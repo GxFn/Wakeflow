@@ -14,6 +14,16 @@ tool first:
 
 - Call `wakeflow_initialize_workspace` with `apply: false` for preview/dry-run
   requests.
+- Wakeflow MCP returns directory facts and an `agentSelectionProtocol`; it does
+  not classify a workspace as clean or messy. Codex must judge from the visible
+  directory facts and user context.
+- If Codex judges the workspace is clean, call `wakeflow_initialize_workspace`
+  again with explicit `repositories` mappings for the intended work windows,
+  plus the selected Design/Test mode. Use `apply: true` only when the user has
+  allowed writing.
+- If Codex judges the workspace is messy, contains history/runtime/ledger/tool
+  directories, or has unclear window ownership, stop and ask the user which
+  windows to manage. Do not call `useDiscovered` in that case.
 - Call `wakeflow_initialize_workspace` with `apply: true` only after the user
   confirms the preview and write boundary.
 - If the user removes discovered windows during setup, pass them as

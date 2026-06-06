@@ -301,6 +301,21 @@ function discoverSiblingRepositories({ wakeflowRoot, parentRoot, config }) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+function redactAbsolutePaths(items) {
+  return items.map(({ absolutePath, ...item }) => item);
+}
+
+function agentSelectionProtocol() {
+  return {
+    decisionOwner: "codex-agent",
+    pluginDoesNotClassifyCleanOrMessy: true,
+    safeDefault: "Discovery is read-only. Without explicit repository mappings, initialization returns discovery and writes nothing.",
+    cleanWorkspaceAction: "If the agent judges every discovered directory that matters is an intended Wakeflow work window, rerun initialize with explicit repositories and the desired Design/Test mode; apply/write only after the user has allowed writing.",
+    messyWorkspaceAction: "If the agent sees runtime/history/ledger/scratch/tooling directories, mixed product families, or uncertain ownership, ask the user which windows to manage before writing.",
+    avoid: "Do not use --use-discovered in a messy workspace. Prefer explicit --repo Window=Path mappings from the agent/user-confirmed selection.",
+  };
+}
+
 function statusPayload() {
   const context = commandContext();
   const configuredRepositories = normalizedRepositories(context.config).map((repo) => {
@@ -320,7 +335,7 @@ function statusPayload() {
       mode: repo.mode,
     };
   });
-  const discovered = discoverSiblingRepositories(context).map(({ absolutePath, ...item }) => item);
+  const discovered = redactAbsolutePaths(discoverSiblingRepositories(context));
   const missing = configuredRepositories.filter((repo) => !repo.exists);
   const outsideParent = configuredRepositories.filter((repo) => !repo.withinParent);
   return {
@@ -332,6 +347,7 @@ function statusPayload() {
     wakeflowRepoDir: context.config.wakeflowRepoDir,
     configuredRepositories: configuredRepositories.map(({ absolutePath, ...repo }) => repo),
     discoveredRepositories: discovered,
+    agentSelectionProtocol: agentSelectionProtocol(),
     missingConfiguredRepositories: missing.map((repo) => repo.windowName),
     outsideParentRepositories: outsideParent.map((repo) => repo.windowName),
     setupQuestions: [
@@ -413,7 +429,7 @@ function parseRepoSpecs(context) {
   const excluded = excludedWindows();
   const internalOnly = hasFlag("--internal-design") || hasFlag("--internal-test");
   if (repoSpecs.length === 0 && !hasFlag("--use-discovered") && !internalOnly) {
-    fail("configure requires at least one --repo WindowName=../RepositoryPath, or --use-discovered for a dry-run proposal.");
+    fail("configure requires at least one agent/user-confirmed --repo WindowName=../RepositoryPath. Use --use-discovered only after confirming every discovered directory is a work window.");
   }
 
   if (repoSpecs.length > 0) {
@@ -1706,11 +1722,12 @@ function localWindowRegistrationPayload(context, options = {}) {
 
 function initializePayload() {
   const context = commandContext();
+  const discovered = redactAbsolutePaths(discoverSiblingRepositories(context));
   const discovery = {
     workspaceName: context.config.workspaceName,
     wakeflowRoot: context.wakeflowRoot,
     parentRoot: context.parentRoot,
-    discoveredRepositories: discoverSiblingRepositories(context).map(({ absolutePath, ...item }) => item),
+    discoveredRepositories: discovered,
     configuredRepositories: normalizedRepositories(context.config).map((repo) => ({
       windowName: repo.windowName,
       path: repo.path,
@@ -1718,6 +1735,7 @@ function initializePayload() {
       mode: repo.mode,
       managedAgents: repo.managedAgents,
     })),
+    agentSelectionProtocol: agentSelectionProtocol(),
     setupQuestions: statusPayload().setupQuestions,
   };
 
@@ -1729,7 +1747,7 @@ function initializePayload() {
       wrote: false,
       requiresUserSelection: true,
       discovery,
-      nextAction: "Choose repositories/windows with --repo Window=../Repo or --use-discovered, choose internal/external Design/Test, then rerun initialize with --write when ready.",
+      nextAction: "Agent must judge whether the workspace is clean. If clean, rerun initialize with explicit repositories. If messy, ask the user which windows to manage before writing.",
     };
   }
 
@@ -1812,9 +1830,9 @@ function help() {
     examples: [
       "node scripts/wakeflow-setup.mjs initialize --json",
       "node scripts/wakeflow-setup.mjs initialize --repo AppWindow=../MyApp --internal-design --internal-test --write --json",
-      "node scripts/wakeflow-setup.mjs initialize --use-discovered --exclude-window ScratchRepo --internal-design --internal-test --write --json",
+      "node scripts/wakeflow-setup.mjs initialize --repo AppWindow=../MyApp --repo ServiceWindow=../MyService --internal-design --internal-test --write --json",
       "node scripts/wakeflow-setup.mjs initialize --replace-window AppWindow --thread AppWindow=<newRealThreadId> --write --json",
-      "node scripts/wakeflow-setup.mjs initialize --use-discovered --thread Wakeflow=<realThreadId> --write --json",
+      "node scripts/wakeflow-setup.mjs initialize --use-discovered --thread Wakeflow=<realThreadId> --write --json  # only after confirming all discovered directories",
       "node scripts/wakeflow-setup.mjs discover --json",
       "node scripts/wakeflow-setup.mjs configure --repo AppWindow=../MyApp --repo ServiceWindow=../MyService --write",
       "node scripts/wakeflow-setup.mjs prompts --window AppWindow",
@@ -1839,13 +1857,15 @@ function main() {
       break;
     case "discover": {
       const context = commandContext();
+      const discovered = redactAbsolutePaths(discoverSiblingRepositories(context));
       printResult({
         ok: true,
         command: "discover",
         workspaceName: context.config.workspaceName,
         wakeflowRoot: context.wakeflowRoot,
         parentRoot: context.parentRoot,
-        discoveredRepositories: discoverSiblingRepositories(context).map(({ absolutePath, ...item }) => item),
+        discoveredRepositories: discovered,
+        agentSelectionProtocol: agentSelectionProtocol(),
       });
       break;
     }

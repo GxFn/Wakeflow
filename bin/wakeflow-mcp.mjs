@@ -5,7 +5,7 @@ import { listWakeflowRuntimeScripts, runWakeflowRuntime } from "../lib/wakeflow-
 const tools = [
   {
     name: "wakeflow_initialize_workspace",
-    description: "Initialize a Wakeflow runtime: discover siblings, generate/apply workspace config, install AGENTS blocks, create sibling Design/Test surfaces, and record local window configuration. Dry-run unless apply is true. Returns a localized host create_thread launch plan; replaceWindows limits the plan to selected windows. Real thread ids are stored only in local runtime by the host, not tracked docs or this MCP schema.",
+    description: "Initialize a Wakeflow runtime: discover siblings, generate/apply workspace config, install AGENTS blocks, create sibling Design/Test surfaces, and record local window configuration. Dry-run unless apply is true. If repositories/useDiscovered are omitted, the tool returns read-only discovery plus an agent-selection protocol; Codex must judge clean versus messy from those facts, pass explicit repositories for a clean workspace, or ask the user in a messy workspace. Returns a localized host create_thread launch plan; replaceWindows limits the plan to selected windows. Real thread ids are stored only in local runtime by the host, not tracked docs or this MCP schema.",
     inputSchema: {
       type: "object",
       properties: {
@@ -17,7 +17,10 @@ const tools = [
           enum: ["auto", "zh", "en"],
           description: "Prompt/title language for window launch plans. Use zh for Chinese users, en for English users, or auto when unknown.",
         },
-        useDiscovered: { type: "boolean" },
+        useDiscovered: {
+          type: "boolean",
+          description: "Force every discovered directory into managed repositories. Use only after the agent/user has confirmed all discovered directories are intended work windows; prefer explicit repositories for messy workspaces.",
+        },
         apply: { type: "boolean" },
         internalDesign: { type: "boolean" },
         internalTest: { type: "boolean" },
@@ -30,6 +33,7 @@ const tools = [
         },
         repositories: {
           type: "array",
+          description: "Agent/user-confirmed work-window mappings. In clean workspaces Codex should pass these explicitly after discovery instead of relying on hidden heuristics.",
           items: {
             type: "object",
             required: ["windowName", "path"],

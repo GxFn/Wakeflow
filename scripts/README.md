@@ -107,6 +107,9 @@ Current scripts:
   subcommands for discovery, prompts, access profiles, same-repository window
   aliases such as `AlembicTest-IDE` / `AlembicTest`, real-project protection,
   and ledger path inspection.
+  Discovery returns directory facts only; the Codex agent decides whether the
+  workspace is clean enough to pass explicit repository mappings or messy enough
+  to ask the user first.
 - `wakeflow-repo-status.mjs`: summarizes branch, HEAD, dirty state, upstream,
   ahead / behind counts, untracked files, and latest commit for each configured
   child repository.

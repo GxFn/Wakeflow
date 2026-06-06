@@ -85,6 +85,8 @@ test("discover lists sibling repositories and marks configured scopes", () => {
       ["PluginWindow", "../PluginWindow", false],
     ],
   );
+  assert.equal(payload.agentSelectionProtocol.decisionOwner, "codex-agent");
+  assert.equal(payload.agentSelectionProtocol.pluginDoesNotClassifyCleanOrMessy, true);
 });
 
 test("configure writes user-confirmed sibling mappings into workspace.config.json", () => {
@@ -124,6 +126,8 @@ test("initialize without selection returns discovery and writes nothing", () => 
   assert.equal(payload.mode, "discovery");
   assert.equal(payload.requiresUserSelection, true);
   assert.equal(payload.wrote, false);
+  assert.equal(payload.discovery.agentSelectionProtocol.decisionOwner, "codex-agent");
+  assert.match(payload.nextAction, /Agent must judge/);
   assert.deepEqual(
     payload.discovery.discoveredRepositories.map((repo) => repo.name),
     ["BaseWindow", "PluginWindow"],

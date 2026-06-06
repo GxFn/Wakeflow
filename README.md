@@ -88,9 +88,12 @@ not source-controlled product state.
 Recommended installation flow:
 
 1. Ask Codex to inspect the parent folder.
-2. Let it propose repository roles and window names.
-3. Remove any discovered windows that should not be managed.
-4. Confirm the boundary.
+2. Wakeflow returns directory facts and an agent-selection protocol; it does not
+   guess whether the workspace is clean or messy.
+3. Codex judges the directory facts. In a clean workspace it passes explicit
+   repository mappings and continues; in a messy workspace it asks which windows
+   to manage.
+4. Confirm the boundary when Codex asks.
 5. Let it write only the managed `AGENTS.md` blocks and local runtime surfaces.
 6. Let Codex create the controller, Design, Test, and product Codex threads from
    the returned `windowLaunchPlan`, then store the real thread ids under
@@ -115,8 +118,11 @@ Preview the plan first and wait for my confirmation before writing.
 ```
 
 That prompt should route through the `wakeflow_initialize_workspace` MCP tool
-with `apply: false`. If the tool is unavailable, reload or reinstall the plugin
-before attempting setup.
+with `apply: false`. If discovery is obviously clean, Codex should call the same
+tool again with explicit `repositories` mappings. If the folder is mixed with
+history, runtime, ledger, scratch, tooling, or unrelated repositories, Codex
+should ask which windows to manage before writing. If the tool is unavailable,
+reload or reinstall the plugin before attempting setup.
 
 Wakeflow keeps Design and Test as sibling window directories such as `Design/`
 and `Test/`, next to product repositories and `wakeflow-ledger/`. This lets

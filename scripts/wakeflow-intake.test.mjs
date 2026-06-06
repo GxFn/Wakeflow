@@ -46,7 +46,7 @@ Fixture only.
 function makeFixture({ demandKey = "ENUM-FLOW-2026-05-30", state = "intake", stateRootArg = null } = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-intake-"));
   const resolvedStateRootArg = stateRootArg === "project-ledger"
-    ? `../workspace-ledger/current/LEDGER-FIXTURE-${path.basename(root)}`
+    ? `../wakeflow-ledger/current/LEDGER-FIXTURE-${path.basename(root)}`
     : stateRootArg;
   writeText(path.join(root, "workspace.config.json"), JSON.stringify({
     workspaceName: "Wakeflow",
@@ -216,7 +216,7 @@ test("test-card supports controller state roots in the configured project ledger
   ]));
 
   assert.equal(payload.ok, true);
-  assert.match(payload.stateRoot, /^\.\.\/workspace-ledger\/current\/LEDGER-FIXTURE-wakeflow-intake-/);
+  assert.match(payload.stateRoot, /^\.\.\/wakeflow-ledger\/current\/LEDGER-FIXTURE-wakeflow-intake-/);
   assert.equal(existsSync(path.join(fixture.stateRoot, "test-cards/REAL-SCENARIO-T1.json")), true);
 });
 

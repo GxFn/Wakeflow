@@ -23,11 +23,11 @@ state roots, task packages, and active plans.
 Keep durable records in:
 
 ```text
-workspace-ledger/
-workspace-ledger/workspace/
-workspace-ledger/workspace/archive/
-workspace-ledger/requirement-designs/
-workspace-ledger/<WindowName>/
+wakeflow-ledger/
+wakeflow-ledger/workspace/
+wakeflow-ledger/workspace/archive/
+wakeflow-ledger/requirement-designs/
+wakeflow-ledger/<WindowName>/
 ```
 
 ## Archive Rules
@@ -45,7 +45,7 @@ Do not archive active, blocked, in-progress, or review-needed work.
 ## Archive Shape
 
 ```text
-workspace-ledger/workspace/archive/YYYY-MM/<topic>/
+wakeflow-ledger/workspace/archive/YYYY-MM/<topic>/
   index.md
   ...
 ```

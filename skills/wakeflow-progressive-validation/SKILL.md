@@ -56,8 +56,8 @@ AlembicWorkspace owns judgment, dispatch, acceptance, and Test handoff. PCVM own
 
 - Active PCVM run artifacts live under `PCVM/scratch/chain-runs/<run-id>/report/`.
 - `PCVM/skills/pcvm-flow-controller/SKILL.md` and `PCVM/config/pcvm-flow-control.json` are the first route-control files for PCVM work.
-- Long-term Alembic PCVM requirements live in `workspace-ledger/requirement-designs/wakeflow-progressive-validation-metrics/`.
-- Per-repository PCVM evidence remains under the relevant `workspace-ledger/<WindowName>/` folder.
+- Long-term Alembic PCVM requirements live in `wakeflow-ledger/requirement-designs/wakeflow-progressive-validation-metrics/`.
+- Per-repository PCVM evidence remains under the relevant `wakeflow-ledger/<WindowName>/` folder.
 - PCV source changes belong in the independent `wakeflow-progressive-validation/` repo, not in `Wakeflow/`.
 - This bridge directory only records how Wakeflow consumes PCV and PCVM. Runtime dispatch state and final acceptance stay under Wakeflow control; PCVM node/round artifacts stay under `PCVM/`.
 

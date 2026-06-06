@@ -63,7 +63,7 @@ Common examples:
   node scripts/wakeflow-cli.mjs intake design-handoff --state-root .workspace-active/workspace/current/<demand-key> --design-key PCVM-2026-05-25 --write --json
   node scripts/wakeflow-cli.mjs install status --json
   node scripts/wakeflow-cli.mjs loop status --json
-  node scripts/wakeflow-cli.mjs sequence status --manifest workspace-ledger/requirement-designs/<topic>/sequence.json --json
+  node scripts/wakeflow-cli.mjs sequence status --manifest wakeflow-ledger/requirement-designs/<topic>/sequence.json --json
   node scripts/wakeflow-cli.mjs next-work --after-completion --json
   node scripts/wakeflow-cli.mjs next-work --id PLUGIN-MCP-MULTI-PROJECT-RUNTIME-2026-06-03 --json
 

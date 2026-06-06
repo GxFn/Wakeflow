@@ -30,11 +30,11 @@ function makeFixture() {
 
 ## Completed TODOs and Historical Sync Records
 
-Completed TODOs, historical sync records, and source archives are queried from [workspace-record-map.md](../../../../workspace-ledger/workspace/workspace-record-map.md#todo-records).
+Completed TODOs, historical sync records, and source archives are queried from [workspace-record-map.md](../../../../wakeflow-ledger/workspace/workspace-record-map.md#todo-records).
 `,
   );
   writeFile(path.join(root, ".workspace-active/workspace/current/plan.md"), "# Plan\n");
-  writeFile(path.resolve(root, "../workspace-ledger/workspace/workspace-record-map.md"), "# Record Map\n");
+  writeFile(path.resolve(root, "../wakeflow-ledger/workspace/workspace-record-map.md"), "# Record Map\n");
   return root;
 }
 
@@ -54,7 +54,7 @@ test("archives completed rows even when the displayed status has a note suffix",
 
   const board = readFileSync(path.join(root, ".workspace-active/workspace/current/global-todo-board.md"), "utf8");
   const archive = readFileSync(
-    path.resolve(root, "../workspace-ledger/workspace/archive/2026-06/global-todo/global-todo-completed-2026-06-04.md"),
+    path.resolve(root, "../wakeflow-ledger/workspace/archive/2026-06/global-todo/global-todo-completed-2026-06-04.md"),
     "utf8",
   );
   assert.doesNotMatch(board, /DONE-SLASH-2026-06-04/);

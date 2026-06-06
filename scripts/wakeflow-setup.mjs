@@ -128,8 +128,8 @@ function migratedInternalPath(value, kind, pluginTargetMode) {
     ? (pluginTargetMode ? "Design" : "../Design")
     : (pluginTargetMode ? "Test" : "../Test");
   const oldValues = kind === "design"
-    ? new Set(["workspace-ledger/design", "../workspace-ledger/design"])
-    : new Set(["workspace-ledger/testing", "../workspace-ledger/testing"]);
+    ? new Set(["wakeflow-ledger/design", "../wakeflow-ledger/design"])
+    : new Set(["wakeflow-ledger/testing", "../wakeflow-ledger/testing"]);
   if (!value || oldValues.has(value)) {
     return next;
   }
@@ -157,12 +157,12 @@ function applyPluginTargetDefaults(config, userConfig, workspaceRoot) {
     controllerWindow,
     workspaceRoot: own(userConfig, "workspaceRoot") ? userConfig.workspaceRoot : ".",
     wakeflowRepoDir: own(userConfig, "wakeflowRepoDir") ? userConfig.wakeflowRepoDir : "",
-    projectLedgerRoot: own(userConfig, "projectLedgerRoot") ? userConfig.projectLedgerRoot : "workspace-ledger",
-    windowLedgerRoot: own(userConfig, "windowLedgerRoot") ? userConfig.windowLedgerRoot : "workspace-ledger",
-    workspaceArchiveDir: own(userConfig, "workspaceArchiveDir") ? userConfig.workspaceArchiveDir : "workspace-ledger/workspace/archive",
-    workspaceRecordMapPath: own(userConfig, "workspaceRecordMapPath") ? userConfig.workspaceRecordMapPath : "workspace-ledger/workspace/workspace-record-map.md",
-    requirementDesignsDir: own(userConfig, "requirementDesignsDir") ? userConfig.requirementDesignsDir : "workspace-ledger/requirement-designs",
-    goalStageConfirmationDir: own(userConfig, "goalStageConfirmationDir") ? userConfig.goalStageConfirmationDir : "workspace-ledger/goal-stage-confirmation",
+    projectLedgerRoot: own(userConfig, "projectLedgerRoot") ? userConfig.projectLedgerRoot : "wakeflow-ledger",
+    windowLedgerRoot: own(userConfig, "windowLedgerRoot") ? userConfig.windowLedgerRoot : "wakeflow-ledger",
+    workspaceArchiveDir: own(userConfig, "workspaceArchiveDir") ? userConfig.workspaceArchiveDir : "wakeflow-ledger/workspace/archive",
+    workspaceRecordMapPath: own(userConfig, "workspaceRecordMapPath") ? userConfig.workspaceRecordMapPath : "wakeflow-ledger/workspace/workspace-record-map.md",
+    requirementDesignsDir: own(userConfig, "requirementDesignsDir") ? userConfig.requirementDesignsDir : "wakeflow-ledger/requirement-designs",
+    goalStageConfirmationDir: own(userConfig, "goalStageConfirmationDir") ? userConfig.goalStageConfirmationDir : "wakeflow-ledger/goal-stage-confirmation",
     internalDesignPath,
     internalTestPath,
     repositories: own(userConfig, "repositories")
@@ -268,7 +268,7 @@ function discoverSiblingRepositories({ wakeflowRoot, parentRoot, config }) {
     .map((repo) => path.basename(resolveMaybeRelative(wakeflowRoot, repo.path)));
   const ignore = new Set([
     wakeflowBasename,
-    path.basename(resolveMaybeRelative(wakeflowRoot, config.projectLedgerRoot ?? "../workspace-ledger")),
+    path.basename(resolveMaybeRelative(wakeflowRoot, config.projectLedgerRoot ?? "../wakeflow-ledger")),
     ...internalBasenames,
     ".git",
     ".workspace-local",
@@ -969,7 +969,7 @@ function replaceAllLiteral(content, from, to) {
 function rootAgentsContent(context) {
   const wakeflowRel = slash(path.relative(context.parentRoot, context.wakeflowRoot)) || ".";
   const wakeflowPrefix = wakeflowRel === "." ? "" : `${wakeflowRel}/`;
-  const ledgerRel = slash(path.relative(context.parentRoot, context.ledgerPaths.projectLedgerRoot)) || "workspace-ledger";
+  const ledgerRel = slash(path.relative(context.parentRoot, context.ledgerPaths.projectLedgerRoot)) || "wakeflow-ledger";
   let content = readWakeflowFile(context.templateRoot, "AGENTS.md");
   content = replaceAllLiteral(
     content,
@@ -983,8 +983,8 @@ function rootAgentsContent(context) {
   content = replaceAllLiteral(content, ".workspace-local/workspace.config.json", localConfigPlaceholder);
   content = replaceAllLiteral(content, ".workspace-active/", `${wakeflowPrefix}.workspace-active/`);
   content = replaceAllLiteral(content, ".workspace-local/", `${wakeflowPrefix}.workspace-local/`);
-  content = replaceAllLiteral(content, "../workspace-ledger/", `${ledgerRel}/`);
-  content = replaceAllLiteral(content, "../workspace-ledger", ledgerRel);
+  content = replaceAllLiteral(content, "../wakeflow-ledger/", `${ledgerRel}/`);
+  content = replaceAllLiteral(content, "../wakeflow-ledger", ledgerRel);
   content = replaceAllLiteral(content, "skills/", `${wakeflowPrefix}skills/`);
   content = replaceAllLiteral(content, "templates/", `${wakeflowPrefix}templates/`);
   content = content.replace(/(?<![\w./-])workspace\.config\.json/g, `${wakeflowPrefix}workspace.config.json`);
@@ -1258,7 +1258,7 @@ function syncStarterLedgerFiles(context) {
   const workspaceLedgerDir = path.dirname(context.ledgerPaths.workspaceRecordMapPath);
   const goalStageConfirmationDir = resolveConfigPath(
     context.wakeflowRoot,
-    context.config.goalStageConfirmationDir ?? path.join(context.config.projectLedgerRoot ?? "workspace-ledger", "goal-stage-confirmation"),
+    context.config.goalStageConfirmationDir ?? path.join(context.config.projectLedgerRoot ?? "wakeflow-ledger", "goal-stage-confirmation"),
   );
   return [
     ensureTextFile(context.ledgerPaths.workspaceIndexPath, readWakeflowFile(context.templateRoot, `${sourceRoot}/index.md`), "active workspace index"),

@@ -135,7 +135,7 @@ Current scripts:
   target points there, and that active docs/scripts/templates do not reference
   old root-level short-term paths.
 - `wakeflow-archive-docs.mjs`: dry-run by default; moves completed Wakeflow
-  documents into `../workspace-ledger/workspace/archive/YYYY-MM/<topic>/`,
+  documents into `../wakeflow-ledger/workspace/archive/YYYY-MM/<topic>/`,
   rewrites relative links, updates index rows, and refreshes the record map when
   `--apply` is provided.
 - `wakeflow-compact-index.mjs`: dry-run by default; compacts historical rows

@@ -114,7 +114,7 @@ test("configure writes user-confirmed sibling mappings into workspace.config.jso
   assert.equal(config.designHandoffBoard, ".workspace-active/workspace/current/design-handoff-board.md");
   assert.equal(config.designHandoffInbox, ".workspace-active/workspace/current/design-handoff-inbox.md");
   assert.equal(config.testExchangePath, ".workspace-active/workspace/current/test-exchange.md");
-  assert.equal(config.goalStageConfirmationDir, "../workspace-ledger/goal-stage-confirmation");
+  assert.equal(config.goalStageConfirmationDir, "../wakeflow-ledger/goal-stage-confirmation");
 });
 
 test("initialize without selection returns discovery and writes nothing", () => {
@@ -153,7 +153,7 @@ test("initialize previews a plugin-managed target workspace without a local Wake
   assert.equal(payload.ok, true);
   assert.equal(payload.mode, "plan");
   assert.equal(payload.steps.configure.nextConfig.workspaceRoot, ".");
-  assert.equal(payload.steps.configure.nextConfig.projectLedgerRoot, "workspace-ledger");
+  assert.equal(payload.steps.configure.nextConfig.projectLedgerRoot, "wakeflow-ledger");
   assert.equal(payload.steps.configure.nextConfig.repositories[0].path, "AppRepo");
   assert.equal(payload.steps.syncRootAgents.source, path.join(workspaceRoot, "AGENTS.md"));
   assert.equal(payload.steps.writeAgents.ok, true);
@@ -199,14 +199,14 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.equal(payload.ok, true);
   assert.equal(payload.mode, "apply");
   assert.equal(payload.steps.configure.nextConfig.workspaceRoot, ".");
-  assert.equal(payload.steps.configure.nextConfig.projectLedgerRoot, "workspace-ledger");
+  assert.equal(payload.steps.configure.nextConfig.projectLedgerRoot, "wakeflow-ledger");
 
   const config = JSON.parse(readFileSync(path.join(parent, "workspace.config.json"), "utf8"));
   assert.equal(config.workspaceRoot, ".");
   assert.equal(config.runtimeMode, "plugin");
-  assert.equal(config.projectLedgerRoot, "workspace-ledger");
+  assert.equal(config.projectLedgerRoot, "wakeflow-ledger");
   assert.equal(config.designHandoffInbox, ".workspace-active/workspace/current/design-handoff-inbox.md");
-  assert.equal(config.goalStageConfirmationDir, "workspace-ledger/goal-stage-confirmation");
+  assert.equal(config.goalStageConfirmationDir, "wakeflow-ledger/goal-stage-confirmation");
   assert.equal(config.wakeflowRepoDir, "");
   assert.equal(config.repositories[0].path, "AppRepo");
   assert.equal(config.repositories.find((repo) => repo.windowName === "Design").path, "Design");
@@ -224,13 +224,13 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.equal(existsSync(path.join(parent, "Design/AGENTS.md")), true);
   assert.equal(existsSync(path.join(parent, "Test/AGENTS.md")), true);
   assert.equal(existsSync(path.join(parent, ".workspace-active/workspace/current/design-handoff-inbox.md")), true);
-  assert.equal(existsSync(path.join(parent, "workspace-ledger/requirement-designs/README.md")), true);
-  assert.equal(existsSync(path.join(parent, "workspace-ledger/goal-stage-confirmation/README.md")), true);
-  assert.equal(existsSync(path.join(parent, "workspace-ledger/goal-stage-confirmation/process.md")), true);
-  assert.equal(existsSync(path.join(parent, "workspace-ledger/workspace/requirement-to-wave-execution-flow.md")), true);
-  assert.equal(existsSync(path.join(parent, "workspace-ledger/workspace/todo-window-scheduling-policy.md")), true);
-  assert.equal(existsSync(path.join(parent, "workspace-ledger/workspace/workspace-doc-archive-policy.md")), true);
-  assert.equal(existsSync(path.join(parent, "workspace-ledger/workspace/archive/index.md")), true);
+  assert.equal(existsSync(path.join(parent, "wakeflow-ledger/requirement-designs/README.md")), true);
+  assert.equal(existsSync(path.join(parent, "wakeflow-ledger/goal-stage-confirmation/README.md")), true);
+  assert.equal(existsSync(path.join(parent, "wakeflow-ledger/goal-stage-confirmation/process.md")), true);
+  assert.equal(existsSync(path.join(parent, "wakeflow-ledger/workspace/requirement-to-wave-execution-flow.md")), true);
+  assert.equal(existsSync(path.join(parent, "wakeflow-ledger/workspace/todo-window-scheduling-policy.md")), true);
+  assert.equal(existsSync(path.join(parent, "wakeflow-ledger/workspace/workspace-doc-archive-policy.md")), true);
+  assert.equal(existsSync(path.join(parent, "wakeflow-ledger/workspace/archive/index.md")), true);
   assert.equal(existsSync(path.join(parent, "Wakeflow")), false);
   assert.deepEqual(
     payload.steps.windowLaunchPlan.windows.map((item) => item.windowName),
@@ -282,10 +282,10 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
   assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/design-handoff-board.md")), true);
   assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/design-handoff-inbox.md")), true);
   assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/test-exchange.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/requirement-designs/README.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/goal-stage-confirmation/process.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/workspace/requirement-to-wave-execution-flow.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/workspace/archive/index.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/requirement-designs/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/goal-stage-confirmation/process.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/workspace/requirement-to-wave-execution-flow.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/workspace/archive/index.md")), true);
 
   const registryPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/thread-registry/FixtureWorkspace.json");
   const windowConfigPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/window-config/FixtureWorkspace.json");
@@ -421,7 +421,7 @@ test("write-agents is dry-run by default and writes managed access cards with --
   assert.match(baseAgents, /Parent workspace AGENTS: `\.\.\/AGENTS\.md`/);
   assert.match(baseAgents, /Active workspace index: `\.\.\/Wakeflow\/\.workspace-active\/workspace\/index\.md`/);
   assert.match(baseAgents, /Current plan directory: `\.\.\/Wakeflow\/\.workspace-active\/workspace\/current`/);
-  assert.match(baseAgents, /Window ledger: `\.\.\/workspace-ledger\/BaseWindow`/);
+  assert.match(baseAgents, /Window ledger: `\.\.\/wakeflow-ledger\/BaseWindow`/);
   assert.match(baseAgents, /Direct-thread delivery is the normal work transport/);
   assert.match(baseAgents, /Delivery prompts carry only a few dynamic variables and a skill pointer/);
   assert.match(baseAgents, /visible `currentWindow` \/ `taskId` \/ `stateRoot` \/ optional `dispatchGroup`/);
@@ -467,7 +467,7 @@ test("access-profiles reports managed child access-card coordinates and automati
   assert.equal(profile.windowName, "BaseWindow");
   assert.equal(profile.coordinates.parentAgents, "../AGENTS.md");
   assert.equal(profile.coordinates.activeIndex, "../Wakeflow/.workspace-active/workspace/index.md");
-  assert.equal(profile.coordinates.windowLedger, "../workspace-ledger/BaseWindow");
+  assert.equal(profile.coordinates.windowLedger, "../wakeflow-ledger/BaseWindow");
   assert.equal(profile.coordinateChecks.every((check) => check.ok), true);
   assert.equal(profile.automationChecks.every((check) => check.ok), true);
 });
@@ -538,8 +538,8 @@ test("write-agents supports multiple workspace windows sharing one AGENTS.md", (
   const sharedAgents = readFileSync(path.join(sharedTest, "AGENTS.md"), "utf8");
   assert.match(sharedAgents, /Window aliases for this repository: `TestIDE` \/ `TestWindow`/);
   assert.match(sharedAgents, /Window ledgers for this repository:/);
-  assert.match(sharedAgents, /`TestIDE`: `\.\.\/workspace-ledger\/TestIDE`/);
-  assert.match(sharedAgents, /`TestWindow`: `\.\.\/workspace-ledger\/TestWindow`/);
+  assert.match(sharedAgents, /`TestIDE`: `\.\.\/wakeflow-ledger\/TestIDE`/);
+  assert.match(sharedAgents, /`TestWindow`: `\.\.\/wakeflow-ledger\/TestWindow`/);
   assert.match(sharedAgents, /only handles dispatch packets for the windows listed in this access card/);
   assert.match(sharedAgents, /Non-Test windows must not create, process, or verify TestWindow \/ TestIDE delivery/);
   assert.match(sharedAgents, /currentWindow/);
@@ -598,17 +598,17 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   assert.equal(existsSync(path.join(fixture.parent, "Design/templates/workspace-signal-template.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/templates/workspace-handoff-template.md")), true);
   assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/test-exchange.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/requirement-designs/README.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/goal-stage-confirmation/README.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/goal-stage-confirmation/process.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/workspace/todo-window-scheduling-policy.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/workspace/workspace-doc-archive-policy.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/workspace/archive/index.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/requirement-designs/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/goal-stage-confirmation/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/goal-stage-confirmation/process.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/workspace/todo-window-scheduling-policy.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/workspace/workspace-doc-archive-policy.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/workspace/archive/index.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/AGENTS.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/README.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/docs/testing-operation-policy.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/templates/test-handoff-template.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/BaseWindow/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/BaseWindow/README.md")), true);
 });
 
 test("external Design and Test directories get only alignment templates", () => {
@@ -650,12 +650,12 @@ test("ledger-paths reports per-window project ledger directories", () => {
   const fixture = makeFixture();
   const payload = runJson(fixture, ["ledger-paths"]);
   assert.equal(payload.command, "ledger-paths");
-  assert.equal(payload.projectLedgerRoot, "../workspace-ledger");
-  assert.equal(payload.windowLedgerRoot, "../workspace-ledger");
+  assert.equal(payload.projectLedgerRoot, "../wakeflow-ledger");
+  assert.equal(payload.windowLedgerRoot, "../wakeflow-ledger");
   assert.deepEqual(
     payload.repositories.map((repo) => [repo.windowName, repo.ledgerPath, repo.exampleDocument]),
     [
-      ["BaseWindow", "../workspace-ledger/BaseWindow", "../workspace-ledger/BaseWindow/example-task-YYYY-MM-DD.md"],
+      ["BaseWindow", "../wakeflow-ledger/BaseWindow", "../wakeflow-ledger/BaseWindow/example-task-YYYY-MM-DD.md"],
     ],
   );
 });

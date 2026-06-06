@@ -16,4 +16,4 @@ Design/Test support, and state-machine progress.
 
 The templates are reusable defaults. Installed workspaces should keep active
 state under `.workspace-active/` and long-term project records under
-`../workspace-ledger/`.
+`../wakeflow-ledger/`.

@@ -1,4 +1,4 @@
-# Workspace Ledgers Reference
+# Wakeflow Ledgers Reference
 
 ## Storage Model
 
@@ -11,7 +11,7 @@ state belongs elsewhere:
   runtime, and keep-live state.
 - `../Design/` and `../Test/`: sibling Design/Test working surfaces when the
   user has not configured external Design/Test repositories.
-- `../workspace-ledger/`: project-specific long-term plans, decisions, archives,
+- `../wakeflow-ledger/`: project-specific long-term plans, decisions, archives,
   and evidence maps.
 
 Do not track product repositories, Design, Test, or real test projects inside
@@ -37,14 +37,14 @@ Use the external workspace ledger for:
 
 Wakeflow initialization creates starter ledger entries for:
 
-- `workspace-ledger/requirement-designs/README.md`;
-- `workspace-ledger/goal-stage-confirmation/README.md`;
-- `workspace-ledger/goal-stage-confirmation/process.md`;
-- `workspace-ledger/workspace/workspace-record-map.md`;
-- `workspace-ledger/workspace/requirement-to-wave-execution-flow.md`;
-- `workspace-ledger/workspace/todo-window-scheduling-policy.md`;
-- `workspace-ledger/workspace/workspace-doc-archive-policy.md`;
-- `workspace-ledger/workspace/archive/index.md`.
+- `wakeflow-ledger/requirement-designs/README.md`;
+- `wakeflow-ledger/goal-stage-confirmation/README.md`;
+- `wakeflow-ledger/goal-stage-confirmation/process.md`;
+- `wakeflow-ledger/workspace/workspace-record-map.md`;
+- `wakeflow-ledger/workspace/requirement-to-wave-execution-flow.md`;
+- `wakeflow-ledger/workspace/todo-window-scheduling-policy.md`;
+- `wakeflow-ledger/workspace/workspace-doc-archive-policy.md`;
+- `wakeflow-ledger/workspace/archive/index.md`.
 
 Long-term documents must avoid user absolute paths, API keys, tokens, and other
 private information. Use lowercase kebab-case names and dates.

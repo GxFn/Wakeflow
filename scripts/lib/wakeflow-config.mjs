@@ -12,19 +12,19 @@ export const defaultWorkspaceConfig = {
   workspaceRoot: "..",
   wakeflowRepoDir: "Wakeflow",
   activeLedgerRoot: ".workspace-active",
-  projectLedgerRoot: "../workspace-ledger",
-  windowLedgerRoot: "../workspace-ledger",
+  projectLedgerRoot: "../wakeflow-ledger",
+  windowLedgerRoot: "../wakeflow-ledger",
   windowLedgerDirs: {},
   workspaceDocsDir: ".workspace-active/workspace",
   workspaceCurrentDir: ".workspace-active/workspace/current",
-  workspaceArchiveDir: "../workspace-ledger/workspace/archive",
+  workspaceArchiveDir: "../wakeflow-ledger/workspace/archive",
   workspaceIndexPath: ".workspace-active/workspace/index.md",
   workspaceCurrentIndexPath: ".workspace-active/workspace/current/index.md",
   workspaceCurrentStatusPath: ".workspace-active/workspace/current/workspace-current-status.md",
-  workspaceRecordMapPath: "../workspace-ledger/workspace/workspace-record-map.md",
+  workspaceRecordMapPath: "../wakeflow-ledger/workspace/workspace-record-map.md",
   globalTodoPath: ".workspace-active/workspace/current/global-todo-board.md",
-  requirementDesignsDir: "../workspace-ledger/requirement-designs",
-  goalStageConfirmationDir: "../workspace-ledger/goal-stage-confirmation",
+  requirementDesignsDir: "../wakeflow-ledger/requirement-designs",
+  goalStageConfirmationDir: "../wakeflow-ledger/goal-stage-confirmation",
   internalDesignPath: "../Design",
   internalTestPath: "../Test",
   allowMissingRepos: true,
@@ -162,7 +162,7 @@ export function windowLedgerDirFor({ workspaceRoot = process.cwd(), config = nul
   if (configured) {
     return resolveConfigPath(workspaceRoot, configured);
   }
-  const root = loaded.windowLedgerRoot ?? loaded.projectLedgerRoot ?? "../workspace-ledger";
+  const root = loaded.windowLedgerRoot ?? loaded.projectLedgerRoot ?? "../wakeflow-ledger";
   return resolveConfigPath(workspaceRoot, path.join(root, ledgerSegment(windowName)));
 }
 
@@ -183,7 +183,7 @@ export function workspaceLedgerPaths({ workspaceRoot = process.cwd(), args = pro
   const activeLedgerRoot = loaded.activeLedgerRoot ?? ".workspace-active";
   const workspaceDocsDir = loaded.workspaceDocsDir ?? path.join(activeLedgerRoot, "workspace");
   const workspaceCurrentDir = loaded.workspaceCurrentDir ?? path.join(workspaceDocsDir, "current");
-  const workspaceArchiveDir = loaded.workspaceArchiveDir ?? "../workspace-ledger/workspace/archive";
+  const workspaceArchiveDir = loaded.workspaceArchiveDir ?? "../wakeflow-ledger/workspace/archive";
   const workspaceIndexPath = loaded.workspaceIndexPath ?? path.join(workspaceDocsDir, "index.md");
   const workspaceCurrentIndexPath = loaded.workspaceCurrentIndexPath ?? path.join(workspaceCurrentDir, "index.md");
   const workspaceCurrentStatusPath = loaded.workspaceCurrentStatusPath
@@ -194,8 +194,8 @@ export function workspaceLedgerPaths({ workspaceRoot = process.cwd(), args = pro
 
   return {
     activeLedgerRoot: resolveConfigPath(workspaceRoot, activeLedgerRoot),
-    projectLedgerRoot: resolveConfigPath(workspaceRoot, loaded.projectLedgerRoot ?? "../workspace-ledger"),
-    windowLedgerRoot: resolveConfigPath(workspaceRoot, loaded.windowLedgerRoot ?? loaded.projectLedgerRoot ?? "../workspace-ledger"),
+    projectLedgerRoot: resolveConfigPath(workspaceRoot, loaded.projectLedgerRoot ?? "../wakeflow-ledger"),
+    windowLedgerRoot: resolveConfigPath(workspaceRoot, loaded.windowLedgerRoot ?? loaded.projectLedgerRoot ?? "../wakeflow-ledger"),
     windowLedgerDirs: windowLedgerDirsFor({ workspaceRoot, args, config: loaded }),
     workspaceDocsDir: resolveConfigPath(workspaceRoot, workspaceDocsDir),
     workspaceCurrentDir: resolveConfigPath(workspaceRoot, workspaceCurrentDir),
@@ -205,6 +205,6 @@ export function workspaceLedgerPaths({ workspaceRoot = process.cwd(), args = pro
     workspaceCurrentStatusPath: resolveConfigPath(workspaceRoot, workspaceCurrentStatusPath),
     workspaceRecordMapPath: resolveConfigPath(workspaceRoot, workspaceRecordMapPath),
     globalTodoPath: resolveConfigPath(workspaceRoot, globalTodoPath),
-    requirementDesignsDir: resolveConfigPath(workspaceRoot, loaded.requirementDesignsDir ?? "../workspace-ledger/requirement-designs"),
+    requirementDesignsDir: resolveConfigPath(workspaceRoot, loaded.requirementDesignsDir ?? "../wakeflow-ledger/requirement-designs"),
   };
 }

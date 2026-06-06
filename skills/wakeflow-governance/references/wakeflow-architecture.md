@@ -22,7 +22,7 @@ judgment.
 | templates | reusable starter surfaces for installed workspaces |
 | `.workspace-active/` | ignored active runtime state |
 | `.workspace-local/` | ignored local config and real thread ids |
-| `../workspace-ledger/` | project-specific long-term records |
+| `../wakeflow-ledger/` | project-specific long-term records |
 
 ## MCP Boundary
 
@@ -39,7 +39,7 @@ ParentWorkspace/
   ProductRepo/
   DesignRepo/
   TestRepo/
-  workspace-ledger/
+  wakeflow-ledger/
 ```
 
 Product repositories remain siblings. Active state and local runtime files are

@@ -29,7 +29,7 @@ archive files.
 Per-window ledgers live next to this workspace ledger:
 
 ```text
-workspace-ledger/<WindowName>/
+wakeflow-ledger/<WindowName>/
 ```
 
 Each window ledger keeps collaboration notes, acceptance evidence, and handoff

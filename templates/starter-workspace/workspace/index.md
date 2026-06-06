@@ -12,13 +12,13 @@ Status: starter template
 
 ## Long-Term Records
 
-Project-specific long-term records should live in `../workspace-ledger/`, not
+Project-specific long-term records should live in `../wakeflow-ledger/`, not
 inside the reusable Wakeflow repository.
 
 ## Starter Ledger Map
 
 | Type | Entry | Notes |
 | --- | --- | --- |
-| Record Map | `../workspace-ledger/workspace/workspace-record-map.md` | Long-term map for requirements, archive, workflow rules, and per-window evidence. |
-| Requirement Designs | `../workspace-ledger/requirement-designs/` | Original plans, requirement designs, and code implementation dependency research. |
-| Goal-Stage Confirmation | `../workspace-ledger/goal-stage-confirmation/` | Reusable process for confirming final goal and phase order before dispatch. |
+| Record Map | `../wakeflow-ledger/workspace/workspace-record-map.md` | Long-term map for requirements, archive, workflow rules, and per-window evidence. |
+| Requirement Designs | `../wakeflow-ledger/requirement-designs/` | Original plans, requirement designs, and code implementation dependency research. |
+| Goal-Stage Confirmation | `../wakeflow-ledger/goal-stage-confirmation/` | Reusable process for confirming final goal and phase order before dispatch. |

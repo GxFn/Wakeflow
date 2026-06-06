@@ -56,7 +56,7 @@ flowchart TD
   Targets --> Repos["Product repositories"]
   Targets --> Results["TargetResultEnvelope<br/>plus raw evidence refs"]
   Results --> Controller
-  Controller --> Ledger["workspace-ledger<br/>long-term records"]
+  Controller --> Ledger["wakeflow-ledger<br/>long-term records"]
 ```
 
 The controller is the only place that decides whether evidence is enough. The
@@ -77,7 +77,7 @@ MyWorkspace/
   PluginRepo/
   DesignRepo/
   TestRepo/
-  workspace-ledger/          # project-specific long-term records
+  wakeflow-ledger/          # project-specific long-term records
 ```
 
 `workspace.config.json` gives reusable defaults. A local installation can
@@ -119,9 +119,9 @@ with `apply: false`. If the tool is unavailable, reload or reinstall the plugin
 before attempting setup.
 
 Wakeflow keeps Design and Test as sibling window directories such as `Design/`
-and `Test/`, next to product repositories and `workspace-ledger/`. This lets
+and `Test/`, next to product repositories and `wakeflow-ledger/`. This lets
 those windows read the same sibling product repositories while keeping long-term
-records in `workspace-ledger/`.
+records in `wakeflow-ledger/`.
 
 Initialization also creates the durable workflow skeleton that mature controller
 workspaces need: Design handoff inbox, requirement-design ledger, goal/stage
@@ -209,7 +209,7 @@ Script families:
 | `workspace.config.json` | Generic window names, repository paths, role labels, and script defaults. |
 | `.workspace-active/` | Ignored project runtime: current indexes, controller state roots, progress docs, TODO projections, intake, and test cards. |
 | `.workspace-local/` | Ignored local runtime: real thread ids, delivery loop state, keep-live state, and local config overrides. |
-| `../workspace-ledger/` | Project-specific long-term records outside the reusable repository. |
+| `../wakeflow-ledger/` | Project-specific long-term records outside the reusable repository. |
 | `scripts/` | Installation, validation, ledger, state-machine, intake, delivery, and coordination helper scripts. |
 | `skills/` | Operational manuals for controller windows, target windows, testing, ledgers, and delivery. |
 | `templates/` | Minimal skeletons for state roots, developer progress docs, Design/Test support, and confirmations. |

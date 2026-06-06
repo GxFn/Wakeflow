@@ -30,7 +30,7 @@ function writeJson(file, value) {
 }
 
 function createManifest(root) {
-  const docsDir = path.join(root, "workspace-ledger/requirement-designs/example");
+  const docsDir = path.join(root, "wakeflow-ledger/requirement-designs/example");
   mkdirSync(docsDir, { recursive: true });
   writeFileSync(path.join(docsDir, "req-01.md"), standardDoc("EXAMPLE-REQ-01", "First Requirement"));
   writeFileSync(path.join(docsDir, "req-02.md"), standardDoc("EXAMPLE-REQ-02", "Second Requirement"));
@@ -45,7 +45,7 @@ function createManifest(root) {
         order: 1,
         demandKey: "EXAMPLE-REQ-01",
         title: "First Requirement",
-        developerDoc: "workspace-ledger/requirement-designs/example/req-01.md",
+        developerDoc: "wakeflow-ledger/requirement-designs/example/req-01.md",
         stateRoot: ".workspace-active/workspace/current/example-req-01",
         goal: "Prove the first requirement can be claimed.",
         completionDefinition: "The first requirement is reviewed and completed.",
@@ -63,7 +63,7 @@ function createManifest(root) {
         order: 2,
         demandKey: "EXAMPLE-REQ-02",
         title: "Second Requirement",
-        developerDoc: "workspace-ledger/requirement-designs/example/req-02.md",
+        developerDoc: "wakeflow-ledger/requirement-designs/example/req-02.md",
         stateRoot: ".workspace-active/workspace/current/example-req-02",
         goal: "Prove the second requirement waits for the first.",
         completionDefinition: "The second requirement is reviewed and completed.",
@@ -162,7 +162,7 @@ test("claim-next dry-run does not create the state root", () => {
   assert.equal(payload.ok, true);
   assert.equal(payload.wrote, false);
   assert.equal(payload.wouldClaim.demandKey, "EXAMPLE-REQ-01");
-  assert.equal(payload.wouldClaim.developerDoc, "workspace-ledger/requirement-designs/example/req-01.md");
+  assert.equal(payload.wouldClaim.developerDoc, "wakeflow-ledger/requirement-designs/example/req-01.md");
   assert.match(payload.wouldClaim.dispatchCandidates[0].prepareCommand, /prepare-dispatch-from-state/);
   assert.equal(existsSync(path.join(root, ".workspace-active/workspace/current/example-req-01")), false);
 });
@@ -178,7 +178,7 @@ test("claim-next --write creates one active state root and initial task package"
   assert.equal(payload.wrote, true);
   assert.equal(payload.claimed.demandKey, "EXAMPLE-REQ-01");
   assert.equal(payload.claimed.stateRoot, ".workspace-active/workspace/current/example-req-01");
-  assert.equal(payload.claimed.developerDoc, "workspace-ledger/requirement-designs/example/req-01.md");
+  assert.equal(payload.claimed.developerDoc, "wakeflow-ledger/requirement-designs/example/req-01.md");
   assert.equal(payload.claimed.developerDocChanged, true);
   assert.deepEqual(payload.claimed.taskPackages, ["EXAMPLE-REQ-01-P1"]);
   assert.match(payload.claimed.dispatchCandidates[0].prepareCommand, /--root /);
@@ -189,7 +189,7 @@ test("claim-next --write creates one active state root and initial task package"
   const stateRoot = path.join(root, payload.claimed.stateRoot);
   const state = readJson(path.join(stateRoot, "wakeflow-state.json"));
   const progress = readFileSync(path.join(stateRoot, "developer-progress.md"), "utf8");
-  const developerDoc = readFileSync(path.join(root, "workspace-ledger/requirement-designs/example/req-01.md"), "utf8");
+  const developerDoc = readFileSync(path.join(root, "wakeflow-ledger/requirement-designs/example/req-01.md"), "utf8");
 
   assert.equal(state.state, "planned");
   assert.equal(state.demandKey, "EXAMPLE-REQ-01");
@@ -207,7 +207,7 @@ test("sync-doc updates the standard developer document from an existing state ro
   const manifestPath = createManifest(root);
   const first = run(["claim-next", "--root", root, "--manifest", manifestPath, "--write", "--json"]);
   const firstPayload = JSON.parse(first.stdout);
-  const docPath = path.join(root, "workspace-ledger/requirement-designs/example/req-01.md");
+  const docPath = path.join(root, "wakeflow-ledger/requirement-designs/example/req-01.md");
   const previousDoc = readFileSync(docPath, "utf8").replace(/Main state: planned/, "Main state: stale");
   writeFileSync(docPath, previousDoc);
 
@@ -218,7 +218,7 @@ test("sync-doc updates the standard developer document from an existing state ro
 
   assert.equal(payload.ok, true);
   assert.equal(payload.command, "sync-doc");
-  assert.equal(payload.developerDoc, "workspace-ledger/requirement-designs/example/req-01.md");
+  assert.equal(payload.developerDoc, "wakeflow-ledger/requirement-designs/example/req-01.md");
   assert.match(nextDoc, /Main state: planned/);
 });
 
@@ -279,7 +279,7 @@ test("missing landing docs fail closed", () => {
 
 test("developer documents without the standard status marker fail closed", () => {
   const root = makeRoot();
-  const docsDir = path.join(root, "workspace-ledger/requirement-designs/example");
+  const docsDir = path.join(root, "wakeflow-ledger/requirement-designs/example");
   mkdirSync(docsDir, { recursive: true });
   writeFileSync(path.join(docsDir, "bad.md"), "# Bad\n");
   const manifestPath = path.join(root, "sequence.json");
@@ -293,7 +293,7 @@ test("developer documents without the standard status marker fail closed", () =>
         order: 1,
         demandKey: "BROKEN-REQ-01",
         title: "Broken Requirement",
-        developerDoc: "workspace-ledger/requirement-designs/example/bad.md",
+        developerDoc: "wakeflow-ledger/requirement-designs/example/bad.md",
         goal: "Should fail.",
         completionDefinition: "Should fail.",
         stagePlan: "Should fail.",

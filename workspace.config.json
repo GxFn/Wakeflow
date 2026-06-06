@@ -8,19 +8,19 @@
   "workspaceRoot": "..",
   "wakeflowRepoDir": "Wakeflow",
   "activeLedgerRoot": ".workspace-active",
-  "projectLedgerRoot": "../workspace-ledger",
-  "windowLedgerRoot": "../workspace-ledger",
+  "projectLedgerRoot": "../wakeflow-ledger",
+  "windowLedgerRoot": "../wakeflow-ledger",
   "workspaceDocsDir": ".workspace-active/workspace",
   "workspaceCurrentDir": ".workspace-active/workspace/current",
-  "workspaceArchiveDir": "../workspace-ledger/workspace/archive",
+  "workspaceArchiveDir": "../wakeflow-ledger/workspace/archive",
   "workspaceIndexPath": ".workspace-active/workspace/index.md",
   "workspaceCurrentIndexPath": ".workspace-active/workspace/current/index.md",
   "workspaceCurrentStatusPath": ".workspace-active/workspace/current/workspace-current-status.md",
-  "workspaceRecordMapPath": "../workspace-ledger/workspace/workspace-record-map.md",
+  "workspaceRecordMapPath": "../wakeflow-ledger/workspace/workspace-record-map.md",
   "globalTodoPath": ".workspace-active/workspace/current/global-todo-board.md",
-  "requirementDesignsDir": "../workspace-ledger/requirement-designs",
-  "internalDesignPath": "../workspace-ledger/design",
-  "internalTestPath": "../workspace-ledger/testing",
+  "requirementDesignsDir": "../wakeflow-ledger/requirement-designs",
+  "internalDesignPath": "../wakeflow-ledger/design",
+  "internalTestPath": "../wakeflow-ledger/testing",
   "allowMissingRepos": true,
   "dispatchWindows": [],
   "requiredDispatchWindows": [
@@ -36,14 +36,14 @@
   "repositories": [
     {
       "windowName": "Design",
-      "path": "../workspace-ledger/design",
+      "path": "../wakeflow-ledger/design",
       "role": "Internal requirement design workspace",
       "managedAgents": false,
       "mode": "internal"
     },
     {
       "windowName": "Test",
-      "path": "../workspace-ledger/testing",
+      "path": "../wakeflow-ledger/testing",
       "role": "Internal test coordination workspace",
       "managedAgents": false,
       "mode": "internal"

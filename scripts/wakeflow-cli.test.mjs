@@ -80,11 +80,11 @@ test("--print loop maps to Wakeflow delivery-loop script", () => {
 });
 
 test("--print sequence maps to ordered demand sequence script", () => {
-  const result = run(["--print", "sequence", "claim-next", "--manifest", "workspace-ledger/requirement-designs/example/sequence.json", "--write", "--json"]);
+  const result = run(["--print", "sequence", "claim-next", "--manifest", "wakeflow-ledger/requirement-designs/example/sequence.json", "--write", "--json"]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(
     result.stdout,
-    /node scripts\/wakeflow-demand-sequence\.mjs claim-next --manifest workspace-ledger\/requirement-designs\/example\/sequence\.json --write --json/,
+    /node scripts\/wakeflow-demand-sequence\.mjs claim-next --manifest wakeflow-ledger\/requirement-designs\/example\/sequence\.json --write --json/,
   );
 });
 

@@ -347,7 +347,7 @@ Operational details live in `skills/wakeflow-governance/` and
   templates, skills, schemas, plugin support files, and starter documents.
 - Project-specific active plans, TODOs, test exchanges, archive history, and
   target backfills belong in ignored `.workspace-active/` surfaces or the
-  external `../workspace-ledger/`.
+  external `../wakeflow-ledger/`.
 - Do not add product repositories, Design, Test, or real test projects to this
   repository as tracked directories, submodules, or gitlinks.
 - Repository scope and managed `AGENTS.md` blocks come from tracked or local
@@ -365,11 +365,11 @@ Operational details live in `skills/wakeflow-governance/` and
 - `.workspace-active/workspace/index.md` is the single active controller entry
   for an installed workspace. It is local runtime and usually not committed.
 - Larger requirement designs and long-term records belong in
-  `../workspace-ledger/`.
+  `../wakeflow-ledger/`.
 - Long-term documents must not contain user absolute paths, API keys, tokens, or
   private information. Use lowercase kebab-case names and execution dates.
 
-See `skills/wakeflow-governance/references/workspace-ledgers.md`.
+See `skills/wakeflow-governance/references/wakeflow-ledgers.md`.
 
 ## Requirement-To-Wave Flow
 
@@ -446,7 +446,7 @@ Reference map:
 - `skills/wakeflow-governance/references/script-pipeline.md`: script
   maintenance, Design intake, state-root/progress projections, and runtime
   checks.
-- `skills/wakeflow-governance/references/workspace-ledgers.md`: document
+- `skills/wakeflow-governance/references/wakeflow-ledgers.md`: document
   placement, indexes, archives, templates, and skill asset ledgers.
 - `skills/wakeflow-governance/references/wakeflow-delivery.md`: dispatch
   packets, delivery envelopes, target result envelopes, controller review, and

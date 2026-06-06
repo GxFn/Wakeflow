@@ -513,7 +513,7 @@ test("state-root review-pack reads target results from controller state root", (
   const { root, stateRootRef, stateRoot } = makeFixture();
   const absoluteEvidence = path.join(root, "absolute-evidence.json");
   writeText(path.join(stateRoot, "reports/plugin-result.json"), "{\"ok\": true}");
-  writeText(path.join(root, "workspace-ledger/evidence/plugin-result.json"), "{\"workspaceRelative\": true}");
+  writeText(path.join(root, "wakeflow-ledger/evidence/plugin-result.json"), "{\"workspaceRelative\": true}");
   writeText(absoluteEvidence, "{\"absolute\": true}");
   writeJson(path.join(stateRoot, "target-results/result-1.json"), {
     schemaVersion: 1,
@@ -523,7 +523,7 @@ test("state-root review-pack reads target results from controller state root", (
     targetTaskId: "CSMR-TASK-1",
     targetWindow: "AlembicPlugin",
     status: "completed",
-    evidenceRefs: ["reports/plugin-result.json", "workspace-ledger/evidence/plugin-result.json", absoluteEvidence],
+    evidenceRefs: ["reports/plugin-result.json", "wakeflow-ledger/evidence/plugin-result.json", absoluteEvidence],
     verification: ["unit tests passed"],
     risks: [],
     createdAt: "2026-06-05T00:01:00.000Z",
@@ -540,9 +540,9 @@ test("state-root review-pack reads target results from controller state root", (
   const summaries = payload.reviewPack.targetResults[0].evidenceRefSummaries;
   assert.equal(summaries[0].stateRootRelativePath, `${stateRootRef}/reports/plugin-result.json`);
   assert.equal(summaries[0].resolvedAgainst, "state-root");
-  assert.equal(summaries[1].ref, "workspace-ledger/evidence/plugin-result.json");
+  assert.equal(summaries[1].ref, "wakeflow-ledger/evidence/plugin-result.json");
   assert.equal(summaries[1].exists, true);
-  assert.equal(summaries[1].path, "workspace-ledger/evidence/plugin-result.json");
+  assert.equal(summaries[1].path, "wakeflow-ledger/evidence/plugin-result.json");
   assert.equal(summaries[1].resolvedAgainst, "workspace-root");
   assert.equal(summaries[2].ref, absoluteEvidence);
   assert.equal(summaries[2].exists, true);

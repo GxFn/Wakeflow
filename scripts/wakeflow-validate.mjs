@@ -9,6 +9,8 @@ const root = path.resolve(getArgValue("--root") || process.cwd());
 const errors = [];
 const placeholderToken = "[TO" + "DO:";
 const oldWorkspaceToken = "codex-control" + "-workspace";
+const oldLedgerToken = "workspace-" + "ledger";
+const oldLedgerReferenceFile = path.join("skills", "wakeflow-governance", "references", "workspace-" + "ledgers.md");
 const ignoredDirectoryNames = new Set([".git", ".workspace-active", ".workspace-local", "coverage", "dist", "node_modules"]);
 const localizedRuntimeTextFiles = new Set([
   "scripts/wakeflow-setup.mjs",
@@ -61,6 +63,7 @@ const requiredFiles = [
   "skills/wakeflow-controller/SKILL.md",
   "skills/wakeflow-target/SKILL.md",
   "skills/wakeflow-governance/SKILL.md",
+  "skills/wakeflow-governance/references/wakeflow-ledgers.md",
   "skills/wakeflow-progressive-validation/SKILL.md",
   "assets/wakeflow-mark.svg",
   "assets/wakeflow-logo.svg",
@@ -68,6 +71,10 @@ const requiredFiles = [
 
 for (const file of requiredFiles) {
   requireFile(file);
+}
+
+if (existsSync(path.join(root, oldLedgerReferenceFile))) {
+  errors.push(`old ledger reference file remains: ${oldLedgerReferenceFile}`);
 }
 
 validatePackage();
@@ -233,6 +240,9 @@ function validateTextSurface() {
     if (text.includes(placeholderToken)) errors.push(`placeholder remains in ${relative(file)}`);
     if (text.includes(oldWorkspaceToken)) {
       errors.push(`old workspace name remains in ${relative(file)}`);
+    }
+    if (text.includes(oldLedgerToken)) {
+      errors.push(`old ledger directory name remains in ${relative(file)}`);
     }
     if (!allowsLocalizedRuntimeText && /\p{Script=Han}/u.test(text)) {
       errors.push(`non-English Han text remains in ${relative(file)}`);

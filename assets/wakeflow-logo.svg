@@ -1,8 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="256" viewBox="0 0 512 256" role="img" aria-label="Wakeflow logo">
-  <rect width="512" height="256" rx="40" fill="#F8FAFC"/>
-  <rect x="40" y="64" width="128" height="128" rx="28" fill="#0F766E"/>
-  <path d="M64 134c13-28 29-28 42 0s29 28 42 0" fill="none" stroke="#ECFDF5" stroke-width="12" stroke-linecap="round"/>
-  <path d="M64 110c13 28 29 28 42 0s29-28 42 0" fill="none" stroke="#A7F3D0" stroke-width="12" stroke-linecap="round"/>
-  <text x="200" y="144" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="700" fill="#0F172A">Wakeflow</text>
-  <text x="202" y="176" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#475569">Unattended control loops</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Wakeflow logo">
+  <rect width="512" height="512" rx="112" fill="#0F766E"/>
+  <path d="M96 280c52-112 116-112 168 0s116 112 168 0" fill="none" stroke="#ECFDF5" stroke-width="48" stroke-linecap="round"/>
+  <path d="M96 184c52 112 116 112 168 0s116-112 168 0" fill="none" stroke="#A7F3D0" stroke-width="48" stroke-linecap="round"/>
 </svg>

@@ -59,7 +59,7 @@ report instead of guessing.
    - Do only the assigned task inside this window / repository boundary.
    - You may use Codex sub agents inside this same repository boundary for
      large task packages, but this window owns final review and evidence.
-   - Do not handle another window's work, `TestWindow` work, total-control
+   - Do not handle another window's work, `Test` / configured test-window work, total-control
      acceptance, or next-wave planning.
 
 4. **Report result envelope**
@@ -143,7 +143,7 @@ node scripts/codex-automation-loop.mjs record-delivery-run --delivery-file <cont
 - Controller return only wakes total control for review. It does not authorize a
   next dispatch. If total control finds no eligible next task, it stops without
   creating another delivery.
-- `TestWindow` is total-control-owned unless the state root and delivery
+- `Test` / configured test-window work is total-control-owned unless the state root and delivery
   envelope explicitly authorize an exception.
 - If the target is an IDE / Plugin test window such as `AlembicTest-IDE`, it
   may handle assigned Codex Plugin, host MCP, local environment, installed /

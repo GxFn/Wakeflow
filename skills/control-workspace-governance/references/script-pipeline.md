@@ -1,6 +1,6 @@
 # Workspace Script Pipeline
 
-Use this reference when auditing ControlWorkspace scripts, choosing validation
+Use this reference when auditing Wakeflow scripts, choosing validation
 commands, refreshing Design handoff intake, or deciding whether a workflow
 should become a script.
 
@@ -74,7 +74,7 @@ should become a script.
 | Validate current docs stay under `.workspace-active/workspace/current/` | `check-workspace-current-layout.mjs` | Read-only layout guard. |
 | Import formal Design handoff board into workspace inbox | `import-design-handoffs.mjs --write` | Discovers and validates ready rows, not a global TODO or execution plan. |
 | Attach an accepted Design source to an active demand | `control-intake.mjs design-handoff` | Writes `intake/design-handoff-*.json` under the state root after total-control judgment. It validates the Design board row but does not accept the handoff, add TODO, or change controller state. |
-| Create a TestWindow boundary card for an active demand | `control-intake.mjs test-card` | Writes `test-cards/*.json` under the state root. It requires the full pre-test boundary gate and does not dispatch TestWindow or accept test evidence. |
+| Create a Test boundary card for an active demand | `control-intake.mjs test-card` | Writes `test-cards/*.json` under the state root. It requires the full pre-test boundary gate and does not dispatch Test or accept test evidence. |
 | Archive completed control docs and shrink historical indexes | `archive-workspace-docs.mjs`, `compact-workspace-index.mjs`, `archive-global-todo-board.mjs`, `generate-archive-topic-summaries.mjs` | Dry-run first; apply only after current status no longer points at the archived item. |
 | Keep script catalog and tests from drifting | `check-script-docs.mjs` | Runs inside `verify-control-center`; add tests to `--with-script-tests`. |
 | Manage the controller state root | `controller-state.mjs`, `render-progress-doc.mjs`, `append-progress-log.mjs` | Default route for execution surfaces. `controller-state` owns machine state, review candidates, explicit review decisions, and final completion transitions; `render-progress-doc` updates only the generated Unified Status block; `append-progress-log` appends human-readable entries without changing state. |

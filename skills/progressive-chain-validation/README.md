@@ -8,7 +8,7 @@ Owner: GxFn
 
 Workspace role:
 
-- Treat this directory as the ControlWorkspace bridge into the external PCV
+- Treat this directory as the Wakeflow bridge into the external PCV
   canonical source repository.
 - `SKILL.md` is a lightweight routing skill for workspace use; canonical PCV
   method instructions, references, templates, and source changes remain in the
@@ -17,7 +17,7 @@ Workspace role:
   Workspace current / ledger documents as canonical Workspace status plus PCV
   evidence labels; this bridge must not become a second state authority.
 - Keep active PCV source development in the independent source repository only
-  when the user wants ControlWorkspace to manage PCV source changes.
+  when the user wants Wakeflow to manage PCV source changes.
 - Do not assume it is installed in Codex runtime unless a sync/link step has
   been performed and recorded.
 - When pulling or syncing from the upstream repository, record the source commit

@@ -1,8 +1,8 @@
 <div align="center">
 
-# Codex Control Workspace
+# Wakeflow
 
-一个本地优先的 Codex 多仓库总控面：一个总控窗口，多个职责窗口，明确证据，direct-thread 投递，但不把脚本变成裁决者。
+一个本地优先的 Codex 插件和多仓库总控面：一个总控窗口，多个职责窗口，明确证据，direct-thread 投递，但不把脚本变成裁决者。
 
 [English](README.md)
 
@@ -14,7 +14,7 @@
 
 ## 它解决什么
 
-一个 Codex 窗口很适合处理一个仓库。真实产品需求经常同时跨过插件入口、本地 daemon、共享 core、Dashboard、需求设计窗口和真实项目测试窗口。Codex Control Workspace 的作用，是防止这些工作散成一堆聊天上下文。
+一个 Codex 窗口很适合处理一个仓库。真实产品需求经常同时跨过插件入口、本地 daemon、共享 core、Dashboard、需求设计窗口和真实项目测试窗口。Wakeflow 的作用，是防止这些工作散成一堆聊天上下文。
 
 核心亮点：
 
@@ -55,7 +55,7 @@ flowchart TD
 ```text
 MyWorkspace/
   AGENTS.md                  # 解包后的总控入口
-  codex-control-workspace/   # 本通用仓库
+  Wakeflow/                  # Wakeflow 插件和总控运行时
   ProductRepo/
   CoreRepo/
   PluginRepo/
@@ -76,7 +76,7 @@ MyWorkspace/
 可以从这段提示词开始：
 
 ```text
-你是 codex-control-workspace 安装助手。
+你是 Wakeflow 安装助手。
 先读取 README.md、README.zh-CN.md、AGENTS.md、workspace.config.json、scripts/README.md。
 对同级仓库做只读探测。
 列出建议窗口名、仓库职责、已有 AGENTS.md 状态，以及将创建的本地运行面。
@@ -163,4 +163,4 @@ node scripts/workspace-control.mjs status
 5. **仓库职责不能混**：shared contract、插件入口、daemon 行为、Dashboard UI、Design 和 Test 都留在正确窗口。
 6. **小提示词优于命令大全**：目标窗口需要当前任务、state root、skill 和身份规则，不需要完整脚本手册。
 
-Codex Control Workspace 是多窗口协作的脚手架。它的工作，是让真正的决策点难以被跳过。
+Wakeflow 是多窗口协作的脚手架。它的工作，是让真正的决策点难以被跳过。

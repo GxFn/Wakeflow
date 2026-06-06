@@ -1,7 +1,7 @@
 # Control Workspace Current Status
 
 Updated: 2026-05-27
-Control window: ControlWorkspace
+Control window: Wakeflow
 Status: idle / no active demand
 
 ## Status Summary

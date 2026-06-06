@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/codex-control-workspace/controller-event.schema.json",
+  "$id": "https://example.invalid/wakeflow/controller-event.schema.json",
   "title": "Controller Event",
   "type": "object",
   "required": [

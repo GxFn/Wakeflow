@@ -1,6 +1,6 @@
 # Internal Design Workspace
 
-Use this directory when the user does not have an external `DesignWindow` repository.
+Use this directory when the user does not have an external Design repository.
 
 - Handoff board: `.workspace-active/workspace/current/design-handoff-board.md`
 - Local rules: `AGENTS.md`

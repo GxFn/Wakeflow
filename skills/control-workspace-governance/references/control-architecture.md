@@ -40,7 +40,7 @@ preserved except as historical archive.
 
 ## Default Control Loop
 
-Use this loop for ordinary ControlWorkspace work unless the user explicitly
+Use this loop for ordinary Wakeflow work unless the user explicitly
 asks for a different mode:
 
 | Step | Owner | Input | Output | Stop Gate |
@@ -81,7 +81,7 @@ Before moving anything out of `AGENTS.md`, ask:
 
 1. Was this rule added to prevent a known total-control failure mode?
 2. Would hiding it make it easier to skip thinking, over-delegate, over-document,
-   trust a window self-report, misuse `TestWindow`, or fabricate progress?
+   trust a window self-report, misuse `Test` / configured test-window work, or fabricate progress?
 3. Does the rule need to be checked before most replies, file edits, dispatches,
    tests, acceptances, or automation jumps?
 
@@ -141,7 +141,7 @@ transitions.
 
 | Class | Use When | Mechanism | Stop Condition |
 | --- | --- | --- | --- |
-| Controller self follow-up | The current task is owned by `ControlWorkspace` itself. | Direct thread follow-up. No target dispatch packet. If unattended automation is enabled, keep-live is active. | User stop, plan hard gate, or no useful next unit. |
+| Controller self follow-up | The current task is owned by Wakeflow itself. | Direct thread follow-up. No target dispatch packet. If unattended automation is enabled, keep-live is active. | User stop, plan hard gate, or no useful next unit. |
 | Closed-loop target fan-out | The controller state root has eligible child-window target tasks and verified thread registrations. | Total control creates dispatch packets and delivery envelopes; delivery adapter uses direct thread delivery. In unattended mode this repeats continuously inside the approved goal. | Delivery failure, evidence gate, group ready for controller review, final completion, hard gate, user stop, or no eligible TODO. |
 | Closed-loop controller return | `DispatchGroup.returnPolicy` permits a controller wakeup: `group-ready` after the expected group is ready / blocked, or `per-target` after one target result exists. | Controller-return direct thread delivery to the stored `DispatchGroup.controllerWindow`, plus `review-results`; unattended mode immediately continues review / next-wave dispatch when allowed. | Acceptance decision, next-wave dispatch, hard stop gate, missing evidence, final completion, user stop, or no eligible TODO. |
 | Manual discussion | User is designing, asking, or redirecting. | Normal chat. | Do not treat as unattended automation. |

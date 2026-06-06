@@ -3,12 +3,12 @@
 日期：YYYY-MM-DD
 状态：草案
 Design Key：<READABLE-TOPIC-YYYY-MM-DD>
-来源窗口：DesignWindow
-接收窗口：ControlWorkspace
+来源窗口：Design
+接收窗口：Wakeflow
 
 ## 摘要
 
-简要说明 `ControlWorkspace` 需要评审什么。
+简要说明 Wakeflow 总控需要评审什么。
 
 ## 交接类型
 
@@ -41,7 +41,7 @@ Design Key：<READABLE-TOPIC-YYYY-MM-DD>
 - 代码事实状态：
 - 是否需要总控继续代码实现依赖调研：
 - 是否处于 detached-design-mode：
-- 与 ControlWorkspace 当前主线关系：
+- 与 Wakeflow 当前主线关系：
 
 ## 建议下一步
 
@@ -49,13 +49,13 @@ Design Key：<READABLE-TOPIC-YYYY-MM-DD>
 
 - 接收为当前主线 bug / 返修候选。
 - 加入 TODO。
-- 在 ControlWorkspace 启动原始计划确认。
+- 在 Wakeflow 启动原始计划确认。
 - 启动需求设计 / 代码调研。
 - 创建目标阶段确认。
 - 创建 controller state root / task package。
 - 暂停，等待用户确认。
 
-说明：本建议只给 `ControlWorkspace` 评审，不是执行窗口提示词。
+说明：本建议只给 Wakeflow 总控评审，不是执行窗口提示词。
 
 ## 功能闭环摘要
 
@@ -71,14 +71,10 @@ Design Key：<READABLE-TOPIC-YYYY-MM-DD>
 
 | 窗口 | 建议状态 | 建议职责 | 依赖 / 阻塞 |
 | --- | --- | --- | --- |
-| BaseWindow | 参与 / 观察 / 无任务 / 待调研 |  |  |
-| CoreWindow | 参与 / 观察 / 无任务 / 待调研 |  |  |
-| AgentWindow | 参与 / 观察 / 无任务 / 待调研 |  |  |
-| DashboardWindow | 参与 / 观察 / 无任务 / 待调研 |  |  |
-| PluginWindow | 参与 / 观察 / 无任务 / 待调研 |  |  |
-| DesignWindow | 设计完成 / 继续调研 / 无任务 |  |  |
-| TestWindow | 参与 / 观察 / 无任务 / 待调研 |  |  |
-| RealTestProject | 观察 / 受保护 / 无任务 |  |  |
+| <configured product window / discovered repo> | 参与 / 观察 / 无任务 / 待调研 |  |  |
+| Design | 设计完成 / 继续调研 / 无任务 |  |  |
+| Test | 参与 / 观察 / 无任务 / 待调研 |  |  |
+| <real project if configured> | 观察 / 受保护 / 无任务 |  |  |
 
 ## 证据与链接
 
@@ -104,13 +100,13 @@ Design Key：<READABLE-TOPIC-YYYY-MM-DD>
 
 阶段候选仅供总控评审，不是 task package 派发依据。
 
-## 给 ControlWorkspace 的开放问题
+## 给 Wakeflow 的开放问题
 
 1. ...
 
 ## 交接前自检
 
-- 已对照 `docs/workspace-alignment-checklist.md` 或外部 DesignWindow 的同名文件：
+- 已对照 `docs/workspace-alignment-checklist.md` 或外部 Design 仓库的同名文件：
 - 本 handoff 没有包含可复制实现窗口提示词：
 - 阶段仍为候选，未写成 task package：
 - TODO / Backlog 已列入证据与链接：

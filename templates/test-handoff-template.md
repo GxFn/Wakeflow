@@ -1,4 +1,4 @@
-# TestWindow Boundary Card Template
+# Test Boundary Card Template
 
 Use this template only when total control has already decided that a real
 scenario, cold start, rescan, Dashboard observation, runtime monitor, or
@@ -10,11 +10,11 @@ The machine source of truth is the active demand state root:
 node scripts/control-intake.mjs test-card \
   --state-root <state-root> \
   --test-id <TEST-ID> \
-  --target-window <TestWindow or IDE/Test window> \
+  --target-window <Test or configured test window> \
   --question "<single question this test answers>" \
   --object-boundary "<project/thread/window boundary>" \
   --controller-self-check "<what total control already verified>" \
-  --real-scenario-condition "<why this needs TestWindow>" \
+  --real-scenario-condition "<why this needs Test or a configured test window>" \
   --success-means "<what success proves>" \
   --failure-means "<what failure proves>" \
   --cannot-conclude "<what this test cannot prove>" \
@@ -27,7 +27,7 @@ node scripts/control-intake.mjs test-card \
 
 After total control reviews the generated `test-cards/*.json`, create the
 state-root task package with `controller-state.mjs add-task-package`. Do not
-dispatch `TestWindow` from this template alone.
+dispatch a test window from this template alone.
 
 Optional human projection for `test-exchange.md`:
 
@@ -38,7 +38,7 @@ Optional human projection for `test-exchange.md`:
 State root：<state-root>
 Test card：<state-root>/test-cards/<id>.json
 Task package：<task package id, after total control creates one>
-执行窗口：<TestWindow / IDE test window>
+执行窗口：<Test / configured test window>
 目标项目：<真实测试项目 / fixture / mock project>
 
 #### 测试目标

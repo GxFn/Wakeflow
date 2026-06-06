@@ -3,8 +3,8 @@
 日期：YYYY-MM-DD
 状态：草案
 Design Key：<READABLE-TOPIC-YYYY-MM-DD>
-维护窗口：DesignWindow
-总控：ControlWorkspace
+维护窗口：Design
+总控：Wakeflow
 
 ## 用户目标
 
@@ -32,11 +32,11 @@ Design Key：<READABLE-TOPIC-YYYY-MM-DD>
 
 标记一项：
 
-- 不影响 ControlWorkspace 当前主线。
+- 不影响 Wakeflow 当前主线。
 - TODO 候选。
 - 下一主线候选。
 - 当前主线阻塞。
-- 需要 ControlWorkspace 总控确认。
+- 需要 Wakeflow 总控确认。
 
 ## 初始范围
 
@@ -52,14 +52,10 @@ Design Key：<READABLE-TOPIC-YYYY-MM-DD>
 
 | 窗口 / 仓库 | 初步判断 | 理由 |
 | --- | --- | --- |
-| BaseWindow | 参与 / 观察 / 无任务 / 待调研 |  |
-| CoreWindow | 参与 / 观察 / 无任务 / 待调研 |  |
-| AgentWindow | 参与 / 观察 / 无任务 / 待调研 |  |
-| DashboardWindow | 参与 / 观察 / 无任务 / 待调研 |  |
-| PluginWindow | 参与 / 观察 / 无任务 / 待调研 |  |
-| DesignWindow | 需求讨论 / 草案 / 无任务 |  |
-| TestWindow | 参与 / 观察 / 无任务 / 待调研 |  |
-| RealTestProject | 观察 / 受保护 / 无任务 |  |
+| <configured product window / discovered repo> | 参与 / 观察 / 无任务 / 待调研 |  |
+| Design | 需求讨论 / 草案 / 无任务 |  |
+| Test | 参与 / 观察 / 无任务 / 待调研 |  |
+| <real project if configured> | 观察 / 受保护 / 无任务 |  |
 
 ## 已知事实
 

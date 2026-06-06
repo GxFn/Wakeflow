@@ -489,8 +489,6 @@ function validateDeliveryRole(value) {
   const normalized = String(value || "target").trim();
   const aliases = new Map([
     ["AlembicTest", "test-target"],
-    ["TestWindow", "test-target"],
-    ["DesignWindow", "design"],
   ]);
   const role = aliases.get(normalized) || normalized;
   const allowed = new Set(["target", "controller", "test-target", "design", "observer"]);
@@ -2108,7 +2106,7 @@ function commandBuildControllerReturn() {
   if (explicitControllerWindow && storedControllerWindow && explicitControllerWindow !== storedControllerWindow) {
     fail(`Dispatch group ${dispatchGroup} returns to controller ${storedControllerWindow}; cannot override with ${explicitControllerWindow}.`);
   }
-  const controllerWindow = explicitControllerWindow || storedControllerWindow || config.controlWindow || config.workspaceName || "ControlWorkspace";
+  const controllerWindow = explicitControllerWindow || storedControllerWindow || config.controlWindow || config.workspaceName || "Wakeflow";
   const registration = loadThreadRegistration(controllerWindow);
   if (hasFlag("--require-thread") && !registration) fail(`No registered controller thread for window: ${controllerWindow}`);
   validateControllerReturnAllowed({ review, triggerTarget, triggerTaskId });

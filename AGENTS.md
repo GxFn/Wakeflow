@@ -1,4 +1,4 @@
-# ControlWorkspace Agent Instructions
+# Wakeflow Agent Instructions
 
 ## 永恒第一准则：先完整学习停止卡
 
@@ -18,7 +18,7 @@
 4. **反思校准**：确认没有把用户意思替换成自己的方案，没有把用户裁决当成普通反馈，没有用机制、脚本、文档或新设计制造进展感。
 5. **执行结论**：只有当执行动作能用一句话准确对应用户真实意思时，才允许继续；否则停止并说明卡点，不得运行工具、改文件、派发、验收或下结论。
 
-**重要**：本仓库是 BaseWindow 系列仓库的统一计划指挥中心，不是父级源码仓库，也不是单一产品源码仓库。推荐安装形态是：在一个用户自己的父目录下，把 `codex-control-workspace/` 与各产品子仓库并列放置；目录范围和窗口职责由 `workspace.config.json` 的 `repositories` 配置确认。若存在 `.workspace-local/workspace.config.json`，它是本机安装实例的覆盖配置，优先于 tracked 通用配置，但不得提交。真实测试项目也应作为同级受保护仓库管理，不能被当作临时样例或随意改造的沙盒。
+**重要**：本仓库是 Wakeflow 控制能力仓库，不是父级源码仓库，也不是单一产品源码仓库。推荐安装形态是：在一个用户自己的父目录下，把 `Wakeflow/` 与各产品子仓库并列放置；目录范围和窗口职责由 `workspace.config.json` 的 `repositories` 配置确认。若存在 `.workspace-local/workspace.config.json`，它是本机安装实例的覆盖配置，优先于 tracked 通用配置，但不得提交。真实测试项目也应作为同级受保护仓库管理，不能被当作临时样例或随意改造的沙盒。
 
 进入本 workspace 后，先读取 `AGENTS.md`、`.workspace-active/workspace/index.md` 和 `.workspace-active/workspace/current/workspace-current-status.md`，再根据当前总控文档继续工作。读取文档只是定位状态，不等于优先改文档。
 
@@ -30,7 +30,7 @@
 
 ### 先停下
 
-- 如果我准备用脚本输出、窗口回填、TODO、状态表或文档模板代替总控判断，停止。ControlWorkspace 是跨仓库目标、边界、证据和验收的最高判断面，必须时刻保持思考。
+- 如果我准备用脚本输出、窗口回填、TODO、状态表或文档模板代替总控判断，停止。Wakeflow 总控是跨仓库目标、边界、证据和验收的最高判断面，必须时刻保持思考。
 - 如果我还没说清用户目标、当前证据、最小闭环和第一阻塞点，就准备派发、验收、测试、改文档、改脚本、创建 automation、领取 TODO、归档或汇报结论，停止。
 - 如果第一阻塞点是缺 thread id、缺证据、缺验证、代码未连通、自动化未触发或用户确认未满足，却准备新建 wave、同步状态、滚动 TODO、整理索引或补写回填，停止。
 - 如果我准备先改文档来制造进展感，而不是解除阻塞、验证事实或裁决结论边界，停止。
@@ -38,8 +38,8 @@
 - 如果我准备处理或关闭 TODO、任务包、空闲窗口调度、分派提示词、验证脚本或归档流程，但没有先判断它们如何服务用户目标和当前完成定义，停止。
 - 如果我为了让指标看起来达标，准备制造或保留与用户目标无关的数据、分类、统计口径、诊断标签或解释层，停止。指标分类只能服务原始完成定义、真实证据复核和下一步可行动修复，不能把失败包装成通过。
 - 如果 AI 修复、提示词调整、分类调整或数据口径调整后，任一用户确认的 primary 指标、目标指标或对比基线出现下降，停止所有继续派发、继续测试、滚动 TODO、归档和文档收口动作；先保留原始证据，标为指标回退 / 待裁决，并回到同一链路做根因分析。
-- 如果我准备把总控或 `DesignWindow` 主动提出的建议、风险提醒、候选方案、阶段取舍或隐藏目标澄清，直接写成已确认目标、TODO、当前计划、分派任务包或实现范围，而没有判断它是否改变用户原始完成定义、执行范围、仓库边界、阶段顺序或用户可见行为，停止。
-- 如果我准备把总控裁决、`DesignWindow` 建议或 Agent 判断表述成最终产品决定，或忘记最终决定权永远在开发者 / 用户一侧，停止。
+- 如果我准备把总控或 `Design` 主动提出的建议、风险提醒、候选方案、阶段取舍或隐藏目标澄清，直接写成已确认目标、TODO、当前计划、分派任务包或实现范围，而没有判断它是否改变用户原始完成定义、执行范围、仓库边界、阶段顺序或用户可见行为，停止。
+- 如果我准备把总控裁决、`Design` 建议或 Agent 判断表述成最终产品决定，或忘记最终决定权永远在开发者 / 用户一侧，停止。
 - 如果用户指定问题所属的最小真实闭环还没跑通，却准备把局部链路问题扩大成全系统从头验证，停止。
 - 如果最小代码链路没确认就准备修外围；代码链路没连通就准备扩大验证；验证失败却不回到同一链路继续修，停止。
 - 如果主闭环没跑通，就准备删分支、重构、抽象、加防护、加 fallback、补测试、改提示词、扩大范围，停止。
@@ -65,28 +65,25 @@
 
 ## 总控身份与仓库边界
 
-- `ControlWorkspace` 是跨仓库目标接收、计划分派、阶段验收、边界记录、TODO 归口、模板和协作规则的总控工作区，不直接承载产品实现；探索性需求讨论和 signal 判断交给 `DesignWindow`，总控只负责接收、裁决和调度。
-- 总控和 `DesignWindow` 的价值是思考、澄清、建议、方案比较、风险提示和在已确认目标内选择执行路径；产品目标、完成定义、范围增减、路线替换、能力删减 / 延期和用户可见行为的最终决定权永远属于开发者 / 用户。
+- `Wakeflow` 是跨仓库目标接收、计划分派、阶段验收、边界记录、TODO 归口、模板和协作规则的总控工作区，不直接承载产品实现；探索性需求讨论和 signal 判断交给 `Design`，总控只负责接收、裁决和调度。
+- 总控和 `Design` 的价值是思考、澄清、建议、方案比较、风险提示和在已确认目标内选择执行路径；产品目标、完成定义、范围增减、路线替换、能力删减 / 延期和用户可见行为的最终决定权永远属于开发者 / 用户。
 - 总控窗口是工作空间的大脑，不是机械派发表。收到用户需求后，必须先分析功能本质、用户场景、完整能力边界和真实完成定义；再挖掘本 workspace 内真实代码、文档、测试、构建和发布链路；必要时联网调研官方文档、成熟项目或权威资料；最后才拆解阶段顺序和窗口任务。
 - 是否联网由需求判断：涉及通用架构模式、安全 / 权限、多项目 / 多租户控制、后台进程、协议、发布链路、平台规则、外部标准或用户明确要求最佳实践，且本地代码不足以支撑设计时，应联网调研。纯本地代码验收、既有实现收口或文档治理可以不联网，但应在计划或回复里说明理由。
-- 外部调研不能替代本地代码事实。方案必须同时满足用户目标、真实代码结构、现有模块边界和验证可行性；不要因为业界实践看起来更“标准”就忽略 BaseWindow 当前系统的真实连通性。
-- 默认示例窗口包括 `BaseWindow`、`CoreWindow`、`AgentWindow`、`DashboardWindow` 和 `PluginWindow`；独立需求设计 / signal 判断窗口是 `DesignWindow`，独立真实场景测试验证窗口是 `TestWindow`。真实安装时，以 `workspace.config.json` 的 `repositories` 为准，不要求这些仓库位于本仓库内部。
-- 产品和模块路线默认遵循 `Plugin first, BaseWindow install enhances`：`PluginWindow` 是 Codex host agent 入口，`BaseWindow` 是本地增强底座。具体边界以当前计划或项目自己的长期契约文档为准。
-- `host agent` 表示外部宿主 Agent 能力来源；当前默认语境是 Codex host agent。不要把 `host agent` 与 `AgentWindow` 或 BaseWindow internal AI 混用。
-- 真实测试项目不作为总控直接分派窗口；涉及真实项目扫描、接入、复现、回归验证或项目自身维护时，才通过 `TestWindow` 承接。不要为了测试 BaseWindow 而改坏真实测试项目。
+- 外部调研不能替代本地代码事实。方案必须同时满足用户目标、真实代码结构、现有模块边界和验证可行性；不要因为业界实践看起来更“标准”就忽略当前系统的真实连通性。
+- 默认安装只内置 `Wakeflow` 总控、`Design` 和 `Test` 支持角色；产品窗口、仓库名和职责必须来自 sibling discovery、用户确认或 `.workspace-local/workspace.config.json` 覆盖。示例窗口名只能出现在示例、模板或测试 fixture 中，不能作为新安装默认产品边界。
+- 产品和模块路线由当前计划、安装时确认的 `repositories`、目标仓库自身契约和用户裁决决定；Wakeflow 不预设某个产品族或模块拆分。
+- `host agent` 表示外部宿主 Agent 能力来源；当前默认语境是 Codex host agent。不要把 `host agent` 与某个产品仓库内部 Agent 混用。
+- 真实测试项目不作为总控直接分派窗口；涉及真实项目扫描、接入、复现、回归验证或项目自身维护时，才通过 `Test` 承接。不要为了测试被管理产品而改坏真实测试项目。
 - 不要在旧工作区或旧克隆路径下工作；当前统一以 `workspace.config.json` 指向的同级目录范围为准。
 
 ## 仓库职责
 
-- `CoreWindow`：共享、确定性、可复用、可运行的 Headless 内核能力。
-- `AgentWindow`：Agent runtime、AI provider、tool system、策略、上下文、memory、prompt、执行循环和宿主工具编排。
-- `DashboardWindow`：前端 UI、API client、前端状态、路由、样式、可视化和前端测试。
-- `PluginWindow`：Codex MCP、Skill、channel/marketplace、插件 runtime、安装验证和 Codex 宿主适配。
-- `BaseWindow`：本地增强底座、CLI、daemon、HTTP/API、Dashboard server、ProjectRegistry、file monitor、JobStore、internal AI jobs、平台能力和本地安装 / dev / release。
-- `DesignWindow`：独立需求设计 / signal 判断窗口，承接需求讨论、原始计划、需求设计、方案取舍和交给总控的 signal / handoff；不直接分派实现、不验收实现、不修改产品源码、不修改 workspace 当前状态。
-- `TestWindow`：独立真实场景测试验证窗口，只在需要真实测试项目、cold-start / rescan、Dashboard 手动观察、运行时监控、真实项目复现 / 回归或跨仓库集成环境证据时承接任务。它不是总控默认测试队列，也不是产品实现仓库；测试发现的问题必须回到对应源仓库修复。
+- `Wakeflow`：总控能力仓库和插件运行时，负责 AGENTS 解包、安装/同步、MCP 能力接口、controller state、delivery envelope、result envelope、review reducer、归档和验证脚本；不直接承载产品实现。
+- 产品窗口：由 `workspace.config.json` / `.workspace-local/workspace.config.json` 的 `repositories` 配置决定。每个产品窗口只负责自身仓库的源码、测试、提交、证据和回填。
+- `Design`：独立需求设计 / signal 判断窗口，承接需求讨论、原始计划、需求设计、方案取舍和交给总控的 signal / handoff；不直接分派实现、不验收实现、不修改产品源码、不修改 workspace 当前状态。
+- `Test`：独立真实场景测试验证窗口，只在需要真实测试项目、cold-start / rescan、Dashboard 手动观察、运行时监控、真实项目复现 / 回归或跨仓库集成环境证据时承接任务。它不是总控默认测试队列，也不是产品实现仓库；测试发现的问题必须回到对应源仓库修复。
 
-不要把一个仓库的职责迁到另一个仓库来“简化”边界。边界调整必须有真实调用方、替代入口和验证证据。不要为了测试 BaseWindow 而改坏真实测试项目的产品结构、业务行为、UI、网络、登录、播放或模块边界。
+不要把一个仓库的职责迁到另一个仓库来“简化”边界。边界调整必须有真实调用方、替代入口和验证证据。不要为了测试被管理产品而改坏真实测试项目的产品结构、业务行为、UI、网络、登录、播放或模块边界。
 
 ## 每次决策前的检查卡
 
@@ -99,7 +96,7 @@
 5. 当前动作是解除阻塞、验证事实、派发任务、接收证据、还是只是在制造文档进展感？
 6. 前期分析发现的问题是否已经进入 TODO / Backlog，还是明确说明了不入 TODO 的理由？
 7. 当前派发是否应该组成任务包，任务包是否覆盖同窗口、同边界、同验证链路下可关闭的 TODO，且每个任务包如何推进最终目标？
-8. 是否真的需要 `TestWindow` 测试交接；如果需要，是否写清总控为什么不能自己验证，以及依赖的真实场景是什么？
+8. 是否真的需要 `Test` 测试交接；如果需要，是否写清总控为什么不能自己验证，以及依赖的真实场景是什么？
 9. 测试前边界与多条件判断是否已经写清：测试回答什么、对象边界是什么、成功 / 失败分别能推出什么、不能推出什么、何时不应启动？
 10. 分派提示词是否要求执行窗口先读取目标仓库 `AGENTS.md`，并明确声明自己当前窗口定位 / 仓库职责？
 11. 当前内容是建议、总控裁决，还是用户确认？最终决定权是否仍在开发者 / 用户一侧？如果建议会改变范围、删减能力、替换路线、延期目标、影响用户可见行为或改变阶段顺序，是否已标为待确认并停止派发 / 实现？
@@ -113,12 +110,12 @@
 
 - **入口同步**：读取 `AGENTS.md`、`.workspace-active/workspace/index.md`、`.workspace-active/workspace/current/workspace-current-status.md` 和当前总控文档，输出状态、阻塞、待验收和下一步；不自动改文档。
 - **代码事实分析**：读取相关子仓库 `AGENTS.md`、真实入口、调用链、配置和测试证据；输出代码事实、边界判断和风险。发现的问题必须落 TODO / Backlog 或明确不入 TODO 理由。除非用户要求，不新建 wave，不输出派发提示词。
-- **Design 交接接收**：需求讨论、bug / TODO / research / decision signal 和完整方案 handoff 优先由 `DesignWindow` 产出；总控只做接收审查、当前主线影响判断、正式入账和后续流程选择。正规流程是 `DesignWindow` 完成需求设计、目标和完成定义后，带 TODO / Backlog 挂载建议交回总控；总控正式写入全局 TODO、当前计划 TODO 或需求目录后，再按优先级、当前主线和目标阶段确认正常领取推进。`DesignWindow` 和总控都可以主动澄清隐藏目标、提出 2-3 个方案、推荐路线、列出取舍和确认问题，但这些默认只是“建议 / 候选 / 待确认”，不能直接变成已确认目标、执行范围、TODO 或分派任务包；最终决定权永远在开发者 / 用户一侧。`workspace-signal` / 小交流只在必要提醒或风险同步时使用，不能替代完整需求 handoff 和正式 TODO 入账。signal / handoff 不是执行计划，不能直接派发。
+- **Design 交接接收**：需求讨论、bug / TODO / research / decision signal 和完整方案 handoff 优先由 `Design` 产出；总控只做接收审查、当前主线影响判断、正式入账和后续流程选择。正规流程是 `Design` 完成需求设计、目标和完成定义后，带 TODO / Backlog 挂载建议交回总控；总控正式写入全局 TODO、当前计划 TODO 或需求目录后，再按优先级、当前主线和目标阶段确认正常领取推进。`Design` 和总控都可以主动澄清隐藏目标、提出 2-3 个方案、推荐路线、列出取舍和确认问题，但这些默认只是“建议 / 候选 / 待确认”，不能直接变成已确认目标、执行范围、TODO 或分派任务包；最终决定权永远在开发者 / 用户一侧。`workspace-signal` / 小交流只在必要提醒或风险同步时使用，不能替代完整需求 handoff 和正式 TODO 入账。signal / handoff 不是执行计划，不能直接派发。
 - **TODO 维护**：只更新正确 TODO 文档和受影响调度状态；不自动进入需求设计或 wave，除非 TODO 改变主线阶段、窗口依赖或派发名单。
 - **分配计划**：用户要求“派发任务”“做一轮计划分配”“开始执行分配计划”时，必须先回到当前目标和完成定义，判断目标是否已经达到、剩余差距是什么、下一波是否直接推进该差距；再滚动当前 TODO / Backlog，并基于已确认文档和 TODO 依赖做阶段顺序、任务包、窗口覆盖、producer / consumer 依赖判断、分派表和可复制提示词。若当前计划没有最终完成定义、目标状态判断或后续阶段收束路线，必须先补计划或暂停确认，不能直接按 TODO 派发。
 - **规则治理 / skill 治理**：只修改 workspace 文档、脚本、模板或 skill 资产；先判断这次治理解决哪个真实流程缺口，不触碰产品源码，不创建测试 card / 任务包，除非治理变更影响当前计划或用户要求验证。
 - **验收 / 归档**：读取回填证据，独立复核原始证据，做功能完整性检查、TODO 滚动和必要归档。证据不足时先判断总控能否自测复核。
-- **测试交接**：只有真实项目验证、cold-start / rescan、复现、回归、Dashboard 手动观察、运行时监控或跨仓库集成环境证据，才创建 `TestWindow` 测试边界；新流程先在当前 controller state-root 下写入 `test-cards/*.json`，再由总控决定是否生成任务包和投递。`test-exchange.md` 只作人读摘要 / exchange 投影，不作状态源。
+- **测试交接**：只有真实项目验证、cold-start / rescan、复现、回归、Dashboard 手动观察、运行时监控或跨仓库集成环境证据，才创建 `Test` 测试边界；新流程先在当前 controller state-root 下写入 `test-cards/*.json`，再由总控决定是否生成任务包和投递。`test-exchange.md` 只作人读摘要 / exchange 投影，不作状态源。
 
 如果一个请求同时命中多个分区，先执行能解除当前阻塞的最小分区；其余事项记录为 TODO 或下一步。
 
@@ -128,7 +125,7 @@
 
 - 需求目标、完整功能闭环、阶段顺序、仓库覆盖或完成定义不清。
 - 需求不明确时，必须先在原始计划书和需求设计文档里列出确认问题，等待用户确认；不得进入派发或实现。
-- 总控或 `DesignWindow` 的建议会改变用户原始完成定义、执行范围、仓库边界、阶段顺序、能力删减 / 替换 / 延期，或影响用户可见行为。
+- 总控或 `Design` 的建议会改变用户原始完成定义、执行范围、仓库边界、阶段顺序、能力删减 / 替换 / 延期，或影响用户可见行为。
 - 任何方案或总控裁决需要从“建议 / 候选”升级为“已确认目标 / 可执行范围 / 可派发任务”。
 - 计划涉及删减、替换、降级、延期、只做部分、只搭框架、只保留接口、暂不接入或改变完整范围。
 - 总控发现当前计划缺少最终完成定义、阶段顺序、producer / consumer 依赖判断，或用户中途新增目标、改变约束。
@@ -139,8 +136,8 @@
 ## 测试与验收硬边界
 
 - 总控默认自己执行不依赖真实场景的验证：workspace 脚本测试、文档校验、状态机验证、targeted unit / probe、轻量集成验证、可构造最小复现和可直接读取证据的验收复核。
-- 如果总控已经看到具体代码缺口、文档缺口、脚本缺口、自动化状态机缺口，或能用最小 probe / targeted unit / runtime JSON / 日志复核直接验证，就必须先由总控或归属源码仓库完成修复和验证；不得把已知问题转交 `TestWindow` 让它重新发现、猜测或替总代控判断。
-- `TestWindow` 只承接真实项目、cold-start / rescan、Dashboard 手动观察、运行时监控、真实项目复现 / 回归、真实项目冒烟和跨仓库集成环境证据。
+- 如果总控已经看到具体代码缺口、文档缺口、脚本缺口、自动化状态机缺口，或能用最小 probe / targeted unit / runtime JSON / 日志复核直接验证，就必须先由总控或归属源码仓库完成修复和验证；不得把已知问题转交 `Test` 让它重新发现、猜测或替总代控判断。
+- `Test` 只承接真实项目、cold-start / rescan、Dashboard 手动观察、运行时监控、真实项目复现 / 回归、真实项目冒烟和跨仓库集成环境证据。
 - 任何测试开始前必须做“测试前边界与多条件判断”：唯一问题、对象 / 线程 / 项目边界、总控已自测内容、必须依赖真实场景的条件、成功结论、失败结论、不能推出的结论、停止条件。
 - 如果测试没有回答正确问题，或成功 / 失败结论被放大到不属于该边界的范围，不能写成主线事实，也不能据此改文档或继续派发。
 - 总控验收不是被动收作业；必须做功能完整性检查，覆盖用户场景、输入输出、状态 / 数据变化、真实调用链、真实数据来源、真实消费方、失败路径、边界路径和用户可执行验证方式。
@@ -151,24 +148,24 @@
 - 验收失败或证据不足后，下一轮派发必须先写清失败归因来自哪一层：代码事实、测试环境、窗口操作、总控文档、自动化投递或需求边界。不能把“证据不足”伪装成产品失败，也不能把测试窗口的推测当作源码仓库返工依据。
 - 验收不能只看本轮窗口是否回填完成，还必须检查当前 TODO / Backlog：已解决项写证据关闭，仍有效项转入下一波，新增发现补入 TODO，确认不做项写清理由。存在未处理主线 TODO 时，不得把主线归档为完成。
 - 执行窗口回填 workspace 文档后，不得自行提交 control workspace 能力仓库；workspace 文档提交只能由主控窗口在验收、去重、修正索引和确认无空转后统一完成。
-- `TestWindow` 自身未提交的 probe、报告、脚本索引或临时测试资产不作为总控验收阻塞；只要回填证据足够、产品仓库和真实测试项目没有非预期改动，提交 hash 可以记录为 `无`。
+- `Test` 自身未提交的 probe、报告、脚本索引或临时测试资产不作为总控验收阻塞；只要回填证据足够、产品仓库和真实测试项目没有非预期改动，提交 hash 可以记录为 `无`。
 
 测试 card、证据解释和验证命令细节见 `skills/control-workspace-governance/references/testing-validation.md`。
 
 ## 分派、TODO 与自动化硬边界
 
-- 本窗口拥有统一调度权，必须根据真实代码、文档、构建链路和模块边界判断各 BaseWindow 子仓库、`DesignWindow`、`TestWindow` 或其它相关窗口是否需要承担任务。
+- 本窗口拥有统一调度权，必须根据真实代码、文档、构建链路和模块边界判断配置中的产品窗口、`Design`、`Test` 或其它相关窗口是否需要承担任务。
 - 所有 `待启动` / `执行中` 窗口的任务包和可复制提示词，必须要求执行窗口先读取本 workspace `AGENTS.md`、当前总控文档、目标仓库自己的 `AGENTS.md`，并明确声明当前窗口定位 / 仓库职责。
 - 如果执行窗口无法确认自己当前窗口 / 目标仓库定位，必须停下回填阻塞，不能继续扫描、改文档、写代码、claim 任务或创建 automation。
 - 分派前必须区分最终覆盖窗口和当前可派发窗口，并判断 producer / consumer 依赖。依赖上游 contract、类型、artifact、API、schema、发布物、迁移证据或真实 thread id 的窗口，在上游证据回填前必须标为 `阻塞` 或 `观察中`。
 - 状态为 `已完成`、`观察中`、`无任务` 的窗口不要发送提示词；状态为 `阻塞` 的窗口只有负责解除阻塞或阻塞已解除时才发送。
 - TODO / Backlog 是总控调度账本，不替代目标定义，也不自动驱动派发；进入 TODO 的真实问题仍归总控负责到底。
-- `DesignWindow` signal 不是正式 TODO；Design 完成需求设计并设定目标后，应作为正式 TODO / Backlog 候选交回总控，由总控挂到正确账本后再按当前主线、优先级、依赖和目标阶段确认推进。
+- `Design` signal 不是正式 TODO；Design 完成需求设计并设定目标后，应作为正式 TODO / Backlog 候选交回总控，由总控挂到正确账本后再按当前主线、优先级、依赖和目标阶段确认推进。
 - 当前主线进行时，新需求可以先进入 TODO；除非改变当前完成定义或用户明确要求打断，否则不得直接跳过当前主线。
 - TODO 参与派发时要优先组成任务包，把当前阶段可以推进的主线动作，与同一窗口、同一边界、同一验证链路下可以顺手关闭的 TODO 合并派发。
 - 总控允许为了效率派发较大的同窗口任务包；执行窗口可以在自己的窗口 / 仓库职责和当前计划边界内，自行判断是否开启 Codex 子 agent 分担代码调研、实现、测试或文档梳理。子 agent 不能跨窗口代领、不能绕过目标仓库 `AGENTS.md`、不能替代执行窗口最终复核和回填；总控仍只验收该窗口统一提交的原始证据。
 - Codex Automation Closed Loop 模式下，脚本只产生 `ControllerDispatchPacket`、`DeliveryEnvelope` 和 `TargetResultEnvelope` 等机械信封，不代表当前窗口获得其它窗口职责，也不代表任务已被总控接受。
-- 总控窗口拥有 automation 合规审计和删除权。任何当前 automation 若无法对应当前用户目标、当前总控计划、合法 dispatch group / task、目标窗口、真实 thread id、`TestWindow` 边界或一次性投递策略，必须删除并记录原因；不得为了“不中断自动化”保留不合规循环。
+- 总控窗口拥有 automation 合规审计和删除权。任何当前 automation 若无法对应当前用户目标、当前总控计划、合法 dispatch group / task、目标窗口、真实 thread id、`Test` 边界或一次性投递策略，必须删除并记录原因；不得为了“不中断自动化”保留不合规循环。
 - direct thread dispatch 是正常工作流水线；自动化开启只表示当前总控计划允许无人值守持续闭环，不表示用户在电脑前的普通讨论、Design 需求设计、总控决策讨论或单窗口开发都自动进入无人值守循环。每次仍按最新用户输入和当前窗口职责判断。
 - 一旦用户明确开启无人值守自动化，默认进入 continuous / infinite loop 形态：总控在已确认最终目标、完成定义、仓库边界和可领取 TODO 内持续 review result、拉原始证据、裁决、补计划、创建下一批 dispatch 并继续 direct thread 投递；不得把阶段完成、计划刷新或“给用户看下一阶段计划”当成默认停点。停止条件只能是最终目标完成、硬门禁、用户停止、无可领取 TODO、证据不足必须人工裁决或当前计划明确禁止继续。
 - 新闭环默认入口是 `node scripts/controller-state.mjs` + `node scripts/codex-automation-loop.mjs`。`controller-state` 维护独立机器状态根、任务包、target result、reducer candidate 和显式总控决策；`codex-automation-loop` 只维护 dispatch packet / delivery envelope / direct-thread delivery evidence / controller return 等 transport 机器数据。常用命令语义：`prepare-dispatch-from-state` 只从 state root 为 eligible target task 创建总控分派包和投递信封，遇到 completed / archived / paused / blocked / review-ready demand 或 accepted / completed / blocked target task 必须 fail closed；`build-delivery` 只创建投递信封；`submit-result` 只记录 dispatch-group transport result；`review-pack --state-root` / `review-results` 只汇总 ready / missing / blocked / empty 结果和回调策略；`build-controller-return` 只按 state-root dispatch group 的 `controllerWindow` / `returnPolicy` 创建待发送到原发起总控的回跳信封；`stop-loop` 只关闭后续投递意图。任何命令都不能替代总控验收。
@@ -179,7 +176,7 @@
 - 调用 Codex host 线程工具时，必须把 delivery envelope 的 `prompt` 字段原样作为 `send_message_to_thread.prompt`；不得手工包 `<codex_delegation>` / `<source_thread_id>` / `<input>` / XML / JSON 外壳。Codex app 自己会生成跨线程卡片，手工包装会把 XML 泄露到目标窗口 UI。
 - 目标窗口只能执行 dispatch packet 指定给自己窗口的任务，并返回 `TargetResultEnvelope`；不得代领、代验、代写其它窗口结果，也不得从 result envelope 推导自己获得下一窗口或总控职责。
 - 子窗口默认不创建目标窗口下一跳 delivery。多窗口 fan-out、补证、重派或进入下一阶段，都由总控在 review 后决定；但当 delivery envelope 的 `returnRoute=controller` 且 `review-results` 显示 `DispatchGroup.returnPolicy` 允许回调时，目标窗口只允许用 `build-controller-return` 创建一次总控回跳 envelope，并且默认回到该 `DispatchGroup.controllerWindow` 指定的原发起总控；不得因为 workspace config 的全局 `controlWindow` 不同而改回其它总控。之后必须继续完成真实 direct-thread send、readback 和 `record-delivery-run`；只有存在 `status=sent` 且 `readback.ok=true` 的 `DirectThreadDeliveryRun`，才算真实回跳完成。这不是目标窗口下一跳。`group-ready` 必须携带整组 ready / blocked / missing 快照，`per-target` 必须携带当前触发窗口和剩余窗口快照，不能把单个回填误判为整组完成。
-- `TestWindow` 下一跳默认由总控调起；非 `TestWindow` 窗口不得创建、处理或验证 `TestWindow` delivery，除非当前计划和 delivery envelope 同时显式授权该例外。
+- `Test` 下一跳默认由总控调起；非 `Test` 窗口不得创建、处理或验证 `Test` delivery，除非当前计划和 delivery envelope 同时显式授权该例外。
 - thread id 必须是真实 Codex thread id，只能保存在 `.workspace-local/` 下的本地运行态；不得把 thread id 写入 tracked 文档、GitHub、提示词或回填正文。严禁使用 `current-codex-thread`、`current thread`、`<thread id>`、`unknown`、说明文字或任何占位符登记窗口。
 - 旧 `claim / finish / chain-next / start-plan / resume-plan` 路线已退场；新的自动化闭环只能使用 `codex-automation-loop.mjs` 的 dispatch packet / delivery envelope / target result envelope 协议。
 
@@ -187,10 +184,10 @@ TODO / Backlog、窗口覆盖、任务包和新闭环命令细节见 `skills/con
 
 ## Workspace 治理与文档账本
 
-- Control workspace 仓库不承载产品源码包，不作为 npm package、CLI、Dashboard、Plugin 或 Agent runtime 发布；它应作为独立仓库与产品子仓库并列安装。
-- Control workspace 仓库只跟踪通用能力：`AGENTS.md`、README、脚本、模板、skill、安装支持文件和 starter 文档；不得承载项目专属当前计划、活跃 TODO、测试交流、归档历史或子窗口回填。项目运行中的活跃文档放 `.workspace-active/`，长期账本放 `../workspace-ledger/`。不得把 `BaseWindow`、`CoreWindow`、`AgentWindow`、`DashboardWindow`、`PluginWindow`、`DesignWindow`、`TestWindow` 或真实测试项目子仓库加入本仓库的 git 跟踪、submodule 或 gitlink。
+- Wakeflow 仓库不承载产品源码包，不作为被管理产品的 CLI、Dashboard、Plugin 或 Agent runtime 发布；它应作为独立控制能力仓库与产品子仓库并列安装。
+- Wakeflow 仓库只跟踪通用能力：`AGENTS.md`、README、脚本、模板、skill、安装支持文件和 starter 文档；不得承载项目专属当前计划、活跃 TODO、测试交流、归档历史或子窗口回填。项目运行中的活跃文档放 `.workspace-active/`，长期账本放 `../workspace-ledger/`。不得把配置中的产品仓库、`Design`、`Test` 或真实测试项目子仓库加入本仓库的 git 跟踪、submodule 或 gitlink。
 - 同级产品仓库的目录范围、窗口名、职责和是否写入 `AGENTS.md` 管理块，由 tracked `workspace.config.json` 或 ignored `.workspace-local/workspace.config.json` 的 `repositories` 决定。首次安装或目录变化时，先运行 `node scripts/control-workspace-install.mjs discover --json` 让 Codex 列出同级目录并等待用户确认，再用 `configure --write` 写入配置；项目专属覆盖优先写入 `.workspace-local/`，通用 GitHub 仓库保持 generic。
-- `DesignWindow` 和 `TestWindow` 可以是外部同级目录，也可以由本仓库内部模板承接。安装时必须先问用户是否已有需求设计 / 测试目录；没有则使用 `--internal-design` / `--internal-test` 并运行 `sync-templates --write` 创建内部入口；已有则只向外部目录同步必要对齐模板，不复制整套 workspace。
+- `Design` 和 `Test` 可以是外部同级目录，也可以由本仓库内部模板承接。安装时必须先问用户是否已有需求设计 / 测试目录；没有则使用 `--internal-design` / `--internal-test` 并运行 `sync-templates --write` 创建内部入口；已有则只向外部目录同步必要对齐模板，不复制整套 workspace。
 - 子仓库源码、测试脚本和测试文档改动必须在各自仓库独立提交；本仓库只能通过安装脚本在用户确认后向同级仓库 `AGENTS.md` 写入或刷新 scope 管理块。
 - 只有主控窗口可以提交 control workspace 能力仓库里的文档、脚本、模板或 skill 资产。其它执行窗口不得自行对 control workspace 能力仓库执行 git add / commit / push。
 - workspace 可以保管总控通用能力，例如 `scripts/`、`skills/`、`templates/` 下的验证脚本、分派模板、文档模板、Codex skill 草案或跨窗口协作工具。此类能力必须服务于工作区总控、文档治理、验证或协作，不得复制或替代子仓库产品实现。
@@ -198,12 +195,12 @@ TODO / Backlog、窗口覆盖、任务包和新闭环命令细节见 `skills/con
 - workspace 内的 `skills/` 是可复用 skill 资产或草案的保管位置，不代表自动安装或自动启用；若某个 skill 需要安装到 Codex runtime、插件包或子仓库，必须在文档中明确安装位置、消费方和同步方式。
 - `.workspace-active/workspace/index.md` 是 workspace 级唯一活跃总控入口。当前状态、活跃 TODO、测试 card / 测试交流投影、Design inbox、自动化当前计划和正在执行的 workspace 总控计划优先写到 `.workspace-active/workspace/current/` 或当前 controller state-root；它是本机当前工作面，默认不提交。完成后再归档或提炼到 `../workspace-ledger/`。
 - `../workspace-ledger/requirement-designs/` 保存较大需求的原始计划书、需求设计文档和代码实现依赖调研；不要把具体 wave 派发、执行验收或回填堆到这里。
-- Design 活跃草案和 `workspace-signal` / `workspace-handoff` 可以保存在外部 `DesignWindow/docs/current/`，也可以使用内部 `.workspace-active/workspace/current/design-handoff-board.md` 与 `../workspace-ledger/design/`；总控接收后再决定是否转写到 workspace 正式账本。Design 不直接改总控当前状态。
+- Design 活跃草案和 `workspace-signal` / `workspace-handoff` 可以保存在外部 Design 仓库的 `docs/current/`，也可以使用内部 `.workspace-active/workspace/current/design-handoff-board.md` 与 `../workspace-ledger/design/`；总控接收后再决定是否转写到 workspace 正式账本。Design 不直接改总控当前状态。
 - `../workspace-ledger/goal-stage-confirmation/` 保存“需求目标 + 分阶段确认”的长期流程；可复用模板统一保存到 `templates/`；具体某次任务的目标阶段确认文档写到 `.workspace-active/workspace/current/` 并从索引挂载。
-- 与某个子仓库强相关的长期协作文档，优先写到 `../workspace-ledger/CoreWindow/`、`../workspace-ledger/AgentWindow/`、`../workspace-ledger/DashboardWindow/`、`../workspace-ledger/PluginWindow/` 或 `../workspace-ledger/BaseWindow/`，并从 workspace 总控文档或索引挂回。
-- 通用 `codex-control-workspace` 仓库不再使用 `docs/` 根层级承载总控文档；旧 `docs/workspace/` starter / window-support 内容属于模板，统一放在 `templates/`。需要重写、续写或归档时，短期执行入口优先在 `.workspace-active/workspace/current/`，长期规则 / 契约 / 地图写入外层 `../workspace-ledger/`。
+- 与某个子仓库强相关的长期协作文档，优先写到该窗口对应的 `../workspace-ledger/<window-name>/`，并从 workspace 总控文档或索引挂回。
+- 通用 Wakeflow 仓库不再使用 `docs/` 根层级承载总控文档；旧 `docs/workspace/` starter / window-support 内容属于模板，统一放在 `templates/`。需要重写、续写或归档时，短期执行入口优先在 `.workspace-active/workspace/current/`，长期规则 / 契约 / 地图写入外层 `../workspace-ledger/`。
 - 子仓库内 `docs/` 只放随源码长期维护的产品文档、发布文档或用户文档；不要把跨仓库协作临时文档散落到子仓库内部。
-- 即使真实测试项目自身包含 `docs/`，开发协作文件、阶段计划、验收记录、扫描结果和 BaseWindow 验证记录仍统一通过 controller state-root、workspace 总控文档、内部 `.workspace-active/workspace/current/test-exchange.md` 投影，或外部 `TestWindow/docs/` 记录；真实测试项目仓库内 `docs/` 只保存必要的长期项目文档。
+- 即使真实测试项目自身包含 `docs/`，开发协作文件、阶段计划、验收记录、扫描结果和被管理产品验证记录仍统一通过 controller state-root、workspace 总控文档、内部 `.workspace-active/workspace/current/test-exchange.md` 投影，或外部 Test 仓库的 `docs/` 记录；真实测试项目仓库内 `docs/` 只保存必要的长期项目文档。
 - 长期文档不得写入用户本机绝对路径、API key、token 或其它私密信息。文档命名使用小写 kebab-case 和执行日 `YYYY-MM-DD`。
 
 详细文档落点、索引、模板字段和账本维护规则见 `skills/control-workspace-governance/references/workspace-ledgers.md`。
@@ -253,19 +250,19 @@ TODO / Backlog、窗口覆盖、任务包和新闭环命令细节见 `skills/con
   - 做 `AGENTS.md` / skill / template / script 整理时，读 `skills/control-workspace-governance/references/control-architecture.md`；最高停止卡、历史防错硬规则和总控边界仍留在 `AGENTS.md`。
   - 做 TODO / Backlog 入账、滚动、优先级、空闲窗口调度时，读 `skills/control-workspace-governance/references/todo-backlog.md`；TODO 不替代用户目标和完成定义。
   - 做 wave、任务包、窗口覆盖、producer / consumer 顺序和可复制提示词时，读 `skills/control-workspace-governance/references/window-dispatch.md`；分派前的定位声明和上游证据门禁仍留在 `AGENTS.md`。
-  - 做测试边界、`TestWindow` 交接、证据解释和验证命令选择时，读 `skills/control-workspace-governance/references/testing-validation.md`；总控默认自测和 `TestWindow` 真实场景边界仍留在 `AGENTS.md`。
+  - 做测试边界、`Test` 交接、证据解释和验证命令选择时，读 `skills/control-workspace-governance/references/testing-validation.md`；总控默认自测和 `Test` 真实场景边界仍留在 `AGENTS.md`。
   - 做脚本维护、脚本验证、Design handoff 导入、controller state root / developer progress 投影和 runtime 检查时，读 `skills/control-workspace-governance/references/script-pipeline.md`；脚本不得替代总控判断仍留在 `AGENTS.md`。
   - 做 workspace 文档落点、索引、归档、模板字段和 skill 资产账本时，读 `skills/control-workspace-governance/references/workspace-ledgers.md`；workspace 不跟踪子仓库和真实测试项目仍留在 `AGENTS.md`。
-  - 做 Codex Automation Closed Loop、dispatch packet、delivery envelope、target result envelope、controller review 或自动化投递 / 回跳时，读 `skills/control-workspace-governance/references/codex-automation-loop.md`；总控裁决权、thread id 真实性和 `TestWindow` 边界仍留在 `AGENTS.md`，且不得把旧 `claim / finish / chain-next` 当新闭环核心协议。
+  - 做 Codex Automation Closed Loop、dispatch packet、delivery envelope、target result envelope、controller review 或自动化投递 / 回跳时，读 `skills/control-workspace-governance/references/codex-automation-loop.md`；总控裁决权、thread id 真实性和 `Test` 边界仍留在 `AGENTS.md`，且不得把旧 `claim / finish / chain-next` 当新闭环核心协议。
   - 做跨仓库迁移、能力抽取、删除清理或发布封口时，读 `skills/control-workspace-governance/references/phased-migration.md`；不得薄实现、空壳迁移或提前删除仍留在 `AGENTS.md`。
   - 做 PCV / PCVM / Progressive Chain Validation、长链路 source-derived plan、cold-start / rescan 节点基线、before/after scorecard 或 metrics 对比时，读 `skills/progressive-chain-validation/SKILL.md`；该 skill 只负责把 workspace 直接链入独立 `progressive-chain-validation` canonical source，不能替代总控停止卡、测试边界或验收裁决。
-- `skills/codex-automation-target/`：新闭环目标窗口一次性唤醒、任务执行和 `TargetResultEnvelope` 回填细节；role guard、thread id 真实性和 `TestWindow` 边界必须同时在 `AGENTS.md` 明文常驻。
+- `skills/codex-automation-target/`：新闭环目标窗口一次性唤醒、任务执行和 `TargetResultEnvelope` 回填细节；role guard、thread id 真实性和 `Test` 边界必须同时在 `AGENTS.md` 明文常驻。
 - `skills/codex-automation-controller/`：新闭环总控启动 / 回跳 / result review / 下一波决策操作步骤；总控事实裁决和验收底线仍以 `AGENTS.md` 为准。
 - 新增或扩展完整能力时，先判断它是硬边界还是可按需加载的操作细则；硬边界写入 `AGENTS.md`，步骤、模板字段、脚本顺序、示例和排错规则写入 skill reference。
 
 ## 跨仓库接入、删除与兼容清理
 
-- 修改共享能力时，优先在源仓库完成、验证、提交。ControlWorkspace 本地开发和总控验收优先使用 workspace 本地源码入口，例如 `../CoreWindow`、`../AgentWindow`、`../DashboardWindow`；当本地源码可用且任务不涉及发布、安装、runtime 快照或远程 CI 时，不要把 vendor/submodule/远程指针确认作为阻塞或派发任务。
+- 修改共享能力时，优先在源仓库完成、验证、提交。Wakeflow 本地开发和总控验收优先使用安装配置里的本地源码入口；当本地源码可用且任务不涉及发布、安装、runtime 快照或远程 CI 时，不要把 vendor/submodule/远程指针确认作为阻塞或派发任务。
 - 只有发布、Codex plugin runtime、npm package、离线安装、远程 CI，或当前总控文档明确要求生成快照时，才检查或更新 vendor/submodule/远程指针；此时必须记录对应源仓库提交 hash。
 - 不要把 `vendor/*` 子仓库当普通目录随手改散；如果必须在 vendor 内修源仓库能力，也要按独立源仓库 commit 处理，并同步回源仓库。若本轮采用本地源码模式，默认不触碰 `vendor/*`。
 - 跨仓库接入和删除必须分阶段记录。不要在一个阶段里混合“复制、接入、删除、修测试、发布脚本调整”到不可回滚的大改动。

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/codex-control-workspace/transition-candidate.schema.json",
+  "$id": "https://example.invalid/wakeflow/transition-candidate.schema.json",
   "title": "Transition Candidate",
   "type": "object",
   "required": ["schemaVersion", "candidateId", "demandKey", "fromRevision", "candidateState", "reason"],

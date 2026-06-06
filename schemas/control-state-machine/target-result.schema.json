@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/codex-control-workspace/target-result.schema.json",
+  "$id": "https://example.invalid/wakeflow/target-result.schema.json",
   "title": "Target Result",
   "type": "object",
   "required": ["schemaVersion", "resultId", "targetWindow", "targetTaskId", "status", "evidenceRefs"],

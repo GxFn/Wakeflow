@@ -4,10 +4,10 @@ Use this reference when preparing a wave, task package, window coverage table, p
 
 ## Coverage Authority
 
-- 本窗口拥有统一调度权：可以根据真实代码、文档、构建链路和模块边界，判断任意 BaseWindow 子仓库或测试验证窗口是否需要承担任务，并在总控文档中直接分配给 `BaseWindow`、`CoreWindow`、`AgentWindow`、`DashboardWindow`、`PluginWindow`、`TestWindow` 或其它当前 workspace 内相关窗口。
-- `DesignWindow` 不进入默认产品实现覆盖表；只有需要需求讨论、signal 判断或 handoff 草案时，才作为独立窗口纳入当前分派。
+- 本窗口拥有统一调度权：可以根据真实代码、文档、构建链路和模块边界，判断 `workspace.config.json` / `.workspace-local/workspace.config.json` 中配置的产品窗口、`Design`、`Test` 或其它当前 workspace 内相关窗口是否需要承担任务。
+- `Design` 不进入默认产品实现覆盖表；只有需要需求讨论、signal 判断或 handoff 草案时，才作为独立窗口纳入当前分派。
 - 分配任务时不需要等待用户逐一指定仓库；如果某项变更会影响多个仓库，必须主动识别所有受影响窗口并给出执行、观察、等待或无需处理的明确判断。
-- 制定跨仓库计划时必须做窗口覆盖检查：逐一判断 `BaseWindow`、`CoreWindow`、`AgentWindow`、`DashboardWindow`、`PluginWindow` 和 `TestWindow` 是否需要任务；即使某窗口无需行动，也要在总控判断中说明它是 `无任务`、`观察中` 还是等待上游 / 下游。真实测试项目只通过 `TestWindow` 进入覆盖判断。
+- 制定跨仓库计划时必须做窗口覆盖检查：逐一判断当前配置的产品窗口以及必要的 `Design` / `Test` 支撑窗口是否需要任务；即使某窗口无需行动，也要在总控判断中说明它是 `无任务`、`观察中` 还是等待上游 / 下游。真实测试项目只通过 `Test` 或配置测试窗口进入覆盖判断。
 - 如果后续读取代码发现新的关联仓库、vendor 子仓库、插件资源、Dashboard 产物、runtime 包或发布链路会受影响，必须追加到任务分派中，不能只处理最先被用户点名的仓库。
 
 ## Dispatch Preconditions
@@ -17,21 +17,21 @@ Use this reference when preparing a wave, task package, window coverage table, p
 - 制定分派表时必须区分“最终覆盖窗口”和“当前可派发窗口”：最终会参与某条链路的仓库可以写入覆盖表，但只有当前无上游依赖、发送后能直接推进的窗口才能标为 `待启动` 并进入提示词发送名单。
 - 每次分派前必须先判断 producer / consumer 依赖链：产出 contract、类型、artifact、API、schema、发布物或迁移证据的窗口是上游；消费这些结果的窗口在上游完成前必须标为 `阻塞` 或 `观察中`，不得为了并行而提前派发。
 - 依赖上游提交、接口或文档证据的窗口，只有在上游回填提交 hash、完成范围和验证结果后，才能由总控改为 `待启动`。不要让下游窗口猜字段、复制临时 contract、提前做 fallback 或空跑验证。
-- 发送测试窗口前必须先做自测排除判断：`TestWindow` 不再是默认测试窗口。脚本测试、文档校验、状态机验证、targeted unit / probe、轻量集成验证和可构造最小验证必须由总控自己做；只有需要真实项目环境、cold-start / rescan、Dashboard 手动观察、运行时监控、真实项目复现 / 回归或跨仓库集成环境证据时，才把 `TestWindow` 标为 `待启动`，并写清总控不能自测的理由。
-- Codex Plugin、Codex host MCP、Codex 会话 / 本地环境、installed / packaged Plugin runtime smoke、direct-thread / IDE 投递读回等测试不发送给真实项目 `TestWindow`；如果 workspace config 有 `ideTestWindow`，发送给该窗口，例如 `AlembicTest-IDE`。BiliDili / AlembicWorkspace cold-start / rescan / AI/provider 测试仍发送给 `TestWindow`，例如 `AlembicTest`。
+- 发送测试窗口前必须先做自测排除判断：`Test` 不再是默认测试窗口。脚本测试、文档校验、状态机验证、targeted unit / probe、轻量集成验证和可构造最小验证必须由总控自己做；只有需要真实项目环境、cold-start / rescan、Dashboard 手动观察、运行时监控、真实项目复现 / 回归或跨仓库集成环境证据时，才把 `Test` 或配置测试窗口标为 `待启动`，并写清总控不能自测的理由。
+- Codex Plugin、Codex host MCP、Codex 会话 / 本地环境、installed / packaged Plugin runtime smoke、direct-thread / IDE 投递读回等测试不发送给真实项目测试窗口；如果 workspace config 有 IDE / Plugin 测试职责窗口，发送给该窗口。真实 cold-start / rescan / AI/provider / Dashboard 场景测试仍发送给 `Test` 或配置测试窗口。
 
 ## Task Package Requirements
 
 - 跨仓库任务必须优先通过文档明确目标、边界、执行窗口、验收命令、删除候选、禁止事项和回填证据。
 - 分派给其他窗口的任务必须可执行：包含目标、范围、禁止事项、验证命令、回填要求、文档动作、文档保存位置和文档挂载入口。
-- 分派给其他窗口的任务必须包含目标仓库 `AGENTS.md` 读取要求和定位声明要求。跨仓库任务要逐一写清每个目标仓库的 `AGENTS.md` 路径；测试窗口要读取 `TestWindow/AGENTS.md` 和测试执行规则；真实测试项目仍只通过 `TestWindow` 进入。
+- 分派给其他窗口的任务必须包含目标仓库 `AGENTS.md` 读取要求和定位声明要求。跨仓库任务要逐一写清每个目标仓库的 `AGENTS.md` 路径；测试窗口要读取 `Test` / 配置测试窗口的 `AGENTS.md` 和测试执行规则；真实测试项目仍只通过配置测试窗口进入。
 - 分派默认以“任务包”为单位，而不是每次只派一个很小的动作。任务包是为了把真实阻塞点之前能完成的主线动作、同窗口同验证链路下可关闭的 TODO 和必要证据一次性打包推进，避免碎片小任务拖慢进度；它不是把目标拆成更小目标、降低完成定义或制造更多等待点。
 - 任务包必须写清：当前阶段目标、包含的主线任务、可一起关闭的 TODO、明确不包含的事项、文件 / 模块边界、依赖前提、统一验证命令和回填要求。
 - 每个任务包还必须写清它推进的最终目标差距，以及完成后如何判断是继续下一阶段、转观察 / 不做、进入验收归档或需要用户确认。没有这两项，任务包只能作为候选，不得进入发送名单。
 - 组包优先级是：先保证主线闭环，再合并同窗口可关闭 TODO，再安排独立并行项。若当前只能派发一个小任务，必须在总控文档或回复中说明原因，例如上游未完成、文件冲突、验证路径不一致或阶段边界未确认。
 - 组包时必须先回答“当前真实阻塞点之前还能做什么”。如果还有同阶段可推进事项、同窗口相关清理或同验证链路 TODO，就应合入本包；只有遇到真实上游依赖、跨窗口 contract 未定、风险需要用户确认、或验证无法统一时，才停止在阻塞点前。
 - 同一窗口在一次派发中可以承担多个相关任务，但必须共享清晰的完成定义和验证路径；不要把跨阶段、跨边界、跨仓库依赖未解开的事项打包给同一个窗口空转。
-- 总控可以为了效率派发较大的同窗口任务包。执行窗口可以在本窗口 / 本仓库职责和当前计划边界内，自行判断是否开启 Codex 子 agent 分担代码调研、实现、测试或文档梳理；子 agent 不能跨窗口代领、不能修改 ControlWorkspace 账本、不能替代执行窗口最终复核和回填。总控验收仍只接受该窗口统一提交的原始证据和结论。
+- 总控可以为了效率派发较大的同窗口任务包。执行窗口可以在本窗口 / 本仓库职责和当前计划边界内，自行判断是否开启 Codex 子 agent 分担代码调研、实现、测试或文档梳理；子 agent 不能跨窗口代领、不能修改 Wakeflow 账本、不能替代执行窗口最终复核和回填。总控验收仍只接受该窗口统一提交的原始证据和结论。
 - 给任意窗口分配任务时，如果判断无需新建文档，必须说明原因；如果需要单仓库专项执行文档，写入 `../workspace-ledger/<WindowName>/`，并必须从 `../workspace-ledger/workspace/` 的当前总控入口留下链接或引用关系。
 
 ## Send / No-Send Rules
@@ -43,7 +43,7 @@ Use this reference when preparing a wave, task package, window coverage table, p
 - 旧文档中的 `待启动`、`执行中`、`已投递`、`待验收`、`阻塞`、`已完成`、`暂停`、`观察中`、`无任务` 等展示文字只作为迁移输入；脚本判断必须先归一化为 machine id。
 - 窗口覆盖检查默认字段、分派模板和命名模板以 `.workspace-active/workspace/index.md` 为准。
 - 若用户口头更新状态，应先记录为“用户口径更新”或“总控状态快照”；没有验证证据前，不要把下一阶段标记为完成。
-- 如果某个产品实现窗口仍有未提交工作区改动，只能记录为执行中或待封口，不能作为可删除或可进入下一阶段的证据。`TestWindow` 自身的 probe、报告、脚本索引或临时测试资产例外：只要测试回填证据足够、产品仓库和真实测试项目没有非预期改动，不把这些未提交测试资产当作总控验收阻塞。
+- 如果某个产品实现窗口仍有未提交工作区改动，只能记录为执行中或待封口，不能作为可删除或可进入下一阶段的证据。`Test` 或配置测试窗口自身的 probe、报告、脚本索引或临时测试资产例外：只要测试回填证据足够、产品仓库和真实测试项目没有非预期改动，不把这些未提交测试资产当作总控验收阻塞。
 - 计划文档中要明确“进入某仓库”“留在某仓库”“删除候选”“不得删除”“反馈给其他窗口”五类结果。
 
 ## Unified Dispatch Prompt

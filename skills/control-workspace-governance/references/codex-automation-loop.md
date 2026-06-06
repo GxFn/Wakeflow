@@ -1,6 +1,6 @@
 # Codex Automation Closed Loop
 
-This reference describes the automation path for ControlWorkspace. It is the
+This reference describes the automation path for Wakeflow. It is the
 only supported closed-loop automation contract surface.
 
 Child-window file configuration, thread registry schema, delivery-run evidence,

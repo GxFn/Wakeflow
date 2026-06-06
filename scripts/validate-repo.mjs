@@ -44,7 +44,7 @@ for (const file of required.filter((item) => item.endsWith(".md") || item.endsWi
 
 if (errors.length) {
   console.error(JSON.stringify({ ok: false, errors }, null, 2));
-  process.exit(1);
+  process.exitCode = 1;
+} else {
+  console.log(JSON.stringify({ ok: true, checked: required.length }, null, 2));
 }
-
-console.log(JSON.stringify({ ok: true, checked: required.length }, null, 2));

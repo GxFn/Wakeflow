@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/codex-control-workspace/projection.schema.json",
+  "$id": "https://example.invalid/wakeflow/projection.schema.json",
   "title": "Controller Projection",
   "type": "object",
   "required": [

@@ -1,7 +1,7 @@
 # Requirement Design Template
 
 状态：长期模板
-维护窗口：ControlWorkspace
+维护窗口：Wakeflow
 
 本模板用于 `../workspace-ledger/requirement-designs/<需求名>/requirement-design-YYYY-MM-DD.md`：必须先读取同目录中已经由用户确认的原始计划书，再按用户需求调研真实代码、功能逻辑、模块边界和跨仓库连通性，形成需求目标、实现方案和分阶段步骤。原始计划书未确认前，不应创建或激活需求设计文档。只有完成这份需求设计文档后，才进入 `.workspace-active/workspace/current/` 的任务级目标阶段确认。
 
@@ -15,7 +15,7 @@
 - 原始计划书确认状态：`unconfirmed` / `confirmed` / `needs-confirmation` / `not-required` / `superseded`
 - 原始计划书确认说明：
 - 用户确认时间：
-- DesignWindow 来源 signal / handoff（如有）：
+- Design 来源 signal / handoff（如有）：
 - Design 接收状态：`draft` / `ready-for-workspace` / `accepted-by-workspace` / `needs-design` / `paused` / `archived` / `research` / `absorbed-by-codex-loop`
 - 当前主线关系状态：`none` / `todo-candidate` / `next-mainline` / `blocks-current` / `interrupts-current` / `after-current`
 
@@ -58,37 +58,20 @@
 
 按仓库记录，不写猜测：
 
-### CoreWindow
+### <configured product window / discovered repo>
 
+- 仓库路径：
 - 已有能力：
 - 关键文件：
 - 缺口：
+- producer / consumer 判断：
 
-### BaseWindow
+### Design
 
-- 已有能力：
-- 关键文件：
-- 缺口：
+- 是否需要继续需求设计：
+- 需要补充的问题：
 
-### PluginWindow
-
-- 已有能力：
-- 关键文件：
-- 缺口：
-
-### DashboardWindow
-
-- 已有能力：
-- 关键文件：
-- 缺口：
-
-### AgentWindow
-
-- 已有能力：
-- 关键文件：
-- 缺口：
-
-### TestWindow / 真实项目验证
+### Test / 真实项目验证
 
 - 是否纳入：
 - 理由：

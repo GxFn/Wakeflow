@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/codex-control-workspace/automation-dispatch.schema.json",
+  "$id": "https://example.invalid/wakeflow/automation-dispatch.schema.json",
   "title": "Automation Dispatch",
   "type": "object",
   "required": [

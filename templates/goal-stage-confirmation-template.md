@@ -1,7 +1,7 @@
 # 需求目标与分阶段确认模板
 
 状态：长期模板
-维护窗口：ControlWorkspace
+维护窗口：Wakeflow
 
 本模板用于用户提出较大任务目标后、初始化执行 state root 前。总控窗口必须先按本模板创建任务级“最终目标 + 分阶段确认”文档，等待用户确认后再创建 controller state root 和第一批 task package。
 
@@ -69,14 +69,10 @@
 
 | 窗口 / 状态 | 任务 |
 | --- | --- |
-| `BaseWindow`<br>状态 |  |
-| `CoreWindow`<br>状态 |  |
-| `AgentWindow`<br>状态 |  |
-| `DashboardWindow`<br>状态 |  |
-| `PluginWindow`<br>状态 |  |
-| `DesignWindow`<br>状态 |  |
-| `TestWindow`<br>状态 |  |
-| `RealTestProject`<br>状态 |  |
+| `<configured product window / discovered repo>`<br>状态 |  |
+| `Design`<br>状态 |  |
+| `Test`<br>状态 |  |
+| `<real project if configured>`<br>状态 |  |
 
 补充说明：
 

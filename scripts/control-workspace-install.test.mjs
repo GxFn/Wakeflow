@@ -100,8 +100,8 @@ test("configure writes user-confirmed sibling mappings into workspace.config.jso
     [
       ["BaseWindow", "../BaseWindow"],
       ["PluginWindow", "../PluginWindow"],
-      ["DesignWindow", "../workspace-ledger/design"],
-      ["TestWindow", "../workspace-ledger/testing"],
+      ["Design", "../workspace-ledger/design"],
+      ["Test", "../workspace-ledger/testing"],
     ],
   );
   assert.equal(config.designHandoffBoard, ".workspace-active/workspace/current/design-handoff-board.md");
@@ -250,9 +250,9 @@ test("access-profiles reports managed child access-card coordinates and automati
 
 test("write-agents can explicitly include unmanaged Design/Test windows while skipping real projects", () => {
   const fixture = makeFixture();
-  const design = path.join(fixture.parent, "DesignWindow");
-  const testWindow = path.join(fixture.parent, "TestWindow");
-  const realProject = path.join(fixture.parent, "RealTestProject");
+  const design = path.join(fixture.parent, "Design");
+  const testWindow = path.join(fixture.parent, "Test");
+  const realProject = path.join(fixture.parent, "SampleProject");
   mkdirSync(design, { recursive: true });
   mkdirSync(testWindow, { recursive: true });
   mkdirSync(realProject, { recursive: true });
@@ -262,30 +262,32 @@ test("write-agents can explicitly include unmanaged Design/Test windows while sk
     "--repo",
     "BaseWindow=../BaseWindow",
     "--repo",
-    "DesignWindow=../DesignWindow",
+    "Design=../Design",
     "--repo",
-    "TestWindow=../TestWindow",
+    "Test=../Test",
     "--repo",
-    "RealTestProject=../RealTestProject",
+    "SampleProject=../SampleProject",
+    "--real-project-window",
+    "SampleProject",
     "--write",
   ]);
 
   const payload = runJson(fixture, ["write-agents", "--all", "--include-unmanaged", "--write"]);
   assert.deepEqual(
     payload.results.map((result) => result.windowName),
-    ["BaseWindow", "DesignWindow", "TestWindow"],
+    ["BaseWindow", "Design", "Test"],
   );
   assert.equal(existsSync(path.join(realProject, "AGENTS.md")), false);
 
   const designAgents = readFileSync(path.join(design, "AGENTS.md"), "utf8");
-  assert.match(designAgents, /Window name: `DesignWindow`/);
+  assert.match(designAgents, /Window name: `Design`/);
   assert.match(designAgents, /Design handoff board: `docs\/current\/workspace-handoff-board\.md`/);
   assert.doesNotMatch(designAgents, /不得派发实现/);
 
   const testAgents = readFileSync(path.join(testWindow, "AGENTS.md"), "utf8");
-  assert.match(testAgents, /Window name: `TestWindow`/);
+  assert.match(testAgents, /Window name: `Test`/);
   assert.match(testAgents, /Test exchange projection: `\.\.\/Wakeflow\/\.workspace-active\/workspace\/current\/test-exchange\.md`/);
-  assert.match(testAgents, /非测试窗口不得创建、处理或验证 TestWindow delivery/);
+  assert.match(testAgents, /非测试窗口不得创建、处理或验证 Test delivery/);
   assert.doesNotMatch(testAgents, /不得成为默认测试队列/);
 });
 
@@ -339,7 +341,7 @@ test("sync-root-agents unpacks parent AGENTS with control-repo paths", () => {
   assert.match(rootAgents, /# FixtureWorkspace Agent Instructions/);
   assert.match(rootAgents, /Wakeflow\/\.workspace-active\/workspace\/index\.md|controller state roots/);
   assert.match(rootAgents, /cd Wakeflow && node scripts\/control-workspace-install\.mjs sync-root-agents --write/);
-  assert.match(rootAgents, /FixtureWorkspace 是跨仓库目标、边界、证据/);
+  assert.match(rootAgents, /FixtureWorkspace 总控是跨仓库目标、边界、证据/);
   assert.doesNotMatch(rootAgents, /plugin form/);
   assert.doesNotMatch(rootAgents, /FixtureWorkspace 仓库/);
 });
@@ -380,8 +382,8 @@ test("sync-templates creates internal Design and Test surfaces when no external 
 
 test("external Design and Test directories get only alignment templates", () => {
   const fixture = makeFixture();
-  const design = path.join(fixture.parent, "DesignWindow");
-  const testWindow = path.join(fixture.parent, "TestWindow");
+  const design = path.join(fixture.parent, "Design");
+  const testWindow = path.join(fixture.parent, "Test");
   mkdirSync(design, { recursive: true });
   mkdirSync(testWindow, { recursive: true });
   runJson(fixture, [
@@ -389,14 +391,14 @@ test("external Design and Test directories get only alignment templates", () => 
     "--repo",
     "BaseWindow=../BaseWindow",
     "--repo",
-    "DesignWindow=../DesignWindow",
+    "Design=../Design",
     "--repo",
-    "TestWindow=../TestWindow",
+    "Test=../Test",
     "--write",
   ]);
 
   const config = JSON.parse(readFileSync(path.join(fixture.control, "workspace.config.json"), "utf8"));
-  assert.equal(config.designHandoffBoard, "../DesignWindow/docs/current/workspace-handoff-board.md");
+  assert.equal(config.designHandoffBoard, "../Design/docs/current/workspace-handoff-board.md");
 
   const payload = runJson(fixture, ["sync-templates", "--all", "--write"]);
   assert.equal(payload.ok, true);

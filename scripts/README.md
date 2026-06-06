@@ -1,6 +1,6 @@
 # Workspace Scripts
 
-This directory stores ControlWorkspace-owned scripts for coordination,
+This directory stores Wakeflow-owned scripts for coordination,
 verification, documentation maintenance, and cross-repository guardrails.
 
 Scripts in this directory should:
@@ -116,9 +116,8 @@ Current scripts:
   runtime residue such as `.asd/`, `.cursor/skills`, and `.agents/skills`.
   It is read-only by default; use `--fix` only after confirming generated
   workspace pollution.
-- `check-runtime-residue.mjs`: read-only check for BaseWindow daemon, Dashboard
-  dev server, and Codex MCP process residue. Use `--strict` only when clean
-  runtime surface is required.
+- `check-runtime-residue.mjs`: read-only check for configured runtime process
+  residue. Use `--strict` only when clean runtime surface is required.
 - `check-script-docs.mjs`: verifies that every top-level `scripts/*.mjs` file is
   represented in this README, that test scripts appear in workspace script-test
   instructions, that normal CLI scripts do not call direct `process.exit()`, and
@@ -148,11 +147,21 @@ Current scripts:
   handoff board and global TODO board for controller-ready candidates after a
   demand completes. It never creates a current plan, accepts evidence,
   dispatches windows, or changes TODO / Design status.
-- `import-design-handoffs.mjs`: imports the configured DesignWindow handoff
+- `import-design-handoffs.mjs`: imports the configured Design handoff
   board into the active Design inbox and validates ready rows. It supports
   forward-compatible enum columns while keeping old board prose readable.
 - `generate-archive-topic-summaries.mjs`: dry-run by default; creates or
   refreshes archive `index.md` summary files.
+- `smoke.mjs`: plugin-runtime smoke that exercises the controller state root,
+  task package, delivery envelope, target result import, review reduction, and
+  MCP tools/list + tools/call path.
+- `validate-repo.mjs`: repository package-shape validation for Wakeflow plugin
+  assets, MCP entrypoint, core runtime scripts, templates, schemas, skills, and
+  image assets.
+- `wakeflow-control.mjs`: controlled fallback runner for Wakeflow runtime
+  scripts. `list` prints the allowed backend script set; other commands run a
+  named backend script through `lib/control-runtime.mjs`. Prefer named MCP
+  capability tools for normal work.
 
 Workspace script tests:
 
@@ -188,13 +197,13 @@ command catalog and selection table, read
 | Focus a named Design/TODO candidate | `node scripts/workspace-control.mjs next-work --id <DESIGN-KEY> --json` |
 | Sibling install / child AGENTS scope writes | `node scripts/workspace-control.mjs install <subcommand> ...` |
 | Child window access profile view | `node scripts/workspace-control.mjs install access-profiles --json` |
-| One-shot workspace initialization | `node scripts/workspace-control.mjs install initialize --repo BaseWindow=../MyApp --internal-design --internal-test --write --json` |
+| One-shot workspace initialization | `node scripts/workspace-control.mjs install initialize --repo AppWindow=../MyApp --internal-design --internal-test --write --json` |
 
 Run write/apply commands only after the active state root or user request
 authorizes the write. Use `--print` on `workspace-control.mjs` when you want to
 inspect the underlying script calls before execution.
 
-Real-project test scripts, when an external `TestWindow` exists, live under that
+Real-project test scripts, when an external Test repository exists, live under that
 repository's `scripts/` directory so the control workspace root `scripts/`
 directory stays focused on governance. Test boundaries for an active demand are
 machine cards under that demand's state root; `test-exchange.md` is only a

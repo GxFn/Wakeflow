@@ -1,11 +1,11 @@
 ---
 name: workspace-progressive-chain-validation
-description: Use when ControlWorkspace needs to link into the external Progressive Chain Validation (PCV) canonical source or the local PCVM workspace for source-derived chain plans, scoped rounds, node-level cold-start/rescan baselines, before/after metrics, scorecards, or PCV-guided workflow repair.
+description: Use when Wakeflow needs to link into the external Progressive Chain Validation (PCV) canonical source or the local PCVM workspace for source-derived chain plans, scoped rounds, node-level cold-start/rescan baselines, before/after metrics, scorecards, or PCV-guided workflow repair.
 ---
 
 # Workspace Progressive Chain Validation Bridge
 
-This is the ControlWorkspace bridge into the external PCV canonical source and the local PCVM artifact workspace. It does not redefine PCV and does not replace the workspace `AGENTS.md` stop card.
+This is the Wakeflow bridge into the external PCV canonical source and the local PCVM artifact workspace. It does not redefine PCV and does not replace the workspace `AGENTS.md` stop card.
 
 For PCVM flow control, load these first:
 
@@ -58,8 +58,8 @@ AlembicWorkspace owns judgment, dispatch, acceptance, and Test handoff. PCVM own
 - `PCVM/skills/pcvm-flow-controller/SKILL.md` and `PCVM/config/pcvm-flow-control.json` are the first route-control files for PCVM work.
 - Long-term Alembic PCVM requirements live in `workspace-ledger/requirement-designs/progressive-chain-validation-metrics/`.
 - Per-repository PCVM evidence remains under the relevant `workspace-ledger/<WindowName>/` folder.
-- PCV source changes belong in the independent `progressive-chain-validation/` repo, not in `codex-control-workspace/`.
-- This bridge directory only records how ControlWorkspace consumes PCV and PCVM. Runtime dispatch state and final acceptance stay under AlembicWorkspace control; PCVM node/round artifacts stay under `PCVM/`.
+- PCV source changes belong in the independent `progressive-chain-validation/` repo, not in `Wakeflow/`.
+- This bridge directory only records how Wakeflow consumes PCV and PCVM. Runtime dispatch state and final acceptance stay under Wakeflow control; PCVM node/round artifacts stay under `PCVM/`.
 
 ## Control Workflow
 
@@ -70,7 +70,7 @@ AlembicWorkspace owns judgment, dispatch, acceptance, and Test handoff. PCVM own
 
    ```text
    git -C progressive-chain-validation rev-parse HEAD
-   # or, when already inside codex-control-workspace:
+   # or, when already inside Wakeflow:
    git -C ../progressive-chain-validation rev-parse HEAD
    ```
 
@@ -95,5 +95,5 @@ The overlay is a coverage oracle, not proof. If Alembic source boundaries disagr
 
 - Hard anti-failure rules, repository boundaries, AlembicTest usage limits, Codex automation limits, and acceptance rules stay in workspace `AGENTS.md`.
 - PCV is not a default dispatch window. Treat it as a skill source unless a control plan explicitly assigns work to the independent PCV repository.
-- Do not copy canonical PCV references into ControlWorkspace to make local edits easier. Patch the PCV repo when PCV itself needs changes.
+- Do not copy canonical PCV references into Wakeflow to make local edits easier. Patch the PCV repo when PCV itself needs changes.
 - Do not run full cold-start / rescan just to fill a PCV plan. If the current node cannot be isolated, first add or request observability / dry-run / no-delivery support.

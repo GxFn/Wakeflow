@@ -1,6 +1,6 @@
 # Workspace Ledgers And Document Surfaces
 
-Use this reference when creating, moving, syncing, or archiving ControlWorkspace control documents, status mirrors, indexes, templates, Design handoff ledgers, test exchange entries, or workspace skill assets.
+Use this reference when creating, moving, syncing, or archiving Wakeflow control documents, status mirrors, indexes, templates, Design handoff ledgers, test exchange entries, or workspace skill assets.
 
 `AGENTS.md` remains the hard boundary source. This file only describes document locations, ledger usage, and template fields.
 
@@ -36,13 +36,13 @@ Use this reference when creating, moving, syncing, or archiving ControlWorkspace
 - `.workspace-active/workspace/current/` holds current status, active TODO, test exchange projections, and active workspace control plans / state roots.
 - `.workspace-active/workspace/current/workspace-current-status.md` is a short current snapshot, not the place for large historical backfill.
 - `.workspace-active/workspace/current/global-todo-board.md` is the cross-plan TODO / Backlog ledger.
-- Active controller state roots hold real `TestWindow` test boundary cards under `test-cards/*.json` and target results under `target-results/*.json`.
-- `.workspace-active/workspace/current/test-exchange.md` is a short human-readable projection / exchange point for real `TestWindow` handoffs and evidence, not the state source.
-- `../workspace-ledger/design/` is the internal `DesignWindow` surface when no external design repository is configured. It must include local rules, operating policy, alignment checklist, and original-plan / requirement-design / signal / handoff templates.
-- `../workspace-ledger/testing/` is the internal `TestWindow` surface when no external test repository is configured. It must include local rules, testing operation policy, and the test handoff template.
+- Active controller state roots hold real `Test` / configured test-window boundary cards under `test-cards/*.json` and target results under `target-results/*.json`.
+- `.workspace-active/workspace/current/test-exchange.md` is a short human-readable projection / exchange point for real Test handoffs and evidence, not the state source.
+- `../workspace-ledger/design/` is the internal Design surface when no external design repository is configured. It must include local rules, operating policy, alignment checklist, and original-plan / requirement-design / signal / handoff templates.
+- `../workspace-ledger/testing/` is the internal Test surface when no external test repository is configured. It must include local rules, testing operation policy, and the test handoff template.
 - `.workspace-active/` is the ignored active working surface. It may hold current task documents and local runtime state, but completed / historical project records must be archived into `../workspace-ledger/`.
-- External `DesignWindow/docs/current/` holds Design-side drafts, signals, and handoff boards. Total control receives them, then decides whether to write workspace formal ledgers.
-- External `TestWindow/docs/` holds real-scenario test policies, reports, probe scripts, and evidence when a separate test repository is configured.
+- External Design repository `docs/current/` holds Design-side drafts, signals, and handoff boards. Total control receives them, then decides whether to write workspace formal ledgers.
+- External Test repository `docs/` holds real-scenario test policies, reports, probe scripts, and evidence when a separate test repository is configured.
 
 ## Requirement And Goal Documents
 
@@ -63,20 +63,15 @@ Use this reference when creating, moving, syncing, or archiving ControlWorkspace
 
 ## Repo-Specific Collaboration Documents
 
-- Long-lived repo-specific collaboration documents should go under each configured window ledger directory:
-  - `../workspace-ledger/CoreWindow/`;
-  - `../workspace-ledger/AgentWindow/`;
-  - `../workspace-ledger/DashboardWindow/`;
-  - `../workspace-ledger/PluginWindow/`;
-  - `../workspace-ledger/BaseWindow/`.
+- Long-lived repo-specific collaboration documents should go under each configured window ledger directory, for example `../workspace-ledger/<window-name>/`.
 - These directories are generated from `workspace.config.json` through `windowLedgerRoot` and optional `windowLedgerDirs`. They replace the old project-specific `docs/<WindowName>/` pattern for generic installations.
 - Single-repo execution backfill should still be linked back from the active workspace control plan or workspace index.
 - Child repository internal `docs/` should hold product docs, release docs, or user docs only. Do not scatter cross-repo coordination files inside child repos.
-- Real test project docs remain project docs; BaseWindow validation plans, scans, acceptance, and reproduction records should be kept in workspace control docs or `TestWindow/docs/`.
+- Real test project docs remain project docs; product validation plans, scans, acceptance, and reproduction records should be kept in workspace control docs or the configured Test repository `docs/`.
 
 ## Workspace Git Governance
 
-- ControlWorkspace may track workspace-owned documentation, scripts, templates, and skill assets only.
+- Wakeflow may track workspace-owned documentation, scripts, templates, and skill assets only.
 - Do not add child repositories, real test projects, gitlinks, submodules, or local runtime state to the workspace repository.
 - Child repo source / tests / docs must be committed in their own repositories.
 - Other windows may create or backfill workspace docs only when authorized by the active controller state root; they must not run workspace `git add`, `git commit`, or `git push`.

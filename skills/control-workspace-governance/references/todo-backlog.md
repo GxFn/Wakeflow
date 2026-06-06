@@ -1,12 +1,12 @@
 # TODO And Backlog Rules
 
-Use this reference when creating, adjusting, accepting, rolling, canceling, prioritizing, or dispatching TODO / Backlog items in ControlWorkspace.
+Use this reference when creating, adjusting, accepting, rolling, canceling, prioritizing, or dispatching TODO / Backlog items in Wakeflow.
 
 ## Core Rules
 
 - TODO / Backlog 是通用子模式，不只用于问题修复。用户可以在需求讨论、需求设计、代码调研、目标阶段确认、wave 派发、监控、验收或真实测试期间要求新增、调整、取消或重排 TODO。
-- `DesignWindow` signal 不是正式 TODO；总控接收后才决定是否写入 `global-todo-board`、当前 TODO / Backlog、测试 card 候选或需求目录。
-- `DesignWindow` 完成需求设计并设定目标后，默认不再作为零散交流处理，而应作为正式 TODO / Backlog 候选交回总控。总控要把它挂到正确账本，再按当前主线是否完成、优先级、依赖和目标阶段确认正常领取推进；除非用户明确要求打断当前主线，否则不得因 Design 完成而直接跳过 TODO 或立即派发。
+- `Design` signal 不是正式 TODO；总控接收后才决定是否写入 `global-todo-board`、当前 TODO / Backlog、测试 card 候选或需求目录。
+- `Design` 完成需求设计并设定目标后，默认不再作为零散交流处理，而应作为正式 TODO / Backlog 候选交回总控。总控要把它挂到正确账本，再按当前主线是否完成、优先级、依赖和目标阶段确认正常领取推进；除非用户明确要求打断当前主线，否则不得因 Design 完成而直接跳过 TODO 或立即派发。
 - TODO / Backlog 不能替代目标定义，也不能自动驱动派发。TODO 是总控调度账本和空闲窗口候选任务池，用来保存目标主线中发现的真实问题、后续清理点、验证缺口和可并行事项；进入 TODO 的真实问题仍归总控负责到底，不能因为写入 TODO 就变成遗忘项、长期观察项或目标外事项。
 - 每次使用 TODO 派发前，必须先说明该 TODO 对应哪一部分最终目标、完成后如何缩小剩余差距、是否可能其实应标为已完成 / 观察 / 不做。
 

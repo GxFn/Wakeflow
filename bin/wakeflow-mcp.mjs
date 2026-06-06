@@ -5,7 +5,7 @@ import { listControlRuntimeScripts, runControlRuntime } from "../lib/control-run
 const tools = [
   {
     name: "wakeflow_initialize_workspace",
-    description: "Initialize a Wakeflow control workspace: discover siblings, generate/apply workspace config, install AGENTS blocks, create Design/Test surfaces, and record local window/thread runtime. Dry-run unless apply is true.",
+    description: "Initialize a Wakeflow control workspace: discover siblings, generate/apply workspace config, install AGENTS blocks, create Design/Test surfaces, and record local window configuration. Dry-run unless apply is true. Does not accept or write thread ids.",
     inputSchema: {
       type: "object",
       properties: {
@@ -45,22 +45,42 @@ const tools = [
             },
           },
         },
-        threads: {
-          type: "array",
-          items: {
-            type: "object",
-            required: ["windowName", "threadId"],
-            properties: {
-              windowName: { type: "string" },
-              threadId: { type: "string" },
-              role: { enum: ["controller", "target", "test-target", "design", "observer"] },
-              cwd: { type: "string" },
-              responsibilityRoot: { type: "string" },
-              displayTitle: { type: "string" },
-              canonicalUse: { type: "string" },
-            },
-          },
-        },
+      },
+    },
+  },
+  {
+    name: "wakeflow_discover_workspace",
+    description: "Discover sibling repositories and current Wakeflow workspace setup without writing files.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+        parent: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "wakeflow_access_profiles",
+    description: "Inspect child-window AGENTS access-card coordinates and automation gates.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+        window: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "wakeflow_sync_agents",
+    description: "Install or dry-run Wakeflow root/child AGENTS surfaces. Does not register thread ids.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+        rootAgents: { type: "boolean" },
+        all: { type: "boolean" },
+        windows: { type: "array", items: { type: "string" } },
+        apply: { type: "boolean" },
       },
     },
   },
@@ -119,7 +139,6 @@ const tools = [
         taskPackageId: { type: "string" },
         humanContextRef: { type: "string" },
         returnPolicy: { enum: ["group-ready", "per-target"] },
-        requireThread: { type: "boolean" },
         automationEnabled: { type: "boolean" },
       },
     },
@@ -175,6 +194,190 @@ const tools = [
     },
   },
   {
+    name: "wakeflow_review_pack",
+    description: "Build a review evidence pack for a state root, dispatch group, or task id. This is evidence, not acceptance.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+        stateRoot: { type: "string" },
+        dispatchGroup: { type: "string" },
+        taskId: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "wakeflow_decide_review",
+    description: "Record an explicit controller decision for a review candidate.",
+    inputSchema: {
+      type: "object",
+      required: ["stateRoot", "candidateId", "decision", "reason"],
+      properties: {
+        root: { type: "string" },
+        stateRoot: { type: "string" },
+        candidateId: { type: "string" },
+        decision: { enum: ["accept", "rework", "blocked"] },
+        reason: { type: "string" },
+        evidenceRefs: { type: "array", items: { type: "string" } },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "wakeflow_complete_demand",
+    description: "Complete a demand after all task packages and target tasks are accepted.",
+    inputSchema: {
+      type: "object",
+      required: ["stateRoot", "reason", "evidenceRefs"],
+      properties: {
+        root: { type: "string" },
+        stateRoot: { type: "string" },
+        reason: { type: "string" },
+        evidenceRefs: { type: "array", items: { type: "string" } },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "wakeflow_build_controller_return",
+    description: "Build a controller-return delivery envelope for the original controller window. This is not a send.",
+    inputSchema: {
+      type: "object",
+      required: ["dispatchGroup", "triggerTarget", "triggerTaskId"],
+      properties: {
+        root: { type: "string" },
+        dispatchGroup: { type: "string" },
+        triggerTarget: { type: "string" },
+        triggerTaskId: { type: "string" },
+        controllerWindow: { type: "string" },
+        humanContextRef: { type: "string" },
+        returnReason: { enum: ["result-ready", "blocked"] },
+        automationEnabled: { type: "boolean" },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "wakeflow_stop_loop",
+    description: "Write a stop marker for Wakeflow automation transport and stop associated keep-live if applicable.",
+    inputSchema: {
+      type: "object",
+      required: ["reason"],
+      properties: {
+        root: { type: "string" },
+        reason: { type: "string" },
+        automationRunId: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "wakeflow_keep_live_state",
+    description: "Inspect keep-live state for unattended Wakeflow support.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "wakeflow_intake_design_handoff",
+    description: "Attach a ready Design handoff to a controller state root as machine intake.",
+    inputSchema: {
+      type: "object",
+      required: ["stateRoot", "designKey"],
+      properties: {
+        root: { type: "string" },
+        stateRoot: { type: "string" },
+        designKey: { type: "string" },
+        board: { type: "string" },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "wakeflow_intake_test_card",
+    description: "Create a Test boundary card under a controller state root.",
+    inputSchema: {
+      type: "object",
+      required: [
+        "stateRoot",
+        "testId",
+        "targetWindow",
+        "question",
+        "objectBoundary",
+        "controllerSelfChecks",
+        "realScenarioConditions",
+        "successMeans",
+        "failureMeans",
+        "cannotConclude",
+        "stopConditions"
+      ],
+      properties: {
+        root: { type: "string" },
+        stateRoot: { type: "string" },
+        testId: { type: "string" },
+        targetWindow: { type: "string" },
+        question: { type: "string" },
+        objectBoundary: { type: "string" },
+        controllerSelfChecks: { type: "array", items: { type: "string" } },
+        realScenarioConditions: { type: "array", items: { type: "string" } },
+        successMeans: { type: "array", items: { type: "string" } },
+        failureMeans: { type: "array", items: { type: "string" } },
+        cannotConclude: { type: "array", items: { type: "string" } },
+        stopConditions: { type: "array", items: { type: "string" } },
+        sourceRef: { type: "string" },
+        evidenceRequired: { type: "array", items: { type: "string" } },
+        allowedOperations: { type: "array", items: { type: "string" } },
+        forbiddenOperations: { type: "array", items: { type: "string" } },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "wakeflow_next_work",
+    description: "Scan Design handoff and TODO ledgers for the next controller-ready candidate.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+        id: { type: "string" },
+        source: { enum: ["all", "design", "todo"] },
+        limit: { type: "number" },
+        afterCompletion: { type: "boolean" },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "wakeflow_archive_workspace_docs",
+    description: "Archive completed workspace control documents. Dry-run unless apply is true.",
+    inputSchema: {
+      type: "object",
+      required: ["topic", "files"],
+      properties: {
+        root: { type: "string" },
+        topic: { type: "string" },
+        month: { type: "string" },
+        files: { type: "array", items: { type: "string" } },
+        keepIndexRows: { type: "boolean" },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "wakeflow_archive_todo",
+    description: "Archive completed global TODO rows. Dry-run unless apply is true.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+        date: { type: "string" },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
     name: "wakeflow_control_runtime",
     description: "Run a Wakeflow runtime script through a whitelist. This does not send host thread messages.",
     inputSchema: {
@@ -214,10 +417,49 @@ const handlers = {
       ...(args.includeRealProject ? ["--include-real-project"] : []),
       ...repositoryArgs(args.repositories),
       ...localWindowArgs(args.localWindows),
-      ...threadArgs(args.threads),
       ...(args.apply ? ["--write"] : []),
       "--json",
     ],
+    cwd: args.root || undefined,
+  }),
+  wakeflow_discover_workspace: (args) => runControlRuntime({
+    script: "control-workspace-install",
+    args: [
+      "discover",
+      ...rootArgs(args),
+      ...optionalValue("--parent", args.parent),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
+  wakeflow_access_profiles: (args) => runControlRuntime({
+    script: "control-workspace-install",
+    args: [
+      "access-profiles",
+      ...rootArgs(args),
+      ...optionalValue("--window", args.window),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
+  wakeflow_sync_agents: (args) => runControlRuntime({
+    script: "control-workspace-install",
+    args: args.rootAgents
+      ? [
+          "sync-root-agents",
+          ...rootArgs(args),
+          ...(args.apply ? ["--write"] : []),
+          "--json",
+        ]
+      : [
+          "write-agents",
+          ...rootArgs(args),
+          ...(args.all ? ["--all"] : []),
+          ...repeatValues("--window", args.windows),
+          ...(args.apply ? ["--write"] : []),
+          "--json",
+        ],
+    cwd: args.root || undefined,
   }),
   wakeflow_status: () => runControlRuntime({
     script: "workspace-control",
@@ -265,7 +507,6 @@ const handlers = {
       ...optionalValue("--controller-window", args.controllerWindow),
       ...optionalValue("--group", args.dispatchGroup),
       ...optionalValue("--return-policy", args.returnPolicy),
-      ...(args.requireThread ? ["--require-thread"] : []),
       ...(args.automationEnabled ? ["--automation-enabled"] : []),
       ...rootArgs(args),
       "--write",
@@ -310,6 +551,146 @@ const handlers = {
     script: "controller-state",
     args: ["reduce-results", "--state-root", args.stateRoot, ...rootArgs(args), "--write", "--json"],
   }),
+  wakeflow_review_pack: (args) => runControlRuntime({
+    script: "codex-automation-loop",
+    args: [
+      "review-pack",
+      ...optionalValue("--state-root", args.stateRoot),
+      ...optionalValue("--group", args.dispatchGroup),
+      ...optionalValue("--task-id", args.taskId),
+      ...rootArgs(args),
+      "--json",
+    ],
+  }),
+  wakeflow_decide_review: (args) => runControlRuntime({
+    script: "controller-state",
+    args: [
+      "decide-review",
+      "--state-root", args.stateRoot,
+      "--candidate-id", args.candidateId,
+      "--decision", args.decision,
+      "--reason", args.reason,
+      ...repeatValues("--evidence-ref", args.evidenceRefs),
+      ...rootArgs(args),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+  }),
+  wakeflow_complete_demand: (args) => runControlRuntime({
+    script: "controller-state",
+    args: [
+      "complete-demand",
+      "--state-root", args.stateRoot,
+      "--reason", args.reason,
+      ...repeatValues("--evidence-ref", args.evidenceRefs),
+      ...rootArgs(args),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+  }),
+  wakeflow_build_controller_return: (args) => runControlRuntime({
+    script: "codex-automation-loop",
+    args: [
+      "build-controller-return",
+      "--group", args.dispatchGroup,
+      "--trigger-target", args.triggerTarget,
+      "--trigger-task-id", args.triggerTaskId,
+      ...optionalValue("--controller-window", args.controllerWindow),
+      ...optionalValue("--human-context-ref", args.humanContextRef),
+      ...optionalValue("--return-reason", args.returnReason),
+      ...(args.automationEnabled ? ["--automation-enabled"] : []),
+      ...rootArgs(args),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+  }),
+  wakeflow_stop_loop: (args) => runControlRuntime({
+    script: "codex-automation-loop",
+    args: [
+      "stop-loop",
+      "--reason", args.reason,
+      ...optionalValue("--automation-run-id", args.automationRunId),
+      ...rootArgs(args),
+      "--write",
+      "--json",
+    ],
+  }),
+  wakeflow_keep_live_state: (args) => runControlRuntime({
+    script: "codex-automation-loop",
+    args: ["keep-live-state", ...rootArgs(args), "--json"],
+  }),
+  wakeflow_intake_design_handoff: (args) => runControlRuntime({
+    script: "control-intake",
+    args: [
+      "design-handoff",
+      "--state-root", args.stateRoot,
+      "--design-key", args.designKey,
+      ...optionalValue("--board", args.board),
+      ...rootArgs(args),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+  }),
+  wakeflow_intake_test_card: (args) => runControlRuntime({
+    script: "control-intake",
+    args: [
+      "test-card",
+      "--state-root", args.stateRoot,
+      "--test-id", args.testId,
+      "--target-window", args.targetWindow,
+      "--question", args.question,
+      "--object-boundary", args.objectBoundary,
+      ...repeatValues("--controller-self-check", args.controllerSelfChecks),
+      ...repeatValues("--real-scenario-condition", args.realScenarioConditions),
+      ...repeatValues("--success-means", args.successMeans),
+      ...repeatValues("--failure-means", args.failureMeans),
+      ...repeatValues("--cannot-conclude", args.cannotConclude),
+      ...repeatValues("--stop-condition", args.stopConditions),
+      ...optionalValue("--source-ref", args.sourceRef),
+      ...repeatValues("--evidence-required", args.evidenceRequired),
+      ...repeatValues("--allowed-operation", args.allowedOperations),
+      ...repeatValues("--forbidden-operation", args.forbiddenOperations),
+      ...rootArgs(args),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+  }),
+  wakeflow_next_work: (args) => runControlRuntime({
+    script: "next-control-work",
+    args: [
+      ...rootArgs(args),
+      ...optionalValue("--id", args.id),
+      ...optionalValue("--source", args.source),
+      ...optionalValue("--limit", args.limit),
+      ...(args.afterCompletion ? ["--after-completion"] : []),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
+  wakeflow_archive_workspace_docs: (args) => runControlRuntime({
+    script: "archive-workspace-docs",
+    args: [
+      ...rootArgs(args),
+      "--topic", args.topic,
+      ...optionalValue("--month", args.month),
+      ...repeatValues("--file", args.files),
+      ...(args.keepIndexRows ? ["--keep-index-rows"] : []),
+      ...(args.apply ? ["--apply"] : []),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
+  wakeflow_archive_todo: (args) => runControlRuntime({
+    script: "archive-global-todo-board",
+    args: [
+      ...rootArgs(args),
+      ...optionalValue("--date", args.date),
+      ...(args.apply ? ["--apply"] : []),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
   wakeflow_control_runtime: (args) => runControlRuntime({
     script: args.script,
     args: args.args || [],
@@ -353,17 +734,6 @@ function repositoryArgs(repositories = []) {
 function localWindowArgs(windows = []) {
   return (windows || []).flatMap((item) => [
     "--window", item.windowName,
-    ...optionalValue("--thread-role", item.role ? `${item.windowName}=${item.role}` : ""),
-    ...optionalValue("--thread-cwd", item.cwd ? `${item.windowName}=${item.cwd}` : ""),
-    ...optionalValue("--thread-responsibility-root", item.responsibilityRoot ? `${item.windowName}=${item.responsibilityRoot}` : ""),
-    ...optionalValue("--thread-title", item.displayTitle ? `${item.windowName}=${item.displayTitle}` : ""),
-    ...optionalValue("--thread-use", item.canonicalUse ? `${item.windowName}=${item.canonicalUse}` : ""),
-  ]);
-}
-
-function threadArgs(threads = []) {
-  return (threads || []).flatMap((item) => [
-    "--thread", `${item.windowName}=${item.threadId}`,
     ...optionalValue("--thread-role", item.role ? `${item.windowName}=${item.role}` : ""),
     ...optionalValue("--thread-cwd", item.cwd ? `${item.windowName}=${item.cwd}` : ""),
     ...optionalValue("--thread-responsibility-root", item.responsibilityRoot ? `${item.windowName}=${item.responsibilityRoot}` : ""),

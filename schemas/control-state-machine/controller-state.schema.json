@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/codex-control-workspace/controller-state.schema.json",
+  "$id": "https://example.invalid/wakeflow/controller-state.schema.json",
   "title": "Controller State",
   "type": "object",
   "required": [

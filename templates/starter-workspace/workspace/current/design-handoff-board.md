@@ -1,6 +1,6 @@
 # Workspace Handoff Board
 
-This internal board is used when the user does not have an external `DesignWindow` directory.
+This internal board is used when the user does not have an external Design directory.
 
 ## Handoff 清单
 

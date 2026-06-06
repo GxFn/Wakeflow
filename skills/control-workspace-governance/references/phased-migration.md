@@ -1,7 +1,7 @@
 # Phased Migration Playbook
 
 Use this reference when a task moves, extracts, deletes, or rehomes behavior
-across BaseWindow repositories. This is a playbook, not a legacy long-form
+across configured product repositories. This is a playbook, not a legacy long-form
 execution template. Execution should use a controller state root created from
 `templates/control-state-machine/`, with migration stages represented as task
 packages and review decisions.

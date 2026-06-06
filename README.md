@@ -1,10 +1,10 @@
 <div align="center">
 
-# Codex Control Workspace
+# Wakeflow
 
-A local-first control plane for multi-repository Codex work: one controller,
-many specialist Codex windows, explicit evidence, and direct-thread handoff
-without turning scripts into the decision maker.
+A local-first Codex plugin for unattended multi-repository work: one controller,
+many specialist windows, explicit evidence, and direct-thread handoff without
+turning scripts into the decision maker.
 
 [中文](README.zh-CN.md)
 
@@ -18,8 +18,8 @@ without turning scripts into the decision maker.
 
 One Codex window is good at one codebase. Real product work often spans a
 plugin entrypoint, a local daemon, a shared core package, a dashboard, a design
-thread, and a real-project test thread. Codex Control Workspace keeps that work
-from turning into scattered chat state.
+thread, and a real-project test thread. Wakeflow keeps that work from turning
+into scattered chat state.
 
 The main ideas:
 
@@ -73,7 +73,7 @@ workspace next to the repositories it manages:
 ```text
 MyWorkspace/
   AGENTS.md                  # unpacked total-control entrypoint
-  codex-control-workspace/   # this reusable repository
+  Wakeflow/                  # Wakeflow plugin and control runtime
   ProductRepo/
   CoreRepo/
   PluginRepo/
@@ -97,7 +97,7 @@ Recommended installation flow:
 Useful first prompt:
 
 ```text
-You are installing codex-control-workspace.
+You are installing Wakeflow.
 Read README.md, README.zh-CN.md, AGENTS.md, workspace.config.json, and scripts/README.md.
 Run a read-only discovery of sibling repositories.
 List proposed window names, repository roles, existing AGENTS.md status, and local surfaces that would be created.
@@ -204,5 +204,5 @@ Script families:
 6. **Small prompts beat command dumps**: target windows need the current task,
    state root, skill, and identity rules, not a full script manual.
 
-Codex Control Workspace is scaffolding for disciplined multi-window work. Its
-job is to make the real decision points hard to skip.
+Wakeflow is scaffolding for disciplined multi-window work. Its job is to make
+the real decision points hard to skip.

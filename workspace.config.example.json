@@ -1,10 +1,10 @@
 {
   "workspaceName": "Wakeflow",
   "controlWindow": "Wakeflow",
-  "designWindow": "DesignWindow",
-  "testWindow": "TestWindow",
-  "realProjectWindow": "RealTestProject",
-  "baseWindow": "BaseWindow",
+  "designWindow": "Design",
+  "testWindow": "Test",
+  "realProjectWindow": "",
+  "baseWindow": "",
   "activeLedgerRoot": ".workspace-active",
   "projectLedgerRoot": "../workspace-ledger",
   "windowLedgerRoot": "../workspace-ledger",
@@ -21,51 +21,34 @@
   "internalTestPath": "../workspace-ledger/testing",
   "allowMissingRepos": true,
   "dispatchWindows": [
-    "BaseWindow",
-    "CoreWindow",
-    "AgentWindow",
-    "DashboardWindow",
-    "PluginWindow",
-    "TestWindow"
+    "AppWindow",
+    "ServiceWindow",
+    "IntegrationWindow",
+    "Test"
   ],
   "requiredDispatchWindows": [
-    "BaseWindow",
-    "CoreWindow",
-    "AgentWindow",
-    "DashboardWindow",
-    "PluginWindow",
-    "TestWindow",
-    "RealTestProject"
+    "AppWindow",
+    "ServiceWindow",
+    "IntegrationWindow",
+    "Design",
+    "Test"
   ],
   "repoNames": [
-    "BaseWindow",
-    "CoreWindow",
-    "AgentWindow",
-    "DashboardWindow",
-    "PluginWindow"
+    "AppWindow",
+    "ServiceWindow",
+    "IntegrationWindow"
   ],
   "testExchangePath": ".workspace-active/workspace/current/test-exchange.md",
   "designHandoffBoard": ".workspace-active/workspace/current/design-handoff-board.md",
   "designHandoffInbox": ".workspace-active/workspace/current/design-handoff-inbox.md",
   "runtimeProcessMatchers": [],
   "runtimeProcessLabel": "configured",
-  "protectedWorkspacePrefixes": [
-    "BaseWindow/",
-    "CoreWindow/",
-    "AgentWindow/",
-    "DashboardWindow/",
-    "PluginWindow/",
-    "TestWindow/",
-    "RealTestProject/"
-  ],
+  "protectedWorkspacePrefixes": [],
   "repositoryRoles": {
-    "BaseWindow": "Local platform or base runtime",
-    "CoreWindow": "Shared deterministic core",
-    "AgentWindow": "Agent runtime and orchestration",
-    "DashboardWindow": "Frontend UI",
-    "PluginWindow": "Host integration or plugin entry",
-    "DesignWindow": "Requirement design and handoff",
-    "TestWindow": "Real environment validation",
-    "RealTestProject": "Protected real test project"
+    "AppWindow": "Primary application repository",
+    "ServiceWindow": "Shared service or runtime repository",
+    "IntegrationWindow": "Host integration repository",
+    "Design": "Requirement design and handoff",
+    "Test": "Real environment validation"
   }
 }

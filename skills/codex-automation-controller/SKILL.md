@@ -1,6 +1,6 @@
 ---
 name: codex-automation-controller
-description: Use when ControlWorkspace total control starts or resumes Codex Automation Closed Loop, reviews target result envelopes, creates dispatch packets, builds delivery envelopes, decides acceptance / rework / block / next wave, or stops unattended automation.
+description: Use when Wakeflow total control starts or resumes Codex Automation Closed Loop, reviews target result envelopes, creates dispatch packets, builds delivery envelopes, decides acceptance / rework / block / next wave, or stops unattended automation.
 ---
 
 # Codex Automation Controller
@@ -305,7 +305,7 @@ Stop and report when any applies:
 - Evidence is contradictory or only natural-language assertion.
 - The next step changes the approved goal, removes scope, downgrades capability,
   or touches a protected real test project without written boundary.
-- A target window tried to do another window's work, handle `TestWindow`, or
+- A target window tried to do another window's work, handle `Test` / configured test-window work, or
   create its own next-hop without explicit state-root authorization.
 - Two automated retries fail on the same issue.
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/codex-control-workspace/task-package.schema.json",
+  "$id": "https://example.invalid/wakeflow/task-package.schema.json",
   "title": "Task Package",
   "type": "object",
   "required": ["schemaVersion", "taskPackageId", "demandKey", "summary", "status", "targetTasks"],

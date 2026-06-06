@@ -320,11 +320,14 @@ function parseRepoSpecs(context) {
 function configurePayload(context = commandContext()) {
   const workspaceName = getValue("--workspace-name", context.config.workspaceName);
   const controlWindow = getValue("--control-window", workspaceName);
-  const designWindow = getValue("--design-window", context.config.designWindow);
-  const testWindow = getValue("--test-window", context.config.testWindow);
-  const realProjectWindow = getValue("--real-project-window", context.config.realProjectWindow);
   const explicitRepositories = parseRepoSpecs(context);
   const explicitWindows = new Set(explicitRepositories.map((repo) => repo.windowName));
+  const requestedDesignWindow = getValue("--design-window", null);
+  const requestedTestWindow = getValue("--test-window", null);
+  const requestedRealProjectWindow = getValue("--real-project-window", null);
+  let designWindow = requestedDesignWindow ?? context.config.designWindow;
+  let testWindow = requestedTestWindow ?? context.config.testWindow;
+  let realProjectWindow = requestedRealProjectWindow ?? context.config.realProjectWindow;
   const previousByWindow = new Map(normalizedRepositories(context.config).map((repo) => [repo.windowName, repo]));
   const repositories = explicitRepositories.length > 0
     ? [...explicitRepositories]
@@ -478,7 +481,7 @@ function testWindowNamesForContext(context) {
     .map((name) => repoForWindow(context.config, name))
     .find(Boolean);
   if (!testRepo) {
-    return [...new Set(configuredNames.length > 0 ? configuredNames : ["TestWindow"])];
+    return [...new Set(configuredNames.length > 0 ? configuredNames : ["Test"])];
   }
   const testPath = repositoryAbsPath(context.controlRoot, testRepo);
   const samePathNames = normalizedRepositories(context.config)
@@ -802,34 +805,16 @@ function replaceAllLiteral(content, from, to) {
   return content.split(from).join(to);
 }
 
-function projectWindowByPosition(config, position, fallback) {
-  const projectNames = Array.isArray(config.repoNames) && config.repoNames.length > 0
-    ? config.repoNames
-    : (config.dispatchWindows ?? []).filter((name) => name !== config.testWindow);
-  return projectNames[position] ?? fallback;
-}
-
 function rootAgentsContent(context) {
   const controlRel = slash(path.relative(context.parentRoot, context.controlRoot)) || ".";
   const ledgerRel = slash(path.relative(context.parentRoot, context.ledgerPaths.projectLedgerRoot)) || "workspace-ledger";
   let content = readControlFile(context.controlRoot, "AGENTS.md");
-
-  const windowReplacements = [
-    ["ControlWorkspace", context.config.workspaceName],
-    ["BaseWindow", context.config.baseWindow ?? projectWindowByPosition(context.config, 0, "BaseWindow")],
-    ["CoreWindow", projectWindowByPosition(context.config, 1, "CoreWindow")],
-    ["AgentWindow", projectWindowByPosition(context.config, 2, "AgentWindow")],
-    ["DashboardWindow", projectWindowByPosition(context.config, 3, "DashboardWindow")],
-    ["PluginWindow", projectWindowByPosition(context.config, 4, "PluginWindow")],
-    ["DesignWindow", context.config.designWindow],
-    ["TestWindow", context.config.testWindow],
-    ["RealTestProject", context.config.realProjectWindow],
-  ];
-  for (const [from, to] of windowReplacements) {
-    if (from && to && from !== to) {
-      content = replaceAllLiteral(content, from, to);
-    }
-  }
+  content = replaceAllLiteral(
+    content,
+    "本仓库是 Wakeflow 控制能力仓库",
+    `本 workspace 使用 \`${controlRel}/\` 作为 Wakeflow 控制能力入口`,
+  );
+  content = replaceAllLiteral(content, "Wakeflow 总控", `${context.config.workspaceName} 总控`);
 
   const localConfigPlaceholder = "__CODEX_CONTROL_WORKSPACE_LOCAL_CONFIG__";
   content = replaceAllLiteral(content, ".workspace-local/workspace.config.json", localConfigPlaceholder);
@@ -936,7 +921,7 @@ function writeAgentsPayload(context = commandContext(), options = {}) {
 function designBoardTemplate() {
   return `# Workspace Handoff Board
 
-This board is intentionally small. DesignWindow records completed requirement design handoffs here; the control workspace imports ready rows with \`scripts/import-design-handoffs.mjs\`.
+This board is intentionally small. Design records completed requirement design handoffs here; Wakeflow imports ready rows with \`scripts/import-design-handoffs.mjs\`.
 
 ## Handoff 清单
 
@@ -1474,11 +1459,11 @@ function help() {
     },
     examples: [
       "node scripts/control-workspace-install.mjs initialize --json",
-      "node scripts/control-workspace-install.mjs initialize --repo BaseWindow=../MyApp --internal-design --internal-test --write --json",
-      "node scripts/control-workspace-install.mjs initialize --use-discovered --thread ControlWorkspace=<realThreadId> --write --json",
+      "node scripts/control-workspace-install.mjs initialize --repo AppWindow=../MyApp --internal-design --internal-test --write --json",
+      "node scripts/control-workspace-install.mjs initialize --use-discovered --thread Wakeflow=<realThreadId> --write --json",
       "node scripts/control-workspace-install.mjs discover --json",
-      "node scripts/control-workspace-install.mjs configure --repo BaseWindow=../MyApp --repo PluginWindow=../MyPlugin --write",
-      "node scripts/control-workspace-install.mjs prompts --window BaseWindow",
+      "node scripts/control-workspace-install.mjs configure --repo AppWindow=../MyApp --repo ServiceWindow=../MyService --write",
+      "node scripts/control-workspace-install.mjs prompts --window AppWindow",
       "node scripts/control-workspace-install.mjs sync-root-agents --write",
       "node scripts/control-workspace-install.mjs write-agents --all --write",
       "node scripts/control-workspace-install.mjs access-profiles --json",

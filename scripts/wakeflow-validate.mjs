@@ -10,6 +10,9 @@ const errors = [];
 const placeholderToken = "[TO" + "DO:";
 const oldWorkspaceToken = "codex-control" + "-workspace";
 const ignoredDirectoryNames = new Set([".git", ".workspace-active", ".workspace-local", "coverage", "dist", "node_modules"]);
+const localizedRuntimeTextFiles = new Set([
+  "scripts/wakeflow-setup.mjs",
+]);
 
 const requiredFiles = [
   "AGENTS.md",
@@ -38,7 +41,16 @@ const requiredFiles = [
   "templates/starter-workspace/workspace/current/workspace-current-status.md",
   "templates/starter-workspace/workspace/current/global-todo-board.md",
   "templates/starter-workspace/workspace/current/design-handoff-board.md",
+  "templates/starter-workspace/workspace/current/design-handoff-inbox.md",
   "templates/starter-workspace/workspace/current/test-exchange.md",
+  "templates/starter-workspace/workspace/workspace-record-map.md",
+  "templates/starter-workspace/ledger/requirement-designs/README.md",
+  "templates/starter-workspace/ledger/goal-stage-confirmation/README.md",
+  "templates/starter-workspace/ledger/goal-stage-confirmation/process.md",
+  "templates/starter-workspace/ledger/workspace/requirement-to-wave-execution-flow.md",
+  "templates/starter-workspace/ledger/workspace/todo-window-scheduling-policy.md",
+  "templates/starter-workspace/ledger/workspace/workspace-doc-archive-policy.md",
+  "templates/starter-workspace/ledger/workspace/archive/index.md",
   "templates/window-support/design/AGENTS.md",
   "templates/window-support/testing/AGENTS.md",
   "schemas/wakeflow-state-machine/wakeflow-state.schema.json",
@@ -134,11 +146,12 @@ function validateMcpConfig() {
     return;
   }
   if (server.command !== "node") errors.push("wakeflow MCP command must be node");
-  if (!Array.isArray(server.args) || server.args[0] !== "bin/wakeflow-mcp.mjs") {
-    errors.push("wakeflow MCP args must start with bin/wakeflow-mcp.mjs");
+  if (server.cwd !== ".") errors.push("wakeflow MCP cwd must be .");
+  if (!Array.isArray(server.args) || server.args[0] !== "./bin/wakeflow-mcp.mjs") {
+    errors.push("wakeflow MCP args must start with ./bin/wakeflow-mcp.mjs");
   }
   for (const arg of server.args || []) {
-    if (arg.endsWith(".mjs")) requireFile(arg);
+    if (arg.endsWith(".mjs")) requireFile(stripDotSlash(arg));
   }
 
   const mcpText = readText("bin/wakeflow-mcp.mjs");
@@ -200,19 +213,31 @@ function validateSkillSurface() {
       errors.push(`${relative(file)} is missing a description`);
     }
   }
+  const governance = readText("skills/wakeflow-governance/SKILL.md");
+  for (const required of [
+    "workspace initialization",
+    "wakeflow_initialize_workspace",
+    "apply: false",
+    "MCP server is unavailable",
+  ]) {
+    if (!governance.includes(required)) {
+      errors.push(`wakeflow-governance skill must direct initialization through MCP: ${required}`);
+    }
+  }
 }
 
 function validateTextSurface() {
   for (const file of listTextFiles(root)) {
     const text = readFileSync(file, "utf8");
+    const allowsLocalizedRuntimeText = localizedRuntimeTextFiles.has(relative(file));
     if (text.includes(placeholderToken)) errors.push(`placeholder remains in ${relative(file)}`);
     if (text.includes(oldWorkspaceToken)) {
       errors.push(`old workspace name remains in ${relative(file)}`);
     }
-    if (/\p{Script=Han}/u.test(text)) {
+    if (!allowsLocalizedRuntimeText && /\p{Script=Han}/u.test(text)) {
       errors.push(`non-English Han text remains in ${relative(file)}`);
     }
-    if (/[\u3000-\u303F\uFF00-\uFFEF]/u.test(text)) {
+    if (!allowsLocalizedRuntimeText && /[\u3000-\u303F\uFF00-\uFFEF]/u.test(text)) {
       errors.push(`fullwidth punctuation remains in ${relative(file)}`);
     }
   }

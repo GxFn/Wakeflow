@@ -88,6 +88,20 @@ test("fails when the MCP config points at a missing server entrypoint", () => {
   }
 });
 
+test("fails when the MCP config does not launch from the plugin root", () => {
+  const root = makeFixture();
+  try {
+    mutateJson(path.join(root, ".mcp.json"), (payload) => {
+      delete payload.mcpServers.wakeflow.cwd;
+    });
+    const result = run(root);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /wakeflow MCP cwd must be \./);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("fails when a runtime whitelist script is absent from the package", () => {
   const root = makeFixture();
   try {

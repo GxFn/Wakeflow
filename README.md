@@ -89,18 +89,45 @@ Recommended installation flow:
 
 1. Ask Codex to inspect the parent folder.
 2. Let it propose repository roles and window names.
-3. Confirm the boundary.
-4. Let it write only the managed `AGENTS.md` blocks and local runtime surfaces.
+3. Remove any discovered windows that should not be managed.
+4. Confirm the boundary.
+5. Let it write only the managed `AGENTS.md` blocks and local runtime surfaces.
+6. Let Codex create the controller, Design, Test, and product Codex threads from
+   the returned `windowLaunchPlan`, then store the real thread ids under
+   `.workspace-local/`.
+
+Wakeflow detects the requested setup language from `language` (`auto`, `zh`, or
+`en`). The launch plan uses short window titles with the window name first, such
+as `<RepoName> Responsibility Window` in English or the localized equivalent in
+Chinese, and the first line of each create-thread prompt starts with that title.
+This keeps the core repository visible in narrow Codex sidebars.
+
+To rebuild only selected windows, pass them as `replaceWindows` during
+initialization. Wakeflow returns a launch plan containing only those windows.
+After Codex creates the replacement threads, register the new real thread ids in
+the local runtime; tracked docs and prompts still never contain thread ids.
 
 Useful first prompt:
 
 ```text
-You are installing Wakeflow.
-Read README.md, AGENTS.md, workspace.config.json, and scripts/README.md.
-Run a read-only discovery of sibling repositories.
-List proposed window names, repository roles, existing AGENTS.md status, and local surfaces that would be created.
-Wait for my confirmation before writing anything.
+Use Wakeflow to initialize the current workspace.
+Preview the plan first and wait for my confirmation before writing.
 ```
+
+That prompt should route through the `wakeflow_initialize_workspace` MCP tool
+with `apply: false`. If the tool is unavailable, reload or reinstall the plugin
+before attempting setup.
+
+Wakeflow keeps Design and Test as sibling window directories such as `Design/`
+and `Test/`, next to product repositories and `workspace-ledger/`. This lets
+those windows read the same sibling product repositories while keeping long-term
+records in `workspace-ledger/`.
+
+Initialization also creates the durable workflow skeleton that mature controller
+workspaces need: Design handoff inbox, requirement-design ledger, goal/stage
+confirmation process, workspace archive index, TODO/window scheduling policy,
+and requirement-to-wave flow. These are generic Wakeflow records, not copies of
+any one product workspace's history.
 
 ## How Work Moves
 

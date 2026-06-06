@@ -14,6 +14,7 @@ Status: idle / no active demand
 ## Current Ledgers
 
 - Global TODO: [global-todo-board.md](global-todo-board.md)
+- Design handoff inbox: [design-handoff-inbox.md](design-handoff-inbox.md)
 - Test exchange projection: [test-exchange.md](test-exchange.md)
 - Current map: [index.md](index.md)
 

@@ -5,7 +5,7 @@ import { listWakeflowRuntimeScripts, runWakeflowRuntime } from "../lib/wakeflow-
 const tools = [
   {
     name: "wakeflow_initialize_workspace",
-    description: "Initialize a Wakeflow runtime: discover siblings, generate/apply workspace config, install AGENTS blocks, create Design/Test surfaces, and record local window configuration. Dry-run unless apply is true. Does not accept or write thread ids.",
+    description: "Initialize a Wakeflow runtime: discover siblings, generate/apply workspace config, install AGENTS blocks, create sibling Design/Test surfaces, and record local window configuration. Dry-run unless apply is true. Returns a localized host create_thread launch plan; replaceWindows limits the plan to selected windows. Real thread ids are stored only in local runtime by the host, not tracked docs or this MCP schema.",
     inputSchema: {
       type: "object",
       properties: {
@@ -13,11 +13,21 @@ const tools = [
         parent: { type: "string" },
         workspaceName: { type: "string" },
         controllerWindow: { type: "string" },
+        language: {
+          enum: ["auto", "zh", "en"],
+          description: "Prompt/title language for window launch plans. Use zh for Chinese users, en for English users, or auto when unknown.",
+        },
         useDiscovered: { type: "boolean" },
         apply: { type: "boolean" },
         internalDesign: { type: "boolean" },
         internalTest: { type: "boolean" },
         includeRealProject: { type: "boolean" },
+        excludeWindows: { type: "array", items: { type: "string" } },
+        replaceWindows: {
+          type: "array",
+          items: { type: "string" },
+          description: "Only return/create/update these replacement window entries; real replacement thread ids are still recorded by local runtime tooling after host create_thread succeeds.",
+        },
         repositories: {
           type: "array",
           items: {
@@ -428,11 +438,14 @@ const handlers = {
       ...optionalValue("--parent", args.parent),
       ...optionalValue("--workspace-name", args.workspaceName),
       ...optionalValue("--controller-window", args.controllerWindow),
+      ...optionalValue("--language", args.language),
       ...(args.useDiscovered ? ["--use-discovered"] : []),
       ...(args.internalDesign ? ["--internal-design"] : []),
       ...(args.internalTest ? ["--internal-test"] : []),
       ...(args.includeRealProject ? ["--include-real-project"] : []),
       ...repositoryArgs(args.repositories),
+      ...repeatValues("--exclude-window", args.excludeWindows),
+      ...repeatValues("--replace-window", args.replaceWindows),
       ...localWindowArgs(args.localWindows),
       ...(args.apply ? ["--write"] : []),
       "--json",

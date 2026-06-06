@@ -10,9 +10,9 @@ repository exists.
 Read:
 
 1. This file.
-2. The parent workspace `AGENTS.md`.
-3. `.workspace-active/workspace/index.md`.
-4. `.workspace-active/workspace/current/workspace-current-status.md`.
+2. The parent workspace `../AGENTS.md`.
+3. `../.workspace-active/workspace/index.md`.
+4. `../.workspace-active/workspace/current/workspace-current-status.md`.
 5. `docs/testing-operation-policy.md`.
 
 ## Role

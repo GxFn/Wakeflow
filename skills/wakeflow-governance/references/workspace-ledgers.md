@@ -9,6 +9,8 @@ state belongs elsewhere:
   projections, intake, test cards, and progress docs.
 - `.workspace-local/`: ignored local config, real thread ids, delivery loop
   runtime, and keep-live state.
+- `../Design/` and `../Test/`: sibling Design/Test working surfaces when the
+  user has not configured external Design/Test repositories.
 - `../workspace-ledger/`: project-specific long-term plans, decisions, archives,
   and evidence maps.
 
@@ -32,6 +34,17 @@ Use the external workspace ledger for:
 - test history;
 - cross-repository evidence maps;
 - per-window collaboration records.
+
+Wakeflow initialization creates starter ledger entries for:
+
+- `workspace-ledger/requirement-designs/README.md`;
+- `workspace-ledger/goal-stage-confirmation/README.md`;
+- `workspace-ledger/goal-stage-confirmation/process.md`;
+- `workspace-ledger/workspace/workspace-record-map.md`;
+- `workspace-ledger/workspace/requirement-to-wave-execution-flow.md`;
+- `workspace-ledger/workspace/todo-window-scheduling-policy.md`;
+- `workspace-ledger/workspace/workspace-doc-archive-policy.md`;
+- `workspace-ledger/workspace/archive/index.md`.
 
 Long-term documents must avoid user absolute paths, API keys, tokens, and other
 private information. Use lowercase kebab-case names and dates.

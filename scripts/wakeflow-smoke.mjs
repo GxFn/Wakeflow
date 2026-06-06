@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runWakeflowRuntime } from "../lib/wakeflow-runtime.mjs";
@@ -104,8 +104,12 @@ function assertOk(result, label) {
 }
 
 async function runMcpSmoke(rootPath) {
-  const child = spawn(process.execPath, ["bin/wakeflow-mcp.mjs"], {
-    cwd: process.cwd(),
+  const mcpConfig = JSON.parse(readFileSync(".mcp.json", "utf8"));
+  const server = mcpConfig.mcpServers?.wakeflow;
+  if (!server) throw new Error("Wakeflow MCP config is missing mcpServers.wakeflow");
+  const cwd = server.cwd === "." ? process.cwd() : path.resolve(process.cwd(), server.cwd ?? ".");
+  const child = spawn(server.command, server.args, {
+    cwd,
     stdio: ["pipe", "pipe", "pipe"],
   });
   let stderr = "";
@@ -186,6 +190,24 @@ async function runMcpSmoke(rootPath) {
     }
     if (deliverySchema.includes("requireThread")) {
       throw new Error("wakeflow_prepare_delivery schema exposes requireThread");
+    }
+
+    const initialized = await request("tools/call", {
+      name: "wakeflow_initialize_workspace",
+      arguments: {
+        root: rootPath,
+        parent: rootPath,
+      },
+    });
+    const initializedText = initialized.result.content?.[0]?.text;
+    const initializedPayload = JSON.parse(initializedText);
+    if (
+      !initializedPayload.ok
+      || initializedPayload.parsedJson?.command !== "initialize"
+      || initializedPayload.parsedJson?.mode !== "discovery"
+      || initializedPayload.parsedJson?.wrote !== false
+    ) {
+      throw new Error("MCP wakeflow_initialize_workspace did not return a dry-run discovery plan");
     }
 
     const called = await request("tools/call", {

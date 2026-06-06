@@ -61,6 +61,13 @@ function run(fixture, args) {
   });
 }
 
+function runAt(root, args) {
+  return spawnSync("node", [installScript, ...args, "--root", root], {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+  });
+}
+
 function runJson(fixture, args) {
   const result = run(fixture, [...args, "--json"]);
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -100,12 +107,14 @@ test("configure writes user-confirmed sibling mappings into workspace.config.jso
     [
       ["BaseWindow", "../BaseWindow"],
       ["PluginWindow", "../PluginWindow"],
-      ["Design", "../workspace-ledger/design"],
-      ["Test", "../workspace-ledger/testing"],
+      ["Design", "../Design"],
+      ["Test", "../Test"],
     ],
   );
   assert.equal(config.designHandoffBoard, ".workspace-active/workspace/current/design-handoff-board.md");
+  assert.equal(config.designHandoffInbox, ".workspace-active/workspace/current/design-handoff-inbox.md");
   assert.equal(config.testExchangePath, ".workspace-active/workspace/current/test-exchange.md");
+  assert.equal(config.goalStageConfirmationDir, "../workspace-ledger/goal-stage-confirmation");
 });
 
 test("initialize without selection returns discovery and writes nothing", () => {
@@ -120,7 +129,119 @@ test("initialize without selection returns discovery and writes nothing", () => 
     ["BaseWindow", "PluginWindow"],
   );
   assert.equal(existsSync(path.join(fixture.parent, "AGENTS.md")), false);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/design/AGENTS.md")), false);
+  assert.equal(existsSync(path.join(fixture.parent, "Design/AGENTS.md")), false);
+});
+
+test("initialize previews a plugin-managed target workspace without a local Wakeflow repo", () => {
+  const parent = mkdtempSync(path.join(os.tmpdir(), "wakeflow-target-workspace-"));
+  mkdirSync(path.join(parent, "AppRepo", ".git"), { recursive: true });
+  writeFile(path.join(parent, "AppRepo", "AGENTS.md"), "# App Repo\n");
+
+  let result = runAt(parent, ["initialize", "--json"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  let payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.mode, "discovery");
+  assert.equal(payload.discovery.workspaceName, path.basename(parent));
+  assert.equal(payload.discovery.discoveredRepositories[0].path, "AppRepo");
+  assert.equal(payload.discovery.configuredRepositories[0].path, "Design");
+  assert.equal(existsSync(path.join(parent, "AGENTS.md")), false);
+
+  result = runAt(parent, ["initialize", "--use-discovered", "--internal-design", "--internal-test", "--json"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.mode, "plan");
+  assert.equal(payload.steps.configure.nextConfig.workspaceRoot, ".");
+  assert.equal(payload.steps.configure.nextConfig.projectLedgerRoot, "workspace-ledger");
+  assert.equal(payload.steps.configure.nextConfig.repositories[0].path, "AppRepo");
+  assert.equal(payload.steps.syncRootAgents.source, path.join(workspaceRoot, "AGENTS.md"));
+  assert.equal(payload.steps.writeAgents.ok, true);
+  assert.equal(existsSync(path.join(parent, "AGENTS.md")), false);
+  assert.equal(existsSync(path.join(parent, "Design/AGENTS.md")), false);
+});
+
+test("initialize localizes launch titles and prompts with the window name first", () => {
+  const parent = mkdtempSync(path.join(os.tmpdir(), "wakeflow-target-language-"));
+  mkdirSync(path.join(parent, "AppRepo", ".git"), { recursive: true });
+  const result = runAt(parent, ["initialize", "--use-discovered", "--internal-design", "--internal-test", "--language", "zh", "--json"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  const windows = payload.steps.windowLaunchPlan.windows;
+  const controller = windows.find((item) => item.windowName === path.basename(parent));
+  const app = windows.find((item) => item.windowName === "AppRepo");
+  const design = windows.find((item) => item.windowName === "Design");
+
+  const zhControllerRole = "\u603b\u63a7";
+  const zhDutyWindow = "\u804c\u8d23\u7a97\u53e3";
+  const zhDesignWindow = "\u9700\u6c42\u7a97\u53e3";
+  const zhFirstRead = "\u5148\u8bfb\u53d6";
+  const zhColon = "\uff1a";
+
+  assert.equal(payload.steps.windowLaunchPlan.language, "zh");
+  assert.equal(controller.displayTitle, `${path.basename(parent)} ${zhControllerRole}`);
+  assert.equal(app.displayTitle, `AppRepo ${zhDutyWindow}`);
+  assert.equal(design.displayTitle, `Design ${zhDesignWindow}`);
+  assert.equal(app.createThreadPrompt.split("\n")[0], `AppRepo ${zhDutyWindow}${zhColon}\u5148\u5b8c\u6210\u5165\u53e3\u540c\u6b65\u3002`);
+  assert.match(app.createThreadPrompt, new RegExp(zhFirstRead));
+  assert.doesNotMatch(controller.createThreadPrompt, /AGENTS\.md\u3001AGENTS\.md/);
+  assert.doesNotMatch(design.createThreadPrompt, /\.\.\/AGENTS\.md\u3001\.\.\/AGENTS\.md/);
+});
+
+test("initialize applies a plugin-managed target workspace without copying Wakeflow source", () => {
+  const parent = mkdtempSync(path.join(os.tmpdir(), "wakeflow-target-apply-"));
+  mkdirSync(path.join(parent, "AppRepo", ".git"), { recursive: true });
+  writeFile(path.join(parent, "AppRepo", "AGENTS.md"), "# App Repo\n\nExisting app rule.");
+
+  const result = runAt(parent, ["initialize", "--use-discovered", "--internal-design", "--internal-test", "--write", "--json"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.mode, "apply");
+  assert.equal(payload.steps.configure.nextConfig.workspaceRoot, ".");
+  assert.equal(payload.steps.configure.nextConfig.projectLedgerRoot, "workspace-ledger");
+
+  const config = JSON.parse(readFileSync(path.join(parent, "workspace.config.json"), "utf8"));
+  assert.equal(config.workspaceRoot, ".");
+  assert.equal(config.runtimeMode, "plugin");
+  assert.equal(config.projectLedgerRoot, "workspace-ledger");
+  assert.equal(config.designHandoffInbox, ".workspace-active/workspace/current/design-handoff-inbox.md");
+  assert.equal(config.goalStageConfirmationDir, "workspace-ledger/goal-stage-confirmation");
+  assert.equal(config.wakeflowRepoDir, "");
+  assert.equal(config.repositories[0].path, "AppRepo");
+  assert.equal(config.repositories.find((repo) => repo.windowName === "Design").path, "Design");
+  assert.equal(config.repositories.find((repo) => repo.windowName === "Test").path, "Test");
+
+  const rootAgents = readFileSync(path.join(parent, "AGENTS.md"), "utf8");
+  assert.match(rootAgents, /Wakeflow is installed as a Codex plugin for this workspace/);
+  assert.match(rootAgents, /Use Wakeflow MCP tools/);
+  assert.doesNotMatch(rootAgents, /node scripts\/wakeflow-setup\.mjs/);
+
+  const appAgents = readFileSync(path.join(parent, "AppRepo", "AGENTS.md"), "utf8");
+  assert.match(appAgents, /## Workspace Access Card/);
+  assert.match(appAgents, /Existing app rule/);
+  assert.match(appAgents, /Active workspace index: `\.\.\/\.workspace-active\/workspace\/index\.md`/);
+  assert.equal(existsSync(path.join(parent, "Design/AGENTS.md")), true);
+  assert.equal(existsSync(path.join(parent, "Test/AGENTS.md")), true);
+  assert.equal(existsSync(path.join(parent, ".workspace-active/workspace/current/design-handoff-inbox.md")), true);
+  assert.equal(existsSync(path.join(parent, "workspace-ledger/requirement-designs/README.md")), true);
+  assert.equal(existsSync(path.join(parent, "workspace-ledger/goal-stage-confirmation/README.md")), true);
+  assert.equal(existsSync(path.join(parent, "workspace-ledger/goal-stage-confirmation/process.md")), true);
+  assert.equal(existsSync(path.join(parent, "workspace-ledger/workspace/requirement-to-wave-execution-flow.md")), true);
+  assert.equal(existsSync(path.join(parent, "workspace-ledger/workspace/todo-window-scheduling-policy.md")), true);
+  assert.equal(existsSync(path.join(parent, "workspace-ledger/workspace/workspace-doc-archive-policy.md")), true);
+  assert.equal(existsSync(path.join(parent, "workspace-ledger/workspace/archive/index.md")), true);
+  assert.equal(existsSync(path.join(parent, "Wakeflow")), false);
+  assert.deepEqual(
+    payload.steps.windowLaunchPlan.windows.map((item) => item.windowName),
+    [path.basename(parent), "AppRepo", "Design", "Test"],
+  );
+
+  const synced = runAt(parent, ["sync-root-agents", "--write", "--json"]);
+  assert.equal(synced.status, 0, synced.stderr || synced.stdout);
+  const rootAgentsAfterSync = readFileSync(path.join(parent, "AGENTS.md"), "utf8");
+  assert.match(rootAgentsAfterSync, /Wakeflow is installed as a Codex plugin for this workspace/);
+  assert.doesNotMatch(rootAgentsAfterSync, /node scripts\/wakeflow-setup\.mjs/);
 });
 
 test("initialize applies workspace config, AGENTS, Design/Test surfaces, and local thread runtime", () => {
@@ -152,13 +273,19 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
   assert.equal(payload.steps.syncRootAgents.wrote, true);
   assert.equal(payload.steps.writeAgents.results.some((item) => item.windowName === "BaseWindow" && item.wrote), true);
   assert.equal(payload.steps.writeAgents.results.some((item) => item.windowName === "PluginWindow" && item.wrote), true);
-  assert.equal(payload.steps.localWindows.results[0].threadIdRedacted, true);
+  const controllerLocalWindow = payload.steps.localWindows.results.find((item) => item.windowName === "FixtureWorkspace");
+  assert.equal(controllerLocalWindow.threadIdRedacted, true);
 
   assert.equal(existsSync(path.join(fixture.parent, "AGENTS.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/design/AGENTS.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/testing/AGENTS.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Design/AGENTS.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/AGENTS.md")), true);
   assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/design-handoff-board.md")), true);
+  assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/design-handoff-inbox.md")), true);
   assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/test-exchange.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/requirement-designs/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/goal-stage-confirmation/process.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/workspace/requirement-to-wave-execution-flow.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/workspace/archive/index.md")), true);
 
   const registryPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/thread-registry/FixtureWorkspace.json");
   const windowConfigPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/window-config/FixtureWorkspace.json");
@@ -171,13 +298,110 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
   assert.equal(Object.hasOwn(windowConfig, "threadId"), false);
 });
 
+test("initialize can replace one registered window thread without rebuilding every window", () => {
+  const fixture = makeFixture();
+  const oldThreadId = "019e7e06-e64c-7e42-9dc3-ca1633bdeed7";
+  const newThreadId = "019e7e07-4c52-7752-8ca6-5e8033bf3fb9";
+  const zhDutyWindow = "\u804c\u8d23\u7a97\u53e3";
+
+  let result = run(fixture, [
+    "initialize",
+    "--repo",
+    "BaseWindow=../BaseWindow",
+    "--internal-design",
+    "--internal-test",
+    "--thread",
+    `BaseWindow=${oldThreadId}`,
+    "--thread-role",
+    "BaseWindow=target",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  result = run(fixture, [
+    "initialize",
+    "--replace-window",
+    "BaseWindow",
+    "--language",
+    "zh",
+    "--thread",
+    `BaseWindow=${newThreadId}`,
+    "--thread-role",
+    "BaseWindow=target",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.doesNotMatch(result.stdout, new RegExp(newThreadId));
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.steps.windowLaunchPlan.replacementMode, true);
+  assert.deepEqual(payload.steps.windowLaunchPlan.replaceWindows, ["BaseWindow"]);
+  assert.deepEqual(payload.steps.windowLaunchPlan.windows.map((item) => item.windowName), ["BaseWindow"]);
+  assert.equal(payload.steps.windowLaunchPlan.windows[0].displayTitle, `BaseWindow ${zhDutyWindow}`);
+
+  const replaced = payload.steps.localWindows.results.find((item) => item.windowName === "BaseWindow");
+  assert.equal(replaced.replaceRequested, true);
+  assert.equal(replaced.replacedExistingThread, true);
+  assert.equal(replaced.threadIdRedacted, true);
+
+  const registryPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/thread-registry/BaseWindow.json");
+  const registry = JSON.parse(readFileSync(registryPath, "utf8"));
+  assert.equal(registry.threadId, newThreadId);
+  assert.equal(registry.displayTitle, `BaseWindow ${zhDutyWindow}`);
+});
+
+test("initialize replacement apply fails closed until the new real thread id is registered locally", () => {
+  const fixture = makeFixture();
+  const result = run(fixture, ["initialize", "--replace-window", "BaseWindow", "--write", "--json"]);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stdout}\n${result.stderr}`, /requires a new --thread Window=<realThreadId>/);
+});
+
+test("initialize use-discovered supports excluding product windows before config and launch plan", () => {
+  const parent = mkdtempSync(path.join(os.tmpdir(), "wakeflow-target-exclude-"));
+  mkdirSync(path.join(parent, "AppRepo", ".git"), { recursive: true });
+  mkdirSync(path.join(parent, "ScratchRepo", ".git"), { recursive: true });
+
+  const result = runAt(parent, [
+    "initialize",
+    "--use-discovered",
+    "--exclude-window",
+    "ScratchRepo",
+    "--internal-design",
+    "--internal-test",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  const config = JSON.parse(readFileSync(path.join(parent, "workspace.config.json"), "utf8"));
+  assert.deepEqual(
+    config.repositories.map((repo) => repo.windowName),
+    ["AppRepo", "Design", "Test"],
+  );
+  assert.deepEqual(
+    payload.steps.windowLaunchPlan.windows.map((item) => item.windowName),
+    [path.basename(parent), "AppRepo", "Design", "Test"],
+  );
+});
+
 test("prompts use sibling Wakeflow script paths for child windows", () => {
   const fixture = makeFixture();
   const payload = runJson(fixture, ["prompts", "--window", "BaseWindow"]);
   assert.equal(payload.prompts.length, 1);
-  assert.match(payload.prompts[0].prompt, /You are the BaseWindow child window/);
+  assert.equal(payload.prompts[0].displayTitle, "BaseWindow Responsibility Window");
+  assert.match(payload.prompts[0].prompt, /BaseWindow Responsibility Window: perform entry sync first/);
   assert.match(payload.prompts[0].prompt, /AGENTS\.md, \.\.\/AGENTS\.md, \.\.\/Wakeflow\/\.workspace-active\/workspace\/index\.md/);
   assert.match(payload.prompts[0].prompt, /node \.\.\/Wakeflow\/scripts\/wakeflow-setup\.mjs status --json/);
+
+  const zhDutyWindow = "\u804c\u8d23\u7a97\u53e3";
+  const zhFirstRead = "\u5148\u8bfb\u53d6";
+  const zhPayload = runJson(fixture, ["prompts", "--window", "BaseWindow", "--language", "zh"]);
+  assert.equal(zhPayload.language, "zh");
+  assert.equal(zhPayload.prompts[0].displayTitle, `BaseWindow ${zhDutyWindow}`);
+  assert.match(zhPayload.prompts[0].prompt, new RegExp(`^BaseWindow ${zhDutyWindow}`));
+  assert.match(zhPayload.prompts[0].prompt, new RegExp(zhFirstRead));
 });
 
 test("write-agents is dry-run by default and writes managed access cards with --write", () => {
@@ -364,19 +588,26 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   assert.equal(payload.ok, true);
   assert.equal(payload.wrote, true);
   assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/design-handoff-board.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/design/AGENTS.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/design/README.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/design/docs/design-window-operating-policy.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/design/docs/workspace-alignment-checklist.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/design/templates/original-plan-template.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/design/templates/requirement-design-template.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/design/templates/workspace-signal-template.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/design/templates/workspace-handoff-template.md")), true);
+  assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/design-handoff-inbox.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Design/AGENTS.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Design/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Design/docs/design-window-operating-policy.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Design/docs/workspace-alignment-checklist.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Design/templates/original-plan-template.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Design/templates/requirement-design-template.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Design/templates/workspace-signal-template.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Design/templates/workspace-handoff-template.md")), true);
   assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/test-exchange.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/testing/AGENTS.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/testing/README.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/testing/docs/testing-operation-policy.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/testing/templates/test-handoff-template.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/requirement-designs/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/goal-stage-confirmation/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/goal-stage-confirmation/process.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/workspace/todo-window-scheduling-policy.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/workspace/workspace-doc-archive-policy.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/workspace/archive/index.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/AGENTS.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/docs/testing-operation-policy.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/templates/test-handoff-template.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "workspace-ledger/BaseWindow/README.md")), true);
 });
 

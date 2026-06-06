@@ -32,7 +32,7 @@
     ],
     "websiteURL": "https://github.com/GxFn/Wakeflow#readme",
     "defaultPrompt": [
-      "Set up a Wakeflow control loop",
+      "Initialize the current workspace with Wakeflow",
       "Create a Wakeflow task package",
       "Review Wakeflow target results",
       "Run Wakeflow control status"

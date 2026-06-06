@@ -10,9 +10,9 @@ repository exists.
 Read:
 
 1. This file.
-2. The parent workspace `AGENTS.md`.
-3. `.workspace-active/workspace/index.md`.
-4. `.workspace-active/workspace/current/workspace-current-status.md`.
+2. The parent workspace `../AGENTS.md`.
+3. `../.workspace-active/workspace/index.md`.
+4. `../.workspace-active/workspace/current/workspace-current-status.md`.
 5. `docs/design-window-operating-policy.md`.
 6. `docs/workspace-alignment-checklist.md`.
 
@@ -59,8 +59,8 @@ current controller state.
 - Bug/TODO/research signal: create a lightweight signal from
   `templates/workspace-signal-template.md`.
 - Handoff: create a handoff from `templates/workspace-handoff-template.md` and
-  register it in `../current/design-handoff-board.md` or the external Design
-  repository handoff board.
+  register it in `../.workspace-active/workspace/current/design-handoff-board.md`
+  or the external Design repository handoff board.
 
 Each plan, signal, design, and handoff board entry must have a stable
 `Design Key` in the form `<READABLE-TOPIC>-YYYY-MM-DD`. The board `ID` must

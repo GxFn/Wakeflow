@@ -1,6 +1,6 @@
 ---
 name: wakeflow-governance
-description: Use when working inside Wakeflow on AGENTS.md / skill layering, TODO / Backlog intake, Design handoff intake, idle-window scheduling, window coverage, task-package dispatch, producer/consumer sequencing, unified dispatch prompts, test handoffs, validation boundaries, or workspace script pipelines. This skill supplements AGENTS.md and must not override its hard boundaries.
+description: Use when working inside Wakeflow on workspace initialization / setup, AGENTS.md / skill layering, TODO / Backlog intake, Design handoff intake, idle-window scheduling, window coverage, task-package dispatch, producer/consumer sequencing, unified dispatch prompts, test handoffs, validation boundaries, or workspace script pipelines. This skill supplements AGENTS.md and must not override its hard boundaries.
 ---
 
 # Wakeflow Governance
@@ -8,6 +8,36 @@ description: Use when working inside Wakeflow on AGENTS.md / skill layering, TOD
 This skill holds detailed Wakeflow procedures that are too bulky to keep fully resident in `AGENTS.md`.
 
 ## Scope
+
+For workspace initialization or setup requests, use the Wakeflow MCP capability
+tool first:
+
+- Call `wakeflow_initialize_workspace` with `apply: false` for preview/dry-run
+  requests.
+- Call `wakeflow_initialize_workspace` with `apply: true` only after the user
+  confirms the preview and write boundary.
+- If the user removes discovered windows during setup, pass them as
+  `excludeWindows` so the config, AGENTS updates, launch plan, and local window
+  runtime agree.
+- Pass `language: "zh"` when the user is working in Chinese, `language: "en"`
+  when the user asks for English, and leave `language: "auto"` only when there
+  is no clear preference. Use the returned `displayTitle` as the Codex thread
+  title; it keeps the window/repository name first.
+- After apply, read the returned `windowLaunchPlan`, use the Codex host
+  `create_thread` tool to create real controller / Design / Test / product
+  windows, then record the real thread ids only in `.workspace-local` local
+  runtime files.
+- To rebuild selected windows, pass `replaceWindows`. Create threads only for
+  the returned replacement launch entries, then replace those windows' local
+  registry records with the new real thread ids. Do not rewrite unrelated window
+  registrations.
+- Do not replace that tool with a hand-written inspection checklist when the MCP
+  server is available.
+- If Wakeflow MCP tools are unavailable, say that the MCP server is unavailable
+  and stop for plugin reload/reinstall instead of pretending initialization can
+  proceed through docs alone.
+- Wakeflow MCP initialization does not place real thread ids in tracked docs or
+  prompts. Thread registration remains local runtime work outside tracked docs.
 
 Use this skill after reading:
 

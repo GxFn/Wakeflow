@@ -5,11 +5,11 @@
 
 ## 用户真实目标
 
-Wakeflow 不是一个薄插件、脚手架入口或简化版 demo。Wakeflow 的目标是把已经成熟的 `codex-control-workspace` 工作流完整产品化为可安装的 Codex 插件形态，同时保留 control workspace 的判断边界、状态根、任务包、Design/Test 支撑、direct-thread 传递、target result、controller review、归档和本地运行态规则。
+Wakeflow 不是一个薄插件、脚手架入口或简化版 demo。Wakeflow 的目标是把已经成熟的 source runtime 工作流完整产品化为可安装的 Codex 插件形态，同时保留 Wakeflow runtime 的判断边界、状态根、任务包、Design/Test 支撑、direct-thread 传递、target result、controller review、归档和本地运行态规则。
 
 一句话完成定义：
 
-> 用户安装 Wakeflow 后，可以在任意父级 workspace 中初始化一个完整 control workspace，选择受管子仓库和窗口，安装 root / child / Design / Test 的 `AGENTS.md` 与模板；后续流程推进仍由 `AGENTS.md` 指挥 Codex 自己完成读文档、改文档、回填、总控验收和 direct-thread 投递。Wakeflow MCP 提供稳定的通用能力接口，并用成熟 JS 脚本作为本地实现后端；它不接管总控判断，也不直接操作 thread id。
+> 用户安装 Wakeflow 后，可以在任意父级 workspace 中初始化一个完整 Wakeflow runtime，选择受管子仓库和窗口，安装 root / child / Design / Test 的 `AGENTS.md` 与模板；后续流程推进仍由 `AGENTS.md` 指挥 Codex 自己完成读文档、改文档、回填、总控验收和 direct-thread 投递。Wakeflow MCP 提供稳定的通用能力接口，并用成熟 JS 脚本作为本地实现后端；它不接管总控判断，也不直接操作 thread id。
 
 2026-06-06 用户追加裁决：
 
@@ -19,17 +19,17 @@ Wakeflow 不是一个薄插件、脚手架入口或简化版 demo。Wakeflow 的
 
 ## 当前代码现状
 
-当前 Wakeflow 仓库已经完成一轮从简版插件向完整 control workspace runtime 的迁移，仓库工作树在本文创建前为 clean。
+当前 Wakeflow 仓库已经完成一轮从简版插件向完整 Wakeflow runtime runtime 的迁移，仓库工作树在本文创建前为 clean。
 
 已存在的主要资产：
 
-- `AGENTS.md`：已从 control workspace 规则解包为 Wakeflow 通用总控规则，保留最高停止卡、仓库边界、自动化闭环、Design/Test 边界、skill 分层和文档账本规则。
-- `README.md` / `README.zh-CN.md`：已从真实 control workspace 文档提升到根目录，当前说明 Wakeflow 的控制面、安装形态、状态根、direct-thread transport 和本地优先原则。
+- `AGENTS.md`：已从 Wakeflow runtime 规则解包为 Wakeflow 通用总控规则，保留最高停止卡、仓库边界、自动化闭环、Design/Test 边界、skill 分层和文档账本规则。
+- `README.md` / `README.zh-CN.md`：已从真实 Wakeflow runtime 文档提升到根目录，当前说明 Wakeflow 的控制面、安装形态、状态根、direct-thread transport 和本地优先原则。
 - `.codex-plugin/plugin.json`：已声明 Wakeflow Codex 插件元数据、skills、MCP server、品牌和能力描述。
 - `bin/wakeflow-mcp.mjs`：已形成 MCP server 能力接口层，包括 workspace discovery / setup / status、需求 state root、任务包、delivery、result、review、controller return、stop-loop、Design/Test intake、归档、验证和受控 runtime fallback；typed API 不再暴露 thread id 输入面。
-- `lib/control-runtime.mjs`：作为能力接口的实现后端和诊断 fallback，白名单覆盖 25 个非测试 runtime 脚本；它不是 MCP 的主要产品界面。
-- `scripts/`：已迁入 control workspace 的核心脚本，包括 `control-workspace-install.mjs`、`controller-state.mjs`、`codex-automation-loop.mjs`、`control-intake.mjs`、`workspace-control.mjs`、验证和归档脚本。
-- `skills/`：已保留成熟 skill，包括 `codex-automation-controller`、`codex-automation-target`、`control-workspace-governance` 和 `progressive-chain-validation`。
+- `lib/wakeflow-runtime.mjs`：作为能力接口的实现后端和诊断 fallback，白名单覆盖 25 个非测试 runtime 脚本；它不是 MCP 的主要产品界面。
+- `scripts/`：已迁入 Wakeflow runtime 的核心脚本，包括 `wakeflow-setup.mjs`、`wakeflow-state.mjs`、`wakeflow-delivery.mjs`、`wakeflow-intake.mjs`、`wakeflow-cli.mjs`、验证和归档脚本。
+- `skills/`：已保留成熟 skill，包括 `wakeflow-controller`、`wakeflow-target`、`wakeflow-governance` 和 `wakeflow-progressive-validation`。
 - `templates/`：已有 starter workspace、Design/Test 支撑模板、state-machine 模板、需求设计 / handoff / signal / test 模板。
 - `schemas/`：已有 controller state machine、task package、target result、automation dispatch 等 JSON schema。
 - `workspace.config.json` / `workspace.config.example.json`：默认只内置 Wakeflow / Design / Test 支撑角色；产品窗口来自 discovery / 用户选择 / local config。
@@ -37,31 +37,31 @@ Wakeflow 不是一个薄插件、脚手架入口或简化版 demo。Wakeflow 的
 当前已验证过的能力：
 
 - 初始化环境脚本已支持 discovery-only、配置写入、root AGENTS 同步、child AGENTS 同步、Design/Test 内部面创建、本地窗口配置写入；thread registry 不应通过 MCP 写入。
-- `npm test` 曾通过，覆盖 validate、smoke 和 control runtime test suite。
+- `npm test` 曾通过，覆盖 validate、smoke 和 Wakeflow runtime test suite。
 - MCP `tools/list` 曾能列出 `wakeflow_initialize_workspace` 等工具。
 
 2026-06-06 本轮落地新增事实：
 
-- `node scripts/validate-repo.mjs` 通过，验证插件 manifest、MCP 入口、核心脚本、模板、skills 和 assets 存在。
-- `node scripts/smoke.mjs` 通过，证明 state root、task package、delivery envelope、target result import、reduce review、`workspace-control` 基础链路和 MCP `tools/list` / `tools/call` smoke 可运行。
-- `node scripts/wakeflow-control.mjs list` 当前列出 25 个白名单 runtime 脚本。
-- `node scripts/check-script-docs.mjs --json` 通过；`scripts/README.md` 已补齐 `smoke.mjs` / `validate-repo.mjs` / `wakeflow-control.mjs`，`validate-repo.mjs` 不再直接 `process.exit()`。
+- `node scripts/wakeflow-validate.mjs` 通过，验证插件 manifest、MCP 入口、核心脚本、模板、skills 和 assets 存在。
+- `node scripts/wakeflow-smoke.mjs` 通过，证明 state root、task package、delivery envelope、target result import、reduce review、`wakeflow-cli` 基础链路和 MCP `tools/list` / `tools/call` smoke 可运行。
+- `node scripts/wakeflow-runtime.mjs list` 当前列出 25 个白名单 runtime 脚本。
+- `node scripts/wakeflow-check-scripts.mjs --json` 通过；`scripts/README.md` 已补齐 `wakeflow-smoke.mjs` / `wakeflow-validate.mjs` / `wakeflow-runtime.mjs`，`wakeflow-validate.mjs` 不再直接 `process.exit()`。
 - README / README.zh-CN 第一视线已改为 Wakeflow，安装形态使用 `Wakeflow/`。
 - Wakeflow `AGENTS.md` 已改为 Wakeflow Agent Instructions，并写清默认安装只内置 Wakeflow / Design / Test，产品窗口来自 discovery / 用户选择。
 - 模板、skills、schema 中面向用户的旧固定窗口名已清理为 Wakeflow / Design / Test / configured product window；代码中仅保留显式旧名兼容分支。
-- `npm test` 通过：validate、smoke、93 个 control tests 全部通过。
+- `npm test` 通过：validate、smoke、93 个 Wakeflow tests 全部通过。
 
-## `codex-control-workspace` 能力对齐检查
+## source runtime 能力对齐检查
 
-本节记录 2026-06-06 对 `codex-control-workspace` 与 Wakeflow 的文件级和 MCP 暴露级检查结论。
+本节记录 2026-06-06 对 source runtime 与 Wakeflow 的文件级和 MCP 暴露级检查结论。
 
 ### 可以完整插件化
 
-结论：`codex-control-workspace` 的完整能力可以通过 Wakeflow 插件形态承载。原因是它的核心能力本来就是本地文件、JS 脚本、模板、schema、skills 和 ignored runtime state；这些能力不依赖一个必须常驻的后端服务，也不要求 MCP 承担流程控制。
+结论：source runtime 的完整能力可以通过 Wakeflow 插件形态承载。原因是它的核心能力本来就是本地文件、JS 脚本、模板、schema、skills 和 ignored runtime state；这些能力不依赖一个必须常驻的后端服务，也不要求 MCP 承担流程控制。
 
 Wakeflow 插件化后的职责是：
 
-- 带上完整 control workspace 文件资产。
+- 带上完整 Wakeflow runtime 文件资产。
 - 安装时让 Codex 读取 Wakeflow `AGENTS.md` 和 skills。
 - 通过 MCP 暴露不含 thread id 操作的通用能力接口，并复用本地 JS 脚本作为实现后端。
 - 让 Codex 按 `AGENTS.md` 调用这些工具、改文档、投递信封、回填和验收。
@@ -70,47 +70,47 @@ Wakeflow 插件化后的职责是：
 
 文件级检查结果：
 
-- `schemas/`：Wakeflow 与 `codex-control-workspace` 完全一致。
+- `schemas/`：Wakeflow 与 source runtime 完全一致。
 - `templates/`：主体模板已完整迁移；差异只出现在 README 和 testing AGENTS 的 Wakeflow skill 路径替换。
-- `scripts/`：核心 control workspace 脚本均已迁入 Wakeflow；差异主要是 Wakeflow 名称 / 路径替换，以及 Wakeflow 新增的一键 `initialize` 和插件验证脚本。
+- `scripts/`：核心 Wakeflow runtime 脚本均已迁入 Wakeflow；差异主要是 Wakeflow 名称 / 路径替换，以及 Wakeflow 新增的一键 `initialize` 和插件验证脚本。
 - `AGENTS.md`：已解包为 Wakeflow 通用总控规则，保留停止卡、自动化闭环、Design/Test、skill 分层和文档账本规则。
-- `README.md` / `README.zh-CN.md`：已提升到根目录，说明 control workspace 的插件化形态。
-- `.codex-plugin/plugin.json` / `.mcp.json` / `bin/wakeflow-mcp.mjs` / `lib/control-runtime.mjs`：插件包装与 MCP server 已存在。
+- `README.md` / `README.zh-CN.md`：已提升到根目录，说明 Wakeflow runtime 的插件化形态。
+- `.codex-plugin/plugin.json` / `.mcp.json` / `bin/wakeflow-mcp.mjs` / `lib/wakeflow-runtime.mjs`：插件包装与 MCP server 已存在。
 
 ### 合理差异
 
 以下差异是插件化所需，不代表能力缺失：
 
-- 默认名称从 `ControlWorkspace` / `codex-control-workspace` 改为 `Wakeflow`。
+- 默认名称从 `Wakeflow` / source runtime 改为 `Wakeflow`。
 - skill 路径从 `skills/dev/<skill>` 扁平为 `skills/<skill>`，适配 Codex 插件的 skill 暴露方式。
-- AGENTS 管理块 marker 从 `codex-control-workspace:*` 改为 `wakeflow:*`，避免安装后与旧仓库管理块混淆。
-- Wakeflow 增加 `.codex-plugin`、`.mcp.json`、assets、`validate-repo.mjs`、`smoke.mjs`、`wakeflow-control.mjs`。
-- `control-workspace-install.mjs` 在 Wakeflow 中增强了 `initialize`，这属于安装体验补齐，不削弱原能力。
+- AGENTS 管理块 marker 从 `source runtime:*` 改为 `wakeflow:*`，避免安装后与旧仓库管理块混淆。
+- Wakeflow 增加 `.codex-plugin`、`.mcp.json`、assets、`wakeflow-validate.mjs`、`wakeflow-smoke.mjs`、`wakeflow-runtime.mjs`。
+- `wakeflow-setup.mjs` 在 Wakeflow 中增强了 `initialize`，这属于安装体验补齐，不削弱原能力。
 
 ### 本轮已关闭的缺口
 
-本轮已把 MCP 暴露从脚本包装推进到能力接口层，并删除 typed MCP API 中的 thread id 相关输入。`lib/control-runtime.mjs` runtime fallback 白名单覆盖 25 个非 test JS 脚本：
+本轮已把 MCP 暴露从脚本包装推进到能力接口层，并删除 typed MCP API 中的 thread id 相关输入。`lib/wakeflow-runtime.mjs` runtime fallback 白名单覆盖 25 个非 test JS 脚本：
 
-- `append-progress-log`
-- `archive-global-todo-board`
-- `archive-workspace-docs`
-- `check-repository-residue`
-- `check-runtime-residue`
-- `check-script-docs`
-- `check-workspace-boundary`
-- `check-workspace-current-layout`
-- `collect-repo-status`
-- `compact-workspace-index`
-- `generate-archive-topic-summaries`
-- `import-design-handoffs`
-- `next-control-work`
-- `render-progress-doc`
+- `wakeflow-progress-log`
+- `wakeflow-archive-todo`
+- `wakeflow-archive-docs`
+- `wakeflow-check-repository-residue`
+- `wakeflow-check-runtime`
+- `wakeflow-check-scripts`
+- `wakeflow-check-boundary`
+- `wakeflow-check-layout`
+- `wakeflow-repo-status`
+- `wakeflow-compact-index`
+- `wakeflow-archive-summaries`
+- `wakeflow-import-design-handoffs`
+- `wakeflow-next-work`
+- `wakeflow-render-progress`
 - `smoke`
-- `validate-repo`
-- `verify-control-center`
+- `wakeflow-validate`
+- `wakeflow-verify`
 - `verify-workspace-docs`
-- `wakeflow-control`
-- `workspace-control`
+- `wakeflow-runtime`
+- `wakeflow-cli`
 
 这些脚本现在作为能力接口后端和诊断 fallback 存在；Wakeflow MCP 的主完成定义不是“列出 25 个脚本”，而是让 Codex 调用稳定的 workspace / demand / task / delivery / result / review / archive / verify 能力。
 
@@ -122,18 +122,18 @@ Wakeflow 插件化后的职责是：
 
 已修复的验证层缺口：
 
-- `check-script-docs` 已通过，脚本文档索引与新增插件脚本对齐。
-- `smoke.mjs` 已增加 MCP server smoke，覆盖 `initialize`、`tools/list`、核心 `tools/call` 和 thread 字段边界。
-- `wakeflow-control.mjs list` 与 MCP runtime 白名单已对齐，当前暴露 25 个非测试 runtime 脚本。
+- `wakeflow-check-scripts` 已通过，脚本文档索引与新增插件脚本对齐。
+- `wakeflow-smoke.mjs` 已增加 MCP server smoke，覆盖 `initialize`、`tools/list`、核心 `tools/call` 和 thread 字段边界。
+- `wakeflow-runtime.mjs list` 与 MCP runtime 白名单已对齐，当前暴露 25 个非测试 runtime 脚本。
 
 文档产品化缺口：
 
-- README 和中文 README 已改为 Wakeflow 第一视线，保留来源于成熟 control workspace 工作流的说明。
-- `AGENTS.md` 已保留硬规则，并明确 Wakeflow 是插件化 control workspace 能力仓库；默认只设 controller / Design / Test，产品窗口来自 discovery / 用户选择 / 本地配置。
+- README 和中文 README 已改为 Wakeflow 第一视线，保留来源于成熟 Wakeflow runtime 工作流的说明。
+- `AGENTS.md` 已保留硬规则，并明确 Wakeflow 是插件化 Wakeflow runtime 能力仓库；默认只设 controller / Design / Test，产品窗口来自 discovery / 用户选择 / 本地配置。
 
 ## 当前问题与边界
 
-当前问题不是“有没有代码”，而是 Wakeflow 还缺一份清晰的完整落地路线，把现有 control workspace 能力如何被插件安装、如何由 `AGENTS.md` 指挥 Codex 使用、以及 MCP 如何整合通用能力并调用 JS 后端讲清楚，并据此收束后续实现。
+当前问题不是“有没有代码”，而是 Wakeflow 还缺一份清晰的完整落地路线，把现有 Wakeflow runtime 能力如何被插件安装、如何由 `AGENTS.md` 指挥 Codex 使用、以及 MCP 如何整合通用能力并调用 JS 后端讲清楚，并据此收束后续实现。
 
 必须纠正的风险：
 
@@ -148,16 +148,16 @@ Wakeflow 插件化后的职责是：
 
 Wakeflow 应同时具备两层形态：
 
-1. **Control workspace runtime**
-   - 保留 `codex-control-workspace` 的完整文件结构能力：脚本、模板、skills、schema、AGENTS、state root、local runtime。
+1. **Wakeflow runtime**
+   - 保留 source runtime 的完整文件结构能力：脚本、模板、skills、schema、AGENTS、state root、local runtime。
    - 可以作为一个普通仓库与用户产品子仓库并列安装。
 
 2. **Codex plugin adapter**
    - 通过 `.codex-plugin/plugin.json` 安装。
    - 暴露 Wakeflow MCP 工具和 skills。
-   - MCP 工具调用本地 control runtime JS 脚本，不直接执行 host send、不跳过 `AGENTS.md` 和 Codex 的总控判断。
+   - MCP 工具调用本地 Wakeflow runtime JS 脚本，不直接执行 host send、不跳过 `AGENTS.md` 和 Codex 的总控判断。
 
-因此，Wakeflow 不是“为了插件重新设计一套流程”，而是把 control workspace 工作流变成插件可安装、skills 可读取、JS 脚本可由 MCP 调用、Codex 窗口可按 `AGENTS.md` 推进的完整形态。
+因此，Wakeflow 不是“为了插件重新设计一套流程”，而是把 Wakeflow runtime 工作流变成插件可安装、skills 可读取、JS 脚本可由 MCP 调用、Codex 窗口可按 `AGENTS.md` 推进的完整形态。
 
 ## 目标用户流程
 
@@ -167,7 +167,7 @@ Wakeflow 应同时具备两层形态：
 
 流程：
 
-1. 发现当前 control workspace 和同级子仓库。
+1. 发现当前 Wakeflow runtime 和同级子仓库。
 2. 读取 / 生成 `workspace.config.json` 或 `.workspace-local/workspace.config.json`。
 3. 让用户选择哪些仓库 / 窗口纳入 Wakeflow 管理。
 4. 创建或配置 Design / Test 工作面。
@@ -292,7 +292,7 @@ MCP 的职责不是重新设计 Wakeflow 流程，也不是承载总控策略。
 
 因此，Wakeflow MCP 的正确职责是：
 
-- 整合 control workspace 的通用能力，并以稳定 MCP 工具表达：workspace setup、AGENTS 安装、Design/Test 支撑面、state root、task package、delivery envelope、delivery evidence、target result、review candidate、decision、archive、verify。
+- 整合 Wakeflow runtime 的通用能力，并以稳定 MCP 工具表达：workspace setup、AGENTS 安装、Design/Test 支撑面、state root、task package、delivery envelope、delivery evidence、target result、review candidate、decision、archive、verify。
 - 把 `scripts/*.mjs` 作为这些能力接口的实现后端；MCP 工具面不应要求用户理解每个脚本和子命令。
 - 保留受控 runtime fallback，用于诊断、过渡和少数低频维护命令，避免任意 shell。
 - 对写入型脚本保留 dry-run / explicit write 语义。
@@ -308,15 +308,15 @@ MCP 工具可以分为两层：
    - 这是 Wakeflow MCP 的主产品面，必须完整、稳定、清晰。
 
 2. **脚本后端 / fallback 层**
-   - 能力接口内部调用 `control-workspace-install`、`controller-state`、`codex-automation-loop`、`control-intake`、`workspace-control` 等 JS。
-   - `wakeflow_control_runtime` 可保留为诊断和未整合能力的过渡口，但不能成为主要使用方式。
+   - 能力接口内部调用 `wakeflow-setup`、`wakeflow-state`、`wakeflow-delivery`、`wakeflow-intake`、`wakeflow-cli` 等 JS。
+   - `wakeflow_run_backend` 可保留为诊断和未整合能力的过渡口，但不能成为主要使用方式。
 
 ### 真实落地原则
 
 后续代码实现必须遵守以下原则：
 
 - 先设计并实现能力接口矩阵，而不是先追求脚本枚举完整。
-- `wakeflow_control_runtime` 只能作为 fallback；脚本白名单完整性是能力不丢失的保障，不是主完成定义。
+- `wakeflow_run_backend` 只能作为 fallback；脚本白名单完整性是能力不丢失的保障，不是主完成定义。
 - 不为每个脚本子命令硬造 MCP 工具；只为真实工作流动作暴露能力接口。
 - 不在 MCP 中解析当前计划 Markdown 来做决策；Codex 自己按 `AGENTS.md` 读取和判断。
 - 不在 MCP 中实现队列、等待、轮询、自动派发、自动验收或自动归档策略。
@@ -331,7 +331,7 @@ MCP 工具可以分为两层：
 应保留或补齐：
 
 - 以能力接口表达 discover workspace、select repositories、configure workspace、install root AGENTS、sync child AGENTS、create internal Design/Test、inspect access profiles。
-- 后端可调用 `control-workspace-install.mjs discover / initialize / sync-root-agents / write-agents / sync-templates / access-profiles`。
+- 后端可调用 `wakeflow-setup.mjs discover / initialize / sync-root-agents / write-agents / sync-templates / access-profiles`。
 - MCP 初始化只创建 workspace / AGENTS / Design / Test / 本地窗口配置；真实 thread id 登记不走 MCP typed 初始化 API。
 - 默认窗口命名按用户裁决 B：不把 `BaseWindow / CoreWindow / AgentWindow / DashboardWindow / PluginWindow` 作为第一默认面；真实仓库窗口来自 discovery / 用户选择。
 
@@ -345,35 +345,35 @@ MCP 工具可以分为两层：
 应保留或补齐：
 
 - 能力接口覆盖 create demand、read demand status、append progress log、render progress、complete demand。
-- 后端可调用 `controller-state.mjs init / add-task-package / import-target-result / reduce-results / decide-review / complete-demand`、`render-progress-doc.mjs`、`append-progress-log.mjs`。
+- 后端可调用 `wakeflow-state.mjs init / add-task-package / import-target-result / reduce-results / decide-review / complete-demand`、`wakeflow-render-progress.mjs`、`wakeflow-progress-log.mjs`。
 
 当前状态：
 
 - 已有 `wakeflow_init_demand` 和 `wakeflow_add_task` 便利别名。
-- 需要确认底层 `controller-state` 全命令是否都能通过 MCP 调用，而不是重新设计一套 demand workflow。
+- 需要确认底层 `wakeflow-state` 全命令是否都能通过 MCP 调用，而不是重新设计一套 demand workflow。
 
 ### C. Intake Capability
 
 应补齐：
 
 - 能力接口覆盖 import Design handoff、attach Test card、list intake attachments、validate intake boundary。
-- 后端可调用 `control-intake.mjs` 和 `import-design-handoffs.mjs`。
+- 后端可调用 `wakeflow-intake.mjs` 和 `wakeflow-import-design-handoffs.mjs`。
 
 当前状态：
 
-- 底层有 `control-intake.mjs`，MCP 只需要暴露它或提供轻量别名，不需要新流程。
+- 底层有 `wakeflow-intake.mjs`，MCP 只需要暴露它或提供轻量别名，不需要新流程。
 
 ### D. Dispatch / Transport Capability
 
 应保留或补齐：
 
 - 能力接口覆盖 prepare delivery、record delivery evidence、build controller return、stop loop、keep-live state、review group readiness。
-- 后端可调用 `codex-automation-loop.mjs prepare-dispatch-from-state / build-delivery / record-delivery-run / build-controller-return / start-keep-live / stop-keep-live / keep-live-state / submit-result / review-results / review-pack / stop-loop`。
+- 后端可调用 `wakeflow-delivery.mjs prepare-dispatch-from-state / build-delivery / record-delivery-run / build-controller-return / start-keep-live / stop-keep-live / keep-live-state / submit-result / review-results / review-pack / stop-loop`。
 
 当前状态：
 
 - 已有 prepare / record 便利别名。
-- 通用白名单运行器已可调用部分脚本；需要确认 `codex-automation-loop` 所有必要子命令都能通过 MCP 传参调用。
+- 通用白名单运行器已可调用部分脚本；需要确认 `wakeflow-delivery` 所有必要子命令都能通过 MCP 传参调用。
 
 ### E. Result / Review / Decision Capability
 
@@ -393,7 +393,7 @@ MCP 工具可以分为两层：
 应保留或补齐：
 
 - 能力接口覆盖 status、verify、check docs、check boundary、check residue、archive、compact index、next work scan。
-- 后端可调用 `workspace-control.mjs`、`verify-control-center.mjs`、`check-script-docs.mjs`、`check-workspace-boundary.mjs` 等 JS。
+- 后端可调用 `wakeflow-cli.mjs`、`wakeflow-verify.mjs`、`wakeflow-check-scripts.mjs`、`wakeflow-check-boundary.mjs` 等 JS。
 
 当前状态：
 
@@ -425,37 +425,37 @@ MCP 工具可以分为两层：
 
 - 建立能力接口矩阵：workspace setup、AGENTS install、Design/Test setup、demand state root、task package、delivery、delivery evidence、target result、review pack、controller decision、archive、verify、status。
 - 为每个能力写清输入、输出、写入文件、失败条件、是否 dry-run、对应后端脚本。
-- 保留 `wakeflow_control_runtime` 作为 fallback，并在 `lib/control-runtime.mjs` 中补齐需要的后端脚本白名单。
+- 保留 `wakeflow_run_backend` 作为 fallback，并在 `lib/wakeflow-runtime.mjs` 中补齐需要的后端脚本白名单。
 - typed 能力接口不出现 thread id 字段；fallback 不新增 thread registry 语义，也不在文档中把 thread registry 作为 MCP 使用路线。
 - 给写入型能力明确 dry-run / apply 语义；后端脚本保持原生命令语义。
 
 fallback 后端脚本覆盖目标：
 
-- `append-progress-log`
-- `archive-global-todo-board`
-- `archive-workspace-docs`
-- `check-repository-residue`
-- `check-runtime-residue`
-- `check-script-docs`
-- `check-workspace-boundary`
-- `check-workspace-current-layout`
-- `codex-automation-loop`
-- `collect-repo-status`
-- `compact-workspace-index`
-- `control-intake`
-- `control-workspace-install`
-- `controller-state`
-- `demand-sequence`
-- `generate-archive-topic-summaries`
-- `import-design-handoffs`
-- `next-control-work`
-- `render-progress-doc`
+- `wakeflow-progress-log`
+- `wakeflow-archive-todo`
+- `wakeflow-archive-docs`
+- `wakeflow-check-repository-residue`
+- `wakeflow-check-runtime`
+- `wakeflow-check-scripts`
+- `wakeflow-check-boundary`
+- `wakeflow-check-layout`
+- `wakeflow-delivery`
+- `wakeflow-repo-status`
+- `wakeflow-compact-index`
+- `wakeflow-intake`
+- `wakeflow-setup`
+- `wakeflow-state`
+- `wakeflow-demand-sequence`
+- `wakeflow-archive-summaries`
+- `wakeflow-import-design-handoffs`
+- `wakeflow-next-work`
+- `wakeflow-render-progress`
 - `smoke`
-- `validate-repo`
-- `verify-control-center`
+- `wakeflow-validate`
+- `wakeflow-verify`
 - `verify-workspace-docs`
-- `wakeflow-control`
-- `workspace-control`
+- `wakeflow-runtime`
+- `wakeflow-cli`
 
 验收：
 
@@ -476,7 +476,7 @@ fallback 后端脚本覆盖目标：
 - 从 `wakeflow_prepare_delivery` typed schema 移除 `requireThread` 字段；底层脚本的 `--require-thread` 保留为本地 CLI / host-controlled 路线，不作为 MCP 便利参数。
 - 删除 MCP server 内只服务 typed `threads` 字段的 `threadArgs()` helper。
 - 不为 `register-thread`、`--thread`、`--thread-id` 或其它 thread registry 写入路线创建 MCP 便利工具。
-- `wakeflow_control_runtime` 只作为 fallback；文档和工具说明不把 thread registry 路线列为 MCP 使用方式。
+- `wakeflow_run_backend` 只作为 fallback；文档和工具说明不把 thread registry 路线列为 MCP 使用方式。
 - 保留脚本名称、参数 key 和非敏感路径，便于总控复核。
 - 增加测试：`tools/list` 中不存在 thread id / registry 专用工具，`wakeflow_initialize_workspace` schema 中不存在 `threads` 字段，`wakeflow_prepare_delivery` schema 中不存在 `requireThread` 字段。
 
@@ -492,7 +492,7 @@ fallback 后端脚本覆盖目标：
 
 动作：
 
-- 确认 `control-workspace-install.mjs` 的 discover / initialize / sync-agents 路线都能通过 MCP 调用；thread registry 路线不作为 MCP 初始化能力。
+- 确认 `wakeflow-setup.mjs` 的 discover / initialize / sync-agents 路线都能通过 MCP 调用；thread registry 路线不作为 MCP 初始化能力。
 - 确认 internal Design / Test 与 external Design / Test 两种路径。
 - 确认 MCP 初始化不接收 thread id，不写 thread registry。
 - 增加 MCP 层测试：dry-run 不写、apply 写入；初始化 schema 不包含 thread id 相关参数。
@@ -508,7 +508,7 @@ fallback 后端脚本覆盖目标：
 
 动作：
 
-- 确认 `controller-state` / `render-progress-doc` / `append-progress-log` 均可通过 MCP 调用。
+- 确认 `wakeflow-state` / `wakeflow-render-progress` / `wakeflow-progress-log` 均可通过 MCP 调用。
 - 让 task package 的输入包含 sourceRef、目标窗口、验证要求、回填要求。
 - 检查 terminal / review-ready / blocked 状态下新增任务 fail closed。
 
@@ -523,7 +523,7 @@ fallback 后端脚本覆盖目标：
 
 动作：
 
-- 确认 `codex-automation-loop` 的 controller-return、stop-loop、keep-live 命令可通过 MCP 调用。
+- 确认 `wakeflow-delivery` 的 controller-return、stop-loop、keep-live 命令可通过 MCP 调用。
 - 确认 delivery prompt 是轻量小卡片。
 - 确认 record delivery run 强制 sent + readback evidence。
 
@@ -555,7 +555,7 @@ fallback 后端脚本覆盖目标：
 
 动作：
 
-- 确认 `control-intake.mjs` 对 Design handoff / Test card 的命令可通过 MCP 调用。
+- 确认 `wakeflow-intake.mjs` 对 Design handoff / Test card 的命令可通过 MCP 调用。
 - 输出当前 intake 附件、待 review 项和 nextAction。
 - 保留 Design / Test 的职责边界。
 
@@ -570,14 +570,14 @@ fallback 后端脚本覆盖目标：
 
 动作：
 
-- README / README.zh-CN 第一视线改为 Wakeflow，安装形态使用 `Wakeflow/`，同时说明它来源于成熟 control workspace 工作流。
-- AGENTS.md 第一视线改为 Wakeflow control workspace instructions；保留停止卡和硬规则，默认不再出现固定产品窗口示例，真实安装以 `workspace.config.json` / 初始化选择为准。
+- README / README.zh-CN 第一视线改为 Wakeflow，安装形态使用 `Wakeflow/`，同时说明它来源于成熟 Wakeflow runtime 工作流。
+- AGENTS.md 第一视线改为 Wakeflow Wakeflow runtime instructions；保留停止卡和硬规则，默认不再出现固定产品窗口示例，真实安装以 `workspace.config.json` / 初始化选择为准。
 - README 保持亮点和架构，不堆脚本手册。
 - `scripts/README.md` 保持脚本细节索引。
 - MCP 文档写清：工具是通用能力接口，后端复用 JS 脚本；流程控制在 `AGENTS.md`。
 - 已增加 MCP server smoke：`initialize`、`tools/list`、核心 `tools/call`。
 - 已跑 `npm test`、MCP node check、repo validation。
-- 已修复 `check-script-docs` 失败项：补 `smoke.mjs` / `validate-repo.mjs` / `wakeflow-control.mjs` 索引，去掉 `validate-repo.mjs` 的直接 `process.exit()`。
+- 已修复 `wakeflow-check-scripts` 失败项：补 `wakeflow-smoke.mjs` / `wakeflow-validate.mjs` / `wakeflow-runtime.mjs` 索引，去掉 `wakeflow-validate.mjs` 的直接 `process.exit()`。
 
 验收：
 
@@ -601,7 +601,7 @@ fallback 后端脚本覆盖目标：
 
 1. 先在 `bin/wakeflow-mcp.mjs` 中整理主能力接口矩阵，避免继续以脚本枚举为产品面。
 2. 移除 MCP typed API 的 thread id 输入面：初始化入口不再提供 `threads` 字段，prepare delivery 不再提供 `requireThread` 字段，文档和工具说明不把 thread registry 路线作为 MCP 使用方式。
-3. 更新 fallback 后端白名单，覆盖能力接口需要的非 test JS；`wakeflow_control_runtime` 保留为诊断 / 过渡口，不作为主使用方式。
+3. 更新 fallback 后端白名单，覆盖能力接口需要的非 test JS；`wakeflow_run_backend` 保留为诊断 / 过渡口，不作为主使用方式。
 4. 补齐能力接口：setup/discover、status/verify、demand、task、delivery、record delivery、submit result、review pack、decision、archive/next-work。
 5. 修复脚本文档验证失败项，确保新增插件脚本进入 `scripts/README.md`。
 6. 为 MCP server 增加真实 `tools/list` / `tools/call` smoke，断言主工具是能力接口、schema 不包含 thread id 参数。

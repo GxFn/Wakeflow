@@ -7,7 +7,7 @@ cross-repository integration proof is required.
 The machine source of truth is the active demand state root:
 
 ```bash
-node scripts/control-intake.mjs test-card \
+node scripts/wakeflow-intake.mjs test-card \
   --state-root <state-root> \
   --test-id <TEST-ID> \
   --target-window <Test or configured test window> \
@@ -26,7 +26,7 @@ node scripts/control-intake.mjs test-card \
 ```
 
 After total control reviews the generated `test-cards/*.json`, create the
-state-root task package with `controller-state.mjs add-task-package`. Do not
+state-root task package with `wakeflow-state.mjs add-task-package`. Do not
 dispatch a test window from this template alone.
 
 Optional human projection for `test-exchange.md`:

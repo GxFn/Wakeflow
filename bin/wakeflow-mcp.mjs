@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 
-import { listControlRuntimeScripts, runControlRuntime } from "../lib/control-runtime.mjs";
+import { listWakeflowRuntimeScripts, runWakeflowRuntime } from "../lib/wakeflow-runtime.mjs";
 
 const tools = [
   {
     name: "wakeflow_initialize_workspace",
-    description: "Initialize a Wakeflow control workspace: discover siblings, generate/apply workspace config, install AGENTS blocks, create Design/Test surfaces, and record local window configuration. Dry-run unless apply is true. Does not accept or write thread ids.",
+    description: "Initialize a Wakeflow Wakeflow runtime: discover siblings, generate/apply workspace config, install AGENTS blocks, create Design/Test surfaces, and record local window configuration. Dry-run unless apply is true. Does not accept or write thread ids.",
     inputSchema: {
       type: "object",
       properties: {
         root: { type: "string" },
         parent: { type: "string" },
         workspaceName: { type: "string" },
-        controlWindow: { type: "string" },
+        controllerWindow: { type: "string" },
         useDiscovered: { type: "boolean" },
         apply: { type: "boolean" },
         internalDesign: { type: "boolean" },
@@ -351,7 +351,7 @@ const tools = [
   },
   {
     name: "wakeflow_archive_workspace_docs",
-    description: "Archive completed workspace control documents. Dry-run unless apply is true.",
+    description: "Archive completed Wakeflow workspace documents. Dry-run unless apply is true.",
     inputSchema: {
       type: "object",
       required: ["topic", "files"],
@@ -378,13 +378,13 @@ const tools = [
     },
   },
   {
-    name: "wakeflow_control_runtime",
+    name: "wakeflow_run_backend",
     description: "Run a Wakeflow runtime script through a whitelist. This does not send host thread messages.",
     inputSchema: {
       type: "object",
       required: ["script"],
       properties: {
-        script: { enum: listControlRuntimeScripts() },
+        script: { enum: listWakeflowRuntimeScripts() },
         args: { type: "array", items: { type: "string" } },
         timeoutMs: { type: "number" },
       },
@@ -397,20 +397,20 @@ const tools = [
   },
   {
     name: "wakeflow_full_verify",
-    description: "Run embedded control runtime verification.",
+    description: "Run embedded Wakeflow runtime verification.",
     inputSchema: { type: "object", properties: { scriptTests: { type: "boolean" } } },
   },
 ];
 
 const handlers = {
-  wakeflow_initialize_workspace: (args) => runControlRuntime({
-    script: "control-workspace-install",
+  wakeflow_initialize_workspace: (args) => runWakeflowRuntime({
+    script: "wakeflow-setup",
     args: [
       "initialize",
       ...rootArgs(args),
       ...optionalValue("--parent", args.parent),
       ...optionalValue("--workspace-name", args.workspaceName),
-      ...optionalValue("--control-window", args.controlWindow),
+      ...optionalValue("--controller-window", args.controllerWindow),
       ...(args.useDiscovered ? ["--use-discovered"] : []),
       ...(args.internalDesign ? ["--internal-design"] : []),
       ...(args.internalTest ? ["--internal-test"] : []),
@@ -422,8 +422,8 @@ const handlers = {
     ],
     cwd: args.root || undefined,
   }),
-  wakeflow_discover_workspace: (args) => runControlRuntime({
-    script: "control-workspace-install",
+  wakeflow_discover_workspace: (args) => runWakeflowRuntime({
+    script: "wakeflow-setup",
     args: [
       "discover",
       ...rootArgs(args),
@@ -432,8 +432,8 @@ const handlers = {
     ],
     cwd: args.root || undefined,
   }),
-  wakeflow_access_profiles: (args) => runControlRuntime({
-    script: "control-workspace-install",
+  wakeflow_access_profiles: (args) => runWakeflowRuntime({
+    script: "wakeflow-setup",
     args: [
       "access-profiles",
       ...rootArgs(args),
@@ -442,8 +442,8 @@ const handlers = {
     ],
     cwd: args.root || undefined,
   }),
-  wakeflow_sync_agents: (args) => runControlRuntime({
-    script: "control-workspace-install",
+  wakeflow_sync_agents: (args) => runWakeflowRuntime({
+    script: "wakeflow-setup",
     args: args.rootAgents
       ? [
           "sync-root-agents",
@@ -461,12 +461,12 @@ const handlers = {
         ],
     cwd: args.root || undefined,
   }),
-  wakeflow_status: () => runControlRuntime({
-    script: "workspace-control",
+  wakeflow_status: () => runWakeflowRuntime({
+    script: "wakeflow-cli",
     args: ["status", "--json"],
   }),
-  wakeflow_init_demand: (args) => runControlRuntime({
-    script: "controller-state",
+  wakeflow_init_demand: (args) => runWakeflowRuntime({
+    script: "wakeflow-state",
     args: [
       "init",
       "--demand-key", args.demandKey,
@@ -480,8 +480,8 @@ const handlers = {
       "--json",
     ],
   }),
-  wakeflow_add_task: (args) => runControlRuntime({
-    script: "controller-state",
+  wakeflow_add_task: (args) => runWakeflowRuntime({
+    script: "wakeflow-state",
     args: [
       "add-task-package",
       "--state-root", args.stateRoot,
@@ -496,8 +496,8 @@ const handlers = {
       "--json",
     ],
   }),
-  wakeflow_prepare_delivery: (args) => runControlRuntime({
-    script: "codex-automation-loop",
+  wakeflow_prepare_delivery: (args) => runWakeflowRuntime({
+    script: "wakeflow-delivery",
     args: [
       "prepare-dispatch-from-state",
       "--state-root", args.stateRoot,
@@ -513,8 +513,8 @@ const handlers = {
       "--json",
     ],
   }),
-  wakeflow_record_delivery: (args) => runControlRuntime({
-    script: "codex-automation-loop",
+  wakeflow_record_delivery: (args) => runWakeflowRuntime({
+    script: "wakeflow-delivery",
     args: [
       "record-delivery-run",
       "--delivery-file", args.deliveryFile,
@@ -529,8 +529,8 @@ const handlers = {
       "--json",
     ],
   }),
-  wakeflow_submit_result: (args) => runControlRuntime({
-    script: "controller-state",
+  wakeflow_submit_result: (args) => runWakeflowRuntime({
+    script: "wakeflow-state",
     args: [
       "import-target-result",
       "--state-root", args.stateRoot,
@@ -547,12 +547,12 @@ const handlers = {
       "--json",
     ],
   }),
-  wakeflow_review: (args) => runControlRuntime({
-    script: "controller-state",
+  wakeflow_review: (args) => runWakeflowRuntime({
+    script: "wakeflow-state",
     args: ["reduce-results", "--state-root", args.stateRoot, ...rootArgs(args), "--write", "--json"],
   }),
-  wakeflow_review_pack: (args) => runControlRuntime({
-    script: "codex-automation-loop",
+  wakeflow_review_pack: (args) => runWakeflowRuntime({
+    script: "wakeflow-delivery",
     args: [
       "review-pack",
       ...optionalValue("--state-root", args.stateRoot),
@@ -562,8 +562,8 @@ const handlers = {
       "--json",
     ],
   }),
-  wakeflow_decide_review: (args) => runControlRuntime({
-    script: "controller-state",
+  wakeflow_decide_review: (args) => runWakeflowRuntime({
+    script: "wakeflow-state",
     args: [
       "decide-review",
       "--state-root", args.stateRoot,
@@ -576,8 +576,8 @@ const handlers = {
       "--json",
     ],
   }),
-  wakeflow_complete_demand: (args) => runControlRuntime({
-    script: "controller-state",
+  wakeflow_complete_demand: (args) => runWakeflowRuntime({
+    script: "wakeflow-state",
     args: [
       "complete-demand",
       "--state-root", args.stateRoot,
@@ -588,8 +588,8 @@ const handlers = {
       "--json",
     ],
   }),
-  wakeflow_build_controller_return: (args) => runControlRuntime({
-    script: "codex-automation-loop",
+  wakeflow_build_controller_return: (args) => runWakeflowRuntime({
+    script: "wakeflow-delivery",
     args: [
       "build-controller-return",
       "--group", args.dispatchGroup,
@@ -604,8 +604,8 @@ const handlers = {
       "--json",
     ],
   }),
-  wakeflow_stop_loop: (args) => runControlRuntime({
-    script: "codex-automation-loop",
+  wakeflow_stop_loop: (args) => runWakeflowRuntime({
+    script: "wakeflow-delivery",
     args: [
       "stop-loop",
       "--reason", args.reason,
@@ -615,12 +615,12 @@ const handlers = {
       "--json",
     ],
   }),
-  wakeflow_keep_live_state: (args) => runControlRuntime({
-    script: "codex-automation-loop",
+  wakeflow_keep_live_state: (args) => runWakeflowRuntime({
+    script: "wakeflow-delivery",
     args: ["keep-live-state", ...rootArgs(args), "--json"],
   }),
-  wakeflow_intake_design_handoff: (args) => runControlRuntime({
-    script: "control-intake",
+  wakeflow_intake_design_handoff: (args) => runWakeflowRuntime({
+    script: "wakeflow-intake",
     args: [
       "design-handoff",
       "--state-root", args.stateRoot,
@@ -631,8 +631,8 @@ const handlers = {
       "--json",
     ],
   }),
-  wakeflow_intake_test_card: (args) => runControlRuntime({
-    script: "control-intake",
+  wakeflow_intake_test_card: (args) => runWakeflowRuntime({
+    script: "wakeflow-intake",
     args: [
       "test-card",
       "--state-root", args.stateRoot,
@@ -655,8 +655,8 @@ const handlers = {
       "--json",
     ],
   }),
-  wakeflow_next_work: (args) => runControlRuntime({
-    script: "next-control-work",
+  wakeflow_next_work: (args) => runWakeflowRuntime({
+    script: "wakeflow-next-work",
     args: [
       ...rootArgs(args),
       ...optionalValue("--id", args.id),
@@ -668,8 +668,8 @@ const handlers = {
     ],
     cwd: args.root || undefined,
   }),
-  wakeflow_archive_workspace_docs: (args) => runControlRuntime({
-    script: "archive-workspace-docs",
+  wakeflow_archive_workspace_docs: (args) => runWakeflowRuntime({
+    script: "wakeflow-archive-docs",
     args: [
       ...rootArgs(args),
       "--topic", args.topic,
@@ -681,8 +681,8 @@ const handlers = {
     ],
     cwd: args.root || undefined,
   }),
-  wakeflow_archive_todo: (args) => runControlRuntime({
-    script: "archive-global-todo-board",
+  wakeflow_archive_todo: (args) => runWakeflowRuntime({
+    script: "wakeflow-archive-todo",
     args: [
       ...rootArgs(args),
       ...optionalValue("--date", args.date),
@@ -691,17 +691,17 @@ const handlers = {
     ],
     cwd: args.root || undefined,
   }),
-  wakeflow_control_runtime: (args) => runControlRuntime({
+  wakeflow_run_backend: (args) => runWakeflowRuntime({
     script: args.script,
     args: args.args || [],
     timeoutMs: args.timeoutMs || 120000,
   }),
-  wakeflow_full_status: (args) => runControlRuntime({
-    script: "workspace-control",
+  wakeflow_full_status: (args) => runWakeflowRuntime({
+    script: "wakeflow-cli",
     args: ["status", ...(args.json === false ? [] : ["--json"])],
   }),
-  wakeflow_full_verify: (args) => runControlRuntime({
-    script: "workspace-control",
+  wakeflow_full_verify: (args) => runWakeflowRuntime({
+    script: "wakeflow-cli",
     args: ["verify", ...(args.scriptTests ? ["--script-tests"] : []), "--json"],
     timeoutMs: args.scriptTests ? 180000 : 120000,
   }),

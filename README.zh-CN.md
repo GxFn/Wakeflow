@@ -26,7 +26,7 @@
 - **Design 和 Test 挂到需求上**：需求设计 handoff 和真实场景 test card 成为结构化 intake，不再各自发展一套并行状态机。
 - **本地优先**：活跃状态和真实 thread id 不进 Git；长期决策进入项目 ledger。
 
-它不是更大的脚本运行器，而是一个小而清楚的控制面，让多窗口、多仓库工作里的判断、证据和责任持续可见。
+它不是更大的脚本运行器，而是一个小而清楚的协作面，让多窗口、多仓库工作里的判断、证据和责任持续可见。
 
 ## 基础架构
 
@@ -50,12 +50,12 @@ flowchart TD
 
 ## 安装形态
 
-不要把产品仓库塞进这个仓库里。推荐把通用总控仓库放在项目族父目录下，和它管理的仓库并列：
+不要把产品仓库塞进这个仓库里。推荐把 Wakeflow 仓库放在项目族父目录下，和它管理的仓库并列：
 
 ```text
 MyWorkspace/
   AGENTS.md                  # 解包后的总控入口
-  Wakeflow/                  # Wakeflow 插件和总控运行时
+  Wakeflow/                  # Wakeflow 插件和运行时
   ProductRepo/
   CoreRepo/
   PluginRepo/
@@ -113,14 +113,14 @@ Design 和 Test 是支持角色：
 - `per-target` 可以每个目标完成时唤醒总控，但仍携带 group snapshot。
 - 总控在最终完成、硬门禁、用户停止、无可领取 TODO、证据不足或当前状态禁止派发时停止。
 
-如果需要完整参数和命令，读 [scripts/README.md](scripts/README.md)。README 只解释控制模型，不当 shell 手册。
+如果需要完整参数和命令，读 [scripts/README.md](scripts/README.md)。README 只解释协作模型，不当 shell 手册。
 
 ## 日常使用
 
-先读当前总控面和当前 state root，不要上来跑一串脚本。最常用的辅助命令是：
+先读当前 Wakeflow 面和当前 state root，不要上来跑一串脚本。最常用的辅助命令是：
 
 ```sh
-node scripts/workspace-control.mjs status
+node scripts/wakeflow-cli.mjs status
 ```
 
 然后选择能推进真实闭环的最小动作：
@@ -135,11 +135,11 @@ node scripts/workspace-control.mjs status
 
 | 需要做什么 | 脚本家族 |
 | --- | --- |
-| 安装 / 同步父级与子仓库 `AGENTS.md` 管理块 | `control-workspace-install.mjs` |
-| 创建 state root、任务包、裁决和 progress 投影 | `controller-state.mjs` |
-| 记录 Design / Test intake | `control-intake.mjs` |
-| 创建 delivery envelope、review result group、记录 direct-thread run | `codex-automation-loop.mjs` |
-| 日常状态、验证和命令快捷入口 | `workspace-control.mjs` |
+| 安装 / 同步父级与子仓库 `AGENTS.md` 管理块 | `wakeflow-setup.mjs` |
+| 创建 state root、任务包、裁决和 progress 投影 | `wakeflow-state.mjs` |
+| 记录 Design / Test intake | `wakeflow-intake.mjs` |
+| 创建 delivery envelope、review result group、记录 direct-thread run | `wakeflow-delivery.mjs` |
+| 日常状态、验证和命令快捷入口 | `wakeflow-cli.mjs` |
 
 ## 目录职责
 
@@ -148,10 +148,10 @@ node scripts/workspace-control.mjs status
 | `AGENTS.md` | 总控规则源文件，用于解包到父级工作区。 |
 | `workspace.config.json` | 通用窗口名、同级仓库路径、职责标签和脚本默认配置。 |
 | `.workspace-active/` | 不提交的项目运行态：当前索引、状态根、推进文档、TODO 投影、intake、test cards。 |
-| `.workspace-local/` | 不提交的本机运行态：真实 thread id、自动化闭环状态、keep-live 状态、本机配置覆盖。 |
+| `.workspace-local/` | 不提交的本机运行态：真实 thread id、投递闭环状态、keep-live 状态、本机配置覆盖。 |
 | `../workspace-ledger/` | 位于本仓库外的项目专属长期账本。 |
-| `scripts/` | 安装、校验、账本、状态机、intake、自动化和总控辅助脚本。 |
-| `skills/` | 总控、子窗口、测试、账本和自动化操作手册。 |
+| `scripts/` | 安装、校验、账本、状态机、intake、投递和协作辅助脚本。 |
+| `skills/` | 总控、子窗口、测试、账本和投递操作手册。 |
 | `templates/` | 状态根、开发者推进文档、Design/Test 支持面和阶段确认的最小骨架。 |
 
 ## 设计哲学

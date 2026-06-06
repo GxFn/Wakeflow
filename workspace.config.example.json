@@ -1,6 +1,6 @@
 {
   "workspaceName": "Wakeflow",
-  "controlWindow": "Wakeflow",
+  "controllerWindow": "Wakeflow",
   "designWindow": "Design",
   "testWindow": "Test",
   "realProjectWindow": "",

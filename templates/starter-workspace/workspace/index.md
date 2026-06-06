@@ -1,4 +1,4 @@
-# Control Workspace Index
+# Wakeflow Workspace Index
 
 This file is the starter template for the single active workspace entrypoint. After installation, current status, active TODO, test exchange, and active controller state roots live in `.workspace-active/workspace/current/`. Completed plans should be archived to the project ledger, normally `../workspace-ledger/workspace/archive/`.
 
@@ -7,7 +7,7 @@ This file is the starter template for the single active workspace entrypoint. Af
 | 类型 | 文档 | 状态 | 说明 |
 | --- | --- | --- | --- |
 | 当前状态 | [current/workspace-current-status.md](current/workspace-current-status.md) | idle | Fresh template status; no active demand has been initialized. |
-| State Machine Templates | [../../templates/control-state-machine/](../../templates/control-state-machine/) | template | Create new active demands with `controller-state.mjs init`, then read the generated `developer-progress.md`. |
+| State Machine Templates | [../../templates/wakeflow-state-machine/](../../templates/wakeflow-state-machine/) | template | Create new active demands with `wakeflow-state.mjs init`, then read the generated `developer-progress.md`. |
 | Global TODO Board | [current/global-todo-board.md](current/global-todo-board.md) | maintained | Cross-plan TODO ledger. |
 | Design Handoff Board | [current/design-handoff-board.md](current/design-handoff-board.md) | maintained | Internal Design handoff board when no external design repository is configured. |
 | Test Exchange | [current/test-exchange.md](current/test-exchange.md) | maintained | Human projection for real-scenario validation; state-root `test-cards/*.json` is the machine boundary. |

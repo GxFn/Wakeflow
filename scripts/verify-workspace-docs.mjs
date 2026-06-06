@@ -2,8 +2,8 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { workspaceLedgerPaths } from "./lib/workspace-config.mjs";
-import { isCompletedState, stateIdFromText } from "./lib/status-machine.mjs";
+import { workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
+import { isCompletedState, stateIdFromText } from "./lib/wakeflow-status-machine.mjs";
 
 const workspaceRoot = process.cwd();
 const args = process.argv.slice(2);

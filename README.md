@@ -40,7 +40,7 @@ The main ideas:
 - **Local-first by default**: active state and real thread ids stay out of Git;
   long-term decisions go to a project ledger.
 
-The result is not a bigger script runner. It is a small control surface that
+The result is not a bigger script runner. It is a small coordination surface that
 keeps judgment, evidence, and ownership visible while Codex work fans out.
 
 ## Architecture
@@ -67,13 +67,13 @@ a feature, widen scope, or choose product behavior.
 
 ## Install Shape
 
-Do not put product repositories inside this repository. Put the reusable control
-workspace next to the repositories it manages:
+Do not put product repositories inside this repository. Put the reusable
+Wakeflow runtime next to the repositories it manages:
 
 ```text
 MyWorkspace/
-  AGENTS.md                  # unpacked total-control entrypoint
-  Wakeflow/                  # Wakeflow plugin and control runtime
+  AGENTS.md                  # unpacked controller entrypoint
+  Wakeflow/                  # Wakeflow plugin and runtime
   ProductRepo/
   CoreRepo/
   PluginRepo/
@@ -147,15 +147,15 @@ Core rules:
   TODO, missing evidence, or any state that forbids dispatch.
 
 If you need every flag and command, use [scripts/README.md](scripts/README.md).
-The README is meant to explain the control model, not act as a shell manual.
+The README is meant to explain the coordination model, not act as a shell manual.
 
 ## Daily Use
 
-Start by reading the active control surface and the current state root, not by
+Start by reading the active Wakeflow surface and the current state root, not by
 running every script. The most common helper is:
 
 ```sh
-node scripts/workspace-control.mjs status
+node scripts/wakeflow-cli.mjs status
 ```
 
 After that, choose the smallest action that advances the real loop:
@@ -170,23 +170,23 @@ Script families:
 
 | Need | Script family |
 | --- | --- |
-| Install / sync parent and child `AGENTS.md` blocks | `control-workspace-install.mjs` |
-| Create state roots, task packages, decisions, progress projections | `controller-state.mjs` |
-| Record Design/Test intake | `control-intake.mjs` |
-| Build delivery envelopes, review result groups, record direct-thread runs | `codex-automation-loop.mjs` |
-| Daily status, verification, and printed command shortcuts | `workspace-control.mjs` |
+| Install / sync parent and child `AGENTS.md` blocks | `wakeflow-setup.mjs` |
+| Create state roots, task packages, decisions, progress projections | `wakeflow-state.mjs` |
+| Record Design/Test intake | `wakeflow-intake.mjs` |
+| Build delivery envelopes, review result groups, record direct-thread runs | `wakeflow-delivery.mjs` |
+| Daily status, verification, and printed command shortcuts | `wakeflow-cli.mjs` |
 
 ## Repository Layout
 
 | Path | Purpose |
 | --- | --- |
-| `AGENTS.md` | Source total-control instructions, unpacked to the parent workspace root. |
+| `AGENTS.md` | Source controller instructions, unpacked to the parent workspace root. |
 | `workspace.config.json` | Generic window names, repository paths, role labels, and script defaults. |
 | `.workspace-active/` | Ignored project runtime: current indexes, controller state roots, progress docs, TODO projections, intake, and test cards. |
-| `.workspace-local/` | Ignored local runtime: real thread ids, automation loop state, keep-live state, and local config overrides. |
+| `.workspace-local/` | Ignored local runtime: real thread ids, delivery loop state, keep-live state, and local config overrides. |
 | `../workspace-ledger/` | Project-specific long-term records outside the reusable repository. |
-| `scripts/` | Installation, validation, ledger, state-machine, intake, automation, and control helper scripts. |
-| `skills/` | Operational manuals for controller windows, target windows, testing, ledgers, and automation. |
+| `scripts/` | Installation, validation, ledger, state-machine, intake, delivery, and coordination helper scripts. |
+| `skills/` | Operational manuals for controller windows, target windows, testing, ledgers, and delivery. |
 | `templates/` | Minimal skeletons for state roots, developer progress docs, Design/Test support, and confirmations. |
 
 ## Design Philosophy

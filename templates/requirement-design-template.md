@@ -7,7 +7,7 @@
 
 需求设计文档必须把需求落成完整功能模块。不要把当前已有能力当成目标上限，也不要只设计抽象接口、空 adapter、空 provider、无调用方 glue code 或只连线不形成用户可用能力的阶段。需求不明确时，把问题写入“待确认问题”，不要进入派发。
 
-需求设计完成后若进入 workspace 执行推进，后续默认创建 controller state root 和唯一 `developer-progress.md`，模板来自 `templates/control-state-machine/`，并遵守 `scripts/README.md` 的脚本可读格式说明。需求设计本文不直接承载窗口派发。
+需求设计完成后若进入 workspace 执行推进，后续默认创建 controller state root 和唯一 `developer-progress.md`，模板来自 `templates/wakeflow-state-machine/`，并遵守 `scripts/README.md` 的脚本可读格式说明。需求设计本文不直接承载窗口派发。
 
 ## 原始计划书
 

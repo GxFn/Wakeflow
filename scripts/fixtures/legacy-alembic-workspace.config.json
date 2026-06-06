@@ -1,6 +1,6 @@
 {
   "workspaceName": "AlembicWorkspace",
-  "controlWindow": "AlembicWorkspace",
+  "controllerWindow": "AlembicWorkspace",
   "designWindow": "AlembicDesign",
   "testWindow": "AlembicTest",
   "realProjectWindow": "BiliDili",

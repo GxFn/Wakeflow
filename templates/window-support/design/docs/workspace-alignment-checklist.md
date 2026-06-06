@@ -16,7 +16,7 @@
 | TODO / Backlog 账本 | `requirement-design` 和 `workspace-handoff` 的 TODO / Backlog | 设计期 TODO 不替代 workspace 全局 TODO，需总控接收后归口。 |
 | bug / TODO / 调研 / 决策即时回传 | `workspace-signal` | Signal 可随时交回总控，但不能直接改 workspace 当前状态。 |
 | 阶段顺序 | `requirement-design` 和 `workspace-handoff` 的阶段候选 | 候选不是 task package；最终阶段顺序由总控确认。 |
-| 测试交接 | `requirement-design` 的验证策略和 `workspace-handoff` 的验证需求 | 不直接创建 `Test` 测试 card / 任务包，不跑真实项目测试；总控接收后再决定是否用 `control-intake.mjs test-card`。 |
+| 测试交接 | `requirement-design` 的验证策略和 `workspace-handoff` 的验证需求 | 不直接创建 `Test` 测试 card / 任务包，不跑真实项目测试；总控接收后再决定是否用 `wakeflow-intake.mjs test-card`。 |
 | 当前主线保护 | `workspace-handoff` 的当前主线关系 | 不打断当前主线；是否提升为主线由总控决定。 |
 
 ## Signal 必填检查

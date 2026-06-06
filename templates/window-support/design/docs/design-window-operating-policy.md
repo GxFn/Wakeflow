@@ -37,7 +37,7 @@
 - **Signal**：用于 bug 线索、TODO 候选、调研请求、用户决策、当前主线风险或轻量建议。使用 `templates/workspace-signal-template.md`。
 - **Handoff**：用于较完整的需求设计或方案交接。使用 `templates/workspace-handoff-template.md`。
 - **Handoff board**：正式需求设计完成后的清单入口。内部模式默认是 `.workspace-active/workspace/current/design-handoff-board.md`；外部 Design 仓库默认是 `docs/current/workspace-handoff-board.md`。状态为 `ready-for-workspace` 的条目可被总控发现和校验。
-- **State-root intake**：总控正式接收后，用 `control-intake.mjs design-handoff` 把 handoff board 条目和关联文档作为 `intake/*.json` 附着到 controller state-root。这个 intake 不是 TODO、不是任务包、不是实现派发。
+- **State-root intake**：总控正式接收后，用 `wakeflow-intake.mjs design-handoff` 把 handoff board 条目和关联文档作为 `intake/*.json` 附着到 controller state-root。这个 intake 不是 TODO、不是任务包、不是实现派发。
 
 每次交回 Wakeflow 的 handoff 草案应包含：
 
@@ -51,4 +51,4 @@
 8. 验证需求。
 9. 非目标和禁止捷径。
 
-Wakeflow 接收 handoff 前仍需独立复核；handoff 和 state-root intake 都不是目标阶段确认，也不是 task package。只有总控通过 `controller-state.mjs add-task-package` 创建任务包后，才进入执行路线。
+Wakeflow 接收 handoff 前仍需独立复核；handoff 和 state-root intake 都不是目标阶段确认，也不是 task package。只有总控通过 `wakeflow-state.mjs add-task-package` 创建任务包后，才进入执行路线。

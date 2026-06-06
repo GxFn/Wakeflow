@@ -4,4 +4,4 @@ Long-term archive and evidence map.
 
 | Topic | Directory | Description |
 | --- | --- | --- |
-| template | archive/ | Completed control plans should be grouped by date and topic. |
+| template | archive/ | Completed Wakeflow plans should be grouped by date and topic. |

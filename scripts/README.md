@@ -171,7 +171,8 @@ current set is `wakeflow-archive-todo.test.mjs`,
 `wakeflow-state.test.mjs`, `wakeflow-state-machine-route-fixtures.test.mjs`,
 `wakeflow-intake.test.mjs`, `wakeflow-demand-sequence.test.mjs`,
 `wakeflow-check-repository-residue.test.mjs`, `wakeflow-check-scripts.test.mjs`,
-`wakeflow-setup.test.mjs`, `wakeflow-import-design-handoffs.test.mjs`,
+`wakeflow-validate.test.mjs`, `wakeflow-setup.test.mjs`,
+`wakeflow-import-design-handoffs.test.mjs`,
 `wakeflow-next-work.test.mjs`, and
 `wakeflow-cli.test.mjs`.
 

@@ -66,6 +66,8 @@ test("--print scripts --tests includes script validation and all script tests", 
   assert.match(result.stdout, /node --test .*scripts\/wakeflow-delivery\.test\.mjs/);
   assert.match(result.stdout, /scripts\/wakeflow-intake\.test\.mjs/);
   assert.match(result.stdout, /scripts\/wakeflow-demand-sequence\.test\.mjs/);
+  assert.match(result.stdout, /scripts\/wakeflow-check-repository-residue\.test\.mjs/);
+  assert.match(result.stdout, /scripts\/wakeflow-validate\.test\.mjs/);
   assert.match(result.stdout, /scripts\/wakeflow-import-design-handoffs\.test\.mjs/);
   assert.match(result.stdout, /scripts\/wakeflow-next-work\.test\.mjs/);
   assert.match(result.stdout, /scripts\/wakeflow-cli\.test\.mjs/);

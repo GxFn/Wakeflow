@@ -1,0 +1,43 @@
+{
+  "name": "wakeflow",
+  "version": "0.1.0",
+  "description": "Unattended control loops for multi-window agent work.",
+  "author": {
+    "name": "GxFn",
+    "url": "https://github.com/GxFn"
+  },
+  "homepage": "https://github.com/GxFn/Wakeflow#readme",
+  "repository": "https://github.com/GxFn/Wakeflow",
+  "license": "MIT",
+  "keywords": [
+    "agent-workflow",
+    "unattended",
+    "control-plane",
+    "multi-window",
+    "local-first",
+    "evidence-review"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Wakeflow",
+    "shortDescription": "Unattended control loops for agent work",
+    "longDescription": "Wakeflow helps a controller coordinate multi-window agent work with local state roots, task packages, compact delivery intents, target result envelopes, and evidence-first review. It prepares unattended workflows without secretly sending prompts or replacing controller judgment.",
+    "developerName": "GxFn",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/GxFn/Wakeflow#readme",
+    "defaultPrompt": [
+      "Set up a Wakeflow control loop",
+      "Create a Wakeflow task package",
+      "Review Wakeflow target results"
+    ],
+    "brandColor": "#0F766E",
+    "composerIcon": "./assets/wakeflow-mark.svg",
+    "logo": "./assets/wakeflow-logo.svg"
+  }
+}

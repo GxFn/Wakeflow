@@ -1,0 +1,6 @@
+.DS_Store
+node_modules/
+.wakeflow/
+coverage/
+dist/
+*.log

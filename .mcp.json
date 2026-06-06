@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "wakeflow": {
+      "command": "node",
+      "args": ["./bin/wakeflow-mcp.mjs"],
+      "cwd": ".",
+      "env": {
+        "WAKEFLOW_MCP_MODE": "1",
+        "WAKEFLOW_PLUGIN_ROOT": "."
+      }
+    }
+  }
+}

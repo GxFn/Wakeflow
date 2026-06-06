@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Wakeflow mark">
+  <rect width="128" height="128" rx="28" fill="#0F766E"/>
+  <path d="M24 70c13-28 29-28 42 0s29 28 42 0" fill="none" stroke="#ECFDF5" stroke-width="12" stroke-linecap="round"/>
+  <path d="M24 46c13 28 29 28 42 0s29-28 42 0" fill="none" stroke="#A7F3D0" stroke-width="12" stroke-linecap="round"/>
+</svg>

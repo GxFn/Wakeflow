@@ -1,0 +1,15 @@
+{
+  "name": "wakeflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Unattended control loops for multi-window agent work.",
+  "scripts": {
+    "validate": "node scripts/validate-repo.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "test": "npm run validate && npm run smoke"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

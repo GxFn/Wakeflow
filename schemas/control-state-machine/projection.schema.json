@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/codex-control-workspace/projection.schema.json",
+  "title": "Controller Projection",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "demandKey",
+    "title",
+    "sourceRevision",
+    "sourceEventId",
+    "progressDoc",
+    "unifiedStatus"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "demandKey": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1 },
+    "sourceRevision": { "type": "integer", "minimum": 1 },
+    "sourceEventId": { "type": "string", "minLength": 1 },
+    "progressDoc": { "type": "string", "minLength": 1 },
+    "unifiedStatus": { "type": "object" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/codex-control-workspace/target-result.schema.json",
+  "title": "Target Result",
+  "type": "object",
+  "required": ["schemaVersion", "resultId", "targetWindow", "targetTaskId", "status", "evidenceRefs"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "resultId": { "type": "string", "minLength": 1 },
+    "demandKey": { "type": "string", "minLength": 1 },
+    "taskPackageId": { "type": "string", "minLength": 1 },
+    "targetWindow": { "type": "string", "minLength": 1 },
+    "targetTaskId": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "enum": ["completed", "blocked", "needs-review"] },
+    "summary": { "type": "string" },
+    "evidenceRefs": { "type": "array", "items": { "type": "string" } },
+    "verification": { "type": "array", "items": { "type": "string" } },
+    "risks": { "type": "array", "items": { "type": "string" } },
+    "createdAt": { "type": "string" },
+    "stateRevisionObserved": { "type": "integer", "minimum": 1 },
+    "forbiddenConclusions": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

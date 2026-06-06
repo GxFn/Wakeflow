@@ -1,6 +1,7 @@
 .DS_Store
+.workspace-active/
+.workspace-local/
 node_modules/
-.wakeflow/
 coverage/
 dist/
 *.log

@@ -1,0 +1,26 @@
+{
+  "demandKey": "CSMR-MANUAL-ROUTE",
+  "title": "Manual Controller State Route",
+  "goal": "Prove a controller can move a single task from intake to explicit acceptance without dispatch automation.",
+  "completionDefinition": "Target result import, reducer candidate, explicit decision, append-only logs, and Unified Status projection all complete.",
+  "stagePlan": "Stage 0 creates a task package; Stage 1 imports evidence; Stage 2 records controller judgment.",
+  "taskPackage": {
+    "taskPackageId": "CSMR-MANUAL-PKG",
+    "summary": "Run the manual fixture task.",
+    "sourceRef": "fixtures/control-state-machine/manual-route",
+    "targetWindow": "AlembicWorkspace",
+    "targetTaskId": "CSMR-MANUAL-TASK",
+    "targetSummary": "Return fixture evidence for manual controller review."
+  },
+  "result": {
+    "resultId": "CSMR-MANUAL-RESULT",
+    "status": "completed",
+    "summary": "Manual fixture completed.",
+    "evidenceRef": "evidence/manual-route-result.json",
+    "verification": "node --test scripts/control-state-machine-route-fixtures.test.mjs"
+  },
+  "decision": {
+    "decision": "accept",
+    "reason": "Manual route fixture evidence reviewed by total control."
+  }
+}

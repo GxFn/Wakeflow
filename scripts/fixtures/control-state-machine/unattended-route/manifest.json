@@ -1,0 +1,28 @@
+{
+  "demandKey": "CSMR-UNATTENDED-ROUTE",
+  "title": "Unattended Controller State Route",
+  "goal": "Prove unattended dispatch preparation and controller return can use stateRoot and humanContextRef without Markdown plan authority.",
+  "completionDefinition": "State-root dispatch packet, delivery envelope, review pack, target result, reducer, controller-return, and explicit decision complete without controlPlan.",
+  "stagePlan": "Stage 0 creates state; Stage 1 prepares state-root dispatch; Stage 2 imports state-root result; Stage 3 records controller judgment.",
+  "controllerWindow": "AlembicWorkspace",
+  "dispatchGroup": "CSMR-UNATTENDED-GROUP",
+  "taskPackage": {
+    "taskPackageId": "CSMR-UNATTENDED-PKG",
+    "summary": "Run the unattended fixture task.",
+    "sourceRef": "fixtures/control-state-machine/unattended-route",
+    "targetWindow": "Alembic",
+    "targetTaskId": "CSMR-UNATTENDED-TASK",
+    "targetSummary": "Return unattended route evidence."
+  },
+  "result": {
+    "resultId": "CSMR-UNATTENDED-RESULT",
+    "status": "completed",
+    "summary": "Unattended fixture completed.",
+    "evidenceRef": "evidence/unattended-route-result.json",
+    "verification": "node --test scripts/control-state-machine-route-fixtures.test.mjs"
+  },
+  "decision": {
+    "decision": "accept",
+    "reason": "Unattended state-root route evidence reviewed by total control."
+  }
+}

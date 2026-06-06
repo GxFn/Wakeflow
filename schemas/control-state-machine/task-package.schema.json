@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/codex-control-workspace/task-package.schema.json",
+  "title": "Task Package",
+  "type": "object",
+  "required": ["schemaVersion", "taskPackageId", "demandKey", "summary", "status", "targetTasks"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "taskPackageId": { "type": "string", "minLength": 1 },
+    "demandKey": { "type": "string", "minLength": 1 },
+    "summary": { "type": "string" },
+    "status": { "type": "string" },
+    "targetTasks": { "type": "array", "items": { "type": "object" } },
+    "createdAt": { "type": "string" },
+    "sourceRef": { "type": ["string", "null"] }
+  },
+  "additionalProperties": true
+}

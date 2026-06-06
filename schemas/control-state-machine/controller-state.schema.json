@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/codex-control-workspace/controller-state.schema.json",
+  "title": "Controller State",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "demandKey",
+    "title",
+    "state",
+    "stateReason",
+    "revision",
+    "activeStageId",
+    "updatedAt",
+    "allowedActions",
+    "blockers",
+    "decisionsRequired",
+    "stages",
+    "taskPackages",
+    "targetTasks",
+    "windows",
+    "review",
+    "automation",
+    "projection"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "demandKey": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1 },
+    "state": {
+      "type": "string",
+      "enum": [
+        "idle",
+        "intake",
+        "designing",
+        "needs-confirmation",
+        "planned",
+        "dispatching",
+        "waiting-results",
+        "review-ready",
+        "accepting",
+        "needs-rework",
+        "blocked",
+        "paused",
+        "completed",
+        "archived"
+      ]
+    },
+    "stateReason": { "type": "string" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "activeStageId": { "type": ["string", "null"] },
+    "updatedAt": { "type": "string" },
+    "allowedActions": { "type": "array", "items": { "type": "string" } },
+    "blockers": { "type": "array", "items": { "type": "object" } },
+    "decisionsRequired": { "type": "array", "items": { "type": "object" } },
+    "stages": { "type": "array", "items": { "type": "object" } },
+    "taskPackages": { "type": "array", "items": { "type": "object" } },
+    "targetTasks": { "type": "array", "items": { "type": "object" } },
+    "windows": { "type": "array", "items": { "type": "object" } },
+    "review": {
+      "type": "object",
+      "required": ["status", "readyResultIds", "blockedResultIds", "missingResultIds"],
+      "properties": {
+        "status": { "type": "string" },
+        "readyResultIds": { "type": "array", "items": { "type": "string" } },
+        "blockedResultIds": { "type": "array", "items": { "type": "string" } },
+        "missingResultIds": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "automation": {
+      "type": "object",
+      "required": ["enabled", "activeRunIds", "lastReviewPack"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "activeRunIds": { "type": "array", "items": { "type": "string" } },
+        "lastReviewPack": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "projection": {
+      "type": "object",
+      "required": ["status", "lastRenderedAt", "progressDoc"],
+      "properties": {
+        "status": { "type": "string" },
+        "lastRenderedAt": { "type": ["string", "null"] },
+        "progressDoc": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

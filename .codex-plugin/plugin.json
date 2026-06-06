@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "Wakeflow",
     "shortDescription": "Unattended control loops for agent work",
-    "longDescription": "Wakeflow helps a controller coordinate multi-window agent work with local state roots, task packages, compact delivery intents, target result envelopes, and evidence-first review. It prepares unattended workflows without secretly sending prompts or replacing controller judgment.",
+    "longDescription": "Wakeflow packages the complete control-workspace runtime as a Codex plugin: controller state roots, task packages, Design/Test intake, delivery envelopes, target result envelopes, review reducers, controller-return envelopes, progress templates, verification scripts, and controller/target skills. It prepares unattended workflows without secretly sending prompts or replacing controller judgment.",
     "developerName": "GxFn",
     "category": "Productivity",
     "capabilities": [
@@ -34,7 +34,8 @@
     "defaultPrompt": [
       "Set up a Wakeflow control loop",
       "Create a Wakeflow task package",
-      "Review Wakeflow target results"
+      "Review Wakeflow target results",
+      "Run Wakeflow control status"
     ],
     "brandColor": "#0F766E",
     "composerIcon": "./assets/wakeflow-mark.svg",

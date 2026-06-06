@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/codex-control-workspace/transition-candidate.schema.json",
+  "title": "Transition Candidate",
+  "type": "object",
+  "required": ["schemaVersion", "candidateId", "demandKey", "fromRevision", "candidateState", "reason"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "candidateId": { "type": "string", "minLength": 1 },
+    "demandKey": { "type": "string", "minLength": 1 },
+    "fromRevision": { "type": "integer", "minimum": 1 },
+    "candidateState": { "type": "string" },
+    "reason": { "type": "string" },
+    "reviewStatus": { "type": "string" },
+    "readyResultIds": { "type": "array", "items": { "type": "string" } },
+    "blockedResultIds": { "type": "array", "items": { "type": "string" } },
+    "missingResultIds": { "type": "array", "items": { "type": "string" } },
+    "targetTaskIds": { "type": "array", "items": { "type": "string" } },
+    "allowedDecisions": { "type": "array", "items": { "type": "string" } },
+    "evidenceRefs": { "type": "array", "items": { "type": "string" } },
+    "forbiddenConclusions": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

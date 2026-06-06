@@ -7,7 +7,8 @@
   "scripts": {
     "validate": "node scripts/validate-repo.mjs",
     "smoke": "node scripts/smoke.mjs",
-    "test": "npm run validate && npm run smoke"
+    "test:control": "node --test scripts/archive-global-todo-board.test.mjs scripts/codex-automation-loop.test.mjs scripts/collect-repo-status.test.mjs scripts/controller-state.test.mjs scripts/control-state-machine-route-fixtures.test.mjs scripts/control-intake.test.mjs scripts/demand-sequence.test.mjs scripts/check-repository-residue.test.mjs scripts/check-script-docs.test.mjs scripts/control-workspace-install.test.mjs scripts/import-design-handoffs.test.mjs scripts/next-control-work.test.mjs scripts/workspace-control.test.mjs",
+    "test": "npm run validate && npm run smoke && npm run test:control"
   },
   "engines": {
     "node": ">=20"

@@ -1,0 +1,27 @@
+{
+  "demandKey": "CSMR-FAILURE-ROUTE",
+  "title": "Failure Controller State Route",
+  "goal": "Prove missing and blocked target results stop at controller decision gates instead of silently accepting work.",
+  "completionDefinition": "Missing results create no transition candidate; blocked results create an explicit blocked review candidate; stale candidates are rejected.",
+  "stagePlan": "Stage 0 waits for missing result; Stage 1 imports blocked result; Stage 2 records blocked judgment.",
+  "taskPackage": {
+    "taskPackageId": "CSMR-FAILURE-PKG",
+    "summary": "Run the failure fixture task.",
+    "sourceRef": "fixtures/control-state-machine/failure-route",
+    "targetWindow": "AlembicPlugin",
+    "targetTaskId": "CSMR-FAILURE-TASK",
+    "targetSummary": "Return blocked fixture evidence."
+  },
+  "result": {
+    "resultId": "CSMR-FAILURE-RESULT",
+    "status": "blocked",
+    "summary": "Failure fixture blocked.",
+    "evidenceRef": "evidence/failure-route-result.json",
+    "verification": "blocked before implementation",
+    "risk": "fixture blocker"
+  },
+  "decision": {
+    "decision": "blocked",
+    "reason": "Failure route fixture intentionally records a controller blocker."
+  }
+}

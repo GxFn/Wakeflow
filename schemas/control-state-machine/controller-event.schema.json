@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/codex-control-workspace/controller-event.schema.json",
+  "title": "Controller Event",
+  "type": "object",
+  "required": [
+    "eventId",
+    "createdAt",
+    "actor",
+    "type",
+    "from",
+    "to",
+    "reason",
+    "evidenceRefs",
+    "allowedWrites",
+    "forbiddenConclusions",
+    "stateRevision"
+  ],
+  "properties": {
+    "eventId": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string" },
+    "actor": { "type": "string" },
+    "type": { "type": "string" },
+    "from": { "type": ["string", "null"] },
+    "to": { "type": ["string", "null"] },
+    "reason": { "type": "string" },
+    "evidenceRefs": { "type": "array", "items": { "type": "string" } },
+    "allowedWrites": { "type": "array", "items": { "type": "string" } },
+    "forbiddenConclusions": { "type": "array", "items": { "type": "string" } },
+    "stateRevision": { "type": "integer", "minimum": 1 }
+  },
+  "additionalProperties": false
+}

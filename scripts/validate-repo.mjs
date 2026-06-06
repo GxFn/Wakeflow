@@ -8,19 +8,22 @@ const required = [
   ".codex-plugin/plugin.json",
   ".mcp.json",
   "bin/wakeflow-mcp.mjs",
-  "scripts/wakeflow.mjs",
-  "lib/wakeflow-state.mjs",
-  "skills/wakeflow/SKILL.md",
-  "skills/wakeflow-control/SKILL.md",
-  "skills/wakeflow-target/SKILL.md",
-  "skills/wakeflow-install/SKILL.md",
-  "skills/wakeflow-review/SKILL.md",
-  "templates/delivery-prompt.md",
-  "templates/developer-progress.md",
+  "scripts/wakeflow-control.mjs",
+  "lib/control-runtime.mjs",
+  "scripts/workspace-control.mjs",
+  "scripts/controller-state.mjs",
+  "scripts/codex-automation-loop.mjs",
+  "scripts/control-intake.mjs",
+  "scripts/control-workspace-install.mjs",
+  "templates/control-state-machine/developer-progress.template.md",
+  "schemas/control-state-machine/controller-state.schema.json",
+  "skills/codex-automation-controller/SKILL.md",
+  "skills/codex-automation-target/SKILL.md",
+  "skills/control-workspace-governance/SKILL.md",
+  "skills/progressive-chain-validation/SKILL.md",
   "assets/wakeflow-mark.svg",
   "assets/wakeflow-logo.svg",
 ];
-
 const errors = [];
 for (const file of required) {
   if (!existsSync(path.join(root, file))) errors.push(`Missing ${file}`);

@@ -1,0 +1,118 @@
+{
+  "workspaceName": "Wakeflow",
+  "controlWindow": "Wakeflow",
+  "designWindow": "DesignWindow",
+  "testWindow": "TestWindow",
+  "realProjectWindow": "RealTestProject",
+  "baseWindow": "BaseWindow",
+  "workspaceRoot": "..",
+  "controlRepoDir": "Wakeflow",
+  "activeLedgerRoot": ".workspace-active",
+  "projectLedgerRoot": "../workspace-ledger",
+  "windowLedgerRoot": "../workspace-ledger",
+  "workspaceDocsDir": ".workspace-active/workspace",
+  "workspaceCurrentDir": ".workspace-active/workspace/current",
+  "workspaceArchiveDir": "../workspace-ledger/workspace/archive",
+  "workspaceIndexPath": ".workspace-active/workspace/index.md",
+  "workspaceCurrentIndexPath": ".workspace-active/workspace/current/index.md",
+  "workspaceCurrentStatusPath": ".workspace-active/workspace/current/workspace-current-status.md",
+  "workspaceRecordMapPath": "../workspace-ledger/workspace/workspace-record-map.md",
+  "globalTodoPath": ".workspace-active/workspace/current/global-todo-board.md",
+  "requirementDesignsDir": "../workspace-ledger/requirement-designs",
+  "internalDesignPath": "../workspace-ledger/design",
+  "internalTestPath": "../workspace-ledger/testing",
+  "allowMissingRepos": true,
+  "dispatchWindows": [
+    "BaseWindow",
+    "CoreWindow",
+    "AgentWindow",
+    "DashboardWindow",
+    "PluginWindow",
+    "TestWindow"
+  ],
+  "requiredDispatchWindows": [
+    "BaseWindow",
+    "CoreWindow",
+    "AgentWindow",
+    "DashboardWindow",
+    "PluginWindow",
+    "DesignWindow",
+    "TestWindow",
+    "RealTestProject"
+  ],
+  "repoNames": [
+    "BaseWindow",
+    "CoreWindow",
+    "AgentWindow",
+    "DashboardWindow",
+    "PluginWindow"
+  ],
+  "testExchangePath": ".workspace-active/workspace/current/test-exchange.md",
+  "designHandoffBoard": ".workspace-active/workspace/current/design-handoff-board.md",
+  "designHandoffInbox": ".workspace-active/workspace/current/design-handoff-inbox.md",
+  "runtimeProcessMatchers": [],
+  "runtimeProcessLabel": "configured",
+  "repositories": [
+    {
+      "windowName": "BaseWindow",
+      "path": "../BaseWindow",
+      "role": "Local platform or base runtime",
+      "managedAgents": true
+    },
+    {
+      "windowName": "CoreWindow",
+      "path": "../CoreWindow",
+      "role": "Shared deterministic core",
+      "managedAgents": true
+    },
+    {
+      "windowName": "AgentWindow",
+      "path": "../AgentWindow",
+      "role": "Agent runtime and orchestration",
+      "managedAgents": true
+    },
+    {
+      "windowName": "DashboardWindow",
+      "path": "../DashboardWindow",
+      "role": "Frontend UI",
+      "managedAgents": true
+    },
+    {
+      "windowName": "PluginWindow",
+      "path": "../PluginWindow",
+      "role": "Host integration or plugin entry",
+      "managedAgents": true
+    },
+    {
+      "windowName": "DesignWindow",
+      "path": "../workspace-ledger/design",
+      "role": "Internal requirement design workspace",
+      "managedAgents": false,
+      "mode": "internal"
+    },
+    {
+      "windowName": "TestWindow",
+      "path": "../workspace-ledger/testing",
+      "role": "Internal test coordination workspace",
+      "managedAgents": false,
+      "mode": "internal"
+    },
+    {
+      "windowName": "RealTestProject",
+      "path": "../RealTestProject",
+      "role": "Protected real test project",
+      "managedAgents": false
+    }
+  ],
+  "protectedWorkspacePrefixes": [],
+  "repositoryRoles": {
+    "BaseWindow": "Local platform or base runtime",
+    "CoreWindow": "Shared deterministic core",
+    "AgentWindow": "Agent runtime and orchestration",
+    "DashboardWindow": "Frontend UI",
+    "PluginWindow": "Host integration or plugin entry",
+    "DesignWindow": "Requirement design and handoff",
+    "TestWindow": "Real environment validation",
+    "RealTestProject": "Protected real test project"
+  }
+}

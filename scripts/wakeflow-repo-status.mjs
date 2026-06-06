@@ -5,7 +5,6 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { loadWorkspaceConfig } from "./lib/wakeflow-config.mjs";
 
-const workspaceRoot = process.cwd();
 const args = process.argv.slice(2);
 const json = args.includes("--json");
 
@@ -16,6 +15,7 @@ function getArgValue(name) {
   return index >= 0 ? args[index + 1] : null;
 }
 
+const workspaceRoot = path.resolve(getArgValue("--root") || process.cwd());
 const workspaceConfig = loadWorkspaceConfig({ workspaceRoot, args });
 const repoNames = workspaceConfig.repoNames;
 const allowMissingRepos = workspaceConfig.allowMissingRepos === true;

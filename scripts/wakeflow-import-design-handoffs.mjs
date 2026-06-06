@@ -22,21 +22,21 @@ const allowedStatuses = new Set([
 ]);
 const requiredColumns = [
   "ID",
-  "状态",
-  "标题",
-  "原始计划",
-  "需求设计",
+  "Status",
+  "Title",
+  "Original Plan",
+  "Requirement Design",
   "Handoff",
-  "用户确认",
-  "当前主线关系",
-  "建议 TODO",
-  "优先级",
-  "下一步",
+  "User Confirmation",
+  "Current Mainline Relation",
+  "Suggested TODO",
+  "Priority",
+  "Next Step",
 ];
 const optionalEnumColumns = {
-  "用户确认状态": new Set(["unconfirmed", "confirmed", "needs-confirmation", "not-required", "superseded"]),
-  "主线关系状态": new Set(["none", "todo-candidate", "next-mainline", "blocks-current", "interrupts-current", "after-current"]),
-  "优先级枚举": new Set(["P0", "P1", "P2", "P3"]),
+  "User Confirmation Status": new Set(["unconfirmed", "confirmed", "needs-confirmation", "not-required", "superseded"]),
+  "Mainline Relation Status": new Set(["none", "todo-candidate", "next-mainline", "blocks-current", "interrupts-current", "after-current"]),
+  "Priority Enum": new Set(["P0", "P1", "P2", "P3"]),
 };
 const readyConfirmationStatuses = new Set(["confirmed", "not-required"]);
 const designKeyPattern = /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d{4}-\d{2}-\d{2}(?:-\d{2})?$/;
@@ -137,17 +137,17 @@ function linkedTargets(entry, column) {
 }
 
 function extractDesignKey(content) {
-  const match = content.match(/^Design Key[：:]\s*([A-Z0-9-]+)\s*$/m);
+  const match = content.match(/^Design Key:\s*([A-Z0-9-]+)\s*$/m);
   return match?.[1] ?? null;
 }
 
 function parseBoard(content) {
-  const section = extractSection(content, "Handoff 清单");
+  const section = extractSection(content, "Handoff Board");
   const lines = section.split("\n");
   const rows = lines.map(splitMarkdownRow).filter((row) => row.length > 0);
-  const header = rows.find((row) => row.includes("ID") && row.includes("状态"));
+  const header = rows.find((row) => row.includes("ID") && row.includes("Status"));
   if (!header) {
-    return { entries: [], issues: ["Handoff board is missing a table headed by ID / 状态."] };
+    return { entries: [], issues: ["Handoff board is missing a table headed by ID / Status."] };
   }
 
   const missingColumns = requiredColumns.filter((column) => !header.includes(column));
@@ -177,13 +177,13 @@ function validateEntry(entry, seenIds) {
   }
   seenIds.add(id);
 
-  if (!allowedStatuses.has(entry["状态"])) {
-    issues.push(`${id}: unsupported status "${entry["状态"]}".`);
+  if (!allowedStatuses.has(entry["Status"])) {
+    issues.push(`${id}: unsupported status "${entry["Status"]}".`);
   }
   issues.push(...validateEnumColumns(entry));
 
   const boardDir = path.dirname(boardPath);
-  for (const column of ["原始计划", "需求设计", "Handoff"]) {
+  for (const column of ["Original Plan", "Requirement Design", "Handoff"]) {
     for (const rawTarget of extractLinks(entry[column] ?? "")) {
       const target = stripLinkTarget(rawTarget);
       if (!target || isExternalTarget(target)) {
@@ -196,11 +196,11 @@ function validateEntry(entry, seenIds) {
     }
   }
 
-  if (entry["状态"] === "ready-for-workspace") {
-    if (!firstLink(entry["原始计划"])) {
+  if (entry["Status"] === "ready-for-workspace") {
+    if (!firstLink(entry["Original Plan"])) {
       issues.push(`${id}: ready entry must link an original plan.`);
     }
-    if (!firstLink(entry["需求设计"])) {
+    if (!firstLink(entry["Requirement Design"])) {
       issues.push(`${id}: ready entry must link a requirement design.`);
     }
     const confirmation = userConfirmationState(entry);
@@ -209,12 +209,12 @@ function validateEntry(entry, seenIds) {
         `${id}: ready entry must record user confirmation status confirmed or not-required.`,
       );
     }
-    for (const column of ["当前主线关系", "建议 TODO", "优先级", "下一步"]) {
+    for (const column of ["Current Mainline Relation", "Suggested TODO", "Priority", "Next Step"]) {
       if (!entry[column] || entry[column].trim().length === 0) {
         issues.push(`${id}: ready entry is missing ${column}.`);
       }
     }
-    for (const column of ["用户确认状态", "主线关系状态", "优先级枚举"]) {
+    for (const column of ["User Confirmation Status", "Mainline Relation Status", "Priority Enum"]) {
       if (hasColumn(entry, column) && !String(entry[column] ?? "").trim()) {
         issues.push(`${id}: ready entry is missing ${column}.`);
       }
@@ -232,7 +232,7 @@ function validateTargetDesignKey(entry) {
     issues.push(`${id}: Design Key must use <READABLE-TOPIC>-YYYY-MM-DD format.`);
   }
 
-  const linkedDocs = ["原始计划", "需求设计", "Handoff"].flatMap((column) => linkedTargets(entry, column));
+  const linkedDocs = ["Original Plan", "Requirement Design", "Handoff"].flatMap((column) => linkedTargets(entry, column));
   const docsWithDesignKey = [];
   for (const doc of linkedDocs) {
     if (!existsSync(doc.absoluteTarget)) {
@@ -265,7 +265,7 @@ function normalizeEnumValue(value, column) {
   if (!text) {
     return "";
   }
-  return column === "优先级枚举" ? text.toUpperCase() : text.toLowerCase();
+  return column === "Priority Enum" ? text.toUpperCase() : text.toLowerCase();
 }
 
 function validateEnumColumns(entry) {
@@ -281,17 +281,17 @@ function validateEnumColumns(entry) {
     }
   }
 
-  if (hasColumn(entry, "用户确认状态")) {
-    const status = normalizeEnumValue(entry["用户确认状态"], "用户确认状态");
-    if (status && optionalEnumColumns["用户确认状态"].has(status)) {
-      const legacyText = String(entry["用户确认"] ?? "").trim();
-      const legacyPositive = hasPositiveUserConfirmation(entry["用户确认"]);
-      const legacyNegative = legacyText ? hasNegativeUserConfirmation(entry["用户确认"]) : false;
+  if (hasColumn(entry, "User Confirmation Status")) {
+    const status = normalizeEnumValue(entry["User Confirmation Status"], "User Confirmation Status");
+    if (status && optionalEnumColumns["User Confirmation Status"].has(status)) {
+      const legacyText = String(entry["User Confirmation"] ?? "").trim();
+      const legacyPositive = hasPositiveUserConfirmation(entry["User Confirmation"]);
+      const legacyNegative = legacyText ? hasNegativeUserConfirmation(entry["User Confirmation"]) : false;
       if (readyConfirmationStatuses.has(status) && legacyNegative) {
-        issues.push(`${id}: 用户确认状态=${status} conflicts with 用户确认 text.`);
+        issues.push(`${id}: User Confirmation Status=${status} conflicts with User Confirmation text.`);
       }
       if (!readyConfirmationStatuses.has(status) && legacyPositive) {
-        issues.push(`${id}: 用户确认状态=${status} conflicts with 用户确认 text.`);
+        issues.push(`${id}: User Confirmation Status=${status} conflicts with User Confirmation text.`);
       }
     }
   }
@@ -299,8 +299,8 @@ function validateEnumColumns(entry) {
 }
 
 function userConfirmationState(entry) {
-  if (hasColumn(entry, "用户确认状态")) {
-    const status = normalizeEnumValue(entry["用户确认状态"], "用户确认状态");
+  if (hasColumn(entry, "User Confirmation Status")) {
+    const status = normalizeEnumValue(entry["User Confirmation Status"], "User Confirmation Status");
     return {
       source: status ? "enum" : "missing-enum",
       status: status || "unconfirmed",
@@ -308,7 +308,7 @@ function userConfirmationState(entry) {
   }
   return {
     source: "legacy-text",
-    status: hasPositiveUserConfirmation(entry["用户确认"]) ? "confirmed" : "unconfirmed",
+    status: hasPositiveUserConfirmation(entry["User Confirmation"]) ? "confirmed" : "unconfirmed",
   };
 }
 
@@ -325,7 +325,7 @@ function hasNegativeUserConfirmation(value) {
   if (!text) {
     return true;
   }
-  return /(未确认|待确认|没有确认|无确认|not confirmed|unconfirmed|pending confirmation)/i.test(text);
+  return /(unconfirmed|pending-confirmation|not confirmed|no confirmation|not confirmed|unconfirmed|pending confirmation)/i.test(text);
 }
 
 function hasPositiveUserConfirmation(value) {
@@ -336,7 +336,7 @@ function hasPositiveUserConfirmation(value) {
   if (hasNegativeUserConfirmation(text)) {
     return false;
   }
-  return /(用户[^|。；;]*确认|已[^|。；;]*确认|yes|confirmed)/i.test(text);
+  return /(user[^|.;]*confirmed|yes|confirmed)/i.test(text);
 }
 
 function summarizeLinkedDoc(entry, column) {
@@ -377,19 +377,19 @@ function summarizeTargetEntry(entry) {
   }
   return {
     id: entry.ID,
-    status: entry["状态"],
-    title: entry["标题"],
-    readyForWorkspace: entry["状态"] === "ready-for-workspace",
-    userConfirmation: entry["用户确认"],
+    status: entry["Status"],
+    title: entry["Title"],
+    readyForWorkspace: entry["Status"] === "ready-for-workspace",
+    userConfirmation: entry["User Confirmation"],
     userConfirmationStatus: userConfirmationState(entry),
-    currentMainlineRelation: entry["当前主线关系"],
-    mainlineRelationStatus: optionalEnumState(entry, "主线关系状态"),
-    suggestedTodo: entry["建议 TODO"],
-    priority: entry["优先级"],
-    priorityStatus: optionalEnumState(entry, "优先级枚举"),
-    nextStep: entry["下一步"],
-    originalPlan: summarizeLinkedDoc(entry, "原始计划"),
-    requirementDesign: summarizeLinkedDoc(entry, "需求设计"),
+    currentMainlineRelation: entry["Current Mainline Relation"],
+    mainlineRelationStatus: optionalEnumState(entry, "Mainline Relation Status"),
+    suggestedTodo: entry["Suggested TODO"],
+    priority: entry["Priority"],
+    priorityStatus: optionalEnumState(entry, "Priority Enum"),
+    nextStep: entry["Next Step"],
+    originalPlan: summarizeLinkedDoc(entry, "Original Plan"),
+    requirementDesign: summarizeLinkedDoc(entry, "Requirement Design"),
     handoff: summarizeLinkedDoc(entry, "Handoff"),
   };
 }
@@ -426,67 +426,67 @@ function renderInbox(entries, issues) {
     year: "numeric",
   }).format(new Date());
   const boardLink = relativeLink(inboxPath, boardPath);
-  const readyEntries = entries.filter((entry) => entry["状态"] === "ready-for-workspace");
-  const acceptedEntries = entries.filter((entry) => entry["状态"] === "accepted-by-workspace");
+  const readyEntries = entries.filter((entry) => entry["Status"] === "ready-for-workspace");
+  const acceptedEntries = entries.filter((entry) => entry["Status"] === "accepted-by-workspace");
   const otherEntries = entries.filter(
-    (entry) => entry["状态"] !== "ready-for-workspace" && entry["状态"] !== "accepted-by-workspace",
+    (entry) => entry["Status"] !== "ready-for-workspace" && entry["Status"] !== "accepted-by-workspace",
   );
 
   const rows = readyEntries
     .map((entry) => {
-      return `| ${formatCell(entry.ID)} | ${formatCell(entry["标题"])} | ${formatCell(
-        entry["优先级"],
-      )} | ${formatCell(userConfirmationState(entry).status)} | ${formatCell(entry["当前主线关系"])} | ${formatCell(entry["建议 TODO"])} | ${formatCell(
-        rewriteLinksForInbox(entry["原始计划"]),
-      )} | ${formatCell(rewriteLinksForInbox(entry["需求设计"]))} | ${formatCell(entry["下一步"])} |`;
+      return `| ${formatCell(entry.ID)} | ${formatCell(entry["Title"])} | ${formatCell(
+        entry["Priority"],
+      )} | ${formatCell(userConfirmationState(entry).status)} | ${formatCell(entry["Current Mainline Relation"])} | ${formatCell(entry["Suggested TODO"])} | ${formatCell(
+        rewriteLinksForInbox(entry["Original Plan"]),
+      )} | ${formatCell(rewriteLinksForInbox(entry["Requirement Design"]))} | ${formatCell(entry["Next Step"])} |`;
     })
     .join("\n");
   const allRows = entries
-    .map((entry) => `| ${formatCell(entry.ID)} | ${formatCell(entry["状态"])} | ${formatCell(entry["标题"])} |`)
+    .map((entry) => `| ${formatCell(entry.ID)} | ${formatCell(entry["Status"])} | ${formatCell(entry["Title"])} |`)
     .join("\n");
 
   return `# Design Handoff Inbox
 
-更新日期：${date}
-维护窗口：${workspaceConfig.controllerWindow}
-来源清单：[${workspaceConfig.designWindow} workspace handoff board](${boardLink})
+Updated Date: ${date}
+Maintained By: ${workspaceConfig.controllerWindow}
+Source board: [${workspaceConfig.designWindow} workspace handoff board](${boardLink})
 
-## 定位
+## Purpose
 
-本文件由 \`scripts/wakeflow-import-design-handoffs.mjs --write\` 从 ${workspaceConfig.designWindow} 清单生成，用于提醒总控有哪些 Design 正规需求已准备接收。它不是全局 TODO，也不是执行计划；总控接收后仍需正式写入 \`global-todo-board\`、当前计划 \`TODO / Backlog\` 或需求目录，并按当前主线、优先级、依赖和目标阶段确认推进。
+This file is generated from \`scripts/wakeflow-import-design-handoffs.mjs --write\` using the ${workspaceConfig.designWindow} board. It alerts the controller to Design demands that are ready for intake. It is not Global TODO and not an execution plan. After controller intake, entries still need to be written into \`global-todo-board\`, the current plan \`TODO / Backlog\`, or the demand directory, then advanced according to the current mainline, priority, dependencies, and goal-stage confirmation.
 
-## 待总控接收
+## Pending Controller Intake
 
 ${
   readyEntries.length > 0
-    ? `| ID | 标题 | 优先级 | 用户确认状态 | 当前主线关系 | 建议 TODO | 原始计划 | 需求设计 | 下一步 |
+    ? `| ID | Title | Priority | User Confirmation Status | Current Mainline Relation | Suggested TODO | Original Plan | Requirement Design | Next Step |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 ${rows}`
-    : "当前没有 `ready-for-workspace` 条目。"
+    : "There are no `ready-for-workspace` entries."
 }
 
-## 接收边界
+## Intake Boundary
 
-- 自动生成只负责发现和校验，不自动派发实现窗口。
-- \`ready-for-workspace\` 条目进入总控后，必须先判断是否影响当前主线。
-- 不影响当前主线的完整需求默认进入正式 TODO / Backlog 或需求目录；当前主线完成后再按优先级领取。
-- 影响当前主线的条目必须标为阻塞 / 待确认 / 返修候选，不得绕过总控确认门禁。
+- Automatic generation only discovers and validates; it does not dispatch implementation windows.
+- \`ready-for-workspace\` entries must be checked for current-mainline impact after controller intake.
+- Complete demands that do not affect the current mainline normally enter TODO/Backlog or the demand directory and are claimed by priority after the current mainline completes.
+- Entries that affect the current mainline must be marked blocked, pending-confirmation, or rework-candidate; do not bypass controller confirmation gates.
 
-## 统计
+## Stats
 
-- Ready for workspace：${readyEntries.length}
-- Accepted by workspace：${acceptedEntries.length}
-- Other statuses：${otherEntries.length}
-- Validation issues：${issues.length}
+- Ready for workspace: ${readyEntries.length}
+- Accepted by workspace: ${acceptedEntries.length}
+- Other statuses: ${otherEntries.length}
+- Validation issues: ${issues.length}
 
-## 全部 Design 清单条目
+## All Design Board Entries
 
 ${
   entries.length > 0
-    ? `| ID | 状态 | 标题 |
+    ? `| ID | Status | Title |
 | --- | --- | --- |
 ${allRows}`
-    : "Design 清单暂无条目。"
+    : "The Design board has no entries."
 }
 `;
 }
@@ -512,7 +512,7 @@ const targetIssues = targetId
     : [`${targetId}: handoff ID not found.`]
   : [];
 const issues = [...parsed.issues, ...entryIssues, ...targetIssues];
-const readyEntries = parsed.entries.filter((entry) => entry["状态"] === "ready-for-workspace");
+const readyEntries = parsed.entries.filter((entry) => entry["Status"] === "ready-for-workspace");
 
 if (writeInbox) {
   mkdirSync(path.dirname(inboxPath), { recursive: true });
@@ -549,7 +549,7 @@ if (json) {
   }
   if (targetId) {
     if (targetEntry) {
-      console.log(`Target: ${targetEntry.ID} (${targetEntry["状态"]})`);
+      console.log(`Target: ${targetEntry.ID} (${targetEntry["Status"]})`);
     } else {
       console.log(`Target: ${targetId} (not found)`);
     }

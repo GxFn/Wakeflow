@@ -20,7 +20,7 @@ import {
 } from "./lib/wakeflow-config.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
-const defaultControlRoot = path.dirname(path.dirname(scriptPath));
+const defaultWakeflowRoot = path.dirname(path.dirname(scriptPath));
 const rawArgs = process.argv.slice(2);
 const command = rawArgs[0] ?? "help";
 const args = rawArgs.slice(1);
@@ -129,7 +129,7 @@ function slug(value) {
 }
 
 function commandContext() {
-  const wakeflowRoot = resolveMaybeRelative(defaultControlRoot, getValue("--root", "."));
+  const wakeflowRoot = resolveMaybeRelative(defaultWakeflowRoot, getValue("--root", "."));
   const config = loadWorkspaceConfig({ workspaceRoot: wakeflowRoot, args });
   const userConfig = readWorkspaceConfig({ workspaceRoot: wakeflowRoot, args });
   const configPath = workspaceConfigPath({ workspaceRoot: wakeflowRoot, args });
@@ -433,18 +433,20 @@ function buildChildPrompt(context, repo) {
   const parentAgents = relativePathFrom(absolutePath, path.join(context.parentRoot, "AGENTS.md"));
   const activeIndex = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceIndexPath ?? ".workspace-active/workspace/index.md"));
   const activeStatus = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentStatusPath ?? ".workspace-active/workspace/current/workspace-current-status.md"));
-  return `你是 ${repo.windowName} 子窗口，目标目录是 ${repo.path}，职责是：${repo.role}。
+  return `You are the ${repo.windowName} child window.
+Target directory: ${repo.path}
+Responsibility: ${repo.role}
 
-先读取本目录 AGENTS.md、${parentAgents}、${activeIndex}、${activeStatus}；如果缺少 Wakeflow 接入卡，先确认目录范围，不要跨目录工作。
+First read this directory AGENTS.md, ${parentAgents}, ${activeIndex}, and ${activeStatus}. If the Wakeflow access card is missing, confirm the directory scope before doing any cross-directory work.
 
-请先运行：
+First run:
 node ${relativeScript} status --json
 
-确认当前目录属于 ${repo.windowName} 后，只处理本窗口职责内任务；需要写入或刷新本目录 AGENTS.md 时运行：
+After confirming this directory belongs to ${repo.windowName}, process only tasks inside this window responsibility. To write or refresh this directory AGENTS.md, run:
 node ${relativeScript} write-agents --window ${repo.windowName} --write
 
-Wakeflow 运行时相对路径：${wakeflowPath}
-如目录、职责或 stateRoot / Wakeflow 配置不一致，停止并回报总控。`;
+Wakeflow runtime relative path: ${wakeflowPath}
+If the directory, responsibility, stateRoot, or Wakeflow configuration is inconsistent, stop and report to the controller.`;
 }
 
 function promptsPayload() {
@@ -492,7 +494,7 @@ function testWindowNamesForContext(context) {
 
 function testWindowDeliveryBoundaryLine(context) {
   const names = testWindowNamesForContext(context).join(" / ");
-  return `- 非测试窗口不得创建、处理或验证 ${names} delivery，除非当前计划和 delivery envelope 同时显式授权。`;
+  return `- Non-Test windows must not create, process, or verify ${names} delivery unless both the current plan and delivery envelope explicitly authorize it.`;
 }
 
 function scopeBlock(context, repo) {
@@ -547,17 +549,17 @@ ${samePathRepos.map((item) => {
 - Window aliases for this repository: ${windowNamesInline}`
     : `- Window name: \`${primaryRepo.windowName}\``;
   const taskTargetText = hasWindowAliases
-    ? `本接入卡列出的窗口之一（${windowNamesInline}）`
+    ? `one of the windows listed in this access card (${windowNamesInline})`
     : `\`${primaryRepo.windowName}\``;
   const dispatchPacketRule = hasWindowAliases
-    ? `- 本仓库只处理本接入卡列出的窗口 dispatch packet（${windowNamesInline}）；执行前必须按提示词、delivery envelope 或当前计划里的 \`currentWindow\` 分流，并返回对应窗口的 \`TargetResultEnvelope\`；不得代领、代验或处理其它窗口任务。`
-    : `- 本窗口只处理 \`${primaryRepo.windowName}\` 对应的 dispatch packet，并返回 \`TargetResultEnvelope\`；不得代领、代验或处理其它窗口任务。`;
+    ? `- This repository only handles dispatch packets for the windows listed in this access card (${windowNamesInline}). Before execution, route by \`currentWindow\` in the prompt, delivery envelope, or current plan, then return the matching \`TargetResultEnvelope\`. Do not claim, accept, or process other window tasks.`
+    : `- This window only handles dispatch packets for \`${primaryRepo.windowName}\` and returns \`TargetResultEnvelope\`. Do not claim, accept, or process other window tasks.`;
   return `${AGENTS_START}
-## Workspace 接入卡
+## Workspace Access Card
 
-本节由 Wakeflow runtime 安装脚本维护，只记录本窗口接入坐标和自动化最小门禁。硬规则以父级 AGENTS 与本文件的“本窗口最高停止卡”为准；不要在这里重复仓库专属规则。
+This section is maintained by the Wakeflow runtime installer. It records this window access coordinates and the minimum automation gate. Hard rules come from the parent AGENTS and this file; do not duplicate repository-specific rules here.
 
-### 坐标
+### Coordinates
 
 - Wakeflow runtime: \`${wakeflowRelative}\`
 ${windowNameText}
@@ -567,26 +569,26 @@ ${windowNameText}
 - Current plan directory: \`${currentDir}\`
 ${windowLedgerText}${roleNoteText}
 
-### 领取 workspace 任务时
+### When claiming workspace work
 
-1. 先读本文件。
-2. 再读父级 \`${parentAgents}\`。
-3. 再读 \`${activeIndex}\` 和 \`${activeStatus}\`。
-4. 如果有当前计划、任务包或 direct-thread delivery，只按 \`${currentDir}\` 中明确分配给${taskTargetText}的内容执行。
-5. 目标、范围、禁止事项、验证命令和回填字段以当前计划 / 任务包和本仓库规则为准；提示词只是唤醒入口，不是唯一任务说明。
+1. Read this file first.
+2. Then read parent \`${parentAgents}\`.
+3. Then read \`${activeIndex}\` and \`${activeStatus}\`.
+4. If there is a current plan, task package, or direct-thread delivery, execute only the content under \`${currentDir}\` explicitly assigned to ${taskTargetText}.
+5. Goals, scope, forbidden actions, validation commands, and backfill fields come from the current plan, task package, and repository rules. Prompts are only wakeup entrypoints, not the full task specification.
 
-### Direct Thread Dispatch 最小门禁
+### Direct Thread Dispatch Minimum Gate
 
-- Direct-thread delivery 是正常工作投递流水线，不改变本窗口职责，也不扩大任务范围；具体任务以 dispatch packet、当前计划和本仓库规则为准。
-- Delivery prompt 只承载少量动态变量和 skill 指向；不得把提示词当成完整命令手册。状态机路线的可见变量只需要 \`currentWindow\` / \`taskId\` / \`stateRoot\` / 可选 \`dispatchGroup\`；\`controllerWindow\`、\`returnPolicy\`、\`humanContextRef\`、\`stateRevision\` 等机器字段从 state root、dispatch group 和 delivery envelope 读取。缺少 \`stateRoot\` 或变量冲突时停止回报。
+- Direct-thread delivery is the normal work transport. It does not change this window responsibility or expand task scope. Specific work comes from the dispatch packet, current plan, and repository rules.
+- Delivery prompts carry only a few dynamic variables and a skill pointer. Do not treat the prompt as a full command manual. State-machine routes need only visible \`currentWindow\` / \`taskId\` / \`stateRoot\` / optional \`dispatchGroup\`. Machine fields such as \`controllerWindow\`, \`returnPolicy\`, \`humanContextRef\`, and \`stateRevision\` are read from the state root, dispatch group, and delivery envelope. Stop and report if \`stateRoot\` is missing or variables conflict.
 ${dispatchPacketRule}
-- 子窗口默认不创建目标窗口下一跳 delivery；补证、重派和下一阶段都由总控 review 后决定。若 delivery \`returnRoute=controller\` 且 \`review-results\` 显示 \`DispatchGroup.returnPolicy\` 允许回调，只允许通过 \`build-controller-return\` 创建一次总控回跳 envelope，并默认回到 \`DispatchGroup.controllerWindow\` 指定的原发起总控；之后必须继续完成真实 direct-thread send、readback 和 \`record-delivery-run\`。只有存在 \`status=sent\` 且 \`readback.ok=true\` 的 \`DirectThreadDeliveryRun\`，才算真实回跳完成。完整 group snapshot 留在 controller-return envelope；可见 prompt 只显示非空异常 targets，不能把单个回填误判为整组完成。
+- Child windows do not create target-to-target next-hop delivery by default. Evidence repair, redispatch, and next phases are decided by controller review. If delivery has \`returnRoute=controller\` and \`review-results\` shows that \`DispatchGroup.returnPolicy\` allows a callback, create exactly one controller-return envelope with \`build-controller-return\`, returning by default to the original controller named by \`DispatchGroup.controllerWindow\`. Then complete the real direct-thread send, readback, and \`record-delivery-run\`. A controller return is complete only when a \`DirectThreadDeliveryRun\` exists with \`status=sent\` and \`readback.ok=true\`. The full group snapshot stays in the controller-return envelope; the visible prompt shows only non-empty exceptional targets and must not treat one target backfill as whole-group completion.
 ${testWindowDeliveryBoundaryLine(context)}
-- Thread id 只能写入 Wakeflow runtime 的本地 runtime；不得写入 tracked 文档、回填正文或 GitHub。
+- Thread ids may only be written to Wakeflow local runtime. Do not write them to tracked documents, backfill text, or GitHub.
 
-### 文档落点
+### Document Destinations
 
-- 长期跨仓库协作文档、计划、验收、扫描和边界记录写入 \`${windowLedger}\`；本仓库 \`docs/\` 只放随源码维护的产品、发布或用户文档。
+- Long-term cross-repository collaboration docs, plans, acceptance records, scans, and boundary records go to \`${windowLedger}\`. This repository \`docs/\` is only for product, release, or user docs maintained with the source.
 ${AGENTS_END}`;
 }
 
@@ -710,13 +712,13 @@ function accessProfileFor(context, repo) {
     {
       key: "singleWindowDispatchPacket",
       ok: hasWindowAliases
-        ? block.includes("只处理本接入卡列出的窗口 dispatch packet")
+        ? block.includes("This repository only handles dispatch packets for the windows listed in this access card")
           && coordinates.windowNames.every((name) => block.includes(`\`${name}\``))
-        : block.includes(`只处理 \`${repo.windowName}\` 对应的 dispatch packet`),
+        : block.includes(`This window only handles dispatch packets for \`${repo.windowName}\``),
     },
     {
       key: "noTargetNextHop",
-      ok: block.includes("子窗口默认不创建目标窗口下一跳 delivery"),
+      ok: block.includes("Child windows do not create target-to-target next-hop delivery by default"),
     },
     {
       key: "testWindowBoundary",
@@ -724,7 +726,7 @@ function accessProfileFor(context, repo) {
     },
     {
       key: "threadIdLocalOnly",
-      ok: block.includes("Thread id 只能写入 Wakeflow runtime 的本地 runtime"),
+      ok: block.includes("Thread ids may only be written to Wakeflow local runtime"),
     },
   ];
   const required = repo.managedAgents !== false;
@@ -811,10 +813,11 @@ function rootAgentsContent(context) {
   let content = readWakeflowFile(context.wakeflowRoot, "AGENTS.md");
   content = replaceAllLiteral(
     content,
-    "本仓库是 Wakeflow 能力仓库",
-    `本 workspace 使用 \`${wakeflowRel}/\` 作为 Wakeflow 能力入口`,
+    "This repository is the Wakeflow capability repository",
+    `This workspace uses \`${wakeflowRel}/\` as the Wakeflow capability entrypoint`,
   );
-  content = replaceAllLiteral(content, "Wakeflow 总控", `${context.config.workspaceName} 总控`);
+  content = replaceAllLiteral(content, "Wakeflow is the controller workspace", `${context.config.workspaceName} is the controller workspace`);
+  content = replaceAllLiteral(content, "Wakeflow controller", `${context.config.workspaceName} controller`);
 
   const localConfigPlaceholder = "__WAKEFLOW_LOCAL_CONFIG__";
   content = replaceAllLiteral(content, ".workspace-local/workspace.config.json", localConfigPlaceholder);
@@ -832,7 +835,7 @@ function rootAgentsContent(context) {
   content = content.replace(/^# .+$/m, `# ${context.config.workspaceName} Agent Instructions`);
   content = content.replace(
     /^# .+$/m,
-    (heading) => `${heading}\n\n> 本文件由 \`${wakeflowRel}/AGENTS.md\` 解包生成，是父级工作区的 Codex 自动读取入口。不要手工长期维护；修改源文件后运行 \`cd ${wakeflowRel} && node scripts/wakeflow-setup.mjs sync-root-agents --write\` 刷新。脚本命令默认进入 \`${wakeflowRel}/\` 后执行。`,
+    (heading) => `${heading}\n\n> This file is generated from \`${wakeflowRel}/AGENTS.md\` and is the parent workspace Codex entrypoint. Do not maintain it by hand long term. After changing the source file, run \`cd ${wakeflowRel} && node scripts/wakeflow-setup.mjs sync-root-agents --write\` to refresh it. Script commands default to \`${wakeflowRel}/\` before execution.`,
   );
 
   return `${ROOT_AGENTS_START}\n${content.trimEnd()}\n${ROOT_AGENTS_END}`;
@@ -923,9 +926,9 @@ function designBoardTemplate() {
 
 This board is intentionally small. Design records completed requirement design handoffs here; Wakeflow imports ready rows with \`scripts/wakeflow-import-design-handoffs.mjs\`.
 
-## Handoff 清单
+## Handoff Board
 
-| ID | 状态 | 标题 | 原始计划 | 需求设计 | Handoff | 用户确认状态 | 用户确认 | 主线关系状态 | 当前主线关系 | 建议 TODO | 优先级枚举 | 优先级 | 下一步 |
+| ID | Status | Title | Original Plan | Requirement Design | Handoff | User Confirmation Status | User Confirmation | Mainline Relation Status | Current Mainline Relation | Suggested TODO | Priority Enum | Priority | Next Step |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 `;
 }
@@ -991,7 +994,7 @@ function readWakeflowFile(wakeflowRoot, relativePath) {
   if (existsSync(targetFile)) {
     return readFileSync(targetFile, "utf8");
   }
-  return readFileSync(path.join(defaultControlRoot, relativePath), "utf8");
+  return readFileSync(path.join(defaultWakeflowRoot, relativePath), "utf8");
 }
 
 function ensureTextFile(file, content, label) {

@@ -20,7 +20,7 @@ function designDoc(id, title) {
 
 Design Key: ${id}
 
-## 目标
+## Goal
 
 Fixture only.
 `;
@@ -37,7 +37,7 @@ function makeFixture({ row, header }) {
     path.join(root, "DesignWindow/docs/current/workspace-handoff-board.md"),
     `# Workspace Handoff Board
 
-## Handoff 清单
+## Handoff Board
 
 ${header}
 ${row}
@@ -57,18 +57,18 @@ function run({ board, id, root }) {
   });
 }
 
-const legacyHeader = `| ID | 状态 | 标题 | 原始计划 | 需求设计 | Handoff | 用户确认 | 当前主线关系 | 建议 TODO | 优先级 | 下一步 |
+const legacyHeader = `| ID | Status | Title | Original Plan | Requirement Design | Handoff | User Confirmation | Current Mainline Relation | Suggested TODO | Priority | Next Step |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |`;
 
-const enumHeader = `| ID | 状态 | 标题 | 原始计划 | 需求设计 | Handoff | 用户确认状态 | 用户确认 | 主线关系状态 | 当前主线关系 | 建议 TODO | 优先级枚举 | 优先级 | 下一步 |
+const enumHeader = `| ID | Status | Title | Original Plan | Requirement Design | Handoff | User Confirmation Status | User Confirmation | Mainline Relation Status | Current Mainline Relation | Suggested TODO | Priority Enum | Priority | Next Step |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |`;
 
-function legacyRow(userConfirmation = "用户已确认") {
-  return `| ENUM-FLOW-2026-05-30 | ready-for-workspace | Enum fixture | [original](enum-flow/original-plan-2026-05-30.md) | [design](enum-flow/requirement-design-2026-05-30.md) | [handoff](enum-flow/workspace-handoff-2026-05-30.md) | ${userConfirmation} | 不影响主线 | TODO | P1 | 总控接收 |`;
+function legacyRow(userConfirmation = "user confirmed") {
+  return `| ENUM-FLOW-2026-05-30 | ready-for-workspace | Enum fixture | [original](enum-flow/original-plan-2026-05-30.md) | [design](enum-flow/requirement-design-2026-05-30.md) | [handoff](enum-flow/workspace-handoff-2026-05-30.md) | ${userConfirmation} | does not affect current mainline | TODO | P1 | controller intake |`;
 }
 
 function enumRow({ confirmationStatus, userConfirmation = "", mainlineStatus = "todo-candidate", priorityStatus = "P1" }) {
-  return `| ENUM-FLOW-2026-05-30 | ready-for-workspace | Enum fixture | [original](enum-flow/original-plan-2026-05-30.md) | [design](enum-flow/requirement-design-2026-05-30.md) | [handoff](enum-flow/workspace-handoff-2026-05-30.md) | ${confirmationStatus} | ${userConfirmation} | ${mainlineStatus} | 不影响主线 | TODO | ${priorityStatus} | P1 | 总控接收 |`;
+  return `| ENUM-FLOW-2026-05-30 | ready-for-workspace | Enum fixture | [original](enum-flow/original-plan-2026-05-30.md) | [design](enum-flow/requirement-design-2026-05-30.md) | [handoff](enum-flow/workspace-handoff-2026-05-30.md) | ${confirmationStatus} | ${userConfirmation} | ${mainlineStatus} | does not affect current mainline | TODO | ${priorityStatus} | P1 | controller intake |`;
 }
 
 test("legacy user confirmation text remains accepted for old boards", () => {
@@ -95,16 +95,16 @@ test("ready rows fail when enum and prose confirmation conflict", () => {
   const result = run(
     makeFixture({
       header: enumHeader,
-      row: enumRow({ confirmationStatus: "needs-confirmation", userConfirmation: "用户已确认" }),
+      row: enumRow({ confirmationStatus: "needs-confirmation", userConfirmation: "user confirmed" }),
     }),
   );
   assert.notEqual(result.status, 0);
-  assert.match(result.stdout, /conflicts with 用户确认 text/);
+  assert.match(result.stdout, /conflicts with User Confirmation text/);
   assert.match(result.stdout, /ready entry must record user confirmation status/);
 });
 
 test("ready rows fail when required enum cells are blank on enum boards", () => {
   const result = run(makeFixture({ header: enumHeader, row: enumRow({ confirmationStatus: "" }) }));
   assert.notEqual(result.status, 0);
-  assert.match(result.stdout, /ready entry is missing 用户确认状态/);
+  assert.match(result.stdout, /ready entry is missing User Confirmation Status/);
 });

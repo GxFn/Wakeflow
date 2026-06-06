@@ -2,6 +2,8 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
@@ -103,6 +105,36 @@ test("status --json returns a machine-readable aggregate", () => {
     payload.checks.map((check) => check.key),
     ["repoStatus", "closedLoopStatus"],
   );
+});
+
+test("--print status routes an explicit Wakeflow root to status checks", () => {
+  const root = "/tmp/example-wakeflow";
+  const result = run(["--print", "status", "--root", root, "--json"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, new RegExp(`node scripts/wakeflow-repo-status\\.mjs --root ${root} --json`));
+  assert.match(result.stdout, new RegExp(`node scripts/wakeflow-delivery\\.mjs status --root ${root} --json`));
+});
+
+test("status --root uses embedded scripts when the target root has no scripts directory", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "wakeflow-cli-status-root-"));
+  try {
+    const result = run(["status", "--root", root, "--json"]);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.checks[0].payload.workspaceRoot, root);
+    assert.deepEqual(payload.checks[0].payload.repos, []);
+    assert.match(payload.checks[1].payload.stateDir, /\.workspace-local\/wakeflow-delivery$/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("--print verify routes an explicit Wakeflow root to verification", () => {
+  const root = "/tmp/example-wakeflow";
+  const result = run(["--print", "verify", "--root", root, "--script-tests"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, new RegExp(`node scripts/wakeflow-verify\\.mjs --root ${root} --with-script-tests`));
 });
 
 test("sync without state root fails closed instead of using legacy Markdown state", () => {

@@ -75,7 +75,7 @@ Current scripts:
   state roots, builds delivery envelopes, records delivery-run evidence, records
   target result envelopes, reviews group readiness, builds controller-return
   envelopes, manages keep-live state, and writes stop markers. It does not read
-  current plan Markdown as authority, create old Codex automations, send host
+  current plan Markdown as authority, create legacy automation jobs, send host
   thread messages, or accept evidence. `prepare-dispatch-from-state` fails
   closed for completed / archived / paused demands, review-ready demands that
   still need a controller decision, blocked demands, and target tasks that are

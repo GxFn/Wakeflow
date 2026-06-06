@@ -5,8 +5,8 @@ import path from "node:path";
 import { workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 import { isCompletedState, stateIdFromText } from "./lib/wakeflow-status-machine.mjs";
 
-const workspaceRoot = process.cwd();
 const args = process.argv.slice(2);
+const workspaceRoot = path.resolve(getArgValue("--root") || process.cwd());
 const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args });
 const indexPath = ledgerPaths.workspaceIndexPath;
 const json = args.includes("--json");
@@ -90,7 +90,7 @@ function firstTableDataRow(section) {
     .split("\n")
     .map(splitMarkdownRow)
     .filter((row) => row.length > 0);
-  return rows.find((row) => !row.every((cell) => /^:?-{3,}:?$/.test(cell)) && row[0] !== "类型");
+  return rows.find((row) => !row.every((cell) => /^:?-{3,}:?$/.test(cell)) && row[0] !== "Type");
 }
 
 function extractFirstLinkTarget(markdown) {
@@ -99,7 +99,7 @@ function extractFirstLinkTarget(markdown) {
 }
 
 function currentPlanPathFromIndex(indexContent) {
-  const currentSection = sectionContent(indexContent, "当前总控入口");
+  const currentSection = sectionContent(indexContent, "Current Controller Entry");
   const firstRow = firstTableDataRow(currentSection);
   if (!firstRow || firstRow.length < 2) {
     return null;
@@ -114,6 +114,9 @@ function currentPlanPathFromIndex(indexContent) {
 }
 
 function listMarkdownFiles(directory) {
+  if (!existsSync(directory)) {
+    return [];
+  }
   const files = [];
   for (const entry of readdirSync(directory)) {
     const absolutePath = path.join(directory, entry);
@@ -129,7 +132,9 @@ function listMarkdownFiles(directory) {
 
 function isArchivedWorkspaceDoc(file) {
   const relativePath = path.relative(ledgerPaths.workspaceArchiveDir, file);
-  // 归档文档是历史快照，允许保留当时的相对链接和旧验证命令；当前入口、长期规则和模板才参与严格链接校验。
+  // Archive documents are historical snapshots. Allow old relative links and
+  // validation commands there; strict link checks apply only to current
+  // entries, long-term rules, and templates.
   return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
 }
 
@@ -172,14 +177,14 @@ function checkRequiredSections(label, content, requiredSections) {
 }
 
 function parseDispatchRows(planContent) {
-  const dispatch = sectionContent(planContent, "窗口分派");
+  const dispatch = sectionContent(planContent, "Window Dispatch");
   const rows = [];
   for (const line of dispatch.split("\n")) {
     const cells = splitMarkdownRow(line);
     if (
       cells.length < 2 ||
-      cells[0] === "窗口" ||
-      cells[0] === "窗口 / 状态" ||
+      cells[0] === "Window" ||
+      cells[0] === "Window / Status" ||
       cells[0].startsWith("---")
     ) {
       continue;
@@ -209,7 +214,7 @@ function checkCompletedDocsExist(planContent) {
   const issues = [];
   const rows = parseDispatchRows(planContent);
   for (const row of rows) {
-    const expectsExistingDoc = isCompletedState(row.status) || row.docAction === "已新建";
+    const expectsExistingDoc = isCompletedState(row.status) || row.docAction === "created";
     const savePath = row.savePath.trim();
     if (!expectsExistingDoc || !savePath.startsWith("docs/")) {
       continue;
@@ -246,9 +251,9 @@ if (!currentPlanPath || !existsSync(currentPlanPath)) {
 if (indexContent) {
   issues.push(
     ...checkRequiredSections(path.relative(workspaceRoot, indexPath), indexContent, [
-      { name: "当前总控入口", regex: /^## 当前总控入口/m },
-      { name: "窗口覆盖状态", regex: /^## 窗口覆盖状态/m },
-      { name: "状态枚举", regex: /^## 状态枚举/m },
+      { name: "Current Controller Entry", regex: /^## Current Controller Entry/m },
+      { name: "Window Coverage Status", regex: /^## Window Coverage Status/m },
+      { name: "Status Enum", regex: /^## Status Enum/m },
     ]),
   );
 }
@@ -258,9 +263,9 @@ if (currentPlanPath && existsSync(currentPlanPath)) {
   planContent = read(currentPlanPath);
   issues.push(
     ...checkRequiredSections(path.relative(workspaceRoot, currentPlanPath), planContent, [
-      { name: "窗口分派", regex: /^## .*窗口分派/m },
-      { name: "可复制提示词", regex: /^## .*可复制/m },
-      { name: "回填区", regex: /^## .*回填区/m },
+      { name: "Window Dispatch", regex: /^## .*Window Dispatch/m },
+      { name: "Copyable Prompt", regex: /^## .*Copyable/m },
+      { name: "Backfill Area", regex: /^## .*Backfill Area/m },
     ]),
   );
   issues.push(...checkCompletedDocsExist(planContent));

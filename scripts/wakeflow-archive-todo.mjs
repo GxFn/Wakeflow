@@ -96,22 +96,22 @@ function todoRowStatus(line) {
 }
 
 function upsertCompletedArchiveSection(content) {
-  const heading = "已完成 TODO 和历史同步记录";
+  const heading = "Completed TODOs and Historical Sync Records";
   const nextSection = [
     `## ${heading}`,
     "",
-    "已完成 TODO、旧同步记录和来源归档统一从 [workspace-record-map.md](../workspace-record-map.md#todo-records) 查询。",
+    "Completed TODOs, historical sync records, and source archives are queried from [workspace-record-map.md](../workspace-record-map.md#todo-records).",
     "",
   ].join("\n");
   const range = sectionRange(content, heading);
   if (range) {
     return `${content.slice(0, range.start)}${nextSection}\n\n${content.slice(range.end).replace(/^\s*/, "")}`;
   }
-  const legacyRange = sectionRange(content, "已完成 TODO 归档");
+  const legacyRange = sectionRange(content, "Completed TODO Archive");
   if (legacyRange) {
     return `${content.slice(0, legacyRange.start)}${nextSection}\n\n${content.slice(legacyRange.end).replace(/^\s*/, "")}`;
   }
-  const syncRange = sectionRange(content, "最近同步记录");
+  const syncRange = sectionRange(content, "Recent Sync Records");
   if (!syncRange) {
     return `${content.replace(/\s*$/, "\n\n")}${nextSection}\n`;
   }
@@ -119,7 +119,7 @@ function upsertCompletedArchiveSection(content) {
 }
 
 function isArchiveMarkerBullet(line) {
-  return line.includes("更早的已完成 TODO 和同步记录已归档到");
+  return line.includes("Older completed TODOs and sync records were archived to");
 }
 
 const month = getArgValue("--month") ?? "2026-05";
@@ -138,10 +138,10 @@ let archivePath = "";
 
 if (issues.length === 0) {
   const content = readFileSync(todoPath, "utf8");
-  const todoRange = sectionRange(content, "全局 TODO");
-  const syncRange = sectionRange(content, "最近同步记录");
+  const todoRange = sectionRange(content, "Global TODO");
+  const syncRange = sectionRange(content, "Recent Sync Records");
   if (!todoRange) {
-    issues.push("global TODO board is missing ## 全局 TODO");
+    issues.push("global TODO board is missing ## Global TODO");
   }
 
   if (issues.length === 0) {
@@ -165,7 +165,7 @@ if (issues.length === 0) {
         ? [
             ...syncHeader.filter((line, index) => index === 0 || line.trim().length > 0),
             "",
-            `- ${archiveDate}：更早的已完成 TODO 和同步记录已归档到 [workspace-record-map.md](../workspace-record-map.md#todo-records)。`,
+            `- ${archiveDate}: Older completed TODOs and sync records were archived to [workspace-record-map.md](../workspace-record-map.md#todo-records).`,
             ...keptSync,
             "",
           ]
@@ -178,18 +178,18 @@ if (issues.length === 0) {
     const baseArchiveContent = [
       "# Global TODO Completed Archive",
       "",
-      `归档日期：${archiveDate}`,
-      `来源：${relativePosix(path.dirname(archivePath), todoPath)}`,
+      `Archive Date: ${archiveDate}`,
+      `Source: ${relativePosix(path.dirname(archivePath), todoPath)}`,
       "",
-      `本文件保存从 \`${relativePosix(workspaceRoot, todoPath)}\` 压缩下来的已完成 TODO 和旧同步记录。活动项和观察项仍留在全局 TODO 列表。`,
+      `This file preserves completed TODOs and historical sync records compacted from \`${relativePosix(workspaceRoot, todoPath)}\` . Active and observing items remain on the global TODO board.`,
       "",
-      "## 已完成 TODO",
+      "## Completed TODOs",
       "",
-      "| ID | 状态 | 类型 | 优先级 | 归属 | 事项 / 目标 | 影响复测 / 派发 | 依赖 / 触发 | 推荐窗口 | 当前挂载 |",
+      "| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount |",
       "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
       ...archiveCompletedRows,
       "",
-      "## 旧同步记录",
+      "## Historical Sync Records",
       "",
       ...archiveSyncRows,
       "",
@@ -203,9 +203,9 @@ if (issues.length === 0) {
       if (completedRows.length > 0) {
         appendSections.push(
           [
-            `## 追加已完成 TODO（${archiveDate}）`,
+            `## Appended Completed TODOs (${archiveDate})`,
             "",
-            "| ID | 状态 | 类型 | 优先级 | 归属 | 事项 / 目标 | 影响复测 / 派发 | 依赖 / 触发 | 推荐窗口 | 当前挂载 |",
+            "| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount |",
             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
             ...archiveCompletedRows,
             "",
@@ -215,7 +215,7 @@ if (issues.length === 0) {
       if (archivedSync.length > 0) {
         appendSections.push(
           [
-            `## 追加旧同步记录（${archiveDate}）`,
+            `## Appended Historical Sync Records (${archiveDate})`,
             "",
             ...archiveSyncRows,
             "",
@@ -227,7 +227,7 @@ if (issues.length === 0) {
 
     let nextContent = `${content.slice(0, todoRange.start)}${nextTodoLines.join("\n")}${content.slice(todoRange.end)}`;
     if (nextSyncLines) {
-      const nextSyncRange = sectionRange(nextContent, "最近同步记录");
+      const nextSyncRange = sectionRange(nextContent, "Recent Sync Records");
       nextContent = `${nextContent.slice(0, nextSyncRange.start)}${nextSyncLines.join("\n")}${nextContent.slice(nextSyncRange.end)}`;
     }
     nextContent = upsertCompletedArchiveSection(nextContent);

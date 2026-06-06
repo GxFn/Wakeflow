@@ -204,6 +204,17 @@ async function runMcpSmoke(rootPath) {
     if (!payload.ok || !payload.parsedJson?.stateRoot) {
       throw new Error("MCP tools/call did not create a state root");
     }
+
+    const statusCall = await request("tools/call", {
+      name: "wakeflow_status",
+      arguments: { root: rootPath },
+    });
+    const statusText = statusCall.result.content?.[0]?.text;
+    const statusPayload = JSON.parse(statusText);
+    if (!statusPayload.ok || statusPayload.parsedJson?.command !== "status") {
+      throw new Error("MCP wakeflow_status did not inspect the requested root");
+    }
+
     return { ok: true, toolCount: toolNames.length, stateRoot: payload.parsedJson.stateRoot };
   } finally {
     clearTimeout(timeout);

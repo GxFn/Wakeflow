@@ -22,13 +22,13 @@ Design Key: ${id}
 `;
 }
 
-function makeFixture({ status = "空闲", designRows = "", todoRows = "" } = {}) {
+function makeFixture({ status = "idle", designRows = "", todoRows = "" } = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-next-work-"));
   writeFile(
     path.join(root, ".workspace-active/workspace/current/workspace-current-status.md"),
     `# Status
 
-状态：${status}
+Status: ${status}
 `,
   );
   const designId = "NEXT-DESIGN-2026-06-04";
@@ -40,9 +40,9 @@ function makeFixture({ status = "空闲", designRows = "", todoRows = "" } = {})
     path.join(root, ".workspace-active/workspace/current/design-handoff-board.md"),
     `# Workspace Handoff Board
 
-## Handoff 清单
+## Handoff Board
 
-| ID | 状态 | 标题 | 原始计划 | 需求设计 | Handoff | 用户确认状态 | 用户确认 | 主线关系状态 | 当前主线关系 | 建议 TODO | 优先级枚举 | 优先级 | 下一步 |
+| ID | Status | Title | Original Plan | Requirement Design | Handoff | User Confirmation Status | User Confirmation | Mainline Relation Status | Current Mainline Relation | Suggested TODO | Priority Enum | Priority | Next Step |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 ${designRows}
 `,
@@ -51,9 +51,9 @@ ${designRows}
     path.join(root, ".workspace-active/workspace/current/global-todo-board.md"),
     `# Global TODO
 
-## 全局 TODO
+## Global TODO
 
-| ID | 状态 | 类型 | 优先级 | 归属 | 事项 / 目标 | 影响复测 / 派发 | 依赖 / 触发 | 推荐窗口 | 当前挂载 |
+| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 ${todoRows}
 `,
@@ -69,7 +69,7 @@ function run(root, args = []) {
 }
 
 test("after-completion fails closed when current state is not completed or idle", () => {
-  const { root } = makeFixture({ status: "暂停 / 用户停止" });
+  const { root } = makeFixture({ status: "paused / user stop" });
   const result = run(root, ["--after-completion"]);
   assert.notEqual(result.status, 0);
   const parsed = JSON.parse(result.stdout);
@@ -79,7 +79,7 @@ test("after-completion fails closed when current state is not completed or idle"
 test("single ready Design handoff becomes auto-claimable candidate only", () => {
   const { root, designId } = makeFixture({
     designRows:
-      "| NEXT-DESIGN-2026-06-04 | ready-for-workspace | Next design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | [handoff](next-design/workspace-handoff-2026-06-04.md) | confirmed |  | next-mainline | 当前主线后接手 | GTODO-NEXT | P1 | P1 | 总控接收 |",
+      "| NEXT-DESIGN-2026-06-04 | ready-for-workspace | Next design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | [handoff](next-design/workspace-handoff-2026-06-04.md) | confirmed |  | next-mainline | after current mainline | GTODO-NEXT | P1 | P1 | controller intake |",
   });
   const result = run(root, ["--after-completion"]);
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -92,7 +92,7 @@ test("single ready Design handoff becomes auto-claimable candidate only", () => 
 test("ready Design demand without separate handoff link remains claimable from requirement design", () => {
   const { root } = makeFixture({
     designRows:
-      "| OPTIONAL-HANDOFF-2026-06-04 | ready-for-workspace | Optional handoff design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | 需求设计已包含交接信息 | confirmed |  | next-mainline | 当前主线后接手 | GTODO-NEXT | P1 | P1-runtime-reliability | 总控接收 |",
+      "| OPTIONAL-HANDOFF-2026-06-04 | ready-for-workspace | Optional handoff design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | Requirement design contains handoff details | confirmed |  | next-mainline | after current mainline | GTODO-NEXT | P1 | P1-runtime-reliability | controller intake |",
   });
   const result = run(root, ["--id", "OPTIONAL-HANDOFF-2026-06-04", "--after-completion"]);
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -106,8 +106,8 @@ test("ready Design demand without separate handoff link remains claimable from r
 test("target id focuses next-work scan when multiple ready Design demands exist", () => {
   const { root } = makeFixture({
     designRows: [
-      "| FIRST-DESIGN-2026-06-04 | ready-for-workspace | First design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | 需求设计已包含交接信息 | confirmed |  | next-mainline | 当前主线后接手 | GTODO-FIRST | P1 | P1 | 总控接收 |",
-      "| SECOND-DESIGN-2026-06-04 | ready-for-workspace | Second design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | 需求设计已包含交接信息 | confirmed |  | next-mainline | 当前主线后接手 | GTODO-SECOND | P1 | P1 | 总控接收 |",
+      "| FIRST-DESIGN-2026-06-04 | ready-for-workspace | First design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | Requirement design contains handoff details | confirmed |  | next-mainline | after current mainline | GTODO-FIRST | P1 | P1 | controller intake |",
+      "| SECOND-DESIGN-2026-06-04 | ready-for-workspace | Second design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | Requirement design contains handoff details | confirmed |  | next-mainline | after current mainline | GTODO-SECOND | P1 | P1 | controller intake |",
     ].join("\n"),
   });
   const result = run(root, ["--id", "SECOND-DESIGN-2026-06-04", "--after-completion"]);
@@ -121,9 +121,9 @@ test("target id focuses next-work scan when multiple ready Design demands exist"
 test("TODO candidates exclude completed slash-status and Aux-owned rows", () => {
   const { root } = makeFixture({
     todoRows: [
-      "| DONE-2026-06-04 | 已完成 / 总控验收通过 | fixture | P1 | Workspace | done | 否 | evidence | AlembicWorkspace | current |",
-      "| AUX-2026-06-04 | Aux 已领取 / 继续推进 | fixture | P1 | AlembicWorkspace-Aux | aux | 是 | Aux | AlembicWorkspace-Aux | current |",
-      "| CLAIM-2026-06-04 | 待排期 | fixture | P1 | Wakeflow | claimable | 是 | none | Wakeflow | current |",
+      "| DONE-2026-06-04 | completed / controller-accepted | fixture | P1 | Workspace | done | no | evidence | AlembicWorkspace | current |",
+      "| AUX-2026-06-04 | Aux claimed / continue | fixture | P1 | AlembicWorkspace-Aux | aux | yes | Aux | AlembicWorkspace-Aux | current |",
+      "| CLAIM-2026-06-04 | pending-schedule | fixture | P1 | Wakeflow | claimable | yes | none | Wakeflow | current |",
     ].join("\n"),
   });
   const result = run(root, ["--source", "todo", "--after-completion"]);

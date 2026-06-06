@@ -1,113 +1,112 @@
-# <需求标题> Workspace 交接
+# <Demand Title> Workspace Handoff
 
-日期：YYYY-MM-DD
-状态：草案
-Design Key：<READABLE-TOPIC-YYYY-MM-DD>
-来源窗口：Design
-接收窗口：Wakeflow
+Date: YYYY-MM-DD
+Status: draft
+Source Window: Design
+Receiving Window: Wakeflow
 
-## 摘要
+## Summary
 
-简要说明 Wakeflow 总控需要评审什么。
+Briefly state what Wakeflow should review.
 
-## 交接类型
+## Handoff Type
 
-标记一项：
+Choose one:
 
-- requirement-design
-- design-decision
-- research-result
-- bug-with-design-impact
-- todo-package-candidate
+- requirement-candidate
+- bug-signal
+- todo-candidate
+- research-request
 - current-mainline-risk
+- decision-record
 
-## 用户已确认目标
+## Confirmed User Goal
 
-...
+-
 
-## 最终完成定义
+## Final Completion Definition
 
-...
+-
 
-## 当前设计状态
+## Current Design Status
 
-- 用户确认状态：`unconfirmed` / `confirmed` / `needs-confirmation` / `not-required` / `superseded`
-- 用户确认说明：
-- Handoff 状态：`draft` / `ready-for-workspace` / `accepted-by-workspace` / `needs-design` / `paused` / `archived` / `research` / `absorbed-by-codex-loop`
-- 主线关系状态：`none` / `todo-candidate` / `next-mainline` / `blocks-current` / `interrupts-current` / `after-current`
-- 优先级枚举：`P0` / `P1` / `P2` / `P3`
-- 原始计划确认状态：
-- 需求设计状态：
-- 代码事实状态：
-- 是否需要总控继续代码实现依赖调研：
-- 是否处于 detached-design-mode：
-- 与 Wakeflow 当前主线关系：
+- Requirement design status:
+- User confirmation status:
+- Mainline relation status: `none` / `todo-candidate` / `next-mainline` /
+  `blocks-current` / `interrupts-current` / `after-current`
+- Original plan confirmation status:
+- Code fact status:
+- Needs Wakeflow code research: yes/no
+- Detached Design mode: yes/no
+- Relation to Wakeflow current mainline:
 
-## 建议下一步
+## Recommended Next Step
 
-选择一项：
+Choose one:
 
-- 接收为当前主线 bug / 返修候选。
-- 加入 TODO。
-- 在 Wakeflow 启动原始计划确认。
-- 启动需求设计 / 代码调研。
-- 创建目标阶段确认。
-- 创建 controller state root / task package。
-- 暂停，等待用户确认。
+- accept as current-mainline bug or rework candidate
+- add to TODO
+- start original-plan confirmation in Wakeflow
+- start requirement design or code research
+- create goal-stage confirmation
+- create controller state root or task package
+- pause for user confirmation
 
-说明：本建议只给 Wakeflow 总控评审，不是执行窗口提示词。
+This recommendation is for Wakeflow review only. It is not an execution-window
+prompt.
 
-## 功能闭环摘要
+## Functional Loop Summary
 
-- 用户场景：
-- 输入：
-- 输出：
-- 状态变化：
-- 生产方：
-- 消费方：
-- 失败路径：
+- User scenario:
+- Input:
+- Output:
+- State change:
+- Producer:
+- Consumer:
+- Failure path:
 
-## 建议仓库覆盖
+## Recommended Repository Coverage
 
-| 窗口 | 建议状态 | 建议职责 | 依赖 / 阻塞 |
+| Window | Recommended Status | Recommended Responsibility | Dependency / Blocker |
 | --- | --- | --- | --- |
-| <configured product window / discovered repo> | 参与 / 观察 / 无任务 / 待调研 |  |  |
-| Design | 设计完成 / 继续调研 / 无任务 |  |  |
-| Test | 参与 / 观察 / 无任务 / 待调研 |  |  |
-| <real project if configured> | 观察 / 受保护 / 无任务 |  |  |
+| <configured product window / discovered repo> | participates / observing / no-task / needs-research |  |  |
+| Design | design-complete / continue-research / no-task |  |  |
+| Test | participates / observing / no-task / needs-research |  |  |
+| <real project if configured> | observing / protected / no-task |  |  |
 
-## 证据与链接
+## Evidence And Links
 
-- 原始计划：
-- 需求设计：
-- 代码调研 / 待调研：
-- 用户决策：
-- TODO / Backlog：
+- Original plan:
+- Requirement design:
+- Code research / pending research:
+- User decisions:
+- Related TODO / Backlog:
 
-## 风险
+## Risks
 
-- ...
+-
 
-## 非目标与禁止捷径
+## Non-Goals And Forbidden Shortcuts
 
-- ...
+-
 
-## 建议阶段候选
+## Phase Candidates
 
-| 阶段 | 目标 | 上游 / 下游 | 完成判断 |
+| Phase | Goal | Upstream / Downstream | Completion Signal |
 | --- | --- | --- | --- |
-| 1 |  |  |  |
 
-阶段候选仅供总控评审，不是 task package 派发依据。
+Phase candidates are for controller review only and are not task packages.
 
-## 给 Wakeflow 的开放问题
+## Open Questions For Wakeflow
 
-1. ...
+1. <question>
 
-## 交接前自检
+## Pre-Handoff Checklist
 
-- 已对照 `docs/workspace-alignment-checklist.md` 或外部 Design 仓库的同名文件：
-- 本 handoff 没有包含可复制实现窗口提示词：
-- 阶段仍为候选，未写成 task package：
-- TODO / Backlog 已列入证据与链接：
-- 如有删减、降级、延期、兼容保留或边界变化，已列为待确认：
+- Checked `docs/workspace-alignment-checklist.md` or the external Design
+  repository equivalent:
+- This handoff does not include copyable implementation-window prompts:
+- Phases remain candidates, not task packages:
+- TODO / Backlog candidates are listed in Evidence And Links:
+- Any deletion, downgrade, deferral, compatibility retention, or boundary change
+  is marked as pending confirmation:

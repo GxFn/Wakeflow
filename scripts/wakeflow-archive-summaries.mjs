@@ -55,7 +55,7 @@ function readArchiveTopicDescriptions() {
   const descriptions = new Map();
   for (const line of content.slice(range.start, range.end).split("\n")) {
     const cells = splitMarkdownRow(line);
-    if (cells.length < 3 || cells[0] === "归档主题" || cells.every((cell) => /^:?-{3,}:?$/.test(cell))) {
+    if (cells.length < 3 || cells[0] === "Archive Topic" || cells.every((cell) => /^:?-{3,}:?$/.test(cell))) {
       continue;
     }
     const key = cells[0].replace(/`/g, "");
@@ -120,7 +120,7 @@ function previousIndexRows(indexPath) {
   }
 
   const content = readFileSync(indexPath, "utf8");
-  const range = sectionRange(content, "索引行");
+  const range = sectionRange(content, "Index Rows");
   if (!range) {
     return [];
   }
@@ -150,7 +150,7 @@ function topicRowsFor(parentDir, topics) {
   return topics.map(({ month, topic, dir }) => {
     const key = `${month}/${topic}`;
     const label = parentDir === path.join(archiveRoot, month) ? topic : key;
-    return `| [${label}](${relativePosix(parentDir, dir)}/) | ${descriptions.get(key) ?? "历史归档主题。"} |`;
+    return `| [${label}](${relativePosix(parentDir, dir)}/) | ${descriptions.get(key) ?? "Historical archive topic."} |`;
   });
 }
 
@@ -159,23 +159,23 @@ if (existsSync(archiveRoot)) {
   const rootRows = months.map((month) => {
     const monthDir = path.join(archiveRoot, month);
     const topicCount = dirs.filter((item) => item.month === month).length;
-    return `| [${month}](${relativePosix(archiveRoot, monthDir)}/) | ${topicCount} 个 topic 归档文件夹。 |`;
+    return `| [${month}](${relativePosix(archiveRoot, monthDir)}/) | ${topicCount} topic archive folders. |`;
   });
   const rootIndexContent = [
     "# Workspace Archive Summary",
     "",
-    "状态：归档区汇总",
-    `维护入口：[workspace-record-map.md](${relativePosix(archiveRoot, recordMapPath)})`,
+    "Status: archive area summary",
+    `Maintained Entry: [workspace-record-map.md](${relativePosix(archiveRoot, recordMapPath)})`,
     "",
-    "## 概括",
+    "## Summary",
     "",
-    "本文件是 workspace 归档区的总入口。归档正文文件保持当时证据快照；汇总说明和地图清单放在归档文件夹的 `index.md` 中。",
+    "This file is the archive area entrypoint. Archived body files preserve evidence snapshots; summaries and maps live in archive `index.md` files.",
     "",
-    "## 月份地图",
+    "## Month Map",
     "",
-    "| 月份 | 说明 |",
+    "| Month | Notes |",
     "| --- | --- |",
-    ...(rootRows.length > 0 ? rootRows : ["| 无 | 当前没有归档月份。 |"]),
+    ...(rootRows.length > 0 ? rootRows : ["| None | No archive months yet. |"]),
     "",
   ].join("\n");
   writeIfChanged(path.join(archiveRoot, "index.md"), `${rootIndexContent.replace(/\s+$/, "")}\n`);
@@ -186,16 +186,16 @@ if (existsSync(archiveRoot)) {
     const monthIndexContent = [
       `# ${month} Archive Summary`,
       "",
-      "状态：归档月份汇总",
-      `维护入口：[workspace-record-map.md](${relativePosix(monthDir, recordMapPath)})`,
+      "Status: archive month summary",
+      `Maintained Entry: [workspace-record-map.md](${relativePosix(monthDir, recordMapPath)})`,
       "",
-      "## 概括",
+      "## Summary",
       "",
-      `本文件汇总 ${month} 的 workspace 归档 topic。每个 topic 文件夹的 \`index.md\` 继续提供该 topic 的概括和文件地图。`,
+      `This file summarizes ${month} workspace archive topics. Each topic folder keeps its own \`index.md\` summary and file map.`,
       "",
-      "## Topic 地图",
+      "## Topic Map",
       "",
-      "| Topic | 说明 |",
+      "| Topic | Notes |",
       "| --- | --- |",
       ...topicRowsFor(monthDir, topics),
       "",
@@ -207,7 +207,7 @@ if (existsSync(archiveRoot)) {
 for (const { month, topic, dir } of dirs) {
   const key = `${month}/${topic}`;
   const indexPath = path.join(dir, "index.md");
-  const description = descriptions.get(key) ?? "历史归档主题。";
+  const description = descriptions.get(key) ?? "Historical archive topic.";
   const files = listMarkdownFiles(dir);
   const mapRows = files.map((file) => {
     const name = path.basename(file);
@@ -218,31 +218,31 @@ for (const { month, topic, dir } of dirs) {
   const contentParts = [
     `# ${key} Archive Summary`,
     "",
-    "状态：归档汇总",
-    `归档主题：\`${key}\``,
-    `维护入口：[workspace-record-map.md](${relativePosix(dir, recordMapPath)})`,
+    "Status: archive summary",
+    `Archive Topic: \`${key}\``,
+    `Maintained Entry: [workspace-record-map.md](${relativePosix(dir, recordMapPath)})`,
     "",
-    "## 概括",
+    "## Summary",
     "",
     description,
     "",
-    "本文件是该归档文件夹的汇总说明和地图清单。历史正文文件作为当时证据快照保留；开发区长期文档只链接到记录地图或本归档目录，不直接散链到具体历史文件。",
+    "This file summarizes the archive folder and map. Historical body files remain evidence snapshots; active docs should link to the record map or archive directory instead of scattering direct historical file links.",
     "",
-    "## 地图清单",
+    "## Map",
     "",
-    "| 文件 | 类型 | 说明 |",
+    "| File | Type | Notes |",
     "| --- | --- | --- |",
-    ...(mapRows.length > 0 ? mapRows : ["| 无 | 无 | 当前目录没有归档正文文件。 |"]),
+    ...(mapRows.length > 0 ? mapRows : ["| None | None | This directory has no archived body files. |"]),
     "",
   ];
 
   if (legacyRows.length > 0) {
     contentParts.push(
-      "## 历史索引行",
+      "## Historical Index Rows",
       "",
-      "以下内容是从旧活跃 workspace index 压缩下来的索引行，用于保留当时的开发者可读入口。",
+      "The following rows were compacted from a previous active workspace index to preserve historical developer-facing entrypoints.",
       "",
-      ...legacyRows.filter((line) => line !== "## 索引行"),
+      ...legacyRows.filter((line) => line !== "## Index Rows"),
       "",
     );
   }

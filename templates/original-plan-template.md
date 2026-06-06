@@ -1,90 +1,53 @@
-# <需求标题> 原始计划书
+# <Demand Title> Original Plan
 
-日期：YYYY-MM-DD
-状态：草案
-Design Key：<READABLE-TOPIC-YYYY-MM-DD>
-维护窗口：Design
-总控：Wakeflow
+Date: YYYY-MM-DD
+Status: draft
+Owner Window: Design
+Receiving Window: Wakeflow
 
-## 用户目标
+## User Goal
 
-用直接语言描述用户想要解决的问题或达成的目标。
+State the user's words and the real target without adding implementation scope.
 
-## 用户原话 / 关键约束
+## Background
 
-```text
-<保留用户需求的关键原话或准确转述>
-```
+- Trigger:
+- Existing context:
+- Related repositories/windows:
+- Screenshots, logs, or links:
 
-## 为什么现在做
+## Scope Candidate
 
-说明当前痛点、机会或触发原因。
+| Area | In Scope Candidate | Out Of Scope Candidate | Notes |
+| --- | --- | --- | --- |
+| User-visible behavior |  |  |  |
+| Runtime/data behavior |  |  |  |
+| Repositories/windows |  |  |  |
+| Testing |  |  |  |
 
-## 期望结果
+## Completion Definition Candidate
 
-描述需求完成后应该成立的事实。
+Describe what must be true before Wakeflow can accept the demand as complete.
+Keep open questions explicit.
 
-## 最终完成定义草案
+## Non-Goals
 
-用可验收的语言写清“做到什么才算完成”。这是草案，用户确认前不能作为执行标准。
+- <item>
 
-## 当前主线关系
+## Known Evidence
 
-标记一项：
+- User evidence:
+- Code evidence:
+- Test evidence:
+- Missing evidence:
 
-- 不影响 Wakeflow 当前主线。
-- TODO 候选。
-- 下一主线候选。
-- 当前主线阻塞。
-- 需要 Wakeflow 总控确认。
+## Confirmation Questions
 
-## 初始范围
+1. <question>
+2. <question>
+3. <question>
 
-包含：
+## Confirmation Status
 
-- ...
-
-不包含：
-
-- ...
-
-## 初步仓库影响
-
-| 窗口 / 仓库 | 初步判断 | 理由 |
-| --- | --- | --- |
-| <configured product window / discovered repo> | 参与 / 观察 / 无任务 / 待调研 |  |
-| Design | 需求讨论 / 草案 / 无任务 |  |
-| Test | 参与 / 观察 / 无任务 / 待调研 |  |
-| <real project if configured> | 观察 / 受保护 / 无任务 |  |
-
-## 已知事实
-
-- ...
-
-## 待补代码事实
-
-- ...
-
-## 外部调研初判
-
-- 是否需要联网：
-- 理由：
-- 若需要，建议来源：
-
-## 风险 / 设计分叉
-
-- ...
-
-## 开放问题
-
-1. ...
-
-## 需要确认
-
-本原始计划书不是实现计划。进入详细需求设计前，需要用户确认。
-
-确认前禁止：
-
-- 写执行 task package。
-- 建议发送实现窗口。
-- 把阶段候选写成派发顺序。
+- User confirmation status: unconfirmed
+- Do not write execution phases or dispatch targets before confirmation.

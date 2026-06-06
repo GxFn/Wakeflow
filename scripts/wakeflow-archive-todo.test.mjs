@@ -21,16 +21,16 @@ function makeFixture() {
     path.join(root, ".workspace-active/workspace/current/global-todo-board.md"),
     `# Global TODO Board
 
-## 全局 TODO
+## Global TODO
 
-| ID | 状态 | 类型 | 优先级 | 归属 | 事项 / 目标 | 影响复测 / 派发 | 依赖 / 触发 | 推荐窗口 | 当前挂载 |
+| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| DONE-SLASH-2026-06-04 | 已完成 / 总控验收通过 | fixture | P1 | Workspace | done with note | 否 | evidence | AlembicWorkspace | [plan](plan.md) |
-| ACTIVE-2026-06-04 | 观察中 | fixture | P2 | Workspace | keep active | 否 | none | AlembicWorkspace | current |
+| DONE-SLASH-2026-06-04 | completed / controller-accepted | fixture | P1 | Workspace | done with note | no | evidence | AlembicWorkspace | [plan](plan.md) |
+| ACTIVE-2026-06-04 | observing | fixture | P2 | Workspace | keep active | no | none | AlembicWorkspace | current |
 
-## 已完成 TODO 和历史同步记录
+## Completed TODOs and Historical Sync Records
 
-已完成 TODO、旧同步记录和来源归档统一从 [workspace-record-map.md](../../../../workspace-ledger/workspace/workspace-record-map.md#todo-records) 查询。
+Completed TODOs, historical sync records, and source archives are queried from [workspace-record-map.md](../../../../workspace-ledger/workspace/workspace-record-map.md#todo-records).
 `,
   );
   writeFile(path.join(root, ".workspace-active/workspace/current/plan.md"), "# Plan\n");

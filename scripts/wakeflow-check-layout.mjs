@@ -2,10 +2,10 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
+import { getArgValue, loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 
-const workspaceRoot = process.cwd();
 const args = process.argv.slice(2);
+const workspaceRoot = path.resolve(getArgValue(args, "--root", process.cwd()));
 const json = args.includes("--json");
 const workspaceConfig = loadWorkspaceConfig({ workspaceRoot, args });
 const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args, config: workspaceConfig });
@@ -87,12 +87,12 @@ function extractFirstLinkTarget(markdown) {
 }
 
 function currentPlanTarget(indexContent) {
-  const section = sectionContent(indexContent, "当前总控入口");
+  const section = sectionContent(indexContent, "Current Controller Entry");
   const rows = section
     .split("\n")
     .map(splitMarkdownRow)
     .filter((row) => row.length > 0);
-  const row = rows.find((candidate) => candidate[0] !== "类型" && !candidate.every((cell) => /^:?-{3,}:?$/.test(cell)));
+  const row = rows.find((candidate) => candidate[0] !== "Type" && !candidate.every((cell) => /^:?-{3,}:?$/.test(cell)));
   return row && row.length >= 2 ? extractFirstLinkTarget(row[1]) : null;
 }
 

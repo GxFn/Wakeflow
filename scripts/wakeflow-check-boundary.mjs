@@ -3,12 +3,14 @@
 import { execFileSync } from "node:child_process";
 import { loadWorkspaceConfig } from "./lib/wakeflow-config.mjs";
 
-const workspaceConfig = loadWorkspaceConfig();
+const args = process.argv.slice(2);
+const workspaceRoot = getArgValue("--root") || process.cwd();
+const workspaceConfig = loadWorkspaceConfig({ workspaceRoot, args });
 const protectedWorkspacePrefixes = workspaceConfig.protectedWorkspacePrefixes;
 const disallowedTrackedPaths = workspaceConfig.disallowedTrackedPaths;
 
 function git(args) {
-  return execFileSync("git", args, { encoding: "utf8" }).trim();
+  return execFileSync("git", ["-C", workspaceRoot, ...args], { encoding: "utf8" }).trim();
 }
 
 const tracked = git(["ls-files", "-s"])
@@ -41,3 +43,10 @@ if (violations.length > 0) {
 
 console.log("Workspace boundary check passed.");
 console.log(`Tracked workspace files: ${tracked.length}`);
+
+function getArgValue(name) {
+  const eq = args.find((arg) => arg.startsWith(`${name}=`));
+  if (eq) return eq.slice(name.length + 1);
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : null;
+}

@@ -175,8 +175,8 @@ test("prompts use sibling Wakeflow script paths for child windows", () => {
   const fixture = makeFixture();
   const payload = runJson(fixture, ["prompts", "--window", "BaseWindow"]);
   assert.equal(payload.prompts.length, 1);
-  assert.match(payload.prompts[0].prompt, /你是 BaseWindow 子窗口/);
-  assert.match(payload.prompts[0].prompt, /AGENTS\.md、\.\.\/AGENTS\.md、\.\.\/Wakeflow\/\.workspace-active\/workspace\/index\.md/);
+  assert.match(payload.prompts[0].prompt, /You are the BaseWindow child window/);
+  assert.match(payload.prompts[0].prompt, /AGENTS\.md, \.\.\/AGENTS\.md, \.\.\/Wakeflow\/\.workspace-active\/workspace\/index\.md/);
   assert.match(payload.prompts[0].prompt, /node \.\.\/Wakeflow\/scripts\/wakeflow-setup\.mjs status --json/);
 });
 
@@ -191,23 +191,23 @@ test("write-agents is dry-run by default and writes managed access cards with --
   assert.equal(payload.results[0].wrote, true);
   const baseAgents = readFileSync(path.join(fixture.base, "AGENTS.md"), "utf8");
   assert.match(baseAgents, /wakeflow:scope:start/);
-  assert.match(baseAgents, /## Workspace 接入卡/);
-  assert.match(baseAgents, /只记录本窗口接入坐标和自动化最小门禁/);
+  assert.match(baseAgents, /## Workspace Access Card/);
+  assert.match(baseAgents, /records this window access coordinates and the minimum automation gate/);
   assert.match(baseAgents, /Window name: `BaseWindow`/);
   assert.match(baseAgents, /Parent workspace AGENTS: `\.\.\/AGENTS\.md`/);
   assert.match(baseAgents, /Active workspace index: `\.\.\/Wakeflow\/\.workspace-active\/workspace\/index\.md`/);
   assert.match(baseAgents, /Current plan directory: `\.\.\/Wakeflow\/\.workspace-active\/workspace\/current`/);
   assert.match(baseAgents, /Window ledger: `\.\.\/workspace-ledger\/BaseWindow`/);
-  assert.match(baseAgents, /Direct-thread delivery 是正常工作投递流水线/);
-  assert.match(baseAgents, /Delivery prompt 只承载少量动态变量和 skill 指向/);
-  assert.match(baseAgents, /可见变量只需要 `currentWindow` \/ `taskId` \/ `stateRoot` \/ 可选 `dispatchGroup`/);
-  assert.match(baseAgents, /`controllerWindow`、`returnPolicy`、`humanContextRef`、`stateRevision` 等机器字段从 state root、dispatch group 和 delivery envelope 读取/);
-  assert.match(baseAgents, /返回 `TargetResultEnvelope`/);
-  assert.match(baseAgents, /完整 group snapshot 留在 controller-return envelope/);
+  assert.match(baseAgents, /Direct-thread delivery is the normal work transport/);
+  assert.match(baseAgents, /Delivery prompts carry only a few dynamic variables and a skill pointer/);
+  assert.match(baseAgents, /visible `currentWindow` \/ `taskId` \/ `stateRoot` \/ optional `dispatchGroup`/);
+  assert.match(baseAgents, /Machine fields such as `controllerWindow`, `returnPolicy`, `humanContextRef`, and `stateRevision`/);
+  assert.match(baseAgents, /returns `TargetResultEnvelope`/);
+  assert.match(baseAgents, /The full group snapshot stays in the controller-return envelope/);
   assert.doesNotMatch(baseAgents, /controlPlan/);
-  assert.doesNotMatch(baseAgents, /回填必须包含完成范围/);
-  assert.doesNotMatch(baseAgents, /可以在本窗口 \/ 本仓库边界内使用 Codex 子 agent/);
-  assert.doesNotMatch(baseAgents, /完整能力改成薄实现/);
+  assert.doesNotMatch(baseAgents, /backfill must include completion scope/);
+  assert.doesNotMatch(baseAgents, /may use Codex subagents inside this window/);
+  assert.doesNotMatch(baseAgents, /downgrade complete capability into thin implementation/);
 
   runJson(fixture, [
     "configure",
@@ -221,7 +221,7 @@ test("write-agents is dry-run by default and writes managed access cards with --
   assert.equal(payload.results[0].wrote, true);
   const pluginAgents = readFileSync(path.join(fixture.plugin, "AGENTS.md"), "utf8");
   assert.match(pluginAgents, /Existing rule/);
-  assert.match(pluginAgents, /## Workspace 接入卡[\s\S]+Existing rule/);
+  assert.match(pluginAgents, /## Workspace Access Card[\s\S]+Existing rule/);
   assert.match(pluginAgents, /Window name: `PluginWindow`/);
 });
 
@@ -282,13 +282,13 @@ test("write-agents can explicitly include unmanaged Design/Test windows while sk
   const designAgents = readFileSync(path.join(design, "AGENTS.md"), "utf8");
   assert.match(designAgents, /Window name: `Design`/);
   assert.match(designAgents, /Design handoff board: `docs\/current\/workspace-handoff-board\.md`/);
-  assert.doesNotMatch(designAgents, /不得派发实现/);
+  assert.doesNotMatch(designAgents, /must not dispatch implementation/);
 
   const testAgents = readFileSync(path.join(testWindow, "AGENTS.md"), "utf8");
   assert.match(testAgents, /Window name: `Test`/);
   assert.match(testAgents, /Test exchange projection: `\.\.\/Wakeflow\/\.workspace-active\/workspace\/current\/test-exchange\.md`/);
-  assert.match(testAgents, /非测试窗口不得创建、处理或验证 Test delivery/);
-  assert.doesNotMatch(testAgents, /不得成为默认测试队列/);
+  assert.match(testAgents, /Non-Test windows must not create, process, or verify Test delivery/);
+  assert.doesNotMatch(testAgents, /default test queue/);
 });
 
 test("write-agents supports multiple workspace windows sharing one AGENTS.md", () => {
@@ -316,8 +316,8 @@ test("write-agents supports multiple workspace windows sharing one AGENTS.md", (
   assert.match(sharedAgents, /Window ledgers for this repository:/);
   assert.match(sharedAgents, /`TestIDE`: `\.\.\/workspace-ledger\/TestIDE`/);
   assert.match(sharedAgents, /`TestWindow`: `\.\.\/workspace-ledger\/TestWindow`/);
-  assert.match(sharedAgents, /只处理本接入卡列出的窗口 dispatch packet/);
-  assert.match(sharedAgents, /非测试窗口不得创建、处理或验证 TestWindow \/ TestIDE delivery/);
+  assert.match(sharedAgents, /only handles dispatch packets for the windows listed in this access card/);
+  assert.match(sharedAgents, /Non-Test windows must not create, process, or verify TestWindow \/ TestIDE delivery/);
   assert.match(sharedAgents, /currentWindow/);
 
   const ideProfile = runJson(fixture, ["access-profiles", "--window", "TestIDE"]).profiles[0];
@@ -341,9 +341,9 @@ test("sync-root-agents unpacks parent AGENTS with Wakeflow repo paths", () => {
   assert.match(rootAgents, /# FixtureWorkspace Agent Instructions/);
   assert.match(rootAgents, /Wakeflow\/\.workspace-active\/workspace\/index\.md|controller state roots/);
   assert.match(rootAgents, /cd Wakeflow && node scripts\/wakeflow-setup\.mjs sync-root-agents --write/);
-  assert.match(rootAgents, /FixtureWorkspace 总控是跨仓库目标、边界、证据/);
+  assert.match(rootAgents, /FixtureWorkspace is the controller workspace for cross-repository goal intake/);
   assert.doesNotMatch(rootAgents, /plugin form/);
-  assert.doesNotMatch(rootAgents, /FixtureWorkspace 仓库/);
+  assert.doesNotMatch(rootAgents, /FixtureWorkspace repository/);
 });
 
 test("sync-templates creates internal Design and Test surfaces when no external directories exist", () => {

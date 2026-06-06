@@ -6,13 +6,14 @@ import { fileURLToPath } from "node:url";
 import { loadWorkspaceConfig } from "./lib/wakeflow-config.mjs";
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
-const workspaceRoot = path.dirname(scriptsDir);
 const rawArgs = process.argv.slice(2);
+const wakeflowRoot = path.dirname(scriptsDir);
+const targetRoot = path.resolve(getValue(rawArgs, "--root") || wakeflowRoot);
 const printOnly = rawArgs.includes("--print");
 const args = rawArgs.filter((arg) => arg !== "--print");
 const command = args[0] ?? "help";
 const commandArgs = args.slice(1);
-const workspaceConfig = loadWorkspaceConfig({ workspaceRoot, args: rawArgs });
+const workspaceConfig = loadWorkspaceConfig({ workspaceRoot: targetRoot, args: rawArgs });
 
 const testScripts = [
   "scripts/wakeflow-archive-todo.test.mjs",
@@ -53,6 +54,7 @@ Commands:
 Common examples:
   node scripts/wakeflow-cli.mjs status
   node scripts/wakeflow-cli.mjs status --json
+  node scripts/wakeflow-cli.mjs status --root /path/to/Wakeflow --json
   node scripts/wakeflow-cli.mjs verify --script-tests
   node scripts/wakeflow-cli.mjs sync --state-root .workspace-active/workspace/current/<demand-key> --write
   node scripts/wakeflow-cli.mjs design --id PCVM-2026-05-25 --json
@@ -143,23 +145,36 @@ function verifyArgs(options) {
 }
 
 function buildStatus(options) {
-  assertKnownOptions(options, ["--json"], []);
+  assertKnownOptions(options, ["--json"], ["--root"]);
   const json = hasFlag(options, "--json");
+  const root = getValue(options, "--root");
   return [
-    { label: "repo status", key: "repoStatus", ...nodeScript("wakeflow-repo-status.mjs", json ? ["--json"] : []) },
-    { label: "closed-loop status", key: "closedLoopStatus", ...nodeScript("wakeflow-delivery.mjs", ["status", ...(json ? ["--json"] : [])]) },
+    {
+      label: "repo status",
+      key: "repoStatus",
+      ...nodeScript("wakeflow-repo-status.mjs", [...optionalRoot(root), ...(json ? ["--json"] : [])]),
+    },
+    {
+      label: "closed-loop status",
+      key: "closedLoopStatus",
+      ...nodeScript("wakeflow-delivery.mjs", ["status", ...optionalRoot(root), ...(json ? ["--json"] : [])]),
+    },
   ];
 }
 
 function buildVerify(options) {
   assertKnownOptions(options, [
+    "--json",
     "--runtime",
     "--with-runtime",
     "--strict-runtime",
     "--script-tests",
     "--with-script-tests",
-  ]);
-  return [{ label: "Wakeflow verification", ...nodeScript("wakeflow-verify.mjs", verifyArgs(options)) }];
+  ], ["--root"]);
+  return [{
+    label: "Wakeflow verification",
+    ...nodeScript("wakeflow-verify.mjs", [...optionalRoot(getValue(options, "--root")), ...verifyArgs(options)]),
+  }];
 }
 
 function buildSync(options) {
@@ -251,6 +266,10 @@ function buildScripts(options) {
   return steps;
 }
 
+function optionalRoot(root) {
+  return root ? ["--root", root] : [];
+}
+
 function buildLoop(options) {
   const subcommand = options[0] ?? "status";
   const rest = options.slice(1);
@@ -306,7 +325,7 @@ function runStep(step) {
   console.log(`\n## ${step.label}`);
   console.log(`$ ${shellDisplay(step)}`);
   const result = spawnSync(step.command, step.args, {
-    cwd: workspaceRoot,
+    cwd: wakeflowRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -325,7 +344,7 @@ function runStatusJson(steps) {
 
   for (const step of steps) {
     const result = spawnSync(step.command, step.args, {
-      cwd: workspaceRoot,
+      cwd: wakeflowRoot,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });

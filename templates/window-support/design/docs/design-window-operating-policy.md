@@ -1,54 +1,56 @@
-# Design Operating Policy
+# Design Window Operating Policy
 
-状态：长期规则
-维护窗口：Design
-接收窗口：Wakeflow
+Status: long-term rule
+Maintained By: Design
+Receiving Window: Wakeflow
 
-## 目的
+## Purpose
 
-`Design` 将需求讨论与实现派发拆开。它给用户一个专门讨论想法、打磨需求和比较方案的窗口；Wakeflow 仍然是执行、验收、TODO 归口和归档的总控。
+Design separates requirement discussion from implementation dispatch. It gives
+the user a focused place to clarify goals and compare options while Wakeflow
+keeps execution, acceptance, TODO routing, and archive authority.
 
-## 控制关系
+## Control Relationship
 
-- Wakeflow 负责最终状态、当前主线、TODO 优先级、窗口派发、测试交接、验收和归档。
-- `Design` 负责探索性需求讨论和设计草案准备。
-- 设计草案只有在 Wakeflow 接收、创建或连接 controller state-root、并按总控判断生成任务包后，才会变成可执行工作。
-- 如果 `Design` 被单独打开且读不到总控文档，只能进入 `detached-design-mode`。
+- Wakeflow owns final state, current mainline, TODO priority, dispatch, Test
+  handoff, acceptance, and archive.
+- Design owns exploratory requirement discussion and design drafts.
+- A design draft becomes executable only after Wakeflow accepts it, attaches or
+  creates a state root, and creates task packages.
+- Detached Design work must be marked for controller re-import.
 
-## 允许事项
+## Allowed Work
 
-- 澄清产品目标和用户场景。
-- 起草原始计划书、需求设计、workspace signal 和 workspace handoff。
-- 比较架构方案和取舍。
-- 识别需要 Wakeflow 或源码仓库窗口补充的代码调研请求。
-- 识别讨论内容是否应作为 bug 线索、TODO 候选、调研请求、用户决策或当前主线阻塞交回总控。
+- Clarify product goals and user scenarios.
+- Draft original plans, requirement designs, workspace signals, and handoffs.
+- Compare architecture options and tradeoffs.
+- Identify code-research requests for Wakeflow or source windows.
+- Identify whether discussion should return as a bug signal, TODO candidate,
+  research request, user decision, or current-mainline blocker.
 
-## 与总控需求设计能力对齐
+## Design Requirements
 
-- 原始计划书只记录用户目标、背景、范围、约束和确认问题；用户确认前，不写执行阶段、不推荐发送窗口。
-- 需求设计必须包含用户场景、完整功能闭环、输入输出、状态变化、生产方、消费方、失败路径、仓库边界、验证策略和完成定义。
-- 复杂需求必须显式判断是否需要代码实现依赖调研；若设计窗口没有足够代码证据，必须把调研范围、入口、调用链和待验证问题写成交接给总控的请求。
-- 阶段只能作为候选方向，不能作为执行派发依据；最终阶段顺序由总控在目标阶段确认和 controller state root 中确定。
-- 讨论中产生的 TODO、风险、删除候选、兼容保留、验证缺口和用户偏好，必须落到设计文档或交接草案，不能只留在聊天里。
-- 任何会降低目标能力、只做框架、延期关键能力、保留兼容层或改变仓库职责边界的设计，必须标为待确认。
+- Original plans record user goal, background, scope, constraints, and
+  confirmation questions. Do not write execution phases before confirmation.
+- Requirement designs must include user scenario, full functional loop, inputs,
+  outputs, state changes, producer, consumer, failure path, repository boundary,
+  validation strategy, and completion definition.
+- Complex demands must explicitly state whether code-fact research is needed.
+- Phases are candidates only; final phase order is set by Wakeflow.
+- TODOs, risks, deletion candidates, compatibility retention, validation gaps,
+  and preferences must be recorded in design documents or handoff drafts.
+- Any downgrade, deferral, compatibility retention, or boundary change must be
+  marked pending confirmation.
 
-## 交接契约
+## Handoff Contract
 
-- **Signal**：用于 bug 线索、TODO 候选、调研请求、用户决策、当前主线风险或轻量建议。使用 `templates/workspace-signal-template.md`。
-- **Handoff**：用于较完整的需求设计或方案交接。使用 `templates/workspace-handoff-template.md`。
-- **Handoff board**：正式需求设计完成后的清单入口。内部模式默认是 `.workspace-active/workspace/current/design-handoff-board.md`；外部 Design 仓库默认是 `docs/current/workspace-handoff-board.md`。状态为 `ready-for-workspace` 的条目可被总控发现和校验。
-- **State-root intake**：总控正式接收后，用 `wakeflow-intake.mjs design-handoff` 把 handoff board 条目和关联文档作为 `intake/*.json` 附着到 controller state-root。这个 intake 不是 TODO、不是任务包、不是实现派发。
+- **Signal**: bug signal, TODO candidate, research request, user decision,
+  current-mainline risk, or lightweight recommendation.
+- **Handoff**: complete requirement design or plan transfer.
+- **Handoff board**: the discoverable list of ready Design entries.
+- **State-root intake**: Wakeflow attaches accepted board entries and linked
+  documents to `intake/*.json`. Intake is not a TODO, task package, or dispatch.
 
-每次交回 Wakeflow 的 handoff 草案应包含：
-
-1. 需求标题和用户目标。
-2. 设计状态。
-3. 最终完成定义。
-4. 已知事实和证据。
-5. 开放问题和已确认决策。
-6. 建议覆盖的仓库 / 窗口。
-7. 建议阶段候选。
-8. 验证需求。
-9. 非目标和禁止捷径。
-
-Wakeflow 接收 handoff 前仍需独立复核；handoff 和 state-root intake 都不是目标阶段确认，也不是 task package。只有总控通过 `wakeflow-state.mjs add-task-package` 创建任务包后，才进入执行路线。
+Every handoff should include title, goal, design status, final completion
+definition, evidence, open questions, confirmed decisions, suggested windows,
+phase candidates, validation needs, non-goals, and forbidden shortcuts.

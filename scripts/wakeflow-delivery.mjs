@@ -52,7 +52,7 @@ Usage:
 Design:
   This script is the CodexAutomationClosedLoop contract surface. Dispatches
   are state-root only. The script does not parse current plans, decide
-  sendable windows, claim target work, create legacy Codex automations, or
+  sendable windows, claim target work, create legacy automation jobs, or
   accept evidence. Total control creates dispatch packets and later reviews
   raw evidence. Delivery adapters only consume the delivery envelope. Target
   windows return result envelopes.
@@ -384,7 +384,7 @@ function uniqueTargetNames(items) {
 
 function formatPromptTargetList(targets) {
   const uniqueTargets = [...new Set((targets || []).filter(Boolean))];
-  return uniqueTargets.length > 0 ? uniqueTargets.join("、") : "无";
+  return uniqueTargets.length > 0 ? uniqueTargets.join(", ") : "None";
 }
 
 function buildGroupSnapshot({ groupRecord, results }) {
@@ -1149,9 +1149,9 @@ function formatTargetPrompt({
 }) {
   if (!stateRef) fail("Target prompts require stateRef from a controller state root.");
   return [
-    `继续当前窗口任务：${targetWindow} / ${taskId}。`,
+    `Continue current window task: ${targetWindow} / ${taskId}.`,
     "",
-    "变量：",
+    "Variables:",
     `- currentWindow: ${targetWindow}`,
     `- taskId: ${taskId}`,
     `- stateRoot: ${stateRef.stateRoot}`,
@@ -1180,8 +1180,8 @@ function formatControllerReturnPrompt({
     ? formatPromptTargetList(returnedTargets)
     : triggerTarget;
   const title = reviewScope === "group"
-    ? `继续总控验收：${titleTargets} 回填。`
-    : `继续总控验收：${triggerTarget} 回填。`;
+    ? `Continue controller review: ${titleTargets} backfill.`
+    : `Continue controller review: ${triggerTarget} backfill.`;
   const blockedTargets = formatPromptTargetList(groupSnapshot.blockedTargets);
   const remainingTargets = formatPromptTargetList(groupSnapshot.missingTargets);
   const hasBlockedTargets = Array.isArray(groupSnapshot.blockedTargets) && groupSnapshot.blockedTargets.length > 0;
@@ -1189,7 +1189,7 @@ function formatControllerReturnPrompt({
   return [
     title,
     "",
-    "变量：",
+    "Variables:",
     `- stateRoot: ${stateRef.stateRoot}`,
     `- dispatchGroup: ${dispatchGroup}`,
     `- trigger: ${triggerTarget} / ${triggerTaskId}`,

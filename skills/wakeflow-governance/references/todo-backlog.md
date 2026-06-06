@@ -1,40 +1,42 @@
-# TODO And Backlog Rules
+# TODO And Backlog Reference
 
-Use this reference when creating, adjusting, accepting, rolling, canceling, prioritizing, or dispatching TODO / Backlog items in Wakeflow.
-
-## Core Rules
-
-- TODO / Backlog 是通用子模式，不只用于问题修复。用户可以在需求讨论、需求设计、代码调研、目标阶段确认、wave 派发、监控、验收或真实测试期间要求新增、调整、取消或重排 TODO。
-- `Design` signal 不是正式 TODO；总控接收后才决定是否写入 `global-todo-board`、当前 TODO / Backlog、测试 card 候选或需求目录。
-- `Design` 完成需求设计并设定目标后，默认不再作为零散交流处理，而应作为正式 TODO / Backlog 候选交回总控。总控要把它挂到正确账本，再按当前主线是否完成、优先级、依赖和目标阶段确认正常领取推进；除非用户明确要求打断当前主线，否则不得因 Design 完成而直接跳过 TODO 或立即派发。
-- TODO / Backlog 不能替代目标定义，也不能自动驱动派发。TODO 是总控调度账本和空闲窗口候选任务池，用来保存目标主线中发现的真实问题、后续清理点、验证缺口和可并行事项；进入 TODO 的真实问题仍归总控负责到底，不能因为写入 TODO 就变成遗忘项、长期观察项或目标外事项。
-- 每次使用 TODO 派发前，必须先说明该 TODO 对应哪一部分最终目标、完成后如何缩小剩余差距、是否可能其实应标为已完成 / 观察 / 不做。
+TODO/Backlog is a scheduling ledger, not the source of the user goal.
 
 ## Intake
 
-- 当前主线进行时，用户可以先讨论新需求并进入 TODO；若不改变当前主线完成定义，不能打断主线。
-- 该 TODO 只能在两种路径推进：满足无上游依赖、验证独立且不干扰主线时作为空闲窗口任务调度；或等当前主线彻底验收归档后，经目标确认提升为新主线。
-- 总控必须把最新 TODO 落到当前正确文档位置，并据此调整下一轮需求设计、阶段确认或派发计划。
-- TODO 是代码事实分析和阶段分派之间的中间账本。前期分析中发现的问题、职责错位、冗余实现、删除候选、兼容保留、验证缺口、文档债务、发布链路风险和后续拆分点，不能只停留在聊天总结里；除非当轮已经解决或明确不做，必须进入 TODO / Backlog。
-- 对于文件夹整理、功能职责清晰、删除冗余、边界收敛这类多阶段任务，不能只分派几个小任务就宣布结束；必须把分析发现先归类成 TODO，再按依赖关系排序为“先修真实边界 / 再删除冗余 / 再整理结构 / 再验收归档”等可执行阶段。
+Add an item only when it has:
 
-## Correct Ledger
+- a stable id;
+- a real user goal or verified defect;
+- an owner candidate;
+- priority;
+- current-mainline relation;
+- evidence status;
+- dependency or trigger;
+- reason it belongs in TODO instead of the active state root.
 
-- 需求设计期 TODO 应写入对应 `../workspace-ledger/requirement-designs/<需求名>/requirement-design-YYYY-MM-DD.md`，用于记录待澄清问题、设计候选、风险、验证点、用户偏好和后续拆分输入；它不等于执行任务，不能绕过原始计划书确认、代码调研和目标阶段确认。
-- 目标阶段确认或 wave 执行期 TODO 应写入当前 `.workspace-active/workspace/current/` 总控文档的 `TODO / Backlog`；当 TODO 会影响窗口派发、并行安排或下一波顺序时，必须同时更新 `空闲窗口调度`、分派表和可复制提示词。
-- 长期规则见 `../workspace-ledger/workspace/todo-window-scheduling-policy.md`。
-- TODO 列表必须记录事项类型、现象 / 目标、归属仓库、严重度 / 优先级、是否影响真实复测或下一步派发、依赖 / 触发、推荐窗口和当前状态。
+Design signals and handoffs are candidates until the controller reviews and
+routes them.
 
-## Rolling And Scheduling
+## Rolling TODOs
 
-- 主线阻塞项优先处理；可并行项只有在无上游依赖、无文件冲突、有独立验证价值时才安排给空闲窗口。空闲窗口调度不是为了把窗口填满。
-- 每次需求设计更新、目标阶段确认、wave 验收或下一波派发前都要滚动 TODO：已完成项标为已完成并写证据；仍有效项转入下一波；新发现项新增；确认不做的项标为取消 / 不做并写理由；用户调整优先级时，必须重算派发顺序和窗口状态。
-- 每次下一波派发前，必须用 TODO 做阶段顺序检查：主线阻塞项是否先处理、删除项是否已有替代入口、下游是否等待上游、并行项是否真的无文件冲突和独立可验。
-- 若 TODO 暴露阶段顺序不清，必须先暂停并补目标阶段确认，不能继续简单派发。
+When accepting or archiving work:
 
-## Task Package Relationship
+- close solved TODOs with evidence;
+- keep valid remaining TODOs with updated blockers;
+- add newly found TODOs with evidence;
+- explain why an observed issue does not enter TODO.
 
-- TODO 参与派发时要优先组成任务包：把当前阶段可以推进的主线动作，与同一窗口、同一边界、同一验证链路下可以顺手关闭的 TODO 合并派发。
-- 不要把 TODO 当作零散小工单逐条丢给窗口。
-- 任务包不得为了“显得充分”硬塞无关事项；存在上游阻塞、文件冲突、职责边界不同、验证路径不一致或会模糊完成定义的 TODO，必须留到后续包或独立包。
-- 主线动作应尽量在真正阻塞点之前一波完成尽可能多的事。分派时先识别下一处真实阻塞是什么，再把阻塞前同阶段、同窗口、同验证链路内可安全推进的分析、修正、清理、文档和可关闭 TODO 合成一个任务包；不要因为后面存在阻塞，就只派阻塞前的最小一小步。
+Do not close a TODO from script output alone. Review raw evidence.
+
+## Dispatch Use
+
+TODOs may be merged into a task package only when they share the same window,
+boundary, and validation path as the mainline work before the next real blocker.
+Do not fragment dispatch only to move TODO counters.
+
+## Archive
+
+Completed TODO rows can be compacted with `wakeflow-archive-todo.mjs`. Active
+or observing rows remain on the current board. Long-term history belongs in the
+workspace ledger.

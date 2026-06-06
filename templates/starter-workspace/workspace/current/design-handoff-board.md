@@ -1,8 +1,15 @@
-# Workspace Handoff Board
+# Design Handoff Board
 
-This internal board is used when the user does not have an external Design directory.
+Status: starter template
 
-## Handoff 清单
+## Handoff Board
 
-| ID | 状态 | 标题 | 原始计划 | 需求设计 | Handoff | 用户确认状态 | 用户确认 | 主线关系状态 | 当前主线关系 | 建议 TODO | 优先级枚举 | 优先级 | 下一步 |
+| ID | Status | Title | Original Plan | Requirement Design | Handoff | User Confirmation Status | User Confirmation | Mainline Relation Status | Current Mainline Relation | Suggested TODO | Priority Enum | Priority | Next Step |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+## Notes
+
+- Add `ready-for-workspace` rows only after Design has a reviewable plan or
+  handoff.
+- Controller intake still performs independent review before creating TODOs,
+  state roots, or task packages.

@@ -37,7 +37,7 @@ function designDoc(id, title) {
 
 Design Key: ${id}
 
-## 目标
+## Goal
 
 Fixture only.
 `;
@@ -70,11 +70,11 @@ function makeFixture({ demandKey = "ENUM-FLOW-2026-05-30", state = "intake", sta
     path.join(root, "DesignWindow/docs/current/workspace-handoff-board.md"),
     `# Workspace Handoff Board
 
-## Handoff 清单
+## Handoff Board
 
-| ID | 状态 | 标题 | 原始计划 | 需求设计 | Handoff | 用户确认状态 | 用户确认 | 主线关系状态 | 当前主线关系 | 建议 TODO | 优先级枚举 | 优先级 | 下一步 |
+| ID | Status | Title | Original Plan | Requirement Design | Handoff | User Confirmation Status | User Confirmation | Mainline Relation Status | Current Mainline Relation | Suggested TODO | Priority Enum | Priority | Next Step |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ${designKey} | ready-for-workspace | Enum fixture | [original](enum-flow/original-plan-2026-05-30.md) | [design](enum-flow/requirement-design-2026-05-30.md) | [handoff](enum-flow/workspace-handoff-2026-05-30.md) | confirmed | 用户已确认 | todo-candidate | 不影响主线 | TODO | P1 | P1 | 总控接收 |
+| ${designKey} | ready-for-workspace | Enum fixture | [original](enum-flow/original-plan-2026-05-30.md) | [design](enum-flow/requirement-design-2026-05-30.md) | [handoff](enum-flow/workspace-handoff-2026-05-30.md) | confirmed | user confirmed | todo-candidate | does not affect current mainline | TODO | P1 | P1 | controller intake |
 `,
   );
 

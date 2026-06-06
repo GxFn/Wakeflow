@@ -1,14 +1,13 @@
-# <标题> Workspace Signal
+# <Signal Title> Workspace Signal
 
-日期：YYYY-MM-DD
-状态：草案
-Design Key：<READABLE-TOPIC-YYYY-MM-DD>
-来源窗口：Design
-接收窗口：Wakeflow
+Date: YYYY-MM-DD
+Status: draft
+Source Window: Design
+Receiving Window: Wakeflow
 
-## Signal 类型
+## Signal Type
 
-标记一项：
+Choose one:
 
 - bug
 - todo
@@ -17,66 +16,55 @@ Design Key：<READABLE-TOPIC-YYYY-MM-DD>
 - current-mainline-risk
 - requirement-candidate
 
-## 触发内容
+## Summary
 
-记录用户原话或准确摘要。
+State the signal in one or two sentences.
 
-```text
-...
-```
+## User Goal Or Decision
 
-## Design 判断
+-
 
-- 为什么属于该类型：
-- 是否影响 Wakeflow 当前主线：
-- 是否建议打断当前主线：
-- 是否需要用户继续确认：
+## Current Mainline Relation
 
-## 影响范围建议
+- Relation: none / todo-candidate / next-mainline / blocks-current /
+  interrupts-current / after-current
+- Should interrupt current mainline: yes/no
+- Reason:
 
-| 窗口 / 仓库 | 建议状态 | 理由 |
+## Evidence
+
+- User description:
+- Screenshot/log:
+- Code evidence:
+- Test evidence:
+- Evidence status: user-described / code-confirmed / test-confirmed /
+  pending-research
+
+## Recommended Owner
+
+| Candidate Window | Recommendation | Reason |
 | --- | --- | --- |
-| <configured product window / discovered repo> | 参与 / 观察 / 无任务 / 待调研 |  |
-| Design | 设计完成 / 继续调研 / 无任务 |  |
-| Test | 参与 / 观察 / 无任务 / 待调研 |  |
-| <real project if configured> | 观察 / 受保护 / 无任务 |  |
+| Wakeflow | review / intake / no-task |  |
+| Design | continue-design / no-task |  |
+| Test | verify / no-task |  |
+| <configured product window> | research / fix / no-task |  |
 
-## 证据状态
+The recommendation is not a dispatch decision.
 
-- 用户描述：
-- 截图 / 日志：
-- 已知代码事实：
-- 待补代码事实：
-- 测试 / 复现需求：
+## Suggested TODO / Backlog
 
-## 建议给总控的下一步
-
-选择一项或多项：
-
-- 加入 `global-todo-board`。
-- 作为当前 state-root task package 的阻塞 / 返修候选。
-- 总控评审是否需要创建 `Test` 或其它配置测试窗口的测试 card / 任务包。
-- 开启原始计划确认。
-- 继续由 Design 做需求设计。
-- 等当前主线完成后再评估。
-- 不入账，作为背景信息。
-
-说明：本建议只给 Wakeflow 总控评审，不是执行窗口提示词。
-
-## TODO / Backlog 建议
-
-| ID | 类型 | 优先级建议 | 推荐归口 | 事项 | 依赖 / 触发 |
+| ID | Type | Priority | Owner Candidate | Item / Goal | Dependency / Trigger |
 | --- | --- | --- | --- | --- | --- |
-| SIGNAL-TODO-1 | bug / todo / research / decision | P0 / P1 / P2 |  |  |  |
 
-## 开放问题
+## Open Questions
 
-1. ...
+1. <question>
 
-## 交接前自检
+## Pre-Handoff Checklist
 
-- 已对照 `docs/workspace-alignment-checklist.md` 或外部 Design 仓库的同名文件：
-- 本 signal 没有修改 workspace 当前状态或全局 TODO：
-- 本 signal 没有包含可复制实现窗口提示词：
-- 推荐归口只是建议，不是派发：
-- 如处于 detached-design-mode，已标注需要总控导入复核：
+- Checked `docs/workspace-alignment-checklist.md` or the external Design
+  repository equivalent:
+- This signal does not mutate workspace current status or Global TODO:
+- This signal does not contain copyable implementation-window prompts:
+- Recommended owner is advice only, not dispatch:
+- Detached Design mode, if applicable, is marked for controller re-import:

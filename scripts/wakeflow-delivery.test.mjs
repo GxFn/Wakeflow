@@ -285,7 +285,7 @@ test("build-delivery rejects legacy packets without stateRef", () => {
     id: "legacy-packet",
     targetWindow: "AlembicPlugin",
     taskId: "TASK-LEGACY",
-    prompt: "继续当前窗口任务：AlembicPlugin / TASK-LEGACY。",
+    prompt: "Continue current window task: AlembicPlugin / TASK-LEGACY.",
   });
   const result = run(root, ["build-delivery", "--packet-file", "legacy-packet.json", "--write"]);
   assert.notEqual(result.status, 0);

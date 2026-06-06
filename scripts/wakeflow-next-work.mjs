@@ -113,7 +113,7 @@ function hasNegativeUserConfirmation(value) {
   if (!text) {
     return true;
   }
-  return /(未确认|待确认|没有确认|无确认|not confirmed|unconfirmed|pending confirmation)/i.test(text);
+  return /(unconfirmed|pending-confirmation|not confirmed|no confirmation|not confirmed|unconfirmed|pending confirmation)/i.test(text);
 }
 
 function hasPositiveUserConfirmation(value) {
@@ -121,15 +121,15 @@ function hasPositiveUserConfirmation(value) {
   if (!text || hasNegativeUserConfirmation(text)) {
     return false;
   }
-  return /(用户[^|。；;]*确认|已[^|。；;]*确认|yes|confirmed)/i.test(text);
+  return /(user[^|.;]*confirmed|yes|confirmed)/i.test(text);
 }
 
 function userConfirmationStatus(entry) {
-  const enumValue = normalizeEnumValue(entry["用户确认状态"]);
+  const enumValue = normalizeEnumValue(entry["User Confirmation Status"]);
   if (enumValue) {
     return enumValue;
   }
-  return hasPositiveUserConfirmation(entry["用户确认"]) ? "confirmed" : "unconfirmed";
+  return hasPositiveUserConfirmation(entry["User Confirmation"]) ? "confirmed" : "unconfirmed";
 }
 
 function firstLink(cell) {
@@ -185,11 +185,11 @@ function parseDesignCandidates(issues, warnings) {
   }
 
   const content = read(designBoardPath);
-  const section = sectionContent(content, "Handoff 清单");
+  const section = sectionContent(content, "Handoff Board");
   const rows = tableRows(section);
-  const header = rows.find((row) => row.includes("ID") && row.includes("状态"));
+  const header = rows.find((row) => row.includes("ID") && row.includes("Status"));
   if (!header) {
-    issues.push("Design handoff board is missing a table headed by ID / 状态.");
+    issues.push("Design handoff board is missing a table headed by ID / Status.");
     return [];
   }
 
@@ -197,14 +197,14 @@ function parseDesignCandidates(issues, warnings) {
     .filter((row) => row !== header)
     .filter((row) => row.some((cell) => cell && !/^:?-{3,}:?$/.test(cell)))
     .map((row) => rowObject(header, row))
-    .filter((entry) => entry.ID && entry["状态"] === "ready-for-workspace")
+    .filter((entry) => entry.ID && entry["Status"] === "ready-for-workspace")
     .map((entry) => {
       const confirmation = userConfirmationStatus(entry);
-      const relation = normalizeEnumValue(entry["主线关系状态"]) || "todo-candidate";
-      const priority = normalizePriority(entry["优先级枚举"] || entry["优先级"]);
+      const relation = normalizeEnumValue(entry["Mainline Relation Status"]) || "todo-candidate";
+      const priority = normalizePriority(entry["Priority Enum"] || entry["Priority"]);
       const docs = {
-        originalPlan: linkedDoc(entry, "原始计划", designBoardPath),
-        requirementDesign: linkedDoc(entry, "需求设计", designBoardPath),
+        originalPlan: linkedDoc(entry, "Original Plan", designBoardPath),
+        requirementDesign: linkedDoc(entry, "Requirement Design", designBoardPath),
         handoff: linkedDoc(entry, "Handoff", designBoardPath),
       };
       const blockers = [];
@@ -223,13 +223,13 @@ function parseDesignCandidates(issues, warnings) {
       return {
         source: "design",
         id: entry.ID,
-        title: entry["标题"],
-        status: entry["状态"],
+        title: entry["Title"],
+        status: entry["Status"],
         priority,
         relation,
         recommendedWindow: workspaceConfig.controllerWindow,
-        nextStep: entry["下一步"],
-        suggestedTodo: entry["建议 TODO"],
+        nextStep: entry["Next Step"],
+        suggestedTodo: entry["Suggested TODO"],
         documents: docs,
         blockers,
         eligible: blockers.length === 0,
@@ -247,11 +247,11 @@ function parseTodoCandidates(warnings) {
   }
 
   const content = read(todoBoardPath);
-  const section = sectionContent(content, "全局 TODO");
+  const section = sectionContent(content, "Global TODO");
   const rows = tableRows(section);
-  const header = rows.find((row) => row.includes("ID") && row.includes("状态"));
+  const header = rows.find((row) => row.includes("ID") && row.includes("Status"));
   if (!header) {
-    warnings.push("Global TODO board is missing a table headed by ID / 状态.");
+    warnings.push("Global TODO board is missing a table headed by ID / Status.");
     return [];
   }
 
@@ -261,10 +261,10 @@ function parseTodoCandidates(warnings) {
     .map((row) => rowObject(header, row))
     .filter((entry) => entry.ID)
     .map((entry) => {
-      const status = entry["状态"];
+      const status = entry["Status"];
       const stateId = normalizeStateId(status);
-      const recommendedWindow = entry["推荐窗口"] ?? "";
-      const statusText = `${status} ${entry["归属"] ?? ""} ${recommendedWindow}`;
+      const recommendedWindow = entry["Recommended Window"] ?? "";
+      const statusText = `${status} ${entry["Owner"] ?? ""} ${recommendedWindow}`;
       const blockers = [];
       if (isCompletedState(status)) {
         blockers.push("already completed");
@@ -272,28 +272,28 @@ function parseTodoCandidates(warnings) {
       if (isPausedLikeState(status)) {
         blockers.push(`status is not claimable: ${status}`);
       }
-      if (statusText.includes(`${workspaceConfig.controllerWindow}-Aux`) || /Aux 已领取|Aux 推进/.test(statusText)) {
+      if (statusText.includes(`${workspaceConfig.controllerWindow}-Aux`) || /Aux claimed|Aux progressing/.test(statusText)) {
         blockers.push("owned by Aux controller");
       }
       if (!recommendedWindow.includes(workspaceConfig.controllerWindow)) {
         blockers.push(`recommended window is ${recommendedWindow || "missing"}`);
       }
-      if (!/(待自动化|待排期|候选|独立线路|待 P\d|待 Stage|待领取|待后续)/.test(status)) {
+      if (!/(pending automation|pending-schedule|candidate|independent track|pending P\d|pending Stage|pending-claim|pending-follow-up)/i.test(status)) {
         blockers.push("status is not an explicit next-work candidate");
       }
       return {
         source: "todo",
         id: entry.ID,
-        title: entry["事项 / 目标"],
+        title: entry["Item / Goal"],
         status,
         stateId,
-        type: entry["类型"],
-        priority: normalizePriority(entry["优先级"]),
-        owner: entry["归属"],
-        effect: entry["影响复测 / 派发"],
-        dependency: entry["依赖 / 触发"],
+        type: entry["Type"],
+        priority: normalizePriority(entry["Priority"]),
+        owner: entry["Owner"],
+        effect: entry["Affects Retest / Dispatch"],
+        dependency: entry["Dependency / Trigger"],
         recommendedWindow,
-        mount: entry["当前挂载"],
+        mount: entry["Current Mount"],
         blockers,
         eligible: blockers.length === 0,
       };
@@ -311,7 +311,7 @@ function currentStatus() {
     };
   }
   const content = read(currentStatusPath);
-  const match = content.match(/^状态[：:]\s*(.+?)\s*$/m);
+  const match = content.match(/^Status:\s*(.+?)\s*$/m);
   const status = match?.[1]?.trim() ?? null;
   const stateId = normalizeStateId(status);
   return {

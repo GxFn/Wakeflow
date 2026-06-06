@@ -1,21 +1,21 @@
 export const wakeflowStates = {
-  draft: { label: "草案", category: "planning" },
-  pending: { label: "待启动", category: "sendable" },
-  running: { label: "执行中", category: "sendable" },
-  delivered: { label: "已投递", category: "sendable" },
-  review: { label: "待验收", category: "waiting" },
-  blocked: { label: "阻塞", category: "blocked" },
-  completed: { label: "已完成", category: "closed" },
-  paused: { label: "暂停", category: "closed" },
-  cancelled: { label: "取消", category: "closed" },
-  rejected: { label: "不做", category: "closed" },
-  observing: { label: "观察中", category: "waiting" },
-  none: { label: "无任务", category: "closed" },
-  idle: { label: "空闲", category: "closed" },
-  maintained: { label: "维护中", category: "maintenance" },
-  template: { label: "长期模板", category: "maintenance" },
-  policy: { label: "长期规则", category: "maintenance" },
-  archive: { label: "归档汇总", category: "maintenance" },
+  draft: { label: "draft", category: "planning" },
+  pending: { label: "pending", category: "sendable" },
+  running: { label: "running", category: "sendable" },
+  delivered: { label: "delivered", category: "sendable" },
+  review: { label: "review", category: "waiting" },
+  blocked: { label: "blocked", category: "blocked" },
+  completed: { label: "completed", category: "closed" },
+  paused: { label: "paused", category: "closed" },
+  cancelled: { label: "cancelled", category: "closed" },
+  rejected: { label: "rejected", category: "closed" },
+  observing: { label: "observing", category: "waiting" },
+  none: { label: "no task", category: "closed" },
+  idle: { label: "idle", category: "closed" },
+  maintained: { label: "maintained", category: "maintenance" },
+  template: { label: "template", category: "maintenance" },
+  policy: { label: "policy", category: "maintenance" },
+  archive: { label: "archive", category: "maintenance" },
 };
 
 export const stateAliases = new Map(
@@ -25,10 +25,10 @@ export const stateAliases = new Map(
   ]),
 );
 
-stateAliases.set("待确认", "draft");
-stateAliases.set("已完成 ", "completed");
-stateAliases.set("总控验收通过", "completed");
-stateAliases.set("空闲中", "idle");
+stateAliases.set("pending-confirmation", "draft");
+stateAliases.set("completed ", "completed");
+stateAliases.set("controller-accepted", "completed");
+stateAliases.set("idle", "idle");
 stateAliases.set("maintained", "maintained");
 stateAliases.set("maintenance", "maintained");
 stateAliases.set("draft", "draft");
@@ -42,7 +42,7 @@ export function displayPrimaryState(value) {
     .split("/")
     .map((item) => item.trim())
     .find(Boolean)
-    ?.replace(/（.*?）|\(.*?\)/g, "")
+    ?.replace(/\(.*?\)/g, "")
     .trim() ?? "";
 }
 

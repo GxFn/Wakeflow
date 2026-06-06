@@ -120,7 +120,7 @@ if (testScripts.length > 0 && !existsSync(verifierPath)) {
 }
 
 for (const scriptName of testScripts) {
-  if (verifierContent && !verifierContent.includes(`scripts/${scriptName}`)) {
+  if (verifierContent && !verifierContent.includes(scriptName)) {
     issues.push(`${scriptName} is not included in wakeflow-verify --with-script-tests.`);
   }
 }

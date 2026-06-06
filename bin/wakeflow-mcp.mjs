@@ -5,7 +5,7 @@ import { listWakeflowRuntimeScripts, runWakeflowRuntime } from "../lib/wakeflow-
 const tools = [
   {
     name: "wakeflow_initialize_workspace",
-    description: "Initialize a Wakeflow Wakeflow runtime: discover siblings, generate/apply workspace config, install AGENTS blocks, create Design/Test surfaces, and record local window configuration. Dry-run unless apply is true. Does not accept or write thread ids.",
+    description: "Initialize a Wakeflow runtime: discover siblings, generate/apply workspace config, install AGENTS blocks, create Design/Test surfaces, and record local window configuration. Dry-run unless apply is true. Does not accept or write thread ids.",
     inputSchema: {
       type: "object",
       properties: {
@@ -87,7 +87,12 @@ const tools = [
   {
     name: "wakeflow_status",
     description: "Inspect Wakeflow repository and closed-loop runtime status. Does not send messages.",
-    inputSchema: { type: "object", properties: {} },
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+      },
+    },
   },
   {
     name: "wakeflow_init_demand",
@@ -393,12 +398,24 @@ const tools = [
   {
     name: "wakeflow_full_status",
     description: "Run the embedded runtime status path.",
-    inputSchema: { type: "object", properties: { json: { type: "boolean" } } },
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+        json: { type: "boolean" },
+      },
+    },
   },
   {
     name: "wakeflow_full_verify",
     description: "Run embedded Wakeflow runtime verification.",
-    inputSchema: { type: "object", properties: { scriptTests: { type: "boolean" } } },
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+        scriptTests: { type: "boolean" },
+      },
+    },
   },
 ];
 
@@ -461,9 +478,10 @@ const handlers = {
         ],
     cwd: args.root || undefined,
   }),
-  wakeflow_status: () => runWakeflowRuntime({
+  wakeflow_status: (args) => runWakeflowRuntime({
     script: "wakeflow-cli",
-    args: ["status", "--json"],
+    args: ["status", ...rootArgs(args), "--json"],
+    cwd: args.root || undefined,
   }),
   wakeflow_init_demand: (args) => runWakeflowRuntime({
     script: "wakeflow-state",
@@ -698,11 +716,13 @@ const handlers = {
   }),
   wakeflow_full_status: (args) => runWakeflowRuntime({
     script: "wakeflow-cli",
-    args: ["status", ...(args.json === false ? [] : ["--json"])],
+    args: ["status", ...rootArgs(args), ...(args.json === false ? [] : ["--json"])],
+    cwd: args.root || undefined,
   }),
   wakeflow_full_verify: (args) => runWakeflowRuntime({
     script: "wakeflow-cli",
-    args: ["verify", ...(args.scriptTests ? ["--script-tests"] : []), "--json"],
+    args: ["verify", ...rootArgs(args), ...(args.scriptTests ? ["--script-tests"] : []), "--json"],
+    cwd: args.root || undefined,
     timeoutMs: args.scriptTests ? 180000 : 120000,
   }),
 };

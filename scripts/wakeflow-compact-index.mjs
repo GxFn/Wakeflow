@@ -112,14 +112,14 @@ function upsertArchiveSummary(content, row) {
   const summarySection = [
     `## ${heading}`,
     "",
-    "| 归档主题 | 目录 | 说明 |",
+    "| Archive Topic | Directory | Notes |",
     "| --- | --- | --- |",
     row,
     "",
   ].join("\n");
 
   if (!section) {
-    const windowSection = sectionRange(content, "窗口覆盖状态");
+    const windowSection = sectionRange(content, "Window Coverage Status");
     const insertAt = windowSection?.start ?? content.length;
     const prefix = content.slice(0, insertAt).replace(/\s*$/, "\n\n");
     const suffix = content.slice(insertAt).replace(/^\s*/, "");
@@ -160,15 +160,15 @@ function recordMapSkeleton() {
   return [
     "# Workspace Record Map",
     "",
-    "状态：长期记录清单",
-    `维护窗口：${workspaceConfig.controllerWindow}`,
-    `更新日期：${new Date().toISOString().slice(0, 10)}`,
+    "Status: long-term record map",
+    `Maintained By: ${workspaceConfig.controllerWindow}`,
+    `Updated Date: ${new Date().toISOString().slice(0, 10)}`,
     "",
-    `本文是 ${workspaceConfig.workspaceName} 的长期记录地图。当前开发区不直接散链到具体归档文件；需要历史细节时，从本文查询。`,
+    `This is the long-term record map for ${workspaceConfig.workspaceName}. The active workspace links to this map instead of scattering direct archive-file links.`,
     "",
     "## Archive Topics",
     "",
-    "| 归档主题 | 目录 | 说明 |",
+    "| Archive Topic | Directory | Notes |",
     "| --- | --- | --- |",
   ].join("\n");
 }
@@ -178,14 +178,14 @@ function ensureIndexArchiveCatalogEntry(content) {
     return content;
   }
 
-  const range = sectionRange(content, "当前总控入口");
+  const range = sectionRange(content, "Current Controller Entry");
   if (!range) {
     return content;
   }
 
   const lines = content.slice(range.start, range.end).split("\n");
   const recordMapLink = relativePosix(workspaceDocsDir, recordMapPath);
-  const row = `| 长期记录地图 | [workspace-record-map.md](${recordMapLink}) | 长期地图 | 查询历史计划、归档 topic、已完成 TODO、测试历史和证据入口。 |`;
+  const row = `| Long-Term Record Map | [workspace-record-map.md](${recordMapLink}) | Long-Term Map | Query historical plans, archived topics, completed TODOs, test history, and evidence entrypoints. |`;
   const separatorIndex = lines.findIndex((line) => {
     const cells = splitMarkdownRow(line);
     return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
@@ -201,7 +201,7 @@ function compileMatchers(values) {
 
 function rowIsData(line) {
   const cells = splitMarkdownRow(line);
-  return cells.length >= 2 && cells[0] !== "类型" && !cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+  return cells.length >= 2 && cells[0] !== "Type" && !cells.every((cell) => /^:?-{3,}:?$/.test(cell));
 }
 
 function rowIsProtectedCurrentEntry(line) {
@@ -209,12 +209,12 @@ function rowIsProtectedCurrentEntry(line) {
   const type = cells[0] ?? "";
   const status = cells[2] ?? "";
   return (
-    type.includes("当前计划") ||
-    type.includes("当前状态") ||
-    type.includes("当前短期工作区") ||
-    type.includes("长期") ||
-    status.includes("长期") ||
-    status === "已生效"
+    type.includes("Current Plan") ||
+    type.includes("Current Status") ||
+    type.includes("Current Work Area") ||
+    type.includes("Long-Term") ||
+    status.includes("Long-Term") ||
+    status === "active"
   );
 }
 
@@ -240,9 +240,9 @@ let manifestPath = "";
 
 if (issues.length === 0) {
   const content = readFileSync(indexPath, "utf8");
-  const range = sectionRange(content, "当前总控入口");
+  const range = sectionRange(content, "Current Controller Entry");
   if (!range) {
-    issues.push("index.md is missing ## 当前总控入口");
+    issues.push("index.md is missing ## Current Controller Entry");
   } else {
     const section = content.slice(range.start, range.end);
     const nextLines = [];
@@ -264,15 +264,15 @@ if (issues.length === 0) {
     const manifestRows = [
       "# Archived Workspace Index Rows",
       "",
-      `归档主题：${archiveKey(month, topic)}`,
-      `标题：${title}`,
-      `生成日期：${new Date().toISOString().slice(0, 10)}`,
+      `Archive Topic: ${archiveKey(month, topic)}`,
+      `Title: ${title}`,
+      `Generated Date: ${new Date().toISOString().slice(0, 10)}`,
       "",
-      `本文件保存从 \`${path.relative(workspaceRoot, indexPath).split(path.sep).join("/")}\` 压缩下来的历史索引行。原始证据文档仍留在各自目录或 topic 归档目录中。`,
+      `This file preserves historical index rows compacted from \`${path.relative(workspaceRoot, indexPath).split(path.sep).join("/")}\`. Original evidence documents remain in their original directories or topic archive directories.`,
       "",
-      "## 索引行",
+      "## Index Rows",
       "",
-      "| 类型 | 文档 | 状态 | 说明 |",
+      "| Type | Document | Status | Notes |",
       "| --- | --- | --- | --- |",
       ...removedRows.map((row) => rewriteIndexRowLinksForManifest(row, manifestPath)),
       "",
@@ -283,7 +283,7 @@ if (issues.length === 0) {
       ? readFileSync(recordMapPath, "utf8")
       : recordMapSkeleton();
     const archiveTarget = relativePosix(path.dirname(recordMapPath), path.dirname(manifestPath));
-    const summaryRow = `| \`${archiveKey(month, topic)}\` | [${topic}](${archiveTarget}/) | 已压缩 ${removedRows.length} 条历史索引行到 topic manifest；当前索引只保留目录入口。 |`;
+    const summaryRow = `| \`${archiveKey(month, topic)}\` | [${topic}](${archiveTarget}/) | Compacted ${removedRows.length} historical index rows into the topic manifest; the current index keeps only the directory entry. |`;
     if (removedRows.length > 0) {
       nextArchiveCatalogContent = upsertArchiveSummary(nextArchiveCatalogContent, summaryRow);
       nextContent = ensureIndexArchiveCatalogEntry(nextContent);

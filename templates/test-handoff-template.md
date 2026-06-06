@@ -1,73 +1,47 @@
-# Test Boundary Card Template
+# <Demand Title> Test Handoff
 
-Use this template only when total control has already decided that a real
-scenario, cold start, rescan, Dashboard observation, runtime monitor, or
-cross-repository integration proof is required.
+Date: YYYY-MM-DD
+Status: draft
+Controller Window: Wakeflow
+Execution Window: Test / configured test window
 
-The machine source of truth is the active demand state root:
+## Test Boundary
 
-```bash
-node scripts/wakeflow-intake.mjs test-card \
-  --state-root <state-root> \
-  --test-id <TEST-ID> \
-  --target-window <Test or configured test window> \
-  --question "<single question this test answers>" \
-  --object-boundary "<project/thread/window boundary>" \
-  --controller-self-check "<what total control already verified>" \
-  --real-scenario-condition "<why this needs Test or a configured test window>" \
-  --success-means "<what success proves>" \
-  --failure-means "<what failure proves>" \
-  --cannot-conclude "<what this test cannot prove>" \
-  --stop-condition "<when not to start or when to stop>" \
-  --evidence-required "<raw evidence required>" \
-  --allowed-operation "<allowed operation>" \
-  --forbidden-operation "<forbidden operation>" \
-  --write --json
-```
+Use Test only when the controller or product repository cannot safely validate
+the scenario alone.
 
-After total control reviews the generated `test-cards/*.json`, create the
-state-root task package with `wakeflow-state.mjs add-task-package`. Do not
-dispatch a test window from this template alone.
+## Test Cards
 
-Optional human projection for `test-exchange.md`:
+### Test-<number>: <test name>
 
-````text
-### Test-<编号>：<测试名称>
+Execution Window: <Test / configured test window>
+Target Project: <real test project / fixture / mock project>
 
-状态：draft / pending / running / review / completed / blocked / paused
-State root：<state-root>
-Test card：<state-root>/test-cards/<id>.json
-Task package：<task package id, after total control creates one>
-执行窗口：<Test / configured test window>
-目标项目：<真实测试项目 / fixture / mock project>
+#### Test Goal
 
-#### 测试目标
+- <real loop to prove>
 
-- <要证明的真实闭环>
+#### Pre-Test Boundary
 
-#### 测试前边界
+- Single question:
+- Object / target window / thread / project boundary:
+- Controller self-verification already done:
+- Why a real scenario is required:
+- Success can prove:
+- Failure can prove:
+- This test cannot prove:
+- Stop conditions:
 
-- 唯一问题：
-- 对象 / 目标窗口 / 线程 / 项目边界：
-- 总控已自测：
-- 必须交给真实场景的条件：
-- 成功能推出：
-- 失败能推出：
-- 不能推出：
-- 停止条件：
+#### Backfill Requirements
 
-#### 回填要求
-
-- state-root / task package / target task / test card：
-- 测试结论：
-- 执行范围：
-- 使用配置：
-- job id / session id：
-- Dashboard URL 摘要：
-- 状态变化：
-- 关键日志信号：
-- 真实项目是否干净：
-- 详细报告路径：
-- 遗留风险：
-- 下一步建议：
-````
+- Test conclusion:
+- Execution scope:
+- Configuration used:
+- Job/session id:
+- Dashboard URL summary:
+- State changes:
+- Key log signals:
+- Real project cleanliness:
+- Detailed report path:
+- Residual risks:
+- Recommended next step:

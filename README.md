@@ -6,8 +6,6 @@ A local-first Codex plugin for unattended multi-repository work: one controller,
 many specialist windows, explicit evidence, and direct-thread handoff without
 turning scripts into the decision maker.
 
-[中文](README.zh-CN.md)
-
 </div>
 
 ---
@@ -98,7 +96,7 @@ Useful first prompt:
 
 ```text
 You are installing Wakeflow.
-Read README.md, README.zh-CN.md, AGENTS.md, workspace.config.json, and scripts/README.md.
+Read README.md, AGENTS.md, workspace.config.json, and scripts/README.md.
 Run a read-only discovery of sibling repositories.
 List proposed window names, repository roles, existing AGENTS.md status, and local surfaces that would be created.
 Wait for my confirmation before writing anything.

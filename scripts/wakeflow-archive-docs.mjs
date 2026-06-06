@@ -126,10 +126,10 @@ function sectionRange(content, heading) {
 }
 
 function firstCurrentPlanPath(indexContent) {
-  const currentSection = sectionContent(indexContent, "当前总控入口");
+  const currentSection = sectionContent(indexContent, "Current Controller Entry");
   for (const line of currentSection.split("\n")) {
     const cells = splitMarkdownRow(line);
-    if (cells.length < 2 || cells[0] === "类型" || cells[0].startsWith("---")) {
+    if (cells.length < 2 || cells[0] === "Type" || cells[0].startsWith("---")) {
       continue;
     }
     if (isCompletedState(cells[2])) {
@@ -218,7 +218,7 @@ function addArchiveSummaryGroup(groups, group, count = 1) {
 }
 
 function trimArchivedRowsFromIndex(content, archivedTargets) {
-  const range = sectionRange(content, "当前总控入口");
+  const range = sectionRange(content, "Current Controller Entry");
   if (!range) {
     return { content, removedRows: [], summaryGroups: [] };
   }
@@ -230,7 +230,7 @@ function trimArchivedRowsFromIndex(content, archivedTargets) {
 
   for (const line of section.split("\n")) {
     const cells = splitMarkdownRow(line);
-    if (cells.length < 2 || cells[0] === "类型" || cells[0].startsWith("---")) {
+    if (cells.length < 2 || cells[0] === "Type" || cells[0].startsWith("---")) {
       nextLines.push(line);
       continue;
     }
@@ -262,7 +262,7 @@ function trimArchivedRowsFromIndex(content, archivedTargets) {
 function archiveSummaryRow({ monthValue, topicValue, archiveDir, fileCount, baseDir = workspaceDocsDir }) {
   const key = archiveKey(monthValue, topicValue);
   const archiveTarget = relativePosix(baseDir, archiveDir);
-  return `| \`${key}\` | [${topicValue}](${archiveTarget}/) | 已归档 ${fileCount} 个 workspace 文档；当前索引只保留目录入口。 |`;
+  return `| \`${key}\` | [${topicValue}](${archiveTarget}/) | Archived ${fileCount} workspace documents; the current index keeps only the directory entry. |`;
 }
 
 function countMarkdownFiles(directory) {
@@ -288,14 +288,14 @@ function upsertArchiveSummary(content, row) {
   const summarySection = [
     `## ${heading}`,
     "",
-    "| 归档主题 | 目录 | 说明 |",
+    "| Archive Topic | Directory | Notes |",
     "| --- | --- | --- |",
     row,
     "",
   ].join("\n");
 
   if (!section) {
-    const windowSection = sectionRange(content, "窗口覆盖状态");
+    const windowSection = sectionRange(content, "Window Coverage Status");
     const insertAt = windowSection?.start ?? content.length;
     const prefix = content.slice(0, insertAt).replace(/\s*$/, "\n\n");
     const suffix = content.slice(insertAt).replace(/^\s*/, "");
@@ -336,15 +336,15 @@ function recordMapSkeleton() {
   return [
     "# Workspace Record Map",
     "",
-    "状态：长期记录清单",
-    `维护窗口：${workspaceConfig.controllerWindow}`,
-    `更新日期：${new Date().toISOString().slice(0, 10)}`,
+    "Status: long-term record map",
+    `Maintained By: ${workspaceConfig.controllerWindow}`,
+    `Updated Date: ${new Date().toISOString().slice(0, 10)}`,
     "",
-    `本文是 ${workspaceConfig.workspaceName} 的长期记录地图。当前开发区不直接散链到具体归档文件；需要历史细节时，从本文查询。`,
+    `This is the long-term record map for ${workspaceConfig.workspaceName}. The active workspace links to this map instead of scattering direct archive-file links.`,
     "",
     "## Archive Topics",
     "",
-    "| 归档主题 | 目录 | 说明 |",
+    "| Archive Topic | Directory | Notes |",
     "| --- | --- | --- |",
   ].join("\n");
 }
@@ -354,14 +354,14 @@ function ensureIndexArchiveCatalogEntry(content) {
     return content;
   }
 
-  const range = sectionRange(content, "当前总控入口");
+  const range = sectionRange(content, "Current Controller Entry");
   if (!range) {
     return content;
   }
 
   const lines = content.slice(range.start, range.end).split("\n");
   const recordMapLink = relativePosix(workspaceDocsDir, recordMapPath);
-  const row = `| 长期记录地图 | [workspace-record-map.md](${recordMapLink}) | 长期地图 | 查询历史计划、归档 topic、已完成 TODO、测试历史和证据入口。 |`;
+  const row = `| Long-Term Record Map | [workspace-record-map.md](${recordMapLink}) | Long-Term Map | Query historical plans, archived topics, completed TODOs, test history, and evidence entrypoints. |`;
   const separatorIndex = lines.findIndex((line) => {
     const cells = splitMarkdownRow(line);
     return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));

@@ -203,7 +203,10 @@ function slug(value) {
 }
 
 function commandContext() {
-  const wakeflowRoot = resolveMaybeRelative(defaultWakeflowRoot, getValue("--root", "."));
+  const rootArg = getValue("--root", null);
+  const wakeflowRoot = rootArg
+    ? (path.isAbsolute(rootArg) ? path.resolve(rootArg) : path.resolve(process.cwd(), rootArg))
+    : defaultWakeflowRoot;
   const configPath = workspaceConfigPath({ workspaceRoot: wakeflowRoot, args });
   const userConfig = readWorkspaceConfig({ workspaceRoot: wakeflowRoot, args });
   const configuredRootExists = existsSync(configPath);
@@ -524,6 +527,7 @@ function configurePayload(context = commandContext()) {
   const dispatchWindows = names.filter((name) => name !== designWindow && name !== realProjectWindow);
   const repoNames = names.filter((name) => ![designWindow, testWindow, realProjectWindow].includes(name));
   const protectedWorkspacePrefixes = repositories
+    .filter((repo) => repo.mode !== "internal")
     .map((repo) => repo.path)
     .filter((repoPath) => !repoPath.startsWith("../") && repoPath !== ".")
     .map((repoPath) => `${repoPath.replace(/\/+$/, "")}/`);
@@ -1180,6 +1184,8 @@ Use this directory when the user does not have an external ${config.designWindow
 
 - Handoff board: \`${config.designHandoffBoard}\`
 - Local rules: \`AGENTS.md\`
+- Documentation index: \`docs/index.md\`
+- Current Design work: \`docs/current/\`
 - Operating policy: \`docs/design-window-operating-policy.md\`
 - Alignment checklist: \`docs/workspace-alignment-checklist.md\`
 - Templates: \`templates/original-plan-template.md\`, \`templates/requirement-design-template.md\`, \`templates/workspace-signal-template.md\`, and \`templates/workspace-handoff-template.md\`
@@ -1195,6 +1201,11 @@ Use this directory when the user does not have an external ${config.testWindow} 
 - Test boundary machine cards: \`<state-root>/test-cards/*.json\`
 - Test exchange projection: \`${config.testExchangePath}\`
 - Local rules: \`AGENTS.md\`
+- Documentation index: \`docs/README.md\`
+- Current Test work: \`docs/current/\`
+- Default config: \`config/defaults.json\`
+- Test-owned scripts: \`scripts/\`
+- Test-local skill notes: \`skills/\`
 - Testing operation policy: \`docs/testing-operation-policy.md\`
 - Test handoff template: \`templates/test-handoff-template.md\`
 - Rule: only run real test work when a controller state root assigns a matching task package and test card.
@@ -1258,6 +1269,20 @@ function hasNonStarterActiveDemand(existing) {
   return activeDemand !== "" && activeDemand !== "none";
 }
 
+function hasNonStarterStatus(existing) {
+  const match = existing.match(/^Status:\s*(.+)$/im);
+  if (!match) return false;
+  const status = match[1].trim().replace(/[.;]$/, "").toLowerCase();
+  return !new Set([
+    "starter template",
+    "starter inbox",
+    "starter long-term map",
+    "idle / no active demand",
+    "idle / initialization ready",
+    "idle / initialization ready / waiting for controller task",
+  ]).has(status);
+}
+
 function ensureTextFile(file, content, label, options = {}) {
   const exists = existsSync(file);
   const next = `${content.trimEnd()}\n`;
@@ -1267,7 +1292,8 @@ function ensureTextFile(file, content, label, options = {}) {
       && options.refreshStarter
       && existing !== next
       && isStarterGeneratedContent(existing)
-      && !hasNonStarterActiveDemand(existing),
+      && !hasNonStarterActiveDemand(existing)
+      && !hasNonStarterStatus(existing),
   );
   const changed = !exists || refreshStarter;
   if (write && changed) {
@@ -1360,10 +1386,14 @@ function syncDesignSupportFiles(context, repoRoot, mode) {
   const files = [
     ...(mode === "internal"
       ? [
+          ensureTextFile(path.join(repoRoot, ".gitignore"), readWakeflowFile(context.templateRoot, "templates/window-support/design/.gitignore"), `${prefix} gitignore`),
           ensureTextFile(path.join(repoRoot, "AGENTS.md"), readWakeflowFile(context.templateRoot, "templates/window-support/design/AGENTS.md"), `${prefix} agents`),
           ensureTextFile(path.join(repoRoot, "README.md"), internalDesignReadme(context.config), `${prefix} readme`),
         ]
       : []),
+    ensureTextFile(path.join(repoRoot, "docs/index.md"), readWakeflowFile(context.templateRoot, "templates/window-support/design/docs/index.md"), `${prefix} docs index`),
+    ensureTextFile(path.join(repoRoot, "docs/current/README.md"), readWakeflowFile(context.templateRoot, "templates/window-support/design/docs/current/README.md"), `${prefix} current readme`),
+    ensureTextFile(path.join(repoRoot, "docs/current/workspace-handoff-board.md"), readWakeflowFile(context.templateRoot, "templates/window-support/design/docs/current/workspace-handoff-board.md"), `${prefix} local handoff board`),
     ensureTextFile(
       path.join(repoRoot, "docs/design-window-operating-policy.md"),
       readWakeflowFile(context.templateRoot, "templates/window-support/design/docs/design-window-operating-policy.md"),
@@ -1387,10 +1417,18 @@ function syncTestSupportFiles(context, repoRoot, mode) {
   const files = [
     ...(mode === "internal"
       ? [
+          ensureTextFile(path.join(repoRoot, ".gitignore"), readWakeflowFile(context.templateRoot, "templates/window-support/testing/.gitignore"), `${prefix} gitignore`),
           ensureTextFile(path.join(repoRoot, "AGENTS.md"), readWakeflowFile(context.templateRoot, "templates/window-support/testing/AGENTS.md"), `${prefix} agents`),
           ensureTextFile(path.join(repoRoot, "README.md"), internalTestingReadme(context.config), `${prefix} readme`),
         ]
       : []),
+    ensureTextFile(path.join(repoRoot, "docs/README.md"), readWakeflowFile(context.templateRoot, "templates/window-support/testing/docs/README.md"), `${prefix} docs readme`),
+    ensureTextFile(path.join(repoRoot, "docs/current/README.md"), readWakeflowFile(context.templateRoot, "templates/window-support/testing/docs/current/README.md"), `${prefix} current readme`),
+    ensureTextFile(path.join(repoRoot, "docs/current/test-window-alignment.md"), readWakeflowFile(context.templateRoot, "templates/window-support/testing/docs/current/test-window-alignment.md"), `${prefix} test alignment`),
+    ensureTextFile(path.join(repoRoot, "config/README.md"), readWakeflowFile(context.templateRoot, "templates/window-support/testing/config/README.md"), `${prefix} config readme`),
+    ensureTextFile(path.join(repoRoot, "config/defaults.json"), readWakeflowFile(context.templateRoot, "templates/window-support/testing/config/defaults.json"), `${prefix} default config`),
+    ensureTextFile(path.join(repoRoot, "scripts/README.md"), readWakeflowFile(context.templateRoot, "templates/window-support/testing/scripts/README.md"), `${prefix} scripts readme`),
+    ensureTextFile(path.join(repoRoot, "skills/README.md"), readWakeflowFile(context.templateRoot, "templates/window-support/testing/skills/README.md"), `${prefix} skills readme`),
     ensureTextFile(
       path.join(repoRoot, "docs/testing-operation-policy.md"),
       readWakeflowFile(context.templateRoot, "templates/window-support/testing/docs/testing-operation-policy.md"),
@@ -1420,14 +1458,14 @@ function syncStarterLedgerFiles(context) {
     ensureTextFile(resolveConfigPath(context.wakeflowRoot, context.config.designHandoffBoard), configuredStarterContent(context, `${sourceRoot}/current/design-handoff-board.md`), "active design handoff board", { refreshStarter: true }),
     ensureTextFile(resolveConfigPath(context.wakeflowRoot, context.config.designHandoffInbox), configuredStarterContent(context, `${sourceRoot}/current/design-handoff-inbox.md`), "active design handoff inbox", { refreshStarter: true }),
     ensureTextFile(resolveConfigPath(context.wakeflowRoot, context.config.testExchangePath), configuredStarterContent(context, `${sourceRoot}/current/test-exchange.md`), "active test exchange projection", { refreshStarter: true }),
-    ensureTextFile(context.ledgerPaths.workspaceRecordMapPath, configuredStarterContent(context, `${sourceRoot}/workspace-record-map.md`), "project workspace record map", { refreshStarter: true }),
-    ensureTextFile(path.join(context.ledgerPaths.requirementDesignsDir, "README.md"), configuredStarterContent(context, `${ledgerRoot}/requirement-designs/README.md`), "requirement designs readme", { refreshStarter: true }),
-    ensureTextFile(path.join(goalStageConfirmationDir, "README.md"), configuredStarterContent(context, `${ledgerRoot}/goal-stage-confirmation/README.md`), "goal-stage confirmation readme", { refreshStarter: true }),
-    ensureTextFile(path.join(goalStageConfirmationDir, "process.md"), configuredStarterContent(context, `${ledgerRoot}/goal-stage-confirmation/process.md`), "goal-stage confirmation process", { refreshStarter: true }),
-    ensureTextFile(path.join(workspaceLedgerDir, "requirement-to-wave-execution-flow.md"), configuredStarterContent(context, `${ledgerRoot}/workspace/requirement-to-wave-execution-flow.md`), "requirement to wave flow", { refreshStarter: true }),
-    ensureTextFile(path.join(workspaceLedgerDir, "todo-window-scheduling-policy.md"), configuredStarterContent(context, `${ledgerRoot}/workspace/todo-window-scheduling-policy.md`), "TODO and window scheduling policy", { refreshStarter: true }),
-    ensureTextFile(path.join(workspaceLedgerDir, "workspace-doc-archive-policy.md"), configuredStarterContent(context, `${ledgerRoot}/workspace/workspace-doc-archive-policy.md`), "workspace doc archive policy", { refreshStarter: true }),
-    ensureTextFile(path.join(context.ledgerPaths.workspaceArchiveDir, "index.md"), configuredStarterContent(context, `${ledgerRoot}/workspace/archive/index.md`), "workspace archive index", { refreshStarter: true }),
+    ensureTextFile(context.ledgerPaths.workspaceRecordMapPath, configuredStarterContent(context, `${sourceRoot}/workspace-record-map.md`), "project workspace record map"),
+    ensureTextFile(path.join(context.ledgerPaths.requirementDesignsDir, "README.md"), configuredStarterContent(context, `${ledgerRoot}/requirement-designs/README.md`), "requirement designs readme"),
+    ensureTextFile(path.join(goalStageConfirmationDir, "README.md"), configuredStarterContent(context, `${ledgerRoot}/goal-stage-confirmation/README.md`), "goal-stage confirmation readme"),
+    ensureTextFile(path.join(goalStageConfirmationDir, "process.md"), configuredStarterContent(context, `${ledgerRoot}/goal-stage-confirmation/process.md`), "goal-stage confirmation process"),
+    ensureTextFile(path.join(workspaceLedgerDir, "requirement-to-wave-execution-flow.md"), configuredStarterContent(context, `${ledgerRoot}/workspace/requirement-to-wave-execution-flow.md`), "requirement to wave flow"),
+    ensureTextFile(path.join(workspaceLedgerDir, "todo-window-scheduling-policy.md"), configuredStarterContent(context, `${ledgerRoot}/workspace/todo-window-scheduling-policy.md`), "TODO and window scheduling policy"),
+    ensureTextFile(path.join(workspaceLedgerDir, "workspace-doc-archive-policy.md"), configuredStarterContent(context, `${ledgerRoot}/workspace/workspace-doc-archive-policy.md`), "workspace doc archive policy"),
+    ensureTextFile(path.join(context.ledgerPaths.workspaceArchiveDir, "index.md"), configuredStarterContent(context, `${ledgerRoot}/workspace/archive/index.md`), "workspace archive index"),
   ];
 }
 

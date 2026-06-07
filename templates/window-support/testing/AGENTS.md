@@ -13,7 +13,10 @@ Read:
 2. The parent workspace `../AGENTS.md`.
 3. `../.workspace-active/workspace/index.md`.
 4. `../.workspace-active/workspace/current/workspace-current-status.md`.
-5. `docs/testing-operation-policy.md`.
+5. `docs/README.md`.
+6. `docs/testing-operation-policy.md`.
+7. `docs/current/README.md`.
+8. `docs/current/test-window-alignment.md`.
 
 ## Role
 
@@ -42,3 +45,10 @@ repository cannot safely reproduce alone, such as:
 Every test backfill must include the state root, test card, target project,
 entrypoint, configuration used, command/log evidence, result classification,
 project cleanliness, residual risks, and recommended next step.
+
+## Local Surfaces
+
+- Use `config/defaults.json` only for generic, secret-free defaults.
+- Use `scripts/` for Test-owned helpers that need a real scenario or runtime.
+- Use `skills/` only for repeated Test-local validation instructions that do
+  not belong in the installed Wakeflow skills or product repositories.

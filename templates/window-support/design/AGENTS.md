@@ -13,8 +13,10 @@ Read:
 2. The parent workspace `../AGENTS.md`.
 3. `../.workspace-active/workspace/index.md`.
 4. `../.workspace-active/workspace/current/workspace-current-status.md`.
-5. `docs/design-window-operating-policy.md`.
-6. `docs/workspace-alignment-checklist.md`.
+5. `docs/index.md`.
+6. `docs/design-window-operating-policy.md`.
+7. `docs/workspace-alignment-checklist.md`.
+8. `docs/current/README.md`.
 
 If controller documents are unavailable, enter `detached-design-mode`: drafts
 may continue, but they must say that they have not been imported into the
@@ -59,8 +61,8 @@ current controller state.
 - Bug/TODO/research signal: create a lightweight signal from
   `templates/workspace-signal-template.md`.
 - Handoff: create a handoff from `templates/workspace-handoff-template.md` and
-  register it in `../.workspace-active/workspace/current/design-handoff-board.md`
-  or the external Design repository handoff board.
+  register it in `docs/current/workspace-handoff-board.md`, unless the current
+  workspace config points Design handoff intake to a different board.
 
 Each plan, signal, design, and handoff board entry must have a stable
 `Design Key` in the form `<READABLE-TOPIC>-YYYY-MM-DD`. The board `ID` must

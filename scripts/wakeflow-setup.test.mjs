@@ -117,6 +117,7 @@ test("configure writes user-confirmed sibling mappings into workspace.config.jso
   assert.equal(config.designHandoffInbox, ".workspace-active/workspace/current/design-handoff-inbox.md");
   assert.equal(config.testExchangePath, ".workspace-active/workspace/current/test-exchange.md");
   assert.equal(config.goalStageConfirmationDir, "../wakeflow-ledger/goal-stage-confirmation");
+  assert.deepEqual(config.protectedWorkspacePrefixes, []);
 });
 
 test("sync-gitignore adds Wakeflow runtime entries idempotently", () => {
@@ -182,6 +183,26 @@ test("initialize previews a plugin-managed target workspace without a local Wake
   assert.equal(payload.steps.writeAgents.ok, true);
   assert.equal(existsSync(path.join(parent, "AGENTS.md")), false);
   assert.equal(existsSync(path.join(parent, "Design/AGENTS.md")), false);
+});
+
+test("explicit relative --root resolves from the caller cwd", () => {
+  const parent = mkdtempSync(path.join(os.tmpdir(), "wakeflow-relative-root-"));
+  mkdirSync(path.join(parent, "AppRepo", ".git"), { recursive: true });
+
+  const result = spawnSync("node", [installScript, "initialize", "--root", ".", "--json"], {
+    cwd: parent,
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.mode, "discovery");
+  assert.equal(payload.discovery.workspaceName, path.basename(parent));
+  assert.deepEqual(
+    payload.discovery.discoveredRepositories.map((repo) => repo.path),
+    ["AppRepo"],
+  );
+  assert.equal(existsSync(path.join(parent, "AGENTS.md")), false);
 });
 
 test("initialize localizes launch titles and prompts with the window name first", () => {
@@ -251,6 +272,7 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.equal(config.workspaceRoot, ".");
   assert.equal(config.runtimeMode, "plugin");
   assert.equal(config.projectLedgerRoot, "wakeflow-ledger");
+  assert.deepEqual(config.protectedWorkspacePrefixes, ["AppRepo/"]);
   assert.equal(payload.steps.gitignore.wrote, true);
   const gitignore = readFileSync(path.join(parent, ".gitignore"), "utf8");
   assert.match(gitignore, /^\.workspace-active\/$/m);
@@ -440,6 +462,49 @@ Status: active
   const activeStatus = readFileSync(path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"), "utf8");
   assert.match(activeStatus, /# Custom Current Status/);
   assert.match(activeStatus, /Active demand: REAL-DEMAND/);
+
+  writeFile(
+    path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"),
+    `# Queue Current Status
+
+Controller window: QueueWorkspace
+Status: idle / local demand queue ready / waiting for claim
+
+## Status Summary
+
+- Active demand: none.
+- Local demand definitions have been rebuilt for this workspace.
+- Next claimable demand: LOCAL-REQ-08.`,
+  );
+  writeFile(
+    path.join(parent, "wakeflow-ledger/workspace/workspace-record-map.md"),
+    `# Workspace Record Map
+
+Status: starter long-term map
+
+## Current Entries
+
+| Type | Entry | Description |
+| --- | --- | --- |
+| Active workspace | ../../.workspace-active/workspace/ | Current index. |
+| Local demand queue | ../requirement-designs/local-demand/ | Local rebuilt queue that must survive template sync. |`,
+  );
+
+  const queueResult = runAt(parent, [
+    "initialize",
+    "--repo",
+    "AppRepo=AppRepo",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(queueResult.status, 0, queueResult.stderr || queueResult.stdout);
+  const queueStatus = readFileSync(path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"), "utf8");
+  assert.match(queueStatus, /# Queue Current Status/);
+  assert.match(queueStatus, /Next claimable demand: LOCAL-REQ-08/);
+  assert.doesNotMatch(queueStatus, /Create a real active demand with the Wakeflow MCP/);
+  const recordMap = readFileSync(path.join(parent, "wakeflow-ledger/workspace/workspace-record-map.md"), "utf8");
+  assert.match(recordMap, /Local demand queue/);
+  assert.match(recordMap, /local rebuilt queue that must survive template sync/i);
 });
 
 test("initialize applies workspace config, AGENTS, Design/Test surfaces, and local thread runtime", () => {
@@ -833,6 +898,10 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/design-handoff-inbox.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/AGENTS.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Design/.gitignore")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Design/docs/index.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Design/docs/current/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Design/docs/current/workspace-handoff-board.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/docs/design-window-operating-policy.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/docs/workspace-alignment-checklist.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/templates/original-plan-template.md")), true);
@@ -848,6 +917,14 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/workspace/archive/index.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/AGENTS.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/.gitignore")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/config/defaults.json")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/config/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/docs/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/docs/current/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/docs/current/test-window-alignment.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/scripts/README.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/skills/README.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/docs/testing-operation-policy.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/templates/test-handoff-template.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/BaseWindow/README.md")), true);
@@ -876,6 +953,8 @@ test("external Design and Test directories get only alignment templates", () => 
   const payload = runJson(fixture, ["sync-templates", "--all", "--write"]);
   assert.equal(payload.ok, true);
   assert.equal(existsSync(path.join(design, "docs/current/workspace-handoff-board.md")), true);
+  assert.equal(existsSync(path.join(design, "docs/current/README.md")), true);
+  assert.equal(existsSync(path.join(design, "docs/index.md")), true);
   assert.equal(existsSync(path.join(design, "docs/design-window-operating-policy.md")), true);
   assert.equal(existsSync(path.join(design, "docs/workspace-alignment-checklist.md")), true);
   assert.equal(existsSync(path.join(design, "templates/original-plan-template.md")), true);
@@ -883,6 +962,11 @@ test("external Design and Test directories get only alignment templates", () => 
   assert.equal(existsSync(path.join(design, "templates/workspace-signal-template.md")), true);
   assert.equal(existsSync(path.join(design, "templates/workspace-handoff-template.md")), true);
   assert.equal(existsSync(path.join(testWindow, "docs/current/test-window-alignment.md")), true);
+  assert.equal(existsSync(path.join(testWindow, "docs/current/README.md")), true);
+  assert.equal(existsSync(path.join(testWindow, "docs/README.md")), true);
+  assert.equal(existsSync(path.join(testWindow, "config/defaults.json")), true);
+  assert.equal(existsSync(path.join(testWindow, "scripts/README.md")), true);
+  assert.equal(existsSync(path.join(testWindow, "skills/README.md")), true);
   assert.equal(existsSync(path.join(testWindow, "docs/testing-operation-policy.md")), true);
   assert.equal(existsSync(path.join(testWindow, "templates/test-handoff-template.md")), true);
   assert.equal(existsSync(path.join(testWindow, "docs/current/test-exchange.md")), false);

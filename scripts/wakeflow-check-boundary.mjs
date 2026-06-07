@@ -8,6 +8,11 @@ const workspaceRoot = getArgValue("--root") || process.cwd();
 const workspaceConfig = loadWorkspaceConfig({ workspaceRoot, args });
 const protectedWorkspacePrefixes = workspaceConfig.protectedWorkspacePrefixes;
 const disallowedTrackedPaths = workspaceConfig.disallowedTrackedPaths;
+const internalWorkspacePrefixes = new Set(
+  (workspaceConfig.repositories ?? [])
+    .filter((repo) => repo.mode === "internal")
+    .map((repo) => `${String(repo.path ?? "").replace(/\/+$/, "")}/`),
+);
 
 function git(args) {
   return execFileSync("git", ["-C", workspaceRoot, ...args], { encoding: "utf8" }).trim();
@@ -24,7 +29,10 @@ const tracked = git(["ls-files", "-s"])
 const violations = [];
 
 for (const path of tracked) {
-  if (protectedWorkspacePrefixes.some((prefix) => path.startsWith(prefix))) {
+  if (
+    protectedWorkspacePrefixes.some((prefix) => path.startsWith(prefix))
+    && ![...internalWorkspacePrefixes].some((prefix) => path.startsWith(prefix))
+  ) {
     violations.push(`protected workspace path is tracked: ${path}`);
   }
 

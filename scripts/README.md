@@ -71,13 +71,15 @@ Current scripts:
   decision entries to allowed developer-readable sections while leaving machine
   state and `Unified Status` untouched.
 - `wakeflow-delivery.mjs`: state-root-only automation transport manager. It
-  registers threads, builds window configs, prepares dispatch packets from
-  state roots, builds delivery envelopes, records delivery-run evidence, records
-  target result envelopes, reviews group readiness, builds controller-return
-  envelopes, manages keep-live state, and writes stop markers. It does not read
-  current plan Markdown as authority, create legacy automation jobs, send host
-  thread messages, or accept evidence. `prepare-dispatch-from-state` fails
-  closed for completed / archived / paused demands, review-ready demands that
+  registers real thread ids in the local thread registry, derives window
+  configs from workspace config plus registry presence, prepares dispatch
+  packets from state roots, builds delivery envelopes, records delivery-run
+  evidence, records target result envelopes, reviews group readiness, builds
+  controller-return envelopes, manages keep-live state, and writes stop
+  markers. It does not read current plan Markdown as authority, create legacy
+  automation jobs, send host thread messages, or accept evidence.
+  `prepare-dispatch-from-state` fails closed for completed / archived / paused
+  demands, review-ready demands that
   still need a controller decision, blocked demands, and target tasks that are
   already accepted, completed, or blocked. Group-scoped target result files
   keep concurrent controller runs from overwriting each other, and

@@ -13,7 +13,7 @@ const moduleDir = dirname(fileURLToPath(import.meta.url));
 const tools = [
   {
     name: "wakeflow_initialize_workspace",
-    description: "Initialize a Wakeflow runtime: discover siblings, generate/apply workspace config, install AGENTS blocks, create sibling Design/Test surfaces, and record local window configuration. Dry-run unless apply is true. If repositories/useDiscovered are omitted, the tool returns read-only discovery plus an agent-selection protocol; Codex must judge clean versus messy from those facts, pass explicit repositories for a clean workspace, or ask the user in a messy workspace. Returns a localized host create_thread launch plan; replaceWindows limits the plan to selected windows. Real thread ids are stored only in local runtime by the host, not tracked docs or this MCP schema.",
+    description: "Initialize a Wakeflow runtime: discover siblings, generate/apply workspace config, install AGENTS blocks, create sibling Design/Test surfaces, and record derived local window configuration. Dry-run unless apply is true. If repositories/useDiscovered are omitted, the tool returns read-only discovery plus an agent-selection protocol; Codex must judge clean versus messy from those facts, pass explicit repositories for a clean workspace, or ask the user in a messy workspace. Returns a localized host create_thread launch plan; replaceWindows limits the plan to selected windows. Real thread ids are registered only in the local thread registry by host-controlled follow-up, not tracked docs or this MCP schema; window config is derived from workspace config plus registry presence.",
     inputSchema: {
       type: "object",
       properties: {
@@ -46,7 +46,7 @@ const tools = [
         replaceWindows: {
           type: "array",
           items: { type: "string" },
-          description: "Only return/create/update these replacement window entries; real replacement thread ids are still recorded by local runtime tooling after host create_thread succeeds.",
+          description: "Only return/create/update these replacement window entries; real replacement thread ids are still recorded in the local thread registry after host create_thread succeeds.",
         },
         repositories: {
           type: "array",
@@ -58,21 +58,6 @@ const tools = [
               windowName: { type: "string" },
               path: { type: "string" },
               role: { type: "string" },
-            },
-          },
-        },
-        localWindows: {
-          type: "array",
-          items: {
-            type: "object",
-            required: ["windowName"],
-            properties: {
-              windowName: { type: "string" },
-              role: { type: "string", enum: ["controller", "target", "test-target", "design", "observer"] },
-              cwd: { type: "string" },
-              responsibilityRoot: { type: "string" },
-              displayTitle: { type: "string" },
-              canonicalUse: { type: "string" },
             },
           },
         },
@@ -469,7 +454,6 @@ const handlers = {
       ...repositoryArgs(args.repositories),
       ...repeatValues("--exclude-window", args.excludeWindows),
       ...repeatValues("--replace-window", args.replaceWindows),
-      ...localWindowArgs(args.localWindows),
       ...(args.apply ? ["--write"] : []),
       "--json",
     ],
@@ -802,16 +786,6 @@ function repositoryArgs(repositories = []) {
   return (repositories || []).flatMap((repo) => [
     "--repo", `${repo.windowName}=${repo.path}`,
     ...optionalValue("--role", repo.role ? `${repo.windowName}=${repo.role}` : ""),
-  ]);
-}
-
-function localWindowArgs(windows = []) {
-  return (windows || []).flatMap((item) => [
-    ...optionalValue("--thread-role", item.role ? `${item.windowName}=${item.role}` : ""),
-    ...optionalValue("--thread-cwd", item.cwd ? `${item.windowName}=${item.cwd}` : ""),
-    ...optionalValue("--thread-responsibility-root", item.responsibilityRoot ? `${item.windowName}=${item.responsibilityRoot}` : ""),
-    ...optionalValue("--thread-title", item.displayTitle ? `${item.windowName}=${item.displayTitle}` : ""),
-    ...optionalValue("--thread-use", item.canonicalUse ? `${item.windowName}=${item.canonicalUse}` : ""),
   ]);
 }
 

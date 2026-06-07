@@ -42,21 +42,25 @@ tool first:
 - After apply, read the returned `windowLaunchPlan`, use the Codex host
   `create_thread` tool to create real controller / Design / Test / product
   windows, immediately call the Codex host `set_thread_title` tool for every
-  newly created thread using that entry's `displayTitle`, then record the real
-  thread ids only in `.workspace-local` local runtime files. Do this title reset
-  at the end of the initialization flow instead of manually renaming ad hoc
-  windows later.
+  newly created thread using that entry's `displayTitle`, then pass each real
+  thread id once to Wakeflow's local registration command. The thread registry
+  is the only thread-id authority; derived `window-config` is refreshed by
+  Wakeflow from the current workspace config and registry presence. Do this
+  title reset at the end of the initialization flow instead of manually
+  renaming ad hoc windows later.
 - To rebuild selected windows, pass `replaceWindows`. Create threads only for
-  the returned replacement launch entries, then replace those windows' local
-  registry records with the new real thread ids. Do not rewrite unrelated window
-  registrations.
+  the returned replacement launch entries, then replace only those windows'
+  local thread-registry records with the new real thread ids. Do not rewrite
+  unrelated window registrations or store window role / cwd / title metadata in
+  the registry.
 - Do not replace that tool with a hand-written inspection checklist when the MCP
   server is available.
 - If Wakeflow MCP tools are unavailable, say that the MCP server is unavailable
   and stop for plugin reload/reinstall instead of pretending initialization can
   proceed through docs alone.
 - Wakeflow MCP initialization does not place real thread ids in tracked docs or
-  prompts. Thread registration remains local runtime work outside tracked docs.
+  prompts. Thread registration remains local runtime work outside tracked docs;
+  `window-config` is a derived runtime view, not a second storage location.
 
 Use this skill after reading:
 

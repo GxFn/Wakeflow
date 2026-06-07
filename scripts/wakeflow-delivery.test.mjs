@@ -118,15 +118,13 @@ function parseOk(result) {
   return JSON.parse(result.stdout);
 }
 
-function registerThread(root, windowName, role = "target") {
+function registerThread(root, windowName) {
   return parseOk(run(root, [
     "register-thread",
     "--window",
     windowName,
     "--thread-id",
     `0192fac-${windowName}`,
-    "--role",
-    role,
     "--write",
   ]));
 }
@@ -175,12 +173,36 @@ test("registers threads locally and redacts thread ids", () => {
   assert.equal(payload.ok, true);
   assert.equal(payload.windowName, "AlembicPlugin");
   assert.equal(payload.threadIdRedacted, true);
+  assert.equal(Object.hasOwn(payload, "deliveryRole"), false);
   assert.doesNotMatch(JSON.stringify(payload), /0192fac-AlembicPlugin/);
+  const registry = JSON.parse(readFileSync(path.join(root, ".workspace-local/wakeflow-delivery/thread-registry/AlembicPlugin.json"), "utf8"));
+  assert.equal(registry.threadId, "0192fac-AlembicPlugin");
+  assert.equal(Object.hasOwn(registry, "deliveryRole"), false);
+  assert.equal(Object.hasOwn(registry, "cwd"), false);
+  assert.equal(Object.hasOwn(registry, "responsibilityRoot"), false);
+  assert.equal(Object.hasOwn(registry, "displayTitle"), false);
 
   const config = parseOk(run(root, ["build-window-config", "--window", "AlembicPlugin", "--require-thread", "--write"]));
   assert.equal(config.config.threadRegistered, true);
   assert.equal(config.config.dispatchable, true);
+  assert.equal(config.config.deliveryRole, "target");
+  assert.equal(config.config.cwd, "../AlembicPlugin");
+  assert.equal(config.config.responsibilityRoot, "../AlembicPlugin");
   assert.equal(config.config.delivery.transport, "direct-thread");
+});
+
+test("rejects obsolete thread registry kinds instead of using fallback metadata", () => {
+  const { root } = makeFixture();
+  writeJson(path.join(root, ".workspace-local/wakeflow-delivery/thread-registry/AlembicPlugin.json"), {
+    kind: "CodexAutomationThreadRegistration",
+    version: 1,
+    windowName: "AlembicPlugin",
+    threadId: "0192fac-AlembicPlugin",
+  });
+
+  const result = run(root, ["build-window-config", "--window", "AlembicPlugin", "--require-thread"]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr || result.stdout, /Invalid thread registration/);
 });
 
 test("prepare-dispatch-from-state writes packet, group, and delivery without legacy controlPlan authority", () => {

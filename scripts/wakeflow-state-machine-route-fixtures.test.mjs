@@ -19,7 +19,18 @@ function readFixture(name) {
 }
 
 function makeRoot(prefix) {
-  return mkdtempSync(path.join(os.tmpdir(), prefix));
+  const root = mkdtempSync(path.join(os.tmpdir(), prefix));
+  writeJson(path.join(root, "workspace.config.json"), {
+    workspaceName: "WakeflowFixture",
+    controllerWindow: "AlembicWorkspace",
+    repositories: [
+      { windowName: "AlembicWorkspace", path: ".", role: "controller" },
+      { windowName: "Alembic", path: "../Alembic", role: "product repository" },
+      { windowName: "AlembicPlugin", path: "../AlembicPlugin", role: "plugin repository" },
+    ],
+    dispatchWindows: ["AlembicWorkspace", "Alembic", "AlembicPlugin"],
+  });
+  return root;
 }
 
 function runNode(script, args, root) {
@@ -270,8 +281,6 @@ test("unattended route prepares dispatch and controller return from stateRoot wi
     manifest.taskPackage.targetWindow,
     "--thread-id",
     "019e-state-root-target-thread",
-    "--role",
-    "target",
     "--write",
   ], root);
   assert.equal(registerTarget.status, 0, registerTarget.stderr || registerTarget.stdout);
@@ -282,8 +291,6 @@ test("unattended route prepares dispatch and controller return from stateRoot wi
     manifest.controllerWindow,
     "--thread-id",
     "019e-state-root-controller-thread",
-    "--role",
-    "controller",
     "--write",
   ], root);
   assert.equal(registerController.status, 0, registerController.stderr || registerController.stdout);

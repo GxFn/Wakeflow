@@ -43,8 +43,9 @@ Wakeflow provides the missing control layer:
   envelope; the state root and skills hold the task details.
 - **Evidence before acceptance**: target backfill is input, not a conclusion.
   The controller still reviews raw evidence before completing work.
-- **Local-first runtime**: real thread ids, local window runtime, and active
-  state stay out of tracked source.
+- **Local-first runtime**: real thread ids live only in the local thread
+  registry; window config is a derived sendability view, and active state stays
+  out of tracked source.
 
 Wakeflow is not a command launcher with nicer names. It is a reusable workflow
 capability for keeping multi-window agent work legible, bounded, and resumable.
@@ -58,7 +59,7 @@ flowchart TD
   Controller <--> StateRoot["State root<br/>.workspace-active/..."]
   StateRoot --> Tasks["Task packages"]
   Tasks --> Delivery["Delivery envelopes"]
-  LocalRuntime[".workspace-local<br/>thread ids and local config"] -. "lookup" .-> Delivery
+  LocalRuntime[".workspace-local<br/>thread registry + derived window config"] -. "lookup" .-> Delivery
   Delivery --> Host["Codex host thread tools"]
   Host --> Targets["Repository / Design / Test windows"]
   Targets --> Repos["Responsibility roots"]
@@ -81,7 +82,7 @@ MyWorkspace/
   AGENTS.md
   workspace.config.json
   .workspace-active/          # ignored active controller state
-  .workspace-local/           # ignored local runtime and real thread ids
+  .workspace-local/           # ignored thread registry and derived runtime
   wakeflow-ledger/            # durable project coordination records
   ProductRepo/
   CoreRepo/
@@ -109,8 +110,9 @@ The operating flow is:
 6. After user confirmation, Codex calls `wakeflow_initialize_workspace` with
    `apply: true`.
 7. Codex creates the returned Codex threads, resets each thread title to the
-   returned `displayTitle`, and stores real thread ids only in
-   `.workspace-local/`.
+   returned `displayTitle`, and passes each real thread id once to Wakeflow's
+   local registration command. The thread registry is the only thread-id
+   authority; window config is refreshed as a derived view.
 
 Design and Test are fresh support surfaces by default. Existing similarly named
 directories such as `<Product>Design` or `<Product>Test` are treated as ordinary
@@ -132,7 +134,7 @@ boundary:
 | Child `AGENTS.md` access cards | Per-window responsibility and read paths. |
 | `workspace.config.json` | Managed windows, repository paths, roles, and default language. |
 | `.workspace-active/` | Active state roots, current indexes, progress docs, TODO projections, intake, and test cards. |
-| `.workspace-local/` | Real thread ids, direct-thread runtime, local overrides, and window config. |
+| `.workspace-local/` | Thread registry, direct-thread runtime, local overrides, and derived window config. |
 | `wakeflow-ledger/` | Long-term project coordination records and archives. |
 | `Design/` | Internal requirement-design workspace when no external Design repository is mapped. |
 | `Test/` | Internal test coordination workspace when no external Test repository is mapped. |
@@ -169,7 +171,9 @@ Wakeflow automation is direct-thread delivery plus explicit result return.
 
 Core rules:
 
-- Real thread ids live only in `.workspace-local/`.
+- Real thread ids live only in `.workspace-local/wakeflow-delivery/thread-registry/`.
+- Window config is derived from `workspace.config.json` plus thread-registry
+  presence; it is not a second thread-id or window-semantics authority.
 - Delivery prompts remain compact and human-readable.
 - The host sends prompts with Codex thread tools; Wakeflow records the send and
   readback evidence.
@@ -216,12 +220,12 @@ Wakeflow keeps source, active runtime, and durable records separate:
 | `scripts/` | Runtime implementation and validation scripts packaged by the plugin. |
 | `templates/` | Starter state, Design/Test, and ledger skeletons. |
 | `.workspace-active/` | Current active work in a target workspace; ignored by Git. |
-| `.workspace-local/` | Machine-local runtime and real thread ids; ignored by Git. |
+| `.workspace-local/` | Machine-local thread registry, derived runtime views, and local state; ignored by Git. |
 | `wakeflow-ledger/` | Project-specific durable records outside reusable Wakeflow source. |
 
 The source repository tracks reusable Wakeflow capability. Product code,
-project-specific active state, real thread ids, and local runtime artifacts do
-not belong in Wakeflow source.
+project-specific active state, real thread ids, and derived local runtime
+artifacts do not belong in Wakeflow source.
 
 ## Working In This Repository
 
@@ -261,8 +265,8 @@ operator manual.
    commits, and evidence.
 5. **Automation moves work, not authority**: direct-thread delivery proves that
    a prompt was sent, not that the result is complete.
-6. **Local runtime stays local**: real thread ids and active runtime state never
-   enter tracked documentation.
+6. **Local runtime stays local**: real thread ids stay only in the local thread
+   registry, and active runtime state never enters tracked documentation.
 7. **Fresh support windows by default**: Design and Test are created as clear
    Wakeflow support surfaces unless the user explicitly maps existing ones.
 

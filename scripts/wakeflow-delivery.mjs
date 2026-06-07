@@ -35,7 +35,7 @@ Wakeflow delivery-loop contract manager
 
 Usage:
   node scripts/wakeflow-delivery.mjs status [--json]
-  node scripts/wakeflow-delivery.mjs register-thread --window <name> --thread-id <id> [--role target|controller|test-target|design|observer] [--cwd <path>] [--responsibility-root <path>] [--display-title <title>] [--write-boundary <path>...] [--canonical-use <text>] [--supersedes-window <name>...] --write [--json]
+  node scripts/wakeflow-delivery.mjs register-thread --window <name> --thread-id <id> --write [--json]
   node scripts/wakeflow-delivery.mjs build-window-config --window <name> [--require-thread] --write [--json]
   node scripts/wakeflow-delivery.mjs build-delivery --packet-file <path> [--delivery-id <id>] [--return-route controller|none] [--automation-enabled] [--require-thread] [--write] [--json]
   node scripts/wakeflow-delivery.mjs prepare-dispatch-from-state --state-root <path> --target-task-id <id> [--task-package-id <id>] [--human-context-ref <ref>] [--controller-window <name>] [--group <id>] [--return-policy group-ready|per-target] [--automation-enabled] [--require-thread] [--write] [--json]
@@ -119,7 +119,7 @@ function output(payload, textLines = []) {
 function inferAgentNext(payload) {
   if (!payload.ok) return "Stop and inspect the reported closed-loop contract issue.";
   if (payload.command === "prepare-dispatch-from-state") return payload.threadReady ? "Send the prepared prompt with the host thread tool, then record a delivery run." : "Register the target thread before direct-thread delivery.";
-  if (payload.command === "register-thread") return "Build or refresh the local window config, then build delivery envelopes when total control decides to dispatch.";
+  if (payload.command === "register-thread") return "Build or refresh the derived local window config, then build delivery envelopes when total control decides to dispatch.";
   if (payload.command === "build-window-config") return "Use this child-window config when creating direct-thread delivery envelopes.";
   if (payload.command === "build-delivery") return payload.threadReady ? "Send the prompt with the host thread tool, then record a delivery run." : "Register the target thread before direct-thread delivery.";
   if (payload.command === "build-controller-return") return payload.threadReady ? "Send the controller-return prompt with the host thread tool, then record a delivery run." : "Register the controller thread before unattended return.";
@@ -483,28 +483,6 @@ function validateReturnPolicyMode(value) {
     fail(`--return-policy must be one of: ${[...allowed].join(", ")}`);
   }
   return value;
-}
-
-function validateDeliveryRole(value) {
-  const normalized = String(value || "target").trim();
-  const aliases = new Map([
-    ["AlembicTest", "test-target"],
-  ]);
-  const role = aliases.get(normalized) || normalized;
-  const allowed = new Set(["target", "controller", "test-target", "design", "observer"]);
-  if (!allowed.has(role)) {
-    fail(`--role must be one of: ${[...allowed].join(", ")}`);
-  }
-  return role;
-}
-
-function normalizeLegacyRole(value) {
-  const role = String(value || "target").trim();
-  if (role === "controller") return "controller";
-  if (/test/i.test(role)) return "test-target";
-  if (/design/i.test(role)) return "design";
-  if (/observer/i.test(role)) return "observer";
-  return "target";
 }
 
 function validateDeliveryRunStatus(value) {
@@ -1139,6 +1117,24 @@ function repositoryForWindow(windowName) {
   };
 }
 
+function deliveryRoleForWindow(config, windowName) {
+  if (windowName === config.controllerWindow) return "controller";
+  if (windowName === config.designWindow) return "design";
+  if (windowName === config.testWindow) return "test-target";
+  return "target";
+}
+
+function windowRuntimeDescriptor(windowName) {
+  const { config, repository } = repositoryForWindow(windowName);
+  return {
+    config,
+    repository,
+    deliveryRole: deliveryRoleForWindow(config, windowName),
+    cwd: repository?.path,
+    responsibilityRoot: repository?.path,
+  };
+}
+
 function formatTargetPrompt({
   targetWindow,
   taskId,
@@ -1203,25 +1199,11 @@ function commandRegisterThread() {
   if (!write) fail("register-thread requires --write.");
   const windowName = requireValue("--window");
   const threadId = validateThreadId(requireValue("--thread-id"));
-  const deliveryRole = validateDeliveryRole(getValue("--role", "target"));
-  const cwd = getValue("--cwd", "");
-  const responsibilityRoot = getValue("--responsibility-root", "");
-  const displayTitle = getValue("--display-title", "");
-  const canonicalUse = getValue("--canonical-use", "");
-  const writeBoundary = getAllValues("--write-boundary");
-  const supersedesWindowNames = getAllValues("--supersedes-window");
   const registration = {
     kind: "CodexWindowThreadRegistration",
     version: threadRegistrationVersion,
     windowName,
-    displayTitle: displayTitle || undefined,
-    deliveryRole,
     threadId,
-    cwd: cwd || undefined,
-    responsibilityRoot: responsibilityRoot || cwd || undefined,
-    writeBoundary,
-    canonicalUse: canonicalUse || undefined,
-    supersedesWindowNames,
     registeredAt: nowIso(),
     lastVerifiedAt: nowIso(),
   };
@@ -1233,7 +1215,6 @@ function commandRegisterThread() {
       command: "register-thread",
       wrote: true,
       windowName,
-      deliveryRole,
       threadRegistered: true,
       threadIdRedacted: true,
       registryFile: path.relative(workspaceRoot, threadFileFor(windowName)),
@@ -1246,19 +1227,20 @@ function loadThreadRegistration(windowName) {
   const file = threadFileFor(windowName);
   if (!existsSync(file)) return null;
   const registration = readJson(file, "thread registration");
-  if (!["CodexAutomationThreadRegistration", "CodexWindowThreadRegistration"].includes(registration.kind)) {
+  if (registration.kind !== "CodexWindowThreadRegistration") {
     fail(`Invalid thread registration for ${windowName}.`);
   }
-  const roleCandidate = registration.deliveryRole || registration.role || registration.windowRole || registration.windowName;
-  const deliveryRole = normalizeLegacyRole(roleCandidate);
+  if (!registration.threadId) {
+    fail(`Thread registration for ${windowName} is missing threadId.`);
+  }
   return {
-    ...registration,
     kind: "CodexWindowThreadRegistration",
     version: threadRegistrationVersion,
-    deliveryRole,
-    role: undefined,
+    windowName: registration.windowName || windowName,
+    threadId: registration.threadId,
+    registeredAt: registration.registeredAt,
+    lastVerifiedAt: registration.lastVerifiedAt,
     threadRegistryFile: path.relative(stateDir, file),
-    responsibilityRoot: registration.responsibilityRoot || registration.cwd,
   };
 }
 
@@ -1672,13 +1654,12 @@ function buildStateRootReviewPack(stateRoot) {
 function buildWindowConfig(windowName, { requireThread = false } = {}) {
   const registration = loadThreadRegistration(windowName);
   if (requireThread && !registration) fail(`No registered thread for window: ${windowName}`);
-  const { config, repository } = repositoryForWindow(windowName);
+  const { config, repository, deliveryRole, cwd, responsibilityRoot } = windowRuntimeDescriptor(windowName);
   const dispatchWindows = new Set([
     ...(Array.isArray(config.dispatchWindows) ? config.dispatchWindows : []),
     ...(Array.isArray(config.requiredDispatchWindows) ? config.requiredDispatchWindows : []),
     config.controllerWindow,
   ].filter(Boolean));
-  const deliveryRole = registration?.deliveryRole || (windowName === config.controllerWindow ? "controller" : "target");
   const dispatchable = ["controller", "target", "test-target"].includes(deliveryRole) && (dispatchWindows.size === 0 || dispatchWindows.has(windowName) || Boolean(registration));
   return {
     kind: "CodexSubwindowDispatchConfig",
@@ -1689,8 +1670,8 @@ function buildWindowConfig(windowName, { requireThread = false } = {}) {
     dispatchable,
     threadRegistered: Boolean(registration),
     threadRegistryFile: path.relative(stateDir, threadFileFor(windowName)),
-    cwd: registration?.cwd || repository?.path,
-    responsibilityRoot: registration?.responsibilityRoot || repository?.path,
+    cwd,
+    responsibilityRoot,
     deliveryRole,
     delivery: {
       transport: "direct-thread",
@@ -1888,11 +1869,8 @@ function buildDeliveryArtifacts({
     targetThread: registration
       ? {
           windowName: registration.windowName,
-          deliveryRole: registration.deliveryRole,
           threadIdRedacted: true,
           threadRegistryFile: registration.threadRegistryFile,
-          cwd: registration.cwd,
-          responsibilityRoot: registration.responsibilityRoot,
         }
       : undefined,
     transport: {
@@ -2146,11 +2124,8 @@ function commandBuildControllerReturn() {
     targetThread: registration
       ? {
           windowName: registration.windowName,
-          deliveryRole: registration.deliveryRole,
           threadIdRedacted: true,
           threadRegistryFile: registration.threadRegistryFile,
-          cwd: registration.cwd,
-          responsibilityRoot: registration.responsibilityRoot,
         }
       : undefined,
     transport: {

@@ -1711,7 +1711,7 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
     hostWorkflow: [
       "Call create_thread for each launch entry with the entry cwd and createThreadPrompt. These prompts perform initialization entry sync only; they are not task deliveries.",
       "Immediately call set_thread_title for the returned thread id, using the entry displayTitle.",
-      "Register the real thread id only in the local thread registry, preserving the same displayTitle.",
+      "Pass each returned real thread id once to the Wakeflow local registration command. The command stores the id only in thread-registry and refreshes derived window-config status; do not hand-write runtime files.",
     ],
     windows: entries.map((entry) => ({
       windowName: entry.windowName,
@@ -1725,6 +1725,22 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
         required: true,
         hostTool: "set_thread_title",
         title: entry.displayTitle,
+      },
+      localRegistration: {
+        required: true,
+        command: "wakeflow-setup initialize",
+        threadIdAuthority: `.workspace-local/wakeflow-delivery/thread-registry/${slug(entry.windowName)}.json`,
+        derivedStatusView: `.workspace-local/wakeflow-delivery/window-config/${slug(entry.windowName)}.json`,
+        trackedDocsContainThreadIds: false,
+        argvTemplate: [
+          "initialize",
+          "--root",
+          context.wakeflowRoot,
+          "--thread",
+          `${entry.windowName}=<createdThreadId>`,
+          "--write",
+          "--json",
+        ],
       },
       createThreadPrompt: entry.createThreadPrompt,
     })),
@@ -1754,16 +1770,16 @@ function localWindowRoot(context, windowName) {
   };
 }
 
-function buildLocalWindowConfig(context, registration) {
-  const windowName = registration.windowName;
+function buildLocalWindowConfig(context, descriptor) {
+  const windowName = descriptor.windowName;
   const { path: repoPath, role } = localWindowRoot(context, windowName);
   const dispatchWindows = new Set([
     ...(Array.isArray(context.config.dispatchWindows) ? context.config.dispatchWindows : []),
     ...(Array.isArray(context.config.requiredDispatchWindows) ? context.config.requiredDispatchWindows : []),
     context.config.controllerWindow,
   ].filter(Boolean));
-  const dispatchable = ["controller", "target", "test-target"].includes(registration.deliveryRole)
-    && (dispatchWindows.size === 0 || dispatchWindows.has(windowName) || registration.threadRegistered);
+  const dispatchable = ["controller", "target", "test-target"].includes(descriptor.deliveryRole)
+    && (dispatchWindows.size === 0 || dispatchWindows.has(windowName) || descriptor.threadRegistered);
   return {
     kind: "CodexSubwindowDispatchConfig",
     version: 1,
@@ -1771,11 +1787,11 @@ function buildLocalWindowConfig(context, registration) {
     repositoryPath: repoPath || undefined,
     responsibility: role,
     dispatchable,
-    threadRegistered: registration.threadRegistered,
+    threadRegistered: descriptor.threadRegistered,
     threadRegistryFile: slash(path.relative(automationStateDir(context), threadRegistryFile(context, windowName))),
-    cwd: registration.cwd || repoPath || undefined,
-    responsibilityRoot: registration.responsibilityRoot || registration.cwd || repoPath || undefined,
-    deliveryRole: registration.deliveryRole,
+    cwd: descriptor.cwd || repoPath || undefined,
+    responsibilityRoot: descriptor.responsibilityRoot || descriptor.cwd || repoPath || undefined,
+    deliveryRole: descriptor.deliveryRole,
     delivery: {
       transport: "direct-thread",
       requireThread: true,
@@ -1797,11 +1813,6 @@ function buildLocalWindowConfig(context, registration) {
 
 function localWindowRegistrationPayload(context, options = {}) {
   const threadSpecs = parseSpecMap("--thread");
-  const roleSpecs = parseSpecMap("--thread-role");
-  const titleSpecs = parseSpecMap("--thread-title", [...threadSpecs.keys()]);
-  const canonicalUseSpecs = parseSpecMap("--thread-use");
-  const cwdSpecs = parseSpecMap("--thread-cwd");
-  const responsibilitySpecs = parseSpecMap("--thread-responsibility-root");
   const replacements = options.replacements ?? replacementWindows();
   if (write && replacements.size > 0) {
     const missingThread = [...replacements].filter((windowName) => !threadSpecs.has(windowName));
@@ -1817,30 +1828,29 @@ function localWindowRegistrationPayload(context, options = {}) {
 
   for (const windowName of [...windowSpecs].sort()) {
     const localRoot = localWindowRoot(context, windowName);
+    const registryPath = threadRegistryFile(context, windowName);
+    const existingRegistration = existsSync(registryPath) ? readJson(registryPath) : null;
     const hasThread = threadSpecs.has(windowName);
-    const deliveryRole = validateThreadRole(roleSpecs.get(windowName) ?? defaultThreadRole(context, windowName));
-    const cwd = cwdSpecs.get(windowName) ?? localRoot.absolutePath;
-    const responsibilityRoot = responsibilitySpecs.get(windowName) ?? localRoot.absolutePath;
+    const existingThreadRegistered = Boolean(existingRegistration?.threadId);
+    const threadRegistered = hasThread || existingThreadRegistered;
+    const deliveryRole = validateThreadRole(defaultThreadRole(context, windowName));
+    const cwd = localRoot.absolutePath;
+    const responsibilityRoot = localRoot.absolutePath;
     const registration = {
       kind: "CodexWindowThreadRegistration",
       version: 2,
       windowName,
-      displayTitle: titleSpecs.get(windowName) || options.windows?.find((item) => item.windowName === windowName)?.displayTitle || undefined,
-      deliveryRole,
       ...(hasThread ? { threadId: validateThreadId(threadSpecs.get(windowName)) } : {}),
-      cwd,
-      responsibilityRoot,
-      writeBoundary: [],
-      canonicalUse: canonicalUseSpecs.get(windowName) || undefined,
-      supersedesWindowNames: [],
       registeredAt: new Date().toISOString(),
       lastVerifiedAt: new Date().toISOString(),
     };
     const windowConfig = buildLocalWindowConfig(context, {
-      ...registration,
-      threadRegistered: hasThread,
+      windowName,
+      deliveryRole,
+      cwd,
+      responsibilityRoot,
+      threadRegistered,
     });
-    const registryPath = threadRegistryFile(context, windowName);
     const configPath = windowConfigFile(context, windowName);
     let replacedExistingThread = false;
     if (hasThread && existsSync(registryPath)) {
@@ -1857,10 +1867,10 @@ function localWindowRegistrationPayload(context, options = {}) {
       windowName,
       deliveryRole,
       repositoryPath: localRoot.path || ".",
-      registryFile: hasThread ? slash(path.relative(context.wakeflowRoot, registryPath)) : null,
+      registryFile: threadRegistered ? slash(path.relative(context.wakeflowRoot, registryPath)) : null,
       windowConfigFile: slash(path.relative(context.wakeflowRoot, configPath)),
-      threadRegistered: hasThread,
-      threadIdRedacted: hasThread,
+      threadRegistered,
+      threadIdRedacted: threadRegistered,
       replaceRequested: replacements.has(windowName),
       replacedExistingThread,
       wroteRegistry: write && hasThread,
@@ -1965,7 +1975,7 @@ function initializePayload() {
       accessProfiles,
     },
     nextAction: write
-      ? "Create the Codex windows in windowLaunchPlan with the host create_thread tool, immediately reset each title with set_thread_title using displayTitle, then register real thread ids into .workspace-local before dispatching any work."
+      ? "Create the Codex windows in windowLaunchPlan with the host create_thread tool, immediately reset each title with set_thread_title using displayTitle, then register real thread ids once into the local thread registry before dispatching any work."
       : "Dry-run only. Rerun with --write after confirming repositories, Design/Test mode, excluded windows, and optional thread registrations.",
   };
 }

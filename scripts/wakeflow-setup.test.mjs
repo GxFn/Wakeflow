@@ -206,6 +206,8 @@ test("initialize localizes launch titles and prompts with the window name first"
   assert.equal(payload.steps.windowLaunchPlan.requiresHostTitleReset, true);
   assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /set_thread_title/);
   assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /not task deliveries/);
+  assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /Pass each returned real thread id once/);
+  assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /stores the id only in thread-registry/);
   assert.equal(controller.displayTitle, `${path.basename(parent)} ${zhControllerRole}`);
   assert.equal(app.displayTitle, `AppRepo ${zhDutyWindow}`);
   assert.equal(design.displayTitle, `Design ${zhDesignWindow}`);
@@ -215,6 +217,15 @@ test("initialize localizes launch titles and prompts with the window name first"
     hostTool: "set_thread_title",
     title: `AppRepo ${zhDutyWindow}`,
   });
+  assert.equal(app.localRegistration.required, true);
+  assert.equal(app.localRegistration.command, "wakeflow-setup initialize");
+  assert.equal(app.localRegistration.threadIdAuthority, ".workspace-local/wakeflow-delivery/thread-registry/AppRepo.json");
+  assert.equal(app.localRegistration.derivedStatusView, ".workspace-local/wakeflow-delivery/window-config/AppRepo.json");
+  assert.equal(app.localRegistration.trackedDocsContainThreadIds, false);
+  assert.ok(app.localRegistration.argvTemplate.includes("--thread"));
+  assert.ok(app.localRegistration.argvTemplate.includes("AppRepo=<createdThreadId>"));
+  assert.equal(app.localRegistration.argvTemplate.includes("--thread-title"), false);
+  assert.equal(app.localRegistration.argvTemplate.includes("--thread-role"), false);
   assert.equal(app.createThreadPrompt.split("\n")[0], `AppRepo ${zhDutyWindow}${zhColon}\u521d\u59cb\u5316\u5165\u53e3\u540c\u6b65\uff0c\u4e0d\u662f\u4efb\u52a1\u6295\u9012\u3002`);
   assert.match(app.createThreadPrompt, new RegExp(zhFirstRead));
   assert.match(app.createThreadPrompt, new RegExp(zhReadyWait));
@@ -444,10 +455,6 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
     "--internal-test",
     "--thread",
     `FixtureWorkspace=${threadId}`,
-    "--thread-role",
-    "FixtureWorkspace=controller",
-    "--thread-title",
-    "Fixture control",
     "--write",
     "--json",
   ]);
@@ -479,8 +486,10 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
   const registry = JSON.parse(readFileSync(registryPath, "utf8"));
   const windowConfig = JSON.parse(readFileSync(windowConfigPath, "utf8"));
   assert.equal(registry.threadId, threadId);
-  assert.equal(registry.displayTitle, "Fixture control");
-  assert.equal(registry.deliveryRole, "controller");
+  assert.equal(Object.hasOwn(registry, "displayTitle"), false);
+  assert.equal(Object.hasOwn(registry, "deliveryRole"), false);
+  assert.equal(Object.hasOwn(registry, "cwd"), false);
+  assert.equal(Object.hasOwn(registry, "responsibilityRoot"), false);
   assert.equal(windowConfig.threadRegistered, true);
   assert.equal(windowConfig.deliveryRole, "controller");
   assert.equal(Object.hasOwn(windowConfig, "threadId"), false);
@@ -493,6 +502,42 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
   assert.match(currentStatus, /# FixtureWorkspace Current Status/);
   assert.match(currentStatus, /Controller window: FixtureWorkspace/);
   assert.doesNotMatch(currentStatus, /Controller window: Wakeflow/);
+
+  writeFileSync(
+    registryPath,
+    `${JSON.stringify({
+      ...registry,
+      displayTitle: "Stale title",
+      deliveryRole: "observer",
+      cwd: "/stale/cwd",
+      responsibilityRoot: "/stale/responsibility",
+    }, null, 2)}\n`,
+  );
+
+  const rerun = run(fixture, [
+    "initialize",
+    "--repo",
+    "BaseWindow=../BaseWindow",
+    "--repo",
+    "PluginWindow=../PluginWindow",
+    "--internal-design",
+    "--internal-test",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(rerun.status, 0, rerun.stderr || rerun.stdout);
+  assert.doesNotMatch(rerun.stdout, new RegExp(threadId));
+  const rerunPayload = JSON.parse(rerun.stdout);
+  const rerunControllerWindow = rerunPayload.steps.localWindows.results.find((item) => item.windowName === "FixtureWorkspace");
+  assert.equal(rerunControllerWindow.threadRegistered, true);
+  assert.equal(rerunControllerWindow.threadIdRedacted, true);
+  assert.equal(rerunControllerWindow.wroteRegistry, false);
+  const rerunWindowConfig = JSON.parse(readFileSync(windowConfigPath, "utf8"));
+  assert.equal(rerunWindowConfig.threadRegistered, true);
+  assert.equal(rerunWindowConfig.deliveryRole, "controller");
+  assert.equal(rerunWindowConfig.cwd, fixture.control);
+  assert.equal(rerunWindowConfig.responsibilityRoot, fixture.control);
+  assert.equal(Object.hasOwn(rerunWindowConfig, "threadId"), false);
 });
 
 test("initialize can replace one registered window thread without rebuilding every window", () => {
@@ -509,8 +554,6 @@ test("initialize can replace one registered window thread without rebuilding eve
     "--internal-test",
     "--thread",
     `BaseWindow=${oldThreadId}`,
-    "--thread-role",
-    "BaseWindow=target",
     "--write",
     "--json",
   ]);
@@ -524,8 +567,6 @@ test("initialize can replace one registered window thread without rebuilding eve
     "zh",
     "--thread",
     `BaseWindow=${newThreadId}`,
-    "--thread-role",
-    "BaseWindow=target",
     "--write",
     "--json",
   ]);
@@ -546,7 +587,8 @@ test("initialize can replace one registered window thread without rebuilding eve
   const registryPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/thread-registry/BaseWindow.json");
   const registry = JSON.parse(readFileSync(registryPath, "utf8"));
   assert.equal(registry.threadId, newThreadId);
-  assert.equal(registry.displayTitle, `BaseWindow ${zhDutyWindow}`);
+  assert.equal(Object.hasOwn(registry, "displayTitle"), false);
+  assert.equal(Object.hasOwn(registry, "deliveryRole"), false);
 });
 
 test("initialize replacement apply fails closed until the new real thread id is registered locally", () => {

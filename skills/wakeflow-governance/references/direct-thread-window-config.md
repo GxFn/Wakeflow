@@ -8,8 +8,10 @@ project documentation.
 
 ## Storage
 
-Store real thread ids only under `.workspace-local/`, for example in the local
-thread registry written by Wakeflow setup or host-controlled tooling.
+Store real thread ids only in the local thread registry under
+`.workspace-local/wakeflow-delivery/thread-registry/`. Wakeflow setup or
+host-controlled tooling should pass each real thread id to one local
+registration command; agents must not hand-write multiple runtime files.
 
 Never write real thread ids to:
 
@@ -24,17 +26,31 @@ Never write real thread ids to:
 Do not register placeholders such as `current-thread`, `unknown`, or
 `<thread-id>`.
 
-## Window Record Shape
+## Registry Record Shape
 
-Records should describe:
+Thread-registry records should contain only:
 
 - logical window name;
-- repository path;
-- role;
-- whether it may receive delivery;
+- real thread id;
+- registration / verification timestamps.
+
+Do not store window role, display title, cwd, responsibility root, dispatchable
+state, or delivery policy in the registry.
+
+## Derived Window Config
+
+`window-config` files are derived runtime views. They are rebuilt from
+`workspace.config.json`, current launch / replacement inputs, and whether a
+thread-registry record exists. They may describe:
+
+- repository path and responsibility;
 - delivery role, such as controller, target, Design, or Test;
-- local thread id reference stored in ignored runtime state;
-- last validation/readback evidence when available.
+- whether the window may receive delivery;
+- a local registry-file reference;
+- delivery/readback requirements.
+
+They must not contain real thread ids and must not become a second authority for
+window semantics.
 
 ## Send Policy
 

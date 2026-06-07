@@ -67,3 +67,10 @@ current controller state.
 Each plan, signal, design, and handoff board entry must have a stable
 `Design Key` in the form `<READABLE-TOPIC>-YYYY-MM-DD`. The board `ID` must
 match the design key.
+
+## Local Surfaces
+
+- Use `skills/` only for optional Design-local methods that shape questions,
+  requirement slices, reviews, or handoff readiness.
+- Design skills do not confirm executable scope, mutate Wakeflow state, or
+  replace controller judgment.

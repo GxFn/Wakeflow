@@ -9,7 +9,7 @@ Use this directory when the user does not have an external Test repository.
 - Current Test work: `docs/current/`
 - Default config: `config/defaults.json`
 - Test-owned scripts: `scripts/`
-- Test-local skill notes: `skills/`
+- Default Test skills: `skills/`
 - Testing operation policy: `docs/testing-operation-policy.md`
 - Test handoff template: `templates/test-handoff-template.md`
 - Only run real test work when the current controller state-root has a task package assigned to `Test` or the configured test window; real-scenario work must also have a matching `test-cards/*.json` boundary.

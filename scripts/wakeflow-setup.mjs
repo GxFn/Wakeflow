@@ -1200,6 +1200,7 @@ Use this directory when the user does not have an external ${config.designWindow
 - Operating policy: \`docs/design-window-operating-policy.md\`
 - Alignment checklist: \`docs/workspace-alignment-checklist.md\`
 - Templates: \`templates/original-plan-template.md\`, \`templates/requirement-design-template.md\`, \`templates/workspace-signal-template.md\`, and \`templates/workspace-handoff-template.md\`
+- Default Design skills: \`skills/\`
 - Wakeflow imports: use controller intake tooling such as \`wakeflow_intake_design_handoff\` or the installed runtime import command.
 `;
 }
@@ -1216,7 +1217,7 @@ Use this directory when the user does not have an external ${config.testWindow} 
 - Current Test work: \`docs/current/\`
 - Default config: \`config/defaults.json\`
 - Test-owned scripts: \`scripts/\`
-- Test-local skill notes: \`skills/\`
+- Default Test skills: \`skills/\`
 - Testing operation policy: \`docs/testing-operation-policy.md\`
 - Test handoff template: \`templates/test-handoff-template.md\`
 - Rule: only run real test work when a controller state root assigns a matching task package and test card.
@@ -1392,6 +1393,40 @@ function configuredStarterContent(context, relativePath) {
   return content;
 }
 
+const designDefaultSkillPaths = [
+  "skills/README.md",
+  "skills/requirements-framing/SKILL.md",
+  "skills/design-interview-grill/SKILL.md",
+  "skills/vertical-slice-requirement-planning/SKILL.md",
+  "skills/heuristic-design-review/SKILL.md",
+  "skills/accessibility-design-review/SKILL.md",
+  "skills/handoff-quality-gate/SKILL.md",
+];
+
+const testDefaultSkillPaths = [
+  "skills/README.md",
+  "skills/risk-based-test-strategy/SKILL.md",
+  "skills/diagnostic-feedback-loop/SKILL.md",
+  "skills/behavior-first-regression-evidence/SKILL.md",
+  "skills/e2e-playwright-practices/SKILL.md",
+  "skills/accessibility-test-plan/SKILL.md",
+  "skills/web-security-test-triage/SKILL.md",
+];
+
+function syncWindowSupportFile(context, repoRoot, supportName, relativePath, label) {
+  return ensureTextFile(
+    path.join(repoRoot, relativePath),
+    readWakeflowFile(context.templateRoot, `templates/window-support/${supportName}/${relativePath}`),
+    label,
+  );
+}
+
+function syncWindowSupportFiles(context, repoRoot, supportName, relativePaths, prefix) {
+  return relativePaths.map((relativePath) =>
+    syncWindowSupportFile(context, repoRoot, supportName, relativePath, `${prefix} ${relativePath}`),
+  );
+}
+
 function syncDesignSupportFiles(context, repoRoot, mode) {
   const prefix = mode === "internal" ? "internal design" : "external design";
   const files = [
@@ -1419,6 +1454,7 @@ function syncDesignSupportFiles(context, repoRoot, mode) {
     syncRelativeFile(context.templateRoot, repoRoot, "templates/requirement-design-template.md", `${prefix} requirement design template`),
     syncRelativeFile(context.templateRoot, repoRoot, "templates/workspace-signal-template.md", `${prefix} workspace signal template`),
     syncRelativeFile(context.templateRoot, repoRoot, "templates/workspace-handoff-template.md", `${prefix} workspace handoff template`),
+    ...syncWindowSupportFiles(context, repoRoot, "design", designDefaultSkillPaths, prefix),
   ];
   return files;
 }
@@ -1439,7 +1475,7 @@ function syncTestSupportFiles(context, repoRoot, mode) {
     ensureTextFile(path.join(repoRoot, "config/README.md"), readWakeflowFile(context.templateRoot, "templates/window-support/testing/config/README.md"), `${prefix} config readme`),
     ensureTextFile(path.join(repoRoot, "config/defaults.json"), readWakeflowFile(context.templateRoot, "templates/window-support/testing/config/defaults.json"), `${prefix} default config`),
     ensureTextFile(path.join(repoRoot, "scripts/README.md"), readWakeflowFile(context.templateRoot, "templates/window-support/testing/scripts/README.md"), `${prefix} scripts readme`),
-    ensureTextFile(path.join(repoRoot, "skills/README.md"), readWakeflowFile(context.templateRoot, "templates/window-support/testing/skills/README.md"), `${prefix} skills readme`),
+    ...syncWindowSupportFiles(context, repoRoot, "testing", testDefaultSkillPaths, prefix),
     ensureTextFile(
       path.join(repoRoot, "docs/testing-operation-policy.md"),
       readWakeflowFile(context.templateRoot, "templates/window-support/testing/docs/testing-operation-policy.md"),

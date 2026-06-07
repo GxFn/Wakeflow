@@ -267,6 +267,16 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.equal(existsSync(path.join(parent, "wakeflow-ledger/workspace/workspace-doc-archive-policy.md")), true);
   assert.equal(existsSync(path.join(parent, "wakeflow-ledger/workspace/archive/index.md")), true);
   assert.equal(existsSync(path.join(parent, "Wakeflow")), false);
+  const currentStatus = readFileSync(path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"), "utf8");
+  assert.match(currentStatus, new RegExp(`# ${path.basename(parent)} Current Status`));
+  assert.match(currentStatus, new RegExp(`Controller window: ${path.basename(parent)}`));
+  assert.doesNotMatch(currentStatus, /Controller window: Wakeflow/);
+  assert.match(currentStatus, /Wakeflow MCP `wakeflow_init_demand` tool/);
+  assert.doesNotMatch(currentStatus, /node scripts\/wakeflow-state\.mjs/);
+  assert.match(currentStatus, new RegExp(`\\| ${path.basename(parent)} \\| idle \\| No active demand\\. \\| Starter status only\\. \\|`));
+  const workspaceIndex = readFileSync(path.join(parent, ".workspace-active/workspace/index.md"), "utf8");
+  assert.match(workspaceIndex, new RegExp(`# ${path.basename(parent)} Workspace Index`));
+  assert.match(workspaceIndex, /`wakeflow-ledger\/workspace\/workspace-record-map\.md`/);
   assert.deepEqual(
     payload.steps.windowLaunchPlan.windows.map((item) => item.windowName),
     [path.basename(parent), "AppRepo", "Design", "Test"],
@@ -338,6 +348,79 @@ test("initialize does not reuse similar Design/Test directories unless explicitl
   assert.equal(existsSync(path.join(parent, "Test/AGENTS.md")), true);
   assert.equal(existsSync(path.join(parent, "AlembicDesign/AGENTS.md")), false);
   assert.equal(existsSync(path.join(parent, "AlembicTest/AGENTS.md")), false);
+  const currentStatus = readFileSync(path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"), "utf8");
+  assert.match(currentStatus, /# AlembicWorkspace Current Status/);
+  assert.match(currentStatus, /Controller window: AlembicWorkspace/);
+  assert.doesNotMatch(currentStatus, /Controller window: Wakeflow/);
+});
+
+test("initialize refreshes stale starter controller identity without overwriting active demand status", () => {
+  const parent = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stale-status-"));
+  mkdirSync(path.join(parent, "AppRepo", ".git"), { recursive: true });
+  writeFile(
+    path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"),
+    `# Wakeflow Current Status
+
+Updated: 2026-05-27
+Controller window: Wakeflow
+Status: idle / no active demand
+
+## Status Summary
+
+- Active demand: none.
+- This repository is a freshly extracted Wakeflow runtime template.
+
+## Window Dispatch
+
+| Window | Status | Assigned Work | Evidence |
+| --- | --- | --- | --- |
+| Controller | idle | No active demand. | Starter status only. |`,
+  );
+
+  const result = runAt(parent, [
+    "initialize",
+    "--repo",
+    "AppRepo=AppRepo",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  const statusResult = payload.steps.syncTemplates.results.find((item) => item.label === "active current status");
+  assert.equal(statusResult.refreshedStarter, true);
+
+  const currentStatus = readFileSync(path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"), "utf8");
+  assert.match(currentStatus, new RegExp(`# ${path.basename(parent)} Current Status`));
+  assert.match(currentStatus, new RegExp(`Controller window: ${path.basename(parent)}`));
+  assert.match(currentStatus, new RegExp(`\\| ${path.basename(parent)} \\| idle \\| No active demand\\. \\| Starter status only\\. \\|`));
+  assert.match(currentStatus, /Wakeflow MCP `wakeflow_init_demand` tool/);
+  assert.doesNotMatch(currentStatus, /node scripts\/wakeflow-state\.mjs/);
+  assert.doesNotMatch(currentStatus, /Controller window: Wakeflow/);
+
+  writeFile(
+    path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"),
+    `# Custom Current Status
+
+Controller window: Wakeflow
+Status: active
+
+## Status Summary
+
+- Active demand: REAL-DEMAND
+- Keep this active status.`,
+  );
+
+  const activeResult = runAt(parent, [
+    "initialize",
+    "--repo",
+    "AppRepo=AppRepo",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(activeResult.status, 0, activeResult.stderr || activeResult.stdout);
+  const activeStatus = readFileSync(path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"), "utf8");
+  assert.match(activeStatus, /# Custom Current Status/);
+  assert.match(activeStatus, /Active demand: REAL-DEMAND/);
 });
 
 test("initialize applies workspace config, AGENTS, Design/Test surfaces, and local thread runtime", () => {
@@ -398,6 +481,10 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
   const baseWindowConfig = JSON.parse(readFileSync(baseWindowConfigPath, "utf8"));
   assert.equal(baseWindowConfig.threadRegistered, false);
   assert.equal(baseWindowConfig.deliveryRole, "target");
+  const currentStatus = readFileSync(path.join(fixture.control, ".workspace-active/workspace/current/workspace-current-status.md"), "utf8");
+  assert.match(currentStatus, /# FixtureWorkspace Current Status/);
+  assert.match(currentStatus, /Controller window: FixtureWorkspace/);
+  assert.doesNotMatch(currentStatus, /Controller window: Wakeflow/);
 });
 
 test("initialize can replace one registered window thread without rebuilding every window", () => {

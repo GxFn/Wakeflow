@@ -1158,7 +1158,7 @@ function writeAgentsPayload(context = commandContext(), options = {}) {
 function designBoardTemplate() {
   return `# Workspace Handoff Board
 
-This board is intentionally small. Design records completed requirement design handoffs here; Wakeflow imports ready rows with \`scripts/wakeflow-import-design-handoffs.mjs\`.
+This board is intentionally small. Design records completed requirement design handoffs here; Wakeflow imports ready rows with the installed Design intake tooling.
 
 ## Handoff Board
 
@@ -1177,7 +1177,7 @@ Use this directory when the user does not have an external ${config.designWindow
 - Operating policy: \`docs/design-window-operating-policy.md\`
 - Alignment checklist: \`docs/workspace-alignment-checklist.md\`
 - Templates: \`templates/original-plan-template.md\`, \`templates/requirement-design-template.md\`, \`templates/workspace-signal-template.md\`, and \`templates/workspace-handoff-template.md\`
-- Wakeflow imports: \`node scripts/wakeflow-import-design-handoffs.mjs --write\`
+- Wakeflow imports: use controller intake tooling such as \`wakeflow_intake_design_handoff\` or the installed runtime import command.
 `;
 }
 
@@ -1231,18 +1231,47 @@ function readWakeflowFile(wakeflowRoot, relativePath) {
   return readFileSync(path.join(defaultWakeflowRoot, relativePath), "utf8");
 }
 
-function ensureTextFile(file, content, label) {
+function isStarterGeneratedContent(existing) {
+  return [
+    "Status: starter template",
+    "Status: starter inbox",
+    "Status: starter long-term map",
+    "Status: idle / no active demand",
+    "Fresh template status",
+    "Template initialized.",
+    "TODO-EXAMPLE-001",
+  ].some((marker) => existing.includes(marker));
+}
+
+function hasNonStarterActiveDemand(existing) {
+  const match = existing.match(/^- Active demand:\s*(.+)$/im);
+  if (!match) return false;
+  const activeDemand = match[1].trim().replace(/[.;]$/, "").toLowerCase();
+  return activeDemand !== "" && activeDemand !== "none";
+}
+
+function ensureTextFile(file, content, label, options = {}) {
   const exists = existsSync(file);
-  const changed = !exists;
+  const next = `${content.trimEnd()}\n`;
+  const existing = exists ? readFileSync(file, "utf8") : "";
+  const refreshStarter = Boolean(
+    exists
+      && options.refreshStarter
+      && existing !== next
+      && isStarterGeneratedContent(existing)
+      && !hasNonStarterActiveDemand(existing),
+  );
+  const changed = !exists || refreshStarter;
   if (write && changed) {
     mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(file, `${content.trimEnd()}\n`);
+    writeFileSync(file, next);
   }
   return {
     label,
     path: file,
     exists,
     changed,
+    refreshedStarter: refreshStarter,
     wrote: write && changed,
   };
 }
@@ -1257,6 +1286,63 @@ function syncRelativeFile(wakeflowRoot, targetRoot, relativePath, label) {
     readWakeflowFile(wakeflowRoot, relativePath),
     label,
   );
+}
+
+function relativeFromWorkspaceRoot(context, absolutePath) {
+  const relative = slash(path.relative(context.wakeflowRoot, absolutePath));
+  return relative === "" ? "." : relative;
+}
+
+function configuredStarterContent(context, relativePath) {
+  const workspaceName = context.config.workspaceName ?? "Wakeflow";
+  const controllerWindow = context.config.controllerWindow ?? workspaceName;
+  const updated = new Date().toISOString().slice(0, 10);
+  const projectLedgerRel = relativeFromWorkspaceRoot(context, context.ledgerPaths.projectLedgerRoot);
+  const requirementDesignsRel = relativeFromWorkspaceRoot(context, context.ledgerPaths.requirementDesignsDir);
+  const goalStageConfirmationRel = relativeFromWorkspaceRoot(
+    context,
+    resolveConfigPath(
+      context.wakeflowRoot,
+      context.config.goalStageConfirmationDir ?? path.join(context.config.projectLedgerRoot ?? "wakeflow-ledger", "goal-stage-confirmation"),
+    ),
+  );
+  const workspaceRecordMapRel = relativeFromWorkspaceRoot(context, context.ledgerPaths.workspaceRecordMapPath);
+  const workspaceArchiveRel = relativeFromWorkspaceRoot(context, context.ledgerPaths.workspaceArchiveDir);
+
+  let content = readWakeflowFile(context.templateRoot, relativePath);
+  content = replaceAllLiteral(content, "# Wakeflow Workspace Index", `# ${workspaceName} Workspace Index`);
+  content = replaceAllLiteral(content, "# Wakeflow Current Status", `# ${workspaceName} Current Status`);
+  content = replaceAllLiteral(content, "Updated: 2026-05-27", `Updated: ${updated}`);
+  content = replaceAllLiteral(content, "Controller window: Wakeflow", `Controller window: ${controllerWindow}`);
+  content = replaceAllLiteral(content, "Maintained Window: Wakeflow controller", `Maintained Window: ${controllerWindow} controller`);
+  content = replaceAllLiteral(content, "Maintained By: Wakeflow controller", `Maintained By: ${controllerWindow} controller`);
+  content = replaceAllLiteral(
+    content,
+    "This repository is a freshly extracted Wakeflow runtime template.",
+    `This workspace is a freshly initialized Wakeflow controller surface for ${workspaceName}.`,
+  );
+  if (context.pluginTargetMode) {
+    content = replaceAllLiteral(
+      content,
+      "Create a real active demand with `node scripts/wakeflow-state.mjs init --write`; then read the generated `developer-progress.md`.",
+      "Create a real active demand with the Wakeflow MCP `wakeflow_init_demand` tool; then read the generated `developer-progress.md`.",
+    );
+  }
+  content = replaceAllLiteral(content, "| Controller | idle | No active demand has been initialized. |", `| ${controllerWindow} | idle | No active demand has been initialized. |`);
+  content = replaceAllLiteral(content, "| Controller | idle | No active demand. | Starter status only. |", `| ${controllerWindow} | idle | No active demand. | Starter status only. |`);
+  content = replaceAllLiteral(content, "| TODO-EXAMPLE-001 | parked | template | P3 | Wakeflow |", `| TODO-EXAMPLE-001 | parked | template | P3 | ${controllerWindow} |`);
+  content = replaceAllLiteral(content, "| New project setup. | Wakeflow | none |", `| New project setup. | ${controllerWindow} | none |`);
+  content = replaceAllLiteral(content, "`../wakeflow-ledger/workspace/workspace-record-map.md`", `\`${workspaceRecordMapRel}\``);
+  content = replaceAllLiteral(content, "`../wakeflow-ledger/requirement-designs/`", `\`${requirementDesignsRel}/\``);
+  content = replaceAllLiteral(content, "`../wakeflow-ledger/goal-stage-confirmation/`", `\`${goalStageConfirmationRel}/\``);
+  content = replaceAllLiteral(content, "`../wakeflow-ledger/`", `\`${projectLedgerRel}/\``);
+  content = replaceAllLiteral(content, "../wakeflow-ledger/workspace/workspace-record-map.md", workspaceRecordMapRel);
+  content = replaceAllLiteral(content, "../wakeflow-ledger/requirement-designs/", `${requirementDesignsRel}/`);
+  content = replaceAllLiteral(content, "../wakeflow-ledger/goal-stage-confirmation/", `${goalStageConfirmationRel}/`);
+  content = replaceAllLiteral(content, "../wakeflow-ledger/workspace/archive/", `${workspaceArchiveRel}/`);
+  content = replaceAllLiteral(content, "../wakeflow-ledger/", `${projectLedgerRel}/`);
+  content = replaceAllLiteral(content, "../wakeflow-ledger", projectLedgerRel);
+  return content;
 }
 
 function syncDesignSupportFiles(context, repoRoot, mode) {
@@ -1317,21 +1403,21 @@ function syncStarterLedgerFiles(context) {
     context.config.goalStageConfirmationDir ?? path.join(context.config.projectLedgerRoot ?? "wakeflow-ledger", "goal-stage-confirmation"),
   );
   return [
-    ensureTextFile(context.ledgerPaths.workspaceIndexPath, readWakeflowFile(context.templateRoot, `${sourceRoot}/index.md`), "active workspace index"),
-    ensureTextFile(context.ledgerPaths.workspaceCurrentIndexPath, readWakeflowFile(context.templateRoot, `${sourceRoot}/current/index.md`), "active current index"),
-    ensureTextFile(context.ledgerPaths.workspaceCurrentStatusPath, readWakeflowFile(context.templateRoot, `${sourceRoot}/current/workspace-current-status.md`), "active current status"),
-    ensureTextFile(context.ledgerPaths.globalTodoPath, readWakeflowFile(context.templateRoot, `${sourceRoot}/current/global-todo-board.md`), "active global TODO board"),
-    ensureTextFile(resolveConfigPath(context.wakeflowRoot, context.config.designHandoffBoard), readWakeflowFile(context.templateRoot, `${sourceRoot}/current/design-handoff-board.md`), "active design handoff board"),
-    ensureTextFile(resolveConfigPath(context.wakeflowRoot, context.config.designHandoffInbox), readWakeflowFile(context.templateRoot, `${sourceRoot}/current/design-handoff-inbox.md`), "active design handoff inbox"),
-    ensureTextFile(resolveConfigPath(context.wakeflowRoot, context.config.testExchangePath), readWakeflowFile(context.templateRoot, `${sourceRoot}/current/test-exchange.md`), "active test exchange projection"),
-    ensureTextFile(context.ledgerPaths.workspaceRecordMapPath, readWakeflowFile(context.templateRoot, `${sourceRoot}/workspace-record-map.md`), "project workspace record map"),
-    ensureTextFile(path.join(context.ledgerPaths.requirementDesignsDir, "README.md"), readWakeflowFile(context.templateRoot, `${ledgerRoot}/requirement-designs/README.md`), "requirement designs readme"),
-    ensureTextFile(path.join(goalStageConfirmationDir, "README.md"), readWakeflowFile(context.templateRoot, `${ledgerRoot}/goal-stage-confirmation/README.md`), "goal-stage confirmation readme"),
-    ensureTextFile(path.join(goalStageConfirmationDir, "process.md"), readWakeflowFile(context.templateRoot, `${ledgerRoot}/goal-stage-confirmation/process.md`), "goal-stage confirmation process"),
-    ensureTextFile(path.join(workspaceLedgerDir, "requirement-to-wave-execution-flow.md"), readWakeflowFile(context.templateRoot, `${ledgerRoot}/workspace/requirement-to-wave-execution-flow.md`), "requirement to wave flow"),
-    ensureTextFile(path.join(workspaceLedgerDir, "todo-window-scheduling-policy.md"), readWakeflowFile(context.templateRoot, `${ledgerRoot}/workspace/todo-window-scheduling-policy.md`), "TODO and window scheduling policy"),
-    ensureTextFile(path.join(workspaceLedgerDir, "workspace-doc-archive-policy.md"), readWakeflowFile(context.templateRoot, `${ledgerRoot}/workspace/workspace-doc-archive-policy.md`), "workspace doc archive policy"),
-    ensureTextFile(path.join(context.ledgerPaths.workspaceArchiveDir, "index.md"), readWakeflowFile(context.templateRoot, `${ledgerRoot}/workspace/archive/index.md`), "workspace archive index"),
+    ensureTextFile(context.ledgerPaths.workspaceIndexPath, configuredStarterContent(context, `${sourceRoot}/index.md`), "active workspace index", { refreshStarter: true }),
+    ensureTextFile(context.ledgerPaths.workspaceCurrentIndexPath, configuredStarterContent(context, `${sourceRoot}/current/index.md`), "active current index", { refreshStarter: true }),
+    ensureTextFile(context.ledgerPaths.workspaceCurrentStatusPath, configuredStarterContent(context, `${sourceRoot}/current/workspace-current-status.md`), "active current status", { refreshStarter: true }),
+    ensureTextFile(context.ledgerPaths.globalTodoPath, configuredStarterContent(context, `${sourceRoot}/current/global-todo-board.md`), "active global TODO board", { refreshStarter: true }),
+    ensureTextFile(resolveConfigPath(context.wakeflowRoot, context.config.designHandoffBoard), configuredStarterContent(context, `${sourceRoot}/current/design-handoff-board.md`), "active design handoff board", { refreshStarter: true }),
+    ensureTextFile(resolveConfigPath(context.wakeflowRoot, context.config.designHandoffInbox), configuredStarterContent(context, `${sourceRoot}/current/design-handoff-inbox.md`), "active design handoff inbox", { refreshStarter: true }),
+    ensureTextFile(resolveConfigPath(context.wakeflowRoot, context.config.testExchangePath), configuredStarterContent(context, `${sourceRoot}/current/test-exchange.md`), "active test exchange projection", { refreshStarter: true }),
+    ensureTextFile(context.ledgerPaths.workspaceRecordMapPath, configuredStarterContent(context, `${sourceRoot}/workspace-record-map.md`), "project workspace record map", { refreshStarter: true }),
+    ensureTextFile(path.join(context.ledgerPaths.requirementDesignsDir, "README.md"), configuredStarterContent(context, `${ledgerRoot}/requirement-designs/README.md`), "requirement designs readme", { refreshStarter: true }),
+    ensureTextFile(path.join(goalStageConfirmationDir, "README.md"), configuredStarterContent(context, `${ledgerRoot}/goal-stage-confirmation/README.md`), "goal-stage confirmation readme", { refreshStarter: true }),
+    ensureTextFile(path.join(goalStageConfirmationDir, "process.md"), configuredStarterContent(context, `${ledgerRoot}/goal-stage-confirmation/process.md`), "goal-stage confirmation process", { refreshStarter: true }),
+    ensureTextFile(path.join(workspaceLedgerDir, "requirement-to-wave-execution-flow.md"), configuredStarterContent(context, `${ledgerRoot}/workspace/requirement-to-wave-execution-flow.md`), "requirement to wave flow", { refreshStarter: true }),
+    ensureTextFile(path.join(workspaceLedgerDir, "todo-window-scheduling-policy.md"), configuredStarterContent(context, `${ledgerRoot}/workspace/todo-window-scheduling-policy.md`), "TODO and window scheduling policy", { refreshStarter: true }),
+    ensureTextFile(path.join(workspaceLedgerDir, "workspace-doc-archive-policy.md"), configuredStarterContent(context, `${ledgerRoot}/workspace/workspace-doc-archive-policy.md`), "workspace doc archive policy", { refreshStarter: true }),
+    ensureTextFile(path.join(context.ledgerPaths.workspaceArchiveDir, "index.md"), configuredStarterContent(context, `${ledgerRoot}/workspace/archive/index.md`), "workspace archive index", { refreshStarter: true }),
   ];
 }
 

@@ -17,8 +17,8 @@ judgment.
 | --- | --- |
 | `AGENTS.md` | hard gates, controller identity, repository boundaries, confirmation gates, testing boundaries, acceptance floor |
 | skills | operation steps, commands, field templates, examples, troubleshooting |
-| MCP tools | stable outer capability interface for workspace setup, status, state roots, packages, delivery envelope preparation/recording, review packs, controller decisions, Design/Test intake, next-work scans, and verification |
-| scripts | local implementation backend for file/state operations, result import/reduction, controller-return construction, archive maintenance, keep-live state, and backend checks |
+| MCP tools | stable outer capability interface for workspace setup, status, state roots, packages, delivery envelope preparation/recording, review packs, controller decisions, Design/Test intake, next-work scans, archive actions, and verification |
+| scripts | local implementation backend for file/state operations, result import/reduction, controller-return construction, archive internals, keep-live state, and backend checks |
 | templates | reusable starter surfaces for installed workspaces |
 | `.workspace-active/` | ignored active runtime state |
 | `.workspace-local/` | ignored local config and real thread ids |

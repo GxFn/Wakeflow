@@ -259,6 +259,8 @@ async function runMcpSmoke(rootPath) {
       "wakeflow_record_target_result",
       "wakeflow_review_pack",
       "wakeflow_decide_review",
+      "wakeflow_archive_todo",
+      "wakeflow_archive_workspace_docs",
       "wakeflow_verify",
     ]) {
       if (!toolNames.includes(expected)) {
@@ -273,8 +275,6 @@ async function runMcpSmoke(rootPath) {
       "wakeflow_build_controller_return",
       "wakeflow_stop_loop",
       "wakeflow_keep_live_state",
-      "wakeflow_archive_workspace_docs",
-      "wakeflow_archive_todo",
       "wakeflow_run_backend",
       "wakeflow_full_status",
       "wakeflow_full_verify",

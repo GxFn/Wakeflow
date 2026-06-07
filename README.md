@@ -250,15 +250,17 @@ Primary tool groups:
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_intake_design_handoff`, `wakeflow_intake_test_card` |
-| Maintenance and verification | `wakeflow_verify` |
+| Archive, maintenance, and verification | `wakeflow_archive_todo`, `wakeflow_archive_workspace_docs`, `wakeflow_verify` |
 
 Public MCP tools are for outer agent workflows. Target closeout is deliberately
 split: record a target result, review readiness, prepare a controller-return
 envelope when policy allows, send with the Codex host thread tool, and record
 delivery evidence. Do not collapse those steps into a single target-window MCP
-tool. Internal steps such as result reduction, archive maintenance, keep-live
-state, and script backend execution stay inside Wakeflow JS/runtime scripts and
-skills. Do not expose those internal steps as separate MCP tools.
+tool. Internal steps such as result reduction, archive summary refresh internals,
+keep-live state, and script backend execution stay inside Wakeflow JS/runtime
+scripts and skills. Public archive MCP tools wrap only controller-approved TODO
+or workspace document archive flows; they do not make acceptance decisions or
+send host messages.
 
 Wakeflow declares MCP tool annotations for every public tool: read-only tools
 are marked read-only, write tools are local, non-destructive, and closed-world.

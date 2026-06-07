@@ -276,6 +276,8 @@ function validateMcpConfig() {
     "wakeflow_complete_demand",
     "wakeflow_intake_design_handoff",
     "wakeflow_intake_test_card",
+    "wakeflow_archive_todo",
+    "wakeflow_archive_workspace_docs",
     "wakeflow_verify",
   ]) {
     if (!mcpText.includes(`name: "${tool}"`)) errors.push(`MCP tool is missing: ${tool}`);
@@ -288,8 +290,6 @@ function validateMcpConfig() {
     "wakeflow_build_controller_return",
     "wakeflow_stop_loop",
     "wakeflow_keep_live_state",
-    "wakeflow_archive_workspace_docs",
-    "wakeflow_archive_todo",
     "wakeflow_run_backend",
     "wakeflow_full_status",
     "wakeflow_full_verify",

@@ -1044,7 +1044,7 @@ function rootAgentsContent(context) {
     );
     content = content.replace(
       /^# .+?\n\n/s,
-      (heading) => `${heading}> Wakeflow is installed as a Codex plugin for this workspace. Use Wakeflow MCP tools for setup, status, state roots, delivery, review, and verification; local Wakeflow runtime scripts live in the installed plugin, not in this workspace root.\n\n`,
+      (heading) => `${heading}> Wakeflow is installed as a Codex plugin for this workspace. Use Wakeflow MCP tools for setup, status, state roots, delivery, review, archive, and verification; local Wakeflow runtime scripts live in the installed plugin, not in this workspace root.\n\n`,
     );
   }
 

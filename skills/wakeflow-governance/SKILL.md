@@ -21,6 +21,10 @@ tool first:
   again with explicit `repositories` mappings for the intended work windows,
   plus the selected Design/Test mode. Use `apply: true` only when the user has
   allowed writing.
+- Do not infer Design/Test from similar existing directory names such as
+  `<WorkspaceName>Design`, `<ProductName>Design`, `<WorkspaceName>Test`, or
+  `<ProductName>Test`. Unless the user explicitly names those as Design/Test,
+  Wakeflow should create/use fresh `Design` and `Test` support surfaces.
 - If Codex judges the workspace is messy, contains history/runtime/ledger/tool
   directories, or has unclear window ownership, stop and ask the user which
   windows to manage. Do not call `useDiscovered` in that case.

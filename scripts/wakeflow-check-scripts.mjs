@@ -2,6 +2,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const args = process.argv.slice(2);
 const json = args.includes("--json");
@@ -65,17 +66,28 @@ function processExitIssues(scriptName, content) {
 }
 
 const workspaceRoot = path.resolve(getArgValue("--root", process.cwd()));
-const scriptsDir = path.join(workspaceRoot, "scripts");
-const readmePath = path.join(scriptsDir, "README.md");
-const verifierPath = path.join(scriptsDir, "wakeflow-verify.mjs");
+const installedScriptsDir = path.dirname(fileURLToPath(import.meta.url));
+const targetScriptsDir = path.join(workspaceRoot, "scripts");
+const targetReadmePath = path.join(targetScriptsDir, "README.md");
+const targetScriptNames = existsSync(targetScriptsDir)
+  ? readdirSync(targetScriptsDir)
+      .filter((name) => name.endsWith(".mjs"))
+      .sort()
+  : [];
+const useWorkspaceScripts = targetScriptNames.length > 0 || existsSync(targetReadmePath);
+const scriptsDir = useWorkspaceScripts ? targetScriptsDir : installedScriptsDir;
+const readmePath = useWorkspaceScripts ? targetReadmePath : path.join(installedScriptsDir, "README.md");
+const verifierPath = useWorkspaceScripts
+  ? path.join(targetScriptsDir, "wakeflow-verify.mjs")
+  : path.join(installedScriptsDir, "wakeflow-verify.mjs");
 const issues = [];
 const warnings = [];
 
-if (!existsSync(scriptsDir)) {
+if (useWorkspaceScripts && !existsSync(scriptsDir)) {
   issues.push("scripts directory is missing.");
 }
 if (!existsSync(readmePath)) {
-  issues.push("scripts/README.md is missing.");
+  issues.push(useWorkspaceScripts ? "scripts/README.md is missing." : "installed Wakeflow scripts/README.md is missing.");
 }
 
 const scriptNames = existsSync(scriptsDir)
@@ -134,6 +146,9 @@ for (const scriptName of scriptNames) {
 
 const result = {
   ok: issues.length === 0,
+  scriptSource: useWorkspaceScripts ? "workspace-local" : "installed-runtime",
+  workspaceScriptsDir: targetScriptsDir,
+  runtimeScriptsDir: installedScriptsDir,
   scriptCount: scriptNames.length,
   runtimeScriptCount: runtimeScripts.length,
   testScriptCount: testScripts.length,

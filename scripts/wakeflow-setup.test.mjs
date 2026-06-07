@@ -279,6 +279,67 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.doesNotMatch(rootAgentsAfterSync, /node scripts\/wakeflow-setup\.mjs/);
 });
 
+test("initialize does not reuse similar Design/Test directories unless explicitly mapped", () => {
+  const parent = mkdtempSync(path.join(os.tmpdir(), "plugin-target-legacy-design-"));
+  mkdirSync(path.join(parent, "Alembic", ".git"), { recursive: true });
+  mkdirSync(path.join(parent, "AlembicDesign", ".git"), { recursive: true });
+  mkdirSync(path.join(parent, "AlembicTest", ".git"), { recursive: true });
+  writeFile(
+    path.join(parent, "workspace.config.json"),
+    JSON.stringify(
+      {
+        runtimeMode: "plugin",
+        workspaceName: "AlembicWorkspace",
+        controllerWindow: "AlembicWorkspace",
+        designWindow: "AlembicDesign",
+        testWindow: "AlembicTest",
+        repositories: [
+          { windowName: "Alembic", path: "Alembic", role: "Product repository" },
+          { windowName: "AlembicDesign", path: "AlembicDesign", role: "Legacy design-like repository" },
+          { windowName: "AlembicTest", path: "AlembicTest", role: "Legacy test-like repository" },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
+
+  const result = runAt(parent, [
+    "initialize",
+    "--repo",
+    "Alembic=Alembic",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  const config = JSON.parse(readFileSync(path.join(parent, "workspace.config.json"), "utf8"));
+  assert.equal(config.designWindow, "Design");
+  assert.equal(config.testWindow, "Test");
+  assert.equal(config.internalDesignPath, "Design");
+  assert.equal(config.internalTestPath, "Test");
+  assert.deepEqual(
+    config.repositories.map((repo) => [repo.windowName, repo.path, repo.mode]),
+    [
+      ["Alembic", "Alembic", "external"],
+      ["Design", "Design", "internal"],
+      ["Test", "Test", "internal"],
+    ],
+  );
+  assert.deepEqual(
+    Object.keys(config.repositoryRoles).sort(),
+    ["Alembic", "Design", "Test"],
+  );
+  assert.deepEqual(
+    payload.steps.windowLaunchPlan.windows.map((item) => item.windowName),
+    ["AlembicWorkspace", "Alembic", "Design", "Test"],
+  );
+  assert.equal(existsSync(path.join(parent, "Design/AGENTS.md")), true);
+  assert.equal(existsSync(path.join(parent, "Test/AGENTS.md")), true);
+  assert.equal(existsSync(path.join(parent, "AlembicDesign/AGENTS.md")), false);
+  assert.equal(existsSync(path.join(parent, "AlembicTest/AGENTS.md")), false);
+});
+
 test("initialize applies workspace config, AGENTS, Design/Test surfaces, and local thread runtime", () => {
   const fixture = makeFixture();
   const threadId = "019e7e06-e64c-7e42-9dc3-ca1633bdeed7";
@@ -295,7 +356,7 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
     "--thread-role",
     "FixtureWorkspace=controller",
     "--thread-title",
-    "FixtureWorkspace=Fixture control",
+    "Fixture control",
     "--write",
     "--json",
   ]);
@@ -327,10 +388,16 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
   const registry = JSON.parse(readFileSync(registryPath, "utf8"));
   const windowConfig = JSON.parse(readFileSync(windowConfigPath, "utf8"));
   assert.equal(registry.threadId, threadId);
+  assert.equal(registry.displayTitle, "Fixture control");
   assert.equal(registry.deliveryRole, "controller");
   assert.equal(windowConfig.threadRegistered, true);
   assert.equal(windowConfig.deliveryRole, "controller");
   assert.equal(Object.hasOwn(windowConfig, "threadId"), false);
+
+  const baseWindowConfigPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/window-config/BaseWindow.json");
+  const baseWindowConfig = JSON.parse(readFileSync(baseWindowConfigPath, "utf8"));
+  assert.equal(baseWindowConfig.threadRegistered, false);
+  assert.equal(baseWindowConfig.deliveryRole, "target");
 });
 
 test("initialize can replace one registered window thread without rebuilding every window", () => {

@@ -21,6 +21,14 @@ const tools = [
         parent: { type: "string" },
         workspaceName: { type: "string" },
         controllerWindow: { type: "string" },
+        designWindow: {
+          type: "string",
+          description: "Only set this when the user explicitly names an existing or custom Design window. Otherwise Wakeflow creates/uses a fresh Design support surface.",
+        },
+        testWindow: {
+          type: "string",
+          description: "Only set this when the user explicitly names an existing or custom Test window. Otherwise Wakeflow creates/uses a fresh Test support surface.",
+        },
         language: {
           type: "string",
           enum: ["auto", "zh", "en"],
@@ -451,6 +459,8 @@ const handlers = {
       ...optionalValue("--parent", args.parent),
       ...optionalValue("--workspace-name", args.workspaceName),
       ...optionalValue("--controller-window", args.controllerWindow),
+      ...optionalValue("--design-window", args.designWindow),
+      ...optionalValue("--test-window", args.testWindow),
       ...optionalValue("--language", args.language),
       ...(args.useDiscovered ? ["--use-discovered"] : []),
       ...(args.internalDesign ? ["--internal-design"] : []),
@@ -797,7 +807,6 @@ function repositoryArgs(repositories = []) {
 
 function localWindowArgs(windows = []) {
   return (windows || []).flatMap((item) => [
-    "--window", item.windowName,
     ...optionalValue("--thread-role", item.role ? `${item.windowName}=${item.role}` : ""),
     ...optionalValue("--thread-cwd", item.cwd ? `${item.windowName}=${item.cwd}` : ""),
     ...optionalValue("--thread-responsibility-root", item.responsibilityRoot ? `${item.windowName}=${item.responsibilityRoot}` : ""),

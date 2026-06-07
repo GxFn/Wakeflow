@@ -57,8 +57,19 @@ test("passes when scripts, tests, README, and verifier are aligned", () => {
   assert.equal(result.status, 0, result.stderr);
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.ok, true);
+  assert.equal(parsed.scriptSource, "workspace-local");
   assert.equal(parsed.runtimeScriptCount, 2);
   assert.equal(parsed.testScriptCount, 1);
+});
+
+test("passes in plugin-managed workspaces without local scripts", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "plugin-target-"));
+  const result = run(root);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.scriptSource, "installed-runtime");
+  assert.ok(parsed.runtimeScriptCount > 0);
 });
 
 test("fails when a runtime script is missing from README", () => {

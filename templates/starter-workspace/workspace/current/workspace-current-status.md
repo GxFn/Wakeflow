@@ -18,6 +18,19 @@ Status: idle / no active demand
 - Test exchange projection: [test-exchange.md](test-exchange.md)
 - Current map: [index.md](index.md)
 
-## Backfill
+## Window Dispatch
+
+| Window | Status | Assigned Work | Evidence |
+| --- | --- | --- | --- |
+| Controller | idle | No active demand. | Starter status only. |
+| Design | standby | No active handoff. | See Design handoff inbox after setup. |
+| Test | standby | No active test card. | See Test exchange only after controller assignment. |
+
+## Copyable Prompt
+
+No active demand exists yet. Create a controller state root before copying a
+window prompt.
+
+## Backfill Area
 
 - 2026-05-27: Template initialized.

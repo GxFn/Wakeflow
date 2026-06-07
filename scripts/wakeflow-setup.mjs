@@ -11,6 +11,7 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  defaultWorkspaceConfig,
   loadWorkspaceConfig,
   readWorkspaceConfig,
   resolveConfigPath,
@@ -338,6 +339,8 @@ function statusPayload() {
   const discovered = redactAbsolutePaths(discoverSiblingRepositories(context));
   const missing = configuredRepositories.filter((repo) => !repo.exists);
   const outsideParent = configuredRepositories.filter((repo) => !repo.withinParent);
+  const defaultDesignWindow = defaultWorkspaceConfig.designWindow;
+  const defaultTestWindow = defaultWorkspaceConfig.testWindow;
   return {
     ok: missing.length === 0 || context.config.allowMissingRepos === true,
     wakeflowRoot: context.wakeflowRoot,
@@ -352,16 +355,16 @@ function statusPayload() {
     outsideParentRepositories: outsideParent.map((repo) => repo.windowName),
     setupQuestions: [
       {
-        windowName: context.config.designWindow,
+        windowName: defaultDesignWindow,
         question: "Do you already have a requirement-design directory or repository? If yes, configure it as external; if no, use the internal workspace design board.",
         internalCommand: "node scripts/wakeflow-setup.mjs configure --internal-design --write",
-        externalCommand: `node scripts/wakeflow-setup.mjs configure --repo ${context.config.designWindow}=../YourDesignRepo --write`,
+        externalCommand: `node scripts/wakeflow-setup.mjs configure --design-window ${defaultDesignWindow} --repo ${defaultDesignWindow}=../YourDesignRepo --write`,
       },
       {
-        windowName: context.config.testWindow,
+        windowName: defaultTestWindow,
         question: "Do you already have a real-test directory or repository? If yes, configure it as external; if no, use the internal workspace test exchange.",
         internalCommand: "node scripts/wakeflow-setup.mjs configure --internal-test --write",
-        externalCommand: `node scripts/wakeflow-setup.mjs configure --repo ${context.config.testWindow}=../YourTestRepo --write`,
+        externalCommand: `node scripts/wakeflow-setup.mjs configure --test-window ${defaultTestWindow} --repo ${defaultTestWindow}=../YourTestRepo --write`,
       },
     ],
   };
@@ -471,11 +474,11 @@ function configurePayload(context = commandContext()) {
   const requestedTestWindow = getValue("--test-window", null);
   const requestedRealProjectWindow = getValue("--real-project-window", null);
   const requestedLanguage = requestedInterfaceLanguage(context);
-  let designWindow = requestedDesignWindow ?? context.config.designWindow;
-  let testWindow = requestedTestWindow ?? context.config.testWindow;
+  let designWindow = requestedDesignWindow ?? defaultWorkspaceConfig.designWindow;
+  let testWindow = requestedTestWindow ?? defaultWorkspaceConfig.testWindow;
   let realProjectWindow = requestedRealProjectWindow ?? context.config.realProjectWindow;
-  const internalDesignPath = migratedInternalPath(context.config.internalDesignPath, "design", context.pluginTargetMode);
-  const internalTestPath = migratedInternalPath(context.config.internalTestPath, "test", context.pluginTargetMode);
+  const internalDesignPath = context.pluginTargetMode ? designWindow : `../${designWindow}`;
+  const internalTestPath = context.pluginTargetMode ? testWindow : `../${testWindow}`;
   const previousByWindow = new Map(normalizedRepositories(context.config).map((repo) => [repo.windowName, repo]));
   const repositories = explicitRepositories.length > 0
     ? [...explicitRepositories]
@@ -512,7 +515,7 @@ function configurePayload(context = commandContext()) {
   }
 
   const baseWindow = getValue("--base-window", context.config.baseWindow ?? repositories[0]?.windowName);
-  const repositoryRoles = { ...context.config.repositoryRoles };
+  const repositoryRoles = {};
   for (const repo of repositories) {
     repositoryRoles[repo.windowName] = repo.role;
   }
@@ -554,7 +557,7 @@ function configurePayload(context = commandContext()) {
     internalTestPath,
     designHandoffBoard: designRepo?.mode === "external"
       ? `${designRepo.path.replace(/\/+$/, "")}/docs/current/workspace-handoff-board.md`
-      : context.config.designHandoffBoard,
+      : defaultWorkspaceConfig.designHandoffBoard,
     designHandoffInbox: context.config.designHandoffInbox,
     testExchangePath: context.config.testExchangePath,
     dispatchWindows,
@@ -1434,8 +1437,7 @@ function hasConfigSelection() {
 }
 
 function hasLocalWindowSelection() {
-  return getAllValues("--window").length > 0
-    || getAllValues("--thread").length > 0
+  return getAllValues("--thread").length > 0
     || getAllValues("--replace-window").length > 0;
 }
 
@@ -1443,8 +1445,13 @@ function hasInitializeSelection() {
   return hasConfigSelection() || hasLocalWindowSelection();
 }
 
-function parseSpecMap(flag) {
-  return new Map(getAllValues(flag).map((spec) => parseKeyValueSpec(spec, flag)));
+function parseSpecMap(flag, fallbackKeys = []) {
+  return new Map(getAllValues(flag).map((spec) => {
+    if (!spec.includes("=") && fallbackKeys.length === 1) {
+      return [fallbackKeys[0], spec];
+    }
+    return parseKeyValueSpec(spec, flag);
+  }));
 }
 
 function automationStateDir(context) {
@@ -1689,7 +1696,7 @@ function buildLocalWindowConfig(context, registration) {
 function localWindowRegistrationPayload(context, options = {}) {
   const threadSpecs = parseSpecMap("--thread");
   const roleSpecs = parseSpecMap("--thread-role");
-  const titleSpecs = parseSpecMap("--thread-title");
+  const titleSpecs = parseSpecMap("--thread-title", [...threadSpecs.keys()]);
   const canonicalUseSpecs = parseSpecMap("--thread-use");
   const cwdSpecs = parseSpecMap("--thread-cwd");
   const responsibilitySpecs = parseSpecMap("--thread-responsibility-root");
@@ -1702,7 +1709,6 @@ function localWindowRegistrationPayload(context, options = {}) {
   }
   const windowSpecs = new Set([
     ...(options.windows ?? []).map((item) => item.windowName),
-    ...getAllValues("--window"),
     ...threadSpecs.keys(),
   ]);
   const results = [];

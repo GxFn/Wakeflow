@@ -116,7 +116,7 @@ function relativePathFrom(fromDir, absolutePath) {
 
 function looksLikeWakeflowRuntimeRoot(root) {
   return existsSync(path.join(root, ".codex-plugin/plugin.json"))
-    && existsSync(path.join(root, "bin/wakeflow-mcp.mjs"))
+    && existsSync(path.join(root, "mcp/server.cjs"))
     && existsSync(path.join(root, "skills"));
 }
 

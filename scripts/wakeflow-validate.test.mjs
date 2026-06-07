@@ -35,6 +35,7 @@ function makeFixture() {
     "assets",
     "bin",
     "lib",
+    "mcp",
     "schemas",
     "scripts",
     "skills",
@@ -78,11 +79,11 @@ test("fails when the MCP config points at a missing server entrypoint", () => {
   const root = makeFixture();
   try {
     mutateJson(path.join(root, ".mcp.json"), (payload) => {
-      payload.mcpServers.wakeflow.args = ["bin/missing-wakeflow-mcp.mjs"];
+      payload.mcpServers.wakeflow.args = ["./mcp/missing-server.cjs"];
     });
     const result = run(root);
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /missing file: bin\/missing-wakeflow-mcp\.mjs/);
+    assert.match(result.stderr, /missing file: mcp\/missing-server\.cjs/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

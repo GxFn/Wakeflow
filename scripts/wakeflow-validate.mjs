@@ -24,6 +24,8 @@ const requiredFiles = [
   ".codex-plugin/plugin.json",
   ".mcp.json",
   "bin/wakeflow-mcp.mjs",
+  "mcp/server.cjs",
+  "lib/wakeflow-mcp-tools.mjs",
   "scripts/wakeflow-runtime.mjs",
   "lib/wakeflow-runtime.mjs",
   "scripts/wakeflow-cli.mjs",
@@ -146,14 +148,14 @@ function validatePluginManifest() {
 
 function validateMcpConfig() {
   const packageJson = readJson("package.json");
-  if (packageJson?.bin?.["wakeflow-mcp"] !== "./bin/wakeflow-mcp.mjs") {
-    errors.push("package.json must expose wakeflow-mcp bin at ./bin/wakeflow-mcp.mjs");
+  if (packageJson?.bin?.["wakeflow-mcp"] !== "./mcp/server.cjs") {
+    errors.push("package.json must expose wakeflow-mcp bin at ./mcp/server.cjs");
   }
-  if (packageJson?.scripts?.mcp !== "node ./bin/wakeflow-mcp.mjs") {
+  if (packageJson?.scripts?.mcp !== "node ./mcp/server.cjs") {
     errors.push("package.json must expose an mcp script for the Wakeflow MCP entrypoint");
   }
-  if (!packageJson?.dependencies?.["@modelcontextprotocol/sdk"]) {
-    errors.push("package.json must depend on @modelcontextprotocol/sdk for the official MCP server transport");
+  if (packageJson?.dependencies?.["@modelcontextprotocol/sdk"] || packageJson?.devDependencies?.["@modelcontextprotocol/sdk"]) {
+    errors.push("package.json must not depend on @modelcontextprotocol/sdk; Wakeflow MCP is a standalone stdio server");
   }
 
   const config = readJson(".mcp.json");
@@ -165,23 +167,31 @@ function validateMcpConfig() {
   }
   if (server.command !== "node") errors.push("wakeflow MCP command must be node");
   if (server.cwd !== ".") errors.push("wakeflow MCP cwd must be .");
-  if (!Array.isArray(server.args) || server.args[0] !== "./bin/wakeflow-mcp.mjs") {
-    errors.push("wakeflow MCP args must start with ./bin/wakeflow-mcp.mjs");
+  if (!Array.isArray(server.args) || server.args[0] !== "./mcp/server.cjs") {
+    errors.push("wakeflow MCP args must start with ./mcp/server.cjs");
   }
   for (const arg of server.args || []) {
-    if (arg.endsWith(".mjs")) requireFile(stripDotSlash(arg));
+    if (arg.endsWith(".mjs") || arg.endsWith(".cjs")) requireFile(stripDotSlash(arg));
   }
 
-  const mcpText = readText("bin/wakeflow-mcp.mjs");
+  const serverText = readText("mcp/server.cjs");
   for (const required of [
-    "@modelcontextprotocol/sdk/server/mcp.js",
-    "@modelcontextprotocol/sdk/server/stdio.js",
-    "ListToolsRequestSchema",
-    "CallToolRequestSchema",
-    "StdioServerTransport",
+    "initialize",
+    "notifications/initialized",
+    "tools/list",
+    "tools/call",
+    "process.stdin",
+    "process.stdout",
   ]) {
-    if (!mcpText.includes(required)) errors.push(`MCP entrypoint must use official SDK surface: ${required}`);
+    if (!serverText.includes(required)) errors.push(`standalone MCP server is missing: ${required}`);
   }
+  for (const required of [
+    "@modelcontextprotocol/sdk",
+    "node_modules",
+  ]) {
+    if (serverText.includes(required)) errors.push(`standalone MCP server must not depend on ${required}`);
+  }
+  const mcpText = readText("lib/wakeflow-mcp-tools.mjs");
   for (const tool of [
     "wakeflow_initialize_workspace",
     "wakeflow_status",
@@ -218,9 +228,6 @@ function validateMcpConfig() {
   }
   for (const forbidden of ["threadId", "promptFile", "prompt-file"]) {
     if (mcpText.includes(forbidden)) errors.push(`MCP surface must not expose ${forbidden}`);
-  }
-  for (const forbiddenTransport of ["process.stdin.on", "Content-Length:", "readline.createInterface"]) {
-    if (mcpText.includes(forbiddenTransport)) errors.push(`MCP entrypoint must not hand-roll transport: ${forbiddenTransport}`);
   }
 }
 

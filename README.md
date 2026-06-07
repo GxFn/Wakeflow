@@ -250,7 +250,8 @@ Common source areas:
 | Path | Purpose |
 | --- | --- |
 | `.codex-plugin/plugin.json` | Plugin manifest and MCP wiring. |
-| `bin/wakeflow-mcp.mjs` | MCP server entrypoint. |
+| `mcp/server.cjs` | Standalone MCP server entrypoint with no `node_modules` dependency. |
+| `bin/wakeflow-mcp.mjs` | Compatibility wrapper for the MCP server entrypoint. |
 | `scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime. |
 | `skills/` | Controller, target, governance, and validation operating manuals. |
 | `templates/` | Installed workspace starter documents and support surfaces. |

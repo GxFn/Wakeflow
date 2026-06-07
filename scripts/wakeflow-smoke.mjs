@@ -136,6 +136,11 @@ async function runMcpSmoke(rootPath) {
     child.stdin.write(`${JSON.stringify(payload)}\n`);
   }
 
+  function writeFramedMessage(payload) {
+    const body = JSON.stringify(payload);
+    child.stdin.write(`Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`);
+  }
+
   function notify(method, params = undefined) {
     const payload = { jsonrpc: "2.0", method };
     if (params !== undefined) payload.params = params;
@@ -149,6 +154,31 @@ async function runMcpSmoke(rootPath) {
     if (params !== undefined) payload.params = params;
     return new Promise((resolve, reject) => {
       pending.set(id, { resolve, reject });
+      writeMessage(payload);
+    });
+  }
+
+  function rawRequest(payload, { framed = false } = {}) {
+    return new Promise((resolve, reject) => {
+      pending.set(payload.id, { resolve, reject });
+      if (framed) writeFramedMessage(payload);
+      else writeMessage(payload);
+    });
+  }
+
+  function requestError(payload) {
+    return new Promise((resolve, reject) => {
+      pending.set(payload.id, {
+        resolveErrors: true,
+        resolve: (message) => {
+          if (!message.error) {
+            reject(new Error(`Expected JSON-RPC error for ${payload.method || "raw request"}`));
+            return;
+          }
+          resolve(message.error);
+        },
+        reject,
+      });
       writeMessage(payload);
     });
   }
@@ -181,19 +211,42 @@ async function runMcpSmoke(rootPath) {
     const waiter = pending.get(message.id);
     if (waiter) {
       pending.delete(message.id);
-      if (message.error) waiter.reject(new Error(message.error.message));
+      if (message.error && !waiter.resolveErrors) waiter.reject(new Error(message.error.message));
       else waiter.resolve(message);
     }
   }
 
   try {
-    await request("initialize", {
+    const initializedServer = await request("initialize", {
       protocolVersion: "2024-11-05",
       capabilities: {},
       clientInfo: { name: "wakeflow-smoke", version: "0.0.0" },
     });
+    if (initializedServer.result.protocolVersion !== "2024-11-05") {
+      throw new Error("MCP initialize did not preserve a supported protocol version");
+    }
     notify("notifications/initialized");
-    const listed = await request("tools/list");
+    const pong = await request("ping");
+    if (!pong.result || Object.keys(pong.result).length !== 0) {
+      throw new Error("MCP ping did not return an empty result");
+    }
+    const unsupportedVersion = await request("initialize", {
+      protocolVersion: "2099-01-01",
+      capabilities: {},
+      clientInfo: { name: "wakeflow-smoke", version: "0.0.0" },
+    });
+    if (unsupportedVersion.result.protocolVersion !== "2025-03-26") {
+      throw new Error("MCP initialize did not negotiate unsupported protocol versions to the default");
+    }
+    const unknown = await requestError({ jsonrpc: "2.0", id: nextId++, method: "wakeflow/unknown" });
+    if (unknown.code !== -32601) {
+      throw new Error("MCP unknown request did not return MethodNotFound");
+    }
+    const invalidParams = await requestError({ jsonrpc: "2.0", id: nextId++, method: "tools/list", params: "bad" });
+    if (invalidParams.code !== -32602) {
+      throw new Error("MCP non-object params did not return InvalidParams");
+    }
+    const listed = await rawRequest({ jsonrpc: "2.0", id: nextId++, method: "tools/list" }, { framed: true });
     const tools = listed.result.tools;
     assertToolSchemasAcceptedByHost(tools);
     const toolNames = tools.map((tool) => tool.name);

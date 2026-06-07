@@ -183,9 +183,16 @@ test("initialize localizes launch titles and prompts with the window name first"
   const zhColon = "\uff1a";
 
   assert.equal(payload.steps.windowLaunchPlan.language, "zh");
+  assert.equal(payload.steps.windowLaunchPlan.requiresHostTitleReset, true);
+  assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /set_thread_title/);
   assert.equal(controller.displayTitle, `${path.basename(parent)} ${zhControllerRole}`);
   assert.equal(app.displayTitle, `AppRepo ${zhDutyWindow}`);
   assert.equal(design.displayTitle, `Design ${zhDesignWindow}`);
+  assert.deepEqual(app.titleReset, {
+    required: true,
+    hostTool: "set_thread_title",
+    title: `AppRepo ${zhDutyWindow}`,
+  });
   assert.equal(app.createThreadPrompt.split("\n")[0], `AppRepo ${zhDutyWindow}${zhColon}\u5148\u5b8c\u6210\u5165\u53e3\u540c\u6b65\u3002`);
   assert.match(app.createThreadPrompt, new RegExp(zhFirstRead));
   assert.doesNotMatch(controller.createThreadPrompt, /AGENTS\.md\u3001AGENTS\.md/);
@@ -343,6 +350,7 @@ test("initialize can replace one registered window thread without rebuilding eve
   assert.deepEqual(payload.steps.windowLaunchPlan.replaceWindows, ["BaseWindow"]);
   assert.deepEqual(payload.steps.windowLaunchPlan.windows.map((item) => item.windowName), ["BaseWindow"]);
   assert.equal(payload.steps.windowLaunchPlan.windows[0].displayTitle, `BaseWindow ${zhDutyWindow}`);
+  assert.equal(payload.steps.windowLaunchPlan.windows[0].titleReset.title, `BaseWindow ${zhDutyWindow}`);
 
   const replaced = payload.steps.localWindows.results.find((item) => item.windowName === "BaseWindow");
   assert.equal(replaced.replaceRequested, true);

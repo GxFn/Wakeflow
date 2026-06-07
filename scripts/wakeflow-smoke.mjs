@@ -113,7 +113,7 @@ async function runMcpSmoke(rootPath) {
     stdio: ["pipe", "pipe", "pipe"],
   });
   let stderr = "";
-  let buffer = "";
+  let buffer = Buffer.alloc(0);
   let nextId = 1;
   const pending = new Map();
   const timeout = setTimeout(() => {
@@ -128,9 +128,19 @@ async function runMcpSmoke(rootPath) {
     stderr += chunk.toString("utf8");
   });
   child.stdout.on("data", (chunk) => {
-    buffer += chunk.toString("utf8");
+    buffer = Buffer.concat([buffer, chunk]);
     drainFrames();
   });
+
+  function writeMessage(payload) {
+    child.stdin.write(`${JSON.stringify(payload)}\n`);
+  }
+
+  function notify(method, params = undefined) {
+    const payload = { jsonrpc: "2.0", method };
+    if (params !== undefined) payload.params = params;
+    writeMessage(payload);
+  }
 
   function request(method, params = undefined) {
     const id = nextId;
@@ -139,36 +149,53 @@ async function runMcpSmoke(rootPath) {
     if (params !== undefined) payload.params = params;
     return new Promise((resolve, reject) => {
       pending.set(id, { resolve, reject });
-      child.stdin.write(`${JSON.stringify(payload)}\n`);
+      writeMessage(payload);
     });
   }
 
   function drainFrames() {
-    while (buffer.startsWith("Content-Length:")) {
-      const headerEnd = buffer.indexOf("\r\n\r\n");
-      if (headerEnd < 0) return;
-      const header = buffer.slice(0, headerEnd);
-      const match = /Content-Length:\s*(\d+)/i.exec(header);
-      if (!match) throw new Error("Invalid MCP frame header");
-      const length = Number(match[1]);
-      const bodyStart = headerEnd + 4;
-      if (buffer.length < bodyStart + length) return;
-      const body = buffer.slice(bodyStart, bodyStart + length);
-      buffer = buffer.slice(bodyStart + length);
-      const message = JSON.parse(body);
-      const waiter = pending.get(message.id);
-      if (waiter) {
-        pending.delete(message.id);
-        if (message.error) waiter.reject(new Error(message.error.message));
-        else waiter.resolve(message);
+    while (buffer.length > 0) {
+      if (buffer.toString("utf8", 0, Math.min(buffer.length, 15)).startsWith("Content-Length:")) {
+        const headerEnd = buffer.indexOf("\r\n\r\n");
+        if (headerEnd < 0) return;
+        const header = buffer.toString("utf8", 0, headerEnd);
+        const match = /Content-Length:\s*(\d+)/i.exec(header);
+        if (!match) throw new Error("Invalid MCP frame header");
+        const length = Number(match[1]);
+        const bodyStart = headerEnd + 4;
+        if (buffer.length < bodyStart + length) return;
+        const body = buffer.toString("utf8", bodyStart, bodyStart + length);
+        buffer = buffer.slice(bodyStart + length);
+        resolveMessage(JSON.parse(body));
+        continue;
       }
+      const newline = buffer.indexOf("\n");
+      if (newline < 0) return;
+      const line = buffer.toString("utf8", 0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (line) resolveMessage(JSON.parse(line));
+    }
+  }
+
+  function resolveMessage(message) {
+    const waiter = pending.get(message.id);
+    if (waiter) {
+      pending.delete(message.id);
+      if (message.error) waiter.reject(new Error(message.error.message));
+      else waiter.resolve(message);
     }
   }
 
   try {
-    await request("initialize");
+    await request("initialize", {
+      protocolVersion: "2024-11-05",
+      capabilities: {},
+      clientInfo: { name: "wakeflow-smoke", version: "0.0.0" },
+    });
+    notify("notifications/initialized");
     const listed = await request("tools/list");
     const tools = listed.result.tools;
+    assertToolSchemasAcceptedByHost(tools);
     const toolNames = tools.map((tool) => tool.name);
     for (const expected of [
       "wakeflow_discover_workspace",
@@ -244,6 +271,30 @@ async function runMcpSmoke(rootPath) {
     child.kill("SIGTERM");
     if (stderr.trim()) {
       // Keep stderr visible when the smoke itself fails; successful runs ignore quiet shutdown noise.
+    }
+  }
+}
+
+function assertToolSchemasAcceptedByHost(tools) {
+  for (const tool of tools) {
+    if (!tool.inputSchema || tool.inputSchema.type !== "object") {
+      throw new Error(`${tool.name} inputSchema must be an object schema`);
+    }
+    assertEnumSchemasHaveTypes(tool.inputSchema, tool.name);
+  }
+}
+
+function assertEnumSchemasHaveTypes(schema, location) {
+  if (!schema || typeof schema !== "object") return;
+  if (Array.isArray(schema.enum) && !schema.type) {
+    throw new Error(`${location} enum schema is missing an explicit type`);
+  }
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === "enum") continue;
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => assertEnumSchemasHaveTypes(item, `${location}.${key}[${index}]`));
+    } else {
+      assertEnumSchemasHaveTypes(value, `${location}.${key}`);
     }
   }
 }

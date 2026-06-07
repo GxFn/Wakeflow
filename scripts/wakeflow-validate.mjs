@@ -145,6 +145,17 @@ function validatePluginManifest() {
 }
 
 function validateMcpConfig() {
+  const packageJson = readJson("package.json");
+  if (packageJson?.bin?.["wakeflow-mcp"] !== "./bin/wakeflow-mcp.mjs") {
+    errors.push("package.json must expose wakeflow-mcp bin at ./bin/wakeflow-mcp.mjs");
+  }
+  if (packageJson?.scripts?.mcp !== "node ./bin/wakeflow-mcp.mjs") {
+    errors.push("package.json must expose an mcp script for the Wakeflow MCP entrypoint");
+  }
+  if (!packageJson?.dependencies?.["@modelcontextprotocol/sdk"]) {
+    errors.push("package.json must depend on @modelcontextprotocol/sdk for the official MCP server transport");
+  }
+
   const config = readJson(".mcp.json");
   if (!config) return;
   const server = config.mcpServers?.wakeflow;
@@ -162,6 +173,15 @@ function validateMcpConfig() {
   }
 
   const mcpText = readText("bin/wakeflow-mcp.mjs");
+  for (const required of [
+    "@modelcontextprotocol/sdk/server/mcp.js",
+    "@modelcontextprotocol/sdk/server/stdio.js",
+    "ListToolsRequestSchema",
+    "CallToolRequestSchema",
+    "StdioServerTransport",
+  ]) {
+    if (!mcpText.includes(required)) errors.push(`MCP entrypoint must use official SDK surface: ${required}`);
+  }
   for (const tool of [
     "wakeflow_initialize_workspace",
     "wakeflow_discover_workspace",
@@ -183,6 +203,9 @@ function validateMcpConfig() {
   }
   for (const forbidden of ["threadId", "promptFile", "prompt-file"]) {
     if (mcpText.includes(forbidden)) errors.push(`MCP surface must not expose ${forbidden}`);
+  }
+  for (const forbiddenTransport of ["process.stdin.on", "Content-Length:", "readline.createInterface"]) {
+    if (mcpText.includes(forbiddenTransport)) errors.push(`MCP entrypoint must not hand-roll transport: ${forbiddenTransport}`);
   }
 }
 

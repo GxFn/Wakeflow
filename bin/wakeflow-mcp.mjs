@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { McpServer as SdkMcpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { listWakeflowRuntimeScripts, runWakeflowRuntime } from "../lib/wakeflow-runtime.mjs";
+
+const moduleDir = dirname(fileURLToPath(import.meta.url));
 
 const tools = [
   {
@@ -14,6 +22,7 @@ const tools = [
         workspaceName: { type: "string" },
         controllerWindow: { type: "string" },
         language: {
+          type: "string",
           enum: ["auto", "zh", "en"],
           description: "Prompt/title language for window launch plans. Use zh for Chinese users, en for English users, or auto when unknown.",
         },
@@ -51,7 +60,7 @@ const tools = [
             required: ["windowName"],
             properties: {
               windowName: { type: "string" },
-              role: { enum: ["controller", "target", "test-target", "design", "observer"] },
+              role: { type: "string", enum: ["controller", "target", "test-target", "design", "observer"] },
               cwd: { type: "string" },
               responsibilityRoot: { type: "string" },
               displayTitle: { type: "string" },
@@ -157,7 +166,7 @@ const tools = [
         controllerWindow: { type: "string" },
         taskPackageId: { type: "string" },
         humanContextRef: { type: "string" },
-        returnPolicy: { enum: ["group-ready", "per-target"] },
+        returnPolicy: { type: "string", enum: ["group-ready", "per-target"] },
         automationEnabled: { type: "boolean" },
       },
     },
@@ -171,12 +180,12 @@ const tools = [
       properties: {
         root: { type: "string" },
         deliveryFile: { type: "string" },
-        status: { enum: ["sent", "blocked", "failed"] },
+        status: { type: "string", enum: ["sent", "blocked", "failed"] },
         evidence: { type: "string" },
         error: { type: "string" },
         readbackOk: { type: "boolean" },
         hostMethod: { type: "string" },
-        hostMode: { enum: ["new-turn", "unknown"] },
+        hostMode: { type: "string", enum: ["new-turn", "unknown"] },
       },
     },
   },
@@ -191,7 +200,7 @@ const tools = [
         stateRoot: { type: "string" },
         taskId: { type: "string" },
         targetWindow: { type: "string" },
-        status: { enum: ["completed", "blocked", "needs-review"] },
+        status: { type: "string", enum: ["completed", "blocked", "needs-review"] },
         summary: { type: "string" },
         evidenceRefs: { type: "array", items: { type: "string" } },
         verification: { type: "array", items: { type: "string" } },
@@ -235,7 +244,7 @@ const tools = [
         root: { type: "string" },
         stateRoot: { type: "string" },
         candidateId: { type: "string" },
-        decision: { enum: ["accept", "rework", "blocked"] },
+        decision: { type: "string", enum: ["accept", "rework", "blocked"] },
         reason: { type: "string" },
         evidenceRefs: { type: "array", items: { type: "string" } },
         apply: { type: "boolean" },
@@ -270,7 +279,7 @@ const tools = [
         triggerTaskId: { type: "string" },
         controllerWindow: { type: "string" },
         humanContextRef: { type: "string" },
-        returnReason: { enum: ["result-ready", "blocked"] },
+        returnReason: { type: "string", enum: ["result-ready", "blocked"] },
         automationEnabled: { type: "boolean" },
         apply: { type: "boolean" },
       },
@@ -361,7 +370,7 @@ const tools = [
       properties: {
         root: { type: "string" },
         id: { type: "string" },
-        source: { enum: ["all", "design", "todo"] },
+        source: { type: "string", enum: ["all", "design", "todo"] },
         limit: { type: "number" },
         afterCompletion: { type: "boolean" },
         apply: { type: "boolean" },
@@ -403,7 +412,7 @@ const tools = [
       type: "object",
       required: ["script"],
       properties: {
-        script: { enum: listWakeflowRuntimeScripts() },
+        script: { type: "string", enum: listWakeflowRuntimeScripts() },
         args: { type: "array", items: { type: "string" } },
         timeoutMs: { type: "number" },
       },
@@ -744,12 +753,30 @@ const handlers = {
   }),
 };
 
-let buffer = "";
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", (chunk) => {
-  buffer += chunk;
-  drainBuffer();
-});
+await main();
+
+async function main() {
+  const sdkServer = new SdkMcpServer(
+    { name: "wakeflow", version: readPackageVersion() },
+    { capabilities: { tools: {} } },
+  );
+
+  sdkServer.server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
+  sdkServer.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args = {} } = request.params || {};
+    const handler = handlers[name];
+    if (!handler) {
+      return toolError(`Unknown Wakeflow tool: ${name}`);
+    }
+    try {
+      return toolContent(await handler(args || {}));
+    } catch (error) {
+      return toolError(error.message);
+    }
+  });
+
+  await sdkServer.connect(new StdioServerTransport());
+}
 
 function optionalValue(flag, value) {
   return value === undefined || value === null || value === "" ? [] : [flag, String(value)];
@@ -783,19 +810,6 @@ function rootArgs(args) {
   return optionalValue("--root", args.root);
 }
 
-function send(message) {
-  const body = JSON.stringify(message);
-  process.stdout.write(`Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`);
-}
-
-function result(id, payload) {
-  send({ jsonrpc: "2.0", id, result: payload });
-}
-
-function error(id, code, message) {
-  send({ jsonrpc: "2.0", id, error: { code, message } });
-}
-
 function toolContent(payload) {
   return {
     content: [
@@ -807,67 +821,23 @@ function toolContent(payload) {
   };
 }
 
-function handleLine(line) {
-  let request;
-  try {
-    request = JSON.parse(line);
-  } catch (parseError) {
-    error(null, -32700, `Parse error: ${parseError.message}`);
-    return;
-  }
-  try {
-    if (request.method === "initialize") {
-      result(request.id, {
-        protocolVersion: "2024-11-05",
-        capabilities: { tools: {} },
-        serverInfo: { name: "wakeflow", version: "0.1.0" },
-      });
-      return;
-    }
-    if (request.method === "tools/list") {
-      result(request.id, { tools });
-      return;
-    }
-    if (request.method === "tools/call") {
-      const { name, arguments: args = {} } = request.params || {};
-      const handler = handlers[name];
-      if (!handler) throw new Error(`Unknown Wakeflow tool: ${name}`);
-      Promise.resolve(handler(args))
-        .then((payload) => result(request.id, toolContent(payload)))
-        .catch((toolError) => error(request.id, -32000, toolError.message));
-      return;
-    }
-    if (!request.id) return;
-    error(request.id, -32601, `Unknown method: ${request.method}`);
-  } catch (callError) {
-    error(request.id, -32000, callError.message);
-  }
+function toolError(message) {
+  return {
+    isError: true,
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ ok: false, error: message }, null, 2),
+      },
+    ],
+  };
 }
 
-function drainBuffer() {
-  while (buffer.length) {
-    if (buffer.startsWith("Content-Length:")) {
-      const headerEnd = buffer.indexOf("\r\n\r\n");
-      if (headerEnd < 0) return;
-      const header = buffer.slice(0, headerEnd);
-      const match = /Content-Length:\s*(\d+)/i.exec(header);
-      if (!match) {
-        error(null, -32600, "Invalid MCP frame header");
-        buffer = "";
-        return;
-      }
-      const length = Number(match[1]);
-      const bodyStart = headerEnd + 4;
-      if (buffer.length < bodyStart + length) return;
-      const body = buffer.slice(bodyStart, bodyStart + length);
-      buffer = buffer.slice(bodyStart + length);
-      handleLine(body);
-      continue;
-    }
-    const newline = buffer.indexOf("\n");
-    if (newline < 0) return;
-    const line = buffer.slice(0, newline).trim();
-    buffer = buffer.slice(newline + 1);
-    if (line) handleLine(line);
+function readPackageVersion() {
+  try {
+    const packageJson = JSON.parse(readFileSync(join(moduleDir, "../package.json"), "utf8"));
+    return packageJson.version || "0.0.0";
+  } catch {
+    return "0.0.0";
   }
 }

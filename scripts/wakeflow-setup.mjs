@@ -1557,11 +1557,17 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
     ok: true,
     command: "window-launch-plan",
     requiresHostCreateThread: true,
+    requiresHostTitleReset: true,
     language: options.language ?? interfaceLanguage(context),
     replacementMode: replacements.size > 0,
     replaceWindows: [...replacements],
     threadIdStorage: ".workspace-local/wakeflow-delivery/thread-registry/<window>.json",
     trackedDocsContainThreadIds: false,
+    hostWorkflow: [
+      "Call create_thread for each launch entry with the entry cwd and createThreadPrompt.",
+      "Immediately call set_thread_title for the returned thread id, using the entry displayTitle.",
+      "Register the real thread id only in the local thread registry, preserving the same displayTitle.",
+    ],
     windows: entries.map((entry) => ({
       windowName: entry.windowName,
       deliveryRole: entry.deliveryRole,
@@ -1569,6 +1575,11 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
       responsibilityRoot: entry.responsibilityRoot,
       repositoryPath: entry.repositoryPath,
       displayTitle: entry.displayTitle,
+      titleReset: {
+        required: true,
+        hostTool: "set_thread_title",
+        title: entry.displayTitle,
+      },
       createThreadPrompt: entry.createThreadPrompt,
     })),
   };
@@ -1807,7 +1818,7 @@ function initializePayload() {
       accessProfiles,
     },
     nextAction: write
-      ? "Create the Codex windows in windowLaunchPlan with the host create_thread tool, then register their real thread ids into .workspace-local before dispatching any work."
+      ? "Create the Codex windows in windowLaunchPlan with the host create_thread tool, immediately reset each title with set_thread_title using displayTitle, then register real thread ids into .workspace-local before dispatching any work."
       : "Dry-run only. Rerun with --write after confirming repositories, Design/Test mode, excluded windows, and optional thread registrations.",
   };
 }

@@ -31,12 +31,15 @@ tool first:
   runtime agree.
 - Pass `language: "zh"` when the user is working in Chinese, `language: "en"`
   when the user asks for English, and leave `language: "auto"` only when there
-  is no clear preference. Use the returned `displayTitle` as the Codex thread
-  title; it keeps the window/repository name first.
+  is no clear preference. The returned `displayTitle` is the canonical Codex
+  thread title; it keeps the window/repository name first.
 - After apply, read the returned `windowLaunchPlan`, use the Codex host
   `create_thread` tool to create real controller / Design / Test / product
-  windows, then record the real thread ids only in `.workspace-local` local
-  runtime files.
+  windows, immediately call the Codex host `set_thread_title` tool for every
+  newly created thread using that entry's `displayTitle`, then record the real
+  thread ids only in `.workspace-local` local runtime files. Do this title reset
+  at the end of the initialization flow instead of manually renaming ad hoc
+  windows later.
 - To rebuild selected windows, pass `replaceWindows`. Create threads only for
   the returned replacement launch entries, then replace those windows' local
   registry records with the new real thread ids. Do not rewrite unrelated window

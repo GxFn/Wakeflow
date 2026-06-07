@@ -4,13 +4,20 @@
   "private": true,
   "type": "module",
   "description": "Unattended workflow loops for multi-window agent work.",
+  "bin": {
+    "wakeflow-mcp": "./bin/wakeflow-mcp.mjs"
+  },
   "scripts": {
     "validate": "node scripts/wakeflow-validate.mjs",
     "smoke": "node scripts/wakeflow-smoke.mjs",
+    "mcp": "node ./bin/wakeflow-mcp.mjs",
     "test:wakeflow": "node --test scripts/wakeflow-archive-todo.test.mjs scripts/wakeflow-delivery.test.mjs scripts/wakeflow-repo-status.test.mjs scripts/wakeflow-state.test.mjs scripts/wakeflow-state-machine-route-fixtures.test.mjs scripts/wakeflow-intake.test.mjs scripts/wakeflow-demand-sequence.test.mjs scripts/wakeflow-check-repository-residue.test.mjs scripts/wakeflow-check-scripts.test.mjs scripts/wakeflow-validate.test.mjs scripts/wakeflow-setup.test.mjs scripts/wakeflow-import-design-handoffs.test.mjs scripts/wakeflow-next-work.test.mjs scripts/wakeflow-cli.test.mjs",
     "test": "npm run validate && npm run smoke && npm run test:wakeflow"
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
   }
 }

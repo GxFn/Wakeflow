@@ -96,14 +96,18 @@ Recommended installation flow:
 4. Confirm the boundary when Codex asks.
 5. Let it write only the managed `AGENTS.md` blocks and local runtime surfaces.
 6. Let Codex create the controller, Design, Test, and product Codex threads from
-   the returned `windowLaunchPlan`, then store the real thread ids under
+   the returned `windowLaunchPlan`.
+7. After each thread is created, Codex calls `set_thread_title` with that
+   window's `displayTitle`, then stores the real thread ids under
    `.workspace-local/`.
 
 Wakeflow detects the requested setup language from `language` (`auto`, `zh`, or
 `en`). The launch plan uses short window titles with the window name first, such
 as `<RepoName> Responsibility Window` in English or the localized equivalent in
 Chinese, and the first line of each create-thread prompt starts with that title.
-This keeps the core repository visible in narrow Codex sidebars.
+Initialization also includes a final host title-reset step so Codex-generated
+conversation titles are overwritten with the canonical `displayTitle`. This
+keeps the core repository visible in narrow Codex sidebars.
 
 To rebuild only selected windows, pass them as `replaceWindows` during
 initialization. Wakeflow returns a launch plan containing only those windows.

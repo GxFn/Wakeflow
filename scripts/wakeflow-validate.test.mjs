@@ -127,6 +127,47 @@ test("fails when a plugin skill surface is missing", () => {
   }
 });
 
+test("fails when package metadata is still private", () => {
+  const root = makeFixture();
+  try {
+    mutateJson(path.join(root, "package.json"), (payload) => {
+      payload.private = true;
+    });
+    const result = run(root);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /package\.json must not be private/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("fails when plugin starter prompts exceed the Codex UI limit", () => {
+  const root = makeFixture();
+  try {
+    mutateJson(path.join(root, ".codex-plugin/plugin.json"), (payload) => {
+      payload.interface.defaultPrompt.push("Run Wakeflow control status");
+    });
+    const result = run(root);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /defaultPrompt must contain at most 3 prompts/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("fails when project-specific names leak into reusable runtime text", () => {
+  const root = makeFixture();
+  try {
+    mkdirSync(path.join(root, "docs"), { recursive: true });
+    writeFileSync(path.join(root, "docs/bad.md"), "# Bad\n\nAlembicWorkspace should not be a reusable default.\n");
+    const result = run(root);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /project-specific token AlembicWorkspace remains in docs\/bad\.md/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("fails when non-English project text is introduced", () => {
   const root = makeFixture();
   try {

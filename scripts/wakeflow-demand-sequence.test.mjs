@@ -30,6 +30,10 @@ function writeJson(file, value) {
 }
 
 function createManifest(root) {
+  writeJson(path.join(root, "workspace.config.json"), {
+    workspaceName: "ExampleWorkspace",
+    controllerWindow: "ExampleController",
+  });
   const docsDir = path.join(root, "wakeflow-ledger/requirement-designs/example");
   mkdirSync(docsDir, { recursive: true });
   writeFileSync(path.join(docsDir, "req-01.md"), standardDoc("EXAMPLE-REQ-01", "First Requirement"));
@@ -54,7 +58,7 @@ function createManifest(root) {
           {
             taskPackageId: "EXAMPLE-REQ-01-P1",
             summary: "Review first requirement code facts.",
-            targetWindow: "AlembicWorkspace",
+            targetWindow: "ExampleProduct",
             targetTaskId: "EXAMPLE-REQ-01-T1",
           },
         ],
@@ -72,7 +76,7 @@ function createManifest(root) {
           {
             taskPackageId: "EXAMPLE-REQ-02-P1",
             summary: "Review second requirement code facts.",
-            targetWindow: "AlembicWorkspace",
+            targetWindow: "ExampleProduct",
             targetTaskId: "EXAMPLE-REQ-02-T1",
           },
         ],
@@ -183,6 +187,7 @@ test("claim-next --write creates one active state root and initial task package"
   assert.deepEqual(payload.claimed.taskPackages, ["EXAMPLE-REQ-01-P1"]);
   assert.match(payload.claimed.dispatchCandidates[0].prepareCommand, /--root /);
   assert.match(payload.claimed.dispatchCandidates[0].prepareCommand, /--group EXAMPLE-REQ-01-GROUP/);
+  assert.match(payload.claimed.dispatchCandidates[0].prepareCommand, /--controller-window ExampleController/);
   assert.doesNotMatch(payload.claimed.dispatchCandidates[0].prepareCommand, /--dispatch-group/);
   assert.match(payload.claimed.dispatchCandidates[0].prepareCommand, /--target-task-id EXAMPLE-REQ-01-T1/);
 
@@ -194,7 +199,7 @@ test("claim-next --write creates one active state root and initial task package"
   assert.equal(state.state, "planned");
   assert.equal(state.demandKey, "EXAMPLE-REQ-01");
   assert.equal(state.taskPackages[0].taskPackageId, "EXAMPLE-REQ-01-P1");
-  assert.equal(state.targetTasks[0].targetWindow, "AlembicWorkspace");
+  assert.equal(state.targetTasks[0].targetWindow, "ExampleProduct");
   assert.match(progress, /Main state: planned/);
   assert.match(progress, /Current task packages: EXAMPLE-REQ-01-P1\(pending\)/);
   assert.match(developerDoc, /Main state: planned/);

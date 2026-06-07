@@ -111,8 +111,8 @@ Current scripts:
   access-card sync, internal or external Design/Test support templates, and
   local-only window / thread runtime registration. It also exposes the narrower
   subcommands for discovery, prompts, access profiles, same-repository window
-  aliases such as `AlembicTest-IDE` / `AlembicTest`, real-project protection,
-  and ledger path inspection.
+  aliases such as `<Repo>-IDE` / `<Repo>`, real-project protection, and ledger
+  path inspection.
   Discovery returns directory facts only; the Codex agent decides whether the
   workspace is clean enough to pass explicit repository mappings or messy enough
   to ask the user first.

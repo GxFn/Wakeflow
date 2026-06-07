@@ -34,8 +34,7 @@
     "defaultPrompt": [
       "Initialize the current workspace with Wakeflow",
       "Create a Wakeflow task package",
-      "Review Wakeflow target results",
-      "Run Wakeflow control status"
+      "Review Wakeflow target results"
     ],
     "brandColor": "#0F766E",
     "composerIcon": "./assets/wakeflow-mark.svg",

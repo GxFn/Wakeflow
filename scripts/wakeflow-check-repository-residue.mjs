@@ -14,8 +14,8 @@ const workspaceConfig = loadWorkspaceConfig({ workspaceRoot, args });
 const residueRules = [
   {
     relPath: ".asd",
-    kind: "alembic-runtime-data",
-    message: "Alembic runtime data must not live in workspace source repositories.",
+    kind: "external-runtime-data",
+    message: "External runtime data must not live in workspace source repositories.",
   },
   {
     relPath: ".cursor/skills",

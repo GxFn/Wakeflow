@@ -11,6 +11,12 @@ const placeholderToken = "[TO" + "DO:";
 const oldWorkspaceToken = "codex-control" + "-workspace";
 const oldLedgerToken = "workspace-" + "ledger";
 const oldLedgerReferenceFile = path.join("skills", "wakeflow-governance", "references", "workspace-" + "ledgers.md");
+const projectSpecificTokens = [
+  "AFA" + "PI",
+  "Al" + "embic" + "Workspace",
+  "Al" + "embic" + "Plugin",
+  "Al" + "embic" + "Core",
+];
 const ignoredDirectoryNames = new Set([".git", ".workspace-active", ".workspace-local", "coverage", "dist", "node_modules"]);
 const localizedRuntimeTextFiles = new Set([
   "scripts/wakeflow-setup.mjs",
@@ -108,7 +114,25 @@ function validatePackage() {
   const manifest = readJson("package.json");
   if (!manifest) return;
   if (manifest.name !== "wakeflow") errors.push("package name must be wakeflow");
+  if (manifest.private === true) errors.push("package.json must not be private for release packaging");
   if (manifest.type !== "module") errors.push("package type must be module");
+  if (manifest.license !== "MIT") errors.push("package license must be MIT");
+  if (manifest.homepage !== "https://github.com/GxFn/Wakeflow#readme") {
+    errors.push("package homepage must point at the public Wakeflow README");
+  }
+  if (manifest.repository?.url !== "https://github.com/GxFn/Wakeflow.git") {
+    errors.push("package repository URL must point at the public Wakeflow source");
+  }
+  if (!Array.isArray(manifest.keywords) || !manifest.keywords.includes("unattended")) {
+    errors.push("package keywords must include unattended");
+  }
+  if (!Array.isArray(manifest.files) || manifest.files.length === 0) {
+    errors.push("package files must declare the plugin release surface");
+  } else {
+    for (const expected of [".codex-plugin/", ".mcp.json", "mcp/", "skills/", "scripts/", "templates/"]) {
+      if (!manifest.files.includes(expected)) errors.push(`package files must include ${expected}`);
+    }
+  }
   if (manifest.scripts?.validate !== "node scripts/wakeflow-validate.mjs") {
     errors.push("package validate script must run scripts/wakeflow-validate.mjs");
   }
@@ -135,6 +159,17 @@ function validatePluginManifest() {
   }
   if (!Array.isArray(manifest.interface?.defaultPrompt) || manifest.interface.defaultPrompt.length === 0) {
     errors.push("plugin interface.defaultPrompt must be a non-empty array");
+  } else {
+    if (manifest.interface.defaultPrompt.length > 3) {
+      errors.push("plugin interface.defaultPrompt must contain at most 3 prompts");
+    }
+    for (const [index, prompt] of manifest.interface.defaultPrompt.entries()) {
+      if (typeof prompt !== "string" || prompt.trim() === "") {
+        errors.push(`plugin interface.defaultPrompt[${index}] must be a non-empty string`);
+      } else if (prompt.length > 128) {
+        errors.push(`plugin interface.defaultPrompt[${index}] must be at most 128 characters`);
+      }
+    }
   }
   for (const relativePath of [
     manifest.skills,
@@ -280,22 +315,32 @@ function validateSkillSurface() {
 
 function validateTextSurface() {
   for (const file of listTextFiles(root)) {
+    const rel = relative(file);
     const text = readFileSync(file, "utf8");
-    const allowsLocalizedRuntimeText = localizedRuntimeTextFiles.has(relative(file));
-    if (text.includes(placeholderToken)) errors.push(`placeholder remains in ${relative(file)}`);
+    const allowsLocalizedRuntimeText = localizedRuntimeTextFiles.has(rel);
+    if (text.includes(placeholderToken)) errors.push(`placeholder remains in ${rel}`);
     if (text.includes(oldWorkspaceToken)) {
-      errors.push(`old workspace name remains in ${relative(file)}`);
+      errors.push(`old workspace name remains in ${rel}`);
     }
     if (text.includes(oldLedgerToken)) {
-      errors.push(`old ledger directory name remains in ${relative(file)}`);
+      errors.push(`old ledger directory name remains in ${rel}`);
+    }
+    if (!allowsProjectSpecificFixtureText(rel)) {
+      for (const token of projectSpecificTokens) {
+        if (text.includes(token)) errors.push(`project-specific token ${token} remains in ${rel}`);
+      }
     }
     if (!allowsLocalizedRuntimeText && /\p{Script=Han}/u.test(text)) {
-      errors.push(`non-English Han text remains in ${relative(file)}`);
+      errors.push(`non-English Han text remains in ${rel}`);
     }
     if (!allowsLocalizedRuntimeText && /[\u3000-\u303F\uFF00-\uFFEF]/u.test(text)) {
-      errors.push(`fullwidth punctuation remains in ${relative(file)}`);
+      errors.push(`fullwidth punctuation remains in ${rel}`);
     }
   }
+}
+
+function allowsProjectSpecificFixtureText(relativePath) {
+  return relativePath.startsWith("scripts/fixtures/") || /\.test\.mjs$/u.test(relativePath);
 }
 
 function requireFile(relativePath) {

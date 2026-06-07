@@ -20,6 +20,7 @@ compact direct-thread delivery, and evidence-based acceptance.
 - [Automation Semantics](#automation-semantics)
 - [MCP Capability Surface](#mcp-capability-surface)
 - [Runtime And Ledger Boundaries](#runtime-and-ledger-boundaries)
+- [Marketplace Release](#marketplace-release)
 - [Working In This Repository](#working-in-this-repository)
 - [Design Principles](#design-principles)
 
@@ -233,6 +234,30 @@ Wakeflow keeps source, active runtime, and durable records separate:
 The source repository tracks reusable Wakeflow capability. Product code,
 project-specific active state, real thread ids, and derived local runtime
 artifacts do not belong in Wakeflow source.
+
+## Marketplace Release
+
+Wakeflow is packaged as a Codex plugin source repository. The public source of
+truth is:
+
+```text
+https://github.com/GxFn/Wakeflow.git
+```
+
+Before publishing a marketplace entry or release tag:
+
+1. Run `npm test` from this repository.
+2. Run the Codex plugin manifest validator in an environment with its Python
+   dependencies installed.
+3. Confirm `.codex-plugin/plugin.json` has no more than three starter prompts.
+4. Confirm runtime scripts and installed skills contain no project-specific
+   default controller names, product overlays, local paths, or private thread
+   ids.
+5. Tag the exact commit that the marketplace entry should install.
+
+Local development may use a personal marketplace entry that points at this
+checkout. A shared marketplace should point at the public source repository or
+a repo/team marketplace layout, not at a user-specific filesystem path.
 
 ## Working In This Repository
 

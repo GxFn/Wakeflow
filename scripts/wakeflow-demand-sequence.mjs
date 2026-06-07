@@ -14,6 +14,7 @@ const options = rawArgs[0] && !rawArgs[0].startsWith("--") ? rawArgs.slice(1) : 
 const workspaceRoot = path.resolve(getValue("--root", wakeflowRoot));
 const write = hasFlag("--write");
 const json = hasFlag("--json");
+let cachedWorkspaceConfig = undefined;
 
 const helpText = `
 Controller demand sequence runner
@@ -165,6 +166,22 @@ function readManifest() {
       items: [...manifest.items].sort((left, right) => left.order - right.order),
     },
   };
+}
+
+function readWorkspaceConfig() {
+  if (cachedWorkspaceConfig !== undefined) return cachedWorkspaceConfig;
+  const configPath = path.join(workspaceRoot, "workspace.config.json");
+  cachedWorkspaceConfig = existsSync(configPath) ? readJson(configPath, "workspace config") : null;
+  return cachedWorkspaceConfig;
+}
+
+function controllerWindowFor(item) {
+  const config = readWorkspaceConfig();
+  const controllerWindow = item.controllerWindow ?? config?.controllerWindow ?? config?.workspaceName;
+  if (!controllerWindow) {
+    fail(`manifest item ${item.demandKey} requires controllerWindow or workspace.config.json controllerWindow.`);
+  }
+  return controllerWindow;
 }
 
 function sourceRefsFor(item) {
@@ -369,7 +386,7 @@ function dispatchCandidatesFor(item, stateRoot) {
           "--group",
           dispatchGroup,
           "--controller-window",
-          item.controllerWindow ?? "AlembicWorkspace",
+          controllerWindowFor(item),
           "--return-policy",
           pkg.returnPolicy ?? item.returnPolicy ?? "group-ready",
           "--write",

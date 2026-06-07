@@ -1,99 +1,107 @@
 ---
 name: workspace-wakeflow-progressive-validation
-description: Use when Wakeflow needs to link into the external Progressive Chain Validation (PCV) canonical source or the local PCVM workspace for source-derived chain plans, scoped rounds, node-level cold-start/rescan baselines, before/after metrics, scorecards, or PCV-guided workflow repair.
+description: Use when Wakeflow needs to link into a configured Progressive Chain Validation (PCV) source or validation artifact workspace for source-derived chain plans, scoped rounds, before/after metrics, scorecards, or PCV-guided workflow repair.
 ---
 
 # Workspace Progressive Chain Validation Bridge
 
-This is the Wakeflow bridge into the external PCV canonical source and the local PCVM artifact workspace. It does not redefine PCV and does not replace the workspace `AGENTS.md` stop card.
+This is an optional Wakeflow bridge into an external Progressive Chain
+Validation source. It does not redefine PCV and does not replace the workspace
+`AGENTS.md` stop card, state root, dispatch rules, or controller acceptance.
 
-For PCVM flow control, load these first:
-
-```text
-PCVM/skills/pcvm-flow-controller/SKILL.md
-PCVM/config/pcvm-flow-control.json
-```
-
-The old route of treating `.workspace-active/workspace/current/` as the PCVM state machine is retired unless a user explicitly asks to update total-control current documents. PCVM run state, scoped round evidence, engineering repair packages, and AI local-chain placeholders live under `PCVM/`.
+Use this bridge only when the current state root, plan, or workspace
+configuration explicitly names a PCV source checkout, validation artifact
+workspace, or PCV run. Wakeflow must not assume a fixed repository name,
+artifact directory, product overlay, or controller window.
 
 ## Source Of Truth
 
-- Canonical PCV source repo: `https://github.com/GxFn/wakeflow-progressive-validation.git`
-- Expected local checkout from the parent workspace root: `wakeflow-progressive-validation/`
-- Canonical method package inside that checkout: `wakeflow-progressive-validation/wakeflow-progressive-validation/`
-- Current observed source commit: `3322646aa57c67c164eec20626ec5edd9d05b113`
+- Canonical PCV source repo: the repo named by the current state root, plan, or
+  workspace config.
+- Local PCV checkout: the path named by the current state root, plan, or
+  workspace config.
+- Validation artifact workspace: the path named by the current state root,
+  plan, or workspace config.
+- Expected PCV commit: optional; use only when the current task names a commit
+  or revision constraint.
 
-When PCV execution, planning quality, node contract, metrics, overlays, or templates matter, load the canonical package from the local checkout first:
+When PCV execution, planning quality, node contracts, metrics, overlays, or
+templates matter, load the configured PCV source entrypoint first. Then load
+only the references needed for the current task, such as metric contracts,
+chain-plan generation rules, source adapters, overlays, or plan templates.
 
-```text
-wakeflow-progressive-validation/wakeflow-progressive-validation/SKILL.md
-```
-
-Then load only the canonical references needed for the current task, such as:
-
-- `references/metrics-contract.md` for baseline / candidate / comparison / verdict work.
-- `references/chain-plan-generation.md` for deriving nodes from source boundaries.
-- `references/overlays/alembic-coldstart-rescan.md` for Alembic cold-start or rescan work.
-- `templates/plan.md` when producing a PCV plan artifact.
-
-If the local checkout is missing or the commit cannot be verified, stop before treating PCV results as current evidence. For discussion-only work, say that the answer is based on workspace ledger memory rather than a verified PCV source checkout.
+If the configured source checkout or revision cannot be verified, stop before
+treating PCV output as current evidence. For discussion-only work, state that
+the answer is based on available Wakeflow context rather than a verified PCV
+source checkout.
 
 ## When To Use
 
 Use this bridge when:
 
-- A TODO, wave, or user request mentions PCV / PCVM / Progressive Chain Validation.
+- A TODO, wave, state root, or user request explicitly mentions Progressive
+  Chain Validation.
 - A long workflow needs a source-derived node chain before implementation.
-- The task is cold-start / rescan optimization and needs node-level baseline evidence.
-- The task needs before/after scorecards, useful-unit metrics, stage loss, trace/artifact/source-ref linkage, or a `blocked-by-observability-gap` decision.
-- The workspace is deciding whether to run a broad smoke, split a node, add observability, or stop at a current-node boundary.
+- A task needs before/after scorecards, useful-unit metrics, stage loss,
+  trace/artifact/source-ref linkage, or a `blocked-by-observability-gap`
+  decision.
+- The workspace is deciding whether to run a broad smoke, split a node, add
+  observability, or stop at a current-node boundary.
 
-Do not use PCV as a generic replacement for normal workspace validation, TODO bookkeeping, Wakeflow Delivery Loop delivery, or final acceptance. PCV is a chain-planning and node-validation tool; total-control judgment remains in workspace `AGENTS.md`.
-
-AlembicWorkspace owns judgment, dispatch, acceptance, and Test handoff. PCVM owns the PCV plan artifact, round records, metrics, issue records, and task-package design candidates. Do not use PCVM artifacts to close Workspace TODOs or product acceptance without total-control review.
+Do not use PCV as a generic replacement for normal workspace validation, TODO
+bookkeeping, Wakeflow Delivery Loop delivery, or final acceptance. PCV is a
+chain-planning and node-validation aid; controller judgment remains in
+workspace `AGENTS.md` and the active Wakeflow state root.
 
 ## Workspace Routing
 
-- Active PCVM run artifacts live under `PCVM/scratch/chain-runs/<run-id>/report/`.
-- `PCVM/skills/pcvm-flow-controller/SKILL.md` and `PCVM/config/pcvm-flow-control.json` are the first route-control files for PCVM work.
-- Long-term Alembic PCVM requirements live in `wakeflow-ledger/requirement-designs/wakeflow-progressive-validation-metrics/`.
-- Per-repository PCVM evidence remains under the relevant `wakeflow-ledger/<WindowName>/` folder.
-- PCV source changes belong in the independent `wakeflow-progressive-validation/` repo, not in `Wakeflow/`.
-- This bridge directory only records how Wakeflow consumes PCV and PCVM. Runtime dispatch state and final acceptance stay under Wakeflow control; PCVM node/round artifacts stay under `PCVM/`.
+- Active PCV run artifacts live in the validation artifact workspace named by
+  the current state root, plan, or workspace config.
+- Long-term requirement and evidence records stay in the configured
+  `wakeflow-ledger/` destination for the owning window or demand.
+- PCV source changes belong in the independent PCV source repository, not in
+  Wakeflow, unless the current plan explicitly assigns Wakeflow source work.
+- Wakeflow records how it consumes PCV output. Runtime dispatch state and final
+  acceptance stay under Wakeflow control; PCV node/round artifacts stay under
+  the configured validation artifact workspace.
 
 ## Control Workflow
 
-1. Apply the workspace stop card: state the user goal, current evidence, minimum closure, and first blocker.
-2. Read `PCVM/skills/pcvm-flow-controller/SKILL.md` and `PCVM/config/pcvm-flow-control.json`.
-3. Read the active PCVM run plan and records.
-4. Verify the PCV source checkout when current PCV facts are needed:
+1. Apply the workspace stop card: state the user goal, current evidence,
+   minimum closure, and first blocker.
+2. Read the current state root, plan, and any PCV source/artifact coordinates
+   they name.
+3. Verify the configured PCV source checkout and expected revision when current
+   PCV facts are needed.
+4. Load the configured PCV method entrypoint, then the minimum relevant
+   references.
+5. Build the source chain map from real code before applying overlays or prior
+   plans.
+6. Decide whether this is plan-only, round execution, engineering repair
+   packaging, live local-chain prep, or acceptance review.
+7. For execution, advance only one current round/node at a time. Broad
+   cold-start, rescan, daemon, or end-to-end commands are observation-only until
+   prerequisite component nodes have passed.
+8. Record verified PCV facts in the configured artifact workspace; do not turn
+   PCV output into Wakeflow acceptance.
 
-   ```text
-   git -C wakeflow-progressive-validation rev-parse HEAD
-   # or, when already inside Wakeflow:
-   git -C ../wakeflow-progressive-validation rev-parse HEAD
-   ```
+## Product-Specific Overlays
 
-5. Load canonical PCV `SKILL.md` as the method entrypoint, then the minimum relevant PCV references.
-6. Build the source chain map from real code before applying overlays or prior plans.
-7. Decide whether this is plan-only, round execution, engineering repair packaging, live AI local-chain prep, or acceptance review.
-8. For execution, advance only one current round/node at a time. Broad cold-start, rescan, daemon, or end-to-end commands are observation-only until prerequisite component nodes have passed.
-9. Record verified PCVM facts under `PCVM/scratch/chain-runs/<run-id>/report/`; do not turn PCVM output into total-control acceptance.
-
-## Alembic Cold-Start Shortcut
-
-For Alembic cold-start / rescan optimization, load the canonical Alembic adapter and cold-start overlay after the source map exists:
-
-```text
-wakeflow-progressive-validation/wakeflow-progressive-validation/references/adapters/alembic.md
-wakeflow-progressive-validation/wakeflow-progressive-validation/references/overlays/alembic-coldstart-rescan.md
-```
-
-The overlay is a coverage oracle, not proof. If Alembic source boundaries disagree with the overlay, record the split / merge / missing / conditional mapping and keep the node cursor on the first unproven boundary.
+Product adapters and overlays are optional. Load only overlays named by the
+current state root, plan, or verified PCV source map. An overlay is a coverage
+oracle, not proof. If source boundaries disagree with the overlay, record the
+split, merge, missing, or conditional mapping and keep the cursor on the first
+unproven boundary.
 
 ## Boundaries
 
-- Hard anti-failure rules, repository boundaries, AlembicTest usage limits, Wakeflow delivery limits, and acceptance rules stay in workspace `AGENTS.md`.
-- PCV is not a default dispatch window. Treat it as a skill source unless a Wakeflow plan explicitly assigns work to the independent PCV repository.
-- Do not copy canonical PCV references into Wakeflow to make local edits easier. Patch the PCV repo when PCV itself needs changes.
-- Do not run full cold-start / rescan just to fill a PCV plan. If the current node cannot be isolated, first add or request observability / dry-run / no-delivery support.
+- Hard anti-failure rules, repository boundaries, Test usage limits, Wakeflow
+  delivery limits, and acceptance rules stay in workspace `AGENTS.md`.
+- PCV is not a default dispatch window. Treat it as a source or artifact
+  capability unless a Wakeflow plan explicitly assigns work to the independent
+  PCV repository.
+- Do not copy canonical PCV references into Wakeflow to make local edits easier.
+  Patch the PCV source repo when PCV itself needs changes.
+- Do not run full cold-start, rescan, or end-to-end commands just to fill a PCV
+  plan. If the current node cannot be isolated, first add or request
+  observability, dry-run, or no-delivery support.

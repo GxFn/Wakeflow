@@ -1,5 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Wakeflow mark">
-  <rect width="128" height="128" rx="28" fill="#0F766E"/>
-  <path d="M24 70c13-28 29-28 42 0s29 28 42 0" fill="none" stroke="#ECFDF5" stroke-width="12" stroke-linecap="round"/>
-  <path d="M24 46c13 28 29 28 42 0s29-28 42 0" fill="none" stroke="#A7F3D0" stroke-width="12" stroke-linecap="round"/>
+  <rect width="128" height="128" rx="28" fill="#0F172A"/>
+  <g transform="translate(64 64) rotate(45) scale(1.25) translate(-64 -64)">
+    <path d="M43 64a21 21 0 1 1 34 16" fill="none" stroke="#5EEAD4" stroke-width="10" stroke-linecap="round"/>
+    <path d="M77 80 92 82 82 69Z" fill="#5EEAD4"/>
+    <circle cx="64" cy="64" r="10" fill="#F8FAFC"/>
+    <circle cx="64" cy="64" r="4" fill="#0F172A"/>
+  </g>
 </svg>

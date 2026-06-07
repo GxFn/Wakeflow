@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -278,6 +278,23 @@ test("prepare-dispatch-from-state rejects completed and accepted state-root task
   assert.notEqual(accepted.status, 0);
   assert.match(accepted.stdout, /target task CSMR-TASK-1 is accepted/);
 
+  state.targetTasks[0].status = "sent";
+  writeJson(stateFile, state);
+  const sent = run(root, [
+    "prepare-dispatch-from-state",
+    "--state-root",
+    stateRootRef,
+    "--target-task-id",
+    "CSMR-TASK-1",
+    "--group",
+    "GROUP-STATE",
+    "--controller-window",
+    "AlembicWorkspace",
+    "--write",
+  ]);
+  assert.notEqual(sent.status, 0);
+  assert.match(sent.stdout, /target task CSMR-TASK-1 is sent/);
+
   state.state = "blocked";
   state.taskPackages[0].status = "pending";
   state.targetTasks[0].status = "pending";
@@ -531,6 +548,56 @@ test("controller-return blocked delivery records controller window evidence", ()
   assert.equal(recorded.run.status, "blocked");
 });
 
+test("group review and controller return read state-root target results", () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  prepareDispatch(root, stateRootRef);
+  writeText(path.join(stateRoot, "reports/plugin-result.json"), "{\"ok\": true}");
+  writeJson(path.join(stateRoot, "target-results/result-1.json"), {
+    schemaVersion: 1,
+    resultId: "result-1",
+    demandKey: "CSMR-FIXTURE",
+    taskPackageId: "CSMR-PKG-1",
+    targetTaskId: "CSMR-TASK-1",
+    targetWindow: "AlembicPlugin",
+    dispatchGroup: "GROUP-STATE",
+    status: "completed",
+    changedRepositories: [{
+      repository: "AlembicPlugin",
+      head: "abc123",
+      changedFiles: [],
+    }],
+    evidenceRefs: ["reports/plugin-result.json"],
+    verification: ["focused smoke passed"],
+    risks: [],
+    createdAt: "2026-06-05T00:01:00.000Z",
+  });
+
+  const review = parseOk(run(root, ["review-results", "--group", "GROUP-STATE"]));
+  assert.equal(review.decision, "needs-controller-review");
+  assert.equal(review.groupStatus, "ready");
+  assert.equal(review.groupSnapshot.ready[0].status, "completed");
+  assert.equal(review.readyResults[0].resultFile, `${stateRootRef}/target-results/result-1.json`);
+
+  const pack = parseOk(run(root, ["review-pack", "--group", "GROUP-STATE"]));
+  assert.equal(pack.reviewPack.gates.controllerReviewReady, true);
+  assert.equal(pack.reviewPack.targetResults[0].stateRootResult, true);
+  assert.equal(pack.reviewPack.targetResults[0].evidenceRefSummaries[0].resolvedAgainst, "state-root");
+
+  const returned = parseOk(run(root, [
+    "build-controller-return",
+    "--group",
+    "GROUP-STATE",
+    "--trigger-target",
+    "AlembicPlugin",
+    "--trigger-task-id",
+    "CSMR-TASK-1",
+    "--write",
+  ]));
+  assert.equal(returned.envelope.groupSnapshot.allResultsPresent, true);
+  assert.equal(returned.envelope.groupSnapshot.ready[0].resultFile, `${stateRootRef}/target-results/result-1.json`);
+});
+
 test("state-root review-pack reads target results from controller state root", () => {
   const { root, stateRootRef, stateRoot } = makeFixture();
   const absoluteEvidence = path.join(root, "absolute-evidence.json");
@@ -652,7 +719,7 @@ test("completed target results require reviewable evidence", () => {
 });
 
 test("record-delivery-run enforces sent readback evidence", () => {
-  const { root, stateRootRef } = makeFixture();
+  const { root, stateRootRef, stateRoot } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
 
@@ -683,10 +750,63 @@ test("record-delivery-run enforces sent readback evidence", () => {
   ]));
   assert.equal(recorded.status, "sent");
   assert.equal(recorded.run.readback.ok, true);
+  assert.equal(recorded.stateUpdate.updated, true);
+  assert.equal(recorded.stateUpdate.targetTaskId, "CSMR-TASK-1");
+  assert.equal(recorded.stateUpdate.projectionStatus, "stale");
   assert.match(recorded.agentNext, /Controller-side delivery is complete/);
   assert.match(recorded.agentNext, /Do not poll, sleep, or run review-results/);
   assert.doesNotMatch(recorded.agentNext, /Wait for the target result envelope/);
   assert.doesNotMatch(JSON.stringify(recorded), /0192fac-AlembicPlugin/);
+
+  const state = JSON.parse(readFileSync(path.join(stateRoot, "wakeflow-state.json"), "utf8"));
+  assert.equal(state.state, "dispatched");
+  assert.equal(state.taskPackages[0].status, "sent");
+  assert.equal(state.targetTasks[0].status, "sent");
+  assert.equal(state.targetTasks[0].delivery.deliveryRunId, recorded.run.deliveryRunId);
+  assert.equal(state.windows[0].windowState, "active");
+  assert.equal(state.projection.status, "stale");
+  const events = readFileSync(path.join(stateRoot, "controller-events.jsonl"), "utf8");
+  assert.match(events, /"type":"delivery\.sent"/);
+});
+
+test("record-delivery-run infers workspace root from an absolute delivery file", () => {
+  const { root, stateRootRef } = makeFixture();
+  const caller = mkdtempSync(path.join(os.tmpdir(), "wakeflow-other-cwd-"));
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const absoluteDeliveryFile = path.join(root, prepared.deliveryFile);
+
+  const recorded = spawnSync("node", [
+    script,
+    "record-delivery-run",
+    "--delivery-file",
+    absoluteDeliveryFile,
+    "--status",
+    "sent",
+    "--readback-ok",
+    "true",
+    "--evidence",
+    "host thread accepted prompt",
+    "--write",
+    "--json",
+  ], {
+    cwd: caller,
+    encoding: "utf8",
+  });
+
+  const payload = parseOk(recorded);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.runFile.startsWith(".workspace-local/wakeflow-delivery/delivery-runs/"), true);
+  assert.equal(
+    existsSync(path.join(root, payload.runFile)),
+    true,
+    "delivery run should be written beside the delivery envelope workspace",
+  );
+  assert.equal(
+    existsSync(path.join(caller, payload.runFile)),
+    false,
+    "delivery run must not be written under the caller cwd",
+  );
 });
 
 test("waiting review results tell total control to stop instead of polling", () => {

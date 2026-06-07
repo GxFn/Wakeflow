@@ -184,22 +184,37 @@ function validateMcpConfig() {
   }
   for (const tool of [
     "wakeflow_initialize_workspace",
-    "wakeflow_discover_workspace",
-    "wakeflow_sync_agents",
+    "wakeflow_status",
     "wakeflow_init_demand",
     "wakeflow_add_task",
+    "wakeflow_next_work",
     "wakeflow_prepare_delivery",
     "wakeflow_record_delivery",
-    "wakeflow_submit_result",
     "wakeflow_review_pack",
     "wakeflow_decide_review",
-    "wakeflow_build_controller_return",
+    "wakeflow_complete_demand",
     "wakeflow_intake_design_handoff",
     "wakeflow_intake_test_card",
-    "wakeflow_next_work",
-    "wakeflow_full_verify",
+    "wakeflow_verify",
   ]) {
     if (!mcpText.includes(`name: "${tool}"`)) errors.push(`MCP tool is missing: ${tool}`);
+  }
+  for (const tool of [
+    "wakeflow_discover_workspace",
+    "wakeflow_access_profiles",
+    "wakeflow_sync_agents",
+    "wakeflow_submit_result",
+    "wakeflow_review",
+    "wakeflow_build_controller_return",
+    "wakeflow_stop_loop",
+    "wakeflow_keep_live_state",
+    "wakeflow_archive_workspace_docs",
+    "wakeflow_archive_todo",
+    "wakeflow_run_backend",
+    "wakeflow_full_status",
+    "wakeflow_full_verify",
+  ]) {
+    if (mcpText.includes(`name: "${tool}"`)) errors.push(`internal tool must not be public MCP: ${tool}`);
   }
   for (const forbidden of ["threadId", "promptFile", "prompt-file"]) {
     if (mcpText.includes(forbidden)) errors.push(`MCP surface must not expose ${forbidden}`);

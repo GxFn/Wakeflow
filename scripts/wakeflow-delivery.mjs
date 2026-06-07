@@ -7,7 +7,7 @@ import path from "node:path";
 const args = process.argv.slice(2);
 const command = args[0] && !args[0].startsWith("--") ? args[0] : "status";
 const options = args[0] && !args[0].startsWith("--") ? args.slice(1) : args;
-const workspaceRoot = path.resolve(getValue("--root", process.cwd()));
+const workspaceRoot = inferWorkspaceRoot();
 const stateDir = path.resolve(getValue("--state-dir", path.join(workspaceRoot, ".workspace-local/wakeflow-delivery")));
 const scriptPath = new URL(import.meta.url).pathname;
 const write = hasFlag("--write");
@@ -88,8 +88,24 @@ function getAllValues(name) {
   return values;
 }
 
+function inferWorkspaceRoot() {
+  const explicitRoot = getValue("--root", "");
+  if (explicitRoot) return path.resolve(explicitRoot);
+  const deliveryFile = getValue("--delivery-file", "");
+  if (command === "record-delivery-run" && deliveryFile && path.isAbsolute(deliveryFile)) {
+    const marker = `${path.sep}.workspace-local${path.sep}wakeflow-delivery${path.sep}delivery-envelopes${path.sep}`;
+    const index = deliveryFile.indexOf(marker);
+    if (index > 0) return path.resolve(deliveryFile.slice(0, index));
+  }
+  return path.resolve(process.cwd());
+}
+
 function nowIso() {
   return new Date().toISOString();
+}
+
+function eventIdFor(createdAt, revision) {
+  return `evt-${createdAt.replace(/[-:.TZ]/g, "").slice(0, 14)}-${String(revision).padStart(4, "0")}`;
 }
 
 function slug(value) {
@@ -127,8 +143,8 @@ function inferAgentNext(payload) {
   if (payload.command === "start-keep-live") return payload.keepLive?.active ? "Continue unattended direct-thread dispatch; keep-live is active." : "Treat keep-live as an automation readiness risk before claiming unattended reliability.";
   if (payload.command === "stop-keep-live") return payload.keepLive?.retainedByOtherRuns ? "Keep-live is retained by other active automation runs." : payload.keepLive?.active ? "Inspect and stop the recorded keep-live process before claiming shutdown is clean." : "Keep-live is stopped; continue only by total-control judgment.";
   if (payload.command === "keep-live-state") return "Continue or stop unattended automation according to the current plan and keep-live status.";
-  if (payload.command === "submit-result") return "Wake total control or run review-results; the result is not an acceptance verdict.";
-  if (payload.command === "review-results") return payload.decision === "wait" ? "No controller review is available yet; stop this turn and wait for the target/controller-return instead of polling or sleeping." : "Total control must pull raw evidence and make the verdict.";
+  if (payload.command === "submit-result") return "Run review-results for the dispatch group; if controller return is allowed, build the controller-return envelope, send it with the host thread tool, then record that delivery run.";
+  if (payload.command === "review-results") return payload.decision === "wait" ? "No controller review is available yet; stop this turn and wait for the target/controller-return instead of polling or sleeping." : "If this is a target window and controller return is allowed, build-controller-return, send it with the host thread tool, then record that delivery run; total control must still review raw evidence before acceptance.";
   if (payload.command === "review-pack") {
     if (payload.decision === "completed") return "Demand is completed; stop without creating new deliveries.";
     if (payload.decision === "no-target-tasks") return "No target tasks are reviewable; add a task package before dispatch or review.";
@@ -168,6 +184,12 @@ function atomicWriteJson(file, value) {
     if (existsSync(temp)) unlinkSync(temp);
     throw error;
   }
+}
+
+function appendJsonLine(file, value) {
+  ensureInsideWorkspace(file, "controller event log");
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, `${JSON.stringify(value)}\n`, { flag: "a" });
 }
 
 function readJson(file, label = "JSON file") {
@@ -1292,6 +1314,115 @@ function deliveryRunStatusForEnvelope(envelope) {
   };
 }
 
+function markStateRootDeliverySent(envelope, run) {
+  if (envelope.kind !== "DeliveryEnvelope" || run.status !== "sent") {
+    return { updated: false, reason: "not-a-sent-target-delivery" };
+  }
+  const stateRootRef = envelope.stateRef?.stateRoot;
+  const targetTaskId = envelope.stateRef?.targetTaskId || envelope.taskId;
+  const taskPackageId = envelope.stateRef?.taskPackageId;
+  if (!stateRootRef || !targetTaskId || !taskPackageId) {
+    return { updated: false, reason: "missing-state-ref" };
+  }
+
+  const stateRoot = resolveStateRoot(stateRootRef);
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const eventsFile = path.join(stateRoot, "controller-events.jsonl");
+  const state = readJson(stateFile, "controller state");
+  const targetTask = (state.targetTasks ?? []).find((item) => item.targetTaskId === targetTaskId);
+  if (!targetTask) {
+    fail(`delivery run targets unknown state task: ${targetTaskId}`);
+  }
+  if (envelope.targetWindow && targetTask.targetWindow !== envelope.targetWindow) {
+    fail(`delivery run target window mismatch: state has ${targetTask.targetWindow}, envelope has ${envelope.targetWindow}`);
+  }
+  if (targetTask.taskPackageId !== taskPackageId) {
+    fail(`delivery run task package mismatch: state has ${targetTask.taskPackageId}, envelope has ${taskPackageId}`);
+  }
+  if (["accepted", "completed", "blocked", "needs-review"].includes(targetTask.status)) {
+    return { updated: false, reason: `target-task-already-${targetTask.status}` };
+  }
+
+  const createdAt = nowIso();
+  const nextRevision = Number(state.revision ?? 0) + 1;
+  const eventId = eventIdFor(createdAt, nextRevision);
+  const nextTargetTasks = (state.targetTasks ?? []).map((item) => item.targetTaskId === targetTaskId
+    ? {
+        ...item,
+        status: "sent",
+        delivery: {
+          deliveryId: envelope.deliveryId,
+          deliveryRunId: run.deliveryRunId,
+          dispatchGroup: envelope.dispatchGroup,
+          sentAt: run.createdAt,
+          readbackOk: Boolean(run.readback?.ok),
+        },
+      }
+    : item);
+  const nextTaskPackages = (state.taskPackages ?? []).map((item) => item.taskPackageId === taskPackageId
+    ? { ...item, status: item.status === "accepted" ? item.status : "sent" }
+    : item);
+  const nextWindows = (state.windows ?? []).map((item) => item.windowName === targetTask.targetWindow
+    ? { ...item, windowState: "active" }
+    : item);
+  const nextState = {
+    ...state,
+    state: "dispatched",
+    stateReason: `delivery sent: ${targetTaskId}`,
+    revision: nextRevision,
+    updatedAt: createdAt,
+    allowedActions: ["import-target-result", "reduce-results", "wakeflow-render-progress"],
+    taskPackages: nextTaskPackages,
+    targetTasks: nextTargetTasks,
+    windows: nextWindows,
+    delivery: {
+      ...(state.delivery ?? {}),
+      lastDeliveryId: envelope.deliveryId,
+      lastDeliveryRunId: run.deliveryRunId,
+      lastDispatchGroup: envelope.dispatchGroup,
+      lastTargetTaskId: targetTaskId,
+      lastStatus: "sent",
+      updatedAt: createdAt,
+    },
+    projection: {
+      ...(state.projection ?? {}),
+      status: "stale",
+    },
+  };
+  const event = {
+    eventId,
+    createdAt,
+    actor: "delivery-runtime",
+    type: "delivery.sent",
+    from: state.state,
+    to: "dispatched",
+    reason: `delivery run recorded as sent: ${run.deliveryRunId}`,
+    evidenceRefs: [path.relative(workspaceRoot, deliveryRunFileFor(run.deliveryRunId))],
+    allowedWrites: [
+      "wakeflow-state.json",
+      "controller-events.jsonl",
+    ],
+    forbiddenConclusions: [
+      "delivery-sent-is-target-result",
+      "delivery-sent-is-controller-acceptance",
+      "delivery-sent-starts-polling",
+    ],
+    stateRevision: nextRevision,
+  };
+
+  atomicWriteJson(stateFile, nextState);
+  appendJsonLine(eventsFile, event);
+  return {
+    updated: true,
+    stateRoot: path.relative(workspaceRoot, stateRoot),
+    targetTaskId,
+    taskPackageId,
+    stateRevision: nextRevision,
+    eventId,
+    projectionStatus: "stale",
+  };
+}
+
 function controllerReturnDeliveryStatusForGroup(dispatchGroup) {
   if (!dispatchGroup) {
     return {
@@ -1381,7 +1512,9 @@ function targetResultReviewEntry(item) {
   const evidenceRefs = Array.isArray(result?.evidenceRefs) ? result.evidenceRefs : [];
   const verificationSummary = Array.isArray(result?.verificationSummary) ? result.verificationSummary : [];
   const commits = Array.isArray(result?.commits) ? result.commits : [];
-  const evidenceRefSummaries = evidenceRefs.map(evidenceRefSummary);
+  const evidenceRefSummaries = item.stateRoot
+    ? evidenceRefs.map((ref) => stateRootEvidenceRefSummary(item.stateRoot, item.stateRootRef, ref))
+    : evidenceRefs.map(evidenceRefSummary);
   const missingEvidenceRefs = missingEvidenceRefsFromSummaries(evidenceRefSummaries);
   return {
     packetId: item.packet.id,
@@ -1400,6 +1533,7 @@ function targetResultReviewEntry(item) {
     reportedAt: result?.reportedAt,
     hasControllerReviewEvidence: commits.length > 0 || evidenceRefs.length > 0 || verificationSummary.length > 0,
     targetDeliveries: targetDeliveryStatusesForPacket(item.packet.id),
+    stateRootResult: Boolean(item.stateRootResult),
   };
 }
 
@@ -1479,6 +1613,56 @@ function latestStateRootResultsByTargetTask(stateRoot) {
     }
   }
   return latest;
+}
+
+function normalizeStateRootResult(result) {
+  const changedRepositories = Array.isArray(result?.changedRepositories) ? result.changedRepositories : [];
+  const changedRepos = Array.isArray(result?.changedRepos)
+    ? result.changedRepos
+    : changedRepositories.map((item) => item.repository).filter(Boolean);
+  const commits = Array.isArray(result?.commits)
+    ? result.commits
+    : changedRepositories.map((item) => item.head).filter(Boolean);
+  return {
+    kind: "TargetResultEnvelope",
+    version,
+    targetWindow: result?.targetWindow,
+    taskId: result?.targetTaskId || result?.taskId,
+    dispatchGroup: result?.dispatchGroup,
+    status: result?.status,
+    changedRepos,
+    commits,
+    evidenceRefs: Array.isArray(result?.evidenceRefs) ? result.evidenceRefs : [],
+    verificationSummary: Array.isArray(result?.verificationSummary)
+      ? result.verificationSummary
+      : Array.isArray(result?.verification)
+        ? result.verification
+        : [],
+    riskSummary: Array.isArray(result?.riskSummary)
+      ? result.riskSummary
+      : Array.isArray(result?.risks)
+        ? result.risks
+        : [],
+    nextSuggestion: result?.nextSuggestion || result?.controllerActionRequired,
+    reportedAt: result?.reportedAt || result?.createdAt,
+  };
+}
+
+function stateRootResultForPacket({ packet, stateRoot, stateRootRef, resultsByTask }) {
+  if (!stateRoot || !resultsByTask) return null;
+  const item = resultsByTask.get(packet.taskId);
+  if (!item) return null;
+  if (item.result.targetWindow && item.result.targetWindow !== packet.targetWindow) {
+    fail(`state-root target result window mismatch for ${packet.taskId}: result has ${item.result.targetWindow}, packet has ${packet.targetWindow}`);
+  }
+  return {
+    packet,
+    file: item.file,
+    result: normalizeStateRootResult(item.result),
+    stateRoot,
+    stateRootRef,
+    stateRootResult: true,
+  };
 }
 
 function stateRootEvidenceRefSummary(stateRoot, stateRootRef, ref) {
@@ -2250,6 +2434,7 @@ function commandRecordDeliveryRun() {
   const runFile = deliveryRunFileFor(deliveryRunId);
   ensureStateDirs();
   atomicWriteJson(runFile, run);
+  const stateUpdate = markStateRootDeliverySent(envelope, run);
   output(
     {
       ok: true,
@@ -2258,6 +2443,7 @@ function commandRecordDeliveryRun() {
       status,
       run,
       runFile: path.relative(workspaceRoot, runFile),
+      stateUpdate,
     },
     [
       `Recorded direct-thread delivery run ${deliveryRunId}.`,
@@ -2408,8 +2594,20 @@ function computeReviewResults({ group = "", taskId = "" } = {}) {
   const { packets } = loadPacketsForScope({ group, taskId });
   if (packets.length === 0) fail("No matching dispatch packets found for review.");
   const groupRecord = groupFromPackets({ groupId: group || packets[0]?.dispatchGroup || "", packets });
+  const stateRootRef = groupRecord.stateRef?.stateRoot || packets.find((packet) => packet.stateRef?.stateRoot)?.stateRef?.stateRoot || "";
+  const stateRoot = stateRootRef ? resolveStateRoot(stateRootRef) : null;
+  const stateRootResultsByTask = stateRoot ? latestStateRootResultsByTargetTask(stateRoot) : null;
   const unorderedResults = packets.map((packet) => {
     const file = resultFileFor(packet.targetWindow, packet.taskId, packet.dispatchGroup);
+    if (!existsSync(file)) {
+      const stateRootResult = stateRootResultForPacket({
+        packet,
+        stateRoot,
+        stateRootRef,
+        resultsByTask: stateRootResultsByTask,
+      });
+      if (stateRootResult) return stateRootResult;
+    }
     return {
       packet,
       file,

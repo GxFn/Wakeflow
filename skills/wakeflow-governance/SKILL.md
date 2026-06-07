@@ -31,7 +31,10 @@ tool first:
 - Call `wakeflow_initialize_workspace` with `apply: true` only after the user
   confirms the preview and write boundary.
 - During apply, Wakeflow synchronizes the workspace `.gitignore` so
-  `.workspace-active/` and `.workspace-local/` are ignored runtime directories.
+  only `.workspace-active/` and `.workspace-local/` are ignored runtime
+  directories. Do not add product repositories, Design/Test, ledgers,
+  `.DS_Store`, or other user workspace noise as Wakeflow-generated gitignore
+  entries.
 - If the user removes discovered windows during setup, pass them as
   `excludeWindows` so the config, AGENTS updates, launch plan, and local window
   runtime agree.

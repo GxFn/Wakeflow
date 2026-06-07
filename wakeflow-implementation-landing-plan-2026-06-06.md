@@ -56,15 +56,18 @@ This landing pass verified the original source-workspace capabilities against
 the current Wakeflow implementation and closed the most important connectivity
 gaps:
 
-- MCP `wakeflow_status`, `wakeflow_full_status`, and `wakeflow_full_verify`
-  accept and forward an explicit `root`.
+- MCP keeps only stable outer workflow contracts public. `wakeflow_status` and
+  `wakeflow_verify` accept and forward an explicit `root`; detailed backend,
+  archive, result-import, and controller-return steps remain internal runtime
+  script operations.
 - CLI `--root` now targets the managed workspace while keeping script execution
   anchored in the Wakeflow runtime directory.
 - Verification helpers support explicit roots and handle an uninitialized active
   workspace without failing reusable plugin checks.
 - Runtime script naming now exposes `wakeflow-smoke` instead of a generic
   `smoke` key.
-- Smoke tests cover MCP status calls with an explicit root.
+- Smoke tests cover MCP status, task creation, and target delivery preparation
+  with an explicit root.
 - CLI tests cover root-aware status, embedded runtime execution, and root-aware
   verification.
 

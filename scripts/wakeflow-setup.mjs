@@ -662,6 +662,8 @@ const AGENTS_END = "<!-- wakeflow:scope:end -->";
 const ROOT_AGENTS_START = "<!-- wakeflow:root-agents:start -->";
 const ROOT_AGENTS_END = "<!-- wakeflow:root-agents:end -->";
 const RUNTIME_GITIGNORE_ENTRIES = [".workspace-active/", ".workspace-local/"];
+const GITIGNORE_POLICY =
+  "Wakeflow only manages its own runtime state entries in the workspace .gitignore. Do not add product repositories, Design/Test support directories, ledger directories, source folders, or generic local noise as Wakeflow-generated gitignore entries.";
 
 function testWindowNamesForContext(context) {
   const configuredNames = [
@@ -1117,8 +1119,17 @@ function syncGitignorePayload(context = commandContext()) {
     wrote: write && changed,
     changed,
     target,
+    policy: GITIGNORE_POLICY,
     entries: RUNTIME_GITIGNORE_ENTRIES,
     missing,
+    wakeflowManagedOnly: true,
+    forbiddenGeneratedEntries: [
+      "product repositories",
+      "Design/",
+      "Test/",
+      "wakeflow-ledger/",
+      ".DS_Store",
+    ],
   };
 }
 
@@ -1628,6 +1639,7 @@ function defaultThreadRole(context, windowName) {
 }
 
 function roleTitle(context, windowName, deliveryRole, language) {
+  const workspaceName = context.config.workspaceName || path.basename(context.wakeflowRoot);
   if (language === "zh") {
     if (deliveryRole === "controller") return `${windowName} 总控`;
     if (deliveryRole === "design") return `${windowName} 需求窗口`;
@@ -1635,11 +1647,50 @@ function roleTitle(context, windowName, deliveryRole, language) {
     if (deliveryRole === "observer") return `${windowName} 观察窗口`;
     return `${windowName} 职责窗口`;
   }
-  if (deliveryRole === "controller") return `${windowName} Controller`;
-  if (deliveryRole === "design") return `${windowName} Design Window`;
-  if (deliveryRole === "test-target") return `${windowName} Test Window`;
+  if (deliveryRole === "controller") {
+    return titleWithRole({
+      workspaceName,
+      windowName,
+      role: "Controller",
+      genericWindowNames: ["controller", "totalcontrol", "total-control"],
+    });
+  }
+  if (deliveryRole === "design") {
+    return titleWithRole({
+      workspaceName,
+      windowName,
+      role: "Design",
+      genericWindowNames: ["design"],
+    });
+  }
+  if (deliveryRole === "test-target") {
+    return titleWithRole({
+      workspaceName,
+      windowName,
+      role: "Test",
+      genericWindowNames: ["test", "testing"],
+    });
+  }
   if (deliveryRole === "observer") return `${windowName} Observer`;
-  return `${windowName} Responsibility Window`;
+  return `${windowName} Work`;
+}
+
+function titleWithRole({ workspaceName, windowName, role, genericWindowNames }) {
+  const normalizedWindow = normalizeTitleToken(windowName);
+  const normalizedRole = normalizeTitleToken(role);
+  const normalizedWorkspace = normalizeTitleToken(workspaceName);
+  const isGeneric = genericWindowNames.includes(normalizedWindow);
+  if (isGeneric && normalizedWorkspace && normalizedWorkspace !== normalizedWindow) {
+    return `${workspaceName} ${role}`;
+  }
+  if (normalizedWindow === normalizedRole || normalizedWindow.endsWith(normalizedRole)) {
+    return windowName;
+  }
+  return `${windowName} ${role}`;
+}
+
+function normalizeTitleToken(value) {
+  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
 function uniqueReadRefs(...refs) {
@@ -2028,7 +2079,7 @@ function help() {
       configure: "Write workspace.config.json after user-confirmed --repo mappings.",
       prompts: "Print child-window prompts for confirming scope and refreshing AGENTS.md.",
       "sync-root-agents": "Unpack the control AGENTS.md into the parent workspace AGENTS.md so Codex auto-loads total-control rules at the outer workspace root.",
-      "sync-gitignore": "Ensure .workspace-active/ and .workspace-local/ are ignored in the target workspace .gitignore.",
+      "sync-gitignore": "Ensure only Wakeflow runtime entries .workspace-active/ and .workspace-local/ are ignored in the target workspace .gitignore; do not add product repositories, Design/Test, ledger directories, or generic local noise.",
       "write-agents": "Append or refresh managed access-card blocks in configured child AGENTS.md files.",
       "access-profiles": "Print a read-only ChildWindowAccessProfile view from workspace.config plus child AGENTS managed blocks.",
       "sync-templates": "Create missing internal Design/Test templates or minimal external alignment templates.",

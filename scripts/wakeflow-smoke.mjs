@@ -198,14 +198,35 @@ async function runMcpSmoke(rootPath) {
     assertToolSchemasAcceptedByHost(tools);
     const toolNames = tools.map((tool) => tool.name);
     for (const expected of [
-      "wakeflow_discover_workspace",
       "wakeflow_initialize_workspace",
+      "wakeflow_status",
+      "wakeflow_prepare_delivery",
+      "wakeflow_record_delivery",
       "wakeflow_review_pack",
       "wakeflow_decide_review",
-      "wakeflow_archive_workspace_docs",
+      "wakeflow_verify",
     ]) {
       if (!toolNames.includes(expected)) {
         throw new Error(`MCP tools/list missing ${expected}`);
+      }
+    }
+    for (const internal of [
+      "wakeflow_discover_workspace",
+      "wakeflow_access_profiles",
+      "wakeflow_sync_agents",
+      "wakeflow_submit_result",
+      "wakeflow_review",
+      "wakeflow_build_controller_return",
+      "wakeflow_stop_loop",
+      "wakeflow_keep_live_state",
+      "wakeflow_archive_workspace_docs",
+      "wakeflow_archive_todo",
+      "wakeflow_run_backend",
+      "wakeflow_full_status",
+      "wakeflow_full_verify",
+    ]) {
+      if (toolNames.includes(internal)) {
+        throw new Error(`MCP tools/list exposes internal tool ${internal}`);
       }
     }
     const initializeTool = tools.find((tool) => tool.name === "wakeflow_initialize_workspace");
@@ -217,6 +238,9 @@ async function runMcpSmoke(rootPath) {
     }
     if (deliverySchema.includes("requireThread")) {
       throw new Error("wakeflow_prepare_delivery schema exposes requireThread");
+    }
+    if (!deliverySchema.includes("controller-return")) {
+      throw new Error("wakeflow_prepare_delivery schema must cover controller-return direction");
     }
 
     const initialized = await request("tools/call", {
@@ -253,6 +277,42 @@ async function runMcpSmoke(rootPath) {
     if (!payload.ok || !payload.parsedJson?.stateRoot) {
       throw new Error("MCP tools/call did not create a state root");
     }
+    const mcpStateRoot = payload.parsedJson.stateRoot;
+
+    const addedTask = await request("tools/call", {
+      name: "wakeflow_add_task",
+      arguments: {
+        root: rootPath,
+        stateRoot: mcpStateRoot,
+        taskId: "mcp-smoke-task",
+        targetWindow: "Target",
+        summary: "MCP smoke task package.",
+        targetSummary: "Return MCP smoke evidence.",
+      },
+    });
+    const addedTaskPayload = JSON.parse(addedTask.result.content?.[0]?.text);
+    if (!addedTaskPayload.ok || addedTaskPayload.parsedJson?.command !== "add-task-package") {
+      throw new Error("MCP wakeflow_add_task did not create a task package");
+    }
+
+    const prepared = await request("tools/call", {
+      name: "wakeflow_prepare_delivery",
+      arguments: {
+        root: rootPath,
+        direction: "target",
+        stateRoot: mcpStateRoot,
+        taskId: "mcp-smoke-task",
+        dispatchGroup: "mcp-smoke-group",
+      },
+    });
+    const preparedPayload = JSON.parse(prepared.result.content?.[0]?.text);
+    if (
+      !preparedPayload.ok
+      || preparedPayload.parsedJson?.command !== "prepare-dispatch-from-state"
+      || !preparedPayload.parsedJson?.envelope?.prompt?.includes("mcp-smoke-task")
+    ) {
+      throw new Error("MCP wakeflow_prepare_delivery did not create a target delivery envelope");
+    }
 
     const statusCall = await request("tools/call", {
       name: "wakeflow_status",
@@ -264,7 +324,7 @@ async function runMcpSmoke(rootPath) {
       throw new Error("MCP wakeflow_status did not inspect the requested root");
     }
 
-    return { ok: true, toolCount: toolNames.length, stateRoot: payload.parsedJson.stateRoot };
+    return { ok: true, toolCount: toolNames.length, stateRoot: mcpStateRoot };
   } finally {
     clearTimeout(timeout);
     child.stdin.end();

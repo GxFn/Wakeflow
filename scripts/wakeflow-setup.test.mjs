@@ -127,12 +127,19 @@ test("sync-gitignore adds Wakeflow runtime entries idempotently", () => {
   const dryRun = runJson(fixture, ["sync-gitignore"]);
   assert.equal(dryRun.changed, true);
   assert.deepEqual(dryRun.missing, [".workspace-active/"]);
+  assert.equal(dryRun.wakeflowManagedOnly, true);
+  assert.match(dryRun.policy, /only manages its own runtime state entries/);
+  assert.deepEqual(dryRun.entries, [".workspace-active/", ".workspace-local/"]);
+  assert.ok(dryRun.forbiddenGeneratedEntries.includes("product repositories"));
 
   const first = runJson(fixture, ["sync-gitignore", "--write"]);
   assert.equal(first.wrote, true);
   const content = readFileSync(path.join(fixture.control, ".gitignore"), "utf8");
   assert.match(content, /^\.workspace-local$/m);
   assert.match(content, /^\.workspace-active\/$/m);
+  assert.doesNotMatch(content, /^\.DS_Store$/m);
+  assert.doesNotMatch(content, /^BaseWindow\/$/m);
+  assert.doesNotMatch(content, /^PluginWindow\/$/m);
 
   const second = runJson(fixture, ["sync-gitignore", "--write"]);
   assert.equal(second.changed, false);
@@ -265,6 +272,8 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true);
   assert.equal(payload.mode, "apply");
+  assert.equal(payload.steps.gitignore.wakeflowManagedOnly, true);
+  assert.match(payload.steps.gitignore.policy, /Do not add product repositories/);
   assert.equal(payload.steps.configure.nextConfig.workspaceRoot, ".");
   assert.equal(payload.steps.configure.nextConfig.projectLedgerRoot, "wakeflow-ledger");
 
@@ -277,6 +286,10 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   const gitignore = readFileSync(path.join(parent, ".gitignore"), "utf8");
   assert.match(gitignore, /^\.workspace-active\/$/m);
   assert.match(gitignore, /^\.workspace-local\/$/m);
+  assert.doesNotMatch(gitignore, /^\.DS_Store$/m);
+  assert.doesNotMatch(gitignore, /^AppRepo\/$/m);
+  assert.doesNotMatch(gitignore, /^Design\/$/m);
+  assert.doesNotMatch(gitignore, /^Test\/$/m);
   assert.equal(config.designHandoffInbox, ".workspace-active/workspace/current/design-handoff-inbox.md");
   assert.equal(config.goalStageConfirmationDir, "wakeflow-ledger/goal-stage-confirmation");
   assert.equal(config.wakeflowRepoDir, "");
@@ -695,8 +708,8 @@ test("prompts use sibling Wakeflow script paths for child windows", () => {
   const fixture = makeFixture();
   const payload = runJson(fixture, ["prompts", "--window", "BaseWindow"]);
   assert.equal(payload.prompts.length, 1);
-  assert.equal(payload.prompts[0].displayTitle, "BaseWindow Responsibility Window");
-  assert.match(payload.prompts[0].prompt, /BaseWindow Responsibility Window: initialization entry sync, not a task delivery/);
+  assert.equal(payload.prompts[0].displayTitle, "BaseWindow Work");
+  assert.match(payload.prompts[0].prompt, /BaseWindow Work: initialization entry sync, not a task delivery/);
   assert.match(payload.prompts[0].prompt, /entry sync complete; waiting for controller task/);
   assert.match(payload.prompts[0].prompt, /AGENTS\.md, \.\.\/AGENTS\.md, \.\.\/Wakeflow\/\.workspace-active\/workspace\/index\.md/);
   assert.match(payload.prompts[0].prompt, /node \.\.\/Wakeflow\/scripts\/wakeflow-setup\.mjs status --json/);
@@ -708,6 +721,35 @@ test("prompts use sibling Wakeflow script paths for child windows", () => {
   assert.equal(zhPayload.prompts[0].displayTitle, `BaseWindow ${zhDutyWindow}`);
   assert.match(zhPayload.prompts[0].prompt, new RegExp(`^BaseWindow ${zhDutyWindow}`));
   assert.match(zhPayload.prompts[0].prompt, new RegExp(zhFirstRead));
+});
+
+test("English launch titles avoid repeated role words", () => {
+  const parent = mkdtempSync(path.join(os.tmpdir(), "wakeflow-title-en-"));
+  mkdirSync(path.join(parent, "Alembic", ".git"), { recursive: true });
+  const result = runAt(parent, [
+    "initialize",
+    "--repo",
+    "Controller=.",
+    "--repo",
+    "Alembic=Alembic",
+    "--internal-design",
+    "--internal-test",
+    "--controller-window",
+    "Controller",
+    "--language",
+    "en",
+    "--json",
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  const titles = Object.fromEntries(
+    payload.steps.windowLaunchPlan.windows.map((item) => [item.windowName, item.displayTitle]),
+  );
+  assert.equal(titles.Controller, `${path.basename(parent)} Controller`);
+  assert.equal(titles.Alembic, "Alembic Work");
+  assert.equal(titles.Design, `${path.basename(parent)} Design`);
+  assert.equal(titles.Test, `${path.basename(parent)} Test`);
+  assert.doesNotMatch(JSON.stringify(titles), /Controller Controller|Design Design|Test Test|Responsibility Window/);
 });
 
 test("write-agents is dry-run by default and writes managed access cards with --write", () => {

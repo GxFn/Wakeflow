@@ -139,8 +139,10 @@ boundary:
 | `Design/` | Internal requirement-design workspace when no external Design repository is mapped. |
 | `Test/` | Internal test coordination workspace when no external Test repository is mapped. |
 
-Wakeflow also synchronizes `.gitignore` so `.workspace-active/` and
-`.workspace-local/` remain local runtime directories.
+Wakeflow also synchronizes `.gitignore` so only `.workspace-active/` and
+`.workspace-local/` remain local runtime directories. It does not add product
+repositories, Design/Test folders, ledgers, `.DS_Store`, or other user
+workspace noise to `.gitignore`.
 
 ## How Work Moves
 
@@ -192,23 +194,28 @@ user judgment.
 
 ## MCP Capability Surface
 
-Wakeflow exposes plugin capabilities as MCP tools. The tools wrap the runtime
-scripts so Codex can use one consistent surface without copying local command
-manuals into prompts.
+Wakeflow exposes only stable outer workflow contracts as MCP tools. Runtime
+scripts remain the internal implementation and test surface; they are not
+public tools just because they exist. A target closeout uses the same
+direct-thread delivery model as controller dispatch: prepare an envelope, send
+the prompt with the host thread tool, then record the delivery run.
 
 Primary tool groups:
 
 | Need | MCP tools |
 | --- | --- |
-| Setup and workspace discovery | `wakeflow_initialize_workspace`, `wakeflow_discover_workspace`, `wakeflow_sync_agents`, `wakeflow_access_profiles` |
+| Setup and workspace discovery | `wakeflow_initialize_workspace` |
 | Demand and task state | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
-| Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_build_controller_return`, `wakeflow_stop_loop` |
-| Results and review | `wakeflow_submit_result`, `wakeflow_review`, `wakeflow_review_pack`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
+| Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
+| Results and review | `wakeflow_review_pack`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_intake_design_handoff`, `wakeflow_intake_test_card` |
-| Maintenance and verification | `wakeflow_archive_workspace_docs`, `wakeflow_archive_todo`, `wakeflow_run_backend`, `wakeflow_full_status`, `wakeflow_full_verify`, `wakeflow_keep_live_state` |
+| Maintenance and verification | `wakeflow_verify` |
 
-When the MCP server is available, agents should use these tools instead of
-reconstructing setup or state transitions by hand.
+Public MCP tools are for outer agent workflows. Internal steps such as target
+result import, result reduction, controller-return envelope construction,
+archive maintenance, keep-live state, and script backend execution stay inside
+Wakeflow JS/runtime scripts and skills. Do not expose those internal steps as
+separate MCP tools.
 
 ## Runtime And Ledger Boundaries
 

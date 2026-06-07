@@ -17,8 +17,8 @@ judgment.
 | --- | --- |
 | `AGENTS.md` | hard gates, controller identity, repository boundaries, confirmation gates, testing boundaries, acceptance floor |
 | skills | operation steps, commands, field templates, examples, troubleshooting |
-| MCP tools | stable capability interface for workspace setup, status, state roots, packages, delivery, results, review, archive, verification |
-| scripts | local implementation backend for file/state operations |
+| MCP tools | stable outer capability interface for workspace setup, status, state roots, packages, delivery envelope preparation/recording, review packs, controller decisions, Design/Test intake, next-work scans, and verification |
+| scripts | local implementation backend for file/state operations, result import/reduction, controller-return construction, archive maintenance, keep-live state, and backend checks |
 | templates | reusable starter surfaces for installed workspaces |
 | `.workspace-active/` | ignored active runtime state |
 | `.workspace-local/` | ignored local config and real thread ids |
@@ -26,9 +26,12 @@ judgment.
 
 ## MCP Boundary
 
-MCP tools organize local file/state operations. They do not directly manipulate
-real thread ids, fake host sends, or decide acceptance. Codex host thread tools
-perform real sends; Wakeflow records envelopes and send/readback evidence.
+MCP tools organize only the outer agent workflow. They do not directly
+manipulate real thread ids, fake host sends, expose every runtime script,
+import target results as a public action, or decide acceptance. Codex host
+thread tools perform real sends; Wakeflow records envelopes and send/readback
+evidence. Internal runtime scripts remain available to Wakeflow skills and
+tests without becoming public MCP tools.
 
 ## Installed Workspace Shape
 

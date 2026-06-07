@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { McpServer as SdkMcpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { listWakeflowRuntimeScripts, runWakeflowRuntime } from "../lib/wakeflow-runtime.mjs";
+import { runWakeflowRuntime } from "../lib/wakeflow-runtime.mjs";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 
@@ -65,42 +65,6 @@ const tools = [
     },
   },
   {
-    name: "wakeflow_discover_workspace",
-    description: "Discover sibling repositories and current Wakeflow workspace setup without writing files.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        parent: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_access_profiles",
-    description: "Inspect child-window AGENTS access-card coordinates and automation gates.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        window: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_sync_agents",
-    description: "Install or dry-run Wakeflow root/child AGENTS surfaces. Does not register thread ids.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        rootAgents: { type: "boolean" },
-        all: { type: "boolean" },
-        windows: { type: "array", items: { type: "string" } },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
     name: "wakeflow_status",
     description: "Inspect Wakeflow repository and closed-loop runtime status. Does not send messages.",
     inputSchema: {
@@ -147,12 +111,13 @@ const tools = [
   },
   {
     name: "wakeflow_prepare_delivery",
-    description: "Prepare a full runtime dispatch packet and delivery envelope. This is not a send.",
+    description: "Prepare one direct-thread delivery envelope. Use direction=target for controller-to-window dispatch, or direction=controller-return for target-to-controller return. This never sends the host thread message.",
     inputSchema: {
       type: "object",
-      required: ["stateRoot", "taskId"],
+      required: ["direction"],
       properties: {
         root: { type: "string" },
+        direction: { type: "string", enum: ["target", "controller-return"] },
         stateRoot: { type: "string" },
         taskId: { type: "string" },
         dispatchGroup: { type: "string" },
@@ -160,6 +125,9 @@ const tools = [
         taskPackageId: { type: "string" },
         humanContextRef: { type: "string" },
         returnPolicy: { type: "string", enum: ["group-ready", "per-target"] },
+        triggerTarget: { type: "string" },
+        triggerTaskId: { type: "string" },
+        returnReason: { type: "string", enum: ["result-ready", "blocked"] },
         automationEnabled: { type: "boolean" },
       },
     },
@@ -179,38 +147,6 @@ const tools = [
         readbackOk: { type: "boolean" },
         hostMethod: { type: "string" },
         hostMode: { type: "string", enum: ["new-turn", "unknown"] },
-      },
-    },
-  },
-  {
-    name: "wakeflow_submit_result",
-    description: "Import a target result envelope into a full Wakeflow controller state root.",
-    inputSchema: {
-      type: "object",
-      required: ["stateRoot", "taskId", "targetWindow", "status"],
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string" },
-        taskId: { type: "string" },
-        targetWindow: { type: "string" },
-        status: { type: "string", enum: ["completed", "blocked", "needs-review"] },
-        summary: { type: "string" },
-        evidenceRefs: { type: "array", items: { type: "string" } },
-        verification: { type: "array", items: { type: "string" } },
-        risks: { type: "array", items: { type: "string" } },
-        resultId: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_review",
-    description: "Reduce full runtime target results into a controller review candidate.",
-    inputSchema: {
-      type: "object",
-      required: ["stateRoot"],
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string" },
       },
     },
   },
@@ -256,48 +192,6 @@ const tools = [
         reason: { type: "string" },
         evidenceRefs: { type: "array", items: { type: "string" } },
         apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_build_controller_return",
-    description: "Build a controller-return delivery envelope for the original controller window. This is not a send.",
-    inputSchema: {
-      type: "object",
-      required: ["dispatchGroup", "triggerTarget", "triggerTaskId"],
-      properties: {
-        root: { type: "string" },
-        dispatchGroup: { type: "string" },
-        triggerTarget: { type: "string" },
-        triggerTaskId: { type: "string" },
-        controllerWindow: { type: "string" },
-        humanContextRef: { type: "string" },
-        returnReason: { type: "string", enum: ["result-ready", "blocked"] },
-        automationEnabled: { type: "boolean" },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_stop_loop",
-    description: "Write a stop marker for Wakeflow automation transport and stop associated keep-live if applicable.",
-    inputSchema: {
-      type: "object",
-      required: ["reason"],
-      properties: {
-        root: { type: "string" },
-        reason: { type: "string" },
-        automationRunId: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_keep_live_state",
-    description: "Inspect keep-live state for unattended Wakeflow support.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
       },
     },
   },
@@ -371,60 +265,8 @@ const tools = [
     },
   },
   {
-    name: "wakeflow_archive_workspace_docs",
-    description: "Archive completed Wakeflow workspace documents. Dry-run unless apply is true.",
-    inputSchema: {
-      type: "object",
-      required: ["topic", "files"],
-      properties: {
-        root: { type: "string" },
-        topic: { type: "string" },
-        month: { type: "string" },
-        files: { type: "array", items: { type: "string" } },
-        keepIndexRows: { type: "boolean" },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_archive_todo",
-    description: "Archive completed global TODO rows. Dry-run unless apply is true.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        date: { type: "string" },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_run_backend",
-    description: "Run a Wakeflow runtime script through a whitelist. This does not send host thread messages.",
-    inputSchema: {
-      type: "object",
-      required: ["script"],
-      properties: {
-        script: { type: "string", enum: listWakeflowRuntimeScripts() },
-        args: { type: "array", items: { type: "string" } },
-        timeoutMs: { type: "number" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_full_status",
-    description: "Run the embedded runtime status path.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        json: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_full_verify",
-    description: "Run embedded Wakeflow runtime verification.",
+    name: "wakeflow_verify",
+    description: "Run embedded Wakeflow runtime verification for an installed workspace or the Wakeflow source repository.",
     inputSchema: {
       type: "object",
       properties: {
@@ -457,45 +299,6 @@ const handlers = {
       ...(args.apply ? ["--write"] : []),
       "--json",
     ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_discover_workspace: (args) => runWakeflowRuntime({
-    script: "wakeflow-setup",
-    args: [
-      "discover",
-      ...rootArgs(args),
-      ...optionalValue("--parent", args.parent),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_access_profiles: (args) => runWakeflowRuntime({
-    script: "wakeflow-setup",
-    args: [
-      "access-profiles",
-      ...rootArgs(args),
-      ...optionalValue("--window", args.window),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_sync_agents: (args) => runWakeflowRuntime({
-    script: "wakeflow-setup",
-    args: args.rootAgents
-      ? [
-          "sync-root-agents",
-          ...rootArgs(args),
-          ...(args.apply ? ["--write"] : []),
-          "--json",
-        ]
-      : [
-          "write-agents",
-          ...rootArgs(args),
-          ...(args.all ? ["--all"] : []),
-          ...repeatValues("--window", args.windows),
-          ...(args.apply ? ["--write"] : []),
-          "--json",
-        ],
     cwd: args.root || undefined,
   }),
   wakeflow_status: (args) => runWakeflowRuntime({
@@ -534,23 +337,49 @@ const handlers = {
       "--json",
     ],
   }),
-  wakeflow_prepare_delivery: (args) => runWakeflowRuntime({
-    script: "wakeflow-delivery",
-    args: [
-      "prepare-dispatch-from-state",
-      "--state-root", args.stateRoot,
-      "--target-task-id", args.taskId,
-      ...optionalValue("--task-package-id", args.taskPackageId),
-      ...optionalValue("--human-context-ref", args.humanContextRef),
-      ...optionalValue("--controller-window", args.controllerWindow),
-      ...optionalValue("--group", args.dispatchGroup),
-      ...optionalValue("--return-policy", args.returnPolicy),
-      ...(args.automationEnabled ? ["--automation-enabled"] : []),
-      ...rootArgs(args),
-      "--write",
-      "--json",
-    ],
-  }),
+  wakeflow_prepare_delivery: (args) => {
+    const direction = args.direction || "target";
+    if (direction === "controller-return") {
+      const dispatchGroup = requireValueForTool(args, "dispatchGroup", "wakeflow_prepare_delivery direction=controller-return");
+      const triggerTarget = requireValueForTool(args, "triggerTarget", "wakeflow_prepare_delivery direction=controller-return");
+      const triggerTaskId = requireValueForTool(args, "triggerTaskId", "wakeflow_prepare_delivery direction=controller-return");
+      return runWakeflowRuntime({
+        script: "wakeflow-delivery",
+        args: [
+          "build-controller-return",
+          "--group", dispatchGroup,
+          "--trigger-target", triggerTarget,
+          "--trigger-task-id", triggerTaskId,
+          ...optionalValue("--controller-window", args.controllerWindow),
+          ...optionalValue("--human-context-ref", args.humanContextRef),
+          ...optionalValue("--return-reason", args.returnReason),
+          ...(args.automationEnabled ? ["--automation-enabled"] : []),
+          ...rootArgs(args),
+          "--write",
+          "--json",
+        ],
+      });
+    }
+    const stateRoot = requireValueForTool(args, "stateRoot", "wakeflow_prepare_delivery direction=target");
+    const taskId = requireValueForTool(args, "taskId", "wakeflow_prepare_delivery direction=target");
+    return runWakeflowRuntime({
+      script: "wakeflow-delivery",
+      args: [
+        "prepare-dispatch-from-state",
+        "--state-root", stateRoot,
+        "--target-task-id", taskId,
+        ...optionalValue("--task-package-id", args.taskPackageId),
+        ...optionalValue("--human-context-ref", args.humanContextRef),
+        ...optionalValue("--controller-window", args.controllerWindow),
+        ...optionalValue("--group", args.dispatchGroup),
+        ...optionalValue("--return-policy", args.returnPolicy),
+        ...(args.automationEnabled ? ["--automation-enabled"] : []),
+        ...rootArgs(args),
+        "--write",
+        "--json",
+      ],
+    });
+  },
   wakeflow_record_delivery: (args) => runWakeflowRuntime({
     script: "wakeflow-delivery",
     args: [
@@ -566,28 +395,6 @@ const handlers = {
       "--write",
       "--json",
     ],
-  }),
-  wakeflow_submit_result: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "import-target-result",
-      "--state-root", args.stateRoot,
-      "--target-task-id", args.taskId,
-      "--target-window", args.targetWindow,
-      "--status", args.status,
-      ...optionalValue("--summary", args.summary),
-      ...optionalValue("--result-id", args.resultId),
-      ...repeatValues("--evidence-ref", args.evidenceRefs),
-      ...repeatValues("--verification", args.verification),
-      ...repeatValues("--risk", args.risks),
-      ...rootArgs(args),
-      "--write",
-      "--json",
-    ],
-  }),
-  wakeflow_review: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: ["reduce-results", "--state-root", args.stateRoot, ...rootArgs(args), "--write", "--json"],
   }),
   wakeflow_review_pack: (args) => runWakeflowRuntime({
     script: "wakeflow-delivery",
@@ -625,37 +432,6 @@ const handlers = {
       ...(args.apply ? ["--write"] : []),
       "--json",
     ],
-  }),
-  wakeflow_build_controller_return: (args) => runWakeflowRuntime({
-    script: "wakeflow-delivery",
-    args: [
-      "build-controller-return",
-      "--group", args.dispatchGroup,
-      "--trigger-target", args.triggerTarget,
-      "--trigger-task-id", args.triggerTaskId,
-      ...optionalValue("--controller-window", args.controllerWindow),
-      ...optionalValue("--human-context-ref", args.humanContextRef),
-      ...optionalValue("--return-reason", args.returnReason),
-      ...(args.automationEnabled ? ["--automation-enabled"] : []),
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-  }),
-  wakeflow_stop_loop: (args) => runWakeflowRuntime({
-    script: "wakeflow-delivery",
-    args: [
-      "stop-loop",
-      "--reason", args.reason,
-      ...optionalValue("--automation-run-id", args.automationRunId),
-      ...rootArgs(args),
-      "--write",
-      "--json",
-    ],
-  }),
-  wakeflow_keep_live_state: (args) => runWakeflowRuntime({
-    script: "wakeflow-delivery",
-    args: ["keep-live-state", ...rootArgs(args), "--json"],
   }),
   wakeflow_intake_design_handoff: (args) => runWakeflowRuntime({
     script: "wakeflow-intake",
@@ -706,40 +482,7 @@ const handlers = {
     ],
     cwd: args.root || undefined,
   }),
-  wakeflow_archive_workspace_docs: (args) => runWakeflowRuntime({
-    script: "wakeflow-archive-docs",
-    args: [
-      ...rootArgs(args),
-      "--topic", args.topic,
-      ...optionalValue("--month", args.month),
-      ...repeatValues("--file", args.files),
-      ...(args.keepIndexRows ? ["--keep-index-rows"] : []),
-      ...(args.apply ? ["--apply"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_archive_todo: (args) => runWakeflowRuntime({
-    script: "wakeflow-archive-todo",
-    args: [
-      ...rootArgs(args),
-      ...optionalValue("--date", args.date),
-      ...(args.apply ? ["--apply"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_run_backend: (args) => runWakeflowRuntime({
-    script: args.script,
-    args: args.args || [],
-    timeoutMs: args.timeoutMs || 120000,
-  }),
-  wakeflow_full_status: (args) => runWakeflowRuntime({
-    script: "wakeflow-cli",
-    args: ["status", ...rootArgs(args), ...(args.json === false ? [] : ["--json"])],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_full_verify: (args) => runWakeflowRuntime({
+  wakeflow_verify: (args) => runWakeflowRuntime({
     script: "wakeflow-cli",
     args: ["verify", ...rootArgs(args), ...(args.scriptTests ? ["--script-tests"] : []), "--json"],
     cwd: args.root || undefined,
@@ -774,6 +517,14 @@ async function main() {
 
 function optionalValue(flag, value) {
   return value === undefined || value === null || value === "" ? [] : [flag, String(value)];
+}
+
+function requireValueForTool(args, name, context) {
+  const value = args[name];
+  if (value === undefined || value === null || value === "") {
+    throw new Error(`${context} requires ${name}`);
+  }
+  return String(value);
 }
 
 function repeatValues(flag, values) {

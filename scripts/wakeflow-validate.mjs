@@ -29,6 +29,7 @@ const requiredFiles = [
   "LICENSE",
   "package.json",
   ".codex-plugin/plugin.json",
+  ".agents/plugins/marketplace.json",
   ".mcp.json",
   "bin/wakeflow-mcp.mjs",
   "mcp/server.cjs",
@@ -88,6 +89,7 @@ if (existsSync(path.join(root, oldLedgerReferenceFile))) {
 
 validatePackage();
 validatePluginManifest();
+validateMarketplace();
 validateMcpConfig();
 await validateMcpToolDeclarations();
 validateRuntimeWhitelist();
@@ -131,7 +133,7 @@ function validatePackage() {
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) {
     errors.push("package files must declare the plugin release surface");
   } else {
-    for (const expected of [".codex-plugin/", ".mcp.json", "mcp/", "skills/", "scripts/", "templates/"]) {
+    for (const expected of [".codex-plugin/", ".agents/plugins/marketplace.json", ".mcp.json", "mcp/", "skills/", "scripts/", "templates/"]) {
       if (!manifest.files.includes(expected)) errors.push(`package files must include ${expected}`);
     }
   }
@@ -180,6 +182,37 @@ function validatePluginManifest() {
     manifest.interface?.logo,
   ].filter(Boolean)) {
     requirePath(relativePath, `plugin manifest points to missing path: ${relativePath}`);
+  }
+}
+
+function validateMarketplace() {
+  const marketplace = readJson(".agents/plugins/marketplace.json");
+  const manifest = readJson(".codex-plugin/plugin.json");
+  if (!marketplace || !manifest) return;
+  const entries = Array.isArray(marketplace.plugins) ? marketplace.plugins : [];
+  const entry = entries.find((plugin) => plugin?.name === manifest.name);
+  if (marketplace.name !== "gxfn") errors.push("marketplace name must be gxfn");
+  if (marketplace.interface?.displayName !== "GxFn") {
+    errors.push("marketplace displayName must be GxFn");
+  }
+  if (entries.length !== 1) errors.push("marketplace must list exactly one Wakeflow plugin");
+  if (!entry) {
+    errors.push("marketplace must include wakeflow");
+    return;
+  }
+  if (entry.source?.source !== "local") errors.push("marketplace wakeflow source must be local");
+  if (entry.source?.path !== ".") errors.push("marketplace wakeflow path must point to repository root");
+  if (path.resolve(root, entry.source?.path || "") !== root) {
+    errors.push("marketplace wakeflow path must resolve to the repository root");
+  }
+  if (entry.policy?.installation !== "AVAILABLE") {
+    errors.push("marketplace wakeflow installation policy must be AVAILABLE");
+  }
+  if (entry.policy?.authentication !== "ON_INSTALL") {
+    errors.push("marketplace wakeflow authentication policy must be ON_INSTALL");
+  }
+  if (entry.category !== manifest.interface?.category) {
+    errors.push("marketplace wakeflow category must match plugin interface category");
   }
 }
 

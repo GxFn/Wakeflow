@@ -22,6 +22,7 @@
   },
   "files": [
     ".codex-plugin/",
+    ".agents/plugins/marketplace.json",
     ".mcp.json",
     "AGENTS.md",
     "LICENSE",

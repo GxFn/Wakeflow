@@ -31,6 +31,7 @@ function parseOutput(result) {
 function makeFixture() {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-validate-"));
   for (const entry of [
+    ".agents",
     ".codex-plugin",
     "assets",
     "bin",

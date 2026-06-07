@@ -14,6 +14,7 @@ compact direct-thread delivery, and evidence-based acceptance.
 
 - [Why Wakeflow](#why-wakeflow)
 - [System Model](#system-model)
+- [Install Wakeflow](#install-wakeflow)
 - [Initialize A Workspace](#initialize-a-workspace)
 - [What Wakeflow Creates](#what-wakeflow-creates)
 - [How Work Moves](#how-work-moves)
@@ -72,6 +73,45 @@ flowchart TD
 The controller is the only acceptance authority. Scripts and MCP tools create,
 validate, summarize, and record machine data, but they do not widen scope,
 decide product behavior, or declare a task complete.
+
+## Install Wakeflow
+
+Wakeflow is a self-contained Codex plugin marketplace source. The repository
+root is the installable plugin root, and `.agents/plugins/marketplace.json`
+contains a single `wakeflow` entry whose `source.path` is `.`.
+
+Install the public source repository:
+
+```bash
+codex plugin marketplace add GxFn/Wakeflow --ref main
+```
+
+For a pinned release after the matching tag exists:
+
+```bash
+codex plugin marketplace add GxFn/Wakeflow --ref v0.1.0
+```
+
+If the Codex dialog separates source, ref, and sparse path, use the repository
+URL, the desired ref, and leave the sparse path empty.
+
+For local development, register this checkout as its own local marketplace:
+
+```toml
+[marketplaces.gxfn]
+source_type = "local"
+source = "/absolute/path/to/Wakeflow"
+
+[plugins."wakeflow@gxfn"]
+enabled = true
+
+[plugins."wakeflow@gxfn".mcp_servers.wakeflow]
+default_tools_approval_mode = "approve"
+```
+
+Wakeflow does not require an aggregate marketplace repository. A separate
+catalog can still list Wakeflow for brand discovery, but that is not part of
+the primary install or release path.
 
 ## Initialize A Workspace
 
@@ -256,20 +296,25 @@ truth is:
 https://github.com/GxFn/Wakeflow.git
 ```
 
-Before publishing a marketplace entry or release tag:
+The repository carries its own marketplace catalog at
+`.agents/plugins/marketplace.json`. That catalog is intentionally single-plugin:
+it names the marketplace `gxfn`, displays as `GxFn`, and points the
+only plugin entry at the repository root. Publishing Wakeflow means tagging or
+installing this repository directly, not copying it into an aggregate marketplace
+repository.
+
+Before publishing a release tag:
 
 1. Run `npm test` from this repository.
 2. Run the Codex plugin manifest validator in an environment with its Python
    dependencies installed.
 3. Confirm `.codex-plugin/plugin.json` has no more than three starter prompts.
-4. Confirm runtime scripts and installed skills contain no project-specific
+4. Confirm `.agents/plugins/marketplace.json` contains only the repository-root
+   `wakeflow` entry.
+5. Confirm runtime scripts and installed skills contain no project-specific
    default controller names, product overlays, local paths, or private thread
    ids.
-5. Tag the exact commit that the marketplace entry should install.
-
-Local development may use a personal marketplace entry that points at this
-checkout. A shared marketplace should point at the public source repository or
-a repo/team marketplace layout, not at a user-specific filesystem path.
+6. Tag the exact commit that Codex should install.
 
 ## Working In This Repository
 

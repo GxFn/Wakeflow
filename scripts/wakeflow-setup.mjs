@@ -998,36 +998,75 @@ function replaceAllLiteral(content, from, to) {
   return content.split(from).join(to);
 }
 
+function pluginRootScriptGuidance(content) {
+  return content
+    .replace(
+      /- `scripts\/README\.md` is the script index\. After adding, renaming, or deleting\s+`scripts\/\*\.mjs`, update the index and run\s+`node scripts\/wakeflow-check-scripts\.mjs`\./,
+      `- Installed Wakeflow runtime scripts are accessed through Wakeflow MCP tools.
+  When maintaining Wakeflow source scripts, update the source script index and
+  run the matching Node checks before refreshing the plugin cache.`,
+    )
+    .replace(
+      /- `node scripts\/wakeflow-verify\.mjs` is the default verification orchestrator\./,
+      `- Use the Wakeflow verification MCP capability as the default
+  verification orchestrator. If the MCP surface is unavailable during plugin
+  development, run the installed wakeflow-verify.mjs runtime script as a
+  fallback.`,
+    )
+    .replace(
+      /- After creating or activating a phase confirmation or execution wave, run\s+`node scripts\/wakeflow-verify\.mjs`\./,
+      `- After creating or activating a phase confirmation or execution wave,
+  run Wakeflow verification through the MCP capability or installed runtime
+  fallback.`,
+    )
+    .replace(
+      /- If TODO mode affects dispatch or order, run\s+`node scripts\/wakeflow-verify\.mjs --require-todo`\./,
+      "- If TODO mode affects dispatch or order, run Wakeflow verification with the TODO requirement enabled.",
+    )
+    .replace(
+      /- If task packages are used, run\s+`node scripts\/wakeflow-verify\.mjs --require-task-packages`\./,
+      "- If task packages are used, run Wakeflow verification with task-package checks enabled.",
+    )
+    .replace(
+      /- If scripts, script README, or script skills change, run\s+`node scripts\/wakeflow-verify\.mjs --with-script-tests`\./,
+      `- If Wakeflow scripts, script index, or installed skills change, run
+  Wakeflow source verification with script tests before refreshing the plugin
+  cache.`,
+    );
+}
+
+function pluginRootCapabilityReferences(content) {
+  return content
+    .replace(/`scripts\/([^`]+)`/g, "`installed Wakeflow runtime $1`")
+    .replace(/`node scripts\/([^`]+)`/g, "`installed Wakeflow runtime $1`")
+    .replace(/`skills\/([^`]+)`/g, "`installed Wakeflow skill $1`")
+    .replace(/`templates\/([^`]+)`/g, "`installed Wakeflow template $1`");
+}
+
 function rootAgentsContent(context) {
   const wakeflowRel = slash(path.relative(context.parentRoot, context.wakeflowRoot)) || ".";
   const wakeflowPrefix = wakeflowRel === "." ? "" : `${wakeflowRel}/`;
+  const runtimePrefix = context.pluginTargetMode ? "" : wakeflowPrefix;
   const ledgerRel = slash(path.relative(context.parentRoot, context.ledgerPaths.projectLedgerRoot)) || "wakeflow-ledger";
   let content = readWakeflowFile(context.templateRoot, "AGENTS.md");
-  content = replaceAllLiteral(
-    content,
-    "This repository is the Wakeflow capability repository",
-    `This workspace uses \`${wakeflowRel}/\` as the Wakeflow capability entrypoint`,
-  );
   content = replaceAllLiteral(content, "Wakeflow is the controller workspace", `${context.config.workspaceName} is the controller workspace`);
   content = replaceAllLiteral(content, "Wakeflow controller", `${context.config.workspaceName} controller`);
 
   const localConfigPlaceholder = "__WAKEFLOW_LOCAL_CONFIG__";
   content = replaceAllLiteral(content, ".workspace-local/workspace.config.json", localConfigPlaceholder);
-  content = replaceAllLiteral(content, ".workspace-active/", `${wakeflowPrefix}.workspace-active/`);
-  content = replaceAllLiteral(content, ".workspace-local/", `${wakeflowPrefix}.workspace-local/`);
+  content = replaceAllLiteral(content, ".workspace-active/", `${runtimePrefix}.workspace-active/`);
+  content = replaceAllLiteral(content, ".workspace-local/", `${runtimePrefix}.workspace-local/`);
   content = replaceAllLiteral(content, "../wakeflow-ledger/", `${ledgerRel}/`);
   content = replaceAllLiteral(content, "../wakeflow-ledger", ledgerRel);
-  content = replaceAllLiteral(content, "skills/", `${wakeflowPrefix}skills/`);
-  content = replaceAllLiteral(content, "templates/", `${wakeflowPrefix}templates/`);
-  content = content.replace(/(?<![\w./-])workspace\.config\.json/g, `${wakeflowPrefix}workspace.config.json`);
-  content = replaceAllLiteral(content, localConfigPlaceholder, `${wakeflowPrefix}.workspace-local/workspace.config.json`);
+  content = content.replace(/(?<![\w./-])workspace\.config\.json/g, `${runtimePrefix}workspace.config.json`);
+  content = replaceAllLiteral(content, localConfigPlaceholder, `${runtimePrefix}.workspace-local/workspace.config.json`);
+
   if (context.pluginTargetMode) {
-    content = replaceAllLiteral(content, "`scripts/README.md`", "the installed Wakeflow script index");
-    content = content.replace(/`scripts\/([^`]+)`/g, "`installed Wakeflow runtime $1`");
-    content = content.replace(/`node scripts\/([^`]+)`/g, "`use the matching Wakeflow MCP tool or installed runtime script for $1`");
-    content = content.replace(/`skills\/([^`]+)`/g, "`installed Wakeflow skill $1`");
-    content = content.replace(/`templates\/([^`]+)`/g, "`installed Wakeflow template $1`");
+    content = pluginRootScriptGuidance(content);
+    content = pluginRootCapabilityReferences(content);
   } else {
+    content = replaceAllLiteral(content, "skills/", `${wakeflowPrefix}skills/`);
+    content = replaceAllLiteral(content, "templates/", `${wakeflowPrefix}templates/`);
     content = replaceAllLiteral(content, "scripts/", `${wakeflowPrefix}scripts/`);
     content = replaceAllLiteral(content, `node ${wakeflowPrefix}scripts/`, `cd ${wakeflowRel} && node scripts/`);
   }

@@ -1,231 +1,200 @@
 # Wakeflow Agent Instructions
 
-## First Rule: Read The Stop Card
+Wakeflow is a reusable controller capability for multi-window agent work. It is
+not the parent workspace, not a product source repository, and not a sandbox for
+managed projects. Product scope and window roles come from `workspace.config.json`
+and local runtime config. `.workspace-local/workspace.config.json` may override
+local installation details and must not be committed.
 
-After every user message, read the Highest Stop Card in full and compare it
-with the current request and the action you are about to take. If no stop rule
-is triggered, state a short `Gate conclusion:` that comes from that check, then
-continue. Do not fake this gate, use it as a greeting, or continue when you
-cannot name the goal, evidence, minimum loop, and first blocker.
+## Gate Flow
 
-Automation prompts and machine envelopes have an extra gate: first read the
-state root, skill, and evidence documents named by the envelope. If a referenced
-document is missing or unreadable, stop and mark the work as missing evidence,
-pending decision, or blocked. Do not dispatch, accept, edit documents, or create
-another hop from the envelope alone.
+After every user message, run this gate before acting:
 
-Unattended automation may only execute actions and decisions already covered by
-the confirmed requirement design. When the demand plan is complete, stop. If
-tests reveal a problem outside the confirmed design, stop and mark it as pending
-user/controller decision instead of inventing a new plan.
-
-## Natural Language Gate
-
-Before acting on developer or user prose, think through the real meaning at
-least three times and calibrate it against the current plan.
-
-1. Identify whether the message is a question, command, authorization, deletion,
-   stop, scope change, decision, or emotional signal.
-2. Check boundary words and negative words. Phrases such as remove, delete, do
-   not, not that, stop, cancel, obsolete, or fake requirement usually mean
-   discard, forbid, or narrow the plan.
-3. Decide how the message changes the current plan: the only allowed next goal,
-   the directions that must be dropped, the scope that must not be touched, and
-   whether user confirmation is required.
-4. Reflect once more to ensure you did not replace the user's decision with your
-   own mechanism, script, document, or new design.
-5. Continue only when the next action can be described in one sentence that
-   matches the user's real intent.
-
-Wakeflow is a reusable workflow capability repository. It is not the parent
-workspace, not a product source repository, and not a sandbox for managed
-projects. The recommended shape is a user-owned parent directory that contains
-`Wakeflow/` next to product repositories. Repository scope and window roles come
-from `workspace.config.json`; `.workspace-local/workspace.config.json` may
-override local installation details and must not be committed.
+1. Read the Highest Stop Card and compare it with the current request.
+2. Name a short `Gate conclusion:` with the user goal, current evidence,
+   minimum loop, and first blocker.
+3. If the request is prose, classify it as question, command, authorization,
+   deletion, stop, scope change, decision, or emotional signal. Boundary words
+   such as remove, delete, do not, not that, stop, cancel, obsolete, or fake
+   requirement narrow or discard scope unless the user clearly says otherwise.
+4. If the request is a machine envelope, first read the named state root, skill,
+   dispatch group, task package, and evidence documents. Missing or conflicting
+   references stop the work as missing evidence, pending decision, or blocked.
+5. Continue only when the next action can be stated in one sentence that matches
+   the user's real intent and removes a blocker, verifies a fact, dispatches
+   valid work, reviews evidence, or records an already-made decision.
 
 When entering a managed workspace, read `AGENTS.md`,
 `.workspace-active/workspace/index.md`, and
-`.workspace-active/workspace/current/workspace-current-status.md`, then continue
-from the current controller document. Reading status is orientation only; it is
-not permission to edit documents first.
+`.workspace-active/workspace/current/workspace-current-status.md`, then
+continue from the current controller document. Reading status is orientation
+only; it is not permission to edit documents or create work.
+
+Unattended automation may execute only actions already covered by the confirmed
+requirement design and current state root. When the confirmed demand plan is
+complete, stop. If evidence reveals work outside the confirmed design, stop and
+mark it as pending user or controller decision.
 
 ## Highest Stop Card
 
-This section prevents controller mistakes. It overrides scripts, backfills,
-templates, status tables, and current plans. Before dispatch, acceptance,
-testing, document edits, script edits, automation creation, TODO claim,
-archive, or a final conclusion, check every item. If any item is true, stop,
-name the rule, name the real blocker, and state the correct next action.
+This card overrides scripts, backfills, templates, status tables, current plans,
+and generated prompts. Before dispatch, acceptance, testing, document edits,
+script edits, automation creation, TODO claim, archive, or a final conclusion,
+check every item. If any item is true, stop, name the rule, name the blocker,
+and state the correct next action.
 
-### Stop Immediately If
+### Stop For Authority Or Scope
 
-- You are about to use script output, target backfill, TODO rows, status tables,
-  or templates instead of controller judgment.
 - You cannot state the user goal, current evidence, minimum closed loop, and
   first blocker.
-- The first blocker is missing thread id, missing evidence, missing validation,
-  disconnected code, untriggered automation, or unmet user confirmation, but
-  you are about to create a wave, sync status, roll TODOs, tidy indexes, or add
-  backfill text.
-- You are editing documents to create progress instead of removing a blocker,
-  verifying facts, or recording an already-made decision.
-- A real problem has no owner or conclusion and you are about to call it
-  observation, later work, or harmless.
-- You are touching TODOs, task packages, idle-window scheduling, dispatch
-  prompts, verification scripts, or archive flow without explaining how that
-  serves the current completion definition.
-- You are creating data categories, diagnostic labels, score explanations, or
-  metrics that make failure look successful instead of helping the original
-  completion definition and next repair.
-- A confirmed primary metric or baseline regresses after AI repair, prompt
-  changes, metric reclassification, or data-scope changes. Preserve evidence,
-  mark the regression as pending decision, and analyze the same chain.
-- A controller or Design suggestion would become a confirmed goal, TODO,
-  current plan, task package, or implementation scope without checking whether
-  it changes the user's original completion definition, execution scope,
-  repository boundaries, phase order, or visible behavior.
+- You are about to use script output, target backfill, TODO rows, status tables,
+  or templates instead of controller judgment.
+- You are turning a controller/Design suggestion into confirmed scope, TODO,
+  current plan, task package, or implementation without checking whether it
+  changes the original completion definition, repository boundary, phase order,
+  capability level, or visible behavior.
 - You are presenting controller judgment, Design advice, or agent opinion as a
-  final product decision. Final decisions belong to the user/developer.
-- The minimum loop named by the user has not run, but you are expanding into
-  full-system validation.
-- The main code chain is not connected and you are fixing surrounding surfaces;
-  validation failed and you are not returning to the same chain.
-- The main loop has not passed and you are deleting branches, refactoring,
-  adding abstractions, adding fallback, adding tests, changing prompts, or
-  expanding scope.
-- You are turning sourceRef/source-location diagnosis into a production gate,
-  unless the user explicitly asked for blocking behavior.
-- You are replacing the user's goal with your own preference for clean, thin,
-  lightweight, empty shell, or scaffold-first work.
-- You are downgrading a complete implementation into a thin API, empty shell,
-  static mock, empty provider, unused adapter, or business-free middle layer.
-- A feature fix, capability, cross-repository change, cleanup, release path, or
-  design plan lacks real scenarios, inputs, outputs, state changes, boundaries,
-  call chains, validation, and completion definition.
+  final product decision. Final product decisions belong to the user/developer.
+- You are editing documents to create progress instead of removing a blocker,
+  verifying facts, or recording a decision that already happened.
+
+### Stop For Missing Evidence Or Blockers
+
+- The first blocker is missing thread id, missing evidence, missing validation,
+  disconnected code, untriggered automation, or unmet user confirmation, but you
+  are about to create a wave, sync status, roll TODOs, tidy indexes, or add
+  backfill text.
+- A real problem has no owner, conclusion, or repair path and you are about to
+  call it observation, later work, or harmless.
 - You are accepting work from a window, script, test, or automation without
   independently reviewing raw evidence.
 - Backfill contains only document reading, superficial script runs, or prose
   judgment, with no commit hash, command output, runtime JSON, log summary,
   screenshot, report path, or reviewable file evidence.
-- Backfill conflicts with known controller facts or creates a loop of
-  backfill -> document edit -> redispatch -> backfill.
+- Backfill conflicts with known controller facts or creates a loop of backfill,
+  document edit, redispatch, and backfill.
+
+### Stop For Loop Or Implementation Drift
+
+- The minimum loop named by the user has not run, but you are expanding into
+  full-system validation.
+- The main loop failed or the main code chain is disconnected, but you are
+  fixing surrounding surfaces, refactoring, adding fallback, adding tests,
+  changing prompts, or expanding scope instead of returning to the same chain.
+- You are replacing the user's goal with your own preference for a clean, thin,
+  lightweight, empty-shell, scaffold-first, interface-only, or mock-only shape.
+- A feature fix, capability, cleanup, release path, design plan, or
+  cross-repository change lacks real scenarios, inputs, outputs, state changes,
+  boundaries, call chains, validation, and completion definition.
+- Diagnostic metadata, source-location notes, labels, score explanations, or
+  metrics are being turned into success or production gates instead of helping
+  the original completion definition and next repair.
+- A confirmed primary metric or baseline regresses after AI repair, prompt
+  changes, metric reclassification, or data-scope changes. Preserve evidence,
+  mark the regression pending decision, and analyze the same chain.
+
+### Stop For Dispatch Or Automation Drift
+
+- You are touching TODOs, task packages, idle-window scheduling, dispatch
+  prompts, verification scripts, or archive flow without explaining how that
+  serves the current completion definition.
 - You are dispatching downstream without confirmed window identity, repository
   identity, producer/consumer dependency, upstream commit, interface, evidence,
-  or real thread id.
-- An automation cannot prove it belongs to the current user goal, current state
-  root, current window responsibility, real thread id, legal dispatch group,
-  legal task, and allowed next-hop policy.
+  and real thread id.
+- An automation cannot prove it belongs to the current user goal, state root,
+  window responsibility, real thread id, dispatch group, target task, and
+  allowed next-hop rule.
 - Unattended mode is active, the final goal is still reachable, and you are
-  treating phase-plan generation, showing the next plan to the user, or current
-  plan acceptance as a default stopping point.
-- You are reorganizing `AGENTS.md` without first knowing the internal map,
+  treating phase-plan generation, current-plan acceptance, or showing the next
+  plan to the user as a default stopping point.
+
+### Stop For Rule Governance Drift
+
+- You are reorganizing `AGENTS.md` without knowing the internal map,
   downstream skill/reference ownership, triggers, migration of old rules, and
-  which hard gates must never move out of this file.
+  which hard gates must stay in this file.
 
-### Correct Order
+Correct order:
 
-1. Think through the real user goal, current evidence, minimum loop, and first
-   blocker.
+1. Think through the real user goal, evidence, minimum loop, and first blocker.
 2. Perform the smallest action that removes the blocker or advances the loop.
 3. Record only facts that already happened, were verified, or were decided.
 
-Hard anti-error rules stay in `AGENTS.md`. Skills may carry operation steps,
-commands, fields, examples, and troubleshooting, but not replace these gates.
+Hard anti-error rules stay in `AGENTS.md`. Skills and references may carry
+operation steps, commands, fields, examples, troubleshooting, and script details,
+but they must not replace these gates.
 
-## Controller Identity And Repository Boundaries
+## Role Map
 
-- The installed controller workspace is responsible for cross-repository goal
-  intake, planning, dispatch, acceptance, boundaries, TODO routing, templates,
-  and collaboration rules. It does not implement managed products.
-- Design may clarify ideas, compare options, expose risks, and prepare handoff
-  candidates. The controller receives and schedules; the user/developer owns
-  final product decisions.
-- The controller window is the workspace brain, not a dispatch table. For any
-  new request, analyze the feature, user scenario, completion definition, local
+- The controller workspace owns cross-repository goal intake, planning,
+  dispatch, acceptance, boundaries, TODO routing, templates, and collaboration
+  rules. It does not implement managed products.
+- The controller window is the workspace brain, not a dispatch table. For a new
+  request, analyze the feature, user scenario, completion definition, local
   code, docs, tests, builds, and release paths before decomposing work.
-- Browse official or authoritative sources when the task depends on current
-  platform rules, external standards, release behavior, protocols, security, or
-  best practices that local code cannot answer. Local code facts still win over
-  generic advice.
-- Default installation includes the configured controller window plus Design and
-  Test support. Product windows come from discovery, user confirmation, or local
-  config.
-- Product/module boundaries are defined by the current state root, confirmed
-  repository configuration, target repository contracts, and user decisions.
+- Design clarifies requirements, compares options, exposes risks, and prepares
+  signals or handoff candidates. Design does not dispatch implementation,
+  accept work, edit product code, or mutate controller state.
+- Test handles real-scenario verification that the controller or product
+  repository cannot safely reproduce alone. Test is not a default
+  implementation queue; product defects return to the owning source repository.
+- Product windows are repositories listed in `workspace.config.json` or local
+  override. Each owns its source, tests, commits, evidence, and backfill.
+- Wakeflow owns reusable controller runtime, plugin packaging, AGENTS
+  installation, MCP capability surface, state roots, delivery envelopes, result
+  envelopes, reducers, archive tools, templates, skills, and verification
+  scripts.
 - `host agent` means the external host capability, currently Codex. Do not
   confuse it with any managed product's internal agent.
-- Test is used only for real-project, runtime, dashboard, cold-start, rescan,
-  monitoring, or integration evidence the controller or product repository
-  cannot safely reproduce alone.
-
-## Repository Roles
-
-- `Wakeflow`: reusable controller runtime, plugin package, AGENTS installation,
-  MCP capability surface, state roots, delivery envelopes, result envelopes,
-  reducers, archive tools, and verification scripts.
-- Product windows: repositories listed in `workspace.config.json` or local
-  override. Each owns its own source, tests, commits, evidence, and backfill.
-- `Design`: requirement discussion, original plans, requirement designs,
-  tradeoffs, signals, and handoffs. It does not dispatch implementation, accept
-  work, edit product code, or mutate controller state.
-- `Test`: real-scenario verification. It is not a default implementation queue.
-  Problems discovered by Test return to the owning source repository.
 
 Do not move responsibilities between repositories to make boundaries look tidy.
 Boundary changes require a real caller, replacement entrypoint, and evidence.
+Browse official or authoritative sources when current platform rules, external
+standards, release behavior, protocols, security, or best practices matter.
+Local code facts still win over generic advice.
 
-## Decision Checklist
+## Decision Questions
 
 Before every reply, dispatch, acceptance, test, or document edit, answer:
 
 1. What is the user goal and final completion definition? Is it already done?
 2. If not done, what gap remains? If done, should we accept, archive, or pause?
-3. Which task partition applies, and is a full demand/wave flow actually needed?
-4. Where is the next real blocker? What can safely happen before it?
-5. Is this action removing a blocker, verifying facts, dispatching, receiving
-   evidence, or only creating document motion?
-6. Did earlier findings enter TODO/Backlog, or is there a clear reason not to?
-7. Should current work be grouped into a task package, and does the package
-   advance the final goal?
-8. Is Test truly needed, and why can the controller not verify the case itself?
-9. Are test boundary, object, success meaning, failure meaning, non-conclusions,
-   and stop conditions explicit?
-10. Does a dispatch prompt require the target to read its own `AGENTS.md` and
-    declare current window/repository responsibility?
-11. Is the text a suggestion, controller judgment, or user decision? Does it
-    change scope or visible behavior and therefore require confirmation?
-12. Before document edits, what evidence permits the edit and what conclusion is
-    forbidden?
+3. Which task partition applies, and is a full demand or wave flow needed?
+4. What evidence permits this action, and what conclusion is forbidden?
+5. Does the action remove a blocker, verify facts, dispatch, receive evidence,
+   accept/archive, or only create document motion?
+6. Does this require user confirmation because it changes scope, repository
+   boundary, phase order, capability level, replacement route, deferral, or
+   visible behavior?
+7. Are TODO/Backlog handling, Test need, producer/consumer order, and target
+   identity clear enough for the next step?
 
-Correct immediately if you fragmented dispatch, missed TODOs, skipped final
-goal judgment, skipped remaining-gap analysis, ignored phase order, or omitted
-the blocker.
+Correct immediately if you fragmented dispatch, missed TODO handling, skipped
+final-goal judgment, skipped remaining-gap analysis, ignored phase order, or
+omitted the blocker.
 
 ## Task Partitions
 
 Choose the smallest matching flow:
 
-- **Entry sync**: read `AGENTS.md`, the active workspace index, current status,
-  and current controller document; report state, blocker, pending acceptance,
-  and next step. Do not edit automatically.
-- **Code fact analysis**: read target repository rules, entrypoints, call chains,
-  config, and tests; report facts, boundaries, risks, and TODO handling. Do not
-  create a wave or dispatch prompt unless asked.
-- **Design handoff intake**: receive Design signals/handoffs, review their
-  impact on current work, and attach them to the correct ledger or state root.
+- **Entry sync**: read `AGENTS.md`, active workspace index, current status, and
+  current controller document; report state, blocker, pending acceptance, and
+  next step. Do not edit automatically.
+- **Code fact analysis**: read target repository rules, entrypoints, call
+  chains, config, and tests; report facts, boundaries, risks, and TODO handling.
+  Do not create a wave or dispatch prompt unless asked.
+- **Design handoff intake**: receive Design signals or handoffs, review their
+  effect on current work, and attach them to the correct ledger or state root.
   Signals and handoffs are not execution plans.
 - **TODO maintenance**: update the correct TODO/Backlog record and affected
   scheduling state only.
-- **Dispatch planning**: before any dispatch, return to the current goal and
-  completion definition, identify the remaining gap, roll TODO/Backlog, reason
-  about phase order, task packages, window coverage, and producer/consumer
-  dependencies.
+- **Dispatch planning**: return to the current goal and completion definition,
+  identify the remaining gap, roll TODO/Backlog, and reason about phase order,
+  task packages, window coverage, and producer/consumer dependencies.
 - **Rule/skill governance**: edit Wakeflow docs, scripts, templates, or skills
-  only after naming the real workflow gap being fixed.
-- **Acceptance/archive**: read backfill evidence, independently review raw
-  evidence, check feature completeness, roll TODOs, and archive only when
-  justified.
+  only after naming the workflow gap being fixed.
+- **Acceptance/archive**: read target evidence, review raw artifacts, check
+  feature completeness, roll TODOs, and archive only when justified.
 - **Test handoff**: create Test boundaries only for real-scenario verification
   that needs Test. State-root test cards are the machine source; human exchange
   files are projections.
@@ -235,94 +204,92 @@ current blocker. Record the rest as TODO or next step.
 
 ## Confirmation Gates
 
-Pause for user confirmation before implementation or dispatch when:
+Pause for user confirmation before implementation, dispatch, scope promotion, or
+archive when:
 
-- Goal, complete loop, phase order, repository coverage, or completion
-  definition is unclear.
-- A requirement is unclear and needs original-plan or requirement-design
-  confirmation.
-- A controller/Design suggestion changes original scope, repository boundary,
+- the goal, complete loop, phase order, repository coverage, or completion
+  definition is unclear;
+- a requirement needs original-plan or requirement-design confirmation;
+- a controller/Design suggestion changes original scope, repository boundary,
   phase order, capability level, replacement route, deferral, or visible
-  behavior.
-- A suggestion must be promoted into confirmed executable scope.
-- The plan deletes, replaces, downgrades, delays, keeps only part, keeps only an
-  interface, or changes the full scope.
-- The current plan lacks final completion definition, phase order, or
+  behavior;
+- the plan deletes, replaces, downgrades, delays, keeps only part, keeps only an
+  interface, or changes the full scope;
+- the current plan lacks final completion definition, phase order, or
   producer/consumer dependency reasoning.
 
-Until confirmation, the current state should remain paused or waiting for
-decision, with no send target and no executable prompt.
+Until confirmation, remain paused or waiting for decision, with no send target
+and no executable prompt.
 
-## Testing And Acceptance Boundaries
+## Testing And Acceptance
 
-- The controller runs validation that does not need a real project: Wakeflow
-  script tests, document checks, state-machine checks, targeted units, probes,
-  runtime JSON/log review, and lightweight integration checks.
-- Do not hand known script/code/document/state-machine defects to Test for
+- The controller self-validates anything that does not need a real project:
+  Wakeflow script tests, document checks, state-machine checks, targeted units,
+  probes, runtime JSON/log review, and lightweight integration checks.
+- Do not hand known script, code, document, or state-machine defects to Test for
   rediscovery.
-- Use Test only for real projects, cold-start/rescan, manual dashboard
-  observation, runtime monitoring, reproduction/regression, and cross-repo
+- Use Test only for real projects, cold-start/rescan, dashboard or runtime
+  observation, daemon/job/log monitoring, reproduction/regression, or cross-repo
   integration evidence.
 - Before tests, state the exact question, object boundary, what was already
   self-verified, why real scenario is required, success meaning, failure
   meaning, invalid conclusions, and stop conditions.
-- Acceptance is not passive. Review user scenario, inputs, outputs, state/data
-  changes, actual call chain, real consumers, failure paths, edge cases, and
-  user-verifiable behavior.
-- A task that only creates a connection, empty API, static mock, unused contract,
-  or unreachable entrypoint is not complete.
-- If acceptance finds a thin implementation, create a follow-up package that
-  names missing entrypoints, data, state changes, consumers, failure paths,
-  verification commands, and completion definition.
-- Target results are review inputs. Controller acceptance requires raw evidence.
-- Acceptance must roll TODO/Backlog: close solved items with evidence, keep
-  valid remaining items, add newly found items, and explain items that should
-  not enter TODO.
+- Acceptance requires raw evidence review: user scenario, inputs, outputs,
+  state/data changes, actual call chain, real consumers, failure paths, edge
+  cases, and user-verifiable behavior.
+- A task that only creates a connection, empty API, static mock, unused
+  contract, or unreachable entrypoint is not complete. If acceptance finds a
+  thin implementation, create a follow-up package naming missing entrypoints,
+  data, state changes, consumers, failure paths, validation, and completion
+  definition.
+- Target results are review inputs, not acceptance. Controller acceptance must
+  roll TODO/Backlog: close solved items with evidence, keep valid remaining
+  items, add newly found items, and explain items that should not enter TODO.
 - Product repository commits are handled by the owning repository window.
   Wakeflow documentation commits are made only by the controller after review.
 
 Details live in `skills/wakeflow-governance/references/testing-validation.md`.
 
-## Dispatch, TODO, And Automation Boundaries
+## Dispatch, TODO, And Automation
 
 - The controller owns dispatch decisions across configured windows.
-- Every task package or prompt for an executing window must require reading the
-  parent `AGENTS.md`, current state root/current plan, and target repository
-  `AGENTS.md`, then declaring current window/repository responsibility.
-- If the executing window cannot confirm its identity and repository, it must
-  stop and backfill a blocker.
+- Every task package or executing prompt must require the target to read parent
+  `AGENTS.md`, current state root/current plan, and target repository
+  `AGENTS.md`, then declare current window/repository responsibility.
+- If the executing window cannot confirm identity and repository, it must stop
+  and backfill a blocker.
 - Separate final coverage from currently dispatchable windows. Producer/consumer
   dependencies must be explicit.
 - Do not send prompts to completed, observing, no-task, or blocked windows
   unless the prompt removes that blocker.
-- TODO/Backlog is a scheduling ledger, not a goal definition.
-- Design signals become executable only after controller intake and routing.
+- TODO/Backlog is a scheduling ledger, not a goal definition. Design signals
+  become executable only after controller intake and routing.
 - Dispatch may use larger same-window task packages when they share a boundary
   and validation path.
 - Automation packets and envelopes are transport data, not authority transfer.
-- The controller may delete any automation that cannot prove its current goal,
+  The controller may delete any automation that cannot prove its current goal,
   state root, window, thread id, dispatch group, target task, and next-hop rule.
-- Direct-thread dispatch is the normal transport; it does not make ordinary
+- Direct-thread dispatch is the normal transport. It does not make ordinary
   discussion, Design work, or single-window development unattended automation.
 - In confirmed unattended mode, continue reviewing results, pulling evidence,
   deciding, creating next eligible packages, and dispatching until final
   completion, a hard gate, user stop, no eligible TODO, or missing evidence that
   requires human decision.
-- New loop entrypoints are `wakeflow-state.mjs` and `wakeflow-delivery.mjs`.
-  Commands create machine state, envelopes, result imports, review candidates,
-  controller decisions, and stop markers. Commands do not replace acceptance.
+- `wakeflow-state.mjs` and `wakeflow-delivery.mjs` create machine state,
+  envelopes, result imports, review candidates, controller decisions, and stop
+  markers. Commands do not replace acceptance.
 - After a real direct-thread send is recorded as `status=sent` with
-  `readback.ok=true`, the current send turn stops. Do not sleep, poll, or wait
+  `readback.ok=true`, stop the current send turn. Do not sleep, poll, or wait
   in the controller window.
 - Keep-live belongs to unattended support only. It is not task logic, transport,
   or acceptance evidence.
 - Delivery prompts must be compact wakeup envelopes. Target prompts default to
-  `currentWindow`, `taskId`, `stateRoot`, optional `dispatchGroup`, and `skill`.
-  Controller-return prompts default to `stateRoot`, `dispatchGroup`, trigger,
-  non-empty exceptional targets, and `skill`. Machine details remain in state
-  root, dispatch group, or envelope JSON.
-- When using a Codex host thread tool, pass the envelope `prompt` field exactly
-  as `send_message_to_thread.prompt`. Do not wrap it in XML, JSON, or
+  `currentWindow`, `taskId`, `stateRoot`, optional `dispatchGroup`, and
+  `skill`. Controller-return prompts default to `stateRoot`,
+  `dispatchGroup`, trigger, non-empty exceptional targets, and `skill`.
+  Machine details remain in state root, dispatch group, or envelope JSON.
+- When using a Codex host thread tool, pass the envelope `prompt` field
+  exactly as `send_message_to_thread.prompt`. Do not wrap it in XML, JSON, or
   delegation tags.
 - Target windows execute only their assigned dispatch packet and return a
   `TargetResultEnvelope`. They do not claim another target or controller role.
@@ -332,20 +299,20 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
 - Test delivery is controller-started by default. Non-Test windows must not
   create, process, or verify Test delivery unless both the current plan and the
   envelope explicitly authorize the exception.
-- Real thread ids live only in `.workspace-local/`. Never write them to tracked
-  docs, GitHub, prompts, or backfill text. Do not register placeholders.
+- Real thread ids live only in `.workspace-local/`. Never write them to
+  tracked docs, GitHub, prompts, or backfill text. Do not register placeholders.
 - Old claim/finish/chain-next/start-plan/resume-plan routes are retired. Use
   dispatch packets, delivery envelopes, target result envelopes, and controller
   review.
 
-Operational details live in `skills/wakeflow-governance/` and
-`skills/wakeflow-target/`.
+Operational details live in `skills/wakeflow-governance/`,
+`skills/wakeflow-controller/`, and `skills/wakeflow-target/`.
 
 ## Workspace Governance And Ledgers
 
 - Project-specific active plans, TODOs, test exchanges, archive history, and
   target backfills belong in ignored `.workspace-active/` surfaces or the
-  external `../wakeflow-ledger/`.
+  configured `../wakeflow-ledger/`.
 - Repository scope and managed `AGENTS.md` blocks come from tracked or local
   workspace config. First installation should run discovery, present the
   proposed scope, and wait for user confirmation before writing.
@@ -377,13 +344,14 @@ See `skills/wakeflow-governance/references/wakeflow-ledgers.md`.
   validation strategy, risks, and confirmation questions.
 - Create or activate execution waves only after user confirmation.
 
-## Scripts And Automation
+## Scripts And Verification
 
 - For script maintenance or pipeline questions, read
   `skills/wakeflow-governance/SKILL.md` and
   `skills/wakeflow-governance/references/script-pipeline.md`.
 - `scripts/README.md` is the script index. After adding, renaming, or deleting
-  `scripts/*.mjs`, update the index and run `node scripts/wakeflow-check-scripts.mjs`.
+  `scripts/*.mjs`, update the index and run
+  `node scripts/wakeflow-check-scripts.mjs`.
 - State roots, progress docs, Design handoff boards, Design/Test intake, Test
   cards, archive entries, and templates must keep script-readable formats.
 - `node scripts/wakeflow-verify.mjs` is the default verification orchestrator.
@@ -414,7 +382,7 @@ according to the current plan.
 Do not put wave-specific window lists, blocked/observing decisions, detailed
 validation commands, forbidden paths, or automation manuals in `AGENTS.md`.
 
-## Skill Layers
+## Skill And Rule Layers
 
 - `AGENTS.md` keeps identity, immutable boundaries, confirmation gates, goal
   judgment, testing boundaries, acceptance floor, repository protection,
@@ -426,6 +394,8 @@ validation commands, forbidden paths, or automation manuals in `AGENTS.md`.
 
 Reference map:
 
+- `skills/wakeflow-governance/references/agents-rule-map.md`: old-rule
+  migration, ownership, and optimization notes for this file.
 - `skills/wakeflow-governance/references/wakeflow-architecture.md`: structure,
   AGENTS/skill/template/script organization.
 - `skills/wakeflow-governance/references/todo-backlog.md`: TODO/Backlog intake,
@@ -446,8 +416,8 @@ Reference map:
   migration, extraction, deletion, and release closure.
 - `skills/wakeflow-progressive-validation/SKILL.md`: progressive validation
   and source-derived long-chain plans.
-- `skills/wakeflow-target/`: target-window execution and `TargetResultEnvelope`
-  backfill.
+- `skills/wakeflow-target/`: target-window execution and
+  `TargetResultEnvelope` backfill.
 - `skills/wakeflow-controller/`: controller start, return, result review, and
   next-wave decisions.
 

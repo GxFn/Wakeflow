@@ -73,6 +73,7 @@ const requiredFiles = [
   "skills/wakeflow-controller/SKILL.md",
   "skills/wakeflow-target/SKILL.md",
   "skills/wakeflow-governance/SKILL.md",
+  "skills/wakeflow-governance/references/agents-rule-map.md",
   "skills/wakeflow-governance/references/wakeflow-ledgers.md",
   "skills/wakeflow-progressive-validation/SKILL.md",
   "assets/wakeflow-mark.svg",

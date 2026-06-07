@@ -300,7 +300,11 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   const rootAgents = readFileSync(path.join(parent, "AGENTS.md"), "utf8");
   assert.match(rootAgents, /Wakeflow is installed as a Codex plugin for this workspace/);
   assert.match(rootAgents, /Use Wakeflow MCP tools/);
+  assert.match(rootAgents, /Wakeflow verification MCP capability/);
+  assert.match(rootAgents, /workspace\.config\.json/);
   assert.doesNotMatch(rootAgents, /node scripts\/wakeflow-setup\.mjs/);
+  assert.doesNotMatch(rootAgents, /use the matching Wakeflow MCP tool/);
+  assert.doesNotMatch(rootAgents, /the installed Wakeflow script index is the script index/);
 
   const appAgents = readFileSync(path.join(parent, "AppRepo", "AGENTS.md"), "utf8");
   assert.match(appAgents, /## Workspace Access Card/);
@@ -339,7 +343,9 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.equal(synced.status, 0, synced.stderr || synced.stdout);
   const rootAgentsAfterSync = readFileSync(path.join(parent, "AGENTS.md"), "utf8");
   assert.match(rootAgentsAfterSync, /Wakeflow is installed as a Codex plugin for this workspace/);
+  assert.match(rootAgentsAfterSync, /Wakeflow verification MCP capability/);
   assert.doesNotMatch(rootAgentsAfterSync, /node scripts\/wakeflow-setup\.mjs/);
+  assert.doesNotMatch(rootAgentsAfterSync, /use the matching Wakeflow MCP tool/);
 });
 
 test("initialize does not reuse similar Design/Test directories unless explicitly mapped", () => {
@@ -913,7 +919,11 @@ test("sync-root-agents unpacks parent AGENTS with Wakeflow repo paths", () => {
   assert.match(rootAgents, /# FixtureWorkspace Agent Instructions/);
   assert.match(rootAgents, /Wakeflow\/\.workspace-active\/workspace\/index\.md|controller state roots/);
   assert.match(rootAgents, /cd Wakeflow && node scripts\/wakeflow-setup\.mjs sync-root-agents --write/);
-  assert.match(rootAgents, /The installed controller workspace is responsible for cross-repository goal/);
+  assert.match(rootAgents, /Wakeflow\/workspace\.config\.json/);
+  assert.match(rootAgents, /## Gate Flow/);
+  assert.match(rootAgents, /## Role Map/);
+  assert.match(rootAgents, /The controller workspace owns cross-repository goal intake/);
+  assert.match(rootAgents, /## Highest Stop Card/);
   assert.doesNotMatch(rootAgents, /FixtureWorkspace is the controller workspace/);
   assert.doesNotMatch(rootAgents, /plugin form/);
   assert.doesNotMatch(rootAgents, /FixtureWorkspace repository/);

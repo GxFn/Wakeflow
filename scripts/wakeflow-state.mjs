@@ -245,14 +245,6 @@ function commandInit() {
     events: path.join(stateRoot, "controller-events.jsonl"),
     projection: path.join(stateRoot, "projection.json"),
     progress: path.join(stateRoot, progressDoc),
-    intake: path.join(stateRoot, "intake"),
-    testCards: path.join(stateRoot, "test-cards"),
-    taskPackages: path.join(stateRoot, "task-packages"),
-    targetResults: path.join(stateRoot, "target-results"),
-    evidence: path.join(stateRoot, "evidence"),
-    transitionCandidates: path.join(stateRoot, "transition-candidates"),
-    automation: path.join(stateRoot, "automation"),
-    archive: path.join(stateRoot, "archive"),
   };
 
   const demand = {
@@ -361,19 +353,13 @@ function commandInit() {
     stagePlan,
     unifiedStatus,
   });
-  const directories = [
-    files.intake,
-    files.testCards,
-    files.taskPackages,
-    files.targetResults,
-    files.evidence,
-    path.join(files.automation, "dispatch-groups"),
-    path.join(files.automation, "dispatch-packets"),
-    path.join(files.automation, "delivery-envelopes"),
-    path.join(files.automation, "delivery-runs"),
-    path.join(files.automation, "review-packs"),
-    files.transitionCandidates,
-    files.archive,
+  const lazyStateDirectories = [
+    path.join(stateRoot, "intake"),
+    path.join(stateRoot, "test-cards"),
+    path.join(stateRoot, "task-packages"),
+    path.join(stateRoot, "target-results"),
+    path.join(stateRoot, "evidence"),
+    path.join(stateRoot, "transition-candidates"),
   ];
   const outputs = [
     files.demand,
@@ -381,13 +367,9 @@ function commandInit() {
     files.events,
     files.projection,
     files.progress,
-    ...directories,
   ];
 
   if (write) {
-    for (const dir of directories) {
-      mkdirSync(dir, { recursive: true });
-    }
     writeJson(files.demand, demand);
     writeJson(files.state, state);
     writeText(files.events, JSON.stringify(event));
@@ -408,6 +390,8 @@ function commandInit() {
       projectionFile: relative(files.projection),
       templateRoot: relative(templateRoot),
       generatedRuntimeBoundary: ".workspace-active is ignored by the Wakeflow repository; tracked assets are templates, schemas, scripts, skills, and tests.",
+      lazyStateDirectories: lazyStateDirectories.map(relative),
+      localDeliveryRuntime: ".workspace-local/wakeflow-delivery",
       outputs: outputs.map(relative),
     },
     [

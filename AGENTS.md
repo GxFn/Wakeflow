@@ -135,9 +135,9 @@ commands, fields, examples, and troubleshooting, but not replace these gates.
 
 ## Controller Identity And Repository Boundaries
 
-- Wakeflow is the controller workspace for cross-repository goal intake,
-  planning, dispatch, acceptance, boundaries, TODO routing, templates, and
-  collaboration rules. It does not implement managed products.
+- The installed controller workspace is responsible for cross-repository goal
+  intake, planning, dispatch, acceptance, boundaries, TODO routing, templates,
+  and collaboration rules. It does not implement managed products.
 - Design may clarify ideas, compare options, expose risks, and prepare handoff
   candidates. The controller receives and schedules; the user/developer owns
   final product decisions.
@@ -148,8 +148,8 @@ commands, fields, examples, and troubleshooting, but not replace these gates.
   platform rules, external standards, release behavior, protocols, security, or
   best practices that local code cannot answer. Local code facts still win over
   generic advice.
-- Default installation includes only Wakeflow controller, Design, and Test
-  support. Product windows come from discovery, user confirmation, or local
+- Default installation includes the configured controller window plus Design and
+  Test support. Product windows come from discovery, user confirmation, or local
   config.
 - Product/module boundaries are defined by the current state root, confirmed
   repository configuration, target repository contracts, and user decisions.
@@ -343,13 +343,9 @@ Operational details live in `skills/wakeflow-governance/` and
 
 ## Workspace Governance And Ledgers
 
-- Wakeflow tracks only reusable capability assets: `AGENTS.md`, README, scripts,
-  templates, skills, schemas, plugin support files, and starter documents.
 - Project-specific active plans, TODOs, test exchanges, archive history, and
   target backfills belong in ignored `.workspace-active/` surfaces or the
   external `../wakeflow-ledger/`.
-- Do not add product repositories, Design, Test, or real test projects to this
-  repository as tracked directories, submodules, or gitlinks.
 - Repository scope and managed `AGENTS.md` blocks come from tracked or local
   workspace config. First installation should run discovery, present the
   proposed scope, and wait for user confirmation before writing.
@@ -357,11 +353,6 @@ Operational details live in `skills/wakeflow-governance/` and
   surfaces. Ask before choosing.
 - Source, tests, and docs for product repositories are committed in their own
   repositories.
-- Only the controller commits Wakeflow capability changes.
-- Wakeflow scripts must be repo-neutral, parameterized, secret-free, free of
-  user absolute paths, and network-independent unless explicitly justified.
-- Skills in `skills/` are reusable assets. Installing or syncing a skill must
-  name its consumer and destination.
 - `.workspace-active/workspace/index.md` is the single active controller entry
   for an installed workspace. It is local runtime and usually not committed.
 - Larger requirement designs and long-term records belong in

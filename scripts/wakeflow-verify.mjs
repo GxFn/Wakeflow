@@ -86,6 +86,7 @@ if (withScriptTests) {
       path.join(scriptsDir, "wakeflow-intake.test.mjs"),
       path.join(scriptsDir, "wakeflow-demand-sequence.test.mjs"),
       path.join(scriptsDir, "wakeflow-check-repository-residue.test.mjs"),
+      path.join(scriptsDir, "wakeflow-check-layout.test.mjs"),
       path.join(scriptsDir, "wakeflow-check-scripts.test.mjs"),
       path.join(scriptsDir, "wakeflow-validate.test.mjs"),
       path.join(scriptsDir, "wakeflow-setup.test.mjs"),

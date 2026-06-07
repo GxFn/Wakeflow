@@ -2,6 +2,8 @@
 
 This board records cross-plan TODO items. It does not replace the active controller state root, developer progress document, or final completion definition.
 
-| ID | Status | Type | Priority | Owner | Goal | Retest / Dispatch Impact | Dependency / Trigger | Recommended Window | Evidence |
+## Global TODO
+
+| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | TODO-EXAMPLE-001 | parked | template | P3 | Wakeflow | Replace this row with your first real TODO. | no | New project setup. | Wakeflow | none |

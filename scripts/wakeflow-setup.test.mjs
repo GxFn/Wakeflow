@@ -806,7 +806,8 @@ test("sync-root-agents unpacks parent AGENTS with Wakeflow repo paths", () => {
   assert.match(rootAgents, /# FixtureWorkspace Agent Instructions/);
   assert.match(rootAgents, /Wakeflow\/\.workspace-active\/workspace\/index\.md|controller state roots/);
   assert.match(rootAgents, /cd Wakeflow && node scripts\/wakeflow-setup\.mjs sync-root-agents --write/);
-  assert.match(rootAgents, /FixtureWorkspace is the controller workspace for cross-repository goal intake/);
+  assert.match(rootAgents, /The installed controller workspace is responsible for cross-repository goal/);
+  assert.doesNotMatch(rootAgents, /FixtureWorkspace is the controller workspace/);
   assert.doesNotMatch(rootAgents, /plugin form/);
   assert.doesNotMatch(rootAgents, /FixtureWorkspace repository/);
 });

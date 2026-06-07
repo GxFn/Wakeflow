@@ -12,14 +12,24 @@ const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args, config: workspac
 const workspaceDocsDir = ledgerPaths.workspaceDocsDir;
 const currentDir = ledgerPaths.workspaceCurrentDir;
 const indexPath = ledgerPaths.workspaceIndexPath;
+const currentIndexPath = ledgerPaths.workspaceCurrentIndexPath;
+const currentStatusPath = ledgerPaths.workspaceCurrentStatusPath;
+const globalTodoPath = ledgerPaths.globalTodoPath;
 const configuredTestExchangeFile = path.basename(workspaceConfig.testExchangePath);
+
+function configuredCurrentFile(configuredPath) {
+  const absolute = path.resolve(workspaceRoot, configuredPath);
+  return path.dirname(absolute) === currentDir ? path.basename(absolute) : null;
+}
 
 const requiredCurrentFiles = [
   "index.md",
   "workspace-current-status.md",
   "global-todo-board.md",
+  configuredCurrentFile(workspaceConfig.designHandoffBoard),
+  configuredCurrentFile(workspaceConfig.designHandoffInbox),
   configuredTestExchangeFile,
-];
+].filter(Boolean);
 
 const forbiddenRootFiles = [
   "workspace-current-status.md",
@@ -71,6 +81,13 @@ function splitMarkdownRow(line) {
     .map((cell) => cell.trim());
 }
 
+function tableRows(section) {
+  return section
+    .split("\n")
+    .map(splitMarkdownRow)
+    .filter((row) => row.length > 0 && !row.every((cell) => /^:?-{3,}:?$/.test(cell)));
+}
+
 function sectionContent(content, heading) {
   const start = content.indexOf(`## ${heading}`);
   if (start < 0) {
@@ -79,6 +96,29 @@ function sectionContent(content, heading) {
   const rest = content.slice(start);
   const next = rest.slice(1).search(/\n## /);
   return next >= 0 ? rest.slice(0, next + 1) : rest;
+}
+
+function hasRequiredColumns(header, columns) {
+  return columns.every((column) => header.includes(column));
+}
+
+function validateTableSection({ file, label, heading, requiredColumns }) {
+  if (!existsSync(file)) {
+    return;
+  }
+
+  const content = read(file);
+  const section = sectionContent(content, heading);
+  if (!section) {
+    issues.push(`${relative(file)} is missing ## ${heading}`);
+    return;
+  }
+
+  const rows = tableRows(section);
+  const header = rows.find((row) => hasRequiredColumns(row, requiredColumns));
+  if (!header) {
+    issues.push(`${relative(file)} ${label} table is missing required columns: ${requiredColumns.join(", ")}`);
+  }
 }
 
 function extractFirstLinkTarget(markdown) {
@@ -128,6 +168,64 @@ if (!existsSync(indexPath)) {
     warnings.push(`${relative(indexPath)} should expose ${relative(currentDir)}/ as the short-term work area`);
   }
 }
+
+validateTableSection({
+  file: currentIndexPath,
+  label: "current map",
+  heading: "Current Map",
+  requiredColumns: ["Type", "Document"],
+});
+
+if (existsSync(currentStatusPath)) {
+  const currentStatusContent = read(currentStatusPath);
+  if (!/^Status:\s*.+$/m.test(currentStatusContent)) {
+    issues.push(`${relative(currentStatusPath)} is missing a Status: line`);
+  }
+  if (!/^Controller window:\s*.+$/m.test(currentStatusContent)) {
+    issues.push(`${relative(currentStatusPath)} is missing a Controller window: line`);
+  }
+  validateTableSection({
+    file: currentStatusPath,
+    label: "window dispatch",
+    heading: "Window Dispatch",
+    requiredColumns: ["Window", "Status"],
+  });
+}
+
+validateTableSection({
+  file: globalTodoPath,
+  label: "global TODO",
+  heading: "Global TODO",
+  requiredColumns: [
+    "ID",
+    "Status",
+    "Type",
+    "Priority",
+    "Owner",
+    "Item / Goal",
+    "Affects Retest / Dispatch",
+    "Dependency / Trigger",
+    "Recommended Window",
+    "Current Mount",
+  ],
+});
+
+validateTableSection({
+  file: path.resolve(workspaceRoot, workspaceConfig.designHandoffBoard),
+  label: "Design handoff",
+  heading: "Handoff Board",
+  requiredColumns: [
+    "ID",
+    "Status",
+    "Title",
+    "Original Plan",
+    "Requirement Design",
+    "User Confirmation Status",
+    "Mainline Relation Status",
+    "Priority",
+    "Next Step",
+  ],
+});
 
 const activeFiles = [
   path.join(workspaceRoot, "AGENTS.md"),

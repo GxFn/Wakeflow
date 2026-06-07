@@ -37,10 +37,11 @@ Script-readable document format:
 - New demands start from a controller state root created by
   `wakeflow-state.mjs init`.
 - The root contains machine-owned `demand.json`, `wakeflow-state.json`,
-  `controller-events.jsonl`, `intake/*.json`, `test-cards/*.json`,
-  `task-packages/*.json`, `target-results/*.json`,
-  `transition-candidates/*.json`, and one developer-readable
-  `developer-progress.md`.
+  `controller-events.jsonl`, `projection.json`, and one developer-readable
+  `developer-progress.md`. Operation-specific directories such as
+  `intake/`, `test-cards/`, `task-packages/`, `target-results/`, `evidence/`,
+  and `transition-candidates/` are created lazily only by the command that
+  writes real content there.
 - `developer-progress.md` is not state authority. Scripts may update only its
   `<!-- unified-status:start -->` block via `wakeflow-render-progress.mjs`; task
   packages, backfill summaries, and decisions are append-only timestamped
@@ -70,14 +71,17 @@ Current scripts:
 - `wakeflow-progress-log.mjs`: appends timestamped task-package, backfill, or
   decision entries to allowed developer-readable sections while leaving machine
   state and `Unified Status` untouched.
-- `wakeflow-delivery.mjs`: state-root-only automation transport manager. It
+- `wakeflow-delivery.mjs`: state-root-backed local transport manager. It
   registers real thread ids in the local thread registry, derives window
   configs from workspace config plus registry presence, prepares dispatch
   packets from state roots, builds delivery envelopes, records delivery-run
   evidence, records target result envelopes, reviews group readiness, builds
   controller-return envelopes, manages keep-live state, and writes stop
   markers. It does not read current plan Markdown as authority, create legacy
-  automation jobs, send host thread messages, or accept evidence.
+  automation jobs, send host thread messages, or accept evidence. Runtime
+  packets, envelopes, delivery runs, review packs, and thread registry files
+  stay under ignored `.workspace-local/wakeflow-delivery/` unless an explicit
+  state directory is provided.
   `prepare-dispatch-from-state` fails closed for completed / archived / paused
   demands, review-ready demands that
   still need a controller decision, blocked demands, and target tasks that are
@@ -137,8 +141,9 @@ Current scripts:
   references.
 - `wakeflow-check-layout.mjs`: verifies that short-term workspace docs
   live under `.workspace-active/workspace/current/`, that the current index
-  target points there, and that active docs/scripts/templates do not reference
-  old root-level short-term paths.
+  target points there, that starter/current tables still match downstream
+  readers such as `wakeflow-next-work.mjs`, and that active docs/scripts/templates
+  do not reference old root-level short-term paths.
 - `wakeflow-archive-docs.mjs`: dry-run by default; moves completed Wakeflow
   documents into `../wakeflow-ledger/workspace/archive/YYYY-MM/<topic>/`,
   rewrites relative links, updates index rows, and refreshes the record map when
@@ -175,7 +180,8 @@ current set is `wakeflow-archive-todo.test.mjs`,
 `wakeflow-delivery.test.mjs`, `wakeflow-repo-status.test.mjs`,
 `wakeflow-state.test.mjs`, `wakeflow-state-machine-route-fixtures.test.mjs`,
 `wakeflow-intake.test.mjs`, `wakeflow-demand-sequence.test.mjs`,
-`wakeflow-check-repository-residue.test.mjs`, `wakeflow-check-scripts.test.mjs`,
+`wakeflow-check-repository-residue.test.mjs`,
+`wakeflow-check-layout.test.mjs`, `wakeflow-check-scripts.test.mjs`,
 `wakeflow-validate.test.mjs`, `wakeflow-setup.test.mjs`,
 `wakeflow-import-design-handoffs.test.mjs`,
 `wakeflow-next-work.test.mjs`, and

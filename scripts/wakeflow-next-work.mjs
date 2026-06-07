@@ -186,6 +186,10 @@ function parseDesignCandidates(issues, warnings) {
 
   const content = read(designBoardPath);
   const section = sectionContent(content, "Handoff Board");
+  if (!section) {
+    issues.push("Design handoff board is missing ## Handoff Board.");
+    return [];
+  }
   const rows = tableRows(section);
   const header = rows.find((row) => row.includes("ID") && row.includes("Status"));
   if (!header) {
@@ -248,6 +252,10 @@ function parseTodoCandidates(warnings) {
 
   const content = read(todoBoardPath);
   const section = sectionContent(content, "Global TODO");
+  if (!section) {
+    warnings.push("Global TODO board is missing ## Global TODO.");
+    return [];
+  }
   const rows = tableRows(section);
   const header = rows.find((row) => row.includes("ID") && row.includes("Status"));
   if (!header) {

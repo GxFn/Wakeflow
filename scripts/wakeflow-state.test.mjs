@@ -104,11 +104,18 @@ test("init --write creates ignored state root from tracked templates", () => {
   assert.match(progress, /<!-- unified-status:start -->/);
   assert.match(progress, /Main state: intake/);
   assert.match(progress, /Prove init can create a state root\./);
-  assert.equal(existsSync(path.join(stateRoot, "intake")), true);
-  assert.equal(existsSync(path.join(stateRoot, "test-cards")), true);
-  assert.equal(existsSync(path.join(stateRoot, "task-packages")), true);
-  assert.equal(existsSync(path.join(stateRoot, "automation/delivery-runs")), true);
-  assert.equal(existsSync(path.join(stateRoot, "transition-candidates")), true);
+  assert.deepEqual(payload.outputs.sort(), [
+    ".workspace-active/workspace/current/CSMR-FIXTURE-2026-06-05/controller-events.jsonl",
+    ".workspace-active/workspace/current/CSMR-FIXTURE-2026-06-05/demand.json",
+    ".workspace-active/workspace/current/CSMR-FIXTURE-2026-06-05/developer-progress.md",
+    ".workspace-active/workspace/current/CSMR-FIXTURE-2026-06-05/projection.json",
+    ".workspace-active/workspace/current/CSMR-FIXTURE-2026-06-05/wakeflow-state.json",
+  ].sort());
+  assert.equal(existsSync(path.join(stateRoot, "intake")), false);
+  assert.equal(existsSync(path.join(stateRoot, "test-cards")), false);
+  assert.equal(existsSync(path.join(stateRoot, "task-packages")), false);
+  assert.equal(existsSync(path.join(stateRoot, "automation")), false);
+  assert.equal(existsSync(path.join(stateRoot, "transition-candidates")), false);
 });
 
 test("init refuses state roots outside workspace or configured ledger", () => {
@@ -187,6 +194,8 @@ test("add-task-package updates machine state without changing progress doc", () 
   assert.equal(state.targetTasks[0].targetTaskId, "CSMR-TASK-1");
   assert.equal(state.windows[0].windowName, "AlembicWorkspace");
   assert.equal(taskPackage.targetTasks[0].targetWindow, "AlembicWorkspace");
+  assert.equal(existsSync(path.join(stateRoot, "task-packages")), true);
+  assert.equal(existsSync(path.join(stateRoot, "automation")), false);
   assert.equal(events.length, 2);
   assert.equal(JSON.parse(events[1]).type, "task-package.added");
   assert.equal(progressAfter, progressBefore);

@@ -94,7 +94,8 @@ Recommended installation flow:
    repository mappings and continues; in a messy workspace it asks which windows
    to manage.
 4. Confirm the boundary when Codex asks.
-5. Let it write only the managed `AGENTS.md` blocks and local runtime surfaces.
+5. Let it write only the managed `AGENTS.md` blocks, `.gitignore` runtime
+   entries, and local runtime surfaces.
 6. Let Codex create the controller, Design, Test, and product Codex threads from
    the returned `windowLaunchPlan`.
 7. After each thread is created, Codex calls `set_thread_title` with that
@@ -206,6 +207,7 @@ Script families:
 | Need | Script family |
 | --- | --- |
 | Install / sync parent and child `AGENTS.md` blocks | `wakeflow-setup.mjs` |
+| Ensure Wakeflow runtime directories are ignored | `wakeflow-setup.mjs sync-gitignore` |
 | Create state roots, task packages, decisions, progress projections | `wakeflow-state.mjs` |
 | Record Design/Test intake | `wakeflow-intake.mjs` |
 | Build delivery envelopes, review result groups, record direct-thread runs | `wakeflow-delivery.mjs` |

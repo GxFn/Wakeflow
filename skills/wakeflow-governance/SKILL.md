@@ -26,6 +26,8 @@ tool first:
   windows to manage. Do not call `useDiscovered` in that case.
 - Call `wakeflow_initialize_workspace` with `apply: true` only after the user
   confirms the preview and write boundary.
+- During apply, Wakeflow synchronizes the workspace `.gitignore` so
+  `.workspace-active/` and `.workspace-local/` are ignored runtime directories.
 - If the user removes discovered windows during setup, pass them as
   `excludeWindows` so the config, AGENTS updates, launch plan, and local window
   runtime agree.

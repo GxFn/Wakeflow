@@ -648,6 +648,7 @@ const AGENTS_START = "<!-- wakeflow:scope:start -->";
 const AGENTS_END = "<!-- wakeflow:scope:end -->";
 const ROOT_AGENTS_START = "<!-- wakeflow:root-agents:start -->";
 const ROOT_AGENTS_END = "<!-- wakeflow:root-agents:end -->";
+const RUNTIME_GITIGNORE_ENTRIES = [".workspace-active/", ".workspace-local/"];
 
 function testWindowNamesForContext(context) {
   const configuredNames = [
@@ -1069,6 +1070,42 @@ function syncRootAgentsPayload(context = commandContext()) {
     source: path.join(context.templateRoot, "AGENTS.md"),
     parentRoot: context.parentRoot,
     wakeflowRoot: context.wakeflowRoot,
+  };
+}
+
+function gitignoreHasRuntimeEntry(existing, entry) {
+  const expected = entry.replace(/^\/+/, "").replace(/\/+$/, "");
+  return existing
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"))
+    .some((line) => line.replace(/^\/+/, "").replace(/\/+$/, "") === expected);
+}
+
+function syncGitignorePayload(context = commandContext()) {
+  const target = path.join(context.wakeflowRoot, ".gitignore");
+  if (!isInside(target, context.wakeflowRoot)) {
+    fail(`Refusing to write .gitignore outside workspace root: ${target}`);
+  }
+  const existing = existsSync(target) ? readFileSync(target, "utf8") : "";
+  const missing = RUNTIME_GITIGNORE_ENTRIES.filter((entry) => !gitignoreHasRuntimeEntry(existing, entry));
+  const changed = missing.length > 0;
+  let next = existing;
+  if (changed) {
+    const prefix = existing.trim() ? `${existing.trimEnd()}\n\n# Wakeflow runtime state\n` : "# Wakeflow runtime state\n";
+    next = `${prefix}${missing.join("\n")}\n`;
+  }
+  if (write && changed) {
+    writeFileSync(target, next);
+  }
+  return {
+    ok: true,
+    command: "sync-gitignore",
+    wrote: write && changed,
+    changed,
+    target,
+    entries: RUNTIME_GITIGNORE_ENTRIES,
+    missing,
   };
 }
 
@@ -1784,6 +1821,7 @@ function initializePayload() {
     replacements,
     language,
   });
+  const gitignore = syncGitignorePayload(installContext);
   const templates = syncTemplatesPayload(installContext, { all: true });
   const rootAgents = syncRootAgentsPayload(installContext);
   const childAgents = writeAgentsPayload(installContext, {
@@ -1797,8 +1835,8 @@ function initializePayload() {
   });
 
   const okItems = write
-    ? [configured, templates, rootAgents, childAgents, localWindows, accessProfiles]
-    : [configured, templates, rootAgents, childAgents, localWindows];
+    ? [configured, gitignore, templates, rootAgents, childAgents, localWindows, accessProfiles]
+    : [configured, gitignore, templates, rootAgents, childAgents, localWindows];
   const ok = okItems
     .every((item) => item.ok !== false);
 
@@ -1810,6 +1848,7 @@ function initializePayload() {
     discovery,
     steps: {
       configure: configured,
+      gitignore,
       syncTemplates: templates,
       syncRootAgents: rootAgents,
       writeAgents: childAgents,
@@ -1833,6 +1872,7 @@ function help() {
       configure: "Write workspace.config.json after user-confirmed --repo mappings.",
       prompts: "Print child-window prompts for confirming scope and refreshing AGENTS.md.",
       "sync-root-agents": "Unpack the control AGENTS.md into the parent workspace AGENTS.md so Codex auto-loads total-control rules at the outer workspace root.",
+      "sync-gitignore": "Ensure .workspace-active/ and .workspace-local/ are ignored in the target workspace .gitignore.",
       "write-agents": "Append or refresh managed access-card blocks in configured child AGENTS.md files.",
       "access-profiles": "Print a read-only ChildWindowAccessProfile view from workspace.config plus child AGENTS managed blocks.",
       "sync-templates": "Create missing internal Design/Test templates or minimal external alignment templates.",
@@ -1851,6 +1891,7 @@ function help() {
       "node scripts/wakeflow-setup.mjs write-agents --all --write",
       "node scripts/wakeflow-setup.mjs access-profiles --json",
       "node scripts/wakeflow-setup.mjs ledger-paths --json",
+      "node scripts/wakeflow-setup.mjs sync-gitignore --write --json",
       "node scripts/wakeflow-setup.mjs sync-templates --all --write",
     ],
   };
@@ -1897,6 +1938,9 @@ function main() {
       break;
     case "sync-root-agents":
       printResult(syncRootAgentsPayload());
+      break;
+    case "sync-gitignore":
+      printResult(syncGitignorePayload());
       break;
     case "ledger-paths": {
       const context = commandContext();

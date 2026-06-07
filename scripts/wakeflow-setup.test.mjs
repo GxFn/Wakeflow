@@ -119,6 +119,25 @@ test("configure writes user-confirmed sibling mappings into workspace.config.jso
   assert.equal(config.goalStageConfirmationDir, "../wakeflow-ledger/goal-stage-confirmation");
 });
 
+test("sync-gitignore adds Wakeflow runtime entries idempotently", () => {
+  const fixture = makeFixture();
+  writeFile(path.join(fixture.control, ".gitignore"), ".workspace-local\nnode_modules/");
+
+  const dryRun = runJson(fixture, ["sync-gitignore"]);
+  assert.equal(dryRun.changed, true);
+  assert.deepEqual(dryRun.missing, [".workspace-active/"]);
+
+  const first = runJson(fixture, ["sync-gitignore", "--write"]);
+  assert.equal(first.wrote, true);
+  const content = readFileSync(path.join(fixture.control, ".gitignore"), "utf8");
+  assert.match(content, /^\.workspace-local$/m);
+  assert.match(content, /^\.workspace-active\/$/m);
+
+  const second = runJson(fixture, ["sync-gitignore", "--write"]);
+  assert.equal(second.changed, false);
+  assert.equal(second.wrote, false);
+});
+
 test("initialize without selection returns discovery and writes nothing", () => {
   const fixture = makeFixture();
   const payload = runJson(fixture, ["initialize"]);
@@ -216,6 +235,10 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.equal(config.workspaceRoot, ".");
   assert.equal(config.runtimeMode, "plugin");
   assert.equal(config.projectLedgerRoot, "wakeflow-ledger");
+  assert.equal(payload.steps.gitignore.wrote, true);
+  const gitignore = readFileSync(path.join(parent, ".gitignore"), "utf8");
+  assert.match(gitignore, /^\.workspace-active\/$/m);
+  assert.match(gitignore, /^\.workspace-local\/$/m);
   assert.equal(config.designHandoffInbox, ".workspace-active/workspace/current/design-handoff-inbox.md");
   assert.equal(config.goalStageConfirmationDir, "wakeflow-ledger/goal-stage-confirmation");
   assert.equal(config.wakeflowRepoDir, "");
@@ -234,6 +257,7 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.match(appAgents, /Active workspace index: `\.\.\/\.workspace-active\/workspace\/index\.md`/);
   assert.equal(existsSync(path.join(parent, "Design/AGENTS.md")), true);
   assert.equal(existsSync(path.join(parent, "Test/AGENTS.md")), true);
+  assert.equal(existsSync(path.join(parent, "scripts/README.md")), false);
   assert.equal(existsSync(path.join(parent, ".workspace-active/workspace/current/design-handoff-inbox.md")), true);
   assert.equal(existsSync(path.join(parent, "wakeflow-ledger/requirement-designs/README.md")), true);
   assert.equal(existsSync(path.join(parent, "wakeflow-ledger/goal-stage-confirmation/README.md")), true);

@@ -2,6 +2,7 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { listWakeflowRuntimeScriptEntries } from "../lib/wakeflow-runtime.mjs";
 
 const args = process.argv.slice(2);
@@ -88,6 +89,7 @@ if (existsSync(path.join(root, oldLedgerReferenceFile))) {
 validatePackage();
 validatePluginManifest();
 validateMcpConfig();
+await validateMcpToolDeclarations();
 validateRuntimeWhitelist();
 validateSkillSurface();
 validateTextSurface();
@@ -235,6 +237,7 @@ function validateMcpConfig() {
     "wakeflow_next_work",
     "wakeflow_prepare_delivery",
     "wakeflow_record_delivery",
+    "wakeflow_record_target_result",
     "wakeflow_review_pack",
     "wakeflow_decide_review",
     "wakeflow_complete_demand",
@@ -248,7 +251,6 @@ function validateMcpConfig() {
     "wakeflow_discover_workspace",
     "wakeflow_access_profiles",
     "wakeflow_sync_agents",
-    "wakeflow_submit_result",
     "wakeflow_review",
     "wakeflow_build_controller_return",
     "wakeflow_stop_loop",
@@ -263,6 +265,50 @@ function validateMcpConfig() {
   }
   for (const forbidden of ["threadId", "promptFile", "prompt-file"]) {
     if (mcpText.includes(forbidden)) errors.push(`MCP surface must not expose ${forbidden}`);
+  }
+}
+
+async function validateMcpToolDeclarations() {
+  const toolModule = path.join(root, "lib/wakeflow-mcp-tools.mjs");
+  if (!existsSync(toolModule)) return;
+  let tools;
+  try {
+    ({ tools } = await import(pathToFileURL(toolModule).href));
+  } catch (error) {
+    errors.push(`failed to load Wakeflow MCP tools: ${error.message}`);
+    return;
+  }
+  if (!Array.isArray(tools) || tools.length === 0) {
+    errors.push("Wakeflow MCP tools export must be a non-empty array");
+    return;
+  }
+  const readOnlyTools = new Set([
+    "wakeflow_status",
+    "wakeflow_review_pack",
+    "wakeflow_verify",
+  ]);
+  for (const tool of tools) {
+    if (!tool?.name) {
+      errors.push("Wakeflow MCP tool declaration is missing name");
+      continue;
+    }
+    const annotations = tool.annotations;
+    if (!annotations || typeof annotations !== "object" || Array.isArray(annotations)) {
+      errors.push(`MCP tool ${tool.name} must declare annotations`);
+      continue;
+    }
+    for (const field of ["title", "readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"]) {
+      if (!(field in annotations)) errors.push(`MCP tool ${tool.name} annotations missing ${field}`);
+    }
+    if (annotations.destructiveHint !== false) {
+      errors.push(`MCP tool ${tool.name} must not be destructive by default`);
+    }
+    if (annotations.openWorldHint !== false) {
+      errors.push(`MCP tool ${tool.name} must stay local; openWorldHint must be false`);
+    }
+    if (readOnlyTools.has(tool.name) && annotations.readOnlyHint !== true) {
+      errors.push(`MCP tool ${tool.name} must be declared read-only`);
+    }
   }
 }
 

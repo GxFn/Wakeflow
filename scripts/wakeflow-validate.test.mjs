@@ -65,6 +65,10 @@ function mutateJson(file, mutate) {
   writeFileSync(file, `${JSON.stringify(payload, null, 2)}\n`);
 }
 
+function mutateText(file, mutate) {
+  writeFileSync(file, mutate(readFileSync(file, "utf8")));
+}
+
 test("passes for the repository plugin surface", () => {
   const result = run(workspaceRoot);
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -98,6 +102,20 @@ test("fails when the MCP config does not launch from the plugin root", () => {
     const result = run(root);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /wakeflow MCP cwd must be \./);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("fails when an MCP tool declaration is missing annotations", () => {
+  const root = makeFixture();
+  try {
+    mutateText(path.join(root, "lib/wakeflow-mcp-tools.mjs"), (text) => {
+      return text.replace('    annotations: readOnlyTool("Inspect Wakeflow Status"),\n', "");
+    });
+    const result = run(root);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /MCP tool wakeflow_status must declare annotations/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

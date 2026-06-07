@@ -324,7 +324,7 @@ test("unattended route prepares dispatch and controller return from stateRoot wi
   assert.doesNotMatch(preparedPayload.packet.prompt, /rules:/);
 
   const submit = runAutomation([
-    "submit-result",
+    "record-target-result",
     "--target-window",
     manifest.taskPackage.targetWindow,
     "--task-id",

@@ -27,11 +27,12 @@ judgment.
 ## MCP Boundary
 
 MCP tools organize only the outer agent workflow. They do not directly
-manipulate real thread ids, fake host sends, expose every runtime script,
-import target results as a public action, or decide acceptance. Codex host
-thread tools perform real sends; Wakeflow records envelopes and send/readback
-evidence. Internal runtime scripts remain available to Wakeflow skills and
-tests without becoming public MCP tools.
+manipulate real thread ids, fake host sends, expose every runtime script, or
+decide acceptance. Target closeout stays split into narrow actions: record the
+target result envelope, review readiness, prepare a controller-return envelope
+when policy allows, send with the Codex host thread tool, and record delivery
+evidence. Internal runtime scripts remain available to Wakeflow skills and tests
+without becoming public MCP tools.
 
 ## Installed Workspace Shape
 

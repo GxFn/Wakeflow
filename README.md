@@ -208,15 +208,27 @@ Primary tool groups:
 | Setup and workspace discovery | `wakeflow_initialize_workspace` |
 | Demand and task state | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
-| Results and review | `wakeflow_review_pack`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
+| Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_intake_design_handoff`, `wakeflow_intake_test_card` |
 | Maintenance and verification | `wakeflow_verify` |
 
-Public MCP tools are for outer agent workflows. Internal steps such as target
-result import, result reduction, controller-return envelope construction,
-archive maintenance, keep-live state, and script backend execution stay inside
-Wakeflow JS/runtime scripts and skills. Do not expose those internal steps as
-separate MCP tools.
+Public MCP tools are for outer agent workflows. Target closeout is deliberately
+split: record a target result, review readiness, prepare a controller-return
+envelope when policy allows, send with the Codex host thread tool, and record
+delivery evidence. Do not collapse those steps into a single target-window MCP
+tool. Internal steps such as result reduction, archive maintenance, keep-live
+state, and script backend execution stay inside Wakeflow JS/runtime scripts and
+skills. Do not expose those internal steps as separate MCP tools.
+
+Wakeflow declares MCP tool annotations for every public tool: read-only tools
+are marked read-only, write tools are local, non-destructive, and closed-world.
+Codex approval policy is still controlled by the user's Codex config. For a
+trusted local Wakeflow installation, the matching Codex server policy is:
+
+```toml
+[plugins."wakeflow@gxfn".mcp_servers.wakeflow]
+default_tools_approval_mode = "approve"
+```
 
 ## Runtime And Ledger Boundaries
 

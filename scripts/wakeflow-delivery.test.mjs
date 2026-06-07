@@ -342,7 +342,7 @@ test("review-results and controller return require state-root group evidence", (
   assert.equal(waiting.groupSnapshot.missingTargets[0], "AlembicPlugin");
 
   const completed = parseOk(run(root, [
-    "submit-result",
+    "record-target-result",
     "--target-window",
     "AlembicPlugin",
     "--task-id",
@@ -415,7 +415,7 @@ test("target results are scoped by dispatch group to avoid parallel run collisio
   prepareDispatch(root, stateRootRef, { group: "GROUP-B" });
 
   const resultA = parseOk(run(root, [
-    "submit-result",
+    "record-target-result",
     "--target-window",
     "AlembicPlugin",
     "--task-id",
@@ -429,7 +429,7 @@ test("target results are scoped by dispatch group to avoid parallel run collisio
     "--write",
   ]));
   const resultB = parseOk(run(root, [
-    "submit-result",
+    "record-target-result",
     "--target-window",
     "AlembicPlugin",
     "--task-id",
@@ -464,7 +464,7 @@ test("review-pack gates missing path evidence refs before controller verdict", (
   prepareDispatch(root, stateRootRef);
 
   parseOk(run(root, [
-    "submit-result",
+    "record-target-result",
     "--target-window",
     "AlembicPlugin",
     "--task-id",
@@ -505,7 +505,7 @@ test("controller-return blocked delivery records controller window evidence", ()
   registerThread(root, "AlembicPlugin");
   prepareDispatch(root, stateRootRef);
   parseOk(run(root, [
-    "submit-result",
+    "record-target-result",
     "--target-window",
     "AlembicPlugin",
     "--task-id",
@@ -705,7 +705,7 @@ test("completed state-root review-pack stops instead of asking for another verdi
 test("completed target results require reviewable evidence", () => {
   const { root } = makeFixture();
   const result = run(root, [
-    "submit-result",
+    "record-target-result",
     "--target-window",
     "AlembicPlugin",
     "--task-id",

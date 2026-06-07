@@ -53,25 +53,28 @@ state root, or human context, stop and report instead of guessing.
      logs, runtime JSON, report paths, screenshots, or other reviewable
      evidence.
    - Prose alone is not enough for completion.
-5. Submit a `TargetResultEnvelope`.
-   - Use the installed Wakeflow runtime JS scripts named by the dispatch packet.
-   - Do not use public MCP tools for target closeout. MCP exposes outer
-     workflow contracts; target result import, group review, and return
-     envelope construction are internal runtime steps.
-   - Report `completed`, `blocked`, or `needs-controller-review` honestly.
+5. Record a `TargetResultEnvelope`.
+   - Use the Wakeflow MCP `wakeflow_record_target_result` tool for the result
+     envelope. This is one narrow file/state action: it records target evidence
+     only, and it does not review, accept, dispatch, send, or return.
+   - Report `completed`, `blocked`, or `needs-review` honestly.
    - Include evidence references and residual risks.
 6. Return to the controller only when allowed.
    - Target-to-target next-hop delivery is forbidden by default.
    - If `returnRoute=controller` and the dispatch group policy allows a return,
-     build exactly one controller-return envelope for the dispatch group's
-     stored `controllerWindow`.
+     use `wakeflow_review_pack` to confirm the group is ready or blocked, then
+     use `wakeflow_prepare_delivery` with `direction=controller-return` to build
+     exactly one controller-return envelope for the dispatch group's stored
+     `controllerWindow`.
    - Complete the real host send/readback with the same host thread tool used
-     for controller-to-target delivery, then record the delivery run.
+     for controller-to-target delivery, then use `wakeflow_record_delivery` to
+     record the delivery run.
    - Do not stop after writing the target result when controller return is
-     allowed. Run group review, build the controller-return envelope, send its
-     prompt through the host thread tool, then record that delivery run. The
-     target result may live in the state root; do not duplicate it into another
-     local result store.
+     allowed. The closeout steps stay separate: record target result, review
+     readiness, prepare controller-return envelope, send with the host thread
+     tool, then record delivery evidence. Do not replace them with one combined
+     target-window tool or duplicate the target result into another local result
+     store.
 
 ## Stop Conditions
 

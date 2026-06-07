@@ -249,12 +249,14 @@ async function runMcpSmoke(rootPath) {
     const listed = await rawRequest({ jsonrpc: "2.0", id: nextId++, method: "tools/list" }, { framed: true });
     const tools = listed.result.tools;
     assertToolSchemasAcceptedByHost(tools);
+    assertToolAnnotationsAcceptedByHost(tools);
     const toolNames = tools.map((tool) => tool.name);
     for (const expected of [
       "wakeflow_initialize_workspace",
       "wakeflow_status",
       "wakeflow_prepare_delivery",
       "wakeflow_record_delivery",
+      "wakeflow_record_target_result",
       "wakeflow_review_pack",
       "wakeflow_decide_review",
       "wakeflow_verify",
@@ -267,7 +269,6 @@ async function runMcpSmoke(rootPath) {
       "wakeflow_discover_workspace",
       "wakeflow_access_profiles",
       "wakeflow_sync_agents",
-      "wakeflow_submit_result",
       "wakeflow_review",
       "wakeflow_build_controller_return",
       "wakeflow_stop_loop",
@@ -367,6 +368,26 @@ async function runMcpSmoke(rootPath) {
       throw new Error("MCP wakeflow_prepare_delivery did not create a target delivery envelope");
     }
 
+    const recordedTargetResult = await request("tools/call", {
+      name: "wakeflow_record_target_result",
+      arguments: {
+        root: rootPath,
+        stateRoot: mcpStateRoot,
+        targetWindow: "Target",
+        taskId: "mcp-smoke-task",
+        status: "completed",
+        evidenceRefs: ["target-results/mcp-smoke.md"],
+        verification: ["mcp smoke target result recorded"],
+      },
+    });
+    const recordedTargetResultPayload = JSON.parse(recordedTargetResult.result.content?.[0]?.text);
+    if (
+      !recordedTargetResultPayload.ok
+      || recordedTargetResultPayload.parsedJson?.command !== "import-target-result"
+    ) {
+      throw new Error("MCP wakeflow_record_target_result did not record target evidence");
+    }
+
     const statusCall = await request("tools/call", {
       name: "wakeflow_status",
       arguments: { root: rootPath },
@@ -394,6 +415,23 @@ function assertToolSchemasAcceptedByHost(tools) {
       throw new Error(`${tool.name} inputSchema must be an object schema`);
     }
     assertEnumSchemasHaveTypes(tool.inputSchema, tool.name);
+  }
+}
+
+function assertToolAnnotationsAcceptedByHost(tools) {
+  for (const tool of tools) {
+    const annotations = tool.annotations;
+    if (!annotations || typeof annotations !== "object" || Array.isArray(annotations)) {
+      throw new Error(`${tool.name} annotations must be present`);
+    }
+    for (const field of ["title", "readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"]) {
+      if (!(field in annotations)) {
+        throw new Error(`${tool.name} annotations missing ${field}`);
+      }
+    }
+    if (annotations.destructiveHint !== false || annotations.openWorldHint !== false) {
+      throw new Error(`${tool.name} annotations must describe a local non-destructive tool`);
+    }
   }
 }
 

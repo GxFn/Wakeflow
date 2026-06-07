@@ -44,7 +44,7 @@ Usage:
   node scripts/wakeflow-delivery.mjs start-keep-live --automation-run-id <id> [--keep-live-command <cmd>] [--keep-live-arg <arg>...] [--no-keep-live] --write [--json]
   node scripts/wakeflow-delivery.mjs stop-keep-live --automation-run-id <id> [--reason <text>] --write [--json]
   node scripts/wakeflow-delivery.mjs keep-live-state --automation-run-id <id> --status running|stopped|failed [--mechanism macos-caffeinate|manual|none] [--pid <pid>] [--error <text>] --write [--json]
-  node scripts/wakeflow-delivery.mjs submit-result --target-window <name> --task-id <id> --status completed|blocked|needs-review [--group <id>] [--changed-repo <repo>...] [--commit <hash>...] [--evidence-ref <ref>...] [--verification <text>...] [--risk <text>...] [--next-suggestion <text>] [--write] [--json]
+  node scripts/wakeflow-delivery.mjs record-target-result --target-window <name> --task-id <id> --status completed|blocked|needs-review [--group <id>] [--changed-repo <repo>...] [--commit <hash>...] [--evidence-ref <ref>...] [--verification <text>...] [--risk <text>...] [--next-suggestion <text>] [--write] [--json]
   node scripts/wakeflow-delivery.mjs review-results (--group <id>|--task-id <id>) [--json]
   node scripts/wakeflow-delivery.mjs review-pack (--group <id>|--task-id <id>|--state-root <path>) [--json]
   node scripts/wakeflow-delivery.mjs stop-loop --reason <text> [--automation-run-id <id>] --write [--json]
@@ -143,7 +143,7 @@ function inferAgentNext(payload) {
   if (payload.command === "start-keep-live") return payload.keepLive?.active ? "Continue unattended direct-thread dispatch; keep-live is active." : "Treat keep-live as an automation readiness risk before claiming unattended reliability.";
   if (payload.command === "stop-keep-live") return payload.keepLive?.retainedByOtherRuns ? "Keep-live is retained by other active automation runs." : payload.keepLive?.active ? "Inspect and stop the recorded keep-live process before claiming shutdown is clean." : "Keep-live is stopped; continue only by total-control judgment.";
   if (payload.command === "keep-live-state") return "Continue or stop unattended automation according to the current plan and keep-live status.";
-  if (payload.command === "submit-result") return "Run review-results for the dispatch group; if controller return is allowed, build the controller-return envelope, send it with the host thread tool, then record that delivery run.";
+  if (payload.command === "record-target-result") return "Run review-results for the dispatch group; if controller return is allowed, build the controller-return envelope, send it with the host thread tool, then record that delivery run.";
   if (payload.command === "review-results") return payload.decision === "wait" ? "No controller review is available yet; stop this turn and wait for the target/controller-return instead of polling or sleeping." : "If this is a target window and controller return is allowed, build-controller-return, send it with the host thread tool, then record that delivery run; total control must still review raw evidence before acceptance.";
   if (payload.command === "review-pack") {
     if (payload.decision === "completed") return "Demand is completed; stop without creating new deliveries.";
@@ -2533,7 +2533,7 @@ function commandKeepLiveState() {
   );
 }
 
-function commandSubmitResult() {
+function commandRecordTargetResult() {
   const targetWindow = requireValue("--target-window");
   const taskId = requireValue("--task-id");
   const status = validateResultStatus(requireValue("--status"));
@@ -2569,7 +2569,7 @@ function commandSubmitResult() {
   output(
     {
       ok: true,
-      command: "submit-result",
+      command: "record-target-result",
       wrote: write,
       result,
       resultFile: write ? path.relative(workspaceRoot, resultFile) : "",
@@ -2799,8 +2799,8 @@ try {
     case "keep-live-state":
       commandKeepLiveState();
       break;
-    case "submit-result":
-      commandSubmitResult();
+    case "record-target-result":
+      commandRecordTargetResult();
       break;
     case "review-results":
       commandReviewResults();

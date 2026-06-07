@@ -593,7 +593,7 @@ function buildChildPrompt(context, repo, language) {
   const activeStatus = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentStatusPath ?? ".workspace-active/workspace/current/workspace-current-status.md"));
   const title = roleTitle(context, repo.windowName, defaultThreadRole(context, repo.windowName), language);
   if (language === "zh") {
-    return `${title}：先完成入口同步。
+    return `${title}：初始化入口同步，不是任务投递。
 目标目录：${repo.path}
 窗口职责：${repo.role}
 
@@ -605,10 +605,13 @@ node ${relativeScript} status --json
 确认当前目录属于 ${repo.windowName} 后，只处理本窗口职责范围内的任务。需要写入或刷新本目录 AGENTS.md 时运行：
 node ${relativeScript} write-agents --window ${repo.windowName} --write
 
+如果当前没有 active demand、state root、task package 或 dispatch packet，请报告“入口同步完成，等待总控任务”后停止。这是初始化后的正常 ready 状态，不是失败。
+只有收到包含 currentWindow、taskId、stateRoot 的 Wakeflow task wakeup / delivery prompt 时，才执行本窗口任务。
+
 Wakeflow runtime 相对路径：${wakeflowPath}
 如果目录、职责、stateRoot 或 Wakeflow 配置不一致，停止并回报总控。`;
   }
-  return `${title}: perform entry sync first.
+  return `${title}: initialization entry sync, not a task delivery.
 Target directory: ${repo.path}
 Responsibility: ${repo.role}
 
@@ -619,6 +622,9 @@ node ${relativeScript} status --json
 
 After confirming this directory belongs to ${repo.windowName}, process only tasks inside this window responsibility. To write or refresh this directory AGENTS.md, run:
 node ${relativeScript} write-agents --window ${repo.windowName} --write
+
+If there is no active demand, state root, task package, or dispatch packet, report "entry sync complete; waiting for controller task" and stop. This is the normal ready state after initialization, not a failure.
+Execute window work only after receiving a Wakeflow task wakeup / delivery prompt containing currentWindow, taskId, and stateRoot.
 
 Wakeflow runtime relative path: ${wakeflowPath}
 If the directory, responsibility, stateRoot, or Wakeflow configuration is inconsistent, stop and report to the controller.`;
@@ -1237,7 +1243,9 @@ function isStarterGeneratedContent(existing) {
     "Status: starter inbox",
     "Status: starter long-term map",
     "Status: idle / no active demand",
+    "Status: idle / initialization ready",
     "Fresh template status",
+    "Initialization ready state",
     "Template initialized.",
     "TODO-EXAMPLE-001",
   ].some((marker) => existing.includes(marker));
@@ -1328,8 +1336,10 @@ function configuredStarterContent(context, relativePath) {
       "Create a real active demand with the Wakeflow MCP `wakeflow_init_demand` tool; then read the generated `developer-progress.md`.",
     );
   }
-  content = replaceAllLiteral(content, "| Controller | idle | No active demand has been initialized. |", `| ${controllerWindow} | idle | No active demand has been initialized. |`);
-  content = replaceAllLiteral(content, "| Controller | idle | No active demand. | Starter status only. |", `| ${controllerWindow} | idle | No active demand. | Starter status only. |`);
+  content = replaceAllLiteral(content, "| Controller | idle | No active demand has been initialized; entry-sync windows should report ready and stop. |", `| ${controllerWindow} | idle | No active demand has been initialized; entry-sync windows should report ready and stop. |`);
+  content = replaceAllLiteral(content, "| Controller | idle | No active demand; waiting for controller task. | Initialization ready state. |", `| ${controllerWindow} | idle | No active demand; waiting for controller task. | Initialization ready state. |`);
+  content = replaceAllLiteral(content, "| Controller | idle | No active demand has been initialized. |", `| ${controllerWindow} | idle | No active demand has been initialized; entry-sync windows should report ready and stop. |`);
+  content = replaceAllLiteral(content, "| Controller | idle | No active demand. | Starter status only. |", `| ${controllerWindow} | idle | No active demand; waiting for controller task. | Initialization ready state. |`);
   content = replaceAllLiteral(content, "| TODO-EXAMPLE-001 | parked | template | P3 | Wakeflow |", `| TODO-EXAMPLE-001 | parked | template | P3 | ${controllerWindow} |`);
   content = replaceAllLiteral(content, "| New project setup. | Wakeflow | none |", `| New project setup. | ${controllerWindow} | none |`);
   content = replaceAllLiteral(content, "`../wakeflow-ledger/workspace/workspace-record-map.md`", `\`${workspaceRecordMapRel}\``);
@@ -1623,21 +1633,25 @@ function localWindowPrompt(context, windowName, deliveryRole, language) {
   const readRefs = formatReadRefs(uniqueReadRefs(ownAgentsRef, parentAgents, activeIndex, activeStatus), language);
   if (language === "zh") {
     return [
-      `${title}：先完成入口同步。`,
+      `${title}：初始化入口同步，不是任务投递。`,
       `责任目录：${localRoot.absolutePath}`,
       `窗口职责：${localRoot.role}`,
       "",
       `先读取 ${readRefs}。`,
-      "只执行当前窗口职责范围内的工作。如果窗口身份、仓库路径、state root 或 Wakeflow 配置不一致，停止并回报总控。",
+      "如果当前没有 active demand、state root、task package 或 dispatch packet，请报告“入口同步完成，等待总控任务”后停止。这是初始化后的正常 ready 状态，不是失败。",
+      "只有收到包含 currentWindow、taskId、stateRoot 的 Wakeflow task wakeup / delivery prompt 时，才执行本窗口任务。",
+      "如果窗口身份、仓库路径、state root 或 Wakeflow 配置不一致，停止并回报总控。",
     ].join("\n");
   }
   return [
-    `${title}: perform entry sync first.`,
+    `${title}: initialization entry sync, not a task delivery.`,
     `Working directory: ${localRoot.absolutePath}`,
     `Responsibility: ${localRoot.role}`,
     "",
     `First read ${readRefs}.`,
-    "Only perform the role assigned to this window. If the window identity, repository path, state root, or Wakeflow configuration is inconsistent, stop and report to the controller.",
+    "If there is no active demand, state root, task package, or dispatch packet, report \"entry sync complete; waiting for controller task\" and stop. This is the normal ready state after initialization, not a failure.",
+    "Execute window work only after receiving a Wakeflow task wakeup / delivery prompt containing currentWindow, taskId, and stateRoot.",
+    "If the window identity, repository path, state root, or Wakeflow configuration is inconsistent, stop and report to the controller.",
   ].join("\n");
 }
 
@@ -1676,6 +1690,7 @@ function windowLaunchEntries(context, options = {}) {
         repositoryPath: localRoot.path || ".",
         responsibility: localRoot.role,
         displayTitle: roleTitle(context, entry.windowName, entry.deliveryRole, language),
+        promptPurpose: "initialization-entry-sync",
         createThreadPrompt: localWindowPrompt(context, entry.windowName, entry.deliveryRole, language),
       };
     });
@@ -1694,7 +1709,7 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
     threadIdStorage: ".workspace-local/wakeflow-delivery/thread-registry/<window>.json",
     trackedDocsContainThreadIds: false,
     hostWorkflow: [
-      "Call create_thread for each launch entry with the entry cwd and createThreadPrompt.",
+      "Call create_thread for each launch entry with the entry cwd and createThreadPrompt. These prompts perform initialization entry sync only; they are not task deliveries.",
       "Immediately call set_thread_title for the returned thread id, using the entry displayTitle.",
       "Register the real thread id only in the local thread registry, preserving the same displayTitle.",
     ],
@@ -1705,6 +1720,7 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
       responsibilityRoot: entry.responsibilityRoot,
       repositoryPath: entry.repositoryPath,
       displayTitle: entry.displayTitle,
+      promptPurpose: entry.promptPurpose,
       titleReset: {
         required: true,
         hostTool: "set_thread_title",

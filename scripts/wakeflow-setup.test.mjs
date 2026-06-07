@@ -200,20 +200,25 @@ test("initialize localizes launch titles and prompts with the window name first"
   const zhDesignWindow = "\u9700\u6c42\u7a97\u53e3";
   const zhFirstRead = "\u5148\u8bfb\u53d6";
   const zhColon = "\uff1a";
+  const zhReadyWait = "\u5165\u53e3\u540c\u6b65\u5b8c\u6210\uff0c\u7b49\u5f85\u603b\u63a7\u4efb\u52a1";
 
   assert.equal(payload.steps.windowLaunchPlan.language, "zh");
   assert.equal(payload.steps.windowLaunchPlan.requiresHostTitleReset, true);
   assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /set_thread_title/);
+  assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /not task deliveries/);
   assert.equal(controller.displayTitle, `${path.basename(parent)} ${zhControllerRole}`);
   assert.equal(app.displayTitle, `AppRepo ${zhDutyWindow}`);
   assert.equal(design.displayTitle, `Design ${zhDesignWindow}`);
+  assert.equal(app.promptPurpose, "initialization-entry-sync");
   assert.deepEqual(app.titleReset, {
     required: true,
     hostTool: "set_thread_title",
     title: `AppRepo ${zhDutyWindow}`,
   });
-  assert.equal(app.createThreadPrompt.split("\n")[0], `AppRepo ${zhDutyWindow}${zhColon}\u5148\u5b8c\u6210\u5165\u53e3\u540c\u6b65\u3002`);
+  assert.equal(app.createThreadPrompt.split("\n")[0], `AppRepo ${zhDutyWindow}${zhColon}\u521d\u59cb\u5316\u5165\u53e3\u540c\u6b65\uff0c\u4e0d\u662f\u4efb\u52a1\u6295\u9012\u3002`);
   assert.match(app.createThreadPrompt, new RegExp(zhFirstRead));
+  assert.match(app.createThreadPrompt, new RegExp(zhReadyWait));
+  assert.match(app.createThreadPrompt, /currentWindow.*taskId.*stateRoot/);
   assert.doesNotMatch(controller.createThreadPrompt, /AGENTS\.md\u3001AGENTS\.md/);
   assert.doesNotMatch(design.createThreadPrompt, /\.\.\/AGENTS\.md\u3001\.\.\/AGENTS\.md/);
 });
@@ -273,7 +278,9 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.doesNotMatch(currentStatus, /Controller window: Wakeflow/);
   assert.match(currentStatus, /Wakeflow MCP `wakeflow_init_demand` tool/);
   assert.doesNotMatch(currentStatus, /node scripts\/wakeflow-state\.mjs/);
-  assert.match(currentStatus, new RegExp(`\\| ${path.basename(parent)} \\| idle \\| No active demand\\. \\| Starter status only\\. \\|`));
+  assert.match(currentStatus, /Status: idle \/ initialization ready \/ waiting for controller task/);
+  assert.match(currentStatus, /Entry-sync windows should report readiness and stop/);
+  assert.match(currentStatus, new RegExp(`\\| ${path.basename(parent)} \\| idle \\| No active demand; waiting for controller task\\. \\| Initialization ready state\\. \\|`));
   const workspaceIndex = readFileSync(path.join(parent, ".workspace-active/workspace/index.md"), "utf8");
   assert.match(workspaceIndex, new RegExp(`# ${path.basename(parent)} Workspace Index`));
   assert.match(workspaceIndex, /`wakeflow-ledger\/workspace\/workspace-record-map\.md`/);
@@ -392,7 +399,8 @@ Status: idle / no active demand
   const currentStatus = readFileSync(path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"), "utf8");
   assert.match(currentStatus, new RegExp(`# ${path.basename(parent)} Current Status`));
   assert.match(currentStatus, new RegExp(`Controller window: ${path.basename(parent)}`));
-  assert.match(currentStatus, new RegExp(`\\| ${path.basename(parent)} \\| idle \\| No active demand\\. \\| Starter status only\\. \\|`));
+  assert.match(currentStatus, /Status: idle \/ initialization ready \/ waiting for controller task/);
+  assert.match(currentStatus, new RegExp(`\\| ${path.basename(parent)} \\| idle \\| No active demand; waiting for controller task\\. \\| Initialization ready state\\. \\|`));
   assert.match(currentStatus, /Wakeflow MCP `wakeflow_init_demand` tool/);
   assert.doesNotMatch(currentStatus, /node scripts\/wakeflow-state\.mjs/);
   assert.doesNotMatch(currentStatus, /Controller window: Wakeflow/);
@@ -581,7 +589,8 @@ test("prompts use sibling Wakeflow script paths for child windows", () => {
   const payload = runJson(fixture, ["prompts", "--window", "BaseWindow"]);
   assert.equal(payload.prompts.length, 1);
   assert.equal(payload.prompts[0].displayTitle, "BaseWindow Responsibility Window");
-  assert.match(payload.prompts[0].prompt, /BaseWindow Responsibility Window: perform entry sync first/);
+  assert.match(payload.prompts[0].prompt, /BaseWindow Responsibility Window: initialization entry sync, not a task delivery/);
+  assert.match(payload.prompts[0].prompt, /entry sync complete; waiting for controller task/);
   assert.match(payload.prompts[0].prompt, /AGENTS\.md, \.\.\/AGENTS\.md, \.\.\/Wakeflow\/\.workspace-active\/workspace\/index\.md/);
   assert.match(payload.prompts[0].prompt, /node \.\.\/Wakeflow\/scripts\/wakeflow-setup\.mjs status --json/);
 

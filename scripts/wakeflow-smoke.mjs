@@ -258,6 +258,7 @@ async function runMcpSmoke(rootPath) {
       "wakeflow_record_delivery",
       "wakeflow_record_target_result",
       "wakeflow_review_pack",
+      "wakeflow_reduce_results",
       "wakeflow_decide_review",
       "wakeflow_archive_todo",
       "wakeflow_archive_workspace_docs",
@@ -386,6 +387,23 @@ async function runMcpSmoke(rootPath) {
       || recordedTargetResultPayload.parsedJson?.command !== "import-target-result"
     ) {
       throw new Error("MCP wakeflow_record_target_result did not record target evidence");
+    }
+
+    const reducedResults = await request("tools/call", {
+      name: "wakeflow_reduce_results",
+      arguments: {
+        root: rootPath,
+        stateRoot: mcpStateRoot,
+        apply: true,
+      },
+    });
+    const reducedResultsPayload = JSON.parse(reducedResults.result.content?.[0]?.text);
+    if (
+      !reducedResultsPayload.ok
+      || reducedResultsPayload.parsedJson?.command !== "reduce-results"
+      || !reducedResultsPayload.parsedJson?.candidateId
+    ) {
+      throw new Error("MCP wakeflow_reduce_results did not create a review candidate");
     }
 
     const statusCall = await request("tools/call", {

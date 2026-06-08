@@ -281,6 +281,7 @@ function validateMcpConfig() {
     "wakeflow_record_delivery",
     "wakeflow_record_target_result",
     "wakeflow_review_pack",
+    "wakeflow_reduce_results",
     "wakeflow_decide_review",
     "wakeflow_complete_demand",
     "wakeflow_intake_design_handoff",

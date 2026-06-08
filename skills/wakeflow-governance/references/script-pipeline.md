@@ -40,6 +40,7 @@ Use these MCP tools for normal installed-workspace control:
 | Initialize or refresh workspace setup | `wakeflow_initialize_workspace` |
 | Create, extend, or complete a controller demand | `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_complete_demand` |
 | Prepare or record delivery-loop transport evidence | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result` |
+| Review target results and record controller judgment | `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review` |
 | Scan next controller-ready work | `wakeflow_next_work` |
 | Archive completed workspace docs or TODO rows | `wakeflow_archive_workspace_docs`, `wakeflow_archive_todo` |
 | Verify Wakeflow state and docs | `wakeflow_verify` |

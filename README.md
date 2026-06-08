@@ -250,15 +250,17 @@ Primary tool groups:
 | Setup and workspace discovery | `wakeflow_initialize_workspace` |
 | Demand and task state | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
-| Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
+| Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_intake_design_handoff`, `wakeflow_intake_test_card` |
 | Archive, maintenance, and verification | `wakeflow_archive_todo`, `wakeflow_archive_workspace_docs`, `wakeflow_verify` |
 
 Public MCP tools are for outer agent workflows. Target closeout is deliberately
 split: record a target result, review readiness, prepare a controller-return
 envelope when policy allows, send with the Codex host thread tool, and record
-delivery evidence. Do not collapse those steps into a single target-window MCP
-tool. Internal steps such as result reduction, archive summary refresh internals,
+delivery evidence. Controller review stays split as review pack, result
+reduction, and explicit decision; result reduction only creates a review
+candidate and is not acceptance. Do not collapse those steps into a single
+target-window MCP tool. Internal steps such as archive summary refresh internals,
 keep-live state, and script backend execution stay inside Wakeflow JS/runtime
 scripts and skills. Public archive MCP tools wrap only controller-approved TODO
 or workspace document archive flows; they do not make acceptance decisions or

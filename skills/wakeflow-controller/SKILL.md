@@ -194,8 +194,10 @@ runtime scripts:
 - `wakeflow_archive_workspace_docs` and `wakeflow_archive_todo` for archive
   dry-runs or applies.
 - `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_complete_demand`,
-  `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, and
-  `wakeflow_record_target_result` for state-root and delivery mechanics.
+  `wakeflow_prepare_delivery`, `wakeflow_record_delivery`,
+  `wakeflow_record_target_result`, `wakeflow_review_pack`,
+  `wakeflow_reduce_results`, and `wakeflow_decide_review` for state-root,
+  result review, and delivery mechanics.
 
 Do not run `node .../plugins/cache/.../wakeflow/.../scripts/*.mjs`, copy
 installed runtime script paths, or infer script flags from old docs during

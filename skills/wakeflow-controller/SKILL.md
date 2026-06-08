@@ -26,6 +26,23 @@ turn open with `sleep`, repeated result review, repeated thread reads, or manual
 polling. The target returns later through a `TargetResultEnvelope` and, if
 policy allows, a controller-return delivery.
 
+## Source Practices For Acceptance
+
+Controller acceptance adapts these mature review and evidence practices:
+
+- `code-reviewer`: understand intent first, then review correctness, safety,
+  maintainability, performance, and tests; large changes start with entrypoints
+  and high-risk files; findings must be actionable with why and scope.
+- `senior-qa`: optimize confidence per unit effort, choose test layers by risk,
+  and treat flakiness as evidence degradation rather than success.
+- SRE evidence practice: separate symptoms, causes, black-box evidence, and
+  white-box evidence; logs, probes, and scripts are inputs, not conclusions.
+
+The controller must preserve these practices while applying Wakeflow's stricter
+authority boundary: target windows, Test, Design, scripts, and MCP tools provide
+review inputs. Only the controller can accept, request rework, block, wait,
+complete a demand, archive, or create the next package.
+
 ## Controller Return Prompt Shape
 
 Controller return prompts should be compact:
@@ -67,14 +84,69 @@ machine state.
 2. Run group review against the state root.
 3. Check for missing, blocked, or ready targets.
 4. Pull raw evidence before deciding.
-5. Decide explicitly:
+5. Review acceptance inputs:
+   - original user goal and completion definition;
+   - current state root and task package;
+   - dispatch group and target identity;
+   - target result envelope;
+   - raw evidence paths, commits, commands, reports, logs, screenshots, runtime
+     JSON, probes, or Test evidence;
+   - product repository rules and relevant Design/Test artifacts;
+   - TODO/backlog implications.
+6. Check acceptance questions:
+   - Does the evidence prove the intended user/system behavior, not only that a
+     script ran?
+   - Are inputs, outputs, state/data changes, call chains, real consumers,
+     failure paths, and edge cases covered enough for this task scope?
+   - Did the target stay inside its assigned window/repository and task package?
+   - Are tests or probes at the right seam, and did they cover the behavior that
+     matters?
+   - Is any remaining risk a blocker, a follow-up, or a user/controller
+     decision?
+   - Which TODOs close, remain, or need to be added?
+7. Decide explicitly:
    - accept target result,
    - request rework,
    - mark blocked,
    - wait for missing targets,
    - complete the demand,
    - or create the next eligible package.
-6. Record the decision in controller state before dispatching follow-up work.
+8. Record the decision in controller state before dispatching follow-up work.
+
+## Acceptance Decision Format
+
+Use this shape when recording or reporting controller acceptance:
+
+```markdown
+## Controller Acceptance
+
+- User goal:
+- Scope reviewed:
+- Target/window:
+- Evidence reviewed:
+- Implementation reality:
+- Validation result:
+- Blockers:
+- Missing evidence:
+- Residual risks:
+- TODO/backlog rollup:
+- Decision:
+- Next action:
+```
+
+`Decision` must be one of:
+
+- `accept-target-result`
+- `request-rework`
+- `mark-blocked`
+- `wait-for-missing-target`
+- `needs-user-decision`
+- `complete-demand`
+- `archive-completed-work`
+- `create-next-package`
+
+Never use `accepted` as a shorthand unless the evidence, scope, and TODO rollup
+are already stated.
 
 ## Group Policies
 
@@ -97,6 +169,15 @@ Stop instead of dispatching when:
 - The next action would change scope, delete capability, downgrade capability,
   or make a product decision without user confirmation.
 - A target result lacks reviewable evidence.
+- Evidence is only target prose, superficial script output, or status-table
+  motion.
+- Test says evidence is acceptable but the controller has not reviewed the raw
+  artifacts named by Test.
+- The result is only an empty interface, static mock, unused adapter, type-only
+  contract, unreachable route, or documentation motion without a real consumer
+  and validation path.
+- A completed result would leave TODO/backlog, archive state, or current status
+  inconsistent.
 - The controller is about to poll/wait for targets after a send was recorded.
 - There are no eligible tasks.
 

@@ -51,6 +51,15 @@ Wakeflow may accept the demand only when:
 - Confirmed tests/builds:
 - Missing code facts:
 
+## Approach Options
+
+Record real options only. If there is only one viable route, explain why.
+
+| Option | Summary | Pros | Cons / Risks | Decision |
+| --- | --- | --- | --- | --- |
+| A |  |  |  | recommended / rejected / pending |
+| B |  |  |  | recommended / rejected / pending |
+
 ## Phase Candidates
 
 Phases are candidates for Wakeflow review. They are not task packages.
@@ -68,6 +77,15 @@ Phases are candidates for Wakeflow review. They are not task packages.
 - Success means:
 - Failure means:
 - This test cannot prove:
+
+## Rollout, Compatibility, And Documentation
+
+- Compatibility requirement:
+- Migration or rollout plan:
+- Rollback or recovery path:
+- User documentation:
+- API/developer documentation:
+- Release or operator notes:
 
 ## TODO / Backlog Candidates
 
@@ -87,5 +105,7 @@ Phases are candidates for Wakeflow review. They are not task packages.
 - Original plan confirmed:
 - Requirement design complete:
 - Code facts sufficient:
+- Approach tradeoffs recorded:
+- Rollout / compatibility / docs recorded:
 - Needs Wakeflow code research:
 - Ready for workspace handoff:

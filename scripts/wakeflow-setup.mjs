@@ -1434,22 +1434,19 @@ function configuredStarterContent(context, relativePath) {
 
 const designDefaultSkillPaths = [
   "skills/README.md",
-  "skills/requirements-framing/SKILL.md",
-  "skills/design-interview-grill/SKILL.md",
-  "skills/vertical-slice-requirement-planning/SKILL.md",
-  "skills/heuristic-design-review/SKILL.md",
-  "skills/accessibility-design-review/SKILL.md",
-  "skills/handoff-quality-gate/SKILL.md",
+  "skills/requirement-clarification/SKILL.md",
+  "skills/option-planning/SKILL.md",
+  "skills/requirement-design/SKILL.md",
+  "skills/work-slicing/SKILL.md",
+  "skills/design-handoff/SKILL.md",
 ];
 
 const testDefaultSkillPaths = [
   "skills/README.md",
-  "skills/risk-based-test-strategy/SKILL.md",
-  "skills/diagnostic-feedback-loop/SKILL.md",
-  "skills/behavior-first-regression-evidence/SKILL.md",
-  "skills/e2e-playwright-practices/SKILL.md",
-  "skills/accessibility-test-plan/SKILL.md",
-  "skills/web-security-test-triage/SKILL.md",
+  "skills/test-strategy/SKILL.md",
+  "skills/debugging-and-triage/SKILL.md",
+  "skills/regression-design/SKILL.md",
+  "skills/evidence-review/SKILL.md",
 ];
 
 function syncWindowSupportFile(context, repoRoot, supportName, relativePath, label) {

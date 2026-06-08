@@ -9,6 +9,13 @@ Receiving Window: Wakeflow
 
 State the user's words and the real target without adding implementation scope.
 
+## Primary Users And Scenario
+
+- Primary users:
+- User scenario:
+- User-visible success:
+- Operator/developer-visible success:
+
 ## Background
 
 - Trigger:
@@ -25,6 +32,20 @@ State the user's words and the real target without adding implementation scope.
 | Repositories/windows |  |  |  |
 | Testing |  |  |  |
 
+## Discovery Checklist
+
+Record known facts and unknowns. Do not invent answers.
+
+| Topic | Known / Unknown | Notes |
+| --- | --- | --- |
+| Affected layers |  | Data / API / UI / runtime / infrastructure / docs |
+| Quality bar |  | Performance / security / reliability / maintainability |
+| Error handling |  | Fail fast / recover / degrade / manual decision |
+| Dependencies |  | Product, team, external service, or sequencing dependency |
+| Compatibility |  | Existing clients, data, config, or migration constraints |
+| Documentation |  | User docs, API docs, developer docs, release notes |
+| Rollout constraints |  | Flag, migration, staged release, rollback, deadline |
+
 ## Completion Definition Candidate
 
 Describe what must be true before Wakeflow can accept the demand as complete.
@@ -40,6 +61,7 @@ Keep open questions explicit.
 - Code evidence:
 - Test evidence:
 - Missing evidence:
+- Contradictory or failed assumptions:
 
 ## Confirmation Questions
 

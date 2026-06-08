@@ -1,24 +1,44 @@
 # Test Skills
 
-These optional local skills help Test windows plan and run real-scenario
-validation. They do not replace the workspace AGENTS rules, controller
-state-root boundaries, product repository rules, or Wakeflow target skills.
+These skills are Wakeflow-adapted Test-window capabilities. They turn mature QA,
+debugging, TDD, and review practices into evidence-producing workflows for
+controller review.
 
-Use a skill only when the current controller state root or test card assigns a
-matching Test task:
+Test skills do not accept product work, dispatch new windows, mutate controller
+state, or take over product implementation unless a controller state root
+explicitly authorizes it.
 
-- `risk-based-test-strategy/SKILL.md`: choose a minimal but meaningful test
-  scope from risk, user impact, and changed surfaces.
-- `diagnostic-feedback-loop/SKILL.md`: reproduce, isolate, and verify a
-  failing or uncertain runtime behavior.
-- `behavior-first-regression-evidence/SKILL.md`: prove user-visible or
-  operator-visible behavior without overfitting to implementation details.
-- `e2e-playwright-practices/SKILL.md`: design maintainable browser tests
-  around user-visible behavior.
-- `accessibility-test-plan/SKILL.md`: plan accessibility evidence for a real
-  scenario.
-- `web-security-test-triage/SKILL.md`: scope authorized web/API security
-  checks without expanding into unrelated penetration testing.
+## Installed Skills
 
-Keep source-specific test helpers with the owning product repository. Keep
-hard Wakeflow execution gates in AGENTS.md.
+- `test-strategy/SKILL.md`
+  - Purpose: design a risk-based validation plan for a controller test card or
+    real scenario.
+  - Sources: `senior-qa`, code-review evidence practice, risk-based testing,
+    and the test pyramid.
+  - Output: exact question, risk focus, test layer, success/failure meaning,
+    invalid conclusions, stop conditions, and evidence paths.
+- `debugging-and-triage/SKILL.md`
+  - Purpose: reproduce, isolate, and classify failing or uncertain behavior.
+  - Sources: `diagnose`, `systematic-debugging`, `triage`, scientific
+    debugging, and SRE symptom/cause separation.
+  - Output: feedback loop, reproduction evidence, hypotheses, probes,
+    classification, owner recommendation, and residual risk.
+- `regression-design/SKILL.md`
+  - Purpose: design behavior-focused regression coverage using public seams.
+  - Sources: `tdd`, diagnosis-loop seam discipline, behavior-focused testing,
+    and the test pyramid.
+  - Output: protected behavior, public seam, fail-before/pass-after signal,
+    first tracer bullet, fixtures, risks, and owner.
+- `evidence-review/SKILL.md`
+  - Purpose: review target result evidence, diffs, reports, logs, or validation
+    outputs for controller judgment.
+  - Sources: `code-reviewer`, `senior-qa`, Google code review practice, and
+    SRE evidence discipline.
+  - Output: blockers, missing evidence, minor issues, residual risks, test plan
+    assessment, invalid conclusions, and recommended controller decision.
+
+## Quality Standard
+
+Test output must answer a controller question with reviewable evidence. It is
+not enough to say that tests passed. Every result must distinguish success,
+failure, invalid conclusion, missing evidence, and residual risk.

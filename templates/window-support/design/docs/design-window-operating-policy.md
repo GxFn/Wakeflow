@@ -27,18 +27,29 @@ keeps execution, acceptance, TODO routing, and archive authority.
 - Identify code-research requests for Wakeflow or source windows.
 - Identify whether discussion should return as a bug signal, TODO candidate,
   research request, user decision, or current-mainline blocker.
+- Keep complex requirement discovery in persistent Design documents instead of
+  relying on chat memory.
 
 ## Design Requirements
 
 - Original plans record user goal, background, scope, constraints, and
   confirmation questions. Do not write execution phases before confirmation.
+- Discovery must explicitly capture or mark unknown: primary users, affected
+  layers, quality bar, external dependencies, compatibility needs,
+  documentation needs, and rollout constraints.
 - Requirement designs must include user scenario, full functional loop, inputs,
   outputs, state changes, producer, consumer, failure path, repository boundary,
   validation strategy, and completion definition.
+- Non-trivial designs must compare viable approaches and record why rejected
+  options were not chosen before recommending an implementation route.
 - Complex demands must explicitly state whether code-fact research is needed.
 - Phases are candidates only; final phase order is set by Wakeflow.
 - TODOs, risks, deletion candidates, compatibility retention, validation gaps,
   and preferences must be recorded in design documents or handoff drafts.
+- Re-read the current original plan, requirement design, or handoff draft
+  before making major scope, phase, or boundary decisions. Record new
+  decisions, contradictions, failed assumptions, and missing evidence in the
+  document rather than hiding them in conversation.
 - Any downgrade, deferral, compatibility retention, or boundary change must be
   marked pending confirmation.
 
@@ -53,4 +64,5 @@ keeps execution, acceptance, TODO routing, and archive authority.
 
 Every handoff should include title, goal, design status, final completion
 definition, evidence, open questions, confirmed decisions, suggested windows,
-phase candidates, validation needs, non-goals, and forbidden shortcuts.
+approach tradeoffs, phase candidates, validation needs, non-goals, rollout or
+compatibility notes, and forbidden shortcuts.

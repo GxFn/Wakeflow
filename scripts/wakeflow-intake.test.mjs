@@ -43,7 +43,7 @@ Fixture only.
 `;
 }
 
-function makeFixture({ demandKey = "ENUM-FLOW-2026-05-30", state = "intake", stateRootArg = null } = {}) {
+function makeFixture({ demandKey = "enum-flow-2026-05-30", state = "intake", stateRootArg = null } = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-intake-"));
   const resolvedStateRootArg = stateRootArg === "project-ledger"
     ? `../wakeflow-ledger/current/LEDGER-FIXTURE-${path.basename(root)}`
@@ -61,7 +61,7 @@ function makeFixture({ demandKey = "ENUM-FLOW-2026-05-30", state = "intake", sta
     ],
   }, null, 2));
 
-  const designKey = "ENUM-FLOW-2026-05-30";
+  const designKey = "enum-flow-2026-05-30";
   const designDir = path.join(root, "DesignWindow/docs/current/enum-flow");
   writeText(path.join(designDir, "original-plan-2026-05-30.md"), designDoc(designKey, "Original Plan"));
   writeText(path.join(designDir, "requirement-design-2026-05-30.md"), designDoc(designKey, "Requirement Design"));
@@ -122,7 +122,7 @@ test("design-handoff attaches ready Design source without mutating controller st
   assert.equal(payload.command, "design-handoff");
   assert.equal(payload.wrote, true);
   assert.equal(payload.demandKeyMatchesDesignKey, true);
-  assert.match(payload.intakeFile, /intake\/design-handoff-ENUM-FLOW-2026-05-30\.json/);
+  assert.match(payload.intakeFile, /intake\/design-handoff-enum-flow-2026-05-30\.json/);
   assert.deepEqual(JSON.parse(readFileSync(path.join(fixture.stateRoot, "wakeflow-state.json"), "utf8")), JSON.parse(before));
 
   const intake = readJson(path.join(fixture.root, payload.intakeFile));
@@ -135,7 +135,7 @@ test("design-handoff attaches ready Design source without mutating controller st
 });
 
 test("design-handoff warns when Design source key differs from demand key", () => {
-  const fixture = makeFixture({ demandKey: "CONTROL-DEMAND-2026-05-30" });
+  const fixture = makeFixture({ demandKey: "control-demand-2026-05-30" });
   const payload = parseOk(run(intakeScript, fixture.root, [
     "design-handoff",
     "--state-root",

@@ -31,7 +31,7 @@ function makeFixture({ status = "idle", designRows = "", todoRows = "" } = {}) {
 Status: ${status}
 `,
   );
-  const designId = "NEXT-DESIGN-2026-06-04";
+  const designId = "next-design-2026-06-04";
   const designDir = path.join(root, ".workspace-active/workspace/current/next-design");
   writeFile(path.join(designDir, "original-plan-2026-06-04.md"), designDoc(designId, "Original Plan"));
   writeFile(path.join(designDir, "requirement-design-2026-06-04.md"), designDoc(designId, "Requirement Design"));
@@ -79,7 +79,7 @@ test("after-completion fails closed when current state is not completed or idle"
 test("single ready Design handoff becomes auto-claimable candidate only", () => {
   const { root, designId } = makeFixture({
     designRows:
-      "| NEXT-DESIGN-2026-06-04 | ready-for-workspace | Next design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | [handoff](next-design/workspace-handoff-2026-06-04.md) | confirmed |  | next-mainline | after current mainline | GTODO-NEXT | P1 | P1 | controller intake |",
+      "| next-design-2026-06-04 | ready-for-workspace | Next design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | [handoff](next-design/workspace-handoff-2026-06-04.md) | confirmed |  | next-mainline | after current mainline | GTODO-NEXT | P1 | P1 | controller intake |",
   });
   const result = run(root, ["--after-completion"]);
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -92,13 +92,13 @@ test("single ready Design handoff becomes auto-claimable candidate only", () => 
 test("ready Design demand without separate handoff link remains claimable from requirement design", () => {
   const { root } = makeFixture({
     designRows:
-      "| OPTIONAL-HANDOFF-2026-06-04 | ready-for-workspace | Optional handoff design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | Requirement design contains handoff details | confirmed |  | next-mainline | after current mainline | GTODO-NEXT | P1 | P1-runtime-reliability | controller intake |",
+      "| optional-handoff-2026-06-04 | ready-for-workspace | Optional handoff design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | Requirement design contains handoff details | confirmed |  | next-mainline | after current mainline | GTODO-NEXT | P1 | P1-runtime-reliability | controller intake |",
   });
-  const result = run(root, ["--id", "OPTIONAL-HANDOFF-2026-06-04", "--after-completion"]);
+  const result = run(root, ["--id", "optional-handoff-2026-06-04", "--after-completion"]);
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.autoClaimable, true);
-  assert.equal(parsed.recommended.id, "OPTIONAL-HANDOFF-2026-06-04");
+  assert.equal(parsed.recommended.id, "optional-handoff-2026-06-04");
   assert.equal(parsed.recommended.priority, "P1");
   assert.equal(parsed.recommended.documents.handoff.optionalMissing, true);
 });
@@ -106,16 +106,16 @@ test("ready Design demand without separate handoff link remains claimable from r
 test("target id focuses next-work scan when multiple ready Design demands exist", () => {
   const { root } = makeFixture({
     designRows: [
-      "| FIRST-DESIGN-2026-06-04 | ready-for-workspace | First design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | Requirement design contains handoff details | confirmed |  | next-mainline | after current mainline | GTODO-FIRST | P1 | P1 | controller intake |",
-      "| SECOND-DESIGN-2026-06-04 | ready-for-workspace | Second design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | Requirement design contains handoff details | confirmed |  | next-mainline | after current mainline | GTODO-SECOND | P1 | P1 | controller intake |",
+      "| first-design-2026-06-04 | ready-for-workspace | First design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | Requirement design contains handoff details | confirmed |  | next-mainline | after current mainline | GTODO-FIRST | P1 | P1 | controller intake |",
+      "| second-design-2026-06-04 | ready-for-workspace | Second design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | Requirement design contains handoff details | confirmed |  | next-mainline | after current mainline | GTODO-SECOND | P1 | P1 | controller intake |",
     ].join("\n"),
   });
-  const result = run(root, ["--id", "SECOND-DESIGN-2026-06-04", "--after-completion"]);
+  const result = run(root, ["--id", "second-design-2026-06-04", "--after-completion"]);
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.candidateCount, 1);
   assert.equal(parsed.autoClaimable, true);
-  assert.equal(parsed.recommended.id, "SECOND-DESIGN-2026-06-04");
+  assert.equal(parsed.recommended.id, "second-design-2026-06-04");
 });
 
 test("TODO candidates exclude completed slash-status and Aux-owned rows", () => {

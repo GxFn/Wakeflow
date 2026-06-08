@@ -39,7 +39,7 @@ const optionalEnumColumns = {
   "Priority Enum": new Set(["P0", "P1", "P2", "P3"]),
 };
 const readyConfirmationStatuses = new Set(["confirmed", "not-required"]);
-const designKeyPattern = /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d{4}-\d{2}-\d{2}(?:-\d{2})?$/;
+const designKeyPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*-\d{4}-\d{2}-\d{2}(?:-\d{2})?$/;
 
 function getArgValue(name, fallback) {
   const eq = args.find((arg) => arg.startsWith(`${name}=`));
@@ -137,7 +137,7 @@ function linkedTargets(entry, column) {
 }
 
 function extractDesignKey(content) {
-  const match = content.match(/^Design Key:\s*([A-Z0-9-]+)\s*$/m);
+  const match = content.match(/^Design Key:\s*([A-Za-z0-9-]+)\s*$/m);
   return match?.[1] ?? null;
 }
 
@@ -229,7 +229,7 @@ function validateTargetDesignKey(entry) {
   const id = entry.ID;
 
   if (!designKeyPattern.test(id)) {
-    issues.push(`${id}: Design Key must use <READABLE-TOPIC>-YYYY-MM-DD format.`);
+    issues.push(`${id}: Design Key must use lowercase kebab-case <readable-topic>-YYYY-MM-DD format.`);
   }
 
   const linkedDocs = ["Original Plan", "Requirement Design", "Handoff"].flatMap((column) => linkedTargets(entry, column));

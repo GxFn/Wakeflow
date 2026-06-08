@@ -203,14 +203,14 @@ command catalog and selection table, read
 | Current repo / closed-loop health | `node scripts/wakeflow-cli.mjs status` |
 | Full Wakeflow verification | `node scripts/wakeflow-cli.mjs verify` |
 | Render a controller state-root progress doc | `node scripts/wakeflow-cli.mjs sync --state-root <state-root> --write` |
-| Design handoff discovery / validation | `node scripts/wakeflow-cli.mjs design --id <DESIGN-KEY> --json` |
+| Design handoff discovery / validation | `node scripts/wakeflow-cli.mjs design --id <design-key> --json` |
 | Attach Design/Test machine intake to a state root | `node scripts/wakeflow-cli.mjs intake <design-handoff|test-card> ... --state-root <state-root>` |
 | Script docs plus script tests | `node scripts/wakeflow-cli.mjs scripts --tests` |
 | Runtime residue read-only check | `node scripts/wakeflow-cli.mjs runtime` |
 | Wakeflow Delivery Loop commands | `node scripts/wakeflow-cli.mjs loop <subcommand> ...` |
 | Ordered independent demand sequence | `node scripts/wakeflow-cli.mjs sequence <status|claim-next|sync-doc> --root .. --manifest <manifest.json> ...` |
 | Scan next controller-ready candidate | `node scripts/wakeflow-cli.mjs next-work --after-completion --json` |
-| Focus a named Design/TODO candidate | `node scripts/wakeflow-cli.mjs next-work --id <DESIGN-KEY> --json` |
+| Focus a named Design/TODO candidate | `node scripts/wakeflow-cli.mjs next-work --id <design-key> --json` |
 | Sibling install / child AGENTS scope writes | `node scripts/wakeflow-cli.mjs install <subcommand> ...` |
 | Child window access profile view | `node scripts/wakeflow-cli.mjs install access-profiles --json` |
 | One-shot workspace initialization | `node scripts/wakeflow-cli.mjs install initialize --repo AppWindow=../MyApp --internal-design --internal-test --write --json` |

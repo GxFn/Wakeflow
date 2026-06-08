@@ -121,8 +121,8 @@ or recommend the missing upstream skill first.
   Design handoff intake to a different board.
 
 Each plan, signal, design, and handoff board entry must have a stable
-`Design Key` in the form `<READABLE-TOPIC>-YYYY-MM-DD`. The board `ID` must
-match the design key.
+`Design Key` in lowercase kebab-case form `<readable-topic>-YYYY-MM-DD`. The
+board `ID` and controller `demandKey` must match the design key exactly.
 
 ## Local Surfaces
 

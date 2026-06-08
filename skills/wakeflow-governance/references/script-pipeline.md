@@ -57,8 +57,8 @@ repository. They are not the installed controller command surface.
   `node scripts/wakeflow-cli.mjs scripts --tests`
   `node scripts/wakeflow-cli.mjs loop status --json`
   `node scripts/wakeflow-cli.mjs next-work --after-completion --json`
-  `node scripts/wakeflow-cli.mjs next-work --id <DESIGN-KEY> --json`
-  `node scripts/wakeflow-cli.mjs intake design-handoff --state-root <state-root> --design-key <DESIGN-KEY> --write --json`
+  `node scripts/wakeflow-cli.mjs next-work --id <design-key> --json`
+  `node scripts/wakeflow-cli.mjs intake design-handoff --state-root <state-root> --design-key <design-key> --write --json`
   `node scripts/wakeflow-cli.mjs intake test-card --state-root <state-root> --test-id <id> --target-window <window> ... --write --json`
   `node scripts/wakeflow-cli.mjs loop build-delivery --write --json`
   `node scripts/wakeflow-cli.mjs loop review-results --json`
@@ -74,9 +74,9 @@ repository. They are not the installed controller command surface.
   `node scripts/wakeflow-verify.mjs`
 - Design formal handoff intake:
   `node scripts/wakeflow-import-design-handoffs.mjs --write`
-  `node scripts/wakeflow-import-design-handoffs.mjs --id <DESIGN-KEY> --json`
+  `node scripts/wakeflow-import-design-handoffs.mjs --id <design-key> --json`
 - Design/Test state-root intake:
-  `node scripts/wakeflow-intake.mjs design-handoff --state-root <state-root> --design-key <DESIGN-KEY> --write --json`
+  `node scripts/wakeflow-intake.mjs design-handoff --state-root <state-root> --design-key <design-key> --write --json`
   `node scripts/wakeflow-intake.mjs test-card --state-root <state-root> --test-id <id> --target-window <window> ... --write --json`
 - Runtime residue inspection:
   `node scripts/wakeflow-check-runtime.mjs`
@@ -101,7 +101,7 @@ repository. They are not the installed controller command surface.
 | Keep script catalog and tests from drifting | `wakeflow-check-scripts.mjs` | Runs inside `wakeflow-verify`; add tests to `--with-script-tests`. |
 | Manage the controller state root | `wakeflow-state.mjs`, `wakeflow-render-progress.mjs`, `wakeflow-progress-log.mjs` | Default route for execution surfaces. `wakeflow-state` owns machine state, review candidates, explicit review decisions, and final completion transitions; `wakeflow-render-progress` updates only the generated Unified Status block; `wakeflow-progress-log` appends human-readable entries without changing state. |
 | Manage Wakeflow Delivery Loop contracts | `wakeflow-delivery.mjs`, `wakeflow-cli.mjs loop ...` | Runtime files stay under ignored `.workspace-local/wakeflow-delivery/`; the script derives packets and envelopes from the state root, then writes dispatch packets, groups, envelopes, delivery runs, review packs, controller-return envelopes, stop markers, and thread registry files in the local delivery runtime. It never sends host thread messages, accepts evidence, selects TODOs, or writes product repositories. |
-| Scan next controller-ready demand after completion | `wakeflow-next-work.mjs`, `wakeflow-cli.mjs next-work ...` | Read-only by default. It combines Design ready handoffs and global TODO candidates into a ranked candidate list, but never creates a current plan, accepts a candidate, dispatches windows, or changes Design / TODO state. Use `--id <DESIGN-KEY>` when the user names a specific ready demand. |
+| Scan next controller-ready demand after completion | `wakeflow-next-work.mjs`, `wakeflow-cli.mjs next-work ...` | Read-only by default. It combines Design ready handoffs and global TODO candidates into a ranked candidate list, but never creates a current plan, accepts a candidate, dispatches windows, or changes Design / TODO state. Use `--id <design-key>` when the user names a specific ready demand. |
 | Reduce repeated controller dispatch preparation | `wakeflow-delivery.mjs prepare-dispatch-from-state` | Use only after total control has chosen an eligible target task inside the controller state root. It writes a derived window config, dispatch packet, dispatch group, and delivery envelope in one step, then stops before host thread send. It fails closed for terminal / paused / blocked / review-ready demands and accepted / completed / blocked target tasks. |
 | Reduce repeated callback review setup | `wakeflow-delivery.mjs review-pack` | Read-only. It wraps `review-results` with target result evidence pointers, delivery-run status, and controller-return status so total control can pull raw evidence without manually opening every local envelope first. It is not an acceptance verdict. Empty state-root target lists return `no-target-tasks`, not review-ready. |
 | Manage direct-thread child-window config and delivery evidence | `wakeflow-delivery.mjs register-thread`, `build-window-config`, `record-delivery-run`, `keep-live-state` | `register-thread` writes only the local thread registry. Child-window config is a derived runtime view from workspace config plus registry presence; delivery-run evidence and keep-live state stay under ignored local runtime. They describe sendability and transport evidence only; total control still owns the state root, delivery decision, evidence pull, and acceptance verdict. |

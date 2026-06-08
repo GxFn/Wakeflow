@@ -36,9 +36,9 @@ test("--print sync renders controller state progress documents", () => {
 });
 
 test("--print design preserves focused handoff validation arguments", () => {
-  const result = run(["--print", "design", "--id", "PCVM-2026-05-25", "--json"]);
+  const result = run(["--print", "design", "--id", "pcvm-2026-05-25", "--json"]);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /node scripts\/wakeflow-import-design-handoffs\.mjs --json --id PCVM-2026-05-25/);
+  assert.match(result.stdout, /node scripts\/wakeflow-import-design-handoffs\.mjs --json --id pcvm-2026-05-25/);
 });
 
 test("--print intake maps Design/Test intake to the state-root bridge", () => {
@@ -89,11 +89,11 @@ test("--print sequence maps to ordered demand sequence script", () => {
 });
 
 test("--print next-work maps to the controller candidate scan script", () => {
-  const result = run(["--print", "next-work", "--id", "PLUGIN-MCP-MULTI-PROJECT-RUNTIME-2026-06-03", "--after-completion", "--source", "design", "--json"]);
+  const result = run(["--print", "next-work", "--id", "plugin-mcp-multi-project-runtime-2026-06-03", "--after-completion", "--source", "design", "--json"]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(
     result.stdout,
-    /node scripts\/wakeflow-next-work\.mjs --id PLUGIN-MCP-MULTI-PROJECT-RUNTIME-2026-06-03 --after-completion --source design --json/,
+    /node scripts\/wakeflow-next-work\.mjs --id plugin-mcp-multi-project-runtime-2026-06-03 --after-completion --source design --json/,
   );
 });
 

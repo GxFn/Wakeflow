@@ -14,5 +14,6 @@ Scripts here should:
   authorizes a fixture or harness change;
 - print concise evidence that the controller can review.
 
-Wakeflow governance, delivery, state-root, and validation scripts stay in the
-installed Wakeflow runtime.
+Wakeflow governance, delivery, state-root, and validation mechanics stay behind
+the Wakeflow MCP surface in installed plugin workspaces. Do not call plugin-cache
+runtime scripts from Test helper scripts.

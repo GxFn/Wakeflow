@@ -80,7 +80,10 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
 - Read [references/todo-backlog.md](references/todo-backlog.md) when creating, adjusting, rolling, accepting, canceling, prioritizing, or dispatching TODO / Backlog items.
 - Read [references/window-dispatch.md](references/window-dispatch.md) when preparing a wave, task package, window coverage table, producer / consumer sequence, unified dispatch prompt, or send/no-send decision.
 - Read [references/testing-validation.md](references/testing-validation.md) when deciding whether total control should self-test, whether `Test` or another configured test window is justified, how to write a test handoff, how to interpret test evidence, or which validation command applies.
-- Read [references/script-pipeline.md](references/script-pipeline.md) when auditing workspace scripts, choosing validation commands, refreshing Design handoff intake, or maintaining script tests / documentation.
+- Read [references/script-pipeline.md](references/script-pipeline.md) only when
+  maintaining Wakeflow source/runtime scripts, auditing backend script
+  contracts, or changing script tests / documentation. Installed workspace
+  validation and next-work scans should use Wakeflow MCP tools directly.
 - Read [references/wakeflow-ledgers.md](references/wakeflow-ledgers.md) when creating, moving, syncing, archiving, or validating Wakeflow workspace documents, status mirrors, indexes, templates, Design handoff ledgers, test exchange entries, workspace skill assets, or `AGENTS.md` map / skill-pointer layering.
 - Read [references/wakeflow-architecture.md](references/wakeflow-architecture.md) when restructuring `AGENTS.md`, skills, references, templates, scripts, current plans, or automation surfaces as one consistent Wakeflow system.
 - Read [references/agents-rule-map.md](references/agents-rule-map.md) when auditing, merging, downshifting, or rewriting root `AGENTS.md` rules.

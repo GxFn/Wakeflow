@@ -184,7 +184,26 @@ Stop instead of dispatching when:
 ## Verification
 
 Use the smallest verification that covers the changed surface. For Wakeflow
-script or automation changes, prefer:
+total-control work in an installed workspace, use MCP tools instead of direct
+runtime scripts:
+
+- `wakeflow_verify` for overall Wakeflow verification. Use `scriptTests: true`
+  only when the change is Wakeflow source/plugin script maintenance.
+- `wakeflow_status` for repository, state-root, and delivery-loop orientation.
+- `wakeflow_next_work` for after-completion candidate scans.
+- `wakeflow_archive_workspace_docs` and `wakeflow_archive_todo` for archive
+  dry-runs or applies.
+- `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_complete_demand`,
+  `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, and
+  `wakeflow_record_target_result` for state-root and delivery mechanics.
+
+Do not run `node .../plugins/cache/.../wakeflow/.../scripts/*.mjs`, copy
+installed runtime script paths, or infer script flags from old docs during
+normal total control. If the Wakeflow MCP tool surface is unavailable, stop and
+report that the plugin must be reloaded or reinstalled.
+
+Only when the current repository is Wakeflow source and the user is maintaining
+Wakeflow scripts or automation, source-repo verification may use:
 
 - `node scripts/wakeflow-verify.mjs`
 - `node scripts/wakeflow-verify.mjs --with-script-tests`

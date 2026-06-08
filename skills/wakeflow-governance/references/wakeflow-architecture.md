@@ -34,6 +34,12 @@ when policy allows, send with the Codex host thread tool, and record delivery
 evidence. Internal runtime scripts remain available to Wakeflow skills and tests
 without becoming public MCP tools.
 
+In installed plugin workspaces, total-control agents must treat those scripts as
+backend implementation details. They use Wakeflow MCP tools for setup, status,
+state roots, delivery, archive, next-work scans, and verification. If the MCP
+surface is unavailable, they stop and report the plugin-surface blocker instead
+of constructing cache paths or guessing script parameters.
+
 ## Installed Workspace Shape
 
 ```text

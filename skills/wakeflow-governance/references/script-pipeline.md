@@ -1,8 +1,13 @@
 # Workspace Script Pipeline
 
-Use this reference when auditing Wakeflow scripts, choosing validation
-commands, refreshing Design handoff intake, or deciding whether a workflow
-should become a script.
+Use this reference when maintaining Wakeflow source/runtime scripts, auditing
+script contracts, or deciding whether a workflow should become a script.
+
+Installed workspace controllers must use Wakeflow MCP tools as their command
+surface. Do not copy Node command examples from this reference into total
+control, do not call plugin-cache scripts directly, and do not infer runtime
+script parameters. If the required MCP tool is unavailable, stop and report the
+plugin-surface blocker instead of falling back to a script path.
 
 ## Boundaries
 
@@ -25,7 +30,24 @@ should become a script.
   `developer-progress.md`. Do not hand-author explanatory status strings as the
   source of truth.
 
-## Default Command Set
+## Installed Controller MCP Surface
+
+Use these MCP tools for normal installed-workspace control:
+
+| Need | MCP tool |
+| --- | --- |
+| Inspect repository, state-root, and delivery-loop status | `wakeflow_status` |
+| Initialize or refresh workspace setup | `wakeflow_initialize_workspace` |
+| Create, extend, or complete a controller demand | `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_complete_demand` |
+| Prepare or record delivery-loop transport evidence | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result` |
+| Scan next controller-ready work | `wakeflow_next_work` |
+| Archive completed workspace docs or TODO rows | `wakeflow_archive_workspace_docs`, `wakeflow_archive_todo` |
+| Verify Wakeflow state and docs | `wakeflow_verify` |
+
+## Source Runtime Command Set
+
+The commands below are backend/source-maintenance examples for the Wakeflow
+repository. They are not the installed controller command surface.
 
 - Aggregated command surface:
   `node scripts/wakeflow-cli.mjs status`

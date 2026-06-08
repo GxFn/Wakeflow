@@ -9,7 +9,7 @@ Status: idle / initialization ready / waiting for controller task
 - Active demand: none.
 - This repository is a freshly extracted Wakeflow runtime template.
 - This is the normal ready state after initialization. Entry-sync windows should report readiness and stop until a controller task wakeup names a state root.
-- Create a real active demand with `node scripts/wakeflow-state.mjs init --write`; then read the generated `developer-progress.md`.
+- Create a real active demand through the configured Wakeflow control surface; in installed plugin workspaces, use the Wakeflow MCP `wakeflow_init_demand` tool. Then read the generated `developer-progress.md`.
 - Unattended automation is disabled by default.
 
 ## Current Ledgers

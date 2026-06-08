@@ -300,9 +300,14 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   const rootAgents = readFileSync(path.join(parent, "AGENTS.md"), "utf8");
   assert.match(rootAgents, /Wakeflow is installed as a Codex plugin for this workspace/);
   assert.match(rootAgents, /Use Wakeflow MCP tools/);
+  assert.match(rootAgents, /Do not call installed runtime scripts directly/);
   assert.match(rootAgents, /Wakeflow verification MCP capability/);
   assert.match(rootAgents, /workspace\.config\.json/);
   assert.doesNotMatch(rootAgents, /node scripts\/wakeflow-setup\.mjs/);
+  assert.doesNotMatch(rootAgents, /installed runtime fallback/);
+  assert.doesNotMatch(rootAgents, /installed Wakeflow runtime/);
+  assert.doesNotMatch(rootAgents, /wakeflow-verify\.mjs/);
+  assert.doesNotMatch(rootAgents, /plugins\/cache/);
   assert.doesNotMatch(rootAgents, /use the matching Wakeflow MCP tool/);
   assert.doesNotMatch(rootAgents, /the installed Wakeflow script index is the script index/);
 
@@ -344,7 +349,12 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   const rootAgentsAfterSync = readFileSync(path.join(parent, "AGENTS.md"), "utf8");
   assert.match(rootAgentsAfterSync, /Wakeflow is installed as a Codex plugin for this workspace/);
   assert.match(rootAgentsAfterSync, /Wakeflow verification MCP capability/);
+  assert.match(rootAgentsAfterSync, /Do not call installed runtime scripts directly/);
   assert.doesNotMatch(rootAgentsAfterSync, /node scripts\/wakeflow-setup\.mjs/);
+  assert.doesNotMatch(rootAgentsAfterSync, /installed runtime fallback/);
+  assert.doesNotMatch(rootAgentsAfterSync, /installed Wakeflow runtime/);
+  assert.doesNotMatch(rootAgentsAfterSync, /wakeflow-verify\.mjs/);
+  assert.doesNotMatch(rootAgentsAfterSync, /plugins\/cache/);
   assert.doesNotMatch(rootAgentsAfterSync, /use the matching Wakeflow MCP tool/);
 });
 

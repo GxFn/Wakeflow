@@ -1002,22 +1002,23 @@ function pluginRootScriptGuidance(content) {
   return content
     .replace(
       /- `scripts\/README\.md` is the script index\. After adding, renaming, or deleting\s+`scripts\/\*\.mjs`, update the index and run\s+`node scripts\/wakeflow-check-scripts\.mjs`\./,
-      `- Installed Wakeflow runtime scripts are accessed through Wakeflow MCP tools.
-  When maintaining Wakeflow source scripts, update the source script index and
-  run the matching Node checks before refreshing the plugin cache.`,
+      `- In installed parent workspaces, Wakeflow runtime scripts are backend
+  implementation details. Use Wakeflow MCP tools for setup, status, state
+  roots, delivery, review, archive, next-work scans, and verification. Do not
+  call installed plugin-cache scripts directly from total control.`,
     )
     .replace(
       /- `node scripts\/wakeflow-verify\.mjs` is the default verification orchestrator\./,
       `- Use the Wakeflow verification MCP capability as the default
-  verification orchestrator. If the MCP surface is unavailable during plugin
-  development, run the installed wakeflow-verify.mjs runtime script as a
-  fallback.`,
+  verification orchestrator. If the MCP surface is unavailable, stop and report
+  that the Wakeflow plugin must be reloaded or reinstalled; do not fall back to
+  installed runtime scripts.`,
     )
     .replace(
       /- After creating or activating a phase confirmation or execution wave, run\s+`node scripts\/wakeflow-verify\.mjs`\./,
       `- After creating or activating a phase confirmation or execution wave,
-  run Wakeflow verification through the MCP capability or installed runtime
-  fallback.`,
+  run Wakeflow verification through the MCP capability. If that capability is
+  unavailable, stop and report the plugin-surface blocker.`,
     )
     .replace(
       /- If TODO mode affects dispatch or order, run\s+`node scripts\/wakeflow-verify\.mjs --require-todo`\./,
@@ -1037,8 +1038,8 @@ function pluginRootScriptGuidance(content) {
 
 function pluginRootCapabilityReferences(content) {
   return content
-    .replace(/`scripts\/([^`]+)`/g, "`installed Wakeflow runtime $1`")
-    .replace(/`node scripts\/([^`]+)`/g, "`installed Wakeflow runtime $1`")
+    .replace(/`node scripts\/([^`]+)`/g, "`Wakeflow MCP tool surface`")
+    .replace(/`scripts\/([^`]+)`/g, "`Wakeflow source-maintenance script $1`")
     .replace(/`skills\/([^`]+)`/g, "`installed Wakeflow skill $1`")
     .replace(/`templates\/([^`]+)`/g, "`installed Wakeflow template $1`");
 }
@@ -1083,7 +1084,7 @@ function rootAgentsContent(context) {
     );
     content = content.replace(
       /^# .+?\n\n/s,
-      (heading) => `${heading}> Wakeflow is installed as a Codex plugin for this workspace. Use Wakeflow MCP tools for setup, status, state roots, delivery, review, archive, and verification; local Wakeflow runtime scripts live in the installed plugin, not in this workspace root.\n\n`,
+      (heading) => `${heading}> Wakeflow is installed as a Codex plugin for this workspace. Use Wakeflow MCP tools for setup, status, state roots, delivery, review, archive, next-work scans, and verification. Do not call installed runtime scripts directly or infer their Node parameters; if a required Wakeflow MCP tool is unavailable, stop and report that the Wakeflow plugin surface must be reloaded or reinstalled.\n\n`,
     );
   }
 

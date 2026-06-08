@@ -580,6 +580,153 @@ test("decide-review records explicit controller judgment before task acceptance"
   assert.equal(progressAfter, progressBefore);
 });
 
+test("review decisions affect open targets without rewriting accepted history", () => {
+  const root = makeRoot();
+  const init = run([
+    "init",
+    "--root",
+    root,
+    "--demand-key",
+    "CSMR-FIXTURE-2026-06-05",
+    "--title",
+    "Fixture Demand",
+    "--write",
+    "--json",
+  ]);
+  const initPayload = JSON.parse(init.stdout);
+  const stateRoot = path.join(root, initPayload.stateRoot);
+
+  const addTask = (taskPackageId, targetTaskId) => {
+    const result = run([
+      "add-task-package",
+      "--root",
+      root,
+      "--state-root",
+      initPayload.stateRoot,
+      "--task-package-id",
+      taskPackageId,
+      "--summary",
+      `Package ${taskPackageId}.`,
+      "--target-window",
+      "AlembicWorkspace",
+      "--target-task-id",
+      targetTaskId,
+      "--write",
+      "--json",
+    ]);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+  };
+  const importResult = (targetTaskId, resultId) => {
+    const result = run([
+      "import-target-result",
+      "--root",
+      root,
+      "--state-root",
+      initPayload.stateRoot,
+      "--target-task-id",
+      targetTaskId,
+      "--target-window",
+      "AlembicWorkspace",
+      "--status",
+      "completed",
+      "--result-id",
+      resultId,
+      "--evidence-ref",
+      `reports/${resultId}.json`,
+      "--write",
+      "--json",
+    ]);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+  };
+  const reduce = () => {
+    const result = run([
+      "reduce-results",
+      "--root",
+      root,
+      "--state-root",
+      initPayload.stateRoot,
+      "--write",
+      "--json",
+    ]);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    return JSON.parse(result.stdout);
+  };
+  const decide = (candidateId, decision) => {
+    const result = run([
+      "decide-review",
+      "--root",
+      root,
+      "--state-root",
+      initPayload.stateRoot,
+      "--candidate-id",
+      candidateId,
+      "--decision",
+      decision,
+      "--reason",
+      `Controller decision ${decision}.`,
+      "--evidence-ref",
+      `reports/${candidateId}.json`,
+      "--write",
+      "--json",
+    ]);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    return JSON.parse(result.stdout);
+  };
+
+  addTask("CSMR-PKG-0", "CSMR-TASK-0");
+  importResult("CSMR-TASK-0", "CSMR-RESULT-0");
+  decide(reduce().candidateId, "accept");
+
+  addTask("CSMR-PKG-1", "CSMR-TASK-1");
+  importResult("CSMR-TASK-1", "CSMR-RESULT-1");
+  const reworkCandidatePayload = reduce();
+  const reworkCandidateFile = path.join(stateRoot, `transition-candidates/${reworkCandidatePayload.candidateId}.json`);
+  const reworkCandidate = readJson(reworkCandidateFile);
+  assert.deepEqual(reworkCandidate.targetTaskIds, ["CSMR-TASK-1"]);
+  assert.deepEqual(reworkCandidate.excludedTargetTaskIds, ["CSMR-TASK-0"]);
+  writeFileSync(reworkCandidateFile, `${JSON.stringify({
+    ...reworkCandidate,
+    targetTaskIds: ["CSMR-TASK-0", "CSMR-TASK-1"],
+    excludedTargetTaskIds: [],
+  }, null, 2)}\n`);
+  const reworkDecision = decide(reworkCandidatePayload.candidateId, "rework");
+  assert.deepEqual(reworkDecision.targetTaskIds, ["CSMR-TASK-1"]);
+  assert.deepEqual(reworkDecision.excludedTargetTaskIds, ["CSMR-TASK-0"]);
+
+  const afterRework = readJson(path.join(stateRoot, "wakeflow-state.json"));
+  assert.equal(afterRework.taskPackages.find((item) => item.taskPackageId === "CSMR-PKG-0").status, "accepted");
+  assert.equal(afterRework.targetTasks.find((item) => item.targetTaskId === "CSMR-TASK-0").status, "accepted");
+  assert.equal(afterRework.taskPackages.find((item) => item.taskPackageId === "CSMR-PKG-1").status, "needs-rework");
+  assert.equal(afterRework.targetTasks.find((item) => item.targetTaskId === "CSMR-TASK-1").status, "needs-rework");
+
+  addTask("CSMR-PKG-1A", "CSMR-TASK-1A");
+  importResult("CSMR-TASK-1A", "CSMR-RESULT-1A");
+  const acceptCandidatePayload = reduce();
+  const acceptCandidate = readJson(path.join(stateRoot, `transition-candidates/${acceptCandidatePayload.candidateId}.json`));
+  assert.deepEqual(acceptCandidate.targetTaskIds, ["CSMR-TASK-1", "CSMR-TASK-1A"]);
+  assert.deepEqual(acceptCandidate.excludedTargetTaskIds, ["CSMR-TASK-0"]);
+  decide(acceptCandidatePayload.candidateId, "accept");
+
+  const finalState = readJson(path.join(stateRoot, "wakeflow-state.json"));
+  assert.deepEqual(finalState.taskPackages.map((item) => item.status), ["accepted", "accepted", "accepted"]);
+  assert.deepEqual(finalState.targetTasks.map((item) => item.status), ["accepted", "accepted", "accepted"]);
+
+  const completed = run([
+    "complete-demand",
+    "--root",
+    root,
+    "--state-root",
+    initPayload.stateRoot,
+    "--reason",
+    "All open and rework tasks accepted.",
+    "--evidence-ref",
+    "reports/final.json",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(completed.status, 0, completed.stderr || completed.stdout);
+});
+
 test("blocked and review-ready demands reject new task packages before explicit decision", () => {
   const root = makeRoot();
   const init = run([

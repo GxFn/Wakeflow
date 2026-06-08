@@ -269,6 +269,42 @@ test("manual route keeps state, result, decision, and progress projection separa
   assert.match(progress, /accept: Manual route fixture evidence reviewed by total control/);
 });
 
+test("state-root review pack excludes accepted targets from the next review scope", () => {
+  const manifest = readFixture("manual-route");
+  const root = makeRoot("csmr-review-scope-");
+  const { stateRootRef, stateRoot } = initDemand(root, manifest);
+  addTaskPackage(root, stateRootRef, manifest);
+  writeJson(path.join(stateRoot, manifest.result.evidenceRef), { ok: true, route: "manual" });
+  importResult(root, stateRootRef, manifest);
+  const reduced = reduceResults(root, stateRootRef);
+  decideReview(root, stateRootRef, reduced.candidateId, manifest);
+
+  const secondTask = runController([
+    "add-task-package",
+    "--state-root",
+    stateRootRef,
+    "--task-package-id",
+    "CSMR-MANUAL-PKG-2",
+    "--summary",
+    "Second package waits for a target result.",
+    "--target-window",
+    manifest.taskPackage.targetWindow,
+    "--target-task-id",
+    "CSMR-MANUAL-TASK-2",
+    "--write",
+  ], root);
+  assert.equal(secondTask.status, 0, secondTask.stderr || secondTask.stdout);
+
+  const review = runAutomation(["review-pack", "--state-root", stateRootRef], root);
+  assert.equal(review.status, 0, review.stderr || review.stdout);
+  const payload = JSON.parse(review.stdout);
+  assert.equal(payload.reviewPack.decision, "wait");
+  assert.deepEqual(payload.reviewPack.reviewScope.targetTaskIds, ["CSMR-MANUAL-TASK-2"]);
+  assert.deepEqual(payload.reviewPack.reviewScope.excludedTargetTaskIds, [manifest.taskPackage.targetTaskId]);
+  assert.deepEqual(payload.reviewPack.groupSnapshot.expected.map((item) => item.taskId), ["CSMR-MANUAL-TASK-2"]);
+  assert.deepEqual(payload.reviewPack.groupSnapshot.missing.map((item) => item.taskId), ["CSMR-MANUAL-TASK-2"]);
+});
+
 test("unattended route prepares dispatch and controller return from stateRoot without controlPlan", () => {
   const manifest = readFixture("unattended-route");
   const root = makeRoot("csmr-unattended-");

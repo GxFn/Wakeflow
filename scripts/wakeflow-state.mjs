@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSyn
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
+import { controllerReviewScope, reductionStatusForTargetTask } from "./lib/wakeflow-review-scope.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const wakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -643,9 +644,14 @@ function commandReduceResults() {
   if (["completed", "archived"].includes(state.state)) {
     fail(`cannot reduce results while demand is ${state.state}: ${state.demandKey}`);
   }
-  const targetTasks = state.targetTasks ?? [];
-  if (targetTasks.length === 0) {
+  const allTargetTasks = state.targetTasks ?? [];
+  if (allTargetTasks.length === 0) {
     fail("controller state has no target tasks to reduce.");
+  }
+  const reviewScope = controllerReviewScope(allTargetTasks);
+  const targetTasks = reviewScope.reviewableTargetTasks;
+  if (targetTasks.length === 0) {
+    fail("controller state has no open target tasks to reduce; complete the demand or add the next task package by total-control judgment.");
   }
   const results = latestResultsByTargetTask(readTargetResults(stateRoot));
   const readyResultIds = [];
@@ -695,7 +701,9 @@ function commandReduceResults() {
     readyResultIds,
     blockedResultIds,
     missingResultIds: [],
-    targetTaskIds: targetTasks.map((item) => item.targetTaskId),
+    reviewScope: reviewScope.mode,
+    targetTaskIds: reviewScope.targetTaskIds,
+    excludedTargetTaskIds: reviewScope.excludedTargetTaskIds,
     allowedDecisions: ["accept", "rework", "blocked"],
     evidenceRefs: [...new Set(evidenceRefs)],
     forbiddenConclusions: [
@@ -718,11 +726,12 @@ function commandReduceResults() {
       blockedResultIds,
       missingResultIds: missingTargetTaskIds,
     },
-    targetTasks: targetTasks.map((task) => {
+    targetTasks: allTargetTasks.map((task) => {
+      if (!reviewScope.targetTaskIds.includes(task.targetTaskId)) return task;
       const result = results.get(task.targetTaskId);
       return {
         ...task,
-        status: result ? result.status : "missing-result",
+        status: reductionStatusForTargetTask(task, result),
         resultId: result?.resultId ?? null,
       };
     }),
@@ -778,6 +787,9 @@ function commandReduceResults() {
       blockedResultIds,
       missingResultIds: missingTargetTaskIds,
       candidateId,
+      reviewScope: reviewScope.mode,
+      targetTaskIds: reviewScope.targetTaskIds,
+      excludedTargetTaskIds: reviewScope.excludedTargetTaskIds,
       projectionStatus: "stale",
     },
     [
@@ -818,7 +830,17 @@ function commandDecideReview() {
   const evidenceRefs = [...new Set([...(candidate.evidenceRefs ?? []), ...valuesFor("--evidence-ref")])];
   const nextMainState = decision === "accept" ? "planned" : decision === "rework" ? "needs-rework" : "blocked";
   const nextTaskStatus = decision === "accept" ? "accepted" : decision === "rework" ? "needs-rework" : "blocked";
-  const candidateTaskIds = new Set(candidate.targetTaskIds ?? []);
+  const rawCandidateTaskIds = new Set(candidate.targetTaskIds ?? []);
+  const knownCandidateTasks = (state.targetTasks ?? []).filter((item) => rawCandidateTaskIds.has(item.targetTaskId));
+  const unknownCandidateTaskIds = [...rawCandidateTaskIds].filter((targetTaskId) => !knownCandidateTasks.some((item) => item.targetTaskId === targetTaskId));
+  if (unknownCandidateTaskIds.length > 0) {
+    fail(`transition candidate ${candidateId} references unknown target tasks: ${unknownCandidateTaskIds.join(", ")}`);
+  }
+  const decisionScope = controllerReviewScope(knownCandidateTasks);
+  if (decisionScope.targetTaskIds.length === 0) {
+    fail(`transition candidate ${candidateId} has no open target tasks to decide; complete the demand or add the next task package by total-control judgment.`);
+  }
+  const candidateTaskIds = new Set(decisionScope.targetTaskIds);
   const nextTargetTasks = (state.targetTasks ?? []).map((item) => candidateTaskIds.has(item.targetTaskId)
     ? {
         ...item,
@@ -904,6 +926,8 @@ function commandDecideReview() {
       decision,
       previousState: state.state,
       nextState: nextMainState,
+      targetTaskIds: decisionScope.targetTaskIds,
+      excludedTargetTaskIds: decisionScope.excludedTargetTaskIds,
       stateRevision: nextRevision,
       eventId,
       projectionStatus: "stale",
@@ -1075,7 +1099,8 @@ function latestResultsByTargetTask(results) {
 function reduceWindowStates(windows, targetTasks, results) {
   return windows.map((window) => {
     const tasks = targetTasks.filter((task) => task.targetWindow === window.windowName);
-    const statuses = tasks.map((task) => results.get(task.targetTaskId)?.status ?? "missing-result");
+    if (tasks.length === 0) return window;
+    const statuses = tasks.map((task) => reductionStatusForTargetTask(task, results.get(task.targetTaskId)));
     const windowState = statuses.includes("missing-result")
       ? "waiting-results"
       : statuses.includes("blocked")

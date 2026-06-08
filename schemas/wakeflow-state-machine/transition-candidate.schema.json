@@ -15,7 +15,9 @@
     "readyResultIds": { "type": "array", "items": { "type": "string" } },
     "blockedResultIds": { "type": "array", "items": { "type": "string" } },
     "missingResultIds": { "type": "array", "items": { "type": "string" } },
+    "reviewScope": { "type": "string" },
     "targetTaskIds": { "type": "array", "items": { "type": "string" } },
+    "excludedTargetTaskIds": { "type": "array", "items": { "type": "string" } },
     "allowedDecisions": { "type": "array", "items": { "type": "string" } },
     "evidenceRefs": { "type": "array", "items": { "type": "string" } },
     "forbiddenConclusions": { "type": "array", "items": { "type": "string" } }

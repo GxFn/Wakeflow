@@ -3,6 +3,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { controllerReviewScope } from "./lib/wakeflow-review-scope.mjs";
 
 const args = process.argv.slice(2);
 const command = args[0] && !args[0].startsWith("--") ? args[0] : "status";
@@ -1697,7 +1698,9 @@ function stateRootEvidenceRefSummary(stateRoot, stateRootRef, ref) {
 function buildStateRootReviewPack(stateRoot) {
   const { state, stateRootRef } = readControllerStateRoot(stateRoot);
   const resultsByTask = latestStateRootResultsByTargetTask(stateRoot);
-  const targetTasks = state.targetTasks ?? [];
+  const allTargetTasks = state.targetTasks ?? [];
+  const reviewScope = controllerReviewScope(allTargetTasks);
+  const targetTasks = reviewScope.reviewableTargetTasks;
   const targetResults = targetTasks.map((task) => {
     const item = resultsByTask.get(task.targetTaskId);
     const result = item?.result ?? null;
@@ -1725,12 +1728,15 @@ function buildStateRootReviewPack(stateRoot) {
   const missing = targetResults.filter((item) => item.resultStatus === "missing");
   const blocked = targetResults.filter((item) => item.resultStatus === "blocked");
   const ready = targetResults.filter((item) => item.resultStatus !== "missing" && item.resultStatus !== "blocked");
-  const noTargetTasks = targetTasks.length === 0;
+  const noTargetTasks = allTargetTasks.length === 0;
+  const noOpenTargetTasks = !noTargetTasks && targetTasks.length === 0;
   const demandCompleted = state.state === "completed" || state.review?.status === "demand-completed";
   const decision = demandCompleted
     ? "completed"
     : noTargetTasks
     ? "no-target-tasks"
+    : noOpenTargetTasks
+    ? "ready-to-complete-demand"
     : missing.length > 0
     ? "wait"
     : blocked.length > 0
@@ -1740,6 +1746,8 @@ function buildStateRootReviewPack(stateRoot) {
     ? "completed"
     : noTargetTasks
     ? "empty"
+    : noOpenTargetTasks
+    ? "accepted"
     : missing.length > 0
     ? ready.length > 0 || blocked.length > 0 ? "partially-ready" : "waiting"
     : blocked.length > 0 ? "blocked" : "ready";
@@ -1767,7 +1775,7 @@ function buildStateRootReviewPack(stateRoot) {
     allResultsPresent: missing.length === 0,
     stateRoot: stateRootRef,
   };
-  const reviewReady = !demandCompleted && !noTargetTasks && decision !== "wait";
+  const reviewReady = !demandCompleted && !noTargetTasks && !noOpenTargetTasks && decision !== "wait";
   const missingEvidenceRefs = targetResults.flatMap((item) => item.missingEvidenceRefs.map((ref) => ({
     targetWindow: item.targetWindow,
     taskId: item.taskId,
@@ -1786,6 +1794,11 @@ function buildStateRootReviewPack(stateRoot) {
     returnPolicy: groupSnapshot.returnPolicy,
     groupStatus,
     groupSnapshot,
+    reviewScope: {
+      mode: reviewScope.mode,
+      targetTaskIds: reviewScope.targetTaskIds,
+      excludedTargetTaskIds: reviewScope.excludedTargetTaskIds,
+    },
     controllerReturnDelivery: {
       status: "not-applicable",
       reason: "state-root review pack is independent of controller-return delivery evidence",
@@ -1806,6 +1819,7 @@ function buildStateRootReviewPack(stateRoot) {
     gates: {
       controllerReviewReady: reviewReady && !missingEvidenceRefsPresent,
       noTargetTasks,
+      noOpenTargetTasks,
       waitForMissingResults: decision === "wait",
       blockedResultsPresent: blocked.length > 0,
       missingEvidenceRefsPresent,
@@ -1819,6 +1833,8 @@ function buildStateRootReviewPack(stateRoot) {
       ? "demand-completed-stop-without-next-dispatch"
       : noTargetTasks
       ? "add-task-package-before-review"
+      : noOpenTargetTasks
+      ? "run-wakeflow-complete-demand-or-add-next-package"
       : decision === "wait"
       ? "wait-for-state-root-target-result"
       : decision === "blocked"

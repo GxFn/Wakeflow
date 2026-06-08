@@ -157,6 +157,8 @@ function validatePluginManifest() {
   if (!manifest) return;
   if (manifest.name !== "wakeflow") errors.push("plugin name must be wakeflow");
   if (manifest.interface?.displayName !== "Wakeflow") errors.push("plugin displayName must be Wakeflow");
+  if (manifest.author?.name !== "gaoxuefeng") errors.push("plugin author name must be gaoxuefeng");
+  if (manifest.interface?.developerName !== "GxFn") errors.push("plugin developerName must be GxFn");
   if (manifest.skills !== "./skills/") errors.push("plugin skills path must be ./skills/");
   if (manifest.mcpServers !== "./.mcp.json") errors.push("plugin mcpServers path must be ./.mcp.json");
   if (!Array.isArray(manifest.keywords) || !manifest.keywords.includes("unattended")) {

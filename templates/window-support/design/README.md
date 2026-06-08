@@ -11,4 +11,4 @@ Use this directory when the user does not have an external Design repository.
 - Templates: `templates/original-plan-template.md`, `templates/requirement-design-template.md`, `templates/workspace-signal-template.md`, and `templates/workspace-handoff-template.md`
 - Default Design skills: `skills/`
 - Discovery and intake are performed by the controller through the Wakeflow MCP surface.
-- Do not call installed Wakeflow runtime scripts from this Design support directory.
+- Do not call plugin-cache runtime scripts from this Design support directory.

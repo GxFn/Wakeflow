@@ -22,10 +22,14 @@ const ignoredDirectoryNames = new Set([".git", ".workspace-active", ".workspace-
 const localizedRuntimeTextFiles = new Set([
   "scripts/wakeflow-setup.mjs",
 ]);
+const localizedDocumentationTextFiles = new Set([
+  "README.zh-CN.md",
+]);
 
 const requiredFiles = [
   "AGENTS.md",
   "README.md",
+  "README.zh-CN.md",
   "LICENSE",
   "package.json",
   ".codex-plugin/plugin.json",
@@ -136,7 +140,7 @@ function validatePackage() {
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) {
     errors.push("package files must declare the plugin release surface");
   } else {
-    for (const expected of [".codex-plugin/", ".agents/plugins/marketplace.json", ".mcp.json", "mcp/", "skills/", "scripts/", "templates/"]) {
+    for (const expected of [".codex-plugin/", ".agents/plugins/marketplace.json", ".mcp.json", "README.zh-CN.md", "mcp/", "skills/", "scripts/", "templates/"]) {
       if (!manifest.files.includes(expected)) errors.push(`package files must include ${expected}`);
     }
   }
@@ -402,6 +406,8 @@ function validateTextSurface() {
     const rel = relative(file);
     const text = readFileSync(file, "utf8");
     const allowsLocalizedRuntimeText = localizedRuntimeTextFiles.has(rel);
+    const allowsLocalizedDocumentationText = localizedDocumentationTextFiles.has(rel);
+    const allowsLocalizedText = allowsLocalizedRuntimeText || allowsLocalizedDocumentationText;
     if (text.includes(placeholderToken)) errors.push(`placeholder remains in ${rel}`);
     if (text.includes(oldWorkspaceToken)) {
       errors.push(`old workspace name remains in ${rel}`);
@@ -414,10 +420,10 @@ function validateTextSurface() {
         if (text.includes(token)) errors.push(`project-specific token ${token} remains in ${rel}`);
       }
     }
-    if (!allowsLocalizedRuntimeText && /\p{Script=Han}/u.test(text)) {
+    if (!allowsLocalizedText && /\p{Script=Han}/u.test(text)) {
       errors.push(`non-English Han text remains in ${rel}`);
     }
-    if (!allowsLocalizedRuntimeText && /[\u3000-\u303F\uFF00-\uFFEF]/u.test(text)) {
+    if (!allowsLocalizedText && /[\u3000-\u303F\uFF00-\uFFEF]/u.test(text)) {
       errors.push(`fullwidth punctuation remains in ${rel}`);
     }
   }

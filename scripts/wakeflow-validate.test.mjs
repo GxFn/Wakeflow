@@ -52,6 +52,7 @@ function makeFixture() {
     "AGENTS.md",
     "LICENSE",
     "README.md",
+    "README.zh-CN.md",
     "package.json",
     "workspace.config.json",
   ]) {
@@ -195,6 +196,17 @@ test("fails when non-English project text is introduced", () => {
     const result = run(root);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /non-English Han text remains in docs\/bad\.md/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("allows the localized Chinese README", () => {
+  const root = makeFixture();
+  try {
+    writeFileSync(path.join(root, "README.zh-CN.md"), `# Wakeflow\n\n${"\u4e2d\u6587\u8bf4\u660e\uff1a\u53ef\u672c\u5730\u5316\u3002"}\n`);
+    const result = run(root);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

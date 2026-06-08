@@ -4,6 +4,8 @@
 
 Unattended control loops for multi-window agent work.
 
+[English](README.md) | [Simplified Chinese](README.zh-CN.md)
+
 Wakeflow turns a local Codex workspace into a disciplined controller system:
 one controller window, focused repository windows, explicit state roots,
 compact direct-thread delivery, and evidence-based acceptance.

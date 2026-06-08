@@ -1447,6 +1447,16 @@ const testDefaultSkillPaths = [
   "skills/debugging-and-triage/SKILL.md",
   "skills/regression-design/SKILL.md",
   "skills/evidence-review/SKILL.md",
+  "skills/progressive-chain-validation/SKILL.md",
+  "skills/progressive-chain-validation/references/artifact-layout.md",
+  "skills/progressive-chain-validation/references/chain-plan-generation.md",
+  "skills/progressive-chain-validation/references/data-location-preflight.md",
+  "skills/progressive-chain-validation/references/local-chain-optimization.md",
+  "skills/progressive-chain-validation/references/metrics-contract.md",
+  "skills/progressive-chain-validation/references/plan-quality-standard.md",
+  "skills/progressive-chain-validation/references/round-model.md",
+  "skills/progressive-chain-validation/references/safety-boundaries.md",
+  "skills/progressive-chain-validation/templates/plan.md",
 ];
 
 function syncWindowSupportFile(context, repoRoot, supportName, relativePath, label) {

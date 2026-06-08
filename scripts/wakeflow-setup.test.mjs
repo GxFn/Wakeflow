@@ -987,6 +987,9 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   assert.equal(existsSync(path.join(fixture.parent, "Test/skills/debugging-and-triage/SKILL.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/skills/regression-design/SKILL.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/skills/evidence-review/SKILL.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/skills/progressive-chain-validation/SKILL.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/skills/progressive-chain-validation/references/metrics-contract.md")), true);
+  assert.equal(existsSync(path.join(fixture.parent, "Test/skills/progressive-chain-validation/templates/plan.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/docs/testing-operation-policy.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/templates/test-handoff-template.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/BaseWindow/README.md")), true);
@@ -1039,6 +1042,9 @@ test("external Design and Test directories get only alignment templates", () => 
   assert.equal(existsSync(path.join(testWindow, "skills/debugging-and-triage/SKILL.md")), true);
   assert.equal(existsSync(path.join(testWindow, "skills/regression-design/SKILL.md")), true);
   assert.equal(existsSync(path.join(testWindow, "skills/evidence-review/SKILL.md")), true);
+  assert.equal(existsSync(path.join(testWindow, "skills/progressive-chain-validation/SKILL.md")), true);
+  assert.equal(existsSync(path.join(testWindow, "skills/progressive-chain-validation/references/metrics-contract.md")), true);
+  assert.equal(existsSync(path.join(testWindow, "skills/progressive-chain-validation/templates/plan.md")), true);
   assert.equal(existsSync(path.join(testWindow, "docs/testing-operation-policy.md")), true);
   assert.equal(existsSync(path.join(testWindow, "templates/test-handoff-template.md")), true);
   assert.equal(existsSync(path.join(testWindow, "docs/current/test-exchange.md")), false);

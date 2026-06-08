@@ -75,7 +75,9 @@ const requiredFiles = [
   "skills/wakeflow-governance/SKILL.md",
   "skills/wakeflow-governance/references/agents-rule-map.md",
   "skills/wakeflow-governance/references/wakeflow-ledgers.md",
-  "skills/wakeflow-progressive-validation/SKILL.md",
+  "templates/window-support/testing/skills/progressive-chain-validation/SKILL.md",
+  "templates/window-support/testing/skills/progressive-chain-validation/references/metrics-contract.md",
+  "templates/window-support/testing/skills/progressive-chain-validation/templates/plan.md",
   "assets/wakeflow-mark.svg",
   "assets/wakeflow-logo.svg",
 ];
@@ -372,7 +374,7 @@ function validateSkillSurface() {
   const skillsRoot = path.join(root, "skills");
   if (!existsSync(skillsRoot)) return;
   const skillFiles = listFiles(skillsRoot).filter((file) => path.basename(file) === "SKILL.md");
-  if (skillFiles.length < 4) errors.push("skills/ must expose controller, target, governance, and validation skills");
+  if (skillFiles.length < 3) errors.push("skills/ must expose controller, target, and governance skills");
   for (const file of skillFiles) {
     const text = readFileSync(file, "utf8");
     if (!/^---\n[\s\S]*?\n---/.test(text)) {

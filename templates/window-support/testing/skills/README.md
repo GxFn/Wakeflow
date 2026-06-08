@@ -36,6 +36,16 @@ explicitly authorizes it.
     SRE evidence discipline.
   - Output: blockers, missing evidence, minor issues, residual risks, test plan
     assessment, invalid conclusions, and recommended controller decision.
+- `progressive-chain-validation/SKILL.md`
+  - Purpose: generate and execute source-derived long-chain validation plans
+    one node at a time, with isolated fixtures, safe write boundaries,
+    before/after metrics, scoped round verdicts, and a required
+    `scratch/chain-runs/<run-id>/report/plan.md` artifact.
+  - Sources: Progressive Chain Validation, PCVM round/segment semantics, metric
+    contracts, node isolation, and bounded terminal execution.
+  - Output: source chain map, node cuts, round model, local segment scorecards,
+    evidence links, current-node execution log, scoped verdicts, and full-run
+    readiness gate.
 
 ## Quality Standard
 

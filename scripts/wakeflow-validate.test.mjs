@@ -77,7 +77,7 @@ test("passes for the repository plugin surface", () => {
   assert.equal(payload.ok, true);
   assert.ok(payload.checked.requiredFiles > 30);
   assert.ok(payload.checked.runtimeScripts > 20);
-  assert.ok(payload.checked.skills >= 4);
+  assert.ok(payload.checked.skills >= 3);
 });
 
 test("fails when the MCP config points at a missing server entrypoint", () => {

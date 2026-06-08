@@ -414,12 +414,13 @@ Reference map:
   automation return.
 - `skills/wakeflow-governance/references/phased-migration.md`: cross-repo
   migration, extraction, deletion, and release closure.
-- `skills/wakeflow-progressive-validation/SKILL.md`: progressive validation
-  and source-derived long-chain plans.
 - `skills/wakeflow-target/`: target-window execution and
   `TargetResultEnvelope` backfill.
 - `skills/wakeflow-controller/`: controller start, return, result review, and
   next-wave decisions.
+- `templates/window-support/testing/skills/progressive-chain-validation/`:
+  Test-window progressive chain validation, source-derived plans,
+  node-local isolation, scoped rounds, and metrics.
 
 Hard boundaries stay here. Operational details live in skills.
 

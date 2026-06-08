@@ -22,6 +22,8 @@ keeps execution, acceptance, TODO routing, and archive authority.
 ## Allowed Work
 
 - Clarify product goals and user scenarios.
+- Interactively recommend and apply the relevant Design skill before writing a
+  tracked Design artifact.
 - Draft original plans, requirement designs, workspace signals, and handoffs.
 - Compare architecture options and tradeoffs.
 - Identify code-research requests for Wakeflow or source windows.
@@ -50,6 +52,9 @@ keeps execution, acceptance, TODO routing, and archive authority.
   before making major scope, phase, or boundary decisions. Record new
   decisions, contradictions, failed assumptions, and missing evidence in the
   document rather than hiding them in conversation.
+- Before creating or updating a tracked Design document, state which Design
+  skill is being used and confirm the user/controller wants the result recorded,
+  unless the current controller state root already assigns a write deliverable.
 - Any downgrade, deferral, compatibility retention, or boundary change must be
   marked pending confirmation.
 
@@ -66,3 +71,7 @@ Every handoff should include title, goal, design status, final completion
 definition, evidence, open questions, confirmed decisions, suggested windows,
 approach tradeoffs, phase candidates, validation needs, non-goals, rollout or
 compatibility notes, and forbidden shortcuts.
+
+Handoffs are packaging, not discovery. If clarification, option comparison, or
+requirement design is missing, use or recommend the upstream Design skill before
+writing a handoff.

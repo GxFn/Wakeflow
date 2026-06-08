@@ -22,6 +22,18 @@ Design proposes task-package candidates. Controller decides whether they enter
 TODO, state roots, waves, or dispatch. Use this skill when a requirement design
 is confirmed enough to discuss implementation chunks.
 
+## Interaction First
+
+Default to conversation. Use this skill to propose candidate slices, explain
+dependencies, and ask the user/controller to confirm granularity and HITL/AFK
+labels before writing any tracked Design artifact.
+
+Do not create or update slice notes, handoff drafts, TODO boards, task packages,
+or board rows as the first action. Write files only when the user/controller
+explicitly asks for a tracked artifact, confirms that the proposed content
+should be recorded, or a controller state root assigns a write deliverable. If a
+write is justified, state what will be written and why before editing.
+
 ## Inputs
 
 - Requirement design or PRD-like artifact.
@@ -91,6 +103,7 @@ Contract-only or interface-only work is allowed only when it names:
 
 ## Allowed Outputs
 
+- Conversational candidate slice list and confirmation questions.
 - Candidate slice lists.
 - TODO/task-package suggestions.
 - Dependency and phase-order notes.
@@ -103,6 +116,8 @@ Contract-only or interface-only work is allowed only when it names:
 - No dispatch.
 - No issue tracker publishing.
 - No thin interface-only candidates without consumer and validation.
+- No tracked Design document or board update as the first action without an
+  explicit write request or confirmation.
 
 ## Quality Bar
 

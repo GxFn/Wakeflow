@@ -1,7 +1,8 @@
 # Workspace Handoff Board
 
-This board records completed Design handoffs that are ready for Wakeflow
-controller intake. It is a Design-owned source list, not an execution queue.
+This board records completed Design handoffs only after user/controller
+confirmation. Wakeflow imports ready rows through the controller MCP intake
+surface. It is a Design-owned source list, not an execution queue.
 
 ## Handoff Board
 

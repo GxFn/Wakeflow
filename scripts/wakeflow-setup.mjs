@@ -1219,7 +1219,7 @@ function writeAgentsPayload(context = commandContext(), options = {}) {
 function designBoardTemplate() {
   return `# Workspace Handoff Board
 
-This board is intentionally small. Design records completed requirement design handoffs here; Wakeflow imports ready rows with the installed Design intake tooling.
+This board is intentionally small. Design records completed requirement design handoffs here only after user/controller confirmation; Wakeflow imports ready rows through the controller MCP intake surface.
 
 ## Handoff Board
 
@@ -1240,8 +1240,13 @@ Use this directory when the user does not have an external ${config.designWindow
 - Operating policy: \`docs/design-window-operating-policy.md\`
 - Alignment checklist: \`docs/workspace-alignment-checklist.md\`
 - Templates: \`templates/original-plan-template.md\`, \`templates/requirement-design-template.md\`, \`templates/workspace-signal-template.md\`, and \`templates/workspace-handoff-template.md\`
-- Default Design skills: \`skills/\`
-- Wakeflow imports: use controller intake tooling such as \`wakeflow_intake_design_handoff\` or the installed runtime import command.
+- Design skill map: \`skills/README.md\`
+- Design skills are conversational methods first. Use them to clarify, compare,
+  draft, slice, and prepare handoff recommendations with the user before
+  writing tracked documents.
+- Discovery and intake are performed by the controller through the Wakeflow MCP
+  surface. Design does not run plugin-cache runtime scripts or update intake
+  state directly.
 `;
 }
 

@@ -32,6 +32,18 @@ before an option becomes executable scope. Use this skill when:
 - quality attributes such as reliability, performance, security, or maintenance
   change the route.
 
+## Interaction First
+
+Default to conversation. Use this skill to compare options, explain tradeoffs,
+recommend a route, and ask confirmation questions before writing any tracked
+Design artifact.
+
+Do not create or update option notes, requirement designs, handoff drafts, ADRs,
+or board rows as the first action. Write files only when the user/controller
+explicitly asks for a tracked artifact, confirms that the proposed content
+should be recorded, or a controller state root assigns a write deliverable. If a
+write is justified, state what will be written and why before editing.
+
 ## Inputs
 
 Read only the context needed for the decision:
@@ -101,6 +113,7 @@ Otherwise, keep it as Design rationale.
 
 ## Allowed Outputs
 
+- Conversational option comparison and recommendation.
 - Option comparison notes.
 - Architecture sketch text or Mermaid diagram when it clarifies boundaries.
 - ADR candidate text.
@@ -115,6 +128,8 @@ Otherwise, keep it as Design rationale.
 - No empty API/interface-only option unless it names a real consumer, next
   consumption step, and validation path.
 - No product ADR write unless explicitly authorized.
+- No tracked Design document or board update as the first action without an
+  explicit write request or confirmation.
 
 ## Quality Bar
 

@@ -35,6 +35,18 @@ If the goal, scope, or completion evidence is unclear, run
 `requirement-clarification` first. If the implementation route is unclear, run
 `option-planning` first.
 
+## Interaction First
+
+Default to conversation. Use this skill to draft or review requirement-design
+sections with the user, call out gaps, and recommend the next Design or
+controller decision before writing any tracked Design artifact.
+
+Do not create or update requirement-design documents, handoff drafts, or board
+rows as the first action. Write files only when the user/controller explicitly
+asks for a tracked artifact, confirms that the proposed content should be
+recorded, or a controller state root assigns a write deliverable. If a write is
+justified, state what will be written and why before editing.
+
 ## Workflow
 
 1. Gather facts.
@@ -49,7 +61,9 @@ If the goal, scope, or completion evidence is unclear, run
    - Prefer existing public seams.
    - Use the highest seam that proves observable behavior.
    - If a new seam is needed, justify it.
-4. Write the design as a controller artifact.
+4. Draft the design as a controller artifact in the conversation.
+   - Write a tracked requirement-design document only after explicit
+     user/controller confirmation.
 5. Mark confirmation status.
    - `confirmed`
    - `candidate`
@@ -104,6 +118,7 @@ If the goal, scope, or completion evidence is unclear, run
 
 ## Allowed Outputs
 
+- Conversational requirement-design draft or review.
 - Wakeflow Design requirement-design documents.
 - Requirement-design candidate sections in a handoff.
 - Controller intake notes and open questions.
@@ -116,6 +131,8 @@ If the goal, scope, or completion evidence is unclear, run
 - No controller state mutation.
 - No invented code facts.
 - No unconfirmed Design suggestion marked as executable scope.
+- No tracked Design document or board update as the first action without an
+  explicit write request or confirmation.
 
 ## Quality Bar
 

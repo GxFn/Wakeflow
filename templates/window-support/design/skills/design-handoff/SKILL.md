@@ -27,6 +27,18 @@ Use this skill when:
 - an option comparison needs a controller/user decision;
 - open questions or risks should be preserved without becoming TODOs.
 
+## Interaction First
+
+Default to conversation. Use this skill to summarize handoff readiness, separate
+facts from recommendations, name missing upstream Design work, and recommend the
+next skill or controller action before writing any tracked handoff artifact.
+
+Do not create or update handoff documents, handoff board rows, or workspace
+intake records as the first action. Write files only when the user/controller
+explicitly asks for a tracked artifact, confirms that the proposed content
+should be recorded, or a controller state root assigns a write deliverable. If a
+write is justified, state what will be written and why before editing.
+
 ## Workflow
 
 1. Read the source artifacts.
@@ -85,6 +97,7 @@ Use paths or URLs for source artifacts whenever possible.
 
 ## Allowed Outputs
 
+- Conversational handoff-ready summary and suggested next action.
 - Design handoff document or handoff board entry.
 - Controller intake summary.
 - Suggested Wakeflow skill list.
@@ -97,6 +110,8 @@ Use paths or URLs for source artifacts whenever possible.
 - No product code edits.
 - No acceptance or archive decision.
 - No unconfirmed recommendation presented as final scope.
+- No tracked handoff document, board row, or intake record as the first action
+  without an explicit write request or confirmation.
 
 ## Quality Bar
 

@@ -38,9 +38,22 @@ Use this skill to prepare one of these outputs:
 Do not create task packages, dispatch packets, global TODO rows, state roots, or
 target prompts from this skill.
 
+## Interaction First
+
+Default to conversation. Use this skill to state an interpretation, ask
+scope-changing questions, provide recommended answers, and explain tradeoffs to
+the user before writing any tracked Design artifact.
+
+Do not create or update Design notes, requirement documents, handoff drafts, or
+board rows as the first action. Write files only when the user/controller
+explicitly asks for a tracked artifact, confirms that the proposed content
+should be recorded, or a controller state root assigns a write deliverable. If a
+write is justified, state what will be written and why before editing.
+
 ## First Pass
 
-Start by writing a compact interpretation before asking anything:
+Start in the conversation by writing a compact interpretation before asking
+anything:
 
 1. Likely user goal.
 2. Known facts from the conversation, current Design docs, current state root,
@@ -98,7 +111,8 @@ up" unless they are sharpened into verifiable outcomes.
 
 ## Output Contract
 
-Use this structure for a Design note or handoff section:
+Use this structure in chat first. Reuse it for a Design note or handoff section
+only after the user/controller confirms a tracked write:
 
 ```markdown
 ## Clarified Requirement
@@ -125,6 +139,7 @@ Use this structure for a Design note or handoff section:
 
 ## Allowed Outputs
 
+- Conversational clarification, recommendation, and decision questions.
 - Design notes under the Design workspace.
 - Original-plan or requirement-design candidate text.
 - Controller decision questions.
@@ -138,6 +153,8 @@ Use this structure for a Design note or handoff section:
 - No global TODO rows.
 - No final product decision language.
 - No thread ids, secrets, or local runtime identifiers in tracked docs.
+- No tracked Design document or board update as the first action without an
+  explicit write request or confirmation.
 
 ## Quality Bar
 

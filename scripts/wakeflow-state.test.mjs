@@ -370,6 +370,11 @@ test("import-target-result stores result evidence without changing controller st
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true);
   assert.equal(payload.stateRevisionUnchanged, 2);
+  assert.match(payload.agentNext, /not controller acceptance/);
+  assert.match(payload.agentNext, /wakeflow_review_pack/);
+  assert.match(payload.agentNext, /controller-return delivery/);
+  assert.match(payload.agentNext, /host thread tool/);
+  assert.match(payload.agentNext, /record that delivery run/);
 
   const stateAfter = readJson(path.join(stateRoot, "wakeflow-state.json"));
   const progressAfter = readFileSync(path.join(stateRoot, "developer-progress.md"), "utf8");

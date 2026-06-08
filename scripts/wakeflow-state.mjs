@@ -626,10 +626,11 @@ function commandImportTargetResult() {
       stateRevisionUnchanged: state.revision,
       nextSuggestedCommand: "reduce-results",
       forbiddenConclusions: result.forbiddenConclusions,
+      agentNext: "Target result is recorded, but this is not controller acceptance. If the delivery envelope has returnRoute=controller, run wakeflow_review_pack, prepare a controller-return delivery, send it with the host thread tool, then record that delivery run.",
     },
     [
       `${write ? "Imported" : "Would import"} target result ${resultId}.`,
-      "Controller state was not changed; run reduce-results to build a review candidate.",
+      "Controller state was not changed; return to the controller when the delivery policy allows it.",
     ],
   );
 }

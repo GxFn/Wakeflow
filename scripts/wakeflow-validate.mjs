@@ -38,6 +38,7 @@ const requiredFiles = [
   "bin/wakeflow-mcp.mjs",
   "mcp/server.cjs",
   "lib/wakeflow-mcp-tools.mjs",
+  "lib/wakeflow-process.mjs",
   "scripts/wakeflow-runtime.mjs",
   "lib/wakeflow-runtime.mjs",
   "scripts/wakeflow-cli.mjs",
@@ -48,27 +49,7 @@ const requiredFiles = [
   "scripts/wakeflow-validate.mjs",
   "scripts/wakeflow-smoke.mjs",
   "scripts/wakeflow-verify.mjs",
-  "templates/wakeflow-state-machine/developer-progress.template.md",
-  "templates/wakeflow-state-machine/unified-status.template.md",
-  "templates/wakeflow-state-machine/decision-log-entry.template.md",
-  "templates/wakeflow-state-machine/task-package-entry.template.md",
-  "templates/wakeflow-state-machine/backfill-summary-entry.template.md",
-  "templates/starter-workspace/workspace/index.md",
-  "templates/starter-workspace/workspace/current/workspace-current-status.md",
-  "templates/starter-workspace/workspace/current/global-todo-board.md",
-  "templates/starter-workspace/workspace/current/design-handoff-board.md",
-  "templates/starter-workspace/workspace/current/design-handoff-inbox.md",
-  "templates/starter-workspace/workspace/current/test-exchange.md",
-  "templates/starter-workspace/workspace/workspace-record-map.md",
-  "templates/starter-workspace/ledger/requirement-designs/README.md",
-  "templates/starter-workspace/ledger/goal-stage-confirmation/README.md",
-  "templates/starter-workspace/ledger/goal-stage-confirmation/process.md",
-  "templates/starter-workspace/ledger/workspace/requirement-to-wave-execution-flow.md",
-  "templates/starter-workspace/ledger/workspace/todo-window-scheduling-policy.md",
-  "templates/starter-workspace/ledger/workspace/workspace-doc-archive-policy.md",
-  "templates/starter-workspace/ledger/workspace/archive/index.md",
-  "templates/window-support/design/AGENTS.md",
-  "templates/window-support/testing/AGENTS.md",
+  "templates/wakeflow-template-bundle.json",
   "schemas/wakeflow-state-machine/wakeflow-state.schema.json",
   "schemas/wakeflow-state-machine/task-package.schema.json",
   "schemas/wakeflow-state-machine/target-result.schema.json",
@@ -79,9 +60,6 @@ const requiredFiles = [
   "skills/wakeflow-governance/SKILL.md",
   "skills/wakeflow-governance/references/agents-rule-map.md",
   "skills/wakeflow-governance/references/wakeflow-ledgers.md",
-  "templates/window-support/testing/skills/progressive-chain-validation/SKILL.md",
-  "templates/window-support/testing/skills/progressive-chain-validation/references/metrics-contract.md",
-  "templates/window-support/testing/skills/progressive-chain-validation/templates/plan.md",
   "assets/wakeflow-mark.svg",
   "assets/wakeflow-logo.svg",
 ];
@@ -101,6 +79,7 @@ validateMcpConfig();
 await validateMcpToolDeclarations();
 validateRuntimeWhitelist();
 validateSkillSurface();
+validateTemplateBundle();
 validateTextSurface();
 
 const payload = {
@@ -398,6 +377,57 @@ function validateSkillSurface() {
   ]) {
     if (!governance.includes(required)) {
       errors.push(`wakeflow-governance skill must direct initialization through MCP: ${required}`);
+    }
+  }
+}
+
+function validateTemplateBundle() {
+  const bundle = readJson("templates/wakeflow-template-bundle.json");
+  if (!bundle) return;
+  if (bundle.version !== 1) {
+    errors.push("template bundle version must be 1");
+  }
+  if (!bundle.files || typeof bundle.files !== "object" || Array.isArray(bundle.files)) {
+    errors.push("template bundle must contain a files object");
+    return;
+  }
+  for (const required of [
+    "templates/wakeflow-state-machine/developer-progress.template.md",
+    "templates/wakeflow-state-machine/unified-status.template.md",
+    "templates/wakeflow-state-machine/decision-log-entry.template.md",
+    "templates/wakeflow-state-machine/task-package-entry.template.md",
+    "templates/wakeflow-state-machine/backfill-summary-entry.template.md",
+    "templates/starter-workspace/workspace/index.md",
+    "templates/starter-workspace/workspace/current/workspace-current-status.md",
+    "templates/starter-workspace/workspace/current/global-todo-board.md",
+    "templates/starter-workspace/workspace/current/design-handoff-board.md",
+    "templates/starter-workspace/workspace/current/design-handoff-inbox.md",
+    "templates/starter-workspace/workspace/current/test-exchange.md",
+    "templates/starter-workspace/workspace/workspace-record-map.md",
+    "templates/starter-workspace/ledger/requirement-designs/README.md",
+    "templates/starter-workspace/ledger/goal-stage-confirmation/README.md",
+    "templates/starter-workspace/ledger/goal-stage-confirmation/process.md",
+    "templates/starter-workspace/ledger/workspace/requirement-to-wave-execution-flow.md",
+    "templates/starter-workspace/ledger/workspace/todo-window-scheduling-policy.md",
+    "templates/starter-workspace/ledger/workspace/workspace-doc-archive-policy.md",
+    "templates/starter-workspace/ledger/workspace/archive/index.md",
+    "templates/window-support/design/AGENTS.md",
+    "templates/window-support/design/skills/requirement-clarification/SKILL.md",
+    "templates/window-support/design/skills/option-planning/SKILL.md",
+    "templates/window-support/design/skills/requirement-design/SKILL.md",
+    "templates/window-support/design/skills/work-slicing/SKILL.md",
+    "templates/window-support/design/skills/design-handoff/SKILL.md",
+    "templates/window-support/testing/AGENTS.md",
+    "templates/window-support/testing/skills/test-strategy/SKILL.md",
+    "templates/window-support/testing/skills/debugging-and-triage/SKILL.md",
+    "templates/window-support/testing/skills/regression-design/SKILL.md",
+    "templates/window-support/testing/skills/evidence-review/SKILL.md",
+    "templates/window-support/testing/skills/progressive-chain-validation/SKILL.md",
+    "templates/window-support/testing/skills/progressive-chain-validation/references/metrics-contract.md",
+    "templates/window-support/testing/skills/progressive-chain-validation/templates/plan.md",
+  ]) {
+    if (typeof bundle.files[required] !== "string" || bundle.files[required].trim() === "") {
+      errors.push(`template bundle missing ${required}`);
     }
   }
 }

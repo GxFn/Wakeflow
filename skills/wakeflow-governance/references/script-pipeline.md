@@ -136,7 +136,7 @@ When adding or changing a document format:
 
 1. Update the script-readable format notes in `scripts/README.md` only when the
    script contract changes.
-2. Update the relevant template in `templates/`.
+2. Update the relevant template entry in `templates/wakeflow-template-bundle.json`.
 3. Run the focused state-root tests for the affected route.
 4. Run `node scripts/wakeflow-verify.mjs --with-script-tests` when the
    active state root or dispatch boundary is affected.

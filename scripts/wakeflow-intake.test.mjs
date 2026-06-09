@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { runSync } from "../lib/wakeflow-process.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -21,7 +21,7 @@ function readJson(file) {
 }
 
 function run(script, root, args) {
-  return spawnSync("node", [script, ...args, "--root", root, "--json"], {
+  return runSync("node", [script, ...args, "--root", root, "--json"], {
     cwd: root,
     encoding: "utf8",
   });

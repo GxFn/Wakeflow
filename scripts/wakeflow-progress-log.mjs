@@ -12,6 +12,8 @@ const workspaceRoot = path.resolve(getValue("--root", wakeflowRoot));
 const write = rawArgs.includes("--write");
 const json = rawArgs.includes("--json");
 const templateRoot = path.join(wakeflowRoot, "templates/wakeflow-state-machine");
+const templateBundlePath = path.join(wakeflowRoot, "templates/wakeflow-template-bundle.json");
+let templateBundle = undefined;
 
 const sectionByType = new Map([
   ["task-package", "Task Packages"],
@@ -126,7 +128,31 @@ function atomicWrite(file, content) {
 }
 
 function readTemplate(name) {
-  return readFileSync(path.join(templateRoot, name), "utf8");
+  const file = path.join(templateRoot, name);
+  if (existsSync(file)) {
+    return readFileSync(file, "utf8");
+  }
+  const bundled = readBundledTemplate(`templates/wakeflow-state-machine/${name}`);
+  if (bundled !== null) {
+    return bundled;
+  }
+  return readFileSync(file, "utf8");
+}
+
+function readBundledTemplate(relativePath) {
+  const bundle = readTemplateBundle();
+  const content = bundle?.files?.[relativePath];
+  return typeof content === "string" ? content : null;
+}
+
+function readTemplateBundle() {
+  if (templateBundle !== undefined) return templateBundle;
+  if (!existsSync(templateBundlePath)) {
+    templateBundle = null;
+    return templateBundle;
+  }
+  templateBundle = readJson(templateBundlePath, "template bundle");
+  return templateBundle;
 }
 
 function render(template, data) {

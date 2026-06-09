@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { runSync } from "../lib/wakeflow-process.mjs";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -51,7 +51,7 @@ ${row}
 }
 
 function run({ board, id, root }) {
-  return spawnSync("node", [script, "--board", board, "--id", id, "--json"], {
+  return runSync("node", [script, "--board", board, "--id", id, "--json"], {
     cwd: root,
     encoding: "utf8",
   });

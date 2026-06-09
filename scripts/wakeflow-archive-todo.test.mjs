@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { runSync } from "../lib/wakeflow-process.mjs";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -40,7 +40,7 @@ Completed TODOs, historical sync records, and source archives are queried from [
 }
 
 function run(root, args = []) {
-  return spawnSync("node", [script, "--month", "2026-06", "--date", "2026-06-04", ...args, "--json"], {
+  return runSync("node", [script, "--month", "2026-06", "--date", "2026-06-04", ...args, "--json"], {
     cwd: root,
     encoding: "utf8",
   });

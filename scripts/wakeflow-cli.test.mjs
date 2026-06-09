@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { runSync } from "../lib/wakeflow-process.mjs";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -11,7 +11,7 @@ const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathnam
 const controlScript = path.join(workspaceRoot, "scripts/wakeflow-cli.mjs");
 
 function run(args) {
-  return spawnSync("node", [controlScript, ...args], {
+  return runSync("node", [controlScript, ...args], {
     cwd: workspaceRoot,
     encoding: "utf8",
   });

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { execFileSync } from "node:child_process";
+import { execFileText } from "../lib/wakeflow-process.mjs";
 import { loadWorkspaceConfig } from "./lib/wakeflow-config.mjs";
 
 const args = process.argv.slice(2);
@@ -41,7 +41,7 @@ function classify(command) {
 }
 
 function readProcesses() {
-  const output = execFileSync("ps", ["-axo", "pid,command"], {
+  const output = execFileText("ps", ["-axo", "pid,command"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });

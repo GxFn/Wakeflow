@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runSync } from "../lib/wakeflow-process.mjs";
 
 const args = process.argv.slice(2);
 const workspaceRoot = path.resolve(getArgValue("--root") || process.cwd());
@@ -101,7 +101,7 @@ function runCheck(check) {
   console.log(`\n## ${check.label}`);
   console.log(`$ ${[check.command, ...check.args].join(" ")}`);
 
-  const result = spawnSync(check.command, check.args, {
+  const result = runSync(check.command, check.args, {
     cwd: wakeflowRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],

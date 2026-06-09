@@ -418,9 +418,9 @@ Reference map:
   `TargetResultEnvelope` backfill.
 - `skills/wakeflow-controller/`: controller start, return, result review, and
   next-wave decisions.
-- `templates/window-support/testing/skills/progressive-chain-validation/`:
-  Test-window progressive chain validation, source-derived plans,
-  node-local isolation, scoped rounds, and metrics.
+- `templates/wakeflow-template-bundle.json`: bundled starter workspace,
+  Design/Test support surfaces, and Test-window progressive chain validation
+  assets that Wakeflow expands during setup.
 
 Hard boundaries stay here. Operational details live in skills.
 

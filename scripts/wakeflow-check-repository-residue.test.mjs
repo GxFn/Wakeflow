@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { runSync } from "../lib/wakeflow-process.mjs";
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -42,7 +42,7 @@ function makeFixture() {
 }
 
 function run(root, extraArgs = []) {
-  return spawnSync("node", [checkScript, "--root", root, "--json", ...extraArgs], {
+  return runSync("node", [checkScript, "--root", root, "--json", ...extraArgs], {
     encoding: "utf8",
   });
 }

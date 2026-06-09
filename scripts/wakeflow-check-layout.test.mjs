@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { runSync } from "../lib/wakeflow-process.mjs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -10,7 +10,7 @@ import test from "node:test";
 const wakeflowRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const checkScript = path.join(wakeflowRoot, "scripts/wakeflow-check-layout.mjs");
 const nextWorkScript = path.join(wakeflowRoot, "scripts/wakeflow-next-work.mjs");
-const starterWorkspaceTemplate = path.join(wakeflowRoot, "templates/starter-workspace/workspace");
+const templateBundle = JSON.parse(readFileSync(path.join(wakeflowRoot, "templates/wakeflow-template-bundle.json"), "utf8"));
 
 function writeFile(file, content) {
   mkdirSync(path.dirname(file), { recursive: true });
@@ -19,7 +19,7 @@ function writeFile(file, content) {
 
 function makeStarterFixture() {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-layout-"));
-  cpSync(starterWorkspaceTemplate, path.join(root, ".workspace-active/workspace"), { recursive: true });
+  writeBundledTemplates("templates/starter-workspace/workspace/", path.join(root, ".workspace-active/workspace"));
   writeFile(path.join(root, "AGENTS.md"), "# Fixture Workspace\n");
   writeFile(
     path.join(root, "workspace.config.json"),
@@ -50,8 +50,16 @@ function makeStarterFixture() {
   return root;
 }
 
+function writeBundledTemplates(prefix, targetRoot) {
+  for (const [relativePath, content] of Object.entries(templateBundle.files)) {
+    if (!relativePath.startsWith(prefix)) continue;
+    const target = path.join(targetRoot, relativePath.slice(prefix.length));
+    writeFile(target, content);
+  }
+}
+
 function run(script, root, args = []) {
-  return spawnSync("node", [script, "--root", root, "--json", ...args], {
+  return runSync("node", [script, "--root", root, "--json", ...args], {
     cwd: root,
     encoding: "utf8",
   });

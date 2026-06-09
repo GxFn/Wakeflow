@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { execFileSync } from "node:child_process";
+import { execFileText } from "../lib/wakeflow-process.mjs";
 import { loadWorkspaceConfig } from "./lib/wakeflow-config.mjs";
 
 const args = process.argv.slice(2);
@@ -15,7 +15,7 @@ const internalWorkspacePrefixes = new Set(
 );
 
 function git(args) {
-  return execFileSync("git", ["-C", workspaceRoot, ...args], { encoding: "utf8" }).trim();
+  return execFileText("git", ["-C", workspaceRoot, ...args], { encoding: "utf8" }).trim();
 }
 
 const tracked = git(["ls-files", "-s"])

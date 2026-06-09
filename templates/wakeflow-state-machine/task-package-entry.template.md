@@ -1,1 +1,0 @@
-- {{timestamp}}: `{{taskPackageId}}` - {{summary}}; Source: {{sourceRef}}.

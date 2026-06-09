@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
+import { runSync } from "../lib/wakeflow-process.mjs";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -47,7 +47,7 @@ node --test scripts/foo.test.mjs
 }
 
 function run(root) {
-  return spawnSync("node", [checkScript, "--root", root, "--json"], {
+  return runSync("node", [checkScript, "--root", root, "--json"], {
     encoding: "utf8",
   });
 }

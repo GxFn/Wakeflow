@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { runSync } from "../lib/wakeflow-process.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -108,14 +108,14 @@ function makeFixture() {
 }
 
 function run(root, args) {
-  return spawnSync("node", [script, ...args, "--root", root, "--json"], {
+  return runSync("node", [script, ...args, "--root", root, "--json"], {
     cwd: root,
     encoding: "utf8",
   });
 }
 
 function runState(root, args) {
-  return spawnSync("node", [stateScript, ...args, "--root", root, "--json"], {
+  return runSync("node", [stateScript, ...args, "--root", root, "--json"], {
     cwd: root,
     encoding: "utf8",
   });
@@ -161,7 +161,7 @@ function prepareDispatch(root, stateRootRef, options = {}) {
 
 test("help exposes state-root commands and rejects old dispatch routes", () => {
   const { root } = makeFixture();
-  const help = spawnSync("node", [script, "--help", "--root", root], { cwd: root, encoding: "utf8" });
+  const help = runSync("node", [script, "--help", "--root", root], { cwd: root, encoding: "utf8" });
   assert.equal(help.status, 0, help.stderr || help.stdout);
   assert.match(help.stdout, /prepare-dispatch-from-state/);
   assert.doesNotMatch(help.stdout, /create-dispatch/);
@@ -838,7 +838,7 @@ test("record-delivery-run infers workspace root from an absolute delivery file",
   const prepared = prepareDispatch(root, stateRootRef);
   const absoluteDeliveryFile = path.join(root, prepared.deliveryFile);
 
-  const recorded = spawnSync("node", [
+  const recorded = runSync("node", [
     script,
     "record-delivery-run",
     "--delivery-file",

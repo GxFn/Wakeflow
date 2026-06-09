@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runSync } from "../lib/wakeflow-process.mjs";
 import { loadWorkspaceConfig } from "./lib/wakeflow-config.mjs";
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
@@ -326,7 +326,7 @@ function buildSteps() {
 function runStep(step) {
   console.log(`\n## ${step.label}`);
   console.log(`$ ${shellDisplay(step)}`);
-  const result = spawnSync(step.command, step.args, {
+  const result = runSync(step.command, step.args, {
     cwd: wakeflowRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -345,7 +345,7 @@ function runStatusJson(steps) {
   let ok = true;
 
   for (const step of steps) {
-    const result = spawnSync(step.command, step.args, {
+    const result = runSync(step.command, step.args, {
       cwd: wakeflowRoot,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],

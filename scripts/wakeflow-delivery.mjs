@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { spawnProcess } from "../lib/wakeflow-process.mjs";
 import { controllerReviewScope } from "./lib/wakeflow-review-scope.mjs";
 
 const args = process.argv.slice(2);
@@ -804,7 +804,7 @@ function startKeepLive({ automationRunId }) {
   });
 
   try {
-    const worker = spawn(process.execPath, keepLiveWorkerArgs(current, token, automationRunId), {
+    const worker = spawnProcess(process.execPath, keepLiveWorkerArgs(current, token, automationRunId), {
       detached: true,
       stdio: "ignore",
     });
@@ -1056,7 +1056,7 @@ function commandKeepLiveWorker() {
   };
 
   try {
-    child = spawn(commandName, childArgs, { stdio: "ignore" });
+    child = spawnProcess(commandName, childArgs, { stdio: "ignore" });
   } catch (error) {
     writeKeepLiveControl({
       version: keepLiveVersion,

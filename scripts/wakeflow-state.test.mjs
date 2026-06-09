@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { runSync } from "../lib/wakeflow-process.mjs";
 import test from "node:test";
 
 const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
@@ -19,14 +19,14 @@ function makeRoot() {
 }
 
 function run(args, cwd = workspaceRoot) {
-  return spawnSync("node", [script, ...args], {
+  return runSync("node", [script, ...args], {
     cwd,
     encoding: "utf8",
   });
 }
 
 function runScript(targetScript, args, cwd = workspaceRoot) {
-  return spawnSync("node", [targetScript, ...args], {
+  return runSync("node", [targetScript, ...args], {
     cwd,
     encoding: "utf8",
   });

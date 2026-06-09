@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { execFileText } from "../lib/wakeflow-process.mjs";
 import { loadWorkspaceConfig } from "./lib/wakeflow-config.mjs";
 
 const args = process.argv.slice(2);
@@ -25,7 +25,7 @@ const configuredRepositories = new Map(
 
 function runGit(repoPath, args, options = {}) {
   try {
-    const output = execFileSync("git", ["-C", repoPath, ...args], {
+    const output = execFileText("git", ["-C", repoPath, ...args], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });

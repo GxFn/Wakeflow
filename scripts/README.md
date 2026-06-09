@@ -59,7 +59,7 @@ Current scripts:
   onto the current scripts without replacing their dry-run / write gates. Use
   `--print` to inspect the exact commands before running them.
 - `wakeflow-state.mjs`: state-root manager. `init` creates a per-demand
-  machine directory from `templates/wakeflow-state-machine/`; `add-task-package`
+  machine directory from `templates/wakeflow-template-bundle.json`; `add-task-package`
   writes task package JSON and moves an intake / rework demand back to
   `planned`; `import-target-result` stores result evidence; `reduce-results`
   creates review candidates; `decide-review` records explicit total-control

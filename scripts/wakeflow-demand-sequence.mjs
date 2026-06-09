@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runSync } from "../lib/wakeflow-process.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const scriptsDir = path.dirname(scriptPath);
@@ -279,7 +279,7 @@ function sequenceSummary(manifest) {
 }
 
 function runControllerState(argsForScript) {
-  const result = spawnSync(process.execPath, [path.join(scriptsDir, "wakeflow-state.mjs"), ...argsForScript], {
+  const result = runSync(process.execPath, [path.join(scriptsDir, "wakeflow-state.mjs"), ...argsForScript], {
     cwd: workspaceRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -295,7 +295,7 @@ function runControllerState(argsForScript) {
 }
 
 function runRenderProgressDoc(stateRoot) {
-  const result = spawnSync(process.execPath, [
+  const result = runSync(process.execPath, [
     path.join(scriptsDir, "wakeflow-render-progress.mjs"),
     "--root",
     workspaceRoot,

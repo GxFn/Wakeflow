@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { spawnProcess } from "../lib/wakeflow-process.mjs";
 import { runWakeflowRuntime } from "../lib/wakeflow-runtime.mjs";
 
 const root = mkdtempSync(path.join(tmpdir(), "wakeflow-smoke-"));
@@ -108,7 +108,7 @@ async function runMcpSmoke(rootPath) {
   const server = mcpConfig.mcpServers?.wakeflow;
   if (!server) throw new Error("Wakeflow MCP config is missing mcpServers.wakeflow");
   const cwd = server.cwd === "." ? process.cwd() : path.resolve(process.cwd(), server.cwd ?? ".");
-  const child = spawn(server.command, server.args, {
+  const child = spawnProcess(server.command, server.args, {
     cwd,
     stdio: ["pipe", "pipe", "pipe"],
   });

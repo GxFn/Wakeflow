@@ -4,14 +4,14 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { runSync } from "../lib/wakeflow-process.mjs";
 import test from "node:test";
 
 const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const collectScript = path.join(workspaceRoot, "scripts/wakeflow-repo-status.mjs");
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+  const result = runSync(command, args, {
     encoding: "utf8",
     ...options,
   });

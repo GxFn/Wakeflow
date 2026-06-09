@@ -229,7 +229,7 @@ Wakeflow 把源码、active runtime 和长期记录分开：
 | --- | --- |
 | `skills/` | 随插件安装的可复用操作说明。 |
 | `scripts/` | 插件打包的运行时实现和验证脚本。 |
-| `templates/` | starter state、Design/Test 和 ledger skeletons。 |
+| `templates/wakeflow-template-bundle.json` | setup 时展开的 starter state、Design/Test 和 ledger skeletons bundle。 |
 | `.workspace-active/` | 目标工作区中的当前 active work；被 Git 忽略。 |
 | `.workspace-local/` | 机器本地 thread registry、派生 runtime views 和 local state；被 Git 忽略。 |
 | `wakeflow-ledger/` | 项目特定的长期记录，不属于可复用 Wakeflow 源码。 |
@@ -279,7 +279,7 @@ npm test
 | `bin/wakeflow-mcp.mjs` | MCP server entrypoint 的兼容 wrapper。 |
 | `scripts/` | setup、state、delivery、intake、archive、validation 和 CLI runtime。 |
 | `skills/` | controller、target、governance 和 validation 操作手册。 |
-| `templates/` | 已安装工作区 starter documents 和 support surfaces。 |
+| `templates/wakeflow-template-bundle.json` | 已安装工作区 starter documents 和 support surfaces 的 bundle，用于控制 marketplace scan 文件数。 |
 | `assets/` | Marketplace 和插件展示资源。 |
 
 详细命令说明在 [scripts/README.md](scripts/README.md)。顶层 README 解释系统模型；

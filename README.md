@@ -284,7 +284,7 @@ Wakeflow keeps source, active runtime, and durable records separate:
 | --- | --- |
 | `skills/` | Reusable operating instructions installed with the plugin. |
 | `scripts/` | Runtime implementation and validation scripts packaged by the plugin. |
-| `templates/` | Starter state, Design/Test, and ledger skeletons. |
+| `templates/wakeflow-template-bundle.json` | Bundled starter state, Design/Test, and ledger skeletons expanded during setup. |
 | `.workspace-active/` | Current active work in a target workspace; ignored by Git. |
 | `.workspace-local/` | Machine-local thread registry, derived runtime views, and local state; ignored by Git. |
 | `wakeflow-ledger/` | Project-specific durable records outside reusable Wakeflow source. |
@@ -342,7 +342,7 @@ Common source areas:
 | `bin/wakeflow-mcp.mjs` | Compatibility wrapper for the MCP server entrypoint. |
 | `scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime. |
 | `skills/` | Controller, target, governance, and validation operating manuals. |
-| `templates/` | Installed workspace starter documents and support surfaces. |
+| `templates/wakeflow-template-bundle.json` | Installed workspace starter documents and support surfaces, bundled for marketplace scan size. |
 | `assets/` | Marketplace and plugin presentation assets. |
 
 Detailed command references live in [scripts/README.md](scripts/README.md).

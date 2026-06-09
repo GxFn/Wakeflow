@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { runSync } from "../lib/wakeflow-process.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -34,7 +34,7 @@ function makeRoot(prefix) {
 }
 
 function runNode(script, args, root) {
-  return spawnSync("node", [script, ...args], {
+  return runSync("node", [script, ...args], {
     cwd: workspaceRoot,
     encoding: "utf8",
     env: {

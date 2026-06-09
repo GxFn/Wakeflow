@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runSync } from "../lib/wakeflow-process.mjs";
 import { loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
@@ -171,7 +171,7 @@ function runDesignImport({ designKey, board }) {
   if (board) {
     args.push("--board", board);
   }
-  const result = spawnSync(process.execPath, args, {
+  const result = runSync(process.execPath, args, {
     cwd: workspaceRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],

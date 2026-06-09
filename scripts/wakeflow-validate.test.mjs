@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { runSync } from "../lib/wakeflow-process.mjs";
 import {
   cpSync,
   mkdirSync,
@@ -18,7 +18,7 @@ const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathnam
 const validateScript = path.join(workspaceRoot, "scripts/wakeflow-validate.mjs");
 
 function run(root) {
-  return spawnSync("node", [validateScript, "--root", root], {
+  return runSync("node", [validateScript, "--root", root], {
     cwd: workspaceRoot,
     encoding: "utf8",
   });

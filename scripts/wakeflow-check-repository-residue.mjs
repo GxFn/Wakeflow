@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
+import { execFileText } from "../lib/wakeflow-process.mjs";
 import { getArgValue, loadWorkspaceConfig, resolveConfigPath } from "./lib/wakeflow-config.mjs";
 
 const args = process.argv.slice(2);
@@ -64,7 +64,7 @@ function gitTrackedPaths(repoRoot, relPath) {
     return [];
   }
   try {
-    return execFileSync("git", ["-C", repoRoot, "ls-files", relPath], {
+    return execFileText("git", ["-C", repoRoot, "ls-files", relPath], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     })

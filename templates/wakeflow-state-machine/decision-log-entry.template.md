@@ -1,1 +1,0 @@
-- {{timestamp}}: {{decision}}. Event: {{eventId}}. Evidence: {{evidenceRef}}.

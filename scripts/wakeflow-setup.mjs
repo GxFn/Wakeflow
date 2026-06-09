@@ -27,6 +27,8 @@ const command = rawArgs[0] ?? "help";
 const args = rawArgs.slice(1);
 const json = args.includes("--json");
 const write = args.includes("--write");
+const templateBundleFile = "templates/wakeflow-template-bundle.json";
+const templateBundleCache = new Map();
 
 class CliExit extends Error {}
 
@@ -1317,11 +1319,47 @@ This repository can act as an external test window for ${config.workspaceName}.
 }
 
 function readWakeflowFile(wakeflowRoot, relativePath) {
+  const normalizedPath = slash(relativePath);
   const targetFile = path.join(wakeflowRoot, relativePath);
   if (existsSync(targetFile)) {
     return readFileSync(targetFile, "utf8");
   }
-  return readFileSync(path.join(defaultWakeflowRoot, relativePath), "utf8");
+  const bundled = readBundledWakeflowFile(wakeflowRoot, normalizedPath);
+  if (bundled !== null) {
+    return bundled;
+  }
+  const defaultFile = path.join(defaultWakeflowRoot, relativePath);
+  if (existsSync(defaultFile)) {
+    return readFileSync(defaultFile, "utf8");
+  }
+  const fallbackBundled = readBundledWakeflowFile(defaultWakeflowRoot, normalizedPath);
+  if (fallbackBundled !== null) {
+    return fallbackBundled;
+  }
+  return readFileSync(defaultFile, "utf8");
+}
+
+function readBundledWakeflowFile(wakeflowRoot, relativePath) {
+  const bundle = readTemplateBundle(wakeflowRoot);
+  const content = bundle?.files?.[relativePath];
+  return typeof content === "string" ? content : null;
+}
+
+function readTemplateBundle(wakeflowRoot) {
+  const bundlePath = path.join(wakeflowRoot, templateBundleFile);
+  if (templateBundleCache.has(bundlePath)) {
+    return templateBundleCache.get(bundlePath);
+  }
+  if (!existsSync(bundlePath)) {
+    templateBundleCache.set(bundlePath, null);
+    return null;
+  }
+  const bundle = readJson(bundlePath);
+  if (!bundle || typeof bundle.files !== "object" || Array.isArray(bundle.files)) {
+    fail(`${templateBundleFile} must contain a files object.`);
+  }
+  templateBundleCache.set(bundlePath, bundle);
+  return bundle;
 }
 
 function isStarterGeneratedContent(existing) {

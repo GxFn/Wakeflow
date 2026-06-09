@@ -125,7 +125,6 @@ function validatePackage() {
   const manifest = readJson("package.json");
   if (!manifest) return;
   if (manifest.name !== "wakeflow") errors.push("package name must be wakeflow");
-  if (manifest.author?.name !== "GxFn") errors.push("package author name must be GxFn");
   if (manifest.private === true) errors.push("package.json must not be private for release packaging");
   if (manifest.type !== "module") errors.push("package type must be module");
   if (manifest.license !== "MIT") errors.push("package license must be MIT");
@@ -164,7 +163,7 @@ function validatePluginManifest() {
   if (!manifest) return;
   if (manifest.name !== "wakeflow") errors.push("plugin name must be wakeflow");
   if (manifest.interface?.displayName !== "Wakeflow") errors.push("plugin displayName must be Wakeflow");
-  if (manifest.author?.name !== "GxFn") errors.push("plugin author name must be GxFn");
+  if (manifest.author?.name !== "gaoxuefeng") errors.push("plugin author name must be gaoxuefeng");
   if (manifest.interface?.developerName !== "GxFn") errors.push("plugin developerName must be GxFn");
   if (manifest.skills !== "./skills/") errors.push("plugin skills path must be ./skills/");
   if (manifest.mcpServers !== "./.mcp.json") errors.push("plugin mcpServers path must be ./.mcp.json");

@@ -3,10 +3,6 @@
   "version": "0.1.1",
   "type": "module",
   "description": "Unattended workflow loops for multi-window agent work.",
-  "author": {
-    "name": "GxFn",
-    "url": "https://github.com/GxFn"
-  },
   "license": "MIT",
   "homepage": "https://github.com/GxFn/Wakeflow#readme",
   "repository": {

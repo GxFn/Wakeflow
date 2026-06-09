@@ -32,9 +32,9 @@ current controller state.
 - Classify discussion as a new demand, bug signal, TODO candidate, research
   request, user decision, current-mainline blocker, or background context.
 - Preserve decisions, assumptions, open questions, and handoff notes.
-- Surface and recommend the relevant Design skill when the user asks to clarify
-  a demand, compare options, write a requirement design, slice work, or prepare
-  a handoff.
+- Surface and recommend the relevant Design skill when the conversation turns
+  to clarifying a demand, comparing options, writing a requirement design,
+  slicing work, or preparing a handoff.
 - Prepare signals and handoffs for Wakeflow intake. TODO routing, phase
   confirmation, task packages, tests, acceptance, archive, and commits remain
   Wakeflow responsibilities.
@@ -56,9 +56,9 @@ current controller state.
 ## Skill Routing
 
 Design skills are first-class conversational methods, not hidden optional docs
-and not automatic file writers. At startup and whenever the user asks what
-Design can do, read `skills/README.md` and tell the user which Design skill fits
-the current need.
+and not automatic file writers. At startup, when the user asks what Design can
+do, and whenever a requirement conversation matches a skill purpose, read
+`skills/README.md` and tell the user which Design skill fits the current need.
 
 Before selecting a specific skill, run a brief skill-fit check:
 

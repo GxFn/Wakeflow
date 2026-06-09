@@ -776,6 +776,7 @@ ${dispatchPacketRule}
 - Child windows do not create target-to-target next-hop delivery by default. Evidence repair, redispatch, and next phases are decided by controller review. If delivery has \`returnRoute=controller\` and \`review-results\` shows that \`DispatchGroup.returnPolicy\` allows a callback, create exactly one controller-return envelope with \`build-controller-return\`, returning by default to the original controller named by \`DispatchGroup.controllerWindow\`. Then complete the real direct-thread send, readback, and \`record-delivery-run\`. A controller return is complete only when a \`DirectThreadDeliveryRun\` exists with \`status=sent\` and \`readback.ok=true\`. The full group snapshot stays in the controller-return envelope; the visible prompt shows only non-empty exceptional targets and must not treat one target backfill as whole-group completion.
 ${testWindowDeliveryBoundaryLine(context)}
 - Thread ids may only be written to Wakeflow local runtime. Do not write them to tracked documents, backfill text, or GitHub.
+${skillAssistanceText(context, samePathWindowNames)}
 
 ### Document Destinations
 
@@ -797,6 +798,21 @@ function primaryRepositoryForScope(context, repo) {
     ?? samePathRepos.find((candidate) => candidate.managedAgents !== false)
     ?? samePathRepos[0]
     ?? repo;
+}
+
+function skillAssistanceText(context, samePathWindowNames) {
+  const roleLines = [];
+  if (samePathWindowNames.includes(context.config.designWindow)) {
+    roleLines.push(`- Design work should proactively surface relevant local Design skills while the user is clarifying requirements, comparing options, writing a requirement design, slicing work, or preparing a handoff. Read \`skills/README.md\` when available, name the smallest matching skill, explain why it helps, and use it in conversation before writing tracked Design artifacts. If no skill is genuinely needed, say so briefly and answer directly.`);
+  }
+  if (samePathWindowNames.includes(context.config.testWindow)) {
+    roleLines.push(`- Test work should proactively surface relevant local Test skills while planning validation, reproducing or triaging failures, designing regressions, reviewing evidence, or validating long chains. Read \`skills/README.md\` when available, name the smallest matching skill, explain why it helps, and use it to shape evidence before running or recording test work. If no skill is genuinely needed, say so briefly and proceed with the assigned test boundary.`);
+  }
+  if (roleLines.length === 0) return "";
+  return `
+### Skill Assistance
+
+${roleLines.join("\n")}`;
 }
 
 function scopeBlockContent(existing) {
@@ -1262,7 +1278,10 @@ Use this directory when the user does not have an external ${config.testWindow} 
 - Current Test work: \`docs/current/\`
 - Default config: \`config/defaults.json\`
 - Test-owned scripts: \`scripts/\`
-- Default Test skills: \`skills/\`
+- Test skill map: \`skills/README.md\`
+- Test skills are evidence methods first. Use them proactively to plan
+  validation, triage failures, design regressions, review evidence, and handle
+  long-chain validation before recording backfill.
 - Testing operation policy: \`docs/testing-operation-policy.md\`
 - Test handoff template: \`templates/test-handoff-template.md\`
 - Rule: only run real test work when a controller state root assigns a matching task package and test card.

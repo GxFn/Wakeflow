@@ -870,12 +870,18 @@ test("write-agents can explicitly include unmanaged Design/Test windows while sk
   const designAgents = readFileSync(path.join(design, "AGENTS.md"), "utf8");
   assert.match(designAgents, /Window name: `Design`/);
   assert.match(designAgents, /Design handoff board: `docs\/current\/workspace-handoff-board\.md`/);
+  assert.match(designAgents, /### Skill Assistance/);
+  assert.match(designAgents, /Design work should proactively surface relevant local Design skills/);
+  assert.match(designAgents, /name the smallest matching skill/);
   assert.doesNotMatch(designAgents, /must not dispatch implementation/);
 
   const testAgents = readFileSync(path.join(testWindow, "AGENTS.md"), "utf8");
   assert.match(testAgents, /Window name: `Test`/);
   assert.match(testAgents, /Test exchange projection: `\.\.\/Wakeflow\/\.workspace-active\/workspace\/current\/test-exchange\.md`/);
   assert.match(testAgents, /Non-Test windows must not create, process, or verify Test delivery/);
+  assert.match(testAgents, /### Skill Assistance/);
+  assert.match(testAgents, /Test work should proactively surface relevant local Test skills/);
+  assert.match(testAgents, /validating long chains/);
   assert.doesNotMatch(testAgents, /default test queue/);
 });
 
@@ -907,6 +913,8 @@ test("write-agents supports multiple workspace windows sharing one AGENTS.md", (
   assert.match(sharedAgents, /only handles dispatch packets for the windows listed in this access card/);
   assert.match(sharedAgents, /Non-Test windows must not create, process, or verify TestWindow \/ TestIDE delivery/);
   assert.match(sharedAgents, /currentWindow/);
+  assert.match(sharedAgents, /### Skill Assistance/);
+  assert.match(sharedAgents, /Test work should proactively surface relevant local Test skills/);
 
   const ideProfile = runJson(fixture, ["access-profiles", "--window", "TestIDE"]).profiles[0];
   const testProfile = runJson(fixture, ["access-profiles", "--window", "TestWindow"]).profiles[0];
@@ -981,6 +989,7 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   assert.match(designAgents, /skill-fit check/);
   assert.match(designAgents, /Default to chat first/);
   assert.match(designAgents, /not automatic file writers/);
+  assert.match(designAgents, /whenever a requirement conversation matches a skill purpose/);
   assert.doesNotMatch(designAgents, /optional Design-local methods/);
   const designReadme = readFileSync(path.join(fixture.parent, "Design/README.md"), "utf8");
   assert.match(designReadme, /Design skill map: `skills\/README\.md`/);
@@ -993,6 +1002,7 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   const designSkills = readFileSync(path.join(fixture.parent, "Design/skills/README.md"), "utf8");
   assert.match(designSkills, /Interaction Contract/);
   assert.match(designSkills, /Before selecting a skill, do a skill-fit check/);
+  assert.match(designSkills, /proactively name the relevant skill/);
   assert.match(designSkills, /Do not create or update tracked Design documents/);
   const requirementClarification = readFileSync(path.join(fixture.parent, "Design/skills/requirement-clarification/SKILL.md"), "utf8");
   assert.match(requirementClarification, /Interaction First/);
@@ -1023,6 +1033,17 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   assert.equal(existsSync(path.join(fixture.parent, "Test/skills/progressive-chain-validation/templates/plan.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/docs/testing-operation-policy.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/templates/test-handoff-template.md")), true);
+  const testAgents = readFileSync(path.join(fixture.parent, "Test/AGENTS.md"), "utf8");
+  assert.match(testAgents, /`skills\/README\.md`/);
+  assert.match(testAgents, /Skill Routing/);
+  assert.match(testAgents, /proactively recommend the smallest matching Test skill/);
+  assert.match(testAgents, /skills\/evidence-review\/SKILL\.md/);
+  const testReadme = readFileSync(path.join(fixture.parent, "Test/README.md"), "utf8");
+  assert.match(testReadme, /Test skill map: `skills\/README\.md`/);
+  assert.match(testReadme, /Test skills are evidence methods first/);
+  const testSkills = readFileSync(path.join(fixture.parent, "Test/skills/README.md"), "utf8");
+  assert.match(testSkills, /How To Use These Skills/);
+  assert.match(testSkills, /Use these skills proactively/);
   assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/BaseWindow/README.md")), true);
 });
 

@@ -12,9 +12,10 @@ an exception.
 
 ## Interaction Contract
 
-Design skills are conversational methods first. When a user asks to improve a
-requirement, compare routes, design behavior, slice work, or prepare a handoff,
-name the relevant skill and use it in the conversation before writing files.
+Design skills are conversational methods first. When the conversation turns to
+improving a requirement, comparing routes, designing behavior, slicing work, or
+preparing a handoff, proactively name the relevant skill and use it in the
+conversation before writing files.
 
 Before selecting a skill, do a skill-fit check:
 

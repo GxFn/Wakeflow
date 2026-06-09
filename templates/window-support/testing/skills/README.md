@@ -8,6 +8,21 @@ Test skills do not accept product work, dispatch new windows, mutate controller
 state, or take over product implementation unless a controller state root
 explicitly authorizes it.
 
+## How To Use These Skills
+
+Use these skills proactively while Test is executing an assigned test card or
+answering a controller evidence question:
+
+- If the work involves validation planning, reproduction, triage, regression
+  design, evidence review, or long-chain validation, name the smallest matching
+  skill and explain why it helps before running commands or recording backfill.
+- If a skill is only possibly useful, recommend it as the next method and ask
+  only for the missing scope decision that would change the test boundary.
+- If the current evidence question is straightforward and a skill would add no
+  value, say that briefly and proceed inside the assigned boundary.
+- Do not blend several skills into one vague pass. Use them in sequence and stop
+  when the current evidence question is answered.
+
 ## Installed Skills
 
 - `test-strategy/SKILL.md`

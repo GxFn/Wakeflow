@@ -1,9 +1,9 @@
 {
   "name": "wakeflow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Unattended control loops for multi-window agent work.",
   "author": {
-    "name": "gaoxuefeng",
+    "name": "GxFn",
     "url": "https://github.com/GxFn"
   },
   "homepage": "https://github.com/GxFn/Wakeflow#readme",

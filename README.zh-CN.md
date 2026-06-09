@@ -80,7 +80,7 @@ codex plugin marketplace add GxFn/Wakeflow --ref main
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-codex plugin marketplace add GxFn/Wakeflow --ref v0.1.0
+codex plugin marketplace add GxFn/Wakeflow --ref v0.1.1
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，

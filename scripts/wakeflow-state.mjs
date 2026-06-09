@@ -144,6 +144,16 @@ function readJson(file, label = "JSON file") {
   return null;
 }
 
+function readJsonIfExists(file, label = "JSON file") {
+  if (!existsSync(file)) return null;
+  try {
+    return JSON.parse(readFileSync(file, "utf8"));
+  } catch (error) {
+    fail(`Invalid ${label} ${relative(file)}: ${error.message}`);
+  }
+  return null;
+}
+
 function stateRootFromArg() {
   const stateRoot = resolveFromWorkspace(requireValue("--state-root"));
   const config = loadWorkspaceConfig({ workspaceRoot, args: options });
@@ -554,6 +564,60 @@ function commandAddTaskPackage() {
   );
 }
 
+function deliveryEnvelopeFileForId(deliveryId) {
+  return path.join(workspaceRoot, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${slug(deliveryId)}.json`);
+}
+
+function targetTaskDeliveryContext(targetTask) {
+  const delivery = targetTask.delivery ?? null;
+  const deliveryId = delivery?.deliveryId ?? null;
+  const envelopeFile = delivery?.deliveryFile
+    ? resolveFromWorkspace(delivery.deliveryFile)
+    : deliveryId
+      ? deliveryEnvelopeFileForId(deliveryId)
+      : null;
+  if (envelopeFile) {
+    ensureInsideAllowedRoots(envelopeFile, "delivery envelope", [workspaceRoot]);
+  }
+  const envelope = envelopeFile ? readJsonIfExists(envelopeFile, "delivery envelope") : null;
+  const returnRoute = envelope?.returnRoute ?? null;
+  const returnPolicy = envelope?.returnPolicy ?? null;
+  const dispatchGroup = envelope?.dispatchGroup ?? delivery?.dispatchGroup ?? null;
+
+  return {
+    deliveryId,
+    deliveryFile: delivery?.deliveryFile ?? null,
+    deliveryRunId: delivery?.deliveryRunId ?? null,
+    dispatchGroup,
+    deliveryEnvelopeFile: envelope ? relative(envelopeFile) : null,
+    deliveryEnvelopeFound: Boolean(envelope),
+    resolution: !deliveryId
+      ? "missing-delivery-metadata"
+      : !envelope
+        ? "missing-delivery-envelope"
+        : returnRoute === "controller"
+          ? "controller-return-required"
+          : "no-controller-return",
+    returnRoute,
+    returnPolicy,
+    controllerWindow: envelope?.controllerWindow ?? null,
+    controllerReturnRequired: returnRoute === "controller",
+  };
+}
+
+function targetResultAgentNext(deliveryContext) {
+  if (deliveryContext.controllerReturnRequired) {
+    return "Target result is recorded, but this is not controller acceptance. The resolved delivery envelope has returnRoute=controller; run wakeflow_review_pack, prepare a controller-return delivery, send it with the host thread tool, then run wakeflow_record_delivery for that controller-return envelope.";
+  }
+  if (deliveryContext.deliveryId && !deliveryContext.deliveryEnvelopeFound) {
+    return "Target result is recorded, but this is not controller acceptance. The target task references a delivery id, but the local delivery envelope was not found; stop and report the missing local delivery envelope instead of assuming no controller callback.";
+  }
+  if (!deliveryContext.deliveryId) {
+    return "Target result is recorded, but this is not controller acceptance. No recorded delivery metadata was found on this target task; stop and report unless the controller sends another task.";
+  }
+  return "Target result is recorded, but this is not controller acceptance. The resolved delivery envelope does not require a controller return; stop unless the controller sends another task.";
+}
+
 function commandImportTargetResult() {
   const stateRoot = stateRootFromArg();
   const targetTaskId = requireValue("--target-task-id");
@@ -586,11 +650,14 @@ function commandImportTargetResult() {
   const evidenceRefs = valuesFor("--evidence-ref");
   const verification = valuesFor("--verification");
   const risks = valuesFor("--risk");
+  const deliveryContext = targetTaskDeliveryContext(targetTask);
   const result = {
     schemaVersion,
     resultId,
     demandKey: state.demandKey,
     taskPackageId: targetTask.taskPackageId,
+    dispatchGroup: deliveryContext.dispatchGroup ?? undefined,
+    stateRoot: relative(stateRoot),
     targetWindow,
     targetTaskId,
     status,
@@ -598,6 +665,8 @@ function commandImportTargetResult() {
     evidenceRefs,
     verification,
     risks,
+    deliveryContext,
+    controllerActionRequired: Boolean(deliveryContext.controllerReturnRequired),
     createdAt,
     stateRevisionObserved: state.revision,
     forbiddenConclusions: [
@@ -624,10 +693,26 @@ function commandImportTargetResult() {
       resultFile: relative(resultFile),
       targetTaskId,
       status,
+      dispatchGroup: deliveryContext.dispatchGroup,
+      deliveryContext,
+      controllerReturn: {
+        required: Boolean(deliveryContext.controllerReturnRequired),
+        route: deliveryContext.returnRoute,
+        policy: deliveryContext.returnPolicy,
+        deliveryEnvelopeFile: deliveryContext.deliveryEnvelopeFile,
+        nextCommands: deliveryContext.controllerReturnRequired
+          ? [
+              "wakeflow_review_pack",
+              "wakeflow_prepare_delivery direction=controller-return",
+              "send envelope.prompt with the host thread tool",
+              "wakeflow_record_delivery",
+            ]
+          : [],
+      },
       stateRevisionUnchanged: state.revision,
       nextSuggestedCommand: "reduce-results",
       forbiddenConclusions: result.forbiddenConclusions,
-      agentNext: "Target result is recorded, but this is not controller acceptance. If the delivery envelope has returnRoute=controller, run wakeflow_review_pack, prepare a controller-return delivery, send it with the host thread tool, then record that delivery run.",
+      agentNext: targetResultAgentNext(deliveryContext),
     },
     [
       `${write ? "Imported" : "Would import"} target result ${resultId}.`,

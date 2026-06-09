@@ -57,15 +57,23 @@ state root, or human context, stop and report instead of guessing.
    - Use the Wakeflow MCP `wakeflow_record_target_result` tool for the result
      envelope. This is one narrow file/state action: it records target evidence
      only, and it does not review, accept, dispatch, send, or return.
+   - Read the tool response's `deliveryContext` / `controllerReturn` fields.
+     `returnRoute` and `returnPolicy` live in the local delivery envelope, not
+     the controller state root. Do not decide "no callback" by searching only
+     `wakeflow-state.json`.
    - Report `completed`, `blocked`, or `needs-review` honestly.
    - Include evidence references and residual risks.
 6. Return to the controller only when allowed.
    - Target-to-target next-hop delivery is forbidden by default.
-   - If `returnRoute=controller` and the dispatch group policy allows a return,
-     use `wakeflow_review_pack` to confirm the group is ready or blocked, then
-     use `wakeflow_prepare_delivery` with `direction=controller-return` to build
+   - If `wakeflow_record_target_result` reports `controllerReturn.required=true`
+     or the local delivery envelope has `returnRoute=controller`, use
+     `wakeflow_review_pack` to confirm the group is ready or blocked, then use
+     `wakeflow_prepare_delivery` with `direction=controller-return` to build
      exactly one controller-return envelope for the dispatch group's stored
      `controllerWindow`.
+   - If the target task references a delivery id but the local delivery envelope
+     cannot be found, stop and report that missing local envelope; do not assume
+     no callback is needed.
    - Complete the real host send/readback with the same host thread tool used
      for controller-to-target delivery, then use `wakeflow_record_delivery` to
      record the delivery run.

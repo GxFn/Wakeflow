@@ -9,6 +9,7 @@ import test from "node:test";
 
 const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const script = path.join(workspaceRoot, "scripts/wakeflow-delivery.mjs");
+const stateScript = path.join(workspaceRoot, "scripts/wakeflow-state.mjs");
 
 function writeText(file, content) {
   mkdirSync(path.dirname(file), { recursive: true });
@@ -108,6 +109,13 @@ function makeFixture() {
 
 function run(root, args) {
   return spawnSync("node", [script, ...args, "--root", root, "--json"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+}
+
+function runState(root, args) {
+  return spawnSync("node", [stateScript, ...args, "--root", root, "--json"], {
     cwd: root,
     encoding: "utf8",
   });
@@ -762,11 +770,65 @@ test("record-delivery-run enforces sent readback evidence", () => {
   assert.equal(state.state, "dispatched");
   assert.equal(state.taskPackages[0].status, "sent");
   assert.equal(state.targetTasks[0].status, "sent");
+  assert.equal(state.targetTasks[0].delivery.deliveryFile, prepared.deliveryFile);
   assert.equal(state.targetTasks[0].delivery.deliveryRunId, recorded.run.deliveryRunId);
   assert.equal(state.windows[0].windowState, "active");
   assert.equal(state.projection.status, "stale");
   const events = readFileSync(path.join(stateRoot, "controller-events.jsonl"), "utf8");
   assert.match(events, /"type":"delivery\.sent"/);
+});
+
+test("state-root target result import exposes controller-return context from delivery envelope", () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  parseOk(run(root, [
+    "record-delivery-run",
+    "--delivery-file",
+    prepared.deliveryFile,
+    "--status",
+    "sent",
+    "--readback-ok",
+    "true",
+    "--evidence",
+    "host thread accepted prompt",
+    "--write",
+  ]));
+
+  const imported = parseOk(runState(root, [
+    "import-target-result",
+    "--state-root",
+    stateRootRef,
+    "--target-task-id",
+    "CSMR-TASK-1",
+    "--target-window",
+    "AlembicPlugin",
+    "--status",
+    "completed",
+    "--result-id",
+    "CSMR-RESULT-CALLBACK",
+    "--evidence-ref",
+    "reports/plugin-result.json",
+    "--verification",
+    "unit test passed",
+    "--write",
+  ]));
+
+  assert.equal(imported.dispatchGroup, "GROUP-STATE");
+  assert.equal(imported.deliveryContext.resolution, "controller-return-required");
+  assert.equal(imported.deliveryContext.deliveryFile, prepared.deliveryFile);
+  assert.equal(imported.deliveryContext.deliveryEnvelopeFile, prepared.deliveryFile);
+  assert.equal(imported.controllerReturn.required, true);
+  assert.equal(imported.controllerReturn.route, "controller");
+  assert.deepEqual(imported.controllerReturn.policy, { mode: "group-ready" });
+  assert.match(imported.agentNext, /resolved delivery envelope has returnRoute=controller/);
+  assert.match(imported.agentNext, /wakeflow_review_pack/);
+  assert.match(imported.agentNext, /wakeflow_record_delivery/);
+
+  const resultFile = JSON.parse(readFileSync(path.join(stateRoot, "target-results/CSMR-RESULT-CALLBACK.json"), "utf8"));
+  assert.equal(resultFile.dispatchGroup, "GROUP-STATE");
+  assert.equal(resultFile.deliveryContext.deliveryEnvelopeFile, prepared.deliveryFile);
+  assert.equal(resultFile.controllerActionRequired, true);
 });
 
 test("record-delivery-run infers workspace root from an absolute delivery file", () => {

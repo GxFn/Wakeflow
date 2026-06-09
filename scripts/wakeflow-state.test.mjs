@@ -371,10 +371,9 @@ test("import-target-result stores result evidence without changing controller st
   assert.equal(payload.ok, true);
   assert.equal(payload.stateRevisionUnchanged, 2);
   assert.match(payload.agentNext, /not controller acceptance/);
-  assert.match(payload.agentNext, /wakeflow_review_pack/);
-  assert.match(payload.agentNext, /controller-return delivery/);
-  assert.match(payload.agentNext, /host thread tool/);
-  assert.match(payload.agentNext, /record that delivery run/);
+  assert.equal(payload.deliveryContext.resolution, "missing-delivery-metadata");
+  assert.equal(payload.controllerReturn.required, false);
+  assert.match(payload.agentNext, /No recorded delivery metadata/);
 
   const stateAfter = readJson(path.join(stateRoot, "wakeflow-state.json"));
   const progressAfter = readFileSync(path.join(stateRoot, "developer-progress.md"), "utf8");
@@ -383,6 +382,9 @@ test("import-target-result stores result evidence without changing controller st
   assert.deepEqual(stateAfter, stateBefore);
   assert.equal(progressAfter, progressBefore);
   assert.equal(resultFile.status, "completed");
+  assert.equal(resultFile.stateRoot, initPayload.stateRoot);
+  assert.equal(resultFile.deliveryContext.resolution, "missing-delivery-metadata");
+  assert.equal(resultFile.controllerActionRequired, false);
   assert.deepEqual(resultFile.forbiddenConclusions, [
     "target-result-is-controller-acceptance",
     "target-result-closes-task-package",

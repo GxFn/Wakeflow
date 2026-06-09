@@ -1353,6 +1353,7 @@ function markStateRootDeliverySent(envelope, run) {
         status: "sent",
         delivery: {
           deliveryId: envelope.deliveryId,
+          deliveryFile: path.relative(workspaceRoot, deliveryFileFor(envelope.deliveryId)),
           deliveryRunId: run.deliveryRunId,
           dispatchGroup: envelope.dispatchGroup,
           sentAt: run.createdAt,

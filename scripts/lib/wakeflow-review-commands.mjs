@@ -212,6 +212,147 @@ export function createReviewCommands(ctx) {
     return ["sent", "active", "missing-result"].includes(task?.status || "");
   }
 
+  function notApplicableStateRootCallbackPlan(dispatchGroup, returnPolicy, reason) {
+    return {
+      kind: "WakeflowControllerCallbackPlan",
+      version: 1,
+      dispatchGroup: dispatchGroup || undefined,
+      returnPolicy: returnPolicy || { mode: "group-ready" },
+      status: "not-applicable",
+      reason,
+      counts: {
+        unitCount: 0,
+        readyToBuildCount: 0,
+        pendingHostSendCount: 0,
+        sentCount: 0,
+        waitingForSentResultsCount: 0,
+        waitingForResultCount: 0,
+        transportReviewCount: 0,
+      },
+      units: [],
+      forbiddenConclusions: [
+        "callback-plan-is-controller-acceptance",
+        "callback-plan-sends-host-message",
+        "callback-plan-creates-target-result",
+      ],
+    };
+  }
+
+  function stateRootCallbackContext(targetResults) {
+    const controllerReturnResults = targetResults
+      .filter((item) => item.dispatchGroup && item.returnRoute === "controller");
+    const dispatchGroups = [...new Set(controllerReturnResults.map((item) => item.dispatchGroup))];
+    if (dispatchGroups.length === 0) {
+      return {
+        dispatchGroup: "",
+        review: null,
+        controllerReturnDelivery: {
+          status: "not-applicable",
+          reason: "state-root review pack has no target result with deliveryContext.returnRoute=controller",
+        },
+        callbackPlan: notApplicableStateRootCallbackPlan(
+          "",
+          { mode: "group-ready" },
+          "State-root review has no controller-return delivery context.",
+        ),
+      };
+    }
+    if (dispatchGroups.length > 1) {
+      return {
+        dispatchGroup: "",
+        review: null,
+        controllerReturnDelivery: {
+          status: "needs-transport-review",
+          reason: "multiple dispatch groups require a group-scoped review pack before controller-return",
+          dispatchGroups,
+        },
+        callbackPlan: {
+          ...notApplicableStateRootCallbackPlan(
+            "",
+            { mode: "group-ready" },
+            "Multiple controller-return dispatch groups are present; use a group-scoped review pack.",
+          ),
+          status: "needs-transport-review",
+          counts: {
+            unitCount: dispatchGroups.length,
+            readyToBuildCount: 0,
+            pendingHostSendCount: 0,
+            sentCount: 0,
+            waitingForSentResultsCount: 0,
+            waitingForResultCount: 0,
+            transportReviewCount: dispatchGroups.length,
+          },
+          units: dispatchGroups.map((dispatchGroup) => ({
+            scope: "group",
+            dispatchGroup,
+            status: "requires-group-scoped-review",
+            buildAllowed: false,
+            hostSendRequired: false,
+            controllerAlreadyReached: false,
+            failureNeedsReview: true,
+          })),
+        },
+      };
+    }
+
+    const dispatchGroup = dispatchGroups[0];
+    const packetsForGroup = listJsonFiles(dirs.packets)
+      .map((file) => readJson(file, "dispatch packet"))
+      .filter((packet) => packet.kind === "ControllerDispatchPacket" && packet.dispatchGroup === dispatchGroup);
+    if (packetsForGroup.length === 0) {
+      const returnPolicy = controllerReturnResults[0]?.returnPolicy || { mode: "group-ready" };
+      return {
+        dispatchGroup,
+        review: null,
+        controllerReturnDelivery: {
+          status: "needs-transport-review",
+          dispatchGroup,
+          reason: "controller-return delivery context exists, but local dispatch packets are missing",
+        },
+        callbackPlan: {
+          ...notApplicableStateRootCallbackPlan(
+            dispatchGroup,
+            returnPolicy,
+            "Local dispatch packets are required before building a controller-return envelope.",
+          ),
+          status: "needs-transport-review",
+          counts: {
+            unitCount: 1,
+            readyToBuildCount: 0,
+            pendingHostSendCount: 0,
+            sentCount: 0,
+            waitingForSentResultsCount: 0,
+            waitingForResultCount: 0,
+            transportReviewCount: 1,
+          },
+          units: [{
+            scope: "group",
+            dispatchGroup,
+            status: "missing-dispatch-packets",
+            buildAllowed: false,
+            hostSendRequired: false,
+            controllerAlreadyReached: false,
+            failureNeedsReview: true,
+          }],
+        },
+      };
+    }
+
+    const review = computeReviewResults({ group: dispatchGroup });
+    const controllerReturnDelivery = controllerReturnDeliveryStatusForGroup(dispatchGroup);
+    return {
+      dispatchGroup,
+      review,
+      controllerReturnDelivery,
+      callbackPlan: buildControllerCallbackPlan({
+        dispatchGroup,
+        returnPolicy: review.returnPolicy,
+        groupSnapshot: review.groupSnapshot,
+        controllerReturnDeliveries: controllerReturnDelivery.deliveries,
+      }),
+    };
+  }
+
   function buildStateRootReviewPack(stateRoot) {
     const { state, stateRootRef } = readControllerStateRoot(stateRoot);
     const resultsByTask = latestStateRootResultsByTargetTask(stateRoot);
@@ -231,6 +372,10 @@ export function createReviewCommands(ctx) {
         targetWindow: task.targetWindow,
         taskId: task.targetTaskId,
         taskPackageId: task.taskPackageId,
+        dispatchGroup: result?.dispatchGroup || result?.deliveryContext?.dispatchGroup || task.delivery?.dispatchGroup,
+        returnRoute: result?.deliveryContext?.returnRoute || result?.returnRoute,
+        returnPolicy: result?.deliveryContext?.returnPolicy || result?.returnPolicy,
+        deliveryContext: result?.deliveryContext,
         resultId: result?.resultId,
         resultStatus,
         resultFile: item ? path.relative(workspaceRoot, item.file) : undefined,
@@ -318,29 +463,12 @@ export function createReviewCommands(ctx) {
     })));
     const missingEvidenceRefsPresent = missingEvidenceRefs.length > 0;
     const generatedAt = nowIso();
-    const callbackPlan = {
-      kind: "WakeflowControllerCallbackPlan",
-      version: 1,
-      dispatchGroup: state.demandKey,
-      returnPolicy: groupSnapshot.returnPolicy,
-      status: "not-applicable",
-      reason: "State-root review packs are controller-local; run reducer/decision instead of building a direct-thread controller-return envelope.",
-      counts: {
-        unitCount: 0,
-        readyToBuildCount: 0,
-        pendingHostSendCount: 0,
-        sentCount: 0,
-        waitingForSentResultsCount: 0,
-        waitingForResultCount: 0,
-        transportReviewCount: 0,
-      },
-      units: [],
-      forbiddenConclusions: [
-        "callback-plan-is-controller-acceptance",
-        "callback-plan-sends-host-message",
-        "callback-plan-creates-target-result",
-      ],
-    };
+    const callbackContext = stateRootCallbackContext(targetResults);
+    const callbackPlan = callbackContext.callbackPlan;
+    const controllerReturnDelivery = callbackContext.controllerReturnDelivery;
+    const controllerReturnReady = (callbackPlan?.counts?.readyToBuildCount || 0) > 0;
+    const controllerReturnPendingHostSend = (callbackPlan?.counts?.pendingHostSendCount || 0) > 0;
+    const controllerReturnSent = (callbackPlan?.counts?.sentCount || 0) > 0;
     return {
       kind: "ControllerReviewPack",
       version,
@@ -359,8 +487,8 @@ export function createReviewCommands(ctx) {
         excludedTargetTaskIds: reviewScope.excludedTargetTaskIds,
       },
       controllerReturnDelivery: {
-        status: "not-applicable",
-        reason: "state-root review pack is independent of controller-return delivery evidence",
+        ...controllerReturnDelivery,
+        reason: controllerReturnDelivery.reason || "state-root review pack resolved controller-return evidence from the delivery runtime",
       },
       callbackPlan,
       targetResults,
@@ -385,9 +513,9 @@ export function createReviewCommands(ctx) {
         blockedResultsPresent: blocked.length > 0,
         missingEvidenceRefsPresent,
         evidenceRepairRequired: missingEvidenceRefsPresent,
-        controllerReturnSent: false,
-        controllerReturnReady: false,
-        controllerReturnPendingHostSend: false,
+        controllerReturnSent,
+        controllerReturnReady,
+        controllerReturnPendingHostSend,
         rawEvidencePullRequired: reviewReady,
         totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent,
         stateRootBased: true,
@@ -398,6 +526,10 @@ export function createReviewCommands(ctx) {
         ? "add-task-package-before-review"
         : noOpenTargetTasks
         ? "run-wakeflow-complete-demand-or-add-next-package"
+        : controllerReturnPendingHostSend
+        ? "send-controller-return-and-record-delivery"
+        : controllerReturnReady
+        ? "build-controller-return"
         : decision === "wait"
         ? missing.length > 0
           ? "wait-for-state-root-target-result"

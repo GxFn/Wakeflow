@@ -1741,6 +1741,20 @@ test("state-root target result import exposes controller-return context from del
     triggerTaskId: "CSMR-TASK-1",
   });
 
+  const stateRootPack = parseOk(run(root, [
+    "review-pack",
+    "--state-root",
+    stateRootRef,
+  ]));
+  assert.equal(stateRootPack.reviewPack.callbackPlan.dispatchGroup, "GROUP-STATE");
+  assert.equal(stateRootPack.reviewPack.callbackPlan.status, "ready-to-build");
+  assert.equal(stateRootPack.reviewPack.callbackPlan.counts.readyToBuildCount, 1);
+  assert.equal(stateRootPack.reviewPack.gates.controllerReturnReady, true);
+  assert.equal(stateRootPack.reviewPack.controllerReturnDelivery.status, "not-built");
+  assert.equal(stateRootPack.reviewPack.nextAction, "build-controller-return");
+  assert.equal(stateRootPack.reviewPack.callbackPlan.units[0].triggerTarget, "AlembicPlugin");
+  assert.equal(stateRootPack.reviewPack.callbackPlan.units[0].triggerTaskId, "CSMR-TASK-1");
+
   const traceByGroup = parseOk(run(root, [
     "trace-spine",
     "--group",

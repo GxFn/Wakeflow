@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { runSync } from "../lib/wakeflow-process.mjs";
+import { runWakeflowRuntime } from "../lib/wakeflow-runtime.mjs";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -107,6 +108,49 @@ test("status --json returns a machine-readable aggregate", () => {
     payload.checks.map((check) => check.key),
     ["repoStatus", "closedLoopStatus"],
   );
+});
+
+test("runtime wrapper adds trace and health metadata without changing status payload", async () => {
+  const payload = await runWakeflowRuntime({
+    script: "wakeflow-cli",
+    args: ["status", "--json"],
+    cwd: workspaceRoot,
+  });
+  assert.equal(payload.ok, true);
+  assert.equal(payload.parsedJson.command, "status");
+  assert.equal(payload.wakeflowTrace.kind, "WakeflowTrace");
+  assert.equal(payload.wakeflowTrace.script, "wakeflow-cli");
+  assert.equal(payload.wakeflowTrace.command, "status");
+  assert.equal(payload.wakeflowRuntimeStatus.kind, "WakeflowRuntimeStatus");
+  assert.equal(payload.wakeflowRuntimeStatus.processOk, true);
+  assert.equal(payload.wakeflowRuntimeStatus.semanticOk, true);
+  assert.equal(payload.wakeflowHealth.kind, "WakeflowStatusHealth");
+  assert.equal(payload.wakeflowHealth.checks.repoStatus, true);
+  assert.equal(payload.wakeflowHealth.checks.closedLoopStatus, true);
+  assert.equal(typeof payload.wakeflowHealth.nextAction, "string");
+  assert.equal(
+    payload.wakeflowHealth.signals.runtimeSummary.kind,
+    "WakeflowClosedLoopRuntimeSummary",
+  );
+  assert.equal(
+    payload.wakeflowHealth.signals.runtimeSummary.resumePlan.kind,
+    "WakeflowRuntimeResumePlan",
+  );
+  assert.ok(["idle", "active", "has-runtime-evidence"].includes(payload.wakeflowHealth.status));
+});
+
+test("runtime wrapper classifies failed commands with typed errors", async () => {
+  const payload = await runWakeflowRuntime({
+    script: "wakeflow-cli",
+    args: ["legacy-sync", "--json"],
+    cwd: workspaceRoot,
+  });
+  assert.equal(payload.ok, false);
+  assert.equal(payload.wakeflowRuntimeStatus.processOk, false);
+  assert.equal(payload.wakeflowRuntimeStatus.semanticOk, false);
+  assert.equal(payload.wakeflowError.kind, "WakeflowError");
+  assert.equal(payload.wakeflowError.code, "unsupported-command");
+  assert.equal(payload.wakeflowError.retryable, false);
 });
 
 test("--print status routes an explicit Wakeflow root to status checks", () => {

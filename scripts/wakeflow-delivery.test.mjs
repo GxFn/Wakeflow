@@ -2,10 +2,32 @@
 
 import assert from "node:assert/strict";
 import { runSync } from "../lib/wakeflow-process.mjs";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import {
+  buildControllerCallbackPlan,
+  controllerReturnDuplicateScopeText,
+  controllerReturnDuplicateSelector,
+  controllerReturnReadinessIssue,
+  returnPolicyReviewScope,
+} from "./lib/wakeflow-return-policy.mjs";
+import {
+  buildControllerReturnEnvelope,
+  formatControllerReturnPrompt,
+} from "./lib/wakeflow-controller-return.mjs";
+import {
+  buildRuntimeResumePlan,
+  deriveRuntimeGroupStatus,
+  summarizeRuntimeNextAction,
+} from "./lib/wakeflow-runtime-summary.mjs";
+import { buildControllerReviewPack } from "./lib/wakeflow-review-pack.mjs";
+import {
+  buildWindowDispatchConfig,
+  createThreadRegistration,
+  normalizeThreadRegistrationRecord,
+} from "./lib/wakeflow-thread-registry.mjs";
 
 const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const script = path.join(workspaceRoot, "scripts/wakeflow-delivery.mjs");
@@ -140,13 +162,14 @@ function registerThread(root, windowName) {
 function prepareDispatch(root, stateRootRef, options = {}) {
   const config = Array.isArray(options) ? { extra: options } : options;
   const group = config.group || "GROUP-STATE";
+  const targetTaskId = config.targetTaskId || "CSMR-TASK-1";
   const extra = config.extra || [];
   return parseOk(run(root, [
     "prepare-dispatch-from-state",
     "--state-root",
     stateRootRef,
     "--target-task-id",
-    "CSMR-TASK-1",
+    targetTaskId,
     "--group",
     group,
     "--controller-window",
@@ -159,11 +182,380 @@ function prepareDispatch(root, stateRootRef, options = {}) {
   ]));
 }
 
+test("return policy helpers preserve group-ready and per-target callback semantics", () => {
+  const review = {
+    group: "group-fixture",
+    returnPolicy: { mode: "group-ready" },
+    results: [
+      {
+        packet: { packetId: "packet-a", targetWindow: "WindowA", taskId: "task-a" },
+        result: { status: "completed" },
+      },
+      {
+        packet: { packetId: "packet-b", targetWindow: "WindowB", taskId: "task-b" },
+        result: null,
+      },
+    ],
+    groupSnapshot: {
+      allSentResultsPresent: false,
+      ready: [{ packetId: "packet-a", targetWindow: "WindowA", taskId: "task-a" }],
+      blocked: [],
+      missing: [{ packetId: "packet-b", targetWindow: "WindowB", taskId: "task-b" }],
+    },
+  };
+
+  assert.equal(returnPolicyReviewScope(review.returnPolicy), "group");
+  assert.deepEqual(controllerReturnDuplicateSelector({
+    returnPolicy: review.returnPolicy,
+    triggerTarget: "WindowA",
+    triggerTaskId: "task-a",
+  }), {});
+  assert.equal(controllerReturnDuplicateScopeText({
+    returnPolicy: review.returnPolicy,
+    triggerTarget: "WindowA",
+    triggerTaskId: "task-a",
+  }), "");
+  assert.equal(
+    controllerReturnReadinessIssue({
+      review,
+      triggerTarget: "WindowA",
+      triggerTaskId: "task-a",
+    }).code,
+    "group-ready-missing-sent-results",
+  );
+  const groupPlan = buildControllerCallbackPlan({
+    dispatchGroup: "group-fixture",
+    returnPolicy: review.returnPolicy,
+    groupSnapshot: review.groupSnapshot,
+  });
+  assert.equal(groupPlan.status, "waiting");
+  assert.equal(groupPlan.counts.waitingForSentResultsCount, 1);
+
+  const perTargetReview = {
+    ...review,
+    returnPolicy: { mode: "per-target" },
+  };
+  assert.equal(returnPolicyReviewScope(perTargetReview.returnPolicy), "single-target");
+  assert.deepEqual(controllerReturnDuplicateSelector({
+    returnPolicy: perTargetReview.returnPolicy,
+    triggerTarget: "WindowA",
+    triggerTaskId: "task-a",
+  }), { triggerTarget: "WindowA", triggerTaskId: "task-a" });
+  assert.equal(controllerReturnDuplicateScopeText({
+    returnPolicy: perTargetReview.returnPolicy,
+    triggerTarget: "WindowA",
+    triggerTaskId: "task-a",
+  }), " for WindowA / task-a");
+  assert.equal(controllerReturnReadinessIssue({
+    review: perTargetReview,
+    triggerTarget: "WindowA",
+    triggerTaskId: "task-a",
+  }), null);
+  const perTargetPlan = buildControllerCallbackPlan({
+    dispatchGroup: "group-fixture",
+    returnPolicy: perTargetReview.returnPolicy,
+    groupSnapshot: perTargetReview.groupSnapshot,
+  });
+  assert.equal(perTargetPlan.status, "ready-to-build");
+  assert.equal(perTargetPlan.counts.readyToBuildCount, 1);
+  assert.deepEqual(perTargetPlan.units.map((unit) => unit.triggerTarget), ["WindowA"]);
+  assert.equal(
+    controllerReturnReadinessIssue({
+      review: perTargetReview,
+      triggerTarget: "WindowB",
+      triggerTaskId: "task-b",
+    }).code,
+    "trigger-result-missing",
+  );
+});
+
+test("controller-return builder preserves callback prompt scope and transport guards", () => {
+  const stateRef = {
+    stateRoot: ".workspace-active/workspace/current/CSMR-FIXTURE",
+  };
+  const groupSnapshot = {
+    readyTargets: ["WindowA", "WindowB"],
+    blockedTargets: ["WindowC"],
+    missingTargets: ["WindowD"],
+    pendingDispatchTargets: ["WindowE"],
+  };
+
+  assert.match(formatControllerReturnPrompt({
+    dispatchGroup: "group-fixture",
+    triggerTarget: "WindowA",
+    triggerTaskId: "task-a",
+    stateRef,
+    reviewScope: "group",
+    groupSnapshot,
+  }), /Continue controller review: WindowA, WindowB, WindowC backfill\./);
+  assert.match(formatControllerReturnPrompt({
+    dispatchGroup: "group-fixture",
+    triggerTarget: "WindowA",
+    triggerTaskId: "task-a",
+    stateRef,
+    reviewScope: "single-target",
+    groupSnapshot,
+  }), /Continue controller review: WindowA backfill\./);
+
+  const envelope = buildControllerReturnEnvelope({
+    version: 2,
+    deliveryId: "controller-return-group-fixture__windowa__task-a",
+    dispatchGroup: "group-fixture",
+    controllerWindow: "Controller",
+    triggerTarget: "WindowA",
+    triggerTaskId: "task-a",
+    returnPolicy: { mode: "per-target" },
+    groupSnapshot,
+    reviewScope: "single-target",
+    humanContextRef: "developer-progress.md",
+    stateRef,
+    registration: {
+      windowName: "Controller",
+      threadId: "0192fac-controller",
+      threadRegistryFile: "thread-registry/Controller.json",
+    },
+    transportThreadRegistryFile: "thread-registry/Controller.json",
+    automationEnabled: true,
+    keepLiveStateFile: "keep-live/state.json",
+    returnReason: "result-ready",
+    reviewDecision: "review",
+    groupStatus: "partially-ready",
+    windowConfig: { kind: "CodexSubwindowDispatchConfig" },
+    wakeflowTrace: { dispatchGroup: "group-fixture" },
+    createdAt: "2026-06-10T00:00:00.000Z",
+  });
+  assert.equal(envelope.kind, "ControllerReturnEnvelope");
+  assert.equal(envelope.oneShot, true);
+  assert.equal(envelope.targetThread.threadIdRedacted, true);
+  assert.equal(Object.hasOwn(envelope.targetThread, "threadId"), false);
+  assert.equal(envelope.transport.readbackRequired, true);
+  assert.equal(envelope.deliveryCompletion.pendingUntil, "host-send-readback-recorded");
+  assert.equal(envelope.loopGuard.controllerReviewRequired, true);
+  assert.equal(envelope.automation.keepLiveStateFile, "keep-live/state.json");
+});
+
+test("runtime summary helpers separate host-send, review, wait, and dispatch resume plans", () => {
+  assert.equal(deriveRuntimeGroupStatus({ "pending-host-send": 1 }), "pending-host-send");
+  assert.equal(deriveRuntimeGroupStatus({ completed: 1, missing: 1 }), "partially-ready");
+  assert.equal(deriveRuntimeGroupStatus({ missing: 1 }), "waiting");
+  assert.equal(deriveRuntimeGroupStatus({ "pending-dispatch": 1 }), "pending-dispatch");
+
+  const diagnostics = { errors: [] };
+  assert.equal(summarizeRuntimeNextAction({
+    diagnostics,
+    deliveryStatuses: [{ kind: "ControllerReturnEnvelope", status: "pending-host-send" }],
+    groupSummaries: [],
+  }), "send-controller-return");
+  assert.equal(summarizeRuntimeNextAction({
+    diagnostics,
+    deliveryStatuses: [],
+    groupSummaries: [{
+      groupStatus: "partially-ready",
+      callbackPlan: { counts: { readyToBuildCount: 1 } },
+    }],
+  }), "build-controller-return");
+  assert.equal(summarizeRuntimeNextAction({
+    diagnostics,
+    deliveryStatuses: [{ kind: "DeliveryEnvelope", status: "failed" }],
+    groupSummaries: [{ groupStatus: "ready" }],
+  }), "inspect-delivery-failures");
+  assert.equal(summarizeRuntimeNextAction({
+    diagnostics,
+    deliveryStatuses: [],
+    groupSummaries: [{ groupStatus: "partially-ready" }],
+  }), "review-target-results");
+  assert.equal(summarizeRuntimeNextAction({
+    diagnostics,
+    deliveryStatuses: [],
+    groupSummaries: [{ groupStatus: "waiting" }],
+  }), "wait-for-target-result");
+  assert.equal(summarizeRuntimeNextAction({
+    diagnostics,
+    deliveryStatuses: [],
+    groupSummaries: [{ groupStatus: "pending-dispatch" }],
+  }), "dispatch-pending-target");
+
+  const hostSendPlan = buildRuntimeResumePlan({
+    nextAction: "send-controller-return",
+    diagnostics,
+    deliveryStatuses: [{
+      kind: "ControllerReturnEnvelope",
+      status: "pending-host-send",
+      file: ".workspace-local/wakeflow-delivery/delivery-envelopes/controller-return.json",
+      deliveryId: "controller-return-1",
+      targetWindow: "Controller",
+      taskId: "task-a",
+      dispatchGroup: "group-fixture",
+      wakeflowTrace: { dispatchGroup: "group-fixture" },
+    }],
+    groupSummaries: [],
+  });
+  assert.equal(hostSendPlan.status, "ready");
+  assert.equal(hostSendPlan.hostSendRequired, true);
+  assert.equal(hostSendPlan.steps[0].kind, "host-send");
+  assert.equal(hostSendPlan.steps[0].adapter.kind, "WakeflowHostSendAdapter");
+  assert.equal(hostSendPlan.steps[0].adapter.adapterId, "codex-app-thread");
+  assert.equal(hostSendPlan.steps[0].adapter.storesThreadIds, false);
+  assert.equal(hostSendPlan.steps[1].kind, "record-delivery-run");
+
+  const callbackPlan = buildRuntimeResumePlan({
+    nextAction: "build-controller-return",
+    diagnostics,
+    deliveryStatuses: [],
+    groupSummaries: [{
+      groupId: "group-fixture",
+      groupStatus: "partially-ready",
+      stateRoot: ".workspace-active/workspace/current/CSMR-FIXTURE",
+      returnPolicy: { mode: "per-target" },
+      callbackPlan: {
+        counts: { readyToBuildCount: 1 },
+        units: [{
+          scope: "target",
+          triggerTarget: "WindowA",
+          triggerTaskId: "task-a",
+          buildAllowed: true,
+        }],
+      },
+    }],
+  });
+  assert.equal(callbackPlan.status, "ready");
+  assert.equal(callbackPlan.steps[0].kind, "prepare-controller-return");
+  assert.deepEqual(callbackPlan.steps[0].arguments, {
+    direction: "controller-return",
+    dispatchGroup: "group-fixture",
+    triggerTarget: "WindowA",
+    triggerTaskId: "task-a",
+  });
+
+  const waitPlan = buildRuntimeResumePlan({
+    nextAction: "wait-for-target-result",
+    diagnostics,
+    deliveryStatuses: [],
+    groupSummaries: [{
+      groupId: "group-fixture",
+      groupStatus: "waiting",
+      targets: [{
+        status: "missing",
+        targetWindow: "WindowA",
+        taskId: "task-a",
+        deliveryStatus: "sent",
+      }],
+    }],
+  });
+  assert.equal(waitPlan.status, "waiting");
+  assert.equal(waitPlan.stopRequired, true);
+  assert.equal(waitPlan.steps[0].kind, "stop-and-wait");
+});
+
+test("thread registry helpers build dispatch config without leaking thread ids", () => {
+  const registeredAt = "2026-06-10T00:00:00.000Z";
+  const rawRegistration = createThreadRegistration({
+    windowName: "WindowA",
+    threadId: "0192fac-window-a",
+    registeredAt,
+  });
+  assert.equal(rawRegistration.lastVerifiedAt, registeredAt);
+
+  const registration = normalizeThreadRegistrationRecord({
+    windowName: "WindowA",
+    registration: rawRegistration,
+    threadRegistryFile: "thread-registry/WindowA.json",
+  });
+  assert.equal(registration.threadId, "0192fac-window-a");
+  assert.equal(registration.threadRegistryFile, "thread-registry/WindowA.json");
+  assert.throws(() => normalizeThreadRegistrationRecord({
+    windowName: "WindowB",
+    registration: { kind: "CodexWindowThreadRegistration" },
+    threadRegistryFile: "thread-registry/WindowB.json",
+  }), /missing threadId/);
+
+  const config = buildWindowDispatchConfig({
+    windowName: "WindowA",
+    config: {
+      controllerWindow: "Controller",
+      dispatchWindows: ["WindowA"],
+    },
+    repository: { path: "../WindowA", role: "plugin" },
+    deliveryRole: "target",
+    cwd: "../WindowA",
+    responsibilityRoot: "../WindowA",
+    registration,
+    threadRegistryFile: "thread-registry/WindowA.json",
+    generatedAt: registeredAt,
+  });
+  assert.equal(config.dispatchable, true);
+  assert.equal(config.threadRegistered, true);
+  assert.equal(config.threadRegistryFile, "thread-registry/WindowA.json");
+  assert.equal(config.delivery.missingThread, "fail-closed");
+  assert.equal(config.result.returnRoute, "controller");
+  assert.equal(Object.hasOwn(config, "threadId"), false);
+
+  const unlisted = buildWindowDispatchConfig({
+    windowName: "WindowB",
+    config: {
+      controllerWindow: "Controller",
+      dispatchWindows: ["WindowA"],
+    },
+    repository: { path: "../WindowB", role: "plugin" },
+    deliveryRole: "target",
+    cwd: "../WindowB",
+    responsibilityRoot: "../WindowB",
+    registration: null,
+    threadRegistryFile: "thread-registry/WindowB.json",
+    generatedAt: registeredAt,
+  });
+  assert.equal(unlisted.dispatchable, false);
+});
+
+test("review pack helper preserves evidence repair and pending-dispatch gates", () => {
+  const review = {
+    group: "group-fixture",
+    taskId: "",
+    decision: "review",
+    returnPolicy: { mode: "group-ready" },
+    groupStatus: "partially-ready",
+    groupSnapshot: {
+      missing: [],
+      pendingDispatch: [{ packetId: "packet-b" }],
+    },
+    blocked: [],
+  };
+  const pack = buildControllerReviewPack({
+    review,
+    controllerReturnDelivery: { status: "none" },
+    targetResults: [{
+      targetWindow: "WindowA",
+      taskId: "task-a",
+      resultStatus: "completed",
+      commits: [],
+      evidenceRefs: ["missing-evidence.md"],
+      verificationSummary: ["unit passed"],
+      hasControllerReviewEvidence: true,
+      missingEvidenceRefs: ["missing-evidence.md"],
+    }],
+    generatedAt: "2026-06-10T00:00:00.000Z",
+    wakeflowTrace: { dispatchGroup: "group-fixture" },
+  });
+
+  assert.equal(pack.kind, "ControllerReviewPack");
+  assert.equal(pack.gates.controllerReviewReady, false);
+  assert.equal(pack.gates.evidenceRepairRequired, true);
+  assert.equal(pack.gates.pendingDispatchTargetsPresent, true);
+  assert.equal(pack.nextAction, "fix-missing-evidence-refs-before-controller-verdict");
+  assert.deepEqual(pack.rawEvidenceRequired[0].verificationSummary, ["unit passed"]);
+  assert.deepEqual(pack.missingEvidenceRefs, [{
+    targetWindow: "WindowA",
+    taskId: "task-a",
+    ref: "missing-evidence.md",
+  }]);
+});
+
 test("help exposes state-root commands and rejects old dispatch routes", () => {
   const { root } = makeFixture();
   const help = runSync("node", [script, "--help", "--root", root], { cwd: root, encoding: "utf8" });
   assert.equal(help.status, 0, help.stderr || help.stdout);
   assert.match(help.stdout, /prepare-dispatch-from-state/);
+  assert.match(help.stdout, /trace-spine/);
   assert.doesNotMatch(help.stdout, /create-dispatch/);
   assert.doesNotMatch(help.stdout, /prepare-dispatch --target-window/);
   assert.doesNotMatch(help.stdout, /--control-plan/);
@@ -228,6 +620,30 @@ test("prepare-dispatch-from-state writes packet, group, and delivery without leg
   assert.equal(payload.packet.stateRef.stateRevision, 3);
   assert.equal(payload.dispatchGroup.stateRef.stateRoot, stateRootRef);
   assert.equal(payload.envelope.stateRef.targetTaskId, "CSMR-TASK-1");
+  assert.equal(payload.packet.wakeflowTrace.artifactKind, "dispatch-packet");
+  assert.equal(payload.packet.wakeflowTrace.stateRoot, stateRootRef);
+  assert.equal(payload.packet.wakeflowTrace.taskPackageId, "CSMR-PKG-1");
+  assert.equal(payload.packet.wakeflowTrace.targetTaskId, "CSMR-TASK-1");
+  assert.equal(payload.dispatchGroup.wakeflowTrace.artifactKind, "dispatch-group");
+  assert.equal(payload.envelope.wakeflowTrace.artifactKind, "delivery-envelope");
+  assert.equal(payload.envelope.wakeflowTrace.deliveryId, payload.envelope.deliveryId);
+  const status = parseOk(run(root, ["status"]));
+  assert.equal(status.runtimeSummary.kind, "WakeflowClosedLoopRuntimeSummary");
+  assert.equal(status.runtimeSummary.nextAction, "send-target-delivery");
+  assert.equal(status.runtimeSummary.health.kind, "WakeflowRuntimeHealth");
+  assert.equal(status.runtimeSummary.health.status, "attention");
+  assert.equal(status.runtimeSummary.health.checks.hostSend.pendingCount, 1);
+  assert.equal(status.runtimeSummary.health.checks.projection.stateRootCount, 1);
+  assert.equal(status.runtimeSummary.health.checks.projection.staleCount, 0);
+  assert.equal(status.runtimeSummary.deliveries.counts["pending-host-send"], 1);
+  assert.equal(status.runtimeSummary.groups.items[0].groupStatus, "pending-host-send");
+  assert.equal(status.runtimeSummary.resumePlan.kind, "WakeflowRuntimeResumePlan");
+  assert.equal(status.runtimeSummary.resumePlan.hostSendRequired, true);
+  assert.equal(status.runtimeSummary.resumePlan.steps[0].kind, "host-send");
+  assert.equal(status.runtimeSummary.resumePlan.steps[0].adapter.adapterId, "codex-app-thread");
+  assert.equal(status.runtimeSummary.resumePlan.steps[0].adapter.inputAuthority, "delivery-envelope");
+  assert.equal(status.runtimeSummary.resumePlan.steps[0].deliveryFile, payload.deliveryFile);
+  assert.equal(status.runtimeSummary.resumePlan.steps[1].tool, "wakeflow_record_delivery");
   assert.match(payload.packet.prompt, /- stateRoot: \.workspace-active\/workspace\/current\/CSMR-FIXTURE/);
   assert.match(payload.packet.prompt, /- dispatchGroup: GROUP-STATE/);
   assert.doesNotMatch(payload.packet.prompt, /humanContextRef:/);
@@ -242,6 +658,47 @@ test("prepare-dispatch-from-state writes packet, group, and delivery without leg
   assert.doesNotMatch(readFileSync(path.join(root, payload.packetFile), "utf8"), /controlPlan/);
   assert.doesNotMatch(readFileSync(path.join(root, payload.deliveryFile), "utf8"), /controlPlan/);
   assert.doesNotMatch(readFileSync(path.join(root, payload.deliveryFile), "utf8"), /0192fac-AlembicPlugin/);
+  assert.equal(
+    payload.packet.idempotency.key,
+    "dispatch-packet:.workspace-active/workspace/current/CSMR-FIXTURE:CSMR-PKG-1:CSMR-TASK-1:3:GROUP-STATE:AlembicPlugin",
+  );
+
+  const replayed = prepareDispatch(root, stateRootRef);
+  assert.equal(replayed.duplicate, true);
+  assert.equal(replayed.idempotentReplay, true);
+  assert.equal(replayed.wrote, false);
+  assert.equal(replayed.packet.createdAt, payload.packet.createdAt);
+  assert.equal(replayed.envelope.createdAt, payload.envelope.createdAt);
+
+  rmSync(path.join(root, payload.dispatchGroupFile));
+  const repaired = prepareDispatch(root, stateRootRef);
+  assert.equal(repaired.duplicate, true);
+  assert.equal(repaired.idempotentReplay, true);
+  assert.equal(repaired.wrote, true);
+  assert.deepEqual(repaired.repairedArtifacts, ["dispatch-group"]);
+  assert.equal(existsSync(path.join(root, payload.dispatchGroupFile)), true);
+
+  const stateFile = path.join(root, stateRootRef, "wakeflow-state.json");
+  const staleState = JSON.parse(readFileSync(stateFile, "utf8"));
+  staleState.revision = 4;
+  writeJson(stateFile, staleState);
+  const staleReplay = run(root, [
+    "prepare-dispatch-from-state",
+    "--state-root",
+    stateRootRef,
+    "--target-task-id",
+    "CSMR-TASK-1",
+    "--group",
+    "GROUP-STATE",
+    "--controller-window",
+    "AlembicWorkspace",
+    "--human-context-ref",
+    `${stateRootRef}/developer-progress.md`,
+    "--require-thread",
+    "--write",
+  ]);
+  assert.notEqual(staleReplay.status, 0);
+  assert.match(staleReplay.stdout, /prepared from state revision 3; current revision is 4/);
 });
 
 test("prepare-dispatch-from-state rejects completed and accepted state-root tasks", () => {
@@ -535,8 +992,152 @@ test("group-ready controller return ignores targets prepared but not sent", () =
     "--write",
   ]));
   assert.equal(returned.ok, true);
+  assert.equal(returned.envelope.wakeflowTrace.artifactKind, "controller-return-envelope");
+  assert.equal(returned.envelope.wakeflowTrace.deliveryId, returned.envelope.deliveryId);
+  assert.equal(returned.envelope.wakeflowTrace.dispatchGroup, "GROUP-STATE");
+  assert.equal(returned.envelope.wakeflowTrace.stateRoot, stateRootRef);
+  const status = parseOk(run(root, ["status"]));
+  assert.equal(status.runtimeSummary.nextAction, "send-controller-return");
+  assert.equal(status.runtimeSummary.resumePlan.steps[0].deliveryKind, "ControllerReturnEnvelope");
+  assert.equal(status.runtimeSummary.resumePlan.steps[0].deliveryId, returned.envelope.deliveryId);
   assert.equal(returned.envelope.groupSnapshot.pendingDispatch[0].taskId, "CSMR-TASK-2");
   assert.match(returned.envelope.prompt, /pendingDispatchTargets: AlembicPlugin/);
+});
+
+test("per-target controller return allows independent callbacks per target", () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  const configFile = path.join(root, "workspace.config.json");
+  const config = JSON.parse(readFileSync(configFile, "utf8"));
+  config.repositories.push({ windowName: "AlembicCore", path: "../AlembicCore", role: "core" });
+  config.dispatchWindows.push("AlembicCore");
+  writeJson(configFile, config);
+
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.taskPackages.push({
+    taskPackageId: "CSMR-PKG-2",
+    summary: "Second fixture package",
+    status: "pending",
+    createdAt: "2026-06-05T00:00:00.000Z",
+  });
+  state.targetTasks.push({
+    targetTaskId: "CSMR-TASK-2",
+    taskPackageId: "CSMR-PKG-2",
+    targetWindow: "AlembicCore",
+    summary: "Run second fixture target task",
+    status: "pending",
+    createdAt: "2026-06-05T00:00:00.000Z",
+  });
+  state.windows.push({
+    windowName: "AlembicCore",
+    windowState: "pending",
+    taskPackageIds: ["CSMR-PKG-2"],
+    targetTaskIds: ["CSMR-TASK-2"],
+  });
+  writeJson(stateFile, state);
+  writeJson(path.join(stateRoot, "task-packages/CSMR-PKG-2.json"), {
+    schemaVersion: 1,
+    taskPackageId: "CSMR-PKG-2",
+    demandKey: "CSMR-FIXTURE",
+    summary: "Second fixture package",
+    status: "pending",
+    targetTasks: [{
+      targetTaskId: "CSMR-TASK-2",
+      taskPackageId: "CSMR-PKG-2",
+      targetWindow: "AlembicCore",
+      summary: "Run second fixture target task",
+      status: "pending",
+    }],
+    createdAt: "2026-06-05T00:00:00.000Z",
+  });
+
+  registerThread(root, "AlembicPlugin");
+  registerThread(root, "AlembicCore");
+  registerThread(root, "AlembicWorkspace");
+
+  prepareDispatch(root, stateRootRef, { extra: ["--return-policy", "per-target"] });
+  prepareDispatch(root, stateRootRef, { targetTaskId: "CSMR-TASK-2" });
+
+  parseOk(run(root, [
+    "record-target-result",
+    "--target-window",
+    "AlembicPlugin",
+    "--task-id",
+    "CSMR-TASK-1",
+    "--group",
+    "GROUP-STATE",
+    "--status",
+    "completed",
+    "--evidence-ref",
+    "reports/plugin-result.json",
+    "--verification",
+    "plugin smoke passed",
+    "--write",
+  ]));
+  const firstReturn = parseOk(run(root, [
+    "build-controller-return",
+    "--group",
+    "GROUP-STATE",
+    "--trigger-target",
+    "AlembicPlugin",
+    "--trigger-task-id",
+    "CSMR-TASK-1",
+    "--require-thread",
+    "--write",
+  ]));
+  assert.equal(firstReturn.envelope.returnPolicy.mode, "per-target");
+  assert.equal(firstReturn.envelope.reviewScope, "single-target");
+  assert.equal(firstReturn.envelope.triggerTarget, "AlembicPlugin");
+
+  parseOk(run(root, [
+    "record-target-result",
+    "--target-window",
+    "AlembicCore",
+    "--task-id",
+    "CSMR-TASK-2",
+    "--group",
+    "GROUP-STATE",
+    "--status",
+    "completed",
+    "--evidence-ref",
+    "reports/core-result.json",
+    "--verification",
+    "core smoke passed",
+    "--write",
+  ]));
+  const secondReturn = parseOk(run(root, [
+    "build-controller-return",
+    "--group",
+    "GROUP-STATE",
+    "--trigger-target",
+    "AlembicCore",
+    "--trigger-task-id",
+    "CSMR-TASK-2",
+    "--require-thread",
+    "--write",
+  ]));
+  assert.equal(secondReturn.envelope.returnPolicy.mode, "per-target");
+  assert.equal(secondReturn.envelope.reviewScope, "single-target");
+  assert.equal(secondReturn.envelope.triggerTarget, "AlembicCore");
+  assert.notEqual(firstReturn.envelope.deliveryId, secondReturn.envelope.deliveryId);
+
+  const duplicateFirstReturn = run(root, [
+    "build-controller-return",
+    "--group",
+    "GROUP-STATE",
+    "--trigger-target",
+    "AlembicPlugin",
+    "--trigger-task-id",
+    "CSMR-TASK-1",
+    "--require-thread",
+    "--write",
+  ]);
+  assert.notEqual(duplicateFirstReturn.status, 0);
+  assert.match(duplicateFirstReturn.stdout, /GROUP-STATE for AlembicPlugin \/ CSMR-TASK-1 already has controller-return delivery status pending-host-send/);
+
+  const review = parseOk(run(root, ["review-results", "--group", "GROUP-STATE"]));
+  assert.equal(review.controllerReturnDelivery.envelopeCount, 2);
+  assert.equal(review.controllerReturnDelivery.pendingCount, 2);
 });
 
 test("target results are scoped by dispatch group to avoid parallel run collisions", () => {
@@ -613,6 +1214,9 @@ test("review-pack gates missing path evidence refs before controller verdict", (
 
   const missing = parseOk(run(root, ["review-pack", "--group", "GROUP-STATE"]));
   assert.equal(missing.reviewPack.decision, "needs-controller-review");
+  assert.equal(missing.reviewPack.wakeflowTrace.artifactKind, "review-pack");
+  assert.equal(missing.reviewPack.wakeflowTrace.dispatchGroup, "GROUP-STATE");
+  assert.equal(missing.reviewPack.wakeflowTrace.stateRoot, stateRootRef);
   assert.equal(missing.reviewPack.gates.controllerReviewReady, false);
   assert.equal(missing.reviewPack.gates.missingEvidenceRefsPresent, true);
   assert.equal(missing.reviewPack.gates.evidenceRepairRequired, true);
@@ -752,6 +1356,10 @@ test("state-root review-pack reads target results from controller state root", (
   const payload = parseOk(run(root, ["review-pack", "--state-root", stateRootRef]));
   assert.equal(payload.source, "wakeflow-state-root");
   assert.equal(payload.decision, "needs-controller-review");
+  assert.equal(payload.reviewPack.wakeflowTrace.artifactKind, "review-pack");
+  assert.equal(payload.reviewPack.wakeflowTrace.dispatchGroup, "CSMR-FIXTURE");
+  assert.equal(payload.reviewPack.wakeflowTrace.stateRoot, stateRootRef);
+  assert.equal(payload.reviewPack.wakeflowTrace.stateRevision, 3);
   assert.equal(payload.reviewPack.gates.stateRootBased, true);
   assert.equal(payload.reviewPack.gates.controllerReviewReady, true);
   assert.equal(payload.reviewPack.gates.missingEvidenceRefsPresent, false);
@@ -884,6 +1492,11 @@ test("record-delivery-run enforces sent readback evidence", () => {
   assert.equal(recorded.stateUpdate.updated, true);
   assert.equal(recorded.stateUpdate.targetTaskId, "CSMR-TASK-1");
   assert.equal(recorded.stateUpdate.projectionStatus, "stale");
+  assert.equal(recorded.run.wakeflowTrace.artifactKind, "delivery-run");
+  assert.equal(recorded.run.wakeflowTrace.deliveryId, recorded.run.deliveryId);
+  assert.equal(recorded.run.wakeflowTrace.deliveryRunId, recorded.run.deliveryRunId);
+  assert.equal(recorded.run.wakeflowTrace.dispatchGroup, "GROUP-STATE");
+  assert.equal(recorded.run.wakeflowTrace.stateRoot, stateRootRef);
   assert.match(recorded.agentNext, /Controller-side delivery is complete/);
   assert.match(recorded.agentNext, /Do not poll, sleep, or run review-results/);
   assert.doesNotMatch(recorded.agentNext, /Wait for the target result envelope/);
@@ -899,6 +1512,164 @@ test("record-delivery-run enforces sent readback evidence", () => {
   assert.equal(state.projection.status, "stale");
   const events = readFileSync(path.join(stateRoot, "controller-events.jsonl"), "utf8");
   assert.match(events, /"type":"delivery\.sent"/);
+  const deliveryEvent = events.trim().split("\n").map((line) => JSON.parse(line)).find((event) => event.type === "delivery.sent");
+  assert.equal(deliveryEvent.wakeflowTrace.artifactKind, "controller-event");
+  assert.equal(deliveryEvent.wakeflowTrace.deliveryRunId, recorded.run.deliveryRunId);
+  assert.equal(deliveryEvent.wakeflowTrace.dispatchGroup, "GROUP-STATE");
+  assert.equal(deliveryEvent.wakeflowTrace.stateRoot, stateRootRef);
+
+  const duplicate = parseOk(run(root, [
+    "record-delivery-run",
+    "--delivery-file",
+    prepared.deliveryFile,
+    "--status",
+    "sent",
+    "--readback-ok",
+    "true",
+    "--evidence",
+    "read_thread latest turn is inProgress",
+    "--write",
+  ]));
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(duplicate.idempotentReplay, true);
+  assert.equal(duplicate.wrote, false);
+  assert.equal(duplicate.stateUpdate.updated, false);
+  assert.equal(duplicate.stateUpdate.reason, "target-task-already-sent");
+  const replayedState = JSON.parse(readFileSync(path.join(stateRoot, "wakeflow-state.json"), "utf8"));
+  assert.equal(replayedState.revision, state.revision);
+  const replayedEvents = readFileSync(path.join(stateRoot, "controller-events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  assert.equal(replayedEvents.filter((event) => event.type === "delivery.sent").length, 1);
+
+  const retry = parseOk(run(root, [
+    "record-delivery-run",
+    "--delivery-file",
+    prepared.deliveryFile,
+    "--delivery-run-id",
+    "run-retry-readback",
+    "--status",
+    "sent",
+    "--readback-ok",
+    "true",
+    "--evidence",
+    "read_thread retry readback matched the same prompt",
+    "--write",
+  ]));
+  assert.equal(retry.wrote, true);
+  assert.equal(retry.run.idempotency.key, "delivery-run:delivery-GROUP-STATE__AlembicPlugin__CSMR-TASK-1:run-retry-readback");
+  assert.equal(retry.stateUpdate.updated, false);
+  assert.equal(retry.stateUpdate.reason, "target-task-already-sent");
+  const retryState = JSON.parse(readFileSync(path.join(stateRoot, "wakeflow-state.json"), "utf8"));
+  assert.equal(retryState.revision, state.revision);
+  const status = parseOk(run(root, ["status"]));
+  assert.equal(status.runtimeSummary.nextAction, "wait-for-target-result");
+  assert.equal(status.runtimeSummary.health.status, "attention");
+  assert.equal(status.runtimeSummary.health.checks.targetResults.missingCount, 1);
+  assert.equal(status.runtimeSummary.health.checks.projection.staleCount, 1);
+  assert.deepEqual(status.runtimeSummary.health.checks.projection.staleStateRoots, [stateRootRef]);
+  assert.equal(status.runtimeSummary.replay.status, "has-replay-history");
+  assert.equal(status.runtimeSummary.replay.deliveryAttemptCount, 2);
+  assert.equal(status.runtimeSummary.replay.repeatedDeliveryAttemptCount, 1);
+  assert.equal(status.runtimeSummary.replay.repeatedDeliveryAttempts[0].runIds.length, 2);
+  assert.equal(status.runtimeSummary.resumePlan.status, "waiting");
+  assert.equal(status.runtimeSummary.resumePlan.stopRequired, true);
+  assert.equal(status.runtimeSummary.resumePlan.steps[0].kind, "stop-and-wait");
+});
+
+test("record-target-result is idempotent and requires explicit supersede for changed content", () => {
+  const { root } = makeFixture();
+  const first = parseOk(run(root, [
+    "record-target-result",
+    "--target-window",
+    "AlembicPlugin",
+    "--task-id",
+    "CSMR-TASK-1",
+    "--group",
+    "GROUP-STATE",
+    "--status",
+    "completed",
+    "--evidence-ref",
+    "reports/result.json",
+    "--verification",
+    "focused smoke passed",
+    "--write",
+  ]));
+  assert.equal(first.wrote, true);
+  assert.equal(first.result.idempotency.key, "target-result:GROUP-STATE:AlembicPlugin:CSMR-TASK-1");
+
+  const duplicate = parseOk(run(root, [
+    "record-target-result",
+    "--target-window",
+    "AlembicPlugin",
+    "--task-id",
+    "CSMR-TASK-1",
+    "--group",
+    "GROUP-STATE",
+    "--status",
+    "completed",
+    "--evidence-ref",
+    "reports/result.json",
+    "--verification",
+    "focused smoke passed",
+    "--write",
+  ]));
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(duplicate.idempotentReplay, true);
+  assert.equal(duplicate.wrote, false);
+  assert.equal(duplicate.result.reportedAt, first.result.reportedAt);
+
+  const changedWithoutSupersede = run(root, [
+    "record-target-result",
+    "--target-window",
+    "AlembicPlugin",
+    "--task-id",
+    "CSMR-TASK-1",
+    "--group",
+    "GROUP-STATE",
+    "--status",
+    "completed",
+    "--evidence-ref",
+    "reports/result-v2.json",
+    "--verification",
+    "focused smoke passed",
+    "--write",
+  ]);
+  assert.notEqual(changedWithoutSupersede.status, 0);
+  assert.match(changedWithoutSupersede.stdout, /already exists/);
+  assert.match(changedWithoutSupersede.stdout, /--supersede-result/);
+
+  const superseded = parseOk(run(root, [
+    "record-target-result",
+    "--target-window",
+    "AlembicPlugin",
+    "--task-id",
+    "CSMR-TASK-1",
+    "--group",
+    "GROUP-STATE",
+    "--status",
+    "completed",
+    "--evidence-ref",
+    "reports/result-v2.json",
+    "--verification",
+    "focused smoke passed",
+    "--supersede-result",
+    "--write",
+  ]));
+  assert.equal(superseded.superseded, true);
+  assert.match(superseded.supersededFile, /target-results\/superseded\//);
+  assert.equal(superseded.result.supersedes.status, "completed");
+  const archived = JSON.parse(readFileSync(path.join(root, superseded.supersededFile), "utf8"));
+  assert.equal(archived.evidenceRefs[0], "reports/result.json");
+  assert.equal(archived.supersededBy.resultFile, superseded.resultFile);
+  const current = JSON.parse(readFileSync(path.join(root, superseded.resultFile), "utf8"));
+  assert.equal(current.evidenceRefs[0], "reports/result-v2.json");
+  const status = parseOk(run(root, ["status"]));
+  assert.equal(status.runtimeSummary.replay.status, "has-replay-history");
+  assert.equal(status.runtimeSummary.replay.targetResultCount, 1);
+  assert.equal(status.runtimeSummary.replay.supersededTargetResultCount, 1);
+  assert.equal(status.runtimeSummary.replay.supersededTargetResults[0].archivedResultFile, superseded.supersededFile);
 });
 
 test("state-root target result import exposes controller-return context from delivery envelope", () => {
@@ -952,6 +1723,61 @@ test("state-root target result import exposes controller-return context from del
   assert.equal(resultFile.dispatchGroup, "GROUP-STATE");
   assert.equal(resultFile.deliveryContext.deliveryEnvelopeFile, prepared.deliveryFile);
   assert.equal(resultFile.controllerActionRequired, true);
+  assert.equal(resultFile.wakeflowTrace.artifactKind, "target-result");
+  assert.equal(resultFile.wakeflowTrace.resultId, "CSMR-RESULT-CALLBACK");
+  assert.equal(resultFile.wakeflowTrace.dispatchGroup, "GROUP-STATE");
+  assert.equal(resultFile.wakeflowTrace.stateRoot, stateRootRef);
+  assert.equal(resultFile.wakeflowTrace.targetTaskId, "CSMR-TASK-1");
+  const status = parseOk(run(root, ["status"]));
+  assert.equal(status.runtimeSummary.nextAction, "build-controller-return");
+  assert.equal(status.runtimeSummary.health.checks.controllerCallback.readyUnitCount, 1);
+  assert.equal(status.runtimeSummary.resumePlan.controllerDecisionRequired, false);
+  assert.equal(status.runtimeSummary.resumePlan.steps[0].kind, "prepare-controller-return");
+  assert.equal(status.runtimeSummary.resumePlan.steps[0].tool, "wakeflow_prepare_delivery");
+  assert.deepEqual(status.runtimeSummary.resumePlan.steps[0].arguments, {
+    direction: "controller-return",
+    dispatchGroup: "GROUP-STATE",
+    triggerTarget: "AlembicPlugin",
+    triggerTaskId: "CSMR-TASK-1",
+  });
+
+  const traceByGroup = parseOk(run(root, [
+    "trace-spine",
+    "--group",
+    "GROUP-STATE",
+  ]));
+  assert.equal(traceByGroup.traceSpine.kind, "WakeflowTraceSpine");
+  assert.equal(traceByGroup.coverage.stateRootCount, 1);
+  assert.equal(traceByGroup.coverage.dispatchGroupCount, 1);
+  assert.equal(traceByGroup.coverage.dispatchPacketCount, 1);
+  assert.equal(traceByGroup.coverage.deliveryEnvelopeCount, 1);
+  assert.equal(traceByGroup.coverage.deliveryRunCount, 1);
+  assert.equal(traceByGroup.coverage.targetResultCount, 1);
+  assert.equal(traceByGroup.coverage.controllerEventCount, 1);
+  assert.equal(traceByGroup.traceSpine.dispatchPackets[0].id, "GROUP-STATE__AlembicPlugin__CSMR-TASK-1");
+  assert.equal(traceByGroup.traceSpine.deliveryEnvelopes[0].deliveryId, prepared.envelope.deliveryId);
+  assert.equal(traceByGroup.traceSpine.deliveryRuns[0].status, "sent");
+  assert.equal(traceByGroup.traceSpine.targetResults[0].id, "CSMR-RESULT-CALLBACK");
+  assert.equal(traceByGroup.traceSpine.review.decision, "needs-controller-review");
+  assert.match(traceByGroup.agentNext, /read-only/);
+
+  const traceByDeliveryId = parseOk(run(root, [
+    "trace-spine",
+    "--delivery-id",
+    prepared.envelope.deliveryId,
+  ]));
+  assert.equal(traceByDeliveryId.selector.dispatchGroup, "GROUP-STATE");
+  assert.equal(traceByDeliveryId.coverage.dispatchPacketCount, 1);
+  assert.equal(traceByDeliveryId.coverage.targetResultCount, 1);
+
+  const traceByResultFile = parseOk(run(root, [
+    "trace-spine",
+    "--result-file",
+    `${stateRootRef}/target-results/CSMR-RESULT-CALLBACK.json`,
+  ]));
+  assert.equal(traceByResultFile.selector.deliveryId, prepared.envelope.deliveryId);
+  assert.equal(traceByResultFile.coverage.deliveryEnvelopeCount, 1);
+  assert.equal(traceByResultFile.coverage.targetResultCount, 1);
 });
 
 test("record-delivery-run infers workspace root from an absolute delivery file", () => {

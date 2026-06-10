@@ -20,6 +20,7 @@
     "excludedTargetTaskIds": { "type": "array", "items": { "type": "string" } },
     "allowedDecisions": { "type": "array", "items": { "type": "string" } },
     "evidenceRefs": { "type": "array", "items": { "type": "string" } },
+    "wakeflowTrace": { "type": "object" },
     "forbiddenConclusions": { "type": "array", "items": { "type": "string" } }
   },
   "additionalProperties": false

@@ -3,6 +3,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildWakeflowTrace } from "../lib/wakeflow-trace.mjs";
 import { loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 import { controllerReviewScope, reductionStatusForTargetTask } from "./lib/wakeflow-review-scope.mjs";
 
@@ -91,6 +92,17 @@ function slug(value) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function artifactTrace({ artifactKind, createdAt, ...fields } = {}) {
+  return buildWakeflowTrace({
+    artifactKind,
+    command,
+    createdAt,
+    root: workspaceRoot,
+    source: "wakeflow-state",
+    ...fields,
+  });
 }
 
 function relative(file) {
@@ -693,6 +705,18 @@ function commandImportTargetResult() {
     risks,
     deliveryContext,
     controllerActionRequired: Boolean(deliveryContext.controllerReturnRequired),
+    wakeflowTrace: artifactTrace({
+      artifactKind: "target-result",
+      createdAt,
+      demandKey: state.demandKey,
+      dispatchGroup: deliveryContext.dispatchGroup ?? undefined,
+      resultId,
+      stateRevision: state.revision,
+      stateRoot: relative(stateRoot),
+      targetTaskId,
+      targetWindow,
+      taskPackageId: targetTask.taskPackageId,
+    }),
     createdAt,
     stateRevisionObserved: state.revision,
     forbiddenConclusions: [
@@ -817,6 +841,14 @@ function commandReduceResults() {
     excludedTargetTaskIds: reviewScope.excludedTargetTaskIds,
     allowedDecisions: ["accept", "rework", "blocked"],
     evidenceRefs: [...new Set(evidenceRefs)],
+    wakeflowTrace: artifactTrace({
+      artifactKind: "transition-candidate",
+      candidateId,
+      createdAt,
+      demandKey: state.demandKey,
+      stateRevision: nextRevision,
+      stateRoot: relative(stateRoot),
+    }),
     forbiddenConclusions: [
       "transition-candidate-is-acceptance",
       "reducer-decision-closes-task-package",
@@ -872,6 +904,13 @@ function commandReduceResults() {
       "review-reduction-closes-task-package",
     ],
     stateRevision: nextRevision,
+    wakeflowTrace: artifactTrace({
+      artifactKind: "controller-event",
+      createdAt,
+      demandKey: state.demandKey,
+      stateRevision: nextRevision,
+      stateRoot: relative(stateRoot),
+    }),
   };
 
   if (write) {

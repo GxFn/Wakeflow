@@ -16,6 +16,7 @@
     "evidenceRefs": { "type": "array", "items": { "type": "string" } },
     "verification": { "type": "array", "items": { "type": "string" } },
     "risks": { "type": "array", "items": { "type": "string" } },
+    "wakeflowTrace": { "type": "object" },
     "createdAt": { "type": "string" },
     "stateRevisionObserved": { "type": "integer", "minimum": 1 },
     "forbiddenConclusions": { "type": "array", "items": { "type": "string" } }

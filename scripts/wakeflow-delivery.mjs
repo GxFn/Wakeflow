@@ -3,7 +3,40 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawnProcess } from "../lib/wakeflow-process.mjs";
+import { buildWakeflowTrace } from "../lib/wakeflow-trace.mjs";
+import { buildControllerReturnEnvelope } from "./lib/wakeflow-controller-return.mjs";
+import {
+  annotateDeliveryRunIdempotency,
+  annotateDispatchPacketIdempotency,
+  annotateTargetResultIdempotency,
+  buildReplaySummary,
+  sameDeliveryEnvelopeContent,
+  sameDeliveryRunContent,
+  sameDispatchPacketContent,
+  sameTargetResultContent,
+} from "./lib/wakeflow-idempotency.mjs";
 import { controllerReviewScope } from "./lib/wakeflow-review-scope.mjs";
+import { buildControllerReviewPack } from "./lib/wakeflow-review-pack.mjs";
+import {
+  buildRuntimeHealth,
+  buildRuntimeResumePlan,
+  countBy,
+  deriveRuntimeGroupStatus,
+  summarizeRuntimeNextAction,
+} from "./lib/wakeflow-runtime-summary.mjs";
+import {
+  buildWindowDispatchConfig,
+  createThreadRegistration,
+  normalizeThreadRegistrationRecord,
+} from "./lib/wakeflow-thread-registry.mjs";
+import {
+  buildControllerCallbackPlan,
+  controllerReturnDuplicateScopeText,
+  controllerReturnDuplicateSelector,
+  controllerReturnReadinessIssue,
+  normalizeReturnPolicyMode,
+  returnPolicyReviewScope,
+} from "./lib/wakeflow-return-policy.mjs";
 
 const args = process.argv.slice(2);
 const command = args[0] && !args[0].startsWith("--") ? args[0] : "status";
@@ -45,9 +78,10 @@ Usage:
   node scripts/wakeflow-delivery.mjs start-keep-live --automation-run-id <id> [--keep-live-command <cmd>] [--keep-live-arg <arg>...] [--no-keep-live] --write [--json]
   node scripts/wakeflow-delivery.mjs stop-keep-live --automation-run-id <id> [--reason <text>] --write [--json]
   node scripts/wakeflow-delivery.mjs keep-live-state --automation-run-id <id> --status running|stopped|failed [--mechanism macos-caffeinate|manual|none] [--pid <pid>] [--error <text>] --write [--json]
-  node scripts/wakeflow-delivery.mjs record-target-result --target-window <name> --task-id <id> --status completed|blocked|needs-review [--group <id>] [--changed-repo <repo>...] [--commit <hash>...] [--evidence-ref <ref>...] [--verification <text>...] [--risk <text>...] [--next-suggestion <text>] [--write] [--json]
+  node scripts/wakeflow-delivery.mjs record-target-result --target-window <name> --task-id <id> --status completed|blocked|needs-review [--group <id>] [--changed-repo <repo>...] [--commit <hash>...] [--evidence-ref <ref>...] [--verification <text>...] [--risk <text>...] [--next-suggestion <text>] [--supersede-result] [--write] [--json]
   node scripts/wakeflow-delivery.mjs review-results (--group <id>|--task-id <id>) [--json]
   node scripts/wakeflow-delivery.mjs review-pack (--group <id>|--task-id <id>|--state-root <path>) [--json]
+  node scripts/wakeflow-delivery.mjs trace-spine [--state-root <path>] [--group <id>] [--target-window <name>] [--task-id <id>] [--result-file <path>] [--result-id <id>] [--delivery-file <path>] [--delivery-id <id>] [--json]
   node scripts/wakeflow-delivery.mjs stop-loop --reason <text> [--automation-run-id <id>] --write [--json]
 
 Design:
@@ -105,6 +139,17 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function artifactTrace({ artifactKind, createdAt, ...fields } = {}) {
+  return buildWakeflowTrace({
+    artifactKind,
+    command,
+    createdAt,
+    root: workspaceRoot,
+    source: "wakeflow-delivery",
+    ...fields,
+  });
+}
+
 function eventIdFor(createdAt, revision) {
   return `evt-${createdAt.replace(/[-:.TZ]/g, "").slice(0, 14)}-${String(revision).padStart(4, "0")}`;
 }
@@ -152,12 +197,43 @@ function inferAgentNext(payload) {
     if (payload.reviewPack?.nextAction === "dispatch-pending-target-before-result-review") return "No sent target result is missing; return to total-control judgment and dispatch the pending target before waiting for a result.";
     return payload.decision === "wait" ? "No controller review is available yet; stop this turn and wait for the target/controller-return instead of polling or sleeping." : "Use this review pack to pull raw evidence, then make a total-control verdict.";
   }
+  if (payload.command === "trace-spine") return "Use the trace spine to inspect evidence and runtime gaps; it is read-only and not a controller acceptance verdict.";
   if (payload.command === "stop-loop") return payload.keepLive?.retainedByOtherRuns ? "Closed-loop delivery is stopped for this run; keep-live remains active for other runs." : "Closed-loop delivery is stopped; do not create new deliveries.";
   return "Continue by total-control judgment.";
 }
 
+function classifyErrorCode(message = "") {
+  const text = String(message);
+  const rules = [
+    [/state revision/i, "stale-state-revision"],
+    [/outside workspace/i, "scope-boundary-violation"],
+    [/No registered .*thread|thread.*missing|thread id/i, "thread-registration-invalid"],
+    [/already .*controller-return|duplicate controller returns/i, "controller-return-duplicate"],
+    [/missing results|missing target results|missing result/i, "target-result-missing"],
+    [/pending-host-send|host send|readback/i, "host-readback-unconfirmed"],
+    [/evidence/i, "evidence-insufficient"],
+    [/return policy|Invalid return policy/i, "return-policy-invalid"],
+    [/not part of dispatch group|No matching dispatch packets|requires --group|requires --state-root/i, "dispatch-context-missing"],
+    [/Delivery file must contain|unreadable|JSON/i, "artifact-invalid"],
+    [/completed|archived|paused|blocked/i, "state-not-dispatchable"],
+  ];
+  return rules.find(([pattern]) => pattern.test(text))?.[1] || "wakeflow-contract-error";
+}
+
 function fail(message) {
-  output({ ok: false, command, error: message });
+  const errorCode = classifyErrorCode(message);
+  output({
+    ok: false,
+    command,
+    errorCode,
+    error: message,
+    diagnostics: {
+      code: errorCode,
+      severity: "error",
+      plane: "delivery-loop",
+      retryable: ["host-readback-unconfirmed", "thread-registration-invalid"].includes(errorCode),
+    },
+  });
   process.exitCode = 1;
   throw new CliExit(message);
 }
@@ -268,6 +344,12 @@ function resultFileFor(targetWindow, taskId, dispatchGroup = "") {
   return path.join(dirs.results, `${parts.join("__")}.json`);
 }
 
+function supersededResultFileFor(targetWindow, taskId, dispatchGroup = "", supersededAt = nowIso()) {
+  const parts = [dispatchGroup, targetWindow, taskId].filter(Boolean).map(slug);
+  const stamp = supersededAt.replace(/[-:.TZ]/g, "").slice(0, 14);
+  return path.join(dirs.results, "superseded", `${parts.join("__")}__superseded-${stamp}.json`);
+}
+
 function listJsonFiles(dir) {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
@@ -366,6 +448,8 @@ function upsertDispatchGroup({
   } else {
     expectedTargets.push(descriptor);
   }
+  const updatedAt = nowIso();
+  const createdAt = existing?.createdAt || updatedAt;
 
   return {
     kind: "DispatchGroup",
@@ -378,8 +462,16 @@ function upsertDispatchGroup({
     returnPolicy: {
       mode,
     },
-    createdAt: existing?.createdAt || nowIso(),
-    updatedAt: nowIso(),
+    wakeflowTrace: artifactTrace({
+      artifactKind: "dispatch-group",
+      createdAt,
+      dispatchGroup: groupId,
+      stateRef: existing?.stateRef ? dispatchGroupStateRef(existing.stateRef) : groupStateRef,
+      targetTaskId: taskId,
+      targetWindow,
+    }),
+    createdAt,
+    updatedAt,
   };
 }
 
@@ -405,6 +497,12 @@ function groupFromPackets({ groupId = "", packets = [] }) {
     })),
     returnPolicy: firstPacket.returnPolicy || { mode: "group-ready" },
     reconstructedFromPackets: true,
+    wakeflowTrace: artifactTrace({
+      artifactKind: "dispatch-group",
+      createdAt: firstPacket.createdAt,
+      dispatchGroup: groupId,
+      stateRef: firstPacket.stateRef,
+    }),
     createdAt: firstPacket.createdAt,
     updatedAt: firstPacket.createdAt,
   };
@@ -427,11 +525,6 @@ function resultSummary(item) {
 
 function uniqueTargetNames(items) {
   return [...new Set(items.map((item) => item.packet?.targetWindow ?? item.targetWindow).filter(Boolean))];
-}
-
-function formatPromptTargetList(targets) {
-  const uniqueTargets = [...new Set((targets || []).filter(Boolean))];
-  return uniqueTargets.length > 0 ? uniqueTargets.join(", ") : "None";
 }
 
 function buildGroupSnapshot({ groupRecord, results }) {
@@ -487,21 +580,9 @@ function buildGroupSnapshot({ groupRecord, results }) {
 }
 
 function validateControllerReturnAllowed({ review, triggerTarget, triggerTaskId }) {
-  const trigger = review.results.find((item) => item.packet.targetWindow === triggerTarget && item.packet.taskId === triggerTaskId);
-  if (!trigger) {
-    fail(`Trigger target ${triggerTarget} / ${triggerTaskId} is not part of dispatch group ${review.group}.`);
-  }
-  if (!trigger.result) {
-    fail(`Cannot build controller return before trigger target result exists: ${triggerTarget} / ${triggerTaskId}.`);
-  }
-  const mode = review.returnPolicy.mode;
-  if (mode === "group-ready" && !review.groupSnapshot.allSentResultsPresent) {
-    fail(`Cannot build group-ready controller return while dispatch group has sent targets missing results: ${review.groupSnapshot.missing.map((item) => item.packetId).join(", ")}`);
-  }
-  if (mode === "group-ready" && review.groupSnapshot.ready.length === 0 && review.groupSnapshot.blocked.length === 0) {
-    fail(`Cannot build group-ready controller return before any sent target result is ready.`);
-  }
-  return trigger;
+  const issue = controllerReturnReadinessIssue({ review, triggerTarget, triggerTaskId });
+  if (issue) fail(issue.message);
+  return review.results.find((item) => item.packet.targetWindow === triggerTarget && item.packet.taskId === triggerTaskId);
 }
 
 function requireValue(name) {
@@ -543,11 +624,11 @@ function validateReturnReason(value) {
 }
 
 function validateReturnPolicyMode(value) {
-  const allowed = new Set(["group-ready", "per-target"]);
-  if (!allowed.has(value)) {
-    fail(`--return-policy must be one of: ${[...allowed].join(", ")}`);
+  try {
+    return normalizeReturnPolicyMode(value);
+  } catch {
+    fail("--return-policy must be one of: group-ready, per-target");
   }
-  return value;
 }
 
 function validateDeliveryRunStatus(value) {
@@ -1221,60 +1302,16 @@ function formatTargetPrompt({
   ].join("\n");
 }
 
-function formatControllerReturnPrompt({
-  dispatchGroup,
-  controllerWindow,
-  triggerTarget,
-  triggerTaskId,
-  humanContextRef = "",
-  stateRef,
-  returnPolicy,
-  reviewScope,
-  groupSnapshot,
-}) {
-  if (!stateRef) fail("Controller return prompts require stateRef from a controller state root.");
-  const returnedTargets = [
-    ...(groupSnapshot.readyTargets || []),
-    ...(groupSnapshot.blockedTargets || []),
-  ];
-  const titleTargets = reviewScope === "group"
-    ? formatPromptTargetList(returnedTargets)
-    : triggerTarget;
-  const title = reviewScope === "group"
-    ? `Continue controller review: ${titleTargets} backfill.`
-    : `Continue controller review: ${triggerTarget} backfill.`;
-  const blockedTargets = formatPromptTargetList(groupSnapshot.blockedTargets);
-  const remainingTargets = formatPromptTargetList(groupSnapshot.missingTargets);
-  const pendingDispatchTargets = formatPromptTargetList(groupSnapshot.pendingDispatchTargets);
-  const hasBlockedTargets = Array.isArray(groupSnapshot.blockedTargets) && groupSnapshot.blockedTargets.length > 0;
-  const hasRemainingTargets = Array.isArray(groupSnapshot.missingTargets) && groupSnapshot.missingTargets.length > 0;
-  const hasPendingDispatchTargets = Array.isArray(groupSnapshot.pendingDispatchTargets) && groupSnapshot.pendingDispatchTargets.length > 0;
-  return [
-    title,
-    "",
-    "Variables:",
-    `- stateRoot: ${stateRef.stateRoot}`,
-    `- dispatchGroup: ${dispatchGroup}`,
-    `- trigger: ${triggerTarget} / ${triggerTaskId}`,
-    ...(hasBlockedTargets ? [`- blockedTargets: ${blockedTargets}`] : []),
-    ...(hasRemainingTargets ? [`- remainingTargets: ${remainingTargets}`] : []),
-    ...(hasPendingDispatchTargets ? [`- pendingDispatchTargets: ${pendingDispatchTargets}`] : []),
-    "- skill: skills/wakeflow-controller/SKILL.md",
-  ].join("\n");
-}
-
 function commandRegisterThread() {
   if (!write) fail("register-thread requires --write.");
   const windowName = requireValue("--window");
   const threadId = validateThreadId(requireValue("--thread-id"));
-  const registration = {
-    kind: "CodexWindowThreadRegistration",
-    version: threadRegistrationVersion,
+  const registration = createThreadRegistration({
     windowName,
     threadId,
     registeredAt: nowIso(),
-    lastVerifiedAt: nowIso(),
-  };
+    version: threadRegistrationVersion,
+  });
   ensureStateDirs();
   atomicWriteJson(threadFileFor(windowName), registration);
   output(
@@ -1295,21 +1332,17 @@ function loadThreadRegistration(windowName) {
   const file = threadFileFor(windowName);
   if (!existsSync(file)) return null;
   const registration = readJson(file, "thread registration");
-  if (registration.kind !== "CodexWindowThreadRegistration") {
-    fail(`Invalid thread registration for ${windowName}.`);
+  try {
+    return normalizeThreadRegistrationRecord({
+      windowName,
+      registration,
+      threadRegistryFile: path.relative(stateDir, file),
+      version: threadRegistrationVersion,
+    });
+  } catch (error) {
+    fail(error.message);
   }
-  if (!registration.threadId) {
-    fail(`Thread registration for ${windowName} is missing threadId.`);
-  }
-  return {
-    kind: "CodexWindowThreadRegistration",
-    version: threadRegistrationVersion,
-    windowName: registration.windowName || windowName,
-    threadId: registration.threadId,
-    registeredAt: registration.registeredAt,
-    lastVerifiedAt: registration.lastVerifiedAt,
-    threadRegistryFile: path.relative(stateDir, file),
-  };
+  return null;
 }
 
 function redactDeliveryEnvelope(envelope) {
@@ -1360,6 +1393,646 @@ function deliveryRunStatusForEnvelope(envelope) {
   };
 }
 
+function readJsonArtifact(file) {
+  try {
+    return { file, value: JSON.parse(readFileSync(file, "utf8")) };
+  } catch (error) {
+    return { file, error: error.message };
+  }
+}
+
+function listJsonArtifacts(dir) {
+  return listJsonFiles(dir).map((file) => readJsonArtifact(file));
+}
+
+function artifactValues(artifacts, kind = "") {
+  return artifacts
+    .filter((item) => !item.error && (!kind || item.value?.kind === kind))
+    .map((item) => ({ file: item.file, value: item.value }));
+}
+
+function statusFromLoadedRuns(envelope, runArtifacts) {
+  const runs = runArtifacts
+    .filter((item) => item.value?.kind === "DirectThreadDeliveryRun" && item.value.deliveryId === envelope.deliveryId)
+    .sort((left, right) => String(left.value.createdAt || "").localeCompare(String(right.value.createdAt || "")));
+  const sentRun = [...runs].reverse().find((item) => item.value.status === "sent" && item.value.readback?.ok === true);
+  const latestRun = runs[runs.length - 1] || null;
+  const status = sentRun
+    ? "sent"
+    : runs.length === 0
+      ? "pending-host-send"
+      : latestRun.value.status;
+  return {
+    deliveryId: envelope.deliveryId,
+    kind: envelope.kind,
+    targetWindow: envelope.targetWindow || envelope.targetThread?.windowName || envelope.controllerWindow,
+    taskId: envelope.taskId || envelope.triggerTaskId,
+    dispatchGroup: envelope.dispatchGroup,
+    sourcePacketId: envelope.sourcePacketId,
+    status,
+    sent: Boolean(sentRun),
+    readbackOk: Boolean(sentRun?.value.readback?.ok),
+    runCount: runs.length,
+    latestRunFile: latestRun ? path.relative(workspaceRoot, latestRun.file) : undefined,
+    wakeflowTrace: envelope.wakeflowTrace,
+  };
+}
+
+function statusResultForPacket(packet, resultArtifacts, stateRootResultCache, diagnostics) {
+  const local = resultArtifacts.find((item) => {
+    const result = item.value;
+    if (!result) return false;
+    if (result.targetWindow !== packet.targetWindow) return false;
+    if ((result.targetTaskId || result.taskId) !== packet.taskId) return false;
+    return !result.dispatchGroup || result.dispatchGroup === packet.dispatchGroup;
+  });
+  if (local) return local;
+
+  const stateRootRef = packet.stateRef?.stateRoot;
+  if (!stateRootRef) return null;
+  if (!stateRootResultCache.has(stateRootRef)) {
+    const stateRoot = path.resolve(workspaceRoot, stateRootRef);
+    const rel = path.relative(workspaceRoot, stateRoot);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+      diagnostics.errors.push({ file: stateRootRef, error: "state root is outside workspace" });
+      stateRootResultCache.set(stateRootRef, []);
+    } else {
+      const artifacts = listJsonArtifacts(path.join(stateRoot, "target-results"));
+      for (const artifact of artifacts.filter((item) => item.error)) {
+        diagnostics.errors.push({
+          file: path.relative(workspaceRoot, artifact.file),
+          error: artifact.error,
+        });
+      }
+      stateRootResultCache.set(stateRootRef, artifacts);
+    }
+  }
+  return stateRootResultCache.get(stateRootRef).find((item) => {
+    const result = item.value;
+    return result
+      && result.targetTaskId === packet.taskId
+      && (!result.targetWindow || result.targetWindow === packet.targetWindow);
+  }) || null;
+}
+
+function buildRuntimeGroupSummaries({ packets, groupArtifacts, resultArtifacts, deliveryStatuses, diagnostics }) {
+  const stateRootResultCache = new Map();
+  const groupsById = new Map();
+  for (const packet of packets) {
+    const groupId = packet.dispatchGroup || packet.taskId || packet.id;
+    if (!groupsById.has(groupId)) groupsById.set(groupId, []);
+    groupsById.get(groupId).push(packet);
+  }
+  const groupRecords = new Map(groupArtifacts.map((item) => [item.value.groupId, item.value]));
+  const deliveryByPacket = new Map();
+  for (const delivery of deliveryStatuses.filter((item) => item.kind === "DeliveryEnvelope")) {
+    if (!delivery.sourcePacketId) continue;
+    if (!deliveryByPacket.has(delivery.sourcePacketId)) deliveryByPacket.set(delivery.sourcePacketId, []);
+    deliveryByPacket.get(delivery.sourcePacketId).push(delivery);
+  }
+
+  return [...groupsById.entries()].map(([groupId, groupPackets]) => {
+    const packetSummaries = groupPackets.map((packet) => {
+      const deliveries = deliveryByPacket.get(packet.id) || [];
+      const result = statusResultForPacket(packet, resultArtifacts, stateRootResultCache, diagnostics);
+      const deliverySent = deliveries.some((item) => item.status === "sent");
+      const deliveryPending = deliveries.some((item) => item.status === "pending-host-send");
+      const resultStatus = result?.value?.status
+        || (deliverySent ? "missing" : deliveryPending ? "pending-host-send" : "pending-dispatch");
+      return {
+        packetId: packet.id,
+        targetWindow: packet.targetWindow,
+        taskId: packet.taskId,
+        stateRoot: packet.stateRef?.stateRoot,
+        status: resultStatus,
+        deliveryStatus: deliveries[0]?.status || "not-built",
+        resultFile: result ? path.relative(workspaceRoot, result.file) : undefined,
+      };
+    });
+    const counts = countBy(packetSummaries, "status");
+    const groupStatus = deriveRuntimeGroupStatus(counts);
+    const returnPolicy = groupRecords.get(groupId)?.returnPolicy || groupPackets[0]?.returnPolicy || { mode: "group-ready" };
+    const callbackSnapshot = {
+      groupId,
+      returnPolicy,
+      groupStatus,
+      expected: packetSummaries,
+      ready: packetSummaries.filter((item) => !["missing", "pending-dispatch", "pending-host-send", "blocked"].includes(item.status)),
+      blocked: packetSummaries.filter((item) => item.status === "blocked"),
+      missing: packetSummaries.filter((item) => item.status === "missing"),
+      pendingDispatch: packetSummaries.filter((item) => ["pending-dispatch", "pending-host-send"].includes(item.status)),
+    };
+    const callbackPlan = buildControllerCallbackPlan({
+      dispatchGroup: groupId,
+      returnPolicy,
+      groupSnapshot: callbackSnapshot,
+      controllerReturnDeliveries: deliveryStatuses.filter((item) => item.kind === "ControllerReturnEnvelope" && item.dispatchGroup === groupId),
+    });
+    return {
+      groupId,
+      returnPolicy,
+      stateRoot: groupRecords.get(groupId)?.stateRef?.stateRoot || groupPackets.find((packet) => packet.stateRef?.stateRoot)?.stateRef?.stateRoot,
+      groupStatus,
+      targets: packetSummaries,
+      counts,
+      callbackPlan,
+    };
+  });
+}
+
+function collectProjectionHealth({ packets, diagnostics }) {
+  const stateRootRefs = [...new Set(packets.map((packet) => packet.stateRef?.stateRoot).filter(Boolean))];
+  return stateRootRefs.flatMap((stateRootRef) => {
+    const stateRoot = path.resolve(workspaceRoot, stateRootRef);
+    const rel = path.relative(workspaceRoot, stateRoot);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+      diagnostics.errors.push({ file: stateRootRef, error: "state root is outside workspace" });
+      return [];
+    }
+    const stateFile = path.join(stateRoot, "wakeflow-state.json");
+    if (!existsSync(stateFile)) {
+      diagnostics.errors.push({ file: path.relative(workspaceRoot, stateFile), error: "state root is missing wakeflow-state.json" });
+      return [];
+    }
+    const artifact = readJsonArtifact(stateFile);
+    if (artifact.error) {
+      diagnostics.errors.push({ file: path.relative(workspaceRoot, stateFile), error: artifact.error });
+      return [];
+    }
+    const state = artifact.value;
+    return [{
+      stateRoot: stateRootRef,
+      demandKey: state.demandKey,
+      state: state.state,
+      stateRevision: state.revision,
+      projectionStatus: state.projection?.status || "unknown",
+      progressDoc: state.projection?.progressDoc,
+      updatedAt: state.updatedAt,
+    }];
+  });
+}
+
+function buildRuntimeSummary({
+  packetCount,
+  groupCount,
+  deliveryCount,
+  deliveryRunCount,
+  resultCount,
+  registeredThreadCount,
+  windowConfigCount,
+  keepLive,
+}) {
+  const packetArtifacts = listJsonArtifacts(dirs.packets);
+  const groupArtifacts = listJsonArtifacts(dirs.groups);
+  const deliveryArtifacts = listJsonArtifacts(dirs.deliveries);
+  const runArtifacts = listJsonArtifacts(dirs.deliveryRuns);
+  const resultArtifacts = listJsonArtifacts(dirs.results);
+  const diagnostics = {
+    errors: [...packetArtifacts, ...groupArtifacts, ...deliveryArtifacts, ...runArtifacts, ...resultArtifacts]
+      .filter((item) => item.error)
+      .map((item) => ({ file: path.relative(workspaceRoot, item.file), error: item.error })),
+  };
+  const packets = artifactValues(packetArtifacts, "ControllerDispatchPacket").map((item) => item.value);
+  const groups = artifactValues(groupArtifacts, "DispatchGroup");
+  const results = artifactValues(resultArtifacts);
+  const replaySummary = buildReplaySummary({
+    deliveryRuns: artifactValues(runArtifacts, "DirectThreadDeliveryRun").map((item) => item.value),
+    targetResults: results.map((item) => item.value),
+  });
+  const projectionHealth = collectProjectionHealth({ packets, diagnostics });
+  const deliveryStatuses = artifactValues(deliveryArtifacts)
+    .filter((item) => ["DeliveryEnvelope", "ControllerReturnEnvelope"].includes(item.value?.kind))
+    .map((item) => ({
+      file: path.relative(workspaceRoot, item.file),
+      ...statusFromLoadedRuns(item.value, runArtifacts),
+    }));
+  const groupSummaries = buildRuntimeGroupSummaries({
+    packets,
+    groupArtifacts: groups,
+    resultArtifacts: results,
+    deliveryStatuses,
+    diagnostics,
+  });
+  const deliveryCounts = countBy(deliveryStatuses, "status");
+  const groupCounts = countBy(groupSummaries, "groupStatus");
+  const nextAction = summarizeRuntimeNextAction({ diagnostics, deliveryStatuses, groupSummaries });
+  const resumePlan = buildRuntimeResumePlan({
+    nextAction,
+    diagnostics,
+    deliveryStatuses,
+    groupSummaries,
+  });
+  const health = buildRuntimeHealth({
+    diagnostics,
+    deliveryStatuses,
+    groupSummaries,
+    replaySummary,
+    projectionHealth,
+    keepLive,
+  });
+  return {
+    kind: "WakeflowClosedLoopRuntimeSummary",
+    version: 1,
+    status: health.status === "blocked" ? "blocked" : nextAction === "idle" ? "idle" : "active",
+    nextAction,
+    wakeflowTrace: artifactTrace({
+      artifactKind: "runtime-summary",
+      createdAt: nowIso(),
+    }),
+    health,
+    resumePlan,
+    totals: {
+      packetCount,
+      groupCount,
+      deliveryCount,
+      deliveryRunCount,
+      resultCount,
+      registeredThreadCount,
+      windowConfigCount,
+    },
+    keepLive: {
+      active: Boolean(keepLive.active),
+      status: keepLive.status,
+    },
+    deliveries: {
+      counts: deliveryCounts,
+      pendingHostSend: deliveryStatuses.filter((item) => item.status === "pending-host-send"),
+      sent: deliveryStatuses.filter((item) => item.status === "sent"),
+      failed: deliveryStatuses.filter((item) => item.status === "failed"),
+      blocked: deliveryStatuses.filter((item) => item.status === "blocked"),
+    },
+    groups: {
+      counts: groupCounts,
+      items: groupSummaries,
+    },
+    replay: replaySummary,
+    diagnostics,
+  };
+}
+
+function traceRelativeFile(file) {
+  return file ? path.relative(workspaceRoot, file) : undefined;
+}
+
+function traceTaskId(value = {}) {
+  return value.taskId || value.targetTaskId || value.stateRef?.targetTaskId || value.wakeflowTrace?.targetTaskId || "";
+}
+
+function traceStateRoot(value = {}) {
+  return value.stateRoot || value.stateRef?.stateRoot || value.wakeflowTrace?.stateRoot || "";
+}
+
+function traceTargetWindow(value = {}) {
+  return value.targetWindow || value.targetThread?.windowName || value.wakeflowTrace?.targetWindow || "";
+}
+
+function traceDispatchGroup(value = {}) {
+  return value.dispatchGroup || value.wakeflowTrace?.dispatchGroup || "";
+}
+
+function traceSelectorHasValue(selector) {
+  return Object.entries(selector).some(([key, value]) => key !== "resultFile" && key !== "deliveryFile" && Boolean(value));
+}
+
+function readTraceSeedFile(value, label) {
+  if (!value) return null;
+  const file = resolveInputPath(value, label);
+  ensureInsideWorkspace(file, label);
+  return {
+    file,
+    value: readJson(file, label),
+  };
+}
+
+function mergeTraceSelector(selector, artifact) {
+  if (!artifact?.value) return selector;
+  const value = artifact.value;
+  return {
+    ...selector,
+    resultId: selector.resultId || value.resultId || "",
+    deliveryId: selector.deliveryId || value.deliveryId || value.deliveryContext?.deliveryId || "",
+    dispatchGroup: selector.dispatchGroup || traceDispatchGroup(value) || value.deliveryContext?.dispatchGroup || "",
+    stateRoot: selector.stateRoot || traceStateRoot(value) || value.deliveryContext?.stateRoot || "",
+    targetWindow: selector.targetWindow || traceTargetWindow(value) || "",
+    taskId: selector.taskId || traceTaskId(value) || "",
+  };
+}
+
+function stateRootResultArtifactsFor(stateRootRefs, diagnostics) {
+  const seen = new Set();
+  const artifacts = [];
+  for (const stateRootRef of stateRootRefs.filter(Boolean)) {
+    if (seen.has(stateRootRef)) continue;
+    seen.add(stateRootRef);
+    const stateRoot = path.resolve(workspaceRoot, stateRootRef);
+    const rel = path.relative(workspaceRoot, stateRoot);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+      diagnostics.errors.push({ file: stateRootRef, error: "state root is outside workspace" });
+      continue;
+    }
+    for (const artifact of listJsonArtifacts(path.join(stateRoot, "target-results"))) {
+      if (artifact.error) {
+        diagnostics.errors.push({ file: traceRelativeFile(artifact.file), error: artifact.error });
+        continue;
+      }
+      artifacts.push({
+        ...artifact,
+        source: "state-root",
+        stateRoot: stateRootRef,
+      });
+    }
+  }
+  return artifacts;
+}
+
+function traceMatchesSelector(value, selector, { loose = false } = {}) {
+  if (!value) return false;
+  const checks = [
+    selector.resultId ? value.resultId === selector.resultId : true,
+    selector.deliveryId ? value.deliveryId === selector.deliveryId || value.deliveryContext?.deliveryId === selector.deliveryId : true,
+    selector.dispatchGroup ? traceDispatchGroup(value) === selector.dispatchGroup || value.deliveryContext?.dispatchGroup === selector.dispatchGroup : true,
+    selector.stateRoot ? traceStateRoot(value) === selector.stateRoot || value.deliveryContext?.stateRoot === selector.stateRoot : true,
+    selector.targetWindow ? traceTargetWindow(value) === selector.targetWindow : true,
+    selector.taskId ? traceTaskId(value) === selector.taskId : true,
+  ];
+  if (checks.every(Boolean)) return true;
+  if (!loose) return false;
+  return Boolean(
+    (selector.dispatchGroup && traceDispatchGroup(value) === selector.dispatchGroup)
+      || (selector.deliveryId && (value.deliveryId === selector.deliveryId || value.deliveryContext?.deliveryId === selector.deliveryId))
+      || (selector.resultId && value.resultId === selector.resultId)
+      || (selector.stateRoot && traceStateRoot(value) === selector.stateRoot && selector.taskId && traceTaskId(value) === selector.taskId)
+      || (selector.targetWindow && selector.taskId && traceTargetWindow(value) === selector.targetWindow && traceTaskId(value) === selector.taskId),
+  );
+}
+
+function summarizeTraceArtifact({ file, value, source = "local" }) {
+  return {
+    file: traceRelativeFile(file),
+    source,
+    kind: value.kind || value.schemaVersion && "StateRootTargetResult" || "JSON",
+    id: value.id || value.packetId || value.groupId || value.deliveryId || value.deliveryRunId || value.resultId || value.targetTaskId || value.taskPackageId,
+    demandKey: value.demandKey || value.wakeflowTrace?.demandKey,
+    stateRoot: traceStateRoot(value),
+    stateRevision: value.stateRevision || value.stateRevisionObserved || value.stateRef?.stateRevision || value.wakeflowTrace?.stateRevision,
+    taskPackageId: value.taskPackageId || value.stateRef?.taskPackageId || value.wakeflowTrace?.taskPackageId,
+    targetWindow: traceTargetWindow(value),
+    taskId: traceTaskId(value),
+    dispatchGroup: traceDispatchGroup(value),
+    deliveryId: value.deliveryId || value.deliveryContext?.deliveryId,
+    deliveryRunId: value.deliveryRunId || value.deliveryContext?.deliveryRunId,
+    status: value.status || value.state || value.review?.status,
+    returnRoute: value.returnRoute || value.deliveryContext?.returnRoute,
+    returnPolicy: value.returnPolicy || value.deliveryContext?.returnPolicy,
+    createdAt: value.createdAt,
+    reportedAt: value.reportedAt,
+    wakeflowTrace: value.wakeflowTrace,
+  };
+}
+
+function traceStateRootsFromArtifacts({ selector, packets, deliveries, results }) {
+  return [...new Set([
+    selector.stateRoot,
+    ...packets.map((item) => traceStateRoot(item.value)),
+    ...deliveries.map((item) => traceStateRoot(item.value)),
+    ...results.map((item) => traceStateRoot(item.value) || item.stateRoot),
+  ].filter(Boolean))];
+}
+
+function traceStateRootSummaries(stateRootRefs, selector, diagnostics) {
+  return stateRootRefs.flatMap((stateRootRef) => {
+    const stateRoot = path.resolve(workspaceRoot, stateRootRef);
+    const stateFile = path.join(stateRoot, "wakeflow-state.json");
+    if (!existsSync(stateFile)) {
+      diagnostics.errors.push({ file: traceRelativeFile(stateFile), error: "state root is missing wakeflow-state.json" });
+      return [];
+    }
+    const artifact = readJsonArtifact(stateFile);
+    if (artifact.error) {
+      diagnostics.errors.push({ file: traceRelativeFile(stateFile), error: artifact.error });
+      return [];
+    }
+    const state = artifact.value;
+    const targetTasks = (state.targetTasks || []).filter((task) => (
+      (!selector.taskId || task.targetTaskId === selector.taskId)
+        && (!selector.targetWindow || task.targetWindow === selector.targetWindow)
+        && (!selector.dispatchGroup || task.delivery?.dispatchGroup === selector.dispatchGroup || state.demandKey === selector.dispatchGroup)
+    ));
+    const taskPackageIds = new Set(targetTasks.map((task) => task.taskPackageId).filter(Boolean));
+    const taskPackages = (state.taskPackages || []).filter((taskPackage) => (
+      taskPackageIds.size === 0
+        ? (!selector.taskId && !selector.targetWindow)
+        : taskPackageIds.has(taskPackage.taskPackageId)
+    ));
+    return [{
+      file: traceRelativeFile(stateFile),
+      stateRoot: stateRootRef,
+      demandKey: state.demandKey,
+      title: state.title,
+      state: state.state,
+      stateRevision: state.revision,
+      reviewStatus: state.review?.status,
+      projectionStatus: state.projection?.status,
+      progressDoc: state.projection?.progressDoc,
+      targetTasks,
+      taskPackages,
+    }];
+  });
+}
+
+function traceControllerEvents(stateRootRefs, selector, diagnostics) {
+  return stateRootRefs.flatMap((stateRootRef) => {
+    const eventsFile = path.join(workspaceRoot, stateRootRef, "controller-events.jsonl");
+    if (!existsSync(eventsFile)) return [];
+    return readFileSync(eventsFile, "utf8")
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .flatMap((line) => {
+        try {
+          const event = JSON.parse(line);
+          if (!traceMatchesSelector(event, selector, { loose: true })) return [];
+          return [{
+            file: traceRelativeFile(eventsFile),
+            eventId: event.eventId,
+            type: event.type,
+            from: event.from,
+            to: event.to,
+            reason: event.reason,
+            stateRevision: event.stateRevision,
+            evidenceRefs: event.evidenceRefs || [],
+            createdAt: event.createdAt,
+            wakeflowTrace: event.wakeflowTrace,
+          }];
+        } catch (error) {
+          diagnostics.errors.push({ file: traceRelativeFile(eventsFile), error: error.message });
+          return [];
+        }
+      });
+  });
+}
+
+function commandTraceSpine() {
+  const seedResult = readTraceSeedFile(getValue("--result-file", ""), "--result-file");
+  const seedDelivery = readTraceSeedFile(getValue("--delivery-file", ""), "--delivery-file");
+  let selector = {
+    stateRoot: getValue("--state-root", ""),
+    dispatchGroup: getValue("--group", ""),
+    targetWindow: getValue("--target-window", ""),
+    taskId: getValue("--task-id", ""),
+    resultId: getValue("--result-id", ""),
+    deliveryId: getValue("--delivery-id", ""),
+  };
+  selector = mergeTraceSelector(mergeTraceSelector(selector, seedResult), seedDelivery);
+  if (!traceSelectorHasValue(selector)) {
+    fail("trace-spine requires at least one selector: --state-root, --group, --target-window/--task-id, --result-file, --result-id, --delivery-file, or --delivery-id.");
+  }
+
+  const diagnostics = { errors: [] };
+  const packetArtifacts = artifactValues(listJsonArtifacts(dirs.packets), "ControllerDispatchPacket");
+  const groupArtifacts = artifactValues(listJsonArtifacts(dirs.groups), "DispatchGroup");
+  const deliveryArtifacts = artifactValues(listJsonArtifacts(dirs.deliveries))
+    .filter((item) => ["DeliveryEnvelope", "ControllerReturnEnvelope"].includes(item.value?.kind));
+  const runArtifacts = artifactValues(listJsonArtifacts(dirs.deliveryRuns), "DirectThreadDeliveryRun");
+  const localResultArtifacts = artifactValues(listJsonArtifacts(dirs.results))
+    .filter((item) => item.value?.kind === "TargetResultEnvelope")
+    .map((item) => ({ ...item, source: "local" }));
+  const seedResults = seedResult ? [{ file: seedResult.file, value: seedResult.value, source: "seed" }] : [];
+  const stateRootRefs = [...new Set([
+    selector.stateRoot,
+    ...packetArtifacts.map((item) => traceStateRoot(item.value)),
+    ...deliveryArtifacts.map((item) => traceStateRoot(item.value)),
+    ...seedResults.map((item) => traceStateRoot(item.value)),
+  ].filter(Boolean))];
+  let stateRootResults = stateRootResultArtifactsFor(stateRootRefs, diagnostics);
+  let allResults = [...seedResults, ...localResultArtifacts, ...stateRootResults];
+  let matchingResults = allResults.filter((item) => traceMatchesSelector(item.value, selector, { loose: true }));
+  for (const result of matchingResults) selector = mergeTraceSelector(selector, result);
+
+  let matchingPackets = packetArtifacts.filter((item) => traceMatchesSelector(item.value, selector, { loose: true }));
+  let packetIds = new Set(matchingPackets.map((item) => item.value.id).filter(Boolean));
+  const matchingDeliveries = [
+    ...(seedDelivery ? [{ file: seedDelivery.file, value: seedDelivery.value }] : []),
+    ...deliveryArtifacts,
+  ].filter((item, index, array) => array.findIndex((candidate) => candidate.file === item.file) === index)
+    .filter((item) => traceMatchesSelector(item.value, selector, { loose: true }) || packetIds.has(item.value.sourcePacketId));
+  const deliverySourcePacketIds = new Set(matchingDeliveries.map((item) => item.value.sourcePacketId).filter(Boolean));
+  matchingPackets = [
+    ...matchingPackets,
+    ...packetArtifacts.filter((item) => deliverySourcePacketIds.has(item.value.id)),
+  ].filter((item, index, array) => array.findIndex((candidate) => candidate.file === item.file) === index);
+  for (const packet of matchingPackets) selector = mergeTraceSelector(selector, packet);
+  packetIds = new Set(matchingPackets.map((item) => item.value.id).filter(Boolean));
+  const expandedStateRootRefs = [...new Set([
+    ...stateRootRefs,
+    ...matchingPackets.map((item) => traceStateRoot(item.value)),
+    ...matchingDeliveries.map((item) => traceStateRoot(item.value)),
+  ].filter(Boolean))];
+  stateRootResults = stateRootResultArtifactsFor(expandedStateRootRefs, diagnostics);
+  allResults = [...seedResults, ...localResultArtifacts, ...stateRootResults];
+  matchingResults = allResults
+    .filter((item, index, array) => array.findIndex((candidate) => candidate.file === item.file) === index)
+    .filter((item) => traceMatchesSelector(item.value, selector, { loose: true }));
+  for (const result of matchingResults) selector = mergeTraceSelector(selector, result);
+  const deliveryIds = new Set(matchingDeliveries.map((item) => item.value.deliveryId).filter(Boolean));
+  const matchingRuns = runArtifacts.filter((item) => deliveryIds.has(item.value.deliveryId) || traceMatchesSelector(item.value, selector, { loose: true }));
+  const matchingGroups = groupArtifacts.filter((item) => (
+    (selector.dispatchGroup && item.value.groupId === selector.dispatchGroup)
+      || matchingPackets.some((packet) => packet.value.dispatchGroup && packet.value.dispatchGroup === item.value.groupId)
+  ));
+  const finalStateRootRefs = traceStateRootsFromArtifacts({
+    selector,
+    packets: matchingPackets,
+    deliveries: matchingDeliveries,
+    results: matchingResults,
+  });
+  const stateRoots = traceStateRootSummaries(finalStateRootRefs, selector, diagnostics);
+  const controllerEvents = traceControllerEvents(finalStateRootRefs, selector, diagnostics);
+  const review = selector.dispatchGroup && matchingPackets.length > 0
+    ? (() => {
+        try {
+          const reviewResults = computeReviewResults({ group: selector.dispatchGroup });
+          return {
+            decision: reviewResults.decision,
+            groupStatus: reviewResults.groupStatus,
+            returnPolicy: reviewResults.returnPolicy,
+            missing: reviewResults.missing,
+            blocked: reviewResults.blocked,
+            needsReview: reviewResults.needsReview,
+          };
+        } catch (error) {
+          diagnostics.errors.push({ file: selector.dispatchGroup, error: error.message });
+          return null;
+        }
+      })()
+    : null;
+
+  const traceSpine = {
+    kind: "WakeflowTraceSpine",
+    version: 1,
+    selector,
+    coverage: {
+      stateRootCount: stateRoots.length,
+      taskPackageCount: stateRoots.reduce((total, state) => total + state.taskPackages.length, 0),
+      targetTaskCount: stateRoots.reduce((total, state) => total + state.targetTasks.length, 0),
+      dispatchGroupCount: matchingGroups.length,
+      dispatchPacketCount: matchingPackets.length,
+      deliveryEnvelopeCount: matchingDeliveries.length,
+      deliveryRunCount: matchingRuns.length,
+      targetResultCount: matchingResults.length,
+      controllerEventCount: controllerEvents.length,
+      complete: matchingPackets.length > 0 && matchingDeliveries.length > 0 && matchingResults.length > 0,
+    },
+    demand: stateRoots.map((state) => ({
+      file: state.file,
+      stateRoot: state.stateRoot,
+      demandKey: state.demandKey,
+      title: state.title,
+      state: state.state,
+      stateRevision: state.stateRevision,
+      reviewStatus: state.reviewStatus,
+      projectionStatus: state.projectionStatus,
+      progressDoc: state.progressDoc,
+    })),
+    taskPackages: stateRoots.flatMap((state) => state.taskPackages.map((taskPackage) => ({
+      ...taskPackage,
+      stateRoot: state.stateRoot,
+    }))),
+    targetTasks: stateRoots.flatMap((state) => state.targetTasks.map((task) => ({
+      ...task,
+      stateRoot: state.stateRoot,
+    }))),
+    dispatchGroups: matchingGroups.map(summarizeTraceArtifact),
+    dispatchPackets: matchingPackets.map(summarizeTraceArtifact),
+    deliveryEnvelopes: matchingDeliveries.map((item) => summarizeTraceArtifact({ ...item, value: item.value.kind === "DeliveryEnvelope" ? redactDeliveryEnvelope(item.value) : item.value })),
+    deliveryRuns: matchingRuns.map(summarizeTraceArtifact),
+    targetResults: matchingResults.map(summarizeTraceArtifact),
+    controllerEvents,
+    review,
+    diagnostics,
+    forbiddenConclusions: [
+      "trace-spine-is-controller-acceptance",
+      "trace-spine-sends-host-message",
+      "trace-spine-creates-target-result",
+    ],
+  };
+
+  output(
+    {
+      ok: diagnostics.errors.length === 0,
+      command: "trace-spine",
+      traceSpine,
+      selector: traceSpine.selector,
+      coverage: traceSpine.coverage,
+      diagnostics,
+    },
+    [
+      `Trace spine: ${selector.dispatchGroup || selector.deliveryId || selector.resultId || selector.taskId || selector.stateRoot}`,
+      `Packets: ${traceSpine.coverage.dispatchPacketCount}; deliveries: ${traceSpine.coverage.deliveryEnvelopeCount}; runs: ${traceSpine.coverage.deliveryRunCount}; results: ${traceSpine.coverage.targetResultCount}`,
+      `State roots: ${traceSpine.coverage.stateRootCount}; controller events: ${traceSpine.coverage.controllerEventCount}`,
+    ],
+  );
+}
+
 function markStateRootDeliverySent(envelope, run) {
   if (envelope.kind !== "DeliveryEnvelope" || run.status !== "sent") {
     return { updated: false, reason: "not-a-sent-target-delivery" };
@@ -1384,6 +2057,22 @@ function markStateRootDeliverySent(envelope, run) {
   }
   if (targetTask.taskPackageId !== taskPackageId) {
     fail(`delivery run task package mismatch: state has ${targetTask.taskPackageId}, envelope has ${taskPackageId}`);
+  }
+  if (targetTask.status === "sent") {
+    if (targetTask.delivery?.deliveryId && targetTask.delivery.deliveryId !== envelope.deliveryId) {
+      fail(`target task ${targetTaskId} was already sent via delivery ${targetTask.delivery.deliveryId}; refusing conflicting delivery ${envelope.deliveryId}.`);
+    }
+    return {
+      updated: false,
+      reason: "target-task-already-sent",
+      idempotentReplay: true,
+      stateRoot: path.relative(workspaceRoot, stateRoot),
+      targetTaskId,
+      taskPackageId,
+      stateRevision: state.revision,
+      existingDeliveryRunId: targetTask.delivery?.deliveryRunId,
+      replayedDeliveryRunId: run.deliveryRunId,
+    };
   }
   if (["accepted", "completed", "blocked", "needs-review"].includes(targetTask.status)) {
     return { updated: false, reason: `target-task-already-${targetTask.status}` };
@@ -1455,6 +2144,18 @@ function markStateRootDeliverySent(envelope, run) {
       "delivery-sent-starts-polling",
     ],
     stateRevision: nextRevision,
+    wakeflowTrace: artifactTrace({
+      artifactKind: "controller-event",
+      createdAt,
+      deliveryFile: path.relative(workspaceRoot, deliveryFileFor(envelope.deliveryId)),
+      deliveryId: envelope.deliveryId,
+      deliveryRunId: run.deliveryRunId,
+      dispatchGroup: envelope.dispatchGroup,
+      stateRef: envelope.stateRef,
+      stateRevision: nextRevision,
+      targetTaskId,
+      targetWindow: targetTask.targetWindow,
+    }),
   };
 
   atomicWriteJson(stateFile, nextState);
@@ -1470,11 +2171,13 @@ function markStateRootDeliverySent(envelope, run) {
   };
 }
 
-function controllerReturnDeliveryStatusForGroup(dispatchGroup) {
+function controllerReturnDeliveryStatusForGroup(dispatchGroup, { triggerTarget = "", triggerTaskId = "" } = {}) {
   if (!dispatchGroup) {
     return {
       status: "not-applicable",
       dispatchGroup: undefined,
+      triggerTarget: triggerTarget || undefined,
+      triggerTaskId: triggerTaskId || undefined,
       envelopeCount: 0,
       sentCount: 0,
       pendingCount: 0,
@@ -1490,6 +2193,8 @@ function controllerReturnDeliveryStatusForGroup(dispatchGroup) {
       envelope: readJson(file, "delivery envelope"),
     }))
     .filter((item) => item.envelope.kind === "ControllerReturnEnvelope" && item.envelope.dispatchGroup === dispatchGroup)
+    .filter((item) => !triggerTarget || item.envelope.triggerTarget === triggerTarget)
+    .filter((item) => !triggerTaskId || item.envelope.triggerTaskId === triggerTaskId)
     .map((item) => ({
       file: path.relative(workspaceRoot, item.file),
       ...deliveryRunStatusForEnvelope(item.envelope),
@@ -1514,6 +2219,8 @@ function controllerReturnDeliveryStatusForGroup(dispatchGroup) {
   return {
     status,
     dispatchGroup,
+    triggerTarget: triggerTarget || undefined,
+    triggerTaskId: triggerTaskId || undefined,
     envelopeCount: deliveries.length,
     sentCount,
     pendingCount,
@@ -1624,62 +2331,29 @@ function targetResultReviewEntry(item) {
 function buildReviewPack(review) {
   const returnGroup = review.group || (review.packets.length === 1 ? review.packets[0].dispatchGroup : "");
   const controllerReturnDelivery = controllerReturnDeliveryStatusForGroup(returnGroup);
-  const results = review.results.map(targetResultReviewEntry);
-  const reviewReady = review.decision !== "wait";
-  const missingEvidenceRefs = results.flatMap((item) => item.missingEvidenceRefs.map((ref) => ({
-    targetWindow: item.targetWindow,
-    taskId: item.taskId,
-    ref,
-  })));
-  const missingEvidenceRefsPresent = missingEvidenceRefs.length > 0;
-  const rawEvidenceRequired = results
-    .filter((item) => item.resultStatus !== "missing")
-    .map((item) => ({
-      targetWindow: item.targetWindow,
-      taskId: item.taskId,
-      resultStatus: item.resultStatus,
-      commits: item.commits,
-      evidenceRefs: item.evidenceRefs,
-      verificationSummary: item.verificationSummary,
-      hasControllerReviewEvidence: item.hasControllerReviewEvidence,
-      missingEvidenceRefs: item.missingEvidenceRefs,
-    }));
-  const gates = {
-    controllerReviewReady: reviewReady && !missingEvidenceRefsPresent,
-    waitForMissingResults: review.groupSnapshot.missing.length > 0,
-    pendingDispatchTargetsPresent: (review.groupSnapshot.pendingDispatch ?? []).length > 0,
-    blockedResultsPresent: review.blocked.length > 0,
-    missingEvidenceRefsPresent,
-    evidenceRepairRequired: missingEvidenceRefsPresent,
-    controllerReturnSent: controllerReturnDelivery.status === "sent",
-    rawEvidencePullRequired: reviewReady,
-    totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent,
-  };
-  return {
-    kind: "ControllerReviewPack",
-    version,
-    dispatchGroup: review.group || undefined,
-    taskId: review.taskId || undefined,
-    decision: review.decision,
+  const callbackPlan = buildControllerCallbackPlan({
+    dispatchGroup: returnGroup,
     returnPolicy: review.returnPolicy,
-    groupStatus: review.groupStatus,
     groupSnapshot: review.groupSnapshot,
+    controllerReturnDeliveries: controllerReturnDelivery.deliveries,
+  });
+  const results = review.results.map(targetResultReviewEntry);
+  const generatedAt = nowIso();
+  return buildControllerReviewPack({
+    review,
     controllerReturnDelivery,
+    callbackPlan,
     targetResults: results,
-    rawEvidenceRequired,
-    missingEvidenceRefs,
-    gates,
-    nextAction: review.decision === "wait"
-      ? "wait-for-target-result-envelope"
-      : review.decision === "blocked"
-        ? "pull-block-evidence-and-classify"
-        : missingEvidenceRefsPresent
-          ? "fix-missing-evidence-refs-before-controller-verdict"
-          : (review.groupSnapshot.pendingDispatch ?? []).length > 0
-            ? "pull-raw-evidence-and-continue-pending-dispatch"
-            : "pull-raw-evidence-and-make-total-control-verdict",
-    generatedAt: nowIso(),
-  };
+    generatedAt,
+    wakeflowTrace: artifactTrace({
+      artifactKind: "review-pack",
+      createdAt: generatedAt,
+      dispatchGroup: review.group || undefined,
+      stateRef: review.groupRecord?.stateRef,
+      targetTaskId: review.taskId || undefined,
+    }),
+    version,
+  });
 }
 
 function stateRootTargetResults(stateRoot) {
@@ -1897,6 +2571,30 @@ function buildStateRootReviewPack(stateRoot) {
     ref,
   })));
   const missingEvidenceRefsPresent = missingEvidenceRefs.length > 0;
+  const generatedAt = nowIso();
+  const callbackPlan = {
+    kind: "WakeflowControllerCallbackPlan",
+    version: 1,
+    dispatchGroup: state.demandKey,
+    returnPolicy: groupSnapshot.returnPolicy,
+    status: "not-applicable",
+    reason: "State-root review packs are controller-local; run reducer/decision instead of building a direct-thread controller-return envelope.",
+    counts: {
+      unitCount: 0,
+      readyToBuildCount: 0,
+      pendingHostSendCount: 0,
+      sentCount: 0,
+      waitingForSentResultsCount: 0,
+      waitingForResultCount: 0,
+      transportReviewCount: 0,
+    },
+    units: [],
+    forbiddenConclusions: [
+      "callback-plan-is-controller-acceptance",
+      "callback-plan-sends-host-message",
+      "callback-plan-creates-target-result",
+    ],
+  };
   return {
     kind: "ControllerReviewPack",
     version,
@@ -1918,6 +2616,7 @@ function buildStateRootReviewPack(stateRoot) {
       status: "not-applicable",
       reason: "state-root review pack is independent of controller-return delivery evidence",
     },
+    callbackPlan,
     targetResults,
     rawEvidenceRequired: targetResults
       .filter((item) => item.resultStatus !== "missing")
@@ -1941,6 +2640,8 @@ function buildStateRootReviewPack(stateRoot) {
       missingEvidenceRefsPresent,
       evidenceRepairRequired: missingEvidenceRefsPresent,
       controllerReturnSent: false,
+      controllerReturnReady: false,
+      controllerReturnPendingHostSend: false,
       rawEvidencePullRequired: reviewReady,
       totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent,
       stateRootBased: true,
@@ -1967,7 +2668,15 @@ function buildStateRootReviewPack(stateRoot) {
       "review-pack-creates-next-dispatch",
       "review-pack-updates-developer-progress",
     ],
-    generatedAt: nowIso(),
+    wakeflowTrace: artifactTrace({
+      artifactKind: "review-pack",
+      createdAt: generatedAt,
+      demandKey: state.demandKey,
+      dispatchGroup: state.demandKey,
+      stateRevision: state.revision,
+      stateRoot: stateRootRef,
+    }),
+    generatedAt,
   };
 }
 
@@ -1975,41 +2684,18 @@ function buildWindowConfig(windowName, { requireThread = false } = {}) {
   const registration = loadThreadRegistration(windowName);
   if (requireThread && !registration) fail(`No registered thread for window: ${windowName}`);
   const { config, repository, deliveryRole, cwd, responsibilityRoot } = windowRuntimeDescriptor(windowName);
-  const dispatchWindows = new Set([
-    ...(Array.isArray(config.dispatchWindows) ? config.dispatchWindows : []),
-    ...(Array.isArray(config.requiredDispatchWindows) ? config.requiredDispatchWindows : []),
-    config.controllerWindow,
-  ].filter(Boolean));
-  const dispatchable = ["controller", "target", "test-target"].includes(deliveryRole) && (dispatchWindows.size === 0 || dispatchWindows.has(windowName) || Boolean(registration));
-  return {
-    kind: "CodexSubwindowDispatchConfig",
-    version: windowConfigVersion,
+  return buildWindowDispatchConfig({
     windowName,
-    repositoryPath: repository?.path,
-    responsibility: repository?.role,
-    dispatchable,
-    threadRegistered: Boolean(registration),
-    threadRegistryFile: path.relative(stateDir, threadFileFor(windowName)),
+    config,
+    repository,
+    deliveryRole,
     cwd,
     responsibilityRoot,
-    deliveryRole,
-    delivery: {
-      transport: "direct-thread",
-      requireThread: true,
-      missingThread: "fail-closed",
-      readbackRequired: true,
-    },
-    automation: {
-      mode: "manual-or-unattended",
-      continuousWhenEnabled: true,
-      keepLive: "required-when-automation-enabled",
-    },
-    result: {
-      returnRoute: "controller",
-      resultEnvelopeRequired: true,
-    },
+    registration,
+    threadRegistryFile: path.relative(stateDir, threadFileFor(windowName)),
     generatedAt: nowIso(),
-  };
+    version: windowConfigVersion,
+  });
 }
 
 function commandStatus() {
@@ -2026,6 +2712,16 @@ function commandStatus() {
   const windowConfigCount = listJsonFiles(dirs.windowConfig).length;
   const keepLive = keepLiveStatus();
   const keepLiveStateExists = existsSync(keepLiveStateFile());
+  const runtimeSummary = buildRuntimeSummary({
+    packetCount,
+    groupCount,
+    deliveryCount,
+    deliveryRunCount,
+    resultCount,
+    registeredThreadCount,
+    windowConfigCount,
+    keepLive,
+  });
   output(
     {
       ok: true,
@@ -2040,6 +2736,7 @@ function commandStatus() {
       windowConfigCount,
       keepLiveStateExists,
       keepLive,
+      runtimeSummary,
     },
     [
       "Wakeflow delivery-loop status",
@@ -2052,6 +2749,7 @@ function commandStatus() {
       `Registered threads: ${registeredThreadCount}`,
       `Window configs: ${windowConfigCount}`,
       `Keep-live: ${keepLive.active ? `active worker=${keepLive.workerPid} child=${keepLive.childPid}` : keepLive.status}`,
+      `Next action: ${runtimeSummary.nextAction}`,
     ],
   );
 }
@@ -2121,7 +2819,8 @@ function buildDispatchArtifacts({
         packetId: id,
       })
     : null;
-  const packet = {
+  const createdAt = nowIso();
+  const packet = annotateDispatchPacketIdempotency({
     kind: "ControllerDispatchPacket",
     version,
     id,
@@ -2139,8 +2838,17 @@ function buildDispatchArtifacts({
     returnPolicy: dispatchGroupRecord?.returnPolicy,
     contextPolicy: validateContextPolicy(contextPolicy || "refresh-if-missing"),
     prompt,
-    createdAt: nowIso(),
-  };
+    wakeflowTrace: artifactTrace({
+      artifactKind: "dispatch-packet",
+      createdAt,
+      dispatchGroup: dispatchGroup || undefined,
+      stateRef,
+      targetTaskId: taskId,
+      targetWindow,
+      taskPackageId: stateRef.taskPackageId,
+    }),
+    createdAt,
+  });
 
   const packetFile = packetFileFor(packet.id);
   return { dispatchGroupRecord, packet, packetFile };
@@ -2170,6 +2878,7 @@ function buildDeliveryArtifacts({
   if (requireThread && !registration) fail(`No registered thread for target window: ${packet.targetWindow}`);
   const resolvedWindowConfig = windowConfig || buildWindowConfig(packet.targetWindow);
   const resolvedDeliveryId = deliveryId || `delivery-${packet.id}`;
+  const createdAt = nowIso();
   const envelope = {
     kind: "DeliveryEnvelope",
     version: deliveryEnvelopeVersion,
@@ -2206,7 +2915,16 @@ function buildDeliveryArtifacts({
       keepLiveStateFile: automationEnabled ? path.relative(stateDir, keepLiveStateFile()) : undefined,
     },
     windowConfig: resolvedWindowConfig,
-    createdAt: nowIso(),
+    wakeflowTrace: artifactTrace({
+      artifactKind: "delivery-envelope",
+      createdAt,
+      deliveryId: resolvedDeliveryId,
+      dispatchGroup: packet.dispatchGroup,
+      stateRef: packet.stateRef,
+      targetTaskId: packet.taskId,
+      targetWindow: packet.targetWindow,
+    }),
+    createdAt,
   };
 
   const deliveryFile = deliveryFileFor(envelope.deliveryId);
@@ -2330,23 +3048,56 @@ function commandPrepareDispatchFromState() {
     returnRoute: getValue("--return-route", "controller"),
     windowConfig,
   });
+  const dispatchGroupFile = dispatchGroup ? groupFileFor(dispatchGroup) : "";
+  const existingGroup = dispatchGroup ? loadDispatchGroup(dispatchGroup) : null;
+  const existingPacket = existsSync(packetFile) ? readJson(packetFile, "dispatch packet") : null;
+  const existingEnvelope = existsSync(deliveryFile) ? readJson(deliveryFile, "delivery envelope") : null;
+  if (existingPacket) {
+    if (existingPacket.stateRef?.stateRevision !== state.revision) {
+      fail(`existing dispatch packet ${packet.id} was prepared from state revision ${existingPacket.stateRef?.stateRevision}; current revision is ${state.revision}. Use a new dispatch group or clear stale local delivery runtime intentionally.`);
+    }
+    if (!sameDispatchPacketContent(existingPacket, packet)) {
+      fail(`existing dispatch packet ${packet.id} has different content for the same state revision; refusing to overwrite local delivery runtime.`);
+    }
+  }
+  if (existingEnvelope) {
+    if (existingEnvelope.stateRef?.stateRevision !== state.revision) {
+      fail(`existing delivery envelope ${envelope.deliveryId} was prepared from state revision ${existingEnvelope.stateRef?.stateRevision}; current revision is ${state.revision}. Use a new delivery id or clear stale local delivery runtime intentionally.`);
+    }
+    if (!sameDeliveryEnvelopeContent(existingEnvelope, envelope)) {
+      fail(`existing delivery envelope ${envelope.deliveryId} has different content for the same state revision; refusing to overwrite local delivery runtime.`);
+    }
+  }
+  if (existingGroup?.stateRef?.stateRevision && existingGroup.stateRef.stateRevision !== state.revision) {
+    fail(`existing dispatch group ${dispatchGroup} was prepared from state revision ${existingGroup.stateRef.stateRevision}; current revision is ${state.revision}. Use a new dispatch group or clear stale local delivery runtime intentionally.`);
+  }
+  const idempotentReplay = Boolean(existingPacket && existingEnvelope);
+  const repairArtifacts = [
+    !existingGroup && dispatchGroupRecord ? "dispatch-group" : "",
+    !existingPacket ? "dispatch-packet" : "",
+    !existingEnvelope ? "delivery-envelope" : "",
+  ].filter(Boolean);
 
   let keepLive = null;
   if (write) {
     ensureStateDirs();
-    if (automationEnabled) {
+    if (automationEnabled && !idempotentReplay) {
       keepLive = startKeepLive({ automationRunId: dispatchGroup || packet.id });
     }
-    atomicWriteJson(windowConfigFileFor(targetWindow), windowConfig);
-    writeDispatchArtifacts({ dispatchGroup, dispatchGroupRecord, packet, packetFile });
-    atomicWriteJson(deliveryFile, envelope);
+    if (!idempotentReplay) atomicWriteJson(windowConfigFileFor(targetWindow), windowConfig);
+    if (!existingGroup && dispatchGroupRecord && dispatchGroup) atomicWriteJson(dispatchGroupFile, dispatchGroupRecord);
+    if (!existingPacket) atomicWriteJson(packetFile, packet);
+    if (!existingEnvelope) atomicWriteJson(deliveryFile, envelope);
   }
 
   output(
     {
       ok: true,
       command: "prepare-dispatch-from-state",
-      wrote: write,
+      wrote: write && (!idempotentReplay || repairArtifacts.length > 0),
+      duplicate: idempotentReplay || undefined,
+      idempotentReplay: idempotentReplay || undefined,
+      repairedArtifacts: write && repairArtifacts.length > 0 ? repairArtifacts : undefined,
       keepLive,
       stateRoot: stateRootRef,
       stateRevision: state.revision,
@@ -2356,11 +3107,11 @@ function commandPrepareDispatchFromState() {
       windowName: targetWindow,
       windowConfig,
       configFile: write ? path.relative(workspaceRoot, windowConfigFileFor(targetWindow)) : "",
-      packet,
+      packet: existingPacket || packet,
       dispatchGroup: dispatchGroupRecord,
       packetFile: write ? path.relative(workspaceRoot, packetFile) : "",
-      dispatchGroupFile: write && dispatchGroupRecord ? path.relative(workspaceRoot, groupFileFor(dispatchGroup)) : "",
-      envelope: redactDeliveryEnvelope(envelope),
+      dispatchGroupFile: write && dispatchGroupRecord ? path.relative(workspaceRoot, dispatchGroupFile) : "",
+      envelope: redactDeliveryEnvelope(existingEnvelope || envelope),
       deliveryFile: write ? path.relative(workspaceRoot, deliveryFile) : "",
       threadReady: Boolean(registration),
       threadIdRedacted: Boolean(registration),
@@ -2371,7 +3122,7 @@ function commandPrepareDispatchFromState() {
       ],
     },
     [
-      `${write ? "Prepared" : "Would prepare"} state-root dispatch + delivery for ${targetWindow} / ${targetTaskId}.`,
+      `${idempotentReplay ? "Reused" : write ? "Prepared" : "Would prepare"} state-root dispatch + delivery for ${targetWindow} / ${targetTaskId}.`,
       `State root: ${stateRootRef}`,
       `Thread: ${registration ? "registered" : "missing"}`,
       `Delivery: ${path.relative(workspaceRoot, deliveryFile)}`,
@@ -2408,84 +3159,50 @@ function commandBuildControllerReturn() {
   const registration = loadThreadRegistration(controllerWindow);
   if (hasFlag("--require-thread") && !registration) fail(`No registered controller thread for window: ${controllerWindow}`);
   validateControllerReturnAllowed({ review, triggerTarget, triggerTaskId });
-  const existingReturn = controllerReturnDeliveryStatusForGroup(dispatchGroup);
+  const existingReturn = controllerReturnDeliveryStatusForGroup(
+    dispatchGroup,
+    controllerReturnDuplicateSelector({ returnPolicy: review.returnPolicy, triggerTarget, triggerTaskId }),
+  );
   if (existingReturn.pendingCount > 0 || existingReturn.sentCount > 0) {
-    fail(`Dispatch group ${dispatchGroup} already has controller-return delivery status ${existingReturn.status}; do not create duplicate controller returns.`);
+    const duplicateScope = controllerReturnDuplicateScopeText({ returnPolicy: review.returnPolicy, triggerTarget, triggerTaskId });
+    fail(`Dispatch group ${dispatchGroup}${duplicateScope} already has controller-return delivery status ${existingReturn.status}; do not create duplicate controller returns.`);
   }
   const windowConfig = buildWindowConfig(controllerWindow);
-  const reviewScope = review.returnPolicy.mode === "group-ready" ? "group" : "single-target";
+  const reviewScope = returnPolicyReviewScope(review.returnPolicy);
 
-  const prompt = formatControllerReturnPrompt({
+  const deliveryId = `controller-return-${slug(dispatchGroup)}__${slug(triggerTarget)}__${slug(triggerTaskId)}`;
+  const createdAt = nowIso();
+  const envelope = buildControllerReturnEnvelope({
+    version: deliveryEnvelopeVersion,
+    deliveryId,
     dispatchGroup,
     controllerWindow,
     triggerTarget,
     triggerTaskId,
+    returnPolicy: review.returnPolicy,
+    groupSnapshot: review.groupSnapshot,
+    reviewScope,
     humanContextRef,
     stateRef: inheritedStateRef,
-    returnPolicy: review.returnPolicy,
-    reviewScope,
-    groupSnapshot: review.groupSnapshot,
-  });
-  const envelope = {
-    kind: "ControllerReturnEnvelope",
-    version: deliveryEnvelopeVersion,
-    deliveryId: `controller-return-${slug(dispatchGroup)}__${slug(triggerTarget)}__${slug(triggerTaskId)}`,
-    dispatchGroup,
-    controllerWindow,
-    triggerTarget,
-    triggerTaskId,
-    returnPolicy: review.returnPolicy,
-    groupSnapshot: review.groupSnapshot,
-    reviewScope,
-    humanContextRef: humanContextRef || undefined,
-    stateRef: inheritedStateRef || undefined,
-    prompt,
-    oneShot: true,
-    targetThread: registration
-      ? {
-          windowName: registration.windowName,
-          threadIdRedacted: true,
-          threadRegistryFile: registration.threadRegistryFile,
-        }
-      : undefined,
-    transport: {
-      kind: "direct-thread",
-      threadRegistryFile: path.relative(stateDir, threadFileFor(controllerWindow)),
-      readbackRequired: true,
-      missingThread: "fail-closed",
-    },
-    automation: {
-      enabled: automationEnabled,
-      continuousLoop: automationEnabled,
-      keepLive: automationEnabled,
-      keepLiveStateFile: automationEnabled ? path.relative(stateDir, keepLiveStateFile()) : undefined,
-    },
-    deliveryCompletion: {
-      required: true,
-      pendingUntil: "host-send-readback-recorded",
-      completionProof: "DirectThreadDeliveryRun status=sent with readback.ok=true",
-      blockedAction: "record-delivery-run status=blocked or failed, then stop for total-control judgment",
-    },
-    loopGuard: {
-      returnReason,
-      reviewDecision: review.decision,
-      groupStatus: review.groupStatus,
-      controllerWindow,
-      returnPolicy: review.returnPolicy,
-      reviewScope,
-      deliveryAllowedOnlyFor: ["result-ready", "blocked"],
-      controllerReviewRequired: true,
-      noEligibleTaskAction: "stop-without-next-delivery",
-      repeatControllerReturnForbidden: true,
-      nextDispatchAllowedOnlyWhen: [
-        "current plan has eligible unfinished task",
-        "target evidence requires controller rework dispatch",
-        "user-approved unattended automation remains inside boundary",
-      ],
-    },
+    registration,
+    transportThreadRegistryFile: path.relative(stateDir, threadFileFor(controllerWindow)),
+    automationEnabled,
+    keepLiveStateFile: path.relative(stateDir, keepLiveStateFile()),
+    returnReason,
+    reviewDecision: review.decision,
+    groupStatus: review.groupStatus,
     windowConfig,
-    createdAt: nowIso(),
-  };
+    wakeflowTrace: artifactTrace({
+      artifactKind: "controller-return-envelope",
+      createdAt,
+      deliveryId,
+      dispatchGroup,
+      stateRef: inheritedStateRef,
+      targetTaskId: triggerTaskId,
+      targetWindow: triggerTarget,
+    }),
+    createdAt,
+  });
 
   const returnFile = deliveryFileFor(envelope.deliveryId);
   if (write) {
@@ -2533,7 +3250,8 @@ function commandRecordDeliveryRun() {
   const deliveryRunId = getValue("--delivery-run-id", `run-${envelope.deliveryId}`);
   const keepLiveState = envelope.automation?.keepLive ? path.relative(stateDir, keepLiveStateFile()) : null;
   const deliveryWindow = envelope.targetWindow || envelope.targetThread?.windowName || envelope.controllerWindow;
-  const run = {
+  const createdAt = nowIso();
+  const run = annotateDeliveryRunIdempotency({
     kind: "DirectThreadDeliveryRun",
     version: deliveryRunVersion,
     deliveryRunId,
@@ -2565,9 +3283,45 @@ function commandRecordDeliveryRun() {
       stateFile: keepLiveState,
     },
     error: error || undefined,
-    createdAt: nowIso(),
-  };
+    wakeflowTrace: artifactTrace({
+      artifactKind: "delivery-run",
+      createdAt,
+      deliveryFile: path.relative(workspaceRoot, deliveryFile),
+      deliveryId: envelope.deliveryId,
+      deliveryRunId,
+      dispatchGroup: envelope.dispatchGroup,
+      stateRef: envelope.stateRef,
+      targetTaskId: envelope.taskId || envelope.triggerTaskId,
+      targetWindow: deliveryWindow,
+    }),
+    createdAt,
+  });
   const runFile = deliveryRunFileFor(deliveryRunId);
+  if (existsSync(runFile)) {
+    const existingRun = readJson(runFile, "delivery run");
+    if (!sameDeliveryRunContent(existingRun, run)) {
+      fail(`Delivery run ${deliveryRunId} already exists with different content; use a new --delivery-run-id for a distinct retry attempt.`);
+    }
+    const stateUpdate = markStateRootDeliverySent(envelope, existingRun);
+    output(
+      {
+        ok: true,
+        command: "record-delivery-run",
+        wrote: false,
+        duplicate: true,
+        idempotentReplay: true,
+        status: existingRun.status,
+        run: existingRun,
+        runFile: path.relative(workspaceRoot, runFile),
+        stateUpdate,
+      },
+      [
+        `Delivery run ${deliveryRunId} already recorded; treated as idempotent replay.`,
+        `Status: ${existingRun.status}`,
+      ],
+    );
+    return;
+  }
   ensureStateDirs();
   atomicWriteJson(runFile, run);
   const stateUpdate = markStateRootDeliverySent(envelope, run);
@@ -2677,13 +3431,17 @@ function commandRecordTargetResult() {
   const evidenceRefs = getAllValues("--evidence-ref");
   const verificationSummary = getAllValues("--verification");
   const commits = getAllValues("--commit");
+  const supersedeResult = hasFlag("--supersede-result");
   if (status === "completed" && evidenceRefs.length === 0 && verificationSummary.length === 0 && commits.length === 0) {
     fail("completed results require --evidence-ref, --verification, or --commit.");
   }
 
-  const result = {
+  const reportedAt = nowIso();
+  const resultId = `target-result-${slug(targetWindow)}__${slug(taskId)}${dispatchGroup ? `__${slug(dispatchGroup)}` : ""}`;
+  const result = annotateTargetResultIdempotency({
     kind: "TargetResultEnvelope",
     version,
+    resultId,
     targetWindow,
     taskId,
     dispatchGroup: dispatchGroup || undefined,
@@ -2694,10 +3452,62 @@ function commandRecordTargetResult() {
     verificationSummary,
     riskSummary: getAllValues("--risk"),
     nextSuggestion: getValue("--next-suggestion", "") || undefined,
-    reportedAt: nowIso(),
-  };
+    wakeflowTrace: artifactTrace({
+      artifactKind: "target-result",
+      createdAt: reportedAt,
+      dispatchGroup: dispatchGroup || undefined,
+      resultId,
+      targetTaskId: taskId,
+      targetWindow,
+    }),
+    reportedAt,
+  });
 
   const resultFile = resultFileFor(targetWindow, taskId, dispatchGroup);
+  let supersededFile = "";
+  if (existsSync(resultFile)) {
+    const existingResult = readJson(resultFile, "target result");
+    if (sameTargetResultContent(existingResult, result)) {
+      output(
+        {
+          ok: true,
+          command: "record-target-result",
+          wrote: false,
+          duplicate: true,
+          idempotentReplay: true,
+          result: existingResult,
+          resultFile: path.relative(workspaceRoot, resultFile),
+        },
+        [
+          `Target result for ${targetWindow} / ${taskId} already recorded; treated as idempotent replay.`,
+          `Status: ${existingResult.status}`,
+        ],
+      );
+      return;
+    }
+    if (!supersedeResult) {
+      fail(`Target result already exists for ${targetWindow} / ${taskId}${dispatchGroup ? ` in group ${dispatchGroup}` : ""}; use --supersede-result to replace it explicitly.`);
+    }
+    supersededFile = supersededResultFileFor(targetWindow, taskId, dispatchGroup, reportedAt);
+    result.supersedes = {
+      resultFile: path.relative(workspaceRoot, resultFile),
+      archivedResultFile: path.relative(workspaceRoot, supersededFile),
+      resultId: existingResult.resultId,
+      status: existingResult.status,
+      reportedAt: existingResult.reportedAt,
+      supersededAt: reportedAt,
+    };
+    if (write) {
+      atomicWriteJson(supersededFile, {
+        ...existingResult,
+        supersededBy: {
+          resultId: result.resultId,
+          resultFile: path.relative(workspaceRoot, resultFile),
+          supersededAt: reportedAt,
+        },
+      });
+    }
+  }
   if (write) {
     ensureStateDirs();
     atomicWriteJson(resultFile, result);
@@ -2707,8 +3517,10 @@ function commandRecordTargetResult() {
       ok: true,
       command: "record-target-result",
       wrote: write,
+      superseded: Boolean(supersededFile),
       result,
       resultFile: write ? path.relative(workspaceRoot, resultFile) : "",
+      supersededFile: supersededFile && write ? path.relative(workspaceRoot, supersededFile) : undefined,
     },
     [
       `${write ? "Recorded" : "Would record"} result envelope for ${targetWindow} / ${taskId}.`,
@@ -2791,6 +3603,12 @@ function commandReviewResults() {
   const review = computeReviewResults({ group, taskId });
   const returnGroup = review.group || (review.packets.length === 1 ? review.packets[0].dispatchGroup : "");
   const controllerReturnDelivery = controllerReturnDeliveryStatusForGroup(returnGroup);
+  const callbackPlan = buildControllerCallbackPlan({
+    dispatchGroup: returnGroup,
+    returnPolicy: review.returnPolicy,
+    groupSnapshot: review.groupSnapshot,
+    controllerReturnDeliveries: controllerReturnDelivery.deliveries,
+  });
 
   output(
     {
@@ -2811,6 +3629,7 @@ function commandReviewResults() {
       decision: review.decision,
       controllerReturnDeliveries: controllerReturnDelivery.deliveries,
       controllerReturnDelivery,
+      callbackPlan,
     },
     [
       `Review scope: ${group ? `group ${group}` : `task ${taskId}`}`,
@@ -2945,6 +3764,9 @@ try {
       break;
     case "review-pack":
       commandReviewPack();
+      break;
+    case "trace-spine":
+      commandTraceSpine();
       break;
     case "stop-loop":
       commandStopLoop();

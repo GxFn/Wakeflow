@@ -87,11 +87,36 @@ Current scripts:
   still need a controller decision, blocked demands, and target tasks that are
   already accepted, completed, or blocked. Group-scoped target result files
   keep concurrent controller runs from overwriting each other, and
-  `build-controller-return` fails closed when a dispatch group already has a
-  pending or sent controller-return envelope. After a direct-thread delivery run
-  is recorded as sent/readback-ok, its agent cue must close the controller
-  dispatch turn; it must not tell total control to sleep, poll, or wait in place
-  for target results.
+  `build-controller-return` enforces the dispatch group's return policy:
+  `group-ready` permits one pending/sent controller-return for the group wave,
+  while `per-target` permits one pending/sent controller-return per
+  trigger target/task pair. After a direct-thread delivery run is recorded as
+  sent/readback-ok, its agent cue must close the controller dispatch turn; it
+  must not tell total control to sleep, poll, or wait in place for target
+  results. Re-recording the same delivery run or identical target result is an
+  idempotent replay and must not advance state again; changed target results
+  require explicit `--supersede-result`, which archives the previous envelope
+  under local delivery runtime before replacing it. `status` includes a compact
+  runtime health block for artifact errors, host-send readiness, review queues,
+  controller-return callback readiness, missing target results, stale state-root
+  projections, and replay audit issues. Its resume plan separates failed /
+  blocked delivery runs, pending host sends, callback-envelope creation,
+  evidence review, wait-for-result, and pending dispatch as different next
+  actions. `review-results`, `review-pack`, and `status` expose a
+  `callbackPlan`: `group-ready` waits for all sent target results before one
+  group callback, while `per-target` can produce one independent callback per
+  completed or blocked target/task and still tracks later siblings. Failed
+  delivery commands include a stable `errorCode` plus diagnostics so MCP callers
+  can distinguish stale revisions, duplicate callbacks, missing results,
+  evidence gaps, thread registration issues, and boundary violations without
+  parsing prose.
+  `trace-spine` is a read-only evidence lookup that can start from a state root,
+  dispatch group, delivery, target, or target result and report the matching
+  demand / task package / dispatch / delivery / result / controller-event chain
+  without sending messages or making an acceptance decision. Resume plans expose
+  a `WakeflowHostSendAdapter` descriptor for Codex app thread dispatch; the
+  adapter consumes delivery envelopes, requires readback, and never stores real
+  thread ids or performs controller acceptance.
 - `wakeflow-demand-sequence.mjs`: ordered independent-demand runner. It reads a tracked
   machine manifest whose items point at standard developer demand documents,
   validates each document has exactly one `Unified Status` marker plus the

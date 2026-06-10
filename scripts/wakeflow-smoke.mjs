@@ -258,6 +258,7 @@ async function runMcpSmoke(rootPath) {
       "wakeflow_record_delivery",
       "wakeflow_record_target_result",
       "wakeflow_review_pack",
+      "wakeflow_trace_spine",
       "wakeflow_reduce_results",
       "wakeflow_decide_review",
       "wakeflow_archive_todo",
@@ -414,6 +415,25 @@ async function runMcpSmoke(rootPath) {
     const statusPayload = JSON.parse(statusText);
     if (!statusPayload.ok || statusPayload.parsedJson?.command !== "status") {
       throw new Error("MCP wakeflow_status did not inspect the requested root");
+    }
+
+    const traced = await request("tools/call", {
+      name: "wakeflow_trace_spine",
+      arguments: {
+        root: rootPath,
+        stateRoot: mcpStateRoot,
+        targetWindow: "Target",
+        taskId: "mcp-smoke-task",
+      },
+    });
+    const tracedPayload = JSON.parse(traced.result.content?.[0]?.text);
+    if (
+      !tracedPayload.ok
+      || tracedPayload.parsedJson?.command !== "trace-spine"
+      || tracedPayload.parsedJson?.traceSpine?.coverage?.dispatchPacketCount !== 1
+      || tracedPayload.parsedJson?.traceSpine?.coverage?.targetResultCount !== 1
+    ) {
+      throw new Error("MCP wakeflow_trace_spine did not return the task evidence spine");
     }
 
     return { ok: true, toolCount: toolNames.length, stateRoot: mcpStateRoot };

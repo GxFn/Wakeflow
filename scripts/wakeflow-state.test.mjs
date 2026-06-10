@@ -36,6 +36,17 @@ function readJson(file) {
   return JSON.parse(readFileSync(file, "utf8"));
 }
 
+test("trace-bearing state-machine schemas expose wakeflowTrace explicitly", () => {
+  for (const schemaName of [
+    "target-result.schema.json",
+    "transition-candidate.schema.json",
+    "controller-event.schema.json",
+  ]) {
+    const schema = readJson(path.join(workspaceRoot, "schemas/wakeflow-state-machine", schemaName));
+    assert.equal(schema.properties.wakeflowTrace.type, "object", schemaName);
+  }
+});
+
 test("wakeflow-progress-log help documents append-only usage", () => {
   const result = runScript(appendScript, ["--help"]);
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -385,6 +396,12 @@ test("import-target-result stores result evidence without changing controller st
   assert.equal(resultFile.stateRoot, initPayload.stateRoot);
   assert.equal(resultFile.deliveryContext.resolution, "missing-delivery-metadata");
   assert.equal(resultFile.controllerActionRequired, false);
+  assert.equal(resultFile.wakeflowTrace.artifactKind, "target-result");
+  assert.equal(resultFile.wakeflowTrace.source, "wakeflow-state");
+  assert.equal(resultFile.wakeflowTrace.stateRoot, initPayload.stateRoot);
+  assert.equal(resultFile.wakeflowTrace.stateRevision, 2);
+  assert.equal(resultFile.wakeflowTrace.resultId, "CSMR-RESULT-1");
+  assert.equal(resultFile.wakeflowTrace.targetTaskId, "CSMR-TASK-1");
   assert.deepEqual(resultFile.forbiddenConclusions, [
     "target-result-is-controller-acceptance",
     "target-result-closes-task-package",
@@ -476,6 +493,18 @@ test("reduce-results creates controller review candidate without accepting work"
   assert.equal(state.allowedActions[0], "decide-review");
   assert.equal(candidate.fromRevision, 3);
   assert.deepEqual(candidate.allowedDecisions, ["accept", "rework", "blocked"]);
+  assert.equal(candidate.wakeflowTrace.artifactKind, "transition-candidate");
+  assert.equal(candidate.wakeflowTrace.candidateId, payload.candidateId);
+  assert.equal(candidate.wakeflowTrace.stateRoot, initPayload.stateRoot);
+  assert.equal(candidate.wakeflowTrace.stateRevision, 3);
+  const reviewEvent = readFileSync(path.join(stateRoot, "controller-events.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+    .find((event) => event.type === "review.reduced");
+  assert.equal(reviewEvent.wakeflowTrace.artifactKind, "controller-event");
+  assert.equal(reviewEvent.wakeflowTrace.stateRoot, initPayload.stateRoot);
+  assert.equal(reviewEvent.wakeflowTrace.stateRevision, 3);
   assert.equal(progressAfter, progressBefore);
 });
 

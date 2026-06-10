@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { runSync } from "../lib/wakeflow-process.mjs";
+import { runSync } from "../plugins/wakeflow/lib/wakeflow-process.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,24 +12,24 @@ import {
   controllerReturnDuplicateSelector,
   controllerReturnReadinessIssue,
   returnPolicyReviewScope,
-} from "./lib/wakeflow-return-policy.mjs";
+} from "../plugins/wakeflow/scripts/lib/wakeflow-return-policy.mjs";
 import {
   buildControllerReturnEnvelope,
   formatControllerReturnPrompt,
-} from "./lib/wakeflow-controller-return.mjs";
+} from "../plugins/wakeflow/scripts/lib/wakeflow-controller-return.mjs";
 import {
   buildRuntimeResumePlan,
   deriveRuntimeGroupStatus,
   summarizeRuntimeNextAction,
-} from "./lib/wakeflow-runtime-summary.mjs";
-import { buildControllerReviewPack } from "./lib/wakeflow-review-pack.mjs";
+} from "../plugins/wakeflow/scripts/lib/wakeflow-runtime-summary.mjs";
+import { buildControllerReviewPack } from "../plugins/wakeflow/scripts/lib/wakeflow-review-pack.mjs";
 import {
   buildWindowDispatchConfig,
   createThreadRegistration,
   normalizeThreadRegistrationRecord,
-} from "./lib/wakeflow-thread-registry.mjs";
+} from "../plugins/wakeflow/scripts/lib/wakeflow-thread-registry.mjs";
 
-const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/wakeflow");
 const script = path.join(workspaceRoot, "scripts/wakeflow-delivery.mjs");
 const stateScript = path.join(workspaceRoot, "scripts/wakeflow-state.mjs");
 

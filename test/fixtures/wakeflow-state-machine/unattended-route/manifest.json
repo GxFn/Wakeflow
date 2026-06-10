@@ -19,7 +19,7 @@
     "status": "completed",
     "summary": "Unattended fixture completed.",
     "evidenceRef": "evidence/unattended-route-result.json",
-    "verification": "node --test scripts/wakeflow-state-machine-route-fixtures.test.mjs"
+    "verification": "node --test test/wakeflow-state-machine-route-fixtures.test.mjs"
   },
   "decision": {
     "decision": "accept",

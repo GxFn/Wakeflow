@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { runSync } from "../lib/wakeflow-process.mjs";
+import { runSync } from "../plugins/wakeflow/lib/wakeflow-process.mjs";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-const wakeflowRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const wakeflowRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/wakeflow");
 const checkScript = path.join(wakeflowRoot, "scripts/wakeflow-check-layout.mjs");
 const nextWorkScript = path.join(wakeflowRoot, "scripts/wakeflow-next-work.mjs");
 const templateBundle = JSON.parse(readFileSync(path.join(wakeflowRoot, "templates/wakeflow-template-bundle.json"), "utf8"));

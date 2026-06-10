@@ -346,17 +346,17 @@ Common source areas:
 
 | Path | Purpose |
 | --- | --- |
-| `plugins/wakeflow/.codex-plugin/plugin.json` | Plugin manifest and MCP wiring. |
-| `plugins/wakeflow/mcp/server.cjs` | Standalone MCP server entrypoint with no `node_modules` dependency. |
-| `plugins/wakeflow/bin/wakeflow-mcp.mjs` | Compatibility wrapper for the MCP server entrypoint. |
-| `plugins/wakeflow/scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime shipped with the plugin. |
-| `plugins/wakeflow/skills/` | Controller, target, governance, and validation operating manuals shipped with the plugin. |
-| `plugins/wakeflow/templates/wakeflow-template-bundle.json` | Installed workspace starter documents and support surfaces, bundled for marketplace scan size. |
-| `plugins/wakeflow/assets/` | Marketplace and plugin presentation assets. |
-| `test/` | Development-only regression tests kept outside the marketplace scan surface. |
-| `docs/` | Development planning and architecture notes kept outside the plugin artifact. |
+| `.codex-plugin/plugin.json` | Plugin manifest and MCP wiring. |
+| `mcp/server.cjs` | Standalone MCP server entrypoint with no `node_modules` dependency. |
+| `bin/wakeflow-mcp.mjs` | Compatibility wrapper for the MCP server entrypoint. |
+| `scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime shipped with the plugin. |
+| `skills/` | Controller, target, governance, and validation operating manuals shipped with the plugin. |
+| `templates/wakeflow-template-bundle.json` | Installed workspace starter documents and support surfaces, bundled for marketplace scan size. |
+| `assets/` | Marketplace and plugin presentation assets. |
+| `../../test/` | Development-only regression tests kept outside the marketplace scan surface. |
+| `../../docs/` | Development planning and architecture notes kept outside the plugin artifact. |
 
-Detailed command references live in [scripts/README.md](plugins/wakeflow/scripts/README.md).
+Detailed command references live in [scripts/README.md](scripts/README.md).
 The top-level README explains the system model; the script README is the
 operator manual.
 

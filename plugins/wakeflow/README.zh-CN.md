@@ -277,17 +277,17 @@ npm test
 
 | Path | 用途 |
 | --- | --- |
-| `plugins/wakeflow/.codex-plugin/plugin.json` | 插件 manifest 和 MCP wiring。 |
-| `plugins/wakeflow/mcp/server.cjs` | 无 `node_modules` 依赖的 standalone MCP server entrypoint。 |
-| `plugins/wakeflow/bin/wakeflow-mcp.mjs` | MCP server entrypoint 的兼容 wrapper。 |
-| `plugins/wakeflow/scripts/` | 随插件发布的 setup、state、delivery、intake、archive、validation 和 CLI runtime。 |
-| `plugins/wakeflow/skills/` | 随插件发布的 controller、target、governance 和 validation 操作手册。 |
-| `plugins/wakeflow/templates/wakeflow-template-bundle.json` | 已安装工作区 starter documents 和 support surfaces 的 bundle，用于控制 marketplace scan 文件数。 |
-| `plugins/wakeflow/assets/` | Marketplace 和插件展示资源。 |
-| `test/` | 开发期回归测试，不进入 marketplace 扫描面。 |
-| `docs/` | 开发期规划和架构文档，不进入插件 artifact。 |
+| `.codex-plugin/plugin.json` | 插件 manifest 和 MCP wiring。 |
+| `mcp/server.cjs` | 无 `node_modules` 依赖的 standalone MCP server entrypoint。 |
+| `bin/wakeflow-mcp.mjs` | MCP server entrypoint 的兼容 wrapper。 |
+| `scripts/` | 随插件发布的 setup、state、delivery、intake、archive、validation 和 CLI runtime。 |
+| `skills/` | 随插件发布的 controller、target、governance 和 validation 操作手册。 |
+| `templates/wakeflow-template-bundle.json` | 已安装工作区 starter documents 和 support surfaces 的 bundle，用于控制 marketplace scan 文件数。 |
+| `assets/` | Marketplace 和插件展示资源。 |
+| `../../test/` | 开发期回归测试，不进入 marketplace 扫描面。 |
+| `../../docs/` | 开发期规划和架构文档，不进入插件 artifact。 |
 
-详细命令说明在 [scripts/README.md](plugins/wakeflow/scripts/README.md)。顶层 README 解释系统模型；
+详细命令说明在 [scripts/README.md](scripts/README.md)。顶层 README 解释系统模型；
 script README 是操作者手册。
 
 ## 设计原则

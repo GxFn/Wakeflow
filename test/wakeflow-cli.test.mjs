@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { runSync } from "../lib/wakeflow-process.mjs";
-import { runWakeflowRuntime } from "../lib/wakeflow-runtime.mjs";
+import { runSync } from "../plugins/wakeflow/lib/wakeflow-process.mjs";
+import { runWakeflowRuntime } from "../plugins/wakeflow/lib/wakeflow-runtime.mjs";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/wakeflow");
 const controlScript = path.join(workspaceRoot, "scripts/wakeflow-cli.mjs");
 
 function run(args) {
@@ -64,14 +64,14 @@ test("--print scripts --tests includes script validation and all script tests", 
   const result = run(["--print", "scripts", "--tests"]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /node scripts\/wakeflow-check-scripts\.mjs/);
-  assert.match(result.stdout, /node --test .*scripts\/wakeflow-delivery\.test\.mjs/);
-  assert.match(result.stdout, /scripts\/wakeflow-intake\.test\.mjs/);
-  assert.match(result.stdout, /scripts\/wakeflow-demand-sequence\.test\.mjs/);
-  assert.match(result.stdout, /scripts\/wakeflow-check-repository-residue\.test\.mjs/);
-  assert.match(result.stdout, /scripts\/wakeflow-validate\.test\.mjs/);
-  assert.match(result.stdout, /scripts\/wakeflow-import-design-handoffs\.test\.mjs/);
-  assert.match(result.stdout, /scripts\/wakeflow-next-work\.test\.mjs/);
-  assert.match(result.stdout, /scripts\/wakeflow-cli\.test\.mjs/);
+  assert.match(result.stdout, /node --test .*\.\.\/\.\.\/test\/wakeflow-delivery\.test\.mjs/);
+  assert.match(result.stdout, /\.\.\/\.\.\/test\/wakeflow-intake\.test\.mjs/);
+  assert.match(result.stdout, /\.\.\/\.\.\/test\/wakeflow-demand-sequence\.test\.mjs/);
+  assert.match(result.stdout, /\.\.\/\.\.\/test\/wakeflow-check-repository-residue\.test\.mjs/);
+  assert.match(result.stdout, /\.\.\/\.\.\/test\/wakeflow-validate\.test\.mjs/);
+  assert.match(result.stdout, /\.\.\/\.\.\/test\/wakeflow-import-design-handoffs\.test\.mjs/);
+  assert.match(result.stdout, /\.\.\/\.\.\/test\/wakeflow-next-work\.test\.mjs/);
+  assert.match(result.stdout, /\.\.\/\.\.\/test\/wakeflow-cli\.test\.mjs/);
 });
 
 test("--print loop maps to Wakeflow delivery-loop script", () => {

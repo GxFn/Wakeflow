@@ -35,7 +35,6 @@ const requiredFiles = [
   "LICENSE",
   "package.json",
   ".codex-plugin/plugin.json",
-  ".agents/plugins/marketplace.json",
   ".mcp.json",
   "bin/wakeflow-mcp.mjs",
   "mcp/server.cjs",
@@ -76,7 +75,7 @@ if (existsSync(path.join(root, oldLedgerReferenceFile))) {
 
 validatePackage();
 validatePluginManifest();
-validateMarketplace();
+validateMarketplaceIfPresent();
 validateMcpConfig();
 await validateMcpToolDeclarations();
 validateRuntimeWhitelist();
@@ -121,7 +120,7 @@ function validatePackage() {
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) {
     errors.push("package files must declare the plugin release surface");
   } else {
-    for (const expected of [".codex-plugin/", ".agents/plugins/marketplace.json", ".mcp.json", "README.zh-CN.md", "mcp/", "skills/", "scripts/", "templates/"]) {
+    for (const expected of [".codex-plugin/", ".mcp.json", "README.zh-CN.md", "mcp/", "skills/", "scripts/", "templates/"]) {
       if (!manifest.files.includes(expected)) errors.push(`package files must include ${expected}`);
     }
   }
@@ -175,7 +174,8 @@ function validatePluginManifest() {
   }
 }
 
-function validateMarketplace() {
+function validateMarketplaceIfPresent() {
+  if (!existsSync(path.join(root, ".agents/plugins/marketplace.json"))) return;
   const marketplace = readJson(".agents/plugins/marketplace.json");
   const manifest = readJson(".codex-plugin/plugin.json");
   if (!marketplace || !manifest) return;
@@ -191,9 +191,9 @@ function validateMarketplace() {
     return;
   }
   if (entry.source?.source !== "local") errors.push("marketplace wakeflow source must be local");
-  if (entry.source?.path !== ".") errors.push("marketplace wakeflow path must point to repository root");
+  if (entry.source?.path !== ".") errors.push("marketplace wakeflow path must point to the plugin artifact root");
   if (path.resolve(root, entry.source?.path || "") !== root) {
-    errors.push("marketplace wakeflow path must resolve to the repository root");
+    errors.push("marketplace wakeflow path must resolve to the plugin artifact root");
   }
   if (entry.policy?.installation !== "AVAILABLE") {
     errors.push("marketplace wakeflow installation policy must be AVAILABLE");

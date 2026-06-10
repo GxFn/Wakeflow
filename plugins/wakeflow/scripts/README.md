@@ -153,10 +153,10 @@ Current scripts:
 - `wakeflow-check-runtime.mjs`: read-only check for configured runtime process
   residue. Use `--strict` only when clean runtime surface is required.
 - `wakeflow-check-scripts.mjs`: verifies that every top-level `scripts/*.mjs` file is
-  represented in this README, that test scripts appear in workspace script-test
-  instructions, that normal CLI scripts do not call direct `process.exit()`, and
-  that `wakeflow-verify.mjs --with-script-tests` runs all `*.test.mjs`
-  files.
+  represented in this README and that normal CLI scripts do not call direct
+  `process.exit()`. Development tests live in the repository root `test/`
+  directory so the marketplace artifact does not ship test-only subprocess
+  fixtures.
 - `wakeflow-verify.mjs`: one-command Wakeflow verification. It runs
   workspace boundary, repository residue, repo status, workspace docs, script
   docs, current layout, `git diff --check`, optional runtime residue, and
@@ -204,17 +204,10 @@ Current scripts:
 
 Workspace script tests:
 
-Run them through `node scripts/wakeflow-cli.mjs scripts --tests`. The
-current set is `wakeflow-archive-todo.test.mjs`,
-`wakeflow-delivery.test.mjs`, `wakeflow-repo-status.test.mjs`,
-`wakeflow-state.test.mjs`, `wakeflow-state-machine-route-fixtures.test.mjs`,
-`wakeflow-intake.test.mjs`, `wakeflow-demand-sequence.test.mjs`,
-`wakeflow-check-repository-residue.test.mjs`,
-`wakeflow-check-layout.test.mjs`, `wakeflow-check-scripts.test.mjs`,
-`wakeflow-validate.test.mjs`, `wakeflow-setup.test.mjs`,
-`wakeflow-import-design-handoffs.test.mjs`,
-`wakeflow-next-work.test.mjs`, and
-`wakeflow-cli.test.mjs`.
+From the development repository root, run them through `npm run test:wakeflow`
+or `node --test test`. The plugin CLI can also discover them in a checkout via
+`node plugins/wakeflow/scripts/wakeflow-cli.mjs scripts --tests`. Installed
+marketplace artifacts do not include this test directory.
 
 ## Common Routes
 

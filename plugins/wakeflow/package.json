@@ -1,0 +1,50 @@
+{
+  "name": "wakeflow",
+  "version": "0.1.2",
+  "type": "module",
+  "description": "Unattended workflow loops for multi-window agent work.",
+  "license": "MIT",
+  "homepage": "https://github.com/GxFn/Wakeflow#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GxFn/Wakeflow.git"
+  },
+  "keywords": [
+    "agent-workflow",
+    "unattended",
+    "control-plane",
+    "multi-window",
+    "local-first",
+    "evidence-review"
+  ],
+  "bin": {
+    "wakeflow-mcp": "./mcp/server.cjs"
+  },
+  "files": [
+    ".codex-plugin/",
+    ".mcp.json",
+    "AGENTS.md",
+    "LICENSE",
+    "README.md",
+    "README.zh-CN.md",
+    "assets/",
+    "bin/",
+    "lib/",
+    "mcp/",
+    "schemas/",
+    "scripts/",
+    "skills/",
+    "templates/",
+    "workspace.config.example.json",
+    "workspace.config.json"
+  ],
+  "scripts": {
+    "validate": "node scripts/wakeflow-validate.mjs",
+    "smoke": "node scripts/wakeflow-smoke.mjs",
+    "mcp": "node ./mcp/server.cjs",
+    "test": "npm run validate && npm run smoke"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

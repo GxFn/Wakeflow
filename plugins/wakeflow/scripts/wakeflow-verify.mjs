@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runSync } from "../lib/wakeflow-process.mjs";
@@ -14,6 +14,7 @@ const hasActiveWorkspaceDocs = existsSync(path.join(workspaceRoot, ".workspace-a
 const withRuntime = args.includes("--with-runtime");
 const strictRuntime = args.includes("--strict-runtime");
 const withScriptTests = args.includes("--with-script-tests");
+const repositoryTestFiles = listRepositoryTests();
 
 const checks = [
   {
@@ -72,29 +73,26 @@ if (withRuntime || strictRuntime) {
   });
 }
 
-if (withScriptTests) {
+if (withScriptTests && repositoryTestFiles.length > 0) {
   checks.push({
     label: "workspace script tests",
     command: process.execPath,
-    args: [
-      "--test",
-      path.join(scriptsDir, "wakeflow-archive-todo.test.mjs"),
-      path.join(scriptsDir, "wakeflow-delivery.test.mjs"),
-      path.join(scriptsDir, "wakeflow-repo-status.test.mjs"),
-      path.join(scriptsDir, "wakeflow-state.test.mjs"),
-      path.join(scriptsDir, "wakeflow-state-machine-route-fixtures.test.mjs"),
-      path.join(scriptsDir, "wakeflow-intake.test.mjs"),
-      path.join(scriptsDir, "wakeflow-demand-sequence.test.mjs"),
-      path.join(scriptsDir, "wakeflow-check-repository-residue.test.mjs"),
-      path.join(scriptsDir, "wakeflow-check-layout.test.mjs"),
-      path.join(scriptsDir, "wakeflow-check-scripts.test.mjs"),
-      path.join(scriptsDir, "wakeflow-validate.test.mjs"),
-      path.join(scriptsDir, "wakeflow-setup.test.mjs"),
-      path.join(scriptsDir, "wakeflow-import-design-handoffs.test.mjs"),
-      path.join(scriptsDir, "wakeflow-next-work.test.mjs"),
-      path.join(scriptsDir, "wakeflow-cli.test.mjs"),
-    ],
+    args: ["--test", ...repositoryTestFiles],
   });
+}
+
+function listRepositoryTests() {
+  for (const candidate of [
+    path.join(wakeflowRoot, "test"),
+    path.resolve(wakeflowRoot, "../../test"),
+  ]) {
+    if (!existsSync(candidate)) continue;
+    return readdirSync(candidate)
+      .filter((name) => name.endsWith(".test.mjs"))
+      .sort()
+      .map((name) => path.join(candidate, name));
+  }
+  return [];
 }
 
 function runCheck(check) {
@@ -131,7 +129,7 @@ function getArgValue(name) {
 
 console.log("Wakeflow verification");
 console.log(`Runtime residue check: ${withRuntime || strictRuntime ? (strictRuntime ? "strict" : "warning") : "skipped"}`);
-console.log(`Workspace script tests: ${withScriptTests ? "yes" : "no"}`);
+console.log(`Workspace script tests: ${withScriptTests ? (repositoryTestFiles.length > 0 ? "yes" : "not available") : "no"}`);
 console.log(`Active workspace docs: ${hasActiveWorkspaceDocs ? "yes" : "not initialized"}`);
 
 const results = checks.map(runCheck);

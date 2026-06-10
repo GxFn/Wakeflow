@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import path from "node:path";
+import { existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runSync } from "../lib/wakeflow-process.mjs";
 import { loadWorkspaceConfig } from "./lib/wakeflow-config.mjs";
@@ -15,22 +16,7 @@ const command = args[0] ?? "help";
 const commandArgs = args.slice(1);
 const workspaceConfig = loadWorkspaceConfig({ workspaceRoot: targetRoot, args: rawArgs });
 
-const testScripts = [
-  "scripts/wakeflow-archive-todo.test.mjs",
-  "scripts/wakeflow-delivery.test.mjs",
-  "scripts/wakeflow-repo-status.test.mjs",
-  "scripts/wakeflow-state.test.mjs",
-  "scripts/wakeflow-state-machine-route-fixtures.test.mjs",
-  "scripts/wakeflow-intake.test.mjs",
-  "scripts/wakeflow-demand-sequence.test.mjs",
-  "scripts/wakeflow-check-repository-residue.test.mjs",
-  "scripts/wakeflow-check-scripts.test.mjs",
-  "scripts/wakeflow-validate.test.mjs",
-  "scripts/wakeflow-setup.test.mjs",
-  "scripts/wakeflow-import-design-handoffs.test.mjs",
-  "scripts/wakeflow-next-work.test.mjs",
-  "scripts/wakeflow-cli.test.mjs",
-];
+const testScripts = listRepositoryTests();
 
 const helpText = `
 ${workspaceConfig.workspaceName} script aggregator
@@ -258,6 +244,9 @@ function buildScripts(options) {
   assertKnownOptions(options, ["--tests"]);
   const steps = [{ label: "script docs", ...nodeScript("wakeflow-check-scripts.mjs") }];
   if (hasFlag(options, "--tests")) {
+    if (testScripts.length === 0) {
+      fail("No repository test directory is available from this Wakeflow installation.");
+    }
     steps.push({
       label: "workspace script tests",
       command: process.execPath,
@@ -266,6 +255,20 @@ function buildScripts(options) {
     });
   }
   return steps;
+}
+
+function listRepositoryTests() {
+  for (const candidate of [
+    path.join(wakeflowRoot, "test"),
+    path.resolve(wakeflowRoot, "../../test"),
+  ]) {
+    if (!existsSync(candidate)) continue;
+    return readdirSync(candidate)
+      .filter((name) => name.endsWith(".test.mjs"))
+      .sort()
+      .map((name) => path.relative(wakeflowRoot, path.join(candidate, name)).split(path.sep).join("/"));
+  }
+  return [];
 }
 
 function optionalRoot(root) {

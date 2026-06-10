@@ -17,7 +17,7 @@
     "status": "completed",
     "summary": "Manual fixture completed.",
     "evidenceRef": "evidence/manual-route-result.json",
-    "verification": "node --test scripts/wakeflow-state-machine-route-fixtures.test.mjs"
+    "verification": "node --test test/wakeflow-state-machine-route-fixtures.test.mjs"
   },
   "decision": {
     "decision": "accept",

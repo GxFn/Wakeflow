@@ -4,10 +4,10 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { runSync } from "../lib/wakeflow-process.mjs";
+import { runSync } from "../plugins/wakeflow/lib/wakeflow-process.mjs";
 import test from "node:test";
 
-const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/wakeflow");
 const script = path.join(workspaceRoot, "scripts/wakeflow-state.mjs");
 const renderScript = path.join(workspaceRoot, "scripts/wakeflow-render-progress.mjs");
 const appendScript = path.join(workspaceRoot, "scripts/wakeflow-progress-log.mjs");

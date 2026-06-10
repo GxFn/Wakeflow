@@ -80,24 +80,24 @@ decide product behavior, or declare a task complete.
 
 Wakeflow uses the same two-layer marketplace shape as Lark Remote: the
 repository root is the development workspace, and the installable plugin
-artifact lives in `plugins/wakeflow/`. The root
+artifact lives in `plugins/codex-wakeflow/`. The root
 `.agents/plugins/marketplace.json` contains a single `wakeflow` entry whose
-`source.path` is `./plugins/wakeflow`.
+`source.path` is `./plugins/codex-wakeflow`.
 
 Install the public plugin artifact:
 
 ```bash
-npx codex-marketplace add GxFn/Wakeflow/plugins/wakeflow --plugin
+npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 ```
 
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.1.2/plugins/wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.1.2/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository
-URL, the desired ref, and `plugins/wakeflow` as the sparse path.
+URL, the desired ref, and `plugins/codex-wakeflow` as the sparse path.
 
 For local development, register this checkout as its own local marketplace:
 
@@ -314,7 +314,7 @@ https://github.com/GxFn/Wakeflow.git
 The repository carries its own marketplace catalog at
 `.agents/plugins/marketplace.json`. That catalog is intentionally single-plugin:
 it names the marketplace `gxfn`, displays as `GxFn`, and points the only plugin
-entry at `./plugins/wakeflow`. Publishing Wakeflow means tagging the repository
+entry at `./plugins/codex-wakeflow`. Publishing Wakeflow means tagging the repository
 and submitting the nested plugin artifact, not the development workspace root.
 
 Before publishing a release tag:
@@ -322,10 +322,10 @@ Before publishing a release tag:
 1. Run `npm test` from this repository.
 2. Run the Codex plugin manifest validator in an environment with its Python
    dependencies installed.
-3. Confirm `plugins/wakeflow/.codex-plugin/plugin.json` has no more than three
+3. Confirm `plugins/codex-wakeflow/.codex-plugin/plugin.json` has no more than three
    starter prompts.
 4. Confirm `.agents/plugins/marketplace.json` contains only the nested
-   `./plugins/wakeflow` entry.
+   `./plugins/codex-wakeflow` entry.
 5. Confirm runtime scripts and installed skills contain no project-specific
    default controller names, product overlays, local paths, or private thread
    ids.
@@ -346,17 +346,17 @@ Common source areas:
 
 | Path | Purpose |
 | --- | --- |
-| `plugins/wakeflow/.codex-plugin/plugin.json` | Plugin manifest and MCP wiring. |
-| `plugins/wakeflow/mcp/server.cjs` | Standalone MCP server entrypoint with no `node_modules` dependency. |
-| `plugins/wakeflow/bin/wakeflow-mcp.mjs` | Compatibility wrapper for the MCP server entrypoint. |
-| `plugins/wakeflow/scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime shipped with the plugin. |
-| `plugins/wakeflow/skills/` | Controller, target, governance, and validation operating manuals shipped with the plugin. |
-| `plugins/wakeflow/templates/wakeflow-template-bundle.json` | Installed workspace starter documents and support surfaces, bundled for marketplace scan size. |
-| `plugins/wakeflow/assets/` | Marketplace and plugin presentation assets. |
+| `plugins/codex-wakeflow/.codex-plugin/plugin.json` | Plugin manifest and MCP wiring. |
+| `plugins/codex-wakeflow/mcp/server.cjs` | Standalone MCP server entrypoint with no `node_modules` dependency. |
+| `plugins/codex-wakeflow/bin/wakeflow-mcp.mjs` | Compatibility wrapper for the MCP server entrypoint. |
+| `plugins/codex-wakeflow/scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime shipped with the plugin. |
+| `plugins/codex-wakeflow/skills/` | Controller, target, governance, and validation operating manuals shipped with the plugin. |
+| `plugins/codex-wakeflow/templates/wakeflow-template-bundle.json` | Installed workspace starter documents and support surfaces, bundled for marketplace scan size. |
+| `plugins/codex-wakeflow/assets/` | Marketplace and plugin presentation assets. |
 | `test/` | Development-only regression tests kept outside the marketplace scan surface. |
 | `docs/` | Development planning and architecture notes kept outside the plugin artifact. |
 
-Detailed command references live in [scripts/README.md](plugins/wakeflow/scripts/README.md).
+Detailed command references live in [scripts/README.md](plugins/codex-wakeflow/scripts/README.md).
 The top-level README explains the system model; the script README is the
 operator manual.
 

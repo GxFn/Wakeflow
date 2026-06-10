@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { runSync } from "../plugins/wakeflow/lib/wakeflow-process.mjs";
-import { runWakeflowRuntime } from "../plugins/wakeflow/lib/wakeflow-runtime.mjs";
+import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
+import { runWakeflowRuntime } from "../plugins/codex-wakeflow/lib/wakeflow-runtime.mjs";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/wakeflow");
+const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
 const controlScript = path.join(workspaceRoot, "scripts/wakeflow-cli.mjs");
 
 function run(args) {

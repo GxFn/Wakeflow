@@ -69,24 +69,24 @@ flowchart TD
 ## 安装 Wakeflow
 
 Wakeflow 采用和 Lark Remote 一样的双层 marketplace 结构：仓库根目录是开发工作区，
-真正可安装的插件 artifact 位于 `plugins/wakeflow/`。根目录
+真正可安装的插件 artifact 位于 `plugins/codex-wakeflow/`。根目录
 `.agents/plugins/marketplace.json` 内只有一个 `wakeflow` 条目，`source.path`
-指向 `./plugins/wakeflow`。
+指向 `./plugins/codex-wakeflow`。
 
 安装公开插件 artifact：
 
 ```bash
-npx codex-marketplace add GxFn/Wakeflow/plugins/wakeflow --plugin
+npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 ```
 
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.1.2/plugins/wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.1.2/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
-并把 sparse path 填成 `plugins/wakeflow`。
+并把 sparse path 填成 `plugins/codex-wakeflow`。
 
 本地开发时，可以把当前 checkout 注册成本地 marketplace：
 
@@ -249,15 +249,15 @@ https://github.com/GxFn/Wakeflow.git
 
 仓库自带 marketplace catalog：`.agents/plugins/marketplace.json`。这个 catalog
 故意只包含一个插件：marketplace 名为 `gxfn`，显示为 `GxFn`，唯一插件条目指向
-`./plugins/wakeflow`。发布 Wakeflow 意味着给仓库打 tag，并提交嵌套插件 artifact，
+`./plugins/codex-wakeflow`。发布 Wakeflow 意味着给仓库打 tag，并提交嵌套插件 artifact，
 不是提交开发工作区根目录。
 
 发布 release tag 前：
 
 1. 在本仓库运行 `npm test`。
 2. 在有 Python 依赖的环境中运行 Codex plugin manifest validator。
-3. 确认 `plugins/wakeflow/.codex-plugin/plugin.json` starter prompts 不超过 3 条。
-4. 确认 `.agents/plugins/marketplace.json` 只包含嵌套的 `./plugins/wakeflow` 条目。
+3. 确认 `plugins/codex-wakeflow/.codex-plugin/plugin.json` starter prompts 不超过 3 条。
+4. 确认 `.agents/plugins/marketplace.json` 只包含嵌套的 `./plugins/codex-wakeflow` 条目。
 5. 确认 runtime scripts 和 installed skills 没有项目特定默认 controller 名、产品 overlay、
    本地路径或私有 thread id。
 6. 给 Codex 应安装的精确 commit 打 tag。
@@ -277,17 +277,17 @@ npm test
 
 | Path | 用途 |
 | --- | --- |
-| `plugins/wakeflow/.codex-plugin/plugin.json` | 插件 manifest 和 MCP wiring。 |
-| `plugins/wakeflow/mcp/server.cjs` | 无 `node_modules` 依赖的 standalone MCP server entrypoint。 |
-| `plugins/wakeflow/bin/wakeflow-mcp.mjs` | MCP server entrypoint 的兼容 wrapper。 |
-| `plugins/wakeflow/scripts/` | 随插件发布的 setup、state、delivery、intake、archive、validation 和 CLI runtime。 |
-| `plugins/wakeflow/skills/` | 随插件发布的 controller、target、governance 和 validation 操作手册。 |
-| `plugins/wakeflow/templates/wakeflow-template-bundle.json` | 已安装工作区 starter documents 和 support surfaces 的 bundle，用于控制 marketplace scan 文件数。 |
-| `plugins/wakeflow/assets/` | Marketplace 和插件展示资源。 |
+| `plugins/codex-wakeflow/.codex-plugin/plugin.json` | 插件 manifest 和 MCP wiring。 |
+| `plugins/codex-wakeflow/mcp/server.cjs` | 无 `node_modules` 依赖的 standalone MCP server entrypoint。 |
+| `plugins/codex-wakeflow/bin/wakeflow-mcp.mjs` | MCP server entrypoint 的兼容 wrapper。 |
+| `plugins/codex-wakeflow/scripts/` | 随插件发布的 setup、state、delivery、intake、archive、validation 和 CLI runtime。 |
+| `plugins/codex-wakeflow/skills/` | 随插件发布的 controller、target、governance 和 validation 操作手册。 |
+| `plugins/codex-wakeflow/templates/wakeflow-template-bundle.json` | 已安装工作区 starter documents 和 support surfaces 的 bundle，用于控制 marketplace scan 文件数。 |
+| `plugins/codex-wakeflow/assets/` | Marketplace 和插件展示资源。 |
 | `test/` | 开发期回归测试，不进入 marketplace 扫描面。 |
 | `docs/` | 开发期规划和架构文档，不进入插件 artifact。 |
 
-详细命令说明在 [scripts/README.md](plugins/wakeflow/scripts/README.md)。顶层 README 解释系统模型；
+详细命令说明在 [scripts/README.md](plugins/codex-wakeflow/scripts/README.md)。顶层 README 解释系统模型；
 script README 是操作者手册。
 
 ## 设计原则

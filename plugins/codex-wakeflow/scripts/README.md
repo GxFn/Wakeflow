@@ -206,7 +206,7 @@ Workspace script tests:
 
 From the development repository root, run them through `npm run test:wakeflow`
 or `node --test test`. The plugin CLI can also discover them in a checkout via
-`node plugins/wakeflow/scripts/wakeflow-cli.mjs scripts --tests`. Installed
+`node plugins/codex-wakeflow/scripts/wakeflow-cli.mjs scripts --tests`. Installed
 marketplace artifacts do not include this test directory.
 
 ## Common Routes

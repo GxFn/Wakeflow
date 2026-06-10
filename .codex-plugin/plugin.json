@@ -1,6 +1,6 @@
 {
   "name": "wakeflow",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Unattended control loops for multi-window agent work.",
   "author": {
     "name": "gaoxuefeng",

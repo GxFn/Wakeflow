@@ -91,7 +91,7 @@ codex plugin marketplace add GxFn/Wakeflow --ref main
 For a pinned release after the matching tag exists:
 
 ```bash
-codex plugin marketplace add GxFn/Wakeflow --ref v0.1.1
+codex plugin marketplace add GxFn/Wakeflow --ref v0.1.2
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository

@@ -1,0 +1,596 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { buildControllerCallbackPlan } from "./wakeflow-return-policy.mjs";
+import { controllerReviewScope } from "./wakeflow-review-scope.mjs";
+import { buildControllerReviewPack } from "./wakeflow-review-pack.mjs";
+
+export function createReviewCommands(ctx) {
+  const {
+    workspaceRoot,
+    dirs,
+    version,
+    getValue,
+    output,
+    fail,
+    nowIso,
+    artifactTrace,
+    readControllerStateRoot,
+    resolveStateRoot,
+    listJsonFiles,
+    readJson,
+    resultFileFor,
+    controllerReturnDeliveryStatusForGroup,
+    targetDeliveryStatusesForPacket,
+    groupFromPackets,
+    orderResultsByGroup,
+    buildGroupSnapshot,
+  } = ctx;
+
+  function evidenceRefSummary(ref) {
+    const text = String(ref ?? "");
+    const looksLikePath = text.includes("/") || /\.(json|md|log|txt|png|jpg|jpeg|webp|html|csv)$/i.test(text);
+    const resolvedPath = looksLikePath ? (path.isAbsolute(text) ? text : path.resolve(workspaceRoot, text)) : "";
+    return {
+      ref: text,
+      looksLikePath,
+      exists: Boolean(resolvedPath && existsSync(resolvedPath)),
+      path: resolvedPath && existsSync(resolvedPath) ? path.relative(workspaceRoot, resolvedPath) : undefined,
+    };
+  }
+
+  function missingEvidenceRefsFromSummaries(summaries) {
+    return summaries
+      .filter((item) => item.looksLikePath && !item.exists)
+      .map((item) => item.ref);
+  }
+
+  function targetResultReviewEntry(item) {
+    const result = item.result;
+    const evidenceRefs = Array.isArray(result?.evidenceRefs) ? result.evidenceRefs : [];
+    const verificationSummary = Array.isArray(result?.verificationSummary) ? result.verificationSummary : [];
+    const commits = Array.isArray(result?.commits) ? result.commits : [];
+    const evidenceRefSummaries = item.stateRoot
+      ? evidenceRefs.map((ref) => stateRootEvidenceRefSummary(item.stateRoot, item.stateRootRef, ref))
+      : evidenceRefs.map(evidenceRefSummary);
+    const missingEvidenceRefs = missingEvidenceRefsFromSummaries(evidenceRefSummaries);
+    return {
+      packetId: item.packet.id,
+      targetWindow: item.packet.targetWindow,
+      taskId: item.packet.taskId,
+      resultStatus: result?.status || "missing",
+      resultFile: result ? path.relative(workspaceRoot, item.file) : undefined,
+      changedRepos: Array.isArray(result?.changedRepos) ? result.changedRepos : [],
+      commits,
+      evidenceRefs,
+      evidenceRefSummaries,
+      missingEvidenceRefs,
+      verificationSummary,
+      riskSummary: Array.isArray(result?.riskSummary) ? result.riskSummary : [],
+      nextSuggestion: result?.nextSuggestion,
+      reportedAt: result?.reportedAt,
+      hasControllerReviewEvidence: commits.length > 0 || evidenceRefs.length > 0 || verificationSummary.length > 0,
+      targetDeliveries: targetDeliveryStatusesForPacket(item.packet.id),
+      stateRootResult: Boolean(item.stateRootResult),
+    };
+  }
+
+  function buildReviewPack(review) {
+    const returnGroup = review.group || (review.packets.length === 1 ? review.packets[0].dispatchGroup : "");
+    const controllerReturnDelivery = controllerReturnDeliveryStatusForGroup(returnGroup);
+    const callbackPlan = buildControllerCallbackPlan({
+      dispatchGroup: returnGroup,
+      returnPolicy: review.returnPolicy,
+      groupSnapshot: review.groupSnapshot,
+      controllerReturnDeliveries: controllerReturnDelivery.deliveries,
+    });
+    const results = review.results.map(targetResultReviewEntry);
+    const generatedAt = nowIso();
+    return buildControllerReviewPack({
+      review,
+      controllerReturnDelivery,
+      callbackPlan,
+      targetResults: results,
+      generatedAt,
+      wakeflowTrace: artifactTrace({
+        artifactKind: "review-pack",
+        createdAt: generatedAt,
+        dispatchGroup: review.group || undefined,
+        stateRef: review.groupRecord?.stateRef,
+        targetTaskId: review.taskId || undefined,
+      }),
+      version,
+    });
+  }
+
+  function stateRootTargetResults(stateRoot) {
+    const dir = path.join(stateRoot, "target-results");
+    if (!existsSync(dir)) return [];
+    return listJsonFiles(dir).map((file) => ({
+      file,
+      result: readJson(file, "state-root target result"),
+    }));
+  }
+
+  function latestStateRootResultsByTargetTask(stateRoot) {
+    const latest = new Map();
+    for (const item of stateRootTargetResults(stateRoot)) {
+      const existing = latest.get(item.result.targetTaskId);
+      if (!existing || String(item.result.createdAt ?? "") >= String(existing.result.createdAt ?? "")) {
+        latest.set(item.result.targetTaskId, item);
+      }
+    }
+    return latest;
+  }
+
+  function normalizeStateRootResult(result) {
+    const changedRepositories = Array.isArray(result?.changedRepositories) ? result.changedRepositories : [];
+    const changedRepos = Array.isArray(result?.changedRepos)
+      ? result.changedRepos
+      : changedRepositories.map((item) => item.repository).filter(Boolean);
+    const commits = Array.isArray(result?.commits)
+      ? result.commits
+      : changedRepositories.map((item) => item.head).filter(Boolean);
+    return {
+      kind: "TargetResultEnvelope",
+      version,
+      targetWindow: result?.targetWindow,
+      taskId: result?.targetTaskId || result?.taskId,
+      dispatchGroup: result?.dispatchGroup,
+      status: result?.status,
+      changedRepos,
+      commits,
+      evidenceRefs: Array.isArray(result?.evidenceRefs) ? result.evidenceRefs : [],
+      verificationSummary: Array.isArray(result?.verificationSummary)
+        ? result.verificationSummary
+        : Array.isArray(result?.verification)
+          ? result.verification
+          : [],
+      riskSummary: Array.isArray(result?.riskSummary)
+        ? result.riskSummary
+        : Array.isArray(result?.risks)
+          ? result.risks
+          : [],
+      nextSuggestion: result?.nextSuggestion || result?.controllerActionRequired,
+      reportedAt: result?.reportedAt || result?.createdAt,
+    };
+  }
+
+  function stateRootResultForPacket({ packet, stateRoot, stateRootRef, resultsByTask }) {
+    if (!stateRoot || !resultsByTask) return null;
+    const item = resultsByTask.get(packet.taskId);
+    if (!item) return null;
+    if (item.result.targetWindow && item.result.targetWindow !== packet.targetWindow) {
+      fail(`state-root target result window mismatch for ${packet.taskId}: result has ${item.result.targetWindow}, packet has ${packet.targetWindow}`);
+    }
+    return {
+      packet,
+      file: item.file,
+      result: normalizeStateRootResult(item.result),
+      stateRoot,
+      stateRootRef,
+      stateRootResult: true,
+    };
+  }
+
+  function stateRootEvidenceRefSummary(stateRoot, stateRootRef, ref) {
+    const text = String(ref ?? "");
+    const looksLikePath = text.includes("/") || /\.(json|md|log|txt|png|jpg|jpeg|webp|html|csv)$/i.test(text);
+    const absoluteRef = path.isAbsolute(text);
+    const candidatePaths = looksLikePath
+      ? absoluteRef
+        ? [text]
+        : [
+            path.resolve(stateRoot, text),
+            path.resolve(workspaceRoot, text),
+          ]
+      : [];
+    const resolvedPath = candidatePaths.find((candidate) => existsSync(candidate)) || candidatePaths[0] || "";
+    const stateRootCandidate = looksLikePath && !absoluteRef ? path.resolve(stateRoot, text) : "";
+    return {
+      ref: text,
+      looksLikePath,
+      exists: Boolean(resolvedPath && existsSync(resolvedPath)),
+      path: resolvedPath && existsSync(resolvedPath) ? path.relative(workspaceRoot, resolvedPath) : undefined,
+      stateRootRelativePath: stateRootCandidate ? path.join(stateRootRef, text) : undefined,
+      resolvedAgainst: resolvedPath && existsSync(resolvedPath)
+        ? (() => {
+            const relativeToStateRoot = path.relative(stateRoot, resolvedPath);
+            return !relativeToStateRoot.startsWith("..") && !path.isAbsolute(relativeToStateRoot) ? "state-root" : "workspace-root";
+          })()
+        : undefined,
+    };
+  }
+
+  function stateRootTaskDeliveryStatus(task) {
+    if (task?.delivery?.deliveryRunId) return "sent";
+    if (task?.delivery?.deliveryFile) return "pending-host-send";
+    return "not-built";
+  }
+
+  function stateRootTaskResultExpected(task) {
+    if (task?.delivery?.deliveryRunId) return true;
+    return ["sent", "active", "missing-result"].includes(task?.status || "");
+  }
+
+  function buildStateRootReviewPack(stateRoot) {
+    const { state, stateRootRef } = readControllerStateRoot(stateRoot);
+    const resultsByTask = latestStateRootResultsByTargetTask(stateRoot);
+    const allTargetTasks = state.targetTasks ?? [];
+    const reviewScope = controllerReviewScope(allTargetTasks);
+    const targetTasks = reviewScope.reviewableTargetTasks;
+    const targetResults = targetTasks.map((task) => {
+      const item = resultsByTask.get(task.targetTaskId);
+      const result = item?.result ?? null;
+      const evidenceRefs = Array.isArray(result?.evidenceRefs) ? result.evidenceRefs : [];
+      const verificationSummary = Array.isArray(result?.verification) ? result.verification : [];
+      const evidenceRefSummaries = evidenceRefs.map((ref) => stateRootEvidenceRefSummary(stateRoot, stateRootRef, ref));
+      const missingEvidenceRefs = missingEvidenceRefsFromSummaries(evidenceRefSummaries);
+      const resultExpected = stateRootTaskResultExpected(task);
+      const resultStatus = result?.status || (resultExpected ? "missing" : "pending-dispatch");
+      return {
+        targetWindow: task.targetWindow,
+        taskId: task.targetTaskId,
+        taskPackageId: task.taskPackageId,
+        resultId: result?.resultId,
+        resultStatus,
+        resultFile: item ? path.relative(workspaceRoot, item.file) : undefined,
+        evidenceRefs,
+        evidenceRefSummaries,
+        missingEvidenceRefs,
+        verificationSummary,
+        riskSummary: Array.isArray(result?.risks) ? result.risks : [],
+        reportedAt: result?.createdAt,
+        hasControllerReviewEvidence: evidenceRefs.length > 0 || verificationSummary.length > 0,
+        stateRootResult: true,
+        resultExpected,
+        deliveryStatus: stateRootTaskDeliveryStatus(task),
+      };
+    });
+    const missing = targetResults.filter((item) => item.resultStatus === "missing");
+    const pendingDispatch = targetResults.filter((item) => item.resultStatus === "pending-dispatch");
+    const blocked = targetResults.filter((item) => item.resultStatus === "blocked");
+    const ready = targetResults.filter((item) => !["missing", "pending-dispatch", "blocked"].includes(item.resultStatus));
+    const noTargetTasks = allTargetTasks.length === 0;
+    const noOpenTargetTasks = !noTargetTasks && targetTasks.length === 0;
+    const demandCompleted = state.state === "completed" || state.review?.status === "demand-completed";
+    const decision = demandCompleted
+      ? "completed"
+      : noTargetTasks
+      ? "no-target-tasks"
+      : noOpenTargetTasks
+      ? "ready-to-complete-demand"
+      : missing.length > 0
+      ? "wait"
+      : ready.length === 0 && blocked.length === 0
+      ? "wait"
+      : blocked.length > 0
+        ? "blocked"
+        : "needs-controller-review";
+    const groupStatus = demandCompleted
+      ? "completed"
+      : noTargetTasks
+      ? "empty"
+      : noOpenTargetTasks
+      ? "accepted"
+      : missing.length > 0
+      ? ready.length > 0 || blocked.length > 0 ? "partially-ready" : "waiting"
+      : ready.length > 0 || blocked.length > 0
+      ? pendingDispatch.length > 0
+        ? "partially-ready"
+        : blocked.length > 0
+          ? "blocked"
+          : "ready"
+      : pendingDispatch.length > 0
+        ? "pending-dispatch"
+        : "waiting";
+    const groupSnapshot = {
+      groupId: state.demandKey,
+      returnPolicy: { mode: "group-ready" },
+      groupStatus,
+      expected: targetResults.map((item) => ({
+        packetId: item.taskId,
+        targetWindow: item.targetWindow,
+        taskId: item.taskId,
+        status: item.resultStatus,
+        resultFile: item.resultFile,
+      })),
+      completed: targetResults.filter((item) => item.resultStatus === "completed"),
+      ready,
+      blocked,
+      missing,
+      pendingDispatch,
+      needsReview: targetResults.filter((item) => item.resultStatus === "needs-review"),
+      expectedTargets: [...new Set(targetTasks.map((item) => item.targetWindow))],
+      completedTargets: [...new Set(targetResults.filter((item) => item.resultStatus === "completed").map((item) => item.targetWindow))],
+      readyTargets: [...new Set(ready.map((item) => item.targetWindow))],
+      blockedTargets: [...new Set(blocked.map((item) => item.targetWindow))],
+      missingTargets: [...new Set(missing.map((item) => item.targetWindow))],
+      pendingDispatchTargets: [...new Set(pendingDispatch.map((item) => item.targetWindow))],
+      allResultsPresent: missing.length === 0 && pendingDispatch.length === 0,
+      allSentResultsPresent: missing.length === 0,
+      stateRoot: stateRootRef,
+    };
+    const reviewReady = !demandCompleted && !noTargetTasks && !noOpenTargetTasks && decision !== "wait";
+    const missingEvidenceRefs = targetResults.flatMap((item) => item.missingEvidenceRefs.map((ref) => ({
+      targetWindow: item.targetWindow,
+      taskId: item.taskId,
+      ref,
+    })));
+    const missingEvidenceRefsPresent = missingEvidenceRefs.length > 0;
+    const generatedAt = nowIso();
+    const callbackPlan = {
+      kind: "WakeflowControllerCallbackPlan",
+      version: 1,
+      dispatchGroup: state.demandKey,
+      returnPolicy: groupSnapshot.returnPolicy,
+      status: "not-applicable",
+      reason: "State-root review packs are controller-local; run reducer/decision instead of building a direct-thread controller-return envelope.",
+      counts: {
+        unitCount: 0,
+        readyToBuildCount: 0,
+        pendingHostSendCount: 0,
+        sentCount: 0,
+        waitingForSentResultsCount: 0,
+        waitingForResultCount: 0,
+        transportReviewCount: 0,
+      },
+      units: [],
+      forbiddenConclusions: [
+        "callback-plan-is-controller-acceptance",
+        "callback-plan-sends-host-message",
+        "callback-plan-creates-target-result",
+      ],
+    };
+    return {
+      kind: "ControllerReviewPack",
+      version,
+      source: "wakeflow-state-root",
+      demandKey: state.demandKey,
+      stateRoot: stateRootRef,
+      stateRevision: state.revision,
+      controllerState: state.state,
+      decision,
+      returnPolicy: groupSnapshot.returnPolicy,
+      groupStatus,
+      groupSnapshot,
+      reviewScope: {
+        mode: reviewScope.mode,
+        targetTaskIds: reviewScope.targetTaskIds,
+        excludedTargetTaskIds: reviewScope.excludedTargetTaskIds,
+      },
+      controllerReturnDelivery: {
+        status: "not-applicable",
+        reason: "state-root review pack is independent of controller-return delivery evidence",
+      },
+      callbackPlan,
+      targetResults,
+      rawEvidenceRequired: targetResults
+        .filter((item) => item.resultStatus !== "missing")
+        .map((item) => ({
+          targetWindow: item.targetWindow,
+          taskId: item.taskId,
+          resultStatus: item.resultStatus,
+          evidenceRefs: item.evidenceRefs,
+          verificationSummary: item.verificationSummary,
+          hasControllerReviewEvidence: item.hasControllerReviewEvidence,
+          missingEvidenceRefs: item.missingEvidenceRefs,
+        })),
+      missingEvidenceRefs,
+      gates: {
+        controllerReviewReady: reviewReady && !missingEvidenceRefsPresent,
+        noTargetTasks,
+        noOpenTargetTasks,
+        waitForMissingResults: missing.length > 0,
+        pendingDispatchTargetsPresent: pendingDispatch.length > 0,
+        blockedResultsPresent: blocked.length > 0,
+        missingEvidenceRefsPresent,
+        evidenceRepairRequired: missingEvidenceRefsPresent,
+        controllerReturnSent: false,
+        controllerReturnReady: false,
+        controllerReturnPendingHostSend: false,
+        rawEvidencePullRequired: reviewReady,
+        totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent,
+        stateRootBased: true,
+      },
+      nextAction: demandCompleted
+        ? "demand-completed-stop-without-next-dispatch"
+        : noTargetTasks
+        ? "add-task-package-before-review"
+        : noOpenTargetTasks
+        ? "run-wakeflow-complete-demand-or-add-next-package"
+        : decision === "wait"
+        ? missing.length > 0
+          ? "wait-for-state-root-target-result"
+          : "dispatch-pending-target-before-result-review"
+        : decision === "blocked"
+          ? "pull-block-evidence-and-run-wakeflow-state-reducer"
+          : missingEvidenceRefsPresent
+            ? "fix-missing-evidence-refs-before-wakeflow-state-reducer"
+            : pendingDispatch.length > 0
+              ? "pull-raw-evidence-and-continue-pending-dispatch"
+              : "pull-raw-evidence-and-run-wakeflow-state-reducer",
+      forbiddenConclusions: [
+        "review-pack-is-controller-acceptance",
+        "review-pack-creates-next-dispatch",
+        "review-pack-updates-developer-progress",
+      ],
+      wakeflowTrace: artifactTrace({
+        artifactKind: "review-pack",
+        createdAt: generatedAt,
+        demandKey: state.demandKey,
+        dispatchGroup: state.demandKey,
+        stateRevision: state.revision,
+        stateRoot: stateRootRef,
+      }),
+      generatedAt,
+    };
+  }
+
+  function loadPacketsForScope({ group = "", taskId = "" } = {}) {
+    if (!group && !taskId) fail("review-results requires --group or --task-id.");
+    const packets = listJsonFiles(dirs.packets)
+      .map((file) => readJson(file, "dispatch packet"))
+      .filter((packet) => packet.kind === "ControllerDispatchPacket")
+      .filter((packet) => (group ? packet.dispatchGroup === group : packet.taskId === taskId));
+    return { group, taskId, packets };
+  }
+
+  function computeReviewResults({ group = "", taskId = "" } = {}) {
+    const { packets } = loadPacketsForScope({ group, taskId });
+    if (packets.length === 0) fail("No matching dispatch packets found for review.");
+    const groupRecord = groupFromPackets({ groupId: group || packets[0]?.dispatchGroup || "", packets });
+    const stateRootRef = groupRecord.stateRef?.stateRoot || packets.find((packet) => packet.stateRef?.stateRoot)?.stateRef?.stateRoot || "";
+    const stateRoot = stateRootRef ? resolveStateRoot(stateRootRef) : null;
+    const stateRootResultsByTask = stateRoot ? latestStateRootResultsByTargetTask(stateRoot) : null;
+    const unorderedResults = packets.map((packet) => {
+      const file = resultFileFor(packet.targetWindow, packet.taskId, packet.dispatchGroup);
+      if (!existsSync(file)) {
+        const stateRootResult = stateRootResultForPacket({
+          packet,
+          stateRoot,
+          stateRootRef,
+          resultsByTask: stateRootResultsByTask,
+        });
+        if (stateRootResult) return stateRootResult;
+      }
+      return {
+        packet,
+        file,
+        result: existsSync(file) ? readJson(file, "target result") : null,
+      };
+    });
+    const results = orderResultsByGroup({ groupRecord, results: unorderedResults });
+    const groupSnapshot = buildGroupSnapshot({ groupRecord, results });
+    const missing = groupSnapshot.missing.map((item) => item.packetId);
+    const blocked = groupSnapshot.blocked.map((item) => item.packetId);
+    const needsReview = groupSnapshot.ready.map((item) => item.packetId);
+    const mode = groupSnapshot.returnPolicy.mode;
+    const decision = mode === "per-target"
+      ? ["waiting", "pending-dispatch"].includes(groupSnapshot.groupStatus)
+        ? "wait"
+        : groupSnapshot.blocked.length > 0 && groupSnapshot.ready.length === 0
+          ? "blocked"
+        : "needs-controller-review"
+      : groupSnapshot.missing.length > 0
+        ? "wait"
+        : groupSnapshot.ready.length === 0 && groupSnapshot.blocked.length === 0
+          ? "wait"
+        : groupSnapshot.blocked.length > 0
+          ? "blocked"
+          : "needs-controller-review";
+    return {
+      group,
+      taskId,
+      groupRecord,
+      returnPolicy: groupSnapshot.returnPolicy,
+      groupStatus: groupSnapshot.groupStatus,
+      groupSnapshot,
+      packets,
+      results,
+      missing,
+      blocked,
+      needsReview,
+      decision,
+    };
+  }
+
+  function commandReviewResults() {
+    const group = getValue("--group", "");
+    const taskId = getValue("--task-id", "");
+    const review = computeReviewResults({ group, taskId });
+    const returnGroup = review.group || (review.packets.length === 1 ? review.packets[0].dispatchGroup : "");
+    const controllerReturnDelivery = controllerReturnDeliveryStatusForGroup(returnGroup);
+    const callbackPlan = buildControllerCallbackPlan({
+      dispatchGroup: returnGroup,
+      returnPolicy: review.returnPolicy,
+      groupSnapshot: review.groupSnapshot,
+      controllerReturnDeliveries: controllerReturnDelivery.deliveries,
+    });
+
+    output(
+      {
+        ok: true,
+        command: "review-results",
+        group: review.group || undefined,
+        taskId: review.taskId || undefined,
+        packetCount: review.packets.length,
+        returnPolicy: review.returnPolicy,
+        groupStatus: review.groupStatus,
+        groupSnapshot: review.groupSnapshot,
+        readyResults: review.groupSnapshot.ready,
+        missingResults: review.groupSnapshot.missing,
+        blockedResults: review.groupSnapshot.blocked,
+        missing: review.missing,
+        blocked: review.blocked,
+        needsReview: review.needsReview,
+        decision: review.decision,
+        controllerReturnDeliveries: controllerReturnDelivery.deliveries,
+        controllerReturnDelivery,
+        callbackPlan,
+      },
+      [
+        `Review scope: ${group ? `group ${group}` : `task ${taskId}`}`,
+        `Packets: ${review.packets.length}`,
+        `Decision: ${review.decision}`,
+        `Controller return delivery: ${controllerReturnDelivery.status}`,
+      ],
+    );
+  }
+
+  function commandReviewPack() {
+    const stateRootArg = getValue("--state-root", "");
+    if (stateRootArg) {
+      const stateRoot = resolveStateRoot(stateRootArg);
+      const reviewPack = buildStateRootReviewPack(stateRoot);
+      output(
+        {
+          ok: true,
+          command: "review-pack",
+          source: "wakeflow-state-root",
+          stateRoot: reviewPack.stateRoot,
+          stateRevision: reviewPack.stateRevision,
+          demandKey: reviewPack.demandKey,
+          decision: reviewPack.decision,
+          groupStatus: reviewPack.groupStatus,
+          reviewPack,
+        },
+        [
+          `Review pack: state root ${reviewPack.stateRoot}`,
+          `Decision: ${reviewPack.decision}`,
+          `Targets: ${reviewPack.groupSnapshot.expectedTargets.join(", ") || "(none)"}`,
+          `Next: ${reviewPack.nextAction}`,
+        ],
+      );
+      return;
+    }
+    const group = getValue("--group", "");
+    const taskId = getValue("--task-id", "");
+    const review = computeReviewResults({ group, taskId });
+    const reviewPack = buildReviewPack(review);
+    output(
+      {
+        ok: true,
+        command: "review-pack",
+        group: review.group || undefined,
+        taskId: review.taskId || undefined,
+        decision: review.decision,
+        groupStatus: review.groupStatus,
+        reviewPack,
+      },
+      [
+        `Review pack: ${group ? `group ${group}` : `task ${taskId}`}`,
+        `Decision: ${review.decision}`,
+        `Targets: ${reviewPack.groupSnapshot.expectedTargets.join(", ") || "(none)"}`,
+        `Next: ${reviewPack.nextAction}`,
+      ],
+    );
+  }
+
+  return {
+    buildReviewPack,
+    buildStateRootReviewPack,
+    computeReviewResults,
+    commandReviewResults,
+    commandReviewPack,
+  };
+}

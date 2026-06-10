@@ -34,7 +34,7 @@ function makeRoot(prefix) {
 }
 
 function runNode(script, args, root) {
-  return runSync("node", [script, ...args], {
+  return runSync(process.execPath, [script, ...args], {
     cwd: workspaceRoot,
     encoding: "utf8",
     env: {

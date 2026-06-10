@@ -21,7 +21,7 @@ function readJson(file) {
 }
 
 function run(script, root, args) {
-  return runSync("node", [script, ...args, "--root", root, "--json"], {
+  return runSync(process.execPath, [script, ...args, "--root", root, "--json"], {
     cwd: root,
     encoding: "utf8",
   });

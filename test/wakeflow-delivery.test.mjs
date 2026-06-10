@@ -130,14 +130,14 @@ function makeFixture() {
 }
 
 function run(root, args) {
-  return runSync("node", [script, ...args, "--root", root, "--json"], {
+  return runSync(process.execPath, [script, ...args, "--root", root, "--json"], {
     cwd: root,
     encoding: "utf8",
   });
 }
 
 function runState(root, args) {
-  return runSync("node", [stateScript, ...args, "--root", root, "--json"], {
+  return runSync(process.execPath, [stateScript, ...args, "--root", root, "--json"], {
     cwd: root,
     encoding: "utf8",
   });
@@ -552,7 +552,7 @@ test("review pack helper preserves evidence repair and pending-dispatch gates", 
 
 test("help exposes state-root commands and rejects old dispatch routes", () => {
   const { root } = makeFixture();
-  const help = runSync("node", [script, "--help", "--root", root], { cwd: root, encoding: "utf8" });
+  const help = runSync(process.execPath, [script, "--help", "--root", root], { cwd: root, encoding: "utf8" });
   assert.equal(help.status, 0, help.stderr || help.stdout);
   assert.match(help.stdout, /prepare-dispatch-from-state/);
   assert.match(help.stdout, /trace-spine/);
@@ -1801,7 +1801,7 @@ test("record-delivery-run infers workspace root from an absolute delivery file",
   const prepared = prepareDispatch(root, stateRootRef);
   const absoluteDeliveryFile = path.join(root, prepared.deliveryFile);
 
-  const recorded = runSync("node", [
+  const recorded = runSync(process.execPath, [
     script,
     "record-delivery-run",
     "--delivery-file",

@@ -62,7 +62,7 @@ ${todoRows}
 }
 
 function run(root, args = []) {
-  return runSync("node", [script, "--json", ...args], {
+  return runSync(process.execPath, [script, "--json", ...args], {
     cwd: root,
     encoding: "utf8",
   });

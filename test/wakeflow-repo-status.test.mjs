@@ -49,7 +49,7 @@ test("porcelain status preserves leading-space unstaged markers", () => {
     }),
   );
 
-  const result = run("node", [collectScript, "--json"], { cwd: fixtureRoot });
+  const result = run(process.execPath, [collectScript, "--json"], { cwd: fixtureRoot });
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.repos.length, 1);
   assert.equal(payload.repos[0].staged, 0);
@@ -57,7 +57,7 @@ test("porcelain status preserves leading-space unstaged markers", () => {
   assert.equal(payload.repos[0].untracked, 1);
 
   run("git", ["add", "tracked.txt"], { cwd: repoPath });
-  const stagedResult = run("node", [collectScript, "--json"], { cwd: fixtureRoot });
+  const stagedResult = run(process.execPath, [collectScript, "--json"], { cwd: fixtureRoot });
   const stagedPayload = JSON.parse(stagedResult.stdout);
   assert.equal(stagedPayload.repos[0].staged, 1);
   assert.equal(stagedPayload.repos[0].unstaged, 0);

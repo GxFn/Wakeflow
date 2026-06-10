@@ -40,7 +40,7 @@ Completed TODOs, historical sync records, and source archives are queried from [
 }
 
 function run(root, args = []) {
-  return runSync("node", [script, "--month", "2026-06", "--date", "2026-06-04", ...args, "--json"], {
+  return runSync(process.execPath, [script, "--month", "2026-06", "--date", "2026-06-04", ...args, "--json"], {
     cwd: root,
     encoding: "utf8",
   });

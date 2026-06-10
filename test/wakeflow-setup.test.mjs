@@ -55,14 +55,14 @@ function makeFixture() {
 }
 
 function run(fixture, args) {
-  return runSync("node", [installScript, ...args, "--root", fixture.control], {
+  return runSync(process.execPath, [installScript, ...args, "--root", fixture.control], {
     cwd: fixture.control,
     encoding: "utf8",
   });
 }
 
 function runAt(root, args) {
-  return runSync("node", [installScript, ...args, "--root", root], {
+  return runSync(process.execPath, [installScript, ...args, "--root", root], {
     cwd: workspaceRoot,
     encoding: "utf8",
   });
@@ -196,7 +196,7 @@ test("explicit relative --root resolves from the caller cwd", () => {
   const parent = mkdtempSync(path.join(os.tmpdir(), "wakeflow-relative-root-"));
   mkdirSync(path.join(parent, "AppRepo", ".git"), { recursive: true });
 
-  const result = runSync("node", [installScript, "initialize", "--root", ".", "--json"], {
+  const result = runSync(process.execPath, [installScript, "initialize", "--root", ".", "--json"], {
     cwd: parent,
     encoding: "utf8",
   });

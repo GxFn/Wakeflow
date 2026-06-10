@@ -59,7 +59,7 @@ function writeBundledTemplates(prefix, targetRoot) {
 }
 
 function run(script, root, args = []) {
-  return runSync("node", [script, "--root", root, "--json", ...args], {
+  return runSync(process.execPath, [script, "--root", root, "--json", ...args], {
     cwd: root,
     encoding: "utf8",
   });

@@ -12,7 +12,7 @@ const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathnam
 const controlScript = path.join(workspaceRoot, "scripts/wakeflow-cli.mjs");
 
 function run(args) {
-  return runSync("node", [controlScript, ...args], {
+  return runSync(process.execPath, [controlScript, ...args], {
     cwd: workspaceRoot,
     encoding: "utf8",
   });

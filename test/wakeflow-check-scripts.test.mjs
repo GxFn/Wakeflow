@@ -47,7 +47,7 @@ node --test scripts/foo.test.mjs
 }
 
 function run(root) {
-  return runSync("node", [checkScript, "--root", root, "--json"], {
+  return runSync(process.execPath, [checkScript, "--root", root, "--json"], {
     encoding: "utf8",
   });
 }

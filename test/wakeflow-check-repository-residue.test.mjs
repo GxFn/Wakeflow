@@ -42,7 +42,7 @@ function makeFixture() {
 }
 
 function run(root, extraArgs = []) {
-  return runSync("node", [checkScript, "--root", root, "--json", ...extraArgs], {
+  return runSync(process.execPath, [checkScript, "--root", root, "--json", ...extraArgs], {
     encoding: "utf8",
   });
 }

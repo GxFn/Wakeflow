@@ -51,7 +51,7 @@ ${row}
 }
 
 function run({ board, id, root }) {
-  return runSync("node", [script, "--board", board, "--id", id, "--json"], {
+  return runSync(process.execPath, [script, "--board", board, "--id", id, "--json"], {
     cwd: root,
     encoding: "utf8",
   });

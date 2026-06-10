@@ -19,14 +19,14 @@ function makeRoot() {
 }
 
 function run(args, cwd = workspaceRoot) {
-  return runSync("node", [script, ...args], {
+  return runSync(process.execPath, [script, ...args], {
     cwd,
     encoding: "utf8",
   });
 }
 
 function runScript(targetScript, args, cwd = workspaceRoot) {
-  return runSync("node", [targetScript, ...args], {
+  return runSync(process.execPath, [targetScript, ...args], {
     cwd,
     encoding: "utf8",
   });

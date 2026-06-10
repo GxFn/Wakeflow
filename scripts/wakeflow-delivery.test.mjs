@@ -344,10 +344,23 @@ test("review-results and controller return require state-root group evidence", (
   registerThread(root, "AlembicPlugin");
   registerThread(root, "AlembicWorkspace", "controller");
   const prepared = prepareDispatch(root, stateRootRef);
+  parseOk(run(root, [
+    "record-delivery-run",
+    "--delivery-file",
+    prepared.deliveryFile,
+    "--status",
+    "sent",
+    "--readback-ok",
+    "true",
+    "--evidence",
+    "host thread accepted prompt",
+    "--write",
+  ]));
 
   const waiting = parseOk(run(root, ["review-results", "--group", "GROUP-STATE"]));
   assert.equal(waiting.decision, "wait");
   assert.equal(waiting.groupSnapshot.missingTargets[0], "AlembicPlugin");
+  assert.equal(waiting.groupSnapshot.pendingDispatch.length, 0);
 
   const completed = parseOk(run(root, [
     "record-target-result",
@@ -414,6 +427,116 @@ test("review-results and controller return require state-root group evidence", (
   ]);
   assert.notEqual(duplicateReturn.status, 0);
   assert.match(duplicateReturn.stdout, /already has controller-return delivery status pending-host-send/);
+});
+
+test("group-ready controller return ignores targets prepared but not sent", () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  registerThread(root, "AlembicWorkspace", "controller");
+
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.taskPackages.push({
+    taskPackageId: "CSMR-PKG-2",
+    summary: "Second fixture package",
+    status: "pending",
+    createdAt: "2026-06-05T00:00:00.000Z",
+  });
+  state.targetTasks.push({
+    targetTaskId: "CSMR-TASK-2",
+    taskPackageId: "CSMR-PKG-2",
+    targetWindow: "AlembicPlugin",
+    summary: "Run second fixture target task",
+    status: "pending",
+    createdAt: "2026-06-05T00:00:00.000Z",
+  });
+  state.windows[0].taskPackageIds.push("CSMR-PKG-2");
+  state.windows[0].targetTaskIds.push("CSMR-TASK-2");
+  writeJson(stateFile, state);
+  writeJson(path.join(stateRoot, "task-packages/CSMR-PKG-2.json"), {
+    schemaVersion: 1,
+    taskPackageId: "CSMR-PKG-2",
+    demandKey: "CSMR-FIXTURE",
+    summary: "Second fixture package",
+    status: "pending",
+    targetTasks: [{
+      targetTaskId: "CSMR-TASK-2",
+      taskPackageId: "CSMR-PKG-2",
+      targetWindow: "AlembicPlugin",
+      summary: "Run second fixture target task",
+      status: "pending",
+    }],
+    createdAt: "2026-06-05T00:00:00.000Z",
+  });
+
+  const first = prepareDispatch(root, stateRootRef);
+  parseOk(run(root, [
+    "prepare-dispatch-from-state",
+    "--state-root",
+    stateRootRef,
+    "--target-task-id",
+    "CSMR-TASK-2",
+    "--group",
+    "GROUP-STATE",
+    "--controller-window",
+    "AlembicWorkspace",
+    "--human-context-ref",
+    `${stateRootRef}/developer-progress.md`,
+    "--require-thread",
+    "--write",
+  ]));
+  parseOk(run(root, [
+    "record-delivery-run",
+    "--delivery-file",
+    first.deliveryFile,
+    "--status",
+    "sent",
+    "--readback-ok",
+    "true",
+    "--evidence",
+    "first target thread accepted prompt",
+    "--write",
+  ]));
+  parseOk(run(root, [
+    "record-target-result",
+    "--target-window",
+    "AlembicPlugin",
+    "--task-id",
+    "CSMR-TASK-1",
+    "--group",
+    "GROUP-STATE",
+    "--status",
+    "completed",
+    "--evidence-ref",
+    "reports/result-1.json",
+    "--verification",
+    "focused smoke passed",
+    "--write",
+  ]));
+
+  const review = parseOk(run(root, ["review-results", "--group", "GROUP-STATE"]));
+  assert.equal(review.decision, "needs-controller-review");
+  assert.equal(review.groupStatus, "partially-ready");
+  assert.deepEqual(review.groupSnapshot.missing, []);
+  assert.equal(review.groupSnapshot.pendingDispatch[0].taskId, "CSMR-TASK-2");
+  assert.equal(review.groupSnapshot.pendingDispatch[0].status, "pending-dispatch");
+  assert.equal(review.groupSnapshot.allSentResultsPresent, true);
+  assert.equal(review.groupSnapshot.allResultsPresent, false);
+
+  const returned = parseOk(run(root, [
+    "build-controller-return",
+    "--group",
+    "GROUP-STATE",
+    "--trigger-target",
+    "AlembicPlugin",
+    "--trigger-task-id",
+    "CSMR-TASK-1",
+    "--require-thread",
+    "--write",
+  ]));
+  assert.equal(returned.ok, true);
+  assert.equal(returned.envelope.groupSnapshot.pendingDispatch[0].taskId, "CSMR-TASK-2");
+  assert.match(returned.envelope.prompt, /pendingDispatchTargets: AlembicPlugin/);
 });
 
 test("target results are scoped by dispatch group to avoid parallel run collisions", () => {

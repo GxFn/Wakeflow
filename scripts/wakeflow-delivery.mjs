@@ -149,6 +149,7 @@ function inferAgentNext(payload) {
   if (payload.command === "review-pack") {
     if (payload.decision === "completed") return "Demand is completed; stop without creating new deliveries.";
     if (payload.decision === "no-target-tasks") return "No target tasks are reviewable; add a task package before dispatch or review.";
+    if (payload.reviewPack?.nextAction === "dispatch-pending-target-before-result-review") return "No sent target result is missing; return to total-control judgment and dispatch the pending target before waiting for a result.";
     return payload.decision === "wait" ? "No controller review is available yet; stop this turn and wait for the target/controller-return instead of polling or sleeping." : "Use this review pack to pull raw evidence, then make a total-control verdict.";
   }
   if (payload.command === "stop-loop") return payload.keepLive?.retainedByOtherRuns ? "Closed-loop delivery is stopped for this run; keep-live remains active for other runs." : "Closed-loop delivery is stopped; do not create new deliveries.";
@@ -302,6 +303,22 @@ function targetKey({ targetWindow, taskId }) {
   return `${targetWindow}\u0000${taskId}`;
 }
 
+function dispatchGroupStateRef(stateRef = {}) {
+  if (!stateRef?.stateRoot) return null;
+  return {
+    stateRoot: stateRef.stateRoot,
+    demandKey: stateRef.demandKey,
+    stateRevision: stateRef.stateRevision,
+  };
+}
+
+function sameDispatchGroupState(left = {}, right = {}) {
+  if (!left?.stateRoot || !right?.stateRoot) return false;
+  if (left.stateRoot !== right.stateRoot) return false;
+  if (left.demandKey && right.demandKey && left.demandKey !== right.demandKey) return false;
+  return true;
+}
+
 function orderResultsByGroup({ groupRecord, results }) {
   const expectedTargets = Array.isArray(groupRecord?.expectedTargets) ? groupRecord.expectedTargets : [];
   const order = new Map(expectedTargets.map((target, index) => [targetKey(target), index]));
@@ -330,7 +347,9 @@ function upsertDispatchGroup({
     fail(`Dispatch group ${groupId} already uses return policy ${existing.returnPolicy.mode}; cannot change to ${returnPolicyMode}.`);
   }
   if (!stateRef) fail("Dispatch groups require stateRef from a controller state root.");
-  if (existing?.stateRef && stateRef && JSON.stringify(existing.stateRef) !== JSON.stringify(stateRef)) {
+  const groupStateRef = dispatchGroupStateRef(stateRef);
+  if (!groupStateRef) fail("Dispatch groups require stateRef.stateRoot from a controller state root.");
+  if (existing?.stateRef && !sameDispatchGroupState(dispatchGroupStateRef(existing.stateRef), groupStateRef)) {
     fail(`Dispatch group ${groupId} already belongs to a different state root.`);
   }
   const existingControllerWindow = existing?.controllerWindow || "";
@@ -353,7 +372,7 @@ function upsertDispatchGroup({
     version,
     groupId,
     humanContextRef: humanContextRef || existing?.humanContextRef || undefined,
-    stateRef: stateRef || existing?.stateRef || undefined,
+    stateRef: existing?.stateRef ? dispatchGroupStateRef(existing.stateRef) : groupStateRef,
     controllerWindow: groupControllerWindow,
     expectedTargets,
     returnPolicy: {
@@ -377,7 +396,7 @@ function groupFromPackets({ groupId = "", packets = [] }) {
     version,
     groupId,
     humanContextRef: firstPacket.humanContextRef,
-    stateRef: firstPacket.stateRef,
+    stateRef: dispatchGroupStateRef(firstPacket.stateRef) || firstPacket.stateRef,
     controllerWindow: firstPacket.controllerWindow,
     expectedTargets: packets.map((packet) => targetDescriptor({
       targetWindow: packet.targetWindow,
@@ -392,17 +411,22 @@ function groupFromPackets({ groupId = "", packets = [] }) {
 }
 
 function resultSummary(item) {
+  const delivery = deliveryExpectationForPacket(item.packet.id);
+  const resultStatus = item.result?.status || (delivery.resultExpected ? "missing" : "pending-dispatch");
   return {
     packetId: item.packet.id,
     targetWindow: item.packet.targetWindow,
     taskId: item.packet.taskId,
-    status: item.result?.status || "missing",
+    status: resultStatus,
     resultFile: item.result ? path.relative(workspaceRoot, item.file) : undefined,
+    resultExpected: delivery.resultExpected,
+    deliveryStatus: delivery.status,
+    deliveryCount: delivery.count,
   };
 }
 
 function uniqueTargetNames(items) {
-  return [...new Set(items.map((item) => item.packet.targetWindow))];
+  return [...new Set(items.map((item) => item.packet?.targetWindow ?? item.targetWindow).filter(Boolean))];
 }
 
 function formatPromptTargetList(targets) {
@@ -411,20 +435,32 @@ function formatPromptTargetList(targets) {
 }
 
 function buildGroupSnapshot({ groupRecord, results }) {
-  const expectedResults = results.map(resultSummary);
-  const ready = results.filter((item) => item.result && item.result.status !== "blocked");
-  const blocked = results.filter((item) => item.result?.status === "blocked");
-  const missing = results.filter((item) => !item.result);
-  const completed = ready.filter((item) => item.result?.status === "completed");
-  const needsReview = ready.filter((item) => item.result?.status === "needs-review");
-  const allResultsPresent = missing.length === 0;
-  const groupStatus = allResultsPresent
-    ? blocked.length > 0
-      ? "blocked"
-      : "ready"
-    : ready.length > 0 || blocked.length > 0
+  const annotated = results.map((item) => ({
+    item,
+    summary: resultSummary(item),
+  }));
+  const expectedResults = annotated.map((item) => item.summary);
+  const ready = annotated.filter((item) => item.item.result && item.item.result.status !== "blocked");
+  const blocked = annotated.filter((item) => item.item.result?.status === "blocked");
+  const missing = annotated.filter((item) => !item.item.result && item.summary.resultExpected);
+  const pendingDispatch = annotated.filter((item) => !item.item.result && !item.summary.resultExpected);
+  const completed = ready.filter((item) => item.item.result?.status === "completed");
+  const needsReview = ready.filter((item) => item.item.result?.status === "needs-review");
+  const allSentResultsPresent = missing.length === 0;
+  const allResultsPresent = missing.length === 0 && pendingDispatch.length === 0;
+  const groupStatus = missing.length > 0
+    ? ready.length > 0 || blocked.length > 0
       ? "partially-ready"
-      : "waiting";
+      : "waiting"
+    : ready.length > 0 || blocked.length > 0
+      ? pendingDispatch.length > 0
+        ? "partially-ready"
+        : blocked.length > 0
+          ? "blocked"
+          : "ready"
+      : pendingDispatch.length > 0
+        ? "pending-dispatch"
+        : "waiting";
 
   return {
     groupId: groupRecord?.groupId,
@@ -432,17 +468,20 @@ function buildGroupSnapshot({ groupRecord, results }) {
     returnPolicy: groupRecord?.returnPolicy || { mode: "group-ready" },
     groupStatus,
     expected: expectedResults,
-    completed: completed.map(resultSummary),
-    ready: ready.map(resultSummary),
-    blocked: blocked.map(resultSummary),
-    missing: missing.map(resultSummary),
-    needsReview: needsReview.map(resultSummary),
-    expectedTargets: uniqueTargetNames(results),
-    completedTargets: uniqueTargetNames(completed),
-    readyTargets: uniqueTargetNames(ready),
-    blockedTargets: uniqueTargetNames(blocked),
-    missingTargets: uniqueTargetNames(missing),
+    completed: completed.map((item) => item.summary),
+    ready: ready.map((item) => item.summary),
+    blocked: blocked.map((item) => item.summary),
+    missing: missing.map((item) => item.summary),
+    pendingDispatch: pendingDispatch.map((item) => item.summary),
+    needsReview: needsReview.map((item) => item.summary),
+    expectedTargets: uniqueTargetNames(results.map((item) => item.packet)),
+    completedTargets: uniqueTargetNames(completed.map((item) => item.item.packet)),
+    readyTargets: uniqueTargetNames(ready.map((item) => item.item.packet)),
+    blockedTargets: uniqueTargetNames(blocked.map((item) => item.item.packet)),
+    missingTargets: uniqueTargetNames(missing.map((item) => item.item.packet)),
+    pendingDispatchTargets: uniqueTargetNames(pendingDispatch.map((item) => item.item.packet)),
     allResultsPresent,
+    allSentResultsPresent,
     reconstructedFromPackets: Boolean(groupRecord?.reconstructedFromPackets),
   };
 }
@@ -456,8 +495,11 @@ function validateControllerReturnAllowed({ review, triggerTarget, triggerTaskId 
     fail(`Cannot build controller return before trigger target result exists: ${triggerTarget} / ${triggerTaskId}.`);
   }
   const mode = review.returnPolicy.mode;
-  if (mode === "group-ready" && !review.groupSnapshot.allResultsPresent) {
-    fail(`Cannot build group-ready controller return while dispatch group has missing results: ${review.groupSnapshot.missing.map((item) => item.packetId).join(", ")}`);
+  if (mode === "group-ready" && !review.groupSnapshot.allSentResultsPresent) {
+    fail(`Cannot build group-ready controller return while dispatch group has sent targets missing results: ${review.groupSnapshot.missing.map((item) => item.packetId).join(", ")}`);
+  }
+  if (mode === "group-ready" && review.groupSnapshot.ready.length === 0 && review.groupSnapshot.blocked.length === 0) {
+    fail(`Cannot build group-ready controller return before any sent target result is ready.`);
   }
   return trigger;
 }
@@ -1203,8 +1245,10 @@ function formatControllerReturnPrompt({
     : `Continue controller review: ${triggerTarget} backfill.`;
   const blockedTargets = formatPromptTargetList(groupSnapshot.blockedTargets);
   const remainingTargets = formatPromptTargetList(groupSnapshot.missingTargets);
+  const pendingDispatchTargets = formatPromptTargetList(groupSnapshot.pendingDispatchTargets);
   const hasBlockedTargets = Array.isArray(groupSnapshot.blockedTargets) && groupSnapshot.blockedTargets.length > 0;
   const hasRemainingTargets = Array.isArray(groupSnapshot.missingTargets) && groupSnapshot.missingTargets.length > 0;
+  const hasPendingDispatchTargets = Array.isArray(groupSnapshot.pendingDispatchTargets) && groupSnapshot.pendingDispatchTargets.length > 0;
   return [
     title,
     "",
@@ -1214,6 +1258,7 @@ function formatControllerReturnPrompt({
     `- trigger: ${triggerTarget} / ${triggerTaskId}`,
     ...(hasBlockedTargets ? [`- blockedTargets: ${blockedTargets}`] : []),
     ...(hasRemainingTargets ? [`- remainingTargets: ${remainingTargets}`] : []),
+    ...(hasPendingDispatchTargets ? [`- pendingDispatchTargets: ${pendingDispatchTargets}`] : []),
     "- skill: skills/wakeflow-controller/SKILL.md",
   ].join("\n");
 }
@@ -1491,6 +1536,43 @@ function targetDeliveryStatusesForPacket(packetId) {
     }));
 }
 
+function deliveryExpectationForPacket(packetId) {
+  const deliveries = targetDeliveryStatusesForPacket(packetId);
+  if (deliveries.some((item) => item.status === "sent")) {
+    return {
+      status: "sent",
+      resultExpected: true,
+      count: deliveries.length,
+    };
+  }
+  if (deliveries.some((item) => item.status === "pending-host-send")) {
+    return {
+      status: "pending-host-send",
+      resultExpected: false,
+      count: deliveries.length,
+    };
+  }
+  if (deliveries.some((item) => item.status === "failed")) {
+    return {
+      status: "failed",
+      resultExpected: false,
+      count: deliveries.length,
+    };
+  }
+  if (deliveries.some((item) => item.status === "blocked")) {
+    return {
+      status: "blocked",
+      resultExpected: false,
+      count: deliveries.length,
+    };
+  }
+  return {
+    status: deliveries.length > 0 ? "unknown" : "not-built",
+    resultExpected: false,
+    count: deliveries.length,
+  };
+}
+
 function evidenceRefSummary(ref) {
   const text = String(ref ?? "");
   const looksLikePath = text.includes("/") || /\.(json|md|log|txt|png|jpg|jpeg|webp|html|csv)$/i.test(text);
@@ -1564,7 +1646,8 @@ function buildReviewPack(review) {
     }));
   const gates = {
     controllerReviewReady: reviewReady && !missingEvidenceRefsPresent,
-    waitForMissingResults: review.decision === "wait",
+    waitForMissingResults: review.groupSnapshot.missing.length > 0,
+    pendingDispatchTargetsPresent: (review.groupSnapshot.pendingDispatch ?? []).length > 0,
     blockedResultsPresent: review.blocked.length > 0,
     missingEvidenceRefsPresent,
     evidenceRepairRequired: missingEvidenceRefsPresent,
@@ -1592,7 +1675,9 @@ function buildReviewPack(review) {
         ? "pull-block-evidence-and-classify"
         : missingEvidenceRefsPresent
           ? "fix-missing-evidence-refs-before-controller-verdict"
-          : "pull-raw-evidence-and-make-total-control-verdict",
+          : (review.groupSnapshot.pendingDispatch ?? []).length > 0
+            ? "pull-raw-evidence-and-continue-pending-dispatch"
+            : "pull-raw-evidence-and-make-total-control-verdict",
     generatedAt: nowIso(),
   };
 }
@@ -1696,6 +1781,17 @@ function stateRootEvidenceRefSummary(stateRoot, stateRootRef, ref) {
   };
 }
 
+function stateRootTaskDeliveryStatus(task) {
+  if (task?.delivery?.deliveryRunId) return "sent";
+  if (task?.delivery?.deliveryFile) return "pending-host-send";
+  return "not-built";
+}
+
+function stateRootTaskResultExpected(task) {
+  if (task?.delivery?.deliveryRunId) return true;
+  return ["sent", "active", "missing-result"].includes(task?.status || "");
+}
+
 function buildStateRootReviewPack(stateRoot) {
   const { state, stateRootRef } = readControllerStateRoot(stateRoot);
   const resultsByTask = latestStateRootResultsByTargetTask(stateRoot);
@@ -1709,12 +1805,14 @@ function buildStateRootReviewPack(stateRoot) {
     const verificationSummary = Array.isArray(result?.verification) ? result.verification : [];
     const evidenceRefSummaries = evidenceRefs.map((ref) => stateRootEvidenceRefSummary(stateRoot, stateRootRef, ref));
     const missingEvidenceRefs = missingEvidenceRefsFromSummaries(evidenceRefSummaries);
+    const resultExpected = stateRootTaskResultExpected(task);
+    const resultStatus = result?.status || (resultExpected ? "missing" : "pending-dispatch");
     return {
       targetWindow: task.targetWindow,
       taskId: task.targetTaskId,
       taskPackageId: task.taskPackageId,
       resultId: result?.resultId,
-      resultStatus: result?.status || "missing",
+      resultStatus,
       resultFile: item ? path.relative(workspaceRoot, item.file) : undefined,
       evidenceRefs,
       evidenceRefSummaries,
@@ -1724,11 +1822,14 @@ function buildStateRootReviewPack(stateRoot) {
       reportedAt: result?.createdAt,
       hasControllerReviewEvidence: evidenceRefs.length > 0 || verificationSummary.length > 0,
       stateRootResult: true,
+      resultExpected,
+      deliveryStatus: stateRootTaskDeliveryStatus(task),
     };
   });
   const missing = targetResults.filter((item) => item.resultStatus === "missing");
+  const pendingDispatch = targetResults.filter((item) => item.resultStatus === "pending-dispatch");
   const blocked = targetResults.filter((item) => item.resultStatus === "blocked");
-  const ready = targetResults.filter((item) => item.resultStatus !== "missing" && item.resultStatus !== "blocked");
+  const ready = targetResults.filter((item) => !["missing", "pending-dispatch", "blocked"].includes(item.resultStatus));
   const noTargetTasks = allTargetTasks.length === 0;
   const noOpenTargetTasks = !noTargetTasks && targetTasks.length === 0;
   const demandCompleted = state.state === "completed" || state.review?.status === "demand-completed";
@@ -1739,6 +1840,8 @@ function buildStateRootReviewPack(stateRoot) {
     : noOpenTargetTasks
     ? "ready-to-complete-demand"
     : missing.length > 0
+    ? "wait"
+    : ready.length === 0 && blocked.length === 0
     ? "wait"
     : blocked.length > 0
       ? "blocked"
@@ -1751,7 +1854,15 @@ function buildStateRootReviewPack(stateRoot) {
     ? "accepted"
     : missing.length > 0
     ? ready.length > 0 || blocked.length > 0 ? "partially-ready" : "waiting"
-    : blocked.length > 0 ? "blocked" : "ready";
+    : ready.length > 0 || blocked.length > 0
+    ? pendingDispatch.length > 0
+      ? "partially-ready"
+      : blocked.length > 0
+        ? "blocked"
+        : "ready"
+    : pendingDispatch.length > 0
+      ? "pending-dispatch"
+      : "waiting";
   const groupSnapshot = {
     groupId: state.demandKey,
     returnPolicy: { mode: "group-ready" },
@@ -1767,13 +1878,16 @@ function buildStateRootReviewPack(stateRoot) {
     ready,
     blocked,
     missing,
+    pendingDispatch,
     needsReview: targetResults.filter((item) => item.resultStatus === "needs-review"),
     expectedTargets: [...new Set(targetTasks.map((item) => item.targetWindow))],
     completedTargets: [...new Set(targetResults.filter((item) => item.resultStatus === "completed").map((item) => item.targetWindow))],
     readyTargets: [...new Set(ready.map((item) => item.targetWindow))],
     blockedTargets: [...new Set(blocked.map((item) => item.targetWindow))],
     missingTargets: [...new Set(missing.map((item) => item.targetWindow))],
-    allResultsPresent: missing.length === 0,
+    pendingDispatchTargets: [...new Set(pendingDispatch.map((item) => item.targetWindow))],
+    allResultsPresent: missing.length === 0 && pendingDispatch.length === 0,
+    allSentResultsPresent: missing.length === 0,
     stateRoot: stateRootRef,
   };
   const reviewReady = !demandCompleted && !noTargetTasks && !noOpenTargetTasks && decision !== "wait";
@@ -1821,7 +1935,8 @@ function buildStateRootReviewPack(stateRoot) {
       controllerReviewReady: reviewReady && !missingEvidenceRefsPresent,
       noTargetTasks,
       noOpenTargetTasks,
-      waitForMissingResults: decision === "wait",
+      waitForMissingResults: missing.length > 0,
+      pendingDispatchTargetsPresent: pendingDispatch.length > 0,
       blockedResultsPresent: blocked.length > 0,
       missingEvidenceRefsPresent,
       evidenceRepairRequired: missingEvidenceRefsPresent,
@@ -1837,12 +1952,16 @@ function buildStateRootReviewPack(stateRoot) {
       : noOpenTargetTasks
       ? "run-wakeflow-complete-demand-or-add-next-package"
       : decision === "wait"
-      ? "wait-for-state-root-target-result"
+      ? missing.length > 0
+        ? "wait-for-state-root-target-result"
+        : "dispatch-pending-target-before-result-review"
       : decision === "blocked"
         ? "pull-block-evidence-and-run-wakeflow-state-reducer"
         : missingEvidenceRefsPresent
           ? "fix-missing-evidence-refs-before-wakeflow-state-reducer"
-          : "pull-raw-evidence-and-run-wakeflow-state-reducer",
+          : pendingDispatch.length > 0
+            ? "pull-raw-evidence-and-continue-pending-dispatch"
+            : "pull-raw-evidence-and-run-wakeflow-state-reducer",
     forbiddenConclusions: [
       "review-pack-is-controller-acceptance",
       "review-pack-creates-next-dispatch",
@@ -2638,13 +2757,15 @@ function computeReviewResults({ group = "", taskId = "" } = {}) {
   const needsReview = groupSnapshot.ready.map((item) => item.packetId);
   const mode = groupSnapshot.returnPolicy.mode;
   const decision = mode === "per-target"
-    ? groupSnapshot.groupStatus === "waiting"
+    ? ["waiting", "pending-dispatch"].includes(groupSnapshot.groupStatus)
       ? "wait"
       : groupSnapshot.blocked.length > 0 && groupSnapshot.ready.length === 0
         ? "blocked"
-        : "needs-controller-review"
+      : "needs-controller-review"
     : groupSnapshot.missing.length > 0
       ? "wait"
+      : groupSnapshot.ready.length === 0 && groupSnapshot.blocked.length === 0
+        ? "wait"
       : groupSnapshot.blocked.length > 0
         ? "blocked"
         : "needs-controller-review";

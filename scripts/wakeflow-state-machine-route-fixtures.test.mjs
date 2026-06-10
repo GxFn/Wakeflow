@@ -302,7 +302,11 @@ test("state-root review pack excludes accepted targets from the next review scop
   assert.deepEqual(payload.reviewPack.reviewScope.targetTaskIds, ["CSMR-MANUAL-TASK-2"]);
   assert.deepEqual(payload.reviewPack.reviewScope.excludedTargetTaskIds, [manifest.taskPackage.targetTaskId]);
   assert.deepEqual(payload.reviewPack.groupSnapshot.expected.map((item) => item.taskId), ["CSMR-MANUAL-TASK-2"]);
-  assert.deepEqual(payload.reviewPack.groupSnapshot.missing.map((item) => item.taskId), ["CSMR-MANUAL-TASK-2"]);
+  assert.deepEqual(payload.reviewPack.groupSnapshot.missing.map((item) => item.taskId), []);
+  assert.deepEqual(payload.reviewPack.groupSnapshot.pendingDispatch.map((item) => item.taskId), ["CSMR-MANUAL-TASK-2"]);
+  assert.equal(payload.reviewPack.gates.waitForMissingResults, false);
+  assert.equal(payload.reviewPack.gates.pendingDispatchTargetsPresent, true);
+  assert.equal(payload.reviewPack.nextAction, "dispatch-pending-target-before-result-review");
 });
 
 test("unattended route prepares dispatch and controller return from stateRoot without controlPlan", () => {
@@ -437,8 +441,10 @@ test("failure route waits on missing results, surfaces blocked evidence, and rej
   assert.equal(missingReview.status, 0, missingReview.stderr || missingReview.stdout);
   const missingPayload = JSON.parse(missingReview.stdout);
   assert.equal(missingPayload.reviewPack.decision, "wait");
-  assert.equal(missingPayload.reviewPack.groupStatus, "waiting");
-  assert.equal(missingPayload.reviewPack.gates.waitForMissingResults, true);
+  assert.equal(missingPayload.reviewPack.groupStatus, "pending-dispatch");
+  assert.equal(missingPayload.reviewPack.gates.waitForMissingResults, false);
+  assert.equal(missingPayload.reviewPack.gates.pendingDispatchTargetsPresent, true);
+  assert.equal(missingPayload.reviewPack.nextAction, "dispatch-pending-target-before-result-review");
 
   const reducedMissing = reduceResults(root, stateRootRef);
   assert.equal(reducedMissing.nextState, "waiting-results");

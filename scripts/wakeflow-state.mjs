@@ -5,6 +5,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildWakeflowTrace } from "../lib/wakeflow-trace.mjs";
 import { loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
+import {
+  detectInterfaceLanguage,
+  localizedTemplateName,
+  normalizeInterfaceLanguage,
+  wakeflowStateLocale,
+} from "./lib/wakeflow-language.mjs";
 import { controllerReviewScope, reductionStatusForTargetTask } from "./lib/wakeflow-review-scope.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
@@ -24,7 +30,7 @@ const helpText = `
 Controller state-machine manager
 
 Usage:
-  node scripts/wakeflow-state.mjs init --demand-key <key> --title <title> [--goal <text>] [--completion-definition <text>] [--stage-plan <text>] [--root <workspace>] [--state-root <path>] [--write] [--json]
+  node scripts/wakeflow-state.mjs init --demand-key <key> --title <title> [--goal <text>] [--completion-definition <text>] [--stage-plan <text>] [--language <auto|zh|en>] [--root <workspace>] [--state-root <path>] [--write] [--json]
   node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--source-ref <ref>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
@@ -121,7 +127,18 @@ function ensureInsideAllowedRoots(file, label, allowedRoots) {
   fail(`${label} must stay inside the Wakeflow runtime or configured project ledger: ${absolute}`);
 }
 
-function readTemplate(name) {
+function readTemplate(name, { language = "en" } = {}) {
+  const localizedName = localizedTemplateName(name, language);
+  if (localizedName !== name) {
+    const localized = readTemplateContent(localizedName);
+    if (localized !== null) return localized;
+  }
+  const content = readTemplateContent(name);
+  if (content !== null) return content;
+  return readFileSync(path.join(templateRoot, name), "utf8");
+}
+
+function readTemplateContent(name) {
   const file = path.join(templateRoot, name);
   if (existsSync(file)) {
     return readFileSync(file, "utf8");
@@ -130,7 +147,7 @@ function readTemplate(name) {
   if (bundled !== null) {
     return bundled;
   }
-  return readFileSync(file, "utf8");
+  return null;
 }
 
 function readBundledTemplate(relativePath) {
@@ -237,27 +254,34 @@ function resolveFromWorkspace(value) {
   return path.isAbsolute(value) ? path.resolve(value) : path.resolve(workspaceRoot, value);
 }
 
-function unifiedStatusText({ demandKey, title, state, updatedAt, revision, eventId }) {
-  return render(readTemplate("unified-status.template.md"), {
+function selectInterfaceLanguage(config) {
+  const requested = normalizeInterfaceLanguage(getValue("--language", config.interfaceLanguage ?? "auto"));
+  if (!requested) fail("--language must be auto, zh, or en.");
+  return detectInterfaceLanguage({ requested });
+}
+
+function unifiedStatusText({ demandKey, title, state, updatedAt, revision, eventId, language }) {
+  const locale = wakeflowStateLocale(language);
+  return render(readTemplate("unified-status.template.md", { language }), {
     demandKey,
     title,
     state,
-    stage: "none",
-    taskPackages: "none",
-    windows: "none",
-    blockers: "none",
-    nextAction: "Define stages and task packages by total-control judgment.",
-    review: "none",
-    automation: "disabled",
-    decisionsRequired: "none",
+    stage: locale.none,
+    taskPackages: locale.none,
+    windows: locale.none,
+    blockers: locale.none,
+    nextAction: locale.initialNextAction,
+    review: locale.none,
+    automation: locale.automationDisabled,
+    decisionsRequired: locale.none,
     updatedAt: beijingTimestamp(updatedAt),
     revision,
     eventId,
   }).trimEnd();
 }
 
-function progressDocText({ demandKey, title, goal, completionDefinition, stagePlan, unifiedStatus }) {
-  const template = readTemplate("developer-progress.template.md");
+function progressDocText({ demandKey, title, goal, completionDefinition, stagePlan, unifiedStatus, language }) {
+  const template = readTemplate("developer-progress.template.md", { language });
   const body = render(template, {
     title,
     goal,
@@ -273,10 +297,12 @@ function progressDocText({ demandKey, title, goal, completionDefinition, stagePl
 function commandInit() {
   const demandKey = requireValue("--demand-key");
   const title = requireValue("--title");
-  const goal = getValue("--goal", "TBD by total-control judgment.");
-  const completionDefinition = getValue("--completion-definition", "TBD by total-control judgment.");
-  const stagePlan = getValue("--stage-plan", "TBD by total-control judgment.");
   const config = loadWorkspaceConfig({ workspaceRoot, args: options });
+  const language = selectInterfaceLanguage(config);
+  const locale = wakeflowStateLocale(language);
+  const goal = getValue("--goal", locale.defaultGoal);
+  const completionDefinition = getValue("--completion-definition", locale.defaultCompletionDefinition);
+  const stagePlan = getValue("--stage-plan", locale.defaultStagePlan);
   const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args: options, config });
   const stateRoot = resolveFromWorkspace(getValue("--state-root", defaultStateRoot({ demandKey, ledgerPaths })));
   ensureInsideAllowedRoots(stateRoot, "state root", [
@@ -300,6 +326,7 @@ function commandInit() {
     schemaVersion,
     demandKey,
     title,
+    interfaceLanguage: language,
     goal,
     completionDefinition,
     createdAt,
@@ -313,6 +340,7 @@ function commandInit() {
     schemaVersion,
     demandKey,
     title,
+    interfaceLanguage: language,
     state: "intake",
     stateReason: "wakeflow-state-init",
     revision: 1,
@@ -339,6 +367,7 @@ function commandInit() {
     projection: {
       status: "synced",
       lastRenderedAt: createdAt,
+      interfaceLanguage: language,
       progressDoc,
     },
   };
@@ -372,25 +401,27 @@ function commandInit() {
     updatedAt: createdAt,
     revision: state.revision,
     eventId,
+    language,
   });
   const projection = {
     schemaVersion,
     demandKey,
     title,
+    interfaceLanguage: language,
     sourceRevision: state.revision,
     sourceEventId: eventId,
     progressDoc,
     unifiedStatus: {
       demand: `${demandKey} - ${title}`,
       mainState: state.state,
-      stage: "none",
-      currentTaskPackages: "none",
-      windows: "none",
-      blockers: "none",
-      nextAction: "Define stages and task packages by total-control judgment.",
-      review: "none",
-      automation: "disabled",
-      userDecisionsNeeded: "none",
+      stage: locale.none,
+      currentTaskPackages: locale.none,
+      windows: locale.none,
+      blockers: locale.none,
+      nextAction: locale.initialNextAction,
+      review: locale.none,
+      automation: locale.automationDisabled,
+      userDecisionsNeeded: locale.none,
       lastUpdated: createdAt,
     },
   };
@@ -401,6 +432,7 @@ function commandInit() {
     completionDefinition,
     stagePlan,
     unifiedStatus,
+    language,
   });
   const lazyStateDirectories = [
     path.join(stateRoot, "intake"),

@@ -165,6 +165,13 @@ Wakeflow supports localized initialization. Pass `language: "zh"` for Chinese
 workspaces, `language: "en"` for English workspaces, or `language: "auto"` when
 there is no clear preference. Generated thread titles keep the window name at
 the front so the important repository name remains visible in narrow sidebars.
+New state-root progress documents and subsequent Unified Status renders also
+use the selected interface language.
+
+Controller and child windows can use Codex subagents to speed up bounded code
+search, log triage, test localization, and evidence summaries. Subagent output
+is evidence or advice only; controller review, dispatch, state writes, and
+repository boundaries remain with the Wakeflow window that owns the task.
 
 ## What Wakeflow Creates
 

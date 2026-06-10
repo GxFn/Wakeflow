@@ -20,10 +20,12 @@ const projectSpecificTokens = [
 ];
 const ignoredDirectoryNames = new Set([".git", ".workspace-active", ".workspace-local", "coverage", "dist", "node_modules"]);
 const localizedRuntimeTextFiles = new Set([
+  "scripts/lib/wakeflow-language.mjs",
   "scripts/wakeflow-setup.mjs",
 ]);
 const localizedDocumentationTextFiles = new Set([
   "README.zh-CN.md",
+  "templates/wakeflow-template-bundle.json",
 ]);
 
 const requiredFiles = [
@@ -393,7 +395,9 @@ function validateTemplateBundle() {
   }
   for (const required of [
     "templates/wakeflow-state-machine/developer-progress.template.md",
+    "templates/wakeflow-state-machine/developer-progress.zh-CN.template.md",
     "templates/wakeflow-state-machine/unified-status.template.md",
+    "templates/wakeflow-state-machine/unified-status.zh-CN.template.md",
     "templates/wakeflow-state-machine/decision-log-entry.template.md",
     "templates/wakeflow-state-machine/task-package-entry.template.md",
     "templates/wakeflow-state-machine/backfill-summary-entry.template.md",

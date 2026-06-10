@@ -146,6 +146,10 @@ but they must not replace these gates.
   scripts.
 - `host agent` means the external host capability, currently Codex. Do not
   confuse it with any managed product's internal agent.
+- Codex subagents may assist controller and child windows with bounded parallel
+  code search, log triage, test localization, and evidence summarization. Their
+  output is advisory evidence; it never transfers dispatch, acceptance,
+  state-machine writes, repository ownership, or user-confirmation authority.
 
 Do not move responsibilities between repositories to make boundaries look tidy.
 Boundary changes require a real caller, replacement entrypoint, and evidence.
@@ -266,6 +270,9 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   become executable only after controller intake and routing.
 - Dispatch may use larger same-window task packages when they share a boundary
   and validation path.
+- Prefer Codex subagents for narrow parallel investigation when they shorten
+  evidence collection without changing task ownership. Do not create subagent
+  work to manufacture progress, bypass a blocker, or replace controller review.
 - Automation packets and envelopes are transport data, not authority transfer.
   The controller may delete any automation that cannot prove its current goal,
   state root, window, thread id, dispatch group, target task, and next-hop rule.

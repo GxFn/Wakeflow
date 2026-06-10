@@ -236,6 +236,7 @@ test("initialize localizes launch titles and prompts with the window name first"
   assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /not task deliveries/);
   assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /Pass each returned real thread id once/);
   assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /stores the id only in thread-registry/);
+  assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /\u5b50 agent/);
   assert.equal(controller.displayTitle, `${path.basename(parent)} ${zhControllerRole}`);
   assert.equal(app.displayTitle, `AppRepo ${zhDutyWindow}`);
   assert.equal(design.displayTitle, `Design ${zhDesignWindow}`);
@@ -257,6 +258,7 @@ test("initialize localizes launch titles and prompts with the window name first"
   assert.equal(app.createThreadPrompt.split("\n")[0], `AppRepo ${zhDutyWindow}${zhColon}\u521d\u59cb\u5316\u5165\u53e3\u540c\u6b65\uff0c\u4e0d\u662f\u4efb\u52a1\u6295\u9012\u3002`);
   assert.match(app.createThreadPrompt, new RegExp(zhFirstRead));
   assert.match(app.createThreadPrompt, new RegExp(zhReadyWait));
+  assert.match(app.createThreadPrompt, /\u5b50 agent/);
   assert.match(app.createThreadPrompt, /currentWindow.*taskId.*stateRoot/);
   assert.doesNotMatch(controller.createThreadPrompt, /AGENTS\.md\u3001AGENTS\.md/);
   assert.doesNotMatch(design.createThreadPrompt, /\.\.\/AGENTS\.md\u3001\.\.\/AGENTS\.md/);
@@ -792,9 +794,9 @@ test("write-agents is dry-run by default and writes managed access cards with --
   assert.match(baseAgents, /Machine fields such as `controllerWindow`, `returnPolicy`, `humanContextRef`, and `stateRevision`/);
   assert.match(baseAgents, /returns `TargetResultEnvelope`/);
   assert.match(baseAgents, /The full group snapshot stays in the controller-return envelope/);
+  assert.match(baseAgents, /Codex subagents are recommended for bounded parallel assistance/);
   assert.doesNotMatch(baseAgents, /controlPlan/);
   assert.doesNotMatch(baseAgents, /backfill must include completion scope/);
-  assert.doesNotMatch(baseAgents, /may use Codex subagents inside this window/);
   assert.doesNotMatch(baseAgents, /downgrade complete capability into thin implementation/);
 
   runJson(fixture, [

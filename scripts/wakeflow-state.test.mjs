@@ -129,6 +129,55 @@ test("init --write creates ignored state root from tracked templates", () => {
   assert.equal(existsSync(path.join(stateRoot, "transition-candidates")), false);
 });
 
+test("init and render-progress localize generated state-root docs for Chinese workspaces", () => {
+  const root = makeRoot();
+  const result = run([
+    "init",
+    "--root",
+    root,
+    "--demand-key",
+    "ZH-FIXTURE-2026-06-10",
+    "--title",
+    "Chinese Demand",
+    "--language",
+    "zh",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  const stateRoot = path.join(root, payload.stateRoot);
+  const state = readJson(path.join(stateRoot, "wakeflow-state.json"));
+  const demand = readJson(path.join(stateRoot, "demand.json"));
+  const projection = readJson(path.join(stateRoot, "projection.json"));
+  const progress = readFileSync(path.join(stateRoot, "developer-progress.md"), "utf8");
+
+  assert.equal(state.interfaceLanguage, "zh");
+  assert.equal(state.projection.interfaceLanguage, "zh");
+  assert.equal(demand.interfaceLanguage, "zh");
+  assert.equal(projection.interfaceLanguage, "zh");
+  assert.match(progress, /# Chinese Demand \u8fdb\u5ea6/);
+  assert.match(progress, /\u7edf\u4e00\u72b6\u6001/);
+  assert.match(progress, /\u4e3b\u72b6\u6001: intake/);
+  assert.match(progress, /\u7531\u603b\u63a7\u5224\u65ad\u8865\u5145\u3002/);
+  assert.doesNotMatch(progress, /Main state:/);
+
+  const render = runScript(renderScript, [
+    "--root",
+    root,
+    "--state-root",
+    payload.stateRoot,
+    "--write",
+    "--json",
+  ]);
+  assert.equal(render.status, 0, render.stderr || render.stdout);
+  const progressAfter = readFileSync(path.join(stateRoot, "developer-progress.md"), "utf8");
+  const stateAfter = readJson(path.join(stateRoot, "wakeflow-state.json"));
+  assert.equal(stateAfter.projection.interfaceLanguage, "zh");
+  assert.match(progressAfter, /\u4e0b\u4e00\u6b65: \u7531\u603b\u63a7\u5224\u65ad\u5b9a\u4e49\u9636\u6bb5\u548c\u4efb\u52a1\u5305\u3002/);
+  assert.doesNotMatch(progressAfter, /Next action:/);
+});
+
 test("init refuses state roots outside workspace or configured ledger", () => {
   const root = makeRoot();
   const outside = path.join(os.tmpdir(), "wakeflow-state-outside", String(Date.now()));

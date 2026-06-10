@@ -4,6 +4,12 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
+import {
+  detectInterfaceLanguage,
+  localizedTemplateName,
+  normalizeInterfaceLanguage,
+  wakeflowStateLocale,
+} from "./lib/wakeflow-language.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const wakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -111,7 +117,18 @@ function writeJson(file, value) {
   atomicWrite(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function readTemplate(name) {
+function readTemplate(name, { language = "en" } = {}) {
+  const localizedName = localizedTemplateName(name, language);
+  if (localizedName !== name) {
+    const localized = readTemplateContent(localizedName);
+    if (localized !== null) return localized;
+  }
+  const content = readTemplateContent(name);
+  if (content !== null) return content;
+  return readFileSync(path.join(templateRoot, name), "utf8");
+}
+
+function readTemplateContent(name) {
   const file = path.join(templateRoot, name);
   if (existsSync(file)) {
     return readFileSync(file, "utf8");
@@ -120,7 +137,7 @@ function readTemplate(name) {
   if (bundled !== null) {
     return bundled;
   }
-  return readFileSync(file, "utf8");
+  return null;
 }
 
 function readBundledTemplate(relativePath) {
@@ -162,29 +179,41 @@ function lastEvent(eventsFile) {
   return JSON.parse(lines.at(-1));
 }
 
-function summarizeItems(items, idKey, statusKey = "status") {
-  if (!Array.isArray(items) || items.length === 0) return "none";
+function selectInterfaceLanguage(state, config) {
+  const requested = normalizeInterfaceLanguage(
+    getValue("--language", state.interfaceLanguage ?? state.projection?.interfaceLanguage ?? config.interfaceLanguage ?? "auto"),
+  );
+  if (!requested) fail("--language must be auto, zh, or en.");
+  return detectInterfaceLanguage({ requested });
+}
+
+function summarizeItems(items, idKey, statusKey = "status", locale = wakeflowStateLocale("en")) {
+  if (!Array.isArray(items) || items.length === 0) return locale.none;
   return items.map((item) => `${item[idKey] ?? "unknown"}(${item[statusKey] ?? "unknown"})`).join(", ");
 }
 
-function summarizeWindows(windows) {
-  if (!Array.isArray(windows) || windows.length === 0) return "none";
+function summarizeWindows(windows, locale = wakeflowStateLocale("en")) {
+  if (!Array.isArray(windows) || windows.length === 0) return locale.none;
   return windows.map((item) => `${item.windowName ?? "unknown"}(${item.windowState ?? "unknown"})`).join(", ");
 }
 
-function summarizeBlockers(blockers) {
-  if (!Array.isArray(blockers) || blockers.length === 0) return "none";
+function summarizeBlockers(blockers, locale = wakeflowStateLocale("en")) {
+  if (!Array.isArray(blockers) || blockers.length === 0) return locale.none;
   return blockers.map((item) => item.summary ?? item.reason ?? item.id ?? "blocker").join(", ");
 }
 
-function nextActionFor(state) {
+function nextActionFor(state, locale) {
   if (Array.isArray(state.allowedActions) && state.allowedActions.length > 0) {
     return state.allowedActions.join(", ");
   }
   if (state.projection?.status === "stale") {
-    return "Review state changes and choose the next total-control action.";
+    return locale.staleNextAction;
   }
-  return "Define stages and task packages by total-control judgment.";
+  return locale.initialNextAction;
+}
+
+function displayMachineNone(value, locale) {
+  return value && value !== "none" ? value : locale.none;
 }
 
 try {
@@ -193,6 +222,9 @@ try {
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const projectionFile = path.join(stateRoot, "projection.json");
   const state = readJson(stateFile, "controller state");
+  const config = loadWorkspaceConfig({ workspaceRoot, args: rawArgs });
+  const language = selectInterfaceLanguage(state, config);
+  const locale = wakeflowStateLocale(language);
   const event = lastEvent(eventsFile);
   const progressDoc = state.projection?.progressDoc ?? "developer-progress.md";
   const progressFile = path.join(stateRoot, progressDoc);
@@ -205,23 +237,24 @@ try {
     demandKey: state.demandKey,
     title: state.title,
     state: state.state,
-    stage: state.activeStageId ?? "none",
-    taskPackages: summarizeItems(state.taskPackages, "taskPackageId"),
-    windows: summarizeWindows(state.windows),
-    blockers: summarizeBlockers(state.blockers),
-    nextAction: nextActionFor(state),
-    review: state.review?.status ?? "none",
-    automation: state.automation?.enabled ? "enabled" : "disabled",
-    decisionsRequired: summarizeBlockers(state.decisionsRequired),
+    stage: state.activeStageId ?? locale.none,
+    taskPackages: summarizeItems(state.taskPackages, "taskPackageId", "status", locale),
+    windows: summarizeWindows(state.windows, locale),
+    blockers: summarizeBlockers(state.blockers, locale),
+    nextAction: nextActionFor(state, locale),
+    review: displayMachineNone(state.review?.status, locale),
+    automation: state.automation?.enabled ? locale.automationEnabled : locale.automationDisabled,
+    decisionsRequired: summarizeBlockers(state.decisionsRequired, locale),
     updatedAt: beijingTimestamp(renderedAt),
     revision: state.revision,
-    eventId: event?.eventId ?? "none",
+    eventId: event?.eventId ?? locale.none,
   };
-  const unifiedStatus = render(readTemplate("unified-status.template.md"), statusValues).trimEnd();
+  const unifiedStatus = render(readTemplate("unified-status.template.md", { language }), statusValues).trimEnd();
   const projection = {
     schemaVersion: 1,
     demandKey: state.demandKey,
     title: state.title,
+    interfaceLanguage: language,
     sourceRevision: state.revision,
     sourceEventId: event?.eventId ?? "none",
     progressDoc,
@@ -254,6 +287,7 @@ try {
       ...(state.projection ?? {}),
       status: "synced",
       lastRenderedAt: renderedAt,
+      interfaceLanguage: language,
       progressDoc,
     },
   };

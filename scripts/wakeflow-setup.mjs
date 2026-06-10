@@ -19,6 +19,10 @@ import {
   workspaceLedgerPaths,
   workspaceConfigPath,
 } from "./lib/wakeflow-config.mjs";
+import {
+  detectInterfaceLanguage,
+  normalizeInterfaceLanguage,
+} from "./lib/wakeflow-language.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const defaultWakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -419,16 +423,14 @@ function replacementWindows() {
 }
 
 function requestedInterfaceLanguage(context) {
-  const requested = getValue("--language", context.config.interfaceLanguage ?? "auto");
-  if (["auto", "zh", "en"].includes(requested)) return requested;
+  const requested = normalizeInterfaceLanguage(getValue("--language", context.config.interfaceLanguage ?? "auto"));
+  if (requested) return requested;
   fail("--language must be auto, zh, or en.");
 }
 
 function interfaceLanguage(context) {
   const requested = requestedInterfaceLanguage(context);
-  if (requested === "zh" || requested === "en") return requested;
-  const envLanguage = `${process.env.LC_ALL ?? ""} ${process.env.LC_MESSAGES ?? ""} ${process.env.LANG ?? ""}`;
-  return /zh|cn|chinese/i.test(envLanguage) ? "zh" : "en";
+  return detectInterfaceLanguage({ requested });
 }
 
 function parseRepoSpecs(context) {
@@ -613,6 +615,7 @@ node ${relativeScript} write-agents --window ${repo.windowName} --write
 
 如果当前没有 active demand、state root、task package 或 dispatch packet，请报告“入口同步完成，等待总控任务”后停止。这是初始化后的正常 ready 状态，不是失败。
 只有收到包含 currentWindow、taskId、stateRoot 的 Wakeflow task wakeup / delivery prompt 时，才执行本窗口任务。
+可把代码搜索、日志归因、测试定位、证据汇总等窄任务交给 Codex 子 agent 并行辅助；子 agent 只提供证据和建议，不改变窗口职责、验收、派发或状态机写入边界。
 
 Wakeflow runtime 相对路径：${wakeflowPath}
 如果目录、职责、stateRoot 或 Wakeflow 配置不一致，停止并回报总控。`;
@@ -631,6 +634,7 @@ node ${relativeScript} write-agents --window ${repo.windowName} --write
 
 If there is no active demand, state root, task package, or dispatch packet, report "entry sync complete; waiting for controller task" and stop. This is the normal ready state after initialization, not a failure.
 Execute window work only after receiving a Wakeflow task wakeup / delivery prompt containing currentWindow, taskId, and stateRoot.
+Use Codex subagents for narrow parallel assistance such as code search, log triage, test localization, or evidence summarization when useful. Subagents only provide evidence and recommendations; they do not change window responsibility, acceptance, dispatch, or state-machine write boundaries.
 
 Wakeflow runtime relative path: ${wakeflowPath}
 If the directory, responsibility, stateRoot, or Wakeflow configuration is inconsistent, stop and report to the controller.`;
@@ -803,14 +807,15 @@ function primaryRepositoryForScope(context, repo) {
 }
 
 function skillAssistanceText(context, samePathWindowNames) {
-  const roleLines = [];
+  const roleLines = [
+    "- Codex subagents are recommended for bounded parallel assistance such as code search, log triage, test localization, and evidence summarization. Treat subagent output as evidence or advice only; it must not accept work, dispatch another window, write controller state, or expand repository boundaries.",
+  ];
   if (samePathWindowNames.includes(context.config.designWindow)) {
     roleLines.push(`- Design work should proactively surface relevant local Design skills while the user is clarifying requirements, comparing options, writing a requirement design, slicing work, or preparing a handoff. Read \`skills/README.md\` when available, name the smallest matching skill, explain why it helps, and use it in conversation before writing tracked Design artifacts. If no skill is genuinely needed, say so briefly and answer directly.`);
   }
   if (samePathWindowNames.includes(context.config.testWindow)) {
     roleLines.push(`- Test work should proactively surface relevant local Test skills while planning validation, reproducing or triaging failures, designing regressions, reviewing evidence, or validating long chains. Read \`skills/README.md\` when available, name the smallest matching skill, explain why it helps, and use it to shape evidence before running or recording test work. If no skill is genuinely needed, say so briefly and proceed with the assigned test boundary.`);
   }
-  if (roleLines.length === 0) return "";
   return `
 ### Skill Assistance
 
@@ -1874,6 +1879,7 @@ function localWindowPrompt(context, windowName, deliveryRole, language) {
       `先读取 ${readRefs}。`,
       "如果当前没有 active demand、state root、task package 或 dispatch packet，请报告“入口同步完成，等待总控任务”后停止。这是初始化后的正常 ready 状态，不是失败。",
       "只有收到包含 currentWindow、taskId、stateRoot 的 Wakeflow task wakeup / delivery prompt 时，才执行本窗口任务。",
+      "可把代码搜索、日志归因、测试定位、证据汇总等窄任务交给 Codex 子 agent 并行辅助；子 agent 只提供证据和建议，不改变窗口职责、验收、派发或状态机写入边界。",
       "如果窗口身份、仓库路径、state root 或 Wakeflow 配置不一致，停止并回报总控。",
     ].join("\n");
   }
@@ -1885,6 +1891,7 @@ function localWindowPrompt(context, windowName, deliveryRole, language) {
     `First read ${readRefs}.`,
     "If there is no active demand, state root, task package, or dispatch packet, report \"entry sync complete; waiting for controller task\" and stop. This is the normal ready state after initialization, not a failure.",
     "Execute window work only after receiving a Wakeflow task wakeup / delivery prompt containing currentWindow, taskId, and stateRoot.",
+    "Use Codex subagents for narrow parallel assistance such as code search, log triage, test localization, or evidence summarization when useful. Subagents only provide evidence and recommendations; they do not change window responsibility, acceptance, dispatch, or state-machine write boundaries.",
     "If the window identity, repository path, state root, or Wakeflow configuration is inconsistent, stop and report to the controller.",
   ].join("\n");
 }
@@ -1932,12 +1939,13 @@ function windowLaunchEntries(context, options = {}) {
 
 function windowLaunchPlanPayload(context, entries, options = {}) {
   const replacements = options.replacements ?? replacementWindows();
+  const language = options.language ?? interfaceLanguage(context);
   return {
     ok: true,
     command: "window-launch-plan",
     requiresHostCreateThread: true,
     requiresHostTitleReset: true,
-    language: options.language ?? interfaceLanguage(context),
+    language,
     replacementMode: replacements.size > 0,
     replaceWindows: [...replacements],
     threadIdStorage: ".workspace-local/wakeflow-delivery/thread-registry/<window>.json",
@@ -1946,6 +1954,9 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
       "Call create_thread for each launch entry with the entry cwd and createThreadPrompt. These prompts perform initialization entry sync only; they are not task deliveries.",
       "Immediately call set_thread_title for the returned thread id, using the entry displayTitle.",
       "Pass each returned real thread id once to the Wakeflow local registration command. The command stores the id only in thread-registry and refreshes derived window-config status; do not hand-write runtime files.",
+      language === "zh"
+        ? "总控和子窗口可使用 Codex 子 agent 并行做代码搜索、日志归因、测试定位和证据汇总；子 agent 不拥有验收、派发、状态机写入或跨仓库边界。"
+        : "Controller and child windows may use Codex subagents for parallel code search, log triage, test localization, and evidence summarization. Subagents do not own acceptance, dispatch, state-machine writes, or cross-repository boundaries.",
     ],
     windows: entries.map((entry) => ({
       windowName: entry.windowName,

@@ -272,10 +272,18 @@ async function commandLaunchWindow() {
   // --resume restores an existing registered session into a fresh tmux window
   // (cold start after reboot); the session id is stable across resumes.
   const sessionArgs = hasFlag("--resume") ? ["--resume", sessionId] : ["--session-id", sessionId];
+  // Workspace-pinned claude flags (e.g. ["--effort", "max"]) come from
+  // workspace.config.json hosts.claude-code.claudeArgs; per-call --claude-arg
+  // values still append after them and win on conflicts.
+  const configFile = path.join(workspaceRoot, "workspace.config.json");
+  const hostConfig = existsSync(configFile) ? (readJson(configFile, "workspace config").hosts?.["claude-code"] ?? {}) : {};
+  const configClaudeArgs = Array.isArray(hostConfig.claudeArgs) && hostConfig.claudeArgs.every((arg) => typeof arg === "string")
+    ? hostConfig.claudeArgs
+    : [];
   // Default to acceptEdits so seeded allowlists plus edit auto-accept make the
   // window prompt-free; any caller-provided --permission-mode wins.
   const modeArgs = extraClaudeArgs.includes("--permission-mode") ? [] : ["--permission-mode", "acceptEdits"];
-  const claudeCommand = [claudeBin, ...sessionArgs, "--add-dir", workspaceRoot, ...modeArgs, ...extraClaudeArgs]
+  const claudeCommand = [claudeBin, ...sessionArgs, "--add-dir", workspaceRoot, ...modeArgs, ...configClaudeArgs, ...extraClaudeArgs]
     .map((part) => `'${String(part).replace(/'/g, `'\\''`)}'`)
     .join(" ");
   const created = tmux([

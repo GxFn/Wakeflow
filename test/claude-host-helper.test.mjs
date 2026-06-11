@@ -99,6 +99,9 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
   // deadlock). Only a CROSS-host lock hard-blocks.
   const sameHostResend = parseOk(runHelper(root, ["send", "--window", "RepoA", "--prompt-file", deliveryPrompt]));
   assert.match(sameHostResend.lockWarning || "", /same-host delivery lock/);
+  assert.equal(sameHostResend.deliveryId, "dlv-test-1", "same-host resend without an explicit id preserves the locked delivery id");
+  const sameHostLock = JSON.parse(readFileSync(path.join(root, sent.lockFile), "utf8"));
+  assert.equal(sameHostLock.deliveryId, "dlv-test-1", "same-host resend must not erase the lock delivery id");
 
   // Simulate a fresh lock from the OTHER host -> hard block.
   const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/RepoA.json");
@@ -174,13 +177,13 @@ test("check-workspace reports gaps and stamp-runtime clears the version gap", ()
   assert.equal(second.stamp.pluginVersion, second.pluginVersion);
 });
 
-test("launch-window resolves per-role effort (controller=max, worker=high)", { skip: !tmuxPresent }, async (t) => {
+test("launch-window resolves per-role effort and model pin (controller=max, worker=xhigh)", { skip: !tmuxPresent }, async (t) => {
   const root = makeWorkspace();
   mkdirSync(path.join(root, "Worker"), { recursive: true });
   writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
     workspaceName: "EffortFlow",
     controllerWindow: "EffortFlow",
-    hosts: { "claude-code": { tmuxSession: serverSession, effortByRole: { controller: "max", default: "high" } } },
+    hosts: { "claude-code": { tmuxSession: serverSession, modelByRole: { default: "claude-fable-5" } } },
     repositories: [{ windowName: "Worker", path: "Worker", role: "Repository window" }],
   }));
   mkdirSync(path.join(root, "EffortFlow"), { recursive: true });
@@ -189,10 +192,12 @@ test("launch-window resolves per-role effort (controller=max, worker=high)", { s
   const ctrl = parseOk(runHelper(root, ["launch-window", "--server", serverSession, "--window", "EffortFlow", "--cwd", ".", "--boot-wait-ms", "600"]));
   assert.equal(ctrl.role, "controller");
   assert.equal(ctrl.effort, "max", "controller launches at max");
+  assert.equal(ctrl.model, "claude-fable-5", "controller model pinned from modelByRole");
 
   const worker = parseOk(runHelper(root, ["launch-window", "--server", serverSession, "--window", "Worker", "--cwd", "Worker", "--boot-wait-ms", "600"]));
   assert.equal(worker.role, "product");
-  assert.equal(worker.effort, "high", "worker launches at high");
+  assert.equal(worker.effort, "xhigh", "worker launches at xhigh (profile default)");
+  assert.equal(worker.model, "claude-fable-5", "worker model pinned from modelByRole");
 });
 
 test("wait-results keeps a delivery lock that is newer than the arrived result", { skip: !tmuxPresent }, async (t) => {

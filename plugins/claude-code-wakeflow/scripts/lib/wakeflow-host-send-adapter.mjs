@@ -25,7 +25,7 @@ export const claudeTmuxResidentAdapter = {
   kind: "WakeflowHostSendAdapter",
   version: 1,
   adapterId: "claude-tmux-resident",
-  hostTool: "wakeflow-claude-host send --window <target> --prompt-file <envelope prompt file>",
+  hostTool: "wakeflow-claude-host send --window <target> --prompt-file <envelope prompt file> --delivery-id <delivery id>",
   sideEffect: "host-session-message",
   inputAuthority: "delivery-envelope",
   readbackRequired: true,
@@ -62,7 +62,7 @@ export function buildHostSendResumeStep(delivery, adapter = claudeTmuxResidentAd
     taskId: delivery.taskId,
     dispatchGroup: delivery.dispatchGroup,
     sourceTrace: delivery.wakeflowTrace,
-    instruction: "Write the delivery envelope prompt to a temp file and send it into the registered tmux-resident window with the wakeflow-claude-host send command; do not edit product files from this resume step. If the tmux window is dead, relaunch the SAME session interactively (launch-window --resume --session-id <registered id> --replace) and resend; avoid headless claude -p, which bills the separate Agent SDK credit from 2026-06-15.",
+    instruction: `Write the delivery envelope prompt to a temp file and send it into the registered tmux-resident window with wakeflow-claude-host send --window ${delivery.targetWindow} --prompt-file <temp file> --delivery-id ${delivery.deliveryId}; do not edit product files from this resume step. If the tmux window is dead, relaunch the SAME session interactively (launch-window --resume --session-id <registered id> --replace) and resend with the same --delivery-id; avoid headless claude -p, which bills the separate Agent SDK credit from 2026-06-15.`,
   };
 }
 

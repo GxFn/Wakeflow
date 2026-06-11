@@ -128,6 +128,17 @@ function resolveEffortArgs(windowName, hostConfig) {
   return effort ? ["--effort", effort] : [];
 }
 
+function resolveModelArgs(windowName, hostConfig) {
+  // hosts.claude-code.modelByRole pins the serving model per role so a window
+  // restart cannot silently fall back to the settings default. No profile
+  // default: without config the window inherits the user's normal model.
+  const profileMap = hostProfile.launch.modelByRole ?? {};
+  const configMap = hostConfig && typeof hostConfig.modelByRole === "object" ? hostConfig.modelByRole : {};
+  const role = roleOfWindow(windowName);
+  const model = configMap[role] ?? configMap.default ?? profileMap[role] ?? profileMap.default;
+  return model ? ["--model", model] : [];
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -423,12 +434,14 @@ async function commandLaunchWindow() {
   // when --effort is already supplied explicitly (per-call or global claudeArgs).
   const effortAlreadySet = extraClaudeArgs.includes("--effort") || configClaudeArgs.includes("--effort");
   const effortArgs = effortAlreadySet ? [] : resolveEffortArgs(windowName, hostConfig);
+  const modelAlreadySet = extraClaudeArgs.includes("--model") || configClaudeArgs.includes("--model");
+  const modelArgs = modelAlreadySet ? [] : resolveModelArgs(windowName, hostConfig);
   // Permission mode precedence: explicit --claude-arg --permission-mode wins;
   // else workspace.config.json hosts.claude-code.permissionMode; else
   // acceptEdits so seeded allowlists keep the window prompt-free.
   const configMode = typeof hostConfig.permissionMode === "string" ? hostConfig.permissionMode : "acceptEdits";
   const modeArgs = extraClaudeArgs.includes("--permission-mode") ? [] : ["--permission-mode", configMode];
-  const claudeCommand = [claudeBin, ...sessionArgs, "--add-dir", workspaceRoot, ...modeArgs, ...effortArgs, ...configClaudeArgs, ...extraClaudeArgs]
+  const claudeCommand = [claudeBin, ...sessionArgs, "--add-dir", workspaceRoot, ...modeArgs, ...effortArgs, ...modelArgs, ...configClaudeArgs, ...extraClaudeArgs]
     .map((part) => `'${String(part).replace(/'/g, `'\\''`)}'`)
     .join(" ");
   const created = tmux([
@@ -467,12 +480,16 @@ async function commandLaunchWindow() {
     // prior consent. A bypass prompt without that opt-in is left for the user.
     const trustPattern = /trust this folder|Do you trust/i;
     const bypassPattern = /bypass permissions|skip all permission|dangerously/i;
+    // Large-session resume prompt: confirm the highlighted default (resume the
+    // full session) so a fleet relaunch never stalls on it.
+    const resumePattern = /Resume full session|Resume with summary/i;
     const bypassConsented = configMode === "bypassPermissions";
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const pane = capturePaneTail(binding, 30);
       const isTrust = trustPattern.test(pane);
       const isBypass = bypassPattern.test(pane) && bypassConsented;
-      if (!isTrust && !isBypass) break;
+      const isResumeDialog = resumePattern.test(pane);
+      if (!isTrust && !isBypass && !isResumeDialog) break;
       tmux(["send-keys", "-t", binding.tmux.windowId, "Enter"]);
       trustAccepted = true;
       await sleep(2800);
@@ -487,6 +504,7 @@ async function commandLaunchWindow() {
     command: "launch-window",
     permissionMode: configMode,
     effort: effortArgs.length ? effortArgs[1] : (effortAlreadySet ? "explicit" : null),
+    model: modelArgs.length ? modelArgs[1] : (modelAlreadySet ? "explicit" : null),
     role: roleOfWindow(windowName),
     trustAccepted,
     windowName,
@@ -531,19 +549,28 @@ async function commandSend() {
   // self target-result to release it) must not deadlock. So warn and proceed.
   const lock = readLock(windowName);
   let lockWarning;
+  let effectiveDeliveryId = deliveryId;
   if (lock && lockIsFresh(lock)) {
     const otherHost = lock.host && lock.host !== HOST_DIR_NAME;
+    const ownDelivery = Boolean(deliveryId) && lock.deliveryId === deliveryId;
     if (otherHost && !hasFlag("--force")) {
       fail(`Window ${windowName} has a fresh in-flight delivery lock from host ${lock.host} (${lock.deliveryId || "unknown delivery"}, expires ${lock.expiresAt}); wait for that delivery or pass --force.`);
     }
-    lockWarning = `Proceeding over a fresh same-host delivery lock on ${windowName} (${lock.deliveryId || "no delivery id"}, created ${lock.createdAt}); the prior delivery's lock had no release path (e.g. a controller-return target).`;
+    if (!effectiveDeliveryId && !otherHost && lock.deliveryId) {
+      effectiveDeliveryId = lock.deliveryId;
+    }
+    if (!ownDelivery) {
+      // A lock for OUR delivery id was acquired at envelope-build time by the
+      // core dispatch path; sending it is the expected next step, not a clash.
+      lockWarning = `Proceeding over a fresh same-host delivery lock on ${windowName} (${lock.deliveryId || "no delivery id"}, created ${lock.createdAt}); the prior delivery's lock had no release path (e.g. a controller-return target).`;
+    }
   }
   writeJson(lockFileFor(windowName), {
     kind: "WakeflowWindowDeliveryLock",
     version: 1,
     windowName,
     host: HOST_DIR_NAME,
-    deliveryId: deliveryId || undefined,
+    deliveryId: effectiveDeliveryId || undefined,
     createdAt: nowIso(),
     expiresAt: new Date(Date.now() + (Number.isFinite(lockTtlSec) ? lockTtlSec : 7200) * 1000).toISOString(),
   });
@@ -560,7 +587,7 @@ async function commandSend() {
     lockWarning,
     windowName,
     windowId: binding.tmux.windowId,
-    deliveryId: deliveryId || undefined,
+    deliveryId: effectiveDeliveryId || undefined,
     sentAt: nowIso(),
     lockFile: path.relative(workspaceRoot, lockFileFor(windowName)),
     readback: {
@@ -1066,6 +1093,61 @@ function arrangeWindows(serverSession) {
   return arranged;
 }
 
+// Always-visible model indicator for fleet windows. The statusline command
+// receives Claude Code's render JSON on stdin; the script prints the ACTUAL
+// serving model and flags a mismatch against the workspace's configured
+// modelByRole pin, so a silent model switch is immediately visible in-pane.
+const STATUSLINE_SCRIPT = `#!/usr/bin/env node
+// Generated by wakeflow (seed-permissions). Shows the live serving model and
+// warns when it differs from the model pinned in workspace.config.json.
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+let raw = "";
+process.stdin.on("data", (chunk) => { raw += chunk; });
+process.stdin.on("end", () => {
+  let input = {};
+  try { input = JSON.parse(raw); } catch { /* render with what we have */ }
+  const model = input.model ?? {};
+  const cwd = input.workspace?.current_dir || process.cwd();
+  let expected = null;
+  try {
+    const config = JSON.parse(readFileSync(path.join(root, "workspace.config.json"), "utf8"));
+    const byRole = config.hosts?.["claude-code"]?.modelByRole ?? {};
+    let role = "default";
+    if (path.resolve(cwd) === path.resolve(root)) role = "controller";
+    else {
+      const repo = (config.repositories ?? []).find((r) => r.path && path.resolve(root, r.path) === path.resolve(cwd));
+      if (repo) {
+        role = repo.windowName === config.designWindow ? "design"
+          : repo.windowName === config.testWindow ? "test" : "product";
+      }
+    }
+    expected = byRole[role] ?? byRole.default ?? null;
+  } catch { /* unpinned workspaces just show the live model */ }
+  const name = model.display_name || model.id || "model?";
+  const ok = !expected || model.id === expected;
+  console.log(ok ? \`\${name} \u00b7 \${path.basename(cwd)}\` : \`\u26a0\ufe0f \${name}\`);
+});
+`;
+
+function statuslineScriptFile() {
+  return path.join(workspaceRoot, ".workspace-local", "wakeflow-statusline.mjs");
+}
+
+function ensureStatuslineScript(write) {
+  const file = statuslineScriptFile();
+  const current = existsSync(file) ? readFileSync(file, "utf8") : null;
+  const changed = current !== STATUSLINE_SCRIPT;
+  if (write && changed) {
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, STATUSLINE_SCRIPT);
+  }
+  return { file, changed };
+}
+
 const SEED_ALLOW_RULES = [
   "mcp__plugin_wakeflow_wakeflow",
   "Bash(node *)",
@@ -1084,7 +1166,14 @@ function readWorkspaceRepositories() {
 }
 
 function mergePermissionSettings(existing, { isWorkspaceRoot }) {
-  const settings = existing && typeof existing === "object" ? existing : {};
+  // Never mutate `existing`: the caller detects changes by comparing the merge
+  // result against it, so in-place edits would self-cancel and skip the write.
+  const settings = existing && typeof existing === "object" ? { ...existing } : {};
+  // Continuous model visibility: point the statusline at the workspace-level
+  // wakeflow script unless the user already configured their own statusline.
+  if (!settings.statusLine) {
+    settings.statusLine = { type: "command", command: `node ${statuslineScriptFile()}` };
+  }
   const permissions = settings.permissions && typeof settings.permissions === "object" ? settings.permissions : {};
   const allow = new Set(Array.isArray(permissions.allow) ? permissions.allow : []);
   for (const rule of SEED_ALLOW_RULES) allow.add(rule);
@@ -1099,6 +1188,7 @@ function mergePermissionSettings(existing, { isWorkspaceRoot }) {
 
 function commandSeedPermissions() {
   const write = hasFlag("--write");
+  const statusline = ensureStatuslineScript(write);
   const targets = [workspaceRoot, ...readWorkspaceRepositories()];
   const seen = new Set();
   const results = [];

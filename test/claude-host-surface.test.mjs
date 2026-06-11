@@ -77,6 +77,7 @@ test("claude entryExtras emit tmux-resident hostLaunch specs and codex emits non
   assert.match(launchArgv, /--title RepoA Work/);
   assert.match(launchArgv, /--cwd \/tmp\/repo-a/);
   assert.match(extras.hostLaunch.sendArgv.join(" "), /send/);
+  assert.match(extras.hostLaunch.sendArgv.join(" "), /--delivery-id <delivery envelope id>/);
   assert.match(extras.hostLaunch.recovery, /--resume/);
 });
 
@@ -101,7 +102,9 @@ test("claude send adapters keep the codex adapter step contract", () => {
     );
   }
   assert.equal(claudeSteps[0].adapter.adapterId, "claude-tmux-resident");
+  assert.match(claudeSteps[0].hostTool, /--delivery-id <delivery id>/);
   assert.match(claudeSteps[0].instruction, /wakeflow-claude-host send/);
+  assert.match(claudeSteps[0].instruction, /--delivery-id dlv-1/);
   assert.equal(claudeSteps[1].tool, "wakeflow_record_delivery");
 });
 

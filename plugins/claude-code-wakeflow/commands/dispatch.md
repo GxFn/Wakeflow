@@ -12,3 +12,11 @@ Run one controller dispatch step. Use the wakeflow-controller skill as the opera
 5. The target's tmux tab now shows a yellow > glyph (busy) until its result lands; `wakeflow-claude-host window-status` reports the same per-window states. End the dispatch turn after the delivery run is recorded as `status=sent` with `readback.ok=true`. As optional stall insurance, first start `wakeflow-claude-host.mjs wait-results --group <id> --target <window> ... [--timeout-sec N]` as a background task; it wakes the controller when all expected target results exist (releasing those windows' locks), and a timeout flags a stalled delivery to review. Do not poll, sleep, or pre-review results in the same turn.
 
 Stop instead of dispatching when the demand is complete, blocked, review-ready, or lacks evidence, or when no registered session exists for the target window.
+
+Lock notes: the shared per-window delivery lock is acquired automatically when
+the envelope is written and released when the matching target result is
+recorded; a fresh lock from the OTHER host fails the dispatch closed, while a
+same-host lock that belongs to this very delivery is normal and not a warning.
+A stalled or ownerless lock is released with the dry-run-first recovery command
+`release-window-lock --window <name> --write` (MCP: `wakeflow_release_window_lock`);
+releasing another host's fresh lock must be a deliberate controller decision.

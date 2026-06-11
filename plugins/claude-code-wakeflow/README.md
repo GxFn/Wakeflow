@@ -15,13 +15,12 @@ roots, compact delivery envelopes, and evidence-based acceptance.
 ---
 
 - [Why Wakeflow](#why-wakeflow)
-- [System Model](#system-model)
+- [Architecture](#architecture)
 - [Install Wakeflow](#install-wakeflow)
 - [Window Model](#window-model)
 - [One Vocabulary Across Hosts](#one-vocabulary-across-hosts)
 - [Initialize A Workspace](#initialize-a-workspace)
 - [What Wakeflow Creates](#what-wakeflow-creates)
-- [How Work Moves](#how-work-moves)
 - [Automation Semantics](#automation-semantics)
 - [MCP Capability Surface](#mcp-capability-surface)
 - [Runtime And Ledger Boundaries](#runtime-and-ledger-boundaries)
@@ -56,29 +55,117 @@ Wakeflow provides the missing control layer:
 Wakeflow is not a command launcher with nicer names. It is a reusable workflow
 capability for keeping multi-window agent work legible, bounded, and resumable.
 
-## System Model
+## Architecture
 
-```mermaid
-flowchart TD
-  User["User goal"] --> Controller["Controller Claude Code window"]
-  Controller --> Gates["CLAUDE.md gates<br/>goal, boundary, evidence, stop rules"]
-  Controller <--> StateRoot["State root<br/>.workspace-active/..."]
-  StateRoot --> Tasks["Task packages"]
-  Tasks --> Delivery["Delivery envelopes"]
-  LocalRuntime[".workspace-local<br/>thread registry + derived window config"] -. "lookup" .-> Delivery
-  Delivery --> Host["Claude Code delivery<br/>tmux window send via host helper"]
-  Host --> Targets["Repository / Design / Test windows"]
-  Targets --> Repos["Responsibility roots"]
-  Targets --> Results["TargetResultEnvelope<br/>with evidence refs"]
-  Results --> Controller
-  Controller --> Ledger["wakeflow-ledger<br/>durable project records"]
+Wakeflow is three layers working together: a window fleet you can see, a
+closed loop that moves the work, and a disk layout that survives restarts.
+
+### Layer 1 — the fleet (what you see)
+
+One tmux session holds the whole operation. Every window is a long-lived
+interactive Claude Code session pinned to one responsibility, and the status
+bar tells you who is doing what at a glance:
+
+```text
+[alembic]  1:Design   >> 2:Controller   3:RepoA  >  4:RepoB   5:Test   6:zsh
+            idle      green = executing  idle    yellow =      idle    yours,
+                      a turn right now           delivery              untouched
+                                                 in flight
 ```
 
-The controller is the only acceptance authority. Scripts and MCP tools create,
-validate, summarize, and record machine data, but they do not widen scope,
-decide product behavior, or declare a task complete.
+| Badge | Meaning |
+| --- | --- |
+| green `>>` block | the window is executing a turn right now (live activity monitor) |
+| yellow `>` block | a delivery was sent and the result is still pending |
+| red `!` block | the delivery stalled past its timeout |
+| green `+` | a result arrived and is ready for controller review |
+| no badge | idle |
+
+| Window | Role | Default reasoning effort |
+| --- | --- | --- |
+| Controller | owns goals, dispatch, evidence review, acceptance | `max` |
+| Design | clarifies requirements, compares options, prepares handoffs | `xhigh` |
+| Repo windows | implement inside exactly one repository | `xhigh` |
+| Test | real-scenario verification the repos cannot self-run | `xhigh` |
+
+Inside every pane a seeded statusline shows the live serving model and the
+window identity (`Fable 5 . RepoA`), and flags a warning the moment a session
+drifts off the model pinned in `modelByRole`. Windows survive reboots: the
+same session resumes with its full conversation.
+
+### Layer 2 — the loop (how work moves)
+
+Work is organized into demands: one demand = one goal = one state root on
+disk. Every demand moves through the same closed loop:
+
+```text
+ 1 init       controller creates the demand state root            (unclaimed)
+ 2 claim      the first driving command binds it to ONE platform  (codex | claude)
+ 3 add task   a task package names the target window and scope
+ 4 dispatch   envelope written -> window LOCKED -> prompt pasted into the pane
+ 5 work       the target window executes inside its repository boundary
+ 6 result     TargetResultEnvelope lands with evidence refs -> lock released
+ 7 review     controller reads RAW evidence, then accepts / reworks / blocks
+ 8 complete   only when every task is accepted and no blockers remain
+```
+
+Two rules keep the loop honest:
+
+- **Prompts wake, state instructs.** The pasted prompt only names the window,
+  task id, and state root; the task definition lives in the state root and the
+  installed skills. A lost prompt loses nothing.
+- **Backfill is input, not acceptance.** A target's self-report never closes
+  work. The controller reviews the raw evidence (commits, command output,
+  reports) before recording a decision, and a blocked decision is always
+  recoverable: new evidence reopens review.
+
+### Layer 3 — the ground (what's on disk)
+
+```text
+<workspace>/
+  workspace.config.json          windows, roles, model/effort pins   committed
+  CLAUDE.md  (+ one per repo)    controller gates / access cards     committed
+  .claude/settings.json          portable allow rules, relative refs committed
+  .claude/settings.local.json    machine-local statusline command    never committed
+  wakeflow-ledger/               durable designs, records, archives  committed
+  .workspace-active/             demand state roots (layer 2 lives here)   local
+  .workspace-local/wakeflow-delivery/                                      local
+    dispatch-packets/  delivery-envelopes/  delivery-runs/   transport records
+    target-results/                                          evidence envelopes
+    locks/                       one in-flight delivery per window, cross-host
+    hosts/codex/                 codex session registry (host-scoped)
+    hosts/claude-code/           claude session registry + tmux bindings
+```
+
+Rule of thumb: **business truth is host-neutral and shared; transport handles
+are host-scoped and never leave `.workspace-local/`.** Session ids never
+appear in tracked files, prompts, or backfill text.
+
+### Who decides what (trust model)
+
+- Scripts and MCP tools create, validate, and record machine data; they never
+  accept work, widen scope, or decide product behavior.
+- Target windows execute exactly their dispatched package and report evidence.
+- The controller is the only acceptance authority.
+- The user owns product decisions. `bypassPermissions` is never a silent
+  default: it is recorded in `workspace.config.json` only after an explicit
+  yes, and that recorded consent is what authorizes unattended boot dialogs.
+
+### Dual-host coexistence
+
+The same workspace can run the Codex edition and the Claude Code edition side
+by side. Demands bind to one platform at claim time (machine-enforced on every
+driving command), the shared per-window lock serializes deliveries across
+hosts, and ownership moves only through an explicit, audited
+`adopt-demand-host` transfer.
 
 ## Install Wakeflow
+
+> Platform support: macOS-first. The tmux fleet, `brew` preflight, and
+> current-terminal tab opening (iTerm2) are exercised daily on macOS; the tmux
+> core should work on Linux but is not yet verified there, and terminal-tab
+> opening degrades gracefully to a printed `tmux attach` command.
+
 
 The repository root is the development workspace, and the installable Claude
 Code plugin artifact lives in `plugins/claude-code-wakeflow/`. Install it from
@@ -102,7 +189,7 @@ The plugin ships four coordinated surfaces:
 | --- | --- |
 | MCP server | `.mcp.json` starts `node ${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs`, a standalone server with no `node_modules` dependency. |
 | Skills | `wakeflow-controller`, `wakeflow-target`, and `wakeflow-governance` operating manuals. |
-| Slash commands | `/wakeflow:init`, `/wakeflow:status`, `/wakeflow:dispatch`, and `/wakeflow:review`. |
+| Slash commands | `/wakeflow:init`, `/wakeflow:check`, `/wakeflow:windows`, `/wakeflow:status`, `/wakeflow:dispatch`, `/wakeflow:review`, and `/wakeflow:unattended`. |
 | Host transport helper | `scripts/lib/wakeflow-claude-host.mjs` with the commands `preflight`, `ensure-server`, `launch-window`, `retitle`, `send`, `readback`, `release-lock`, `wait-results`, and `attach-window`. |
 
 The helper requires tmux. Initialization runs `preflight`, which installs tmux
@@ -253,29 +340,6 @@ Wakeflow also synchronizes `.gitignore` so only `.workspace-active/` and
 repositories, Design/Test folders, ledgers, `.DS_Store`, or other user
 workspace noise to `.gitignore`.
 
-## How Work Moves
-
-The normal Wakeflow loop is deliberately small:
-
-1. A user goal, Design handoff, or controller intake creates a demand.
-2. The controller defines completion, boundaries, phase order, and the first
-   blocker.
-3. A state root records the demand and creates eligible task packages.
-4. The controller prepares compact delivery envelopes for the target windows.
-5. Target windows read their own rules, execute only their assigned package,
-   and return target result envelopes with reviewable evidence.
-6. The controller reviews raw evidence, records a decision, and either creates
-   the next eligible package, stops for user judgment, marks the demand
-   blocked, or completes the demand.
-7. Durable conclusions move to `wakeflow-ledger/`; local runtime stays local.
-
-Design and Test are supporting roles:
-
-- **Design** clarifies requirements, options, risks, and handoff candidates.
-  It does not dispatch implementation or become product truth by itself.
-- **Test** is reserved for real-scenario evidence that the controller or
-  product repository cannot safely reproduce alone.
-
 ## Automation Semantics
 
 Wakeflow automation is direct session delivery plus explicit result return.
@@ -412,7 +476,7 @@ Common source areas inside this plugin artifact:
 | `templates/wakeflow-template-bundle.json` | Installed workspace starter documents and support surfaces, bundled for marketplace scan size. |
 | `assets/` | Marketplace and plugin presentation assets. |
 
-The repository root README explains the shared system model; this README is
+The repository root README explains the shared architecture; this README is
 the Claude Code edition manual.
 
 ## Design Principles

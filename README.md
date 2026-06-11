@@ -16,11 +16,10 @@ evidence-based acceptance.
 ---
 
 - [Why Wakeflow](#why-wakeflow)
-- [System Model](#system-model)
+- [Architecture](#architecture)
 - [Install Wakeflow](#install-wakeflow)
 - [Initialize A Workspace](#initialize-a-workspace)
 - [What Wakeflow Creates](#what-wakeflow-creates)
-- [How Work Moves](#how-work-moves)
 - [Automation Semantics](#automation-semantics)
 - [MCP Capability Surface](#mcp-capability-surface)
 - [Runtime And Ledger Boundaries](#runtime-and-ledger-boundaries)
@@ -56,27 +55,80 @@ Wakeflow provides the missing control layer:
 Wakeflow is not a command launcher with nicer names. It is a reusable workflow
 capability for keeping multi-window agent work legible, bounded, and resumable.
 
-## System Model
+## Architecture
 
-```mermaid
-flowchart TD
-  User["User goal"] --> Controller["Controller window<br/>Codex / Claude Code"]
-  Controller --> Gates["AGENTS.md / CLAUDE.md gates<br/>goal, boundary, evidence, stop rules"]
-  Controller <--> StateRoot["State root<br/>.workspace-active/..."]
-  StateRoot --> Tasks["Task packages"]
-  Tasks --> Delivery["Delivery envelopes"]
-  LocalRuntime[".workspace-local<br/>thread registry + derived window config"] -. "lookup" .-> Delivery
-  Delivery --> Host["Host transport<br/>Codex thread tools or Claude tmux helper"]
-  Host --> Targets["Repository / Design / Test windows"]
-  Targets --> Repos["Responsibility roots"]
-  Targets --> Results["TargetResultEnvelope<br/>with evidence refs"]
-  Results --> Controller
-  Controller --> Ledger["wakeflow-ledger<br/>durable project records"]
+Wakeflow is three layers working together: a window fleet you can see, a
+closed loop that moves the work, and a disk layout that survives restarts.
+Both editions — Codex and Claude Code — run the same shared core; only the
+transport differs (Codex host thread tools vs a tmux send helper).
+
+### Layer 1 — the fleet (what you see)
+
+Every Wakeflow window is a long-lived agent session pinned to one
+responsibility. On Claude Code the fleet lives in one tmux session with live
+status badges; on Codex the windows are host threads.
+
+| Window | Role | Default reasoning effort (Claude Code) |
+| --- | --- | --- |
+| Controller | owns goals, dispatch, evidence review, acceptance | `max` |
+| Design | clarifies requirements, compares options, prepares handoffs | `xhigh` |
+| Repo windows | implement inside exactly one repository | `xhigh` |
+| Test | real-scenario verification the repos cannot self-run | `xhigh` |
+
+### Layer 2 — the loop (how work moves)
+
+Work is organized into demands: one demand = one goal = one state root on
+disk. Every demand moves through the same closed loop:
+
+```text
+ 1 init       controller creates the demand state root            (unclaimed)
+ 2 claim      the first driving command binds it to ONE platform  (codex | claude)
+ 3 add task   a task package names the target window and scope
+ 4 dispatch   envelope written -> window LOCKED -> prompt delivered
+ 5 work       the target window executes inside its repository boundary
+ 6 result     TargetResultEnvelope lands with evidence refs -> lock released
+ 7 review     controller reads RAW evidence, then accepts / reworks / blocks
+ 8 complete   only when every task is accepted and no blockers remain
 ```
 
-The controller is the only acceptance authority. Scripts and MCP tools create,
-validate, summarize, and record machine data, but they do not widen scope,
-decide product behavior, or declare a task complete.
+Two rules keep the loop honest: **prompts wake, state instructs** (the
+delivered prompt only names window, task id, and state root; the task
+definition lives in the state root and skills), and **backfill is input, not
+acceptance** (the controller reviews raw evidence before any decision; a
+blocked decision is always recoverable once new evidence arrives).
+
+### Layer 3 — the ground (what's on disk)
+
+```text
+<workspace>/
+  workspace.config.json          windows, roles, per-host knobs      committed
+  AGENTS.md / CLAUDE.md          per-host controller gates           committed
+  wakeflow-ledger/               durable designs, records, archives  committed
+  .workspace-active/             demand state roots (layer 2)        local
+  .workspace-local/wakeflow-delivery/                                local
+    dispatch-packets/  delivery-envelopes/  delivery-runs/    transport records
+    target-results/                                           evidence envelopes
+    locks/                       one in-flight delivery per window, cross-host
+    hosts/codex/                 codex thread registry  (host-scoped)
+    hosts/claude-code/           claude session registry + tmux bindings
+```
+
+Rule of thumb: **business truth is host-neutral and shared; transport handles
+are host-scoped and never leave `.workspace-local/`.**
+
+### Who decides what (trust model)
+
+Scripts and MCP tools create, validate, and record machine data; they never
+accept work, widen scope, or decide product behavior. Target windows execute
+exactly their dispatched package. The controller is the only acceptance
+authority, and the user owns product decisions.
+
+### Dual-host coexistence
+
+One workspace may run both editions side by side: demands bind to one platform
+at claim time (machine-enforced on every driving command), the shared
+per-window lock serializes deliveries across hosts, and ownership moves only
+through the explicit, audited `adopt-demand-host` transfer.
 
 ## Install Wakeflow
 
@@ -222,29 +274,6 @@ Wakeflow also synchronizes `.gitignore` so only `.workspace-active/` and
 `.workspace-local/` remain local runtime directories. It does not add product
 repositories, Design/Test folders, ledgers, `.DS_Store`, or other user
 workspace noise to `.gitignore`.
-
-## How Work Moves
-
-The normal Wakeflow loop is deliberately small:
-
-1. A user goal, Design handoff, or controller intake creates a demand.
-2. The controller defines completion, boundaries, phase order, and the first
-   blocker.
-3. A state root records the demand and creates eligible task packages.
-4. The controller prepares compact delivery envelopes for the target windows.
-5. Target windows read their own rules, execute only their assigned package, and
-   return target result envelopes with reviewable evidence.
-6. The controller reviews raw evidence, records a decision, and either creates
-   the next eligible package, stops for user judgment, marks the demand blocked,
-   or completes the demand.
-7. Durable conclusions move to `wakeflow-ledger/`; local runtime stays local.
-
-Design and Test are supporting roles:
-
-- **Design** clarifies requirements, options, risks, and handoff candidates. It
-  does not dispatch implementation or become product truth by itself.
-- **Test** is reserved for real-scenario evidence that the controller or product
-  repository cannot safely reproduce alone.
 
 ## Automation Semantics
 

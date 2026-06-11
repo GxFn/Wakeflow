@@ -14,13 +14,12 @@ Wakeflow 把一个本地 Claude Code 工作区变成有纪律的控制系统：�
 ---
 
 - [为什么需要 Wakeflow](#为什么需要-wakeflow)
-- [系统模型](#系统模型)
+- [架构](#架构)
 - [安装 Wakeflow](#安装-wakeflow)
 - [窗口模型](#窗口模型)
 - [跨宿主统一词汇](#跨宿主统一词汇)
 - [初始化工作区](#初始化工作区)
 - [Wakeflow 会创建什么](#wakeflow-会创建什么)
-- [工作如何流转](#工作如何流转)
 - [自动化语义](#自动化语义)
 - [MCP 能力面](#mcp-能力面)
 - [运行时与账本边界](#运行时与账本边界)
@@ -47,28 +46,105 @@ Wakeflow 提供缺失的控制层：
 Wakeflow 不是换了名字的命令启动器。它是一个可复用的工作流能力，用来让多窗口
 agent 工作保持可读、有边界、可恢复。
 
-## 系统模型
+## 架构
 
-```mermaid
-flowchart TD
-  User["用户目标"] --> Controller["总控 Claude Code 窗口"]
-  Controller --> Gates["CLAUDE.md gates<br/>目标、边界、证据、停止规则"]
-  Controller <--> StateRoot["State root<br/>.workspace-active/..."]
-  StateRoot --> Tasks["任务包"]
-  Tasks --> Delivery["投递 envelope"]
-  LocalRuntime[".workspace-local<br/>thread registry + 派生 window config"] -. "lookup" .-> Delivery
-  Delivery --> Host["Claude Code 投递<br/>host helper 的 tmux 窗口发送"]
-  Host --> Targets["仓库 / Design / Test 窗口"]
-  Targets --> Repos["责任根目录"]
-  Targets --> Results["TargetResultEnvelope<br/>包含 evidence refs"]
-  Results --> Controller
-  Controller --> Ledger["wakeflow-ledger<br/>长期项目记录"]
+Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环、以及重启不丢的磁盘布局。
+
+### 第一层 —— 舰队(你看到的)
+
+一个 tmux 会话承载全部工作。每个窗口都是常驻的交互式 Claude Code 会话,
+绑定唯一职责;状态栏一眼看清谁在干什么:
+
+```text
+[alembic]  1:Design   >> 2:Controller   3:RepoA  >  4:RepoB   5:Test   6:zsh
+            空闲      绿块=正在执行回合   空闲    黄块=投递在途   空闲    你自己的,
+                                                                      不受影响
 ```
 
-总控是唯一验收权威。脚本和 MCP 工具可以创建、验证、汇总、记录机器数据，但不能扩大范围、
-决定产品行为，或宣称任务已经完成。
+| 徽章 | 含义 |
+| --- | --- |
+| 绿色 `>>` 色块 | 窗口此刻正在执行回合(活动监视器实时点亮) |
+| 黄色 `>` 色块 | 投递已发出,结果未回 |
+| 红色 `!` 色块 | 投递超时停滞 |
+| 绿色 `+` | 结果已落,待总控评审 |
+| 无徽章 | 空闲 |
+
+| 窗口 | 职责 | 默认推理力度 |
+| --- | --- | --- |
+| Controller(总控) | 目标、派发、证据评审、验收 | `max` |
+| Design | 澄清需求、比较方案、准备交接 | `xhigh` |
+| 仓库窗口 | 只在一个仓库内实现 | `xhigh` |
+| Test | 仓库自己做不了的真实场景验证 | `xhigh` |
+
+每个窗格底部的 statusline 实时显示服务模型与窗口身份(`Fable 5 . RepoA`),
+会话一旦偏离 `modelByRole` 钉住的模型立即亮警告。窗口跨重启存活:
+同一会话恢复,完整上下文不丢。
+
+### 第二层 —— 闭环(工作如何流动)
+
+工作以需求(demand)组织:一个需求 = 一个目标 = 磁盘上一个 state root。
+每个需求走同一条闭环:
+
+```text
+ 1 init       总控创建需求 state root                       (未认领)
+ 2 claim      第一个驱动命令把它绑定到一个平台              (codex | claude)
+ 3 add task   任务包写明目标窗口与边界
+ 4 dispatch   写信封 -> 窗口上锁 -> prompt 粘贴进窗格
+ 5 work       目标窗口在自己的仓库边界内执行
+ 6 result     带证据引用的 TargetResultEnvelope 落盘 -> 锁释放
+ 7 review     总控读原始证据,然后 accept / rework / blocked
+ 8 complete   所有任务通过验收且无阻塞时才能完结
+```
+
+两条规则保证闭环诚实:
+
+- **Prompt 只负责唤醒,state 负责指挥。** 粘贴的 prompt 只带窗口名、任务 id、
+  state root;任务定义在 state root 和已装 skill 里。丢一条 prompt 不丢任何东西。
+- **回填是输入,不是验收。** 目标窗口的自述永远不能关闭工作;总控先读原始证据
+  (commit、命令输出、报告)再记录决定。blocked 决定永远可恢复:新证据到来即
+  重新开启评审。
+
+### 第三层 —— 地基(磁盘上是什么)
+
+```text
+<workspace>/
+  workspace.config.json          窗口、角色、模型/力度钉子          入库
+  CLAUDE.md(每仓库各一份)       总控门 / 访问卡                    入库
+  .claude/settings.json          可移植 allow 规则、相对引用        入库
+  .claude/settings.local.json    本机 statusline 命令               永不入库
+  wakeflow-ledger/               长期设计、记录、归档               入库
+  .workspace-active/             需求 state root(第二层住这里)    本机
+  .workspace-local/wakeflow-delivery/                               本机
+    dispatch-packets/  delivery-envelopes/  delivery-runs/   传输记录
+    target-results/                                          证据信封
+    locks/                       每窗口一把在途锁,跨宿主共享
+    hosts/codex/                 codex 会话注册表(宿主私有)
+    hosts/claude-code/           claude 会话注册表 + tmux 绑定
+```
+
+一句话原则:**业务真相宿主中立、双方共享;传输句柄宿主私有、永不离开
+`.workspace-local/`。** 会话 id 不会出现在任何入库文件、prompt 或回填文本里。
+
+### 谁能决定什么(信任模型)
+
+- 脚本与 MCP 工具负责创建、校验、记录机器数据;它们不验收、不扩权、不替产品做决定。
+- 目标窗口只执行被派发的任务包并回报证据。
+- 总控是唯一的验收权威。
+- 产品决定属于用户。`bypassPermissions` 永不默认开启:只有用户显式同意后才写进
+  `workspace.config.json`,这条被记录的同意才是无人值守启动对话框的授权来源。
+
+### 双宿主共存
+
+同一工作区可同时运行 Codex 版与 Claude Code 版:需求在领取时绑定平台
+(每个驱动命令机器强制校验),跨宿主共享的窗口锁串行化投递,
+归属只能通过显式且留痕的 `adopt-demand-host` 转移。
 
 ## 安装 Wakeflow
+
+> 平台支持:macOS 优先。tmux 舰队、`brew` 预检、当前终端开标签(iTerm2)
+> 每天在 macOS 上真实使用;tmux 核心理论上可在 Linux 运行但尚未验证,
+> 终端开标签在不支持的平台会优雅降级为打印 `tmux attach` 命令。
+
 
 仓库根目录是开发工作区，真正可安装的 Claude Code 插件 artifact 位于
 `plugins/claude-code-wakeflow/`。在 Claude Code 内安装：
@@ -91,7 +167,7 @@ flowchart TD
 | --- | --- |
 | MCP server | `.mcp.json` 启动 `node ${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs`，无 `node_modules` 依赖的 standalone server。 |
 | Skills | `wakeflow-controller`、`wakeflow-target`、`wakeflow-governance` 操作手册。 |
-| Slash commands | `/wakeflow:init`、`/wakeflow:status`、`/wakeflow:dispatch`、`/wakeflow:review`。 |
+| Slash commands | `/wakeflow:init`、`/wakeflow:check`、`/wakeflow:windows`、`/wakeflow:status`、`/wakeflow:dispatch`、`/wakeflow:review`、`/wakeflow:unattended`。 |
 | Host transport helper | `scripts/lib/wakeflow-claude-host.mjs`，提供 `preflight`、`ensure-server`、`launch-window`、`retitle`、`send`、`readback`、`release-lock`、`wait-results`、`attach-window` 命令。 |
 
 helper 依赖 tmux。初始化会先运行 `preflight`：缺少 tmux 时，在获得用户一次明确
@@ -221,23 +297,6 @@ Wakeflow 也会同步 `.gitignore`，只把 `.workspace-active/` 和 `.workspace
 作为本地运行时目录忽略。它不会把产品仓库、Design/Test、ledger、`.DS_Store`
 或其他本地杂项加入 `.gitignore`。
 
-## 工作如何流转
-
-Wakeflow 的正常循环刻意保持小而清晰：
-
-1. 用户目标、Design handoff 或 controller intake 创建一个 demand。
-2. 总控定义完成标准、边界、阶段顺序和第一个 blocker。
-3. state root 记录 demand 并创建可执行任务包。
-4. 总控为目标窗口准备轻量 delivery envelope。
-5. 目标窗口读取自己的规则，只执行分配给自己的任务包，并返回带可审查证据的 target result envelope。
-6. 总控审查原始证据，记录决策，然后创建下一批可执行任务、等待用户判断、标记 blocked，或完成 demand。
-7. 长期结论进入 `wakeflow-ledger/`；本地运行时继续留在本地。
-
-Design 和 Test 是支持角色：
-
-- **Design** 澄清需求、选项、风险和 handoff 候选。Design 不投递实现，也不会自动成为产品真相。
-- **Test** 只用于总控或产品仓库无法安全复现的真实场景证据。
-
 ## 自动化语义
 
 Wakeflow 自动化是直接 session 投递加显式结果返回。
@@ -356,7 +415,7 @@ npm test
 | `templates/wakeflow-template-bundle.json` | 已安装工作区 starter documents 和 support surfaces 的 bundle，用于控制 marketplace scan 文件数。 |
 | `assets/` | Marketplace 和插件展示资源。 |
 
-仓库根 README 解释共享的系统模型；本 README 是 Claude Code 版本手册。
+仓库根 README 解释共享架构；本 README 是 Claude Code 版本手册。
 
 ## 设计原则
 

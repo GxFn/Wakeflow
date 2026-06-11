@@ -18,3 +18,14 @@ Diagnose an ALREADY-INITIALIZED workspace (one that has `workspace.config.json`)
 5. Re-run `check-workspace` and report the before/after gap counts. Anything still failing is a finding to surface, not to hide.
 
 This command never deletes state, never touches Codex-owned surfaces (`AGENTS.md`, `hosts/codex/`), and never sends task deliveries.
+
+Notes on the converged settings layout: the COMMITTED `.claude/settings.json`
+of each window directory carries portable content only (allow rules plus a
+RELATIVE `additionalDirectories` parent reference); machine-local items — the
+wakeflow statusline command with its absolute script path — live in
+`.claude/settings.local.json`, which is never committed. `seed-permissions`
+migrates any older absolute-path or statusLine residue out of the committed
+file automatically and leaves user-custom statusLine configs untouched. The
+`plugin-version` gap means the workspace was last converged by an older plugin:
+running the fix flow re-runs seeding and `stamp-runtime` to record the current
+version.

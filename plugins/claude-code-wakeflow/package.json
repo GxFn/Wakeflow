@@ -1,6 +1,6 @@
 {
   "name": "claude-code-wakeflow",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "type": "module",
   "description": "Unattended workflow loops for multi-window agent work (Claude Code plugin).",
   "license": "MIT",

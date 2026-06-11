@@ -4,7 +4,10 @@
       "command": "node",
       "args": [
         "${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs"
-      ]
+      ],
+      "env": {
+        "WAKEFLOW_DEFAULT_ROOT": "${CLAUDE_PROJECT_DIR}"
+      }
     }
   }
 }

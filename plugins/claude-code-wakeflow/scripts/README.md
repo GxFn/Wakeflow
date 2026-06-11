@@ -226,6 +226,10 @@ JSON output; it is a script, not an MCP tool. Its nine commands:
 - `readback`: capture the current pane tail for evidence (`--window [--lines]`).
 - `release-lock`: remove the shared in-flight delivery lock for a window.
 - `wait-results`: block until target results exist for a dispatch group
+- `arrange-windows`: rename managed windows to short tabs and order them Design, controller, products, Test; unmanaged windows trail.
+- `check-workspace`: read-only health check for an existing workspace (config hosts block, managed CLAUDE.md surfaces, registry/binding/liveness, permission seeds, version stamp).
+- `stamp-runtime`: record the converging plugin version in hosts/claude-code/runtime-meta.json (`--write`).
+- `seed-permissions`: merge wakeflow automation allowlists into .claude/settings.json at the workspace root and every configured repository (`--write`).
   (`--group [--target <window>...|--expect N] [--timeout-sec] [--poll-ms]`);
   run it as a background task, it releases finished windows' locks.
 - `attach-window`: print, and optionally open in macOS Terminal, the tmux

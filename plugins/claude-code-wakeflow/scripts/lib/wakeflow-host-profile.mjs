@@ -90,6 +90,11 @@ export const hostProfile = {
       "Create the tmux-resident window sessions in windowLaunchPlan: run the host helper preflight first (install tmux via brew with one user consent when missing), then for each entry write createThreadPrompt to a temp file and run the helper launch-window command from hostLaunch; finally register each returned session id once into the local thread registry before dispatching any work.",
   },
   launch: {
+    tabNames: {
+      controller: "总控",
+      design: "Design",
+      test: "Test",
+    },
     planFlags: {
       requiresHostCreateThread: true,
       requiresHostTitleReset: true,

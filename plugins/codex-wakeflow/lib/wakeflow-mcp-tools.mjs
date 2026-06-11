@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { runWakeflowRuntime } from "./wakeflow-runtime.mjs";
 import { hostProfile } from "../scripts/lib/wakeflow-host-profile.mjs";
 
@@ -774,5 +776,15 @@ function repositoryArgs(repositories = []) {
 }
 
 function rootArgs(args) {
-  return optionalValue("--root", args.root);
+  return optionalValue("--root", args.root ?? defaultWorkspaceRoot());
+}
+
+function defaultWorkspaceRoot() {
+  // The MCP server process may start with an arbitrary cwd (for plugin-managed
+  // servers it is not the user's workspace), so an explicit root from the
+  // caller wins; otherwise fall back to the host-injected workspace dir.
+  for (const candidate of [process.env.WAKEFLOW_DEFAULT_ROOT, process.env.CLAUDE_PROJECT_DIR]) {
+    if (candidate && path.isAbsolute(candidate) && existsSync(candidate)) return candidate;
+  }
+  return undefined;
 }

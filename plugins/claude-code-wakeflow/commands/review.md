@@ -9,6 +9,7 @@ Run one controller review step. Use the wakeflow-controller skill acceptance rul
 2. Call `wakeflow_review_pack` for the group/task and read the listed raw evidence (files, commits, commands, logs, reports) before judging anything.
 3. When multiple target results need consolidation, call `wakeflow_reduce_results`; treat the reduction as a review candidate only.
 4. Decide explicitly and record it: `wakeflow_decide_review` with accept / rework / blocked / wait, or `wakeflow_complete_demand` when the completion definition is met with evidence.
-5. Report the decision, the evidence that supports it, and the next eligible step (next package, intake, archive, or stop for user judgment).
+5. After recording the decision, clear transient window glyphs with `wakeflow-claude-host window-status --reconcile --root <workspace>` (green + means result-ready; reconcile returns settled windows to plain tabs).
+6. Report the decision, the evidence that supports it, and the next eligible step (next package, intake, archive, or stop for user judgment).
 
 Never accept work whose evidence only proves a script ran; the evidence must prove the intended behavior. When evidence is missing or ambiguous, choose rework/blocked/wait and say why.

@@ -91,6 +91,9 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
   assert.match(sent.readback.paneTail, /line-two/);
   assert.ok(existsSync(path.join(root, sent.lockFile)), "send must create the shared window lock");
 
+  const busyStatus = parseOk(runHelper(root, ["window-status"]));
+  assert.equal(busyStatus.windows.find((row) => row.window === "RepoA").state, "busy", "send marks the window busy");
+
   const lockedSend = runHelper(root, ["send", "--window", "RepoA", "--prompt-file", deliveryPrompt]);
   assert.notEqual(lockedSend.status, 0);
   assert.match(lockedSend.stderr + lockedSend.stdout, /in-flight delivery lock/);
@@ -122,6 +125,40 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
 
   const attach = parseOk(runHelper(root, ["attach-window", "--window", "RepoA"]));
   assert.match(attach.attach, new RegExp(serverSession));
+
+  const status = parseOk(runHelper(root, ["window-status"]));
+  const repoRow = status.windows.find((row) => row.window === "RepoA");
+  assert.equal(repoRow.alive, true);
+  assert.equal(repoRow.state, "done", "wait-results marks the window done");
+
+  const reconciled = parseOk(runHelper(root, ["window-status", "--reconcile"]));
+  const cleared = reconciled.windows.find((row) => row.window === "RepoA");
+  assert.equal(cleared.state, "", "reconcile clears transient done state when no fresh lock");
+});
+
+test("check-workspace reports gaps and stamp-runtime clears the version gap", () => {
+  const root = makeWorkspace();
+  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+    workspaceName: "CheckFlow",
+    controllerWindow: "CheckFlow",
+    repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
+  }));
+
+  const first = parseOk(runHelper(root, ["check-workspace"]));
+  assert.equal(first.healthy, false);
+  const areas = new Set(first.gaps.map((gap) => gap.area));
+  for (const expected of ["workspace-config", "root-memory-file", "window-card", "permissions", "registry", "plugin-version"]) {
+    assert.ok(areas.has(expected), `expected gap area ${expected}`);
+  }
+  assert.ok(first.gaps.every((gap) => gap.fix), "every gap names its fix");
+
+  parseOk(runHelper(root, ["seed-permissions", "--write"]));
+  parseOk(runHelper(root, ["stamp-runtime", "--write"]));
+  const second = parseOk(runHelper(root, ["check-workspace"]));
+  const secondAreas = new Set(second.gaps.map((gap) => gap.area));
+  assert.ok(!secondAreas.has("permissions"), "seeded permissions clear the permissions gap");
+  assert.ok(!secondAreas.has("plugin-version"), "stamp clears the version gap");
+  assert.equal(second.stamp.pluginVersion, second.pluginVersion);
 });
 
 test("send refuses when no binding exists and release-lock is idempotent", () => {

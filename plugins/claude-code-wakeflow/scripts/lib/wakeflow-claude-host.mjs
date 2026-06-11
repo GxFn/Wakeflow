@@ -231,7 +231,10 @@ async function commandLaunchWindow() {
     fail(`Window ${windowName} already has a live tmux window (${existing.tmux.windowId}); pass --replace to relaunch.`);
   }
 
-  const claudeCommand = [claudeBin, "--session-id", sessionId, ...extraClaudeArgs]
+  // Repository windows must read the parent workspace (CLAUDE.md, state roots,
+  // task packages), which lives outside their cwd; grant it at launch so entry
+  // sync and deliveries do not stall on cross-directory read prompts.
+  const claudeCommand = [claudeBin, "--session-id", sessionId, "--add-dir", workspaceRoot, ...extraClaudeArgs]
     .map((part) => `'${String(part).replace(/'/g, `'\\''`)}'`)
     .join(" ");
   const created = tmux([

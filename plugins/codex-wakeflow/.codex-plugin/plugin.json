@@ -1,7 +1,7 @@
 {
   "name": "wakeflow",
   "version": "0.1.2",
-  "description": "Unattended control loops for multi-window agent work.",
+  "description": "Unattended control loops for Codex workspaces, aligned with Wakeflow's Claude Code edition.",
   "author": {
     "name": "gaoxuefeng",
     "url": "https://github.com/GxFn"
@@ -21,8 +21,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Wakeflow",
-    "shortDescription": "Unattended control loops for agent work",
-    "longDescription": "Wakeflow packages the complete control-workspace runtime as a Codex plugin: controller state roots, task packages, Design/Test intake, delivery envelopes, target result envelopes, review reducers, controller-return envelopes, progress templates, verification scripts, and controller/target skills. It prepares unattended workflows without secretly sending prompts or replacing controller judgment.",
+    "shortDescription": "Dual-host control loops for agent work",
+    "longDescription": "Wakeflow ships Codex and Claude Code editions for the same local-first control model. This Codex artifact packages controller state roots, task packages, Design/Test intake, delivery envelopes, target result envelopes, review reducers, controller-return envelopes, progress templates, verification scripts, and controller/target skills for Codex workspaces. It coordinates unattended workflows without secretly sending prompts or replacing controller judgment, and can share demand state with the Claude Code edition in dual-host workspaces.",
     "developerName": "GxFn",
     "category": "Productivity",
     "capabilities": [

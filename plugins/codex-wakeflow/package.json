@@ -2,7 +2,7 @@
   "name": "wakeflow",
   "version": "0.1.2",
   "type": "module",
-  "description": "Unattended workflow loops for multi-window agent work.",
+  "description": "Unattended control loops for Codex workspaces, aligned with Wakeflow's Claude Code edition.",
   "license": "MIT",
   "homepage": "https://github.com/GxFn/Wakeflow#readme",
   "repository": {

@@ -2,7 +2,7 @@
   "name": "wakeflow-repo",
   "version": "0.0.0",
   "private": true,
-  "description": "Development workspace for the Wakeflow plugin artifacts.",
+  "description": "Development workspace for the Wakeflow Codex and Claude Code plugin artifacts.",
   "type": "module",
   "workspaces": [
     "plugins/codex-wakeflow",

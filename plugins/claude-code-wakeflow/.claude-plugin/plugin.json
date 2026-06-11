@@ -1,7 +1,7 @@
 {
   "name": "wakeflow",
-  "version": "0.5.0",
-  "description": "Unattended control loops for multi-window agent work: controller state roots, task packages, direct-session delivery, evidence review, and Design/Test intake for Claude Code desktop and terminal.",
+  "version": "0.5.1",
+  "description": "Unattended control loops for Claude Code workspaces, aligned with Wakeflow's Codex edition: controller state roots, task packages, tmux-resident direct-session delivery, evidence review, and Design/Test intake.",
   "author": {
     "name": "gaoxuefeng",
     "url": "https://github.com/GxFn"

@@ -134,6 +134,86 @@ export function createDeliveryStore({
     return path.join(dirs.locks, `${slug(windowName)}.json`);
   }
 
+  function readWindowLock(windowName) {
+    const file = lockFileFor(windowName);
+    if (!existsSync(file)) return null;
+    try {
+      return JSON.parse(readFileSync(file, "utf8"));
+    } catch {
+      return null;
+    }
+  }
+
+  function windowLockFresh(lock) {
+    if (!lock?.expiresAt) return false;
+    return Date.parse(lock.expiresAt) > Date.now();
+  }
+
+  function writeWindowLock(windowName, { deliveryId, ttlSeconds = 7200 } = {}) {
+    // Shared cross-host advisory lock: one in-flight delivery per window. Both
+    // host editions write it on record-delivery-run (status=sent) and check it
+    // before dispatching into the same repository working tree.
+    atomicWriteJson(lockFileFor(windowName), {
+      kind: "WakeflowWindowDeliveryLock",
+      version: 1,
+      windowName,
+      host: hostProfile.runtime.hostDirName,
+      deliveryId: deliveryId || undefined,
+      createdAt: nowIso(),
+      expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
+    });
+  }
+
+  function removeWindowLock(windowName) {
+    const file = lockFileFor(windowName);
+    if (existsSync(file)) unlinkSync(file);
+  }
+
+  function listFreshWindowLocks() {
+    return listJsonFiles(dirs.locks)
+      .map((file) => {
+        try {
+          return JSON.parse(readFileSync(file, "utf8"));
+        } catch {
+          return null;
+        }
+      })
+      .filter((lock) => windowLockFresh(lock));
+  }
+
+  function listHostRuntimes() {
+    // Cross-host visibility: enumerate every host runtime under hosts/ so a
+    // controller can see the other host's registrations (read-only).
+    const hostsDir = path.join(stateDir, "hosts");
+    if (!existsSync(hostsDir)) return [];
+    return readdirSync(hostsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => {
+        const registry = path.join(hostsDir, entry.name, "thread-registry");
+        const registeredWindows = existsSync(registry)
+          ? readdirSync(registry).filter((name) => name.endsWith(".json")).map((name) => name.replace(/\.json$/, "")).sort()
+          : [];
+        return { host: entry.name, registeredWindows };
+      });
+  }
+
+  function listDispatchGroupsForTask(targetWindow, taskId) {
+    const groups = new Set();
+    for (const file of listJsonFiles(dirs.packets)) {
+      try {
+        const packet = JSON.parse(readFileSync(file, "utf8"));
+        if (packet.targetWindow === targetWindow
+          && (packet.taskId === taskId || packet.targetTaskId === taskId || packet.stateRef?.targetTaskId === taskId)
+          && packet.dispatchGroup) {
+          groups.add(packet.dispatchGroup);
+        }
+      } catch {
+        // unreadable packets are skipped
+      }
+    }
+    return [...groups];
+  }
+
   function windowConfigFileFor(windowName) {
     return path.join(dirs.windowConfig, `${slug(windowName)}.json`);
   }
@@ -176,6 +256,13 @@ export function createDeliveryStore({
     findThreadFile,
     legacyThreadRegistryEntries,
     lockFileFor,
+    readWindowLock,
+    windowLockFresh,
+    writeWindowLock,
+    removeWindowLock,
+    listFreshWindowLocks,
+    listHostRuntimes,
+    listDispatchGroupsForTask,
     windowConfigFileFor,
     resultFileFor,
     supersededResultFileFor,

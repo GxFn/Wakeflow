@@ -80,7 +80,7 @@ message queues in its input and is processed next turn.
 If the lock is held or the window-host binding is missing, fail closed and
 return to controller judgment. Do not create a hidden schedule, heartbeat, or
 fallback delivery route. Recovery is not a mode: a dead window's session is
-finished or recovered headless with `claude -p --resume <registered session
+finished or recovered by interactive relaunch (`launch-window --resume`; headless `claude -p` bills the separate Agent SDK credit from 2026-06-15) with `claude --resume <registered session
 id>`, then relaunched with `launch-window --replace --session-id <same id>`.
 
 ## Controller Return

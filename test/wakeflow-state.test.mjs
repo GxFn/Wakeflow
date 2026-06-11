@@ -1109,3 +1109,39 @@ test("completed demands reject follow-up task and result mutations", () => {
   assert.notEqual(importResult.status, 0);
   assert.match(importResult.stdout, /cannot import target result while demand is completed/);
 });
+
+
+test("import-target-result auto-disambiguates the default result id on rework re-import", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run(["init", "--root", root, "--demand-key", "REWORK-FIXTURE", "--title", "Rework Fixture", "--write", "--json"]).stdout);
+  run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Pkg", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
+
+  const args = ["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "reports/a.json", "--write", "--json"];
+  const first = JSON.parse(run(args).stdout);
+  assert.equal(first.ok, true);
+
+  const second = JSON.parse(run(args).stdout);
+  assert.equal(second.ok, true, "rework re-import with the default result id must not collide");
+  assert.notEqual(second.resultId, first.resultId, "second import gets a disambiguated id");
+
+  const explicit = run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--result-id", first.resultId, "--evidence-ref", "reports/a.json", "--write", "--json"]);
+  assert.notEqual(explicit.status, 0, "an explicit duplicate result id still fails");
+});
+
+test("decide-review refuses to accept over blocked results without --accept-blocked", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run(["init", "--root", root, "--demand-key", "BLOCKED-FIXTURE", "--title", "Blocked Fixture", "--write", "--json"]).stdout);
+  run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Pkg", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
+  run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "blocked", "--summary", "blocked by env", "--write", "--json"]);
+  const reduced = JSON.parse(run(["reduce-results", "--root", root, "--state-root", init.stateRoot, "--write", "--json"]).stdout);
+  assert.equal(reduced.ok, true);
+  const candidateId = reduced.candidate?.candidateId ?? reduced.candidateId;
+  assert.ok(candidateId, "reduce produced a candidate");
+
+  const refused = run(["decide-review", "--root", root, "--state-root", init.stateRoot, "--candidate-id", candidateId, "--decision", "accept", "--reason", "try accept", "--write", "--json"]);
+  assert.notEqual(refused.status, 0, "accept over blocked must fail without the explicit flag");
+  assert.match(refused.stdout + refused.stderr, /blocked target results/);
+
+  const allowed = JSON.parse(run(["decide-review", "--root", root, "--state-root", init.stateRoot, "--candidate-id", candidateId, "--decision", "accept", "--reason", "controller override with evidence", "--accept-blocked", "--write", "--json"]).stdout);
+  assert.equal(allowed.ok, true, "explicit --accept-blocked allows the override");
+});

@@ -10,8 +10,9 @@
  * Window model: every Wakeflow window (controller included) is a tmux-resident
  * interactive `claude` session, created and driven by the host transport
  * helper scripts/lib/wakeflow-claude-host.mjs (launch-window / send /
- * readback / wait-results). Headless `claude -p --resume <sessionId>` is a
- * recovery path for dead tmux windows, not a window mode. Claude Code desktop
+ * readback / wait-results). Dead windows are recovered by relaunching the
+ * SAME session interactively (launch-window --resume); headless `claude -p`
+ * is a last resort that bills the separate Agent SDK credit from 2026-06-15. Claude Code desktop
  * windows are not part of the automation surface.
  *
  * Contract rule: core files may interpolate these values but must not branch on
@@ -91,9 +92,20 @@ export const hostProfile = {
   },
   launch: {
     tabNames: {
-      controller: "总控",
+      controller: "Controller",
       design: "Design",
       test: "Test",
+    },
+    // Default reasoning effort per window role. The controller does the deep
+    // judgment (planning, acceptance, evidence review) and gets max; worker
+    // windows execute scoped tasks and run high. Overridable per workspace via
+    // hosts.claude-code.effortByRole, or per window with --claude-arg --effort.
+    effortByRole: {
+      controller: "max",
+      design: "high",
+      test: "high",
+      product: "high",
+      default: "high",
     },
     planFlags: {
       requiresHostCreateThread: true,
@@ -138,7 +150,7 @@ export const hostProfile = {
           "--prompt-file", "<temp file containing the delivery envelope prompt>",
         ],
         attachArgv: ["node", hostHelperPath, "attach-window", "--root", "<workspace-root>", "--window", entry.windowName, "--open-terminal"],
-        recovery: "When the tmux window is dead, recover the same session headless: claude -p --resume <registered session id> (the session id is stable across resumes), then relaunch the tmux window with launch-window --replace --session-id <same id>.",
+        recovery: "When the tmux window is dead, relaunch the SAME session interactively: launch-window --resume --session-id <registered id> --replace (the session id is stable across resumes; interactive sessions stay on the subscription pool). Headless claude -p --resume is a last resort only: from 2026-06-15 it bills the separate Agent SDK credit at API rates.",
       },
     }),
   },

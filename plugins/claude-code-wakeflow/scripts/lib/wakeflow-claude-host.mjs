@@ -19,15 +19,19 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { hostProfile } from "./wakeflow-host-profile.mjs";
 
 // This helper IS the Claude Code host transport boundary, so it runs the host
 // binaries (tmux, claude, brew, osascript) directly with a narrow no-shell
 // wrapper instead of lib/wakeflow-process.mjs, whose whitelist intentionally
 // keeps host commands out of the shared core runtime scripts.
 function execHostText(command, args) {
-  const result = spawnSync(command, args, { encoding: "utf8", shell: false });
+  const hasUtf8 = /utf-?8/i.test(process.env.LC_ALL || process.env.LANG || "");
+  const env = hasUtf8 ? process.env : { ...process.env, LANG: "en_US.UTF-8", LC_ALL: "en_US.UTF-8" };
+  const result = spawnSync(command, args, { encoding: "utf8", shell: false, env });
   return {
     status: result.error ? 1 : result.status ?? 1,
     stdout: result.stdout || "",
@@ -96,6 +100,32 @@ function defaultServerSession() {
     }
   }
   return "wakeflow";
+}
+
+function roleOfWindow(windowName) {
+  const configFile = path.join(workspaceRoot, "workspace.config.json");
+  if (!existsSync(configFile)) return "default";
+  let config;
+  try {
+    config = JSON.parse(readFileSync(configFile, "utf8"));
+  } catch {
+    return "default";
+  }
+  if (windowName === config.controllerWindow) return "controller";
+  if (windowName === config.designWindow) return "design";
+  if (windowName === config.testWindow) return "test";
+  const repos = Array.isArray(config.repositories) ? config.repositories : [];
+  return repos.some((r) => r.windowName === windowName) ? "product" : "default";
+}
+
+function resolveEffortArgs(windowName, hostConfig) {
+  // hosts.claude-code.effortByRole overrides the profile defaults; both are
+  // keyed by role (controller/design/test/product) with a "default" fallback.
+  const profileMap = hostProfile.launch.effortByRole ?? {};
+  const configMap = hostConfig && typeof hostConfig.effortByRole === "object" ? hostConfig.effortByRole : {};
+  const role = roleOfWindow(windowName);
+  const effort = configMap[role] ?? configMap.default ?? profileMap[role] ?? profileMap.default;
+  return effort ? ["--effort", effort] : [];
 }
 
 function nowIso() {
@@ -227,14 +257,64 @@ function applyStatusOptions(serverSession) {
   const optionSets = [
     ["set-option", "-t", serverSession, "status-left", `[${serverSession}] `],
     ["set-option", "-t", serverSession, "status-left-length", "14"],
-    ["set-option", "-t", serverSession, "status-right", "%H:%M"],
+    ["set-option", "-t", serverSession, "status-right", ""],
+    ["set-option", "-t", serverSession, "status-right-length", "0"],
     ["set-option", "-t", serverSession, "status-interval", "5"],
     ["set-option", "-t", serverSession, "renumber-windows", "on"],
-    ["set-option", "-g", "window-status-format", "#{?#{==:#{@wakeflow_state},busy},#[fg=yellow]>#[default],#{?#{==:#{@wakeflow_state},done},#[fg=green]+#[default],#{?#{==:#{@wakeflow_state},stalled},#[fg=red]!#[default],}}}#I:#{=8:window_name}"],
-    ["set-option", "-g", "window-status-current-format", "#[bold,underscore]#{?#{==:#{@wakeflow_state},busy},#[fg=yellow]>#[default]#[bold,underscore],#{?#{==:#{@wakeflow_state},done},#[fg=green]+#[default]#[bold,underscore],#{?#{==:#{@wakeflow_state},stalled},#[fg=red]!#[default]#[bold,underscore],}}}#I:#{=16:window_name}"],
-    ["set-option", "-g", "window-status-separator", " "],
+    // Leading state glyph (the activity monitor sets @wakeflow_state): a bright
+    // RUN marker for a live-executing window, then result/stall markers. The
+    // glyph sits OUTSIDE the current-window reverse styling so "who is running"
+    // is visible regardless of which window is selected.
+    ["set-option", "-g", "window-status-format", `${STATE_GLYPH_FMT}#I:#{=14:window_name} `],
+    ["set-option", "-g", "window-status-current-format", `${STATE_GLYPH_FMT}#[reverse,bold]#I:#{=16:window_name}#[noreverse] `],
+    ["set-option", "-g", "window-status-separator", ""],
+    ["set-option", "-t", serverSession, "base-index", "1"],
+    // refresh fast enough that the running marker tracks live execution
+    ["set-option", "-t", serverSession, "status-interval", "2"],
   ];
   for (const optionArgs of optionSets) tmux(optionArgs, { allowFailure: true });
+}
+
+// Leading glyph: running -> bright green ">>", done -> green "+", stalled ->
+// red "!", busy(delivered, waiting) -> yellow ">", idle -> two spaces.
+const STATE_GLYPH_FMT = "#{?#{==:#{@wakeflow_state},running},#[fg=green,bold,blink]>>#[default] ,"
+  + "#{?#{==:#{@wakeflow_state},done},#[fg=green,bold]+ #[default],"
+  + "#{?#{==:#{@wakeflow_state},stalled},#[fg=red,bold]! #[default],"
+  + "#{?#{==:#{@wakeflow_state},busy},#[fg=yellow,bold]> #[default],   }}}}";
+
+function paneShowsExecution(pane) {
+  // Claude Code shows "esc to interrupt" in the input area while a turn runs.
+  return /esc to interrupt/i.test(pane);
+}
+
+function activityMonitorPidFile(serverSession) {
+  return path.join(hostDir, `activity-monitor-${slug(serverSession)}.pid`);
+}
+
+function activityMonitorRunning(serverSession) {
+  const pidFile = activityMonitorPidFile(serverSession);
+  if (!existsSync(pidFile)) return false;
+  const pid = Number(readFileSync(pidFile, "utf8").trim());
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function startActivityMonitorDaemon(serverSession) {
+  // One detached poller per server: it sets @wakeflow_state=running on windows
+  // whose pane is mid-turn and clears it when idle. Single-instance via pidfile.
+  if (activityMonitorRunning(serverSession)) return false;
+  const selfPath = fileURLToPath(import.meta.url);
+  const child = spawn(process.execPath, [selfPath, "activity-monitor", "--root", workspaceRoot, "--server", serverSession], {
+    detached: true,
+    stdio: "ignore",
+  });
+  child.unref();
+  return true;
 }
 
 function ensureServer(serverSession) {
@@ -249,7 +329,43 @@ function ensureServer(serverSession) {
 function commandEnsureServer() {
   const serverSession = getValue("--server", defaultServerSession());
   const created = ensureServer(serverSession);
-  output({ ok: true, command: "ensure-server", server: serverSession, created });
+  const monitorStarted = hasFlag("--no-monitor") ? false : startActivityMonitorDaemon(serverSession);
+  output({ ok: true, command: "ensure-server", server: serverSession, created, activityMonitorStarted: monitorStarted });
+}
+
+async function commandActivityMonitor() {
+  const serverSession = getValue("--server", defaultServerSession());
+  const pollMs = Math.max(800, Number(getValue("--poll-ms", "1500")));
+  const once = hasFlag("--once");
+  const pidFile = activityMonitorPidFile(serverSession);
+  if (!once) {
+    mkdirSync(path.dirname(pidFile), { recursive: true });
+    writeFileSync(pidFile, String(process.pid));
+  }
+  let lastSummary = { running: [] };
+  for (;;) {
+    if (tmux(["has-session", "-t", serverSession], { allowFailure: true }).status !== 0) break;
+    const listed = tmux(["list-windows", "-t", serverSession, "-F", "#{window_id}"], { allowFailure: true });
+    const running = [];
+    for (const wid of (listed.stdout || "").trim().split("\n").map((l) => l.trim()).filter(Boolean)) {
+      const pane = tmux(["capture-pane", "-p", "-t", wid], { allowFailure: true }).stdout || "";
+      const isRunning = paneShowsExecution(pane);
+      const current = tmux(["show-options", "-w", "-v", "-t", wid, "@wakeflow_state"], { allowFailure: true }).stdout.trim();
+      // The monitor owns the "running" state; it never clobbers dispatch markers
+      // (done/stalled/busy) — it only adds/removes "running".
+      if (isRunning && current !== "running") {
+        tmux(["set-option", "-w", "-t", wid, "@wakeflow_state", "running"], { allowFailure: true });
+      } else if (!isRunning && current === "running") {
+        tmux(["set-option", "-w", "-u", "-t", wid, "@wakeflow_state"], { allowFailure: true });
+      }
+      if (isRunning) running.push(wid);
+    }
+    lastSummary = { running };
+    if (once) break;
+    await sleep(pollMs);
+  }
+  if (!once && existsSync(pidFile)) rmSync(pidFile, { force: true });
+  output({ ok: true, command: "activity-monitor", server: serverSession, once, running: lastSummary.running });
 }
 
 function pastePromptFile(binding, promptFile) {
@@ -275,8 +391,15 @@ async function commandLaunchWindow() {
 
   ensureServer(serverSession);
   const existing = existsSync(bindingFileFor(windowName)) ? readJson(bindingFileFor(windowName), "window-host binding") : null;
-  if (existing && windowAlive({ tmux: existing.tmux }) && !hasFlag("--replace")) {
+  const existingAlive = Boolean(existing) && windowAlive({ tmux: existing.tmux });
+  if (existingAlive && !hasFlag("--replace")) {
     fail(`Window ${windowName} already has a live tmux window (${existing.tmux.windowId}); pass --replace to relaunch.`);
+  }
+  if (existingAlive) {
+    // --replace must not leak the old window: kill it before creating the new
+    // one. tmux window ids are unique across the whole server, so this targets
+    // the right window even if it previously lived under a different session.
+    tmux(["kill-window", "-t", existing.tmux.windowId], { allowFailure: true });
   }
 
   // Repository windows must read the parent workspace (CLAUDE.md, state roots,
@@ -293,12 +416,16 @@ async function commandLaunchWindow() {
   const configClaudeArgs = Array.isArray(hostConfig.claudeArgs) && hostConfig.claudeArgs.every((arg) => typeof arg === "string")
     ? hostConfig.claudeArgs
     : [];
+  // Per-role reasoning effort: controller=max, workers=high by default. Skip
+  // when --effort is already supplied explicitly (per-call or global claudeArgs).
+  const effortAlreadySet = extraClaudeArgs.includes("--effort") || configClaudeArgs.includes("--effort");
+  const effortArgs = effortAlreadySet ? [] : resolveEffortArgs(windowName, hostConfig);
   // Permission mode precedence: explicit --claude-arg --permission-mode wins;
   // else workspace.config.json hosts.claude-code.permissionMode; else
   // acceptEdits so seeded allowlists keep the window prompt-free.
   const configMode = typeof hostConfig.permissionMode === "string" ? hostConfig.permissionMode : "acceptEdits";
   const modeArgs = extraClaudeArgs.includes("--permission-mode") ? [] : ["--permission-mode", configMode];
-  const claudeCommand = [claudeBin, ...sessionArgs, "--add-dir", workspaceRoot, ...modeArgs, ...configClaudeArgs, ...extraClaudeArgs]
+  const claudeCommand = [claudeBin, ...sessionArgs, "--add-dir", workspaceRoot, ...modeArgs, ...effortArgs, ...configClaudeArgs, ...extraClaudeArgs]
     .map((part) => `'${String(part).replace(/'/g, `'\\''`)}'`)
     .join(" ");
   const created = tmux([
@@ -312,6 +439,9 @@ async function commandLaunchWindow() {
   const windowId = created.stdout.trim();
   if (!windowId.startsWith("@")) fail(`tmux did not return a window id: ${created.stdout}`);
   tmux(["set-option", "-w", "-t", windowId, "automatic-rename", "off"], { allowFailure: true });
+  // A freshly launched/replaced window is idle — clear any inherited dispatch
+  // glyph so it does not show a stale busy/done marker.
+  tmux(["set-option", "-w", "-u", "-t", windowId, "@wakeflow_state"], { allowFailure: true });
 
   const binding = {
     kind: BINDING_KIND,
@@ -353,6 +483,8 @@ async function commandLaunchWindow() {
     ok: true,
     command: "launch-window",
     permissionMode: configMode,
+    effort: effortArgs.length ? effortArgs[1] : (effortAlreadySet ? "explicit" : null),
+    role: roleOfWindow(windowName),
     trustAccepted,
     windowName,
     title,
@@ -385,12 +517,23 @@ async function commandSend() {
   const lockTtlSec = Number(getValue("--lock-ttl-sec", "7200"));
   const binding = readBinding(windowName);
   if (!windowAlive(binding)) {
-    fail(`tmux window for ${windowName} is not alive (${binding.tmux.windowId}); relaunch it or recover the session headless with: ${claudeBin} -p --resume <registered session id>.`);
+    fail(`tmux window for ${windowName} is not alive (${binding.tmux.windowId}); relaunch the same session interactively with launch-window --resume --session-id <registered id> --replace, then resend.`);
   }
 
+  // Lock semantics (aligned with core dispatch): a fresh lock from the OTHER
+  // host means another controller is driving this window's working tree — fail
+  // closed. A SAME-host lock is advisory: the core per-task sent-state guard
+  // already prevents true double-dispatch, and a controller-return to a window
+  // that still holds its own inbound lock (the controller never produces a
+  // self target-result to release it) must not deadlock. So warn and proceed.
   const lock = readLock(windowName);
-  if (lock && lockIsFresh(lock) && !hasFlag("--force")) {
-    fail(`Window ${windowName} has an in-flight delivery lock (${lock.deliveryId || "unknown delivery"}, host ${lock.host}, expires ${lock.expiresAt}); review or release it before sending, or pass --force.`);
+  let lockWarning;
+  if (lock && lockIsFresh(lock)) {
+    const otherHost = lock.host && lock.host !== HOST_DIR_NAME;
+    if (otherHost && !hasFlag("--force")) {
+      fail(`Window ${windowName} has a fresh in-flight delivery lock from host ${lock.host} (${lock.deliveryId || "unknown delivery"}, expires ${lock.expiresAt}); wait for that delivery or pass --force.`);
+    }
+    lockWarning = `Proceeding over a fresh same-host delivery lock on ${windowName} (${lock.deliveryId || "no delivery id"}, created ${lock.createdAt}); the prior delivery's lock had no release path (e.g. a controller-return target).`;
   }
   writeJson(lockFileFor(windowName), {
     kind: "WakeflowWindowDeliveryLock",
@@ -411,6 +554,7 @@ async function commandSend() {
   output({
     ok: true,
     command: "send",
+    lockWarning,
     windowName,
     windowId: binding.tmux.windowId,
     deliveryId: deliveryId || undefined,
@@ -484,8 +628,21 @@ async function commandWaitResults() {
     found = expectedWindows.length > 0 ? windows.filter((window) => expectedWindows.includes(window)) : windows;
     for (const window of found) {
       const lock = readLock(window);
-      if (lock && (lock.deliveryId === undefined || results.some((result) => result.targetWindow === window))) {
-        rmSync(lockFileFor(window), { force: true });
+      // Release the lock only when it predates the arrived result for this
+      // window, i.e. the lock belongs to the delivery whose result we now see.
+      // A lock NEWER than every result is a fresh still-in-flight delivery and
+      // must survive (otherwise wait-results could clear a delivery that has
+      // not completed). Locks with no timestamp fall back to release.
+      if (lock) {
+        const windowResultTimes = results
+          .filter((result) => result.targetWindow === window)
+          .map((result) => Date.parse(result.createdAt || result.recordedAt || ""))
+          .filter((value) => Number.isFinite(value));
+        const newestResultAt = windowResultTimes.length ? Math.max(...windowResultTimes) : Date.now();
+        const lockAt = Date.parse(lock.createdAt || "");
+        if (!Number.isFinite(lockAt) || lockAt <= newestResultAt) {
+          rmSync(lockFileFor(window), { force: true });
+        }
       }
       setWindowState(window, "done");
     }
@@ -573,8 +730,6 @@ function openTabInTerminal(attachCommand) {
   if (r.status !== 0) fail(`Failed to open Terminal window: ${(r.stderr || "").trim()}`);
   return "terminal-window";
 }
-
-import { hostProfile } from "./wakeflow-host-profile.mjs";
 
 function readWorkspaceWindowModel() {
   const configFile = path.join(workspaceRoot, "workspace.config.json");
@@ -672,20 +827,25 @@ async function commandLaunchAll() {
       error: parsed?.ok ? undefined : (parsed?.error || (r.stderr || r.stdout).slice(-160)),
     });
   }
-  applyStatusOptions(serverSession);
-  output({ ok: results.every((x) => x.status === "resumed" || x.status.startsWith("skipped")), command: "launch-all", server: serverSession, order, results });
+  // Order and rename the freshly resumed windows into the canonical short-tab
+  // layout in one pass (launch-window appends at the tmux tail, so without this
+  // the windows would be out of order and carry their long launch titles).
+  const arranged = arrangeWindows(serverSession);
+  output({ ok: results.every((x) => x.status === "resumed" || x.status.startsWith("skipped")), command: "launch-all", server: serverSession, order, arranged, results });
 }
 
 function readRepositoryForWindow(windowName) {
   const config = readJson(path.join(workspaceRoot, "workspace.config.json"), "workspace config");
+  // Titles are ASCII by design: CJK names were repeatedly mangled by shell
+  // locale hops between the controller agent, tmux, and display surfaces.
   if (windowName === config.controllerWindow) {
-    return { cwd: workspaceRoot, title: `${windowName} \u603b\u63a7` };
+    return { cwd: workspaceRoot, title: `${windowName} Controller` };
   }
   const repo = (Array.isArray(config.repositories) ? config.repositories : []).find((r) => r.windowName === windowName);
   if (!repo) return { cwd: workspaceRoot, title: windowName };
-  const roleTitle = windowName === config.designWindow ? `${windowName} \u9700\u6c42\u7a97\u53e3`
-    : windowName === config.testWindow ? `${windowName} \u6d4b\u8bd5\u7a97\u53e3`
-    : `${windowName} \u804c\u8d23\u7a97\u53e3`;
+  const roleTitle = windowName === config.designWindow ? `${windowName} Design`
+    : windowName === config.testWindow ? `${windowName} Test`
+    : `${windowName} Work`;
   return { cwd: path.resolve(workspaceRoot, repo.path), title: roleTitle };
 }
 
@@ -858,6 +1018,11 @@ function commandStampRuntime() {
 
 function commandArrangeWindows() {
   const serverSession = getValue("--server", defaultServerSession());
+  const arranged = arrangeWindows(serverSession);
+  output({ ok: true, command: "arrange-windows", server: serverSession, order: arranged });
+}
+
+function arrangeWindows(serverSession) {
   const model = readWorkspaceWindowModel();
   const desired = [
     { windowName: model.design, role: "design" },
@@ -895,7 +1060,7 @@ function commandArrangeWindows() {
   }
   tmux(["move-window", "-r", "-t", serverSession], { allowFailure: true });
   tmux(["set-option", "-t", serverSession, "renumber-windows", "on"], { allowFailure: true });
-  output({ ok: true, command: "arrange-windows", server: serverSession, order: arranged });
+  return arranged;
 }
 
 const SEED_ALLOW_RULES = [
@@ -964,7 +1129,8 @@ function commandHelp() {
     ok: true,
     commands: {
       preflight: "Report tmux/claude/brew availability and the install recommendation.",
-      "ensure-server": "Create the wakeflow tmux server session when missing (--server wakeflow).",
+      "ensure-server": "Create the wakeflow tmux server session when missing and start the activity monitor (--server wakeflow) [--no-monitor].",
+      "activity-monitor": "Background poller that marks live-executing windows (>> running glyph) by watching pane state: [--server] [--poll-ms] [--once].",
       "launch-window": "Create one tmux-resident claude window: --window --cwd [--title] [--session-id] [--prompt-file] [--server] [--boot-wait-ms] [--claude-arg ...] [--replace] [--no-auto-trust]. Defaults to --permission-mode acceptEdits and auto-accepts the one-time folder trust dialog. Pass --resume with --session-id to restore a registered session into a fresh window after a reboot.",
       retitle: "Rename the tmux window that hosts a Wakeflow window: --window --title.",
       send: "Paste a prompt file into a window and record pane readback: --window --prompt-file [--delivery-id] [--lock-ttl-sec] [--force].",
@@ -987,6 +1153,7 @@ async function main() {
   switch (command) {
     case "preflight": return commandPreflight();
     case "ensure-server": return commandEnsureServer();
+    case "activity-monitor": return commandActivityMonitor();
     case "launch-window": return commandLaunchWindow();
     case "retitle": return commandRetitle();
     case "send": return commandSend();

@@ -251,6 +251,10 @@ export const tools = [
         decision: { type: "string", enum: ["accept", "rework", "blocked"] },
         reason: { type: "string" },
         evidenceRefs: { type: "array", items: { type: "string" } },
+        acceptBlocked: {
+          type: "boolean",
+          description: "Explicitly accept a candidate that contains blocked target results. Without this, accept fails when blocked results are present.",
+        },
         apply: { type: "boolean" },
       },
     },
@@ -609,6 +613,7 @@ export const handlers = {
       "--decision", args.decision,
       "--reason", args.reason,
       ...repeatValues("--evidence-ref", args.evidenceRefs),
+      ...(args.acceptBlocked ? ["--accept-blocked"] : []),
       ...rootArgs(args),
       ...(args.apply ? ["--write"] : []),
       "--json",

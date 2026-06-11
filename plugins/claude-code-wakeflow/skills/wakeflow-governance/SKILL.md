@@ -74,7 +74,7 @@ tool first:
   `wakeflow`). A Wakeflow thread id IS the window's Claude Code session id:
   generated at launch, stable across resumes, registered once. Recovery is not
   a mode: when a window is dead, finish or recover the same session headless
-  with `claude -p --resume <registered session id>`, then relaunch the resident
+  with `launch-window --resume --session-id <registered id> --replace (interactive; headless claude -p bills the separate Agent SDK credit from 2026-06-15)`, then relaunch the resident
   window with `launch-window --replace --session-id <same id>`. (Claude Code
   desktop windows are not an automation transport.)
 - tmux windows cannot answer permission prompts while the user is away.

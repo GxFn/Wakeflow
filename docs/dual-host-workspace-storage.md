@@ -63,24 +63,37 @@ Split by *what the data is*, not by who wrote it:
 | `hosts/<host>/thread-registry/` | per host | The same window name may be registered on both hosts (a Codex thread AND a Claude tmux session for `RepoA`). Registration records keep their host `kind`. |
 | `hosts/<host>/window-config/` | per host | Derived view; regenerated from workspace config + that host's registry. Never migrated, never shared. |
 | `hosts/claude-code/window-host/` | claude | tmux `window_id` bindings so renames (displayTitle) never break targeting. |
-| `locks/` | shared | One in-flight delivery per WINDOW across hosts. A lock names `{window, deliveryId, host, expiresAt}`. v1 enforcement: the Claude transport helper refuses to send while a fresh lock exists; the Codex flow honors it by controller discipline (documented) until its dispatch path adds the same check. |
+| `locks/` | shared | One in-flight delivery per WINDOW across hosts. A lock names `{windowName, host, deliveryId, createdAt, expiresAt}`. Enforced in shared core: written on record-delivery-run (sent), checked fail-closed at dispatch when the fresh lock belongs to the other host, released by the matching record-target-result; the Claude helper additionally guards tmux sends. |
 | Root and child memory files | per host | `AGENTS.md` and `CLAUDE.md` coexist; each plugin's `sync-root-agents` / `write-agents` touches only its own file. Gate content stays in lockstep because both templates live in this repository. |
 | `.gitignore` sync | shared | Both plugins ensure the same two entries (`.workspace-active/`, `.workspace-local/`); idempotent in either order. |
 
 ## Concurrency Rules
 
 1. **One controller per demand, across hosts.** Either host may act as the
-   controller for a demand, never both at once. `wakeflow_status` lists both
-   host registries, so a controller can see the other host is present; the
-   shared state root records which controller dispatched each group.
+   controller for a demand, never both at once. This is currently enforced by
+   discipline plus the shared state root recording which controller dispatched
+   each group. NOTE (v1 reality): `wakeflow_status` reads only the CURRENT
+   host's `hosts/<host>/thread-registry/`; it does not yet enumerate the other
+   host's registry for SEND ELIGIBILITY, but the status payload now carries a
+   read-only `dualHost` block (every `hosts/*/thread-registry` registration plus
+   all fresh `locks/` entries with their owning host), so a controller can see
+   the other host's presence and in-flight deliveries before acting.
 2. **One in-flight delivery per window, across hosts** (the `locks/` rule).
    Two hosts dispatching different tasks into the same repository working tree
-   concurrently is the real hazard dual-install creates; the shared lock plus
-   the existing per-window task discipline prevents it.
+   concurrently is the real hazard dual-install creates. ENFORCEMENT: BOTH host
+   editions now participate through the shared core — `record-delivery-run`
+   (status=sent) writes `locks/<window>.json` `{windowName, host, deliveryId,
+   createdAt, expiresAt}`, the dispatch path fails closed when a fresh lock from
+   the OTHER host exists (same-host locks surface as `windowLockWarning`), and
+   `record-target-result` releases the lock when the result answers the locked
+   delivery. The Claude transport helper additionally checks/writes the same
+   lock at tmux send time and via `wait-results`.
 3. **Handles never leak across hosts.** A Codex envelope must never instruct a
    Claude send and vice versa; envelopes record their transport and the
    registry file they used (`hosts/<host>/thread-registry/...` paths make this
-   self-evident in evidence).
+   self-evident in evidence). This invariant IS enforced: all shared business
+   records carry `threadIdRedacted: true` and a registry-file path, never a raw
+   handle.
 
 ## Codex Legacy Migration
 

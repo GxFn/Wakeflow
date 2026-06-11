@@ -96,7 +96,7 @@ state root, or human context, stop and report instead of guessing.
      store.
 
 Recovery is not a delivery mode: if this window's tmux pane dies mid-task, the
-same session is finished or recovered headless with `claude -p --resume
+same session is finished or recovered by interactive relaunch (`launch-window --resume`; headless `claude -p` bills the separate Agent SDK credit from 2026-06-15) with `claude --resume
 <registered session id>` (the session id is stable and stays registered), and
 the resident window is relaunched with `launch-window --replace
 --session-id <same id>`.

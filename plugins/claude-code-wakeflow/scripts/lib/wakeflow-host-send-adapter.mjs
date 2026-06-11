@@ -8,10 +8,11 @@
  * (scripts/lib/wakeflow-claude-host.mjs send), which also maintains the shared
  * per-window delivery lock and returns pane readback evidence.
  *
- * Headless resume is NOT a window mode: it is the recovery transport when a
- * tmux window died. The session id is stable across resumes, so recovering
- * with `claude -p --resume <sessionId>` and relaunching the tmux window with
- * the same id keeps the registry valid.
+ * Dead-window recovery: relaunch the SAME session interactively with
+ * launch-window --resume (the session id is stable, the registry stays valid,
+ * and interactive sessions stay on the subscription pool). Headless
+ * `claude -p --resume` is a last resort only: from 2026-06-15 `claude -p`
+ * bills the separate Agent SDK credit at API rates.
  */
 
 const FORBIDDEN_CONCLUSIONS = [
@@ -36,7 +37,7 @@ export const claudeHeadlessRecoveryAdapter = {
   kind: "WakeflowHostSendAdapter",
   version: 1,
   adapterId: "claude-headless-recovery",
-  hostTool: "claude -p --resume <sessionId> \"<envelope prompt>\" --output-format json (recovery only, when the tmux window is dead)",
+  hostTool: "last resort when no interactive relaunch is possible: claude -p --resume <sessionId> \"<envelope prompt>\" --output-format json (bills the separate Agent SDK credit from 2026-06-15; prefer launch-window --resume + send)",
   sideEffect: "host-session-message",
   inputAuthority: "delivery-envelope",
   readbackRequired: true,
@@ -61,7 +62,7 @@ export function buildHostSendResumeStep(delivery, adapter = claudeTmuxResidentAd
     taskId: delivery.taskId,
     dispatchGroup: delivery.dispatchGroup,
     sourceTrace: delivery.wakeflowTrace,
-    instruction: "Write the delivery envelope prompt to a temp file and send it into the registered tmux-resident window with the wakeflow-claude-host send command; do not edit product files from this resume step. If the tmux window is dead, recover the same session headless (claude -p --resume <registered session id>) and relaunch the window before or after the send.",
+    instruction: "Write the delivery envelope prompt to a temp file and send it into the registered tmux-resident window with the wakeflow-claude-host send command; do not edit product files from this resume step. If the tmux window is dead, relaunch the SAME session interactively (launch-window --resume --session-id <registered id> --replace) and resend; avoid headless claude -p, which bills the separate Agent SDK credit from 2026-06-15.",
   };
 }
 

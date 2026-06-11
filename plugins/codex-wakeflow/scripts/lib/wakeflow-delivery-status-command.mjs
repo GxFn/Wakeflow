@@ -26,6 +26,8 @@ export function commandStatus(ctx) {
     keepLiveStateFile,
     artifactTrace,
     nowIso,
+    listHostRuntimes,
+    listFreshWindowLocks,
   } = ctx;
 
   function statusFromLoadedRuns(envelope, runArtifacts) {
@@ -324,6 +326,19 @@ export function commandStatus(ctx) {
       windowConfigCount,
       keepLiveStateExists,
       keepLive,
+      // Cross-host visibility: which hosts have registered windows in this
+      // workspace and which windows hold a fresh in-flight delivery lock.
+      dualHost: {
+        hosts: listHostRuntimes ? listHostRuntimes() : [],
+        freshLocks: listFreshWindowLocks
+          ? listFreshWindowLocks().map((lock) => ({
+              windowName: lock.windowName,
+              host: lock.host,
+              deliveryId: lock.deliveryId,
+              expiresAt: lock.expiresAt,
+            }))
+          : [],
+      },
       runtimeSummary,
     },
     [

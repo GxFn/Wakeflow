@@ -148,7 +148,7 @@ toward the controller window. `wait-results --group <id>` can run as a
 background watcher for stall insurance.
 
 **Recovery.** When a tmux window dies, the registered session id remains the
-thread id: run `claude -p --resume <registered session id>` (same id), then
+thread id: relaunch the SAME session interactively with `launch-window --resume --session-id <registered id> --replace` (same id; subscription pool). Headless `claude -p --resume` is a last resort that bills the separate Agent SDK credit from 2026-06-15; if used, then
 `launch-window --replace` with that id.
 
 **Watching.** Attach to the whole server with `tmux attach -t wakeflow`, open

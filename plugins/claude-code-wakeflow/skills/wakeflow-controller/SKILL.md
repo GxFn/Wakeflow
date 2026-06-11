@@ -100,7 +100,7 @@ machine state.
    watcher for the dispatch group first.
 
 Recovery is not a delivery mode: when a target's tmux window is dead, finish or
-recover the same session headless with `claude -p --resume <registered session
+relaunch the same session interactively with `launch-window --resume --session-id` (headless `claude -p` bills the separate Agent SDK credit from 2026-06-15); legacy form `claude -p --resume <registered session
 id>` (the session id is stable), then relaunch the resident window with
 `launch-window --replace --session-id <same id>` before the next delivery.
 

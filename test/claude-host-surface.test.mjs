@@ -110,7 +110,7 @@ test("adapterForWindowMode pins tmux-resident with headless recovery", () => {
   assert.equal(adapterForWindowMode(undefined), claudeTmuxResidentAdapter);
   assert.equal(adapterForWindowMode("headless-recovery"), claudeHeadlessRecoveryAdapter);
   assert.match(claudeHeadlessRecoveryAdapter.hostTool, /claude -p --resume/);
-  assert.match(claudeHeadlessRecoveryAdapter.hostTool, /recovery/);
+  assert.match(claudeHeadlessRecoveryAdapter.hostTool, /last resort/);
 });
 
 test("claude artifact registers a session id under the host-scoped registry", () => {

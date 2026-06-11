@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { hostProfile } from "./wakeflow-host-profile.mjs";
 import path from "node:path";
 import { buildControllerReturnEnvelope } from "./wakeflow-controller-return.mjs";
 import {
@@ -43,6 +44,8 @@ export function createDispatchCommands(ctx) {
     deliveryFileFor,
     threadFileFor,
     findThreadFile,
+    readWindowLock,
+    windowLockFresh,
     windowConfigFileFor,
     keepLiveStateFile,
     startKeepLive,
@@ -156,6 +159,18 @@ export function createDispatchCommands(ctx) {
 
     const registration = loadThreadRegistration(packet.targetWindow);
     if (requireThread && !registration) fail(`No registered thread for target window: ${packet.targetWindow}`);
+    // Cross-host in-flight guard: a fresh delivery lock written by the OTHER
+    // host means another controller is already driving this window's working
+    // tree. Fail closed; same-host locks are reported as a warning because the
+    // per-task sent-state guard already prevents double-sending here.
+    const windowLock = readWindowLock ? readWindowLock(packet.targetWindow) : null;
+    const windowLockIsFresh = Boolean(windowLock) && windowLockFresh(windowLock);
+    if (windowLockIsFresh && windowLock.host && windowLock.host !== hostProfile.runtime.hostDirName) {
+      fail(`Window ${packet.targetWindow} has a fresh in-flight delivery lock from host ${windowLock.host} (delivery ${windowLock.deliveryId || "unknown"}, expires ${windowLock.expiresAt}); wait for that delivery or coordinate before dispatching from this host.`);
+    }
+    const windowLockWarning = windowLockIsFresh
+      ? `Window ${packet.targetWindow} already has a fresh same-host delivery lock (${windowLock.deliveryId || "unknown"}); confirm the prior delivery finished before sending.`
+      : undefined;
     const resolvedWindowConfig = windowConfig || buildWindowConfig(packet.targetWindow);
     const resolvedDeliveryId = deliveryId || `delivery-${packet.id}`;
     const createdAt = nowIso();
@@ -208,13 +223,13 @@ export function createDispatchCommands(ctx) {
     };
 
     const deliveryFile = deliveryFileFor(envelope.deliveryId);
-    return { deliveryFile, envelope, registration };
+    return { deliveryFile, envelope, registration, windowLockWarning };
   }
 
   function commandBuildDelivery() {
     const packetFile = resolveInputPath(requireValue("--packet-file"), "--packet-file");
     const packet = readJson(packetFile, "dispatch packet");
-    const { deliveryFile, envelope, registration } = buildDeliveryArtifacts({
+    const { deliveryFile, envelope, registration, windowLockWarning } = buildDeliveryArtifacts({
       automationEnabled: hasFlag("--automation-enabled"),
       deliveryId: getValue("--delivery-id", `delivery-${packet.id}`),
       packet,
@@ -234,6 +249,7 @@ export function createDispatchCommands(ctx) {
         deliveryFile: write ? path.relative(workspaceRoot, deliveryFile) : "",
         threadReady: Boolean(registration),
         threadIdRedacted: Boolean(registration),
+        windowLockWarning,
       },
       [
         `${write ? "Created" : "Would create"} delivery envelope ${envelope.deliveryId}.`,
@@ -320,7 +336,7 @@ export function createDispatchCommands(ctx) {
       targetWindow,
       taskId: targetTaskId,
     });
-    const { deliveryFile, envelope, registration } = buildDeliveryArtifacts({
+    const { deliveryFile, envelope, registration, windowLockWarning } = buildDeliveryArtifacts({
       automationEnabled,
       deliveryId: getValue("--delivery-id", `delivery-${packet.id}`),
       packet,
@@ -395,6 +411,7 @@ export function createDispatchCommands(ctx) {
         deliveryFile: write ? path.relative(workspaceRoot, deliveryFile) : "",
         threadReady: Boolean(registration),
         threadIdRedacted: Boolean(registration),
+        windowLockWarning,
         forbiddenConclusions: [
           "prepared-dispatch-is-host-send",
           "prepared-dispatch-is-target-result",

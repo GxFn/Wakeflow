@@ -308,7 +308,7 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   `readback.paneTail` evidence. Controller returns use the same helper `send`
   aimed at the controller window. Recovery is not a mode: a dead window's
   session is finished or recovered headless with
-  `claude -p --resume <registered session id>` and relaunched with
+  `launch-window --resume --session-id <registered id> --replace (interactive; headless claude -p bills the separate Agent SDK credit from 2026-06-15)` and relaunched with
   `launch-window --replace --session-id <same id>`. (Claude Code desktop
   windows are not an automation transport.) Do not wrap the prompt in XML,
   JSON, or delegation tags.

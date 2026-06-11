@@ -69,7 +69,7 @@ background `wait-results --group <id> --target <windowA> --target <windowB>
 envelopes exist (also releasing those windows' locks) and wakes the
 controller; a timeout means a stalled delivery to review. Recovery is not a
 mode: a dead window's session is finished or recovered headless with
-`claude -p --resume <registered session id>`, then relaunched with
+`launch-window --resume --session-id <registered id> --replace (interactive; headless claude -p bills the separate Agent SDK credit from 2026-06-15)`, then relaunched with
 `launch-window --replace --session-id <same id>`. (Claude Code desktop windows
 are not an automation transport.)
 

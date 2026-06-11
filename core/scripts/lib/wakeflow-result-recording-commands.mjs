@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
   annotateDeliveryRunIdempotency,
@@ -38,6 +38,11 @@ export function createResultRecordingCommands(ctx) {
     keepLiveStateFile,
     resultFileFor,
     supersededResultFileFor,
+    readWindowLock,
+    windowLockFresh,
+    writeWindowLock,
+    removeWindowLock,
+    listDispatchGroupsForTask,
     artifactTrace,
   } = ctx;
 
@@ -74,7 +79,11 @@ export function createResultRecordingCommands(ctx) {
     fail(`Boolean value expected, got: ${value}`);
   }
 
-  function markStateRootDeliverySent(envelope, run) {
+  function lockPathNote(windowName) {
+    return path.join(stateDir, "locks", `${slug(windowName)}.json`);
+  }
+
+  function markStateRootDeliverySent(envelope, run, { apply = true } = {}) {
     if (envelope.kind !== "DeliveryEnvelope" || run.status !== "sent") {
       return { updated: false, reason: "not-a-sent-target-delivery" };
     }
@@ -117,6 +126,12 @@ export function createResultRecordingCommands(ctx) {
     }
     if (["accepted", "completed", "blocked", "needs-review"].includes(targetTask.status)) {
       return { updated: false, reason: `target-task-already-${targetTask.status}` };
+    }
+    if (!apply) {
+      // Validation pass: all envelope-vs-state consistency checks above ran
+      // and passed; the caller may now durably record the run file knowing the
+      // state advance cannot fail on a mismatch afterwards.
+      return { updated: false, reason: "validated" };
     }
 
     const createdAt = nowIso();
@@ -305,8 +320,17 @@ export function createResultRecordingCommands(ctx) {
       return;
     }
     ensureStateDirs();
+    // Validate the envelope-state consistency BEFORE the run file exists: a
+    // mismatch must fail cleanly instead of leaving a recorded-but-unapplied
+    // run that wedges every retry.
+    markStateRootDeliverySent(envelope, run, { apply: false });
     atomicWriteJson(runFile, run);
     const stateUpdate = markStateRootDeliverySent(envelope, run);
+    let windowLock;
+    if (run.status === "sent" && envelope.kind === "DeliveryEnvelope" && envelope.targetWindow) {
+      writeWindowLock(envelope.targetWindow, { deliveryId: envelope.deliveryId });
+      windowLock = path.relative(workspaceRoot, lockPathNote(envelope.targetWindow));
+    }
     output(
       {
         ok: true,
@@ -316,6 +340,7 @@ export function createResultRecordingCommands(ctx) {
         run,
         runFile: path.relative(workspaceRoot, runFile),
         stateUpdate,
+        windowLock,
       },
       [
         `Recorded direct-thread delivery run ${deliveryRunId}.`,
@@ -328,7 +353,19 @@ export function createResultRecordingCommands(ctx) {
     const targetWindow = requireValue("--target-window");
     const taskId = requireValue("--task-id");
     const status = validateResultStatus(requireValue("--status"));
-    const dispatchGroup = getValue("--group", "");
+    let dispatchGroup = getValue("--group", "");
+    // The result filename is keyed by dispatch group; a wrong or missing group
+    // makes review-results report this target as missing even though the
+    // result exists. Resolve/validate against the known dispatch packets.
+    const knownGroups = listDispatchGroupsForTask(targetWindow, taskId);
+    if (dispatchGroup && knownGroups.length > 0 && !knownGroups.includes(dispatchGroup)) {
+      fail(`--group ${dispatchGroup} does not match any dispatch packet for ${targetWindow} / ${taskId}; known groups: ${knownGroups.join(", ")}.`);
+    }
+    if (!dispatchGroup && knownGroups.length === 1) {
+      dispatchGroup = knownGroups[0];
+    } else if (!dispatchGroup && knownGroups.length > 1) {
+      fail(`Multiple dispatch groups exist for ${targetWindow} / ${taskId} (${knownGroups.join(", ")}); pass --group explicitly.`);
+    }
     const evidenceRefs = getAllValues("--evidence-ref");
     const verificationSummary = getAllValues("--verification");
     const commits = getAllValues("--commit");
@@ -413,10 +450,36 @@ export function createResultRecordingCommands(ctx) {
       ensureStateDirs();
       atomicWriteJson(resultFile, result);
     }
+    // Release the shared in-flight window lock when it belongs to the delivery
+    // this result answers; a lock for a different (newer) delivery survives.
+    let lockReleased = false;
+    if (write) {
+      const lock = readWindowLock(targetWindow);
+      if (lock && windowLockFresh(lock)) {
+        let belongsHere = !lock.deliveryId;
+        if (!belongsHere) {
+          const runFile = deliveryRunFileFor(`run-${lock.deliveryId}`);
+          if (existsSync(runFile)) {
+            try {
+              const run = JSON.parse(readFileSync(runFile, "utf8"));
+              belongsHere = run.targetWindow === targetWindow
+                && (run.targetTaskId === taskId || !run.targetTaskId);
+            } catch {
+              belongsHere = false;
+            }
+          }
+        }
+        if (belongsHere) {
+          removeWindowLock(targetWindow);
+          lockReleased = true;
+        }
+      }
+    }
     output(
       {
         ok: true,
         command: "record-target-result",
+        lockReleased,
         wrote: write,
         superseded: Boolean(supersededFile),
         result,

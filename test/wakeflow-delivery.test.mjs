@@ -1879,3 +1879,63 @@ test("stop-loop writes a stop marker without creating new delivery state", () =>
   assert.equal(payload.reason, "test complete");
   assert.equal(payload.keepLive.active, false);
 });
+
+
+test("record-delivery-run validates envelope-state consistency before writing the run file", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const envelope = JSON.parse(readFileSync(deliveryFile, "utf8"));
+  envelope.stateRef.taskPackageId = "CSMR-PKG-WRONG";
+  writeJson(deliveryFile, envelope);
+
+  const result = run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "test send evidence", "--write"]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout + result.stderr, /task package mismatch/);
+  const runFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-runs", `run-${prepared.envelope.deliveryId}.json`);
+  assert.equal(existsSync(runFile), false, "a mismatched record must not leave a wedged run file on disk");
+});
+
+test("record-delivery-run writes the shared window lock and record-target-result releases it", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "test send evidence", "--write"]));
+
+  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  assert.equal(existsSync(lockFile), true, "sent delivery must write the shared window lock");
+  const lock = JSON.parse(readFileSync(lockFile, "utf8"));
+  assert.equal(lock.host, "codex");
+  assert.equal(lock.deliveryId, prepared.envelope.deliveryId);
+
+  const recorded = parseOk(run(root, [
+    "record-target-result",
+    "--target-window", "AlembicPlugin",
+    "--task-id", "CSMR-TASK-1",
+    "--status", "completed",
+    "--evidence-ref", "docs/evidence.md",
+    "--write",
+  ]));
+  assert.equal(recorded.lockReleased, true, "result for the locked delivery must release the lock");
+  assert.equal(existsSync(lockFile), false);
+  assert.equal(recorded.result.dispatchGroup, "GROUP-STATE", "group auto-resolves from the dispatch packet");
+});
+
+test("record-target-result rejects a group that matches no dispatch packet", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  prepareDispatch(root, stateRootRef);
+  const result = run(root, [
+    "record-target-result",
+    "--target-window", "AlembicPlugin",
+    "--task-id", "CSMR-TASK-1",
+    "--status", "completed",
+    "--evidence-ref", "docs/evidence.md",
+    "--group", "WRONG-GROUP",
+    "--write",
+  ]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout + result.stderr, /does not match any dispatch packet/);
+});

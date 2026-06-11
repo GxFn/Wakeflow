@@ -131,7 +131,7 @@ controller-return。`wait-results --group <id>` 可以作为后台 watcher 运�
 提供 stall 保险。
 
 **恢复。** tmux 窗口挂掉时，已注册的 session id 仍然是 thread id：先运行
-`claude -p --resume <registered session id>`（同一个 id），再用该 id 运行
+`launch-window --resume --session-id <已注册 id> --replace` 交互式复活同一会话（订阅额度不变）。`claude -p --resume` 仅作最后手段：2026-06-15 起 `claude -p` 走独立的 Agent SDK 额度按 API 价计费。如确需 headless，再用该 id 运行
 `launch-window --replace`。
 
 **观察。** 用 `tmux attach -t wakeflow` 附着整个 server，用 helper 的

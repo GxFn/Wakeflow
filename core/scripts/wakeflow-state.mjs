@@ -34,7 +34,7 @@ Usage:
   node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--source-ref <ref>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
-  node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked> --reason <text> [--evidence-ref <ref>] [--write] [--json]
+  node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked> --reason <text> [--evidence-ref <ref>] [--accept-blocked] [--write] [--json]
   node scripts/wakeflow-state.mjs complete-demand --state-root <path> --reason <text> --evidence-ref <ref> [--write] [--json]
 
 Design:
@@ -114,6 +114,22 @@ function artifactTrace({ artifactKind, createdAt, ...fields } = {}) {
 function relative(file) {
   const rel = path.relative(workspaceRoot, file).split(path.sep).join("/");
   return rel || ".";
+}
+
+function assertWorkspaceRootResolved() {
+  // workspaceRoot defaults to the plugin runtime dir when --root is omitted and
+  // no host env (WAKEFLOW_DEFAULT_ROOT / CLAUDE_PROJECT_DIR) resolved it. Writing
+  // a demand state root there would silently land work inside the installed
+  // plugin cache. Real workspaces never carry a plugin manifest at their root,
+  // so refuse to write when the resolved root looks like the plugin itself.
+  for (const manifest of [".claude-plugin/plugin.json", ".codex-plugin/plugin.json"]) {
+    if (existsSync(path.join(workspaceRoot, manifest))) {
+      fail(
+        `Refusing to write into the Wakeflow plugin directory (${workspaceRoot}). `
+        + "Pass --root <workspace>, or start the MCP server with WAKEFLOW_DEFAULT_ROOT/CLAUDE_PROJECT_DIR set to the workspace.",
+      );
+    }
+  }
 }
 
 function ensureInsideAllowedRoots(file, label, allowedRoots) {
@@ -225,9 +241,10 @@ function stateRootFromArg() {
 }
 
 function appendJsonLine(file, value) {
-  const previous = existsSync(file) ? readFileSync(file, "utf8").trimEnd() : "";
-  const next = `${previous ? `${previous}\n` : ""}${JSON.stringify(value)}\n`;
-  atomicWrite(file, next);
+  // Append-mode (O_APPEND) so concurrent writers cannot drop each other's
+  // lines, matching the delivery-store implementation.
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, `${JSON.stringify(value)}\n`, { flag: "a" });
 }
 
 function nextEventId(createdAt, revision) {
@@ -295,6 +312,7 @@ function progressDocText({ demandKey, title, goal, completionDefinition, stagePl
 }
 
 function commandInit() {
+  assertWorkspaceRootResolved();
   const demandKey = requireValue("--demand-key");
   const title = requireValue("--title");
   const config = loadWorkspaceConfig({ workspaceRoot, args: options });
@@ -711,10 +729,22 @@ function commandImportTargetResult() {
   if (["accepted"].includes(targetTask.status)) {
     fail(`target task ${targetTaskId} is already ${targetTask.status}; create a new task package for follow-up work.`);
   }
-  const resultId = getValue("--result-id", `tr-${slug(targetTaskId)}`);
-  const resultFile = path.join(stateRoot, "target-results", `${slug(resultId)}.json`);
+  const explicitResultId = getValue("--result-id", null);
+  let resultId = explicitResultId ?? `tr-${slug(targetTaskId)}`;
+  let resultFile = path.join(stateRoot, "target-results", `${slug(resultId)}.json`);
   if (existsSync(resultFile)) {
-    fail(`target result already exists: ${relative(resultFile)}`);
+    if (explicitResultId) {
+      fail(`target result already exists: ${relative(resultFile)}`);
+    }
+    // Default-id collision is the normal rework cycle (decide-review rework ->
+    // re-dispatch -> new result for the same target task). Auto-disambiguate
+    // with a timestamp; reduce-results already picks the latest by createdAt.
+    const stamp = nowIso().replace(/[^0-9]/g, "").slice(0, 14);
+    resultId = `tr-${slug(targetTaskId)}-${stamp}`;
+    resultFile = path.join(stateRoot, "target-results", `${slug(resultId)}.json`);
+    if (existsSync(resultFile)) {
+      fail(`target result already exists: ${relative(resultFile)}`);
+    }
   }
   const createdAt = nowIso();
   const evidenceRefs = valuesFor("--evidence-ref");
@@ -1006,8 +1036,13 @@ function commandDecideReview() {
   if (candidate.fromRevision !== state.revision) {
     fail(`transition candidate ${candidateId} is stale: candidate revision ${candidate.fromRevision}, current revision ${state.revision}`);
   }
+  if (decision === "accept" && (candidate.blockedResultIds?.length ?? 0) > 0 && !hasFlag("--accept-blocked")) {
+    // Accepting over a blocked target result must be an explicit controller
+    // override, never a silent sweep into "accepted".
+    fail(`transition candidate ${candidateId} contains blocked target results (${candidate.blockedResultIds.join(", ")}); decide rework or blocked, or pass --accept-blocked to explicitly accept over them.`);
+  }
   const createdAt = nowIso();
-  const nextRevision = state.revision + 1;
+  const nextRevision = Number(state.revision ?? 0) + 1;
   const eventId = nextEventId(createdAt, nextRevision);
   const evidenceRefs = [...new Set([...(candidate.evidenceRefs ?? []), ...valuesFor("--evidence-ref")])];
   const nextMainState = decision === "accept" ? "planned" : decision === "rework" ? "needs-rework" : "blocked";

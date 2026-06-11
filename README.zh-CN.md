@@ -69,11 +69,26 @@ flowchart TD
 ## 安装 Wakeflow
 
 Wakeflow 采用和 Lark Remote 一样的双层 marketplace 结构：仓库根目录是开发工作区，
-真正可安装的插件 artifact 位于 `plugins/codex-wakeflow/`。根目录
-`.agents/plugins/marketplace.json` 内只有一个 `wakeflow` 条目，`source.path`
-指向 `./plugins/codex-wakeflow`。
+真正可安装的插件 artifact 位于 `plugins/` 之下。本仓库从一份共享 core 构建两个宿主版本：
 
-安装公开插件 artifact：
+| 宿主 | Artifact | 目录 |
+| --- | --- | --- |
+| Codex | `plugins/codex-wakeflow/` | `.agents/plugins/marketplace.json` |
+| Claude Code | `plugins/claude-code-wakeflow/` | `.claude-plugin/marketplace.json` |
+
+在 Claude Code 内安装 Claude Code 版本：
+
+```text
+/plugin marketplace add GxFn/Wakeflow
+/plugin install wakeflow@gxfn
+```
+
+Claude Code 版本支持两种窗口模式：`desktop-session`（每个 Wakeflow 窗口是一个
+Claude Code 桌面会话，通过会话消息工具投递）和 `headless-resume`（每个窗口是一个
+持久 CLI 会话，控制器用 `claude -p --resume <sessionId>` 作为后台任务投递）。
+完整指南见 [plugins/claude-code-wakeflow/README.zh-CN.md](plugins/claude-code-wakeflow/README.zh-CN.md)。
+
+安装公开 Codex 插件 artifact：
 
 ```bash
 npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
@@ -267,17 +282,31 @@ https://github.com/GxFn/Wakeflow.git
 本仓库用于开发 Wakeflow 插件本身。
 
 ```sh
-npm run validate
-npm run smoke
+npm run sync:core    # 把 core/ 同步进两个插件 artifact
+npm run check:core   # artifact 偏离 core/ 时报错
+npm run validate     # codex artifact 校验
+npm run validate:claude
+npm run smoke        # codex artifact 冒烟
+npm run smoke:claude
 npm run test:wakeflow
-npm test
+npm test             # check:core + 双 validate + 双 smoke + 全部测试
 ```
+
+共享 core 规则：宿主中立的 runtime 文件放在 `core/`，由 `tools/sync-core.mjs`
+同步进两个 artifact；只在 `core/` 里编辑它们，不要改 artifact 里的副本。宿主特定
+文件（host profile、host artifact checks、host send adapter、manifest、README、
+memory 文件模板、skills、template bundle）只存在于各自 artifact 内。
+`npm run check:core` 负责保证副本不漂移。
 
 常见源码区域：
 
 | Path | 用途 |
 | --- | --- |
-| `plugins/codex-wakeflow/.codex-plugin/plugin.json` | 插件 manifest 和 MCP wiring。 |
+| `core/` | 宿主中立 runtime 的唯一事实源，同步进两个 artifact。 |
+| `tools/sync-core.mjs` | core 同步与漂移检查（`--check`）。 |
+| `plugins/codex-wakeflow/.codex-plugin/plugin.json` | Codex 插件 manifest 和 MCP wiring。 |
+| `plugins/claude-code-wakeflow/.claude-plugin/plugin.json` | Claude Code 插件 manifest 和 MCP wiring。 |
+| `plugins/claude-code-wakeflow/scripts/lib/wakeflow-host-profile.mjs` | Claude Code host profile（窗口模式、CLAUDE.md、session 词汇）。 |
 | `plugins/codex-wakeflow/mcp/server.cjs` | 无 `node_modules` 依赖的 standalone MCP server entrypoint。 |
 | `plugins/codex-wakeflow/bin/wakeflow-mcp.mjs` | MCP server entrypoint 的兼容 wrapper。 |
 | `plugins/codex-wakeflow/scripts/` | 随插件发布的 setup、state、delivery、intake、archive、validation 和 CLI runtime。 |

@@ -1,0 +1,57 @@
+{
+  "workspaceName": "Wakeflow",
+  "controllerWindow": "Wakeflow",
+  "designWindow": "Design",
+  "testWindow": "Test",
+  "realProjectWindow": "",
+  "baseWindow": "",
+  "workspaceRoot": "..",
+  "wakeflowRepoDir": "Wakeflow",
+  "activeLedgerRoot": ".workspace-active",
+  "projectLedgerRoot": "../wakeflow-ledger",
+  "windowLedgerRoot": "../wakeflow-ledger",
+  "workspaceDocsDir": ".workspace-active/workspace",
+  "workspaceCurrentDir": ".workspace-active/workspace/current",
+  "workspaceArchiveDir": "../wakeflow-ledger/workspace/archive",
+  "workspaceIndexPath": ".workspace-active/workspace/index.md",
+  "workspaceCurrentIndexPath": ".workspace-active/workspace/current/index.md",
+  "workspaceCurrentStatusPath": ".workspace-active/workspace/current/workspace-current-status.md",
+  "workspaceRecordMapPath": "../wakeflow-ledger/workspace/workspace-record-map.md",
+  "globalTodoPath": ".workspace-active/workspace/current/global-todo-board.md",
+  "requirementDesignsDir": "../wakeflow-ledger/requirement-designs",
+  "internalDesignPath": "../wakeflow-ledger/design",
+  "internalTestPath": "../wakeflow-ledger/testing",
+  "allowMissingRepos": true,
+  "dispatchWindows": [],
+  "requiredDispatchWindows": [
+    "Design",
+    "Test"
+  ],
+  "repoNames": [],
+  "testExchangePath": ".workspace-active/workspace/current/test-exchange.md",
+  "designHandoffBoard": ".workspace-active/workspace/current/design-handoff-board.md",
+  "designHandoffInbox": ".workspace-active/workspace/current/design-handoff-inbox.md",
+  "runtimeProcessMatchers": [],
+  "runtimeProcessLabel": "configured",
+  "repositories": [
+    {
+      "windowName": "Design",
+      "path": "../wakeflow-ledger/design",
+      "role": "Internal requirement design workspace",
+      "managedAgents": false,
+      "mode": "internal"
+    },
+    {
+      "windowName": "Test",
+      "path": "../wakeflow-ledger/testing",
+      "role": "Internal test coordination workspace",
+      "managedAgents": false,
+      "mode": "internal"
+    }
+  ],
+  "protectedWorkspacePrefixes": [],
+  "repositoryRoles": {
+    "Design": "Requirement design and handoff",
+    "Test": "Real environment validation"
+  }
+}

@@ -1,0 +1,166 @@
+export const wakeflowStates = {
+  draft: { label: "draft", category: "planning" },
+  pending: { label: "pending", category: "sendable" },
+  running: { label: "running", category: "sendable" },
+  delivered: { label: "delivered", category: "sendable" },
+  review: { label: "review", category: "waiting" },
+  blocked: { label: "blocked", category: "blocked" },
+  completed: { label: "completed", category: "closed" },
+  paused: { label: "paused", category: "closed" },
+  cancelled: { label: "cancelled", category: "closed" },
+  rejected: { label: "rejected", category: "closed" },
+  observing: { label: "observing", category: "waiting" },
+  none: { label: "no task", category: "closed" },
+  idle: { label: "idle", category: "closed" },
+  maintained: { label: "maintained", category: "maintenance" },
+  template: { label: "template", category: "maintenance" },
+  policy: { label: "policy", category: "maintenance" },
+  archive: { label: "archive", category: "maintenance" },
+};
+
+export const stateAliases = new Map(
+  Object.entries(wakeflowStates).flatMap(([id, definition]) => [
+    [id, id],
+    [definition.label, id],
+  ]),
+);
+
+stateAliases.set("pending-confirmation", "draft");
+stateAliases.set("completed ", "completed");
+stateAliases.set("controller-accepted", "completed");
+stateAliases.set("idle", "idle");
+stateAliases.set("maintained", "maintained");
+stateAliases.set("maintenance", "maintained");
+stateAliases.set("draft", "draft");
+
+export function displayPrimaryState(value) {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return "";
+  }
+  return text
+    .split("/")
+    .map((item) => item.trim())
+    .find(Boolean)
+    ?.replace(/\(.*?\)/g, "")
+    .trim() ?? "";
+}
+
+export function stateIdFromDisplay(value) {
+  const primary = displayPrimaryState(value);
+  if (!primary) {
+    return null;
+  }
+  if (stateAliases.has(primary)) {
+    return stateAliases.get(primary);
+  }
+  const prefix = [...stateAliases.keys()]
+    .filter((alias) => primary.startsWith(alias))
+    .sort((a, b) => b.length - a.length)[0];
+  return prefix ? stateAliases.get(prefix) : null;
+}
+
+export function normalizeStateId(id) {
+  const text = String(id ?? "").trim();
+  if (!text) {
+    return null;
+  }
+  if (wakeflowStates[text]) {
+    return text;
+  }
+  return stateIdFromDisplay(text);
+}
+
+export function stateIdFromText(value) {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return null;
+  }
+  const exact = normalizeStateId(text);
+  if (exact) {
+    return exact;
+  }
+  const candidates = [
+    ...Object.keys(wakeflowStates),
+    ...Object.values(wakeflowStates).map((definition) => definition.label),
+    ...stateAliases.keys(),
+  ]
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  for (const candidate of candidates) {
+    const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`(^|[^\\p{L}\\p{N}_-])${escaped}([^\\p{L}\\p{N}_-]|$)`, "u").test(text)) {
+      return normalizeStateId(candidate);
+    }
+  }
+  return null;
+}
+
+export function validateStateSpec(spec, label = "state") {
+  if (!spec || typeof spec !== "object" || Array.isArray(spec)) {
+    return [`${label} must be an object with an id field`];
+  }
+  const issues = [];
+  const id = normalizeStateId(spec.id);
+  if (!id) {
+    issues.push(`${label}.id must be one of: ${Object.keys(wakeflowStates).join(", ")}`);
+  }
+  for (const key of Object.keys(spec)) {
+    if (!["id", "note", "reason"].includes(key)) {
+      issues.push(`${label} has unsupported key: ${key}`);
+    }
+  }
+  for (const key of ["note", "reason"]) {
+    if (spec[key] !== undefined && typeof spec[key] !== "string") {
+      issues.push(`${label}.${key} must be a string`);
+    }
+  }
+  return issues;
+}
+
+export function renderState(specOrDisplay, fallback = "") {
+  if (specOrDisplay && typeof specOrDisplay === "object" && !Array.isArray(specOrDisplay)) {
+    const id = normalizeStateId(specOrDisplay.id);
+    if (!id) {
+      return fallback;
+    }
+    const note = String(specOrDisplay.note ?? specOrDisplay.reason ?? "").trim();
+    return note ? `${wakeflowStates[id].label} / ${note}` : wakeflowStates[id].label;
+  }
+
+  const id = normalizeStateId(specOrDisplay);
+  if (id) {
+    const original = String(specOrDisplay ?? "").trim();
+    const primary = displayPrimaryState(original);
+    const suffix = original.startsWith(primary) ? original.slice(primary.length).trim() : "";
+    return suffix ? `${wakeflowStates[id].label}${suffix.startsWith("/") ? ` ${suffix}` : ` ${suffix}`}` : wakeflowStates[id].label;
+  }
+
+  return String(specOrDisplay ?? fallback ?? "").trim();
+}
+
+export function isCompletedState(value) {
+  return stateIdFromText(value) === "completed";
+}
+
+export function isSendEligibleState(value) {
+  return ["pending", "running", "delivered"].includes(stateIdFromText(value));
+}
+
+export function isNoSendState(value) {
+  return ["review", "completed", "paused", "cancelled", "rejected", "observing", "none", "idle"].includes(
+    stateIdFromText(value),
+  );
+}
+
+export function isBlockedState(value) {
+  return stateIdFromText(value) === "blocked";
+}
+
+export function isPausedLikeState(value) {
+  return ["paused", "cancelled", "rejected", "blocked"].includes(stateIdFromText(value));
+}
+
+export function validStateLabels() {
+  return Object.values(wakeflowStates).map((definition) => definition.label);
+}

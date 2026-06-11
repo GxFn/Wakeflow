@@ -1,0 +1,34 @@
+{
+  "name": "gxfn",
+  "owner": {
+    "name": "GxFn",
+    "url": "https://github.com/GxFn"
+  },
+  "metadata": {
+    "description": "GxFn plugin catalog",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "wakeflow",
+      "source": "./plugins/claude-code-wakeflow",
+      "description": "Unattended control loops for multi-window agent work: controller state roots, task packages, direct-session delivery, evidence review, and Design/Test intake for Claude Code desktop and terminal.",
+      "version": "0.1.2",
+      "author": {
+        "name": "gaoxuefeng",
+        "url": "https://github.com/GxFn"
+      },
+      "homepage": "https://github.com/GxFn/Wakeflow#readme",
+      "license": "MIT",
+      "keywords": [
+        "agent-workflow",
+        "unattended",
+        "control-plane",
+        "multi-window",
+        "local-first",
+        "evidence-review"
+      ],
+      "category": "productivity"
+    }
+  ]
+}

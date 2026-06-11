@@ -95,7 +95,7 @@ test("keeps plugin metadata aligned with repository-local marketplace convention
 
   assert.equal(rootPackageJson.name, "wakeflow-repo");
   assert.equal(rootPackageJson.private, true);
-  assert.deepEqual(rootPackageJson.workspaces, ["plugins/codex-wakeflow"]);
+  assert.deepEqual(rootPackageJson.workspaces, ["plugins/codex-wakeflow", "plugins/claude-code-wakeflow"]);
 
   assert.equal(manifest.name, "wakeflow");
   assert.equal(packageJson.name, "wakeflow");

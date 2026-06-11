@@ -1,0 +1,21 @@
+{
+  "name": "wakeflow",
+  "version": "0.1.2",
+  "description": "Unattended control loops for multi-window agent work: controller state roots, task packages, direct-session delivery, evidence review, and Design/Test intake for Claude Code desktop and terminal.",
+  "author": {
+    "name": "gaoxuefeng",
+    "url": "https://github.com/GxFn"
+  },
+  "homepage": "https://github.com/GxFn/Wakeflow#readme",
+  "repository": "https://github.com/GxFn/Wakeflow",
+  "license": "MIT",
+  "keywords": [
+    "agent-workflow",
+    "unattended",
+    "control-plane",
+    "multi-window",
+    "local-first",
+    "evidence-review"
+  ],
+  "mcpServers": "./.mcp.json"
+}

@@ -80,11 +80,29 @@ decide product behavior, or declare a task complete.
 
 Wakeflow uses the same two-layer marketplace shape as Lark Remote: the
 repository root is the development workspace, and the installable plugin
-artifact lives in `plugins/codex-wakeflow/`. The root
-`.agents/plugins/marketplace.json` contains a single `wakeflow` entry whose
-`source.path` is `./plugins/codex-wakeflow`.
+artifacts live under `plugins/`. The repository ships two host editions built
+from one shared core:
 
-Install the public plugin artifact:
+| Host | Artifact | Catalog |
+| --- | --- | --- |
+| Codex | `plugins/codex-wakeflow/` | `.agents/plugins/marketplace.json` |
+| Claude Code | `plugins/claude-code-wakeflow/` | `.claude-plugin/marketplace.json` |
+
+Install the Claude Code edition from inside Claude Code:
+
+```text
+/plugin marketplace add GxFn/Wakeflow
+/plugin install wakeflow@gxfn
+```
+
+The Claude Code edition supports two window modes: `desktop-session` (each
+Wakeflow window is a Claude Code desktop session reached with the session
+message tool) and `headless-resume` (each window is a persistent CLI session
+resumed with `claude -p --resume <sessionId>` as a background task). See
+[plugins/claude-code-wakeflow/README.md](plugins/claude-code-wakeflow/README.md)
+for the full Claude Code guide.
+
+Install the public Codex plugin artifact:
 
 ```bash
 npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
@@ -336,17 +354,32 @@ Before publishing a release tag:
 Use this repository to develop the Wakeflow plugin itself.
 
 ```sh
-npm run validate
-npm run smoke
+npm run sync:core    # copy core/ into both plugin artifacts
+npm run check:core   # fail when an artifact drifts from core/
+npm run validate     # codex artifact validation
+npm run validate:claude
+npm run smoke        # codex artifact smoke
+npm run smoke:claude
 npm run test:wakeflow
-npm test
+npm test             # check:core + both validates + both smokes + tests
 ```
+
+Shared-core rule: host-neutral runtime files live in `core/` and are synced
+into both artifacts with `tools/sync-core.mjs`; edit them in `core/`, never in
+an artifact copy. Host-specific files (host profile, host artifact checks,
+host send adapter, manifests, READMEs, memory-file template, skills, template
+bundle) live only inside each artifact. `npm run check:core` keeps the copies
+honest.
 
 Common source areas:
 
 | Path | Purpose |
 | --- | --- |
-| `plugins/codex-wakeflow/.codex-plugin/plugin.json` | Plugin manifest and MCP wiring. |
+| `core/` | Host-neutral runtime source of truth synced into both artifacts. |
+| `tools/sync-core.mjs` | Core sync and drift check (`--check`). |
+| `plugins/codex-wakeflow/.codex-plugin/plugin.json` | Codex plugin manifest and MCP wiring. |
+| `plugins/claude-code-wakeflow/.claude-plugin/plugin.json` | Claude Code plugin manifest and MCP wiring. |
+| `plugins/claude-code-wakeflow/scripts/lib/wakeflow-host-profile.mjs` | Claude Code host profile (window modes, CLAUDE.md, session vocabulary). |
 | `plugins/codex-wakeflow/mcp/server.cjs` | Standalone MCP server entrypoint with no `node_modules` dependency. |
 | `plugins/codex-wakeflow/bin/wakeflow-mcp.mjs` | Compatibility wrapper for the MCP server entrypoint. |
 | `plugins/codex-wakeflow/scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime shipped with the plugin. |

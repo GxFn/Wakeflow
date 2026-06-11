@@ -39,6 +39,7 @@ Wakeflow delivery-loop contract manager
 
 Usage:
   node scripts/wakeflow-delivery.mjs status [--json]
+  node scripts/wakeflow-delivery.mjs release-window-lock --window <name> [--write] [--json]
   node scripts/wakeflow-delivery.mjs register-thread --window <name> --thread-id <id> --write [--json]
   node scripts/wakeflow-delivery.mjs build-window-config --window <name> [--require-thread] --write [--json]
   node scripts/wakeflow-delivery.mjs build-delivery --packet-file <path> [--delivery-id <id>] [--return-route controller|none] [--automation-enabled] [--require-thread] [--write] [--json]
@@ -575,6 +576,7 @@ const {
   windowConfigFileFor,
   readWindowLock,
   windowLockFresh,
+  writeWindowLock,
   keepLiveStateFile,
   startKeepLive,
   artifactTrace,
@@ -625,6 +627,35 @@ const {
   listDispatchGroupsForTask,
   artifactTrace,
 });
+
+function commandReleaseWindowLock() {
+  const windowName = requireValue("--window");
+  const lock = readWindowLock(windowName);
+  if (!lock) {
+    output({ ok: true, command: "release-window-lock", windowName, released: false, note: "no lock present" });
+    return;
+  }
+  if (!write) {
+    output({
+      ok: true,
+      command: "release-window-lock",
+      windowName,
+      released: false,
+      dryRun: true,
+      lock: { host: lock.host, deliveryId: lock.deliveryId, createdAt: lock.createdAt, expiresAt: lock.expiresAt, fresh: windowLockFresh(lock) },
+      note: "pass --write to release; releasing another host's fresh lock should be a deliberate recovery decision",
+    });
+    return;
+  }
+  removeWindowLock(windowName);
+  output({
+    ok: true,
+    command: "release-window-lock",
+    windowName,
+    released: true,
+    releasedLock: { host: lock.host, deliveryId: lock.deliveryId, expiresAt: lock.expiresAt },
+  });
+}
 
 function commandStatus() {
   runStatusCommand({
@@ -765,6 +796,9 @@ try {
   switch (command) {
     case "status":
       commandStatus();
+      break;
+    case "release-window-lock":
+      commandReleaseWindowLock();
       break;
     case "register-thread":
       commandRegisterThread();

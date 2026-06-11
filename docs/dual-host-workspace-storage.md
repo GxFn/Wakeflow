@@ -63,7 +63,7 @@ Split by *what the data is*, not by who wrote it:
 | `hosts/<host>/thread-registry/` | per host | The same window name may be registered on both hosts (a Codex thread AND a Claude tmux session for `RepoA`). Registration records keep their host `kind`. |
 | `hosts/<host>/window-config/` | per host | Derived view; regenerated from workspace config + that host's registry. Never migrated, never shared. |
 | `hosts/claude-code/window-host/` | claude | tmux `window_id` bindings so renames (displayTitle) never break targeting. |
-| `locks/` | shared | One in-flight delivery per WINDOW across hosts. A lock names `{windowName, host, deliveryId, createdAt, expiresAt}`. Enforced in shared core: written on record-delivery-run (sent), checked fail-closed at dispatch when the fresh lock belongs to the other host, released by the matching record-target-result; the Claude helper additionally guards tmux sends. |
+| `locks/` | shared | One in-flight delivery per WINDOW across hosts. A lock names `{windowName, host, deliveryId, createdAt, expiresAt}`. Enforced in shared core: acquired at envelope write (prepare/build), refreshed on record-delivery-run (sent), fail-closed at dispatch on a fresh other-host lock, released by the matching record-target-result; recovery via `release-window-lock`. The Claude helper additionally guards tmux sends. |
 | Root and child memory files | per host | `AGENTS.md` and `CLAUDE.md` coexist; each plugin's `sync-root-agents` / `write-agents` touches only its own file. Gate content stays in lockstep because both templates live in this repository. |
 | `.gitignore` sync | shared | Both plugins ensure the same two entries (`.workspace-active/`, `.workspace-local/`); idempotent in either order. |
 
@@ -87,14 +87,19 @@ Split by *what the data is*, not by who wrote it:
    acting.
 2. **One in-flight delivery per window, across hosts** (the `locks/` rule).
    Two hosts dispatching different tasks into the same repository working tree
-   concurrently is the real hazard dual-install creates. ENFORCEMENT: BOTH host
-   editions now participate through the shared core — `record-delivery-run`
-   (status=sent) writes `locks/<window>.json` `{windowName, host, deliveryId,
-   createdAt, expiresAt}`, the dispatch path fails closed when a fresh lock from
-   the OTHER host exists (same-host locks surface as `windowLockWarning`), and
-   `record-target-result` releases the lock when the result answers the locked
-   delivery. The Claude transport helper additionally checks/writes the same
-   lock at tmux send time and via `wait-results`.
+   concurrently is the real hazard dual-install creates. ENFORCEMENT (generic,
+   shared core — identical on both hosts): the lock `locks/<window>.json`
+   `{windowName, host, deliveryId, createdAt, expiresAt}` is ACQUIRED when the
+   delivery envelope is written (`prepare-dispatch-from-state` /
+   `build-delivery`), so it covers the whole build -> host send -> record
+   window even where the host send itself has no wakeflow hook (codex thread
+   tools). `record-delivery-run` (sent) refreshes it; the dispatch path fails
+   closed on a fresh OTHER-host lock and warns on a same-host lock that is not
+   this delivery's own; `record-target-result` releases it when the result
+   answers the locked delivery. Recovery: `release-window-lock` (MCP:
+   `wakeflow_release_window_lock`), dry-run by default. The Claude transport
+   helper additionally re-checks at tmux send time and via `wait-results`,
+   treating its own delivery id as a non-event.
 3. **Handles never leak across hosts.** A Codex envelope must never instruct a
    Claude send and vice versa; envelopes record their transport and the
    registry file they used (`hosts/<host>/thread-registry/...` paths make this

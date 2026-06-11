@@ -79,6 +79,20 @@ export const tools = [
     },
   },
   {
+    name: "wakeflow_release_window_lock",
+    description: "Release the shared cross-host in-flight delivery lock for one window. Recovery action for stalled or ownerless locks; releasing another host's fresh lock must be a deliberate controller decision.",
+    annotations: localWriteTool("Release Wakeflow Window Lock"),
+    inputSchema: {
+      type: "object",
+      required: ["window"],
+      properties: {
+        root: { type: "string" },
+        window: { type: "string" },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
     name: "wakeflow_status",
     description: "Inspect Wakeflow repository and closed-loop runtime status, including host-send, callbackPlan, delivery failure, replay, and resume-plan diagnostics. Does not send messages.",
     annotations: readOnlyTool("Inspect Wakeflow Status"),
@@ -193,7 +207,7 @@ export const tools = [
   },
   {
     name: "wakeflow_review_pack",
-    description: "Build a review evidence pack for a state root, dispatch group, or task id, including callbackPlan when direct-thread controller return is applicable. This is evidence, not acceptance.",
+    description: "Build a review evidence pack for a state root, dispatch group, or task id, including callbackPlan when direct-thread controller return is applicable. Read-only, two sanctioned uses: (1) controller review preparation; (2) a TARGET window confirming its OWN dispatch group's return readiness before building a controller-return. Targets must scope it to their own group; review decisions (accept/rework/blocked) stay controller-only. This is evidence, not acceptance.",
     annotations: readOnlyTool("Build Wakeflow Review Pack"),
     inputSchema: {
       type: "object",
@@ -453,6 +467,17 @@ export const handlers = {
       ...repositoryArgs(args.repositories),
       ...repeatValues("--exclude-window", args.excludeWindows),
       ...repeatValues("--replace-window", args.replaceWindows),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
+  wakeflow_release_window_lock: (args) => runWakeflowRuntime({
+    script: "wakeflow-delivery",
+    args: [
+      "release-window-lock",
+      "--window", args.window,
+      ...rootArgs(args),
       ...(args.apply ? ["--write"] : []),
       "--json",
     ],

@@ -466,8 +466,9 @@ export function createResultRecordingCommands(ctx) {
           if (existsSync(runFile)) {
             try {
               const run = JSON.parse(readFileSync(runFile, "utf8"));
+              const runTaskId = run.taskId || run.targetTaskId;
               belongsHere = run.targetWindow === targetWindow
-                && (run.targetTaskId === taskId || !run.targetTaskId);
+                && (!runTaskId || runTaskId === taskId);
             } catch {
               belongsHere = false;
             }

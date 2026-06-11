@@ -241,3 +241,5 @@ Wakeflow scripts or automation, source-repo verification may use:
 - `npm test`
 
 Script output is evidence, not acceptance.
+
+- Stalled or ownerless window locks (`locks/<window>.json`) are recovered with `release-window-lock --window <name> --write` (MCP: `wakeflow_release_window_lock`); dry-run first, and treat releasing another host's fresh lock as a deliberate controller decision.

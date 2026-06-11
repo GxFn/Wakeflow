@@ -46,6 +46,7 @@ export function createDispatchCommands(ctx) {
     findThreadFile,
     readWindowLock,
     windowLockFresh,
+    writeWindowLock,
     windowConfigFileFor,
     keepLiveStateFile,
     startKeepLive,
@@ -176,6 +177,7 @@ export function createDispatchCommands(ctx) {
 
     const registration = loadThreadRegistration(packet.targetWindow);
     if (requireThread && !registration) fail(`No registered thread for target window: ${packet.targetWindow}`);
+    const resolvedDeliveryId = deliveryId || `delivery-${packet.id}`;
     // Cross-host in-flight guard: a fresh delivery lock written by the OTHER
     // host means another controller is already driving this window's working
     // tree. Fail closed; same-host locks are reported as a warning because the
@@ -185,11 +187,10 @@ export function createDispatchCommands(ctx) {
     if (windowLockIsFresh && windowLock.host && windowLock.host !== hostProfile.runtime.hostDirName) {
       fail(`Window ${packet.targetWindow} has a fresh in-flight delivery lock from host ${windowLock.host} (delivery ${windowLock.deliveryId || "unknown"}, expires ${windowLock.expiresAt}); wait for that delivery or coordinate before dispatching from this host.`);
     }
-    const windowLockWarning = windowLockIsFresh
+    const windowLockWarning = windowLockIsFresh && windowLock.deliveryId !== resolvedDeliveryId
       ? `Window ${packet.targetWindow} already has a fresh same-host delivery lock (${windowLock.deliveryId || "unknown"}); confirm the prior delivery finished before sending.`
       : undefined;
     const resolvedWindowConfig = windowConfig || buildWindowConfig(packet.targetWindow);
-    const resolvedDeliveryId = deliveryId || `delivery-${packet.id}`;
     const createdAt = nowIso();
     const envelope = {
       kind: "DeliveryEnvelope",
@@ -256,6 +257,13 @@ export function createDispatchCommands(ctx) {
     if (write) {
       ensureStateDirs();
       atomicWriteJson(deliveryFile, envelope);
+      // Acquire the shared cross-host window lock at envelope time so it
+      // covers the whole build -> host send -> record window on every host
+      // (the codex host send has no wakeflow hook of its own). Same-id
+      // re-acquisition just refreshes the TTL.
+      if (writeWindowLock && envelope.targetWindow) {
+        writeWindowLock(envelope.targetWindow, { deliveryId: envelope.deliveryId });
+      }
     }
     output(
       {
@@ -407,6 +415,9 @@ export function createDispatchCommands(ctx) {
       if (!existingGroup && dispatchGroupRecord && dispatchGroup) atomicWriteJson(dispatchGroupFile, dispatchGroupRecord);
       if (!existingPacket) atomicWriteJson(packetFile, packet);
       if (!existingEnvelope) atomicWriteJson(deliveryFile, envelope);
+      if (writeWindowLock && envelope.targetWindow) {
+        writeWindowLock(envelope.targetWindow, { deliveryId: envelope.deliveryId });
+      }
     }
 
     output(

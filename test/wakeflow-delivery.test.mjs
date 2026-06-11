@@ -1923,6 +1923,44 @@ test("record-delivery-run writes the shared window lock and record-target-result
   assert.equal(recorded.result.dispatchGroup, "GROUP-STATE", "group auto-resolves from the dispatch packet");
 });
 
+test("record-target-result preserves a fresh lock for a different task in the same window", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  prepareDispatch(root, stateRootRef);
+  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  const newerDeliveryId = "delivery-CSMR-TASK-2";
+  writeJson(path.join(root, ".workspace-local/wakeflow-delivery/delivery-runs", `run-${newerDeliveryId}.json`), {
+    kind: "DirectThreadDeliveryRun",
+    version: 1,
+    deliveryRunId: `run-${newerDeliveryId}`,
+    deliveryId: newerDeliveryId,
+    targetWindow: "AlembicPlugin",
+    taskId: "CSMR-TASK-2",
+    status: "sent",
+    createdAt: "2026-06-05T00:00:00.000Z",
+  });
+  writeJson(lockFile, {
+    kind: "WakeflowWindowDeliveryLock",
+    version: 1,
+    windowName: "AlembicPlugin",
+    host: "codex",
+    deliveryId: newerDeliveryId,
+    createdAt: "2026-06-05T00:00:00.000Z",
+    expiresAt: "2999-01-01T00:00:00.000Z",
+  });
+
+  const recorded = parseOk(run(root, [
+    "record-target-result",
+    "--target-window", "AlembicPlugin",
+    "--task-id", "CSMR-TASK-1",
+    "--status", "completed",
+    "--evidence-ref", "docs/evidence.md",
+    "--write",
+  ]));
+  assert.equal(recorded.lockReleased, false, "an old result must not release a newer same-window task lock");
+  assert.equal(JSON.parse(readFileSync(lockFile, "utf8")).deliveryId, newerDeliveryId);
+});
+
 test("record-target-result rejects a group that matches no dispatch packet", () => {
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
@@ -1982,4 +2020,41 @@ test("controller-return prompt localizes sentences for zh demands", async () => 
     groupSnapshot: { readyTargets: ["WindowA"], blockedTargets: [], missingTargets: [], pendingDispatchTargets: [] },
   });
   assert.match(enPrompt, /Continue controller review: WindowA backfill\./, "en default unchanged");
+});
+
+
+test("prepare-dispatch acquires the shared window lock at envelope time (generic, both hosts)", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  assert.equal(existsSync(lockFile), true, "lock acquired when the envelope is written");
+  const lock = JSON.parse(readFileSync(lockFile, "utf8"));
+  assert.equal(lock.host, "codex", "acquired by the dispatching host");
+  assert.equal(lock.deliveryId, prepared.envelope.deliveryId, "lock carries the delivery id");
+
+  // replay refreshes the same lock without a same-host warning (own delivery)
+  const replay = prepareDispatch(root, stateRootRef);
+  assert.equal(replay.windowLockWarning ?? null, null, "own-delivery lock does not warn");
+});
+
+test("release-window-lock is dry-run by default and releases with --write", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  prepareDispatch(root, stateRootRef);
+  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  assert.equal(existsSync(lockFile), true);
+
+  const dry = parseOk(run(root, ["release-window-lock", "--window", "AlembicPlugin"]));
+  assert.equal(dry.released, false);
+  assert.equal(dry.dryRun, true);
+  assert.equal(existsSync(lockFile), true, "dry-run must not delete the lock");
+
+  const released = parseOk(run(root, ["release-window-lock", "--window", "AlembicPlugin", "--write"]));
+  assert.equal(released.released, true);
+  assert.equal(released.releasedLock.deliveryId.startsWith("delivery-"), true);
+  assert.equal(existsSync(lockFile), false);
+
+  const again = parseOk(run(root, ["release-window-lock", "--window", "AlembicPlugin", "--write"]));
+  assert.equal(again.released, false, "idempotent when no lock present");
 });

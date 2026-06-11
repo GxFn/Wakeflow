@@ -1754,12 +1754,26 @@ function automationStateDir(context) {
   return path.join(context.wakeflowRoot, ".workspace-local/wakeflow-delivery");
 }
 
+function hostRuntimeDir(context) {
+  return path.join(automationStateDir(context), "hosts", hostProfile.runtime.hostDirName);
+}
+
 function threadRegistryFile(context, windowName) {
-  return path.join(automationStateDir(context), "thread-registry", `${slug(windowName)}.json`);
+  return path.join(hostRuntimeDir(context), "thread-registry", `${slug(windowName)}.json`);
+}
+
+function findThreadRegistryFile(context, windowName) {
+  const hostFile = threadRegistryFile(context, windowName);
+  if (existsSync(hostFile)) return hostFile;
+  if (hostProfile.runtime.legacyRegistryFallback) {
+    const legacyFile = path.join(automationStateDir(context), "thread-registry", `${slug(windowName)}.json`);
+    if (existsSync(legacyFile)) return legacyFile;
+  }
+  return hostFile;
 }
 
 function windowConfigFile(context, windowName) {
-  return path.join(automationStateDir(context), "window-config", `${slug(windowName)}.json`);
+  return path.join(hostRuntimeDir(context), "window-config", `${slug(windowName)}.json`);
 }
 
 function validateThreadId(value) {
@@ -1948,7 +1962,7 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
     language,
     replacementMode: replacements.size > 0,
     replaceWindows: [...replacements],
-    threadIdStorage: ".workspace-local/wakeflow-delivery/thread-registry/<window>.json",
+    threadIdStorage: `.workspace-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/thread-registry/<window>.json`,
     trackedDocsContainThreadIds: false,
     hostWorkflow: hostProfile.launch.workflowSteps(language),
     windows: entries.map((entry) => ({
@@ -1960,11 +1974,12 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
       displayTitle: entry.displayTitle,
       promptPurpose: entry.promptPurpose,
       titleReset: hostProfile.launch.titleReset(entry.displayTitle),
+      ...(typeof hostProfile.launch.entryExtras === "function" ? hostProfile.launch.entryExtras(entry, context) : {}),
       localRegistration: {
         required: true,
         command: "wakeflow-setup initialize",
-        threadIdAuthority: `.workspace-local/wakeflow-delivery/thread-registry/${slug(entry.windowName)}.json`,
-        derivedStatusView: `.workspace-local/wakeflow-delivery/window-config/${slug(entry.windowName)}.json`,
+        threadIdAuthority: `.workspace-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/thread-registry/${slug(entry.windowName)}.json`,
+        derivedStatusView: `.workspace-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/window-config/${slug(entry.windowName)}.json`,
         trackedDocsContainThreadIds: false,
         argvTemplate: [
           "initialize",
@@ -2063,7 +2078,8 @@ function localWindowRegistrationPayload(context, options = {}) {
   for (const windowName of [...windowSpecs].sort()) {
     const localRoot = localWindowRoot(context, windowName);
     const registryPath = threadRegistryFile(context, windowName);
-    const existingRegistration = existsSync(registryPath) ? readJson(registryPath) : null;
+    const existingRegistrationPath = findThreadRegistryFile(context, windowName);
+    const existingRegistration = existsSync(existingRegistrationPath) ? readJson(existingRegistrationPath) : null;
     const hasThread = threadSpecs.has(windowName);
     const existingThreadRegistered = Boolean(existingRegistration?.threadId);
     const threadRegistered = hasThread || existingThreadRegistered;
@@ -2087,8 +2103,8 @@ function localWindowRegistrationPayload(context, options = {}) {
     });
     const configPath = windowConfigFile(context, windowName);
     let replacedExistingThread = false;
-    if (hasThread && existsSync(registryPath)) {
-      const previous = readJson(registryPath);
+    if (hasThread && existsSync(existingRegistrationPath)) {
+      const previous = readJson(existingRegistrationPath);
       replacedExistingThread = Boolean(previous.threadId && previous.threadId !== registration.threadId);
     }
 

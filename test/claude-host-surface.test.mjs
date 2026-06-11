@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -9,10 +9,9 @@ import { hostProfile as claudeProfile } from "../plugins/claude-code-wakeflow/sc
 import * as codexAdapter from "../plugins/codex-wakeflow/scripts/lib/wakeflow-host-send-adapter.mjs";
 import * as claudeAdapter from "../plugins/claude-code-wakeflow/scripts/lib/wakeflow-host-send-adapter.mjs";
 import {
-  adapterForDeliveryMode,
-  claudeDesktopSessionAdapter,
-  claudeHeadlessResumeAdapter,
-  claudeSessionAutoAdapter,
+  adapterForWindowMode,
+  claudeHeadlessRecoveryAdapter,
+  claudeTmuxResidentAdapter,
 } from "../plugins/claude-code-wakeflow/scripts/lib/wakeflow-host-send-adapter.mjs";
 
 const claudePluginRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/claude-code-wakeflow");
@@ -38,20 +37,47 @@ test("claude host profile matches the codex host profile contract shape", () => 
   assertSameShape(codexProfile, claudeProfile);
 });
 
-test("claude host profile carries Claude Code semantics", () => {
+test("claude host profile carries terminal-only Claude Code semantics", () => {
   assert.equal(claudeProfile.hostId, "claude-code");
   assert.equal(claudeProfile.memoryFile, "CLAUDE.md");
   assert.equal(claudeProfile.pluginManifestPath, ".claude-plugin/plugin.json");
+  assert.equal(claudeProfile.runtime.hostDirName, "claude-code");
+  assert.equal(claudeProfile.runtime.legacyRegistryFallback, false);
+  assert.equal(codexProfile.runtime.hostDirName, "codex");
+  assert.equal(codexProfile.runtime.legacyRegistryFallback, true);
   assert.equal(claudeProfile.kinds.windowRegistration, "ClaudeWindowSessionRegistration");
   assert.equal(claudeProfile.kinds.windowDispatchConfig, "ClaudeSubwindowDispatchConfig");
-  assert.equal(claudeProfile.launch.planFlags.requiresHostTitleReset, false);
-  assert.equal(claudeProfile.launch.titleReset("Window Title").required, false);
+  assert.equal(claudeProfile.launch.planFlags.requiresHostTitleReset, true);
+  assert.equal(claudeProfile.launch.titleReset("Window Title").required, true);
+  assert.match(claudeProfile.launch.titleReset("Window Title").hostTool, /retitle/);
   for (const language of ["zh", "en"]) {
     const steps = claudeProfile.launch.workflowSteps(language).join("\n");
-    assert.match(steps, /claude -p/, `launch workflow (${language}) must explain headless-resume`);
-    assert.match(steps, /session/i, `launch workflow (${language}) must speak session vocabulary`);
+    assert.match(steps, /tmux/, `launch workflow (${language}) must describe the tmux-resident flow`);
+    assert.match(steps, /preflight/, `launch workflow (${language}) must run preflight first`);
+    assert.match(steps, /launch-window/, `launch workflow (${language}) must use the host helper`);
   }
   assert.match(claudeProfile.texts.registeredHandle("Repo"), /Claude Code session for Repo/);
+  assert.match(claudeProfile.hostTools.sendToWindow, /wakeflow-claude-host send/);
+});
+
+test("claude entryExtras emit tmux-resident hostLaunch specs and codex emits none", () => {
+  assert.equal(codexProfile.launch.entryExtras, undefined);
+  const entry = {
+    windowName: "RepoA",
+    displayTitle: "RepoA Work",
+    cwd: "/tmp/repo-a",
+    createThreadPrompt: "entry sync",
+  };
+  const extras = claudeProfile.launch.entryExtras(entry);
+  assert.equal(extras.windowMode, "tmux-resident");
+  assert.ok(existsSync(extras.hostLaunch.helper), "host helper path must exist in the artifact");
+  const launchArgv = extras.hostLaunch.launchArgv.join(" ");
+  assert.match(launchArgv, /launch-window/);
+  assert.match(launchArgv, /--window RepoA/);
+  assert.match(launchArgv, /--title RepoA Work/);
+  assert.match(launchArgv, /--cwd \/tmp\/repo-a/);
+  assert.match(extras.hostLaunch.sendArgv.join(" "), /send/);
+  assert.match(extras.hostLaunch.recovery, /--resume/);
 });
 
 test("claude send adapters keep the codex adapter step contract", () => {
@@ -74,18 +100,20 @@ test("claude send adapters keep the codex adapter step contract", () => {
       `resume step ${index} must keep the same field contract`,
     );
   }
-  assert.equal(claudeSteps[0].adapter.adapterId, "claude-session-auto");
+  assert.equal(claudeSteps[0].adapter.adapterId, "claude-tmux-resident");
+  assert.match(claudeSteps[0].instruction, /wakeflow-claude-host send/);
   assert.equal(claudeSteps[1].tool, "wakeflow_record_delivery");
 });
 
-test("adapterForDeliveryMode pins desktop-session and headless-resume", () => {
-  assert.equal(adapterForDeliveryMode("desktop-session"), claudeDesktopSessionAdapter);
-  assert.equal(adapterForDeliveryMode("headless-resume"), claudeHeadlessResumeAdapter);
-  assert.equal(adapterForDeliveryMode(undefined), claudeSessionAutoAdapter);
-  assert.match(claudeHeadlessResumeAdapter.hostTool, /claude -p --resume/);
+test("adapterForWindowMode pins tmux-resident with headless recovery", () => {
+  assert.equal(adapterForWindowMode("tmux-resident"), claudeTmuxResidentAdapter);
+  assert.equal(adapterForWindowMode(undefined), claudeTmuxResidentAdapter);
+  assert.equal(adapterForWindowMode("headless-recovery"), claudeHeadlessRecoveryAdapter);
+  assert.match(claudeHeadlessRecoveryAdapter.hostTool, /claude -p --resume/);
+  assert.match(claudeHeadlessRecoveryAdapter.hostTool, /recovery/);
 });
 
-test("claude artifact registers a session id as the window thread registration", () => {
+test("claude artifact registers a session id under the host-scoped registry", () => {
   const workspaceRoot = mkdtempSync(path.join(os.tmpdir(), "claude-wakeflow-"));
   mkdirSync(path.join(workspaceRoot, "RepoA"), { recursive: true });
   writeFileSync(
@@ -118,6 +146,7 @@ test("claude artifact registers a session id as the window thread registration",
   assert.equal(payload.ok, true);
   assert.equal(payload.threadRegistered, true);
   assert.equal(payload.windowName, "RepoA");
+  assert.match(payload.registryFile, /hosts\/claude-code\/thread-registry\//);
 
   const registryFile = path.join(workspaceRoot, payload.registryFile);
   const registration = JSON.parse(readFileSync(registryFile, "utf8"));

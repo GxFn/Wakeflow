@@ -16,7 +16,7 @@ export function createKeepLiveManager({
   ensureStateDirs,
   atomicWriteJson,
 }) {
-  const keepLiveDir = path.join(stateDir, "keep-live");
+  const keepLiveDir = path.join(stateDir, "hosts", hostProfile.runtime.hostDirName, "keep-live");
 
   function keepLiveStateFile() {
     return path.join(keepLiveDir, "state.json");

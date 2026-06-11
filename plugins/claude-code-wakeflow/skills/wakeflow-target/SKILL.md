@@ -1,6 +1,6 @@
 ---
 name: wakeflow-target
-description: Use when a target Claude Code window session receives a Wakeflow Delivery Loop direct-thread delivery, executes only its assigned dispatch packet, reports a TargetResultEnvelope, or enforces target-window boundaries without claim / finish / chain-next state.
+description: Use when a tmux-resident target Claude Code window session receives a Wakeflow Delivery Loop direct-thread delivery in its tmux pane, executes only its assigned dispatch packet, reports a TargetResultEnvelope, sends the controller-return with the wakeflow-claude-host helper, or enforces target-window boundaries without claim / finish / chain-next state.
 ---
 
 # Wakeflow Target
@@ -34,9 +34,10 @@ state root, or human context, stop and report instead of guessing.
 ## Target Flow
 
 1. Consume the delivery envelope.
-   - Direct-thread delivery proves only that a prompt was delivered, whether it
-     arrived through a desktop-session message or a headless
-     `claude -p --resume` wakeup of this session.
+   - Direct-thread delivery proves only that a prompt was delivered. It arrives
+     as a user message pasted into this window's tmux pane by the Wakeflow host
+     helper (`wakeflow-claude-host.mjs send`); arrival is transport evidence,
+     not authority.
    - Confirm `currentWindow`, `taskId`, `stateRoot`, and optional
      `dispatchGroup`.
    - Read the target repository `CLAUDE.md` and declare the current window and
@@ -79,21 +80,26 @@ state root, or human context, stop and report instead of guessing.
    - If the target task references a delivery id but the local delivery envelope
      cannot be found, stop and report that missing local envelope; do not assume
      no callback is needed.
-   - Complete the real host send/readback with the same Claude Code delivery
-     mode used for controller-to-target delivery: in desktop-session mode, send
-     the envelope prompt to the registered controller desktop session with the
-     session message tool; in headless-resume mode, resume the controller
-     session as a background task with
-     `claude -p --resume <sessionId> "<envelope prompt>" --output-format json`
-     and treat the JSON result as readback evidence (re-register a forked
-     `session_id` into the thread registry when it changes). Then use
-     `wakeflow_record_delivery` to record the delivery run.
+   - Complete the real host send/readback with the same tmux helper used for
+     controller-to-target delivery: write the controller-return envelope prompt
+     to a temp file, then run
+     `node <plugin>/scripts/lib/wakeflow-claude-host.mjs send --root <workspace>
+     --window <controllerWindow> --prompt-file <file>`. The controller is also
+     a tmux-resident window; the helper enforces the controller window's shared
+     delivery lock and returns pane readback evidence (`readback.paneTail`).
+     Then use `wakeflow_record_delivery` to record the delivery run.
    - Do not stop after writing the target result when controller return is
      allowed. The closeout steps stay separate: record target result, review
-     readiness, prepare controller-return envelope, send with the host delivery
-     mode, then record delivery evidence. Do not replace them with one combined
+     readiness, prepare controller-return envelope, send with the host helper,
+     then record delivery evidence. Do not replace them with one combined
      target-window tool or duplicate the target result into another local result
      store.
+
+Recovery is not a delivery mode: if this window's tmux pane dies mid-task, the
+same session is finished or recovered headless with `claude -p --resume
+<registered session id>` (the session id is stable and stays registered), and
+the resident window is relaunched with `launch-window --replace
+--session-id <same id>`.
 
 ## Stop Conditions
 

@@ -56,6 +56,10 @@ const HOST_CONTRACT_FILES = (target) => [
   "templates/wakeflow-template-bundle.json",
 ];
 
+const HOST_LOCAL_CORE_FILES = new Set([
+  "scripts/lib/wakeflow-host-profile.mjs",
+]);
+
 function listCoreFiles(directory = coreRoot) {
   const files = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -64,7 +68,9 @@ function listCoreFiles(directory = coreRoot) {
     if (entry.isDirectory()) {
       files.push(...listCoreFiles(absolute));
     } else if (entry.isFile()) {
-      files.push(path.relative(coreRoot, absolute));
+      const relative = path.relative(coreRoot, absolute);
+      if (HOST_LOCAL_CORE_FILES.has(relative)) continue;
+      files.push(relative);
     }
   }
   return files.sort();

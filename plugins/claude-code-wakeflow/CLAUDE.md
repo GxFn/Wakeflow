@@ -289,7 +289,8 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   markers. Commands do not replace acceptance.
 - After a real direct-thread send is recorded as `status=sent` with
   `readback.ok=true`, stop the current send turn. Do not sleep, poll, or wait
-  in the controller window.
+  in the controller window; the background `wakeflow-claude-host wait-results`
+  watcher is the only allowed wait for target results.
 - Keep-live belongs to unattended support only. It is not task logic, transport,
   or acceptance evidence.
 - Delivery prompts must be compact wakeup envelopes. Target prompts default to
@@ -297,16 +298,20 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   `skill`. Controller-return prompts default to `stateRoot`,
   `dispatchGroup`, trigger, non-empty exceptional targets, and `skill`.
   Machine details remain in state root, dispatch group, or envelope JSON.
-- Deliveries go to the registered target session. In desktop-session mode, send
-  the envelope `prompt` field exactly as the message text to the registered
-  target desktop session with the session message tool. In headless-resume
-  mode, resume the target session with
-  `claude -p --resume <sessionId> "<prompt>" --output-format json` as a
-  background task; the JSON result is the readback evidence, and a resumed
-  session can fork to a new `session_id` that must be re-registered before the
-  next send. `workspace.config.json` may pin
-  `"deliveryMode": "desktop-session" | "headless-resume"`. Do not wrap the
-  prompt in XML, JSON, or delegation tags.
+- Deliveries go to the registered target session, which is a tmux-resident
+  interactive `claude` window; every Wakeflow window, controller included,
+  lives in the workspace tmux server session. Write the envelope `prompt`
+  field exactly to a temp file and run the host helper
+  `node <plugin>/scripts/lib/wakeflow-claude-host.mjs send --root <workspace>
+  --window <target> --prompt-file <file>`; it enforces the shared per-window
+  delivery lock, pastes into the target tmux pane, and returns
+  `readback.paneTail` evidence. Controller returns use the same helper `send`
+  aimed at the controller window. Recovery is not a mode: a dead window's
+  session is finished or recovered headless with
+  `claude -p --resume <registered session id>` and relaunched with
+  `launch-window --replace --session-id <same id>`. (Claude Code desktop
+  windows are not an automation transport.) Do not wrap the prompt in XML,
+  JSON, or delegation tags.
 - Target windows execute only their assigned dispatch packet and return a
   `TargetResultEnvelope`. They do not claim another target or controller role.
 - Target windows do not create target-to-target next-hop delivery. A controller

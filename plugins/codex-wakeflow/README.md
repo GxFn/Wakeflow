@@ -225,7 +225,8 @@ Wakeflow automation is direct-thread delivery plus explicit result return.
 
 Core rules:
 
-- Real thread ids live only in `.workspace-local/wakeflow-delivery/thread-registry/`.
+- Real thread ids live only in
+  `.workspace-local/wakeflow-delivery/hosts/codex/thread-registry/`.
 - Window config is derived from `workspace.config.json` plus thread-registry
   presence; it is not a second thread-id or window-semantics authority.
 - Delivery prompts remain compact and human-readable.
@@ -301,6 +302,17 @@ Wakeflow keeps source, active runtime, and durable records separate:
 The source repository tracks reusable Wakeflow capability. Product code,
 project-specific active state, real thread ids, and derived local runtime
 artifacts do not belong in Wakeflow source.
+
+A workspace may run the Codex and Claude Code Wakeflow editions side by side.
+Shared business state (`.workspace-active/`, `wakeflow-ledger/`, and the
+dispatch packets, dispatch groups, delivery envelopes, delivery runs, target
+results, and shared `locks/` under `.workspace-local/wakeflow-delivery/`)
+stays host-neutral, while host-scoped runtime such as the thread registry,
+window config, and keep-live state lives under
+`.workspace-local/wakeflow-delivery/hosts/codex/`. Records in the legacy
+`.workspace-local/wakeflow-delivery/thread-registry/` location are still read
+as a fallback, new registrations write the host-scoped path, and
+`wakeflow-verify` prints a migration note.
 
 ## Marketplace Release
 

@@ -41,27 +41,46 @@ tool first:
   window runtime agree.
 - Pass `language: "zh"` when the user is working in Chinese, `language: "en"`
   when the user asks for English, and leave `language: "auto"` only when there
-  is no clear preference. The returned `displayTitle` is the canonical Claude
-  Code window session title; it keeps the window/repository name first.
-- After apply, read the returned `windowLaunchPlan`. Claude Code has no host
-  thread tools, so open a real Claude Code window session for each controller /
-  Design / Test / product launch entry, set each new window session's title
-  from that entry's `displayTitle`, then pass each real thread id (the
-  registered Claude Code session id) once to Wakeflow's local registration
-  command. The thread registry is the only thread-id authority; derived
-  `window-config` is refreshed by Wakeflow from the current workspace config
-  and registry presence. Do this title setup at the end of the initialization
-  flow instead of manually renaming ad hoc window sessions later.
-- To rebuild selected windows, pass `replaceWindows`. Open new window sessions
-  only for the returned replacement launch entries, then replace only those
-  windows' local thread-registry records with the new real session ids. Do not
-  rewrite unrelated window registrations or store window role / cwd / title
-  metadata in the registry.
-- The workspace config may pin a delivery mode with
-  `"deliveryMode": "desktop-session" | "headless-resume"`; otherwise delivery
-  prefers the open desktop session and falls back to headless resume. In
-  headless-resume mode, a resumed session can fork to a new `session_id`; when
-  it changes, re-register the new id into the thread registry.
+  is no clear preference. The returned `displayTitle` is the canonical window
+  title: the tmux window NAME is the displayTitle (for example "AppRepo Work"),
+  it shows in the tmux status bar and terminal tabs, and the host helper
+  `retitle` command renames it later.
+- After apply, read the returned `windowLaunchPlan`. Every launch entry is a
+  tmux-resident window (`windowMode: "tmux-resident"`) with a ready-made
+  `hostLaunch` argv spec for the host helper
+  `node <plugin>/scripts/lib/wakeflow-claude-host.mjs`. First run `preflight`;
+  when tmux is missing, ask the user once, then `brew install tmux`, retrying
+  once on a transient bottle error. Then per entry: write `createThreadPrompt`
+  to a temp file and run the entry's `hostLaunch` launch-window argv
+  (`launch-window --window <Name> --title <displayTitle> --cwd <repo>
+  --prompt-file <file>`). The helper creates the tmux window running
+  `claude --session-id <generated uuid>`, pastes the entry-sync prompt, stores
+  the window-host binding at
+  `.workspace-local/wakeflow-delivery/hosts/claude-code/window-host/<window>.json`,
+  and returns the session id. Register each returned session id once with the
+  local registration command (`--thread <Window>=<sessionId> --write`); it
+  lands in `.workspace-local/wakeflow-delivery/hosts/claude-code/thread-registry/`.
+  The thread registry is the only thread-id authority; derived `window-config`
+  is refreshed by Wakeflow from the current workspace config and registry
+  presence.
+- To rebuild selected windows, pass `replaceWindows`. Run
+  `launch-window --replace` only for the returned replacement launch entries,
+  then replace only those windows' local thread-registry records with the new
+  real session ids. Do not rewrite unrelated window registrations or store
+  window role / cwd / title metadata in the registry.
+- All Wakeflow windows (controller included) live in the tmux server session
+  named by `workspace.config.json`
+  `"hosts": { "claude-code": { "tmuxSession": "wakeflow" } }` (default
+  `wakeflow`). A Wakeflow thread id IS the window's Claude Code session id:
+  generated at launch, stable across resumes, registered once. Recovery is not
+  a mode: when a window is dead, finish or recover the same session headless
+  with `claude -p --resume <registered session id>`, then relaunch the resident
+  window with `launch-window --replace --session-id <same id>`. (Claude Code
+  desktop windows are not an automation transport.)
+- tmux windows cannot answer permission prompts while the user is away.
+  Per-repository `.claude/settings.json` allowlists, or an explicit
+  `--claude-arg --permission-mode=acceptEdits` at launch, are the user's
+  decision; Wakeflow never chooses silently.
 - Do not replace that tool with a hand-written inspection checklist when the MCP
   server is available.
 - If Wakeflow MCP tools are unavailable, say that the MCP server is unavailable

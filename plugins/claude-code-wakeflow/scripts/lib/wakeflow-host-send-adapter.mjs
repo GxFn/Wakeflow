@@ -1,20 +1,17 @@
 /**
  * Claude Code host send adapters for Wakeflow direct-thread delivery.
  *
- * A Wakeflow "thread id" on this host is a Claude Code session id. Two
- * transports deliver an envelope prompt to a registered window session:
+ * Terminal-only model: every Wakeflow window is a tmux-resident interactive
+ * `claude` session, and a Wakeflow "thread id" is that session's Claude Code
+ * session id. The primary transport pastes the envelope prompt into the
+ * registered tmux window through the host helper
+ * (scripts/lib/wakeflow-claude-host.mjs send), which also maintains the shared
+ * per-window delivery lock and returns pane readback evidence.
  *
- * - desktop-session: the controller sends the envelope prompt to the target
- *   Claude Code desktop session with the session message tool.
- * - headless-resume: the controller resumes the target session as a background
- *   task with `claude -p --resume <sessionId> "<envelope prompt>"
- *   --output-format json`. The JSON result is the readback evidence; its
- *   session_id must be re-registered when it differs, because resumed Claude
- *   Code sessions can fork to a new session id.
- *
- * The auto adapter is the default: it tells the sender to prefer the open
- * desktop session and fall back to headless resume. workspace.config.json may
- * pin one transport with "deliveryMode": "desktop-session" | "headless-resume".
+ * Headless resume is NOT a window mode: it is the recovery transport when a
+ * tmux window died. The session id is stable across resumes, so recovering
+ * with `claude -p --resume <sessionId>` and relaunching the tmux window with
+ * the same id keeps the registry valid.
  */
 
 const FORBIDDEN_CONCLUSIONS = [
@@ -23,11 +20,11 @@ const FORBIDDEN_CONCLUSIONS = [
   "host-send-adapter-creates-target-result",
 ];
 
-export const claudeDesktopSessionAdapter = {
+export const claudeTmuxResidentAdapter = {
   kind: "WakeflowHostSendAdapter",
   version: 1,
-  adapterId: "claude-desktop-session",
-  hostTool: "claude-desktop session message tool (send to the registered target session)",
+  adapterId: "claude-tmux-resident",
+  hostTool: "wakeflow-claude-host send --window <target> --prompt-file <envelope prompt file>",
   sideEffect: "host-session-message",
   inputAuthority: "delivery-envelope",
   readbackRequired: true,
@@ -35,11 +32,11 @@ export const claudeDesktopSessionAdapter = {
   forbiddenConclusions: FORBIDDEN_CONCLUSIONS,
 };
 
-export const claudeHeadlessResumeAdapter = {
+export const claudeHeadlessRecoveryAdapter = {
   kind: "WakeflowHostSendAdapter",
   version: 1,
-  adapterId: "claude-headless-resume",
-  hostTool: "claude -p --resume <sessionId> \"<envelope prompt>\" --output-format json (background task)",
+  adapterId: "claude-headless-recovery",
+  hostTool: "claude -p --resume <sessionId> \"<envelope prompt>\" --output-format json (recovery only, when the tmux window is dead)",
   sideEffect: "host-session-message",
   inputAuthority: "delivery-envelope",
   readbackRequired: true,
@@ -47,25 +44,12 @@ export const claudeHeadlessResumeAdapter = {
   forbiddenConclusions: FORBIDDEN_CONCLUSIONS,
 };
 
-export const claudeSessionAutoAdapter = {
-  kind: "WakeflowHostSendAdapter",
-  version: 1,
-  adapterId: "claude-session-auto",
-  hostTool: "prefer the open Claude Code desktop session message tool; otherwise resume headless with claude -p --resume <sessionId>",
-  sideEffect: "host-session-message",
-  inputAuthority: "delivery-envelope",
-  readbackRequired: true,
-  storesThreadIds: false,
-  forbiddenConclusions: FORBIDDEN_CONCLUSIONS,
-};
-
-export function adapterForDeliveryMode(deliveryMode) {
-  if (deliveryMode === "desktop-session") return claudeDesktopSessionAdapter;
-  if (deliveryMode === "headless-resume") return claudeHeadlessResumeAdapter;
-  return claudeSessionAutoAdapter;
+export function adapterForWindowMode(windowMode) {
+  if (windowMode === "headless-recovery") return claudeHeadlessRecoveryAdapter;
+  return claudeTmuxResidentAdapter;
 }
 
-export function buildHostSendResumeStep(delivery, adapter = claudeSessionAutoAdapter) {
+export function buildHostSendResumeStep(delivery, adapter = claudeTmuxResidentAdapter) {
   return {
     kind: "host-send",
     adapter,
@@ -77,7 +61,7 @@ export function buildHostSendResumeStep(delivery, adapter = claudeSessionAutoAda
     taskId: delivery.taskId,
     dispatchGroup: delivery.dispatchGroup,
     sourceTrace: delivery.wakeflowTrace,
-    instruction: "Read the delivery envelope prompt and send it to the registered target Claude Code session (desktop message tool, or headless claude -p --resume as a background task); do not edit product files from this resume step.",
+    instruction: "Write the delivery envelope prompt to a temp file and send it into the registered tmux-resident window with the wakeflow-claude-host send command; do not edit product files from this resume step. If the tmux window is dead, recover the same session headless (claude -p --resume <registered session id>) and relaunch the window before or after the send.",
   };
 }
 
@@ -90,11 +74,11 @@ export function buildRecordDeliveryRunResumeStep(delivery) {
       status: "sent",
       readbackOk: true,
     },
-    after: "Only after host send succeeds and readback evidence exists, record delivery evidence with the observed evidence text. For headless-resume sends, include the result session_id in the evidence and re-register it when it changed.",
+    after: "Only after the helper send succeeds and pane readback evidence exists, record delivery evidence with the observed evidence text (include the helper's paneTail snippet or the recovery JSON result).",
   };
 }
 
-export function buildHostSendResumeSteps(deliveries, adapter = claudeSessionAutoAdapter) {
+export function buildHostSendResumeSteps(deliveries, adapter = claudeTmuxResidentAdapter) {
   return deliveries.flatMap((delivery) => [
     buildHostSendResumeStep(delivery, adapter),
     buildRecordDeliveryRunResumeStep(delivery),

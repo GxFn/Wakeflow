@@ -4,6 +4,7 @@ import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runSync } from "../lib/wakeflow-process.mjs";
+import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 
 const args = process.argv.slice(2);
 const workspaceRoot = path.resolve(getArgValue("--root") || process.cwd());
@@ -138,6 +139,14 @@ const failed = results.filter((result) => !result.ok);
 console.log("\n## Summary");
 for (const result of results) {
   console.log(`- ${result.ok ? "PASS" : "FAIL"} ${result.label}`);
+}
+
+const legacyRegistryDir = path.join(workspaceRoot, ".workspace-local/wakeflow-delivery/thread-registry");
+if (hostProfile.runtime.legacyRegistryFallback && existsSync(legacyRegistryDir)) {
+  const legacyFiles = readdirSync(legacyRegistryDir).filter((name) => name.endsWith(".json"));
+  if (legacyFiles.length > 0) {
+    console.log(`- NOTE ${legacyFiles.length} legacy thread-registry file(s) remain in .workspace-local/wakeflow-delivery/thread-registry/; reads fall back automatically, but move them to .workspace-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/thread-registry/ to finish the dual-host layout migration.`);
+  }
 }
 
 if (failed.length > 0) {

@@ -46,21 +46,32 @@ field exactly to the host send transport.
 
 ## Send Boundary
 
-Scripts build envelopes and record evidence. The Claude Code host transport
-performs the real send, in one of two modes:
+Scripts build envelopes and record evidence. The agent performs the real send
+with the tmux host helper: write the envelope prompt to a temp file, then run
+`node <plugin>/scripts/lib/wakeflow-claude-host.mjs send --root <workspace>
+--window <target> --prompt-file <file> [--delivery-id <id>]`. The helper
+enforces the shared per-window delivery lock
+(`.workspace-local/wakeflow-delivery/locks/<window>.json`, one in-flight
+delivery per window across hosts), pastes via a tmux buffer (multiline-safe),
+and returns pane readback evidence. The send evidence is `readback.paneTail`
+plus the recorded delivery run (`wakeflow_record_delivery`, default host
+method `wakeflow-claude-host send`). A mid-turn target queues the pasted
+message for its next turn.
 
-- desktop-session: send the envelope prompt to the registered target desktop
-  session with the session message tool.
-- headless-resume: resume the target session with
-  `claude -p --resume <sessionId> "<prompt>" --output-format json` as a
-  background task; the JSON result is the readback evidence. A resumed session
-  can fork to a new session_id, which must be re-registered in the thread
-  registry before the next send.
+Every Wakeflow window (controller included) is a tmux-resident interactive
+`claude` session, so a controller return uses the same helper `send` aimed at
+the dispatch group's stored controller window, recorded the same way.
 
-`workspace.config.json` may pin one transport with
-`"deliveryMode": "desktop-session" | "headless-resume"`. Once send/readback is
-recorded as sent and readback-ok, stop the controller turn; do not poll for
-target completion.
+Once send/readback is recorded as sent and readback-ok, stop the controller
+turn; do not poll for target completion. The only allowed wait is the
+background `wait-results --group <id> --target <windowA> --target <windowB>
+[--timeout-sec N]` watcher: it completes when all expected target result
+envelopes exist (also releasing those windows' locks) and wakes the
+controller; a timeout means a stalled delivery to review. Recovery is not a
+mode: a dead window's session is finished or recovered headless with
+`claude -p --resume <registered session id>`, then relaunched with
+`launch-window --replace --session-id <same id>`. (Claude Code desktop windows
+are not an automation transport.)
 
 ## Result Review
 

@@ -95,10 +95,10 @@ Install the Claude Code edition from inside Claude Code:
 /plugin install wakeflow@gxfn
 ```
 
-The Claude Code edition supports two window modes: `desktop-session` (each
-Wakeflow window is a Claude Code desktop session reached with the session
-message tool) and `headless-resume` (each window is a persistent CLI session
-resumed with `claude -p --resume <sessionId>` as a background task). See
+The Claude Code edition is terminal-only: every Wakeflow window (controller
+included) is a tmux-resident interactive `claude` session in the `wakeflow`
+tmux server session, and a Wakeflow thread id is the window's Claude Code
+session id (stable across resumes). See
 [plugins/claude-code-wakeflow/README.md](plugins/claude-code-wakeflow/README.md)
 for the full Claude Code guide.
 
@@ -243,7 +243,9 @@ Wakeflow automation is direct-thread delivery plus explicit result return.
 
 Core rules:
 
-- Real thread ids live only in `.workspace-local/wakeflow-delivery/thread-registry/`.
+- Real thread ids live only in the host-scoped local thread registry under
+  `.workspace-local/wakeflow-delivery/hosts/<host>/thread-registry/`
+  (`codex` or `claude-code`).
 - Window config is derived from `workspace.config.json` plus thread-registry
   presence; it is not a second thread-id or window-semantics authority.
 - Delivery prompts remain compact and human-readable.
@@ -371,6 +373,10 @@ host send adapter, manifests, READMEs, memory-file template, skills, template
 bundle) live only inside each artifact. `npm run check:core` keeps the copies
 honest.
 
+The split between shared business state and host-scoped runtime for
+workspaces that run both editions is specified in
+[docs/dual-host-workspace-storage.md](docs/dual-host-workspace-storage.md).
+
 Common source areas:
 
 | Path | Purpose |
@@ -379,7 +385,7 @@ Common source areas:
 | `tools/sync-core.mjs` | Core sync and drift check (`--check`). |
 | `plugins/codex-wakeflow/.codex-plugin/plugin.json` | Codex plugin manifest and MCP wiring. |
 | `plugins/claude-code-wakeflow/.claude-plugin/plugin.json` | Claude Code plugin manifest and MCP wiring. |
-| `plugins/claude-code-wakeflow/scripts/lib/wakeflow-host-profile.mjs` | Claude Code host profile (window modes, CLAUDE.md, session vocabulary). |
+| `plugins/claude-code-wakeflow/scripts/lib/wakeflow-host-profile.mjs` | Claude Code host profile (tmux window model, CLAUDE.md, session vocabulary). |
 | `plugins/codex-wakeflow/mcp/server.cjs` | Standalone MCP server entrypoint with no `node_modules` dependency. |
 | `plugins/codex-wakeflow/bin/wakeflow-mcp.mjs` | Compatibility wrapper for the MCP server entrypoint. |
 | `plugins/codex-wakeflow/scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime shipped with the plugin. |

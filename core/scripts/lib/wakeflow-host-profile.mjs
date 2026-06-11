@@ -1,28 +1,10 @@
 /**
- * Wakeflow host profile: the single host-coupling surface for this plugin artifact.
+ * Wakeflow development host profile for core/ scripts.
  *
- * Every Wakeflow plugin artifact (Codex, Claude Code, ...) ships its own copy of
- * this module with the same exported shape. Core runtime files are host-neutral:
- * they keep Wakeflow's internal machine vocabulary ("thread" = a registered
- * window conversation handle, on-disk field names, registry paths) identical
- * across hosts, and read everything host-visible from this profile instead:
- *
- * - hostId / hostName / decisionOwner: host identity used in payloads and text.
- * - memoryFile / memoryFileLabel: per-window operating rules file (AGENTS.md / CLAUDE.md).
- * - pluginManifestDir / pluginManifestPath: installed plugin manifest location.
- * - kinds: host-branded on-disk record kinds (existing workspaces depend on these).
- * - closedLoopContractName: contract label used in script help text.
- * - hostTools: host-side window tools referenced by launch plans and delivery guidance.
- * - handleId: placeholder rejection set and human description for real window ids.
- * - keepLiveEnv: environment variable names for keep-live runtime assistance.
- * - workspaceResidueChecks: host-specific residue checks for target workspaces.
- * - texts: human-facing strings embedded in generated documents and prompts.
- * - launch: window launch plan flags, host workflow steps, and title-reset shape.
- * - artifact: plugin artifact layout facts consumed by wakeflow-validate.
- *
- * Contract rule: core files may interpolate these values but must not branch on
- * hostId. Anything that needs structurally different behavior per host belongs
- * in this module (or in wakeflow-host-send-adapter.mjs for delivery transport).
+ * Plugin artifacts own their real host profiles and tools/sync-core.mjs
+ * intentionally does not copy this file into plugin targets. The core copy is
+ * here so host-neutral scripts can run from core/ during repository
+ * development without breaking their dynamic host-profile imports.
  */
 
 export const hostProfile = {
@@ -57,13 +39,7 @@ export const hostProfile = {
     argsJson: "CODEX_AUTOMATION_KEEP_LIVE_ARGS_JSON",
     disable: "CODEX_AUTOMATION_KEEP_LIVE",
   },
-  workspaceResidueChecks: [
-    {
-      relPath: ".agents/skills",
-      kind: "codex-project-skill-projection",
-      message: "Codex project skill projections require explicit current-plan authorization.",
-    },
-  ],
+  workspaceResidueChecks: [],
   texts: {
     registeredHandle: (windowName) => `Registered Codex thread for ${windowName}.`,
     subagentAssist: {
@@ -101,8 +77,8 @@ export const hostProfile = {
     }),
   },
   artifact: {
-    packageName: "wakeflow",
+    packageName: "wakeflow-core-dev",
     marketplacePath: ".agents/plugins/marketplace.json",
-    packagedEntries: [".codex-plugin/", ".mcp.json", "README.zh-CN.md", "mcp/", "skills/", "scripts/", "templates/"],
+    packagedEntries: [],
   },
 };

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { hostProfile } from "./wakeflow-host-profile.mjs";
 
 export function createDeliveryStore({
   workspaceRoot,
@@ -8,15 +9,18 @@ export function createDeliveryStore({
   nowIso,
   fail,
 }) {
+  const hostRuntimeDir = path.join(stateDir, "hosts", hostProfile.runtime.hostDirName);
+  const legacyRegistryDir = path.join(stateDir, "thread-registry");
   const dirs = {
     packets: path.join(stateDir, "dispatch-packets"),
     groups: path.join(stateDir, "dispatch-groups"),
     deliveries: path.join(stateDir, "delivery-envelopes"),
     deliveryRuns: path.join(stateDir, "delivery-runs"),
     results: path.join(stateDir, "target-results"),
-    registry: path.join(stateDir, "thread-registry"),
-    windowConfig: path.join(stateDir, "window-config"),
-    keepLive: path.join(stateDir, "keep-live"),
+    locks: path.join(stateDir, "locks"),
+    registry: path.join(hostRuntimeDir, "thread-registry"),
+    windowConfig: path.join(hostRuntimeDir, "window-config"),
+    keepLive: path.join(hostRuntimeDir, "keep-live"),
   };
 
   function ensureInsideWorkspace(file, label) {
@@ -108,6 +112,28 @@ export function createDeliveryStore({
     return path.join(dirs.registry, `${slug(windowName)}.json`);
   }
 
+  function findThreadFile(windowName) {
+    const hostFile = threadFileFor(windowName);
+    if (existsSync(hostFile)) return hostFile;
+    if (hostProfile.runtime.legacyRegistryFallback) {
+      const legacyFile = path.join(legacyRegistryDir, `${slug(windowName)}.json`);
+      if (existsSync(legacyFile)) return legacyFile;
+    }
+    return hostFile;
+  }
+
+  function legacyThreadRegistryEntries() {
+    if (!hostProfile.runtime.legacyRegistryFallback || !existsSync(legacyRegistryDir)) return [];
+    return readdirSync(legacyRegistryDir)
+      .filter((name) => name.endsWith(".json"))
+      .sort()
+      .map((name) => path.join(legacyRegistryDir, name));
+  }
+
+  function lockFileFor(windowName) {
+    return path.join(dirs.locks, `${slug(windowName)}.json`);
+  }
+
   function windowConfigFileFor(windowName) {
     return path.join(dirs.windowConfig, `${slug(windowName)}.json`);
   }
@@ -147,6 +173,9 @@ export function createDeliveryStore({
     deliveryFileFor,
     deliveryRunFileFor,
     threadFileFor,
+    findThreadFile,
+    legacyThreadRegistryEntries,
+    lockFileFor,
     windowConfigFileFor,
     resultFileFor,
     supersededResultFileFor,

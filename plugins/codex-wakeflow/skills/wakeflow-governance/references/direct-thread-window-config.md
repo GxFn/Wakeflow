@@ -9,9 +9,13 @@ project documentation.
 ## Storage
 
 Store real thread ids only in the local thread registry under
-`.workspace-local/wakeflow-delivery/thread-registry/`. Wakeflow setup or
-host-controlled tooling should pass each real thread id to one local
+`.workspace-local/wakeflow-delivery/hosts/codex/thread-registry/`. Wakeflow
+setup or host-controlled tooling should pass each real thread id to one local
 registration command; agents must not hand-write multiple runtime files.
+Records in the legacy `.workspace-local/wakeflow-delivery/thread-registry/`
+location are still read as a fallback while new registrations write the
+host-scoped path, and the shared `.workspace-local/wakeflow-delivery/locks/`
+directory enforces one in-flight delivery per window across hosts.
 
 Never write real thread ids to:
 

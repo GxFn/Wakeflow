@@ -248,8 +248,8 @@ test("initialize localizes launch titles and prompts with the window name first"
   });
   assert.equal(app.localRegistration.required, true);
   assert.equal(app.localRegistration.command, "wakeflow-setup initialize");
-  assert.equal(app.localRegistration.threadIdAuthority, ".workspace-local/wakeflow-delivery/thread-registry/AppRepo.json");
-  assert.equal(app.localRegistration.derivedStatusView, ".workspace-local/wakeflow-delivery/window-config/AppRepo.json");
+  assert.equal(app.localRegistration.threadIdAuthority, ".workspace-local/wakeflow-delivery/hosts/codex/thread-registry/AppRepo.json");
+  assert.equal(app.localRegistration.derivedStatusView, ".workspace-local/wakeflow-delivery/hosts/codex/window-config/AppRepo.json");
   assert.equal(app.localRegistration.trackedDocsContainThreadIds, false);
   assert.ok(app.localRegistration.argvTemplate.includes("--thread"));
   assert.ok(app.localRegistration.argvTemplate.includes("AppRepo=<createdThreadId>"));
@@ -577,8 +577,8 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
   assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/workspace/requirement-to-wave-execution-flow.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/workspace/archive/index.md")), true);
 
-  const registryPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/thread-registry/FixtureWorkspace.json");
-  const windowConfigPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/window-config/FixtureWorkspace.json");
+  const registryPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/thread-registry/FixtureWorkspace.json");
+  const windowConfigPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/window-config/FixtureWorkspace.json");
   const registry = JSON.parse(readFileSync(registryPath, "utf8"));
   const windowConfig = JSON.parse(readFileSync(windowConfigPath, "utf8"));
   assert.equal(registry.threadId, threadId);
@@ -590,7 +590,7 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
   assert.equal(windowConfig.deliveryRole, "controller");
   assert.equal(Object.hasOwn(windowConfig, "threadId"), false);
 
-  const baseWindowConfigPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/window-config/BaseWindow.json");
+  const baseWindowConfigPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/window-config/BaseWindow.json");
   const baseWindowConfig = JSON.parse(readFileSync(baseWindowConfigPath, "utf8"));
   assert.equal(baseWindowConfig.threadRegistered, false);
   assert.equal(baseWindowConfig.deliveryRole, "target");
@@ -680,7 +680,7 @@ test("initialize can replace one registered window thread without rebuilding eve
   assert.equal(replaced.replacedExistingThread, true);
   assert.equal(replaced.threadIdRedacted, true);
 
-  const registryPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/thread-registry/BaseWindow.json");
+  const registryPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/thread-registry/BaseWindow.json");
   const registry = JSON.parse(readFileSync(registryPath, "utf8"));
   assert.equal(registry.threadId, newThreadId);
   assert.equal(Object.hasOwn(registry, "displayTitle"), false);

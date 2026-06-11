@@ -115,10 +115,10 @@ Current scripts:
   dispatch group, delivery, target, or target result and report the matching
   demand / task package / dispatch / delivery / result / controller-event chain
   without sending messages or making an acceptance decision. Resume plans expose
-  a `WakeflowHostSendAdapter` descriptor for Claude Code session dispatch in
-  desktop-session or headless-resume mode; the adapter consumes delivery
-  envelopes, requires readback, and never stores real thread ids or performs
-  controller acceptance.
+  a `WakeflowHostSendAdapter` descriptor for Claude Code dispatch to
+  tmux-resident windows; the adapter describes the `wakeflow-claude-host send`
+  command the agent must run, consumes delivery envelopes, requires pane
+  readback, and never stores real thread ids or performs controller acceptance.
 - `wakeflow-demand-sequence.mjs`: ordered independent-demand runner. It reads a tracked
   machine manifest whose items point at standard developer demand documents,
   validates each document has exactly one `Unified Status` marker plus the
@@ -203,6 +203,33 @@ Current scripts:
   scripts. `list` prints the allowed backend script set; other commands run a
   named backend script through `lib/wakeflow-runtime.mjs`. Prefer named MCP
   capability tools for normal work.
+
+Host transport helper:
+
+`scripts/lib/wakeflow-claude-host.mjs` is the tmux transport for tmux-resident
+Claude Code windows. The agent runs it directly via Bash as
+`node scripts/lib/wakeflow-claude-host.mjs <command> --root <workspace>` with
+JSON output; it is a script, not an MCP tool. Its nine commands:
+
+- `preflight`: report tmux/claude/brew availability and the install
+  recommendation (ask the user once before `brew install tmux`).
+- `ensure-server`: create the wakeflow tmux server session when missing.
+- `launch-window`: create one tmux-resident `claude --session-id` window
+  (`--window --cwd [--title] [--session-id] [--prompt-file] [--claude-arg ...]
+  [--replace]`), paste the entry-sync prompt, store the window-host binding,
+  and return the generated session id.
+- `retitle`: rename the tmux window that hosts a Wakeflow window
+  (`--window --title`).
+- `send`: paste a prompt file into a window's pane under the shared per-window
+  delivery lock and return pane readback evidence
+  (`--window --prompt-file [--delivery-id] [--lock-ttl-sec] [--force]`).
+- `readback`: capture the current pane tail for evidence (`--window [--lines]`).
+- `release-lock`: remove the shared in-flight delivery lock for a window.
+- `wait-results`: block until target results exist for a dispatch group
+  (`--group [--target <window>...|--expect N] [--timeout-sec] [--poll-ms]`);
+  run it as a background task, it releases finished windows' locks.
+- `attach-window`: print, and optionally open in macOS Terminal, the tmux
+  attach command for a window (`--window [--open-terminal]`).
 
 Workspace script tests:
 

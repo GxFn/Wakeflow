@@ -21,6 +21,7 @@ export function createWindowRuntime(ctx) {
     atomicWriteJson,
     readJson,
     threadFileFor,
+    findThreadFile,
     windowConfigFileFor,
     threadRegistrationVersion,
     windowConfigVersion,
@@ -121,7 +122,7 @@ export function createWindowRuntime(ctx) {
   }
 
   function loadThreadRegistration(windowName) {
-    const file = threadFileFor(windowName);
+    const file = (findThreadFile ?? threadFileFor)(windowName);
     if (!existsSync(file)) return null;
     const registration = readJson(file, "thread registration");
     try {
@@ -157,7 +158,7 @@ export function createWindowRuntime(ctx) {
       cwd,
       responsibilityRoot,
       registration,
-      threadRegistryFile: path.relative(stateDir, threadFileFor(windowName)),
+      threadRegistryFile: path.relative(stateDir, (findThreadFile ?? threadFileFor)(windowName)),
       generatedAt: nowIso(),
       version: windowConfigVersion,
     });

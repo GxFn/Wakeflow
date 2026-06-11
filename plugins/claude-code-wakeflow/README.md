@@ -17,7 +17,7 @@ roots, compact delivery envelopes, and evidence-based acceptance.
 - [Why Wakeflow](#why-wakeflow)
 - [System Model](#system-model)
 - [Install Wakeflow](#install-wakeflow)
-- [Window Modes](#window-modes)
+- [Window Model](#window-model)
 - [One Vocabulary Across Hosts](#one-vocabulary-across-hosts)
 - [Initialize A Workspace](#initialize-a-workspace)
 - [What Wakeflow Creates](#what-wakeflow-creates)
@@ -25,6 +25,7 @@ roots, compact delivery envelopes, and evidence-based acceptance.
 - [Automation Semantics](#automation-semantics)
 - [MCP Capability Surface](#mcp-capability-surface)
 - [Runtime And Ledger Boundaries](#runtime-and-ledger-boundaries)
+- [Dual-Host Workspaces](#dual-host-workspaces)
 - [Working In This Repository](#working-in-this-repository)
 - [Design Principles](#design-principles)
 
@@ -65,7 +66,7 @@ flowchart TD
   StateRoot --> Tasks["Task packages"]
   Tasks --> Delivery["Delivery envelopes"]
   LocalRuntime[".workspace-local<br/>thread registry + derived window config"] -. "lookup" .-> Delivery
-  Delivery --> Host["Claude Code delivery<br/>desktop session message or headless resume"]
+  Delivery --> Host["Claude Code delivery<br/>tmux window send via host helper"]
   Host --> Targets["Repository / Design / Test windows"]
   Targets --> Repos["Responsibility roots"]
   Targets --> Results["TargetResultEnvelope<br/>with evidence refs"]
@@ -95,62 +96,77 @@ For local development, add this checkout as a local marketplace instead:
 /plugin install wakeflow@gxfn
 ```
 
-The plugin ships three coordinated surfaces:
+The plugin ships four coordinated surfaces:
 
 | Surface | Contents |
 | --- | --- |
 | MCP server | `.mcp.json` starts `node ${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs`, a standalone server with no `node_modules` dependency. |
 | Skills | `wakeflow-controller`, `wakeflow-target`, and `wakeflow-governance` operating manuals. |
 | Slash commands | `/wakeflow:init`, `/wakeflow:status`, `/wakeflow:dispatch`, and `/wakeflow:review`. |
+| Host transport helper | `scripts/lib/wakeflow-claude-host.mjs` with the commands `preflight`, `ensure-server`, `launch-window`, `retitle`, `send`, `readback`, `release-lock`, `wait-results`, and `attach-window`. |
 
-## Window Modes
+The helper requires tmux. Initialization runs `preflight`, which installs tmux
+with `brew install tmux` after one explicit user consent when it is missing,
+retrying once on transient bottle errors.
 
-Window transport is the key Claude Code difference. Wakeflow supports two
-delivery modes, and both keep the same envelope, evidence, and review
-contracts.
+## Window Model
 
-**desktop-session mode.** Each Wakeflow window (controller, repository
-windows, Design, Test) is a Claude Code desktop session. The controller
-delivers envelope prompts to target sessions with the desktop session message
-tool. This is the natural mode when the user keeps the windows visible and
-wants to watch work move.
-
-**headless-resume mode.** Each window is a persistent CLI session. The
-controller delivers by resuming the target as a background task:
-
-```bash
-claude -p --resume <sessionId> "<envelope prompt>" --output-format json
-```
-
-The JSON run result is the readback evidence for that delivery. A resumed
-session can fork to a new `session_id`; the new id must be re-registered in
-the local thread registry after every run, or the next delivery will wake a
-stale session.
-
-`workspace.config.json` can pin a mode explicitly:
+Window transport is the key Claude Code difference, and the Claude Code
+edition is terminal-only. Every Wakeflow window (controller included) is a
+tmux-resident interactive `claude` session, and all windows live in one tmux
+server session named `wakeflow` by default. The session name is configurable
+in `workspace.config.json`:
 
 ```json
 {
-  "deliveryMode": "desktop-session"
+  "hosts": {
+    "claude-code": {
+      "tmuxSession": "wakeflow"
+    }
+  }
 }
 ```
 
-Allowed values are `"desktop-session"` and `"headless-resume"`. When no mode
-is pinned, the default behavior prefers the open desktop session and falls
-back to headless resume.
+A Wakeflow thread id is the window's Claude Code session id, which stays
+stable across resumes. Desktop windows are not an automation transport. The
+envelope, evidence, and review contracts are unchanged from the shared
+Wakeflow model.
 
-**Unattended permissions for headless mode.** Headless targets cannot answer
-permission prompts. Before running unattended, configure per-repository
-allowlists in each repository's `.claude/settings.json`, or consciously choose
-`--permission-mode acceptEdits` for sessions you trust with edits. Wakeflow
-never makes this choice for the user: it is a deliberate per-repository
-decision, not a default.
+**Launch.** Initialization runs the helper's `preflight` (tmux install with
+consent when missing), then `launch-window` for each planned window: the
+helper creates a tmux window running `claude --session-id`, pastes the
+entry-sync prompt, sets the `displayTitle` as the tmux window name, and
+returns the session id, which is registered once in the local thread
+registry.
+
+**Dispatch.** The controller writes the envelope prompt to a temp file and
+runs `send --window <target> --prompt-file <file>`. The helper enforces a
+shared per-window delivery lock, pastes the prompt through a tmux buffer, and
+returns pane readback evidence; the agent records it with
+`wakeflow_record_delivery`. Target windows controller-return the same way
+toward the controller window. `wait-results --group <id>` can run as a
+background watcher for stall insurance.
+
+**Recovery.** When a tmux window dies, the registered session id remains the
+thread id: run `claude -p --resume <registered session id>` (same id), then
+`launch-window --replace` with that id.
+
+**Watching.** Attach to the whole server with `tmux attach -t wakeflow`, open
+one window in macOS Terminal with the helper's
+`attach-window --open-terminal`, or use iTerm2 native integration with
+`tmux -CC`.
+
+**Unattended permissions.** Unattended permission behavior remains the user's
+decision. Configure per-repository allowlists in each repository's
+`.claude/settings.json`, or consciously choose an explicit permission mode at
+launch for sessions you trust with edits. Wakeflow never makes this choice
+for the user: it is a deliberate per-repository decision, not a default.
 
 ## One Vocabulary Across Hosts
 
 Wakeflow keeps one machine vocabulary across host editions. A "thread id" in
-registries, payload fields, and CLI flags is the Claude Code session id; no
-field is renamed per host. The per-window rules file is `CLAUDE.md`, which
+registries, payload fields, and CLI flags is the Claude Code session id,
+stable across resumes; no field is renamed per host. The per-window rules file is `CLAUDE.md`, which
 Claude Code auto-loads when the session starts, so each window reads its own
 gates and access card without extra prompting.
 
@@ -192,11 +208,13 @@ The operating flow is:
    import.
 6. After user confirmation, Claude Code calls `wakeflow_initialize_workspace`
    with `apply: true`.
-7. Claude Code creates the window sessions described by the returned launch
-   plan (desktop sessions or persistent CLI sessions, per the active window
-   mode) and passes each real session id once to Wakeflow's local registration
-   command. The thread registry is the only session-id authority; window
-   config is refreshed as a derived view.
+7. Claude Code runs the host helper: `preflight` first, then `launch-window`
+   for each window in the returned launch plan. Each launch creates a tmux
+   window running `claude --session-id`, pastes the entry-sync prompt, sets
+   the `displayTitle` as the tmux window name, and returns the session id,
+   which is passed once to Wakeflow's local registration command. The thread
+   registry is the only session-id authority; window config is refreshed as a
+   derived view.
 
 Design and Test are fresh support surfaces by default. Existing similarly
 named directories such as `<Product>Design` or `<Product>Test` are treated as
@@ -223,7 +241,7 @@ boundary:
 | --- | --- |
 | `CLAUDE.md` | Parent controller gates and durable boundaries. |
 | Child `CLAUDE.md` access cards | Per-window responsibility and read paths. |
-| `workspace.config.json` | Managed windows, repository paths, roles, delivery mode, and default language. |
+| `workspace.config.json` | Managed windows, repository paths, roles, host transport settings such as the tmux session name, and default language. |
 | `.workspace-active/` | Active state roots, current indexes, progress docs, TODO projections, intake, and test cards. |
 | `.workspace-local/` | Thread registry, delivery runtime, local overrides, and derived window config. |
 | `wakeflow-ledger/` | Long-term project coordination records and archives. |
@@ -264,14 +282,19 @@ Wakeflow automation is direct session delivery plus explicit result return.
 
 Core rules:
 
-- Real session ids live only in `.workspace-local/wakeflow-delivery/thread-registry/`.
+- Real session ids live only in
+  `.workspace-local/wakeflow-delivery/hosts/claude-code/thread-registry/`.
 - Window config is derived from `workspace.config.json` plus thread-registry
   presence; it is not a second session-id or window-semantics authority.
 - Delivery prompts remain compact and human-readable.
-- The host sends prompts with the desktop session message tool or a headless
-  resume run; Wakeflow records the send and readback evidence.
-- In headless-resume mode the JSON run result is the readback evidence, and
-  any forked session id is re-registered before the next delivery.
+- The controller writes the envelope prompt to a temp file and sends it with
+  the host helper (`send --window <target> --prompt-file <file>`); the helper
+  enforces the shared per-window delivery lock, pastes through a tmux buffer,
+  and returns pane readback evidence that the agent records with
+  `wakeflow_record_delivery`.
+- Targets controller-return through the same helper send toward the
+  controller window; `wait-results --group <id>` can run as a background
+  watcher for stall insurance.
 - `group-ready` waits for the expected target results before a controller
   return.
 - `per-target` can wake the controller once per target while still preserving
@@ -291,8 +314,8 @@ Wakeflow exposes only stable outer workflow contracts as MCP tools, and the
 tool names are identical to the Codex edition. Runtime scripts remain the
 internal implementation and test surface; they are not public tools just
 because they exist. A target closeout uses the same delivery model as
-controller dispatch: prepare an envelope, send the prompt through the active
-window mode, then record the delivery run.
+controller dispatch: prepare an envelope, send the prompt through the tmux
+host helper, then record the delivery run.
 
 Primary tool groups:
 
@@ -307,8 +330,8 @@ Primary tool groups:
 
 Public MCP tools are for outer agent workflows. Target closeout is
 deliberately split: record a target result, review readiness, prepare a
-controller-return envelope when policy allows, send through the active window
-mode, and record delivery evidence. Controller review stays split as review
+controller-return envelope when policy allows, send through the tmux host
+helper, and record delivery evidence. Controller review stays split as review
 pack, result reduction, and explicit decision; result reduction only creates a
 review candidate and is not acceptance. Do not collapse those steps into a
 single target-window MCP tool. Internal steps such as archive summary refresh
@@ -339,6 +362,24 @@ Wakeflow keeps source, active runtime, and durable records separate:
 The source repository tracks reusable Wakeflow capability. Product code,
 project-specific active state, real session ids, and derived local runtime
 artifacts do not belong in Wakeflow source.
+
+## Dual-Host Workspaces
+
+One workspace may run the Codex and Claude Code Wakeflow editions side by
+side. Shared business state stays host-neutral: `.workspace-active/`,
+`wakeflow-ledger/`, and the delivery state under
+`.workspace-local/wakeflow-delivery/` (`dispatch-packets/`,
+`dispatch-groups/`, `delivery-envelopes/`, `delivery-runs/`,
+`target-results/`), plus the shared `locks/` directory that enforces one
+in-flight delivery per window across hosts.
+
+Host-scoped runtime is separated per host:
+
+- `.workspace-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`
+- `.workspace-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`
+
+`AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code) coexist at the workspace
+and child roots, and each demand has exactly one controller across hosts.
 
 ## Working In This Repository
 

@@ -83,9 +83,9 @@ Wakeflow 采用和 Lark Remote 一样的双层 marketplace 结构：仓库根目
 /plugin install wakeflow@gxfn
 ```
 
-Claude Code 版本支持两种窗口模式：`desktop-session`（每个 Wakeflow 窗口是一个
-Claude Code 桌面会话，通过会话消息工具投递）和 `headless-resume`（每个窗口是一个
-持久 CLI 会话，控制器用 `claude -p --resume <sessionId>` 作为后台任务投递）。
+Claude Code 版本只使用 tmux 常驻终端模型：每个 Wakeflow 窗口（包括总控）都是
+常驻 tmux 的交互式 `claude` 会话，位于名为 `wakeflow` 的 tmux server session
+内；Wakeflow thread id 就是该窗口的 Claude Code session id（跨 resume 保持稳定）。
 完整指南见 [plugins/claude-code-wakeflow/README.zh-CN.md](plugins/claude-code-wakeflow/README.zh-CN.md)。
 
 安装公开 Codex 插件 artifact：
@@ -205,7 +205,9 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 
 核心规则：
 
-- 真实 thread id 只存在 `.workspace-local/wakeflow-delivery/thread-registry/`。
+- 真实 thread id 只存在宿主独立的本地 thread registry：
+  `.workspace-local/wakeflow-delivery/hosts/<host>/thread-registry/`
+  （`codex` 或 `claude-code`）。
 - Window config 从 `workspace.config.json` 和 thread-registry presence 派生，不是第二份 thread-id 权威。
 - Delivery prompts 保持轻量、可读。
 - Host 通过 Codex thread tools 发送 prompt；Wakeflow 记录发送和 readback 证据。
@@ -298,6 +300,9 @@ npm test             # check:core + 双 validate + 双 smoke + 全部测试
 memory 文件模板、skills、template bundle）只存在于各自 artifact 内。
 `npm run check:core` 负责保证副本不漂移。
 
+同时运行两个版本的工作区里，共享业务状态与宿主独立运行时的划分见
+[docs/dual-host-workspace-storage.md](docs/dual-host-workspace-storage.md)。
+
 常见源码区域：
 
 | Path | 用途 |
@@ -306,7 +311,7 @@ memory 文件模板、skills、template bundle）只存在于各自 artifact 内
 | `tools/sync-core.mjs` | core 同步与漂移检查（`--check`）。 |
 | `plugins/codex-wakeflow/.codex-plugin/plugin.json` | Codex 插件 manifest 和 MCP wiring。 |
 | `plugins/claude-code-wakeflow/.claude-plugin/plugin.json` | Claude Code 插件 manifest 和 MCP wiring。 |
-| `plugins/claude-code-wakeflow/scripts/lib/wakeflow-host-profile.mjs` | Claude Code host profile（窗口模式、CLAUDE.md、session 词汇）。 |
+| `plugins/claude-code-wakeflow/scripts/lib/wakeflow-host-profile.mjs` | Claude Code host profile（tmux 窗口模型、CLAUDE.md、session 词汇）。 |
 | `plugins/codex-wakeflow/mcp/server.cjs` | 无 `node_modules` 依赖的 standalone MCP server entrypoint。 |
 | `plugins/codex-wakeflow/bin/wakeflow-mcp.mjs` | MCP server entrypoint 的兼容 wrapper。 |
 | `plugins/codex-wakeflow/scripts/` | 随插件发布的 setup、state、delivery、intake、archive、validation 和 CLI runtime。 |

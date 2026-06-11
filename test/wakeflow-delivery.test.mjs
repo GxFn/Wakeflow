@@ -575,7 +575,7 @@ test("registers threads locally and redacts thread ids", () => {
   assert.equal(payload.threadIdRedacted, true);
   assert.equal(Object.hasOwn(payload, "deliveryRole"), false);
   assert.doesNotMatch(JSON.stringify(payload), /0192fac-AlembicPlugin/);
-  const registry = JSON.parse(readFileSync(path.join(root, ".workspace-local/wakeflow-delivery/thread-registry/AlembicPlugin.json"), "utf8"));
+  const registry = JSON.parse(readFileSync(path.join(root, ".workspace-local/wakeflow-delivery/hosts/codex/thread-registry/AlembicPlugin.json"), "utf8"));
   assert.equal(registry.threadId, "0192fac-AlembicPlugin");
   assert.equal(Object.hasOwn(registry, "deliveryRole"), false);
   assert.equal(Object.hasOwn(registry, "cwd"), false);
@@ -591,9 +591,25 @@ test("registers threads locally and redacts thread ids", () => {
   assert.equal(config.config.delivery.transport, "direct-thread");
 });
 
-test("rejects obsolete thread registry kinds instead of using fallback metadata", () => {
+test("reads legacy pre-dual-host thread registrations through the fallback path", () => {
   const { root } = makeFixture();
   writeJson(path.join(root, ".workspace-local/wakeflow-delivery/thread-registry/AlembicPlugin.json"), {
+    kind: "CodexWindowThreadRegistration",
+    version: 2,
+    windowName: "AlembicPlugin",
+    threadId: "0192fac-AlembicPlugin",
+    registeredAt: "2026-01-01T00:00:00.000Z",
+    lastVerifiedAt: "2026-01-01T00:00:00.000Z",
+  });
+
+  const config = parseOk(run(root, ["build-window-config", "--window", "AlembicPlugin", "--require-thread", "--write"]));
+  assert.equal(config.config.threadRegistered, true);
+  assert.match(config.config.threadRegistryFile, /^thread-registry\//);
+});
+
+test("rejects obsolete thread registry kinds instead of using fallback metadata", () => {
+  const { root } = makeFixture();
+  writeJson(path.join(root, ".workspace-local/wakeflow-delivery/hosts/codex/thread-registry/AlembicPlugin.json"), {
     kind: "CodexAutomationThreadRegistration",
     version: 1,
     windowName: "AlembicPlugin",

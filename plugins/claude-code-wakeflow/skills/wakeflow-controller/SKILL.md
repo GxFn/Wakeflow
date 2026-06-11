@@ -1,6 +1,6 @@
 ---
 name: wakeflow-controller
-description: Use when Wakeflow total control starts or resumes Wakeflow Delivery Loop in Claude Code, reviews target result envelopes, creates dispatch packets, builds delivery envelopes, decides acceptance / rework / block / next wave, or stops unattended automation.
+description: Use when Wakeflow total control starts or resumes Wakeflow Delivery Loop in Claude Code, reviews target result envelopes, creates dispatch packets, builds delivery envelopes, sends deliveries to tmux-resident window sessions with the wakeflow-claude-host helper, decides acceptance / rework / block / next wave, or stops unattended automation.
 ---
 
 # Wakeflow Controller
@@ -15,20 +15,25 @@ sessions, receive compact result envelopes, review raw evidence, and decide the
 next package. It does not replace planning, scope control, or acceptance.
 
 Direct-thread dispatch is the normal transport; on Claude Code a Wakeflow
-thread id is the registered Claude Code session id. In explicitly enabled
-unattended mode, keep reviewing results, pulling evidence, deciding, planning
-next eligible packages, and dispatching until final completion, a hard gate,
-explicit user stop, missing evidence that needs human judgment, or no eligible
-TODO remains.
+thread id is the window's Claude Code session id, generated at launch and
+stable across resumes. Every Wakeflow window (the controller included) is a
+tmux-resident interactive `claude` session inside the workspace tmux server
+session. In explicitly enabled unattended mode, keep reviewing results, pulling
+evidence, deciding, planning next eligible packages, and dispatching until
+final completion, a hard gate, explicit user stop, missing evidence that needs
+human judgment, or no eligible TODO remains.
 
 After a delivery is sent, read back, and recorded as `status=sent` with
 `readback.ok=true`, the controller dispatch turn is complete. Do not keep the
 turn open with `sleep`, repeated result review, repeated session reads, or
 manual polling. The target returns later through a `TargetResultEnvelope` and,
-if policy allows, a controller-return delivery. In headless-resume mode the
-background `claude -p` task completing is what wakes the controller; treat a
-missing result after the background task exits as a stalled delivery to
-review, not something to poll for.
+if policy allows, a controller-return delivery sent to the controller's own
+tmux window. As stall insurance, after dispatching a group the controller may
+run `wakeflow-claude-host.mjs wait-results --group <id> --target <windowA>
+--target <windowB> [--timeout-sec N]` as a background task; it completes when
+all expected target result envelopes exist (also releasing those windows'
+delivery locks) and wakes the controller. A `wait-results` timeout means a
+stalled delivery to review, not something to poll for.
 
 ## Source Practices For Acceptance
 
@@ -78,20 +83,26 @@ machine state.
 4. Create or select a task package only when it advances the confirmed goal.
 5. Build a dispatch packet from the state root.
 6. Build a delivery envelope.
-7. Send the envelope prompt exactly as stored in the envelope, using one of the
-   two Claude Code delivery modes:
-   - desktop-session mode: send the envelope prompt to the registered target
-     Claude Code desktop session with the session message tool.
-   - headless-resume mode: resume the target session as a background task with
-     `claude -p --resume <sessionId> "<envelope prompt>" --output-format json`.
-     The JSON result is the readback evidence. Resumed sessions can fork to a
-     new `session_id`; when it changes, re-register the new id into the thread
-     registry.
-   The workspace config may pin a mode with
-   `"deliveryMode": "desktop-session" | "headless-resume"`; otherwise prefer
-   the open desktop session and fall back to headless resume.
-8. Read back the host send evidence and record the delivery run.
-9. End the dispatch turn.
+7. Send the envelope prompt exactly as stored in the envelope with the tmux
+   host helper: write the prompt to a temp file, then run
+   `node <plugin>/scripts/lib/wakeflow-claude-host.mjs send --root <workspace>
+   --window <targetWindow> --prompt-file <file> [--delivery-id <id>]`. The
+   helper enforces the shared per-window delivery lock
+   (`.workspace-local/wakeflow-delivery/locks/<window>.json`, one in-flight
+   delivery per window across hosts), pastes the prompt into the target's tmux
+   pane via a tmux buffer (multiline-safe), and returns pane readback evidence
+   (`readback.paneTail`). If the target window is mid-turn, the pasted message
+   queues in its input and is processed next turn; that is fine. (Claude Code
+   desktop windows are not an automation transport.)
+8. Read back the helper send evidence and record the delivery run with
+   `wakeflow_record_delivery` (default host method `wakeflow-claude-host send`).
+9. End the dispatch turn, optionally starting the `wait-results` background
+   watcher for the dispatch group first.
+
+Recovery is not a delivery mode: when a target's tmux window is dead, finish or
+recover the same session headless with `claude -p --resume <registered session
+id>` (the session id is stable), then relaunch the resident window with
+`launch-window --replace --session-id <same id>` before the next delivery.
 
 ## Review Target Results
 
@@ -193,7 +204,8 @@ Stop instead of dispatching when:
   and validation path.
 - A completed result would leave TODO/backlog, archive state, or current status
   inconsistent.
-- The controller is about to poll/wait for targets after a send was recorded.
+- The controller is about to poll/wait for targets after a send was recorded
+  (the background `wait-results` watcher is the only allowed wait).
 - There are no eligible tasks.
 
 ## Verification

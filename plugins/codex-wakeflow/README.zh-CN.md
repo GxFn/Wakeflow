@@ -190,7 +190,7 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 
 核心规则：
 
-- 真实 thread id 只存在 `.workspace-local/wakeflow-delivery/thread-registry/`。
+- 真实 thread id 只存在 `.workspace-local/wakeflow-delivery/hosts/codex/thread-registry/`。
 - Window config 从 `workspace.config.json` 和 thread-registry presence 派生，不是第二份 thread-id 权威。
 - Delivery prompts 保持轻量、可读。
 - Host 通过 Codex thread tools 发送 prompt；Wakeflow 记录发送和 readback 证据。
@@ -238,6 +238,14 @@ Wakeflow 把源码、active runtime 和长期记录分开：
 
 Wakeflow 源仓库只跟踪可复用能力。产品代码、项目特定 active state、真实 thread id
 和派生本地运行时 artifacts 都不应进入 Wakeflow 源码。
+
+同一个工作区可以同时运行 Codex 和 Claude Code 两个 Wakeflow 版本。共享业务状态
+（`.workspace-active/`、`wakeflow-ledger/`，以及 `.workspace-local/wakeflow-delivery/`
+下的 dispatch packets、dispatch groups、delivery envelopes、delivery runs、
+target results 和共享 `locks/`）保持宿主中立；thread registry、window config、
+keep-live 等宿主独立运行时位于 `.workspace-local/wakeflow-delivery/hosts/codex/`。
+旧位置 `.workspace-local/wakeflow-delivery/thread-registry/` 的记录仍会作为
+fallback 被读取；新注册写入宿主独立路径，`wakeflow-verify` 会输出迁移提示。
 
 ## Marketplace 发布
 

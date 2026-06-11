@@ -1,29 +1,37 @@
 /**
  * Wakeflow host profile: the single host-coupling surface for this plugin artifact.
  *
- * This is the Claude Code edition. Core runtime files are host-neutral: they
- * keep Wakeflow's internal machine vocabulary ("thread" = a registered window
- * conversation handle; for Claude Code a thread id is a Claude Code session
- * id) identical across hosts, and read everything host-visible from this
- * profile instead.
+ * This is the Claude Code edition (terminal-only). Core runtime files are
+ * host-neutral: they keep Wakeflow's internal machine vocabulary ("thread" = a
+ * registered window conversation handle; for Claude Code a thread id is a
+ * Claude Code session id) identical across hosts, and read everything
+ * host-visible from this profile instead.
  *
- * Claude Code window modes supported by this artifact:
- * - desktop-session: each Wakeflow window is a Claude Code desktop session;
- *   deliveries are sent with the desktop session message tool.
- * - headless-resume: each Wakeflow window is a persistent CLI session;
- *   deliveries are sent by resuming it with `claude -p --resume <sessionId>`
- *   as a background task. Resumed sessions can fork to a new session id, so
- *   the new id from the JSON result must be re-registered after every run.
+ * Window model: every Wakeflow window (controller included) is a tmux-resident
+ * interactive `claude` session, created and driven by the host transport
+ * helper scripts/lib/wakeflow-claude-host.mjs (launch-window / send /
+ * readback / wait-results). Headless `claude -p --resume <sessionId>` is a
+ * recovery path for dead tmux windows, not a window mode. Claude Code desktop
+ * windows are not part of the automation surface.
  *
  * Contract rule: core files may interpolate these values but must not branch on
  * hostId. Anything that needs structurally different behavior per host belongs
  * in this module (or in wakeflow-host-send-adapter.mjs for delivery transport).
  */
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const pluginRoot = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
+const hostHelperPath = path.join(pluginRoot, "scripts/lib/wakeflow-claude-host.mjs");
 
 export const hostProfile = {
   hostId: "claude-code",
   hostName: "Claude Code",
   decisionOwner: "claude-agent",
+  runtime: {
+    hostDirName: "claude-code",
+    legacyRegistryFallback: false,
+  },
   memoryFile: "CLAUDE.md",
   memoryFileLabel: "CLAUDE",
   pluginManifestDir: ".claude-plugin",
@@ -35,9 +43,9 @@ export const hostProfile = {
     automationLoopStop: "ClaudeAutomationLoopStop",
   },
   hostTools: {
-    createWindow: "claude-session-create",
-    retitleWindow: "claude-session-rename",
-    sendToWindow: "claude-session-send",
+    createWindow: "wakeflow-claude-host launch-window",
+    retitleWindow: "wakeflow-claude-host retitle",
+    sendToWindow: "wakeflow-claude-host send",
   },
   handleId: {
     placeholders: [
@@ -79,31 +87,54 @@ export const hostProfile = {
     rootPluginUsageBanner:
       "> Wakeflow is installed as a Claude Code plugin for this workspace. Use Wakeflow MCP tools for setup, status, state roots, delivery, review, archive, next-work scans, and verification. Do not call installed runtime scripts directly or infer their Node parameters; if a required Wakeflow MCP tool is unavailable, stop and report that the Wakeflow plugin surface must be reloaded or reinstalled.\n\n",
     initializeApplyNextAction:
-      "Create the Claude Code window sessions in windowLaunchPlan (desktop-session mode: open a Claude Code window at each entry cwd and send createThreadPrompt as the first message; headless-resume mode: run `claude -p` in each entry cwd with createThreadPrompt and --output-format json), then register each real session id once into the local thread registry before dispatching any work.",
+      "Create the tmux-resident window sessions in windowLaunchPlan: run the host helper preflight first (install tmux via brew with one user consent when missing), then for each entry write createThreadPrompt to a temp file and run the helper launch-window command from hostLaunch; finally register each returned session id once into the local thread registry before dispatching any work.",
   },
   launch: {
     planFlags: {
       requiresHostCreateThread: true,
-      requiresHostTitleReset: false,
+      requiresHostTitleReset: true,
     },
     workflowSteps: (language) =>
       language === "zh"
         ? [
-            "为每个 launch entry 创建窗口会话。desktop-session 模式：在 entry cwd 打开一个 Claude Code 窗口，把 createThreadPrompt 作为第一条消息发送。headless-resume 模式：在 entry cwd 运行 `claude -p \"<createThreadPrompt>\" --output-format json`，从 JSON 结果读取 session_id。这些 prompt 只做初始化入口同步，不是任务投递。",
-            "displayTitle 是该窗口的工作标题；宿主支持改名时保持一致即可，Wakeflow 不要求标题重置工具调用。",
-            "把每个真实 session id 通过 Wakeflow 本地注册命令登记一次（--thread <Window>=<sessionId>）。该命令只把 id 存入 thread-registry 并刷新派生 window-config 状态；不要手写 runtime 文件。headless-resume 每次 `claude -p --resume` 运行后，从 JSON 结果读取 session_id，如有变化必须重新登记：恢复的 Claude Code 会话可能派生出新的 session id。",
+            "先运行 host helper 预检：`node <plugin>/scripts/lib/wakeflow-claude-host.mjs preflight --root <workspace>`。缺 tmux 时征求用户同意一次后执行 `brew install tmux`（遇瞬时 bottle 错误重试一次），再继续。",
+            "为每个 launch entry 创建 tmux 常驻窗口：把 createThreadPrompt 写入临时文件，执行该 entry hostLaunch.launchArgv 给出的 helper launch-window 命令（--window、--title displayTitle、--cwd、--prompt-file）。helper 会创建运行 `claude --session-id` 的 tmux 窗口、注入入口同步 prompt、写入 window-host 绑定并返回生成的 session id。这些 prompt 只做初始化入口同步，不是任务投递。",
+            "把每个返回的 session id 通过 Wakeflow 本地注册命令登记一次（--thread <Window>=<sessionId>）。该命令只把 id 存入本宿主 thread-registry 并刷新派生 window-config 状态；不要手写 runtime 文件。",
             "总控和子窗口可使用 Claude Code 子 agent（Task 工具）并行做代码搜索、日志归因、测试定位和证据汇总；子 agent 不拥有验收、派发、状态机写入或跨仓库边界。",
           ]
         : [
-            "Create the window session for each launch entry. desktop-session mode: open a Claude Code window rooted at the entry cwd and send createThreadPrompt as the first message. headless-resume mode: run `claude -p \"<createThreadPrompt>\" --output-format json` in the entry cwd and read session_id from the JSON result. These prompts perform initialization entry sync only; they are not task deliveries.",
-            "displayTitle is the working title for the window; keep it where the host supports renaming. Wakeflow does not require a title-reset tool call.",
-            "Pass each real session id once to the Wakeflow local registration command (--thread <Window>=<sessionId>). The command stores the id only in thread-registry and refreshes derived window-config status; do not hand-write runtime files. After every headless `claude -p --resume` run, read session_id from the JSON result and re-register it when it changed: resumed Claude Code sessions can fork to a new session id.",
+            "Run the host helper preflight first: `node <plugin>/scripts/lib/wakeflow-claude-host.mjs preflight --root <workspace>`. When tmux is missing, ask the user once, run `brew install tmux` (retry once on a transient bottle error), then continue.",
+            "Create one tmux-resident window per launch entry: write createThreadPrompt to a temp file and run the helper launch-window command from the entry's hostLaunch.launchArgv (--window, --title displayTitle, --cwd, --prompt-file). The helper creates the tmux window running `claude --session-id`, pastes the entry-sync prompt, stores the window-host binding, and returns the generated session id. These prompts perform initialization entry sync only; they are not task deliveries.",
+            "Pass each returned session id once to the Wakeflow local registration command (--thread <Window>=<sessionId>). The command stores the id only in this host's thread-registry and refreshes derived window-config status; do not hand-write runtime files.",
             "Controller and child windows may use Claude Code subagents (the Task/Agent tool) for parallel code search, log triage, test localization, and evidence summarization. Subagents do not own acceptance, dispatch, state-machine writes, or cross-repository boundaries.",
           ],
     titleReset: (title) => ({
-      required: false,
-      hostTool: null,
+      required: true,
+      hostTool: "wakeflow-claude-host retitle",
       title,
+    }),
+    entryExtras: (entry) => ({
+      windowMode: "tmux-resident",
+      hostLaunch: {
+        helper: hostHelperPath,
+        preflightArgv: ["node", hostHelperPath, "preflight", "--root", "<workspace-root>"],
+        launchArgv: [
+          "node", hostHelperPath, "launch-window",
+          "--root", "<workspace-root>",
+          "--window", entry.windowName,
+          "--title", entry.displayTitle,
+          "--cwd", entry.cwd,
+          "--prompt-file", "<temp file containing createThreadPrompt>",
+        ],
+        sendArgv: [
+          "node", hostHelperPath, "send",
+          "--root", "<workspace-root>",
+          "--window", entry.windowName,
+          "--prompt-file", "<temp file containing the delivery envelope prompt>",
+        ],
+        attachArgv: ["node", hostHelperPath, "attach-window", "--root", "<workspace-root>", "--window", entry.windowName, "--open-terminal"],
+        recovery: "When the tmux window is dead, recover the same session headless: claude -p --resume <registered session id> (the session id is stable across resumes), then relaunch the tmux window with launch-window --replace --session-id <same id>.",
+      },
     }),
   },
   artifact: {

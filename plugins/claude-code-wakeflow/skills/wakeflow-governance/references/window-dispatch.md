@@ -12,8 +12,8 @@ drafting. Test is included only when real-scenario evidence is required.
 
 ## Identity Gate
 
-Every task package and copyable prompt for an execution window (a Claude Code
-window session) must require the target to:
+Every task package and copyable prompt for an execution window (a
+tmux-resident Claude Code window session) must require the target to:
 
 - read parent `CLAUDE.md`;
 - read the current state root or controller document;
@@ -22,6 +22,10 @@ window session) must require the target to:
 - state what the window is not responsible for.
 
 If the target cannot confirm identity, it stops and reports a blocker.
+
+A dispatch prompt arrives as a user message pasted into the target's tmux pane
+by the host helper. Arrival proves transport only; it never grants identity or
+authority.
 
 ## Coverage And Dependencies
 

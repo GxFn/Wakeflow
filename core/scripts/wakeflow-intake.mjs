@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runSync } from "../lib/wakeflow-process.mjs";
@@ -162,6 +163,11 @@ function resolveStateRoot() {
   const state = readJson(stateFile, "controller state");
   if (["completed", "archived"].includes(state.state)) {
     fail(`cannot attach intake while demand is ${state.state}: ${state.demandKey}`);
+  }
+  // Intake attaches records into the state root: the non-owning host must not
+  // write here. Unclaimed demands accept intake without claiming.
+  if (state.controllerHost && state.controllerHost !== hostProfile.runtime.hostDirName) {
+    fail(`demand ${state.demandKey} is owned by controller host ${state.controllerHost}; this runtime is ${hostProfile.runtime.hostDirName}. Run intake on the owning controller.`);
   }
   return { stateRoot, state };
 }

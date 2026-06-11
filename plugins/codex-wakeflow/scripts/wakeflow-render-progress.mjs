@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
@@ -292,9 +293,22 @@ try {
     },
   };
 
+  // Ownership gate: rendering rewrites wakeflow-state.json, so the non-owning
+  // host must not run it (it would race the owner's writes). Unclaimed demands
+  // render freely; rendering never claims.
+  if (state.controllerHost && state.controllerHost !== hostProfile.runtime.hostDirName) {
+    fail(`demand ${state.demandKey} is owned by controller host ${state.controllerHost}; this runtime is ${hostProfile.runtime.hostDirName}. Render from the owning controller.`);
+  }
+
   if (write) {
+    // Lost-update guard: re-read the state and rebuild from the FRESH copy so a
+    // concurrent revision bump between our read and this write is not reverted.
+    const fresh = readJson(stateFile, "controller state");
+    if (fresh.revision !== state.revision) {
+      fail(`controller state changed while rendering (revision ${state.revision} -> ${fresh.revision}); re-run wakeflow-render-progress against the current state.`);
+    }
     writeJson(projectionFile, projection);
-    writeJson(stateFile, nextState);
+    writeJson(stateFile, { ...fresh, projection: nextState.projection });
     atomicWrite(progressFile, nextProgress.endsWith("\n") ? nextProgress : `${nextProgress}\n`);
   }
 

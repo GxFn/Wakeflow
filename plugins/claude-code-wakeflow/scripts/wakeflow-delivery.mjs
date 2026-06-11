@@ -226,6 +226,7 @@ const {
   resultFileFor,
   supersededResultFileFor,
   listJsonFiles,
+  lockFileFor,
   readWindowLock,
   windowLockFresh,
   writeWindowLock,
@@ -632,6 +633,18 @@ function commandReleaseWindowLock() {
   const windowName = requireValue("--window");
   const lock = readWindowLock(windowName);
   if (!lock) {
+    // readWindowLock returns null for BOTH missing and unparsable files; a
+    // corrupt lock must still be removable by this recovery command.
+    const file = lockFileFor(windowName);
+    if (existsSync(file)) {
+      if (write) {
+        removeWindowLock(windowName);
+        output({ ok: true, command: "release-window-lock", windowName, released: true, note: "corrupt lock file removed" });
+      } else {
+        output({ ok: true, command: "release-window-lock", windowName, released: false, dryRun: true, note: "lock file exists but is unreadable (corrupt); pass --write to remove it" });
+      }
+      return;
+    }
     output({ ok: true, command: "release-window-lock", windowName, released: false, note: "no lock present" });
     return;
   }

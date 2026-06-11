@@ -2058,3 +2058,44 @@ test("release-window-lock is dry-run by default and releases with --write", () =
   const again = parseOk(run(root, ["release-window-lock", "--window", "AlembicPlugin", "--write"]));
   assert.equal(again.released, false, "idempotent when no lock present");
 });
+
+
+test("release-window-lock removes a corrupt lock file with --write", () => {
+  const { root } = makeFixture();
+  const locksDir = path.join(root, ".workspace-local/wakeflow-delivery/locks");
+  mkdirSync(locksDir, { recursive: true });
+  const lockFile = path.join(locksDir, "WinX.json");
+  writeFileSync(lockFile, "{not json");
+
+  const dry = parseOk(run(root, ["release-window-lock", "--window", "WinX"]));
+  assert.equal(dry.released, false);
+  assert.match(dry.note, /corrupt/);
+  assert.equal(existsSync(lockFile), true, "dry-run keeps the corrupt file");
+
+  const released = parseOk(run(root, ["release-window-lock", "--window", "WinX", "--write"]));
+  assert.equal(released.released, true);
+  assert.match(released.note, /corrupt/);
+  assert.equal(existsSync(lockFile), false);
+});
+
+test("record-target-result releases the lock even when the run used a custom --delivery-run-id", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--delivery-run-id", "retry-custom-7", "--status", "sent", "--readback-ok", "true", "--evidence", "retry evidence", "--write"]));
+
+  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  assert.equal(existsSync(lockFile), true, "sent record refreshes the lock");
+
+  const recorded = parseOk(run(root, [
+    "record-target-result",
+    "--target-window", "AlembicPlugin",
+    "--task-id", "CSMR-TASK-1",
+    "--status", "completed",
+    "--evidence-ref", "docs/evidence.md",
+    "--write",
+  ]));
+  assert.equal(recorded.lockReleased, true, "release matches the delivery id via the runs scan");
+  assert.equal(existsSync(lockFile), false);
+});

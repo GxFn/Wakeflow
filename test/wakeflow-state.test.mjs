@@ -1145,3 +1145,55 @@ test("decide-review refuses to accept over blocked results without --accept-bloc
   const allowed = JSON.parse(run(["decide-review", "--root", root, "--state-root", init.stateRoot, "--candidate-id", candidateId, "--decision", "accept", "--reason", "controller override with evidence", "--accept-blocked", "--write", "--json"]).stdout);
   assert.equal(allowed.ok, true, "explicit --accept-blocked allows the override");
 });
+
+
+test("a blocked review decision is recoverable: new evidence reopens review and accept clears blockers", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run(["init", "--root", root, "--demand-key", "UNBLOCK-FIXTURE", "--title", "Unblock Fixture", "--write", "--json"]).stdout);
+  run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Pkg", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
+  run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "blocked", "--summary", "env broken", "--write", "--json"]);
+  const reduced1 = JSON.parse(run(["reduce-results", "--root", root, "--state-root", init.stateRoot, "--write", "--json"]).stdout);
+  const blockedDecision = JSON.parse(run(["decide-review", "--root", root, "--state-root", init.stateRoot, "--candidate-id", reduced1.candidateId, "--decision", "blocked", "--reason", "blocked pending env fix", "--write", "--json"]).stdout);
+  assert.equal(blockedDecision.ok, true);
+
+  // new evidence arrives -> the blocked task must be reviewable again
+  const reimport = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "reports/fixed.json", "--write", "--json"]).stdout);
+  assert.equal(reimport.ok, true, "import after a blocked decision must work");
+  const reduced2 = JSON.parse(run(["reduce-results", "--root", root, "--state-root", init.stateRoot, "--write", "--json"]).stdout);
+  assert.equal(reduced2.ok, true, "reduce must form a new candidate from the fresh evidence");
+  assert.ok(reduced2.candidateId, "blocked task is reviewable again");
+
+  const accepted = JSON.parse(run(["decide-review", "--root", root, "--state-root", init.stateRoot, "--candidate-id", reduced2.candidateId, "--decision", "accept", "--reason", "fixed and verified", "--write", "--json"]).stdout);
+  assert.equal(accepted.ok, true, "accept after unblock must work");
+
+  const state = readJson(path.join(root, init.stateRoot, "wakeflow-state.json"));
+  assert.equal((state.blockers ?? []).length, 0, "accept clears review-blockers");
+  const added = JSON.parse(run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-2", "--summary", "Next", "--target-window", "WinA", "--target-task-id", "TASK-2", "--write", "--json"]).stdout);
+  assert.equal(added.ok, true, "demand is drivable again after the unblock cycle");
+});
+
+test("import-target-result never claims an unclaimed demand and rejects --adopt-host", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run(["init", "--root", root, "--demand-key", "NOCLAIM-FIXTURE", "--title", "NoClaim", "--write", "--json"]).stdout);
+  run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Pkg", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
+  const stateFile = path.join(root, init.stateRoot, "wakeflow-state.json");
+  // simulate the other host owning the demand
+  const state = readJson(stateFile);
+  state.controllerHost = "some-other-host";
+  writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+
+  const refused = run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "r.json", "--write", "--json"]);
+  assert.notEqual(refused.status, 0, "foreign-owned demand refuses import");
+
+  const adoptRefused = run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "r.json", "--adopt-host", "--write", "--json"]);
+  assert.notEqual(adoptRefused.status, 0, "--adopt-host cannot persist from import");
+  assert.match(adoptRefused.stdout + adoptRefused.stderr, /state-writing command/);
+
+  // unclaimed: import passes WITHOUT stamping
+  const state2 = readJson(stateFile);
+  delete state2.controllerHost;
+  writeFileSync(stateFile, `${JSON.stringify(state2, null, 2)}\n`);
+  const imported = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "r.json", "--write", "--json"]).stdout);
+  assert.equal(imported.ok, true);
+  assert.equal(readJson(stateFile).controllerHost ?? null, null, "import does not claim");
+});

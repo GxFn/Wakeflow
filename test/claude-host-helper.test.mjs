@@ -133,6 +133,7 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
     targetWindow: "RepoA",
     taskId: "task-1",
     status: "completed",
+    reportedAt: new Date().toISOString(),
   }));
   const ready = parseOk(runHelper(root, ["wait-results", "--group", "grp-1", "--target", "RepoA", "--timeout-sec", "5", "--poll-ms", "250"]));
   assert.equal(ready.status, "ready");
@@ -298,6 +299,43 @@ test("launch-window --replace kills the old window instead of leaking an orphan"
   assert.equal(after.length, before.length, "window count unchanged: no orphan leaked");
   assert.ok(!after.includes(oldWid), "old window was killed");
   assert.ok(after.includes(second.windowId), "new window is alive");
+});
+
+test("seed-permissions keeps committed settings portable and migrates old residue to settings.local.json", () => {
+  const root = makeWorkspace();
+  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+    workspaceName: "SeedFlow", controllerWindow: "SeedFlow",
+    repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
+  }));
+  // simulate the OLD buggy layout: absolute workspace path + wakeflow statusLine in the COMMITTED file
+  const repoSettingsDir = path.join(root, "RepoA", ".claude");
+  mkdirSync(repoSettingsDir, { recursive: true });
+  writeFileSync(path.join(repoSettingsDir, "settings.json"), JSON.stringify({
+    statusLine: { type: "command", command: `node ${root}/.workspace-local/wakeflow-statusline.mjs` },
+    permissions: { allow: [], additionalDirectories: [root] },
+  }));
+
+  parseOk(runHelper(root, ["seed-permissions", "--write"]));
+
+  const committed = JSON.parse(readFileSync(path.join(repoSettingsDir, "settings.json"), "utf8"));
+  assert.equal(committed.statusLine, undefined, "wakeflow statusLine migrated out of the committed file");
+  const dirs = committed.permissions.additionalDirectories;
+  assert.ok(!dirs.includes(root), "absolute workspace path removed");
+  assert.ok(dirs.includes(".."), "relative parent reference present");
+  assert.ok(!JSON.stringify(committed).includes(root), "no absolute machine path anywhere in the committed file");
+
+  const local = JSON.parse(readFileSync(path.join(repoSettingsDir, "settings.local.json"), "utf8"));
+  assert.match(local.statusLine.command, /wakeflow-statusline\.mjs/, "statusline lives in the machine-local layer");
+
+  // a user-custom statusLine in the committed file is left untouched
+  const rootSettings = path.join(root, ".claude");
+  mkdirSync(rootSettings, { recursive: true });
+  writeFileSync(path.join(rootSettings, "settings.json"), JSON.stringify({
+    statusLine: { type: "command", command: "my-custom-statusline" },
+  }));
+  parseOk(runHelper(root, ["seed-permissions", "--write"]));
+  const rootCommitted = JSON.parse(readFileSync(path.join(rootSettings, "settings.json"), "utf8"));
+  assert.equal(rootCommitted.statusLine.command, "my-custom-statusline", "custom statusLine untouched");
 });
 
 test("send refuses when no binding exists and release-lock is idempotent", () => {

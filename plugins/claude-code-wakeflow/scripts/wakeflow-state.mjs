@@ -37,6 +37,7 @@ Usage:
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
   node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked> --reason <text> [--evidence-ref <ref>] [--accept-blocked] [--write] [--json]
   node scripts/wakeflow-state.mjs complete-demand --state-root <path> --reason <text> --evidence-ref <ref> [--write] [--json]
+  node scripts/wakeflow-state.mjs adopt-demand-host --state-root <path> [--reason <text>] [--write] [--json]
 
 Design:
   This script manages the machine state root for the Wakeflow state-machine
@@ -140,21 +141,84 @@ function assertWorkspaceRootResolved() {
 // fails closed, and ownership moves only via an explicit --adopt-host.
 // Demands from before this feature are simply unclaimed and follow the same
 // first-claim rule.
-function ensureDemandHostOwnership(state) {
+function ensureDemandHostOwnership(state, { claim = true } = {}) {
   const currentHost = hostProfile.runtime.hostDirName;
   const owner = state.controllerHost;
   if (!owner) {
+    if (!claim) {
+      // Non-state-writing commands (import/intake) must not claim: a stamp
+      // they cannot persist would report a transfer that never happened.
+      return { controllerHost: null, unclaimed: true };
+    }
     state.controllerHost = currentHost;
     return { controllerHost: currentHost, claimed: "first-driving-command" };
   }
   if (owner !== currentHost) {
     if (hasFlag("--adopt-host")) {
+      if (!claim) {
+        fail(`--adopt-host cannot persist from ${command}; transfer ownership with a state-writing command first (e.g. add-task-package --adopt-host or decide-review --adopt-host).`);
+      }
       state.controllerHost = currentHost;
       return { controllerHost: currentHost, transferredFrom: owner };
     }
-    fail(`demand ${state.demandKey} is owned by controller host ${owner}; this runtime is ${currentHost}. Continue on the ${owner} controller, or pass --adopt-host to explicitly transfer ownership to ${currentHost}.`);
+    fail(`demand ${state.demandKey} is owned by controller host ${owner}; this runtime is ${currentHost}. Continue on the ${owner} controller, or transfer ownership explicitly with adopt-demand-host (MCP: wakeflow_adopt_demand_host), or pass --adopt-host on a state-writing command.`);
   }
   return { controllerHost: owner };
+}
+
+function commandAdoptDemandHost() {
+  const stateRoot = resolveFromWorkspace(requireValue("--state-root"));
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const eventsFile = path.join(stateRoot, "controller-events.jsonl");
+  if (!existsSync(stateFile)) fail(`state root is missing wakeflow-state.json: ${relative(stateRoot)}`);
+  const state = readJson(stateFile, "controller state");
+  const currentHost = hostProfile.runtime.hostDirName;
+  const previousOwner = state.controllerHost ?? null;
+  if (previousOwner === currentHost) {
+    output({ ok: true, command: "adopt-demand-host", wrote: false, controllerHost: currentHost, note: "this host already owns the demand" });
+    return;
+  }
+  const reason = getValue("--reason", previousOwner ? `ownership transferred from ${previousOwner}` : "unclaimed demand adopted");
+  const createdAt = nowIso();
+  const nextRevision = Number(state.revision ?? 0) + 1;
+  const eventId = nextEventId(createdAt, nextRevision);
+  const nextState = {
+    ...state,
+    controllerHost: currentHost,
+    revision: nextRevision,
+    updatedAt: createdAt,
+  };
+  const event = {
+    eventId,
+    createdAt,
+    actor: "controller",
+    type: previousOwner ? "demand.host-transferred" : "demand.host-adopted",
+    from: previousOwner,
+    to: currentHost,
+    reason,
+    evidenceRefs: [],
+    allowedWrites: ["wakeflow-state.json", "controller-events.jsonl"],
+    forbiddenConclusions: [
+      "host-transfer-is-acceptance",
+      "host-transfer-changes-task-status",
+    ],
+    stateRevision: nextRevision,
+  };
+  if (write) {
+    writeJson(stateFile, nextState);
+    appendJsonLine(eventsFile, event);
+  }
+  output({
+    ok: true,
+    command: "adopt-demand-host",
+    wrote: write,
+    previousOwner,
+    controllerHost: currentHost,
+    stateRevision: write ? nextRevision : state.revision,
+    note: write
+      ? undefined
+      : "dry-run: pass --write to record the transfer. Existing transition candidates become stale after the revision bump; re-run reduce-results on this host.",
+  });
 }
 
 function ensureInsideAllowedRoots(file, label, allowedRoots) {
@@ -644,6 +708,7 @@ function commandAddTaskPackage() {
       "task-package-updates-progress-doc-status",
     ],
     stateRevision: nextRevision,
+    ...(hostOwnership.claimed || hostOwnership.transferredFrom ? { hostOwnership } : {}),
   };
 
   if (write) {
@@ -657,6 +722,7 @@ function commandAddTaskPackage() {
     {
       ok: true,
       command: "add-task-package",
+      hostOwnership,
       wrote: write,
       demandKey: state.demandKey,
       stateRoot: relative(stateRoot),
@@ -745,7 +811,7 @@ function commandImportTargetResult() {
     fail(`--status must be one of: ${[...allowedStatuses].join(", ")}`);
   }
   const state = readJson(path.join(stateRoot, "wakeflow-state.json"), "controller state");
-  ensureDemandHostOwnership(state);
+  const hostOwnership = ensureDemandHostOwnership(state, { claim: false });
   if (["completed", "archived"].includes(state.state)) {
     fail(`cannot import target result while demand is ${state.state}: ${state.demandKey}`);
   }
@@ -823,11 +889,33 @@ function commandImportTargetResult() {
     mkdirSync(path.dirname(resultFile), { recursive: true });
     writeJson(resultFile, result);
   }
+  // Release the shared in-flight window lock when this result answers the
+  // delivery that locked it. This is the only release point reachable from the
+  // MCP-only flow (wakeflow_record_target_result maps here), so without it
+  // codex-side locks would linger the full TTL after the work finished.
+  let lockReleased = false;
+  if (write) {
+    const lockFile = path.join(workspaceRoot, ".workspace-local/wakeflow-delivery/locks", `${slug(targetWindow)}.json`);
+    if (existsSync(lockFile)) {
+      try {
+        const lock = JSON.parse(readFileSync(lockFile, "utf8"));
+        const taskDeliveryId = targetTask.delivery?.deliveryId;
+        if (!lock.deliveryId || (taskDeliveryId && lock.deliveryId === taskDeliveryId)) {
+          unlinkSync(lockFile);
+          lockReleased = true;
+        }
+      } catch {
+        // unreadable lock: leave it for release-window-lock recovery
+      }
+    }
+  }
 
   output(
     {
       ok: true,
       command: "import-target-result",
+      lockReleased,
+      hostOwnership,
       wrote: write,
       demandKey: state.demandKey,
       stateRoot: relative(stateRoot),
@@ -997,6 +1085,7 @@ function commandReduceResults() {
       "review-reduction-closes-task-package",
     ],
     stateRevision: nextRevision,
+    ...(hostOwnership.claimed || hostOwnership.transferredFrom ? { hostOwnership } : {}),
     wakeflowTrace: artifactTrace({
       artifactKind: "controller-event",
       createdAt,
@@ -1018,6 +1107,7 @@ function commandReduceResults() {
     {
       ok: true,
       command: "reduce-results",
+      hostOwnership,
       wrote: write,
       demandKey: state.demandKey,
       stateRoot: relative(stateRoot),
@@ -1119,7 +1209,10 @@ function commandDecideReview() {
             createdAt,
           },
         ]
-      : (state.blockers ?? []),
+      // An explicit accept/rework decision IS the unblock decision the
+      // review-blocker waits for: clear review-blockers so the demand can
+      // move again; non-review blockers stay.
+      : (state.blockers ?? []).filter((blocker) => blocker?.kind !== "review-blocker"),
     decisionsRequired: [],
     review: {
       ...(state.review ?? {}),
@@ -1157,6 +1250,7 @@ function commandDecideReview() {
       "decision-starts-automation",
     ],
     stateRevision: nextRevision,
+    ...(hostOwnership.claimed || hostOwnership.transferredFrom ? { hostOwnership } : {}),
   };
 
   if (write) {
@@ -1168,6 +1262,7 @@ function commandDecideReview() {
     {
       ok: true,
       command: "decide-review",
+      hostOwnership,
       wrote: write,
       demandKey: state.demandKey,
       stateRoot: relative(stateRoot),
@@ -1256,6 +1351,7 @@ function commandCompleteDemand() {
       "completion-updates-progress-doc-body",
     ],
     stateRevision: nextRevision,
+    ...(hostOwnership.claimed || hostOwnership.transferredFrom ? { hostOwnership } : {}),
   };
 
   if (write) {
@@ -1267,6 +1363,7 @@ function commandCompleteDemand() {
     {
       ok: true,
       command: "complete-demand",
+      hostOwnership,
       wrote: write,
       demandKey: state.demandKey,
       stateRoot: relative(stateRoot),
@@ -1386,6 +1483,9 @@ try {
       break;
     case "reduce-results":
       commandReduceResults();
+      break;
+    case "adopt-demand-host":
+      commandAdoptDemandHost();
       break;
     case "decide-review":
       commandDecideReview();

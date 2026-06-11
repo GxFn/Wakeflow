@@ -135,3 +135,62 @@ test("dispatch preparation refuses a demand owned by the other host", () => {
   assert.notEqual(prepared.result.status, 0);
   assert.match(prepared.result.stdout + prepared.result.stderr, /owned by controller host claude-code/);
 });
+
+
+test("adopt-demand-host transfers ownership with an audit event and revision bump only", () => {
+  const root = makeRoot();
+  const { stateRootRef, stateFile } = initDemand(root);
+  const claim = runJson(codexState, [...addTaskArgs(stateRootRef, "T1"), "--root", root], root);
+  assert.equal(claim.result.status, 0);
+  const before = JSON.parse(readFileSync(stateFile, "utf8"));
+  assert.equal(before.controllerHost, "codex");
+
+  // dry-run first: nothing persists
+  const dry = runJson(claudeState, ["adopt-demand-host", "--state-root", stateRootRef, "--root", root], root);
+  assert.equal(dry.result.status, 0);
+  assert.equal(dry.payload.wrote, false);
+  assert.equal(JSON.parse(readFileSync(stateFile, "utf8")).controllerHost, "codex");
+
+  const adopted = runJson(claudeState, ["adopt-demand-host", "--state-root", stateRootRef, "--reason", "handoff to claude shift", "--root", root, "--write"], root);
+  assert.equal(adopted.result.status, 0, adopted.result.stderr || adopted.result.stdout);
+  assert.equal(adopted.payload.previousOwner, "codex");
+  const after = JSON.parse(readFileSync(stateFile, "utf8"));
+  assert.equal(after.controllerHost, "claude-code");
+  assert.equal(after.revision, before.revision + 1, "revision bumps so stale candidates are invalidated");
+  assert.equal(after.state, before.state, "no other state change");
+  assert.deepEqual(after.targetTasks, before.targetTasks, "tasks untouched");
+
+  const events = readFileSync(path.join(root, stateRootRef, "controller-events.jsonl"), "utf8").trim().split("\n");
+  const last = JSON.parse(events[events.length - 1]);
+  assert.equal(last.type, "demand.host-transferred");
+  assert.equal(last.from, "codex");
+  assert.equal(last.to, "claude-code");
+
+  // idempotent: adopting again is a no-op
+  const again = runJson(claudeState, ["adopt-demand-host", "--state-root", stateRootRef, "--root", root, "--write"], root);
+  assert.equal(again.payload.wrote, false);
+});
+
+test("build-delivery (packet-file route) refuses a demand owned by the other host", () => {
+  const root = makeRoot();
+  mkdirSync(path.join(root, "WinA"), { recursive: true });
+  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+    workspaceName: "OwnFlow", controllerWindow: "OwnFlow",
+    repositories: [{ windowName: "WinA", path: "WinA", role: "Repository window" }],
+  }));
+  const { stateRootRef, stateFile } = initDemand(root);
+  runJson(codexState, [...addTaskArgs(stateRootRef, "T6"), "--root", root], root);
+  runJson(codexDelivery, ["register-thread", "--root", root, "--window", "WinA", "--thread-id", "thread-own-2", "--write"], root);
+  const prepared = runJson(codexDelivery, ["prepare-dispatch-from-state", "--root", root, "--state-root", stateRootRef, "--target-task-id", "T6", "--controller-window", "OwnFlow", "--write"], root);
+  assert.equal(prepared.result.status, 0);
+  const packetFile = path.join(root, ".workspace-local/wakeflow-delivery/dispatch-packets", `${prepared.payload.packet.id}.json`);
+
+  // demand moves to the other host AFTER the packet exists
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.controllerHost = "claude-code";
+  writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+
+  const built = runJson(codexDelivery, ["build-delivery", "--packet-file", packetFile, "--root", root, "--write"], root);
+  assert.notEqual(built.result.status, 0, "stale packet from the old owner must fail at build, not after the send");
+  assert.match(built.result.stdout + built.result.stderr, /owned by controller host claude-code/);
+});

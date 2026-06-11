@@ -63,13 +63,22 @@ export function createDispatchCommands(ctx) {
     formatTargetPrompt,
   } = ctx;
 
+  function safeStateFileForRef(stateRef) {
+    // Resolve a stateRef WITHOUT ctx fail(): ctx fail prints an ok:false JSON
+    // blob and sets exitCode before throwing, which a try/catch cannot undo.
+    if (!stateRef?.stateRoot) return null;
+    const root = path.isAbsolute(stateRef.stateRoot) ? stateRef.stateRoot : path.resolve(workspaceRoot, stateRef.stateRoot);
+    const stateFile = path.join(root, "wakeflow-state.json");
+    return existsSync(stateFile) ? stateFile : null;
+  }
+
   function interfaceLanguageForStateRef(stateRef) {
     // The demand's interfaceLanguage (stamped at init) drives the human-readable
     // sentences of envelope prompts so target windows answer in the workspace
     // language. Machine keys stay English. Defaults to en when unreadable.
     try {
-      const stateFile = path.join(resolveStateRoot(stateRef.stateRoot), "wakeflow-state.json");
-      if (existsSync(stateFile)) {
+      const stateFile = safeStateFileForRef(stateRef);
+      if (stateFile) {
         const language = JSON.parse(readFileSync(stateFile, "utf8")).interfaceLanguage;
         if (language === "zh") return "zh";
       }
@@ -77,6 +86,19 @@ export function createDispatchCommands(ctx) {
       // fall through to the English default
     }
     return "en";
+  }
+
+  function demandOwnerForStateRef(stateRef) {
+    try {
+      const stateFile = safeStateFileForRef(stateRef);
+      if (stateFile) {
+        const state = JSON.parse(readFileSync(stateFile, "utf8"));
+        return { owner: state.controllerHost ?? null, demandKey: state.demandKey };
+      }
+    } catch {
+      // unreadable state: no gate (verify reports broken state roots separately)
+    }
+    return null;
   }
 
   function buildDispatchArtifacts({
@@ -177,6 +199,13 @@ export function createDispatchCommands(ctx) {
 
     const registration = loadThreadRegistration(packet.targetWindow);
     if (requireThread && !registration) fail(`No registered thread for target window: ${packet.targetWindow}`);
+    // Demand host-ownership gate also covers the packet-file route
+    // (build-delivery): failing here is cheap; failing only at record time
+    // would land AFTER the prompt was already sent into the target pane.
+    const demandOwner = demandOwnerForStateRef(packet.stateRef);
+    if (demandOwner?.owner && demandOwner.owner !== hostProfile.runtime.hostDirName) {
+      fail(`demand ${demandOwner.demandKey} is owned by controller host ${demandOwner.owner}; this runtime is ${hostProfile.runtime.hostDirName}. Dispatch from the owning controller, or transfer ownership explicitly first (adopt-demand-host; MCP: wakeflow_adopt_demand_host).`);
+    }
     const resolvedDeliveryId = deliveryId || `delivery-${packet.id}`;
     // Cross-host in-flight guard: a fresh delivery lock written by the OTHER
     // host means another controller is already driving this window's working
@@ -311,7 +340,7 @@ export function createDispatchCommands(ctx) {
     // by the other host's controller (ownership transfer is a state-machine
     // action: wakeflow-state --adopt-host).
     if (state.controllerHost && state.controllerHost !== hostProfile.runtime.hostDirName) {
-      fail(`demand ${state.demandKey} is owned by controller host ${state.controllerHost}; this runtime is ${hostProfile.runtime.hostDirName}. Dispatch from the owning controller, or transfer ownership explicitly first (wakeflow-state --adopt-host).`);
+      fail(`demand ${state.demandKey} is owned by controller host ${state.controllerHost}; this runtime is ${hostProfile.runtime.hostDirName}. Dispatch from the owning controller, or transfer ownership explicitly first (adopt-demand-host; MCP: wakeflow_adopt_demand_host).`);
     }
     const targetTaskId = requireValue("--target-task-id");
     const targetTask = (state.targetTasks ?? []).find((item) => item.targetTaskId === targetTaskId);

@@ -270,20 +270,37 @@ function applyStatusOptions(serverSession) {
     ["set-option", "-t", serverSession, "status-left-length", "14"],
     ["set-option", "-t", serverSession, "status-right", ""],
     ["set-option", "-t", serverSession, "status-right-length", "0"],
-    ["set-option", "-t", serverSession, "status-interval", "5"],
     ["set-option", "-t", serverSession, "renumber-windows", "on"],
-    // Leading state glyph (the activity monitor sets @wakeflow_state): a bright
-    // RUN marker for a live-executing window, then result/stall markers. The
-    // glyph sits OUTSIDE the current-window reverse styling so "who is running"
-    // is visible regardless of which window is selected.
-    ["set-option", "-g", "window-status-format", `${STATE_GLYPH_FMT}#I:#{=14:window_name} `],
-    ["set-option", "-g", "window-status-current-format", `${STATE_GLYPH_FMT}#[reverse]#[bold]#I:#{=16:window_name}#[noreverse] `],
-    ["set-option", "-g", "window-status-separator", ""],
     ["set-option", "-t", serverSession, "base-index", "1"],
     // refresh fast enough that the running marker tracks live execution
     ["set-option", "-t", serverSession, "status-interval", "2"],
   ];
   for (const optionArgs of optionSets) tmux(optionArgs, { allowFailure: true });
+  // migration: earlier versions set these as -g on the DEFAULT server, leaking
+  // the wakeflow layout into the user's personal sessions; unset the globals.
+  for (const option of ["window-status-format", "window-status-current-format", "window-status-separator"]) {
+    tmux(["set-option", "-gu", option], { allowFailure: true });
+  }
+  // window-status-* are WINDOW options: apply them per managed window (never
+  // -g) so the wakeflow glyph layout cannot leak into the user's personal tmux
+  // sessions on the same default server.
+  const listed = tmux(["list-windows", "-t", serverSession, "-F", "#{window_id}"], { allowFailure: true });
+  for (const wid of (listed.stdout || "").trim().split("\n").map((line) => line.trim()).filter(Boolean)) {
+    applyWindowGlyphFormat(wid);
+  }
+}
+
+function applyWindowGlyphFormat(windowId) {
+  // Leading state glyph (the activity monitor sets @wakeflow_state): a solid
+  // badge for a live-executing window, then result/stall markers. The glyph
+  // sits OUTSIDE the current-window reverse styling so "who is running" is
+  // visible regardless of which window is selected.
+  const sets = [
+    ["set-option", "-w", "-t", windowId, "window-status-format", `${STATE_GLYPH_FMT}#I:#{=14:window_name} `],
+    ["set-option", "-w", "-t", windowId, "window-status-current-format", `${STATE_GLYPH_FMT}#[reverse]#[bold]#I:#{=16:window_name}#[noreverse] `],
+    ["set-option", "-w", "-t", windowId, "window-status-separator", ""],
+  ];
+  for (const optionArgs of sets) tmux(optionArgs, { allowFailure: true });
 }
 
 // Leading glyph: running -> bright green ">>", done -> green "+", stalled ->
@@ -291,10 +308,14 @@ function applyStatusOptions(serverSession) {
 // IMPORTANT: no raw commas inside #{?} branches — tmux splits alternatives on
 // them (escape would be #,). One attribute per #[] block keeps branches comma-
 // free; verified by rendering on tmux 3.6b for every state value.
-const STATE_GLYPH_FMT = "#{?#{==:#{@wakeflow_state},running},#[fg=green]#[bold]>>#[default] ,"
-  + "#{?#{==:#{@wakeflow_state},done},#[fg=green]#[bold]+ #[default],"
-  + "#{?#{==:#{@wakeflow_state},stalled},#[fg=red]#[bold]! #[default],"
-  + "#{?#{==:#{@wakeflow_state},busy},#[fg=yellow]#[bold]> #[default],   }}}}";
+// Solid background badges read far better than colored glyphs on light status
+// bars: running = green block, busy(delivered) = yellow block, stalled = red
+// block; done stays calm green text. No commas inside #[] (tmux splits
+// conditional branches on raw commas) and one attribute per block.
+const STATE_GLYPH_FMT = "#{?#{==:#{@wakeflow_state},running},#[bg=green]#[fg=black]#[bold] >> #[default],"
+  + "#{?#{==:#{@wakeflow_state},done},#[fg=green]#[bold] +  #[default],"
+  + "#{?#{==:#{@wakeflow_state},stalled},#[bg=red]#[fg=white]#[bold] !  #[default],"
+  + "#{?#{==:#{@wakeflow_state},busy},#[bg=yellow]#[fg=black]#[bold] >  #[default],    }}}}";
 
 function paneShowsExecution(pane) {
   // Claude Code shows "esc to interrupt" in the input area while a turn runs.
@@ -312,10 +333,13 @@ function activityMonitorRunning(serverSession) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);
-    return true;
   } catch {
     return false;
   }
+  // Guard against pid reuse after a reboot: the recorded pid must still be a
+  // node process running this helper's activity-monitor.
+  const probe = execHostText("ps", ["-o", "command=", "-p", String(pid)]);
+  return probe.status === 0 && /wakeflow-claude-host\.mjs activity-monitor/.test(probe.stdout);
 }
 
 function startActivityMonitorDaemon(serverSession) {
@@ -337,6 +361,10 @@ function ensureServer(serverSession) {
     tmux(["new-session", "-d", "-s", serverSession, "-c", workspaceRoot]);
   }
   applyStatusOptions(serverSession);
+  // Rearm the activity monitor on every server touch (launch-window/launch-all
+  // included): after a reboot the documented restore path never runs the
+  // ensure-server CLI command, and the pidfile keeps this idempotent.
+  if (command !== "activity-monitor") startActivityMonitorDaemon(serverSession);
   return !present;
 }
 
@@ -349,10 +377,15 @@ function commandEnsureServer() {
 
 async function commandActivityMonitor() {
   const serverSession = getValue("--server", defaultServerSession());
-  const pollMs = Math.max(800, Number(getValue("--poll-ms", "1500")));
+  const pollRaw = Number(getValue("--poll-ms", "1500"));
+  const pollMs = Number.isFinite(pollRaw) ? Math.max(800, pollRaw) : 1500;
   const once = hasFlag("--once");
   const pidFile = activityMonitorPidFile(serverSession);
   if (!once) {
+    if (activityMonitorRunning(serverSession)) {
+      output({ ok: true, command: "activity-monitor", server: serverSession, started: false, note: "another monitor instance is already running" });
+      return;
+    }
     mkdirSync(path.dirname(pidFile), { recursive: true });
     writeFileSync(pidFile, String(process.pid));
   }
@@ -365,12 +398,23 @@ async function commandActivityMonitor() {
       const pane = tmux(["capture-pane", "-p", "-t", wid], { allowFailure: true }).stdout || "";
       const isRunning = paneShowsExecution(pane);
       const current = tmux(["show-options", "-w", "-q", "-v", "-t", wid, "@wakeflow_state"], { allowFailure: true }).stdout.trim();
-      // The monitor owns the "running" state; it never clobbers dispatch markers
-      // (done/stalled/busy) — it only adds/removes "running".
+      // The monitor owns only the "running" overlay: it stashes the dispatch
+      // marker (busy/done/stalled) in @wakeflow_prev_state when execution
+      // starts and RESTORES it when execution pauses, so a delivered window
+      // that pauses mid-turn goes back to busy, not idle.
       if (isRunning && current !== "running") {
+        if (current) {
+          tmux(["set-option", "-w", "-t", wid, "@wakeflow_prev_state", current], { allowFailure: true });
+        }
         tmux(["set-option", "-w", "-t", wid, "@wakeflow_state", "running"], { allowFailure: true });
       } else if (!isRunning && current === "running") {
-        tmux(["set-option", "-w", "-u", "-t", wid, "@wakeflow_state"], { allowFailure: true });
+        const previous = tmux(["show-options", "-w", "-q", "-v", "-t", wid, "@wakeflow_prev_state"], { allowFailure: true }).stdout.trim();
+        if (previous) {
+          tmux(["set-option", "-w", "-t", wid, "@wakeflow_state", previous], { allowFailure: true });
+          tmux(["set-option", "-w", "-u", "-t", wid, "@wakeflow_prev_state"], { allowFailure: true });
+        } else {
+          tmux(["set-option", "-w", "-u", "-t", wid, "@wakeflow_state"], { allowFailure: true });
+        }
       }
       if (isRunning) running.push(wid);
     }
@@ -378,7 +422,10 @@ async function commandActivityMonitor() {
     if (once) break;
     await sleep(pollMs);
   }
-  if (!once && existsSync(pidFile)) rmSync(pidFile, { force: true });
+  // delete the pidfile only when it still belongs to this instance
+  if (!once && existsSync(pidFile) && readFileSync(pidFile, "utf8").trim() === String(process.pid)) {
+    rmSync(pidFile, { force: true });
+  }
   output({ ok: true, command: "activity-monitor", server: serverSession, once, running: lastSummary.running });
 }
 
@@ -387,7 +434,13 @@ function pastePromptFile(binding, promptFile) {
   if (!existsSync(file)) fail(`--prompt-file does not exist: ${promptFile}`);
   const bufferName = `wakeflow-${slug(binding.windowName)}-${Date.now()}`;
   tmux(["load-buffer", "-b", bufferName, file]);
-  tmux(["paste-buffer", "-d", "-b", bufferName, "-t", binding.tmux.windowId]);
+  try {
+    tmux(["paste-buffer", "-d", "-b", bufferName, "-t", binding.tmux.windowId]);
+  } catch (error) {
+    // paste-buffer -d only deletes on success; drop the orphan buffer
+    tmux(["delete-buffer", "-b", bufferName], { allowFailure: true });
+    throw error;
+  }
   tmux(["send-keys", "-t", binding.tmux.windowId, "Enter"]);
 }
 
@@ -430,17 +483,19 @@ async function commandLaunchWindow() {
   const configClaudeArgs = Array.isArray(hostConfig.claudeArgs) && hostConfig.claudeArgs.every((arg) => typeof arg === "string")
     ? hostConfig.claudeArgs
     : [];
-  // Per-role reasoning effort: controller=max, workers=high by default. Skip
+  // Per-role reasoning effort: controller=max, workers=xhigh by default. Skip
   // when --effort is already supplied explicitly (per-call or global claudeArgs).
-  const effortAlreadySet = extraClaudeArgs.includes("--effort") || configClaudeArgs.includes("--effort");
+  const flagPresent = (argsList, name) => argsList.some((arg) => arg === name || arg.startsWith(`${name}=`));
+  const effortAlreadySet = flagPresent(extraClaudeArgs, "--effort") || flagPresent(configClaudeArgs, "--effort");
   const effortArgs = effortAlreadySet ? [] : resolveEffortArgs(windowName, hostConfig);
-  const modelAlreadySet = extraClaudeArgs.includes("--model") || configClaudeArgs.includes("--model");
+  const modelAlreadySet = flagPresent(extraClaudeArgs, "--model") || flagPresent(configClaudeArgs, "--model");
   const modelArgs = modelAlreadySet ? [] : resolveModelArgs(windowName, hostConfig);
   // Permission mode precedence: explicit --claude-arg --permission-mode wins;
   // else workspace.config.json hosts.claude-code.permissionMode; else
   // acceptEdits so seeded allowlists keep the window prompt-free.
   const configMode = typeof hostConfig.permissionMode === "string" ? hostConfig.permissionMode : "acceptEdits";
-  const modeArgs = extraClaudeArgs.includes("--permission-mode") ? [] : ["--permission-mode", configMode];
+  const modeExplicit = flagPresent(extraClaudeArgs, "--permission-mode") || flagPresent(configClaudeArgs, "--permission-mode");
+  const modeArgs = modeExplicit ? [] : ["--permission-mode", configMode];
   const claudeCommand = [claudeBin, ...sessionArgs, "--add-dir", workspaceRoot, ...modeArgs, ...effortArgs, ...modelArgs, ...configClaudeArgs, ...extraClaudeArgs]
     .map((part) => `'${String(part).replace(/'/g, `'\\''`)}'`)
     .join(" ");
@@ -455,9 +510,11 @@ async function commandLaunchWindow() {
   const windowId = created.stdout.trim();
   if (!windowId.startsWith("@")) fail(`tmux did not return a window id: ${created.stdout}`);
   tmux(["set-option", "-w", "-t", windowId, "automatic-rename", "off"], { allowFailure: true });
+  applyWindowGlyphFormat(windowId);
   // A freshly launched/replaced window is idle — clear any inherited dispatch
   // glyph so it does not show a stale busy/done marker.
   tmux(["set-option", "-w", "-u", "-t", windowId, "@wakeflow_state"], { allowFailure: true });
+  tmux(["set-option", "-w", "-u", "-t", windowId, "@wakeflow_prev_state"], { allowFailure: true });
 
   const binding = {
     kind: BINDING_KIND,
@@ -471,30 +528,39 @@ async function commandLaunchWindow() {
   writeJson(bindingFileFor(windowName), binding);
 
   await sleep(Number.isFinite(bootWaitMs) ? bootWaitMs : 6000);
-  let trustAccepted = false;
+  // Boot can present up to three sequential dialogs (folder trust -> bypass
+  // consent -> large-session resume), and a slow resume can render a dialog a
+  // frame after a clean-looking pane. Loop with a stability re-check so a late
+  // dialog is not missed and the entry prompt never lands inside one.
+  const dialogsConfirmed = [];
   if (!hasFlag("--no-auto-trust")) {
     // The folder-trust dialog is always covered by the user's window-launch
     // authorization (they mapped this directory as a managed window). The
     // bypass-permissions consent is auto-confirmed ONLY when the user opted
     // into bypass mode in workspace.config.json: that recorded choice IS the
     // prior consent. A bypass prompt without that opt-in is left for the user.
-    const trustPattern = /trust this folder|Do you trust/i;
-    const bypassPattern = /bypass permissions|skip all permission|dangerously/i;
-    // Large-session resume prompt: confirm the highlighted default (resume the
-    // full session) so a fleet relaunch never stalls on it.
-    const resumePattern = /Resume full session|Resume with summary/i;
     const bypassConsented = configMode === "bypassPermissions";
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    const dialogPatterns = [
+      ["trust", /trust this folder|Do you trust/i, () => true],
+      ["bypass-consent", /bypass permissions|skip all permission|dangerously/i, () => bypassConsented],
+      ["resume", /Resume full session|Resume with summary/i, () => true],
+    ];
+    let quietChecks = 0;
+    for (let attempt = 0; attempt < 8 && quietChecks < 2; attempt += 1) {
       const pane = capturePaneTail(binding, 30);
-      const isTrust = trustPattern.test(pane);
-      const isBypass = bypassPattern.test(pane) && bypassConsented;
-      const isResumeDialog = resumePattern.test(pane);
-      if (!isTrust && !isBypass && !isResumeDialog) break;
+      const match = dialogPatterns.find(([, pattern, allowed]) => pattern.test(pane) && allowed());
+      if (!match) {
+        quietChecks += 1;
+        await sleep(1200);
+        continue;
+      }
+      quietChecks = 0;
       tmux(["send-keys", "-t", binding.tmux.windowId, "Enter"]);
-      trustAccepted = true;
+      dialogsConfirmed.push(match[0]);
       await sleep(2800);
     }
   }
+  const trustAccepted = dialogsConfirmed.length > 0;
   if (promptFile) {
     pastePromptFile(binding, promptFile);
   }
@@ -502,11 +568,12 @@ async function commandLaunchWindow() {
   output({
     ok: true,
     command: "launch-window",
-    permissionMode: configMode,
+    permissionMode: modeExplicit ? "explicit" : configMode,
     effort: effortArgs.length ? effortArgs[1] : (effortAlreadySet ? "explicit" : null),
     model: modelArgs.length ? modelArgs[1] : (modelAlreadySet ? "explicit" : null),
     role: roleOfWindow(windowName),
     trustAccepted,
+    dialogsConfirmed,
     windowName,
     title,
     server: serverSession,
@@ -562,7 +629,9 @@ async function commandSend() {
     if (!ownDelivery) {
       // A lock for OUR delivery id was acquired at envelope-build time by the
       // core dispatch path; sending it is the expected next step, not a clash.
-      lockWarning = `Proceeding over a fresh same-host delivery lock on ${windowName} (${lock.deliveryId || "no delivery id"}, created ${lock.createdAt}); the prior delivery's lock had no release path (e.g. a controller-return target).`;
+      lockWarning = otherHost
+        ? `Proceeding over a fresh OTHER-HOST delivery lock on ${windowName} (host ${lock.host}, ${lock.deliveryId || "no delivery id"}) because --force was passed.`
+        : `Proceeding over a fresh same-host delivery lock on ${windowName} (${lock.deliveryId || "no delivery id"}, created ${lock.createdAt}); the prior delivery's lock had no release path (e.g. a controller-return target).`;
     }
   }
   writeJson(lockFileFor(windowName), {
@@ -578,8 +647,10 @@ async function commandSend() {
   const before = capturePaneTail(binding, 5);
   pastePromptFile(binding, promptFile);
   setWindowState(windowName, "busy");
-  await sleep(Number(getValue("--readback-wait-ms", "1200")));
-  const paneTail = capturePaneTail(binding, Number(getValue("--lines", "25")));
+  const readbackWait = Number(getValue("--readback-wait-ms", "1200"));
+  await sleep(Number.isFinite(readbackWait) ? readbackWait : 1200);
+  const tailLines = Number(getValue("--lines", "25"));
+  const paneTail = capturePaneTail(binding, Number.isFinite(tailLines) ? tailLines : 25);
 
   output({
     ok: true,
@@ -648,7 +719,8 @@ async function commandWaitResults() {
   const expectedWindows = getAllValues("--target");
   const expectCount = Number(getValue("--expect", expectedWindows.length > 0 ? String(expectedWindows.length) : "1"));
   const timeoutSec = Number(getValue("--timeout-sec", "7200"));
-  const pollMs = Math.max(250, Number(getValue("--poll-ms", "2000")));
+  const pollParsed = Number(getValue("--poll-ms", "2000"));
+  const pollMs = Number.isFinite(pollParsed) ? Math.max(250, pollParsed) : 2000;
   const deadline = Date.now() + (Number.isFinite(timeoutSec) ? timeoutSec : 7200) * 1000;
 
   let found = [];
@@ -659,22 +731,29 @@ async function commandWaitResults() {
     for (const window of found) {
       const lock = readLock(window);
       // Release the lock only when it predates the arrived result for this
-      // window, i.e. the lock belongs to the delivery whose result we now see.
-      // A lock NEWER than every result is a fresh still-in-flight delivery and
-      // must survive (otherwise wait-results could clear a delivery that has
-      // not completed). Locks with no timestamp fall back to release.
+      // window (the lock belongs to the delivery the result answers). A lock
+      // NEWER than every result is a fresh still-in-flight delivery and must
+      // survive. Delivery-store envelopes stamp reportedAt; state-root results
+      // stamp createdAt. When no result timestamp is parseable, keep any lock
+      // that names a delivery id (fail safe), and release only ownerless ones.
+      let lockCleared = !lock;
       if (lock) {
         const windowResultTimes = results
           .filter((result) => result.targetWindow === window)
-          .map((result) => Date.parse(result.createdAt || result.recordedAt || ""))
+          .map((result) => Date.parse(result.reportedAt || result.createdAt || result.wakeflowTrace?.createdAt || ""))
           .filter((value) => Number.isFinite(value));
-        const newestResultAt = windowResultTimes.length ? Math.max(...windowResultTimes) : Date.now();
         const lockAt = Date.parse(lock.createdAt || "");
-        if (!Number.isFinite(lockAt) || lockAt <= newestResultAt) {
+        const releasable = windowResultTimes.length
+          ? (!Number.isFinite(lockAt) || lockAt <= Math.max(...windowResultTimes))
+          : !lock.deliveryId;
+        if (releasable) {
           rmSync(lockFileFor(window), { force: true });
+          lockCleared = true;
         }
       }
-      setWindowState(window, "done");
+      // "done" only when no in-flight lock survives; a preserved newer lock
+      // means a fresh delivery is mid-flight on this window.
+      if (lockCleared) setWindowState(window, "done");
     }
     const satisfied = expectedWindows.length > 0
       ? expectedWindows.every((window) => found.includes(window))
@@ -778,7 +857,7 @@ function tabNameFor(role, windowName) {
   return hostProfile.launch.tabNames?.[role] ?? windowName;
 }
 
-const pluginRootDir = path.dirname(path.dirname(path.dirname(new URL(import.meta.url).pathname)));
+const pluginRootDir = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
 function pluginVersion() {
   try {
@@ -790,6 +869,13 @@ function pluginVersion() {
 
 function runtimeMetaFile() {
   return path.join(hostDir, "runtime-meta.json");
+}
+
+function relativeWorkspaceEntry(dir) {
+  // Committed settings must stay portable: reference the parent workspace by a
+  // RELATIVE path (".." for direct children), never the user's absolute path.
+  const rel = path.relative(dir, workspaceRoot).split(path.sep).join("/");
+  return rel || ".";
 }
 
 function settingsSeeded(dir, { isWorkspaceRoot }) {
@@ -806,9 +892,31 @@ function settingsSeeded(dir, { isWorkspaceRoot }) {
   if (!rulesOk) return "partial";
   if (!isWorkspaceRoot) {
     const dirs = Array.isArray(parsed?.permissions?.additionalDirectories) ? parsed.permissions.additionalDirectories : [];
-    if (!dirs.includes(workspaceRoot)) return "partial";
+    if (!dirs.includes(relativeWorkspaceEntry(dir))) return "partial";
   }
+  // committed settings must carry no machine-local residue
+  if (settingsHasMachineResidue(parsed, dir)) return "partial";
+  const localFile = path.join(dir, ".claude", "settings.local.json");
+  if (!existsSync(localFile)) return "partial";
+  try {
+    const local = JSON.parse(readFileSync(localFile, "utf8"));
+    if (!local.statusLine) return "partial";
+  } catch {
+    return "invalid";
+  }
+  // the statusline command points at a generated script in cleanable local
+  // runtime: it must exist and match the current template, or every pane's
+  // statusline silently errors while check reports healthy
+  const script = statuslineScriptFile();
+  if (!existsSync(script) || readFileSync(script, "utf8") !== STATUSLINE_SCRIPT) return "partial";
   return "seeded";
+}
+
+function settingsHasMachineResidue(parsed, dir) {
+  const dirs = Array.isArray(parsed?.permissions?.additionalDirectories) ? parsed.permissions.additionalDirectories : [];
+  if (dirs.includes(workspaceRoot)) return true;
+  const command = parsed?.statusLine?.command;
+  return typeof command === "string" && command.includes(".workspace-local/wakeflow-statusline.mjs");
 }
 
 function memoryFileState(dir) {
@@ -843,6 +951,7 @@ async function commandLaunchAll() {
     const title = repo.title;
     const argv = [
       "launch-window", "--root", workspaceRoot, "--server", serverSession,
+      ...(stateDir !== path.resolve(workspaceRoot, ".workspace-local/wakeflow-delivery") ? ["--state-dir", stateDir] : []),
       "--window", windowName, "--title", title, "--cwd", repo.cwd,
       "--resume", "--session-id", sessionId, "--replace", "--boot-wait-ms", getValue("--boot-wait-ms", "7000"),
     ];
@@ -872,7 +981,9 @@ function readRepositoryForWindow(windowName) {
     return { cwd: workspaceRoot, title: `${windowName} Controller` };
   }
   const repo = (Array.isArray(config.repositories) ? config.repositories : []).find((r) => r.windowName === windowName);
-  if (!repo) return { cwd: workspaceRoot, title: windowName };
+  if (!repo) {
+    fail(`window ${windowName} is registered but not in workspace.config.json repositories; fix the config (or register the window under its configured name) before launching it.`);
+  }
   const roleTitle = windowName === config.designWindow ? `${windowName} Design`
     : windowName === config.testWindow ? `${windowName} Test`
     : `${windowName} Work`;
@@ -984,7 +1095,7 @@ function commandCheckWorkspace() {
         note("window-card", cardState, "wakeflow_initialize_workspace apply:true upserts the managed CLAUDE.md access card.", { window: repo.windowName });
       }
     }
-    const seeded = settingsSeeded(dir, { isWorkspaceRoot: false });
+    const seeded = settingsSeeded(dir, { isWorkspaceRoot: dir === workspaceRoot });
     if (seeded !== "seeded") note("permissions", seeded, "wakeflow-claude-host seed-permissions --write", { window: repo.windowName });
   }
   const rootSeeded = settingsSeeded(workspaceRoot, { isWorkspaceRoot: true });
@@ -1062,8 +1173,10 @@ function arrangeWindows(serverSession) {
   ].filter((entry) => entry.windowName);
 
   const arranged = [];
-  // Pause renumbering so explicit move targets stay stable during the pass.
+  // Pause renumbering so explicit move targets stay stable during the pass;
+  // the finally below guarantees it is restored even when a move fails.
   tmux(["set-option", "-t", serverSession, "renumber-windows", "off"], { allowFailure: true });
+  try {
   let slot = 101;
   for (const entry of desired) {
     const bindingFile = bindingFileFor(entry.windowName);
@@ -1088,8 +1201,10 @@ function arrangeWindows(serverSession) {
     tmux(["move-window", "-s", windowId, "-t", `${serverSession}:${trailSlot}`], { allowFailure: true });
     trailSlot += 1;
   }
-  tmux(["move-window", "-r", "-t", serverSession], { allowFailure: true });
-  tmux(["set-option", "-t", serverSession, "renumber-windows", "on"], { allowFailure: true });
+    tmux(["move-window", "-r", "-t", serverSession], { allowFailure: true });
+  } finally {
+    tmux(["set-option", "-t", serverSession, "renumber-windows", "on"], { allowFailure: true });
+  }
   return arranged;
 }
 
@@ -1099,37 +1214,59 @@ function arrangeWindows(serverSession) {
 // modelByRole pin, so a silent model switch is immediately visible in-pane.
 const STATUSLINE_SCRIPT = `#!/usr/bin/env node
 // Generated by wakeflow (seed-permissions). Shows the live serving model and
-// warns when it differs from the model pinned in workspace.config.json.
-import { readFileSync } from "node:fs";
+// the WINDOW identity. Identity comes from the registered session id (immune
+// to cd drift inside the session); cwd is only a fallback for unregistered
+// sessions. Warns when the model differs from the configured modelByRole pin.
+import { readFileSync, readdirSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const stateDir = process.env.WAKEFLOW_STATE_DIR || path.join(root, ".workspace-local/wakeflow-delivery");
+function readlinkSafe(p) {
+  return realpathSync(path.resolve(p));
+}
 let raw = "";
 process.stdin.on("data", (chunk) => { raw += chunk; });
 process.stdin.on("end", () => {
   let input = {};
   try { input = JSON.parse(raw); } catch { /* render with what we have */ }
   const model = input.model ?? {};
-  const cwd = input.workspace?.current_dir || process.cwd();
-  let expected = null;
+  const cwd = input.workspace?.project_dir || input.workspace?.current_dir || process.cwd();
+  const sessionId = input.session_id || "";
+  let config = null;
+  try { config = JSON.parse(readFileSync(path.join(root, "workspace.config.json"), "utf8")); } catch { /* unconfigured */ }
+  let windowName = null;
   try {
-    const config = JSON.parse(readFileSync(path.join(root, "workspace.config.json"), "utf8"));
-    const byRole = config.hosts?.["claude-code"]?.modelByRole ?? {};
-    let role = "default";
-    if (path.resolve(cwd) === path.resolve(root)) role = "controller";
-    else {
-      const repo = (config.repositories ?? []).find((r) => r.path && path.resolve(root, r.path) === path.resolve(cwd));
-      if (repo) {
-        role = repo.windowName === config.designWindow ? "design"
-          : repo.windowName === config.testWindow ? "test" : "product";
+    const registry = path.join(stateDir, "hosts/claude-code/thread-registry");
+    for (const file of readdirSync(registry)) {
+      if (!file.endsWith(".json")) continue;
+      const record = JSON.parse(readFileSync(path.join(registry, file), "utf8"));
+      if (record.threadId === sessionId) { windowName = record.windowName; break; }
+    }
+  } catch { /* no registry: fall back to cwd */ }
+  let role = "default";
+  if (config) {
+    if (!windowName) {
+      const real = (p) => { try { return readlinkSafe(p); } catch { return path.resolve(p); } };
+      if (real(cwd) === real(root)) windowName = config.controllerWindow;
+      else {
+        const repo = (config.repositories ?? []).find((r) => r.path && real(path.resolve(root, r.path)) === real(cwd));
+        if (repo) windowName = repo.windowName;
       }
     }
-    expected = byRole[role] ?? byRole.default ?? null;
-  } catch { /* unpinned workspaces just show the live model */ }
+    role = windowName === config.controllerWindow ? "controller"
+      : windowName === config.designWindow ? "design"
+      : windowName === config.testWindow ? "test"
+      : (config.repositories ?? []).some((r) => r.windowName === windowName) ? "product" : "default";
+  }
+  const byRole = config?.hosts?.["claude-code"]?.modelByRole ?? {};
+  const expected = byRole[role] ?? byRole.default ?? null;
   const name = model.display_name || model.id || "model?";
-  const ok = !expected || model.id === expected;
-  console.log(ok ? \`\${name} \u00b7 \${path.basename(cwd)}\` : \`\u26a0\ufe0f \${name}\`);
+  const label = config && windowName === config.controllerWindow ? "Controller" : (windowName || path.basename(cwd));
+  // alias pins ("opus") are valid --model values: match by inclusion
+  const ok = !expected || model.id === expected || String(model.id || "").includes(expected);
+  console.log(ok ? \`\${name} \u00b7 \${label}\` : \`\u26a0\ufe0f \${name}\`);
 });
 `;
 
@@ -1165,30 +1302,48 @@ function readWorkspaceRepositories() {
     .filter((dir) => existsSync(dir));
 }
 
-function mergePermissionSettings(existing, { isWorkspaceRoot }) {
-  // Never mutate `existing`: the caller detects changes by comparing the merge
-  // result against it, so in-place edits would self-cancel and skip the write.
+function mergePermissionSettings(existing, { isWorkspaceRoot, dir }) {
+  // COMMITTED settings: portable content only (allow rules + RELATIVE parent
+  // reference). Machine-local items (statusLine -> .workspace-local script,
+  // absolute paths) belong in .claude/settings.local.json. Never mutate
+  // `existing`: the caller detects changes by comparing against it.
   const settings = existing && typeof existing === "object" ? { ...existing } : {};
-  // Continuous model visibility: point the statusline at the workspace-level
-  // wakeflow script unless the user already configured their own statusline.
-  if (!settings.statusLine) {
-    settings.statusLine = { type: "command", command: `node ${statuslineScriptFile()}` };
-  }
   const permissions = settings.permissions && typeof settings.permissions === "object" ? settings.permissions : {};
   const allow = new Set(Array.isArray(permissions.allow) ? permissions.allow : []);
   for (const rule of SEED_ALLOW_RULES) allow.add(rule);
   const merged = { ...settings, permissions: { ...permissions, allow: [...allow].sort() } };
   if (!isWorkspaceRoot) {
     const dirs = new Set(Array.isArray(permissions.additionalDirectories) ? permissions.additionalDirectories : []);
-    dirs.add(workspaceRoot);
+    // migrate: drop the absolute workspace path earlier wakeflow versions wrote
+    dirs.delete(workspaceRoot);
+    dirs.add(relativeWorkspaceEntry(dir));
     merged.permissions.additionalDirectories = [...dirs].sort();
+  } else if (Array.isArray(permissions.additionalDirectories) && permissions.additionalDirectories.includes(workspaceRoot)) {
+    // root-level absolute residue: clean it here too, or check-workspace flags
+    // a "partial" that seeding can never converge
+    merged.permissions.additionalDirectories = permissions.additionalDirectories.filter((entry) => entry !== workspaceRoot);
+  }
+  // migrate: move the wakeflow statusline out of the committed file (a custom
+  // user statusLine is left untouched)
+  if (typeof merged.statusLine?.command === "string" && merged.statusLine.command.includes(".workspace-local/wakeflow-statusline.mjs")) {
+    delete merged.statusLine;
   }
   return merged;
 }
 
+function mergeLocalSettings(existing) {
+  // MACHINE-LOCAL settings (.claude/settings.local.json, never committed):
+  // the statusline command may carry this machine's absolute script path.
+  const settings = existing && typeof existing === "object" ? { ...existing } : {};
+  if (!settings.statusLine) {
+    settings.statusLine = { type: "command", command: `node "${statuslineScriptFile()}"` };
+  }
+  return settings;
+}
+
 function commandSeedPermissions() {
   const write = hasFlag("--write");
-  const statusline = ensureStatuslineScript(write);
+  const statuslineScript = ensureStatuslineScript(write);
   const targets = [workspaceRoot, ...readWorkspaceRepositories()];
   const seen = new Set();
   const results = [];
@@ -1196,23 +1351,46 @@ function commandSeedPermissions() {
     if (seen.has(dir)) continue;
     seen.add(dir);
     const file = path.join(dir, ".claude", "settings.json");
-    const existing = existsSync(file) ? readJson(file, "claude settings") : null;
-    const merged = mergePermissionSettings(existing, { isWorkspaceRoot: dir === workspaceRoot });
+    let existing = null;
+    if (existsSync(file)) {
+      try {
+        existing = JSON.parse(readFileSync(file, "utf8"));
+      } catch {
+        // an unparsable settings file must not abort the whole seed run: skip
+        // this target with a report so the user can repair it by hand
+        results.push({ settingsFile: path.relative(workspaceRoot, file), existed: true, invalid: true, changed: false, wrote: false });
+        continue;
+      }
+    }
+    const merged = mergePermissionSettings(existing, { isWorkspaceRoot: dir === workspaceRoot, dir });
     const changed = JSON.stringify(merged) !== JSON.stringify(existing);
     if (write && changed) writeJson(file, merged);
+    const localFile = path.join(dir, ".claude", "settings.local.json");
+    const existingLocal = existsSync(localFile) ? readJson(localFile, "claude local settings") : null;
+    const mergedLocal = mergeLocalSettings(existingLocal);
+    const localChanged = JSON.stringify(mergedLocal) !== JSON.stringify(existingLocal);
+    if (write && localChanged) writeJson(localFile, mergedLocal);
     results.push({
       settingsFile: path.relative(workspaceRoot, file) || ".claude/settings.json",
       existed: Boolean(existing),
       changed,
       wrote: write && changed,
+      localSettingsFile: path.relative(workspaceRoot, localFile) || ".claude/settings.local.json",
+      localChanged,
+      localWrote: write && localChanged,
     });
   }
   output({
     ok: true,
     command: "seed-permissions",
-    wrote: write,
+    wrote: write && (results.some((entry) => entry.wrote || entry.localWrote) || statuslineScript.changed),
+    statuslineScript: {
+      file: path.relative(workspaceRoot, statuslineScript.file),
+      changed: statuslineScript.changed,
+      wrote: write && statuslineScript.changed,
+    },
     allowRules: SEED_ALLOW_RULES,
-    note: "Repo settings also gain permissions.additionalDirectories=[workspace root] so windows read parent workspace state without prompts. The workspace trust dialog still appears once per new directory; everything else becomes prompt-free under acceptEdits mode.",
+    note: "Committed repo settings gain portable entries only (allow rules + a RELATIVE additionalDirectories parent reference); machine-local items such as the wakeflow statusline live in .claude/settings.local.json, which is never committed. Past absolute-path/statusLine residue in settings.json is migrated out automatically.",
     results,
   });
 }
@@ -1220,6 +1398,7 @@ function commandSeedPermissions() {
 function commandHelp() {
   output({
     ok: true,
+    command: "help",
     commands: {
       preflight: "Report tmux/claude/brew availability and the install recommendation.",
       "ensure-server": "Create the wakeflow tmux server session when missing and start the activity monitor (--server wakeflow) [--no-monitor].",
@@ -1237,7 +1416,7 @@ function commandHelp() {
       "check-workspace": "Read-only health check for an existing workspace: config hosts block, managed CLAUDE.md surfaces, registry/binding/liveness per window, permission seeds, legacy codex registry, plugin version stamp.",
       "stamp-runtime": "Record the converging plugin version in hosts/claude-code/runtime-meta.json: --write.",
       "arrange-windows": "Rename managed windows to short tabs and order them Design, controller, products, Test (unmanaged windows trail): [--server wakeflow].",
-      "seed-permissions": "Merge wakeflow automation allowlists into .claude/settings.json at the workspace root and every configured repository: [--write] (dry-run by default).",
+      "seed-permissions": "Converge both settings layers for the workspace root and every configured repository: portable allow rules + relative parent reference into committed .claude/settings.json, the machine-local statusline into .claude/settings.local.json, plus the generated statusline script. Migrates older absolute-path/statusLine residue. [--write] (dry-run by default).",
     },
   });
 }

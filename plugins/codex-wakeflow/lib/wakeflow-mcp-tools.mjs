@@ -79,6 +79,35 @@ export const tools = [
     },
   },
   {
+    name: "wakeflow_adopt_demand_host",
+    description: "Explicitly transfer (or claim) demand controller-host ownership to THIS host, with an audit event and a revision bump — no other state changes. The sanctioned cross-host handoff; existing transition candidates become stale and must be re-reduced on the new host.",
+    annotations: localWriteTool("Adopt Wakeflow Demand Ownership"),
+    inputSchema: {
+      type: "object",
+      required: ["stateRoot"],
+      properties: {
+        root: { type: "string" },
+        stateRoot: { type: "string" },
+        reason: { type: "string" },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "wakeflow_render_progress",
+    description: "Re-render the developer progress projection for a demand state root (the projection goes stale after every state mutation). Owner-host only; does not change machine state semantics.",
+    annotations: localWriteTool("Render Wakeflow Progress"),
+    inputSchema: {
+      type: "object",
+      required: ["stateRoot"],
+      properties: {
+        root: { type: "string" },
+        stateRoot: { type: "string" },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
     name: "wakeflow_release_window_lock",
     description: "Release the shared cross-host in-flight delivery lock for one window. Recovery action for stalled or ownerless locks; releasing another host's fresh lock must be a deliberate controller decision.",
     annotations: localWriteTool("Release Wakeflow Window Lock"),
@@ -114,6 +143,7 @@ export const tools = [
         root: { type: "string" },
         demandKey: { type: "string" },
         title: { type: "string" },
+        language: { type: "string", enum: ["auto", "zh", "en"], description: "Demand interface language; drives the human-readable sentences of all envelope prompts for this demand." },
         goal: { type: "string" },
         completionDefinition: { type: "string" },
         stagePlan: { type: "string" },
@@ -177,6 +207,7 @@ export const tools = [
         deliveryFile: { type: "string" },
         status: { type: "string", enum: ["sent", "blocked", "failed"] },
         evidence: { type: "string" },
+        deliveryRunId: { type: "string", description: "Distinct run id for retrying the same delivery after a failed attempt (defaults to run-<deliveryId>, which cannot be re-recorded with different content)." },
         error: { type: "string" },
         readbackOk: { type: "boolean" },
         hostMethod: { type: "string" },
@@ -472,6 +503,28 @@ export const handlers = {
     ],
     cwd: args.root || undefined,
   }),
+  wakeflow_adopt_demand_host: (args) => runWakeflowRuntime({
+    script: "wakeflow-state",
+    args: [
+      "adopt-demand-host",
+      "--state-root", args.stateRoot,
+      ...(args.reason ? ["--reason", args.reason] : []),
+      ...rootArgs(args),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
+  wakeflow_render_progress: (args) => runWakeflowRuntime({
+    script: "wakeflow-render-progress",
+    args: [
+      "--state-root", args.stateRoot,
+      ...rootArgs(args),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
   wakeflow_release_window_lock: (args) => runWakeflowRuntime({
     script: "wakeflow-delivery",
     args: [
@@ -500,6 +553,7 @@ export const handlers = {
       ...optionalValue("--state-root", args.stateRoot),
       ...rootArgs(args),
       "--write",
+      ...(args.language ? ["--language", args.language] : []),
       "--json",
     ],
   }),
@@ -576,6 +630,7 @@ export const handlers = {
       ...(typeof args.readbackOk === "boolean" ? ["--readback-ok", String(args.readbackOk)] : []),
       ...rootArgs(args),
       "--write",
+      ...(args.deliveryRunId ? ["--delivery-run-id", args.deliveryRunId] : []),
       "--json",
     ],
   }),

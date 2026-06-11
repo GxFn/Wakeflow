@@ -1,7 +1,10 @@
-const FINAL_CONTROLLER_DECISIONS = new Set(["accept", "blocked"]);
-
+// "accept" is the only FINAL review decision. A "blocked" decision parks the
+// task pending new evidence: once a fresh target result is imported the task
+// must become reviewable again, otherwise the demand wedges permanently
+// (add-task refuses while blockers exist, reduce sees no open tasks, and
+// complete refuses open tasks - no escape).
 export function hasFinalControllerDecision(task) {
-  return task?.status === "accepted" || FINAL_CONTROLLER_DECISIONS.has(task?.reviewDecision);
+  return task?.status === "accepted" || task?.reviewDecision === "accept";
 }
 
 export function controllerReviewScope(targetTasks = []) {

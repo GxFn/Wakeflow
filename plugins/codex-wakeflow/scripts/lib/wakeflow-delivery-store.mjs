@@ -188,6 +188,10 @@ export function createDeliveryStore({
     if (!existsSync(hostsDir)) return [];
     return readdirSync(hostsDir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
+      // a host runtime dir carries at least one known runtime surface; stray
+      // directories under hosts/ are not hosts
+      .filter((entry) => ["thread-registry", "window-config", "keep-live", "window-host"]
+        .some((marker) => existsSync(path.join(hostsDir, entry.name, marker))))
       .map((entry) => {
         const registry = path.join(hostsDir, entry.name, "thread-registry");
         const registeredWindows = existsSync(registry)

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import {
   annotateDeliveryRunIdempotency,
@@ -297,6 +297,17 @@ export function createResultRecordingCommands(ctx) {
       }),
       createdAt,
     });
+    function refreshSentWindowLock(runStatus) {
+      // The prepare-time lock may have expired before a crashed record was
+      // replayed; (re)write it on every sent record so the in-flight delivery
+      // is never unlocked.
+      if (runStatus === "sent" && envelope.kind === "DeliveryEnvelope" && envelope.targetWindow) {
+        writeWindowLock(envelope.targetWindow, { deliveryId: envelope.deliveryId });
+        return path.relative(workspaceRoot, lockPathNote(envelope.targetWindow));
+      }
+      return undefined;
+    }
+
     const runFile = deliveryRunFileFor(deliveryRunId);
     if (existsSync(runFile)) {
       const existingRun = readJson(runFile, "delivery run");
@@ -304,6 +315,7 @@ export function createResultRecordingCommands(ctx) {
         fail(`Delivery run ${deliveryRunId} already exists with different content; use a new --delivery-run-id for a distinct retry attempt.`);
       }
       const stateUpdate = markStateRootDeliverySent(envelope, existingRun);
+      const windowLock = refreshSentWindowLock(existingRun.status);
       output(
         {
           ok: true,
@@ -315,6 +327,7 @@ export function createResultRecordingCommands(ctx) {
           run: existingRun,
           runFile: path.relative(workspaceRoot, runFile),
           stateUpdate,
+          windowLock,
         },
         [
           `Delivery run ${deliveryRunId} already recorded; treated as idempotent replay.`,
@@ -330,11 +343,7 @@ export function createResultRecordingCommands(ctx) {
     markStateRootDeliverySent(envelope, run, { apply: false });
     atomicWriteJson(runFile, run);
     const stateUpdate = markStateRootDeliverySent(envelope, run);
-    let windowLock;
-    if (run.status === "sent" && envelope.kind === "DeliveryEnvelope" && envelope.targetWindow) {
-      writeWindowLock(envelope.targetWindow, { deliveryId: envelope.deliveryId });
-      windowLock = path.relative(workspaceRoot, lockPathNote(envelope.targetWindow));
-    }
+    const windowLock = refreshSentWindowLock(run.status);
     output(
       {
         ok: true,
@@ -462,15 +471,35 @@ export function createResultRecordingCommands(ctx) {
       if (lock && windowLockFresh(lock)) {
         let belongsHere = !lock.deliveryId;
         if (!belongsHere) {
-          const runFile = deliveryRunFileFor(`run-${lock.deliveryId}`);
-          if (existsSync(runFile)) {
+          const matchRun = (run) => {
+            if (!run || run.deliveryId !== lock.deliveryId) return false;
+            const runTaskId = run.taskId || run.targetTaskId;
+            return run.targetWindow === targetWindow && (!runTaskId || runTaskId === taskId);
+          };
+          const guessedFile = deliveryRunFileFor(`run-${lock.deliveryId}`);
+          if (existsSync(guessedFile)) {
             try {
-              const run = JSON.parse(readFileSync(runFile, "utf8"));
-              const runTaskId = run.taskId || run.targetTaskId;
-              belongsHere = run.targetWindow === targetWindow
-                && (!runTaskId || runTaskId === taskId);
+              belongsHere = matchRun(JSON.parse(readFileSync(guessedFile, "utf8")));
             } catch {
               belongsHere = false;
+            }
+          }
+          if (!belongsHere) {
+            // custom --delivery-run-id retries do not follow the run-<deliveryId>
+            // naming; scan the runs directory for the matching delivery id.
+            const runsDir = path.dirname(guessedFile);
+            if (existsSync(runsDir)) {
+              for (const name of readdirSync(runsDir)) {
+                if (!name.endsWith(".json")) continue;
+                try {
+                  if (matchRun(JSON.parse(readFileSync(path.join(runsDir, name), "utf8")))) {
+                    belongsHere = true;
+                    break;
+                  }
+                } catch {
+                  // skip unreadable run files
+                }
+              }
             }
           }
         }

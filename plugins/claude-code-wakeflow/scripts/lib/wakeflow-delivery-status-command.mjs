@@ -15,14 +15,23 @@ function scanDemandHostOwnership(workspaceRoot) {
   // Read-only visibility: which host's controller owns each active demand.
   const currentDir = path.join(workspaceRoot, ".workspace-active/workspace/current");
   if (!existsSync(currentDir)) return [];
-  const demands = [];
+  const active = [];
+  const byHost = {};
+  let total = 0;
   for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const stateFile = path.join(currentDir, entry.name, "wakeflow-state.json");
     if (!existsSync(stateFile)) continue;
     try {
       const state = JSON.parse(readFileSync(stateFile, "utf8"));
-      demands.push({
+      total += 1;
+      const host = state.controllerHost ?? "unclaimed";
+      byHost[host] = (byHost[host] ?? 0) + 1;
+      // completed/archived demands stay countable but are dropped from the
+      // embedded list: the live workspace can hold ~100 state roots and the
+      // status payload feeds straight into agent context.
+      if (["completed", "archived"].includes(state.state)) continue;
+      active.push({
         demandKey: state.demandKey,
         stateRoot: `.workspace-active/workspace/current/${entry.name}`,
         controllerHost: state.controllerHost ?? null,
@@ -32,7 +41,14 @@ function scanDemandHostOwnership(workspaceRoot) {
       // unreadable state roots are skipped; verify reports them separately
     }
   }
-  return demands;
+  const cap = 30;
+  return {
+    total,
+    activeCount: active.length,
+    byHost,
+    truncated: active.length > cap ? active.length - cap : 0,
+    demands: active.slice(0, cap),
+  };
 }
 
 export function commandStatus(ctx) {

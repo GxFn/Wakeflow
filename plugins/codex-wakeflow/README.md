@@ -23,6 +23,7 @@ compact direct-thread delivery, and evidence-based acceptance.
 - [Automation Semantics](#automation-semantics)
 - [MCP Capability Surface](#mcp-capability-surface)
 - [Runtime And Ledger Boundaries](#runtime-and-ledger-boundaries)
+- [Dual-Host Workspaces](#dual-host-workspaces)
 - [Marketplace Release](#marketplace-release)
 - [Working In This Repository](#working-in-this-repository)
 - [Design Principles](#design-principles)
@@ -240,6 +241,17 @@ Core rules:
   turn stops. It does not sleep or poll in the same turn.
 - Keep-live support is runtime assistance only. It is not task logic, transport
   authority, or acceptance evidence.
+- Demand creation is host-neutral: `wakeflow_init_demand` writes
+  `controllerHost: null`, so Codex and Claude Code can both create or import
+  demand material without taking ownership.
+- The first real driving command claims the demand for its platform by writing
+  `controllerHost: "codex"` or `controllerHost: "claude-code"`.
+- After a demand is owned by one host, the other host fails closed on
+  controller mutations and dispatch preparation unless ownership is explicitly
+  transferred with `--adopt-host`.
+- `wakeflow_status` exposes demand ownership under `dualHost.demandOwnership`
+  so mixed-host controllers can see which platform owns active work before
+  acting.
 
 Automation stops on final completion, hard gates, user stop, no eligible work,
 missing evidence, blocked state, or any condition that requires controller or
@@ -262,7 +274,7 @@ Primary tool groups:
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_intake_design_handoff`, `wakeflow_intake_test_card` |
-| Archive, maintenance, and verification | `wakeflow_archive_todo`, `wakeflow_archive_workspace_docs`, `wakeflow_verify` |
+| Archive, maintenance, and verification | `wakeflow_archive_todo`, `wakeflow_archive_workspace_docs`, `wakeflow_verify`, `wakeflow_trace_spine` |
 
 Public MCP tools are for outer agent workflows. Target closeout is deliberately
 split: record a target result, review readiness, prepare a controller-return
@@ -303,16 +315,27 @@ The source repository tracks reusable Wakeflow capability. Product code,
 project-specific active state, real thread ids, and derived local runtime
 artifacts do not belong in Wakeflow source.
 
+## Dual-Host Workspaces
+
 A workspace may run the Codex and Claude Code Wakeflow editions side by side.
 Shared business state (`.workspace-active/`, `wakeflow-ledger/`, and the
 dispatch packets, dispatch groups, delivery envelopes, delivery runs, target
 results, and shared `locks/` under `.workspace-local/wakeflow-delivery/`)
-stays host-neutral, while host-scoped runtime such as the thread registry,
-window config, and keep-live state lives under
-`.workspace-local/wakeflow-delivery/hosts/codex/`. Records in the legacy
-`.workspace-local/wakeflow-delivery/thread-registry/` location are still read
-as a fallback, new registrations write the host-scoped path, and
-`wakeflow-verify` prints a migration note.
+stays host-neutral. Shared locks enforce one in-flight delivery per window
+across hosts.
+
+Codex runtime remains host-scoped under
+`.workspace-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`.
+Claude Code stores its own runtime under
+`.workspace-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`.
+Records in the legacy `.workspace-local/wakeflow-delivery/thread-registry/`
+location are still read as a fallback; new registrations write the host-scoped
+path and `wakeflow_verify` reports the migration state.
+
+`AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code) may coexist at the
+workspace and child roots. Each demand still has exactly one controller host:
+creation is neutral, the first driving command claims ownership, non-owning
+hosts fail closed, and `--adopt-host` is the explicit transfer mechanism.
 
 ## Marketplace Release
 

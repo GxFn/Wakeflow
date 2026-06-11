@@ -22,6 +22,7 @@ Wakeflow 把一个本地 Codex 工作区变成有纪律的控制系统：一个�
 - [自动化语义](#自动化语义)
 - [MCP 能力面](#mcp-能力面)
 - [运行时与账本边界](#运行时与账本边界)
+- [双宿主工作区](#双宿主工作区)
 - [Marketplace 发布](#marketplace-发布)
 - [开发本仓库](#开发本仓库)
 - [设计原则](#设计原则)
@@ -198,6 +199,15 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 - `per-target` 可以每个 target 唤醒一次 controller，同时保留 group snapshot。
 - 一次真实发送被记录为 `sent` 且有 readback 证据后，总控本轮停止，不在同一轮 sleep 或 poll。
 - Keep-live 只是运行时辅助，不是任务逻辑、传输权威或验收证据。
+- Demand 创建是宿主中立的：`wakeflow_init_demand` 写入
+  `controllerHost: null`，所以 Codex 和 Claude Code 都可以创建或导入需求材料，
+  但不会因此抢占控制权。
+- 第一个真正驱动需求的命令会把 demand 绑定到当前平台，写入
+  `controllerHost: "codex"` 或 `controllerHost: "claude-code"`。
+- demand 归属于某个宿主后，另一个宿主的 controller 写操作和投递准备会 fail-closed；
+  只有显式 `--adopt-host` 才能转移控制权。
+- `wakeflow_status` 会在 `dualHost.demandOwnership` 暴露 active demand 的宿主归属，
+  让混合宿主总控在行动前先看清归属。
 
 自动化会在最终完成、硬 gate、用户停止、没有 eligible work、缺失证据、blocked state、
 或任何需要总控/用户判断的条件下停止。
@@ -215,9 +225,9 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 | 设置和工作区发现 | `wakeflow_initialize_workspace` |
 | Demand 和任务状态 | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
-| 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
+| 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design 和 Test intake | `wakeflow_intake_design_handoff`, `wakeflow_intake_test_card` |
-| 归档、维护和验证 | `wakeflow_archive_todo`, `wakeflow_archive_workspace_docs`, `wakeflow_verify` |
+| 归档、维护和验证 | `wakeflow_archive_todo`, `wakeflow_archive_workspace_docs`, `wakeflow_verify`, `wakeflow_trace_spine` |
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：
 记录 target result、审查 readiness、在策略允许时准备 controller-return envelope、
@@ -239,13 +249,24 @@ Wakeflow 把源码、active runtime 和长期记录分开：
 Wakeflow 源仓库只跟踪可复用能力。产品代码、项目特定 active state、真实 thread id
 和派生本地运行时 artifacts 都不应进入 Wakeflow 源码。
 
+## 双宿主工作区
+
 同一个工作区可以同时运行 Codex 和 Claude Code 两个 Wakeflow 版本。共享业务状态
 （`.workspace-active/`、`wakeflow-ledger/`，以及 `.workspace-local/wakeflow-delivery/`
 下的 dispatch packets、dispatch groups、delivery envelopes、delivery runs、
-target results 和共享 `locks/`）保持宿主中立；thread registry、window config、
-keep-live 等宿主独立运行时位于 `.workspace-local/wakeflow-delivery/hosts/codex/`。
+target results 和共享 `locks/`）保持宿主中立。共享锁会跨宿主强制每个窗口同一时间
+只有一个 in-flight 投递。
+
+Codex 运行时仍位于宿主独立路径：
+`.workspace-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`。
+Claude Code 运行时位于：
+`.workspace-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`。
 旧位置 `.workspace-local/wakeflow-delivery/thread-registry/` 的记录仍会作为
-fallback 被读取；新注册写入宿主独立路径，`wakeflow-verify` 会输出迁移提示。
+fallback 被读取；新注册写入宿主独立路径，`wakeflow_verify` 会报告迁移状态。
+
+`AGENTS.md`（Codex）与 `CLAUDE.md`（Claude Code）可以在工作区根目录和子目录根
+共存。每个 demand 仍然只有一个 controller host：创建中立，第一次驱动命令认领，
+非归属宿主 fail-closed，`--adopt-host` 是显式转移机制。
 
 ## Marketplace 发布
 

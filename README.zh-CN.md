@@ -6,8 +6,9 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Wakeflow 把一个本地 Codex 工作区变成有纪律的控制系统：一个总控窗口、
-多个聚焦的仓库窗口、明确的 state root、轻量 direct-thread 投递，以及基于证据的验收。
+Wakeflow 把一个本地 Codex 或 Claude Code 工作区变成有纪律的控制系统：
+一个总控窗口、多个聚焦的仓库窗口、明确的 state root、轻量 direct-thread
+或 direct-session 投递，以及基于证据的验收。
 
 </div>
 
@@ -22,6 +23,7 @@ Wakeflow 把一个本地 Codex 工作区变成有纪律的控制系统：一个�
 - [自动化语义](#自动化语义)
 - [MCP 能力面](#mcp-能力面)
 - [运行时与账本边界](#运行时与账本边界)
+- [双宿主工作区](#双宿主工作区)
 - [Marketplace 发布](#marketplace-发布)
 - [开发本仓库](#开发本仓库)
 - [设计原则](#设计原则)
@@ -49,13 +51,13 @@ agent 工作保持可读、有边界、可恢复。
 
 ```mermaid
 flowchart TD
-  User["用户目标"] --> Controller["总控 Codex 窗口"]
-  Controller --> Gates["AGENTS.md gates<br/>目标、边界、证据、停止规则"]
+  User["用户目标"] --> Controller["总控窗口<br/>Codex / Claude Code"]
+  Controller --> Gates["AGENTS.md / CLAUDE.md gates<br/>目标、边界、证据、停止规则"]
   Controller <--> StateRoot["State root<br/>.workspace-active/..."]
   StateRoot --> Tasks["任务包"]
   Tasks --> Delivery["投递 envelope"]
   LocalRuntime[".workspace-local<br/>thread registry + 派生 window config"] -. "lookup" .-> Delivery
-  Delivery --> Host["Codex host thread tools"]
+  Delivery --> Host["Host transport<br/>Codex thread tools 或 Claude tmux helper"]
   Host --> Targets["仓库 / Design / Test 窗口"]
   Targets --> Repos["责任根目录"]
   Targets --> Results["TargetResultEnvelope<br/>包含 evidence refs"]
@@ -122,11 +124,12 @@ Wakeflow 不要求额外的聚合 marketplace 仓库。单独的 catalog 可以�
 
 ## 初始化工作区
 
-Wakeflow 作为 Codex 插件安装。目标工作区不需要包含 Wakeflow 源码。推荐的目标形态是：
+Wakeflow 作为 Codex 或 Claude Code 插件安装。目标工作区不需要包含 Wakeflow
+源码。推荐的目标形态是：
 
 ```text
 MyWorkspace/
-  AGENTS.md
+  AGENTS.md 或 CLAUDE.md
   workspace.config.json
   .workspace-active/          # ignored active controller state
   .workspace-local/           # ignored thread registry and derived runtime
@@ -156,12 +159,21 @@ Preview the plan first and wait for my confirmation before writing.
    只写入 Wakeflow 本地注册命令。thread registry 是唯一 thread-id 权威；
    window config 是由它派生的视图。
 
+Claude Code 版本使用同样的 preview/apply 合约。返回的 launch plan 由 tmux host
+helper 实体化，而不是用 Codex `create_thread`：每个窗口都会作为交互式 `claude`
+session 启动，并把返回的 Claude Code session id 注册为 Wakeflow thread id。
+
 Design 和 Test 默认创建为新的支持 surface。`<Product>Design` 或 `<Product>Test`
 这类相似目录只被当作目录事实，除非用户明确把它们映射成 Design/Test。
 
 Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文工作区传
 `language: "en"`，没有明显偏好时传 `language: "auto"`。生成的线程标题会把窗口名放在最前面，
-方便在窄侧边栏里识别仓库。
+方便在窄侧边栏里识别仓库。新的 state-root progress 文档和后续 Unified Status
+渲染也会使用所选界面语言。
+
+总控和子窗口可以使用 Codex 或 Claude Code subagent 加速有边界的代码搜索、日志分诊、
+测试定位和证据汇总。Subagent 输出只是证据或建议；总控 review、投递、状态写入
+和仓库边界仍归拥有该任务的 Wakeflow 窗口。
 
 ## Wakeflow 会创建什么
 
@@ -210,11 +222,21 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
   （`codex` 或 `claude-code`）。
 - Window config 从 `workspace.config.json` 和 thread-registry presence 派生，不是第二份 thread-id 权威。
 - Delivery prompts 保持轻量、可读。
-- Host 通过 Codex thread tools 发送 prompt；Wakeflow 记录发送和 readback 证据。
+- Host 通过自己的传输边界发送 prompt：Codex 使用 thread tools，Claude Code 使用
+  tmux host helper。Wakeflow 记录发送和 readback 证据。
 - `group-ready` 会等待预期 target results，再允许 controller return。
 - `per-target` 可以每个 target 唤醒一次 controller，同时保留 group snapshot。
 - 一次真实发送被记录为 `sent` 且有 readback 证据后，总控本轮停止，不在同一轮 sleep 或 poll。
 - Keep-live 只是运行时辅助，不是任务逻辑、传输权威或验收证据。
+- Demand 创建是宿主中立的：`wakeflow_init_demand` 写入
+  `controllerHost: null`，所以 Codex 和 Claude Code 都可以创建或导入需求材料，
+  但不会因此抢占控制权。
+- 第一个真正驱动需求的命令会把 demand 绑定到当前平台，写入
+  `controllerHost: "codex"` 或 `controllerHost: "claude-code"`。
+- demand 归属于某个宿主后，另一个宿主的 controller 写操作和投递准备会 fail-closed；
+  只有显式 `--adopt-host` 才能转移控制权。
+- `wakeflow_status` 会在 `dualHost.demandOwnership` 暴露 active demand 的宿主归属，
+  让混合宿主总控在行动前先看清归属。
 
 自动化会在最终完成、硬 gate、用户停止、没有 eligible work、缺失证据、blocked state、
 或任何需要总控/用户判断的条件下停止。
@@ -232,13 +254,13 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 | 设置和工作区发现 | `wakeflow_initialize_workspace` |
 | Demand 和任务状态 | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
-| 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
+| 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design 和 Test intake | `wakeflow_intake_design_handoff`, `wakeflow_intake_test_card` |
-| 归档、维护和验证 | `wakeflow_archive_todo`, `wakeflow_archive_workspace_docs`, `wakeflow_verify` |
+| 归档、维护和验证 | `wakeflow_archive_todo`, `wakeflow_archive_workspace_docs`, `wakeflow_verify`, `wakeflow_trace_spine` |
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：
 记录 target result、审查 readiness、在策略允许时准备 controller-return envelope、
-用 Codex host thread tool 发送，再记录 delivery evidence。不要把这些步骤合并成一个 target-window MCP tool。
+通过当前归属宿主的 transport 发送，再记录 delivery evidence。不要把这些步骤合并成一个 target-window MCP tool。
 
 ## 运行时与账本边界
 
@@ -256,28 +278,50 @@ Wakeflow 把源码、active runtime 和长期记录分开：
 Wakeflow 源仓库只跟踪可复用能力。产品代码、项目特定 active state、真实 thread id
 和派生本地运行时 artifacts 都不应进入 Wakeflow 源码。
 
+## 双宿主工作区
+
+同一个工作区可以同时运行 Codex 和 Claude Code 两个 Wakeflow 版本。共享业务状态
+保持宿主中立：`.workspace-active/`、`wakeflow-ledger/`，以及
+`.workspace-local/wakeflow-delivery/` 下的共享投递 spine（`dispatch-packets/`、
+`dispatch-groups/`、`delivery-envelopes/`、`delivery-runs/`、`target-results/`
+和共享 `locks/`）。
+
+宿主独立的运行时按宿主分开：
+
+- `.workspace-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`
+- `.workspace-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`
+
+`AGENTS.md`（Codex）与 `CLAUDE.md`（Claude Code）可以在工作区根目录和子目录根
+共存。每个 demand 仍然只有一个 controller host：创建中立，第一次驱动命令认领，
+非归属宿主 fail-closed，`--adopt-host` 是显式转移机制。
+
 ## Marketplace 发布
 
-Wakeflow 被打包成 Codex 插件源仓库。公开 source of truth 是：
+Wakeflow 被打包成双宿主插件源仓库。公开 source of truth 是：
 
 ```text
 https://github.com/GxFn/Wakeflow.git
 ```
 
-仓库自带 marketplace catalog：`.agents/plugins/marketplace.json`。这个 catalog
-故意只包含一个插件：marketplace 名为 `gxfn`，显示为 `GxFn`，唯一插件条目指向
-`./plugins/codex-wakeflow`。发布 Wakeflow 意味着给仓库打 tag，并提交嵌套插件 artifact，
+仓库为不同宿主分别携带 catalog：
+
+- `.agents/plugins/marketplace.json` 把 Codex 插件条目指向
+  `./plugins/codex-wakeflow`。
+- `.claude-plugin/marketplace.json` 把 Claude Code 插件条目指向
+  `./plugins/claude-code-wakeflow`。
+
+发布 Wakeflow 意味着给仓库打 tag，并向目标宿主提交正确的嵌套插件 artifact，
 不是提交开发工作区根目录。
 
 发布 release tag 前：
 
 1. 在本仓库运行 `npm test`。
-2. 在有 Python 依赖的环境中运行 Codex plugin manifest validator。
+2. 在可用时运行对应宿主的 plugin manifest validator。
 3. 确认 `plugins/codex-wakeflow/.codex-plugin/plugin.json` starter prompts 不超过 3 条。
-4. 确认 `.agents/plugins/marketplace.json` 只包含嵌套的 `./plugins/codex-wakeflow` 条目。
+4. 确认两个宿主 catalog 都只指向各自的嵌套插件 artifact。
 5. 确认 runtime scripts 和 installed skills 没有项目特定默认 controller 名、产品 overlay、
    本地路径或私有 thread id。
-6. 给 Codex 应安装的精确 commit 打 tag。
+6. 给目标宿主 marketplace 应安装的精确 commit 打 tag。
 
 ## 开发本仓库
 

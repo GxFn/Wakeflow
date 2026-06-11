@@ -380,6 +380,11 @@ Host-scoped runtime is separated per host:
 
 `AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code) coexist at the workspace
 and child roots, and each demand has exactly one controller across hosts.
+Demand creation is host-neutral (`controllerHost: null`); the first real
+driving command claims ownership for `codex` or `claude-code`; non-owning
+hosts fail closed on controller mutations and dispatch preparation; and
+`--adopt-host` is the explicit transfer mechanism. `wakeflow_status` exposes
+the current mapping under `dualHost.demandOwnership`.
 
 ## Working In This Repository
 

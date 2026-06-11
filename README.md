@@ -6,9 +6,10 @@ Unattended control loops for multi-window agent work.
 
 [English](README.md) | [Simplified Chinese](README.zh-CN.md)
 
-Wakeflow turns a local Codex workspace into a disciplined controller system:
-one controller window, focused repository windows, explicit state roots,
-compact direct-thread delivery, and evidence-based acceptance.
+Wakeflow turns a local Codex or Claude Code workspace into a disciplined
+controller system: one controller window, focused repository windows, explicit
+state roots, compact direct-thread or direct-session delivery, and
+evidence-based acceptance.
 
 </div>
 
@@ -23,6 +24,7 @@ compact direct-thread delivery, and evidence-based acceptance.
 - [Automation Semantics](#automation-semantics)
 - [MCP Capability Surface](#mcp-capability-surface)
 - [Runtime And Ledger Boundaries](#runtime-and-ledger-boundaries)
+- [Dual-Host Workspaces](#dual-host-workspaces)
 - [Marketplace Release](#marketplace-release)
 - [Working In This Repository](#working-in-this-repository)
 - [Design Principles](#design-principles)
@@ -58,13 +60,13 @@ capability for keeping multi-window agent work legible, bounded, and resumable.
 
 ```mermaid
 flowchart TD
-  User["User goal"] --> Controller["Controller Codex window"]
-  Controller --> Gates["AGENTS.md gates<br/>goal, boundary, evidence, stop rules"]
+  User["User goal"] --> Controller["Controller window<br/>Codex / Claude Code"]
+  Controller --> Gates["AGENTS.md / CLAUDE.md gates<br/>goal, boundary, evidence, stop rules"]
   Controller <--> StateRoot["State root<br/>.workspace-active/..."]
   StateRoot --> Tasks["Task packages"]
   Tasks --> Delivery["Delivery envelopes"]
   LocalRuntime[".workspace-local<br/>thread registry + derived window config"] -. "lookup" .-> Delivery
-  Delivery --> Host["Codex host thread tools"]
+  Delivery --> Host["Host transport<br/>Codex thread tools or Claude tmux helper"]
   Host --> Targets["Repository / Design / Test windows"]
   Targets --> Repos["Responsibility roots"]
   Targets --> Results["TargetResultEnvelope<br/>with evidence refs"]
@@ -137,12 +139,12 @@ the primary install or release path.
 
 ## Initialize A Workspace
 
-Wakeflow is installed as a Codex plugin. A target workspace does not need to
-contain Wakeflow source code. The expected target shape is:
+Wakeflow is installed as a Codex or Claude Code plugin. A target workspace
+does not need to contain Wakeflow source code. The expected target shape is:
 
 ```text
 MyWorkspace/
-  AGENTS.md
+  AGENTS.md or CLAUDE.md
   workspace.config.json
   .workspace-active/          # ignored active controller state
   .workspace-local/           # ignored thread registry and derived runtime
@@ -177,6 +179,12 @@ The operating flow is:
    local registration command. The thread registry is the only thread-id
    authority; window config is refreshed as a derived view.
 
+In the Claude Code edition, the same preview/apply contract is used. The
+returned launch plan is materialized by the tmux host helper instead of Codex
+`create_thread`: each window is launched as an interactive `claude` session,
+and the returned Claude Code session id is registered as the Wakeflow thread
+id.
+
 Design and Test are fresh support surfaces by default. Existing similarly named
 directories such as `<Product>Design` or `<Product>Test` are treated as ordinary
 directory facts unless the user explicitly maps them as Design/Test.
@@ -188,10 +196,11 @@ the front so the important repository name remains visible in narrow sidebars.
 New state-root progress documents and subsequent Unified Status renders also
 use the selected interface language.
 
-Controller and child windows can use Codex subagents to speed up bounded code
-search, log triage, test localization, and evidence summaries. Subagent output
-is evidence or advice only; controller review, dispatch, state writes, and
-repository boundaries remain with the Wakeflow window that owns the task.
+Controller and child windows can use Codex or Claude Code subagents to speed
+up bounded code search, log triage, test localization, and evidence summaries.
+Subagent output is evidence or advice only; controller review, dispatch, state
+writes, and repository boundaries remain with the Wakeflow window that owns the
+task.
 
 ## What Wakeflow Creates
 
@@ -249,8 +258,9 @@ Core rules:
 - Window config is derived from `workspace.config.json` plus thread-registry
   presence; it is not a second thread-id or window-semantics authority.
 - Delivery prompts remain compact and human-readable.
-- The host sends prompts with Codex thread tools; Wakeflow records the send and
-  readback evidence.
+- The host sends prompts through its transport boundary: Codex thread tools for
+  Codex, and the tmux host helper for Claude Code. Wakeflow records the send
+  and readback evidence.
 - `group-ready` waits for the expected target results before a controller
   return.
 - `per-target` can wake the controller once per target while still preserving a
@@ -259,6 +269,17 @@ Core rules:
   turn stops. It does not sleep or poll in the same turn.
 - Keep-live support is runtime assistance only. It is not task logic, transport
   authority, or acceptance evidence.
+- Demand creation is host-neutral: `wakeflow_init_demand` writes
+  `controllerHost: null`, so Codex and Claude Code can both create or import
+  demand material without taking ownership.
+- The first real driving command claims the demand for its platform by writing
+  `controllerHost: "codex"` or `controllerHost: "claude-code"`.
+- After a demand is owned by one host, the other host fails closed on
+  controller mutations and dispatch preparation unless ownership is explicitly
+  transferred with `--adopt-host`.
+- `wakeflow_status` exposes demand ownership under `dualHost.demandOwnership`
+  so mixed-host controllers can see which platform owns active work before
+  acting.
 
 Automation stops on final completion, hard gates, user stop, no eligible work,
 missing evidence, blocked state, or any condition that requires controller or
@@ -281,11 +302,11 @@ Primary tool groups:
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_intake_design_handoff`, `wakeflow_intake_test_card` |
-| Archive, maintenance, and verification | `wakeflow_archive_todo`, `wakeflow_archive_workspace_docs`, `wakeflow_verify` |
+| Archive, maintenance, and verification | `wakeflow_archive_todo`, `wakeflow_archive_workspace_docs`, `wakeflow_verify`, `wakeflow_trace_spine` |
 
 Public MCP tools are for outer agent workflows. Target closeout is deliberately
 split: record a target result, review readiness, prepare a controller-return
-envelope when policy allows, send with the Codex host thread tool, and record
+envelope when policy allows, send through the active host transport, and record
 delivery evidence. Controller review stays split as review pack, result
 reduction, and explicit decision; result reduction only creates a review
 candidate and is not acceptance. Do not collapse those steps into a single
@@ -322,34 +343,55 @@ The source repository tracks reusable Wakeflow capability. Product code,
 project-specific active state, real thread ids, and derived local runtime
 artifacts do not belong in Wakeflow source.
 
+## Dual-Host Workspaces
+
+One workspace may run the Codex and Claude Code Wakeflow editions side by
+side. Shared business state stays host-neutral: `.workspace-active/`,
+`wakeflow-ledger/`, and the shared delivery spine under
+`.workspace-local/wakeflow-delivery/` (`dispatch-packets/`,
+`dispatch-groups/`, `delivery-envelopes/`, `delivery-runs/`,
+`target-results/`, and shared `locks/`).
+
+Host-scoped runtime is separated per host:
+
+- `.workspace-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`
+- `.workspace-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`
+
+`AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code) may coexist at the
+workspace and child roots. Each demand still has exactly one controller host:
+creation is neutral, the first driving command claims ownership, non-owning
+hosts fail closed, and `--adopt-host` is the explicit transfer mechanism.
+
 ## Marketplace Release
 
-Wakeflow is packaged as a Codex plugin source repository. The public source of
-truth is:
+Wakeflow is packaged as a dual-host plugin source repository. The public
+source of truth is:
 
 ```text
 https://github.com/GxFn/Wakeflow.git
 ```
 
-The repository carries its own marketplace catalog at
-`.agents/plugins/marketplace.json`. That catalog is intentionally single-plugin:
-it names the marketplace `gxfn`, displays as `GxFn`, and points the only plugin
-entry at `./plugins/codex-wakeflow`. Publishing Wakeflow means tagging the repository
-and submitting the nested plugin artifact, not the development workspace root.
+The repository carries separate host catalogs:
+
+- `.agents/plugins/marketplace.json` points the Codex plugin entry at
+  `./plugins/codex-wakeflow`.
+- `.claude-plugin/marketplace.json` points the Claude Code plugin entry at
+  `./plugins/claude-code-wakeflow`.
+
+Publishing Wakeflow means tagging the repository and submitting the correct
+nested artifact for the target host, not the development workspace root.
 
 Before publishing a release tag:
 
 1. Run `npm test` from this repository.
-2. Run the Codex plugin manifest validator in an environment with its Python
-   dependencies installed.
-3. Confirm `plugins/codex-wakeflow/.codex-plugin/plugin.json` has no more than three
-   starter prompts.
-4. Confirm `.agents/plugins/marketplace.json` contains only the nested
-   `./plugins/codex-wakeflow` entry.
+2. Run the host-specific plugin manifest validators where available.
+3. Confirm `plugins/codex-wakeflow/.codex-plugin/plugin.json` has no more than
+   three starter prompts.
+4. Confirm both host catalogs point only at their nested plugin artifacts.
 5. Confirm runtime scripts and installed skills contain no project-specific
    default controller names, product overlays, local paths, or private thread
    ids.
-6. Tag the exact commit that Codex should install.
+6. Tag the exact commit that the host marketplace should install.
 
 ## Working In This Repository
 

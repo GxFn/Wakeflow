@@ -324,7 +324,11 @@ Wakeflow 源仓库只跟踪可复用能力。产品代码、项目特定 active 
 - `.workspace-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`
 
 `AGENTS.md`（Codex）与 `CLAUDE.md`（Claude Code）在工作区根目录和子目录根
-共存，每个 demand 跨宿主只有一个总控。
+共存，每个 demand 跨宿主只有一个总控。Demand 创建是宿主中立的
+（`controllerHost: null`）；第一个真正驱动命令会把所有权认领为 `codex`
+或 `claude-code`；非归属宿主的 controller 写操作和投递准备会 fail-closed；
+`--adopt-host` 是显式转移机制。`wakeflow_status` 会在
+`dualHost.demandOwnership` 暴露当前映射。
 
 ## 开发本仓库
 

@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { hostProfile } from "./wakeflow-host-profile.mjs";
 import path from "node:path";
 import { buildControllerReturnEnvelope } from "./wakeflow-controller-return.mjs";
@@ -62,6 +62,22 @@ export function createDispatchCommands(ctx) {
     formatTargetPrompt,
   } = ctx;
 
+  function interfaceLanguageForStateRef(stateRef) {
+    // The demand's interfaceLanguage (stamped at init) drives the human-readable
+    // sentences of envelope prompts so target windows answer in the workspace
+    // language. Machine keys stay English. Defaults to en when unreadable.
+    try {
+      const stateFile = path.join(resolveStateRoot(stateRef.stateRoot), "wakeflow-state.json");
+      if (existsSync(stateFile)) {
+        const language = JSON.parse(readFileSync(stateFile, "utf8")).interfaceLanguage;
+        if (language === "zh") return "zh";
+      }
+    } catch {
+      // fall through to the English default
+    }
+    return "en";
+  }
+
   function buildDispatchArtifacts({
     contextPolicy,
     controllerWindow = "",
@@ -86,6 +102,7 @@ export function createDispatchCommands(ctx) {
       controllerWindow,
       humanContextRef,
       stateRef,
+      interfaceLanguage: interfaceLanguageForStateRef(stateRef),
     });
     if (!prompt) fail("Prompt cannot be empty.");
 
@@ -282,6 +299,12 @@ export function createDispatchCommands(ctx) {
   function commandPrepareDispatchFromState() {
     const stateRoot = resolveStateRoot(requireValue("--state-root"));
     const { state, stateRootRef } = readControllerStateRoot(stateRoot);
+    // Demand host-ownership gate: never prepare a dispatch for a demand owned
+    // by the other host's controller (ownership transfer is a state-machine
+    // action: wakeflow-state --adopt-host).
+    if (state.controllerHost && state.controllerHost !== hostProfile.runtime.hostDirName) {
+      fail(`demand ${state.demandKey} is owned by controller host ${state.controllerHost}; this runtime is ${hostProfile.runtime.hostDirName}. Dispatch from the owning controller, or transfer ownership explicitly first (wakeflow-state --adopt-host).`);
+    }
     const targetTaskId = requireValue("--target-task-id");
     const targetTask = (state.targetTasks ?? []).find((item) => item.targetTaskId === targetTaskId);
     if (!targetTask) fail(`target task does not exist in controller state: ${targetTaskId}`);
@@ -476,6 +499,7 @@ export function createDispatchCommands(ctx) {
       controllerWindow,
       triggerTarget,
       triggerTaskId,
+      interfaceLanguage: inheritedStateRef ? interfaceLanguageForStateRef(inheritedStateRef) : "en",
       returnPolicy: review.returnPolicy,
       groupSnapshot: review.groupSnapshot,
       reviewScope,

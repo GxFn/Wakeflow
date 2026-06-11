@@ -1,6 +1,7 @@
-export function formatPromptTargetList(targets) {
+export function formatPromptTargetList(targets, interfaceLanguage = "en") {
   const uniqueTargets = [...new Set((targets || []).filter(Boolean))];
-  return uniqueTargets.length > 0 ? uniqueTargets.join(", ") : "None";
+  if (uniqueTargets.length > 0) return uniqueTargets.join(", ");
+  return interfaceLanguage === "zh" ? "\u65e0" : "None";
 }
 
 export function formatControllerReturnPrompt({
@@ -10,28 +11,32 @@ export function formatControllerReturnPrompt({
   stateRef,
   reviewScope,
   groupSnapshot,
+  interfaceLanguage = "en",
 }) {
   if (!stateRef) throw new Error("Controller return prompts require stateRef from a controller state root.");
+  // Sentences follow the demand interfaceLanguage; machine variable KEYS stay
+  // English by contract.
+  const zh = interfaceLanguage === "zh";
   const returnedTargets = [
     ...(groupSnapshot.readyTargets || []),
     ...(groupSnapshot.blockedTargets || []),
   ];
   const titleTargets = reviewScope === "group"
-    ? formatPromptTargetList(returnedTargets)
+    ? formatPromptTargetList(returnedTargets, interfaceLanguage)
     : triggerTarget;
-  const title = reviewScope === "group"
-    ? `Continue controller review: ${titleTargets} backfill.`
-    : `Continue controller review: ${triggerTarget} backfill.`;
-  const blockedTargets = formatPromptTargetList(groupSnapshot.blockedTargets);
-  const remainingTargets = formatPromptTargetList(groupSnapshot.missingTargets);
-  const pendingDispatchTargets = formatPromptTargetList(groupSnapshot.pendingDispatchTargets);
+  const title = zh
+    ? `\u7ee7\u7eed\u603b\u63a7\u8bc4\u5ba1\uff1a${titleTargets} \u56de\u586b\u3002`
+    : `Continue controller review: ${titleTargets} backfill.`;
+  const blockedTargets = formatPromptTargetList(groupSnapshot.blockedTargets, interfaceLanguage);
+  const remainingTargets = formatPromptTargetList(groupSnapshot.missingTargets, interfaceLanguage);
+  const pendingDispatchTargets = formatPromptTargetList(groupSnapshot.pendingDispatchTargets, interfaceLanguage);
   const hasBlockedTargets = Array.isArray(groupSnapshot.blockedTargets) && groupSnapshot.blockedTargets.length > 0;
   const hasRemainingTargets = Array.isArray(groupSnapshot.missingTargets) && groupSnapshot.missingTargets.length > 0;
   const hasPendingDispatchTargets = Array.isArray(groupSnapshot.pendingDispatchTargets) && groupSnapshot.pendingDispatchTargets.length > 0;
   return [
     title,
     "",
-    "Variables:",
+    zh ? "\u53d8\u91cf\uff1a" : "Variables:",
     `- stateRoot: ${stateRef.stateRoot}`,
     `- dispatchGroup: ${dispatchGroup}`,
     `- trigger: ${triggerTarget} / ${triggerTaskId}`,
@@ -64,6 +69,7 @@ export function buildControllerReturnEnvelope({
   windowConfig,
   wakeflowTrace,
   createdAt,
+  interfaceLanguage = "en",
 }) {
   const prompt = formatControllerReturnPrompt({
     dispatchGroup,
@@ -72,6 +78,7 @@ export function buildControllerReturnEnvelope({
     stateRef,
     reviewScope,
     groupSnapshot,
+    interfaceLanguage,
   });
   return {
     kind: "ControllerReturnEnvelope",

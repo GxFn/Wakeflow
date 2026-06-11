@@ -69,15 +69,22 @@ Split by *what the data is*, not by who wrote it:
 
 ## Concurrency Rules
 
-1. **One controller per demand, across hosts.** Either host may act as the
-   controller for a demand, never both at once. This is currently enforced by
-   discipline plus the shared state root recording which controller dispatched
-   each group. NOTE (v1 reality): `wakeflow_status` reads only the CURRENT
-   host's `hosts/<host>/thread-registry/`; it does not yet enumerate the other
-   host's registry for SEND ELIGIBILITY, but the status payload now carries a
-   read-only `dualHost` block (every `hosts/*/thread-registry` registration plus
-   all fresh `locks/` entries with their owning host), so a controller can see
-   the other host's presence and in-flight deliveries before acting.
+1. **One controller per demand, across hosts.** Demand CREATION is
+   host-neutral and decoupled: either platform may `init` a demand
+   (`controllerHost: null`). The platform binding happens at CLAIM time — the
+   first driving command (add-task-package and every later mutating state
+   command) stamps the current host into `controllerHost`. From then on it is
+   machine-enforced: mutating state commands (add-task-package,
+   import-target-result, reduce-results, decide-review, complete-demand),
+   `prepare-dispatch-from-state`, and the delivery-sent state advance all fail
+   closed on the non-owning host. Transfer is explicit only: `--adopt-host`
+   (MCP: `adoptHost`) re-stamps ownership and is recorded in the command
+   payload. Pre-feature demands (no `controllerHost` field) follow the same
+   first-claim rule. Visibility: the status payload's `dualHost` block lists
+   every host registration, all fresh `locks/`, and `demandOwnership` (each
+   active demand's `controllerHost`, `null` = unclaimed), so a controller sees
+   the other host's presence, in-flight deliveries, and demand ownership before
+   acting.
 2. **One in-flight delivery per window, across hosts** (the `locks/` rule).
    Two hosts dispatching different tasks into the same repository working tree
    concurrently is the real hazard dual-install creates. ENFORCEMENT: BOTH host

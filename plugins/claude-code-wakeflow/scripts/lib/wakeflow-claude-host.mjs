@@ -266,7 +266,7 @@ function applyStatusOptions(serverSession) {
     // glyph sits OUTSIDE the current-window reverse styling so "who is running"
     // is visible regardless of which window is selected.
     ["set-option", "-g", "window-status-format", `${STATE_GLYPH_FMT}#I:#{=14:window_name} `],
-    ["set-option", "-g", "window-status-current-format", `${STATE_GLYPH_FMT}#[reverse,bold]#I:#{=16:window_name}#[noreverse] `],
+    ["set-option", "-g", "window-status-current-format", `${STATE_GLYPH_FMT}#[reverse]#[bold]#I:#{=16:window_name}#[noreverse] `],
     ["set-option", "-g", "window-status-separator", ""],
     ["set-option", "-t", serverSession, "base-index", "1"],
     // refresh fast enough that the running marker tracks live execution
@@ -277,10 +277,13 @@ function applyStatusOptions(serverSession) {
 
 // Leading glyph: running -> bright green ">>", done -> green "+", stalled ->
 // red "!", busy(delivered, waiting) -> yellow ">", idle -> two spaces.
-const STATE_GLYPH_FMT = "#{?#{==:#{@wakeflow_state},running},#[fg=green,bold,blink]>>#[default] ,"
-  + "#{?#{==:#{@wakeflow_state},done},#[fg=green,bold]+ #[default],"
-  + "#{?#{==:#{@wakeflow_state},stalled},#[fg=red,bold]! #[default],"
-  + "#{?#{==:#{@wakeflow_state},busy},#[fg=yellow,bold]> #[default],   }}}}";
+// IMPORTANT: no raw commas inside #{?} branches — tmux splits alternatives on
+// them (escape would be #,). One attribute per #[] block keeps branches comma-
+// free; verified by rendering on tmux 3.6b for every state value.
+const STATE_GLYPH_FMT = "#{?#{==:#{@wakeflow_state},running},#[fg=green]#[bold]>>#[default] ,"
+  + "#{?#{==:#{@wakeflow_state},done},#[fg=green]#[bold]+ #[default],"
+  + "#{?#{==:#{@wakeflow_state},stalled},#[fg=red]#[bold]! #[default],"
+  + "#{?#{==:#{@wakeflow_state},busy},#[fg=yellow]#[bold]> #[default],   }}}}";
 
 function paneShowsExecution(pane) {
   // Claude Code shows "esc to interrupt" in the input area while a turn runs.
@@ -350,7 +353,7 @@ async function commandActivityMonitor() {
     for (const wid of (listed.stdout || "").trim().split("\n").map((l) => l.trim()).filter(Boolean)) {
       const pane = tmux(["capture-pane", "-p", "-t", wid], { allowFailure: true }).stdout || "";
       const isRunning = paneShowsExecution(pane);
-      const current = tmux(["show-options", "-w", "-v", "-t", wid, "@wakeflow_state"], { allowFailure: true }).stdout.trim();
+      const current = tmux(["show-options", "-w", "-q", "-v", "-t", wid, "@wakeflow_state"], { allowFailure: true }).stdout.trim();
       // The monitor owns the "running" state; it never clobbers dispatch markers
       // (done/stalled/busy) — it only adds/removes "running".
       if (isRunning && current !== "running") {

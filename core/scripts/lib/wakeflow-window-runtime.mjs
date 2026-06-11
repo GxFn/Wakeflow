@@ -81,12 +81,20 @@ export function createWindowRuntime(ctx) {
     taskId,
     dispatchGroup,
     stateRef,
+    interfaceLanguage = "en",
   }) {
     if (!stateRef) fail("Target prompts require stateRef from a controller state root.");
+    // Human-readable sentences follow the demand interfaceLanguage so the
+    // target window answers in the workspace language; machine variable KEYS
+    // (currentWindow/taskId/stateRoot/dispatchGroup/skill) stay English by
+    // contract.
+    const zh = interfaceLanguage === "zh";
     return [
-      `Continue current window task: ${targetWindow} / ${taskId}.`,
+      zh
+        ? `\u7ee7\u7eed\u5f53\u524d\u7a97\u53e3\u4efb\u52a1\uff1a${targetWindow} / ${taskId}\u3002`
+        : `Continue current window task: ${targetWindow} / ${taskId}.`,
       "",
-      "Variables:",
+      zh ? "\u53d8\u91cf\uff1a" : "Variables:",
       `- currentWindow: ${targetWindow}`,
       `- taskId: ${taskId}`,
       `- stateRoot: ${stateRef.stateRoot}`,

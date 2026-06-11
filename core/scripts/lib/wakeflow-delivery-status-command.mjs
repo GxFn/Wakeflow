@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { buildReplaySummary } from "./wakeflow-idempotency.mjs";
 import { buildControllerCallbackPlan } from "./wakeflow-return-policy.mjs";
@@ -9,6 +9,31 @@ import {
   deriveRuntimeGroupStatus,
   summarizeRuntimeNextAction,
 } from "./wakeflow-runtime-summary.mjs";
+
+function scanDemandHostOwnership(workspaceRoot) {
+  // Active demand state roots live under the conventional current-plan dir.
+  // Read-only visibility: which host's controller owns each active demand.
+  const currentDir = path.join(workspaceRoot, ".workspace-active/workspace/current");
+  if (!existsSync(currentDir)) return [];
+  const demands = [];
+  for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const stateFile = path.join(currentDir, entry.name, "wakeflow-state.json");
+    if (!existsSync(stateFile)) continue;
+    try {
+      const state = JSON.parse(readFileSync(stateFile, "utf8"));
+      demands.push({
+        demandKey: state.demandKey,
+        stateRoot: `.workspace-active/workspace/current/${entry.name}`,
+        controllerHost: state.controllerHost ?? null,
+        state: state.state,
+      });
+    } catch {
+      // unreadable state roots are skipped; verify reports them separately
+    }
+  }
+  return demands;
+}
 
 export function commandStatus(ctx) {
   const {
@@ -330,6 +355,7 @@ export function commandStatus(ctx) {
       // workspace and which windows hold a fresh in-flight delivery lock.
       dualHost: {
         hosts: listHostRuntimes ? listHostRuntimes() : [],
+        demandOwnership: scanDemandHostOwnership(workspaceRoot),
         freshLocks: listFreshWindowLocks
           ? listFreshWindowLocks().map((lock) => ({
               windowName: lock.windowName,

@@ -12,6 +12,7 @@ import {
   wakeflowStateLocale,
 } from "./lib/wakeflow-language.mjs";
 import { controllerReviewScope, reductionStatusForTargetTask } from "./lib/wakeflow-review-scope.mjs";
+import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const wakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -130,6 +131,30 @@ function assertWorkspaceRootResolved() {
       );
     }
   }
+}
+
+// Demand-level controller-host ownership. Demand CREATION is host-neutral:
+// either platform may init a demand. The binding happens at CLAIM time — the
+// first mutating drive command (add-task-package and onward) stamps the
+// current host as controllerHost. From then on the other host's controller
+// fails closed, and ownership moves only via an explicit --adopt-host.
+// Demands from before this feature are simply unclaimed and follow the same
+// first-claim rule.
+function ensureDemandHostOwnership(state) {
+  const currentHost = hostProfile.runtime.hostDirName;
+  const owner = state.controllerHost;
+  if (!owner) {
+    state.controllerHost = currentHost;
+    return { controllerHost: currentHost, claimed: "first-driving-command" };
+  }
+  if (owner !== currentHost) {
+    if (hasFlag("--adopt-host")) {
+      state.controllerHost = currentHost;
+      return { controllerHost: currentHost, transferredFrom: owner };
+    }
+    fail(`demand ${state.demandKey} is owned by controller host ${owner}; this runtime is ${currentHost}. Continue on the ${owner} controller, or pass --adopt-host to explicitly transfer ownership to ${currentHost}.`);
+  }
+  return { controllerHost: owner };
 }
 
 function ensureInsideAllowedRoots(file, label, allowedRoots) {
@@ -359,6 +384,9 @@ function commandInit() {
     demandKey,
     title,
     interfaceLanguage: language,
+    // Demand creation is host-neutral: controllerHost stays unset until the
+    // first driving command claims the demand for its platform.
+    controllerHost: null,
     state: "intake",
     stateReason: "wakeflow-state-init",
     revision: 1,
@@ -513,6 +541,7 @@ function commandAddTaskPackage() {
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const packageFile = path.join(stateRoot, "task-packages", `${slug(taskPackageId)}.json`);
   const state = readJson(stateFile, "controller state");
+  const hostOwnership = ensureDemandHostOwnership(state);
 
   if (["completed", "archived", "paused"].includes(state.state)) {
     fail(`cannot add task package while demand is ${state.state}: ${state.demandKey}`);
@@ -716,6 +745,7 @@ function commandImportTargetResult() {
     fail(`--status must be one of: ${[...allowedStatuses].join(", ")}`);
   }
   const state = readJson(path.join(stateRoot, "wakeflow-state.json"), "controller state");
+  ensureDemandHostOwnership(state);
   if (["completed", "archived"].includes(state.state)) {
     fail(`cannot import target result while demand is ${state.state}: ${state.demandKey}`);
   }
@@ -838,6 +868,7 @@ function commandReduceResults() {
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const state = readJson(stateFile, "controller state");
+  const hostOwnership = ensureDemandHostOwnership(state);
   if (["completed", "archived"].includes(state.state)) {
     fail(`cannot reduce results while demand is ${state.state}: ${state.demandKey}`);
   }
@@ -1025,6 +1056,7 @@ function commandDecideReview() {
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const state = readJson(stateFile, "controller state");
+  const hostOwnership = ensureDemandHostOwnership(state);
   const candidateFile = path.join(stateRoot, "transition-candidates", `${slug(candidateId)}.json`);
   if (!existsSync(candidateFile)) {
     fail(`transition candidate does not exist: ${relative(candidateFile)}`);
@@ -1172,6 +1204,7 @@ function commandCompleteDemand() {
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const state = readJson(stateFile, "controller state");
+  const hostOwnership = ensureDemandHostOwnership(state);
   if (state.state === "completed") {
     fail(`demand is already completed: ${state.demandKey}`);
   }

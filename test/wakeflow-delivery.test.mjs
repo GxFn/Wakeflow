@@ -1939,3 +1939,47 @@ test("record-target-result rejects a group that matches no dispatch packet", () 
   assert.notEqual(result.status, 0);
   assert.match(result.stdout + result.stderr, /does not match any dispatch packet/);
 });
+
+
+test("envelope prompts follow the demand interfaceLanguage (zh)", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  // switch the demand to Chinese, as a zh workspace init would stamp it
+  const stateFile = path.join(root, stateRootRef, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.interfaceLanguage = "zh";
+  writeJson(stateFile, state);
+
+  const prepared = prepareDispatch(root, stateRootRef);
+  const prompt = prepared.envelope.prompt;
+  assert.match(prompt, /\u7ee7\u7eed\u5f53\u524d\u7a97\u53e3\u4efb\u52a1\uff1a/, "zh headline");
+  assert.match(prompt, /\u53d8\u91cf\uff1a/, "zh variables label");
+  assert.match(prompt, /- currentWindow: AlembicPlugin/, "machine keys stay English");
+  assert.match(prompt, /- skill: skills\/wakeflow-target\/SKILL\.md/, "skill pointer unchanged");
+});
+
+test("controller-return prompt localizes sentences for zh demands", async () => {
+  const { formatControllerReturnPrompt } = await import("../plugins/codex-wakeflow/scripts/lib/wakeflow-controller-return.mjs");
+  const zhPrompt = formatControllerReturnPrompt({
+    dispatchGroup: "GRP-1",
+    triggerTarget: "WindowA",
+    triggerTaskId: "T1",
+    stateRef: { stateRoot: ".workspace-active/workspace/current/demo" },
+    reviewScope: "single",
+    groupSnapshot: { readyTargets: ["WindowA"], blockedTargets: [], missingTargets: ["WindowB"], pendingDispatchTargets: [] },
+    interfaceLanguage: "zh",
+  });
+  assert.match(zhPrompt, /\u7ee7\u7eed\u603b\u63a7\u8bc4\u5ba1\uff1aWindowA \u56de\u586b\u3002/, "zh title");
+  assert.match(zhPrompt, /\u53d8\u91cf\uff1a/, "zh variables label");
+  assert.match(zhPrompt, /- trigger: WindowA \/ T1/, "machine keys stay English");
+
+  const enPrompt = formatControllerReturnPrompt({
+    dispatchGroup: "GRP-1",
+    triggerTarget: "WindowA",
+    triggerTaskId: "T1",
+    stateRef: { stateRoot: ".workspace-active/workspace/current/demo" },
+    reviewScope: "single",
+    groupSnapshot: { readyTargets: ["WindowA"], blockedTargets: [], missingTargets: [], pendingDispatchTargets: [] },
+  });
+  assert.match(enPrompt, /Continue controller review: WindowA backfill\./, "en default unchanged");
+});

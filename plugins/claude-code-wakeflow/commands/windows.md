@@ -1,16 +1,22 @@
 ---
-description: List, launch, resume, or attach Wakeflow tmux windows from any session
-argument-hint: [window-name]
+description: List, launch, resume, or attach Wakeflow tmux windows, choosing the permission mode
+argument-hint: [window-name | all]
 ---
 
 Manage the workspace's tmux-resident Wakeflow windows. Use the host helper (`node <plugin>/scripts/lib/wakeflow-claude-host.mjs <command> --root <workspace>`); never invent session ids — the thread registry and window-host bindings are the only authorities.
 
-1. Read `workspace.config.json` (configured windows and roles), `.workspace-local/wakeflow-delivery/hosts/claude-code/thread-registry/` (registered session ids), and `.workspace-local/wakeflow-delivery/hosts/claude-code/window-host/` (tmux bindings). Probe liveness with the helper `readback --window <name>` per bound window.
-2. With no `$ARGUMENTS`: render a table — window, role, displayTitle, registered (yes/no), tmux window alive (yes/no) — and print the attach command (`tmux attach -t <server>`). Stop after reporting.
-3. With a window name in `$ARGUMENTS`, converge that window to "alive and registered":
+1. Read `workspace.config.json` (configured windows, roles, and `hosts.claude-code.permissionMode`), `.workspace-local/wakeflow-delivery/hosts/claude-code/thread-registry/` (registered session ids), and `.workspace-local/wakeflow-delivery/hosts/claude-code/window-host/` (tmux bindings). Probe liveness with the helper `readback --window <name>` per bound window.
+2. With no `$ARGUMENTS`: render a table — window, role, displayTitle, registered (yes/no), tmux window alive (yes/no) — plus the current `permissionMode`, and print the attach command (`tmux attach -t <server>`). Stop after reporting; do not launch anything.
+3. Before launching or resuming ANY window (i.e. when `$ARGUMENTS` is `all` or a window name), settle the permission mode first:
+   - Ask the user (AskUserQuestion) which mode the work windows should run in: `acceptEdits` (default — prompts before risky actions) or `bypassPermissions` (fully unattended, no prompts; the safety boundary becomes the repo worktree + CLAUDE.md gates + the Wakeflow state machine). Show the value currently recorded in config as the pre-selected option.
+   - Skip the question only when the user already named the mode in this turn, or when simply re-confirming the recorded mode with no change.
+   - On an explicit choice, persist it before launching: `set-unattended --root <workspace> --mode <choice> --write`. Recording `bypassPermissions` requires a clear yes; the recorded value is the consent the helper relies on to auto-confirm the boot dialog.
+4. Resolve the launch set: `all` (or no window name after the mode question when the user asked to open everything) means every configured window in canonical order (Design, controller, products, Test); otherwise the single named window. For each target, converge it to "alive and registered":
    - Binding exists and window alive: nothing to create; print the helper `attach-window` command (offer `--open-terminal` to pop a macOS Terminal window on it).
-   - Registered but tmux window dead (or after a reboot): restore the SAME session with `launch-window --resume --session-id <registered id> --window <name> --title <displayTitle> --cwd <repo> --replace`. Do not generate a new id.
+   - Registered but tmux window dead (or after a reboot): restore the SAME session with `launch-window --resume --session-id <registered id> --window <name> --title <displayTitle> --cwd <repo> --replace`. Do not generate a new id. The window inherits the recorded `permissionMode` and `claudeArgs`.
    - Configured but never registered: full first launch — write the window's entry-sync prompt to a temp file, run `launch-window --window <name> --title <displayTitle> --cwd <repo> --prompt-file <file>`, then register the returned session id with the local registration command from the launch plan (`--thread <name>=<sessionId> --write`).
    - Named window not in `workspace.config.json`: stop and report; adding a window is a workspace-scope decision for `/wakeflow:init` (replaceWindows) or the user, not this command.
-4. After any launch or resume, run the helper `arrange-windows` so tabs stay short (Design=D, controller, products, Test=T) and ordered.
-5. Report what changed (created / resumed / already alive) with the window id and title. This command never sends task deliveries; use `/wakeflow:dispatch` for work.
+   - Skip any window the helper reports `inFlight` (mid-turn); report it for a later rerun rather than interrupting it.
+5. After any launch or resume, run the helper `arrange-windows` so tabs stay short and ordered (Design, controller, products, Test; unmanaged windows trail).
+6. Enter the workspace by upgrading the current terminal into a tmux view: run `attach-window --window <controller> --open-tab`. It opens a new tab in the user's CURRENT terminal app (iTerm2 when that is the host) running `tmux attach`, so the workspace appears beside this session without a foreign Terminal.app window. When already inside tmux it reports `inside-tmux` and the user should `tmux switch-client -t <server>` instead. Also print the plain `tmux attach -t <server>` for the user who prefers to exit and attach in place.
+7. Report what changed (created / resumed / already alive / skipped-in-flight), the resolved `permissionMode`, and the attach command. This command never sends task deliveries; use `/wakeflow:dispatch` for work.

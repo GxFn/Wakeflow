@@ -161,6 +161,34 @@ test("check-workspace reports gaps and stamp-runtime clears the version gap", ()
   assert.equal(second.stamp.pluginVersion, second.pluginVersion);
 });
 
+test("set-unattended records the permission mode and reports restart plan", () => {
+  const root = makeWorkspace();
+  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+    workspaceName: "ModeFlow",
+    controllerWindow: "ModeFlow",
+    hosts: { "claude-code": { tmuxSession: "modeflow", claudeArgs: ["--effort", "max"] } },
+    repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
+  }));
+
+  const bad = runHelper(root, ["set-unattended", "--mode", "nonsense", "--write"]);
+  assert.notEqual(bad.status, 0);
+  assert.match(bad.stderr + bad.stdout, /--mode must be one of/);
+
+  const dry = parseOk(runHelper(root, ["set-unattended", "--mode", "bypassPermissions"]));
+  assert.equal(dry.wrote, false);
+  assert.equal(dry.previousMode, "acceptEdits");
+  assert.equal(dry.mode, "bypassPermissions");
+  const stillDefault = JSON.parse(readFileSync(path.join(root, "workspace.config.json"), "utf8"));
+  assert.equal(stillDefault.hosts["claude-code"].permissionMode, undefined, "dry run does not write");
+
+  const wrote = parseOk(runHelper(root, ["set-unattended", "--mode", "bypassPermissions", "--write"]));
+  assert.equal(wrote.wrote, true);
+  const after = JSON.parse(readFileSync(path.join(root, "workspace.config.json"), "utf8"));
+  assert.equal(after.hosts["claude-code"].permissionMode, "bypassPermissions");
+  assert.equal(after.hosts["claude-code"].tmuxSession, "modeflow", "other host keys preserved");
+  assert.deepEqual(after.hosts["claude-code"].claudeArgs, ["--effort", "max"], "claudeArgs preserved");
+});
+
 test("send refuses when no binding exists and release-lock is idempotent", () => {
   const root = makeWorkspace();
   const promptFile = path.join(root, "p.txt");

@@ -85,6 +85,19 @@ const resultsDir = path.join(stateDir, "target-results");
 const tmuxBin = process.env.WAKEFLOW_TMUX_BIN || "tmux";
 const claudeBin = process.env.WAKEFLOW_CLAUDE_BIN || "claude";
 
+function defaultServerSession() {
+  const configFile = path.join(workspaceRoot, "workspace.config.json");
+  if (existsSync(configFile)) {
+    try {
+      const session = JSON.parse(readFileSync(configFile, "utf8")).hosts?.["claude-code"]?.tmuxSession;
+      if (typeof session === "string" && session.trim()) return session.trim();
+    } catch {
+      // fall through to the generic default
+    }
+  }
+  return "wakeflow";
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -234,7 +247,7 @@ function ensureServer(serverSession) {
 }
 
 function commandEnsureServer() {
-  const serverSession = getValue("--server", "wakeflow");
+  const serverSession = getValue("--server", defaultServerSession());
   const created = ensureServer(serverSession);
   output({ ok: true, command: "ensure-server", server: serverSession, created });
 }
@@ -253,7 +266,7 @@ async function commandLaunchWindow() {
   const title = getValue("--title", windowName);
   const cwd = path.resolve(workspaceRoot, requireValue("--cwd"));
   if (!existsSync(cwd)) fail(`--cwd does not exist: ${cwd}`);
-  const serverSession = getValue("--server", "wakeflow");
+  const serverSession = getValue("--server", defaultServerSession());
   const sessionId = getValue("--session-id", hasFlag("--resume") ? null : randomUUID());
   if (!sessionId) fail("--resume requires --session-id <registered session id> (read it from the thread registry).");
   const promptFile = getValue("--prompt-file");
@@ -280,9 +293,11 @@ async function commandLaunchWindow() {
   const configClaudeArgs = Array.isArray(hostConfig.claudeArgs) && hostConfig.claudeArgs.every((arg) => typeof arg === "string")
     ? hostConfig.claudeArgs
     : [];
-  // Default to acceptEdits so seeded allowlists plus edit auto-accept make the
-  // window prompt-free; any caller-provided --permission-mode wins.
-  const modeArgs = extraClaudeArgs.includes("--permission-mode") ? [] : ["--permission-mode", "acceptEdits"];
+  // Permission mode precedence: explicit --claude-arg --permission-mode wins;
+  // else workspace.config.json hosts.claude-code.permissionMode; else
+  // acceptEdits so seeded allowlists keep the window prompt-free.
+  const configMode = typeof hostConfig.permissionMode === "string" ? hostConfig.permissionMode : "acceptEdits";
+  const modeArgs = extraClaudeArgs.includes("--permission-mode") ? [] : ["--permission-mode", configMode];
   const claudeCommand = [claudeBin, ...sessionArgs, "--add-dir", workspaceRoot, ...modeArgs, ...configClaudeArgs, ...extraClaudeArgs]
     .map((part) => `'${String(part).replace(/'/g, `'\\''`)}'`)
     .join(" ");
@@ -312,14 +327,22 @@ async function commandLaunchWindow() {
   await sleep(Number.isFinite(bootWaitMs) ? bootWaitMs : 6000);
   let trustAccepted = false;
   if (!hasFlag("--no-auto-trust")) {
-    // The user already confirmed this directory as a managed window during
-    // workspace initialization; accepting the one-time folder trust dialog is
-    // inside that consent. --no-auto-trust restores manual handling.
-    const bootPane = capturePaneTail(binding, 30);
-    if (/trust this folder|Do you trust/i.test(bootPane)) {
+    // The folder-trust dialog is always covered by the user's window-launch
+    // authorization (they mapped this directory as a managed window). The
+    // bypass-permissions consent is auto-confirmed ONLY when the user opted
+    // into bypass mode in workspace.config.json: that recorded choice IS the
+    // prior consent. A bypass prompt without that opt-in is left for the user.
+    const trustPattern = /trust this folder|Do you trust/i;
+    const bypassPattern = /bypass permissions|skip all permission|dangerously/i;
+    const bypassConsented = configMode === "bypassPermissions";
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const pane = capturePaneTail(binding, 30);
+      const isTrust = trustPattern.test(pane);
+      const isBypass = bypassPattern.test(pane) && bypassConsented;
+      if (!isTrust && !isBypass) break;
       tmux(["send-keys", "-t", binding.tmux.windowId, "Enter"]);
       trustAccepted = true;
-      await sleep(3000);
+      await sleep(2800);
     }
   }
   if (promptFile) {
@@ -329,6 +352,7 @@ async function commandLaunchWindow() {
   output({
     ok: true,
     command: "launch-window",
+    permissionMode: configMode,
     trustAccepted,
     windowName,
     title,
@@ -495,12 +519,59 @@ function commandAttachWindow() {
   const windowName = requireValue("--window");
   const binding = readBinding(windowName);
   const attach = `${tmuxBin} attach -t ${binding.tmux.server} \\; select-window -t ${binding.tmux.windowId}`;
-  if (hasFlag("--open-terminal") && process.platform === "darwin") {
-    const escaped = attach.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    const result = execHostText("osascript", ["-e", `tell application "Terminal" to do script "${escaped}"`, "-e", 'tell application "Terminal" to activate']);
-    if (result.status !== 0) fail(`Failed to open Terminal window: ${(result.stderr || "").trim()}`);
+  let opened = "";
+  if (hasFlag("--open-tab") || hasFlag("--open-terminal")) {
+    // --open-tab opens a new tab in the CURRENT terminal app (iTerm2 preferred,
+    // matching where the user already works); --open-terminal is kept as an
+    // alias. Detect the host terminal from TERM_PROGRAM so an iTerm2 user never
+    // gets a Terminal.app window. Inside tmux, switch-client is the right move
+    // and no new tab is spawned.
+    if (process.env.TMUX) {
+      opened = "inside-tmux";
+    } else if (process.platform === "darwin") {
+      opened = openTabInTerminal(attach);
+    } else {
+      opened = "unsupported-platform";
+    }
   }
-  output({ ok: true, command: "attach-window", windowName, windowId: binding.tmux.windowId, attach, openedTerminal: hasFlag("--open-terminal") && process.platform === "darwin" });
+  output({
+    ok: true,
+    command: "attach-window",
+    windowName,
+    windowId: binding.tmux.windowId,
+    server: binding.tmux.server,
+    attach,
+    switchClient: `${tmuxBin} switch-client -t ${binding.tmux.server}`,
+    opened,
+  });
+}
+
+function openTabInTerminal(attachCommand) {
+  const termProgram = process.env.TERM_PROGRAM || "";
+  const cmd = attachCommand.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const iTermInstalled = existsSync("/Applications/iTerm.app");
+  // iTerm2: create a new tab in the current window and run the attach there.
+  if (termProgram === "iTerm.app" || (termProgram === "" && iTermInstalled)) {
+    const script = [
+      'tell application "iTerm2"',
+      "  tell current window",
+      `    create tab with default profile command "${cmd}"`,
+      "  end tell",
+      "  activate",
+      "end tell",
+    ].join("\n");
+    const r = execHostText("osascript", ["-e", script]);
+    if (r.status === 0) return "iterm2-tab";
+    // current window may not exist (no iTerm window open): open a fresh one
+    const fallback = `tell application "iTerm2" to create window with default profile command "${cmd}"`;
+    const r2 = execHostText("osascript", ["-e", fallback, "-e", 'tell application "iTerm2" to activate']);
+    if (r2.status === 0) return "iterm2-window";
+    fail(`Failed to open iTerm2 tab: ${(r.stderr || r2.stderr || "").trim()}`);
+  }
+  // Terminal.app: do script opens a new window/tab and runs the command.
+  const r = execHostText("osascript", ["-e", `tell application "Terminal" to do script "${cmd}"`, "-e", 'tell application "Terminal" to activate']);
+  if (r.status !== 0) fail(`Failed to open Terminal window: ${(r.stderr || "").trim()}`);
+  return "terminal-window";
 }
 
 import { hostProfile } from "./wakeflow-host-profile.mjs";
@@ -561,6 +632,103 @@ function memoryFileState(dir) {
   const text = readFileSync(file, "utf8");
   const marker = dir === workspaceRoot ? "wakeflow:root-agents" : "wakeflow:scope";
   return text.includes(marker) ? "managed" : "unmanaged";
+}
+
+const PERMISSION_MODES = ["acceptEdits", "bypassPermissions", "default", "plan", "dontAsk", "auto"];
+
+async function commandLaunchAll() {
+  const serverSession = getValue("--server", defaultServerSession());
+  const model = readWorkspaceWindowModel();
+  const order = [model.design, model.controller, ...model.products, model.test].filter(Boolean);
+  ensureServer(serverSession);
+  const results = [];
+  for (const windowName of order) {
+    const registryFile = path.join(hostDir, "thread-registry", `${slug(windowName)}.json`);
+    if (!existsSync(registryFile)) {
+      results.push({ window: windowName, status: "skipped-unregistered", note: "Run /wakeflow:init or a single launch to register this window first." });
+      continue;
+    }
+    const lock = readLock(windowName);
+    if (lockIsFresh(lock)) {
+      results.push({ window: windowName, status: "skipped-in-flight" });
+      continue;
+    }
+    const sessionId = readJson(registryFile, "thread registration").threadId;
+    const repo = readRepositoryForWindow(windowName);
+    const title = repo.title;
+    const argv = [
+      "launch-window", "--root", workspaceRoot, "--server", serverSession,
+      "--window", windowName, "--title", title, "--cwd", repo.cwd,
+      "--resume", "--session-id", sessionId, "--replace", "--boot-wait-ms", getValue("--boot-wait-ms", "7000"),
+    ];
+    const r = execHostText(process.execPath, [process.argv[1], ...argv]);
+    let parsed = null;
+    try { parsed = JSON.parse(r.stdout); } catch { /* keep raw */ }
+    results.push({
+      window: windowName,
+      status: parsed?.ok ? "resumed" : "failed",
+      windowId: parsed?.windowId,
+      permissionMode: parsed?.permissionMode,
+      error: parsed?.ok ? undefined : (parsed?.error || (r.stderr || r.stdout).slice(-160)),
+    });
+  }
+  applyStatusOptions(serverSession);
+  output({ ok: results.every((x) => x.status === "resumed" || x.status.startsWith("skipped")), command: "launch-all", server: serverSession, order, results });
+}
+
+function readRepositoryForWindow(windowName) {
+  const config = readJson(path.join(workspaceRoot, "workspace.config.json"), "workspace config");
+  if (windowName === config.controllerWindow) {
+    return { cwd: workspaceRoot, title: `${windowName} \u603b\u63a7` };
+  }
+  const repo = (Array.isArray(config.repositories) ? config.repositories : []).find((r) => r.windowName === windowName);
+  if (!repo) return { cwd: workspaceRoot, title: windowName };
+  const roleTitle = windowName === config.designWindow ? `${windowName} \u9700\u6c42\u7a97\u53e3`
+    : windowName === config.testWindow ? `${windowName} \u6d4b\u8bd5\u7a97\u53e3`
+    : `${windowName} \u804c\u8d23\u7a97\u53e3`;
+  return { cwd: path.resolve(workspaceRoot, repo.path), title: roleTitle };
+}
+
+function commandSetUnattended() {
+  const mode = requireValue("--mode");
+  if (!PERMISSION_MODES.includes(mode)) {
+    fail(`--mode must be one of ${PERMISSION_MODES.join(", ")}.`);
+  }
+  const write = hasFlag("--write");
+  const configFile = path.join(workspaceRoot, "workspace.config.json");
+  if (!existsSync(configFile)) fail("workspace.config.json not found; run initialization first.");
+  const config = readJson(configFile, "workspace config");
+  const previous = config.hosts?.["claude-code"]?.permissionMode ?? "acceptEdits";
+  if (write) {
+    const hosts = config.hosts && typeof config.hosts === "object" ? config.hosts : {};
+    const cc = hosts["claude-code"] && typeof hosts["claude-code"] === "object" ? hosts["claude-code"] : {};
+    cc.permissionMode = mode;
+    hosts["claude-code"] = cc;
+    config.hosts = hosts;
+    writeJson(configFile, config);
+  }
+  // Windows already running keep their launch-time mode; report which need a
+  // resume-restart to pick up the new mode, and which are mid-turn (skip).
+  const restart = [];
+  if (existsSync(windowHostDir)) {
+    for (const name of readdirSync(windowHostDir).filter((f) => f.endsWith(".json")).sort()) {
+      const binding = readJson(path.join(windowHostDir, name), "window-host binding");
+      const alive = windowAlive(binding);
+      const lock = readLock(binding.windowName);
+      restart.push({ window: binding.windowName, alive, needsRestart: alive, inFlight: lockIsFresh(lock) });
+    }
+  }
+  output({
+    ok: true,
+    command: "set-unattended",
+    wrote: write,
+    previousMode: previous,
+    mode,
+    note: mode === "bypassPermissions"
+      ? "Unattended mode: work windows run with no permission prompts. They stay bounded by repository worktrees, CLAUDE.md gates, and the Wakeflow state machine. Resume-restart live windows to apply; in-flight windows must finish first."
+      : "Windows resume-restart into this mode; bypass auto-consent no longer applies.",
+    restart,
+  });
 }
 
 function commandWindowStatus() {
@@ -689,7 +857,7 @@ function commandStampRuntime() {
 }
 
 function commandArrangeWindows() {
-  const serverSession = getValue("--server", "wakeflow");
+  const serverSession = getValue("--server", defaultServerSession());
   const model = readWorkspaceWindowModel();
   const desired = [
     { windowName: model.design, role: "design" },
@@ -803,7 +971,9 @@ function commandHelp() {
       readback: "Capture the current pane tail for evidence: --window [--lines].",
       "release-lock": "Remove the shared in-flight delivery lock for a window: --window.",
       "wait-results": "Block until target results exist for a dispatch group: --group [--state-root <path>] [--target <window>...|--expect N] [--timeout-sec] [--poll-ms]. Scans both the delivery store and the state root target-results.",
-      "attach-window": "Print (and optionally open in Terminal) the tmux attach command: --window [--open-terminal].",
+      "attach-window": "Print the tmux attach/switch command for a window; --open-tab opens a new tab in the current terminal app (iTerm2 preferred) running attach. --window [--open-tab].",
+      "launch-all": "Resume every registered window in canonical order (Design, controller, products, Test) using the recorded permissionMode, skipping in-flight windows: [--server <name>].",
+      "set-unattended": "Set hosts.claude-code.permissionMode (acceptEdits|bypassPermissions|...) and report which live windows need a resume-restart: --mode <m> [--write].",
       "window-status": "Report per-window dispatch state (busy/done/stalled glyphs, lock, delivery id): [--reconcile] recomputes glyphs from the shared locks.",
       "check-workspace": "Read-only health check for an existing workspace: config hosts block, managed CLAUDE.md surfaces, registry/binding/liveness per window, permission seeds, legacy codex registry, plugin version stamp.",
       "stamp-runtime": "Record the converging plugin version in hosts/claude-code/runtime-meta.json: --write.",
@@ -828,6 +998,8 @@ async function main() {
     case "arrange-windows": return commandArrangeWindows();
     case "check-workspace": return commandCheckWorkspace();
     case "window-status": return commandWindowStatus();
+    case "set-unattended": return commandSetUnattended();
+    case "launch-all": return commandLaunchAll();
     case "stamp-runtime": return commandStampRuntime();
     case "help": return commandHelp();
     default:

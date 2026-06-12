@@ -15,11 +15,10 @@ Wakeflow 把一个本地 Codex 或 Claude Code 工作区变成有纪律的控制
 ---
 
 - [为什么需要 Wakeflow](#为什么需要-wakeflow)
-- [系统模型](#系统模型)
+- [架构](#架构)
 - [安装 Wakeflow](#安装-wakeflow)
 - [初始化工作区](#初始化工作区)
 - [Wakeflow 会创建什么](#wakeflow-会创建什么)
-- [工作如何流转](#工作如何流转)
 - [自动化语义](#自动化语义)
 - [MCP 能力面](#mcp-能力面)
 - [运行时与账本边界](#运行时与账本边界)
@@ -47,26 +46,75 @@ Wakeflow 提供缺失的控制层：
 Wakeflow 不是换了名字的命令启动器。它是一个可复用的工作流能力，用来让多窗口
 agent 工作保持可读、有边界、可恢复。
 
-## 系统模型
+## 架构
 
-```mermaid
-flowchart TD
-  User["用户目标"] --> Controller["总控窗口<br/>Codex / Claude Code"]
-  Controller --> Gates["AGENTS.md / CLAUDE.md gates<br/>目标、边界、证据、停止规则"]
-  Controller <--> StateRoot["State root<br/>.workspace-active/..."]
-  StateRoot --> Tasks["任务包"]
-  Tasks --> Delivery["投递 envelope"]
-  LocalRuntime[".workspace-local<br/>thread registry + 派生 window config"] -. "lookup" .-> Delivery
-  Delivery --> Host["Host transport<br/>Codex thread tools 或 Claude tmux helper"]
-  Host --> Targets["仓库 / Design / Test 窗口"]
-  Targets --> Repos["责任根目录"]
-  Targets --> Results["TargetResultEnvelope<br/>包含 evidence refs"]
-  Results --> Controller
-  Controller --> Ledger["wakeflow-ledger<br/>长期项目记录"]
+Wakeflow 由三层共同工作：你能看到的窗口舰队、推进工作的闭环，以及重启后仍能恢复的
+磁盘布局。Codex 与 Claude Code 两个版本运行同一份共享 core；差异只在传输层
+（Codex host thread tools 对比 tmux send helper）。
+
+### 第 1 层 - 窗口舰队（你看到的东西）
+
+每个 Wakeflow 窗口都是长期存在、绑定单一责任的 agent session。Claude Code
+版本把窗口舰队放在一个 tmux session 里，并带有实时状态徽标；Codex 版本使用
+host threads。
+
+| 窗口 | 角色 | 默认推理强度（Claude Code） |
+| --- | --- | --- |
+| Controller | 拥有目标、投递、证据审查和验收 | `max` |
+| Design | 澄清需求、比较方案、准备 handoff | `xhigh` |
+| Repo windows | 只在一个仓库边界内实现 | `xhigh` |
+| Test | 执行仓库无法自测的真实场景验证 | `xhigh` |
+
+### 第 2 层 - 闭环（工作如何推进）
+
+工作被组织成 demand：一个 demand = 一个目标 = 磁盘上的一个 state root。每个
+demand 都经过同一个闭环：
+
+```text
+ 1 init       总控创建 demand state root                  (未认领)
+ 2 claim      第一个驱动命令把它绑定到一个平台             (codex | claude)
+ 3 add task   任务包命名目标窗口和范围
+ 4 dispatch   envelope 写入 -> 窗口加锁 -> prompt 投递
+ 5 work       目标窗口在自己的仓库边界内执行
+ 6 result     TargetResultEnvelope 携带 evidence refs 落地 -> 解锁
+ 7 review     总控读取原始证据，再 accept / rework / block
+ 8 complete   所有任务 accepted 且没有 blockers 后才完成
 ```
 
-总控是唯一验收权威。脚本和 MCP 工具可以创建、验证、汇总、记录机器数据，但不能扩大范围、
-决定产品行为，或宣称任务已经完成。
+两条规则保证闭环可靠：**Prompt 负责唤醒，state 负责指令**（投递 prompt 只命名
+窗口、task id 和 state root；任务定义存在 state root 和 skills 里），以及
+**backfill 是输入，不是验收**（总控先审查原始证据再做决策；blocked decision
+在新证据到达后始终可恢复）。
+
+### 第 3 层 - 地面事实（磁盘上的内容）
+
+```text
+<workspace>/
+  workspace.config.json          窗口、角色、每宿主配置              committed
+  AGENTS.md / CLAUDE.md          每宿主总控 gate                    committed
+  wakeflow-ledger/               长期设计、记录、归档               committed
+  .workspace-active/             demand state roots（第 2 层）       local
+  .workspace-local/wakeflow-delivery/                                local
+    dispatch-packets/  delivery-envelopes/  delivery-runs/    transport records
+    target-results/                                           evidence envelopes
+    locks/                       每窗口一个 in-flight delivery，跨宿主
+    hosts/codex/                 codex thread registry（宿主内）
+    hosts/claude-code/           claude session registry + tmux bindings
+```
+
+经验规则：**业务真相是宿主中立并共享的；传输句柄按宿主隔离，且永远不离开
+`.workspace-local/`。**
+
+### 谁决定什么（信任模型）
+
+脚本和 MCP 工具创建、验证、记录机器数据；它们不会验收工作、扩大范围，或决定产品行为。
+目标窗口只执行被投递的任务包。总控是唯一验收权威，用户拥有产品决策。
+
+### 双宿主共存
+
+同一个工作区可以并行运行两个版本：demand 在 claim 时绑定到一个平台（每个驱动命令都会
+机器校验），共享的每窗口 lock 会跨宿主串行化投递，所有权只通过显式且可审计的
+`adopt-demand-host` 转移。
 
 ## 安装 Wakeflow
 
@@ -194,23 +242,6 @@ Wakeflow 也会同步 `.gitignore`，只把 `.workspace-active/` 和 `.workspace
 作为本地运行时目录忽略。它不会把产品仓库、Design/Test、ledger、`.DS_Store`
 或其他本地杂项加入 `.gitignore`。
 
-## 工作如何流转
-
-Wakeflow 的正常循环刻意保持小而清晰：
-
-1. 用户目标、Design handoff 或 controller intake 创建一个 demand。
-2. 总控定义完成标准、边界、阶段顺序和第一个 blocker。
-3. state root 记录 demand 并创建可执行任务包。
-4. 总控为目标窗口准备轻量 delivery envelope。
-5. 目标窗口读取自己的规则，只执行分配给自己的任务包，并返回带可审查证据的 target result envelope。
-6. 总控审查原始证据，记录决策，然后创建下一批可执行任务、等待用户判断、标记 blocked，或完成 demand。
-7. 长期结论进入 `wakeflow-ledger/`；本地运行时继续留在本地。
-
-Design 和 Test 是支持角色：
-
-- **Design** 澄清需求、选项、风险和 handoff 候选。Design 不投递实现，也不会自动成为产品真相。
-- **Test** 只用于总控或产品仓库无法安全复现的真实场景证据。
-
 ## 自动化语义
 
 Wakeflow 自动化是 direct-thread 投递加显式结果返回。
@@ -261,6 +292,20 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：
 记录 target result、审查 readiness、在策略允许时准备 controller-return envelope、
 通过当前归属宿主的 transport 发送，再记录 delivery evidence。不要把这些步骤合并成一个 target-window MCP tool。
+总控 review 也保持拆分：review pack、result reduction 和显式 decision 分别处理；
+result reduction 只创建 review candidate，不是验收。内部步骤（例如 archive summary
+refresh internals、keep-live state、script backend execution）留在 Wakeflow
+JS/runtime scripts 和 skills 内。公共 archive MCP tools 只包装总控批准的 TODO
+或 workspace document archive flows；它们不做验收决策，也不发送 host messages。
+
+Wakeflow 为每个公共 tool 声明 MCP annotations：只读工具标记为 read-only，写工具
+标记为本地、非破坏性、闭世界。Codex approval policy 仍由用户自己的 Codex 配置控制。
+可信本地 Wakeflow 安装对应的 Codex server policy 是：
+
+```toml
+[plugins."wakeflow@gxfn".mcp_servers.wakeflow]
+default_tools_approval_mode = "approve"
+```
 
 ## 运行时与账本边界
 

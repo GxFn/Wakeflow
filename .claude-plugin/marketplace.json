@@ -13,7 +13,7 @@
       "name": "wakeflow",
       "source": "./plugins/claude-code-wakeflow",
       "description": "Unattended control loops for Claude Code workspaces, aligned with Wakeflow's Codex edition: controller state roots, task packages, tmux-resident direct-session delivery, evidence review, and Design/Test intake.",
-      "version": "0.5.2",
+      "version": "0.5.3",
       "author": {
         "name": "gaoxuefeng",
         "url": "https://github.com/GxFn"

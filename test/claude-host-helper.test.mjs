@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
 
 const helperScript = path.resolve(
@@ -138,7 +138,12 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
   const ready = parseOk(runHelper(root, ["wait-results", "--group", "grp-1", "--target", "RepoA", "--timeout-sec", "5", "--poll-ms", "250"]));
   assert.equal(ready.status, "ready");
   assert.deepEqual(ready.windows, ["RepoA"]);
-  assert.ok(!existsSync(path.join(root, sent.lockFile)), "wait-results must release the delivered window lock");
+  assert.ok(existsSync(path.join(root, sent.lockFile)), "wait-results is a pure observer: the lock is untouched (core release / sentinel own it)");
+
+  // the sentinel flips busy -> done once the lock is released (as the core
+  // record/import path does after a real result)
+  rmSync(path.join(root, sent.lockFile), { force: true });
+  parseOk(runHelper(root, ["activity-monitor", "--server", serverSession, "--once"]));
 
   const attach = parseOk(runHelper(root, ["attach-window", "--window", "RepoA"]));
   assert.match(attach.attach, new RegExp(serverSession));
@@ -201,7 +206,7 @@ test("launch-window resolves per-role effort and model pin (controller=max, work
   assert.equal(worker.model, "claude-fable-5", "worker model pinned from modelByRole");
 });
 
-test("wait-results keeps a delivery lock that is newer than the arrived result", { skip: !tmuxPresent }, async (t) => {
+test("wait-results never touches locks or glyphs (pure observation)", { skip: !tmuxPresent }, async (t) => {
   const root = makeWorkspace();
   mkdirSync(path.join(root, "RepoA"), { recursive: true });
   writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
@@ -213,12 +218,10 @@ test("wait-results keeps a delivery lock that is newer than the arrived result",
 
   const resultsDir = path.join(root, ".workspace-local/wakeflow-delivery/target-results");
   mkdirSync(resultsDir, { recursive: true });
-  // An OLD result already exists for RepoA.
   writeFileSync(path.join(resultsDir, "grp__RepoA__t1.json"), JSON.stringify({
     kind: "TargetResultEnvelope", dispatchGroup: "grp", targetWindow: "RepoA", taskId: "t1",
-    status: "completed", createdAt: "2026-01-01T00:00:00.000Z",
+    status: "completed", reportedAt: new Date().toISOString(),
   }));
-  // A NEW lock (fresh delivery) was written AFTER that result.
   const locksDir = path.join(root, ".workspace-local/wakeflow-delivery/locks");
   mkdirSync(locksDir, { recursive: true });
   const lockFile = path.join(locksDir, "RepoA.json");
@@ -230,9 +233,8 @@ test("wait-results keeps a delivery lock that is newer than the arrived result",
 
   const ready = parseOk(runHelper(root, ["wait-results", "--group", "grp", "--target", "RepoA", "--timeout-sec", "5", "--poll-ms", "250"]));
   assert.equal(ready.status, "ready");
-  assert.ok(existsSync(lockFile), "lock newer than the result must survive (still-in-flight delivery)");
+  assert.ok(existsSync(lockFile), "the lock survives: release belongs to the core record path");
 });
-
 test("activity-monitor --once marks live-executing windows running and clears idle ones", { skip: !tmuxPresent }, async (t) => {
   const root = makeWorkspace();
   writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
@@ -299,6 +301,107 @@ test("launch-window --replace kills the old window instead of leaking an orphan"
   assert.equal(after.length, before.length, "window count unchanged: no orphan leaked");
   assert.ok(!after.includes(oldWid), "old window was killed");
   assert.ok(after.includes(second.windowId), "new window is alive");
+});
+
+test("activity-monitor sentinel: stall nudges the controller once, late result flips to done", { skip: !tmuxPresent }, async (t) => {
+  const root = makeWorkspace();
+  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+    workspaceName: "SentinelFlow", controllerWindow: "SentinelFlow",
+    hosts: { "claude-code": { tmuxSession: serverSession } },
+    repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
+  }));
+  t.after(killServer);
+
+  const noAuto = { WAKEFLOW_DISABLE_MONITOR: "1" };
+  parseOk(runHelper(root, ["launch-window", "--server", serverSession, "--window", "SentinelFlow", "--cwd", ".", "--boot-wait-ms", "400"], noAuto));
+  const launched = parseOk(runHelper(root, ["launch-window", "--server", serverSession, "--window", "RepoA", "--cwd", "RepoA", "--boot-wait-ms", "400"], noAuto));
+  const prompt = path.join(root, "p.txt");
+  writeFileSync(prompt, "task\n");
+  parseOk(runHelper(root, ["send", "--window", "RepoA", "--prompt-file", prompt, "--delivery-id", "dlv-sentinel", "--readback-wait-ms", "200"], noAuto));
+
+  // run the sentinel loop detached with a tiny stall threshold
+  const monitor = spawn(process.execPath, [helperScript, "activity-monitor", "--root", root, "--server", serverSession, "--poll-ms", "500", "--stall-after-sec", "1"], { detached: true, stdio: "ignore", env: { ...process.env, WAKEFLOW_CLAUDE_BIN: path.join(root, "stub-claude") } });
+  monitor.unref();
+  t.after(() => { try { process.kill(monitor.pid); } catch { /* already gone */ } });
+
+  const readState = () => spawnSync("tmux", ["show-options", "-w", "-q", "-v", "-t", launched.windowId, "@wakeflow_state"], { encoding: "utf8" }).stdout.trim();
+  const waitForState = async (want, timeoutMs) => {
+    const deadline = Date.now() + timeoutMs;
+    let state = readState();
+    while (state !== want && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 500));
+      state = readState();
+    }
+    return state;
+  };
+  // generous deadline: the full suite runs under heavy parallel load
+  assert.equal(await waitForState("stalled", 12000), "stalled", "silent delivered window is marked stalled");
+  const readControllerPane = () => spawnSync("tmux", ["capture-pane", "-p", "-t", `${serverSession}:1`], { encoding: "utf8" }).stdout;
+  {
+    const deadline = Date.now() + 6000;
+    while (!/stall notice: window RepoA/.test(readControllerPane()) && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  assert.match(readControllerPane(), /stall notice: window RepoA/, "controller received the stall nudge");
+
+  // late result: the core release deletes the lock -> sentinel flips to done
+  rmSync(path.join(root, ".workspace-local/wakeflow-delivery/locks/RepoA.json"), { force: true });
+  assert.equal(await waitForState("done", 8000), "done", "late result flips the stalled window to done");
+});
+
+test("sentinel: changing pane content counts as activity (long tool calls never stall)", { skip: !tmuxPresent }, async (t) => {
+  const root = makeWorkspace();
+  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+    workspaceName: "ActiveFlow", controllerWindow: "ActiveFlow",
+    hosts: { "claude-code": { tmuxSession: serverSession } },
+    repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
+  }));
+  // a "claude" whose pane updates every second WITHOUT any esc-to-interrupt
+  // hint — exactly the long-tool-call rendering that fooled the hint regex
+  writeFileSync(path.join(root, "stub-claude"), "#!/bin/sh\nwhile true; do date; sleep 1; done\n", { mode: 0o755 });
+  t.after(killServer);
+
+  const noAuto = { WAKEFLOW_DISABLE_MONITOR: "1" };
+  const launched = parseOk(runHelper(root, ["launch-window", "--server", serverSession, "--window", "RepoA", "--cwd", "RepoA", "--boot-wait-ms", "400"], noAuto));
+  // simulate a delivered window: busy + lock
+  spawnSync("tmux", ["set-option", "-w", "-t", launched.windowId, "@wakeflow_state", "busy"], { encoding: "utf8" });
+  const locksDir = path.join(root, ".workspace-local/wakeflow-delivery/locks");
+  mkdirSync(locksDir, { recursive: true });
+  writeFileSync(path.join(locksDir, "RepoA.json"), JSON.stringify({
+    kind: "WakeflowWindowDeliveryLock", windowName: "RepoA", host: "claude-code",
+    deliveryId: "dlv-active", createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+  }));
+
+  const monitor = spawn(process.execPath, [helperScript, "activity-monitor", "--root", root, "--server", serverSession, "--poll-ms", "500", "--stall-after-sec", "1"], { detached: true, stdio: "ignore", env: { ...process.env, WAKEFLOW_CLAUDE_BIN: path.join(root, "stub-claude") } });
+  monitor.unref();
+  t.after(() => { try { process.kill(monitor.pid); } catch { /* gone */ } });
+
+  await new Promise((r) => setTimeout(r, 4000));
+  const state = spawnSync("tmux", ["show-options", "-w", "-q", "-v", "-t", launched.windowId, "@wakeflow_state"], { encoding: "utf8" }).stdout.trim();
+  assert.notEqual(state, "stalled", "an actively-updating pane must never be marked stalled");
+  assert.equal(state, "running", "content change lights the running badge");
+});
+
+test("send to the controller window is a lock-free notification (no busy residue)", { skip: !tmuxPresent }, async (t) => {
+  const root = makeWorkspace();
+  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+    workspaceName: "CtrlFlow", controllerWindow: "CtrlFlow",
+    hosts: { "claude-code": { tmuxSession: serverSession } },
+    repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
+  }));
+  t.after(killServer);
+  const noAuto = { WAKEFLOW_DISABLE_MONITOR: "1" };
+  const ctrl = parseOk(runHelper(root, ["launch-window", "--server", serverSession, "--window", "CtrlFlow", "--cwd", ".", "--boot-wait-ms", "400"], noAuto));
+  const prompt = path.join(root, "ret.txt");
+  writeFileSync(prompt, "controller return\n");
+  const sent = parseOk(runHelper(root, ["send", "--window", "CtrlFlow", "--prompt-file", prompt, "--readback-wait-ms", "200"], noAuto));
+  assert.equal(sent.controllerNotification, true);
+  assert.equal(sent.lockFile, undefined, "no lock file reported");
+  assert.equal(existsSync(path.join(root, ".workspace-local/wakeflow-delivery/locks/CtrlFlow.json")), false, "no controller lock written");
+  const state = spawnSync("tmux", ["show-options", "-w", "-q", "-v", "-t", ctrl.windowId, "@wakeflow_state"], { encoding: "utf8" }).stdout.trim();
+  assert.equal(state, "", "no busy residue on the controller");
 });
 
 test("seed-permissions keeps committed settings portable and migrates old residue to settings.local.json", () => {

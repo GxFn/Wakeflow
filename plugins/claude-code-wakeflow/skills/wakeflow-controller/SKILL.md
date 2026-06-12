@@ -28,12 +28,9 @@ After a delivery is sent, read back, and recorded as `status=sent` with
 turn open with `sleep`, repeated result review, repeated session reads, or
 manual polling. The target returns later through a `TargetResultEnvelope` and,
 if policy allows, a controller-return delivery sent to the controller's own
-tmux window. As stall insurance, after dispatching a group the controller may
-run `wakeflow-claude-host.mjs wait-results --group <id> --target <windowA>
---target <windowB> [--timeout-sec N]` as a background task; it completes when
-all expected target result envelopes exist (also releasing those windows'
-delivery locks) and wakes the controller. A `wait-results` timeout means a
-stalled delivery to review, not something to poll for.
+tmux window. Stall insurance is automatic: the activity-monitor sentinel watches every delivered window: it flips the tab to done when the result lands (lock released), marks it stalled after the silence threshold, and nudges the controller window once for a stall — a dead window that can never send its own controller-return still wakes the controller. Do not
+arm per-dispatch watchers; `wait-results` exists only as an explicit
+synchronous wait for scripted flows (pure observation, no side effects).
 
 ## Source Practices For Acceptance
 
@@ -96,8 +93,9 @@ machine state.
    desktop windows are not an automation transport.)
 8. Read back the helper send evidence and record the delivery run with
    `wakeflow_record_delivery` (default host method `wakeflow-claude-host send`).
-9. End the dispatch turn, optionally starting the `wait-results` background
-   watcher for the dispatch group first.
+9. End the dispatch turn. The controller-return delivery is the wake-up, and
+   the activity-monitor sentinel covers stalls automatically; do not arm a
+   per-dispatch watcher.
 
 Recovery is not a delivery mode: when a target's tmux window is dead, finish or
 relaunch the same session interactively with `launch-window --resume --session-id` (headless `claude -p` bills the separate Agent SDK credit from 2026-06-15); legacy form `claude -p --resume <registered session
@@ -205,7 +203,8 @@ Stop instead of dispatching when:
 - A completed result would leave TODO/backlog, archive state, or current status
   inconsistent.
 - The controller is about to poll/wait for targets after a send was recorded
-  (the background `wait-results` watcher is the only allowed wait).
+  (the controller-return delivery and the activity-monitor sentinel are the
+  wake-ups; in-turn waiting is never allowed).
 - There are no eligible tasks.
 
 ## Verification

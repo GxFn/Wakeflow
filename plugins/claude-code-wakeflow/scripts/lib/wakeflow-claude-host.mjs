@@ -102,6 +102,21 @@ function defaultServerSession() {
   return "wakeflow";
 }
 
+let cachedControllerWindow;
+function workspaceControllerWindow() {
+  if (cachedControllerWindow !== undefined) return cachedControllerWindow;
+  const configFile = path.join(workspaceRoot, "workspace.config.json");
+  cachedControllerWindow = null;
+  if (existsSync(configFile)) {
+    try {
+      cachedControllerWindow = JSON.parse(readFileSync(configFile, "utf8")).controllerWindow ?? null;
+    } catch {
+      cachedControllerWindow = null;
+    }
+  }
+  return cachedControllerWindow;
+}
+
 function roleOfWindow(windowName) {
   const configFile = path.join(workspaceRoot, "workspace.config.json");
   if (!existsSync(configFile)) return "default";
@@ -345,6 +360,9 @@ function activityMonitorRunning(serverSession) {
 function startActivityMonitorDaemon(serverSession) {
   // One detached poller per server: it sets @wakeflow_state=running on windows
   // whose pane is mid-turn and clears it when idle. Single-instance via pidfile.
+  // WAKEFLOW_DISABLE_MONITOR=1 suppresses the AUTO-start (tests and special
+  // setups that run the monitor explicitly with their own flags).
+  if (process.env.WAKEFLOW_DISABLE_MONITOR === "1") return false;
   if (activityMonitorRunning(serverSession)) return false;
   const selfPath = fileURLToPath(import.meta.url);
   const child = spawn(process.execPath, [selfPath, "activity-monitor", "--root", workspaceRoot, "--server", serverSession], {
@@ -375,10 +393,63 @@ function commandEnsureServer() {
   output({ ok: true, command: "ensure-server", server: serverSession, created, activityMonitorStarted: monitorStarted });
 }
 
+function monitorWindowNames() {
+  // windowId -> windowName from the live window-host bindings (locks and the
+  // controller nudge are keyed by window NAME)
+  const map = new Map();
+  if (!existsSync(windowHostDir)) return map;
+  for (const file of readdirSync(windowHostDir)) {
+    if (!file.endsWith(".json")) continue;
+    try {
+      const binding = JSON.parse(readFileSync(path.join(windowHostDir, file), "utf8"));
+      if (binding?.tmux?.windowId) map.set(binding.tmux.windowId, binding.windowName);
+    } catch {
+      // skip unreadable bindings
+    }
+  }
+  return map;
+}
+
+function nudgeController(stalledWindow, quietSeconds) {
+  // One-shot stall notice to the controller window: the dead/silent target
+  // will never send its controller-return, so this is the only wake-up that
+  // can still happen. The notice is transport, not a dispatch.
+  const configFile = path.join(workspaceRoot, "workspace.config.json");
+  if (!existsSync(configFile)) return false;
+  let controllerWindow;
+  try {
+    controllerWindow = JSON.parse(readFileSync(configFile, "utf8")).controllerWindow;
+  } catch {
+    return false;
+  }
+  if (!controllerWindow || controllerWindow === stalledWindow) return false;
+  const bindingFile = bindingFileFor(controllerWindow);
+  if (!existsSync(bindingFile)) return false;
+  const binding = readJson(bindingFile, "window-host binding");
+  if (!windowAlive(binding)) return false;
+  const noticeFile = path.join(hostDir, `stall-notice-${slug(stalledWindow)}.txt`);
+  writeFileSync(noticeFile, [
+    `Wakeflow stall notice: window ${stalledWindow} has been busy ${quietSeconds}s with no pane activity and no recorded result.`,
+    "Review the in-flight delivery (wakeflow_status / review the dispatch group); recover a dead window with launch-window --resume, or release the lock with release-window-lock after judgment.",
+    "One-time notice from the activity monitor.",
+  ].join("\n"));
+  try {
+    pastePromptFile(binding, noticeFile);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    rmSync(noticeFile, { force: true });
+  }
+}
+
 async function commandActivityMonitor() {
   const serverSession = getValue("--server", defaultServerSession());
   const pollRaw = Number(getValue("--poll-ms", "1500"));
   const pollMs = Number.isFinite(pollRaw) ? Math.max(800, pollRaw) : 1500;
+  const stallRaw = Number(getValue("--stall-after-sec", "180"));
+  const stallAfterMs = (Number.isFinite(stallRaw) ? Math.max(1, stallRaw) : 180) * 1000;
+  const nudgeEnabled = !hasFlag("--no-nudge");
   const once = hasFlag("--once");
   const pidFile = activityMonitorPidFile(serverSession);
   if (!once) {
@@ -389,22 +460,46 @@ async function commandActivityMonitor() {
     mkdirSync(path.dirname(pidFile), { recursive: true });
     writeFileSync(pidFile, String(process.pid));
   }
-  let lastSummary = { running: [] };
+  // Sentinel memory (process-local): when a delivered window went quiet, and
+  // which stalls were already nudged. A monitor restart resets the timers.
+  const quietSince = new Map();
+  const nudged = new Set();
+  // Robust activity detection: the "esc to interrupt" hint is NOT rendered in
+  // every active-turn phase (long tool calls show only a spinner/elapsed line),
+  // so any pane-content change between polls also counts as activity — the
+  // elapsed timer alone changes every second while a turn runs. An idle pane
+  // is byte-stable.
+  const lastPane = new Map();
+  const controllerWindowName = workspaceControllerWindow();
+  let lastSummary = { running: [], stalled: [], completed: [] };
   for (;;) {
     if (tmux(["has-session", "-t", serverSession], { allowFailure: true }).status !== 0) break;
+    const names = monitorWindowNames();
     const listed = tmux(["list-windows", "-t", serverSession, "-F", "#{window_id}"], { allowFailure: true });
     const running = [];
+    const stalled = [];
+    const completed = [];
     for (const wid of (listed.stdout || "").trim().split("\n").map((l) => l.trim()).filter(Boolean)) {
       const pane = tmux(["capture-pane", "-p", "-t", wid], { allowFailure: true }).stdout || "";
-      const isRunning = paneShowsExecution(pane);
+      const previousPane = lastPane.get(wid);
+      lastPane.set(wid, pane);
+      const isRunning = paneShowsExecution(pane) || (previousPane !== undefined && previousPane !== pane);
       const current = tmux(["show-options", "-w", "-q", "-v", "-t", wid, "@wakeflow_state"], { allowFailure: true }).stdout.trim();
-      // The monitor owns only the "running" overlay: it stashes the dispatch
-      // marker (busy/done/stalled) in @wakeflow_prev_state when execution
-      // starts and RESTORES it when execution pauses, so a delivered window
-      // that pauses mid-turn goes back to busy, not idle.
+      // The monitor owns the "running" overlay: it stashes the dispatch marker
+      // (busy/done/stalled) in @wakeflow_prev_state while execution runs and
+      // restores it when execution pauses.
       if (isRunning && current !== "running") {
-        if (current) {
-          tmux(["set-option", "-w", "-t", wid, "@wakeflow_prev_state", current], { allowFailure: true });
+        let stash = current;
+        if (current === "stalled") {
+          // a "stalled" window that shows activity was a false positive (or it
+          // recovered): clear the episode and stash its real dispatch marker
+          const name = names.get(wid);
+          stash = name && existsSync(lockFileFor(name)) ? "busy" : "";
+          if (name) nudged.delete(name);
+          quietSince.delete(wid);
+        }
+        if (stash) {
+          tmux(["set-option", "-w", "-t", wid, "@wakeflow_prev_state", stash], { allowFailure: true });
         }
         tmux(["set-option", "-w", "-t", wid, "@wakeflow_state", "running"], { allowFailure: true });
       } else if (!isRunning && current === "running") {
@@ -416,9 +511,58 @@ async function commandActivityMonitor() {
           tmux(["set-option", "-w", "-u", "-t", wid, "@wakeflow_state"], { allowFailure: true });
         }
       }
-      if (isRunning) running.push(wid);
+      if (isRunning) {
+        running.push(wid);
+        quietSince.delete(wid);
+        continue;
+      }
+      // Sentinel: the monitor also owns the done/stalled transitions for
+      // delivered windows, replacing the per-dispatch wait-results watcher.
+      // - lock FILE deleted   => the result was recorded (core releases on
+      //   record/import) => done
+      // - lock file still present and the pane stays quiet past the stall
+      //   threshold => stalled + one controller nudge (a silent window will
+      //   never send its own controller-return)
+      const windowName = names.get(wid);
+      if (!windowName) continue;
+      if (controllerWindowName && windowName === controllerWindowName) {
+        // The controller has no delivery lifecycle of its own: returns are
+        // notifications, and "the controller went quiet" is just the user's
+        // session being idle — never a stall.
+        continue;
+      }
+      const effective = current === "running" ? "" : current;
+      const lockPresent = existsSync(lockFileFor(windowName));
+      if (effective === "busy") {
+        if (!lockPresent) {
+          tmux(["set-option", "-w", "-t", wid, "@wakeflow_state", "done"], { allowFailure: true });
+          quietSince.delete(wid);
+          nudged.delete(windowName);
+          completed.push(windowName);
+        } else {
+          const since = quietSince.get(wid) ?? Date.now();
+          quietSince.set(wid, since);
+          if (Date.now() - since >= stallAfterMs) {
+            tmux(["set-option", "-w", "-t", wid, "@wakeflow_state", "stalled"], { allowFailure: true });
+            stalled.push(windowName);
+            if (nudgeEnabled && !nudged.has(windowName)) {
+              nudged.add(windowName);
+              nudgeController(windowName, Math.round((Date.now() - since) / 1000));
+            }
+          }
+        }
+      } else if (effective === "stalled" && !lockPresent) {
+        // late result after a stall: flip to done and clear the episode
+        tmux(["set-option", "-w", "-t", wid, "@wakeflow_state", "done"], { allowFailure: true });
+        quietSince.delete(wid);
+        nudged.delete(windowName);
+        completed.push(windowName);
+      } else if (effective !== "busy") {
+        quietSince.delete(wid);
+        if (effective === "" || effective === "done") nudged.delete(windowName);
+      }
     }
-    lastSummary = { running };
+    lastSummary = { running, stalled, completed };
     if (once) break;
     await sleep(pollMs);
   }
@@ -426,7 +570,7 @@ async function commandActivityMonitor() {
   if (!once && existsSync(pidFile) && readFileSync(pidFile, "utf8").trim() === String(process.pid)) {
     rmSync(pidFile, { force: true });
   }
-  output({ ok: true, command: "activity-monitor", server: serverSession, once, running: lastSummary.running });
+  output({ ok: true, command: "activity-monitor", server: serverSession, once, running: lastSummary.running, stalled: lastSummary.stalled, completed: lastSummary.completed });
 }
 
 function pastePromptFile(binding, promptFile) {
@@ -608,13 +752,16 @@ async function commandSend() {
     fail(`tmux window for ${windowName} is not alive (${binding.tmux.windowId}); relaunch the same session interactively with launch-window --resume --session-id <registered id> --replace, then resend.`);
   }
 
+  // A delivery to the CONTROLLER window is a controller-return/notification:
+  // the controller never records a target-result for itself, so a lock or busy
+  // marker written here would never be released and would read as a stalled
+  // controller. Returns queue naturally in the controller's input box.
+  const isControllerTarget = windowName === workspaceControllerWindow();
   // Lock semantics (aligned with core dispatch): a fresh lock from the OTHER
   // host means another controller is driving this window's working tree — fail
   // closed. A SAME-host lock is advisory: the core per-task sent-state guard
-  // already prevents true double-dispatch, and a controller-return to a window
-  // that still holds its own inbound lock (the controller never produces a
-  // self target-result to release it) must not deadlock. So warn and proceed.
-  const lock = readLock(windowName);
+  // already prevents true double-dispatch.
+  const lock = isControllerTarget ? null : readLock(windowName);
   let lockWarning;
   let effectiveDeliveryId = deliveryId;
   if (lock && lockIsFresh(lock)) {
@@ -634,19 +781,21 @@ async function commandSend() {
         : `Proceeding over a fresh same-host delivery lock on ${windowName} (${lock.deliveryId || "no delivery id"}, created ${lock.createdAt}); the prior delivery's lock had no release path (e.g. a controller-return target).`;
     }
   }
-  writeJson(lockFileFor(windowName), {
-    kind: "WakeflowWindowDeliveryLock",
-    version: 1,
-    windowName,
-    host: HOST_DIR_NAME,
-    deliveryId: effectiveDeliveryId || undefined,
-    createdAt: nowIso(),
-    expiresAt: new Date(Date.now() + (Number.isFinite(lockTtlSec) ? lockTtlSec : 7200) * 1000).toISOString(),
-  });
+  if (!isControllerTarget) {
+    writeJson(lockFileFor(windowName), {
+      kind: "WakeflowWindowDeliveryLock",
+      version: 1,
+      windowName,
+      host: HOST_DIR_NAME,
+      deliveryId: effectiveDeliveryId || undefined,
+      createdAt: nowIso(),
+      expiresAt: new Date(Date.now() + (Number.isFinite(lockTtlSec) ? lockTtlSec : 7200) * 1000).toISOString(),
+    });
+  }
 
   const before = capturePaneTail(binding, 5);
   pastePromptFile(binding, promptFile);
-  setWindowState(windowName, "busy");
+  if (!isControllerTarget) setWindowState(windowName, "busy");
   const readbackWait = Number(getValue("--readback-wait-ms", "1200"));
   await sleep(Number.isFinite(readbackWait) ? readbackWait : 1200);
   const tailLines = Number(getValue("--lines", "25"));
@@ -660,7 +809,8 @@ async function commandSend() {
     windowId: binding.tmux.windowId,
     deliveryId: effectiveDeliveryId || undefined,
     sentAt: nowIso(),
-    lockFile: path.relative(workspaceRoot, lockFileFor(windowName)),
+    lockFile: isControllerTarget ? undefined : path.relative(workspaceRoot, lockFileFor(windowName)),
+    controllerNotification: isControllerTarget || undefined,
     readback: {
       paneTail,
       paneChanged: paneTail !== before,
@@ -728,33 +878,9 @@ async function commandWaitResults() {
     const results = listGroupResults(group, stateRootDir);
     const windows = [...new Set(results.map((result) => result.targetWindow).filter(Boolean))];
     found = expectedWindows.length > 0 ? windows.filter((window) => expectedWindows.includes(window)) : windows;
-    for (const window of found) {
-      const lock = readLock(window);
-      // Release the lock only when it predates the arrived result for this
-      // window (the lock belongs to the delivery the result answers). A lock
-      // NEWER than every result is a fresh still-in-flight delivery and must
-      // survive. Delivery-store envelopes stamp reportedAt; state-root results
-      // stamp createdAt. When no result timestamp is parseable, keep any lock
-      // that names a delivery id (fail safe), and release only ownerless ones.
-      let lockCleared = !lock;
-      if (lock) {
-        const windowResultTimes = results
-          .filter((result) => result.targetWindow === window)
-          .map((result) => Date.parse(result.reportedAt || result.createdAt || result.wakeflowTrace?.createdAt || ""))
-          .filter((value) => Number.isFinite(value));
-        const lockAt = Date.parse(lock.createdAt || "");
-        const releasable = windowResultTimes.length
-          ? (!Number.isFinite(lockAt) || lockAt <= Math.max(...windowResultTimes))
-          : !lock.deliveryId;
-        if (releasable) {
-          rmSync(lockFileFor(window), { force: true });
-          lockCleared = true;
-        }
-      }
-      // "done" only when no in-flight lock survives; a preserved newer lock
-      // means a fresh delivery is mid-flight on this window.
-      if (lockCleared) setWindowState(window, "done");
-    }
+    // Pure wait: lock release belongs to the core record/import path, and the
+    // done/stalled glyphs belong to the activity-monitor sentinel. This
+    // command only observes and reports.
     const satisfied = expectedWindows.length > 0
       ? expectedWindows.every((window) => found.includes(window))
       : found.length >= expectCount;
@@ -764,7 +890,6 @@ async function commandWaitResults() {
     }
     if (Date.now() >= deadline) {
       const missing = (expectedWindows.length > 0 ? expectedWindows : []).filter((window) => !found.includes(window));
-      for (const window of missing) setWindowState(window, "stalled");
       output({
         ok: false,
         command: "wait-results",
@@ -1402,13 +1527,13 @@ function commandHelp() {
     commands: {
       preflight: "Report tmux/claude/brew availability and the install recommendation.",
       "ensure-server": "Create the wakeflow tmux server session when missing and start the activity monitor (--server wakeflow) [--no-monitor].",
-      "activity-monitor": "Background poller that marks live-executing windows (>> running glyph) by watching pane state: [--server] [--poll-ms] [--once].",
+      "activity-monitor": "Background sentinel that watches every window pane: marks live execution (running >>), flips delivered windows to done when their lock is released by a recorded result, marks stalled after --stall-after-sec (default 180) of silence, and nudges the controller window ONCE per stall. Started automatically by ensure-server/launches: [--server] [--poll-ms] [--stall-after-sec] [--no-nudge] [--once].",
       "launch-window": "Create one tmux-resident claude window: --window --cwd [--title] [--session-id] [--prompt-file] [--server] [--boot-wait-ms] [--claude-arg ...] [--replace] [--no-auto-trust]. Defaults to --permission-mode acceptEdits and auto-accepts the one-time folder trust dialog. Pass --resume with --session-id to restore a registered session into a fresh window after a reboot.",
       retitle: "Rename the tmux window that hosts a Wakeflow window: --window --title.",
       send: "Paste a prompt file into a window and record pane readback: --window --prompt-file [--delivery-id] [--lock-ttl-sec] [--force].",
       readback: "Capture the current pane tail for evidence: --window [--lines].",
       "release-lock": "Remove the shared in-flight delivery lock for a window: --window.",
-      "wait-results": "Block until target results exist for a dispatch group: --group [--state-root <path>] [--target <window>...|--expect N] [--timeout-sec] [--poll-ms]. Scans both the delivery store and the state root target-results.",
+      "wait-results": "Explicit synchronous wait for target results of one dispatch group (scans both result layers; pure observation, no lock or glyph side effects). NOT a default dispatch step: the controller-return delivery is the wake-up and the activity monitor handles done/stalled. Use for scripted flows that must block: --group <id> [--target <w>...] [--expect n] [--timeout-sec] [--poll-ms] [--state-root <path>].",
       "attach-window": "Print the tmux attach/switch command for a window; --open-tab opens a new tab in the current terminal app (iTerm2 preferred) running attach. --window [--open-tab].",
       "launch-all": "Resume every registered window in canonical order (Design, controller, products, Test) using the recorded permissionMode, skipping in-flight windows: [--server <name>].",
       "set-unattended": "Set hosts.claude-code.permissionMode (acceptEdits|bypassPermissions|...) and report which live windows need a resume-restart: --mode <m> [--write].",

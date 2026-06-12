@@ -289,8 +289,9 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   markers. Commands do not replace acceptance.
 - After a real direct-thread send is recorded as `status=sent` with
   `readback.ok=true`, stop the current send turn. Do not sleep, poll, or wait
-  in the controller window; the background `wakeflow-claude-host wait-results`
-  watcher is the only allowed wait for target results.
+  in the controller window; the wake-up is the target's controller-return
+  delivery, and the always-on activity-monitor sentinel marks done/stalled
+  states and nudges the controller once when a delivered window goes silent.
 - Keep-live belongs to unattended support only. It is not task logic, transport,
   or acceptance evidence.
 - Delivery prompts must be compact wakeup envelopes. Target prompts default to

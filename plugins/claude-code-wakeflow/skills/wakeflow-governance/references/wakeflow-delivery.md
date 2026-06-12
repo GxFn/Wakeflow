@@ -63,11 +63,11 @@ Every Wakeflow window (controller included) is a tmux-resident interactive
 the dispatch group's stored controller window, recorded the same way.
 
 Once send/readback is recorded as sent and readback-ok, stop the controller
-turn; do not poll for target completion. The only allowed wait is the
-background `wait-results --group <id> --target <windowA> --target <windowB>
-[--timeout-sec N]` watcher: it completes when all expected target result
-envelopes exist (also releasing those windows' locks) and wakes the
-controller; a timeout means a stalled delivery to review. Recovery is not a
+turn; do not poll for target completion. The wake-up is the target's
+controller-return delivery, and the activity-monitor sentinel watches every delivered window: it flips the tab to done when the result lands (lock released), marks it stalled after the silence threshold, and nudges the controller window once for a stall — a dead window that can never send its own controller-return still wakes the controller. `wait-results
+--group <id> [--target <w>...] [--timeout-sec N]` remains available as an
+EXPLICIT synchronous wait for scripted flows only (pure observation, no lock
+or glyph side effects); it is not a default dispatch step. Recovery is not a
 mode: a dead window's session is finished or recovered headless with
 `launch-window --resume --session-id <registered id> --replace (interactive; headless claude -p bills the separate Agent SDK credit from 2026-06-15)`, then relaunched with
 `launch-window --replace --session-id <same id>`. (Claude Code desktop windows

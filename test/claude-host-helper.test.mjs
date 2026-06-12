@@ -50,6 +50,7 @@ test("preflight reports tmux and recommendation", () => {
 
 test("launch-window, send, readback, lock, and wait-results work end to end", { skip: !tmuxPresent }, async (t) => {
   const root = makeWorkspace();
+  const noAuto = { WAKEFLOW_DISABLE_MONITOR: "1" };
   t.after(killServer);
 
   const promptFile = path.join(root, "entry-prompt.txt");
@@ -63,7 +64,7 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
     "--cwd", "RepoA",
     "--prompt-file", promptFile,
     "--boot-wait-ms", "800",
-  ]));
+  ], noAuto));
   assert.equal(launched.ok, true);
   assert.match(launched.windowId, /^@/);
   assert.equal(launched.title, "RepoA Work");
@@ -85,19 +86,19 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
     "--prompt-file", deliveryPrompt,
     "--delivery-id", "dlv-test-1",
     "--readback-wait-ms", "700",
-  ]));
+  ], noAuto));
   assert.equal(sent.ok, true);
   assert.match(sent.readback.paneTail, /wakeflow-delivery-marker line-one/);
   assert.match(sent.readback.paneTail, /line-two/);
   assert.ok(existsSync(path.join(root, sent.lockFile)), "send must create the shared window lock");
 
-  const busyStatus = parseOk(runHelper(root, ["window-status"]));
+  const busyStatus = parseOk(runHelper(root, ["window-status"], noAuto));
   assert.equal(busyStatus.windows.find((row) => row.window === "RepoA").state, "busy", "send marks the window busy");
 
   // A SAME-host fresh lock is advisory: re-send proceeds with a warning (a
   // controller-return to a window holding its own inbound lock must not
   // deadlock). Only a CROSS-host lock hard-blocks.
-  const sameHostResend = parseOk(runHelper(root, ["send", "--window", "RepoA", "--prompt-file", deliveryPrompt]));
+  const sameHostResend = parseOk(runHelper(root, ["send", "--window", "RepoA", "--prompt-file", deliveryPrompt], noAuto));
   assert.match(sameHostResend.lockWarning || "", /same-host delivery lock/);
   assert.equal(sameHostResend.deliveryId, "dlv-test-1", "same-host resend without an explicit id preserves the locked delivery id");
   const sameHostLock = JSON.parse(readFileSync(path.join(root, sent.lockFile), "utf8"));
@@ -110,20 +111,20 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
     deliveryId: "dlv-codex", createdAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 3600_000).toISOString(),
   }));
-  const crossHostSend = runHelper(root, ["send", "--window", "RepoA", "--prompt-file", deliveryPrompt]);
+  const crossHostSend = runHelper(root, ["send", "--window", "RepoA", "--prompt-file", deliveryPrompt], noAuto);
   assert.notEqual(crossHostSend.status, 0);
   assert.match(crossHostSend.stderr + crossHostSend.stdout, /fresh in-flight delivery lock from host codex/);
 
-  const readback = parseOk(runHelper(root, ["readback", "--window", "RepoA", "--lines", "30"]));
+  const readback = parseOk(runHelper(root, ["readback", "--window", "RepoA", "--lines", "30"], noAuto));
   assert.equal(readback.alive, true);
   assert.match(readback.paneTail, /wakeflow-entry-sync-marker/);
 
-  const retitled = parseOk(runHelper(root, ["retitle", "--window", "RepoA", "--title", "RepoA Focus"]));
+  const retitled = parseOk(runHelper(root, ["retitle", "--window", "RepoA", "--title", "RepoA Focus"], noAuto));
   assert.equal(retitled.title, "RepoA Focus");
 
-  const stalled = runHelper(root, ["wait-results", "--group", "grp-1", "--target", "RepoA", "--timeout-sec", "1", "--poll-ms", "250"]);
+  const stalled = runHelper(root, ["wait-results", "--group", "grp-1", "--target", "RepoA", "--timeout-sec", "1", "--poll-ms", "250"], noAuto);
   assert.notEqual(stalled.status, 0);
-  assert.equal(JSON.parse(stalled.stdout).status, "stalled");
+  assert.equal(JSON.parse(stalled.stdout).status, "timeout");
 
   const resultsDir = path.join(root, ".workspace-local/wakeflow-delivery/target-results");
   mkdirSync(resultsDir, { recursive: true });
@@ -135,7 +136,7 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
     status: "completed",
     reportedAt: new Date().toISOString(),
   }));
-  const ready = parseOk(runHelper(root, ["wait-results", "--group", "grp-1", "--target", "RepoA", "--timeout-sec", "5", "--poll-ms", "250"]));
+  const ready = parseOk(runHelper(root, ["wait-results", "--group", "grp-1", "--target", "RepoA", "--timeout-sec", "5", "--poll-ms", "250"], noAuto));
   assert.equal(ready.status, "ready");
   assert.deepEqual(ready.windows, ["RepoA"]);
   assert.ok(existsSync(path.join(root, sent.lockFile)), "wait-results is a pure observer: the lock is untouched (core release / sentinel own it)");
@@ -143,17 +144,17 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
   // the sentinel flips busy -> done once the lock is released (as the core
   // record/import path does after a real result)
   rmSync(path.join(root, sent.lockFile), { force: true });
-  parseOk(runHelper(root, ["activity-monitor", "--server", serverSession, "--once"]));
+  parseOk(runHelper(root, ["activity-monitor", "--server", serverSession, "--once"], noAuto));
 
-  const attach = parseOk(runHelper(root, ["attach-window", "--window", "RepoA"]));
+  const attach = parseOk(runHelper(root, ["attach-window", "--window", "RepoA"], noAuto));
   assert.match(attach.attach, new RegExp(serverSession));
 
-  const status = parseOk(runHelper(root, ["window-status"]));
+  const status = parseOk(runHelper(root, ["window-status"], noAuto));
   const repoRow = status.windows.find((row) => row.window === "RepoA");
   assert.equal(repoRow.alive, true);
   assert.equal(repoRow.state, "done", "wait-results marks the window done");
 
-  const reconciled = parseOk(runHelper(root, ["window-status", "--reconcile"]));
+  const reconciled = parseOk(runHelper(root, ["window-status", "--reconcile"], noAuto));
   const cleared = reconciled.windows.find((row) => row.window === "RepoA");
   assert.equal(cleared.state, "", "reconcile clears transient done state when no fresh lock");
 });
@@ -303,7 +304,7 @@ test("launch-window --replace kills the old window instead of leaking an orphan"
   assert.ok(after.includes(second.windowId), "new window is alive");
 });
 
-test("activity-monitor sentinel: stall nudges the controller once, late result flips to done", { skip: !tmuxPresent }, async (t) => {
+test("sentinel: --once flips a delivered window to done when its lock is released; controller exempt", { skip: !tmuxPresent }, async (t) => {
   const root = makeWorkspace();
   writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
     workspaceName: "SentinelFlow", controllerWindow: "SentinelFlow",
@@ -311,59 +312,57 @@ test("activity-monitor sentinel: stall nudges the controller once, late result f
     repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
   }));
   t.after(killServer);
-
   const noAuto = { WAKEFLOW_DISABLE_MONITOR: "1" };
-  parseOk(runHelper(root, ["launch-window", "--server", serverSession, "--window", "SentinelFlow", "--cwd", ".", "--boot-wait-ms", "400"], noAuto));
-  const launched = parseOk(runHelper(root, ["launch-window", "--server", serverSession, "--window", "RepoA", "--cwd", "RepoA", "--boot-wait-ms", "400"], noAuto));
-  const prompt = path.join(root, "p.txt");
-  writeFileSync(prompt, "task\n");
-  parseOk(runHelper(root, ["send", "--window", "RepoA", "--prompt-file", prompt, "--delivery-id", "dlv-sentinel", "--readback-wait-ms", "200"], noAuto));
+  const ctrl = parseOk(runHelper(root, ["launch-window", "--server", serverSession, "--window", "SentinelFlow", "--cwd", ".", "--boot-wait-ms", "400"], noAuto));
+  const repo = parseOk(runHelper(root, ["launch-window", "--server", serverSession, "--window", "RepoA", "--cwd", "RepoA", "--boot-wait-ms", "400"], noAuto));
+  const readState = (wid) => spawnSync("tmux", ["show-options", "-w", "-q", "-v", "-t", wid, "@wakeflow_state"], { encoding: "utf8" }).stdout.trim();
 
-  // run the sentinel loop detached with a tiny stall threshold
-  const monitor = spawn(process.execPath, [helperScript, "activity-monitor", "--root", root, "--server", serverSession, "--poll-ms", "500", "--stall-after-sec", "1"], { detached: true, stdio: "ignore", env: { ...process.env, WAKEFLOW_CLAUDE_BIN: path.join(root, "stub-claude") } });
-  monitor.unref();
-  t.after(() => { try { process.kill(monitor.pid); } catch { /* already gone */ } });
+  // delivered window: busy + lock -> stays busy (the monitor never judges silence)
+  spawnSync("tmux", ["set-option", "-w", "-t", repo.windowId, "@wakeflow_state", "busy"], { encoding: "utf8" });
+  const locksDir = path.join(root, ".workspace-local/wakeflow-delivery/locks");
+  mkdirSync(locksDir, { recursive: true });
+  const lockFile = path.join(locksDir, "RepoA.json");
+  writeFileSync(lockFile, JSON.stringify({
+    kind: "WakeflowWindowDeliveryLock", windowName: "RepoA", host: "claude-code",
+    deliveryId: "dlv-1", createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+  }));
+  parseOk(runHelper(root, ["activity-monitor", "--server", serverSession, "--once"]));
+  assert.equal(readState(repo.windowId), "busy", "locked delivered window stays busy; silence is never auto-judged");
 
-  const readState = () => spawnSync("tmux", ["show-options", "-w", "-q", "-v", "-t", launched.windowId, "@wakeflow_state"], { encoding: "utf8" }).stdout.trim();
-  const waitForState = async (want, timeoutMs) => {
-    const deadline = Date.now() + timeoutMs;
-    let state = readState();
-    while (state !== want && Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 500));
-      state = readState();
-    }
-    return state;
-  };
-  // generous deadline: the full suite runs under heavy parallel load
-  assert.equal(await waitForState("stalled", 12000), "stalled", "silent delivered window is marked stalled");
-  const readControllerPane = () => spawnSync("tmux", ["capture-pane", "-p", "-t", `${serverSession}:1`], { encoding: "utf8" }).stdout;
-  {
-    const deadline = Date.now() + 6000;
-    while (!/stall notice: window RepoA/.test(readControllerPane()) && Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 500));
-    }
-  }
-  assert.match(readControllerPane(), /stall notice: window RepoA/, "controller received the stall nudge");
+  // core releases the lock (result recorded) -> done
+  rmSync(lockFile, { force: true });
+  parseOk(runHelper(root, ["activity-monitor", "--server", serverSession, "--once"]));
+  assert.equal(readState(repo.windowId), "done", "lock release flips the window to done");
 
-  // late result: the core release deletes the lock -> sentinel flips to done
-  rmSync(path.join(root, ".workspace-local/wakeflow-delivery/locks/RepoA.json"), { force: true });
-  assert.equal(await waitForState("done", 8000), "done", "late result flips the stalled window to done");
+  // controller never enters the delivery lifecycle
+  spawnSync("tmux", ["set-option", "-w", "-t", ctrl.windowId, "@wakeflow_state", "busy"], { encoding: "utf8" });
+  parseOk(runHelper(root, ["activity-monitor", "--server", serverSession, "--once"]));
+  assert.equal(readState(ctrl.windowId), "busy", "controller is exempt from done transitions");
+  spawnSync("tmux", ["set-option", "-w", "-u", "-t", ctrl.windowId, "@wakeflow_state"], { encoding: "utf8" });
+
+  // residue from the removed stall feature migrates back to busy while locked
+  spawnSync("tmux", ["set-option", "-w", "-t", repo.windowId, "@wakeflow_state", "stalled"], { encoding: "utf8" });
+  writeFileSync(lockFile, JSON.stringify({ kind: "WakeflowWindowDeliveryLock", windowName: "RepoA", host: "claude-code", deliveryId: "dlv-2", createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 3600_000).toISOString() }));
+  parseOk(runHelper(root, ["activity-monitor", "--server", serverSession, "--once"]));
+  assert.equal(readState(repo.windowId), "busy", "legacy stalled residue migrates to busy");
 });
 
 test("sentinel: changing pane content counts as activity (long tool calls never stall)", { skip: !tmuxPresent }, async (t) => {
   const root = makeWorkspace();
+  const activeSession = `${serverSession}-s2`;
   writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
     workspaceName: "ActiveFlow", controllerWindow: "ActiveFlow",
-    hosts: { "claude-code": { tmuxSession: serverSession } },
+    hosts: { "claude-code": { tmuxSession: activeSession } },
     repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
   }));
   // a "claude" whose pane updates every second WITHOUT any esc-to-interrupt
   // hint — exactly the long-tool-call rendering that fooled the hint regex
   writeFileSync(path.join(root, "stub-claude"), "#!/bin/sh\nwhile true; do date; sleep 1; done\n", { mode: 0o755 });
-  t.after(killServer);
+  t.after(() => spawnSync("tmux", ["kill-session", "-t", activeSession], { encoding: "utf8" }));
 
   const noAuto = { WAKEFLOW_DISABLE_MONITOR: "1" };
-  const launched = parseOk(runHelper(root, ["launch-window", "--server", serverSession, "--window", "RepoA", "--cwd", "RepoA", "--boot-wait-ms", "400"], noAuto));
+  const launched = parseOk(runHelper(root, ["launch-window", "--server", activeSession, "--window", "RepoA", "--cwd", "RepoA", "--boot-wait-ms", "400"], noAuto));
   // simulate a delivered window: busy + lock
   spawnSync("tmux", ["set-option", "-w", "-t", launched.windowId, "@wakeflow_state", "busy"], { encoding: "utf8" });
   const locksDir = path.join(root, ".workspace-local/wakeflow-delivery/locks");
@@ -374,13 +373,12 @@ test("sentinel: changing pane content counts as activity (long tool calls never 
     expiresAt: new Date(Date.now() + 3600_000).toISOString(),
   }));
 
-  const monitor = spawn(process.execPath, [helperScript, "activity-monitor", "--root", root, "--server", serverSession, "--poll-ms", "500", "--stall-after-sec", "1"], { detached: true, stdio: "ignore", env: { ...process.env, WAKEFLOW_CLAUDE_BIN: path.join(root, "stub-claude") } });
+  const monitor = spawn(process.execPath, [helperScript, "activity-monitor", "--root", root, "--server", activeSession, "--poll-ms", "500"], { detached: true, stdio: "ignore", env: { ...process.env, WAKEFLOW_CLAUDE_BIN: path.join(root, "stub-claude") } });
   monitor.unref();
   t.after(() => { try { process.kill(monitor.pid); } catch { /* gone */ } });
 
   await new Promise((r) => setTimeout(r, 4000));
   const state = spawnSync("tmux", ["show-options", "-w", "-q", "-v", "-t", launched.windowId, "@wakeflow_state"], { encoding: "utf8" }).stdout.trim();
-  assert.notEqual(state, "stalled", "an actively-updating pane must never be marked stalled");
   assert.equal(state, "running", "content change lights the running badge");
 });
 

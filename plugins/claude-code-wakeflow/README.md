@@ -67,19 +67,17 @@ interactive Claude Code session pinned to one responsibility, and the status
 bar tells you who is doing what at a glance:
 
 ```text
-[alembic]  1:Design   >> 2:Controller   3:RepoA  >  4:RepoB   5:Test   6:zsh
-            idle      green = executing  idle    yellow =      idle    yours,
-                      a turn right now           delivery              untouched
-                                                 in flight
+[alembic]  1:Design   >> 2:Controller   3:RepoA  +  4:RepoB   5:Test   6:zsh
+            idle      green = executing  idle    result       idle    yours,
+                      a turn right now           ready for            untouched
+                                                 review
 ```
 
 | Badge | Meaning |
 | --- | --- |
 | green `>>` block | the window is executing a turn right now (live activity monitor) |
-| yellow `>` block | a delivery was sent and the result is still pending |
-| red `!` block | the delivery stalled past its timeout |
 | green `+` | a result arrived and is ready for controller review |
-| no badge | idle |
+| no badge | idle, or a delivery quietly in flight (the fleet's normal state; `window-status` reports the machine states when needed) |
 
 | Window | Role | Default reasoning effort |
 | --- | --- | --- |
@@ -89,9 +87,8 @@ bar tells you who is doing what at a glance:
 | Test | real-scenario verification the repos cannot self-run | `xhigh` |
 
 Inside every pane a seeded statusline shows the live serving model and the
-window identity (`Fable 5 . RepoA`), and flags a warning the moment a session
-drifts off the model pinned in `modelByRole`. Windows survive reboots: the
-same session resumes with its full conversation.
+window identity (`Fable 5 . RepoA`) in plain text. Windows survive reboots:
+the same session resumes with its full conversation.
 
 ### Layer 2 — the loop (how work moves)
 
@@ -231,8 +228,8 @@ runs `send --window <target> --prompt-file <file>`. The helper enforces a
 shared per-window delivery lock, pastes the prompt through a tmux buffer, and
 returns pane readback evidence; the agent records it with
 `wakeflow_record_delivery`. Target windows controller-return the same way
-toward the controller window. `wait-results --group <id>` can run as a
-background watcher for stall insurance.
+toward the controller window. `wait-results --group <id>` is available only for
+explicit synchronous waits in scripted flows; normal dispatch does not arm it.
 
 **Recovery.** When a tmux window dies, the registered session id remains the
 thread id: relaunch the SAME session interactively with `launch-window --resume --session-id <registered id> --replace` (same id; subscription pool). Headless `claude -p --resume` is a last resort that bills the separate Agent SDK credit from 2026-06-15; if used, then
@@ -357,8 +354,8 @@ Core rules:
   and returns pane readback evidence that the agent records with
   `wakeflow_record_delivery`.
 - Targets controller-return through the same helper send toward the
-  controller window; `wait-results --group <id>` can run as a background
-  watcher for stall insurance.
+  controller window; `wait-results --group <id>` is available only for explicit
+  synchronous waits in scripted flows.
 - `group-ready` waits for the expected target results before a controller
   return.
 - `per-target` can wake the controller once per target while still preserving

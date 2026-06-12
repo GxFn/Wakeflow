@@ -290,8 +290,9 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
 - After a real direct-thread send is recorded as `status=sent` with
   `readback.ok=true`, stop the current send turn. Do not sleep, poll, or wait
   in the controller window; the wake-up is the target's controller-return
-  delivery, and the always-on activity-monitor sentinel marks done/stalled
-  states and nudges the controller once when a delivered window goes silent.
+  delivery; the always-on activity monitor marks done when a result lands.
+  Silence is never auto-judged: whether a quiet window is stalled is the
+  controller's judgment, made when it chooses to inspect.
 - Keep-live belongs to unattended support only. It is not task logic, transport,
   or acceptance evidence.
 - Delivery prompts must be compact wakeup envelopes. Target prompts default to

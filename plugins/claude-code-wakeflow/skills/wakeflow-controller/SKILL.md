@@ -28,9 +28,7 @@ After a delivery is sent, read back, and recorded as `status=sent` with
 turn open with `sleep`, repeated result review, repeated session reads, or
 manual polling. The target returns later through a `TargetResultEnvelope` and,
 if policy allows, a controller-return delivery sent to the controller's own
-tmux window. Stall insurance is automatic: the activity-monitor sentinel watches every delivered window: it flips the tab to done when the result lands (lock released), marks it stalled after the silence threshold, and nudges the controller window once for a stall — a dead window that can never send its own controller-return still wakes the controller. Do not
-arm per-dispatch watchers; `wait-results` exists only as an explicit
-synchronous wait for scripted flows (pure observation, no side effects).
+tmux window. The activity monitor flips the tab to done when the result lands (lock released). Silence is never auto-judged: a long quiet spell may be a legitimate long tool call, so whether a window is stalled is the CONTROLLER'S judgment, made when it chooses to inspect (window-status, pane readback, the dispatch group). Do not arm per-dispatch watchers; `wait-results` exists only as an explicit synchronous wait for scripted flows (pure observation, no side effects).
 
 ## Source Practices For Acceptance
 
@@ -94,8 +92,8 @@ machine state.
 8. Read back the helper send evidence and record the delivery run with
    `wakeflow_record_delivery` (default host method `wakeflow-claude-host send`).
 9. End the dispatch turn. The controller-return delivery is the wake-up, and
-   the activity-monitor sentinel covers stalls automatically; do not arm a
-   per-dispatch watcher.
+   the activity monitor only updates live/done tab indicators; it never judges
+   quiet windows as stalled or wakes anyone. Do not arm a per-dispatch watcher.
 
 Recovery is not a delivery mode: when a target's tmux window is dead, finish or
 relaunch the same session interactively with `launch-window --resume --session-id` (headless `claude -p` bills the separate Agent SDK credit from 2026-06-15); legacy form `claude -p --resume <registered session

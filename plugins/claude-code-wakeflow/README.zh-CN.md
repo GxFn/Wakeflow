@@ -56,18 +56,16 @@ Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环�
 绑定唯一职责;状态栏一眼看清谁在干什么:
 
 ```text
-[alembic]  1:Design   >> 2:Controller   3:RepoA  >  4:RepoB   5:Test   6:zsh
-            空闲      绿块=正在执行回合   空闲    黄块=投递在途   空闲    你自己的,
+[alembic]  1:Design   >> 2:Controller   3:RepoA  +  4:RepoB   5:Test   6:zsh
+            空闲      绿块=正在执行回合   空闲    结果待评审     空闲    你自己的,
                                                                       不受影响
 ```
 
 | 徽章 | 含义 |
 | --- | --- |
 | 绿色 `>>` 色块 | 窗口此刻正在执行回合(活动监视器实时点亮) |
-| 黄色 `>` 色块 | 投递已发出,结果未回 |
-| 红色 `!` 色块 | 投递超时停滞 |
 | 绿色 `+` | 结果已落,待总控评审 |
-| 无徽章 | 空闲 |
+| 无徽章 | 空闲,或投递安静在途(舰队的常态;需要时用 `window-status` 查看机器状态) |
 
 | 窗口 | 职责 | 默认推理力度 |
 | --- | --- | --- |
@@ -77,8 +75,7 @@ Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环�
 | Test | 仓库自己做不了的真实场景验证 | `xhigh` |
 
 每个窗格底部的 statusline 实时显示服务模型与窗口身份(`Fable 5 . RepoA`),
-会话一旦偏离 `modelByRole` 钉住的模型立即亮警告。窗口跨重启存活:
-同一会话恢复,完整上下文不丢。
+纯文本无图标。窗口跨重启存活:同一会话恢复,完整上下文不丢。
 
 ### 第二层 —— 闭环(工作如何流动)
 
@@ -203,8 +200,8 @@ Wakeflow thread id 就是该窗口的 Claude Code session id，跨 resume 保持
 `send --window <target> --prompt-file <file>`。helper 强制共享的按窗口投递锁，
 通过 tmux buffer 粘贴 prompt，并返回 pane readback 证据；agent 用
 `wakeflow_record_delivery` 记录这次投递。目标窗口以同样方式向总控窗口做
-controller-return。`wait-results --group <id>` 可以作为后台 watcher 运行，
-提供 stall 保险。
+controller-return。`wait-results --group <id>` 只作为脚本化流程里的显式同步等待，
+正常投递不会自动启用它。
 
 **恢复。** tmux 窗口挂掉时，已注册的 session id 仍然是 thread id：先运行
 `launch-window --resume --session-id <已注册 id> --replace` 交互式复活同一会话（订阅额度不变）。`claude -p --resume` 仅作最后手段：2026-06-15 起 `claude -p` 走独立的 Agent SDK 额度按 API 价计费。如确需 headless，再用该 id 运行
@@ -311,7 +308,7 @@ Wakeflow 自动化是直接 session 投递加显式结果返回。
   投递锁，通过 tmux buffer 粘贴，并返回 pane readback 证据，由 agent 用
   `wakeflow_record_delivery` 记录。
 - 目标窗口通过同样的 helper send 向总控窗口 controller-return；
-  `wait-results --group <id>` 可以作为后台 watcher 提供 stall 保险。
+  `wait-results --group <id>` 只作为脚本化流程里的显式同步等待。
 - `group-ready` 会等待预期 target results，再允许 controller return。
 - `per-target` 可以每个 target 唤醒一次 controller，同时保留 group snapshot。
 - 一次真实发送被记录为 `sent` 且有 readback 证据后，总控本轮停止，不在同一轮 sleep 或 poll。

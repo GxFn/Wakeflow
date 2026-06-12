@@ -64,7 +64,7 @@ the dispatch group's stored controller window, recorded the same way.
 
 Once send/readback is recorded as sent and readback-ok, stop the controller
 turn; do not poll for target completion. The wake-up is the target's
-controller-return delivery, and the activity-monitor sentinel watches every delivered window: it flips the tab to done when the result lands (lock released), marks it stalled after the silence threshold, and nudges the controller window once for a stall — a dead window that can never send its own controller-return still wakes the controller. `wait-results
+controller-return delivery, and the activity monitor flips the delivered window's tab to done when the result lands (lock released); silence is never auto-judged — whether a quiet window is stalled is the controller's judgment, made when it chooses to inspect. `wait-results
 --group <id> [--target <w>...] [--timeout-sec N]` remains available as an
 EXPLICIT synchronous wait for scripted flows only (pure observation, no lock
 or glyph side effects); it is not a default dispatch step. Recovery is not a

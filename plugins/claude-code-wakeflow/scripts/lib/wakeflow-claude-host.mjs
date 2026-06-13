@@ -671,6 +671,31 @@ async function commandSend() {
   const windowName = requireValue("--window");
   const promptFile = requireValue("--prompt-file");
   const deliveryId = getValue("--delivery-id", "");
+  await performSend({ windowName, promptFile, deliveryId, commandName: "send" });
+}
+
+async function commandDeliver() {
+  // One-step dispatch transport: read the delivery envelope from disk (the
+  // compact prepare payload only carries its path), extract the prompt and
+  // target, write the temp prompt file itself, send, and return compact
+  // readback. Replaces the manual write-prompt-file + send ceremony.
+  const deliveryFile = path.resolve(workspaceRoot, requireValue("--delivery-file"));
+  if (!existsSync(deliveryFile)) fail(`--delivery-file does not exist: ${deliveryFile}`);
+  const envelope = readJson(deliveryFile, "delivery envelope");
+  const windowName = envelope.targetWindow || (envelope.kind === "ControllerReturnEnvelope" ? envelope.controllerWindow : null);
+  if (!windowName) fail("delivery envelope names no target window.");
+  if (!envelope.prompt) fail("delivery envelope has no prompt.");
+  const promptFile = path.join(hostDir, `deliver-${slug(envelope.deliveryId || windowName)}.txt`);
+  mkdirSync(path.dirname(promptFile), { recursive: true });
+  writeFileSync(promptFile, envelope.prompt.endsWith("\n") ? envelope.prompt : `${envelope.prompt}\n`);
+  try {
+    await performSend({ windowName, promptFile, deliveryId: envelope.deliveryId || "", commandName: "deliver" });
+  } finally {
+    rmSync(promptFile, { force: true });
+  }
+}
+
+async function performSend({ windowName, promptFile, deliveryId, commandName }) {
   const lockTtlSec = Number(getValue("--lock-ttl-sec", "7200"));
   const binding = readBinding(windowName);
   if (!windowAlive(binding)) {
@@ -728,7 +753,7 @@ async function commandSend() {
 
   output({
     ok: true,
-    command: "send",
+    command: commandName,
     lockWarning,
     windowName,
     windowId: binding.tmux.windowId,
@@ -1437,6 +1462,7 @@ function commandHelp() {
       "launch-window": "Create one tmux-resident claude window: --window --cwd [--title] [--session-id] [--prompt-file] [--server] [--boot-wait-ms] [--claude-arg ...] [--replace] [--no-auto-trust]. Defaults to --permission-mode acceptEdits and auto-accepts the one-time folder trust dialog. Pass --resume with --session-id to restore a registered session into a fresh window after a reboot.",
       retitle: "Rename the tmux window that hosts a Wakeflow window: --window --title.",
       send: "Paste a prompt file into a window and record pane readback: --window --prompt-file [--delivery-id] [--lock-ttl-sec] [--force].",
+      "deliver": "One-step dispatch transport: read the delivery envelope file, write the prompt to a temp file, send it into the registered tmux window, and return compact readback evidence: --delivery-file <envelope.json> [--readback-wait-ms] [--lines] [--force]. Replaces the manual prompt-file + send ceremony.",
       readback: "Capture the current pane tail for evidence: --window [--lines].",
       "release-lock": "Remove the shared in-flight delivery lock for a window: --window.",
       "wait-results": "Explicit synchronous wait for target results of one dispatch group (scans both result layers; pure observation, no lock or glyph side effects). NOT a default dispatch step: the controller-return delivery is the wake-up. A timeout is a report, not a verdict - whether the delivery is stalled is the controller judgment: --group <id> [--target <w>...] [--expect n] [--timeout-sec] [--poll-ms] [--state-root <path>].",
@@ -1460,6 +1486,7 @@ async function main() {
     case "launch-window": return commandLaunchWindow();
     case "retitle": return commandRetitle();
     case "send": return commandSend();
+    case "deliver": return commandDeliver();
     case "readback": return commandReadback();
     case "release-lock": return commandReleaseLock();
     case "wait-results": return commandWaitResults();

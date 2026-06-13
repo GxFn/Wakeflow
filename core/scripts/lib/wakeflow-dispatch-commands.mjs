@@ -294,8 +294,7 @@ export function createDispatchCommands(ctx) {
         writeWindowLock(envelope.targetWindow, { deliveryId: envelope.deliveryId });
       }
     }
-    output(
-      {
+    const buildPayload = {
         ok: true,
         command: "build-delivery",
         wrote: write,
@@ -304,7 +303,25 @@ export function createDispatchCommands(ctx) {
         threadReady: Boolean(registration),
         threadIdRedacted: Boolean(registration),
         windowLockWarning,
-      },
+    };
+    output(
+      hasFlag("--compact")
+        ? {
+            ok: true,
+            command: "build-delivery",
+            wrote: write,
+            compact: true,
+            deliveryId: envelope.deliveryId,
+            targetWindow: envelope.targetWindow,
+            taskId: envelope.taskId,
+            dispatchGroup: envelope.dispatchGroup,
+            returnRoute: envelope.returnRoute,
+            prompt: envelope.prompt,
+            deliveryFile: buildPayload.deliveryFile,
+            threadReady: buildPayload.threadReady,
+            windowLockWarning,
+          }
+        : buildPayload,
       [
         `${write ? "Created" : "Would create"} delivery envelope ${envelope.deliveryId}.`,
         `Target: ${envelope.targetWindow}`,
@@ -464,18 +481,30 @@ export function createDispatchCommands(ctx) {
         targetTaskId,
         humanContextRef,
         windowName: targetWindow,
-        windowConfig,
-        configFile: write ? path.relative(workspaceRoot, windowConfigFileFor(targetWindow)) : "",
-        packet: existingPacket || packet,
-        dispatchGroup: dispatchGroupRecord,
+        // --compact: the structured artifacts live on disk (deliveryFile /
+        // packetFile); embedding them in every payload was the controller's
+        // single biggest context burner (60-70KB per dispatch in production).
+        ...(hasFlag("--compact")
+          ? {
+              compact: true,
+              deliveryId: (existingEnvelope || envelope).deliveryId,
+              dispatchGroup: packet.dispatchGroup,
+              prompt: (existingPacket || packet).prompt,
+            }
+          : {
+              windowConfig,
+              configFile: write ? path.relative(workspaceRoot, windowConfigFileFor(targetWindow)) : "",
+              packet: existingPacket || packet,
+              dispatchGroup: dispatchGroupRecord,
+              dispatchGroupFile: write && dispatchGroupRecord ? path.relative(workspaceRoot, dispatchGroupFile) : "",
+              envelope: redactDeliveryEnvelope(existingEnvelope || envelope),
+            }),
         packetFile: write ? path.relative(workspaceRoot, packetFile) : "",
-        dispatchGroupFile: write && dispatchGroupRecord ? path.relative(workspaceRoot, dispatchGroupFile) : "",
-        envelope: redactDeliveryEnvelope(existingEnvelope || envelope),
         deliveryFile: write ? path.relative(workspaceRoot, deliveryFile) : "",
         threadReady: Boolean(registration),
         threadIdRedacted: Boolean(registration),
         windowLockWarning,
-        forbiddenConclusions: [
+        forbiddenConclusions: hasFlag("--compact") ? undefined : [
           "prepared-dispatch-is-host-send",
           "prepared-dispatch-is-target-result",
           "prepared-dispatch-is-controller-acceptance",
@@ -575,7 +604,9 @@ export function createDispatchCommands(ctx) {
         ok: true,
         command: "build-controller-return",
         wrote: write,
-        envelope: redactDeliveryEnvelope(envelope),
+        ...(hasFlag("--compact")
+          ? { compact: true, deliveryId: envelope.deliveryId, controllerWindow: envelope.controllerWindow, dispatchGroup: envelope.dispatchGroup, prompt: envelope.prompt }
+          : { envelope: redactDeliveryEnvelope(envelope) }),
         returnFile: write ? path.relative(workspaceRoot, returnFile) : "",
         threadReady: Boolean(registration),
         threadIdRedacted: Boolean(registration),

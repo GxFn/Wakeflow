@@ -324,7 +324,9 @@ export function createResultRecordingCommands(ctx) {
           duplicate: true,
           idempotentReplay: true,
           status: existingRun.status,
-          run: existingRun,
+          ...(hasFlag("--compact")
+            ? { compact: true, deliveryRunId: existingRun.deliveryRunId, deliveryId: existingRun.deliveryId, targetWindow: existingRun.targetWindow }
+            : { run: existingRun }),
           runFile: path.relative(workspaceRoot, runFile),
           stateUpdate,
           windowLock,
@@ -350,7 +352,11 @@ export function createResultRecordingCommands(ctx) {
         command: "record-delivery-run",
         wrote: true,
         status,
-        run,
+        // --compact: the run record is on disk at runFile; echoing it back was
+        // pure context burn
+        ...(hasFlag("--compact")
+          ? { compact: true, deliveryRunId: run.deliveryRunId, deliveryId: run.deliveryId, targetWindow: run.targetWindow }
+          : { run }),
         runFile: path.relative(workspaceRoot, runFile),
         stateUpdate,
         windowLock,
@@ -516,7 +522,10 @@ export function createResultRecordingCommands(ctx) {
         lockReleased,
         wrote: write,
         superseded: Boolean(supersededFile),
-        result,
+        // --compact: the envelope is on disk at resultFile
+        ...(hasFlag("--compact")
+          ? { compact: true, resultId: result.resultId, status: result.status, dispatchGroup: result.dispatchGroup, targetWindow: result.targetWindow, taskId: result.taskId }
+          : { result }),
         resultFile: write ? path.relative(workspaceRoot, resultFile) : "",
         supersededFile: supersededFile && write ? path.relative(workspaceRoot, supersededFile) : undefined,
       },

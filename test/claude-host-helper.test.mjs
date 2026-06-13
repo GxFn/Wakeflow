@@ -377,9 +377,14 @@ test("sentinel: changing pane content counts as activity (long tool calls never 
   monitor.unref();
   t.after(() => { try { process.kill(monitor.pid); } catch { /* gone */ } });
 
-  await new Promise((r) => setTimeout(r, 4000));
-  const state = spawnSync("tmux", ["show-options", "-w", "-q", "-v", "-t", launched.windowId, "@wakeflow_state"], { encoding: "utf8" }).stdout.trim();
-  assert.equal(state, "running", "content change lights the running badge");
+  const readActiveState = () => spawnSync("tmux", ["show-options", "-w", "-q", "-v", "-t", launched.windowId, "@wakeflow_state"], { encoding: "utf8" }).stdout.trim();
+  {
+    const deadline = Date.now() + 12000;
+    while (readActiveState() !== "running" && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  assert.equal(readActiveState(), "running", "content change lights the running badge");
 });
 
 test("send to the controller window is a lock-free notification (no busy residue)", { skip: !tmuxPresent }, async (t) => {
@@ -437,6 +442,30 @@ test("seed-permissions keeps committed settings portable and migrates old residu
   parseOk(runHelper(root, ["seed-permissions", "--write"]));
   const rootCommitted = JSON.parse(readFileSync(path.join(rootSettings, "settings.json"), "utf8"));
   assert.equal(rootCommitted.statusLine.command, "my-custom-statusline", "custom statusLine untouched");
+});
+
+test("deliver sends straight from a delivery envelope file (one-step transport)", { skip: !tmuxPresent }, async (t) => {
+  const root = makeWorkspace();
+  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+    workspaceName: "DeliverFlow", controllerWindow: "DeliverFlow",
+    hosts: { "claude-code": { tmuxSession: serverSession } },
+    repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
+  }));
+  t.after(killServer);
+  const noAuto = { WAKEFLOW_DISABLE_MONITOR: "1" };
+  parseOk(runHelper(root, ["launch-window", "--server", serverSession, "--window", "RepoA", "--cwd", "RepoA", "--boot-wait-ms", "400"], noAuto));
+
+  const envelopeFile = path.join(root, "delivery.json");
+  writeFileSync(envelopeFile, JSON.stringify({
+    kind: "DeliveryEnvelope", deliveryId: "dlv-deliver-1", targetWindow: "RepoA",
+    taskId: "T1", dispatchGroup: "G1", prompt: "Continue current window task: RepoA / T1.",
+  }));
+  const sent = parseOk(runHelper(root, ["deliver", "--delivery-file", "delivery.json", "--readback-wait-ms", "300"], noAuto));
+  assert.equal(sent.command, "deliver");
+  assert.equal(sent.deliveryId, "dlv-deliver-1");
+  assert.match(sent.readback.paneTail, /RepoA \/ T1/, "prompt landed in the pane");
+  const lock = JSON.parse(readFileSync(path.join(root, ".workspace-local/wakeflow-delivery/locks/RepoA.json"), "utf8"));
+  assert.equal(lock.deliveryId, "dlv-deliver-1", "lock carries the envelope delivery id");
 });
 
 test("send refuses when no binding exists and release-lock is idempotent", () => {

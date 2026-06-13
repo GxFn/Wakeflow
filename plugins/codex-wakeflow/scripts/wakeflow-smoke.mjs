@@ -363,10 +363,15 @@ async function runMcpSmoke(rootPath) {
       },
     });
     const preparedPayload = JSON.parse(prepared.result.content?.[0]?.text);
+    // MCP payloads are compact by default: the prompt is still present, the
+    // full envelope lives on disk at deliveryFile.
+    const preparedJson = preparedPayload.parsedJson;
+    const preparedPrompt = preparedJson?.prompt ?? preparedJson?.envelope?.prompt;
     if (
       !preparedPayload.ok
-      || preparedPayload.parsedJson?.command !== "prepare-dispatch-from-state"
-      || !preparedPayload.parsedJson?.envelope?.prompt?.includes("mcp-smoke-task")
+      || preparedJson?.command !== "prepare-dispatch-from-state"
+      || !preparedPrompt?.includes("mcp-smoke-task")
+      || !preparedJson?.deliveryFile
     ) {
       throw new Error("MCP wakeflow_prepare_delivery did not create a target delivery envelope");
     }

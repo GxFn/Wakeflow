@@ -79,9 +79,12 @@ machine state.
 5. Build a dispatch packet from the state root.
 6. Build a delivery envelope.
 7. Send the envelope prompt exactly as stored in the envelope with the tmux
-   host helper: write the prompt to a temp file, then run
-   `node <plugin>/scripts/lib/wakeflow-claude-host.mjs send --root <workspace>
-   --window <targetWindow> --prompt-file <file> [--delivery-id <id>]`. The
+   host helper in ONE step:
+   `node <plugin>/scripts/lib/wakeflow-claude-host.mjs deliver --root <workspace>
+   --delivery-file <deliveryFile from the prepare payload>` — it reads the
+   envelope from disk, writes its own temp prompt file, sends, and returns
+   compact readback. (The lower-level `send --window --prompt-file` form
+   remains for custom prompts.) The
    helper enforces the shared per-window delivery lock
    (`.workspace-local/wakeflow-delivery/locks/<window>.json`, one in-flight
    delivery per window across hosts), pastes the prompt into the target's tmux

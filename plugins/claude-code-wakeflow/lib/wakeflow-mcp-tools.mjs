@@ -180,6 +180,7 @@ export const tools = [
       required: ["direction"],
       properties: {
         root: { type: "string" },
+        verbose: { type: "boolean", description: "Return the full structured payload (envelope/packet/run echoes). Default is a compact summary; the artifacts are on disk at the reported file paths." },
         direction: { type: "string", enum: ["target", "controller-return"] },
         stateRoot: { type: "string" },
         taskId: { type: "string" },
@@ -204,6 +205,7 @@ export const tools = [
       required: ["deliveryFile", "status"],
       properties: {
         root: { type: "string" },
+        verbose: { type: "boolean", description: "Return the full structured payload (envelope/packet/run echoes). Default is a compact summary; the artifacts are on disk at the reported file paths." },
         deliveryFile: { type: "string" },
         status: { type: "string", enum: ["sent", "blocked", "failed"] },
         evidence: { type: "string" },
@@ -224,6 +226,7 @@ export const tools = [
       required: ["stateRoot", "targetWindow", "taskId", "status"],
       properties: {
         root: { type: "string" },
+        verbose: { type: "boolean", description: "Return the full structured payload (envelope/packet/run echoes). Default is a compact summary; the artifacts are on disk at the reported file paths." },
         stateRoot: { type: "string" },
         targetWindow: { type: "string" },
         taskId: { type: "string" },
@@ -593,7 +596,8 @@ export const handlers = {
           ...(args.automationEnabled ? ["--automation-enabled"] : []),
           ...rootArgs(args),
           "--write",
-          "--json",
+          ...(args.verbose ? [] : ["--compact"]),
+      "--json",
         ],
       });
     }
@@ -613,7 +617,8 @@ export const handlers = {
         ...(args.automationEnabled ? ["--automation-enabled"] : []),
         ...rootArgs(args),
         "--write",
-        "--json",
+        ...(args.verbose ? [] : ["--compact"]),
+      "--json",
       ],
     });
   },
@@ -631,6 +636,7 @@ export const handlers = {
       ...rootArgs(args),
       "--write",
       ...(args.deliveryRunId ? ["--delivery-run-id", args.deliveryRunId] : []),
+      ...(args.verbose ? [] : ["--compact"]),
       "--json",
     ],
   }),
@@ -649,6 +655,7 @@ export const handlers = {
       ...repeatValues("--risk", args.risks),
       ...rootArgs(args),
       "--write",
+      ...(args.verbose ? [] : ["--compact"]),
       "--json",
     ],
   }),

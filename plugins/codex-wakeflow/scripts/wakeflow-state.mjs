@@ -775,7 +775,7 @@ function targetTaskDeliveryContext(targetTask) {
     deliveryEnvelopeFile: envelope ? relative(envelopeFile) : null,
     deliveryEnvelopeFound: Boolean(envelope),
     resolution: !deliveryId
-      ? "missing-delivery-metadata"
+      ? "state-only-result"
       : !envelope
         ? "missing-delivery-envelope"
         : returnRoute === "controller"
@@ -788,7 +788,12 @@ function targetTaskDeliveryContext(targetTask) {
   };
 }
 
-function targetResultAgentNext(deliveryContext) {
+function targetResultAgentNext(deliveryContext, reviewReadiness) {
+  // The controller-return is the loop's wake-up: when the envelope requires
+  // it, that guidance always wins; the reduce hint only applies otherwise.
+  if (!deliveryContext.controllerReturnRequired && reviewReadiness && reviewReadiness.readyForReduce) {
+    return "Target result is recorded, but this is not controller acceptance. All open target tasks now have results: run reduce-results to form the review candidate, then decide.";
+  }
   if (deliveryContext.controllerReturnRequired) {
     return "Target result is recorded, but this is not controller acceptance. The resolved delivery envelope has returnRoute=controller; run wakeflow_review_pack, prepare a controller-return delivery, send it with the host thread tool, then run wakeflow_record_delivery for that controller-return envelope.";
   }
@@ -796,7 +801,9 @@ function targetResultAgentNext(deliveryContext) {
     return "Target result is recorded, but this is not controller acceptance. The target task references a delivery id, but the local delivery envelope was not found; stop and report the missing local delivery envelope instead of assuming no controller callback.";
   }
   if (!deliveryContext.deliveryId) {
-    return "Target result is recorded, but this is not controller acceptance. No recorded delivery metadata was found on this target task; stop and report unless the controller sends another task.";
+    // state-only results (controller/self tasks, direct imports) are a normal
+    // shape, not an anomaly worth a stop-and-report tone
+    return "State-only target result recorded (no delivery metadata on this task - normal for controller/self tasks). Reduce when the demand remaining results are in.";
   }
   return "Target result is recorded, but this is not controller acceptance. The resolved delivery envelope does not require a controller return; stop unless the controller sends another task.";
 }
@@ -910,10 +917,34 @@ function commandImportTargetResult() {
     }
   }
 
+  // Review readiness: which open tasks still lack a result AFTER this import,
+  // so the controller never runs speculative reduce rounds to find out.
+  const resultsScanDir = path.join(stateRoot, "target-results");
+  const taskIdsWithResults = new Set([targetTaskId]);
+  if (existsSync(resultsScanDir)) {
+    for (const name of readdirSync(resultsScanDir)) {
+      if (!name.endsWith(".json")) continue;
+      try {
+        const recorded = JSON.parse(readFileSync(path.join(resultsScanDir, name), "utf8"));
+        if (recorded && recorded.targetTaskId) taskIdsWithResults.add(recorded.targetTaskId);
+      } catch {
+        // unreadable results are reduce concern, not readiness
+      }
+    }
+  }
+  const remainingTaskIds = (state.targetTasks ?? [])
+    .filter((task) => task.status !== "accepted" && !taskIdsWithResults.has(task.targetTaskId))
+    .map((task) => task.targetTaskId);
+  const reviewReadiness = {
+    remainingTaskIds,
+    readyForReduce: remainingTaskIds.length === 0,
+  };
+
   output(
     {
       ok: true,
       command: "import-target-result",
+      reviewReadiness,
       lockReleased,
       hostOwnership,
       wrote: write,
@@ -942,7 +973,7 @@ function commandImportTargetResult() {
       stateRevisionUnchanged: state.revision,
       nextSuggestedCommand: "reduce-results",
       forbiddenConclusions: result.forbiddenConclusions,
-      agentNext: targetResultAgentNext(deliveryContext),
+      agentNext: targetResultAgentNext(deliveryContext, reviewReadiness),
     },
     [
       `${write ? "Imported" : "Would import"} target result ${resultId}.`,

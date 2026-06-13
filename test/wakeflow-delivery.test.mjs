@@ -2099,3 +2099,37 @@ test("record-target-result releases the lock even when the run used a custom --d
   assert.equal(recorded.lockReleased, true, "release matches the delivery id via the runs scan");
   assert.equal(existsSync(lockFile), false);
 });
+
+
+test("--compact payloads drop the structured echoes but keep ids, files, and prompt", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const compact = parseOk(run(root, [
+    "prepare-dispatch-from-state",
+    "--state-root", stateRootRef,
+    "--target-task-id", "CSMR-TASK-1",
+    "--group", "GROUP-STATE",
+    "--controller-window", "AlembicWorkspace",
+    "--human-context-ref", `${stateRootRef}/developer-progress.md`,
+    "--require-thread", "--write", "--compact",
+  ]));
+  assert.equal(compact.compact, true);
+  assert.equal(compact.envelope, undefined, "no envelope echo");
+  assert.equal(compact.packet, undefined, "no packet echo");
+  assert.equal(compact.windowConfig, undefined, "no windowConfig echo");
+  assert.ok(compact.deliveryId, "delivery id present");
+  assert.ok(compact.deliveryFile, "delivery file path present");
+  assert.ok(compact.prompt.includes("CSMR-TASK-1"), "prompt text present for the host send");
+
+  const deliveryFile = path.join(root, compact.deliveryFile);
+  const recorded = parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "ev", "--write", "--compact"]));
+  assert.equal(recorded.compact, true);
+  assert.equal(recorded.run, undefined, "no run echo");
+  assert.ok(recorded.deliveryRunId);
+  assert.ok(recorded.stateUpdate, "state update summary kept");
+
+  const result = parseOk(run(root, ["record-target-result", "--target-window", "AlembicPlugin", "--task-id", "CSMR-TASK-1", "--status", "completed", "--evidence-ref", "docs/e.md", "--write", "--compact"]));
+  assert.equal(result.compact, true);
+  assert.equal(result.result, undefined, "no result echo");
+  assert.ok(result.resultId);
+});

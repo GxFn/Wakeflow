@@ -431,9 +431,9 @@ test("import-target-result stores result evidence without changing controller st
   assert.equal(payload.ok, true);
   assert.equal(payload.stateRevisionUnchanged, 2);
   assert.match(payload.agentNext, /not controller acceptance/);
-  assert.equal(payload.deliveryContext.resolution, "missing-delivery-metadata");
+  assert.equal(payload.deliveryContext.resolution, "state-only-result");
   assert.equal(payload.controllerReturn.required, false);
-  assert.match(payload.agentNext, /No recorded delivery metadata/);
+  assert.match(payload.agentNext, /not controller acceptance/);
 
   const stateAfter = readJson(path.join(stateRoot, "wakeflow-state.json"));
   const progressAfter = readFileSync(path.join(stateRoot, "developer-progress.md"), "utf8");
@@ -443,7 +443,7 @@ test("import-target-result stores result evidence without changing controller st
   assert.equal(progressAfter, progressBefore);
   assert.equal(resultFile.status, "completed");
   assert.equal(resultFile.stateRoot, initPayload.stateRoot);
-  assert.equal(resultFile.deliveryContext.resolution, "missing-delivery-metadata");
+  assert.equal(resultFile.deliveryContext.resolution, "state-only-result");
   assert.equal(resultFile.controllerActionRequired, false);
   assert.equal(resultFile.wakeflowTrace.artifactKind, "target-result");
   assert.equal(resultFile.wakeflowTrace.source, "wakeflow-state");
@@ -1196,4 +1196,20 @@ test("import-target-result never claims an unclaimed demand and rejects --adopt-
   const imported = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "r.json", "--write", "--json"]).stdout);
   assert.equal(imported.ok, true);
   assert.equal(readJson(stateFile).controllerHost ?? null, null, "import does not claim");
+});
+
+
+test("import-target-result reports review readiness so reduce is never speculative", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run(["init", "--root", root, "--demand-key", "READY-FIXTURE", "--title", "Ready", "--write", "--json"]).stdout);
+  run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Pkg", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
+  run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-2", "--summary", "Pkg2", "--target-window", "WinB", "--target-task-id", "TASK-2", "--write", "--json"]);
+
+  const first = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "a.md", "--write", "--json"]).stdout);
+  assert.equal(first.reviewReadiness.readyForReduce, false);
+  assert.deepEqual(first.reviewReadiness.remainingTaskIds, ["TASK-2"], "names exactly what is still missing");
+
+  const second = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-2", "--target-window", "WinB", "--status", "completed", "--evidence-ref", "b.md", "--write", "--json"]).stdout);
+  assert.equal(second.reviewReadiness.readyForReduce, true);
+  assert.match(second.agentNext, /not controller acceptance.*run reduce-results/);
 });

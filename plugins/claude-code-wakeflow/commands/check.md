@@ -10,10 +10,10 @@ Diagnose an ALREADY-INITIALIZED workspace (one that has `workspace.config.json`)
 3. If gaps exist and `$ARGUMENTS` does not contain `--fix`, stop after reporting with the proposed fix plan. Do not write anything.
 4. With `--fix`, converge in this order, narrating each step:
    a. When `root-memory-file` is `unmanaged`: STOP and ask the user first — the fix replaces the existing root `CLAUDE.md` content with the managed Wakeflow gates (show its first lines). Only continue with explicit consent.
-   b. Doc surfaces (root gates, window cards, Design/Test templates, gitignore): call `wakeflow_initialize_workspace` with `apply: true` and NO `repositories` argument changes — the existing `workspace.config.json` mapping is reused as-is; this is an idempotent upsert, not a re-initialization.
+   b. Doc surfaces that require setup rewrite (root gates, window cards, Design/Test templates, gitignore): STOP and ask for explicit reset-initialization consent. Only after that consent, call `wakeflow_initialize_workspace` with `apply: true`, `resetInitialization: true`, explicit `repositories` copied from the confirmed `workspace.config.json`, and the selected Design/Test mode. Never use `useDiscovered` here.
    c. Permission seeds: `wakeflow-claude-host seed-permissions --root <workspace> --write`.
    d. Missing `hosts.claude-code` config block: merge `{ "hosts": { "claude-code": { "tmuxSession": "wakeflow" } } }` into `workspace.config.json` (preserve all other keys).
-   e. Unregistered or dead windows: converge each via the `/wakeflow:windows <window>` rules (resume registered ids; full-launch unregistered ones), then `arrange-windows`.
+   e. Unregistered, dead, or context-heavy windows: converge each via the `/wakeflow:windows <window>` rules; use `/wakeflow:windows <window> --replace` when a fresh single-window context is needed, then `arrange-windows`.
    f. Stamp the converged version: `wakeflow-claude-host stamp-runtime --root <workspace> --write`.
 5. Re-run `check-workspace` and report the before/after gap counts. Anything still failing is a finding to surface, not to hide.
 

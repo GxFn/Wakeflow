@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -415,8 +416,11 @@ function excludedWindows() {
 }
 
 function replacementWindows() {
+  if (!["replace-window", "replace-windows"].includes(command)) {
+    return new Set();
+  }
   return new Set(
-    getAllValues("--replace-window")
+    getAllValues("--window")
       .flatMap((value) => String(value).split(","))
       .map((value) => value.trim())
       .filter(Boolean),
@@ -785,6 +789,15 @@ ${testWindowDeliveryBoundaryLine(context)}
 - Thread ids may only be written to Wakeflow local runtime. Do not write them to tracked documents, backfill text, or GitHub.
 ${skillAssistanceText(context, samePathWindowNames)}
 
+### Functional Completeness Self-Check
+
+Before returning a \`TargetResultEnvelope\` or handoff, this child window must self-check the assigned feature or evidence path for functional completeness. Do not rely on the controller to discover obvious gaps.
+
+- Re-read the state root, task package, current plan, repository rules, and acceptance/evidence requirements.
+- Verify the implementation or evidence covers the requested behavior end to end, including edge cases, integration boundaries, docs/config/API surfaces, and tests that the target window can reasonably run.
+- Compare the final diff/evidence against the original user goal and explicit non-goals; do not downgrade a complete capability into a thin adapter, placeholder, mock-only flow, or partial scaffold.
+- If completeness cannot be proven inside this window boundary, return \`blocked\` or \`needs-review\` with the missing evidence and next recommendation instead of reporting \`completed\`.
+
 ### Document Destinations
 
 - Long-term cross-repository collaboration docs, plans, acceptance records, scans, and boundary records go to \`${windowLedger}\`. This repository \`docs/\` is only for product, release, or user docs maintained with the source.
@@ -942,6 +955,12 @@ function accessProfileFor(context, repo) {
     {
       key: "threadIdLocalOnly",
       ok: block.includes("Thread ids may only be written to Wakeflow local runtime"),
+    },
+    {
+      key: "functionalCompletenessSelfCheck",
+      ok: block.includes("Functional Completeness Self-Check")
+        && block.includes("Do not rely on the controller to discover obvious gaps")
+        && block.includes("do not downgrade a complete capability into a thin adapter"),
     },
   ];
   const required = repo.managedAgents !== false;
@@ -1734,7 +1753,7 @@ function hasConfigSelection() {
 
 function hasLocalWindowSelection() {
   return getAllValues("--thread").length > 0
-    || getAllValues("--replace-window").length > 0;
+    || (["replace-window", "replace-windows"].includes(command) && getAllValues("--window").length > 0);
 }
 
 function hasInitializeSelection() {
@@ -1748,6 +1767,96 @@ function parseSpecMap(flag, fallbackKeys = []) {
     }
     return parseKeyValueSpec(spec, flag);
   }));
+}
+
+function initializedWorkspaceFootprint(context) {
+  const runtimeFootprint = [];
+  const configExists = existsSync(context.configPath);
+  for (const [kind, configuredPath] of [
+    ["workspace-index", context.config.workspaceIndexPath ?? ".workspace-active/workspace/index.md"],
+    ["workspace-status", context.config.workspaceCurrentStatusPath ?? ".workspace-active/workspace/current/workspace-current-status.md"],
+    ["delivery-runtime", ".workspace-local/wakeflow-delivery"],
+  ]) {
+    const absolute = path.resolve(context.wakeflowRoot, configuredPath);
+    if (existsSync(absolute)) {
+      runtimeFootprint.push({ kind, path: slash(path.relative(context.wakeflowRoot, absolute)) || "." });
+    }
+  }
+  const rootMemoryFile = path.join(context.parentRoot, hostProfile.memoryFile);
+  if (existsSync(rootMemoryFile)) {
+    const text = readFileSync(rootMemoryFile, "utf8");
+    if (text.includes(ROOT_AGENTS_START) && text.includes(ROOT_AGENTS_END)) {
+      runtimeFootprint.push({ kind: "root-memory", path: slash(path.relative(context.wakeflowRoot, rootMemoryFile)) });
+    }
+  }
+  for (const repo of normalizedRepositories(context.userConfig)) {
+    const memoryFile = path.join(repositoryAbsPath(context.wakeflowRoot, repo), hostProfile.memoryFile);
+    if (!existsSync(memoryFile)) continue;
+    const text = readFileSync(memoryFile, "utf8");
+    if (text.includes(AGENTS_START) && text.includes(AGENTS_END)) {
+      runtimeFootprint.push({
+        kind: "child-memory",
+        path: slash(path.relative(context.wakeflowRoot, memoryFile)),
+        windowName: repo.windowName,
+      });
+    }
+  }
+  if (!configExists || normalizedRepositories(context.userConfig).length === 0) {
+    return runtimeFootprint;
+  }
+  if (runtimeFootprint.length === 0) {
+    return runtimeFootprint;
+  }
+  return [
+    { kind: "config", path: slash(path.relative(context.wakeflowRoot, context.configPath)) || "workspace.config.json" },
+    ...runtimeFootprint,
+  ];
+}
+
+function initializedWorkspaceResetRequested() {
+  return hasFlag("--reset-initialization");
+}
+
+function assertInitializeDoesNotUseReplacementFlags() {
+  if (command === "initialize" && getAllValues("--replace-window").length > 0) {
+    fail("initialize no longer accepts --replace-window. Use replace-window for one existing window or replace-windows for a selected group; replacement routes validate thread ids before any write and do not refresh initialization docs.");
+  }
+}
+
+function assertInitializeWriteAllowed(context) {
+  // A pure local registration follow-up (thread ids only, no config/scope
+  // selection, no reset) is the EXPECTED step after windows are created —
+  // including the first-time setup, whose own launch plan emits
+  // `initialize --thread X=<id> --write`. The footprint guard only protects
+  // against re-scaffolding config/docs/scope, so never let it block thread
+  // registration. Reset always runs the gate so its dedicated errors fire.
+  if (!hasConfigSelection() && !initializedWorkspaceResetRequested()) return null;
+  // Compute the gate in BOTH dry-run and apply so the plan a dry-run shows
+  // agrees with what apply does (no green plan that then fails on --write),
+  // and so a dry-run reset can preview the cleanup. Hard failures only on write.
+  const footprint = initializedWorkspaceFootprint(context);
+  const alreadyInitialized = footprint.length > 0;
+  const resetRequested = initializedWorkspaceResetRequested();
+  const reInitBlocked = alreadyInitialized && hasConfigSelection() && !resetRequested;
+  if (write && reInitBlocked) {
+    fail(`initialize --write found an existing Wakeflow initialization footprint (${footprint.map((item) => `${item.kind}:${item.path}`).join(", ")}). Re-run only after the user explicitly requests reset initialization, then pass --reset-initialization with explicit --repo mappings. For heavy/stale windows, use replace-window or replace-windows instead.`);
+  }
+  if (write && alreadyInitialized && resetRequested && hasFlag("--use-discovered")) {
+    fail("reset initialization cannot use --use-discovered. Reconfirm intended work directories and pass explicit --repo Window=Path mappings so scratch/history/ledger directories are not added to Wakeflow scope.");
+  }
+  if (write && alreadyInitialized && resetRequested && getAllValues("--repo").length === 0) {
+    fail("reset initialization requires explicit --repo Window=Path mappings when changing configuration. Do not reuse the old config or discovered directories implicitly.");
+  }
+  return { alreadyInitialized, resetRequested, footprint, reInitBlocked };
+}
+
+function assertReplacementWriteThreads(replacements, commandName) {
+  if (!write || replacements.size === 0) return;
+  const threadSpecs = parseSpecMap("--thread");
+  const missingThread = [...replacements].filter((windowName) => !threadSpecs.has(windowName));
+  if (missingThread.length > 0) {
+    fail(`${commandName} with --write requires a new --thread Window=<realThreadId> for: ${missingThread.join(", ")}`);
+  }
 }
 
 function automationStateDir(context) {
@@ -1955,6 +2064,9 @@ function windowLaunchEntries(context, options = {}) {
 function windowLaunchPlanPayload(context, entries, options = {}) {
   const replacements = options.replacements ?? replacementWindows();
   const language = options.language ?? interfaceLanguage(context);
+  const registrationArgvCommand = options.registrationCommand
+    ?? (replacements.size > 0 ? "replace-windows" : "initialize");
+  const registrationCommand = `wakeflow-setup ${registrationArgvCommand}`;
   return {
     ok: true,
     command: "window-launch-plan",
@@ -1977,14 +2089,15 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
       ...(typeof hostProfile.launch.entryExtras === "function" ? hostProfile.launch.entryExtras(entry, context) : {}),
       localRegistration: {
         required: true,
-        command: "wakeflow-setup initialize",
+        command: registrationCommand,
         threadIdAuthority: `.workspace-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/thread-registry/${slug(entry.windowName)}.json`,
         derivedStatusView: `.workspace-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/window-config/${slug(entry.windowName)}.json`,
         trackedDocsContainThreadIds: false,
         argvTemplate: [
-          "initialize",
+          registrationArgvCommand,
           "--root",
           context.wakeflowRoot,
+          ...(replacements.size > 0 ? ["--window", entry.windowName] : []),
           "--thread",
           `${entry.windowName}=<createdThreadId>`,
           "--write",
@@ -1993,6 +2106,111 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
       },
       createThreadPrompt: entry.createThreadPrompt,
     })),
+  };
+}
+
+function assertReplacementLaunchEntries(replacements, launchEntries, commandName) {
+  if (replacements.size === 0) {
+    fail(`${commandName} requires at least one --window <WindowName>.`);
+  }
+  const available = new Set(launchEntries.map((entry) => entry.windowName));
+  const missing = [...replacements].filter((windowName) => !available.has(windowName));
+  if (missing.length > 0) {
+    fail(`${commandName} requested window(s) not present in the current launch plan: ${missing.join(", ")}. Check workspace.config.json, or pass --include-real-project when replacing the real-project window.`);
+  }
+}
+
+function configuredWindowSet(config) {
+  return new Set([
+    config.controllerWindow,
+    ...normalizedRepositories(config).map((repo) => repo.windowName),
+  ].filter(Boolean));
+}
+
+function resetInitializationCleanupPayload(previousContext, nextContext, gate) {
+  const resetRequested = Boolean(gate?.resetRequested);
+  if (!resetRequested) {
+    return {
+      ok: true,
+      command: "reset-initialization-cleanup",
+      skipped: true,
+      wrote: false,
+      reason: "reset initialization was not requested",
+      staleWindows: [],
+      results: [],
+    };
+  }
+
+  const nextWindows = configuredWindowSet(nextContext.config);
+  const previousRepos = normalizedRepositories(previousContext.config);
+  const staleRepos = previousRepos.filter((repo) => !nextWindows.has(repo.windowName));
+  const staleWindows = [...configuredWindowSet(previousContext.config)].filter((windowName) => !nextWindows.has(windowName));
+  const results = [];
+
+  for (const repo of staleRepos) {
+    const repoRoot = repositoryAbsPath(previousContext.wakeflowRoot, repo);
+    const agentsPath = path.join(repoRoot, hostProfile.memoryFile);
+    if (!existsSync(agentsPath)) {
+      results.push({
+        kind: "memory-file",
+        windowName: repo.windowName,
+        path: slash(path.relative(previousContext.wakeflowRoot, agentsPath)),
+        changed: false,
+        reason: "missing",
+      });
+      continue;
+    }
+    const existing = readFileSync(agentsPath, "utf8");
+    const next = removeScopeBlock(existing);
+    const changed = next !== existing.trim();
+    if (write && changed) {
+      writeFileSync(agentsPath, `${next.trimEnd()}\n`);
+    }
+    results.push({
+      kind: "memory-file",
+      windowName: repo.windowName,
+      path: slash(path.relative(previousContext.wakeflowRoot, agentsPath)),
+      changed,
+      wrote: write && changed,
+      cleanup: "removed Wakeflow managed access card only",
+    });
+  }
+
+  for (const windowName of staleWindows) {
+    const cleanupTargets = [
+      ["thread-registry", threadRegistryFile(previousContext, windowName)],
+      ["window-config", windowConfigFile(previousContext, windowName)],
+    ];
+    // Codex-style hosts keep a legacy flat registry that findThreadRegistryFile
+    // still falls back to; a reset that drops a window must clear it too, or a
+    // stale thread id survives the reset on migrated workspaces.
+    if (hostProfile.runtime.legacyRegistryFallback) {
+      cleanupTargets.push([
+        "thread-registry-legacy",
+        path.join(automationStateDir(previousContext), "thread-registry", `${slug(windowName)}.json`),
+      ]);
+    }
+    for (const [kind, file] of cleanupTargets) {
+      const existed = existsSync(file);
+      if (write && existed) rmSync(file, { force: true });
+      results.push({
+        kind,
+        windowName,
+        path: slash(path.relative(previousContext.wakeflowRoot, file)),
+        changed: existed,
+        wrote: write && existed,
+      });
+    }
+  }
+
+  return {
+    ok: true,
+    command: "reset-initialization-cleanup",
+    resetRequested: true,
+    wrote: write,
+    previousFootprint: gate?.footprint ?? [],
+    staleWindows,
+    results,
   };
 }
 
@@ -2063,12 +2281,7 @@ function buildLocalWindowConfig(context, descriptor) {
 function localWindowRegistrationPayload(context, options = {}) {
   const threadSpecs = parseSpecMap("--thread");
   const replacements = options.replacements ?? replacementWindows();
-  if (write && replacements.size > 0) {
-    const missingThread = [...replacements].filter((windowName) => !threadSpecs.has(windowName));
-    if (missingThread.length > 0) {
-      fail(`--replace-window with --write requires a new --thread Window=<realThreadId> for: ${missingThread.join(", ")}`);
-    }
-  }
+  assertReplacementWriteThreads(replacements, "replacement window registration");
   const windowSpecs = new Set([
     ...(options.windows ?? []).map((item) => item.windowName),
     ...threadSpecs.keys(),
@@ -2138,6 +2351,8 @@ function localWindowRegistrationPayload(context, options = {}) {
 
 function initializePayload() {
   const context = commandContext();
+  assertInitializeDoesNotUseReplacementFlags();
+  const writeGate = assertInitializeWriteAllowed(context);
   const discovered = redactAbsolutePaths(discoverSiblingRepositories(context));
   const discovery = {
     workspaceName: context.config.workspaceName,
@@ -2155,6 +2370,26 @@ function initializePayload() {
     setupQuestions: statusPayload().setupQuestions,
   };
 
+  if (write && writeGate?.resetRequested && !hasInitializeSelection()) {
+    fail("reset initialization requires explicit --repo mappings plus Design/Test mode confirmation; use replace-window or replace-windows for window-only recreation.");
+  }
+
+  // Dry-run honesty: if applying THIS selection would be blocked by the
+  // footprint guard, say so now instead of returning a green plan that fails
+  // on --write. The agent should switch to replace-window(s) or reset.
+  if (!write && writeGate?.reInitBlocked) {
+    return {
+      ok: true,
+      command: "initialize",
+      mode: "blocked-already-initialized",
+      wrote: false,
+      alreadyInitialized: true,
+      initializationFootprint: writeGate.footprint,
+      discovery,
+      nextAction: "This workspace is already initialized. Do not re-run initialize. Use replace-window / replace-windows (wakeflow_replace_window(s)) for heavy or stale windows, or only on explicit user request re-run with --reset-initialization and explicit --repo mappings.",
+    };
+  }
+
   if (!hasInitializeSelection()) {
     return {
       ok: true,
@@ -2166,6 +2401,8 @@ function initializePayload() {
       nextAction: "Agent must judge whether the workspace is clean. If clean, rerun initialize with explicit repositories. If messy, ask the user which windows to manage before writing.",
     };
   }
+
+  const replacements = new Set();
 
   const configured = hasConfigSelection()
     ? configurePayload(context)
@@ -2179,7 +2416,6 @@ function initializePayload() {
       };
   const installContext = contextWithConfig(context, configured.nextConfig);
   const language = interfaceLanguage(installContext);
-  const replacements = replacementWindows();
   const launchEntries = windowLaunchEntries(installContext, {
     includeRealProject: hasFlag("--include-real-project"),
     replacements,
@@ -2201,9 +2437,10 @@ function initializePayload() {
   const accessProfiles = accessProfilesPayload(installContext, {
     includeRealProject: hasFlag("--include-real-project"),
   });
+  const resetCleanup = resetInitializationCleanupPayload(context, installContext, writeGate);
 
   const okItems = write
-    ? [configured, gitignore, templates, rootAgents, childAgents, localWindows, accessProfiles]
+    ? [configured, resetCleanup, gitignore, templates, rootAgents, childAgents, localWindows, accessProfiles]
     : [configured, gitignore, templates, rootAgents, childAgents, localWindows];
   const ok = okItems
     .every((item) => item.ok !== false);
@@ -2216,6 +2453,7 @@ function initializePayload() {
     discovery,
     steps: {
       configure: configured,
+      resetInitializationCleanup: resetCleanup,
       gitignore,
       syncTemplates: templates,
       syncRootAgents: rootAgents,
@@ -2230,11 +2468,61 @@ function initializePayload() {
   };
 }
 
+function replaceWindowsPayload(options = {}) {
+  const context = commandContext();
+  const commandName = options.single ? "replace-window" : "replace-windows";
+  if (!existsSync(context.configPath)) {
+    fail(`${commandName} requires an initialized workspace (workspace.config.json not found). Run initialize first; replacement only recreates an existing window.`);
+  }
+  const replacements = replacementWindows();
+  if (options.single && replacements.size !== 1) {
+    fail("replace-window requires exactly one --window <WindowName>.");
+  }
+  assertReplacementWriteThreads(replacements, commandName);
+  const language = interfaceLanguage(context);
+  const launchEntries = windowLaunchEntries(context, {
+    includeRealProject: hasFlag("--include-real-project"),
+    replacements,
+    language,
+  });
+  assertReplacementLaunchEntries(replacements, launchEntries, commandName);
+  const windowLaunchPlan = windowLaunchPlanPayload(context, launchEntries, {
+    replacements,
+    language,
+    registrationCommand: commandName,
+  });
+  const localWindows = localWindowRegistrationPayload(context, { windows: launchEntries, replacements });
+  const ok = [windowLaunchPlan, localWindows].every((item) => item.ok !== false);
+
+  return {
+    ok,
+    command: commandName,
+    mode: write ? "apply" : "plan",
+    wrote: write,
+    configuredRepositories: normalizedRepositories(context.config).map((repo) => ({
+      windowName: repo.windowName,
+      path: repo.path,
+      role: repo.role,
+      mode: repo.mode,
+      managedAgents: repo.managedAgents,
+    })),
+    steps: {
+      windowLaunchPlan,
+      localWindows,
+    },
+    nextAction: write
+      ? "Replacement thread registry and derived local window config were updated only for the selected windows. Do not treat this as workspace initialization or task delivery."
+      : "Create only the returned replacement windows, then register each real thread id with the returned localRegistration argvTemplate. Do not rewrite unrelated window registrations.",
+  };
+}
+
 function help() {
   return {
     ok: true,
     commands: {
       initialize: "One workflow for discovery, config generation, AGENTS install, Design/Test setup, and local window/thread runtime registration.",
+      "replace-window": "Regenerate one existing responsibility-window launch prompt and replace only its local thread registry/window-config records; preferred for a heavy/stale single window.",
+      "replace-windows": "Regenerate selected responsibility-window launch prompts and replace only their local thread registry/window-config records; does not refresh workspace initialization docs.",
       discover: "List sibling repository candidates under the parent workspace.",
       status: "Show configured repositories, discovered siblings, and scope issues.",
       configure: "Write workspace.config.json after user-confirmed --repo mappings.",
@@ -2248,10 +2536,11 @@ function help() {
     },
     examples: [
       "node scripts/wakeflow-setup.mjs initialize --json",
-      "node scripts/wakeflow-setup.mjs initialize --repo AppWindow=../MyApp --internal-design --internal-test --write --json",
-      "node scripts/wakeflow-setup.mjs initialize --repo AppWindow=../MyApp --repo ServiceWindow=../MyService --internal-design --internal-test --write --json",
-      "node scripts/wakeflow-setup.mjs initialize --replace-window AppWindow --thread AppWindow=<newRealThreadId> --write --json",
-      "node scripts/wakeflow-setup.mjs initialize --use-discovered --thread Wakeflow=<realThreadId> --write --json  # only after confirming all discovered directories",
+      "node scripts/wakeflow-setup.mjs initialize --repo AppWindow=../MyApp --internal-design --internal-test --write --json  # fresh workspace only",
+      "node scripts/wakeflow-setup.mjs initialize --reset-initialization --repo AppWindow=../MyApp --repo ServiceWindow=../MyService --internal-design --internal-test --write --json",
+      "node scripts/wakeflow-setup.mjs replace-window --window AppWindow --thread AppWindow=<newRealThreadId> --write --json",
+      "node scripts/wakeflow-setup.mjs replace-windows --window AppWindow --thread AppWindow=<newRealThreadId> --write --json",
+      "node scripts/wakeflow-setup.mjs initialize --use-discovered --thread Wakeflow=<realThreadId> --write --json  # fresh workspace only after confirming all discovered directories",
       "node scripts/wakeflow-setup.mjs discover --json",
       "node scripts/wakeflow-setup.mjs configure --repo AppWindow=../MyApp --repo ServiceWindow=../MyService --write",
       "node scripts/wakeflow-setup.mjs prompts --window AppWindow",
@@ -2274,6 +2563,12 @@ function main() {
       break;
     case "initialize":
       printResult(initializePayload());
+      break;
+    case "replace-window":
+      printResult(replaceWindowsPayload({ single: true }));
+      break;
+    case "replace-windows":
+      printResult(replaceWindowsPayload());
       break;
     case "discover": {
       const context = commandContext();

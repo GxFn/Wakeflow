@@ -29,7 +29,10 @@ tool first:
   directories, or has unclear window ownership, stop and ask the user which
   windows to manage. Do not call `useDiscovered` in that case.
 - Call `wakeflow_initialize_workspace` with `apply: true` only after the user
-  confirms the preview and write boundary.
+  confirms the preview and write boundary. In an already initialized workspace,
+  this is allowed only when the user explicitly asks for reset initialization;
+  pass `resetInitialization: true`, explicit `repositories`, and the selected
+  Design/Test mode, and do not pass `useDiscovered`.
 - During apply, Wakeflow synchronizes the workspace `.gitignore` so
   only `.workspace-active/` and `.workspace-local/` are ignored runtime
   directories. Do not add product repositories, Design/Test, ledgers,
@@ -51,11 +54,16 @@ tool first:
   Wakeflow from the current workspace config and registry presence. Do this
   title reset at the end of the initialization flow instead of manually
   renaming ad hoc windows later.
-- To rebuild selected windows, pass `replaceWindows`. Create threads only for
-  the returned replacement launch entries, then replace only those windows'
-  local thread-registry records with the new real thread ids. Do not rewrite
-  unrelated window registrations or store window role / cwd / title metadata in
-  the registry.
+- To rebuild selected windows, use `wakeflow_replace_window` for one heavy or
+  stale responsibility window, or `wakeflow_replace_windows` for a selected
+  group. Create threads only for the returned replacement launch entries, then
+  replace only those windows' local thread-registry records with the new real
+  thread ids. Do not rewrite unrelated window registrations or store window role
+  / cwd / title metadata in the registry.
+- Do not use `wakeflow_initialize_workspace` as a refresh path for window
+  context bloat. Replacement tools return only replacement launch entries plus
+  local registration argv templates; create only those host windows and then
+  register their real thread ids through the returned local command.
 - Do not replace that tool with a hand-written inspection checklist when the MCP
   server is available.
 - If Wakeflow MCP tools are unavailable, say that the MCP server is unavailable

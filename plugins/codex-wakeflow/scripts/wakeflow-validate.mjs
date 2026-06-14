@@ -200,6 +200,8 @@ function validateMcpConfig() {
   const mcpText = readText("lib/wakeflow-mcp-tools.mjs");
   for (const tool of [
     "wakeflow_initialize_workspace",
+    "wakeflow_replace_window",
+    "wakeflow_replace_windows",
     "wakeflow_status",
     "wakeflow_init_demand",
     "wakeflow_add_task",
@@ -320,6 +322,7 @@ function validateSkillSurface() {
   for (const required of [
     "workspace initialization",
     "wakeflow_initialize_workspace",
+    "wakeflow_replace_window",
     "apply: false",
     "MCP server is unavailable",
   ]) {
@@ -378,6 +381,21 @@ function validateTemplateBundle() {
   ]) {
     if (typeof bundle.files[required] !== "string" || bundle.files[required].trim() === "") {
       errors.push(`template bundle missing ${required}`);
+    }
+  }
+  for (const [label, key] of [
+    ["Design", `templates/window-support/design/${hostProfile.memoryFile}`],
+    ["Test", `templates/window-support/testing/${hostProfile.memoryFile}`],
+  ]) {
+    const content = bundle.files[key] ?? "";
+    for (const required of [
+      "## Functional Completeness Self-Check",
+      "Do not rely on the controller to discover obvious gaps",
+      "downgrade a complete",
+    ]) {
+      if (!content.includes(required)) {
+        errors.push(`${label} support ${hostProfile.memoryFile} missing functional completeness guard: ${required}`);
+      }
     }
   }
 }

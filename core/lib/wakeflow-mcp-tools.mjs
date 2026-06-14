@@ -23,10 +23,10 @@ function localWriteTool(title, idempotentHint = false) {
   };
 }
 
-export const tools = [
+const toolDefinitions = [
   {
     name: "wakeflow_initialize_workspace",
-    description: `Initialize a Wakeflow runtime: discover siblings, generate/apply workspace config, install ${hostProfile.memoryFileLabel} blocks, create sibling Design/Test surfaces, and record derived local window configuration. Dry-run unless apply is true. If repositories/useDiscovered are omitted, the tool returns read-only discovery plus an agent-selection protocol; ${hostProfile.hostName} must judge clean versus messy from those facts, pass explicit repositories for a clean workspace, or ask the user in a messy workspace. Returns a localized host ${hostProfile.hostTools.createWindow} launch plan; replaceWindows limits the plan to selected windows. Real thread ids are registered only in the local thread registry by host-controlled follow-up, not tracked docs or this MCP schema; window config is derived from workspace config plus registry presence.`,
+    description: `Initialize a Wakeflow runtime: discover siblings, generate/apply workspace config, install ${hostProfile.memoryFileLabel} blocks, create sibling Design/Test surfaces, and record derived local window configuration. Dry-run unless apply is true. On an already initialized workspace, apply is allowed only when the user explicitly asks for reset initialization and resetInitialization is true with explicit repositories; never use useDiscovered for reset. Heavy or stale existing windows should use wakeflow_replace_window or wakeflow_replace_windows instead of initialization. Launch plans include host-profile create-window settings such as reasoning effort/model when supported. Real thread ids are registered only in the local thread registry by host-controlled follow-up, not tracked docs or this MCP schema; window config is derived from workspace config plus registry presence.`,
     annotations: localWriteTool("Initialize Wakeflow Workspace", true),
     inputSchema: {
       type: "object",
@@ -53,15 +53,14 @@ export const tools = [
           description: "Force every discovered directory into managed repositories. Use only after the agent/user has confirmed all discovered directories are intended work windows; prefer explicit repositories for messy workspaces.",
         },
         apply: { type: "boolean" },
+        resetInitialization: {
+          type: "boolean",
+          description: "Required with apply:true only when the user explicitly requests resetting an already initialized Wakeflow workspace. Reset requires explicit repositories and refuses useDiscovered.",
+        },
         internalDesign: { type: "boolean" },
         internalTest: { type: "boolean" },
         includeRealProject: { type: "boolean" },
         excludeWindows: { type: "array", items: { type: "string" } },
-        replaceWindows: {
-          type: "array",
-          items: { type: "string" },
-          description: `Only return/create/update these replacement window entries; real replacement thread ids are still recorded in the local thread registry after host ${hostProfile.hostTools.createWindow} succeeds.`,
-        },
         repositories: {
           type: "array",
           description: `Agent/user-confirmed work-window mappings. In clean workspaces ${hostProfile.hostName} should pass these explicitly after discovery instead of relying on hidden heuristics.`,
@@ -74,6 +73,60 @@ export const tools = [
               role: { type: "string" },
             },
           },
+        },
+      },
+    },
+  },
+  {
+    name: "wakeflow_replace_window",
+    description: `Regenerate a scoped ${hostProfile.hostTools.createWindow} launch plan for exactly one existing Wakeflow logical window without reinitializing workspace docs. Use this high-frequency path when a single responsibility window is too context-heavy, stale, or needs rebinding. It reads the current workspace config, returns one replacement entry with host-profile create-window settings such as reasoning effort/model when supported, and includes the localRegistration argv template; the real thread id is registered only by host-controlled local follow-up after ${hostProfile.hostTools.createWindow} succeeds.`,
+    annotations: readOnlyTool("Plan One Wakeflow Replacement Window"),
+    inputSchema: {
+      type: "object",
+      required: ["window"],
+      properties: {
+        root: { type: "string" },
+        parent: { type: "string" },
+        language: {
+          type: "string",
+          enum: ["auto", "zh", "en"],
+          description: "Prompt/title language for the replacement window launch plan. Use zh for Chinese users, en for English users, or auto when unknown.",
+        },
+        includeRealProject: {
+          type: "boolean",
+          description: "Allow replacing the configured real-project window when that window is intentionally managed.",
+        },
+        window: {
+          type: "string",
+          description: "Existing Wakeflow logical window name to recreate. This does not add repositories or rewrite unrelated registrations.",
+        },
+      },
+    },
+  },
+  {
+    name: "wakeflow_replace_windows",
+    description: `Regenerate a scoped ${hostProfile.hostTools.createWindow} launch plan for existing Wakeflow windows without reinitializing workspace docs. Use this when selected responsibility windows must be recreated or rebound more often than full initialization. The tool reads the current workspace config, returns only the requested replacement entries with host-profile create-window settings such as reasoning effort/model when supported, and includes localRegistration argv templates; real thread ids are still registered only by the host-controlled local follow-up after ${hostProfile.hostTools.createWindow} succeeds.`,
+    annotations: readOnlyTool("Plan Wakeflow Replacement Windows"),
+    inputSchema: {
+      type: "object",
+      required: ["windows"],
+      properties: {
+        root: { type: "string" },
+        parent: { type: "string" },
+        language: {
+          type: "string",
+          enum: ["auto", "zh", "en"],
+          description: "Prompt/title language for replacement window launch plans. Use zh for Chinese users, en for English users, or auto when unknown.",
+        },
+        includeRealProject: {
+          type: "boolean",
+          description: "Allow replacing the configured real-project window when that window is intentionally managed.",
+        },
+        windows: {
+          type: "array",
+          minItems: 1,
+          items: { type: "string" },
+          description: "Existing Wakeflow logical window names to recreate. This does not add new repositories or rewrite unrelated registrations.",
         },
       },
     },
@@ -482,6 +535,41 @@ export const tools = [
   },
 ];
 
+// Some Codex hosts only surface an early prefix of MCP tools to the model.
+// Keep the controller closed-loop path inside that prefix so imported target
+// results can always be reviewed, reduced, decided, and completed through MCP.
+const HOST_VISIBLE_PRIORITY_TOOLS = [
+  "wakeflow_status",
+  "wakeflow_initialize_workspace",
+  "wakeflow_replace_window",
+  "wakeflow_init_demand",
+  "wakeflow_add_task",
+  "wakeflow_prepare_delivery",
+  "wakeflow_record_delivery",
+  "wakeflow_record_target_result",
+  "wakeflow_review_pack",
+  "wakeflow_reduce_results",
+  "wakeflow_decide_review",
+  "wakeflow_complete_demand",
+];
+
+export const tools = prioritizeHostVisibleTools(toolDefinitions);
+
+function prioritizeHostVisibleTools(definitions) {
+  const remaining = new Map(definitions.map((tool) => [tool.name, tool]));
+  const prioritized = [];
+  for (const name of HOST_VISIBLE_PRIORITY_TOOLS) {
+    const tool = remaining.get(name);
+    if (!tool) continue;
+    prioritized.push(tool);
+    remaining.delete(name);
+  }
+  return [
+    ...prioritized,
+    ...definitions.filter((tool) => remaining.has(tool.name)),
+  ];
+}
+
 export const handlers = {
   wakeflow_initialize_workspace: (args) => runWakeflowRuntime({
     script: "wakeflow-setup",
@@ -494,14 +582,40 @@ export const handlers = {
       ...optionalValue("--design-window", args.designWindow),
       ...optionalValue("--test-window", args.testWindow),
       ...optionalValue("--language", args.language),
+      ...(args.resetInitialization ? ["--reset-initialization"] : []),
       ...(args.useDiscovered ? ["--use-discovered"] : []),
       ...(args.internalDesign ? ["--internal-design"] : []),
       ...(args.internalTest ? ["--internal-test"] : []),
       ...(args.includeRealProject ? ["--include-real-project"] : []),
       ...repositoryArgs(args.repositories),
       ...repeatValues("--exclude-window", args.excludeWindows),
-      ...repeatValues("--replace-window", args.replaceWindows),
       ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
+  wakeflow_replace_window: (args) => runWakeflowRuntime({
+    script: "wakeflow-setup",
+    args: [
+      "replace-window",
+      ...rootArgs(args),
+      ...optionalValue("--parent", args.parent),
+      ...optionalValue("--language", args.language),
+      ...(args.includeRealProject ? ["--include-real-project"] : []),
+      ...optionalValue("--window", args.window),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
+  wakeflow_replace_windows: (args) => runWakeflowRuntime({
+    script: "wakeflow-setup",
+    args: [
+      "replace-windows",
+      ...rootArgs(args),
+      ...optionalValue("--parent", args.parent),
+      ...optionalValue("--language", args.language),
+      ...(args.includeRealProject ? ["--include-real-project"] : []),
+      ...repeatValues("--window", args.windows),
       "--json",
     ],
     cwd: args.root || undefined,

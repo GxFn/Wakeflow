@@ -30,7 +30,10 @@ tool first:
   stop and ask the user which windows to manage. Do not call `useDiscovered` in
   that case.
 - Call `wakeflow_initialize_workspace` with `apply: true` only after the user
-  confirms the preview and write boundary.
+  confirms the preview and write boundary. In an already initialized workspace,
+  this is allowed only when the user explicitly asks for reset initialization;
+  pass `resetInitialization: true`, explicit `repositories`, and the selected
+  Design/Test mode, and do not pass `useDiscovered`.
 - During apply, Wakeflow synchronizes the workspace `.gitignore` so
   only `.workspace-active/` and `.workspace-local/` are ignored runtime
   directories. Do not add product repositories, Design/Test, ledgers,
@@ -63,11 +66,16 @@ tool first:
   The thread registry is the only thread-id authority; derived `window-config`
   is refreshed by Wakeflow from the current workspace config and registry
   presence.
-- To rebuild selected windows, pass `replaceWindows`. Run
-  `launch-window --replace` only for the returned replacement launch entries,
-  then replace only those windows' local thread-registry records with the new
-  real session ids. Do not rewrite unrelated window registrations or store
-  window role / cwd / title metadata in the registry.
+- To rebuild selected windows, use `wakeflow_replace_window` for one heavy or
+  stale responsibility window, or `wakeflow_replace_windows` for a selected
+  group. Run `launch-window --replace` only for the returned replacement launch
+  entries, then replace only those windows' local thread-registry records with
+  the new real session ids. Do not rewrite unrelated window registrations or
+  store window role / cwd / title metadata in the registry.
+- Do not use `wakeflow_initialize_workspace` as a refresh path for window
+  context bloat. Replacement tools return only replacement launch entries plus
+  local registration argv templates; launch only those host windows and then
+  register their real session ids through the returned local command.
 - All Wakeflow windows (controller included) live in the tmux server session
   named by `workspace.config.json`
   `"hosts": { "claude-code": { "tmuxSession": "wakeflow" } }` (default

@@ -17,6 +17,7 @@ roots, compact delivery envelopes, and evidence-based acceptance.
 - [Why Wakeflow](#why-wakeflow)
 - [Architecture](#architecture)
 - [Install Wakeflow](#install-wakeflow)
+- [Quick Start](#quick-start)
 - [Window Model](#window-model)
 - [One Vocabulary Across Hosts](#one-vocabulary-across-hosts)
 - [Initialize A Workspace](#initialize-a-workspace)
@@ -193,6 +194,38 @@ The helper requires tmux. Initialization runs `preflight`, which installs tmux
 with `brew install tmux` after one explicit user consent when it is missing,
 retrying once on transient bottle errors.
 
+## Quick Start
+
+Three steps from install to a running fleet, then a command cheat sheet.
+
+1. **Initialize** (once per workspace) — in Claude Code, from the workspace directory:
+   ```text
+   /wakeflow:init
+   ```
+   Preview the plan, confirm, and Wakeflow writes the config + access cards, launches every window, and registers it. Already initialized? `init` stops on purpose — use `/wakeflow:windows <name> --replace` for a stale window, or re-run only on an explicit reset.
+2. **Enter the workspace** — open a NEW terminal window or tab, `cd` into the workspace, and run (substitute your `hosts.claude-code.tmuxSession`):
+   ```text
+   tmux attach -t wakeflow
+   ```
+3. **Start work** — give the controller window a demand, or run `/wakeflow:dispatch`.
+
+### Command cheat sheet
+
+| Command | What it does | When |
+| --- | --- | --- |
+| `/wakeflow:init` | Scaffold the workspace, then launch + register every window (first time only) | A brand-new workspace |
+| `/wakeflow:windows` | Read-only status table of every window (registered? alive? mode?) | "What is the fleet doing?" |
+| `/wakeflow:windows all` | Resume/relaunch every configured window with the SAME session ids (context intact) | After a reboot or a plugin upgrade |
+| `/wakeflow:windows <name>` | Resume one window | One window died |
+| `/wakeflow:windows <name> --replace` | Rebuild one window with a fresh session | A window is stale / context-heavy |
+| `/wakeflow:status` | Demands, eligible work, deliveries, window readiness | Before dispatching |
+| `/wakeflow:dispatch` | Prepare and send one delivery to a target window | Hand work to a window |
+| `/wakeflow:review` | Review a target's raw evidence, record accept / rework / blocked | A result came back |
+| `/wakeflow:unattended on|off` | Toggle the work windows' permission mode | Switch hands-off ↔ prompted |
+| `/wakeflow:check` | Health-check an existing workspace, converge stale or missing surfaces | After an upgrade |
+
+Mnemonic: **`init` builds it, `windows all` powers it on, `windows` just takes a look.**
+
 ## Window Model
 
 Window transport is the key Claude Code difference, and the Claude Code
@@ -290,8 +323,8 @@ The operating flow is:
 5. For a messy workspace, Claude Code asks which directories are managed
    windows before writing. It must not use a broad discovered-directory
    import.
-6. After user confirmation, Claude Code calls `wakeflow_initialize_workspace`
-   with `apply: true`.
+6. After user confirmation for a fresh workspace, Claude Code calls
+   `wakeflow_initialize_workspace` with `apply: true`.
 7. Claude Code runs the host helper: `preflight` first, then `launch-window`
    for each window in the returned launch plan. Each launch creates a tmux
    window running `claude --session-id`, pastes the entry-sync prompt, sets
@@ -299,6 +332,22 @@ The operating flow is:
    which is passed once to Wakeflow's local registration command. The thread
    registry is the only session-id authority; window config is refreshed as a
    derived view.
+
+For an already initialized workspace, `wakeflow_initialize_workspace` is not a
+general refresh button. It may write only after the user explicitly requests a
+reset initialization; the apply call must set `resetInitialization: true`, pass
+explicit `repositories`, reconfirm Design/Test mode, and must not use
+`useDiscovered`. Heavy or stale tmux windows use the replacement commands
+instead.
+
+Command responsibilities stay separate:
+
+| Need | Command | Responsibility |
+| --- | --- | --- |
+| First-time setup | `wakeflow_initialize_workspace` | Discover, confirm, write workspace config/docs/support surfaces, and return the full launch plan. |
+| Explicit reset setup | `wakeflow_initialize_workspace` with `resetInitialization: true` | Reconfirm work directories, clean stale managed window cards/runtime for removed windows, and rewrite setup surfaces. |
+| One heavy/stale window | `wakeflow_replace_window` | Return one replacement launch entry and local registration command; no workspace docs refresh. |
+| Several heavy/stale windows | `wakeflow_replace_windows` | Return only the requested replacement entries and local registration commands; no unrelated window rewrites. |
 
 Design and Test are fresh support surfaces by default. Existing similarly
 named directories such as `<Product>Design` or `<Product>Test` are treated as
@@ -383,6 +432,7 @@ Primary tool groups:
 | Need | MCP tools |
 | --- | --- |
 | Setup and workspace discovery | `wakeflow_initialize_workspace` |
+| Responsibility window replacement | `wakeflow_replace_window`, `wakeflow_replace_windows` |
 | Demand and task state | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |

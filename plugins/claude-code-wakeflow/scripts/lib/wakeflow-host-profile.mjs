@@ -150,7 +150,7 @@ export const hostProfile = {
           "--prompt-file", "<temp file containing the delivery envelope prompt>",
           "--delivery-id", "<delivery envelope id>",
         ],
-        attachArgv: ["node", hostHelperPath, "attach-window", "--root", "<workspace-root>", "--window", entry.windowName, "--open-terminal"],
+        attachArgv: ["node", hostHelperPath, "attach-window", "--root", "<workspace-root>", "--window", entry.windowName],
         recovery: "When the tmux window is dead, relaunch the SAME session interactively: launch-window --resume --session-id <registered id> --replace (the session id is stable across resumes; interactive sessions stay on the subscription pool). Headless claude -p --resume is a last resort only: from 2026-06-15 it bills the separate Agent SDK credit at API rates.",
       },
     }),

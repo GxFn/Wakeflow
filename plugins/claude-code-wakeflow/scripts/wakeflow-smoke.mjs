@@ -254,6 +254,8 @@ async function runMcpSmoke(rootPath) {
     const toolNames = tools.map((tool) => tool.name);
     for (const expected of [
       "wakeflow_initialize_workspace",
+      "wakeflow_replace_window",
+      "wakeflow_replace_windows",
       "wakeflow_status",
       "wakeflow_prepare_delivery",
       "wakeflow_record_delivery",
@@ -268,6 +270,17 @@ async function runMcpSmoke(rootPath) {
     ]) {
       if (!toolNames.includes(expected)) {
         throw new Error(`MCP tools/list missing ${expected}`);
+      }
+    }
+    const hostVisiblePrefix = toolNames.slice(0, 12);
+    for (const expected of [
+      "wakeflow_review_pack",
+      "wakeflow_reduce_results",
+      "wakeflow_decide_review",
+      "wakeflow_complete_demand",
+    ]) {
+      if (!hostVisiblePrefix.includes(expected)) {
+        throw new Error(`MCP host-visible tool prefix missing ${expected}`);
       }
     }
     for (const internal of [
@@ -292,6 +305,9 @@ async function runMcpSmoke(rootPath) {
     const deliverySchema = JSON.stringify(deliveryTool.inputSchema);
     if (initializeSchema.includes("threadId") || initializeSchema.includes("\"threads\"")) {
       throw new Error("wakeflow_initialize_workspace schema exposes thread id fields");
+    }
+    if (initializeSchema.includes("replaceWindows")) {
+      throw new Error("wakeflow_initialize_workspace schema exposes replacement-window input");
     }
     if (deliverySchema.includes("requireThread")) {
       throw new Error("wakeflow_prepare_delivery schema exposes requireThread");

@@ -82,12 +82,24 @@ export const hostProfile = {
       "Create the Codex windows in windowLaunchPlan with the host create_thread tool, immediately reset each title with set_thread_title using displayTitle, then register real thread ids once into the local thread registry before dispatching any work.",
   },
   launch: {
+    // Default Codex reasoning effort for newly created Wakeflow windows. The
+    // host create_thread tool can receive this as `thinking`; model is not
+    // pinned by default so it can inherit the user's current Codex model unless
+    // workspace.config.json hosts.codex.modelByRole sets an explicit pin.
+    thinkingByRole: {
+      controller: "xhigh",
+      design: "xhigh",
+      test: "xhigh",
+      product: "xhigh",
+      default: "xhigh",
+    },
     planFlags: {
       requiresHostCreateThread: true,
       requiresHostTitleReset: true,
+      includesHostCreateThreadSettings: true,
     },
     workflowSteps: (language) => [
-      "Call create_thread for each launch entry with the entry cwd and createThreadPrompt. These prompts perform initialization entry sync only; they are not task deliveries.",
+      "Call create_thread for each launch entry with the entry cwd, createThreadPrompt, and hostCreateThread settings. These prompts perform initialization entry sync only; they are not task deliveries.",
       "Immediately call set_thread_title for the returned thread id, using the entry displayTitle.",
       "Pass each returned real thread id once to the Wakeflow local registration command. The command stores the id only in thread-registry and refreshes derived window-config status; do not hand-write runtime files.",
       language === "zh"
@@ -99,6 +111,7 @@ export const hostProfile = {
       hostTool: "set_thread_title",
       title,
     }),
+    entryExtras: (entry, context) => codexEntryExtras(entry, context),
   },
   artifact: {
     packageName: "wakeflow",
@@ -106,3 +119,49 @@ export const hostProfile = {
     packagedEntries: [".codex-plugin/", ".mcp.json", "README.zh-CN.md", "mcp/", "skills/", "scripts/", "templates/"],
   },
 };
+
+function codexEntryExtras(entry, context) {
+  const role = launchRoleForEntry(entry);
+  const hostConfig = context?.config?.hosts?.codex && typeof context.config.hosts.codex === "object"
+    ? context.config.hosts.codex
+    : {};
+  const thinking = resolveRoleValue({
+    configMap: hostConfig.thinkingByRole,
+    profileMap: hostProfile.launch.thinkingByRole,
+    role,
+  });
+  const model = resolveRoleValue({
+    configMap: hostConfig.modelByRole,
+    profileMap: hostProfile.launch.modelByRole,
+    role,
+  });
+  return {
+    hostCreateThread: {
+      required: true,
+      hostTool: "create_thread",
+      promptField: "createThreadPrompt",
+      targetPolicy: "Use the saved Codex project for this cwd with environment { type: \"local\" }; do not create a worktree unless the user explicitly asks.",
+      cwd: entry.cwd,
+      title: entry.displayTitle,
+      thinking,
+      thinkingSource: "workspace.config.json hosts.codex.thinkingByRole, falling back to the Wakeflow Codex profile",
+      ...(model ? { model, modelSource: "workspace.config.json hosts.codex.modelByRole" } : {
+        model: null,
+        modelPolicy: "inherit the current Codex model; omit create_thread.model unless workspace config pins hosts.codex.modelByRole",
+      }),
+    },
+  };
+}
+
+function launchRoleForEntry(entry) {
+  if (entry.deliveryRole === "controller") return "controller";
+  if (entry.deliveryRole === "design") return "design";
+  if (entry.deliveryRole === "test-target") return "test";
+  return "product";
+}
+
+function resolveRoleValue({ configMap, profileMap, role }) {
+  const safeConfig = configMap && typeof configMap === "object" && !Array.isArray(configMap) ? configMap : {};
+  const safeProfile = profileMap && typeof profileMap === "object" && !Array.isArray(profileMap) ? profileMap : {};
+  return safeConfig[role] ?? safeConfig.default ?? safeProfile[role] ?? safeProfile.default ?? null;
+}

@@ -16,6 +16,7 @@ Wakeflow 把一个本地 Codex 工作区变成有纪律的控制系统：一个�
 - [为什么需要 Wakeflow](#为什么需要-wakeflow)
 - [系统模型](#系统模型)
 - [安装 Wakeflow](#安装-wakeflow)
+- [快速开始](#快速开始)
 - [初始化工作区](#初始化工作区)
 - [Wakeflow 会创建什么](#wakeflow-会创建什么)
 - [工作如何流转](#工作如何流转)
@@ -83,7 +84,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.5.5/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.5.6/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -105,6 +106,31 @@ default_tools_approval_mode = "approve"
 
 Wakeflow 不要求额外的聚合 marketplace 仓库。单独的 catalog 可以用于品牌展示，
 但不是主要安装或发布路径。
+
+## 快速开始
+
+Codex 版通过 MCP 工具驱动(没有 slash 命令)。用自然语言告诉 Codex 你要做什么,它会调用对应工具。
+
+1. **初始化**(每个工作区一次):
+   ```text
+   用 Wakeflow 初始化这个工作区,先预览计划,等我确认再写入。
+   ```
+   Codex 调用 `wakeflow_initialize_workspace`(dry-run -> 确认 -> apply),再用宿主 `create_thread` 工具创建每个窗口并注册真实 thread id。已初始化过?重初始化会有意被拒——单个陈旧窗口用 `wakeflow_replace_window` 重建,或做显式 reset。
+2. **开始干活**——给总控一个需求,或让 Codex 派发下一个可领取任务。
+
+### 工具速查表(意图 -> MCP 工具)
+
+| 你想... | 工具 |
+| --- | --- |
+| 搭建新工作区 | `wakeflow_initialize_workspace` |
+| 重建陈旧窗口 | `wakeflow_replace_window` / `wakeflow_replace_windows` |
+| 看需求 / 可领取工作 / 就绪度 | `wakeflow_status`、`wakeflow_next_work` |
+| 启动一个需求 | `wakeflow_init_demand` -> `wakeflow_add_task` |
+| 把活交给窗口 | `wakeflow_prepare_delivery` -> 宿主发送 -> `wakeflow_record_delivery` |
+| 记录目标结果 | `wakeflow_record_target_result` |
+| 评审并决策 | `wakeflow_review_pack` -> `wakeflow_reduce_results` -> `wakeflow_decide_review` -> `wakeflow_complete_demand` |
+| 把需求移交另一宿主 | `wakeflow_adopt_demand_host` |
+| 体检 / 收敛运行时 | `wakeflow_verify` |
 
 ## 初始化工作区
 
@@ -137,10 +163,25 @@ Preview the plan first and wait for my confirmation before writing.
 3. Codex 根据目录事实和用户上下文判断工作区是 clean 还是 messy。
 4. 对 clean 工作区，Codex 再次调用工具，并显式传入目标 work windows 的 `repositories` 映射。
 5. 对 messy 工作区，Codex 先问用户哪些目录是受管窗口，不能直接广泛导入 discovered 目录。
-6. 用户确认后，Codex 调用 `wakeflow_initialize_workspace`，`apply: true`。
+6. 对首次初始化的工作区，用户确认后，Codex 调用
+   `wakeflow_initialize_workspace`，`apply: true`。
 7. Codex 创建返回的线程，将每个线程标题重设为 `displayTitle`，并把真实 thread id
    只写入 Wakeflow 本地注册命令。thread registry 是唯一 thread-id 权威；
    window config 是由它派生的视图。
+
+已经初始化过的工作区里，`wakeflow_initialize_workspace` 不是通用“刷新”按钮。
+只有用户明确要求“重置初始化”时才能写入；apply 调用必须设置
+`resetInitialization: true`，显式传入 `repositories`，重新确认 Design/Test 模式，
+并且不能使用 `useDiscovered`。窗口上下文过重或过期时，使用替换窗口命令。
+
+三个高层入口的职责要分清：
+
+| 需求 | 命令 | 职责 |
+| --- | --- | --- |
+| 首次 setup | `wakeflow_initialize_workspace` | 发现、确认、写入 workspace config/docs/support surfaces，并返回完整 launch plan。 |
+| 明确重置 setup | `wakeflow_initialize_workspace` + `resetInitialization: true` | 重新确认工作目录，清理被移除窗口的受管 cards/runtime，并重写 setup surfaces。 |
+| 替换单个上下文过重/过期窗口 | `wakeflow_replace_window` | 只返回一个 replacement launch entry 和本地注册命令，不刷新 workspace docs。 |
+| 替换多个上下文过重/过期窗口 | `wakeflow_replace_windows` | 只返回指定窗口的 replacement entries 和本地注册命令，不改无关窗口。 |
 
 Design 和 Test 默认创建为新的支持 surface。`<Product>Design` 或 `<Product>Test`
 这类相似目录只被当作目录事实，除非用户明确把它们映射成 Design/Test。
@@ -223,6 +264,7 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 | 需求 | MCP tools |
 | --- | --- |
 | 设置和工作区发现 | `wakeflow_initialize_workspace` |
+| 职责窗口替换 | `wakeflow_replace_window`, `wakeflow_replace_windows` |
 | Demand 和任务状态 | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |

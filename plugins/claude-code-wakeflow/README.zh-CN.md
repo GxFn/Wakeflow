@@ -16,6 +16,7 @@ Wakeflow 把一个本地 Claude Code 工作区变成有纪律的控制系统：�
 - [为什么需要 Wakeflow](#为什么需要-wakeflow)
 - [架构](#架构)
 - [安装 Wakeflow](#安装-wakeflow)
+- [快速开始](#快速开始)
 - [窗口模型](#窗口模型)
 - [跨宿主统一词汇](#跨宿主统一词汇)
 - [初始化工作区](#初始化工作区)
@@ -170,6 +171,38 @@ Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环�
 helper 依赖 tmux。初始化会先运行 `preflight`：缺少 tmux 时，在获得用户一次明确
 同意后用 `brew install tmux` 安装，遇到临时 bottle 错误会重试一次。
 
+## 快速开始
+
+从安装到舰队跑起来三步,后面附命令速查表。
+
+1. **初始化**(每个工作区一次)——在 Claude Code 里,于工作区目录下:
+   ```text
+   /wakeflow:init
+   ```
+   预览计划、确认,Wakeflow 写入 config + 访问卡、启动全部窗口并注册。已初始化过?`init` 会有意停下——单个陈旧窗口用 `/wakeflow:windows <名> --replace`,整体重建只在显式 reset 时再跑。
+2. **进入工作区**——新开一个终端窗口或 tab,`cd` 进工作区,执行(把 `<session>` 换成你的 `hosts.claude-code.tmuxSession`):
+   ```text
+   tmux attach -t wakeflow
+   ```
+3. **开始干活**——给总控窗口一个需求,或运行 `/wakeflow:dispatch`。
+
+### 命令速查表
+
+| 命令 | 作用 | 何时用 |
+| --- | --- | --- |
+| `/wakeflow:init` | 搭建工作区,再启动 + 注册全部窗口(仅首次) | 全新工作区 |
+| `/wakeflow:windows` | 只读:列出每个窗口状态(注册了?存活?模式?) | "舰队现在啥状态?" |
+| `/wakeflow:windows all` | 用相同 session id 恢复/重开全部配置窗口(上下文不丢) | 重启电脑后 / 升级插件后 |
+| `/wakeflow:windows <名>` | 恢复单个窗口 | 某个窗口死了 |
+| `/wakeflow:windows <名> --replace` | 用全新 session 重建单个窗口 | 窗口陈旧 / 上下文太重 |
+| `/wakeflow:status` | 需求、可领取工作、投递、窗口就绪度 | 派发前 |
+| `/wakeflow:dispatch` | 给目标窗口准备并发送一次投递 | 把活交给某窗口 |
+| `/wakeflow:review` | 看目标的原始证据,记录 accept / rework / blocked | 有结果回来了 |
+| `/wakeflow:unattended on|off` | 切换工作窗口的权限模式 | 无人值守 ↔ 逐操作提示 |
+| `/wakeflow:check` | 体检已有工作区,收敛陈旧/缺失的面 | 升级之后 |
+
+口诀:**`init` 装修,`windows all` 开灯,`windows` 看一眼。**
+
 ## 窗口模型
 
 窗口传输是 Claude Code 版本的关键差异，而且 Claude Code 版本只使用终端。
@@ -256,12 +289,27 @@ Preview the plan first and wait for my confirmation before writing.
 3. Claude Code 根据目录事实和用户上下文判断工作区是 clean 还是 messy。
 4. 对 clean 工作区，Claude Code 再次调用工具，并显式传入目标 work windows 的 `repositories` 映射。
 5. 对 messy 工作区，Claude Code 先问用户哪些目录是受管窗口，不能直接广泛导入 discovered 目录。
-6. 用户确认后，Claude Code 调用 `wakeflow_initialize_workspace`，`apply: true`。
+6. 对首次初始化的工作区，用户确认后，Claude Code 调用
+   `wakeflow_initialize_workspace`，`apply: true`。
 7. Claude Code 运行 host helper：先 `preflight`，再对返回 launch plan 中的
    每个窗口运行 `launch-window`。每次 launch 创建运行 `claude --session-id`
    的 tmux 窗口、粘贴 entry-sync prompt、把 `displayTitle` 设为 tmux 窗口名，
    并返回 session id；每个真实 session id 只传一次给 Wakeflow 本地注册命令。
    thread registry 是唯一 session-id 权威；window config 是由它派生的视图。
+
+已经初始化过的工作区里，`wakeflow_initialize_workspace` 不是通用“刷新”按钮。
+只有用户明确要求“重置初始化”时才能写入；apply 调用必须设置
+`resetInitialization: true`，显式传入 `repositories`，重新确认 Design/Test 模式，
+并且不能使用 `useDiscovered`。窗口上下文过重或过期时，使用替换窗口命令。
+
+三个高层入口的职责要分清：
+
+| 需求 | 命令 | 职责 |
+| --- | --- | --- |
+| 首次 setup | `wakeflow_initialize_workspace` | 发现、确认、写入 workspace config/docs/support surfaces，并返回完整 launch plan。 |
+| 明确重置 setup | `wakeflow_initialize_workspace` + `resetInitialization: true` | 重新确认工作目录，清理被移除窗口的受管 cards/runtime，并重写 setup surfaces。 |
+| 替换单个上下文过重/过期窗口 | `wakeflow_replace_window` | 只返回一个 replacement launch entry 和本地注册命令，不刷新 workspace docs。 |
+| 替换多个上下文过重/过期窗口 | `wakeflow_replace_windows` | 只返回指定窗口的 replacement entries 和本地注册命令，不改无关窗口。 |
 
 Design 和 Test 默认创建为新的支持 surface。`<Product>Design` 或 `<Product>Test`
 这类相似目录只被当作目录事实，除非用户明确把它们映射成 Design/Test。
@@ -329,6 +377,7 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools，工具名与 
 | 需求 | MCP tools |
 | --- | --- |
 | 设置和工作区发现 | `wakeflow_initialize_workspace` |
+| 职责窗口替换 | `wakeflow_replace_window`, `wakeflow_replace_windows` |
 | Demand 和任务状态 | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |

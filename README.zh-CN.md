@@ -147,7 +147,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.5.5/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.5.6/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -202,10 +202,25 @@ Preview the plan first and wait for my confirmation before writing.
 3. Codex 根据目录事实和用户上下文判断工作区是 clean 还是 messy。
 4. 对 clean 工作区，Codex 再次调用工具，并显式传入目标 work windows 的 `repositories` 映射。
 5. 对 messy 工作区，Codex 先问用户哪些目录是受管窗口，不能直接广泛导入 discovered 目录。
-6. 用户确认后，Codex 调用 `wakeflow_initialize_workspace`，`apply: true`。
+6. 对首次初始化的工作区，用户确认后，Codex 调用
+   `wakeflow_initialize_workspace`，`apply: true`。
 7. Codex 创建返回的线程，将每个线程标题重设为 `displayTitle`，并把真实 thread id
    只写入 Wakeflow 本地注册命令。thread registry 是唯一 thread-id 权威；
    window config 是由它派生的视图。
+
+已经初始化过的工作区里，`wakeflow_initialize_workspace` 不是通用“刷新”按钮。
+只有用户明确要求“重置初始化”时才能写入；apply 调用必须设置
+`resetInitialization: true`，显式传入 `repositories`，重新确认 Design/Test 模式，
+并且不能使用 `useDiscovered`。窗口上下文过重或过期时，使用替换窗口命令。
+
+三个高层入口的职责要分清：
+
+| 需求 | 命令 | 职责 |
+| --- | --- | --- |
+| 首次 setup | `wakeflow_initialize_workspace` | 发现、确认、写入 workspace config/docs/support surfaces，并返回完整 launch plan。 |
+| 明确重置 setup | `wakeflow_initialize_workspace` + `resetInitialization: true` | 重新确认工作目录，清理被移除窗口的受管 cards/runtime，并重写 setup surfaces。 |
+| 替换单个上下文过重/过期窗口 | `wakeflow_replace_window` | 只返回一个 replacement launch entry 和本地注册命令，不刷新 workspace docs。 |
+| 替换多个上下文过重/过期窗口 | `wakeflow_replace_windows` | 只返回指定窗口的 replacement entries 和本地注册命令，不改无关窗口。 |
 
 Claude Code 版本使用同样的 preview/apply 合约。返回的 launch plan 由 tmux host
 helper 实体化，而不是用 Codex `create_thread`：每个窗口都会作为交互式 `claude`
@@ -283,6 +298,7 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 | 需求 | MCP tools |
 | --- | --- |
 | 设置和工作区发现 | `wakeflow_initialize_workspace` |
+| 职责窗口替换 | `wakeflow_replace_window`, `wakeflow_replace_windows` |
 | Demand 和任务状态 | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |

@@ -21,9 +21,15 @@ function shapeOf(value) {
   return typeof value;
 }
 
+const HOST_SPECIFIC_CONTRACT_PATHS = new Set([
+  "hostProfile.launch.thinkingByRole",
+  "hostProfile.launch.planFlags.includesHostCreateThreadSettings",
+]);
+
 function assertSameShape(reference, candidate, trail = "hostProfile") {
   for (const [key, refValue] of Object.entries(reference)) {
     const at = `${trail}.${key}`;
+    if (HOST_SPECIFIC_CONTRACT_PATHS.has(at)) continue;
     assert.ok(key in candidate, `${at} is missing from the claude host profile`);
     const candidateValue = candidate[key];
     assert.equal(shapeOf(candidateValue), shapeOf(refValue), `${at} must have shape ${shapeOf(refValue)}`);
@@ -60,14 +66,22 @@ test("claude host profile carries terminal-only Claude Code semantics", () => {
   assert.match(claudeProfile.hostTools.sendToWindow, /wakeflow-claude-host send/);
 });
 
-test("claude entryExtras emit tmux-resident hostLaunch specs and codex emits none", () => {
-  assert.equal(codexProfile.launch.entryExtras, undefined);
+test("host entryExtras emit host-specific launch specs", () => {
   const entry = {
     windowName: "RepoA",
+    deliveryRole: "product",
     displayTitle: "RepoA Work",
     cwd: "/tmp/repo-a",
     createThreadPrompt: "entry sync",
   };
+  const codexExtras = codexProfile.launch.entryExtras(entry, { config: {} });
+  assert.equal(codexExtras.hostCreateThread.required, true);
+  assert.equal(codexExtras.hostCreateThread.hostTool, "create_thread");
+  assert.equal(codexExtras.hostCreateThread.promptField, "createThreadPrompt");
+  assert.equal(codexExtras.hostCreateThread.thinking, "xhigh");
+  assert.equal(codexExtras.hostCreateThread.model, null);
+  assert.match(codexExtras.hostCreateThread.modelPolicy, /inherit the current Codex model/);
+
   const extras = claudeProfile.launch.entryExtras(entry);
   assert.equal(extras.windowMode, "tmux-resident");
   assert.ok(existsSync(extras.hostLaunch.helper), "host helper path must exist in the artifact");

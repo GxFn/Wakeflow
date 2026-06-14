@@ -37,7 +37,9 @@ Use these MCP tools for normal installed-workspace control:
 | Need | MCP tool |
 | --- | --- |
 | Inspect repository, state-root, and delivery-loop status | `wakeflow_status` |
-| Initialize or refresh workspace setup | `wakeflow_initialize_workspace` |
+| Initialize first-time setup, or explicitly reset initialized setup after user confirmation | `wakeflow_initialize_workspace` |
+| Recreate/rebind one responsibility window without workspace initialization | `wakeflow_replace_window` |
+| Recreate/rebind selected responsibility windows without workspace initialization | `wakeflow_replace_windows` |
 | Create, extend, or complete a controller demand | `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_complete_demand` |
 | Prepare or record delivery-loop transport evidence | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result` |
 | Review target results and record controller judgment | `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review` |

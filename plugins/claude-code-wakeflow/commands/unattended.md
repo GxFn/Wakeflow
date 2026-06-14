@@ -3,7 +3,7 @@ description: Turn unattended (prompt-free) mode for the work windows on or off, 
 argument-hint: [on|off]
 ---
 
-Change the permission mode of this workspace's tmux work windows. Unattended (`bypassPermissions`) removes per-action permission prompts so dispatch flows run without clicks; the windows stay bounded by repository worktrees, `CLAUDE.md` gates, and the Wakeflow state machine. This is a deliberate, recorded, reversible decision — never a silent default.
+Change the permission mode of this workspace's tmux work windows. Unattended (`bypassPermissions`) removes per-action permission prompts so dispatch flows run without clicks; the windows stay bounded by repository worktrees, `CLAUDE.md` gates, and the Wakeflow state machine. Wakeflow work windows default to this unattended mode (the fleet is built for hands-off dispatch); this command makes the choice explicit, recorded, and reversible, and lets a user switch to `acceptEdits` when they want per-action prompts back.
 
 1. Resolve the target mode from `$ARGUMENTS`: `on` -> `bypassPermissions`, `off` -> `acceptEdits`. If absent, read the current `hosts.claude-code.permissionMode` and ask the user which mode they want.
 2. If turning unattended ON, get the user's EXPLICIT confirmation first (AskUserQuestion): state plainly that work windows will run with no permission prompts, and that the safety boundary becomes the repo worktree + CLAUDE.md gates + state machine rather than per-action approval. Do not proceed without a clear yes. If turning OFF, no extra consent is needed.

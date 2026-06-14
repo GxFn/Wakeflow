@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { handlers, tools } from "../plugins/codex-wakeflow/lib/wakeflow-mcp-tools.mjs";
 import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
 import {
   existsSync,
@@ -232,7 +233,9 @@ test("initialize localizes launch titles and prompts with the window name first"
 
   assert.equal(payload.steps.windowLaunchPlan.language, "zh");
   assert.equal(payload.steps.windowLaunchPlan.requiresHostTitleReset, true);
+  assert.equal(payload.steps.windowLaunchPlan.includesHostCreateThreadSettings, true);
   assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /set_thread_title/);
+  assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /hostCreateThread settings/);
   assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /not task deliveries/);
   assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /Pass each returned real thread id once/);
   assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /stores the id only in thread-registry/);
@@ -241,6 +244,18 @@ test("initialize localizes launch titles and prompts with the window name first"
   assert.equal(app.displayTitle, `AppRepo ${zhDutyWindow}`);
   assert.equal(design.displayTitle, `Design ${zhDesignWindow}`);
   assert.equal(app.promptPurpose, "initialization-entry-sync");
+  assert.deepEqual(app.hostCreateThread, {
+    required: true,
+    hostTool: "create_thread",
+    promptField: "createThreadPrompt",
+    targetPolicy: "Use the saved Codex project for this cwd with environment { type: \"local\" }; do not create a worktree unless the user explicitly asks.",
+    cwd: app.cwd,
+    title: `AppRepo ${zhDutyWindow}`,
+    thinking: "xhigh",
+    thinkingSource: "workspace.config.json hosts.codex.thinkingByRole, falling back to the Wakeflow Codex profile",
+    model: null,
+    modelPolicy: "inherit the current Codex model; omit create_thread.model unless workspace config pins hosts.codex.modelByRole",
+  });
   assert.deepEqual(app.titleReset, {
     required: true,
     hostTool: "set_thread_title",
@@ -450,6 +465,7 @@ Status: idle / no active demand
 
   const result = runAt(parent, [
     "initialize",
+    "--reset-initialization",
     "--repo",
     "AppRepo=AppRepo",
     "--write",
@@ -484,6 +500,7 @@ Status: active
 
   const activeResult = runAt(parent, [
     "initialize",
+    "--reset-initialization",
     "--repo",
     "AppRepo=AppRepo",
     "--write",
@@ -523,6 +540,7 @@ Status: starter long-term map
 
   const queueResult = runAt(parent, [
     "initialize",
+    "--reset-initialization",
     "--repo",
     "AppRepo=AppRepo",
     "--write",
@@ -612,6 +630,7 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
 
   const rerun = run(fixture, [
     "initialize",
+    "--reset-initialization",
     "--repo",
     "BaseWindow=../BaseWindow",
     "--repo",
@@ -636,7 +655,7 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
   assert.equal(Object.hasOwn(rerunWindowConfig, "threadId"), false);
 });
 
-test("initialize can replace one registered window thread without rebuilding every window", () => {
+test("replace-window replaces one registered window thread without initialization writes", () => {
   const fixture = makeFixture();
   const oldThreadId = "019e7e06-e64c-7e42-9dc3-ca1633bdeed7";
   const newThreadId = "019e7e07-4c52-7752-8ca6-5e8033bf3fb9";
@@ -656,8 +675,8 @@ test("initialize can replace one registered window thread without rebuilding eve
   assert.equal(result.status, 0, result.stderr || result.stdout);
 
   result = run(fixture, [
-    "initialize",
-    "--replace-window",
+    "replace-window",
+    "--window",
     "BaseWindow",
     "--language",
     "zh",
@@ -669,11 +688,24 @@ test("initialize can replace one registered window thread without rebuilding eve
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.doesNotMatch(result.stdout, new RegExp(newThreadId));
   const payload = JSON.parse(result.stdout);
+  assert.equal(payload.command, "replace-window");
+  assert.equal(payload.mode, "apply");
   assert.equal(payload.steps.windowLaunchPlan.replacementMode, true);
   assert.deepEqual(payload.steps.windowLaunchPlan.replaceWindows, ["BaseWindow"]);
   assert.deepEqual(payload.steps.windowLaunchPlan.windows.map((item) => item.windowName), ["BaseWindow"]);
   assert.equal(payload.steps.windowLaunchPlan.windows[0].displayTitle, `BaseWindow ${zhDutyWindow}`);
   assert.equal(payload.steps.windowLaunchPlan.windows[0].titleReset.title, `BaseWindow ${zhDutyWindow}`);
+  assert.equal(payload.steps.windowLaunchPlan.windows[0].hostCreateThread.required, true);
+  assert.equal(payload.steps.windowLaunchPlan.windows[0].hostCreateThread.promptField, "createThreadPrompt");
+  assert.equal(payload.steps.windowLaunchPlan.windows[0].hostCreateThread.title, `BaseWindow ${zhDutyWindow}`);
+  assert.equal(payload.steps.windowLaunchPlan.windows[0].hostCreateThread.thinking, "xhigh");
+  assert.equal(payload.steps.windowLaunchPlan.windows[0].hostCreateThread.model, null);
+  assert.match(payload.steps.windowLaunchPlan.windows[0].hostCreateThread.modelPolicy, /inherit the current Codex model/);
+  assert.equal(payload.steps.windowLaunchPlan.windows[0].localRegistration.command, "wakeflow-setup replace-window");
+  assert.deepEqual(
+    payload.steps.windowLaunchPlan.windows[0].localRegistration.argvTemplate.slice(0, 6),
+    ["replace-window", "--root", fixture.control, "--window", "BaseWindow", "--thread"],
+  );
 
   const replaced = payload.steps.localWindows.results.find((item) => item.windowName === "BaseWindow");
   assert.equal(replaced.replaceRequested, true);
@@ -687,11 +719,314 @@ test("initialize can replace one registered window thread without rebuilding eve
   assert.equal(Object.hasOwn(registry, "deliveryRole"), false);
 });
 
-test("initialize replacement apply fails closed until the new real thread id is registered locally", () => {
+test("replace-windows regenerates only selected responsibility windows without initialization writes", () => {
   const fixture = makeFixture();
-  const result = run(fixture, ["initialize", "--replace-window", "BaseWindow", "--write", "--json"]);
+  const oldThreadId = "019e7e06-e64c-7e42-9dc3-ca1633bdeed7";
+  const newThreadId = "019e7e07-4c52-7752-8ca6-5e8033bf3fb9";
+
+  let result = run(fixture, [
+    "initialize",
+    "--repo",
+    "BaseWindow=../BaseWindow",
+    "--internal-design",
+    "--internal-test",
+    "--thread",
+    `BaseWindow=${oldThreadId}`,
+    "--write",
+    "--json",
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  result = run(fixture, [
+    "replace-windows",
+    "--window",
+    "BaseWindow",
+    "--language",
+    "zh",
+    "--json",
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.command, "replace-windows");
+  assert.equal(plan.mode, "plan");
+  assert.equal(plan.wrote, false);
+  assert.equal(Object.hasOwn(plan.steps, "syncTemplates"), false);
+  assert.equal(Object.hasOwn(plan.steps, "syncRootAgents"), false);
+  assert.equal(Object.hasOwn(plan.steps, "writeAgents"), false);
+  assert.deepEqual(plan.steps.windowLaunchPlan.replaceWindows, ["BaseWindow"]);
+  assert.deepEqual(plan.steps.windowLaunchPlan.windows.map((item) => item.windowName), ["BaseWindow"]);
+  assert.equal(plan.steps.windowLaunchPlan.windows[0].localRegistration.command, "wakeflow-setup replace-windows");
+  assert.deepEqual(
+    plan.steps.windowLaunchPlan.windows[0].localRegistration.argvTemplate.slice(0, 6),
+    ["replace-windows", "--root", fixture.control, "--window", "BaseWindow", "--thread"],
+  );
+
+  result = run(fixture, [
+    "replace-windows",
+    "--window",
+    "BaseWindow",
+    "--thread",
+    `BaseWindow=${newThreadId}`,
+    "--write",
+    "--json",
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const applied = JSON.parse(result.stdout);
+  assert.equal(applied.command, "replace-windows");
+  assert.equal(applied.mode, "apply");
+  assert.equal(applied.steps.localWindows.results[0].replaceRequested, true);
+  assert.equal(applied.steps.localWindows.results[0].replacedExistingThread, true);
+
+  const registryPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/thread-registry/BaseWindow.json");
+  const registry = JSON.parse(readFileSync(registryPath, "utf8"));
+  assert.equal(registry.threadId, newThreadId);
+});
+
+test("replace-window carries Codex create_thread model and thinking overrides from workspace config", () => {
+  const fixture = makeFixture();
+  const configPath = path.join(fixture.control, "workspace.config.json");
+  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  config.hosts = {
+    codex: {
+      modelByRole: { default: "gpt-5.5" },
+      thinkingByRole: { product: "high", default: "medium" },
+    },
+  };
+  writeFile(configPath, JSON.stringify(config, null, 2));
+
+  const plan = runJson(fixture, [
+    "replace-window",
+    "--window",
+    "BaseWindow",
+  ]);
+  const entry = plan.steps.windowLaunchPlan.windows[0];
+  assert.equal(entry.windowName, "BaseWindow");
+  assert.equal(entry.hostCreateThread.required, true);
+  assert.equal(entry.hostCreateThread.hostTool, "create_thread");
+  assert.equal(entry.hostCreateThread.promptField, "createThreadPrompt");
+  assert.equal(entry.hostCreateThread.thinking, "high");
+  assert.equal(entry.hostCreateThread.thinkingSource, "workspace.config.json hosts.codex.thinkingByRole, falling back to the Wakeflow Codex profile");
+  assert.equal(entry.hostCreateThread.model, "gpt-5.5");
+  assert.equal(entry.hostCreateThread.modelSource, "workspace.config.json hosts.codex.modelByRole");
+});
+
+test("wakeflow_replace_windows MCP wrapper returns a scoped replacement plan", async () => {
+  const fixture = makeFixture();
+  const result = await handlers.wakeflow_replace_windows({
+    root: fixture.control,
+    windows: ["BaseWindow"],
+    language: "zh",
+  });
+
+  assert.equal(result.ok, true, result.stderr || result.stdout);
+  assert.equal(result.parsedJson.command, "replace-windows");
+  assert.equal(result.parsedJson.mode, "plan");
+  assert.deepEqual(result.parsedJson.steps.windowLaunchPlan.windows.map((item) => item.windowName), ["BaseWindow"]);
+});
+
+test("wakeflow_replace_window MCP wrapper returns one scoped replacement plan", async () => {
+  const fixture = makeFixture();
+  const result = await handlers.wakeflow_replace_window({
+    root: fixture.control,
+    window: "BaseWindow",
+    language: "zh",
+  });
+
+  assert.equal(result.ok, true, result.stderr || result.stdout);
+  assert.equal(result.parsedJson.command, "replace-window");
+  assert.equal(result.parsedJson.mode, "plan");
+  assert.deepEqual(result.parsedJson.steps.windowLaunchPlan.windows.map((item) => item.windowName), ["BaseWindow"]);
+  assert.equal(result.parsedJson.steps.windowLaunchPlan.windows[0].localRegistration.command, "wakeflow-setup replace-window");
+});
+
+test("MCP tool order keeps controller review loop inside the host-visible prefix", () => {
+  assert.deepEqual(tools.slice(0, 12).map((tool) => tool.name), [
+    "wakeflow_status",
+    "wakeflow_initialize_workspace",
+    "wakeflow_replace_window",
+    "wakeflow_init_demand",
+    "wakeflow_add_task",
+    "wakeflow_prepare_delivery",
+    "wakeflow_record_delivery",
+    "wakeflow_record_target_result",
+    "wakeflow_review_pack",
+    "wakeflow_reduce_results",
+    "wakeflow_decide_review",
+    "wakeflow_complete_demand",
+  ]);
+});
+
+test("initialize MCP schema does not expose replacement-window compatibility input", () => {
+  const initializeTool = tools.find((tool) => tool.name === "wakeflow_initialize_workspace");
+  assert.ok(initializeTool);
+  assert.equal(Object.hasOwn(initializeTool.inputSchema.properties, "replaceWindows"), false);
+});
+
+test("initialize rejects obsolete replacement-window flag before writing", () => {
+  const fixture = makeFixture();
+  const configPath = path.join(fixture.control, "workspace.config.json");
+  const beforeConfig = readFileSync(configPath, "utf8");
+  const result = run(fixture, [
+    "initialize",
+    "--replace-window",
+    "BaseWindow",
+    "--repo",
+    "PluginWindow=../PluginWindow",
+    "--thread",
+    "BaseWindow=019e7e07-4c52-7752-8ca6-5e8033bf3fb9",
+    "--write",
+    "--json",
+  ]);
   assert.notEqual(result.status, 0);
-  assert.match(`${result.stdout}\n${result.stderr}`, /requires a new --thread Window=<realThreadId>/);
+  assert.match(`${result.stdout}\n${result.stderr}`, /initialize no longer accepts --replace-window/);
+  assert.match(`${result.stdout}\n${result.stderr}`, /Use replace-window for one existing window/);
+  assert.equal(readFileSync(configPath, "utf8"), beforeConfig);
+  assert.equal(existsSync(path.join(fixture.parent, "AGENTS.md")), false);
+});
+
+test("initialized workspace requires explicit reset initialization and cleans stale managed windows", () => {
+  const fixture = makeFixture();
+  let result = run(fixture, [
+    "initialize",
+    "--repo",
+    "BaseWindow=../BaseWindow",
+    "--repo",
+    "PluginWindow=../PluginWindow",
+    "--internal-design",
+    "--internal-test",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const pluginAgentsPath = path.join(fixture.plugin, "AGENTS.md");
+  const staleWindowConfigPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/window-config/PluginWindow.json");
+  assert.match(readFileSync(pluginAgentsPath, "utf8"), /wakeflow:scope:start/);
+  assert.equal(existsSync(staleWindowConfigPath), true);
+
+  result = run(fixture, [
+    "initialize",
+    "--repo",
+    "BaseWindow=../BaseWindow",
+    "--internal-design",
+    "--internal-test",
+    "--write",
+    "--json",
+  ]);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stdout}\n${result.stderr}`, /existing Wakeflow initialization footprint/);
+  assert.match(`${result.stdout}\n${result.stderr}`, /--reset-initialization/);
+  assert.match(readFileSync(path.join(fixture.control, "workspace.config.json"), "utf8"), /PluginWindow/);
+  assert.match(readFileSync(pluginAgentsPath, "utf8"), /wakeflow:scope:start/);
+
+  result = run(fixture, [
+    "initialize",
+    "--reset-initialization",
+    "--repo",
+    "BaseWindow=../BaseWindow",
+    "--internal-design",
+    "--internal-test",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.steps.resetInitializationCleanup.resetRequested, true);
+  assert.deepEqual(payload.steps.resetInitializationCleanup.staleWindows, ["PluginWindow"]);
+  const pluginAgents = readFileSync(pluginAgentsPath, "utf8");
+  assert.match(pluginAgents, /Existing rule/);
+  assert.doesNotMatch(pluginAgents, /wakeflow:scope:start/);
+  assert.doesNotMatch(readFileSync(path.join(fixture.control, "workspace.config.json"), "utf8"), /PluginWindow/);
+  assert.equal(existsSync(staleWindowConfigPath), false);
+});
+
+test("thread registration follow-up is allowed on an already-initialized workspace (no footprint block)", () => {
+  const fixture = makeFixture();
+  let result = run(fixture, [
+    "initialize",
+    "--repo",
+    "BaseWindow=../BaseWindow",
+    "--internal-design",
+    "--internal-test",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  // The launch plan's own registration argvTemplate is `initialize --thread
+  // <window>=<id> --write`; it MUST succeed after init created the footprint,
+  // otherwise no created window can ever register its thread id.
+  result = run(fixture, [
+    "initialize",
+    "--thread",
+    "BaseWindow=thread-real-001",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  const registryPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/thread-registry/BaseWindow.json");
+  assert.equal(existsSync(registryPath), true, "thread id is registered into the local registry");
+
+  // a config-bearing re-init on the same workspace is still blocked
+  const reinit = run(fixture, [
+    "initialize",
+    "--repo",
+    "BaseWindow=../BaseWindow",
+    "--write",
+    "--json",
+  ]);
+  assert.notEqual(reinit.status, 0, "config re-init stays guarded");
+  assert.match(`${reinit.stdout}\n${reinit.stderr}`, /existing Wakeflow initialization footprint/);
+});
+
+test("dry-run initialize on an already-initialized workspace reports blocked instead of a green plan", () => {
+  const fixture = makeFixture();
+  run(fixture, ["initialize", "--repo", "BaseWindow=../BaseWindow", "--internal-design", "--internal-test", "--write", "--json"]);
+
+  // dry-run with config selection must agree with what --write would do
+  const dry = run(fixture, ["initialize", "--repo", "BaseWindow=../BaseWindow", "--json"]);
+  assert.equal(dry.status, 0, dry.stderr || dry.stdout);
+  const payload = JSON.parse(dry.stdout);
+  assert.equal(payload.mode, "blocked-already-initialized");
+  assert.equal(payload.alreadyInitialized, true);
+  assert.match(payload.nextAction, /replace-window|reset-initialization/);
+});
+
+test("dry-run reset previews stale windows without deleting anything", () => {
+  const fixture = makeFixture();
+  run(fixture, ["initialize", "--repo", "BaseWindow=../BaseWindow", "--repo", "PluginWindow=../PluginWindow", "--internal-design", "--internal-test", "--write", "--json"]);
+  const staleConfig = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/window-config/PluginWindow.json");
+  assert.equal(existsSync(staleConfig), true);
+
+  const dry = run(fixture, ["initialize", "--reset-initialization", "--repo", "BaseWindow=../BaseWindow", "--internal-design", "--internal-test", "--json"]);
+  assert.equal(dry.status, 0, dry.stderr || dry.stdout);
+  const cleanup = JSON.parse(dry.stdout).steps.resetInitializationCleanup;
+  assert.deepEqual(cleanup.staleWindows, ["PluginWindow"], "preview names the window apply would drop");
+  assert.equal(cleanup.wrote, false);
+  assert.equal(existsSync(staleConfig), true, "dry-run must not delete the stale window config");
+});
+
+test("reset cleanup also removes a legacy flat thread-registry entry (codex fallback)", () => {
+  const fixture = makeFixture();
+  run(fixture, ["initialize", "--repo", "BaseWindow=../BaseWindow", "--repo", "PluginWindow=../PluginWindow", "--internal-design", "--internal-test", "--write", "--json"]);
+  const legacyDir = path.join(fixture.control, ".workspace-local/wakeflow-delivery/thread-registry");
+  mkdirSync(legacyDir, { recursive: true });
+  const legacyFile = path.join(legacyDir, "PluginWindow.json");
+  writeFileSync(legacyFile, JSON.stringify({ threadId: "stale-legacy-id" }));
+
+  run(fixture, ["initialize", "--reset-initialization", "--repo", "BaseWindow=../BaseWindow", "--internal-design", "--internal-test", "--write", "--json"]);
+  assert.equal(existsSync(legacyFile), false, "reset clears the legacy registry so no stale id survives the fallback");
+});
+
+test("replace-window requires an initialized workspace", () => {
+  const parent = mkdtempSync(path.join(os.tmpdir(), "wf-uninit-"));
+  const control = path.join(parent, "Wakeflow");
+  mkdirSync(path.join(control, "scripts"), { recursive: true });
+  const result = run({ control }, ["replace-window", "--window", "Design", "--write", "--json"]);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stdout}\n${result.stderr}`, /requires an initialized workspace/);
 });
 
 test("initialize use-discovered supports excluding product windows before config and launch plan", () => {
@@ -795,6 +1130,10 @@ test("write-agents is dry-run by default and writes managed access cards with --
   assert.match(baseAgents, /returns `TargetResultEnvelope`/);
   assert.match(baseAgents, /The full group snapshot stays in the controller-return envelope/);
   assert.match(baseAgents, /Codex subagents are recommended for bounded parallel assistance/);
+  assert.match(baseAgents, /Functional Completeness Self-Check/);
+  assert.match(baseAgents, /Do not rely on the controller to discover obvious gaps/);
+  assert.match(baseAgents, /do not downgrade a complete capability into a thin adapter/);
+  assert.match(baseAgents, /return `blocked` or `needs-review`/);
   assert.doesNotMatch(baseAgents, /controlPlan/);
   assert.doesNotMatch(baseAgents, /backfill must include completion scope/);
   assert.doesNotMatch(baseAgents, /downgrade complete capability into thin implementation/);
@@ -875,6 +1214,8 @@ test("write-agents can explicitly include unmanaged Design/Test windows while sk
   assert.match(designAgents, /### Skill Assistance/);
   assert.match(designAgents, /Design work should proactively surface relevant local Design skills/);
   assert.match(designAgents, /name the smallest matching skill/);
+  assert.match(designAgents, /Functional Completeness Self-Check/);
+  assert.match(designAgents, /Do not rely on the controller to discover obvious gaps/);
   assert.doesNotMatch(designAgents, /must not dispatch implementation/);
 
   const testAgents = readFileSync(path.join(testWindow, "AGENTS.md"), "utf8");
@@ -884,6 +1225,8 @@ test("write-agents can explicitly include unmanaged Design/Test windows while sk
   assert.match(testAgents, /### Skill Assistance/);
   assert.match(testAgents, /Test work should proactively surface relevant local Test skills/);
   assert.match(testAgents, /validating long chains/);
+  assert.match(testAgents, /Functional Completeness Self-Check/);
+  assert.match(testAgents, /Do not rely on the controller to discover obvious gaps/);
   assert.doesNotMatch(testAgents, /default test queue/);
 });
 
@@ -992,6 +1335,9 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   assert.match(designAgents, /Default to chat first/);
   assert.match(designAgents, /not automatic file writers/);
   assert.match(designAgents, /whenever a requirement conversation matches a skill purpose/);
+  assert.match(designAgents, /Functional Completeness Self-Check/);
+  assert.match(designAgents, /Do not rely on the controller to discover obvious gaps/);
+  assert.match(designAgents, /downgrade a complete/);
   assert.doesNotMatch(designAgents, /optional Design-local methods/);
   const designReadme = readFileSync(path.join(fixture.parent, "Design/README.md"), "utf8");
   assert.match(designReadme, /Design skill map: `skills\/README\.md`/);
@@ -1040,6 +1386,9 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   assert.match(testAgents, /Skill Routing/);
   assert.match(testAgents, /proactively recommend the smallest matching Test skill/);
   assert.match(testAgents, /skills\/evidence-review\/SKILL\.md/);
+  assert.match(testAgents, /Functional Completeness Self-Check/);
+  assert.match(testAgents, /Do not rely on the controller to discover obvious gaps/);
+  assert.match(testAgents, /downgrade a complete/);
   const testReadme = readFileSync(path.join(fixture.parent, "Test/README.md"), "utf8");
   assert.match(testReadme, /Test skill map: `skills\/README\.md`/);
   assert.match(testReadme, /Test skills are evidence methods first/);

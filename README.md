@@ -165,7 +165,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.5.5/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.5.6/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository
@@ -224,12 +224,27 @@ The operating flow is:
    `repositories` mappings for the intended work windows.
 5. For a messy workspace, Codex asks which directories are managed windows
    before writing. It must not use a broad discovered-directory import.
-6. After user confirmation, Codex calls `wakeflow_initialize_workspace` with
-   `apply: true`.
+6. After user confirmation for a fresh workspace, Codex calls
+   `wakeflow_initialize_workspace` with `apply: true`.
 7. Codex creates the returned Codex threads, resets each thread title to the
    returned `displayTitle`, and passes each real thread id once to Wakeflow's
    local registration command. The thread registry is the only thread-id
    authority; window config is refreshed as a derived view.
+
+For an already initialized workspace, `wakeflow_initialize_workspace` is not a
+general refresh button. It may write only after the user explicitly requests a
+reset initialization; the apply call must set `resetInitialization: true`, pass
+explicit `repositories`, reconfirm Design/Test mode, and must not use
+`useDiscovered`. Heavy or stale windows use the replacement commands instead.
+
+Command responsibilities stay separate:
+
+| Need | Command | Responsibility |
+| --- | --- | --- |
+| First-time setup | `wakeflow_initialize_workspace` | Discover, confirm, write workspace config/docs/support surfaces, and return the full launch plan. |
+| Explicit reset setup | `wakeflow_initialize_workspace` with `resetInitialization: true` | Reconfirm work directories, clean stale managed window cards/runtime for removed windows, and rewrite setup surfaces. |
+| One heavy/stale window | `wakeflow_replace_window` | Return one replacement launch entry and local registration command; no workspace docs refresh. |
+| Several heavy/stale windows | `wakeflow_replace_windows` | Return only the requested replacement entries and local registration commands; no unrelated window rewrites. |
 
 In the Claude Code edition, the same preview/apply contract is used. The
 returned launch plan is materialized by the tmux host helper instead of Codex
@@ -327,6 +342,7 @@ Primary tool groups:
 | Need | MCP tools |
 | --- | --- |
 | Setup and workspace discovery | `wakeflow_initialize_workspace` |
+| Responsibility window replacement | `wakeflow_replace_window`, `wakeflow_replace_windows` |
 | Demand and task state | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |

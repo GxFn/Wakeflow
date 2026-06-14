@@ -440,6 +440,7 @@ async function commandActivityMonitor() {
       const isRunning = paneShowsExecution(pane) || (previousPane !== undefined && previousPane !== pane);
       const current = tmux(["show-options", "-w", "-q", "-v", "-t", wid, "@wakeflow_state"], { allowFailure: true }).stdout.trim();
       const windowName = names.get(wid);
+      if (!windowName) continue;
       // The monitor owns the "running" overlay: it stashes the dispatch marker
       // (busy/done) in @wakeflow_prev_state while execution runs and restores
       // it when execution pauses.
@@ -467,7 +468,6 @@ async function commandActivityMonitor() {
         running.push(wid);
         continue;
       }
-      if (!windowName) continue;
       if (controllerWindowName && windowName === controllerWindowName) {
         // the controller has no delivery lifecycle: returns are notifications
         continue;
@@ -562,7 +562,12 @@ async function commandLaunchWindow() {
   // Permission mode precedence: explicit --claude-arg --permission-mode wins;
   // else workspace.config.json hosts.claude-code.permissionMode; else
   // acceptEdits so seeded allowlists keep the window prompt-free.
-  const configMode = typeof hostConfig.permissionMode === "string" ? hostConfig.permissionMode : "acceptEdits";
+  // Default to bypassPermissions: Wakeflow work windows are an unattended fleet
+  // whose safety boundary is the repo worktree + CLAUDE.md gates + the state
+  // machine, not per-action prompts. The init/windows flow still asks and lets
+  // the user pick acceptEdits per workspace; this is only the fallback when no
+  // mode was recorded.
+  const configMode = typeof hostConfig.permissionMode === "string" ? hostConfig.permissionMode : "bypassPermissions";
   const modeExplicit = flagPresent(extraClaudeArgs, "--permission-mode") || flagPresent(configClaudeArgs, "--permission-mode");
   const modeArgs = modeExplicit ? [] : ["--permission-mode", configMode];
   const claudeCommand = [claudeBin, ...sessionArgs, "--add-dir", workspaceRoot, ...modeArgs, ...effortArgs, ...modelArgs, ...configClaudeArgs, ...extraClaudeArgs]
@@ -860,22 +865,10 @@ async function commandWaitResults() {
 function commandAttachWindow() {
   const windowName = requireValue("--window");
   const binding = readBinding(windowName);
-  const attach = `${tmuxBin} attach -t ${binding.tmux.server} \\; select-window -t ${binding.tmux.windowId}`;
-  let opened = "";
-  if (hasFlag("--open-tab") || hasFlag("--open-terminal")) {
-    // --open-tab opens a new tab in the CURRENT terminal app (iTerm2 preferred,
-    // matching where the user already works); --open-terminal is kept as an
-    // alias. Detect the host terminal from TERM_PROGRAM so an iTerm2 user never
-    // gets a Terminal.app window. Inside tmux, switch-client is the right move
-    // and no new tab is spawned.
-    if (process.env.TMUX) {
-      opened = "inside-tmux";
-    } else if (process.platform === "darwin") {
-      opened = openTabInTerminal(attach);
-    } else {
-      opened = "unsupported-platform";
-    }
-  }
+  // One reliable path: the user opens a new terminal window/tab themselves and
+  // attaches. Programmatic tab-opening (osascript) proved unreliable across
+  // terminals (tabs flash and close), so it is intentionally not offered.
+  const attach = `tmux attach -t ${binding.tmux.server}`;
   output({
     ok: true,
     command: "attach-window",
@@ -883,38 +876,10 @@ function commandAttachWindow() {
     windowId: binding.tmux.windowId,
     server: binding.tmux.server,
     attach,
-    switchClient: `${tmuxBin} switch-client -t ${binding.tmux.server}`,
-    opened,
+    instruction: `Open a new terminal window or tab, cd into this workspace, and run: ${attach}`,
   });
 }
 
-function openTabInTerminal(attachCommand) {
-  const termProgram = process.env.TERM_PROGRAM || "";
-  const cmd = attachCommand.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  const iTermInstalled = existsSync("/Applications/iTerm.app");
-  // iTerm2: create a new tab in the current window and run the attach there.
-  if (termProgram === "iTerm.app" || (termProgram === "" && iTermInstalled)) {
-    const script = [
-      'tell application "iTerm2"',
-      "  tell current window",
-      `    create tab with default profile command "${cmd}"`,
-      "  end tell",
-      "  activate",
-      "end tell",
-    ].join("\n");
-    const r = execHostText("osascript", ["-e", script]);
-    if (r.status === 0) return "iterm2-tab";
-    // current window may not exist (no iTerm window open): open a fresh one
-    const fallback = `tell application "iTerm2" to create window with default profile command "${cmd}"`;
-    const r2 = execHostText("osascript", ["-e", fallback, "-e", 'tell application "iTerm2" to activate']);
-    if (r2.status === 0) return "iterm2-window";
-    fail(`Failed to open iTerm2 tab: ${(r.stderr || r2.stderr || "").trim()}`);
-  }
-  // Terminal.app: do script opens a new window/tab and runs the command.
-  const r = execHostText("osascript", ["-e", `tell application "Terminal" to do script "${cmd}"`, "-e", 'tell application "Terminal" to activate']);
-  if (r.status !== 0) fail(`Failed to open Terminal window: ${(r.stderr || "").trim()}`);
-  return "terminal-window";
-}
 
 function readWorkspaceWindowModel() {
   const configFile = path.join(workspaceRoot, "workspace.config.json");
@@ -1075,7 +1040,7 @@ function commandSetUnattended() {
   const configFile = path.join(workspaceRoot, "workspace.config.json");
   if (!existsSync(configFile)) fail("workspace.config.json not found; run initialization first.");
   const config = readJson(configFile, "workspace config");
-  const previous = config.hosts?.["claude-code"]?.permissionMode ?? "acceptEdits";
+  const previous = config.hosts?.["claude-code"]?.permissionMode ?? "bypassPermissions";
   if (write) {
     const hosts = config.hosts && typeof config.hosts === "object" ? config.hosts : {};
     const cc = hosts["claude-code"] && typeof hosts["claude-code"] === "object" ? hosts["claude-code"] : {};
@@ -1466,7 +1431,7 @@ function commandHelp() {
       readback: "Capture the current pane tail for evidence: --window [--lines].",
       "release-lock": "Remove the shared in-flight delivery lock for a window: --window.",
       "wait-results": "Explicit synchronous wait for target results of one dispatch group (scans both result layers; pure observation, no lock or glyph side effects). NOT a default dispatch step: the controller-return delivery is the wake-up. A timeout is a report, not a verdict - whether the delivery is stalled is the controller judgment: --group <id> [--target <w>...] [--expect n] [--timeout-sec] [--poll-ms] [--state-root <path>].",
-      "attach-window": "Print the tmux attach/switch command for a window; --open-tab opens a new tab in the current terminal app (iTerm2 preferred) running attach. --window [--open-tab].",
+      "attach-window": "Print the human instruction to enter the workspace (open a new terminal window/tab and run tmux attach -t <session>): --window.",
       "launch-all": "Resume every registered window in canonical order (Design, controller, products, Test) using the recorded permissionMode, skipping in-flight windows: [--server <name>].",
       "set-unattended": "Set hosts.claude-code.permissionMode (acceptEdits|bypassPermissions|...) and report which live windows need a resume-restart: --mode <m> [--write].",
       "window-status": "Report per-window dispatch state (busy/done, lock, delivery id): [--reconcile] recomputes busy from shared locks and clears stale visual markers.",

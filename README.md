@@ -71,7 +71,7 @@ status badges; on Codex the windows are host threads.
 | Window | Role | Default reasoning effort (Claude Code) |
 | --- | --- | --- |
 | Controller | owns goals, dispatch, evidence review, acceptance | `max` |
-| Design | clarifies requirements, compares options, prepares handoffs | `xhigh` |
+| Design | clarifies requirements, redesigns non-bug outcome mismatches, prepares handoffs | `xhigh` |
 | Repo windows | implement inside exactly one repository | `xhigh` |
 | Test | real-scenario verification the repos cannot self-run | `xhigh` |
 

@@ -37,11 +37,11 @@ export const defaultWorkspaceConfig = {
   runtimeProcessMatchers: [],
   runtimeProcessLabel: "configured",
   repositoryRoles: {
-    Design: "Requirement design and handoff",
+    Design: "Requirement design, outcome redesign, and handoff",
     Test: "Real environment validation",
   },
   repositories: [
-    { windowName: "Design", path: "../Design", role: "Internal requirement design workspace", managedAgents: false, mode: "internal" },
+    { windowName: "Design", path: "../Design", role: "Internal requirement and outcome design workspace", managedAgents: false, mode: "internal" },
     { windowName: "Test", path: "../Test", role: "Internal test coordination workspace", managedAgents: false, mode: "internal" },
   ],
   protectedWorkspacePrefixes: [],

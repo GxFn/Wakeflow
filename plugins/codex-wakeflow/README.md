@@ -257,7 +257,9 @@ The normal Wakeflow loop is deliberately small:
 Design and Test are supporting roles:
 
 - **Design** clarifies requirements, options, risks, and handoff candidates. It
-  does not dispatch implementation or become product truth by itself.
+  also redesigns non-bug outcome mismatches when implementation evidence is
+  valid but the user-visible effect is still wrong. It does not dispatch
+  implementation or become product truth by itself.
 - **Test** is reserved for real-scenario evidence that the controller or product
   repository cannot safely reproduce alone.
 

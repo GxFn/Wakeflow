@@ -48,7 +48,7 @@
     "AppWindow": "Primary application repository",
     "ServiceWindow": "Shared service or runtime repository",
     "IntegrationWindow": "Host integration repository",
-    "Design": "Requirement design and handoff",
+    "Design": "Requirement design, outcome redesign, and handoff",
     "Test": "Real environment validation"
   }
 }

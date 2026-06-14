@@ -7,8 +7,9 @@ Design, and Test. It must identify affected repositories from code, docs,
 builds, runtime packages, plugin assets, dashboard outputs, and release paths,
 not only from the repository named by the user.
 
-Design is included only for requirement discussion, signal judgment, or handoff
-drafting. Test is included only when real-scenario evidence is required.
+Design is included only for requirement discussion, signal judgment, non-bug
+outcome redesign, or handoff drafting. Test is included only when real-scenario
+evidence is required.
 
 ## Identity Gate
 

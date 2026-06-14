@@ -30,7 +30,8 @@ entry points.
 - Do not delete reasonable logic merely because it looks long or untidy.
 - Each skill must fully perform its role:
   - Design clarifies, helps confirm, proposes options, writes requirement
-    designs, proposes candidate slices, and hands off.
+    designs, redesigns non-bug outcome mismatches, proposes candidate slices,
+    and hands off.
   - Test plans real validation, reproduces, designs regression evidence, and
     reviews evidence.
   - Controller accepts, archives, routes TODOs, and decides final state.

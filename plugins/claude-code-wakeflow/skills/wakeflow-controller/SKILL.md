@@ -126,12 +126,16 @@ id>` (the session id is stable), then relaunch the resident window with
    - Did the target stay inside its assigned window/repository and task package?
    - Are tests or probes at the right seam, and did they cover the behavior that
      matters?
+   - Is the remaining gap a product-code defect, or a non-bug mismatch between
+     the current effect and the user's intended outcome?
    - Is any remaining risk a blocker, a follow-up, or a user/controller
      decision?
    - Which TODOs close, remain, or need to be added?
 7. Decide explicitly:
    - accept target result,
    - request rework,
+   - route a non-bug outcome mismatch to Design redesign instead of product
+     rework,
    - mark blocked,
    - wait for missing targets,
    - complete the demand,
@@ -201,6 +205,9 @@ Stop instead of dispatching when:
 - The result is only an empty interface, static mock, unused adapter, type-only
   contract, unreachable route, or documentation motion without a real consumer
   and validation path.
+- The evidence shows a non-bug outcome mismatch that needs requirement or
+  option redesign; pause implementation redispatch and route the next package
+  to Design instead of bouncing point fixes between product windows.
 - A completed result would leave TODO/backlog, archive state, or current status
   inconsistent.
 - The controller is about to poll/wait for targets after a send was recorded

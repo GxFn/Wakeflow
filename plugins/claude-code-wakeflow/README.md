@@ -83,7 +83,7 @@ bar tells you who is doing what at a glance:
 | Window | Role | Default reasoning effort |
 | --- | --- | --- |
 | Controller | owns goals, dispatch, evidence review, acceptance | `max` |
-| Design | clarifies requirements, compares options, prepares handoffs | `xhigh` |
+| Design | clarifies requirements, redesigns non-bug outcome mismatches, prepares handoffs | `xhigh` |
 | Repo windows | implement inside exactly one repository | `xhigh` |
 | Test | real-scenario verification the repos cannot self-run | `xhigh` |
 

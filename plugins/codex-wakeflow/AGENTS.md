@@ -132,9 +132,10 @@ but they must not replace these gates.
 - The controller window is the workspace brain, not a dispatch table. For a new
   request, analyze the feature, user scenario, completion definition, local
   code, docs, tests, builds, and release paths before decomposing work.
-- Design clarifies requirements, compares options, exposes risks, and prepares
-  signals or handoff candidates. Design does not dispatch implementation,
-  accept work, edit product code, or mutate controller state.
+- Design clarifies requirements, compares options, exposes risks, redesigns
+  non-bug outcome mismatches, and prepares signals or handoff candidates.
+  Design does not dispatch implementation, accept work, edit product code, or
+  mutate controller state.
 - Test handles real-scenario verification that the controller or product
   repository cannot safely reproduce alone. Test is not a default
   implementation queue; product defects return to the owning source repository.
@@ -190,6 +191,10 @@ Choose the smallest matching flow:
 - **Design handoff intake**: receive Design signals or handoffs, review their
   effect on current work, and attach them to the correct ledger or state root.
   Signals and handoffs are not execution plans.
+- **Design redesign request**: when reviewed evidence shows the result is not a
+  code defect but the product effect, interaction, architecture, or capability
+  still misses the user goal, pause implementation churn and ask Design for a
+  complete adjustment plan before redispatching product work.
 - **TODO maintenance**: update the correct TODO/Backlog record and affected
   scheduling state only.
 - **Dispatch planning**: return to the current goal and completion definition,
@@ -246,6 +251,11 @@ and no executable prompt.
   thin implementation, create a follow-up package naming missing entrypoints,
   data, state changes, consumers, failure paths, validation, and completion
   definition.
+- If acceptance finds no clear product-code bug, but the delivered effect is
+  still not what the user asked for, do not keep redispatching point fixes.
+  Stop the implementation loop, record the mismatch as a Design redesign need,
+  and route it to Design for requirement/option redesign before product work
+  resumes.
 - Target results are review inputs, not acceptance. Controller acceptance must
   roll TODO/Backlog: close solved items with evidence, keep valid remaining
   items, add newly found items, and explain items that should not enter TODO.
@@ -342,6 +352,11 @@ See `skills/wakeflow-governance/references/wakeflow-ledgers.md`.
   definition, phase candidates, and TODO/Backlog suggestions. The controller
   receives them, attaches intake to the state root, and decides code research,
   Test cards, task packages, phase confirmation, or execution.
+- Redesign route: when current implementation evidence is valid but the
+  observed outcome misses the user's target in a non-bug way, Design prepares a
+  revised requirement/option design and adjustment handoff. The controller
+  decides whether to update the state root, ask the user for confirmation, or
+  create new task packages; product windows do not guess the new solution.
 - Do not split work into only abstract connections, placeholders, empty
   adapters, unused providers, or type-only changes. Contract-only stages must
   name their consumer, next consumption step, and targeted validation.

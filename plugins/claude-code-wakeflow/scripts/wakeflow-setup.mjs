@@ -825,7 +825,7 @@ function skillAssistanceText(context, samePathWindowNames) {
     hostProfile.texts.skillAssistanceLine,
   ];
   if (samePathWindowNames.includes(context.config.designWindow)) {
-    roleLines.push(`- Design work should proactively surface relevant local Design skills while the user is clarifying requirements, comparing options, writing a requirement design, slicing work, or preparing a handoff. Read \`skills/README.md\` when available, name the smallest matching skill, explain why it helps, and use it in conversation before writing tracked Design artifacts. If no skill is genuinely needed, say so briefly and answer directly.`);
+    roleLines.push(`- Design work should proactively surface relevant local Design skills while the user is clarifying requirements, comparing options, writing a requirement design, redesigning a non-bug outcome mismatch, slicing work, or preparing a handoff. Read \`skills/README.md\` when available, name the smallest matching skill, explain why it helps, and use it in conversation before writing tracked Design artifacts. If no skill is genuinely needed, say so briefly and answer directly.`);
   }
   if (samePathWindowNames.includes(context.config.testWindow)) {
     roleLines.push(`- Test work should proactively surface relevant local Test skills while planning validation, reproducing or triaging failures, designing regressions, reviewing evidence, or validating long chains. Read \`skills/README.md\` when available, name the smallest matching skill, explain why it helps, and use it to shape evidence before running or recording test work. If no skill is genuinely needed, say so briefly and proceed with the assigned test boundary.`);
@@ -1285,8 +1285,8 @@ Use this directory when the user does not have an external ${config.designWindow
 - Templates: \`templates/original-plan-template.md\`, \`templates/requirement-design-template.md\`, \`templates/workspace-signal-template.md\`, and \`templates/workspace-handoff-template.md\`
 - Design skill map: \`skills/README.md\`
 - Design skills are conversational methods first. Use them to clarify, compare,
-  draft, slice, and prepare handoff recommendations with the user before
-  writing tracked documents.
+  draft, redesign non-bug outcome mismatches, slice, and prepare handoff
+  recommendations with the user before writing tracked documents.
 - Discovery and intake are performed by the controller through the Wakeflow MCP
   surface. Design does not run plugin-cache runtime scripts or update intake
   state directly.

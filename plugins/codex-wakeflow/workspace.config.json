@@ -37,7 +37,7 @@
     {
       "windowName": "Design",
       "path": "../wakeflow-ledger/design",
-      "role": "Internal requirement design workspace",
+      "role": "Internal requirement and outcome design workspace",
       "managedAgents": false,
       "mode": "internal"
     },
@@ -51,7 +51,7 @@
   ],
   "protectedWorkspacePrefixes": [],
   "repositoryRoles": {
-    "Design": "Requirement design and handoff",
+    "Design": "Requirement design, outcome redesign, and handoff",
     "Test": "Real environment validation"
   }
 }

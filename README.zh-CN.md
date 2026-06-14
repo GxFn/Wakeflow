@@ -61,7 +61,7 @@ host threads。
 | 窗口 | 角色 | 默认推理强度（Claude Code） |
 | --- | --- | --- |
 | Controller | 拥有目标、投递、证据审查和验收 | `max` |
-| Design | 澄清需求、比较方案、准备 handoff | `xhigh` |
+| Design | 澄清需求、重设非 bug 结果偏差方案、准备 handoff | `xhigh` |
 | Repo windows | 只在一个仓库边界内实现 | `xhigh` |
 | Test | 执行仓库无法自测的真实场景验证 | `xhigh` |
 

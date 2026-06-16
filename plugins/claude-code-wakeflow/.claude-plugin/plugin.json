@@ -1,6 +1,6 @@
 {
   "name": "wakeflow",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "Unattended control loops for Claude Code workspaces, aligned with Wakeflow's Codex edition: controller state roots, task packages, tmux-resident direct-session delivery, evidence review, and Design/Test intake.",
   "category": "workflow",
   "author": {

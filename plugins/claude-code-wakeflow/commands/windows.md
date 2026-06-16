@@ -1,6 +1,6 @@
 ---
 description: List, launch, resume, or attach Wakeflow tmux windows, choosing the permission mode
-argument-hint: [window-name | all] [--replace]
+argument-hint: "[window-name | all] [--replace]"
 ---
 
 Manage the workspace's tmux-resident Wakeflow windows. Use the host helper (`node <plugin>/scripts/lib/wakeflow-claude-host.mjs <command> --root <workspace>`); never invent session ids — the thread registry and window-host bindings are the only authorities.

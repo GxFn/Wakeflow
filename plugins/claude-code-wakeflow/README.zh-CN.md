@@ -17,6 +17,7 @@ Wakeflow 把一个本地 Claude Code 工作区变成有纪律的控制系统：�
 - [架构](#架构)
 - [安装 Wakeflow](#安装-wakeflow)
 - [快速开始](#快速开始)
+- [安全与系统影响](#安全与系统影响)
 - [窗口模型](#窗口模型)
 - [跨宿主统一词汇](#跨宿主统一词汇)
 - [初始化工作区](#初始化工作区)
@@ -202,6 +203,19 @@ helper 依赖 tmux。初始化会先运行 `preflight`：缺少 tmux 时，在�
 | `/wakeflow:check` | 体检已有工作区,收敛陈旧/缺失的面 | 升级之后 |
 
 口诀:**`init` 装修,`windows all` 开灯,`windows` 看一眼。**
+
+## 安全与系统影响
+
+Wakeflow 是一个强大的本地自动化插件。安装前请清楚它在你机器上做什么——没有任何隐藏:
+
+- **运行一个本地 MCP server**(`node mcp/server.cjs`):独立、无依赖的 Node 进程,读写工作区状态文件,自身不发任何网络请求。
+- **拉起 tmux 会话和交互式 `claude` 窗口**:总控和每个工作窗口都是真实的 `claude` CLI 会话,住在一个 tmux session 里。Wakeflow 通过自带的 host helper 创建、恢复、替换、排版它们。
+- **会跑这些 shell 命令**:`node`、`tmux`、`git`、`brew`——最后这个仅在缺 tmux 时、经你一次显式同意后 `brew install tmux`。
+- **权限模型——默认安全**:工作窗口默认 `acceptEdits`(Claude Code 在风险动作前仍会询问)。完全无人值守的 `bypassPermissions`(无提示)**仅显式开启**:工作区通过 `/wakeflow:unattended on` 主动启用,选择记录在 `workspace.config.json`,只有这条被记录的同意才让 helper 自动确认启动对话框。无人值守模式下的安全边界是仓库 worktree、`CLAUDE.md` 闸门、Wakeflow 状态机。
+- **本地优先、无遥测**:真实 session/thread id 只存在 `.workspace-local/` 下,绝不写入受版本控制的文件、prompt,也不外发。需求、证据、账本都留在你的工作区。
+- **平台**:macOS 优先(tmux + `brew` + iTerm2)。tmux 核心理论上可在 Linux 运行但尚未验证。
+
+你始终掌控:脚本和 MCP 工具只创建、校验、记录机器数据——不验收、不扩权、不替产品做决定。总控是唯一验收权威,产品决定属于你。
 
 ## 窗口模型
 

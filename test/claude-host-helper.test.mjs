@@ -19,6 +19,8 @@ function makeServerSession() {
   return `wakeflow-test-${process.pid}-${serverSessionCounter}`;
 }
 
+const setupScript = path.join(path.dirname(path.dirname(helperScript)), "wakeflow-setup.mjs");
+
 function makeWorkspace() {
   const root = mkdtempSync(path.join(os.tmpdir(), "claude-host-"));
   mkdirSync(path.join(root, "RepoA"), { recursive: true });
@@ -302,7 +304,7 @@ test("set-unattended records the permission mode and reports restart plan", () =
 
   const dry = parseOk(runHelper(root, ["set-unattended", "--mode", "bypassPermissions"]));
   assert.equal(dry.wrote, false);
-  assert.equal(dry.previousMode, "bypassPermissions");
+  assert.equal(dry.previousMode, "acceptEdits");
   assert.equal(dry.mode, "bypassPermissions");
   const stillDefault = JSON.parse(readFileSync(path.join(root, "workspace.config.json"), "utf8"));
   assert.equal(stillDefault.hosts["claude-code"].permissionMode, undefined, "dry run does not write");
@@ -498,6 +500,38 @@ test("deliver sends straight from a delivery envelope file (one-step transport)"
   assert.match(sent.readback.paneTail, /RepoA \/ T1/, "prompt landed in the pane");
   const lock = JSON.parse(readFileSync(path.join(root, ".workspace-local/wakeflow-delivery/locks/RepoA.json"), "utf8"));
   assert.equal(lock.deliveryId, "dlv-deliver-1", "lock carries the envelope delivery id");
+});
+
+test("replace-all tears down and rebuilds the whole fleet with fresh registered sessions", { skip: !tmuxPresent }, async (t) => {
+  const root = makeWorkspace();
+  const serverSession = makeServerSession();
+  const noAuto = { WAKEFLOW_DISABLE_MONITOR: "1" };
+  // scaffold a real initialized workspace so replace-windows registration works
+  const init = runSync(process.execPath, [setupScript, "initialize", "--root", root, "--repo", "RepoA=./RepoA", "--internal-design", "--internal-test", "--write", "--json"], { encoding: "utf8", cwd: root });
+  assert.equal(init.status, 0, init.stderr || init.stdout);
+  const cfg = JSON.parse(readFileSync(path.join(root, "workspace.config.json"), "utf8"));
+  const controllerWindow = cfg.controllerWindow;
+  t.after(() => spawnSync("tmux", ["kill-session", "-t", serverSession], { encoding: "utf8" }));
+
+  const out = parseOk(runHelper(root, ["replace-all", "--server", serverSession, "--boot-wait-ms", "600"], noAuto));
+  assert.equal(out.command, "replace-all");
+  assert.equal(out.scope, "all-configured");
+  assert.ok(out.results.length >= 3, "replaces Design, controller, RepoA, Test");
+  for (const r of out.results) {
+    assert.equal(r.status, "replaced", `${r.window} replaced (${r.error ?? ""})`);
+    assert.equal(r.sessionIdRegistered, true, `${r.window} new session id registered`);
+  }
+  // the controller's registry now holds a freshly written session id
+  const registryFile = path.join(root, ".workspace-local/wakeflow-delivery/hosts/claude-code/thread-registry", `${controllerWindow.replace(/[^A-Za-z0-9._-]+/g, "-")}.json`);
+  assert.equal(existsSync(registryFile), true);
+  const reg = JSON.parse(readFileSync(registryFile, "utf8"));
+  assert.ok(reg.threadId && reg.threadId.length > 8, "registry carries a real session id");
+
+  // a named subset replaces only those
+  const subset = parseOk(runHelper(root, ["replace-all", "--server", serverSession, "--window", "RepoA", "--boot-wait-ms", "600"], noAuto));
+  assert.deepEqual(subset.scope, ["RepoA"]);
+  assert.equal(subset.results.length, 1);
+  assert.equal(subset.results[0].window, "RepoA");
 });
 
 test("send refuses when no binding exists and release-lock is idempotent", () => {

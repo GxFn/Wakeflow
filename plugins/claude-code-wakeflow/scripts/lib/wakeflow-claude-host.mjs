@@ -562,12 +562,11 @@ async function commandLaunchWindow() {
   // Permission mode precedence: explicit --claude-arg --permission-mode wins;
   // else workspace.config.json hosts.claude-code.permissionMode; else
   // acceptEdits so seeded allowlists keep the window prompt-free.
-  // Default to bypassPermissions: Wakeflow work windows are an unattended fleet
-  // whose safety boundary is the repo worktree + CLAUDE.md gates + the state
-  // machine, not per-action prompts. The init/windows flow still asks and lets
-  // the user pick acceptEdits per workspace; this is only the fallback when no
-  // mode was recorded.
-  const configMode = typeof hostConfig.permissionMode === "string" ? hostConfig.permissionMode : "bypassPermissions";
+  // Default to acceptEdits (prompts before risky actions) as the SAFE shipped
+  // default for distribution. A workspace opts into fully-unattended
+  // bypassPermissions explicitly via /wakeflow:unattended or set-unattended;
+  // that recorded choice is then the consent the boot dialog auto-confirms.
+  const configMode = typeof hostConfig.permissionMode === "string" ? hostConfig.permissionMode : "acceptEdits";
   const modeExplicit = flagPresent(extraClaudeArgs, "--permission-mode") || flagPresent(configClaudeArgs, "--permission-mode");
   const modeArgs = modeExplicit ? [] : ["--permission-mode", configMode];
   const claudeCommand = [claudeBin, ...sessionArgs, "--add-dir", workspaceRoot, ...modeArgs, ...effortArgs, ...modelArgs, ...configClaudeArgs, ...extraClaudeArgs]
@@ -1014,6 +1013,80 @@ async function commandLaunchAll() {
   output({ ok: results.every((x) => x.status === "resumed" || x.status.startsWith("skipped")), command: "launch-all", server: serverSession, order, arranged, results });
 }
 
+async function commandReplaceAll() {
+  // Robust, in-process "tear down + rebuild fresh" for the whole fleet (or a
+  // named subset): for each window it kills the old tmux window and launches a
+  // BRAND-NEW session (no --resume => fresh session id, empty context), then
+  // registers the new id via the core setup replace-windows command (which
+  // never touches workspace config/docs/scope). Replaces the fragile hand-
+  // written launch + register loop; run from one call instead of a shell loop.
+  const serverSession = getValue("--server", defaultServerSession());
+  const onlyWindows = getAllValues("--window");
+  const model = readWorkspaceWindowModel();
+  const order = [model.design, model.controller, ...model.products, model.test]
+    .filter(Boolean)
+    .filter((windowName) => onlyWindows.length === 0 || onlyWindows.includes(windowName));
+  if (order.length === 0) {
+    fail(onlyWindows.length > 0
+      ? `replace-all: none of ${onlyWindows.join(", ")} are configured windows.`
+      : "replace-all found no configured windows; initialize the workspace first.");
+  }
+  ensureServer(serverSession);
+  const setupScript = path.join(pluginRootDir, "scripts", "wakeflow-setup.mjs");
+  const defaultStateDir = path.resolve(workspaceRoot, ".workspace-local/wakeflow-delivery");
+  const bootWait = getValue("--boot-wait-ms", "7000");
+  const results = [];
+  for (const windowName of order) {
+    const lock = readLock(windowName);
+    if (lockIsFresh(lock)) {
+      // a mid-flight window must not be torn down under an active delivery
+      results.push({ window: windowName, status: "skipped-in-flight" });
+      continue;
+    }
+    const repo = readRepositoryForWindow(windowName);
+    const launchArgv = [
+      "launch-window", "--root", workspaceRoot, "--server", serverSession,
+      ...(stateDir !== defaultStateDir ? ["--state-dir", stateDir] : []),
+      "--window", windowName, "--title", repo.title, "--cwd", repo.cwd,
+      "--replace", "--boot-wait-ms", bootWait,
+    ];
+    const launched = execHostText(process.execPath, [process.argv[1], ...launchArgv]);
+    let launchParsed = null;
+    try { launchParsed = JSON.parse(launched.stdout); } catch { /* keep raw */ }
+    if (!launchParsed?.ok || !launchParsed.sessionId) {
+      results.push({ window: windowName, status: "launch-failed", error: launchParsed?.error || (launched.stderr || launched.stdout).slice(-160) });
+      continue;
+    }
+    const newSessionId = launchParsed.sessionId;
+    const regArgv = [
+      "replace-windows", "--root", workspaceRoot,
+      "--window", windowName, "--thread", `${windowName}=${newSessionId}`,
+      "--write", "--json",
+    ];
+    const registered = execHostText(process.execPath, [setupScript, ...regArgv]);
+    let regParsed = null;
+    try { regParsed = JSON.parse(registered.stdout); } catch { /* keep raw */ }
+    results.push({
+      window: windowName,
+      status: regParsed?.ok ? "replaced" : "registration-failed",
+      windowId: launchParsed.windowId,
+      sessionIdRegistered: Boolean(regParsed?.ok),
+      threadIdRedacted: true,
+      error: regParsed?.ok ? undefined : (regParsed?.error || (registered.stderr || registered.stdout).slice(-160)),
+    });
+  }
+  const arranged = arrangeWindows(serverSession);
+  output({
+    ok: results.every((x) => x.status === "replaced" || x.status === "skipped-in-flight"),
+    command: "replace-all",
+    server: serverSession,
+    scope: onlyWindows.length > 0 ? onlyWindows : "all-configured",
+    order,
+    arranged,
+    results,
+  });
+}
+
 function readRepositoryForWindow(windowName) {
   const config = readJson(path.join(workspaceRoot, "workspace.config.json"), "workspace config");
   // Titles are ASCII by design: CJK names were repeatedly mangled by shell
@@ -1040,7 +1113,7 @@ function commandSetUnattended() {
   const configFile = path.join(workspaceRoot, "workspace.config.json");
   if (!existsSync(configFile)) fail("workspace.config.json not found; run initialization first.");
   const config = readJson(configFile, "workspace config");
-  const previous = config.hosts?.["claude-code"]?.permissionMode ?? "bypassPermissions";
+  const previous = config.hosts?.["claude-code"]?.permissionMode ?? "acceptEdits";
   if (write) {
     const hosts = config.hosts && typeof config.hosts === "object" ? config.hosts : {};
     const cc = hosts["claude-code"] && typeof hosts["claude-code"] === "object" ? hosts["claude-code"] : {};
@@ -1433,6 +1506,7 @@ function commandHelp() {
       "wait-results": "Explicit synchronous wait for target results of one dispatch group (scans both result layers; pure observation, no lock or glyph side effects). NOT a default dispatch step: the controller-return delivery is the wake-up. A timeout is a report, not a verdict - whether the delivery is stalled is the controller judgment: --group <id> [--target <w>...] [--expect n] [--timeout-sec] [--poll-ms] [--state-root <path>].",
       "attach-window": "Print the human instruction to enter the workspace (open a new terminal window/tab and run tmux attach -t <session>): --window.",
       "launch-all": "Resume every registered window in canonical order (Design, controller, products, Test) using the recorded permissionMode, skipping in-flight windows: [--server <name>].",
+      "replace-all": "Tear down and rebuild the whole fleet (or a named subset) with BRAND-NEW sessions: kills each old tmux window, launches a fresh claude session (empty context), and registers the new id via core replace-windows (config/docs untouched). Skips in-flight windows: [--server <name>] [--window <name> ...] [--boot-wait-ms].",
       "set-unattended": "Set hosts.claude-code.permissionMode (acceptEdits|bypassPermissions|...) and report which live windows need a resume-restart: --mode <m> [--write].",
       "window-status": "Report per-window dispatch state (busy/done, lock, delivery id): [--reconcile] recomputes busy from shared locks and clears stale visual markers.",
       "check-workspace": "Read-only health check for an existing workspace: config hosts block, managed CLAUDE.md surfaces, registry/binding/liveness per window, permission seeds, legacy codex registry, plugin version stamp.",
@@ -1462,6 +1536,7 @@ async function main() {
     case "window-status": return commandWindowStatus();
     case "set-unattended": return commandSetUnattended();
     case "launch-all": return commandLaunchAll();
+    case "replace-all": return commandReplaceAll();
     case "stamp-runtime": return commandStampRuntime();
     case "help": return commandHelp();
     default:

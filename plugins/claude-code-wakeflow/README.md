@@ -18,6 +18,7 @@ roots, compact delivery envelopes, and evidence-based acceptance.
 - [Architecture](#architecture)
 - [Install Wakeflow](#install-wakeflow)
 - [Quick Start](#quick-start)
+- [Security & System Impact](#security--system-impact)
 - [Window Model](#window-model)
 - [One Vocabulary Across Hosts](#one-vocabulary-across-hosts)
 - [Initialize A Workspace](#initialize-a-workspace)
@@ -225,6 +226,19 @@ Three steps from install to a running fleet, then a command cheat sheet.
 | `/wakeflow:check` | Health-check an existing workspace, converge stale or missing surfaces | After an upgrade |
 
 Mnemonic: **`init` builds it, `windows all` powers it on, `windows` just takes a look.**
+
+## Security & System Impact
+
+Wakeflow is a powerful local automation plugin. Before installing, understand exactly what it does on your machine — none of it is hidden:
+
+- **Runs a local MCP server** (`node mcp/server.cjs`): a standalone, dependency-free Node process. It reads/writes workspace state files; it makes no network calls of its own.
+- **Spawns tmux sessions and interactive `claude` windows**: the controller and each work window are real `claude` CLI sessions living in one tmux session. Wakeflow creates, resumes, replaces, and arranges them via the bundled host helper.
+- **Runs these shell commands**: `node`, `tmux`, `git`, and `brew` — the last only to `brew install tmux` once, after a single explicit consent, when tmux is missing.
+- **Permission model — safe by default**: work windows ship with `acceptEdits` (Claude Code still prompts before risky actions). Fully unattended `bypassPermissions` (no prompts) is **opt-in only**: a workspace enables it explicitly via `/wakeflow:unattended on`, that choice is recorded in `workspace.config.json`, and only that recorded consent lets the helper auto-confirm the boot dialog. The safety boundary in unattended mode is the repository worktree, the `CLAUDE.md` gates, and the Wakeflow state machine.
+- **Local-first, no telemetry**: real session/thread ids live only under `.workspace-local/` and are never written to tracked files, prompts, or sent anywhere. Demands, evidence, and ledgers stay in your workspace.
+- **Platform**: macOS-first (tmux + `brew` + iTerm2). The tmux core should work on Linux but is not yet verified there.
+
+You remain in control: scripts and MCP tools create, validate, and record machine data — they never accept work, widen scope, or decide product behavior. The controller is the only acceptance authority, and product decisions are yours.
 
 ## Window Model
 

@@ -1,6 +1,6 @@
 {
   "name": "wakeflow",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "description": "Unattended control loops for Codex workspaces, aligned with Wakeflow's Claude Code edition.",
   "category": "workflow",
   "author": {

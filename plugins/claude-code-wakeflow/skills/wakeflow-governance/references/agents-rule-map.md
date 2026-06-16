@@ -9,6 +9,7 @@ governance reference, not an additional authority layer. If this file and
 ## Hard Gates That Must Stay In CLAUDE.md
 
 - Gate conclusion and Stop Card discipline.
+- Controller think-first and no keyword-reflex execution gate.
 - Machine envelope evidence-first rule.
 - User decision and scope promotion gates.
 - Controller/Product/Design/Test role boundaries.

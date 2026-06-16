@@ -69,15 +69,17 @@ machine state.
 2. Confirm the user goal, fully read original plan / requirement design
    decisions, completion definition, remaining gap, first blocker, current
    demand status, and eligible target tasks.
-3. If the demand is complete, blocked, paused, archived, review-ready, or lacks
+3. State the safe operation, recovery boundary, and one-sentence plan before
+   using tools, editing files, dispatching, accepting, archiving, or deleting.
+4. If the demand is complete, blocked, paused, archived, review-ready, or lacks
    evidence, stop instead of preparing another package.
-4. Create or select a task package only when it advances the confirmed goal.
-5. Build a dispatch packet from the state root.
-6. Build a delivery envelope.
-7. Send the envelope prompt through the Codex host thread tool exactly as stored
+5. Create or select a task package only when it advances the confirmed goal.
+6. Build a dispatch packet from the state root.
+7. Build a delivery envelope.
+8. Send the envelope prompt through the Codex host thread tool exactly as stored
    in the envelope.
-8. Read back the host send evidence and record the delivery run.
-9. End the dispatch turn.
+9. Read back the host send evidence and record the delivery run.
+10. End the dispatch turn.
 
 ## Review Target Results
 
@@ -175,6 +177,9 @@ Stop instead of dispatching when:
 - The user goal or completion definition is unclear.
 - Required evidence is missing or unreadable.
 - The state root is not current or cannot be trusted.
+- The controller is reacting to a keyword, familiar command shape, script hint,
+  or urgency before naming the safe operation, recovery boundary, explicit
+  plan, and smallest valid next step.
 - A target window, repository, upstream dependency, or real thread id is
   missing.
 - The next action would change scope, delete capability, downgrade capability,

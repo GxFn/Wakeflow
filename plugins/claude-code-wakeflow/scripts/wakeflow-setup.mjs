@@ -778,6 +778,7 @@ ${windowLedgerText}${roleNoteText}
 3. Then read \`${activeIndex}\` and \`${activeStatus}\`.
 4. If there is a current plan, task package, or direct-thread delivery, execute only the content under \`${currentDir}\` explicitly assigned to ${taskTargetText}.
 5. Goals, scope, forbidden actions, validation commands, and backfill fields come from the current plan, task package, and repository rules. Prompts are only wakeup entrypoints, not the full task specification.
+6. If a keyword, familiar command, script hint, or urgency is pulling you into action before a safe operation, recovery boundary, and one-sentence plan are clear, stop and report the blocker.
 
 ### Direct Thread Dispatch Minimum Gate
 

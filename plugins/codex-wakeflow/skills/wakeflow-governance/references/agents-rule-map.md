@@ -7,6 +7,7 @@ authority layer. If this file and `AGENTS.md` differ, `AGENTS.md` wins.
 ## Hard Gates That Must Stay In AGENTS.md
 
 - Gate conclusion and Stop Card discipline.
+- Controller think-first and no keyword-reflex execution gate.
 - Machine envelope evidence-first rule.
 - User decision and scope promotion gates.
 - Controller/Product/Design/Test role boundaries.

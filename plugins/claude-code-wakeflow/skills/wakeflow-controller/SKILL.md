@@ -74,12 +74,14 @@ machine state.
 2. Confirm the user goal, fully read original plan / requirement design
    decisions, completion definition, remaining gap, first blocker, current
    demand status, and eligible target tasks.
-3. If the demand is complete, blocked, paused, archived, review-ready, or lacks
+3. State the safe operation, recovery boundary, and one-sentence plan before
+   using tools, editing files, dispatching, accepting, archiving, or deleting.
+4. If the demand is complete, blocked, paused, archived, review-ready, or lacks
    evidence, stop instead of preparing another package.
-4. Create or select a task package only when it advances the confirmed goal.
-5. Build a dispatch packet from the state root.
-6. Build a delivery envelope.
-7. Send the envelope prompt exactly as stored in the envelope with the tmux
+5. Create or select a task package only when it advances the confirmed goal.
+6. Build a dispatch packet from the state root.
+7. Build a delivery envelope.
+8. Send the envelope prompt exactly as stored in the envelope with the tmux
    host helper in ONE step:
    `node <plugin>/scripts/lib/wakeflow-claude-host.mjs deliver --root <workspace>
    --delivery-file <deliveryFile from the prepare payload>` — it reads the
@@ -93,9 +95,9 @@ machine state.
    (`readback.paneTail`). If the target window is mid-turn, the pasted message
    queues in its input and is processed next turn; that is fine. (Claude Code
    desktop windows are not an automation transport.)
-8. Read back the helper send evidence and record the delivery run with
+9. Read back the helper send evidence and record the delivery run with
    `wakeflow_record_delivery` (default host method `wakeflow-claude-host send`).
-9. End the dispatch turn. The controller-return delivery is the wake-up, and
+10. End the dispatch turn. The controller-return delivery is the wake-up, and
    the activity monitor only updates live/done tab indicators; it never judges
    quiet windows as stalled or wakes anyone. Do not arm a per-dispatch watcher.
 
@@ -200,6 +202,9 @@ Stop instead of dispatching when:
 - The user goal or completion definition is unclear.
 - Required evidence is missing or unreadable.
 - The state root is not current or cannot be trusted.
+- The controller is reacting to a keyword, familiar command shape, script hint,
+  or urgency before naming the safe operation, recovery boundary, explicit
+  plan, and smallest valid next step.
 - A target window session, repository, upstream dependency, or real thread id
   (the registered Claude Code session id) is missing.
 - The next action would change scope, delete capability, downgrade capability,

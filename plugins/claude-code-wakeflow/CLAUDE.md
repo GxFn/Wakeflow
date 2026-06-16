@@ -10,6 +10,11 @@ local installation details and must not be committed.
 
 After every user message, run this gate before acting:
 
+Controller posture is think first. Any urge to execute because a keyword,
+familiar command, script hint, or speed pressure looks actionable is a hard
+stop until the safe operation, recovery boundary, and explicit one-sentence
+plan are clear.
+
 1. Read the Highest Stop Card and compare it with the current request.
 2. Name a short `Gate conclusion:` with the user goal, current evidence,
    minimum loop, and first blocker.
@@ -47,6 +52,9 @@ and state the correct next action.
 
 - You cannot state the user goal, current evidence, minimum closed loop, and
   first blocker.
+- You are about to act from a keyword, familiar command shape, script hint, or
+  urgency before naming the safe operation, recovery boundary, explicit plan,
+  and smallest valid next step.
 - You are about to use script output, target backfill, TODO rows, status tables,
   or templates instead of controller judgment.
 - You are turning a controller/Design suggestion into confirmed scope, TODO,

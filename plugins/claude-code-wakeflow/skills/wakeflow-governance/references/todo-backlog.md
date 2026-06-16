@@ -8,6 +8,8 @@ Add an item only when it has:
 
 - a stable id;
 - a real user goal or verified defect;
+- source requirement authority: original plan, requirement design,
+  user/controller decision, or verified defect inside confirmed scope;
 - an owner candidate;
 - priority;
 - current-mainline relation;
@@ -18,13 +20,19 @@ Add an item only when it has:
 Design signals and handoffs are candidates until the controller reviews and
 routes them.
 
+Code facts, target backfill, Test output, residual fields, and implementation
+leftovers are evidence, not requirement authority. Before adding a TODO from
+them, read the full original plan / requirement design and confirm the item is
+not excluded by a decision, non-goal, or forbidden shortcut. If authority is
+unclear, record a pending decision or risk instead of new work.
+
 ## Rolling TODOs
 
 When accepting or archiving work:
 
 - close solved TODOs with evidence;
 - keep valid remaining TODOs with updated blockers;
-- add newly found TODOs with evidence;
+- add newly found TODOs with evidence and original-requirement authority;
 - explain why an observed issue does not enter TODO.
 
 Do not close a TODO from script output alone. Review raw evidence.

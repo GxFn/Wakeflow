@@ -66,8 +66,9 @@ machine state.
 
 1. Read `AGENTS.md`, the active workspace index/status, and the current state
    root or controller document.
-2. Confirm the user goal, completion definition, remaining gap, first blocker,
-   current demand status, and eligible target tasks.
+2. Confirm the user goal, fully read original plan / requirement design
+   decisions, completion definition, remaining gap, first blocker, current
+   demand status, and eligible target tasks.
 3. If the demand is complete, blocked, paused, archived, review-ready, or lacks
    evidence, stop instead of preparing another package.
 4. Create or select a task package only when it advances the confirmed goal.
@@ -85,6 +86,8 @@ machine state.
 3. Check for missing, blocked, or ready targets.
 4. Pull raw evidence before deciding.
 5. Review acceptance inputs:
+   - full original plan / requirement design, including explicit decisions,
+     non-goals, and forbidden shortcuts;
    - original user goal and completion definition;
    - current state root and task package;
    - dispatch group and target identity;
@@ -101,6 +104,9 @@ machine state.
    - Did the target stay inside its assigned window/repository and task package?
    - Are tests or probes at the right seam, and did they cover the behavior that
      matters?
+   - If adding a TODO, follow-up, or next package, is it authorized by the
+     original requirement decisions rather than inferred from residual code,
+     existing tests, target backfill, or implementation leftovers?
    - Is the remaining gap a product-code defect, or a non-bug mismatch between
      the current effect and the user's intended outcome?
    - Is any remaining risk a blocker, a follow-up, or a user/controller
@@ -126,6 +132,7 @@ Use this shape when recording or reporting controller acceptance:
 
 - User goal:
 - Scope reviewed:
+- Original requirement authority:
 - Target/window:
 - Evidence reviewed:
 - Implementation reality:
@@ -172,6 +179,11 @@ Stop instead of dispatching when:
   missing.
 - The next action would change scope, delete capability, downgrade capability,
   or make a product decision without user confirmation.
+- The next action would add a TODO, follow-up requirement, task package, or
+  scope expansion from code facts, test output, target evidence, implementation
+  leftovers, or residual fields without first reading the full original plan /
+  requirement design and confirming that the addition stays inside the original
+  decisions and non-goals.
 - A target result lacks reviewable evidence.
 - Evidence is only target prose, superficial script output, or status-table
   motion.

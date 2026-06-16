@@ -796,6 +796,7 @@ Before returning a \`TargetResultEnvelope\` or handoff, this child window must s
 - Re-read the state root, task package, current plan, repository rules, and acceptance/evidence requirements.
 - Verify the implementation or evidence covers the requested behavior end to end, including edge cases, integration boundaries, docs/config/API surfaces, and tests that the target window can reasonably run.
 - Compare the final diff/evidence against the original user goal and explicit non-goals; do not downgrade a complete capability into a thin adapter, placeholder, mock-only flow, or partial scaffold.
+- When recommending follow-up work, label whether it is authorized by the original requirement or only discovered by code/test inspection. Residual implementation fields, existing tests, old adapters, and target observations do not become new requirements unless the original plan, requirement design, or a user/controller decision allows them.
 - If completeness cannot be proven inside this window boundary, return \`blocked\` or \`needs-review\` with the missing evidence and next recommendation instead of reporting \`completed\`.
 
 ### Document Destinations

@@ -405,8 +405,8 @@ npm test             # check:core + 双 validate + 双 smoke + 全部测试
 memory 文件模板、skills、template bundle）只存在于各自 artifact 内。
 `npm run check:core` 负责保证副本不漂移。
 
-同时运行两个版本的工作区里，共享业务状态与宿主独立运行时的划分见
-[docs/dual-host-workspace-storage.md](docs/dual-host-workspace-storage.md)。
+完整的双版本架构、代码逻辑、本地存储（共享业务状态与宿主独立运行时的划分）与状态流转，
+见 [docs/wakeflow-dual-edition-architecture-and-state-flow.md](docs/wakeflow-dual-edition-architecture-and-state-flow.md)。
 
 常见源码区域：
 

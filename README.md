@@ -460,9 +460,10 @@ host send adapter, manifests, READMEs, memory-file template, skills, template
 bundle) live only inside each artifact. `npm run check:core` keeps the copies
 honest.
 
-The split between shared business state and host-scoped runtime for
-workspaces that run both editions is specified in
-[docs/dual-host-workspace-storage.md](docs/dual-host-workspace-storage.md).
+The full dual-edition architecture, code logic, local file storage (the
+shared-business-state vs host-scoped-runtime split), and state flow are
+documented in
+[docs/wakeflow-dual-edition-architecture-and-state-flow.md](docs/wakeflow-dual-edition-architecture-and-state-flow.md).
 
 Common source areas:
 

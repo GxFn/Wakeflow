@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
@@ -203,6 +203,40 @@ test("RA5: focus-doc distills a per-window card (dry-run default, --write emits 
   const md = readFileSync(path.join(root, wrote.files[0]), "utf8");
   assert.match(md, /# Focus: WinA/);
   assert.match(md, /FOC-TASK/);
+});
+
+// F41: crash-injection — a failed state.json write must NOT advance the revision (the event
+// is written first, so a crash leaves at most a harmless extra event, never a missing-event
+// gap). Skipped under root, where chmod 0555 does not block writes.
+test("F41: a failed state.json commit leaves the revision unadvanced (no half-commit)", {
+  skip: typeof process.getuid === "function" && process.getuid() === 0 ? "chmod is bypassed when running as root" : false,
+}, () => {
+  const root = makeRoot();
+  const init = JSON.parse(run([
+    "init", "--root", root, "--demand-key", "CRASH-FIXTURE", "--title", "Crash Fixture", "--write", "--json",
+  ]).stdout);
+  const stateRootRel = init.stateRoot;
+  const stateRootAbs = path.join(root, stateRootRel);
+  run(["add-task-package", "--root", root, "--state-root", stateRootRel, "--task-package-id", "C-PKG-1", "--summary", "p1", "--write", "--json"]);
+  const stateFile = path.join(stateRootAbs, "wakeflow-state.json");
+  const eventsFile = path.join(stateRootAbs, "controller-events.jsonl");
+  const beforeRev = readJson(stateFile).revision;
+  const beforeEvents = readFileSync(eventsFile, "utf8").trim().split("\n").length;
+  // make the state-root dir read-only so the state.json temp+rename fails AFTER the event append
+  chmodSync(stateRootAbs, 0o555);
+  let failed;
+  try {
+    failed = run([
+      "add-task-package", "--root", root, "--state-root", stateRootRel,
+      "--task-package-id", "C-PKG-2", "--summary", "p2", "--write", "--json",
+    ]).status !== 0;
+  } finally {
+    chmodSync(stateRootAbs, 0o755);
+  }
+  assert.equal(failed, true, "the commit fails when state.json cannot be written");
+  assert.equal(readJson(stateFile).revision, beforeRev, "state.json revision is NOT advanced on a failed commit");
+  const afterEvents = readFileSync(eventsFile, "utf8").trim().split("\n").length;
+  assert.ok(afterEvents >= beforeEvents, "an extra event may exist (harmless), never a missing event for an advanced revision");
 });
 
 test("init and render-progress localize generated state-root docs for Chinese workspaces", () => {

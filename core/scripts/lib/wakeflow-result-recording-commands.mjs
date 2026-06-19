@@ -226,8 +226,10 @@ export function createResultRecordingCommands(ctx) {
       }),
     };
 
-    atomicWriteJson(stateFile, nextState);
+    // F41: event first, state.json (the authoritative snapshot) last, so a crash leaves at
+    // most a harmless extra event, never a revision-without-event audit gap.
     appendJsonLine(eventsFile, event);
+    atomicWriteJson(stateFile, nextState);
     return {
       updated: true,
       stateRoot: path.relative(workspaceRoot, stateRoot),

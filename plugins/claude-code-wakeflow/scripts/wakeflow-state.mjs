@@ -206,8 +206,8 @@ function commandAdoptDemandHost() {
     stateRevision: nextRevision,
   };
   if (write) {
-    writeJson(stateFile, nextState);
     appendJsonLine(eventsFile, event);
+    writeJson(stateFile, nextState);
   }
   output({
     ok: true,
@@ -715,8 +715,8 @@ function commandAddTaskPackage() {
   if (write) {
     mkdirSync(path.dirname(packageFile), { recursive: true });
     writeJson(packageFile, taskPackage);
-    writeJson(stateFile, nextState);
     appendJsonLine(eventsFile, event);
+    writeJson(stateFile, nextState);
   }
 
   output(
@@ -1121,11 +1121,14 @@ function commandReduceResults() {
   };
 
   if (write) {
-    writeJson(stateFile, nextState);
-    appendJsonLine(eventsFile, event);
+    // F41: write secondaries + the event first and flip state.json (the authoritative
+    // snapshot) LAST, so a crash mid-commit leaves at most a harmless extra event, never a
+    // revision-without-event audit gap.
     if (candidate) {
       writeJson(path.join(stateRoot, "transition-candidates", `${slug(candidate.candidateId)}.json`), candidate);
     }
+    appendJsonLine(eventsFile, event);
+    writeJson(stateFile, nextState);
   }
 
   output(
@@ -1287,8 +1290,8 @@ function commandDecideReview() {
   };
 
   if (write) {
-    writeJson(stateFile, nextState);
     appendJsonLine(eventsFile, event);
+    writeJson(stateFile, nextState);
   }
 
   output(
@@ -1388,8 +1391,8 @@ function commandCompleteDemand() {
   };
 
   if (write) {
-    writeJson(stateFile, nextState);
     appendJsonLine(eventsFile, event);
+    writeJson(stateFile, nextState);
   }
 
   output(

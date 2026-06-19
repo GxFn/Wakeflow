@@ -154,6 +154,32 @@ test("RA5: render-progress emits structured projection slices alongside the disp
   assert.equal(typeof projection.unifiedStatus.windows, "string", "the lossy display string is retained for back-compat");
 });
 
+test("RA5: render-progress writes an idempotent navigable state-root index.md", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run([
+    "init", "--root", root, "--demand-key", "INDEX-FIXTURE", "--title", "Index Fixture", "--write", "--json",
+  ]).stdout);
+  const stateRootRel = init.stateRoot;
+  run([
+    "add-task-package", "--root", root, "--state-root", stateRootRel,
+    "--task-package-id", "IDX-PKG", "--summary", "pkg",
+    "--target-window", "WinA", "--target-task-id", "IDX-TASK", "--target-summary", "do",
+    "--write", "--json",
+  ]);
+  const indexPath = path.join(root, stateRootRel, "index.md");
+  assert.equal(runScript(renderScript, ["--root", root, "--state-root", stateRootRel, "--write", "--json"]).status, 0);
+  assert.ok(existsSync(indexPath), "render-progress writes index.md");
+  const first = readFileSync(indexPath, "utf8");
+  assert.match(first, /# INDEX-FIXTURE/);
+  assert.match(first, /\[wakeflow-state\.json\]\(wakeflow-state\.json\)/, "links the state file");
+  assert.match(first, /\[projection\.json\]\(projection\.json\)/, "links the projection");
+  assert.match(first, /IDX-PKG/, "lists the task package");
+  assert.match(first, /IDX-TASK/, "lists the target task");
+  // idempotent: regenerating against the same state yields an identical index (no wall-clock)
+  assert.equal(runScript(renderScript, ["--root", root, "--state-root", stateRootRel, "--write", "--json"]).status, 0);
+  assert.equal(readFileSync(indexPath, "utf8"), first, "regenerating against the same state is idempotent");
+});
+
 test("init and render-progress localize generated state-root docs for Chinese workspaces", () => {
   const root = makeRoot();
   const result = run([

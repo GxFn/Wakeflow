@@ -203,6 +203,53 @@ function summarizeBlockers(blockers, locale = wakeflowStateLocale("en")) {
   return blockers.map((item) => item.summary ?? item.reason ?? item.id ?? "blocker").join(", ");
 }
 
+// RA5: a generated, navigable state-root index. State-driven and stamped with revision +
+// eventId (no wall-clock), so regenerating against the same state is idempotent. Links the
+// fixed core records, lists task packages / target tasks, and links the evidence subdirs so
+// an agent can find any record from one entry point.
+function buildStateRootIndex(state, stateRoot, progressDoc, eventId) {
+  const lines = [
+    `# ${state.demandKey} — ${state.title}`,
+    "",
+    `> State-root index. Generated from wakeflow-state.json (revision ${state.revision}, event ${eventId}). Regenerate with wakeflow-render-progress; do not hand-edit.`,
+    "",
+    "## Core records",
+    "",
+    "- [demand.json](demand.json) — immutable demand record",
+    `- [wakeflow-state.json](wakeflow-state.json) — authoritative state machine (state: ${state.state}, revision ${state.revision})`,
+    "- [controller-events.jsonl](controller-events.jsonl) — append-only controller event log",
+    "- [projection.json](projection.json) — machine-readable projection + structured slices",
+    `- [${progressDoc}](${progressDoc}) — human progress document`,
+    "",
+    "## Task packages",
+    "",
+  ];
+  const packages = state.taskPackages ?? [];
+  if (packages.length === 0) {
+    lines.push("_None yet._");
+  } else {
+    for (const pkg of packages) {
+      lines.push(`- \`${pkg.taskPackageId}\` (${pkg.status ?? "unknown"}) — ${pkg.summary ?? ""}`);
+    }
+  }
+  lines.push("", "## Target tasks", "");
+  const tasks = state.targetTasks ?? [];
+  if (tasks.length === 0) {
+    lines.push("_None yet._");
+  } else {
+    for (const task of tasks) {
+      lines.push(`- \`${task.targetTaskId}\` -> window \`${task.targetWindow}\` (${task.status ?? "unknown"})`);
+    }
+  }
+  lines.push("", "## Sub-directories", "");
+  for (const dir of ["task-packages", "target-results", "transition-candidates", "intake", "test-cards", "evidence", "focus"]) {
+    const present = existsSync(path.join(stateRoot, dir));
+    lines.push(`- [${dir}/](${dir}/)${present ? "" : " — _(not present)_"}`);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
 function nextActionFor(state, locale) {
   if (Array.isArray(state.allowedActions) && state.allowedActions.length > 0) {
     return state.allowedActions.join(", ");
@@ -304,6 +351,8 @@ try {
       })),
     },
   };
+  const stateRootIndex = buildStateRootIndex(state, stateRoot, progressDoc, event?.eventId ?? "none");
+  const indexFile = path.join(stateRoot, "index.md");
   const progress = readFileSync(progressFile, "utf8");
   const matches = progress.match(/<!-- unified-status:start -->[\s\S]*?<!-- unified-status:end -->/g) ?? [];
   if (matches.length !== 1) {
@@ -339,6 +388,7 @@ try {
       fail(`controller state changed while rendering (revision ${state.revision} -> ${fresh.revision}); re-run wakeflow-render-progress against the current state.`);
     }
     writeJson(projectionFile, projection);
+    atomicWrite(indexFile, stateRootIndex.endsWith("\n") ? stateRootIndex : `${stateRootIndex}\n`);
     writeJson(stateFile, { ...fresh, projection: nextState.projection });
     atomicWrite(progressFile, nextProgress.endsWith("\n") ? nextProgress : `${nextProgress}\n`);
   }

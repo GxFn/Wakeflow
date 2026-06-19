@@ -52,6 +52,7 @@ Usage:
   node scripts/wakeflow-delivery.mjs record-target-result --target-window <name> --task-id <id> --status completed|blocked|needs-review [--group <id>] [--changed-repo <repo>...] [--commit <hash>...] [--evidence-ref <ref>...] [--verification <text>...] [--risk <text>...] [--next-suggestion <text>] [--supersede-result] [--write] [--json]
   node scripts/wakeflow-delivery.mjs review-results (--group <id>|--task-id <id>) [--json]
   node scripts/wakeflow-delivery.mjs review-pack (--group <id>|--task-id <id>|--state-root <path>) [--json]
+  node scripts/wakeflow-delivery.mjs task-ledger --state-root <path> [--task-id <id>] [--target-window <name>] [--json]
   node scripts/wakeflow-delivery.mjs trace-spine [--state-root <path>] [--group <id>] [--target-window <name>] [--task-id <id>] [--result-file <path>] [--result-id <id>] [--delivery-file <path>] [--delivery-id <id>] [--json]
   node scripts/wakeflow-delivery.mjs stop-loop --reason <text> [--automation-run-id <id>] --write [--json]
 
@@ -492,6 +493,7 @@ const {
   computeReviewResults,
   commandReviewResults,
   commandReviewPack,
+  commandTaskLedger,
 } = createReviewCommands({
   workspaceRoot,
   dirs,
@@ -851,6 +853,9 @@ try {
       break;
     case "review-pack":
       commandReviewPack();
+      break;
+    case "task-ledger":
+      commandTaskLedger();
       break;
     case "trace-spine":
       commandTraceSpine();

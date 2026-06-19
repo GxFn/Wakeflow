@@ -718,11 +718,99 @@ export function createReviewCommands(ctx) {
     );
   }
 
+  // RA2: a read-only unified per-task rollup. Scans ALL target tasks (accepted history
+  // preserved, unlike the review-scope-filtered review pack) and fuses execution status +
+  // acceptance decision + persisted counts (dispatchCount/reworkCount) + derived counts
+  // (retestCount from test-card files, supplementCount from design-handoff intake) +
+  // latest result + test-card status, so the controller sees the whole picture in one call.
+  function buildTaskLedger(stateRoot) {
+    const { state, stateRootRef } = readControllerStateRoot(stateRoot);
+    const resultsByTask = latestStateRootResultsByTargetTask(stateRoot);
+    const allTargetTasks = state.targetTasks ?? [];
+
+    // Test cards join to a task by suggestedTaskPackage.targetTaskId.
+    const testCardStatusesByTask = new Map();
+    const testCardsDir = path.join(stateRoot, "test-cards");
+    if (existsSync(testCardsDir)) {
+      for (const file of listJsonFiles(testCardsDir)) {
+        const card = readJson(file, "test card");
+        const taskId = card?.suggestedTaskPackage?.targetTaskId;
+        if (!taskId) continue;
+        const statuses = testCardStatusesByTask.get(taskId) ?? [];
+        statuses.push(card?.status ?? "draft");
+        testCardStatusesByTask.set(taskId, statuses);
+      }
+    }
+
+    // Design-handoff intake carries no per-task id, so supplementCount is demand-wide.
+    const intakeDir = path.join(stateRoot, "intake");
+    const supplementCount = existsSync(intakeDir)
+      ? listJsonFiles(intakeDir).filter((file) => path.basename(file).startsWith("design-handoff-")).length
+      : 0;
+
+    const tasks = allTargetTasks.map((task) => {
+      const result = resultsByTask.get(task.targetTaskId)?.result ?? null;
+      const testCardStatuses = testCardStatusesByTask.get(task.targetTaskId) ?? [];
+      const persisted = task.counts ?? {};
+      return {
+        targetTaskId: task.targetTaskId,
+        taskPackageId: task.taskPackageId,
+        targetWindow: task.targetWindow,
+        summary: task.summary,
+        status: task.status,
+        reviewDecision: task.reviewDecision ?? null,
+        latestResultStatus: result?.status ?? null,
+        latestResultId: result?.resultId ?? null,
+        testCardStatus: testCardStatuses.length ? testCardStatuses[testCardStatuses.length - 1] : null,
+        counts: {
+          dispatchCount: persisted.dispatchCount ?? 0,
+          reworkCount: persisted.reworkCount ?? 0,
+          retestCount: testCardStatuses.length,
+          supplementCount,
+        },
+      };
+    });
+
+    return {
+      kind: "WakeflowTaskLedger",
+      version,
+      demandKey: state.demandKey,
+      demandState: state.state,
+      revision: state.revision,
+      stateRoot: stateRootRef,
+      taskCount: tasks.length,
+      supplementCount,
+      tasks,
+      generatedAt: nowIso(),
+    };
+  }
+
+  function commandTaskLedger() {
+    const stateRootArg = getValue("--state-root");
+    if (!stateRootArg) fail("task-ledger requires --state-root.");
+    const stateRoot = resolveStateRoot(stateRootArg);
+    const ledger = buildTaskLedger(stateRoot);
+    const taskFilter = getValue("--task-id");
+    const windowFilter = getValue("--target-window");
+    let tasks = ledger.tasks;
+    if (taskFilter) tasks = tasks.filter((item) => item.targetTaskId === taskFilter);
+    if (windowFilter) tasks = tasks.filter((item) => item.targetWindow === windowFilter);
+    output(
+      { ...ledger, ok: true, command: "task-ledger", tasks },
+      [
+        `Task ledger: ${ledger.demandKey} (${tasks.length}/${ledger.taskCount} task(s), ${ledger.supplementCount} supplement(s))`,
+        ...tasks.map((item) => `- ${item.targetTaskId} [${item.status}] dispatch x${item.counts.dispatchCount} rework x${item.counts.reworkCount} retest x${item.counts.retestCount}`),
+      ],
+    );
+  }
+
   return {
     buildReviewPack,
     buildStateRootReviewPack,
     computeReviewResults,
     commandReviewResults,
     commandReviewPack,
+    buildTaskLedger,
+    commandTaskLedger,
   };
 }

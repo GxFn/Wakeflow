@@ -2028,6 +2028,40 @@ test("F53: an expired other-host window lock self-heals and allows dispatch", ()
   assert.ok(prepared.envelope?.deliveryId, "an expired other-host lock is treated as absent");
 });
 
+test("RA2: record-delivery-run sets per-task dispatchCount and is idempotent on replay", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const sendArgs = ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "send evidence", "--write"];
+  parseOk(run(root, sendArgs));
+  const stateFile = path.join(root, stateRootRef, "wakeflow-state.json");
+  const task = () => JSON.parse(readFileSync(stateFile, "utf8")).targetTasks.find((t) => t.targetTaskId === "CSMR-TASK-1");
+  assert.equal(task().counts?.dispatchCount, 1, "the first sent delivery sets dispatchCount=1");
+  // replay the same delivery — the already-sent guard must skip the state advance, so no double-count
+  run(root, sendArgs);
+  assert.equal(task().counts?.dispatchCount, 1, "replaying the same delivery must not double-count dispatchCount");
+});
+
+test("RA2: task-ledger reports a unified per-task rollup with handling counts", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "send evidence", "--write"]));
+  const ledger = parseOk(run(root, ["task-ledger", "--state-root", stateRootRef]));
+  assert.equal(ledger.command, "task-ledger");
+  assert.equal(ledger.kind, "WakeflowTaskLedger");
+  assert.equal(ledger.taskCount, 1, "the ledger scans all target tasks");
+  const entry = ledger.tasks.find((item) => item.targetTaskId === "CSMR-TASK-1");
+  assert.ok(entry, "the ledger must include the task");
+  assert.equal(entry.status, "sent");
+  assert.equal(entry.counts.dispatchCount, 1, "dispatchCount surfaced in the ledger");
+  assert.equal(entry.counts.reworkCount, 0);
+  assert.equal(entry.counts.retestCount, 0);
+  assert.equal(entry.counts.supplementCount, 0);
+});
+
 test("record-target-result rejects a group that matches no dispatch packet", () => {
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");

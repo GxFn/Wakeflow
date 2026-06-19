@@ -307,6 +307,20 @@ const toolDefinitions = [
     },
   },
   {
+    name: "wakeflow_task_ledger",
+    description: "Read-only unified per-task rollup for a demand state root: for EVERY target task (accepted history preserved) it fuses execution status, acceptance decision, latest result, test-card status, and handling counts (dispatchCount/reworkCount persisted; retestCount/supplementCount derived). Use it to see how many times each task was dispatched/reworked/tested before a controller decision. Evidence, not acceptance.",
+    annotations: readOnlyTool("Wakeflow Task Ledger"),
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+        stateRoot: { type: "string" },
+        taskId: { type: "string" },
+        targetWindow: { type: "string" },
+      },
+    },
+  },
+  {
     name: "wakeflow_trace_spine",
     description: "Trace the Wakeflow evidence spine for a state root, dispatch group, delivery, target, or target result. Read-only diagnostic evidence; not controller acceptance and not a host send.",
     annotations: readOnlyTool("Trace Wakeflow Evidence Spine"),
@@ -782,6 +796,17 @@ export const handlers = {
       ...optionalValue("--state-root", args.stateRoot),
       ...optionalValue("--group", args.dispatchGroup),
       ...optionalValue("--task-id", args.taskId),
+      ...rootArgs(args),
+      "--json",
+    ],
+  }),
+  wakeflow_task_ledger: (args) => runWakeflowRuntime({
+    script: "wakeflow-delivery",
+    args: [
+      "task-ledger",
+      ...optionalValue("--state-root", args.stateRoot),
+      ...optionalValue("--task-id", args.taskId),
+      ...optionalValue("--target-window", args.targetWindow),
       ...rootArgs(args),
       "--json",
     ],

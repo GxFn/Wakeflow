@@ -144,6 +144,9 @@ export function createResultRecordingCommands(ctx) {
       ? {
           ...item,
           status: "sent",
+          // RA2: per-task handling count. Sits AFTER the already-sent idempotent-replay
+          // early-return above, so a replay of the same delivery never double-counts.
+          counts: { ...(item.counts ?? {}), dispatchCount: (item.counts?.dispatchCount ?? 0) + 1 },
           delivery: {
             deliveryId: envelope.deliveryId,
             deliveryFile: path.relative(workspaceRoot, deliveryFileFor(envelope.deliveryId)),

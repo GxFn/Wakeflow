@@ -1212,11 +1212,19 @@ function commandDecideReview() {
   }
   const candidateTaskIds = new Set(decisionScope.targetTaskIds);
   const nextTargetTasks = (state.targetTasks ?? []).map((item) => candidateTaskIds.has(item.targetTaskId)
-    ? {
-        ...item,
-        status: nextTaskStatus,
-        reviewDecision: decision,
-      }
+    ? (decision === "rework"
+        ? {
+            ...item,
+            status: nextTaskStatus,
+            reviewDecision: decision,
+            // RA2: per-task handling count — a rework decision is one rework cycle.
+            counts: { ...(item.counts ?? {}), reworkCount: (item.counts?.reworkCount ?? 0) + 1 },
+          }
+        : {
+            ...item,
+            status: nextTaskStatus,
+            reviewDecision: decision,
+          })
     : item);
   const nextState = {
     ...state,

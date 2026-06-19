@@ -1509,6 +1509,70 @@ function updatePackageStatusesForDecision(taskPackages, targetTasks, candidateTa
   });
 }
 
+// RA4: a read-only per-window orientation card. One call returns the tasks that belong to
+// a window plus where its files live (both the state-root tier and the .workspace-local
+// transport tier), so a sub-window stops hunting for its task and file area. No write, no
+// revision bump, no event, no host-ownership claim.
+function commandWindowView() {
+  const stateRoot = stateRootFromArg();
+  const state = readJson(path.join(stateRoot, "wakeflow-state.json"), "controller state");
+  const window = requireValue("--window");
+  const myTasks = (state.targetTasks ?? []).filter((task) => task.targetWindow === window);
+  const myPackageIds = new Set(myTasks.map((task) => task.taskPackageId));
+  const myPackages = (state.taskPackages ?? []).filter((pkg) => myPackageIds.has(pkg.taskPackageId));
+  const windowRollup = (state.windows ?? []).find((entry) => entry.windowName === window) ?? null;
+  const stateRootRel = relative(stateRoot);
+  const transportRoot = ".workspace-local/wakeflow-delivery";
+  const hostDir = hostProfile.runtime.hostDirName;
+  // Transport dirs are emitted as directories (per-result filenames need a dispatchGroup,
+  // so they are not fabricated); per-window registry/config files are slug-derivable.
+  const fileAreas = {
+    stateRoot: stateRootRel,
+    taskPackagesDir: `${stateRootRel}/task-packages`,
+    targetResultsDir: `${stateRootRel}/target-results`,
+    intakeDir: `${stateRootRel}/intake`,
+    testCardsDir: `${stateRootRel}/test-cards`,
+    transport: {
+      dispatchPacketsDir: `${transportRoot}/dispatch-packets`,
+      targetResultsDir: `${transportRoot}/target-results`,
+      deliveryEnvelopesDir: `${transportRoot}/delivery-envelopes`,
+      deliveryRunsDir: `${transportRoot}/delivery-runs`,
+      lockFile: `${transportRoot}/locks/${slug(window)}.json`,
+    },
+    host: {
+      threadRegistryFile: `${transportRoot}/hosts/${hostDir}/thread-registry/${slug(window)}.json`,
+      windowConfigFile: `${transportRoot}/hosts/${hostDir}/window-config/${slug(window)}.json`,
+    },
+  };
+  const tasks = myTasks.map((task) => ({
+    targetTaskId: task.targetTaskId,
+    taskPackageId: task.taskPackageId,
+    status: task.status,
+    reviewDecision: task.reviewDecision ?? null,
+    summary: task.summary,
+    counts: task.counts ?? { dispatchCount: 0, reworkCount: 0 },
+  }));
+  output(
+    {
+      ok: true,
+      command: "window-view",
+      window,
+      demandKey: state.demandKey,
+      stateRoot: stateRootRel,
+      windowState: windowRollup?.windowState ?? null,
+      counts: { open: tasks.filter((task) => task.status !== "accepted").length, total: tasks.length },
+      tasks,
+      taskPackages: myPackages.map((pkg) => ({ taskPackageId: pkg.taskPackageId, status: pkg.status, summary: pkg.summary })),
+      fileAreas,
+    },
+    [
+      `Window ${window}: ${tasks.length} task(s) in demand ${state.demandKey}`,
+      ...tasks.map((task) => `- ${task.targetTaskId} [${task.status}]`),
+      `Files: ${stateRootRel} (+ transport under ${transportRoot})`,
+    ],
+  );
+}
+
 try {
   switch (command) {
     case "init":
@@ -1531,6 +1595,9 @@ try {
       break;
     case "complete-demand":
       commandCompleteDemand();
+      break;
+    case "window-view":
+      commandWindowView();
       break;
     case "help":
     case "--help":

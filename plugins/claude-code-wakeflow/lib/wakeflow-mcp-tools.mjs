@@ -321,6 +321,19 @@ const toolDefinitions = [
     },
   },
   {
+    name: "wakeflow_window_view",
+    description: "Read-only per-window orientation card for a demand state root: the tasks that belong to a window (with handling counts), its task packages, its window rollup, and the exact file areas where its state-root and transport files live. Use it so a window quickly finds its own tasks and files. No write.",
+    annotations: readOnlyTool("Wakeflow Window View"),
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+        stateRoot: { type: "string" },
+        window: { type: "string" },
+      },
+    },
+  },
+  {
     name: "wakeflow_trace_spine",
     description: "Trace the Wakeflow evidence spine for a state root, dispatch group, delivery, target, or target result. Read-only diagnostic evidence; not controller acceptance and not a host send.",
     annotations: readOnlyTool("Trace Wakeflow Evidence Spine"),
@@ -807,6 +820,16 @@ export const handlers = {
       ...optionalValue("--state-root", args.stateRoot),
       ...optionalValue("--task-id", args.taskId),
       ...optionalValue("--target-window", args.targetWindow),
+      ...rootArgs(args),
+      "--json",
+    ],
+  }),
+  wakeflow_window_view: (args) => runWakeflowRuntime({
+    script: "wakeflow-state",
+    args: [
+      "window-view",
+      ...optionalValue("--state-root", args.stateRoot),
+      ...optionalValue("--window", args.window),
       ...rootArgs(args),
       "--json",
     ],

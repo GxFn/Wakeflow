@@ -2062,6 +2062,20 @@ test("RA2: task-ledger reports a unified per-task rollup with handling counts", 
   assert.equal(entry.counts.supplementCount, 0);
 });
 
+test("RA4: window-view returns a window's own tasks and file areas", () => {
+  const { root, stateRootRef } = makeFixture();
+  const view = parseOk(runState(root, ["window-view", "--state-root", stateRootRef, "--window", "AlembicPlugin"]));
+  assert.equal(view.command, "window-view");
+  assert.equal(view.window, "AlembicPlugin");
+  assert.equal(view.counts.total, 1, "the fixture window owns one task");
+  assert.ok(view.tasks.find((t) => t.targetTaskId === "CSMR-TASK-1"), "window-view lists the window's task");
+  assert.ok(view.fileAreas?.stateRoot, "window-view includes the state-root file area");
+  assert.ok(view.fileAreas?.transport?.dispatchPacketsDir, "window-view includes transport dirs");
+  assert.match(view.fileAreas?.host?.threadRegistryFile ?? "", /AlembicPlugin/, "per-window host registry path");
+  const other = parseOk(runState(root, ["window-view", "--state-root", stateRootRef, "--window", "AlembicWorkspace"]));
+  assert.equal(other.counts.total, 0, "a different window sees none of this window's tasks");
+});
+
 test("record-target-result rejects a group that matches no dispatch packet", () => {
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");

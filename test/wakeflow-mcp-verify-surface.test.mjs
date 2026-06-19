@@ -29,3 +29,14 @@ test("wakeflow_task_ledger MCP tool is registered with a handler", () => {
   }
   assert.equal(typeof handlers.wakeflow_task_ledger, "function", "wakeflow_task_ledger must have a handler");
 });
+
+// Guards RA4: the per-window orientation card is reachable as a read-only MCP tool.
+test("wakeflow_window_view MCP tool is registered with a handler", () => {
+  const view = tools.find((t) => t.name === "wakeflow_window_view");
+  assert.ok(view, "wakeflow_window_view tool must be registered");
+  const props = view.inputSchema?.properties ?? {};
+  for (const field of ["stateRoot", "window"]) {
+    assert.equal(props[field]?.type, "string", `wakeflow_window_view must expose a string '${field}' input`);
+  }
+  assert.equal(typeof handlers.wakeflow_window_view, "function", "wakeflow_window_view must have a handler");
+});

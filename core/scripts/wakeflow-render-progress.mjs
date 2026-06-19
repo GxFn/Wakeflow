@@ -272,6 +272,37 @@ try {
       userDecisionsNeeded: statusValues.decisionsRequired,
       lastUpdated: renderedAt,
     },
+    // RA5: structured machine-extractable slices alongside the lossy display strings, so a
+    // consumer can pull per-window/per-task data as JSON without re-parsing wakeflow-state.json.
+    slices: {
+      windows: (state.windows ?? []).map((item) => ({
+        windowName: item.windowName,
+        windowState: item.windowState ?? null,
+        taskPackageIds: item.taskPackageIds ?? [],
+        targetTaskIds: item.targetTaskIds ?? [],
+      })),
+      taskPackages: (state.taskPackages ?? []).map((item) => ({
+        taskPackageId: item.taskPackageId,
+        status: item.status ?? null,
+        summary: item.summary ?? null,
+      })),
+      targetTasks: (state.targetTasks ?? []).map((item) => ({
+        targetTaskId: item.targetTaskId,
+        taskPackageId: item.taskPackageId,
+        targetWindow: item.targetWindow,
+        status: item.status ?? null,
+        reviewDecision: item.reviewDecision ?? null,
+        counts: item.counts ?? null,
+      })),
+      blockers: (state.blockers ?? []).map((item) => ({
+        id: item.id ?? null,
+        summary: item.summary ?? item.reason ?? null,
+      })),
+      decisionsRequired: (state.decisionsRequired ?? []).map((item) => ({
+        id: item.id ?? null,
+        summary: item.summary ?? item.reason ?? null,
+      })),
+    },
   };
   const progress = readFileSync(progressFile, "utf8");
   const matches = progress.match(/<!-- unified-status:start -->[\s\S]*?<!-- unified-status:end -->/g) ?? [];

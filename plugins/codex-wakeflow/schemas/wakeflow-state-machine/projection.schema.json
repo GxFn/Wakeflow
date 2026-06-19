@@ -19,7 +19,9 @@
     "sourceRevision": { "type": "integer", "minimum": 1 },
     "sourceEventId": { "type": "string", "minLength": 1 },
     "progressDoc": { "type": "string", "minLength": 1 },
-    "unifiedStatus": { "type": "object" }
+    "unifiedStatus": { "type": "object" },
+    "interfaceLanguage": { "type": "string" },
+    "slices": { "type": "object" }
   },
   "additionalProperties": false
 }

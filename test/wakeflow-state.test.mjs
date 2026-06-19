@@ -129,6 +129,31 @@ test("init --write creates ignored state root from tracked templates", () => {
   assert.equal(existsSync(path.join(stateRoot, "transition-candidates")), false);
 });
 
+test("RA5: render-progress emits structured projection slices alongside the display strings", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run([
+    "init", "--root", root, "--demand-key", "SLICE-FIXTURE", "--title", "Slice Fixture", "--write", "--json",
+  ]).stdout);
+  const stateRootRel = init.stateRoot;
+  const add = run([
+    "add-task-package", "--root", root, "--state-root", stateRootRel,
+    "--task-package-id", "SLICE-PKG", "--summary", "pkg",
+    "--target-window", "WinA", "--target-task-id", "SLICE-TASK", "--target-summary", "do it",
+    "--write", "--json",
+  ]);
+  assert.equal(add.status, 0, add.stderr || add.stdout);
+  const render = runScript(renderScript, ["--root", root, "--state-root", stateRootRel, "--write", "--json"]);
+  assert.equal(render.status, 0, render.stderr || render.stdout);
+  const projection = readJson(path.join(root, stateRootRel, "projection.json"));
+  assert.ok(projection.slices, "projection carries a structured slices object");
+  assert.ok(Array.isArray(projection.slices.targetTasks), "slices.targetTasks is an array of objects");
+  const task = projection.slices.targetTasks.find((item) => item.targetTaskId === "SLICE-TASK");
+  assert.ok(task, "slices.targetTasks includes the task as a structured object");
+  assert.equal(task.targetWindow, "WinA");
+  assert.ok(Array.isArray(projection.slices.windows), "slices.windows is an array of objects");
+  assert.equal(typeof projection.unifiedStatus.windows, "string", "the lossy display string is retained for back-compat");
+});
+
 test("init and render-progress localize generated state-root docs for Chinese workspaces", () => {
   const root = makeRoot();
   const result = run([

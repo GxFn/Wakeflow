@@ -13,6 +13,7 @@ import {
 } from "./lib/wakeflow-language.mjs";
 import { controllerReviewScope, reductionStatusForTargetTask } from "./lib/wakeflow-review-scope.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
+import { releaseWindowLockForResult } from "./lib/wakeflow-delivery-store.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const wakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -903,18 +904,11 @@ function commandImportTargetResult() {
   let lockReleased = false;
   if (write) {
     const lockFile = path.join(workspaceRoot, ".workspace-local/wakeflow-delivery/locks", `${slug(targetWindow)}.json`);
-    if (existsSync(lockFile)) {
-      try {
-        const lock = JSON.parse(readFileSync(lockFile, "utf8"));
-        const taskDeliveryId = targetTask.delivery?.deliveryId;
-        if (!lock.deliveryId || (taskDeliveryId && lock.deliveryId === taskDeliveryId)) {
-          unlinkSync(lockFile);
-          lockReleased = true;
-        }
-      } catch {
-        // unreadable lock: leave it for release-window-lock recovery
-      }
-    }
+    const taskDeliveryId = targetTask.delivery?.deliveryId;
+    lockReleased = releaseWindowLockForResult(
+      lockFile,
+      (lock) => !lock.deliveryId || (taskDeliveryId && lock.deliveryId === taskDeliveryId),
+    );
   }
 
   // Review readiness: which open tasks still lack a result AFTER this import,

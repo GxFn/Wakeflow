@@ -2096,6 +2096,25 @@ test("F18: re-dispatch clears a prior rework decision so a fresh result is not m
   assert.equal(task.reviewDecision, null, "re-dispatch clears the stale rework decision");
 });
 
+test("F25: a stale lock for the answered delivery is released (unified freshness-agnostic policy)", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "send", "--write"]));
+  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  // make the lock stale but still belonging to the answered delivery
+  const lock = JSON.parse(readFileSync(lockFile, "utf8"));
+  lock.expiresAt = "2000-01-01T00:00:00.000Z";
+  writeJson(lockFile, lock);
+  const recorded = parseOk(run(root, [
+    "record-target-result", "--target-window", "AlembicPlugin", "--task-id", "CSMR-TASK-1",
+    "--status", "completed", "--evidence-ref", "docs/e.md", "--write",
+  ]));
+  assert.equal(recorded.lockReleased, true, "a stale lock for the answered delivery is released under the unified policy");
+  assert.equal(existsSync(lockFile), false);
+});
+
 test("record-target-result rejects a group that matches no dispatch packet", () => {
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");

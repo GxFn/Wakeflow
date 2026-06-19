@@ -7,6 +7,7 @@ import {
   sameTargetResultContent,
 } from "./wakeflow-idempotency.mjs";
 import { hostProfile } from "./wakeflow-host-profile.mjs";
+import { releaseWindowLockForResult } from "./wakeflow-delivery-store.mjs";
 
 function eventIdFor(createdAt, revision) {
   return `evt-${createdAt.replace(/[-:.TZ]/g, "").slice(0, 14)}-${String(revision).padStart(4, "0")}`;
@@ -478,49 +479,43 @@ export function createResultRecordingCommands(ctx) {
     }
     // Release the shared in-flight window lock when it belongs to the delivery
     // this result answers; a lock for a different (newer) delivery survives.
+    // Release through the shared releaseWindowLockForResult authority (same contract as the
+    // state script). The belongsHere predicate keeps the run-scan that handles custom
+    // --delivery-run-id retries; freshness is no longer a gate (unified release policy).
     let lockReleased = false;
     if (write) {
-      const lock = readWindowLock(targetWindow);
-      if (lock && windowLockFresh(lock)) {
-        let belongsHere = !lock.deliveryId;
-        if (!belongsHere) {
-          const matchRun = (run) => {
-            if (!run || run.deliveryId !== lock.deliveryId) return false;
-            const runTaskId = run.taskId || run.targetTaskId;
-            return run.targetWindow === targetWindow && (!runTaskId || runTaskId === taskId);
-          };
-          const guessedFile = deliveryRunFileFor(`run-${lock.deliveryId}`);
-          if (existsSync(guessedFile)) {
+      const lockFile = path.join(stateDir, "locks", `${slug(targetWindow)}.json`);
+      const belongsHere = (lock) => {
+        if (!lock.deliveryId) return true;
+        const matchRun = (run) => {
+          if (!run || run.deliveryId !== lock.deliveryId) return false;
+          const runTaskId = run.taskId || run.targetTaskId;
+          return run.targetWindow === targetWindow && (!runTaskId || runTaskId === taskId);
+        };
+        const guessedFile = deliveryRunFileFor(`run-${lock.deliveryId}`);
+        if (existsSync(guessedFile)) {
+          try {
+            if (matchRun(JSON.parse(readFileSync(guessedFile, "utf8")))) return true;
+          } catch {
+            // fall through to the directory scan
+          }
+        }
+        // custom --delivery-run-id retries do not follow the run-<deliveryId> naming;
+        // scan the runs directory for the matching delivery id.
+        const runsDir = path.dirname(guessedFile);
+        if (existsSync(runsDir)) {
+          for (const name of readdirSync(runsDir)) {
+            if (!name.endsWith(".json")) continue;
             try {
-              belongsHere = matchRun(JSON.parse(readFileSync(guessedFile, "utf8")));
+              if (matchRun(JSON.parse(readFileSync(path.join(runsDir, name), "utf8")))) return true;
             } catch {
-              belongsHere = false;
-            }
-          }
-          if (!belongsHere) {
-            // custom --delivery-run-id retries do not follow the run-<deliveryId>
-            // naming; scan the runs directory for the matching delivery id.
-            const runsDir = path.dirname(guessedFile);
-            if (existsSync(runsDir)) {
-              for (const name of readdirSync(runsDir)) {
-                if (!name.endsWith(".json")) continue;
-                try {
-                  if (matchRun(JSON.parse(readFileSync(path.join(runsDir, name), "utf8")))) {
-                    belongsHere = true;
-                    break;
-                  }
-                } catch {
-                  // skip unreadable run files
-                }
-              }
+              // skip unreadable run files
             }
           }
         }
-        if (belongsHere) {
-          removeWindowLock(targetWindow);
-          lockReleased = true;
-        }
-      }
+        return false;
+      };
+      lockReleased = releaseWindowLockForResult(lockFile, belongsHere);
     }
     output(
       {

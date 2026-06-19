@@ -2,6 +2,25 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSyn
 import path from "node:path";
 import { hostProfile } from "./wakeflow-host-profile.mjs";
 
+// F25: single authority for releasing a window delivery lock when a result answers it — read
+// the lock file, apply the caller's matches(lock) decision, unlink on a match. Both the
+// state-script (import-target-result) and the delivery-script (record-target-result) route
+// their release through here, so the lock-file operation lives in one place and the release
+// contract is identical. Freshness is NOT a gate: an own/matching lock clears whether fresh
+// or stale (a stale lock is ignored by dispatch anyway); a different-delivery lock survives.
+export function releaseWindowLockForResult(lockFile, matches) {
+  if (!existsSync(lockFile)) return false;
+  let lock;
+  try {
+    lock = JSON.parse(readFileSync(lockFile, "utf8"));
+  } catch {
+    return false; // unreadable lock: leave it for release-window-lock recovery
+  }
+  if (!matches(lock)) return false;
+  unlinkSync(lockFile);
+  return true;
+}
+
 export function createDeliveryStore({
   workspaceRoot,
   stateDir,

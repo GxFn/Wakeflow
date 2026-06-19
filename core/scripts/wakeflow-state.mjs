@@ -1513,10 +1513,7 @@ function updatePackageStatusesForDecision(taskPackages, targetTasks, candidateTa
 // a window plus where its files live (both the state-root tier and the .workspace-local
 // transport tier), so a sub-window stops hunting for its task and file area. No write, no
 // revision bump, no event, no host-ownership claim.
-function commandWindowView() {
-  const stateRoot = stateRootFromArg();
-  const state = readJson(path.join(stateRoot, "wakeflow-state.json"), "controller state");
-  const window = requireValue("--window");
+function buildWindowCard(state, stateRoot, window) {
   const myTasks = (state.targetTasks ?? []).filter((task) => task.targetWindow === window);
   const myPackageIds = new Set(myTasks.map((task) => task.taskPackageId));
   const myPackages = (state.taskPackages ?? []).filter((pkg) => myPackageIds.has(pkg.taskPackageId));
@@ -1552,24 +1549,105 @@ function commandWindowView() {
     summary: task.summary,
     counts: task.counts ?? { dispatchCount: 0, reworkCount: 0 },
   }));
+  return {
+    window,
+    demandKey: state.demandKey,
+    stateRoot: stateRootRel,
+    windowState: windowRollup?.windowState ?? null,
+    counts: { open: tasks.filter((task) => task.status !== "accepted").length, total: tasks.length },
+    tasks,
+    taskPackages: myPackages.map((pkg) => ({ taskPackageId: pkg.taskPackageId, status: pkg.status, summary: pkg.summary })),
+    fileAreas,
+  };
+}
+
+function commandWindowView() {
+  const stateRoot = stateRootFromArg();
+  const state = readJson(path.join(stateRoot, "wakeflow-state.json"), "controller state");
+  const window = requireValue("--window");
+  const card = buildWindowCard(state, stateRoot, window);
   output(
-    {
-      ok: true,
-      command: "window-view",
-      window,
-      demandKey: state.demandKey,
-      stateRoot: stateRootRel,
-      windowState: windowRollup?.windowState ?? null,
-      counts: { open: tasks.filter((task) => task.status !== "accepted").length, total: tasks.length },
-      tasks,
-      taskPackages: myPackages.map((pkg) => ({ taskPackageId: pkg.taskPackageId, status: pkg.status, summary: pkg.summary })),
-      fileAreas,
-    },
+    { ok: true, command: "window-view", ...card },
     [
-      `Window ${window}: ${tasks.length} task(s) in demand ${state.demandKey}`,
-      ...tasks.map((task) => `- ${task.targetTaskId} [${task.status}]`),
-      `Files: ${stateRootRel} (+ transport under ${transportRoot})`,
+      `Window ${window}: ${card.tasks.length} task(s) in demand ${card.demandKey}`,
+      ...card.tasks.map((task) => `- ${task.targetTaskId} [${task.status}]`),
+      `Files: ${card.stateRoot} (+ transport under .workspace-local/wakeflow-delivery)`,
     ],
+  );
+}
+
+function renderWindowFocusMarkdown(card) {
+  const lines = [
+    `# Focus: ${card.window} — ${card.demandKey}`,
+    "",
+    `> Generated focus card (regenerable artifact, not state authority). Window state: ${card.windowState ?? "n/a"}; ${card.counts.open} open / ${card.counts.total} total task(s).`,
+    "",
+    "## My tasks",
+    "",
+  ];
+  if (card.tasks.length === 0) {
+    lines.push("_None._");
+  } else {
+    for (const task of card.tasks) {
+      lines.push(`- \`${task.targetTaskId}\` [${task.status}] (dispatch x${task.counts?.dispatchCount ?? 0}, rework x${task.counts?.reworkCount ?? 0}) — ${task.summary ?? ""}`);
+    }
+  }
+  lines.push("", "## My file areas", "");
+  lines.push(`- state root: \`${card.fileAreas.stateRoot}\``);
+  lines.push(`- task packages: \`${card.fileAreas.taskPackagesDir}\``);
+  lines.push(`- my results: \`${card.fileAreas.targetResultsDir}\``);
+  lines.push(`- transport packets: \`${card.fileAreas.transport.dispatchPacketsDir}\``);
+  lines.push(`- my thread registry: \`${card.fileAreas.host.threadRegistryFile}\``);
+  lines.push("");
+  return lines.join("\n");
+}
+
+// RA5: distill the big state into a focused, regenerable sub-document for one window (or,
+// best-effort, one phase). Dry-run by default; --write rewrites focus/ artifacts under the
+// owning-host gate. Focus docs are never state authority.
+function commandFocusDoc() {
+  const stateRoot = stateRootFromArg();
+  const state = readJson(path.join(stateRoot, "wakeflow-state.json"), "controller state");
+  const window = getValue("--window");
+  const phase = getValue("--phase");
+  if (!window && !phase) fail("focus-doc requires --window or --phase.");
+  if (write && state.controllerHost && state.controllerHost !== hostProfile.runtime.hostDirName) {
+    fail(`demand ${state.demandKey} is owned by controller host ${state.controllerHost}; this runtime is ${hostProfile.runtime.hostDirName}. Generate focus docs from the owning controller.`);
+  }
+  if (window) {
+    const card = buildWindowCard(state, stateRoot, window);
+    const markdown = renderWindowFocusMarkdown(card);
+    const mdFile = path.join(stateRoot, "focus", `window-${slug(window)}.md`);
+    const jsonFile = path.join(stateRoot, "focus", `window-${slug(window)}.json`);
+    if (write) {
+      atomicWrite(mdFile, markdown.endsWith("\n") ? markdown : `${markdown}\n`);
+      writeJson(jsonFile, { kind: "WakeflowWindowFocus", ...card });
+    }
+    output(
+      { ok: true, command: "focus-doc", scope: "window", window, wrote: write, files: [relative(mdFile), relative(jsonFile)], card },
+      [`Focus doc for window ${window}: ${write ? "wrote" : "would write"} ${relative(mdFile)} + ${relative(jsonFile)}`],
+    );
+    return;
+  }
+  // Best-effort phase brief: target tasks are not yet per-phase tagged, so this is a
+  // demand-stage-level list (G11(a) per-task stageId is a separate, larger change).
+  const stageId = phase === "active" ? (state.activeStageId ?? "active") : phase;
+  const tasks = state.targetTasks ?? [];
+  const markdown = [
+    `# Focus: phase ${stageId} — ${state.demandKey}`,
+    "",
+    `> Best-effort phase brief (regenerable, not state authority). Target tasks are not yet per-phase tagged, so this lists the demand's tasks at active stage ${state.activeStageId ?? "n/a"}.`,
+    "",
+    "## Tasks",
+    "",
+    ...(tasks.length ? tasks.map((task) => `- \`${task.targetTaskId}\` -> \`${task.targetWindow}\` [${task.status}]`) : ["_None._"]),
+    "",
+  ].join("\n");
+  const mdFile = path.join(stateRoot, "focus", `phase-${slug(stageId)}.md`);
+  if (write) atomicWrite(mdFile, `${markdown}\n`);
+  output(
+    { ok: true, command: "focus-doc", scope: "phase", phase: stageId, wrote: write, files: [relative(mdFile)] },
+    [`Focus doc for phase ${stageId}: ${write ? "wrote" : "would write"} ${relative(mdFile)}`],
   );
 }
 
@@ -1598,6 +1676,9 @@ try {
       break;
     case "window-view":
       commandWindowView();
+      break;
+    case "focus-doc":
+      commandFocusDoc();
       break;
     case "help":
     case "--help":

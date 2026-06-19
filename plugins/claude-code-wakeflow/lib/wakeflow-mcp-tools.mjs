@@ -334,6 +334,21 @@ const toolDefinitions = [
     },
   },
   {
+    name: "wakeflow_focus_doc",
+    description: "Generate a focused, regenerable sub-document for one window (or, best-effort, one phase) of a demand state root — a distilled card written under focus/. Dry-run by default; apply:true writes under the owning-host gate. Focus docs are never state authority.",
+    annotations: localWriteTool("Generate Wakeflow Focus Doc"),
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+        stateRoot: { type: "string" },
+        window: { type: "string" },
+        phase: { type: "string" },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
     name: "wakeflow_trace_spine",
     description: "Trace the Wakeflow evidence spine for a state root, dispatch group, delivery, target, or target result. Read-only diagnostic evidence; not controller acceptance and not a host send.",
     annotations: readOnlyTool("Trace Wakeflow Evidence Spine"),
@@ -830,6 +845,18 @@ export const handlers = {
       "window-view",
       ...optionalValue("--state-root", args.stateRoot),
       ...optionalValue("--window", args.window),
+      ...rootArgs(args),
+      "--json",
+    ],
+  }),
+  wakeflow_focus_doc: (args) => runWakeflowRuntime({
+    script: "wakeflow-state",
+    args: [
+      "focus-doc",
+      ...optionalValue("--state-root", args.stateRoot),
+      ...optionalValue("--window", args.window),
+      ...optionalValue("--phase", args.phase),
+      ...(args.apply ? ["--write"] : []),
       ...rootArgs(args),
       "--json",
     ],

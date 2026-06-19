@@ -180,6 +180,31 @@ test("RA5: render-progress writes an idempotent navigable state-root index.md", 
   assert.equal(readFileSync(indexPath, "utf8"), first, "regenerating against the same state is idempotent");
 });
 
+test("RA5: focus-doc distills a per-window card (dry-run default, --write emits md + json)", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run([
+    "init", "--root", root, "--demand-key", "FOCUS-FIXTURE", "--title", "Focus Fixture", "--write", "--json",
+  ]).stdout);
+  const stateRootRel = init.stateRoot;
+  run([
+    "add-task-package", "--root", root, "--state-root", stateRootRel,
+    "--task-package-id", "FOC-PKG", "--summary", "pkg",
+    "--target-window", "WinA", "--target-task-id", "FOC-TASK", "--target-summary", "do",
+    "--write", "--json",
+  ]);
+  const dry = JSON.parse(run(["focus-doc", "--root", root, "--state-root", stateRootRel, "--window", "WinA", "--json"]).stdout);
+  assert.equal(dry.command, "focus-doc");
+  assert.equal(dry.wrote, false, "focus-doc is dry-run by default");
+  assert.equal(existsSync(path.join(root, dry.files[0])), false, "dry-run writes nothing");
+  const wrote = JSON.parse(run(["focus-doc", "--root", root, "--state-root", stateRootRel, "--window", "WinA", "--write", "--json"]).stdout);
+  assert.equal(wrote.wrote, true);
+  assert.ok(existsSync(path.join(root, wrote.files[0])), "focus-doc --write writes the window card markdown");
+  assert.ok(existsSync(path.join(root, wrote.files[1])), "and the card json");
+  const md = readFileSync(path.join(root, wrote.files[0]), "utf8");
+  assert.match(md, /# Focus: WinA/);
+  assert.match(md, /FOC-TASK/);
+});
+
 test("init and render-progress localize generated state-root docs for Chinese workspaces", () => {
   const root = makeRoot();
   const result = run([

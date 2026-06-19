@@ -40,3 +40,14 @@ test("wakeflow_window_view MCP tool is registered with a handler", () => {
   }
   assert.equal(typeof handlers.wakeflow_window_view, "function", "wakeflow_window_view must have a handler");
 });
+
+// Guards RA5 part 3: the focus-doc generator is reachable as an MCP tool (a write tool).
+test("wakeflow_focus_doc MCP tool is registered with a handler", () => {
+  const focus = tools.find((t) => t.name === "wakeflow_focus_doc");
+  assert.ok(focus, "wakeflow_focus_doc tool must be registered");
+  const props = focus.inputSchema?.properties ?? {};
+  for (const field of ["stateRoot", "window", "phase", "apply"]) {
+    assert.ok(props[field], `wakeflow_focus_doc must expose '${field}'`);
+  }
+  assert.equal(typeof handlers.wakeflow_focus_doc, "function", "wakeflow_focus_doc must have a handler");
+});

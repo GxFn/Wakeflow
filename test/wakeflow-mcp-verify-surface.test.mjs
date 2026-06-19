@@ -51,3 +51,12 @@ test("wakeflow_focus_doc MCP tool is registered with a handler", () => {
   }
   assert.equal(typeof handlers.wakeflow_focus_doc, "function", "wakeflow_focus_doc must have a handler");
 });
+
+test("wakeflow_claim_next MCP tool is registered with a handler", () => {
+  const claim = tools.find((t) => t.name === "wakeflow_claim_next");
+  assert.ok(claim, "wakeflow_claim_next tool must be registered");
+  const props = claim.inputSchema?.properties ?? {};
+  assert.equal(props.designKey?.type, "string", "wakeflow_claim_next must expose a string 'designKey' input");
+  assert.equal(props.apply?.type, "boolean", "wakeflow_claim_next must expose a boolean 'apply' input");
+  assert.equal(typeof handlers.wakeflow_claim_next, "function", "wakeflow_claim_next must have a handler");
+});

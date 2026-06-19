@@ -13,6 +13,7 @@ const workspaceConfig = loadWorkspaceConfig({ workspaceRoot, args });
 const allowedStatuses = new Set([
   "draft",
   "ready-for-workspace",
+  "controller-claimable",
   "accepted-by-workspace",
   "needs-design",
   "paused",
@@ -196,7 +197,7 @@ function validateEntry(entry, seenIds) {
     }
   }
 
-  if (entry["Status"] === "ready-for-workspace") {
+  if (entry["Status"] === "ready-for-workspace" || entry["Status"] === "controller-claimable") {
     if (!firstLink(entry["Original Plan"])) {
       issues.push(`${id}: ready entry must link an original plan.`);
     }
@@ -219,6 +220,13 @@ function validateEntry(entry, seenIds) {
         issues.push(`${id}: ready entry is missing ${column}.`);
       }
     }
+  }
+
+  // controller-claimable rows carry every ready-for-workspace invariant PLUS design-key
+  // provenance, so the controller auto-claim gate keys off a typed Design-owned status
+  // rather than free text. The gate moves to Design authority; it is not removed.
+  if (entry["Status"] === "controller-claimable") {
+    issues.push(...validateTargetDesignKey(entry));
   }
 
   return issues;
@@ -380,6 +388,7 @@ function summarizeTargetEntry(entry) {
     status: entry["Status"],
     title: entry["Title"],
     readyForWorkspace: entry["Status"] === "ready-for-workspace",
+    controllerClaimable: entry["Status"] === "controller-claimable",
     userConfirmation: entry["User Confirmation"],
     userConfirmationStatus: userConfirmationState(entry),
     currentMainlineRelation: entry["Current Mainline Relation"],

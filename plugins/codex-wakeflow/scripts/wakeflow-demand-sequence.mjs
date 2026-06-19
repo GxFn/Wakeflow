@@ -23,6 +23,7 @@ Usage:
   node scripts/wakeflow-demand-sequence.mjs status --manifest <manifest.json> [--root <workspace>] [--json]
   node scripts/wakeflow-demand-sequence.mjs claim-next --manifest <manifest.json> [--root <workspace>] [--write] [--json]
   node scripts/wakeflow-demand-sequence.mjs sync-doc --manifest <manifest.json> --demand-key <key> [--root <workspace>] [--write] [--json]
+  node scripts/wakeflow-demand-sequence.mjs claim-from-design [--design-key <key>] [--root <workspace>] [--write] [--json]
 
 Design:
   A sequence manifest is tracked, machine-readable demand order. This script
@@ -600,6 +601,144 @@ function commandSyncDoc() {
   ]);
 }
 
+function runNextWorkDesign() {
+  const result = runSync(process.execPath, [
+    path.join(scriptsDir, "wakeflow-next-work.mjs"),
+    "--root", workspaceRoot, "--source", "design", "--json",
+  ], { cwd: workspaceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  if (!result.stdout) {
+    fail(["wakeflow-next-work produced no output during the Design scan.", result.stderr?.trim()].filter(Boolean).join("\n"));
+  }
+  return JSON.parse(result.stdout);
+}
+
+function runImportRevalidate(designKey) {
+  // import exits non-zero when ANY board row has issues; the JSON payload on stdout is
+  // still authoritative, and the caller keeps only the targeted row's issues so an
+  // unrelated invalid row never blocks a legitimate single-row claim.
+  const result = runSync(process.execPath, [
+    path.join(scriptsDir, "wakeflow-import-design-handoffs.mjs"),
+    "--root", workspaceRoot, "--id", designKey, "--json",
+  ], { cwd: workspaceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  if (!result.stdout) {
+    fail([`wakeflow-import-design-handoffs produced no output revalidating ${designKey}.`, result.stderr?.trim()].filter(Boolean).join("\n"));
+  }
+  return JSON.parse(result.stdout);
+}
+
+// claim-from-design is the manifest-free, Design-gated controller auto-claim: it inits at
+// most one demand from a Design-set controller-claimable row. It never dispatches, accepts,
+// or weakens per-demand user confirmation. Eligibility lives in the typed Design status.
+function commandClaimFromDesign() {
+  const designKeyArg = getValue("--design-key", null);
+  const scan = runNextWorkDesign();
+  const claimable = (scan.candidates ?? []).filter((candidate) => candidate.controllerClaimable === true);
+
+  if (claimable.length === 0) {
+    output({
+      ok: true,
+      command: "claim-from-design",
+      wrote: false,
+      claimable: [],
+      claimed: null,
+      agentNext: "No controller-claimable Design row. Ask Design to set controller-claimable on a user-confirmed deliverable.",
+    }, ["No controller-claimable Design row is available."]);
+    return;
+  }
+
+  let target;
+  if (designKeyArg) {
+    target = claimable.find((candidate) => candidate.id === designKeyArg);
+    if (!target) {
+      fail(`--design-key ${designKeyArg} is not a controller-claimable row; claimable: ${claimable.map((c) => c.id).join(", ")}.`);
+    }
+  } else if (claimable.length === 1) {
+    target = claimable[0];
+  } else {
+    fail(`multiple controller-claimable rows (${claimable.map((c) => c.id).join(", ")}); pass --design-key to choose exactly one.`);
+  }
+
+  const stateRootAbs = resolveFromWorkspace(`.workspace-active/workspace/current/${slug(target.id)}`);
+  const stateRoot = relative(stateRootAbs);
+  const requirementDesign = target.documents?.requirementDesign?.path ?? null;
+  const originalPlan = target.documents?.originalPlan?.path ?? null;
+
+  if (!write) {
+    output({
+      ok: true,
+      command: "claim-from-design",
+      wrote: false,
+      wouldClaim: { demandKey: target.id, title: target.title, stateRoot, requirementDesign, originalPlan },
+      agentNext: "Rerun with --write after total control confirms this Design-confirmed demand is the next safe demand to init.",
+    }, [`Would claim Design demand: ${target.id}`]);
+    return;
+  }
+
+  // Apply-time fail-closed single-row revalidation (TOCTOU guard): the row must still pass
+  // its own import validation and still be typed controller-claimable.
+  const reval = runImportRevalidate(target.id);
+  const rowIssues = (reval.issues ?? []).filter((issue) => issue.startsWith(`${target.id}:`));
+  if (rowIssues.length > 0) {
+    fail([`controller-claimable row ${target.id} failed fail-closed revalidation:`, ...rowIssues].join("\n"));
+  }
+  if (!reval.target || reval.target.controllerClaimable !== true) {
+    fail(`row ${target.id} is no longer controller-claimable at apply time; refusing to claim.`);
+  }
+
+  // demandKey-collision guard: never re-init over an existing demand state root.
+  if (existsSync(path.join(stateRootAbs, "wakeflow-state.json"))) {
+    fail(`a demand state root already exists at ${stateRoot}; refuse to re-init ${target.id}.`);
+  }
+
+  const goal = requirementDesign
+    ? `Deliver per Design requirement design: ${requirementDesign}`
+    : `Deliver Design demand ${target.id}: ${target.title}`;
+  const completionDefinition = requirementDesign
+    ? `Completion per requirement design ${requirementDesign}; total control confirms scope before dispatch.`
+    : "Total control confirms the completion definition from linked Design docs before dispatch.";
+  const stagePlan = originalPlan
+    ? `Derive stages from original plan ${originalPlan} and requirement design ${requirementDesign ?? "(linked)"}.`
+    : "Total control derives the stage plan from the linked Design docs.";
+
+  const initOut = runControllerState([
+    "init",
+    "--root", workspaceRoot,
+    "--state-root", stateRoot,
+    "--demand-key", target.id,
+    "--title", target.title,
+    "--goal", goal,
+    "--completion-definition", completionDefinition,
+    "--stage-plan", stagePlan,
+    "--write", "--json",
+  ]);
+  const renderOut = runRenderProgressDoc(stateRoot);
+
+  output({
+    ok: true,
+    command: "claim-from-design",
+    wrote: true,
+    claimed: {
+      demandKey: target.id,
+      title: target.title,
+      stateRoot,
+      progressDoc: `${stateRoot}/developer-progress.md`,
+      requirementDesign,
+      originalPlan,
+    },
+    controllerOutputs: [initOut, renderOut],
+    forbiddenConclusions: [
+      "claim-from-design-is-dispatch",
+      "claim-from-design-is-acceptance",
+      "controller-claim-bypasses-per-demand-confirmation",
+    ],
+    agentNext: "Read the linked Design docs, then confirm dispatch as a separate step. No dispatch, delivery, or acceptance was performed.",
+  }, [
+    `Claimed Design demand: ${target.id}`,
+    `State root: ${stateRoot}`,
+    "Init-only: no dispatch, delivery, automation loop, or evidence acceptance was performed.",
+  ]);
+}
+
 function main() {
   if (command === "help" || command === "--help" || command === "-h") {
     console.log(helpText);
@@ -615,6 +754,10 @@ function main() {
   }
   if (command === "sync-doc") {
     commandSyncDoc();
+    return;
+  }
+  if (command === "claim-from-design") {
+    commandClaimFromDesign();
     return;
   }
   fail(`Unknown wakeflow-demand-sequence command: ${command}\n\n${helpText}`);

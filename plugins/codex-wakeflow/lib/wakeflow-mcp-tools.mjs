@@ -495,6 +495,19 @@ const toolDefinitions = [
     },
   },
   {
+    name: "wakeflow_claim_next",
+    description: "Design-gated controller auto-claim: init at most one demand from a Design-set controller-claimable handoff row. Dry-run unless apply is true. This tool inits a state root only; it never dispatches, accepts evidence, or weakens per-demand user confirmation.",
+    annotations: localWriteTool("Claim Next Controller Demand"),
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+        designKey: { type: "string" },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
     name: "wakeflow_archive_todo",
     description: "Archive completed Wakeflow TODO rows and historical sync records into the configured workspace ledger. Dry-run unless apply is true. This tool records archive facts only; it does not accept work, select next work, or send host messages.",
     annotations: localWriteTool("Archive Wakeflow TODO Rows"),
@@ -961,6 +974,17 @@ export const handlers = {
       ...optionalValue("--source", args.source),
       ...optionalValue("--limit", args.limit),
       ...(args.afterCompletion ? ["--after-completion"] : []),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
+  wakeflow_claim_next: (args) => runWakeflowRuntime({
+    script: "wakeflow-demand-sequence",
+    args: [
+      "claim-from-design",
+      ...rootArgs(args),
+      ...optionalValue("--design-key", args.designKey),
       ...(args.apply ? ["--write"] : []),
       "--json",
     ],

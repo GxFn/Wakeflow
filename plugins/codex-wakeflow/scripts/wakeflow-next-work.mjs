@@ -201,7 +201,7 @@ function parseDesignCandidates(issues, warnings) {
     .filter((row) => row !== header)
     .filter((row) => row.some((cell) => cell && !/^:?-{3,}:?$/.test(cell)))
     .map((row) => rowObject(header, row))
-    .filter((entry) => entry.ID && entry["Status"] === "ready-for-workspace")
+    .filter((entry) => entry.ID && ["ready-for-workspace", "controller-claimable"].includes(entry["Status"]))
     .map((entry) => {
       const confirmation = userConfirmationStatus(entry);
       const relation = normalizeEnumValue(entry["Mainline Relation Status"]) || "todo-candidate";
@@ -237,6 +237,7 @@ function parseDesignCandidates(issues, warnings) {
         documents: docs,
         blockers,
         eligible: blockers.length === 0,
+        controllerClaimable: entry["Status"] === "controller-claimable" && blockers.length === 0,
       };
     });
 }

@@ -133,3 +133,19 @@ test("TODO candidates exclude completed slash-status and Aux-owned rows", () => 
   assert.equal(parsed.recommended.id, "CLAIM-2026-06-04");
   assert.equal(parsed.autoClaimable, true);
 });
+
+test("controller-claimable Design row reports controllerClaimable; ready-for-workspace reports false", () => {
+  const { root } = makeFixture({
+    designRows: [
+      "| claim-design-2026-06-04 | controller-claimable | Claimable | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | Requirement design contains handoff details | confirmed |  | next-mainline | after current mainline | GTODO-CLAIM | P1 | P1 | controller intake |",
+      "| ready-design-2026-06-04 | ready-for-workspace | Ready | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | Requirement design contains handoff details | confirmed |  | next-mainline | after current mainline | GTODO-READY | P1 | P1 | controller intake |",
+    ].join("\n"),
+  });
+  const result = run(root, ["--source", "design"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  const claim = parsed.candidates.find((candidate) => candidate.id === "claim-design-2026-06-04");
+  const ready = parsed.candidates.find((candidate) => candidate.id === "ready-design-2026-06-04");
+  assert.equal(claim.controllerClaimable, true);
+  assert.equal(ready.controllerClaimable, false);
+});

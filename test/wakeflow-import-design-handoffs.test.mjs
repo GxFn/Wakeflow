@@ -71,6 +71,24 @@ function enumRow({ confirmationStatus, userConfirmation = "", mainlineStatus = "
   return `| enum-flow-2026-05-30 | ready-for-workspace | Enum fixture | [original](enum-flow/original-plan-2026-05-30.md) | [design](enum-flow/requirement-design-2026-05-30.md) | [handoff](enum-flow/workspace-handoff-2026-05-30.md) | ${confirmationStatus} | ${userConfirmation} | ${mainlineStatus} | does not affect current mainline | TODO | ${priorityStatus} | P1 | controller intake |`;
 }
 
+function controllerClaimableRow({ original = "[original](enum-flow/original-plan-2026-05-30.md)" } = {}) {
+  return `| enum-flow-2026-05-30 | controller-claimable | Claim fixture | ${original} | [design](enum-flow/requirement-design-2026-05-30.md) | [handoff](enum-flow/workspace-handoff-2026-05-30.md) | confirmed |  | todo-candidate | does not affect current mainline | TODO | P1 | P1 | controller intake |`;
+}
+
+test("controller-claimable row validates clean and reports controllerClaimable", () => {
+  const result = run(makeFixture({ header: enumHeader, row: controllerClaimableRow() }));
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.issueCount, 0);
+  assert.equal(parsed.target.controllerClaimable, true);
+});
+
+test("controller-claimable row without an original plan link fails closed", () => {
+  const result = run(makeFixture({ header: enumHeader, row: controllerClaimableRow({ original: "no link" }) }));
+  const parsed = JSON.parse(result.stdout);
+  assert.ok(parsed.issues.some((issue) => /must link an original plan/.test(issue)), parsed.issues.join("\n"));
+});
+
 test("legacy user confirmation text remains accepted for old boards", () => {
   const result = run(makeFixture({ header: legacyHeader, row: legacyRow() }));
   assert.equal(result.status, 0, result.stderr || result.stdout);

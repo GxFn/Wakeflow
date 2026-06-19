@@ -241,6 +241,14 @@ archive when:
 Until confirmation, remain paused or waiting for decision, with no send target
 and no executable prompt.
 
+The controller may auto-claim (init) a demand without a fresh user prompt ONLY
+from a Design-set `controller-claimable` handoff row via `wakeflow_claim_next`.
+That typed status is the moved confirmation gate: only Design can set it, it
+carries every ready-row invariant plus design-key provenance, and it never
+bypasses per-demand user confirmation. A free-text TODO row cannot drive
+auto-claim, and the claim is init-only — dispatch and acceptance gates stay
+intact and still require their own evidence and confirmation.
+
 ## Testing And Acceptance
 
 - The controller self-validates anything that does not need a real project:

@@ -309,3 +309,77 @@ test("developer documents without the standard status marker fail closed", () =>
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /must contain exactly one unified-status marker block/);
 });
+
+// RA1: Design-gated controller auto-claim (claim-from-design).
+function designDoc(id, title) {
+  return `# ${title}\n\nDesign Key: ${id}\n`;
+}
+
+function makeDesignFixture({ status = "controller-claimable", id = "auto-claim-2026-06-19" } = {}) {
+  const root = makeRoot();
+  writeJson(path.join(root, "workspace.config.json"), {
+    workspaceName: "ExampleWorkspace",
+    controllerWindow: "ExampleController",
+  });
+  const currentDir = path.join(root, ".workspace-active/workspace/current");
+  const designDir = path.join(currentDir, "auto-claim");
+  mkdirSync(designDir, { recursive: true });
+  writeFileSync(path.join(designDir, "original-plan.md"), designDoc(id, "Original Plan"));
+  writeFileSync(path.join(designDir, "requirement-design.md"), designDoc(id, "Requirement Design"));
+  writeFileSync(path.join(currentDir, "workspace-current-status.md"), "# Status\n\nStatus: idle\n");
+  const row = `| ${id} | ${status} | Auto claim design | [original](auto-claim/original-plan.md) | [design](auto-claim/requirement-design.md) | Requirement design contains handoff details | confirmed |  | next-mainline | after current mainline | GTODO-AUTO | P1 | P1 | controller intake |`;
+  writeFileSync(
+    path.join(currentDir, "design-handoff-board.md"),
+    `# Workspace Handoff Board\n\n## Handoff Board\n\n| ID | Status | Title | Original Plan | Requirement Design | Handoff | User Confirmation Status | User Confirmation | Mainline Relation Status | Current Mainline Relation | Suggested TODO | Priority Enum | Priority | Next Step |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n${row}\n`,
+  );
+  return { root, id };
+}
+
+test("claim-from-design dry-run returns the single claimable demand without writing a state root", () => {
+  const { root, id } = makeDesignFixture();
+  const result = run(["claim-from-design", "--root", root, "--json"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.wrote, false);
+  assert.equal(payload.wouldClaim.demandKey, id);
+  assert.match(payload.wouldClaim.requirementDesign, /requirement-design\.md$/);
+  assert.equal(existsSync(path.join(root, `.workspace-active/workspace/current/${id}`)), false);
+});
+
+test("claim-from-design --write inits exactly one demand, no task package, no dispatch", () => {
+  const { root, id } = makeDesignFixture();
+  const result = run(["claim-from-design", "--root", root, "--write", "--json"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.wrote, true);
+  assert.equal(payload.claimed.demandKey, id);
+  const stateRoot = path.join(root, payload.claimed.stateRoot);
+  const state = readJson(path.join(stateRoot, "wakeflow-state.json"));
+  assert.equal(state.demandKey, id);
+  assert.equal(state.state, "intake");
+  assert.equal(state.taskPackages.length, 0);
+  assert.equal(state.targetTasks.length, 0);
+  assert.equal(state.controllerHost, null);
+  assert.equal(existsSync(path.join(stateRoot, "developer-progress.md")), true);
+  assert.ok(payload.forbiddenConclusions.includes("claim-from-design-is-dispatch"));
+});
+
+test("claim-from-design refuses to re-init an existing demand state root", () => {
+  const { root } = makeDesignFixture();
+  run(["claim-from-design", "--root", root, "--write", "--json"]);
+  const result = run(["claim-from-design", "--root", root, "--write", "--json"]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /already exists/);
+});
+
+test("claim-from-design ignores a ready-for-workspace row that is not controller-claimable", () => {
+  const { root } = makeDesignFixture({ status: "ready-for-workspace" });
+  const result = run(["claim-from-design", "--root", root, "--write", "--json"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.claimed, null);
+  assert.deepEqual(payload.claimable, []);
+});

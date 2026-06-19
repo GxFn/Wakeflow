@@ -1961,6 +1961,73 @@ test("record-target-result preserves a fresh lock for a different task in the sa
   assert.equal(JSON.parse(readFileSync(lockFile, "utf8")).deliveryId, newerDeliveryId);
 });
 
+test("F51: state-script import-target-result (the MCP path) releases the matching window lock", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "state-script send", "--write"]));
+  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  assert.equal(existsSync(lockFile), true, "sent delivery must write the shared window lock");
+
+  // wakeflow_record_target_result maps to the STATE-script import-target-result; its
+  // lock-release path (state.mjs) was previously untested (assessment F51).
+  parseOk(runState(root, [
+    "import-target-result",
+    "--state-root", stateRootRef,
+    "--target-task-id", "CSMR-TASK-1",
+    "--target-window", "AlembicPlugin",
+    "--status", "completed",
+    "--evidence-ref", "docs/evidence.md",
+    "--write",
+  ]));
+  assert.equal(existsSync(lockFile), false, "the state-script import must release the matching delivery lock");
+});
+
+test("F52: dispatch is fail-closed against a fresh other-host window lock", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  writeJson(lockFile, {
+    kind: "WakeflowWindowDeliveryLock",
+    version: 1,
+    windowName: "AlembicPlugin",
+    host: "claude-code",
+    deliveryId: "delivery-other-host",
+    createdAt: "2026-06-05T00:00:00.000Z",
+    expiresAt: "2999-01-01T00:00:00.000Z",
+  });
+  const blocked = run(root, [
+    "prepare-dispatch-from-state",
+    "--state-root", stateRootRef,
+    "--target-task-id", "CSMR-TASK-1",
+    "--group", "GROUP-STATE",
+    "--controller-window", "AlembicWorkspace",
+    "--human-context-ref", `${stateRootRef}/developer-progress.md`,
+    "--require-thread",
+    "--write",
+  ]);
+  assert.notEqual(blocked.status, 0, "a fresh other-host lock must fail closed");
+  assert.match(blocked.stdout + blocked.stderr, /lock/i);
+});
+
+test("F53: an expired other-host window lock self-heals and allows dispatch", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  writeJson(lockFile, {
+    kind: "WakeflowWindowDeliveryLock",
+    version: 1,
+    windowName: "AlembicPlugin",
+    host: "claude-code",
+    deliveryId: "delivery-stale",
+    createdAt: "2000-01-01T00:00:00.000Z",
+    expiresAt: "2000-01-01T01:00:00.000Z",
+  });
+  const prepared = prepareDispatch(root, stateRootRef);
+  assert.ok(prepared.envelope?.deliveryId, "an expired other-host lock is treated as absent");
+});
+
 test("record-target-result rejects a group that matches no dispatch packet", () => {
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");

@@ -144,6 +144,52 @@ for (const scriptName of scriptNames) {
   }
 }
 
+// Allow-list <-> caller cross-check (source / installed-runtime only): every runtime
+// allow-list entry should have at least one real caller — an MCP runWakeflowRuntime script
+// arg, an intra-script spawn, a package.json npm script, or a verify path.join spawn. An
+// entry with no detected caller is surfaced as a WARNING (not a failing issue) so a
+// retired-but-still-listed script stays visible without breaking the pipeline before its
+// scheduled removal. Only runs where the runtime registry is present (the source repo or an
+// installed plugin runtime), never in a managed workspace that ships no runtime lib.
+const runtimeRegistryPath = path.join(scriptsDir, "..", "lib", "wakeflow-runtime.mjs");
+if (existsSync(scriptsDir) && existsSync(runtimeRegistryPath)) {
+  const registry = read(runtimeRegistryPath);
+  const allowListEntries = [...registry.matchAll(/\["([a-z0-9-]+)",\s*"([a-z0-9.-]+\.mjs)"\]/g)]
+    .map((match) => ({ logical: match[1], file: match[2] }));
+  const callerCorpus = [];
+  for (const name of runtimeScripts) {
+    callerCorpus.push({ base: name, text: read(path.join(scriptsDir, name)) });
+  }
+  const libDir = path.join(scriptsDir, "..", "lib");
+  if (existsSync(libDir)) {
+    for (const name of readdirSync(libDir).filter((entry) => entry.endsWith(".mjs"))) {
+      callerCorpus.push({ base: name, text: read(path.join(libDir, name)) });
+    }
+  }
+  const packageJsonPath = path.join(scriptsDir, "..", "package.json");
+  if (existsSync(packageJsonPath)) {
+    callerCorpus.push({ base: "package.json", text: read(packageJsonPath) });
+  }
+  for (const entry of allowListEntries) {
+    const called = callerCorpus.some((source) => {
+      if (source.base === entry.file) return false; // the entry's own file
+      if (source.base === "wakeflow-runtime.mjs") return false; // the allow-list registry itself
+      return (
+        source.text.includes(`"${entry.logical}"`)
+        || source.text.includes(`'${entry.logical}'`)
+        || source.text.includes(entry.file)
+      );
+    });
+    if (!called) {
+      warnings.push(
+        `runtime allow-list entry '${entry.logical}' (${entry.file}) has no detected caller `
+          + "(MCP runWakeflowRuntime, intra-script spawn, package.json script, or verify spawn) — "
+          + "wire it or retire it from the allow-list.",
+      );
+    }
+  }
+}
+
 const result = {
   ok: issues.length === 0,
   scriptSource: useWorkspaceScripts ? "workspace-local" : "installed-runtime",

@@ -523,13 +523,15 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_verify",
-    description: "Run embedded Wakeflow runtime verification for an installed workspace or the Wakeflow source repository.",
+    description: "Run embedded Wakeflow runtime verification for an installed workspace or the Wakeflow source repository. Set withRuntime for the runtime-residue check (strictRuntime to fail on blocking residue); scriptTests to run the script test suite.",
     annotations: readOnlyTool("Verify Wakeflow Runtime"),
     inputSchema: {
       type: "object",
       properties: {
         root: { type: "string" },
         scriptTests: { type: "boolean" },
+        withRuntime: { type: "boolean" },
+        strictRuntime: { type: "boolean" },
       },
     },
   },
@@ -931,9 +933,15 @@ export const handlers = {
   },
   wakeflow_verify: (args) => runWakeflowRuntime({
     script: "wakeflow-cli",
-    args: ["verify", ...rootArgs(args), ...(args.scriptTests ? ["--script-tests"] : []), "--json"],
+    args: [
+      "verify",
+      ...rootArgs(args),
+      ...(args.scriptTests ? ["--script-tests"] : []),
+      ...(args.strictRuntime ? ["--strict-runtime"] : args.withRuntime ? ["--with-runtime"] : []),
+      "--json",
+    ],
     cwd: args.root || undefined,
-    timeoutMs: args.scriptTests ? 180000 : 120000,
+    timeoutMs: args.scriptTests || args.withRuntime || args.strictRuntime ? 180000 : 120000,
   }),
 };
 

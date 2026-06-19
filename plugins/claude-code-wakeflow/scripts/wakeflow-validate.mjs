@@ -5,7 +5,26 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { listWakeflowRuntimeScriptEntries } from "../lib/wakeflow-runtime.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
-import { createHostArtifactChecks } from "./lib/wakeflow-host-artifact-checks.mjs";
+// host-artifact-checks is host-local (one per edition) and is not present in core/. Import
+// it dynamically so a core/-rooted dev run gets a clear message instead of a bare
+// ERR_MODULE_NOT_FOUND; the host-artifact validation is then no-op'd for that dev run. A
+// synced edition resolves the real module normally.
+let createHostArtifactChecks;
+try {
+  ({ createHostArtifactChecks } = await import(new URL("./lib/wakeflow-host-artifact-checks.mjs", import.meta.url).href));
+} catch (error) {
+  if (error?.code !== "ERR_MODULE_NOT_FOUND") throw error;
+  console.error(
+    "wakeflow-validate: host-artifact checks skipped — wakeflow-host-artifact-checks.mjs is host-local "
+      + "and absent from core/. Run from a synced edition (plugins/codex-wakeflow or "
+      + "plugins/claude-code-wakeflow) for full validation.",
+  );
+  createHostArtifactChecks = () => ({
+    validatePluginManifest() {},
+    validateMarketplaceIfPresent() {},
+    validateMcpServerWiring() {},
+  });
+}
 
 const args = process.argv.slice(2);
 const root = path.resolve(getArgValue("--root") || process.cwd());

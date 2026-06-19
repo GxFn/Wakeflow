@@ -432,7 +432,7 @@ reducer re-read guard; sticky-rework clear.
 
 **Data-model / schema changes.** No new top-level state fields. New event type
 `demand.reopened`; `task-package.added` gains optional `addedDuringState`. Enum corrected
-(add `dispatched`, drop 5 never-written values) — reference-only, no Ajv. `sentAt`
+(add `dispatched`, drop the 4 pure-vestige values) — reference-only, no Ajv. `sentAt`
 surfaced into status output (derived from existing `run.createdAt`). Optional
 `--stale-after-minutes` / `--unattended` (default current behavior).
 
@@ -844,16 +844,20 @@ skill `script-pipeline.md` lines), the `--require-*` lines (both memory files), 
 shim (core/bin + both editions/bin + validate requiredFiles + all README tables including
 repo-root). After every change: `sync:core`, `check:core`, `npm test`.
 
-**Data-model / schema changes.** `.state` enum reference-only: ADD `dispatched`; REMOVE
-`designing`, `needs-confirmation`, `dispatching`, `accepting`. Synced byte-identical. SAFETY
-CAVEAT (see correction #4): this edit touches ONLY the `state` enum in
-`core/schemas/wakeflow-state-machine/wakeflow-state.schema.json`. The string `accepting`
-MUST remain in the live `candidateState`/read-guard code (verified `wakeflow-state.mjs:613`
-read-guard and `:1045` `candidateState:"accepting"`, a SEPARATE unbound field), and
-`needs-confirmation` MUST remain in the Design-handoff enum
-(`wakeflow-import-design-handoffs.mjs` `optionalEnumColumns`, verified live). Do NOT
-grep-and-delete these four strings repo-wide — only remove the four entries from the one
-`state` enum array, after the three-namespace grep in Dependencies completes clean.
+**Data-model / schema changes.** `.state` enum reference-only: ADD `dispatched`; REMOVE the
+four pure-vestige values `idle`, `designing`, `needs-confirmation`, `dispatching` (zero
+connection to `state.state` — never written and never a `state.state` read-guard). SAFETY
+CAVEAT: KEEP `accepting` and `paused` in the `state` enum — they are never written but ARE
+referenced by live `state.state` read-guards (`wakeflow-state.mjs:613` checks
+`state==="accepting"`; `:610/:822/:991` check `paused`), so removing them would desync the
+guards from the enum. This edit touches ONLY the `state` enum in
+`core/schemas/wakeflow-state-machine/wakeflow-state.schema.json`; `accepting` also lives as
+the `candidateState` value (`:1045`, a SEPARATE unbound field) and `needs-confirmation` in
+the Design-handoff enum (`wakeflow-import-design-handoffs.mjs:37`, verified live) — do NOT
+grep-and-delete these strings repo-wide. (IMPLEMENTED in Wave 0: the enum is now the 11
+values {intake, planned, dispatched, waiting-results, review-ready, accepting, needs-rework,
+blocked, paused, completed, archived}, guarded by `test/wakeflow-state-schema.test.mjs`. The
+earlier draft erroneously swapped `idle`↔`accepting` in the removal list; corrected here.)
 
 **New / changed commands and tools.** No new CLI subcommands. `wakeflow_verify` gains
 `withRuntime` + `strictRuntime` boolean inputs.

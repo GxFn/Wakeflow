@@ -30,12 +30,9 @@
     "state": {
       "type": "string",
       "enum": [
-        "idle",
         "intake",
-        "designing",
-        "needs-confirmation",
         "planned",
-        "dispatching",
+        "dispatched",
         "waiting-results",
         "review-ready",
         "accepting",

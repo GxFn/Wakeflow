@@ -1044,10 +1044,18 @@ async function commandReplaceAll() {
       continue;
     }
     const repo = readRepositoryForWindow(windowName);
+    // Entry-sync prompt: a freshly relaunched window otherwise boots as a generic claude with
+    // no Wakeflow orientation. Paste a clear "who you are + read CLAUDE.md + wait for dispatch"
+    // prompt after boot so the window orients itself instead of sitting clueless until the
+    // first dispatch.
+    const entrySyncFile = path.join(hostDir, `entry-sync-${slug(windowName)}.txt`);
+    mkdirSync(hostDir, { recursive: true });
+    writeFileSync(entrySyncFile, buildEntrySyncPrompt(windowName, repo));
     const launchArgv = [
       "launch-window", "--root", workspaceRoot, "--server", serverSession,
       ...(stateDir !== defaultStateDir ? ["--state-dir", stateDir] : []),
       "--window", windowName, "--title", repo.title, "--cwd", repo.cwd,
+      "--prompt-file", entrySyncFile,
       "--replace", "--boot-wait-ms", bootWait,
     ];
     const launched = execHostText(process.execPath, [process.argv[1], ...launchArgv]);
@@ -1085,6 +1093,22 @@ async function commandReplaceAll() {
     arranged,
     results,
   });
+}
+
+function buildEntrySyncPrompt(windowName, repo) {
+  // Generic, host-neutral entry sync. The window's own CLAUDE.md (read in step 1) carries any
+  // language preference, so this prompt stays English and points at the docs.
+  const role = repo.title.replace(`${windowName} `, "") || "Work";
+  return `${[
+    `You are the **${windowName}** window in this multi-window Wakeflow workspace (working dir: ${repo.cwd}; role: ${role}). The window was just (re)launched and has no task yet.`,
+    ``,
+    `Entry sync — do this before any dispatch arrives:`,
+    `1. Read the parent workspace \`CLAUDE.md\` (the controller's rules) and this repository's own \`CLAUDE.md\`/\`AGENTS.md\`, and follow them (including any language preference they set).`,
+    `2. State your window name and repository identity in one line.`,
+    `3. You are a Wakeflow TARGET window: execute only the task packages the controller dispatches to you, return a TargetResultEnvelope when done, and never self-start, claim another window's work, or touch another repository.`,
+    `4. Storage layout: controller state lives under \`.wakeflow-active/\` (no nested \`workspace/\` layer); transport lives under \`.wakeflow-local/\`; real session ids stay only in \`.wakeflow-local/\`.`,
+    `5. Confirm you are ready, then WAIT for a controller dispatch — do not begin work before a task package arrives.`,
+  ].join("\n")}\n`;
 }
 
 function readRepositoryForWindow(windowName) {

@@ -517,10 +517,6 @@ Hard boundaries stay here. Operational details live in skills.
   semantics, persistence behavior, and user-visible APIs.
 - After creating or activating a phase confirmation or execution wave, run
   `node scripts/wakeflow-verify.mjs`.
-- If TODO mode affects dispatch or order, run
-  `node scripts/wakeflow-verify.mjs --require-todo`.
-- If task packages are used, run
-  `node scripts/wakeflow-verify.mjs --require-task-packages`.
 - If scripts, script README, or script skills change, run
   `node scripts/wakeflow-verify.mjs --with-script-tests`.
 - If only long-term docs changed, run workspace docs verification and

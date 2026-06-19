@@ -529,7 +529,6 @@ Common source areas inside this plugin artifact:
 | `.claude-plugin/plugin.json` | Plugin manifest with the MCP server reference. |
 | `.mcp.json` | MCP server wiring (`node ${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs`). |
 | `mcp/server.cjs` | Standalone MCP server entrypoint with no `node_modules` dependency. |
-| `bin/wakeflow-mcp.mjs` | Compatibility wrapper for the MCP server entrypoint. |
 | `lib/` | MCP tool definitions, runtime helpers, process and trace support. |
 | `scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime shipped with the plugin. |
 | `skills/` | Controller, target, and governance operating manuals shipped with the plugin. |

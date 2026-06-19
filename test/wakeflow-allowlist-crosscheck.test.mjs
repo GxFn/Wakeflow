@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 // Guards W0-3 / RA7 (P2-13/F8): wakeflow-check-scripts cross-checks that every runtime
 // allow-list entry has at least one real caller and WARNS (never fails) on an orphan, so a
 // retired-but-still-listed script is visible without breaking the pipeline before removal.
-// Synthetic allow-list keeps this decoupled from the live compact-index orphan.
+// Synthetic allow-list keeps this decoupled from whatever live allow-list entries exist.
 
 const checkScript = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),

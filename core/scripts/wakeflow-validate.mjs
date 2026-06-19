@@ -58,7 +58,6 @@ const requiredFiles = [
   "package.json",
   hostProfile.pluginManifestPath,
   ".mcp.json",
-  "bin/wakeflow-mcp.mjs",
   "mcp/server.cjs",
   "lib/wakeflow-mcp-tools.mjs",
   "lib/wakeflow-process.mjs",

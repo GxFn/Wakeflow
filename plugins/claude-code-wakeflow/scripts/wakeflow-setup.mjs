@@ -1066,14 +1066,6 @@ function pluginRootScriptGuidance(content) {
   unavailable, stop and report the plugin-surface blocker.`,
     )
     .replace(
-      /- If TODO mode affects dispatch or order, run\s+`node scripts\/wakeflow-verify\.mjs --require-todo`\./,
-      "- If TODO mode affects dispatch or order, run Wakeflow verification with the TODO requirement enabled.",
-    )
-    .replace(
-      /- If task packages are used, run\s+`node scripts\/wakeflow-verify\.mjs --require-task-packages`\./,
-      "- If task packages are used, run Wakeflow verification with task-package checks enabled.",
-    )
-    .replace(
       /- If scripts, script README, or script skills change, run\s+`node scripts\/wakeflow-verify\.mjs --with-script-tests`\./,
       `- If Wakeflow scripts, script index, or installed skills change, run
   Wakeflow source verification with script tests before refreshing the plugin

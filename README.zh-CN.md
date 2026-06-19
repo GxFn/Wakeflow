@@ -418,7 +418,6 @@ memory 文件模板、skills、template bundle）只存在于各自 artifact 内
 | `plugins/claude-code-wakeflow/.claude-plugin/plugin.json` | Claude Code 插件 manifest 和 MCP wiring。 |
 | `plugins/claude-code-wakeflow/scripts/lib/wakeflow-host-profile.mjs` | Claude Code host profile（tmux 窗口模型、CLAUDE.md、session 词汇）。 |
 | `plugins/codex-wakeflow/mcp/server.cjs` | 无 `node_modules` 依赖的 standalone MCP server entrypoint。 |
-| `plugins/codex-wakeflow/bin/wakeflow-mcp.mjs` | MCP server entrypoint 的兼容 wrapper。 |
 | `plugins/codex-wakeflow/scripts/` | 随插件发布的 setup、state、delivery、intake、archive、validation 和 CLI runtime。 |
 | `plugins/codex-wakeflow/skills/` | 随插件发布的 controller、target、governance 和 validation 操作手册。 |
 | `plugins/codex-wakeflow/templates/wakeflow-template-bundle.json` | 已安装工作区 starter documents 和 support surfaces 的 bundle，用于控制 marketplace scan 文件数。 |

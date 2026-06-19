@@ -33,7 +33,6 @@ function makeFixture() {
   for (const entry of [
     ".codex-plugin",
     "assets",
-    "bin",
     "lib",
     "mcp",
     "schemas",

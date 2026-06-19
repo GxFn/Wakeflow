@@ -350,7 +350,6 @@ npm test
 | --- | --- |
 | `.codex-plugin/plugin.json` | 插件 manifest 和 MCP wiring。 |
 | `mcp/server.cjs` | 无 `node_modules` 依赖的 standalone MCP server entrypoint。 |
-| `bin/wakeflow-mcp.mjs` | MCP server entrypoint 的兼容 wrapper。 |
 | `scripts/` | 随插件发布的 setup、state、delivery、intake、archive、validation 和 CLI runtime。 |
 | `skills/` | 随插件发布的 controller、target、governance 和 validation 操作手册。 |
 | `templates/wakeflow-template-bundle.json` | 已安装工作区 starter documents 和 support surfaces 的 bundle，用于控制 marketplace scan 文件数。 |

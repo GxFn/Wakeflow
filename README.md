@@ -475,7 +475,6 @@ Common source areas:
 | `plugins/claude-code-wakeflow/.claude-plugin/plugin.json` | Claude Code plugin manifest and MCP wiring. |
 | `plugins/claude-code-wakeflow/scripts/lib/wakeflow-host-profile.mjs` | Claude Code host profile (tmux window model, CLAUDE.md, session vocabulary). |
 | `plugins/codex-wakeflow/mcp/server.cjs` | Standalone MCP server entrypoint with no `node_modules` dependency. |
-| `plugins/codex-wakeflow/bin/wakeflow-mcp.mjs` | Compatibility wrapper for the MCP server entrypoint. |
 | `plugins/codex-wakeflow/scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime shipped with the plugin. |
 | `plugins/codex-wakeflow/skills/` | Controller, target, governance, and validation operating manuals shipped with the plugin. |
 | `plugins/codex-wakeflow/templates/wakeflow-template-bundle.json` | Installed workspace starter documents and support surfaces, bundled for marketplace scan size. |

@@ -15,7 +15,6 @@ const bundledPluginEntries = [
   "README.md",
   "README.zh-CN.md",
   "assets",
-  "bin",
   "commands",
   "lib",
   "mcp",

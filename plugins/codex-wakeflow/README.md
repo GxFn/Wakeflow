@@ -427,7 +427,6 @@ Common source areas:
 | --- | --- |
 | `.codex-plugin/plugin.json` | Plugin manifest and MCP wiring. |
 | `mcp/server.cjs` | Standalone MCP server entrypoint with no `node_modules` dependency. |
-| `bin/wakeflow-mcp.mjs` | Compatibility wrapper for the MCP server entrypoint. |
 | `scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime shipped with the plugin. |
 | `skills/` | Controller, target, governance, and validation operating manuals shipped with the plugin. |
 | `templates/wakeflow-template-bundle.json` | Installed workspace starter documents and support surfaces, bundled for marketplace scan size. |

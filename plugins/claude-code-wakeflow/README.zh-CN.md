@@ -467,7 +467,6 @@ npm test
 | `.claude-plugin/plugin.json` | 插件 manifest 与 MCP server 引用。 |
 | `.mcp.json` | MCP server wiring（`node ${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs`）。 |
 | `mcp/server.cjs` | 无 `node_modules` 依赖的 standalone MCP server entrypoint。 |
-| `bin/wakeflow-mcp.mjs` | MCP server entrypoint 的兼容 wrapper。 |
 | `lib/` | MCP 工具定义、runtime helpers、进程与 trace 支持。 |
 | `scripts/` | 随插件发布的 setup、state、delivery、intake、archive、validation 和 CLI runtime。 |
 | `skills/` | 随插件发布的 controller、target 和 governance 操作手册。 |

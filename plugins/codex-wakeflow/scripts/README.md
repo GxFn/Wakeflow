@@ -173,9 +173,6 @@ Current scripts:
   documents into `../wakeflow-ledger/workspace/archive/YYYY-MM/<topic>/`,
   rewrites relative links, updates index rows, and refreshes the record map when
   `--apply` is provided.
-- `wakeflow-compact-index.mjs`: dry-run by default; compacts historical rows
-  from `.workspace-active/workspace/index.md` into archive topic manifests and
-  updates the workspace record map.
 - `wakeflow-archive-todo.mjs`: dry-run by default; moves completed global
   TODO rows and old sync records from the active TODO board to archive.
 - Normal controller archive flows should call the public MCP wrappers

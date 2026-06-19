@@ -26,7 +26,6 @@ const allowedScripts = new Map([
   ["wakeflow-check-layout", "wakeflow-check-layout.mjs"],
   ["wakeflow-delivery", "wakeflow-delivery.mjs"],
   ["wakeflow-repo-status", "wakeflow-repo-status.mjs"],
-  ["wakeflow-compact-index", "wakeflow-compact-index.mjs"],
   ["wakeflow-intake", "wakeflow-intake.mjs"],
   ["wakeflow-setup", "wakeflow-setup.mjs"],
   ["wakeflow-state", "wakeflow-state.mjs"],

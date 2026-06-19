@@ -144,6 +144,10 @@ export function createResultRecordingCommands(ctx) {
       ? {
           ...item,
           status: "sent",
+          // F18: re-dispatch resolves any prior rework decision; clear the stale
+          // reviewDecision so a fresh result is mapped from its own status at reduce
+          // instead of being stuck as needs-rework.
+          reviewDecision: null,
           // RA2: per-task handling count. Sits AFTER the already-sent idempotent-replay
           // early-return above, so a replay of the same delivery never double-counts.
           counts: { ...(item.counts ?? {}), dispatchCount: (item.counts?.dispatchCount ?? 0) + 1 },

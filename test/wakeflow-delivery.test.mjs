@@ -2076,6 +2076,26 @@ test("RA4: window-view returns a window's own tasks and file areas", () => {
   assert.equal(other.counts.total, 0, "a different window sees none of this window's tasks");
 });
 
+test("F18: re-dispatch clears a prior rework decision so a fresh result is not mislabeled", () => {
+  const { root, stateRootRef } = makeFixture();
+  // simulate a prior rework decision on the fixture task + package
+  const stateFile = path.join(root, stateRootRef, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.state = "needs-rework";
+  state.targetTasks[0].status = "needs-rework";
+  state.targetTasks[0].reviewDecision = "rework";
+  state.taskPackages[0].status = "needs-rework";
+  writeJson(stateFile, state);
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "redispatch evidence", "--write"]));
+  const after = JSON.parse(readFileSync(stateFile, "utf8"));
+  const task = after.targetTasks.find((t) => t.targetTaskId === "CSMR-TASK-1");
+  assert.equal(task.status, "sent", "re-dispatch returns the task to sent");
+  assert.equal(task.reviewDecision, null, "re-dispatch clears the stale rework decision");
+});
+
 test("record-target-result rejects a group that matches no dispatch packet", () => {
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");

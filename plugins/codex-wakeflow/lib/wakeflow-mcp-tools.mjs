@@ -423,6 +423,23 @@ const toolDefinitions = [
     },
   },
   {
+    name: "wakeflow_archive_demand",
+    description: "Archive a completed demand by relocating its state root into the committed ledger. Dry-run unless apply is true. A P1-0 redaction guard refuses on any real-id-shaped string unless redact relocates a cleaned copy (the original is preserved for audit). This commits state-root content to the version-controlled ledger; review redactedFields before pushing.",
+    annotations: localWriteTool("Archive Wakeflow Demand"),
+    inputSchema: {
+      type: "object",
+      required: ["stateRoot", "reason"],
+      properties: {
+        root: { type: "string" },
+        stateRoot: { type: "string" },
+        reason: { type: "string" },
+        redact: { type: "boolean" },
+        evidenceRefs: { type: "array", items: { type: "string" } },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
     name: "wakeflow_intake_design_handoff",
     description: "Attach a ready Design handoff to a controller state root as machine intake.",
     annotations: localWriteTool("Intake Wakeflow Design Handoff"),
@@ -940,6 +957,19 @@ export const handlers = {
       ...rootArgs(args),
       ...(args.apply ? ["--write"] : []),
       ...(args.adoptHost ? ["--adopt-host"] : []),
+      "--json",
+    ],
+  }),
+  wakeflow_archive_demand: (args) => runWakeflowRuntime({
+    script: "wakeflow-state",
+    args: [
+      "archive-demand",
+      "--state-root", args.stateRoot,
+      "--reason", args.reason,
+      ...(args.redact ? ["--redact"] : []),
+      ...repeatValues("--evidence-ref", args.evidenceRefs ?? []),
+      ...rootArgs(args),
+      ...(args.apply ? ["--write"] : []),
       "--json",
     ],
   }),

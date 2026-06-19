@@ -69,3 +69,13 @@ test("wakeflow_prune_runtime MCP tool is registered with a handler", () => {
   assert.equal(props.apply?.type, "boolean", "wakeflow_prune_runtime must expose a boolean 'apply' input");
   assert.equal(typeof handlers.wakeflow_prune_runtime, "function", "wakeflow_prune_runtime must have a handler");
 });
+
+test("wakeflow_archive_demand MCP tool is registered with a handler", () => {
+  const archive = tools.find((t) => t.name === "wakeflow_archive_demand");
+  assert.ok(archive, "wakeflow_archive_demand tool must be registered");
+  const props = archive.inputSchema?.properties ?? {};
+  assert.deepEqual(archive.inputSchema?.required, ["stateRoot", "reason"]);
+  assert.equal(props.redact?.type, "boolean", "wakeflow_archive_demand must expose a boolean 'redact' input");
+  assert.equal(props.apply?.type, "boolean", "wakeflow_archive_demand must expose a boolean 'apply' input");
+  assert.equal(typeof handlers.wakeflow_archive_demand, "function", "wakeflow_archive_demand must have a handler");
+});

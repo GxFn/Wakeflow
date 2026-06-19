@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildWakeflowTrace } from "../lib/wakeflow-trace.mjs";
@@ -14,6 +14,7 @@ import {
 import { controllerReviewScope, reductionStatusForTargetTask } from "./lib/wakeflow-review-scope.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import { releaseWindowLockForResult } from "./lib/wakeflow-delivery-store.mjs";
+import { scanStateRootForRealIds, redactStateRootIntoCopy } from "./lib/wakeflow-redaction.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const wakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -38,6 +39,7 @@ Usage:
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
   node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked> --reason <text> [--evidence-ref <ref>] [--accept-blocked] [--write] [--json]
   node scripts/wakeflow-state.mjs complete-demand --state-root <path> --reason <text> --evidence-ref <ref> [--write] [--json]
+  node scripts/wakeflow-state.mjs archive-demand --state-root <path> --reason <text> [--redact] [--evidence-ref <ref>] [--write] [--json]
   node scripts/wakeflow-state.mjs adopt-demand-host --state-root <path> [--reason <text>] [--write] [--json]
 
 Design:
@@ -1648,6 +1650,158 @@ function commandFocusDoc() {
   );
 }
 
+function scanDanglingEnvelopeRefs(stateRoot) {
+  // Best-effort: any persisted delivery envelope still referencing the pre-move state-root path.
+  const envDir = path.join(workspaceRoot, ".workspace-local/wakeflow-delivery/delivery-envelopes");
+  if (!existsSync(envDir)) return [];
+  const stateRootRel = relative(stateRoot);
+  const refs = [];
+  for (const name of readdirSync(envDir)) {
+    if (!name.endsWith(".json")) continue;
+    try {
+      if (readFileSync(path.join(envDir, name), "utf8").includes(stateRootRel)) refs.push(name);
+    } catch {
+      // unreadable envelope: skip
+    }
+  }
+  return refs;
+}
+
+// archive-demand: relocate a completed demand's state root into the committed ledger. The P1-0
+// redaction guard is a HARD precondition — it refuses on any real-id-shaped string unless
+// --redact relocates a cleaned COPY (the original is preserved in the gitignored active tier
+// for a human audit). Dry-run unless --write. The state flip + demand.archived event are
+// written BEFORE the move so the archived root carries its own terminal transition.
+function commandArchiveDemand() {
+  const stateRoot = stateRootFromArg();
+  const reason = requireValue("--reason");
+  const redact = options.includes("--redact");
+  const evidenceRefs = valuesFor("--evidence-ref");
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const eventsFile = path.join(stateRoot, "controller-events.jsonl");
+  const state = readJson(stateFile, "controller state");
+
+  if (state.state !== "completed") {
+    fail(`archive-demand requires state=completed; ${state.demandKey} is ${state.state}.`);
+  }
+
+  const scan = scanStateRootForRealIds(stateRoot, { hostProfile });
+  if (!scan.clean && !redact) {
+    fail([
+      `archive-demand refuses: ${scan.findings.length} possible real id(s) in the state-root tree.`,
+      "Audit them, then re-run with --redact to relocate a cleaned COPY (original preserved for audit).",
+      ...scan.findings.slice(0, 5).map((finding) => `  ${finding.file ?? "?"}:${finding.line ?? "?"} ${finding.match ?? finding.reason ?? ""}`),
+    ].join("\n"));
+  }
+
+  const config = loadWorkspaceConfig({ workspaceRoot, args: options });
+  const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args: options, config });
+  const createdAt = nowIso();
+  const month = createdAt.slice(0, 7);
+  const ledgerDest = path.join(ledgerPaths.projectLedgerRoot, "workspace", "archive", month, slug(state.demandKey));
+  ensureInsideAllowedRoots(ledgerDest, "archive destination", [ledgerPaths.projectLedgerRoot]);
+  if (existsSync(ledgerDest)) {
+    fail(`archive destination already exists: ${relative(ledgerDest)}; refuse to overwrite.`);
+  }
+
+  const danglingRefs = scanDanglingEnvelopeRefs(stateRoot);
+
+  if (!write) {
+    output({
+      ok: true,
+      command: "archive-demand",
+      wrote: false,
+      wouldArchive: {
+        demandKey: state.demandKey,
+        sourceStateRoot: relative(stateRoot),
+        ledgerDest: relative(ledgerDest),
+        redactNeeded: !scan.clean,
+        findingCount: scan.findings.length,
+        danglingRefs,
+      },
+      forbiddenConclusions: ["archive-is-deletion", "archive-is-acceptance"],
+      agentNext: scan.clean
+        ? "Dry-run only. Re-run with --write to flip the demand to archived and relocate it into the committed ledger."
+        : "Dry-run only. Real ids found — audit them, then re-run with --redact --write to relocate a cleaned copy.",
+    }, [`Would archive ${state.demandKey} -> ${relative(ledgerDest)}${scan.clean ? "" : " (redaction required)"}`]);
+    return;
+  }
+
+  const nextRevision = Number(state.revision ?? 0) + 1;
+  const eventId = nextEventId(createdAt, nextRevision);
+  const nextState = {
+    ...state,
+    state: "archived",
+    stateReason: reason,
+    revision: nextRevision,
+    updatedAt: createdAt,
+    allowedActions: [],
+    decisionsRequired: [],
+    projection: { ...(state.projection ?? {}), status: "stale" },
+  };
+  const event = {
+    eventId,
+    createdAt,
+    actor: "controller",
+    type: "demand.archived",
+    from: state.state,
+    to: "archived",
+    reason,
+    evidenceRefs,
+    allowedWrites: ["wakeflow-state.json", "controller-events.jsonl"],
+    forbiddenConclusions: ["archive-is-deletion", "archive-creates-dispatch", "archive-skips-redaction-audit"],
+    stateRevision: nextRevision,
+  };
+
+  // F41 order: event, then the authoritative state flip — in the ACTIVE root, BEFORE the move.
+  appendJsonLine(eventsFile, event);
+  writeJson(stateFile, nextState);
+
+  mkdirSync(path.dirname(ledgerDest), { recursive: true });
+  let redactedFields = [];
+  const preservedOriginal = redact && !scan.clean;
+  if (preservedOriginal) {
+    ({ redactedFields } = redactStateRootIntoCopy(stateRoot, ledgerDest, { hostProfile }));
+  } else {
+    cpSync(stateRoot, ledgerDest, { recursive: true });
+    rmSync(stateRoot, { recursive: true, force: true });
+  }
+
+  writeJson(path.join(ledgerDest, "archive-manifest.json"), {
+    kind: "WakeflowArchiveManifest",
+    version: 1,
+    demandKey: state.demandKey,
+    archivedAt: createdAt,
+    reason,
+    redactedFields,
+    sourceStateRoot: relative(stateRoot),
+    preservedOriginal,
+  });
+
+  output({
+    ok: true,
+    command: "archive-demand",
+    wrote: true,
+    archived: {
+      demandKey: state.demandKey,
+      ledgerDest: relative(ledgerDest),
+      manifest: relative(path.join(ledgerDest, "archive-manifest.json")),
+      redactedFields,
+      preservedOriginal,
+      danglingRefs,
+    },
+    indexRefreshNeeded: true,
+    forbiddenConclusions: ["archive-is-deletion", "archive-is-acceptance"],
+    agentNext: "Refresh the active workspace index to drop the archived root, then review redactedFields before committing the ledger to git.",
+  }, [
+    `Archived ${state.demandKey} -> ${relative(ledgerDest)}`,
+    redactedFields.length
+      ? `Redacted ${redactedFields.reduce((total, field) => total + field.count, 0)} id(s) into the committed copy; original preserved for audit.`
+      : "No redaction needed.",
+    danglingRefs.length ? `WARNING: ${danglingRefs.length} delivery envelope(s) still reference the old path.` : "",
+  ].filter(Boolean));
+}
+
 try {
   switch (command) {
     case "init":
@@ -1670,6 +1824,9 @@ try {
       break;
     case "complete-demand":
       commandCompleteDemand();
+      break;
+    case "archive-demand":
+      commandArchiveDemand();
       break;
     case "window-view":
       commandWindowView();

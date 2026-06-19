@@ -1,0 +1,81 @@
+#!/usr/bin/env node
+
+import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
+import test from "node:test";
+
+const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
+const script = path.join(workspaceRoot, "scripts/wakeflow-state.mjs");
+
+function run(args) {
+  return runSync(process.execPath, [script, ...args], { cwd: workspaceRoot, encoding: "utf8" });
+}
+function readJson(file) { return JSON.parse(readFileSync(file, "utf8")); }
+function writeJson(file, value) { writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`); }
+
+function initDemand({ demandKey = "ARCH-1", complete = true } = {}) {
+  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-archive-"));
+  writeJson(path.join(root, "workspace.config.json"), { workspaceName: "X", controllerWindow: "C", projectLedgerRoot: "wakeflow-ledger" });
+  const init = JSON.parse(run(["init", "--root", root, "--demand-key", demandKey, "--title", "Archive me", "--write", "--json"]).stdout);
+  const stateFile = path.join(root, init.stateRoot, "wakeflow-state.json");
+  if (complete) writeJson(stateFile, { ...readJson(stateFile), state: "completed" });
+  return { root, stateRoot: init.stateRoot, stateFile };
+}
+
+test("archive-demand refuses a demand that is not completed", () => {
+  const { root, stateRoot } = initDemand({ demandKey: "ARCH-2", complete: false });
+  const result = run(["archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "x", "--json"]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /requires state=completed/);
+});
+
+test("archive-demand dry-run reports the move without writing", () => {
+  const { root, stateRoot, stateFile } = initDemand();
+  const result = run(["archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "done", "--json"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.wrote, false);
+  assert.match(payload.wouldArchive.ledgerDest, /wakeflow-ledger\/workspace\/archive\//);
+  assert.equal(payload.wouldArchive.redactNeeded, false);
+  assert.equal(readJson(stateFile).state, "completed", "dry-run must not flip state");
+});
+
+test("archive-demand --write flips to archived, relocates into the ledger, writes a manifest", () => {
+  const { root, stateRoot, stateFile } = initDemand();
+  const result = run(["archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "done", "--write", "--json"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.wrote, true);
+  assert.equal(existsSync(stateFile), false, "original active state root is moved away");
+  const ledgerDest = path.join(root, payload.archived.ledgerDest);
+  assert.equal(readJson(path.join(ledgerDest, "wakeflow-state.json")).state, "archived");
+  const manifest = readJson(path.join(ledgerDest, "archive-manifest.json"));
+  assert.equal(manifest.demandKey, "ARCH-1");
+  assert.deepEqual(manifest.redactedFields, []);
+  assert.match(readFileSync(path.join(ledgerDest, "controller-events.jsonl"), "utf8"), /"type":"demand\.archived"/);
+});
+
+test("archive-demand refuses a planted real id unless --redact, then relocates a cleaned copy", () => {
+  const { root, stateRoot } = initDemand({ demandKey: "ARCH-3" });
+  const uuid = "3f8a1c2b-9d4e-4f6a-8b1c-2d3e4f5a6b7c";
+  const noteFile = path.join(root, stateRoot, "leak.md");
+  writeFileSync(noteFile, `thread ${uuid}\n`);
+
+  const refuse = run(["archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "x", "--write", "--json"]);
+  assert.notEqual(refuse.status, 0);
+  assert.match(refuse.stdout, /refuses|real id/i);
+  assert.equal(existsSync(noteFile), true, "a refused archive must not move anything");
+
+  const redacted = run(["archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "x", "--redact", "--write", "--json"]);
+  assert.equal(redacted.status, 0, redacted.stderr || redacted.stdout);
+  const payload = JSON.parse(redacted.stdout);
+  assert.equal(payload.archived.preservedOriginal, true);
+  assert.equal(existsSync(noteFile), true, "the original (with the id) is preserved for audit");
+  const ledgerLeak = readFileSync(path.join(root, payload.archived.ledgerDest, "leak.md"), "utf8");
+  assert.doesNotMatch(ledgerLeak, new RegExp(uuid), "the committed copy must not carry the real id");
+  assert.match(ledgerLeak, /<redacted>/);
+  assert.ok(payload.archived.redactedFields.some((field) => field.file === "leak.md"));
+});

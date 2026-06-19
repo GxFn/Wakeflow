@@ -53,7 +53,7 @@ function makeFixture() {
     ],
     dispatchWindows: ["AlembicWorkspace", "AlembicPlugin"],
   });
-  const stateRoot = path.join(root, ".workspace-active/workspace/current/CSMR-FIXTURE");
+  const stateRoot = path.join(root, ".wakeflow-active/current/CSMR-FIXTURE");
   mkdirSync(path.join(stateRoot, "task-packages"), { recursive: true });
   mkdirSync(path.join(stateRoot, "target-results"), { recursive: true });
   writeJson(path.join(stateRoot, "wakeflow-state.json"), {
@@ -124,7 +124,7 @@ function makeFixture() {
   writeText(path.join(stateRoot, "developer-progress.md"), "# Controller State Fixture");
   return {
     root,
-    stateRootRef: ".workspace-active/workspace/current/CSMR-FIXTURE",
+    stateRootRef: ".wakeflow-active/current/CSMR-FIXTURE",
     stateRoot,
   };
 }
@@ -271,7 +271,7 @@ test("return policy helpers preserve group-ready and per-target callback semanti
 
 test("controller-return builder preserves callback prompt scope and transport guards", () => {
   const stateRef = {
-    stateRoot: ".workspace-active/workspace/current/CSMR-FIXTURE",
+    stateRoot: ".wakeflow-active/current/CSMR-FIXTURE",
   };
   const groupSnapshot = {
     readyTargets: ["WindowA", "WindowB"],
@@ -381,7 +381,7 @@ test("runtime summary helpers separate host-send, review, wait, and dispatch res
     deliveryStatuses: [{
       kind: "ControllerReturnEnvelope",
       status: "pending-host-send",
-      file: ".workspace-local/wakeflow-delivery/delivery-envelopes/controller-return.json",
+      file: ".wakeflow-local/wakeflow-delivery/delivery-envelopes/controller-return.json",
       deliveryId: "controller-return-1",
       targetWindow: "Controller",
       taskId: "task-a",
@@ -405,7 +405,7 @@ test("runtime summary helpers separate host-send, review, wait, and dispatch res
     groupSummaries: [{
       groupId: "group-fixture",
       groupStatus: "partially-ready",
-      stateRoot: ".workspace-active/workspace/current/CSMR-FIXTURE",
+      stateRoot: ".wakeflow-active/current/CSMR-FIXTURE",
       returnPolicy: { mode: "per-target" },
       callbackPlan: {
         counts: { readyToBuildCount: 1 },
@@ -575,7 +575,7 @@ test("registers threads locally and redacts thread ids", () => {
   assert.equal(payload.threadIdRedacted, true);
   assert.equal(Object.hasOwn(payload, "deliveryRole"), false);
   assert.doesNotMatch(JSON.stringify(payload), /0192fac-AlembicPlugin/);
-  const registry = JSON.parse(readFileSync(path.join(root, ".workspace-local/wakeflow-delivery/hosts/codex/thread-registry/AlembicPlugin.json"), "utf8"));
+  const registry = JSON.parse(readFileSync(path.join(root, ".wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/AlembicPlugin.json"), "utf8"));
   assert.equal(registry.threadId, "0192fac-AlembicPlugin");
   assert.equal(Object.hasOwn(registry, "deliveryRole"), false);
   assert.equal(Object.hasOwn(registry, "cwd"), false);
@@ -593,7 +593,7 @@ test("registers threads locally and redacts thread ids", () => {
 
 test("reads legacy pre-dual-host thread registrations through the fallback path", () => {
   const { root } = makeFixture();
-  writeJson(path.join(root, ".workspace-local/wakeflow-delivery/thread-registry/AlembicPlugin.json"), {
+  writeJson(path.join(root, ".wakeflow-local/wakeflow-delivery/thread-registry/AlembicPlugin.json"), {
     kind: "CodexWindowThreadRegistration",
     version: 2,
     windowName: "AlembicPlugin",
@@ -609,7 +609,7 @@ test("reads legacy pre-dual-host thread registrations through the fallback path"
 
 test("rejects obsolete thread registry kinds instead of using fallback metadata", () => {
   const { root } = makeFixture();
-  writeJson(path.join(root, ".workspace-local/wakeflow-delivery/hosts/codex/thread-registry/AlembicPlugin.json"), {
+  writeJson(path.join(root, ".wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/AlembicPlugin.json"), {
     kind: "CodexAutomationThreadRegistration",
     version: 1,
     windowName: "AlembicPlugin",
@@ -660,7 +660,7 @@ test("prepare-dispatch-from-state writes packet, group, and delivery without leg
   assert.equal(status.runtimeSummary.resumePlan.steps[0].adapter.inputAuthority, "delivery-envelope");
   assert.equal(status.runtimeSummary.resumePlan.steps[0].deliveryFile, payload.deliveryFile);
   assert.equal(status.runtimeSummary.resumePlan.steps[1].tool, "wakeflow_record_delivery");
-  assert.match(payload.packet.prompt, /- stateRoot: \.workspace-active\/workspace\/current\/CSMR-FIXTURE/);
+  assert.match(payload.packet.prompt, /- stateRoot: \.wakeflow-active\/current\/CSMR-FIXTURE/);
   assert.match(payload.packet.prompt, /- dispatchGroup: GROUP-STATE/);
   assert.doesNotMatch(payload.packet.prompt, /humanContextRef:/);
   assert.doesNotMatch(payload.packet.prompt, /stateRevision:/);
@@ -676,7 +676,7 @@ test("prepare-dispatch-from-state writes packet, group, and delivery without leg
   assert.doesNotMatch(readFileSync(path.join(root, payload.deliveryFile), "utf8"), /0192fac-AlembicPlugin/);
   assert.equal(
     payload.packet.idempotency.key,
-    "dispatch-packet:.workspace-active/workspace/current/CSMR-FIXTURE:CSMR-PKG-1:CSMR-TASK-1:3:GROUP-STATE:AlembicPlugin",
+    "dispatch-packet:.wakeflow-active/current/CSMR-FIXTURE:CSMR-PKG-1:CSMR-TASK-1:3:GROUP-STATE:AlembicPlugin",
   );
 
   const replayed = prepareDispatch(root, stateRootRef);
@@ -871,7 +871,7 @@ test("review-results and controller return require state-root group evidence", (
   assert.equal(returned.envelope.controlPlan, undefined);
   assert.equal(returned.envelope.stateRef.stateRoot, stateRootRef);
   assert.equal(returned.envelope.humanContextRef, `${stateRootRef}/developer-progress.md`);
-  assert.match(returned.envelope.prompt, /- stateRoot: \.workspace-active\/workspace\/current\/CSMR-FIXTURE/);
+  assert.match(returned.envelope.prompt, /- stateRoot: \.wakeflow-active\/current\/CSMR-FIXTURE/);
   assert.match(returned.envelope.prompt, /- trigger: AlembicPlugin \/ CSMR-TASK-1/);
   assert.doesNotMatch(returned.envelope.prompt, /controllerWindow:/);
   assert.doesNotMatch(returned.envelope.prompt, /returnPolicy:/);
@@ -1837,7 +1837,7 @@ test("record-delivery-run infers workspace root from an absolute delivery file",
 
   const payload = parseOk(recorded);
   assert.equal(payload.ok, true);
-  assert.equal(payload.runFile.startsWith(".workspace-local/wakeflow-delivery/delivery-runs/"), true);
+  assert.equal(payload.runFile.startsWith(".wakeflow-local/wakeflow-delivery/delivery-runs/"), true);
   assert.equal(
     existsSync(path.join(root, payload.runFile)),
     true,
@@ -1885,7 +1885,7 @@ test("record-delivery-run validates envelope-state consistency before writing th
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
   const envelope = JSON.parse(readFileSync(deliveryFile, "utf8"));
   envelope.stateRef.taskPackageId = "CSMR-PKG-WRONG";
   writeJson(deliveryFile, envelope);
@@ -1893,7 +1893,7 @@ test("record-delivery-run validates envelope-state consistency before writing th
   const result = run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "test send evidence", "--write"]);
   assert.notEqual(result.status, 0);
   assert.match(result.stdout + result.stderr, /task package mismatch/);
-  const runFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-runs", `run-${prepared.envelope.deliveryId}.json`);
+  const runFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-runs", `run-${prepared.envelope.deliveryId}.json`);
   assert.equal(existsSync(runFile), false, "a mismatched record must not leave a wedged run file on disk");
 });
 
@@ -1901,10 +1901,10 @@ test("record-delivery-run writes the shared window lock and record-target-result
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
   parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "test send evidence", "--write"]));
 
-  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
   assert.equal(existsSync(lockFile), true, "sent delivery must write the shared window lock");
   const lock = JSON.parse(readFileSync(lockFile, "utf8"));
   assert.equal(lock.host, "codex");
@@ -1927,9 +1927,9 @@ test("record-target-result preserves a fresh lock for a different task in the sa
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   prepareDispatch(root, stateRootRef);
-  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
   const newerDeliveryId = "delivery-CSMR-TASK-2";
-  writeJson(path.join(root, ".workspace-local/wakeflow-delivery/delivery-runs", `run-${newerDeliveryId}.json`), {
+  writeJson(path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-runs", `run-${newerDeliveryId}.json`), {
     kind: "DirectThreadDeliveryRun",
     version: 1,
     deliveryRunId: `run-${newerDeliveryId}`,
@@ -1965,9 +1965,9 @@ test("F51: state-script import-target-result (the MCP path) releases the matchin
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
   parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "state-script send", "--write"]));
-  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
   assert.equal(existsSync(lockFile), true, "sent delivery must write the shared window lock");
 
   // wakeflow_record_target_result maps to the STATE-script import-target-result; its
@@ -1987,7 +1987,7 @@ test("F51: state-script import-target-result (the MCP path) releases the matchin
 test("F52: dispatch is fail-closed against a fresh other-host window lock", () => {
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
-  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
   writeJson(lockFile, {
     kind: "WakeflowWindowDeliveryLock",
     version: 1,
@@ -2014,7 +2014,7 @@ test("F52: dispatch is fail-closed against a fresh other-host window lock", () =
 test("F53: an expired other-host window lock self-heals and allows dispatch", () => {
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
-  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
   writeJson(lockFile, {
     kind: "WakeflowWindowDeliveryLock",
     version: 1,
@@ -2032,7 +2032,7 @@ test("RA2: record-delivery-run sets per-task dispatchCount and is idempotent on 
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
   const sendArgs = ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "send evidence", "--write"];
   parseOk(run(root, sendArgs));
   const stateFile = path.join(root, stateRootRef, "wakeflow-state.json");
@@ -2047,7 +2047,7 @@ test("RA2: task-ledger reports a unified per-task rollup with handling counts", 
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
   parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "send evidence", "--write"]));
   const ledger = parseOk(run(root, ["task-ledger", "--state-root", stateRootRef]));
   assert.equal(ledger.command, "task-ledger");
@@ -2088,7 +2088,7 @@ test("F18: re-dispatch clears a prior rework decision so a fresh result is not m
   writeJson(stateFile, state);
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
   parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "redispatch evidence", "--write"]));
   const after = JSON.parse(readFileSync(stateFile, "utf8"));
   const task = after.targetTasks.find((t) => t.targetTaskId === "CSMR-TASK-1");
@@ -2100,9 +2100,9 @@ test("F25: a stale lock for the answered delivery is released (unified freshness
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
   parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "send", "--write"]));
-  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
   // make the lock stale but still belonging to the answered delivery
   const lock = JSON.parse(readFileSync(lockFile, "utf8"));
   lock.expiresAt = "2000-01-01T00:00:00.000Z";
@@ -2156,7 +2156,7 @@ test("controller-return prompt localizes sentences for zh demands", async () => 
     dispatchGroup: "GRP-1",
     triggerTarget: "WindowA",
     triggerTaskId: "T1",
-    stateRef: { stateRoot: ".workspace-active/workspace/current/demo" },
+    stateRef: { stateRoot: ".wakeflow-active/current/demo" },
     reviewScope: "single",
     groupSnapshot: { readyTargets: ["WindowA"], blockedTargets: [], missingTargets: ["WindowB"], pendingDispatchTargets: [] },
     interfaceLanguage: "zh",
@@ -2169,7 +2169,7 @@ test("controller-return prompt localizes sentences for zh demands", async () => 
     dispatchGroup: "GRP-1",
     triggerTarget: "WindowA",
     triggerTaskId: "T1",
-    stateRef: { stateRoot: ".workspace-active/workspace/current/demo" },
+    stateRef: { stateRoot: ".wakeflow-active/current/demo" },
     reviewScope: "single",
     groupSnapshot: { readyTargets: ["WindowA"], blockedTargets: [], missingTargets: [], pendingDispatchTargets: [] },
   });
@@ -2181,7 +2181,7 @@ test("prepare-dispatch acquires the shared window lock at envelope time (generic
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
   assert.equal(existsSync(lockFile), true, "lock acquired when the envelope is written");
   const lock = JSON.parse(readFileSync(lockFile, "utf8"));
   assert.equal(lock.host, "codex", "acquired by the dispatching host");
@@ -2196,7 +2196,7 @@ test("release-window-lock is dry-run by default and releases with --write", () =
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   prepareDispatch(root, stateRootRef);
-  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
   assert.equal(existsSync(lockFile), true);
 
   const dry = parseOk(run(root, ["release-window-lock", "--window", "AlembicPlugin"]));
@@ -2216,7 +2216,7 @@ test("release-window-lock is dry-run by default and releases with --write", () =
 
 test("release-window-lock removes a corrupt lock file with --write", () => {
   const { root } = makeFixture();
-  const locksDir = path.join(root, ".workspace-local/wakeflow-delivery/locks");
+  const locksDir = path.join(root, ".wakeflow-local/wakeflow-delivery/locks");
   mkdirSync(locksDir, { recursive: true });
   const lockFile = path.join(locksDir, "WinX.json");
   writeFileSync(lockFile, "{not json");
@@ -2236,10 +2236,10 @@ test("record-target-result releases the lock even when the run used a custom --d
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
   parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--delivery-run-id", "retry-custom-7", "--status", "sent", "--readback-ok", "true", "--evidence", "retry evidence", "--write"]));
 
-  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
   assert.equal(existsSync(lockFile), true, "sent record refreshes the lock");
 
   const recorded = parseOk(run(root, [

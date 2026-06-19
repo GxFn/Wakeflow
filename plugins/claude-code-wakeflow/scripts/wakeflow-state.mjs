@@ -583,9 +583,9 @@ function commandInit() {
       eventFile: relative(files.events),
       projectionFile: relative(files.projection),
       templateRoot: relative(templateRoot),
-      generatedRuntimeBoundary: ".workspace-active is ignored by the Wakeflow repository; tracked assets are templates, schemas, scripts, skills, and tests.",
+      generatedRuntimeBoundary: ".wakeflow-active is ignored by the Wakeflow repository; tracked assets are templates, schemas, scripts, skills, and tests.",
       lazyStateDirectories: lazyStateDirectories.map(relative),
-      localDeliveryRuntime: ".workspace-local/wakeflow-delivery",
+      localDeliveryRuntime: ".wakeflow-local/wakeflow-delivery",
       outputs: outputs.map(relative),
     },
     [
@@ -751,7 +751,7 @@ function commandAddTaskPackage() {
 }
 
 function deliveryEnvelopeFileForId(deliveryId) {
-  return path.join(workspaceRoot, ".workspace-local/wakeflow-delivery/delivery-envelopes", `${slug(deliveryId)}.json`);
+  return path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${slug(deliveryId)}.json`);
 }
 
 function targetTaskDeliveryContext(targetTask) {
@@ -905,7 +905,7 @@ function commandImportTargetResult() {
   // codex-side locks would linger the full TTL after the work finished.
   let lockReleased = false;
   if (write) {
-    const lockFile = path.join(workspaceRoot, ".workspace-local/wakeflow-delivery/locks", `${slug(targetWindow)}.json`);
+    const lockFile = path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery/locks", `${slug(targetWindow)}.json`);
     const taskDeliveryId = targetTask.delivery?.deliveryId;
     lockReleased = releaseWindowLockForResult(
       lockFile,
@@ -1509,7 +1509,7 @@ function updatePackageStatusesForDecision(taskPackages, targetTasks, candidateTa
 }
 
 // RA4: a read-only per-window orientation card. One call returns the tasks that belong to
-// a window plus where its files live (both the state-root tier and the .workspace-local
+// a window plus where its files live (both the state-root tier and the .wakeflow-local
 // transport tier), so a sub-window stops hunting for its task and file area. No write, no
 // revision bump, no event, no host-ownership claim.
 function buildWindowCard(state, stateRoot, window) {
@@ -1518,7 +1518,7 @@ function buildWindowCard(state, stateRoot, window) {
   const myPackages = (state.taskPackages ?? []).filter((pkg) => myPackageIds.has(pkg.taskPackageId));
   const windowRollup = (state.windows ?? []).find((entry) => entry.windowName === window) ?? null;
   const stateRootRel = relative(stateRoot);
-  const transportRoot = ".workspace-local/wakeflow-delivery";
+  const transportRoot = ".wakeflow-local/wakeflow-delivery";
   const hostDir = hostProfile.runtime.hostDirName;
   // Transport dirs are emitted as directories (per-result filenames need a dispatchGroup,
   // so they are not fabricated); per-window registry/config files are slug-derivable.
@@ -1570,7 +1570,7 @@ function commandWindowView() {
     [
       `Window ${window}: ${card.tasks.length} task(s) in demand ${card.demandKey}`,
       ...card.tasks.map((task) => `- ${task.targetTaskId} [${task.status}]`),
-      `Files: ${card.stateRoot} (+ transport under .workspace-local/wakeflow-delivery)`,
+      `Files: ${card.stateRoot} (+ transport under .wakeflow-local/wakeflow-delivery)`,
     ],
   );
 }
@@ -1652,7 +1652,7 @@ function commandFocusDoc() {
 
 function scanDanglingEnvelopeRefs(stateRoot) {
   // Best-effort: any persisted delivery envelope still referencing the pre-move state-root path.
-  const envDir = path.join(workspaceRoot, ".workspace-local/wakeflow-delivery/delivery-envelopes");
+  const envDir = path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery/delivery-envelopes");
   if (!existsSync(envDir)) return [];
   const stateRootRel = relative(stateRoot);
   const refs = [];

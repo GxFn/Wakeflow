@@ -61,5 +61,5 @@ result is not group completion unless the group expected only that target.
 
 ## Thread Id Boundary
 
-Real thread ids live only in `.workspace-local/`. They must not appear in
+Real thread ids live only in `.wakeflow-local/`. They must not appear in
 tracked documents, prompts, GitHub, or backfill text.

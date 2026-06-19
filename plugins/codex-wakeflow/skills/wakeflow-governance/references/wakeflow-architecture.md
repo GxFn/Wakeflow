@@ -20,8 +20,8 @@ judgment.
 | MCP tools | stable outer capability interface for workspace setup, status, state roots, packages, delivery envelope preparation/recording, review packs, controller decisions, Design/Test intake, next-work scans, archive actions, and verification |
 | scripts | local implementation backend for file/state operations, result import/reduction, controller-return construction, archive internals, keep-live state, and backend checks |
 | templates | reusable starter surfaces for installed workspaces |
-| `.workspace-active/` | ignored active runtime state |
-| `.workspace-local/` | ignored local config and real thread ids |
+| `.wakeflow-active/` | ignored active runtime state |
+| `.wakeflow-local/` | ignored local config and real thread ids |
 | `../wakeflow-ledger/` | project-specific long-term records |
 
 ## MCP Boundary

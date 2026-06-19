@@ -1,6 +1,6 @@
 .DS_Store
-.workspace-active/
-.workspace-local/
+.wakeflow-active/
+.wakeflow-local/
 node_modules/
 coverage/
 dist/

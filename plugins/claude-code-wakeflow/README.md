@@ -127,8 +127,8 @@ Two rules keep the loop honest:
   .claude/settings.json          portable allow rules, relative refs committed
   .claude/settings.local.json    machine-local statusline command    never committed
   wakeflow-ledger/               durable designs, records, archives  committed
-  .workspace-active/             demand state roots (layer 2 lives here)   local
-  .workspace-local/wakeflow-delivery/                                      local
+  .wakeflow-active/             demand state roots (layer 2 lives here)   local
+  .wakeflow-local/wakeflow-delivery/                                      local
     dispatch-packets/  delivery-envelopes/  delivery-runs/   transport records
     target-results/                                          evidence envelopes
     locks/                       one in-flight delivery per window, cross-host
@@ -137,7 +137,7 @@ Two rules keep the loop honest:
 ```
 
 Rule of thumb: **business truth is host-neutral and shared; transport handles
-are host-scoped and never leave `.workspace-local/`.** Session ids never
+are host-scoped and never leave `.wakeflow-local/`.** Session ids never
 appear in tracked files, prompts, or backfill text.
 
 ### Who decides what (trust model)
@@ -235,7 +235,7 @@ Wakeflow is a powerful local automation plugin. Before installing, understand ex
 - **Spawns tmux sessions and interactive `claude` windows**: the controller and each work window are real `claude` CLI sessions living in one tmux session. Wakeflow creates, resumes, replaces, and arranges them via the bundled host helper.
 - **Runs these shell commands**: `node`, `tmux`, `git`, and `brew` — the last only to `brew install tmux` once, after a single explicit consent, when tmux is missing.
 - **Permission model — safe by default**: work windows ship with `acceptEdits` (Claude Code still prompts before risky actions). Fully unattended `bypassPermissions` (no prompts) is **opt-in only**: a workspace enables it explicitly via `/wakeflow:unattended on`, that choice is recorded in `workspace.config.json`, and only that recorded consent lets the helper auto-confirm the boot dialog. The safety boundary in unattended mode is the repository worktree, the `CLAUDE.md` gates, and the Wakeflow state machine.
-- **Local-first, no telemetry**: real session/thread ids live only under `.workspace-local/` and are never written to tracked files, prompts, or sent anywhere. Demands, evidence, and ledgers stay in your workspace.
+- **Local-first, no telemetry**: real session/thread ids live only under `.wakeflow-local/` and are never written to tracked files, prompts, or sent anywhere. Demands, evidence, and ledgers stay in your workspace.
 - **Platform**: macOS-first (tmux + `brew` + iTerm2). The tmux core should work on Linux but is not yet verified there.
 
 You remain in control: scripts and MCP tools create, validate, and record machine data — they never accept work, widen scope, or decide product behavior. The controller is the only acceptance authority, and product decisions are yours.
@@ -310,8 +310,8 @@ need to contain Wakeflow source code. The expected target shape is:
 MyWorkspace/
   CLAUDE.md
   workspace.config.json
-  .workspace-active/          # ignored active controller state
-  .workspace-local/           # ignored thread registry and derived runtime
+  .wakeflow-active/          # ignored active controller state
+  .wakeflow-local/           # ignored thread registry and derived runtime
   wakeflow-ledger/            # durable project coordination records
   ProductRepo/
   CoreRepo/
@@ -389,14 +389,14 @@ boundary:
 | `CLAUDE.md` | Parent controller gates and durable boundaries. |
 | Child `CLAUDE.md` access cards | Per-window responsibility and read paths. |
 | `workspace.config.json` | Managed windows, repository paths, roles, host transport settings such as the tmux session name, and default language. |
-| `.workspace-active/` | Active state roots, current indexes, progress docs, TODO projections, intake, and test cards. |
-| `.workspace-local/` | Thread registry, delivery runtime, local overrides, and derived window config. |
+| `.wakeflow-active/` | Active state roots, current indexes, progress docs, TODO projections, intake, and test cards. |
+| `.wakeflow-local/` | Thread registry, delivery runtime, local overrides, and derived window config. |
 | `wakeflow-ledger/` | Long-term project coordination records and archives. |
 | `Design/` | Internal requirement-design workspace when no external Design repository is mapped. |
 | `Test/` | Internal test coordination workspace when no external Test repository is mapped. |
 
-Wakeflow also synchronizes `.gitignore` so only `.workspace-active/` and
-`.workspace-local/` remain local runtime directories. It does not add product
+Wakeflow also synchronizes `.gitignore` so only `.wakeflow-active/` and
+`.wakeflow-local/` remain local runtime directories. It does not add product
 repositories, Design/Test folders, ledgers, `.DS_Store`, or other user
 workspace noise to `.gitignore`.
 
@@ -407,7 +407,7 @@ Wakeflow automation is direct session delivery plus explicit result return.
 Core rules:
 
 - Real session ids live only in
-  `.workspace-local/wakeflow-delivery/hosts/claude-code/thread-registry/`.
+  `.wakeflow-local/wakeflow-delivery/hosts/claude-code/thread-registry/`.
 - Window config is derived from `workspace.config.json` plus thread-registry
   presence; it is not a second session-id or window-semantics authority.
 - Delivery prompts remain compact and human-readable.
@@ -480,8 +480,8 @@ Wakeflow keeps source, active runtime, and durable records separate:
 | `skills/` | Reusable operating instructions installed with the plugin. |
 | `scripts/` | Runtime implementation and validation scripts packaged by the plugin. |
 | `templates/wakeflow-template-bundle.json` | Bundled starter state, Design/Test, and ledger skeletons expanded during setup. |
-| `.workspace-active/` | Current active work in a target workspace; ignored by Git. |
-| `.workspace-local/` | Machine-local thread registry, derived runtime views, and local state; ignored by Git. |
+| `.wakeflow-active/` | Current active work in a target workspace; ignored by Git. |
+| `.wakeflow-local/` | Machine-local thread registry, derived runtime views, and local state; ignored by Git. |
 | `wakeflow-ledger/` | Project-specific durable records outside reusable Wakeflow source. |
 
 The source repository tracks reusable Wakeflow capability. Product code,
@@ -491,17 +491,17 @@ artifacts do not belong in Wakeflow source.
 ## Dual-Host Workspaces
 
 One workspace may run the Codex and Claude Code Wakeflow editions side by
-side. Shared business state stays host-neutral: `.workspace-active/`,
+side. Shared business state stays host-neutral: `.wakeflow-active/`,
 `wakeflow-ledger/`, and the delivery state under
-`.workspace-local/wakeflow-delivery/` (`dispatch-packets/`,
+`.wakeflow-local/wakeflow-delivery/` (`dispatch-packets/`,
 `dispatch-groups/`, `delivery-envelopes/`, `delivery-runs/`,
 `target-results/`), plus the shared `locks/` directory that enforces one
 in-flight delivery per window across hosts.
 
 Host-scoped runtime is separated per host:
 
-- `.workspace-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`
-- `.workspace-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`
+- `.wakeflow-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`
+- `.wakeflow-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`
 
 `AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code) coexist at the workspace
 and child roots, and each demand has exactly one controller across hosts.

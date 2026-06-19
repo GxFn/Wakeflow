@@ -28,11 +28,11 @@ test("--print verify maps friendly flags to wakeflow-verify flags", () => {
 });
 
 test("--print sync renders controller state progress documents", () => {
-  const result = run(["--print", "sync", "--state-root", ".workspace-active/workspace/current/example-demand", "--write", "--json"]);
+  const result = run(["--print", "sync", "--state-root", ".wakeflow-active/current/example-demand", "--write", "--json"]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(
     result.stdout,
-    /node scripts\/wakeflow-render-progress\.mjs --state-root \.workspace-active\/workspace\/current\/example-demand --write --json/,
+    /node scripts\/wakeflow-render-progress\.mjs --state-root \.wakeflow-active\/current\/example-demand --write --json/,
   );
 });
 
@@ -48,7 +48,7 @@ test("--print intake maps Design/Test intake to the state-root bridge", () => {
     "intake",
     "test-card",
     "--state-root",
-    ".workspace-active/workspace/current/example-demand",
+    ".wakeflow-active/current/example-demand",
     "--test-id",
     "TEST-1",
     "--json",
@@ -56,7 +56,7 @@ test("--print intake maps Design/Test intake to the state-root bridge", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(
     result.stdout,
-    /node scripts\/wakeflow-intake\.mjs test-card --state-root \.workspace-active\/workspace\/current\/example-demand --test-id TEST-1 --json/,
+    /node scripts\/wakeflow-intake\.mjs test-card --state-root \.wakeflow-active\/current\/example-demand --test-id TEST-1 --json/,
   );
 });
 
@@ -170,7 +170,7 @@ test("status --root uses embedded scripts when the target root has no scripts di
     assert.equal(payload.ok, true);
     assert.equal(payload.checks[0].payload.workspaceRoot, root);
     assert.deepEqual(payload.checks[0].payload.repos, []);
-    assert.match(payload.checks[1].payload.stateDir, /\.workspace-local\/wakeflow-delivery$/);
+    assert.match(payload.checks[1].payload.stateDir, /\.wakeflow-local\/wakeflow-delivery$/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -53,10 +53,10 @@ agent 工作保持可读、有边界、可恢复。
 flowchart TD
   User["用户目标"] --> Controller["总控 Codex 窗口"]
   Controller --> Gates["AGENTS.md gates<br/>目标、边界、证据、停止规则"]
-  Controller <--> StateRoot["State root<br/>.workspace-active/..."]
+  Controller <--> StateRoot["State root<br/>.wakeflow-active/..."]
   StateRoot --> Tasks["任务包"]
   Tasks --> Delivery["投递 envelope"]
-  LocalRuntime[".workspace-local<br/>thread registry + 派生 window config"] -. "lookup" .-> Delivery
+  LocalRuntime[".wakeflow-local<br/>thread registry + 派生 window config"] -. "lookup" .-> Delivery
   Delivery --> Host["Codex host thread tools"]
   Host --> Targets["仓库 / Design / Test 窗口"]
   Targets --> Repos["责任根目录"]
@@ -140,8 +140,8 @@ Wakeflow 作为 Codex 插件安装。目标工作区不需要包含 Wakeflow 源
 MyWorkspace/
   AGENTS.md
   workspace.config.json
-  .workspace-active/          # ignored active controller state
-  .workspace-local/           # ignored thread registry and derived runtime
+  .wakeflow-active/          # ignored active controller state
+  .wakeflow-local/           # ignored thread registry and derived runtime
   wakeflow-ledger/            # durable project coordination records
   ProductRepo/
   CoreRepo/
@@ -199,13 +199,13 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
 | `AGENTS.md` | 父级总控 gate 和长期边界规则。 |
 | 子窗口 `AGENTS.md` access cards | 每个窗口的责任和读取路径。 |
 | `workspace.config.json` | 受管窗口、仓库路径、角色和默认语言。 |
-| `.workspace-active/` | active state roots、当前索引、progress docs、TODO 投影、intake 和 test cards。 |
-| `.workspace-local/` | thread registry、direct-thread runtime、本地 overrides 和派生 window config。 |
+| `.wakeflow-active/` | active state roots、当前索引、progress docs、TODO 投影、intake 和 test cards。 |
+| `.wakeflow-local/` | thread registry、direct-thread runtime、本地 overrides 和派生 window config。 |
 | `wakeflow-ledger/` | 长期项目协作记录和归档。 |
 | `Design/` | 未映射外部 Design 仓库时创建的内部需求设计工作区。 |
 | `Test/` | 未映射外部 Test 仓库时创建的内部测试协作工作区。 |
 
-Wakeflow 也会同步 `.gitignore`，只把 `.workspace-active/` 和 `.workspace-local/`
+Wakeflow 也会同步 `.gitignore`，只把 `.wakeflow-active/` 和 `.wakeflow-local/`
 作为本地运行时目录忽略。它不会把产品仓库、Design/Test、ledger、`.DS_Store`
 或其他本地杂项加入 `.gitignore`。
 
@@ -232,7 +232,7 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 
 核心规则：
 
-- 真实 thread id 只存在 `.workspace-local/wakeflow-delivery/hosts/codex/thread-registry/`。
+- 真实 thread id 只存在 `.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/`。
 - Window config 从 `workspace.config.json` 和 thread-registry presence 派生，不是第二份 thread-id 权威。
 - Delivery prompts 保持轻量、可读。
 - Host 通过 Codex thread tools 发送 prompt；Wakeflow 记录发送和 readback 证据。
@@ -284,8 +284,8 @@ Wakeflow 把源码、active runtime 和长期记录分开：
 | `skills/` | 随插件安装的可复用操作说明。 |
 | `scripts/` | 插件打包的运行时实现和验证脚本。 |
 | `templates/wakeflow-template-bundle.json` | setup 时展开的 starter state、Design/Test 和 ledger skeletons bundle。 |
-| `.workspace-active/` | 目标工作区中的当前 active work；被 Git 忽略。 |
-| `.workspace-local/` | 机器本地 thread registry、派生 runtime views 和 local state；被 Git 忽略。 |
+| `.wakeflow-active/` | 目标工作区中的当前 active work；被 Git 忽略。 |
+| `.wakeflow-local/` | 机器本地 thread registry、派生 runtime views 和 local state；被 Git 忽略。 |
 | `wakeflow-ledger/` | 项目特定的长期记录，不属于可复用 Wakeflow 源码。 |
 
 Wakeflow 源仓库只跟踪可复用能力。产品代码、项目特定 active state、真实 thread id
@@ -294,16 +294,16 @@ Wakeflow 源仓库只跟踪可复用能力。产品代码、项目特定 active 
 ## 双宿主工作区
 
 同一个工作区可以同时运行 Codex 和 Claude Code 两个 Wakeflow 版本。共享业务状态
-（`.workspace-active/`、`wakeflow-ledger/`，以及 `.workspace-local/wakeflow-delivery/`
+（`.wakeflow-active/`、`wakeflow-ledger/`，以及 `.wakeflow-local/wakeflow-delivery/`
 下的 dispatch packets、dispatch groups、delivery envelopes、delivery runs、
 target results 和共享 `locks/`）保持宿主中立。共享锁会跨宿主强制每个窗口同一时间
 只有一个 in-flight 投递。
 
 Codex 运行时仍位于宿主独立路径：
-`.workspace-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`。
+`.wakeflow-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`。
 Claude Code 运行时位于：
-`.workspace-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`。
-旧位置 `.workspace-local/wakeflow-delivery/thread-registry/` 的记录仍会作为
+`.wakeflow-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`。
+旧位置 `.wakeflow-local/wakeflow-delivery/thread-registry/` 的记录仍会作为
 fallback 被读取；新注册写入宿主独立路径，`wakeflow_verify` 会报告迁移状态。
 
 `AGENTS.md`（Codex）与 `CLAUDE.md`（Claude Code）可以在工作区根目录和子目录根

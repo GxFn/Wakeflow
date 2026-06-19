@@ -44,9 +44,9 @@ Common examples:
   node scripts/wakeflow-cli.mjs status --json
   node scripts/wakeflow-cli.mjs status --root /path/to/Wakeflow --json
   node scripts/wakeflow-cli.mjs verify --script-tests
-  node scripts/wakeflow-cli.mjs sync --state-root .workspace-active/workspace/current/<demand-key> --write
+  node scripts/wakeflow-cli.mjs sync --state-root .wakeflow-active/current/<demand-key> --write
   node scripts/wakeflow-cli.mjs design --id design-handoff-2026-06-03 --json
-  node scripts/wakeflow-cli.mjs intake design-handoff --state-root .workspace-active/workspace/current/<demand-key> --design-key design-handoff-2026-06-03 --write --json
+  node scripts/wakeflow-cli.mjs intake design-handoff --state-root .wakeflow-active/current/<demand-key> --design-key design-handoff-2026-06-03 --write --json
   node scripts/wakeflow-cli.mjs install status --json
   node scripts/wakeflow-cli.mjs loop status --json
   node scripts/wakeflow-cli.mjs sequence status --manifest wakeflow-ledger/requirement-designs/<topic>/sequence.json --json

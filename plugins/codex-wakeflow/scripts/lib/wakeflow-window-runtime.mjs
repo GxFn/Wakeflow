@@ -41,7 +41,7 @@ export function createWindowRuntime(ctx) {
 
   function readWorkspaceConfig() {
     for (const candidate of [
-      path.join(workspaceRoot, ".workspace-local/workspace.config.json"),
+      path.join(workspaceRoot, ".wakeflow-local/workspace.config.json"),
       path.join(workspaceRoot, "workspace.config.json"),
     ]) {
       if (existsSync(candidate)) return readJson(candidate, "workspace config");

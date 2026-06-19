@@ -223,7 +223,7 @@ function validateDeveloperDoc(item) {
 }
 
 function stateRootFor(item) {
-  return resolveFromWorkspace(item.stateRoot ?? `.workspace-active/workspace/current/${slug(item.demandKey)}`);
+  return resolveFromWorkspace(item.stateRoot ?? `.wakeflow-active/current/${slug(item.demandKey)}`);
 }
 
 function stateFor(item) {
@@ -658,7 +658,7 @@ function commandClaimFromDesign() {
     fail(`multiple controller-claimable rows (${claimable.map((c) => c.id).join(", ")}); pass --design-key to choose exactly one.`);
   }
 
-  const stateRootAbs = resolveFromWorkspace(`.workspace-active/workspace/current/${slug(target.id)}`);
+  const stateRootAbs = resolveFromWorkspace(`.wakeflow-active/current/${slug(target.id)}`);
   const stateRoot = relative(stateRootAbs);
   const requirementDesign = target.documents?.requirementDesign?.path ?? null;
   const originalPlan = target.documents?.originalPlan?.path ?? null;

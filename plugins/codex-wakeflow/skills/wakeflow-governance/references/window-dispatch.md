@@ -71,8 +71,8 @@ migration input only.
 ```text
 Continue the current controller task: <plan or wave>.
 
-First read: AGENTS.md, .workspace-active/workspace/index.md,
-.workspace-active/workspace/current/<current-controller-document>.md, and this
+First read: AGENTS.md, .wakeflow-active/index.md,
+.wakeflow-active/current/<current-controller-document>.md, and this
 window/repository AGENTS.md.
 
 Identity: state the current window and repository responsibility.

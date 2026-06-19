@@ -183,7 +183,7 @@ test("build-delivery (packet-file route) refuses a demand owned by the other hos
   runJson(codexDelivery, ["register-thread", "--root", root, "--window", "WinA", "--thread-id", "thread-own-2", "--write"], root);
   const prepared = runJson(codexDelivery, ["prepare-dispatch-from-state", "--root", root, "--state-root", stateRootRef, "--target-task-id", "T6", "--controller-window", "OwnFlow", "--write"], root);
   assert.equal(prepared.result.status, 0);
-  const packetFile = path.join(root, ".workspace-local/wakeflow-delivery/dispatch-packets", `${prepared.payload.packet.id}.json`);
+  const packetFile = path.join(root, ".wakeflow-local/wakeflow-delivery/dispatch-packets", `${prepared.payload.packet.id}.json`);
 
   // demand moves to the other host AFTER the packet exists
   const state = JSON.parse(readFileSync(stateFile, "utf8"));

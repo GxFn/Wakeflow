@@ -21,7 +21,7 @@ const todoBoardPath = path.resolve(workspaceRoot, getArgValue("--todo", ledgerPa
 const currentStatusPath = path.resolve(workspaceRoot, getArgValue("--status", ledgerPaths.workspaceCurrentStatusPath));
 const outputPath = path.resolve(
   workspaceRoot,
-  getArgValue("--out", ".workspace-local/wakeflow-intake/wakeflow-next-work.json"),
+  getArgValue("--out", ".wakeflow-local/wakeflow-intake/wakeflow-next-work.json"),
 );
 
 const priorityRank = new Map([

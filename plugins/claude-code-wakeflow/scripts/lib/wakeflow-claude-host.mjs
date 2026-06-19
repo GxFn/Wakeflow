@@ -10,9 +10,9 @@
  * dispatch, acceptance, or task content.
  *
  * Storage (dual-host layout):
- * - window bindings: .workspace-local/wakeflow-delivery/hosts/claude-code/window-host/<window>.json
- * - shared advisory locks: .workspace-local/wakeflow-delivery/locks/<window>.json
- * - shared results scanned by wait-results: .workspace-local/wakeflow-delivery/target-results/
+ * - window bindings: .wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/<window>.json
+ * - shared advisory locks: .wakeflow-local/wakeflow-delivery/locks/<window>.json
+ * - shared results scanned by wait-results: .wakeflow-local/wakeflow-delivery/target-results/
  *
  * Environment overrides (used by tests): WAKEFLOW_TMUX_BIN, WAKEFLOW_CLAUDE_BIN.
  */
@@ -81,7 +81,7 @@ function requireValue(name) {
 }
 
 const workspaceRoot = path.resolve(getValue("--root", process.cwd()));
-const stateDir = path.resolve(getValue("--state-dir", path.join(workspaceRoot, ".workspace-local/wakeflow-delivery")));
+const stateDir = path.resolve(getValue("--state-dir", path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery")));
 const hostDir = path.join(stateDir, "hosts", HOST_DIR_NAME);
 const windowHostDir = path.join(hostDir, "window-host");
 const locksDir = path.join(stateDir, "locks");
@@ -796,7 +796,7 @@ function commandReleaseLock() {
 
 function listGroupResults(group, stateRootDir) {
   // Target results land in two layers: the delivery store
-  // (.workspace-local/wakeflow-delivery/target-results/) and the demand state
+  // (.wakeflow-local/wakeflow-delivery/target-results/) and the demand state
   // root (<state-root>/target-results/, written by the MCP record flow).
   // Scan both so the watcher wakes on either.
   const dirs = [resultsDir];
@@ -956,7 +956,7 @@ function settingsHasMachineResidue(parsed, dir) {
   const dirs = Array.isArray(parsed?.permissions?.additionalDirectories) ? parsed.permissions.additionalDirectories : [];
   if (dirs.includes(workspaceRoot)) return true;
   const command = parsed?.statusLine?.command;
-  return typeof command === "string" && command.includes(".workspace-local/wakeflow-statusline.mjs");
+  return typeof command === "string" && command.includes(".wakeflow-local/wakeflow-statusline.mjs");
 }
 
 function memoryFileState(dir) {
@@ -991,7 +991,7 @@ async function commandLaunchAll() {
     const title = repo.title;
     const argv = [
       "launch-window", "--root", workspaceRoot, "--server", serverSession,
-      ...(stateDir !== path.resolve(workspaceRoot, ".workspace-local/wakeflow-delivery") ? ["--state-dir", stateDir] : []),
+      ...(stateDir !== path.resolve(workspaceRoot, ".wakeflow-local/wakeflow-delivery") ? ["--state-dir", stateDir] : []),
       "--window", windowName, "--title", title, "--cwd", repo.cwd,
       "--resume", "--session-id", sessionId, "--replace", "--boot-wait-ms", getValue("--boot-wait-ms", "7000"),
     ];
@@ -1033,7 +1033,7 @@ async function commandReplaceAll() {
   }
   ensureServer(serverSession);
   const setupScript = path.join(pluginRootDir, "scripts", "wakeflow-setup.mjs");
-  const defaultStateDir = path.resolve(workspaceRoot, ".workspace-local/wakeflow-delivery");
+  const defaultStateDir = path.resolve(workspaceRoot, ".wakeflow-local/wakeflow-delivery");
   const bootWait = getValue("--boot-wait-ms", "7000");
   const results = [];
   for (const windowName of order) {
@@ -1336,7 +1336,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const stateDir = process.env.WAKEFLOW_STATE_DIR || path.join(root, ".workspace-local/wakeflow-delivery");
+const stateDir = process.env.WAKEFLOW_STATE_DIR || path.join(root, ".wakeflow-local/wakeflow-delivery");
 let raw = "";
 process.stdin.on("data", (chunk) => { raw += chunk; });
 process.stdin.on("end", () => {
@@ -1365,7 +1365,7 @@ process.stdin.on("end", () => {
 `;
 
 function statuslineScriptFile() {
-  return path.join(workspaceRoot, ".workspace-local", "wakeflow-statusline.mjs");
+  return path.join(workspaceRoot, ".wakeflow-local", "wakeflow-statusline.mjs");
 }
 
 function ensureStatuslineScript(write) {
@@ -1398,7 +1398,7 @@ function readWorkspaceRepositories() {
 
 function mergePermissionSettings(existing, { isWorkspaceRoot, dir }) {
   // COMMITTED settings: portable content only (allow rules + RELATIVE parent
-  // reference). Machine-local items (statusLine -> .workspace-local script,
+  // reference). Machine-local items (statusLine -> .wakeflow-local script,
   // absolute paths) belong in .claude/settings.local.json. Never mutate
   // `existing`: the caller detects changes by comparing against it.
   const settings = existing && typeof existing === "object" ? { ...existing } : {};
@@ -1419,7 +1419,7 @@ function mergePermissionSettings(existing, { isWorkspaceRoot, dir }) {
   }
   // migrate: move the wakeflow statusline out of the committed file (a custom
   // user statusLine is left untouched)
-  if (typeof merged.statusLine?.command === "string" && merged.statusLine.command.includes(".workspace-local/wakeflow-statusline.mjs")) {
+  if (typeof merged.statusLine?.command === "string" && merged.statusLine.command.includes(".wakeflow-local/wakeflow-statusline.mjs")) {
     delete merged.statusLine;
   }
   return merged;

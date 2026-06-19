@@ -220,7 +220,7 @@ flowchart TB
 
 ## 4. 端到端生命周期
 
-控制器循环横跨两个 CLI 脚本加上薄薄一层 MCP 代理。状态机生命周期驻留于 `core/scripts/wakeflow-state.mjs`（写入持久化的 state root）；传输生命周期驻留于 `core/scripts/wakeflow-delivery.mjs` 及其库（写入 `.workspace-local/wakeflow-delivery` 下被忽略的本地运行时）。
+控制器循环横跨两个 CLI 脚本加上薄薄一层 MCP 代理。状态机生命周期驻留于 `core/scripts/wakeflow-state.mjs`（写入持久化的 state root）；传输生命周期驻留于 `core/scripts/wakeflow-delivery.mjs` 及其库（写入 `.wakeflow-local/wakeflow-delivery` 下被忽略的本地运行时）。
 
 **在派发期间推进持久化状态的唯一一点是 `record-delivery-run`** → `markStateRootDeliverySent`，它把目标任务翻转为 `status=sent`、把需求翻转为 `state=dispatched`（`wakeflow-result-recording-commands.mjs:86-232`）。`prepare-dispatch-from-state` **仅**写入本地运行时（packet/group/envelope/lock），从不触碰 `wakeflow-state.json`。
 
@@ -492,11 +492,11 @@ Wakeflow 按 **数据是什么，而非谁写的** 来切分存储。业务状�
 
 三道提交/忽略边界是显式的：
 
-- **`.workspace-local/`**——持有 **真实的 session/thread id**；**绝不提交**。
-- **`.workspace-active/`**——本地运行时（活动文档 + 按需求 state root）；被 gitignore。
+- **`.wakeflow-local/`**——持有 **真实的 session/thread id**；**绝不提交**。
+- **`.wakeflow-active/`**——本地运行时（活动文档 + 按需求 state root）；被 gitignore。
 - **`wakeflow-ledger/`**——持久化的长期记录；**已提交**。
 
-工作区的 `.gitignore` 被强制恰好包含 `.workspace-active/` 与 `.workspace-local/`（`wakeflow-setup.mjs:675` 的 `RUNTIME_GITIGNORE_ENTRIES`）；ledger **不**被忽略。`workspace.config.json` 受跟踪，而 `.workspace-local/workspace.config.json` 在本地覆盖它并胜出（`wakeflow-config.mjs:66-78`）。
+工作区的 `.gitignore` 被强制恰好包含 `.wakeflow-active/` 与 `.wakeflow-local/`（`wakeflow-setup.mjs:675` 的 `RUNTIME_GITIGNORE_ENTRIES`）；ledger **不**被忽略。`workspace.config.json` 受跟踪，而 `.wakeflow-local/workspace.config.json` 在本地覆盖它并胜出（`wakeflow-config.mjs:66-78`）。
 
 ### 6.1 带注解的目录树
 
@@ -507,9 +507,9 @@ Legend: [T]=tracked  [I]=gitignored/local-runtime  [L]=committed long-term ledge
 <workspace>/
 ├── workspace.config.json                       [T] 共享的宿主中立真相；按宿主的旋钮位于 "hosts" 下
 ├── CLAUDE.md / AGENTS.md                        [T] 按宿主的控制器门禁卡（每个插件持有自己的文件）
-├── .gitignore                                   [T] 被强制包含 .workspace-active/ + .workspace-local/
+├── .gitignore                                   [T] 被强制包含 .wakeflow-active/ + .wakeflow-local/
 │
-├── .workspace-active/                           [I] 共享业务状态（宿主中立，无句柄）
+├── .wakeflow-active/                           [I] 共享业务状态（宿主中立，无句柄）
 │   └── workspace/
 │       ├── index.md                                 活动控制器入口
 │       └── current/
@@ -531,7 +531,7 @@ Legend: [T]=tracked  [I]=gitignored/local-runtime  [L]=committed long-term ledge
 │               ├── evidence/                           证据产物（惰性）
 │               └── transition-candidates/<id>.json    [json] reduce-results 候选（惰性）
 │
-├── .workspace-local/                            [I] 绝不提交——持有真实 session/thread id
+├── .wakeflow-local/                            [I] 绝不提交——持有真实 session/thread id
 │   ├── workspace.config.json                        [I] 可选本地覆盖（胜过受跟踪配置）
 │   └── wakeflow-delivery/                            === stateDir 默认值（wakeflow-delivery.mjs:26） ===
 │       ├── dispatch-packets/<id>.json                [json] 共享 dispatch packet
@@ -561,7 +561,7 @@ Legend: [T]=tracked  [I]=gitignored/local-runtime  [L]=committed long-term ledge
     └── <window-slug>/                                按窗口长期 ledger
 
 NOTE: this repo IS the plugin source — its own workspace.config.json / wakeflow-ledger /
-.workspace-active are untracked dogfood runtime here (git ls-files = 0). [T]/[I]/[L]
+.wakeflow-active are untracked dogfood runtime here (git ls-files = 0). [T]/[I]/[L]
 describe the INSTALLED-workspace contract the code enforces, not this source checkout.
 ```
 
@@ -570,8 +570,8 @@ describe the INSTALLED-workspace contract the code enforces, not this source che
 | 路径 | writtenBy | readBy | 格式 | 范围 | 是否提交 |
 |---|---|---|---|---|---|
 | `workspace.config.json` | wakeflow-setup configure | wakeflow-config、window-runtime、claude-host | json | 按工作区 | 受跟踪（本地覆盖胜出） |
-| `.workspace-local/workspace.config.json` | 手动 / setup | wakeflow-config（最先解析，胜出） | json | 按工作区 | **绝不** |
-| `.workspace-active/workspace/index.md` + `current/*` | setup 脚手架 + 控制器编辑 | 控制器、verify-workspace-docs、check-layout | md | 按工作区 | gitignore |
+| `.wakeflow-local/workspace.config.json` | 手动 / setup | wakeflow-config（最先解析，胜出） | json | 按工作区 | **绝不** |
+| `.wakeflow-active/index.md` + `current/*` | setup 脚手架 + 控制器编辑 | 控制器、verify-workspace-docs、check-layout | md | 按工作区 | gitignore |
 | `<state-root>/demand.json` | wakeflow-state init | 控制器定位 | json | 按需求 | gitignore |
 | `<state-root>/wakeflow-state.json` | wakeflow-state reducer + `markStateRootDeliverySent`（非 import-target-result） | 所有 reducer、render-progress、demand-sequence、delivery status 扫描 | json | 按需求 | gitignore |
 | `<state-root>/controller-events.jsonl` | 每个变更 reducer 经 `appendJsonLine`（O_APPEND） | 审计/追踪 | jsonl | 按需求 | gitignore |
@@ -579,20 +579,20 @@ describe the INSTALLED-workspace contract the code enforces, not this source che
 | `<state-root>/target-results/<id>.json` | import-target-result（冲突时自动加时间戳） | reduce-results（按 createdAt 取最新）、review-pack | json | 按需求 | gitignore |
 | `<state-root>/task-packages/<id>.json` | add-task-package | prepare-dispatch（`readTaskPackageFromStateRoot`） | json | 按需求 | gitignore |
 | `<state-root>/projection.json` + `developer-progress.md` | init 种入；render-progress 重建（reducer 只翻转 `projection.status=stale`） | render-progress、demand-sequence、人类 | json + md | 按需求 | gitignore |
-| `.workspace-local/wakeflow-delivery/dispatch-packets/<id>.json` | prepare-dispatch / build-delivery | build-delivery、review | json | 按目标派发 | 绝不 |
-| `.workspace-local/wakeflow-delivery/dispatch-groups/<id>.json` | `upsertDispatchGroup` | review、callbackPlan、controller-return | json | 按组 | 绝不 |
-| `.workspace-local/wakeflow-delivery/delivery-envelopes/<id>.json` | build-delivery / prepare-dispatch / build-controller-return | record-delivery-run、trace-spine、host send | json | 按派发 | 绝不 |
-| `.workspace-local/wakeflow-delivery/delivery-runs/<id>.json` | record-delivery-run | delivery-evidence（`sent` 在此计算）、status、锁释放 | json | 按发送尝试 | 绝不 |
-| `.workspace-local/wakeflow-delivery/target-results/<group>__<window>__<task>.json` | delivery-script record-target-result | review-results/pack、claude-host wait-results | json | 按目标任务 | 绝不 |
-| `.workspace-local/wakeflow-delivery/target-results/superseded/<…>.json` | record-target-result 取代时 | 审计 / 回放摘要 | json | 按目标任务 | 绝不 |
-| `.workspace-local/wakeflow-delivery/locks/<window>.json` | build-delivery（`writeWindowLock`）、record-delivery-run sent 刷新、claude-host `performSend` | 派发守卫、release-window-lock、status freshLocks | json | 按窗口（跨宿主） | 绝不 |
-| `.workspace-local/wakeflow-delivery/stop.json` | `commandStopLoop` | 无人值守循环 / status | json | 按工作区 | 绝不 |
-| `.workspace-local/wakeflow-delivery/hosts/<host>/thread-registry/<window>.json` | register-thread / replace-windows | `loadThreadRegistration`、buildWindowConfig、dispatch | json | 按窗口按宿主 | 绝不（真实句柄；在共享记录中被脱敏） |
-| `.workspace-local/wakeflow-delivery/hosts/<host>/window-config/<window>.json` | build-window-config | dispatch 信封构建 | json | 按窗口按宿主 | 绝不（可重新生成） |
-| `.workspace-local/wakeflow-delivery/hosts/<host>/keep-live/{state,control}.json` | keep-live start/stop/worker | keep-live status、delivery status | json | 按宿主 | 绝不 |
-| `.workspace-local/wakeflow-delivery/hosts/claude-code/window-host/<window>.json` | claude-host launch-window | claude-host send/wait/activity-monitor；core 将其列为宿主标记 | json | 按窗口（仅 claude-code） | 绝不 |
-| `.workspace-local/wakeflow-delivery/hosts/claude-code/activity-monitor-<server>.pid` | claude-host activity-monitor | `isActivityMonitorRunning` | text（pid） | 按 tmux server（claude-code） | 绝不 |
-| `.workspace-local/wakeflow-delivery/thread-registry/<window>.json`（遗留） | （不写入——仅遗留） | 当 `legacyRegistryFallback`（codex=true）时 `findThreadFile` 回退 | json | 按窗口（codex 遗留） | 绝不 |
+| `.wakeflow-local/wakeflow-delivery/dispatch-packets/<id>.json` | prepare-dispatch / build-delivery | build-delivery、review | json | 按目标派发 | 绝不 |
+| `.wakeflow-local/wakeflow-delivery/dispatch-groups/<id>.json` | `upsertDispatchGroup` | review、callbackPlan、controller-return | json | 按组 | 绝不 |
+| `.wakeflow-local/wakeflow-delivery/delivery-envelopes/<id>.json` | build-delivery / prepare-dispatch / build-controller-return | record-delivery-run、trace-spine、host send | json | 按派发 | 绝不 |
+| `.wakeflow-local/wakeflow-delivery/delivery-runs/<id>.json` | record-delivery-run | delivery-evidence（`sent` 在此计算）、status、锁释放 | json | 按发送尝试 | 绝不 |
+| `.wakeflow-local/wakeflow-delivery/target-results/<group>__<window>__<task>.json` | delivery-script record-target-result | review-results/pack、claude-host wait-results | json | 按目标任务 | 绝不 |
+| `.wakeflow-local/wakeflow-delivery/target-results/superseded/<…>.json` | record-target-result 取代时 | 审计 / 回放摘要 | json | 按目标任务 | 绝不 |
+| `.wakeflow-local/wakeflow-delivery/locks/<window>.json` | build-delivery（`writeWindowLock`）、record-delivery-run sent 刷新、claude-host `performSend` | 派发守卫、release-window-lock、status freshLocks | json | 按窗口（跨宿主） | 绝不 |
+| `.wakeflow-local/wakeflow-delivery/stop.json` | `commandStopLoop` | 无人值守循环 / status | json | 按工作区 | 绝不 |
+| `.wakeflow-local/wakeflow-delivery/hosts/<host>/thread-registry/<window>.json` | register-thread / replace-windows | `loadThreadRegistration`、buildWindowConfig、dispatch | json | 按窗口按宿主 | 绝不（真实句柄；在共享记录中被脱敏） |
+| `.wakeflow-local/wakeflow-delivery/hosts/<host>/window-config/<window>.json` | build-window-config | dispatch 信封构建 | json | 按窗口按宿主 | 绝不（可重新生成） |
+| `.wakeflow-local/wakeflow-delivery/hosts/<host>/keep-live/{state,control}.json` | keep-live start/stop/worker | keep-live status、delivery status | json | 按宿主 | 绝不 |
+| `.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/<window>.json` | claude-host launch-window | claude-host send/wait/activity-monitor；core 将其列为宿主标记 | json | 按窗口（仅 claude-code） | 绝不 |
+| `.wakeflow-local/wakeflow-delivery/hosts/claude-code/activity-monitor-<server>.pid` | claude-host activity-monitor | `isActivityMonitorRunning` | text（pid） | 按 tmux server（claude-code） | 绝不 |
+| `.wakeflow-local/wakeflow-delivery/thread-registry/<window>.json`（遗留） | （不写入——仅遗留） | 当 `legacyRegistryFallback`（codex=true）时 `findThreadFile` 回退 | json | 按窗口（codex 遗留） | 绝不 |
 | `wakeflow-ledger/`（record-map、requirement-designs、goal-stage、按窗口） | 控制器（手动提交）+ setup 脚手架 | 控制器/Design、归档工具 | md | 按工作区长期 | **已提交** |
 | `CLAUDE.md` / `AGENTS.md`（根 + 子仓库） | setup sync-root-agents / write-agents | 入口处的宿主智能体 | md | 按工作区 + 按子仓库 | 受跟踪 |
 
@@ -603,7 +603,7 @@ describe the INSTALLED-workspace contract the code enforces, not this source che
 - **任何地方都没有 `decisions/` 目录**——每个 "decisions" grep 命中都是 `decisionsRequired` 状态字段；控制器决策经由 `decide-review` 驻留在 `wakeflow-state.json` + `controller-events.jsonl` 之内。
 - 幂等键驻留于记录**内部**（无单独的键文件）；重放检测扫描现有的 `delivery-runs`/`target-results`。
 
-> **待核实 / 存疑：** 本仓库即插件**源码**，所以它自己的 `workspace.config.json`/`wakeflow-ledger`/`.workspace-active` 是未受跟踪的自用（dogfood）运行时（git ls-files = 0）；提交/忽略语义描述的是一个已安装工作区。Codex 版本的 `hosts/codex/` 布局未在 codex profile 中逐行重新核验（经由共享内核派生，高置信度）。当 `dispatchGroup` 为空时，结果文件命名可能产出 `<window>__<task>.json`（无组前缀）；跨组边缘冲突未做压力测试。
+> **待核实 / 存疑：** 本仓库即插件**源码**，所以它自己的 `workspace.config.json`/`wakeflow-ledger`/`.wakeflow-active` 是未受跟踪的自用（dogfood）运行时（git ls-files = 0）；提交/忽略语义描述的是一个已安装工作区。Codex 版本的 `hosts/codex/` 布局未在 codex profile 中逐行重新核验（经由共享内核派生，高置信度）。当 `dispatchGroup` 为空时，结果文件命名可能产出 `<window>__<task>.json`（无组前缀）；跨组边缘冲突未做压力测试。
 
 ---
 
@@ -629,7 +629,7 @@ Wakeflow 在一个宿主中立内核之后拥有两种宿主传输。
 
 ### 7.2 跨宿主窗口锁生命周期
 
-锁位于 `.workspace-local/wakeflow-delivery/locks/<window>.json`（`WakeflowWindowDeliveryLock` v1：`{windowName, host, deliveryId, createdAt, expiresAt}`，TTL 7200s，`host = hostProfile.runtime.hostDirName`）：
+锁位于 `.wakeflow-local/wakeflow-delivery/locks/<window>.json`（`WakeflowWindowDeliveryLock` v1：`{windowName, host, deliveryId, createdAt, expiresAt}`，TTL 7200s，`host = hostProfile.runtime.hostDirName`）：
 
 ```mermaid
 stateDiagram-v2
@@ -699,8 +699,8 @@ INIT 是 `wakeflow-setup.mjs initialize` 中的一个 **四阶段、先 dry-run*
 
 守卫：
 
-- **重新 init 足迹守卫**（`assertInitializeWriteAllowed`）：若足迹已存在（config + workspace index/status、`.workspace-local/wakeflow-delivery`、根 + 子级 memory 块）且存在 config 选择但无 `--reset-initialization`，则 `--write` 失败（`reInitBlocked`）；dry-run 返回 `mode:'blocked-already-initialized'`。reset 在传入 `--use-discovered` 或未给出显式 `--repo` 映射时还会额外失败。
-- **线程注册后续豁免**：`initialize --thread X=<id> --write`（无 config 选择、无 reset）会注册一个真实 thread id 而不重新脚手架；id 会针对 host-profile 占位符校验，必须无空白，且只落于 `.workspace-local/.../hosts/<host>/thread-registry/<window>.json`，绝不进入受跟踪文档。
+- **重新 init 足迹守卫**（`assertInitializeWriteAllowed`）：若足迹已存在（config + workspace index/status、`.wakeflow-local/wakeflow-delivery`、根 + 子级 memory 块）且存在 config 选择但无 `--reset-initialization`，则 `--write` 失败（`reInitBlocked`）；dry-run 返回 `mode:'blocked-already-initialized'`。reset 在传入 `--use-discovered` 或未给出显式 `--repo` 映射时还会额外失败。
+- **线程注册后续豁免**：`initialize --thread X=<id> --write`（无 config 选择、无 reset）会注册一个真实 thread id 而不重新脚手架；id 会针对 host-profile 占位符校验，必须无空白，且只落于 `.wakeflow-local/.../hosts/<host>/thread-registry/<window>.json`，绝不进入受跟踪文档。
 
 应用写入：`workspace.config.json`、`.gitignore` 运行时条目、起始的活动文档 + ledger（record-map、requirement-designs/goal-stage README、policy 文档、archive 索引、按窗口 ledger README）、父级 + 子级 `AGENTS/CLAUDE.md` 受管范围卡，以及按窗口的 thread-registry + window-config JSON。
 
@@ -711,7 +711,7 @@ INIT 是 `wakeflow-setup.mjs initialize` 中的一个 **四阶段、先 dry-run*
 `wakeflow-cli verify` → `wakeflow-verify.mjs` 运行：
 
 - **基础（始终 5 项）：** `boundary`、`repository-residue`、`repo-status`、`script-docs`、`git diff --check`。
-- **条件项：** 当 `.workspace-active/workspace` 存在时，拼入 `workspace-docs (--all-workspace)` 与 `current-layout`。
+- **条件项：** 当 `.wakeflow-active` 存在时，拼入 `workspace-docs (--all-workspace)` 与 `current-layout`。
 - **`--with-runtime`/`--strict-runtime`：** 添加 `runtime-residue`（阻塞性残留仅在 strict 下失败）。
 - **`--with-script-tests`：** 添加 `node --test test/*.test.mjs`。
 
@@ -759,12 +759,12 @@ flowchart LR
 | `core/scripts/wakeflow-state.mjs` | 核心：7 个需求 reducer + host-ownership 守卫 + reduce/decide 辅助；写入 `wakeflow-state.json`、`controller-events.jsonl`、候选、结果、package |
 | `core/scripts/lib/wakeflow-review-scope.mjs` | blocked 楔块恢复：只有 `accepted`/`reviewDecision=accept` 才算终结；保持 blocked-但-未-accepted 的任务可评审 |
 | `core/scripts/lib/wakeflow-status-machine.mjs` | 独立的 17 值窗口/运行时状态词汇 + 发送资格谓词（仅投影/调度层） |
-| `core/scripts/wakeflow-delivery.mjs` | Delivery-loop CLI 分发器；`stateDir` 默认 `.workspace-local/wakeflow-delivery`；拥有 `stop.json` |
+| `core/scripts/wakeflow-delivery.mjs` | Delivery-loop CLI 分发器；`stateDir` 默认 `.wakeflow-local/wakeflow-delivery`；拥有 `stop.json` |
 | `core/scripts/lib/wakeflow-dispatch-commands.mjs` | `prepare-dispatch-from-state` / `build-delivery` / `build-controller-return`；资格 + 跨宿主锁 + 幂等守卫 |
 | `core/scripts/lib/wakeflow-result-recording-commands.mjs` | `record-delivery-run`（经 `markStateRootDeliverySent` 的唯一派发期状态推进）+ `record-target-result`（锁释放） |
 | `core/scripts/lib/wakeflow-review-commands.mjs` | `computeReviewResults` / `buildReviewPack` / `buildStateRootReviewPack`；ready+blocked 混合永不为 `blocked` 的规则 |
 | `core/scripts/lib/wakeflow-delivery-store.mjs` | 共享 delivery 目录映射 + 按宿主目录的唯一注册表；跨宿主锁辅助；遗留回退 |
-| `core/scripts/lib/wakeflow-config.mjs` | 配置解析（`.workspace-local` 覆盖胜出）+ ledger 路径派生 |
+| `core/scripts/lib/wakeflow-config.mjs` | 配置解析（`.wakeflow-local` 覆盖胜出）+ ledger 路径派生 |
 | `core/scripts/wakeflow-setup.mjs` | Init/setup 编排器：4 阶段 dry-run→apply、写入守卫、scope-card upsert、thread-registry 注册、gitignore 契约 |
 | `core/scripts/wakeflow-verify.mjs` | 验证编排器：基础 5 检查 + 条件 active-docs/runtime/script-tests；PASS/FAIL 汇总 |
 | `core/scripts/wakeflow-cli.mjs` | `wakeflow_status`（扇出）与 `wakeflow_verify` 背后的 CLI 聚合器 |

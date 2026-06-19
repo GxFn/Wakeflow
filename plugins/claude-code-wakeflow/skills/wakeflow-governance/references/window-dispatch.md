@@ -75,8 +75,8 @@ migration input only.
 ```text
 Continue the current controller task: <plan or wave>.
 
-First read: CLAUDE.md, .workspace-active/workspace/index.md,
-.workspace-active/workspace/current/<current-controller-document>.md, and this
+First read: CLAUDE.md, .wakeflow-active/index.md,
+.wakeflow-active/current/<current-controller-document>.md, and this
 window/repository CLAUDE.md.
 
 Identity: state the current window and repository responsibility.

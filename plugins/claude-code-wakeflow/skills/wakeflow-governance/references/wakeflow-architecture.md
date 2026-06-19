@@ -21,8 +21,8 @@ judgment.
 | scripts | local implementation backend for file/state operations, result import/reduction, controller-return construction, archive internals, keep-live state, and backend checks |
 | host transport | `scripts/lib/wakeflow-claude-host.mjs`, the tmux helper the agent runs via Bash for preflight, window launch/retitle, prompt send/readback, lock release, wait-results, and attach |
 | templates | reusable starter surfaces for installed workspaces |
-| `.workspace-active/` | ignored active runtime state |
-| `.workspace-local/` | ignored local config plus delivery runtime; real thread ids (Claude Code session ids) live in `wakeflow-delivery/hosts/claude-code/thread-registry/`, window-host bindings in `hosts/claude-code/window-host/`, shared locks in `wakeflow-delivery/locks/` |
+| `.wakeflow-active/` | ignored active runtime state |
+| `.wakeflow-local/` | ignored local config plus delivery runtime; real thread ids (Claude Code session ids) live in `wakeflow-delivery/hosts/claude-code/thread-registry/`, window-host bindings in `hosts/claude-code/window-host/`, shared locks in `wakeflow-delivery/locks/` |
 | `../wakeflow-ledger/` | project-specific long-term records |
 
 ## MCP Boundary
@@ -64,11 +64,11 @@ session inside the tmux server session named by `workspace.config.json`
 ## Dual-Host Storage
 
 One workspace may run both the Codex and the Claude Code Wakeflow plugins.
-Business state is shared across hosts: `.workspace-active/`,
+Business state is shared across hosts: `.wakeflow-active/`,
 `wakeflow-ledger/`, and
-`.workspace-local/wakeflow-delivery/{dispatch-packets,dispatch-groups,delivery-envelopes,delivery-runs,target-results}/`.
+`.wakeflow-local/wakeflow-delivery/{dispatch-packets,dispatch-groups,delivery-envelopes,delivery-runs,target-results}/`.
 Host transport runtime is host-scoped:
-`.workspace-local/wakeflow-delivery/hosts/claude-code/` (this plugin's thread
+`.wakeflow-local/wakeflow-delivery/hosts/claude-code/` (this plugin's thread
 registry and window-host bindings) and `hosts/codex/` (the Codex plugin's
 twin). `locks/` is shared so each window has at most one in-flight delivery
 across both hosts. `AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code) coexist,

@@ -11,7 +11,7 @@ const workspaceRoot = path.resolve(getArgValue("--root") || process.cwd());
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const wakeflowRoot = path.dirname(scriptsDir);
 const rootArgs = ["--root", workspaceRoot];
-const hasActiveWorkspaceDocs = existsSync(path.join(workspaceRoot, ".workspace-active/workspace"));
+const hasActiveWorkspaceDocs = existsSync(path.join(workspaceRoot, ".wakeflow-active"));
 const withRuntime = args.includes("--with-runtime");
 const strictRuntime = args.includes("--strict-runtime");
 const withScriptTests = args.includes("--with-script-tests");
@@ -141,11 +141,11 @@ for (const result of results) {
   console.log(`- ${result.ok ? "PASS" : "FAIL"} ${result.label}`);
 }
 
-const legacyRegistryDir = path.join(workspaceRoot, ".workspace-local/wakeflow-delivery/thread-registry");
+const legacyRegistryDir = path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery/thread-registry");
 if (hostProfile.runtime.legacyRegistryFallback && existsSync(legacyRegistryDir)) {
   const legacyFiles = readdirSync(legacyRegistryDir).filter((name) => name.endsWith(".json"));
   if (legacyFiles.length > 0) {
-    console.log(`- NOTE ${legacyFiles.length} legacy thread-registry file(s) remain in .workspace-local/wakeflow-delivery/thread-registry/; reads fall back automatically, but move them to .workspace-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/thread-registry/ to finish the dual-host layout migration.`);
+    console.log(`- NOTE ${legacyFiles.length} legacy thread-registry file(s) remain in .wakeflow-local/wakeflow-delivery/thread-registry/; reads fall back automatically, but move them to .wakeflow-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/thread-registry/ to finish the dual-host layout migration.`);
   }
 }
 

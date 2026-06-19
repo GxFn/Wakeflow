@@ -213,13 +213,13 @@ test("allows the localized Chinese README", () => {
 test("ignores local runtime text while validating the reusable plugin package", () => {
   const root = makeFixture();
   try {
-    mkdirSync(path.join(root, ".workspace-active/workspace/current"), { recursive: true });
-    mkdirSync(path.join(root, ".workspace-local"), { recursive: true });
+    mkdirSync(path.join(root, ".wakeflow-active/current"), { recursive: true });
+    mkdirSync(path.join(root, ".wakeflow-local"), { recursive: true });
     writeFileSync(
-      path.join(root, ".workspace-active/workspace/current/local.md"),
+      path.join(root, ".wakeflow-active/current/local.md"),
       `# Local\n\n${"\u4e2d\u6587\u8fd0\u884c\u6001"}\n`,
     );
-    writeFileSync(path.join(root, ".workspace-local/local.json"), JSON.stringify({ note: "\u672c\u5730" }));
+    writeFileSync(path.join(root, ".wakeflow-local/local.json"), JSON.stringify({ note: "\u672c\u5730" }));
     const result = run(root);
     assert.equal(result.status, 0, result.stderr || result.stdout);
   } finally {

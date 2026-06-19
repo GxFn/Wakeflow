@@ -89,7 +89,7 @@ machine state.
    compact readback. (The lower-level `send --window --prompt-file` form
    remains for custom prompts.) The
    helper enforces the shared per-window delivery lock
-   (`.workspace-local/wakeflow-delivery/locks/<window>.json`, one in-flight
+   (`.wakeflow-local/wakeflow-delivery/locks/<window>.json`, one in-flight
    delivery per window across hosts), pastes the prompt into the target's tmux
    pane via a tmux buffer (multiline-safe), and returns pane readback evidence
    (`readback.paneTail`). If the target window is mid-turn, the pasted message

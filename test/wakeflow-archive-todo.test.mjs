@@ -19,7 +19,7 @@ function writeFile(file, content) {
 function makeFixture() {
   const root = mkdtempSync(path.join(os.tmpdir(), "archive-global-todo-"));
   writeFile(
-    path.join(root, ".workspace-active/workspace/current/global-todo-board.md"),
+    path.join(root, ".wakeflow-active/current/global-todo-board.md"),
     `# Global TODO Board
 
 ## Global TODO
@@ -34,7 +34,7 @@ function makeFixture() {
 Completed TODOs, historical sync records, and source archives are queried from [workspace-record-map.md](../../../../wakeflow-ledger/workspace/workspace-record-map.md#todo-records).
 `,
   );
-  writeFile(path.join(root, ".workspace-active/workspace/current/plan.md"), "# Plan\n");
+  writeFile(path.join(root, ".wakeflow-active/current/plan.md"), "# Plan\n");
   writeFile(path.resolve(root, "../wakeflow-ledger/workspace/workspace-record-map.md"), "# Record Map\n");
   return root;
 }
@@ -53,7 +53,7 @@ test("archives completed rows even when the displayed status has a note suffix",
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.completedRows, 1);
 
-  const board = readFileSync(path.join(root, ".workspace-active/workspace/current/global-todo-board.md"), "utf8");
+  const board = readFileSync(path.join(root, ".wakeflow-active/current/global-todo-board.md"), "utf8");
   const archive = readFileSync(
     path.resolve(root, "../wakeflow-ledger/workspace/archive/2026-06/global-todo/global-todo-completed-2026-06-04.md"),
     "utf8",
@@ -76,7 +76,7 @@ test("archives completed TODO rows through the public MCP wrapper", async () => 
   assert.equal(result.ok, true, result.stderr || result.stdout);
   assert.equal(result.parsedJson.completedRows, 1);
 
-  const board = readFileSync(path.join(root, ".workspace-active/workspace/current/global-todo-board.md"), "utf8");
+  const board = readFileSync(path.join(root, ".wakeflow-active/current/global-todo-board.md"), "utf8");
   const archive = readFileSync(
     path.resolve(root, "../wakeflow-ledger/workspace/archive/2026-06/global-todo/global-todo-completed-2026-06-04.md"),
     "utf8",
@@ -89,14 +89,14 @@ test("archives completed TODO rows through the public MCP wrapper", async () => 
 test("prunes already archived workspace index rows through the public MCP wrapper", async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "archive-docs-prune-"));
   writeFile(
-    path.join(root, ".workspace-active/workspace/index.md"),
+    path.join(root, ".wakeflow-active/index.md"),
     `# Workspace Index
 
 ## Current Controller Entry
 
 | Type | Link | Status | Notes |
 | --- | --- | --- | --- |
-| Archived Plan | [plan](../../../wakeflow-ledger/workspace/archive/2026-06/done-topic/plan.md) | completed | should prune |
+| Archived Plan | [plan](../../wakeflow-ledger/workspace/archive/2026-06/done-topic/plan.md) | completed | should prune |
 | Current Status | [status](current/workspace-current-status.md) | active | should stay |
 `,
   );
@@ -110,7 +110,7 @@ test("prunes already archived workspace index rows through the public MCP wrappe
 
   assert.equal(result.ok, true, result.stderr || result.stdout);
   assert.equal(result.parsedJson.removedIndexRows.length, 1);
-  const index = readFileSync(path.join(root, ".workspace-active/workspace/index.md"), "utf8");
+  const index = readFileSync(path.join(root, ".wakeflow-active/index.md"), "utf8");
   assert.doesNotMatch(index, /Archived Plan/);
   assert.match(index, /Current Status/);
 });

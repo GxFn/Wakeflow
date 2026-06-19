@@ -34,7 +34,7 @@ tool first:
   pass `resetInitialization: true`, explicit `repositories`, and the selected
   Design/Test mode, and do not pass `useDiscovered`.
 - During apply, Wakeflow synchronizes the workspace `.gitignore` so
-  only `.workspace-active/` and `.workspace-local/` are ignored runtime
+  only `.wakeflow-active/` and `.wakeflow-local/` are ignored runtime
   directories. Do not add product repositories, Design/Test, ledgers,
   `.DS_Store`, or other user workspace noise as Wakeflow-generated gitignore
   entries.
@@ -76,8 +76,8 @@ tool first:
 Use this skill after reading:
 
 1. `AGENTS.md`
-2. `.workspace-active/workspace/index.md`
-3. `.workspace-active/workspace/current/workspace-current-status.md`
+2. `.wakeflow-active/index.md`
+3. `.wakeflow-active/current/workspace-current-status.md`
 4. the current controller state root and its developer progress document when
    the active demand has an execution surface
 

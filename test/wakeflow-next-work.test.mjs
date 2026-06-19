@@ -25,19 +25,19 @@ Design Key: ${id}
 function makeFixture({ status = "idle", designRows = "", todoRows = "" } = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-next-work-"));
   writeFile(
-    path.join(root, ".workspace-active/workspace/current/workspace-current-status.md"),
+    path.join(root, ".wakeflow-active/current/workspace-current-status.md"),
     `# Status
 
 Status: ${status}
 `,
   );
   const designId = "next-design-2026-06-04";
-  const designDir = path.join(root, ".workspace-active/workspace/current/next-design");
+  const designDir = path.join(root, ".wakeflow-active/current/next-design");
   writeFile(path.join(designDir, "original-plan-2026-06-04.md"), designDoc(designId, "Original Plan"));
   writeFile(path.join(designDir, "requirement-design-2026-06-04.md"), designDoc(designId, "Requirement Design"));
   writeFile(path.join(designDir, "workspace-handoff-2026-06-04.md"), designDoc(designId, "Workspace Handoff"));
   writeFile(
-    path.join(root, ".workspace-active/workspace/current/design-handoff-board.md"),
+    path.join(root, ".wakeflow-active/current/design-handoff-board.md"),
     `# Workspace Handoff Board
 
 ## Handoff Board
@@ -48,7 +48,7 @@ ${designRows}
 `,
   );
   writeFile(
-    path.join(root, ".workspace-active/workspace/current/global-todo-board.md"),
+    path.join(root, ".wakeflow-active/current/global-todo-board.md"),
     `# Global TODO
 
 ## Global TODO

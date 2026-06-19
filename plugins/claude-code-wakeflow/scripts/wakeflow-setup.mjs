@@ -283,8 +283,8 @@ function discoverSiblingRepositories({ wakeflowRoot, parentRoot, config }) {
     path.basename(resolveMaybeRelative(wakeflowRoot, config.projectLedgerRoot ?? "../wakeflow-ledger")),
     ...internalBasenames,
     ".git",
-    ".workspace-local",
-    ".workspace-active",
+    ".wakeflow-local",
+    ".wakeflow-active",
     "node_modules",
     ".DS_Store",
   ]);
@@ -602,8 +602,8 @@ function buildChildPrompt(context, repo, language) {
   const relativeScript = relativeCommandPath(absolutePath, path.join(context.wakeflowRoot, "scripts/wakeflow-setup.mjs"));
   const wakeflowPath = slash(path.relative(absolutePath, context.wakeflowRoot)) || ".";
   const parentAgents = relativePathFrom(absolutePath, path.join(context.parentRoot, hostProfile.memoryFile));
-  const activeIndex = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceIndexPath ?? ".workspace-active/workspace/index.md"));
-  const activeStatus = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentStatusPath ?? ".workspace-active/workspace/current/workspace-current-status.md"));
+  const activeIndex = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceIndexPath ?? ".wakeflow-active/index.md"));
+  const activeStatus = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentStatusPath ?? ".wakeflow-active/current/workspace-current-status.md"));
   const title = roleTitle(context, repo.windowName, defaultThreadRole(context, repo.windowName), language);
   if (language === "zh") {
     return `${title}：初始化入口同步，不是任务投递。
@@ -672,7 +672,7 @@ const AGENTS_START = "<!-- wakeflow:scope:start -->";
 const AGENTS_END = "<!-- wakeflow:scope:end -->";
 const ROOT_AGENTS_START = "<!-- wakeflow:root-agents:start -->";
 const ROOT_AGENTS_END = "<!-- wakeflow:root-agents:end -->";
-const RUNTIME_GITIGNORE_ENTRIES = [".workspace-active/", ".workspace-local/"];
+const RUNTIME_GITIGNORE_ENTRIES = [".wakeflow-active/", ".wakeflow-local/"];
 const GITIGNORE_POLICY =
   "Wakeflow only manages its own runtime state entries in the workspace .gitignore. Do not add product repositories, Design/Test support directories, ledger directories, source folders, or generic local noise as Wakeflow-generated gitignore entries.";
 
@@ -708,9 +708,9 @@ function scopeBlock(context, repo) {
   const windowNamesInline = samePathWindowNames.map((name) => `\`${name}\``).join(" / ");
   const wakeflowRelative = slash(path.relative(absolutePath, context.wakeflowRoot)) || ".";
   const parentAgents = relativePathFrom(absolutePath, path.join(context.parentRoot, hostProfile.memoryFile));
-  const activeIndex = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceIndexPath ?? ".workspace-active/workspace/index.md"));
-  const activeStatus = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentStatusPath ?? ".workspace-active/workspace/current/workspace-current-status.md"));
-  const currentDir = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentDir ?? ".workspace-active/workspace/current"));
+  const activeIndex = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceIndexPath ?? ".wakeflow-active/index.md"));
+  const activeStatus = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentStatusPath ?? ".wakeflow-active/current/workspace-current-status.md"));
+  const currentDir = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentDir ?? ".wakeflow-active/current"));
   const windowLedger = relativePathFrom(absolutePath, windowLedgerDirFor({
     workspaceRoot: context.wakeflowRoot,
     config: context.config,
@@ -730,11 +730,11 @@ ${samePathRepos.map((item) => {
     : `- Window ledger: \`${windowLedger}\``;
   const designBoard = relativePathFrom(
     absolutePath,
-    resolveMaybeRelative(context.wakeflowRoot, context.config.designHandoffBoard ?? ".workspace-active/workspace/current/design-handoff-board.md"),
+    resolveMaybeRelative(context.wakeflowRoot, context.config.designHandoffBoard ?? ".wakeflow-active/current/design-handoff-board.md"),
   );
   const testExchange = relativePathFrom(
     absolutePath,
-    resolveMaybeRelative(context.wakeflowRoot, context.config.testExchangePath ?? ".workspace-active/workspace/current/test-exchange.md"),
+    resolveMaybeRelative(context.wakeflowRoot, context.config.testExchangePath ?? ".wakeflow-active/current/test-exchange.md"),
   );
   const isDesign = samePathWindowNames.includes(context.config.designWindow);
   const isTest = samePathWindowNames.includes(context.config.testWindow);
@@ -864,9 +864,9 @@ function expectedScopeCoordinates(context, repo) {
     windowName: repo.windowName,
     windowNames: samePathWindowNames,
     parentAgents: relativePathFrom(absolutePath, path.join(context.parentRoot, hostProfile.memoryFile)),
-    activeIndex: relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceIndexPath ?? ".workspace-active/workspace/index.md")),
-    activeStatus: relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentStatusPath ?? ".workspace-active/workspace/current/workspace-current-status.md")),
-    currentPlanDirectory: relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentDir ?? ".workspace-active/workspace/current")),
+    activeIndex: relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceIndexPath ?? ".wakeflow-active/index.md")),
+    activeStatus: relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentStatusPath ?? ".wakeflow-active/current/workspace-current-status.md")),
+    currentPlanDirectory: relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentDir ?? ".wakeflow-active/current")),
     windowLedger: relativePathFrom(absolutePath, windowLedgerDirFor({
       workspaceRoot: context.wakeflowRoot,
       config: context.config,
@@ -877,13 +877,13 @@ function expectedScopeCoordinates(context, repo) {
   if (repo.windowName === context.config.designWindow) {
     coordinate.designHandoffBoard = relativePathFrom(
       absolutePath,
-      resolveMaybeRelative(context.wakeflowRoot, context.config.designHandoffBoard ?? ".workspace-active/workspace/current/design-handoff-board.md"),
+      resolveMaybeRelative(context.wakeflowRoot, context.config.designHandoffBoard ?? ".wakeflow-active/current/design-handoff-board.md"),
     );
   }
   if (repo.windowName === context.config.testWindow) {
     coordinate.testExchangeProjection = relativePathFrom(
       absolutePath,
-      resolveMaybeRelative(context.wakeflowRoot, context.config.testExchangePath ?? ".workspace-active/workspace/current/test-exchange.md"),
+      resolveMaybeRelative(context.wakeflowRoot, context.config.testExchangePath ?? ".wakeflow-active/current/test-exchange.md"),
     );
   }
   return coordinate;
@@ -1091,13 +1091,13 @@ function rootAgentsContent(context) {
   content = replaceAllLiteral(content, "Wakeflow controller", `${context.config.workspaceName} controller`);
 
   const localConfigPlaceholder = "__WAKEFLOW_LOCAL_CONFIG__";
-  content = replaceAllLiteral(content, ".workspace-local/workspace.config.json", localConfigPlaceholder);
-  content = replaceAllLiteral(content, ".workspace-active/", `${runtimePrefix}.workspace-active/`);
-  content = replaceAllLiteral(content, ".workspace-local/", `${runtimePrefix}.workspace-local/`);
+  content = replaceAllLiteral(content, ".wakeflow-local/workspace.config.json", localConfigPlaceholder);
+  content = replaceAllLiteral(content, ".wakeflow-active/", `${runtimePrefix}.wakeflow-active/`);
+  content = replaceAllLiteral(content, ".wakeflow-local/", `${runtimePrefix}.wakeflow-local/`);
   content = replaceAllLiteral(content, "../wakeflow-ledger/", `${ledgerRel}/`);
   content = replaceAllLiteral(content, "../wakeflow-ledger", ledgerRel);
   content = content.replace(/(?<![\w./-])workspace\.config\.json/g, `${runtimePrefix}workspace.config.json`);
-  content = replaceAllLiteral(content, localConfigPlaceholder, `${runtimePrefix}.workspace-local/workspace.config.json`);
+  content = replaceAllLiteral(content, localConfigPlaceholder, `${runtimePrefix}.wakeflow-local/workspace.config.json`);
 
   if (context.pluginTargetMode) {
     content = pluginRootScriptGuidance(content);
@@ -1767,9 +1767,9 @@ function initializedWorkspaceFootprint(context) {
   const runtimeFootprint = [];
   const configExists = existsSync(context.configPath);
   for (const [kind, configuredPath] of [
-    ["workspace-index", context.config.workspaceIndexPath ?? ".workspace-active/workspace/index.md"],
-    ["workspace-status", context.config.workspaceCurrentStatusPath ?? ".workspace-active/workspace/current/workspace-current-status.md"],
-    ["delivery-runtime", ".workspace-local/wakeflow-delivery"],
+    ["workspace-index", context.config.workspaceIndexPath ?? ".wakeflow-active/index.md"],
+    ["workspace-status", context.config.workspaceCurrentStatusPath ?? ".wakeflow-active/current/workspace-current-status.md"],
+    ["delivery-runtime", ".wakeflow-local/wakeflow-delivery"],
   ]) {
     const absolute = path.resolve(context.wakeflowRoot, configuredPath);
     if (existsSync(absolute)) {
@@ -1854,7 +1854,7 @@ function assertReplacementWriteThreads(replacements, commandName) {
 }
 
 function automationStateDir(context) {
-  return path.join(context.wakeflowRoot, ".workspace-local/wakeflow-delivery");
+  return path.join(context.wakeflowRoot, ".wakeflow-local/wakeflow-delivery");
 }
 
 function hostRuntimeDir(context) {
@@ -1982,8 +1982,8 @@ function formatReadRefs(refs, language) {
 function localWindowPrompt(context, windowName, deliveryRole, language) {
   const localRoot = localWindowRoot(context, windowName);
   const parentAgents = relativePathFrom(localRoot.absolutePath, path.join(context.parentRoot, hostProfile.memoryFile));
-  const activeIndex = relativePathFrom(localRoot.absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceIndexPath ?? ".workspace-active/workspace/index.md"));
-  const activeStatus = relativePathFrom(localRoot.absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentStatusPath ?? ".workspace-active/workspace/current/workspace-current-status.md"));
+  const activeIndex = relativePathFrom(localRoot.absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceIndexPath ?? ".wakeflow-active/index.md"));
+  const activeStatus = relativePathFrom(localRoot.absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentStatusPath ?? ".wakeflow-active/current/workspace-current-status.md"));
   const ownAgents = path.join(localRoot.absolutePath, hostProfile.memoryFile);
   const ownAgentsRef = existsSync(ownAgents) ? hostProfile.memoryFile : parentAgents;
   const title = roleTitle(context, windowName, deliveryRole, language);
@@ -2068,7 +2068,7 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
     language,
     replacementMode: replacements.size > 0,
     replaceWindows: [...replacements],
-    threadIdStorage: `.workspace-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/thread-registry/<window>.json`,
+    threadIdStorage: `.wakeflow-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/thread-registry/<window>.json`,
     trackedDocsContainThreadIds: false,
     hostWorkflow: hostProfile.launch.workflowSteps(language),
     windows: entries.map((entry) => ({
@@ -2084,8 +2084,8 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
       localRegistration: {
         required: true,
         command: registrationCommand,
-        threadIdAuthority: `.workspace-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/thread-registry/${slug(entry.windowName)}.json`,
-        derivedStatusView: `.workspace-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/window-config/${slug(entry.windowName)}.json`,
+        threadIdAuthority: `.wakeflow-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/thread-registry/${slug(entry.windowName)}.json`,
+        derivedStatusView: `.wakeflow-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/window-config/${slug(entry.windowName)}.json`,
         trackedDocsContainThreadIds: false,
         argvTemplate: [
           registrationArgvCommand,
@@ -2522,7 +2522,7 @@ function help() {
       configure: "Write workspace.config.json after user-confirmed --repo mappings.",
       prompts: `Print child-window prompts for confirming scope and refreshing ${hostProfile.memoryFile}.`,
       "sync-root-agents": `Unpack the control ${hostProfile.memoryFile} into the parent workspace ${hostProfile.memoryFile} so ${hostProfile.hostName} auto-loads total-control rules at the outer workspace root.`,
-      "sync-gitignore": "Ensure only Wakeflow runtime entries .workspace-active/ and .workspace-local/ are ignored in the target workspace .gitignore; do not add product repositories, Design/Test, ledger directories, or generic local noise.",
+      "sync-gitignore": "Ensure only Wakeflow runtime entries .wakeflow-active/ and .wakeflow-local/ are ignored in the target workspace .gitignore; do not add product repositories, Design/Test, ledger directories, or generic local noise.",
       "write-agents": `Append or refresh managed access-card blocks in configured child ${hostProfile.memoryFile} files.`,
       "access-profiles": "Print a read-only ChildWindowAccessProfile view from workspace.config plus child AGENTS managed blocks.",
       "sync-templates": "Create missing internal Design/Test templates or minimal external alignment templates.",

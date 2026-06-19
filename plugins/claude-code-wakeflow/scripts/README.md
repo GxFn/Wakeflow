@@ -81,7 +81,7 @@ Current scripts:
   markers. It does not read current plan Markdown as authority, create legacy
   automation jobs, send host session messages, or accept evidence. Runtime
   packets, envelopes, delivery runs, review packs, and thread registry files
-  stay under ignored `.workspace-local/wakeflow-delivery/` unless an explicit
+  stay under ignored `.wakeflow-local/wakeflow-delivery/` unless an explicit
   state directory is provided.
   `prepare-dispatch-from-state` fails closed for completed / archived / paused
   demands, review-ready demands that
@@ -167,7 +167,7 @@ Current scripts:
   references, required sections, Markdown links, and completed document
   references.
 - `wakeflow-check-layout.mjs`: verifies that short-term workspace docs
-  live under `.workspace-active/workspace/current/`, that the current index
+  live under `.wakeflow-active/current/`, that the current index
   target points there, that starter/current tables still match downstream
   readers such as `wakeflow-next-work.mjs`, and that active docs/scripts/templates
   do not reference old root-level short-term paths.

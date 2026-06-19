@@ -114,30 +114,30 @@ test("configure writes user-confirmed sibling mappings into workspace.config.jso
       ["Test", "../Test"],
     ],
   );
-  assert.equal(config.designHandoffBoard, ".workspace-active/workspace/current/design-handoff-board.md");
-  assert.equal(config.designHandoffInbox, ".workspace-active/workspace/current/design-handoff-inbox.md");
-  assert.equal(config.testExchangePath, ".workspace-active/workspace/current/test-exchange.md");
+  assert.equal(config.designHandoffBoard, ".wakeflow-active/current/design-handoff-board.md");
+  assert.equal(config.designHandoffInbox, ".wakeflow-active/current/design-handoff-inbox.md");
+  assert.equal(config.testExchangePath, ".wakeflow-active/current/test-exchange.md");
   assert.equal(config.goalStageConfirmationDir, "../wakeflow-ledger/goal-stage-confirmation");
   assert.deepEqual(config.protectedWorkspacePrefixes, []);
 });
 
 test("sync-gitignore adds Wakeflow runtime entries idempotently", () => {
   const fixture = makeFixture();
-  writeFile(path.join(fixture.control, ".gitignore"), ".workspace-local\nnode_modules/");
+  writeFile(path.join(fixture.control, ".gitignore"), ".wakeflow-local\nnode_modules/");
 
   const dryRun = runJson(fixture, ["sync-gitignore"]);
   assert.equal(dryRun.changed, true);
-  assert.deepEqual(dryRun.missing, [".workspace-active/"]);
+  assert.deepEqual(dryRun.missing, [".wakeflow-active/"]);
   assert.equal(dryRun.wakeflowManagedOnly, true);
   assert.match(dryRun.policy, /only manages its own runtime state entries/);
-  assert.deepEqual(dryRun.entries, [".workspace-active/", ".workspace-local/"]);
+  assert.deepEqual(dryRun.entries, [".wakeflow-active/", ".wakeflow-local/"]);
   assert.ok(dryRun.forbiddenGeneratedEntries.includes("product repositories"));
 
   const first = runJson(fixture, ["sync-gitignore", "--write"]);
   assert.equal(first.wrote, true);
   const content = readFileSync(path.join(fixture.control, ".gitignore"), "utf8");
-  assert.match(content, /^\.workspace-local$/m);
-  assert.match(content, /^\.workspace-active\/$/m);
+  assert.match(content, /^\.wakeflow-local$/m);
+  assert.match(content, /^\.wakeflow-active\/$/m);
   assert.doesNotMatch(content, /^\.DS_Store$/m);
   assert.doesNotMatch(content, /^BaseWindow\/$/m);
   assert.doesNotMatch(content, /^PluginWindow\/$/m);
@@ -263,8 +263,8 @@ test("initialize localizes launch titles and prompts with the window name first"
   });
   assert.equal(app.localRegistration.required, true);
   assert.equal(app.localRegistration.command, "wakeflow-setup initialize");
-  assert.equal(app.localRegistration.threadIdAuthority, ".workspace-local/wakeflow-delivery/hosts/codex/thread-registry/AppRepo.json");
-  assert.equal(app.localRegistration.derivedStatusView, ".workspace-local/wakeflow-delivery/hosts/codex/window-config/AppRepo.json");
+  assert.equal(app.localRegistration.threadIdAuthority, ".wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/AppRepo.json");
+  assert.equal(app.localRegistration.derivedStatusView, ".wakeflow-local/wakeflow-delivery/hosts/codex/window-config/AppRepo.json");
   assert.equal(app.localRegistration.trackedDocsContainThreadIds, false);
   assert.ok(app.localRegistration.argvTemplate.includes("--thread"));
   assert.ok(app.localRegistration.argvTemplate.includes("AppRepo=<createdThreadId>"));
@@ -301,13 +301,13 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.deepEqual(config.protectedWorkspacePrefixes, ["AppRepo/"]);
   assert.equal(payload.steps.gitignore.wrote, true);
   const gitignore = readFileSync(path.join(parent, ".gitignore"), "utf8");
-  assert.match(gitignore, /^\.workspace-active\/$/m);
-  assert.match(gitignore, /^\.workspace-local\/$/m);
+  assert.match(gitignore, /^\.wakeflow-active\/$/m);
+  assert.match(gitignore, /^\.wakeflow-local\/$/m);
   assert.doesNotMatch(gitignore, /^\.DS_Store$/m);
   assert.doesNotMatch(gitignore, /^AppRepo\/$/m);
   assert.doesNotMatch(gitignore, /^Design\/$/m);
   assert.doesNotMatch(gitignore, /^Test\/$/m);
-  assert.equal(config.designHandoffInbox, ".workspace-active/workspace/current/design-handoff-inbox.md");
+  assert.equal(config.designHandoffInbox, ".wakeflow-active/current/design-handoff-inbox.md");
   assert.equal(config.goalStageConfirmationDir, "wakeflow-ledger/goal-stage-confirmation");
   assert.equal(config.wakeflowRepoDir, "");
   assert.equal(config.repositories[0].path, "AppRepo");
@@ -331,11 +331,11 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   const appAgents = readFileSync(path.join(parent, "AppRepo", "AGENTS.md"), "utf8");
   assert.match(appAgents, /## Workspace Access Card/);
   assert.match(appAgents, /Existing app rule/);
-  assert.match(appAgents, /Active workspace index: `\.\.\/\.workspace-active\/workspace\/index\.md`/);
+  assert.match(appAgents, /Active workspace index: `\.\.\/\.wakeflow-active\/index\.md`/);
   assert.equal(existsSync(path.join(parent, "Design/AGENTS.md")), true);
   assert.equal(existsSync(path.join(parent, "Test/AGENTS.md")), true);
   assert.equal(existsSync(path.join(parent, "scripts/README.md")), false);
-  assert.equal(existsSync(path.join(parent, ".workspace-active/workspace/current/design-handoff-inbox.md")), true);
+  assert.equal(existsSync(path.join(parent, ".wakeflow-active/current/design-handoff-inbox.md")), true);
   assert.equal(existsSync(path.join(parent, "wakeflow-ledger/requirement-designs/README.md")), true);
   assert.equal(existsSync(path.join(parent, "wakeflow-ledger/goal-stage-confirmation/README.md")), true);
   assert.equal(existsSync(path.join(parent, "wakeflow-ledger/goal-stage-confirmation/process.md")), true);
@@ -344,7 +344,7 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.equal(existsSync(path.join(parent, "wakeflow-ledger/workspace/workspace-doc-archive-policy.md")), true);
   assert.equal(existsSync(path.join(parent, "wakeflow-ledger/workspace/archive/index.md")), true);
   assert.equal(existsSync(path.join(parent, "Wakeflow")), false);
-  const currentStatus = readFileSync(path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"), "utf8");
+  const currentStatus = readFileSync(path.join(parent, ".wakeflow-active/current/workspace-current-status.md"), "utf8");
   assert.match(currentStatus, new RegExp(`# ${path.basename(parent)} Current Status`));
   assert.match(currentStatus, new RegExp(`Controller window: ${path.basename(parent)}`));
   assert.doesNotMatch(currentStatus, /Controller window: Wakeflow/);
@@ -353,7 +353,7 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.match(currentStatus, /Status: idle \/ initialization ready \/ waiting for controller task/);
   assert.match(currentStatus, /Entry-sync windows should report readiness and stop/);
   assert.match(currentStatus, new RegExp(`\\| ${path.basename(parent)} \\| idle \\| No active demand; waiting for controller task\\. \\| Initialization ready state\\. \\|`));
-  const workspaceIndex = readFileSync(path.join(parent, ".workspace-active/workspace/index.md"), "utf8");
+  const workspaceIndex = readFileSync(path.join(parent, ".wakeflow-active/index.md"), "utf8");
   assert.match(workspaceIndex, new RegExp(`# ${path.basename(parent)} Workspace Index`));
   assert.match(workspaceIndex, /`wakeflow-ledger\/workspace\/workspace-record-map\.md`/);
   assert.deepEqual(
@@ -434,7 +434,7 @@ test("initialize does not reuse similar Design/Test directories unless explicitl
   assert.equal(existsSync(path.join(parent, "Test/AGENTS.md")), true);
   assert.equal(existsSync(path.join(parent, "AlembicDesign/AGENTS.md")), false);
   assert.equal(existsSync(path.join(parent, "AlembicTest/AGENTS.md")), false);
-  const currentStatus = readFileSync(path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"), "utf8");
+  const currentStatus = readFileSync(path.join(parent, ".wakeflow-active/current/workspace-current-status.md"), "utf8");
   assert.match(currentStatus, /# AlembicWorkspace Current Status/);
   assert.match(currentStatus, /Controller window: AlembicWorkspace/);
   assert.doesNotMatch(currentStatus, /Controller window: Wakeflow/);
@@ -444,7 +444,7 @@ test("initialize refreshes stale starter controller identity without overwriting
   const parent = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stale-status-"));
   mkdirSync(path.join(parent, "AppRepo", ".git"), { recursive: true });
   writeFile(
-    path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"),
+    path.join(parent, ".wakeflow-active/current/workspace-current-status.md"),
     `# Wakeflow Current Status
 
 Updated: 2026-05-27
@@ -476,7 +476,7 @@ Status: idle / no active demand
   const statusResult = payload.steps.syncTemplates.results.find((item) => item.label === "active current status");
   assert.equal(statusResult.refreshedStarter, true);
 
-  const currentStatus = readFileSync(path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"), "utf8");
+  const currentStatus = readFileSync(path.join(parent, ".wakeflow-active/current/workspace-current-status.md"), "utf8");
   assert.match(currentStatus, new RegExp(`# ${path.basename(parent)} Current Status`));
   assert.match(currentStatus, new RegExp(`Controller window: ${path.basename(parent)}`));
   assert.match(currentStatus, /Status: idle \/ initialization ready \/ waiting for controller task/);
@@ -486,7 +486,7 @@ Status: idle / no active demand
   assert.doesNotMatch(currentStatus, /Controller window: Wakeflow/);
 
   writeFile(
-    path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"),
+    path.join(parent, ".wakeflow-active/current/workspace-current-status.md"),
     `# Custom Current Status
 
 Controller window: Wakeflow
@@ -507,12 +507,12 @@ Status: active
     "--json",
   ]);
   assert.equal(activeResult.status, 0, activeResult.stderr || activeResult.stdout);
-  const activeStatus = readFileSync(path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"), "utf8");
+  const activeStatus = readFileSync(path.join(parent, ".wakeflow-active/current/workspace-current-status.md"), "utf8");
   assert.match(activeStatus, /# Custom Current Status/);
   assert.match(activeStatus, /Active demand: REAL-DEMAND/);
 
   writeFile(
-    path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"),
+    path.join(parent, ".wakeflow-active/current/workspace-current-status.md"),
     `# Queue Current Status
 
 Controller window: QueueWorkspace
@@ -534,7 +534,7 @@ Status: starter long-term map
 
 | Type | Entry | Description |
 | --- | --- | --- |
-| Active workspace | ../../.workspace-active/workspace/ | Current index. |
+| Active workspace | ../../.wakeflow-active/ | Current index. |
 | Local demand queue | ../requirement-designs/local-demand/ | Local rebuilt queue that must survive template sync. |`,
   );
 
@@ -547,7 +547,7 @@ Status: starter long-term map
     "--json",
   ]);
   assert.equal(queueResult.status, 0, queueResult.stderr || queueResult.stdout);
-  const queueStatus = readFileSync(path.join(parent, ".workspace-active/workspace/current/workspace-current-status.md"), "utf8");
+  const queueStatus = readFileSync(path.join(parent, ".wakeflow-active/current/workspace-current-status.md"), "utf8");
   assert.match(queueStatus, /# Queue Current Status/);
   assert.match(queueStatus, /Next claimable demand: LOCAL-REQ-08/);
   assert.doesNotMatch(queueStatus, /Create a real active demand with the Wakeflow MCP/);
@@ -587,16 +587,16 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
   assert.equal(existsSync(path.join(fixture.parent, "AGENTS.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/AGENTS.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/AGENTS.md")), true);
-  assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/design-handoff-board.md")), true);
-  assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/design-handoff-inbox.md")), true);
-  assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/test-exchange.md")), true);
+  assert.equal(existsSync(path.join(fixture.control, ".wakeflow-active/current/design-handoff-board.md")), true);
+  assert.equal(existsSync(path.join(fixture.control, ".wakeflow-active/current/design-handoff-inbox.md")), true);
+  assert.equal(existsSync(path.join(fixture.control, ".wakeflow-active/current/test-exchange.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/requirement-designs/README.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/goal-stage-confirmation/process.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/workspace/requirement-to-wave-execution-flow.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/workspace/archive/index.md")), true);
 
-  const registryPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/thread-registry/FixtureWorkspace.json");
-  const windowConfigPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/window-config/FixtureWorkspace.json");
+  const registryPath = path.join(fixture.control, ".wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/FixtureWorkspace.json");
+  const windowConfigPath = path.join(fixture.control, ".wakeflow-local/wakeflow-delivery/hosts/codex/window-config/FixtureWorkspace.json");
   const registry = JSON.parse(readFileSync(registryPath, "utf8"));
   const windowConfig = JSON.parse(readFileSync(windowConfigPath, "utf8"));
   assert.equal(registry.threadId, threadId);
@@ -608,11 +608,11 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
   assert.equal(windowConfig.deliveryRole, "controller");
   assert.equal(Object.hasOwn(windowConfig, "threadId"), false);
 
-  const baseWindowConfigPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/window-config/BaseWindow.json");
+  const baseWindowConfigPath = path.join(fixture.control, ".wakeflow-local/wakeflow-delivery/hosts/codex/window-config/BaseWindow.json");
   const baseWindowConfig = JSON.parse(readFileSync(baseWindowConfigPath, "utf8"));
   assert.equal(baseWindowConfig.threadRegistered, false);
   assert.equal(baseWindowConfig.deliveryRole, "target");
-  const currentStatus = readFileSync(path.join(fixture.control, ".workspace-active/workspace/current/workspace-current-status.md"), "utf8");
+  const currentStatus = readFileSync(path.join(fixture.control, ".wakeflow-active/current/workspace-current-status.md"), "utf8");
   assert.match(currentStatus, /# FixtureWorkspace Current Status/);
   assert.match(currentStatus, /Controller window: FixtureWorkspace/);
   assert.doesNotMatch(currentStatus, /Controller window: Wakeflow/);
@@ -712,7 +712,7 @@ test("replace-window replaces one registered window thread without initializatio
   assert.equal(replaced.replacedExistingThread, true);
   assert.equal(replaced.threadIdRedacted, true);
 
-  const registryPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/thread-registry/BaseWindow.json");
+  const registryPath = path.join(fixture.control, ".wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/BaseWindow.json");
   const registry = JSON.parse(readFileSync(registryPath, "utf8"));
   assert.equal(registry.threadId, newThreadId);
   assert.equal(Object.hasOwn(registry, "displayTitle"), false);
@@ -777,7 +777,7 @@ test("replace-windows regenerates only selected responsibility windows without i
   assert.equal(applied.steps.localWindows.results[0].replaceRequested, true);
   assert.equal(applied.steps.localWindows.results[0].replacedExistingThread, true);
 
-  const registryPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/thread-registry/BaseWindow.json");
+  const registryPath = path.join(fixture.control, ".wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/BaseWindow.json");
   const registry = JSON.parse(readFileSync(registryPath, "utf8"));
   assert.equal(registry.threadId, newThreadId);
 });
@@ -900,7 +900,7 @@ test("initialized workspace requires explicit reset initialization and cleans st
   assert.equal(result.status, 0, result.stderr || result.stdout);
 
   const pluginAgentsPath = path.join(fixture.plugin, "AGENTS.md");
-  const staleWindowConfigPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/window-config/PluginWindow.json");
+  const staleWindowConfigPath = path.join(fixture.control, ".wakeflow-local/wakeflow-delivery/hosts/codex/window-config/PluginWindow.json");
   assert.match(readFileSync(pluginAgentsPath, "utf8"), /wakeflow:scope:start/);
   assert.equal(existsSync(staleWindowConfigPath), true);
 
@@ -966,7 +966,7 @@ test("thread registration follow-up is allowed on an already-initialized workspa
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true);
-  const registryPath = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/thread-registry/BaseWindow.json");
+  const registryPath = path.join(fixture.control, ".wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/BaseWindow.json");
   assert.equal(existsSync(registryPath), true, "thread id is registered into the local registry");
 
   // a config-bearing re-init on the same workspace is still blocked
@@ -997,7 +997,7 @@ test("dry-run initialize on an already-initialized workspace reports blocked ins
 test("dry-run reset previews stale windows without deleting anything", () => {
   const fixture = makeFixture();
   run(fixture, ["initialize", "--repo", "BaseWindow=../BaseWindow", "--repo", "PluginWindow=../PluginWindow", "--internal-design", "--internal-test", "--write", "--json"]);
-  const staleConfig = path.join(fixture.control, ".workspace-local/wakeflow-delivery/hosts/codex/window-config/PluginWindow.json");
+  const staleConfig = path.join(fixture.control, ".wakeflow-local/wakeflow-delivery/hosts/codex/window-config/PluginWindow.json");
   assert.equal(existsSync(staleConfig), true);
 
   const dry = run(fixture, ["initialize", "--reset-initialization", "--repo", "BaseWindow=../BaseWindow", "--internal-design", "--internal-test", "--json"]);
@@ -1011,7 +1011,7 @@ test("dry-run reset previews stale windows without deleting anything", () => {
 test("reset cleanup also removes a legacy flat thread-registry entry (codex fallback)", () => {
   const fixture = makeFixture();
   run(fixture, ["initialize", "--repo", "BaseWindow=../BaseWindow", "--repo", "PluginWindow=../PluginWindow", "--internal-design", "--internal-test", "--write", "--json"]);
-  const legacyDir = path.join(fixture.control, ".workspace-local/wakeflow-delivery/thread-registry");
+  const legacyDir = path.join(fixture.control, ".wakeflow-local/wakeflow-delivery/thread-registry");
   mkdirSync(legacyDir, { recursive: true });
   const legacyFile = path.join(legacyDir, "PluginWindow.json");
   writeFileSync(legacyFile, JSON.stringify({ threadId: "stale-legacy-id" }));
@@ -1064,7 +1064,7 @@ test("prompts use sibling Wakeflow script paths for child windows", () => {
   assert.equal(payload.prompts[0].displayTitle, "BaseWindow Work");
   assert.match(payload.prompts[0].prompt, /BaseWindow Work: initialization entry sync, not a task delivery/);
   assert.match(payload.prompts[0].prompt, /entry sync complete; waiting for controller task/);
-  assert.match(payload.prompts[0].prompt, /AGENTS\.md, \.\.\/AGENTS\.md, \.\.\/Wakeflow\/\.workspace-active\/workspace\/index\.md/);
+  assert.match(payload.prompts[0].prompt, /AGENTS\.md, \.\.\/AGENTS\.md, \.\.\/Wakeflow\/\.wakeflow-active\/index\.md/);
   assert.match(payload.prompts[0].prompt, /node \.\.\/Wakeflow\/scripts\/wakeflow-setup\.mjs status --json/);
 
   const zhDutyWindow = "\u804c\u8d23\u7a97\u53e3";
@@ -1120,8 +1120,8 @@ test("write-agents is dry-run by default and writes managed access cards with --
   assert.match(baseAgents, /records this window access coordinates and the minimum automation gate/);
   assert.match(baseAgents, /Window name: `BaseWindow`/);
   assert.match(baseAgents, /Parent workspace AGENTS: `\.\.\/AGENTS\.md`/);
-  assert.match(baseAgents, /Active workspace index: `\.\.\/Wakeflow\/\.workspace-active\/workspace\/index\.md`/);
-  assert.match(baseAgents, /Current plan directory: `\.\.\/Wakeflow\/\.workspace-active\/workspace\/current`/);
+  assert.match(baseAgents, /Active workspace index: `\.\.\/Wakeflow\/\.wakeflow-active\/index\.md`/);
+  assert.match(baseAgents, /Current plan directory: `\.\.\/Wakeflow\/\.wakeflow-active\/current`/);
   assert.match(baseAgents, /Window ledger: `\.\.\/wakeflow-ledger\/BaseWindow`/);
   assert.match(baseAgents, /Direct-thread delivery is the normal work transport/);
   assert.match(baseAgents, /Delivery prompts carry only a few dynamic variables and a skill pointer/);
@@ -1171,7 +1171,7 @@ test("access-profiles reports managed child access-card coordinates and automati
   assert.equal(profile.ok, true);
   assert.equal(profile.windowName, "BaseWindow");
   assert.equal(profile.coordinates.parentAgents, "../AGENTS.md");
-  assert.equal(profile.coordinates.activeIndex, "../Wakeflow/.workspace-active/workspace/index.md");
+  assert.equal(profile.coordinates.activeIndex, "../Wakeflow/.wakeflow-active/index.md");
   assert.equal(profile.coordinates.windowLedger, "../wakeflow-ledger/BaseWindow");
   assert.equal(profile.coordinateChecks.every((check) => check.ok), true);
   assert.equal(profile.automationChecks.every((check) => check.ok), true);
@@ -1220,7 +1220,7 @@ test("write-agents can explicitly include unmanaged Design/Test windows while sk
 
   const testAgents = readFileSync(path.join(testWindow, "AGENTS.md"), "utf8");
   assert.match(testAgents, /Window name: `Test`/);
-  assert.match(testAgents, /Test exchange projection: `\.\.\/Wakeflow\/\.workspace-active\/workspace\/current\/test-exchange\.md`/);
+  assert.match(testAgents, /Test exchange projection: `\.\.\/Wakeflow\/\.wakeflow-active\/current\/test-exchange\.md`/);
   assert.match(testAgents, /Non-Test windows must not create, process, or verify Test delivery/);
   assert.match(testAgents, /### Skill Assistance/);
   assert.match(testAgents, /Test work should proactively surface relevant local Test skills/);
@@ -1280,7 +1280,7 @@ test("sync-root-agents unpacks parent AGENTS with Wakeflow repo paths", () => {
   const rootAgents = readFileSync(path.join(fixture.parent, "AGENTS.md"), "utf8");
   assert.match(rootAgents, /wakeflow:root-agents:start/);
   assert.match(rootAgents, /# FixtureWorkspace Agent Instructions/);
-  assert.match(rootAgents, /Wakeflow\/\.workspace-active\/workspace\/index\.md|controller state roots/);
+  assert.match(rootAgents, /Wakeflow\/\.wakeflow-active\/index\.md|controller state roots/);
   assert.match(rootAgents, /cd Wakeflow && node scripts\/wakeflow-setup\.mjs sync-root-agents --write/);
   assert.match(rootAgents, /Wakeflow\/workspace\.config\.json/);
   assert.match(rootAgents, /## Gate Flow/);
@@ -1309,8 +1309,8 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   const payload = runJson(fixture, ["sync-templates", "--all", "--write"]);
   assert.equal(payload.ok, true);
   assert.equal(payload.wrote, true);
-  assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/design-handoff-board.md")), true);
-  assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/design-handoff-inbox.md")), true);
+  assert.equal(existsSync(path.join(fixture.control, ".wakeflow-active/current/design-handoff-board.md")), true);
+  assert.equal(existsSync(path.join(fixture.control, ".wakeflow-active/current/design-handoff-inbox.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/AGENTS.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/README.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/.gitignore")), true);
@@ -1355,7 +1355,7 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   const requirementClarification = readFileSync(path.join(fixture.parent, "Design/skills/requirement-clarification/SKILL.md"), "utf8");
   assert.match(requirementClarification, /Interaction First/);
   assert.match(requirementClarification, /Default to conversation/);
-  assert.equal(existsSync(path.join(fixture.control, ".workspace-active/workspace/current/test-exchange.md")), true);
+  assert.equal(existsSync(path.join(fixture.control, ".wakeflow-active/current/test-exchange.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/requirement-designs/README.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/goal-stage-confirmation/README.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/goal-stage-confirmation/process.md")), true);

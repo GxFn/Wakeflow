@@ -50,7 +50,7 @@ function createManifest(root) {
         demandKey: "EXAMPLE-REQ-01",
         title: "First Requirement",
         developerDoc: "wakeflow-ledger/requirement-designs/example/req-01.md",
-        stateRoot: ".workspace-active/workspace/current/example-req-01",
+        stateRoot: ".wakeflow-active/current/example-req-01",
         goal: "Prove the first requirement can be claimed.",
         completionDefinition: "The first requirement is reviewed and completed.",
         stagePlan: "Stage 0: review code facts.",
@@ -68,7 +68,7 @@ function createManifest(root) {
         demandKey: "EXAMPLE-REQ-02",
         title: "Second Requirement",
         developerDoc: "wakeflow-ledger/requirement-designs/example/req-02.md",
-        stateRoot: ".workspace-active/workspace/current/example-req-02",
+        stateRoot: ".wakeflow-active/current/example-req-02",
         goal: "Prove the second requirement waits for the first.",
         completionDefinition: "The second requirement is reviewed and completed.",
         stagePlan: "Stage 0: review code facts.",
@@ -153,7 +153,7 @@ test("status reports the next claimable demand without writing state roots", () 
   assert.equal(payload.totalCount, 2);
   assert.equal(payload.completedCount, 0);
   assert.equal(payload.nextClaimable.demandKey, "EXAMPLE-REQ-01");
-  assert.equal(existsSync(path.join(root, ".workspace-active/workspace/current/example-req-01")), false);
+  assert.equal(existsSync(path.join(root, ".wakeflow-active/current/example-req-01")), false);
 });
 
 test("claim-next dry-run does not create the state root", () => {
@@ -168,7 +168,7 @@ test("claim-next dry-run does not create the state root", () => {
   assert.equal(payload.wouldClaim.demandKey, "EXAMPLE-REQ-01");
   assert.equal(payload.wouldClaim.developerDoc, "wakeflow-ledger/requirement-designs/example/req-01.md");
   assert.match(payload.wouldClaim.dispatchCandidates[0].prepareCommand, /prepare-dispatch-from-state/);
-  assert.equal(existsSync(path.join(root, ".workspace-active/workspace/current/example-req-01")), false);
+  assert.equal(existsSync(path.join(root, ".wakeflow-active/current/example-req-01")), false);
 });
 
 test("claim-next --write creates one active state root and initial task package", () => {
@@ -181,7 +181,7 @@ test("claim-next --write creates one active state root and initial task package"
   assert.equal(payload.ok, true);
   assert.equal(payload.wrote, true);
   assert.equal(payload.claimed.demandKey, "EXAMPLE-REQ-01");
-  assert.equal(payload.claimed.stateRoot, ".workspace-active/workspace/current/example-req-01");
+  assert.equal(payload.claimed.stateRoot, ".wakeflow-active/current/example-req-01");
   assert.equal(payload.claimed.developerDoc, "wakeflow-ledger/requirement-designs/example/req-01.md");
   assert.equal(payload.claimed.developerDocChanged, true);
   assert.deepEqual(payload.claimed.taskPackages, ["EXAMPLE-REQ-01-P1"]);
@@ -204,7 +204,7 @@ test("claim-next --write creates one active state root and initial task package"
   assert.match(progress, /Current task packages: EXAMPLE-REQ-01-P1\(pending\)/);
   assert.match(developerDoc, /Main state: planned/);
   assert.match(developerDoc, /Current task packages: EXAMPLE-REQ-01-P1\(pending\)/);
-  assert.equal(existsSync(path.join(root, ".workspace-active/workspace/current/example-req-02")), false);
+  assert.equal(existsSync(path.join(root, ".wakeflow-active/current/example-req-02")), false);
 });
 
 test("sync-doc updates the standard developer document from an existing state root", () => {
@@ -238,7 +238,7 @@ test("claim-next refuses to skip an active demand", () => {
   assert.equal(payload.ok, true);
   assert.equal(payload.claimed, null);
   assert.equal(payload.active.demandKey, "EXAMPLE-REQ-01");
-  assert.equal(existsSync(path.join(root, ".workspace-active/workspace/current/example-req-02")), false);
+  assert.equal(existsSync(path.join(root, ".wakeflow-active/current/example-req-02")), false);
 });
 
 test("claim-next advances only after the previous demand is terminal", () => {
@@ -254,7 +254,7 @@ test("claim-next advances only after the previous demand is terminal", () => {
 
   assert.equal(payload.ok, true);
   assert.equal(payload.claimed.demandKey, "EXAMPLE-REQ-02");
-  assert.equal(existsSync(path.join(root, ".workspace-active/workspace/current/example-req-02/wakeflow-state.json")), true);
+  assert.equal(existsSync(path.join(root, ".wakeflow-active/current/example-req-02/wakeflow-state.json")), true);
 });
 
 test("missing landing docs fail closed", () => {
@@ -321,7 +321,7 @@ function makeDesignFixture({ status = "controller-claimable", id = "auto-claim-2
     workspaceName: "ExampleWorkspace",
     controllerWindow: "ExampleController",
   });
-  const currentDir = path.join(root, ".workspace-active/workspace/current");
+  const currentDir = path.join(root, ".wakeflow-active/current");
   const designDir = path.join(currentDir, "auto-claim");
   mkdirSync(designDir, { recursive: true });
   writeFileSync(path.join(designDir, "original-plan.md"), designDoc(id, "Original Plan"));
@@ -344,7 +344,7 @@ test("claim-from-design dry-run returns the single claimable demand without writ
   assert.equal(payload.wrote, false);
   assert.equal(payload.wouldClaim.demandKey, id);
   assert.match(payload.wouldClaim.requirementDesign, /requirement-design\.md$/);
-  assert.equal(existsSync(path.join(root, `.workspace-active/workspace/current/${id}`)), false);
+  assert.equal(existsSync(path.join(root, `.wakeflow-active/current/${id}`)), false);
 });
 
 test("claim-from-design --write inits exactly one demand, no task package, no dispatch", () => {

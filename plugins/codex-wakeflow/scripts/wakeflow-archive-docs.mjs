@@ -146,7 +146,7 @@ function firstCurrentPlanPath(indexContent) {
 function requireWorkspaceDoc(input) {
   const normalized = input
     .replace(/^docs\/workspace\//, "")
-    .replace(/^\.workspace-active\/workspace\//, "");
+    .replace(/^\.wakeflow-active\//, "");
   const directPath = path.resolve(workspaceRoot, input);
   const absolutePath = directPath.startsWith(`${workspaceDocsDir}${path.sep}`)
     ? directPath
@@ -384,7 +384,7 @@ if (!topic && files.length > 0) {
 }
 
 if (files.length === 0 && !pruneIndexOnly) {
-  issues.push("Missing --file <.workspace-active/workspace/current/file.md>; repeat --file for multiple docs");
+  issues.push("Missing --file <.wakeflow-active/current/file.md>; repeat --file for multiple docs");
 }
 
 const indexContent = existsSync(indexPath) ? readFileSync(indexPath, "utf8") : "";

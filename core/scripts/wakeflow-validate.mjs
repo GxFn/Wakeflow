@@ -39,7 +39,7 @@ const projectSpecificTokens = [
   "Al" + "embic" + "Plugin",
   "Al" + "embic" + "Core",
 ];
-const ignoredDirectoryNames = new Set([".git", ".workspace-active", ".workspace-local", "coverage", "dist", "node_modules"]);
+const ignoredDirectoryNames = new Set([".git", ".wakeflow-active", ".wakeflow-local", "coverage", "dist", "node_modules"]);
 const localizedRuntimeTextFiles = new Set([
   "scripts/lib/wakeflow-language.mjs",
   "scripts/lib/wakeflow-host-profile.mjs",

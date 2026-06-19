@@ -22,7 +22,7 @@ const RUNS = [
 
 function makeFixture() {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-prune-"));
-  const stateDir = path.join(root, ".workspace-local/wakeflow-delivery");
+  const stateDir = path.join(root, ".wakeflow-local/wakeflow-delivery");
   const runsDir = path.join(stateDir, "delivery-runs");
   mkdirSync(runsDir, { recursive: true });
   for (const run of RUNS) {

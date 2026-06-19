@@ -24,7 +24,7 @@ const args = process.argv.slice(2);
 const command = args[0] && !args[0].startsWith("--") ? args[0] : "status";
 const options = args[0] && !args[0].startsWith("--") ? args.slice(1) : args;
 const workspaceRoot = inferWorkspaceRoot();
-const stateDir = path.resolve(getValue("--state-dir", path.join(workspaceRoot, ".workspace-local/wakeflow-delivery")));
+const stateDir = path.resolve(getValue("--state-dir", path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery")));
 const scriptPath = new URL(import.meta.url).pathname;
 const write = hasFlag("--write");
 const json = hasFlag("--json");
@@ -102,7 +102,7 @@ function inferWorkspaceRoot() {
   if (explicitRoot) return path.resolve(explicitRoot);
   const deliveryFile = getValue("--delivery-file", "");
   if (command === "record-delivery-run" && deliveryFile && path.isAbsolute(deliveryFile)) {
-    const marker = `${path.sep}.workspace-local${path.sep}wakeflow-delivery${path.sep}delivery-envelopes${path.sep}`;
+    const marker = `${path.sep}.wakeflow-local${path.sep}wakeflow-delivery${path.sep}delivery-envelopes${path.sep}`;
     const index = deliveryFile.indexOf(marker);
     if (index > 0) return path.resolve(deliveryFile.slice(0, index));
   }

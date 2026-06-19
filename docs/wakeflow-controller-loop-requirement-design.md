@@ -522,7 +522,7 @@ a full evidence scan), or `buildWindowDispatchConfig`
 (`wakeflow-thread-registry.mjs:37-85`, ZERO task data, ZERO file paths). `state.windows[]`
 (`wakeflow-state.mjs:1420-1442`) carries only bare ID lists. Per-window file areas span
 two tiers — state-root (`task-packages/`, `target-results/`) and transport-runtime
-(`.workspace-local/wakeflow-delivery/{dispatch-packets,target-results,delivery-envelopes,
+(`.wakeflow-local/wakeflow-delivery/{dispatch-packets,target-results,delivery-envelopes,
 delivery-runs}` + `hosts/<hostDirName>/{thread-registry,window-config}`).
 
 **Landing design.** PHASE 1 (recommended, no schema change): new read-only MCP tool
@@ -644,7 +644,7 @@ shape change.
 **Edge cases.** `slices` additive (consumers reading strings unaffected). Index/slices ride
 the render-progress ownership gate (`:299-301`) + lost-update re-check (`:304-309`), built
 from the same pre-write state (revision-consistent). Empty demand → empty arrays. Anchor
-collisions → `-2` suffix. Generated state-root docs live in gitignored `.workspace-active`
+collisions → `-2` suffix. Generated state-root docs live in gitignored `.wakeflow-active`
 and honor the P1-0 redaction rule; NOT promoted to `wakeflow-ledger` by this area.
 
 **Test plan.** slices arrays-of-objects (strings retained); index links resolve + idempotent;
@@ -703,7 +703,7 @@ remove API (no `removePacket/removeRun/removeResult/removeEnvelope`); `supersede
 and `resultFileFor:225` already exist. `buildRuntimeSummary`
 (`delivery-status-command.mjs:245-249`) lists all five transport dirs every call.
 `complete-demand` (`wakeflow-state.mjs:1323-1418`) flips state to `completed` and leaves the
-root in `.workspace-active`. Rework orphans: `import-target-result:836-851` auto-timestamps a
+root in `.wakeflow-active`. Rework orphans: `import-target-result:836-851` auto-timestamps a
 new `tr-…` file and leaves the prior flat file. Archived read-guards already fail-close
 (`:610, :822, :991`). The archive template is `wakeflow-archive-docs.mjs` (dry-run default,
 moves files, rewrites index, refuses dirs/non-`.md`). Committed tier:
@@ -1002,7 +1002,7 @@ Confirmation gates and standing boundaries that apply across the proposal:
 - **RA6 redaction is a hard prerequisite.** No state-root content is committed to git until the
   P1-0 redaction guard proves ZERO real session/thread ids (refuse-by-default,
   redact-into-copy-only, mandatory human audit before `--write`). P1-4 cannot land before P1-0.
-  Real thread ids live only in `.workspace-local`; they must never enter tracked docs, GitHub,
+  Real thread ids live only in `.wakeflow-local`; they must never enter tracked docs, GitHub,
   prompts, or backfill.
 - **Do not delete owned capabilities without a named replacement + import-scan.** Every RA7
   deletion carries import-scan evidence and a named real entrypoint
@@ -1060,7 +1060,7 @@ constants into a shared helper?
 `wakeflow_focus_doc` as an MCP tool now vs CLI-only first? (3) Per-phase brief: `--window` now +
 `--phase` best-effort on `activeStageId`, or sequence behind G11(a)'s per-task `stageId`? (4)
 Anchor checking as a non-blocking WARNING first (recommended) vs a hard gate? (5) Confirm
-generated state-root docs stay in gitignored `.workspace-active` (not committed by this area)?
+generated state-root docs stay in gitignored `.wakeflow-active` (not committed by this area)?
 
 **RA6.** (1) Confirm the committed archive location
 `<projectLedgerRoot>/workspace/archive/<month>/<topic>/<slug>/` vs a separate top-level ledger

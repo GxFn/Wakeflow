@@ -51,7 +51,7 @@ with the tmux host helper: write the envelope prompt to a temp file, then run
 `node <plugin>/scripts/lib/wakeflow-claude-host.mjs send --root <workspace>
 --window <target> --prompt-file <file> [--delivery-id <id>]`. The helper
 enforces the shared per-window delivery lock
-(`.workspace-local/wakeflow-delivery/locks/<window>.json`, one in-flight
+(`.wakeflow-local/wakeflow-delivery/locks/<window>.json`, one in-flight
 delivery per window across hosts), pastes via a tmux buffer (multiline-safe),
 and returns pane readback evidence. The send evidence is `readback.paneTail`
 plus the recorded delivery run (`wakeflow_record_delivery`, default host
@@ -84,5 +84,5 @@ result is not group completion unless the group expected only that target.
 
 ## Thread Id Boundary
 
-Real thread ids (Claude Code session ids) live only in `.workspace-local/`. They
+Real thread ids (Claude Code session ids) live only in `.wakeflow-local/`. They
 must not appear in tracked documents, prompts, GitHub, or backfill text.

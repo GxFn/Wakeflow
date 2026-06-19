@@ -368,7 +368,7 @@ The controller loop spans two CLI scripts plus the thin MCP proxy. The
 state-machine lifecycle lives in `core/scripts/wakeflow-state.mjs` (writes the
 durable state root); the transport lifecycle lives in
 `core/scripts/wakeflow-delivery.mjs` and its libs (writes ignored local runtime
-under `.workspace-local/wakeflow-delivery`).
+under `.wakeflow-local/wakeflow-delivery`).
 
 **The single point that advances durable state during dispatch is
 `record-delivery-run`** → `markStateRootDeliverySent`, which flips the target task
@@ -759,15 +759,15 @@ handles, configs, tmux bindings, keep-live, activity-monitor pid) is
 
 Three committed/ignored boundaries are explicit:
 
-- **`.workspace-local/`** — holds **REAL session/thread ids**; **never committed**.
-- **`.workspace-active/`** — local runtime (active docs + per-demand state roots);
+- **`.wakeflow-local/`** — holds **REAL session/thread ids**; **never committed**.
+- **`.wakeflow-active/`** — local runtime (active docs + per-demand state roots);
   gitignored.
 - **`wakeflow-ledger/`** — durable long-term records; **committed**.
 
-The workspace `.gitignore` is forced to contain exactly `.workspace-active/` and
-`.workspace-local/` (`wakeflow-setup.mjs:675` `RUNTIME_GITIGNORE_ENTRIES`); the
+The workspace `.gitignore` is forced to contain exactly `.wakeflow-active/` and
+`.wakeflow-local/` (`wakeflow-setup.mjs:675` `RUNTIME_GITIGNORE_ENTRIES`); the
 ledger is **not** ignored. `workspace.config.json` is tracked while
-`.workspace-local/workspace.config.json` overrides it locally and wins
+`.wakeflow-local/workspace.config.json` overrides it locally and wins
 (`wakeflow-config.mjs:66-78`).
 
 ### 6.1 Annotated directory tree
@@ -779,9 +779,9 @@ Legend: [T]=tracked  [I]=gitignored/local-runtime  [L]=committed long-term ledge
 <workspace>/
 ├── workspace.config.json                       [T] shared host-neutral truth; per-host knobs under "hosts"
 ├── CLAUDE.md / AGENTS.md                        [T] per-host controller gate cards (each plugin owns its file)
-├── .gitignore                                   [T] forced to contain .workspace-active/ + .workspace-local/
+├── .gitignore                                   [T] forced to contain .wakeflow-active/ + .wakeflow-local/
 │
-├── .workspace-active/                           [I] SHARED business state (host-neutral, no handles)
+├── .wakeflow-active/                           [I] SHARED business state (host-neutral, no handles)
 │   └── workspace/
 │       ├── index.md                                 active controller entry
 │       └── current/
@@ -803,7 +803,7 @@ Legend: [T]=tracked  [I]=gitignored/local-runtime  [L]=committed long-term ledge
 │               ├── evidence/                           evidence artifacts (lazy)
 │               └── transition-candidates/<id>.json    [json] reduce-results candidates (lazy)
 │
-├── .workspace-local/                            [I] NEVER COMMITTED — holds REAL session/thread ids
+├── .wakeflow-local/                            [I] NEVER COMMITTED — holds REAL session/thread ids
 │   ├── workspace.config.json                        [I] optional local override (wins over tracked config)
 │   └── wakeflow-delivery/                            === stateDir default (wakeflow-delivery.mjs:26) ===
 │       ├── dispatch-packets/<id>.json                [json] SHARED dispatch packets
@@ -833,7 +833,7 @@ Legend: [T]=tracked  [I]=gitignored/local-runtime  [L]=committed long-term ledge
     └── <window-slug>/                                per-window long-term ledger
 
 NOTE: this repo IS the plugin source — its own workspace.config.json / wakeflow-ledger /
-.workspace-active are untracked dogfood runtime here (git ls-files = 0). [T]/[I]/[L]
+.wakeflow-active are untracked dogfood runtime here (git ls-files = 0). [T]/[I]/[L]
 describe the INSTALLED-workspace contract the code enforces, not this source checkout.
 ```
 
@@ -842,8 +842,8 @@ describe the INSTALLED-workspace contract the code enforces, not this source che
 | Path | writtenBy | readBy | format | scope | committed |
 |---|---|---|---|---|---|
 | `workspace.config.json` | wakeflow-setup configure | wakeflow-config, window-runtime, claude-host | json | per-workspace | tracked (override wins locally) |
-| `.workspace-local/workspace.config.json` | manual / setup | wakeflow-config (resolved first, wins) | json | per-workspace | **never** |
-| `.workspace-active/workspace/index.md` + `current/*` | setup scaffold + controller edits | controller, verify-workspace-docs, check-layout | md | per-workspace | gitignored |
+| `.wakeflow-local/workspace.config.json` | manual / setup | wakeflow-config (resolved first, wins) | json | per-workspace | **never** |
+| `.wakeflow-active/index.md` + `current/*` | setup scaffold + controller edits | controller, verify-workspace-docs, check-layout | md | per-workspace | gitignored |
 | `<state-root>/demand.json` | wakeflow-state init | controller orientation | json | per-demand | gitignored |
 | `<state-root>/wakeflow-state.json` | wakeflow-state reducers + `markStateRootDeliverySent` (NOT import-target-result) | all reducers, render-progress, demand-sequence, delivery status scan | json | per-demand | gitignored |
 | `<state-root>/controller-events.jsonl` | every mutating reducer via `appendJsonLine` (O_APPEND) | audit/trace | jsonl | per-demand | gitignored |
@@ -851,20 +851,20 @@ describe the INSTALLED-workspace contract the code enforces, not this source che
 | `<state-root>/target-results/<id>.json` | import-target-result (auto-timestamps on collision) | reduce-results (latest-by-createdAt), review-pack | json | per-demand | gitignored |
 | `<state-root>/task-packages/<id>.json` | add-task-package | prepare-dispatch (`readTaskPackageFromStateRoot`) | json | per-demand | gitignored |
 | `<state-root>/projection.json` + `developer-progress.md` | init seeds; render-progress rebuilds (reducers only flip `projection.status=stale`) | render-progress, demand-sequence, humans | json + md | per-demand | gitignored |
-| `.workspace-local/wakeflow-delivery/dispatch-packets/<id>.json` | prepare-dispatch / build-delivery | build-delivery, review | json | per-target dispatch | never |
-| `.workspace-local/wakeflow-delivery/dispatch-groups/<id>.json` | `upsertDispatchGroup` | review, callbackPlan, controller-return | json | per-group | never |
-| `.workspace-local/wakeflow-delivery/delivery-envelopes/<id>.json` | build-delivery / prepare-dispatch / build-controller-return | record-delivery-run, trace-spine, host send | json | per-delivery | never |
-| `.workspace-local/wakeflow-delivery/delivery-runs/<id>.json` | record-delivery-run | delivery-evidence (`sent` computed here), status, lock release | json | per-send-attempt | never |
-| `.workspace-local/wakeflow-delivery/target-results/<group>__<window>__<task>.json` | delivery-script record-target-result | review-results/pack, claude-host wait-results | json | per-target-task | never |
-| `.workspace-local/wakeflow-delivery/target-results/superseded/<…>.json` | record-target-result on supersede | audit / replay summary | json | per-target-task | never |
-| `.workspace-local/wakeflow-delivery/locks/<window>.json` | build-delivery (`writeWindowLock`), record-delivery-run sent refresh, claude-host `performSend` | dispatch guard, release-window-lock, status freshLocks | json | per-window (cross-host) | never |
-| `.workspace-local/wakeflow-delivery/stop.json` | `commandStopLoop` | unattended loop / status | json | per-workspace | never |
-| `.workspace-local/wakeflow-delivery/hosts/<host>/thread-registry/<window>.json` | register-thread / replace-windows | `loadThreadRegistration`, buildWindowConfig, dispatch | json | per-window per-host | never (REAL handle; redacted in shared records) |
-| `.workspace-local/wakeflow-delivery/hosts/<host>/window-config/<window>.json` | build-window-config | dispatch envelope build | json | per-window per-host | never (regenerable) |
-| `.workspace-local/wakeflow-delivery/hosts/<host>/keep-live/{state,control}.json` | keep-live start/stop/worker | keep-live status, delivery status | json | per-host | never |
-| `.workspace-local/wakeflow-delivery/hosts/claude-code/window-host/<window>.json` | claude-host launch-window | claude-host send/wait/activity-monitor; core lists as host marker | json | per-window (claude-code only) | never |
-| `.workspace-local/wakeflow-delivery/hosts/claude-code/activity-monitor-<server>.pid` | claude-host activity-monitor | `isActivityMonitorRunning` | text (pid) | per-tmux-server (claude-code) | never |
-| `.workspace-local/wakeflow-delivery/thread-registry/<window>.json` (LEGACY) | (not written — legacy only) | `findThreadFile` fallback when `legacyRegistryFallback` (codex=true) | json | per-window (codex legacy) | never |
+| `.wakeflow-local/wakeflow-delivery/dispatch-packets/<id>.json` | prepare-dispatch / build-delivery | build-delivery, review | json | per-target dispatch | never |
+| `.wakeflow-local/wakeflow-delivery/dispatch-groups/<id>.json` | `upsertDispatchGroup` | review, callbackPlan, controller-return | json | per-group | never |
+| `.wakeflow-local/wakeflow-delivery/delivery-envelopes/<id>.json` | build-delivery / prepare-dispatch / build-controller-return | record-delivery-run, trace-spine, host send | json | per-delivery | never |
+| `.wakeflow-local/wakeflow-delivery/delivery-runs/<id>.json` | record-delivery-run | delivery-evidence (`sent` computed here), status, lock release | json | per-send-attempt | never |
+| `.wakeflow-local/wakeflow-delivery/target-results/<group>__<window>__<task>.json` | delivery-script record-target-result | review-results/pack, claude-host wait-results | json | per-target-task | never |
+| `.wakeflow-local/wakeflow-delivery/target-results/superseded/<…>.json` | record-target-result on supersede | audit / replay summary | json | per-target-task | never |
+| `.wakeflow-local/wakeflow-delivery/locks/<window>.json` | build-delivery (`writeWindowLock`), record-delivery-run sent refresh, claude-host `performSend` | dispatch guard, release-window-lock, status freshLocks | json | per-window (cross-host) | never |
+| `.wakeflow-local/wakeflow-delivery/stop.json` | `commandStopLoop` | unattended loop / status | json | per-workspace | never |
+| `.wakeflow-local/wakeflow-delivery/hosts/<host>/thread-registry/<window>.json` | register-thread / replace-windows | `loadThreadRegistration`, buildWindowConfig, dispatch | json | per-window per-host | never (REAL handle; redacted in shared records) |
+| `.wakeflow-local/wakeflow-delivery/hosts/<host>/window-config/<window>.json` | build-window-config | dispatch envelope build | json | per-window per-host | never (regenerable) |
+| `.wakeflow-local/wakeflow-delivery/hosts/<host>/keep-live/{state,control}.json` | keep-live start/stop/worker | keep-live status, delivery status | json | per-host | never |
+| `.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/<window>.json` | claude-host launch-window | claude-host send/wait/activity-monitor; core lists as host marker | json | per-window (claude-code only) | never |
+| `.wakeflow-local/wakeflow-delivery/hosts/claude-code/activity-monitor-<server>.pid` | claude-host activity-monitor | `isActivityMonitorRunning` | text (pid) | per-tmux-server (claude-code) | never |
+| `.wakeflow-local/wakeflow-delivery/thread-registry/<window>.json` (LEGACY) | (not written — legacy only) | `findThreadFile` fallback when `legacyRegistryFallback` (codex=true) | json | per-window (codex legacy) | never |
 | `wakeflow-ledger/` (record-map, requirement-designs, goal-stage, per-window) | controller (committed by hand) + setup scaffold | controller/Design, archive tooling | md | per-workspace long-term | **committed** |
 | `CLAUDE.md` / `AGENTS.md` (root + child repos) | setup sync-root-agents / write-agents | host agent at entry | md | per-workspace + per-child | tracked |
 
@@ -881,7 +881,7 @@ Key facts:
   detection scans existing `delivery-runs`/`target-results`.
 
 > **Open questions / verify:** This repo is the plugin **source**, so its own
-> `workspace.config.json`/`wakeflow-ledger`/`.workspace-active` are untracked
+> `workspace.config.json`/`wakeflow-ledger`/`.wakeflow-active` are untracked
 > dogfood runtime (git ls-files = 0); the committed/ignored semantics describe an
 > installed workspace. The Codex edition's `hosts/codex/` layout was not
 > re-verified line-by-line in the codex profile (high-confidence via the shared
@@ -919,7 +919,7 @@ boundary.
 
 ### 7.2 The cross-host window lock lifecycle
 
-The lock at `.workspace-local/wakeflow-delivery/locks/<window>.json`
+The lock at `.wakeflow-local/wakeflow-delivery/locks/<window>.json`
 (`WakeflowWindowDeliveryLock` v1: `{windowName, host, deliveryId, createdAt, expiresAt}`,
 TTL 7200s, `host = hostProfile.runtime.hostDirName`):
 
@@ -1054,7 +1054,7 @@ INIT is a **four-phase dry-run-first** flow in `wakeflow-setup.mjs initialize`:
 Guards:
 
 - **Re-init footprint guard** (`assertInitializeWriteAllowed`): if a footprint
-  exists (config + workspace index/status, `.workspace-local/wakeflow-delivery`,
+  exists (config + workspace index/status, `.wakeflow-local/wakeflow-delivery`,
   root + child memory blocks) and config selection is present without
   `--reset-initialization`, `--write` fails (`reInitBlocked`); a dry-run returns
   `mode:'blocked-already-initialized'`. Reset additionally fails if
@@ -1063,7 +1063,7 @@ Guards:
   (with no config selection and no reset) registers a real thread id without
   re-scaffolding; ids are validated against host-profile placeholders, must be
   whitespace-free, and land only under
-  `.workspace-local/.../hosts/<host>/thread-registry/<window>.json`, never tracked
+  `.wakeflow-local/.../hosts/<host>/thread-registry/<window>.json`, never tracked
   docs.
 
 Apply writes: `workspace.config.json`, `.gitignore` runtime entries, the starter
@@ -1083,7 +1083,7 @@ never the init docs.
 
 - **Base (always 5):** `boundary`, `repository-residue`, `repo-status`,
   `script-docs`, `git diff --check`.
-- **Conditional:** when `.workspace-active/workspace` exists, splices in
+- **Conditional:** when `.wakeflow-active` exists, splices in
   `workspace-docs (--all-workspace)` and `current-layout`.
 - **`--with-runtime`/`--strict-runtime`:** adds `runtime-residue` (blocking
   residue fails only in strict).
@@ -1167,12 +1167,12 @@ flowchart LR
 | `core/scripts/wakeflow-state.mjs` | The heart: 7 demand reducers + host-ownership guard + reduce/decide helpers; writes `wakeflow-state.json`, `controller-events.jsonl`, candidates, results, packages |
 | `core/scripts/lib/wakeflow-review-scope.mjs` | Blocked-wedge recovery: only `accepted`/`reviewDecision=accept` is final; keeps blocked-but-not-accepted tasks reviewable |
 | `core/scripts/lib/wakeflow-status-machine.mjs` | Separate 17-value window/runtime status vocabulary + send-eligibility predicates (projection/scheduling layer only) |
-| `core/scripts/wakeflow-delivery.mjs` | Delivery-loop CLI dispatcher; `stateDir` default `.workspace-local/wakeflow-delivery`; owns `stop.json` |
+| `core/scripts/wakeflow-delivery.mjs` | Delivery-loop CLI dispatcher; `stateDir` default `.wakeflow-local/wakeflow-delivery`; owns `stop.json` |
 | `core/scripts/lib/wakeflow-dispatch-commands.mjs` | `prepare-dispatch-from-state` / `build-delivery` / `build-controller-return`; eligibility + cross-host lock + idempotency guards |
 | `core/scripts/lib/wakeflow-result-recording-commands.mjs` | `record-delivery-run` (the only dispatch-time state advance via `markStateRootDeliverySent`) + `record-target-result` (lock release) |
 | `core/scripts/lib/wakeflow-review-commands.mjs` | `computeReviewResults` / `buildReviewPack` / `buildStateRootReviewPack`; the mixed ready+blocked never-`blocked` rule |
 | `core/scripts/lib/wakeflow-delivery-store.mjs` | Single registry for the shared delivery dir map + per-host dirs; cross-host lock helpers; legacy fallback |
-| `core/scripts/lib/wakeflow-config.mjs` | Config resolution (`.workspace-local` override wins) + ledger path derivation |
+| `core/scripts/lib/wakeflow-config.mjs` | Config resolution (`.wakeflow-local` override wins) + ledger path derivation |
 | `core/scripts/wakeflow-setup.mjs` | Init/setup orchestrator: 4-phase dry-run→apply, write guards, scope-card upsert, thread-registry registration, gitignore contract |
 | `core/scripts/wakeflow-verify.mjs` | Verification orchestrator: base 5 checks + conditional active-docs/runtime/script-tests; PASS/FAIL summary |
 | `core/scripts/wakeflow-cli.mjs` | CLI aggregator behind `wakeflow_status` (fan-out) and `wakeflow_verify` |

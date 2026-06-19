@@ -112,8 +112,8 @@ Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环�
   .claude/settings.json          可移植 allow 规则、相对引用        入库
   .claude/settings.local.json    本机 statusline 命令               永不入库
   wakeflow-ledger/               长期设计、记录、归档               入库
-  .workspace-active/             需求 state root(第二层住这里)    本机
-  .workspace-local/wakeflow-delivery/                               本机
+  .wakeflow-active/             需求 state root(第二层住这里)    本机
+  .wakeflow-local/wakeflow-delivery/                               本机
     dispatch-packets/  delivery-envelopes/  delivery-runs/   传输记录
     target-results/                                          证据信封
     locks/                       每窗口一把在途锁,跨宿主共享
@@ -122,7 +122,7 @@ Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环�
 ```
 
 一句话原则:**业务真相宿主中立、双方共享;传输句柄宿主私有、永不离开
-`.workspace-local/`。** 会话 id 不会出现在任何入库文件、prompt 或回填文本里。
+`.wakeflow-local/`。** 会话 id 不会出现在任何入库文件、prompt 或回填文本里。
 
 ### 谁能决定什么(信任模型)
 
@@ -212,7 +212,7 @@ Wakeflow 是一个强大的本地自动化插件。安装前请清楚它在你�
 - **拉起 tmux 会话和交互式 `claude` 窗口**:总控和每个工作窗口都是真实的 `claude` CLI 会话,住在一个 tmux session 里。Wakeflow 通过自带的 host helper 创建、恢复、替换、排版它们。
 - **会跑这些 shell 命令**:`node`、`tmux`、`git`、`brew`——最后这个仅在缺 tmux 时、经你一次显式同意后 `brew install tmux`。
 - **权限模型——默认安全**:工作窗口默认 `acceptEdits`(Claude Code 在风险动作前仍会询问)。完全无人值守的 `bypassPermissions`(无提示)**仅显式开启**:工作区通过 `/wakeflow:unattended on` 主动启用,选择记录在 `workspace.config.json`,只有这条被记录的同意才让 helper 自动确认启动对话框。无人值守模式下的安全边界是仓库 worktree、`CLAUDE.md` 闸门、Wakeflow 状态机。
-- **本地优先、无遥测**:真实 session/thread id 只存在 `.workspace-local/` 下,绝不写入受版本控制的文件、prompt,也不外发。需求、证据、账本都留在你的工作区。
+- **本地优先、无遥测**:真实 session/thread id 只存在 `.wakeflow-local/` 下,绝不写入受版本控制的文件、prompt,也不外发。需求、证据、账本都留在你的工作区。
 - **平台**:macOS 优先(tmux + `brew` + iTerm2)。tmux 核心理论上可在 Linux 运行但尚未验证。
 
 你始终掌控:脚本和 MCP 工具只创建、校验、记录机器数据——不验收、不扩权、不替产品做决定。总控是唯一验收权威,产品决定属于你。
@@ -280,8 +280,8 @@ Wakeflow 作为 Claude Code 插件安装。目标工作区不需要包含 Wakefl
 MyWorkspace/
   CLAUDE.md
   workspace.config.json
-  .workspace-active/          # ignored active controller state
-  .workspace-local/           # ignored thread registry and derived runtime
+  .wakeflow-active/          # ignored active controller state
+  .wakeflow-local/           # ignored thread registry and derived runtime
   wakeflow-ledger/            # durable project coordination records
   ProductRepo/
   CoreRepo/
@@ -346,13 +346,13 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
 | `CLAUDE.md` | 父级总控 gate 和长期边界规则。 |
 | 子窗口 `CLAUDE.md` access cards | 每个窗口的责任和读取路径。 |
 | `workspace.config.json` | 受管窗口、仓库路径、角色、host transport 设置（如 tmux session 名）和默认语言。 |
-| `.workspace-active/` | active state roots、当前索引、progress docs、TODO 投影、intake 和 test cards。 |
-| `.workspace-local/` | thread registry、投递 runtime、本地 overrides 和派生 window config。 |
+| `.wakeflow-active/` | active state roots、当前索引、progress docs、TODO 投影、intake 和 test cards。 |
+| `.wakeflow-local/` | thread registry、投递 runtime、本地 overrides 和派生 window config。 |
 | `wakeflow-ledger/` | 长期项目协作记录和归档。 |
 | `Design/` | 未映射外部 Design 仓库时创建的内部需求设计工作区。 |
 | `Test/` | 未映射外部 Test 仓库时创建的内部测试协作工作区。 |
 
-Wakeflow 也会同步 `.gitignore`，只把 `.workspace-active/` 和 `.workspace-local/`
+Wakeflow 也会同步 `.gitignore`，只把 `.wakeflow-active/` 和 `.wakeflow-local/`
 作为本地运行时目录忽略。它不会把产品仓库、Design/Test、ledger、`.DS_Store`
 或其他本地杂项加入 `.gitignore`。
 
@@ -362,7 +362,7 @@ Wakeflow 自动化是直接 session 投递加显式结果返回。
 
 核心规则：
 
-- 真实 session id 只存在 `.workspace-local/wakeflow-delivery/hosts/claude-code/thread-registry/`。
+- 真实 session id 只存在 `.wakeflow-local/wakeflow-delivery/hosts/claude-code/thread-registry/`。
 - Window config 从 `workspace.config.json` 和 thread-registry presence 派生，不是第二份 session-id 权威。
 - Delivery prompts 保持轻量、可读。
 - 总控把 envelope prompt 写入临时文件，由 host helper
@@ -421,8 +421,8 @@ Wakeflow 把源码、active runtime 和长期记录分开：
 | `skills/` | 随插件安装的可复用操作说明。 |
 | `scripts/` | 插件打包的运行时实现和验证脚本。 |
 | `templates/wakeflow-template-bundle.json` | setup 时展开的 starter state、Design/Test 和 ledger skeletons bundle。 |
-| `.workspace-active/` | 目标工作区中的当前 active work；被 Git 忽略。 |
-| `.workspace-local/` | 机器本地 thread registry、派生 runtime views 和 local state；被 Git 忽略。 |
+| `.wakeflow-active/` | 目标工作区中的当前 active work；被 Git 忽略。 |
+| `.wakeflow-local/` | 机器本地 thread registry、派生 runtime views 和 local state；被 Git 忽略。 |
 | `wakeflow-ledger/` | 项目特定的长期记录，不属于可复用 Wakeflow 源码。 |
 
 Wakeflow 源仓库只跟踪可复用能力。产品代码、项目特定 active state、真实 session id
@@ -431,16 +431,16 @@ Wakeflow 源仓库只跟踪可复用能力。产品代码、项目特定 active 
 ## 双宿主工作区
 
 同一个工作区可以同时运行 Codex 和 Claude Code 两个 Wakeflow 版本。共享业务
-状态保持宿主中立：`.workspace-active/`、`wakeflow-ledger/`，以及
-`.workspace-local/wakeflow-delivery/` 下的投递状态（`dispatch-packets/`、
+状态保持宿主中立：`.wakeflow-active/`、`wakeflow-ledger/`，以及
+`.wakeflow-local/wakeflow-delivery/` 下的投递状态（`dispatch-packets/`、
 `dispatch-groups/`、`delivery-envelopes/`、`delivery-runs/`、
 `target-results/`），加上共享 `locks/` 目录——它跨宿主强制每个窗口同一时间
 只有一个 in-flight 投递。
 
 宿主独立的运行时按宿主分开：
 
-- `.workspace-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`
-- `.workspace-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`
+- `.wakeflow-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`
+- `.wakeflow-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`
 
 `AGENTS.md`（Codex）与 `CLAUDE.md`（Claude Code）在工作区根目录和子目录根
 共存，每个 demand 跨宿主只有一个总控。Demand 创建是宿主中立的

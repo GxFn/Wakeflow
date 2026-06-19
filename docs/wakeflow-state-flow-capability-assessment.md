@@ -36,7 +36,7 @@ A **TODO/Backlog is NOT a real data store** — it is a Markdown board parsed by
 scripts; confidence high:
 
 - The board paths are markdown files: `globalTodoPath =
-  .workspace-active/workspace/current/global-todo-board.md`
+  .wakeflow-active/current/global-todo-board.md`
   (`core/scripts/lib/wakeflow-config.mjs:25`) and `designHandoffBoard =
   design-handoff-board.md` (`:35`).
 - Reading is regex table parsing: `parseTodoCandidates`
@@ -64,7 +64,7 @@ high.
 
 - `wakeflow_next_work` is **advisory only**. `wakeflow-next-work.mjs` computes
   `autoClaimable` (`:389`) but the `--write` path (`:415-419`) only dumps a candidate JSON to
-  `.workspace-local/wakeflow-intake/wakeflow-next-work.json`. Grep confirms it contains **no**
+  `.wakeflow-local/wakeflow-intake/wakeflow-next-work.json`. Grep confirms it contains **no**
   state-init or add-task call. Its own `agentNext` (`:408-409`) states: "Total control may
   claim the single eligible candidate by creating or updating a current plan; scripts still
   must not accept evidence or dispatch without the plan gate."
@@ -312,7 +312,7 @@ reinvent:
 **Claim / scheduling (Q1, Q2):**
 - `wakeflow-next-work.mjs` candidate scanner — ranks Design + TODO boards, emits
   `recommended`/`autoClaimable`/per-candidate blockers, and writes a stable candidate JSON to
-  `.workspace-local/wakeflow-intake/wakeflow-next-work.json`.
+  `.wakeflow-local/wakeflow-intake/wakeflow-next-work.json`.
 - `wakeflow-demand-sequence.mjs claim-next --write` — the auto-init+add primitive (chains
   `wakeflow-state init` + `add-task-package` + render-progress for at-most-one demand from a
   manifest); the `ControllerDemandSequenceManifest` contract (`:116-222`) is already a

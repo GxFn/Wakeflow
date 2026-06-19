@@ -11,18 +11,18 @@ export const defaultWorkspaceConfig = {
   baseWindow: "",
   workspaceRoot: "..",
   wakeflowRepoDir: "Wakeflow",
-  activeLedgerRoot: ".workspace-active",
+  activeLedgerRoot: ".wakeflow-active",
   projectLedgerRoot: "../wakeflow-ledger",
   windowLedgerRoot: "../wakeflow-ledger",
   windowLedgerDirs: {},
-  workspaceDocsDir: ".workspace-active/workspace",
-  workspaceCurrentDir: ".workspace-active/workspace/current",
+  workspaceDocsDir: ".wakeflow-active",
+  workspaceCurrentDir: ".wakeflow-active/current",
   workspaceArchiveDir: "../wakeflow-ledger/workspace/archive",
-  workspaceIndexPath: ".workspace-active/workspace/index.md",
-  workspaceCurrentIndexPath: ".workspace-active/workspace/current/index.md",
-  workspaceCurrentStatusPath: ".workspace-active/workspace/current/workspace-current-status.md",
+  workspaceIndexPath: ".wakeflow-active/index.md",
+  workspaceCurrentIndexPath: ".wakeflow-active/current/index.md",
+  workspaceCurrentStatusPath: ".wakeflow-active/current/workspace-current-status.md",
   workspaceRecordMapPath: "../wakeflow-ledger/workspace/workspace-record-map.md",
-  globalTodoPath: ".workspace-active/workspace/current/global-todo-board.md",
+  globalTodoPath: ".wakeflow-active/current/global-todo-board.md",
   requirementDesignsDir: "../wakeflow-ledger/requirement-designs",
   goalStageConfirmationDir: "../wakeflow-ledger/goal-stage-confirmation",
   internalDesignPath: "../Design",
@@ -31,9 +31,9 @@ export const defaultWorkspaceConfig = {
   dispatchWindows: [],
   requiredDispatchWindows: ["Design", "Test"],
   repoNames: [],
-  testExchangePath: ".workspace-active/workspace/current/test-exchange.md",
-  designHandoffBoard: ".workspace-active/workspace/current/design-handoff-board.md",
-  designHandoffInbox: ".workspace-active/workspace/current/design-handoff-inbox.md",
+  testExchangePath: ".wakeflow-active/current/test-exchange.md",
+  designHandoffBoard: ".wakeflow-active/current/design-handoff-board.md",
+  designHandoffInbox: ".wakeflow-active/current/design-handoff-inbox.md",
   runtimeProcessMatchers: [],
   runtimeProcessLabel: "configured",
   repositoryRoles: {
@@ -69,7 +69,7 @@ export function workspaceConfigPath({ workspaceRoot = process.cwd(), args = proc
     return path.isAbsolute(configArg) ? configArg : path.join(workspaceRoot, configArg);
   }
 
-  const localConfig = path.join(workspaceRoot, ".workspace-local/workspace.config.json");
+  const localConfig = path.join(workspaceRoot, ".wakeflow-local/workspace.config.json");
   if (existsSync(localConfig)) {
     return localConfig;
   }
@@ -180,8 +180,8 @@ export function windowLedgerDirsFor({ workspaceRoot = process.cwd(), args = proc
 
 export function workspaceLedgerPaths({ workspaceRoot = process.cwd(), args = process.argv.slice(2), config = null } = {}) {
   const loaded = config ?? loadWorkspaceConfig({ workspaceRoot, args });
-  const activeLedgerRoot = loaded.activeLedgerRoot ?? ".workspace-active";
-  const workspaceDocsDir = loaded.workspaceDocsDir ?? path.join(activeLedgerRoot, "workspace");
+  const activeLedgerRoot = loaded.activeLedgerRoot ?? ".wakeflow-active";
+  const workspaceDocsDir = loaded.workspaceDocsDir ?? activeLedgerRoot;
   const workspaceCurrentDir = loaded.workspaceCurrentDir ?? path.join(workspaceDocsDir, "current");
   const workspaceArchiveDir = loaded.workspaceArchiveDir ?? "../wakeflow-ledger/workspace/archive";
   const workspaceIndexPath = loaded.workspaceIndexPath ?? path.join(workspaceDocsDir, "index.md");

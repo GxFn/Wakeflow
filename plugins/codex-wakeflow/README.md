@@ -62,10 +62,10 @@ capability for keeping multi-window agent work legible, bounded, and resumable.
 flowchart TD
   User["User goal"] --> Controller["Controller Codex window"]
   Controller --> Gates["AGENTS.md gates<br/>goal, boundary, evidence, stop rules"]
-  Controller <--> StateRoot["State root<br/>.workspace-active/..."]
+  Controller <--> StateRoot["State root<br/>.wakeflow-active/..."]
   StateRoot --> Tasks["Task packages"]
   Tasks --> Delivery["Delivery envelopes"]
-  LocalRuntime[".workspace-local<br/>thread registry + derived window config"] -. "lookup" .-> Delivery
+  LocalRuntime[".wakeflow-local<br/>thread registry + derived window config"] -. "lookup" .-> Delivery
   Delivery --> Host["Codex host thread tools"]
   Host --> Targets["Repository / Design / Test windows"]
   Targets --> Repos["Responsibility roots"]
@@ -153,8 +153,8 @@ contain Wakeflow source code. The expected target shape is:
 MyWorkspace/
   AGENTS.md
   workspace.config.json
-  .workspace-active/          # ignored active controller state
-  .workspace-local/           # ignored thread registry and derived runtime
+  .wakeflow-active/          # ignored active controller state
+  .wakeflow-local/           # ignored thread registry and derived runtime
   wakeflow-ledger/            # durable project coordination records
   ProductRepo/
   CoreRepo/
@@ -227,14 +227,14 @@ boundary:
 | `AGENTS.md` | Parent controller gates and durable boundaries. |
 | Child `AGENTS.md` access cards | Per-window responsibility and read paths. |
 | `workspace.config.json` | Managed windows, repository paths, roles, and default language. |
-| `.workspace-active/` | Active state roots, current indexes, progress docs, TODO projections, intake, and test cards. |
-| `.workspace-local/` | Thread registry, direct-thread runtime, local overrides, and derived window config. |
+| `.wakeflow-active/` | Active state roots, current indexes, progress docs, TODO projections, intake, and test cards. |
+| `.wakeflow-local/` | Thread registry, direct-thread runtime, local overrides, and derived window config. |
 | `wakeflow-ledger/` | Long-term project coordination records and archives. |
 | `Design/` | Internal requirement-design workspace when no external Design repository is mapped. |
 | `Test/` | Internal test coordination workspace when no external Test repository is mapped. |
 
-Wakeflow also synchronizes `.gitignore` so only `.workspace-active/` and
-`.workspace-local/` remain local runtime directories. It does not add product
+Wakeflow also synchronizes `.gitignore` so only `.wakeflow-active/` and
+`.wakeflow-local/` remain local runtime directories. It does not add product
 repositories, Design/Test folders, ledgers, `.DS_Store`, or other user
 workspace noise to `.gitignore`.
 
@@ -270,7 +270,7 @@ Wakeflow automation is direct-thread delivery plus explicit result return.
 Core rules:
 
 - Real thread ids live only in
-  `.workspace-local/wakeflow-delivery/hosts/codex/thread-registry/`.
+  `.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/`.
 - Window config is derived from `workspace.config.json` plus thread-registry
   presence; it is not a second thread-id or window-semantics authority.
 - Delivery prompts remain compact and human-readable.
@@ -351,8 +351,8 @@ Wakeflow keeps source, active runtime, and durable records separate:
 | `skills/` | Reusable operating instructions installed with the plugin. |
 | `scripts/` | Runtime implementation and validation scripts packaged by the plugin. |
 | `templates/wakeflow-template-bundle.json` | Bundled starter state, Design/Test, and ledger skeletons expanded during setup. |
-| `.workspace-active/` | Current active work in a target workspace; ignored by Git. |
-| `.workspace-local/` | Machine-local thread registry, derived runtime views, and local state; ignored by Git. |
+| `.wakeflow-active/` | Current active work in a target workspace; ignored by Git. |
+| `.wakeflow-local/` | Machine-local thread registry, derived runtime views, and local state; ignored by Git. |
 | `wakeflow-ledger/` | Project-specific durable records outside reusable Wakeflow source. |
 
 The source repository tracks reusable Wakeflow capability. Product code,
@@ -362,17 +362,17 @@ artifacts do not belong in Wakeflow source.
 ## Dual-Host Workspaces
 
 A workspace may run the Codex and Claude Code Wakeflow editions side by side.
-Shared business state (`.workspace-active/`, `wakeflow-ledger/`, and the
+Shared business state (`.wakeflow-active/`, `wakeflow-ledger/`, and the
 dispatch packets, dispatch groups, delivery envelopes, delivery runs, target
-results, and shared `locks/` under `.workspace-local/wakeflow-delivery/`)
+results, and shared `locks/` under `.wakeflow-local/wakeflow-delivery/`)
 stays host-neutral. Shared locks enforce one in-flight delivery per window
 across hosts.
 
 Codex runtime remains host-scoped under
-`.workspace-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`.
+`.wakeflow-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`.
 Claude Code stores its own runtime under
-`.workspace-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`.
-Records in the legacy `.workspace-local/wakeflow-delivery/thread-registry/`
+`.wakeflow-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`.
+Records in the legacy `.wakeflow-local/wakeflow-delivery/thread-registry/`
 location are still read as a fallback; new registrations write the host-scoped
 path and `wakeflow_verify` reports the migration state.
 

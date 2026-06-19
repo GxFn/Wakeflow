@@ -35,7 +35,7 @@ tool first:
   pass `resetInitialization: true`, explicit `repositories`, and the selected
   Design/Test mode, and do not pass `useDiscovered`.
 - During apply, Wakeflow synchronizes the workspace `.gitignore` so
-  only `.workspace-active/` and `.workspace-local/` are ignored runtime
+  only `.wakeflow-active/` and `.wakeflow-local/` are ignored runtime
   directories. Do not add product repositories, Design/Test, ledgers,
   `.DS_Store`, or other user workspace noise as Wakeflow-generated gitignore
   entries.
@@ -59,10 +59,10 @@ tool first:
   --prompt-file <file>`). The helper creates the tmux window running
   `claude --session-id <generated uuid>`, pastes the entry-sync prompt, stores
   the window-host binding at
-  `.workspace-local/wakeflow-delivery/hosts/claude-code/window-host/<window>.json`,
+  `.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/<window>.json`,
   and returns the session id. Register each returned session id once with the
   local registration command (`--thread <Window>=<sessionId> --write`); it
-  lands in `.workspace-local/wakeflow-delivery/hosts/claude-code/thread-registry/`.
+  lands in `.wakeflow-local/wakeflow-delivery/hosts/claude-code/thread-registry/`.
   The thread registry is the only thread-id authority; derived `window-config`
   is refreshed by Wakeflow from the current workspace config and registry
   presence.
@@ -101,8 +101,8 @@ tool first:
 Use this skill after reading:
 
 1. `CLAUDE.md`
-2. `.workspace-active/workspace/index.md`
-3. `.workspace-active/workspace/current/workspace-current-status.md`
+2. `.wakeflow-active/index.md`
+3. `.wakeflow-active/current/workspace-current-status.md`
 4. the current controller state root and its developer progress document when
    the active demand has an execution surface
 

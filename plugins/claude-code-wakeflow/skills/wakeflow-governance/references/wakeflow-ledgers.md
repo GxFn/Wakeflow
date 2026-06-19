@@ -5,9 +5,9 @@
 Wakeflow repository tracks reusable capability assets only. Installed project
 state belongs elsewhere:
 
-- `.workspace-active/`: ignored active state roots, current indexes, TODO
+- `.wakeflow-active/`: ignored active state roots, current indexes, TODO
   projections, intake, test cards, and progress docs.
-- `.workspace-local/`: ignored local config, real thread ids (Claude Code
+- `.wakeflow-local/`: ignored local config, real thread ids (Claude Code
   session ids), delivery loop runtime, and keep-live state.
 - `../Design/` and `../Test/`: sibling Design/Test working surfaces when the
   user has not configured external Design/Test repositories.

@@ -9,16 +9,16 @@ local runtime state, not tracked project documentation.
 ## Storage
 
 Store real thread ids only in the host-scoped local thread registry under
-`.workspace-local/wakeflow-delivery/hosts/claude-code/thread-registry/` (the
+`.wakeflow-local/wakeflow-delivery/hosts/claude-code/thread-registry/` (the
 Codex plugin keeps its twin under
-`.workspace-local/wakeflow-delivery/hosts/codex/thread-registry/`). Wakeflow
+`.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/`). Wakeflow
 setup or host-controlled tooling should pass each real thread id to one local
 registration command; agents must not hand-write multiple runtime files. A
 thread id is the window's Claude Code session id, generated at launch and
 stable across resumes; it is registered once.
 
 The host helper `launch-window` also stores a window-host binding at
-`.workspace-local/wakeflow-delivery/hosts/claude-code/window-host/<window>.json`
+`.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/<window>.json`
 (the tmux window mapping for that Wakeflow window). The binding is host
 transport runtime only; it is not a thread-id authority and not a second
 window-semantics store.
@@ -70,7 +70,7 @@ write the prompt to a temp file, then run
 `node <plugin>/scripts/lib/wakeflow-claude-host.mjs send --root <workspace>
 --window <target> --prompt-file <file> [--delivery-id <id>]`. The helper
 enforces the shared per-window delivery lock
-(`.workspace-local/wakeflow-delivery/locks/<window>.json`, one in-flight
+(`.wakeflow-local/wakeflow-delivery/locks/<window>.json`, one in-flight
 delivery per window across both hosts), pastes the prompt into the target's
 tmux pane via a tmux buffer (multiline-safe), and returns pane readback
 evidence (`readback.paneTail`). Wakeflow then records the send/readback result

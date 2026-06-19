@@ -3,7 +3,7 @@
 Wakeflow is a reusable controller capability for multi-window agent work. It is
 not the parent workspace, not a product source repository, and not a sandbox for
 managed projects. Product scope and window roles come from `workspace.config.json`
-and local runtime config. `.workspace-local/workspace.config.json` may override
+and local runtime config. `.wakeflow-local/workspace.config.json` may override
 local installation details and must not be committed.
 
 ## Gate Flow
@@ -30,8 +30,8 @@ plan are clear.
    valid work, reviews evidence, or records an already-made decision.
 
 When entering a managed workspace, read `AGENTS.md`,
-`.workspace-active/workspace/index.md`, and
-`.workspace-active/workspace/current/workspace-current-status.md`, then
+`.wakeflow-active/index.md`, and
+`.wakeflow-active/current/workspace-current-status.md`, then
 continue from the current controller document. Reading status is orientation
 only; it is not permission to edit documents or create work.
 
@@ -340,7 +340,7 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
 - Test delivery is controller-started by default. Non-Test windows must not
   create, process, or verify Test delivery unless both the current plan and the
   envelope explicitly authorize the exception.
-- Real thread ids live only in `.workspace-local/`. Never write them to
+- Real thread ids live only in `.wakeflow-local/`. Never write them to
   tracked docs, GitHub, prompts, or backfill text. Do not register placeholders.
 - Old claim/finish/chain-next/start-plan/resume-plan routes are retired. Use
   dispatch packets, delivery envelopes, target result envelopes, and controller
@@ -352,7 +352,7 @@ Operational details live in `skills/wakeflow-governance/`,
 ## Workspace Governance And Ledgers
 
 - Project-specific active plans, TODOs, test exchanges, archive history, and
-  target backfills belong in ignored `.workspace-active/` surfaces or the
+  target backfills belong in ignored `.wakeflow-active/` surfaces or the
   configured `../wakeflow-ledger/`.
 - Repository scope and managed `AGENTS.md` blocks come from tracked or local
   workspace config. First installation should run discovery, present the
@@ -361,7 +361,7 @@ Operational details live in `skills/wakeflow-governance/`,
   surfaces. Ask before choosing.
 - Source, tests, and docs for product repositories are committed in their own
   repositories.
-- `.workspace-active/workspace/index.md` is the single active controller entry
+- `.wakeflow-active/index.md` is the single active controller entry
   for an installed workspace. It is local runtime and usually not committed.
 - Larger requirement designs and long-term records belong in
   `../wakeflow-ledger/`.
@@ -415,8 +415,8 @@ prompt. The prompt navigates; the state root, task package, target repository
 ```text
 Continue the current controller task: <plan or wave>.
 
-First read: AGENTS.md, .workspace-active/workspace/index.md,
-.workspace-active/workspace/current/<current-controller-document>.md, and this
+First read: AGENTS.md, .wakeflow-active/index.md,
+.wakeflow-active/current/<current-controller-document>.md, and this
 window/repository AGENTS.md.
 
 Identity: state the current window and repository responsibility.

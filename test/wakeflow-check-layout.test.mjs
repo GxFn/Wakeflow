@@ -19,7 +19,7 @@ function writeFile(file, content) {
 
 function makeStarterFixture() {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-layout-"));
-  writeBundledTemplates("templates/starter-workspace/workspace/", path.join(root, ".workspace-active/workspace"));
+  writeBundledTemplates("templates/starter-workspace/workspace/", path.join(root, ".wakeflow-active"));
   writeFile(path.join(root, "AGENTS.md"), "# Fixture Workspace\n");
   writeFile(
     path.join(root, "workspace.config.json"),
@@ -29,19 +29,19 @@ function makeStarterFixture() {
         workspaceName: "FixtureWorkspace",
         controllerWindow: "Wakeflow",
         workspaceRoot: ".",
-        activeLedgerRoot: ".workspace-active",
+        activeLedgerRoot: ".wakeflow-active",
         projectLedgerRoot: "wakeflow-ledger",
         windowLedgerRoot: "wakeflow-ledger",
-        workspaceDocsDir: ".workspace-active/workspace",
-        workspaceCurrentDir: ".workspace-active/workspace/current",
+        workspaceDocsDir: ".wakeflow-active",
+        workspaceCurrentDir: ".wakeflow-active/current",
         workspaceArchiveDir: "wakeflow-ledger/workspace/archive",
-        workspaceIndexPath: ".workspace-active/workspace/index.md",
-        workspaceCurrentIndexPath: ".workspace-active/workspace/current/index.md",
-        workspaceCurrentStatusPath: ".workspace-active/workspace/current/workspace-current-status.md",
-        globalTodoPath: ".workspace-active/workspace/current/global-todo-board.md",
-        designHandoffBoard: ".workspace-active/workspace/current/design-handoff-board.md",
-        designHandoffInbox: ".workspace-active/workspace/current/design-handoff-inbox.md",
-        testExchangePath: ".workspace-active/workspace/current/test-exchange.md",
+        workspaceIndexPath: ".wakeflow-active/index.md",
+        workspaceCurrentIndexPath: ".wakeflow-active/current/index.md",
+        workspaceCurrentStatusPath: ".wakeflow-active/current/workspace-current-status.md",
+        globalTodoPath: ".wakeflow-active/current/global-todo-board.md",
+        designHandoffBoard: ".wakeflow-active/current/design-handoff-board.md",
+        designHandoffInbox: ".wakeflow-active/current/design-handoff-inbox.md",
+        testExchangePath: ".wakeflow-active/current/test-exchange.md",
       },
       null,
       2,
@@ -82,7 +82,7 @@ test("starter workspace current docs satisfy layout and next-work reader contrac
 
 test("layout check catches a TODO board that is visible but missing the script-readable section", () => {
   const root = makeStarterFixture();
-  const todoPath = path.join(root, ".workspace-active/workspace/current/global-todo-board.md");
+  const todoPath = path.join(root, ".wakeflow-active/current/global-todo-board.md");
   writeFile(todoPath, readFileSync(todoPath, "utf8").replace(/\n## Global TODO\n/u, "\n"));
 
   const result = run(checkScript, root);
@@ -93,7 +93,7 @@ test("layout check catches a TODO board that is visible but missing the script-r
 
 test("layout check catches starter TODO columns that next-work depends on", () => {
   const root = makeStarterFixture();
-  const todoPath = path.join(root, ".workspace-active/workspace/current/global-todo-board.md");
+  const todoPath = path.join(root, ".wakeflow-active/current/global-todo-board.md");
   writeFile(todoPath, readFileSync(todoPath, "utf8").replace("Item / Goal", "Goal"));
 
   const result = run(checkScript, root);
@@ -105,7 +105,7 @@ test("layout check catches starter TODO columns that next-work depends on", () =
 
 test("layout check catches a Design board that next-work cannot scan", () => {
   const root = makeStarterFixture();
-  const boardPath = path.join(root, ".workspace-active/workspace/current/design-handoff-board.md");
+  const boardPath = path.join(root, ".wakeflow-active/current/design-handoff-board.md");
   writeFile(boardPath, readFileSync(boardPath, "utf8").replace(/\n## Handoff Board\n/u, "\n"));
 
   const result = run(checkScript, root);

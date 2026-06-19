@@ -71,7 +71,7 @@ test("init dry-run reports generated files without writing active state", () => 
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true);
   assert.equal(payload.wrote, false);
-  assert.equal(payload.stateRoot, ".workspace-active/workspace/current/CSMR-FIXTURE-2026-06-05");
+  assert.equal(payload.stateRoot, ".wakeflow-active/current/CSMR-FIXTURE-2026-06-05");
   assert.equal(existsSync(path.join(root, payload.stateRoot)), false);
 });
 
@@ -116,11 +116,11 @@ test("init --write creates ignored state root from tracked templates", () => {
   assert.match(progress, /Main state: intake/);
   assert.match(progress, /Prove init can create a state root\./);
   assert.deepEqual(payload.outputs.sort(), [
-    ".workspace-active/workspace/current/CSMR-FIXTURE-2026-06-05/controller-events.jsonl",
-    ".workspace-active/workspace/current/CSMR-FIXTURE-2026-06-05/demand.json",
-    ".workspace-active/workspace/current/CSMR-FIXTURE-2026-06-05/developer-progress.md",
-    ".workspace-active/workspace/current/CSMR-FIXTURE-2026-06-05/projection.json",
-    ".workspace-active/workspace/current/CSMR-FIXTURE-2026-06-05/wakeflow-state.json",
+    ".wakeflow-active/current/CSMR-FIXTURE-2026-06-05/controller-events.jsonl",
+    ".wakeflow-active/current/CSMR-FIXTURE-2026-06-05/demand.json",
+    ".wakeflow-active/current/CSMR-FIXTURE-2026-06-05/developer-progress.md",
+    ".wakeflow-active/current/CSMR-FIXTURE-2026-06-05/projection.json",
+    ".wakeflow-active/current/CSMR-FIXTURE-2026-06-05/wakeflow-state.json",
   ].sort());
   assert.equal(existsSync(path.join(stateRoot, "intake")), false);
   assert.equal(existsSync(path.join(stateRoot, "test-cards")), false);

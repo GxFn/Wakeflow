@@ -113,7 +113,7 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
   assert.equal(sameHostLock.deliveryId, "dlv-test-1", "same-host resend must not erase the lock delivery id");
 
   // Simulate a fresh lock from the OTHER host -> hard block.
-  const lockFile = path.join(root, ".workspace-local/wakeflow-delivery/locks/RepoA.json");
+  const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/RepoA.json");
   writeFileSync(lockFile, JSON.stringify({
     kind: "WakeflowWindowDeliveryLock", windowName: "RepoA", host: "codex",
     deliveryId: "dlv-codex", createdAt: new Date().toISOString(),
@@ -134,7 +134,7 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
   assert.notEqual(stalled.status, 0);
   assert.equal(JSON.parse(stalled.stdout).status, "timeout");
 
-  const resultsDir = path.join(root, ".workspace-local/wakeflow-delivery/target-results");
+  const resultsDir = path.join(root, ".wakeflow-local/wakeflow-delivery/target-results");
   mkdirSync(resultsDir, { recursive: true });
   writeFileSync(path.join(resultsDir, "grp-1__RepoA__task-1.json"), JSON.stringify({
     kind: "TargetResultEnvelope",
@@ -227,13 +227,13 @@ test("wait-results never touches locks or glyphs (pure observation)", { skip: !t
   }));
   t.after(() => killServer(serverSession));
 
-  const resultsDir = path.join(root, ".workspace-local/wakeflow-delivery/target-results");
+  const resultsDir = path.join(root, ".wakeflow-local/wakeflow-delivery/target-results");
   mkdirSync(resultsDir, { recursive: true });
   writeFileSync(path.join(resultsDir, "grp__RepoA__t1.json"), JSON.stringify({
     kind: "TargetResultEnvelope", dispatchGroup: "grp", targetWindow: "RepoA", taskId: "t1",
     status: "completed", reportedAt: new Date().toISOString(),
   }));
-  const locksDir = path.join(root, ".workspace-local/wakeflow-delivery/locks");
+  const locksDir = path.join(root, ".wakeflow-local/wakeflow-delivery/locks");
   mkdirSync(locksDir, { recursive: true });
   const lockFile = path.join(locksDir, "RepoA.json");
   writeFileSync(lockFile, JSON.stringify({
@@ -261,7 +261,7 @@ test("activity-monitor --once marks live-executing windows running and clears id
   const busyWindow = spawnSync("tmux", ["new-window", "-t", serverSession, "-n", "Busy", "-P", "-F", "#{window_id}", "sh -c 'printf \"esc to interrupt\"; sleep 60'"], { encoding: "utf8" }).stdout.trim();
   // window 2: an idle shell
   const idleWindow = spawnSync("tmux", ["new-window", "-t", serverSession, "-n", "Idle", "-P", "-F", "#{window_id}", "sh -c 'sleep 60'"], { encoding: "utf8" }).stdout.trim();
-  const bindingDir = path.join(root, ".workspace-local/wakeflow-delivery/hosts/claude-code/window-host");
+  const bindingDir = path.join(root, ".wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host");
   mkdirSync(bindingDir, { recursive: true });
   writeFileSync(path.join(bindingDir, "Busy.json"), JSON.stringify({
     kind: "ClaudeWindowHostBinding",
@@ -350,7 +350,7 @@ test("sentinel: --once flips a delivered window to done when its lock is release
 
   // delivered window: busy + lock -> stays busy (the monitor never judges silence)
   spawnSync("tmux", ["set-option", "-w", "-t", repo.windowId, "@wakeflow_state", "busy"], { encoding: "utf8" });
-  const locksDir = path.join(root, ".workspace-local/wakeflow-delivery/locks");
+  const locksDir = path.join(root, ".wakeflow-local/wakeflow-delivery/locks");
   mkdirSync(locksDir, { recursive: true });
   const lockFile = path.join(locksDir, "RepoA.json");
   writeFileSync(lockFile, JSON.stringify({
@@ -397,7 +397,7 @@ test("sentinel: changing pane content counts as activity (long tool calls never 
   const launched = parseOk(runHelper(root, ["launch-window", "--server", activeSession, "--window", "RepoA", "--cwd", "RepoA", "--boot-wait-ms", "400"], noAuto));
   // simulate a delivered window: busy + lock
   spawnSync("tmux", ["set-option", "-w", "-t", launched.windowId, "@wakeflow_state", "busy"], { encoding: "utf8" });
-  const locksDir = path.join(root, ".workspace-local/wakeflow-delivery/locks");
+  const locksDir = path.join(root, ".wakeflow-local/wakeflow-delivery/locks");
   mkdirSync(locksDir, { recursive: true });
   writeFileSync(path.join(locksDir, "RepoA.json"), JSON.stringify({
     kind: "WakeflowWindowDeliveryLock", windowName: "RepoA", host: "claude-code",
@@ -435,7 +435,7 @@ test("send to the controller window is a lock-free notification (no busy residue
   const sent = parseOk(runHelper(root, ["send", "--window", "CtrlFlow", "--prompt-file", prompt, "--readback-wait-ms", "200"], noAuto));
   assert.equal(sent.controllerNotification, true);
   assert.equal(sent.lockFile, undefined, "no lock file reported");
-  assert.equal(existsSync(path.join(root, ".workspace-local/wakeflow-delivery/locks/CtrlFlow.json")), false, "no controller lock written");
+  assert.equal(existsSync(path.join(root, ".wakeflow-local/wakeflow-delivery/locks/CtrlFlow.json")), false, "no controller lock written");
   const state = spawnSync("tmux", ["show-options", "-w", "-q", "-v", "-t", ctrl.windowId, "@wakeflow_state"], { encoding: "utf8" }).stdout.trim();
   assert.equal(state, "", "no busy residue on the controller");
 });
@@ -450,7 +450,7 @@ test("seed-permissions keeps committed settings portable and migrates old residu
   const repoSettingsDir = path.join(root, "RepoA", ".claude");
   mkdirSync(repoSettingsDir, { recursive: true });
   writeFileSync(path.join(repoSettingsDir, "settings.json"), JSON.stringify({
-    statusLine: { type: "command", command: `node ${root}/.workspace-local/wakeflow-statusline.mjs` },
+    statusLine: { type: "command", command: `node ${root}/.wakeflow-local/wakeflow-statusline.mjs` },
     permissions: { allow: [], additionalDirectories: [root] },
   }));
 
@@ -498,7 +498,7 @@ test("deliver sends straight from a delivery envelope file (one-step transport)"
   assert.equal(sent.command, "deliver");
   assert.equal(sent.deliveryId, "dlv-deliver-1");
   assert.match(sent.readback.paneTail, /RepoA \/ T1/, "prompt landed in the pane");
-  const lock = JSON.parse(readFileSync(path.join(root, ".workspace-local/wakeflow-delivery/locks/RepoA.json"), "utf8"));
+  const lock = JSON.parse(readFileSync(path.join(root, ".wakeflow-local/wakeflow-delivery/locks/RepoA.json"), "utf8"));
   assert.equal(lock.deliveryId, "dlv-deliver-1", "lock carries the envelope delivery id");
 });
 
@@ -522,7 +522,7 @@ test("replace-all tears down and rebuilds the whole fleet with fresh registered 
     assert.equal(r.sessionIdRegistered, true, `${r.window} new session id registered`);
   }
   // the controller's registry now holds a freshly written session id
-  const registryFile = path.join(root, ".workspace-local/wakeflow-delivery/hosts/claude-code/thread-registry", `${controllerWindow.replace(/[^A-Za-z0-9._-]+/g, "-")}.json`);
+  const registryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/hosts/claude-code/thread-registry", `${controllerWindow.replace(/[^A-Za-z0-9._-]+/g, "-")}.json`);
   assert.equal(existsSync(registryFile), true);
   const reg = JSON.parse(readFileSync(registryFile, "utf8"));
   assert.ok(reg.threadId && reg.threadId.length > 8, "registry carries a real session id");

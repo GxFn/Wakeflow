@@ -13,7 +13,7 @@ import {
 function scanDemandHostOwnership(workspaceRoot) {
   // Active demand state roots live under the conventional current-plan dir.
   // Read-only visibility: which host's controller owns each active demand.
-  const currentDir = path.join(workspaceRoot, ".workspace-active/workspace/current");
+  const currentDir = path.join(workspaceRoot, ".wakeflow-active/current");
   if (!existsSync(currentDir)) return [];
   const active = [];
   const byHost = {};
@@ -33,7 +33,7 @@ function scanDemandHostOwnership(workspaceRoot) {
       if (["completed", "archived"].includes(state.state)) continue;
       active.push({
         demandKey: state.demandKey,
-        stateRoot: `.workspace-active/workspace/current/${entry.name}`,
+        stateRoot: `.wakeflow-active/current/${entry.name}`,
         controllerHost: state.controllerHost ?? null,
         state: state.state,
       });

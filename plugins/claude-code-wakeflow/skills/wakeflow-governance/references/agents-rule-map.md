@@ -71,3 +71,30 @@ governance reference, not an additional authority layer. If this file and
 - A narrow rule should become generic when the same failure can happen in many
   workflows; it should move to a skill/reference when it only describes command
   order or troubleshooting.
+
+## Lightening pass (2026-06-19)
+
+Six operational sections in `CLAUDE.md` were condensed to pointers, with their
+hard rules kept inline and the operational detail left to the owning references:
+
+- Task Partitions -> `skills/wakeflow-governance/SKILL.md` (flow catalog).
+- Standard Dispatch Prompt -> `references/window-dispatch.md` (copyable template).
+- Requirement-To-Wave Flow -> `references/window-dispatch.md` (wave/package detail).
+- Workspace Governance And Ledgers -> `references/wakeflow-ledgers.md`.
+- Scripts And Verification -> `references/script-pipeline.md`.
+- Dispatch, TODO, And Automation -> `references/wakeflow-delivery.md` +
+  `skills/wakeflow-controller/` + `skills/wakeflow-target/` (envelope fields,
+  the `wakeflow-claude-host.mjs` send/launch/recovery mechanics, keep-live,
+  review flow).
+
+Kept verbatim: Highest Stop Card, Confirmation Gates, Gate Flow, Role Map, the
+acceptance floor, the cross-repo deletion rules, and the Technical-Stack verify
+lines (the last are setup-render transform targets — do not remove them).
+
+Already enforced by code/tooling (prose kept as a one-line gate, not re-described):
+- "real thread ids only in `.wakeflow-local/`" — register-thread + the P1-0
+  redaction guard enforce it.
+- "use the MCP surface, do not call scripts directly" — the installed-workspace
+  setup transform rewrites script paths into the MCP wording.
+- "run verification after a wave" — `wakeflow_verify` is an MCP tool; setup
+  rewrites the prose into the installed-workspace MCP wording.

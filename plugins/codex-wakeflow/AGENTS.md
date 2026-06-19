@@ -191,36 +191,14 @@ omitted the blocker.
 
 ## Task Partitions
 
-Choose the smallest matching flow:
-
-- **Entry sync**: read `AGENTS.md`, active workspace index, current status, and
-  current controller document; report state, blocker, pending acceptance, and
-  next step. Do not edit automatically.
-- **Code fact analysis**: read target repository rules, entrypoints, call
-  chains, config, and tests; report facts, boundaries, risks, and TODO handling.
-  Do not create a wave or dispatch prompt unless asked.
-- **Design handoff intake**: receive Design signals or handoffs, review their
-  effect on current work, and attach them to the correct ledger or state root.
-  Signals and handoffs are not execution plans.
-- **Design redesign request**: when reviewed evidence shows the result is not a
-  code defect but the product effect, interaction, architecture, or capability
-  still misses the user goal, pause implementation churn and ask Design for a
-  complete adjustment plan before redispatching product work.
-- **TODO maintenance**: update the correct TODO/Backlog record and affected
-  scheduling state only.
-- **Dispatch planning**: return to the current goal and completion definition,
-  identify the remaining gap, roll TODO/Backlog, and reason about phase order,
-  task packages, window coverage, and producer/consumer dependencies.
-- **Rule/skill governance**: edit Wakeflow docs, scripts, templates, or skills
-  only after naming the workflow gap being fixed.
-- **Acceptance/archive**: read target evidence, review raw artifacts, check
-  feature completeness, roll TODOs, and archive only when justified.
-- **Test handoff**: create Test boundaries only for real-scenario verification
-  that needs Test. State-root test cards are the machine source; human exchange
-  files are projections.
-
-If multiple partitions match, first execute the smallest one that removes the
-current blocker. Record the rest as TODO or next step.
+Choose the smallest matching flow; if several match, run the smallest that
+removes the current blocker and record the rest as TODO or next step. The flow
+catalog — entry sync, code-fact analysis, Design handoff intake, Design redesign
+request, TODO maintenance, dispatch planning, rule/skill governance,
+acceptance/archive, and Test handoff — and each flow's boundaries live in
+`skills/wakeflow-governance/SKILL.md`. Two rules survive here: Design signals and
+handoffs are not execution plans, and a Design redesign request pauses
+implementation churn until Design returns a complete adjustment plan.
 
 ## Confirmation Gates
 
@@ -288,147 +266,96 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
 
 ## Dispatch, TODO, And Automation
 
-- The controller owns dispatch decisions across configured windows.
-- Every task package or executing prompt must require the target to read parent
-  `AGENTS.md`, current state root/current plan, and target repository
-  `AGENTS.md`, then declare current window/repository responsibility.
-- If the executing window cannot confirm identity and repository, it must stop
-  and backfill a blocker.
-- Separate final coverage from currently dispatchable windows. Producer/consumer
-  dependencies must be explicit.
-- Do not send prompts to completed, observing, no-task, or blocked windows
-  unless the prompt removes that blocker.
-- TODO/Backlog is a scheduling ledger, not a goal definition. Design signals
-  become executable only after controller intake and routing.
-- TODO/Backlog additions need original-requirement or verified in-scope-defect
-  authority; otherwise record an observation, risk, or pending decision.
-- Dispatch may use larger same-window task packages when they share a boundary
-  and validation path.
-- Prefer Codex subagents for narrow parallel investigation when they shorten
-  evidence collection without changing task ownership. Do not create subagent
-  work to manufacture progress, bypass a blocker, or replace controller review.
+- The controller owns dispatch across configured windows. Every task package or
+  executing prompt makes the target read parent `AGENTS.md`, the current state
+  root/plan, and the target repository `AGENTS.md`, then declare window/
+  repository identity; a target that cannot confirm identity stops and backfills
+  a blocker.
+- Separate final coverage from currently dispatchable windows; producer/consumer
+  dependencies must be explicit. Do not send to completed, observing, no-task,
+  or blocked windows unless the prompt removes that blocker.
+- TODO/Backlog is a scheduling ledger, not a goal definition; additions need
+  original-requirement or verified in-scope-defect authority, else record an
+  observation, risk, or pending decision. Design signals become executable only
+  after controller intake.
+- Codex subagents do bounded parallel investigation only — never to manufacture
+  progress, bypass a blocker, or replace controller review.
 - Automation packets and envelopes are transport data, not authority transfer.
-  The controller may delete any automation that cannot prove its current goal,
-  state root, window, thread id, dispatch group, target task, and next-hop rule.
-- Direct-thread dispatch is the normal transport. It does not make ordinary
+  The controller may delete any automation that cannot prove its goal, state
+  root, window, thread id, dispatch group, target task, and next-hop rule.
+- Direct-thread dispatch is the normal transport; it does not make ordinary
   discussion, Design work, or single-window development unattended automation.
-- In confirmed unattended mode, continue reviewing results, pulling evidence,
-  deciding, creating next eligible packages, and dispatching until final
-  completion, a hard gate, user stop, no eligible TODO, or missing evidence that
-  requires human decision.
-- `wakeflow-state.mjs` and `wakeflow-delivery.mjs` create machine state,
-  envelopes, result imports, review candidates, controller decisions, and stop
-  markers. Commands do not replace acceptance.
-- After a real direct-thread send is recorded as `status=sent` with
-  `readback.ok=true`, stop the current send turn. Do not sleep, poll, or wait
-  in the controller window.
-- Keep-live belongs to unattended support only. It is not task logic, transport,
-  or acceptance evidence.
-- Delivery prompts must be compact wakeup envelopes. Target prompts default to
-  `currentWindow`, `taskId`, `stateRoot`, optional `dispatchGroup`, and
-  `skill`. Controller-return prompts default to `stateRoot`,
-  `dispatchGroup`, trigger, non-empty exceptional targets, and `skill`.
-  Machine details remain in state root, dispatch group, or envelope JSON.
-- When using a Codex host thread tool, pass the envelope `prompt` field
-  exactly as `send_message_to_thread.prompt`. Do not wrap it in XML, JSON, or
-  delegation tags.
-- Target windows execute only their assigned dispatch packet and return a
-  `TargetResultEnvelope`. They do not claim another target or controller role.
-- Target windows do not create target-to-target next-hop delivery. A controller
-  return is allowed only when the envelope says `returnRoute=controller` and
-  the dispatch group return policy permits it.
-- Test delivery is controller-started by default. Non-Test windows must not
-  create, process, or verify Test delivery unless both the current plan and the
-  envelope explicitly authorize the exception.
-- Real thread ids live only in `.wakeflow-local/`. Never write them to
-  tracked docs, GitHub, prompts, or backfill text. Do not register placeholders.
-- Old claim/finish/chain-next/start-plan/resume-plan routes are retired. Use
-  dispatch packets, delivery envelopes, target result envelopes, and controller
-  review.
+  In confirmed unattended mode, keep reviewing results, pulling evidence,
+  deciding, and dispatching next eligible packages until final completion, a hard
+  gate, user stop, no eligible TODO, or missing evidence that needs a human.
+- After a real direct-thread send records `status=sent` with `readback.ok=true`,
+  stop the send turn — do not sleep, poll, or wait. Keep-live is unattended
+  support only, not task logic, transport, or acceptance evidence.
+- Real thread ids live only in `.wakeflow-local/`; never write them to tracked
+  docs, GitHub, prompts, or backfill, and never register placeholders.
+- Target windows execute only their assigned packet and return a
+  `TargetResultEnvelope`; they do not claim another target/controller role or
+  create target-to-target next-hop delivery (a controller return needs
+  `returnRoute=controller` plus a permitting dispatch-group policy). Test
+  delivery is controller-started unless the plan and envelope authorize an
+  exception. Old claim/finish/chain-next/start-plan/resume-plan routes are
+  retired.
 
-Operational details live in `skills/wakeflow-governance/`,
+Delivery-envelope fields, host-thread send mechanics, keep-live, and review flow
+live in `skills/wakeflow-governance/references/wakeflow-delivery.md`,
 `skills/wakeflow-controller/`, and `skills/wakeflow-target/`.
 
 ## Workspace Governance And Ledgers
 
-- Project-specific active plans, TODOs, test exchanges, archive history, and
-  target backfills belong in ignored `.wakeflow-active/` surfaces or the
-  configured `../wakeflow-ledger/`.
-- Repository scope and managed `AGENTS.md` blocks come from tracked or local
-  workspace config. First installation should run discovery, present the
-  proposed scope, and wait for user confirmation before writing.
-- Design/Test may be external sibling directories or internal template-backed
-  surfaces. Ask before choosing.
-- Source, tests, and docs for product repositories are committed in their own
-  repositories.
-- `.wakeflow-active/index.md` is the single active controller entry
-  for an installed workspace. It is local runtime and usually not committed.
-- Larger requirement designs and long-term records belong in
-  `../wakeflow-ledger/`.
+- Project-specific active plans, TODOs, test exchanges, archives, and backfills
+  belong in ignored `.wakeflow-active/` or the configured `../wakeflow-ledger/`;
+  `.wakeflow-active/index.md` is the single active controller entry (local
+  runtime, usually uncommitted), and larger requirement designs live in
+  `../wakeflow-ledger/`. Product source/tests/docs commit in their own repos.
 - Long-term documents must not contain user absolute paths, API keys, tokens, or
   private information. Use lowercase kebab-case names and execution dates.
-
-See `skills/wakeflow-governance/references/wakeflow-ledgers.md`.
+- First installation runs discovery and waits for user confirmation before
+  writing scope. Placement, index, and archive detail live in
+  `skills/wakeflow-governance/references/wakeflow-ledgers.md`.
 
 ## Requirement-To-Wave Flow
 
-- Normal route: Design prepares original plan, requirement design, completion
-  definition, phase candidates, and TODO/Backlog suggestions. The controller
-  receives them, attaches intake to the state root, and decides code research,
-  Test cards, task packages, phase confirmation, or execution.
-- Redesign route: when current implementation evidence is valid but the
-  observed outcome misses the user's target in a non-bug way, Design prepares a
-  revised requirement/option design and adjustment handoff. The controller
-  decides whether to update the state root, ask the user for confirmation, or
-  create new task packages; product windows do not guess the new solution.
-- Supplemental requirements or next packages must not reverse original
-  decisions, non-goals, or forbidden shortcuts.
-- Do not split work into only abstract connections, placeholders, empty
-  adapters, unused providers, or type-only changes. Contract-only stages must
-  name their consumer, next consumption step, and targeted validation.
-- Task-level confirmation must state original goal, requirement design,
-  controller interpretation, final completion definition, non-goals, affected
-  windows, producer/consumer chain, phase plan, current phase judgment,
-  validation strategy, risks, and confirmation questions.
-- Create or activate execution waves only after user confirmation.
+- Design prepares the original plan, requirement design, completion definition,
+  phase candidates, and TODO suggestions; the controller intakes them to the
+  state root and decides research, Test cards, packages, phase confirmation, or
+  execution. When valid implementation still misses the target in a non-bug way,
+  route a Design redesign (product windows do not guess the new solution).
+- Supplemental requirements must not reverse original decisions, non-goals, or
+  forbidden shortcuts, and must not split into placeholder / empty-adapter /
+  type-only stages without a named consumer and targeted validation.
+- Task-level confirmation states the original goal, requirement design,
+  controller interpretation, completion definition, non-goals, affected windows,
+  producer/consumer chain, phase plan, current-phase judgment, validation,
+  risks, and questions. Create or activate execution waves only after user
+  confirmation. Wave/package detail:
+  `skills/wakeflow-governance/references/window-dispatch.md`.
 
 ## Scripts And Verification
 
-- For script maintenance or pipeline questions, read
-  `skills/wakeflow-governance/SKILL.md` and
-  `skills/wakeflow-governance/references/script-pipeline.md`.
-- `scripts/README.md` is the script index. After adding, renaming, or deleting
-  `scripts/*.mjs`, update the index and run
-  `node scripts/wakeflow-check-scripts.mjs`.
-- State roots, progress docs, Design handoff boards, Design/Test intake, Test
-  cards, archive entries, and templates must keep script-readable formats.
 - `node scripts/wakeflow-verify.mjs` is the default verification orchestrator.
-- Writing scripts must default to dry-run or explicit check. Use `--write` or
-  `--apply` only when the user goal or state root authorizes writes.
+- Writing scripts default to dry-run or explicit check; use `--write`/`--apply`
+  only when the user goal or state root authorizes writes.
+- `scripts/README.md` is the script index; after adding/renaming/deleting
+  `scripts/*.mjs`, update it and run `node scripts/wakeflow-check-scripts.mjs`.
+  State roots, boards, intake, cards, archives, and templates must keep
+  script-readable formats. Pipeline and maintenance detail live in
+  `skills/wakeflow-governance/references/script-pipeline.md`.
 
 ## Standard Dispatch Prompt
 
-When the user needs a prompt for another Codex window, output a compact wakeup
-prompt. The prompt navigates; the state root, task package, target repository
-`AGENTS.md`, and skills define the task.
-
-```text
-Continue the current controller task: <plan or wave>.
-
-First read: AGENTS.md, .wakeflow-active/index.md,
-.wakeflow-active/current/<current-controller-document>.md, and this
-window/repository AGENTS.md.
-
-Identity: state the current window and repository responsibility.
-
-Claim: take only the task assigned to this window by the current plan.
-
-When done, backfill evidence, boundaries, risks, and recommended next steps
-according to the current plan.
-```
-
-Do not put wave-specific window lists, blocked/observing decisions, detailed
-validation commands, forbidden paths, or automation manuals in `AGENTS.md`.
+A dispatch prompt is a compact wakeup envelope: it navigates (read parent
+`AGENTS.md`, the active index, the current controller doc, and the target
+repository `AGENTS.md`; state window/repository identity; claim only the assigned
+task; backfill evidence/boundaries/risks/next-steps when done) while the state
+root, task package, and skills define the work. The copyable template lives in
+`skills/wakeflow-governance/references/window-dispatch.md`. Do not put
+wave-specific window lists, blocked/observing decisions, validation commands,
+forbidden paths, or automation manuals in `AGENTS.md`.
 
 ## Skill And Rule Layers
 

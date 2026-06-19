@@ -127,19 +127,49 @@ function spawnNode({ command, args, cwd, timeoutMs }) {
     let stdout = "";
     let stderr = "";
     let timedOut = false;
-    const timer = setTimeout(() => {
+    let timer = null;
+    let killTimer = null;
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      if (killTimer) clearTimeout(killTimer);
+      resolve(result);
+    };
+    timer = setTimeout(() => {
       timedOut = true;
       child.kill("SIGTERM");
+      // Escalate to SIGKILL if the child ignores SIGTERM, so timeoutMs is a hard cap.
+      killTimer = setTimeout(() => {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          // child already exited
+        }
+      }, 2000);
     }, timeoutMs);
-    child.stdout.on("data", (chunk) => {
+    child.stdout?.on("data", (chunk) => {
       stdout += chunk.toString("utf8");
     });
-    child.stderr.on("data", (chunk) => {
+    child.stderr?.on("data", (chunk) => {
       stderr += chunk.toString("utf8");
     });
+    // A spawn-launch failure (EAGAIN/EMFILE/ENOENT) would otherwise throw uncaught and crash
+    // the whole MCP stdio server; resolve it as a transient spawn failure instead.
+    child.on("error", (error) => {
+      finish({
+        exitCode: null,
+        signal: null,
+        timedOut,
+        stdout,
+        stderr,
+        spawnError: error?.message ?? String(error),
+        parsedJson: null,
+      });
+    });
     child.on("close", (exitCode, signal) => {
-      clearTimeout(timer);
-      resolve({
+      finish({
         exitCode,
         signal,
         timedOut,
@@ -207,6 +237,7 @@ function classifyWakeflowError(output, runtimeStatus) {
 function classifyErrorCode({ output, parsed, message }) {
   const text = `${parsed.code || ""} ${parsed.errorCode || ""} ${message || ""}`.toLowerCase();
   if (output.timedOut) return "runtime-timeout";
+  if (output.spawnError) return "runtime-spawn-failed";
   if (/unknown wakeflow-cli command|unsupported wakeflow runtime script|unknown wakeflow tool/.test(text)) return "unsupported-command";
   if (/state root|state-root/.test(text)) return "state-root-missing";
   if (/state revision|revision conflict|stale/.test(text)) return "state-revision-conflict";
@@ -222,7 +253,7 @@ function classifyErrorCode({ output, parsed, message }) {
 }
 
 function errorCategory(code) {
-  if (["runtime-timeout", "process-exit-nonzero", "unsupported-command"].includes(code)) return "runtime";
+  if (["runtime-timeout", "runtime-spawn-failed", "process-exit-nonzero", "unsupported-command"].includes(code)) return "runtime";
   if (["state-root-missing", "state-revision-conflict", "group-not-ready", "controller-decision-required"].includes(code)) return "state";
   if (["thread-registry-missing", "delivery-envelope-missing"].includes(code)) return "transport";
   if (["target-result-missing", "schema-invalid"].includes(code)) return "evidence";
@@ -231,7 +262,7 @@ function errorCategory(code) {
 }
 
 function retryableError(code) {
-  return ["runtime-timeout"].includes(code);
+  return ["runtime-timeout", "runtime-spawn-failed"].includes(code);
 }
 
 function buildWakeflowHealth({ script, args, cwd, parsedJson, trace }) {

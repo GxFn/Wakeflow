@@ -33,6 +33,9 @@ export const hostProfile = {
   handleId: {
     placeholders: ["current-codex-thread", "current thread", "<thread id>", "unknown", ""],
     realIdRequirement: "a real Codex thread id",
+    // P1-0 redaction guard: real Codex thread ids are UUID-shaped. Declared per edition
+    // because host-profile is host-local and not byte-synced (check:core cannot cross-check).
+    idShape: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
   },
   keepLiveEnv: {
     command: "CODEX_AUTOMATION_KEEP_LIVE_COMMAND",

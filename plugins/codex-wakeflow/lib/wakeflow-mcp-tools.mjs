@@ -508,6 +508,19 @@ const toolDefinitions = [
     },
   },
   {
+    name: "wakeflow_prune_runtime",
+    description: "Prune replay-safe, confirmed-send delivery-run transport files older than a cutoff. Dry-run unless apply is true; apply requires before. Target-results (evidence) are never deleted, and runs inside a surviving repeated-attempt chain are retained.",
+    annotations: localWriteTool("Prune Wakeflow Runtime Transport"),
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+        before: { type: "string" },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
     name: "wakeflow_archive_todo",
     description: "Archive completed Wakeflow TODO rows and historical sync records into the configured workspace ledger. Dry-run unless apply is true. This tool records archive facts only; it does not accept work, select next work, or send host messages.",
     annotations: localWriteTool("Archive Wakeflow TODO Rows"),
@@ -985,6 +998,17 @@ export const handlers = {
       "claim-from-design",
       ...rootArgs(args),
       ...optionalValue("--design-key", args.designKey),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
+  wakeflow_prune_runtime: (args) => runWakeflowRuntime({
+    script: "wakeflow-delivery",
+    args: [
+      "prune-runtime",
+      ...rootArgs(args),
+      ...optionalValue("--before", args.before),
       ...(args.apply ? ["--write"] : []),
       "--json",
     ],

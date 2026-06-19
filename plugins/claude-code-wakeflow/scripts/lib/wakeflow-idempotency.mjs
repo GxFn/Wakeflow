@@ -220,3 +220,12 @@ export function buildReplaySummary({ deliveryRuns = [], targetResults = [] } = {
     ],
   };
 }
+
+// pruneWouldBreakReplay: a delivery-run is protected from GC when its deliveryId still has a
+// surviving repeated-attempt chain in the replay summary, because deleting it would break
+// idempotency dup-detection for that chain. prune-runtime keeps anything this returns true for.
+export function pruneWouldBreakReplay(deliveryId, replaySummary) {
+  if (!deliveryId) return false;
+  const protectedIds = new Set((replaySummary?.repeatedDeliveryAttempts ?? []).map((attempt) => attempt.deliveryId));
+  return protectedIds.has(deliveryId);
+}

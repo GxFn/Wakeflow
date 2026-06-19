@@ -18,6 +18,7 @@ import {
   controllerReturnReadinessIssue,
   normalizeReturnPolicyMode,
 } from "./lib/wakeflow-return-policy.mjs";
+import { buildReplaySummary, pruneWouldBreakReplay } from "./lib/wakeflow-idempotency.mjs";
 
 const args = process.argv.slice(2);
 const command = args[0] && !args[0].startsWith("--") ? args[0] : "status";
@@ -39,6 +40,7 @@ Wakeflow delivery-loop contract manager
 
 Usage:
   node scripts/wakeflow-delivery.mjs status [--json]
+  node scripts/wakeflow-delivery.mjs prune-runtime [--before <iso>] [--write] [--json]
   node scripts/wakeflow-delivery.mjs release-window-lock --window <name> [--write] [--json]
   node scripts/wakeflow-delivery.mjs register-thread --window <name> --thread-id <id> --write [--json]
   node scripts/wakeflow-delivery.mjs build-window-config --window <name> [--require-thread] --write [--json]
@@ -232,6 +234,7 @@ const {
   windowLockFresh,
   writeWindowLock,
   removeWindowLock,
+  removeRuntimeFile,
   listFreshWindowLocks,
   listHostRuntimes,
   listDispatchGroupsForTask,
@@ -807,6 +810,77 @@ function commandStopLoop() {
   );
 }
 
+// prune-runtime: GC replay-safe, confirmed-send delivery-run files older than a cutoff.
+// Target-results are evidence and are NEVER deleted; a run inside a surviving repeated-attempt
+// chain is retained so idempotency dup-detection keeps working. Dry-run unless --write, and
+// --write requires --before to bound the deletion.
+function commandPruneRuntime() {
+  const before = getValue("--before", null);
+  const beforeMs = before ? Date.parse(before) : null;
+  if (before && Number.isNaN(beforeMs)) fail("--before must be an ISO timestamp.");
+  if (write && before === null) fail("prune-runtime --write requires --before <iso> to bound the deletion.");
+
+  const safeRead = (file) => {
+    try {
+      return JSON.parse(readFileSync(file, "utf8"));
+    } catch {
+      return null;
+    }
+  };
+
+  const runEntries = listJsonFiles(dirs.deliveryRuns)
+    .map((file) => ({ file, run: safeRead(file) }))
+    .filter((entry) => entry.run?.kind === "DirectThreadDeliveryRun");
+  const targetResults = listJsonFiles(dirs.results).map((file) => safeRead(file)).filter(Boolean);
+  const replay = buildReplaySummary({ deliveryRuns: runEntries.map((entry) => entry.run), targetResults });
+
+  const prunable = [];
+  const retained = [];
+  for (const { file, run } of runEntries) {
+    const reasons = [];
+    if (!(run.status === "sent" && run.readback?.ok === true)) reasons.push("not-a-confirmed-send");
+    if (pruneWouldBreakReplay(run.deliveryId, replay)) reasons.push("in-replay-chain");
+    if (beforeMs !== null) {
+      const runMs = run.createdAt ? Date.parse(run.createdAt) : NaN;
+      if (Number.isNaN(runMs) || runMs >= beforeMs) reasons.push("not-before-cutoff");
+    }
+    const summary = { file: path.relative(workspaceRoot, file), deliveryRunId: run.deliveryRunId, deliveryId: run.deliveryId };
+    if (reasons.length === 0) prunable.push({ ...summary, absFile: file });
+    else retained.push({ ...summary, reasons });
+  }
+
+  let removed = 0;
+  if (write) {
+    for (const entry of prunable) {
+      if (removeRuntimeFile(entry.absFile)) removed += 1;
+    }
+  }
+
+  output({
+    ok: true,
+    command: "prune-runtime",
+    wrote: write,
+    before: before ?? null,
+    deliveryRunCount: runEntries.length,
+    prunableCount: prunable.length,
+    prunable: prunable.map(({ absFile, ...rest }) => rest),
+    removed,
+    retainedCount: retained.length,
+    retained,
+    forbiddenConclusions: [
+      "prune-is-acceptance",
+      "prune-is-archive",
+      "pruned-run-is-undelivered-work",
+    ],
+    agentNext: write
+      ? "Pruned replay-safe confirmed-send delivery-runs older than the cutoff. Target-results (evidence) are never pruned."
+      : "Dry-run only. Review the prunable list, then rerun with --write --before <iso> to delete.",
+  }, [
+    `${write ? "Pruned" : "Would prune"} ${prunable.length} replay-safe delivery-run file(s)${write ? ` (${removed} removed)` : ""}.`,
+    "Target-results are evidence and are never deleted by prune-runtime.",
+  ]);
+}
+
 try {
   switch (command) {
     case "status":
@@ -862,6 +936,9 @@ try {
       break;
     case "stop-loop":
       commandStopLoop();
+      break;
+    case "prune-runtime":
+      commandPruneRuntime();
       break;
     case "help":
     case "--help":

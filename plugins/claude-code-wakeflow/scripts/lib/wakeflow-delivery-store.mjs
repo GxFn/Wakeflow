@@ -188,6 +188,14 @@ export function createDeliveryStore({
     if (existsSync(file)) unlinkSync(file);
   }
 
+  // Generic prune helper: unlink one runtime transport file (e.g. a delivery-run). Returns
+  // whether the file existed and was removed. Used by prune-runtime.
+  function removeRuntimeFile(file) {
+    if (!existsSync(file)) return false;
+    unlinkSync(file);
+    return true;
+  }
+
   function listFreshWindowLocks() {
     return listJsonFiles(dirs.locks)
       .map((file) => {
@@ -283,6 +291,7 @@ export function createDeliveryStore({
     windowLockFresh,
     writeWindowLock,
     removeWindowLock,
+    removeRuntimeFile,
     listFreshWindowLocks,
     listHostRuntimes,
     listDispatchGroupsForTask,

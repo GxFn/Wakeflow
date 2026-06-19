@@ -33,7 +33,7 @@ Use the external workspace ledger for:
 - completed TODO history;
 - test history;
 - cross-repository evidence maps;
-- per-window collaboration records.
+- per-window function/value records (see Per-Window Folders).
 
 Wakeflow initialization creates starter ledger entries for:
 
@@ -48,6 +48,18 @@ Wakeflow initialization creates starter ledger entries for:
 
 Long-term documents must avoid user absolute paths, API keys, tokens, and other
 private information. Use lowercase kebab-case names and dates.
+
+## Per-Window Folders
+
+Each managed window/repository gets its own folder under the ledger
+(`wakeflow-ledger/<window>/`). Keep these folders focused on the window's own
+function and value documentation — what the window does, its capabilities,
+interfaces, integration points, and the durable reference a contributor to that
+window needs. They do NOT hold requirement or process-flow documents: requirement
+designs, goal/stage confirmations, wave-execution flow, and TODO scheduling stay
+in the controller's shared ledger areas (`requirement-designs/`,
+`goal-stage-confirmation/`, `workspace/`). A window folder carries the window's
+value, not the controller's planning trail.
 
 ## Design/Test Records
 

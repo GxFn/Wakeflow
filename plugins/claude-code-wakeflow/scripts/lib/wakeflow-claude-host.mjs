@@ -80,7 +80,33 @@ function requireValue(name) {
   return value;
 }
 
-const workspaceRoot = path.resolve(getValue("--root", process.cwd()));
+// Resolve the true workspace root. The host helper is invoked from a target
+// window's own cwd when that window sends a controller-return; without an explicit
+// --root (or with --root pointing at a product/Design/Test subdir) process.cwd() is
+// a sub-window subdir, not the workspace root, so binding/state lookups would hit a
+// stray nested .wakeflow-local instead of the one real store and fail with
+// "No window-host binding". Walk up to the nearest ancestor carrying
+// workspace.config.json (the workspace-root marker) so every window's invocation
+// anchors to the same store. Only sub-windows lack that file, so a correctly-passed
+// --root (the workspace root) is returned unchanged.
+function resolveWorkspaceRoot(start) {
+  if (existsSync(path.join(start, "workspace.config.json"))) return start;
+  let dir = start;
+  for (let depth = 0; depth < 64; depth += 1) {
+    const parent = path.dirname(dir);
+    if (parent === dir) break; // filesystem root
+    dir = parent;
+    if (existsSync(path.join(dir, "workspace.config.json"))) {
+      process.stderr.write(
+        `wakeflow-claude-host: resolved workspace root by walking up from ${start} to ${dir}; pass --root <workspace-root> to avoid this.\n`,
+      );
+      return dir;
+    }
+  }
+  return start; // no workspace.config.json upward — keep the original (pre-init / standalone)
+}
+
+const workspaceRoot = resolveWorkspaceRoot(path.resolve(getValue("--root", process.cwd())));
 const stateDir = path.resolve(getValue("--state-dir", path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery")));
 const hostDir = path.join(stateDir, "hosts", HOST_DIR_NAME);
 const windowHostDir = path.join(hostDir, "window-host");

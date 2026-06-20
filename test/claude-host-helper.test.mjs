@@ -55,6 +55,43 @@ test("preflight reports tmux and recommendation", () => {
   assert.ok(["ready", "install-tmux", "install-homebrew-then-tmux"].includes(payload.recommendation));
 });
 
+test("ensure-server honors a configured dedicated tmux socket (isolated from the default server)", { skip: !tmuxPresent }, async (t) => {
+  const root = makeWorkspace();
+  const serverSession = makeServerSession();
+  const socket = `wfsock-${process.pid}-${serverSession.split("-").pop()}`;
+  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+    workspaceName: "SocketFlow",
+    controllerWindow: "SocketFlow",
+    hosts: { "claude-code": { tmuxSession: serverSession, tmuxSocket: socket } },
+    repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
+  }));
+  t.after(() => {
+    const pidFile = path.join(root, ".wakeflow-local/wakeflow-delivery/hosts/claude-code", `activity-monitor-${serverSession}.pid`);
+    if (existsSync(pidFile)) {
+      const pid = Number(readFileSync(pidFile, "utf8").trim());
+      if (Number.isInteger(pid)) { try { process.kill(pid); } catch { /* already gone */ } }
+    }
+    spawnSync("tmux", ["-L", socket, "kill-server"], { encoding: "utf8" });
+  });
+
+  const payload = parseOk(runHelper(root, ["ensure-server", "--server", serverSession]));
+  assert.equal(payload.ok, true);
+  assert.equal(payload.created, true);
+
+  // The session is created on the dedicated -L socket...
+  assert.equal(
+    spawnSync("tmux", ["-L", socket, "has-session", "-t", serverSession], { encoding: "utf8" }).status,
+    0,
+    "session must exist on the dedicated -L socket",
+  );
+  // ...and must NOT leak onto the shared default socket the user's personal sessions use.
+  assert.notEqual(
+    spawnSync("tmux", ["has-session", "-t", serverSession], { encoding: "utf8" }).status,
+    0,
+    "session must not appear on the default socket",
+  );
+});
+
 test("launch-window, send, readback, lock, and wait-results work end to end", { skip: !tmuxPresent }, async (t) => {
   const root = makeWorkspace();
   const serverSession = makeServerSession();

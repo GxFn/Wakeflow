@@ -115,6 +115,29 @@ const resultsDir = path.join(stateDir, "target-results");
 const tmuxBin = process.env.WAKEFLOW_TMUX_BIN || "tmux";
 const claudeBin = process.env.WAKEFLOW_CLAUDE_BIN || "claude";
 
+// Optional dedicated tmux socket (opt-in). When hosts.claude-code.tmuxSocket is set
+// in workspace.config.json (or --socket is passed) every tmux call runs against a
+// private `tmux -L <socket>` server instead of the shared default socket, isolating
+// the wakeflow fleet from the user's personal tmux sessions on the default server.
+// Unset = default socket (backward-compatible). Resolved once; every tmux() call
+// funnels the flag through, and the activity monitor inherits it via --root config.
+function resolveTmuxSocket() {
+  const override = getValue("--socket", null);
+  if (override && override.trim()) return override.trim();
+  const configFile = path.join(workspaceRoot, "workspace.config.json");
+  if (existsSync(configFile)) {
+    try {
+      const socket = JSON.parse(readFileSync(configFile, "utf8")).hosts?.["claude-code"]?.tmuxSocket;
+      if (typeof socket === "string" && socket.trim()) return socket.trim();
+    } catch {
+      // fall through to the shared default socket
+    }
+  }
+  return null;
+}
+const tmuxSocket = resolveTmuxSocket();
+const tmuxSocketArgs = tmuxSocket ? ["-L", tmuxSocket] : [];
+
 function defaultServerSession() {
   const configFile = path.join(workspaceRoot, "workspace.config.json");
   if (existsSync(configFile)) {
@@ -206,7 +229,7 @@ function readJson(file, label) {
 }
 
 function tmux(tmuxArgs, { allowFailure = false } = {}) {
-  const result = execHostText(tmuxBin, tmuxArgs);
+  const result = execHostText(tmuxBin, [...tmuxSocketArgs, ...tmuxArgs]);
   if (result.status !== 0 && !allowFailure) {
     fail(`tmux ${tmuxArgs.join(" ")} failed: ${(result.stderr || result.stdout || "").trim()}`);
   }
@@ -893,7 +916,9 @@ function commandAttachWindow() {
   // One reliable path: the user opens a new terminal window/tab themselves and
   // attaches. Programmatic tab-opening (osascript) proved unreliable across
   // terminals (tabs flash and close), so it is intentionally not offered.
-  const attach = `tmux attach -t ${binding.tmux.server}`;
+  const attach = tmuxSocket
+    ? `tmux -L ${tmuxSocket} attach -t ${binding.tmux.server}`
+    : `tmux attach -t ${binding.tmux.server}`;
   output({
     ok: true,
     command: "attach-window",

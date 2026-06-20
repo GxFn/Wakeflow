@@ -79,3 +79,14 @@ test("wakeflow_archive MCP tool is registered with a handler and target routing"
   }
   assert.equal(typeof handlers.wakeflow_archive, "function", "wakeflow_archive must have a handler");
 });
+
+test("wakeflow_archive target=demand fails closed before runtime when required inputs are missing", async () => {
+  await assert.rejects(
+    handlers.wakeflow_archive({ target: "demand" }),
+    /wakeflow_archive target=demand requires stateRoot/,
+  );
+  await assert.rejects(
+    handlers.wakeflow_archive({ target: "demand", stateRoot: ".wakeflow-active/current/x" }),
+    /wakeflow_archive target=demand requires reason/,
+  );
+});

@@ -859,12 +859,14 @@ export const handlers = {
   }),
   wakeflow_archive: async (args) => {
     if (args.target === "demand") {
+      const stateRoot = requireValueForTool(args, "stateRoot", "wakeflow_archive target=demand");
+      const reason = requireValueForTool(args, "reason", "wakeflow_archive target=demand");
       return runWakeflowRuntime({
         script: "wakeflow-state",
         args: [
           "archive-demand",
-          "--state-root", args.stateRoot,
-          "--reason", args.reason,
+          "--state-root", stateRoot,
+          "--reason", reason,
           ...(args.redact ? ["--redact"] : []),
           ...repeatValues("--evidence-ref", args.evidenceRefs ?? []),
           ...rootArgs(args),

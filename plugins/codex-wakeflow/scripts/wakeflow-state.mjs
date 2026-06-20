@@ -1670,8 +1670,8 @@ function scanDanglingEnvelopeRefs(stateRoot) {
 // archive-demand: relocate a completed demand's state root into the committed ledger. The P1-0
 // redaction guard is a HARD precondition — it refuses on any real-id-shaped string unless
 // --redact relocates a cleaned COPY (the original is preserved in the gitignored active tier
-// for a human audit). Dry-run unless --write. The state flip + demand.archived event are
-// written BEFORE the move so the archived root carries its own terminal transition.
+// for a human audit). Dry-run unless --write. The archive copy is fully staged before
+// the ledger is committed, so a filesystem failure cannot half-flip the active state root.
 function commandArchiveDemand() {
   const stateRoot = stateRootFromArg();
   const reason = requireValue("--reason");
@@ -1753,21 +1753,9 @@ function commandArchiveDemand() {
     stateRevision: nextRevision,
   };
 
-  // F41 order: event, then the authoritative state flip — in the ACTIVE root, BEFORE the move.
-  appendJsonLine(eventsFile, event);
-  writeJson(stateFile, nextState);
-
-  mkdirSync(path.dirname(ledgerDest), { recursive: true });
   let redactedFields = [];
   const preservedOriginal = redact && !scan.clean;
-  if (preservedOriginal) {
-    ({ redactedFields } = redactStateRootIntoCopy(stateRoot, ledgerDest, { hostProfile }));
-  } else {
-    cpSync(stateRoot, ledgerDest, { recursive: true });
-    rmSync(stateRoot, { recursive: true, force: true });
-  }
-
-  writeJson(path.join(ledgerDest, "archive-manifest.json"), {
+  const archiveManifest = {
     kind: "WakeflowArchiveManifest",
     version: 1,
     demandKey: state.demandKey,
@@ -1776,7 +1764,36 @@ function commandArchiveDemand() {
     redactedFields,
     sourceStateRoot: relative(stateRoot),
     preservedOriginal,
-  });
+  };
+  const stagingDest = `${ledgerDest}.tmp-${process.pid}-${Date.now()}`;
+
+  try {
+    mkdirSync(path.dirname(ledgerDest), { recursive: true });
+    if (preservedOriginal) {
+      ({ redactedFields } = redactStateRootIntoCopy(stateRoot, stagingDest, { hostProfile }));
+      archiveManifest.redactedFields = redactedFields;
+    } else {
+      cpSync(stateRoot, stagingDest, { recursive: true });
+    }
+    appendJsonLine(path.join(stagingDest, "controller-events.jsonl"), event);
+    writeJson(path.join(stagingDest, "wakeflow-state.json"), nextState);
+    writeJson(path.join(stagingDest, "archive-manifest.json"), archiveManifest);
+    renameSync(stagingDest, ledgerDest);
+  } catch (error) {
+    if (existsSync(stagingDest)) rmSync(stagingDest, { recursive: true, force: true });
+    fail(`archive-demand failed before ledger commit; active state root was left unchanged: ${error.message}`);
+  }
+
+  try {
+    if (preservedOriginal) {
+      appendJsonLine(eventsFile, event);
+      writeJson(stateFile, nextState);
+    } else {
+      rmSync(stateRoot, { recursive: true, force: true });
+    }
+  } catch (error) {
+    fail(`archive-demand committed ledger at ${relative(ledgerDest)} but could not finalize the active state root: ${error.message}`);
+  }
 
   output({
     ok: true,

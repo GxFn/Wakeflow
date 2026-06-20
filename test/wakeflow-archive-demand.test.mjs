@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
@@ -56,6 +56,26 @@ test("archive-demand --write flips to archived, relocates into the ledger, write
   assert.equal(manifest.demandKey, "ARCH-1");
   assert.deepEqual(manifest.redactedFields, []);
   assert.match(readFileSync(path.join(ledgerDest, "controller-events.jsonl"), "utf8"), /"type":"demand\.archived"/);
+});
+
+test("archive-demand write failure leaves the active state root unchanged before ledger commit", () => {
+  const { root, stateRoot, stateFile } = initDemand({ demandKey: "ARCH-4" });
+  const dryRun = run(["archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "done", "--json"]);
+  assert.equal(dryRun.status, 0, dryRun.stderr || dryRun.stdout);
+  const dryPayload = JSON.parse(dryRun.stdout);
+  const ledgerDest = path.join(root, dryPayload.wouldArchive.ledgerDest);
+  const blockedMonthDir = path.dirname(ledgerDest);
+  mkdirSync(path.dirname(blockedMonthDir), { recursive: true });
+  writeFileSync(blockedMonthDir, "not a directory\n");
+
+  const result = run(["archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "done", "--write", "--json"]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /active state root was left unchanged/);
+  assert.equal(readJson(stateFile).state, "completed");
+  assert.doesNotMatch(
+    readFileSync(path.join(root, stateRoot, "controller-events.jsonl"), "utf8"),
+    /"type":"demand\.archived"/,
+  );
 });
 
 test("archive-demand refuses a planted real id unless --redact, then relocates a cleaned copy", () => {

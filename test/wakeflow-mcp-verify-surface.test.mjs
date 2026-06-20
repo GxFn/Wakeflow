@@ -19,37 +19,26 @@ test("wakeflow_verify MCP tool exposes the runtime-residue flags", () => {
   }
 });
 
-// Guards RA2: the unified per-task rollup is reachable as a read-only MCP tool.
-test("wakeflow_task_ledger MCP tool is registered with a handler", () => {
-  const ledger = tools.find((t) => t.name === "wakeflow_task_ledger");
-  assert.ok(ledger, "wakeflow_task_ledger tool must be registered");
-  const props = ledger.inputSchema?.properties ?? {};
-  for (const field of ["stateRoot", "taskId", "targetWindow"]) {
-    assert.equal(props[field]?.type, "string", `wakeflow_task_ledger must expose a string '${field}' input`);
-  }
-  assert.equal(typeof handlers.wakeflow_task_ledger, "function", "wakeflow_task_ledger must have a handler");
-});
-
-// Guards RA4: the per-window orientation card is reachable as a read-only MCP tool.
-test("wakeflow_window_view MCP tool is registered with a handler", () => {
-  const view = tools.find((t) => t.name === "wakeflow_window_view");
-  assert.ok(view, "wakeflow_window_view tool must be registered");
+// Guards RA2/RA4/RA5p3 (converged): the per-task rollup, per-window orientation card,
+// the focus-doc generator, and the evidence-spine trace are reachable through the unified
+// read/projection tool wakeflow_view, selected by scope.
+test("wakeflow_view MCP tool is registered with a handler and scope routing", () => {
+  const view = tools.find((t) => t.name === "wakeflow_view");
+  assert.ok(view, "wakeflow_view tool must be registered");
   const props = view.inputSchema?.properties ?? {};
-  for (const field of ["stateRoot", "window"]) {
-    assert.equal(props[field]?.type, "string", `wakeflow_window_view must expose a string '${field}' input`);
+  assert.deepEqual(view.inputSchema?.required, ["scope"]);
+  assert.deepEqual(
+    props.scope?.enum,
+    ["task-ledger", "window", "focus", "trace"],
+    "wakeflow_view scope must enumerate task-ledger|window|focus|trace",
+  );
+  // Inputs fused from the former task_ledger / window_view / focus_doc / trace_spine tools.
+  for (const field of [
+    "stateRoot", "taskId", "targetWindow", "window", "phase", "apply", "dispatchGroup", "deliveryId",
+  ]) {
+    assert.ok(props[field], `wakeflow_view must expose '${field}'`);
   }
-  assert.equal(typeof handlers.wakeflow_window_view, "function", "wakeflow_window_view must have a handler");
-});
-
-// Guards RA5 part 3: the focus-doc generator is reachable as an MCP tool (a write tool).
-test("wakeflow_focus_doc MCP tool is registered with a handler", () => {
-  const focus = tools.find((t) => t.name === "wakeflow_focus_doc");
-  assert.ok(focus, "wakeflow_focus_doc tool must be registered");
-  const props = focus.inputSchema?.properties ?? {};
-  for (const field of ["stateRoot", "window", "phase", "apply"]) {
-    assert.ok(props[field], `wakeflow_focus_doc must expose '${field}'`);
-  }
-  assert.equal(typeof handlers.wakeflow_focus_doc, "function", "wakeflow_focus_doc must have a handler");
+  assert.equal(typeof handlers.wakeflow_view, "function", "wakeflow_view must have a handler");
 });
 
 test("wakeflow_claim_next MCP tool is registered with a handler", () => {
@@ -70,12 +59,23 @@ test("wakeflow_prune_runtime MCP tool is registered with a handler", () => {
   assert.equal(typeof handlers.wakeflow_prune_runtime, "function", "wakeflow_prune_runtime must have a handler");
 });
 
-test("wakeflow_archive_demand MCP tool is registered with a handler", () => {
-  const archive = tools.find((t) => t.name === "wakeflow_archive_demand");
-  assert.ok(archive, "wakeflow_archive_demand tool must be registered");
+// Guards RA6 (converged): demand/todo/docs archival is reachable through the unified
+// wakeflow_archive tool selected by target; the demand redaction-guard inputs survive
+// the merge. Transport-runtime GC stays separate as wakeflow_prune_runtime (asserted above).
+test("wakeflow_archive MCP tool is registered with a handler and target routing", () => {
+  const archive = tools.find((t) => t.name === "wakeflow_archive");
+  assert.ok(archive, "wakeflow_archive tool must be registered");
   const props = archive.inputSchema?.properties ?? {};
-  assert.deepEqual(archive.inputSchema?.required, ["stateRoot", "reason"]);
-  assert.equal(props.redact?.type, "boolean", "wakeflow_archive_demand must expose a boolean 'redact' input");
-  assert.equal(props.apply?.type, "boolean", "wakeflow_archive_demand must expose a boolean 'apply' input");
-  assert.equal(typeof handlers.wakeflow_archive_demand, "function", "wakeflow_archive_demand must have a handler");
+  assert.deepEqual(archive.inputSchema?.required, ["target"]);
+  assert.deepEqual(
+    props.target?.enum,
+    ["demand", "todo", "docs"],
+    "wakeflow_archive target must enumerate demand|todo|docs",
+  );
+  // demand redaction-guard inputs + todo/docs inputs fused into one tool.
+  assert.equal(props.redact?.type, "boolean", "wakeflow_archive must keep a boolean 'redact' input (target=demand)");
+  for (const field of ["stateRoot", "reason", "evidenceRefs", "month", "date", "files", "topic", "apply"]) {
+    assert.ok(props[field], `wakeflow_archive must expose '${field}'`);
+  }
+  assert.equal(typeof handlers.wakeflow_archive, "function", "wakeflow_archive must have a handler");
 });

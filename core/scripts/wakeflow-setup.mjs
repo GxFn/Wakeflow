@@ -2380,7 +2380,7 @@ function initializePayload() {
       alreadyInitialized: true,
       initializationFootprint: writeGate.footprint,
       discovery,
-      nextAction: "This workspace is already initialized. Do not re-run initialize. Use replace-window / replace-windows (wakeflow_replace_window(s)) for heavy or stale windows, or only on explicit user request re-run with --reset-initialization and explicit --repo mappings.",
+      nextAction: "This workspace is already initialized. Do not re-run initialize. Use replace-windows (wakeflow_replace_windows; pass a single window name for one) for heavy or stale windows, or only on explicit user request re-run with --reset-initialization and explicit --repo mappings.",
     };
   }
 

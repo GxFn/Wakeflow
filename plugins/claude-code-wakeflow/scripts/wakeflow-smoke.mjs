@@ -254,18 +254,16 @@ async function runMcpSmoke(rootPath) {
     const toolNames = tools.map((tool) => tool.name);
     for (const expected of [
       "wakeflow_initialize_workspace",
-      "wakeflow_replace_window",
       "wakeflow_replace_windows",
       "wakeflow_status",
       "wakeflow_prepare_delivery",
       "wakeflow_record_delivery",
       "wakeflow_record_target_result",
       "wakeflow_review_pack",
-      "wakeflow_trace_spine",
+      "wakeflow_view",
       "wakeflow_reduce_results",
       "wakeflow_decide_review",
-      "wakeflow_archive_todo",
-      "wakeflow_archive_workspace_docs",
+      "wakeflow_archive",
       "wakeflow_verify",
     ]) {
       if (!toolNames.includes(expected)) {
@@ -440,9 +438,10 @@ async function runMcpSmoke(rootPath) {
     }
 
     const traced = await request("tools/call", {
-      name: "wakeflow_trace_spine",
+      name: "wakeflow_view",
       arguments: {
         root: rootPath,
+        scope: "trace",
         stateRoot: mcpStateRoot,
         targetWindow: "Target",
         taskId: "mcp-smoke-task",
@@ -455,7 +454,7 @@ async function runMcpSmoke(rootPath) {
       || tracedPayload.parsedJson?.traceSpine?.coverage?.dispatchPacketCount !== 1
       || tracedPayload.parsedJson?.traceSpine?.coverage?.targetResultCount !== 1
     ) {
-      throw new Error("MCP wakeflow_trace_spine did not return the task evidence spine");
+      throw new Error("MCP wakeflow_view(scope=trace) did not return the task evidence spine");
     }
 
     return { ok: true, toolCount: toolNames.length, stateRoot: mcpStateRoot };

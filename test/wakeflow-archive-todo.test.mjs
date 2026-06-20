@@ -66,7 +66,8 @@ test("archives completed rows even when the displayed status has a note suffix",
 
 test("archives completed TODO rows through the public MCP wrapper", async () => {
   const root = makeFixture();
-  const result = await handlers.wakeflow_archive_todo({
+  const result = await handlers.wakeflow_archive({
+    target: "todo",
     root,
     month: "2026-06",
     date: "2026-06-04",
@@ -102,7 +103,8 @@ test("prunes already archived workspace index rows through the public MCP wrappe
   );
   writeFile(path.resolve(root, "../wakeflow-ledger/workspace/archive/2026-06/done-topic/plan.md"), "# Archived Plan\n");
 
-  const result = await handlers.wakeflow_archive_workspace_docs({
+  const result = await handlers.wakeflow_archive({
+    target: "docs",
     root,
     pruneIndexOnly: true,
     apply: true,

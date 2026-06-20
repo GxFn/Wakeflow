@@ -26,7 +26,7 @@ function localWriteTool(title, idempotentHint = false) {
 const toolDefinitions = [
   {
     name: "wakeflow_initialize_workspace",
-    description: `Initialize a Wakeflow runtime: discover siblings, generate/apply workspace config, install ${hostProfile.memoryFileLabel} blocks, create sibling Design/Test surfaces, and record derived local window configuration. Dry-run unless apply is true. On an already initialized workspace, apply is allowed only when the user explicitly asks for reset initialization and resetInitialization is true with explicit repositories; never use useDiscovered for reset. Heavy or stale existing windows should use wakeflow_replace_window or wakeflow_replace_windows instead of initialization. Launch plans include host-profile create-window settings such as reasoning effort/model when supported. Real thread ids are registered only in the local thread registry by host-controlled follow-up, not tracked docs or this MCP schema; window config is derived from workspace config plus registry presence.`,
+    description: `Initialize a Wakeflow runtime: discover siblings, generate/apply workspace config, install ${hostProfile.memoryFileLabel} blocks, create sibling Design/Test surfaces, and record derived local window configuration. Dry-run unless apply is true. On an already initialized workspace, apply is allowed only when the user explicitly asks for reset initialization and resetInitialization is true with explicit repositories; never use useDiscovered for reset. Heavy or stale existing windows should use wakeflow_replace_windows instead of initialization. Launch plans include host-profile create-window settings such as reasoning effort/model when supported. Real thread ids are registered only in the local thread registry by host-controlled follow-up, not tracked docs or this MCP schema; window config is derived from workspace config plus registry presence.`,
     annotations: localWriteTool("Initialize Wakeflow Workspace", true),
     inputSchema: {
       type: "object",
@@ -78,38 +78,11 @@ const toolDefinitions = [
     },
   },
   {
-    name: "wakeflow_replace_window",
-    description: `Regenerate a scoped ${hostProfile.hostTools.createWindow} launch plan for exactly one existing Wakeflow logical window without reinitializing workspace docs. Use this high-frequency path when a single responsibility window is too context-heavy, stale, or needs rebinding. It reads the current workspace config, returns one replacement entry with host-profile create-window settings such as reasoning effort/model when supported, and includes the localRegistration argv template; the real thread id is registered only by host-controlled local follow-up after ${hostProfile.hostTools.createWindow} succeeds.`,
-    annotations: readOnlyTool("Plan One Wakeflow Replacement Window"),
-    inputSchema: {
-      type: "object",
-      required: ["window"],
-      properties: {
-        root: { type: "string" },
-        parent: { type: "string" },
-        language: {
-          type: "string",
-          enum: ["auto", "zh", "en"],
-          description: "Prompt/title language for the replacement window launch plan. Use zh for Chinese users, en for English users, or auto when unknown.",
-        },
-        includeRealProject: {
-          type: "boolean",
-          description: "Allow replacing the configured real-project window when that window is intentionally managed.",
-        },
-        window: {
-          type: "string",
-          description: "Existing Wakeflow logical window name to recreate. This does not add repositories or rewrite unrelated registrations.",
-        },
-      },
-    },
-  },
-  {
     name: "wakeflow_replace_windows",
-    description: `Regenerate a scoped ${hostProfile.hostTools.createWindow} launch plan for existing Wakeflow windows without reinitializing workspace docs. Use this when selected responsibility windows must be recreated or rebound more often than full initialization. The tool reads the current workspace config, returns only the requested replacement entries with host-profile create-window settings such as reasoning effort/model when supported, and includes localRegistration argv templates; real thread ids are still registered only by the host-controlled local follow-up after ${hostProfile.hostTools.createWindow} succeeds.`,
+    description: `Regenerate a scoped ${hostProfile.hostTools.createWindow} launch plan for one or more existing Wakeflow windows without reinitializing workspace docs. Pass window for the high-frequency single-window path (a responsibility window that is too context-heavy, stale, or needs rebinding) or windows for a batch. The tool reads the current workspace config, returns only the requested replacement entries with host-profile create-window settings such as reasoning effort/model when supported, and includes localRegistration argv templates; real thread ids are still registered only by the host-controlled local follow-up after ${hostProfile.hostTools.createWindow} succeeds.`,
     annotations: readOnlyTool("Plan Wakeflow Replacement Windows"),
     inputSchema: {
       type: "object",
-      required: ["windows"],
       properties: {
         root: { type: "string" },
         parent: { type: "string" },
@@ -122,11 +95,15 @@ const toolDefinitions = [
           type: "boolean",
           description: "Allow replacing the configured real-project window when that window is intentionally managed.",
         },
+        window: {
+          type: "string",
+          description: "Recreate exactly ONE existing Wakeflow logical window (high-frequency path). Provide window or windows, not both.",
+        },
         windows: {
           type: "array",
           minItems: 1,
           items: { type: "string" },
-          description: "Existing Wakeflow logical window names to recreate. This does not add new repositories or rewrite unrelated registrations.",
+          description: "Existing Wakeflow logical window names to recreate as a batch. Provide window or windows, not both.",
         },
       },
     },
@@ -307,63 +284,30 @@ const toolDefinitions = [
     },
   },
   {
-    name: "wakeflow_task_ledger",
-    description: "Read-only unified per-task rollup for a demand state root: for EVERY target task (accepted history preserved) it fuses execution status, acceptance decision, latest result, test-card status, and handling counts (dispatchCount/reworkCount persisted; retestCount/supplementCount derived). Use it to see how many times each task was dispatched/reworked/tested before a controller decision. Evidence, not acceptance.",
-    annotations: readOnlyTool("Wakeflow Task Ledger"),
+    name: "wakeflow_view",
+    description: "Read-only (mostly) projections for a demand state root; scope selects which. task-ledger: unified per-task rollup for EVERY target task (accepted history preserved) — execution status, acceptance decision, latest result, test-card status, and handling counts (dispatchCount/reworkCount persisted; retestCount/supplementCount derived). window: per-window orientation card — the tasks that belong to a window (with handling counts), its task packages, its rollup, and the file areas where its state-root/transport files live. focus: generate a focused, regenerable sub-document for one window (or best-effort one phase) under focus/ — dry-run by default, apply:true writes under the owning-host gate (focus docs are never state authority). trace: trace the evidence spine for a state root, dispatch group, delivery, target, or target result. Evidence, not acceptance, and never a host send.",
+    annotations: localWriteTool("Wakeflow View Projection"),
     inputSchema: {
       type: "object",
+      required: ["scope"],
       properties: {
         root: { type: "string" },
+        scope: {
+          type: "string",
+          enum: ["task-ledger", "window", "focus", "trace"],
+          description: "Which projection to return: task-ledger | window | focus | trace.",
+        },
         stateRoot: { type: "string" },
-        taskId: { type: "string" },
-        targetWindow: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_window_view",
-    description: "Read-only per-window orientation card for a demand state root: the tasks that belong to a window (with handling counts), its task packages, its window rollup, and the exact file areas where its state-root and transport files live. Use it so a window quickly finds its own tasks and files. No write.",
-    annotations: readOnlyTool("Wakeflow Window View"),
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string" },
-        window: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_focus_doc",
-    description: "Generate a focused, regenerable sub-document for one window (or, best-effort, one phase) of a demand state root — a distilled card written under focus/. Dry-run by default; apply:true writes under the owning-host gate. Focus docs are never state authority.",
-    annotations: localWriteTool("Generate Wakeflow Focus Doc"),
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string" },
-        window: { type: "string" },
-        phase: { type: "string" },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_trace_spine",
-    description: "Trace the Wakeflow evidence spine for a state root, dispatch group, delivery, target, or target result. Read-only diagnostic evidence; not controller acceptance and not a host send.",
-    annotations: readOnlyTool("Trace Wakeflow Evidence Spine"),
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string" },
-        dispatchGroup: { type: "string" },
-        targetWindow: { type: "string" },
-        taskId: { type: "string" },
-        resultFile: { type: "string" },
-        resultId: { type: "string" },
-        deliveryFile: { type: "string" },
-        deliveryId: { type: "string" },
+        window: { type: "string", description: "Window name for scope=window or scope=focus." },
+        phase: { type: "string", description: "Best-effort phase for scope=focus." },
+        apply: { type: "boolean", description: "scope=focus only: write the focus doc (default dry-run)." },
+        taskId: { type: "string", description: "Task id for scope=task-ledger or scope=trace." },
+        targetWindow: { type: "string", description: "Target window for scope=task-ledger or scope=trace." },
+        dispatchGroup: { type: "string", description: "Dispatch group for scope=trace." },
+        resultFile: { type: "string", description: "Result file for scope=trace." },
+        resultId: { type: "string", description: "Result id for scope=trace." },
+        deliveryFile: { type: "string", description: "Delivery file for scope=trace." },
+        deliveryId: { type: "string", description: "Delivery id for scope=trace." },
       },
     },
   },
@@ -423,18 +367,32 @@ const toolDefinitions = [
     },
   },
   {
-    name: "wakeflow_archive_demand",
-    description: "Archive a completed demand by relocating its state root into the committed ledger. Dry-run unless apply is true. A P1-0 redaction guard refuses on any real-id-shaped string unless redact relocates a cleaned copy (the original is preserved for audit). This commits state-root content to the version-controlled ledger; review redactedFields before pushing.",
-    annotations: localWriteTool("Archive Wakeflow Demand"),
+    name: "wakeflow_archive",
+    description: "Archive completed Wakeflow content into the committed ledger; target selects which. demand: relocate a completed demand state root into the ledger — a P1-0 redaction guard refuses on any real-id-shaped string unless redact relocates a cleaned copy (original preserved for audit); commits state-root content to the version-controlled ledger, review redactedFields before pushing. todo: completed TODO rows + historical sync records into the workspace ledger. docs: explicit completed workspace documents into a ledger topic, or prune active index rows that already point at archive topics (never archives the active index/current plan by inference). Dry-run unless apply is true. Records archive facts only — never accepts work, selects next work, or sends host messages. (Transport-runtime GC is the separate wakeflow_prune_runtime.)",
+    annotations: localWriteTool("Archive Wakeflow Content"),
     inputSchema: {
       type: "object",
-      required: ["stateRoot", "reason"],
+      required: ["target"],
       properties: {
         root: { type: "string" },
-        stateRoot: { type: "string" },
-        reason: { type: "string" },
-        redact: { type: "boolean" },
-        evidenceRefs: { type: "array", items: { type: "string" } },
+        target: {
+          type: "string",
+          enum: ["demand", "todo", "docs"],
+          description: "What to archive: demand (a completed demand state root) | todo (completed TODO rows + sync records) | docs (explicit workspace documents).",
+        },
+        stateRoot: { type: "string", description: "target=demand: the completed demand state root to relocate." },
+        reason: { type: "string", description: "target=demand: required archive reason." },
+        redact: { type: "boolean", description: "target=demand: relocate a redacted copy when real-id-shaped strings are present." },
+        evidenceRefs: { type: "array", items: { type: "string" }, description: "target=demand: evidence references to record." },
+        month: { type: "string", description: "target=todo/docs: archive month YYYY-MM (backend policy default when omitted)." },
+        date: { type: "string", description: "target=todo: archive date YYYY-MM-DD (today when omitted)." },
+        keepCompleted: { type: "number", description: "target=todo: completed TODO rows to keep on the active board." },
+        keepSync: { type: "number", description: "target=todo: historical sync records to keep on the active board." },
+        topic: { type: "string", description: "target=docs: archive topic folder (required when files are supplied; normalized to a safe kebab-case segment)." },
+        files: { type: "array", items: { type: "string" }, description: "target=docs: workspace Markdown documents to archive (omit only when pruneIndexOnly is true)." },
+        keepIndexRows: { type: "boolean", description: "target=docs: keep source index rows instead of trimming archived rows." },
+        pruneIndexOnly: { type: "boolean", description: "target=docs: only prune index rows for already-archived docs; do not move files." },
+        refreshSummaries: { type: "boolean", description: "target=todo/docs: refresh archive summary indexes after a successful run." },
         apply: { type: "boolean" },
       },
     },
@@ -538,75 +496,6 @@ const toolDefinitions = [
     },
   },
   {
-    name: "wakeflow_archive_todo",
-    description: "Archive completed Wakeflow TODO rows and historical sync records into the configured workspace ledger. Dry-run unless apply is true. This tool records archive facts only; it does not accept work, select next work, or send host messages.",
-    annotations: localWriteTool("Archive Wakeflow TODO Rows"),
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        month: {
-          type: "string",
-          description: "Archive month in YYYY-MM. Defaults to the backend policy when omitted.",
-        },
-        date: {
-          type: "string",
-          description: "Archive date in YYYY-MM-DD. Defaults to today's date when omitted.",
-        },
-        keepCompleted: {
-          type: "number",
-          description: "Number of completed TODO rows to keep on the active board.",
-        },
-        keepSync: {
-          type: "number",
-          description: "Number of historical sync records to keep on the active board.",
-        },
-        apply: { type: "boolean" },
-        refreshSummaries: {
-          type: "boolean",
-          description: "Refresh archive summary indexes after a successful archive run.",
-        },
-      },
-    },
-  },
-  {
-    name: "wakeflow_archive_workspace_docs",
-    description: "Archive explicit completed Wakeflow workspace documents into the configured workspace ledger topic, or prune active index rows that already point at archive topics. Dry-run unless apply is true. This tool never archives the active index/current plan by inference.",
-    annotations: localWriteTool("Archive Wakeflow Workspace Documents"),
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        topic: {
-          type: "string",
-          description: "Archive topic folder name. Required when files are supplied. The backend normalizes it to a safe kebab-case segment.",
-        },
-        month: {
-          type: "string",
-          description: "Archive month in YYYY-MM. Defaults to the backend policy when omitted.",
-        },
-        files: {
-          type: "array",
-          items: { type: "string" },
-          description: "Active workspace Markdown documents to archive. Omit only when pruneIndexOnly is true.",
-        },
-        keepIndexRows: {
-          type: "boolean",
-          description: "Keep source index rows instead of trimming archived rows.",
-        },
-        pruneIndexOnly: {
-          type: "boolean",
-          description: "Only prune index rows for already archived docs; do not move files.",
-        },
-        apply: { type: "boolean" },
-        refreshSummaries: {
-          type: "boolean",
-          description: "Refresh archive summary indexes after a successful archive run.",
-        },
-      },
-    },
-  },
-  {
     name: "wakeflow_verify",
     description: "Run embedded Wakeflow runtime verification for an installed workspace or the Wakeflow source repository. Set withRuntime for the runtime-residue check (strictRuntime to fail on blocking residue); scriptTests to run the script test suite.",
     annotations: readOnlyTool("Verify Wakeflow Runtime"),
@@ -628,7 +517,7 @@ const toolDefinitions = [
 const HOST_VISIBLE_PRIORITY_TOOLS = [
   "wakeflow_status",
   "wakeflow_initialize_workspace",
-  "wakeflow_replace_window",
+  "wakeflow_replace_windows",
   "wakeflow_init_demand",
   "wakeflow_add_task",
   "wakeflow_prepare_delivery",
@@ -681,30 +570,27 @@ export const handlers = {
     ],
     cwd: args.root || undefined,
   }),
-  wakeflow_replace_window: (args) => runWakeflowRuntime({
-    script: "wakeflow-setup",
-    args: [
-      "replace-window",
-      ...rootArgs(args),
-      ...optionalValue("--parent", args.parent),
-      ...optionalValue("--language", args.language),
-      ...(args.includeRealProject ? ["--include-real-project"] : []),
-      ...optionalValue("--window", args.window),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
   wakeflow_replace_windows: (args) => runWakeflowRuntime({
     script: "wakeflow-setup",
-    args: [
-      "replace-windows",
-      ...rootArgs(args),
-      ...optionalValue("--parent", args.parent),
-      ...optionalValue("--language", args.language),
-      ...(args.includeRealProject ? ["--include-real-project"] : []),
-      ...repeatValues("--window", args.windows),
-      "--json",
-    ],
+    args: args.window
+      ? [
+          "replace-window",
+          ...rootArgs(args),
+          ...optionalValue("--parent", args.parent),
+          ...optionalValue("--language", args.language),
+          ...(args.includeRealProject ? ["--include-real-project"] : []),
+          ...optionalValue("--window", args.window),
+          "--json",
+        ]
+      : [
+          "replace-windows",
+          ...rootArgs(args),
+          ...optionalValue("--parent", args.parent),
+          ...optionalValue("--language", args.language),
+          ...(args.includeRealProject ? ["--include-real-project"] : []),
+          ...repeatValues("--window", args.windows),
+          "--json",
+        ],
     cwd: args.root || undefined,
   }),
   wakeflow_adopt_demand_host: (args) => runWakeflowRuntime({
@@ -871,55 +757,66 @@ export const handlers = {
       "--json",
     ],
   }),
-  wakeflow_task_ledger: (args) => runWakeflowRuntime({
-    script: "wakeflow-delivery",
-    args: [
-      "task-ledger",
-      ...optionalValue("--state-root", args.stateRoot),
-      ...optionalValue("--task-id", args.taskId),
-      ...optionalValue("--target-window", args.targetWindow),
-      ...rootArgs(args),
-      "--json",
-    ],
-  }),
-  wakeflow_window_view: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "window-view",
-      ...optionalValue("--state-root", args.stateRoot),
-      ...optionalValue("--window", args.window),
-      ...rootArgs(args),
-      "--json",
-    ],
-  }),
-  wakeflow_focus_doc: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "focus-doc",
-      ...optionalValue("--state-root", args.stateRoot),
-      ...optionalValue("--window", args.window),
-      ...optionalValue("--phase", args.phase),
-      ...(args.apply ? ["--write"] : []),
-      ...rootArgs(args),
-      "--json",
-    ],
-  }),
-  wakeflow_trace_spine: (args) => runWakeflowRuntime({
-    script: "wakeflow-delivery",
-    args: [
-      "trace-spine",
-      ...optionalValue("--state-root", args.stateRoot),
-      ...optionalValue("--group", args.dispatchGroup),
-      ...optionalValue("--target-window", args.targetWindow),
-      ...optionalValue("--task-id", args.taskId),
-      ...optionalValue("--result-file", args.resultFile),
-      ...optionalValue("--result-id", args.resultId),
-      ...optionalValue("--delivery-file", args.deliveryFile),
-      ...optionalValue("--delivery-id", args.deliveryId),
-      ...rootArgs(args),
-      "--json",
-    ],
-  }),
+  wakeflow_view: (args) => {
+    if (args.scope === "task-ledger") {
+      return runWakeflowRuntime({
+        script: "wakeflow-delivery",
+        args: [
+          "task-ledger",
+          ...optionalValue("--state-root", args.stateRoot),
+          ...optionalValue("--task-id", args.taskId),
+          ...optionalValue("--target-window", args.targetWindow),
+          ...rootArgs(args),
+          "--json",
+        ],
+      });
+    }
+    if (args.scope === "window") {
+      return runWakeflowRuntime({
+        script: "wakeflow-state",
+        args: [
+          "window-view",
+          ...optionalValue("--state-root", args.stateRoot),
+          ...optionalValue("--window", args.window),
+          ...rootArgs(args),
+          "--json",
+        ],
+      });
+    }
+    if (args.scope === "focus") {
+      return runWakeflowRuntime({
+        script: "wakeflow-state",
+        args: [
+          "focus-doc",
+          ...optionalValue("--state-root", args.stateRoot),
+          ...optionalValue("--window", args.window),
+          ...optionalValue("--phase", args.phase),
+          ...(args.apply ? ["--write"] : []),
+          ...rootArgs(args),
+          "--json",
+        ],
+      });
+    }
+    if (args.scope === "trace") {
+      return runWakeflowRuntime({
+        script: "wakeflow-delivery",
+        args: [
+          "trace-spine",
+          ...optionalValue("--state-root", args.stateRoot),
+          ...optionalValue("--group", args.dispatchGroup),
+          ...optionalValue("--target-window", args.targetWindow),
+          ...optionalValue("--task-id", args.taskId),
+          ...optionalValue("--result-file", args.resultFile),
+          ...optionalValue("--result-id", args.resultId),
+          ...optionalValue("--delivery-file", args.deliveryFile),
+          ...optionalValue("--delivery-id", args.deliveryId),
+          ...rootArgs(args),
+          "--json",
+        ],
+      });
+    }
+    throw new Error(`wakeflow_view: unknown scope "${args.scope}" (expected task-ledger | window | focus | trace)`);
+  },
   wakeflow_reduce_results: (args) => runWakeflowRuntime({
     script: "wakeflow-state",
     args: [
@@ -960,19 +857,64 @@ export const handlers = {
       "--json",
     ],
   }),
-  wakeflow_archive_demand: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "archive-demand",
-      "--state-root", args.stateRoot,
-      "--reason", args.reason,
-      ...(args.redact ? ["--redact"] : []),
-      ...repeatValues("--evidence-ref", args.evidenceRefs ?? []),
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-  }),
+  wakeflow_archive: async (args) => {
+    if (args.target === "demand") {
+      return runWakeflowRuntime({
+        script: "wakeflow-state",
+        args: [
+          "archive-demand",
+          "--state-root", args.stateRoot,
+          "--reason", args.reason,
+          ...(args.redact ? ["--redact"] : []),
+          ...repeatValues("--evidence-ref", args.evidenceRefs ?? []),
+          ...rootArgs(args),
+          ...(args.apply ? ["--write"] : []),
+          "--json",
+        ],
+      });
+    }
+    if (args.target === "todo") {
+      const archive = await runWakeflowRuntime({
+        script: "wakeflow-archive-todo",
+        args: [
+          ...rootArgs(args),
+          ...optionalValue("--month", args.month),
+          ...optionalValue("--date", args.date),
+          ...optionalValue("--keep-completed", args.keepCompleted),
+          ...optionalValue("--keep-sync", args.keepSync),
+          ...(args.apply ? ["--apply"] : []),
+          "--json",
+        ],
+        cwd: args.root || undefined,
+      });
+      return maybeRefreshArchiveSummaries(args, archive);
+    }
+    if (args.target === "docs") {
+      const files = asStringList(args.files);
+      if (files.length === 0 && !args.pruneIndexOnly) {
+        throw new Error("wakeflow_archive target=docs requires files unless pruneIndexOnly is true");
+      }
+      if (files.length > 0) {
+        requireValueForTool(args, "topic", "wakeflow_archive (target=docs)");
+      }
+      const archive = await runWakeflowRuntime({
+        script: "wakeflow-archive-docs",
+        args: [
+          ...rootArgs(args),
+          ...optionalValue("--topic", args.topic),
+          ...optionalValue("--month", args.month),
+          ...repeatValues("--file", files),
+          ...(args.keepIndexRows ? ["--keep-index-rows"] : []),
+          ...(args.pruneIndexOnly ? ["--prune-index-only"] : []),
+          ...(args.apply ? ["--apply"] : []),
+          "--json",
+        ],
+        cwd: args.root || undefined,
+      });
+      return maybeRefreshArchiveSummaries(args, archive);
+    }
+    throw new Error(`wakeflow_archive: unknown target "${args.target}" (expected demand | todo | docs)`);
+  },
   wakeflow_intake_design_handoff: (args) => runWakeflowRuntime({
     script: "wakeflow-intake",
     args: [
@@ -1044,46 +986,6 @@ export const handlers = {
     ],
     cwd: args.root || undefined,
   }),
-  wakeflow_archive_todo: async (args) => {
-    const archive = await runWakeflowRuntime({
-      script: "wakeflow-archive-todo",
-      args: [
-        ...rootArgs(args),
-        ...optionalValue("--month", args.month),
-        ...optionalValue("--date", args.date),
-        ...optionalValue("--keep-completed", args.keepCompleted),
-        ...optionalValue("--keep-sync", args.keepSync),
-        ...(args.apply ? ["--apply"] : []),
-        "--json",
-      ],
-      cwd: args.root || undefined,
-    });
-    return maybeRefreshArchiveSummaries(args, archive);
-  },
-  wakeflow_archive_workspace_docs: async (args) => {
-    const files = asStringList(args.files);
-    if (files.length === 0 && !args.pruneIndexOnly) {
-      throw new Error("wakeflow_archive_workspace_docs requires files unless pruneIndexOnly is true");
-    }
-    if (files.length > 0) {
-      requireValueForTool(args, "topic", "wakeflow_archive_workspace_docs");
-    }
-    const archive = await runWakeflowRuntime({
-      script: "wakeflow-archive-docs",
-      args: [
-        ...rootArgs(args),
-        ...optionalValue("--topic", args.topic),
-        ...optionalValue("--month", args.month),
-        ...repeatValues("--file", files),
-        ...(args.keepIndexRows ? ["--keep-index-rows"] : []),
-        ...(args.pruneIndexOnly ? ["--prune-index-only"] : []),
-        ...(args.apply ? ["--apply"] : []),
-        "--json",
-      ],
-      cwd: args.root || undefined,
-    });
-    return maybeRefreshArchiveSummaries(args, archive);
-  },
   wakeflow_verify: (args) => runWakeflowRuntime({
     script: "wakeflow-cli",
     args: [

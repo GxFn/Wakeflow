@@ -218,7 +218,6 @@ function validateMcpConfig() {
   const mcpText = readText("lib/wakeflow-mcp-tools.mjs");
   for (const tool of [
     "wakeflow_initialize_workspace",
-    "wakeflow_replace_window",
     "wakeflow_replace_windows",
     "wakeflow_status",
     "wakeflow_init_demand",
@@ -228,13 +227,13 @@ function validateMcpConfig() {
     "wakeflow_record_delivery",
     "wakeflow_record_target_result",
     "wakeflow_review_pack",
+    "wakeflow_view",
     "wakeflow_reduce_results",
     "wakeflow_decide_review",
     "wakeflow_complete_demand",
     "wakeflow_intake_design_handoff",
     "wakeflow_intake_test_card",
-    "wakeflow_archive_todo",
-    "wakeflow_archive_workspace_docs",
+    "wakeflow_archive",
     "wakeflow_verify",
   ]) {
     if (!mcpText.includes(`name: "${tool}"`)) errors.push(`MCP tool is missing: ${tool}`);
@@ -340,7 +339,7 @@ function validateSkillSurface() {
   for (const required of [
     "workspace initialization",
     "wakeflow_initialize_workspace",
-    "wakeflow_replace_window",
+    "wakeflow_replace_windows",
     "apply: false",
     "MCP server is unavailable",
   ]) {

@@ -824,9 +824,9 @@ test("wakeflow_replace_windows MCP wrapper returns a scoped replacement plan", a
   assert.deepEqual(result.parsedJson.steps.windowLaunchPlan.windows.map((item) => item.windowName), ["BaseWindow"]);
 });
 
-test("wakeflow_replace_window MCP wrapper returns one scoped replacement plan", async () => {
+test("wakeflow_replace_windows(window) MCP wrapper returns one scoped replacement plan", async () => {
   const fixture = makeFixture();
-  const result = await handlers.wakeflow_replace_window({
+  const result = await handlers.wakeflow_replace_windows({
     root: fixture.control,
     window: "BaseWindow",
     language: "zh",
@@ -843,7 +843,7 @@ test("MCP tool order keeps controller review loop inside the host-visible prefix
   assert.deepEqual(tools.slice(0, 12).map((tool) => tool.name), [
     "wakeflow_status",
     "wakeflow_initialize_workspace",
-    "wakeflow_replace_window",
+    "wakeflow_replace_windows",
     "wakeflow_init_demand",
     "wakeflow_add_task",
     "wakeflow_prepare_delivery",

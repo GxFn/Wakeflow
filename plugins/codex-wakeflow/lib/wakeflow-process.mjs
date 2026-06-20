@@ -1,6 +1,8 @@
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 
+const defaultSpawnSyncMaxBuffer = 64 * 1024 * 1024;
+
 const allowedGitSubcommands = new Set([
   "add",
   "branch",
@@ -33,7 +35,7 @@ const blockedNodeFlags = new Set([
 // commands outside Wakeflow's fixed runtime/git/process/keep-live needs.
 export function execFileText(command, args, options = {}) {
   const prepared = prepareWakeflowCommand(command, args, options);
-  const result = spawnSync(prepared.command, prepared.args, options);
+  const result = spawnSync(prepared.command, prepared.args, withSpawnSyncDefaults(options));
   if (result.error) {
     throw result.error;
   }
@@ -47,7 +49,7 @@ export function execFileText(command, args, options = {}) {
 
 export function runSync(command, args, options = {}) {
   const prepared = prepareWakeflowCommand(command, args, options);
-  return spawnSync(prepared.command, prepared.args, options);
+  return spawnSync(prepared.command, prepared.args, withSpawnSyncDefaults(options));
 }
 
 export function spawnProcess(command, args, options = {}) {
@@ -81,6 +83,14 @@ function assertSafeOptions(options) {
   if (options?.shell) {
     throw new Error("Wakeflow process execution forbids shell mode");
   }
+}
+
+function withSpawnSyncDefaults(options = {}) {
+  const merged = { ...options };
+  if (merged.maxBuffer === undefined) {
+    merged.maxBuffer = defaultSpawnSyncMaxBuffer;
+  }
+  return merged;
 }
 
 function assertStringArray(value, label) {

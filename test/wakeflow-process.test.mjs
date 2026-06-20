@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
   execFileText,
@@ -36,4 +39,24 @@ test("wakeflow process boundary rejects shell mode and unsupported commands", ()
     () => runSync(process.execPath, ["-e", "console.log('no')"], { encoding: "utf8" }),
     /Unsupported Wakeflow node flag: -e/,
   );
+});
+
+test("Wakeflow spawnSync wrapper buffers large local JSON-sized output", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "wakeflow-process-buffer-"));
+  try {
+    const script = path.join(root, "large-output.mjs");
+    writeFileSync(script, "process.stdout.write('x'.repeat(2 * 1024 * 1024));\n");
+
+    const result = runSync(process.execPath, [script], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    assert.equal(result.status, 0, result.error?.message);
+    assert.equal(result.error, undefined);
+    assert.equal(result.stdout.length, 2 * 1024 * 1024);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

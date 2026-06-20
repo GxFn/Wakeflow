@@ -133,8 +133,9 @@ function verifyArgs(options) {
 }
 
 function buildStatus(options) {
-  assertKnownOptions(options, ["--json"], ["--root"]);
+  assertKnownOptions(options, ["--json", "--verbose"], ["--root"]);
   const json = hasFlag(options, "--json");
+  const verbose = hasFlag(options, "--verbose");
   const root = getValue(options, "--root");
   return [
     {
@@ -145,7 +146,7 @@ function buildStatus(options) {
     {
       label: "closed-loop status",
       key: "closedLoopStatus",
-      ...nodeScript("wakeflow-delivery.mjs", ["status", ...optionalRoot(root), ...(json ? ["--json"] : [])]),
+      ...nodeScript("wakeflow-delivery.mjs", ["status", ...optionalRoot(root), ...(json ? ["--json"] : []), ...(verbose ? ["--verbose"] : [])]),
     },
   ];
 }

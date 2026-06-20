@@ -330,6 +330,144 @@ export function commandStatus(ctx) {
     };
   }
 
+  function compactArray(items = [], limit = 10) {
+    const list = Array.isArray(items) ? items : [];
+    return list.slice(0, limit);
+  }
+
+  function truncatedCount(items = [], limit = 10) {
+    return Math.max(0, (Array.isArray(items) ? items.length : 0) - limit);
+  }
+
+  function compactKeepLive(value = {}) {
+    return {
+      active: Boolean(value.active),
+      status: value.status || "unknown",
+      workerPid: value.workerPid,
+      childPid: value.childPid,
+      activeRunCount: value.activeRunCount,
+      stateFile: value.stateFile,
+    };
+  }
+
+  function compactDeliveryStatus(item = {}) {
+    return {
+      file: item.file,
+      deliveryId: item.deliveryId,
+      kind: item.kind,
+      targetWindow: item.targetWindow,
+      taskId: item.taskId,
+      dispatchGroup: item.dispatchGroup,
+      status: item.status,
+      sent: item.sent,
+      readbackOk: item.readbackOk,
+      runCount: item.runCount,
+      latestRunFile: item.latestRunFile,
+    };
+  }
+
+  function compactGroupSummary(item = {}) {
+    return {
+      groupId: item.groupId,
+      stateRoot: item.stateRoot,
+      groupStatus: item.groupStatus,
+      returnMode: item.returnPolicy?.mode,
+      counts: item.counts || {},
+      targetCount: item.targets?.length || 0,
+      callbackPlan: item.callbackPlan
+        ? {
+            status: item.callbackPlan.status,
+            nextAction: item.callbackPlan.nextAction,
+            ready: item.callbackPlan.ready,
+            reason: item.callbackPlan.reason,
+            controllerReturnRequired: item.callbackPlan.controllerReturnRequired,
+            hostSendRequired: item.callbackPlan.hostSendRequired,
+          }
+        : undefined,
+    };
+  }
+
+  function compactRuntimeSummary(summary) {
+    const resumePlan = summary.resumePlan || {};
+    const health = summary.health || {};
+    const replay = summary.replay || {};
+    return {
+      kind: summary.kind,
+      version: summary.version,
+      status: summary.status,
+      nextAction: summary.nextAction,
+      wakeflowTrace: summary.wakeflowTrace,
+      totals: summary.totals,
+      keepLive: summary.keepLive,
+      health: {
+        ...health,
+        checks: {
+          ...health.checks,
+          projection: health.checks?.projection
+            ? {
+                ...health.checks.projection,
+                staleStateRoots: health.checks.projection.staleStateRoots?.slice(0, 10) || [],
+                staleStateRootsTruncated: Math.max(0, (health.checks.projection.staleStateRoots?.length || 0) - 10),
+              }
+            : undefined,
+        },
+        issues: compactArray(health.issues, 10),
+      },
+      resumePlan: {
+        ...resumePlan,
+        steps: compactArray(resumePlan.steps, 10),
+        stepsTruncated: truncatedCount(resumePlan.steps, 10),
+      },
+      deliveries: {
+        counts: summary.deliveries?.counts || {},
+        pendingHostSend: compactArray(summary.deliveries?.pendingHostSend, 10).map(compactDeliveryStatus),
+        failed: compactArray(summary.deliveries?.failed, 10).map(compactDeliveryStatus),
+        blocked: compactArray(summary.deliveries?.blocked, 10).map(compactDeliveryStatus),
+        sentCount: summary.deliveries?.sent?.length || 0,
+      },
+      groups: {
+        counts: summary.groups?.counts || {},
+        items: compactArray(summary.groups?.items, 10).map(compactGroupSummary),
+        itemsTruncated: truncatedCount(summary.groups?.items, 10),
+      },
+      replay: {
+        kind: replay.kind,
+        version: replay.version,
+        status: replay.status,
+        deliveryAttemptCount: replay.deliveryAttemptCount,
+        repeatedDeliveryAttemptCount: replay.repeatedDeliveryAttemptCount,
+        repeatedDeliveryAttempts: compactArray(replay.repeatedDeliveryAttempts, 10),
+        repeatedDeliveryAttemptsTruncated: truncatedCount(replay.repeatedDeliveryAttempts, 10),
+        targetResultCount: replay.targetResultCount,
+        supersededTargetResultCount: replay.supersededTargetResultCount,
+        supersededTargetResults: compactArray(replay.supersededTargetResults, 10),
+        supersededTargetResultsTruncated: truncatedCount(replay.supersededTargetResults, 10),
+        missingIdempotencyKeyCount: replay.missingIdempotencyKeyCount,
+        missingIdempotencyKeys: compactArray(replay.missingIdempotencyKeys, 10),
+        missingIdempotencyKeysTruncated: truncatedCount(replay.missingIdempotencyKeys, 10),
+        forbiddenConclusions: replay.forbiddenConclusions,
+      },
+      diagnostics: {
+        errors: compactArray(summary.diagnostics?.errors, 20),
+        errorsTruncated: truncatedCount(summary.diagnostics?.errors, 20),
+      },
+      truncation: {
+        healthIssues: truncatedCount(health.issues, 10),
+        resumePlanSteps: truncatedCount(resumePlan.steps, 10),
+        pendingHostSendDeliveries: truncatedCount(summary.deliveries?.pendingHostSend, 10),
+        failedDeliveries: truncatedCount(summary.deliveries?.failed, 10),
+        blockedDeliveries: truncatedCount(summary.deliveries?.blocked, 10),
+        groupItems: truncatedCount(summary.groups?.items, 10),
+        repeatedDeliveryAttempts: truncatedCount(replay.repeatedDeliveryAttempts, 10),
+        supersededTargetResults: truncatedCount(replay.supersededTargetResults, 10),
+        missingIdempotencyKeys: truncatedCount(replay.missingIdempotencyKeys, 10),
+        diagnosticsErrors: truncatedCount(summary.diagnostics?.errors, 20),
+      },
+      detail: "compact",
+      fullStatusCommand: "wakeflow-delivery status --verbose --json",
+    };
+  }
+
   if (hasFlag("--help") || hasFlag("-h")) {
     console.log(helpText);
     return;
@@ -341,6 +479,7 @@ export function commandStatus(ctx) {
   const resultCount = listJsonFiles(dirs.results).length;
   const registeredThreadCount = listJsonFiles(dirs.registry).length;
   const windowConfigCount = listJsonFiles(dirs.windowConfig).length;
+  const verbose = hasFlag("--verbose") || hasFlag("--full");
   const keepLive = keepLiveStatus();
   const keepLiveStateExists = existsSync(keepLiveStateFile());
   const runtimeSummary = buildRuntimeSummary({
@@ -366,7 +505,7 @@ export function commandStatus(ctx) {
       registeredThreadCount,
       windowConfigCount,
       keepLiveStateExists,
-      keepLive,
+      keepLive: verbose ? keepLive : compactKeepLive(keepLive),
       // Cross-host visibility: which hosts have registered windows in this
       // workspace and which windows hold a fresh in-flight delivery lock.
       dualHost: {
@@ -381,7 +520,7 @@ export function commandStatus(ctx) {
             }))
           : [],
       },
-      runtimeSummary,
+      runtimeSummary: verbose ? runtimeSummary : compactRuntimeSummary(runtimeSummary),
     },
     [
       "Wakeflow delivery-loop status",

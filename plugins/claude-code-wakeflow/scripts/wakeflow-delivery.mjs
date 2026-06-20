@@ -39,7 +39,7 @@ const helpText = `
 Wakeflow delivery-loop contract manager
 
 Usage:
-  node scripts/wakeflow-delivery.mjs status [--json]
+  node scripts/wakeflow-delivery.mjs status [--json] [--verbose]
   node scripts/wakeflow-delivery.mjs prune-runtime [--before <iso>] [--write] [--json]
   node scripts/wakeflow-delivery.mjs release-window-lock --window <name> [--write] [--json]
   node scripts/wakeflow-delivery.mjs register-thread --window <name> --thread-id <id> --write [--json]

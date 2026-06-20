@@ -121,7 +121,7 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
   const binding = JSON.parse(readFileSync(bindingFile, "utf8"));
   assert.equal(binding.kind, "ClaudeWindowHostBinding");
   assert.equal(binding.threadId, launched.sessionId);
-  assert.equal(binding.tmux.server, serverSession);
+  assert.equal(binding.tmux.session, serverSession);
 
   const deliveryPrompt = path.join(root, "delivery-prompt.txt");
   writeFileSync(deliveryPrompt, "wakeflow-delivery-marker line-one\nline-two\n");
@@ -306,7 +306,7 @@ test("activity-monitor --once marks live-executing windows running and clears id
     windowName: "Busy",
     threadId: "test-busy",
     cwd: root,
-    tmux: { server: serverSession, windowId: busyWindow, title: "Busy" },
+    tmux: { session: serverSession, windowId: busyWindow, title: "Busy" },
   }));
   writeFileSync(path.join(bindingDir, "Idle.json"), JSON.stringify({
     kind: "ClaudeWindowHostBinding",
@@ -314,7 +314,7 @@ test("activity-monitor --once marks live-executing windows running and clears id
     windowName: "Idle",
     threadId: "test-idle",
     cwd: root,
-    tmux: { server: serverSession, windowId: idleWindow, title: "Idle" },
+    tmux: { session: serverSession, windowId: idleWindow, title: "Idle" },
   }));
   await new Promise((r) => setTimeout(r, 800));
 

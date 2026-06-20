@@ -249,7 +249,7 @@ function readBinding(windowName) {
 }
 
 function windowAlive(binding) {
-  const result = tmux(["list-windows", "-t", binding.tmux.server, "-F", "#{window_id}"], { allowFailure: true });
+  const result = tmux(["list-windows", "-t", binding.tmux.session, "-F", "#{window_id}"], { allowFailure: true });
   if (result.status !== 0) return false;
   return result.stdout.split("\n").map((line) => line.trim()).includes(binding.tmux.windowId);
 }
@@ -644,7 +644,7 @@ async function commandLaunchWindow() {
     windowName,
     threadId: sessionId,
     cwd,
-    tmux: { server: serverSession, windowId, title },
+    tmux: { session: serverSession, windowId, title },
     createdAt: nowIso(),
   };
   writeJson(bindingFileFor(windowName), binding);
@@ -917,14 +917,14 @@ function commandAttachWindow() {
   // attaches. Programmatic tab-opening (osascript) proved unreliable across
   // terminals (tabs flash and close), so it is intentionally not offered.
   const attach = tmuxSocket
-    ? `tmux -L ${tmuxSocket} attach -t ${binding.tmux.server}`
-    : `tmux attach -t ${binding.tmux.server}`;
+    ? `tmux -L ${tmuxSocket} attach -t ${binding.tmux.session}`
+    : `tmux attach -t ${binding.tmux.session}`;
   output({
     ok: true,
     command: "attach-window",
     windowName,
     windowId: binding.tmux.windowId,
-    server: binding.tmux.server,
+    session: binding.tmux.session,
     attach,
     instruction: `Open a new terminal window or tab, cd into this workspace, and run: ${attach}`,
   });

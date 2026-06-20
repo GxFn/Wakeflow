@@ -219,7 +219,7 @@ Preview the plan first and wait for my confirmation before writing.
 | --- | --- | --- |
 | 首次 setup | `wakeflow_initialize_workspace` | 发现、确认、写入 workspace config/docs/support surfaces，并返回完整 launch plan。 |
 | 明确重置 setup | `wakeflow_initialize_workspace` + `resetInitialization: true` | 重新确认工作目录，清理被移除窗口的受管 cards/runtime，并重写 setup surfaces。 |
-| 替换单个上下文过重/过期窗口 | `wakeflow_replace_window` | 只返回一个 replacement launch entry 和本地注册命令，不刷新 workspace docs。 |
+| 替换单个上下文过重/过期窗口 | `wakeflow_replace_windows`（传 `window`） | 只返回一个 replacement launch entry 和本地注册命令，不刷新 workspace docs。 |
 | 替换多个上下文过重/过期窗口 | `wakeflow_replace_windows` | 只返回指定窗口的 replacement entries 和本地注册命令，不改无关窗口。 |
 
 Claude Code 版本使用同样的 preview/apply 合约。返回的 launch plan 由 tmux host
@@ -298,12 +298,12 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 | 需求 | MCP tools |
 | --- | --- |
 | 设置和工作区发现 | `wakeflow_initialize_workspace` |
-| 职责窗口替换 | `wakeflow_replace_window`, `wakeflow_replace_windows` |
+| 职责窗口替换 | `wakeflow_replace_windows`（单个传 `window`，多个传 `windows`） |
 | Demand 和任务状态 | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design 和 Test intake | `wakeflow_intake_design_handoff`, `wakeflow_intake_test_card` |
-| 归档、维护和验证 | `wakeflow_archive_todo`, `wakeflow_archive_workspace_docs`, `wakeflow_verify`, `wakeflow_trace_spine` |
+| 归档、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_prune_runtime`、`wakeflow_verify`、`wakeflow_view`（scope trace） |
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：
 记录 target result、审查 readiness、在策略允许时准备 controller-return envelope、

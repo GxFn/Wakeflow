@@ -289,8 +289,7 @@ four delivery/result tools accept `verbose` and default to `--compact` (see
 | MCP tool | Script (logical) | Subcommand + notable flags |
 |---|---|---|
 | `wakeflow_initialize_workspace` | `wakeflow-setup` | `initialize` — `--root`, optional `--parent`/`--workspace-name`/`--controller-window`/`--design-window`/`--test-window`/`--language`, booleans `--reset-initialization`/`--use-discovered`/`--internal-design`/`--internal-test`/`--include-real-project`, `--repo win=path` (+`--role`), repeated `--exclude-window`, `apply`→`--write` |
-| `wakeflow_replace_window` | `wakeflow-setup` | `replace-window` (`--window`); readOnly plan |
-| `wakeflow_replace_windows` | `wakeflow-setup` | `replace-windows` (repeated `--window`); readOnly plan |
+| `wakeflow_replace_windows` | `wakeflow-setup` | `window`→`replace-window` (`--window`); else `replace-windows` (repeated `--window` from `windows`); readOnly plan |
 | `wakeflow_adopt_demand_host` | `wakeflow-state` | `adopt-demand-host` — `--state-root`, optional `--reason`, `apply`→`--write` |
 | `wakeflow_render_progress` | `wakeflow-render-progress` | (no subcommand) `--state-root`, `--root`, `apply`→`--write` |
 | `wakeflow_release_window_lock` | `wakeflow-delivery` | `release-window-lock` (`--window`, `apply`→`--write`) |
@@ -301,15 +300,14 @@ four delivery/result tools accept `verbose` and default to `--compact` (see
 | `wakeflow_record_delivery` | `wakeflow-delivery` | `record-delivery-run` — `--delivery-file`,`--status`, optional `--evidence`/`--error`/`--host-method`/`--host-mode`, `--readback-ok <bool>`, optional `--delivery-run-id`, `--compact` unless `verbose` |
 | `wakeflow_record_target_result` | `wakeflow-state` | `import-target-result` — `--state-root`,`--target-task-id`,`--target-window`,`--status`, optional `--result-id`/`--summary`, repeated `--evidence-ref`/`--verification`/`--risk`, `--compact` unless `verbose` |
 | `wakeflow_review_pack` | `wakeflow-delivery` | `review-pack` — optional `--state-root`/`--group`/`--task-id`; readOnly |
-| `wakeflow_trace_spine` | `wakeflow-delivery` | `trace-spine` — optional `--state-root`/`--group`/`--target-window`/`--task-id`/`--result-file`/`--result-id`/`--delivery-file`/`--delivery-id`; readOnly |
+| `wakeflow_view` | `wakeflow-state` / `wakeflow-delivery` | by `scope`: `task-ledger`→`wakeflow-delivery task-ledger` (`--task-id`/`--target-window`); `window`→`wakeflow-state window-view` (`--window`); `focus`→`wakeflow-state focus-doc` (`--window`/`--phase`, `apply`→`--write`); `trace`→`wakeflow-delivery trace-spine` (`--group`/`--target-window`/`--task-id`/`--result-file`/`--result-id`/`--delivery-file`/`--delivery-id`); readOnly except focus+apply |
 | `wakeflow_reduce_results` | `wakeflow-state` | `reduce-results` — `--state-root`, `apply`→`--write`, `adoptHost`→`--adopt-host` |
 | `wakeflow_decide_review` | `wakeflow-state` | `decide-review` — `--state-root`,`--candidate-id`,`--decision`,`--reason`, repeated `--evidence-ref`, `acceptBlocked`→`--accept-blocked`, `apply`→`--write`, `adoptHost`→`--adopt-host` |
 | `wakeflow_complete_demand` | `wakeflow-state` | `complete-demand` — `--state-root`,`--reason`, repeated `--evidence-ref`, `apply`→`--write`, `adoptHost`→`--adopt-host` |
 | `wakeflow_intake_design_handoff` | `wakeflow-intake` | `design-handoff` — `--state-root`,`--design-key`, optional `--board`, `apply`→`--write` |
 | `wakeflow_intake_test_card` | `wakeflow-intake` | `test-card` — `--state-root`,`--test-id`,`--target-window`,`--question`,`--object-boundary`, repeated self-check/scenario/success/failure/cannot-conclude/stop-condition, optional `--source-ref`, repeated evidence/allowed/forbidden operation, `apply`→`--write` |
 | `wakeflow_next_work` | `wakeflow-next-work` | (no subcommand) `--root`, optional `--id`/`--source`/`--limit`, `afterCompletion`→`--after-completion`, `apply`→`--write` |
-| `wakeflow_archive_todo` | `wakeflow-archive-todo` | `--root`, optional `--month`/`--date`/`--keep-completed`/`--keep-sync`, `apply`→`--apply`; async — chains `wakeflow-archive-summaries` when `refreshSummaries && ok` |
-| `wakeflow_archive_workspace_docs` | `wakeflow-archive-docs` | `--root`, optional `--topic`/`--month`, repeated `--file`, `keepIndexRows`→`--keep-index-rows`, `pruneIndexOnly`→`--prune-index-only`, `apply`→`--apply`; async — chains summaries |
+| `wakeflow_archive` | `wakeflow-state` / `wakeflow-archive-todo` / `wakeflow-archive-docs` | by `target`: `demand`→`wakeflow-state archive-demand` (`--state-root`/`--reason`, `redact`→`--redact`, repeated `--evidence-ref`, `apply`→`--write`); `todo`→`wakeflow-archive-todo` (optional `--month`/`--date`/`--keep-completed`/`--keep-sync`, `apply`→`--apply`); `docs`→`wakeflow-archive-docs` (optional `--topic`/`--month`, repeated `--file`, `keepIndexRows`/`pruneIndexOnly`, `apply`→`--apply`); todo/docs async — chain `wakeflow-archive-summaries` when `refreshSummaries && ok` |
 | `wakeflow_verify` | `wakeflow-cli` | `verify --root <root> [--script-tests] --json`; timeout 180000ms with script-tests else 120000ms |
 
 Arg→flag translation is mechanical via four helpers (`wakeflow-mcp-tools.mjs:960-1004`):
@@ -1134,7 +1132,7 @@ state→delivery→result→reduce in a temp dir).
 flowchart LR
   A["Agent (MCP)"] --> M["core/lib/wakeflow-mcp-tools.mjs"]
   M -->|"wakeflow_initialize_workspace"| SETUP["wakeflow-setup initialize<br/>discover → footprint guard → discovery|plan|apply|blocked<br/>apply writes config/.gitignore/active docs/ledger/scope cards/registry"]
-  M -->|"wakeflow_replace_window(s)"| RW["replaceWindowsPayload (needs config + --window + --thread)"]
+  M -->|"wakeflow_replace_windows"| RW["replaceWindowsPayload (needs config + --window + --thread)"]
   M -->|"wakeflow_verify(scriptTests)"| V["wakeflow-cli verify → wakeflow-verify.mjs<br/>base 5 + active-docs + runtime + script-tests<br/>(NO --require-todo/--require-task-packages)"]
   M -->|"wakeflow_intake_design_handoff"| I["wakeflow-intake design-handoff<br/>host+terminal guard → validate board row → write read-only evidence"]
   M -->|"wakeflow_archive_*"| AR["archive-docs / archive-todo → auto-chain archive-summaries"]

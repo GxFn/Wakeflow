@@ -38,13 +38,12 @@ Use these MCP tools for normal installed-workspace control:
 | --- | --- |
 | Inspect repository, state-root, and delivery-loop status | `wakeflow_status` |
 | Initialize first-time setup, or explicitly reset initialized setup after user confirmation | `wakeflow_initialize_workspace` |
-| Recreate/rebind one responsibility window without workspace initialization | `wakeflow_replace_window` |
-| Recreate/rebind selected responsibility windows without workspace initialization | `wakeflow_replace_windows` |
+| Recreate/rebind one or selected responsibility windows without workspace initialization | `wakeflow_replace_windows` (single `window` arg for one, `windows[]` for a group) |
 | Create, extend, or complete a controller demand | `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_complete_demand` |
 | Prepare or record delivery-loop transport evidence | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result` |
 | Review target results and record controller judgment | `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review` |
 | Scan next controller-ready work | `wakeflow_next_work` |
-| Archive completed workspace docs or TODO rows | `wakeflow_archive_workspace_docs`, `wakeflow_archive_todo` |
+| Archive completed workspace docs or TODO rows | `wakeflow_archive` (target=docs / target=todo) |
 | Verify Wakeflow state and docs | `wakeflow_verify` |
 
 ## Source Runtime Command Set
@@ -100,7 +99,7 @@ repository. They are not the installed controller command surface.
 | Import formal Design handoff board into workspace inbox | `wakeflow-import-design-handoffs.mjs --write` | Discovers and validates ready rows, not a global TODO or execution plan. |
 | Attach an accepted Design source to an active demand | `wakeflow-intake.mjs design-handoff` | Writes `intake/design-handoff-*.json` under the state root after total-control judgment. It validates the Design board row but does not accept the handoff, add TODO, or change controller state. |
 | Create a Test boundary card for an active demand | `wakeflow-intake.mjs test-card` | Writes `test-cards/*.json` under the state root. It requires the full pre-test boundary gate and does not dispatch Test or accept test evidence. |
-| Archive completed Wakeflow docs and shrink historical indexes | MCP: `wakeflow_archive_workspace_docs`, `wakeflow_archive_todo`; backend scripts: `wakeflow-archive-docs.mjs`, `wakeflow-archive-todo.mjs`, `wakeflow-archive-summaries.mjs` | Use MCP for normal controller archive flows. Dry-run first; apply only after current status no longer points at the archived item. |
+| Archive completed Wakeflow docs and shrink historical indexes | MCP: `wakeflow_archive` (target=docs / target=todo); backend scripts: `wakeflow-archive-docs.mjs`, `wakeflow-archive-todo.mjs`, `wakeflow-archive-summaries.mjs` | Use MCP for normal controller archive flows. Dry-run first; apply only after current status no longer points at the archived item. |
 | Keep script catalog and tests from drifting | `wakeflow-check-scripts.mjs` | Runs inside `wakeflow-verify`; add tests to `--with-script-tests`. |
 | Manage the controller state root | `wakeflow-state.mjs`, `wakeflow-render-progress.mjs`, `wakeflow-progress-log.mjs` | Default route for execution surfaces. `wakeflow-state` owns machine state, review candidates, explicit review decisions, and final completion transitions; `wakeflow-render-progress` updates only the generated Unified Status block; `wakeflow-progress-log` appends human-readable entries without changing state. |
 | Manage Wakeflow Delivery Loop contracts | `wakeflow-delivery.mjs`, `wakeflow-cli.mjs loop ...` | Runtime files stay under ignored `.wakeflow-local/wakeflow-delivery/`; the script derives packets and envelopes from the state root, then writes dispatch packets, groups, envelopes, delivery runs, review packs, controller-return envelopes, stop markers, and thread registry files in the local delivery runtime. It never sends host thread messages, accepts evidence, selects TODOs, or writes product repositories. |

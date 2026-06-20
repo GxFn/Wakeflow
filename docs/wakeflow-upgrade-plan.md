@@ -1,6 +1,10 @@
 # Wakeflow Upgrade Plan
 
 > Generated 2026-06-19 from an adversarially-verified deep audit; this is a proposal, not executed work.
+>
+> **2026-06-20 update.** Tool names below are pre-convergence: the MCP surface was later merged —
+> `wakeflow_archive_todo` / `wakeflow_archive_workspace_docs` are now `wakeflow_archive` (by `target`),
+> and `wakeflow_trace_spine` is `wakeflow_view` (scope trace). The decisions/text are kept as the original record.
 
 ## 1. Executive Summary
 

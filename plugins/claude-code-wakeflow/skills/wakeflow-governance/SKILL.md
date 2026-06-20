@@ -66,9 +66,9 @@ tool first:
   The thread registry is the only thread-id authority; derived `window-config`
   is refreshed by Wakeflow from the current workspace config and registry
   presence.
-- To rebuild selected windows, use `wakeflow_replace_window` for one heavy or
-  stale responsibility window, or `wakeflow_replace_windows` for a selected
-  group. Run `launch-window --replace` only for the returned replacement launch
+- To rebuild selected windows, use `wakeflow_replace_windows` (single `window`
+  arg for one heavy or stale responsibility window, `windows[]` for a selected
+  group). Run `launch-window --replace` only for the returned replacement launch
   entries, then replace only those windows' local thread-registry records with
   the new real session ids. Do not rewrite unrelated window registrations or
   store window role / cwd / title metadata in the registry.

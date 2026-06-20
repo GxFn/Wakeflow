@@ -175,8 +175,8 @@ Current scripts:
   `--apply` is provided.
 - `wakeflow-archive-todo.mjs`: dry-run by default; moves completed global
   TODO rows and old sync records from the active TODO board to archive.
-- Normal controller archive flows should call the public MCP wrappers
-  `wakeflow_archive_todo` and `wakeflow_archive_workspace_docs`. The raw
+- Normal controller archive flows should call the public MCP wrapper
+  `wakeflow_archive` (target todo/docs). The raw
   scripts remain the backend/fallback surface and preserve the same dry-run /
   explicit-apply semantics.
 - `wakeflow-next-work.mjs`: read-only by default; scans the configured Design

@@ -1,6 +1,14 @@
 # Wakeflow Controller-Loop Unified Requirement Design
 
 > Generated 2026-06-19; requirement design for user confirmation, not executed work.
+>
+> **2026-06-20 update — MCP surface convergence.** The tools this design introduced were later
+> merged at the MCP surface (behavior unchanged, only the tool name + a routing param): the
+> read/projection family `wakeflow_task_ledger` / `wakeflow_window_view` / `wakeflow_focus_doc` /
+> `wakeflow_trace_spine` → `wakeflow_view` (by `scope`); the archive family `wakeflow_archive_demand`
+> + the TODO/docs archivers → `wakeflow_archive` (by `target`); `wakeflow_replace_window` →
+> `wakeflow_replace_windows` (single `window` arg). The original names below are kept as the
+> as-designed record — see `docs/wakeflow-dual-edition-architecture-and-state-flow.md` for the live surface.
 
 This document consolidates the five user-stated requirements with the two previously
 organized planning artifacts — `docs/wakeflow-upgrade-plan.md` (the P-item upgrade plan)

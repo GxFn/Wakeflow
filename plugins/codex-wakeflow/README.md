@@ -127,7 +127,7 @@ Wakeflow on Codex is driven through MCP tools (no slash commands). Tell Codex wh
    ```text
    Use Wakeflow to initialize this workspace. Preview the plan first and wait for my confirmation.
    ```
-   Codex calls `wakeflow_initialize_workspace` (dry-run -> confirm -> apply), then creates each window with the host `create_thread` tool and registers the real thread ids. Already initialized? Re-init is refused on purpose — rebuild one stale window with `wakeflow_replace_window`, or do an explicit reset.
+   Codex calls `wakeflow_initialize_workspace` (dry-run -> confirm -> apply), then creates each window with the host `create_thread` tool and registers the real thread ids. Already initialized? Re-init is refused on purpose — rebuild one stale window with `wakeflow_replace_windows`, or do an explicit reset.
 2. **Start work** — give the controller a demand, or ask Codex to dispatch the next eligible task.
 
 ### Tool cheat sheet (intent -> MCP tool)
@@ -135,7 +135,7 @@ Wakeflow on Codex is driven through MCP tools (no slash commands). Tell Codex wh
 | You want to... | Tool |
 | --- | --- |
 | Set up a new workspace | `wakeflow_initialize_workspace` |
-| Rebuild a stale window | `wakeflow_replace_window` / `wakeflow_replace_windows` |
+| Rebuild a stale window | `wakeflow_replace_windows` |
 | See demands / eligible work / readiness | `wakeflow_status`, `wakeflow_next_work` |
 | Start a demand | `wakeflow_init_demand` -> `wakeflow_add_task` |
 | Hand work to a window | `wakeflow_prepare_delivery` -> host send -> `wakeflow_record_delivery` |
@@ -198,7 +198,7 @@ Command responsibilities stay separate:
 | --- | --- | --- |
 | First-time setup | `wakeflow_initialize_workspace` | Discover, confirm, write workspace config/docs/support surfaces, and return the full launch plan. |
 | Explicit reset setup | `wakeflow_initialize_workspace` with `resetInitialization: true` | Reconfirm work directories, clean stale managed window cards/runtime for removed windows, and rewrite setup surfaces. |
-| One heavy/stale window | `wakeflow_replace_window` | Return one replacement launch entry and local registration command; no workspace docs refresh. |
+| One heavy/stale window | `wakeflow_replace_windows` (pass `window`) | Return one replacement launch entry and local registration command; no workspace docs refresh. |
 | Several heavy/stale windows | `wakeflow_replace_windows` | Return only the requested replacement entries and local registration commands; no unrelated window rewrites. |
 
 Design and Test are fresh support surfaces by default. Existing similarly named
@@ -313,12 +313,12 @@ Primary tool groups:
 | Need | MCP tools |
 | --- | --- |
 | Setup and workspace discovery | `wakeflow_initialize_workspace` |
-| Responsibility window replacement | `wakeflow_replace_window`, `wakeflow_replace_windows` |
+| Responsibility window replacement | `wakeflow_replace_windows` (one via `window`, many via `windows`) |
 | Demand and task state | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_intake_design_handoff`, `wakeflow_intake_test_card` |
-| Archive, maintenance, and verification | `wakeflow_archive_todo`, `wakeflow_archive_workspace_docs`, `wakeflow_verify`, `wakeflow_trace_spine` |
+| Archive, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs), `wakeflow_prune_runtime`, `wakeflow_verify`, `wakeflow_view` (scope trace) |
 
 Public MCP tools are for outer agent workflows. Target closeout is deliberately
 split: record a target result, review readiness, prepare a controller-return

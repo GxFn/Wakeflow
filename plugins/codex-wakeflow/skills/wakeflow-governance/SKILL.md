@@ -54,9 +54,9 @@ tool first:
   Wakeflow from the current workspace config and registry presence. Do this
   title reset at the end of the initialization flow instead of manually
   renaming ad hoc windows later.
-- To rebuild selected windows, use `wakeflow_replace_window` for one heavy or
-  stale responsibility window, or `wakeflow_replace_windows` for a selected
-  group. Create threads only for the returned replacement launch entries, then
+- To rebuild selected windows, use `wakeflow_replace_windows` (single `window`
+  arg for one heavy or stale responsibility window, `windows[]` for a selected
+  group). Create threads only for the returned replacement launch entries, then
   replace only those windows' local thread-registry records with the new real
   thread ids. Do not rewrite unrelated window registrations or store window role
   / cwd / title metadata in the registry.

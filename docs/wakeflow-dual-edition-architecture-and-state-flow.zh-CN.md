@@ -171,8 +171,7 @@ flowchart TB
 | MCP 工具 | 脚本(逻辑名) | 子命令 + 关键标志 |
 |---|---|---|
 | `wakeflow_initialize_workspace` | `wakeflow-setup` | `initialize` — `--root`，可选 `--parent`/`--workspace-name`/`--controller-window`/`--design-window`/`--test-window`/`--language`，布尔项 `--reset-initialization`/`--use-discovered`/`--internal-design`/`--internal-test`/`--include-real-project`，`--repo win=path`（+`--role`），可重复的 `--exclude-window`，`apply`→`--write` |
-| `wakeflow_replace_window` | `wakeflow-setup` | `replace-window`（`--window`）；只读 plan |
-| `wakeflow_replace_windows` | `wakeflow-setup` | `replace-windows`（可重复的 `--window`）；只读 plan |
+| `wakeflow_replace_windows` | `wakeflow-setup` | `window`→`replace-window`（`--window`）；否则 `replace-windows`（来自 `windows` 的可重复 `--window`）；只读 plan |
 | `wakeflow_adopt_demand_host` | `wakeflow-state` | `adopt-demand-host` — `--state-root`，可选 `--reason`，`apply`→`--write` |
 | `wakeflow_render_progress` | `wakeflow-render-progress` | （无子命令）`--state-root`，`--root`，`apply`→`--write` |
 | `wakeflow_release_window_lock` | `wakeflow-delivery` | `release-window-lock`（`--window`，`apply`→`--write`） |
@@ -183,15 +182,14 @@ flowchart TB
 | `wakeflow_record_delivery` | `wakeflow-delivery` | `record-delivery-run` — `--delivery-file`,`--status`，可选 `--evidence`/`--error`/`--host-method`/`--host-mode`，`--readback-ok <bool>`，可选 `--delivery-run-id`，除非 `verbose`，否则 `--compact` |
 | `wakeflow_record_target_result` | `wakeflow-state` | `import-target-result` — `--state-root`,`--target-task-id`,`--target-window`,`--status`，可选 `--result-id`/`--summary`，可重复的 `--evidence-ref`/`--verification`/`--risk`，除非 `verbose`，否则 `--compact` |
 | `wakeflow_review_pack` | `wakeflow-delivery` | `review-pack` — 可选 `--state-root`/`--group`/`--task-id`；只读 |
-| `wakeflow_trace_spine` | `wakeflow-delivery` | `trace-spine` — 可选 `--state-root`/`--group`/`--target-window`/`--task-id`/`--result-file`/`--result-id`/`--delivery-file`/`--delivery-id`；只读 |
+| `wakeflow_view` | `wakeflow-state` / `wakeflow-delivery` | 按 `scope`：`task-ledger`→`wakeflow-delivery task-ledger`（`--task-id`/`--target-window`）；`window`→`wakeflow-state window-view`（`--window`）；`focus`→`wakeflow-state focus-doc`（`--window`/`--phase`，`apply`→`--write`）；`trace`→`wakeflow-delivery trace-spine`（`--group`/`--target-window`/`--task-id`/`--result-file`/`--result-id`/`--delivery-file`/`--delivery-id`）；除 focus+apply 外只读 |
 | `wakeflow_reduce_results` | `wakeflow-state` | `reduce-results` — `--state-root`，`apply`→`--write`，`adoptHost`→`--adopt-host` |
 | `wakeflow_decide_review` | `wakeflow-state` | `decide-review` — `--state-root`,`--candidate-id`,`--decision`,`--reason`，可重复的 `--evidence-ref`，`acceptBlocked`→`--accept-blocked`，`apply`→`--write`，`adoptHost`→`--adopt-host` |
 | `wakeflow_complete_demand` | `wakeflow-state` | `complete-demand` — `--state-root`,`--reason`，可重复的 `--evidence-ref`，`apply`→`--write`，`adoptHost`→`--adopt-host` |
 | `wakeflow_intake_design_handoff` | `wakeflow-intake` | `design-handoff` — `--state-root`,`--design-key`，可选 `--board`，`apply`→`--write` |
 | `wakeflow_intake_test_card` | `wakeflow-intake` | `test-card` — `--state-root`,`--test-id`,`--target-window`,`--question`,`--object-boundary`，可重复的 self-check/scenario/success/failure/cannot-conclude/stop-condition，可选 `--source-ref`，可重复的 evidence/allowed/forbidden operation，`apply`→`--write` |
 | `wakeflow_next_work` | `wakeflow-next-work` | （无子命令）`--root`，可选 `--id`/`--source`/`--limit`，`afterCompletion`→`--after-completion`，`apply`→`--write` |
-| `wakeflow_archive_todo` | `wakeflow-archive-todo` | `--root`，可选 `--month`/`--date`/`--keep-completed`/`--keep-sync`，`apply`→`--apply`；异步——当 `refreshSummaries && ok` 时链式调用 `wakeflow-archive-summaries` |
-| `wakeflow_archive_workspace_docs` | `wakeflow-archive-docs` | `--root`，可选 `--topic`/`--month`，可重复的 `--file`，`keepIndexRows`→`--keep-index-rows`，`pruneIndexOnly`→`--prune-index-only`，`apply`→`--apply`；异步——链式调用 summaries |
+| `wakeflow_archive` | `wakeflow-state` / `wakeflow-archive-todo` / `wakeflow-archive-docs` | 按 `target`：`demand`→`wakeflow-state archive-demand`（`--state-root`/`--reason`，`redact`→`--redact`，可重复的 `--evidence-ref`，`apply`→`--write`）；`todo`→`wakeflow-archive-todo`（可选 `--month`/`--date`/`--keep-completed`/`--keep-sync`，`apply`→`--apply`）；`docs`→`wakeflow-archive-docs`（可选 `--topic`/`--month`，可重复的 `--file`，`keepIndexRows`/`pruneIndexOnly`，`apply`→`--apply`）；todo/docs 异步——当 `refreshSummaries && ok` 时链式调用 `wakeflow-archive-summaries` |
 | `wakeflow_verify` | `wakeflow-cli` | `verify --root <root> [--script-tests] --json`；带 script-tests 时超时 180000ms，否则 120000ms |
 
 参数→标志的翻译由四个 helper 机械完成（`wakeflow-mcp-tools.mjs:960-1004`）：`optionalValue(flag,value)`（对 `undefined`/`null`/`''` 返回空）、`repeatValues`（重复标志）、裸布尔内联，以及 `rootArgs` = `optionalValue('--root', args.root ?? defaultWorkspaceRoot())`。`defaultWorkspaceRoot` 回退到 `WAKEFLOW_DEFAULT_ROOT` / `CLAUDE_PROJECT_DIR` 中第一个存在的绝对路径。
@@ -734,7 +732,7 @@ INIT 是 `wakeflow-setup.mjs initialize` 中的一个 **四阶段、先 dry-run*
 flowchart LR
   A["Agent (MCP)"] --> M["core/lib/wakeflow-mcp-tools.mjs"]
   M -->|"wakeflow_initialize_workspace"| SETUP["wakeflow-setup initialize<br/>discover → footprint guard → discovery|plan|apply|blocked<br/>apply writes config/.gitignore/active docs/ledger/scope cards/registry"]
-  M -->|"wakeflow_replace_window(s)"| RW["replaceWindowsPayload (needs config + --window + --thread)"]
+  M -->|"wakeflow_replace_windows"| RW["replaceWindowsPayload (needs config + --window + --thread)"]
   M -->|"wakeflow_verify(scriptTests)"| V["wakeflow-cli verify → wakeflow-verify.mjs<br/>base 5 + active-docs + runtime + script-tests<br/>(NO --require-todo/--require-task-packages)"]
   M -->|"wakeflow_intake_design_handoff"| I["wakeflow-intake design-handoff<br/>host+terminal guard → validate board row → write read-only evidence"]
   M -->|"wakeflow_archive_*"| AR["archive-docs / archive-todo → auto-chain archive-summaries"]

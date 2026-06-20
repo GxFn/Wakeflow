@@ -215,7 +215,7 @@ runtime scripts:
   only when the change is Wakeflow source/plugin script maintenance.
 - `wakeflow_status` for repository, state-root, and delivery-loop orientation.
 - `wakeflow_next_work` for after-completion candidate scans.
-- `wakeflow_archive_workspace_docs` and `wakeflow_archive_todo` for archive
+- `wakeflow_archive` (target=docs / target=todo) for archive
   dry-runs or applies.
 - `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_complete_demand`,
   `wakeflow_prepare_delivery`, `wakeflow_record_delivery`,

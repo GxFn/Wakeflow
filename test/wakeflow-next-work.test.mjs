@@ -15,6 +15,10 @@ function writeFile(file, content) {
   writeFileSync(file, `${content.trimEnd()}\n`);
 }
 
+function writeJson(file, value) {
+  writeFile(file, JSON.stringify(value, null, 2));
+}
+
 function designDoc(id, title) {
   return `# ${title}
 
@@ -148,4 +152,39 @@ test("controller-claimable Design row reports controllerClaimable; ready-for-wor
   const ready = parsed.candidates.find((candidate) => candidate.id === "ready-design-2026-06-04");
   assert.equal(claim.controllerClaimable, true);
   assert.equal(ready.controllerClaimable, false);
+});
+
+test("Design rows with an existing active state root are lifecycle-blocked", () => {
+  const { root, designId } = makeFixture({
+    designRows:
+      "| next-design-2026-06-04 | controller-claimable | Next design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | [handoff](next-design/workspace-handoff-2026-06-04.md) | confirmed |  | next-mainline | after current mainline | GTODO-NEXT | P1 | P1 | controller intake |",
+  });
+  writeJson(path.join(root, ".wakeflow-active/current", designId, "wakeflow-state.json"), {
+    demandKey: designId,
+    state: "planned",
+  });
+
+  const result = run(root, ["--id", designId, "--source", "design"]);
+  assert.notEqual(result.status, 0);
+  const parsed = JSON.parse(result.stdout);
+  assert.match(parsed.issues.join("\n"), /already active: planned/);
+});
+
+test("Design rows with an archived state root are lifecycle-blocked", () => {
+  const { root, designId } = makeFixture({
+    designRows:
+      "| next-design-2026-06-04 | controller-claimable | Next design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | [handoff](next-design/workspace-handoff-2026-06-04.md) | confirmed |  | next-mainline | after current mainline | GTODO-NEXT | P1 | P1 | controller intake |",
+  });
+  writeJson(path.join(root, "workspace.config.json"), {
+    workspaceArchiveDir: "wakeflow-ledger/workspace/archive",
+  });
+  writeJson(path.join(root, "wakeflow-ledger/workspace/archive/2026-06", designId, "wakeflow-state.json"), {
+    demandKey: designId,
+    state: "archived",
+  });
+
+  const result = run(root, ["--id", designId, "--source", "design"]);
+  assert.notEqual(result.status, 0);
+  const parsed = JSON.parse(result.stdout);
+  assert.match(parsed.issues.join("\n"), /already archived/);
 });

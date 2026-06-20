@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runSync } from "../lib/wakeflow-process.mjs";
+import { updateDesignHandoffStatus } from "./lib/wakeflow-design-board.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const scriptsDir = path.dirname(scriptPath);
@@ -632,9 +633,10 @@ function runImportRevalidate(designKey) {
 function commandClaimFromDesign() {
   const designKeyArg = getValue("--design-key", null);
   const scan = runNextWorkDesign();
-  const claimable = (scan.candidates ?? []).filter((candidate) => candidate.controllerClaimable === true);
+  const designCandidates = scan.candidates ?? [];
+  const autoClaimable = designCandidates.filter((candidate) => candidate.controllerClaimable === true);
 
-  if (claimable.length === 0) {
+  if (!designKeyArg && autoClaimable.length === 0) {
     output({
       ok: true,
       command: "claim-from-design",
@@ -648,14 +650,17 @@ function commandClaimFromDesign() {
 
   let target;
   if (designKeyArg) {
-    target = claimable.find((candidate) => candidate.id === designKeyArg);
+    target = designCandidates.find((candidate) => candidate.id === designKeyArg);
     if (!target) {
-      fail(`--design-key ${designKeyArg} is not a controller-claimable row; claimable: ${claimable.map((c) => c.id).join(", ")}.`);
+      fail(`--design-key ${designKeyArg} is not an eligible Design row; candidates: ${designCandidates.map((c) => `${c.id}:${c.status}`).join(", ") || "none"}.`);
     }
-  } else if (claimable.length === 1) {
-    target = claimable[0];
+    if (!target.controllerClaimable && target.status !== "ready-for-workspace") {
+      fail(`--design-key ${designKeyArg} is ${target.status}; expected ready-for-workspace or controller-claimable.`);
+    }
+  } else if (autoClaimable.length === 1) {
+    target = autoClaimable[0];
   } else {
-    fail(`multiple controller-claimable rows (${claimable.map((c) => c.id).join(", ")}); pass --design-key to choose exactly one.`);
+    fail(`multiple controller-claimable rows (${autoClaimable.map((c) => c.id).join(", ")}); pass --design-key to choose exactly one.`);
   }
 
   const stateRootAbs = resolveFromWorkspace(`.wakeflow-active/current/${slug(target.id)}`);
@@ -669,6 +674,7 @@ function commandClaimFromDesign() {
       command: "claim-from-design",
       wrote: false,
       wouldClaim: { demandKey: target.id, title: target.title, stateRoot, requirementDesign, originalPlan },
+      claimMode: target.controllerClaimable ? "design-auto-claimable" : "explicit-ready-design-key",
       agentNext: "Rerun with --write after total control confirms this Design-confirmed demand is the next safe demand to init.",
     }, [`Would claim Design demand: ${target.id}`]);
     return;
@@ -679,15 +685,29 @@ function commandClaimFromDesign() {
   const reval = runImportRevalidate(target.id);
   const rowIssues = (reval.issues ?? []).filter((issue) => issue.startsWith(`${target.id}:`));
   if (rowIssues.length > 0) {
-    fail([`controller-claimable row ${target.id} failed fail-closed revalidation:`, ...rowIssues].join("\n"));
+    fail([`Design row ${target.id} failed fail-closed revalidation:`, ...rowIssues].join("\n"));
   }
-  if (!reval.target || reval.target.controllerClaimable !== true) {
-    fail(`row ${target.id} is no longer controller-claimable at apply time; refusing to claim.`);
+  if (!reval.target || !(reval.target.controllerClaimable === true || (designKeyArg && reval.target.readyForWorkspace === true))) {
+    fail(`row ${target.id} is no longer claimable at apply time; expected controller-claimable or an explicitly named ready-for-workspace row.`);
   }
+  const claimSourceStatus = reval.target.status;
 
   // demandKey-collision guard: never re-init over an existing demand state root.
   if (existsSync(path.join(stateRootAbs, "wakeflow-state.json"))) {
     fail(`a demand state root already exists at ${stateRoot}; refuse to re-init ${target.id}.`);
+  }
+
+  const boardUpdatePreview = updateDesignHandoffStatus({
+    boardPath: getValue("--board", readWorkspaceConfig()?.designHandoffBoard ?? ".wakeflow-active/current/design-handoff-board.md"),
+    designKey: target.id,
+    nextStatus: "accepted-by-workspace",
+    expectedStatuses: [claimSourceStatus],
+    nextStepNote: `accepted by workspace; state root ${stateRoot}`,
+    write: false,
+    workspaceRoot,
+  });
+  if (!boardUpdatePreview.ok) {
+    fail(`cannot advance Design handoff ${target.id} to accepted-by-workspace: ${boardUpdatePreview.reason ?? "unknown"}.`);
   }
 
   const goal = requirementDesign
@@ -712,6 +732,15 @@ function commandClaimFromDesign() {
     "--write", "--json",
   ]);
   const renderOut = runRenderProgressDoc(stateRoot);
+  const boardUpdate = updateDesignHandoffStatus({
+    boardPath: getValue("--board", readWorkspaceConfig()?.designHandoffBoard ?? ".wakeflow-active/current/design-handoff-board.md"),
+    designKey: target.id,
+    nextStatus: "accepted-by-workspace",
+    expectedStatuses: [claimSourceStatus],
+    nextStepNote: `accepted by workspace; state root ${stateRoot}`,
+    write: true,
+    workspaceRoot,
+  });
 
   output({
     ok: true,
@@ -724,7 +753,9 @@ function commandClaimFromDesign() {
       progressDoc: `${stateRoot}/developer-progress.md`,
       requirementDesign,
       originalPlan,
+      claimMode: target.controllerClaimable ? "design-auto-claimable" : "explicit-ready-design-key",
     },
+    designBoardUpdate: boardUpdate,
     controllerOutputs: [initOut, renderOut],
     forbiddenConclusions: [
       "claim-from-design-is-dispatch",

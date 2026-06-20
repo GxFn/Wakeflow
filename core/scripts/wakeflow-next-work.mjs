@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 import { isCompletedState, isPausedLikeState, normalizeStateId } from "./lib/wakeflow-status-machine.mjs";
@@ -55,8 +55,26 @@ function relativePosix(from, to) {
   return path.relative(from, to).split(path.sep).join("/");
 }
 
+function slug(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "demand";
+}
+
 function read(file) {
   return readFileSync(file, "utf8");
+}
+
+function readJsonIfExists(file) {
+  if (!existsSync(file)) {
+    return { exists: false, value: null, error: null };
+  }
+  try {
+    return { exists: true, value: JSON.parse(readFileSync(file, "utf8")), error: null };
+  } catch (error) {
+    return { exists: true, value: null, error: error.message };
+  }
 }
 
 function splitMarkdownRow(line) {
@@ -175,6 +193,57 @@ function linkedDoc(entry, column, boardPath) {
   };
 }
 
+function archivedStateRootForDemand(demandKey) {
+  const archiveRoot = ledgerPaths.workspaceArchiveDir;
+  if (!existsSync(archiveRoot)) return null;
+  const slugged = slug(demandKey);
+  for (const monthEntry of readdirSync(archiveRoot, { withFileTypes: true })) {
+    if (!monthEntry.isDirectory()) continue;
+    const candidate = path.join(archiveRoot, monthEntry.name, slugged, "wakeflow-state.json");
+    const parsed = readJsonIfExists(candidate);
+    if (parsed.exists) {
+      return {
+        stateRoot: relativePosix(workspaceRoot, path.dirname(candidate)),
+        state: parsed.value?.state ?? null,
+        error: parsed.error,
+      };
+    }
+  }
+  return null;
+}
+
+function designLifecycleFor(entry) {
+  const stateRoot = path.resolve(workspaceRoot, ".wakeflow-active/current", slug(entry.ID));
+  const active = readJsonIfExists(path.join(stateRoot, "wakeflow-state.json"));
+  if (active.exists) {
+    return {
+      status: active.error
+        ? "active-state-unreadable"
+        : ["completed", "archived"].includes(active.value?.state)
+          ? active.value.state
+          : "active",
+      state: active.value?.state ?? null,
+      stateRoot: relativePosix(workspaceRoot, stateRoot),
+      error: active.error,
+    };
+  }
+  const archived = archivedStateRootForDemand(entry.ID);
+  if (archived) {
+    return {
+      status: archived.error ? "archived-state-unreadable" : "archived",
+      state: archived.state,
+      stateRoot: archived.stateRoot,
+      error: archived.error,
+    };
+  }
+  return {
+    status: "unclaimed",
+    state: null,
+    stateRoot: relativePosix(workspaceRoot, stateRoot),
+    error: null,
+  };
+}
+
 function parseDesignCandidates(issues, warnings) {
   if (sourceMode !== "all" && sourceMode !== "design") {
     return [];
@@ -206,6 +275,7 @@ function parseDesignCandidates(issues, warnings) {
       const confirmation = userConfirmationStatus(entry);
       const relation = normalizeEnumValue(entry["Mainline Relation Status"]) || "todo-candidate";
       const priority = normalizePriority(entry["Priority Enum"] || entry["Priority"]);
+      const lifecycle = designLifecycleFor(entry);
       const docs = {
         originalPlan: linkedDoc(entry, "Original Plan", designBoardPath),
         requirementDesign: linkedDoc(entry, "Requirement Design", designBoardPath),
@@ -224,11 +294,21 @@ function parseDesignCandidates(issues, warnings) {
       if (docs.handoff?.exists === false) {
         blockers.push("handoff document is missing");
       }
+      if (lifecycle.status === "active") {
+        blockers.push(`demand state root already active: ${lifecycle.state}`);
+      } else if (lifecycle.status === "completed") {
+        blockers.push("demand state root already completed");
+      } else if (lifecycle.status === "archived") {
+        blockers.push("demand state root already archived");
+      } else if (lifecycle.status.endsWith("-unreadable")) {
+        blockers.push(`demand state root is unreadable: ${lifecycle.error}`);
+      }
       return {
         source: "design",
         id: entry.ID,
         title: entry["Title"],
         status: entry["Status"],
+        lifecycle,
         priority,
         relation,
         recommendedWindow: workspaceConfig.controllerWindow,

@@ -335,6 +335,12 @@ function makeDesignFixture({ status = "controller-claimable", id = "auto-claim-2
   return { root, id };
 }
 
+function designBoardStatus(root, id) {
+  const board = readFileSync(path.join(root, ".wakeflow-active/current/design-handoff-board.md"), "utf8");
+  const line = board.split("\n").find((row) => row.includes(`| ${id} |`));
+  return line?.split("|").map((cell) => cell.trim())[2] ?? null;
+}
+
 test("claim-from-design dry-run returns the single claimable demand without writing a state root", () => {
   const { root, id } = makeDesignFixture();
   const result = run(["claim-from-design", "--root", root, "--json"]);
@@ -363,15 +369,20 @@ test("claim-from-design --write inits exactly one demand, no task package, no di
   assert.equal(state.targetTasks.length, 0);
   assert.equal(state.controllerHost, null);
   assert.equal(existsSync(path.join(stateRoot, "developer-progress.md")), true);
+  assert.equal(designBoardStatus(root, id), "accepted-by-workspace");
+  assert.equal(payload.designBoardUpdate.nextStatus, "accepted-by-workspace");
   assert.ok(payload.forbiddenConclusions.includes("claim-from-design-is-dispatch"));
 });
 
-test("claim-from-design refuses to re-init an existing demand state root", () => {
-  const { root } = makeDesignFixture();
+test("claim-from-design does not re-init an accepted Design handoff", () => {
+  const { root, id } = makeDesignFixture();
   run(["claim-from-design", "--root", root, "--write", "--json"]);
   const result = run(["claim-from-design", "--root", root, "--write", "--json"]);
-  assert.notEqual(result.status, 0);
-  assert.match(result.stdout, /already exists/);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.claimed, null);
+  assert.deepEqual(payload.claimable, []);
+  assert.equal(designBoardStatus(root, id), "accepted-by-workspace");
 });
 
 test("claim-from-design ignores a ready-for-workspace row that is not controller-claimable", () => {
@@ -382,4 +393,18 @@ test("claim-from-design ignores a ready-for-workspace row that is not controller
   assert.equal(payload.ok, true);
   assert.equal(payload.claimed, null);
   assert.deepEqual(payload.claimable, []);
+});
+
+test("claim-from-design explicitly claims a named ready-for-workspace row and closes the Design handoff", () => {
+  const { root, id } = makeDesignFixture({ status: "ready-for-workspace" });
+  const result = run(["claim-from-design", "--root", root, "--design-key", id, "--write", "--json"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.claimed.demandKey, id);
+  assert.equal(payload.claimed.claimMode, "explicit-ready-design-key");
+  assert.equal(designBoardStatus(root, id), "accepted-by-workspace");
+
+  const repeat = run(["claim-from-design", "--root", root, "--design-key", id, "--write", "--json"]);
+  assert.notEqual(repeat.status, 0);
+  assert.match(repeat.stdout, /not an eligible Design row|candidates: none/);
 });

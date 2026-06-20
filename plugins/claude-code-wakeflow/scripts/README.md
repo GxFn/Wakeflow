@@ -124,8 +124,11 @@ Current scripts:
   validates each document has exactly one `Unified Status` marker plus the
   append-only sections, claims at most one next demand by creating its ignored
   controller state root and initial task package, and syncs the state-root
-  `Unified Status` back into the demand document. It does not dispatch, send
-  session messages, accept evidence, or complete demands.
+  `Unified Status` back into the demand document. Its Design claim path can
+  claim a single `controller-claimable` row automatically, or an explicitly
+  named `ready-for-workspace` row, and then advances that Design row to
+  `accepted-by-workspace`. It does not dispatch, send session messages, accept
+  evidence, or complete demands.
 - `wakeflow-intake.mjs`: state-root intake bridge for Design and Test surfaces.
   `design-handoff` validates a formal Design board row and writes
   `intake/design-handoff-*.json`; `test-card` writes a complete pre-test
@@ -183,8 +186,10 @@ Current scripts:
   explicit-apply semantics.
 - `wakeflow-next-work.mjs`: read-only by default; scans the configured Design
   handoff board and global TODO board for controller-ready candidates after a
-  demand completes. It never creates a current plan, accepts evidence,
-  dispatches windows, or changes TODO / Design status.
+  demand completes. It lifecycle-blocks Design rows whose demand state root is
+  already active, completed, or archived, so stale rows cannot be claimed again.
+  It never creates a current plan, accepts evidence, dispatches windows, or
+  changes TODO / Design status.
 - `wakeflow-import-design-handoffs.mjs`: imports the configured Design handoff
   board into the active Design inbox and validates ready rows. It supports
   forward-compatible enum columns while keeping old board prose readable.

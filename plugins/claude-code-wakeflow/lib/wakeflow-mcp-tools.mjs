@@ -368,7 +368,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_archive",
-    description: "Archive completed Wakeflow content into the committed ledger; target selects which. demand: relocate a completed demand state root into the ledger — a P1-0 redaction guard refuses on any real-id-shaped string unless redact relocates a cleaned copy (original preserved for audit); commits state-root content to the version-controlled ledger, review redactedFields before pushing. todo: completed TODO rows + historical sync records into the workspace ledger. docs: explicit completed workspace documents into a ledger topic, or prune active index rows that already point at archive topics (never archives the active index/current plan by inference). Dry-run unless apply is true. Records archive facts only — never accepts work, selects next work, or sends host messages. (Transport-runtime GC is the separate wakeflow_prune_runtime.)",
+    description: "Archive completed Wakeflow content into the committed ledger; target selects which. demand: relocate a completed demand state root into the ledger and advance linked Design handoff rows to archived after the archive commit — a P1-0 redaction guard refuses on any real-id-shaped string unless redact relocates a cleaned copy (original preserved for audit); commits state-root content to the version-controlled ledger, review redactedFields before pushing. todo: completed TODO rows + historical sync records into the workspace ledger. docs: explicit completed workspace documents into a ledger topic, or prune active index rows that already point at archive topics (never archives the active index/current plan by inference). Dry-run unless apply is true. Records archive facts only — never accepts work, selects next work, or sends host messages. (Transport-runtime GC is the separate wakeflow_prune_runtime.)",
     annotations: localWriteTool("Archive Wakeflow Content"),
     inputSchema: {
       type: "object",
@@ -455,7 +455,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_next_work",
-    description: "Scan Design handoff and TODO ledgers for the next controller-ready candidate.",
+    description: "Scan Design handoff and TODO ledgers for the next controller-ready candidate. Design rows with an existing active/completed/archived demand state root are reported as lifecycle-blocked, not claimable.",
     annotations: localWriteTool("Select Wakeflow Next Work"),
     inputSchema: {
       type: "object",
@@ -471,7 +471,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_claim_next",
-    description: "Design-gated controller auto-claim: init at most one demand from a Design-set controller-claimable handoff row. Dry-run unless apply is true. This tool inits a state root only; it never dispatches, accepts evidence, or weakens per-demand user confirmation.",
+    description: "Design-gated controller claim: unattended mode inits at most one Design-set controller-claimable row; when designKey is explicitly provided, a user-confirmed ready-for-workspace row may also be claimed. A successful claim advances the Design row to accepted-by-workspace. Dry-run unless apply is true. This tool inits a state root only; it never dispatches, accepts evidence, or weakens per-demand user confirmation.",
     annotations: localWriteTool("Claim Next Controller Demand"),
     inputSchema: {
       type: "object",

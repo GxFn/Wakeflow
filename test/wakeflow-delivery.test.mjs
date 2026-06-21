@@ -148,6 +148,37 @@ function parseOk(result) {
   return JSON.parse(result.stdout);
 }
 
+test("legacy .workspace-local delivery state-dir redirects to .wakeflow-local", () => {
+  const { root } = makeFixture();
+  try {
+    const legacyStateDir = path.join(root, ".workspace-local/wakeflow-delivery");
+    const result = run(root, [
+      "keep-live-state",
+      "--automation-run-id",
+      "legacy-alias",
+      "--status",
+      "stopped",
+      "--state-dir",
+      legacyStateDir,
+      "--write",
+    ]);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(
+      payload.stateFile,
+      ".wakeflow-local/wakeflow-delivery/hosts/codex/keep-live/state.json",
+    );
+    assert.match(result.stderr, /redirected legacy state dir/);
+    assert.equal(
+      existsSync(path.join(root, ".wakeflow-local/wakeflow-delivery/hosts/codex/keep-live/state.json")),
+      true,
+    );
+    assert.equal(existsSync(path.join(root, ".workspace-local")), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 function registerThread(root, windowName) {
   return parseOk(run(root, [
     "register-thread",

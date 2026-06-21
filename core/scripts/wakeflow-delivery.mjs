@@ -24,7 +24,7 @@ const args = process.argv.slice(2);
 const command = args[0] && !args[0].startsWith("--") ? args[0] : "status";
 const options = args[0] && !args[0].startsWith("--") ? args.slice(1) : args;
 const workspaceRoot = inferWorkspaceRoot();
-const stateDir = path.resolve(getValue("--state-dir", path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery")));
+const stateDir = resolveStateDir();
 const scriptPath = new URL(import.meta.url).pathname;
 const write = hasFlag("--write");
 const json = hasFlag("--json");
@@ -68,6 +68,23 @@ Design:
 `.trim();
 
 class CliExit extends Error {}
+
+function resolveStateDir() {
+  const canonicalStateDir = path.resolve(workspaceRoot, ".wakeflow-local/wakeflow-delivery");
+  const requestedStateDir = path.resolve(getValue("--state-dir", canonicalStateDir));
+  const legacyStateDir = path.resolve(workspaceRoot, ".workspace-local/wakeflow-delivery");
+  if (sameResolvedPath(requestedStateDir, legacyStateDir)) {
+    process.stderr.write(
+      `wakeflow-delivery: redirected legacy state dir ${legacyStateDir} to ${canonicalStateDir}\n`,
+    );
+    return canonicalStateDir;
+  }
+  return requestedStateDir;
+}
+
+function sameResolvedPath(left, right) {
+  return path.normalize(left) === path.normalize(right);
+}
 
 function hasFlag(name) {
   return options.includes(name);

@@ -11,11 +11,15 @@ import {
   normalizeInterfaceLanguage,
   wakeflowStateLocale,
 } from "./lib/wakeflow-language.mjs";
-import { controllerReviewScope, reductionStatusForTargetTask } from "./lib/wakeflow-review-scope.mjs";
+import { controllerReviewScope, hasPendingReworkDecision, reductionStatusForTargetTask } from "./lib/wakeflow-review-scope.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import { releaseWindowLockForResult } from "./lib/wakeflow-delivery-store.mjs";
 import { updateDesignHandoffStatus } from "./lib/wakeflow-design-board.mjs";
 import { scanStateRootForRealIds, redactStateRootIntoCopy } from "./lib/wakeflow-redaction.mjs";
+import {
+  activeDemandConflictSummary,
+  scanUnarchivedDemandStateRoots,
+} from "./lib/wakeflow-active-demands.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const wakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -432,6 +436,17 @@ function commandInit() {
     projection: path.join(stateRoot, "projection.json"),
     progress: path.join(stateRoot, progressDoc),
   };
+  const existingInitFiles = Object.values(files).filter((file) => existsSync(file));
+  if (existingInitFiles.length > 0) {
+    fail(`state root already contains Wakeflow state file(s): ${existingInitFiles.map(relative).join(", ")}; refuse to re-initialize ${demandKey}.`);
+  }
+  const activeDemandConflicts = scanUnarchivedDemandStateRoots({
+    workspaceRoot,
+    excludeDemandKeys: [demandKey],
+  });
+  if (activeDemandConflicts.length > 0) {
+    fail(`cannot initialize ${demandKey} while unarchived demand state root(s) exist: ${activeDemandConflictSummary(activeDemandConflicts)}. Complete and archive the current demand before starting another one.`);
+  }
 
   const demand = {
     schemaVersion,
@@ -620,6 +635,11 @@ function commandAddTaskPackage() {
   if (state.state === "blocked" || (state.blockers ?? []).length > 0) {
     fail(`cannot add task package while demand is blocked; record an explicit rework or unblock decision first.`);
   }
+  const existingReviewScope = controllerReviewScope(state.targetTasks ?? []);
+  const reworkRouteActive = existingReviewScope.mode === "rework-first-controller-review-targets";
+  if (reworkRouteActive && !["needs-rework", "planned"].includes(state.state)) {
+    fail(`cannot add task package while rework route is active; finish or explicitly extend the rework route before adding ordinary next-step work.`);
+  }
   if (existsSync(packageFile)) {
     fail(`task package already exists: ${relative(packageFile)}`);
   }
@@ -636,6 +656,7 @@ function commandAddTaskPackage() {
   const nextMainState = state.state === "intake" || state.state === "needs-rework"
     ? "planned"
     : state.state;
+  const reviewRoute = state.state === "needs-rework" || reworkRouteActive ? "rework" : null;
   const targetTasks = targetWindow
     ? [
         {
@@ -645,6 +666,7 @@ function commandAddTaskPackage() {
           summary: targetSummary,
           status: "pending",
           createdAt,
+          ...(reviewRoute ? { reviewRoute } : {}),
         },
       ]
     : [];
@@ -656,6 +678,7 @@ function commandAddTaskPackage() {
     status: "pending",
     sourceRef,
     createdAt,
+    ...(reviewRoute ? { reviewRoute } : {}),
     targetTasks,
   };
   const nextState = {
@@ -675,6 +698,7 @@ function commandAddTaskPackage() {
         status: "pending",
         sourceRef,
         createdAt,
+        ...(reviewRoute ? { reviewRoute } : {}),
       },
     ],
     targetTasks: [
@@ -798,6 +822,13 @@ function targetResultAgentNext(deliveryContext, reviewReadiness) {
   if (!deliveryContext.controllerReturnRequired && reviewReadiness && reviewReadiness.readyForReduce) {
     return "Target result is recorded, but this is not controller acceptance. All open target tasks now have results: run reduce-results to form the review candidate, then decide.";
   }
+  if (
+    !deliveryContext.controllerReturnRequired
+    && reviewReadiness?.reviewScope?.mode === "rework-first-controller-review-targets"
+    && !reviewReadiness.readyForReduce
+  ) {
+    return `Target result is recorded, but rework is still open. Continue the rework route before reducing ordinary next-step results; missing rework target(s): ${reviewReadiness.remainingTaskIds.join(", ") || "none"}.`;
+  }
   if (deliveryContext.controllerReturnRequired) {
     return "Target result is recorded, but this is not controller acceptance. The resolved delivery envelope has returnRoute=controller; run wakeflow_review_pack, prepare a controller-return delivery, send it with the host thread tool, then run wakeflow_record_delivery for that controller-return envelope.";
   }
@@ -810,6 +841,38 @@ function targetResultAgentNext(deliveryContext, reviewReadiness) {
     return "State-only target result recorded (no delivery metadata on this task - normal for controller/self tasks). Reduce when the demand remaining results are in.";
   }
   return "Target result is recorded, but this is not controller acceptance. The resolved delivery envelope does not require a controller return; stop unless the controller sends another task.";
+}
+
+function reviewReadinessAfterImport(state, stateRoot, importedTargetTaskId) {
+  const reviewScope = controllerReviewScope(state.targetTasks ?? []);
+  const targetTasks = reviewScope.reviewableTargetTasks;
+  const results = latestResultsByTargetTask(readTargetResults(stateRoot));
+  const taskIdsWithResults = new Set([...results.keys(), importedTargetTaskId]);
+  const reworkCompanionPresent = reviewScope.mode === "rework-first-controller-review-targets"
+    && targetTasks.some((task) => task.reviewRoute === "rework" && !hasPendingReworkDecision(task));
+  const remainingTaskIds = [];
+
+  for (const task of targetTasks) {
+    if (hasPendingReworkDecision(task)) {
+      if (!reworkCompanionPresent) {
+        remainingTaskIds.push(task.targetTaskId);
+      }
+      continue;
+    }
+    if (!taskIdsWithResults.has(task.targetTaskId)) {
+      remainingTaskIds.push(task.targetTaskId);
+    }
+  }
+
+  return {
+    remainingTaskIds,
+    readyForReduce: remainingTaskIds.length === 0,
+    reviewScope: {
+      mode: reviewScope.mode,
+      targetTaskIds: reviewScope.targetTaskIds,
+      excludedTargetTaskIds: reviewScope.excludedTargetTaskIds,
+    },
+  };
 }
 
 function commandImportTargetResult() {
@@ -914,28 +977,9 @@ function commandImportTargetResult() {
     );
   }
 
-  // Review readiness: which open tasks still lack a result AFTER this import,
-  // so the controller never runs speculative reduce rounds to find out.
-  const resultsScanDir = path.join(stateRoot, "target-results");
-  const taskIdsWithResults = new Set([targetTaskId]);
-  if (existsSync(resultsScanDir)) {
-    for (const name of readdirSync(resultsScanDir)) {
-      if (!name.endsWith(".json")) continue;
-      try {
-        const recorded = JSON.parse(readFileSync(path.join(resultsScanDir, name), "utf8"));
-        if (recorded && recorded.targetTaskId) taskIdsWithResults.add(recorded.targetTaskId);
-      } catch {
-        // unreadable results are reduce concern, not readiness
-      }
-    }
-  }
-  const remainingTaskIds = (state.targetTasks ?? [])
-    .filter((task) => task.status !== "accepted" && !taskIdsWithResults.has(task.targetTaskId))
-    .map((task) => task.targetTaskId);
-  const reviewReadiness = {
-    remainingTaskIds,
-    readyForReduce: remainingTaskIds.length === 0,
-  };
+  // Review readiness mirrors reduce-results scope, including rework-first rules,
+  // so a stale old result never tells the controller to reduce the wrong lane.
+  const reviewReadiness = reviewReadinessAfterImport(state, stateRoot, targetTaskId);
 
   output(
     {
@@ -998,12 +1042,20 @@ function commandReduceResults() {
     fail("controller state has no open target tasks to reduce; complete the demand or add the next task package by total-control judgment.");
   }
   const results = latestResultsByTargetTask(readTargetResults(stateRoot));
+  const reworkCompanionPresent = reviewScope.mode === "rework-first-controller-review-targets"
+    && targetTasks.some((task) => task.reviewRoute === "rework" && !hasPendingReworkDecision(task));
   const readyResultIds = [];
   const blockedResultIds = [];
   const missingTargetTaskIds = [];
   const evidenceRefs = [];
 
   for (const task of targetTasks) {
+    if (hasPendingReworkDecision(task)) {
+      if (!reworkCompanionPresent) {
+        missingTargetTaskIds.push(task.targetTaskId);
+      }
+      continue;
+    }
     const result = results.get(task.targetTaskId);
     if (!result) {
       missingTargetTaskIds.push(task.targetTaskId);
@@ -1020,12 +1072,19 @@ function commandReduceResults() {
   const createdAt = nowIso();
   const nextRevision = Number(state.revision ?? 0) + 1;
   const eventId = nextEventId(createdAt, nextRevision);
-  const reviewStatus = missingTargetTaskIds.length > 0
+  const reworkRouteWaiting = reviewScope.mode === "rework-first-controller-review-targets" && missingTargetTaskIds.length > 0;
+  const reviewStatus = reworkRouteWaiting
+    ? "rework-route-waiting-results"
+    : missingTargetTaskIds.length > 0
     ? "waiting-results"
     : blockedResultIds.length > 0
       ? "blocked-results-ready"
       : "ready-for-controller-review";
-  const nextMainState = missingTargetTaskIds.length > 0 ? "waiting-results" : "review-ready";
+  const nextMainState = reworkRouteWaiting
+    ? "needs-rework"
+    : missingTargetTaskIds.length > 0
+      ? "waiting-results"
+      : "review-ready";
   const candidateId = missingTargetTaskIds.length > 0 ? null : `tc-${createdAt.replace(/[^0-9]/g, "").slice(0, 14)}-${String(nextRevision).padStart(4, "0")}`;
   const decision = candidateId ? {
     kind: "review-decision",
@@ -1070,7 +1129,11 @@ function commandReduceResults() {
     stateReason: reviewStatus,
     revision: nextRevision,
     updatedAt: createdAt,
-    allowedActions: candidateId ? ["decide-review"] : ["import-target-result", "reduce-results"],
+    allowedActions: candidateId
+      ? ["decide-review"]
+      : reworkRouteWaiting
+        ? ["prepare-dispatch-from-state", "add-task-package", "import-target-result", "reduce-results", "wakeflow-render-progress"]
+        : ["import-target-result", "reduce-results"],
     decisionsRequired: decision ? [decision] : [],
     review: {
       status: reviewStatus,
@@ -1211,6 +1274,12 @@ function commandDecideReview() {
     fail(`transition candidate ${candidateId} has no open target tasks to decide; complete the demand or add the next task package by total-control judgment.`);
   }
   const candidateTaskIds = new Set(decisionScope.targetTaskIds);
+  const outputExcludedTargetTaskIds = [
+    ...new Set([
+      ...(candidate.excludedTargetTaskIds ?? []),
+      ...decisionScope.excludedTargetTaskIds,
+    ]),
+  ];
   const nextTargetTasks = (state.targetTasks ?? []).map((item) => candidateTaskIds.has(item.targetTaskId)
     ? (decision === "rework"
         ? {
@@ -1310,7 +1379,7 @@ function commandDecideReview() {
       previousState: state.state,
       nextState: nextMainState,
       targetTaskIds: decisionScope.targetTaskIds,
-      excludedTargetTaskIds: decisionScope.excludedTargetTaskIds,
+      excludedTargetTaskIds: outputExcludedTargetTaskIds,
       stateRevision: nextRevision,
       eventId,
       projectionStatus: "stale",

@@ -2096,6 +2096,72 @@ test("F18: re-dispatch clears a prior rework decision so a fresh result is not m
   assert.equal(task.reviewDecision, null, "re-dispatch clears the stale rework decision");
 });
 
+test("rework-first dispatch blocks ordinary next-step targets until rework is dispatched", () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.state = "planned";
+  state.targetTasks[0].status = "needs-rework";
+  state.targetTasks[0].reviewDecision = "rework";
+  state.taskPackages[0].status = "needs-rework";
+  state.taskPackages.push({
+    taskPackageId: "CSMR-PKG-2",
+    summary: "Ordinary next step",
+    status: "pending",
+    createdAt: "2026-06-05T00:01:00.000Z",
+  });
+  state.targetTasks.push({
+    targetTaskId: "CSMR-TASK-2",
+    taskPackageId: "CSMR-PKG-2",
+    targetWindow: "AlembicPlugin",
+    summary: "Ordinary next-step task",
+    status: "pending",
+    createdAt: "2026-06-05T00:01:00.000Z",
+  });
+  state.windows[0].taskPackageIds.push("CSMR-PKG-2");
+  state.windows[0].targetTaskIds.push("CSMR-TASK-2");
+  writeJson(stateFile, state);
+  writeJson(path.join(stateRoot, "task-packages/CSMR-PKG-2.json"), {
+    schemaVersion: 1,
+    taskPackageId: "CSMR-PKG-2",
+    demandKey: "CSMR-FIXTURE",
+    summary: "Ordinary next step",
+    status: "pending",
+    targetTasks: [{
+      targetTaskId: "CSMR-TASK-2",
+      taskPackageId: "CSMR-PKG-2",
+      targetWindow: "AlembicPlugin",
+      summary: "Ordinary next-step task",
+      status: "pending",
+    }],
+    createdAt: "2026-06-05T00:01:00.000Z",
+  });
+  registerThread(root, "AlembicPlugin");
+
+  const ordinary = run(root, [
+    "prepare-dispatch-from-state",
+    "--state-root",
+    stateRootRef,
+    "--target-task-id",
+    "CSMR-TASK-2",
+    "--group",
+    "GROUP-NEXT",
+    "--controller-window",
+    "AlembicWorkspace",
+    "--human-context-ref",
+    `${stateRootRef}/developer-progress.md`,
+    "--require-thread",
+    "--write",
+  ]);
+  assert.notEqual(ordinary.status, 0);
+  assert.match(ordinary.stdout, /cannot prepare dispatch for CSMR-TASK-2 while rework is open/);
+  assert.match(ordinary.stdout, /CSMR-TASK-1/);
+
+  const rework = prepareDispatch(root, stateRootRef, { group: "GROUP-REWORK", targetTaskId: "CSMR-TASK-1" });
+  assert.equal(rework.ok, true);
+  assert.equal(rework.envelope.stateRef.targetTaskId, "CSMR-TASK-1");
+});
+
 test("F25: a stale lock for the answered delivery is released (unified freshness-agnostic policy)", () => {
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");

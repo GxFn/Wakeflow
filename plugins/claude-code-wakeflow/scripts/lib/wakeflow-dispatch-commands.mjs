@@ -12,6 +12,7 @@ import {
   controllerReturnDuplicateSelector,
   returnPolicyReviewScope,
 } from "./wakeflow-return-policy.mjs";
+import { controllerReviewScope } from "./wakeflow-review-scope.mjs";
 
 export function createDispatchCommands(ctx) {
   const {
@@ -337,6 +338,13 @@ export function createDispatchCommands(ctx) {
     }
     if (["review-ready", "accepting"].includes(state.state)) {
       fail(`cannot prepare dispatch while controller state is ${state.state}; decide review before dispatching more work.`);
+    }
+    const reviewScope = controllerReviewScope(state.targetTasks ?? []);
+    if (
+      reviewScope.mode === "rework-first-controller-review-targets"
+      && !reviewScope.targetTaskIds.includes(targetTask.targetTaskId)
+    ) {
+      fail(`cannot prepare dispatch for ${targetTask.targetTaskId} while rework is open; dispatch rework target(s) first: ${reviewScope.targetTaskIds.join(", ")}`);
     }
     const eligibleTargetStatuses = new Set(["pending", "needs-rework", "missing-result"]);
     const targetStatus = targetTask.status || "pending";

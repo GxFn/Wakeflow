@@ -93,9 +93,10 @@ if (!controlStatus.ok || !controlStatus.stdout.includes("wakeflow-repo-status.mj
   throw new Error("embedded runtime did not print status route");
 }
 
-const mcpSmoke = await runMcpSmoke(root);
+const mcpRoot = mkdtempSync(path.join(tmpdir(), "wakeflow-mcp-smoke-"));
+const mcpSmoke = await runMcpSmoke(mcpRoot);
 
-console.log(JSON.stringify({ ok: true, root, stateRoot, wakeflowRuntime: "ok", mcp: mcpSmoke }, null, 2));
+console.log(JSON.stringify({ ok: true, root, stateRoot, wakeflowRuntime: "ok", mcpRoot, mcp: mcpSmoke }, null, 2));
 
 function assertOk(result, label) {
   if (!result.ok) {

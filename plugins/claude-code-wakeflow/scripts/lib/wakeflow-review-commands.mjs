@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { buildControllerCallbackPlan } from "./wakeflow-return-policy.mjs";
-import { controllerReviewScope } from "./wakeflow-review-scope.mjs";
+import { controllerReviewScope, hasPendingReworkDecision } from "./wakeflow-review-scope.mjs";
 import { buildControllerReviewPack } from "./wakeflow-review-pack.mjs";
 
 export function createReviewCommands(ctx) {
@@ -359,15 +359,20 @@ export function createReviewCommands(ctx) {
     const allTargetTasks = state.targetTasks ?? [];
     const reviewScope = controllerReviewScope(allTargetTasks);
     const targetTasks = reviewScope.reviewableTargetTasks;
+    const reworkCompanionPresent = reviewScope.mode === "rework-first-controller-review-targets"
+      && targetTasks.some((task) => task.reviewRoute === "rework" && !hasPendingReworkDecision(task));
     const targetResults = targetTasks.map((task) => {
-      const item = resultsByTask.get(task.targetTaskId);
+      const reworkAnchorCovered = hasPendingReworkDecision(task) && reworkCompanionPresent;
+      const item = hasPendingReworkDecision(task) ? null : resultsByTask.get(task.targetTaskId);
       const result = item?.result ?? null;
       const evidenceRefs = Array.isArray(result?.evidenceRefs) ? result.evidenceRefs : [];
       const verificationSummary = Array.isArray(result?.verification) ? result.verification : [];
       const evidenceRefSummaries = evidenceRefs.map((ref) => stateRootEvidenceRefSummary(stateRoot, stateRootRef, ref));
       const missingEvidenceRefs = missingEvidenceRefsFromSummaries(evidenceRefSummaries);
       const resultExpected = stateRootTaskResultExpected(task);
-      const resultStatus = result?.status || (resultExpected ? "missing" : "pending-dispatch");
+      const resultStatus = reworkAnchorCovered
+        ? "covered-by-rework-route"
+        : result?.status || (resultExpected ? "missing" : "pending-dispatch");
       return {
         targetWindow: task.targetWindow,
         taskId: task.targetTaskId,

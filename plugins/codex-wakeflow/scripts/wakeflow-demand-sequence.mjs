@@ -4,6 +4,10 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runSync } from "../lib/wakeflow-process.mjs";
+import {
+  activeDemandConflictSummary,
+  scanUnarchivedDemandStateRoots,
+} from "./lib/wakeflow-active-demands.mjs";
 import { updateDesignHandoffStatus } from "./lib/wakeflow-design-board.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
@@ -85,6 +89,19 @@ function resolveFromWorkspace(value) {
 function relative(file) {
   const rel = path.relative(workspaceRoot, file).split(path.sep).join("/");
   return rel || ".";
+}
+
+function unarchivedDemandConflicts(excludeDemandKeys = []) {
+  return scanUnarchivedDemandStateRoots({ workspaceRoot, excludeDemandKeys });
+}
+
+function failOnUnarchivedDemandConflicts(excludeDemandKeys = []) {
+  const conflicts = unarchivedDemandConflicts(excludeDemandKeys);
+  if (conflicts.length === 0) return [];
+  fail(
+    `cannot claim a new demand while unarchived demand state root(s) exist: ${activeDemandConflictSummary(conflicts)}. Complete and archive the current demand before claiming the next one.`,
+  );
+  return conflicts;
 }
 
 function slug(value) {
@@ -518,6 +535,7 @@ function commandClaimNext() {
   if (!nextItem) {
     fail("sequence has no active demand and no uncreated demand; inspect state roots.");
   }
+  failOnUnarchivedDemandConflicts([nextItem.demandKey]);
   const stateRoot = relative(stateRootFor(nextItem));
   if (!write) {
     output({
@@ -633,6 +651,11 @@ function runImportRevalidate(designKey) {
 function commandClaimFromDesign() {
   const designKeyArg = getValue("--design-key", null);
   const scan = runNextWorkDesign();
+  if ((scan.workspaceDemandConflicts ?? []).length > 0) {
+    fail(
+      `cannot claim a Design demand while unarchived demand state root(s) exist: ${activeDemandConflictSummary(scan.workspaceDemandConflicts)}. Complete and archive the current demand before claiming the next one.`,
+    );
+  }
   const designCandidates = scan.candidates ?? [];
   const autoClaimable = designCandidates.filter((candidate) => candidate.controllerClaimable === true);
 

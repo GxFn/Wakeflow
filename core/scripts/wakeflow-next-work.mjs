@@ -4,6 +4,11 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import path from "node:path";
 import { loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 import { isCompletedState, isPausedLikeState, normalizeStateId } from "./lib/wakeflow-status-machine.mjs";
+import {
+  activeDemandConflictBlockers,
+  activeDemandConflictSummary,
+  scanUnarchivedDemandStateRoots,
+} from "./lib/wakeflow-active-demands.mjs";
 
 const workspaceRoot = process.cwd();
 const args = process.argv.slice(2);
@@ -435,6 +440,21 @@ function compareCandidates(left, right) {
   return 0;
 }
 
+function applyWorkspaceDemandGuard(candidate, conflicts) {
+  const candidateConflicts = conflicts.filter((item) => item.demandKey !== candidate.id);
+  if (candidateConflicts.length === 0) return candidate;
+  const blockers = [
+    ...(candidate.blockers ?? []),
+    ...activeDemandConflictBlockers(candidateConflicts),
+  ];
+  return {
+    ...candidate,
+    blockers,
+    eligible: false,
+    ...(candidate.source === "design" ? { controllerClaimable: false } : {}),
+  };
+}
+
 const issues = [];
 const warnings = [];
 const status = currentStatus();
@@ -449,9 +469,15 @@ if (afterCompletion && !status.eligibleForAfterCompletion) {
 if (!["all", "design", "todo"].includes(sourceMode)) {
   issues.push(`unsupported --source ${sourceMode}; use all, design, or todo`);
 }
+const workspaceDemandConflicts = scanUnarchivedDemandStateRoots({ workspaceRoot });
+if (workspaceDemandConflicts.length > 0) {
+  issues.push(`workspace has unarchived demand state root(s): ${activeDemandConflictSummary(workspaceDemandConflicts)}`);
+}
 
-const designCandidates = parseDesignCandidates(issues, warnings);
-const todoCandidates = parseTodoCandidates(warnings);
+const designCandidates = parseDesignCandidates(issues, warnings)
+  .map((candidate) => applyWorkspaceDemandGuard(candidate, workspaceDemandConflicts));
+const todoCandidates = parseTodoCandidates(warnings)
+  .map((candidate) => applyWorkspaceDemandGuard(candidate, workspaceDemandConflicts));
 const allCandidates = [...designCandidates, ...todoCandidates].sort(compareCandidates);
 const matchedCandidates = targetId ? allCandidates.filter((candidate) => candidate.id === targetId) : allCandidates;
 if (targetId && matchedCandidates.length === 0) {
@@ -476,6 +502,7 @@ const result = {
   afterCompletion,
   targetId,
   currentStatus: status,
+  workspaceDemandConflicts,
   candidateCount: candidates.length,
   candidates,
   recommended,

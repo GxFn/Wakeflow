@@ -26,6 +26,7 @@ function readJson(file) {
 }
 
 function writeJson(file, value) {
+  mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
@@ -141,6 +142,19 @@ function markCompleted(stateRoot) {
   });
 }
 
+function markArchived(stateRoot) {
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const state = readJson(stateFile);
+  writeJson(stateFile, {
+    ...state,
+    state: "archived",
+    review: {
+      ...(state.review ?? {}),
+      status: "demand-archived",
+    },
+  });
+}
+
 test("status reports the next claimable demand without writing state roots", () => {
   const root = makeRoot();
   const manifestPath = createManifest(root);
@@ -241,13 +255,19 @@ test("claim-next refuses to skip an active demand", () => {
   assert.equal(existsSync(path.join(root, ".wakeflow-active/current/example-req-02")), false);
 });
 
-test("claim-next advances only after the previous demand is terminal", () => {
+test("claim-next advances only after the previous demand is archived", () => {
   const root = makeRoot();
   const manifestPath = createManifest(root);
   const first = run(["claim-next", "--root", root, "--manifest", manifestPath, "--write", "--json"]);
   const firstPayload = JSON.parse(first.stdout);
   markCompleted(path.join(root, firstPayload.claimed.stateRoot));
 
+  const blocked = run(["claim-next", "--root", root, "--manifest", manifestPath, "--write", "--json"]);
+  assert.notEqual(blocked.status, 0);
+  assert.match(blocked.stdout, /completed but not archived/);
+  assert.equal(existsSync(path.join(root, ".wakeflow-active/current/example-req-02/wakeflow-state.json")), false);
+
+  markArchived(path.join(root, firstPayload.claimed.stateRoot));
   const result = run(["claim-next", "--root", root, "--manifest", manifestPath, "--write", "--json"]);
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse(result.stdout);
@@ -374,14 +394,26 @@ test("claim-from-design --write inits exactly one demand, no task package, no di
   assert.ok(payload.forbiddenConclusions.includes("claim-from-design-is-dispatch"));
 });
 
+test("claim-from-design refuses while another demand state root is unarchived", () => {
+  const { root, id } = makeDesignFixture();
+  writeJson(path.join(root, ".wakeflow-active/current/current-demand/wakeflow-state.json"), {
+    demandKey: "current-demand",
+    state: "review-ready",
+  });
+
+  const result = run(["claim-from-design", "--root", root, "--write", "--json"]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /cannot claim a Design demand while unarchived demand state root/);
+  assert.equal(designBoardStatus(root, id), "controller-claimable");
+  assert.equal(existsSync(path.join(root, `.wakeflow-active/current/${id}/wakeflow-state.json`)), false);
+});
+
 test("claim-from-design does not re-init an accepted Design handoff", () => {
   const { root, id } = makeDesignFixture();
   run(["claim-from-design", "--root", root, "--write", "--json"]);
   const result = run(["claim-from-design", "--root", root, "--write", "--json"]);
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  const payload = JSON.parse(result.stdout);
-  assert.equal(payload.claimed, null);
-  assert.deepEqual(payload.claimable, []);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /cannot claim a Design demand while unarchived demand state root/);
   assert.equal(designBoardStatus(root, id), "accepted-by-workspace");
 });
 
@@ -406,5 +438,5 @@ test("claim-from-design explicitly claims a named ready-for-workspace row and cl
 
   const repeat = run(["claim-from-design", "--root", root, "--design-key", id, "--write", "--json"]);
   assert.notEqual(repeat.status, 0);
-  assert.match(repeat.stdout, /not an eligible Design row|candidates: none/);
+  assert.match(repeat.stdout, /cannot claim a Design demand while unarchived demand state root/);
 });

@@ -170,6 +170,24 @@ test("Design rows with an existing active state root are lifecycle-blocked", () 
   assert.match(parsed.issues.join("\n"), /already active: planned/);
 });
 
+test("next-work blocks new candidates while another demand state root is unarchived", () => {
+  const { root } = makeFixture({
+    designRows:
+      "| next-design-2026-06-04 | controller-claimable | Next design | [original](next-design/original-plan-2026-06-04.md) | [design](next-design/requirement-design-2026-06-04.md) | [handoff](next-design/workspace-handoff-2026-06-04.md) | confirmed |  | next-mainline | after current mainline | GTODO-NEXT | P1 | P1 | controller intake |",
+  });
+  writeJson(path.join(root, ".wakeflow-active/current/current-demand/wakeflow-state.json"), {
+    demandKey: "current-demand",
+    state: "needs-rework",
+  });
+
+  const result = run(root, ["--source", "design", "--after-completion"]);
+  assert.notEqual(result.status, 0);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.candidateCount, 0);
+  assert.match(parsed.issues.join("\n"), /workspace has unarchived demand state root/);
+  assert.equal(parsed.workspaceDemandConflicts[0].demandKey, "current-demand");
+});
+
 test("Design rows with an archived state root are lifecycle-blocked", () => {
   const { root, designId } = makeFixture({
     designRows:

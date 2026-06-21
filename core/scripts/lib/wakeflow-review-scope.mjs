@@ -7,23 +7,47 @@ export function hasFinalControllerDecision(task) {
   return task?.status === "accepted" || task?.reviewDecision === "accept";
 }
 
+export function hasPendingReworkDecision(task) {
+  return task?.status === "needs-rework" || task?.reviewDecision === "rework";
+}
+
+export function isReworkRouteTask(task) {
+  return hasPendingReworkDecision(task) || task?.reviewRoute === "rework";
+}
+
 export function controllerReviewScope(targetTasks = []) {
-  const reviewableTargetTasks = [];
+  const openTargetTasks = [];
   const excludedTargetTaskIds = [];
 
   for (const task of targetTasks) {
     if (hasFinalControllerDecision(task)) {
       excludedTargetTaskIds.push(task.targetTaskId);
     } else {
-      reviewableTargetTasks.push(task);
+      openTargetTasks.push(task);
     }
+  }
+
+  const reworkRouteTargetTasks = openTargetTasks.filter((task) => isReworkRouteTask(task));
+  if (reworkRouteTargetTasks.length > 0) {
+    const reworkRouteIds = new Set(reworkRouteTargetTasks.map((task) => task.targetTaskId));
+    return {
+      mode: "rework-first-controller-review-targets",
+      targetTaskIds: reworkRouteTargetTasks.map((task) => task.targetTaskId),
+      excludedTargetTaskIds: [
+        ...excludedTargetTaskIds,
+        ...openTargetTasks
+          .filter((task) => !reworkRouteIds.has(task.targetTaskId))
+          .map((task) => task.targetTaskId),
+      ],
+      reviewableTargetTasks: reworkRouteTargetTasks,
+    };
   }
 
   return {
     mode: "open-controller-review-targets",
-    targetTaskIds: reviewableTargetTasks.map((task) => task.targetTaskId),
+    targetTaskIds: openTargetTasks.map((task) => task.targetTaskId),
     excludedTargetTaskIds,
-    reviewableTargetTasks,
+    reviewableTargetTasks: openTargetTasks,
   };
 }
 

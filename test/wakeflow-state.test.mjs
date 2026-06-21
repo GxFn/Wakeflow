@@ -129,6 +129,65 @@ test("init --write creates ignored state root from tracked templates", () => {
   assert.equal(existsSync(path.join(stateRoot, "transition-candidates")), false);
 });
 
+test("init refuses to overwrite an existing state root", () => {
+  const root = makeRoot();
+  const first = run([
+    "init",
+    "--root",
+    root,
+    "--demand-key",
+    "REINIT-FIXTURE",
+    "--title",
+    "Reinit Fixture",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(first.status, 0, first.stderr || first.stdout);
+  const repeat = run([
+    "init",
+    "--root",
+    root,
+    "--demand-key",
+    "REINIT-FIXTURE",
+    "--title",
+    "Reinit Fixture",
+    "--write",
+    "--json",
+  ]);
+  assert.notEqual(repeat.status, 0);
+  assert.match(repeat.stdout + repeat.stderr, /refuse to re-initialize/);
+});
+
+test("init refuses to start another demand while one is unarchived", () => {
+  const root = makeRoot();
+  const first = run([
+    "init",
+    "--root",
+    root,
+    "--demand-key",
+    "ACTIVE-FIXTURE",
+    "--title",
+    "Active Fixture",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(first.status, 0, first.stderr || first.stdout);
+  const second = run([
+    "init",
+    "--root",
+    root,
+    "--demand-key",
+    "SECOND-FIXTURE",
+    "--title",
+    "Second Fixture",
+    "--write",
+    "--json",
+  ]);
+  assert.notEqual(second.status, 0);
+  assert.match(second.stdout + second.stderr, /cannot initialize SECOND-FIXTURE while unarchived demand state root/);
+  assert.equal(existsSync(path.join(root, ".wakeflow-active/current/SECOND-FIXTURE/wakeflow-state.json")), false);
+});
+
 test("RA5: render-progress emits structured projection slices alongside the display strings", () => {
   const root = makeRoot();
   const init = JSON.parse(run([
@@ -889,17 +948,71 @@ test("review decisions affect open targets without rewriting accepted history", 
   assert.equal(afterRework.taskPackages.find((item) => item.taskPackageId === "CSMR-PKG-1").status, "needs-rework");
   assert.equal(afterRework.targetTasks.find((item) => item.targetTaskId === "CSMR-TASK-1").status, "needs-rework");
 
+  const prematureReduce = reduce();
+  assert.equal(prematureReduce.candidateId, null);
+  assert.equal(prematureReduce.nextState, "needs-rework");
+  assert.equal(prematureReduce.reviewStatus, "rework-route-waiting-results");
+  assert.deepEqual(prematureReduce.targetTaskIds, ["CSMR-TASK-1"]);
+  assert.deepEqual(prematureReduce.missingResultIds, ["CSMR-TASK-1"]);
+
   addTask("CSMR-PKG-1A", "CSMR-TASK-1A");
   importResult("CSMR-TASK-1A", "CSMR-RESULT-1A");
+  const stateWithLegacyNextStepFile = path.join(stateRoot, "wakeflow-state.json");
+  const stateWithLegacyNextStep = readJson(stateWithLegacyNextStepFile);
+  stateWithLegacyNextStep.taskPackages.push({
+    taskPackageId: "CSMR-PKG-2",
+    summary: "Legacy next step",
+    status: "pending",
+    createdAt: "2026-06-05T00:02:00.000Z",
+  });
+  stateWithLegacyNextStep.targetTasks.push({
+    targetTaskId: "CSMR-TASK-2",
+    taskPackageId: "CSMR-PKG-2",
+    targetWindow: "AlembicWorkspace",
+    summary: "Legacy next-step task",
+    status: "pending",
+    createdAt: "2026-06-05T00:02:00.000Z",
+  });
+  writeFileSync(stateWithLegacyNextStepFile, `${JSON.stringify(stateWithLegacyNextStep, null, 2)}\n`);
+  writeFileSync(path.join(stateRoot, "task-packages/CSMR-PKG-2.json"), `${JSON.stringify({
+    schemaVersion: 1,
+    taskPackageId: "CSMR-PKG-2",
+    demandKey: "CANDIDATE-SCOPE-MERGE",
+    summary: "Legacy next step",
+    status: "pending",
+    targetTasks: [{
+      targetTaskId: "CSMR-TASK-2",
+      taskPackageId: "CSMR-PKG-2",
+      targetWindow: "AlembicWorkspace",
+      summary: "Legacy next-step task",
+      status: "pending",
+    }],
+    createdAt: "2026-06-05T00:02:00.000Z",
+  }, null, 2)}\n`);
+  importResult("CSMR-TASK-2", "CSMR-RESULT-2");
   const acceptCandidatePayload = reduce();
   const acceptCandidate = readJson(path.join(stateRoot, `transition-candidates/${acceptCandidatePayload.candidateId}.json`));
+  assert.equal(acceptCandidate.reviewScope, "rework-first-controller-review-targets");
   assert.deepEqual(acceptCandidate.targetTaskIds, ["CSMR-TASK-1", "CSMR-TASK-1A"]);
-  assert.deepEqual(acceptCandidate.excludedTargetTaskIds, ["CSMR-TASK-0"]);
-  decide(acceptCandidatePayload.candidateId, "accept");
+  assert.deepEqual(acceptCandidate.excludedTargetTaskIds, ["CSMR-TASK-0", "CSMR-TASK-2"]);
+  const reworkAccept = decide(acceptCandidatePayload.candidateId, "accept");
+  assert.deepEqual(reworkAccept.targetTaskIds, ["CSMR-TASK-1", "CSMR-TASK-1A"]);
+  assert.deepEqual(reworkAccept.excludedTargetTaskIds, ["CSMR-TASK-0", "CSMR-TASK-2"]);
+
+  const afterReworkRouteAccept = readJson(path.join(stateRoot, "wakeflow-state.json"));
+  assert.equal(afterReworkRouteAccept.taskPackages.find((item) => item.taskPackageId === "CSMR-PKG-2").status, "pending");
+  assert.equal(afterReworkRouteAccept.targetTasks.find((item) => item.targetTaskId === "CSMR-TASK-2").status, "pending");
+
+  const nextCandidatePayload = reduce();
+  const nextCandidate = readJson(path.join(stateRoot, `transition-candidates/${nextCandidatePayload.candidateId}.json`));
+  assert.equal(nextCandidate.reviewScope, "open-controller-review-targets");
+  assert.deepEqual(nextCandidate.targetTaskIds, ["CSMR-TASK-2"]);
+  assert.deepEqual(nextCandidate.excludedTargetTaskIds, ["CSMR-TASK-0", "CSMR-TASK-1", "CSMR-TASK-1A"]);
+  decide(nextCandidatePayload.candidateId, "accept");
 
   const finalState = readJson(path.join(stateRoot, "wakeflow-state.json"));
-  assert.deepEqual(finalState.taskPackages.map((item) => item.status), ["accepted", "accepted", "accepted"]);
-  assert.deepEqual(finalState.targetTasks.map((item) => item.status), ["accepted", "accepted", "accepted"]);
+  assert.deepEqual(finalState.taskPackages.map((item) => item.status), ["accepted", "accepted", "accepted", "accepted"]);
+  assert.deepEqual(finalState.targetTasks.map((item) => item.status), ["accepted", "accepted", "accepted", "accepted"]);
 
   const completed = run([
     "complete-demand",
@@ -1322,4 +1435,90 @@ test("import-target-result reports review readiness so reduce is never speculati
   const second = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-2", "--target-window", "WinB", "--status", "completed", "--evidence-ref", "b.md", "--write", "--json"]).stdout);
   assert.equal(second.reviewReadiness.readyForReduce, true);
   assert.match(second.agentNext, /not controller acceptance.*run reduce-results/);
+});
+
+test("import-target-result readiness follows rework-first scope instead of stale results", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run(["init", "--root", root, "--demand-key", "REWORK-READY-FIXTURE", "--title", "Rework Ready", "--write", "--json"]).stdout);
+  run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Needs review", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
+  run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "old.md", "--write", "--json"]);
+  const reduced = JSON.parse(run(["reduce-results", "--root", root, "--state-root", init.stateRoot, "--write", "--json"]).stdout);
+  run(["decide-review", "--root", root, "--state-root", init.stateRoot, "--candidate-id", reduced.candidateId, "--decision", "rework", "--reason", "Needs rework.", "--write", "--json"]);
+
+  const stateRoot = path.join(root, init.stateRoot);
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const state = readJson(stateFile);
+  state.taskPackages.push({
+    taskPackageId: "PKG-2",
+    summary: "Ordinary next step",
+    status: "pending",
+    createdAt: "2026-06-05T00:01:00.000Z",
+  });
+  state.targetTasks.push({
+    targetTaskId: "TASK-2",
+    taskPackageId: "PKG-2",
+    targetWindow: "WinB",
+    summary: "Ordinary next-step task",
+    status: "pending",
+    createdAt: "2026-06-05T00:01:00.000Z",
+  });
+  writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+  writeFileSync(path.join(stateRoot, "task-packages/PKG-2.json"), `${JSON.stringify({
+    schemaVersion: 1,
+    taskPackageId: "PKG-2",
+    demandKey: "REWORK-READY-FIXTURE",
+    summary: "Ordinary next step",
+    status: "pending",
+    targetTasks: [{
+      targetTaskId: "TASK-2",
+      taskPackageId: "PKG-2",
+      targetWindow: "WinB",
+      summary: "Ordinary next-step task",
+      status: "pending",
+    }],
+    createdAt: "2026-06-05T00:01:00.000Z",
+  }, null, 2)}\n`);
+
+  const ordinary = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-2", "--target-window", "WinB", "--status", "completed", "--evidence-ref", "next.md", "--write", "--json"]).stdout);
+  assert.equal(ordinary.reviewReadiness.readyForReduce, false);
+  assert.equal(ordinary.reviewReadiness.reviewScope.mode, "rework-first-controller-review-targets");
+  assert.deepEqual(ordinary.reviewReadiness.remainingTaskIds, ["TASK-1"]);
+  assert.deepEqual(ordinary.reviewReadiness.reviewScope.excludedTargetTaskIds, ["TASK-2"]);
+  assert.match(ordinary.agentNext, /rework is still open/);
+});
+
+test("add-task-package refuses ordinary next-step work while a rework route is active", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run(["init", "--root", root, "--demand-key", "REWORK-ADD-FIXTURE", "--title", "Rework Add", "--write", "--json"]).stdout);
+  run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Needs review", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
+  const stateFile = path.join(root, init.stateRoot, "wakeflow-state.json");
+  const state = readJson(stateFile);
+  state.state = "dispatched";
+  state.taskPackages[0].status = "sent";
+  state.targetTasks[0].status = "sent";
+  state.targetTasks[0].reviewRoute = "rework";
+  writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+
+  const refused = run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-2", "--summary", "Ordinary next step", "--target-window", "WinB", "--target-task-id", "TASK-2", "--write", "--json"]);
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stdout + refused.stderr, /cannot add task package while rework route is active/);
+
+  const needsReworkState = readJson(stateFile);
+  needsReworkState.state = "needs-rework";
+  needsReworkState.taskPackages[0].status = "needs-rework";
+  needsReworkState.targetTasks[0].status = "needs-rework";
+  needsReworkState.targetTasks[0].reviewDecision = "rework";
+  writeFileSync(stateFile, `${JSON.stringify(needsReworkState, null, 2)}\n`);
+
+  const extension = JSON.parse(run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-R", "--summary", "Rework extension", "--target-window", "WinA", "--target-task-id", "TASK-R", "--write", "--json"]).stdout);
+  assert.equal(extension.ok, true);
+  const afterExtension = readJson(stateFile);
+  assert.equal(afterExtension.taskPackages.find((item) => item.taskPackageId === "PKG-R").reviewRoute, "rework");
+  assert.equal(afterExtension.targetTasks.find((item) => item.targetTaskId === "TASK-R").reviewRoute, "rework");
+
+  const secondExtension = JSON.parse(run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-R2", "--summary", "Second rework extension", "--target-window", "WinB", "--target-task-id", "TASK-R2", "--write", "--json"]).stdout);
+  assert.equal(secondExtension.ok, true);
+  const afterSecondExtension = readJson(stateFile);
+  assert.equal(afterSecondExtension.taskPackages.find((item) => item.taskPackageId === "PKG-R2").reviewRoute, "rework");
+  assert.equal(afterSecondExtension.targetTasks.find((item) => item.targetTaskId === "TASK-R2").reviewRoute, "rework");
 });

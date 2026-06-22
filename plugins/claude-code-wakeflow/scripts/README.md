@@ -190,6 +190,11 @@ Current scripts:
   already active, completed, or archived, so stale rows cannot be claimed again.
   It never creates a current plan, accepts evidence, dispatches windows, or
   changes TODO / Design status.
+- `wakeflow-todo.mjs`: dry-run by default; `deliver` appends one Design-ready item
+  (requirement / bug / supplement / research) to the global TODO board as a
+  `pending-claim` row, setting the immutable Auto Claim property once. Append-only:
+  it never edits or re-statuses an existing row. A requirement that authorizes
+  unattended auto-claim must link an Original Plan and a Requirement Design.
 - `wakeflow-import-design-handoffs.mjs`: imports the configured Design handoff
   board into the active Design inbox and validates ready rows. It supports
   forward-compatible enum columns while keeping old board prose readable.

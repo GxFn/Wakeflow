@@ -222,6 +222,7 @@ function validateMcpConfig() {
     "wakeflow_status",
     "wakeflow_init_demand",
     "wakeflow_add_task",
+    "wakeflow_deliver",
     "wakeflow_next_work",
     "wakeflow_prepare_delivery",
     "wakeflow_record_delivery",

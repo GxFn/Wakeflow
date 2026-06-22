@@ -334,22 +334,23 @@ async function runMcpSmoke(rootPath) {
     }
 
     const called = await request("tools/call", {
-      name: "wakeflow_init_demand",
+      name: "wakeflow_create_demand",
       arguments: {
         root: rootPath,
         demandKey: "mcp-smoke",
         title: "MCP Smoke",
         goal: "Verify Wakeflow MCP tools/call.",
         completionDefinition: "MCP call creates a state root through the capability interface.",
-        stagePlan: "Call wakeflow_init_demand.",
+        stagePlan: "Call wakeflow_create_demand.",
+        apply: true,
       },
     });
     const text = called.result.content?.[0]?.text;
     const payload = JSON.parse(text);
-    if (!payload.ok || !payload.parsedJson?.stateRoot) {
+    if (!payload.ok || !payload.parsedJson?.created?.stateRoot) {
       throw new Error("MCP tools/call did not create a state root");
     }
-    const mcpStateRoot = payload.parsedJson.stateRoot;
+    const mcpStateRoot = payload.parsedJson.created.stateRoot;
 
     const addedTask = await request("tools/call", {
       name: "wakeflow_add_task",

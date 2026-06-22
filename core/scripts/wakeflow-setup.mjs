@@ -1492,7 +1492,7 @@ function configuredStarterContent(context, relativePath) {
     content = replaceAllLiteral(
       content,
       "Create a real active demand with `node scripts/wakeflow-state.mjs init --write`; then read the generated `developer-progress.md`.",
-      "Create a real active demand with the Wakeflow MCP `wakeflow_init_demand` tool; then read the generated `developer-progress.md`.",
+      "Create a real active demand with the Wakeflow MCP `wakeflow_create_demand` tool; then read the generated `developer-progress.md`.",
     );
   }
   content = replaceAllLiteral(content, "| Controller | idle | No active demand has been initialized; entry-sync windows should report ready and stop. |", `| ${controllerWindow} | idle | No active demand has been initialized; entry-sync windows should report ready and stop. |`);

@@ -163,25 +163,6 @@ const toolDefinitions = [
     },
   },
   {
-    name: "wakeflow_init_demand",
-    description: "Create a full Wakeflow controller state root for one demand.",
-    annotations: localWriteTool("Create Wakeflow Demand State"),
-    inputSchema: {
-      type: "object",
-      required: ["demandKey", "title"],
-      properties: {
-        root: { type: "string" },
-        demandKey: { type: "string" },
-        title: { type: "string" },
-        language: { type: "string", enum: ["auto", "zh", "en"], description: "Demand interface language; drives the human-readable sentences of all envelope prompts for this demand." },
-        goal: { type: "string" },
-        completionDefinition: { type: "string" },
-        stagePlan: { type: "string" },
-        stateRoot: { type: "string" },
-      },
-    },
-  },
-  {
     name: "wakeflow_add_task",
     description: "Add a full runtime task package and optional target task to a Wakeflow controller state root.",
     annotations: localWriteTool("Add Wakeflow Task Package"),
@@ -668,22 +649,6 @@ export const handlers = {
     script: "wakeflow-cli",
     args: ["status", ...rootArgs(args), "--json"],
     cwd: args.root || undefined,
-  }),
-  wakeflow_init_demand: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "init",
-      "--demand-key", args.demandKey,
-      "--title", args.title,
-      ...optionalValue("--goal", args.goal),
-      ...optionalValue("--completion-definition", args.completionDefinition),
-      ...optionalValue("--stage-plan", args.stagePlan),
-      ...optionalValue("--state-root", args.stateRoot),
-      ...rootArgs(args),
-      "--write",
-      ...(args.language ? ["--language", args.language] : []),
-      "--json",
-    ],
   }),
   wakeflow_add_task: (args) => runWakeflowRuntime({
     script: "wakeflow-state",

@@ -220,7 +220,6 @@ function validateMcpConfig() {
     "wakeflow_initialize_workspace",
     "wakeflow_replace_windows",
     "wakeflow_status",
-    "wakeflow_init_demand",
     "wakeflow_create_demand",
     "wakeflow_add_task",
     "wakeflow_deliver",

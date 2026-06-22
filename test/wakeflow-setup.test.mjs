@@ -348,7 +348,7 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.match(currentStatus, new RegExp(`# ${path.basename(parent)} Current Status`));
   assert.match(currentStatus, new RegExp(`Controller window: ${path.basename(parent)}`));
   assert.doesNotMatch(currentStatus, /Controller window: Wakeflow/);
-  assert.match(currentStatus, /Wakeflow MCP `wakeflow_init_demand` tool/);
+  assert.match(currentStatus, /Wakeflow MCP `wakeflow_create_demand` tool/);
   assert.doesNotMatch(currentStatus, /node scripts\/wakeflow-state\.mjs/);
   assert.match(currentStatus, /Status: idle \/ initialization ready \/ waiting for controller task/);
   assert.match(currentStatus, /Entry-sync windows should report readiness and stop/);
@@ -481,7 +481,7 @@ Status: idle / no active demand
   assert.match(currentStatus, new RegExp(`Controller window: ${path.basename(parent)}`));
   assert.match(currentStatus, /Status: idle \/ initialization ready \/ waiting for controller task/);
   assert.match(currentStatus, new RegExp(`\\| ${path.basename(parent)} \\| idle \\| No active demand; waiting for controller task\\. \\| Initialization ready state\\. \\|`));
-  assert.match(currentStatus, /Wakeflow MCP `wakeflow_init_demand` tool/);
+  assert.match(currentStatus, /Wakeflow MCP `wakeflow_create_demand` tool/);
   assert.doesNotMatch(currentStatus, /node scripts\/wakeflow-state\.mjs/);
   assert.doesNotMatch(currentStatus, /Controller window: Wakeflow/);
 

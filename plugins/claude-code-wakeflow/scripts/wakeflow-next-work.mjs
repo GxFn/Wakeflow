@@ -70,17 +70,6 @@ function read(file) {
   return readFileSync(file, "utf8");
 }
 
-function readJsonIfExists(file) {
-  if (!existsSync(file)) {
-    return { exists: false, value: null, error: null };
-  }
-  try {
-    return { exists: true, value: JSON.parse(readFileSync(file, "utf8")), error: null };
-  } catch (error) {
-    return { exists: true, value: null, error: error.message };
-  }
-}
-
 function splitMarkdownRow(line) {
   const trimmed = line.trim();
   if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) {
@@ -124,111 +113,6 @@ function normalizePriority(value) {
   }
   const prefix = text.match(/^P[0-3](?=$|[\s_-])/u)?.[0];
   return priorityRank.has(prefix) ? prefix : "P3";
-}
-
-function normalizeEnumValue(value) {
-  return String(value ?? "").trim().toLowerCase();
-}
-
-function hasNegativeUserConfirmation(value) {
-  const text = String(value ?? "").trim();
-  if (!text) {
-    return true;
-  }
-  return /(unconfirmed|pending-confirmation|not confirmed|no confirmation|not confirmed|unconfirmed|pending confirmation)/i.test(text);
-}
-
-function hasPositiveUserConfirmation(value) {
-  const text = String(value ?? "").trim();
-  if (!text || hasNegativeUserConfirmation(text)) {
-    return false;
-  }
-  return /(user[^|.;]*confirmed|yes|confirmed)/i.test(text);
-}
-
-function userConfirmationStatus(entry) {
-  const enumValue = normalizeEnumValue(entry["User Confirmation Status"]);
-  if (enumValue) {
-    return enumValue;
-  }
-  return hasPositiveUserConfirmation(entry["User Confirmation"]) ? "confirmed" : "unconfirmed";
-}
-
-function firstLink(cell) {
-  const match = String(cell ?? "").match(/\[[^\]]+]\(([^)]+)\)/);
-  return match?.[1] ?? null;
-}
-
-function stripLinkTarget(rawTarget) {
-  let clean = String(rawTarget ?? "").trim();
-  if (clean.startsWith("<") && clean.endsWith(">")) {
-    clean = clean.slice(1, -1);
-  }
-  const hashIndex = clean.indexOf("#");
-  if (hashIndex >= 0) {
-    clean = clean.slice(0, hashIndex);
-  }
-  try {
-    clean = decodeURI(clean);
-  } catch {
-    // Keep raw target if it is not URI-encoded.
-  }
-  return clean;
-}
-
-function isExternalTarget(target) {
-  return /^[a-z][a-z0-9+.-]*:/i.test(target) || String(target ?? "").trim().startsWith("#");
-}
-
-function archivedStateRootForDemand(demandKey) {
-  const archiveRoot = ledgerPaths.workspaceArchiveDir;
-  if (!existsSync(archiveRoot)) return null;
-  const slugged = slug(demandKey);
-  for (const monthEntry of readdirSync(archiveRoot, { withFileTypes: true })) {
-    if (!monthEntry.isDirectory()) continue;
-    const candidate = path.join(archiveRoot, monthEntry.name, slugged, "wakeflow-state.json");
-    const parsed = readJsonIfExists(candidate);
-    if (parsed.exists) {
-      return {
-        stateRoot: relativePosix(workspaceRoot, path.dirname(candidate)),
-        state: parsed.value?.state ?? null,
-        error: parsed.error,
-      };
-    }
-  }
-  return null;
-}
-
-function designLifecycleFor(entry) {
-  const stateRoot = path.resolve(workspaceRoot, ".wakeflow-active/current", slug(entry.ID));
-  const active = readJsonIfExists(path.join(stateRoot, "wakeflow-state.json"));
-  if (active.exists) {
-    return {
-      status: active.error
-        ? "active-state-unreadable"
-        : ["completed", "archived"].includes(active.value?.state)
-          ? active.value.state
-          : "active",
-      state: active.value?.state ?? null,
-      stateRoot: relativePosix(workspaceRoot, stateRoot),
-      error: active.error,
-    };
-  }
-  const archived = archivedStateRootForDemand(entry.ID);
-  if (archived) {
-    return {
-      status: archived.error ? "archived-state-unreadable" : "archived",
-      state: archived.state,
-      stateRoot: archived.stateRoot,
-      error: archived.error,
-    };
-  }
-  return {
-    status: "unclaimed",
-    state: null,
-    stateRoot: relativePosix(workspaceRoot, stateRoot),
-    error: null,
-  };
 }
 
 function parseTodoCandidates(warnings) {

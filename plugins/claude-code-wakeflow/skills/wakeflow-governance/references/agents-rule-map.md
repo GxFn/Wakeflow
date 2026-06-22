@@ -6,6 +6,13 @@ from the working directory, so it is the per-window rules file. This map is a
 governance reference, not an additional authority layer. If this file and
 `CLAUDE.md` differ, `CLAUDE.md` wins.
 
+> **2026-06-21 update.** The operator's stop-card / confirmation-gate / decision-checklist
+> discipline (the Highest Stop Card, Confirmation Gates, Decision Questions, and the Gate-Flow
+> entry ritual) moved OUT of the reusable template into each installed workspace's own preserved
+> local rules (its `## Personal Operating Constraints`). The reusable `CLAUDE.md` now keeps only
+> `## Controller Posture` + `## Role Map` + the process sections. The "Hard Gates" list and the
+> line-range table below describe the prior 2026-06-08 structure and are kept as the migration record.
+
 ## Hard Gates That Must Stay In CLAUDE.md
 
 - Gate conclusion and Stop Card discipline.

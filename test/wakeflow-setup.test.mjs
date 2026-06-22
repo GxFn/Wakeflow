@@ -1283,10 +1283,13 @@ test("sync-root-agents unpacks parent AGENTS with Wakeflow repo paths", () => {
   assert.match(rootAgents, /Wakeflow\/\.wakeflow-active\/index\.md|controller state roots/);
   assert.match(rootAgents, /cd Wakeflow && node scripts\/wakeflow-setup\.mjs sync-root-agents --write/);
   assert.match(rootAgents, /Wakeflow\/workspace\.config\.json/);
-  assert.match(rootAgents, /## Gate Flow/);
+  assert.match(rootAgents, /## Controller Posture/);
   assert.match(rootAgents, /## Role Map/);
   assert.match(rootAgents, /The controller workspace owns cross-repository goal intake/);
-  assert.match(rootAgents, /## Highest Stop Card/);
+  // The operator's stop-card / confirmation-gate discipline is no longer baked into the
+  // reusable render; it lives in each workspace's own preserved Personal Operating Constraints.
+  assert.doesNotMatch(rootAgents, /## Highest Stop Card/);
+  assert.doesNotMatch(rootAgents, /## Confirmation Gates/);
   assert.doesNotMatch(rootAgents, /FixtureWorkspace is the controller workspace/);
   assert.doesNotMatch(rootAgents, /plugin form/);
   assert.doesNotMatch(rootAgents, /FixtureWorkspace repository/);

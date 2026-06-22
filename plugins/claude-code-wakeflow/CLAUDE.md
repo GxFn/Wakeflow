@@ -6,134 +6,28 @@ managed projects. Product scope and window roles come from `workspace.config.jso
 and local runtime config. `.wakeflow-local/workspace.config.json` may override
 local installation details and must not be committed.
 
-## Gate Flow
+## Controller Posture
 
-After every user message, run this gate before acting:
+The controller is the workspace brain, not a dispatch table. Think first: any urge
+to execute because a keyword, familiar command, script hint, or speed pressure looks
+actionable is a hard stop until the safe operation and the explicit one-sentence next
+step are clear. For a new request, analyze the feature, user scenario, completion
+definition, local code, docs, tests, and release path before decomposing work.
 
-Controller posture is think first. Any urge to execute because a keyword,
-familiar command, script hint, or speed pressure looks actionable is a hard
-stop until the safe operation, recovery boundary, and explicit one-sentence
-plan are clear.
+- Machine envelopes are evidence-first: read the named state root, skill, dispatch
+  group, task package, and evidence documents before acting; missing or conflicting
+  references stop the work as missing evidence, pending decision, or blocked.
+- On entering a managed workspace, read `CLAUDE.md`, `.wakeflow-active/index.md`, and
+  `.wakeflow-active/current/workspace-current-status.md`, then continue from the
+  current controller document. Reading status is orientation, not permission to edit
+  documents or create work.
+- Unattended automation runs only actions already covered by the confirmed
+  requirement design and current state root; when the confirmed demand plan is
+  complete, stop, and mark any work outside the confirmed design as pending decision.
 
-1. Read the Highest Stop Card and compare it with the current request.
-2. Name a short `Gate conclusion:` with the user goal, current evidence,
-   minimum loop, and first blocker.
-3. If the request is prose, classify it as question, command, authorization,
-   deletion, stop, scope change, decision, or emotional signal. Boundary words
-   such as remove, delete, do not, not that, stop, cancel, obsolete, or fake
-   requirement narrow or discard scope unless the user clearly says otherwise.
-4. If the request is a machine envelope, first read the named state root, skill,
-   dispatch group, task package, and evidence documents. Missing or conflicting
-   references stop the work as missing evidence, pending decision, or blocked.
-5. Continue only when the next action can be stated in one sentence that matches
-   the user's real intent and removes a blocker, verifies a fact, dispatches
-   valid work, reviews evidence, or records an already-made decision.
-
-When entering a managed workspace, read `CLAUDE.md`,
-`.wakeflow-active/index.md`, and
-`.wakeflow-active/current/workspace-current-status.md`, then
-continue from the current controller document. Reading status is orientation
-only; it is not permission to edit documents or create work.
-
-Unattended automation may execute only actions already covered by the confirmed
-requirement design and current state root. When the confirmed demand plan is
-complete, stop. If evidence reveals work outside the confirmed design, stop and
-mark it as pending user or controller decision.
-
-## Highest Stop Card
-
-This card overrides scripts, backfills, templates, status tables, current plans,
-and generated prompts. Before dispatch, acceptance, testing, document edits,
-script edits, automation creation, TODO claim, archive, or a final conclusion,
-check every item. If any item is true, stop, name the rule, name the blocker,
-and state the correct next action.
-
-### Stop For Authority Or Scope
-
-- You cannot state the user goal, current evidence, minimum closed loop, and
-  first blocker.
-- You are about to act from a keyword, familiar command shape, script hint, or
-  urgency before naming the safe operation, recovery boundary, explicit plan,
-  and smallest valid next step.
-- You are about to use script output, target backfill, TODO rows, status tables,
-  or templates instead of controller judgment.
-- You are turning a controller/Design suggestion into confirmed scope, TODO,
-  current plan, task package, or implementation without checking whether it
-  changes the original completion definition, repository boundary, phase order,
-  capability level, or visible behavior.
-- You are adding follow-up scope from code/test/target evidence without checking
-  the original plan, confirmed decisions, non-goals, and forbidden shortcuts.
-  Evidence can reveal gaps; it cannot override original requirement authority.
-- You are presenting controller judgment, Design advice, or agent opinion as a
-  final product decision. Final product decisions belong to the user/developer.
-- You are editing documents to create progress instead of removing a blocker,
-  verifying facts, or recording a decision that already happened.
-
-### Stop For Missing Evidence Or Blockers
-
-- The first blocker is missing thread id (a Wakeflow thread id is a Claude Code
-  session id), missing evidence, missing validation, disconnected code,
-  untriggered automation, or unmet user confirmation, but you are about to
-  create a wave, sync status, roll TODOs, tidy indexes, or add backfill text.
-- A real problem has no owner, conclusion, or repair path and you are about to
-  call it observation, later work, or harmless.
-- You are accepting work from a window, script, test, or automation without
-  independently reviewing raw evidence.
-- Backfill contains only document reading, superficial script runs, or prose
-  judgment, with no commit hash, command output, runtime JSON, log summary,
-  screenshot, report path, or reviewable file evidence.
-- Backfill conflicts with known controller facts or creates a loop of backfill,
-  document edit, redispatch, and backfill.
-
-### Stop For Loop Or Implementation Drift
-
-- The minimum loop named by the user has not run, but you are expanding into
-  full-system validation.
-- The main loop failed or the main code chain is disconnected, but you are
-  fixing surrounding surfaces, refactoring, adding fallback, adding tests,
-  changing prompts, or expanding scope instead of returning to the same chain.
-- You are replacing the user's goal with your own preference for a clean, thin,
-  lightweight, empty-shell, scaffold-first, interface-only, or mock-only shape.
-- A feature fix, capability, cleanup, release path, design plan, or
-  cross-repository change lacks real scenarios, inputs, outputs, state changes,
-  boundaries, call chains, validation, and completion definition.
-- Diagnostic metadata, source-location notes, labels, score explanations, or
-  metrics are being turned into success or production gates instead of helping
-  the original completion definition and next repair.
-- A confirmed primary metric or baseline regresses after AI repair, prompt
-  changes, metric reclassification, or data-scope changes. Preserve evidence,
-  mark the regression pending decision, and analyze the same chain.
-
-### Stop For Dispatch Or Automation Drift
-
-- You are touching TODOs, task packages, idle-window scheduling, dispatch
-  prompts, verification scripts, or archive flow without explaining how that
-  serves the current completion definition.
-- You are dispatching downstream without confirmed window identity, repository
-  identity, producer/consumer dependency, upstream commit, interface, evidence,
-  and real thread id.
-- An automation cannot prove it belongs to the current user goal, state root,
-  window responsibility, real thread id, dispatch group, target task, and
-  allowed next-hop rule.
-- Unattended mode is active, the final goal is still reachable, and you are
-  treating phase-plan generation, current-plan acceptance, or showing the next
-  plan to the user as a default stopping point.
-
-### Stop For Rule Governance Drift
-
-- You are reorganizing `CLAUDE.md` without knowing the internal map,
-  downstream skill/reference ownership, triggers, migration of old rules, and
-  which hard gates must stay in this file.
-
-Correct order:
-
-1. Think through the real user goal, evidence, minimum loop, and first blocker.
-2. Perform the smallest action that removes the blocker or advances the loop.
-3. Record only facts that already happened, were verified, or were decided.
-
-Hard anti-error rules stay in `CLAUDE.md`. Skills and references may carry
-operation steps, commands, fields, examples, troubleshooting, and script details,
-but they must not replace these gates.
+The operator's stop-card, confirmation-gate, and decision-checklist discipline lives
+in the installed workspace's own `CLAUDE.md`/`AGENTS.md` (its preserved local rules),
+not in this reusable file. This file keeps Wakeflow's roles, process, and posture.
 
 ## Role Map
 
@@ -170,26 +64,6 @@ Browse official or authoritative sources when current platform rules, external
 standards, release behavior, protocols, security, or best practices matter.
 Local code facts still win over generic advice.
 
-## Decision Questions
-
-Before every reply, dispatch, acceptance, test, or document edit, answer:
-
-1. What is the user goal and final completion definition? Is it already done?
-2. If not done, what gap remains? If done, should we accept, archive, or pause?
-3. Which task partition applies, and is a full demand or wave flow needed?
-4. What evidence permits this action, and what conclusion is forbidden?
-5. Does the action remove a blocker, verify facts, dispatch, receive evidence,
-   accept/archive, or only create document motion?
-6. Does this require user confirmation because it changes scope, repository
-   boundary, phase order, capability level, replacement route, deferral, or
-   visible behavior?
-7. Are TODO/Backlog handling, Test need, producer/consumer order, and target
-   identity clear enough for the next step?
-
-Correct immediately if you fragmented dispatch, missed TODO handling, skipped
-final-goal judgment, skipped remaining-gap analysis, ignored phase order, or
-omitted the blocker.
-
 ## Task Partitions
 
 Choose the smallest matching flow; if several match, run the smallest that
@@ -201,32 +75,14 @@ acceptance/archive, and Test handoff — and each flow's boundaries live in
 handoffs are not execution plans, and a Design redesign request pauses
 implementation churn until Design returns a complete adjustment plan.
 
-## Confirmation Gates
+## Auto-Claim Boundary
 
-Pause for user confirmation before implementation, dispatch, scope promotion, or
-archive when:
-
-- the goal, complete loop, phase order, repository coverage, or completion
-  definition is unclear;
-- a requirement needs original-plan or requirement-design confirmation;
-- a controller/Design suggestion changes original scope, repository boundary,
-  phase order, capability level, replacement route, deferral, or visible
-  behavior;
-- the plan deletes, replaces, downgrades, delays, keeps only part, keeps only an
-  interface, or changes the full scope;
-- the current plan lacks final completion definition, phase order, or
-  producer/consumer dependency reasoning.
-
-Until confirmation, remain paused or waiting for decision, with no send target
-and no executable prompt.
-
-The controller may auto-claim (init) a demand without a fresh user prompt ONLY
-from a Design-set `controller-claimable` handoff row via `wakeflow_claim_next`.
-That typed status is the moved confirmation gate: only Design can set it, it
-carries every ready-row invariant plus design-key provenance, and it never
-bypasses per-demand user confirmation. A free-text TODO row cannot drive
-auto-claim, and the claim is init-only — dispatch and acceptance gates stay
-intact and still require their own evidence and confirmation.
+The controller may auto-claim (init) a demand without a fresh user prompt ONLY from a
+Design-set `controller-claimable` handoff row via `wakeflow_claim_next`: only Design
+can set that typed status, it carries every ready-row invariant plus design-key
+provenance, and it is init-only — dispatch and acceptance still require their own
+evidence and confirmation. A free-text TODO row cannot drive auto-claim. The
+operator's broader confirmation gates live in the installed workspace's own rules.
 
 ## Testing And Acceptance
 
@@ -367,13 +223,13 @@ forbidden paths, or automation manuals in `CLAUDE.md`.
 
 ## Skill And Rule Layers
 
-- `CLAUDE.md` keeps identity, immutable boundaries, confirmation gates, goal
-  judgment, testing boundaries, acceptance floor, repository protection,
-  validation requirements, and hard anti-error rules.
+- `CLAUDE.md` keeps Wakeflow identity, role boundaries, the controller posture, the
+  dispatch/wave/acceptance process, repository protection, and validation
+  requirements. The operator's stop-card, confirmation-gate, and decision-checklist
+  discipline lives in the installed workspace's own `CLAUDE.md`/`AGENTS.md` (its
+  preserved local rules), not in this reusable file.
 - Skills and references keep operation steps, command order, templates,
   examples, troubleshooting, and script details.
-- Before reorganizing `CLAUDE.md`, design three layers: highest stop rules,
-  standing boundaries/maps, and on-demand skill references.
 
 Reference map:
 

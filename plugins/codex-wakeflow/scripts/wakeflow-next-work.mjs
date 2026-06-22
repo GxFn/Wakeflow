@@ -375,6 +375,10 @@ function parseTodoCandidates(warnings) {
       if (!/(pending automation|pending-schedule|candidate|independent track|pending P\d|pending Stage|pending-claim|pending-follow-up)/i.test(status)) {
         blockers.push("status is not an explicit next-work candidate");
       }
+      // Unified-surface delivery property: an immutable yes/no the Design deliver sets
+      // once. yes = Design+user authorized unattended auto-claim; absent/no = controller
+      // confirms first. Mirrors the design-row controllerClaimable computation.
+      const autoClaim = /^yes$/i.test((entry["Auto Claim"] ?? "").trim());
       return {
         source: "todo",
         id: entry.ID,
@@ -388,8 +392,11 @@ function parseTodoCandidates(warnings) {
         dependency: entry["Dependency / Trigger"],
         recommendedWindow,
         mount: entry["Current Mount"],
+        documents: entry["Documents"] ?? "",
+        autoClaim,
         blockers,
         eligible: blockers.length === 0,
+        controllerClaimable: autoClaim && blockers.length === 0,
       };
     });
 }

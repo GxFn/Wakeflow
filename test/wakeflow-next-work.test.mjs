@@ -138,6 +138,31 @@ test("TODO candidates exclude completed slash-status and Aux-owned rows", () => 
   assert.equal(parsed.autoClaimable, true);
 });
 
+test("unified-surface TODO row: Auto Claim drives controllerClaimable", () => {
+  const { root } = makeFixture({});
+  writeFile(
+    path.join(root, ".wakeflow-active/current/global-todo-board.md"),
+    `# Global TODO
+
+## Global TODO
+
+| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount | Auto Claim | Documents |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| AUTO-2026-06-04 | pending-claim | requirement | P1 | Wakeflow | auto deliverable | no | none | Wakeflow | none | yes | [plan](p.md) |
+| MANUAL-2026-06-04 | pending-claim | requirement | P1 | Wakeflow | manual deliverable | no | none | Wakeflow | none | no |  |`,
+  );
+  const result = run(root, ["--source", "todo", "--after-completion"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  const auto = parsed.candidates.find((candidate) => candidate.id === "AUTO-2026-06-04");
+  const manual = parsed.candidates.find((candidate) => candidate.id === "MANUAL-2026-06-04");
+  assert.ok(auto, "Auto Claim=yes row should be an eligible candidate");
+  assert.equal(auto.autoClaim, true);
+  assert.equal(auto.controllerClaimable, true);
+  assert.ok(manual, "Auto Claim=no row should still be eligible (controller confirms)");
+  assert.equal(manual.controllerClaimable, false);
+});
+
 test("controller-claimable Design row reports controllerClaimable; ready-for-workspace reports false", () => {
   const { root } = makeFixture({
     designRows: [

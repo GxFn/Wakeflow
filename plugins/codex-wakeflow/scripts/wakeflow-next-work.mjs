@@ -21,7 +21,6 @@ const limit = Number.parseInt(getArgValue("--limit", "8"), 10);
 const workspaceConfig = loadWorkspaceConfig({ workspaceRoot, args });
 const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args, config: workspaceConfig });
 
-const designBoardPath = path.resolve(workspaceRoot, getArgValue("--board", workspaceConfig.designHandoffBoard));
 const todoBoardPath = path.resolve(workspaceRoot, getArgValue("--todo", ledgerPaths.globalTodoPath));
 const currentStatusPath = path.resolve(workspaceRoot, getArgValue("--status", ledgerPaths.workspaceCurrentStatusPath));
 const outputPath = path.resolve(
@@ -181,23 +180,6 @@ function isExternalTarget(target) {
   return /^[a-z][a-z0-9+.-]*:/i.test(target) || String(target ?? "").trim().startsWith("#");
 }
 
-function linkedDoc(entry, column, boardPath) {
-  const rawTarget = firstLink(entry[column]);
-  if (!rawTarget) {
-    return { path: null, exists: null, external: false, optionalMissing: true };
-  }
-  const target = stripLinkTarget(rawTarget);
-  if (!target || isExternalTarget(target)) {
-    return { path: rawTarget, exists: false, external: true };
-  }
-  const absolutePath = path.resolve(path.dirname(boardPath), target);
-  return {
-    path: relativePosix(workspaceRoot, absolutePath),
-    exists: existsSync(absolutePath),
-    external: false,
-  };
-}
-
 function archivedStateRootForDemand(demandKey) {
   const archiveRoot = ledgerPaths.workspaceArchiveDir;
   if (!existsSync(archiveRoot)) return null;
@@ -247,84 +229,6 @@ function designLifecycleFor(entry) {
     stateRoot: relativePosix(workspaceRoot, stateRoot),
     error: null,
   };
-}
-
-function parseDesignCandidates(issues, warnings) {
-  if (sourceMode !== "all" && sourceMode !== "design") {
-    return [];
-  }
-  if (!existsSync(designBoardPath)) {
-    warnings.push(`Design handoff board missing: ${relativePosix(workspaceRoot, designBoardPath)}`);
-    return [];
-  }
-
-  const content = read(designBoardPath);
-  const section = sectionContent(content, "Handoff Board");
-  if (!section) {
-    issues.push("Design handoff board is missing ## Handoff Board.");
-    return [];
-  }
-  const rows = tableRows(section);
-  const header = rows.find((row) => row.includes("ID") && row.includes("Status"));
-  if (!header) {
-    issues.push("Design handoff board is missing a table headed by ID / Status.");
-    return [];
-  }
-
-  return rows
-    .filter((row) => row !== header)
-    .filter((row) => row.some((cell) => cell && !/^:?-{3,}:?$/.test(cell)))
-    .map((row) => rowObject(header, row))
-    .filter((entry) => entry.ID && ["ready-for-workspace", "controller-claimable"].includes(entry["Status"]))
-    .map((entry) => {
-      const confirmation = userConfirmationStatus(entry);
-      const relation = normalizeEnumValue(entry["Mainline Relation Status"]) || "todo-candidate";
-      const priority = normalizePriority(entry["Priority Enum"] || entry["Priority"]);
-      const lifecycle = designLifecycleFor(entry);
-      const docs = {
-        originalPlan: linkedDoc(entry, "Original Plan", designBoardPath),
-        requirementDesign: linkedDoc(entry, "Requirement Design", designBoardPath),
-        handoff: linkedDoc(entry, "Handoff", designBoardPath),
-      };
-      const blockers = [];
-      if (!["confirmed", "not-required"].includes(confirmation)) {
-        blockers.push(`user confirmation is ${confirmation}`);
-      }
-      for (const name of ["originalPlan", "requirementDesign"]) {
-        const doc = docs[name];
-        if (!doc || !doc.exists) {
-          blockers.push(`${name} document is missing`);
-        }
-      }
-      if (docs.handoff?.exists === false) {
-        blockers.push("handoff document is missing");
-      }
-      if (lifecycle.status === "active") {
-        blockers.push(`demand state root already active: ${lifecycle.state}`);
-      } else if (lifecycle.status === "completed") {
-        blockers.push("demand state root already completed");
-      } else if (lifecycle.status === "archived") {
-        blockers.push("demand state root already archived");
-      } else if (lifecycle.status.endsWith("-unreadable")) {
-        blockers.push(`demand state root is unreadable: ${lifecycle.error}`);
-      }
-      return {
-        source: "design",
-        id: entry.ID,
-        title: entry["Title"],
-        status: entry["Status"],
-        lifecycle,
-        priority,
-        relation,
-        recommendedWindow: workspaceConfig.controllerWindow,
-        nextStep: entry["Next Step"],
-        suggestedTodo: entry["Suggested TODO"],
-        documents: docs,
-        blockers,
-        eligible: blockers.length === 0,
-        controllerClaimable: entry["Status"] === "controller-claimable" && blockers.length === 0,
-      };
-    });
 }
 
 function parseTodoCandidates(warnings) {
@@ -473,19 +377,17 @@ if (afterCompletion && !status.eligibleForAfterCompletion) {
     `--after-completion requires current state completed or idle, got ${status.stateId || "missing"}`,
   );
 }
-if (!["all", "design", "todo"].includes(sourceMode)) {
-  issues.push(`unsupported --source ${sourceMode}; use all, design, or todo`);
+if (!["all", "todo"].includes(sourceMode)) {
+  issues.push(`unsupported --source ${sourceMode}; use all or todo`);
 }
 const workspaceDemandConflicts = scanUnarchivedDemandStateRoots({ workspaceRoot });
 if (workspaceDemandConflicts.length > 0) {
   issues.push(`workspace has unarchived demand state root(s): ${activeDemandConflictSummary(workspaceDemandConflicts)}`);
 }
 
-const designCandidates = parseDesignCandidates(issues, warnings)
-  .map((candidate) => applyWorkspaceDemandGuard(candidate, workspaceDemandConflicts));
 const todoCandidates = parseTodoCandidates(warnings)
   .map((candidate) => applyWorkspaceDemandGuard(candidate, workspaceDemandConflicts));
-const allCandidates = [...designCandidates, ...todoCandidates].sort(compareCandidates);
+const allCandidates = [...todoCandidates].sort(compareCandidates);
 const matchedCandidates = targetId ? allCandidates.filter((candidate) => candidate.id === targetId) : allCandidates;
 if (targetId && matchedCandidates.length === 0) {
   issues.push(`target candidate not found: ${targetId}`);

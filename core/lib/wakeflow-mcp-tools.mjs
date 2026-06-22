@@ -477,14 +477,14 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_next_work",
-    description: "Scan Design handoff and TODO ledgers for the next controller-ready candidate. Design rows with an existing active/completed/archived demand state root are reported as lifecycle-blocked, not claimable.",
+    description: "Scan the global TODO board for the next controller-ready candidate (rows delivered by Design via wakeflow_deliver). Rows with an existing active/completed/archived demand state root are reported as lifecycle-blocked, not claimable.",
     annotations: localWriteTool("Select Wakeflow Next Work"),
     inputSchema: {
       type: "object",
       properties: {
         root: { type: "string" },
         id: { type: "string" },
-        source: { type: "string", enum: ["all", "design", "todo"] },
+        source: { type: "string", enum: ["all", "todo"] },
         limit: { type: "number" },
         afterCompletion: { type: "boolean" },
         apply: { type: "boolean" },

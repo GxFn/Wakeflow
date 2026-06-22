@@ -793,6 +793,133 @@ function commandClaimFromDesign() {
   ]);
 }
 
+function runTodoConsume(designKey, mount) {
+  return runSync(process.execPath, [
+    path.join(scriptsDir, "wakeflow-todo.mjs"),
+    "consume", "--root", workspaceRoot, "--design-key", designKey, "--mount", mount, "--apply", "--json",
+  ], { cwd: workspaceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+}
+
+function runNextWorkTodo(todoId) {
+  const result = runSync(process.execPath, [
+    path.join(scriptsDir, "wakeflow-next-work.mjs"),
+    "--root", workspaceRoot, "--source", "todo", "--id", todoId, "--json",
+  ], { cwd: workspaceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    return { candidates: [], recommended: null };
+  }
+}
+
+// Unified create: replaces init_demand + intake_design_handoff + add_task + adopt_demand_host.
+// From a delivered TODO row (--todo-id) it reads the title + Documents and synthesizes the
+// goal/completion from them (or takes them explicitly); it inits the state root, adopts host,
+// adds any initial task packages, renders progress, and consumes the TODO row (writing the
+// state root into its Current Mount). The demand execution state machine is unchanged.
+function commandCreateDemand() {
+  const todoId = getValue("--todo-id");
+  let demandKey = getValue("--demand-key", todoId);
+  let title = getValue("--title");
+  let goal = getValue("--goal");
+  let completionDefinition = getValue("--completion-definition");
+  let stagePlan = getValue("--stage-plan");
+
+  const taskPackagesRaw = getValue("--task-packages");
+  let taskPackages = [];
+  if (taskPackagesRaw) {
+    try {
+      taskPackages = JSON.parse(taskPackagesRaw);
+    } catch {
+      fail("--task-packages must be a valid JSON array of {taskPackageId, summary, targetWindow, targetTaskId}.");
+    }
+  }
+
+  if (todoId) {
+    const scan = runNextWorkTodo(todoId);
+    const candidate = (scan.candidates ?? []).find((entry) => entry.id === todoId)
+      ?? (scan.recommended && scan.recommended.id === todoId ? scan.recommended : null);
+    if (!candidate) {
+      fail(`TODO row ${todoId} is not an eligible candidate (missing, blocked, or not controller-recommended); inspect it with wakeflow_view scope=todo first.`);
+    }
+    title = title ?? candidate.title;
+    const documents = candidate.documents ?? "";
+    if (!goal) {
+      goal = documents
+        ? `Deliver the requirement described by the delivered docs: ${documents}`
+        : `Deliver TODO ${todoId}: ${title}`;
+    }
+    if (!completionDefinition) {
+      completionDefinition = "Total control confirms the completion definition from the delivered docs before dispatch.";
+    }
+    if (!stagePlan && documents) {
+      stagePlan = `Derive the stage plan from the delivered docs: ${documents}`;
+    }
+  }
+
+  if (!demandKey) fail("--demand-key or --todo-id is required.");
+  if (!title) fail("--title is required (or pass --todo-id pointing at a titled delivered row).");
+
+  const stateRootAbs = resolveFromWorkspace(`.wakeflow-active/current/${slug(demandKey)}`);
+  const stateRoot = relative(stateRootAbs);
+  if (existsSync(path.join(stateRootAbs, "wakeflow-state.json"))) {
+    fail(`a demand state root already exists at ${stateRoot}; refuse to re-create ${demandKey}.`);
+  }
+
+  if (!write) {
+    output({
+      ok: true,
+      command: "create-demand",
+      wrote: false,
+      wouldCreate: { demandKey, title, stateRoot, todoId: todoId ?? null, taskPackageCount: taskPackages.length },
+    }, [`Would create demand ${demandKey} at ${stateRoot}`]);
+    return;
+  }
+
+  const initArgs = ["init", "--root", workspaceRoot, "--state-root", stateRoot, "--demand-key", demandKey, "--title", title];
+  if (goal) initArgs.push("--goal", goal);
+  if (completionDefinition) initArgs.push("--completion-definition", completionDefinition);
+  if (stagePlan) initArgs.push("--stage-plan", stagePlan);
+  initArgs.push("--write", "--json");
+  const initOut = runControllerState(initArgs);
+
+  runControllerState(["adopt-demand-host", "--root", workspaceRoot, "--state-root", stateRoot, "--reason", "create-demand", "--write", "--json"]);
+
+  const addedPackages = [];
+  for (const pkg of taskPackages) {
+    const packageId = pkg.taskPackageId ?? pkg.targetTaskId;
+    if (!packageId) fail("each --task-packages entry needs taskPackageId or targetTaskId.");
+    const tpArgs = ["add-task-package", "--root", workspaceRoot, "--state-root", stateRoot, "--task-package-id", packageId, "--summary", pkg.summary ?? title];
+    if (pkg.targetWindow) tpArgs.push("--target-window", pkg.targetWindow);
+    if (pkg.targetTaskId) tpArgs.push("--target-task-id", pkg.targetTaskId);
+    if (pkg.sourceRef) tpArgs.push("--source-ref", pkg.sourceRef);
+    tpArgs.push("--write", "--json");
+    runControllerState(tpArgs);
+    addedPackages.push(packageId);
+  }
+
+  const renderOut = runRenderProgressDoc(stateRoot);
+
+  let consumedTodoId = null;
+  if (todoId) {
+    const consumeResult = runTodoConsume(todoId, stateRoot);
+    if (consumeResult.status !== 0) {
+      fail(`demand ${demandKey} created, but consuming TODO row ${todoId} failed: ${(consumeResult.stdout || consumeResult.stderr || "").trim()}`);
+    }
+    consumedTodoId = todoId;
+  }
+
+  output({
+    ok: true,
+    command: "create-demand",
+    wrote: true,
+    created: { demandKey, title, stateRoot, taskPackages: addedPackages, consumedTodoId },
+    controllerOutputs: [initOut, renderOut].filter(Boolean),
+    forbiddenConclusions: ["create-demand-is-dispatch", "create-demand-is-acceptance"],
+    agentNext: "Demand created and any delivered TODO row consumed. Dispatch is a separate step; no dispatch, delivery, or acceptance was performed.",
+  }, [`Created demand ${demandKey} at ${stateRoot}`]);
+}
+
 function main() {
   if (command === "help" || command === "--help" || command === "-h") {
     console.log(helpText);
@@ -812,6 +939,10 @@ function main() {
   }
   if (command === "claim-from-design") {
     commandClaimFromDesign();
+    return;
+  }
+  if (command === "create-demand") {
+    commandCreateDemand();
     return;
   }
   fail(`Unknown wakeflow-demand-sequence command: ${command}\n\n${helpText}`);

@@ -844,7 +844,7 @@ test("MCP tool order keeps controller review loop inside the host-visible prefix
     "wakeflow_status",
     "wakeflow_initialize_workspace",
     "wakeflow_replace_windows",
-    "wakeflow_init_demand",
+    "wakeflow_create_demand",
     "wakeflow_add_task",
     "wakeflow_prepare_delivery",
     "wakeflow_record_delivery",

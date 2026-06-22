@@ -145,13 +145,67 @@ function commandDeliver() {
   });
 }
 
+function commandConsume() {
+  const designKey = getArgValue("--design-key");
+  if (!designKey) fail("--design-key is required");
+  const mount = getArgValue("--mount");
+  if (!mount) fail("--mount (the demand state root) is required");
+
+  if (!existsSync(todoPath)) fail(`global TODO board missing: ${todoPath}`);
+  const content = readFileSync(todoPath, "utf8");
+  const range = sectionRange(content, "Global TODO");
+  if (!range) fail("global TODO board is missing ## Global TODO");
+  const lines = content.slice(range.start, range.end).split("\n");
+  const headerIndex = lines.findIndex((line) => {
+    const cells = splitRow(line);
+    return cells.includes("ID") && cells.includes("Status");
+  });
+  if (headerIndex < 0) fail("global TODO board is missing the ID/Status table header");
+  const header = splitRow(lines[headerIndex]);
+  const statusIdx = header.indexOf("Status");
+  const mountIdx = header.indexOf("Current Mount");
+
+  let rowIndex = -1;
+  for (let i = headerIndex + 2; i < lines.length; i += 1) {
+    const cells = splitRow(lines[i]);
+    if (cells.length && cells[0] === designKey) {
+      rowIndex = i;
+      break;
+    }
+  }
+  if (rowIndex < 0) fail(`no TODO row with ID ${designKey}`);
+  const cells = splitRow(lines[rowIndex]);
+  // Consume = the delivery is taken up by a demand: mark it claimed and link the state
+  // root in Current Mount. The demand's own state machine carries the execution lifecycle
+  // from here, so the row is no longer a pending candidate (it will archive via the
+  // existing completed-row path). A side effect of create-demand, never a standalone edit.
+  cells[statusIdx] = "completed / claimed";
+  if (mountIdx >= 0) cells[mountIdx] = mount;
+  lines[rowIndex] = `| ${cells.join(" | ")} |`;
+  const newContent = content.slice(0, range.start) + lines.join("\n") + content.slice(range.end);
+
+  if (apply) writeFileSync(todoPath, newContent);
+  output({
+    ok: true,
+    command: "consume",
+    wrote: apply,
+    designKey,
+    mount,
+    row: lines[rowIndex],
+    board: path.relative(workspaceRoot, todoPath).split(path.sep).join("/"),
+  });
+}
+
 try {
   switch (command) {
     case "deliver":
       commandDeliver();
       break;
+    case "consume":
+      commandConsume();
+      break;
     default:
-      fail(`unknown wakeflow-todo command: ${command ?? "(none)"}; use deliver`);
+      fail(`unknown wakeflow-todo command: ${command ?? "(none)"}; use deliver or consume`);
   }
 } catch (error) {
   if (!(error instanceof CliError)) throw error;

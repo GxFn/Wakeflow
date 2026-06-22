@@ -76,3 +76,23 @@ test("a legacy board missing the Auto Claim column is refused (must migrate firs
   assert.notEqual(result.status, 0);
   assert.match(parse(result).error, /missing the 'Auto Claim' column/);
 });
+
+test("consume marks a delivered row claimed and links the demand state root", () => {
+  const { root, boardPath } = makeBoard(
+    "| feat-2026-06-21 | pending-claim | requirement | P1 | Design | F | no | none | Wakeflow | none | yes | [plan](p.md) |",
+  );
+  const payload = parse(run(root, [
+    "consume", "--design-key", "feat-2026-06-21", "--mount", ".wakeflow-active/current/feat-2026-06-21", "--apply",
+  ]));
+  assert.equal(payload.ok, true);
+  const board = readFileSync(boardPath, "utf8");
+  assert.match(board, /feat-2026-06-21 \| completed \/ claimed \|/);
+  assert.match(board, /\.wakeflow-active\/current\/feat-2026-06-21 \| yes \|/);
+});
+
+test("consume refuses an unknown ID", () => {
+  const { root } = makeBoard();
+  const result = run(root, ["consume", "--design-key", "missing-2026-06-21", "--mount", "x", "--apply"]);
+  assert.notEqual(result.status, 0);
+  assert.match(parse(result).error, /no TODO row with ID/);
+});

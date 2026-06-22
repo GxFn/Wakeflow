@@ -36,6 +36,13 @@ function readJson(file) {
   return JSON.parse(readFileSync(file, "utf8"));
 }
 
+function writeStateRootEvidence(root, stateRootRef, ref, content = "{}\n") {
+  const file = path.resolve(root, stateRootRef, ref);
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, content);
+  return file;
+}
+
 test("trace-bearing state-machine schemas expose wakeflowTrace explicitly", () => {
   for (const schemaName of [
     "target-result.schema.json",
@@ -679,6 +686,7 @@ test("reduce-results creates controller review candidate without accepting work"
     "--write",
     "--json",
   ]);
+  writeStateRootEvidence(root, initPayload.stateRoot, "reports/result.json");
   const progressBefore = readFileSync(path.join(stateRoot, "developer-progress.md"), "utf8");
 
   const result = run([
@@ -724,6 +732,93 @@ test("reduce-results creates controller review candidate without accepting work"
   assert.equal(reviewEvent.wakeflowTrace.stateRoot, initPayload.stateRoot);
   assert.equal(reviewEvent.wakeflowTrace.stateRevision, 3);
   assert.equal(progressAfter, progressBefore);
+});
+
+test("reduce-results refuses to create a review candidate with missing evidence refs", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run([
+    "init",
+    "--root",
+    root,
+    "--demand-key",
+    "MISSING-EVIDENCE-FIXTURE",
+    "--title",
+    "Missing Evidence Fixture",
+    "--write",
+    "--json",
+  ]).stdout);
+  const stateRoot = path.join(root, init.stateRoot);
+  run([
+    "add-task-package",
+    "--root",
+    root,
+    "--state-root",
+    init.stateRoot,
+    "--task-package-id",
+    "PKG-1",
+    "--summary",
+    "Package with missing evidence.",
+    "--target-window",
+    "WinA",
+    "--target-task-id",
+    "TASK-1",
+    "--write",
+    "--json",
+  ]);
+  run([
+    "import-target-result",
+    "--root",
+    root,
+    "--state-root",
+    init.stateRoot,
+    "--target-task-id",
+    "TASK-1",
+    "--target-window",
+    "WinA",
+    "--status",
+    "completed",
+    "--result-id",
+    "RESULT-1",
+    "--evidence-ref",
+    "reports/missing.json",
+    "--write",
+    "--json",
+  ]);
+
+  const refused = run([
+    "reduce-results",
+    "--root",
+    root,
+    "--state-root",
+    init.stateRoot,
+    "--write",
+    "--json",
+  ]);
+  assert.notEqual(refused.status, 0, "missing evidence must block candidate creation");
+  const refusedPayload = JSON.parse(refused.stdout);
+  assert.equal(refusedPayload.ok, false);
+  assert.equal(refusedPayload.reviewGate, "evidence-repair-required");
+  assert.equal(refusedPayload.stateRevisionUnchanged, 2);
+  assert.deepEqual(refusedPayload.missingEvidenceRefs.map((item) => item.ref), ["reports/missing.json"]);
+  assert.match(refusedPayload.agentNext, /repair.*target result evidence.*rerun reduce-results/);
+  const unchangedState = readJson(path.join(stateRoot, "wakeflow-state.json"));
+  assert.equal(unchangedState.state, "planned");
+  assert.equal(unchangedState.revision, 2);
+  assert.equal(existsSync(path.join(stateRoot, "transition-candidates")), false);
+
+  writeStateRootEvidence(root, init.stateRoot, "reports/missing.json");
+  const repaired = JSON.parse(run([
+    "reduce-results",
+    "--root",
+    root,
+    "--state-root",
+    init.stateRoot,
+    "--write",
+    "--json",
+  ]).stdout);
+  assert.equal(repaired.ok, true);
+  assert.equal(repaired.nextState, "review-ready");
+  assert.match(repaired.candidateId, /^tc-/);
 });
 
 test("decide-review records explicit controller judgment before task acceptance", () => {
@@ -777,6 +872,7 @@ test("decide-review records explicit controller judgment before task acceptance"
     "--write",
     "--json",
   ]);
+  writeStateRootEvidence(root, initPayload.stateRoot, "reports/result.json");
   const reduced = run([
     "reduce-results",
     "--root",
@@ -886,6 +982,7 @@ test("review decisions affect open targets without rewriting accepted history", 
       "--json",
     ]);
     assert.equal(result.status, 0, result.stderr || result.stdout);
+    writeStateRootEvidence(root, initPayload.stateRoot, `reports/${resultId}.json`);
   };
   const reduce = () => {
     const result = run([
@@ -1081,6 +1178,7 @@ test("blocked and review-ready demands reject new task packages before explicit 
     "--write",
     "--json",
   ]);
+  writeStateRootEvidence(root, initPayload.stateRoot, "reports/result.json");
   const reduced = run([
     "reduce-results",
     "--root",
@@ -1215,6 +1313,7 @@ test("complete-demand refuses open tasks and records final completion explicitly
     "--write",
     "--json",
   ]);
+  writeStateRootEvidence(root, initPayload.stateRoot, "reports/result.json");
   const reduced = run([
     "reduce-results",
     "--root",
@@ -1382,6 +1481,7 @@ test("a blocked review decision is recoverable: new evidence reopens review and 
   // new evidence arrives -> the blocked task must be reviewable again
   const reimport = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "reports/fixed.json", "--write", "--json"]).stdout);
   assert.equal(reimport.ok, true, "import after a blocked decision must work");
+  writeStateRootEvidence(root, init.stateRoot, "reports/fixed.json");
   const reduced2 = JSON.parse(run(["reduce-results", "--root", root, "--state-root", init.stateRoot, "--write", "--json"]).stdout);
   assert.equal(reduced2.ok, true, "reduce must form a new candidate from the fresh evidence");
   assert.ok(reduced2.candidateId, "blocked task is reviewable again");
@@ -1442,6 +1542,7 @@ test("import-target-result readiness follows rework-first scope instead of stale
   const init = JSON.parse(run(["init", "--root", root, "--demand-key", "REWORK-READY-FIXTURE", "--title", "Rework Ready", "--write", "--json"]).stdout);
   run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Needs review", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
   run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "old.md", "--write", "--json"]);
+  writeStateRootEvidence(root, init.stateRoot, "old.md", "old evidence\n");
   const reduced = JSON.parse(run(["reduce-results", "--root", root, "--state-root", init.stateRoot, "--write", "--json"]).stdout);
   run(["decide-review", "--root", root, "--state-root", init.stateRoot, "--candidate-id", reduced.candidateId, "--decision", "rework", "--reason", "Needs rework.", "--write", "--json"]);
 

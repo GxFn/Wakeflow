@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnProcess } from "../lib/wakeflow-process.mjs";
@@ -391,6 +391,11 @@ async function runMcpSmoke(rootPath) {
       throw new Error("MCP wakeflow_prepare_delivery did not create a target delivery envelope");
     }
 
+    const mcpSmokeEvidenceRef = "target-results/mcp-smoke.md";
+    const mcpSmokeEvidenceFile = path.join(rootPath, mcpStateRoot, mcpSmokeEvidenceRef);
+    mkdirSync(path.dirname(mcpSmokeEvidenceFile), { recursive: true });
+    writeFileSync(mcpSmokeEvidenceFile, "mcp smoke evidence\n");
+
     const recordedTargetResult = await request("tools/call", {
       name: "wakeflow_record_target_result",
       arguments: {
@@ -399,7 +404,7 @@ async function runMcpSmoke(rootPath) {
         targetWindow: "Target",
         taskId: "mcp-smoke-task",
         status: "completed",
-        evidenceRefs: ["target-results/mcp-smoke.md"],
+        evidenceRefs: [mcpSmokeEvidenceRef],
         verification: ["mcp smoke target result recorded"],
       },
     });

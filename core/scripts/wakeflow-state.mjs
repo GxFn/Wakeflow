@@ -368,6 +368,41 @@ function resolveFromWorkspace(value) {
   return path.isAbsolute(value) ? path.resolve(value) : path.resolve(workspaceRoot, value);
 }
 
+function evidenceRefLooksLikePath(ref) {
+  const text = String(ref ?? "");
+  return text.includes("/") || /\.(json|md|log|txt|png|jpg|jpeg|webp|html|csv)$/i.test(text);
+}
+
+function evidenceRefResolutionCandidates(stateRoot, ref) {
+  const text = String(ref ?? "");
+  if (!evidenceRefLooksLikePath(text)) return [];
+  if (path.isAbsolute(text)) return [path.resolve(text)];
+  return [
+    path.resolve(stateRoot, text),
+    path.resolve(workspaceRoot, text),
+  ];
+}
+
+function missingEvidenceRefsForTargetResult(stateRoot, task, result) {
+  const refs = Array.isArray(result?.evidenceRefs) ? result.evidenceRefs : [];
+  return refs
+    .map((ref) => {
+      const candidates = evidenceRefResolutionCandidates(stateRoot, ref);
+      return {
+        targetWindow: task.targetWindow,
+        targetTaskId: task.targetTaskId,
+        taskPackageId: task.taskPackageId,
+        resultId: result.resultId,
+        ref: String(ref ?? ""),
+        candidatePaths: candidates.map(relative),
+        exists: candidates.some((candidate) => existsSync(candidate)),
+      };
+    })
+    .filter((item) => item.candidatePaths.length > 0)
+    .filter((item) => !item.exists)
+    .map(({ exists, ...item }) => item);
+}
+
 function selectInterfaceLanguage(config) {
   const requested = normalizeInterfaceLanguage(getValue("--language", config.interfaceLanguage ?? "auto"));
   if (!requested) fail("--language must be auto, zh, or en.");
@@ -1047,6 +1082,7 @@ function commandReduceResults() {
   const readyResultIds = [];
   const blockedResultIds = [];
   const missingTargetTaskIds = [];
+  const missingEvidenceRefs = [];
   const evidenceRefs = [];
 
   for (const task of targetTasks) {
@@ -1061,12 +1097,35 @@ function commandReduceResults() {
       missingTargetTaskIds.push(task.targetTaskId);
       continue;
     }
+    missingEvidenceRefs.push(...missingEvidenceRefsForTargetResult(stateRoot, task, result));
     evidenceRefs.push(...(result.evidenceRefs ?? []), `target-results/${slug(result.resultId)}.json`);
     if (result.status === "blocked") {
       blockedResultIds.push(result.resultId);
     } else {
       readyResultIds.push(result.resultId);
     }
+  }
+
+  if (missingTargetTaskIds.length === 0 && missingEvidenceRefs.length > 0) {
+    output({
+      ok: false,
+      command: "reduce-results",
+      wrote: false,
+      demandKey: state.demandKey,
+      stateRoot: relative(stateRoot),
+      previousState: state.state,
+      stateRevisionUnchanged: state.revision,
+      reviewGate: "evidence-repair-required",
+      missingEvidenceRefs,
+      forbiddenConclusions: [
+        "all-results-present-is-not-evidence-ready",
+        "missing-evidence-ref-can-enter-transition-candidate",
+        "reduce-results-repairs-target-result",
+      ],
+      agentNext: "Stop: target results are present, but path-like evidence refs are missing. Run wakeflow_review_pack, repair or re-record the target result evidence, then rerun reduce-results; no state was changed.",
+    });
+    process.exitCode = 1;
+    throw new CliExit("missing evidence refs block reduce-results");
   }
 
   const createdAt = nowIso();

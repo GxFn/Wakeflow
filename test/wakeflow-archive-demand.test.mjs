@@ -16,34 +16,13 @@ function run(args) {
 function readJson(file) { return JSON.parse(readFileSync(file, "utf8")); }
 function writeJson(file, value) { writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`); }
 
-function initDemand({ demandKey = "ARCH-1", complete = true, designStatus = null } = {}) {
+function initDemand({ demandKey = "ARCH-1", complete = true } = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-archive-"));
   writeJson(path.join(root, "workspace.config.json"), { workspaceName: "X", controllerWindow: "C", projectLedgerRoot: "wakeflow-ledger" });
   const init = JSON.parse(run(["init", "--root", root, "--demand-key", demandKey, "--title", "Archive me", "--write", "--json"]).stdout);
   const stateFile = path.join(root, init.stateRoot, "wakeflow-state.json");
   if (complete) writeJson(stateFile, { ...readJson(stateFile), state: "completed" });
-  if (designStatus) {
-    const board = path.join(root, ".wakeflow-active/current/design-handoff-board.md");
-    mkdirSync(path.dirname(board), { recursive: true });
-    writeFileSync(
-      board,
-      `# Design Handoff Board
-
-## Handoff Board
-
-| ID | Status | Title | Original Plan | Requirement Design | Handoff | User Confirmation Status | User Confirmation | Mainline Relation Status | Current Mainline Relation | Suggested TODO | Priority Enum | Priority | Next Step |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ${demandKey} | ${designStatus} | Archive me | original | design | handoff | confirmed |  | next-mainline | after current mainline | TODO | P1 | P1 | controller intake |
-`,
-    );
-  }
   return { root, stateRoot: init.stateRoot, stateFile };
-}
-
-function designBoardStatus(root, id) {
-  const board = readFileSync(path.join(root, ".wakeflow-active/current/design-handoff-board.md"), "utf8");
-  const line = board.split("\n").find((row) => row.includes(`| ${id} |`));
-  return line?.split("|").map((cell) => cell.trim())[2] ?? null;
 }
 
 test("archive-demand refuses a demand that is not completed", () => {
@@ -77,20 +56,6 @@ test("archive-demand --write flips to archived, relocates into the ledger, write
   assert.equal(manifest.demandKey, "ARCH-1");
   assert.deepEqual(manifest.redactedFields, []);
   assert.match(readFileSync(path.join(ledgerDest, "controller-events.jsonl"), "utf8"), /"type":"demand\.archived"/);
-});
-
-test("archive-demand advances linked Design handoff rows to archived", () => {
-  const { root, stateRoot } = initDemand({
-    demandKey: "archive-design-2026-06-20",
-    designStatus: "accepted-by-workspace",
-  });
-  const result = run(["archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "done", "--write", "--json"]);
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  const payload = JSON.parse(result.stdout);
-  assert.equal(designBoardStatus(root, "archive-design-2026-06-20"), "archived");
-  assert.equal(payload.archived.designBoardUpdates[0].nextStatus, "archived");
-  const manifest = readJson(path.join(root, payload.archived.ledgerDest, "archive-manifest.json"));
-  assert.deepEqual(manifest.designKeys, ["archive-design-2026-06-20"]);
 });
 
 test("archive-demand write failure leaves the active state root unchanged before ledger commit", () => {

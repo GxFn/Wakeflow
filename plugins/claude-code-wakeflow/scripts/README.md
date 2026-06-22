@@ -195,9 +195,6 @@ Current scripts:
   `pending-claim` row, setting the immutable Auto Claim property once. Append-only:
   it never edits or re-statuses an existing row. A requirement that authorizes
   unattended auto-claim must link an Original Plan and a Requirement Design.
-- `wakeflow-import-design-handoffs.mjs`: imports the configured Design handoff
-  board into the active Design inbox and validates ready rows. It supports
-  forward-compatible enum columns while keeping old board prose readable.
 - `wakeflow-archive-summaries.mjs`: dry-run by default; creates or
   refreshes archive `index.md` summary files.
 - `wakeflow-smoke.mjs`: plugin-runtime smoke that exercises the controller state root,

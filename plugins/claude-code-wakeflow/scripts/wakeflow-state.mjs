@@ -14,7 +14,6 @@ import {
 import { controllerReviewScope, hasPendingReworkDecision, reductionStatusForTargetTask } from "./lib/wakeflow-review-scope.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import { releaseWindowLockForResult } from "./lib/wakeflow-delivery-store.mjs";
-import { updateDesignHandoffStatus } from "./lib/wakeflow-design-board.mjs";
 import { scanStateRootForRealIds, redactStateRootIntoCopy } from "./lib/wakeflow-redaction.mjs";
 import {
   activeDemandConflictSummary,
@@ -1796,53 +1795,6 @@ function scanDanglingEnvelopeRefs(stateRoot) {
   return refs;
 }
 
-function designKeysForStateRootArchive(stateRoot, state) {
-  const keys = new Set([state.demandKey].filter(Boolean));
-  const intakeDir = path.join(stateRoot, "intake");
-  if (!existsSync(intakeDir)) return [...keys];
-  for (const name of readdirSync(intakeDir)) {
-    if (!name.startsWith("design-handoff-") || !name.endsWith(".json")) continue;
-    try {
-      const intake = JSON.parse(readFileSync(path.join(intakeDir, name), "utf8"));
-      if (intake?.designKey) keys.add(intake.designKey);
-    } catch {
-      // Archive should not be blocked by an old auxiliary intake file; the
-      // completed state root remains the authority for the demand transition.
-    }
-  }
-  return [...keys];
-}
-
-function updateDesignHandoffsForArchive({ config, designKeys, ledgerDest, writeBoard }) {
-  const boardPath = config.designHandoffBoard ?? ".wakeflow-active/current/design-handoff-board.md";
-  return designKeys.map((designKey) => {
-    try {
-      return updateDesignHandoffStatus({
-        boardPath,
-        designKey,
-        nextStatus: "archived",
-        expectedStatuses: [
-          "accepted-by-workspace",
-          "controller-claimable",
-          "ready-for-workspace",
-          "archived",
-        ],
-        nextStepNote: `archived by workspace; ledger ${relative(ledgerDest)}`,
-        write: writeBoard,
-        workspaceRoot,
-      });
-    } catch (error) {
-      return {
-        ok: false,
-        updated: false,
-        reason: "update-error",
-        designKey,
-        error: error.message,
-      };
-    }
-  });
-}
-
 // archive-demand: relocate a completed demand's state root into the committed ledger. The P1-0
 // redaction guard is a HARD precondition — it refuses on any real-id-shaped string unless
 // --redact relocates a cleaned COPY (the original is preserved in the gitignored active tier
@@ -1881,14 +1833,6 @@ function commandArchiveDemand() {
   }
 
   const danglingRefs = scanDanglingEnvelopeRefs(stateRoot);
-  const designKeys = designKeysForStateRootArchive(stateRoot, state);
-  const designBoardPreview = updateDesignHandoffsForArchive({
-    config,
-    designKeys,
-    ledgerDest,
-    writeBoard: false,
-  });
-
   if (!write) {
     output({
       ok: true,
@@ -1901,8 +1845,6 @@ function commandArchiveDemand() {
         redactNeeded: !scan.clean,
         findingCount: scan.findings.length,
         danglingRefs,
-        designKeys,
-        designBoardUpdates: designBoardPreview,
       },
       forbiddenConclusions: ["archive-is-deletion", "archive-is-acceptance"],
       agentNext: scan.clean
@@ -1949,7 +1891,6 @@ function commandArchiveDemand() {
     redactedFields,
     sourceStateRoot: relative(stateRoot),
     preservedOriginal,
-    designKeys,
   };
   const stagingDest = `${ledgerDest}.tmp-${process.pid}-${Date.now()}`;
 
@@ -1981,13 +1922,6 @@ function commandArchiveDemand() {
     fail(`archive-demand committed ledger at ${relative(ledgerDest)} but could not finalize the active state root: ${error.message}`);
   }
 
-  const designBoardUpdates = updateDesignHandoffsForArchive({
-    config,
-    designKeys,
-    ledgerDest,
-    writeBoard: true,
-  });
-
   output({
     ok: true,
     command: "archive-demand",
@@ -1999,8 +1933,6 @@ function commandArchiveDemand() {
       redactedFields,
       preservedOriginal,
       danglingRefs,
-      designKeys,
-      designBoardUpdates,
     },
     indexRefreshNeeded: true,
     forbiddenConclusions: ["archive-is-deletion", "archive-is-acceptance"],

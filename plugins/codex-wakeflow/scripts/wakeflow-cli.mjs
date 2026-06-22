@@ -29,14 +29,13 @@ Commands:
   status      Show repo status and closed-loop machine health.
   verify      Run wakeflow-verify with common option aliases.
   sync        Render a controller state-root progress document.
-  design      Refresh or validate Design handoff intake.
-  intake      Attach Design/Test machine intake to a controller state root.
+  intake      Attach Test machine intake (boundary cards) to a controller state root.
   runtime     Inspect runtime residue without mutating processes.
   install     Discover sibling repos, configure scope, and write child AGENTS blocks.
   scripts     Check script docs, optionally including script tests.
   loop        Operate the new Wakeflow Delivery Loop contract surface.
   sequence    Claim or sync ordered independent demand documents.
-  next-work   Scan Design handoff and TODO ledgers for the next controller-ready candidate.
+  next-work   Scan the global TODO board for the next controller-ready candidate.
   help        Show this help.
 
 Common examples:
@@ -45,8 +44,6 @@ Common examples:
   node scripts/wakeflow-cli.mjs status --root /path/to/Wakeflow --json
   node scripts/wakeflow-cli.mjs verify --script-tests
   node scripts/wakeflow-cli.mjs sync --state-root .wakeflow-active/current/<demand-key> --write
-  node scripts/wakeflow-cli.mjs design --id design-handoff-2026-06-03 --json
-  node scripts/wakeflow-cli.mjs intake design-handoff --state-root .wakeflow-active/current/<demand-key> --design-key design-handoff-2026-06-03 --write --json
   node scripts/wakeflow-cli.mjs install status --json
   node scripts/wakeflow-cli.mjs loop status --json
   node scripts/wakeflow-cli.mjs sequence status --manifest wakeflow-ledger/requirement-designs/<topic>/sequence.json --json
@@ -180,27 +177,10 @@ function buildSync(options) {
   return [{ label: "render controller progress doc", key: "controllerProgressRender", ...nodeScript("wakeflow-render-progress.mjs", out) }];
 }
 
-function buildDesign(options) {
-  assertKnownOptions(options, ["--write", "--json"], ["--id", "--board", "--inbox"]);
-  const out = [];
-  for (const flag of ["--write", "--json"]) {
-    if (hasFlag(options, flag)) {
-      out.push(flag);
-    }
-  }
-  for (const valueFlag of ["--id", "--board", "--inbox"]) {
-    const value = getValue(options, valueFlag);
-    if (value) {
-      out.push(valueFlag, value);
-    }
-  }
-  return [{ label: "Design handoff intake", ...nodeScript("wakeflow-import-design-handoffs.mjs", out) }];
-}
-
 function buildIntake(options) {
   const subcommand = options[0] ?? "help";
   const rest = options.slice(1);
-  return [{ label: "Design/Test state-root intake", ...nodeScript("wakeflow-intake.mjs", [subcommand, ...rest]) }];
+  return [{ label: "Test state-root intake", ...nodeScript("wakeflow-intake.mjs", [subcommand, ...rest]) }];
 }
 
 function buildRuntime(options) {
@@ -306,8 +286,6 @@ function buildSteps() {
       return buildVerify(commandArgs);
     case "sync":
       return buildSync(commandArgs);
-    case "design":
-      return buildDesign(commandArgs);
     case "intake":
       return buildIntake(commandArgs);
     case "runtime":

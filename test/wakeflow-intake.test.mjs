@@ -106,50 +106,6 @@ function makeFixture({ demandKey = "enum-flow-2026-05-30", state = "intake", sta
   };
 }
 
-test("design-handoff attaches ready Design source without mutating controller state", () => {
-  const fixture = makeFixture();
-  const before = readFileSync(path.join(fixture.stateRoot, "wakeflow-state.json"), "utf8");
-  const payload = parseOk(run(intakeScript, fixture.root, [
-    "design-handoff",
-    "--state-root",
-    fixture.stateRootRef,
-    "--design-key",
-    fixture.designKey,
-    "--write",
-  ]));
-
-  assert.equal(payload.ok, true);
-  assert.equal(payload.command, "design-handoff");
-  assert.equal(payload.wrote, true);
-  assert.equal(payload.demandKeyMatchesDesignKey, true);
-  assert.match(payload.intakeFile, /intake\/design-handoff-enum-flow-2026-05-30\.json/);
-  assert.deepEqual(JSON.parse(readFileSync(path.join(fixture.stateRoot, "wakeflow-state.json"), "utf8")), JSON.parse(before));
-
-  const intake = readJson(path.join(fixture.root, payload.intakeFile));
-  assert.equal(intake.kind, "DesignHandoffIntake");
-  assert.equal(intake.designKey, fixture.designKey);
-  assert.equal(intake.sourceStatus, "ready-for-workspace");
-  assert.equal(intake.userConfirmationStatus.status, "confirmed");
-  assert.equal(intake.linkedDocs.requirementDesign.exists, true);
-  assert.match(intake.forbiddenConclusions.join("\n"), /design-intake-is-dispatch/);
-});
-
-test("design-handoff warns when Design source key differs from demand key", () => {
-  const fixture = makeFixture({ demandKey: "control-demand-2026-05-30" });
-  const payload = parseOk(run(intakeScript, fixture.root, [
-    "design-handoff",
-    "--state-root",
-    fixture.stateRootRef,
-    "--design-key",
-    fixture.designKey,
-  ]));
-
-  assert.equal(payload.wrote, false);
-  assert.equal(payload.demandKeyMatchesDesignKey, false);
-  assert.match(payload.warnings[0], /differs from Design Key/);
-  assert.equal(existsSync(path.join(fixture.root, payload.intakeFile)), false);
-});
-
 function testCardArgs(stateRootRef, extra = []) {
   return [
     "test-card",

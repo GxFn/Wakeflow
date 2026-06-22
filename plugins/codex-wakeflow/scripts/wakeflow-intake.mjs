@@ -23,7 +23,6 @@ const helpText = `
 Control intake bridge for Design and Test surfaces
 
 Usage:
-  node scripts/wakeflow-intake.mjs design-handoff --state-root <path> --design-key <key> [--board <path>] [--write] [--json]
   node scripts/wakeflow-intake.mjs test-card --state-root <path> --test-id <id> --target-window <window> --question <text> --object-boundary <text> --controller-self-check <text> --real-scenario-condition <text> --success-means <text> --failure-means <text> --cannot-conclude <text> --stop-condition <text> [--source-ref <ref>] [--evidence-required <text>...] [--allowed-operation <text>...] [--forbidden-operation <text>...] [--write] [--json]
 
 Design:
@@ -172,118 +171,6 @@ function resolveStateRoot() {
   return { stateRoot, state };
 }
 
-function runDesignImport({ designKey, board }) {
-  const args = [path.join(wakeflowRoot, "scripts/wakeflow-import-design-handoffs.mjs"), "--id", designKey, "--json"];
-  if (board) {
-    args.push("--board", board);
-  }
-  const result = runSync(process.execPath, args, {
-    cwd: workspaceRoot,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let payload = null;
-  if (result.stdout) {
-    try {
-      payload = JSON.parse(result.stdout);
-    } catch (error) {
-      fail(`Design handoff import did not return JSON: ${error.message}`);
-    }
-  }
-  if ((result.status ?? 1) !== 0) {
-    const issues = payload?.issues?.length ? payload.issues.join("; ") : (result.stderr || result.stdout || "unknown error").trim();
-    fail(`Design handoff validation failed for ${designKey}: ${issues}`);
-  }
-  if (!payload?.target) {
-    fail(`Design handoff target not found: ${designKey}`);
-  }
-  return payload;
-}
-
-function commandDesignHandoff() {
-  const { stateRoot, state } = resolveStateRoot();
-  const designKey = requireValue("--design-key");
-  const board = getValue("--board", workspaceConfig.designHandoffBoard);
-  const importResult = runDesignImport({ designKey, board });
-  const target = importResult.target;
-  if (!["ready-for-workspace", "accepted-by-workspace"].includes(target.status)) {
-    fail(`Design handoff ${designKey} must be ready-for-workspace or accepted-by-workspace, got ${target.status}.`);
-  }
-
-  const capturedAt = nowIso();
-  const intakeFile = path.join(stateRoot, "intake", `design-handoff-${slug(designKey)}.json`);
-  if (existsSync(intakeFile)) {
-    fail(`Design intake already exists: ${relative(intakeFile)}`);
-  }
-  const demandKeyMatches = state.demandKey === designKey;
-  const intake = {
-    kind: "DesignHandoffIntake",
-    schemaVersion,
-    designKey,
-    demandKey: state.demandKey,
-    demandKeyMatchesDesignKey: demandKeyMatches,
-    title: target.title,
-    capturedAt,
-    stateRevisionObserved: state.revision,
-    sourceBoard: importResult.board,
-    sourceStatus: target.status,
-    userConfirmation: target.userConfirmation,
-    userConfirmationStatus: target.userConfirmationStatus,
-    currentMainlineRelation: target.currentMainlineRelation,
-    mainlineRelationStatus: target.mainlineRelationStatus,
-    suggestedTodo: target.suggestedTodo,
-    priority: target.priority,
-    priorityStatus: target.priorityStatus,
-    nextStep: target.nextStep,
-    linkedDocs: {
-      originalPlan: target.originalPlan,
-      requirementDesign: target.requirementDesign,
-      handoff: target.handoff,
-    },
-    warnings: demandKeyMatches ? [] : [
-      `state demandKey ${state.demandKey} differs from Design Key ${designKey}; total control must confirm this is the intended source-to-demand mapping.`,
-    ],
-    allowedNextActions: [
-      "total-control-review-linked-design-docs",
-      "wakeflow-state add-task-package",
-      "wakeflow-progress-log",
-      "wakeflow-render-progress",
-    ],
-    forbiddenConclusions: [
-      "design-intake-is-acceptance",
-      "design-intake-is-todo-ledger",
-      "design-intake-is-dispatch",
-      "design-intake-updates-wakeflow-state",
-      "design-intake-proves-implementation-complete",
-    ],
-  };
-
-  if (write) {
-    atomicWriteJson(intakeFile, intake);
-  }
-
-  output(
-    {
-      ok: true,
-      command: "design-handoff",
-      wrote: write,
-      designKey,
-      demandKey: state.demandKey,
-      stateRoot: relative(stateRoot),
-      intakeFile: relative(intakeFile),
-      sourceStatus: target.status,
-      demandKeyMatchesDesignKey: demandKeyMatches,
-      warnings: intake.warnings,
-      forbiddenConclusions: intake.forbiddenConclusions,
-    },
-    [
-      `${write ? "Attached" : "Would attach"} Design handoff intake ${designKey}.`,
-      `State root: ${relative(stateRoot)}`,
-      "No controller state, dispatch, TODO, or acceptance was changed.",
-    ],
-  );
-}
-
 function commandTestCard() {
   const { stateRoot, state } = resolveStateRoot();
   if (["blocked", "paused", "review-ready", "accepting", "waiting-results"].includes(state.state)) {
@@ -389,8 +276,6 @@ function commandTestCard() {
 try {
   if (command === "help" || command === "--help" || command === "-h") {
     console.log(helpText);
-  } else if (command === "design-handoff") {
-    commandDesignHandoff();
   } else if (command === "test-card") {
     commandTestCard();
   } else {

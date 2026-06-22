@@ -233,7 +233,6 @@ function validateMcpConfig() {
     "wakeflow_reduce_results",
     "wakeflow_decide_review",
     "wakeflow_complete_demand",
-    "wakeflow_intake_design_handoff",
     "wakeflow_intake_test_card",
     "wakeflow_archive",
     "wakeflow_verify",

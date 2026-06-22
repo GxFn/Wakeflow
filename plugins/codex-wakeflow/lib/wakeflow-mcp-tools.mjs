@@ -398,22 +398,6 @@ const toolDefinitions = [
     },
   },
   {
-    name: "wakeflow_intake_design_handoff",
-    description: "Attach a ready Design handoff to a controller state root as machine intake.",
-    annotations: localWriteTool("Intake Wakeflow Design Handoff"),
-    inputSchema: {
-      type: "object",
-      required: ["stateRoot", "designKey"],
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string" },
-        designKey: { type: "string" },
-        board: { type: "string" },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
     name: "wakeflow_intake_test_card",
     description: "Create a Test boundary card under a controller state root.",
     annotations: localWriteTool("Create Wakeflow Test Card"),
@@ -971,18 +955,6 @@ export const handlers = {
     }
     throw new Error(`wakeflow_archive: unknown target "${args.target}" (expected demand | todo | docs)`);
   },
-  wakeflow_intake_design_handoff: (args) => runWakeflowRuntime({
-    script: "wakeflow-intake",
-    args: [
-      "design-handoff",
-      "--state-root", args.stateRoot,
-      "--design-key", args.designKey,
-      ...optionalValue("--board", args.board),
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-  }),
   wakeflow_intake_test_card: (args) => runWakeflowRuntime({
     script: "wakeflow-intake",
     args: [

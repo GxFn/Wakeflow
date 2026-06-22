@@ -493,7 +493,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_claim_next",
-    description: "Design-gated controller claim: unattended mode inits at most one Design-set controller-claimable row; when designKey is explicitly provided, a user-confirmed ready-for-workspace row may also be claimed. A successful claim advances the Design row to accepted-by-workspace. Dry-run unless apply is true. This tool inits a state root only; it never dispatches, accepts evidence, or weakens per-demand user confirmation.",
+    description: "Unified controller claim from the global TODO board: unattended mode inits the single controller-claimable row (Auto Claim = yes and eligible); when designKey is provided, a user-confirmed eligible row may also be claimed even if not auto-claimable. Delegates to create_demand — it inits the state root and consumes the row (Current Mount = state root). Dry-run unless apply is true. Inits only; it never dispatches, accepts evidence, or weakens per-demand user confirmation.",
     annotations: localWriteTool("Claim Next Controller Demand"),
     inputSchema: {
       type: "object",
@@ -1042,7 +1042,7 @@ export const handlers = {
   wakeflow_claim_next: (args) => runWakeflowRuntime({
     script: "wakeflow-demand-sequence",
     args: [
-      "claim-from-design",
+      "claim-todo",
       ...rootArgs(args),
       ...optionalValue("--design-key", args.designKey),
       ...(args.apply ? ["--write"] : []),

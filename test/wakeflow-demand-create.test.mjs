@@ -16,6 +16,9 @@ const DIVIDER = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | -
 // A delivered, controller-recommended, auto-claimable requirement row.
 const DELIVERED_ROW =
   "| feat-2026-06-21 | pending-claim | requirement | P1 | Design | Build the feature | no | none | Wakeflow | none | yes | [plan](plan.md) [design](design.md) |";
+// Eligible but NOT auto-claimable (Auto Claim = no): claimable only with an explicit key.
+const MANUAL_ROW =
+  "| manual-2026-06-21 | pending-claim | bug | P2 | Design | Fix the bug | no | none | Wakeflow | none | no |  |";
 
 function makeWorkspace(rows = "") {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-create-"));
@@ -97,4 +100,40 @@ test("create-demand refuses to re-create an existing demand state root", () => {
   const second = run(root, ["create-demand", "--demand-key", "feat-2026-06-21", "--title", "Dup", "--write"]);
   assert.notEqual(second.status, 0);
   assert.match(parse(second).error ?? "", /already exists/);
+});
+
+test("claim-todo auto-claims the single controller-claimable row and consumes it", () => {
+  const { root, boardPath } = makeWorkspace(DELIVERED_ROW);
+  const payload = parse(run(root, ["claim-todo", "--write"]));
+  assert.equal(payload.ok, true);
+  assert.equal(payload.claimed.id, "feat-2026-06-21");
+  assert.equal(payload.claimMode, "auto-claimable-todo");
+  assert.equal(existsSync(statePath(root, "feat-2026-06-21")), true);
+  assert.match(readFileSync(boardPath, "utf8"), /feat-2026-06-21 \| completed \/ claimed \|/);
+});
+
+test("claim-todo with no auto-claimable row reports nothing to claim", () => {
+  const { root } = makeWorkspace(MANUAL_ROW);
+  const payload = parse(run(root, ["claim-todo", "--write"]));
+  assert.equal(payload.ok, true);
+  assert.equal(payload.wrote, false);
+  assert.equal(payload.claimed, null);
+  assert.equal(existsSync(statePath(root, "manual-2026-06-21")), false);
+});
+
+test("claim-todo claims an explicit eligible row even when not auto-claimable", () => {
+  const { root } = makeWorkspace(MANUAL_ROW);
+  const payload = parse(run(root, ["claim-todo", "--design-key", "manual-2026-06-21", "--write"]));
+  assert.equal(payload.ok, true);
+  assert.equal(payload.claimMode, "explicit-eligible-todo");
+  assert.equal(existsSync(statePath(root, "manual-2026-06-21")), true);
+});
+
+test("claim-todo refuses when multiple rows are controller-claimable", () => {
+  const second =
+    "| feat2-2026-06-21 | pending-claim | requirement | P1 | Design | Second | no | none | Wakeflow | none | yes | [plan](p.md) [design](d.md) |";
+  const { root } = makeWorkspace(`${DELIVERED_ROW}\n${second}`);
+  const result = run(root, ["claim-todo", "--write"]);
+  assert.notEqual(result.status, 0);
+  assert.match(parse(result).error ?? "", /multiple controller-claimable/);
 });

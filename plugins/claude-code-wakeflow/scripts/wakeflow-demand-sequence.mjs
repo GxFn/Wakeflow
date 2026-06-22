@@ -800,16 +800,25 @@ function runTodoConsume(designKey, mount) {
   ], { cwd: workspaceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 
-function runNextWorkTodo(todoId) {
+function runNextWorkTodo(todoId = null) {
   const result = runSync(process.execPath, [
     path.join(scriptsDir, "wakeflow-next-work.mjs"),
-    "--root", workspaceRoot, "--source", "todo", "--id", todoId, "--json",
+    "--root", workspaceRoot, "--source", "todo",
+    ...(todoId ? ["--id", todoId] : []),
+    "--json",
   ], { cwd: workspaceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   try {
     return JSON.parse(result.stdout);
   } catch {
     return { candidates: [], recommended: null };
   }
+}
+
+function runCreateDemandTodo(todoId) {
+  return runSync(process.execPath, [
+    path.join(scriptsDir, "wakeflow-demand-sequence.mjs"),
+    "create-demand", "--root", workspaceRoot, "--todo-id", todoId, "--write", "--json",
+  ], { cwd: workspaceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 
 // Unified create: replaces init_demand + intake_design_handoff + add_task + adopt_demand_host.
@@ -920,6 +929,76 @@ function commandCreateDemand() {
   }, [`Created demand ${demandKey} at ${stateRoot}`]);
 }
 
+// Unified controller auto-claim: the global-TODO-board successor to claim-from-design.
+// Unattended (no key), it claims the single controller-claimable row (Auto Claim = yes and
+// eligible). With an explicit --design-key/--todo-id, a user-confirmed eligible row may be
+// claimed even when not auto-claimable. It delegates to create-demand, so it inits a state
+// root and consumes the row only — no dispatch, evidence acceptance, or per-demand
+// confirmation bypass.
+function commandClaimTodo() {
+  const explicitId = getValue("--todo-id") ?? getValue("--design-key");
+  const candidates = runNextWorkTodo().candidates ?? [];
+
+  let target;
+  if (explicitId) {
+    target = candidates.find((entry) => entry.id === explicitId);
+    if (!target) {
+      fail(`TODO row ${explicitId} is not an eligible candidate (missing, blocked, or not controller-recommended); inspect it with wakeflow_next_work source=todo first.`);
+    }
+  } else {
+    const claimable = candidates.filter((entry) => entry.controllerClaimable);
+    if (claimable.length === 0) {
+      output({
+        ok: true,
+        command: "claim-todo",
+        wrote: false,
+        claimed: null,
+        agentNext: "No controller-claimable TODO row (Auto Claim = yes and eligible). Deliver one with Auto Claim, or claim a specific eligible row explicitly with --design-key.",
+      }, ["No controller-claimable TODO row to auto-claim."]);
+      return;
+    }
+    if (claimable.length > 1) {
+      fail(`multiple controller-claimable TODO rows (${claimable.map((entry) => entry.id).join(", ")}); claim one explicitly with --design-key.`);
+    }
+    target = claimable[0];
+  }
+
+  if (!write) {
+    output({
+      ok: true,
+      command: "claim-todo",
+      wrote: false,
+      wouldClaim: { id: target.id, title: target.title, autoClaim: target.controllerClaimable },
+    }, [`Would claim TODO ${target.id}`]);
+    return;
+  }
+
+  const created = runCreateDemandTodo(target.id);
+  if (created.status !== 0) {
+    fail(`failed to create the demand from TODO row ${target.id}: ${(created.stdout || created.stderr || "").trim()}`);
+  }
+  const createdPayload = created.stdout ? JSON.parse(created.stdout) : null;
+  const stateRoot = createdPayload?.created?.stateRoot ?? null;
+  output({
+    ok: true,
+    command: "claim-todo",
+    wrote: true,
+    claimed: { id: target.id, title: target.title, stateRoot },
+    claimMode: explicitId ? "explicit-eligible-todo" : "auto-claimable-todo",
+    controllerOutputs: [createdPayload].filter(Boolean),
+    forbiddenConclusions: [
+      "claim-todo-is-dispatch",
+      "claim-todo-is-acceptance",
+      "controller-claim-bypasses-per-demand-confirmation",
+    ],
+    agentNext: "Demand created from the TODO row; confirm dispatch as a separate step. No dispatch, delivery, or acceptance was performed.",
+  }, [
+    `Claimed TODO ${target.id}`,
+    `State root: ${stateRoot ?? "(see create-demand output)"}`,
+    "Init-only: no dispatch, delivery, automation loop, or evidence acceptance was performed.",
+  ]);
+}
+
 function main() {
   if (command === "help" || command === "--help" || command === "-h") {
     console.log(helpText);
@@ -943,6 +1022,10 @@ function main() {
   }
   if (command === "create-demand") {
     commandCreateDemand();
+    return;
+  }
+  if (command === "claim-todo") {
+    commandClaimTodo();
     return;
   }
   fail(`Unknown wakeflow-demand-sequence command: ${command}\n\n${helpText}`);

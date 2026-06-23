@@ -27,10 +27,40 @@ export function createReviewCommands(ctx) {
     buildGroupSnapshot,
   } = ctx;
 
-  function evidenceRefSummary(ref) {
+  // Map each work window to its repository root from config, so a target's evidence refs
+  // resolve against the repo where the work + commit happened. Loaded once per run.
+  let repoRootByWindow = null;
+  function repoRootForWindow(windowName) {
+    if (!windowName) return null;
+    if (!repoRootByWindow) {
+      repoRootByWindow = new Map();
+      const config = loadWorkspaceConfig({ workspaceRoot });
+      for (const repo of config.repositories ?? []) {
+        if (repo?.windowName && repo?.path) {
+          repoRootByWindow.set(repo.windowName, path.resolve(workspaceRoot, repo.path));
+        }
+      }
+    }
+    return repoRootByWindow.get(windowName) ?? null;
+  }
+
+  // Candidate roots for a relative evidence ref, most-specific first: the producing target
+  // window's repo (where the work + commit happened), then the workspace root (plus any
+  // extra roots such as the state root). Resolving ONLY against the workspace root
+  // false-flags a target's own repo-relative evidence as "missing", which stalls the
+  // controller return / verdict — a real closed-loop break.
+  function evidenceRefCandidates(text, targetWindow, extraRoots = []) {
+    if (path.isAbsolute(text)) return [text];
+    return [...extraRoots, repoRootForWindow(targetWindow), workspaceRoot]
+      .filter(Boolean)
+      .map((root) => path.resolve(root, text));
+  }
+
+  function evidenceRefSummary(ref, targetWindow) {
     const text = String(ref ?? "");
     const looksLikePath = text.includes("/") || /\.(json|md|log|txt|png|jpg|jpeg|webp|html|csv)$/i.test(text);
-    const resolvedPath = looksLikePath ? (path.isAbsolute(text) ? text : path.resolve(workspaceRoot, text)) : "";
+    const candidatePaths = looksLikePath ? evidenceRefCandidates(text, targetWindow) : [];
+    const resolvedPath = candidatePaths.find((candidate) => existsSync(candidate)) || candidatePaths[0] || "";
     return {
       ref: text,
       looksLikePath,
@@ -51,8 +81,8 @@ export function createReviewCommands(ctx) {
     const verificationSummary = Array.isArray(result?.verificationSummary) ? result.verificationSummary : [];
     const commits = Array.isArray(result?.commits) ? result.commits : [];
     const evidenceRefSummaries = item.stateRoot
-      ? evidenceRefs.map((ref) => stateRootEvidenceRefSummary(item.stateRoot, item.stateRootRef, ref))
-      : evidenceRefs.map(evidenceRefSummary);
+      ? evidenceRefs.map((ref) => stateRootEvidenceRefSummary(item.stateRoot, item.stateRootRef, ref, item.packet.targetWindow))
+      : evidenceRefs.map((ref) => evidenceRefSummary(ref, item.packet.targetWindow));
     const missingEvidenceRefs = missingEvidenceRefsFromSummaries(evidenceRefSummaries);
     return {
       packetId: item.packet.id,
@@ -173,18 +203,11 @@ export function createReviewCommands(ctx) {
     };
   }
 
-  function stateRootEvidenceRefSummary(stateRoot, stateRootRef, ref) {
+  function stateRootEvidenceRefSummary(stateRoot, stateRootRef, ref, targetWindow) {
     const text = String(ref ?? "");
     const looksLikePath = text.includes("/") || /\.(json|md|log|txt|png|jpg|jpeg|webp|html|csv)$/i.test(text);
     const absoluteRef = path.isAbsolute(text);
-    const candidatePaths = looksLikePath
-      ? absoluteRef
-        ? [text]
-        : [
-            path.resolve(stateRoot, text),
-            path.resolve(workspaceRoot, text),
-          ]
-      : [];
+    const candidatePaths = looksLikePath ? evidenceRefCandidates(text, targetWindow, [stateRoot]) : [];
     const resolvedPath = candidatePaths.find((candidate) => existsSync(candidate)) || candidatePaths[0] || "";
     const stateRootCandidate = looksLikePath && !absoluteRef ? path.resolve(stateRoot, text) : "";
     return {
@@ -368,7 +391,7 @@ export function createReviewCommands(ctx) {
       const result = item?.result ?? null;
       const evidenceRefs = Array.isArray(result?.evidenceRefs) ? result.evidenceRefs : [];
       const verificationSummary = Array.isArray(result?.verification) ? result.verification : [];
-      const evidenceRefSummaries = evidenceRefs.map((ref) => stateRootEvidenceRefSummary(stateRoot, stateRootRef, ref));
+      const evidenceRefSummaries = evidenceRefs.map((ref) => stateRootEvidenceRefSummary(stateRoot, stateRootRef, ref, task.targetWindow));
       const missingEvidenceRefs = missingEvidenceRefsFromSummaries(evidenceRefSummaries);
       const resultExpected = stateRootTaskResultExpected(task);
       const resultStatus = reworkAnchorCovered

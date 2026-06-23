@@ -581,6 +581,58 @@ test("review pack helper preserves evidence repair and pending-dispatch gates", 
   }]);
 });
 
+// Regression: a target reports evidence relative to ITS OWN repo (where the work + commit
+// happened). Resolving evidence refs only against the workspace root false-flagged that
+// evidence as "missing", flipping nextAction to fix-missing-evidence-refs and stalling the
+// controller return / verdict — a real closed-loop break observed in live MCP use.
+test("evidence ref relative to a target window's repo resolves, not false-missing (closed-loop break fix)", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-evidence-repo-"));
+  writeJson(path.join(root, "workspace.config.json"), {
+    workspaceName: "Wakeflow",
+    controllerWindow: "AlembicWorkspace",
+    repositories: [
+      { windowName: "AlembicWorkspace", path: ".", role: "controller" },
+      { windowName: "PluginWin", path: "PluginRepo", role: "plugin" },
+    ],
+    dispatchWindows: ["AlembicWorkspace", "PluginWin"],
+  });
+  // Evidence exists ONLY under the producing window's repo, NOT at the workspace root.
+  writeText(path.join(root, "PluginRepo/test/cold-start/evidence.json"), "{}");
+  const stateRoot = path.join(root, ".wakeflow-active/current/EV-FIXTURE");
+  mkdirSync(path.join(stateRoot, "target-results"), { recursive: true });
+  writeJson(path.join(stateRoot, "wakeflow-state.json"), {
+    schemaVersion: 1, demandKey: "EV-FIXTURE", title: "Evidence Fixture",
+    state: "dispatched", stateReason: "test", revision: 4, activeStageId: null,
+    updatedAt: "2026-06-24T00:00:00.000Z", allowedActions: [], blockers: [],
+    decisionsRequired: [], stages: [],
+    taskPackages: [{ taskPackageId: "EV-PKG-1", summary: "pkg", status: "sent", createdAt: "2026-06-24T00:00:00.000Z" }],
+    targetTasks: [{
+      targetTaskId: "EV-T1", taskPackageId: "EV-PKG-1", targetWindow: "PluginWin",
+      summary: "task", status: "sent", createdAt: "2026-06-24T00:00:00.000Z",
+      delivery: { deliveryId: "d-ev", dispatchGroup: "EV-PKG-1" },
+    }],
+    windows: [{ windowName: "PluginWin", windowState: "active", taskPackageIds: ["EV-PKG-1"], targetTaskIds: ["EV-T1"] }],
+    review: { status: "none", readyResultIds: [], blockedResultIds: [], missingResultIds: [] },
+    automation: { enabled: false, activeRunIds: [], lastReviewPack: null },
+    projection: { status: "synced", lastRenderedAt: "2026-06-24T00:00:00.000Z", progressDoc: "developer-progress.md" },
+  });
+  writeJson(path.join(stateRoot, "target-results/tr-EV-T1.json"), {
+    schemaVersion: 1, resultId: "tr-EV-T1", demandKey: "EV-FIXTURE", taskPackageId: "EV-PKG-1",
+    dispatchGroup: "EV-PKG-1", stateRoot: ".wakeflow-active/current/EV-FIXTURE",
+    targetWindow: "PluginWin", targetTaskId: "EV-T1", status: "completed", summary: "done",
+    evidenceRefs: ["test/cold-start/evidence.json", "test/cold-start/missing.json"],
+    createdAt: "2026-06-24T00:10:00.000Z",
+  });
+  writeText(path.join(stateRoot, "developer-progress.md"), "# Evidence Fixture");
+  const parsed = parseOk(run(root, ["review-pack", "--state-root", ".wakeflow-active/current/EV-FIXTURE"]));
+  const pack = parsed.reviewPack || parsed;
+  const missing = (pack.missingEvidenceRefs || []).map((m) => m.ref ?? m);
+  assert.ok(!missing.includes("test/cold-start/evidence.json"),
+    "evidence relative to the target window's repo must resolve, not be flagged missing");
+  assert.ok(missing.includes("test/cold-start/missing.json"),
+    "a genuinely-absent evidence ref must still be flagged missing");
+});
+
 test("help exposes state-root commands and rejects old dispatch routes", () => {
   const { root } = makeFixture();
   const help = runSync(process.execPath, [script, "--help", "--root", root], { cwd: root, encoding: "utf8" });

@@ -10,10 +10,10 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
+import { loadWorkspaceConfig, resolveWorkspaceRoot, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 
-const workspaceRoot = process.cwd();
 const args = process.argv.slice(2);
+const workspaceRoot = resolveWorkspaceRoot(args);
 const command = args[0] && !args[0].startsWith("--") ? args[0] : null;
 const config = loadWorkspaceConfig({ workspaceRoot, args });
 const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args, config });

@@ -2,7 +2,7 @@
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
+import { loadWorkspaceConfig, resolveWorkspaceRoot, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 import { isCompletedState, isPausedLikeState, normalizeStateId } from "./lib/wakeflow-status-machine.mjs";
 import {
   activeDemandConflictBlockers,
@@ -10,8 +10,8 @@ import {
   scanUnarchivedDemandStateRoots,
 } from "./lib/wakeflow-active-demands.mjs";
 
-const workspaceRoot = process.cwd();
 const args = process.argv.slice(2);
+const workspaceRoot = resolveWorkspaceRoot(args);
 const json = args.includes("--json");
 const write = args.includes("--write");
 const afterCompletion = args.includes("--after-completion");

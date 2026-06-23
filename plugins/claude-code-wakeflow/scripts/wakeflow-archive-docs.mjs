@@ -2,11 +2,11 @@
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
+import { loadWorkspaceConfig, resolveWorkspaceRoot, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 import { isCompletedState } from "./lib/wakeflow-status-machine.mjs";
 
-const workspaceRoot = process.cwd();
 const args = process.argv.slice(2);
+const workspaceRoot = resolveWorkspaceRoot(args);
 const apply = args.includes("--apply");
 const json = args.includes("--json");
 const trimIndex = !args.includes("--keep-index-rows");

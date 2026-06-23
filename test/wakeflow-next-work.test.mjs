@@ -105,3 +105,23 @@ test("next-work blocks new candidates while another demand state root is unarchi
   assert.match(parsed.issues.join("\n"), /workspace has unarchived demand state root/);
   assert.equal(parsed.workspaceDemandConflicts[0].demandKey, "current-demand");
 });
+
+// Regression: the MCP server's cwd is the plugin cache, not the workspace, so it passes
+// the workspace via --root. Scripts that hardcoded process.cwd() looked for the board under
+// the cache and reported it missing. A foreign cwd + explicit --root must resolve the real
+// workspace. (Every prior test spawns with cwd=root, which masked this.)
+test("honors --root when cwd is not the workspace (MCP plugin-cache cwd regression)", () => {
+  const { root } = makeFixture({
+    todoRows: "| CLAIM-2026-06-04 | pending-schedule | fixture | P1 | Wakeflow | claimable | yes | none | Wakeflow | current |",
+  });
+  const foreignCwd = mkdtempSync(path.join(os.tmpdir(), "wakeflow-foreign-cwd-"));
+  const result = runSync(
+    process.execPath,
+    [script, "--json", "--source", "todo", "--after-completion", "--root", root],
+    { cwd: foreignCwd, encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.candidateCount, 1, "must read the --root workspace board, not the cwd");
+  assert.equal(parsed.recommended.id, "CLAIM-2026-06-04");
+});

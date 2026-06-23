@@ -2,10 +2,10 @@
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
+import { resolveWorkspaceRoot, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 
-const workspaceRoot = process.cwd();
 const args = process.argv.slice(2);
+const workspaceRoot = resolveWorkspaceRoot(args);
 const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args });
 const workspaceDocsDir = ledgerPaths.workspaceDocsDir;
 const archiveRoot = ledgerPaths.workspaceArchiveDir;

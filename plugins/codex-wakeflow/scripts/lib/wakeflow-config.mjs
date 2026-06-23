@@ -61,6 +61,15 @@ export function getArgValue(args, name, fallback = null) {
   return fallback;
 }
 
+// Resolve the workspace root the way EVERY entrypoint must: honor an explicit `--root`
+// (this is how the MCP surface passes the workspace — the MCP server's cwd is the plugin
+// cache, not the workspace), falling back to the process cwd for direct CLI use. Scripts
+// that hardcode `process.cwd()` silently break every MCP-driven call because they then
+// look for the workspace under the plugin cache instead of the real root.
+export function resolveWorkspaceRoot(args = process.argv.slice(2), fallback = process.cwd()) {
+  return path.resolve(getArgValue(args, "--root", fallback));
+}
+
 export function workspaceConfigPath({ workspaceRoot = process.cwd(), args = process.argv.slice(2) } = {}) {
   const configArg = getArgValue(args, "--config", process.env.WAKEFLOW_CONFIG ?? null);
   if (configArg) {

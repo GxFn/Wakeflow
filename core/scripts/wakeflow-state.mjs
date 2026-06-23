@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, r
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildWakeflowTrace } from "../lib/wakeflow-trace.mjs";
-import { loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
+import { loadWorkspaceConfig, testWindowNames, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 import {
   detectInterfaceLanguage,
   localizedTemplateName,
@@ -1671,14 +1671,28 @@ function buildWindowCard(state, stateRoot, window) {
       windowConfigFile: `${transportRoot}/hosts/${hostDir}/window-config/${slug(window)}.json`,
     },
   };
-  const tasks = myTasks.map((task) => ({
-    targetTaskId: task.targetTaskId,
-    taskPackageId: task.taskPackageId,
-    status: task.status,
-    reviewDecision: task.reviewDecision ?? null,
-    summary: task.summary,
-    counts: task.counts ?? { dispatchCount: 0, reworkCount: 0 },
-  }));
+  const testWindows = new Set(testWindowNames(loadWorkspaceConfig({ workspaceRoot, args: options })));
+  const tasks = myTasks.map((task) => {
+    const persisted = task.counts ?? {};
+    const dispatchCount = persisted.dispatchCount ?? 0;
+    const reworkCount = persisted.reworkCount ?? 0;
+    return {
+      targetTaskId: task.targetTaskId,
+      taskPackageId: task.taskPackageId,
+      status: task.status,
+      reviewDecision: task.reviewDecision ?? null,
+      summary: task.summary,
+      // Full handling counts so the controller's brake signals (redesignCount, recurringProblem)
+      // and the retest hint stay visible on the per-window card too, not only in task-ledger.
+      counts: {
+        dispatchCount,
+        reworkCount,
+        redesignCount: persisted.redesignCount ?? 0,
+        retestCount: testWindows.has(task.targetWindow ?? window) ? dispatchCount : 0,
+      },
+      recurringProblem: reworkCount >= 2,
+    };
+  });
   return {
     window,
     demandKey: state.demandKey,
@@ -1719,7 +1733,7 @@ function renderWindowFocusMarkdown(card) {
     lines.push("_None._");
   } else {
     for (const task of card.tasks) {
-      lines.push(`- \`${task.targetTaskId}\` [${task.status}] (dispatch x${task.counts?.dispatchCount ?? 0}, rework x${task.counts?.reworkCount ?? 0}) — ${task.summary ?? ""}`);
+      lines.push(`- \`${task.targetTaskId}\` [${task.status}] (dispatch x${task.counts?.dispatchCount ?? 0}, rework x${task.counts?.reworkCount ?? 0}, redesign x${task.counts?.redesignCount ?? 0}, retest x${task.counts?.retestCount ?? 0}${task.recurringProblem ? ", recurring" : ""}) — ${task.summary ?? ""}`);
     }
   }
   lines.push("", "## My file areas", "");

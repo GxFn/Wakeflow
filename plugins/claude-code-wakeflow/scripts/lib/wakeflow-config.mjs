@@ -143,6 +143,15 @@ export function loadWorkspaceConfig(options = {}) {
   };
 }
 
+// The window names that count as "Test" targets. Used to derive retest churn — how
+// many rounds a task was dispatched to a Test window (test -> fix -> test again) —
+// from dispatch history, so the count stays consistent with dispatchCount/reworkCount
+// instead of depending on one-shot draft test-card files. Pass a merged config
+// (loadWorkspaceConfig) so testWindow is always populated.
+export function testWindowNames(config = {}) {
+  return [config.testWindow, config.ideTestWindow].filter(Boolean);
+}
+
 export function resolveConfigPath(workspaceRoot, value) {
   return path.isAbsolute(value) ? path.resolve(value) : path.resolve(workspaceRoot, value);
 }

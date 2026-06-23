@@ -2094,6 +2094,30 @@ test("RA2: task-ledger reports a unified per-task rollup with handling counts", 
   assert.equal(entry.recurringProblem, false);
 });
 
+test("RA2: retestCount counts rounds dispatched to a Test window, not test-card files", () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  // A Test-targeted task dispatched twice = two retest rounds (test -> fix -> test again).
+  // The fixture config has no testWindow override, so it defaults to "Test".
+  state.targetTasks.push({
+    targetTaskId: "CSMR-RETEST-1",
+    taskPackageId: "CSMR-PKG-1",
+    targetWindow: "Test",
+    summary: "Real-scenario retest task",
+    status: "sent",
+    counts: { dispatchCount: 2, reworkCount: 0 },
+    createdAt: "2026-06-05T00:02:00.000Z",
+  });
+  writeJson(stateFile, state);
+  const ledger = parseOk(run(root, ["task-ledger", "--state-root", stateRootRef]));
+  const retest = ledger.tasks.find((t) => t.targetTaskId === "CSMR-RETEST-1");
+  assert.equal(retest.counts.retestCount, 2, "Test-window dispatches count as retest rounds");
+  const product = ledger.tasks.find((t) => t.targetTaskId === "CSMR-TASK-1");
+  assert.equal(product.counts.retestCount, 0, "non-Test tasks never accrue retest rounds");
+  assert.equal(ledger.retestCount, 2, "demand-wide retestCount sums Test-dispatch rounds");
+});
+
 test("RA4: window-view returns a window's own tasks and file areas", () => {
   const { root, stateRootRef } = makeFixture();
   const view = parseOk(runState(root, ["window-view", "--state-root", stateRootRef, "--window", "AlembicPlugin"]));

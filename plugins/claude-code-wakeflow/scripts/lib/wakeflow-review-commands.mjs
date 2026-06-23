@@ -3,6 +3,7 @@ import path from "node:path";
 import { buildControllerCallbackPlan } from "./wakeflow-return-policy.mjs";
 import { controllerReviewScope, hasPendingReworkDecision } from "./wakeflow-review-scope.mjs";
 import { buildControllerReviewPack } from "./wakeflow-review-pack.mjs";
+import { loadWorkspaceConfig, testWindowNames } from "./wakeflow-config.mjs";
 
 export function createReviewCommands(ctx) {
   const {
@@ -726,12 +727,15 @@ export function createReviewCommands(ctx) {
   // RA2: a read-only unified per-task rollup. Scans ALL target tasks (accepted history
   // preserved, unlike the review-scope-filtered review pack) and fuses execution status +
   // acceptance decision + persisted counts (dispatchCount/reworkCount/redesignCount) + the derived
-  // retestCount (test-card files) + the recurringProblem signal (reworkCount >= 2) +
+  // retestCount (rounds dispatched to a Test window) + the recurringProblem signal (reworkCount >= 2) +
   // latest result + test-card status, so the controller sees the whole picture in one call.
   function buildTaskLedger(stateRoot) {
     const { state, stateRootRef } = readControllerStateRoot(stateRoot);
     const resultsByTask = latestStateRootResultsByTargetTask(stateRoot);
     const allTargetTasks = state.targetTasks ?? [];
+    // Test-window names resolve retest churn below: a task whose targetWindow is a Test
+    // window counts each (re)dispatch as a retest round (test -> fix -> test again).
+    const testWindows = new Set(testWindowNames(loadWorkspaceConfig({ workspaceRoot })));
 
     // Test cards join to a task by suggestedTaskPackage.targetTaskId.
     const testCardStatusesByTask = new Map();
@@ -752,6 +756,11 @@ export function createReviewCommands(ctx) {
       const testCardStatuses = testCardStatusesByTask.get(task.targetTaskId) ?? [];
       const persisted = task.counts ?? {};
       const reworkCount = persisted.reworkCount ?? 0;
+      const dispatchCount = persisted.dispatchCount ?? 0;
+      // retestCount: rounds this task was dispatched to a Test window (test -> fix -> test
+      // again). Derived from dispatch history, decoupled from one-shot draft test-card files;
+      // 0 for non-Test tasks. An informational hint for the controller, never a gate.
+      const retestCount = testWindows.has(task.targetWindow) ? dispatchCount : 0;
       return {
         targetTaskId: task.targetTaskId,
         taskPackageId: task.taskPackageId,
@@ -763,9 +772,9 @@ export function createReviewCommands(ctx) {
         latestResultId: result?.resultId ?? null,
         testCardStatus: testCardStatuses.length ? testCardStatuses[testCardStatuses.length - 1] : null,
         counts: {
-          dispatchCount: persisted.dispatchCount ?? 0,
+          dispatchCount,
           reworkCount,
-          retestCount: testCardStatuses.length,
+          retestCount,
           // redesignCount replaces the retired supplementCount: how many times this task was routed
           // back to Design (decide-review redesign). Persisted per-task, like reworkCount.
           redesignCount: persisted.redesignCount ?? 0,
@@ -776,6 +785,7 @@ export function createReviewCommands(ctx) {
       };
     });
     const redesignCount = tasks.reduce((sum, task) => sum + task.counts.redesignCount, 0);
+    const retestCount = tasks.reduce((sum, task) => sum + task.counts.retestCount, 0);
 
     return {
       kind: "WakeflowTaskLedger",
@@ -786,6 +796,7 @@ export function createReviewCommands(ctx) {
       stateRoot: stateRootRef,
       taskCount: tasks.length,
       redesignCount,
+      retestCount,
       tasks,
       generatedAt: nowIso(),
     };

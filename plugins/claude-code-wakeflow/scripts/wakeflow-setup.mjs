@@ -568,10 +568,6 @@ function configurePayload(context = commandContext()) {
     goalStageConfirmationDir: context.config.goalStageConfirmationDir,
     internalDesignPath,
     internalTestPath,
-    designHandoffBoard: designRepo?.mode === "external"
-      ? `${designRepo.path.replace(/\/+$/, "")}/docs/current/workspace-handoff-board.md`
-      : defaultWorkspaceConfig.designHandoffBoard,
-    designHandoffInbox: context.config.designHandoffInbox,
     testExchangePath: context.config.testExchangePath,
     dispatchWindows,
     requiredDispatchWindows: names,
@@ -728,10 +724,6 @@ ${samePathRepos.map((item) => {
   return `  - \`${item.windowName}\`: \`${itemLedger}\``;
 }).join("\n")}`
     : `- Window ledger: \`${windowLedger}\``;
-  const designBoard = relativePathFrom(
-    absolutePath,
-    resolveMaybeRelative(context.wakeflowRoot, context.config.designHandoffBoard ?? ".wakeflow-active/current/design-handoff-board.md"),
-  );
   const testExchange = relativePathFrom(
     absolutePath,
     resolveMaybeRelative(context.wakeflowRoot, context.config.testExchangePath ?? ".wakeflow-active/current/test-exchange.md"),
@@ -739,9 +731,6 @@ ${samePathRepos.map((item) => {
   const isDesign = samePathWindowNames.includes(context.config.designWindow);
   const isTest = samePathWindowNames.includes(context.config.testWindow);
   const roleNote = [];
-  if (isDesign) {
-    roleNote.push(`- Design handoff board: \`${designBoard}\``);
-  }
   if (isTest) {
     roleNote.push(`- Test exchange projection: \`${testExchange}\``);
   }
@@ -874,12 +863,6 @@ function expectedScopeCoordinates(context, repo) {
     })),
     ledgerByWindow,
   };
-  if (repo.windowName === context.config.designWindow) {
-    coordinate.designHandoffBoard = relativePathFrom(
-      absolutePath,
-      resolveMaybeRelative(context.wakeflowRoot, context.config.designHandoffBoard ?? ".wakeflow-active/current/design-handoff-board.md"),
-    );
-  }
   if (repo.windowName === context.config.testWindow) {
     coordinate.testExchangeProjection = relativePathFrom(
       absolutePath,
@@ -911,9 +894,6 @@ function coordinateChecks(block, coordinates) {
   } else {
     checks.push(["windowName", `- Window name: \`${coordinates.windowName}\``]);
     checks.push(["windowLedger", `- Window ledger: \`${coordinates.windowLedger}\``]);
-  }
-  if (coordinates.designHandoffBoard) {
-    checks.push(["designHandoffBoard", `- Design handoff board: \`${coordinates.designHandoffBoard}\``]);
   }
   if (coordinates.testExchangeProjection) {
     checks.push(["testExchangeProjection", `- Test exchange projection: \`${coordinates.testExchangeProjection}\``]);
@@ -1253,24 +1233,11 @@ function writeAgentsPayload(context = commandContext(), options = {}) {
   return { ok: results.every((result) => result.ok), command: "write-agents", wrote: write, results };
 }
 
-function designBoardTemplate() {
-  return `# Workspace Handoff Board
-
-This board is intentionally small. Design records completed requirement design handoffs here only after user/controller confirmation; Wakeflow imports ready rows through the controller MCP intake surface.
-
-## Handoff Board
-
-| ID | Status | Title | Original Plan | Requirement Design | Handoff | User Confirmation Status | User Confirmation | Mainline Relation Status | Current Mainline Relation | Suggested TODO | Priority Enum | Priority | Next Step |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-`;
-}
-
 function internalDesignReadme(config) {
   return `# Internal Design Workspace
 
 Use this directory when the user does not have an external ${config.designWindow} repository.
 
-- Handoff board: \`${config.designHandoffBoard}\`
 - Local rules: \`${hostProfile.memoryFile}\`
 - Documentation index: \`docs/index.md\`
 - Current Design work: \`docs/current/\`
@@ -1630,8 +1597,6 @@ function syncStarterLedgerFiles(context) {
     ensureTextFile(context.ledgerPaths.workspaceCurrentIndexPath, configuredStarterContent(context, `${sourceRoot}/current/index.md`), "active current index", { refreshStarter: true }),
     ensureTextFile(context.ledgerPaths.workspaceCurrentStatusPath, configuredStarterContent(context, `${sourceRoot}/current/workspace-current-status.md`), "active current status", { refreshStarter: true }),
     ensureTextFile(context.ledgerPaths.globalTodoPath, configuredStarterContent(context, `${sourceRoot}/current/global-todo-board.md`), "active global TODO board", { refreshStarter: true }),
-    ensureTextFile(resolveConfigPath(context.wakeflowRoot, context.config.designHandoffBoard), configuredStarterContent(context, `${sourceRoot}/current/design-handoff-board.md`), "active design handoff board", { refreshStarter: true }),
-    ensureTextFile(resolveConfigPath(context.wakeflowRoot, context.config.designHandoffInbox), configuredStarterContent(context, `${sourceRoot}/current/design-handoff-inbox.md`), "active design handoff inbox", { refreshStarter: true }),
     ensureTextFile(resolveConfigPath(context.wakeflowRoot, context.config.testExchangePath), configuredStarterContent(context, `${sourceRoot}/current/test-exchange.md`), "active test exchange projection", { refreshStarter: true }),
     ensureTextFile(context.ledgerPaths.workspaceRecordMapPath, configuredStarterContent(context, `${sourceRoot}/workspace-record-map.md`), "project workspace record map"),
     ensureTextFile(path.join(context.ledgerPaths.requirementDesignsDir, "README.md"), configuredStarterContent(context, `${ledgerRoot}/requirement-designs/README.md`), "requirement designs readme"),
@@ -1702,12 +1667,10 @@ function syncTemplatesPayload(context = commandContext(), options = {}) {
         managedAgents: false,
       };
       const repoRoot = repositoryAbsPath(context.wakeflowRoot, repo);
-      const boardPath = resolveConfigPath(context.wakeflowRoot, context.config.designHandoffBoard);
       if (repo.mode === "external" && (!existsSync(repoRoot) || !statSync(repoRoot).isDirectory())) {
         results.push({ windowName, mode: repo.mode, ok: false, issue: "external design directory missing", path: repo.path });
         continue;
       }
-      results.push({ windowName, mode: repo.mode, ok: true, ...ensureTextFile(boardPath, designBoardTemplate(), "design handoff board") });
       for (const result of syncDesignSupportFiles(context, repoRoot, repo.mode)) {
         results.push({ windowName, mode: repo.mode, ok: true, ...result });
       }

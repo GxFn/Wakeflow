@@ -32,8 +32,6 @@ export const defaultWorkspaceConfig = {
   requiredDispatchWindows: ["Design", "Test"],
   repoNames: [],
   testExchangePath: ".wakeflow-active/current/test-exchange.md",
-  designHandoffBoard: ".wakeflow-active/current/design-handoff-board.md",
-  designHandoffInbox: ".wakeflow-active/current/design-handoff-inbox.md",
   runtimeProcessMatchers: [],
   runtimeProcessLabel: "configured",
   repositoryRoles: {

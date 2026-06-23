@@ -114,8 +114,6 @@ test("configure writes user-confirmed sibling mappings into workspace.config.jso
       ["Test", "../Test"],
     ],
   );
-  assert.equal(config.designHandoffBoard, ".wakeflow-active/current/design-handoff-board.md");
-  assert.equal(config.designHandoffInbox, ".wakeflow-active/current/design-handoff-inbox.md");
   assert.equal(config.testExchangePath, ".wakeflow-active/current/test-exchange.md");
   assert.equal(config.goalStageConfirmationDir, "../wakeflow-ledger/goal-stage-confirmation");
   assert.deepEqual(config.protectedWorkspacePrefixes, []);
@@ -307,7 +305,6 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.doesNotMatch(gitignore, /^AppRepo\/$/m);
   assert.doesNotMatch(gitignore, /^Design\/$/m);
   assert.doesNotMatch(gitignore, /^Test\/$/m);
-  assert.equal(config.designHandoffInbox, ".wakeflow-active/current/design-handoff-inbox.md");
   assert.equal(config.goalStageConfirmationDir, "wakeflow-ledger/goal-stage-confirmation");
   assert.equal(config.wakeflowRepoDir, "");
   assert.equal(config.repositories[0].path, "AppRepo");
@@ -335,7 +332,6 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.equal(existsSync(path.join(parent, "Design/AGENTS.md")), true);
   assert.equal(existsSync(path.join(parent, "Test/AGENTS.md")), true);
   assert.equal(existsSync(path.join(parent, "scripts/README.md")), false);
-  assert.equal(existsSync(path.join(parent, ".wakeflow-active/current/design-handoff-inbox.md")), true);
   assert.equal(existsSync(path.join(parent, "wakeflow-ledger/requirement-designs/README.md")), true);
   assert.equal(existsSync(path.join(parent, "wakeflow-ledger/goal-stage-confirmation/README.md")), true);
   assert.equal(existsSync(path.join(parent, "wakeflow-ledger/goal-stage-confirmation/process.md")), true);
@@ -587,8 +583,6 @@ test("initialize applies workspace config, AGENTS, Design/Test surfaces, and loc
   assert.equal(existsSync(path.join(fixture.parent, "AGENTS.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/AGENTS.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Test/AGENTS.md")), true);
-  assert.equal(existsSync(path.join(fixture.control, ".wakeflow-active/current/design-handoff-board.md")), true);
-  assert.equal(existsSync(path.join(fixture.control, ".wakeflow-active/current/design-handoff-inbox.md")), true);
   assert.equal(existsSync(path.join(fixture.control, ".wakeflow-active/current/test-exchange.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/requirement-designs/README.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "wakeflow-ledger/goal-stage-confirmation/process.md")), true);
@@ -1210,7 +1204,6 @@ test("write-agents can explicitly include unmanaged Design/Test windows while sk
 
   const designAgents = readFileSync(path.join(design, "AGENTS.md"), "utf8");
   assert.match(designAgents, /Window name: `Design`/);
-  assert.match(designAgents, /Design handoff board: `docs\/current\/workspace-handoff-board\.md`/);
   assert.match(designAgents, /### Skill Assistance/);
   assert.match(designAgents, /Design work should proactively surface relevant local Design skills/);
   assert.match(designAgents, /name the smallest matching skill/);
@@ -1312,8 +1305,6 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   const payload = runJson(fixture, ["sync-templates", "--all", "--write"]);
   assert.equal(payload.ok, true);
   assert.equal(payload.wrote, true);
-  assert.equal(existsSync(path.join(fixture.control, ".wakeflow-active/current/design-handoff-board.md")), true);
-  assert.equal(existsSync(path.join(fixture.control, ".wakeflow-active/current/design-handoff-inbox.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/AGENTS.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/README.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/.gitignore")), true);
@@ -1419,7 +1410,6 @@ test("external Design and Test directories get only alignment templates", () => 
   ]);
 
   const config = JSON.parse(readFileSync(path.join(fixture.control, "workspace.config.json"), "utf8"));
-  assert.equal(config.designHandoffBoard, "../Design/docs/current/workspace-handoff-board.md");
 
   const payload = runJson(fixture, ["sync-templates", "--all", "--write"]);
   assert.equal(payload.ok, true);

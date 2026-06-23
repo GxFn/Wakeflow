@@ -102,14 +102,3 @@ test("layout check catches starter TODO columns that next-work depends on", () =
   assert.match(parsed.issues.join("\n"), /global TODO table is missing required columns/);
   assert.match(parsed.issues.join("\n"), /Item \/ Goal/);
 });
-
-test("layout check catches a Design board that next-work cannot scan", () => {
-  const root = makeStarterFixture();
-  const boardPath = path.join(root, ".wakeflow-active/current/design-handoff-board.md");
-  writeFile(boardPath, readFileSync(boardPath, "utf8").replace(/\n## Handoff Board\n/u, "\n"));
-
-  const result = run(checkScript, root);
-  assert.notEqual(result.status, 0);
-  const parsed = JSON.parse(result.stdout);
-  assert.match(parsed.issues.join("\n"), /design-handoff-board\.md is missing ## Handoff Board/);
-});

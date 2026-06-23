@@ -370,8 +370,6 @@ function validateTemplateBundle() {
     "templates/starter-workspace/workspace/index.md",
     "templates/starter-workspace/workspace/current/workspace-current-status.md",
     "templates/starter-workspace/workspace/current/global-todo-board.md",
-    "templates/starter-workspace/workspace/current/design-handoff-board.md",
-    "templates/starter-workspace/workspace/current/design-handoff-inbox.md",
     "templates/starter-workspace/workspace/current/test-exchange.md",
     "templates/starter-workspace/workspace/workspace-record-map.md",
     "templates/starter-workspace/ledger/requirement-designs/README.md",

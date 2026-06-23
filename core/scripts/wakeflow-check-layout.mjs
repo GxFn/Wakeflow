@@ -27,8 +27,6 @@ const requiredCurrentFiles = [
   "index.md",
   "workspace-current-status.md",
   "global-todo-board.md",
-  configuredCurrentFile(workspaceConfig.designHandoffBoard),
-  configuredCurrentFile(workspaceConfig.designHandoffInbox),
   configuredTestExchangeFile,
 ].filter(Boolean);
 
@@ -208,23 +206,6 @@ validateTableSection({
     "Dependency / Trigger",
     "Recommended Window",
     "Current Mount",
-  ],
-});
-
-validateTableSection({
-  file: path.resolve(workspaceRoot, workspaceConfig.designHandoffBoard),
-  label: "Design handoff",
-  heading: "Handoff Board",
-  requiredColumns: [
-    "ID",
-    "Status",
-    "Title",
-    "Original Plan",
-    "Requirement Design",
-    "User Confirmation Status",
-    "Mainline Relation Status",
-    "Priority",
-    "Next Step",
   ],
 });
 

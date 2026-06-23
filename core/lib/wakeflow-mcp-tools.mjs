@@ -164,7 +164,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_add_task",
-    description: "Add a full runtime task package and optional target task to a Wakeflow controller state root.",
+    description: "Add a full runtime task package and optional target task to a Wakeflow demand state root. Plans the next work; it does not dispatch, send, or accept.",
     annotations: localWriteTool("Add Wakeflow Task Package"),
     inputSchema: {
       type: "object",
@@ -209,7 +209,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_record_delivery",
-    description: "Record external host-send evidence for a full runtime delivery envelope.",
+    description: "Record external host-send evidence for a delivery envelope, after the host tool performs the real send. A recorded status=sent with readbackOk=true closes the dispatch turn; this does not send the message or accept the result.",
     annotations: localWriteTool("Record Wakeflow Delivery Evidence"),
     inputSchema: {
       type: "object",
@@ -230,7 +230,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_record_target_result",
-    description: "Record one target-window TargetResultEnvelope into a controller state root. This is target closeout evidence, not controller acceptance or next dispatch; when returnRoute=controller applies, follow with review pack, controller-return delivery, host send, and delivery-run recording.",
+    description: "Record one target-window TargetResultEnvelope into a demand state root. This is target closeout evidence, not controller acceptance or next dispatch; when returnRoute=controller applies, follow with review pack, controller-return delivery, host send, and delivery-run recording.",
     annotations: localWriteTool("Record Wakeflow Target Result"),
     inputSchema: {
       type: "object",
@@ -380,7 +380,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_intake_test_card",
-    description: "Create a Test boundary card under a controller state root. Dry-run unless apply is true.",
+    description: "Create a Test boundary card under a demand state root. Dry-run unless apply is true.",
     annotations: localWriteTool("Create Wakeflow Test Card"),
     inputSchema: {
       type: "object",

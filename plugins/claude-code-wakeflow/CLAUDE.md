@@ -25,18 +25,11 @@ definition, local code, docs, tests, and release path before decomposing work.
   requirement design and current state root; when the confirmed demand plan is
   complete, stop, and mark any work outside the confirmed design as pending decision.
 
-The operator's stop-card, confirmation-gate, and decision-checklist discipline lives
-in the installed workspace's own `CLAUDE.md`/`AGENTS.md` (its preserved local rules),
-not in this reusable file. This file keeps Wakeflow's roles, process, and posture.
-
 ## Role Map
 
 - The controller workspace owns cross-repository goal intake, planning,
   dispatch, acceptance, boundaries, TODO routing, templates, and collaboration
   rules. It does not implement managed products.
-- The controller window is the workspace brain, not a dispatch table. For a new
-  request, analyze the feature, user scenario, completion definition, local
-  code, docs, tests, builds, and release paths before decomposing work.
 - Design clarifies requirements, compares options, exposes risks, redesigns
   non-bug outcome mismatches, and prepares signals or handoff candidates.
   Design does not dispatch implementation, accept work, edit product code, or

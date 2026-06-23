@@ -222,7 +222,7 @@ flowchart TB
 
 **在派发期间推进持久化状态的唯一一点是 `record-delivery-run`** → `markStateRootDeliverySent`，它把目标任务翻转为 `status=sent`、把需求翻转为 `state=dispatched`（`wakeflow-result-recording-commands.mjs:86-232`）。`prepare-dispatch-from-state` **仅**写入本地运行时（packet/group/envelope/lock），从不触碰 `wakeflow-state.json`。
 
-> **词汇注记：** 七位子系统阅读者中有两位对需求状态的描述略有不同。reducer 源码写入七个需求状态（`intake`、`planned`、`waiting-results`、`review-ready`、`needs-rework`、`blocked`、`completed`）。一位阅读者观察到 `markStateRootDeliverySent` 还会写入一个瞬态的 `dispatched` 状态。本文档将 `dispatched` 视为一次真实但由传输驱动的写入，随后由 `reduce-results` 解析为 `waiting-results`/`review-ready`。对账见 §5.1。
+> **词汇注记：** reducer 源码写入九个需求状态（`intake`、`planned`、`dispatched`、`waiting-results`、`review-ready`、`needs-rework`、`blocked`、`completed`、`archived`），其中 `dispatched` 是 `markStateRootDeliverySent` 中由传输驱动的写入，随后由 `reduce-results` 解析为 `waiting-results`/`review-ready`。另外两个 enum 值（`accepting`、`paused`）为保留值，并非 reducer 写入。对账见 §5.1。
 
 ### 4.1 生命周期时序图
 
@@ -259,7 +259,7 @@ sequenceDiagram
     U->>ST: reduce_results (reduce-results)
     alt all open results present
         ST-->>U: transition-candidate, state=review-ready, allow decide-review
-        U->>ST: decide_review (accept|rework|blocked)
+        U->>ST: decide_review (accept|rework|blocked|redesign)
         alt accept
             ST-->>U: tasks=accepted, state=planned, allow complete-demand
         else rework
@@ -312,7 +312,7 @@ Wakeflow 有 **两套不共享 enum 的、彼此独立的状态词汇**：
 
 ### 5.1 需求状态（`wakeflow-state.json .state`）
 
-schema enum（`wakeflow-state.schema.json:30-48`）列出 **14** 个值（`idle`、`intake`、`designing`、`needs-confirmation`、`planned`、`dispatching`、`waiting-results`、`review-ready`、`accepting`、`needs-rework`、`blocked`、`paused`、`completed`、`archived`）——是 reducer 实际写入内容的**超集**。reducer 只会写入：`intake`、`planned`、`waiting-results`、`review-ready`、`needs-rework`、`blocked`、`completed`（外加 `markStateRootDeliverySent` 中由传输驱动的 `dispatched` 写入）。其余之中，`paused`/`archived`/`accepting`/`waiting-results` 作为**读取守卫**出现，而 `designing`/`needs-confirmation`/`dispatching`/`idle` 是纯粹的 schema 残迹。**以代码为准**；声称这些是现役需求状态的文档已过时。
+schema enum（`wakeflow-state.schema.json:32-44`）列出 **11** 个值（`intake`、`planned`、`dispatched`、`waiting-results`、`review-ready`、`accepting`、`needs-rework`、`blocked`、`paused`、`completed`、`archived`）。reducer 写入其中九个：`intake`、`planned`、`waiting-results`、`review-ready`、`needs-rework`、`blocked`、`completed`、`archived`，外加 `markStateRootDeliverySent` 中由传输驱动的 `dispatched` 写入。其余两个为**保留值**，并非 reducer 写入：`accepting` 是转换候选的 `candidateState`（结果就绪可接受时的提案状态），同时出现在读取守卫中；`paused` 是由 intake/dispatch/add-task 守卫识别的、手动设置的“closed”状态。早先的残迹值（`idle`、`designing`、`needs-confirmation`、`dispatching`）已从 schema 中移除。**以代码为准**；schema 测试 `wakeflow-state-schema.test.mjs` 锁定此 enum。
 
 ```mermaid
 stateDiagram-v2
@@ -453,7 +453,7 @@ stateDiagram-v2
 
 | 实体 | 起态 | 终态 | 触发 | 守卫 |
 |---|---|---|---|---|
-| 转换候选 | （无） | accepting | reduce-results | 全部就位、无 blocked；`allowedDecisions=[accept,rework,blocked]`；`fromRevision=new revision` |
+| 转换候选 | （无） | accepting | reduce-results | 全部就位、无 blocked；`allowedDecisions=[accept,rework,blocked,redesign]`；`fromRevision=new revision` |
 | | （无） | blocked | reduce-results | 全部就位、≥1 blocked |
 | | accepting\|blocked | （consumed/陈旧） | decide-review | 若 `fromRevision != current revision` 则失败 |
 | 目标结果 | （无） | completed\|blocked\|needs-review | import-target-result `--status` | 任务存在且属于该窗口；尚未 accepted；需求未 completed/archived；revision 不变 |
@@ -480,7 +480,7 @@ stateDiagram-v2
 
 `status-machine.mjs:1-19` 定义 17 个值：`draft`、`pending`、`running`、`delivered`、`review`、`blocked`、`completed`、`paused`、`cancelled`、`rejected`、`observing`、`none`、`idle`、`maintained`、`template`、`policy`、`archive`，并带发送资格谓词（`isSendEligibleState` = pending\|running\|delivered；`isNoSendState` = review\|completed\|paused\|cancelled\|rejected\|observing\|none\|idle；`isPausedLikeState` = paused\|cancelled\|rejected\|blocked）。仅供 next-work/archive/docs-verify 消费——与需求 enum 及内联窗口字符串完全分离。
 
-> **待核实 / 存疑：** 14 个值的需求 schema enum 是 7 个 reducer 实际写入状态的超集；`idle`/`designing`/`needs-confirmation`/`dispatching` 在 `wakeflow-state.mjs` 中既不被读也不被写，但本子系统之外的某个其他脚本可能会写 `paused`/`archived`（未穷尽确认）。需求状态永不会变成 `accepting`（只有 `candidateState` 用到它；`decide accept` 由 review-ready 跳到 planned）。内联 `window.windowState` 集合没有可校验的 schema。`automation-dispatch.schema.json` 可能是一份愿景性契约，而非一个已校验的文件形态。
+> **已澄清：** 11 个值的需求 schema enum 由 `wakeflow-state-schema.test.mjs` 锁定。九个为 reducer 写入（`archived` 经 `wakeflow-state.mjs` 的 archive-demand，`dispatched` 经交付库的 `markStateRootDeliverySent`）；已移除的残迹 `idle`/`designing`/`needs-confirmation`/`dispatching` 不复存在。两个保留值：需求状态永不会变成 `accepting`（只有 `candidateState` 用到它；`decide accept` 由 review-ready 跳到 planned），而 `paused` 是由守卫识别的、手动设置的 closed 状态。内联 `window.windowState` 集合仍没有可校验的 schema。`automation-dispatch.schema.json` 可能是一份愿景性契约，而非一个已校验的文件形态。
 
 ---
 

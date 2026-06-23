@@ -725,8 +725,8 @@ export function createReviewCommands(ctx) {
 
   // RA2: a read-only unified per-task rollup. Scans ALL target tasks (accepted history
   // preserved, unlike the review-scope-filtered review pack) and fuses execution status +
-  // acceptance decision + persisted counts (dispatchCount/reworkCount) + derived counts
-  // (retestCount from test-card files, supplementCount from design-handoff intake) +
+  // acceptance decision + persisted counts (dispatchCount/reworkCount/redesignCount) + the derived
+  // retestCount (test-card files) + the recurringProblem signal (reworkCount >= 2) +
   // latest result + test-card status, so the controller sees the whole picture in one call.
   function buildTaskLedger(stateRoot) {
     const { state, stateRootRef } = readControllerStateRoot(stateRoot);
@@ -747,16 +747,11 @@ export function createReviewCommands(ctx) {
       }
     }
 
-    // Design-handoff intake carries no per-task id, so supplementCount is demand-wide.
-    const intakeDir = path.join(stateRoot, "intake");
-    const supplementCount = existsSync(intakeDir)
-      ? listJsonFiles(intakeDir).filter((file) => path.basename(file).startsWith("design-handoff-")).length
-      : 0;
-
     const tasks = allTargetTasks.map((task) => {
       const result = resultsByTask.get(task.targetTaskId)?.result ?? null;
       const testCardStatuses = testCardStatusesByTask.get(task.targetTaskId) ?? [];
       const persisted = task.counts ?? {};
+      const reworkCount = persisted.reworkCount ?? 0;
       return {
         targetTaskId: task.targetTaskId,
         taskPackageId: task.taskPackageId,
@@ -769,12 +764,18 @@ export function createReviewCommands(ctx) {
         testCardStatus: testCardStatuses.length ? testCardStatuses[testCardStatuses.length - 1] : null,
         counts: {
           dispatchCount: persisted.dispatchCount ?? 0,
-          reworkCount: persisted.reworkCount ?? 0,
+          reworkCount,
           retestCount: testCardStatuses.length,
-          supplementCount,
+          // redesignCount replaces the retired supplementCount: how many times this task was routed
+          // back to Design (decide-review redesign). Persisted per-task, like reworkCount.
+          redesignCount: persisted.redesignCount ?? 0,
         },
+        // recurringProblem flags a stuck product-rework loop (K=2): stop bouncing point-fixes — give a
+        // new root-cause hypothesis or route the next package to Design redesign.
+        recurringProblem: reworkCount >= 2,
       };
     });
+    const redesignCount = tasks.reduce((sum, task) => sum + task.counts.redesignCount, 0);
 
     return {
       kind: "WakeflowTaskLedger",
@@ -784,7 +785,7 @@ export function createReviewCommands(ctx) {
       revision: state.revision,
       stateRoot: stateRootRef,
       taskCount: tasks.length,
-      supplementCount,
+      redesignCount,
       tasks,
       generatedAt: nowIso(),
     };
@@ -803,8 +804,8 @@ export function createReviewCommands(ctx) {
     output(
       { ...ledger, ok: true, command: "task-ledger", tasks },
       [
-        `Task ledger: ${ledger.demandKey} (${tasks.length}/${ledger.taskCount} task(s), ${ledger.supplementCount} supplement(s))`,
-        ...tasks.map((item) => `- ${item.targetTaskId} [${item.status}] dispatch x${item.counts.dispatchCount} rework x${item.counts.reworkCount} retest x${item.counts.retestCount}`),
+        `Task ledger: ${ledger.demandKey} (${tasks.length}/${ledger.taskCount} task(s), ${ledger.redesignCount} redesign(s))`,
+        ...tasks.map((item) => `- ${item.targetTaskId} [${item.status}] dispatch x${item.counts.dispatchCount} rework x${item.counts.reworkCount} retest x${item.counts.retestCount} redesign x${item.counts.redesignCount}${item.recurringProblem ? " [recurring]" : ""}`),
       ],
     );
   }

@@ -41,7 +41,7 @@ Usage:
   node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--source-ref <ref>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
-  node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked> --reason <text> [--evidence-ref <ref>] [--accept-blocked] [--write] [--json]
+  node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked|redesign> --reason <text> [--evidence-ref <ref>] [--accept-blocked] [--write] [--json]
   node scripts/wakeflow-state.mjs complete-demand --state-root <path> --reason <text> --evidence-ref <ref> [--write] [--json]
   node scripts/wakeflow-state.mjs archive-demand --state-root <path> --reason <text> [--redact] [--evidence-ref <ref>] [--write] [--json]
   node scripts/wakeflow-state.mjs adopt-demand-host --state-root <path> [--reason <text>] [--write] [--json]
@@ -1165,7 +1165,7 @@ function commandReduceResults() {
     reviewScope: reviewScope.mode,
     targetTaskIds: reviewScope.targetTaskIds,
     excludedTargetTaskIds: reviewScope.excludedTargetTaskIds,
-    allowedDecisions: ["accept", "rework", "blocked"],
+    allowedDecisions: ["accept", "rework", "blocked", "redesign"],
     evidenceRefs: [...new Set(evidenceRefs)],
     wakeflowTrace: artifactTrace({
       artifactKind: "transition-candidate",
@@ -1291,7 +1291,7 @@ function commandDecideReview() {
   const candidateId = requireValue("--candidate-id");
   const decision = requireValue("--decision");
   const reason = requireValue("--reason");
-  const allowedDecisions = new Set(["accept", "rework", "blocked"]);
+  const allowedDecisions = new Set(["accept", "rework", "blocked", "redesign"]);
   if (!allowedDecisions.has(decision)) {
     fail(`--decision must be one of: ${[...allowedDecisions].join(", ")}`);
   }
@@ -1319,8 +1319,10 @@ function commandDecideReview() {
   const nextRevision = Number(state.revision ?? 0) + 1;
   const eventId = nextEventId(createdAt, nextRevision);
   const evidenceRefs = [...new Set([...(candidate.evidenceRefs ?? []), ...valuesFor("--evidence-ref")])];
-  const nextMainState = decision === "accept" ? "planned" : decision === "rework" ? "needs-rework" : "blocked";
-  const nextTaskStatus = decision === "accept" ? "accepted" : decision === "rework" ? "needs-rework" : "blocked";
+  // redesign parks the task like rework (needs-rework), but routes to Design rather than re-dispatch.
+  const reworkLike = decision === "rework" || decision === "redesign";
+  const nextMainState = decision === "accept" ? "planned" : reworkLike ? "needs-rework" : "blocked";
+  const nextTaskStatus = decision === "accept" ? "accepted" : reworkLike ? "needs-rework" : "blocked";
   const rawCandidateTaskIds = new Set(candidate.targetTaskIds ?? []);
   const knownCandidateTasks = (state.targetTasks ?? []).filter((item) => rawCandidateTaskIds.has(item.targetTaskId));
   const unknownCandidateTaskIds = [...rawCandidateTaskIds].filter((targetTaskId) => !knownCandidateTasks.some((item) => item.targetTaskId === targetTaskId));
@@ -1338,21 +1340,21 @@ function commandDecideReview() {
       ...decisionScope.excludedTargetTaskIds,
     ]),
   ];
-  const nextTargetTasks = (state.targetTasks ?? []).map((item) => candidateTaskIds.has(item.targetTaskId)
-    ? (decision === "rework"
-        ? {
-            ...item,
-            status: nextTaskStatus,
-            reviewDecision: decision,
-            // RA2: per-task handling count — a rework decision is one rework cycle.
-            counts: { ...(item.counts ?? {}), reworkCount: (item.counts?.reworkCount ?? 0) + 1 },
-          }
-        : {
-            ...item,
-            status: nextTaskStatus,
-            reviewDecision: decision,
-          })
-    : item);
+  const nextTargetTasks = (state.targetTasks ?? []).map((item) => {
+    if (!candidateTaskIds.has(item.targetTaskId)) return item;
+    // RA2 / redesign-route: per-task handling counts. A rework decision is one rework cycle (same
+    // product window, re-dispatched). A redesign decision is one Design-rethink cycle: the task is
+    // parked needs-rework like rework, but it is routed back to Design (reviewDecision="redesign"
+    // + redesignCount), not re-dispatched to a product window — the controller's next package is a
+    // Design outcome-redesign, not a product point-fix.
+    if (decision === "rework") {
+      return { ...item, status: nextTaskStatus, reviewDecision: decision, counts: { ...(item.counts ?? {}), reworkCount: (item.counts?.reworkCount ?? 0) + 1 } };
+    }
+    if (decision === "redesign") {
+      return { ...item, status: nextTaskStatus, reviewDecision: decision, counts: { ...(item.counts ?? {}), redesignCount: (item.counts?.redesignCount ?? 0) + 1 } };
+    }
+    return { ...item, status: nextTaskStatus, reviewDecision: decision };
+  });
   const nextState = {
     ...state,
     state: nextMainState,
@@ -1361,7 +1363,7 @@ function commandDecideReview() {
     updatedAt: createdAt,
     allowedActions: decision === "accept"
       ? ["add-task-package", "complete-demand", "wakeflow-render-progress"]
-      : decision === "rework"
+      : reworkLike
         ? ["add-task-package", "wakeflow-render-progress"]
         : ["wakeflow-render-progress"],
     blockers: decision === "blocked"
@@ -1402,6 +1404,7 @@ function commandDecideReview() {
     createdAt,
     actor: "controller",
     type: "review.decided",
+    decision,
     from: state.state,
     to: nextMainState,
     reason,

@@ -2090,7 +2090,8 @@ test("RA2: task-ledger reports a unified per-task rollup with handling counts", 
   assert.equal(entry.counts.dispatchCount, 1, "dispatchCount surfaced in the ledger");
   assert.equal(entry.counts.reworkCount, 0);
   assert.equal(entry.counts.retestCount, 0);
-  assert.equal(entry.counts.supplementCount, 0);
+  assert.equal(entry.counts.redesignCount, 0);
+  assert.equal(entry.recurringProblem, false);
 });
 
 test("RA4: window-view returns a window's own tasks and file areas", () => {

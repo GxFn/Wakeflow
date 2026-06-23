@@ -266,7 +266,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_view",
-    description: "Read-only (mostly) projections for a demand state root; scope selects which. task-ledger: unified per-task rollup for EVERY target task (accepted history preserved) — execution status, acceptance decision, latest result, test-card status, and handling counts (dispatchCount/reworkCount persisted; retestCount/supplementCount derived). window: per-window orientation card — the tasks that belong to a window (with handling counts), its task packages, its rollup, and the file areas where its state-root/transport files live. focus: generate a focused, regenerable sub-document for one window (or best-effort one phase) under focus/ — dry-run by default, apply:true writes under the owning-host gate (focus docs are never state authority). trace: trace the evidence spine for a state root, dispatch group, delivery, target, or target result. Evidence, not acceptance, and never a host send.",
+    description: "Read-only (mostly) projections for a demand state root; scope selects which. task-ledger: unified per-task rollup for EVERY target task (accepted history preserved) — execution status, acceptance decision, latest result, test-card status, and handling counts (dispatchCount/reworkCount/redesignCount persisted; retestCount derived) plus a recurringProblem flag (reworkCount >= 2). window: per-window orientation card — the tasks that belong to a window (with handling counts), its task packages, its rollup, and the file areas where its state-root/transport files live. focus: generate a focused, regenerable sub-document for one window (or best-effort one phase) under focus/ — dry-run by default, apply:true writes under the owning-host gate (focus docs are never state authority). trace: trace the evidence spine for a state root, dispatch group, delivery, target, or target result. Evidence, not acceptance, and never a host send.",
     annotations: localWriteTool("Wakeflow View Projection"),
     inputSchema: {
       type: "object",
@@ -309,7 +309,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_decide_review",
-    description: "Record an explicit controller decision for a review candidate created by wakeflow_reduce_results.",
+    description: "Record an explicit controller decision for a review candidate created by wakeflow_reduce_results. decision=redesign parks the task (needs-rework) and routes it back to Design for an outcome redesign (redesignCount++), instead of a product rework — use it for a non-bug mismatch or a small requirement-level fix.",
     annotations: localWriteTool("Record Wakeflow Review Decision"),
     inputSchema: {
       type: "object",
@@ -318,7 +318,7 @@ const toolDefinitions = [
         root: { type: "string" },
         stateRoot: { type: "string" },
         candidateId: { type: "string" },
-        decision: { type: "string", enum: ["accept", "rework", "blocked"] },
+        decision: { type: "string", enum: ["accept", "rework", "blocked", "redesign"] },
         reason: { type: "string" },
         evidenceRefs: { type: "array", items: { type: "string" } },
         acceptBlocked: {

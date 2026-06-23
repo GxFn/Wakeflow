@@ -718,7 +718,7 @@ test("reduce-results creates controller review candidate without accepting work"
   assert.equal(state.targetTasks[0].status, "completed");
   assert.equal(state.allowedActions[0], "decide-review");
   assert.equal(candidate.fromRevision, 3);
-  assert.deepEqual(candidate.allowedDecisions, ["accept", "rework", "blocked"]);
+  assert.deepEqual(candidate.allowedDecisions, ["accept", "rework", "blocked", "redesign"]);
   assert.equal(candidate.wakeflowTrace.artifactKind, "transition-candidate");
   assert.equal(candidate.wakeflowTrace.candidateId, payload.candidateId);
   assert.equal(candidate.wakeflowTrace.stateRoot, initPayload.stateRoot);
@@ -1493,6 +1493,31 @@ test("a blocked review decision is recoverable: new evidence reopens review and 
   assert.equal((state.blockers ?? []).length, 0, "accept clears review-blockers");
   const added = JSON.parse(run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-2", "--summary", "Next", "--target-window", "WinA", "--target-task-id", "TASK-2", "--write", "--json"]).stdout);
   assert.equal(added.ok, true, "demand is drivable again after the unblock cycle");
+});
+
+test("a redesign decision parks the task needs-rework and counts a Design rethink, not a product rework", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run(["init", "--root", root, "--demand-key", "REDESIGN-FIXTURE", "--title", "Redesign Fixture", "--write", "--json"]).stdout);
+  run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Pkg", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
+  run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "reports/done.json", "--write", "--json"]);
+  writeStateRootEvidence(root, init.stateRoot, "reports/done.json");
+  const reduced = JSON.parse(run(["reduce-results", "--root", root, "--state-root", init.stateRoot, "--write", "--json"]).stdout);
+
+  const decided = JSON.parse(run(["decide-review", "--root", root, "--state-root", init.stateRoot, "--candidate-id", reduced.candidateId, "--decision", "redesign", "--reason", "valid implementation but the requirement was wrong — route to Design", "--write", "--json"]).stdout);
+  assert.equal(decided.ok, true, "redesign is an accepted decision value");
+
+  const state = readJson(path.join(root, init.stateRoot, "wakeflow-state.json"));
+  assert.equal(state.state, "needs-rework", "redesign parks the demand like rework (existing state, no new top-level state)");
+  const task = state.targetTasks.find((item) => item.targetTaskId === "TASK-1");
+  assert.equal(task.status, "needs-rework");
+  assert.equal(task.reviewDecision, "redesign", "the decision marker distinguishes redesign from rework");
+  assert.equal(task.counts.redesignCount, 1, "redesignCount increments");
+  assert.equal(task.counts.reworkCount ?? 0, 0, "a redesign is NOT a product rework — reworkCount untouched");
+  assert.equal((state.blockers ?? []).length, 0, "redesign is not a hard block");
+
+  // needs-rework allows the controller's next package: a Design outcome-redesign, not a product point-fix.
+  const added = JSON.parse(run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-2", "--summary", "Design outcome redesign", "--target-window", "Design", "--target-task-id", "TASK-2", "--write", "--json"]).stdout);
+  assert.equal(added.ok, true, "after redesign, add a Design redesign task package");
 });
 
 test("import-target-result never claims an unclaimed demand and rejects --adopt-host", () => {

@@ -11,7 +11,9 @@ governance reference, not an additional authority layer. If this file and
 > entry ritual) moved OUT of the reusable template into each installed workspace's own preserved
 > local rules (its `## Personal Operating Constraints`). The reusable `CLAUDE.md` now keeps only
 > `## Controller Posture` + `## Role Map` + the process sections. The "Hard Gates" list and the
-> line-range table below describe the prior 2026-06-08 structure and are kept as the migration record.
+> line-range table below describe the prior 2026-06-08 structure and are kept as the migration
+> record; any `CLAUDE.md#…` anchors in them point to those relocated sections, not to today's
+> reusable `CLAUDE.md`.
 
 ## Hard Gates That Must Stay In CLAUDE.md
 

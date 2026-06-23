@@ -9,7 +9,9 @@ authority layer. If this file and `AGENTS.md` differ, `AGENTS.md` wins.
 > entry ritual) moved OUT of the reusable template into each installed workspace's own preserved
 > local rules (its `## Personal Operating Constraints`). The reusable `AGENTS.md` now keeps only
 > `## Controller Posture` + `## Role Map` + the process sections. The "Hard Gates" list and the
-> line-range table below describe the prior 2026-06-08 structure and are kept as the migration record.
+> line-range table below describe the prior 2026-06-08 structure and are kept as the migration
+> record; any `AGENTS.md#…` anchors in them point to those relocated sections, not to today's
+> reusable `AGENTS.md`.
 
 ## Hard Gates That Must Stay In AGENTS.md
 

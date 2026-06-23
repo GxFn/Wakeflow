@@ -2,6 +2,13 @@
 
 Date: 2026-06-08
 
+> **FROZEN historical spec.** This is the original 2026-06-08 implementation source map,
+> kept as the capability and acceptance baseline for the Design/Test/Controller skills. It
+> predates the later convergences (unified intake, the 23-tool MCP surface, the `redesign`
+> review decision, deliver-only Design, the Test-dispatch-rounds `retestCount`). Read it for
+> the preserved external-method basis and the original acceptance intent — NOT as the current
+> tool or intake vocabulary. For those, follow the live `SKILL.md` files and the other references.
+
 ## Purpose
 
 This document is the implementation source map for Wakeflow Design, Test, and

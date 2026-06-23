@@ -210,9 +210,13 @@ Stop instead of dispatching when:
 - The result is only an empty interface, static mock, unused adapter, type-only
   contract, unreachable route, or documentation motion without a real consumer
   and validation path.
-- The evidence shows a non-bug outcome mismatch that needs requirement or
-  option redesign; pause implementation redispatch and route the next package
-  to Design instead of bouncing point fixes between product windows.
+- The evidence shows a non-bug outcome mismatch, or a small requirement-level fix that is
+  Design's job and not a code defect: `decide-review --decision redesign` parks the demand
+  (needs-rework, redesignCount++) instead of bouncing point fixes between product windows.
+  This reuses the normal rhythm — no new transport: surface the redesign to Design; Design
+  re-examines and **delivers** the corrected requirement with `wakeflow_deliver` (its normal
+  stateless path); then **resume the same demand with `add-task-package`** (the corrected task
+  package) — do NOT `create_demand` a new one. The parked demand's history and counts carry over.
 - A completed result would leave TODO/backlog, archive state, or current status
   inconsistent.
 - The controller is about to poll/wait for targets after a send was recorded.

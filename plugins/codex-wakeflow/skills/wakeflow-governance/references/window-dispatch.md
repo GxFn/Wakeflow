@@ -7,8 +7,12 @@ Design, and Test. It must identify affected repositories from code, docs,
 builds, runtime packages, plugin assets, dashboard outputs, and release paths,
 not only from the repository named by the user.
 
-Design is included only for requirement discussion, signal judgment, non-bug
-outcome redesign, or handoff drafting. Test is included only when real-scenario
+Design participates in requirement discussion, signal judgment, non-bug outcome
+redesign, and handoff drafting — but through Design's own stateless `wakeflow_deliver`
+path, not as a controller dispatch target. The controller does not build a dispatch
+packet or delivery envelope for Design; on a `redesign` review decision it parks the
+demand and surfaces it to Design, then resumes the same demand with `add-task-package`
+once Design delivers the corrected requirement. Test is included only when real-scenario
 evidence is required.
 
 ## Identity Gate

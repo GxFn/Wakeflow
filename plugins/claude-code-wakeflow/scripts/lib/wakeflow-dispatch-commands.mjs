@@ -379,7 +379,10 @@ export function createDispatchCommands(ctx) {
     const targetWindow = targetTask.targetWindow;
     if (!targetWindow) fail(`target task ${targetTaskId} is missing targetWindow.`);
     validatePrepareDispatchEligibility({ state, taskPackage, targetTask });
-    const controllerWindow = getValue("--controller-window", "");
+    // Default the controller-return target to the configured controller window so the dispatch
+    // group always carries a real controllerWindow. Leaving it empty made the controller-return
+    // fall back to a guessed window name, which can mis-route the wake-up (a closed-loop break).
+    const controllerWindow = getValue("--controller-window", readWorkspaceConfig().controllerWindow || "");
     const dispatchGroup = getValue("--group", taskPackageId);
     const automationEnabled = hasFlag("--automation-enabled");
     const requireThread = hasFlag("--require-thread");
@@ -552,7 +555,14 @@ export function createDispatchCommands(ctx) {
     if (explicitControllerWindow && storedControllerWindow && explicitControllerWindow !== storedControllerWindow) {
       fail(`Dispatch group ${dispatchGroup} returns to controller ${storedControllerWindow}; cannot override with ${explicitControllerWindow}.`);
     }
-    const controllerWindow = explicitControllerWindow || storedControllerWindow || config.controllerWindow || config.workspaceName || "Wakeflow";
+    // Resolve the controller-return target from real sources only: explicit flag, the group's
+    // stored controllerWindow, or the configured controllerWindow. Do NOT guess from
+    // workspaceName or a literal "Wakeflow" — guessing silently mis-routes the wake-up to a
+    // window that does not exist, stalling the loop. Fail closed when none resolves.
+    const controllerWindow = explicitControllerWindow || storedControllerWindow || config.controllerWindow;
+    if (!controllerWindow) {
+      fail(`Cannot resolve a controller window for the controller-return of dispatch group ${dispatchGroup}: the group stored none, none was passed via --controller-window, and workspace.config.json sets no controllerWindow. Re-dispatch with --controller-window or set controllerWindow in workspace.config.json.`);
+    }
     const registration = loadThreadRegistration(controllerWindow);
     if (hasFlag("--require-thread") && !registration) fail(`No registered controller thread for window: ${controllerWindow}`);
     validateControllerReturnAllowed({ review, triggerTarget, triggerTaskId });

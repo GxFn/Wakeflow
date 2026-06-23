@@ -737,6 +737,20 @@ test("rejects obsolete thread registry kinds instead of using fallback metadata"
   assert.match(result.stderr || result.stdout, /Invalid thread registration/);
 });
 
+test("prepare-dispatch defaults the dispatch group's controllerWindow to the configured controller", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const payload = parseOk(run(root, [
+    "prepare-dispatch-from-state", "--state-root", stateRootRef,
+    "--target-task-id", "CSMR-TASK-1", "--group", "GROUP-DEFAULT-CW",
+    "--human-context-ref", `${stateRootRef}/developer-progress.md`, "--require-thread", "--write",
+  ]));
+  // No --controller-window passed: the group must still carry config.controllerWindow,
+  // never an empty value that the controller-return would then resolve by guessing.
+  assert.equal(payload.dispatchGroup.controllerWindow, "AlembicWorkspace",
+    "dispatch group must carry the configured controllerWindow even without --controller-window");
+});
+
 test("prepare-dispatch-from-state writes packet, group, and delivery without legacy controlPlan authority", () => {
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");

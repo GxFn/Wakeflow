@@ -85,4 +85,6 @@ result is not group completion unless the group expected only that target.
 ## Thread Id Boundary
 
 Real thread ids (Claude Code session ids) live only in `.wakeflow-local/`. They
-must not appear in tracked documents, prompts, GitHub, or backfill text.
+must not appear in tracked documents, prompts, GitHub, or backfill text. The full
+storage path and never-write-to list live in
+[references/direct-thread-window-config.md](direct-thread-window-config.md) (Storage).

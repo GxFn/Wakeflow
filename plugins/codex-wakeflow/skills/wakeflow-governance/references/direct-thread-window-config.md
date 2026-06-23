@@ -58,17 +58,17 @@ window semantics.
 
 ## Send Policy
 
-The delivery envelope stores `targetWindow`, `stateRoot`, `dispatchGroup`, and
-the compact prompt. The host thread tool performs the real send. Wakeflow then
-records the send/readback result with `record-delivery-run`.
+The host thread tool performs the real send; the send/readback boundary and the
+"stop the controller turn once sent and readback-ok" rule live in
+[references/wakeflow-delivery.md](wakeflow-delivery.md) (Send Boundary).
 
-If the target is busy or unavailable and no host-level queued send is supported,
-fail closed and return to controller judgment. Do not create a hidden schedule,
-heartbeat, or fallback delivery route.
+Transport-specific: if the target is busy or unavailable and no host-level queued
+send is supported, fail closed and return to controller judgment. Do not create a
+hidden schedule, heartbeat, or fallback delivery route.
 
 ## Controller Return
 
 Controller return uses the dispatch group's stored `controllerWindow`, not a
-global default controller. This allows multiple controllers to run in parallel.
-The visible return prompt should include only state root, dispatch group,
-trigger, non-empty exceptional targets, and the controller skill.
+global default controller, so multiple controllers can run in parallel. The
+visible return prompt follows the controller-return prompt shape in
+[references/wakeflow-delivery.md](wakeflow-delivery.md) (Prompt Rules).

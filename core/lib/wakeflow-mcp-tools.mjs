@@ -110,7 +110,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_adopt_demand_host",
-    description: "Explicitly transfer (or claim) demand controller-host ownership to THIS host, with an audit event and a revision bump — no other state changes. The sanctioned cross-host handoff; existing transition candidates become stale and must be re-reduced on the new host.",
+    description: "Explicitly transfer (or claim) demand controller-host ownership to THIS host, with an audit event and a revision bump — no other state changes. The sanctioned cross-host handoff; existing transition candidates become stale and must be re-reduced on the new host. Dry-run unless apply is true.",
     annotations: localWriteTool("Adopt Wakeflow Demand Ownership"),
     inputSchema: {
       type: "object",
@@ -125,7 +125,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_render_progress",
-    description: "Re-render the developer progress projection for a demand state root (the projection goes stale after every state mutation). Owner-host only; does not change machine state semantics.",
+    description: "Re-render the developer progress projection for a demand state root (the projection goes stale after every state mutation). Owner-host only; does not change machine state semantics. Dry-run unless apply is true.",
     annotations: localWriteTool("Render Wakeflow Progress"),
     inputSchema: {
       type: "object",
@@ -139,7 +139,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_release_window_lock",
-    description: "Release the shared cross-host in-flight delivery lock for one window. Recovery action for stalled or ownerless locks; releasing another host's fresh lock must be a deliberate controller decision.",
+    description: "Release the shared cross-host in-flight delivery lock for one window. Recovery action for stalled or ownerless locks; releasing another host's fresh lock must be a deliberate controller decision. Dry-run unless apply is true.",
     annotations: localWriteTool("Release Wakeflow Window Lock"),
     inputSchema: {
       type: "object",
@@ -294,7 +294,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_reduce_results",
-    description: "Reduce imported target results into a controller review candidate. This creates the transition candidate needed by wakeflow_decide_review, but it is not acceptance, completion, or dispatch.",
+    description: "Reduce imported target results into a controller review candidate. This creates the transition candidate needed by wakeflow_decide_review, but it is not acceptance, completion, or dispatch. Dry-run unless apply is true.",
     annotations: localWriteTool("Reduce Wakeflow Target Results"),
     inputSchema: {
       type: "object",
@@ -309,7 +309,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_decide_review",
-    description: "Record an explicit controller decision for a review candidate created by wakeflow_reduce_results. decision=redesign parks the task (needs-rework) and routes it back to Design for an outcome redesign (redesignCount++), instead of a product rework — use it for a non-bug mismatch or a small requirement-level fix.",
+    description: "Record an explicit controller decision for a review candidate created by wakeflow_reduce_results. decision=redesign parks the task (needs-rework) and routes it back to Design for an outcome redesign (redesignCount++), instead of a product rework — use it for a non-bug mismatch or a small requirement-level fix. Dry-run unless apply is true.",
     annotations: localWriteTool("Record Wakeflow Review Decision"),
     inputSchema: {
       type: "object",
@@ -332,7 +332,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_complete_demand",
-    description: "Complete a demand after all task packages and target tasks are accepted.",
+    description: "Complete a demand after all task packages and target tasks are accepted. Dry-run unless apply is true.",
     annotations: localWriteTool("Complete Wakeflow Demand"),
     inputSchema: {
       type: "object",
@@ -380,7 +380,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_intake_test_card",
-    description: "Create a Test boundary card under a controller state root.",
+    description: "Create a Test boundary card under a controller state root. Dry-run unless apply is true.",
     annotations: localWriteTool("Create Wakeflow Test Card"),
     inputSchema: {
       type: "object",

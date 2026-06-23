@@ -372,21 +372,41 @@ function evidenceRefLooksLikePath(ref) {
   return text.includes("/") || /\.(json|md|log|txt|png|jpg|jpeg|webp|html|csv)$/i.test(text);
 }
 
-function evidenceRefResolutionCandidates(stateRoot, ref) {
+// Map each work window to its repository root from config, so a target's evidence refs
+// resolve against the repo where the work + commit happened. Loaded once. This mirrors the
+// review-pack resolver: reduce-results HARD-FAILS on "missing" evidence, so resolving a
+// target's repo-relative refs only against the state/workspace root false-fails the reducer
+// and stalls the loop (the controller cannot form a review candidate).
+let evidenceRepoRootByWindow = null;
+function evidenceRepoRootForWindow(windowName) {
+  if (!windowName) return null;
+  if (!evidenceRepoRootByWindow) {
+    evidenceRepoRootByWindow = new Map();
+    const cfg = loadWorkspaceConfig({ workspaceRoot, args: options });
+    for (const repo of cfg.repositories ?? []) {
+      if (repo?.windowName && repo?.path) {
+        evidenceRepoRootByWindow.set(repo.windowName, path.resolve(workspaceRoot, repo.path));
+      }
+    }
+  }
+  return evidenceRepoRootByWindow.get(windowName) ?? null;
+}
+
+function evidenceRefResolutionCandidates(stateRoot, ref, targetWindow) {
   const text = String(ref ?? "");
   if (!evidenceRefLooksLikePath(text)) return [];
   if (path.isAbsolute(text)) return [path.resolve(text)];
-  return [
-    path.resolve(stateRoot, text),
-    path.resolve(workspaceRoot, text),
-  ];
+  // Most-specific first: the state root, the producing window's repo, then the workspace root.
+  return [stateRoot, evidenceRepoRootForWindow(targetWindow), workspaceRoot]
+    .filter(Boolean)
+    .map((root) => path.resolve(root, text));
 }
 
 function missingEvidenceRefsForTargetResult(stateRoot, task, result) {
   const refs = Array.isArray(result?.evidenceRefs) ? result.evidenceRefs : [];
   return refs
     .map((ref) => {
-      const candidates = evidenceRefResolutionCandidates(stateRoot, ref);
+      const candidates = evidenceRefResolutionCandidates(stateRoot, ref, task.targetWindow);
       return {
         targetWindow: task.targetWindow,
         targetTaskId: task.targetTaskId,

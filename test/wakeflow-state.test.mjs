@@ -821,6 +821,36 @@ test("reduce-results refuses to create a review candidate with missing evidence 
   assert.match(repaired.candidateId, /^tc-/);
 });
 
+// Regression: a target reports evidence relative to ITS OWN repo. reduce-results HARD-FAILS on
+// "missing" evidence, so resolving such refs only against the state/workspace root false-fails the
+// reducer and stalls the loop one step past the controller-return. The producing window's repo
+// must be a resolution candidate (parallel to the review-pack evidence fix).
+test("reduce-results resolves evidence under the producing window's repo (no false evidence-repair)", () => {
+  const root = makeRoot();
+  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+    workspaceName: "Wakeflow",
+    controllerWindow: "AlembicWorkspace",
+    repositories: [
+      { windowName: "AlembicWorkspace", path: ".", role: "controller" },
+      { windowName: "WinA", path: "WinARepo", role: "work" },
+    ],
+    dispatchWindows: ["AlembicWorkspace", "WinA"],
+  }, null, 2));
+  // Evidence exists ONLY under WinA's repo — not the workspace root, not the state root.
+  mkdirSync(path.join(root, "WinARepo/reports"), { recursive: true });
+  writeFileSync(path.join(root, "WinARepo/reports/evidence.json"), "{}\n");
+  const init = JSON.parse(run(["init", "--root", root, "--demand-key", "REPO-EVIDENCE-FIXTURE", "--title", "Repo Evidence Fixture", "--write", "--json"]).stdout);
+  run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "pkg", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
+  run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--result-id", "RESULT-1", "--evidence-ref", "reports/evidence.json", "--write", "--json"]);
+  const result = run(["reduce-results", "--root", root, "--state-root", init.stateRoot, "--write", "--json"]);
+  // Evidence resolves against WinA's repo → no false "missing" → the reducer proceeds.
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.nextState, "review-ready");
+  assert.match(payload.candidateId, /^tc-/);
+});
+
 test("decide-review records explicit controller judgment before task acceptance", () => {
   const root = makeRoot();
   const init = run([

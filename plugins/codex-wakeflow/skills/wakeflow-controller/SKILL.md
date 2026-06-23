@@ -122,15 +122,20 @@ machine state.
    - Is any remaining risk a blocker, a follow-up, or a user/controller
      decision?
    - Which TODOs close, remain, or need to be added?
-7. Decide explicitly:
-   - accept target result,
-   - request rework,
-   - route a non-bug outcome mismatch to Design redesign instead of product
-     rework,
-   - mark blocked,
-   - wait for missing targets,
-   - complete the demand,
-   - or create the next eligible package.
+7. Decide explicitly, two-stage (spec compliance first, then quality):
+   - **accept** the target result;
+   - **rework** — a product-code defect: re-dispatch the same window
+     (`decide-review --decision rework`, reworkCount++);
+   - **redesign** — a non-bug mismatch, or a small requirement-level fix that is Design's
+     job and not a code defect: `decide-review --decision redesign` parks the task and
+     routes it back to Design (redesignCount++), instead of bouncing point-fixes between
+     product windows;
+   - **blocked** — a hard blocker that needs a human;
+   - wait for missing targets, complete the demand, or create the next eligible package.
+   - **Brake:** when the task-ledger shows `recurringProblem` (reworkCount ≥ 2) on a task,
+     do NOT plain-rework it again — give a *new* root-cause hypothesis or choose `redesign`.
+   - **Brake:** if a demand's `redesignCount` reaches 2 and the effect still misses, the
+     requirement is unclear at the *user* level — escalate to the user, not another redesign round.
 8. Record the decision in controller state before dispatching follow-up work.
 
 ## Acceptance Decision Format

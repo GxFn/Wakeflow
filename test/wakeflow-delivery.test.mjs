@@ -581,6 +581,39 @@ test("review pack helper preserves evidence repair and pending-dispatch gates", 
   }]);
 });
 
+// Decoupling: a recorded result must wake the controller even when evidence refs don't resolve.
+// controllerReturnNextStep (transport) is independent of evidence; the Iron Law (controller may
+// not ACCEPT without resolvable evidence) still holds via gates.controllerReviewReady / nextAction.
+test("controller-return transport is decoupled from evidence quality (no break on missing evidence)", () => {
+  const review = {
+    decision: "ready",
+    group: "group-fixture",
+    returnPolicy: { mode: "group-ready" },
+    groupStatus: "ready",
+    groupSnapshot: { missing: [], pendingDispatch: [], ready: [{ packetId: "packet-a" }], blocked: [] },
+    blocked: [],
+  };
+  const pack = buildControllerReviewPack({
+    review,
+    controllerReturnDelivery: { status: "none" },
+    callbackPlan: { status: "ready-to-build", counts: { readyToBuildCount: 1, pendingHostSendCount: 0, sentCount: 0 } },
+    targetResults: [{
+      targetWindow: "WindowA", taskId: "task-a", resultStatus: "completed", commits: [],
+      evidenceRefs: ["only-in-target-repo.json"], verificationSummary: ["unit passed"],
+      hasControllerReviewEvidence: true,
+      missingEvidenceRefs: ["only-in-target-repo.json"],
+    }],
+    generatedAt: "2026-06-24T00:00:00.000Z",
+    wakeflowTrace: { dispatchGroup: "group-fixture" },
+  });
+  // Transport: the wake-up fires regardless of the unresolved evidence ref.
+  assert.equal(pack.controllerReturnNextStep, "send-controller-return");
+  assert.equal(pack.gates.controllerReturnReady, true);
+  // Verdict (Iron Law intact): the controller still may not accept without resolvable evidence.
+  assert.equal(pack.gates.controllerReviewReady, false);
+  assert.equal(pack.nextAction, "fix-missing-evidence-refs-before-controller-verdict");
+});
+
 // Regression: a target reports evidence relative to ITS OWN repo (where the work + commit
 // happened). Resolving evidence refs only against the workspace root false-flagged that
 // evidence as "missing", flipping nextAction to fix-missing-evidence-refs and stalling the

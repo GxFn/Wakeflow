@@ -39,6 +39,21 @@ export function buildControllerReviewPack({
     rawEvidencePullRequired: reviewReady,
     totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent,
   };
+  // Transport-facing next step for whoever SENDS the controller return (the target's sanctioned
+  // self-check, or the controller for its own return). INDEPENDENT of evidence quality on purpose:
+  // a recorded result must wake the controller even when its evidence refs do not resolve —
+  // evidence sufficiency is the controller's POST-wake verdict (gates.controllerReviewReady /
+  // nextAction), never a reason to withhold the wake-up. Without this split, a failed evidence-ref
+  // existence check stalls the controller return and breaks the closed loop (the wake-up never fires).
+  const controllerReturnNextStep = gates.controllerReturnSent
+    ? "controller-return-already-sent"
+    : gates.controllerReturnReady
+      ? "send-controller-return"
+      : gates.controllerReturnPendingHostSend
+        ? "complete-controller-return-host-send"
+        : gates.waitForMissingResults
+          ? "wait-for-group-results"
+          : "no-controller-return-needed";
   return {
     kind: "ControllerReviewPack",
     version,
@@ -63,6 +78,7 @@ export function buildControllerReviewPack({
           : (review.groupSnapshot.pendingDispatch ?? []).length > 0
             ? "pull-raw-evidence-and-continue-pending-dispatch"
             : "pull-raw-evidence-and-make-total-control-verdict",
+    controllerReturnNextStep,
     wakeflowTrace,
     generatedAt,
   };

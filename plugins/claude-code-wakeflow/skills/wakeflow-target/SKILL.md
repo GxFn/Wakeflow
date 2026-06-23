@@ -73,10 +73,14 @@ state root, or human context, stop and report instead of guessing.
    - Target-to-target next-hop delivery is forbidden by default.
    - If `wakeflow_record_target_result` reports `controllerReturn.required=true`
      or the local delivery envelope has `returnRoute=controller`, use
-     `wakeflow_review_pack` scoped to YOUR OWN dispatch group to confirm the
-     group is ready or blocked (this read-only self-check is sanctioned for
-     targets; reviewing other groups or deciding accept/rework stays with the
-     controller), then use
+     `wakeflow_review_pack` scoped to YOUR OWN dispatch group as a sanctioned
+     read-only self-check (reviewing other groups or deciding accept/rework stays
+     with the controller). Send the controller-return when the pack's
+     `controllerReturnNextStep` is `send-controller-return` — that is the transport
+     signal and is INDEPENDENT of evidence. Do NOT withhold the controller-return
+     because `missingEvidenceRefs` is non-empty or `nextAction` says
+     `fix-missing-evidence-refs`: evidence sufficiency is the controller's POST-wake
+     verdict, and the controller cannot act on it until you wake it. Then use
      `wakeflow_prepare_delivery` with `direction=controller-return` to build
      exactly one controller-return envelope for the dispatch group's stored
      `controllerWindow`.

@@ -3,10 +3,11 @@ import fs from "node:fs/promises";
 import test from "node:test";
 
 // Guards the reference-only demand `state` enum (W0-1 / RA7 / upgrade-plan P2-6/F19):
-// the enum must list exactly the values the reducers write to `state.state`
-// (plus `archived`, written by the planned archive-demand), with the transport
-// `dispatched` present and the pure-vestige values dropped. Schema is reference-only
-// (no runtime Ajv); this test is the contract guard in its place.
+// the enum must list exactly the values the reducers write to `state.state` (plus
+// `archived`, written by the planned archive-demand), the transport `dispatched`, and
+// the two reserved states `accepting`/`paused` (documented below) — with the pure-vestige
+// values dropped. Schema is reference-only (no runtime Ajv); this test is the contract
+// guard in its place.
 
 const schemaRel = "schemas/wakeflow-state-machine/wakeflow-state.schema.json";
 const sources = {
@@ -23,14 +24,24 @@ async function readStateEnum(url) {
 // Values the reducers actually assign to state.state, plus `archived` (written by
 // the planned archive-demand). `dispatched` is asserted live at
 // wakeflow-delivery.test.mjs and written at result-recording-commands.mjs.
+// Two values are RESERVED — not state.state writes, but intentionally kept in the enum
+// (listed here so they are never dropped as accidental extras):
+//   `accepting` — written as the review candidate's candidateState (the proposed state
+//     when results are ready to accept) at wakeflow-state.mjs; intake/dispatch read-guards
+//     also recognize it.
+//   `paused` — a reserved "closed" demand state (wakeflow-status-machine.mjs) set manually,
+//     not by an automated reducer; intake/dispatch/add-task guards refuse work on a paused
+//     demand.
 const WRITTEN_OR_RESERVED = [
   "intake",
   "planned",
   "dispatched",
   "waiting-results",
   "review-ready",
+  "accepting",
   "needs-rework",
   "blocked",
+  "paused",
   "completed",
   "archived",
 ];

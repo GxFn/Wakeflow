@@ -32,21 +32,28 @@ tmux window. The activity monitor flips the tab to done when the result lands (l
 
 ## Source Practices For Acceptance
 
-Controller acceptance adapts these mature review and evidence practices:
+**Iron Law: NO ACCEPTANCE WITHOUT FRESH RAW-EVIDENCE THAT PROVES THE INTENDED BEHAVIOR.** A result
+envelope, a script's `OK`, or a window's success report is a review input, never the proof.
+Violating the letter of this rule is violating its spirit.
 
-- `code-reviewer`: understand intent first, then review correctness, safety,
-  maintainability, performance, and tests; large changes start with entrypoints
-  and high-risk files; findings must be actionable with why and scope.
-- `senior-qa`: optimize confidence per unit effort, choose test layers by risk,
-  and treat flakiness as evidence degradation rather than success.
-- SRE evidence practice: separate symptoms, causes, black-box evidence, and
-  white-box evidence; logs, probes, and scripts are inputs, not conclusions.
+Controller acceptance adapts mature review practice — `code-reviewer` (understand intent first, then
+correctness, safety, maintainability, performance, tests; start large changes at entrypoints and
+high-risk files), `senior-qa` (confidence per unit effort; flakiness is evidence degradation, not
+success), and SRE evidence practice (separate symptom, cause, black-box, and white-box evidence;
+logs, probes, and scripts are inputs, not conclusions) — under Wakeflow's stricter authority
+boundary: target window sessions, Test, Design, scripts, Claude Code subagents (the Task/Agent
+tool), and MCP tools provide review inputs only; only the controller accepts, requests rework,
+blocks, waits, completes a demand, archives, or creates the next package.
 
-The controller must preserve these practices while applying Wakeflow's stricter
-authority boundary: target window sessions, Test, Design, scripts, Claude Code
-subagents (the Task/Agent tool), and MCP tools provide review inputs only.
-Only the controller can accept, request rework, block, wait, complete a demand,
-archive, or create the next package.
+| Claim | Requires | Not sufficient |
+|---|---|---|
+| Target task done | the VCS diff / raw evidence reviewed this turn | the envelope says "done" |
+| Behavior delivered | evidence shows the user-visible behavior | a connection / empty API / static mock exists |
+| Demand complete | line-by-line vs the requirement design + non-goals | all tasks marked done |
+
+**Red Flag — a third point-fix on the same task.** Two failed reworks on one task mean the next move
+is a *new* root-cause hypothesis or a non-bug-mismatch route to Design redesign — not another bounce
+between product windows.
 
 ## Controller Return Prompt Shape
 

@@ -92,7 +92,7 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
   maintaining Wakeflow source/runtime scripts, auditing backend script
   contracts, or changing script tests / documentation. Installed workspace
   validation and next-work scans should use Wakeflow MCP tools directly.
-- Read [references/wakeflow-ledgers.md](references/wakeflow-ledgers.md) when creating, moving, syncing, archiving, or validating Wakeflow workspace documents, status mirrors, indexes, templates, Design handoff ledgers, test exchange entries, workspace skill assets, or `AGENTS.md` map / skill-pointer layering.
+- Read [references/wakeflow-ledgers.md](references/wakeflow-ledgers.md) when creating, moving, syncing, archiving, or validating Wakeflow workspace documents, status mirrors, indexes, templates, the global TODO board, test exchange entries, workspace skill assets, or `AGENTS.md` map / skill-pointer layering.
 - Read [references/wakeflow-architecture.md](references/wakeflow-architecture.md) when restructuring `AGENTS.md`, skills, references, templates, scripts, current plans, or automation surfaces as one consistent Wakeflow system.
 - Read [references/agents-rule-map.md](references/agents-rule-map.md) when auditing, merging, downshifting, or rewriting root `AGENTS.md` rules.
 - Read [references/wakeflow-delivery.md](references/wakeflow-delivery.md) when total control starts, stops, designs, debugs, or validates the new Wakeflow Delivery Loop packet / envelope / result workflow.
@@ -115,5 +115,5 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
 
 1. Classify whether the task is TODO intake, TODO rolling, wave dispatch, task-package planning, test / validation judgment, script pipeline work, or prompt generation.
 2. Load only the matching reference file.
-3. Update the controller state root, developer progress append-only sections, `global-todo-board`, state-root `test-cards/*.json`, `test-exchange` projection, or Design inbox only when that is the correct ledger.
+3. Update the controller state root, developer progress append-only sections, `global-todo-board`, state-root `test-cards/*.json`, or `test-exchange` projection only when that is the correct ledger.
 4. Run the workspace validation commands required by `AGENTS.md` and the active state root / developer progress document.

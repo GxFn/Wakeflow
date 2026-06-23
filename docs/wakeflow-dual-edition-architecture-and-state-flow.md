@@ -375,13 +375,12 @@ to `status=sent` and the demand to `state=dispatched`
 writes **only** local runtime (packet/group/envelope/lock) and never touches
 `wakeflow-state.json`.
 
-> **Vocabulary note:** Two of the seven subsystem readers describe the demand
-> states slightly differently. The reducer source writes seven demand states
-> (`intake`, `planned`, `waiting-results`, `review-ready`, `needs-rework`,
-> `blocked`, `completed`). One reader observed `markStateRootDeliverySent` also
-> writes a transient `dispatched` state. This document treats `dispatched` as a
-> real but transport-driven write that `reduce-results` then resolves into
-> `waiting-results`/`review-ready`. See §5.1 for the reconciliation.
+> **Vocabulary note:** The reducer source writes nine demand states (`intake`,
+> `planned`, `dispatched`, `waiting-results`, `review-ready`, `needs-rework`,
+> `blocked`, `completed`, `archived`), where `dispatched` is the transport-driven
+> write in `markStateRootDeliverySent` that `reduce-results` then resolves into
+> `waiting-results`/`review-ready`. The other two enum values (`accepting`,
+> `paused`) are reserved, not reducer writes. See §5.1 for the reconciliation.
 
 ### 4.1 Lifecycle sequence diagram
 
@@ -418,7 +417,7 @@ sequenceDiagram
     U->>ST: reduce_results (reduce-results)
     alt all open results present
         ST-->>U: transition-candidate, state=review-ready, allow decide-review
-        U->>ST: decide_review (accept|rework|blocked)
+        U->>ST: decide_review (accept|rework|blocked|redesign)
         alt accept
             ST-->>U: tasks=accepted, state=planned, allow complete-demand
         else rework
@@ -511,16 +510,18 @@ distinct status namespaces is a real complexity to flag.
 
 ### 5.1 Demand state (`wakeflow-state.json .state`)
 
-The schema enum (`wakeflow-state.schema.json:30-48`) lists **14** values
-(`idle`, `intake`, `designing`, `needs-confirmation`, `planned`, `dispatching`,
-`waiting-results`, `review-ready`, `accepting`, `needs-rework`, `blocked`,
-`paused`, `completed`, `archived`) — a **superset** of what reducers write. The
-reducers only ever assign: `intake`, `planned`, `waiting-results`, `review-ready`,
-`needs-rework`, `blocked`, `completed` (plus the transport-driven `dispatched`
-write in `markStateRootDeliverySent`). Of the rest, `paused`/`archived`/
-`accepting`/`waiting-results` appear as **read guards**, while `designing`/
-`needs-confirmation`/`dispatching`/`idle` are pure schema vestige. **Code wins**;
-docs claiming these are live demand states are stale.
+The schema enum (`wakeflow-state.schema.json:32-44`) lists **11** values
+(`intake`, `planned`, `dispatched`, `waiting-results`, `review-ready`,
+`accepting`, `needs-rework`, `blocked`, `paused`, `completed`, `archived`). The
+reducers assign nine of them: `intake`, `planned`, `waiting-results`,
+`review-ready`, `needs-rework`, `blocked`, `completed`, `archived`, plus the
+transport-driven `dispatched` write in `markStateRootDeliverySent`. The remaining
+two are **reserved**, not reducer writes: `accepting` is a transition-candidate
+`candidateState` (the proposed state when results are ready to accept) and also
+appears in read guards; `paused` is a manually-set "closed" state recognized by
+the intake/dispatch/add-task guards. The earlier vestige values (`idle`,
+`designing`, `needs-confirmation`, `dispatching`) were removed from the schema.
+**Code wins**; the schema test `wakeflow-state-schema.test.mjs` pins this enum.
 
 ```mermaid
 stateDiagram-v2
@@ -686,7 +687,7 @@ stateDiagram-v2
 
 | Entity | From | To | Trigger | Guard |
 |---|---|---|---|---|
-| Transition candidate | (none) | accepting | reduce-results | all present, none blocked; `allowedDecisions=[accept,rework,blocked]`; `fromRevision=new revision` |
+| Transition candidate | (none) | accepting | reduce-results | all present, none blocked; `allowedDecisions=[accept,rework,blocked,redesign]`; `fromRevision=new revision` |
 | | (none) | blocked | reduce-results | all present, ≥1 blocked |
 | | accepting\|blocked | (consumed/stale) | decide-review | fails if `fromRevision != current revision` |
 | Target result | (none) | completed\|blocked\|needs-review | import-target-result `--status` | task exists & belongs to window; not already-accepted; demand not completed/archived; revision unchanged |
@@ -735,13 +736,14 @@ send-eligibility predicates (`isSendEligibleState` = pending\|running\|delivered
 next-work/archive/docs-verify only — entirely separate from the demand enum and
 the inline window strings.
 
-> **Open questions / verify:** The 14-value demand schema enum is a superset of
-> the 7 reducer-written states; `idle`/`designing`/`needs-confirmation`/
-> `dispatching` are neither read nor written in `wakeflow-state.mjs`, but some
-> other script outside this subsystem might write `paused`/`archived` (not
-> exhaustively confirmed). Demand state never becomes `accepting` (only
-> `candidateState` uses it; `decide accept` jumps review-ready → planned). The
-> inline `window.windowState` set has no schema to validate against.
+> **Resolved:** The 11-value demand schema enum is pinned by
+> `wakeflow-state-schema.test.mjs`. Nine values are reducer-written (`archived` via
+> archive-demand at `wakeflow-state.mjs`, `dispatched` via `markStateRootDeliverySent`
+> in the delivery lib); the removed vestiges `idle`/`designing`/`needs-confirmation`/
+> `dispatching` are gone. The two reserved values: demand state never becomes
+> `accepting` (only `candidateState` uses it; `decide accept` jumps review-ready →
+> planned), and `paused` is a manually-set closed state recognized by guards. The
+> inline `window.windowState` set still has no schema to validate against.
 > `automation-dispatch.schema.json` may be an aspirational contract rather than a
 > validated file shape.
 

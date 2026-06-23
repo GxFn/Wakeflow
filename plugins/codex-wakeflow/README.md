@@ -137,7 +137,7 @@ Wakeflow on Codex is driven through MCP tools (no slash commands). Tell Codex wh
 | Set up a new workspace | `wakeflow_initialize_workspace` |
 | Rebuild a stale window | `wakeflow_replace_windows` |
 | See demands / eligible work / readiness | `wakeflow_status`, `wakeflow_next_work` |
-| Start a demand | `wakeflow_init_demand` -> `wakeflow_add_task` |
+| Start a demand | `wakeflow_create_demand` -> `wakeflow_add_task` |
 | Hand work to a window | `wakeflow_prepare_delivery` -> host send -> `wakeflow_record_delivery` |
 | Record a target's result | `wakeflow_record_target_result` |
 | Review and decide | `wakeflow_review_pack` -> `wakeflow_reduce_results` -> `wakeflow_decide_review` -> `wakeflow_complete_demand` |
@@ -284,7 +284,7 @@ Core rules:
   turn stops. It does not sleep or poll in the same turn.
 - Keep-live support is runtime assistance only. It is not task logic, transport
   authority, or acceptance evidence.
-- Demand creation is host-neutral: `wakeflow_init_demand` writes
+- Demand creation is host-neutral: `wakeflow_create_demand` writes
   `controllerHost: null`, so Codex and Claude Code can both create or import
   demand material without taking ownership.
 - The first real driving command claims the demand for its platform by writing
@@ -314,10 +314,10 @@ Primary tool groups:
 | --- | --- |
 | Setup and workspace discovery | `wakeflow_initialize_workspace` |
 | Responsibility window replacement | `wakeflow_replace_windows` (one via `window`, many via `windows`) |
-| Demand and task state | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
+| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
-| Design and Test intake | `wakeflow_intake_design_handoff`, `wakeflow_intake_test_card` |
+| Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
 | Archive, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs), `wakeflow_prune_runtime`, `wakeflow_verify`, `wakeflow_view` (scope trace) |
 
 Public MCP tools are for outer agent workflows. Target closeout is deliberately

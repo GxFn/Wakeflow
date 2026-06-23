@@ -1310,7 +1310,6 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   assert.equal(existsSync(path.join(fixture.parent, "Design/.gitignore")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/docs/index.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/docs/current/README.md")), true);
-  assert.equal(existsSync(path.join(fixture.parent, "Design/docs/current/workspace-handoff-board.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/docs/design-window-operating-policy.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/docs/workspace-alignment-checklist.md")), true);
   assert.equal(existsSync(path.join(fixture.parent, "Design/templates/original-plan-template.md")), true);
@@ -1339,8 +1338,6 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   assert.match(designReadme, /Wakeflow MCP/);
   assert.doesNotMatch(designReadme, /installed runtime import command/);
   assert.doesNotMatch(designReadme, /Default Design skills/);
-  const designBoard = readFileSync(path.join(fixture.parent, "Design/docs/current/workspace-handoff-board.md"), "utf8");
-  assert.match(designBoard, /controller MCP intake\s+surface/);
   const designSkills = readFileSync(path.join(fixture.parent, "Design/skills/README.md"), "utf8");
   assert.match(designSkills, /Interaction Contract/);
   assert.match(designSkills, /Before selecting a skill, do a skill-fit check/);
@@ -1413,7 +1410,6 @@ test("external Design and Test directories get only alignment templates", () => 
 
   const payload = runJson(fixture, ["sync-templates", "--all", "--write"]);
   assert.equal(payload.ok, true);
-  assert.equal(existsSync(path.join(design, "docs/current/workspace-handoff-board.md")), true);
   assert.equal(existsSync(path.join(design, "docs/current/README.md")), true);
   assert.equal(existsSync(path.join(design, "docs/index.md")), true);
   assert.equal(existsSync(path.join(design, "docs/design-window-operating-policy.md")), true);

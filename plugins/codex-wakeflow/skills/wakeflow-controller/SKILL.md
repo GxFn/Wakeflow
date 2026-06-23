@@ -217,7 +217,7 @@ runtime scripts:
 - `wakeflow_next_work` for after-completion candidate scans.
 - `wakeflow_archive` (target=docs / target=todo) for archive
   dry-runs or applies.
-- `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_complete_demand`,
+- `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_complete_demand`,
   `wakeflow_prepare_delivery`, `wakeflow_record_delivery`,
   `wakeflow_record_target_result`, `wakeflow_review_pack`,
   `wakeflow_reduce_results`, and `wakeflow_decide_review` for state-root,

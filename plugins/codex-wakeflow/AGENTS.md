@@ -77,11 +77,12 @@ implementation churn until Design returns a complete adjustment plan.
 ## Auto-Claim Boundary
 
 The controller may auto-claim (init) a demand without a fresh user prompt ONLY from a
-Design-set `controller-claimable` handoff row via `wakeflow_claim_next`: only Design
-can set that typed status, it carries every ready-row invariant plus design-key
-provenance, and it is init-only — dispatch and acceptance still require their own
-evidence and confirmation. A free-text TODO row cannot drive auto-claim. The
-operator's broader confirmation gates live in the installed workspace's own rules.
+global TODO row that Design delivered with Auto Claim = yes, via `wakeflow_claim_next`:
+that immutable delivery property is set once at `wakeflow_deliver` time and, for a
+requirement, requires a linked Original Plan + Requirement Design, so it carries the
+ready-row invariants plus design-key provenance. It is init-only — dispatch and
+acceptance still require their own evidence and confirmation. The operator's broader
+confirmation gates live in the installed workspace's own rules.
 
 ## Testing And Acceptance
 

@@ -122,14 +122,13 @@ Current scripts:
   validates each document has exactly one `Unified Status` marker plus the
   append-only sections, claims at most one next demand by creating its ignored
   controller state root and initial task package, and syncs the state-root
-  `Unified Status` back into the demand document. Its Design claim path can
-  claim a single `controller-claimable` row automatically, or an explicitly
-  named `ready-for-workspace` row, and then advances that Design row to
-  `accepted-by-workspace`. It does not dispatch, send thread messages, accept
+  `Unified Status` back into the demand document. Its `claim-todo` path can
+  auto-claim the single controller-claimable global TODO row (Auto Claim = yes
+  and eligible), or an explicitly named eligible row, delegating to
+  `create-demand`. It does not dispatch, send thread messages, accept
   evidence, or complete demands.
-- `wakeflow-intake.mjs`: state-root intake bridge for Design and Test surfaces.
-  `design-handoff` validates a formal Design board row and writes
-  `intake/design-handoff-*.json`; `test-card` writes a complete pre-test
+- `wakeflow-intake.mjs`: state-root intake bridge for the Test surface.
+  `test-card` writes a complete pre-test
   boundary machine card under `test-cards/*.json`. It does not mutate
   `wakeflow-state.json`, create dispatches, accept Design handoffs, accept
   test results, or complete demands.

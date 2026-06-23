@@ -392,10 +392,10 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools，工具名与 
 | --- | --- |
 | 设置和工作区发现 | `wakeflow_initialize_workspace` |
 | 职责窗口替换 | `wakeflow_replace_windows`（单个传 `window`，多个传 `windows`） |
-| Demand 和任务状态 | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
+| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
-| Design 和 Test intake | `wakeflow_intake_design_handoff`, `wakeflow_intake_test_card` |
+| Design 和 Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
 | 归档、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_prune_runtime`、`wakeflow_verify`、`wakeflow_view`（scope trace） |
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：

@@ -125,7 +125,7 @@ Codex 版通过 MCP 工具驱动(没有 slash 命令)。用自然语言告诉 Co
 | 搭建新工作区 | `wakeflow_initialize_workspace` |
 | 重建陈旧窗口 | `wakeflow_replace_windows` |
 | 看需求 / 可领取工作 / 就绪度 | `wakeflow_status`、`wakeflow_next_work` |
-| 启动一个需求 | `wakeflow_init_demand` -> `wakeflow_add_task` |
+| 启动一个需求 | `wakeflow_create_demand` -> `wakeflow_add_task` |
 | 把活交给窗口 | `wakeflow_prepare_delivery` -> 宿主发送 -> `wakeflow_record_delivery` |
 | 记录目标结果 | `wakeflow_record_target_result` |
 | 评审并决策 | `wakeflow_review_pack` -> `wakeflow_reduce_results` -> `wakeflow_decide_review` -> `wakeflow_complete_demand` |
@@ -240,7 +240,7 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 - `per-target` 可以每个 target 唤醒一次 controller，同时保留 group snapshot。
 - 一次真实发送被记录为 `sent` 且有 readback 证据后，总控本轮停止，不在同一轮 sleep 或 poll。
 - Keep-live 只是运行时辅助，不是任务逻辑、传输权威或验收证据。
-- Demand 创建是宿主中立的：`wakeflow_init_demand` 写入
+- Demand 创建是宿主中立的：`wakeflow_create_demand` 写入
   `controllerHost: null`，所以 Codex 和 Claude Code 都可以创建或导入需求材料，
   但不会因此抢占控制权。
 - 第一个真正驱动需求的命令会把 demand 绑定到当前平台，写入
@@ -265,10 +265,10 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 | --- | --- |
 | 设置和工作区发现 | `wakeflow_initialize_workspace` |
 | 职责窗口替换 | `wakeflow_replace_windows`（单个传 `window`，多个传 `windows`） |
-| Demand 和任务状态 | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
+| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
-| Design 和 Test intake | `wakeflow_intake_design_handoff`, `wakeflow_intake_test_card` |
+| Design 和 Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
 | 归档、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_prune_runtime`、`wakeflow_verify`、`wakeflow_view`（scope trace） |
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：

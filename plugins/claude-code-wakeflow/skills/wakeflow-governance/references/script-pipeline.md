@@ -12,7 +12,7 @@ plugin-surface blocker instead of falling back to a script path.
 ## Boundaries
 
 - Workspace scripts are governance tools. They may read workspace docs, inspect
-  child repository git status, validate links, import Design handoff ledgers,
+  child repository git status, validate links, maintain the global TODO board,
   maintain archive docs, and manage controller state roots.
 - Workspace scripts must not implement product features, write into child source
   repositories, edit real test projects, require secrets, depend on network
@@ -39,7 +39,7 @@ Use these MCP tools for normal installed-workspace control:
 | Inspect repository, state-root, and delivery-loop status | `wakeflow_status` |
 | Initialize first-time setup, or explicitly reset initialized setup after user confirmation | `wakeflow_initialize_workspace` |
 | Recreate/rebind one or selected responsibility windows without workspace initialization | `wakeflow_replace_windows` (single `window` arg for one, `windows[]` for a group) |
-| Create, extend, or complete a controller demand | `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_complete_demand` |
+| Create, extend, or complete a controller demand | `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_complete_demand` |
 | Prepare or record delivery-loop transport evidence | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result` |
 | Review target results and record controller judgment | `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review` |
 | Scan next controller-ready work | `wakeflow_next_work` |
@@ -74,11 +74,7 @@ repository. They are not the installed controller command surface.
   `node scripts/wakeflow-delivery.mjs review-pack --json`
 - General pre-acceptance:
   `node scripts/wakeflow-verify.mjs`
-- Design formal handoff intake:
-  `node scripts/wakeflow-import-design-handoffs.mjs --write`
-  `node scripts/wakeflow-import-design-handoffs.mjs --id <design-key> --json`
-- Design/Test state-root intake:
-  `node scripts/wakeflow-intake.mjs design-handoff --state-root <state-root> --design-key <design-key> --write --json`
+- Test state-root intake:
   `node scripts/wakeflow-intake.mjs test-card --state-root <state-root> --test-id <id> --target-window <window> ... --write --json`
 - Runtime residue inspection:
   `node scripts/wakeflow-check-runtime.mjs`
@@ -96,8 +92,6 @@ repository. They are not the installed controller command surface.
 | Ensure workspace git tracks only workspace files | `wakeflow-check-boundary.mjs` | Read-only guard against accidentally tracking child repos or local noise. |
 | Validate workspace docs and links | `verify-workspace-docs.mjs` | Use `--all-workspace` through `wakeflow-verify`. |
 | Validate current docs stay under `.wakeflow-active/current/` and remain readable by downstream scripts | `wakeflow-check-layout.mjs` | Read-only layout and current-doc contract guard. |
-| Import formal Design handoff board into workspace inbox | `wakeflow-import-design-handoffs.mjs --write` | Discovers and validates ready rows, not a global TODO or execution plan. |
-| Attach an accepted Design source to an active demand | `wakeflow-intake.mjs design-handoff` | Writes `intake/design-handoff-*.json` under the state root after total-control judgment. It validates the Design board row but does not accept the handoff, add TODO, or change controller state. |
 | Create a Test boundary card for an active demand | `wakeflow-intake.mjs test-card` | Writes `test-cards/*.json` under the state root. It requires the full pre-test boundary gate and does not dispatch Test or accept test evidence. |
 | Archive completed Wakeflow docs and shrink historical indexes | MCP: `wakeflow_archive` (target=docs / target=todo); backend scripts: `wakeflow-archive-docs.mjs`, `wakeflow-archive-todo.mjs`, `wakeflow-archive-summaries.mjs` | Use MCP for normal controller archive flows. Dry-run first; apply only after current status no longer points at the archived item. |
 | Keep script catalog and tests from drifting | `wakeflow-check-scripts.mjs` | Runs inside `wakeflow-verify`; add tests to `--with-script-tests`. |

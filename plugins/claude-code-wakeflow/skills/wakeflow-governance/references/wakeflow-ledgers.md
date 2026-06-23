@@ -64,7 +64,7 @@ value, not the controller's planning trail.
 ## Design/Test Records
 
 Design drafts may live in an external Design repository or internal Design
-support surface. Wakeflow accepts them through handoff board intake.
+support surface. Wakeflow accepts them through controller TODO delivery via `wakeflow_deliver`.
 
 Test plans and reports may live in an external Test repository or internal Test
 support surface. Wakeflow links to evidence instead of duplicating execution

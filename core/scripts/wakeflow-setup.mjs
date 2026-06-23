@@ -1534,7 +1534,6 @@ function syncDesignSupportFiles(context, repoRoot, mode) {
       : []),
     ensureTextFile(path.join(repoRoot, "docs/index.md"), readWakeflowFile(context.templateRoot, "templates/window-support/design/docs/index.md"), `${prefix} docs index`),
     ensureTextFile(path.join(repoRoot, "docs/current/README.md"), readWakeflowFile(context.templateRoot, "templates/window-support/design/docs/current/README.md"), `${prefix} current readme`),
-    ensureTextFile(path.join(repoRoot, "docs/current/workspace-handoff-board.md"), readWakeflowFile(context.templateRoot, "templates/window-support/design/docs/current/workspace-handoff-board.md"), `${prefix} local handoff board`),
     ensureTextFile(
       path.join(repoRoot, "docs/design-window-operating-policy.md"),
       readWakeflowFile(context.templateRoot, "templates/window-support/design/docs/design-window-operating-policy.md"),

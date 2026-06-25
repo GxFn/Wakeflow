@@ -2,14 +2,14 @@
 
 # Wakeflow
 
-Unattended control loops for multi-window agent work.
+A disciplined control loop for multi-window agent work — every step traced, every result proven.
 
 [English](README.md) | [Simplified Chinese](README.zh-CN.md)
 
 Wakeflow turns a local Codex or Claude Code workspace into a disciplined
 controller system: one controller window, focused repository windows, explicit
 state roots, compact direct-thread or direct-session delivery, and
-evidence-based acceptance.
+evidence-based acceptance. The controller runs this as a closed loop — plan, dispatch, collect evidence, review, decide, repeat — and records every step, so the whole run is auditable after the fact.
 
 </div>
 
@@ -503,5 +503,5 @@ operator manual.
 7. **Fresh support windows by default**: Design and Test are created as clear
    Wakeflow support surfaces unless the user explicitly maps existing ones.
 
-Wakeflow exists to make unattended multi-window work safe to resume, easy to
+Wakeflow exists to make multi-window agent work safe to resume, easy to
 inspect, and hard to fake.

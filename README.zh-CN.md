@@ -2,13 +2,13 @@
 
 # Wakeflow
 
-面向多窗口 agent 工作的无人值守控制循环。
+面向多窗口 agent 工作的严谨控制循环——每一步留痕、每个结果实证。
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 Wakeflow 把一个本地 Codex 或 Claude Code 工作区变成有纪律的控制系统：
 一个总控窗口、多个聚焦的仓库窗口、明确的 state root、轻量 direct-thread
-或 direct-session 投递，以及基于证据的验收。
+或 direct-session 投递，以及基于证据的验收。总控以闭环方式运行这套系统——规划、派发、收集证据、审查、决策、循环往复——并记录每一步，整个过程事后可审计。
 
 </div>
 
@@ -438,4 +438,4 @@ script README 是操作者手册。
 6. **本地运行时留在本地**：真实 thread id 只留在本地 thread registry，active runtime state 不进入 tracked docs。
 7. **默认创建新的支持窗口**：Design 和 Test 默认作为清晰的 Wakeflow support surfaces 创建，除非用户明确映射既有目录。
 
-Wakeflow 的目标是让无人值守的多窗口工作可以安全恢复、容易审查，并且难以伪造完成。
+Wakeflow 的目标是让多窗口 agent 工作可以安全恢复、容易审查，并且难以伪造完成。

@@ -12,7 +12,7 @@
     {
       "name": "wakeflow",
       "source": "./plugins/claude-code-wakeflow",
-      "description": "Unattended control loops for Claude Code workspaces, aligned with Wakeflow's Codex edition: controller state roots, task packages, tmux-resident direct-session delivery, evidence review, and Design/Test intake.",
+      "description": "A disciplined control loop for multi-window Claude Code work: a controller window plans, dispatches scoped task packages across a tmux-resident fleet of focused windows, collects the evidence each returns, reviews it, and decides the next step — then repeats. Built for traceability and proof: every dispatch, delivery, and acceptance is recorded in explicit on-disk state roots, so a run is auditable end to end, and acceptance is evidence-based — a task closes only on reviewable evidence, never on assertion. State roots, task packages, delivery envelopes, evidence review, and Design/Test intake.",
       "version": "0.6.2",
       "author": {
         "name": "gaoxuefeng",

@@ -457,6 +457,7 @@ function claimItem(item) {
     if (pkg.targetWindow) addArgs.push("--target-window", pkg.targetWindow);
     if (pkg.targetTaskId) addArgs.push("--target-task-id", pkg.targetTaskId);
     if (pkg.targetSummary) addArgs.push("--target-summary", pkg.targetSummary);
+    if (pkg.designIntent) addArgs.push("--design-intent", pkg.designIntent);
     addArgs.push("--write", "--json");
     outputs.push(runControllerState(addArgs));
   }
@@ -727,6 +728,7 @@ function commandCreateDemand() {
     if (pkg.targetWindow) tpArgs.push("--target-window", pkg.targetWindow);
     if (pkg.targetTaskId) tpArgs.push("--target-task-id", pkg.targetTaskId);
     if (pkg.sourceRef) tpArgs.push("--source-ref", pkg.sourceRef);
+    if (pkg.designIntent) tpArgs.push("--design-intent", pkg.designIntent);
     tpArgs.push("--write", "--json");
     runControllerState(tpArgs);
     addedPackages.push(packageId);

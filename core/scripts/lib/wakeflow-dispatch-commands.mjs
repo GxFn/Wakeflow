@@ -105,6 +105,7 @@ export function createDispatchCommands(ctx) {
   function buildDispatchArtifacts({
     contextPolicy,
     controllerWindow = "",
+    designIntent = "",
     dispatchGroup = "",
     evidenceRequired = [],
     forbidden = [],
@@ -155,6 +156,10 @@ export function createDispatchCommands(ctx) {
       humanContextRef: humanContextRef || undefined,
       stateRef: stateRef || undefined,
       objective,
+      // Design's implementation intent, carried for the SIDE-BY-SIDE view at
+      // dispatch and review. Advisory only, and deliberately OUTSIDE the
+      // idempotency comparable: same-revision replay ignores it.
+      ...(designIntent ? { designIntent } : {}),
       scope,
       forbidden,
       evidenceRequired,
@@ -398,9 +403,11 @@ export function createDispatchCommands(ctx) {
       targetTaskId,
       stateRevision: state.revision,
     };
+    const designIntent = typeof taskPackage.designIntent === "string" ? taskPackage.designIntent.trim() : "";
     const { dispatchGroupRecord, packet, packetFile } = buildDispatchArtifacts({
       contextPolicy: getValue("--context-policy", "refresh-if-missing"),
       controllerWindow,
+      designIntent,
       dispatchGroup,
       evidenceRequired: [
         ...getAllValues("--evidence"),
@@ -501,6 +508,12 @@ export function createDispatchCommands(ctx) {
               deliveryId: (existingEnvelope || envelope).deliveryId,
               dispatchGroup: packet.dispatchGroup,
               prompt: (existingPacket || packet).prompt,
+              // Intent side-by-side (dispatch-time judgment moment): both
+              // sentences must be IN this payload so the controller confirms
+              // alignment in-turn; zero traces when designIntent is absent.
+              ...((existingPacket || packet).designIntent
+                ? { designIntent: (existingPacket || packet).designIntent, objective: (existingPacket || packet).objective }
+                : {}),
             }
           : {
               windowConfig,
@@ -515,6 +528,16 @@ export function createDispatchCommands(ctx) {
         threadReady: Boolean(registration),
         threadIdRedacted: Boolean(registration),
         windowLockWarning,
+        // Dispatch-time intent check: a one-line conditional reminder, never a
+        // gate. The agent authoring the objective IS the confirmation; an
+        // intentional adaptation belongs in the objective wording.
+        ...(designIntent
+          ? {
+              agentNext: `${registration
+                ? "Send the prepared prompt with the host thread tool, then record a delivery run."
+                : "Register the target thread before direct-thread delivery."} Intent check: confirm this dispatch is an intentional match or an intentional adaptation of the designIntent shown beside the objective; adaptations should be visible in the objective wording.`,
+            }
+          : {}),
         forbiddenConclusions: hasFlag("--compact") ? undefined : [
           "prepared-dispatch-is-host-send",
           "prepared-dispatch-is-target-result",

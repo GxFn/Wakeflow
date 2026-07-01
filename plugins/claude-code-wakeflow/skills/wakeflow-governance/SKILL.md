@@ -136,6 +136,7 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
 - Hard anti-failure rules belong in `CLAUDE.md`, not only in this skill. This skill may add command details and templates, but it must not hide or weaken those rules.
 - Before changing `CLAUDE.md` or moving content into references, prepare an old-rule migration check: keep / downshift / rewrite / discard, and state which `CLAUDE.md` section or reference now owns each rule.
 - Parallel streams are independent windows on dedicated worktrees and branches (`<demandKey>/<streamId>`), registered only through the derived local config overlay (`.wakeflow-local/workspace.config.json`, never hand-edited). Teardown is explicit: dirty worktrees and unmerged branches refuse by default, a demand with open streams refuses to archive, and merge-back is a controller decision, never a stream's.
+- `designIntent` is one optional sentence of implementation intent on a task package ("roughly how"), authored by Design at delivery/handoff when useful. It is advisory input for the controller's own alignment check at dispatch and review — never an acceptance standard, a score, or a gate.
 
 ## Minimal Workflow
 

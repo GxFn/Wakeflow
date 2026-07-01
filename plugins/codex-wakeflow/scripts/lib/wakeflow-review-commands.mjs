@@ -88,6 +88,11 @@ export function createReviewCommands(ctx) {
       packetId: item.packet.id,
       targetWindow: item.packet.targetWindow,
       taskId: item.packet.taskId,
+      // Intent side-by-side (review-time judgment moment): the dispatch intent
+      // sits beside the delivered result; designIntent appears only when Design
+      // authored one (zero traces otherwise).
+      objective: item.packet.objective,
+      ...(item.packet.designIntent ? { designIntent: item.packet.designIntent } : {}),
       resultStatus: result?.status || "missing",
       resultFile: result ? path.relative(workspaceRoot, item.file) : undefined,
       changedRepos: Array.isArray(result?.changedRepos) ? result.changedRepos : [],
@@ -380,6 +385,18 @@ export function createReviewCommands(ctx) {
   function buildStateRootReviewPack(stateRoot) {
     const { state, stateRootRef } = readControllerStateRoot(stateRoot);
     const resultsByTask = latestStateRootResultsByTargetTask(stateRoot);
+    // Packets carry the authored dispatch intent (objective) and Design's
+    // designIntent copy; index them once so every reviewable entry can show
+    // the intent triple beside its result. Tasks never dispatched simply have
+    // no packet: objective falls back to the task summary (source marked).
+    const packetsByTaskId = new Map();
+    for (const file of listJsonFiles(dirs.packets)) {
+      const packet = readJson(file, "dispatch packet");
+      if (packet?.kind !== "ControllerDispatchPacket") continue;
+      if (packet?.stateRef?.stateRoot !== stateRootRef) continue;
+      const packetTaskId = packet.stateRef?.targetTaskId || packet.taskId;
+      if (packetTaskId && !packetsByTaskId.has(packetTaskId)) packetsByTaskId.set(packetTaskId, packet);
+    }
     const allTargetTasks = state.targetTasks ?? [];
     const reviewScope = controllerReviewScope(allTargetTasks);
     const targetTasks = reviewScope.reviewableTargetTasks;
@@ -397,10 +414,14 @@ export function createReviewCommands(ctx) {
       const resultStatus = reworkAnchorCovered
         ? "covered-by-rework-route"
         : result?.status || (resultExpected ? "missing" : "pending-dispatch");
+      const packet = packetsByTaskId.get(task.targetTaskId);
       return {
         targetWindow: task.targetWindow,
         taskId: task.targetTaskId,
         taskPackageId: task.taskPackageId,
+        objective: packet?.objective ?? task.summary,
+        objectiveSource: packet?.objective ? "dispatch-packet" : "task-summary",
+        ...(packet?.designIntent ? { designIntent: packet.designIntent } : {}),
         dispatchGroup: result?.dispatchGroup || result?.deliveryContext?.dispatchGroup || task.delivery?.dispatchGroup,
         returnRoute: result?.deliveryContext?.returnRoute || result?.returnRoute,
         returnPolicy: result?.deliveryContext?.returnPolicy || result?.returnPolicy,
@@ -549,6 +570,13 @@ export function createReviewCommands(ctx) {
         totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent,
         stateRootBased: true,
       },
+      // Review-time intent check: additive advisory string, present only when
+      // any reviewable task carries a designIntent. Never touches gates or
+      // nextAction (machine tokens); the agent's decide-review reason is the
+      // confirmation record.
+      ...(targetResults.some((item) => item.designIntent)
+        ? { intentCheck: "Compare designIntent / objective / delivered result per task. If the delivery departs from the design intent and the dispatch did not declare an intentional adaptation, run a requirement review (Original Plan / Requirement Design) first; if the requirement itself must change, decide redesign." }
+        : {}),
       nextAction: demandCompleted
         ? "demand-completed-stop-without-next-dispatch"
         : noTargetTasks

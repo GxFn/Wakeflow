@@ -1,0 +1,143 @@
+#!/usr/bin/env node
+
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+
+// Guards W2 (next-phase roadmap Phase 2): intent alignment is two sentences
+// side-by-side at two judgment moments — never a score, never a gate. Zero
+// traces when designIntent is absent; gates are byte-identical either way;
+// replay ignores designIntent (it is outside the idempotency comparable).
+
+const pluginRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
+const stateScript = path.join(pluginRoot, "scripts/wakeflow-state.mjs");
+const deliveryScript = path.join(pluginRoot, "scripts/wakeflow-delivery.mjs");
+
+const DESIGN_INTENT = "Refactor the parser into a two-pass pipeline reusing the tokenizer";
+const OBJECTIVE = "Have RepoA land the two-pass parser refactor behind the existing CLI flag";
+
+function run(script, args) {
+  return spawnSync(process.execPath, [script, ...args], { encoding: "utf8", shell: false });
+}
+
+function readJson(file) {
+  return JSON.parse(readFileSync(file, "utf8"));
+}
+
+function makeDemand({ withIntent }) {
+  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-intent-"));
+  mkdirSync(root, { recursive: true });
+  const init = run(stateScript, ["init", "--root", root, "--demand-key", "INTENT-DK", "--title", "Intent Fixture", "--write", "--json"]);
+  assert.equal(init.status, 0, init.stderr || init.stdout);
+  const stateRoot = path.join(root, JSON.parse(init.stdout).stateRoot);
+  const addArgs = [
+    "add-task-package", "--root", root, "--state-root", stateRoot,
+    "--task-package-id", "tp-a", "--summary", "Parser refactor", "--target-window", "RepoA",
+    ...(withIntent ? ["--design-intent", DESIGN_INTENT] : []),
+    "--write", "--json",
+  ];
+  const added = run(stateScript, addArgs);
+  assert.equal(added.status, 0, added.stderr || added.stdout);
+  return { root, stateRoot };
+}
+
+function prepare(root, stateRoot, { objective } = {}) {
+  return run(deliveryScript, [
+    "prepare-dispatch-from-state", "--root", root, "--state-root", stateRoot,
+    "--target-task-id", "tp-a__RepoA",
+    ...(objective ? ["--objective", objective] : []),
+    "--write", "--compact", "--json",
+  ]);
+}
+
+test("designIntent persists on the task package and rides the packet beside the authored objective", () => {
+  const { root, stateRoot } = makeDemand({ withIntent: true });
+  const pkg = readJson(path.join(stateRoot, "task-packages", "tp-a.json"));
+  assert.equal(pkg.designIntent, DESIGN_INTENT);
+  const state = readJson(path.join(stateRoot, "wakeflow-state.json"));
+  assert.equal(state.taskPackages[0].designIntent, DESIGN_INTENT);
+
+  const prepared = prepare(root, stateRoot, { objective: OBJECTIVE });
+  assert.equal(prepared.status, 0, prepared.stderr || prepared.stdout);
+  const payload = JSON.parse(prepared.stdout);
+  // dispatch-time judgment moment: both sentences in the SAME payload + reminder
+  assert.equal(payload.designIntent, DESIGN_INTENT);
+  assert.equal(payload.objective, OBJECTIVE);
+  assert.match(payload.agentNext, /Intent check/);
+
+  const packet = readJson(path.join(root, ".wakeflow-local/wakeflow-delivery/dispatch-packets", "tp-a__RepoA__tp-a__RepoA.json"));
+  assert.equal(packet.designIntent, DESIGN_INTENT);
+  assert.equal(packet.objective, OBJECTIVE);
+});
+
+test("re-preparing at the same revision replays idempotently — designIntent stays outside the comparable", () => {
+  const { root, stateRoot } = makeDemand({ withIntent: true });
+  assert.equal(prepare(root, stateRoot, { objective: OBJECTIVE }).status, 0);
+  const replay = prepare(root, stateRoot, { objective: OBJECTIVE });
+  assert.equal(replay.status, 0, replay.stderr || replay.stdout);
+  assert.equal(JSON.parse(replay.stdout).idempotentReplay, true);
+});
+
+test("without designIntent the whole chain leaves zero traces", () => {
+  const { root, stateRoot } = makeDemand({ withIntent: false });
+  const prepared = prepare(root, stateRoot, { objective: OBJECTIVE });
+  assert.equal(prepared.status, 0, prepared.stderr || prepared.stdout);
+  const payload = JSON.parse(prepared.stdout);
+  assert.equal("designIntent" in payload, false);
+  assert.doesNotMatch(payload.agentNext ?? "", /Intent check/);
+
+  const imported = run(stateScript, [
+    "import-target-result", "--root", root, "--state-root", stateRoot,
+    "--target-task-id", "tp-a__RepoA", "--target-window", "RepoA", "--status", "completed",
+    "--write", "--json",
+  ]);
+  assert.equal(imported.status, 0, imported.stderr || imported.stdout);
+  const pack = JSON.parse(run(deliveryScript, ["review-pack", "--root", root, "--state-root", stateRoot, "--json"]).stdout);
+  assert.equal("intentCheck" in pack.reviewPack, false);
+  const entry = pack.reviewPack.targetResults.find((item) => item.taskId === "tp-a__RepoA");
+  assert.equal("designIntent" in entry, false);
+  assert.equal(entry.objective, OBJECTIVE, "objective still rides the pack (F2) even without designIntent");
+  assert.equal(entry.objectiveSource, "dispatch-packet");
+});
+
+test("review packs show the intent triple side by side and gates stay byte-identical", () => {
+  const withIntent = makeDemand({ withIntent: true });
+  const without = makeDemand({ withIntent: false });
+  for (const fixture of [withIntent, without]) {
+    assert.equal(prepare(fixture.root, fixture.stateRoot, { objective: OBJECTIVE }).status, 0);
+    const imported = run(stateScript, [
+      "import-target-result", "--root", fixture.root, "--state-root", fixture.stateRoot,
+      "--target-task-id", "tp-a__RepoA", "--target-window", "RepoA", "--status", "completed",
+      "--write", "--json",
+    ]);
+    assert.equal(imported.status, 0, imported.stderr || imported.stdout);
+  }
+
+  const packOf = (fixture) => JSON.parse(
+    run(deliveryScript, ["review-pack", "--root", fixture.root, "--state-root", fixture.stateRoot, "--json"]).stdout,
+  ).reviewPack;
+  const packWith = packOf(withIntent);
+  const packWithout = packOf(without);
+
+  // review-time judgment moment: the triple sits on the entry, the reminder on the pack
+  const entry = packWith.targetResults.find((item) => item.taskId === "tp-a__RepoA");
+  assert.equal(entry.designIntent, DESIGN_INTENT);
+  assert.equal(entry.objective, OBJECTIVE);
+  assert.match(packWith.intentCheck, /requirement review/);
+  assert.match(packWith.intentCheck, /redesign/);
+
+  // the reminder is advisory ONLY: gates must not know designIntent exists
+  assert.deepEqual(packWith.gates, packWithout.gates, "gates must be identical with and without designIntent");
+
+  // group-scope pack (the second builder) carries the same triple + reminder
+  const groupPack = JSON.parse(
+    run(deliveryScript, ["review-pack", "--root", withIntent.root, "--group", "tp-a", "--json"]).stdout,
+  ).reviewPack;
+  const groupEntry = groupPack.targetResults.find((item) => item.taskId === "tp-a__RepoA");
+  assert.equal(groupEntry.designIntent, DESIGN_INTENT);
+  assert.equal(groupEntry.objective, OBJECTIVE);
+  assert.match(groupPack.intentCheck, /requirement review/);
+});

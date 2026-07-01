@@ -224,6 +224,24 @@ are already stated.
   step after acceptance, before `stream-close`; `--delete-branch` refuses
   unmerged work by design.
 
+## Intent Alignment
+
+- Two flexible sides, one check: Design's `designIntent` is a sketch, not a
+  contract; the controller's `objective` is today's best arrangement, not a
+  transcription. Deviation is often adaptation, not error — the check turns
+  unconscious drift into a conscious confirmation, nothing more.
+- Dispatch moment: when the task package carries a designIntent, the prepare
+  output shows it beside your objective. Authoring the objective IS the
+  confirmation; make an intentional adaptation visible in its wording (author
+  it at the FIRST prepare — same-revision re-prepares must not change content).
+- Review moment: the review pack shows designIntent / objective / result per
+  task plus one `intentCheck` line. If the delivery departs from the design
+  intent without a declared adaptation, run a requirement review (Original
+  Plan / Requirement Design) first; if the requirement itself must change,
+  decide `redesign`. Your decide-review reason is the confirmation record.
+- No scores, no gates: intent alignment never blocks anything; evidence-based
+  acceptance stays the only verdict.
+
 ## Stop Conditions
 
 Stop instead of dispatching when:

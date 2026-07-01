@@ -99,7 +99,7 @@ stream = 独立窗口 `<repo>__<streamId>` + 独立 worktree + 独立分支 `<de
 
 **明确不做（红线重申）**：复合锁键 / streamId 穿线进锁推导 / 新 targetTaskId 方案 / 改 `sameTargetDescriptor` / **改 reducer 全量语义（波次模型内解决，流式评审见 Phase 3 E-1）** / 放松单活跃 demand / stream 间依赖与合并回主线 / 把 worktree 隔离重新解读为多分支搜索。
 
-### Phase 2 —— F1+F2 意图对齐（版本 0.7.1，规模 S，可与 Phase 1 并行）
+### Phase 2 —— F1+F2 意图对齐（版本 0.7.1，规模 S）——✅ 已于 2026-07-02 落地（npm test 291/291；落地微调：review 提醒落在独立的 `intentCheck` 附加字段而非 nextAction——nextAction 是机器令牌，追加散文会破坏消费者；state-root 包的 objective/designIntent 从 packets 按 stateRef 索引取得，未派发任务回落 task summary 并标注来源）
 
 > **设计要义（2026-07-02 按用户方向对原 F1 的再收窄）**：原需求的词法相似度基线**整体移除**。理由有三：
 > ① 原需求文档自己已断言"低相似 ≠ 漂移、未 calibrate 前近乎无用"——顺着这个怀疑走到底，就该删掉分数，而不是保留一个没人该信的数字；

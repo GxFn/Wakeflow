@@ -69,6 +69,11 @@ export function buildControllerReviewPack({
     rawEvidenceRequired,
     missingEvidenceRefs,
     gates,
+    // Review-time intent check: additive advisory, present only when any entry
+    // carries a designIntent; gates and nextAction stay untouched by design.
+    ...(targetResults.some((item) => item.designIntent)
+      ? { intentCheck: "Compare designIntent / objective / delivered result per task. If the delivery departs from the design intent and the dispatch did not declare an intentional adaptation, run a requirement review (Original Plan / Requirement Design) first; if the requirement itself must change, decide redesign." }
+      : {}),
     nextAction: review.decision === "wait"
       ? "wait-for-target-result-envelope"
       : review.decision === "blocked"

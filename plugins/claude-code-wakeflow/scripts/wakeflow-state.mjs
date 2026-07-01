@@ -39,7 +39,7 @@ Controller state-machine manager
 
 Usage:
   node scripts/wakeflow-state.mjs init --demand-key <key> --title <title> [--goal <text>] [--completion-definition <text>] [--stage-plan <text>] [--language <auto|zh|en>] [--root <workspace>] [--state-root <path>] [--write] [--json]
-  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--source-ref <ref>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--write] [--json]
+  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--source-ref <ref>] [--design-intent <text>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
   node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked|redesign> --reason <text> [--evidence-ref <ref>] [--accept-blocked] [--write] [--json]
@@ -698,6 +698,10 @@ function commandAddTaskPackageLocked(stateRoot) {
   const taskPackageId = requireValue("--task-package-id");
   const summary = requireValue("--summary");
   const sourceRef = getValue("--source-ref", null);
+  // Design's one-line implementation intent ("roughly how"). Optional and
+  // advisory: it is surfaced side-by-side with the controller's objective at
+  // dispatch and review for the agent's own alignment check — never a gate.
+  const designIntent = (getValue("--design-intent", "") || "").trim() || null;
   const targetWindow = getValue("--target-window", null);
   const targetTaskId = getValue("--target-task-id", targetWindow ? `${taskPackageId}__${slug(targetWindow)}` : null);
   const targetSummary = getValue("--target-summary", summary);
@@ -758,6 +762,7 @@ function commandAddTaskPackageLocked(stateRoot) {
     summary,
     status: "pending",
     sourceRef,
+    ...(designIntent ? { designIntent } : {}),
     createdAt,
     ...(reviewRoute ? { reviewRoute } : {}),
     targetTasks,
@@ -778,6 +783,7 @@ function commandAddTaskPackageLocked(stateRoot) {
         summary,
         status: "pending",
         sourceRef,
+        ...(designIntent ? { designIntent } : {}),
         createdAt,
         ...(reviewRoute ? { reviewRoute } : {}),
       },

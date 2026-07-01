@@ -120,6 +120,10 @@ Stop and return a blocker when:
 - Validation fails and the next repair would change scope or repository
   responsibility.
 - A Test delivery appears in a non-Test window without explicit authorization.
+- This window is a parallel stream (`<repo>__<streamId>`) and the task would
+  touch anything outside its own worktree/branch — the repository's main
+  checkout, another stream's worktree, or a merge back to the main line
+  (merging is a controller step, never a stream's).
 
 ## Result Envelope Minimum
 

@@ -1893,6 +1893,16 @@ function commandArchiveDemandLocked(stateRoot) {
     fail(`archive-demand requires state=completed; ${state.demandKey} is ${state.state}.`);
   }
 
+  // A demand with live parallel streams must not archive: their worktrees and
+  // branches would orphan with no owner. Stream entries are plain config facts
+  // (repositories[].stream, host-neutral) surfaced through the derived local
+  // overlay that loadWorkspaceConfig already prefers.
+  const openStreams = (loadWorkspaceConfig({ workspaceRoot, args: options }).repositories ?? [])
+    .filter((repo) => repo?.stream?.demandKey === state.demandKey);
+  if (openStreams.length > 0) {
+    fail(`archive-demand refuses: ${openStreams.length} parallel stream window(s) are still open for ${state.demandKey}: ${openStreams.map((repo) => repo.windowName).join(", ")}. Close them (stream-close) before archiving.`);
+  }
+
   const scan = scanStateRootForRealIds(stateRoot, { hostProfile });
   if (!scan.clean && !redact) {
     fail([

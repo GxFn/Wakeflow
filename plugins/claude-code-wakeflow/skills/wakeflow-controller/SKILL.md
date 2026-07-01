@@ -207,6 +207,23 @@ are already stated.
 - A single target result is not group completion unless the group expected only
   that target.
 
+## Parallel Streams
+
+- A stream is an ordinary target window named `<repo>__<streamId>` bound to its
+  own git worktree on branch `<demandKey>/<streamId>`. Open/close/reconcile with
+  `wakeflow-claude-host.mjs stream-open / stream-close / stream-list`; dispatch
+  to it by windowName like any other window, one task per stream at a time.
+- Wave discipline: one wave = the stream tasks dispatched under ONE dispatch
+  group with the default `group-ready` policy. Execution is parallel; review is
+  per-wave — `reduce-results` needs every open task's result, so reduce at the
+  wave end, decide, then dispatch the next wave. A mid-wave reduce reporting
+  `waiting-results` is the contract working, not a failure.
+- `pool-exhausted` is a hard stop: wait for a stream to close after acceptance,
+  or sequence the work. Never widen `maxStreams` to unblock unattended work.
+- Merging a stream branch back to the main line is a controller-owned explicit
+  step after acceptance, before `stream-close`; `--delete-branch` refuses
+  unmerged work by design.
+
 ## Stop Conditions
 
 Stop instead of dispatching when:

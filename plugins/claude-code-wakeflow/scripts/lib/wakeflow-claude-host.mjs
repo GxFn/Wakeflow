@@ -23,6 +23,22 @@ import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { hostProfile } from "./wakeflow-host-profile.mjs";
+import { withFileLock } from "./wakeflow-state-lock.mjs";
+import {
+  assertOverlayManageable,
+  branchNameFor,
+  buildStreamEntry,
+  maxStreamsFor,
+  overlayBaseStale,
+  overlayConfigFile,
+  overlayIsDerived,
+  readOverlay,
+  regenerateOverlay,
+  streamEntries,
+  streamEntryFor,
+  streamWindowName,
+  worktreeDirFor,
+} from "./wakeflow-claude-stream.mjs";
 
 // This helper IS the Claude Code host transport boundary, so it runs the host
 // binaries (tmux, claude, brew, osascript) directly with a narrow no-shell
@@ -121,10 +137,20 @@ const claudeBin = process.env.WAKEFLOW_CLAUDE_BIN || "claude";
 // the wakeflow fleet from the user's personal tmux sessions on the default server.
 // Unset = default socket (backward-compatible). Resolved once; every tmux() call
 // funnels the flag through, and the activity monitor inherits it via --root config.
+// Window/topology reads prefer the DERIVED local overlay
+// (.wakeflow-local/workspace.config.json, a regenerated full copy of the
+// tracked config plus active stream entries) so stream windows resolve like
+// ordinary windows. Writers (set-unattended) and durable-surface checks
+// (check-workspace, seed-permissions) keep reading the tracked file directly.
+function effectiveConfigFile() {
+  const overlay = overlayConfigFile(workspaceRoot);
+  return existsSync(overlay) ? overlay : path.join(workspaceRoot, "workspace.config.json");
+}
+
 function resolveTmuxSocket() {
   const override = getValue("--socket", null);
   if (override && override.trim()) return override.trim();
-  const configFile = path.join(workspaceRoot, "workspace.config.json");
+  const configFile = effectiveConfigFile();
   if (existsSync(configFile)) {
     try {
       const socket = JSON.parse(readFileSync(configFile, "utf8")).hosts?.["claude-code"]?.tmuxSocket;
@@ -139,7 +165,7 @@ const tmuxSocket = resolveTmuxSocket();
 const tmuxSocketArgs = tmuxSocket ? ["-L", tmuxSocket] : [];
 
 function defaultServerSession() {
-  const configFile = path.join(workspaceRoot, "workspace.config.json");
+  const configFile = effectiveConfigFile();
   if (existsSync(configFile)) {
     try {
       const session = JSON.parse(readFileSync(configFile, "utf8")).hosts?.["claude-code"]?.tmuxSession;
@@ -154,7 +180,7 @@ function defaultServerSession() {
 let cachedControllerWindow;
 function workspaceControllerWindow() {
   if (cachedControllerWindow !== undefined) return cachedControllerWindow;
-  const configFile = path.join(workspaceRoot, "workspace.config.json");
+  const configFile = effectiveConfigFile();
   cachedControllerWindow = null;
   if (existsSync(configFile)) {
     try {
@@ -167,7 +193,7 @@ function workspaceControllerWindow() {
 }
 
 function roleOfWindow(windowName) {
-  const configFile = path.join(workspaceRoot, "workspace.config.json");
+  const configFile = effectiveConfigFile();
   if (!existsSync(configFile)) return "default";
   let config;
   try {
@@ -596,7 +622,7 @@ async function commandLaunchWindow() {
   // Workspace-pinned claude flags (e.g. ["--effort", "max"]) come from
   // workspace.config.json hosts.claude-code.claudeArgs; per-call --claude-arg
   // values still append after them and win on conflicts.
-  const configFile = path.join(workspaceRoot, "workspace.config.json");
+  const configFile = effectiveConfigFile();
   const hostConfig = existsSync(configFile) ? (readJson(configFile, "workspace config").hosts?.["claude-code"] ?? {}) : {};
   const configClaudeArgs = Array.isArray(hostConfig.claudeArgs) && hostConfig.claudeArgs.every((arg) => typeof arg === "string")
     ? hostConfig.claudeArgs
@@ -932,7 +958,7 @@ function commandAttachWindow() {
 
 
 function readWorkspaceWindowModel() {
-  const configFile = path.join(workspaceRoot, "workspace.config.json");
+  const configFile = effectiveConfigFile();
   if (!existsSync(configFile)) fail("workspace.config.json not found; run initialization first.");
   const config = readJson(configFile, "workspace config");
   const repositories = Array.isArray(config.repositories) ? config.repositories : [];
@@ -1163,7 +1189,7 @@ function buildEntrySyncPrompt(windowName, repo) {
 }
 
 function readRepositoryForWindow(windowName) {
-  const config = readJson(path.join(workspaceRoot, "workspace.config.json"), "workspace config");
+  const config = readJson(effectiveConfigFile(), "workspace config");
   // Titles are ASCII by design: CJK names were repeatedly mangled by shell
   // locale hops between the controller agent, tmux, and display surfaces.
   if (windowName === config.controllerWindow) {
@@ -1312,6 +1338,17 @@ function commandCheckWorkspace() {
   const legacyDir = path.join(stateDir, "thread-registry");
   if (existsSync(legacyDir) && readdirSync(legacyDir).some((name) => name.endsWith(".json"))) {
     note("legacy-codex-registry", "present", "Informational: pre-dual-host Codex registrations; the Codex plugin reads them via fallback. Not a Claude-side problem.");
+  }
+
+  try {
+    const overlay = readOverlay(workspaceRoot);
+    if (overlay && !overlayIsDerived(overlay)) {
+      note("stream-overlay", "user-owned", "Informational: .wakeflow-local/workspace.config.json is hand-maintained; stream registration stays disabled until it is folded into workspace.config.json.");
+    } else if (overlay && overlayBaseStale(workspaceRoot, overlay)) {
+      note("stream-overlay", "stale-base", "workspace.config.json changed after the stream overlay was generated; any stream-open/stream-close regenerates it (or close all streams to drop it).");
+    }
+  } catch (error) {
+    note("stream-overlay", "unreadable", error.message);
   }
 
   let stamp = null;
@@ -1564,6 +1601,299 @@ function commandSeedPermissions() {
   });
 }
 
+const DEFAULT_MAX_STREAMS = 2;
+
+function streamOpenLockFile(repoWindow) {
+  return path.join(hostDir, `stream-open-${slug(repoWindow)}.lock`);
+}
+
+function buildStreamEntrySyncPrompt(windowName, repoWindow, worktreeRel, branch, demandKey) {
+  return `${[
+    `You are the **${windowName}** window — a parallel development STREAM of the ${repoWindow} repository in this Wakeflow workspace (worktree: ${worktreeRel}; branch: ${branch}; demand: ${demandKey}).`,
+    ``,
+    `Entry sync — do this before any dispatch arrives:`,
+    `1. Read the parent workspace \`CLAUDE.md\` (the controller's rules) and this repository's own \`CLAUDE.md\`/\`AGENTS.md\`, and follow them.`,
+    `2. State your window name and worktree identity in one line.`,
+    `3. You are a Wakeflow TARGET window: execute only the task packages the controller dispatches to you, return a TargetResultEnvelope when done, and never self-start or claim another window's work.`,
+    `4. STREAM BOUNDARY: work ONLY inside this worktree on branch ${branch}. Never touch the repository's main checkout, other stream worktrees, or other branches; merging back to the main line is a controller-owned step, never yours.`,
+    `5. Confirm you are ready, then WAIT for a controller dispatch — do not begin work before a task package arrives.`,
+  ].join("\n")}\n`;
+}
+
+// stream-open: one parallel stream = one ordinary window `<repo>__<streamId>`
+// bound to a fresh git worktree on branch `<demandKey>/<streamId>`. All new
+// state is the derived config overlay; locks/registry/launch reuse the
+// windowName-keyed machinery unchanged. The pool cap is a hard unattended
+// bound: exhaustion blocks, it never widens.
+function commandStreamOpen() {
+  const repoWindow = requireValue("--repo");
+  const streamId = slug(requireValue("--stream"));
+  const demandKey = requireValue("--demand-key");
+  const baseBranch = getValue("--base", "");
+  const noLaunch = hasFlag("--no-launch");
+
+  const trackedFile = path.join(workspaceRoot, "workspace.config.json");
+  if (!existsSync(trackedFile)) fail("workspace.config.json not found; run initialization first.");
+  try {
+    assertOverlayManageable(workspaceRoot);
+  } catch (error) {
+    fail(error.message);
+  }
+  const baseConfig = readJson(trackedFile, "workspace config");
+  const repoEntry = (Array.isArray(baseConfig.repositories) ? baseConfig.repositories : [])
+    .find((repo) => repo.windowName === repoWindow);
+  if (!repoEntry) fail(`--repo ${repoWindow} is not a configured repository window.`);
+  const repoPath = path.resolve(workspaceRoot, repoEntry.path);
+  if (!existsSync(repoPath)) fail(`repository path does not exist: ${repoPath}`);
+  const windowName = streamWindowName(repoWindow, streamId);
+  const branch = branchNameFor(demandKey, streamId);
+  const worktreeDir = worktreeDirFor(workspaceRoot, repoWindow, streamId);
+  const worktreeRel = path.relative(workspaceRoot, worktreeDir).split(path.sep).join("/");
+  mkdirSync(hostDir, { recursive: true });
+  mkdirSync(path.dirname(worktreeDir), { recursive: true });
+
+  // Registration + worktree creation are one critical section per repo: two
+  // concurrent opens would otherwise race the pool count, git refs, and the
+  // overlay regeneration. Launch (slow) happens after release.
+  let poolExhausted = null;
+  let activeForRepo = [];
+  let cap = DEFAULT_MAX_STREAMS;
+  const openCriticalSection = () => withFileLock(streamOpenLockFile(repoWindow), () => {
+    const overlay = readOverlay(workspaceRoot);
+    if (overlay && overlayBaseStale(workspaceRoot, overlay)) {
+      process.stderr.write("wakeflow-claude-host: stream overlay was stale against workspace.config.json; regenerating from the current base.\n");
+    }
+    const existing = overlay ? streamEntries(overlay) : [];
+    if (existing.some((entry) => entry.windowName === windowName)) {
+      fail(`stream window ${windowName} is already registered; close it first or pick another --stream id.`);
+    }
+    const repoStreams = existing.filter((entry) => entry.stream?.repo === repoWindow);
+    cap = maxStreamsFor(baseConfig, repoEntry, DEFAULT_MAX_STREAMS);
+    activeForRepo = repoStreams.map((entry) => entry.windowName);
+    if (repoStreams.length >= cap) {
+      poolExhausted = { activeStreams: activeForRepo, maxStreams: cap };
+      return;
+    }
+    if (existsSync(worktreeDir)) {
+      fail(`worktree directory already exists: ${worktreeDir}; close/remove it or choose another stream id.`);
+    }
+    const added = execHostText("git", ["-C", repoPath, "worktree", "add", worktreeDir, "-b", branch, ...(baseBranch ? [baseBranch] : [])]);
+    if (added.status !== 0) fail(`git worktree add failed: ${(added.stderr || added.stdout).trim()}`);
+    const entry = buildStreamEntry({ repoEntry, windowName, worktreeRel, repoWindow, streamId, demandKey, branch });
+    regenerateOverlay(workspaceRoot, [...existing, entry]);
+    activeForRepo = [...activeForRepo, windowName];
+  });
+  try {
+    openCriticalSection();
+  } catch (error) {
+    if (error?.code === "WAKEFLOW_STATE_LOCK_TIMEOUT") fail(error.message);
+    throw error;
+  }
+  if (poolExhausted) {
+    output({
+      ok: false,
+      command: "stream-open",
+      code: "pool-exhausted",
+      repo: repoWindow,
+      requestedStream: streamId,
+      ...poolExhausted,
+      note: "Stream pool for this repository is exhausted; wait for an active stream to be closed after acceptance, then retry (or sequence the work). Never widen maxStreams just to unblock unattended work.",
+    });
+    process.exitCode = 1;
+    return;
+  }
+
+  let launch = null;
+  let registration = null;
+  if (!noLaunch) {
+    const entrySyncFile = path.join(hostDir, `entry-sync-${slug(windowName)}.txt`);
+    writeFileSync(entrySyncFile, buildStreamEntrySyncPrompt(windowName, repoWindow, worktreeRel, branch, demandKey));
+    const launchArgv = [
+      "launch-window", "--root", workspaceRoot, "--server", getValue("--server", defaultServerSession()),
+      ...(stateDir !== path.resolve(workspaceRoot, ".wakeflow-local/wakeflow-delivery") ? ["--state-dir", stateDir] : []),
+      "--window", windowName, "--title", windowName, "--cwd", worktreeDir,
+      "--prompt-file", entrySyncFile, "--boot-wait-ms", getValue("--boot-wait-ms", "7000"),
+    ];
+    const launched = execHostText(process.execPath, [process.argv[1], ...launchArgv]);
+    try {
+      launch = JSON.parse(launched.stdout);
+    } catch {
+      launch = null;
+    }
+    if (!launch?.ok || !launch.sessionId) {
+      fail(`stream window launch failed (worktree + overlay are in place; retry with launch-window or stream-close ${windowName}): ${launch?.error || (launched.stderr || launched.stdout).slice(-200)}`);
+    }
+    const setupScript = path.join(pluginRootDir, "scripts", "wakeflow-setup.mjs");
+    const registered = execHostText(process.execPath, [
+      setupScript, "replace-windows", "--root", workspaceRoot,
+      "--window", windowName, "--thread", `${windowName}=${launch.sessionId}`, "--write", "--json",
+    ]);
+    try {
+      registration = JSON.parse(registered.stdout);
+    } catch {
+      registration = null;
+    }
+    if (!registration?.ok) {
+      fail(`stream window session registration failed: ${registration?.error || (registered.stderr || registered.stdout).slice(-200)}`);
+    }
+  }
+
+  output({
+    ok: true,
+    command: "stream-open",
+    windowName,
+    repo: repoWindow,
+    streamId,
+    demandKey,
+    branch,
+    worktree: worktreeRel,
+    overlay: path.relative(workspaceRoot, overlayConfigFile(workspaceRoot)),
+    activeStreamsForRepo: activeForRepo,
+    maxStreams: cap,
+    launched: Boolean(launch),
+    sessionRegistered: Boolean(registration?.ok),
+    threadIdRedacted: true,
+    note: noLaunch
+      ? "Worktree, branch, and registration overlay are in place (--no-launch); launch later with launch-window --window <name> --cwd <worktree>."
+      : "Stream window is live. Dispatch to it by windowName like any other window; one stream carries one task at a time.",
+  });
+}
+
+// stream-close: teardown is explicit and evidence-respecting — a dirty
+// worktree or an unmerged branch refuses by default so accepted-but-unmerged
+// work cannot be deleted casually.
+function commandStreamClose() {
+  const windowName = requireValue("--window");
+  const force = hasFlag("--force");
+  const deleteBranch = hasFlag("--delete-branch");
+  let overlay;
+  try {
+    overlay = assertOverlayManageable(workspaceRoot);
+  } catch (error) {
+    fail(error.message);
+  }
+  const entry = overlay ? streamEntryFor(overlay, windowName) : null;
+  if (!entry) fail(`${windowName} is not a registered stream window (no stream entry in the local config overlay).`);
+  const worktreeDir = path.resolve(workspaceRoot, entry.path);
+  const repoPath = path.resolve(workspaceRoot, entry.stream.repoPath);
+  const branch = entry.stream.branch;
+
+  const steps = [];
+  if (existsSync(worktreeDir)) {
+    const status = execHostText("git", ["-C", worktreeDir, "status", "--porcelain"]);
+    if (status.status === 0 && status.stdout.trim() && !force) {
+      fail(`worktree ${entry.path} has uncommitted changes; commit them (the stream's evidence) or pass --force to discard.`);
+    }
+    const removed = execHostText("git", ["-C", repoPath, "worktree", "remove", ...(force ? ["--force"] : []), worktreeDir]);
+    if (removed.status !== 0) fail(`git worktree remove failed: ${(removed.stderr || removed.stdout).trim()}`);
+    steps.push("worktree-removed");
+  } else {
+    execHostText("git", ["-C", repoPath, "worktree", "prune"]);
+    steps.push("worktree-already-missing-pruned");
+  }
+
+  if (deleteBranch) {
+    // -d refuses an unmerged branch: accepted work must be merged (or the
+    // deletion forced deliberately) before its branch disappears.
+    const deleted = execHostText("git", ["-C", repoPath, "branch", force ? "-D" : "-d", branch]);
+    if (deleted.status !== 0) {
+      fail(`git branch ${force ? "-D" : "-d"} ${branch} failed (worktree already removed; re-run stream-close without --delete-branch to finish deregistration, or merge the branch first): ${(deleted.stderr || deleted.stdout).trim()}`);
+    }
+    steps.push("branch-deleted");
+  }
+
+  const bindingFile = bindingFileFor(windowName);
+  if (existsSync(bindingFile)) {
+    try {
+      const binding = readJson(bindingFile, "window-host binding");
+      if (windowAlive(binding)) tmux(["kill-window", "-t", binding.tmux.windowId], { allowFailure: true });
+    } catch {
+      // unreadable binding: still remove the file below
+    }
+    rmSync(bindingFile, { force: true });
+    steps.push("tmux-window-closed");
+  }
+  for (const runtimeFile of [
+    path.join(hostDir, "thread-registry", `${slug(windowName)}.json`),
+    path.join(hostDir, "window-config", `${slug(windowName)}.json`),
+    lockFileFor(windowName),
+  ]) {
+    if (existsSync(runtimeFile)) {
+      rmSync(runtimeFile, { force: true });
+      steps.push(path.basename(path.dirname(runtimeFile)));
+    }
+  }
+
+  const remaining = streamEntries(overlay).filter((item) => item.windowName !== windowName);
+  const overlayInfo = regenerateOverlay(workspaceRoot, remaining);
+  output({
+    ok: true,
+    command: "stream-close",
+    windowName,
+    repo: entry.stream.repo,
+    branch,
+    branchDeleted: deleteBranch,
+    steps,
+    overlayRemoved: overlayInfo.removed,
+    remainingStreams: remaining.map((item) => item.windowName),
+  });
+}
+
+// stream-list: three-way reconcile (overlay registration / worktree on disk /
+// tmux liveness) — pure observation, no repair side effects.
+function commandStreamList() {
+  let overlay = null;
+  try {
+    overlay = readOverlay(workspaceRoot);
+  } catch (error) {
+    fail(error.message);
+  }
+  if (overlay && !overlayIsDerived(overlay)) {
+    output({ ok: true, command: "stream-list", overlay: "user-owned", streams: [], note: "local config overlay is hand-maintained; stream registration is disabled for this workspace." });
+    return;
+  }
+  const rows = (overlay ? streamEntries(overlay) : []).map((entry) => {
+    const worktreePresent = existsSync(path.resolve(workspaceRoot, entry.path));
+    const bindingFile = bindingFileFor(entry.windowName);
+    let alive = false;
+    if (existsSync(bindingFile)) {
+      try {
+        alive = windowAlive(JSON.parse(readFileSync(bindingFile, "utf8")));
+      } catch {
+        alive = false;
+      }
+    }
+    const registered = existsSync(path.join(hostDir, "thread-registry", `${slug(entry.windowName)}.json`));
+    const lock = readLock(entry.windowName);
+    const status = !worktreePresent
+      ? "broken-missing-worktree"
+      : alive
+        ? "active"
+        : registered
+          ? "resumable"
+          : "prepared";
+    return {
+      window: entry.windowName,
+      repo: entry.stream?.repo,
+      demandKey: entry.stream?.demandKey,
+      branch: entry.stream?.branch,
+      worktree: entry.path,
+      worktreePresent,
+      registered,
+      tmuxAlive: alive,
+      lockFresh: lockIsFresh(lock),
+      status,
+    };
+  });
+  output({
+    ok: true,
+    command: "stream-list",
+    overlay: overlay ? path.relative(workspaceRoot, overlayConfigFile(workspaceRoot)) : null,
+    overlayStale: overlay ? overlayBaseStale(workspaceRoot, overlay) : false,
+    streams: rows,
+  });
+}
+
 function commandHelp() {
   output({
     ok: true,
@@ -1588,6 +1918,9 @@ function commandHelp() {
       "stamp-runtime": "Record the converging plugin version in hosts/claude-code/runtime-meta.json: --write.",
       "arrange-windows": "Rename managed windows to short tabs and order them Design, controller, products, Test (unmanaged windows trail): [--server wakeflow].",
       "seed-permissions": "Converge both settings layers for the workspace root and every configured repository: portable allow rules + relative parent reference into committed .claude/settings.json, the machine-local statusline into .claude/settings.local.json, plus the generated statusline script. Migrates older absolute-path/statusLine residue. [--write] (dry-run by default).",
+      "stream-open": "Open one parallel development stream: git worktree on branch <demand-key>/<stream> + a registered window <repo>__<stream> in the derived local config overlay, then launch + register its claude session: --repo <window> --stream <id> --demand-key <key> [--base <branch>] [--no-launch] [--server] [--boot-wait-ms]. Blocks with pool-exhausted at maxStreams (hosts.claude-code.maxStreamsPerRepo or repositories[].maxStreams, default 2).",
+      "stream-close": "Close one stream: refuse a dirty worktree without --force, git worktree remove, optional --delete-branch (-d refuses unmerged; --force upgrades to -D), kill the tmux window, drop registry/binding/lock, regenerate (or remove) the overlay: --window <repo>__<stream> [--delete-branch] [--force].",
+      "stream-list": "Three-way stream reconcile (overlay registration / worktree / tmux liveness) with per-stream status (active|resumable|prepared|broken) and overlay base-hash staleness. Read-only.",
     },
   });
 }
@@ -1612,6 +1945,9 @@ async function main() {
     case "set-unattended": return commandSetUnattended();
     case "launch-all": return commandLaunchAll();
     case "replace-all": return commandReplaceAll();
+    case "stream-open": return commandStreamOpen();
+    case "stream-close": return commandStreamClose();
+    case "stream-list": return commandStreamList();
     case "stamp-runtime": return commandStampRuntime();
     case "help": return commandHelp();
     default:

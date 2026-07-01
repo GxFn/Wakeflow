@@ -144,7 +144,21 @@ stream = 独立窗口 `<repo>__<streamId>` + 独立 worktree + 独立分支 `<de
 | H-5 | `wakeflow-setup.mjs`（2604 行）拆分 + 各脚本手写 argv 解析（hasFlag/getValue/valuesFor 三件套 × N 份）统一进共享 lib | 深读 §6-6 | 机会性重构，搭任何触碰 setup 的需求便车 |
 | H-6 | 协议人体工学：波次批量 prepare 的输出聚合。**不**合并 prepare/send/record 三步——步骤分离是证据模型本身，README 明令不得折叠 | 深读 §6-5 | 每波 stream 数 ≥3 后控制器上下文压力再评估 |
 
-已消解、不再列入的项：漂移 gate 化（随 PD-5 决议升级——分数已移除，无门可设）；RA3 的写序/锁释放/spawn 错误处理（核实已于 0.5.x-0.6.x 落地：`wakeflow-state.mjs:1267-1276` F41 写序、`:1024-1031` 共享锁释放、`wakeflow-runtime.mjs:139-169` SIGKILL 升级与 spawn error 兜底）。
+已消解、不再列入的项：漂移 gate 化（随 PD-5 决议升级——分数已移除，无门可设）；RA3 的写序/锁释放/spawn 错误处理（核实已于 0.5.x-0.6.x 落地：`wakeflow-state.mjs:1267-1276` F41 写序、`:1024-1031` 共享锁释放、`wakeflow-runtime.mjs:139-169` SIGKILL 升级与 spawn error 兜底）；并发写竞态（Phase 0）；组文件锁（对抗式复核证伪撤销）。
+
+**2026-07-02 真机验收后的观察项增补**（实现与验收过程新暴露；建议将带 ⚡ 的五项打包为一个 O-wave——观察性/加固小波，全部单文件级，共同点是"让下一次事故变成一条清晰信号"）：
+
+| # | 候选 | 来源 | 触发/建议 |
+| --- | --- | --- | --- |
+| H-7 ⚡ | 监视器进程作用域防护：`window-status`/`check-workspace` 显示 monitor pid+root 归属；文档写明清理须按 `--root` 过滤 | 真机验收事故：宽 pgrep 误杀了另一工作区的生产监视器（纯可视化组件，已原样恢复） | 建议立即搭车 |
+| O-2 ⚡ | `deliver` readback 自动断言：envelope.prompt 首行不在 paneTail 时输出 warning（不 fail） | 真机验证 pane 抓屏可靠，残余间隙 = "落 pane ≠ 模型开始处理"；比完整 ack 工件便宜一个量级 | 建议立即搭车 |
+| H-8 ⚡ | `set-unattended --write` 后若派生覆盖层存在则同步重生成（复用 `regenerateOverlay`） | stream 存活期间改 tracked config → 覆盖层立即 stale，下次 stream 操作才刷新 | 建议立即搭车 |
+| H-10 ⚡ | 写锁 stale-break 前加 `process.kill(pid,0)` 存活检查，活进程加倍耐心 | Phase 0 自查：30s 固定阈值 vs archive 大 state root 的合法长持锁 | 建议立即搭车 |
+| （H-3 ⚡） | LLM 契约 lint（原 H-3，价值上升：Phase 2 引入条件化 agentNext 覆盖，覆盖点将增多） | 深读 §6-3 | 并入 O-wave |
+| H-9 | 全局 TODO 板的单写者假定：markdown 读-改-写无锁，靠"Design 唯一追加、控制器唯一消费"纪律 | 本轮复盘 | 丢一行 TODO 时触发；对策现成（`withFileLock` 复用到板文件） |
+| H-11 | review-pack 的 packet 扫描随传输历史线性增长（`prune-runtime` 不清 packets 的既有累积叠加） | Phase 2 实现自查 | 长寿工作区 review-pack 变慢时触发；方向 = prune 扩展到 fully-accepted 组的 packets（原 P1-3 案） |
+
+真机验收带来的权重修正：H-1（锁续租）↑——并行 stream 使长任务更常见；H-4（完整 ack）↓——pane 抓屏实测可靠，O-2 覆盖大半残余间隙；E-1 维持——波尾等待是否成真痛点待真实多任务波数据。
 
 ---
 

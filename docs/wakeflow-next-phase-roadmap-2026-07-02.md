@@ -56,7 +56,7 @@
 
 **完成定义（可证伪，已验证）**：争锁超时用例直接证明互斥生效（新鲜外部锁令命令 fail-closed 且不删他人锁）；4 路并行 add 全部落地、revision 严格连续 1→5；并行 import 不 bump revision；stale 锁被告警夺回；`npm test` 全绿（含双 edition 字节平价与双 smoke）；版本随 Phase 1 一并 bump 至 0.7.0。
 
-### Phase 1 —— F3 并行开发（版本 0.7.0，规模 M，主交付）——✅ 已于 2026-07-02 落地（W1-a/b/c 机制 + W1-d 散文与 0.7.0 bump；散文限 Claude 版——Codex 版无 stream 能力，不写虚构文档；余：tmux 真机验收按本节清单在真实工作区执行）
+### Phase 1 —— F3 并行开发（版本 0.7.0，规模 M，主交付）——✅ 已于 2026-07-02 落地并通过 tmux 真机验收（W1-a/b/c 机制 + W1-d 散文与 0.7.0 bump；散文限 Claude 版——Codex 版无 stream 能力，不写虚构文档。真机验收记录：沙箱工作区 + 专用 tmux socket，两 stream 真实起窗（worktree/独立分支/覆盖层注册/会话注册），第三条触 pool-exhausted 硬阻塞；完整闭环——真实 tmux 投递落 pane 且 readback 回读提示词、record sent、目标在 worktree 分支真实提交、import 释放锁、reduce 正确解析 repo 相对证据 ref、candidate→accept；活动监视器实测在锁释放后把窗口徽标翻 done；clean close 保留未合并分支、末 stream 关闭即删覆盖层、监视器自行退出。真 claude 二进制探针：起窗、folder-trust 自动确认、入场提示投递、真实模型回复 READY、pane 回读完整 UI。Phase 2 的派发侧真机项（compact 同屏两句 + Intent check 提醒）同场验证通过）
 
 stream = 独立窗口 `<repo>__<streamId>` + 独立 worktree + 独立分支 `<demandKey>/<streamId>`。锁/绑定/启动/group fan-out 全按 windowName 键（`wakeflow-delivery-store.mjs:152-153`、`wakeflow-state.mjs:675`、`wakeflow-delivery.mjs:306-308`），独立窗口名自动获得独立锁与独立 targetTaskId——**不改锁键、不改 id 方案、不改 sameTargetDescriptor**（需求文档对抗式复核结论，本轮测绘复认）。
 

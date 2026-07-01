@@ -829,11 +829,24 @@ async function performSend({ windowName, promptFile, deliveryId, commandName }) 
   await sleep(Number.isFinite(readbackWait) ? readbackWait : 1200);
   const tailLines = Number(getValue("--lines", "25"));
   const paneTail = capturePaneTail(binding, Number.isFinite(tailLines) ? tailLines : 25);
+  // Cheap transport assertion: the prompt's first line should surface in the
+  // pane. Claude Code may collapse large pastes, so a missing echo alone is
+  // NOT an error — only a byte-stable pane AND no echo means "nothing visibly
+  // happened" (paste landed in a dialog or a dead pane) and earns a warning.
+  const promptFirstLine = readFileSync(path.resolve(workspaceRoot, promptFile), "utf8")
+    .split("\n")
+    .find((line) => line.trim()) || "";
+  const promptEchoed = Boolean(promptFirstLine) && paneTail.includes(promptFirstLine.slice(0, 24));
+  const paneChanged = paneTail !== before;
+  const readbackWarning = !paneChanged && !promptEchoed
+    ? "pane is byte-stable and the prompt's first line is not visible; the paste may have landed in a dialog or a dead pane — inspect the window before relying on this send"
+    : undefined;
 
   output({
     ok: true,
     command: commandName,
     lockWarning,
+    readbackWarning,
     windowName,
     windowId: binding.tmux.windowId,
     deliveryId: effectiveDeliveryId || undefined,
@@ -842,7 +855,8 @@ async function performSend({ windowName, promptFile, deliveryId, commandName }) 
     controllerNotification: isControllerTarget || undefined,
     readback: {
       paneTail,
-      paneChanged: paneTail !== before,
+      paneChanged,
+      promptEchoed,
     },
   });
 }
@@ -1225,6 +1239,22 @@ function commandSetUnattended() {
   }
   // Windows already running keep their launch-time mode; report which need a
   // resume-restart to pick up the new mode, and which are mid-turn (skip).
+  // The derived stream overlay is a full COPY of the tracked config; a tracked
+  // write would leave it stale until the next stream operation, so regenerate
+  // it in the same turn (H-8).
+  let overlayRegenerated = false;
+  let overlayWarning;
+  if (write) {
+    try {
+      const overlay = readOverlay(workspaceRoot);
+      if (overlay && overlayIsDerived(overlay)) {
+        regenerateOverlay(workspaceRoot, streamEntries(overlay));
+        overlayRegenerated = true;
+      }
+    } catch (error) {
+      overlayWarning = `stream overlay was not regenerated: ${error.message}`;
+    }
+  }
   const restart = [];
   if (existsSync(windowHostDir)) {
     for (const name of readdirSync(windowHostDir).filter((f) => f.endsWith(".json")).sort()) {
@@ -1238,6 +1268,8 @@ function commandSetUnattended() {
     ok: true,
     command: "set-unattended",
     wrote: write,
+    overlayRegenerated,
+    overlayWarning,
     previousMode: previous,
     mode,
     note: mode === "bypassPermissions"
@@ -1245,6 +1277,21 @@ function commandSetUnattended() {
       : "Windows resume-restart into this mode; bypass auto-consent no longer applies.",
     restart,
   });
+}
+
+function activityMonitorOwnership(serverSession) {
+  // Ownership visibility: one monitor per workspace+server. Cleanup must match
+  // by --root (visible in the process command line), never by bare process
+  // name — a wide pgrep kills OTHER workspaces' monitors.
+  const pidFile = activityMonitorPidFile(serverSession);
+  const pid = existsSync(pidFile) ? Number(readFileSync(pidFile, "utf8").trim()) : null;
+  return {
+    server: serverSession,
+    root: workspaceRoot,
+    running: activityMonitorRunning(serverSession),
+    pid: Number.isInteger(pid) && pid > 0 ? pid : null,
+    cleanupRule: "match monitor processes by --root, never by bare process name",
+  };
 }
 
 function commandWindowStatus() {
@@ -1270,7 +1317,13 @@ function commandWindowStatus() {
       });
     }
   }
-  output({ ok: true, command: "window-status", reconciled: reconcile, windows: rows });
+  output({
+    ok: true,
+    command: "window-status",
+    reconciled: reconcile,
+    activityMonitor: activityMonitorOwnership(getValue("--server", defaultServerSession())),
+    windows: rows,
+  });
 }
 
 function commandCheckWorkspace() {
@@ -1366,6 +1419,7 @@ function commandCheckWorkspace() {
     command: "check-workspace",
     pluginVersion: pluginVersion(),
     stamp,
+    activityMonitor: activityMonitorOwnership(defaultServerSession()),
     healthy: gaps.length === 0,
     gaps,
   });
@@ -1912,8 +1966,8 @@ function commandHelp() {
       "attach-window": "Print the human instruction to enter the workspace (open a new terminal window/tab and run tmux attach -t <session>): --window.",
       "launch-all": "Resume every registered window in canonical order (Design, controller, products, Test) using the recorded permissionMode, skipping in-flight windows: [--server <name>].",
       "replace-all": "Tear down and rebuild the whole fleet (or a named subset) with BRAND-NEW sessions: kills each old tmux window, launches a fresh claude session (empty context), and registers the new id via core replace-windows (config/docs untouched). Skips in-flight windows: [--server <name>] [--window <name> ...] [--boot-wait-ms].",
-      "set-unattended": "Set hosts.claude-code.permissionMode (acceptEdits|bypassPermissions|...) and report which live windows need a resume-restart: --mode <m> [--write].",
-      "window-status": "Report per-window dispatch state (busy/done, lock, delivery id): [--reconcile] recomputes busy from shared locks and clears stale visual markers.",
+      "set-unattended": "Set hosts.claude-code.permissionMode (acceptEdits|bypassPermissions|...), regenerate the derived stream overlay when present (a tracked-config write must not leave it stale), and report which live windows need a resume-restart: --mode <m> [--write].",
+      "window-status": "Report per-window dispatch state (busy/done, lock, delivery id) plus activity-monitor ownership (pid/root/server — clean up monitors by --root, never by bare process name): [--reconcile] recomputes busy from shared locks and clears stale visual markers.",
       "check-workspace": "Read-only health check for an existing workspace: config hosts block, managed CLAUDE.md surfaces, registry/binding/liveness per window, permission seeds, legacy codex registry, plugin version stamp.",
       "stamp-runtime": "Record the converging plugin version in hosts/claude-code/runtime-meta.json: --write.",
       "arrange-windows": "Rename managed windows to short tabs and order them Design, controller, products, Test (unmanaged windows trail): [--server wakeflow].",

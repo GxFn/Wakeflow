@@ -47,13 +47,25 @@ export function withFileLock(lockFile, fn, { acquireTimeoutMs = ACQUIRE_TIMEOUT_
       const ageMs = holder?.createdAt ? Date.now() - Date.parse(holder.createdAt) : Number.POSITIVE_INFINITY;
       // NaN age (garbage createdAt) must count as stale, hence the negated form.
       if (!(ageMs <= staleMs)) {
+        // The fixed stale threshold cannot tell a crash from a legitimate long
+        // hold (archive-demand staging a large state root). A LIVE holder pid
+        // gets 4x patience before the lock is stolen; a dead pid is residue.
+        if (pidAlive(holder?.pid) && ageMs <= staleMs * 4) {
+          if (Date.now() >= deadline) {
+            throw new WakeflowStateLockTimeoutError(
+              `state root is locked by a LIVE long-running Wakeflow process (pid ${holder.pid}, since ${holder.createdAt}); retry after it finishes — do not remove ${lockFile} while that pid is alive`,
+            );
+          }
+          sleep(RETRY_DELAY_MS + Math.floor(Math.random() * RETRY_DELAY_MS));
+          continue;
+        }
         // Crash residue or an unreadable lock: break it. Re-check the holder just
         // before unlink so two concurrent breakers cannot free each other's FRESH
         // lock; the remaining microsecond TOCTOU only exists on the 30s-stuck
         // recovery path, never in normal contention.
         const recheck = readLock(lockFile);
         if ((recheck?.token ?? null) === (holder?.token ?? null)) {
-          onWarn?.(`breaking stale state lock ${lockFile} (held by pid ${holder?.pid ?? "unknown"} since ${holder?.createdAt ?? "unknown"})`);
+          onWarn?.(`breaking stale state lock ${lockFile} (held by pid ${holder?.pid ?? "unknown"}${pidAlive(holder?.pid) ? " STILL ALIVE past 4x stale age" : ""} since ${holder?.createdAt ?? "unknown"})`);
           try {
             unlinkSync(lockFile);
           } catch {
@@ -82,6 +94,16 @@ function readLock(lockFile) {
     return JSON.parse(readFileSync(lockFile, "utf8"));
   } catch {
     return null;
+  }
+}
+
+function pidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
   }
 }
 

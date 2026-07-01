@@ -156,6 +156,25 @@ test("a hand-maintained local config override blocks stream registration fail-cl
   assert.equal(untouched.controllerWindow, "Custom", "user override must never be overwritten");
 });
 
+test("window-status exposes activity-monitor ownership (H-7) and set-unattended regenerates the overlay (H-8)", () => {
+  const { root } = makeWorkspace();
+  assert.equal(openStream(root, "a").status, 0);
+
+  const status = JSON.parse(host(root, ["window-status"]).stdout);
+  assert.equal(status.activityMonitor.root, root, "monitor ownership must name its workspace root");
+  assert.equal(status.activityMonitor.running, false);
+  assert.match(status.activityMonitor.cleanupRule, /--root/);
+
+  // tracked-config write must not leave the derived overlay stale
+  const changed = JSON.parse(host(root, ["set-unattended", "--mode", "bypassPermissions", "--write"]).stdout);
+  assert.equal(changed.overlayRegenerated, true);
+  const after = JSON.parse(host(root, ["stream-list"]).stdout);
+  assert.equal(after.overlayStale, false, "overlay must be regenerated from the freshly written base");
+  assert.equal(after.streams.length, 1, "stream registration must survive the regeneration");
+  const overlay = readJson(overlayFile(root));
+  assert.equal(overlay.hosts["claude-code"].permissionMode, "bypassPermissions", "overlay must carry the new base value");
+});
+
 test("archive-demand refuses while the demand's streams are open (PD-4 gate)", () => {
   const { root } = makeWorkspace();
   const stateScript = path.join(pluginRoot, "scripts/wakeflow-state.mjs");

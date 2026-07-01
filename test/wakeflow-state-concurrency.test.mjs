@@ -189,6 +189,48 @@ test("a stale lock is broken with a warning instead of wedging the command", () 
   assert.equal(existsSync(lockFile), false);
 });
 
+test("a stale-aged lock held by a LIVE pid is protected, not stolen (H-10)", () => {
+  const root = makeRoot();
+  const stateRoot = initDemand(root, "LOCK-LIVE-2026-07-02");
+  const lockFile = lockFileFor(stateRoot);
+  writeFileSync(
+    lockFile,
+    `${JSON.stringify({
+      kind: "WakeflowStateLock",
+      version: 1,
+      pid: process.pid,
+      token: "live-long-archive",
+      createdAt: new Date(Date.now() - 60000).toISOString(),
+    })}\n`,
+  );
+
+  const result = run(addTaskArgs(root, stateRoot, "tp-blocked-live", "RepoA"));
+  assert.equal(result.status, 1, result.stdout);
+  assert.match(JSON.parse(result.stdout).error, /LIVE long-running/);
+  assert.equal(existsSync(lockFile), true, "a live holder's lock must survive the stale threshold");
+});
+
+test("a live pid's lock IS broken past 4x stale age with a loud warning (H-10)", () => {
+  const root = makeRoot();
+  const stateRoot = initDemand(root, "LOCK-LIVE-4X-2026-07-02");
+  const lockFile = lockFileFor(stateRoot);
+  writeFileSync(
+    lockFile,
+    `${JSON.stringify({
+      kind: "WakeflowStateLock",
+      version: 1,
+      pid: process.pid,
+      token: "live-but-ancient",
+      createdAt: new Date(Date.now() - 150000).toISOString(),
+    })}\n`,
+  );
+
+  const result = run(addTaskArgs(root, stateRoot, "tp-after-4x", "RepoA"));
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stderr, /STILL ALIVE past 4x stale age/);
+  assert.equal(existsSync(lockFile), false);
+});
+
 test("a fresh foreign lock fails the command closed after the acquire timeout", () => {
   const root = makeRoot();
   const stateRoot = initDemand(root, "LOCK-FRESH-2026-07-02");

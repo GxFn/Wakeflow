@@ -11,6 +11,7 @@ import {
   normalizeInterfaceLanguage,
   wakeflowStateLocale,
 } from "./lib/wakeflow-language.mjs";
+import { WakeflowStateLockTimeoutError, withStateRootLock } from "./lib/wakeflow-state-lock.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const wakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -381,16 +382,24 @@ try {
   }
 
   if (write) {
-    // Lost-update guard: re-read the state and rebuild from the FRESH copy so a
-    // concurrent revision bump between our read and this write is not reverted.
-    const fresh = readJson(stateFile, "controller state");
-    if (fresh.revision !== state.revision) {
-      fail(`controller state changed while rendering (revision ${state.revision} -> ${fresh.revision}); re-run wakeflow-render-progress against the current state.`);
+    // Lost-update guard, under the shared cross-process state lock: the FRESH
+    // re-read happens inside the lock, so a concurrent revision bump between our
+    // read and this write is impossible rather than merely detected.
+    try {
+      withStateRootLock(stateRoot, () => {
+        const fresh = readJson(stateFile, "controller state");
+        if (fresh.revision !== state.revision) {
+          fail(`controller state changed while rendering (revision ${state.revision} -> ${fresh.revision}); re-run wakeflow-render-progress against the current state.`);
+        }
+        writeJson(projectionFile, projection);
+        atomicWrite(indexFile, stateRootIndex.endsWith("\n") ? stateRootIndex : `${stateRootIndex}\n`);
+        writeJson(stateFile, { ...fresh, projection: nextState.projection });
+        atomicWrite(progressFile, nextProgress.endsWith("\n") ? nextProgress : `${nextProgress}\n`);
+      }, { onWarn: (message) => process.stderr.write(`wakeflow-render-progress: ${message}\n`) });
+    } catch (error) {
+      if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);
+      throw error;
     }
-    writeJson(projectionFile, projection);
-    atomicWrite(indexFile, stateRootIndex.endsWith("\n") ? stateRootIndex : `${stateRootIndex}\n`);
-    writeJson(stateFile, { ...fresh, projection: nextState.projection });
-    atomicWrite(progressFile, nextProgress.endsWith("\n") ? nextProgress : `${nextProgress}\n`);
   }
 
   output(

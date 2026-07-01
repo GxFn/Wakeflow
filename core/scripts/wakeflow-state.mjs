@@ -15,6 +15,7 @@ import { controllerReviewScope, hasPendingReworkDecision, reductionStatusForTarg
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import { releaseWindowLockForResult } from "./lib/wakeflow-delivery-store.mjs";
 import { scanStateRootForRealIds, redactStateRootIntoCopy } from "./lib/wakeflow-redaction.mjs";
+import { WakeflowStateLockTimeoutError, withStateRootLock } from "./lib/wakeflow-state-lock.mjs";
 import {
   activeDemandConflictSummary,
   scanUnarchivedDemandStateRoots,
@@ -175,6 +176,13 @@ function ensureDemandHostOwnership(state, { claim = true } = {}) {
 
 function commandAdoptDemandHost() {
   const stateRoot = resolveFromWorkspace(requireValue("--state-root"));
+  if (!existsSync(path.join(stateRoot, "wakeflow-state.json"))) {
+    fail(`state root is missing wakeflow-state.json: ${relative(stateRoot)}`);
+  }
+  withLockedStateRoot(stateRoot, () => commandAdoptDemandHostLocked(stateRoot));
+}
+
+function commandAdoptDemandHostLocked(stateRoot) {
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   if (!existsSync(stateFile)) fail(`state root is missing wakeflow-state.json: ${relative(stateRoot)}`);
@@ -341,6 +349,21 @@ function appendJsonLine(file, value) {
   // lines, matching the delivery-store implementation.
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(value)}\n`, { flag: "a" });
+}
+
+// Cross-process mutex for every state-root read-modify-write command. Parallel MCP
+// calls from one controller turn (e.g. two add-task-package) otherwise both read
+// revision N and the second write silently drops the first. The state readJson must
+// happen INSIDE fn so the whole read-modify-write is one critical section.
+function withLockedStateRoot(stateRoot, fn) {
+  try {
+    return withStateRootLock(stateRoot, fn, {
+      onWarn: (message) => process.stderr.write(`wakeflow-state: ${message}\n`),
+    });
+  } catch (error) {
+    if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);
+    throw error;
+  }
 }
 
 function nextEventId(createdAt, revision) {
@@ -668,6 +691,10 @@ function commandInit() {
 
 function commandAddTaskPackage() {
   const stateRoot = stateRootFromArg();
+  withLockedStateRoot(stateRoot, () => commandAddTaskPackageLocked(stateRoot));
+}
+
+function commandAddTaskPackageLocked(stateRoot) {
   const taskPackageId = requireValue("--task-package-id");
   const summary = requireValue("--summary");
   const sourceRef = getValue("--source-ref", null);
@@ -1079,6 +1106,10 @@ function commandImportTargetResult() {
 
 function commandReduceResults() {
   const stateRoot = stateRootFromArg();
+  withLockedStateRoot(stateRoot, () => commandReduceResultsLocked(stateRoot));
+}
+
+function commandReduceResultsLocked(stateRoot) {
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const state = readJson(stateFile, "controller state");
@@ -1308,6 +1339,10 @@ function commandReduceResults() {
 
 function commandDecideReview() {
   const stateRoot = stateRootFromArg();
+  withLockedStateRoot(stateRoot, () => commandDecideReviewLocked(stateRoot));
+}
+
+function commandDecideReviewLocked(stateRoot) {
   const candidateId = requireValue("--candidate-id");
   const decision = requireValue("--decision");
   const reason = requireValue("--reason");
@@ -1480,6 +1515,10 @@ function commandDecideReview() {
 
 function commandCompleteDemand() {
   const stateRoot = stateRootFromArg();
+  withLockedStateRoot(stateRoot, () => commandCompleteDemandLocked(stateRoot));
+}
+
+function commandCompleteDemandLocked(stateRoot) {
   const reason = requireValue("--reason");
   const evidenceRefs = valuesFor("--evidence-ref");
   if (evidenceRefs.length === 0) {
@@ -1839,6 +1878,10 @@ function scanDanglingEnvelopeRefs(stateRoot) {
 // the ledger is committed, so a filesystem failure cannot half-flip the active state root.
 function commandArchiveDemand() {
   const stateRoot = stateRootFromArg();
+  withLockedStateRoot(stateRoot, () => commandArchiveDemandLocked(stateRoot));
+}
+
+function commandArchiveDemandLocked(stateRoot) {
   const reason = requireValue("--reason");
   const redact = options.includes("--redact");
   const evidenceRefs = valuesFor("--evidence-ref");

@@ -100,10 +100,13 @@ test("next-work blocks new candidates while another demand state root is unarchi
   });
 
   const result = run(root, ["--source", "todo", "--after-completion"]);
-  assert.notEqual(result.status, 0);
+  // At-capacity is a WARNING, not an error: the scan stays ok (in-flight
+  // demands still need review/dispatch) while every new claim is blocked.
+  assert.equal(result.status, 0, result.stdout);
   const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
   assert.equal(parsed.candidateCount, 0);
-  assert.match(parsed.issues.join("\n"), /workspace is at its active-demand capacity \(1\/1\)/);
+  assert.match(parsed.warnings.join("\n"), /workspace is at its active-demand capacity \(1\/1\)/);
   assert.equal(parsed.workspaceDemandConflicts[0].demandKey, "current-demand");
   assert.equal(parsed.demandCapacity.atCapacity, true);
 });

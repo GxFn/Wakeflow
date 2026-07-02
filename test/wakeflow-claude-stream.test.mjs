@@ -43,6 +43,7 @@ function makeWorkspace({ maxStreamsPerRepo = 2 } = {}) {
   writeFileSync(path.join(root, "workspace.config.json"), `${JSON.stringify({
     workspaceName: "StreamFixture",
     controllerWindow: "Controller",
+    projectLedgerRoot: "wakeflow-ledger",
     repositories: [
       { windowName: "RepoA", path: "RepoA", role: "Fixture repo" },
       { windowName: "RepoB", path: "RepoB", role: "Second fixture repo" },
@@ -264,7 +265,7 @@ test("archive-demand refuses while the demand's streams are open (PD-4 gate)", (
 
   const refused = runSync(process.execPath, [stateScript, "archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "done", "--json"]);
   assert.equal(refused.status, 1, refused.stdout);
-  assert.match(JSON.parse(refused.stdout).error, /stream window\(s\) are still open/);
+  assert.match(JSON.parse(refused.stdout).error, /isolation worktree window\(s\) are still open/);
 
   assert.equal(host(root, ["stream-close", "--window", "RepoA__a"]).status, 0);
   const dryRun = runSync(process.execPath, [stateScript, "archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "done", "--json"]);

@@ -152,7 +152,11 @@ Install the Claude Code edition from inside Claude Code:
 The Claude Code edition is terminal-only: every Wakeflow window (controller
 included) is a tmux-resident interactive `claude` session in the `wakeflow`
 tmux server session, and a Wakeflow thread id is the window's Claude Code
-session id (stable across resumes). See
+session id (stable across resumes). Up to `maxActiveDemands` (default 2)
+demands may run side by side as **demand pods** — each pod is its own tmux
+session with its own controller, per-repo isolation worktree windows, and its
+own Test; claiming past capacity fails closed, and pod branches merge back
+only through the human-reviewed `pending-merges.md` ledger. See
 [plugins/claude-code-wakeflow/README.md](plugins/claude-code-wakeflow/README.md)
 for the full Claude Code guide.
 
@@ -165,7 +169,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.5.6/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.7/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository
@@ -321,6 +325,7 @@ Core rules:
 - After a demand is owned by one host, the other host fails closed on
   controller mutations and dispatch preparation unless ownership is explicitly
   transferred with `--adopt-host`.
+- Up to `maxActiveDemands` (default 2, top-level `workspace.config.json`) demands may be active at once; claiming past capacity fails closed until one completes and archives. `wakeflow_next_work` reports `activeDemands` + `demandCapacity`.
 - `wakeflow_status` exposes demand ownership under `dualHost.demandOwnership`
   so mixed-host controllers can see which platform owns active work before
   acting.
@@ -343,11 +348,12 @@ Primary tool groups:
 | --- | --- |
 | Setup and workspace discovery | `wakeflow_initialize_workspace` |
 | Responsibility window replacement | `wakeflow_replace_windows` (one via `window`, many via `windows`) |
-| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_next_work` |
+| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_next_work`, `wakeflow_render_progress` |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
 | Archive, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs), `wakeflow_prune_runtime`, `wakeflow_verify`, `wakeflow_view` (scope trace) |
+| Host ownership and locks | `wakeflow_adopt_demand_host`, `wakeflow_release_window_lock` |
 
 Public MCP tools are for outer agent workflows. Target closeout is deliberately
 split: record a target result, review readiness, prepare a controller-return

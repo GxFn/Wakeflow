@@ -226,3 +226,29 @@ Phase 3  —      加固+规模化（观察触发）  E系: 流式评审/多活�
 ```
 
 红线一句话版：additive-only；不改锁键/id/裁决语义；意图对齐只并排提醒、不算分不设门、最终确认归 Agent；池耗尽即停；host 词不进 core；散文双写；每 wave 全测试绿 + 真机验收留证。
+
+## 6. 全仓综合审计修复波 ——✅ 已于 2026-07-02 落地（0.7.7）
+
+三路后台代理（散文一致性 / 代码对抗 / 连通性）+ 主线复核，共 40 项确认发现，本波全部修复：
+
+**P0/P1 代码（core + claude-host）**
+- H1 tmux 前缀误匹配：`sessionTarget()` 给全部 22 处 session 目标加 `=` 精确匹配前缀（pod session 名 `wakeflow-<pod>` 与 `wakeflow` 前缀碰撞实测危险）。
+- H2 controller-return 锁误挂：`deliver` 按 envelope.kind 识别 ControllerReturnEnvelope 传 `controllerReturn`，pod 总控窗口不再走目标窗口锁；paste 互斥降为按窗口锁；pod-close 清扫 pod 窗口的 delivery/paste 锁。
+- H3 pod 断电恢复：stream-open 幂等续开（registered+dead → 只补 launch+register，跳过 worktree/overlay 重建），pod-open 永远委托；Controller/Test 首启后经 `register-thread` 注册 session id，重开时 `--resume --session-id` 续同一会话。
+- H4 行级生命周期闸 + todoId 领取：next-work 对"自己已有未归档 state root"的候选行直接 blocked（防重复建需求）；pod 总控提示词改用 `todoId` 领取（消费行）并带 resume 分支。
+- M5 证据解析 `__` 后缀回退（state 归档器 + review 解析器双处）：`Repo__pod` 在 overlay 条目消失后回退基仓库解析。
+- M6 `wakeflow_claim_next` 增加 `controllerWindow` 参数并全链路透传（schema→argv→claim-todo→create-demand）。
+- M7 容量 TOCTOU：init 的容量扫描与 demand/state 首写包进 workspace 级 `.capacity-lock` 临界区。
+- M8 舰队操作只读 tracked config（launch-all/replace-all/arrange 永不把 pod 窗口收编进主 session）。
+- GAP1 MCP 根解析向上爬找 `workspace.config.json`（子仓库窗口的 MCP 不再把根解析到自己仓库）。
+- GAP6 replace-all 重建总控时用总控向 entry-sync（不再当 target 等派发）；GAP7/GAP5/A7 三处文案纠正；GAP8 容量满降为 warning（ok:true，在飞需求仍可评审）。
+- L9 pod 路径尊重 `workspaceCurrentDir`；L10 台账回退对齐 `../wakeflow-ledger`；L11 pending-merges 去重 + overlay 再生失败显式 fail；L12 pod-open/close 向子命令透传 `--state-dir` + stream-close 清理 entry-sync 文件。
+
+**散文/文档（19 项，双版本）**
+- A1/A2 zh README 退役工具名（init_demand→create_demand、intake_design_handoff→deliver，补 claim_next）；A12 六份 README 工具表对齐（补 render_progress + 宿主归属/窗口锁行）。
+- A3 helper 命令表 9→24（按舰队/投递/策略/跨需求分组）；A4 删除 `--open-terminal`/iTerm2 `tmux -CC` 幻影能力（README×2 + scripts README + 平台注记）；A5 `deliver --delivery-file` 升为主传输（README×2 + wakeflow-delivery.md）；A6 无人值守段落改写为 recorded-permissionMode 模型；A8 恢复语句去乱码；A9 四处 v0.5.6 钉子 → v0.7.7。
+- A10 系统性补齐：windows.md 第 6 步路由 pod/stream 窗口、status/dispatch 多需求化、review.md 意图三元组 + intentCheck、两版 README Demand Pods 章节、根 README 容量胶囊、codex README 宿主中立容量条目。
+- A13 window-dispatch.md 写入"一仓一窗一组合包"规则 + 标准提示词改为组合包措辞（双版本）；A14 claude 路线图 stream 词汇清理；GAP2 review 决策枚举 wait→redesign；GAP4 合并归属统一为"人工审核、去中心化"（总控 skill + S6）。
+- 模板包（双版本，JSON 校验通过）：A15 handoff-inbox 死表面×2 → TODO board via deliver；A16 调度策略状态词表对齐板面词汇；A17 board 分隔行 13→12 列；A18 Design 边界补"deliver 是唯一许可写"；A19 `[alembic]` 残留 → `[wakeflow]`；GAP9 需求设计模板补齐出口门（Landing Plan/designIntent 列、Test Environment Spec、User Confirmation Ledger、Handoff Readiness 三新项）。
+
+**登记未修（后续观察）**：GAP3 全 pod 重启 runbook（pod-open 已幂等续开，缺一页操作文档）；Codex 版 pod 对称性（用户已定先 CC）；testing-validation.md 现代化重写；target skill 的 deliver 化措辞再统一。

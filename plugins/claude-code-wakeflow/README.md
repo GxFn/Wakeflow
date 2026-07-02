@@ -69,7 +69,7 @@ interactive Claude Code session pinned to one responsibility, and the status
 bar tells you who is doing what at a glance:
 
 ```text
-[alembic]  1:Design   >> 2:Controller   3:RepoA  +  4:RepoB   5:Test   6:zsh
+[wakeflow]  1:Design   >> 2:Controller   3:RepoA  +  4:RepoB   5:Test   6:zsh
             idle      green = executing  idle    result       idle    yours,
                       a turn right now           ready for            untouched
                                                  review
@@ -160,10 +160,10 @@ hosts, and ownership moves only through an explicit, audited
 
 ## Install Wakeflow
 
-> Platform support: macOS-first. The tmux fleet, `brew` preflight, and
-> current-terminal tab opening (iTerm2) are exercised daily on macOS; the tmux
-> core should work on Linux but is not yet verified there, and terminal-tab
-> opening degrades gracefully to a printed `tmux attach` command.
+> Platform support: macOS-first. The tmux fleet and `brew` preflight are
+> exercised daily on macOS; the tmux core should work on Linux but is not yet
+> verified there. Entering the fleet is always the same printed instruction:
+> open a new terminal and run `tmux attach -t <session>`.
 
 
 The repository root is the development workspace, and the installable Claude
@@ -189,7 +189,7 @@ The plugin ships four coordinated surfaces:
 | MCP server | `.mcp.json` starts `node ${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs`, a standalone server with no `node_modules` dependency. |
 | Skills | `wakeflow-controller`, `wakeflow-target`, and `wakeflow-governance` operating manuals. |
 | Slash commands | `/wakeflow:init`, `/wakeflow:check`, `/wakeflow:windows`, `/wakeflow:status`, `/wakeflow:dispatch`, `/wakeflow:review`, and `/wakeflow:unattended`. |
-| Host transport helper | `scripts/lib/wakeflow-claude-host.mjs` with the commands `preflight`, `ensure-server`, `launch-window`, `retitle`, `send`, `readback`, `release-lock`, `wait-results`, and `attach-window`. |
+| Host transport helper | `scripts/lib/wakeflow-claude-host.mjs`. Fleet: `preflight`, `ensure-server`, `launch-window`, `launch-all`, `replace-all`, `retitle`, `arrange-windows`, `attach-window`, `window-status`, `check-workspace`. Delivery: `deliver` (primary), `send`, `readback`, `release-lock`, `wait-results`, `activity-monitor`. Policy: `seed-permissions`, `set-unattended`, `stamp-runtime`. Cross-demand: `stream-open/close/list`, `pod-open/close/list`. |
 
 The helper requires tmux. Initialization runs `preflight`, which installs tmux
 with `brew install tmux` after one explicit user consent when it is missing,
@@ -244,9 +244,10 @@ You remain in control: scripts and MCP tools create, validate, and record machin
 
 Window transport is the key Claude Code difference, and the Claude Code
 edition is terminal-only. Every Wakeflow window (controller included) is a
-tmux-resident interactive `claude` session, and all windows live in one tmux
-server session named `wakeflow` by default. The session name is configurable
-in `workspace.config.json`:
+tmux-resident interactive `claude` session. The default fleet lives in one
+tmux server session named `wakeflow`; each demand pod (below) adds its own
+`wakeflow-<pod>` session beside it. The session name is configurable in
+`workspace.config.json`:
 
 ```json
 {
@@ -270,28 +271,56 @@ entry-sync prompt, sets the `displayTitle` as the tmux window name, and
 returns the session id, which is registered once in the local thread
 registry.
 
-**Dispatch.** The controller writes the envelope prompt to a temp file and
-runs `send --window <target> --prompt-file <file>`. The helper enforces a
-shared per-window delivery lock, pastes the prompt through a tmux buffer, and
-returns pane readback evidence; the agent records it with
-`wakeflow_record_delivery`. Target windows controller-return the same way
-toward the controller window. `wait-results --group <id>` is available only for
-explicit synchronous waits in scripted flows; normal dispatch does not arm it.
+**Dispatch.** The primary transport is one step: `deliver --delivery-file
+<envelope.json>` reads the prepared envelope, renders the prompt, resolves the
+target window itself, enforces the shared per-window delivery lock, pastes
+through a tmux buffer, and returns pane readback evidence; the agent records
+it with `wakeflow_record_delivery`. (`send --window <target> --prompt-file
+<file>` remains the low-level path for custom prompts.) Target windows
+controller-return the same way toward the controller window — for pod demands
+the envelope's stamped `controllerWindow` routes the return to the pod's own
+controller. `wait-results --group <id>` is available only for explicit
+synchronous waits in scripted flows; normal dispatch does not arm it.
 
 **Recovery.** When a tmux window dies, the registered session id remains the
 thread id: relaunch the SAME session interactively with `launch-window --resume --session-id <registered id> --replace` (same id; subscription pool). Headless `claude -p --resume` is a last resort that bills the separate Agent SDK credit from 2026-06-15; if used, then
 `launch-window --replace` with that id.
 
-**Watching.** Attach to the whole server with `tmux attach -t wakeflow`, open
-one window in macOS Terminal with the helper's
-`attach-window --open-terminal`, or use iTerm2 native integration with
-`tmux -CC`.
+**Watching.** Open a new terminal window/tab and run `tmux attach -t
+<session>` (default `wakeflow`); the helper's `attach-window --window <name>`
+prints this exact instruction for a window. That single command is the
+supported path — no programmatic tab-opening or alternative attach variants.
 
-**Unattended permissions.** Unattended permission behavior remains the user's
-decision. Configure per-repository allowlists in each repository's
-`.claude/settings.json`, or consciously choose an explicit permission mode at
-launch for sessions you trust with edits. Wakeflow never makes this choice
-for the user: it is a deliberate per-repository decision, not a default.
+**Unattended permissions.** Work windows ship with `acceptEdits`; the
+fleet-wide mode lives in `hosts.claude-code.permissionMode` and changes only
+through an explicit, recorded decision (`/wakeflow:unattended on|off`, or the
+helper's `set-unattended`). Only that recorded `bypassPermissions` consent lets
+the helper auto-confirm the boot dialog. Per-repository
+`.claude/settings.json` allowlists still compose with whichever mode is
+recorded.
+
+## Demand Pods (multi-demand parallelism)
+
+Parallelism exists ONLY at the demand level. Within one demand each repository
+runs exactly ONE window with ONE combined task package (the window
+self-sequences its items); across demands, up to `maxActiveDemands` (default
+2, `workspace.config.json`) demands run side by side as pods:
+
+- One demand = one pod: its own `Controller__<pod>`, per-repo isolation
+  worktree windows (`<repo>__<pod>` on branch `<demandKey>/<pod>`), and its
+  own `Test__<pod>`, all in its own tmux session. Pods are mutually unaware.
+- Open/resume/close with the helper: `pod-open --demand-key <key> --repos
+  <a,b>` (idempotent — re-run resumes dead windows from the registry),
+  `pod-list` (the one global view), `pod-close` after archive.
+- The pod controller claims its demand itself (`wakeflow_create_demand` with
+  `controllerWindow: "Controller__<pod>"`), so every controller-return routes
+  to the pod, not the default controller.
+- Close order: `complete-demand` → `stream-close` each repo window → archive
+  → `pod-close`. Surviving branches land on
+  `wakeflow-ledger/workspace/pending-merges.md`; merge-back is human-reviewed
+  and decentralized — no controller merges pod branches.
+- `maxStreamsPerRepo` bounds how many pods may hold isolation worktrees on
+  one repository; claiming past `maxActiveDemands` fails closed.
 
 ## One Vocabulary Across Hosts
 
@@ -411,11 +440,11 @@ Core rules:
 - Window config is derived from `workspace.config.json` plus thread-registry
   presence; it is not a second session-id or window-semantics authority.
 - Delivery prompts remain compact and human-readable.
-- The controller writes the envelope prompt to a temp file and sends it with
-  the host helper (`send --window <target> --prompt-file <file>`); the helper
-  enforces the shared per-window delivery lock, pastes through a tmux buffer,
-  and returns pane readback evidence that the agent records with
-  `wakeflow_record_delivery`.
+- The controller sends a prepared envelope in one step with the host helper
+  (`deliver --delivery-file <envelope.json>`; `send --window --prompt-file` is
+  the low-level custom-prompt path); the helper enforces the shared per-window
+  delivery lock, pastes through a tmux buffer, and returns pane readback
+  evidence that the agent records with `wakeflow_record_delivery`.
 - Targets controller-return through the same helper send toward the
   controller window; `wait-results --group <id>` is available only for explicit
   synchronous waits in scripted flows.
@@ -447,11 +476,12 @@ Primary tool groups:
 | --- | --- |
 | Setup and workspace discovery | `wakeflow_initialize_workspace` |
 | Responsibility window replacement | `wakeflow_replace_windows` (one via `window`, many via `windows`) |
-| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
+| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_next_work`, `wakeflow_render_progress` |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
 | Archive, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs), `wakeflow_prune_runtime`, `wakeflow_verify`, `wakeflow_view` (scope trace) |
+| Host ownership and locks | `wakeflow_adopt_demand_host`, `wakeflow_release_window_lock` |
 
 Public MCP tools are for outer agent workflows. Target closeout is
 deliberately split: record a target result, review readiness, prepare a

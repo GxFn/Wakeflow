@@ -237,9 +237,23 @@ function compareCandidates(left, right) {
 }
 
 function applyWorkspaceDemandGuard(candidate, conflicts, maxActive) {
-  // Multi-active demands: a candidate is blocked only when claiming it would
-  // EXCEED workspace capacity (its own demand key never counts against it).
-  const candidateConflicts = conflicts.filter((item) => item.demandKey !== candidate.id);
+  // A candidate whose OWN demand already has an unarchived state root is in
+  // flight, not claimable — re-claiming it would double-create the demand.
+  const own = conflicts.find((item) => item.demandKey === candidate.id);
+  if (own) {
+    return {
+      ...candidate,
+      blockers: [
+        ...(candidate.blockers ?? []),
+        `demand ${candidate.id} already has an unarchived state root (${own.stateRoot}, ${own.state}); it is in flight — continue it there instead of re-claiming`,
+      ],
+      eligible: false,
+      ...(candidate.source === "design" ? { controllerClaimable: false } : {}),
+    };
+  }
+  // Multi-active demands: otherwise a candidate is blocked only when claiming
+  // it would EXCEED workspace capacity.
+  const candidateConflicts = conflicts;
   const capacity = { active: candidateConflicts, max: maxActive, atCapacity: candidateConflicts.length >= maxActive };
   if (!capacity.atCapacity) return candidate;
   const blockers = [
@@ -271,7 +285,10 @@ if (!["all", "todo"].includes(sourceMode)) {
 const workspaceDemandConflicts = scanUnarchivedDemandStateRoots({ workspaceRoot });
 const maxActiveDemands = maxActiveDemandsFor(workspaceConfig);
 if (workspaceDemandConflicts.length >= maxActiveDemands) {
-  issues.push(`workspace is at its active-demand capacity (${workspaceDemandConflicts.length}/${maxActiveDemands}): ${activeDemandConflictSummary(workspaceDemandConflicts)}`);
+  // At-capacity is a NORMAL steady state for the dashboard (in-flight demands
+  // still need review/dispatch); it blocks new claims per candidate, not the
+  // whole scan — so it is a warning, never an ok:false issue.
+  warnings.push(`workspace is at its active-demand capacity (${workspaceDemandConflicts.length}/${maxActiveDemands}): ${activeDemandConflictSummary(workspaceDemandConflicts)}; new claims are blocked until one completes and archives`);
 }
 
 const todoCandidates = parseTodoCandidates(warnings)

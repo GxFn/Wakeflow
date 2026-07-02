@@ -95,7 +95,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.5.6/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.7/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository
@@ -292,6 +292,7 @@ Core rules:
 - After a demand is owned by one host, the other host fails closed on
   controller mutations and dispatch preparation unless ownership is explicitly
   transferred with `--adopt-host`.
+- Up to `maxActiveDemands` (default 2, top-level `workspace.config.json`) demands may be active at once; claiming past capacity fails closed until one completes and archives. `wakeflow_next_work` reports the `activeDemands` list and `demandCapacity`.
 - `wakeflow_status` exposes demand ownership under `dualHost.demandOwnership`
   so mixed-host controllers can see which platform owns active work before
   acting.

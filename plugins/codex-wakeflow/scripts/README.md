@@ -46,7 +46,7 @@ Script-readable document format:
   `<!-- unified-status:start -->` block via `wakeflow-render-progress.mjs`; task
   packages, backfill summaries, and decisions are append-only timestamped
   sections managed by `wakeflow-progress-log.mjs`.
-- Design handoff inboxes, test exchange docs, current indexes, archive maps, and
+- Test exchange docs, the global TODO board, current indexes, archive maps, and
   compact summaries are evidence surfaces; keep them concise and link back to
   the active progress document rather than duplicating it. Design/Test machine
   intake for an active demand belongs under that demand's state root.

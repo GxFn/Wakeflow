@@ -643,10 +643,12 @@ function runNextWorkTodo(todoId = null) {
   }
 }
 
-function runCreateDemandTodo(todoId) {
+function runCreateDemandTodo(todoId, { controllerWindow = "" } = {}) {
   return runSync(process.execPath, [
     path.join(scriptsDir, "wakeflow-demand-sequence.mjs"),
-    "create-demand", "--root", workspaceRoot, "--todo-id", todoId, "--write", "--json",
+    "create-demand", "--root", workspaceRoot, "--todo-id", todoId,
+    ...(controllerWindow ? ["--controller-window", controllerWindow] : []),
+    "--write", "--json",
   ], { cwd: workspaceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 
@@ -678,7 +680,7 @@ function commandCreateDemand() {
     const candidate = (scan.candidates ?? []).find((entry) => entry.id === todoId)
       ?? (scan.recommended && scan.recommended.id === todoId ? scan.recommended : null);
     if (!candidate) {
-      fail(`TODO row ${todoId} is not an eligible candidate (missing, blocked, or not controller-recommended); inspect it with wakeflow_view scope=todo first.`);
+      fail(`TODO row ${todoId} is not an eligible candidate (missing, blocked, or not controller-recommended); inspect it with wakeflow_next_work source=todo first.`);
     }
     title = title ?? candidate.title;
     const documents = candidate.documents ?? "";
@@ -805,7 +807,9 @@ function commandClaimTodo() {
     return;
   }
 
-  const created = runCreateDemandTodo(target.id);
+  // Pods claim with their own controller window so returns route to the pod,
+  // not the default controller.
+  const created = runCreateDemandTodo(target.id, { controllerWindow: getValue("--controller-window", "") });
   if (created.status !== 0) {
     fail(`failed to create the demand from TODO row ${target.id}: ${(created.stdout || created.stderr || "").trim()}`);
   }

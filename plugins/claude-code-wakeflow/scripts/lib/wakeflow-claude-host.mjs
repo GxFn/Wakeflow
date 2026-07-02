@@ -254,6 +254,14 @@ function readJson(file, label) {
   return null;
 }
 
+// tmux resolves `-t <name>` as exact match THEN unambiguous prefix — with pod
+// sessions extending the main session name (wakeflow -> wakeflow-<pod>), a bare
+// name can silently hit a sibling (kill the wrong pod, land fleet windows
+// inside a pod). `=` forces exact matching everywhere a SESSION is targeted.
+function sessionTarget(session) {
+  return `=${session}`;
+}
+
 function tmux(tmuxArgs, { allowFailure = false } = {}) {
   const result = execHostText(tmuxBin, [...tmuxSocketArgs, ...tmuxArgs]);
   if (result.status !== 0 && !allowFailure) {
@@ -275,7 +283,7 @@ function readBinding(windowName) {
 }
 
 function windowAlive(binding) {
-  const result = tmux(["list-windows", "-t", binding.tmux.session, "-F", "#{window_id}"], { allowFailure: true });
+  const result = tmux(["list-windows", "-t", sessionTarget(binding.tmux.session), "-F", "#{window_id}"], { allowFailure: true });
   if (result.status !== 0) return false;
   return result.stdout.split("\n").map((line) => line.trim()).includes(binding.tmux.windowId);
 }
@@ -356,14 +364,14 @@ function applyStatusOptions(serverSession) {
   // window tabs, a compact session label, and renumbering on close. Window
   // formats are set globally because the wakeflow tmux server is dedicated.
   const optionSets = [
-    ["set-option", "-t", serverSession, "status-left", `[${serverSession}] `],
-    ["set-option", "-t", serverSession, "status-left-length", "14"],
-    ["set-option", "-t", serverSession, "status-right", ""],
-    ["set-option", "-t", serverSession, "status-right-length", "0"],
-    ["set-option", "-t", serverSession, "renumber-windows", "on"],
-    ["set-option", "-t", serverSession, "base-index", "1"],
+    ["set-option", "-t", sessionTarget(serverSession), "status-left", `[${serverSession}] `],
+    ["set-option", "-t", sessionTarget(serverSession), "status-left-length", "14"],
+    ["set-option", "-t", sessionTarget(serverSession), "status-right", ""],
+    ["set-option", "-t", sessionTarget(serverSession), "status-right-length", "0"],
+    ["set-option", "-t", sessionTarget(serverSession), "renumber-windows", "on"],
+    ["set-option", "-t", sessionTarget(serverSession), "base-index", "1"],
     // refresh fast enough that the running marker tracks live execution
-    ["set-option", "-t", serverSession, "status-interval", "2"],
+    ["set-option", "-t", sessionTarget(serverSession), "status-interval", "2"],
   ];
   for (const optionArgs of optionSets) tmux(optionArgs, { allowFailure: true });
   // migration: earlier versions set these as -g on the DEFAULT server, leaking
@@ -374,7 +382,7 @@ function applyStatusOptions(serverSession) {
   // window-status-* are WINDOW options: apply them per managed window (never
   // -g) so the wakeflow glyph layout cannot leak into the user's personal tmux
   // sessions on the same default server.
-  const listed = tmux(["list-windows", "-t", serverSession, "-F", "#{window_id}"], { allowFailure: true });
+  const listed = tmux(["list-windows", "-t", sessionTarget(serverSession), "-F", "#{window_id}"], { allowFailure: true });
   for (const wid of (listed.stdout || "").trim().split("\n").map((line) => line.trim()).filter(Boolean)) {
     applyWindowGlyphFormat(wid);
   }
@@ -442,7 +450,7 @@ function startActivityMonitorDaemon(serverSession) {
 }
 
 function ensureServer(serverSession) {
-  const present = tmux(["has-session", "-t", serverSession], { allowFailure: true }).status === 0;
+  const present = tmux(["has-session", "-t", sessionTarget(serverSession)], { allowFailure: true }).status === 0;
   if (!present) {
     tmux(["new-session", "-d", "-s", serverSession, "-c", workspaceRoot]);
   }
@@ -519,9 +527,9 @@ async function commandActivityMonitor() {
   const controllerWindowName = workspaceControllerWindow();
   let lastSummary = { running: [], completed: [] };
   for (;;) {
-    if (tmux(["has-session", "-t", serverSession], { allowFailure: true }).status !== 0) break;
+    if (tmux(["has-session", "-t", sessionTarget(serverSession)], { allowFailure: true }).status !== 0) break;
     const names = monitorWindowNames();
-    const listed = tmux(["list-windows", "-t", serverSession, "-F", "#{window_id}"], { allowFailure: true });
+    const listed = tmux(["list-windows", "-t", sessionTarget(serverSession), "-F", "#{window_id}"], { allowFailure: true });
     const running = [];
     const completed = [];
     for (const wid of (listed.stdout || "").trim().split("\n").map((l) => l.trim()).filter(Boolean)) {
@@ -665,7 +673,7 @@ async function commandLaunchWindow() {
     .join(" ");
   const created = tmux([
     "new-window",
-    "-t", serverSession,
+    "-t", sessionTarget(serverSession),
     "-n", title,
     "-c", cwd,
     "-P", "-F", "#{window_id}",
@@ -777,31 +785,33 @@ async function commandDeliver() {
   const deliveryFile = path.resolve(workspaceRoot, requireValue("--delivery-file"));
   if (!existsSync(deliveryFile)) fail(`--delivery-file does not exist: ${deliveryFile}`);
   const envelope = readJson(deliveryFile, "delivery envelope");
-  const windowName = envelope.targetWindow || (envelope.kind === "ControllerReturnEnvelope" ? envelope.controllerWindow : null);
+  const isControllerReturn = envelope.kind === "ControllerReturnEnvelope";
+  const windowName = envelope.targetWindow || (isControllerReturn ? envelope.controllerWindow : null);
   if (!windowName) fail("delivery envelope names no target window.");
   if (!envelope.prompt) fail("delivery envelope has no prompt.");
   const promptFile = path.join(hostDir, `deliver-${slug(envelope.deliveryId || windowName)}.txt`);
   mkdirSync(path.dirname(promptFile), { recursive: true });
   writeFileSync(promptFile, envelope.prompt.endsWith("\n") ? envelope.prompt : `${envelope.prompt}\n`);
   try {
-    await performSend({ windowName, promptFile, deliveryId: envelope.deliveryId || "", commandName: "deliver" });
+    await performSend({ windowName, promptFile, deliveryId: envelope.deliveryId || "", commandName: "deliver", controllerReturn: isControllerReturn });
   } finally {
     rmSync(promptFile, { force: true });
   }
 }
 
-async function performSend({ windowName, promptFile, deliveryId, commandName }) {
+async function performSend({ windowName, promptFile, deliveryId, commandName, controllerReturn = false }) {
   const lockTtlSec = Number(getValue("--lock-ttl-sec", "7200"));
   const binding = readBinding(windowName);
   if (!windowAlive(binding)) {
     fail(`tmux window for ${windowName} is not alive (${binding.tmux.windowId}); relaunch the same session interactively with launch-window --resume --session-id <registered id> --replace, then resend.`);
   }
 
-  // A delivery to the CONTROLLER window is a controller-return/notification:
-  // the controller never records a target-result for itself, so a lock or busy
-  // marker written here would never be released and would read as a stalled
-  // controller. Returns queue naturally in the controller's input box.
-  const isControllerTarget = windowName === workspaceControllerWindow();
+  // A delivery to ANY controller window — the workspace controller or a pod's
+  // Controller__<pod> (recognized by the ControllerReturnEnvelope it receives)
+  // — is a return/notification: a controller never records a target-result for
+  // itself, so a lock or busy marker written here would never be released and
+  // would read as a stalled controller. Returns queue naturally in the input box.
+  const isControllerTarget = controllerReturn || windowName === workspaceControllerWindow();
   // Lock semantics (aligned with core dispatch): a fresh lock from the OTHER
   // host means another controller is driving this window's working tree — fail
   // closed. A SAME-host lock is advisory: the core per-task sent-state guard
@@ -848,10 +858,11 @@ async function performSend({ windowName, promptFile, deliveryId, commandName }) 
     // Multi-active demands mean concurrent controller-returns are normal. Two
     // simultaneous pastes can interleave at the tmux level (paste-A, paste-B,
     // Enter, Enter) and merge into one garbled message; serialize ONLY the
-    // paste+Enter. This is NOT a delivery lock — the controller still never
-    // goes busy, and returns still queue naturally in its input box.
+    // paste+Enter, PER controller window (pods each have their own). This is
+    // NOT a delivery lock — a controller never goes busy, and returns still
+    // queue naturally in its input box.
     try {
-      withFileLock(path.join(hostDir, "controller-paste.lock"), () => pastePromptFile(binding, promptFile));
+      withFileLock(path.join(hostDir, `paste-${slug(windowName)}.lock`), () => pastePromptFile(binding, promptFile));
     } catch (error) {
       if (error?.code === "WAKEFLOW_STATE_LOCK_TIMEOUT") fail(`controller paste mutex timed out (another return is mid-paste): ${error.message}`);
       throw error;
@@ -1012,7 +1023,11 @@ function commandAttachWindow() {
 
 
 function readWorkspaceWindowModel() {
-  const configFile = effectiveConfigFile();
+  // Fleet-wide operations (launch-all / replace-all / arrange) manage the
+  // MAIN fleet only: read the tracked config, never the overlay — otherwise
+  // pod isolation windows get resumed into the main session, breaking pod
+  // isolation. Pods resume via pod-open.
+  const configFile = path.join(workspaceRoot, "workspace.config.json");
   if (!existsSync(configFile)) fail("workspace.config.json not found; run initialization first.");
   const config = readJson(configFile, "workspace config");
   const repositories = Array.isArray(config.repositories) ? config.repositories : [];
@@ -1227,6 +1242,18 @@ async function commandReplaceAll() {
 }
 
 function buildEntrySyncPrompt(windowName, repo) {
+  if (windowName === workspaceControllerWindow()) {
+    // replace-all rebuilds the controller too: it must re-orient as the
+    // CONTROLLER, not as a dispatch-waiting target.
+    return `${[
+      `You are the **${windowName}** window — the workspace CONTROLLER (working dir: ${repo.cwd}). This session was just rebuilt and has no conversational memory; the state roots are the memory.`,
+      ``,
+      `Entry sync — do this now:`,
+      `1. Read \`CLAUDE.md\`, \`.wakeflow-active/index.md\`, and the current status doc, then the wakeflow-controller skill.`,
+      `2. Run wakeflow_status and wakeflow_next_work to re-orient: active demands, capacity, in-flight deliveries, pending reviews.`,
+      `3. Resume total-control judgment from DISK state only — review pending results, decide, dispatch next eligible work, or wait for returns. Do not re-create existing demands.`,
+    ].join("\n")}\n`;
+  }
   // Generic, host-neutral entry sync. The window's own CLAUDE.md (read in step 1) carries any
   // language preference, so this prompt stays English and points at the docs.
   const role = repo.title.replace(`${windowName} `, "") || "Work";
@@ -1497,7 +1524,7 @@ function arrangeWindows(serverSession) {
   const arranged = [];
   // Pause renumbering so explicit move targets stay stable during the pass;
   // the finally below guarantees it is restored even when a move fails.
-  tmux(["set-option", "-t", serverSession, "renumber-windows", "off"], { allowFailure: true });
+  tmux(["set-option", "-t", sessionTarget(serverSession), "renumber-windows", "off"], { allowFailure: true });
   try {
   let slot = 101;
   for (const entry of desired) {
@@ -1507,7 +1534,7 @@ function arrangeWindows(serverSession) {
     if (!windowAlive(binding)) continue;
     const tabName = tabNameFor(entry.role, entry.windowName);
     tmux(["rename-window", "-t", binding.tmux.windowId, tabName], { allowFailure: true });
-    tmux(["move-window", "-s", binding.tmux.windowId, "-t", `${serverSession}:${slot}`], { allowFailure: true });
+    tmux(["move-window", "-s", binding.tmux.windowId, "-t", `${sessionTarget(serverSession)}:${slot}`], { allowFailure: true });
     binding.tmux.title = tabName;
     writeJson(bindingFile, binding);
     arranged.push({ window: entry.windowName, tab: tabName, slot: slot - 100 });
@@ -1515,17 +1542,17 @@ function arrangeWindows(serverSession) {
   }
   // Push unmanaged windows (bootstrap shells etc.) above the managed block so
   // the sequential renumber leaves them trailing in original relative order.
-  const listed = tmux(["list-windows", "-t", serverSession, "-F", "#{window_index} #{window_id}"], { allowFailure: true });
+  const listed = tmux(["list-windows", "-t", sessionTarget(serverSession), "-F", "#{window_index} #{window_id}"], { allowFailure: true });
   let trailSlot = 201;
   for (const line of (listed.stdout || "").trim().split("\n")) {
     const [index, windowId] = line.trim().split(" ");
     if (!windowId || Number(index) >= 101) continue;
-    tmux(["move-window", "-s", windowId, "-t", `${serverSession}:${trailSlot}`], { allowFailure: true });
+    tmux(["move-window", "-s", windowId, "-t", `${sessionTarget(serverSession)}:${trailSlot}`], { allowFailure: true });
     trailSlot += 1;
   }
-    tmux(["move-window", "-r", "-t", serverSession], { allowFailure: true });
+    tmux(["move-window", "-r", "-t", sessionTarget(serverSession)], { allowFailure: true });
   } finally {
-    tmux(["set-option", "-t", serverSession, "renumber-windows", "on"], { allowFailure: true });
+    tmux(["set-option", "-t", sessionTarget(serverSession), "renumber-windows", "on"], { allowFailure: true });
   }
   return arranged;
 }
@@ -1781,14 +1808,61 @@ function commandStreamOpen() {
   mkdirSync(hostDir, { recursive: true });
   mkdirSync(path.dirname(worktreeDir), { recursive: true });
 
+  // Idempotent resume: an already-registered isolation window is not an error.
+  // --no-launch reports it; a live window reports it; a registered-but-dead
+  // window (e.g. a pod prepared with --no-launch, or after a reboot) skips the
+  // worktree/overlay work and goes straight to launch+register below.
+  let resumeExisting = false;
+  {
+    const overlayNow = readOverlay(workspaceRoot);
+    const existingEntry = overlayNow ? streamEntryFor(overlayNow, windowName) : null;
+    if (existingEntry) {
+      if (existingEntry.stream?.demandKey !== demandKey) {
+        fail(`isolation window ${windowName} is already registered for demand ${existingEntry.stream?.demandKey}; pick another --stream id.`);
+      }
+      const bindingFile = bindingFileFor(windowName);
+      let alive = false;
+      if (existsSync(bindingFile)) {
+        try {
+          alive = windowAlive(JSON.parse(readFileSync(bindingFile, "utf8")));
+        } catch {
+          alive = false;
+        }
+      }
+      if (noLaunch || alive) {
+        output({
+          ok: true,
+          command: "stream-open",
+          windowName,
+          repo: repoWindow,
+          streamId,
+          demandKey,
+          branch: existingEntry.stream?.branch ?? branch,
+          worktree: existingEntry.path,
+          resumed: false,
+          status: alive ? "already-live" : "already-registered",
+          launched: alive,
+          sessionRegistered: alive,
+          threadIdRedacted: true,
+          note: alive
+            ? "Isolation window is already live; nothing to do."
+            : "Isolation window is registered but not launched (--no-launch); re-run without --no-launch to launch it.",
+        });
+        return;
+      }
+      resumeExisting = true;
+    }
+  }
+
   // Registration + worktree creation are one critical section under the
   // GLOBAL overlay mutation lock: pool count, git refs, and the shared overlay
   // regeneration must not race any other stream operation (same repo or not).
-  // Launch (slow) happens after release.
+  // Launch (slow) happens after release. A resume skips this entirely — its
+  // worktree and overlay entry already exist.
   let poolExhausted = null;
   let activeForRepo = [];
   let cap = DEFAULT_MAX_STREAMS;
-  withStreamMutationLock(() => {
+  if (!resumeExisting) withStreamMutationLock(() => {
     const overlay = readOverlay(workspaceRoot);
     if (overlay && overlayBaseStale(workspaceRoot, overlay)) {
       process.stderr.write("wakeflow-claude-host: stream overlay was stale against workspace.config.json; regenerating from the current base.\n");
@@ -2009,7 +2083,13 @@ function streamCloseLocked({ windowName, force, deleteBranch }) {
   }
 
   const remaining = streamEntries(overlay).filter((item) => item.windowName !== windowName);
-  const overlayInfo = regenerateOverlay(workspaceRoot, remaining);
+  let overlayInfo;
+  try {
+    overlayInfo = regenerateOverlay(workspaceRoot, remaining);
+  } catch (error) {
+    fail(`isolation window torn down, but the overlay could not be regenerated (${error.message}); re-run stream-close --window ${windowName} after fixing it.`);
+  }
+  rmSync(path.join(hostDir, `entry-sync-${slug(windowName)}.txt`), { force: true });
   output({
     ok: true,
     command: "stream-close",
@@ -2090,7 +2170,7 @@ function podSessionFor(podSlug) {
 }
 
 function appendPendingMerge({ demandKey, repo, branch, windowName }) {
-  const ledgerRoot = readEffectiveConfig().projectLedgerRoot ?? "wakeflow-ledger";
+  const ledgerRoot = readEffectiveConfig().projectLedgerRoot ?? "../wakeflow-ledger";
   const file = path.resolve(workspaceRoot, ledgerRoot, "workspace", "pending-merges.md");
   mkdirSync(path.dirname(file), { recursive: true });
   if (!existsSync(file)) {
@@ -2105,8 +2185,11 @@ function appendPendingMerge({ demandKey, repo, branch, windowName }) {
       "",
     ].join("\n"));
   }
-  const row = `| ${nowIso()} | ${demandKey ?? "?"} | ${repo ?? "?"} | ${branch} | ${windowName} |\n`;
-  writeFileSync(file, row, { flag: "a" });
+  const marker = `| ${demandKey ?? "?"} | ${repo ?? "?"} | ${branch} | ${windowName} |`;
+  if (readFileSync(file, "utf8").includes(marker)) {
+    return path.relative(workspaceRoot, file); // re-run of a failed close: no duplicate row
+  }
+  writeFileSync(file, `| ${nowIso()} ${marker}\n`, { flag: "a" });
   return path.relative(workspaceRoot, file);
 }
 
@@ -2121,7 +2204,7 @@ function buildPodControllerPrompt(demandKey, podSlug, repos) {
     ``,
     `Pod start — do this now:`,
     `1. Read the parent workspace \`CLAUDE.md\` and the wakeflow-controller skill (the S0→S6 route applies unchanged inside the pod).`,
-    `2. Claim YOUR demand: wakeflow_create_demand with demandKey "${demandKey}" and controllerWindow "Controller__${podSlug}" (from its TODO row when present). The stamped controllerWindow routes every controller-return back to YOU.`,
+    `2. Claim YOUR demand: wakeflow_create_demand with todoId "${demandKey}" and controllerWindow "Controller__${podSlug}" — todoId consumes the TODO row (demandKey defaults to it) and the stamped controllerWindow routes every controller-return back to YOU. If the state root ALREADY exists (pod resume after a restart), do NOT re-create: read it, run wakeflow_adopt_demand_host if needed, and continue the loop from its current state.`,
     `3. Your fleet: dispatch ONLY to ${podWindows || "your pod windows"} (isolation worktrees) and Test__${podSlug}. One combined task package per repo; author objectives; evidence-based review.`,
     `4. Merge-back of pod branches is HUMAN-reviewed after archive — never merge yourself. Close order at the end: complete-demand -> stream-close each repo window -> archive -> report; the user runs pod-close.`,
   ].join("\n")}\n`;
@@ -2147,7 +2230,8 @@ function commandPodOpen() {
 
   // Preflight: the pod controller will CLAIM this demand — warn early when the
   // board does not know it yet, and refuse a provably closed one.
-  const stateFile = path.join(workspaceRoot, ".wakeflow-active", "current", podSlug, "wakeflow-state.json");
+  const currentDir = readEffectiveConfig().workspaceCurrentDir ?? ".wakeflow-active/current";
+  const stateFile = path.resolve(workspaceRoot, currentDir, podSlug, "wakeflow-state.json");
   if (existsSync(stateFile)) {
     try {
       const demandState = JSON.parse(readFileSync(stateFile, "utf8")).state;
@@ -2159,7 +2243,7 @@ function commandPodOpen() {
       if (error instanceof CliExit) throw error;
     }
   } else {
-    const boardPath = path.join(workspaceRoot, ".wakeflow-active", "current", "global-todo-board.md");
+    const boardPath = path.resolve(workspaceRoot, readEffectiveConfig().globalTodoPath ?? path.join(currentDir, "global-todo-board.md"));
     if (!existsSync(boardPath) || !readFileSync(boardPath, "utf8").includes(demandKey)) {
       process.stderr.write(`wakeflow-claude-host: ${demandKey} is not on the global TODO board yet; make sure Design delivered it before the pod controller tries to claim.\n`);
     }
@@ -2176,15 +2260,13 @@ function commandPodOpen() {
   const windows = [];
   for (const repo of repos) {
     const windowName = streamWindowName(repo, podSlug);
-    overlay = readOverlay(workspaceRoot);
-    if (overlay && streamEntryFor(overlay, windowName)) {
-      windows.push({ window: windowName, status: "already-registered" });
-      continue;
-    }
+    // stream-open is idempotent-resume: fresh -> full open, registered+dead ->
+    // launch+register only, registered+live or --no-launch -> report and skip.
     const argv = [
       "stream-open", "--root", workspaceRoot, "--repo", repo, "--stream", podSlug,
       "--demand-key", demandKey, "--server", podSession, "--boot-wait-ms", bootWait,
       ...(noLaunch ? ["--no-launch"] : []),
+      ...(stateDir !== path.resolve(workspaceRoot, ".wakeflow-local/wakeflow-delivery") ? ["--state-dir", stateDir] : []),
     ];
     const opened = execHostText(process.execPath, [process.argv[1], ...argv]);
     let parsed = null;
@@ -2196,7 +2278,7 @@ function commandPodOpen() {
     if (!parsed?.ok) {
       fail(`pod-open stopped at ${windowName} (already-opened pod windows are kept; fix the cause and re-run pod-open to resume): ${parsed?.error || parsed?.code || (opened.stderr || opened.stdout).slice(-200)}`);
     }
-    windows.push({ window: windowName, status: "opened", branch: parsed.branch });
+    windows.push({ window: windowName, status: parsed.status ?? "opened", branch: parsed.branch });
   }
 
   const controllerWindow = `Controller__${podSlug}`;
@@ -2226,10 +2308,25 @@ function commandPodOpen() {
           // unreadable binding: relaunch below
         }
       }
+      // Resume a registered session (reboot / pod-open re-run) instead of
+      // replacing it with a contextless fresh one whose prompt says "claim".
+      const registryFile = path.join(hostDir, "thread-registry", `${slug(windowName)}.json`);
+      let registeredSessionId = null;
+      if (existsSync(registryFile)) {
+        try {
+          registeredSessionId = JSON.parse(readFileSync(registryFile, "utf8")).threadId ?? null;
+        } catch {
+          registeredSessionId = null;
+        }
+      }
       const argv = [
         "launch-window", "--root", workspaceRoot, "--server", podSession,
         "--window", windowName, "--title", windowName, "--cwd", cwd,
-        ...(prompt ? ["--prompt-file", prompt] : []), "--replace", "--boot-wait-ms", bootWait,
+        ...(registeredSessionId
+          ? ["--resume", "--session-id", registeredSessionId]
+          : prompt ? ["--prompt-file", prompt] : []),
+        "--replace", "--boot-wait-ms", bootWait,
+        ...(stateDir !== path.resolve(workspaceRoot, ".wakeflow-local/wakeflow-delivery") ? ["--state-dir", stateDir] : []),
       ];
       const launched = execHostText(process.execPath, [process.argv[1], ...argv]);
       let parsed = null;
@@ -2241,9 +2338,29 @@ function commandPodOpen() {
       if (!parsed?.ok) {
         fail(`pod-open stopped launching ${windowName} (re-run pod-open to resume): ${parsed?.error || (launched.stderr || launched.stdout).slice(-200)}`);
       }
+      if (!registeredSessionId && parsed.sessionId) {
+        // First launch: persist the session id so the pod survives reboots
+        // (register-thread accepts non-config windows; the binding alone
+        // cannot resume a dead session).
+        const registered = execHostText(process.execPath, [
+          path.join(pluginRootDir, "scripts", "wakeflow-delivery.mjs"),
+          "register-thread", "--root", workspaceRoot,
+          "--window", windowName, "--thread-id", parsed.sessionId, "--write", "--json",
+          ...(stateDir !== path.resolve(workspaceRoot, ".wakeflow-local/wakeflow-delivery") ? ["--state-dir", stateDir] : []),
+        ]);
+        let regParsed = null;
+        try {
+          regParsed = JSON.parse(registered.stdout);
+        } catch {
+          regParsed = null;
+        }
+        if (!regParsed?.ok) {
+          process.stderr.write(`wakeflow-claude-host: session registration failed for ${windowName}; the pod will not survive a reboot until re-opened (${(registered.stderr || registered.stdout).slice(-160)}).\n`);
+        }
+      }
       if (windowName === controllerWindow) controllerLaunched = true;
       else testLaunched = true;
-      windows.push({ window: windowName, status: "launched" });
+      windows.push({ window: windowName, status: registeredSessionId ? "resumed" : "launched" });
     }
   }
 
@@ -2275,7 +2392,8 @@ function commandPodClose() {
   const demandKey = requireValue("--demand-key");
   const podSlug = slug(demandKey);
   const force = hasFlag("--force");
-  const stateFile = path.join(workspaceRoot, ".wakeflow-active", "current", podSlug, "wakeflow-state.json");
+  const currentDir = readEffectiveConfig().workspaceCurrentDir ?? ".wakeflow-active/current";
+  const stateFile = path.resolve(workspaceRoot, currentDir, podSlug, "wakeflow-state.json");
   if (existsSync(stateFile) && !force) {
     let demandState = "unreadable";
     try {
@@ -2292,7 +2410,11 @@ function commandPodClose() {
   const leftovers = (overlay ? streamEntries(overlay) : []).filter((entry) => entry.stream?.demandKey === demandKey);
   const closed = [];
   for (const entry of leftovers) {
-    const argv = ["stream-close", "--root", workspaceRoot, "--window", entry.windowName, ...(force ? ["--force"] : [])];
+    const argv = [
+      "stream-close", "--root", workspaceRoot, "--window", entry.windowName,
+      ...(force ? ["--force"] : []),
+      ...(stateDir !== path.resolve(workspaceRoot, ".wakeflow-local/wakeflow-delivery") ? ["--state-dir", stateDir] : []),
+    ];
     const result = execHostText(process.execPath, [process.argv[1], ...argv]);
     let parsed = null;
     try {
@@ -2317,10 +2439,12 @@ function commandPodClose() {
     rmSync(bindingFile, { force: true });
     rmSync(path.join(hostDir, "thread-registry", `${slug(windowName)}.json`), { force: true });
     rmSync(path.join(hostDir, "window-config", `${slug(windowName)}.json`), { force: true });
+    rmSync(lockFileFor(windowName), { force: true });
+    rmSync(path.join(hostDir, `paste-${slug(windowName)}.lock`), { force: true });
     swept.push(windowName);
   }
   const podSession = podSessionFor(podSlug);
-  tmux(["kill-session", "-t", podSession], { allowFailure: true });
+  tmux(["kill-session", "-t", sessionTarget(podSession)], { allowFailure: true });
   rmSync(path.join(hostDir, `pod-entry-${podSlug}.txt`), { force: true });
 
   output({
@@ -2361,7 +2485,7 @@ function commandPodList() {
   }
   const pods = [...byDemand.entries()].map(([demandKey, windows]) => {
     const podSlug = slug(demandKey);
-    const stateFile = path.join(workspaceRoot, ".wakeflow-active", "current", podSlug, "wakeflow-state.json");
+    const stateFile = path.resolve(workspaceRoot, readEffectiveConfig().workspaceCurrentDir ?? ".wakeflow-active/current", podSlug, "wakeflow-state.json");
     let demandState = "no-state-root";
     if (existsSync(stateFile)) {
       try {
@@ -2371,7 +2495,7 @@ function commandPodList() {
       }
     }
     const session = podSessionFor(podSlug);
-    const sessionAlive = tmux(["has-session", "-t", session], { allowFailure: true }).status === 0;
+    const sessionAlive = tmux(["has-session", "-t", sessionTarget(session)], { allowFailure: true }).status === 0;
     return { demandKey, pod: podSlug, session, sessionAlive, demandState, isolationWindows: windows };
   });
   output({ ok: true, command: "pod-list", pods });

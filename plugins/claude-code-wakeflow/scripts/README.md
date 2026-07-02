@@ -46,7 +46,7 @@ Script-readable document format:
   `<!-- unified-status:start -->` block via `wakeflow-render-progress.mjs`; task
   packages, backfill summaries, and decisions are append-only timestamped
   sections managed by `wakeflow-progress-log.mjs`.
-- Design handoff inboxes, test exchange docs, current indexes, archive maps, and
+- Test exchange docs, the global TODO board, current indexes, archive maps, and
   compact summaries are evidence surfaces; keep them concise and link back to
   the active progress document rather than duplicating it. Design/Test machine
   intake for an active demand belongs under that demand's state root.
@@ -235,8 +235,8 @@ JSON output; it is a script, not an MCP tool. Its nine commands:
 - `seed-permissions`: merge wakeflow automation allowlists into .claude/settings.json at the workspace root and every configured repository (`--write`).
   (`--group [--target <window>...|--expect N] [--timeout-sec] [--poll-ms]`);
   run it as a background task, it releases finished windows' locks.
-- `attach-window`: print, and optionally open in macOS Terminal, the tmux
-  attach command for a window (`--window [--open-terminal]`).
+- `attach-window`: print the single supported attach instruction for a
+  window (open a new terminal, `tmux attach -t <session>`) (`--window`).
 
 Workspace script tests:
 

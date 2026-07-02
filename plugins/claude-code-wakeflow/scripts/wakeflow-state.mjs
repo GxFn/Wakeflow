@@ -15,7 +15,7 @@ import { controllerReviewScope, hasPendingReworkDecision, reductionStatusForTarg
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import { releaseWindowLockForResult } from "./lib/wakeflow-delivery-store.mjs";
 import { scanStateRootForRealIds, redactStateRootIntoCopy } from "./lib/wakeflow-redaction.mjs";
-import { WakeflowStateLockTimeoutError, withStateRootLock } from "./lib/wakeflow-state-lock.mjs";
+import { WakeflowStateLockTimeoutError, withFileLock, withStateRootLock } from "./lib/wakeflow-state-lock.mjs";
 import {
   activeDemandCapacity,
   activeDemandConflictSummary,
@@ -412,7 +412,14 @@ function evidenceRepoRootForWindow(windowName) {
       }
     }
   }
-  return evidenceRepoRootByWindow.get(windowName) ?? null;
+  const direct = evidenceRepoRootByWindow.get(windowName);
+  if (direct) return direct;
+  // Pod-suffixed windows (Repo__pod, Test__pod) have no repositories[] entry of
+  // their own once the overlay entry is gone (or never existed, for Test/
+  // Controller pod windows): resolve against the base window's repo so their
+  // repo-relative evidence refs do not false-fail the reducer.
+  const base = String(windowName).split("__")[0];
+  return (base && base !== windowName ? evidenceRepoRootByWindow.get(base) : null) ?? null;
 }
 
 function evidenceRefResolutionCandidates(stateRoot, ref, targetWindow) {
@@ -521,15 +528,6 @@ function commandInit() {
   if (existingInitFiles.length > 0) {
     fail(`state root already contains Wakeflow state file(s): ${existingInitFiles.map(relative).join(", ")}; refuse to re-initialize ${demandKey}.`);
   }
-  const capacity = activeDemandCapacity({
-    workspaceRoot,
-    config,
-    excludeDemandKeys: [demandKey],
-  });
-  if (capacity.atCapacity) {
-    fail(`cannot initialize ${demandKey}: workspace is at its active-demand capacity (${capacity.active.length}/${capacity.max}): ${activeDemandConflictSummary(capacity.active)}. Complete and archive one, or raise maxActiveDemands in workspace.config.json.`);
-  }
-
   const demand = {
     schemaVersion,
     demandKey,
@@ -662,9 +660,33 @@ function commandInit() {
     files.progress,
   ];
 
+  // Capacity is a CROSS-root invariant, so the per-root lock cannot guard it:
+  // serialize the scan against the state-file write on a workspace-scoped lock,
+  // or two parallel claims both scan at N-1 and overshoot maxActiveDemands.
+  mkdirSync(path.dirname(ledgerPaths.workspaceCurrentDir), { recursive: true });
+  try {
+    withFileLock(`${ledgerPaths.workspaceCurrentDir}.capacity-lock`, () => {
+      const capacity = activeDemandCapacity({
+        workspaceRoot,
+        config,
+        excludeDemandKeys: [demandKey],
+      });
+      if (capacity.atCapacity) {
+        fail(`cannot initialize ${demandKey}: workspace is at its active-demand capacity (${capacity.active.length}/${capacity.max}): ${activeDemandConflictSummary(capacity.active)}. Complete and archive one, or raise maxActiveDemands in workspace.config.json.`);
+      }
+      if (write) {
+        // wakeflow-state.json makes the demand visible to other scanners, so
+        // it must land inside the same critical section as the scan.
+        writeJson(files.demand, demand);
+        writeJson(files.state, state);
+      }
+    });
+  } catch (error) {
+    if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);
+    throw error;
+  }
+
   if (write) {
-    writeJson(files.demand, demand);
-    writeJson(files.state, state);
     writeText(files.events, JSON.stringify(event));
     writeJson(files.projection, projection);
     writeText(files.progress, progress);
@@ -1913,14 +1935,14 @@ function commandArchiveDemandLocked(stateRoot) {
     fail(`archive-demand requires state=completed; ${state.demandKey} is ${state.state}.`);
   }
 
-  // A demand with live parallel streams must not archive: their worktrees and
+  // A demand with live isolation worktree windows must not archive: their worktrees and
   // branches would orphan with no owner. Stream entries are plain config facts
   // (repositories[].stream, host-neutral) surfaced through the derived local
   // overlay that loadWorkspaceConfig already prefers.
   const openStreams = (loadWorkspaceConfig({ workspaceRoot, args: options }).repositories ?? [])
     .filter((repo) => repo?.stream?.demandKey === state.demandKey);
   if (openStreams.length > 0) {
-    fail(`archive-demand refuses: ${openStreams.length} parallel stream window(s) are still open for ${state.demandKey}: ${openStreams.map((repo) => repo.windowName).join(", ")}. Close them (stream-close) before archiving.`);
+    fail(`archive-demand refuses: ${openStreams.length} isolation worktree window(s) are still open for ${state.demandKey}: ${openStreams.map((repo) => repo.windowName).join(", ")}. Close them (stream-close) before archiving.`);
   }
 
   const scan = scanStateRootForRealIds(stateRoot, { hostProfile });

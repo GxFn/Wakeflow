@@ -223,9 +223,11 @@ are already stated.
   refuses a second isolation window for the same (repo, demand) — that would
   be same-demand parallelism, which this design rejects; `pool-exhausted`
   bounds how many demands may hold isolation worktrees on one repo.
-- Merging an isolation branch back to the main line is a controller-owned
-  explicit step after acceptance, before `stream-close`; `--delete-branch`
-  refuses unmerged work by design.
+- An isolation branch SURVIVES `stream-close`: it is recorded on
+  `wakeflow-ledger/workspace/pending-merges.md`, and merge-back is
+  human-reviewed and decentralized — no controller merges it. Use
+  `--delete-branch` only for a branch already merged or explicitly dropped;
+  it refuses unmerged work by design.
 
 ## Demand Pods (multiple demands = multiple pods, never one multiplexed controller)
 

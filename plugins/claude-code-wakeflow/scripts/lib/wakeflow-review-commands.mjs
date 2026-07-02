@@ -41,7 +41,13 @@ export function createReviewCommands(ctx) {
         }
       }
     }
-    return repoRootByWindow.get(windowName) ?? null;
+    const direct = repoRootByWindow.get(windowName);
+    if (direct) return direct;
+    // Isolation-worktree / pod-suffixed windows (Repo__pod) resolve against
+    // the base window's repo; the local overlay may already be gone by review
+    // time and the base checkout still contains the committed evidence.
+    const base = String(windowName).split("__")[0];
+    return (base && base !== windowName ? repoRootByWindow.get(base) : null) ?? null;
   }
 
   // Candidate roots for a relative evidence ref, most-specific first: the producing target

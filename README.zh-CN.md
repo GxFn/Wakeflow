@@ -136,6 +136,10 @@ Wakeflow 采用和 Lark Remote 一样的双层 marketplace 结构：仓库根目
 Claude Code 版本只使用 tmux 常驻终端模型：每个 Wakeflow 窗口（包括总控）都是
 常驻 tmux 的交互式 `claude` 会话，位于名为 `wakeflow` 的 tmux server session
 内；Wakeflow thread id 就是该窗口的 Claude Code session id（跨 resume 保持稳定）。
+最多 `maxActiveDemands`（默认 2）个需求可以以 **demand pod** 的方式并行：每个
+pod 是独立的 tmux session，拥有自己的总控、按仓库的 isolation worktree 窗口和
+自己的 Test；超出容量的 claim 会 fail-closed，pod 分支只通过人工审核的
+`pending-merges.md` 台账合并回主线。
 完整指南见 [plugins/claude-code-wakeflow/README.zh-CN.md](plugins/claude-code-wakeflow/README.zh-CN.md)。
 
 安装公开 Codex 插件 artifact：
@@ -147,7 +151,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.5.6/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.7/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -274,13 +278,14 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 - `per-target` 可以每个 target 唤醒一次 controller，同时保留 group snapshot。
 - 一次真实发送被记录为 `sent` 且有 readback 证据后，总控本轮停止，不在同一轮 sleep 或 poll。
 - Keep-live 只是运行时辅助，不是任务逻辑、传输权威或验收证据。
-- Demand 创建是宿主中立的：`wakeflow_init_demand` 写入
+- Demand 创建是宿主中立的：`wakeflow_create_demand` 写入
   `controllerHost: null`，所以 Codex 和 Claude Code 都可以创建或导入需求材料，
   但不会因此抢占控制权。
 - 第一个真正驱动需求的命令会把 demand 绑定到当前平台，写入
   `controllerHost: "codex"` 或 `controllerHost: "claude-code"`。
 - demand 归属于某个宿主后，另一个宿主的 controller 写操作和投递准备会 fail-closed；
   只有显式 `--adopt-host` 才能转移控制权。
+- 最多 `maxActiveDemands`（默认 2）个需求可以同时 active；超出容量的 claim 会 fail-closed。`wakeflow_next_work` 报告 `activeDemands` 与 `demandCapacity`。
 - `wakeflow_status` 会在 `dualHost.demandOwnership` 暴露 active demand 的宿主归属，
   让混合宿主总控在行动前先看清归属。
 
@@ -299,11 +304,12 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 | --- | --- |
 | 设置和工作区发现 | `wakeflow_initialize_workspace` |
 | 职责窗口替换 | `wakeflow_replace_windows`（单个传 `window`，多个传 `windows`） |
-| Demand 和任务状态 | `wakeflow_status`, `wakeflow_init_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
+| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_next_work`, `wakeflow_render_progress` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
-| Design 和 Test intake | `wakeflow_intake_design_handoff`, `wakeflow_intake_test_card` |
+| Design 和 Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
 | 归档、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_prune_runtime`、`wakeflow_verify`、`wakeflow_view`（scope trace） |
+| 宿主归属与窗口锁 | `wakeflow_adopt_demand_host`、`wakeflow_release_window_lock` |
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：
 记录 target result、审查 readiness、在策略允许时准备 controller-return envelope、

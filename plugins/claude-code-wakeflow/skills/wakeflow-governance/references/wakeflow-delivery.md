@@ -47,9 +47,14 @@ field exactly to the host send transport.
 ## Send Boundary
 
 Scripts build envelopes and record evidence. The agent performs the real send
-with the tmux host helper: write the envelope prompt to a temp file, then run
-`node <plugin>/scripts/lib/wakeflow-claude-host.mjs send --root <workspace>
---window <target> --prompt-file <file> [--delivery-id <id>]`. The helper
+with the tmux host helper — primary path, one step:
+`node <plugin>/scripts/lib/wakeflow-claude-host.mjs deliver --root <workspace>
+--delivery-file <envelope.json>`. It reads the prepared envelope, renders the
+prompt, resolves the target window (pod demands route controller-returns via
+the envelope's stamped `controllerWindow`), and needs no temp file. For custom
+prompts outside an envelope, the low-level path remains: write the prompt to a
+temp file, then `send --root <workspace> --window <target> --prompt-file
+<file> [--delivery-id <id>]`. Either way the helper
 enforces the shared per-window delivery lock
 (`.wakeflow-local/wakeflow-delivery/locks/<window>.json`, one in-flight
 delivery per window across hosts), pastes via a tmux buffer (multiline-safe),
@@ -68,10 +73,12 @@ controller-return delivery, and the activity monitor flips the delivered window'
 --group <id> [--target <w>...] [--timeout-sec N]` remains available as an
 EXPLICIT synchronous wait for scripted flows only (pure observation, no lock
 or glyph side effects); it is not a default dispatch step. Recovery is not a
-mode: a dead window's session is finished or recovered headless with
-`launch-window --resume --session-id <registered id> --replace (interactive; headless claude -p bills the separate Agent SDK credit from 2026-06-15)`, then relaunched with
-`launch-window --replace --session-id <same id>`. (Claude Code desktop windows
-are not an automation transport.)
+mode: when a tmux window dies, the registered session id remains the thread
+id — relaunch the SAME session interactively with `launch-window --resume
+--session-id <registered id> --replace` (subscription pool, same id).
+Headless `claude -p --resume` is a last resort: from 2026-06-15 it bills the
+separate Agent SDK credit. (Claude Code desktop windows are not an automation
+transport.)
 
 ## Result Review
 

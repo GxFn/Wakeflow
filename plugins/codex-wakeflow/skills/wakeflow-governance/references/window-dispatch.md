@@ -40,6 +40,12 @@ fallbacks, or run empty validation before upstream evidence exists.
 
 ## Task Packages
 
+Within one demand each repository runs exactly ONE window with ONE combined
+task package: the window self-sequences the package's items, and a window is
+never dispatched two simultaneous tasks inside the same demand (the machine
+refuses a second in-flight dispatch to the same window). More work for that
+repository arrives as the NEXT combined package after review.
+
 Dispatch by task package, not tiny fragments. A task package should group
 mainline work, same-window TODOs, and evidence work that share the same boundary
 and validation path.
@@ -73,7 +79,7 @@ migration input only.
 ## Standard Prompt
 
 ```text
-Continue the current controller task: <plan or wave>.
+Execute your assigned combined task package: <taskPackageId — one-line summary>.
 
 First read: AGENTS.md, .wakeflow-active/index.md,
 .wakeflow-active/current/<current-controller-document>.md, and this

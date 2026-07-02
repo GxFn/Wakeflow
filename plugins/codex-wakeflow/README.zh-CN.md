@@ -84,7 +84,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.5.6/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.7/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -247,6 +247,7 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
   `controllerHost: "codex"` 或 `controllerHost: "claude-code"`。
 - demand 归属于某个宿主后，另一个宿主的 controller 写操作和投递准备会 fail-closed；
   只有显式 `--adopt-host` 才能转移控制权。
+- 最多 `maxActiveDemands`（默认 2，顶层 `workspace.config.json`）个需求可以同时 active；超出容量的 claim 会 fail-closed，直到有需求完成并归档。`wakeflow_next_work` 会报告 `activeDemands` 列表和 `demandCapacity`。
 - `wakeflow_status` 会在 `dualHost.demandOwnership` 暴露 active demand 的宿主归属，
   让混合宿主总控在行动前先看清归属。
 

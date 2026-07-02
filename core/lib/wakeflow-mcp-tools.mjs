@@ -197,7 +197,7 @@ const toolDefinitions = [
         stateRoot: { type: "string" },
         taskId: { type: "string" },
         dispatchGroup: { type: "string" },
-        controllerWindow: { type: "string" },
+        controllerWindow: { type: "string", description: "Return-route override. Default chain: this flag > the state root's stamped controllerWindow (pod demands) > workspace.config.json controllerWindow — normally omit and let the stamp route." },
         taskPackageId: { type: "string" },
         objective: { type: "string", description: "direction=target: the authored controller dispatch intent ('what I am arranging'); defaults to the task summary when omitted. Author it at the FIRST prepare — a same-revision re-prepare with different content fails closed by the idempotency guard." },
         humanContextRef: { type: "string" },
@@ -351,7 +351,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_archive",
-    description: "Archive completed Wakeflow content into the committed ledger; target selects which. demand: relocate a completed demand state root into the ledger and advance linked Design handoff rows to archived after the archive commit — a P1-0 redaction guard refuses on any real-id-shaped string unless redact relocates a cleaned copy (original preserved for audit); commits state-root content to the version-controlled ledger, review redactedFields before pushing. todo: completed TODO rows + historical sync records into the workspace ledger. docs: explicit completed workspace documents into a ledger topic, or prune active index rows that already point at archive topics (never archives the active index/current plan by inference). Dry-run unless apply is true. Records archive facts only — never accepts work, selects next work, or sends host messages. (Transport-runtime GC is the separate wakeflow_prune_runtime.)",
+    description: "Archive completed Wakeflow content into the committed ledger; target selects which. demand: relocate a completed demand state root into the ledger — a P1-0 redaction guard refuses on any real-id-shaped string unless redact relocates a cleaned copy (original preserved for audit); commits state-root content to the version-controlled ledger, review redactedFields before pushing. todo: completed TODO rows + historical sync records into the workspace ledger. docs: explicit completed workspace documents into a ledger topic, or prune active index rows that already point at archive topics (never archives the active index/current plan by inference). Dry-run unless apply is true. Records archive facts only — never accepts work, selects next work, or sends host messages. (Transport-runtime GC is the separate wakeflow_prune_runtime.)",
     annotations: localWriteTool("Archive Wakeflow Content"),
     inputSchema: {
       type: "object",
@@ -444,7 +444,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_next_work",
-    description: "Scan the global TODO board for the next controller-ready candidate (rows delivered by Design via wakeflow_deliver). Rows with an existing active/completed/archived demand state root are reported as lifecycle-blocked, not claimable.",
+    description: "Scan the global TODO board for the next controller-ready candidate (rows delivered by Design via wakeflow_deliver), plus the multi-demand dashboard: activeDemands lists every unarchived demand state root and demandCapacity reports active/max against maxActiveDemands. Rows whose own demand already has an unarchived state root are lifecycle-blocked (in flight, not claimable); at capacity every new claim is blocked (reported as a warning — in-flight demands still need review/dispatch, so the scan stays ok).",
     annotations: localWriteTool("Select Wakeflow Next Work"),
     inputSchema: {
       type: "object",
@@ -460,13 +460,14 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_claim_next",
-    description: "Unified controller claim from the global TODO board: unattended mode inits the single controller-claimable row (Auto Claim = yes and eligible); when designKey is provided, a user-confirmed eligible row may also be claimed even if not auto-claimable. Delegates to create_demand — it inits the state root and consumes the row (Current Mount = state root). Dry-run unless apply is true. Inits only; it never dispatches, accepts evidence, or weakens per-demand user confirmation.",
+    description: "Unified controller claim from the global TODO board: unattended mode inits the single controller-claimable row (Auto Claim = yes and eligible); when designKey is provided, a user-confirmed eligible row may also be claimed even if not auto-claimable. Delegates to create_demand — it inits the state root and consumes the row (Current Mount = state root). Claiming past the workspace's maxActiveDemands capacity fails closed; complete and archive an active demand first. Dry-run unless apply is true. Inits only; it never dispatches, accepts evidence, or weakens per-demand user confirmation.",
     annotations: localWriteTool("Claim Next Controller Demand"),
     inputSchema: {
       type: "object",
       properties: {
         root: { type: "string" },
         designKey: { type: "string" },
+        controllerWindow: { type: "string", description: "The claiming controller's own window (demand pods: Controller__<pod>). Stamped into the new state root so controller-returns route back to the claimer; omit in the default controller." },
         apply: { type: "boolean" },
       },
     },
@@ -988,6 +989,7 @@ export const handlers = {
       "claim-todo",
       ...rootArgs(args),
       ...optionalValue("--design-key", args.designKey),
+      ...optionalValue("--controller-window", args.controllerWindow),
       ...(args.apply ? ["--write"] : []),
       "--json",
     ],
@@ -1096,8 +1098,20 @@ function defaultWorkspaceRoot() {
   // The MCP server process may start with an arbitrary cwd (for plugin-managed
   // servers it is not the user's workspace), so an explicit root from the
   // caller wins; otherwise fall back to the host-injected workspace dir.
+  // CRITICAL: for every NON-controller window that dir is the window's OWN
+  // repo/support dir, not the workspace — walk up to the nearest ancestor
+  // carrying workspace.config.json (the workspace-root marker), or a target's
+  // first record/deliver/review call fails on a mislocated state root.
   for (const candidate of [process.env.WAKEFLOW_DEFAULT_ROOT, process.env.CLAUDE_PROJECT_DIR]) {
-    if (candidate && path.isAbsolute(candidate) && existsSync(candidate)) return candidate;
+    if (!candidate || !path.isAbsolute(candidate) || !existsSync(candidate)) continue;
+    let dir = candidate;
+    for (let depth = 0; depth < 64; depth += 1) {
+      if (existsSync(path.join(dir, "workspace.config.json"))) return dir;
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    return candidate; // pre-init / standalone: keep the injected dir
   }
   return undefined;
 }

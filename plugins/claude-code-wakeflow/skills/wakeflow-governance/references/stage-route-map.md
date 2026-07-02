@@ -53,7 +53,7 @@ current behavior).
 **Entry check:** the controller verifies the Design exit gate is complete. Any
 missing item = route back to Design (redesign lane) — do NOT patch the gap by
 reading code and deciding alone. Exit gate: state root + task packages + wave
-plan (which windows/streams, producer/consumer order).
+plan (which windows, producer/consumer order).
 
 ## S3 — Dispatch & Execute (owners: controller dispatches, targets execute)
 `wakeflow_prepare_delivery` (author the objective; intent check against
@@ -83,10 +83,13 @@ resolves it from the Requirement Design or the user — never by guessing.
 Results return to S4 review.
 
 ## S6 — Integrate & Close (owner: controller)
-Merge accepted stream branches (controller decision, before `stream-close`) →
 `wakeflow_complete_demand` (all accepted, zero blockers, evidence) →
-`wakeflow_archive` (redaction gate; refuses while streams are open) →
-TODO rollup / `wakeflow_prune_runtime`.
+`stream-close` each isolation worktree window (surviving branches are recorded
+on `wakeflow-ledger/workspace/pending-merges.md`) → `wakeflow_archive`
+(redaction gate; refuses while isolation windows are open) → TODO rollup /
+`wakeflow_prune_runtime` (pods: then `pod-close`). Merge-back of recorded
+branches is HUMAN-reviewed and decentralized — outside Wakeflow, no controller
+merges them.
 
 ## Capability-to-stage classification
 

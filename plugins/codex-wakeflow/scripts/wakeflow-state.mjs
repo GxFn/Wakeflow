@@ -17,8 +17,8 @@ import { releaseWindowLockForResult } from "./lib/wakeflow-delivery-store.mjs";
 import { scanStateRootForRealIds, redactStateRootIntoCopy } from "./lib/wakeflow-redaction.mjs";
 import { WakeflowStateLockTimeoutError, withStateRootLock } from "./lib/wakeflow-state-lock.mjs";
 import {
+  activeDemandCapacity,
   activeDemandConflictSummary,
-  scanUnarchivedDemandStateRoots,
 } from "./lib/wakeflow-active-demands.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
@@ -517,12 +517,13 @@ function commandInit() {
   if (existingInitFiles.length > 0) {
     fail(`state root already contains Wakeflow state file(s): ${existingInitFiles.map(relative).join(", ")}; refuse to re-initialize ${demandKey}.`);
   }
-  const activeDemandConflicts = scanUnarchivedDemandStateRoots({
+  const capacity = activeDemandCapacity({
     workspaceRoot,
+    config,
     excludeDemandKeys: [demandKey],
   });
-  if (activeDemandConflicts.length > 0) {
-    fail(`cannot initialize ${demandKey} while unarchived demand state root(s) exist: ${activeDemandConflictSummary(activeDemandConflicts)}. Complete and archive the current demand before starting another one.`);
+  if (capacity.atCapacity) {
+    fail(`cannot initialize ${demandKey}: workspace is at its active-demand capacity (${capacity.active.length}/${capacity.max}): ${activeDemandConflictSummary(capacity.active)}. Complete and archive one, or raise maxActiveDemands in workspace.config.json.`);
   }
 
   const demand = {

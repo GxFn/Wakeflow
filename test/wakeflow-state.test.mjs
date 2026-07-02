@@ -165,8 +165,9 @@ test("init refuses to overwrite an existing state root", () => {
   assert.match(repeat.stdout + repeat.stderr, /refuse to re-initialize/);
 });
 
-test("init refuses to start another demand while one is unarchived", () => {
+test("init refuses to start another demand while one is unarchived (maxActiveDemands=1)", () => {
   const root = makeRoot();
+  writeFileSync(path.join(root, "workspace.config.json"), `${JSON.stringify({ maxActiveDemands: 1 }, null, 2)}\n`);
   const first = run([
     "init",
     "--root",
@@ -191,7 +192,7 @@ test("init refuses to start another demand while one is unarchived", () => {
     "--json",
   ]);
   assert.notEqual(second.status, 0);
-  assert.match(second.stdout + second.stderr, /cannot initialize SECOND-FIXTURE while unarchived demand state root/);
+  assert.match(second.stdout + second.stderr, /cannot initialize SECOND-FIXTURE: workspace is at its active-demand capacity \(1\/1\)/);
   assert.equal(existsSync(path.join(root, ".wakeflow-active/current/SECOND-FIXTURE/wakeflow-state.json")), false);
 });
 

@@ -844,7 +844,21 @@ async function performSend({ windowName, promptFile, deliveryId, commandName }) 
   const tailLines = Number(getValue("--lines", "25"));
   const captureLines = Number.isFinite(tailLines) ? tailLines : 25;
   const before = capturePaneTail(binding, captureLines);
-  pastePromptFile(binding, promptFile);
+  if (isControllerTarget) {
+    // Multi-active demands mean concurrent controller-returns are normal. Two
+    // simultaneous pastes can interleave at the tmux level (paste-A, paste-B,
+    // Enter, Enter) and merge into one garbled message; serialize ONLY the
+    // paste+Enter. This is NOT a delivery lock — the controller still never
+    // goes busy, and returns still queue naturally in its input box.
+    try {
+      withFileLock(path.join(hostDir, "controller-paste.lock"), () => pastePromptFile(binding, promptFile));
+    } catch (error) {
+      if (error?.code === "WAKEFLOW_STATE_LOCK_TIMEOUT") fail(`controller paste mutex timed out (another return is mid-paste): ${error.message}`);
+      throw error;
+    }
+  } else {
+    pastePromptFile(binding, promptFile);
+  }
   if (!isControllerTarget) setWindowState(windowName, "busy");
   const readbackWait = Number(getValue("--readback-wait-ms", "1200"));
   await sleep(Number.isFinite(readbackWait) ? readbackWait : 1200);
@@ -1716,11 +1730,13 @@ function buildStreamEntrySyncPrompt(windowName, repoWindow, worktreeRel, branch,
   ].join("\n")}\n`;
 }
 
-// stream-open: one parallel stream = one ordinary window `<repo>__<streamId>`
-// bound to a fresh git worktree on branch `<demandKey>/<streamId>`. All new
+// stream-open: one CROSS-DEMAND isolation window = one ordinary window
+// `<repo>__<id>` bound to a fresh git worktree on branch `<demandKey>/<id>`.
+// Within a demand each repo runs exactly ONE window; this exists so a LATER
+// active demand touching an occupied repo gets its own checkout. All new
 // state is the derived config overlay; locks/registry/launch reuse the
-// windowName-keyed machinery unchanged. The pool cap is a hard unattended
-// bound: exhaustion blocks, it never widens.
+// windowName-keyed machinery unchanged. The pool cap bounds concurrent
+// demands per repo: exhaustion blocks, it never widens.
 function commandStreamOpen() {
   const repoWindow = requireValue("--repo");
   const streamId = slug(requireValue("--stream"));

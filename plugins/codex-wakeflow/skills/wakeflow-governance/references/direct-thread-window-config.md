@@ -69,6 +69,8 @@ hidden schedule, heartbeat, or fallback delivery route.
 ## Controller Return
 
 Controller return uses the dispatch group's stored `controllerWindow`, not a
-global default controller, so multiple controllers can run in parallel. The
+global default controller — routing is per-group, but the workspace runs ONE
+controller (the single acceptance authority, across every active demand);
+returns are thread messages that become the controller's subsequent turns. The
 visible return prompt follows the controller-return prompt shape in
 [references/wakeflow-delivery.md](wakeflow-delivery.md) (Prompt Rules).

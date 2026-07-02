@@ -88,11 +88,12 @@ test("unified-surface TODO row: Auto Claim drives controllerClaimable", () => {
   assert.equal(manual.controllerClaimable, false);
 });
 
-test("next-work blocks new candidates while another demand state root is unarchived", () => {
+test("next-work blocks new candidates while another demand state root is unarchived (maxActiveDemands=1)", () => {
   const { root } = makeFixture({
     todoRows:
       "| NEXT-2026-06-04 | pending-claim | requirement | P1 | Wakeflow | next | no | none | Wakeflow | none |",
   });
+  writeJson(path.join(root, "workspace.config.json"), { maxActiveDemands: 1 });
   writeJson(path.join(root, ".wakeflow-active/current/current-demand/wakeflow-state.json"), {
     demandKey: "current-demand",
     state: "needs-rework",
@@ -102,8 +103,9 @@ test("next-work blocks new candidates while another demand state root is unarchi
   assert.notEqual(result.status, 0);
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.candidateCount, 0);
-  assert.match(parsed.issues.join("\n"), /workspace has unarchived demand state root/);
+  assert.match(parsed.issues.join("\n"), /workspace is at its active-demand capacity \(1\/1\)/);
   assert.equal(parsed.workspaceDemandConflicts[0].demandKey, "current-demand");
+  assert.equal(parsed.demandCapacity.atCapacity, true);
 });
 
 // Regression: the MCP server's cwd is the plugin cache, not the workspace, so it passes

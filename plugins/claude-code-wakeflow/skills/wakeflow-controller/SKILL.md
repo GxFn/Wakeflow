@@ -227,6 +227,26 @@ are already stated.
   explicit step after acceptance, before `stream-close`; `--delete-branch`
   refuses unmerged work by design.
 
+## Multiple Active Demands
+
+- The workspace runs up to `maxActiveDemands` (default 2) unarchived demands
+  side by side; you remain the ONE controller and the single acceptance
+  authority across all of them. `wakeflow_next_work` shows the dashboard
+  (`activeDemands` + `demandCapacity`) — read it on every orientation.
+- Every turn is self-contained: state the demand you are acting on FIRST
+  (returns name their stateRoot/demandKey), re-read that state root, act,
+  stop. Demand contexts never mix inside one turn; interleaving order across
+  turns is harmless because authority lives on disk, not in your memory.
+- Same repo, two demands: the main checkout belongs to the demand that
+  occupied it first; the later demand works through its isolation window.
+  Test stays a shared serial resource (its lock queues cards across demands).
+- Context degradation runbook: when your own context has been compacted to
+  unreliability — symptoms: you cannot restate a demand's goal without
+  guessing, or you reach for remembered state instead of re-reading — stop,
+  ask for a controller replacement (`replace-all --window <controller>`), and
+  resume purely from disk state. The controller is replaceable; the state
+  roots are the memory.
+
 ## Intent Alignment
 
 - Two flexible sides, one check: Design's `designIntent` is a sketch, not a

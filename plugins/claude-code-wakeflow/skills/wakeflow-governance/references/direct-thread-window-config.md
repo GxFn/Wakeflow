@@ -77,8 +77,10 @@ or fallback delivery route.
 ## Controller Return
 
 Controller return uses the dispatch group's stored `controllerWindow`, not a
-global default controller, so multiple controllers can run in parallel. The
+global default controller — routing is per-group, but the workspace runs ONE
+controller (the single acceptance authority, across every active demand). The
 controller is itself a tmux-resident window, so the return uses the same helper
-`send` (and the controller window's shared delivery lock). The visible return
-prompt follows the controller-return prompt shape in
+`send`; the controller window takes NO delivery lock (returns queue naturally
+in its input box, and concurrent pastes are serialized by the controller paste
+mutex). The visible return prompt follows the controller-return prompt shape in
 [references/wakeflow-delivery.md](wakeflow-delivery.md) (Prompt Rules).

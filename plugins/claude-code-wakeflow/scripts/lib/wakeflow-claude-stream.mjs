@@ -1,14 +1,19 @@
 /**
- * Parallel-stream registration model for the Claude Code edition.
+ * Isolation-window registration model for the Claude Code edition.
  *
- * A stream is an ordinary Wakeflow window named `<repo>__<streamId>` whose cwd
- * is a dedicated git worktree on its own branch `<demandKey>/<streamId>`. The
- * ONLY new state is the derived local config overlay: a full regenerated copy
- * of the tracked workspace.config.json plus one repositories[] entry per active
- * stream, written to .wakeflow-local/workspace.config.json — the path every
- * core resolver (evidence repo mapping, window dispatch config, setup) already
- * prefers when present. Locks, thread registry, launch, and group fan-out all
- * key on windowName, so stream windows inherit them without core changes.
+ * An isolation window is an ordinary Wakeflow window named `<repo>__<id>`
+ * whose cwd is a dedicated git worktree on its own branch `<demandKey>/<id>`.
+ * It exists for CROSS-DEMAND isolation: when more than one demand is active
+ * and both touch a repository, the later demand works in its own worktree so
+ * the main checkout stays coherent. Within one demand a repo runs exactly one
+ * window (a combined task package it self-sequences) — never two. The ONLY
+ * new state is the derived local config overlay: a full regenerated copy of
+ * the tracked workspace.config.json plus one repositories[] entry per active
+ * isolation window, written to .wakeflow-local/workspace.config.json — the
+ * path every core resolver (evidence repo mapping, window dispatch config,
+ * setup) already prefers when present. Locks, thread registry, launch, and
+ * group fan-out all key on windowName, so these windows inherit them without
+ * core changes.
  *
  * A hand-maintained .wakeflow-local/workspace.config.json (no derived marker)
  * is a user override surface per CLAUDE.md; stream registration must FAIL
@@ -116,7 +121,7 @@ export function buildStreamEntry({ repoEntry, windowName, worktreeRel, repoWindo
   return {
     windowName,
     path: worktreeRel,
-    role: `Parallel stream of ${repoWindow}`,
+    role: `Isolation worktree of ${repoWindow}`,
     mode: "internal",
     managedAgents: false,
     stream: {

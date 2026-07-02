@@ -34,6 +34,9 @@ function createManifest(root) {
   writeJson(path.join(root, "workspace.config.json"), {
     workspaceName: "ExampleWorkspace",
     controllerWindow: "ExampleController",
+    // These fixtures pin the strict single-active sequencing semantics; the
+    // multi-active default (2) is covered by wakeflow-multi-demand.test.mjs.
+    maxActiveDemands: 1,
   });
   const docsDir = path.join(root, "wakeflow-ledger/requirement-designs/example");
   mkdirSync(docsDir, { recursive: true });

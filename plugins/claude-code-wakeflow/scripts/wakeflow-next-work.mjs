@@ -5,8 +5,9 @@ import path from "node:path";
 import { loadWorkspaceConfig, resolveWorkspaceRoot, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 import { isCompletedState, isPausedLikeState, normalizeStateId } from "./lib/wakeflow-status-machine.mjs";
 import {
-  activeDemandConflictBlockers,
+  activeDemandCapacityBlockers,
   activeDemandConflictSummary,
+  maxActiveDemandsFor,
   scanUnarchivedDemandStateRoots,
 } from "./lib/wakeflow-active-demands.mjs";
 
@@ -235,12 +236,15 @@ function compareCandidates(left, right) {
   return 0;
 }
 
-function applyWorkspaceDemandGuard(candidate, conflicts) {
+function applyWorkspaceDemandGuard(candidate, conflicts, maxActive) {
+  // Multi-active demands: a candidate is blocked only when claiming it would
+  // EXCEED workspace capacity (its own demand key never counts against it).
   const candidateConflicts = conflicts.filter((item) => item.demandKey !== candidate.id);
-  if (candidateConflicts.length === 0) return candidate;
+  const capacity = { active: candidateConflicts, max: maxActive, atCapacity: candidateConflicts.length >= maxActive };
+  if (!capacity.atCapacity) return candidate;
   const blockers = [
     ...(candidate.blockers ?? []),
-    ...activeDemandConflictBlockers(candidateConflicts),
+    ...activeDemandCapacityBlockers(capacity),
   ];
   return {
     ...candidate,
@@ -265,12 +269,13 @@ if (!["all", "todo"].includes(sourceMode)) {
   issues.push(`unsupported --source ${sourceMode}; use all or todo`);
 }
 const workspaceDemandConflicts = scanUnarchivedDemandStateRoots({ workspaceRoot });
-if (workspaceDemandConflicts.length > 0) {
-  issues.push(`workspace has unarchived demand state root(s): ${activeDemandConflictSummary(workspaceDemandConflicts)}`);
+const maxActiveDemands = maxActiveDemandsFor(workspaceConfig);
+if (workspaceDemandConflicts.length >= maxActiveDemands) {
+  issues.push(`workspace is at its active-demand capacity (${workspaceDemandConflicts.length}/${maxActiveDemands}): ${activeDemandConflictSummary(workspaceDemandConflicts)}`);
 }
 
 const todoCandidates = parseTodoCandidates(warnings)
-  .map((candidate) => applyWorkspaceDemandGuard(candidate, workspaceDemandConflicts));
+  .map((candidate) => applyWorkspaceDemandGuard(candidate, workspaceDemandConflicts, maxActiveDemands));
 const allCandidates = [...todoCandidates].sort(compareCandidates);
 const matchedCandidates = targetId ? allCandidates.filter((candidate) => candidate.id === targetId) : allCandidates;
 if (targetId && matchedCandidates.length === 0) {
@@ -296,6 +301,14 @@ const result = {
   targetId,
   currentStatus: status,
   workspaceDemandConflicts,
+  // Multi-active dashboard: what is in flight and how much room is left —
+  // the controller's per-wake orientation across demands.
+  activeDemands: workspaceDemandConflicts.map((item) => ({ demandKey: item.demandKey, state: item.state, stateRoot: item.stateRoot })),
+  demandCapacity: {
+    active: workspaceDemandConflicts.length,
+    max: maxActiveDemands,
+    atCapacity: workspaceDemandConflicts.length >= maxActiveDemands,
+  },
   candidateCount: candidates.length,
   candidates,
   recommended,

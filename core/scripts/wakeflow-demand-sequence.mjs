@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runSync } from "../lib/wakeflow-process.mjs";
 import {
+  activeDemandCapacity,
   activeDemandConflictSummary,
   scanUnarchivedDemandStateRoots,
 } from "./lib/wakeflow-active-demands.mjs";
@@ -94,12 +95,14 @@ function unarchivedDemandConflicts(excludeDemandKeys = []) {
 }
 
 function failOnUnarchivedDemandConflicts(excludeDemandKeys = []) {
-  const conflicts = unarchivedDemandConflicts(excludeDemandKeys);
-  if (conflicts.length === 0) return [];
+  // Multi-active demands: claiming is refused only AT capacity, not on the
+  // mere existence of another active demand.
+  const capacity = activeDemandCapacity({ workspaceRoot, config: readWorkspaceConfig(), excludeDemandKeys });
+  if (!capacity.atCapacity) return capacity.active;
   fail(
-    `cannot claim a new demand while unarchived demand state root(s) exist: ${activeDemandConflictSummary(conflicts)}. Complete and archive the current demand before claiming the next one.`,
+    `cannot claim a new demand: workspace is at its active-demand capacity (${capacity.active.length}/${capacity.max}): ${activeDemandConflictSummary(capacity.active)}. Complete and archive one, or raise maxActiveDemands in workspace.config.json.`,
   );
-  return conflicts;
+  return capacity.active;
 }
 
 function slug(value) {

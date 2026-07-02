@@ -198,6 +198,10 @@ stream = 独立窗口 `<repo>__<streamId>` + 独立 worktree + 独立分支 `<de
 
 ---
 
+## 4.6 E-2 多活跃 demand ——✅ 已于 2026-07-02 落地（0.7.5，npm test 304/304）
+
+用户拍板三决策：maxActiveDemands 默认 2（配置可调，=1 完全恢复单活跃）；跨需求同仓 = 后来者走隔离窗口（主检出归先占 demand）；**单控制器**统管全部活跃 demand（唯一验收权威）。落点：三处入口门改为容量判定（init / demand-sequence claim / next-work 候选守卫），next-work 输出 activeDemands+demandCapacity 仪表盘，Claude 侧总控粘贴互斥（只序列化 paste+Enter，总控依旧永不 busy），skills 双版本载入多活跃纪律（回合声明 demand、重读 root、总控换新 runbook）与语义清扫（"multiple controllers can run in parallel" 等歧义句修正）。测试钉死：默认 2 并行、第三个 fail-closed、=1 旋钮回归旧语义、两 demand 交错闭环互不干扰（revision 各自 4）、归档释放容量（completed 未归档仍占位）。
+
 ## 4.5 设计纠正（2026-07-02，用户裁定）——需求内并行被整体删除
 
 用户明确：**需求内不存在窗口级并行**。同一 demand 内每个仓库只运行一个窗口、收到一个**组合任务包**（窗口自排优先级、一份带证据的结果收尾）；同一 demand 内一个窗口永远不会被同时派发两个任务。原 F3 的"同仓多 stream"是对用户意图的误读（需求文档的"并行化一个需求"被读成了需求内并行；用户真实诉求是**多个需求并行开发**，即 E-2）。

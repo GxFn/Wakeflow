@@ -187,6 +187,19 @@ flow live in `skills/wakeflow-governance/references/wakeflow-delivery.md`,
   state root and decides research, Test cards, packages, phase confirmation, or
   execution. When valid implementation still misses the target in a non-bug way,
   route a Design redesign (product windows do not guess the new solution).
+- Design's exit gate closes BEFORE first implementation dispatch, at the
+  demand's scale (full gate for a requirement; lighter for bug/supplement):
+  requirement design reconciled against real code facts, a landing plan (per-window
+  breakdown + designIntent), non-goals, every open user question answered and
+  recorded, and the Test decision — including a user-confirmed Test Environment
+  Spec whenever real-scenario Test will be needed. A goal without these is
+  Design work, not execution work.
+- Test only tests: the controller selects the confirmed environment for each
+  test card (from the Design-stage spec) and sends it in the card; Test never
+  chooses environments, invents config values, or fixes product code. A missing
+  input at any stage is routed to its owner (Design / user / bounded
+  investigation), never guessed — the full S0→S6 route and per-stage gates live
+  in `skills/wakeflow-governance/references/stage-route-map.md`.
 - Supplemental requirements must not reverse original decisions, non-goals, or
   forbidden shortcuts, and must not split into placeholder / empty-adapter /
   type-only stages without a named consumer and targeted validation.

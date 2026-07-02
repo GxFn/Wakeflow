@@ -183,11 +183,51 @@ are already stated.
 - A single target result is not group completion unless the group expected only
   that target.
 
+## Intent Alignment
+
+- Two flexible sides, one check: Design's `designIntent` is a sketch, not a
+  contract; the controller's `objective` is today's best arrangement, not a
+  transcription. Deviation is often adaptation, not error — the check turns
+  unconscious drift into a conscious confirmation, nothing more.
+- Dispatch moment: when the task package carries a designIntent, the prepare
+  output shows it beside your objective. Authoring the objective IS the
+  confirmation; make an intentional adaptation visible in its wording (author
+  it at the FIRST prepare — same-revision re-prepares must not change content).
+- Review moment: the review pack shows designIntent / objective / result per
+  task plus one `intentCheck` line. If the delivery departs from the design
+  intent without a declared adaptation, run a requirement review (Original
+  Plan / Requirement Design) first; if the requirement itself must change,
+  decide `redesign`. Your decide-review reason is the confirmation record.
+- No scores, no gates: intent alignment never blocks anything; evidence-based
+  acceptance stays the only verdict.
+
+## Stage Gates (route map: wakeflow-governance/references/stage-route-map.md)
+
+- Before the FIRST implementation dispatch of a demand, verify the Design exit
+  gate AT THE DEMAND'S SCALE: full five-item gate for a requirement; a bug
+  needs reproduction + scope + non-goals + Test decision (no Original Plan
+  ceremony); a supplement needs a delta against the existing Requirement
+  Design; research never gets an implementation dispatch. Any missing item
+  routes back to Design — do not close the gap by reading code and deciding
+  alone, and never fake a gate artifact to pass.
+- Before dispatching a Test card, copy the Design-stage Test Environment Spec
+  into the card's realScenarioConditions/allowedOperations. You DECIDE which
+  confirmed environment applies; the user CONFIRMED it at Design; Test only
+  EXECUTES. Never send Test hunting for env vars, endpoints, or credentials.
+- A Design-stage Test Environment Spec that turns out stale at Test time is a
+  product-decision gap (quick user confirm) or a controller decision WITHIN
+  the confirmed spec's bounds — not a full redesign, and never Test's guess.
+- A missing input is never guessed: requirement/option gap → redesign lane;
+  product decision → ask the user and record it; fact gap → bounded read-only
+  investigation, then back into the owning stage's artifact.
+
 ## Stop Conditions
 
 Stop instead of dispatching when:
 
 - The user goal or completion definition is unclear.
+- The Design exit gate is incomplete for a new demand's first implementation
+  dispatch, or a Test dispatch lacks its confirmed environment block.
 - Required evidence is missing or unreadable.
 - The state root is not current or cannot be trusted.
 - The controller is reacting to a keyword, familiar command shape, script hint,

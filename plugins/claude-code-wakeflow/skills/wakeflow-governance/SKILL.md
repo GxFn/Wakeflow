@@ -110,6 +110,7 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
 
 ## References
 
+- Read [references/stage-route-map.md](references/stage-route-map.md) FIRST when unsure which window acts next, which stage owns a missing input, whether Design's exit gate is complete, or which capability belongs to which stage — the S0→S6 route, per-stage gates, capability classification, and the three escalation lanes live there.
 - Read [references/todo-backlog.md](references/todo-backlog.md) when creating, adjusting, rolling, accepting, canceling, prioritizing, or dispatching TODO / Backlog items.
 - Read [references/window-dispatch.md](references/window-dispatch.md) when preparing a wave, task package, window coverage table, producer / consumer sequence, unified dispatch prompt, or send/no-send decision.
 - Read [references/testing-validation.md](references/testing-validation.md) when deciding whether total control should self-test, whether `Test` or another configured test window is justified, how to write a test handoff, how to interpret test evidence, or which validation command applies.
@@ -137,6 +138,8 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
 - Before changing `CLAUDE.md` or moving content into references, prepare an old-rule migration check: keep / downshift / rewrite / discard, and state which `CLAUDE.md` section or reference now owns each rule.
 - Parallel streams are independent windows on dedicated worktrees and branches (`<demandKey>/<streamId>`), registered only through the derived local config overlay (`.wakeflow-local/workspace.config.json`, never hand-edited). Teardown is explicit: dirty worktrees and unmerged branches refuse by default, a demand with open streams refuses to archive, and merge-back is a controller decision, never a stream's.
 - `designIntent` is one optional sentence of implementation intent on a task package ("roughly how"), authored by Design at delivery/handoff when useful. It is advisory input for the controller's own alignment check at dispatch and review — never an acceptance standard, a score, or a gate.
+- **Design exit gate before ANY implementation dispatch**: Original Plan; Requirement Design with code-fact reconciliation (real current behavior, verified against source), landing plan (per-window breakdown + designIntent), and non-goals; a user-confirmation ledger with every open product question ANSWERED; and the Test decision (needed or not — if yes, a Test Environment Spec confirmed with the user at Design time). A goal arriving without these is S1 work, not execution work: route it to Design instead of "reviewing code and just starting" (see [references/stage-route-map.md](references/stage-route-map.md)).
+- **Test only tests**: the controller decides which confirmed environment a test card uses (from the Design-stage spec), the user confirms it at Design, Test only executes. A card with a missing/ambiguous environment block is a blocker back to the controller — Test never chooses environments, invents config values, or fixes product code. A missing input at any stage is never guessed: requirement gap → Design; product decision → user; fact gap → bounded read-only investigation.
 
 ## Minimal Workflow
 

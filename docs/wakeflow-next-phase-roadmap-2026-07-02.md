@@ -157,6 +157,8 @@ stream = 独立窗口 `<repo>__<streamId>` + 独立 worktree + 独立分支 `<de
 | （H-3 ⚡） | LLM 契约 lint（原 H-3，价值上升：Phase 2 引入条件化 agentNext 覆盖，覆盖点将增多） | 深读 §6-3 | 并入 O-wave |
 | H-9 | 全局 TODO 板的单写者假定：markdown 读-改-写无锁，靠"Design 唯一追加、控制器唯一消费"纪律 | 本轮复盘 | 丢一行 TODO 时触发；对策现成（`withFileLock` 复用到板文件） |
 | H-11 | review-pack 的 packet 扫描随传输历史线性增长（`prune-runtime` 不清 packets 的既有累积叠加） | Phase 2 实现自查 | 长寿工作区 review-pack 变慢时触发；方向 = prune 扩展到 fully-accepted 组的 packets（原 P1-3 案） |
+| E-4 | 测试环境的机械化承载：`wakeflow_deliver` 增 testEnvironmentRef 链接、test-card 增结构化 environment 字段（当前由散文约定承载：S1 出口门禁的 Test Environment Spec → 总控复制进 realScenarioConditions） | 2026-07-02 阶段路线治理（用户需求 #3） | 散文约定在真实使用中被绕过/漏带一次即触发 |
+| E-5 | Design 门禁的机械助攻：`wakeflow_create_demand` 输出咨询性 designGate 块（五项各自有无链接证据，advisory 不设门——意图对齐"正确时刻的正确信息"模式复用） | 2026-07-02 门禁合理性自审：执行力全靠散文是本设计的最薄弱点 | requirement 未过门禁被执行再次发生一次即触发 |
 
 真机验收带来的权重修正：H-1（锁续租）↑——并行 stream 使长任务更常见；H-4（完整 ack）↓——pane 抓屏实测可靠，O-2 覆盖大半残余间隙；E-1 维持——波尾等待是否成真痛点待真实多任务波数据。
 

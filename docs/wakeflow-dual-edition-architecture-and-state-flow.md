@@ -1,6 +1,6 @@
 # Wakeflow: Dual-Edition Architecture and State Flow
 
-> Generated 2026-06-19 from source at commit HEAD; code is the source of truth.
+> Generated 2026-06-19 from source at commit HEAD; **revised 2026-07-02 against v0.7.7** (state-root locks, multi-demand capacity, intent alignment, isolation worktrees, demand pods, unified create/claim/deliver). Code is the source of truth.
 
 This document synthesizes seven parallel subsystem reads of the Wakeflow source.
 Where a reader flagged an uncertainty, it is surfaced in an **Open questions /
@@ -31,12 +31,21 @@ Three structural pillars hold this up:
 1. **One host-neutral core** (`core/`) with a hand-rolled MCP server exposing 23
    `wakeflow_*` tools, each of which spawns an allowlisted Node script.
 2. **A demand state machine** (`core/scripts/wakeflow-state.mjs`) of seven
-   reducers driving a single per-demand state root, plus a separate transport
-   lifecycle (`core/scripts/wakeflow-delivery.mjs`) for envelopes, runs, and
-   results.
+   state-writing reducers (plus the state-neutral result import and two
+   read-only projections) driving a single per-demand state root, and a
+   separate transport lifecycle (`core/scripts/wakeflow-delivery.mjs`) for
+   envelopes, runs, and results.
 3. **A host-profile seam** that lets the identical core run on two different
    transports — Claude Code tmux-resident sessions and Codex host threads —
    without ever branching on host id.
+
+Since 0.7.x a fourth pillar hardens the first three: **mechanical concurrency
+and parallelism** — O_EXCL file locks around every state-root mutation (plus
+board/capacity/paste locks), a `maxActiveDemands` capacity gate (default 2),
+and demand-level parallelism only: within one demand each repository runs
+exactly ONE window with ONE combined task package, while extra demands run as
+isolated demand pods (own controller/Test/tmux session, isolation worktrees,
+human-reviewed merge-back ledger).
 
 ---
 
@@ -47,14 +56,14 @@ Three structural pillars hold this up:
 Wakeflow ships **two self-contained marketplace plugin artifacts built from one
 shared source**:
 
-- `core/` holds **64 host-neutral runtime files** (the MCP server, runtime libs,
-  21 `scripts/lib` modules, 25 top-level scripts, JSON schemas, the bin shim,
-  assets, and config examples). The full breakdown: `scripts/`=46 (25 top-level
-  + 21 `scripts/lib`), `schemas/`=7, `lib/`=4, `mcp/`=1, `bin/`=1, `assets/`=2,
+- `core/` holds **65 host-neutral runtime files** (the MCP server, runtime libs,
+  24 `scripts/lib` modules, 24 top-level scripts, JSON schemas, assets, and
+  config examples). The full breakdown: `scripts/`=48 (24 top-level
+  + 24 `scripts/lib`), `schemas/`=7, `lib/`=4, `mcp/`=1, `assets/`=2,
   3 root files (`LICENSE` + 2 `workspace.config.*.json`).
 - `plugins/codex-wakeflow/` and `plugins/claude-code-wakeflow/` are each a
-  **complete install surface** that commits **plain byte-identical copies of 63
-  of those core files**. The 64th — `scripts/lib/wakeflow-host-profile.mjs` — is
+  **complete install surface** that commits **plain byte-identical copies of 64
+  of those core files**. The 65th — `scripts/lib/wakeflow-host-profile.mjs` — is
   excluded from sync because it is host-local.
 
 The seam between hosts is `wakeflow-host-profile.mjs`. Every core script
@@ -72,22 +81,22 @@ uses `hostProfile.memoryFileLabel`.
 ```mermaid
 flowchart TB
   subgraph SRC["SOURCE OF TRUTH — core/ (64 files)"]
-    CORE["mcp/server.cjs · lib/*.mjs · bin/wakeflow-mcp.mjs<br/>scripts/*.mjs (25 top-level) · scripts/lib/*.mjs (21)<br/>schemas/*.json · workspace.config.*.json"]
+    CORE["mcp/server.cjs · lib/*.mjs<br/>scripts/*.mjs (24 top-level) · scripts/lib/*.mjs (24)<br/>schemas/*.json · workspace.config.*.json"]
     DEVSTUB["scripts/lib/wakeflow-host-profile.mjs<br/><i>DEV STUB — NOT synced</i>"]
   end
 
   SYNC["tools/sync-core.mjs<br/>TARGETS=[codex, claude-code]<br/>HOST_LOCAL_CORE_FILES={host-profile}<br/>sameContent = Buffer.equals<br/>--check: report drift, exit 1<br/>default: copyFileSync<br/>+ assert 14 HOST_CONTRACT_FILES(target) exist<br/>(manifest + memoryFile names vary per edition)"]
 
-  CORE -->|"63 byte-identical"| SYNC
+  CORE -->|"64 byte-identical"| SYNC
 
   subgraph CODEX["plugins/codex-wakeflow/ (committed copies)"]
-    CXSHARED["63 byte-identical core copies"]
+    CXSHARED["64 byte-identical core copies"]
     CXHOST["HOST-SPECIFIC (never synced):<br/>host-profile.mjs (hostId=codex, AGENTS.md)<br/>host-send-adapter.mjs → send_message_to_thread<br/>host-artifact-checks.mjs (.codex-plugin)<br/><b>NO transport helper script</b>"]
   end
 
   subgraph CLAUDE["plugins/claude-code-wakeflow/ (committed copies)"]
-    CLSHARED["63 byte-identical core copies"]
-    CLHOST["HOST-SPECIFIC (never synced):<br/>host-profile.mjs (hostId=claude-code, CLAUDE.md)<br/>host-send-adapter.mjs → tmux paste via helper<br/>host-artifact-checks.mjs (.claude-plugin)<br/>wakeflow-claude-host.mjs (1557L tmux transport)"]
+    CLSHARED["64 byte-identical core copies"]
+    CLHOST["HOST-SPECIFIC (never synced):<br/>host-profile.mjs (hostId=claude-code, CLAUDE.md)<br/>host-send-adapter.mjs → tmux paste via helper<br/>host-artifact-checks.mjs (.claude-plugin)<br/>wakeflow-claude-host.mjs (2581L tmux transport)"]
     CLCMD["commands/ (7 *.md slash commands) — Claude-only"]
   end
 
@@ -104,10 +113,10 @@ flowchart TB
 
 | Class | Files | Sync behavior |
 |---|---|---|
-| **Synced — byte-identical (63)** | all of `core/` except `scripts/lib/wakeflow-host-profile.mjs` | `Buffer.equals` compare; `--check` reports drift (exit 1), default mode `copyFileSync` |
+| **Synced — byte-identical (64)** | all of `core/` except `scripts/lib/wakeflow-host-profile.mjs` | `Buffer.equals` compare; `--check` reports drift (exit 1), default mode `copyFileSync` |
 | **Host-local — not synced (3 lib files)** | `scripts/lib/wakeflow-host-profile.mjs`, `wakeflow-host-artifact-checks.mjs`, `wakeflow-host-send-adapter.mjs` | only the profile is an explicit `HOST_LOCAL_CORE_FILES` exclusion (`:59-61`) — it **does** exist in `core/scripts/lib/` and is skipped (`:72`). The send-adapter and artifact-checks are **not excluded** because they **do not exist in `core/` at all** (confirmed: `core/scripts/lib/` holds only `wakeflow-host-profile.mjs` among the host-* files), so they are never sync candidates. All three are listed in `HOST_CONTRACT_FILES` and only **existence-checked**. The send-adapter and artifact-checks differ **byte-for-byte** between editions |
 | **Host-contract — existence-checked only (14 per target)** | manifest, `.mcp.json`, memory file (`CLAUDE.md`/`AGENTS.md`), README ×2, `package.json`, `scripts/README.md`, the 3 host-lib files, 3 `SKILL.md`, template bundle | `--check` asserts each EXISTS but never byte-compares. `HOST_CONTRACT_FILES` is a **function of `target`** (`:42-57`): `target.manifest` and `target.memoryFile` resolve to the edition's own filenames (`.codex-plugin/plugin.json`+`AGENTS.md` vs `.claude-plugin/plugin.json`+`CLAUDE.md`), so the existence checks use the right per-edition names |
-| **Claude-only extra** | `scripts/lib/wakeflow-claude-host.mjs` (1557-line tmux transport helper), `commands/` (7 slash-command `.md` files) | shipped only in the Claude edition; Codex has no equivalent |
+| **Claude-only extra** | `scripts/lib/wakeflow-claude-host.mjs` (2581-line tmux transport helper), `commands/` (7 slash-command `.md` files) | shipped only in the Claude edition; Codex has no equivalent |
 
 Key citations:
 
@@ -115,7 +124,7 @@ Key citations:
   `:59-61` (`HOST_LOCAL_CORE_FILES`), `:63-77` (`listCoreFiles`), `:79-82`
   (`sameContent` = `readFileSync(a).equals(readFileSync(b))`), `:102-121`
   (sync/check loop), `:115-120` (existence assertion).
-- `package.json:6-9` (npm workspaces), `:11-21` (`sync:core`/`check:core`/`test`).
+- `package.json:7-10` (npm workspaces), `:11-21` (`sync:core`/`check:core`/`test`).
 - `.claude-plugin/marketplace.json:11-16` (single `wakeflow` entry, source
   `./plugins/claude-code-wakeflow`).
 
@@ -127,9 +136,9 @@ Key citations:
 - `--check` (CI gate, wired into `npm test` first, `package.json:21`): drift
   pushes `${target.dir}/${rel} drifts from core/${rel}`, missing dir pushes an
   issue, then `process.exitCode = 1`.
-- default `--write`: `mkdirSync(recursive)` + `copyFileSync`, increments
-  `copied`.
-- Empirically `node tools/sync-core.mjs --check` returns `{ok:true, coreFiles:63, issues:[]}`.
+- default (no flag) is the write mode: `mkdirSync(recursive)` + `copyFileSync`,
+  increments `copied`; `--check` is the only flag.
+- Empirically `node tools/sync-core.mjs --check` returns `{ok:true, coreFiles:64, issues:[]}`.
 
 The `TARGETS` are hardcoded with per-edition manifest + memory file names so the
 existence check uses the right filenames: `{dir:'plugins/codex-wakeflow', manifest:'.codex-plugin/plugin.json', memoryFile:'AGENTS.md'}` and
@@ -151,9 +160,13 @@ The profile exposes four seams that core interpolates but never branches on:
 
 The transport seam **diverges structurally**:
 
-- **Claude**: `hostTools` are subcommands of the 1557-line
-  `wakeflow-claude-host.mjs` (`launch-window`/`retitle`/`send`); its dispatch
-  table is at `wakeflow-claude-host.mjs:1520-1541`. The send-adapter pastes the
+- **Claude**: `hostTools` are subcommands of the 2581-line
+  `wakeflow-claude-host.mjs` (`launch-window`/`retitle`/`send`, plus the
+  one-step `deliver --delivery-file` transport — it reads the prepared
+  envelope, pastes, and returns compact readback, replacing the manual
+  prompt-file + send ceremony — and the `stream-open/close/list` +
+  `pod-open/close/list` cross-demand isolation commands); its dispatch table
+  is at `wakeflow-claude-host.mjs:2539-2565` (26 subcommands). The send-adapter pastes the
   envelope into tmux (`claudeTmuxResidentAdapter`, `send-adapter:24-34`) with a
   `claude -p --resume` headless-recovery last resort (`claudeHeadlessRecoveryAdapter`,
   `:36-46`; the `adapterForWindowMode` dispatcher that selects between them is the
@@ -169,13 +182,13 @@ Additional edition facts:
   requires both `skills/` and `commands/` (`wakeflow-host-artifact-checks.mjs:29-34`);
   Codex has no `commands/` and instead carries a `.codex-plugin` `interface{}`
   block.
-- All edition manifests are version-locked at **0.5.8** in **five places**: both
+- All edition manifests are version-locked at **0.7.7** in **five places**: both
   plugin manifests (`.codex-plugin/plugin.json:3`, `.claude-plugin/plugin.json:3`),
   both plugin `package.json`s, and the marketplace **plugin entry**
   (`.claude-plugin/marketplace.json` `plugins[0].version`). The marketplace file
   also carries a **second, distinct** version field — `metadata.version` is
   `1.0.0` (the catalog metadata, not the plugin version) — so the same file has
-  two different version fields and only the `plugins[0]` one tracks the 0.5.8
+  two different version fields and only the `plugins[0]` one tracks the 0.7.7
   lock. Root `package.json` stays `0.0.0` / `private:true` (private dev
   workspace). `sync-core` does **not** enforce version equality — manifests are
   existence-only.
@@ -190,7 +203,7 @@ where any prose here and the code disagree, the code is authoritative.
 
 > **Open questions / verify:** The no-`hostId`-branch claim rests on a grep for
 > `hostId ===` returning zero hits in `core/`; this would miss exotic dynamic
-> dispatch (e.g. `hostProfile.hostId` used as an object key). The five 0.5.8
+> dispatch (e.g. `hostProfile.hostId` used as an object key). The five 0.7.7
 > version fields currently match but `check:core` does not catch version drift. The
 > Codex `.agents/plugins/marketplace.json` distribution path lives outside this
 > repo's tracked tree and was not confirmed.
@@ -212,12 +225,9 @@ dependency**:
   `mcpServers` at `./.mcp.json` (`claude .claude-plugin/plugin.json:20`,
   `codex .codex-plugin/plugin.json:22`). The Claude `WAKEFLOW_DEFAULT_ROOT`
   injection is what grounds the `defaultWorkspaceRoot` fallback chain in §3.3.
-- `core/bin/wakeflow-mcp.mjs` (`:1-3`) is a 3-line shim that imports
-  `../mcp/server.cjs`. It is **NOT** the executable named by the plugin's MCP
-  registration — the `.mcp.json` files target `mcp/server.cjs` directly, so the
-  bin shim is an alternate/unused entrypoint on the MCP path (useful for a manual
-  `node core/bin/wakeflow-mcp.mjs` launch during repo dev, but the host never
-  invokes it).
+- The former `core/bin/wakeflow-mcp.mjs` shim was removed (dead-capability
+  cleanup); `mcp/server.cjs` is the only MCP entrypoint, exactly as the
+  `.mcp.json` files register it.
 - `core/mcp/server.cjs` implements the full framed transport (newline-delimited
   JSON **and** Content-Length framing, plus JSON-RPC batch arrays), protocol
   negotiation (latest `2025-11-25`, default `2025-03-26`, 5 supported versions),
@@ -230,24 +240,24 @@ dependency**:
   builds a `[subcommand, ...flags]` list and calls `runWakeflowRuntime`. The
   return is `JSON.stringify`'d into a single text content block.
 
-`runWakeflowRuntime` (`core/lib/wakeflow-runtime.mjs:56-104`) resolves the logical
-`script` name against an **allow-list Map** of 25 entries (`:18-44`), spawns
+`runWakeflowRuntime` (`core/lib/wakeflow-runtime.mjs:55-103`) resolves the logical
+`script` name against an **allow-list Map** of 24 entries (`:18-43`), spawns
 `node <pluginRoot>/scripts/<file>.mjs <args>` through the audited `spawnProcess`
 boundary (`core/lib/wakeflow-process.mjs`), with env `WAKEFLOW_CONTROL_RUNTIME=1`,
 no shell, `stdio ['ignore','pipe','pipe']`, and a SIGTERM timeout (default
 120000ms). It parses the **last JSON object** from stdout (`parseLastJson`,
 tolerating leading log lines), then wraps the result with `wakeflowTrace`,
-`wakeflowRuntimeStatus`, optional `wakeflowError` (classified code; only
-`runtime-timeout` is retryable), and — for `wakeflow-cli status` only —
-`wakeflowHealth`.
+`wakeflowRuntimeStatus`, optional `wakeflowError` (classified code; `runtime-timeout` and
+`runtime-spawn-failed` are retryable; the timeout escalates SIGTERM→SIGKILL
+after 2s), and — for `wakeflow-cli status` only — `wakeflowHealth`.
 
 The process boundary is hard-locked: `prepareWakeflowCommand`
-(`wakeflow-process.mjs:58-78`) rejects `shell`, requires string-array args, and
+(`wakeflow-process.mjs:60-80`) rejects `shell`, requires string-array args, and
 permits **only** `node` (with blocked `eval`/`require`/`loader` flags), `git`
 (allow-listed subcommands), exactly `ps -axo pid,command`, and darwin
 `caffeinate`. Anything else throws `Unsupported Wakeflow process command`.
 
-`prioritizeHostVisibleTools` (`wakeflow-mcp-tools.mjs:538-571`) hoists 12 named
+`prioritizeHostVisibleTools` (`wakeflow-mcp-tools.mjs:541-554`) hoists 12 named
 tools to the front of `tools/list` because some Codex hosts only surface an early
 prefix of MCP tools — ordering only, not availability.
 
@@ -257,16 +267,14 @@ prefix of MCP tools — ordering only, not availability.
 flowchart TB
   STDIN["stdin (JSON-RPC: NDJSON or Content-Length framed)"]
   REG[".mcp.json registers: node &lt;pluginRoot&gt;/mcp/server.cjs<br/>(claude: env WAKEFLOW_DEFAULT_ROOT=CLAUDE_PROJECT_DIR)"]
-  SHIM["core/bin/wakeflow-mcp.mjs (3-line shim)<br/><i>alternate/unused MCP entrypoint</i>"]
-  SHIM -.->|import (dev only)| SRV["core/mcp/server.cjs"]
   STDIN --> REG
-  REG -->|host launches| SRV
+  REG -->|host launches| SRV["core/mcp/server.cjs"]
   SRV -->|"main(): dynamic import"| TOOLS["core/lib/wakeflow-mcp-tools.mjs {tools, handlers}"]
   SRV --> DRAIN["LineJsonRpcTransport.drain → handleMessage(method)"]
   DRAIN --> INIT["initialize / ping / notifications-initialized"]
   DRAIN --> LIST["tools/list → {tools} (12 priority tools hoisted)"]
   DRAIN --> CALL["tools/call → callTool(name, arguments)"]
-  CALL --> H["handlers[name](args)<br/>build [subcommand, ...CLI flags]<br/>via optionalValue/repeatValues/rootArgs<br/>(+ default --compact on 4 delivery/result tools)"]
+  CALL --> H["handlers[name](args)<br/>build [subcommand, ...CLI flags]<br/>via optionalValue/repeatValues/rootArgs<br/>(+ default --compact on 3 delivery/result tools)"]
   H --> RT["runWakeflowRuntime({script, args, cwd})"]
   RT --> ALLOW["allowedScripts.get(script) → scripts/&lt;file&gt;.mjs (else throw)"]
   ALLOW --> SPAWN["spawnNode → spawnProcess (no shell)<br/>node scripts/file.mjs args<br/>env WAKEFLOW_CONTROL_RUNTIME=1, SIGTERM timeout"]
@@ -282,9 +290,9 @@ is itself one of the 23 `toolDefinitions` entries (`wakeflow-mcp-tools.mjs:525`,
 inside the array opened at `:26` that feeds `tools =
 prioritizeHostVisibleTools(toolDefinitions)` at `:557`) — it is **not** added
 separately, so the count is a flat 23, not "22 + verify". The handler keys span
-`wakeflow-mcp-tools.mjs:573-937`. All handlers always append `--json`. Only the
-four delivery/result tools accept `verbose` and default to `--compact` (see
-§3.4).
+`wakeflow-mcp-tools.mjs:573-1039`. All handlers always append `--json`. Only the
+three delivery/result tools (four command paths) accept `verbose` and default
+to `--compact` (see §3.4).
 
 | MCP tool | Script (logical) | Subcommand + notable flags |
 |---|---|---|
@@ -294,9 +302,10 @@ four delivery/result tools accept `verbose` and default to `--compact` (see
 | `wakeflow_render_progress` | `wakeflow-render-progress` | (no subcommand) `--state-root`, `--root`, `apply`→`--write` |
 | `wakeflow_release_window_lock` | `wakeflow-delivery` | `release-window-lock` (`--window`, `apply`→`--write`) |
 | `wakeflow_status` | `wakeflow-cli` | `status --root <root> --json` (fans out, §3.5) |
-| `wakeflow_init_demand` | `wakeflow-state` | `init` — `--demand-key`,`--title`, optional `--goal`/`--completion-definition`/`--stage-plan`/`--state-root`, `--write`, optional `--language` |
-| `wakeflow_add_task` | `wakeflow-state` | `add-task-package` — `--state-root`, `--task-package-id`, `--summary`, `--target-window`, `--target-task-id`, optional `--target-summary`/`--source-ref`, `adoptHost`→`--adopt-host`, `--write` |
-| `wakeflow_prepare_delivery` | `wakeflow-delivery` | `direction=controller-return` → `build-controller-return`; `direction=target` (default) → `prepare-dispatch-from-state`; `--compact` unless `verbose` |
+| `wakeflow_create_demand` | `wakeflow-demand-sequence` | `create-demand` — `--todo-id` or `--demand-key`+`--title`, optional `--controller-window`/`--goal`/`--completion-definition`/`--stage-plan`/`--task-packages <json>`, `apply`→`--write`; inits the root, adopts host, adds packages, renders, consumes the TODO row |
+| `wakeflow_claim_next` | `wakeflow-demand-sequence` | `claim-todo` — optional `--design-key`/`--controller-window`, `apply`→`--write`; unattended auto-claim of the single Auto Claim=yes eligible row; delegates to create-demand under the `maxActiveDemands` capacity gate |
+| `wakeflow_add_task` | `wakeflow-state` | `add-task-package` — `--state-root`, `--task-package-id`, `--summary`, `--target-window`, `--target-task-id`, optional `--target-summary`/`--source-ref`/`--design-intent`, `adoptHost`→`--adopt-host`, `--write` |
+| `wakeflow_prepare_delivery` | `wakeflow-delivery` | `direction=controller-return` → `build-controller-return`; `direction=target` (default) → `prepare-dispatch-from-state` (adds `--objective`/`--task-package-id`/`--controller-window` — return-route chain: flag > stamped state.controllerWindow > workspace config — and `--return-policy`); `--compact` unless `verbose` |
 | `wakeflow_record_delivery` | `wakeflow-delivery` | `record-delivery-run` — `--delivery-file`,`--status`, optional `--evidence`/`--error`/`--host-method`/`--host-mode`, `--readback-ok <bool>`, optional `--delivery-run-id`, `--compact` unless `verbose` |
 | `wakeflow_record_target_result` | `wakeflow-state` | `import-target-result` — `--state-root`,`--target-task-id`,`--target-window`,`--status`, optional `--result-id`/`--summary`, repeated `--evidence-ref`/`--verification`/`--risk`, `--compact` unless `verbose` |
 | `wakeflow_review_pack` | `wakeflow-delivery` | `review-pack` — optional `--state-root`/`--group`/`--task-id`; readOnly |
@@ -304,16 +313,21 @@ four delivery/result tools accept `verbose` and default to `--compact` (see
 | `wakeflow_reduce_results` | `wakeflow-state` | `reduce-results` — `--state-root`, `apply`→`--write`, `adoptHost`→`--adopt-host` |
 | `wakeflow_decide_review` | `wakeflow-state` | `decide-review` — `--state-root`,`--candidate-id`,`--decision`,`--reason`, repeated `--evidence-ref`, `acceptBlocked`→`--accept-blocked`, `apply`→`--write`, `adoptHost`→`--adopt-host` |
 | `wakeflow_complete_demand` | `wakeflow-state` | `complete-demand` — `--state-root`,`--reason`, repeated `--evidence-ref`, `apply`→`--write`, `adoptHost`→`--adopt-host` |
-| `wakeflow_intake_design_handoff` | `wakeflow-intake` | `design-handoff` — `--state-root`,`--design-key`, optional `--board`, `apply`→`--write` |
+| `wakeflow_deliver` | `wakeflow-todo` | `deliver` — `--type`,`--design-key`,`--title`, optional `--item`/`--priority`/`--original-plan`/`--requirement-design`/`--dependency`, `autoClaim`→`--auto-claim`, `apply`→`--apply`; Design's append-only `pending-claim` row on the global TODO board (board lock; `autoClaim` immutable) |
+| `wakeflow_prune_runtime` | `wakeflow-delivery` | `prune-runtime` — optional `--before`, `apply`→`--write`; replay-safe transport GC (target-results never deleted) |
 | `wakeflow_intake_test_card` | `wakeflow-intake` | `test-card` — `--state-root`,`--test-id`,`--target-window`,`--question`,`--object-boundary`, repeated self-check/scenario/success/failure/cannot-conclude/stop-condition, optional `--source-ref`, repeated evidence/allowed/forbidden operation, `apply`→`--write` |
 | `wakeflow_next_work` | `wakeflow-next-work` | (no subcommand) `--root`, optional `--id`/`--source`/`--limit`, `afterCompletion`→`--after-completion`, `apply`→`--write` |
 | `wakeflow_archive` | `wakeflow-state` / `wakeflow-archive-todo` / `wakeflow-archive-docs` | by `target`: `demand`→`wakeflow-state archive-demand` (`--state-root`/`--reason`, `redact`→`--redact`, repeated `--evidence-ref`, `apply`→`--write`); `todo`→`wakeflow-archive-todo` (optional `--month`/`--date`/`--keep-completed`/`--keep-sync`, `apply`→`--apply`); `docs`→`wakeflow-archive-docs` (optional `--topic`/`--month`, repeated `--file`, `keepIndexRows`/`pruneIndexOnly`, `apply`→`--apply`); todo/docs async — chain `wakeflow-archive-summaries` when `refreshSummaries && ok` |
-| `wakeflow_verify` | `wakeflow-cli` | `verify --root <root> [--script-tests] --json`; timeout 180000ms with script-tests else 120000ms |
+| `wakeflow_verify` | `wakeflow-cli` | `verify --root <root> [--script-tests] [--with-runtime | --strict-runtime] --json`; timeout 180000ms with any of script-tests/with-runtime/strict-runtime, else 120000ms |
 
-Arg→flag translation is mechanical via four helpers (`wakeflow-mcp-tools.mjs:960-1004`):
+Arg→flag translation is mechanical via four helpers (`wakeflow-mcp-tools.mjs:1061-1117`):
 `optionalValue(flag,value)` (empty for `undefined`/`null`/`''`), `repeatValues`
 (repeated flags), bare booleans inline, and `rootArgs` = `optionalValue('--root', args.root ?? defaultWorkspaceRoot())`. `defaultWorkspaceRoot` falls back to the
-first existing absolute path among `WAKEFLOW_DEFAULT_ROOT` / `CLAUDE_PROJECT_DIR`.
+first existing absolute path among `WAKEFLOW_DEFAULT_ROOT` /
+`CLAUDE_PROJECT_DIR`, then walks up (≤64 levels) to the nearest ancestor
+carrying `workspace.config.json` — so a non-controller window's MCP server
+resolves the WORKSPACE, not its own repo dir (the injected dir is kept as-is
+only pre-init).
 
 ### 3.4 Compact vs verbose
 
@@ -344,14 +358,16 @@ Per command, compact keeps (and the full file always lands on disk):
 - Dispatch gating: `prepare-dispatch-from-state` fails closed when
   `state.controllerHost` is set and differs from `hostProfile.runtime.hostDirName`,
   instructing the caller to dispatch from the owning controller or run
-  `adopt-demand-host` (`core/scripts/lib/wakeflow-dispatch-commands.mjs:359-360`).
+  `adopt-demand-host` / `wakeflow_adopt_demand_host`
+  (`wakeflow-dispatch-commands.mjs:372-373`; an envelope-time owner check also
+  sits at `:212-213`).
 
 > **Open questions / verify:** The full non-compact payload shapes of
 > `wakeflow-setup`/`wakeflow-intake`/`wakeflow-next-work`/archive scripts were not
 > read line-by-line. The `core/` host-profile is a Codex dev stub, so tool
 > descriptions in this source say `Codex`/`AGENTS`/`create_thread`; a real Claude
 > install surfaces the Claude equivalents. `wakeflow-cli.mjs` exposes more
-> subcommands (sync, design, intake, install, loop, sequence, runtime, scripts)
+> subcommands (sync, intake, install, loop, sequence, runtime, scripts, next-work)
 > that are CLI-reachable but **not** wired to any MCP tool. The standalone
 > `core/scripts/wakeflow-runtime.mjs` CLI is a separate dev entrypoint NOT on the
 > MCP path. (Host registration/launch is now traced — see §3.1: both editions'
@@ -394,9 +410,10 @@ sequenceDiagram
     participant TW as Target window
 
     U->>NW: next_work (eligibility scan, no write)
-    NW-->>U: ranked candidates / autoClaimable
-    U->>ST: init_demand (init) ⇒ state=intake, rev1, controllerHost=null
-    U->>ST: add_task (add-task-package) ⇒ first claim stamps controllerHost; task=pending; intake→planned
+    NW-->>U: ranked TODO candidates / autoClaimable + activeDemands & demandCapacity dashboard (at-capacity = warning; own-state-root rows lifecycle-blocked)
+    U->>ST: claim_next (claim-todo: auto-claim the single Auto Claim=yes eligible row, or explicit designKey) ⇒ delegates to create_demand
+    U->>ST: create_demand [--todo-id] ⇒ init (intake, rev1, controllerWindow stamped) + adopt-demand-host (claims controllerHost) + add-task-package(s) (planned, task=pending) + render + consume TODO row
+    Note over U,ST: manual wakeflow_add_task still first-claims controllerHost on an unclaimed demand; packages may carry designIntent
     Note over U,DL: review_pack --state-root is read-only orientation
     U->>DL: prepare_delivery direction=target (prepare-dispatch-from-state)
     DL->>DL: eligibility gate + write packet/group/envelope + ACQUIRE window lock (TTL 7200s)
@@ -421,7 +438,9 @@ sequenceDiagram
         alt accept
             ST-->>U: tasks=accepted, state=planned, allow complete-demand
         else rework
-            ST-->>U: tasks=needs-rework ⇒ loop back to prepare_delivery
+            ST-->>U: tasks=needs-rework, reworkCount++ ⇒ loop back to prepare_delivery
+        else redesign
+            ST-->>U: tasks=needs-rework, redesignCount++ ⇒ route to DESIGN (outcome redesign, not a re-dispatch)
         else blocked
             ST-->>U: state=blocked + review-blocker (WEDGE; fresh result re-opens)
         end
@@ -436,13 +455,13 @@ sequenceDiagram
 
 | Step | Guard(s) |
 |---|---|
-| `init` | refuses to write into the plugin dir (`assertWorkspaceRootResolved`); state root must be inside workspace/ledger; `controllerHost=null` |
-| `add-task-package` | refuses while `completed`/`archived`/`paused`, while `review-ready`/`accepting`/`waiting-results` ("reduce or decide first"), while `blocked` or any blockers; **first driving command claims `controllerHost`** |
-| `prepare-dispatch-from-state` | demand-host ownership gate; eligibility: demand not completed/archived/paused/blocked/review-ready/accepting, target task in `pending`/`needs-rework`/`missing-result`, package in `pending`/`needs-rework`; acquires the cross-host window lock (fail closed on a fresh other-host lock) |
+| `init` | refuses to write into the plugin dir (`assertWorkspaceRootResolved`); state root must be inside workspace/ledger; `controllerHost=null`; `controllerWindow` stamped; refuses at active-demand capacity (`maxActiveDemands`, default 2) under the workspace-scoped `.capacity-lock`; refuses to re-init an existing state root |
+| `add-task-package` | refuses while `completed`/`archived`/`paused`, while `review-ready`/`accepting`/`waiting-results` ("reduce or decide first"), while `blocked` or any blockers; refuses ordinary work while a rework route is open (new work joins the route with `reviewRoute=rework`); optional `--design-intent`; **first driving command claims `controllerHost`** |
+| `prepare-dispatch-from-state` | demand-host ownership gate; eligibility: demand not completed/archived/paused/blocked/review-ready/accepting, target task in `pending`/`needs-rework`/`missing-result`, package in `pending`/`needs-rework`; rework-first: non-rework targets are undispatched while rework targets are open; acquires the cross-host window lock (fail closed on a fresh other-host lock) |
 | host send | (Claude) target window must be alive; per-window delivery lock; (Codex) controller calls the native host tool directly |
 | `record-delivery-run status=sent` | requires `--readback-ok true` **and** non-empty `--evidence`; `markStateRootDeliverySent` advances state; refreshes lock |
 | `import-target-result` | refuses if target task is already `accepted`; default-id collision auto-disambiguates with timestamp (rework); does **not** mutate controller state (`stateRevisionUnchanged`); releases the lock matching the answered delivery |
-| `reduce-results` | refuses while `completed`/`archived`; refuses with zero open tasks; creates a transition candidate only when nothing is missing |
+| `reduce-results` | refuses while `completed`/`archived`; refuses with zero open tasks; hard-fails (`evidence-repair-required`) when any path-like evidence ref is missing (refs resolve state root → producing window's repo → workspace root); reduces only the controller review scope (rework-route tasks first while a rework route is open — a still-missing rework result resolves to `needs-rework`, not `waiting-results`); creates a transition candidate only when nothing in scope is missing |
 | `decide-review accept` | candidate `fromRevision == revision`; `demandKey` match; requires `--accept-blocked` if the candidate has `blockedResultIds`; clears review-blockers |
 | controller-return | four readiness block reasons + duplicate-return guard (see §5) |
 | `complete-demand` | every package **and** target task `accepted`; zero blockers; ≥1 `--evidence-ref` |
@@ -455,8 +474,10 @@ safety property. The review-pack, dispatch-group snapshot, and transition
 candidate **all surface `blocked` whenever ANY result is blocked, regardless of
 how many ready results coexist**: the default (group-ready / state-root) review
 branch computes `blocked.length > 0 ? "blocked" : "needs-controller-review"`
-with **no** ready-count guard (`wakeflow-review-commands.mjs:411-413` in
-`computeStateRootReviewResults`, `:610-612` in the group-ready branch);
+with **no** ready-count guard (`wakeflow-review-commands.mjs:487-493` in
+`buildStateRootReviewPack`, `:697-699` in the group-ready branch; the
+state-root pack also carries extra terminal decisions — `completed`,
+`no-target-tasks`, `ready-to-complete-demand`);
 `buildGroupSnapshot.groupStatus` is likewise `blocked` when `blocked.length>0`
 regardless of `ready.length` (`wakeflow-dispatch-group-review.mjs:103-104`); and
 `reduce-results` sets `candidateState='blocked'` whenever
@@ -498,8 +519,12 @@ demand-host ownership (`:101-103`) before any write.
 
 Wakeflow has **two distinct state vocabularies that do not share an enum**:
 
-1. The **demand** state machine (`core/scripts/wakeflow-state.mjs`) of seven
-   reducer commands driving the per-demand state root.
+1. The **demand** state machine (`core/scripts/wakeflow-state.mjs`) of ten
+   subcommands driving the per-demand state root: seven state-writing reducers
+   (init, add-task-package, reduce-results, decide-review, complete-demand,
+   archive-demand, adopt-demand-host), the state-neutral import-target-result,
+   and the read-only `window-view`/`focus-doc` projections (surfaced as
+   `wakeflow_view` scopes `window`/`focus`).
 2. A **separate window/runtime status vocabulary**
    (`core/scripts/lib/wakeflow-status-machine.mjs`, 17 values) used only by
    next-work/archive/docs-verify projections — **not** by the demand reducers.
@@ -765,10 +790,18 @@ Three committed/ignored boundaries are explicit:
 - **`wakeflow-ledger/`** — durable long-term records; **committed**.
 
 The workspace `.gitignore` is forced to contain exactly `.wakeflow-active/` and
-`.wakeflow-local/` (`wakeflow-setup.mjs:675` `RUNTIME_GITIGNORE_ENTRIES`); the
+`.wakeflow-local/` (`wakeflow-setup.mjs:671` `RUNTIME_GITIGNORE_ENTRIES`); the
 ledger is **not** ignored. `workspace.config.json` is tracked while
-`.wakeflow-local/workspace.config.json` overrides it locally and wins
-(`wakeflow-config.mjs:66-78`).
+`.wakeflow-local/workspace.config.json` is resolved first and wins
+(`wakeflow-config.mjs:73-85`) — but it is normally a DERIVED overlay, not a
+hand-written override: a machine-regenerated full copy of the tracked config
+plus one `repositories[]` entry per active isolation-stream window, stamped
+`derived{kind, baseHash, generatedAt, streamWindows}`, written atomically only
+by the stream machinery (stream-open/close, set-unattended) under
+`stream-overlay.lock` and removed when the last stream closes. A hand-maintained
+(unmarked) file remains a legal user override, but it makes every stream
+operation fail closed and `check-workspace` flags it (`user-owned` /
+`stale-base`).
 
 ### 6.1 Annotated directory tree
 
@@ -782,30 +815,32 @@ Legend: [T]=tracked  [I]=gitignored/local-runtime  [L]=committed long-term ledge
 ├── .gitignore                                   [T] forced to contain .wakeflow-active/ + .wakeflow-local/
 │
 ├── .wakeflow-active/                           [I] SHARED business state (host-neutral, no handles)
-│   └── workspace/
-│       ├── index.md                                 active controller entry
-│       └── current/
-│           ├── index.md
-│           ├── workspace-current-status.md
-│           ├── global-todo-board.md
-│           ├── design-handoff-board.md / -inbox.md
-│           ├── test-exchange.md
-│           └── <demand-slug>/                       === PER-DEMAND STATE ROOT ===
-│               ├── demand.json                       [json] immutable demand record (init)
-│               ├── wakeflow-state.json               [json] authoritative state machine
-│               ├── controller-events.jsonl           [jsonl] append-only event log (every mutation)
-│               ├── projection.json                   [json] render projection cache
-│               ├── developer-progress.md             [md] human projection w/ unified-status marker block
-│               ├── intake/                            Design/Test intake docs (lazy)
-│               ├── test-cards/                        Test cards — machine source (lazy)
-│               ├── task-packages/<id>.json            [json] one per task package
-│               ├── target-results/<id>.json           [json] imported TargetResultEnvelopes
-│               ├── evidence/                           evidence artifacts (lazy)
-│               └── transition-candidates/<id>.json    [json] reduce-results candidates (lazy)
+│   ├── index.md                                     active controller entry (no nested workspace/ layer)
+│   └── current/
+│       ├── index.md
+│       ├── workspace-current-status.md
+│       ├── global-todo-board.md                     Design→controller lane (wakeflow_deliver rows)
+│       ├── test-exchange.md
+│       └── <demand-slug>/                           === PER-DEMAND STATE ROOT (one per active demand, ≤ maxActiveDemands) ===
+│           ├── demand.json                           [json] immutable demand record (init)
+│           ├── wakeflow-state.json                   [json] authoritative state machine (controllerWindow stamped)
+│           ├── controller-events.jsonl               [jsonl] append-only event log (every mutation)
+│           ├── projection.json                       [json] render projection cache
+│           ├── developer-progress.md                 [md] human projection w/ unified-status marker block
+│           ├── intake/                                Design/Test intake docs (lazy)
+│           ├── test-cards/                            Test cards — machine source (lazy)
+│           ├── task-packages/<id>.json                [json] one per task package (optional designIntent)
+│           ├── target-results/<id>.json               [json] imported TargetResultEnvelopes
+│           ├── evidence/                               evidence artifacts (lazy)
+│           ├── focus/                                  regenerable focus cards (wakeflow_view scope=focus)
+│           └── transition-candidates/<id>.json        [json] reduce-results candidates (lazy)
+│   (sibling `<demand-slug>.state-lock` + `current.capacity-lock` O_EXCL mutexes appear transiently)
 │
 ├── .wakeflow-local/                            [I] NEVER COMMITTED — holds REAL session/thread ids
-│   ├── workspace.config.json                        [I] optional local override (wins over tracked config)
-│   └── wakeflow-delivery/                            === stateDir default (wakeflow-delivery.mjs:26) ===
+│   ├── workspace.config.json                        [I] DERIVED stream overlay (tracked copy + stream windows + derived{baseHash}); a legal hand-written override disables stream ops
+│   ├── worktrees/<Repo__id>/                        [I] isolation worktrees (branch <demandKey>/<id>, claude edition)
+│   ├── wakeflow-statusline.mjs                      [I] generated statusline (model + window identity)
+│   └── wakeflow-delivery/                            === stateDir default (wakeflow-delivery.mjs:27) ===
 │       ├── dispatch-packets/<id>.json                [json] SHARED dispatch packets
 │       ├── dispatch-groups/<id>.json                 [json] SHARED dispatch group snapshots
 │       ├── delivery-envelopes/<id>.json              [json] SHARED delivery / controller-return envelopes
@@ -822,19 +857,24 @@ Legend: [T]=tracked  [I]=gitignored/local-runtime  [L]=committed long-term ledge
 │           ├── window-config/<window>.json           [json] derived sendability view (regenerable)
 │           ├── keep-live/{state.json,control.json}   keep-live runtime state + worker control
 │           ├── window-host/<window>.json             [json] claude-code ONLY: tmux binding
-│           └── activity-monitor-<server>.pid         claude-code ONLY: monitor daemon pid
+│           ├── activity-monitor-<server>.pid         claude-code ONLY: monitor daemon pid (O_EXCL, owned per --root)
+│           ├── runtime-meta.json                     claude-code ONLY: stamped plugin version (stamp-runtime)
+│           ├── entry-sync-<w>.txt / deliver-<id>.txt / pod-entry-<pod>.txt   transient prompt files
+│           └── paste-<w>.lock / stream-overlay.lock  O_EXCL paste mutex + overlay mutation lock
 │
-└── wakeflow-ledger/                             [L] SHARED durable records (COMMITTED long-term)
+└── ../wakeflow-ledger/                          [L] SHARED durable records (COMMITTED long-term; default is a SIBLING of the workspace — projectLedgerRoot "../wakeflow-ledger")
     ├── workspace/
     │   ├── workspace-record-map.md
-    │   └── archive/                                  archived workspace docs (month/topic tree)
+    │   ├── pending-merges.md                         isolation branches that outlived their window; merge-back is human-reviewed, decentralized
+    │   └── archive/                                  archived workspace docs (month/topic tree) + archived demand state roots
     ├── requirement-designs/
     ├── goal-stage-confirmation/
     └── <window-slug>/                                per-window long-term ledger
 
-NOTE: this repo IS the plugin source — its own workspace.config.json / wakeflow-ledger /
-.wakeflow-active are untracked dogfood runtime here (git ls-files = 0). [T]/[I]/[L]
-describe the INSTALLED-workspace contract the code enforces, not this source checkout.
+NOTE: this repo IS the plugin source — the tracked workspace.config.json files under
+core/ and plugins/*/ are shipped defaults, and no dogfood runtime lives at the repo
+root. [T]/[I]/[L] describe the INSTALLED-workspace contract the code enforces, not
+this source checkout.
 ```
 
 ### 6.2 Per-path storage table
@@ -842,7 +882,7 @@ describe the INSTALLED-workspace contract the code enforces, not this source che
 | Path | writtenBy | readBy | format | scope | committed |
 |---|---|---|---|---|---|
 | `workspace.config.json` | wakeflow-setup configure | wakeflow-config, window-runtime, claude-host | json | per-workspace | tracked (override wins locally) |
-| `.wakeflow-local/workspace.config.json` | manual / setup | wakeflow-config (resolved first, wins) | json | per-workspace | **never** |
+| `.wakeflow-local/workspace.config.json` | stream machinery (regenerateOverlay; stream-open/close, set-unattended) — hand-written override legal but disables stream ops | wakeflow-config (resolved first, wins), claude-host topology reads | json | per-workspace | **never** |
 | `.wakeflow-active/index.md` + `current/*` | setup scaffold + controller edits | controller, verify-workspace-docs, check-layout | md | per-workspace | gitignored |
 | `<state-root>/demand.json` | wakeflow-state init | controller orientation | json | per-demand | gitignored |
 | `<state-root>/wakeflow-state.json` | wakeflow-state reducers + `markStateRootDeliverySent` (NOT import-target-result) | all reducers, render-progress, demand-sequence, delivery status scan | json | per-demand | gitignored |
@@ -857,6 +897,9 @@ describe the INSTALLED-workspace contract the code enforces, not this source che
 | `.wakeflow-local/wakeflow-delivery/delivery-runs/<id>.json` | record-delivery-run | delivery-evidence (`sent` computed here), status, lock release | json | per-send-attempt | never |
 | `.wakeflow-local/wakeflow-delivery/target-results/<group>__<window>__<task>.json` | delivery-script record-target-result | review-results/pack, claude-host wait-results | json | per-target-task | never |
 | `.wakeflow-local/wakeflow-delivery/target-results/superseded/<…>.json` | record-target-result on supersede | audit / replay summary | json | per-target-task | never |
+| `<state-root sibling>.state-lock` / `current.capacity-lock` / `global-todo-board.md.lock` / `hosts/claude-code/paste-<w>.lock` / `stream-overlay.lock` | wakeflow-state-lock (O_EXCL token, stale-break + live-pid patience) | the owning command only (transient) | json | per-resource | never |
+| `.wakeflow-local/worktrees/<Repo__id>/` | stream-open (git worktree add) | the isolation window's session | git worktree | per (repo, demand) | never |
+| `../wakeflow-ledger/workspace/pending-merges.md` | stream-close (append; deduped) | humans (merge-back review) | md | per-workspace | committed |
 | `.wakeflow-local/wakeflow-delivery/locks/<window>.json` | build-delivery (`writeWindowLock`), record-delivery-run sent refresh, claude-host `performSend` | dispatch guard, release-window-lock, status freshLocks | json | per-window (cross-host) | never |
 | `.wakeflow-local/wakeflow-delivery/stop.json` | `commandStopLoop` | unattended loop / status | json | per-workspace | never |
 | `.wakeflow-local/wakeflow-delivery/hosts/<host>/thread-registry/<window>.json` | register-thread / replace-windows | `loadThreadRegistration`, buildWindowConfig, dispatch | json | per-window per-host | never (REAL handle; redacted in shared records) |
@@ -899,9 +942,9 @@ Wakeflow has two host transports behind one host-neutral core.
 
 | Aspect | CLAUDE edition | CODEX edition |
 |---|---|---|
-| transport script | `wakeflow-claude-host.mjs` (1557–1558 LOC) — the boundary | **NONE** (declarative only; host's own tools) |
+| transport script | `wakeflow-claude-host.mjs` (~2581 LOC) — the boundary | **NONE** (declarative only; host's own tools) |
 | window model | tmux-resident interactive `claude --session-id` process; one tmux window per Wakeflow window | host app "thread" (`create_thread`); no tmux server |
-| server | ONE tmux server session ("wakeflow"); controller lives in it | n/a (host manages) |
+| server | main tmux session from `hosts.claude-code.tmuxSession` (default "wakeflow"; controller lives in it) + one session per demand pod (`<session>-<podslug>`); optional dedicated socket `hosts.claude-code.tmuxSocket`; every `-t` session target is `=`-prefixed for exact match (a pod name can never prefix-match a sibling) | n/a (host manages) |
 | create window | `launch-window` (tmux new-window running `claude --session-id`) | host tool `create_thread` + `set_thread_title` |
 | send | tmux `load-buffer`/`paste-buffer -d` + `send-keys Enter` into pane | host tool `send_message_to_thread` |
 | readback | tmux `capture-pane` tail | host thread reply |
@@ -938,22 +981,34 @@ stateDiagram-v2
   `performSend` **also** writes a byte-identical lock right before pasting, so a
   manual send still locks.
 - **Refreshed** on `record-delivery-run status=sent`.
-- **Released** by `record-target-result` only when `lock.deliveryId` matches the
-  answered delivery (or lock has no `deliveryId`).
+- **Released** via the shared `releaseWindowLockForResult` authority
+  (`wakeflow-delivery-store.mjs:11-22`, "single authority") by BOTH
+  result-recording paths — the delivery script's `record-target-result` and the
+  state script's `import-target-result` — when `lock.deliveryId` matches the
+  answered delivery (or the lock has no `deliveryId`); a matching lock clears
+  whether fresh or stale (freshness never gates release).
 - **Fail-closed against the OTHER host** (a fresh other-host lock blocks dispatch
   unless `--force`); **advisory same-host** (only a warning, because the
   per-task sent-state guard already prevents true double-dispatch).
 - **Controller-target deliveries skip the lock entirely** — a controller-return
   has no result-record release path, so a lock would never clear; deliveries to
-  the controller window are notifications.
+  the controller window are notifications. This covers the workspace controller
+  AND any pod `Controller__<pod>` (recognized by the `ControllerReturnEnvelope`
+  it receives). Concurrent returns to one controller are serialized by a
+  per-window `paste-<slug>.lock` paste mutex (O_EXCL, around paste+Enter only)
+  — never a delivery lock.
 
 ### 7.3 The activity monitor (two badges)
 
 A **single detached poller per tmux server** owns the `@wakeflow_state` tmux
 window option:
 
-- **Single-instance** via a pidfile re-verified with `process.kill(pid,0)` AND
-  `ps -o command` to guard against pid reuse (`wakeflow-claude-host.mjs:329-376`).
+- **Single-instance** via an O_EXCL pidfile (race-loss re-check) re-verified
+  with `process.kill(pid,0)` AND a `ps -o command` probe that must match BOTH
+  the monitor command and this workspace's `--root` — pid-reuse and
+  cross-workspace safe; ownership (pid/root/server) is reported by
+  `window-status`/`check-workspace`, and cleanup must match by `--root`, never
+  by bare process name (`wakeflow-claude-host.mjs:416-434,500-514`).
   `WAKEFLOW_DISABLE_MONITOR=1` suppresses auto-start; `ensureServer` rearms it on
   every server touch.
 - **Running detection is dual-signal**: matches `/esc to interrupt/i` OR any
@@ -985,7 +1040,7 @@ stateDiagram-v2
 ```
 
 - `init` sets `controllerHost=null` (host-neutral; either edition may init).
-- `ensureDemandHostOwnership` (`wakeflow-state.mjs:144-167`) is called with
+- `ensureDemandHostOwnership` (`wakeflow-state.mjs:152-176`) is called with
   `claim=true` by every mutating reducer (`add-task-package` onward). On the
   first such call when owner is null it stamps `controllerHost=currentHost`
   (`claimed:'first-driving-command'`). Thereafter `owner !== currentHost`
@@ -993,12 +1048,12 @@ stateDiagram-v2
   `claim=false` (read-side imports never claim).
 - The gate is enforced at **every** state-mutating entrypoint, not just dispatch.
   Inside `wakeflow-state.mjs` `ensureDemandHostOwnership` is invoked from
-  `add-task-package` (`:608`), `reduce-results` (`:990`), `decide-review`
-  (`:1180`), and `complete-demand` (`:1333`) with `claim=true`, and from
-  `import-target-result` (`:821`) with `claim=false`. Outside that file, the same
+  `add-task-package` (`:740`), `reduce-results` (`:1158`), `decide-review`
+  (`:1398`), and `complete-demand` (`:1572`) with `claim=true`, and from
+  `import-target-result` (`:1003`) with `claim=false`. Outside that file, the same
   ownership check is re-applied at the dispatch gate
-  (`dispatch-commands.mjs:359-360`) and at `record-delivery-run`
-  (`result-recording-commands.mjs:101-103`), plus render-progress and intake. So
+  (`dispatch-commands.mjs:372-373`) and at `record-delivery-run`
+  (`result-recording-commands.mjs:102-103`), plus render-progress and intake. So
   nearly every state-writing command **independently re-checks ownership and
   fails closed for the other host** — claim-on-first-drive is the entry point,
   but the fail-closed wall is everywhere, not just at first claim.
@@ -1028,13 +1083,48 @@ stateDiagram-v2
 > (outside this repo); the cross-host advisory lock is the only lock the Codex
 > path participates in (written by core, never by a Codex script). Done-detection
 > assumes the lock is removed by `record-target-result` before the next poll; a
-> manually-left-fresh lock would keep a badge `busy`. The root `CLAUDE.md`
-> documents only the `send --window --prompt-file` ceremony, but the helper now
-> also ships a one-step `deliver --delivery-file` that reads the envelope
-> directly — the doc text is stale relative to `deliver` (code wins). No code was
+> manually-left-fresh lock would keep a badge `busy`. No code was
 > executed; all transitions are read from source.
 
 ---
+
+### 7.6 Isolation worktree streams (Claude edition, cross-demand only)
+
+`stream-open --repo <win> --stream <id> --demand-key <key>` creates a git
+worktree at `.wakeflow-local/worktrees/<Repo__id>` on branch `<demandKey>/<id>`
+(ref-sanitized), launches window `<repo>__<id>`, and registers it ONLY in the
+derived overlay `.wakeflow-local/workspace.config.json` (full tracked-config
+copy + stream entries + `derived{baseHash}`; regenerated atomically under the
+global `stream-overlay.lock`). Guards: one stream per (repo, demand) — within-
+demand parallelism is refused by design; `maxStreamsPerRepo` (default 2) bounds
+how many demands may hold worktrees on one repo; open is idempotent-resume
+(registered+dead relaunches and re-registers, registered+live reports).
+`stream-close` refuses dirty worktrees (fail closed), records a surviving
+branch on `../wakeflow-ledger/workspace/pending-merges.md`, and `--delete-branch`
+refuses unmerged work. `archive-demand` refuses while any of the demand's
+isolation windows are open. Fleet ops (`launch-all`/`replace-all`/
+`arrange-windows`) read the TRACKED config only, so stream/pod windows are
+never re-homed into the main session. `stream-list` reconciles overlay,
+worktree, and registration state.
+
+### 7.7 Demand pods (Claude edition, multi-demand parallelism)
+
+One demand = one pod: `pod-open --demand-key <key> --repos <a,b>` opens the
+demand's isolation streams in the pod's OWN tmux session
+(`${tmuxSession}-<podslug>`), plus `Controller__<pod>` (fed a pod-entry prompt:
+claim YOUR demand via `wakeflow_create_demand` with `todoId` + stamped
+`controllerWindow`) and `Test__<pod>`; both are registered via
+`wakeflow-delivery.mjs register-thread`, so a re-run of `pod-open` RESUMES dead
+pod windows with `--resume --session-id` instead of replacing them. Pods are
+mutually unaware; `pod-list` is the one read-only global view (sessions,
+liveness, demand states). Cross-pod repo intersections are warned at open time
+(tomorrow's merge conflict). Close order: `complete-demand` → `stream-close`
+each repo window → `archive` → `pod-close` (refuses until archived unless
+`--force`; sweeps bindings, registry entries, delivery/paste locks, and kills
+the pod session). Merge-back of recorded branches is human-reviewed and
+decentralized — no controller merges pod branches. `maxActiveDemands` bounds
+pods; the one-step `deliver --delivery-file` transport routes controller-returns
+to the pod controller via the envelope's stamped `controllerWindow`.
 
 ## 8. Setup, Verification & Governance
 
@@ -1093,14 +1183,11 @@ Each check is spawned via `runSync`; PASS/FAIL is summarized and any failure set
 `process.exitCode = 1`. A legacy thread-registry migration NOTE prints when the
 host's `legacyRegistryFallback` is set (informational).
 
-**The MCP `wakeflow_verify` handler forwards only `--script-tests`** — runtime,
-strict-runtime, todo, and task-package verify modes are reachable **only via the
-CLI**, not via MCP.
-
-**Stale-doc note:** `--require-todo` / `--require-task-packages` are documented in
-the plugin `AGENTS.md` (and `wakeflow-setup.mjs` even regex-rewrites those legacy
-lines) but are **NOT implemented** in the current orchestrator — `wakeflow-cli`
-`verify` only accepts `--runtime/--with-runtime/--strict-runtime/--script-tests/--with-script-tests`. Code wins: those TODO/task-package verify modes do not exist.
+**The MCP `wakeflow_verify` handler forwards `scriptTests`, `withRuntime`, and
+`strictRuntime`** (`--script-tests`/`--with-runtime`/`--strict-runtime`) — all
+CLI verify modes are MCP-reachable. Legacy `--require-todo`/
+`--require-task-packages` verify modes were removed everywhere; `verify`
+accepts only `--runtime/--with-runtime/--strict-runtime/--script-tests/--with-script-tests`.
 
 A separate source-script verification path (run by `package.json` `test`, not by
 `wakeflow-verify`) covers `tools/sync-core --check`, `wakeflow-validate.mjs`
@@ -1109,16 +1196,17 @@ state→delivery→result→reduce in a temp dir).
 
 ### 8.3 Intake and archive
 
-- **Intake** (`wakeflow-intake.mjs`) is **read-only evidence attachment** with
-  strong guards: `resolveStateRoot` fails if the state root lacks
-  `wakeflow-state.json`, if the demand is completed/archived, or if
-  `state.controllerHost` differs from this runtime's `hostDirName`.
-  `design-handoff` validates the board row via
-  `wakeflow-import-design-handoffs.mjs` (must be `ready`/`accepted-by-workspace`,
-  with design-key provenance on linked docs) and writes
-  `intake/design-handoff-<key>.json` with `forbiddenConclusions`; it never mutates
-  state. `test-card` additionally refuses while demand is
-  blocked/paused/review-ready/accepting/waiting-results.
+- **Intake** (`wakeflow-intake.mjs`) now covers ONLY `test-card` — read-only
+  evidence attachment with strong guards: `resolveStateRoot` fails if the state
+  root lacks `wakeflow-state.json`, if the demand is completed/archived, or if
+  `state.controllerHost` differs from this runtime's `hostDirName`; `test-card`
+  additionally refuses while the demand is
+  blocked/paused/review-ready/accepting/waiting-results. Design handoff moved
+  OUT of intake entirely: Design appends a `pending-claim` row to the global
+  TODO board via `wakeflow_deliver` (append-only; `Auto Claim` immutable, set
+  once at delivery — requirement+autoClaim requires linked Original Plan +
+  Requirement Design), and the controller claims it with `wakeflow_claim_next`
+  / `wakeflow_create_demand` under the `maxActiveDemands` capacity gate.
 - **Archive / progress**: `archive-docs` moves `current/*.md` into the ledger
   archive month/topic dir (refusing the current plan, `index.md`, dirs, non-`.md`,
   or paths outside active docs), rewrites links, and trims index rows into the
@@ -1135,9 +1223,10 @@ flowchart LR
   A["Agent (MCP)"] --> M["core/lib/wakeflow-mcp-tools.mjs"]
   M -->|"wakeflow_initialize_workspace"| SETUP["wakeflow-setup initialize<br/>discover → footprint guard → discovery|plan|apply|blocked<br/>apply writes config/.gitignore/active docs/ledger/scope cards/registry"]
   M -->|"wakeflow_replace_windows"| RW["replaceWindowsPayload (needs config + --window + --thread)"]
-  M -->|"wakeflow_verify(scriptTests)"| V["wakeflow-cli verify → wakeflow-verify.mjs<br/>base 5 + active-docs + runtime + script-tests<br/>(NO --require-todo/--require-task-packages)"]
-  M -->|"wakeflow_intake_design_handoff"| I["wakeflow-intake design-handoff<br/>host+terminal guard → validate board row → write read-only evidence"]
-  M -->|"wakeflow_archive_*"| AR["archive-docs / archive-todo → auto-chain archive-summaries"]
+  M -->|"wakeflow_verify(scriptTests|withRuntime|strictRuntime)"| V["wakeflow-cli verify → wakeflow-verify.mjs<br/>base 5 + active-docs + runtime + script-tests"]
+  M -->|"wakeflow_deliver"| I["wakeflow-todo deliver<br/>Design appends pending-claim row to the global TODO board (board lock; Auto Claim immutable)"]
+  M -->|"wakeflow_claim_next / wakeflow_create_demand"| CL["capacity-gated claim: init + adopt-host + packages + render + consume row"]
+  M -->|"wakeflow_archive target=demand|todo|docs"| AR["archive-demand (P1-0 redaction, refuses open isolation windows) / archive-todo / archive-docs → auto-chain archive-summaries"]
   M -->|"wakeflow_render_progress"| RP["render-progress: unified-status block + projection.json (revision/host guarded)"]
   SYNC["tools/sync-core.mjs"] -.->|"check:core CI gate"| SETUP
 ```
@@ -1147,10 +1236,7 @@ flowchart LR
 > block were not fully read. Several `wakeflow-setup.mjs` helpers (lines
 > ~600–1185: scope-card builders, access profiles, internal Design/Test README
 > templates) were confirmed from call sites, not transcribed body-by-body.
-> `wakeflow-validate.mjs`/`wakeflow-smoke.mjs` were read only at their heads. The
-> `--require-todo`/`--require-task-packages` staleness rests on the current
-> orchestrator having no such handling versus `AGENTS.md` still referencing them;
-> no other core script implements those modes.
+> `wakeflow-validate.mjs`/`wakeflow-smoke.mjs` were read only at their heads.
 
 ---
 
@@ -1159,13 +1245,16 @@ flowchart LR
 | File | Role |
 |---|---|
 | `tools/sync-core.mjs` | The sync engine: byte-compares `core/` against both plugin targets (`Buffer.equals`), `--check` reports drift, default copies; asserts 14 host-contract files exist |
-| `core/bin/wakeflow-mcp.mjs` | 3-line shim that imports `../mcp/server.cjs`; an alternate/unused entrypoint — the plugin `.mcp.json` registers `mcp/server.cjs` directly, not this shim |
 | `core/mcp/server.cjs` | Hand-rolled JSON-RPC 2.0 stdio server: framing transport, protocol negotiation, `initialize`/`tools/list`/`tools/call`/`ping` |
-| `core/lib/wakeflow-mcp-tools.mjs` | Tool catalog (23 handlers) — the tool → script → subcommand → args translation table; compact/verbose; host-visible prioritization |
+| `core/lib/wakeflow-mcp-tools.mjs` | Tool catalog (23 handlers, create_demand/claim_next/deliver era) — the tool → script → subcommand → args translation table; compact/verbose; host-visible prioritization |
 | `core/lib/wakeflow-runtime.mjs` | Runtime dispatcher: allow-listed script Map, spawns node child, parses last JSON, builds trace/status/error/health envelope |
 | `core/lib/wakeflow-process.mjs` | Central OS-process boundary: rejects shell mode; restricts commands to node/git/ps/caffeinate |
-| `core/scripts/wakeflow-state.mjs` | The heart: 7 demand reducers + host-ownership guard + reduce/decide helpers; writes `wakeflow-state.json`, `controller-events.jsonl`, candidates, results, packages |
+| `core/scripts/wakeflow-state.mjs` | The heart: 8 demand reducers (init … complete-demand, archive-demand w/ P1-0 redaction + open-isolation-window refusal) + host-ownership guard + window-view/focus-doc read projections; every reducer serialized by a sibling `<stateRoot>.state-lock` O_EXCL mutex, init additionally under the workspace `current.capacity-lock` (maxActiveDemands gate); decide-review decisions: accept/rework/blocked/redesign |
 | `core/scripts/lib/wakeflow-review-scope.mjs` | Blocked-wedge recovery: only `accepted`/`reviewDecision=accept` is final; keeps blocked-but-not-accepted tasks reviewable |
+| `core/scripts/lib/wakeflow-state-lock.mjs` | Cross-process mutex layer: O_EXCL `withFileLock`/`withStateRootLock` with stale-break + live-pid 4× patience — backs `<stateRoot>.state-lock`, `current.capacity-lock`, the TODO board lock, paste mutexes, and `stream-overlay.lock` |
+| `core/scripts/wakeflow-todo.mjs` | Global TODO board writes under the board lock: `deliver` (Design's append-only pending-claim row, immutable Auto Claim) + `consume` (claim marks the row, Current Mount = state root) |
+| `core/scripts/lib/wakeflow-active-demands.mjs` | Multi-demand capacity scanner: `maxActiveDemands` (default 2) over unarchived state roots; backs init/claim gates and the next-work dashboard |
+| `plugins/claude-code-wakeflow/scripts/lib/wakeflow-claude-stream.mjs` | Claude-ONLY derived-overlay + worktree model: `regenerateOverlay` (atomic, `derived{baseHash}`), `assertOverlayManageable` (hand-maintained overlay fails stream ops closed), ref-sanitized branch naming |
 | `core/scripts/lib/wakeflow-status-machine.mjs` | Separate 17-value window/runtime status vocabulary + send-eligibility predicates (projection/scheduling layer only) |
 | `core/scripts/wakeflow-delivery.mjs` | Delivery-loop CLI dispatcher; `stateDir` default `.wakeflow-local/wakeflow-delivery`; owns `stop.json` |
 | `core/scripts/lib/wakeflow-dispatch-commands.mjs` | `prepare-dispatch-from-state` / `build-delivery` / `build-controller-return`; eligibility + cross-host lock + idempotency guards |
@@ -1179,8 +1268,8 @@ flowchart LR
 | `core/scripts/wakeflow-intake.mjs` | Read-only Design-handoff + Test-card intake with host-ownership + non-terminal guards |
 | `core/scripts/wakeflow-render-progress.mjs` | Unified-status projection rebuild with revision (lost-update) + host guards |
 | `core/scripts/wakeflow-next-work.mjs` | Eligibility scanner over Design/TODO boards (no state write, no dispatch) |
-| `core/scripts/wakeflow-demand-sequence.mjs` | At-most-one-active claim-next runner (init + add-task + render); emits dispatch candidates, never dispatches |
-| `plugins/claude-code-wakeflow/scripts/lib/wakeflow-claude-host.mjs` | Claude-ONLY 1557-line tmux transport helper: launch/send/deliver/readback/wait-results/activity-monitor + window-host bindings + glyph badges |
+| `core/scripts/wakeflow-demand-sequence.mjs` | Capacity-gated claim/create runner (refuses only at `maxActiveDemands`, default 2): create-demand = init + adopt-host + add packages + render + consume TODO row; claim-todo = unattended auto-claim; emits dispatch candidates, never dispatches |
+| `plugins/claude-code-wakeflow/scripts/lib/wakeflow-claude-host.mjs` | Claude-ONLY 2581-line tmux transport helper: launch/deliver/send/readback/wait-results/activity-monitor + fleet ops (launch-all/replace-all/arrange), permission seeding + statusline, unattended mode, workspace health check/version stamp, isolation streams (git worktrees) and demand pods |
 | `plugins/*/scripts/lib/wakeflow-host-profile.mjs` | Per-edition host profile (the seam): identity, hostTools, launch, registry/keep-live — interpolated, never branched on |
 | `plugins/*/scripts/lib/wakeflow-host-send-adapter.mjs` | Per-edition transport seam: Claude tmux paste vs Codex `send_message_to_thread` (byte-different) |
 | `core/schemas/wakeflow-state-machine/*.json` | Schemas for state/event/candidate/result/projection/automation-dispatch (note: state enum is a superset of reducer writes) |

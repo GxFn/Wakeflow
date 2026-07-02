@@ -19,6 +19,7 @@ evidence-based acceptance. The controller runs this as a closed loop — plan, d
 - [Architecture](#architecture)
 - [Install Wakeflow](#install-wakeflow)
 - [Initialize A Workspace](#initialize-a-workspace)
+- [Run Your First Demand](#run-your-first-demand)
 - [What Wakeflow Creates](#what-wakeflow-creates)
 - [Automation Semantics](#automation-semantics)
 - [MCP Capability Surface](#mcp-capability-surface)
@@ -30,13 +31,15 @@ evidence-based acceptance. The controller runs this as a closed loop — plan, d
 
 ## Why Wakeflow
 
-Large agent-assisted work rarely lives in one repository or one conversation.
-A single goal may require a controller, product repositories, a design window,
-and a real-scenario test window. Without a shared operating model, the work
-degrades into scattered prompts, copied status tables, unclear ownership, and
-unfinished evidence review.
+Hand an agent fleet a real, multi-repository goal and come back later with the
+three questions that matter: **what was actually done, what evidence proves
+it, and what is still open?** Without a control layer the honest answer is a
+pile of scattered prompts, copied status tables, unclear ownership, and
+"looks done" — work that cannot be audited, resumed, or trusted.
 
-Wakeflow provides the missing control layer:
+Wakeflow is that missing control layer — one controller window drives focused
+repository windows through an explicit, machine-checked loop, and every step
+leaves a verifiable artifact on disk:
 
 - **Controller-first judgment**: the parent workspace owns goals, boundaries,
   dispatch decisions, acceptance, TODO routing, and archive decisions.
@@ -51,6 +54,24 @@ Wakeflow provides the missing control layer:
 - **Local-first runtime**: real thread ids live only in the local thread
   registry; window config is a derived sendability view, and active state stays
   out of tracked source.
+
+What you get, concretely:
+
+- **Auditable** — every dispatch, delivery, result, and decision is a JSON
+  artifact tied into one trace spine; `wakeflow_view` (scope `trace`) replays
+  who did what, on which evidence, at which state revision.
+- **Resumable** — restart any window, the whole fleet, or the machine: sessions
+  resume by registered id and demands continue from their on-disk state roots.
+  No conversation memory is load-bearing.
+- **Hard to fake** — acceptance requires raw evidence that the reducers verify
+  on disk (missing evidence refs fail closed); "the target said done" is never
+  enough, and results never accept themselves.
+- **Parallel without chaos** — up to `maxActiveDemands` demands run side by
+  side as isolated pods (own controller, own worktrees, own Test); within one
+  demand each repo stays strictly one-window-one-package, and pod branches
+  merge back only through a human-reviewed ledger.
+- **Safe by construction** — fail-closed guards on ownership, capacity, locks,
+  and archive redaction; real session ids never leave the local registry.
 
 Wakeflow is not a command launcher with nicer names. It is a reusable workflow
 capability for keeping multi-window agent work legible, bounded, and resumable.
@@ -273,6 +294,47 @@ Subagent output is evidence or advice only; controller review, dispatch, state
 writes, and repository boundaries remain with the Wakeflow window that owns the
 task.
 
+## Run Your First Demand
+
+The loop is the same on both hosts; only how you drive it differs.
+
+**Claude Code (slash commands):**
+
+1. `/wakeflow:init` — discover the workspace, confirm scope with you, write
+   config/docs, and launch the tmux fleet (`tmux attach -t wakeflow` to watch).
+2. Feed the goal to the Design window (or write the requirement yourself).
+   Design clarifies it and calls `wakeflow_deliver` — the demand lands as a
+   `pending-claim` row on the global TODO board with its design docs linked.
+3. In the controller: `/wakeflow:status` to see the board, then claim it —
+   `wakeflow_claim_next` (auto-claimable rows) or `wakeflow_create_demand`
+   (explicit). This inits the state root and consumes the row; the controller
+   confirms the plan and task packages with you before any dispatch.
+4. `/wakeflow:dispatch` — prepare one envelope, deliver it in one step, record
+   the readback, end the turn. The target window works inside its repository
+   and its controller-return wakes the controller with evidence attached.
+5. `/wakeflow:review` — read the raw evidence behind the result, then record
+   the decision: accept / rework / blocked / redesign.
+6. Repeat dispatch → review until every task is accepted, then
+   `wakeflow_complete_demand` and `wakeflow_archive` (redaction-guarded) close
+   the story into the ledger.
+
+**Codex (natural prompts):** the same loop through the same MCP tools —
+"Use Wakeflow to initialize this workspace", "claim the next demand",
+"dispatch the next package", "review the returned results", "complete and
+archive the demand".
+
+**Daily driving (Claude Code):**
+
+| You want | Do |
+| --- | --- |
+| Enter the fleet | open a terminal, `tmux attach -t wakeflow` |
+| See where everything is | `/wakeflow:status` |
+| Push work forward | `/wakeflow:dispatch` |
+| Judge returned work | `/wakeflow:review` |
+| Health check / fix a stale window | `/wakeflow:check` · `/wakeflow:windows <name> --replace` |
+| Hands-off mode (recorded consent) | `/wakeflow:unattended on` |
+| A second demand in parallel | ask the controller to open a demand pod (`pod-open`) — own session, own controller, own Test |
+
 ## What Wakeflow Creates
 
 Initialization writes only the surfaces needed for the confirmed workspace
@@ -469,7 +531,10 @@ honest.
 The full dual-edition architecture, code logic, local file storage (the
 shared-business-state vs host-scoped-runtime split), and state flow are
 documented in
-[docs/wakeflow-dual-edition-architecture-and-state-flow.md](docs/wakeflow-dual-edition-architecture-and-state-flow.md).
+[docs/wakeflow-dual-edition-architecture-and-state-flow.md](docs/wakeflow-dual-edition-architecture-and-state-flow.md);
+the companion design-pattern read — why the architecture looks like this and
+what it costs — is
+[docs/wakeflow-architecture-deep-dive-2026-07-02.md](docs/wakeflow-architecture-deep-dive-2026-07-02.md).
 
 Common source areas:
 

@@ -159,7 +159,8 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   task package (the window self-sequences its items); a window is never
   dispatched two simultaneous tasks inside the same demand. Isolation worktree
   windows (`<repo>__<id>`) exist for cross-demand isolation only; their
-  branches merge back only by controller decision.
+  surviving branches land on the pending-merges ledger, and merge-back is
+  human-reviewed and decentralized — no controller merges them.
 - Parallelism exists ONLY at the demand level, as demand pods: up to
   `maxActiveDemands` (default 2) demands run side by side, each in its own pod
   (own controller stamped into the state root, own isolation worktrees, own
@@ -167,8 +168,10 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   human-reviewed and decentralized; claiming past capacity fails closed.
 
 Deliveries go to a tmux-resident interactive `claude` window via the
-`wakeflow-claude-host.mjs send` helper (shared per-window lock, `readback.paneTail`
-evidence); Claude Code desktop windows are not an automation transport. Envelope
+`wakeflow-claude-host.mjs` helper — one-step `deliver --delivery-file
+<envelope>` as the primary transport, low-level `send --window --prompt-file`
+for custom prompts (shared per-window lock, `readback.paneTail` evidence);
+Claude Code desktop windows are not an automation transport. Envelope
 fields, the host-helper send/launch/recovery mechanics, keep-live, and review
 flow live in `skills/wakeflow-governance/references/wakeflow-delivery.md`,
 `skills/wakeflow-controller/`, and `skills/wakeflow-target/`.

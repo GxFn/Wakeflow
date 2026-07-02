@@ -1,6 +1,6 @@
 # Wakeflow 架构深度解读（设计模式与权衡评估）
 
-> 生成于 2026-07-02，基线 v0.6.3（commit 570f8d8）；以代码为准。本文是对 Wakeflow 真实源码的独立深读分析——聚焦"这个架构为什么长成这样"与"付出了什么代价"，与 `wakeflow-dual-edition-architecture-and-state-flow.md`（系统参考文档）互补，不替代它。文件引用采用 `path:line` 形式，行号对应 v0.6.3。
+> 生成于 2026-07-02，基线 v0.6.3（commit 570f8d8）；同日修订至 **v0.7.7**（并发地基 / 意图对齐 / 跨需求并行 / 需求舱 / 全仓审计加固落地后）。以代码为准。本文是对 Wakeflow 真实源码的独立深读分析——聚焦"这个架构为什么长成这样"与"付出了什么代价"，与 `wakeflow-dual-edition-architecture-and-state-flow.md`（系统参考文档）互补，不替代它。文件引用采用 `path:line` 形式，行号对应 v0.6.3。
 
 ---
 
@@ -27,7 +27,8 @@ Wakeflow 不是一个"工作流工具"，而是一个针对 **"LLM 是不可信�
 ## 3. 核心闭环：一条 demand 的一生
 
 ```
-init(中立) → claim(绑定宿主) → add-task-package → prepare-dispatch
+next-work(容量仪表盘) → create_demand/claim_next(容量门 + 消费 TODO 行 + 盖章 controllerWindow)
+  → add-task-package(可带 designIntent) → prepare-dispatch(作者化 objective)
   → DeliveryEnvelope 写盘 + 窗口锁 → 宿主发送 + readback → record-delivery-run
   → 目标窗口执行 → TargetResultEnvelope(锁释放) → [controller-return 唤醒控制器]
   → reduce-results → TransitionCandidate → decide-review(accept/rework/redesign/blocked)
@@ -66,7 +67,7 @@ init(中立) → claim(绑定宿主) → add-task-package → prepare-dispatch
 
 ### 4.5 端口与适配器：interpolate, don't branch
 
-双发行版共享 `core/`（字节级同步），唯一例外是 `wakeflow-host-profile.mjs`——每插件持有自己的版本，`tools/sync-core.mjs` 刻意不同步它。核心规则：**核心代码可插值 hostProfile 的值，但不允许 `if (hostId === ...)` 分支**（`grep 'hostId ==='` 在 core/ 零命中）。宿主差异压缩进四个接缝：身份词汇（kinds/memoryFile）、传输工具名、启动计划（effort/model by role）、注册表布局。Codex 用原生 thread 工具，Claude Code 用约 1600 行的 tmux helper（launch-window/send/readback/activity-monitor），核心状态机对此完全无感。`npm run check:core` + 五处版本号平价测试（`test/wakeflow-version-parity.test.mjs`）把架构约束变成 CI 门禁。
+双发行版共享 `core/`（字节级同步），唯一例外是 `wakeflow-host-profile.mjs`——每插件持有自己的版本，`tools/sync-core.mjs` 刻意不同步它。核心规则：**核心代码可插值 hostProfile 的值，但不允许 `if (hostId === ...)` 分支**（`grep 'hostId ==='` 在 core/ 零命中）。宿主差异压缩进四个接缝：身份词汇（kinds/memoryFile）、传输工具名、启动计划（effort/model by role）、注册表布局。Codex 用原生 thread 工具，Claude Code 用约 2600 行的 tmux helper（launch-window/deliver/send/readback/activity-monitor，外加 stream-open/close/list 与 pod-open/close/list 两组跨需求命令），核心状态机对此完全无感。`npm run check:core` + 五处版本号平价测试（`test/wakeflow-version-parity.test.mjs`）把架构约束变成 CI 门禁。
 
 ### 4.6 薄 MCP façade：单一实现，双重接口
 
@@ -74,7 +75,7 @@ MCP 层（`core/lib/wakeflow-mcp-tools.mjs`）不含业务逻辑，每个 handle
 
 ### 4.7 Saga 式投递 + 跨宿主租约锁
 
-窗口锁在 envelope 构建时取得（覆盖 build→send→record 全程），TTL 7200 秒，结果落盘时按 deliveryId 匹配释放（`core/scripts/wakeflow-state.mjs:1024-1032`）。语义分级：**他宿主的新鲜锁 → fail-closed 拒绝；本宿主锁 → 仅警告**（同宿主的 sent-state 守卫已防重发）（`core/scripts/lib/wakeflow-dispatch-commands.mjs:215-222`）。锁文件损坏时 `release-window-lock` 仍能恢复性删除。controller-return 路由拒绝猜测——显式参数、组存储、配置三者皆无则 fail-closed（commit 65118d9），配合 `group-ready`/`per-target` 回执策略与重复回执拒绝。
+窗口锁在 envelope 构建时取得（覆盖 build→send→record 全程），TTL 7200 秒，结果落盘时按 deliveryId 匹配释放（`core/scripts/wakeflow-state.mjs:1024-1032`）。语义分级：**他宿主的新鲜锁 → fail-closed 拒绝；本宿主锁 → 仅警告**（同宿主的 sent-state 守卫已防重发）（`core/scripts/lib/wakeflow-dispatch-commands.mjs:215-222`）。锁文件损坏时 `release-window-lock` 仍能恢复性删除。controller-return 路由拒绝猜测——回程链为 显式 flag > state root 盖章的 `controllerWindow`（pod 需求）> workspace 配置，三者皆无则 fail-closed，配合 `group-ready`/`per-target` 回执策略与重复回执拒绝。`deliver` 按 envelope 的 `kind` 识别 ControllerReturnEnvelope：回程送达总控窗口不占目标窗口投递锁；tmux 粘贴互斥则是独立的按窗口 `paste-<window>.lock`。
 
 ### 4.8 信任模型：权力的物理分离
 
@@ -83,7 +84,7 @@ MCP 层（`core/lib/wakeflow-mcp-tools.mjs`）不含业务逻辑，每个 handle
 - **accept 越过 blocked 结果必须显式 `--accept-blocked`**（`core/scripts/wakeflow-state.mjs:1333-1337`）。
 - **目标窗口无状态权**：不能 claim、不能 finish、不能 target-to-target 链式派发，只能回 TargetResultEnvelope。
 - **Design 只有一个写入口**：`wakeflow_deliver` 对全局 TODO 板 append-only，`autoClaim` 一次性写死且 requirement 类型必须挂原始计划+需求设计链接才可无人值守认领。
-- **单活动 demand**：init 扫描到未归档 state root 即拒绝——强制"完成并归档，再开下一个"。
+- **活跃需求容量门**：init 在 workspace 级 `.capacity-lock` 临界区内扫描未归档 state root，超出 `maxActiveDemands`（默认 2，设 1 即回到严格单活跃）即拒绝；`next-work` 把"自己已有未归档 state root"的 TODO 行标记为 lifecycle-blocked，防止重复建需求。
 
 ### 4.9 刹车与人因工程
 
@@ -93,19 +94,40 @@ MCP 层（`core/lib/wakeflow-mcp-tools.mjs`）不含业务逻辑，每个 handle
 
 真实 thread/session id 只存在于 `.wakeflow-local/` 注册表：注册时拒绝占位符、信封输出一律 `threadIdRedacted: true`、`archive-demand` 用宿主声明的 `idShape` 正则全树扫描，命中则拒绝归档；`--redact` 生成净化副本入 ledger 而**原件保留在 gitignored 活动层供人工审计**。另有细节：`assertWorkspaceRootResolved` 检查解析出的根目录是否带插件清单，防止把 demand 状态写进插件缓存目录（`core/scripts/wakeflow-state.mjs:128-142`）。
 
+### 4.11 意图对齐：并排提醒，不算分不设门（F1+F2）
+
+需求侧意图与执行侧意图在三个时点**并排呈现**，最终判断完全归 Agent（用户裁定：机制零分数、零门禁）：
+
+- Design 的 `designIntent` 一句话随任务包持久化，穿过 dispatch packet（放在幂等比较字段之外，不会因补写意图而触发重备失败）；
+- 总控在 prepare 时作者化 `--objective`（"我在安排什么"），派发输出给出两句意图的紧凑回显 + 一条 "Intent check" `agentNext`；
+- `review_pack` 每条目携带 designIntent / objective / result 三元组 + 附加式 `intentCheck` 提醒——真实漂移的出路是 `redesign` 路由回 Design，而不是点修循环。
+
+### 4.12 跨需求并行：隔离 worktree + 需求舱（E-2 + E-6）
+
+并行**只存在于需求层**（用户裁定：需求内每仓一窗口一组合任务包，窗口自排序，绝无同窗双派）：
+
+- **隔离 worktree 窗口** `<repo>__<id>`（分支 `<demandKey>/<id>`）只服务跨需求隔离：后来的需求碰到已被占用的仓库时在自己的 worktree 里工作。注册只落在**派生 overlay** `.wakeflow-local/workspace.config.json`（tracked 配置的再生成副本 + stream 条目 + `derived{baseHash}` 标记；手工维护的 overlay 会让 stream 操作 fail-closed）。core 的解析器天然偏好该路径——零核心改动完成解析。
+- **需求舱（demand pod）**：一需求一舱——自己的 `Controller__<pod>`、按仓库隔离窗口、自己的 `Test__<pod>`，整舱住在独立 tmux session `wakeflow-<pod>`；舱间互不感知。`pod-open` 幂等续开（registered+dead 只补 launch+register，Controller/Test 经 register-thread 注册、重开走 `--resume` 续同一会话）。关闭顺序 complete → stream-close → archive → pod-close；存活分支登记 `pending-merges.md`，**合并回主线人工审核、去中心化——任何总控不合并舱分支**。
+- 容量由 `maxActiveDemands` 限舱数、`maxStreamsPerRepo` 限单仓库舱数；`archive-demand` 在隔离窗口未关时拒绝归档。
+- tmux session 目标全部走 `=` 精确匹配前缀——`wakeflow` 与 `wakeflow-<pod>` 的前缀碰撞在真机上实测危险（H1）。
+
+### 4.13 并发地基：从"约定"到"机制"（Phase 0）
+
+v0.6.3 时的最大批评（§6.1）已被消除：`wakeflow-state-lock.mjs` 提供 O_EXCL 令牌锁（sibling `<root>.state-lock`，2s 获取超时，30s 陈旧判定 + 活 PID 4× 宽限 + 不可读锁按 mtime 老化 + EPERM 视为存活 + realpath 归一），全部六个变更型 state 命令包进 `withLockedStateRoot`；全局 TODO 板的读-改-写包进 board lock；容量扫描+首写包进 workspace capacity lock；tmux 粘贴按窗口互斥。跨宿主所有权门禁之上，同宿主并发写有了硬防护。
+
 ## 5. 工程纪律
 
-测试钉住的是**架构不变量**而非实现细节：状态枚举三处平价、五处版本号一致、MCP 白名单与调用方交叉核对、宿主所有权 fail-closed、脱敏可用性、"result 导入不改 state"、过期候选拒绝。git 历史呈现编号化需求追踪（F41、RA1-RA7、P1-0、W0-*、Phase 1a→4），代码注释直接引用编号——设计文档、提交、代码三方可互相索引。组合风格统一为**工厂函数 + 显式 ctx 依赖注入**（`core/scripts/wakeflow-delivery.mjs` 是拼装 8 个工厂的组合根），零类、零框架、零运行时依赖；高层编排脚本（demand-sequence）以**子进程**组合低层脚本，让 CLI 契约成为内部 API 边界。
+测试钉住的是**架构不变量**而非实现细节（35 个测试文件 / 306 用例）：状态枚举三处平价、五处版本号一致、MCP 白名单与调用方交叉核对、宿主所有权 fail-closed、脱敏可用性、"result 导入不改 state"、过期候选拒绝；0.7.x 新增并发回归（双进程真竞争）、stream/pod 生命周期（headless）、多活跃容量与回程路由链、意图对齐持久化、以及禁词契约 lint（"parallel stream" 等语义漂移词进不了代码与散文）。git 历史呈现编号化需求追踪（F41、RA1-RA7、P1-0、W0-*、Phase 1a→4），代码注释直接引用编号——设计文档、提交、代码三方可互相索引。组合风格统一为**工厂函数 + 显式 ctx 依赖注入**（`core/scripts/wakeflow-delivery.mjs` 是拼装 8 个工厂的组合根），零类、零框架、零运行时依赖；高层编排脚本（demand-sequence）以**子进程**组合低层脚本，让 CLI 契约成为内部 API 边界。
 
 ## 6. 批判性评估：代价与薄弱点
 
-1. **并发模型依赖约定而非机制**。state.json 写入没有文件锁，两个进程同时 reduce 同一 state root 会双双读到 revision N 各写 N+1，丢一次更新。系统靠"一个 demand 只有一个控制器窗口、控制器回合天然串行"的运行约定兜底——跨宿主有 ownership 门禁，同宿主并发写没有硬防护。
+1. ~~并发模型依赖约定而非机制~~ **已于 0.6.4（Phase 0）解决**：state root 文件锁 + board/capacity/paste 锁族（见 §4.13），并发回归测试双进程真竞争验证。残余风险：锁是建议性文件锁，绕过 CLI 直接改 JSON 的进程不受约束（与"脚本是唯一写入口"的纪律互为表里）。
 2. **JSON Schema 只是文档**。七个 schema 无运行时校验器（无 Ajv），靠手写检查 + 测试钉住。省了依赖，但 schema 与代码的漂移只能靠测试覆盖面兜住。
 3. **`forbiddenConclusions` 是软约束**。对 LLM 是提示不是强制——真正的强制在状态机守卫里。二者是纵深防御关系，但护栏第一层可以被无视。
-4. **readback 证据强度有限**。tmux 版发送确认是 pane 抓屏（capture-pane tail），证明"提示词贴进去了"，不证明会话真正开始处理；活动监视器刻意只做观察者。这是设计上的诚实（automation "proves that a prompt was sent, not that the result is complete"），也是链路里最脆的一环。
-5. **协议步骤多**。一次派发 prepare→send→record 三步，一次回执又三步。compact 模式与 `wakeflow_create_demand` 这类聚合工具（一次替代四调用）在持续对抗此问题，但"每步都要证据"的哲学决定了它不可能太顺滑——审计性与流畅性的直接交换。
+4. **readback 证据强度有限**。tmux 版发送确认是 pane 抓屏（同行数 before/after 对照 + promptEchoed 检测，仅在"字节级不变且无回显"时告警——O-2 加固后误报已收窄），证明"提示词贴进去了"，不证明会话真正开始处理；活动监视器刻意只做观察者。这是设计上的诚实（automation "proves that a prompt was sent, not that the result is complete"），仍是链路里最脆的一环。
+5. **协议步骤多**。一次派发 prepare→deliver→record 三步，一次回执又三步。compact 模式、`wakeflow_create_demand`/`wakeflow_claim_next` 聚合工具（一次替代四调用）与 `deliver --delivery-file`（一步替代临时文件+send 仪式）在持续对抗此问题，但"每步都要证据"的哲学决定了它不可能太顺滑——审计性与流畅性的直接交换。
 6. **规模热点**：`wakeflow-setup.mjs` 2604 行单文件；每个脚本重复一套手写 argv 解析（hasFlag/getValue/valuesFor）。
-7. **单活动 demand 串行化**限制跨需求并行度——换来"一个 state root 讲完一个故事"的可审计性，是有意为之，但确实是吞吐上限。（注：2026-06-26 的并行开发需求设计已把"同一需求内多 stream 并行"列为刚需 P1，"放松单活跃 demand"显式移出范围。）
+7. ~~单活动 demand 串行化~~ **已于 0.7.5-0.7.6 演进为容量模型 + 需求舱**（§4.12）：跨需求并行由 `maxActiveDemands` 界定，"一个 state root 讲完一个故事"的可审计性按舱保留。新的真实代价转移到：舱分支的人工合并队列（pending-merges）与共享 Test 环境的跨舱串行资源管理。
 
 ## 7. 总结
 

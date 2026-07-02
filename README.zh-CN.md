@@ -18,6 +18,7 @@ Wakeflow 把一个本地 Codex 或 Claude Code 工作区变成有纪律的控制
 - [架构](#架构)
 - [安装 Wakeflow](#安装-wakeflow)
 - [初始化工作区](#初始化工作区)
+- [跑通第一个需求](#跑通第一个需求)
 - [Wakeflow 会创建什么](#wakeflow-会创建什么)
 - [自动化语义](#自动化语义)
 - [MCP 能力面](#mcp-能力面)
@@ -29,12 +30,13 @@ Wakeflow 把一个本地 Codex 或 Claude Code 工作区变成有纪律的控制
 
 ## 为什么需要 Wakeflow
 
-大型 agent 辅助工作很少只发生在一个仓库或一个会话里。一个目标可能需要
-总控、多个产品仓库、一个 Design 窗口，以及一个真实场景 Test 窗口。没有共同的
-操作模型时，工作很容易退化成零散 prompt、复制粘贴的状态表、不清晰的责任边界，
-以及没有真正验收的“完成”。
+把一个真实的多仓库目标交给一队 agent，过几天回来问三个最要紧的问题：
+**到底做了什么？什么证据能证明？还剩什么没做？** 没有控制层时，诚实的答案
+只能是一堆零散 prompt、复制粘贴的状态表、不清晰的责任边界，和一句"看起来
+完成了"——无法审计、无法续跑、无法信任。
 
-Wakeflow 提供缺失的控制层：
+Wakeflow 就是那个缺失的控制层——一个总控窗口驱动多个聚焦的仓库窗口，走一条
+显式的、机器校验的闭环，每一步都在磁盘上留下可验证的工件：
 
 - **总控优先判断**：父工作区负责目标、边界、投递决策、验收、TODO 路由和归档决策。
 - **一个需求一个 state root**：任务包、目标结果、review candidate、决策和进度投影都绑定到同一个需求。
@@ -42,6 +44,21 @@ Wakeflow 提供缺失的控制层：
 - **轻量投递**：direct-thread prompt 只负责唤醒正确窗口；state root 和 skills 保存任务细节。
 - **先证据，后验收**：target backfill 是输入，不是结论；总控仍然要检查原始证据。
 - **本地优先运行时**：真实 thread id 只存在本地 thread registry；window config 是派生视图，active state 不进入源码。
+
+你具体得到什么：
+
+- **可审计** —— 每次派发、投递、结果、决策都是一个 JSON 工件，串在同一条
+  trace 脊椎上；`wakeflow_view`（scope `trace`）可以回放谁在哪个状态版本上、
+  凭什么证据做了什么。
+- **可续跑** —— 任意窗口、整支舰队、甚至整台机器重启：会话按注册 id 恢复，
+  需求从磁盘 state root 接着走。任何对话记忆都不承重。
+- **难以造假** —— 验收要求 reducer 在磁盘上逐一核验的原始证据（证据引用缺失
+  即 fail-closed）；"目标窗口说做完了"永远不算数，结果也永远不能自我验收。
+- **并行不混乱** —— 最多 `maxActiveDemands` 个需求以隔离舱并行（各自的总控、
+  worktree、Test）；需求内部每仓严格一窗口一组合包，舱分支只通过人工审核的
+  台账合并回主线。
+- **构造上安全** —— 归属、容量、锁、归档脱敏全部 fail-closed；真实 session id
+  永不离开本地注册表。
 
 Wakeflow 不是换了名字的命令启动器。它是一个可复用的工作流能力，用来让多窗口
 agent 工作保持可读、有边界、可恢复。
@@ -242,6 +259,44 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
 测试定位和证据汇总。Subagent 输出只是证据或建议；总控 review、投递、状态写入
 和仓库边界仍归拥有该任务的 Wakeflow 窗口。
 
+## 跑通第一个需求
+
+两个宿主跑的是同一条闭环，差别只在驱动方式。
+
+**Claude Code（slash 命令）：**
+
+1. `/wakeflow:init` —— 发现工作区、和你确认范围、写入配置/文档、拉起 tmux
+   舰队（`tmux attach -t wakeflow` 随时旁观）。
+2. 把目标交给 Design 窗口（或自己写需求）。Design 澄清后调用
+   `wakeflow_deliver` —— 需求以 `pending-claim` 行落到全局 TODO 板，挂着
+   设计文档链接。
+3. 在总控里：`/wakeflow:status` 看板，然后认领 —— `wakeflow_claim_next`
+   （可自动认领的行）或 `wakeflow_create_demand`（显式指定）。这一步初始化
+   state root 并消费该行；派发前总控会和你确认计划与任务包。
+4. `/wakeflow:dispatch` —— 备好 envelope、一步投递、记录 readback、结束本轮。
+   目标窗口在自己的仓库边界内干活，controller-return 带着证据唤醒总控。
+5. `/wakeflow:review` —— 先读结果背后的原始证据，再记录决策：
+   accept / rework / blocked / redesign。
+6. 重复 dispatch → review 直到全部任务 accepted，然后
+   `wakeflow_complete_demand` + `wakeflow_archive`（脱敏门守护）把整个故事
+   收进台账。
+
+**Codex（自然语言）：** 同一条闭环、同一套 MCP 工具 ——
+"用 Wakeflow 初始化这个工作区"、"认领下一个需求"、"派发下一个任务包"、
+"评审返回的结果"、"完成并归档这个需求"。
+
+**日常驾驶（Claude Code）：**
+
+| 你想 | 做 |
+| --- | --- |
+| 进入舰队 | 开个终端，`tmux attach -t wakeflow` |
+| 看全局在哪 | `/wakeflow:status` |
+| 推进工作 | `/wakeflow:dispatch` |
+| 评判返回的工作 | `/wakeflow:review` |
+| 健康检查 / 换掉臃肿窗口 | `/wakeflow:check` · `/wakeflow:windows <名字> --replace` |
+| 无人值守（留痕同意） | `/wakeflow:unattended on` |
+| 并行第二个需求 | 让总控开一个需求舱（`pod-open`）——独立 session、独立总控、独立 Test |
+
 ## Wakeflow 会创建什么
 
 初始化只写入已确认边界所需的 surface：
@@ -412,7 +467,9 @@ memory 文件模板、skills、template bundle）只存在于各自 artifact 内
 `npm run check:core` 负责保证副本不漂移。
 
 完整的双版本架构、代码逻辑、本地存储（共享业务状态与宿主独立运行时的划分）与状态流转，
-见 [docs/wakeflow-dual-edition-architecture-and-state-flow.md](docs/wakeflow-dual-edition-architecture-and-state-flow.md)。
+见 [docs/wakeflow-dual-edition-architecture-and-state-flow.md](docs/wakeflow-dual-edition-architecture-and-state-flow.md)；
+配套的设计模式深读（架构为什么长成这样、付出了什么代价）见
+[docs/wakeflow-architecture-deep-dive-2026-07-02.md](docs/wakeflow-architecture-deep-dive-2026-07-02.md)。
 
 常见源码区域：
 

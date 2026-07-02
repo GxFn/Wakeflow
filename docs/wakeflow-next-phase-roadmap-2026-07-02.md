@@ -261,3 +261,17 @@ Phase 3  —      加固+规模化（观察触发）  E系: 流式评审/多活�
 - 写入方写"解析到的那个文件"：全新工作区得到新名；旧名工作区继续写旧名（不产生双文件脑裂）；旧名 overlay 存在时原地再生，全新 overlay 用新名。
 - `check-workspace` 对旧名给 `legacy-name` 提示（一行 `git mv` 即迁移完成）。
 - 船载默认配置六个文件 `git mv`；`package.json` files 数组、host-profile/MCP 描述、报错文案、全部 skills/docs/README/模板同步改名；新增 `test/wakeflow-config-name.test.mjs`（旧名可读、新名优先、旧名工作区 stream-open 正常 + 迁移提示）3 用例。
+
+
+## 8. H-15 舰队重建的环境卫生 + 新会话认证事故 ——加固已落地，事故根因待用户侧确认（2026-07-02 夜）
+
+真机事故：agent 会话内 kill 整个 tmux server 后重建舰队，8 个新窗口的 `claude` 全部 "Not logged in"。排查结论（按证伪顺序）：
+
+- ~~环境变量污染~~：探针窗口实测 0 个 `CLAUDE*`/`ANTHROPIC*` 变量——tmux 不把调用方环境并入窗口（窗口环境=server 环境）；污染论对"登录失败"不成立。
+- ~~Keychain 锁定~~：条目元数据可读；~~刷新风暴轮换~~：条目 mdat 早于事故且冷却后单窗重启依旧失败。
+- 剩余强怀疑：claude 二进制当日 04:53 自动升级 2.1.197→2.1.198，**每个新启动的会话都认证失败**，旧进程不受影响；无头环境无法验证/修复交互式 OAuth——恢复动作归用户（任一窗口 `/login` 一次，然后 `launch-all` 重拉其余窗口）。
+- 教训：验证"窗口健康"必须同时断言 **claude 确实启动** 且 **已登录**（pane 里没有 "Not logged in" ≠ 登录成功——claude 没跑起来时同样没有这行）。
+
+无论根因归属，两项加固成立并已落地：
+1. `ensureServer` 引导 server 的 `new-session` 传入净化环境（剥 `CLAUDE*`/`ANTHROPIC*`）：server 环境是全部窗口的继承源，从 agent 会话重建时不应把 13 个 agent 会话变量带给用户舰队（PATH 等保持调用方值）。
+2. 恢复舰队的正确顺序：优先 `launch-all`（续同 id、保上下文）；`replace-all` 才是全新重建；绝不用 `env -i` 包装调用（会出现"窗口建成但注册失败"的半成功态，注册表指向死会话，比全失败更危险）。

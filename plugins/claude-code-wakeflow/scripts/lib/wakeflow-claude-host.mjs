@@ -45,9 +45,10 @@ import {
 // binaries (tmux, claude, brew, osascript) directly with a narrow no-shell
 // wrapper instead of lib/wakeflow-process.mjs, whose whitelist intentionally
 // keeps host commands out of the shared core runtime scripts.
-function execHostText(command, args) {
-  const hasUtf8 = /utf-?8/i.test(process.env.LC_ALL || process.env.LANG || "");
-  const env = hasUtf8 ? process.env : { ...process.env, LANG: "en_US.UTF-8", LC_ALL: "en_US.UTF-8" };
+function execHostText(command, args, { env: envOverride = null } = {}) {
+  const baseEnv = envOverride ?? process.env;
+  const hasUtf8 = /utf-?8/i.test(baseEnv.LC_ALL || baseEnv.LANG || "");
+  const env = hasUtf8 ? baseEnv : { ...baseEnv, LANG: "en_US.UTF-8", LC_ALL: "en_US.UTF-8" };
   const result = spawnSync(command, args, { encoding: "utf8", shell: false, env });
   return {
     status: result.error ? 1 : result.status ?? 1,
@@ -264,12 +265,27 @@ function sessionTarget(session) {
   return `=${session}`;
 }
 
-function tmux(tmuxArgs, { allowFailure = false } = {}) {
-  const result = execHostText(tmuxBin, [...tmuxSocketArgs, ...tmuxArgs]);
+function tmux(tmuxArgs, { allowFailure = false, env = null } = {}) {
+  const result = execHostText(tmuxBin, [...tmuxSocketArgs, ...tmuxArgs], { env });
   if (result.status !== 0 && !allowFailure) {
     fail(`tmux ${tmuxArgs.join(" ")} failed: ${(result.stderr || result.stdout || "").trim()}`);
   }
   return result;
+}
+
+// The tmux SERVER captures the spawning process's environment and every window
+// inherits it. When the fleet is (re)built from inside an agent session, that
+// environment carries the agent's own session variables — empirically enough
+// to break child `claude` auth ("Not logged in" across the whole fleet,
+// H-15). Strip agent/SDK variables at server creation so fleet windows always
+// see an environment shaped like the user's own terminal.
+function sanitizedServerEnv() {
+  const env = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (/^(CLAUDE|ANTHROPIC)/i.test(key)) continue;
+    env[key] = value;
+  }
+  return env;
 }
 
 function bindingFileFor(windowName) {
@@ -454,7 +470,10 @@ function startActivityMonitorDaemon(serverSession) {
 function ensureServer(serverSession) {
   const present = tmux(["has-session", "-t", sessionTarget(serverSession)], { allowFailure: true }).status === 0;
   if (!present) {
-    tmux(["new-session", "-d", "-s", serverSession, "-c", workspaceRoot]);
+    // Sanitized env matters only on the call that BOOTS the server (the
+    // server inherits it; sessions created later on a live server do not
+    // re-capture the caller env).
+    tmux(["new-session", "-d", "-s", serverSession, "-c", workspaceRoot], { env: sanitizedServerEnv() });
   }
   applyStatusOptions(serverSession);
   // Rearm the activity monitor on every server touch (launch-window/launch-all

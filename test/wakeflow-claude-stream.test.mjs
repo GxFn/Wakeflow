@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import * as childProcess from "node:child_process";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -31,19 +32,42 @@ function git(cwd, args) {
 
 function makeWorkspace({ maxStreamsPerRepo = 2 } = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stream-"));
-  const repoDir = path.join(root, "RepoA");
-  mkdirSync(repoDir, { recursive: true });
-  runSync("git", ["init", "-q", "-b", "main", repoDir], { encoding: "utf8" });
-  writeFileSync(path.join(repoDir, "README.md"), "fixture\n");
-  git(repoDir, ["add", "README.md"]);
-  git(repoDir, ["commit", "-q", "-m", "init"]);
+  for (const name of ["RepoA", "RepoB"]) {
+    const repoDir = path.join(root, name);
+    mkdirSync(repoDir, { recursive: true });
+    runSync("git", ["init", "-q", "-b", "main", repoDir], { encoding: "utf8" });
+    writeFileSync(path.join(repoDir, "README.md"), "fixture\n");
+    git(repoDir, ["add", "README.md"]);
+    git(repoDir, ["commit", "-q", "-m", "init"]);
+  }
   writeFileSync(path.join(root, "workspace.config.json"), `${JSON.stringify({
     workspaceName: "StreamFixture",
     controllerWindow: "Controller",
-    repositories: [{ windowName: "RepoA", path: "RepoA", role: "Fixture repo" }],
+    repositories: [
+      { windowName: "RepoA", path: "RepoA", role: "Fixture repo" },
+      { windowName: "RepoB", path: "RepoB", role: "Second fixture repo" },
+    ],
     hosts: { "claude-code": { maxStreamsPerRepo } },
   }, null, 2)}\n`);
-  return { root, repoDir };
+  return { root, repoDir: path.join(root, "RepoA") };
+}
+
+function hostAsync(root, args) {
+  return new Promise((resolve) => {
+    const { spawn } = childProcess;
+    const child = spawn(process.execPath, [hostScript, args[0], "--root", root, ...args.slice(1)], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("close", (status) => resolve({ status, stdout, stderr }));
+  });
 }
 
 function host(root, args) {
@@ -156,6 +180,46 @@ test("a hand-maintained local config override blocks stream registration fail-cl
   assert.equal(untouched.controllerWindow, "Custom", "user override must never be overwritten");
 });
 
+test("parallel stream-opens for DIFFERENT repos both land in the overlay (global mutation lock)", async () => {
+  const { root } = makeWorkspace();
+  const [a, b] = await Promise.all([
+    hostAsync(root, ["stream-open", "--repo", "RepoA", "--stream", "a", "--demand-key", "DK-2026-07-02", "--no-launch"]),
+    hostAsync(root, ["stream-open", "--repo", "RepoB", "--stream", "b", "--demand-key", "DK-2026-07-02", "--no-launch"]),
+  ]);
+  assert.equal(a.status, 0, a.stderr || a.stdout);
+  assert.equal(b.status, 0, b.stderr || b.stdout);
+  const overlay = readJson(overlayFile(root));
+  const streamNames = overlay.repositories.filter((repo) => repo.stream).map((repo) => repo.windowName).sort();
+  assert.deepEqual(streamNames, ["RepoA__a", "RepoB__b"], "a cross-repo parallel open must not drop either overlay entry");
+});
+
+test("the stream branch name is git-ref-sanitized while the marker keeps the raw demand key", () => {
+  const { root } = makeWorkspace();
+  const rawKey = "DK 2026:bad?key";
+  const result = host(root, ["stream-open", "--repo", "RepoA", "--stream", "a", "--demand-key", rawKey, "--no-launch"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.branch, "DK-2026-bad-key/a");
+  const worktree = path.join(root, payload.worktree);
+  const head = runSync("git", ["-C", worktree, "rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8" });
+  assert.equal(head.stdout.trim(), "DK-2026-bad-key/a");
+  const entry = readJson(overlayFile(root)).repositories.find((repo) => repo.windowName === "RepoA__a");
+  assert.equal(entry.stream.demandKey, rawKey, "the archive gate matches the RAW key, so the marker must keep it");
+});
+
+test("a stream name colliding with a configured repository fails BEFORE creating a worktree", () => {
+  const { root } = makeWorkspace();
+  const configFile = path.join(root, "workspace.config.json");
+  const config = readJson(configFile);
+  config.repositories.push({ windowName: "RepoA__x", path: "RepoA", role: "Colliding window" });
+  writeFileSync(configFile, `${JSON.stringify(config, null, 2)}\n`);
+
+  const result = host(root, ["stream-open", "--repo", "RepoA", "--stream", "x", "--demand-key", "DK", "--no-launch"]);
+  assert.equal(result.status, 1, result.stdout);
+  assert.match(result.stderr, /collides with a configured repository/);
+  assert.equal(existsSync(path.join(root, ".wakeflow-local/worktrees/RepoA__x")), false, "no orphan worktree may be left behind");
+});
+
 test("window-status exposes activity-monitor ownership (H-7) and set-unattended regenerates the overlay (H-8)", () => {
   const { root } = makeWorkspace();
   assert.equal(openStream(root, "a").status, 0);
@@ -181,12 +245,12 @@ test("archive-demand refuses while the demand's streams are open (PD-4 gate)", (
   const init = runSync(process.execPath, [stateScript, "init", "--root", root, "--demand-key", "ARCH-DK", "--title", "Archive Gate Fixture", "--write", "--json"]);
   assert.equal(init.status, 0, init.stderr || init.stdout);
   const stateRoot = path.join(root, JSON.parse(init.stdout).stateRoot);
-  // Test shortcut: archive requires state=completed; flip the snapshot directly
-  // instead of replaying the whole accept flow (covered by state-machine tests).
+  // Open the stream while the demand is still open (stream-open refuses
+  // completed/archived demands), THEN flip to completed for the archive gate.
+  assert.equal(openStream(root, "a", "ARCH-DK").status, 0);
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
   writeFileSync(stateFile, `${JSON.stringify({ ...readJson(stateFile), state: "completed" }, null, 2)}\n`);
 
-  assert.equal(openStream(root, "a", "ARCH-DK").status, 0);
   const refused = runSync(process.execPath, [stateScript, "archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "done", "--json"]);
   assert.equal(refused.status, 1, refused.stdout);
   assert.match(JSON.parse(refused.stdout).error, /stream window\(s\) are still open/);
@@ -195,6 +259,30 @@ test("archive-demand refuses while the demand's streams are open (PD-4 gate)", (
   const dryRun = runSync(process.execPath, [stateScript, "archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "done", "--json"]);
   assert.equal(dryRun.status, 0, dryRun.stderr || dryRun.stdout);
   assert.equal(JSON.parse(dryRun.stdout).wrote, false);
+});
+
+test("stream-open refuses a completed demand and stream-close refuses an in-flight delivery lock", () => {
+  const { root } = makeWorkspace();
+  const stateScript = path.join(pluginRoot, "scripts/wakeflow-state.mjs");
+  const init = runSync(process.execPath, [stateScript, "init", "--root", root, "--demand-key", "DONE-DK", "--title", "T", "--write", "--json"]);
+  assert.equal(init.status, 0, init.stderr || init.stdout);
+  const stateFile = path.join(root, JSON.parse(init.stdout).stateRoot, "wakeflow-state.json");
+  writeFileSync(stateFile, `${JSON.stringify({ ...readJson(stateFile), state: "completed" }, null, 2)}\n`);
+  const refusedOpen = openStream(root, "a", "DONE-DK");
+  assert.equal(refusedOpen.status, 1, refusedOpen.stdout);
+  assert.match(refusedOpen.stderr, /streams attach to open demands only/);
+
+  assert.equal(openStream(root, "b", "LIVE-DK").status, 0);
+  mkdirSync(path.join(root, ".wakeflow-local/wakeflow-delivery/locks"), { recursive: true });
+  writeFileSync(path.join(root, ".wakeflow-local/wakeflow-delivery/locks/RepoA__b.json"), `${JSON.stringify({
+    kind: "WakeflowWindowDeliveryLock", version: 1, windowName: "RepoA__b", host: "claude-code",
+    deliveryId: "d1", createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60000).toISOString(),
+  })}\n`);
+  const refusedClose = host(root, ["stream-close", "--window", "RepoA__b"]);
+  assert.equal(refusedClose.status, 1, refusedClose.stdout);
+  assert.match(refusedClose.stderr, /in-flight delivery lock/);
+  const forced = host(root, ["stream-close", "--window", "RepoA__b", "--force"]);
+  assert.equal(forced.status, 0, forced.stderr || forced.stdout);
 });
 
 test("stream-list reconciles overlay, worktree, and registration state", () => {

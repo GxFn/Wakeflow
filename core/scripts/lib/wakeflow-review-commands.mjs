@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { buildControllerCallbackPlan } from "./wakeflow-return-policy.mjs";
 import { controllerReviewScope, hasPendingReworkDecision } from "./wakeflow-review-scope.mjs";
@@ -391,12 +391,36 @@ export function createReviewCommands(ctx) {
     // no packet: objective falls back to the task summary (source marked).
     const packetsByTaskId = new Map();
     for (const file of listJsonFiles(dirs.packets)) {
-      const packet = readJson(file, "dispatch packet");
+      let packet = null;
+      try {
+        packet = JSON.parse(readFileSync(file, "utf8"));
+      } catch {
+        // Intent enrichment is best-effort: one torn or corrupt packet file
+        // must never take down the whole review pack (fail() here would).
+        continue;
+      }
       if (packet?.kind !== "ControllerDispatchPacket") continue;
       if (packet?.stateRef?.stateRoot !== stateRootRef) continue;
       const packetTaskId = packet.stateRef?.targetTaskId || packet.taskId;
-      if (packetTaskId && !packetsByTaskId.has(packetTaskId)) packetsByTaskId.set(packetTaskId, packet);
+      if (!packetTaskId) continue;
+      if (!packetsByTaskId.has(packetTaskId)) packetsByTaskId.set(packetTaskId, []);
+      packetsByTaskId.get(packetTaskId).push(packet);
     }
+    // A reworked task has one packet PER dispatch group (the same-revision
+    // guard forces a new group on re-dispatch). The intent triple must show
+    // the dispatch that produced the LATEST result, not whichever group name
+    // sorts first — otherwise the intentCheck compares wave-1's objective
+    // against wave-2's delivery.
+    const packetForTask = (targetTaskId, result) => {
+      const candidates = packetsByTaskId.get(targetTaskId) ?? [];
+      if (candidates.length === 0) return undefined;
+      const resultGroup = result?.dispatchGroup || result?.deliveryContext?.dispatchGroup;
+      if (resultGroup) {
+        const matched = candidates.find((candidate) => candidate.dispatchGroup === resultGroup);
+        if (matched) return matched;
+      }
+      return [...candidates].sort((left, right) => String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")))[0];
+    };
     const allTargetTasks = state.targetTasks ?? [];
     const reviewScope = controllerReviewScope(allTargetTasks);
     const targetTasks = reviewScope.reviewableTargetTasks;
@@ -414,7 +438,7 @@ export function createReviewCommands(ctx) {
       const resultStatus = reworkAnchorCovered
         ? "covered-by-rework-route"
         : result?.status || (resultExpected ? "missing" : "pending-dispatch");
-      const packet = packetsByTaskId.get(task.targetTaskId);
+      const packet = packetForTask(task.targetTaskId, item?.result ?? null);
       return {
         targetWindow: task.targetWindow,
         taskId: task.targetTaskId,

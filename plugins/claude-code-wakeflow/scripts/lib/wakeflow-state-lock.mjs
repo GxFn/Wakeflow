@@ -1,4 +1,4 @@
-import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const ACQUIRE_TIMEOUT_MS = 2000;
@@ -16,7 +16,14 @@ export class WakeflowStateLockTimeoutError extends Error {
 // archive-demand stages, renames, and removes the root while holding the lock, and
 // the P1-0 redaction scan must never see lock tokens inside the tree it audits.
 export function stateRootLockFile(stateRoot) {
-  const resolved = path.resolve(stateRoot);
+  let resolved = path.resolve(stateRoot);
+  try {
+    // Symlinked spellings of the same root (macOS /tmp -> /private/tmp) must
+    // map to ONE lock file, or two processes hold two "different" locks.
+    resolved = realpathSync(resolved);
+  } catch {
+    // root not created yet or racing a removal: the resolve() spelling stands
+  }
   return path.join(path.dirname(resolved), `${path.basename(resolved)}.state-lock`);
 }
 
@@ -44,8 +51,14 @@ export function withFileLock(lockFile, fn, { acquireTimeoutMs = ACQUIRE_TIMEOUT_
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
       const holder = readLock(lockFile);
-      const ageMs = holder?.createdAt ? Date.now() - Date.parse(holder.createdAt) : Number.POSITIVE_INFINITY;
-      // NaN age (garbage createdAt) must count as stale, hence the negated form.
+      // Unreadable/mid-write lock: writeFileSync(wx) is open-then-write, so a
+      // contender can read the file EMPTY inside the acquirer's gap. Treating
+      // that as infinitely stale would break a FRESH lock in normal contention;
+      // age it by file mtime instead. NaN (garbage createdAt) still counts as
+      // stale via the negated comparison below.
+      const ageMs = holder?.createdAt
+        ? Date.now() - Date.parse(holder.createdAt)
+        : lockFileAgeMs(lockFile);
       if (!(ageMs <= staleMs)) {
         // The fixed stale threshold cannot tell a crash from a legitimate long
         // hold (archive-demand staging a large state root). A LIVE holder pid
@@ -97,13 +110,22 @@ function readLock(lockFile) {
   }
 }
 
+function lockFileAgeMs(lockFile) {
+  try {
+    return Date.now() - statSync(lockFile).mtimeMs;
+  } catch {
+    return Number.POSITIVE_INFINITY; // vanished: retry loop resolves it
+  }
+}
+
 function pidAlive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    // EPERM = the pid exists but belongs to another user: that is ALIVE.
+    return error?.code === "EPERM";
   }
 }
 

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -101,6 +101,24 @@ test("without designIntent the whole chain leaves zero traces", () => {
   assert.equal("designIntent" in entry, false);
   assert.equal(entry.objective, OBJECTIVE, "objective still rides the pack (F2) even without designIntent");
   assert.equal(entry.objectiveSource, "dispatch-packet");
+});
+
+test("one corrupt packet file never takes down the state-root review pack", () => {
+  const { root, stateRoot } = makeDemand({ withIntent: true });
+  assert.equal(prepare(root, stateRoot, { objective: OBJECTIVE }).status, 0);
+  const imported = run(stateScript, [
+    "import-target-result", "--root", root, "--state-root", stateRoot,
+    "--target-task-id", "tp-a__RepoA", "--target-window", "RepoA", "--status", "completed",
+    "--write", "--json",
+  ]);
+  assert.equal(imported.status, 0, imported.stderr || imported.stdout);
+  const packetsDir = path.join(root, ".wakeflow-local/wakeflow-delivery/dispatch-packets");
+  writeFileSync(path.join(packetsDir, "zz-corrupt.json"), "{ this is not json");
+
+  const pack = run(deliveryScript, ["review-pack", "--root", root, "--state-root", stateRoot, "--json"]);
+  assert.equal(pack.status, 0, pack.stderr || pack.stdout);
+  const entry = JSON.parse(pack.stdout).reviewPack.targetResults.find((item) => item.taskId === "tp-a__RepoA");
+  assert.equal(entry.designIntent, DESIGN_INTENT, "intent enrichment must survive a corrupt neighbor packet");
 });
 
 test("review packs show the intent triple side by side and gates stay byte-identical", () => {

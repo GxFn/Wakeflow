@@ -995,8 +995,9 @@ function commandImportTargetResult() {
     }
     // Default-id collision is the normal rework cycle (decide-review rework ->
     // re-dispatch -> new result for the same target task). Auto-disambiguate
-    // with a timestamp; reduce-results already picks the latest by createdAt.
-    const stamp = nowIso().replace(/[^0-9]/g, "").slice(0, 14);
+    // with a timestamp plus entropy (two imports inside one second must not
+    // silently overwrite each other); reduce-results picks latest by createdAt.
+    const stamp = `${nowIso().replace(/[^0-9]/g, "").slice(0, 14)}-${Math.random().toString(36).slice(2, 6)}`;
     resultId = `tr-${slug(targetTaskId)}-${stamp}`;
     resultFile = path.join(stateRoot, "target-results", `${slug(resultId)}.json`);
     if (existsSync(resultFile)) {
@@ -1047,6 +1048,13 @@ function commandImportTargetResult() {
   };
 
   if (write) {
+    // Import is lock-free by design (it never mutates wakeflow-state.json),
+    // but a locked archive teardown can race it: re-verify the root still
+    // exists right before writing, or a late import resurrects an orphan
+    // target-results/ dir after the demand moved to the ledger.
+    if (!existsSync(path.join(stateRoot, "wakeflow-state.json"))) {
+      fail(`state root vanished while importing (archived concurrently?): ${relative(stateRoot)}`);
+    }
     mkdirSync(path.dirname(resultFile), { recursive: true });
     writeJson(resultFile, result);
   }

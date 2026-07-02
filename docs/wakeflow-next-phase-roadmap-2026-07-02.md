@@ -160,6 +160,8 @@ stream = 独立窗口 `<repo>__<streamId>` + 独立 worktree + 独立分支 `<de
 
 真机验收带来的权重修正：H-1（锁续租）↑——并行 stream 使长任务更常见；H-4（完整 ack）↓——pane 抓屏实测可靠，O-2 覆盖大半残余间隙；E-1 维持——波尾等待是否成真痛点待真实多任务波数据。
 
+**2026-07-02 对抗式深审（自审 + 独立代理交叉，0.7.3）**：20 条确认发现全部修复——自审 9 条（跨 repo 覆盖层竞态→全局互斥、覆盖层/host writeJson 原子写、损坏 packet 容错、EPERM 视为存活、分支名 git 净化（marker 保留原始 key）、close 脏检查 fail-closed + repo 缺失 --force 路径、基础窗口名碰撞前置检查 + worktree 回滚、readback 读文件守卫、state 锁 realpath 归一）；代理 11 条中修 9（O-2 的 before/after 行数不等致 paneChanged 恒真、rework 多 packet 时意图三元组可能配错波次（按结果的 dispatchGroup 选 packet）、close 无在飞锁守卫、空锁文件被误判 stale（改按 mtime 计龄）、stream-open 不校验 demand（completed/archived 拒绝）、monitor ps 匹配加 --root + pidfile O_EXCL、import 归档竞态重查 + 结果 id 加熵、配置解析 fail-closed）。**新登记观察项**：H-12 archive 门与 stream-open 跨锁域 TOCTOU（需跨域协调，概率低）；H-13 锁心跳（>120s 活持锁仍可被夺，H-10 的 4× 只是缓解）；H-14 并行 init 的单活跃扫描 TOCTOU（事后可见可恢复）。补测欠账：空锁 mtime 计龄与 rework packet 选择暂无独立测试（逻辑经全量回归覆盖）。
+
 ---
 
 ## 3. 推进机制与工程纪律

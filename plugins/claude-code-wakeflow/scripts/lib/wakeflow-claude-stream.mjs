@@ -16,7 +16,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 export const OVERLAY_KIND = "WakeflowLocalConfigOverlay";
@@ -87,8 +87,17 @@ export function streamWindowName(repoWindow, streamId) {
   return `${repoWindow}__${streamId}`;
 }
 
+// Git refs reject spaces, ~ ^ : ? * [ .. @{ and more; a demand key is NOT
+// guaranteed ref-safe. The branch gets a sanitized spelling; the stream marker
+// keeps the RAW demandKey (the archive gate matches it against state.demandKey
+// byte-for-byte).
 export function branchNameFor(demandKey, streamId) {
-  return `${demandKey}/${streamId}`;
+  const safeKey = String(demandKey ?? "")
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^[.-]+|[.-]+$/g, "")
+    .replace(/\.lock$/i, "-lock") || "demand";
+  return `${safeKey}/${streamId}`;
 }
 
 export function worktreeDirFor(workspaceRoot, repoWindow, streamId) {
@@ -156,6 +165,19 @@ export function regenerateOverlay(workspaceRoot, streams) {
     },
   };
   mkdirSync(path.dirname(overlayFile), { recursive: true });
-  writeFileSync(overlayFile, `${JSON.stringify(config, null, 2)}\n`);
+  // Atomic replace: every core resolver prefers this file the moment it
+  // exists, so a torn half-write would transiently break ANY wakeflow command.
+  const temp = `${overlayFile}.tmp-${process.pid}`;
+  try {
+    writeFileSync(temp, `${JSON.stringify(config, null, 2)}\n`);
+    renameSync(temp, overlayFile);
+  } catch (error) {
+    try {
+      unlinkSync(temp);
+    } catch {
+      // temp never created
+    }
+    throw error;
+  }
   return { file: overlayFile, removed: false, streamCount: streams.length };
 }

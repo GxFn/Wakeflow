@@ -17,7 +17,7 @@
  * Environment overrides (used by tests): WAKEFLOW_TMUX_BIN, WAKEFLOW_CLAUDE_BIN.
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
@@ -147,60 +147,50 @@ function effectiveConfigFile() {
   return existsSync(overlay) ? overlay : path.join(workspaceRoot, "workspace.config.json");
 }
 
+// Preferred-config reads fail CLOSED on an existing-but-unparsable file: a
+// silent fallback would run tmux against the wrong socket/session and treat
+// the controller window as an ordinary lockable target (a lock with no
+// release path). Absent file still yields defaults.
+function readEffectiveConfig() {
+  const configFile = effectiveConfigFile();
+  if (!existsSync(configFile)) return {};
+  try {
+    return JSON.parse(readFileSync(configFile, "utf8"));
+  } catch (error) {
+    fail(`unreadable workspace config ${configFile}: ${error.message}; fix or remove it before host operations.`);
+  }
+  return {};
+}
+
 function resolveTmuxSocket() {
   const override = getValue("--socket", null);
   if (override && override.trim()) return override.trim();
-  const configFile = effectiveConfigFile();
-  if (existsSync(configFile)) {
-    try {
-      const socket = JSON.parse(readFileSync(configFile, "utf8")).hosts?.["claude-code"]?.tmuxSocket;
-      if (typeof socket === "string" && socket.trim()) return socket.trim();
-    } catch {
-      // fall through to the shared default socket
-    }
-  }
-  return null;
+  const socket = readEffectiveConfig().hosts?.["claude-code"]?.tmuxSocket;
+  return typeof socket === "string" && socket.trim() ? socket.trim() : null;
 }
-const tmuxSocket = resolveTmuxSocket();
+let tmuxSocket = null;
+try {
+  tmuxSocket = resolveTmuxSocket();
+} catch (error) {
+  console.error(JSON.stringify({ ok: false, command, error: error instanceof CliExit ? error.message : String(error?.message ?? error) }, null, 2));
+  process.exit(1);
+}
 const tmuxSocketArgs = tmuxSocket ? ["-L", tmuxSocket] : [];
 
 function defaultServerSession() {
-  const configFile = effectiveConfigFile();
-  if (existsSync(configFile)) {
-    try {
-      const session = JSON.parse(readFileSync(configFile, "utf8")).hosts?.["claude-code"]?.tmuxSession;
-      if (typeof session === "string" && session.trim()) return session.trim();
-    } catch {
-      // fall through to the generic default
-    }
-  }
-  return "wakeflow";
+  const session = readEffectiveConfig().hosts?.["claude-code"]?.tmuxSession;
+  return typeof session === "string" && session.trim() ? session.trim() : "wakeflow";
 }
 
 let cachedControllerWindow;
 function workspaceControllerWindow() {
   if (cachedControllerWindow !== undefined) return cachedControllerWindow;
-  const configFile = effectiveConfigFile();
-  cachedControllerWindow = null;
-  if (existsSync(configFile)) {
-    try {
-      cachedControllerWindow = JSON.parse(readFileSync(configFile, "utf8")).controllerWindow ?? null;
-    } catch {
-      cachedControllerWindow = null;
-    }
-  }
+  cachedControllerWindow = readEffectiveConfig().controllerWindow ?? null;
   return cachedControllerWindow;
 }
 
 function roleOfWindow(windowName) {
-  const configFile = effectiveConfigFile();
-  if (!existsSync(configFile)) return "default";
-  let config;
-  try {
-    config = JSON.parse(readFileSync(configFile, "utf8"));
-  } catch {
-    return "default";
-  }
+  const config = readEffectiveConfig();
   if (windowName === config.controllerWindow) return "controller";
   if (windowName === config.designWindow) return "design";
   if (windowName === config.testWindow) return "test";
@@ -242,7 +232,17 @@ function slug(value) {
 
 function writeJson(file, value) {
   mkdirSync(path.dirname(file), { recursive: true });
-  writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+  // Atomic replace everywhere: bindings and (via set-unattended) the tracked
+  // workspace config are files every resolver depends on; a crash mid-write
+  // must never leave a torn JSON behind.
+  const temp = `${file}.tmp-${process.pid}`;
+  try {
+    writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`);
+    renameSync(temp, file);
+  } catch (error) {
+    rmSync(temp, { force: true });
+    throw error;
+  }
 }
 
 function readJson(file, label) {
@@ -416,9 +416,13 @@ function activityMonitorRunning(serverSession) {
     return false;
   }
   // Guard against pid reuse after a reboot: the recorded pid must still be a
-  // node process running this helper's activity-monitor.
+  // node process running THIS WORKSPACE's activity-monitor. Matching the bare
+  // process name would let another workspace's monitor (pid-recycled) block
+  // this one forever — the same wide-match mistake the cleanup rule forbids.
   const probe = execHostText("ps", ["-o", "command=", "-p", String(pid)]);
-  return probe.status === 0 && /wakeflow-claude-host\.mjs activity-monitor/.test(probe.stdout);
+  return probe.status === 0
+    && probe.stdout.includes("wakeflow-claude-host.mjs activity-monitor")
+    && probe.stdout.includes(`--root ${workspaceRoot}`);
 }
 
 function startActivityMonitorDaemon(serverSession) {
@@ -487,7 +491,19 @@ async function commandActivityMonitor() {
       return;
     }
     mkdirSync(path.dirname(pidFile), { recursive: true });
-    writeFileSync(pidFile, String(process.pid));
+    try {
+      // O_EXCL: two concurrent ensure-servers must not both pass the running
+      // check and leave two pollers flapping the glyphs.
+      writeFileSync(pidFile, String(process.pid), { flag: "wx" });
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      if (activityMonitorRunning(serverSession)) {
+        output({ ok: true, command: "activity-monitor", server: serverSession, started: false, note: "another monitor instance won the pidfile race" });
+        return;
+      }
+      rmSync(pidFile, { force: true });
+      writeFileSync(pidFile, String(process.pid), { flag: "wx" });
+    }
   }
   // Pure visibility, no judgment: the monitor lights the running badge while a
   // pane is active and flips a delivered window to done once its lock is
@@ -822,20 +838,30 @@ async function performSend({ windowName, promptFile, deliveryId, commandName }) 
     });
   }
 
-  const before = capturePaneTail(binding, 5);
+  // before/after MUST capture the same line count: a 5-line "before" against a
+  // 25-line "after" differs by construction, making paneChanged always true and
+  // the no-echo warning unreachable.
+  const tailLines = Number(getValue("--lines", "25"));
+  const captureLines = Number.isFinite(tailLines) ? tailLines : 25;
+  const before = capturePaneTail(binding, captureLines);
   pastePromptFile(binding, promptFile);
   if (!isControllerTarget) setWindowState(windowName, "busy");
   const readbackWait = Number(getValue("--readback-wait-ms", "1200"));
   await sleep(Number.isFinite(readbackWait) ? readbackWait : 1200);
-  const tailLines = Number(getValue("--lines", "25"));
-  const paneTail = capturePaneTail(binding, Number.isFinite(tailLines) ? tailLines : 25);
+  const paneTail = capturePaneTail(binding, captureLines);
   // Cheap transport assertion: the prompt's first line should surface in the
   // pane. Claude Code may collapse large pastes, so a missing echo alone is
   // NOT an error — only a byte-stable pane AND no echo means "nothing visibly
   // happened" (paste landed in a dialog or a dead pane) and earns a warning.
-  const promptFirstLine = readFileSync(path.resolve(workspaceRoot, promptFile), "utf8")
-    .split("\n")
-    .find((line) => line.trim()) || "";
+  let promptFirstLine = "";
+  try {
+    promptFirstLine = readFileSync(path.resolve(workspaceRoot, promptFile), "utf8")
+      .split("\n")
+      .find((line) => line.trim()) || "";
+  } catch {
+    // prompt file already cleaned up by a concurrent teardown: the echo check
+    // degrades to paneChanged-only rather than crashing an already-sent send
+  }
   const promptEchoed = Boolean(promptFirstLine) && paneTail.includes(promptFirstLine.slice(0, 24));
   const paneChanged = paneTail !== before;
   const readbackWarning = !paneChanged && !promptEchoed
@@ -1246,11 +1272,13 @@ function commandSetUnattended() {
   let overlayWarning;
   if (write) {
     try {
-      const overlay = readOverlay(workspaceRoot);
-      if (overlay && overlayIsDerived(overlay)) {
-        regenerateOverlay(workspaceRoot, streamEntries(overlay));
-        overlayRegenerated = true;
-      }
+      withStreamMutationLock(() => {
+        const overlay = readOverlay(workspaceRoot);
+        if (overlay && overlayIsDerived(overlay)) {
+          regenerateOverlay(workspaceRoot, streamEntries(overlay));
+          overlayRegenerated = true;
+        }
+      });
     } catch (error) {
       overlayWarning = `stream overlay was not regenerated: ${error.message}`;
     }
@@ -1657,8 +1685,22 @@ function commandSeedPermissions() {
 
 const DEFAULT_MAX_STREAMS = 2;
 
-function streamOpenLockFile(repoWindow) {
-  return path.join(hostDir, `stream-open-${slug(repoWindow)}.lock`);
+// ONE mutation lock for every overlay read-modify-write (open, close,
+// set-unattended regen). A per-repo lock is NOT enough: two opens for
+// DIFFERENT repos still race the shared overlay file and the second write
+// silently drops the first's entry.
+function streamMutationLockFile() {
+  return path.join(hostDir, "stream-overlay.lock");
+}
+
+function withStreamMutationLock(fn) {
+  mkdirSync(hostDir, { recursive: true });
+  try {
+    return withFileLock(streamMutationLockFile(), fn);
+  } catch (error) {
+    if (error?.code === "WAKEFLOW_STATE_LOCK_TIMEOUT") fail(error.message);
+    throw error;
+  }
 }
 
 function buildStreamEntrySyncPrompt(windowName, repoWindow, worktreeRel, branch, demandKey) {
@@ -1699,6 +1741,23 @@ function commandStreamOpen() {
   if (!repoEntry) fail(`--repo ${repoWindow} is not a configured repository window.`);
   const repoPath = path.resolve(workspaceRoot, repoEntry.path);
   if (!existsSync(repoPath)) fail(`repository path does not exist: ${repoPath}`);
+  // Streams belong to a live demand: refuse a provably closed one (its
+  // worktrees would orphan behind the archive gate). A missing default state
+  // root only warns — custom-located roots are legitimate.
+  const demandStateFile = path.join(workspaceRoot, ".wakeflow-active", "current", slug(demandKey), "wakeflow-state.json");
+  if (existsSync(demandStateFile)) {
+    try {
+      const demandState = JSON.parse(readFileSync(demandStateFile, "utf8")).state;
+      if (demandState === "completed" || demandState === "archived") {
+        fail(`demand ${demandKey} is ${demandState}; streams attach to open demands only.`);
+      }
+    } catch (error) {
+      if (error instanceof CliExit) throw error;
+      // unreadable state root: leave it to wakeflow-verify, do not block here
+    }
+  } else {
+    process.stderr.write(`wakeflow-claude-host: no state root found for demand ${demandKey} at the default location; proceeding (custom state-root locations are not resolvable from the host helper).\n`);
+  }
   const windowName = streamWindowName(repoWindow, streamId);
   const branch = branchNameFor(demandKey, streamId);
   const worktreeDir = worktreeDirFor(workspaceRoot, repoWindow, streamId);
@@ -1706,13 +1765,14 @@ function commandStreamOpen() {
   mkdirSync(hostDir, { recursive: true });
   mkdirSync(path.dirname(worktreeDir), { recursive: true });
 
-  // Registration + worktree creation are one critical section per repo: two
-  // concurrent opens would otherwise race the pool count, git refs, and the
-  // overlay regeneration. Launch (slow) happens after release.
+  // Registration + worktree creation are one critical section under the
+  // GLOBAL overlay mutation lock: pool count, git refs, and the shared overlay
+  // regeneration must not race any other stream operation (same repo or not).
+  // Launch (slow) happens after release.
   let poolExhausted = null;
   let activeForRepo = [];
   let cap = DEFAULT_MAX_STREAMS;
-  const openCriticalSection = () => withFileLock(streamOpenLockFile(repoWindow), () => {
+  withStreamMutationLock(() => {
     const overlay = readOverlay(workspaceRoot);
     if (overlay && overlayBaseStale(workspaceRoot, overlay)) {
       process.stderr.write("wakeflow-claude-host: stream overlay was stale against workspace.config.json; regenerating from the current base.\n");
@@ -1720,6 +1780,11 @@ function commandStreamOpen() {
     const existing = overlay ? streamEntries(overlay) : [];
     if (existing.some((entry) => entry.windowName === windowName)) {
       fail(`stream window ${windowName} is already registered; close it first or pick another --stream id.`);
+    }
+    // Catch a base-repo collision BEFORE the worktree exists, not via the
+    // regenerateOverlay throw (which would orphan the fresh worktree).
+    if ((Array.isArray(baseConfig.repositories) ? baseConfig.repositories : []).some((repo) => repo.windowName === windowName)) {
+      fail(`stream window name ${windowName} collides with a configured repository window; pick another --stream id.`);
     }
     const repoStreams = existing.filter((entry) => entry.stream?.repo === repoWindow);
     cap = maxStreamsFor(baseConfig, repoEntry, DEFAULT_MAX_STREAMS);
@@ -1734,15 +1799,17 @@ function commandStreamOpen() {
     const added = execHostText("git", ["-C", repoPath, "worktree", "add", worktreeDir, "-b", branch, ...(baseBranch ? [baseBranch] : [])]);
     if (added.status !== 0) fail(`git worktree add failed: ${(added.stderr || added.stdout).trim()}`);
     const entry = buildStreamEntry({ repoEntry, windowName, worktreeRel, repoWindow, streamId, demandKey, branch });
-    regenerateOverlay(workspaceRoot, [...existing, entry]);
+    try {
+      regenerateOverlay(workspaceRoot, [...existing, entry]);
+    } catch (error) {
+      // Registration failed: roll the worktree + branch back so nothing is
+      // half-open, then fail with the real reason.
+      execHostText("git", ["-C", repoPath, "worktree", "remove", "--force", worktreeDir]);
+      execHostText("git", ["-C", repoPath, "branch", "-D", branch]);
+      fail(`stream registration failed (worktree rolled back): ${error.message}`);
+    }
     activeForRepo = [...activeForRepo, windowName];
   });
-  try {
-    openCriticalSection();
-  } catch (error) {
-    if (error?.code === "WAKEFLOW_STATE_LOCK_TIMEOUT") fail(error.message);
-    throw error;
-  }
   if (poolExhausted) {
     output({
       ok: false,
@@ -1820,6 +1887,10 @@ function commandStreamClose() {
   const windowName = requireValue("--window");
   const force = hasFlag("--force");
   const deleteBranch = hasFlag("--delete-branch");
+  withStreamMutationLock(() => streamCloseLocked({ windowName, force, deleteBranch }));
+}
+
+function streamCloseLocked({ windowName, force, deleteBranch }) {
   let overlay;
   try {
     overlay = assertOverlayManageable(workspaceRoot);
@@ -1831,22 +1902,45 @@ function commandStreamClose() {
   const worktreeDir = path.resolve(workspaceRoot, entry.path);
   const repoPath = path.resolve(workspaceRoot, entry.stream.repoPath);
   const branch = entry.stream.branch;
+  const repoPresent = existsSync(repoPath);
+  // In-flight guard (same rule as launch-all/replace-all): a fresh delivery
+  // lock means a dispatched task has not landed its result yet; killing the
+  // window now would wedge the group-ready wave forever.
+  const deliveryLock = readLock(windowName);
+  if (lockIsFresh(deliveryLock) && !force) {
+    fail(`stream ${windowName} has a fresh in-flight delivery lock (${deliveryLock.deliveryId || "unknown delivery"}, expires ${deliveryLock.expiresAt}); wait for its result or pass --force to tear it down anyway.`);
+  }
 
   const steps = [];
+  if (!repoPresent && !force) {
+    fail(`repository path ${entry.stream.repoPath} no longer exists; pass --force to drop the worktree directory and deregister the stream anyway.`);
+  }
   if (existsSync(worktreeDir)) {
-    const status = execHostText("git", ["-C", worktreeDir, "status", "--porcelain"]);
-    if (status.status === 0 && status.stdout.trim() && !force) {
-      fail(`worktree ${entry.path} has uncommitted changes; commit them (the stream's evidence) or pass --force to discard.`);
+    if (repoPresent) {
+      const status = execHostText("git", ["-C", worktreeDir, "status", "--porcelain"]);
+      if (!force && status.status !== 0) {
+        // Fail CLOSED: an unreadable worktree must not silently pass the
+        // dirty check into removal.
+        fail(`cannot verify worktree cleanliness (git status failed: ${(status.stderr || status.stdout).trim()}); pass --force to discard anyway.`);
+      }
+      if (!force && status.stdout.trim()) {
+        fail(`worktree ${entry.path} has uncommitted changes; commit them (the stream's evidence) or pass --force to discard.`);
+      }
+      const removed = execHostText("git", ["-C", repoPath, "worktree", "remove", ...(force ? ["--force"] : []), worktreeDir]);
+      if (removed.status !== 0) fail(`git worktree remove failed: ${(removed.stderr || removed.stdout).trim()}`);
+      steps.push("worktree-removed");
+    } else {
+      rmSync(worktreeDir, { recursive: true, force: true });
+      steps.push("worktree-directory-dropped-repo-missing");
     }
-    const removed = execHostText("git", ["-C", repoPath, "worktree", "remove", ...(force ? ["--force"] : []), worktreeDir]);
-    if (removed.status !== 0) fail(`git worktree remove failed: ${(removed.stderr || removed.stdout).trim()}`);
-    steps.push("worktree-removed");
-  } else {
+  } else if (repoPresent) {
     execHostText("git", ["-C", repoPath, "worktree", "prune"]);
     steps.push("worktree-already-missing-pruned");
   }
 
-  if (deleteBranch) {
+  if (deleteBranch && !repoPresent) {
+    steps.push("branch-deletion-skipped-repo-missing");
+  } else if (deleteBranch) {
     // -d refuses an unmerged branch: accepted work must be merged (or the
     // deletion forced deliberately) before its branch disappears.
     const deleted = execHostText("git", ["-C", repoPath, "branch", force ? "-D" : "-d", branch]);

@@ -155,10 +155,11 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   delivery is controller-started unless the plan and envelope authorize an
   exception. Old claim/finish/chain-next/start-plan/resume-plan routes are
   retired.
-- Parallel streams are ordinary target windows (`<repo>__<streamId>`) on
-  dedicated git worktrees: dispatch by windowName, one task per stream,
-  wave-end review under `group-ready`, pool exhaustion blocks instead of
-  widening, and stream branches merge back only by controller decision.
+- Within one demand each repository runs exactly ONE window with ONE combined
+  task package (the window self-sequences its items); a window is never
+  dispatched two simultaneous tasks inside the same demand. Isolation worktree
+  windows (`<repo>__<id>`) exist for cross-demand isolation only; their
+  branches merge back only by controller decision.
 
 Deliveries go to a tmux-resident interactive `claude` window via the
 `wakeflow-claude-host.mjs send` helper (shared per-window lock, `readback.paneTail`

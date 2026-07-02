@@ -59,8 +59,11 @@ plan (which windows/streams, producer/consumer order).
 `wakeflow_prepare_delivery` (author the objective; intent check against
 designIntent) → host `deliver` (lock, readback) → `wakeflow_record_delivery`
 → target works in its repo/worktree → `wakeflow_record_target_result`.
-Parallel streams: `stream-open/close/list`, wave discipline (group-ready,
-wave-end review). Exit gate: results with evidence refs for the wave.
+WITHIN one demand each repo runs exactly ONE window with ONE combined task
+package (the window self-sequences its items; never two simultaneous tasks to
+one window inside a demand). Isolation worktree windows
+(`stream-open/close/list`) are for CROSS-DEMAND repo isolation only.
+Exit gate: results with evidence refs for the wave.
 
 ## S4 — Review & Decide (owner: controller — the ONLY acceptance authority)
 `wakeflow_review_pack` (intent triple: designIntent / objective / result) →

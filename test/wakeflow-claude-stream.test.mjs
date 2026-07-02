@@ -122,11 +122,22 @@ test("core window resolution sees the stream window through the overlay", () => 
   assert.match(String(payload.config.repositoryPath ?? payload.config.cwd), /\.wakeflow-local\/worktrees\/RepoA__a/);
 });
 
-test("the stream pool blocks at maxStreams instead of opening more windows", () => {
+test("one isolation window per (repo, demand); the pool bounds concurrent demands", () => {
   const { root } = makeWorkspace({ maxStreamsPerRepo: 2 });
   assert.equal(openStream(root, "a").status, 0);
-  assert.equal(openStream(root, "b").status, 0);
-  const third = openStream(root, "c");
+
+  // same repo + SAME demand = same-demand parallelism, rejected by design:
+  // additional items for this repo belong in a combined task package
+  const sameDemand = openStream(root, "a2");
+  assert.equal(sameDemand.status, 1, sameDemand.stdout);
+  assert.match(sameDemand.stderr, /within a demand each repo runs one window/);
+  assert.equal(existsSync(path.join(root, ".wakeflow-local/worktrees/RepoA__a2")), false);
+
+  // same repo + DIFFERENT demand = the cross-demand isolation this exists for
+  assert.equal(openStream(root, "b", "DK-OTHER-2026-07-02").status, 0);
+
+  // cap bounds how many demands may hold isolation worktrees on one repo
+  const third = openStream(root, "c", "DK-THIRD-2026-07-02");
   assert.equal(third.status, 1, third.stdout);
   const payload = JSON.parse(third.stdout);
   assert.equal(payload.code, "pool-exhausted");

@@ -1705,13 +1705,13 @@ function withStreamMutationLock(fn) {
 
 function buildStreamEntrySyncPrompt(windowName, repoWindow, worktreeRel, branch, demandKey) {
   return `${[
-    `You are the **${windowName}** window — a parallel development STREAM of the ${repoWindow} repository in this Wakeflow workspace (worktree: ${worktreeRel}; branch: ${branch}; demand: ${demandKey}).`,
+    `You are the **${windowName}** window — an ISOLATION worktree window of the ${repoWindow} repository in this Wakeflow workspace (worktree: ${worktreeRel}; branch: ${branch}; demand: ${demandKey}). You are demand ${demandKey}'s ONE window for this repository.`,
     ``,
     `Entry sync — do this before any dispatch arrives:`,
     `1. Read the parent workspace \`CLAUDE.md\` (the controller's rules) and this repository's own \`CLAUDE.md\`/\`AGENTS.md\`, and follow them.`,
     `2. State your window name and worktree identity in one line.`,
     `3. You are a Wakeflow TARGET window: execute only the task packages the controller dispatches to you, return a TargetResultEnvelope when done, and never self-start or claim another window's work.`,
-    `4. STREAM BOUNDARY: work ONLY inside this worktree on branch ${branch}. Never touch the repository's main checkout, other stream worktrees, or other branches; merging back to the main line is a controller-owned step, never yours.`,
+    `4. ISOLATION BOUNDARY: work ONLY inside this worktree on branch ${branch}. Never touch the repository's main checkout, another demand's worktree, or other branches; merging back to the main line is a controller-owned step, never yours.`,
     `5. Confirm you are ready, then WAIT for a controller dispatch — do not begin work before a task package arrives.`,
   ].join("\n")}\n`;
 }
@@ -1789,6 +1789,13 @@ function commandStreamOpen() {
     const repoStreams = existing.filter((entry) => entry.stream?.repo === repoWindow);
     cap = maxStreamsFor(baseConfig, repoEntry, DEFAULT_MAX_STREAMS);
     activeForRepo = repoStreams.map((entry) => entry.windowName);
+    // WITHIN one demand a repository runs exactly ONE window: multiple work
+    // items go to that window as a combined task package it self-sequences.
+    // An isolation worktree exists per (repo, demand) — its purpose is
+    // cross-DEMAND isolation, never same-demand parallel dispatch.
+    if (repoStreams.some((entry) => entry.stream?.demandKey === demandKey)) {
+      fail(`demand ${demandKey} already has an isolation window for ${repoWindow} (${repoStreams.find((entry) => entry.stream?.demandKey === demandKey).windowName}); within a demand each repo runs one window — send additional items as a combined task package instead.`);
+    }
     if (repoStreams.length >= cap) {
       poolExhausted = { activeStreams: activeForRepo, maxStreams: cap };
       return;
@@ -2066,7 +2073,7 @@ function commandHelp() {
       "stamp-runtime": "Record the converging plugin version in hosts/claude-code/runtime-meta.json: --write.",
       "arrange-windows": "Rename managed windows to short tabs and order them Design, controller, products, Test (unmanaged windows trail): [--server wakeflow].",
       "seed-permissions": "Converge both settings layers for the workspace root and every configured repository: portable allow rules + relative parent reference into committed .claude/settings.json, the machine-local statusline into .claude/settings.local.json, plus the generated statusline script. Migrates older absolute-path/statusLine residue. [--write] (dry-run by default).",
-      "stream-open": "Open one parallel development stream: git worktree on branch <demand-key>/<stream> + a registered window <repo>__<stream> in the derived local config overlay, then launch + register its claude session: --repo <window> --stream <id> --demand-key <key> [--base <branch>] [--no-launch] [--server] [--boot-wait-ms]. Blocks with pool-exhausted at maxStreams (hosts.claude-code.maxStreamsPerRepo or repositories[].maxStreams, default 2).",
+      "stream-open": "Open one CROSS-DEMAND isolation window: git worktree on branch <demand-key>/<id> + a registered window <repo>__<id> in the derived local config overlay, then launch + register its claude session: --repo <window> --stream <id> --demand-key <key> [--base <branch>] [--no-launch] [--server] [--boot-wait-ms]. Refuses a second window for the same (repo, demand) — within a demand each repo runs ONE window with a combined task package. Blocks with pool-exhausted at maxStreams (bounds concurrent demands per repo, default 2).",
       "stream-close": "Close one stream: refuse a dirty worktree without --force, git worktree remove, optional --delete-branch (-d refuses unmerged; --force upgrades to -D), kill the tmux window, drop registry/binding/lock, regenerate (or remove) the overlay: --window <repo>__<stream> [--delete-branch] [--force].",
       "stream-list": "Three-way stream reconcile (overlay registration / worktree / tmux liveness) with per-stream status (active|resumable|prepared|broken) and overlay base-hash staleness. Read-only.",
     },

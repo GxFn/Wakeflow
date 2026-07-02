@@ -60,9 +60,11 @@ packages + wave plan (which windows, producer/consumer order).
 `wakeflow_prepare_delivery` (author the objective; intent check against
 designIntent) → send with the host thread tool (`send_message_to_thread`) →
 `wakeflow_record_delivery` → target works in its repository →
-`wakeflow_record_target_result`. Exit gate: results with evidence refs for the
-wave. (Parallel worktree streams are a Claude Code-edition capability; on
-Codex, parallelism is multiple product windows/threads.)
+`wakeflow_record_target_result`. WITHIN one demand each repo runs exactly ONE
+window with ONE combined task package (the window self-sequences its items;
+never two simultaneous tasks to one window inside a demand). Exit gate:
+results with evidence refs for the wave. (Isolation worktree windows are a
+Claude Code-edition capability reserved for CROSS-DEMAND repo isolation.)
 
 ## S4 — Review & Decide (owner: controller — the ONLY acceptance authority)
 `wakeflow_review_pack` (intent triple: designIntent / objective / result) →

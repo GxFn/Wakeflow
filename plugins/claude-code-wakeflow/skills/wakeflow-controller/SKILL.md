@@ -207,22 +207,25 @@ are already stated.
 - A single target result is not group completion unless the group expected only
   that target.
 
-## Parallel Streams
+## One Window Per Repo Within A Demand
 
-- A stream is an ordinary target window named `<repo>__<streamId>` bound to its
-  own git worktree on branch `<demandKey>/<streamId>`. Open/close/reconcile with
-  `wakeflow-claude-host.mjs stream-open / stream-close / stream-list`; dispatch
-  to it by windowName like any other window, one task per stream at a time.
-- Wave discipline: one wave = the stream tasks dispatched under ONE dispatch
-  group with the default `group-ready` policy. Execution is parallel; review is
-  per-wave — `reduce-results` needs every open task's result, so reduce at the
-  wave end, decide, then dispatch the next wave. A mid-wave reduce reporting
-  `waiting-results` is the contract working, not a failure.
-- `pool-exhausted` is a hard stop: wait for a stream to close after acceptance,
-  or sequence the work. Never widen `maxStreams` to unblock unattended work.
-- Merging a stream branch back to the main line is a controller-owned explicit
-  step after acceptance, before `stream-close`; `--delete-branch` refuses
-  unmerged work by design.
+- WITHIN one demand, each repository runs exactly ONE window and receives ONE
+  combined task package: list every work item for that repo in the package
+  (the state root holds the detail), and the window self-sequences priorities
+  and returns one evidenced result. A window is never dispatched two
+  simultaneous tasks inside the same demand — more work for that repo arrives
+  as the NEXT combined package after review, never as a parallel dispatch.
+- Isolation worktree windows (`<repo>__<id>`, managed with
+  `wakeflow-claude-host.mjs stream-open / stream-close / stream-list`) exist
+  for CROSS-DEMAND isolation only: when more than one demand is active and
+  both touch a repo, the later demand works in its own worktree/branch
+  (`<demandKey>/<id>`) so the main checkout stays coherent. The machine
+  refuses a second isolation window for the same (repo, demand) — that would
+  be same-demand parallelism, which this design rejects; `pool-exhausted`
+  bounds how many demands may hold isolation worktrees on one repo.
+- Merging an isolation branch back to the main line is a controller-owned
+  explicit step after acceptance, before `stream-close`; `--delete-branch`
+  refuses unmerged work by design.
 
 ## Intent Alignment
 

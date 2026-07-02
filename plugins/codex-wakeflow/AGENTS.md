@@ -188,11 +188,12 @@ live in `skills/wakeflow-governance/references/wakeflow-delivery.md`,
   input at any stage is routed to its owner (Design / user / bounded
   investigation), never guessed — the full S0→S6 route and per-stage gates live
   in `skills/wakeflow-governance/references/stage-route-map.md`.
-- Parallelism exists ONLY at the demand level: up to `maxActiveDemands`
-  (default 2) demands run side by side under ONE controller — the single
-  acceptance authority. Within a demand each repo = one window = one combined
-  task package; each controller turn declares its demand and re-reads that
-  state root; claiming past capacity fails closed.
+- Parallelism exists ONLY at the demand level, as demand pods: up to
+  `maxActiveDemands` (default 2) demands run side by side, each with its OWN
+  controller (stamped into the state root so returns route home) and window
+  set, mutually unaware. Within a demand each repo = one window = one combined
+  task package. Branch merge-back is human-reviewed and decentralized;
+  claiming past capacity fails closed.
 - Supplemental requirements must not reverse original decisions, non-goals, or
   forbidden shortcuts, and must not split into placeholder / empty-adapter /
   type-only stages without a named consumer and targeted validation.

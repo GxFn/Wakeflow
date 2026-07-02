@@ -1995,11 +1995,25 @@ function streamCloseLocked({ windowName, force, deleteBranch }) {
     }
   }
 
+  // Decentralized merging: nothing in Wakeflow merges pod branches, so the
+  // only defense against forgotten branches is a durable ledger row appended
+  // the moment a branch outlives its window.
+  let pendingMergeLedger;
+  if (!deleteBranch) {
+    pendingMergeLedger = appendPendingMerge({
+      demandKey: entry.stream.demandKey,
+      repo: entry.stream.repo,
+      branch,
+      windowName,
+    });
+  }
+
   const remaining = streamEntries(overlay).filter((item) => item.windowName !== windowName);
   const overlayInfo = regenerateOverlay(workspaceRoot, remaining);
   output({
     ok: true,
     command: "stream-close",
+    pendingMergeLedger,
     windowName,
     repo: entry.stream.repo,
     branch,
@@ -2065,6 +2079,304 @@ function commandStreamList() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Demand pods: one demand = one pod (its OWN controller + per-repo isolation
+// worktree windows + its OWN Test) in its OWN tmux session, mutually unaware
+// of other pods. Branch merge-back is fully decentralized (human-reviewed,
+// outside Wakeflow); the pending-merges ledger is the memory that survives it.
+
+function podSessionFor(podSlug) {
+  return `${defaultServerSession()}-${podSlug}`;
+}
+
+function appendPendingMerge({ demandKey, repo, branch, windowName }) {
+  const ledgerRoot = readEffectiveConfig().projectLedgerRoot ?? "wakeflow-ledger";
+  const file = path.resolve(workspaceRoot, ledgerRoot, "workspace", "pending-merges.md");
+  mkdirSync(path.dirname(file), { recursive: true });
+  if (!existsSync(file)) {
+    writeFileSync(file, [
+      "# Pending Merges",
+      "",
+      "> Branches whose isolation window closed without --delete-branch. Merge-back is",
+      "> human-reviewed and decentralized; delete a row once its branch is merged or dropped.",
+      "",
+      "| Closed At | Demand | Repo | Branch | Window |",
+      "| --- | --- | --- | --- | --- |",
+      "",
+    ].join("\n"));
+  }
+  const row = `| ${nowIso()} | ${demandKey ?? "?"} | ${repo ?? "?"} | ${branch} | ${windowName} |\n`;
+  writeFileSync(file, row, { flag: "a" });
+  return path.relative(workspaceRoot, file);
+}
+
+function podBindingWindows(podSlug) {
+  return [`Controller__${podSlug}`, `Test__${podSlug}`];
+}
+
+function buildPodControllerPrompt(demandKey, podSlug, repos) {
+  const podWindows = repos.map((repo) => `${repo}__${podSlug}`).join(", ");
+  return `${[
+    `You are **Controller__${podSlug}** — the DEDICATED controller of demand ${demandKey}, running in your own pod session. You know nothing about other demands or pods; never read or touch their state roots, windows, or branches.`,
+    ``,
+    `Pod start — do this now:`,
+    `1. Read the parent workspace \`CLAUDE.md\` and the wakeflow-controller skill (the S0→S6 route applies unchanged inside the pod).`,
+    `2. Claim YOUR demand: wakeflow_create_demand with demandKey "${demandKey}" and controllerWindow "Controller__${podSlug}" (from its TODO row when present). The stamped controllerWindow routes every controller-return back to YOU.`,
+    `3. Your fleet: dispatch ONLY to ${podWindows || "your pod windows"} (isolation worktrees) and Test__${podSlug}. One combined task package per repo; author objectives; evidence-based review.`,
+    `4. Merge-back of pod branches is HUMAN-reviewed after archive — never merge yourself. Close order at the end: complete-demand -> stream-close each repo window -> archive -> report; the user runs pod-close.`,
+  ].join("\n")}\n`;
+}
+
+// pod-open: idempotent orchestration of existing machinery — pod session +
+// per-repo isolation windows (stream-open) + pod controller + pod Test.
+// Re-running resumes a partially opened pod instead of failing it.
+function commandPodOpen() {
+  const demandKey = requireValue("--demand-key");
+  const podSlug = slug(demandKey);
+  const repos = (requireValue("--repos") || "").split(",").map((name) => name.trim()).filter(Boolean);
+  if (repos.length === 0) fail("--repos needs at least one configured repository window name.");
+  const noLaunch = hasFlag("--no-launch");
+  const bootWait = getValue("--boot-wait-ms", "7000");
+  const trackedFile = path.join(workspaceRoot, "workspace.config.json");
+  if (!existsSync(trackedFile)) fail("workspace.config.json not found; run initialization first.");
+  const baseConfig = readJson(trackedFile, "workspace config");
+  const baseRepos = Array.isArray(baseConfig.repositories) ? baseConfig.repositories : [];
+  for (const repo of repos) {
+    if (!baseRepos.some((entry) => entry.windowName === repo)) fail(`--repos names ${repo}, which is not a configured repository window.`);
+  }
+
+  // Preflight: the pod controller will CLAIM this demand — warn early when the
+  // board does not know it yet, and refuse a provably closed one.
+  const stateFile = path.join(workspaceRoot, ".wakeflow-active", "current", podSlug, "wakeflow-state.json");
+  if (existsSync(stateFile)) {
+    try {
+      const demandState = JSON.parse(readFileSync(stateFile, "utf8")).state;
+      if (demandState === "completed" || demandState === "archived") {
+        fail(`demand ${demandKey} is ${demandState}; a pod attaches to a claimable or open demand.`);
+      }
+      process.stderr.write(`wakeflow-claude-host: demand ${demandKey} already has a state root (${demandState}); the pod controller should RESUME it, not re-create it.\n`);
+    } catch (error) {
+      if (error instanceof CliExit) throw error;
+    }
+  } else {
+    const boardPath = path.join(workspaceRoot, ".wakeflow-active", "current", "global-todo-board.md");
+    if (!existsSync(boardPath) || !readFileSync(boardPath, "utf8").includes(demandKey)) {
+      process.stderr.write(`wakeflow-claude-host: ${demandKey} is not on the global TODO board yet; make sure Design delivered it before the pod controller tries to claim.\n`);
+    }
+  }
+
+  // Cross-pod repo intersection: independent demands sharing a repo are the
+  // top source of merge conflicts — say it now, not at merge time.
+  let overlay = readOverlay(workspaceRoot);
+  const intersections = (overlay ? streamEntries(overlay) : [])
+    .filter((entry) => entry.stream?.demandKey !== demandKey && repos.includes(entry.stream?.repo))
+    .map((entry) => ({ repo: entry.stream.repo, occupiedBy: entry.stream.demandKey, window: entry.windowName }));
+
+  const podSession = podSessionFor(podSlug);
+  const windows = [];
+  for (const repo of repos) {
+    const windowName = streamWindowName(repo, podSlug);
+    overlay = readOverlay(workspaceRoot);
+    if (overlay && streamEntryFor(overlay, windowName)) {
+      windows.push({ window: windowName, status: "already-registered" });
+      continue;
+    }
+    const argv = [
+      "stream-open", "--root", workspaceRoot, "--repo", repo, "--stream", podSlug,
+      "--demand-key", demandKey, "--server", podSession, "--boot-wait-ms", bootWait,
+      ...(noLaunch ? ["--no-launch"] : []),
+    ];
+    const opened = execHostText(process.execPath, [process.argv[1], ...argv]);
+    let parsed = null;
+    try {
+      parsed = JSON.parse(opened.stdout);
+    } catch {
+      parsed = null;
+    }
+    if (!parsed?.ok) {
+      fail(`pod-open stopped at ${windowName} (already-opened pod windows are kept; fix the cause and re-run pod-open to resume): ${parsed?.error || parsed?.code || (opened.stderr || opened.stdout).slice(-200)}`);
+    }
+    windows.push({ window: windowName, status: "opened", branch: parsed.branch });
+  }
+
+  const controllerWindow = `Controller__${podSlug}`;
+  const testWindow = `Test__${podSlug}`;
+  let controllerLaunched = false;
+  let testLaunched = false;
+  if (!noLaunch) {
+    const promptFile = path.join(hostDir, `pod-entry-${podSlug}.txt`);
+    mkdirSync(hostDir, { recursive: true });
+    writeFileSync(promptFile, buildPodControllerPrompt(demandKey, podSlug, repos));
+    for (const [windowName, cwd, prompt] of [
+      [controllerWindow, workspaceRoot, promptFile],
+      [testWindow, path.resolve(workspaceRoot, baseConfig.internalTestPath ?? "Test"), null],
+    ]) {
+      if (!existsSync(cwd)) {
+        process.stderr.write(`wakeflow-claude-host: cwd for ${windowName} does not exist (${cwd}); skipped.\n`);
+        continue;
+      }
+      const bindingFile = bindingFileFor(windowName);
+      if (existsSync(bindingFile)) {
+        try {
+          if (windowAlive(readJson(bindingFile, "window-host binding"))) {
+            windows.push({ window: windowName, status: "already-live" });
+            continue;
+          }
+        } catch {
+          // unreadable binding: relaunch below
+        }
+      }
+      const argv = [
+        "launch-window", "--root", workspaceRoot, "--server", podSession,
+        "--window", windowName, "--title", windowName, "--cwd", cwd,
+        ...(prompt ? ["--prompt-file", prompt] : []), "--replace", "--boot-wait-ms", bootWait,
+      ];
+      const launched = execHostText(process.execPath, [process.argv[1], ...argv]);
+      let parsed = null;
+      try {
+        parsed = JSON.parse(launched.stdout);
+      } catch {
+        parsed = null;
+      }
+      if (!parsed?.ok) {
+        fail(`pod-open stopped launching ${windowName} (re-run pod-open to resume): ${parsed?.error || (launched.stderr || launched.stdout).slice(-200)}`);
+      }
+      if (windowName === controllerWindow) controllerLaunched = true;
+      else testLaunched = true;
+      windows.push({ window: windowName, status: "launched" });
+    }
+  }
+
+  output({
+    ok: true,
+    command: "pod-open",
+    pod: podSlug,
+    demandKey,
+    session: podSession,
+    windows,
+    controllerWindow,
+    testWindow,
+    controllerLaunched,
+    testLaunched,
+    intersections,
+    costNote: `each pod window is a full live claude session (${windows.length} for this pod); maxActiveDemands bounds pods, maxStreamsPerRepo bounds pods per repo`,
+    attach: `${tmuxBin}${tmuxSocket ? ` -L ${tmuxSocket}` : ""} attach -t ${podSession}`,
+    agentNext: noLaunch
+      ? "Pod worktrees and registrations are in place (--no-launch); launch later by re-running pod-open without --no-launch."
+      : `Pod is live and autonomous: Controller__${podSlug} claims ${demandKey} and runs the standard loop. Merge-back stays human-reviewed; run pod-close after the demand archives.`,
+  });
+}
+
+// pod-close: sweep AFTER the demand archived (close order: complete ->
+// stream-close repos -> archive -> pod-close). Leftover isolation windows are
+// closed here (their branches land on the pending-merges ledger), then the
+// pod's controller/Test windows and session go away.
+function commandPodClose() {
+  const demandKey = requireValue("--demand-key");
+  const podSlug = slug(demandKey);
+  const force = hasFlag("--force");
+  const stateFile = path.join(workspaceRoot, ".wakeflow-active", "current", podSlug, "wakeflow-state.json");
+  if (existsSync(stateFile) && !force) {
+    let demandState = "unreadable";
+    try {
+      demandState = JSON.parse(readFileSync(stateFile, "utf8")).state;
+    } catch {
+      // unreadable counts as not-archived
+    }
+    if (demandState !== "archived") {
+      fail(`demand ${demandKey} is ${demandState}, not archived. Close order: complete-demand -> stream-close each repo window -> archive -> pod-close (pass --force to tear the pod down anyway).`);
+    }
+  }
+
+  const overlay = readOverlay(workspaceRoot);
+  const leftovers = (overlay ? streamEntries(overlay) : []).filter((entry) => entry.stream?.demandKey === demandKey);
+  const closed = [];
+  for (const entry of leftovers) {
+    const argv = ["stream-close", "--root", workspaceRoot, "--window", entry.windowName, ...(force ? ["--force"] : [])];
+    const result = execHostText(process.execPath, [process.argv[1], ...argv]);
+    let parsed = null;
+    try {
+      parsed = JSON.parse(result.stdout);
+    } catch {
+      parsed = null;
+    }
+    if (!parsed?.ok) fail(`pod-close stopped at ${entry.windowName}: ${parsed?.error || (result.stderr || result.stdout).slice(-200)}`);
+    closed.push({ window: entry.windowName, branch: entry.stream.branch, pendingMergeLedger: parsed.pendingMergeLedger });
+  }
+
+  const swept = [];
+  for (const windowName of podBindingWindows(podSlug)) {
+    const bindingFile = bindingFileFor(windowName);
+    if (!existsSync(bindingFile)) continue;
+    try {
+      const binding = readJson(bindingFile, "window-host binding");
+      if (windowAlive(binding)) tmux(["kill-window", "-t", binding.tmux.windowId], { allowFailure: true });
+    } catch {
+      // unreadable binding: still remove
+    }
+    rmSync(bindingFile, { force: true });
+    rmSync(path.join(hostDir, "thread-registry", `${slug(windowName)}.json`), { force: true });
+    rmSync(path.join(hostDir, "window-config", `${slug(windowName)}.json`), { force: true });
+    swept.push(windowName);
+  }
+  const podSession = podSessionFor(podSlug);
+  tmux(["kill-session", "-t", podSession], { allowFailure: true });
+  rmSync(path.join(hostDir, `pod-entry-${podSlug}.txt`), { force: true });
+
+  output({
+    ok: true,
+    command: "pod-close",
+    pod: podSlug,
+    demandKey,
+    closedIsolationWindows: closed,
+    sweptWindows: swept,
+    sessionKilled: podSession,
+    agentNext: closed.length > 0
+      ? "Pod is closed. Review wakeflow-ledger/workspace/pending-merges.md and merge or drop the listed branches (human-reviewed, outside Wakeflow)."
+      : "Pod is closed; its branches were already recorded on the pending-merges ledger at stream-close time.",
+  });
+}
+
+// pod-list: the ONE read-only global view a mutually-unaware pod model needs —
+// which pods exist, whether their sessions live, and their demand states.
+function commandPodList() {
+  let overlay = null;
+  try {
+    overlay = readOverlay(workspaceRoot);
+  } catch (error) {
+    fail(error.message);
+  }
+  const byDemand = new Map();
+  for (const entry of (overlay ? streamEntries(overlay) : [])) {
+    const key = entry.stream?.demandKey ?? "unknown";
+    if (!byDemand.has(key)) byDemand.set(key, []);
+    byDemand.get(key).push(entry.windowName);
+  }
+  // pods that opened controller/Test but whose repos are already closed
+  if (existsSync(windowHostDir)) {
+    for (const file of readdirSync(windowHostDir)) {
+      const match = /^controller__(.+)\.json$/i.exec(file);
+      if (match && ![...byDemand.keys()].some((key) => slug(key) === match[1])) byDemand.set(match[1], []);
+    }
+  }
+  const pods = [...byDemand.entries()].map(([demandKey, windows]) => {
+    const podSlug = slug(demandKey);
+    const stateFile = path.join(workspaceRoot, ".wakeflow-active", "current", podSlug, "wakeflow-state.json");
+    let demandState = "no-state-root";
+    if (existsSync(stateFile)) {
+      try {
+        demandState = JSON.parse(readFileSync(stateFile, "utf8")).state;
+      } catch {
+        demandState = "unreadable";
+      }
+    }
+    const session = podSessionFor(podSlug);
+    const sessionAlive = tmux(["has-session", "-t", session], { allowFailure: true }).status === 0;
+    return { demandKey, pod: podSlug, session, sessionAlive, demandState, isolationWindows: windows };
+  });
+  output({ ok: true, command: "pod-list", pods });
+}
+
 function commandHelp() {
   output({
     ok: true,
@@ -2092,6 +2404,9 @@ function commandHelp() {
       "stream-open": "Open one CROSS-DEMAND isolation window: git worktree on branch <demand-key>/<id> + a registered window <repo>__<id> in the derived local config overlay, then launch + register its claude session: --repo <window> --stream <id> --demand-key <key> [--base <branch>] [--no-launch] [--server] [--boot-wait-ms]. Refuses a second window for the same (repo, demand) — within a demand each repo runs ONE window with a combined task package. Blocks with pool-exhausted at maxStreams (bounds concurrent demands per repo, default 2).",
       "stream-close": "Close one stream: refuse a dirty worktree without --force, git worktree remove, optional --delete-branch (-d refuses unmerged; --force upgrades to -D), kill the tmux window, drop registry/binding/lock, regenerate (or remove) the overlay: --window <repo>__<stream> [--delete-branch] [--force].",
       "stream-list": "Three-way stream reconcile (overlay registration / worktree / tmux liveness) with per-stream status (active|resumable|prepared|broken) and overlay base-hash staleness. Read-only.",
+      "pod-open": "Open a demand pod: its OWN tmux session with Controller__<pod> + per-repo isolation worktree windows + Test__<pod>. Idempotent — re-run to resume a partially opened pod. Warns on cross-pod repo intersections (merge-conflict foresight) and when the demand is not on the TODO board yet: --demand-key <key> --repos <a,b,...> [--no-launch] [--boot-wait-ms]. The pod controller claims the demand itself (controllerWindow is stamped into the state root, so returns route home automatically).",
+      "pod-close": "Sweep a pod AFTER its demand archived (order: complete -> stream-close repos -> archive -> pod-close; --force overrides): closes leftover isolation windows (branches land on wakeflow-ledger/workspace/pending-merges.md), removes Controller__/Test__ windows, kills the pod session. Merge-back stays human-reviewed and decentralized: --demand-key <key> [--force].",
+      "pod-list": "Read-only pod inventory: demand state, session liveness, isolation windows per pod — the one global view a mutually-unaware pod model needs (orphan-pod detection).",
     },
   });
 }
@@ -2119,6 +2434,9 @@ async function main() {
     case "stream-open": return commandStreamOpen();
     case "stream-close": return commandStreamClose();
     case "stream-list": return commandStreamList();
+    case "pod-open": return commandPodOpen();
+    case "pod-close": return commandPodClose();
+    case "pod-list": return commandPodList();
     case "stamp-runtime": return commandStampRuntime();
     case "help": return commandHelp();
     default:

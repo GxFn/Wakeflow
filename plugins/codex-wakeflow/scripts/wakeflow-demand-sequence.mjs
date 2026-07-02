@@ -718,6 +718,8 @@ function commandCreateDemand() {
   if (goal) initArgs.push("--goal", goal);
   if (completionDefinition) initArgs.push("--completion-definition", completionDefinition);
   if (stagePlan) initArgs.push("--stage-plan", stagePlan);
+  const demandControllerWindow = getValue("--controller-window", "");
+  if (demandControllerWindow) initArgs.push("--controller-window", demandControllerWindow);
   initArgs.push("--write", "--json");
   const initOut = runControllerState(initArgs);
 

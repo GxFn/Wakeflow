@@ -48,6 +48,24 @@ function driveToAccepted(root, stateRoot, id) {
   return null;
 }
 
+test("the demand's own controllerWindow is stamped at init and routes prepare by default", () => {
+  const root = makeRoot();
+  const init = run(["init", "--root", root, "--demand-key", "POD-DK", "--title", "Pod Demand", "--controller-window", "Controller__POD-DK", "--write", "--json"]);
+  assert.equal(init.status, 0, init.stderr || init.stdout);
+  const stateRoot = path.join(root, ".wakeflow-active/current/POD-DK");
+  assert.equal(readJson(path.join(stateRoot, "wakeflow-state.json")).controllerWindow, "Controller__POD-DK");
+
+  assert.equal(run(["add-task-package", "--root", root, "--state-root", stateRoot, "--task-package-id", "tp-a", "--summary", "W", "--target-window", "RepoA__pod-dk", "--write", "--json"]).status, 0);
+  const deliveryScript = path.join(pluginRoot, "scripts/wakeflow-delivery.mjs");
+  const prepared = spawnSync(process.execPath, [
+    deliveryScript, "prepare-dispatch-from-state", "--root", root, "--state-root", stateRoot,
+    "--target-task-id", "tp-a__RepoA__pod-dk", "--write", "--json",
+  ], { encoding: "utf8", shell: false });
+  assert.equal(prepared.status, 0, prepared.stderr || prepared.stdout);
+  const packet = readJson(path.join(root, ".wakeflow-local/wakeflow-delivery/dispatch-packets", "tp-a__RepoA__pod-dk__tp-a__RepoA__pod-dk.json"));
+  assert.equal(packet.controllerWindow, "Controller__POD-DK", "prepare must default the return route to the demand's own controller — the pod mis-route killer");
+});
+
 test("two demands run side by side; the third fails closed at capacity", () => {
   const root = makeRoot();
   assert.equal(initDemand(root, "D1").status, 0);

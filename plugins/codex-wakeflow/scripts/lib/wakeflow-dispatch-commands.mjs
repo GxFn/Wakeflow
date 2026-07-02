@@ -384,10 +384,12 @@ export function createDispatchCommands(ctx) {
     const targetWindow = targetTask.targetWindow;
     if (!targetWindow) fail(`target task ${targetTaskId} is missing targetWindow.`);
     validatePrepareDispatchEligibility({ state, taskPackage, targetTask });
-    // Default the controller-return target to the configured controller window so the dispatch
-    // group always carries a real controllerWindow. Leaving it empty made the controller-return
-    // fall back to a guessed window name, which can mis-route the wake-up (a closed-loop break).
-    const controllerWindow = getValue("--controller-window", readWorkspaceConfig().controllerWindow || "");
+    // Controller-return target default chain: explicit flag > the demand's OWN
+    // controller window (stamped into the state root at init — demand pods
+    // route home without remembering a flag) > workspace config. An empty
+    // value would make the return fall back to a guessed window name and
+    // mis-route the wake-up (a closed-loop break).
+    const controllerWindow = getValue("--controller-window", state.controllerWindow || readWorkspaceConfig().controllerWindow || "");
     const dispatchGroup = getValue("--group", taskPackageId);
     const automationEnabled = hasFlag("--automation-enabled");
     const requireThread = hasFlag("--require-thread");

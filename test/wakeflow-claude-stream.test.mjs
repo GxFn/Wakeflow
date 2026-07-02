@@ -296,6 +296,43 @@ test("stream-open refuses a completed demand and stream-close refuses an in-flig
   assert.equal(forced.status, 0, forced.stderr || forced.stdout);
 });
 
+test("pod lifecycle headless: idempotent open, cross-pod intersection warning, close-order gate, pending-merges ledger", () => {
+  const { root } = makeWorkspace();
+  const open = host(root, ["pod-open", "--demand-key", "POD-A", "--repos", "RepoA,RepoB", "--no-launch"]);
+  assert.equal(open.status, 0, open.stderr || open.stdout);
+  const payload = JSON.parse(open.stdout);
+  assert.deepEqual(payload.windows.map((w) => w.status), ["opened", "opened"]);
+  assert.equal(payload.intersections.length, 0);
+  assert.equal(existsSync(path.join(root, ".wakeflow-local/worktrees/RepoA__POD-A")), true);
+
+  // idempotent resume: nothing re-created, nothing failed
+  const rerun = JSON.parse(host(root, ["pod-open", "--demand-key", "POD-A", "--repos", "RepoA,RepoB", "--no-launch"]).stdout);
+  assert.deepEqual(rerun.windows.map((w) => w.status), ["already-registered", "already-registered"]);
+
+  // second pod touching RepoA gets the merge-conflict foresight note
+  const podB = JSON.parse(host(root, ["pod-open", "--demand-key", "POD-B", "--repos", "RepoA", "--no-launch"]).stdout);
+  assert.equal(podB.intersections.length, 1);
+  assert.equal(podB.intersections[0].occupiedBy, "POD-A");
+
+  // close order: an unarchived (open) demand refuses pod-close without --force
+  const stateDir = path.join(root, ".wakeflow-active/current/POD-A");
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(path.join(stateDir, "wakeflow-state.json"), `${JSON.stringify({ demandKey: "POD-A", state: "planned" }, null, 2)}\n`);
+  const refused = host(root, ["pod-close", "--demand-key", "POD-A"]);
+  assert.equal(refused.status, 1, refused.stdout);
+  assert.match(refused.stderr, /Close order: complete-demand/);
+
+  // forced close sweeps leftovers and records every surviving branch
+  const closed = JSON.parse(host(root, ["pod-close", "--demand-key", "POD-A", "--force"]).stdout);
+  assert.equal(closed.closedIsolationWindows.length, 2);
+  const ledger = readFileSync(path.join(root, "wakeflow-ledger/workspace/pending-merges.md"), "utf8");
+  assert.match(ledger, /POD-A \| RepoA \| POD-A\/POD-A/);
+  assert.match(ledger, /POD-A \| RepoB \| POD-A\/POD-A/);
+
+  const list = JSON.parse(host(root, ["pod-list"]).stdout);
+  assert.deepEqual(list.pods.map((p) => p.demandKey), ["POD-B"], "closed pod must disappear from the inventory");
+});
+
 test("stream-list reconciles overlay, worktree, and registration state", () => {
   const { root } = makeWorkspace();
   assert.equal(openStream(root, "a").status, 0);

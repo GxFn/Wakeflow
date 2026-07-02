@@ -38,7 +38,7 @@ const helpText = `
 Controller state-machine manager
 
 Usage:
-  node scripts/wakeflow-state.mjs init --demand-key <key> --title <title> [--goal <text>] [--completion-definition <text>] [--stage-plan <text>] [--language <auto|zh|en>] [--root <workspace>] [--state-root <path>] [--write] [--json]
+  node scripts/wakeflow-state.mjs init --demand-key <key> --title <title> [--goal <text>] [--completion-definition <text>] [--stage-plan <text>] [--controller-window <window>] [--language <auto|zh|en>] [--root <workspace>] [--state-root <path>] [--write] [--json]
   node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--source-ref <ref>] [--design-intent <text>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
@@ -493,6 +493,10 @@ function commandInit() {
   const language = selectInterfaceLanguage(config);
   const locale = wakeflowStateLocale(language);
   const goal = getValue("--goal", locale.defaultGoal);
+  // The demand's OWN controller window (demand pods: Controller__<pod>). Every
+  // dispatch's controller-return defaults to this, so a pod controller never
+  // mis-routes wake-ups to the workspace-level controller by forgetting a flag.
+  const demandControllerWindow = (getValue("--controller-window", "") || config.controllerWindow || "").trim() || null;
   const completionDefinition = getValue("--completion-definition", locale.defaultCompletionDefinition);
   const stagePlan = getValue("--stage-plan", locale.defaultStagePlan);
   const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args: options, config });
@@ -548,6 +552,7 @@ function commandInit() {
     // Demand creation is host-neutral: controllerHost stays unset until the
     // first driving command claims the demand for its platform.
     controllerHost: null,
+    controllerWindow: demandControllerWindow,
     state: "intake",
     stateReason: "wakeflow-state-init",
     revision: 1,

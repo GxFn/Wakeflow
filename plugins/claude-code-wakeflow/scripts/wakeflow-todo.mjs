@@ -8,9 +8,10 @@
 // and it sets the immutable `Auto Claim` delivery property exactly once. The controller
 // then reads the row (wakeflow-next-work) and claims it; Design tracks no further status.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadWorkspaceConfig, resolveWorkspaceRoot, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
+import { WakeflowStateLockTimeoutError, withFileLock } from "./lib/wakeflow-state-lock.mjs";
 
 const args = process.argv.slice(2);
 const workspaceRoot = resolveWorkspaceRoot(args);
@@ -196,13 +197,26 @@ function commandConsume() {
   });
 }
 
+// H-9: the board is a lockless markdown read-modify-write. With demand pods,
+// multiple controllers deliver/consume concurrently — serialize the WHOLE
+// command (read inside the lock) or parallel writers drop each other's rows.
+function withBoardLock(fn) {
+  try {
+    mkdirSync(path.dirname(todoPath), { recursive: true });
+    withFileLock(`${todoPath}.lock`, fn);
+  } catch (error) {
+    if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);
+    throw error;
+  }
+}
+
 try {
   switch (command) {
     case "deliver":
-      commandDeliver();
+      withBoardLock(commandDeliver);
       break;
     case "consume":
-      commandConsume();
+      withBoardLock(commandConsume);
       break;
     default:
       fail(`unknown wakeflow-todo command: ${command ?? "(none)"}; use deliver or consume`);

@@ -227,25 +227,33 @@ are already stated.
   explicit step after acceptance, before `stream-close`; `--delete-branch`
   refuses unmerged work by design.
 
-## Multiple Active Demands
+## Demand Pods (multiple demands = multiple pods, never one multiplexed controller)
 
-- The workspace runs up to `maxActiveDemands` (default 2) unarchived demands
-  side by side; you remain the ONE controller and the single acceptance
-  authority across all of them. `wakeflow_next_work` shows the dashboard
-  (`activeDemands` + `demandCapacity`) — read it on every orientation.
-- Every turn is self-contained: state the demand you are acting on FIRST
-  (returns name their stateRoot/demandKey), re-read that state root, act,
-  stop. Demand contexts never mix inside one turn; interleaving order across
-  turns is harmless because authority lives on disk, not in your memory.
-- Same repo, two demands: the main checkout belongs to the demand that
-  occupied it first; the later demand works through its isolation window.
-  Test stays a shared serial resource (its lock queues cards across demands).
-- Context degradation runbook: when your own context has been compacted to
-  unreliability — symptoms: you cannot restate a demand's goal without
-  guessing, or you reach for remembered state instead of re-reading — stop,
-  ask for a controller replacement (`replace-all --window <controller>`), and
-  resume purely from disk state. The controller is replaceable; the state
-  roots are the memory.
+- One demand = one pod: its OWN controller (`Controller__<pod>`), per-repo
+  isolation worktree windows, and its OWN `Test__<pod>`, in its OWN tmux
+  session. Pods are mutually unaware — never read or touch another pod's
+  state roots, windows, or branches. The default fleet is pod 0: it works on
+  the main checkouts, and its demand is just another active demand.
+- Opening a pod is a spare-moment MECHANICAL action for an incumbent
+  controller: `wakeflow-claude-host.mjs pod-open --demand-key <key> --repos
+  <a,b>` (idempotent; re-run resumes). The new pod's controller claims its
+  demand itself via `wakeflow_create_demand` with `controllerWindow:
+  "Controller__<pod>"` — the stamp routes every controller-return home; no
+  per-dispatch flag to remember. Heed pod-open's intersection warnings: a
+  repo shared with another pod is tomorrow's merge conflict.
+- Test ENVIRONMENTS may be physical singletons even though Test windows are
+  per-pod: an exclusive environment (per the S1 Test Environment Spec) is a
+  cross-pod serial resource — confirm no other pod is using it before
+  dispatching the card.
+- Close order, then merge: complete-demand → stream-close each repo window
+  (branches survive onto wakeflow-ledger/workspace/pending-merges.md) →
+  archive → pod-close. Merge-back is HUMAN-reviewed and decentralized —
+  no controller ever merges pod branches.
+- `pod-list` is the one global view (orphan pods, session liveness);
+  `maxActiveDemands` bounds pods, `maxStreamsPerRepo` bounds pods per repo.
+- Context degradation runbook: when your context has been compacted to
+  unreliability, stop and ask for a controller replacement — the controller
+  is replaceable, the state roots are the memory.
 
 ## Intent Alignment
 

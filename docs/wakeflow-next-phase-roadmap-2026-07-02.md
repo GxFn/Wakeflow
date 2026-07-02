@@ -198,7 +198,11 @@ stream = 独立窗口 `<repo>__<streamId>` + 独立 worktree + 独立分支 `<de
 
 ---
 
-## 4.7 需求舱（demand pod）——用户三决策已拍板，待实施（E-6）
+## 4.7 需求舱（demand pod，E-6）——✅ 已于 2026-07-02 落地（0.7.6）
+
+预防清单全部落实：**controllerWindow 入 state root**（init/create_demand 记录，prepare 默认链 flag > state > config——舱回执误路由的机械灭杀）；**H-9 板锁**（deliver/consume 整命令临界区）；`pod-open`（幂等可续、板前置检查、跨舱仓库交集预警、成本提示）；`pod-close`（收舱顺序门 complete→stream-close→archive→pod-close，--force 兜底）；`pod-list`（孤儿舱对账）；**pending-merges 台账**（stream-close 时分支存活即记账——去中心化合并的记忆）；Test 环境独占性写入 controller skill；多路复用散文全量替换为舱模型（双版本）。测试：controllerWindow 路由链、舱幂等开合、交集预警、顺序门、台账行。Codex 舱对称落地为后续项；板锁并发测试待补（原语与 Phase 0 同源）。
+
+## 4.7.0 原设计记录——用户三决策
 
 用户裁定多需求并行的最终形态：**去中心化需求舱**，取代 4.6 的"单总控多路复用"。一个需求 = 一个舱（自己的总控 + 仓库隔离 worktree 窗口 + 自己的 Test），**每舱独立 tmux session**，彼此不知道对方；分支合并完全去中心化（人工，Wakeflow 不承载）；不设瘦入口总控——**现任总控抽空执行 `pod-open` 开新舱**即可，新舱总控自己认领新需求后自主运行。实施要点：`pod-open --demand-key <key>`（编排既有机制：舱 session + 按需 N×stream-open 落入舱 session + `Controller__<slug>`/`Test__<slug>` 窗口 + 入舱定向提示写明"claim 该需求、派发用本舱窗口名、prepare 显式 --controller-window"）；`pod-close`（归档后收舱）；`maxActiveDemands`=舱数上界、`maxStreamsPerRepo`=单仓并发舱数上界（语义已就位）；4.6 的"单总控多路复用"散文（Multiple Active Demands 回合声明等）将被舱模型替换，容量门/仪表盘/板锁（H-9，硬前置）保留。Codex 舱对称落地为后续项。
 

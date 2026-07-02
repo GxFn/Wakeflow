@@ -160,10 +160,11 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   dispatched two simultaneous tasks inside the same demand. Isolation worktree
   windows (`<repo>__<id>`) exist for cross-demand isolation only; their
   branches merge back only by controller decision.
-- Parallelism exists ONLY at the demand level: up to `maxActiveDemands`
-  (default 2) demands run side by side under ONE controller — the single
-  acceptance authority. Each controller turn declares its demand and re-reads
-  that state root; claiming past capacity fails closed.
+- Parallelism exists ONLY at the demand level, as demand pods: up to
+  `maxActiveDemands` (default 2) demands run side by side, each in its own pod
+  (own controller stamped into the state root, own isolation worktrees, own
+  Test, own tmux session), mutually unaware. Branch merge-back is
+  human-reviewed and decentralized; claiming past capacity fails closed.
 
 Deliveries go to a tmux-resident interactive `claude` window via the
 `wakeflow-claude-host.mjs send` helper (shared per-window lock, `readback.paneTail`

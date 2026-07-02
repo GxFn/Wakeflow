@@ -9,6 +9,7 @@ import {
   activeDemandConflictSummary,
   scanUnarchivedDemandStateRoots,
 } from "./lib/wakeflow-active-demands.mjs";
+import { trackedWorkspaceConfigPath } from "./lib/wakeflow-config.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const scriptsDir = path.dirname(scriptPath);
@@ -100,7 +101,7 @@ function failOnUnarchivedDemandConflicts(excludeDemandKeys = []) {
   const capacity = activeDemandCapacity({ workspaceRoot, config: readWorkspaceConfig(), excludeDemandKeys });
   if (!capacity.atCapacity) return capacity.active;
   fail(
-    `cannot claim a new demand: workspace is at its active-demand capacity (${capacity.active.length}/${capacity.max}): ${activeDemandConflictSummary(capacity.active)}. Complete and archive one, or raise maxActiveDemands in workspace.config.json.`,
+    `cannot claim a new demand: workspace is at its active-demand capacity (${capacity.active.length}/${capacity.max}): ${activeDemandConflictSummary(capacity.active)}. Complete and archive one, or raise maxActiveDemands in wakeflow.config.json.`,
   );
   return capacity.active;
 }
@@ -190,7 +191,7 @@ function readManifest() {
 
 function readWorkspaceConfig() {
   if (cachedWorkspaceConfig !== undefined) return cachedWorkspaceConfig;
-  const configPath = path.join(workspaceRoot, "workspace.config.json");
+  const configPath = trackedWorkspaceConfigPath(workspaceRoot);
   cachedWorkspaceConfig = existsSync(configPath) ? readJson(configPath, "workspace config") : null;
   return cachedWorkspaceConfig;
 }
@@ -199,7 +200,7 @@ function controllerWindowFor(item) {
   const config = readWorkspaceConfig();
   const controllerWindow = item.controllerWindow ?? config?.controllerWindow ?? config?.workspaceName;
   if (!controllerWindow) {
-    fail(`manifest item ${item.demandKey} requires controllerWindow or workspace.config.json controllerWindow.`);
+    fail(`manifest item ${item.demandKey} requires controllerWindow or wakeflow.config.json controllerWindow.`);
   }
   return controllerWindow;
 }

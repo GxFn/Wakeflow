@@ -88,7 +88,7 @@ export const hostProfile = {
     // Default Codex reasoning effort for newly created Wakeflow windows. The
     // host create_thread tool can receive this as `thinking`; model is not
     // pinned by default so it can inherit the user's current Codex model unless
-    // workspace.config.json hosts.codex.modelByRole sets an explicit pin.
+    // wakeflow.config.json hosts.codex.modelByRole sets an explicit pin.
     thinkingByRole: {
       controller: "xhigh",
       design: "xhigh",
@@ -147,8 +147,8 @@ function codexEntryExtras(entry, context) {
       cwd: entry.cwd,
       title: entry.displayTitle,
       thinking,
-      thinkingSource: "workspace.config.json hosts.codex.thinkingByRole, falling back to the Wakeflow Codex profile",
-      ...(model ? { model, modelSource: "workspace.config.json hosts.codex.modelByRole" } : {
+      thinkingSource: "wakeflow.config.json hosts.codex.thinkingByRole, falling back to the Wakeflow Codex profile",
+      ...(model ? { model, modelSource: "wakeflow.config.json hosts.codex.modelByRole" } : {
         model: null,
         modelPolicy: "inherit the current Codex model; omit create_thread.model unless workspace config pins hosts.codex.modelByRole",
       }),

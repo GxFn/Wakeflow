@@ -20,7 +20,7 @@ Wakeflow 不是一个"工作流工具"，而是一个针对 **"LLM 是不可信�
 
 磁盘同样分三层，规则是：**业务真相 host-neutral 且共享，传输句柄 host-scoped 且永不离开 `.wakeflow-local/`**：
 
-- `workspace.config.json` + `wakeflow-ledger/` —— 提交入库（配置与耐久记录）
+- `wakeflow.config.json` + `wakeflow-ledger/` —— 提交入库（配置与耐久记录）
 - `.wakeflow-active/<demand>/` —— 本地活动态（每需求一个 state root）
 - `.wakeflow-local/wakeflow-delivery/` —— 传输运行时；`hosts/codex/` 与 `hosts/claude-code/` 各持有自己的 thread-registry，而 `locks/`、`dispatch-packets/`、`target-results/` 等投递主干两宿主共享
 
@@ -106,7 +106,7 @@ MCP 层（`core/lib/wakeflow-mcp-tools.mjs`）不含业务逻辑，每个 handle
 
 并行**只存在于需求层**（用户裁定：需求内每仓一窗口一组合任务包，窗口自排序，绝无同窗双派）：
 
-- **隔离 worktree 窗口** `<repo>__<id>`（分支 `<demandKey>/<id>`）只服务跨需求隔离：后来的需求碰到已被占用的仓库时在自己的 worktree 里工作。注册只落在**派生 overlay** `.wakeflow-local/workspace.config.json`（tracked 配置的再生成副本 + stream 条目 + `derived{baseHash}` 标记；手工维护的 overlay 会让 stream 操作 fail-closed）。core 的解析器天然偏好该路径——零核心改动完成解析。
+- **隔离 worktree 窗口** `<repo>__<id>`（分支 `<demandKey>/<id>`）只服务跨需求隔离：后来的需求碰到已被占用的仓库时在自己的 worktree 里工作。注册只落在**派生 overlay** `.wakeflow-local/wakeflow.config.json`（tracked 配置的再生成副本 + stream 条目 + `derived{baseHash}` 标记；手工维护的 overlay 会让 stream 操作 fail-closed）。core 的解析器天然偏好该路径——零核心改动完成解析。
 - **需求舱（demand pod）**：一需求一舱——自己的 `Controller__<pod>`、按仓库隔离窗口、自己的 `Test__<pod>`，整舱住在独立 tmux session `wakeflow-<pod>`；舱间互不感知。`pod-open` 幂等续开（registered+dead 只补 launch+register，Controller/Test 经 register-thread 注册、重开走 `--resume` 续同一会话）。关闭顺序 complete → stream-close → archive → pod-close；存活分支登记 `pending-merges.md`，**合并回主线人工审核、去中心化——任何总控不合并舱分支**。
 - 容量由 `maxActiveDemands` 限舱数、`maxStreamsPerRepo` 限单仓库舱数；`archive-demand` 在隔离窗口未关时拒绝归档。
 - tmux session 目标全部走 `=` 精确匹配前缀——`wakeflow` 与 `wakeflow-<pod>` 的前缀碰撞在真机上实测危险（H1）。

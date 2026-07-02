@@ -122,7 +122,7 @@ Two rules keep the loop honest:
 
 ```text
 <workspace>/
-  workspace.config.json          windows, roles, model/effort pins   committed
+  wakeflow.config.json          windows, roles, model/effort pins   committed
   CLAUDE.md  (+ one per repo)    controller gates / access cards     committed
   .claude/settings.json          portable allow rules, relative refs committed
   .claude/settings.local.json    machine-local statusline command    never committed
@@ -147,7 +147,7 @@ appear in tracked files, prompts, or backfill text.
 - Target windows execute exactly their dispatched package and report evidence.
 - The controller is the only acceptance authority.
 - The user owns product decisions. `bypassPermissions` is never a silent
-  default: it is recorded in `workspace.config.json` only after an explicit
+  default: it is recorded in `wakeflow.config.json` only after an explicit
   yes, and that recorded consent is what authorizes unattended boot dialogs.
 
 ### Dual-host coexistence
@@ -234,7 +234,7 @@ Wakeflow is a powerful local automation plugin. Before installing, understand ex
 - **Runs a local MCP server** (`node mcp/server.cjs`): a standalone, dependency-free Node process. It reads/writes workspace state files; it makes no network calls of its own.
 - **Spawns tmux sessions and interactive `claude` windows**: the controller and each work window are real `claude` CLI sessions living in one tmux session. Wakeflow creates, resumes, replaces, and arranges them via the bundled host helper.
 - **Runs these shell commands**: `node`, `tmux`, `git`, and `brew` — the last only to `brew install tmux` once, after a single explicit consent, when tmux is missing.
-- **Permission model — safe by default**: work windows ship with `acceptEdits` (Claude Code still prompts before risky actions). Fully unattended `bypassPermissions` (no prompts) is **opt-in only**: a workspace enables it explicitly via `/wakeflow:unattended on`, that choice is recorded in `workspace.config.json`, and only that recorded consent lets the helper auto-confirm the boot dialog. The safety boundary in unattended mode is the repository worktree, the `CLAUDE.md` gates, and the Wakeflow state machine.
+- **Permission model — safe by default**: work windows ship with `acceptEdits` (Claude Code still prompts before risky actions). Fully unattended `bypassPermissions` (no prompts) is **opt-in only**: a workspace enables it explicitly via `/wakeflow:unattended on`, that choice is recorded in `wakeflow.config.json`, and only that recorded consent lets the helper auto-confirm the boot dialog. The safety boundary in unattended mode is the repository worktree, the `CLAUDE.md` gates, and the Wakeflow state machine.
 - **Local-first, no telemetry**: real session/thread ids live only under `.wakeflow-local/` and are never written to tracked files, prompts, or sent anywhere. Demands, evidence, and ledgers stay in your workspace.
 - **Platform**: macOS-first (tmux + `brew` + iTerm2). The tmux core should work on Linux but is not yet verified there.
 
@@ -247,7 +247,7 @@ edition is terminal-only. Every Wakeflow window (controller included) is a
 tmux-resident interactive `claude` session. The default fleet lives in one
 tmux server session named `wakeflow`; each demand pod (below) adds its own
 `wakeflow-<pod>` session beside it. The session name is configurable in
-`workspace.config.json`:
+`wakeflow.config.json`:
 
 ```json
 {
@@ -304,7 +304,7 @@ recorded.
 Parallelism exists ONLY at the demand level. Within one demand each repository
 runs exactly ONE window with ONE combined task package (the window
 self-sequences its items); across demands, up to `maxActiveDemands` (default
-2, `workspace.config.json`) demands run side by side as pods:
+2, `wakeflow.config.json`) demands run side by side as pods:
 
 - One demand = one pod: its own `Controller__<pod>`, per-repo isolation
   worktree windows (`<repo>__<pod>` on branch `<demandKey>/<pod>`), and its
@@ -338,7 +338,7 @@ need to contain Wakeflow source code. The expected target shape is:
 ```text
 MyWorkspace/
   CLAUDE.md
-  workspace.config.json
+  wakeflow.config.json
   .wakeflow-active/          # ignored active controller state
   .wakeflow-local/           # ignored thread registry and derived runtime
   wakeflow-ledger/            # durable project coordination records
@@ -417,7 +417,7 @@ boundary:
 | --- | --- |
 | `CLAUDE.md` | Parent controller gates and durable boundaries. |
 | Child `CLAUDE.md` access cards | Per-window responsibility and read paths. |
-| `workspace.config.json` | Managed windows, repository paths, roles, host transport settings such as the tmux session name, and default language. |
+| `wakeflow.config.json` | Managed windows, repository paths, roles, host transport settings such as the tmux session name, and default language. |
 | `.wakeflow-active/` | Active state roots, current indexes, progress docs, TODO projections, intake, and test cards. |
 | `.wakeflow-local/` | Thread registry, delivery runtime, local overrides, and derived window config. |
 | `wakeflow-ledger/` | Long-term project coordination records and archives. |
@@ -437,7 +437,7 @@ Core rules:
 
 - Real session ids live only in
   `.wakeflow-local/wakeflow-delivery/hosts/claude-code/thread-registry/`.
-- Window config is derived from `workspace.config.json` plus thread-registry
+- Window config is derived from `wakeflow.config.json` plus thread-registry
   presence; it is not a second session-id or window-semantics authority.
 - Delivery prompts remain compact and human-readable.
 - The controller sends a prepared envelope in one step with the host helper

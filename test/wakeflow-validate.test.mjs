@@ -52,7 +52,7 @@ function makeFixture() {
     "README.md",
     "README.zh-CN.md",
     "package.json",
-    "workspace.config.json",
+    "wakeflow.config.json",
   ]) {
     cpSync(path.join(workspaceRoot, file), path.join(root, file));
   }

@@ -20,7 +20,7 @@ function readFixture(name) {
 
 function makeRoot(prefix) {
   const root = mkdtempSync(path.join(os.tmpdir(), prefix));
-  writeJson(path.join(root, "workspace.config.json"), {
+  writeJson(path.join(root, "wakeflow.config.json"), {
     workspaceName: "WakeflowFixture",
     controllerWindow: "AlembicWorkspace",
     repositories: [

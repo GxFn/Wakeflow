@@ -1,6 +1,6 @@
 # Wakeflow: Dual-Edition Architecture and State Flow
 
-> Generated 2026-06-19 from source at commit HEAD; **revised 2026-07-02 against v0.7.7** (state-root locks, multi-demand capacity, intent alignment, isolation worktrees, demand pods, unified create/claim/deliver). Code is the source of truth.
+> Generated 2026-06-19 from source at commit HEAD; **revised 2026-07-02 against v0.7.8** (state-root locks, multi-demand capacity, intent alignment, isolation worktrees, demand pods, unified create/claim/deliver, wakeflow.config.json naming). Code is the source of truth.
 
 This document synthesizes seven parallel subsystem reads of the Wakeflow source.
 Where a reader flagged an uncertainty, it is surfaced in an **Open questions /
@@ -182,13 +182,13 @@ Additional edition facts:
   requires both `skills/` and `commands/` (`wakeflow-host-artifact-checks.mjs:29-34`);
   Codex has no `commands/` and instead carries a `.codex-plugin` `interface{}`
   block.
-- All edition manifests are version-locked at **0.7.7** in **five places**: both
+- All edition manifests are version-locked at **0.7.8** in **five places**: both
   plugin manifests (`.codex-plugin/plugin.json:3`, `.claude-plugin/plugin.json:3`),
   both plugin `package.json`s, and the marketplace **plugin entry**
   (`.claude-plugin/marketplace.json` `plugins[0].version`). The marketplace file
   also carries a **second, distinct** version field — `metadata.version` is
   `1.0.0` (the catalog metadata, not the plugin version) — so the same file has
-  two different version fields and only the `plugins[0]` one tracks the 0.7.7
+  two different version fields and only the `plugins[0]` one tracks the 0.7.8
   lock. Root `package.json` stays `0.0.0` / `private:true` (private dev
   workspace). `sync-core` does **not** enforce version equality — manifests are
   existence-only.
@@ -203,7 +203,7 @@ where any prose here and the code disagree, the code is authoritative.
 
 > **Open questions / verify:** The no-`hostId`-branch claim rests on a grep for
 > `hostId ===` returning zero hits in `core/`; this would miss exotic dynamic
-> dispatch (e.g. `hostProfile.hostId` used as an object key). The five 0.7.7
+> dispatch (e.g. `hostProfile.hostId` used as an object key). The five 0.7.8
 > version fields currently match but `check:core` does not catch version drift. The
 > Codex `.agents/plugins/marketplace.json` distribution path lives outside this
 > repo's tracked tree and was not confirmed.
@@ -325,7 +325,7 @@ Arg→flag translation is mechanical via four helpers (`wakeflow-mcp-tools.mjs:1
 (repeated flags), bare booleans inline, and `rootArgs` = `optionalValue('--root', args.root ?? defaultWorkspaceRoot())`. `defaultWorkspaceRoot` falls back to the
 first existing absolute path among `WAKEFLOW_DEFAULT_ROOT` /
 `CLAUDE_PROJECT_DIR`, then walks up (≤64 levels) to the nearest ancestor
-carrying `workspace.config.json` — so a non-controller window's MCP server
+carrying `wakeflow.config.json` — so a non-controller window's MCP server
 resolves the WORKSPACE, not its own repo dir (the injected dir is kept as-is
 only pre-init).
 
@@ -791,8 +791,11 @@ Three committed/ignored boundaries are explicit:
 
 The workspace `.gitignore` is forced to contain exactly `.wakeflow-active/` and
 `.wakeflow-local/` (`wakeflow-setup.mjs:671` `RUNTIME_GITIGNORE_ENTRIES`); the
-ledger is **not** ignored. `workspace.config.json` is tracked while
-`.wakeflow-local/workspace.config.json` is resolved first and wins
+ledger is **not** ignored. `wakeflow.config.json` is tracked while
+(Naming: `wakeflow.config.json` is canonical since 0.7.8; the legacy
+`workspace.config.json` name — tracked or local — keeps resolving read-side,
+and `check-workspace` suggests the one-line `git mv`.)
+`.wakeflow-local/wakeflow.config.json` is resolved first and wins
 (`wakeflow-config.mjs:73-85`) — but it is normally a DERIVED overlay, not a
 hand-written override: a machine-regenerated full copy of the tracked config
 plus one `repositories[]` entry per active isolation-stream window, stamped
@@ -810,7 +813,7 @@ INSTALLED WORKSPACE LAYOUT (what Wakeflow writes locally)
 Legend: [T]=tracked  [I]=gitignored/local-runtime  [L]=committed long-term ledger
 
 <workspace>/
-├── workspace.config.json                       [T] shared host-neutral truth; per-host knobs under "hosts"
+├── wakeflow.config.json                       [T] shared host-neutral truth; per-host knobs under "hosts"
 ├── CLAUDE.md / AGENTS.md                        [T] per-host controller gate cards (each plugin owns its file)
 ├── .gitignore                                   [T] forced to contain .wakeflow-active/ + .wakeflow-local/
 │
@@ -837,7 +840,7 @@ Legend: [T]=tracked  [I]=gitignored/local-runtime  [L]=committed long-term ledge
 │   (sibling `<demand-slug>.state-lock` + `current.capacity-lock` O_EXCL mutexes appear transiently)
 │
 ├── .wakeflow-local/                            [I] NEVER COMMITTED — holds REAL session/thread ids
-│   ├── workspace.config.json                        [I] DERIVED stream overlay (tracked copy + stream windows + derived{baseHash}); a legal hand-written override disables stream ops
+│   ├── wakeflow.config.json                        [I] DERIVED stream overlay (tracked copy + stream windows + derived{baseHash}); a legal hand-written override disables stream ops
 │   ├── worktrees/<Repo__id>/                        [I] isolation worktrees (branch <demandKey>/<id>, claude edition)
 │   ├── wakeflow-statusline.mjs                      [I] generated statusline (model + window identity)
 │   └── wakeflow-delivery/                            === stateDir default (wakeflow-delivery.mjs:27) ===
@@ -871,7 +874,7 @@ Legend: [T]=tracked  [I]=gitignored/local-runtime  [L]=committed long-term ledge
     ├── goal-stage-confirmation/
     └── <window-slug>/                                per-window long-term ledger
 
-NOTE: this repo IS the plugin source — the tracked workspace.config.json files under
+NOTE: this repo IS the plugin source — the tracked wakeflow.config.json files under
 core/ and plugins/*/ are shipped defaults, and no dogfood runtime lives at the repo
 root. [T]/[I]/[L] describe the INSTALLED-workspace contract the code enforces, not
 this source checkout.
@@ -881,8 +884,8 @@ this source checkout.
 
 | Path | writtenBy | readBy | format | scope | committed |
 |---|---|---|---|---|---|
-| `workspace.config.json` | wakeflow-setup configure | wakeflow-config, window-runtime, claude-host | json | per-workspace | tracked (override wins locally) |
-| `.wakeflow-local/workspace.config.json` | stream machinery (regenerateOverlay; stream-open/close, set-unattended) — hand-written override legal but disables stream ops | wakeflow-config (resolved first, wins), claude-host topology reads | json | per-workspace | **never** |
+| `wakeflow.config.json` | wakeflow-setup configure | wakeflow-config, window-runtime, claude-host | json | per-workspace | tracked (override wins locally) |
+| `.wakeflow-local/wakeflow.config.json` | stream machinery (regenerateOverlay; stream-open/close, set-unattended) — hand-written override legal but disables stream ops | wakeflow-config (resolved first, wins), claude-host topology reads | json | per-workspace | **never** |
 | `.wakeflow-active/index.md` + `current/*` | setup scaffold + controller edits | controller, verify-workspace-docs, check-layout | md | per-workspace | gitignored |
 | `<state-root>/demand.json` | wakeflow-state init | controller orientation | json | per-demand | gitignored |
 | `<state-root>/wakeflow-state.json` | wakeflow-state reducers + `markStateRootDeliverySent` (NOT import-target-result) | all reducers, render-progress, demand-sequence, delivery status scan | json | per-demand | gitignored |
@@ -924,7 +927,7 @@ Key facts:
   detection scans existing `delivery-runs`/`target-results`.
 
 > **Open questions / verify:** This repo is the plugin **source**, so its own
-> `workspace.config.json`/`wakeflow-ledger`/`.wakeflow-active` are untracked
+> `wakeflow.config.json`/`wakeflow-ledger`/`.wakeflow-active` are untracked
 > dogfood runtime (git ls-files = 0); the committed/ignored semantics describe an
 > installed workspace. The Codex edition's `hosts/codex/` layout was not
 > re-verified line-by-line in the codex profile (high-confidence via the shared
@@ -1093,7 +1096,7 @@ stateDiagram-v2
 `stream-open --repo <win> --stream <id> --demand-key <key>` creates a git
 worktree at `.wakeflow-local/worktrees/<Repo__id>` on branch `<demandKey>/<id>`
 (ref-sanitized), launches window `<repo>__<id>`, and registers it ONLY in the
-derived overlay `.wakeflow-local/workspace.config.json` (full tracked-config
+derived overlay `.wakeflow-local/wakeflow.config.json` (full tracked-config
 copy + stream entries + `derived{baseHash}`; regenerated atomically under the
 global `stream-overlay.lock`). Guards: one stream per (repo, demand) — within-
 demand parallelism is refused by design; `maxStreamsPerRepo` (default 2) bounds
@@ -1156,14 +1159,14 @@ Guards:
   `.wakeflow-local/.../hosts/<host>/thread-registry/<window>.json`, never tracked
   docs.
 
-Apply writes: `workspace.config.json`, `.gitignore` runtime entries, the starter
+Apply writes: `wakeflow.config.json`, `.gitignore` runtime entries, the starter
 active docs + ledger (record-map, requirement-designs/goal-stage READMEs, policy
 docs, archive index, per-window ledger READMEs), the parent + child
 `AGENTS/CLAUDE.md` managed scope cards, and per-window thread-registry +
 window-config JSON.
 
 `replace-window(s)` is the high-frequency single/group rebind path: it requires
-an existing `workspace.config.json`, ≥1 `--window`, and (on `--write`) a fresh
+an existing `wakeflow.config.json`, ≥1 `--window`, and (on `--write`) a fresh
 `--thread` per window; it regenerates only the launch plan + local registry,
 never the init docs.
 

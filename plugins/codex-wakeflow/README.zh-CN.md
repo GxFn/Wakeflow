@@ -84,7 +84,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.7/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.8/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -139,7 +139,7 @@ Wakeflow 作为 Codex 插件安装。目标工作区不需要包含 Wakeflow 源
 ```text
 MyWorkspace/
   AGENTS.md
-  workspace.config.json
+  wakeflow.config.json
   .wakeflow-active/          # ignored active controller state
   .wakeflow-local/           # ignored thread registry and derived runtime
   wakeflow-ledger/            # durable project coordination records
@@ -198,7 +198,7 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
 | --- | --- |
 | `AGENTS.md` | 父级总控 gate 和长期边界规则。 |
 | 子窗口 `AGENTS.md` access cards | 每个窗口的责任和读取路径。 |
-| `workspace.config.json` | 受管窗口、仓库路径、角色和默认语言。 |
+| `wakeflow.config.json` | 受管窗口、仓库路径、角色和默认语言。 |
 | `.wakeflow-active/` | active state roots、当前索引、progress docs、TODO 投影、intake 和 test cards。 |
 | `.wakeflow-local/` | thread registry、direct-thread runtime、本地 overrides 和派生 window config。 |
 | `wakeflow-ledger/` | 长期项目协作记录和归档。 |
@@ -233,7 +233,7 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 核心规则：
 
 - 真实 thread id 只存在 `.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/`。
-- Window config 从 `workspace.config.json` 和 thread-registry presence 派生，不是第二份 thread-id 权威。
+- Window config 从 `wakeflow.config.json` 和 thread-registry presence 派生，不是第二份 thread-id 权威。
 - Delivery prompts 保持轻量、可读。
 - Host 通过 Codex thread tools 发送 prompt；Wakeflow 记录发送和 readback 证据。
 - `group-ready` 会等待预期 target results，再允许 controller return。
@@ -247,7 +247,7 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
   `controllerHost: "codex"` 或 `controllerHost: "claude-code"`。
 - demand 归属于某个宿主后，另一个宿主的 controller 写操作和投递准备会 fail-closed；
   只有显式 `--adopt-host` 才能转移控制权。
-- 最多 `maxActiveDemands`（默认 2，顶层 `workspace.config.json`）个需求可以同时 active；超出容量的 claim 会 fail-closed，直到有需求完成并归档。`wakeflow_next_work` 会报告 `activeDemands` 列表和 `demandCapacity`。
+- 最多 `maxActiveDemands`（默认 2，顶层 `wakeflow.config.json`）个需求可以同时 active；超出容量的 claim 会 fail-closed，直到有需求完成并归档。`wakeflow_next_work` 会报告 `activeDemands` 列表和 `demandCapacity`。
 - `wakeflow_status` 会在 `dualHost.demandOwnership` 暴露 active demand 的宿主归属，
   让混合宿主总控在行动前先看清归属。
 

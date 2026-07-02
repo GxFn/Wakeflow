@@ -134,7 +134,7 @@ Current scripts:
   test results, or complete demands.
 - `wakeflow-setup.mjs`: sibling-directory installation helper. It
   can run the full `initialize` workflow for discovery, user-confirmed
-  `workspace.config.json` generation, root `AGENTS.md` unpacking, child-window
+  `wakeflow.config.json` generation, root `AGENTS.md` unpacking, child-window
   access-card sync, internal or external Design/Test support templates, and
   local-only window / thread runtime registration. It also exposes the narrower
   subcommands for discovery, prompts, access profiles, same-repository window

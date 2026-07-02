@@ -2,8 +2,8 @@
 
 Wakeflow is a reusable controller capability for multi-window agent work. It is
 not the parent workspace, not a product source repository, and not a sandbox for
-managed projects. Product scope and window roles come from `workspace.config.json`
-and local runtime config. `.wakeflow-local/workspace.config.json` may override
+managed projects. Product scope and window roles come from `wakeflow.config.json`
+and local runtime config. `.wakeflow-local/wakeflow.config.json` may override
 local installation details and must not be committed.
 
 ## Controller Posture
@@ -37,7 +37,7 @@ definition, local code, docs, tests, and release path before decomposing work.
 - Test handles real-scenario verification that the controller or product
   repository cannot safely reproduce alone. Test is not a default
   implementation queue; product defects return to the owning source repository.
-- Product windows are repositories listed in `workspace.config.json` or local
+- Product windows are repositories listed in `wakeflow.config.json` or local
   override. Each owns its source, tests, commits, evidence, and backfill.
 - Wakeflow owns reusable controller runtime, plugin packaging, AGENTS
   installation, MCP capability surface, state roots, delivery envelopes, result

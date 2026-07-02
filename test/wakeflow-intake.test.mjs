@@ -48,7 +48,7 @@ function makeFixture({ demandKey = "enum-flow-2026-05-30", state = "intake", sta
   const resolvedStateRootArg = stateRootArg === "project-ledger"
     ? `../wakeflow-ledger/current/LEDGER-FIXTURE-${path.basename(root)}`
     : stateRootArg;
-  writeText(path.join(root, "workspace.config.json"), JSON.stringify({
+  writeText(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "Wakeflow",
     controllerWindow: "AlembicWorkspace",
     designWindow: "DesignWindow",

@@ -197,7 +197,7 @@ const toolDefinitions = [
         stateRoot: { type: "string" },
         taskId: { type: "string" },
         dispatchGroup: { type: "string" },
-        controllerWindow: { type: "string", description: "Return-route override. Default chain: this flag > the state root's stamped controllerWindow (pod demands) > workspace.config.json controllerWindow — normally omit and let the stamp route." },
+        controllerWindow: { type: "string", description: "Return-route override. Default chain: this flag > the state root's stamped controllerWindow (pod demands) > wakeflow.config.json controllerWindow — normally omit and let the stamp route." },
         taskPackageId: { type: "string" },
         objective: { type: "string", description: "direction=target: the authored controller dispatch intent ('what I am arranging'); defaults to the task summary when omitted. Author it at the FIRST prepare — a same-revision re-prepare with different content fails closed by the idempotency guard." },
         humanContextRef: { type: "string" },
@@ -1100,13 +1100,14 @@ function defaultWorkspaceRoot() {
   // caller wins; otherwise fall back to the host-injected workspace dir.
   // CRITICAL: for every NON-controller window that dir is the window's OWN
   // repo/support dir, not the workspace — walk up to the nearest ancestor
-  // carrying workspace.config.json (the workspace-root marker), or a target's
+  // carrying wakeflow.config.json (the workspace-root marker; legacy
+  // workspace.config.json still counts), or a target's
   // first record/deliver/review call fails on a mislocated state root.
   for (const candidate of [process.env.WAKEFLOW_DEFAULT_ROOT, process.env.CLAUDE_PROJECT_DIR]) {
     if (!candidate || !path.isAbsolute(candidate) || !existsSync(candidate)) continue;
     let dir = candidate;
     for (let depth = 0; depth < 64; depth += 1) {
-      if (existsSync(path.join(dir, "workspace.config.json"))) return dir;
+      if (existsSync(path.join(dir, "wakeflow.config.json")) || existsSync(path.join(dir, "workspace.config.json"))) return dir;
       const parent = path.dirname(dir);
       if (parent === dir) break;
       dir = parent;

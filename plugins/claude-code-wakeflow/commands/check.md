@@ -3,16 +3,16 @@ description: Health-check an existing Wakeflow workspace and converge missing or
 argument-hint: [--fix]
 ---
 
-Diagnose an ALREADY-INITIALIZED workspace (one that has `workspace.config.json`) and bring its Claude Code surfaces up to the installed plugin version. For first-time setup use `/wakeflow:init` instead.
+Diagnose an ALREADY-INITIALIZED workspace (one that has `wakeflow.config.json`) and bring its Claude Code surfaces up to the installed plugin version. For first-time setup use `/wakeflow:init` instead.
 
 1. Run the read-only diagnosis: `node <plugin>/scripts/lib/wakeflow-claude-host.mjs check-workspace --root <workspace>`. Render the gap report as a table (area, window, status, fix) plus the plugin-version stamp comparison. The legacy-codex-registry entry is informational only — never "fix" another host's runtime.
 2. If there are no gaps, report healthy with the stamped version and stop.
 3. If gaps exist and `$ARGUMENTS` does not contain `--fix`, stop after reporting with the proposed fix plan. Do not write anything.
 4. With `--fix`, converge in this order, narrating each step:
    a. When `root-memory-file` is `unmanaged`: STOP and ask the user first — the fix replaces the existing root `CLAUDE.md` content with the managed Wakeflow gates (show its first lines). Only continue with explicit consent.
-   b. Doc surfaces that require setup rewrite (root gates, window cards, Design/Test templates, gitignore): STOP and ask for explicit reset-initialization consent. Only after that consent, call `wakeflow_initialize_workspace` with `apply: true`, `resetInitialization: true`, explicit `repositories` copied from the confirmed `workspace.config.json`, and the selected Design/Test mode. Never use `useDiscovered` here.
+   b. Doc surfaces that require setup rewrite (root gates, window cards, Design/Test templates, gitignore): STOP and ask for explicit reset-initialization consent. Only after that consent, call `wakeflow_initialize_workspace` with `apply: true`, `resetInitialization: true`, explicit `repositories` copied from the confirmed `wakeflow.config.json`, and the selected Design/Test mode. Never use `useDiscovered` here.
    c. Permission seeds: `wakeflow-claude-host seed-permissions --root <workspace> --write`.
-   d. Missing `hosts.claude-code` config block: merge `{ "hosts": { "claude-code": { "tmuxSession": "wakeflow" } } }` into `workspace.config.json` (preserve all other keys).
+   d. Missing `hosts.claude-code` config block: merge `{ "hosts": { "claude-code": { "tmuxSession": "wakeflow" } } }` into `wakeflow.config.json` (preserve all other keys).
    e. Unregistered, dead, or context-heavy windows: converge each via the `/wakeflow:windows <window>` rules; use `/wakeflow:windows <window> --replace` when a fresh single-window context is needed, then `arrange-windows`.
    f. Stamp the converged version: `wakeflow-claude-host stamp-runtime --root <workspace> --write`.
 5. Re-run `check-workspace` and report the before/after gap counts. Anything still failing is a finding to surface, not to hide.

@@ -32,7 +32,7 @@ function makeFixture() {
   mkdirSync(plugin, { recursive: true });
   writeFile(path.join(plugin, "AGENTS.md"), "# Plugin Instructions\n\nExisting rule.");
   writeFile(
-    path.join(control, "workspace.config.json"),
+    path.join(control, "wakeflow.config.json"),
     JSON.stringify(
       {
         workspaceName: "FixtureWorkspace",
@@ -90,7 +90,7 @@ test("discover lists sibling repositories and marks configured scopes", () => {
   assert.equal(payload.agentSelectionProtocol.pluginDoesNotClassifyCleanOrMessy, true);
 });
 
-test("configure writes user-confirmed sibling mappings into workspace.config.json", () => {
+test("configure writes user-confirmed sibling mappings into wakeflow.config.json", () => {
   const fixture = makeFixture();
   const payload = runJson(fixture, [
     "configure",
@@ -101,7 +101,7 @@ test("configure writes user-confirmed sibling mappings into workspace.config.jso
     "--write",
   ]);
   assert.equal(payload.wrote, true);
-  const config = JSON.parse(readFileSync(path.join(fixture.control, "workspace.config.json"), "utf8"));
+  const config = JSON.parse(readFileSync(path.join(fixture.control, "wakeflow.config.json"), "utf8"));
   assert.equal(config.workspaceRoot, "..");
   assert.equal(config.wakeflowRepoDir, "Wakeflow");
   assert.deepEqual(config.repoNames, ["BaseWindow", "PluginWindow"]);
@@ -250,7 +250,7 @@ test("initialize localizes launch titles and prompts with the window name first"
     cwd: app.cwd,
     title: `AppRepo ${zhDutyWindow}`,
     thinking: "xhigh",
-    thinkingSource: "workspace.config.json hosts.codex.thinkingByRole, falling back to the Wakeflow Codex profile",
+    thinkingSource: "wakeflow.config.json hosts.codex.thinkingByRole, falling back to the Wakeflow Codex profile",
     model: null,
     modelPolicy: "inherit the current Codex model; omit create_thread.model unless workspace config pins hosts.codex.modelByRole",
   });
@@ -292,7 +292,7 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.equal(payload.steps.configure.nextConfig.workspaceRoot, ".");
   assert.equal(payload.steps.configure.nextConfig.projectLedgerRoot, "wakeflow-ledger");
 
-  const config = JSON.parse(readFileSync(path.join(parent, "workspace.config.json"), "utf8"));
+  const config = JSON.parse(readFileSync(path.join(parent, "wakeflow.config.json"), "utf8"));
   assert.equal(config.workspaceRoot, ".");
   assert.equal(config.runtimeMode, "plugin");
   assert.equal(config.projectLedgerRoot, "wakeflow-ledger");
@@ -316,7 +316,7 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.match(rootAgents, /Use Wakeflow MCP tools/);
   assert.match(rootAgents, /Do not call installed runtime scripts directly/);
   assert.match(rootAgents, /Wakeflow verification MCP capability/);
-  assert.match(rootAgents, /workspace\.config\.json/);
+  assert.match(rootAgents, /wakeflow\.config\.json/);
   assert.doesNotMatch(rootAgents, /node scripts\/wakeflow-setup\.mjs/);
   assert.doesNotMatch(rootAgents, /installed runtime fallback/);
   assert.doesNotMatch(rootAgents, /installed Wakeflow runtime/);
@@ -377,7 +377,7 @@ test("initialize does not reuse similar Design/Test directories unless explicitl
   mkdirSync(path.join(parent, "AlembicDesign", ".git"), { recursive: true });
   mkdirSync(path.join(parent, "AlembicTest", ".git"), { recursive: true });
   writeFile(
-    path.join(parent, "workspace.config.json"),
+    path.join(parent, "wakeflow.config.json"),
     JSON.stringify(
       {
         runtimeMode: "plugin",
@@ -405,7 +405,7 @@ test("initialize does not reuse similar Design/Test directories unless explicitl
   ]);
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse(result.stdout);
-  const config = JSON.parse(readFileSync(path.join(parent, "workspace.config.json"), "utf8"));
+  const config = JSON.parse(readFileSync(path.join(parent, "wakeflow.config.json"), "utf8"));
   assert.equal(config.designWindow, "Design");
   assert.equal(config.testWindow, "Test");
   assert.equal(config.internalDesignPath, "Design");
@@ -778,7 +778,7 @@ test("replace-windows regenerates only selected responsibility windows without i
 
 test("replace-window carries Codex create_thread model and thinking overrides from workspace config", () => {
   const fixture = makeFixture();
-  const configPath = path.join(fixture.control, "workspace.config.json");
+  const configPath = path.join(fixture.control, "wakeflow.config.json");
   const config = JSON.parse(readFileSync(configPath, "utf8"));
   config.hosts = {
     codex: {
@@ -799,9 +799,9 @@ test("replace-window carries Codex create_thread model and thinking overrides fr
   assert.equal(entry.hostCreateThread.hostTool, "create_thread");
   assert.equal(entry.hostCreateThread.promptField, "createThreadPrompt");
   assert.equal(entry.hostCreateThread.thinking, "high");
-  assert.equal(entry.hostCreateThread.thinkingSource, "workspace.config.json hosts.codex.thinkingByRole, falling back to the Wakeflow Codex profile");
+  assert.equal(entry.hostCreateThread.thinkingSource, "wakeflow.config.json hosts.codex.thinkingByRole, falling back to the Wakeflow Codex profile");
   assert.equal(entry.hostCreateThread.model, "gpt-5.5");
-  assert.equal(entry.hostCreateThread.modelSource, "workspace.config.json hosts.codex.modelByRole");
+  assert.equal(entry.hostCreateThread.modelSource, "wakeflow.config.json hosts.codex.modelByRole");
 });
 
 test("wakeflow_replace_windows MCP wrapper returns a scoped replacement plan", async () => {
@@ -858,7 +858,7 @@ test("initialize MCP schema does not expose replacement-window compatibility inp
 
 test("initialize rejects obsolete replacement-window flag before writing", () => {
   const fixture = makeFixture();
-  const configPath = path.join(fixture.control, "workspace.config.json");
+  const configPath = path.join(fixture.control, "wakeflow.config.json");
   const beforeConfig = readFileSync(configPath, "utf8");
   const result = run(fixture, [
     "initialize",
@@ -910,7 +910,7 @@ test("initialized workspace requires explicit reset initialization and cleans st
   assert.notEqual(result.status, 0);
   assert.match(`${result.stdout}\n${result.stderr}`, /existing Wakeflow initialization footprint/);
   assert.match(`${result.stdout}\n${result.stderr}`, /--reset-initialization/);
-  assert.match(readFileSync(path.join(fixture.control, "workspace.config.json"), "utf8"), /PluginWindow/);
+  assert.match(readFileSync(path.join(fixture.control, "wakeflow.config.json"), "utf8"), /PluginWindow/);
   assert.match(readFileSync(pluginAgentsPath, "utf8"), /wakeflow:scope:start/);
 
   result = run(fixture, [
@@ -930,7 +930,7 @@ test("initialized workspace requires explicit reset initialization and cleans st
   const pluginAgents = readFileSync(pluginAgentsPath, "utf8");
   assert.match(pluginAgents, /Existing rule/);
   assert.doesNotMatch(pluginAgents, /wakeflow:scope:start/);
-  assert.doesNotMatch(readFileSync(path.join(fixture.control, "workspace.config.json"), "utf8"), /PluginWindow/);
+  assert.doesNotMatch(readFileSync(path.join(fixture.control, "wakeflow.config.json"), "utf8"), /PluginWindow/);
   assert.equal(existsSync(staleWindowConfigPath), false);
 });
 
@@ -1040,7 +1040,7 @@ test("initialize use-discovered supports excluding product windows before config
   ]);
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse(result.stdout);
-  const config = JSON.parse(readFileSync(path.join(parent, "workspace.config.json"), "utf8"));
+  const config = JSON.parse(readFileSync(path.join(parent, "wakeflow.config.json"), "utf8"));
   assert.deepEqual(
     config.repositories.map((repo) => repo.windowName),
     ["AppRepo", "Design", "Test"],
@@ -1227,7 +1227,7 @@ test("write-agents supports multiple workspace windows sharing one AGENTS.md", (
   const fixture = makeFixture();
   const sharedTest = path.join(fixture.parent, "SharedTest");
   mkdirSync(sharedTest, { recursive: true });
-  const configPath = path.join(fixture.control, "workspace.config.json");
+  const configPath = path.join(fixture.control, "wakeflow.config.json");
   const config = JSON.parse(readFileSync(configPath, "utf8"));
   config.testWindow = "TestWindow";
   config.repositories = [
@@ -1275,7 +1275,7 @@ test("sync-root-agents unpacks parent AGENTS with Wakeflow repo paths", () => {
   assert.match(rootAgents, /# FixtureWorkspace Agent Instructions/);
   assert.match(rootAgents, /Wakeflow\/\.wakeflow-active\/index\.md|controller state roots/);
   assert.match(rootAgents, /cd Wakeflow && node scripts\/wakeflow-setup\.mjs sync-root-agents --write/);
-  assert.match(rootAgents, /Wakeflow\/workspace\.config\.json/);
+  assert.match(rootAgents, /Wakeflow\/wakeflow\.config\.json/);
   assert.match(rootAgents, /## Controller Posture/);
   assert.match(rootAgents, /## Role Map/);
   assert.match(rootAgents, /The controller workspace owns cross-repository goal intake/);
@@ -1406,7 +1406,7 @@ test("external Design and Test directories get only alignment templates", () => 
     "--write",
   ]);
 
-  const config = JSON.parse(readFileSync(path.join(fixture.control, "workspace.config.json"), "utf8"));
+  const config = JSON.parse(readFileSync(path.join(fixture.control, "wakeflow.config.json"), "utf8"));
 
   const payload = runJson(fixture, ["sync-templates", "--all", "--write"]);
   assert.equal(payload.ok, true);

@@ -107,7 +107,7 @@ Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环�
 
 ```text
 <workspace>/
-  workspace.config.json          窗口、角色、模型/力度钉子          入库
+  wakeflow.config.json          窗口、角色、模型/力度钉子          入库
   CLAUDE.md(每仓库各一份)       总控门 / 访问卡                    入库
   .claude/settings.json          可移植 allow 规则、相对引用        入库
   .claude/settings.local.json    本机 statusline 命令               永不入库
@@ -130,7 +130,7 @@ Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环�
 - 目标窗口只执行被派发的任务包并回报证据。
 - 总控是唯一的验收权威。
 - 产品决定属于用户。`bypassPermissions` 永不默认开启:只有用户显式同意后才写进
-  `workspace.config.json`,这条被记录的同意才是无人值守启动对话框的授权来源。
+  `wakeflow.config.json`,这条被记录的同意才是无人值守启动对话框的授权来源。
 
 ### 双宿主共存
 
@@ -211,7 +211,7 @@ Wakeflow 是一个强大的本地自动化插件。安装前请清楚它在你�
 - **运行一个本地 MCP server**(`node mcp/server.cjs`):独立、无依赖的 Node 进程,读写工作区状态文件,自身不发任何网络请求。
 - **拉起 tmux 会话和交互式 `claude` 窗口**:总控和每个工作窗口都是真实的 `claude` CLI 会话,住在一个 tmux session 里。Wakeflow 通过自带的 host helper 创建、恢复、替换、排版它们。
 - **会跑这些 shell 命令**:`node`、`tmux`、`git`、`brew`——最后这个仅在缺 tmux 时、经你一次显式同意后 `brew install tmux`。
-- **权限模型——默认安全**:工作窗口默认 `acceptEdits`(Claude Code 在风险动作前仍会询问)。完全无人值守的 `bypassPermissions`(无提示)**仅显式开启**:工作区通过 `/wakeflow:unattended on` 主动启用,选择记录在 `workspace.config.json`,只有这条被记录的同意才让 helper 自动确认启动对话框。无人值守模式下的安全边界是仓库 worktree、`CLAUDE.md` 闸门、Wakeflow 状态机。
+- **权限模型——默认安全**:工作窗口默认 `acceptEdits`(Claude Code 在风险动作前仍会询问)。完全无人值守的 `bypassPermissions`(无提示)**仅显式开启**:工作区通过 `/wakeflow:unattended on` 主动启用,选择记录在 `wakeflow.config.json`,只有这条被记录的同意才让 helper 自动确认启动对话框。无人值守模式下的安全边界是仓库 worktree、`CLAUDE.md` 闸门、Wakeflow 状态机。
 - **本地优先、无遥测**:真实 session/thread id 只存在 `.wakeflow-local/` 下,绝不写入受版本控制的文件、prompt,也不外发。需求、证据、账本都留在你的工作区。
 - **平台**:macOS 优先(tmux + `brew` + iTerm2)。tmux 核心理论上可在 Linux 运行但尚未验证。
 
@@ -223,7 +223,7 @@ Wakeflow 是一个强大的本地自动化插件。安装前请清楚它在你�
 每个 Wakeflow 窗口（包括总控）都是常驻 tmux 的交互式 `claude` session。默认
 舰队位于名为 `wakeflow` 的 tmux server session 内；每个 demand pod（见下文）
 会在旁边新增自己的 `wakeflow-<pod>` session。session 名可在
-`workspace.config.json` 中配置：
+`wakeflow.config.json` 中配置：
 
 ```json
 {
@@ -270,7 +270,7 @@ Wakeflow thread id 就是该窗口的 Claude Code session id，跨 resume 保持
 ## Demand Pods（多需求并行）
 
 并行只存在于需求层面。同一需求内每个仓库只有一个窗口、一个组合任务包
-（窗口自排序）；跨需求最多 `maxActiveDemands`（默认 2，`workspace.config.json`）
+（窗口自排序）；跨需求最多 `maxActiveDemands`（默认 2，`wakeflow.config.json`）
 个需求以 pod 并行：
 
 - 一个需求 = 一个 pod：自己的 `Controller__<pod>`、按仓库的 isolation worktree
@@ -304,7 +304,7 @@ Wakeflow 作为 Claude Code 插件安装。目标工作区不需要包含 Wakefl
 ```text
 MyWorkspace/
   CLAUDE.md
-  workspace.config.json
+  wakeflow.config.json
   .wakeflow-active/          # ignored active controller state
   .wakeflow-local/           # ignored thread registry and derived runtime
   wakeflow-ledger/            # durable project coordination records
@@ -370,7 +370,7 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
 | --- | --- |
 | `CLAUDE.md` | 父级总控 gate 和长期边界规则。 |
 | 子窗口 `CLAUDE.md` access cards | 每个窗口的责任和读取路径。 |
-| `workspace.config.json` | 受管窗口、仓库路径、角色、host transport 设置（如 tmux session 名）和默认语言。 |
+| `wakeflow.config.json` | 受管窗口、仓库路径、角色、host transport 设置（如 tmux session 名）和默认语言。 |
 | `.wakeflow-active/` | active state roots、当前索引、progress docs、TODO 投影、intake 和 test cards。 |
 | `.wakeflow-local/` | thread registry、投递 runtime、本地 overrides 和派生 window config。 |
 | `wakeflow-ledger/` | 长期项目协作记录和归档。 |
@@ -388,7 +388,7 @@ Wakeflow 自动化是直接 session 投递加显式结果返回。
 核心规则：
 
 - 真实 session id 只存在 `.wakeflow-local/wakeflow-delivery/hosts/claude-code/thread-registry/`。
-- Window config 从 `workspace.config.json` 和 thread-registry presence 派生，不是第二份 session-id 权威。
+- Window config 从 `wakeflow.config.json` 和 thread-registry presence 派生，不是第二份 session-id 权威。
 - Delivery prompts 保持轻量、可读。
 - 总控用 host helper 一步发送已 prepare 的 envelope
   （`deliver --delivery-file <envelope.json>`；`send --window --prompt-file`

@@ -586,7 +586,7 @@ export function createDispatchCommands(ctx) {
     // window that does not exist, stalling the loop. Fail closed when none resolves.
     const controllerWindow = explicitControllerWindow || storedControllerWindow || config.controllerWindow;
     if (!controllerWindow) {
-      fail(`Cannot resolve a controller window for the controller-return of dispatch group ${dispatchGroup}: the group stored none, none was passed via --controller-window, and workspace.config.json sets no controllerWindow. Re-dispatch with --controller-window or set controllerWindow in workspace.config.json.`);
+      fail(`Cannot resolve a controller window for the controller-return of dispatch group ${dispatchGroup}: the group stored none, none was passed via --controller-window, and wakeflow.config.json sets no controllerWindow. Re-dispatch with --controller-window or set controllerWindow in wakeflow.config.json.`);
     }
     const registration = loadThreadRegistration(controllerWindow);
     if (hasFlag("--require-thread") && !registration) fail(`No registered controller thread for window: ${controllerWindow}`);

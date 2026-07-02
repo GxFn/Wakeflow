@@ -44,7 +44,7 @@ function writeJson(file, value) {
 
 function makeFixture() {
   const root = mkdtempSync(path.join(os.tmpdir(), "codex-loop-state-only-"));
-  writeJson(path.join(root, "workspace.config.json"), {
+  writeJson(path.join(root, "wakeflow.config.json"), {
     workspaceName: "Wakeflow",
     controllerWindow: "AlembicWorkspace",
     repositories: [
@@ -620,7 +620,7 @@ test("controller-return transport is decoupled from evidence quality (no break o
 // controller return / verdict — a real closed-loop break observed in live MCP use.
 test("evidence ref relative to a target window's repo resolves, not false-missing (closed-loop break fix)", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-evidence-repo-"));
-  writeJson(path.join(root, "workspace.config.json"), {
+  writeJson(path.join(root, "wakeflow.config.json"), {
     workspaceName: "Wakeflow",
     controllerWindow: "AlembicWorkspace",
     repositories: [
@@ -1152,7 +1152,7 @@ test("group-ready controller return ignores targets prepared but not sent", () =
 
 test("per-target controller return allows independent callbacks per target", () => {
   const { root, stateRootRef, stateRoot } = makeFixture();
-  const configFile = path.join(root, "workspace.config.json");
+  const configFile = path.join(root, "wakeflow.config.json");
   const config = JSON.parse(readFileSync(configFile, "utf8"));
   config.repositories.push({ windowName: "AlembicCore", path: "../AlembicCore", role: "core" });
   config.dispatchWindows.push("AlembicCore");

@@ -18,7 +18,7 @@ function writeFile(file, content) {
 function makeFixture() {
   const root = mkdtempSync(path.join(os.tmpdir(), "repository-residue-"));
   writeFile(
-    path.join(root, "workspace.config.json"),
+    path.join(root, "wakeflow.config.json"),
     JSON.stringify(
       {
         repositories: [

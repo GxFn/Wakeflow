@@ -8,14 +8,14 @@
  * the main checkout stays coherent. Within one demand a repo runs exactly one
  * window (a combined task package it self-sequences) — never two. The ONLY
  * new state is the derived local config overlay: a full regenerated copy of
- * the tracked workspace.config.json plus one repositories[] entry per active
- * isolation window, written to .wakeflow-local/workspace.config.json — the
+ * the tracked wakeflow.config.json plus one repositories[] entry per active
+ * isolation window, written to .wakeflow-local/wakeflow.config.json — the
  * path every core resolver (evidence repo mapping, window dispatch config,
  * setup) already prefers when present. Locks, thread registry, launch, and
  * group fan-out all key on windowName, so these windows inherit them without
  * core changes.
  *
- * A hand-maintained .wakeflow-local/workspace.config.json (no derived marker)
+ * A hand-maintained local config override (no derived marker)
  * is a user override surface per CLAUDE.md; stream registration must FAIL
  * CLOSED rather than overwrite it.
  */
@@ -38,11 +38,19 @@ function sha256(text) {
 }
 
 export function trackedConfigFile(workspaceRoot) {
-  return path.join(workspaceRoot, "workspace.config.json");
+  const preferred = path.join(workspaceRoot, "wakeflow.config.json");
+  if (existsSync(preferred)) return preferred;
+  const legacy = path.join(workspaceRoot, "workspace.config.json");
+  if (existsSync(legacy)) return legacy;
+  return preferred;
 }
 
 export function overlayConfigFile(workspaceRoot) {
-  return path.join(workspaceRoot, ".wakeflow-local", "workspace.config.json");
+  // Regenerate an existing legacy-named overlay in place (never two overlays);
+  // fresh overlays get the canonical name.
+  const legacy = path.join(workspaceRoot, ".wakeflow-local", "workspace.config.json");
+  if (existsSync(legacy)) return legacy;
+  return path.join(workspaceRoot, ".wakeflow-local", "wakeflow.config.json");
 }
 
 // Absent -> null. Unparsable -> throw: a corrupt file might be a user override,
@@ -65,9 +73,9 @@ export function assertOverlayManageable(workspaceRoot) {
   const overlay = readOverlay(workspaceRoot);
   if (overlay && !overlayIsDerived(overlay)) {
     throw new Error(
-      ".wakeflow-local/workspace.config.json exists and is hand-maintained (no derived marker); "
+      "the local config override under .wakeflow-local/ is hand-maintained (no derived marker); "
       + "stream registration manages that file as a regenerated derived view and will not overwrite user overrides. "
-      + "Fold the override into workspace.config.json (or remove the local file), then retry.",
+      + "Fold the override into wakeflow.config.json (or remove the local file), then retry.",
     );
   }
   return overlay;
@@ -163,7 +171,7 @@ export function regenerateOverlay(workspaceRoot, streams) {
     derived: {
       kind: OVERLAY_KIND,
       version: 1,
-      from: "workspace.config.json",
+      from: path.basename(tracked),
       baseHash: sha256(raw),
       generatedAt: new Date().toISOString(),
       streamWindows: [...names],

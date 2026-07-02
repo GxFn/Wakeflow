@@ -134,7 +134,7 @@ test("claude artifact registers a session id under the host-scoped registry", ()
   const workspaceRoot = mkdtempSync(path.join(os.tmpdir(), "claude-wakeflow-"));
   mkdirSync(path.join(workspaceRoot, "RepoA"), { recursive: true });
   writeFileSync(
-    path.join(workspaceRoot, "workspace.config.json"),
+    path.join(workspaceRoot, "wakeflow.config.json"),
     JSON.stringify({
       workspaceName: "ClaudeFlow",
       controllerWindow: "ClaudeFlow",

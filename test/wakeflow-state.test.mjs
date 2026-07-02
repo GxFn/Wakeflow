@@ -167,7 +167,7 @@ test("init refuses to overwrite an existing state root", () => {
 
 test("init refuses to start another demand while one is unarchived (maxActiveDemands=1)", () => {
   const root = makeRoot();
-  writeFileSync(path.join(root, "workspace.config.json"), `${JSON.stringify({ maxActiveDemands: 1 }, null, 2)}\n`);
+  writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({ maxActiveDemands: 1 }, null, 2)}\n`);
   const first = run([
     "init",
     "--root",
@@ -828,7 +828,7 @@ test("reduce-results refuses to create a review candidate with missing evidence 
 // must be a resolution candidate (parallel to the review-pack evidence fix).
 test("reduce-results resolves evidence under the producing window's repo (no false evidence-repair)", () => {
   const root = makeRoot();
-  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "Wakeflow",
     controllerWindow: "AlembicWorkspace",
     repositories: [

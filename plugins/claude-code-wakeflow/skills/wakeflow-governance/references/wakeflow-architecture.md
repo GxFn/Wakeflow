@@ -58,7 +58,7 @@ ParentWorkspace/
 Product repositories remain siblings. Active state and local runtime files are
 ignored. Long-term project records live outside the reusable Wakeflow repo.
 Every Wakeflow window (controller included) runs as a tmux-resident `claude`
-session inside the tmux server session named by `workspace.config.json`
+session inside the tmux server session named by `wakeflow.config.json`
 `"hosts": { "claude-code": { "tmuxSession": "wakeflow" } }`.
 
 ## Dual-Host Storage

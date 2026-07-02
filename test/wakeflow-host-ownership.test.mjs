@@ -108,7 +108,7 @@ test("legacy demands without a controllerHost field follow the same first-claim 
 test("dispatch preparation refuses a demand owned by the other host", () => {
   const root = makeRoot();
   mkdirSync(path.join(root, "WinA"), { recursive: true });
-  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "OwnFlow",
     controllerWindow: "OwnFlow",
     repositories: [{ windowName: "WinA", path: "WinA", role: "Repository window" }],
@@ -174,7 +174,7 @@ test("adopt-demand-host transfers ownership with an audit event and revision bum
 test("build-delivery (packet-file route) refuses a demand owned by the other host", () => {
   const root = makeRoot();
   mkdirSync(path.join(root, "WinA"), { recursive: true });
-  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "OwnFlow", controllerWindow: "OwnFlow",
     repositories: [{ windowName: "WinA", path: "WinA", role: "Repository window" }],
   }));

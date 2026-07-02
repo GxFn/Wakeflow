@@ -27,7 +27,7 @@ function readJson(file) {
 function makeRoot(config = null) {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-multi-"));
   mkdirSync(root, { recursive: true });
-  if (config) writeFileSync(path.join(root, "workspace.config.json"), `${JSON.stringify(config, null, 2)}\n`);
+  if (config) writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify(config, null, 2)}\n`);
   return root;
 }
 

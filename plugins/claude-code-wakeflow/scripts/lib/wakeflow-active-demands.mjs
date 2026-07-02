@@ -61,7 +61,7 @@ export function activeDemandConflictSummary(conflicts = []) {
 }
 
 // Multi-active demands: the workspace runs up to maxActiveDemands unarchived
-// demands side by side (workspace.config.json, top-level, host-neutral).
+// demands side by side (wakeflow.config.json, top-level, host-neutral).
 // Unreadable and completed-but-not-archived roots still occupy capacity —
 // archiving is the only way a demand stops counting.
 export const DEFAULT_MAX_ACTIVE_DEMANDS = 2;
@@ -80,6 +80,6 @@ export function activeDemandCapacity({ workspaceRoot, config = {}, excludeDemand
 export function activeDemandCapacityBlockers(capacity) {
   if (!capacity?.atCapacity) return [];
   return [
-    `workspace is at its active-demand capacity (${capacity.active.length}/${capacity.max}): ${activeDemandConflictSummary(capacity.active)}. Complete and archive one, or raise maxActiveDemands in workspace.config.json.`,
+    `workspace is at its active-demand capacity (${capacity.active.length}/${capacity.max}): ${activeDemandConflictSummary(capacity.active)}. Complete and archive one, or raise maxActiveDemands in wakeflow.config.json.`,
   ];
 }

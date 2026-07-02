@@ -122,7 +122,7 @@ blocked decision is always recoverable once new evidence arrives).
 
 ```text
 <workspace>/
-  workspace.config.json          windows, roles, per-host knobs      committed
+  wakeflow.config.json          windows, roles, per-host knobs      committed
   AGENTS.md / CLAUDE.md          per-host controller gates           committed
   wakeflow-ledger/               durable designs, records, archives  committed
   .wakeflow-active/             demand state roots (layer 2)        local
@@ -190,7 +190,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.7/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.8/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository
@@ -219,10 +219,15 @@ the primary install or release path.
 Wakeflow is installed as a Codex or Claude Code plugin. A target workspace
 does not need to contain Wakeflow source code. The expected target shape is:
 
+> Naming: `wakeflow.config.json` is the canonical config name. A pre-rename
+> workspace's `workspace.config.json` keeps working (read fallback); rename it
+> with `git mv workspace.config.json wakeflow.config.json` when convenient —
+> `check-workspace` reminds you.
+
 ```text
 MyWorkspace/
   AGENTS.md or CLAUDE.md
-  workspace.config.json
+  wakeflow.config.json
   .wakeflow-active/          # ignored active controller state
   .wakeflow-local/           # ignored thread registry and derived runtime
   wakeflow-ledger/            # durable project coordination records
@@ -344,7 +349,7 @@ boundary:
 | --- | --- |
 | `AGENTS.md` | Parent controller gates and durable boundaries. |
 | Child `AGENTS.md` access cards | Per-window responsibility and read paths. |
-| `workspace.config.json` | Managed windows, repository paths, roles, and default language. |
+| `wakeflow.config.json` | Managed windows, repository paths, roles, and default language. |
 | `.wakeflow-active/` | Active state roots, current indexes, progress docs, TODO projections, intake, and test cards. |
 | `.wakeflow-local/` | Thread registry, direct-thread runtime, local overrides, and derived window config. |
 | `wakeflow-ledger/` | Long-term project coordination records and archives. |
@@ -365,7 +370,7 @@ Core rules:
 - Real thread ids live only in the host-scoped local thread registry under
   `.wakeflow-local/wakeflow-delivery/hosts/<host>/thread-registry/`
   (`codex` or `claude-code`).
-- Window config is derived from `workspace.config.json` plus thread-registry
+- Window config is derived from `wakeflow.config.json` plus thread-registry
   presence; it is not a second thread-id or window-semantics authority.
 - Delivery prompts remain compact and human-readable.
 - The host sends prompts through its transport boundary: Codex thread tools for
@@ -387,7 +392,7 @@ Core rules:
 - After a demand is owned by one host, the other host fails closed on
   controller mutations and dispatch preparation unless ownership is explicitly
   transferred with `--adopt-host`.
-- Up to `maxActiveDemands` (default 2, top-level `workspace.config.json`) demands may be active at once; claiming past capacity fails closed until one completes and archives. `wakeflow_next_work` reports `activeDemands` + `demandCapacity`.
+- Up to `maxActiveDemands` (default 2, top-level `wakeflow.config.json`) demands may be active at once; claiming past capacity fails closed until one completes and archives. `wakeflow_next_work` reports `activeDemands` + `demandCapacity`.
 - `wakeflow_status` exposes demand ownership under `dualHost.demandOwnership`
   so mixed-host controllers can see which platform owns active work before
   acting.

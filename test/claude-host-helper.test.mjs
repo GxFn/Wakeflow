@@ -59,7 +59,7 @@ test("ensure-server honors a configured dedicated tmux socket (isolated from the
   const root = makeWorkspace();
   const serverSession = makeServerSession();
   const socket = `wfsock-${process.pid}-${serverSession.split("-").pop()}`;
-  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "SocketFlow",
     controllerWindow: "SocketFlow",
     hosts: { "claude-code": { tmuxSession: serverSession, tmuxSocket: socket } },
@@ -206,7 +206,7 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
 
 test("check-workspace reports gaps and stamp-runtime clears the version gap", () => {
   const root = makeWorkspace();
-  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "CheckFlow",
     controllerWindow: "CheckFlow",
     repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
@@ -233,7 +233,7 @@ test("launch-window resolves per-role effort and model pin (controller=max, work
   const root = makeWorkspace();
   const serverSession = makeServerSession();
   mkdirSync(path.join(root, "Worker"), { recursive: true });
-  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "EffortFlow",
     controllerWindow: "EffortFlow",
     hosts: { "claude-code": { tmuxSession: serverSession, modelByRole: { default: "claude-fable-5" } } },
@@ -257,7 +257,7 @@ test("wait-results never touches locks or glyphs (pure observation)", { skip: !t
   const root = makeWorkspace();
   const serverSession = makeServerSession();
   mkdirSync(path.join(root, "RepoA"), { recursive: true });
-  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "LockFlow", controllerWindow: "LockFlow",
     hosts: { "claude-code": { tmuxSession: serverSession } },
     repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
@@ -286,7 +286,7 @@ test("wait-results never touches locks or glyphs (pure observation)", { skip: !t
 test("activity-monitor --once marks live-executing windows running and clears idle ones", { skip: !tmuxPresent }, async (t) => {
   const root = makeWorkspace();
   const serverSession = makeServerSession();
-  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "MonFlow", controllerWindow: "MonFlow",
     hosts: { "claude-code": { tmuxSession: serverSession } },
     repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
@@ -328,7 +328,7 @@ test("activity-monitor --once marks live-executing windows running and clears id
 
 test("set-unattended records the permission mode and reports restart plan", () => {
   const root = makeWorkspace();
-  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "ModeFlow",
     controllerWindow: "ModeFlow",
     hosts: { "claude-code": { tmuxSession: "modeflow", claudeArgs: ["--effort", "max"] } },
@@ -343,12 +343,12 @@ test("set-unattended records the permission mode and reports restart plan", () =
   assert.equal(dry.wrote, false);
   assert.equal(dry.previousMode, "acceptEdits");
   assert.equal(dry.mode, "bypassPermissions");
-  const stillDefault = JSON.parse(readFileSync(path.join(root, "workspace.config.json"), "utf8"));
+  const stillDefault = JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8"));
   assert.equal(stillDefault.hosts["claude-code"].permissionMode, undefined, "dry run does not write");
 
   const wrote = parseOk(runHelper(root, ["set-unattended", "--mode", "bypassPermissions", "--write"]));
   assert.equal(wrote.wrote, true);
-  const after = JSON.parse(readFileSync(path.join(root, "workspace.config.json"), "utf8"));
+  const after = JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8"));
   assert.equal(after.hosts["claude-code"].permissionMode, "bypassPermissions");
   assert.equal(after.hosts["claude-code"].tmuxSession, "modeflow", "other host keys preserved");
   assert.deepEqual(after.hosts["claude-code"].claudeArgs, ["--effort", "max"], "claudeArgs preserved");
@@ -374,7 +374,7 @@ test("launch-window --replace kills the old window instead of leaking an orphan"
 test("sentinel: --once flips a delivered window to done when its lock is released; controller exempt", { skip: !tmuxPresent }, async (t) => {
   const root = makeWorkspace();
   const serverSession = makeServerSession();
-  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "SentinelFlow", controllerWindow: "SentinelFlow",
     hosts: { "claude-code": { tmuxSession: serverSession } },
     repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
@@ -420,7 +420,7 @@ test("sentinel: changing pane content counts as activity (long tool calls never 
   const root = makeWorkspace();
   const serverSession = makeServerSession();
   const activeSession = `${serverSession}-s2`;
-  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "ActiveFlow", controllerWindow: "ActiveFlow",
     hosts: { "claude-code": { tmuxSession: activeSession } },
     repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
@@ -459,7 +459,7 @@ test("sentinel: changing pane content counts as activity (long tool calls never 
 test("send to the controller window is a lock-free notification (no busy residue)", { skip: !tmuxPresent }, async (t) => {
   const root = makeWorkspace();
   const serverSession = makeServerSession();
-  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "CtrlFlow", controllerWindow: "CtrlFlow",
     hosts: { "claude-code": { tmuxSession: serverSession } },
     repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
@@ -479,7 +479,7 @@ test("send to the controller window is a lock-free notification (no busy residue
 
 test("seed-permissions keeps committed settings portable and migrates old residue to settings.local.json", () => {
   const root = makeWorkspace();
-  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "SeedFlow", controllerWindow: "SeedFlow",
     repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
   }));
@@ -517,7 +517,7 @@ test("seed-permissions keeps committed settings portable and migrates old residu
 test("deliver sends straight from a delivery envelope file (one-step transport)", { skip: !tmuxPresent }, async (t) => {
   const root = makeWorkspace();
   const serverSession = makeServerSession();
-  writeFileSync(path.join(root, "workspace.config.json"), JSON.stringify({
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "DeliverFlow", controllerWindow: "DeliverFlow",
     hosts: { "claude-code": { tmuxSession: serverSession } },
     repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
@@ -546,7 +546,7 @@ test("replace-all tears down and rebuilds the whole fleet with fresh registered 
   // scaffold a real initialized workspace so replace-windows registration works
   const init = runSync(process.execPath, [setupScript, "initialize", "--root", root, "--repo", "RepoA=./RepoA", "--internal-design", "--internal-test", "--write", "--json"], { encoding: "utf8", cwd: root });
   assert.equal(init.status, 0, init.stderr || init.stdout);
-  const cfg = JSON.parse(readFileSync(path.join(root, "workspace.config.json"), "utf8"));
+  const cfg = JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8"));
   const controllerWindow = cfg.controllerWindow;
   t.after(() => spawnSync("tmux", ["kill-session", "-t", serverSession], { encoding: "utf8" }));
 

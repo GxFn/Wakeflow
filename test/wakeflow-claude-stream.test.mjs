@@ -40,7 +40,7 @@ function makeWorkspace({ maxStreamsPerRepo = 2 } = {}) {
     git(repoDir, ["add", "README.md"]);
     git(repoDir, ["commit", "-q", "-m", "init"]);
   }
-  writeFileSync(path.join(root, "workspace.config.json"), `${JSON.stringify({
+  writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
     workspaceName: "StreamFixture",
     controllerWindow: "Controller",
     projectLedgerRoot: "wakeflow-ledger",
@@ -81,7 +81,7 @@ function openStream(root, streamId, demandKey = "DK-2026-07-02") {
 }
 
 function overlayFile(root) {
-  return path.join(root, ".wakeflow-local/workspace.config.json");
+  return path.join(root, ".wakeflow-local/wakeflow.config.json");
 }
 
 function readJson(file) {
@@ -221,7 +221,7 @@ test("the stream branch name is git-ref-sanitized while the marker keeps the raw
 
 test("a stream name colliding with a configured repository fails BEFORE creating a worktree", () => {
   const { root } = makeWorkspace();
-  const configFile = path.join(root, "workspace.config.json");
+  const configFile = path.join(root, "wakeflow.config.json");
   const config = readJson(configFile);
   config.repositories.push({ windowName: "RepoA__x", path: "RepoA", role: "Colliding window" });
   writeFileSync(configFile, `${JSON.stringify(config, null, 2)}\n`);
@@ -348,7 +348,7 @@ test("stream-list reconciles overlay, worktree, and registration state", () => {
   assert.equal(row.status, "prepared", "no-launch stream has no registration yet");
 
   // base config edit -> overlay flagged stale
-  const configFile = path.join(root, "workspace.config.json");
+  const configFile = path.join(root, "wakeflow.config.json");
   const config = readJson(configFile);
   config.workspaceName = "Renamed";
   writeFileSync(configFile, `${JSON.stringify(config, null, 2)}\n`);

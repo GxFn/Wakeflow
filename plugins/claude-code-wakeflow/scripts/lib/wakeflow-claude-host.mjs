@@ -27,6 +27,7 @@ import { withFileLock } from "./wakeflow-state-lock.mjs";
 import {
   assertOverlayManageable,
   branchNameFor,
+  trackedConfigFile,
   buildStreamEntry,
   maxStreamsFor,
   overlayBaseStale,
@@ -102,24 +103,25 @@ function requireValue(name) {
 // a sub-window subdir, not the workspace root, so binding/state lookups would hit a
 // stray nested .wakeflow-local instead of the one real store and fail with
 // "No window-host binding". Walk up to the nearest ancestor carrying
-// workspace.config.json (the workspace-root marker) so every window's invocation
+// wakeflow.config.json (the workspace-root marker; legacy workspace.config.json
+// still counts) so every window's invocation
 // anchors to the same store. Only sub-windows lack that file, so a correctly-passed
 // --root (the workspace root) is returned unchanged.
 function resolveWorkspaceRoot(start) {
-  if (existsSync(path.join(start, "workspace.config.json"))) return start;
+  if (existsSync(path.join(start, "wakeflow.config.json")) || existsSync(path.join(start, "workspace.config.json"))) return start;
   let dir = start;
   for (let depth = 0; depth < 64; depth += 1) {
     const parent = path.dirname(dir);
     if (parent === dir) break; // filesystem root
     dir = parent;
-    if (existsSync(path.join(dir, "workspace.config.json"))) {
+    if (existsSync(path.join(dir, "wakeflow.config.json")) || existsSync(path.join(dir, "workspace.config.json"))) {
       process.stderr.write(
         `wakeflow-claude-host: resolved workspace root by walking up from ${start} to ${dir}; pass --root <workspace-root> to avoid this.\n`,
       );
       return dir;
     }
   }
-  return start; // no workspace.config.json upward — keep the original (pre-init / standalone)
+  return start; // no wakeflow.config.json upward — keep the original (pre-init / standalone)
 }
 
 const workspaceRoot = resolveWorkspaceRoot(path.resolve(getValue("--root", process.cwd())));
@@ -132,19 +134,19 @@ const tmuxBin = process.env.WAKEFLOW_TMUX_BIN || "tmux";
 const claudeBin = process.env.WAKEFLOW_CLAUDE_BIN || "claude";
 
 // Optional dedicated tmux socket (opt-in). When hosts.claude-code.tmuxSocket is set
-// in workspace.config.json (or --socket is passed) every tmux call runs against a
+// in wakeflow.config.json (or --socket is passed) every tmux call runs against a
 // private `tmux -L <socket>` server instead of the shared default socket, isolating
 // the wakeflow fleet from the user's personal tmux sessions on the default server.
 // Unset = default socket (backward-compatible). Resolved once; every tmux() call
 // funnels the flag through, and the activity monitor inherits it via --root config.
 // Window/topology reads prefer the DERIVED local overlay
-// (.wakeflow-local/workspace.config.json, a regenerated full copy of the
+// (.wakeflow-local/wakeflow.config.json, a regenerated full copy of the
 // tracked config plus active stream entries) so stream windows resolve like
 // ordinary windows. Writers (set-unattended) and durable-surface checks
 // (check-workspace, seed-permissions) keep reading the tracked file directly.
 function effectiveConfigFile() {
   const overlay = overlayConfigFile(workspaceRoot);
-  return existsSync(overlay) ? overlay : path.join(workspaceRoot, "workspace.config.json");
+  return existsSync(overlay) ? overlay : trackedConfigFile(workspaceRoot);
 }
 
 // Preferred-config reads fail CLOSED on an existing-but-unparsable file: a
@@ -644,7 +646,7 @@ async function commandLaunchWindow() {
   // (cold start after reboot); the session id is stable across resumes.
   const sessionArgs = hasFlag("--resume") ? ["--resume", sessionId] : ["--session-id", sessionId];
   // Workspace-pinned claude flags (e.g. ["--effort", "max"]) come from
-  // workspace.config.json hosts.claude-code.claudeArgs; per-call --claude-arg
+  // wakeflow.config.json hosts.claude-code.claudeArgs; per-call --claude-arg
   // values still append after them and win on conflicts.
   const configFile = effectiveConfigFile();
   const hostConfig = existsSync(configFile) ? (readJson(configFile, "workspace config").hosts?.["claude-code"] ?? {}) : {};
@@ -659,7 +661,7 @@ async function commandLaunchWindow() {
   const modelAlreadySet = flagPresent(extraClaudeArgs, "--model") || flagPresent(configClaudeArgs, "--model");
   const modelArgs = modelAlreadySet ? [] : resolveModelArgs(windowName, hostConfig);
   // Permission mode precedence: explicit --claude-arg --permission-mode wins;
-  // else workspace.config.json hosts.claude-code.permissionMode; else
+  // else wakeflow.config.json hosts.claude-code.permissionMode; else
   // acceptEdits so seeded allowlists keep the window prompt-free.
   // Default to acceptEdits (prompts before risky actions) as the SAFE shipped
   // default for distribution. A workspace opts into fully-unattended
@@ -709,7 +711,7 @@ async function commandLaunchWindow() {
     // The folder-trust dialog is always covered by the user's window-launch
     // authorization (they mapped this directory as a managed window). The
     // bypass-permissions consent is auto-confirmed ONLY when the user opted
-    // into bypass mode in workspace.config.json: that recorded choice IS the
+    // into bypass mode in wakeflow.config.json: that recorded choice IS the
     // prior consent. A bypass prompt without that opt-in is left for the user.
     const bypassConsented = configMode === "bypassPermissions";
     const dialogPatterns = [
@@ -1027,8 +1029,8 @@ function readWorkspaceWindowModel() {
   // MAIN fleet only: read the tracked config, never the overlay — otherwise
   // pod isolation windows get resumed into the main session, breaking pod
   // isolation. Pods resume via pod-open.
-  const configFile = path.join(workspaceRoot, "workspace.config.json");
-  if (!existsSync(configFile)) fail("workspace.config.json not found; run initialization first.");
+  const configFile = trackedConfigFile(workspaceRoot);
+  if (!existsSync(configFile)) fail("wakeflow.config.json not found; run initialization first.");
   const config = readJson(configFile, "workspace config");
   const repositories = Array.isArray(config.repositories) ? config.repositories : [];
   const names = repositories.map((repo) => repo.windowName).filter(Boolean);
@@ -1278,7 +1280,7 @@ function readRepositoryForWindow(windowName) {
   }
   const repo = (Array.isArray(config.repositories) ? config.repositories : []).find((r) => r.windowName === windowName);
   if (!repo) {
-    fail(`window ${windowName} is registered but not in workspace.config.json repositories; fix the config (or register the window under its configured name) before launching it.`);
+    fail(`window ${windowName} is registered but not in wakeflow.config.json repositories; fix the config (or register the window under its configured name) before launching it.`);
   }
   const roleTitle = windowName === config.designWindow ? `${windowName} Design`
     : windowName === config.testWindow ? `${windowName} Test`
@@ -1292,8 +1294,8 @@ function commandSetUnattended() {
     fail(`--mode must be one of ${PERMISSION_MODES.join(", ")}.`);
   }
   const write = hasFlag("--write");
-  const configFile = path.join(workspaceRoot, "workspace.config.json");
-  if (!existsSync(configFile)) fail("workspace.config.json not found; run initialization first.");
+  const configFile = trackedConfigFile(workspaceRoot);
+  if (!existsSync(configFile)) fail("wakeflow.config.json not found; run initialization first.");
   const config = readJson(configFile, "workspace config");
   const previous = config.hosts?.["claude-code"]?.permissionMode ?? "acceptEdits";
   if (write) {
@@ -1402,15 +1404,18 @@ function commandCheckWorkspace() {
   const tmuxPresent = execHostText(tmuxBin, ["-V"]).status === 0;
   if (!tmuxPresent) note("binaries", "tmux-missing", "brew install tmux (retry once on a transient bottle error)");
 
-  const configFile = path.join(workspaceRoot, "workspace.config.json");
+  const configFile = trackedConfigFile(workspaceRoot);
   if (!existsSync(configFile)) {
     note("workspace-config", "missing", "Run /wakeflow:init for first-time initialization; check-workspace targets existing environments.");
     output({ ok: true, command: "check-workspace", pluginVersion: pluginVersion(), stamp: null, gaps });
     return;
   }
+  if (path.basename(configFile) === "workspace.config.json") {
+    note("workspace-config", "legacy-name", "Rename workspace.config.json to wakeflow.config.json (git mv; reads keep working on the legacy name, but the canonical name makes it clearly Wakeflow's config).");
+  }
   const config = readJson(configFile, "workspace config");
   if (!config.hosts || typeof config.hosts !== "object" || !config.hosts["claude-code"]) {
-    note("workspace-config", "hosts-block-missing", "Add hosts.claude-code (e.g. { \"tmuxSession\": \"wakeflow\" }) to workspace.config.json.");
+    note("workspace-config", "hosts-block-missing", "Add hosts.claude-code (e.g. { \"tmuxSession\": \"wakeflow\" }) to wakeflow.config.json.");
   }
 
   const rootState = memoryFileState(workspaceRoot);
@@ -1423,7 +1428,7 @@ function commandCheckWorkspace() {
   for (const repo of repositories) {
     const dir = path.resolve(workspaceRoot, repo.path);
     if (!existsSync(dir)) {
-      note("repository", "directory-missing", "Confirm the repository path in workspace.config.json.", { window: repo.windowName });
+      note("repository", "directory-missing", "Confirm the repository path in wakeflow.config.json.", { window: repo.windowName });
       continue;
     }
     if (repo.managedAgents !== false) {
@@ -1465,9 +1470,9 @@ function commandCheckWorkspace() {
   try {
     const overlay = readOverlay(workspaceRoot);
     if (overlay && !overlayIsDerived(overlay)) {
-      note("stream-overlay", "user-owned", "Informational: .wakeflow-local/workspace.config.json is hand-maintained; stream registration stays disabled until it is folded into workspace.config.json.");
+      note("stream-overlay", "user-owned", "Informational: the local config override under .wakeflow-local/ is hand-maintained; stream registration stays disabled until it is folded into wakeflow.config.json.");
     } else if (overlay && overlayBaseStale(workspaceRoot, overlay)) {
-      note("stream-overlay", "stale-base", "workspace.config.json changed after the stream overlay was generated; any stream-open/stream-close regenerates it (or close all streams to drop it).");
+      note("stream-overlay", "stale-base", "the tracked wakeflow config changed after the stream overlay was generated; any stream-open/stream-close regenerates it (or close all streams to drop it).");
     }
   } catch (error) {
     note("stream-overlay", "unreadable", error.message);
@@ -1591,7 +1596,7 @@ process.stdin.on("end", () => {
   } catch { /* no registry: fall back to cwd */ }
   let label = windowName || path.basename(cwd);
   try {
-    const config = JSON.parse(readFileSync(path.join(root, "workspace.config.json"), "utf8"));
+    const config = JSON.parse(readFileSync(trackedConfigFile(root), "utf8"));
     if (windowName && windowName === config.controllerWindow) label = "Controller";
   } catch { /* keep label */ }
   const name = model.display_name || model.id || "model?";
@@ -1622,7 +1627,7 @@ const SEED_ALLOW_RULES = [
 ];
 
 function readWorkspaceRepositories() {
-  const configFile = path.join(workspaceRoot, "workspace.config.json");
+  const configFile = trackedConfigFile(workspaceRoot);
   if (!existsSync(configFile)) return [];
   const config = readJson(configFile, "workspace config");
   return (Array.isArray(config.repositories) ? config.repositories : [])
@@ -1771,8 +1776,8 @@ function commandStreamOpen() {
   const baseBranch = getValue("--base", "");
   const noLaunch = hasFlag("--no-launch");
 
-  const trackedFile = path.join(workspaceRoot, "workspace.config.json");
-  if (!existsSync(trackedFile)) fail("workspace.config.json not found; run initialization first.");
+  const trackedFile = trackedConfigFile(workspaceRoot);
+  if (!existsSync(trackedFile)) fail("wakeflow.config.json not found; run initialization first.");
   try {
     assertOverlayManageable(workspaceRoot);
   } catch (error) {
@@ -1865,7 +1870,7 @@ function commandStreamOpen() {
   if (!resumeExisting) withStreamMutationLock(() => {
     const overlay = readOverlay(workspaceRoot);
     if (overlay && overlayBaseStale(workspaceRoot, overlay)) {
-      process.stderr.write("wakeflow-claude-host: stream overlay was stale against workspace.config.json; regenerating from the current base.\n");
+      process.stderr.write("wakeflow-claude-host: stream overlay was stale against the tracked wakeflow config; regenerating from the current base.\n");
     }
     const existing = overlay ? streamEntries(overlay) : [];
     if (existing.some((entry) => entry.windowName === windowName)) {
@@ -2220,8 +2225,8 @@ function commandPodOpen() {
   if (repos.length === 0) fail("--repos needs at least one configured repository window name.");
   const noLaunch = hasFlag("--no-launch");
   const bootWait = getValue("--boot-wait-ms", "7000");
-  const trackedFile = path.join(workspaceRoot, "workspace.config.json");
-  if (!existsSync(trackedFile)) fail("workspace.config.json not found; run initialization first.");
+  const trackedFile = trackedConfigFile(workspaceRoot);
+  if (!existsSync(trackedFile)) fail("wakeflow.config.json not found; run initialization first.");
   const baseConfig = readJson(trackedFile, "workspace config");
   const baseRepos = Array.isArray(baseConfig.repositories) ? baseConfig.repositories : [];
   for (const repo of repos) {

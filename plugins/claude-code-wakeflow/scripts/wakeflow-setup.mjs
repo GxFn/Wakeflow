@@ -1071,13 +1071,15 @@ function rootAgentsContent(context) {
   content = replaceAllLiteral(content, "Wakeflow controller", `${context.config.workspaceName} controller`);
 
   const localConfigPlaceholder = "__WAKEFLOW_LOCAL_CONFIG__";
+  content = replaceAllLiteral(content, ".wakeflow-local/wakeflow.config.json", localConfigPlaceholder);
   content = replaceAllLiteral(content, ".wakeflow-local/workspace.config.json", localConfigPlaceholder);
   content = replaceAllLiteral(content, ".wakeflow-active/", `${runtimePrefix}.wakeflow-active/`);
   content = replaceAllLiteral(content, ".wakeflow-local/", `${runtimePrefix}.wakeflow-local/`);
   content = replaceAllLiteral(content, "../wakeflow-ledger/", `${ledgerRel}/`);
   content = replaceAllLiteral(content, "../wakeflow-ledger", ledgerRel);
-  content = content.replace(/(?<![\w./-])workspace\.config\.json/g, `${runtimePrefix}workspace.config.json`);
-  content = replaceAllLiteral(content, localConfigPlaceholder, `${runtimePrefix}.wakeflow-local/workspace.config.json`);
+  content = content.replace(/(?<![\w./-])wakeflow\.config\.json/g, `${runtimePrefix}wakeflow.config.json`);
+  content = content.replace(/(?<![\w./-])workspace\.config\.json/g, `${runtimePrefix}wakeflow.config.json`);
+  content = replaceAllLiteral(content, localConfigPlaceholder, `${runtimePrefix}.wakeflow-local/wakeflow.config.json`);
 
   if (context.pluginTargetMode) {
     content = pluginRootScriptGuidance(content);
@@ -1764,7 +1766,7 @@ function initializedWorkspaceFootprint(context) {
     return runtimeFootprint;
   }
   return [
-    { kind: "config", path: slash(path.relative(context.wakeflowRoot, context.configPath)) || "workspace.config.json" },
+    { kind: "config", path: slash(path.relative(context.wakeflowRoot, context.configPath)) || "wakeflow.config.json" },
     ...runtimeFootprint,
   ];
 }
@@ -2072,7 +2074,7 @@ function assertReplacementLaunchEntries(replacements, launchEntries, commandName
   const available = new Set(launchEntries.map((entry) => entry.windowName));
   const missing = [...replacements].filter((windowName) => !available.has(windowName));
   if (missing.length > 0) {
-    fail(`${commandName} requested window(s) not present in the current launch plan: ${missing.join(", ")}. Check workspace.config.json, or pass --include-real-project when replacing the real-project window.`);
+    fail(`${commandName} requested window(s) not present in the current launch plan: ${missing.join(", ")}. Check wakeflow.config.json, or pass --include-real-project when replacing the real-project window.`);
   }
 }
 
@@ -2183,7 +2185,7 @@ function localWindowRoot(context, windowName) {
     return {
       path: "",
       absolutePath: context.wakeflowRoot,
-      role: "Unconfigured window; confirm workspace.config.json before dispatch.",
+      role: "Unconfigured window; confirm wakeflow.config.json before dispatch.",
     };
   }
   return {
@@ -2428,7 +2430,7 @@ function replaceWindowsPayload(options = {}) {
   const context = commandContext();
   const commandName = options.single ? "replace-window" : "replace-windows";
   if (!existsSync(context.configPath)) {
-    fail(`${commandName} requires an initialized workspace (workspace.config.json not found). Run initialize first; replacement only recreates an existing window.`);
+    fail(`${commandName} requires an initialized workspace (wakeflow.config.json not found). Run initialize first; replacement only recreates an existing window.`);
   }
   const replacements = replacementWindows();
   if (options.single && replacements.size !== 1) {
@@ -2481,12 +2483,12 @@ function help() {
       "replace-windows": "Regenerate selected responsibility-window launch prompts and replace only their local thread registry/window-config records; does not refresh workspace initialization docs.",
       discover: "List sibling repository candidates under the parent workspace.",
       status: "Show configured repositories, discovered siblings, and scope issues.",
-      configure: "Write workspace.config.json after user-confirmed --repo mappings.",
+      configure: "Write wakeflow.config.json after user-confirmed --repo mappings.",
       prompts: `Print child-window prompts for confirming scope and refreshing ${hostProfile.memoryFile}.`,
       "sync-root-agents": `Unpack the control ${hostProfile.memoryFile} into the parent workspace ${hostProfile.memoryFile} so ${hostProfile.hostName} auto-loads total-control rules at the outer workspace root.`,
       "sync-gitignore": "Ensure only Wakeflow runtime entries .wakeflow-active/ and .wakeflow-local/ are ignored in the target workspace .gitignore; do not add product repositories, Design/Test, ledger directories, or generic local noise.",
       "write-agents": `Append or refresh managed access-card blocks in configured child ${hostProfile.memoryFile} files.`,
-      "access-profiles": "Print a read-only ChildWindowAccessProfile view from workspace.config plus child AGENTS managed blocks.",
+      "access-profiles": "Print a read-only ChildWindowAccessProfile view from wakeflow.config plus child AGENTS managed blocks.",
       "sync-templates": "Create missing internal Design/Test templates or minimal external alignment templates.",
       "ledger-paths": "Show project ledger directories for configured windows.",
     },

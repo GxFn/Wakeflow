@@ -44,7 +44,7 @@ state, or delivery policy in the registry.
 ## Derived Window Config
 
 `window-config` files are derived runtime views. They are rebuilt from
-`workspace.config.json`, current launch / replacement inputs, and whether a
+`wakeflow.config.json`, current launch / replacement inputs, and whether a
 thread-registry record exists. They may describe:
 
 - repository path and responsibility;

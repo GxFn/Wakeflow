@@ -1,6 +1,6 @@
 # Wakeflow：双版本架构与状态流转
 
-> 于 2026-06-19 从 commit HEAD 处源码生成；**2026-07-02 对照 v0.7.7 修订**（state-root 文件锁、多活跃需求容量、意图对齐、隔离 worktree、需求舱、统一 create/claim/deliver）。以代码为准。
+> 于 2026-06-19 从 commit HEAD 处源码生成；**2026-07-02 对照 v0.7.8 修订**（state-root 文件锁、多活跃需求容量、意图对齐、隔离 worktree、需求舱、统一 create/claim/deliver、wakeflow.config.json 命名）。以代码为准。
 
 本文档综合了对 Wakeflow 源码的七路并行子系统阅读结果。凡阅读者标记出不确定之处，均以 **待核实 / 存疑** 注记的形式呈现，而非凭猜测填充。文件引用采用 `path:line` 形式。
 
@@ -118,13 +118,13 @@ flowchart TB
 额外的版本事实：
 
 - Claude 版本交付 `commands/`（7 个斜杠命令），且 `artifact-checks` 要求 `skills/` 与 `commands/` 同时存在（`wakeflow-host-artifact-checks.mjs:29-34`）；Codex 没有 `commands/`，转而携带一个 `.codex-plugin` 的 `interface{}` 块。
-- 所有版本的 manifest 都在**五处**被版本锁定为 **0.7.7**：两个插件 manifest（`.codex-plugin/plugin.json:3`、`.claude-plugin/plugin.json:3`）、两个插件 `package.json`，以及 marketplace 的 **plugin 条目**（`.claude-plugin/marketplace.json` 的 `plugins[0].version`）。marketplace 文件还携带**第二个、不同的**版本字段——`metadata.version` 为 `1.0.0`（目录元数据，而非插件版本）——所以同一个文件有两个不同的版本字段，只有 `plugins[0]` 那个跟随 0.7.7 的锁定。根 `package.json` 保持 `0.0.0` / `private:true`（私有开发工作区）。`sync-core` **并不**强制版本一致——manifest 只做存在性检查。
+- 所有版本的 manifest 都在**五处**被版本锁定为 **0.7.8**：两个插件 manifest（`.codex-plugin/plugin.json:3`、`.claude-plugin/plugin.json:3`）、两个插件 `package.json`，以及 marketplace 的 **plugin 条目**（`.claude-plugin/marketplace.json` 的 `plugins[0].version`）。marketplace 文件还携带**第二个、不同的**版本字段——`metadata.version` 为 `1.0.0`（目录元数据，而非插件版本）——所以同一个文件有两个不同的版本字段，只有 `plugins[0]` 那个跟随 0.7.8 的锁定。根 `package.json` 保持 `0.0.0` / `private:true`（私有开发工作区）。`sync-core` **并不**强制版本一致——manifest 只做存在性检查。
 - marketplace **只**发布 Claude 版本；Codex 版本的 `artifact.marketplacePath` 指向一个单独的 `.agents/plugins/marketplace.json`。
 - `core/` 中的 host-profile 副本是一个 **Codex 开发桩**（`hostId codex` 但 `workspaceResidueChecks: []`），被排除在同步之外，仅在仓库开发期间从 `core/` 运行时让内核脚本的相对导入得以解析而存在。
 
 **注：** 这是 Wakeflow 唯一的架构参考文档；根据文首声明，凡此处文字与代码相左之处，以代码为准。
 
-> **待核实 / 存疑：** “内核不基于 `hostId` 分支”这一论断，依据是对 `core/` 中 `hostId ===` 的 grep 返回零命中；这会漏掉某些奇异的动态分发（例如把 `hostProfile.hostId` 用作对象键）。当前五处 0.7.7 版本字段彼此一致，但 `check:core` 并不会捕获版本漂移。Codex 的 `.agents/plugins/marketplace.json` 分发路径位于本仓库受跟踪树之外，未予确认。
+> **待核实 / 存疑：** “内核不基于 `hostId` 分支”这一论断，依据是对 `core/` 中 `hostId ===` 的 grep 返回零命中；这会漏掉某些奇异的动态分发（例如把 `hostProfile.hostId` 用作对象键）。当前五处 0.7.8 版本字段彼此一致，但 `check:core` 并不会捕获版本漂移。Codex 的 `.agents/plugins/marketplace.json` 分发路径位于本仓库受跟踪树之外，未予确认。
 
 ---
 
@@ -198,7 +198,7 @@ flowchart TB
 | `wakeflow_archive` | `wakeflow-state` / `wakeflow-archive-todo` / `wakeflow-archive-docs` | 按 `target`：`demand`→`wakeflow-state archive-demand`（`--state-root`/`--reason`，`redact`→`--redact`，可重复的 `--evidence-ref`，`apply`→`--write`）；`todo`→`wakeflow-archive-todo`（可选 `--month`/`--date`/`--keep-completed`/`--keep-sync`，`apply`→`--apply`）；`docs`→`wakeflow-archive-docs`（可选 `--topic`/`--month`，可重复的 `--file`，`keepIndexRows`/`pruneIndexOnly`，`apply`→`--apply`）；todo/docs 异步——当 `refreshSummaries && ok` 时链式调用 `wakeflow-archive-summaries` |
 | `wakeflow_verify` | `wakeflow-cli` | `verify --root <root> [--script-tests] [--with-runtime | --strict-runtime] --json`；带 script-tests/with-runtime/strict-runtime 任意其一时超时 180000ms，否则 120000ms |
 
-参数→标志的翻译由四个 helper 机械完成（`wakeflow-mcp-tools.mjs:1061-1117`）：`optionalValue(flag,value)`（对 `undefined`/`null`/`''` 返回空）、`repeatValues`（重复标志）、裸布尔内联，以及 `rootArgs` = `optionalValue('--root', args.root ?? defaultWorkspaceRoot())`。`defaultWorkspaceRoot` 回退到 `WAKEFLOW_DEFAULT_ROOT` / `CLAUDE_PROJECT_DIR` 中第一个存在的绝对路径，随后向上行走（≤64 层）到最近一个携带 `workspace.config.json` 的祖先目录——因此非控制器窗口的 MCP server 解析到的是工作区本身，而非它自己的仓库目录（仅在 init 之前才原样保留注入的目录）。
+参数→标志的翻译由四个 helper 机械完成（`wakeflow-mcp-tools.mjs:1061-1117`）：`optionalValue(flag,value)`（对 `undefined`/`null`/`''` 返回空）、`repeatValues`（重复标志）、裸布尔内联，以及 `rootArgs` = `optionalValue('--root', args.root ?? defaultWorkspaceRoot())`。`defaultWorkspaceRoot` 回退到 `WAKEFLOW_DEFAULT_ROOT` / `CLAUDE_PROJECT_DIR` 中第一个存在的绝对路径，随后向上行走（≤64 层）到最近一个携带 `wakeflow.config.json` 的祖先目录——因此非控制器窗口的 MCP server 解析到的是工作区本身，而非它自己的仓库目录（仅在 init 之前才原样保留注入的目录）。
 
 ### 3.4 紧凑 vs 详细
 
@@ -503,7 +503,7 @@ Wakeflow 按 **数据是什么，而非谁写的** 来切分存储。业务状�
 - **`.wakeflow-active/`**——本地运行时（活动文档 + 按需求 state root）；被 gitignore。
 - **`wakeflow-ledger/`**——持久化的长期记录；**已提交**。
 
-工作区的 `.gitignore` 被强制恰好包含 `.wakeflow-active/` 与 `.wakeflow-local/`（`wakeflow-setup.mjs:671` 的 `RUNTIME_GITIGNORE_ENTRIES`）；ledger **不**被忽略。`workspace.config.json` 受跟踪，而 `.wakeflow-local/workspace.config.json` 最先被解析并胜出（`wakeflow-config.mjs:73-85`）——但它通常是一个**派生 overlay**，而非手写覆盖：一份由机器重新生成的受跟踪配置完整副本，加上每个活跃隔离流窗口一条 `repositories[]` 条目，打戳 `derived{kind, baseHash, generatedAt, streamWindows}`，只由流机制（stream-open/close、set-unattended）在 `stream-overlay.lock` 下原子写入，并在最后一条流关闭时移除。手工维护的（无标记的）文件仍是合法的用户覆盖，但它会让每个流操作失败关闭，且 `check-workspace` 会标记它（`user-owned` / `stale-base`）。
+工作区的 `.gitignore` 被强制恰好包含 `.wakeflow-active/` 与 `.wakeflow-local/`（`wakeflow-setup.mjs:671` 的 `RUNTIME_GITIGNORE_ENTRIES`）；ledger **不**被忽略。（命名：`wakeflow.config.json` 自 0.7.8 起为规范名；旧名 `workspace.config.json`——受跟踪或本地——仍然可读回退，`check-workspace` 会建议一行 `git mv` 迁移。）`wakeflow.config.json` 受跟踪，而 `.wakeflow-local/wakeflow.config.json` 最先被解析并胜出（`wakeflow-config.mjs:73-85`）——但它通常是一个**派生 overlay**，而非手写覆盖：一份由机器重新生成的受跟踪配置完整副本，加上每个活跃隔离流窗口一条 `repositories[]` 条目，打戳 `derived{kind, baseHash, generatedAt, streamWindows}`，只由流机制（stream-open/close、set-unattended）在 `stream-overlay.lock` 下原子写入，并在最后一条流关闭时移除。手工维护的（无标记的）文件仍是合法的用户覆盖，但它会让每个流操作失败关闭，且 `check-workspace` 会标记它（`user-owned` / `stale-base`）。
 
 ### 6.1 带注解的目录树
 
@@ -512,7 +512,7 @@ INSTALLED WORKSPACE LAYOUT (what Wakeflow writes locally)
 Legend: [T]=tracked  [I]=gitignored/local-runtime  [L]=committed long-term ledger
 
 <workspace>/
-├── workspace.config.json                       [T] 共享的宿主中立真相；按宿主的旋钮位于 "hosts" 下
+├── wakeflow.config.json                       [T] 共享的宿主中立真相；按宿主的旋钮位于 "hosts" 下
 ├── CLAUDE.md / AGENTS.md                        [T] 按宿主的控制器门禁卡（每个插件持有自己的文件）
 ├── .gitignore                                   [T] 被强制包含 .wakeflow-active/ + .wakeflow-local/
 │
@@ -539,7 +539,7 @@ Legend: [T]=tracked  [I]=gitignored/local-runtime  [L]=committed long-term ledge
 │   （同级的 `<demand-slug>.state-lock` + `current.capacity-lock` O_EXCL 互斥锁会短暂出现）
 │
 ├── .wakeflow-local/                            [I] 绝不提交——持有真实 session/thread id
-│   ├── workspace.config.json                        [I] 派生的流 overlay（受跟踪副本 + 流窗口 + derived{baseHash}）；合法的手写覆盖会禁用流操作
+│   ├── wakeflow.config.json                        [I] 派生的流 overlay（受跟踪副本 + 流窗口 + derived{baseHash}）；合法的手写覆盖会禁用流操作
 │   ├── worktrees/<Repo__id>/                        [I] 隔离 worktree（分支 <demandKey>/<id>，claude 版本）
 │   ├── wakeflow-statusline.mjs                      [I] 生成的 statusline（模型 + 窗口身份）
 │   └── wakeflow-delivery/                            === stateDir 默认值（wakeflow-delivery.mjs:27） ===
@@ -573,7 +573,7 @@ Legend: [T]=tracked  [I]=gitignored/local-runtime  [L]=committed long-term ledge
     ├── goal-stage-confirmation/
     └── <window-slug>/                                按窗口长期 ledger
 
-NOTE: this repo IS the plugin source — the tracked workspace.config.json files under
+NOTE: this repo IS the plugin source — the tracked wakeflow.config.json files under
 core/ and plugins/*/ are shipped defaults, and no dogfood runtime lives at the repo
 root. [T]/[I]/[L] describe the INSTALLED-workspace contract the code enforces, not
 this source checkout.
@@ -583,8 +583,8 @@ this source checkout.
 
 | 路径 | writtenBy | readBy | 格式 | 范围 | 是否提交 |
 |---|---|---|---|---|---|
-| `workspace.config.json` | wakeflow-setup configure | wakeflow-config、window-runtime、claude-host | json | 按工作区 | 受跟踪（本地覆盖胜出） |
-| `.wakeflow-local/workspace.config.json` | 流机制（regenerateOverlay；stream-open/close、set-unattended）——手写覆盖合法但会禁用流操作 | wakeflow-config（最先解析，胜出）、claude-host 拓扑读取 | json | 按工作区 | **绝不** |
+| `wakeflow.config.json` | wakeflow-setup configure | wakeflow-config、window-runtime、claude-host | json | 按工作区 | 受跟踪（本地覆盖胜出） |
+| `.wakeflow-local/wakeflow.config.json` | 流机制（regenerateOverlay；stream-open/close、set-unattended）——手写覆盖合法但会禁用流操作 | wakeflow-config（最先解析，胜出）、claude-host 拓扑读取 | json | 按工作区 | **绝不** |
 | `.wakeflow-active/index.md` + `current/*` | setup 脚手架 + 控制器编辑 | 控制器、verify-workspace-docs、check-layout | md | 按工作区 | gitignore |
 | `<state-root>/demand.json` | wakeflow-state init | 控制器定位 | json | 按需求 | gitignore |
 | `<state-root>/wakeflow-state.json` | wakeflow-state reducer + `markStateRootDeliverySent`（非 import-target-result） | 所有 reducer、render-progress、demand-sequence、delivery status 扫描 | json | 按需求 | gitignore |
@@ -620,7 +620,7 @@ this source checkout.
 - **任何地方都没有 `decisions/` 目录**——每个 "decisions" grep 命中都是 `decisionsRequired` 状态字段；控制器决策经由 `decide-review` 驻留在 `wakeflow-state.json` + `controller-events.jsonl` 之内。
 - 幂等键驻留于记录**内部**（无单独的键文件）；重放检测扫描现有的 `delivery-runs`/`target-results`。
 
-> **待核实 / 存疑：** 本仓库即插件**源码**，所以它自己的 `workspace.config.json`/`wakeflow-ledger`/`.wakeflow-active` 是未受跟踪的自用（dogfood）运行时（git ls-files = 0）；提交/忽略语义描述的是一个已安装工作区。Codex 版本的 `hosts/codex/` 布局未在 codex profile 中逐行重新核验（经由共享内核派生，高置信度）。当 `dispatchGroup` 为空时，结果文件命名可能产出 `<window>__<task>.json`（无组前缀）；跨组边缘冲突未做压力测试。
+> **待核实 / 存疑：** 本仓库即插件**源码**，所以它自己的 `wakeflow.config.json`/`wakeflow-ledger`/`.wakeflow-active` 是未受跟踪的自用（dogfood）运行时（git ls-files = 0）；提交/忽略语义描述的是一个已安装工作区。Codex 版本的 `hosts/codex/` 布局未在 codex profile 中逐行重新核验（经由共享内核派生，高置信度）。当 `dispatchGroup` 为空时，结果文件命名可能产出 `<window>__<task>.json`（无组前缀）；跨组边缘冲突未做压力测试。
 
 ---
 
@@ -705,7 +705,7 @@ stateDiagram-v2
 
 ### 7.6 隔离 worktree 流（Claude 版本，仅跨需求）
 
-`stream-open --repo <win> --stream <id> --demand-key <key>` 会在 `.wakeflow-local/worktrees/<Repo__id>` 创建一个 git worktree（分支 `<demandKey>/<id>`，经 ref 规则清洗），启动窗口 `<repo>__<id>`，并**只**把它注册进派生 overlay `.wakeflow-local/workspace.config.json`（受跟踪配置的完整副本 + 流条目 + `derived{baseHash}`；在全局 `stream-overlay.lock` 下原子地重新生成）。守卫：每（仓库, 需求）一条流——需求内并行按设计被拒绝；`maxStreamsPerRepo`（默认 2）限定同一仓库上可有多少个需求持有 worktree；open 幂等可续（已注册+已死则重新启动并重新注册，已注册+存活则如实报告）。`stream-close` 拒绝脏 worktree（失败关闭），把存活下来的分支记录到 `../wakeflow-ledger/workspace/pending-merges.md`，且 `--delete-branch` 拒绝删除未合并的工作。`archive-demand` 在该需求的任何隔离窗口仍打开时拒绝。舰队操作（`launch-all`/`replace-all`/`arrange-windows`）只读取**受跟踪**配置，因此流/舱窗口永不会被重新归置进主会话。`stream-list` 对 overlay、worktree 与注册三方状态做对账。
+`stream-open --repo <win> --stream <id> --demand-key <key>` 会在 `.wakeflow-local/worktrees/<Repo__id>` 创建一个 git worktree（分支 `<demandKey>/<id>`，经 ref 规则清洗），启动窗口 `<repo>__<id>`，并**只**把它注册进派生 overlay `.wakeflow-local/wakeflow.config.json`（受跟踪配置的完整副本 + 流条目 + `derived{baseHash}`；在全局 `stream-overlay.lock` 下原子地重新生成）。守卫：每（仓库, 需求）一条流——需求内并行按设计被拒绝；`maxStreamsPerRepo`（默认 2）限定同一仓库上可有多少个需求持有 worktree；open 幂等可续（已注册+已死则重新启动并重新注册，已注册+存活则如实报告）。`stream-close` 拒绝脏 worktree（失败关闭），把存活下来的分支记录到 `../wakeflow-ledger/workspace/pending-merges.md`，且 `--delete-branch` 拒绝删除未合并的工作。`archive-demand` 在该需求的任何隔离窗口仍打开时拒绝。舰队操作（`launch-all`/`replace-all`/`arrange-windows`）只读取**受跟踪**配置，因此流/舱窗口永不会被重新归置进主会话。`stream-list` 对 overlay、worktree 与注册三方状态做对账。
 
 ### 7.7 需求舱（Claude 版本，多需求并行）
 
@@ -727,9 +727,9 @@ INIT 是 `wakeflow-setup.mjs initialize` 中的一个 **四阶段、先 dry-run*
 - **重新 init 足迹守卫**（`assertInitializeWriteAllowed`）：若足迹已存在（config + workspace index/status、`.wakeflow-local/wakeflow-delivery`、根 + 子级 memory 块）且存在 config 选择但无 `--reset-initialization`，则 `--write` 失败（`reInitBlocked`）；dry-run 返回 `mode:'blocked-already-initialized'`。reset 在传入 `--use-discovered` 或未给出显式 `--repo` 映射时还会额外失败。
 - **线程注册后续豁免**：`initialize --thread X=<id> --write`（无 config 选择、无 reset）会注册一个真实 thread id 而不重新脚手架；id 会针对 host-profile 占位符校验，必须无空白，且只落于 `.wakeflow-local/.../hosts/<host>/thread-registry/<window>.json`，绝不进入受跟踪文档。
 
-应用写入：`workspace.config.json`、`.gitignore` 运行时条目、起始的活动文档 + ledger（record-map、requirement-designs/goal-stage README、policy 文档、archive 索引、按窗口 ledger README）、父级 + 子级 `AGENTS/CLAUDE.md` 受管范围卡，以及按窗口的 thread-registry + window-config JSON。
+应用写入：`wakeflow.config.json`、`.gitignore` 运行时条目、起始的活动文档 + ledger（record-map、requirement-designs/goal-stage README、policy 文档、archive 索引、按窗口 ledger README）、父级 + 子级 `AGENTS/CLAUDE.md` 受管范围卡，以及按窗口的 thread-registry + window-config JSON。
 
-`replace-window(s)` 是高频的单个/分组重绑路径：它要求一个既有的 `workspace.config.json`、≥1 个 `--window`，并（在 `--write` 时）每个窗口一个新鲜的 `--thread`；它只重新生成启动计划 + 本地注册表，从不重新生成 init 文档。
+`replace-window(s)` 是高频的单个/分组重绑路径：它要求一个既有的 `wakeflow.config.json`、≥1 个 `--window`，并（在 `--write` 时）每个窗口一个新鲜的 `--thread`；它只重新生成启动计划 + 本地注册表，从不重新生成 init 文档。
 
 ### 8.2 `wakeflow_verify` 编排
 

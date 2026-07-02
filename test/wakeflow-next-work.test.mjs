@@ -93,7 +93,7 @@ test("next-work blocks new candidates while another demand state root is unarchi
     todoRows:
       "| NEXT-2026-06-04 | pending-claim | requirement | P1 | Wakeflow | next | no | none | Wakeflow | none |",
   });
-  writeJson(path.join(root, "workspace.config.json"), { maxActiveDemands: 1 });
+  writeJson(path.join(root, "wakeflow.config.json"), { maxActiveDemands: 1 });
   writeJson(path.join(root, ".wakeflow-active/current/current-demand/wakeflow-state.json"), {
     demandKey: "current-demand",
     state: "needs-rework",

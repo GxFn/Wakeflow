@@ -672,7 +672,7 @@ function commandInit() {
         excludeDemandKeys: [demandKey],
       });
       if (capacity.atCapacity) {
-        fail(`cannot initialize ${demandKey}: workspace is at its active-demand capacity (${capacity.active.length}/${capacity.max}): ${activeDemandConflictSummary(capacity.active)}. Complete and archive one, or raise maxActiveDemands in workspace.config.json.`);
+        fail(`cannot initialize ${demandKey}: workspace is at its active-demand capacity (${capacity.active.length}/${capacity.max}): ${activeDemandConflictSummary(capacity.active)}. Complete and archive one, or raise maxActiveDemands in wakeflow.config.json.`);
       }
       if (write) {
         // wakeflow-state.json makes the demand visible to other scanners, so

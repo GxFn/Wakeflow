@@ -23,8 +23,8 @@ const bundledPluginEntries = [
   "scripts",
   "skills",
   "templates",
-  "workspace.config.example.json",
-  "workspace.config.json",
+  "wakeflow.config.example.json",
+  "wakeflow.config.json",
 ];
 
 const forbiddenPluginEntries = [

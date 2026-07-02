@@ -31,7 +31,7 @@ function writeJson(file, value) {
 }
 
 function createManifest(root) {
-  writeJson(path.join(root, "workspace.config.json"), {
+  writeJson(path.join(root, "wakeflow.config.json"), {
     workspaceName: "ExampleWorkspace",
     controllerWindow: "ExampleController",
     // These fixtures pin the strict single-active sequencing semantics; the

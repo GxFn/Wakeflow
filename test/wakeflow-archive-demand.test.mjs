@@ -18,7 +18,7 @@ function writeJson(file, value) { writeFileSync(file, `${JSON.stringify(value, n
 
 function initDemand({ demandKey = "ARCH-1", complete = true } = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-archive-"));
-  writeJson(path.join(root, "workspace.config.json"), { workspaceName: "X", controllerWindow: "C", projectLedgerRoot: "wakeflow-ledger" });
+  writeJson(path.join(root, "wakeflow.config.json"), { workspaceName: "X", controllerWindow: "C", projectLedgerRoot: "wakeflow-ledger" });
   const init = JSON.parse(run(["init", "--root", root, "--demand-key", demandKey, "--title", "Archive me", "--write", "--json"]).stdout);
   const stateFile = path.join(root, init.stateRoot, "wakeflow-state.json");
   if (complete) writeJson(stateFile, { ...readJson(stateFile), state: "completed" });

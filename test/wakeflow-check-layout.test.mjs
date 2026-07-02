@@ -22,7 +22,7 @@ function makeStarterFixture() {
   writeBundledTemplates("templates/starter-workspace/workspace/", path.join(root, ".wakeflow-active"));
   writeFile(path.join(root, "AGENTS.md"), "# Fixture Workspace\n");
   writeFile(
-    path.join(root, "workspace.config.json"),
+    path.join(root, "wakeflow.config.json"),
     JSON.stringify(
       {
         runtimeMode: "plugin",

@@ -70,18 +70,48 @@ export function resolveWorkspaceRoot(args = process.argv.slice(2), fallback = pr
   return path.resolve(getArgValue(args, "--root", fallback));
 }
 
+// Canonical config file name. The legacy "workspace.config.json" name keeps
+// resolving READ-side so pre-rename workspaces never break; writers write to
+// whichever file resolves (fresh workspaces get the new name), and
+// check-workspace suggests the one-line rename.
+export const WAKEFLOW_CONFIG_FILE = "wakeflow.config.json";
+export const LEGACY_WORKSPACE_CONFIG_FILE = "workspace.config.json";
+
+function preferExisting(preferred, legacy) {
+  if (existsSync(preferred)) return preferred;
+  if (existsSync(legacy)) return legacy;
+  return preferred;
+}
+
+// The tracked (committed) Wakeflow config for a workspace.
+export function trackedWorkspaceConfigPath(workspaceRoot = process.cwd()) {
+  return preferExisting(
+    path.join(workspaceRoot, WAKEFLOW_CONFIG_FILE),
+    path.join(workspaceRoot, LEGACY_WORKSPACE_CONFIG_FILE),
+  );
+}
+
+// The local (never committed) config under .wakeflow-local/ — normally the
+// derived stream overlay, or a hand-maintained user override.
+export function localWorkspaceConfigPath(workspaceRoot = process.cwd()) {
+  return preferExisting(
+    path.join(workspaceRoot, ".wakeflow-local", WAKEFLOW_CONFIG_FILE),
+    path.join(workspaceRoot, ".wakeflow-local", LEGACY_WORKSPACE_CONFIG_FILE),
+  );
+}
+
 export function workspaceConfigPath({ workspaceRoot = process.cwd(), args = process.argv.slice(2) } = {}) {
   const configArg = getArgValue(args, "--config", process.env.WAKEFLOW_CONFIG ?? null);
   if (configArg) {
     return path.isAbsolute(configArg) ? configArg : path.join(workspaceRoot, configArg);
   }
 
-  const localConfig = path.join(workspaceRoot, ".wakeflow-local/workspace.config.json");
+  const localConfig = localWorkspaceConfigPath(workspaceRoot);
   if (existsSync(localConfig)) {
     return localConfig;
   }
 
-  return path.join(workspaceRoot, "workspace.config.json");
+  return trackedWorkspaceConfigPath(workspaceRoot);
 }
 
 export function readWorkspaceConfig({ workspaceRoot = process.cwd(), args = process.argv.slice(2), onError = null } = {}) {

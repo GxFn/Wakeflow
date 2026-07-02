@@ -34,7 +34,7 @@ test("porcelain status preserves leading-space unstaged markers", () => {
   writeFileSync(path.join(repoPath, "tracked.txt"), "two\n");
   writeFileSync(path.join(repoPath, "untracked.txt"), "new\n");
   writeFileSync(
-    path.join(fixtureRoot, "workspace.config.json"),
+    path.join(fixtureRoot, "wakeflow.config.json"),
     JSON.stringify({
       workspaceName: "FixtureWorkspace",
       allowMissingRepos: false,

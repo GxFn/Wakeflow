@@ -30,7 +30,7 @@
 | PD | 建议决议 | 理由 |
 | --- | --- | --- |
 | **PD-1 并行范围** | **接受收窄**：P1 只做"一个需求内同 repo 多 stream"；放松单活跃 demand 另立未来需求 | 与用户逐字诉求一致；单活跃 demand 是全系统假定（`wakeflow-active-demands.mjs:46-50`、`wakeflow-next-work.mjs:267-270`、`wakeflow-demand-sequence.mjs:96-102`），爆炸半径最大 |
-| **PD-2 stream 窗口注册落点** | **运行时派生覆盖层 `.wakeflow-local/workspace.config.json`**（= 基础 config + 活动 stream 条目的完整派生副本，由 stream-open/close 重生成） | 本轮测绘核实：core 侧**所有**配置解析已优先读该路径——`workspaceConfigPath`（`wakeflow-config.mjs:79-84`）与 `readWorkspaceConfig`（`wakeflow-window-runtime.mjs:42-50`）。即证据解析（`wakeflow-state.mjs:381-393`）、窗口 dispatch 配置、setup 状态**零 core 改动**就能看到 stream 窗口。唯一要补的是 claude-host 侧约 10 处直接读 tracked config 的调用点（`:127,:142,:157,:170,:599,:935,:1166,:1188,:1257`）换成"覆盖层优先"helper——纯 host-local 改动 |
+| **PD-2 stream 窗口注册落点** | **运行时派生覆盖层 `.wakeflow-local/wakeflow.config.json`**（= 基础 config + 活动 stream 条目的完整派生副本，由 stream-open/close 重生成） | 本轮测绘核实：core 侧**所有**配置解析已优先读该路径——`workspaceConfigPath`（`wakeflow-config.mjs:79-84`）与 `readWorkspaceConfig`（`wakeflow-window-runtime.mjs:42-50`）。即证据解析（`wakeflow-state.mjs:381-393`）、窗口 dispatch 配置、setup 状态**零 core 改动**就能看到 stream 窗口。唯一要补的是 claude-host 侧约 10 处直接读 tracked config 的调用点（`:127,:142,:157,:170,:599,:935,:1166,:1188,:1257`）换成"覆盖层优先"helper——纯 host-local 改动 |
 | **PD-3 streamId 落点** | 已解决（留记录）：落 `wakeflow-state.schema.json:55` 开放 `targetTasks[]` items，零 schema 改动 | 需求文档已接地核实 |
 | **PD-4 worktree 回收时机** | **三层**：① stream 全部任务被 accept 后由控制器显式 `stream-close`；② `archive-demand` 前强制 GC 检查（有存活 stream 则拒绝归档，提示先 close）；③ dirty worktree（未提交改动）拒删，须 `--force` | 防 stale 堆积（今天无 worktree GC）+ 防误删未提交工作；归档门与现有"归档是硬闸门"哲学一致 |
 | **PD-5 漂移门 vs advisory** | **决议升级：相似度分数整体移除**。机制 = 两句意图并排 + 条件化提醒，最终确认归 Agent；"gate 化"议题随分数移除而消解（没有分数就没有门槛） | 原需求文档自己已断言"低相似 ≠ 漂移、未 calibrate 前近乎无用"——顺着这个怀疑走到底就是删掉分数；且脚本算分暗含"脚本在判断"，与 Wakeflow 信任模型（脚本只记录，判断归 Agent）相抵触 |
@@ -82,14 +82,14 @@ stream = 独立窗口 `<repo>__<streamId>` + 独立 worktree + 独立分支 `<de
 - git 子命令经由既有进程边界（`wakeflow-process.mjs` 白名单含 git；worktree 子命令加入允许清单）。
 
 **W1-b：注册与解析（PD-2 落地，核心零改）**
-- stream-open/close 重生成 `.wakeflow-local/workspace.config.json` = 当前 tracked config + 活动 stream 条目 `{windowName, path: <worktree相对路径>, role: "Parallel stream of <repo>", mode: "internal", managedAgents: false, stream: {repo, streamId, demandKey, branch}}`；重生成时断言 windowName 全局唯一。
-- 覆盖层带派生标记 `{derived: {from: "workspace.config.json", baseHash, generatedAt}}`；**新鲜度纪律**：stream-open/close 每次从当前 base 重生成；`check-workspace` 校验 baseHash，不匹配即报"stale overlay"；最后一条 stream 关闭时删除覆盖层（回到直读 base）。
+- stream-open/close 重生成 `.wakeflow-local/wakeflow.config.json` = 当前 tracked config + 活动 stream 条目 `{windowName, path: <worktree相对路径>, role: "Parallel stream of <repo>", mode: "internal", managedAgents: false, stream: {repo, streamId, demandKey, branch}}`；重生成时断言 windowName 全局唯一。
+- 覆盖层带派生标记 `{derived: {from: "wakeflow.config.json", baseHash, generatedAt}}`；**新鲜度纪律**：stream-open/close 每次从当前 base 重生成；`check-workspace` 校验 baseHash，不匹配即报"stale overlay"；最后一条 stream 关闭时删除覆盖层（回到直读 base）。
 - claude-host 新增 `readWorkspaceConfigPreferLocal()` helper，替换其 9-10 处直接读 tracked config 的调用点（`wakeflow-claude-host.mjs:127,:142,:157,:170,:599,:935,:1166,:1188,:1257` 一带）——host-local，不触 core。
 - **波次并发安全（落地时对抗式复核后撤销）**：原判断"组文件互踩 → group-ready 扇入错判"是**错的**——就绪扇入的 `expectedTargets` 从 **packets** 推导（`wakeflow-dispatch-group-review.mjs:45`、快照 `:122`），组文件只承载策略/controllerWindow/排序元数据且**首写生效**（`wakeflow-dispatch-commands.mjs` 写守卫 `!existingGroup`），策略冲突由 upsert 守卫先行拒绝。并行首备的竞态只影响排序外观，**无需组文件锁**；packets 各自独立文件天然并发安全。
 - 收益（本轮测绘核实）：core 的 `workspaceConfigPath` 已优先读覆盖层（`wakeflow-config.mjs:79-84`），因此 **reduce 的证据解析**（`evidenceRepoRootForWindow`，`wakeflow-state.mjs:381-393`）自动把 stream 窗口的 repo 相对证据 ref 解析到 worktree——不补这条，stream 结果会在 reduce 处 false-fail（正是 cdb04b2/77d2e5c 修过的闭环断裂模式在 stream 上的重演）。
 
 **W1-c：池上界与耗尽兜底**
-- 配置：`workspace.config.json` → `hosts.claude-code.maxStreamsPerRepo`（缺省 2），可被 `repositories[].maxStreams` 覆盖。
+- 配置：`wakeflow.config.json` → `hosts.claude-code.maxStreamsPerRepo`（缺省 2），可被 `repositories[].maxStreams` 覆盖。
 - `stream-open` 计数活动 stream ≥ 上界时输出结构化 `pool-exhausted` 失败（block，绝不 spawn 第 N+1 个窗口），`agentNext` 指引"等某 stream 回收后重试或顺序化"——无人值守红线。
 - `archive-demand` 归档门（PD-4 ②）：state root 归档前检查该 demand 的活动 stream，存活即拒绝。
 
@@ -240,7 +240,7 @@ Phase 3  —      加固+规模化（观察触发）  E系: 流式评审/多活�
 - M6 `wakeflow_claim_next` 增加 `controllerWindow` 参数并全链路透传（schema→argv→claim-todo→create-demand）。
 - M7 容量 TOCTOU：init 的容量扫描与 demand/state 首写包进 workspace 级 `.capacity-lock` 临界区。
 - M8 舰队操作只读 tracked config（launch-all/replace-all/arrange 永不把 pod 窗口收编进主 session）。
-- GAP1 MCP 根解析向上爬找 `workspace.config.json`（子仓库窗口的 MCP 不再把根解析到自己仓库）。
+- GAP1 MCP 根解析向上爬找 `wakeflow.config.json`（子仓库窗口的 MCP 不再把根解析到自己仓库）。
 - GAP6 replace-all 重建总控时用总控向 entry-sync（不再当 target 等派发）；GAP7/GAP5/A7 三处文案纠正；GAP8 容量满降为 warning（ok:true，在飞需求仍可评审）。
 - L9 pod 路径尊重 `workspaceCurrentDir`；L10 台账回退对齐 `../wakeflow-ledger`；L11 pending-merges 去重 + overlay 再生失败显式 fail；L12 pod-open/close 向子命令透传 `--state-dir` + stream-close 清理 entry-sync 文件。
 
@@ -252,3 +252,12 @@ Phase 3  —      加固+规模化（观察触发）  E系: 流式评审/多活�
 - 模板包（双版本，JSON 校验通过）：A15 handoff-inbox 死表面×2 → TODO board via deliver；A16 调度策略状态词表对齐板面词汇；A17 board 分隔行 13→12 列；A18 Design 边界补"deliver 是唯一许可写"；A19 `[alembic]` 残留 → `[wakeflow]`；GAP9 需求设计模板补齐出口门（Landing Plan/designIntent 列、Test Environment Spec、User Confirmation Ledger、Handoff Readiness 三新项）。
 
 **登记未修（后续观察）**：GAP3 全 pod 重启 runbook（pod-open 已幂等续开，缺一页操作文档）；Codex 版 pod 对称性（用户已定先 CC）；testing-validation.md 现代化重写；target skill 的 deliver 化措辞再统一。
+
+## 7. 配置命名迁移 ——✅ 已于 2026-07-02 落地（0.7.8）
+
+`workspace.config.json` → **`wakeflow.config.json`**（明确这是 Wakeflow 的配置项，不是任意工作区元数据）。规则：
+
+- 规范名 `wakeflow.config.json`（tracked 与 `.wakeflow-local/` overlay 双层同名）；解析顺序 新名 > 旧名，两层均只读回退旧名 `workspace.config.json`——改名前的已装工作区（如 AlembicWorkspace）零中断。
+- 写入方写"解析到的那个文件"：全新工作区得到新名；旧名工作区继续写旧名（不产生双文件脑裂）；旧名 overlay 存在时原地再生，全新 overlay 用新名。
+- `check-workspace` 对旧名给 `legacy-name` 提示（一行 `git mv` 即迁移完成）。
+- 船载默认配置六个文件 `git mv`；`package.json` files 数组、host-profile/MCP 描述、报错文案、全部 skills/docs/README/模板同步改名；新增 `test/wakeflow-config-name.test.mjs`（旧名可读、新名优先、旧名工作区 stream-open 正常 + 迁移提示）3 用例。

@@ -107,7 +107,7 @@ demand 都经过同一个闭环：
 
 ```text
 <workspace>/
-  workspace.config.json          窗口、角色、每宿主配置              committed
+  wakeflow.config.json          窗口、角色、每宿主配置              committed
   AGENTS.md / CLAUDE.md          每宿主总控 gate                    committed
   wakeflow-ledger/               长期设计、记录、归档               committed
   .wakeflow-active/             demand state roots（第 2 层）       local
@@ -168,7 +168,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.7/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.8/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -196,10 +196,15 @@ Wakeflow 不要求额外的聚合 marketplace 仓库。单独的 catalog 可以�
 Wakeflow 作为 Codex 或 Claude Code 插件安装。目标工作区不需要包含 Wakeflow
 源码。推荐的目标形态是：
 
+> 命名说明：`wakeflow.config.json` 是规范配置名。改名前的工作区里
+> `workspace.config.json` 仍然可读（只读回退）；方便时用
+> `git mv workspace.config.json wakeflow.config.json` 迁移——
+> `check-workspace` 会提醒。
+
 ```text
 MyWorkspace/
   AGENTS.md 或 CLAUDE.md
-  workspace.config.json
+  wakeflow.config.json
   .wakeflow-active/          # ignored active controller state
   .wakeflow-local/           # ignored thread registry and derived runtime
   wakeflow-ledger/            # durable project coordination records
@@ -305,7 +310,7 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
 | --- | --- |
 | `AGENTS.md` | 父级总控 gate 和长期边界规则。 |
 | 子窗口 `AGENTS.md` access cards | 每个窗口的责任和读取路径。 |
-| `workspace.config.json` | 受管窗口、仓库路径、角色和默认语言。 |
+| `wakeflow.config.json` | 受管窗口、仓库路径、角色和默认语言。 |
 | `.wakeflow-active/` | active state roots、当前索引、progress docs、TODO 投影、intake 和 test cards。 |
 | `.wakeflow-local/` | thread registry、direct-thread runtime、本地 overrides 和派生 window config。 |
 | `wakeflow-ledger/` | 长期项目协作记录和归档。 |
@@ -325,7 +330,7 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 - 真实 thread id 只存在宿主独立的本地 thread registry：
   `.wakeflow-local/wakeflow-delivery/hosts/<host>/thread-registry/`
   （`codex` 或 `claude-code`）。
-- Window config 从 `workspace.config.json` 和 thread-registry presence 派生，不是第二份 thread-id 权威。
+- Window config 从 `wakeflow.config.json` 和 thread-registry presence 派生，不是第二份 thread-id 权威。
 - Delivery prompts 保持轻量、可读。
 - Host 通过自己的传输边界发送 prompt：Codex 使用 thread tools，Claude Code 使用
   tmux host helper。Wakeflow 记录发送和 readback 证据。

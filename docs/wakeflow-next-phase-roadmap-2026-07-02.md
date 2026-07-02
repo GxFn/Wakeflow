@@ -198,7 +198,11 @@ stream = 独立窗口 `<repo>__<streamId>` + 独立 worktree + 独立分支 `<de
 
 ---
 
-## 4.6 E-2 多活跃 demand ——✅ 已于 2026-07-02 落地（0.7.5，npm test 304/304）
+## 4.7 需求舱（demand pod）——用户三决策已拍板，待实施（E-6）
+
+用户裁定多需求并行的最终形态：**去中心化需求舱**，取代 4.6 的"单总控多路复用"。一个需求 = 一个舱（自己的总控 + 仓库隔离 worktree 窗口 + 自己的 Test），**每舱独立 tmux session**，彼此不知道对方；分支合并完全去中心化（人工，Wakeflow 不承载）；不设瘦入口总控——**现任总控抽空执行 `pod-open` 开新舱**即可，新舱总控自己认领新需求后自主运行。实施要点：`pod-open --demand-key <key>`（编排既有机制：舱 session + 按需 N×stream-open 落入舱 session + `Controller__<slug>`/`Test__<slug>` 窗口 + 入舱定向提示写明"claim 该需求、派发用本舱窗口名、prepare 显式 --controller-window"）；`pod-close`（归档后收舱）；`maxActiveDemands`=舱数上界、`maxStreamsPerRepo`=单仓并发舱数上界（语义已就位）；4.6 的"单总控多路复用"散文（Multiple Active Demands 回合声明等）将被舱模型替换，容量门/仪表盘/板锁（H-9，硬前置）保留。Codex 舱对称落地为后续项。
+
+## 4.6 E-2 多活跃 demand ——✅ 已于 2026-07-02 落地（0.7.5，npm test 304/304；4.7 用户裁定后，其"单总控多路复用"操作模型被需求舱取代，容量机制保留）
 
 用户拍板三决策：maxActiveDemands 默认 2（配置可调，=1 完全恢复单活跃）；跨需求同仓 = 后来者走隔离窗口（主检出归先占 demand）；**单控制器**统管全部活跃 demand（唯一验收权威）。落点：三处入口门改为容量判定（init / demand-sequence claim / next-work 候选守卫），next-work 输出 activeDemands+demandCapacity 仪表盘，Claude 侧总控粘贴互斥（只序列化 paste+Enter，总控依旧永不 busy），skills 双版本载入多活跃纪律（回合声明 demand、重读 root、总控换新 runbook）与语义清扫（"multiple controllers can run in parallel" 等歧义句修正）。测试钉死：默认 2 并行、第三个 fail-closed、=1 旋钮回归旧语义、两 demand 交错闭环互不干扰（revision 各自 4）、归档释放容量（completed 未归档仍占位）。
 

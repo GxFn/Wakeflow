@@ -43,6 +43,26 @@ function writeStateRootEvidence(root, stateRootRef, ref, content = "{}\n") {
   return file;
 }
 
+
+// New contract (demand information lifecycle): reducers append exactly ONE
+// human timeline line into a designated append-only section; everything else
+// in the progress doc stays byte-identical. Projection, never authority.
+function assertOnlyTimelineAppend(progressAfter, progressBefore, matcher) {
+  const beforeLines = progressBefore.split("\n");
+  const afterLines = progressAfter.split("\n");
+  const added = afterLines.filter((line) => {
+    const index = beforeLines.indexOf(line);
+    if (index >= 0) {
+      beforeLines.splice(index, 1);
+      return false;
+    }
+    return true;
+  });
+  assert.equal(added.length, 1, `expected exactly one appended line, got: ${JSON.stringify(added)}`);
+  assert.match(added[0], matcher);
+  assert.equal(beforeLines.length, 0, "no pre-existing line may change or disappear");
+}
+
 test("trace-bearing state-machine schemas expose wakeflowTrace explicitly", () => {
   for (const schemaName of [
     "target-result.schema.json",
@@ -435,7 +455,7 @@ test("add-task-package updates machine state without changing progress doc", () 
   assert.equal(existsSync(path.join(stateRoot, "automation")), false);
   assert.equal(events.length, 2);
   assert.equal(JSON.parse(events[1]).type, "task-package.added");
-  assert.equal(progressAfter, progressBefore);
+  assertOnlyTimelineAppend(progressAfter, progressBefore, /CSMR-PKG-1 → AlembicWorkspace/);
 });
 
 test("wakeflow-render-progress updates only Unified Status after task package changes", () => {
@@ -617,7 +637,7 @@ test("import-target-result stores result evidence without changing controller st
   const resultFile = readJson(path.join(stateRoot, "target-results/CSMR-RESULT-1.json"));
 
   assert.deepEqual(stateAfter, stateBefore);
-  assert.equal(progressAfter, progressBefore);
+  assertOnlyTimelineAppend(progressAfter, progressBefore, /returned completed \(result CSMR-RESULT-1\)/);
   assert.equal(resultFile.status, "completed");
   assert.equal(resultFile.stateRoot, initPayload.stateRoot);
   assert.equal(resultFile.deliveryContext.resolution, "state-only-result");
@@ -953,7 +973,7 @@ test("decide-review records explicit controller judgment before task acceptance"
   assert.deepEqual(state.allowedActions, ["add-task-package", "complete-demand", "wakeflow-render-progress"]);
   assert.equal(events.at(-1).type, "review.decided");
   assert.match(events.at(-1).forbiddenConclusions.join(","), /decision-creates-dispatch/);
-  assert.equal(progressAfter, progressBefore);
+  assertOnlyTimelineAppend(progressAfter, progressBefore, /decision accept \(candidate /);
 });
 
 test("review decisions affect open targets without rewriting accepted history", () => {
@@ -1402,7 +1422,7 @@ test("complete-demand refuses open tasks and records final completion explicitly
   assert.equal(state.allowedActions[0], "wakeflow-render-progress");
   assert.equal(events.at(-1).type, "demand.completed");
   assert.match(events.at(-1).forbiddenConclusions.join(","), /completion-creates-dispatch/);
-  assert.equal(progressAfter, progressBefore);
+  assertOnlyTimelineAppend(progressAfter, progressBefore, /demand completed — /);
 });
 
 test("completed demands reject follow-up task and result mutations", () => {

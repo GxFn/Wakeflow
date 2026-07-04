@@ -45,6 +45,27 @@ READMEs at `.wakeflow-active/`, `.wakeflow-local/`, `wakeflow-delivery/`,
 may I touch it" right next to the data. `check-workspace` (Claude edition)
 reminds when they are missing or stale.
 
+## Demand Information Lifecycle (what lives where, when)
+
+Every kind of demand information has ONE home per lifecycle stage; the archive
+threads them into a single navigable spine:
+
+| Information | Intake | Active | Archived |
+| --- | --- | --- | --- |
+| Requirement design / original plan | `wakeflow-ledger/requirement-designs/<key>/` (Design writes; TODO row links them) | unchanged — the demand POINTS at it (`demand.json source.designKey/documents`) | unchanged; `archive-summary.md` + manifest link back |
+| Execution actions (dispatch/return) | — | transport artifacts in `.wakeflow-local/wakeflow-delivery/` (pruned later) + one human line each in the progress doc's execution timeline | timeline rides the archived `developer-progress.md`; transport is GC'd |
+| State transitions | — | `wakeflow-state.json` (snapshot) + `controller-events.jsonl` (audit truth) | both copied into `archive/<month>/<demand>/` |
+| Acceptance & conclusion | — | `decide-review` events + timeline lines; completion reason/evidence on the `completed` event | `archive-manifest.json conclusion` + Task Ledger table in `archive-summary.md` |
+| Test information | Test Environment Spec in the requirement design (S1) | `test-cards/` in the state root + results as TargetResultEnvelopes | cards ride the archive copy; summary lists them |
+| Un-redacted original | — | stays in the state root | machine-moved to `.wakeflow-local/preserved/<date>-archive-original-<demand>/` (manifest; `originalPreservedAt` in the archive manifest) |
+
+The execution timeline is machine-appended (dispatch sent, target return,
+decision, completion, archive) into the progress doc's three append-only
+sections — projection for humans, never authority (events jsonl stays the
+audit truth); appends never fail the mutation they narrate. Reading order for
+an archived demand: `archive-summary.md` → `developer-progress.md` (timeline)
+→ `controller-events.jsonl` (audit) → linked requirement design.
+
 ## Rescue Convention And GC
 
 - The ONE sanctioned manual-rescue move is `wakeflow-storage preserve

@@ -16,6 +16,7 @@ import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import { releaseWindowLockForResult } from "./lib/wakeflow-delivery-store.mjs";
 import { scanStateRootForRealIds, redactStateRootIntoCopy } from "./lib/wakeflow-redaction.mjs";
 import { WakeflowStateLockTimeoutError, withFileLock, withStateRootLock } from "./lib/wakeflow-state-lock.mjs";
+import { PROGRESS_SECTIONS, appendProgressTimeline } from "./lib/wakeflow-progress-appends.mjs";
 import {
   activeDemandCapacity,
   activeDemandConflictSummary,
@@ -506,6 +507,12 @@ function commandInit() {
   const demandControllerWindow = (getValue("--controller-window", "") || config.controllerWindow || "").trim() || null;
   const completionDefinition = getValue("--completion-definition", locale.defaultCompletionDefinition);
   const stagePlan = getValue("--stage-plan", locale.defaultStagePlan);
+  // Provenance: the design key (usually the delivered TODO row id) and the
+  // source documents (requirement design / original plan links) persist on
+  // demand.json so the archived story can thread back to its requirement
+  // without relying on prose.
+  const designKey = (getValue("--design-key", "") || "").trim() || null;
+  const sourceDocuments = valuesFor("--source-doc");
   const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args: options, config });
   const stateRoot = resolveFromWorkspace(getValue("--state-root", defaultStateRoot({ demandKey, ledgerPaths })));
   ensureInsideAllowedRoots(stateRoot, "state root", [
@@ -540,6 +547,8 @@ function commandInit() {
       kind: "wakeflow-state-init",
       trackedTemplates: "templates/wakeflow-state-machine",
       generatedStateRoot: relative(stateRoot),
+      ...(designKey ? { designKey } : {}),
+      ...(sourceDocuments.length ? { documents: sourceDocuments } : {}),
     },
   };
   const state = {
@@ -859,6 +868,8 @@ function commandAddTaskPackageLocked(stateRoot) {
     writeJson(packageFile, taskPackage);
     appendJsonLine(eventsFile, event);
     writeJson(stateFile, nextState);
+    appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.taskPackages,
+      `${createdAt} ${taskPackageId} → ${targetWindow || "(unassigned)"} — ${summary}${designIntent ? ` (intent: ${designIntent})` : ""}`);
   }
 
   output(
@@ -1085,6 +1096,8 @@ function commandImportTargetResult() {
     }
     mkdirSync(path.dirname(resultFile), { recursive: true });
     writeJson(resultFile, result);
+    appendProgressTimeline(stateRoot, state, PROGRESS_SECTIONS.backfill,
+      `${createdAt} ${targetWindow}/${targetTaskId} returned ${status} (result ${resultId})`);
   }
   // Release the shared in-flight window lock when this result answers the
   // delivery that locked it. This is the only release point reachable from the
@@ -1522,6 +1535,8 @@ function commandDecideReviewLocked(stateRoot) {
   if (write) {
     appendJsonLine(eventsFile, event);
     writeJson(stateFile, nextState);
+    appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.decisions,
+      `${createdAt} decision ${decision} (candidate ${candidateId}) — ${reason}`);
   }
 
   output(
@@ -1627,6 +1642,8 @@ function commandCompleteDemandLocked(stateRoot) {
   if (write) {
     appendJsonLine(eventsFile, event);
     writeJson(stateFile, nextState);
+    appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.decisions,
+      `${createdAt} demand completed — ${reason}`);
   }
 
   output(
@@ -2014,17 +2031,58 @@ function commandArchiveDemandLocked(stateRoot) {
 
   let redactedFields = [];
   const preservedOriginal = redact && !scan.clean;
+  // Archive spine: thread the whole demand story into the manifest so the
+  // archived tree is navigable without archaeology — provenance (design key +
+  // source docs), the completion conclusion, the per-task handling rollup,
+  // and the test cards.
+  const demandFile = path.join(stateRoot, "demand.json");
+  const demandRecord = existsSync(demandFile) ? JSON.parse(readFileSync(demandFile, "utf8")) : {};
+  let conclusion = null;
+  try {
+    const eventLines = readFileSync(eventsFile, "utf8").split("\n").filter(Boolean);
+    for (let i = eventLines.length - 1; i >= 0; i -= 1) {
+      const parsed = JSON.parse(eventLines[i]);
+      if (parsed.to === "completed") {
+        conclusion = { reason: parsed.reason ?? null, evidenceRefs: parsed.evidenceRefs ?? [], completedAt: parsed.createdAt ?? null };
+        break;
+      }
+    }
+  } catch {
+    conclusion = null;
+  }
+  const taskLedger = (state.targetTasks ?? []).map((task) => ({
+    targetTaskId: task.targetTaskId,
+    targetWindow: task.targetWindow ?? null,
+    status: task.status ?? null,
+    reviewDecision: task.reviewDecision ?? null,
+    dispatchCount: task.counts?.dispatchCount ?? 0,
+    reworkCount: task.counts?.reworkCount ?? 0,
+    redesignCount: task.counts?.redesignCount ?? 0,
+  }));
+  const testCardsDir = path.join(stateRoot, "test-cards");
+  const testCards = existsSync(testCardsDir)
+    ? readdirSync(testCardsDir).filter((name) => name.endsWith(".json") || name.endsWith(".md"))
+    : [];
   const archiveManifest = {
     kind: "WakeflowArchiveManifest",
-    version: 1,
+    version: 2,
     demandKey: state.demandKey,
+    title: state.title ?? demandRecord.title ?? null,
     archivedAt: createdAt,
     reason,
     redactedFields,
     sourceStateRoot: relative(stateRoot),
     preservedOriginal,
+    designKey: demandRecord.source?.designKey ?? null,
+    sourceDocuments: demandRecord.source?.documents ?? [],
+    conclusion,
+    taskLedger,
+    testCards,
   };
   const stagingDest = `${ledgerDest}.tmp-${process.pid}-${Date.now()}`;
+  // Written before the copy so the ARCHIVED progress doc closes its own story.
+  appendProgressTimeline(stateRoot, state, PROGRESS_SECTIONS.decisions,
+    `${createdAt} archived → ${relative(ledgerDest)} — ${reason}`);
 
   try {
     mkdirSync(path.dirname(ledgerDest), { recursive: true });
@@ -2037,6 +2095,48 @@ function commandArchiveDemandLocked(stateRoot) {
     appendJsonLine(path.join(stagingDest, "controller-events.jsonl"), event);
     writeJson(path.join(stagingDest, "wakeflow-state.json"), nextState);
     writeJson(path.join(stagingDest, "archive-manifest.json"), archiveManifest);
+    // The human one-pager: the archived story in reading order — requirement
+    // provenance, conclusion, per-task handling, tests, execution timeline
+    // pointer, audit-hold pointer.
+    writeText(path.join(stagingDest, "archive-summary.md"), [
+      `# ${state.demandKey} — Archive Summary`,
+      "",
+      `- Title: ${archiveManifest.title ?? state.demandKey}`,
+      `- Archived: ${createdAt} — ${reason}`,
+      `- Demand goal: ${demandRecord.goal ?? "(see demand.json)"}`,
+      `- Completion definition: ${demandRecord.completionDefinition ?? "(see demand.json)"}`,
+      "",
+      "## Provenance",
+      "",
+      `- Design key: ${archiveManifest.designKey ?? "(none recorded)"}`,
+      ...(archiveManifest.sourceDocuments.length
+        ? archiveManifest.sourceDocuments.map((doc) => `- Source document: ${doc}`)
+        : ["- Source documents: (none recorded)"]),
+      "",
+      "## Conclusion",
+      "",
+      conclusion
+        ? `- Completed ${conclusion.completedAt ?? "?"} — ${conclusion.reason ?? "(no reason recorded)"}`
+        : "- (no completion event found)",
+      ...(conclusion?.evidenceRefs?.length ? conclusion.evidenceRefs.map((ref) => `- Evidence: ${ref}`) : []),
+      "",
+      "## Task Ledger",
+      "",
+      "| Task | Window | Final | Decision | Dispatches | Reworks | Redesigns |",
+      "| --- | --- | --- | --- | --- | --- | --- |",
+      ...taskLedger.map((task) => `| ${task.targetTaskId} | ${task.targetWindow ?? "-"} | ${task.status ?? "-"} | ${task.reviewDecision ?? "-"} | ${task.dispatchCount} | ${task.reworkCount} | ${task.redesignCount} |`),
+      "",
+      "## Test Cards",
+      "",
+      ...(testCards.length ? testCards.map((name) => `- test-cards/${name}`) : ["- (none)"]),
+      "",
+      "## Where The Rest Lives",
+      "",
+      "- Execution timeline: developer-progress.md (Task Packages / Backfill Summaries / Decisions And Append Log)",
+      "- Machine audit trail: controller-events.jsonl + wakeflow-state.json",
+      `- Un-redacted original: ${preservedOriginal ? "moved to .wakeflow-local/preserved/ (see archive-manifest.json originalPreservedAt)" : "not needed (archive copy is complete)"}`,
+      "",
+    ].join("\n"));
     renameSync(stagingDest, ledgerDest);
   } catch (error) {
     if (existsSync(stagingDest)) rmSync(stagingDest, { recursive: true, force: true });
@@ -2080,6 +2180,11 @@ function commandArchiveDemandLocked(stateRoot) {
         "",
       ].join("\n"));
       originalPreservedAt = relative(preservedDest);
+      try {
+        writeJson(path.join(ledgerDest, "archive-manifest.json"), { ...archiveManifest, originalPreservedAt });
+      } catch {
+        // manifest enrichment is best-effort; the archive itself is committed
+      }
     } catch (error) {
       // The ledger commit already succeeded; a failed move degrades to the
       // old in-place behavior instead of failing the archive.

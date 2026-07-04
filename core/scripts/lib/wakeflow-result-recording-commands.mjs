@@ -8,6 +8,7 @@ import {
 } from "./wakeflow-idempotency.mjs";
 import { hostProfile } from "./wakeflow-host-profile.mjs";
 import { releaseWindowLockForResult } from "./wakeflow-delivery-store.mjs";
+import { PROGRESS_SECTIONS, appendProgressTimeline } from "./wakeflow-progress-appends.mjs";
 
 function eventIdFor(createdAt, revision) {
   return `evt-${createdAt.replace(/[-:.TZ]/g, "").slice(0, 14)}-${String(revision).padStart(4, "0")}`;
@@ -233,6 +234,8 @@ export function createResultRecordingCommands(ctx) {
     // most a harmless extra event, never a revision-without-event audit gap.
     appendJsonLine(eventsFile, event);
     atomicWriteJson(stateFile, nextState);
+    appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.decisions,
+      `${createdAt} dispatched ${targetTaskId} → ${targetTask.targetWindow} (delivery ${envelope.deliveryId})`);
     return {
       updated: true,
       stateRoot: path.relative(workspaceRoot, stateRoot),

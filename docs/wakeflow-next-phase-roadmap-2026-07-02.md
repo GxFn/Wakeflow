@@ -287,3 +287,8 @@ Phase 3  —      加固+规模化（观察触发）  E系: 流式评审/多活�
 - **D 真机治理（AlembicWorkspace）**：七棵无主树（~1774 文件/11.8M）全部折入 canonical preserved/（纯移动 + 补写 manifest，零删除，删除权走 prune dry-run 留给用户）；五份 README 落位；终态 map：unknown=0、legacy=0、preserved=7（全带 manifest）、check-workspace storage 区 0 gap。
 
 新增 `test/wakeflow-storage.test.mjs` 4 用例（map 分类与只读性、seed 幂等与配置化 ledger 路径、preserve/prune 全生命周期、preserve 拒绝态）；archive 测试更新为断言机器移动 + manifest。
+
+
+## 10. 需求信息生命周期（storage clarity 第二波）——✅ 已于 2026-07-04 落地（0.7.10）
+
+见 `wakeflow-local-storage-clarity-plan-2026-07-04.md` §7。一句话：出处入数据（demand.json source.designKey/documents）、执行入时间线（六动作自动追加 progress 三节，投影不权威、失败不阻断）、归档成脊椎（manifest v2 + archive-summary.md 一页串联需求→结论→任务台账→测试→原件指针）。孤儿机制 progress-log 的三节设计被真正接通。

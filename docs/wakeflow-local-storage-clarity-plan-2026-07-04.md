@@ -90,3 +90,16 @@ B  残留治理   canonical preserved/ + 归档原件机器化 + check 存储区
 C  引导重写   wakeflow-ledgers.md 重写 + CLAUDE.md/skill 指针     S   与 A 同源
 D  真机治理   AlembicWorkspace 六棵树逐棵拍板处置                 S   B 的验收场
 ```
+
+
+---
+
+## 7. 第二波：需求信息生命周期（放置合理 / 执行可见 / 归档串联）——✅ 已于 2026-07-04 落地（0.7.10）
+
+第一波治理了"运行时存储"，第二波治理"业务信息"：需求设计、执行动作、状态流转、验收结论、测试信息的落位与串联。实施三件事：
+
+1. **出处持久化**：`create-demand` 解析 TODO 行 Documents 列的链接，经 `init --design-key/--source-doc` 写入 `demand.json source.designKey/documents`——需求出处从散文变成数据，归档后可机读回溯。
+2. **执行时间线**（激活孤儿机制）：progress 模板的三个追加节（Task Packages / Backfill Summaries / Decisions And Append Log）此前无人写入；现在六个真实动作自动各追加一行人读时间线——加包（含 designIntent）、派发 sent、目标回填、评审决策、需求完成、归档收尾。时间线是投影不是权威（events jsonl 仍是审计真相），追加失败绝不阻断状态变更；render-progress 只重写 unified-status 块，时间线永续并随归档副本存续。
+3. **归档脊椎**：`archive-manifest.json` 升 v2（designKey / sourceDocuments / conclusion(完成原因+证据) / taskLedger(每任务 dispatch/rework/redesign 计数+终态+决策) / testCards / originalPreservedAt 实际回填）；新增 **`archive-summary.md`** 人读一页——出处 → 结论 → 任务台账表 → 测试卡 → "其余在哪"。已归档需求的阅读顺序：summary → progress 时间线 → events 审计 → 需求设计原文。
+
+引导：`wakeflow-ledgers.md` 双版本新增"需求信息生命周期"放置矩阵（六类信息 × 三阶段落位表）。测试：`wakeflow-demand-lifecycle-record.test.mjs`（全链路 create→act→archive 断言出处/时间线/re-render 存续/脊椎，+ 进度文档缺失时追加降级不阻断）。

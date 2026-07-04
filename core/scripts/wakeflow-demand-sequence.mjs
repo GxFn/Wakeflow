@@ -676,6 +676,7 @@ function commandCreateDemand() {
     }
   }
 
+  let sourceDocumentRefs = [];
   if (todoId) {
     const scan = runNextWorkTodo(todoId);
     const candidate = (scan.candidates ?? []).find((entry) => entry.id === todoId)
@@ -685,6 +686,10 @@ function commandCreateDemand() {
     }
     title = title ?? candidate.title;
     const documents = candidate.documents ?? "";
+    // Extract the [label](path) targets from the row's Documents cell so the
+    // demand records REAL document refs, not a prose blob.
+    sourceDocumentRefs = [...documents.matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1]);
+    if (sourceDocumentRefs.length === 0 && documents.trim()) sourceDocumentRefs = [documents.trim()];
     if (!goal) {
       goal = documents
         ? `Deliver the requirement described by the delivered docs: ${documents}`
@@ -718,6 +723,8 @@ function commandCreateDemand() {
   }
 
   const initArgs = ["init", "--root", workspaceRoot, "--state-root", stateRoot, "--demand-key", demandKey, "--title", title];
+  if (todoId) initArgs.push("--design-key", todoId);
+  for (const doc of sourceDocumentRefs) initArgs.push("--source-doc", doc);
   if (goal) initArgs.push("--goal", goal);
   if (completionDefinition) initArgs.push("--completion-definition", completionDefinition);
   if (stagePlan) initArgs.push("--stage-plan", stagePlan);

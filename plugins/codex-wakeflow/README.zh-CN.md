@@ -84,7 +84,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.9/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.10/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，

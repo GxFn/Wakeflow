@@ -275,3 +275,15 @@ Phase 3  —      加固+规模化（观察触发）  E系: 流式评审/多活�
 无论根因归属，两项加固成立并已落地：
 1. `ensureServer` 引导 server 的 `new-session` 传入净化环境（剥 `CLAUDE*`/`ANTHROPIC*`）：server 环境是全部窗口的继承源，从 agent 会话重建时不应把 13 个 agent 会话变量带给用户舰队（PATH 等保持调用方值）。
 2. 恢复舰队的正确顺序：优先 `launch-all`（续同 id、保上下文）；`replace-all` 才是全新重建；绝不用 `env -i` 包装调用（会出现"窗口建成但注册失败"的半成功态，注册表指向死会话，比全失败更危险）。
+
+
+## 9. 本地存储清晰化（storage clarity）——✅ 已于 2026-07-04 落地（0.7.9）
+
+规划与现状深读见 `wakeflow-local-storage-clarity-plan-2026-07-04.md`。四阶段全部完成：
+
+- **A 就地说明**：新增 core 脚本 `wakeflow-storage.mjs`（白名单 + MCP 接线）。`wakeflow_view scope=storage` = 存储地图（每棵树 class/size/age + legacy/unknown/aging preserved，分类是描述不是授权）；`seed-readmes --write` 在 `.wakeflow-active/`、`.wakeflow-local/`、`wakeflow-delivery/`、`hosts/`、ledger 根收敛五份就地 README（每份只答"这是什么/谁写/能动吗"）。
+- **B 残留生命周期**：canonical 抢救位 `.wakeflow-local/preserved/<日期>-<原因>/ + MANIFEST.md`（`wakeflow-storage preserve` 是唯一许可的人工保全动作）；`archive-demand --redact` 的原件改为**机器移入** canonical 位（消灭"人工挪原件"这个无主树之源，失败降级为旧行为 + 警告）；`check-workspace` 新增 storage 区（unknown-tree / legacy-residue / preserved-aging / readmes-stale，全部提醒不拦截）；`wakeflow_prune_runtime target=preserved` 按 `preservedRetentionDays`（默认 30）dry-run 列候选、`--apply` 删除。
+- **C 引导重写**：`wakeflow-ledgers.md` 双版本以存储地图为骨架重写（三层 + 分类表 + 抢救 convention + "ledger 位置看 config"）；CLAUDE.md/AGENTS.md 加存储指针；两版 controller skill 增"空闲时看存储地图；unknown-tree 一律路由用户"习惯条。
+- **D 真机治理（AlembicWorkspace）**：七棵无主树（~1774 文件/11.8M）全部折入 canonical preserved/（纯移动 + 补写 manifest，零删除，删除权走 prune dry-run 留给用户）；五份 README 落位；终态 map：unknown=0、legacy=0、preserved=7（全带 manifest）、check-workspace storage 区 0 gap。
+
+新增 `test/wakeflow-storage.test.mjs` 4 用例（map 分类与只读性、seed 幂等与配置化 ledger 路径、preserve/prune 全生命周期、preserve 拒绝态）；archive 测试更新为断言机器移动 + manifest。

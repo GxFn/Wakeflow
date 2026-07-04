@@ -2043,6 +2043,8 @@ function commandArchiveDemandLocked(stateRoot) {
     fail(`archive-demand failed before ledger commit; active state root was left unchanged: ${error.message}`);
   }
 
+  let originalPreservedAt = null;
+  let originalPreserveWarning = null;
   try {
     if (preservedOriginal) {
       appendJsonLine(eventsFile, event);
@@ -2052,6 +2054,37 @@ function commandArchiveDemandLocked(stateRoot) {
     }
   } catch (error) {
     fail(`archive-demand committed ledger at ${relative(ledgerDest)} but could not finalize the active state root: ${error.message}`);
+  }
+  if (preservedOriginal) {
+    // Canonical audit hold: move the un-redacted original OUT of current/
+    // (keeping the active layer clean without manual moves — the historical
+    // source of unowned residue trees) into preserved/<date>-archive-original-
+    // <demand>/ with a manifest; prune-preserved lists it once it ages.
+    const preservedRoot = path.join(workspaceRoot, ".wakeflow-local", "preserved");
+    const dateSlug = createdAt.slice(0, 10);
+    let preservedDest = path.join(preservedRoot, `${dateSlug}-archive-original-${slug(state.demandKey)}`);
+    for (let n = 2; existsSync(preservedDest); n += 1) {
+      preservedDest = path.join(preservedRoot, `${dateSlug}-archive-original-${slug(state.demandKey)}-${n}`);
+    }
+    try {
+      mkdirSync(preservedRoot, { recursive: true });
+      renameSync(stateRoot, preservedDest);
+      writeFileSync(path.join(preservedDest, "MANIFEST.md"), [
+        `# Preserved: ${path.basename(preservedDest)}`,
+        "",
+        `- Preserved at: ${createdAt}`,
+        `- Source: ${relative(stateRoot)}`,
+        `- Reason: un-redacted original of archived demand ${state.demandKey} (redacted copy committed at ${relative(ledgerDest)})`,
+        "- Preserved by: archive-demand --redact",
+        "- Retention: audit hold; prune-preserved lists it once aged past preservedRetentionDays",
+        "",
+      ].join("\n"));
+      originalPreservedAt = relative(preservedDest);
+    } catch (error) {
+      // The ledger commit already succeeded; a failed move degrades to the
+      // old in-place behavior instead of failing the archive.
+      originalPreserveWarning = `original left at ${relative(stateRoot)} (move to preserved/ failed: ${error.message}); move it with wakeflow-storage preserve.`;
+    }
   }
 
   output({
@@ -2064,15 +2097,17 @@ function commandArchiveDemandLocked(stateRoot) {
       manifest: relative(path.join(ledgerDest, "archive-manifest.json")),
       redactedFields,
       preservedOriginal,
+      originalPreservedAt,
       danglingRefs,
     },
+    ...(originalPreserveWarning ? { warnings: [originalPreserveWarning] } : {}),
     indexRefreshNeeded: true,
     forbiddenConclusions: ["archive-is-deletion", "archive-is-acceptance"],
     agentNext: "Refresh the active workspace index to drop the archived root, then review redactedFields before committing the ledger to git.",
   }, [
     `Archived ${state.demandKey} -> ${relative(ledgerDest)}`,
     redactedFields.length
-      ? `Redacted ${redactedFields.reduce((total, field) => total + field.count, 0)} id(s) into the committed copy; original preserved for audit.`
+      ? `Redacted ${redactedFields.reduce((total, field) => total + field.count, 0)} id(s) into the committed copy; original preserved for audit${originalPreservedAt ? ` at ${originalPreservedAt}` : ""}.`
       : "No redaction needed.",
     danglingRefs.length ? `WARNING: ${danglingRefs.length} delivery envelope(s) still reference the old path.` : "",
   ].filter(Boolean));

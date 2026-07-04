@@ -164,6 +164,11 @@ live in `skills/wakeflow-governance/references/wakeflow-delivery.md`,
   `../wakeflow-ledger/`. Product source/tests/docs commit in their own repos.
 - Long-term documents must not contain user absolute paths, API keys, tokens, or
   private information. Use lowercase kebab-case names and execution dates.
+- `wakeflow_view` (scope `storage`) is the local-storage map — every tree with
+  class/size/age plus legacy, unknown, and aging preserved entries; in-place
+  READMEs (seeded by `wakeflow-storage seed-readmes`) explain each tier next
+  to the data. The only sanctioned manual-rescue move is `wakeflow-storage
+  preserve`; unknown trees route to the user and are never auto-deleted.
 - First installation runs discovery and waits for user confirmation before
   writing scope. Placement, index, and archive detail live in
   `skills/wakeflow-governance/references/wakeflow-ledgers.md`.

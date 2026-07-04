@@ -1497,6 +1497,36 @@ function commandCheckWorkspace() {
     note("stream-overlay", "unreadable", error.message);
   }
 
+  // Storage hygiene (reminders, never gates): unknown trees under
+  // .wakeflow-local, legacy residue from older runtimes, missing in-place
+  // READMEs, and preserved/ entries past retention. wakeflow_view
+  // scope=storage is the full map; nothing here auto-deletes anything.
+  try {
+    const storage = JSON.parse(execHostText(process.execPath, [
+      path.join(pluginRootDir, "scripts", "wakeflow-storage.mjs"),
+      "map", "--root", workspaceRoot, "--json",
+    ]).stdout);
+    for (const tree of storage.unknown ?? []) {
+      note("storage", "unknown-tree", `Unrecognized tree ${tree.path} (${tree.files} files): route to the user — fold keepers with 'wakeflow-storage preserve', never auto-delete.`);
+    }
+    for (const tree of storage.legacy ?? []) {
+      note("storage", "legacy-residue", `${tree.path} (${tree.files} files; ${tree.origin}): current runtime never writes this — after user review, fold via 'wakeflow-storage preserve' or delete.`);
+    }
+    for (const name of storage.preservedAging ?? []) {
+      note("storage", "preserved-aging", `preserved/${name} is past the ${storage.preservedRetentionDays}-day retention: review its MANIFEST.md, then 'wakeflow_prune_runtime target=preserved' or keep with an updated manifest.`);
+    }
+    const readmes = JSON.parse(execHostText(process.execPath, [
+      path.join(pluginRootDir, "scripts", "wakeflow-storage.mjs"),
+      "seed-readmes", "--root", workspaceRoot, "--json",
+    ]).stdout);
+    const staleReadmes = (readmes.results ?? []).filter((r) => r.status === "would-create" || r.status === "would-update");
+    if (staleReadmes.length > 0) {
+      note("storage", "readmes-stale", `${staleReadmes.length} in-place storage README(s) missing/stale: run 'wakeflow-storage seed-readmes --write'.`);
+    }
+  } catch {
+    // storage map is best-effort orientation; never fail the health check on it
+  }
+
   let stamp = null;
   if (existsSync(runtimeMetaFile())) {
     stamp = readJson(runtimeMetaFile(), "runtime meta");

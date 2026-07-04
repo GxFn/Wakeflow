@@ -268,7 +268,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_view",
-    description: "Read-only (mostly) projections for a demand state root; scope selects which. task-ledger: unified per-task rollup for EVERY target task (accepted history preserved) — execution status, acceptance decision, latest result, test-card status, and handling counts (dispatchCount/reworkCount/redesignCount persisted; retestCount derived as rounds dispatched to a Test window — an informational hint, not a gate) plus a recurringProblem flag (reworkCount >= 2). window: per-window orientation card — the tasks that belong to a window (with the same handling counts and recurringProblem flag), its task packages, its rollup, and the file areas where its state-root/transport files live. focus: generate a focused, regenerable sub-document for one window (or best-effort one phase) under focus/ — dry-run by default, apply:true writes under the owning-host gate (focus docs are never state authority). trace: trace the evidence spine for a state root, dispatch group, delivery, target, or target result. Evidence, not acceptance, and never a host send.",
+    description: "Read-only (mostly) projections for a demand state root; scope selects which. task-ledger: unified per-task rollup for EVERY target task (accepted history preserved) — execution status, acceptance decision, latest result, test-card status, and handling counts (dispatchCount/reworkCount/redesignCount persisted; retestCount derived as rounds dispatched to a Test window — an informational hint, not a gate) plus a recurringProblem flag (reworkCount >= 2). window: per-window orientation card — the tasks that belong to a window (with the same handling counts and recurringProblem flag), its task packages, its rollup, and the file areas where its state-root/transport files live. focus: generate a focused, regenerable sub-document for one window (or best-effort one phase) under focus/ — dry-run by default, apply:true writes under the owning-host gate (focus docs are never state authority). trace: trace the evidence spine for a state root, dispatch group, delivery, target, or target result. storage: the local-storage map — every known tree under .wakeflow-active/.wakeflow-local/ledger with class (authority/projection/transport/evidence/handles/preserved), size, and age, plus legacy residue, unknown trees, and aging preserved/ entries; classification is descriptive guidance, never a deletion authorization. Evidence, not acceptance, and never a host send.",
     annotations: localWriteTool("Wakeflow View Projection"),
     inputSchema: {
       type: "object",
@@ -277,8 +277,8 @@ const toolDefinitions = [
         root: { type: "string" },
         scope: {
           type: "string",
-          enum: ["task-ledger", "window", "focus", "trace"],
-          description: "Which projection to return: task-ledger | window | focus | trace.",
+          enum: ["task-ledger", "window", "focus", "trace", "storage"],
+          description: "Which projection to return: task-ledger | window | focus | trace | storage.",
         },
         stateRoot: { type: "string" },
         window: { type: "string", description: "Window name for scope=window or scope=focus." },
@@ -508,12 +508,13 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_prune_runtime",
-    description: "Prune replay-safe, confirmed-send delivery-run transport files older than a cutoff. Dry-run unless apply is true; apply requires before. Target-results (evidence) are never deleted, and runs inside a surviving repeated-attempt chain are retained.",
+    description: "Prune replay-safe local runtime; target selects which. transport (default): confirmed-send delivery-run transport files older than a cutoff — dry-run unless apply is true; apply requires before; target-results (evidence) are never deleted, and runs inside a surviving repeated-attempt chain are retained. preserved: audit holds under .wakeflow-local/preserved/ older than the retention (preservedRetentionDays, default 30) or an explicit before — dry-run lists candidates with their manifests; apply deletes them. Legacy/unknown trees are NEVER pruned by any target — they route to the user.",
     annotations: localWriteTool("Prune Wakeflow Runtime Transport"),
     inputSchema: {
       type: "object",
       properties: {
         root: { type: "string" },
+        target: { type: "string", enum: ["transport", "preserved"], description: "What to prune: transport (delivery-run files, default) or preserved (aged audit holds)." },
         before: { type: "string" },
         apply: { type: "boolean" },
       },
@@ -825,7 +826,14 @@ export const handlers = {
         ],
       });
     }
-    throw new Error(`wakeflow_view: unknown scope "${args.scope}" (expected task-ledger | window | focus | trace)`);
+    if (args.scope === "storage") {
+      return runWakeflowRuntime({
+        script: "wakeflow-storage",
+        args: ["map", ...rootArgs(args), "--json"],
+        cwd: args.root || undefined,
+      });
+    }
+    throw new Error(`wakeflow_view: unknown scope "${args.scope}" (expected task-ledger | window | focus | trace | storage)`);
   },
   wakeflow_reduce_results: (args) => runWakeflowRuntime({
     script: "wakeflow-state",
@@ -1013,17 +1021,29 @@ export const handlers = {
     ],
     cwd: args.root || undefined,
   }),
-  wakeflow_prune_runtime: (args) => runWakeflowRuntime({
-    script: "wakeflow-delivery",
-    args: [
-      "prune-runtime",
-      ...rootArgs(args),
-      ...optionalValue("--before", args.before),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
+  wakeflow_prune_runtime: (args) => (args.target === "preserved"
+    ? runWakeflowRuntime({
+      script: "wakeflow-storage",
+      args: [
+        "prune-preserved",
+        ...rootArgs(args),
+        ...optionalValue("--before", args.before),
+        ...(args.apply ? ["--apply"] : []),
+        "--json",
+      ],
+      cwd: args.root || undefined,
+    })
+    : runWakeflowRuntime({
+      script: "wakeflow-delivery",
+      args: [
+        "prune-runtime",
+        ...rootArgs(args),
+        ...optionalValue("--before", args.before),
+        ...(args.apply ? ["--write"] : []),
+        "--json",
+      ],
+      cwd: args.root || undefined,
+    })),
   wakeflow_verify: (args) => runWakeflowRuntime({
     script: "wakeflow-cli",
     args: [

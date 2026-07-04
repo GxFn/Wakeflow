@@ -93,7 +93,13 @@ test("archive-demand refuses a planted real id unless --redact, then relocates a
   assert.equal(redacted.status, 0, redacted.stderr || redacted.stdout);
   const payload = JSON.parse(redacted.stdout);
   assert.equal(payload.archived.preservedOriginal, true);
-  assert.equal(existsSync(noteFile), true, "the original (with the id) is preserved for audit");
+  // The original is machine-moved into the canonical audit hold (current/
+  // stays clean without manual moves) with a manifest.
+  assert.equal(existsSync(noteFile), false, "the original moves out of the active layer");
+  const preservedAt = payload.archived.originalPreservedAt;
+  assert.match(preservedAt, /\.wakeflow-local\/preserved\/\d{4}-\d{2}-\d{2}-archive-original-arch-3/i);
+  assert.equal(existsSync(path.join(root, preservedAt, "leak.md")), true, "the original (with the id) is preserved for audit");
+  assert.equal(existsSync(path.join(root, preservedAt, "MANIFEST.md")), true, "the hold carries its manifest");
   const ledgerLeak = readFileSync(path.join(root, payload.archived.ledgerDest, "leak.md"), "utf8");
   assert.doesNotMatch(ledgerLeak, new RegExp(uuid), "the committed copy must not carry the real id");
   assert.match(ledgerLeak, /<redacted>/);

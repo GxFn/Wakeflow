@@ -221,6 +221,21 @@ are already stated.
   product decision → ask the user and record it; fact gap → bounded read-only
   investigation, then back into the owning stage's artifact.
 
+## Storage Hygiene (idle-moment habit)
+
+- In a spare moment (no in-flight deliveries, no pending reviews), glance at
+  `wakeflow_view` scope `storage`: known trees with class/size/age, legacy
+  residue, unknown trees, aging `preserved/` entries. It is orientation, not
+  a work queue — nothing there authorizes deletion.
+- An `unknown-tree` under `.wakeflow-local/` always routes to the user. Fold
+  keepers with `wakeflow-storage preserve --source <path> --reason <slug>
+  --write` (the ONE sanctioned manual-rescue move; writes the manifest);
+  never invent another holding location and never auto-delete.
+- Aged audit holds: review each `MANIFEST.md`, then
+  `wakeflow_prune_runtime target=preserved` (dry-run first) or keep with an
+  updated manifest. Transport GC stays `wakeflow_prune_runtime` (default
+  target).
+
 ## Stop Conditions
 
 Stop instead of dispatching when:

@@ -33,6 +33,7 @@ const allowedScripts = new Map([
   ["wakeflow-archive-summaries", "wakeflow-archive-summaries.mjs"],
   ["wakeflow-next-work", "wakeflow-next-work.mjs"],
   ["wakeflow-todo", "wakeflow-todo.mjs"],
+  ["wakeflow-storage", "wakeflow-storage.mjs"],
   ["wakeflow-render-progress", "wakeflow-render-progress.mjs"],
   ["wakeflow-smoke", "wakeflow-smoke.mjs"],
   ["wakeflow-validate", "wakeflow-validate.mjs"],

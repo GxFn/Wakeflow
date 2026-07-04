@@ -192,6 +192,17 @@ Current scripts:
   `pending-claim` row, setting the immutable Auto Claim property once. Append-only:
   it never edits or re-statuses an existing row. A requirement that authorizes
   unattended auto-claim must link an Original Plan and a Requirement Design.
+- `wakeflow-storage.mjs`: read-only `map` is the local-storage projection
+  (`wakeflow_view scope=storage`): every known tree under
+  `.wakeflow-active/`, `.wakeflow-local/`, and the ledger with class
+  (authority/projection/transport/evidence/handles/preserved), size, and age,
+  plus legacy residue, unknown trees, and aging `preserved/` entries.
+  `seed-readmes --write` converges the in-place orientation READMEs;
+  `preserve --source --reason --write` is the ONE sanctioned manual-rescue
+  move (relocates into `.wakeflow-local/preserved/<date>-<reason>/` with a
+  MANIFEST.md); `prune-preserved [--apply]` lists/deletes preserved entries
+  past `preservedRetentionDays` (default 30). It never auto-deletes legacy or
+  unknown trees — those route to the user.
 - `wakeflow-archive-summaries.mjs`: dry-run by default; creates or
   refreshes archive `index.md` summary files.
 - `wakeflow-smoke.mjs`: plugin-runtime smoke that exercises the controller state root,

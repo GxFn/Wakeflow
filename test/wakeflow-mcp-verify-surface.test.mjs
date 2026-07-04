@@ -29,8 +29,8 @@ test("wakeflow_view MCP tool is registered with a handler and scope routing", ()
   assert.deepEqual(view.inputSchema?.required, ["scope"]);
   assert.deepEqual(
     props.scope?.enum,
-    ["task-ledger", "window", "focus", "trace"],
-    "wakeflow_view scope must enumerate task-ledger|window|focus|trace",
+    ["task-ledger", "window", "focus", "trace", "storage"],
+    "wakeflow_view scope must enumerate task-ledger|window|focus|trace|storage",
   );
   // Inputs fused from the former task_ledger / window_view / focus_doc / trace_spine tools.
   for (const field of [

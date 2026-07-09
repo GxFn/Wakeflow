@@ -271,6 +271,11 @@ Reference map:
   Design/Test support surfaces, and Test-window progressive chain validation
   assets that Wakeflow expands during setup.
 
+The controller uses ONLY `wakeflow-controller` and `wakeflow-governance`; it does NOT use the
+Design/Test window skills or the development window's `wakeflow-target-craft`. The controller is
+the acceptance authority and does not write product code — code craft belongs to the windows it
+dispatches.
+
 Hard boundaries stay here. Operational details live in skills.
 
 ## Cross-Repository Integration, Deletion, And Compatibility Cleanup

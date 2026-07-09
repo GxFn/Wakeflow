@@ -411,7 +411,11 @@ export function createDispatchCommands(ctx) {
       stateRevision: state.revision,
     };
     const designIntent = typeof taskPackage.designIntent === "string" ? taskPackage.designIntent.trim() : "";
-    const evidenceContract = taskPackage.evidenceContract && typeof taskPackage.evidenceContract === "object"
+    // Defense-in-depth: intake validates the shape (fail-closed); this guard only
+    // keeps a hand-edited mis-shaped contract (arrays included) off the packet.
+    const evidenceContract = taskPackage.evidenceContract
+      && typeof taskPackage.evidenceContract === "object"
+      && !Array.isArray(taskPackage.evidenceContract)
       ? taskPackage.evidenceContract
       : null;
     const { dispatchGroupRecord, packet, packetFile } = buildDispatchArtifacts({
@@ -544,7 +548,7 @@ export function createDispatchCommands(ctx) {
         // point-fixing and re-derive from root cause / route a redesign — the
         // wakeflow-target-craft skill carries the full stop; this only makes it salient.
         ...((targetTask.reworkCount ?? 0) >= 2
-          ? { recurringProblemReminder: `This target task has been reworked ${targetTask.reworkCount} times (recurringProblem). Per wakeflow-target-craft: stop point-fixing — re-derive from root cause, or route a Design redesign for a non-bug outcome mismatch. Reminder only, not a gate.` }
+          ? { recurringProblemReminder: `This target task has been reworked ${targetTask.reworkCount} times (recurringProblem). Per wakeflow-target-craft: stop point-fixing — re-derive from root cause and attach a root-cause-note craft-evidence entry to the next result, or route a Design redesign for a non-bug outcome mismatch. Reminder only, not a gate.` }
           : {}),
         // Dispatch-time intent check: a one-line conditional reminder, never a
         // gate. The agent authoring the objective IS the confirmation; an

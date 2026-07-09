@@ -128,6 +128,48 @@ test("W-Target: malformed --evidence-contract JSON fails closed", () => {
   assert.notEqual(bad.status, 0, "malformed --evidence-contract must fail closed, not silently drop");
 });
 
+test("W-Target: a mis-SHAPED contract fails intake instead of silently disabling the gate", () => {
+  const { root, stateRootRel } = initRoot("CRAFT-SHAPE");
+  // `required` as an OBJECT (not array): before the shape validator, Array.isArray
+  // at reduce time turned this into "no required kinds" — a fail-open on the only
+  // hard craft gate. Intake must reject it.
+  const misShaped = run([
+    "add-task-package", "--root", root, "--state-root", stateRootRel,
+    "--task-package-id", "SHAPE-PKG", "--summary", "pkg",
+    "--evidence-contract", JSON.stringify({ version: 1, required: { kind: "tests" } }),
+    "--target-window", "WinA", "--target-task-id", "SHAPE-TASK", "--target-summary", "do",
+    "--write", "--json",
+  ]);
+  assert.notEqual(misShaped.status, 0, "object-shaped required must fail intake (fail-closed)");
+  assert.match(misShaped.stdout, /must be an ARRAY/i);
+
+  const badEntry = run([
+    "add-task-package", "--root", root, "--state-root", stateRootRel,
+    "--task-package-id", "SHAPE-PKG2", "--summary", "pkg",
+    "--evidence-contract", JSON.stringify({ required: [{ verify: "controller-rerun" }] }),
+    "--target-window", "WinA", "--target-task-id", "SHAPE-TASK2", "--target-summary", "do",
+    "--write", "--json",
+  ]);
+  assert.notEqual(badEntry.status, 0, "a required entry without a string kind must fail intake");
+});
+
+test("W-Target: junk craft-evidence entries fail import instead of landing in the durable result", () => {
+  const { root, stateRootRel } = initRoot("CE-JUNK");
+  run([
+    "add-task-package", "--root", root, "--state-root", stateRootRel,
+    "--task-package-id", "JUNK-PKG", "--summary", "pkg",
+    "--target-window", "WinA", "--target-task-id", "JUNK-TASK", "--target-summary", "do",
+    "--write", "--json",
+  ]);
+  const junk = run([
+    "import-target-result", "--root", root, "--state-root", stateRootRel,
+    "--target-task-id", "JUNK-TASK", "--target-window", "WinA", "--status", "completed",
+    "--evidence-ref", "notes.md", "--craft-evidence", JSON.stringify(["tests", { ref: "x" }]),
+    "--write", "--json",
+  ]);
+  assert.notEqual(junk.status, 0, "entries without an object shape + string kind must fail import");
+});
+
 const GATE_CONTRACT = {
   version: 1,
   required: [

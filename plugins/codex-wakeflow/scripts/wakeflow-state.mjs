@@ -120,6 +120,41 @@ function parseOptionalJsonArrayArg(name) {
   return Array.isArray(parsed) ? parsed : [parsed];
 }
 
+// The evidence contract is the AUTHORITY SOURCE for the only hard craft gate
+// (craft-evidence-required). A malformed shape must fail intake here (fail-closed),
+// never silently disable the gate at reduce time: reduce's Array.isArray guard
+// treats a mis-shaped `required` as "no required kinds" — a fail-open on the gate.
+function validateEvidenceContractShape(contract) {
+  if (contract == null) return null;
+  if (typeof contract !== "object" || Array.isArray(contract)) {
+    fail("--evidence-contract must be a JSON object like { version, required: [{kind, verify}], advisory: [{kind}] }.");
+  }
+  for (const listName of ["required", "advisory"]) {
+    const list = contract[listName];
+    if (list === undefined) continue;
+    if (!Array.isArray(list)) {
+      fail(`--evidence-contract ${listName} must be an ARRAY of {kind, ...} entries (got ${Array.isArray(list) ? "array" : typeof list}); a mis-shaped list would silently disable the craft gate.`);
+    }
+    for (const entry of list) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.kind !== "string" || !entry.kind.trim()) {
+        fail(`--evidence-contract ${listName} entries must be objects with a non-empty string kind.`);
+      }
+    }
+  }
+  return contract;
+}
+
+// Craft evidence entries land in the durable target-result artifact (evidence is
+// never deleted); reject junk shapes at the door instead of archiving them.
+function validateCraftEvidenceEntries(entries) {
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.kind !== "string" || !entry.kind.trim()) {
+      fail("--craft-evidence entries must be objects with a non-empty string kind (e.g. {\"kind\":\"tests\",\"ref\":\"...\"}).");
+    }
+  }
+  return entries;
+}
+
 function slug(value) {
   return String(value ?? "")
     .trim()
@@ -806,7 +841,7 @@ function commandAddTaskPackageLocked(stateRoot) {
   // { version, required:[{kind,verify}], advisory:[{kind}] }; kept OUT of the dispatch
   // idempotency comparable (like designIntent) so it can be authored/adjusted without
   // breaking replay. Absent = zero behavior change.
-  const evidenceContract = parseOptionalJsonArg("--evidence-contract");
+  const evidenceContract = validateEvidenceContractShape(parseOptionalJsonArg("--evidence-contract"));
   const targetWindow = getValue("--target-window", null);
   const targetTaskId = getValue("--target-task-id", targetWindow ? `${taskPackageId}__${slug(targetWindow)}` : null);
   const targetSummary = getValue("--target-summary", summary);
@@ -1119,7 +1154,7 @@ function commandImportTargetResult() {
   const risks = valuesFor("--risk");
   // Typed craft evidence for the execution-craft contract (W-Target). Optional JSON array
   // of { kind, ref|value|commit, verify }. Absent = zero behavior change.
-  const craftEvidence = parseOptionalJsonArrayArg("--craft-evidence");
+  const craftEvidence = validateCraftEvidenceEntries(parseOptionalJsonArrayArg("--craft-evidence"));
   const deliveryContext = targetTaskDeliveryContext(targetTask);
   const result = {
     schemaVersion,
@@ -1327,7 +1362,10 @@ function commandReduceResultsLocked(stateRoot) {
         "craft-evidence-gap-can-enter-transition-candidate",
         "reduce-results-produces-craft-evidence",
       ],
-      agentNext: "Stop: a completed target result does not satisfy its task package's evidence contract (a required craft-evidence kind is absent, or a declared craft artifact does not resolve). Re-dispatch to the target to produce the required evidence (the wakeflow-target-craft skill lists how), or have it record the honest blocked/needs-review status; then rerun reduce-results. No state was changed.",
+      // NOTE: do NOT say "re-dispatch" here — the gated task is `sent`, and dispatch
+      // eligibility only admits pending/needs-rework/missing-result. The recovery path
+      // (same as evidence-repair) is a CORRECTED IMPORT: a sent task accepts a new result.
+      agentNext: "Stop: a completed target result does not satisfy its task package's evidence contract (a required craft-evidence kind is absent, or a declared craft artifact does not resolve). Have the target window produce the required evidence (the wakeflow-target-craft skill lists how) and record a corrected result — a sent task accepts a new import — or record the honest blocked/needs-review status; then rerun reduce-results. No state was changed.",
     });
     process.exitCode = 1;
     throw new CliExit("craft evidence gaps block reduce-results");

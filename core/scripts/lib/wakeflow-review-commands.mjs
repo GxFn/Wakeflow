@@ -103,6 +103,11 @@ export function createReviewCommands(ctx) {
       // evidence contract, surfaced so the pack can add a craftCheck reminder. Required
       // kinds are enforced at reduce-results; these are advisory only.
       ...(item.packet.evidenceContract?.advisory?.length ? { advisoryCraftKinds: item.packet.evidenceContract.advisory.map((entry) => entry.kind).filter(Boolean) } : {}),
+      // Echo the result's typed craft evidence so acceptance can act on the declared
+      // verify modes (e.g. controller-rerun): the script validates presence/artifacts
+      // at reduce; RE-RUNNING is the controller's acceptance-time action, and it needs
+      // this data in the pack to do it.
+      ...(Array.isArray(result?.craftEvidence) && result.craftEvidence.length ? { craftEvidence: result.craftEvidence } : {}),
       resultStatus: result?.status || "missing",
       resultFile: result ? path.relative(workspaceRoot, item.file) : undefined,
       changedRepos: Array.isArray(result?.changedRepos) ? result.changedRepos : [],
@@ -457,6 +462,7 @@ export function createReviewCommands(ctx) {
         objectiveSource: packet?.objective ? "dispatch-packet" : "task-summary",
         ...(packet?.designIntent ? { designIntent: packet.designIntent } : {}),
         ...(packet?.evidenceContract?.advisory?.length ? { advisoryCraftKinds: packet.evidenceContract.advisory.map((entry) => entry.kind).filter(Boolean) } : {}),
+        ...(Array.isArray(result?.craftEvidence) && result.craftEvidence.length ? { craftEvidence: result.craftEvidence } : {}),
         dispatchGroup: result?.dispatchGroup || result?.deliveryContext?.dispatchGroup || task.delivery?.dispatchGroup,
         returnRoute: result?.deliveryContext?.returnRoute || result?.returnRoute,
         returnPolicy: result?.deliveryContext?.returnPolicy || result?.returnPolicy,

@@ -129,6 +129,10 @@ test("B2: review pack surfaces craftCheck when a task declares advisory craft ev
   assert.match(pack.craftCheck, /not a gate/i, "craftCheck states it is a reminder, not a gate");
   const entry = pack.targetResults.find((item) => item.taskId === "tp-a__RepoA");
   assert.deepEqual(entry.advisoryCraftKinds, ["self-review", "test-first"], "the entry lists the advisory craft kinds");
+  // The pack must ECHO the result's typed craft evidence: verify modes like
+  // controller-rerun are the controller's acceptance-time action, and it needs the
+  // data in the pack to perform them.
+  assert.equal(entry.craftEvidence?.[0]?.kind, "tests", "the entry echoes the result's craftEvidence for acceptance-time re-runs");
 });
 
 test("B2: no craftCheck when the task declares no advisory craft evidence (zero trace)", () => {

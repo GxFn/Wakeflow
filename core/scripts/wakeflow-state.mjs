@@ -908,6 +908,13 @@ function commandAddTaskPackageLocked(stateRoot) {
     ...(reviewRoute ? { reviewRoute } : {}),
     targetTasks,
   };
+  // Reminder-first (never a gate): a dispatchable package without an evidence
+  // contract leaves the craft gate dormant — the same forgotten-decision failure
+  // mode testDecisionReminder fixes at create-demand. Surface it; authoring stays
+  // Design's / the controller's judgment (doc-only packages legitimately skip it).
+  const evidenceContractReminder = targetWindow && !evidenceContract
+    ? "No evidence contract on this package: the craft gate stays dormant. If this is implementation work, consider authoring one (required kinds like tests/change-scope; see wakeflow-target-craft). Reminder only — not a gate."
+    : null;
   const nextState = {
     ...state,
     state: nextMainState,
@@ -990,6 +997,7 @@ function commandAddTaskPackageLocked(stateRoot) {
       stateRevision: nextRevision,
       eventId,
       projectionStatus: "stale",
+      ...(evidenceContractReminder ? { evidenceContractReminder } : {}),
       appendLog: {
         type: "task-package",
         section: "Task Packages",

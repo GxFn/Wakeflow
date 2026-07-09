@@ -84,6 +84,7 @@ export function createWindowRuntime(ctx) {
     dispatchGroup,
     stateRef,
     interfaceLanguage = "en",
+    craftSkill = false,
   }) {
     if (!stateRef) fail("Target prompts require stateRef from a controller state root.");
     // Human-readable sentences follow the demand interfaceLanguage so the
@@ -102,6 +103,11 @@ export function createWindowRuntime(ctx) {
       `- stateRoot: ${stateRef.stateRoot}`,
       ...(dispatchGroup ? [`- dispatchGroup: ${dispatchGroup}`] : []),
       "- skill: skills/wakeflow-target/SKILL.md",
+      // Activation chain for the execution-craft skill: only when the task package
+      // carries an evidence contract (zero traces otherwise — reminder-first). The
+      // wake prompt is the one surface a target is GUARANTEED to read; a craft gate
+      // whose skill never activates would fail the target at reduce time.
+      ...(craftSkill ? ["- craftSkill: skills/wakeflow-target-craft/SKILL.md"] : []),
     ].join("\n");
   }
 

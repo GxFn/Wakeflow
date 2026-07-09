@@ -170,6 +170,117 @@ test("W-Target: junk craft-evidence entries fail import instead of landing in th
   assert.notEqual(junk.status, 0, "entries without an object shape + string kind must fail import");
 });
 
+const deliveryScript = path.join(workspaceRoot, "scripts/wakeflow-delivery.mjs");
+function runDelivery(args) {
+  return runSync(process.execPath, [deliveryScript, ...args], { cwd: workspaceRoot, encoding: "utf8" });
+}
+
+test("W-craft-2: the wake prompt activates the craft skill exactly when a contract is present", () => {
+  // With a contract -> the prompt carries the craftSkill line (activation chain).
+  const withC = seedContractedTask("ACT-YES");
+  const prepared = runDelivery([
+    "prepare-dispatch-from-state", "--root", withC.root, "--state-root", withC.stateRootRel,
+    "--target-task-id", "GATE-TASK", "--write", "--compact", "--json",
+  ]);
+  assert.equal(prepared.status, 0, prepared.stderr || prepared.stdout);
+  assert.match(JSON.parse(prepared.stdout).prompt, /craftSkill: skills\/wakeflow-target-craft\/SKILL\.md/,
+    "contract present -> wake prompt points at the craft skill");
+
+  // Without a contract -> zero traces (reminder-first).
+  const { root, stateRootRel } = initRoot("ACT-NO");
+  run([
+    "add-task-package", "--root", root, "--state-root", stateRootRel,
+    "--task-package-id", "PLAIN", "--summary", "pkg",
+    "--target-window", "WinA", "--target-task-id", "PLAIN-TASK", "--target-summary", "do",
+    "--write", "--json",
+  ]);
+  const plain = runDelivery([
+    "prepare-dispatch-from-state", "--root", root, "--state-root", stateRootRel,
+    "--target-task-id", "PLAIN-TASK", "--write", "--compact", "--json",
+  ]);
+  assert.equal(plain.status, 0, plain.stderr || plain.stdout);
+  assert.doesNotMatch(JSON.parse(plain.stdout).prompt, /craftSkill/, "no contract -> no craft line in the prompt");
+});
+
+test("W-craft-2: add-task-package reminds when a dispatchable package lacks a contract (never a gate)", () => {
+  const { root, stateRootRel } = initRoot("REMIND-ADD");
+  const bare = run([
+    "add-task-package", "--root", root, "--state-root", stateRootRel,
+    "--task-package-id", "BARE", "--summary", "pkg",
+    "--target-window", "WinA", "--target-task-id", "BARE-TASK", "--target-summary", "do",
+    "--write", "--json",
+  ]);
+  assert.equal(bare.status, 0, "reminder never blocks");
+  assert.match(JSON.parse(bare.stdout).evidenceContractReminder, /dormant/i, "absent contract -> reminder");
+
+  const withC = run([
+    "add-task-package", "--root", root, "--state-root", stateRootRel,
+    "--task-package-id", "WITHC", "--summary", "pkg",
+    "--evidence-contract", JSON.stringify({ required: [{ kind: "tests" }] }),
+    "--target-window", "WinB", "--target-task-id", "WITHC-TASK", "--target-summary", "do",
+    "--write", "--json",
+  ]);
+  assert.equal("evidenceContractReminder" in JSON.parse(withC.stdout), false, "contract present -> zero trace");
+});
+
+test("W-craft-2: recurringProblem reminder appears at prepare-dispatch after two reworks", () => {
+  const { root, stateRootRel } = initRoot("RECUR");
+  run([
+    "add-task-package", "--root", root, "--state-root", stateRootRel,
+    "--task-package-id", "R-PKG", "--summary", "pkg",
+    "--target-window", "WinA", "--target-task-id", "R-TASK", "--target-summary", "do",
+    "--write", "--json",
+  ]);
+  writeEvidence(root, stateRootRel, "notes.md");
+  // Real rework protocol per round: result -> reduce -> decide rework -> RE-DISPATCH
+  // (prepare + record sent). Skipping the re-dispatch leaves the task pending its
+  // rework decision and reduce refuses a candidate — that refusal is the protocol,
+  // so the test walks the honest loop.
+  for (let round = 1; round <= 2; round += 1) {
+    const imp = run([
+      "import-target-result", "--root", root, "--state-root", stateRootRel,
+      "--target-task-id", "R-TASK", "--target-window", "WinA", "--status", "completed",
+      "--evidence-ref", "notes.md", "--write", "--json",
+    ]);
+    assert.equal(imp.status, 0, imp.stderr || imp.stdout);
+    const red = run(["reduce-results", "--root", root, "--state-root", stateRootRel, "--write", "--json"]);
+    assert.equal(red.status, 0, red.stderr || red.stdout);
+    const cand = JSON.parse(red.stdout).candidateId;
+    assert.ok(cand, `round ${round} reduce produced a candidate`);
+    const dec = run([
+      "decide-review", "--root", root, "--state-root", stateRootRel,
+      "--candidate-id", cand, "--decision", "rework", "--reason", `round ${round} not good enough`,
+      "--write", "--json",
+    ]);
+    assert.equal(dec.status, 0, dec.stderr || dec.stdout);
+    if (round < 2) {
+      // Same-id packets are revision-pinned (idempotency); a rework re-dispatch is a
+      // NEW dispatch group in the real protocol, so each round uses its own group.
+      const prep = runDelivery([
+        "prepare-dispatch-from-state", "--root", root, "--state-root", stateRootRel,
+        "--target-task-id", "R-TASK", "--group", `rework-${round}`, "--write", "--compact", "--json",
+      ]);
+      assert.equal(prep.status, 0, prep.stderr || prep.stdout);
+      const deliveryFile = JSON.parse(prep.stdout).deliveryFile;
+      const rec = runDelivery([
+        "record-delivery-run", "--root", root, "--delivery-file", deliveryFile,
+        "--status", "sent", "--readback-ok", "true", "--evidence", "test-run readback",
+        "--write", "--compact", "--json",
+      ]);
+      assert.equal(rec.status, 0, rec.stderr || rec.stdout);
+    }
+  }
+  const prepared = runDelivery([
+    "prepare-dispatch-from-state", "--root", root, "--state-root", stateRootRel,
+    "--target-task-id", "R-TASK", "--group", "rework-final", "--write", "--compact", "--json",
+  ]);
+  assert.equal(prepared.status, 0, prepared.stderr || prepared.stdout);
+  const payload = JSON.parse(prepared.stdout);
+  assert.match(payload.recurringProblemReminder, /reworked 2 times|recurringProblem/,
+    "two reworks -> the dispatch payload carries the stop-point-fixing reminder");
+  assert.match(payload.recurringProblemReminder, /root-cause-note/, "the reminder asks for a root-cause-note entry");
+});
+
 const GATE_CONTRACT = {
   version: 1,
   required: [

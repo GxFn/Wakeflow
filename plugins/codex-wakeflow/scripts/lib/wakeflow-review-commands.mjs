@@ -844,7 +844,10 @@ export function createReviewCommands(ctx) {
         const taskId = card?.suggestedTaskPackage?.targetTaskId;
         if (!taskId) continue;
         const statuses = testCardStatusesByTask.get(taskId) ?? [];
-        statuses.push(card?.status ?? "draft");
+        // strategySource rides beside the status so the controller can see at review
+        // time whether the test approach was decided at Design or improvised (W-Test);
+        // null = improvised, surfaced as data, never a gate.
+        statuses.push({ status: card?.status ?? "draft", strategySource: card?.strategySource ?? null });
         testCardStatusesByTask.set(taskId, statuses);
       }
     }
@@ -868,7 +871,10 @@ export function createReviewCommands(ctx) {
         reviewDecision: task.reviewDecision ?? null,
         latestResultStatus: result?.status ?? null,
         latestResultId: result?.resultId ?? null,
-        testCardStatus: testCardStatuses.length ? testCardStatuses[testCardStatuses.length - 1] : null,
+        // testCardStatus keeps its original STRING shape (additive discipline);
+        // strategySource is the new sibling field beside it, never inside it.
+        testCardStatus: testCardStatuses.length ? testCardStatuses[testCardStatuses.length - 1].status : null,
+        testCardStrategySource: testCardStatuses.length ? testCardStatuses[testCardStatuses.length - 1].strategySource : null,
         counts: {
           dispatchCount,
           reworkCount,

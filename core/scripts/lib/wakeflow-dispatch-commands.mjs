@@ -129,6 +129,7 @@ export function createDispatchCommands(ctx) {
       humanContextRef,
       stateRef,
       interfaceLanguage: interfaceLanguageForStateRef(stateRef),
+      craftSkill: Boolean(evidenceContract),
     });
     if (!prompt) fail("Prompt cannot be empty.");
 
@@ -547,8 +548,10 @@ export function createDispatchCommands(ctx) {
         // twice+, surface a one-line reminder (never a gate) that the target should stop
         // point-fixing and re-derive from root cause / route a redesign — the
         // wakeflow-target-craft skill carries the full stop; this only makes it salient.
-        ...((targetTask.reworkCount ?? 0) >= 2
-          ? { recurringProblemReminder: `This target task has been reworked ${targetTask.reworkCount} times (recurringProblem). Per wakeflow-target-craft: stop point-fixing — re-derive from root cause and attach a root-cause-note craft-evidence entry to the next result, or route a Design redesign for a non-bug outcome mismatch. Reminder only, not a gate.` }
+        // reworkCount is persisted under task.counts (same path the task ledger
+        // reads); the top-level fallback keeps older hand-shaped state readable.
+        ...(((targetTask.counts?.reworkCount ?? targetTask.reworkCount ?? 0)) >= 2
+          ? { recurringProblemReminder: `This target task has been reworked ${targetTask.counts?.reworkCount ?? targetTask.reworkCount} times (recurringProblem). Per wakeflow-target-craft: stop point-fixing — re-derive from root cause and attach a root-cause-note craft-evidence entry to the next result, or route a Design redesign for a non-bug outcome mismatch. Reminder only, not a gate.` }
           : {}),
         // Dispatch-time intent check: a one-line conditional reminder, never a
         // gate. The agent authoring the objective IS the confirmation; an

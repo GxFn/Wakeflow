@@ -101,6 +101,25 @@ test("W-Design: create-demand records testDecision and reminds (never blocks) wh
   assert.equal("testDecision" in stateNo, false, "absent testDecision leaves no field (zero trace)");
 });
 
+test("W-craft-2: create-demand reminds when no initial package carries an evidence contract", () => {
+  const bare = makeWorkspace();
+  const packages = JSON.stringify([{ taskPackageId: "p1", summary: "impl", targetWindow: "WinA", targetTaskId: "p1-t1" }]);
+  const payload = parse(run(bare.root, [
+    "create-demand", "--demand-key", "ecr-2026-07-10", "--title", "ECR",
+    "--task-packages", packages, "--write",
+  ]));
+  assert.equal(payload.ok, true, "reminder never blocks");
+  assert.match(payload.evidenceContractReminder, /dormant/i, "no contract on any package -> aggregate reminder");
+
+  const withC = makeWorkspace();
+  const contracted = JSON.stringify([{ taskPackageId: "p1", summary: "impl", targetWindow: "WinA", targetTaskId: "p1-t1", evidenceContract: { required: [{ kind: "tests" }] } }]);
+  const ok = parse(run(withC.root, [
+    "create-demand", "--demand-key", "ecr2-2026-07-10", "--title", "ECR2",
+    "--task-packages", contracted, "--write",
+  ]));
+  assert.equal("evidenceContractReminder" in ok, false, "contract present -> zero trace");
+});
+
 test("create-demand dry-run does not create a state root", () => {
   const { root } = makeWorkspace(DELIVERED_ROW);
   const payload = parse(run(root, ["create-demand", "--todo-id", "feat-2026-06-21"]));

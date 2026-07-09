@@ -23,7 +23,7 @@ const helpText = `
 Control intake bridge for Design and Test surfaces
 
 Usage:
-  node scripts/wakeflow-intake.mjs test-card --state-root <path> --test-id <id> --target-window <window> --question <text> --object-boundary <text> --controller-self-check <text> --real-scenario-condition <text> --success-means <text> --failure-means <text> --cannot-conclude <text> --stop-condition <text> [--source-ref <ref>] [--evidence-required <text>...] [--allowed-operation <text>...] [--forbidden-operation <text>...] [--write] [--json]
+  node scripts/wakeflow-intake.mjs test-card --state-root <path> --test-id <id> --target-window <window> --question <text> --object-boundary <text> --controller-self-check <text> --real-scenario-condition <text> --success-means <text> --failure-means <text> --cannot-conclude <text> --stop-condition <text> [--source-ref <ref>] [--strategy-source <ref>] [--evidence-required <text>...] [--allowed-operation <text>...] [--forbidden-operation <text>...] [--write] [--json]
 
 Design:
   This script attaches Design handoff intake and Test boundary cards to an
@@ -201,6 +201,10 @@ function commandTestCard() {
 
   const createdAt = nowIso();
   const sourceRef = getValue("--source-ref", null);
+  // W-Test: where the test approach came from (the Design-stage testing decision / test-strategy).
+  // Optional and advisory: when absent, the card is flagged as an approach not decided at Design,
+  // surfaced as a REMINDER (never a gate) so a path-dependent wrong approach is visible.
+  const strategySource = (getValue("--strategy-source", "") || "").trim() || null;
   const cardFile = path.join(stateRoot, "test-cards", `${slug(testId)}.json`);
   if (existsSync(cardFile)) {
     fail(`test card already exists: ${relative(cardFile)}`);
@@ -215,6 +219,7 @@ function commandTestCard() {
     createdAt,
     stateRevisionObserved: state.revision,
     sourceRef,
+    ...(strategySource ? { strategySource } : {}),
     boundaryGate: {
       question,
       objectBoundary,
@@ -263,6 +268,9 @@ function commandTestCard() {
       stateRoot: relative(stateRoot),
       cardFile: relative(cardFile),
       suggestedTaskPackage: card.suggestedTaskPackage,
+      // Reminder-first (never a gate): if the approach was not sourced from a Design testing
+      // decision, surface a one-line advisory so a path-dependent wrong approach is visible.
+      ...(strategySource ? {} : { strategySourceReminder: "No strategySource recorded: this test approach was not sourced from a Design testing decision. Confirm it fits the demand's risk (challenge path-dependent reuse), or link the Design decision with --strategy-source. Reminder only — not a gate." }),
       forbiddenConclusions: card.forbiddenConclusions,
     },
     [

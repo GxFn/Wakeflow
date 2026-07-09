@@ -821,6 +821,9 @@ function skillAssistanceText(context, samePathWindowNames) {
   if (samePathWindowNames.includes(context.config.testWindow)) {
     roleLines.push(`- Test work should proactively surface relevant local Test skills while planning validation, reproducing or triaging failures, designing regressions, reviewing evidence, or validating long chains. Read \`skills/README.md\` when available, name the smallest matching skill, explain why it helps, and use it to shape evidence before running or recording test work. If no skill is genuinely needed, say so briefly and proceed with the assigned test boundary.`);
   }
+  if (!samePathWindowNames.includes(context.config.designWindow) && !samePathWindowNames.includes(context.config.testWindow)) {
+    roleLines.push(`- Development work uses the plugin execution-craft skill \`wakeflow-target-craft\` (test-first, systematic debugging, self-review by severity, scope discipline, verify-before-done) so it earns the machine-checkable evidence the controller acceptance gate requires. It loads via the Wakeflow plugin alongside \`wakeflow-target\`; this window does NOT use the Design or Test windows' built-in skills.`);
+  }
   return `
 ### Skill Assistance
 

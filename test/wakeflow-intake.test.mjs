@@ -164,6 +164,27 @@ test("test-card writes machine boundary card and leaves controller state unchang
   assert.match(card.forbiddenConclusions.join("\n"), /test-card-is-dispatch/);
 });
 
+test("W-Test: test-card records strategySource and reminds (never blocks) when absent", () => {
+  // recorded -> persists on the card, no reminder
+  const withF = makeFixture();
+  const withPayload = parseOk(run(intakeScript, withF.root, [
+    ...testCardArgs(withF.stateRootRef, ["--strategy-source", "../wakeflow-ledger/requirement-designs/feat.md#testing"]),
+    "--write",
+  ]));
+  assert.equal(withPayload.strategySourceReminder, undefined, "no reminder when strategySource is recorded");
+  const withCard = readJson(path.join(withF.root, withPayload.cardFile));
+  assert.equal(withCard.strategySource, "../wakeflow-ledger/requirement-designs/feat.md#testing", "strategySource persists on the card");
+
+  // absent -> reminder surfaces, but test-card still succeeds (reminder-first, not a gate)
+  const withoutF = makeFixture();
+  const rawResult = run(intakeScript, withoutF.root, [...testCardArgs(withoutF.stateRootRef), "--write"]);
+  assert.equal(rawResult.status, 0, "test-card succeeds without strategySource (reminder, not a gate)");
+  const withoutPayload = parseOk(rawResult);
+  assert.match(withoutPayload.strategySourceReminder, /strateg/i, "a reminder surfaces when strategySource is absent");
+  const withoutCard = readJson(path.join(withoutF.root, withoutPayload.cardFile));
+  assert.equal("strategySource" in withoutCard, false, "absent strategySource leaves no field (zero trace)");
+});
+
 test("test-card supports controller state roots in the configured project ledger", () => {
   const fixture = makeFixture({ stateRootArg: "project-ledger" });
   const payload = parseOk(run(intakeScript, fixture.root, [

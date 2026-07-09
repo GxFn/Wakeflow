@@ -19,7 +19,8 @@
     "wakeflowTrace": { "type": "object" },
     "createdAt": { "type": "string" },
     "stateRevisionObserved": { "type": "integer", "minimum": 1 },
-    "forbiddenConclusions": { "type": "array", "items": { "type": "string" } }
+    "forbiddenConclusions": { "type": "array", "items": { "type": "string" } },
+    "craftEvidence": { "type": "array", "items": { "type": "object" } }
   },
   "additionalProperties": true
 }

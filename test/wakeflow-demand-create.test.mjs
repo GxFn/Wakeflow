@@ -79,6 +79,28 @@ test("create-demand inline (demandKey + title) inits without a TODO row", () => 
   assert.equal(existsSync(statePath(root, "inline-2026-06-21")), true);
 });
 
+test("W-Design: create-demand records testDecision and reminds (never blocks) when absent", () => {
+  // recorded -> persists on the demand state, no reminder
+  const yes = makeWorkspace();
+  const withDecision = parse(run(yes.root, [
+    "create-demand", "--demand-key", "td-yes-2026-07-09", "--title", "TD Yes",
+    "--test-decision", "unit tests in AppWindow; no real Test needed", "--write",
+  ]));
+  assert.equal(withDecision.ok, true);
+  assert.equal(withDecision.testDecisionReminder, undefined, "no reminder when the testing decision is recorded");
+  const stateYes = JSON.parse(readFileSync(statePath(yes.root, "td-yes-2026-07-09"), "utf8"));
+  assert.equal(stateYes.testDecision, "unit tests in AppWindow; no real Test needed", "testDecision persists on the demand state");
+
+  // absent -> reminder surfaces, but create-demand still succeeds (reminder-first, not a gate)
+  const no = makeWorkspace();
+  const result = run(no.root, ["create-demand", "--demand-key", "td-no-2026-07-09", "--title", "TD No", "--write"]);
+  assert.equal(result.status, 0, "create-demand succeeds without a testing decision (reminder, not a gate)");
+  const withoutDecision = parse(result);
+  assert.match(withoutDecision.testDecisionReminder, /testing decision/i, "a reminder surfaces when the testing decision is absent");
+  const stateNo = JSON.parse(readFileSync(statePath(no.root, "td-no-2026-07-09"), "utf8"));
+  assert.equal("testDecision" in stateNo, false, "absent testDecision leaves no field (zero trace)");
+});
+
 test("create-demand dry-run does not create a state root", () => {
   const { root } = makeWorkspace(DELIVERED_ROW);
   const payload = parse(run(root, ["create-demand", "--todo-id", "feat-2026-06-21"]));

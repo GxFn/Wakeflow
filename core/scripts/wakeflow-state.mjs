@@ -39,9 +39,9 @@ const helpText = `
 Controller state-machine manager
 
 Usage:
-  node scripts/wakeflow-state.mjs init --demand-key <key> --title <title> [--goal <text>] [--completion-definition <text>] [--stage-plan <text>] [--controller-window <window>] [--language <auto|zh|en>] [--root <workspace>] [--state-root <path>] [--write] [--json]
-  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--source-ref <ref>] [--design-intent <text>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--write] [--json]
-  node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--summary <text>] [--write] [--json]
+  node scripts/wakeflow-state.mjs init --demand-key <key> --title <title> [--goal <text>] [--completion-definition <text>] [--test-decision <text>] [--stage-plan <text>] [--controller-window <window>] [--language <auto|zh|en>] [--root <workspace>] [--state-root <path>] [--write] [--json]
+  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--source-ref <ref>] [--design-intent <text>] [--evidence-contract <json>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--write] [--json]
+  node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--craft-evidence <json>] [--summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
   node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked|redesign> --reason <text> [--evidence-ref <ref>] [--accept-blocked] [--write] [--json]
   node scripts/wakeflow-state.mjs complete-demand --state-root <path> --reason <text> --evidence-ref <ref> [--write] [--json]
@@ -98,6 +98,26 @@ function requireValue(name) {
   const value = getValue(name);
   if (!value) fail(`${name} is required.`);
   return value;
+}
+
+// Optional JSON-valued flag (e.g. --evidence-contract). Returns null when absent;
+// fails closed on malformed JSON rather than silently dropping the argument.
+function parseOptionalJsonArg(name) {
+  const raw = (getValue(name, "") || "").trim();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    fail(`${name} must be valid JSON: ${error.message}`);
+  }
+}
+
+// Optional JSON-array flag (e.g. --craft-evidence). Returns [] when absent; a single
+// object is wrapped into a one-element array so callers always get an array.
+function parseOptionalJsonArrayArg(name) {
+  const parsed = parseOptionalJsonArg(name);
+  if (parsed == null) return [];
+  return Array.isArray(parsed) ? parsed : [parsed];
 }
 
 function slug(value) {
@@ -453,6 +473,44 @@ function missingEvidenceRefsForTargetResult(stateRoot, task, result) {
     .map(({ exists, ...item }) => item);
 }
 
+// W-Target execution-craft gate: a COMPLETED target result must satisfy its task
+// package's evidence contract — each `required` kind present in craftEvidence, and any
+// declared craft-artifact path resolves on disk. Absent contract => no gap. Only
+// completed results are enforced: blocked / needs-review honestly report an incomplete
+// task and must never be wedged by the contract.
+function craftEvidenceGapsForTargetResult(stateRoot, state, task, result) {
+  const pkg = (state.taskPackages ?? []).find((item) => item.taskPackageId === task.taskPackageId);
+  const required = Array.isArray(pkg?.evidenceContract?.required) ? pkg.evidenceContract.required : [];
+  if (required.length === 0) return [];
+  const provided = Array.isArray(result?.craftEvidence) ? result.craftEvidence : [];
+  const byKind = new Map();
+  for (const item of provided) {
+    if (item && typeof item.kind === "string") {
+      byKind.set(item.kind, [...(byKind.get(item.kind) ?? []), item]);
+    }
+  }
+  const gaps = [];
+  for (const req of required) {
+    const kind = typeof req?.kind === "string" ? req.kind : "";
+    if (!kind) continue;
+    const base = { targetWindow: task.targetWindow, targetTaskId: task.targetTaskId, taskPackageId: task.taskPackageId, kind, verify: req.verify ?? null };
+    const entries = byKind.get(kind) ?? [];
+    if (entries.length === 0) {
+      gaps.push({ ...base, reason: "missing-kind" });
+      continue;
+    }
+    for (const entry of entries) {
+      const ref = typeof entry?.ref === "string" ? entry.ref : "";
+      if (!ref) continue;
+      const candidates = evidenceRefResolutionCandidates(stateRoot, ref, task.targetWindow);
+      if (candidates.length > 0 && !candidates.some((candidate) => existsSync(candidate))) {
+        gaps.push({ ...base, ref, reason: "artifact-missing" });
+      }
+    }
+  }
+  return gaps;
+}
+
 function selectInterfaceLanguage(config) {
   const requested = normalizeInterfaceLanguage(getValue("--language", config.interfaceLanguage ?? "auto"));
   if (!requested) fail("--language must be auto, zh, or en.");
@@ -506,6 +564,10 @@ function commandInit() {
   // mis-routes wake-ups to the workspace-level controller by forgetting a flag.
   const demandControllerWindow = (getValue("--controller-window", "") || config.controllerWindow || "").trim() || null;
   const completionDefinition = getValue("--completion-definition", locale.defaultCompletionDefinition);
+  // Design's testing decision (which validation / real-Test approach). Optional and
+  // advisory: surfaced as a REMINDER when absent, never a gate — the controller/Design
+  // decide whether real Test is needed (reminder-first per the user's design philosophy).
+  const testDecision = (getValue("--test-decision", "") || "").trim() || null;
   const stagePlan = getValue("--stage-plan", locale.defaultStagePlan);
   // Provenance: the design key (usually the delivered TODO row id) and the
   // source documents (requirement design / original plan links) persist on
@@ -560,6 +622,7 @@ function commandInit() {
     // first driving command claims the demand for its platform.
     controllerHost: null,
     controllerWindow: demandControllerWindow,
+    ...(testDecision ? { testDecision } : {}),
     state: "intake",
     stateReason: "wakeflow-state-init",
     revision: 1,
@@ -739,6 +802,11 @@ function commandAddTaskPackageLocked(stateRoot) {
   // advisory: it is surfaced side-by-side with the controller's objective at
   // dispatch and review for the agent's own alignment check — never a gate.
   const designIntent = (getValue("--design-intent", "") || "").trim() || null;
+  // Design-authored execution-craft evidence contract (W-Target). Optional JSON
+  // { version, required:[{kind,verify}], advisory:[{kind}] }; kept OUT of the dispatch
+  // idempotency comparable (like designIntent) so it can be authored/adjusted without
+  // breaking replay. Absent = zero behavior change.
+  const evidenceContract = parseOptionalJsonArg("--evidence-contract");
   const targetWindow = getValue("--target-window", null);
   const targetTaskId = getValue("--target-task-id", targetWindow ? `${taskPackageId}__${slug(targetWindow)}` : null);
   const targetSummary = getValue("--target-summary", summary);
@@ -800,6 +868,7 @@ function commandAddTaskPackageLocked(stateRoot) {
     status: "pending",
     sourceRef,
     ...(designIntent ? { designIntent } : {}),
+    ...(evidenceContract ? { evidenceContract } : {}),
     createdAt,
     ...(reviewRoute ? { reviewRoute } : {}),
     targetTasks,
@@ -821,6 +890,7 @@ function commandAddTaskPackageLocked(stateRoot) {
         status: "pending",
         sourceRef,
         ...(designIntent ? { designIntent } : {}),
+        ...(evidenceContract ? { evidenceContract } : {}),
         createdAt,
         ...(reviewRoute ? { reviewRoute } : {}),
       },
@@ -1047,6 +1117,9 @@ function commandImportTargetResult() {
   const evidenceRefs = valuesFor("--evidence-ref");
   const verification = valuesFor("--verification");
   const risks = valuesFor("--risk");
+  // Typed craft evidence for the execution-craft contract (W-Target). Optional JSON array
+  // of { kind, ref|value|commit, verify }. Absent = zero behavior change.
+  const craftEvidence = parseOptionalJsonArrayArg("--craft-evidence");
   const deliveryContext = targetTaskDeliveryContext(targetTask);
   const result = {
     schemaVersion,
@@ -1062,6 +1135,7 @@ function commandImportTargetResult() {
     evidenceRefs,
     verification,
     risks,
+    ...(craftEvidence.length ? { craftEvidence } : {}),
     deliveryContext,
     controllerActionRequired: Boolean(deliveryContext.controllerReturnRequired),
     wakeflowTrace: artifactTrace({
@@ -1188,6 +1262,7 @@ function commandReduceResultsLocked(stateRoot) {
   const blockedResultIds = [];
   const missingTargetTaskIds = [];
   const missingEvidenceRefs = [];
+  const craftEvidenceGaps = [];
   const evidenceRefs = [];
 
   for (const task of targetTasks) {
@@ -1203,6 +1278,9 @@ function commandReduceResultsLocked(stateRoot) {
       continue;
     }
     missingEvidenceRefs.push(...missingEvidenceRefsForTargetResult(stateRoot, task, result));
+    if (result.status === "completed") {
+      craftEvidenceGaps.push(...craftEvidenceGapsForTargetResult(stateRoot, state, task, result));
+    }
     evidenceRefs.push(...(result.evidenceRefs ?? []), `target-results/${slug(result.resultId)}.json`);
     if (result.status === "blocked") {
       blockedResultIds.push(result.resultId);
@@ -1231,6 +1309,28 @@ function commandReduceResultsLocked(stateRoot) {
     });
     process.exitCode = 1;
     throw new CliExit("missing evidence refs block reduce-results");
+  }
+
+  if (missingTargetTaskIds.length === 0 && missingEvidenceRefs.length === 0 && craftEvidenceGaps.length > 0) {
+    output({
+      ok: false,
+      command: "reduce-results",
+      wrote: false,
+      demandKey: state.demandKey,
+      stateRoot: relative(stateRoot),
+      previousState: state.state,
+      stateRevisionUnchanged: state.revision,
+      reviewGate: "craft-evidence-required",
+      craftEvidenceGaps,
+      forbiddenConclusions: [
+        "completed-result-without-required-craft-evidence-is-acceptable",
+        "craft-evidence-gap-can-enter-transition-candidate",
+        "reduce-results-produces-craft-evidence",
+      ],
+      agentNext: "Stop: a completed target result does not satisfy its task package's evidence contract (a required craft-evidence kind is absent, or a declared craft artifact does not resolve). Re-dispatch to the target to produce the required evidence (the wakeflow-target-craft skill lists how), or have it record the honest blocked/needs-review status; then rerun reduce-results. No state was changed.",
+    });
+    process.exitCode = 1;
+    throw new CliExit("craft evidence gaps block reduce-results");
   }
 
   const createdAt = nowIso();

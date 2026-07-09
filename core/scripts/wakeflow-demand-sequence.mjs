@@ -462,6 +462,7 @@ function claimItem(item) {
     if (pkg.targetTaskId) addArgs.push("--target-task-id", pkg.targetTaskId);
     if (pkg.targetSummary) addArgs.push("--target-summary", pkg.targetSummary);
     if (pkg.designIntent) addArgs.push("--design-intent", pkg.designIntent);
+    if (pkg.evidenceContract) addArgs.push("--evidence-contract", JSON.stringify(pkg.evidenceContract));
     addArgs.push("--write", "--json");
     outputs.push(runControllerState(addArgs));
   }
@@ -664,6 +665,7 @@ function commandCreateDemand() {
   let title = getValue("--title");
   let goal = getValue("--goal");
   let completionDefinition = getValue("--completion-definition");
+  const testDecision = getValue("--test-decision");
   let stagePlan = getValue("--stage-plan");
 
   const taskPackagesRaw = getValue("--task-packages");
@@ -727,6 +729,7 @@ function commandCreateDemand() {
   for (const doc of sourceDocumentRefs) initArgs.push("--source-doc", doc);
   if (goal) initArgs.push("--goal", goal);
   if (completionDefinition) initArgs.push("--completion-definition", completionDefinition);
+  if (testDecision) initArgs.push("--test-decision", testDecision);
   if (stagePlan) initArgs.push("--stage-plan", stagePlan);
   const demandControllerWindow = getValue("--controller-window", "");
   if (demandControllerWindow) initArgs.push("--controller-window", demandControllerWindow);
@@ -744,6 +747,7 @@ function commandCreateDemand() {
     if (pkg.targetTaskId) tpArgs.push("--target-task-id", pkg.targetTaskId);
     if (pkg.sourceRef) tpArgs.push("--source-ref", pkg.sourceRef);
     if (pkg.designIntent) tpArgs.push("--design-intent", pkg.designIntent);
+    if (pkg.evidenceContract) tpArgs.push("--evidence-contract", JSON.stringify(pkg.evidenceContract));
     tpArgs.push("--write", "--json");
     runControllerState(tpArgs);
     addedPackages.push(packageId);
@@ -766,8 +770,12 @@ function commandCreateDemand() {
     wrote: true,
     created: { demandKey, title, stateRoot, taskPackages: addedPackages, consumedTodoId },
     controllerOutputs: [initOut, renderOut].filter(Boolean),
+    // Reminder-first (never a gate): if no testing decision was recorded, surface a
+    // one-line advisory so the Design-stage test approach is not silently forgotten.
+    // Whether real Test is needed is the controller's / Design's judgment, not a gate.
+    ...(testDecision ? {} : { testDecisionReminder: "No testing decision recorded for this demand. Confirm the test approach was decided at Design (requirement-design testing decision), or record it with --test-decision. Reminder only — not a gate." }),
     forbiddenConclusions: ["create-demand-is-dispatch", "create-demand-is-acceptance"],
-    agentNext: "Demand created and any delivered TODO row consumed. Dispatch is a separate step; no dispatch, delivery, or acceptance was performed.",
+    agentNext: `Demand created and any delivered TODO row consumed. Dispatch is a separate step; no dispatch, delivery, or acceptance was performed.${testDecision ? "" : " Reminder: no testing decision recorded — confirm the Design-stage test approach or record it."}`,
   }, [`Created demand ${demandKey} at ${stateRoot}`]);
 }
 

@@ -12,7 +12,9 @@
     "status": { "type": "string" },
     "targetTasks": { "type": "array", "items": { "type": "object" } },
     "createdAt": { "type": "string" },
-    "sourceRef": { "type": ["string", "null"] }
+    "sourceRef": { "type": ["string", "null"] },
+    "designIntent": { "type": ["string", "null"] },
+    "evidenceContract": { "type": "object" }
   },
   "additionalProperties": true
 }

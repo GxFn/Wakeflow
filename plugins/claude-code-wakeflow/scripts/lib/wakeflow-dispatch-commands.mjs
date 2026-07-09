@@ -107,6 +107,7 @@ export function createDispatchCommands(ctx) {
     controllerWindow = "",
     designIntent = "",
     dispatchGroup = "",
+    evidenceContract = null,
     evidenceRequired = [],
     forbidden = [],
     humanContextRef = "",
@@ -160,6 +161,10 @@ export function createDispatchCommands(ctx) {
       // dispatch and review. Advisory only, and deliberately OUTSIDE the
       // idempotency comparable: same-revision replay ignores it.
       ...(designIntent ? { designIntent } : {}),
+      // Design-authored execution-craft evidence contract, carried so the target sees
+      // what evidence it must produce. Advisory at dispatch; enforced at reduce-results.
+      // Also OUTSIDE the idempotency comparable (like designIntent): back-fill is safe.
+      ...(evidenceContract ? { evidenceContract } : {}),
       scope,
       forbidden,
       evidenceRequired,
@@ -406,10 +411,14 @@ export function createDispatchCommands(ctx) {
       stateRevision: state.revision,
     };
     const designIntent = typeof taskPackage.designIntent === "string" ? taskPackage.designIntent.trim() : "";
+    const evidenceContract = taskPackage.evidenceContract && typeof taskPackage.evidenceContract === "object"
+      ? taskPackage.evidenceContract
+      : null;
     const { dispatchGroupRecord, packet, packetFile } = buildDispatchArtifacts({
       contextPolicy: getValue("--context-policy", "refresh-if-missing"),
       controllerWindow,
       designIntent,
+      evidenceContract,
       dispatchGroup,
       evidenceRequired: [
         ...getAllValues("--evidence"),
@@ -530,6 +539,13 @@ export function createDispatchCommands(ctx) {
         threadReady: Boolean(registration),
         threadIdRedacted: Boolean(registration),
         windowLockWarning,
+        // W-Target/P5 recurring-problem stop: when this task has already been reworked
+        // twice+, surface a one-line reminder (never a gate) that the target should stop
+        // point-fixing and re-derive from root cause / route a redesign — the
+        // wakeflow-target-craft skill carries the full stop; this only makes it salient.
+        ...((targetTask.reworkCount ?? 0) >= 2
+          ? { recurringProblemReminder: `This target task has been reworked ${targetTask.reworkCount} times (recurringProblem). Per wakeflow-target-craft: stop point-fixing — re-derive from root cause, or route a Design redesign for a non-bug outcome mismatch. Reminder only, not a gate.` }
+          : {}),
         // Dispatch-time intent check: a one-line conditional reminder, never a
         // gate. The agent authoring the objective IS the confirmation; an
         // intentional adaptation belongs in the objective wording.

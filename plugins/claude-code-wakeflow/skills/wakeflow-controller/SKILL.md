@@ -198,6 +198,28 @@ Use this shape when recording or reporting controller acceptance:
 Never use `accepted` as a shorthand unless the evidence, scope, and TODO rollup
 are already stated.
 
+## Craft Evidence At Acceptance
+
+When a task package carries an `evidenceContract`, the machinery has already
+hard-checked the objective half at reduce (`craft-evidence-required`: required
+kinds present, declared artifacts resolve). The judgment half is yours:
+
+- The review pack echoes each result's `craftEvidence` and a `craftCheck` /
+  `advisoryCraftKinds` reminder. Entries with `verify: controller-rerun` mean
+  YOU re-run them at acceptance (tests/typecheck/lint within the controller
+  self-validation boundary) — the script never runs repo commands for you;
+  `artifact-present` means the artifact was existence-checked only;
+  `self-attested` is a claim on the audit trail, not proof.
+- Read the `self-review` note: stage-1 spec compliance against designIntent,
+  and — on a rework round — the point-by-point response to your previous
+  rework reason. A result that silently ignores a rework point is not ready.
+- `recurringProblem` (reworkCount >= 2, surfaced at prepare-dispatch and in the
+  task ledger): stop redispatching point fixes — expect a `root-cause-note`,
+  and prefer the root-cause re-derivation or the `redesign` route.
+- A package WITHOUT a contract is not a defect (doc-only work legitimately
+  skips it) — the create/add reminders exist so the omission is a decision,
+  never an accident.
+
 ## Group Policies
 
 - `group-ready`: wait until every expected target is ready or a blocker makes

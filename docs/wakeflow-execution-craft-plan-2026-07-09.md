@@ -28,6 +28,14 @@
 - **[修复·语义漂移]** `verify` 模式的诚实语义澄清(见 §7.2 附注):脚本只做客观校验(kind 在场 + 工件 `existsSync`);`controller-rerun` 是**控制器验收时的动作**,为此 review pack 条目现在**回显 `craftEvidence`**,控制器拿到复跑所需数据。
 - **[落地·H-3]** LLM 契约 lint 测试(`wakeflow-llm-contract.test.mjs`):全链每跳 payload 必带 `agentNext`、target-result/transition-candidate 工件必带 `forbiddenConclusions`——软护栏的**存在性**从此由硬测试钉住(深读 §6.3 的纵深防御第一层不再可被静默剥离)。
 - **[收窄·P5]** root-cause-note 硬要求按 reminder-first 收窄:recurringProblem 提醒文本现在明确要求下个结果附 `root-cause-note` craft 条目,不设门。
+**W-craft-2 借鉴回补波(2026-07-10,Superpowers 14 技能全量对照后):**
+- **[修复·激活链]** craft 技能此前是「孤儿」:唤醒提示只指 wakeflow-target、target 技能不反向链接、唯一入口是 scope block 一行。现在:包带 `evidenceContract` 时唤醒提示追加 `craftSkill:` 行(零契约零痕迹),wakeflow-target 双 edition 加前向链接。
+- **[修复·门休眠]** 契约缺失零提醒 → 硬门默认永不开火(重演 testDecision 的被忘模式)。现在:add-task-package(可派发包缺契约)+ create-demand(初始包全无契约)双点 `evidenceContractReminder`,reminder-first。
+- **[修复·P5 真 bug]** recurringProblem 提醒读错字段路径(顶层 `reworkCount`,实际持久化在 `counts.reworkCount`)——零测试所以未暴露;本波补的真协议测试(rework→重派→再 rework 完整两轮)当场逼出并修复。
+- **[craft 技能 v2]** 补齐借鉴:①写前自排(writing-plans/executing-plans,P1 波掉的映射)②baseline-before-start(using-git-worktrees 的 clean-test-baseline)③自审升两段(spec compliance→quality)④**接收打回**(receiving-code-review:逐条回应 rework reason、不防御、不盲改)⑤分支收尾卫生(finishing-a-development-branch)⑥canonical evidence kinds 词表(门按字符串精确匹配)⑦recurringProblem 指路 state(counts.reworkCount)。
+- **[验收侧]** controller 技能新增「Craft Evidence At Acceptance」节:controller-rerun 由控制器复跑、self-review 的逐条回应检查、recurringProblem 倾向 redesign、无契约是决定不是缺陷。
+- **[小项]** task-ledger 加 `testCardStrategySource`(testCardStatus 保持字符串形状——additive 纪律,过程中抓回一次形状破坏)。
+- **[对照结论]** Superpowers 14 技能:已借 9(5 直接+4 被更强覆盖),本波再借 5;`using-superpowers` 的压缩后再注入不抄——Wakeflow 的答案是纪律锚在 state(契约+激活链),不锚在上下文。
 - **[登记·不动]** 深审复核既有 H 系观察项,维持触发器纪律:advisory 锁(绕过 CLI 直改 JSON 不受约束——与「脚本是唯一写入口」互为表里)、schema 无运行时校验器(H-2,触发=真实漂移一次)、readback 强度(H-4)、review-pack packet 扫描线性增长(H-11)、setup.mjs 规模与 argv 解析三件套重复(H-5,机会性重构;本波新增的 JSON arg 解析器仍留在 state.mjs 内,若第二个脚本需要再提共享 lib)、三套状态词汇并存(文档已标注)。均未到触发条件,不为审而改。
 
 ---

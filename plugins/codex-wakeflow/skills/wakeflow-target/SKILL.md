@@ -44,6 +44,11 @@ state root, or human context, stop and report instead of guessing.
      repository rules.
    - Execute only the task assigned to this target window.
    - Do not claim another target, Test role, or controller role.
+   - If the wake prompt carries a `craftSkill` line, or the task package carries
+     an `evidenceContract`, ALSO load `skills/wakeflow-target-craft/SKILL.md`
+     before writing code: it defines how to earn the craft evidence the
+     controller's reduce gate will require (a completed result missing a
+     required kind hard-fails with `craft-evidence-required`).
 3. Work inside repository boundaries.
    - Change only files permitted by the task and repository rules.
    - Keep commits, tests, and evidence scoped to the owning repository.

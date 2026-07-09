@@ -2,12 +2,14 @@
 
 Date: 2026-06-08
 
-> **FROZEN historical spec.** This is the original 2026-06-08 implementation source map,
-> kept as the capability and acceptance baseline for the Design/Test/Controller skills. It
-> predates the later convergences (unified intake, the 23-tool MCP surface, the `redesign`
-> review decision, deliver-only Design, the Test-dispatch-rounds `retestCount`). Read it for
-> the preserved external-method basis and the original acceptance intent — NOT as the current
-> tool or intake vocabulary. For those, follow the live `SKILL.md` files and the other references.
+> **Reactivated living baseline (2026-07-09).** Originally 2026-06-08; un-frozen and being
+> re-derived against the current architecture (unified create/claim/deliver, the 23-tool MCP
+> surface, the `redesign` review decision, deliver-only Design, demand pods, the evidence gate
+> and per-window evidence contract). It now also governs a fourth role — the development/target
+> window's execution craft (`wakeflow-target-craft`, a plugin skill, not a window-support
+> template). Where a specific `SKILL.md` has not yet been re-derived, the live file wins on
+> tool/intake vocabulary; this map governs capability, role boundaries, and acceptance intent.
+> Staged re-derivation: `docs/wakeflow-execution-craft-plan-2026-07-09.md`.
 
 ## Purpose
 
@@ -300,6 +302,7 @@ developer usage.
 | Design | Clarification, assisted confirmation, options, requirement design, candidate slicing, handoff | Dispatch, product implementation, final product decision |
 | Test | Risk strategy, reproduction, regression design, evidence review, failure classification | Product takeover, final acceptance, unbounded QA |
 | Controller | Entry sync, state roots, task packages, dispatch, result review, TODO rollup, archive | Accept target prose, skip raw evidence, let scripts make product decisions |
+| Product / Target craft | Test-first, systematic debugging, self-review by severity, scope discipline (YAGNI), verify-before-done; produce controller-acceptable evidence | Claim, accept, dispatch, cross-window or state-machine writes; invoke Design/Test skills; decide acceptance |
 
 ## Skill To Source Matrix
 
@@ -315,6 +318,7 @@ developer usage.
 | `regression-design` | `tdd` | Test pyramid, behavior-focused testing | Use public seams and fail-before/pass-after evidence |
 | `evidence-review` | `code-reviewer`, `senior-qa` | Google code review, test evidence confidence | Identify blockers, missing evidence, and residual risk without accepting |
 | `wakeflow-controller` acceptance | `code-reviewer`, `senior-qa`, existing Wakeflow controller | Google code review, SRE evidence model | Independently review raw evidence, roll TODOs, and decide accept/rework/block/archive |
+| `wakeflow-target-craft` | Superpowers `test-driven-development` / `systematic-debugging` / `verification-before-completion` / `requesting-code-review`, mattpocock `tdd` / `diagnose` | Test pyramid, scientific debugging, evidence-first code review | Earn machine-checkable evidence during implementation; stop point-fixing at `recurringProblem`; hold no claim/accept/dispatch authority |
 
 ## Design Skills To Implement
 
@@ -498,6 +502,33 @@ Acceptance:
 - Controller can decide accept, rework, wait, block, or ask user without
   rereading every artifact.
 - It does not treat successful command output as full acceptance.
+
+## Product / Target Craft Skill To Implement
+
+### `wakeflow-target-craft`
+
+Path (plugin skill, NOT a window-support template — development windows are external
+product repositories and load it via the Wakeflow plugin, alongside `wakeflow-target`):
+
+- `skills/wakeflow-target-craft/SKILL.md`
+
+Required behavior:
+
+- Shape HOW the development window writes code so it earns machine-checkable evidence:
+  test-first (RED→GREEN), systematic debugging (reproduce → falsifiable hypotheses →
+  one-variable probes → regression), self-review by severity, scope discipline (YAGNI),
+  verify-before-done (typecheck/lint/test output).
+- At `recurringProblem` (reworked twice), stop point-fixing: re-derive from root cause, or
+  return `needs-review` recommending a Design redesign for a non-bug outcome mismatch.
+- Forbid claim, accept, dispatch, cross-window, or state-machine writes; forbid invoking
+  Design/Test skills; never decide acceptance (produce evidence, controller decides).
+
+Acceptance:
+
+- Returns a `TargetResultEnvelope` whose evidence a controller can accept without a
+  round-trip; honestly returns `blocked`/`needs-review` when evidence is missing.
+- Adds craft, not authority: `wakeflow-target` remains higher authority for the delivery and
+  return protocol.
 
 ## Controller Skill Enhancement
 

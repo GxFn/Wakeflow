@@ -20,7 +20,15 @@
 - ✅ 模板包散文(双 edition,幂等脚本追加,diff 干净):Design/Test 记忆文件排他句、`requirement-design` 测试决策必产出、`test-strategy` 反路径依赖。
 - ✅ plugin 记忆文件(CLAUDE.md/AGENTS.md)控制器排他句(只用 controller/governance,不用代码手艺技能)。
 - ✅ 版本五处一致 bump 至 **`0.8.0`**(marketplace `metadata.version` 保持 1.0.0）。
-- 唯一剩项:review-pack B2 软提醒是**代码**增强(非散文);reduce 硬门已覆盖 required kinds,B2 只 surface advisory kinds——可选,留后续。
+- ✅ review-pack B2 `craftCheck` 软提醒已落地(advisory kinds 在场时附加提醒,镜像 intentCheck;零分数零门)。
+
+**对抗式深审硬化波(2026-07-09,Fable 5 深审,全量 328/328):**
+- **[修复·fail-open]** `evidenceContract` 入口增形状校验(fail-closed):此前 `required` 写成对象(非数组)会让 reduce 端 `Array.isArray` 静默把 required 归空——**唯一的硬门被无声关闭**。契约是门的权威来源,坏形状必须死在 intake。`craftEvidence` 条目同样校验(垃圾不入耐久证据工件);dispatch 侧 `!Array.isArray` 纵深守卫。
+- **[修复·指引矛盾]** craft 门 `agentNext` 原文说「Re-dispatch」——但被卡任务是 `sent`,派发资格只收 pending/needs-rework/missing-result,照做必失败。已改为与 evidence-repair 同款的恢复路径:**sent 任务接受修正 import**。
+- **[修复·语义漂移]** `verify` 模式的诚实语义澄清(见 §7.2 附注):脚本只做客观校验(kind 在场 + 工件 `existsSync`);`controller-rerun` 是**控制器验收时的动作**,为此 review pack 条目现在**回显 `craftEvidence`**,控制器拿到复跑所需数据。
+- **[落地·H-3]** LLM 契约 lint 测试(`wakeflow-llm-contract.test.mjs`):全链每跳 payload 必带 `agentNext`、target-result/transition-candidate 工件必带 `forbiddenConclusions`——软护栏的**存在性**从此由硬测试钉住(深读 §6.3 的纵深防御第一层不再可被静默剥离)。
+- **[收窄·P5]** root-cause-note 硬要求按 reminder-first 收窄:recurringProblem 提醒文本现在明确要求下个结果附 `root-cause-note` craft 条目,不设门。
+- **[登记·不动]** 深审复核既有 H 系观察项,维持触发器纪律:advisory 锁(绕过 CLI 直改 JSON 不受约束——与「脚本是唯一写入口」互为表里)、schema 无运行时校验器(H-2,触发=真实漂移一次)、readback 强度(H-4)、review-pack packet 扫描线性增长(H-11)、setup.mjs 规模与 argv 解析三件套重复(H-5,机会性重构;本波新增的 JSON arg 解析器仍留在 state.mjs 内,若第二个脚本需要再提共享 lib)、三套状态词汇并存(文档已标注)。均未到触发条件,不为审而改。
 
 ---
 
@@ -266,6 +274,13 @@ core（host-neutral，契约层）
 | `self-attested` | 仅声明,入审计链不证真 | 无法从工件可靠证明的过程(如「是否真先写测试」) |
 
 不新增窗口是硬约束——控制器跑不动的仓库降级 `artifact-present`,不上升为 Test 窗口。
+
+> **实现附注(2026-07-09 硬化波,诚实语义)**:`verify` 模式在 v1 是**记录的元数据 + 控制器的
+> 验收指引**,不是脚本行为分支。脚本(reduce 门)只做两件客观事:required kind **在场**、声明的
+> craft 工件路径 **`existsSync` 解析**。`controller-rerun` 的「复跑」由**控制器在验收时执行**——
+> 这正是「脚本只创建/校验/记录,判断归 Agent」的信任模型;为此 review pack 条目回显
+> `craftEvidence`,控制器拿到复跑所需的数据。脚本永不 spawn 仓库测试命令(进程边界只放行
+> node/git/ps/caffeinate,不为门开洞)。
 
 ---
 

@@ -103,6 +103,49 @@ test("without designIntent the whole chain leaves zero traces", () => {
   assert.equal(entry.objectiveSource, "dispatch-packet");
 });
 
+test("B2: review pack surfaces craftCheck when a task declares advisory craft evidence (never a gate)", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-craftcheck-"));
+  mkdirSync(root, { recursive: true });
+  const init = run(stateScript, ["init", "--root", root, "--demand-key", "CRAFTCHECK-DK", "--title", "CraftCheck", "--write", "--json"]);
+  assert.equal(init.status, 0, init.stderr || init.stdout);
+  const stateRoot = path.join(root, JSON.parse(init.stdout).stateRoot);
+  const contract = JSON.stringify({ version: 1, required: [{ kind: "tests", verify: "self-attested" }], advisory: [{ kind: "self-review" }, { kind: "test-first" }] });
+  const added = run(stateScript, [
+    "add-task-package", "--root", root, "--state-root", stateRoot,
+    "--task-package-id", "tp-a", "--summary", "Craft task", "--target-window", "RepoA",
+    "--evidence-contract", contract, "--write", "--json",
+  ]);
+  assert.equal(added.status, 0, added.stderr || added.stdout);
+  assert.equal(prepare(root, stateRoot, { objective: OBJECTIVE }).status, 0);
+  const imported = run(stateScript, [
+    "import-target-result", "--root", root, "--state-root", stateRoot,
+    "--target-task-id", "tp-a__RepoA", "--target-window", "RepoA", "--status", "completed",
+    "--craft-evidence", JSON.stringify([{ kind: "tests", value: "ok" }]), "--write", "--json",
+  ]);
+  assert.equal(imported.status, 0, imported.stderr || imported.stdout);
+
+  const pack = JSON.parse(run(deliveryScript, ["review-pack", "--root", root, "--state-root", stateRoot, "--json"]).stdout).reviewPack;
+  assert.match(pack.craftCheck, /advisory craft evidence/i, "craftCheck surfaces when advisory kinds are declared");
+  assert.match(pack.craftCheck, /not a gate/i, "craftCheck states it is a reminder, not a gate");
+  const entry = pack.targetResults.find((item) => item.taskId === "tp-a__RepoA");
+  assert.deepEqual(entry.advisoryCraftKinds, ["self-review", "test-first"], "the entry lists the advisory craft kinds");
+});
+
+test("B2: no craftCheck when the task declares no advisory craft evidence (zero trace)", () => {
+  const { root, stateRoot } = makeDemand({ withIntent: false });
+  assert.equal(prepare(root, stateRoot, { objective: OBJECTIVE }).status, 0);
+  const imported = run(stateScript, [
+    "import-target-result", "--root", root, "--state-root", stateRoot,
+    "--target-task-id", "tp-a__RepoA", "--target-window", "RepoA", "--status", "completed",
+    "--write", "--json",
+  ]);
+  assert.equal(imported.status, 0, imported.stderr || imported.stdout);
+  const pack = JSON.parse(run(deliveryScript, ["review-pack", "--root", root, "--state-root", stateRoot, "--json"]).stdout).reviewPack;
+  assert.equal("craftCheck" in pack, false, "no craftCheck without advisory craft kinds");
+  const entry = pack.targetResults.find((item) => item.taskId === "tp-a__RepoA");
+  assert.equal("advisoryCraftKinds" in entry, false, "no advisoryCraftKinds field without a contract");
+});
+
 test("one corrupt packet file never takes down the state-root review pack", () => {
   const { root, stateRoot } = makeDemand({ withIntent: true });
   assert.equal(prepare(root, stateRoot, { objective: OBJECTIVE }).status, 0);

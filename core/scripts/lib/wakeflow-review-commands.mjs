@@ -99,6 +99,10 @@ export function createReviewCommands(ctx) {
       // authored one (zero traces otherwise).
       objective: item.packet.objective,
       ...(item.packet.designIntent ? { designIntent: item.packet.designIntent } : {}),
+      // B2: advisory craft kinds (self-review, test-first, ...) declared on the packet's
+      // evidence contract, surfaced so the pack can add a craftCheck reminder. Required
+      // kinds are enforced at reduce-results; these are advisory only.
+      ...(item.packet.evidenceContract?.advisory?.length ? { advisoryCraftKinds: item.packet.evidenceContract.advisory.map((entry) => entry.kind).filter(Boolean) } : {}),
       resultStatus: result?.status || "missing",
       resultFile: result ? path.relative(workspaceRoot, item.file) : undefined,
       changedRepos: Array.isArray(result?.changedRepos) ? result.changedRepos : [],
@@ -452,6 +456,7 @@ export function createReviewCommands(ctx) {
         objective: packet?.objective ?? task.summary,
         objectiveSource: packet?.objective ? "dispatch-packet" : "task-summary",
         ...(packet?.designIntent ? { designIntent: packet.designIntent } : {}),
+        ...(packet?.evidenceContract?.advisory?.length ? { advisoryCraftKinds: packet.evidenceContract.advisory.map((entry) => entry.kind).filter(Boolean) } : {}),
         dispatchGroup: result?.dispatchGroup || result?.deliveryContext?.dispatchGroup || task.delivery?.dispatchGroup,
         returnRoute: result?.deliveryContext?.returnRoute || result?.returnRoute,
         returnPolicy: result?.deliveryContext?.returnPolicy || result?.returnPolicy,
@@ -606,6 +611,12 @@ export function createReviewCommands(ctx) {
       // confirmation record.
       ...(targetResults.some((item) => item.designIntent)
         ? { intentCheck: "Compare designIntent / objective / delivered result per task. If the delivery departs from the design intent and the dispatch did not declare an intentional adaptation, run a requirement review (Original Plan / Requirement Design) first; if the requirement itself must change, decide redesign." }
+        : {}),
+      // B2 craft check: additive advisory, present only when a reviewable task declared
+      // advisory craft evidence. Required kinds are enforced at reduce-results; reminder
+      // only, never a gate — gates / nextAction stay untouched.
+      ...(targetResults.some((item) => item.advisoryCraftKinds?.length)
+        ? { craftCheck: "Some tasks declared advisory craft evidence (e.g. self-review, test-first); required craft kinds are already enforced at reduce-results. Reminder only (not a gate): when judging quality, check the target's self-review note and test-first commit history." }
         : {}),
       nextAction: demandCompleted
         ? "demand-completed-stop-without-next-dispatch"

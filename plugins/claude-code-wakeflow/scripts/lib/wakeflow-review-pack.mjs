@@ -74,6 +74,11 @@ export function buildControllerReviewPack({
     ...(targetResults.some((item) => item.designIntent)
       ? { intentCheck: "Compare designIntent / objective / delivered result per task. If the delivery departs from the design intent and the dispatch did not declare an intentional adaptation, run a requirement review (Original Plan / Requirement Design) first; if the requirement itself must change, decide redesign." }
       : {}),
+    // B2 craft check: additive advisory, present only when a reviewable entry carries
+    // advisory craft kinds. Required kinds are enforced at reduce-results; reminder only.
+    ...(targetResults.some((item) => item.advisoryCraftKinds?.length)
+      ? { craftCheck: "Some tasks declared advisory craft evidence (e.g. self-review, test-first); required craft kinds are already enforced at reduce-results. Reminder only (not a gate): when judging quality, check the target's self-review note and test-first commit history." }
+      : {}),
     nextAction: review.decision === "wait"
       ? "wait-for-target-result-envelope"
       : review.decision === "blocked"

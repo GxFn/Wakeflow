@@ -44,10 +44,8 @@
         "dispatched",
         "waiting-results",
         "review-ready",
-        "accepting",
         "needs-rework",
         "blocked",
-        "paused",
         "cancelled",
         "completed",
         "archived"

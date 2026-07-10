@@ -45,7 +45,7 @@ Script-readable document format:
 - `developer-progress.md` is not state authority. Scripts may update only its
   `<!-- unified-status:start -->` block via `wakeflow-render-progress.mjs`; task
   packages, backfill summaries, and decisions are append-only timestamped
-  sections managed by `wakeflow-progress-log.mjs`.
+  sections written by the state commands' own timeline appends.
 - Test exchange docs, the global TODO board, current indexes, archive maps, and
   compact summaries are evidence surfaces; keep them concise and link back to
   the active progress document rather than duplicating it. Design/Test machine
@@ -68,9 +68,6 @@ Current scripts:
 - `wakeflow-render-progress.mjs`: reads a state root, rebuilds `projection.json`, and
   replaces only the `Unified Status` marker block inside
   `developer-progress.md`.
-- `wakeflow-progress-log.mjs`: appends timestamped task-package, backfill, or
-  decision entries to allowed developer-readable sections while leaving machine
-  state and `Unified Status` untouched.
 - `wakeflow-delivery.mjs`: state-root-backed local transport manager. It
   registers real thread ids (a Wakeflow thread id is a Claude Code session id)
   in the local thread registry, derives window
@@ -83,7 +80,7 @@ Current scripts:
   packets, envelopes, delivery runs, review packs, and thread registry files
   stay under ignored `.wakeflow-local/wakeflow-delivery/` unless an explicit
   state directory is provided.
-  `prepare-dispatch-from-state` fails closed for completed / archived / paused
+  `prepare-dispatch-from-state` fails closed for completed / archived / cancelled
   demands, review-ready demands that
   still need a controller decision, blocked demands, and target tasks that are
   already accepted, completed, or blocked. Group-scoped target result files
@@ -119,16 +116,14 @@ Current scripts:
   tmux-resident windows; the adapter describes the `wakeflow-claude-host send`
   command the agent must run, consumes delivery envelopes, requires pane
   readback, and never stores real thread ids or performs controller acceptance.
-- `wakeflow-demand-sequence.mjs`: ordered independent-demand runner. It reads a tracked
-  machine manifest whose items point at standard developer demand documents,
-  validates each document has exactly one `Unified Status` marker plus the
-  append-only sections, claims at most one next demand by creating its ignored
-  controller state root and initial task package, and syncs the state-root
-  `Unified Status` back into the demand document. Its `claim-todo` path can
-  auto-claim the single controller-claimable global TODO row (Auto Claim = yes
-  and eligible), or an explicitly named eligible row, delegating to
-  `create-demand`. It does not dispatch, send session messages, accept
-  evidence, or complete demands.
+- `wakeflow-demand-sequence.mjs`: TODO-board claim/create runner. `create-demand`
+  inits a demand state root (adopting this host), adds any initial task
+  packages, renders the progress doc, and consumes the originating TODO row;
+  `claim-todo` auto-claims the single controller-claimable row (Auto Claim =
+  yes and eligible) or an explicitly named eligible row by delegating to
+  `create-demand`. Claiming past `maxActiveDemands` fails closed at the state
+  init gate. It does not dispatch, send session messages, accept evidence, or
+  complete demands.
 - `wakeflow-pod.mjs`: host-neutral demand-pod runner (open / close / list). One
   demand = one pod — its OWN controller, OWN Test, and one isolation worktree
   window per repo, the WHOLE pod sharing the demand's one worktree set. `open`

@@ -211,33 +211,6 @@ test("claude MCP surface registers and redacts a hostLaunch session id", async (
   assert.equal(registration.threadId, sessionId);
 });
 
-test("claude MCP registration accepts a configured IDE Test window", async () => {
-  const workspaceRoot = mkdtempSync(path.join(os.tmpdir(), "claude-wakeflow-ide-test-"));
-  mkdirSync(path.join(workspaceRoot, "ExternalTest"), { recursive: true });
-  writeFileSync(
-    path.join(workspaceRoot, "wakeflow.config.json"),
-    JSON.stringify({
-      workspaceName: "ClaudeFlow",
-      controllerWindow: "ClaudeFlow",
-      designWindow: "Design",
-      testWindow: "Test",
-      ideTestWindow: "ExternalTest",
-      repositories: [],
-    }),
-  );
-  const sessionId = "a1b2c3d4-5678-90ab-cdef-claude-ide-test";
-  const result = await claudeMcpHandlers.wakeflow_register_window({
-    root: workspaceRoot,
-    window: "ExternalTest",
-    windowHandle: sessionId,
-    apply: true,
-  });
-  assert.equal(result.ok, true, result.stderr || result.stdout);
-  assert.equal(result.parsedJson.threadRegistered, true);
-  const config = JSON.parse(readFileSync(path.join(workspaceRoot, result.parsedJson.windowConfigFile), "utf8"));
-  assert.equal(config.deliveryRole, "test-target");
-  assert.doesNotMatch(JSON.stringify(result), new RegExp(sessionId));
-});
 
 test("claude artifact rejects placeholder session ids", () => {
   const workspaceRoot = mkdtempSync(path.join(os.tmpdir(), "claude-wakeflow-"));

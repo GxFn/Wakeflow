@@ -16,7 +16,6 @@ export const pluginRoot = path.dirname(path.dirname(modulePath));
 export const wakeflowRuntimeRoot = pluginRoot;
 
 const allowedScripts = new Map([
-  ["wakeflow-progress-log", "wakeflow-progress-log.mjs"],
   ["wakeflow-archive-todo", "wakeflow-archive-todo.mjs"],
   ["wakeflow-archive-docs", "wakeflow-archive-docs.mjs"],
   ["wakeflow-check-repository-residue", "wakeflow-check-repository-residue.mjs"],

@@ -951,14 +951,6 @@ function commandReadback() {
   });
 }
 
-function commandReleaseLock() {
-  const windowName = requireValue("--window");
-  const lock = readLock(windowName);
-  if (lock) rmSync(lockFileFor(windowName), { force: true });
-  setWindowState(windowName, null);
-  output({ ok: true, command: "release-lock", windowName, released: Boolean(lock) });
-}
-
 function listGroupResults(group, stateRootDir) {
   // Target results land in two layers: the delivery store
   // (.wakeflow-local/wakeflow-delivery/target-results/) and the demand state
@@ -1026,25 +1018,6 @@ async function commandWaitResults() {
   }
 }
 
-function commandAttachWindow() {
-  const windowName = requireValue("--window");
-  const binding = readBinding(windowName);
-  // One reliable path: the user opens a new terminal window/tab themselves and
-  // attaches. Programmatic tab-opening (osascript) proved unreliable across
-  // terminals (tabs flash and close), so it is intentionally not offered.
-  const attach = tmuxSocket
-    ? `tmux -L ${tmuxSocket} attach -t ${binding.tmux.session}`
-    : `tmux attach -t ${binding.tmux.session}`;
-  output({
-    ok: true,
-    command: "attach-window",
-    windowName,
-    windowId: binding.tmux.windowId,
-    session: binding.tmux.session,
-    attach,
-    instruction: `Open a new terminal window or tab, cd into this workspace, and run: ${attach}`,
-  });
-}
 
 
 function readWorkspaceWindowModel() {
@@ -2532,9 +2505,7 @@ function commandHelp() {
       send: "Paste a prompt file into a window and record pane readback: --window --prompt-file [--delivery-id] [--lock-ttl-sec] [--force].",
       "deliver": "One-step dispatch transport: read the delivery envelope file, write the prompt to a temp file, send it into the registered tmux window, and return compact readback evidence: --delivery-file <envelope.json> [--readback-wait-ms] [--lines] [--force]. Replaces the manual prompt-file + send ceremony.",
       readback: "Capture the current pane tail for evidence: --window [--lines].",
-      "release-lock": "Remove the shared in-flight delivery lock for a window: --window.",
       "wait-results": "Explicit synchronous wait for target results of one dispatch group (scans both result layers; pure observation, no lock or glyph side effects). NOT a default dispatch step: the controller-return delivery is the wake-up. A timeout is a report, not a verdict - whether the delivery is stalled is the controller judgment: --group <id> [--target <w>...] [--expect n] [--timeout-sec] [--poll-ms] [--state-root <path>].",
-      "attach-window": "Print the human instruction to enter the workspace (open a new terminal window/tab and run tmux attach -t <session>): --window.",
       "launch-all": "Resume every registered window in canonical order (Design, controller, products, Test) using the recorded permissionMode, skipping in-flight windows: [--server <name>].",
       "replace-all": "Tear down and rebuild the whole fleet (or a named subset) with BRAND-NEW sessions: kills each old tmux window, launches a fresh claude session (empty context), and registers the new id via core replace-windows (config/docs untouched). Skips in-flight windows: [--server <name>] [--window <name> ...] [--boot-wait-ms].",
       "set-unattended": "Set hosts.claude-code.permissionMode (acceptEdits|bypassPermissions|...), regenerate the derived stream overlay when present (a tracked-config write must not leave it stale), and report which live windows need a resume-restart: --mode <m> [--write].",
@@ -2563,9 +2534,7 @@ async function main() {
     case "send": return commandSend();
     case "deliver": return commandDeliver();
     case "readback": return commandReadback();
-    case "release-lock": return commandReleaseLock();
     case "wait-results": return commandWaitResults();
-    case "attach-window": return commandAttachWindow();
     case "seed-permissions": return commandSeedPermissions();
     case "arrange-windows": return commandArrangeWindows();
     case "check-workspace": return commandCheckWorkspace();

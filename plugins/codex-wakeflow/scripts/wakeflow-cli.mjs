@@ -34,7 +34,6 @@ Commands:
   install     Discover sibling repos, configure scope, and write child AGENTS blocks.
   scripts     Check script docs, optionally including script tests.
   loop        Operate the new Wakeflow Delivery Loop contract surface.
-  sequence    Claim or sync ordered independent demand documents.
   next-work   Scan the global TODO board for the next controller-ready candidate.
   help        Show this help.
 
@@ -46,7 +45,6 @@ Common examples:
   node scripts/wakeflow-cli.mjs sync --state-root .wakeflow-active/current/<demand-key> --write
   node scripts/wakeflow-cli.mjs install status --json
   node scripts/wakeflow-cli.mjs loop status --json
-  node scripts/wakeflow-cli.mjs sequence status --manifest wakeflow-ledger/requirement-designs/<topic>/sequence.json --json
   node scripts/wakeflow-cli.mjs next-work --after-completion --json
   node scripts/wakeflow-cli.mjs next-work --id example-demand-2026-06-03 --json
 
@@ -262,12 +260,6 @@ function buildLoop(options) {
   return [{ label: "Wakeflow delivery loop", ...nodeScript("wakeflow-delivery.mjs", [subcommand, ...rest]) }];
 }
 
-function buildSequence(options) {
-  const subcommand = options[0] ?? "status";
-  const rest = options.slice(1);
-  return [{ label: "ordered demand sequence", ...nodeScript("wakeflow-demand-sequence.mjs", [subcommand, ...rest]) }];
-}
-
 function buildNextWork(options) {
   assertKnownOptions(options, ["--after-completion", "--write", "--json"], ["--id", "--source", "--limit", "--board", "--todo", "--status", "--out"]);
   return [{ label: "next Wakeflow work candidate scan", ...nodeScript("wakeflow-next-work.mjs", options) }];
@@ -296,8 +288,6 @@ function buildSteps() {
       return buildScripts(commandArgs);
     case "loop":
       return buildLoop(commandArgs);
-    case "sequence":
-      return buildSequence(commandArgs);
     case "next-work":
       return buildNextWork(commandArgs);
     default:

@@ -853,10 +853,10 @@ function commandAddTaskPackageLocked(stateRoot) {
   const state = readJson(stateFile, "controller state");
   const hostOwnership = ensureDemandHostOwnership(state);
 
-  if (["completed", "archived", "paused"].includes(state.state)) {
+  if (["completed", "archived", "cancelled"].includes(state.state)) {
     fail(`cannot add task package while demand is ${state.state}: ${state.demandKey}`);
   }
-  if (["review-ready", "accepting", "waiting-results"].includes(state.state)) {
+  if (["review-ready", "waiting-results"].includes(state.state)) {
     fail(`cannot add task package while demand is ${state.state}; reduce or decide current results before adding more work.`);
   }
   if (state.state === "blocked" || (state.blockers ?? []).length > 0) {

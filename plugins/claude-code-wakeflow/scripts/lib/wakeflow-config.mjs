@@ -188,7 +188,7 @@ export function loadWorkspaceConfig(options = {}) {
 // instead of depending on one-shot draft test-card files. Pass a merged config
 // (loadWorkspaceConfig) so testWindow is always populated.
 export function testWindowNames(config = {}) {
-  return [config.testWindow, config.ideTestWindow].filter(Boolean);
+  return [config.testWindow].filter(Boolean);
 }
 
 export function resolveConfigPath(workspaceRoot, value) {

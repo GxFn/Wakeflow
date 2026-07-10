@@ -653,7 +653,7 @@ stateDiagram-v2
   [*] --> absent
   absent --> fresh_same_host : build-delivery writeWindowLock / claude performSend writeJson
   fresh_same_host --> fresh_same_host : record-delivery-run sent (refresh) / same-id re-send
-  fresh_same_host --> absent : record-target-result removeWindowLock / release-lock [deliveryId matches]
+  fresh_same_host --> absent : record-target-result removeWindowLock / wakeflow_release_window_lock [deliveryId matches]
   fresh_other_host --> absent : current-host dispatch attempt — FAIL CLOSED (lock left intact)
   fresh_same_host --> expired : wall clock passes expiresAt
   expired --> absent : treated as absent

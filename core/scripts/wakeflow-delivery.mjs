@@ -202,7 +202,7 @@ function classifyErrorCode(message = "") {
     [/return policy|Invalid return policy/i, "return-policy-invalid"],
     [/not part of dispatch group|No matching dispatch packets|requires --group|requires --state-root/i, "dispatch-context-missing"],
     [/Delivery file must contain|unreadable|JSON/i, "artifact-invalid"],
-    [/completed|archived|paused|blocked/i, "state-not-dispatchable"],
+    [/completed|archived|cancelled|blocked/i, "state-not-dispatchable"],
   ];
   return rules.find(([pattern]) => pattern.test(text))?.[1] || "wakeflow-contract-error";
 }

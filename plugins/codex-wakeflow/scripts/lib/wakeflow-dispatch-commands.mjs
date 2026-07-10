@@ -344,10 +344,10 @@ export function createDispatchCommands(ctx) {
   }
 
   function validatePrepareDispatchEligibility({ state, taskPackage, targetTask }) {
-    if (["completed", "archived", "cancelled", "paused", "blocked"].includes(state.state)) {
+    if (["completed", "archived", "cancelled", "blocked"].includes(state.state)) {
       fail(`cannot prepare dispatch while controller state is ${state.state}: ${state.demandKey}`);
     }
-    if (["review-ready", "accepting"].includes(state.state)) {
+    if (state.state === "review-ready") {
       fail(`cannot prepare dispatch while controller state is ${state.state}; decide review before dispatching more work.`);
     }
     const reviewScope = controllerReviewScope(state.targetTasks ?? []);

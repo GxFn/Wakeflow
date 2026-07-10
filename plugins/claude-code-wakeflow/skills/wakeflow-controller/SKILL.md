@@ -83,7 +83,7 @@ machine state.
    demand status, and eligible target tasks.
 3. State the safe operation, recovery boundary, and one-sentence plan before
    using tools, editing files, dispatching, accepting, archiving, or deleting.
-4. If the demand is complete, blocked, paused, archived, review-ready, or lacks
+4. If the demand is complete, blocked, cancelled, archived, review-ready, or lacks
    evidence, stop instead of preparing another package.
 5. Create or select a task package only when it advances the confirmed goal.
 6. Build a dispatch packet from the state root.

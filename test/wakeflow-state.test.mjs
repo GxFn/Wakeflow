@@ -10,7 +10,6 @@ import test from "node:test";
 const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
 const script = path.join(workspaceRoot, "scripts/wakeflow-state.mjs");
 const renderScript = path.join(workspaceRoot, "scripts/wakeflow-render-progress.mjs");
-const appendScript = path.join(workspaceRoot, "scripts/wakeflow-progress-log.mjs");
 
 function makeRoot() {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-state-"));
@@ -72,14 +71,6 @@ test("trace-bearing state-machine schemas expose wakeflowTrace explicitly", () =
     const schema = readJson(path.join(workspaceRoot, "schemas/wakeflow-state-machine", schemaName));
     assert.equal(schema.properties.wakeflowTrace.type, "object", schemaName);
   }
-});
-
-test("wakeflow-progress-log help documents append-only usage", () => {
-  const result = runScript(appendScript, ["--help"]);
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /Append an entry to a controller state-root developer progress document/);
-  assert.match(result.stdout, /--type task-package/);
-  assert.match(result.stdout, /does not change machine state, dispatch work, or accept evidence/);
 });
 
 test("init dry-run reports generated files without writing active state", () => {
@@ -521,51 +512,6 @@ test("wakeflow-render-progress updates only Unified Status after task package ch
   assert.equal(outsideAfter, outsideBefore);
 });
 
-test("wakeflow-progress-log appends timestamped entries without state transition", () => {
-  const root = makeRoot();
-  const init = run([
-    "init",
-    "--root",
-    root,
-    "--demand-key",
-    "CSMR-FIXTURE-2026-06-05",
-    "--title",
-    "Fixture Demand",
-    "--write",
-    "--json",
-  ]);
-  const initPayload = JSON.parse(init.stdout);
-  const stateRoot = path.join(root, initPayload.stateRoot);
-  const stateBefore = readJson(path.join(stateRoot, "wakeflow-state.json"));
-
-  const result = runScript(appendScript, [
-    "--root",
-    root,
-    "--state-root",
-    initPayload.stateRoot,
-    "--type",
-    "task-package",
-    "--task-package-id",
-    "CSMR-PKG-1",
-    "--summary",
-    "Create the first task package.",
-    "--source-ref",
-    "test-source",
-    "--timestamp",
-    "2026-06-05 12:34 CST",
-    "--write",
-    "--json",
-  ]);
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  const payload = JSON.parse(result.stdout);
-  assert.equal(payload.ok, true);
-  assert.equal(payload.section, "Task Packages");
-
-  const progress = readFileSync(path.join(stateRoot, "developer-progress.md"), "utf8");
-  const stateAfter = readJson(path.join(stateRoot, "wakeflow-state.json"));
-  assert.match(progress, /2026-06-05 12:34 CST: `CSMR-PKG-1` - Create the first task package\.; Source: test-source\./);
-  assert.deepEqual(stateAfter, stateBefore);
-});
 
 test("import-target-result stores result evidence without changing controller state", () => {
   const root = makeRoot();

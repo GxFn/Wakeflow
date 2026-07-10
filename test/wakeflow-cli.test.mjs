@@ -60,7 +60,7 @@ test("--print scripts --tests includes script validation and all script tests", 
   assert.match(result.stdout, /node scripts\/wakeflow-check-scripts\.mjs/);
   assert.match(result.stdout, /node --test .*\.\.\/\.\.\/test\/wakeflow-delivery\.test\.mjs/);
   assert.match(result.stdout, /\.\.\/\.\.\/test\/wakeflow-intake\.test\.mjs/);
-  assert.match(result.stdout, /\.\.\/\.\.\/test\/wakeflow-demand-sequence\.test\.mjs/);
+  assert.match(result.stdout, /\.\.\/\.\.\/test\/wakeflow-demand-create\.test\.mjs/);
   assert.match(result.stdout, /\.\.\/\.\.\/test\/wakeflow-check-repository-residue\.test\.mjs/);
   assert.match(result.stdout, /\.\.\/\.\.\/test\/wakeflow-validate\.test\.mjs/);
   assert.match(result.stdout, /\.\.\/\.\.\/test\/wakeflow-next-work\.test\.mjs/);
@@ -73,14 +73,6 @@ test("--print loop maps to Wakeflow delivery-loop script", () => {
   assert.match(result.stdout, /node scripts\/wakeflow-delivery\.mjs status --json/);
 });
 
-test("--print sequence maps to ordered demand sequence script", () => {
-  const result = run(["--print", "sequence", "claim-next", "--manifest", "wakeflow-ledger/requirement-designs/example/sequence.json", "--write", "--json"]);
-  assert.equal(result.status, 0, result.stderr);
-  assert.match(
-    result.stdout,
-    /node scripts\/wakeflow-demand-sequence\.mjs claim-next --manifest wakeflow-ledger\/requirement-designs\/example\/sequence\.json --write --json/,
-  );
-});
 
 test("--print next-work maps to the controller candidate scan script", () => {
   const result = run(["--print", "next-work", "--id", "plugin-mcp-multi-project-runtime-2026-06-03", "--after-completion", "--source", "todo", "--json"]);

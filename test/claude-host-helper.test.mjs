@@ -191,9 +191,6 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
   rmSync(path.join(root, sent.lockFile), { force: true });
   parseOk(runHelper(root, ["activity-monitor", "--server", serverSession, "--once"], noAuto));
 
-  const attach = parseOk(runHelper(root, ["attach-window", "--window", "RepoA"], noAuto));
-  assert.match(attach.attach, new RegExp(serverSession));
-
   const status = parseOk(runHelper(root, ["window-status"], noAuto));
   const repoRow = status.windows.find((row) => row.window === "RepoA");
   assert.equal(repoRow.alive, true);
@@ -571,7 +568,7 @@ test("replace-all tears down and rebuilds the whole fleet with fresh registered 
   assert.equal(subset.results[0].window, "RepoA");
 });
 
-test("send refuses when no binding exists and release-lock is idempotent", () => {
+test("send refuses when no binding exists and lock release stays idempotent", () => {
   const root = makeWorkspace();
   const promptFile = path.join(root, "p.txt");
   writeFileSync(promptFile, "x\n");
@@ -579,6 +576,9 @@ test("send refuses when no binding exists and release-lock is idempotent", () =>
   assert.notEqual(missing.status, 0);
   assert.match(missing.stderr + missing.stdout, /No window-host binding/);
 
-  const released = parseOk(runHelper(root, ["release-lock", "--window", "Ghost"]));
-  assert.equal(released.released, false);
+  // Lock release is owned by the delivery runtime (MCP wakeflow_release_window_lock);
+  // the host helper no longer duplicates it.
+  const deliveryScript = path.resolve(path.dirname(helperScript), "../wakeflow-delivery.mjs");
+  const released = runSync(process.execPath, [deliveryScript, "release-window-lock", "--window", "Ghost", "--root", root, "--write", "--json"], { encoding: "utf8", cwd: root });
+  assert.equal(released.status, 0, released.stderr || released.stdout);
 });

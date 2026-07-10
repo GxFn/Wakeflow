@@ -4,10 +4,9 @@ import test from "node:test";
 
 // Guards the reference-only demand `state` enum (W0-1 / RA7 / upgrade-plan P2-6/F19):
 // the enum must list exactly the values the reducers write to `state.state` (plus
-// `archived`, written by the planned archive-demand), the transport `dispatched`, and
-// the two reserved states `accepting`/`paused` (documented below) — with the pure-vestige
-// values dropped. Schema is reference-only (no runtime Ajv); this test is the contract
-// guard in its place.
+// `archived`, written by archive-demand, and the transport `dispatched`) — with the
+// pure-vestige values dropped. Schema is reference-only (no runtime Ajv); this test is
+// the contract guard in its place.
 
 const schemaRel = "schemas/wakeflow-state-machine/wakeflow-state.schema.json";
 const sources = {
@@ -22,26 +21,17 @@ async function readStateEnum(url) {
 }
 
 // Values the reducers actually assign to state.state, plus `archived` (written by
-// the planned archive-demand). `dispatched` is asserted live at
-// wakeflow-delivery.test.mjs and written at result-recording-commands.mjs.
-// Two values are RESERVED — not state.state writes, but intentionally kept in the enum
-// (listed here so they are never dropped as accidental extras):
-//   `accepting` — written as the review candidate's candidateState (the proposed state
-//     when results are ready to accept) at wakeflow-state.mjs; intake/dispatch read-guards
-//     also recognize it.
-//   `paused` — a reserved "closed" demand state (wakeflow-status-machine.mjs) set manually,
-//     not by an automated reducer; intake/dispatch/add-task guards refuse work on a paused
-//     demand.
-const WRITTEN_OR_RESERVED = [
+// archive-demand). `dispatched` is asserted live at wakeflow-delivery.test.mjs and
+// written at result-recording-commands.mjs. `cancelled` is written by cancel-demand.
+const WRITTEN_STATES = [
   "intake",
   "planned",
   "dispatched",
   "waiting-results",
   "review-ready",
-  "accepting",
   "needs-rework",
   "blocked",
-  "paused",
+  "cancelled",
   "completed",
   "archived",
 ];
@@ -49,7 +39,13 @@ const WRITTEN_OR_RESERVED = [
 // Removed: zero connection to state.state (never written, no state.state read-guard).
 // `needs-confirmation` lives only in the Design-handoff confirmation set; `idle` only in
 // the separate window/runtime status vocabulary — neither is a demand state.
-const REMOVED_VESTIGE = ["idle", "designing", "needs-confirmation", "dispatching"];
+// The two formerly RESERVED values were retired in the surface-reduction wave:
+//   `accepting` — survives only as the review candidate's candidateState vocabulary
+//     (a proposed decision, never a demand state);
+//   `paused` — the "set manually, no reducer" escape hatch was superseded by the
+//     audited cancel-demand reducer (state=cancelled), so hand-edited machine state
+//     is no longer a sanctioned shape.
+const REMOVED_VESTIGE = ["idle", "designing", "needs-confirmation", "dispatching", "accepting", "paused"];
 
 test("demand state enum includes the transport-written 'dispatched'", async () => {
   const values = await readStateEnum(sources.core);
@@ -63,10 +59,10 @@ test("demand state enum drops the pure-vestige values", async () => {
   }
 });
 
-test("every written/reserved demand state is present in the enum", async () => {
+test("every written demand state is present in the enum", async () => {
   const values = await readStateEnum(sources.core);
-  for (const v of WRITTEN_OR_RESERVED) {
-    assert.ok(values.includes(v), `enum must include written/reserved state '${v}'`);
+  for (const v of WRITTEN_STATES) {
+    assert.ok(values.includes(v), `enum must include written state '${v}'`);
   }
 });
 

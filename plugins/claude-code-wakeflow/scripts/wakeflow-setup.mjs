@@ -698,7 +698,6 @@ const GITIGNORE_POLICY =
 function testWindowNamesForContext(context) {
   const configuredNames = [
     context.config.testWindow,
-    context.config.ideTestWindow,
   ].filter(Boolean);
   const testRepo = configuredNames
     .map((name) => repoForWindow(context.config, name))

@@ -11,7 +11,6 @@ const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathnam
 const fixturesRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "fixtures/wakeflow-state-machine");
 const controllerScript = path.join(workspaceRoot, "scripts/wakeflow-state.mjs");
 const renderScript = path.join(workspaceRoot, "scripts/wakeflow-render-progress.mjs");
-const appendScript = path.join(workspaceRoot, "scripts/wakeflow-progress-log.mjs");
 const automationScript = path.join(workspaceRoot, "scripts/wakeflow-delivery.mjs");
 
 function readFixture(name) {
@@ -50,10 +49,6 @@ function runController(args, root) {
 
 function runRender(args, root) {
   return runNode(renderScript, [...args, "--root", root, "--json"], root);
-}
-
-function runAppend(args, root) {
-  return runNode(appendScript, [...args, "--root", root, "--json"], root);
 }
 
 function runAutomation(args, root) {
@@ -185,23 +180,6 @@ test("manual route keeps state, result, decision, and progress projection separa
   const { stateRootRef, stateRoot } = initDemand(root, manifest);
   const taskPayload = addTaskPackage(root, stateRootRef, manifest);
 
-  const appendTask = runAppend([
-    "--state-root",
-    stateRootRef,
-    "--type",
-    "task-package",
-    "--task-package-id",
-    manifest.taskPackage.taskPackageId,
-    "--summary",
-    manifest.taskPackage.summary,
-    "--source-ref",
-    manifest.taskPackage.sourceRef,
-    "--timestamp",
-    "2026-06-05 10:00 CST",
-    "--write",
-  ], root);
-  assert.equal(appendTask.status, 0, appendTask.stderr || appendTask.stdout);
-
   writeJson(path.join(stateRoot, manifest.result.evidenceRef), { ok: true, route: "manual" });
   const stateBeforeResult = readJson(path.join(stateRoot, "wakeflow-state.json"));
   importResult(root, stateRootRef, manifest);
@@ -217,40 +195,6 @@ test("manual route keeps state, result, decision, and progress projection separa
   assert.equal(decision.nextState, "planned");
   assert.equal(decision.decision, "accept");
 
-  const appendBackfill = runAppend([
-    "--state-root",
-    stateRootRef,
-    "--type",
-    "backfill",
-    "--target-task-id",
-    manifest.taskPackage.targetTaskId,
-    "--target-window",
-    manifest.taskPackage.targetWindow,
-    "--evidence-ref",
-    manifest.result.evidenceRef,
-    "--timestamp",
-    "2026-06-05 10:01 CST",
-    "--write",
-  ], root);
-  assert.equal(appendBackfill.status, 0, appendBackfill.stderr || appendBackfill.stdout);
-
-  const appendDecision = runAppend([
-    "--state-root",
-    stateRootRef,
-    "--type",
-    "decision",
-    "--decision",
-    `${manifest.decision.decision}: ${manifest.decision.reason}`,
-    "--event-id",
-    decision.eventId,
-    "--evidence-ref",
-    manifest.result.evidenceRef,
-    "--timestamp",
-    "2026-06-05 10:02 CST",
-    "--write",
-  ], root);
-  assert.equal(appendDecision.status, 0, appendDecision.stderr || appendDecision.stdout);
-
   renderProgress(root, stateRootRef);
   const state = readJson(path.join(stateRoot, "wakeflow-state.json"));
   const projection = readJson(path.join(stateRoot, "projection.json"));
@@ -265,8 +209,8 @@ test("manual route keeps state, result, decision, and progress projection separa
   assert.equal(projection.unifiedStatus.currentTaskPackages, "CSMR-MANUAL-PKG(accepted)");
   assert.match(progress, /Main state: planned/);
   assert.match(progress, /CSMR-MANUAL-PKG\(accepted\)/);
-  assert.match(progress, /CSMR-MANUAL-TASK` \/ `AlembicWorkspace` backfill received/);
-  assert.match(progress, /accept: Manual route fixture evidence reviewed by total control/);
+  assert.match(progress, /CSMR-MANUAL-TASK returned completed/);
+  assert.match(progress, /decision accept .*Manual route fixture evidence reviewed by total control/);
 });
 
 test("state-root review pack excludes accepted targets from the next review scope", () => {

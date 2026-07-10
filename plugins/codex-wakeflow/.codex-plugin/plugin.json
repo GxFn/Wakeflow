@@ -1,6 +1,6 @@
 {
   "name": "wakeflow",
-  "version": "0.8.9",
+  "version": "0.8.10",
   "description": "A disciplined control loop for multi-window Codex workspaces, aligned with Wakeflow's Claude Code edition: a controller window plans, dispatches scoped task packages, collects evidence, reviews, and decides — then repeats. Built for traceability and evidence-based acceptance: every step is recorded in explicit state roots, so a run is auditable end to end and a task closes only on reviewable evidence.",
   "category": "workflow",
   "author": {

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { spawnProcess } from "../../lib/wakeflow-process.mjs";
+import { withFileLock } from "./wakeflow-state-lock.mjs";
 import { hostProfile } from "./wakeflow-host-profile.mjs";
 
 export function createKeepLiveManager({
@@ -243,12 +244,40 @@ export function createKeepLiveManager({
     atomicWriteJson(keepLiveStateFile(), state);
   }
 
-  function startKeepLive({ automationRunId }) {
-    const current = keepLiveStatus({
+  // The lease table is a cross-process read-modify-write (every pod's
+  // automation shares one keep-live state). start/stop serialize on a sibling
+  // lock; the worker stays lockless (its exit write carries a generation
+  // token guard instead — see writeWorkerState).
+  function withKeepLiveStateLock(fn) {
+    ensureStateDirs();
+    // Holders may legitimately wait ~5s for a dying worker inside the lock;
+    // give contenders a wider acquire window than the 2s default.
+    return withFileLock(`${keepLiveStateFile()}.lock`, fn, { acquireTimeoutMs: 8000 });
+  }
+
+  function startKeepLive(args) {
+    return withKeepLiveStateLock(() => startKeepLiveUnlocked(args));
+  }
+
+  function startKeepLiveUnlocked({ automationRunId }) {
+    let current = keepLiveStatus({
       automationRunId,
       command: keepLiveCommand(),
       args: keepLiveArgs(),
     });
+    // A pending stop marker means the live worker is already dying (it polls
+    // the control file every 500ms). A dying worker is not "already running":
+    // wait for the exit, then rebuild the picture, or the new lease would
+    // ride a corpse and lose its caffeinate.
+    const pendingControl = readKeepLiveControl();
+    if (pendingControl?.action === "stop" && isPidRunning(current.workerPid)) {
+      waitForPidExit(current.workerPid, 5000);
+      current = keepLiveStatus({
+        automationRunId,
+        command: keepLiveCommand(),
+        args: keepLiveArgs(),
+      });
+    }
     const leases = touchKeepLiveLease(current.leases, automationRunId);
     if (!current.enabled) {
       const state = { ...current, leases: {}, activeAutomationRunIds: [], activeRunCount: 0, active: false, status: "stopped", stopReason: "disabled", pid: 0, workerPid: 0, childPid: 0 };
@@ -348,7 +377,11 @@ export function createKeepLiveManager({
     }
   }
 
-  function stopKeepLive({ automationRunId = "", reason = "" } = {}) {
+  function stopKeepLive(args = {}) {
+    return withKeepLiveStateLock(() => stopKeepLiveUnlocked(args));
+  }
+
+  function stopKeepLiveUnlocked({ automationRunId = "", reason = "" } = {}) {
     const current = keepLiveStatus();
     const stopReason = reason || "stopped";
     const release = releaseKeepLiveLease(current.leases, automationRunId);
@@ -486,6 +519,11 @@ export function createKeepLiveManager({
     let pollTimer = null;
 
     const writeWorkerState = (state) => {
+      // Generation guard instead of a lock (the parent stop command may hold
+      // the state lock while WAITING for this very exit): never clobber a
+      // NEWER keep-live generation's state with this worker's exit note.
+      const onDisk = readOptionalJson(keepLiveStateFile());
+      if (onDisk?.token && token && onDisk.token !== token) return;
       writeKeepLiveState({
         kind: "AutomationKeepLiveState",
         version,

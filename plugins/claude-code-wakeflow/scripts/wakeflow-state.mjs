@@ -1141,6 +1141,10 @@ function commandImportTargetResult() {
     fail(`target task ${targetTaskId} is already ${targetTask.status}; create a new task package for follow-up work.`);
   }
   const explicitResultId = getValue("--result-id", null);
+  // The dispatch group the incoming RESULT ENVELOPE claims (optional): late or
+  // duplicate results from a superseded round carry their original group, and
+  // must not be allowed to touch the in-flight round's window lock.
+  const resultDispatchGroup = getValue("--dispatch-group", null);
   let resultId = explicitResultId ?? `tr-${slug(targetTaskId)}`;
   let resultFile = path.join(stateRoot, "target-results", `${slug(resultId)}.json`);
   if (existsSync(resultFile)) {
@@ -1171,7 +1175,7 @@ function commandImportTargetResult() {
     resultId,
     demandKey: state.demandKey,
     taskPackageId: targetTask.taskPackageId,
-    dispatchGroup: deliveryContext.dispatchGroup ?? undefined,
+    dispatchGroup: resultDispatchGroup ?? deliveryContext.dispatchGroup ?? undefined,
     stateRoot: relative(stateRoot),
     targetWindow,
     targetTaskId,
@@ -1226,9 +1230,15 @@ function commandImportTargetResult() {
   if (write) {
     const lockFile = path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery/locks", `${slug(targetWindow)}.json`);
     const taskDeliveryId = targetTask.delivery?.deliveryId;
+    const taskDispatchGroup = targetTask.delivery?.dispatchGroup;
+    // Release only when this result answers the round the lock guards: a late
+    // result that declares an OLDER dispatch group (rework re-dispatched the
+    // task) must leave the in-flight round's lock alone. Results without a
+    // group claim keep the task-current match (legacy imports).
+    const answersCurrentRound = !resultDispatchGroup || !taskDispatchGroup || resultDispatchGroup === taskDispatchGroup;
     lockReleased = releaseWindowLockForResult(
       lockFile,
-      (lock) => !lock.deliveryId || (taskDeliveryId && lock.deliveryId === taskDeliveryId),
+      (lock) => !lock.deliveryId || (taskDeliveryId && lock.deliveryId === taskDeliveryId && answersCurrentRound),
     );
   }
 

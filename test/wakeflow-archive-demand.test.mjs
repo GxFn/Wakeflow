@@ -250,3 +250,39 @@ test("archiving a cancelled demand marks its board row cancelled, not completed"
   assert.match(board, /\| CXL-4 \| cancelled \/ archived \|/);
   assert.doesNotMatch(board, /\| CXL-4 \| completed \/ archived \|/);
 });
+
+// P1 fix wave: a late result from a superseded dispatch round must not
+// release the in-flight round's window lock (import used to match only the
+// task's CURRENT deliveryId, so any (window, task) result unlocked it).
+test("importing a stale-round result leaves the in-flight round's window lock alone", () => {
+  const { root, stateRoot, stateFile } = initDemand({ demandKey: "LCK-1", complete: false });
+  const state = readJson(stateFile);
+  state.state = "dispatched";
+  state.taskPackages = [{ taskPackageId: "LCK-1-P1", summary: "s", status: "sent", targetWindow: "RepoA", targetTaskId: "LCK-1-T1" }];
+  state.targetTasks = [{
+    targetTaskId: "LCK-1-T1", taskPackageId: "LCK-1-P1", targetWindow: "RepoA",
+    status: "sent", delivery: { deliveryId: "d2", dispatchGroup: "G2" },
+  }];
+  writeJson(stateFile, state);
+  const locksDir = path.join(root, ".wakeflow-local/wakeflow-delivery/locks");
+  mkdirSync(locksDir, { recursive: true });
+  const lockPayload = {
+    kind: "WakeflowWindowDeliveryLock", version: 1, windowName: "RepoA",
+    deliveryId: "d2", createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 7200000).toISOString(),
+  };
+  writeJson(path.join(locksDir, "RepoA.json"), lockPayload);
+
+  const stale = run(["import-target-result", "--root", root, "--state-root", stateRoot,
+    "--target-task-id", "LCK-1-T1", "--target-window", "RepoA", "--status", "completed",
+    "--dispatch-group", "G1", "--result-id", "r-old", "--write", "--json"]);
+  assert.equal(stale.status, 0, stale.stderr || stale.stdout);
+  assert.equal(JSON.parse(stale.stdout).lockReleased ?? false, false, "stale-round result must not unlock d2");
+  assert.equal(existsSync(path.join(locksDir, "RepoA.json")), true);
+
+  const current = run(["import-target-result", "--root", root, "--state-root", stateRoot,
+    "--target-task-id", "LCK-1-T1", "--target-window", "RepoA", "--status", "completed",
+    "--dispatch-group", "G2", "--result-id", "r-new", "--write", "--json"]);
+  assert.equal(current.status, 0, current.stderr || current.stdout);
+  assert.equal(existsSync(path.join(locksDir, "RepoA.json")), false, "current-round result releases the lock");
+});

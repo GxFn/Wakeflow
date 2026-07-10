@@ -67,7 +67,9 @@ state root, or human context, stop and report instead of guessing.
 5. Record a `TargetResultEnvelope`.
    - Use the Wakeflow MCP `wakeflow_record_target_result` tool for the result
      envelope. This is one narrow file/state action: it records target evidence
-     only, and it does not review, accept, dispatch, send, or return.
+     only, and it does not review, accept, dispatch, send, or return. Pass the
+     `dispatchGroup` from your delivery prompt: a late result from a superseded
+     round then leaves the in-flight round's window lock alone.
    - Read the tool response's `deliveryContext` / `controllerReturn` fields.
      `returnRoute` and `returnPolicy` live in the local delivery envelope, not
      the controller state root. Do not decide "no callback" by searching only

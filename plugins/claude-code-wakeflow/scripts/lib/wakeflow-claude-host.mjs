@@ -1855,14 +1855,36 @@ function commandStreamOpen() {
       }
       const bindingFile = bindingFileFor(windowName);
       let alive = false;
+      let binding = null;
       if (existsSync(bindingFile)) {
         try {
-          alive = windowAlive(JSON.parse(readFileSync(bindingFile, "utf8")));
+          binding = JSON.parse(readFileSync(bindingFile, "utf8"));
+          alive = windowAlive(binding);
         } catch {
           alive = false;
         }
       }
       if (noLaunch || alive) {
+        // "Alive" must not be reported as "registered": a crash between launch
+        // and registration leaves a live window whose session id never reached
+        // the thread registry, so a reboot could not resume it. The binding
+        // still carries the session id — repair the registration here instead
+        // of masking the gap.
+        let sessionRegistered = existsSync(path.join(hostDir, "thread-registry", `${slug(windowName)}.json`));
+        let repairedRegistration = false;
+        if (alive && !sessionRegistered && binding?.threadId) {
+          const setupScript = path.join(pluginRootDir, "scripts", "wakeflow-setup.mjs");
+          const repaired = execHostText(process.execPath, [
+            setupScript, "replace-windows", "--root", workspaceRoot,
+            "--window", windowName, "--thread", `${windowName}=${binding.threadId}`, "--write", "--json",
+          ]);
+          try {
+            repairedRegistration = Boolean(JSON.parse(repaired.stdout)?.ok);
+          } catch {
+            repairedRegistration = false;
+          }
+          sessionRegistered = repairedRegistration;
+        }
         output({
           ok: true,
           command: "stream-open",
@@ -1875,10 +1897,15 @@ function commandStreamOpen() {
           resumed: false,
           status: alive ? "already-live" : "already-registered",
           launched: alive,
-          sessionRegistered: alive,
+          sessionRegistered,
+          ...(repairedRegistration ? { repairedRegistration: true } : {}),
           threadIdRedacted: true,
           note: alive
-            ? "Isolation window is already live; nothing to do."
+            ? (repairedRegistration
+              ? "Isolation window is already live; its missing thread registration was repaired from the window binding."
+              : sessionRegistered
+                ? "Isolation window is already live; nothing to do."
+                : "Isolation window is live but its thread registration is missing and could not be repaired; run replace-windows with the session id before relying on reboot resume.")
             : "Isolation window is registered but not launched (--no-launch); re-run without --no-launch to launch it.",
         });
         return;

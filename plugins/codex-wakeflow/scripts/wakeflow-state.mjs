@@ -1221,6 +1221,21 @@ function commandImportTargetResult() {
     writeJson(resultFile, result);
     appendProgressTimeline(stateRoot, state, PROGRESS_SECTIONS.backfill,
       `${createdAt} ${targetWindow}/${targetTaskId} returned ${status} (result ${resultId})`);
+    // The pre-write check narrows the archive race but cannot close it (import
+    // is lock-free by design). Re-verify AFTER writing: when the root was torn
+    // down mid-import, withdraw our own writes so no orphan target-results/
+    // dir resurrects under the archived demand's old path.
+    if (!existsSync(path.join(stateRoot, "wakeflow-state.json"))) {
+      rmSync(resultFile, { force: true });
+      try {
+        if (readdirSync(path.dirname(resultFile)).length === 0) {
+          rmSync(path.dirname(resultFile), { recursive: true, force: true });
+        }
+      } catch {
+        // dir vanished with the root — fine
+      }
+      fail(`state root vanished while importing (archived concurrently); the imported result was withdrawn: ${relative(stateRoot)}`);
+    }
   }
   // Release the shared in-flight window lock when this result answers the
   // delivery that locked it. This is the only release point reachable from the

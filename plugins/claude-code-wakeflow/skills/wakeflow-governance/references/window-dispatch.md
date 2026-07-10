@@ -50,6 +50,12 @@ never dispatched two simultaneous tasks inside the same demand (the machine
 refuses a second in-flight dispatch to the same window). More work for that
 repository arrives as the NEXT combined package after review.
 
+Every package's completion definition must state its COMMIT expectation: does
+the repo window commit the work (repo windows own their commits), or leave it
+uncommitted for controller/user review? Silence here leaves accepted-and-
+archived work sitting uncommitted on a main checkout with nobody owning the
+decision — say it in the package, and check it at acceptance.
+
 An explicit controller `rework` normally re-dispatches the same target task and
 package with a fresh dispatch group. This preserves that task's `reworkCount`
 and recurring-problem signal. Add a rework companion package only when the

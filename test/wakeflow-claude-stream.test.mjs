@@ -339,8 +339,8 @@ test("pod lifecycle headless: idempotent open, cross-pod intersection warning, c
   const closed = JSON.parse(host(root, ["pod-close", "--demand-key", "POD-A", "--force"]).stdout);
   assert.equal(closed.closedIsolationWindows.length, 2);
   const ledger = readFileSync(path.join(root, "wakeflow-ledger/workspace/pending-merges.md"), "utf8");
-  assert.match(ledger, /POD-A \| RepoA \| POD-A\/POD-A/);
-  assert.match(ledger, /POD-A \| RepoB \| POD-A\/POD-A/);
+  assert.match(ledger, /POD-A \| RepoA \| POD-A\/pod/);
+  assert.match(ledger, /POD-A \| RepoB \| POD-A\/pod/);
 
   const list = JSON.parse(host(root, ["pod-list"]).stdout);
   assert.deepEqual(list.pods.map((p) => p.demandKey), ["POD-B"], "closed pod must disappear from the inventory");

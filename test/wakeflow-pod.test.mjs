@@ -140,8 +140,8 @@ test("pod close gates on completion, respects dirty worktrees, and records pendi
   const closed = JSON.parse(pod(codexPod, root, ["close", "--demand-key", "POD-A"]).stdout);
   assert.equal(closed.closedIsolationWindows.length, 2);
   const ledger = readFileSync(path.join(root, "wakeflow-ledger/workspace/pending-merges.md"), "utf8");
-  assert.match(ledger, /POD-A \| RepoA \| POD-A\/POD-A/);
-  assert.match(ledger, /POD-A \| RepoB \| POD-A\/POD-A/);
+  assert.match(ledger, /POD-A \| RepoA \| POD-A\/pod/);
+  assert.match(ledger, /POD-A \| RepoB \| POD-A\/pod/);
   assert.equal(existsSync(path.join(root, ".wakeflow-local/worktrees/RepoA__POD-A")), false);
   assert.match(closed.agentNext, /archive the demand now/);
 
@@ -241,7 +241,7 @@ test("pod open adopts a crash-orphaned worktree and refuses a foreign directory"
   const { root } = makeWorkspace();
   const worktreeDir = path.join(root, ".wakeflow-local/worktrees/RepoA__POD-O");
   mkdirSync(path.dirname(worktreeDir), { recursive: true });
-  git(path.join(root, "RepoA"), ["worktree", "add", worktreeDir, "-b", "POD-O/POD-O"]);
+  git(path.join(root, "RepoA"), ["worktree", "add", worktreeDir, "-b", "POD-O/pod"]);
 
   const open = pod(codexPod, root, ["open", "--demand-key", "POD-O", "--repos", "RepoA"]);
   assert.equal(open.status, 0, open.stderr || open.stdout);

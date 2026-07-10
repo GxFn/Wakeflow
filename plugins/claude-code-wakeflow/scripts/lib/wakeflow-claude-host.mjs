@@ -44,6 +44,7 @@ import {
   streamWindowName,
   worktreeDirFor,
 } from "./wakeflow-stream-overlay.mjs";
+import { mainCheckoutOccupancy } from "./wakeflow-active-demands.mjs";
 
 // This helper IS the Claude Code host transport boundary, so it runs the host
 // binaries (tmux, claude, brew, osascript) directly with a narrow no-shell
@@ -450,9 +451,12 @@ function activityMonitorRunning(serverSession) {
   // process name would let another workspace's monitor (pid-recycled) block
   // this one forever — the same wide-match mistake the cleanup rule forbids.
   const probe = execHostText("ps", ["-o", "command=", "-p", String(pid)]);
+  // Boundary-anchored root match: a bare substring would let ~/proj claim
+  // ~/proj-old's monitor (prefix roots + pid reuse).
+  const rootPattern = new RegExp(`--root ${workspaceRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\s|$)`);
   return probe.status === 0
     && probe.stdout.includes("wakeflow-claude-host.mjs activity-monitor")
-    && probe.stdout.includes(`--root ${workspaceRoot}`);
+    && rootPattern.test(probe.stdout);
 }
 
 function startActivityMonitorDaemon(serverSession) {
@@ -758,6 +762,26 @@ async function commandLaunchWindow() {
     }
   }
   const trustAccepted = dialogsConfirmed.length > 0;
+  // Auth preflight (live-fleet finding F-2): an unauthenticated claude CLI
+  // boots to "Not logged in" and every window silently wedges there — fail
+  // the launch LOUDLY with the one-time fix instead. The window is left open
+  // on purpose: the fastest repair is running /login inside this very pane.
+  const bootPane = capturePaneTail(binding, 30);
+  if (/Not logged in/i.test(bootPane)) {
+    output({
+      ok: false,
+      command: "launch-window",
+      code: "claude-not-logged-in",
+      windowName,
+      server: serverSession,
+      windowId,
+      threadIdRedacted: true,
+      attach: `${tmuxBin} attach -t ${serverSession}`,
+      error: `the claude CLI on this machine is not logged in, so every Wakeflow window would wedge at the login prompt. One-time fix: attach (${tmuxBin} attach -t ${serverSession}) and run /login in this pane — or run claude anywhere and /login — then re-run this launch. The window was left open for that.`,
+    });
+    process.exitCode = 1;
+    return;
+  }
   if (promptFile) {
     pastePromptFile(binding, promptFile);
   }
@@ -2267,6 +2291,9 @@ function commandPodOpen() {
   const intersections = (overlay ? streamEntries(overlay) : [])
     .filter((entry) => entry.stream?.demandKey !== demandKey && repos.includes(entry.stream?.repo))
     .map((entry) => ({ repo: entry.stream.repo, occupiedBy: entry.stream.demandKey, window: entry.windowName }));
+  // Pod 0 (the main fleet) edits main checkouts without a stream entry —
+  // surface that occupancy alongside the stream intersections.
+  const mainCheckoutIntersections = mainCheckoutOccupancy({ workspaceRoot, repos, excludeDemandKeys: [demandKey] });
 
   const podSession = podSessionFor(podSlug);
   const windows = [];
@@ -2394,6 +2421,7 @@ function commandPodOpen() {
     controllerLaunched,
     testLaunched,
     intersections,
+    mainCheckoutIntersections,
     costNote: `each pod window is a full live claude session (${windows.length} for this pod); maxActiveDemands bounds pods, maxStreamsPerRepo bounds pods per repo`,
     attach: `${tmuxBin}${tmuxSocket ? ` -L ${tmuxSocket}` : ""} attach -t ${podSession}`,
     agentNext: noLaunch

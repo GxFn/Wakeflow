@@ -131,6 +131,10 @@ export function branchNameFor(demandKey, streamId) {
     .replace(/[^A-Za-z0-9._-]+/g, "-")
     .replace(/^[.-]+|[.-]+$/g, "")
     .replace(/\.lock$/i, "-lock") || "demand";
+  // Demand pods use the demand slug as the stream id; `<key>/<same key>` is
+  // noise in every branch listing, so the pod case collapses to `<key>/pod`.
+  // Window names keep the full suffix (cross-pod uniqueness on a repo).
+  if (streamId === safeKey) return `${safeKey}/pod`;
   return `${safeKey}/${streamId}`;
 }
 

@@ -62,23 +62,27 @@ export function withFileLock(lockFile, fn, { acquireTimeoutMs = ACQUIRE_TIMEOUT_
       if (!(ageMs <= staleMs)) {
         // The fixed stale threshold cannot tell a crash from a legitimate long
         // hold (archive-demand staging a large state root). A LIVE holder pid
-        // gets 4x patience before the lock is stolen; a dead pid is residue.
-        if (pidAlive(holder?.pid) && ageMs <= staleMs * 4) {
+        // is NEVER auto-stolen (H-10 revised): ageMs runs on wall clocks, so a
+        // suspend/NTP jump > the old 4x grace would have let a contender break
+        // a lock whose holder was mid-critical-section — two writers on one
+        // state root. A truly wedged live holder is a human call; the timeout
+        // message says exactly what to check.
+        if (pidAlive(holder?.pid)) {
           if (Date.now() >= deadline) {
             throw new WakeflowStateLockTimeoutError(
-              `state root is locked by a LIVE long-running Wakeflow process (pid ${holder.pid}, since ${holder.createdAt}); retry after it finishes — do not remove ${lockFile} while that pid is alive`,
+              `state root is locked by a LIVE Wakeflow process (pid ${holder?.pid}, since ${holder?.createdAt ?? "unknown"}); retry after it finishes — remove ${lockFile} only if you have confirmed that pid is wedged`,
             );
           }
           sleep(RETRY_DELAY_MS + Math.floor(Math.random() * RETRY_DELAY_MS));
           continue;
         }
-        // Crash residue or an unreadable lock: break it. Re-check the holder just
-        // before unlink so two concurrent breakers cannot free each other's FRESH
-        // lock; the remaining microsecond TOCTOU only exists on the 30s-stuck
-        // recovery path, never in normal contention.
+        // Crash residue (dead pid) or an unreadable lock: break it. Re-check
+        // the holder just before unlink so two concurrent breakers cannot free
+        // each other's FRESH lock; the remaining microsecond TOCTOU only
+        // exists on the 30s-stuck recovery path, never in normal contention.
         const recheck = readLock(lockFile);
         if ((recheck?.token ?? null) === (holder?.token ?? null)) {
-          onWarn?.(`breaking stale state lock ${lockFile} (held by pid ${holder?.pid ?? "unknown"}${pidAlive(holder?.pid) ? " STILL ALIVE past 4x stale age" : ""} since ${holder?.createdAt ?? "unknown"})`);
+          onWarn?.(`breaking stale state lock ${lockFile} (held by dead pid ${holder?.pid ?? "unknown"} since ${holder?.createdAt ?? "unknown"})`);
           try {
             unlinkSync(lockFile);
           } catch {

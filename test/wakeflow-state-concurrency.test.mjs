@@ -206,11 +206,15 @@ test("a stale-aged lock held by a LIVE pid is protected, not stolen (H-10)", () 
 
   const result = run(addTaskArgs(root, stateRoot, "tp-blocked-live", "RepoA"));
   assert.equal(result.status, 1, result.stdout);
-  assert.match(JSON.parse(result.stdout).error, /LIVE long-running/);
+  assert.match(JSON.parse(result.stdout).error, /locked by a LIVE Wakeflow process/);
   assert.equal(existsSync(lockFile), true, "a live holder's lock must survive the stale threshold");
 });
 
-test("a live pid's lock IS broken past 4x stale age with a loud warning (H-10)", () => {
+test("a LIVE pid's lock is never auto-stolen, however old (H-10 revised)", () => {
+  // The old 4x-grace steal ran on wall clocks: a suspend/NTP jump past the
+  // grace window let a contender break a lock whose holder was mid-critical-
+  // section. A live holder now always fails the contender closed; only dead
+  // pids are residue.
   const root = makeRoot();
   const stateRoot = initDemand(root, "LOCK-LIVE-4X-2026-07-02");
   const lockFile = lockFileFor(stateRoot);
@@ -226,9 +230,9 @@ test("a live pid's lock IS broken past 4x stale age with a loud warning (H-10)",
   );
 
   const result = run(addTaskArgs(root, stateRoot, "tp-after-4x", "RepoA"));
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stderr, /STILL ALIVE past 4x stale age/);
-  assert.equal(existsSync(lockFile), false);
+  assert.notEqual(result.status, 0, "contender fails closed against a live holder");
+  assert.match(result.stderr + result.stdout, /locked by a LIVE Wakeflow process/);
+  assert.equal(existsSync(lockFile), true, "the live holder's lock survives");
 });
 
 test("a fresh foreign lock fails the command closed after the acquire timeout", () => {

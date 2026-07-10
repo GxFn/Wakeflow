@@ -54,6 +54,30 @@ export function scanUnarchivedDemandStateRoots({
   return conflicts;
 }
 
+// Which of these plain repo windows are occupied by an UNARCHIVED demand's
+// tasks on the MAIN checkout (pod-0 work)? Streams only warn against other
+// streams; without this, a new pod opening onto a repo the incumbent demand
+// is editing in place gets no merge-conflict foresight at all.
+export function mainCheckoutOccupancy({ workspaceRoot, repos = [], excludeDemandKeys = [] } = {}) {
+  if (repos.length === 0) return [];
+  const repoSet = new Set(repos);
+  const occupancy = [];
+  for (const conflict of scanUnarchivedDemandStateRoots({ workspaceRoot, excludeDemandKeys })) {
+    let state;
+    try {
+      state = JSON.parse(readFileSync(path.resolve(workspaceRoot, conflict.stateRoot, "wakeflow-state.json"), "utf8"));
+    } catch {
+      continue;
+    }
+    for (const task of state?.targetTasks ?? []) {
+      if (repoSet.has(task.targetWindow)) {
+        occupancy.push({ repo: task.targetWindow, occupiedBy: state.demandKey ?? conflict.demandKey, taskStatus: task.status });
+      }
+    }
+  }
+  return occupancy;
+}
+
 export function activeDemandConflictSummary(conflicts = []) {
   return conflicts
     .map((item) => `${item.demandKey} (${item.state ?? "unreadable"} at ${item.stateRoot}: ${item.reason})`)

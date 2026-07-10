@@ -19,6 +19,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runSync } from "../lib/wakeflow-process.mjs";
+import { mainCheckoutOccupancy } from "./lib/wakeflow-active-demands.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import { withFileLock, WakeflowStateLockTimeoutError } from "./lib/wakeflow-state-lock.mjs";
 import {
@@ -263,6 +264,10 @@ function commandOpen() {
   const intersections = (overlayNow ? streamEntries(overlayNow) : [])
     .filter((entry) => entry.stream?.demandKey !== demandKey && repos.includes(entry.stream?.repo))
     .map((entry) => ({ repo: entry.stream.repo, occupiedBy: entry.stream.demandKey, window: entry.windowName }));
+  // Pod 0 works the MAIN checkouts and registers no stream — surface its
+  // occupancy the same way (a repo edited in place is tomorrow's merge
+  // conflict just as much as another pod's worktree).
+  const mainIntersections = mainCheckoutOccupancy({ workspaceRoot, repos, excludeDemandKeys: [demandKey] });
 
   const workWindows = [];
   let poolExhausted = null;
@@ -363,6 +368,7 @@ function commandOpen() {
     transport,
     workWindows,
     intersections,
+    mainCheckoutIntersections: mainIntersections,
     windowPlan,
     overlay: path.relative(workspaceRoot, overlayConfigFile(workspaceRoot)),
     costNote: `each pod window is a full live ${hostProfile.hostName} session (${windowPlan.length} for this pod); maxActiveDemands bounds pods, maxStreamsPerRepo bounds pods per repo`,
@@ -372,6 +378,7 @@ function commandOpen() {
   }, [
     `Pod ${podSlug} prepared: ${workWindows.map((win) => `${win.windowName} (${win.status})`).join(", ") || "no work windows"}.`,
     ...(intersections.length ? [`Cross-pod repo intersections: ${intersections.map((item) => `${item.repo} occupied by ${item.occupiedBy}`).join("; ")}.`] : []),
+    ...(mainIntersections.length ? [`Main-checkout intersections: ${[...new Set(mainIntersections.map((item) => `${item.repo} worked in place by ${item.occupiedBy}`))].join("; ")}.`] : []),
   ]);
 }
 

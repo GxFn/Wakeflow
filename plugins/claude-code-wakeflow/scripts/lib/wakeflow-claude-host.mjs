@@ -2354,8 +2354,9 @@ function commandPodOpen() {
       }
       if (!registeredSessionId && parsed.sessionId) {
         // First launch: persist the session id so the pod survives reboots
-        // (register-thread accepts non-config windows; the binding alone
-        // cannot resume a dead session).
+        // (register-thread accepts pod-SHAPED windows — Controller__<pod> and
+        // configured-base__<pod> — since W-pod-2; the binding alone cannot
+        // resume a dead session).
         const registered = execHostText(process.execPath, [
           path.join(pluginRootDir, "scripts", "wakeflow-delivery.mjs"),
           "register-thread", "--root", workspaceRoot,

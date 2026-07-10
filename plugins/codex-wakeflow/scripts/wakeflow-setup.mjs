@@ -595,6 +595,11 @@ function configurePayload(context = commandContext()) {
 
 function buildChildPrompt(context, repo, language) {
   const absolutePath = repositoryAbsPath(context.wakeflowRoot, repo);
+  // Plugin installs ship no workspace-local scripts/ directory: windows check
+  // status through the Wakeflow MCP tools and route access-card refreshes to
+  // the controller instead of running repository-relative script paths that
+  // do not exist.
+  const pluginMode = context.pluginTargetMode || context.config.runtimeMode === "plugin";
   const relativeScript = relativeCommandPath(absolutePath, path.join(context.wakeflowRoot, "scripts/wakeflow-setup.mjs"));
   const wakeflowPath = slash(path.relative(absolutePath, context.wakeflowRoot)) || ".";
   const parentAgents = relativePathFrom(absolutePath, path.join(context.parentRoot, hostProfile.memoryFile));
@@ -602,42 +607,60 @@ function buildChildPrompt(context, repo, language) {
   const activeStatus = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentStatusPath ?? ".wakeflow-active/current/workspace-current-status.md"));
   const title = roleTitle(context, repo.windowName, defaultThreadRole(context, repo.windowName), language);
   if (language === "zh") {
+    const statusStep = pluginMode
+      ? `先调用 Wakeflow MCP 工具 wakeflow_status 检查工作区状态（插件运行时没有工作区本地脚本目录，不要猜测脚本路径）。`
+      : `先运行：
+node ${relativeScript} status --json`;
+    const refreshStep = pluginMode
+      ? `确认当前目录属于 ${repo.windowName} 后，只处理本窗口职责范围内的任务。本目录 ${hostProfile.memoryFile} 的 access card 缺失或过期时，停止并回报总控收敛，不要自行改写。`
+      : `确认当前目录属于 ${repo.windowName} 后，只处理本窗口职责范围内的任务。需要写入或刷新本目录 ${hostProfile.memoryFile} 时运行：
+node ${relativeScript} write-agents --window ${repo.windowName} --write`;
+    const runtimeLine = pluginMode
+      ? `Wakeflow 运行时由已安装插件提供（MCP 工具面）。`
+      : `Wakeflow runtime 相对路径：${wakeflowPath}`;
     return `${title}：初始化入口同步，不是任务投递。
 目标目录：${repo.path}
 窗口职责：${repo.role}
 
 先读取本目录 ${hostProfile.memoryFile}、${parentAgents}、${activeIndex} 和 ${activeStatus}。如果 Wakeflow access card 缺失，先确认目录范围，再做任何跨目录工作。
 
-先运行：
-node ${relativeScript} status --json
+${statusStep}
 
-确认当前目录属于 ${repo.windowName} 后，只处理本窗口职责范围内的任务。需要写入或刷新本目录 ${hostProfile.memoryFile} 时运行：
-node ${relativeScript} write-agents --window ${repo.windowName} --write
+${refreshStep}
 
 如果当前没有 active demand、state root、task package 或 dispatch packet，请报告“入口同步完成，等待总控任务”后停止。这是初始化后的正常 ready 状态，不是失败。
 只有收到包含 currentWindow、taskId、stateRoot 的 Wakeflow task wakeup / delivery prompt 时，才执行本窗口任务。
 ${hostProfile.texts.subagentAssist.zh}
 
-Wakeflow runtime 相对路径：${wakeflowPath}
+${runtimeLine}
 如果目录、职责、stateRoot 或 Wakeflow 配置不一致，停止并回报总控。`;
   }
+  const statusStep = pluginMode
+    ? `First check workspace status with the Wakeflow MCP tool wakeflow_status (plugin runtimes ship no workspace-local scripts directory; never guess script paths).`
+    : `First run:
+node ${relativeScript} status --json`;
+  const refreshStep = pluginMode
+    ? `After confirming this directory belongs to ${repo.windowName}, process only tasks inside this window responsibility. When this directory ${hostProfile.memoryFile} access card is missing or stale, stop and report to the controller for convergence instead of rewriting it yourself.`
+    : `After confirming this directory belongs to ${repo.windowName}, process only tasks inside this window responsibility. To write or refresh this directory ${hostProfile.memoryFile}, run:
+node ${relativeScript} write-agents --window ${repo.windowName} --write`;
+  const runtimeLine = pluginMode
+    ? `The Wakeflow runtime is provided by the installed plugin (MCP tool surface).`
+    : `Wakeflow runtime relative path: ${wakeflowPath}`;
   return `${title}: initialization entry sync, not a task delivery.
 Target directory: ${repo.path}
 Responsibility: ${repo.role}
 
 First read this directory ${hostProfile.memoryFile}, ${parentAgents}, ${activeIndex}, and ${activeStatus}. If the Wakeflow access card is missing, confirm the directory scope before doing any cross-directory work.
 
-First run:
-node ${relativeScript} status --json
+${statusStep}
 
-After confirming this directory belongs to ${repo.windowName}, process only tasks inside this window responsibility. To write or refresh this directory ${hostProfile.memoryFile}, run:
-node ${relativeScript} write-agents --window ${repo.windowName} --write
+${refreshStep}
 
 If there is no active demand, state root, task package, or dispatch packet, report "entry sync complete; waiting for controller task" and stop. This is the normal ready state after initialization, not a failure.
 Execute window work only after receiving a Wakeflow task wakeup / delivery prompt containing currentWindow, taskId, and stateRoot.
 ${hostProfile.texts.subagentAssist.en}
 
-Wakeflow runtime relative path: ${wakeflowPath}
+${runtimeLine}
 If the directory, responsibility, stateRoot, or Wakeflow configuration is inconsistent, stop and report to the controller.`;
 }
 

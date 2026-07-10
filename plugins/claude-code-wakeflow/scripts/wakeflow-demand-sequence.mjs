@@ -665,7 +665,7 @@ function commandCreateDemand() {
   let title = getValue("--title");
   let goal = getValue("--goal");
   let completionDefinition = getValue("--completion-definition");
-  const testDecision = getValue("--test-decision");
+  let testDecision = getValue("--test-decision");
   let stagePlan = getValue("--stage-plan");
 
   const taskPackagesRaw = getValue("--task-packages");
@@ -688,20 +688,25 @@ function commandCreateDemand() {
     }
     title = title ?? candidate.title;
     const documents = candidate.documents ?? "";
-    // Extract the [label](path) targets from the row's Documents cell so the
-    // demand records REAL document refs, not a prose blob.
-    sourceDocumentRefs = [...documents.matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1]);
+    // next-work resolves board-relative Markdown targets back to workspace refs.
+    // Keep the fallback for older next-work payloads and hand-authored rows.
+    sourceDocumentRefs = Array.isArray(candidate.documentRefs) ? candidate.documentRefs : [];
+    if (sourceDocumentRefs.length === 0) {
+      sourceDocumentRefs = [...documents.matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1]);
+    }
     if (sourceDocumentRefs.length === 0 && documents.trim()) sourceDocumentRefs = [documents.trim()];
+    if (!testDecision && candidate.testDecision?.trim()) testDecision = candidate.testDecision.trim();
+    const documentSummary = sourceDocumentRefs.map((ref) => `\`${ref}\``).join(", ");
     if (!goal) {
-      goal = documents
-        ? `Deliver the requirement described by the delivered docs: ${documents}`
+      goal = documentSummary
+        ? `Deliver the requirement described by the delivered docs: ${documentSummary}`
         : `Deliver TODO ${todoId}: ${title}`;
     }
     if (!completionDefinition) {
       completionDefinition = "Total control confirms the completion definition from the delivered docs before dispatch.";
     }
-    if (!stagePlan && documents) {
-      stagePlan = `Derive the stage plan from the delivered docs: ${documents}`;
+    if (!stagePlan && documentSummary) {
+      stagePlan = `Derive the stage plan from the delivered docs: ${documentSummary}`;
     }
   }
 

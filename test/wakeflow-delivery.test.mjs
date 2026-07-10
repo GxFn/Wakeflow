@@ -614,6 +614,39 @@ test("controller-return transport is decoupled from evidence quality (no break o
   assert.equal(pack.nextAction, "fix-missing-evidence-refs-before-controller-verdict");
 });
 
+test("review pack exposes required craft gaps before reduce while keeping callback transport independent", () => {
+  const review = {
+    decision: "ready",
+    group: "group-craft",
+    returnPolicy: { mode: "group-ready" },
+    groupStatus: "ready",
+    groupSnapshot: { missing: [], pendingDispatch: [], ready: [{ packetId: "packet-a" }], blocked: [] },
+    blocked: [],
+  };
+  const pack = buildControllerReviewPack({
+    review,
+    controllerReturnDelivery: { status: "none" },
+    callbackPlan: { counts: { readyToBuildCount: 1, pendingHostSendCount: 0 } },
+    targetResults: [{
+      targetWindow: "WindowA",
+      taskId: "task-a",
+      resultStatus: "completed",
+      commits: [],
+      evidenceRefs: ["evidence.json"],
+      verificationSummary: ["passed"],
+      hasControllerReviewEvidence: true,
+      missingEvidenceRefs: [],
+      craftEvidenceGaps: [{ targetWindow: "WindowA", taskId: "task-a", kind: "self-review", reason: "missing-kind" }],
+    }],
+    generatedAt: "2026-07-10T00:00:00.000Z",
+    wakeflowTrace: { dispatchGroup: "group-craft" },
+  });
+  assert.equal(pack.gates.controllerReviewReady, false);
+  assert.equal(pack.gates.craftEvidenceRepairRequired, true);
+  assert.equal(pack.nextAction, "fix-required-craft-evidence-before-controller-verdict");
+  assert.equal(pack.controllerReturnNextStep, "send-controller-return", "transport still wakes the controller");
+});
+
 // Regression: a target reports evidence relative to ITS OWN repo (where the work + commit
 // happened). Resolving evidence refs only against the workspace root false-flagged that
 // evidence as "missing", flipping nextAction to fix-missing-evidence-refs and stalling the
@@ -688,6 +721,10 @@ test("registers threads locally and redacts thread ids", () => {
   const payload = registerThread(root, "AlembicPlugin");
   assert.equal(payload.ok, true);
   assert.equal(payload.windowName, "AlembicPlugin");
+  assert.equal(payload.wrote, true);
+  assert.equal(payload.threadRegistered, true);
+  assert.equal(payload.registrationValid, true);
+  assert.equal(payload.windowConfigWritten, true);
   assert.equal(payload.threadIdRedacted, true);
   assert.equal(Object.hasOwn(payload, "deliveryRole"), false);
   assert.doesNotMatch(JSON.stringify(payload), /0192fac-AlembicPlugin/);
@@ -697,6 +734,13 @@ test("registers threads locally and redacts thread ids", () => {
   assert.equal(Object.hasOwn(registry, "cwd"), false);
   assert.equal(Object.hasOwn(registry, "responsibilityRoot"), false);
   assert.equal(Object.hasOwn(registry, "displayTitle"), false);
+
+  const derivedConfigPath = path.join(root, ".wakeflow-local/wakeflow-delivery/hosts/codex/window-config/AlembicPlugin.json");
+  assert.equal(existsSync(derivedConfigPath), true);
+  const derivedConfig = JSON.parse(readFileSync(derivedConfigPath, "utf8"));
+  assert.equal(derivedConfig.threadRegistered, true);
+  assert.equal(derivedConfig.dispatchable, true);
+  assert.equal(Object.hasOwn(derivedConfig, "threadId"), false);
 
   const config = parseOk(run(root, ["build-window-config", "--window", "AlembicPlugin", "--require-thread", "--write"]));
   assert.equal(config.config.threadRegistered, true);
@@ -1834,6 +1878,7 @@ test("state-root target result import exposes controller-return context from del
     "host thread accepted prompt",
     "--write",
   ]));
+  writeText(path.join(stateRoot, "reports/plugin-result.json"), "{\"ok\": true}\n");
 
   const imported = parseOk(runState(root, [
     "import-target-result",
@@ -1897,7 +1942,8 @@ test("state-root target result import exposes controller-return context from del
   assert.equal(stateRootPack.reviewPack.callbackPlan.counts.readyToBuildCount, 1);
   assert.equal(stateRootPack.reviewPack.gates.controllerReturnReady, true);
   assert.equal(stateRootPack.reviewPack.controllerReturnDelivery.status, "not-built");
-  assert.equal(stateRootPack.reviewPack.nextAction, "build-controller-return");
+  assert.equal(stateRootPack.reviewPack.nextAction, "pull-raw-evidence-and-run-wakeflow-state-reducer");
+  assert.equal(stateRootPack.reviewPack.controllerReturnNextStep, "build-controller-return");
   assert.equal(stateRootPack.reviewPack.callbackPlan.units[0].triggerTarget, "AlembicPlugin");
   assert.equal(stateRootPack.reviewPack.callbackPlan.units[0].triggerTaskId, "CSMR-TASK-1");
 

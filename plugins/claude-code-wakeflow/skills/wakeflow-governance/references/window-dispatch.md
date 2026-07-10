@@ -50,6 +50,13 @@ never dispatched two simultaneous tasks inside the same demand (the machine
 refuses a second in-flight dispatch to the same window). More work for that
 repository arrives as the NEXT combined package after review.
 
+An explicit controller `rework` normally re-dispatches the same target task and
+package with a fresh dispatch group. This preserves that task's `reworkCount`
+and recurring-problem signal. Add a rework companion package only when the
+review truly changes or extends task scope; never create one merely because the
+state is `needs-rework`. A `redesign` decision is different: route a new Design
+outcome package and do not re-dispatch the product task.
+
 Dispatch by task package, not tiny fragments. A task package should group
 mainline work, same-window TODOs, and evidence work that share the same boundary
 and validation path.

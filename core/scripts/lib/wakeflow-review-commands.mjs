@@ -81,6 +81,37 @@ export function createReviewCommands(ctx) {
       .map((item) => item.ref);
   }
 
+  function calculateCraftEvidenceGaps({ required, result, targetWindow, taskId, taskPackageId, stateRoot, stateRootRef }) {
+    if (result?.status !== "completed" || !Array.isArray(required) || required.length === 0) return [];
+    const provided = Array.isArray(result.craftEvidence) ? result.craftEvidence : [];
+    const byKind = new Map();
+    for (const item of provided) {
+      if (!item || typeof item.kind !== "string") continue;
+      byKind.set(item.kind, [...(byKind.get(item.kind) ?? []), item]);
+    }
+    const gaps = [];
+    for (const requirement of required) {
+      const kind = typeof requirement?.kind === "string" ? requirement.kind : "";
+      if (!kind) continue;
+      const base = { targetWindow, taskId, taskPackageId, kind, verify: requirement.verify ?? null };
+      const entries = byKind.get(kind) ?? [];
+      if (entries.length === 0) {
+        gaps.push({ ...base, reason: "missing-kind" });
+        continue;
+      }
+      for (const entry of entries) {
+        if (typeof entry?.ref !== "string" || !entry.ref) continue;
+        const summary = stateRoot
+          ? stateRootEvidenceRefSummary(stateRoot, stateRootRef, entry.ref, targetWindow)
+          : evidenceRefSummary(entry.ref, targetWindow);
+        if (summary.looksLikePath && !summary.exists) {
+          gaps.push({ ...base, ref: entry.ref, reason: "artifact-missing" });
+        }
+      }
+    }
+    return gaps;
+  }
+
   function targetResultReviewEntry(item) {
     const result = item.result;
     const evidenceRefs = Array.isArray(result?.evidenceRefs) ? result.evidenceRefs : [];
@@ -90,6 +121,15 @@ export function createReviewCommands(ctx) {
       ? evidenceRefs.map((ref) => stateRootEvidenceRefSummary(item.stateRoot, item.stateRootRef, ref, item.packet.targetWindow))
       : evidenceRefs.map((ref) => evidenceRefSummary(ref, item.packet.targetWindow));
     const missingEvidenceRefs = missingEvidenceRefsFromSummaries(evidenceRefSummaries);
+    const craftEvidenceGaps = calculateCraftEvidenceGaps({
+      required: item.packet.evidenceContract?.required,
+      result,
+      targetWindow: item.packet.targetWindow,
+      taskId: item.packet.taskId,
+      taskPackageId: item.packet.stateRef?.taskPackageId,
+      stateRoot: item.stateRoot,
+      stateRootRef: item.stateRootRef,
+    });
     return {
       packetId: item.packet.id,
       targetWindow: item.packet.targetWindow,
@@ -115,6 +155,7 @@ export function createReviewCommands(ctx) {
       evidenceRefs,
       evidenceRefSummaries,
       missingEvidenceRefs,
+      craftEvidenceGaps,
       verificationSummary,
       riskSummary: Array.isArray(result?.riskSummary) ? result.riskSummary : [],
       nextSuggestion: result?.nextSuggestion,
@@ -454,6 +495,17 @@ export function createReviewCommands(ctx) {
         ? "covered-by-rework-route"
         : result?.status || (resultExpected ? "missing" : "pending-dispatch");
       const packet = packetForTask(task.targetTaskId, item?.result ?? null);
+      const taskPackage = (state.taskPackages ?? []).find((candidate) => candidate.taskPackageId === task.taskPackageId);
+      const requiredCraftEvidence = packet?.evidenceContract?.required ?? taskPackage?.evidenceContract?.required;
+      const craftEvidenceGaps = calculateCraftEvidenceGaps({
+        required: requiredCraftEvidence,
+        result,
+        targetWindow: task.targetWindow,
+        taskId: task.targetTaskId,
+        taskPackageId: task.taskPackageId,
+        stateRoot,
+        stateRootRef,
+      });
       return {
         targetWindow: task.targetWindow,
         taskId: task.targetTaskId,
@@ -473,6 +525,7 @@ export function createReviewCommands(ctx) {
         evidenceRefs,
         evidenceRefSummaries,
         missingEvidenceRefs,
+        craftEvidenceGaps,
         verificationSummary,
         riskSummary: Array.isArray(result?.risks) ? result.risks : [],
         reportedAt: result?.createdAt,
@@ -553,6 +606,8 @@ export function createReviewCommands(ctx) {
       ref,
     })));
     const missingEvidenceRefsPresent = missingEvidenceRefs.length > 0;
+    const craftEvidenceGaps = targetResults.flatMap((item) => item.craftEvidenceGaps ?? []);
+    const craftEvidenceGapsPresent = craftEvidenceGaps.length > 0;
     const generatedAt = nowIso();
     const callbackContext = stateRootCallbackContext(targetResults);
     const callbackPlan = callbackContext.callbackPlan;
@@ -560,6 +615,15 @@ export function createReviewCommands(ctx) {
     const controllerReturnReady = (callbackPlan?.counts?.readyToBuildCount || 0) > 0;
     const controllerReturnPendingHostSend = (callbackPlan?.counts?.pendingHostSendCount || 0) > 0;
     const controllerReturnSent = (callbackPlan?.counts?.sentCount || 0) > 0;
+    const controllerReturnNextStep = controllerReturnSent
+      ? "controller-return-already-sent"
+      : controllerReturnPendingHostSend
+        ? "send-controller-return-and-record-delivery"
+        : controllerReturnReady
+          ? "build-controller-return"
+          : missing.length > 0
+            ? "wait-for-state-root-target-result"
+            : "no-controller-return-needed";
     return {
       kind: "ControllerReviewPack",
       version,
@@ -593,10 +657,12 @@ export function createReviewCommands(ctx) {
           verificationSummary: item.verificationSummary,
           hasControllerReviewEvidence: item.hasControllerReviewEvidence,
           missingEvidenceRefs: item.missingEvidenceRefs,
+          craftEvidenceGaps: item.craftEvidenceGaps ?? [],
         })),
       missingEvidenceRefs,
+      craftEvidenceGaps,
       gates: {
-        controllerReviewReady: reviewReady && !missingEvidenceRefsPresent,
+        controllerReviewReady: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent,
         noTargetTasks,
         noOpenTargetTasks,
         waitForMissingResults: missing.length > 0,
@@ -604,11 +670,13 @@ export function createReviewCommands(ctx) {
         blockedResultsPresent: blocked.length > 0,
         missingEvidenceRefsPresent,
         evidenceRepairRequired: missingEvidenceRefsPresent,
+        craftEvidenceGapsPresent,
+        craftEvidenceRepairRequired: craftEvidenceGapsPresent,
         controllerReturnSent,
         controllerReturnReady,
         controllerReturnPendingHostSend,
         rawEvidencePullRequired: reviewReady,
-        totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent,
+        totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent,
         stateRootBased: true,
       },
       // Review-time intent check: additive advisory string, present only when
@@ -630,21 +698,20 @@ export function createReviewCommands(ctx) {
         ? "add-task-package-before-review"
         : noOpenTargetTasks
         ? "run-wakeflow-complete-demand-or-add-next-package"
-        : controllerReturnPendingHostSend
-        ? "send-controller-return-and-record-delivery"
-        : controllerReturnReady
-        ? "build-controller-return"
         : decision === "wait"
         ? missing.length > 0
           ? "wait-for-state-root-target-result"
           : "dispatch-pending-target-before-result-review"
         : decision === "blocked"
           ? "pull-block-evidence-and-run-wakeflow-state-reducer"
-          : missingEvidenceRefsPresent
+        : missingEvidenceRefsPresent
             ? "fix-missing-evidence-refs-before-wakeflow-state-reducer"
+            : craftEvidenceGapsPresent
+              ? "fix-required-craft-evidence-before-controller-verdict"
             : pendingDispatch.length > 0
               ? "pull-raw-evidence-and-continue-pending-dispatch"
               : "pull-raw-evidence-and-run-wakeflow-state-reducer",
+      controllerReturnNextStep,
       forbiddenConclusions: [
         "review-pack-is-controller-acceptance",
         "review-pack-creates-next-dispatch",

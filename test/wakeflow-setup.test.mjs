@@ -235,7 +235,8 @@ test("initialize localizes launch titles and prompts with the window name first"
   assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /set_thread_title/);
   assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /hostCreateThread settings/);
   assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /not task deliveries/);
-  assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /Pass each returned real thread id once/);
+  assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /wakeflow_register_window/);
+  assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /create_thread\.threadId/);
   assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /stores the id only in thread-registry/);
   assert.match(payload.steps.windowLaunchPlan.hostWorkflow.join("\n"), /\u5b50 agent/);
   assert.equal(controller.displayTitle, `${path.basename(parent)} ${zhControllerRole}`);
@@ -260,14 +261,18 @@ test("initialize localizes launch titles and prompts with the window name first"
     title: `AppRepo ${zhDutyWindow}`,
   });
   assert.equal(app.localRegistration.required, true);
-  assert.equal(app.localRegistration.command, "wakeflow-setup initialize");
+  assert.equal(app.localRegistration.hostTool, "wakeflow_register_window");
+  assert.equal(app.localRegistration.applyRequired, true);
+  assert.equal(app.localRegistration.handleSource, "create_thread.threadId");
   assert.equal(app.localRegistration.threadIdAuthority, ".wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/AppRepo.json");
   assert.equal(app.localRegistration.derivedStatusView, ".wakeflow-local/wakeflow-delivery/hosts/codex/window-config/AppRepo.json");
   assert.equal(app.localRegistration.trackedDocsContainThreadIds, false);
-  assert.ok(app.localRegistration.argvTemplate.includes("--thread"));
-  assert.ok(app.localRegistration.argvTemplate.includes("AppRepo=<createdThreadId>"));
-  assert.equal(app.localRegistration.argvTemplate.includes("--thread-title"), false);
-  assert.equal(app.localRegistration.argvTemplate.includes("--thread-role"), false);
+  assert.deepEqual(app.localRegistration.callTemplate, {
+    root: parent,
+    window: "AppRepo",
+    windowHandle: "<create_thread.threadId>",
+    apply: true,
+  });
   assert.equal(app.createThreadPrompt.split("\n")[0], `AppRepo ${zhDutyWindow}${zhColon}\u521d\u59cb\u5316\u5165\u53e3\u540c\u6b65\uff0c\u4e0d\u662f\u4efb\u52a1\u6295\u9012\u3002`);
   assert.match(app.createThreadPrompt, new RegExp(zhFirstRead));
   assert.match(app.createThreadPrompt, new RegExp(zhReadyWait));
@@ -695,11 +700,14 @@ test("replace-window replaces one registered window thread without initializatio
   assert.equal(payload.steps.windowLaunchPlan.windows[0].hostCreateThread.thinking, "xhigh");
   assert.equal(payload.steps.windowLaunchPlan.windows[0].hostCreateThread.model, null);
   assert.match(payload.steps.windowLaunchPlan.windows[0].hostCreateThread.modelPolicy, /inherit the current Codex model/);
-  assert.equal(payload.steps.windowLaunchPlan.windows[0].localRegistration.command, "wakeflow-setup replace-window");
-  assert.deepEqual(
-    payload.steps.windowLaunchPlan.windows[0].localRegistration.argvTemplate.slice(0, 6),
-    ["replace-window", "--root", fixture.control, "--window", "BaseWindow", "--thread"],
-  );
+  assert.equal(payload.steps.windowLaunchPlan.windows[0].localRegistration.hostTool, "wakeflow_register_window");
+  assert.equal(payload.steps.windowLaunchPlan.windows[0].localRegistration.handleSource, "create_thread.threadId");
+  assert.deepEqual(payload.steps.windowLaunchPlan.windows[0].localRegistration.callTemplate, {
+    root: fixture.control,
+    window: "BaseWindow",
+    windowHandle: "<create_thread.threadId>",
+    apply: true,
+  });
 
   const replaced = payload.steps.localWindows.results.find((item) => item.windowName === "BaseWindow");
   assert.equal(replaced.replaceRequested, true);
@@ -749,11 +757,14 @@ test("replace-windows regenerates only selected responsibility windows without i
   assert.equal(Object.hasOwn(plan.steps, "writeAgents"), false);
   assert.deepEqual(plan.steps.windowLaunchPlan.replaceWindows, ["BaseWindow"]);
   assert.deepEqual(plan.steps.windowLaunchPlan.windows.map((item) => item.windowName), ["BaseWindow"]);
-  assert.equal(plan.steps.windowLaunchPlan.windows[0].localRegistration.command, "wakeflow-setup replace-windows");
-  assert.deepEqual(
-    plan.steps.windowLaunchPlan.windows[0].localRegistration.argvTemplate.slice(0, 6),
-    ["replace-windows", "--root", fixture.control, "--window", "BaseWindow", "--thread"],
-  );
+  assert.equal(plan.steps.windowLaunchPlan.windows[0].localRegistration.hostTool, "wakeflow_register_window");
+  assert.equal(plan.steps.windowLaunchPlan.windows[0].localRegistration.handleSource, "create_thread.threadId");
+  assert.deepEqual(plan.steps.windowLaunchPlan.windows[0].localRegistration.callTemplate, {
+    root: fixture.control,
+    window: "BaseWindow",
+    windowHandle: "<create_thread.threadId>",
+    apply: true,
+  });
 
   result = run(fixture, [
     "replace-windows",
@@ -830,14 +841,79 @@ test("wakeflow_replace_windows(window) MCP wrapper returns one scoped replacemen
   assert.equal(result.parsedJson.command, "replace-window");
   assert.equal(result.parsedJson.mode, "plan");
   assert.deepEqual(result.parsedJson.steps.windowLaunchPlan.windows.map((item) => item.windowName), ["BaseWindow"]);
-  assert.equal(result.parsedJson.steps.windowLaunchPlan.windows[0].localRegistration.command, "wakeflow-setup replace-window");
+  assert.equal(result.parsedJson.steps.windowLaunchPlan.windows[0].localRegistration.hostTool, "wakeflow_register_window");
+  assert.deepEqual(result.parsedJson.steps.windowLaunchPlan.windows[0].localRegistration.callTemplate, {
+    root: fixture.control,
+    window: "BaseWindow",
+    windowHandle: "<create_thread.threadId>",
+    apply: true,
+  });
+});
+
+test("wakeflow_register_window writes host-local registration atomically without exposing the handle", async () => {
+  const fixture = makeFixture();
+  const registryPath = path.join(
+    fixture.control,
+    ".wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/BaseWindow.json",
+  );
+  const windowConfigPath = path.join(
+    fixture.control,
+    ".wakeflow-local/wakeflow-delivery/hosts/codex/window-config/BaseWindow.json",
+  );
+  const firstHandle = "019e7e08-2078-7ec2-b1bf-a64d5adcd371";
+  const secondHandle = "019e7e09-6da8-78d3-af4a-7ae8ad1a927b";
+
+  const dryRun = await handlers.wakeflow_register_window({
+    root: fixture.control,
+    window: "BaseWindow",
+    windowHandle: firstHandle,
+    apply: false,
+  });
+  assert.equal(dryRun.ok, true, dryRun.stderr || dryRun.stdout);
+  assert.equal(dryRun.parsedJson.wrote, false);
+  assert.equal(dryRun.parsedJson.windowConfigWritten, false);
+  assert.equal(existsSync(registryPath), false);
+  assert.equal(existsSync(windowConfigPath), false);
+  assert.doesNotMatch(JSON.stringify(dryRun), new RegExp(firstHandle));
+
+  const applied = await handlers.wakeflow_register_window({
+    root: fixture.control,
+    window: "BaseWindow",
+    windowHandle: firstHandle,
+    apply: true,
+  });
+  assert.equal(applied.ok, true, applied.stderr || applied.stdout);
+  assert.equal(applied.parsedJson.wrote, true);
+  assert.equal(applied.parsedJson.threadRegistered, true);
+  assert.equal(applied.parsedJson.registrationValid, true);
+  assert.equal(applied.parsedJson.windowConfigWritten, true);
+  assert.equal(applied.parsedJson.replacedExistingThread, false);
+  assert.doesNotMatch(JSON.stringify(applied), new RegExp(firstHandle));
+  assert.ok(applied.args.includes("<redacted>"));
+  assert.equal(JSON.parse(readFileSync(registryPath, "utf8")).threadId, firstHandle);
+  const windowConfig = JSON.parse(readFileSync(windowConfigPath, "utf8"));
+  assert.equal(windowConfig.threadRegistered, true);
+  assert.equal(windowConfig.dispatchable, true);
+  assert.equal(Object.hasOwn(windowConfig, "threadId"), false);
+
+  const replaced = await handlers.wakeflow_register_window({
+    root: fixture.control,
+    window: "BaseWindow",
+    windowHandle: secondHandle,
+    apply: true,
+  });
+  assert.equal(replaced.ok, true, replaced.stderr || replaced.stdout);
+  assert.equal(replaced.parsedJson.replacedExistingThread, true);
+  assert.doesNotMatch(JSON.stringify(replaced), new RegExp(secondHandle));
+  assert.equal(JSON.parse(readFileSync(registryPath, "utf8")).threadId, secondHandle);
 });
 
 test("MCP tool order keeps controller review loop inside the host-visible prefix", () => {
-  assert.deepEqual(tools.slice(0, 12).map((tool) => tool.name), [
+  assert.deepEqual(tools.slice(0, 13).map((tool) => tool.name), [
     "wakeflow_status",
     "wakeflow_initialize_workspace",
     "wakeflow_replace_windows",
+    "wakeflow_register_window",
     "wakeflow_create_demand",
     "wakeflow_add_task",
     "wakeflow_prepare_delivery",

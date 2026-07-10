@@ -48,22 +48,22 @@ tool first:
 - After apply, read the returned `windowLaunchPlan`, use the Codex host
   `create_thread` tool to create real controller / Design / Test / product
   windows, immediately call the Codex host `set_thread_title` tool for every
-  newly created thread using that entry's `displayTitle`, then pass each real
-  thread id once to Wakeflow's local registration command. The thread registry
-  is the only thread-id authority; derived `window-config` is refreshed by
-  Wakeflow from the current workspace config and registry presence. Do this
-  title reset at the end of the initialization flow instead of manually
-  renaming ad hoc windows later.
+  newly created thread using that entry's `displayTitle`, then call
+  `wakeflow_register_window` once per returned `create_thread.threadId` using
+  that entry's `localRegistration.callTemplate`. The tool writes the local
+  registry and refreshes derived `window-config` without exposing the id. Do
+  this title reset at the end of initialization instead of manually renaming ad
+  hoc windows later.
 - To rebuild selected windows, use `wakeflow_replace_windows` (single `window`
   arg for one heavy or stale responsibility window, `windows[]` for a selected
   group). Create threads only for the returned replacement launch entries, then
-  replace only those windows' local thread-registry records with the new real
-  thread ids. Do not rewrite unrelated window registrations or store window role
-  / cwd / title metadata in the registry.
+  call `wakeflow_register_window` with each new real thread id. Do not rewrite
+  unrelated window registrations or store window role / cwd / title metadata in
+  the registry.
 - Do not use `wakeflow_initialize_workspace` as a refresh path for window
   context bloat. Replacement tools return only replacement launch entries plus
-  local registration argv templates; create only those host windows and then
-  register their real thread ids through the returned local command.
+  `localRegistration.callTemplate`; create only those host windows and register
+  their real thread ids through `wakeflow_register_window`.
 - Do not replace that tool with a hand-written inspection checklist when the MCP
   server is available.
 - If Wakeflow MCP tools are unavailable, say that the MCP server is unavailable

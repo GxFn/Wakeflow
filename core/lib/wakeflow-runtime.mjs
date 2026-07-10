@@ -53,7 +53,13 @@ export function listWakeflowRuntimeScriptEntries() {
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
-export async function runWakeflowRuntime({ script, args = [], cwd = wakeflowRuntimeRoot, timeoutMs = 120000 }) {
+export async function runWakeflowRuntime({
+  script,
+  args = [],
+  cwd = wakeflowRuntimeRoot,
+  timeoutMs = 120000,
+  sensitiveValues = [],
+}) {
   const scriptFile = allowedScripts.get(script);
   if (!scriptFile) {
     throw new Error(`Unsupported Wakeflow runtime script: ${script}`);
@@ -61,6 +67,10 @@ export async function runWakeflowRuntime({ script, args = [], cwd = wakeflowRunt
   if (!Array.isArray(args) || !args.every((arg) => typeof arg === "string")) {
     throw new Error("args must be an array of strings");
   }
+  if (!Array.isArray(sensitiveValues) || !sensitiveValues.every((value) => typeof value === "string")) {
+    throw new Error("sensitiveValues must be an array of strings");
+  }
+  const secrets = [...new Set(sensitiveValues.map((value) => value.trim()).filter(Boolean))];
   const effectiveCwd = resolveCwd(cwd);
   const scriptPath = path.join(wakeflowRuntimeRoot, "scripts", scriptFile);
   const startedAt = new Date().toISOString();
@@ -71,27 +81,29 @@ export async function runWakeflowRuntime({ script, args = [], cwd = wakeflowRunt
     timeoutMs,
   });
   const completedAt = new Date().toISOString();
+  const safeArgs = redactSensitive(args, secrets);
+  const safeOutput = redactSensitive(output, secrets);
   const wakeflowTrace = buildWakeflowTrace({
     script,
-    args,
+    args: safeArgs,
     cwd: effectiveCwd,
     startedAt,
     completedAt,
-    parsedJson: output.parsedJson,
+    parsedJson: safeOutput.parsedJson,
   });
-  const wakeflowRuntimeStatus = buildWakeflowRuntimeStatus(output, wakeflowTrace);
-  const wakeflowError = classifyWakeflowError(output, wakeflowRuntimeStatus);
+  const wakeflowRuntimeStatus = buildWakeflowRuntimeStatus(safeOutput, wakeflowTrace);
+  const wakeflowError = classifyWakeflowError(safeOutput, wakeflowRuntimeStatus);
   const wakeflowHealth = buildWakeflowHealth({
     script,
-    args,
+    args: safeArgs,
     cwd: effectiveCwd,
-    parsedJson: output.parsedJson,
+    parsedJson: safeOutput.parsedJson,
     trace: wakeflowTrace,
   });
   return {
-    ok: output.exitCode === 0,
+    ok: safeOutput.exitCode === 0,
     script,
-    args,
+    args: safeArgs,
     cwd: effectiveCwd,
     startedAt,
     completedAt,
@@ -99,8 +111,22 @@ export async function runWakeflowRuntime({ script, args = [], cwd = wakeflowRunt
     wakeflowRuntimeStatus,
     ...(wakeflowError ? { wakeflowError } : {}),
     ...(wakeflowHealth ? { wakeflowHealth } : {}),
-    ...output,
+    ...safeOutput,
   };
+}
+
+function redactSensitive(value, secrets) {
+  if (secrets.length === 0 || value === null || value === undefined) return value;
+  if (typeof value === "string") {
+    return secrets.reduce((text, secret) => text.split(secret).join("<redacted>"), value);
+  }
+  if (Array.isArray(value)) return value.map((item) => redactSensitive(item, secrets));
+  if (typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, redactSensitive(item, secrets)]),
+    );
+  }
+  return value;
 }
 
 function resolveCwd(cwd) {

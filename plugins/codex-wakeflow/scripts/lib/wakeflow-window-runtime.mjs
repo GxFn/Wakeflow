@@ -6,6 +6,7 @@ import {
   createThreadRegistration,
   normalizeThreadRegistrationRecord,
 } from "./wakeflow-thread-registry.mjs";
+import { testWindowNames } from "./wakeflow-config.mjs";
 
 export function createWindowRuntime(ctx) {
   const {
@@ -63,7 +64,7 @@ export function createWindowRuntime(ctx) {
   function deliveryRoleForWindow(config, windowName) {
     if (windowName === config.controllerWindow) return "controller";
     if (windowName === config.designWindow) return "design";
-    if (windowName === config.testWindow) return "test-target";
+    if (testWindowNames(config).includes(windowName)) return "test-target";
     return "target";
   }
 
@@ -112,28 +113,63 @@ export function createWindowRuntime(ctx) {
   }
 
   function commandRegisterThread() {
-    if (!write) fail("register-thread requires --write.");
     const windowName = requireValue("--window");
     const threadId = validateThreadId(requireValue("--thread-id"));
+    const descriptor = windowRuntimeDescriptor(windowName);
+    const configuredWindows = new Set([
+      descriptor.config.controllerWindow,
+      descriptor.config.designWindow,
+      ...testWindowNames(descriptor.config),
+      ...(Array.isArray(descriptor.config.repositories)
+        ? descriptor.config.repositories.map((item) => item?.windowName)
+        : []),
+    ].filter(Boolean));
+    if (!configuredWindows.has(windowName)) {
+      fail(`Window is not configured in wakeflow.config.json: ${windowName}`);
+    }
+    const registryFile = threadFileFor(windowName);
+    const previousRegistryFile = (findThreadFile ?? threadFileFor)(windowName);
+    const replacedExistingThread = existsSync(previousRegistryFile);
     const registration = createThreadRegistration({
       windowName,
       threadId,
       registeredAt: nowIso(),
       version: threadRegistrationVersion,
     });
-    ensureStateDirs();
-    atomicWriteJson(threadFileFor(windowName), registration);
+    const configFile = windowConfigFileFor(windowName);
+    const config = buildWindowDispatchConfig({
+      windowName,
+      config: descriptor.config,
+      repository: descriptor.repository,
+      deliveryRole: descriptor.deliveryRole,
+      cwd: descriptor.cwd,
+      responsibilityRoot: descriptor.responsibilityRoot,
+      registration,
+      threadRegistryFile: path.relative(stateDir, registryFile),
+      generatedAt: nowIso(),
+      version: windowConfigVersion,
+    });
+    if (write) {
+      ensureStateDirs();
+      atomicWriteJson(registryFile, registration);
+      atomicWriteJson(configFile, config);
+    }
     output(
       {
         ok: true,
         command: "register-thread",
-        wrote: true,
+        wrote: write,
         windowName,
-        threadRegistered: true,
+        threadRegistered: write,
+        registrationValid: true,
+        replacedExistingThread,
         threadIdRedacted: true,
-        registryFile: path.relative(workspaceRoot, threadFileFor(windowName)),
+        windowHandleRedacted: true,
+        registryFile: path.relative(workspaceRoot, registryFile),
+        windowConfigFile: path.relative(workspaceRoot, configFile),
+        windowConfigWritten: write,
       },
-      [hostProfile.texts.registeredHandle(windowName)],
+      [write ? hostProfile.texts.registeredHandle(windowName) : `Would register ${windowName}.`],
     );
   }
 

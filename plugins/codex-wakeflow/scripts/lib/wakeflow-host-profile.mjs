@@ -51,6 +51,8 @@ export const hostProfile = {
   handleId: {
     placeholders: ["current-codex-thread", "current thread", "<thread id>", "unknown", ""],
     realIdRequirement: "a real Codex thread id",
+    launchResultField: "create_thread.threadId",
+    launchResultPlaceholder: "<create_thread.threadId>",
     // P1-0 redaction guard: real Codex thread ids are UUID-shaped. Declared per edition
     // because host-profile is host-local and not byte-synced (check:core cannot cross-check).
     idShape: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
@@ -82,7 +84,7 @@ export const hostProfile = {
     rootPluginUsageBanner:
       "> Wakeflow is installed as a Codex plugin for this workspace. Use Wakeflow MCP tools for setup, status, state roots, delivery, review, archive, next-work scans, and verification. Do not call installed runtime scripts directly or infer their Node parameters; if a required Wakeflow MCP tool is unavailable, stop and report that the Wakeflow plugin surface must be reloaded or reinstalled.\n\n",
     initializeApplyNextAction:
-      "Create the Codex windows in windowLaunchPlan with the host create_thread tool, immediately reset each title with set_thread_title using displayTitle, then register real thread ids once into the local thread registry before dispatching any work.",
+      "Create the Codex windows in windowLaunchPlan with create_thread, reset each title with set_thread_title, then call wakeflow_register_window once per returned threadId before dispatching work.",
   },
   launch: {
     // Default Codex reasoning effort for newly created Wakeflow windows. The
@@ -104,7 +106,7 @@ export const hostProfile = {
     workflowSteps: (language) => [
       "Call create_thread for each launch entry with the entry cwd, createThreadPrompt, and hostCreateThread settings. These prompts perform initialization entry sync only; they are not task deliveries.",
       "Immediately call set_thread_title for the returned thread id, using the entry displayTitle.",
-      "Pass each returned real thread id once to the Wakeflow local registration command. The command stores the id only in thread-registry and refreshes derived window-config status; do not hand-write runtime files.",
+      "Call wakeflow_register_window once per returned create_thread.threadId using the entry localRegistration.callTemplate. The tool stores the id only in thread-registry and refreshes derived window-config status; do not hand-write runtime files.",
       language === "zh"
         ? "总控和子窗口可使用 Codex 子 agent 并行做代码搜索、日志归因、测试定位和证据汇总；子 agent 不拥有验收、派发、状态机写入或跨仓库边界。"
         : "Controller and child windows may use Codex subagents for parallel code search, log triage, test localization, and evidence summarization. Subagents do not own acceptance, dispatch, state-machine writes, or cross-repository boundaries.",

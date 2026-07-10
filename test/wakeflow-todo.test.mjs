@@ -11,8 +11,10 @@ const script = path.resolve(
 );
 
 const UNIFIED_HEADER =
+  "| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount | Auto Claim | Testing Decision | Documents |";
+const DIVIDER = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
+const PRE_TEST_DECISION_HEADER =
   "| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount | Auto Claim | Documents |";
-const DIVIDER = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
 const LEGACY_HEADER =
   "| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount |";
 
@@ -33,14 +35,29 @@ test("deliver appends a pending-claim row carrying the immutable Auto Claim prop
   const { root, boardPath } = makeBoard();
   const payload = parse(run(root, [
     "deliver", "--type", "requirement", "--design-key", "feat-2026-06-21", "--title", "Feature",
-    "--auto-claim", "--original-plan", "plan.md", "--requirement-design", "design.md", "--priority", "P1", "--apply",
+    "--auto-claim", "--original-plan", "plan.md", "--requirement-design", "design.md",
+    "--test-decision", "target unit tests; no Test window", "--priority", "P1", "--apply",
   ]));
   assert.equal(payload.ok, true);
   assert.equal(payload.wrote, true);
   assert.equal(payload.autoClaim, true);
   const board = readFileSync(boardPath, "utf8");
   assert.match(board, /\| feat-2026-06-21 \| pending-claim \| requirement \|/);
-  assert.match(board, /\| yes \| \[plan\]\(plan\.md\) \[design\]\(design\.md\) \|/);
+  assert.match(board, /\| yes \| target unit tests; no Test window \| \[plan\]\(\.\.\/\.\.\/plan\.md\) \[design\]\(\.\.\/\.\.\/design\.md\) \|/);
+});
+
+test("deliver migrates a pre-testing-decision board without dropping existing rows", () => {
+  const oldDivider = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
+  const existing = "| old-2026-06-20 | pending-claim | bug | P2 | Design | old | no | none | Wakeflow | none | no | [plan](old.md) [design](../../design.md) |";
+  const { root, boardPath } = makeBoard(existing, PRE_TEST_DECISION_HEADER, oldDivider);
+  const result = run(root, ["deliver", "--type", "bug", "--design-key", "new-2026-06-21", "--title", "New", "--test-decision", "smoke", "--apply"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const board = readFileSync(boardPath, "utf8");
+  assert.match(board, /Auto Claim \| Testing Decision \| Documents/);
+  assert.match(board, /old-2026-06-20/);
+  assert.match(board, /\[plan\]\(\.\.\/\.\.\/old\.md\)/, "legacy workspace-relative links are rebased to the board");
+  assert.match(board, /\[design\]\(\.\.\/\.\.\/design\.md\)/, "an already board-relative legacy link is not rebased twice");
+  assert.match(board, /new-2026-06-21[^\n]+\| smoke \|/);
 });
 
 test("requirement + auto-claim without both design docs is refused", () => {

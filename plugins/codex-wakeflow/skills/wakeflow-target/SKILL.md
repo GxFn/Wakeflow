@@ -87,8 +87,12 @@ state root, or human context, stop and report instead of guessing.
      cannot be found, stop and report that missing local envelope; do not assume
      no callback is needed.
    - Complete the real host send/readback with the same host thread tool used
-     for controller-to-target delivery, then use `wakeflow_record_delivery` to
-     record the delivery run.
+     for controller-to-target delivery. The prepared envelope intentionally
+     redacts the thread handle: read its `targetThread.threadRegistryFile`
+     under `.wakeflow-local/wakeflow-delivery/`, load the registered `threadId`,
+     call `send_message_to_thread`, and confirm the exact new turn with
+     `read_thread`. Then use `wakeflow_record_delivery` to record the delivery
+     run. Do not guess thread object keys or expose the id in tracked files.
    - Do not stop after writing the target result when controller return is
      allowed. The closeout steps stay separate: record target result, review
      readiness, prepare controller-return envelope, send with the host thread

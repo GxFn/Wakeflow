@@ -12,6 +12,7 @@ import {
   wakeflowStateLocale,
 } from "./lib/wakeflow-language.mjs";
 import { WakeflowStateLockTimeoutError, withStateRootLock } from "./lib/wakeflow-state-lock.mjs";
+import { refreshWorkspaceProjection } from "./lib/wakeflow-workspace-projection.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const wakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -245,7 +246,7 @@ function buildStateRootIndex(state, stateRoot, progressDoc, eventId) {
   lines.push("", "## Sub-directories", "");
   for (const dir of ["task-packages", "target-results", "transition-candidates", "intake", "test-cards", "evidence", "focus"]) {
     const present = existsSync(path.join(stateRoot, dir));
-    lines.push(`- [${dir}/](${dir}/)${present ? "" : " — _(not present)_"}`);
+    lines.push(present ? `- [${dir}/](${dir}/)` : `- \`${dir}/\` — _(not present)_`);
   }
   lines.push("");
   return lines.join("\n");
@@ -400,6 +401,7 @@ try {
       if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);
       throw error;
     }
+    refreshWorkspaceProjection({ workspaceRoot, config, updatedAt: renderedAt });
   }
 
   output(

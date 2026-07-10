@@ -4,6 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
+import {
+  handlers as claudeMcpHandlers,
+  tools as claudeMcpTools,
+} from "../plugins/claude-code-wakeflow/lib/wakeflow-mcp-tools.mjs";
 import { hostProfile as codexProfile } from "../plugins/codex-wakeflow/scripts/lib/wakeflow-host-profile.mjs";
 import { hostProfile as claudeProfile } from "../plugins/claude-code-wakeflow/scripts/lib/wakeflow-host-profile.mjs";
 import * as codexAdapter from "../plugins/codex-wakeflow/scripts/lib/wakeflow-host-send-adapter.mjs";
@@ -53,6 +57,8 @@ test("claude host profile carries terminal-only Claude Code semantics", () => {
   assert.equal(codexProfile.runtime.legacyRegistryFallback, true);
   assert.equal(claudeProfile.kinds.windowRegistration, "ClaudeWindowSessionRegistration");
   assert.equal(claudeProfile.kinds.windowDispatchConfig, "ClaudeSubwindowDispatchConfig");
+  assert.equal(claudeProfile.handleId.launchResultField, "hostLaunch.sessionId");
+  assert.equal(claudeProfile.handleId.launchResultPlaceholder, "<hostLaunch.sessionId>");
   assert.equal(claudeProfile.launch.planFlags.requiresHostTitleReset, true);
   assert.equal(claudeProfile.launch.titleReset("Window Title").required, true);
   assert.match(claudeProfile.launch.titleReset("Window Title").hostTool, /retitle/);
@@ -61,6 +67,8 @@ test("claude host profile carries terminal-only Claude Code semantics", () => {
     assert.match(steps, /tmux/, `launch workflow (${language}) must describe the tmux-resident flow`);
     assert.match(steps, /preflight/, `launch workflow (${language}) must run preflight first`);
     assert.match(steps, /launch-window/, `launch workflow (${language}) must use the host helper`);
+    assert.match(steps, /wakeflow_register_window/, `launch workflow (${language}) must use the public registration tool`);
+    assert.match(steps, /hostLaunch\.sessionId/, `launch workflow (${language}) must identify the real host handle source`);
   }
   assert.match(claudeProfile.texts.registeredHandle("Repo"), /Claude Code session for Repo/);
   assert.match(claudeProfile.hostTools.sendToWindow, /wakeflow-claude-host send/);
@@ -170,6 +178,65 @@ test("claude artifact registers a session id under the host-scoped registry", ()
   assert.equal(registration.kind, "ClaudeWindowSessionRegistration");
   assert.equal(registration.windowName, "RepoA");
   assert.equal(registration.threadId, "a1b2c3d4-5678-90ab-cdef-claude-session");
+});
+
+test("claude MCP surface registers and redacts a hostLaunch session id", async () => {
+  const workspaceRoot = mkdtempSync(path.join(os.tmpdir(), "claude-wakeflow-mcp-"));
+  mkdirSync(path.join(workspaceRoot, "RepoA"), { recursive: true });
+  writeFileSync(
+    path.join(workspaceRoot, "wakeflow.config.json"),
+    JSON.stringify({
+      workspaceName: "ClaudeFlow",
+      controllerWindow: "ClaudeFlow",
+      repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
+    }),
+  );
+  const sessionId = "a1b2c3d4-5678-90ab-cdef-claude-mcp-session";
+  assert.ok(claudeMcpTools.some((tool) => tool.name === "wakeflow_register_window"));
+
+  const result = await claudeMcpHandlers.wakeflow_register_window({
+    root: workspaceRoot,
+    window: "RepoA",
+    windowHandle: sessionId,
+    apply: true,
+  });
+  assert.equal(result.ok, true, result.stderr || result.stdout);
+  assert.equal(result.parsedJson.threadRegistered, true);
+  assert.equal(result.parsedJson.windowConfigWritten, true);
+  assert.match(result.parsedJson.registryFile, /hosts\/claude-code\/thread-registry\//);
+  assert.doesNotMatch(JSON.stringify(result), new RegExp(sessionId));
+
+  const registration = JSON.parse(readFileSync(path.join(workspaceRoot, result.parsedJson.registryFile), "utf8"));
+  assert.equal(registration.kind, "ClaudeWindowSessionRegistration");
+  assert.equal(registration.threadId, sessionId);
+});
+
+test("claude MCP registration accepts a configured IDE Test window", async () => {
+  const workspaceRoot = mkdtempSync(path.join(os.tmpdir(), "claude-wakeflow-ide-test-"));
+  mkdirSync(path.join(workspaceRoot, "ExternalTest"), { recursive: true });
+  writeFileSync(
+    path.join(workspaceRoot, "wakeflow.config.json"),
+    JSON.stringify({
+      workspaceName: "ClaudeFlow",
+      controllerWindow: "ClaudeFlow",
+      designWindow: "Design",
+      testWindow: "Test",
+      ideTestWindow: "ExternalTest",
+      repositories: [],
+    }),
+  );
+  const sessionId = "a1b2c3d4-5678-90ab-cdef-claude-ide-test";
+  const result = await claudeMcpHandlers.wakeflow_register_window({
+    root: workspaceRoot,
+    window: "ExternalTest",
+    windowHandle: sessionId,
+    apply: true,
+  });
+  assert.equal(result.ok, true, result.stderr || result.stdout);
+  assert.equal(result.parsedJson.threadRegistered, true);
+  const config = JSON.parse(readFileSync(path.join(workspaceRoot, result.parsedJson.windowConfigFile), "utf8"));
+  assert.equal(config.deliveryRole, "test-target");
+  assert.doesNotMatch(JSON.stringify(result), new RegExp(sessionId));
 });
 
 test("claude artifact rejects placeholder session ids", () => {

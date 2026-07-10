@@ -13,7 +13,9 @@ Store real thread ids only in the host-scoped local thread registry under
 Codex plugin keeps its twin under
 `.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/`). Wakeflow
 setup or host-controlled tooling should pass each real thread id to one local
-registration command; agents must not hand-write multiple runtime files. A
+`wakeflow_register_window` call; agents must not hand-write runtime files. The
+tool updates the host-local registry and derived window config together and
+redacts the real id from its output. A
 thread id is the window's Claude Code session id, generated at launch and
 stable across resumes; it is registered once.
 

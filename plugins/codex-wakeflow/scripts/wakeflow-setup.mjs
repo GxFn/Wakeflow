@@ -2025,9 +2025,6 @@ function windowLaunchEntries(context, options = {}) {
 function windowLaunchPlanPayload(context, entries, options = {}) {
   const replacements = options.replacements ?? replacementWindows();
   const language = options.language ?? interfaceLanguage(context);
-  const registrationArgvCommand = options.registrationCommand
-    ?? (replacements.size > 0 ? "replace-windows" : "initialize");
-  const registrationCommand = `wakeflow-setup ${registrationArgvCommand}`;
   return {
     ok: true,
     command: "window-launch-plan",
@@ -2050,20 +2047,18 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
       ...(typeof hostProfile.launch.entryExtras === "function" ? hostProfile.launch.entryExtras(entry, context) : {}),
       localRegistration: {
         required: true,
-        command: registrationCommand,
+        hostTool: "wakeflow_register_window",
+        applyRequired: true,
+        handleSource: hostProfile.handleId.launchResultField,
         threadIdAuthority: `.wakeflow-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/thread-registry/${slug(entry.windowName)}.json`,
         derivedStatusView: `.wakeflow-local/wakeflow-delivery/hosts/${hostProfile.runtime.hostDirName}/window-config/${slug(entry.windowName)}.json`,
         trackedDocsContainThreadIds: false,
-        argvTemplate: [
-          registrationArgvCommand,
-          "--root",
-          context.wakeflowRoot,
-          ...(replacements.size > 0 ? ["--window", entry.windowName] : []),
-          "--thread",
-          `${entry.windowName}=<createdThreadId>`,
-          "--write",
-          "--json",
-        ],
+        callTemplate: {
+          root: context.wakeflowRoot,
+          window: entry.windowName,
+          windowHandle: hostProfile.handleId.launchResultPlaceholder,
+          apply: true,
+        },
       },
       createThreadPrompt: entry.createThreadPrompt,
     })),
@@ -2450,7 +2445,6 @@ function replaceWindowsPayload(options = {}) {
   const windowLaunchPlan = windowLaunchPlanPayload(context, launchEntries, {
     replacements,
     language,
-    registrationCommand: commandName,
   });
   const localWindows = localWindowRegistrationPayload(context, { windows: launchEntries, replacements });
   const ok = [windowLaunchPlan, localWindows].every((item) => item.ok !== false);
@@ -2473,7 +2467,7 @@ function replaceWindowsPayload(options = {}) {
     },
     nextAction: write
       ? "Replacement thread registry and derived local window config were updated only for the selected windows. Do not treat this as workspace initialization or task delivery."
-      : "Create only the returned replacement windows, then register each real thread id with the returned localRegistration argvTemplate. Do not rewrite unrelated window registrations.",
+      : "Create only the returned replacement windows, then call wakeflow_register_window with each returned localRegistration.callTemplate and the real host handle. Do not rewrite unrelated window registrations.",
   };
 }
 

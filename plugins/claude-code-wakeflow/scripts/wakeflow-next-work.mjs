@@ -67,6 +67,24 @@ function slug(value) {
     .replace(/^-+|-+$/g, "") || "demand";
 }
 
+function todoDocumentRefs(documents) {
+  const targets = [...String(documents ?? "").matchAll(/\]\(([^)]+)\)/g)].map((match) => match[1].trim());
+  return targets.map((target) => {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#")) return target;
+    const boardAbsolute = path.resolve(path.dirname(todoBoardPath), target);
+    const legacyWorkspaceAbsolute = path.resolve(workspaceRoot, target);
+    const absolute = path.isAbsolute(target)
+      ? path.resolve(target)
+      : target.startsWith(".") || (existsSync(boardAbsolute) && !existsSync(legacyWorkspaceAbsolute))
+        ? boardAbsolute
+        : legacyWorkspaceAbsolute;
+    const relative = path.relative(workspaceRoot, absolute);
+    return relative.startsWith("..") || path.isAbsolute(relative)
+      ? absolute
+      : relative.split(path.sep).join("/");
+  });
+}
+
 function read(file) {
   return readFileSync(file, "utf8");
 }
@@ -182,6 +200,8 @@ function parseTodoCandidates(warnings) {
         recommendedWindow,
         mount: entry["Current Mount"],
         documents: entry["Documents"] ?? "",
+        documentRefs: todoDocumentRefs(entry["Documents"] ?? ""),
+        testDecision: entry["Testing Decision"] ?? "",
         autoClaim,
         blockers,
         eligible: blockers.length === 0,

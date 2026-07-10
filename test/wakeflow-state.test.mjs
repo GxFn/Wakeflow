@@ -262,6 +262,8 @@ test("RA5: render-progress writes an idempotent navigable state-root index.md", 
   assert.match(first, /\[projection\.json\]\(projection\.json\)/, "links the projection");
   assert.match(first, /IDX-PKG/, "lists the task package");
   assert.match(first, /IDX-TASK/, "lists the target task");
+  assert.equal(first.includes("`intake/` — _(not present)_"), true, "absent lazy directories are labeled");
+  assert.equal(first.includes("[intake/](intake/)"), false, "absent lazy directories are not broken links");
   // idempotent: regenerating against the same state yields an identical index (no wall-clock)
   assert.equal(runScript(renderScript, ["--root", root, "--state-root", stateRootRel, "--write", "--json"]).status, 0);
   assert.equal(readFileSync(indexPath, "utf8"), first, "regenerating against the same state is idempotent");
@@ -1095,6 +1097,7 @@ test("review decisions affect open targets without rewriting accepted history", 
   assert.equal(afterRework.targetTasks.find((item) => item.targetTaskId === "CSMR-TASK-0").status, "accepted");
   assert.equal(afterRework.taskPackages.find((item) => item.taskPackageId === "CSMR-PKG-1").status, "needs-rework");
   assert.equal(afterRework.targetTasks.find((item) => item.targetTaskId === "CSMR-TASK-1").status, "needs-rework");
+  assert.deepEqual(afterRework.allowedActions, ["prepare-dispatch-from-state", "add-task-package", "wakeflow-render-progress"], "product rework exposes same-task re-dispatch");
 
   const prematureReduce = reduce();
   assert.equal(prematureReduce.candidateId, null);

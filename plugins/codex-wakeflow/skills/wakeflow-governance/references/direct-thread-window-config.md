@@ -11,7 +11,9 @@ project documentation.
 Store real thread ids only in the local thread registry under
 `.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/`. Wakeflow
 setup or host-controlled tooling should pass each real thread id to one local
-registration command; agents must not hand-write multiple runtime files.
+`wakeflow_register_window` call; agents must not hand-write runtime files. The
+tool updates the host-local registry and derived window config together and
+redacts the real id from its output.
 Records in the legacy `.wakeflow-local/wakeflow-delivery/thread-registry/`
 location are still read as a fallback while new registrations write the
 host-scoped path, and the shared `.wakeflow-local/wakeflow-delivery/locks/`

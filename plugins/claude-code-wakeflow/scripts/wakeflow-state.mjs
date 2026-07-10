@@ -21,6 +21,7 @@ import {
   activeDemandCapacity,
   activeDemandConflictSummary,
 } from "./lib/wakeflow-active-demands.mjs";
+import { archiveWorkspaceTodo, refreshWorkspaceProjection } from "./lib/wakeflow-workspace-projection.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const wakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -75,7 +76,7 @@ function output(payload, textLines = []) {
   const complete = { scriptComplete: true, ...payload };
   if (!complete.agentNext) {
     complete.agentNext = complete.ok
-      ? "Continue by total-control judgment; this script does not dispatch or accept work."
+      ? "Continue by total-control judgment using the returned allowed actions; this command performed no additional follow-up action."
       : "Stop and inspect the reported wakeflow-state issue.";
   }
   if (json) {
@@ -1619,7 +1620,9 @@ function commandDecideReviewLocked(stateRoot) {
     updatedAt: createdAt,
     allowedActions: decision === "accept"
       ? ["add-task-package", "complete-demand", "wakeflow-render-progress"]
-      : reworkLike
+      : decision === "rework"
+        ? ["prepare-dispatch-from-state", "add-task-package", "wakeflow-render-progress"]
+        : decision === "redesign"
         ? ["add-task-package", "wakeflow-render-progress"]
         : ["wakeflow-render-progress"],
     blockers: decision === "blocked"
@@ -1790,6 +1793,7 @@ function commandCompleteDemandLocked(stateRoot) {
     writeJson(stateFile, nextState);
     appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.decisions,
       `${createdAt} demand completed — ${reason}`);
+    refreshWorkspaceProjection({ workspaceRoot, updatedAt: createdAt });
   }
 
   output(
@@ -2338,6 +2342,20 @@ function commandArchiveDemandLocked(stateRoot) {
     }
   }
 
+  const todoArchive = archiveWorkspaceTodo({
+    workspaceRoot,
+    config,
+    designKey: state.designKey ?? demandRecord.designKey ?? demandRecord.source?.designKey,
+    archiveMount: relative(ledgerDest),
+  });
+  refreshWorkspaceProjection({ workspaceRoot, config, updatedAt: createdAt });
+  const archiveWarnings = [
+    originalPreserveWarning,
+    todoArchive.reason && !["no-design-key", "row-missing"].includes(todoArchive.reason)
+      ? `Global TODO archive projection was not updated: ${todoArchive.reason}`
+      : null,
+  ].filter(Boolean);
+
   output({
     ok: true,
     command: "archive-demand",
@@ -2350,11 +2368,12 @@ function commandArchiveDemandLocked(stateRoot) {
       preservedOriginal,
       originalPreservedAt,
       danglingRefs,
+      todoArchive,
     },
-    ...(originalPreserveWarning ? { warnings: [originalPreserveWarning] } : {}),
-    indexRefreshNeeded: true,
+    ...(archiveWarnings.length ? { warnings: archiveWarnings } : {}),
+    indexRefreshNeeded: false,
     forbiddenConclusions: ["archive-is-deletion", "archive-is-acceptance"],
-    agentNext: "Refresh the active workspace index to drop the archived root, then review redactedFields before committing the ledger to git.",
+    agentNext: "The active workspace projection was refreshed. Review redactedFields before committing the ledger to git.",
   }, [
     `Archived ${state.demandKey} -> ${relative(ledgerDest)}`,
     redactedFields.length

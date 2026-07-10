@@ -11,14 +11,14 @@ const script = path.resolve(
 );
 
 const HEADER =
-  "| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount | Auto Claim | Documents |";
-const DIVIDER = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
+  "| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount | Auto Claim | Testing Decision | Documents |";
+const DIVIDER = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
 // A delivered, controller-recommended, auto-claimable requirement row.
 const DELIVERED_ROW =
-  "| feat-2026-06-21 | pending-claim | requirement | P1 | Design | Build the feature | no | none | Wakeflow | none | yes | [plan](plan.md) [design](design.md) |";
+  "| feat-2026-06-21 | pending-claim | requirement | P1 | Design | Build the feature | no | none | Wakeflow | none | yes | unit tests in target; no Test window | [plan](plan.md) [design](design.md) |";
 // Eligible but NOT auto-claimable (Auto Claim = no): claimable only with an explicit key.
 const MANUAL_ROW =
-  "| manual-2026-06-21 | pending-claim | bug | P2 | Design | Fix the bug | no | none | Wakeflow | none | no |  |";
+  "| manual-2026-06-21 | pending-claim | bug | P2 | Design | Fix the bug | no | none | Wakeflow | none | no | smoke |  |";
 
 function makeWorkspace(rows = "") {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-create-"));
@@ -48,6 +48,12 @@ test("create-demand from a delivered TODO row: inits, adopts host, renders, cons
   const state = JSON.parse(readFileSync(file, "utf8"));
   assert.equal(state.demandKey, "feat-2026-06-21");
   assert.ok(state.controllerHost, "controllerHost is adopted by create-demand");
+  assert.equal(state.testDecision, "unit tests in target; no Test window", "Design testing decision survives TODO claim");
+  const demand = JSON.parse(readFileSync(path.join(root, ".wakeflow-active/current/feat-2026-06-21/demand.json"), "utf8"));
+  assert.deepEqual(demand.source.documents, ["plan.md", "design.md"], "legacy workspace-relative board links stay canonical");
+  const workspaceStatus = readFileSync(path.join(root, ".wakeflow-active/current/workspace-current-status.md"), "utf8");
+  assert.match(workspaceStatus, /Status: active/);
+  assert.match(workspaceStatus, /feat-2026-06-21/, "entry projection links the newly active demand");
 
   // The TODO row is consumed: claimed and linked to the state root.
   const board = readFileSync(boardPath, "utf8");
@@ -172,7 +178,7 @@ test("claim-todo claims an explicit eligible row even when not auto-claimable", 
 
 test("claim-todo refuses when multiple rows are controller-claimable", () => {
   const second =
-    "| feat2-2026-06-21 | pending-claim | requirement | P1 | Design | Second | no | none | Wakeflow | none | yes | [plan](p.md) [design](d.md) |";
+    "| feat2-2026-06-21 | pending-claim | requirement | P1 | Design | Second | no | none | Wakeflow | none | yes | unit | [plan](p.md) [design](d.md) |";
   const { root } = makeWorkspace(`${DELIVERED_ROW}\n${second}`);
   const result = run(root, ["claim-todo", "--write"]);
   assert.notEqual(result.status, 0);

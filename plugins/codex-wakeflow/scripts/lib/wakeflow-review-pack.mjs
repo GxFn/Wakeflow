@@ -14,6 +14,8 @@ export function buildControllerReviewPack({
     ref,
   })));
   const missingEvidenceRefsPresent = missingEvidenceRefs.length > 0;
+  const craftEvidenceGaps = targetResults.flatMap((item) => item.craftEvidenceGaps ?? []);
+  const craftEvidenceGapsPresent = craftEvidenceGaps.length > 0;
   const rawEvidenceRequired = targetResults
     .filter((item) => item.resultStatus !== "missing")
     .map((item) => ({
@@ -25,19 +27,22 @@ export function buildControllerReviewPack({
       verificationSummary: item.verificationSummary,
       hasControllerReviewEvidence: item.hasControllerReviewEvidence,
       missingEvidenceRefs: item.missingEvidenceRefs,
+      craftEvidenceGaps: item.craftEvidenceGaps ?? [],
     }));
   const gates = {
-    controllerReviewReady: reviewReady && !missingEvidenceRefsPresent,
+    controllerReviewReady: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent,
     waitForMissingResults: review.groupSnapshot.missing.length > 0,
     pendingDispatchTargetsPresent: (review.groupSnapshot.pendingDispatch ?? []).length > 0,
     blockedResultsPresent: review.blocked.length > 0,
     missingEvidenceRefsPresent,
     evidenceRepairRequired: missingEvidenceRefsPresent,
+    craftEvidenceGapsPresent,
+    craftEvidenceRepairRequired: craftEvidenceGapsPresent,
     controllerReturnSent: controllerReturnDelivery.status === "sent",
     controllerReturnReady: (callbackPlan?.counts?.readyToBuildCount || 0) > 0,
     controllerReturnPendingHostSend: (callbackPlan?.counts?.pendingHostSendCount || 0) > 0,
     rawEvidencePullRequired: reviewReady,
-    totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent,
+    totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent,
   };
   // Transport-facing next step for whoever SENDS the controller return (the target's sanctioned
   // self-check, or the controller for its own return). INDEPENDENT of evidence quality on purpose:
@@ -68,6 +73,7 @@ export function buildControllerReviewPack({
     targetResults,
     rawEvidenceRequired,
     missingEvidenceRefs,
+    craftEvidenceGaps,
     gates,
     // Review-time intent check: additive advisory, present only when any entry
     // carries a designIntent; gates and nextAction stay untouched by design.
@@ -85,6 +91,8 @@ export function buildControllerReviewPack({
         ? "pull-block-evidence-and-classify"
         : missingEvidenceRefsPresent
           ? "fix-missing-evidence-refs-before-controller-verdict"
+          : craftEvidenceGapsPresent
+            ? "fix-required-craft-evidence-before-controller-verdict"
           : (review.groupSnapshot.pendingDispatch ?? []).length > 0
             ? "pull-raw-evidence-and-continue-pending-dispatch"
             : "pull-raw-evidence-and-make-total-control-verdict",

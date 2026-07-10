@@ -219,6 +219,7 @@ function validateMcpConfig() {
   for (const tool of [
     "wakeflow_initialize_workspace",
     "wakeflow_replace_windows",
+    "wakeflow_register_window",
     "wakeflow_status",
     "wakeflow_create_demand",
     "wakeflow_add_task",
@@ -340,6 +341,7 @@ function validateSkillSurface() {
     "workspace initialization",
     "wakeflow_initialize_workspace",
     "wakeflow_replace_windows",
+    "wakeflow_register_window",
     "apply: false",
     "MCP server is unavailable",
   ]) {

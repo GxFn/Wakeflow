@@ -14,6 +14,7 @@ import test from "node:test";
 
 const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
 const script = path.join(workspaceRoot, "scripts/wakeflow-state.mjs");
+const deliveryScript = path.join(workspaceRoot, "scripts/wakeflow-delivery.mjs");
 
 function makeRoot() {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-craft-"));
@@ -23,6 +24,10 @@ function makeRoot() {
 
 function run(args) {
   return runSync(process.execPath, [script, ...args], { cwd: workspaceRoot, encoding: "utf8" });
+}
+
+function runDelivery(args) {
+  return runSync(process.execPath, [deliveryScript, ...args], { cwd: workspaceRoot, encoding: "utf8" });
 }
 
 function readJson(file) {
@@ -170,11 +175,6 @@ test("W-Target: junk craft-evidence entries fail import instead of landing in th
   assert.notEqual(junk.status, 0, "entries without an object shape + string kind must fail import");
 });
 
-const deliveryScript = path.join(workspaceRoot, "scripts/wakeflow-delivery.mjs");
-function runDelivery(args) {
-  return runSync(process.execPath, [deliveryScript, ...args], { cwd: workspaceRoot, encoding: "utf8" });
-}
-
 test("W-craft-2: the wake prompt activates the craft skill exactly when a contract is present", () => {
   // With a contract -> the prompt carries the craftSkill line (activation chain).
   const withC = seedContractedTask("ACT-YES");
@@ -314,6 +314,13 @@ test("W-Target: reduce-results hard-fails a completed result missing a required 
   const gated = run(["reduce-results", "--root", root, "--state-root", stateRootRel, "--write", "--json"]);
   assert.notEqual(gated.status, 0, "reduce blocks a completed result missing a required craft kind");
   assert.match(gated.stdout, /craft-evidence-required/, "reduce reports the craft gate");
+
+  const pack = runDelivery(["review-pack", "--root", root, "--state-root", stateRootRel, "--json"]);
+  assert.equal(pack.status, 0, pack.stderr || pack.stdout);
+  const review = JSON.parse(pack.stdout).reviewPack;
+  assert.equal(review.gates.controllerReviewReady, false, "review pack agrees with the reducer before mutation");
+  assert.equal(review.gates.craftEvidenceRepairRequired, true);
+  assert.equal(review.nextAction, "fix-required-craft-evidence-before-controller-verdict");
 });
 
 test("W-Target: reduce-results accepts a completed result that satisfies the contract", () => {

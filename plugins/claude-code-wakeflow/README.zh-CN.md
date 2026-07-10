@@ -333,8 +333,9 @@ Preview the plan first and wait for my confirmation before writing.
 7. Claude Code 运行 host helper：先 `preflight`，再对返回 launch plan 中的
    每个窗口运行 `launch-window`。每次 launch 创建运行 `claude --session-id`
    的 tmux 窗口、粘贴 entry-sync prompt、把 `displayTitle` 设为 tmux 窗口名，
-   并返回 session id；每个真实 session id 只传一次给 Wakeflow 本地注册命令。
-   thread registry 是唯一 session-id 权威；window config 是由它派生的视图。
+   并返回 session id；对每个真实 `hostLaunch.sessionId` 调用一次
+   `wakeflow_register_window`。工具会更新本地 registry 和派生 window config，
+   并从输出中隐藏 id。
 
 已经初始化过的工作区里，`wakeflow_initialize_workspace` 不是通用“刷新”按钮。
 只有用户明确要求“重置初始化”时才能写入；apply 调用必须设置
@@ -347,8 +348,8 @@ Preview the plan first and wait for my confirmation before writing.
 | --- | --- | --- |
 | 首次 setup | `wakeflow_initialize_workspace` | 发现、确认、写入 workspace config/docs/support surfaces，并返回完整 launch plan。 |
 | 明确重置 setup | `wakeflow_initialize_workspace` + `resetInitialization: true` | 重新确认工作目录，清理被移除窗口的受管 cards/runtime，并重写 setup surfaces。 |
-| 替换单个上下文过重/过期窗口 | `wakeflow_replace_windows`（传 `window`） | 只返回一个 replacement launch entry 和本地注册命令，不刷新 workspace docs。 |
-| 替换多个上下文过重/过期窗口 | `wakeflow_replace_windows` | 只返回指定窗口的 replacement entries 和本地注册命令，不改无关窗口。 |
+| 替换单个上下文过重/过期窗口 | `wakeflow_replace_windows`（传 `window`） | 只返回一个 replacement launch entry 和 `wakeflow_register_window` 调用模板，不刷新 workspace docs。 |
+| 替换多个上下文过重/过期窗口 | `wakeflow_replace_windows` | 只返回指定窗口的 replacement entries 和注册调用模板，不改无关窗口。 |
 
 Design 和 Test 默认创建为新的支持 surface。`<Product>Design` 或 `<Product>Test`
 这类相似目录只被当作目录事实，除非用户明确把它们映射成 Design/Test。

@@ -60,22 +60,20 @@ tool first:
   `claude --session-id <generated uuid>`, pastes the entry-sync prompt, stores
   the window-host binding at
   `.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/<window>.json`,
-  and returns the session id. Register each returned session id once with the
-  local registration command (`--thread <Window>=<sessionId> --write`); it
-  lands in `.wakeflow-local/wakeflow-delivery/hosts/claude-code/thread-registry/`.
-  The thread registry is the only thread-id authority; derived `window-config`
-  is refreshed by Wakeflow from the current workspace config and registry
-  presence.
+  and returns the session id. Call `wakeflow_register_window` once per returned
+  `hostLaunch.sessionId` using that entry's `localRegistration.callTemplate`.
+  The tool writes the host-local registry and refreshes derived `window-config`
+  without exposing the id.
 - To rebuild selected windows, use `wakeflow_replace_windows` (single `window`
   arg for one heavy or stale responsibility window, `windows[]` for a selected
   group). Run `launch-window --replace` only for the returned replacement launch
-  entries, then replace only those windows' local thread-registry records with
-  the new real session ids. Do not rewrite unrelated window registrations or
-  store window role / cwd / title metadata in the registry.
+  entries, then call `wakeflow_register_window` with each new real session id.
+  Do not rewrite unrelated window registrations or store window role / cwd /
+  title metadata in the registry.
 - Do not use `wakeflow_initialize_workspace` as a refresh path for window
   context bloat. Replacement tools return only replacement launch entries plus
-  local registration argv templates; launch only those host windows and then
-  register their real session ids through the returned local command.
+  `localRegistration.callTemplate`; launch only those host windows and register
+  their real session ids through `wakeflow_register_window`.
 - All Wakeflow windows (controller included) live in the tmux server session
   named by `wakeflow.config.json`
   `"hosts": { "claude-code": { "tmuxSession": "wakeflow" } }` (default

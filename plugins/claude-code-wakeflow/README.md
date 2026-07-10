@@ -371,10 +371,10 @@ The operating flow is:
 7. Claude Code runs the host helper: `preflight` first, then `launch-window`
    for each window in the returned launch plan. Each launch creates a tmux
    window running `claude --session-id`, pastes the entry-sync prompt, sets
-   the `displayTitle` as the tmux window name, and returns the session id,
-   which is passed once to Wakeflow's local registration command. The thread
-   registry is the only session-id authority; window config is refreshed as a
-   derived view.
+   the `displayTitle` as the tmux window name, and returns the session id.
+   Claude Code calls `wakeflow_register_window` once per returned
+   `hostLaunch.sessionId`; the tool updates the local registry and derived
+   window config without exposing the id.
 
 For an already initialized workspace, `wakeflow_initialize_workspace` is not a
 general refresh button. It may write only after the user explicitly requests a
@@ -389,8 +389,8 @@ Command responsibilities stay separate:
 | --- | --- | --- |
 | First-time setup | `wakeflow_initialize_workspace` | Discover, confirm, write workspace config/docs/support surfaces, and return the full launch plan. |
 | Explicit reset setup | `wakeflow_initialize_workspace` with `resetInitialization: true` | Reconfirm work directories, clean stale managed window cards/runtime for removed windows, and rewrite setup surfaces. |
-| One heavy/stale window | `wakeflow_replace_windows` (pass `window`) | Return one replacement launch entry and local registration command; no workspace docs refresh. |
-| Several heavy/stale windows | `wakeflow_replace_windows` | Return only the requested replacement entries and local registration commands; no unrelated window rewrites. |
+| One heavy/stale window | `wakeflow_replace_windows` (pass `window`) | Return one replacement launch entry with a `wakeflow_register_window` call template; no workspace docs refresh. |
+| Several heavy/stale windows | `wakeflow_replace_windows` | Return only the requested replacement entries and registration call templates; no unrelated window rewrites. |
 
 Design and Test are fresh support surfaces by default. Existing similarly
 named directories such as `<Product>Design` or `<Product>Test` are treated as

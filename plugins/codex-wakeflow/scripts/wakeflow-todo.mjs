@@ -8,7 +8,7 @@
 // and it sets the immutable `Auto Claim` delivery property exactly once. The controller
 // then reads the row (wakeflow-next-work) and claims it; Design tracks no further status.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadWorkspaceConfig, resolveWorkspaceRoot, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 import { WakeflowStateLockTimeoutError, withFileLock } from "./lib/wakeflow-state-lock.mjs";
@@ -60,6 +60,30 @@ function sectionRange(content, heading) {
   return { start, end: next >= 0 ? start + 1 + next : content.length };
 }
 
+function atomicWrite(file, content) {
+  const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    writeFileSync(temp, content);
+    renameSync(temp, file);
+  } catch (error) {
+    if (existsSync(temp)) unlinkSync(temp);
+    throw error;
+  }
+}
+
+function boardRelativeDocumentRef(value, { existingBoardLink = false } = {}) {
+  const text = String(value ?? "").trim();
+  if (!text || /^(?:[a-z][a-z0-9+.-]*:|#)/i.test(text)) return text;
+  const boardAbsolute = path.resolve(path.dirname(todoPath), text);
+  const workspaceAbsolute = path.resolve(workspaceRoot, text);
+  const absolute = path.isAbsolute(text)
+    ? path.resolve(text)
+    : existingBoardLink && (text.startsWith(".") || (existsSync(boardAbsolute) && !existsSync(workspaceAbsolute)))
+      ? boardAbsolute
+      : workspaceAbsolute;
+  return path.relative(path.dirname(todoPath), absolute).split(path.sep).join("/") || ".";
+}
+
 function commandDeliver() {
   const type = getArgValue("--type");
   if (!ALLOWED_TYPES.has(type)) fail(`--type must be one of ${[...ALLOWED_TYPES].join(", ")}; got ${type ?? "(missing)"}`);
@@ -74,6 +98,7 @@ function commandDeliver() {
   const priority = getArgValue("--priority", "P2");
   const originalPlan = getArgValue("--original-plan");
   const requirementDesign = getArgValue("--requirement-design");
+  const testingDecision = getArgValue("--test-decision", "");
 
   // Ready invariants: a requirement that authorizes unattended auto-claim must carry both
   // design documents (so create_demand can synthesize goal/completion). A not-fully-designed
@@ -93,9 +118,23 @@ function commandDeliver() {
     return cells.includes("ID") && cells.includes("Status");
   });
   if (headerIndex < 0) fail("global TODO board is missing the ID/Status table header");
-  const header = splitRow(lines[headerIndex]);
+  let header = splitRow(lines[headerIndex]);
   if (!header.includes("Auto Claim")) {
     fail("global TODO board is missing the 'Auto Claim' column; migrate the board to the unified schema first");
+  }
+  if (!header.includes("Testing Decision")) {
+    const documentsAt = header.indexOf("Documents");
+    const insertAt = documentsAt >= 0 ? documentsAt : header.length;
+    for (let i = headerIndex; i < lines.length; i += 1) {
+      const cells = splitRow(lines[i]);
+      if (cells.length === 0) continue;
+      if (documentsAt >= 0 && i > headerIndex + 1 && cells[documentsAt]) {
+        cells[documentsAt] = cells[documentsAt].replace(/\]\(([^)]+)\)/g, (_match, target) => `](${boardRelativeDocumentRef(target, { existingBoardLink: true })})`);
+      }
+      cells.splice(insertAt, 0, i === headerIndex ? "Testing Decision" : /^:?-{3,}:?$/.test(cells[0]) ? "---" : "");
+      lines[i] = `| ${cells.join(" | ")} |`;
+    }
+    header = splitRow(lines[headerIndex]);
   }
 
   // Refuse duplicate ID (append-only; never restates an existing row).
@@ -105,8 +144,8 @@ function commandDeliver() {
   }
 
   const documents = [
-    originalPlan ? `[plan](${originalPlan})` : null,
-    requirementDesign ? `[design](${requirementDesign})` : null,
+    originalPlan ? `[plan](${boardRelativeDocumentRef(originalPlan)})` : null,
+    requirementDesign ? `[design](${boardRelativeDocumentRef(requirementDesign)})` : null,
   ].filter(Boolean).join(" ");
   const cellByName = {
     "ID": designKey,
@@ -120,6 +159,7 @@ function commandDeliver() {
     "Recommended Window": config.controllerWindow,
     "Current Mount": "none",
     "Auto Claim": autoClaim ? "yes" : "no",
+    "Testing Decision": testingDecision,
     "Documents": documents,
   };
   const newRow = `| ${header.map((name) => cellByName[name] ?? "").join(" | ")} |`;
@@ -132,7 +172,7 @@ function commandDeliver() {
   const newLines = [...lines.slice(0, insertAt), newRow, ...lines.slice(insertAt)];
   const newContent = content.slice(0, range.start) + newLines.join("\n") + content.slice(range.end);
 
-  if (apply) writeFileSync(todoPath, newContent);
+  if (apply) atomicWrite(todoPath, newContent);
   output({
     ok: true,
     command: "deliver",
@@ -185,7 +225,7 @@ function commandConsume() {
   lines[rowIndex] = `| ${cells.join(" | ")} |`;
   const newContent = content.slice(0, range.start) + lines.join("\n") + content.slice(range.end);
 
-  if (apply) writeFileSync(todoPath, newContent);
+  if (apply) atomicWrite(todoPath, newContent);
   output({
     ok: true,
     command: "consume",

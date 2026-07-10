@@ -26,7 +26,7 @@ function localWriteTool(title, idempotentHint = false) {
 const toolDefinitions = [
   {
     name: "wakeflow_initialize_workspace",
-    description: `Initialize a Wakeflow runtime: discover siblings, generate/apply workspace config, install ${hostProfile.memoryFileLabel} blocks, create sibling Design/Test surfaces, and record derived local window configuration. Dry-run unless apply is true. On an already initialized workspace, apply is allowed only when the user explicitly asks for reset initialization and resetInitialization is true with explicit repositories; never use useDiscovered for reset. Heavy or stale existing windows should use wakeflow_replace_windows instead of initialization. Launch plans include host-profile create-window settings such as reasoning effort/model when supported. Real thread ids are registered only in the local thread registry by host-controlled follow-up, not tracked docs or this MCP schema; window config is derived from workspace config plus registry presence.`,
+    description: `Initialize a Wakeflow runtime: discover siblings, generate/apply workspace config, install ${hostProfile.memoryFileLabel} blocks, create sibling Design/Test surfaces, and record derived local window configuration. Dry-run unless apply is true. On an already initialized workspace, apply is allowed only when the user explicitly asks for reset initialization and resetInitialization is true with explicit repositories; never use useDiscovered for reset. Heavy or stale existing windows should use wakeflow_replace_windows instead of initialization. Launch plans include host-profile create-window settings such as reasoning effort/model when supported. After the host creates each real window, register its handle through wakeflow_register_window; the handle is written only to the local registry and is redacted from tool output.`,
     annotations: localWriteTool("Initialize Wakeflow Workspace", true),
     inputSchema: {
       type: "object",
@@ -79,7 +79,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_replace_windows",
-    description: `Regenerate a scoped ${hostProfile.hostTools.createWindow} launch plan for one or more existing Wakeflow windows without reinitializing workspace docs. Pass window for the high-frequency single-window path (a responsibility window that is too context-heavy, stale, or needs rebinding) or windows for a batch. The tool reads the current workspace config, returns only the requested replacement entries with host-profile create-window settings such as reasoning effort/model when supported, and includes localRegistration argv templates; real thread ids are still registered only by the host-controlled local follow-up after ${hostProfile.hostTools.createWindow} succeeds.`,
+    description: `Regenerate a scoped ${hostProfile.hostTools.createWindow} launch plan for one or more existing Wakeflow windows without reinitializing workspace docs. Pass window for the high-frequency single-window path (a responsibility window that is too context-heavy, stale, or needs rebinding) or windows for a batch. The tool reads the current workspace config and returns only the requested replacement entries. After ${hostProfile.hostTools.createWindow} succeeds, use each entry's wakeflow_register_window call template to replace only that window's local handle registration.`,
     annotations: readOnlyTool("Plan Wakeflow Replacement Windows"),
     inputSchema: {
       type: "object",
@@ -105,6 +105,21 @@ const toolDefinitions = [
           items: { type: "string" },
           description: "Existing Wakeflow logical window names to recreate as a batch. Provide window or windows, not both.",
         },
+      },
+    },
+  },
+  {
+    name: "wakeflow_register_window",
+    description: `Register one host-created Wakeflow window using ${hostProfile.handleId.realIdRequirement}. This is the required second phase after a window launch or replacement. It writes only the host-scoped local registry and derived window config, never tracked docs, and redacts the handle from all tool output. Dry-run unless apply is true.`,
+    annotations: localWriteTool("Register Wakeflow Window", true),
+    inputSchema: {
+      type: "object",
+      required: ["window", "windowHandle"],
+      properties: {
+        root: { type: "string" },
+        window: { type: "string", description: "Configured Wakeflow logical window name." },
+        windowHandle: { type: "string", description: `The ${hostProfile.handleId.realIdRequirement} returned by the host launch tool. It is never echoed.` },
+        apply: { type: "boolean" },
       },
     },
   },
@@ -425,7 +440,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_deliver",
-    description: "Design-side append-only delivery: append one ready item (type requirement|bug|supplement|research) to the workspace global TODO board as a `pending-claim` row for the controller to claim. Sets the immutable Auto Claim property once at delivery — autoClaim=true authorizes unattended controller auto-claim and, for type=requirement, requires linked Original Plan + Requirement Design; otherwise the controller confirms first. Append-only: it never edits or re-statuses an existing row, and is the only controller-surface write Design performs. Dry-run unless apply is true.",
+    description: "Design-side append-only delivery: append one ready item (type requirement|bug|supplement|research) to the workspace global TODO board as a `pending-claim` row for the controller to claim. Sets immutable Auto Claim and Testing Decision delivery properties once — autoClaim=true authorizes unattended controller auto-claim and, for type=requirement, requires linked Original Plan + Requirement Design; otherwise the controller confirms first. Append-only: it never edits or re-statuses an existing row, and is the only controller-surface write Design performs. Dry-run unless apply is true.",
     annotations: localWriteTool("Deliver Item To Controller TODO"),
     inputSchema: {
       type: "object",
@@ -440,6 +455,7 @@ const toolDefinitions = [
         priority: { type: "string", description: "P0..P3; defaults to P2." },
         originalPlan: { type: "string", description: "link to the Original Plan (required for requirement + autoClaim)." },
         requirementDesign: { type: "string", description: "link to the Requirement Design (required for requirement + autoClaim)." },
+        testDecision: { type: "string", description: "Design's testing approach/decision for this demand; carried into the claimed demand state." },
         dependency: { type: "string" },
         apply: { type: "boolean" },
       },
@@ -548,6 +564,7 @@ const HOST_VISIBLE_PRIORITY_TOOLS = [
   "wakeflow_status",
   "wakeflow_initialize_workspace",
   "wakeflow_replace_windows",
+  "wakeflow_register_window",
   "wakeflow_create_demand",
   "wakeflow_add_task",
   "wakeflow_prepare_delivery",
@@ -622,6 +639,19 @@ export const handlers = {
           "--json",
         ],
     cwd: args.root || undefined,
+  }),
+  wakeflow_register_window: (args) => runWakeflowRuntime({
+    script: "wakeflow-delivery",
+    args: [
+      "register-thread",
+      ...rootArgs(args),
+      ...optionalValue("--window", args.window),
+      ...optionalValue("--thread-id", args.windowHandle),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+    sensitiveValues: typeof args.windowHandle === "string" ? [args.windowHandle] : [],
   }),
   wakeflow_adopt_demand_host: (args) => runWakeflowRuntime({
     script: "wakeflow-state",
@@ -979,6 +1009,7 @@ export const handlers = {
       ...optionalValue("--priority", args.priority),
       ...optionalValue("--original-plan", args.originalPlan),
       ...optionalValue("--requirement-design", args.requirementDesign),
+      ...optionalValue("--test-decision", args.testDecision),
       ...optionalValue("--dependency", args.dependency),
       ...rootArgs(args),
       ...(args.apply ? ["--apply"] : []),

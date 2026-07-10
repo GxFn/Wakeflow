@@ -256,6 +256,7 @@ async function runMcpSmoke(rootPath) {
     for (const expected of [
       "wakeflow_initialize_workspace",
       "wakeflow_replace_windows",
+      "wakeflow_register_window",
       "wakeflow_status",
       "wakeflow_prepare_delivery",
       "wakeflow_record_delivery",
@@ -271,7 +272,7 @@ async function runMcpSmoke(rootPath) {
         throw new Error(`MCP tools/list missing ${expected}`);
       }
     }
-    const hostVisiblePrefix = toolNames.slice(0, 12);
+    const hostVisiblePrefix = toolNames.slice(0, 13);
     for (const expected of [
       "wakeflow_review_pack",
       "wakeflow_reduce_results",

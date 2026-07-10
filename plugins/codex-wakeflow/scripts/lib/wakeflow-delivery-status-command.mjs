@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { buildReplaySummary } from "./wakeflow-idempotency.mjs";
 import { buildControllerCallbackPlan } from "./wakeflow-return-policy.mjs";
+import { loadWorkspaceConfig, workspaceLedgerPaths } from "./wakeflow-config.mjs";
 import {
   buildRuntimeHealth,
   buildRuntimeResumePlan,
@@ -9,6 +10,33 @@ import {
   deriveRuntimeGroupStatus,
   summarizeRuntimeNextAction,
 } from "./wakeflow-runtime-summary.mjs";
+
+function scanArchivedStateRoots(workspaceRoot) {
+  const config = loadWorkspaceConfig({ workspaceRoot });
+  const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, config });
+  const archiveRoot = path.join(ledgerPaths.projectLedgerRoot, "workspace", "archive");
+  const archived = new Map();
+  if (!existsSync(archiveRoot)) return archived;
+  for (const month of readdirSync(archiveRoot, { withFileTypes: true })) {
+    if (!month.isDirectory()) continue;
+    const monthDir = path.join(archiveRoot, month.name);
+    for (const demand of readdirSync(monthDir, { withFileTypes: true })) {
+      if (!demand.isDirectory()) continue;
+      const root = path.join(monthDir, demand.name);
+      const manifestFile = path.join(root, "archive-manifest.json");
+      const stateFile = path.join(root, "wakeflow-state.json");
+      if (!existsSync(manifestFile) || !existsSync(stateFile)) continue;
+      try {
+        const manifest = JSON.parse(readFileSync(manifestFile, "utf8"));
+        const sourceStateRoot = String(manifest.sourceStateRoot ?? "").split(path.sep).join("/");
+        if (sourceStateRoot) archived.set(sourceStateRoot, { root, stateFile });
+      } catch {
+        // Archive verification reports malformed manifests. Status only uses valid mappings.
+      }
+    }
+  }
+  return archived;
+}
 
 function scanDemandHostOwnership(workspaceRoot) {
   // Active demand state roots live under the conventional current-plan dir.
@@ -70,6 +98,57 @@ export function commandStatus(ctx) {
     listHostRuntimes,
     listFreshWindowLocks,
   } = ctx;
+  const archivedStateRoots = scanArchivedStateRoots(workspaceRoot);
+  const stateSnapshotCache = new Map();
+
+  function stateRootLocation(stateRootRef) {
+    const normalized = String(stateRootRef ?? "").split(path.sep).join("/");
+    const activeRoot = path.resolve(workspaceRoot, normalized);
+    const rel = path.relative(workspaceRoot, activeRoot);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) return { error: "state root is outside workspace" };
+    const activeStateFile = path.join(activeRoot, "wakeflow-state.json");
+    if (existsSync(activeStateFile)) return { root: activeRoot, stateFile: activeStateFile, archived: false };
+    const archived = archivedStateRoots.get(normalized);
+    return archived ? { ...archived, archived: true } : { root: activeRoot, stateFile: activeStateFile, archived: false };
+  }
+
+  function stateSnapshot(stateRootRef, diagnostics) {
+    if (!stateRootRef) return null;
+    if (stateSnapshotCache.has(stateRootRef)) return stateSnapshotCache.get(stateRootRef);
+    const location = stateRootLocation(stateRootRef);
+    if (location.error) {
+      diagnostics.errors.push({ file: stateRootRef, error: location.error });
+      stateSnapshotCache.set(stateRootRef, null);
+      return null;
+    }
+    if (!existsSync(location.stateFile)) {
+      diagnostics.errors.push({ file: path.relative(workspaceRoot, location.stateFile), error: "state root is missing wakeflow-state.json" });
+      stateSnapshotCache.set(stateRootRef, null);
+      return null;
+    }
+    const artifact = readJsonArtifact(location.stateFile);
+    if (artifact.error) {
+      diagnostics.errors.push({ file: path.relative(workspaceRoot, location.stateFile), error: artifact.error });
+      stateSnapshotCache.set(stateRootRef, null);
+      return null;
+    }
+    const snapshot = { ...location, state: artifact.value };
+    stateSnapshotCache.set(stateRootRef, snapshot);
+    return snapshot;
+  }
+
+  function packetStillActive(packet, diagnostics) {
+    const snapshot = stateSnapshot(packet.stateRef?.stateRoot, diagnostics);
+    if (!snapshot) return true;
+    if (["completed", "archived"].includes(snapshot.state.state)) return false;
+    const task = (snapshot.state.targetTasks ?? []).find((item) => item.targetTaskId === packet.taskId);
+    if (!task) return true;
+    const currentGroup = task.delivery?.dispatchGroup;
+    if (currentGroup && currentGroup !== packet.dispatchGroup) return false;
+    if (["accepted", "blocked"].includes(task.status)) return false;
+    if (["rework", "redesign"].includes(task.reviewDecision) && task.status === "needs-rework") return false;
+    return true;
+  }
 
   function statusFromLoadedRuns(envelope, runArtifacts) {
     const runs = runArtifacts
@@ -111,13 +190,12 @@ export function commandStatus(ctx) {
     const stateRootRef = packet.stateRef?.stateRoot;
     if (!stateRootRef) return null;
     if (!stateRootResultCache.has(stateRootRef)) {
-      const stateRoot = path.resolve(workspaceRoot, stateRootRef);
-      const rel = path.relative(workspaceRoot, stateRoot);
-      if (rel.startsWith("..") || path.isAbsolute(rel)) {
-        diagnostics.errors.push({ file: stateRootRef, error: "state root is outside workspace" });
+      const location = stateRootLocation(stateRootRef);
+      if (location.error) {
+        diagnostics.errors.push({ file: stateRootRef, error: location.error });
         stateRootResultCache.set(stateRootRef, []);
       } else {
-        const artifacts = listJsonArtifacts(path.join(stateRoot, "target-results"));
+        const artifacts = listJsonArtifacts(path.join(location.root, "target-results"));
         for (const artifact of artifacts.filter((item) => item.error)) {
           diagnostics.errors.push({
             file: path.relative(workspaceRoot, artifact.file),
@@ -138,7 +216,7 @@ export function commandStatus(ctx) {
   function buildRuntimeGroupSummaries({ packets, groupArtifacts, resultArtifacts, deliveryStatuses, diagnostics }) {
     const stateRootResultCache = new Map();
     const groupsById = new Map();
-    for (const packet of packets) {
+    for (const packet of packets.filter((item) => packetStillActive(item, diagnostics))) {
       const groupId = packet.dispatchGroup || packet.taskId || packet.id;
       if (!groupsById.has(groupId)) groupsById.set(groupId, []);
       groupsById.get(groupId).push(packet);
@@ -203,23 +281,9 @@ export function commandStatus(ctx) {
   function collectProjectionHealth({ packets, diagnostics }) {
     const stateRootRefs = [...new Set(packets.map((packet) => packet.stateRef?.stateRoot).filter(Boolean))];
     return stateRootRefs.flatMap((stateRootRef) => {
-      const stateRoot = path.resolve(workspaceRoot, stateRootRef);
-      const rel = path.relative(workspaceRoot, stateRoot);
-      if (rel.startsWith("..") || path.isAbsolute(rel)) {
-        diagnostics.errors.push({ file: stateRootRef, error: "state root is outside workspace" });
-        return [];
-      }
-      const stateFile = path.join(stateRoot, "wakeflow-state.json");
-      if (!existsSync(stateFile)) {
-        diagnostics.errors.push({ file: path.relative(workspaceRoot, stateFile), error: "state root is missing wakeflow-state.json" });
-        return [];
-      }
-      const artifact = readJsonArtifact(stateFile);
-      if (artifact.error) {
-        diagnostics.errors.push({ file: path.relative(workspaceRoot, stateFile), error: artifact.error });
-        return [];
-      }
-      const state = artifact.value;
+      const snapshot = stateSnapshot(stateRootRef, diagnostics);
+      if (!snapshot || ["completed", "archived"].includes(snapshot.state.state)) return [];
+      const state = snapshot.state;
       return [{
         stateRoot: stateRootRef,
         demandKey: state.demandKey,
@@ -266,25 +330,33 @@ export function commandStatus(ctx) {
         file: path.relative(workspaceRoot, item.file),
         ...statusFromLoadedRuns(item.value, runArtifacts),
       }));
+    const activePackets = packets.filter((packet) => packetStillActive(packet, diagnostics));
+    const activePacketIds = new Set(activePackets.map((packet) => packet.id));
+    const activeGroupIds = new Set(activePackets.map((packet) => packet.dispatchGroup || packet.taskId || packet.id));
+    const liveDeliveryStatuses = deliveryStatuses.filter((delivery) => delivery.kind === "DeliveryEnvelope"
+      ? delivery.sourcePacketId
+        ? activePacketIds.has(delivery.sourcePacketId)
+        : activeGroupIds.has(delivery.dispatchGroup)
+      : activeGroupIds.has(delivery.dispatchGroup));
     const groupSummaries = buildRuntimeGroupSummaries({
-      packets,
+      packets: activePackets,
       groupArtifacts: groups,
       resultArtifacts: results,
-      deliveryStatuses,
+      deliveryStatuses: liveDeliveryStatuses,
       diagnostics,
     });
-    const deliveryCounts = countBy(deliveryStatuses, "status");
+    const deliveryCounts = countBy(liveDeliveryStatuses, "status");
     const groupCounts = countBy(groupSummaries, "groupStatus");
-    const nextAction = summarizeRuntimeNextAction({ diagnostics, deliveryStatuses, groupSummaries });
+    const nextAction = summarizeRuntimeNextAction({ diagnostics, deliveryStatuses: liveDeliveryStatuses, groupSummaries });
     const resumePlan = buildRuntimeResumePlan({
       nextAction,
       diagnostics,
-      deliveryStatuses,
+      deliveryStatuses: liveDeliveryStatuses,
       groupSummaries,
     });
     const health = buildRuntimeHealth({
       diagnostics,
-      deliveryStatuses,
+      deliveryStatuses: liveDeliveryStatuses,
       groupSummaries,
       replaySummary,
       projectionHealth,
@@ -316,10 +388,10 @@ export function commandStatus(ctx) {
       },
       deliveries: {
         counts: deliveryCounts,
-        pendingHostSend: deliveryStatuses.filter((item) => item.status === "pending-host-send"),
-        sent: deliveryStatuses.filter((item) => item.status === "sent"),
-        failed: deliveryStatuses.filter((item) => item.status === "failed"),
-        blocked: deliveryStatuses.filter((item) => item.status === "blocked"),
+        pendingHostSend: liveDeliveryStatuses.filter((item) => item.status === "pending-host-send"),
+        sent: liveDeliveryStatuses.filter((item) => item.status === "sent"),
+        failed: liveDeliveryStatuses.filter((item) => item.status === "failed"),
+        blocked: liveDeliveryStatuses.filter((item) => item.status === "blocked"),
       },
       groups: {
         counts: groupCounts,

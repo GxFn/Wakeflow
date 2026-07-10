@@ -181,10 +181,10 @@ The operating flow is:
    before writing. It must not use a broad discovered-directory import.
 6. After user confirmation for a fresh workspace, Codex calls
    `wakeflow_initialize_workspace` with `apply: true`.
-7. Codex creates the returned Codex threads, resets each thread title to the
-   returned `displayTitle`, and passes each real thread id once to Wakeflow's
-   local registration command. The thread registry is the only thread-id
-   authority; window config is refreshed as a derived view.
+7. Codex creates the returned threads, resets each title to `displayTitle`, and
+   calls `wakeflow_register_window` once per real `create_thread.threadId`.
+   The tool updates the local registry and derived window config without
+   exposing the id.
 
 For an already initialized workspace, `wakeflow_initialize_workspace` is not a
 general refresh button. It may write only after the user explicitly requests a
@@ -198,8 +198,8 @@ Command responsibilities stay separate:
 | --- | --- | --- |
 | First-time setup | `wakeflow_initialize_workspace` | Discover, confirm, write workspace config/docs/support surfaces, and return the full launch plan. |
 | Explicit reset setup | `wakeflow_initialize_workspace` with `resetInitialization: true` | Reconfirm work directories, clean stale managed window cards/runtime for removed windows, and rewrite setup surfaces. |
-| One heavy/stale window | `wakeflow_replace_windows` (pass `window`) | Return one replacement launch entry and local registration command; no workspace docs refresh. |
-| Several heavy/stale windows | `wakeflow_replace_windows` | Return only the requested replacement entries and local registration commands; no unrelated window rewrites. |
+| One heavy/stale window | `wakeflow_replace_windows` (pass `window`) | Return one replacement launch entry with a `wakeflow_register_window` call template; no workspace docs refresh. |
+| Several heavy/stale windows | `wakeflow_replace_windows` | Return only the requested replacement entries and registration call templates; no unrelated window rewrites. |
 
 Design and Test are fresh support surfaces by default. Existing similarly named
 directories such as `<Product>Design` or `<Product>Test` are treated as ordinary

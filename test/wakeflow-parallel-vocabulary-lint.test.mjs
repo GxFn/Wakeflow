@@ -65,7 +65,7 @@ test("the canonical demand-level parallelism sentences stay pinned in both editi
     { file: "plugins/claude-code-wakeflow/CLAUDE.md", must: ["Parallelism exists ONLY at the demand level", "ONE worktree set"] },
     { file: "plugins/codex-wakeflow/AGENTS.md", must: ["Parallelism exists ONLY at the demand level", "ONE worktree set"] },
     { file: "plugins/claude-code-wakeflow/skills/wakeflow-governance/SKILL.md", must: ["ONE combined task package", "ONE worktree set"] },
-    { file: "plugins/codex-wakeflow/skills/wakeflow-governance/SKILL.md", must: ["one combined task package", "ONE worktree set"] },
+    { file: "plugins/codex-wakeflow/skills/wakeflow-governance/SKILL.md", must: ["ONE combined task package", "ONE worktree set"] },
     { file: "plugins/claude-code-wakeflow/skills/wakeflow-controller/SKILL.md", must: ["ONE combined task package", "CROSS-DEMAND isolation only"] },
     { file: "plugins/codex-wakeflow/skills/wakeflow-controller/SKILL.md", must: ["ONE combined task package", "CROSS-DEMAND isolation only"] },
   ];

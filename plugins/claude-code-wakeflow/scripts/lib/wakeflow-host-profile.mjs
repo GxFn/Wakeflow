@@ -33,6 +33,12 @@ export const hostProfile = {
     hostDirName: "claude-code",
     legacyRegistryFallback: false,
   },
+  fleet: {
+    // The tmux fleet is launched/resumed and torn down by wakeflow-claude-host
+    // pod-open/pod-close; wakeflow-pod only PREPARES (worktrees + overlay) and
+    // defers the window transport to the helper.
+    transport: "host-helper",
+  },
   memoryFile: "CLAUDE.md",
   memoryFileLabel: "CLAUDE",
   pluginManifestDir: ".claude-plugin",

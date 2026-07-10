@@ -25,12 +25,15 @@ import { fileURLToPath } from "node:url";
 import { hostProfile } from "./wakeflow-host-profile.mjs";
 import { withFileLock } from "./wakeflow-state-lock.mjs";
 import {
+  addStreamWorktree,
+  appendPendingMergeRow,
   assertOverlayManageable,
   branchNameFor,
   trackedConfigFile,
-  buildStreamEntry,
   maxStreamsFor,
   overlayBaseStale,
+  removeStreamWorktree,
+  streamOpenRefusal,
   overlayConfigFile,
   overlayIsDerived,
   readOverlay,
@@ -39,7 +42,7 @@ import {
   streamEntryFor,
   streamWindowName,
   worktreeDirFor,
-} from "./wakeflow-claude-stream.mjs";
+} from "./wakeflow-stream-overlay.mjs";
 
 // This helper IS the Claude Code host transport boundary, so it runs the host
 // binaries (tmux, claude, brew, osascript) directly with a narrow no-shell
@@ -1922,42 +1925,26 @@ function commandStreamOpen() {
       process.stderr.write("wakeflow-claude-host: stream overlay was stale against the tracked wakeflow config; regenerating from the current base.\n");
     }
     const existing = overlay ? streamEntries(overlay) : [];
-    if (existing.some((entry) => entry.windowName === windowName)) {
-      fail(`stream window ${windowName} is already registered; close it first or pick another --stream id.`);
-    }
-    // Catch a base-repo collision BEFORE the worktree exists, not via the
-    // regenerateOverlay throw (which would orphan the fresh worktree).
-    if ((Array.isArray(baseConfig.repositories) ? baseConfig.repositories : []).some((repo) => repo.windowName === windowName)) {
-      fail(`stream window name ${windowName} collides with a configured repository window; pick another --stream id.`);
-    }
-    const repoStreams = existing.filter((entry) => entry.stream?.repo === repoWindow);
     cap = maxStreamsFor(baseConfig, repoEntry, DEFAULT_MAX_STREAMS);
-    activeForRepo = repoStreams.map((entry) => entry.windowName);
-    // WITHIN one demand a repository runs exactly ONE window: multiple work
-    // items go to that window as a combined task package it self-sequences.
-    // An isolation worktree exists per (repo, demand) — its purpose is
-    // cross-DEMAND isolation, never same-demand parallel dispatch.
-    if (repoStreams.some((entry) => entry.stream?.demandKey === demandKey)) {
-      fail(`demand ${demandKey} already has an isolation window for ${repoWindow} (${repoStreams.find((entry) => entry.stream?.demandKey === demandKey).windowName}); within a demand each repo runs one window — send additional items as a combined task package instead.`);
-    }
-    if (repoStreams.length >= cap) {
-      poolExhausted = { activeStreams: activeForRepo, maxStreams: cap };
+    activeForRepo = existing.filter((entry) => entry.stream?.repo === repoWindow).map((entry) => entry.windowName);
+    // Open rules (one window per (repo, demand), pool cap, collisions) are the
+    // shared core contract — identical for every edition by construction.
+    const refusal = streamOpenRefusal({
+      baseConfig, streams: existing, repoWindow, repoEntry, windowName, demandKey, fallbackCap: DEFAULT_MAX_STREAMS,
+    });
+    if (refusal?.code === "pool-exhausted") {
+      poolExhausted = { activeStreams: refusal.activeStreams, maxStreams: refusal.maxStreams };
       return;
     }
-    if (existsSync(worktreeDir)) {
-      fail(`worktree directory already exists: ${worktreeDir}; close/remove it or choose another stream id.`);
-    }
-    const added = execHostText("git", ["-C", repoPath, "worktree", "add", worktreeDir, "-b", branch, ...(baseBranch ? [baseBranch] : [])]);
-    if (added.status !== 0) fail(`git worktree add failed: ${(added.stderr || added.stdout).trim()}`);
-    const entry = buildStreamEntry({ repoEntry, windowName, worktreeRel, repoWindow, streamId, demandKey, branch });
+    if (refusal) fail(refusal.message);
     try {
-      regenerateOverlay(workspaceRoot, [...existing, entry]);
+      addStreamWorktree({
+        workspaceRoot, repoEntry, repoWindow, streamId, demandKey, branch, baseBranch,
+        streams: existing, exec: execHostText,
+      });
     } catch (error) {
-      // Registration failed: roll the worktree + branch back so nothing is
-      // half-open, then fail with the real reason.
-      execHostText("git", ["-C", repoPath, "worktree", "remove", "--force", worktreeDir]);
-      execHostText("git", ["-C", repoPath, "branch", "-D", branch]);
-      fail(`stream registration failed (worktree rolled back): ${error.message}`);
+      if (error instanceof CliExit) throw error;
+      fail(error.message);
     }
     activeForRepo = [...activeForRepo, windowName];
   });
@@ -2050,10 +2037,7 @@ function streamCloseLocked({ windowName, force, deleteBranch }) {
   }
   const entry = overlay ? streamEntryFor(overlay, windowName) : null;
   if (!entry) fail(`${windowName} is not a registered stream window (no stream entry in the local config overlay).`);
-  const worktreeDir = path.resolve(workspaceRoot, entry.path);
-  const repoPath = path.resolve(workspaceRoot, entry.stream.repoPath);
   const branch = entry.stream.branch;
-  const repoPresent = existsSync(repoPath);
   // In-flight guard (same rule as launch-all/replace-all): a fresh delivery
   // lock means a dispatched task has not landed its result yet; killing the
   // window now would wedge the group-ready wave forever.
@@ -2062,43 +2046,15 @@ function streamCloseLocked({ windowName, force, deleteBranch }) {
     fail(`stream ${windowName} has a fresh in-flight delivery lock (${deliveryLock.deliveryId || "unknown delivery"}, expires ${deliveryLock.expiresAt}); wait for its result or pass --force to tear it down anyway.`);
   }
 
-  const steps = [];
-  if (!repoPresent && !force) {
-    fail(`repository path ${entry.stream.repoPath} no longer exists; pass --force to drop the worktree directory and deregister the stream anyway.`);
-  }
-  if (existsSync(worktreeDir)) {
-    if (repoPresent) {
-      const status = execHostText("git", ["-C", worktreeDir, "status", "--porcelain"]);
-      if (!force && status.status !== 0) {
-        // Fail CLOSED: an unreadable worktree must not silently pass the
-        // dirty check into removal.
-        fail(`cannot verify worktree cleanliness (git status failed: ${(status.stderr || status.stdout).trim()}); pass --force to discard anyway.`);
-      }
-      if (!force && status.stdout.trim()) {
-        fail(`worktree ${entry.path} has uncommitted changes; commit them (the stream's evidence) or pass --force to discard.`);
-      }
-      const removed = execHostText("git", ["-C", repoPath, "worktree", "remove", ...(force ? ["--force"] : []), worktreeDir]);
-      if (removed.status !== 0) fail(`git worktree remove failed: ${(removed.stderr || removed.stdout).trim()}`);
-      steps.push("worktree-removed");
-    } else {
-      rmSync(worktreeDir, { recursive: true, force: true });
-      steps.push("worktree-directory-dropped-repo-missing");
-    }
-  } else if (repoPresent) {
-    execHostText("git", ["-C", repoPath, "worktree", "prune"]);
-    steps.push("worktree-already-missing-pruned");
-  }
-
-  if (deleteBranch && !repoPresent) {
-    steps.push("branch-deletion-skipped-repo-missing");
-  } else if (deleteBranch) {
-    // -d refuses an unmerged branch: accepted work must be merged (or the
-    // deletion forced deliberately) before its branch disappears.
-    const deleted = execHostText("git", ["-C", repoPath, "branch", force ? "-D" : "-d", branch]);
-    if (deleted.status !== 0) {
-      fail(`git branch ${force ? "-D" : "-d"} ${branch} failed (worktree already removed; re-run stream-close without --delete-branch to finish deregistration, or merge the branch first): ${(deleted.stderr || deleted.stdout).trim()}`);
-    }
-    steps.push("branch-deleted");
+  // Worktree/branch teardown gates are the shared core contract (dirty and
+  // unreadable trees refuse, -d guards unmerged branches) — identical for
+  // every edition by construction. Host-side teardown stays below.
+  let steps = [];
+  try {
+    steps = removeStreamWorktree({ workspaceRoot, entry, force, deleteBranch, exec: execHostText }).steps;
+  } catch (error) {
+    if (error instanceof CliExit) throw error;
+    fail(error.message);
   }
 
   const bindingFile = bindingFileFor(windowName);
@@ -2128,11 +2084,14 @@ function streamCloseLocked({ windowName, force, deleteBranch }) {
   // the moment a branch outlives its window.
   let pendingMergeLedger;
   if (!deleteBranch) {
-    pendingMergeLedger = appendPendingMerge({
+    pendingMergeLedger = appendPendingMergeRow({
+      workspaceRoot,
+      ledgerRoot: readEffectiveConfig().projectLedgerRoot ?? "../wakeflow-ledger",
       demandKey: entry.stream.demandKey,
       repo: entry.stream.repo,
       branch,
       windowName,
+      now: nowIso,
     });
   }
 
@@ -2223,30 +2182,6 @@ function podSessionFor(podSlug) {
   return `${defaultServerSession()}-${podSlug}`;
 }
 
-function appendPendingMerge({ demandKey, repo, branch, windowName }) {
-  const ledgerRoot = readEffectiveConfig().projectLedgerRoot ?? "../wakeflow-ledger";
-  const file = path.resolve(workspaceRoot, ledgerRoot, "workspace", "pending-merges.md");
-  mkdirSync(path.dirname(file), { recursive: true });
-  if (!existsSync(file)) {
-    writeFileSync(file, [
-      "# Pending Merges",
-      "",
-      "> Branches whose isolation window closed without --delete-branch. Merge-back is",
-      "> human-reviewed and decentralized; delete a row once its branch is merged or dropped.",
-      "",
-      "| Closed At | Demand | Repo | Branch | Window |",
-      "| --- | --- | --- | --- | --- |",
-      "",
-    ].join("\n"));
-  }
-  const marker = `| ${demandKey ?? "?"} | ${repo ?? "?"} | ${branch} | ${windowName} |`;
-  if (readFileSync(file, "utf8").includes(marker)) {
-    return path.relative(workspaceRoot, file); // re-run of a failed close: no duplicate row
-  }
-  writeFileSync(file, `| ${nowIso()} ${marker}\n`, { flag: "a" });
-  return path.relative(workspaceRoot, file);
-}
-
 function podBindingWindows(podSlug) {
   return [`Controller__${podSlug}`, `Test__${podSlug}`];
 }
@@ -2260,7 +2195,27 @@ function buildPodControllerPrompt(demandKey, podSlug, repos) {
     `1. Read the parent workspace \`CLAUDE.md\` and the wakeflow-controller skill (the S0→S6 route applies unchanged inside the pod).`,
     `2. Claim YOUR demand: wakeflow_create_demand with todoId "${demandKey}" and controllerWindow "Controller__${podSlug}" — todoId consumes the TODO row (demandKey defaults to it) and the stamped controllerWindow routes every controller-return back to YOU. If the state root ALREADY exists (pod resume after a restart), do NOT re-create: read it, run wakeflow_adopt_demand_host if needed, and continue the loop from its current state.`,
     `3. Your fleet: dispatch ONLY to ${podWindows || "your pod windows"} (isolation worktrees) and Test__${podSlug}. One combined task package per repo; author objectives; evidence-based review.`,
-    `4. Merge-back of pod branches is HUMAN-reviewed after archive — never merge yourself. Close order at the end: complete-demand -> stream-close each repo window -> archive -> report; the user runs pod-close.`,
+    `4. The WHOLE pod shares this demand's ONE worktree set: every window — Test included — works and verifies inside those worktrees, and nothing in this pod touches a repository's main checkout or another demand's worktrees.`,
+    `5. Merge-back of pod branches is HUMAN-reviewed after archive — never merge yourself. Close order at the end: complete-demand -> stream-close each repo window -> archive -> report; the user runs pod-close.`,
+  ].join("\n")}\n`;
+}
+
+// The pod Test window has no repositories[] entry of its own, so without an
+// entry prompt it would default to "verify against the main checkouts" — the
+// exact opposite of the pod contract. The prompt binds it to the demand's
+// worktree set (the pod-wide shared working trees).
+function buildPodTestPrompt(demandKey, podSlug, repos) {
+  const worktrees = repos.map((repo) => {
+    const rel = path.relative(workspaceRoot, worktreeDirFor(workspaceRoot, repo, podSlug)).split(path.sep).join("/");
+    return `${repo} -> ${rel} (branch ${branchNameFor(demandKey, podSlug)})`;
+  });
+  return `${[
+    `You are **Test__${podSlug}** — the DEDICATED Test window of demand ${demandKey}, running in its pod session. You know nothing about other demands or pods; never read or touch their state roots, windows, worktrees, or branches.`,
+    ``,
+    `Pod Test ground rules:`,
+    `1. Read the parent workspace \`CLAUDE.md\` and the wakeflow-target skill, then state your window identity in one line.`,
+    `2. This demand's code lives ONLY in its isolation worktrees${worktrees.length ? `: ${worktrees.join("; ")}` : ""}. Run every verification against those worktrees — never against a repository's main checkout.`,
+    `3. Execute only test cards delivered by Controller__${podSlug} and report a TargetResultEnvelope with evidence refs. You never fix product code, choose environments the card does not name, or dispatch other windows.`,
   ].join("\n")}\n`;
 }
 
@@ -2339,13 +2294,18 @@ function commandPodOpen() {
   const testWindow = `Test__${podSlug}`;
   let controllerLaunched = false;
   let testLaunched = false;
+  // Entry prompts are written even under --no-launch: they are deterministic
+  // transient artifacts of pod PREPARATION, and a later manual launch (or a
+  // pod-open re-run) sends them as-is.
+  const promptFile = path.join(hostDir, `pod-entry-${podSlug}.txt`);
+  const testPromptFile = path.join(hostDir, `pod-entry-${podSlug}-test.txt`);
+  mkdirSync(hostDir, { recursive: true });
+  writeFileSync(promptFile, buildPodControllerPrompt(demandKey, podSlug, repos));
+  writeFileSync(testPromptFile, buildPodTestPrompt(demandKey, podSlug, repos));
   if (!noLaunch) {
-    const promptFile = path.join(hostDir, `pod-entry-${podSlug}.txt`);
-    mkdirSync(hostDir, { recursive: true });
-    writeFileSync(promptFile, buildPodControllerPrompt(demandKey, podSlug, repos));
     for (const [windowName, cwd, prompt] of [
       [controllerWindow, workspaceRoot, promptFile],
-      [testWindow, path.resolve(workspaceRoot, baseConfig.internalTestPath ?? "Test"), null],
+      [testWindow, path.resolve(workspaceRoot, baseConfig.internalTestPath ?? "Test"), testPromptFile],
     ]) {
       if (!existsSync(cwd)) {
         process.stderr.write(`wakeflow-claude-host: cwd for ${windowName} does not exist (${cwd}); skipped.\n`);

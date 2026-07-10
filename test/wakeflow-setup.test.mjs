@@ -247,7 +247,7 @@ test("initialize localizes launch titles and prompts with the window name first"
     required: true,
     hostTool: "create_thread",
     promptField: "createThreadPrompt",
-    targetPolicy: "Use the saved Codex project for this cwd with environment { type: \"local\" }; do not create a worktree unless the user explicitly asks.",
+    targetPolicy: "Use the saved Codex project for this cwd with environment { type: \"local\" }; never add a Codex-side worktree layer — when the cwd IS a Wakeflow isolation worktree (demand pods), the thread binds it directly.",
     cwd: app.cwd,
     title: `AppRepo ${zhDutyWindow}`,
     thinking: "xhigh",

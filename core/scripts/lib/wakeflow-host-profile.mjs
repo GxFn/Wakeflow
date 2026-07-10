@@ -15,6 +15,12 @@ export const hostProfile = {
     hostDirName: "codex",
     legacyRegistryFallback: true,
   },
+  fleet: {
+    // Codex has no session helper: wakeflow-pod does the host-neutral work
+    // (worktrees, overlay, ledger, registry hygiene) and the agent realizes
+    // the window plan itself — one thread per entry, cwd = the entry worktree.
+    transport: "agent-tools",
+  },
   memoryFile: "AGENTS.md",
   memoryFileLabel: "AGENTS",
   pluginManifestDir: ".codex-plugin",
@@ -121,7 +127,7 @@ function codexEntryExtras(entry, context) {
       required: true,
       hostTool: "create_thread",
       promptField: "createThreadPrompt",
-      targetPolicy: "Use the saved Codex project for this cwd with environment { type: \"local\" }; do not create a worktree unless the user explicitly asks.",
+      targetPolicy: "Use the saved Codex project for this cwd with environment { type: \"local\" }; never add a Codex-side worktree layer — when the cwd IS a Wakeflow isolation worktree (demand pods), the thread binds it directly.",
       cwd: entry.cwd,
       title: entry.displayTitle,
       thinking,

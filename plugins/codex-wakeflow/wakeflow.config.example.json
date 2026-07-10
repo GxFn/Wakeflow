@@ -20,6 +20,7 @@
   "internalDesignPath": "../wakeflow-ledger/design",
   "internalTestPath": "../wakeflow-ledger/testing",
   "allowMissingRepos": true,
+  "maxActiveDemands": 2,
   "dispatchWindows": [
     "AppWindow",
     "ServiceWindow",
@@ -48,5 +49,13 @@
     "IntegrationWindow": "Host integration repository",
     "Design": "Requirement design, outcome redesign, and handoff",
     "Test": "Real environment validation"
+  },
+  "hosts": {
+    "claude-code": {
+      "maxStreamsPerRepo": 2
+    },
+    "codex": {
+      "maxStreamsPerRepo": 2
+    }
   }
 }

@@ -15,6 +15,9 @@ const allowedGitSubcommands = new Set([
   "rev-list",
   "rev-parse",
   "status",
+  // Isolation worktrees are first-class core capability (demand pods): the
+  // host-neutral pod runner adds/removes/prunes them through this guard.
+  "worktree",
 ]);
 
 const blockedNodeFlags = new Set([

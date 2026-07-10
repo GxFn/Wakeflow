@@ -528,6 +528,48 @@ const toolDefinitions = [
     },
   },
   {
+    name: "wakeflow_pod_open",
+    description: "Open a demand pod's host-neutral half: per-repo isolation worktrees (branch <demandKey>/<pod>) + derived overlay entries, plus a windowPlan for the pod's OWN controller (Controller__<pod>), OWN Test (Test__<pod>), and one work window per repo — the WHOLE pod shares the demand's ONE worktree set (Test verifies there, never on a main checkout). Idempotent: re-run resumes a partially opened pod. Warns on cross-pod repo intersections; pool-exhausted blocks at maxStreamsPerRepo. The transport realizes the plan: agent-tools editions create one window per plan entry and register it; host-helper editions follow up with the host pod-open, which resumes prepared worktrees. The pod controller claims the demand itself under the maxActiveDemands gate.",
+    annotations: localWriteTool("Open Demand Pod"),
+    inputSchema: {
+      type: "object",
+      required: ["demandKey", "repos"],
+      properties: {
+        root: { type: "string" },
+        demandKey: { type: "string", description: "The demand this pod serves; also the pod slug and branch prefix." },
+        repos: { type: "array", items: { type: "string" }, description: "Configured repository window names this demand touches; each gets ONE isolation worktree window." },
+        base: { type: "string", description: "Optional base branch for the new worktree branches." },
+      },
+    },
+  },
+  {
+    name: "wakeflow_pod_close",
+    description: "Close a demand pod's host-neutral half AFTER the demand completed (close order: complete-demand -> pod close -> archive; the archive reducer refuses while isolation windows are open). Evidence-first teardown: dirty or unreadable worktrees refuse without force, surviving branches land on the pending-merges ledger (merge-back is human-reviewed and decentralized — no controller merges pod branches), and pod window registrations are swept. host-helper editions must close via their host helper instead (tmux teardown); this tool then refuses unless neutralOnly.",
+    annotations: localWriteTool("Close Demand Pod"),
+    inputSchema: {
+      type: "object",
+      required: ["demandKey"],
+      properties: {
+        root: { type: "string" },
+        demandKey: { type: "string" },
+        force: { type: "boolean", description: "Tear down despite an uncompleted demand, dirty worktrees, or fresh delivery locks. Discards evidence; use deliberately." },
+        deleteBranch: { type: "boolean", description: "Also delete each stream branch (-d; refuses unmerged work unless force)." },
+        neutralOnly: { type: "boolean", description: "host-helper editions only: run just the worktree/ledger half from here anyway." },
+      },
+    },
+  },
+  {
+    name: "wakeflow_pod_list",
+    description: "Read-only pod inventory grouped by demand: isolation windows (repo, branch, worktree, registration), pod controller/Test registration, and each demand's state — the one global view a mutually-unaware pod model needs (orphan-pod detection).",
+    annotations: readOnlyTool("List Demand Pods"),
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string" },
+      },
+    },
+  },
+  {
     name: "wakeflow_prune_runtime",
     description: "Prune replay-safe local runtime; target selects which. transport (default): confirmed-send delivery-run transport files older than a cutoff — dry-run unless apply is true; apply requires before; target-results (evidence) are never deleted, and runs inside a surviving repeated-attempt chain are retained. preserved: audit holds under .wakeflow-local/preserved/ older than the retention (preservedRetentionDays, default 30) or an explicit before — dry-run lists candidates with their manifests; apply deletes them. Legacy/unknown trees are NEVER pruned by any target — they route to the user.",
     annotations: localWriteTool("Prune Wakeflow Runtime Transport"),
@@ -1057,6 +1099,40 @@ export const handlers = {
       ...optionalValue("--stage-plan", args.stagePlan),
       ...(args.taskPackages ? ["--task-packages", JSON.stringify(args.taskPackages)] : []),
       ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
+  wakeflow_pod_open: (args) => runWakeflowRuntime({
+    script: "wakeflow-pod",
+    args: [
+      "open",
+      ...rootArgs(args),
+      ...optionalValue("--demand-key", args.demandKey),
+      ...(Array.isArray(args.repos) && args.repos.length ? ["--repos", args.repos.join(",")] : []),
+      ...optionalValue("--base", args.base),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
+  wakeflow_pod_close: (args) => runWakeflowRuntime({
+    script: "wakeflow-pod",
+    args: [
+      "close",
+      ...rootArgs(args),
+      ...optionalValue("--demand-key", args.demandKey),
+      ...(args.force ? ["--force"] : []),
+      ...(args.deleteBranch ? ["--delete-branch"] : []),
+      ...(args.neutralOnly ? ["--neutral-only"] : []),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
+  wakeflow_pod_list: (args) => runWakeflowRuntime({
+    script: "wakeflow-pod",
+    args: [
+      "list",
+      ...rootArgs(args),
       "--json",
     ],
     cwd: args.root || undefined,

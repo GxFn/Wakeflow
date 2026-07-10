@@ -192,7 +192,7 @@ test("a hand-maintained local config override blocks stream registration fail-cl
   assert.equal(untouched.controllerWindow, "Custom", "user override must never be overwritten");
 });
 
-test("parallel stream-opens for DIFFERENT repos both land in the overlay (global mutation lock)", async () => {
+test("concurrent stream-opens for DIFFERENT repos both land in the overlay (global mutation lock)", async () => {
   const { root } = makeWorkspace();
   const [a, b] = await Promise.all([
     hostAsync(root, ["stream-open", "--repo", "RepoA", "--stream", "a", "--demand-key", "DK-2026-07-02", "--no-launch"]),
@@ -305,6 +305,18 @@ test("pod lifecycle headless: idempotent open, cross-pod intersection warning, c
   assert.deepEqual(payload.windows.map((w) => w.status), ["opened", "opened"]);
   assert.equal(payload.intersections.length, 0);
   assert.equal(existsSync(path.join(root, ".wakeflow-local/worktrees/RepoA__POD-A")), true);
+
+  // Entry prompts are prepared even under --no-launch, and both bind the pod
+  // to the demand's ONE shared worktree set (Test verifies there, never on a
+  // main checkout).
+  const podHostDir = path.join(root, ".wakeflow-local/wakeflow-delivery/hosts/claude-code");
+  const controllerPrompt = readFileSync(path.join(podHostDir, "pod-entry-POD-A.txt"), "utf8");
+  assert.match(controllerPrompt, /ONE worktree set/);
+  assert.match(controllerPrompt, /Test included/);
+  const testPrompt = readFileSync(path.join(podHostDir, "pod-entry-POD-A-test.txt"), "utf8");
+  assert.match(testPrompt, /Test__POD-A/);
+  assert.match(testPrompt, /\.wakeflow-local\/worktrees\/RepoA__POD-A/);
+  assert.match(testPrompt, /never against a repository's main checkout/);
 
   // idempotent resume: nothing re-created, nothing failed
   const rerun = JSON.parse(host(root, ["pod-open", "--demand-key", "POD-A", "--repos", "RepoA,RepoB", "--no-launch"]).stdout);

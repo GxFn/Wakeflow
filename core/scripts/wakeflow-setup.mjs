@@ -527,14 +527,13 @@ function configurePayload(context = commandContext()) {
   }
 
   const baseWindow = getValue("--base-window", context.config.baseWindow ?? repositories[0]?.windowName);
-  const repositoryRoles = {};
-  for (const repo of repositories) {
-    repositoryRoles[repo.windowName] = repo.role;
-  }
+  // The window-list views (dispatchWindows / requiredDispatchWindows /
+  // repoNames / repositoryRoles) are DERIVED from repositories[] by
+  // loadWorkspaceConfig at read time — one fact on disk, four views in
+  // memory. setup stops persisting them (and strips legacy copies below) so
+  // the tracked config cannot drift against its own repositories[].
   const names = repositories.map((repo) => repo.windowName);
   const designRepo = repositories.find((repo) => repo.windowName === designWindow);
-  const dispatchWindows = names.filter((name) => name !== designWindow && name !== realProjectWindow);
-  const repoNames = names.filter((name) => ![designWindow, testWindow, realProjectWindow].includes(name));
   const protectedWorkspacePrefixes = repositories
     .filter((repo) => repo.mode !== "internal")
     .map((repo) => repo.path)
@@ -569,13 +568,12 @@ function configurePayload(context = commandContext()) {
     internalDesignPath,
     internalTestPath,
     testExchangePath: context.config.testExchangePath,
-    dispatchWindows,
-    requiredDispatchWindows: names,
-    repoNames,
     protectedWorkspacePrefixes,
-    repositoryRoles,
     repositories,
   };
+  for (const derived of ["dispatchWindows", "requiredDispatchWindows", "repoNames", "repositoryRoles", "windows"]) {
+    delete nextConfig[derived];
+  }
   nextConfig.wakeflowRepoDir = context.pluginTargetMode
     ? context.config.wakeflowRepoDir
     : path.basename(context.wakeflowRoot);

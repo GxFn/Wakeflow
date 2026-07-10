@@ -22,12 +22,6 @@
   "internalDesignPath": "../wakeflow-ledger/design",
   "internalTestPath": "../wakeflow-ledger/testing",
   "allowMissingRepos": true,
-  "dispatchWindows": [],
-  "requiredDispatchWindows": [
-    "Design",
-    "Test"
-  ],
-  "repoNames": [],
   "testExchangePath": ".wakeflow-active/current/test-exchange.md",
   "runtimeProcessMatchers": [],
   "runtimeProcessLabel": "configured",
@@ -47,9 +41,5 @@
       "mode": "internal"
     }
   ],
-  "protectedWorkspacePrefixes": [],
-  "repositoryRoles": {
-    "Design": "Requirement design, outcome redesign, and handoff",
-    "Test": "Real environment validation"
-  }
+  "protectedWorkspacePrefixes": []
 }

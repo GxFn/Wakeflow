@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { buildControllerCallbackPlan } from "./wakeflow-return-policy.mjs";
 import { controllerReviewScope, hasPendingReworkDecision } from "./wakeflow-review-scope.mjs";
-import { buildControllerReviewPack } from "./wakeflow-review-pack.mjs";
+import { buildControllerReviewPack, rawEvidenceRequiredFrom, reviewAdvisories, sharedReviewGates } from "./wakeflow-review-pack.mjs";
 import { loadWorkspaceConfig, testWindowNames } from "./wakeflow-config.mjs";
 
 export function createReviewCommands(ctx) {
@@ -647,51 +647,26 @@ export function createReviewCommands(ctx) {
       },
       callbackPlan,
       targetResults,
-      rawEvidenceRequired: targetResults
-        .filter((item) => item.resultStatus !== "missing")
-        .map((item) => ({
-          targetWindow: item.targetWindow,
-          taskId: item.taskId,
-          resultStatus: item.resultStatus,
-          evidenceRefs: item.evidenceRefs,
-          verificationSummary: item.verificationSummary,
-          hasControllerReviewEvidence: item.hasControllerReviewEvidence,
-          missingEvidenceRefs: item.missingEvidenceRefs,
-          craftEvidenceGaps: item.craftEvidenceGaps ?? [],
-        })),
+      rawEvidenceRequired: rawEvidenceRequiredFrom(targetResults),
       missingEvidenceRefs,
       craftEvidenceGaps,
       gates: {
-        controllerReviewReady: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent,
+        ...sharedReviewGates({
+          reviewReady,
+          missingCount: missing.length,
+          pendingDispatchCount: pendingDispatch.length,
+          blockedCount: blocked.length,
+          missingEvidenceRefsPresent,
+          craftEvidenceGapsPresent,
+          controllerReturnSent,
+          controllerReturnReady,
+          controllerReturnPendingHostSend,
+        }),
         noTargetTasks,
         noOpenTargetTasks,
-        waitForMissingResults: missing.length > 0,
-        pendingDispatchTargetsPresent: pendingDispatch.length > 0,
-        blockedResultsPresent: blocked.length > 0,
-        missingEvidenceRefsPresent,
-        evidenceRepairRequired: missingEvidenceRefsPresent,
-        craftEvidenceGapsPresent,
-        craftEvidenceRepairRequired: craftEvidenceGapsPresent,
-        controllerReturnSent,
-        controllerReturnReady,
-        controllerReturnPendingHostSend,
-        rawEvidencePullRequired: reviewReady,
-        totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent,
         stateRootBased: true,
       },
-      // Review-time intent check: additive advisory string, present only when
-      // any reviewable task carries a designIntent. Never touches gates or
-      // nextAction (machine tokens); the agent's decide-review reason is the
-      // confirmation record.
-      ...(targetResults.some((item) => item.designIntent)
-        ? { intentCheck: "Compare designIntent / objective / delivered result per task. If the delivery departs from the design intent and the dispatch did not declare an intentional adaptation, run a requirement review (Original Plan / Requirement Design) first; if the requirement itself must change, decide redesign." }
-        : {}),
-      // B2 craft check: additive advisory, present only when a reviewable task declared
-      // advisory craft evidence. Required kinds are enforced at reduce-results; reminder
-      // only, never a gate — gates / nextAction stay untouched.
-      ...(targetResults.some((item) => item.advisoryCraftKinds?.length)
-        ? { craftCheck: "Some tasks declared advisory craft evidence (e.g. self-review, test-first); required craft kinds are already enforced at reduce-results. Reminder only (not a gate): when judging quality, check the target's self-review note and test-first commit history." }
-        : {}),
+      ...reviewAdvisories(targetResults),
       nextAction: demandCompleted
         ? "demand-completed-stop-without-next-dispatch"
         : noTargetTasks

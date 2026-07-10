@@ -1,3 +1,68 @@
+// ONE source for the pieces both review-pack constructors share (the
+// group-snapshot pack below and the state-root pack in review-commands):
+// the advisory texts, the common gate keys, and the raw-evidence projection.
+// Keeping them here means the review judgment vocabulary cannot drift
+// between the two entry points.
+
+export function reviewAdvisories(targetResults) {
+  return {
+    // Review-time intent check: additive advisory, present only when any entry
+    // carries a designIntent; gates and nextAction stay untouched by design.
+    ...(targetResults.some((item) => item.designIntent)
+      ? { intentCheck: "Compare designIntent / objective / delivered result per task. If the delivery departs from the design intent and the dispatch did not declare an intentional adaptation, run a requirement review (Original Plan / Requirement Design) first; if the requirement itself must change, decide redesign." }
+      : {}),
+    // B2 craft check: additive advisory, present only when a reviewable entry carries
+    // advisory craft kinds. Required kinds are enforced at reduce-results; reminder only.
+    ...(targetResults.some((item) => item.advisoryCraftKinds?.length)
+      ? { craftCheck: "Some tasks declared advisory craft evidence (e.g. self-review, test-first); required craft kinds are already enforced at reduce-results. Reminder only (not a gate): when judging quality, check the target's self-review note and test-first commit history." }
+      : {}),
+  };
+}
+
+export function sharedReviewGates({
+  reviewReady,
+  missingCount,
+  pendingDispatchCount,
+  blockedCount,
+  missingEvidenceRefsPresent,
+  craftEvidenceGapsPresent,
+  controllerReturnSent,
+  controllerReturnReady,
+  controllerReturnPendingHostSend,
+}) {
+  return {
+    controllerReviewReady: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent,
+    waitForMissingResults: missingCount > 0,
+    pendingDispatchTargetsPresent: pendingDispatchCount > 0,
+    blockedResultsPresent: blockedCount > 0,
+    missingEvidenceRefsPresent,
+    evidenceRepairRequired: missingEvidenceRefsPresent,
+    craftEvidenceGapsPresent,
+    craftEvidenceRepairRequired: craftEvidenceGapsPresent,
+    controllerReturnSent,
+    controllerReturnReady,
+    controllerReturnPendingHostSend,
+    rawEvidencePullRequired: reviewReady,
+    totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent,
+  };
+}
+
+export function rawEvidenceRequiredFrom(targetResults) {
+  return targetResults
+    .filter((item) => item.resultStatus !== "missing")
+    .map((item) => ({
+      targetWindow: item.targetWindow,
+      taskId: item.taskId,
+      resultStatus: item.resultStatus,
+      commits: item.commits,
+      evidenceRefs: item.evidenceRefs,
+      verificationSummary: item.verificationSummary,
+      hasControllerReviewEvidence: item.hasControllerReviewEvidence,
+      missingEvidenceRefs: item.missingEvidenceRefs,
+      craftEvidenceGaps: item.craftEvidenceGaps ?? [],
+    }));
+}
+
 export function buildControllerReviewPack({
   review,
   controllerReturnDelivery,
@@ -16,34 +81,18 @@ export function buildControllerReviewPack({
   const missingEvidenceRefsPresent = missingEvidenceRefs.length > 0;
   const craftEvidenceGaps = targetResults.flatMap((item) => item.craftEvidenceGaps ?? []);
   const craftEvidenceGapsPresent = craftEvidenceGaps.length > 0;
-  const rawEvidenceRequired = targetResults
-    .filter((item) => item.resultStatus !== "missing")
-    .map((item) => ({
-      targetWindow: item.targetWindow,
-      taskId: item.taskId,
-      resultStatus: item.resultStatus,
-      commits: item.commits,
-      evidenceRefs: item.evidenceRefs,
-      verificationSummary: item.verificationSummary,
-      hasControllerReviewEvidence: item.hasControllerReviewEvidence,
-      missingEvidenceRefs: item.missingEvidenceRefs,
-      craftEvidenceGaps: item.craftEvidenceGaps ?? [],
-    }));
-  const gates = {
-    controllerReviewReady: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent,
-    waitForMissingResults: review.groupSnapshot.missing.length > 0,
-    pendingDispatchTargetsPresent: (review.groupSnapshot.pendingDispatch ?? []).length > 0,
-    blockedResultsPresent: review.blocked.length > 0,
+  const rawEvidenceRequired = rawEvidenceRequiredFrom(targetResults);
+  const gates = sharedReviewGates({
+    reviewReady,
+    missingCount: review.groupSnapshot.missing.length,
+    pendingDispatchCount: (review.groupSnapshot.pendingDispatch ?? []).length,
+    blockedCount: review.blocked.length,
     missingEvidenceRefsPresent,
-    evidenceRepairRequired: missingEvidenceRefsPresent,
     craftEvidenceGapsPresent,
-    craftEvidenceRepairRequired: craftEvidenceGapsPresent,
     controllerReturnSent: controllerReturnDelivery.status === "sent",
     controllerReturnReady: (callbackPlan?.counts?.readyToBuildCount || 0) > 0,
     controllerReturnPendingHostSend: (callbackPlan?.counts?.pendingHostSendCount || 0) > 0,
-    rawEvidencePullRequired: reviewReady,
-    totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent,
-  };
+  });
   // Transport-facing next step for whoever SENDS the controller return (the target's sanctioned
   // self-check, or the controller for its own return). INDEPENDENT of evidence quality on purpose:
   // a recorded result must wake the controller even when its evidence refs do not resolve —
@@ -75,16 +124,7 @@ export function buildControllerReviewPack({
     missingEvidenceRefs,
     craftEvidenceGaps,
     gates,
-    // Review-time intent check: additive advisory, present only when any entry
-    // carries a designIntent; gates and nextAction stay untouched by design.
-    ...(targetResults.some((item) => item.designIntent)
-      ? { intentCheck: "Compare designIntent / objective / delivered result per task. If the delivery departs from the design intent and the dispatch did not declare an intentional adaptation, run a requirement review (Original Plan / Requirement Design) first; if the requirement itself must change, decide redesign." }
-      : {}),
-    // B2 craft check: additive advisory, present only when a reviewable entry carries
-    // advisory craft kinds. Required kinds are enforced at reduce-results; reminder only.
-    ...(targetResults.some((item) => item.advisoryCraftKinds?.length)
-      ? { craftCheck: "Some tasks declared advisory craft evidence (e.g. self-review, test-first); required craft kinds are already enforced at reduce-results. Reminder only (not a gate): when judging quality, check the target's self-review note and test-first commit history." }
-      : {}),
+    ...reviewAdvisories(targetResults),
     nextAction: review.decision === "wait"
       ? "wait-for-target-result-envelope"
       : review.decision === "blocked"

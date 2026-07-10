@@ -6,7 +6,7 @@ import {
   createThreadRegistration,
   normalizeThreadRegistrationRecord,
 } from "./wakeflow-thread-registry.mjs";
-import { testWindowNames } from "./wakeflow-config.mjs";
+import { loadWorkspaceConfig, testWindowNames } from "./wakeflow-config.mjs";
 
 export function createWindowRuntime(ctx) {
   const {
@@ -41,15 +41,11 @@ export function createWindowRuntime(ctx) {
   }
 
   function readWorkspaceConfig() {
-    for (const candidate of [
-      path.join(workspaceRoot, ".wakeflow-local/wakeflow.config.json"),
-      path.join(workspaceRoot, ".wakeflow-local/workspace.config.json"),
-      path.join(workspaceRoot, "wakeflow.config.json"),
-      path.join(workspaceRoot, "workspace.config.json"),
-    ]) {
-      if (existsSync(candidate)) return readJson(candidate, "workspace config");
-    }
-    return {};
+    // The shared loader keeps the overlay-first path preference AND derives
+    // the window-list views (dispatchWindows/requiredDispatchWindows/
+    // repoNames/repositoryRoles) from repositories[], so slim tracked configs
+    // resolve exactly like the old fat ones.
+    return loadWorkspaceConfig({ workspaceRoot, args: [] });
   }
 
   function repositoryForWindow(windowName) {

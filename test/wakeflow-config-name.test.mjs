@@ -94,3 +94,42 @@ test("stream-open on a legacy-named workspace works and writes the canonical ove
   const legacyNote = (payload.gaps ?? []).find((gap) => gap.status === "legacy-name");
   assert.ok(legacyNote, `check-workspace must suggest the rename: ${check.stdout}`);
 });
+
+// Reduction wave W2: the window-list views are DERIVED from repositories[]
+// at load time — the tracked config keeps one fact (repositories) and the
+// loader produces the four views setup used to persist. Explicit values in
+// legacy configs still win.
+test("loader derives the window-list views from repositories[]", async () => {
+  const { loadWorkspaceConfig } = await import("../plugins/codex-wakeflow/scripts/lib/wakeflow-config.mjs");
+  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-derive-"));
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
+    workspaceName: "Derive",
+    controllerWindow: "Ctl",
+    designWindow: "Design",
+    testWindow: "Test",
+    repositories: [
+      { windowName: "RepoA", path: "RepoA", role: "App repo" },
+      { windowName: "RepoB", path: "RepoB", role: "Lib repo" },
+      { windowName: "Design", path: "Design", role: "Design surface", mode: "internal" },
+      { windowName: "Test", path: "Test", role: "Test surface", mode: "internal" },
+    ],
+  }));
+  const config = loadWorkspaceConfig({ workspaceRoot: root, args: [] });
+  assert.deepEqual(config.repoNames, ["RepoA", "RepoB"]);
+  assert.deepEqual(config.dispatchWindows, ["RepoA", "RepoB", "Test"]);
+  assert.deepEqual(config.requiredDispatchWindows, ["RepoA", "RepoB", "Design", "Test"]);
+  assert.equal(config.repositoryRoles.RepoA, "App repo");
+  assert.equal(config.repositoryRoles.Test, "Test surface");
+
+  // Explicit legacy values still win over derivation.
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
+    workspaceName: "Derive",
+    controllerWindow: "Ctl",
+    designWindow: "Design",
+    testWindow: "Test",
+    repoNames: ["OnlyA"],
+    repositories: [{ windowName: "RepoA", path: "RepoA", role: "App repo" }],
+  }));
+  const explicit = loadWorkspaceConfig({ workspaceRoot: root, args: [] });
+  assert.deepEqual(explicit.repoNames, ["OnlyA"]);
+});

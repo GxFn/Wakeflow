@@ -21,35 +21,10 @@
   "internalTestPath": "../wakeflow-ledger/testing",
   "allowMissingRepos": true,
   "maxActiveDemands": 2,
-  "dispatchWindows": [
-    "AppWindow",
-    "ServiceWindow",
-    "IntegrationWindow",
-    "Test"
-  ],
-  "requiredDispatchWindows": [
-    "AppWindow",
-    "ServiceWindow",
-    "IntegrationWindow",
-    "Design",
-    "Test"
-  ],
-  "repoNames": [
-    "AppWindow",
-    "ServiceWindow",
-    "IntegrationWindow"
-  ],
   "testExchangePath": ".wakeflow-active/current/test-exchange.md",
   "runtimeProcessMatchers": [],
   "runtimeProcessLabel": "configured",
   "protectedWorkspacePrefixes": [],
-  "repositoryRoles": {
-    "AppWindow": "Primary application repository",
-    "ServiceWindow": "Shared service or runtime repository",
-    "IntegrationWindow": "Host integration repository",
-    "Design": "Requirement design, outcome redesign, and handoff",
-    "Test": "Real environment validation"
-  },
   "hosts": {
     "claude-code": {
       "maxStreamsPerRepo": 2

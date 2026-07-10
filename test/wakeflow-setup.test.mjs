@@ -104,7 +104,10 @@ test("configure writes user-confirmed sibling mappings into wakeflow.config.json
   const config = JSON.parse(readFileSync(path.join(fixture.control, "wakeflow.config.json"), "utf8"));
   assert.equal(config.workspaceRoot, "..");
   assert.equal(config.wakeflowRepoDir, "Wakeflow");
-  assert.deepEqual(config.repoNames, ["BaseWindow", "PluginWindow"]);
+  // Derived views are no longer persisted; the loader produces them.
+  assert.equal(config.repoNames, undefined);
+  assert.equal(config.dispatchWindows, undefined);
+  assert.equal(config.repositoryRoles, undefined);
   assert.deepEqual(
     config.repositories.map((repo) => [repo.windowName, repo.path]),
     [
@@ -423,10 +426,12 @@ test("initialize does not reuse similar Design/Test directories unless explicitl
       ["Test", "Test", "internal"],
     ],
   );
+  // repositoryRoles is a derived view now: roles live on repositories[].
   assert.deepEqual(
-    Object.keys(config.repositoryRoles).sort(),
+    config.repositories.map((repo) => repo.windowName).sort(),
     ["Alembic", "Design", "Test"],
   );
+  assert.ok(config.repositories.every((repo) => typeof repo.role === "string" && repo.role.length > 0));
   assert.deepEqual(
     payload.steps.windowLaunchPlan.windows.map((item) => item.windowName),
     ["AlembicWorkspace", "Alembic", "Design", "Test"],

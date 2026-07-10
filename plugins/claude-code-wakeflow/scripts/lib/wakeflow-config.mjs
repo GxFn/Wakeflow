@@ -134,7 +134,7 @@ export function readWorkspaceConfig({ workspaceRoot = process.cwd(), args = proc
 export function loadWorkspaceConfig(options = {}) {
   const userConfig = readWorkspaceConfig(options);
   const merged = { ...defaultWorkspaceConfig, ...userConfig };
-  const repositoryRoles = {
+  const configuredRoles = {
     ...defaultWorkspaceConfig.repositoryRoles,
     ...(userConfig.repositoryRoles ?? {}),
   };
@@ -144,10 +144,17 @@ export function loadWorkspaceConfig(options = {}) {
         .map((repo) => ({
           ...repo,
           mode: repo.mode ?? (repo.path.startsWith("../") ? "external" : "internal"),
-          role: repo.role ?? repositoryRoles[repo.windowName] ?? "Configured repository",
+          role: repo.role ?? configuredRoles[repo.windowName] ?? "Configured repository",
           managedAgents: repo.managedAgents !== false,
         }))
     : defaultWorkspaceConfig.repositories;
+  // repositoryRoles is a derived VIEW of repositories[].role (slim configs no
+  // longer persist it); an explicit legacy map still wins per window.
+  const repositoryRoles = {
+    ...defaultWorkspaceConfig.repositoryRoles,
+    ...Object.fromEntries(repositories.map((repo) => [repo.windowName, repo.role])),
+    ...(userConfig.repositoryRoles ?? {}),
+  };
   const repositoryWindowNames = repositories.map((repo) => repo.windowName);
   const hasConfiguredRepositories = Array.isArray(userConfig.repositories) && repositoryWindowNames.length > 0;
   const dispatchWindows = Array.isArray(userConfig.dispatchWindows)

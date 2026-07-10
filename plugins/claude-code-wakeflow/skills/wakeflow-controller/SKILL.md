@@ -255,7 +255,9 @@ kinds present, declared artifacts resolve). The judgment half is yours:
 
 - One demand = one pod: its OWN controller (`Controller__<pod>`), per-repo
   isolation worktree windows, and its OWN `Test__<pod>`, in its OWN tmux
-  session. Pods are mutually unaware — never read or touch another pod's
+  session. The WHOLE pod shares the demand's ONE worktree set — every window,
+  Test included, works and verifies inside those worktrees, never on a main
+  checkout. Pods are mutually unaware — never read or touch another pod's
   state roots, windows, or branches. The default fleet is pod 0: it works on
   the main checkouts, and its demand is just another active demand.
 - Opening a pod is a spare-moment MECHANICAL action for an incumbent

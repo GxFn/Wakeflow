@@ -150,6 +150,21 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   delivery is controller-started unless the plan and envelope authorize an
   exception. Old claim/finish/chain-next/start-plan/resume-plan routes are
   retired.
+- Within one demand each repository runs exactly ONE window with ONE combined
+  task package (the window self-sequences its items); a window is never
+  dispatched two simultaneous tasks inside the same demand. Isolation worktree
+  windows (`<repo>__<id>`, threads whose cwd is the worktree) exist for
+  cross-demand isolation only; their surviving branches land on the
+  pending-merges ledger, and merge-back is human-reviewed and decentralized —
+  no controller merges them.
+- Parallelism exists ONLY at the demand level, as demand pods: up to
+  `maxActiveDemands` (default 2) demands run side by side, each in its own pod
+  (own controller stamped into the state root, own isolation worktrees, own
+  Test — a per-demand thread set opened via `wakeflow_pod_open`), mutually
+  unaware. The WHOLE pod shares its demand's ONE worktree set: every window,
+  Test included, works and verifies inside those worktrees, never on a main
+  checkout. Branch merge-back is human-reviewed and decentralized; claiming
+  past capacity fails closed.
 
 Delivery-envelope fields, host-thread send mechanics, keep-live, and review flow
 live in `skills/wakeflow-governance/references/wakeflow-delivery.md`,
@@ -193,12 +208,6 @@ live in `skills/wakeflow-governance/references/wakeflow-delivery.md`,
   input at any stage is routed to its owner (Design / user / bounded
   investigation), never guessed — the full S0→S6 route and per-stage gates live
   in `skills/wakeflow-governance/references/stage-route-map.md`.
-- Parallelism exists ONLY at the demand level, as demand pods: up to
-  `maxActiveDemands` (default 2) demands run side by side, each with its OWN
-  controller (stamped into the state root so returns route home) and window
-  set, mutually unaware. Within a demand each repo = one window = one combined
-  task package. Branch merge-back is human-reviewed and decentralized;
-  claiming past capacity fails closed.
 - Supplemental requirements must not reverse original decisions, non-goals, or
   forbidden shortcuts, and must not split into placeholder / empty-adapter /
   type-only stages without a named consumer and targeted validation.

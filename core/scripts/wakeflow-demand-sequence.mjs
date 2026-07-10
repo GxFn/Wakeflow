@@ -37,6 +37,12 @@ Design:
   developer-readable demand document with a single Unified Status marker block.
   The script may sync that marker block from machine state; it does not dispatch
   windows, send thread messages, accept evidence, or complete demands.
+
+  A sequence is a DEPENDENT demand chain: inside one manifest demands run
+  strictly serial (the next item is claimable only after the previous one is
+  archived). Cross-demand parallelism lives OUTSIDE the sequence: independent
+  demands (or separate sequences) run side by side as demand pods, bounded by
+  maxActiveDemands — the capacity gate this script's claim path enforces.
 `.trim();
 
 class CliExit extends Error {}

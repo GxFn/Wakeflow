@@ -63,8 +63,10 @@ designIntent) → send with the host thread tool (`send_message_to_thread`) →
 `wakeflow_record_target_result`. WITHIN one demand each repo runs exactly ONE
 window with ONE combined task package (the window self-sequences its items;
 never two simultaneous tasks to one window inside a demand). Exit gate:
-results with evidence refs for the wave. (Isolation worktree windows are a
-Claude Code-edition capability reserved for CROSS-DEMAND repo isolation.)
+results with evidence refs for the wave. (Isolation worktree windows —
+`wakeflow_pod_open`/`wakeflow_pod_close`, threads whose cwd is the worktree —
+exist for CROSS-DEMAND repo isolation only; the whole pod shares its demand's
+one worktree set.)
 
 ## S4 — Review & Decide (owner: controller — the ONLY acceptance authority)
 `wakeflow_review_pack` (intent triple: designIntent / objective / result) →
@@ -87,7 +89,10 @@ Results return to S4 review.
 
 ## S6 — Integrate & Close (owner: controller)
 `wakeflow_complete_demand` (all accepted, zero blockers, evidence) →
+`wakeflow_pod_close` when the demand ran as a pod (worktrees down, branches on
+the pending-merges ledger; the archive gate refuses open isolation windows) →
 `wakeflow_archive` (redaction gate) → TODO rollup / `wakeflow_prune_runtime`.
+Merge-back of surviving branches is human-reviewed, outside Wakeflow.
 
 ## Capability-to-stage classification
 
@@ -96,10 +101,10 @@ Results return to S4 review.
 | S0 | `wakeflow_status` | — | AGENTS.md posture |
 | S1 | `wakeflow_deliver` | — | Design support surface docs |
 | S2 | `wakeflow_next_work`, `wakeflow_claim_next`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_render_progress` | — | governance TODO intake |
-| S3 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result`, `wakeflow_release_window_lock` | `create_thread`, `set_thread_title`, `send_message_to_thread` | controller dispatch + target skill |
+| S3 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result`, `wakeflow_release_window_lock`, `wakeflow_pod_open`/`wakeflow_pod_list` | `create_thread`, `set_thread_title`, `send_message_to_thread` | controller dispatch + target skill |
 | S4 | `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_view` | — | controller acceptance practices |
 | S5 | `wakeflow_intake_test_card` | (dispatch = S3 transport) | testing-validation reference |
-| S6 | `wakeflow_complete_demand`, `wakeflow_archive`, `wakeflow_prune_runtime`, `wakeflow_adopt_demand_host` | — | ledger reference |
+| S6 | `wakeflow_complete_demand`, `wakeflow_archive`, `wakeflow_prune_runtime`, `wakeflow_adopt_demand_host`, `wakeflow_pod_close` | — | ledger reference |
 | Cross | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_verify` | — | this map |
 
 ## The three escalation lanes (a missing input is NEVER guessed)

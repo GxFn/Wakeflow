@@ -275,7 +275,9 @@ Wakeflow thread id 就是该窗口的 Claude Code session id，跨 resume 保持
 
 - 一个需求 = 一个 pod：自己的 `Controller__<pod>`、按仓库的 isolation worktree
   窗口（`<repo>__<pod>`，分支 `<demandKey>/<pod>`）和自己的 `Test__<pod>`，
-  全部在自己的 tmux session 里。pod 之间互不感知。
+  全部在自己的 tmux session 里。整个 pod 共用这条需求的一套 worktree——
+  每个窗口（含 Test）都在这套 worktree 里工作和验证，绝不碰主检出。
+  pod 之间互不感知。
 - 用 helper 开/续/关：`pod-open --demand-key <key> --repos <a,b>`（幂等——
   重跑会从 registry 恢复挂掉的窗口）、`pod-list`（唯一全局视图）、归档后
   `pod-close`。

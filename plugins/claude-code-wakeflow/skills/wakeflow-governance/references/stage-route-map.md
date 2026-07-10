@@ -62,7 +62,8 @@ designIntent) → host `deliver` (lock, readback) → `wakeflow_record_delivery`
 WITHIN one demand each repo runs exactly ONE window with ONE combined task
 package (the window self-sequences its items; never two simultaneous tasks to
 one window inside a demand). Isolation worktree windows
-(`stream-open/close/list`) are for CROSS-DEMAND repo isolation only.
+(`stream-open/close/list`) are for CROSS-DEMAND repo isolation only; the
+whole pod shares its demand's one worktree set.
 Exit gate: results with evidence refs for the wave.
 
 ## S4 — Review & Decide (owner: controller — the ONLY acceptance authority)

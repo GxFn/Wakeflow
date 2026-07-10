@@ -164,7 +164,9 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
 - Parallelism exists ONLY at the demand level, as demand pods: up to
   `maxActiveDemands` (default 2) demands run side by side, each in its own pod
   (own controller stamped into the state root, own isolation worktrees, own
-  Test, own tmux session), mutually unaware. Branch merge-back is
+  Test, own tmux session), mutually unaware. The WHOLE pod shares its demand's
+  ONE worktree set: every window, Test included, works and verifies inside
+  those worktrees, never on a main checkout. Branch merge-back is
   human-reviewed and decentralized; claiming past capacity fails closed.
 
 Deliveries go to a tmux-resident interactive `claude` window via the

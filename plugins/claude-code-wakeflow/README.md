@@ -308,7 +308,9 @@ self-sequences its items); across demands, up to `maxActiveDemands` (default
 
 - One demand = one pod: its own `Controller__<pod>`, per-repo isolation
   worktree windows (`<repo>__<pod>` on branch `<demandKey>/<pod>`), and its
-  own `Test__<pod>`, all in its own tmux session. Pods are mutually unaware.
+  own `Test__<pod>`, all in its own tmux session. The WHOLE pod shares the
+  demand's one worktree set — every window, Test included, works and verifies
+  inside those worktrees, never on a main checkout. Pods are mutually unaware.
 - Open/resume/close with the helper: `pod-open --demand-key <key> --repos
   <a,b>` (idempotent — re-run resumes dead windows from the registry),
   `pod-list` (the one global view), `pod-close` after archive.

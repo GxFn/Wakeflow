@@ -107,7 +107,7 @@ MCP 层（`core/lib/wakeflow-mcp-tools.mjs`）不含业务逻辑，每个 handle
 并行**只存在于需求层**（用户裁定：需求内每仓一窗口一组合任务包，窗口自排序，绝无同窗双派）：
 
 - **隔离 worktree 窗口** `<repo>__<id>`（分支 `<demandKey>/<id>`）只服务跨需求隔离：后来的需求碰到已被占用的仓库时在自己的 worktree 里工作。注册只落在**派生 overlay** `.wakeflow-local/wakeflow.config.json`（tracked 配置的再生成副本 + stream 条目 + `derived{baseHash}` 标记；手工维护的 overlay 会让 stream 操作 fail-closed）。core 的解析器天然偏好该路径——零核心改动完成解析。
-- **需求舱（demand pod）**：一需求一舱——自己的 `Controller__<pod>`、按仓库隔离窗口、自己的 `Test__<pod>`，整舱住在独立 tmux session `wakeflow-<pod>`；舱间互不感知。`pod-open` 幂等续开（registered+dead 只补 launch+register，Controller/Test 经 register-thread 注册、重开走 `--resume` 续同一会话）。关闭顺序 complete → stream-close → archive → pod-close；存活分支登记 `pending-merges.md`，**合并回主线人工审核、去中心化——任何总控不合并舱分支**。
+- **需求舱（demand pod）**：一需求一舱——自己的 `Controller__<pod>`、按仓库隔离窗口、自己的 `Test__<pod>`；**整舱共用这条需求的一套 worktree：每个窗口（含 Test）都在这套 worktree 里工作和验证，绝不碰主检出**（Test 入口提示词点名各 worktree 路径）。Claude 实现整舱住独立 tmux session `wakeflow-<pod>`（`pod-open` 幂等续开：registered+dead 只补 launch+register，Controller/Test 经 register-thread 注册、重开走 `--resume` 续同一会话）；Codex 实现为按需求划分的线程组（`wakeflow_pod_open` 建 worktree+overlay 并出 windowPlan，agent 用 `create_thread` cwd=worktree 落实）。舱间互不感知。关闭顺序 Claude：complete → stream-close → archive → pod-close；Codex：complete → `wakeflow_pod_close` → archive。存活分支登记 `pending-merges.md`，**合并回主线人工审核、去中心化——任何总控不合并舱分支**。
 - 容量由 `maxActiveDemands` 限舱数、`maxStreamsPerRepo` 限单仓库舱数；`archive-demand` 在隔离窗口未关时拒绝归档。
 - tmux session 目标全部走 `=` 精确匹配前缀——`wakeflow` 与 `wakeflow-<pod>` 的前缀碰撞在真机上实测危险（H1）。
 

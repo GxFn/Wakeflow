@@ -176,8 +176,10 @@ tmux server session, and a Wakeflow thread id is the window's Claude Code
 session id (stable across resumes). Up to `maxActiveDemands` (default 2)
 demands may run side by side as **demand pods** — each pod is its own tmux
 session with its own controller, per-repo isolation worktree windows, and its
-own Test; claiming past capacity fails closed, and pod branches merge back
-only through the human-reviewed `pending-merges.md` ledger. See
+own Test, the WHOLE pod sharing the demand's one worktree set (Test verifies
+there, never on a main checkout); claiming past capacity fails closed, and
+pod branches merge back only through the human-reviewed `pending-merges.md`
+ledger. See
 [plugins/claude-code-wakeflow/README.md](plugins/claude-code-wakeflow/README.md)
 for the full Claude Code guide.
 
@@ -195,6 +197,13 @@ npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.10/plugins/
 
 If the Codex dialog separates source, ref, and sparse path, use the repository
 URL, the desired ref, and `plugins/codex-wakeflow` as the sparse path.
+
+The Codex edition runs the same demand-pod model as per-demand thread sets:
+`wakeflow_pod_open` creates the demand's worktree set and returns a windowPlan
+the agent realizes with `create_thread` (each thread's cwd is its worktree),
+and `wakeflow_pod_close` tears it down onto the pending-merges ledger after
+completion. Model, capacity gates, and boundaries are identical across
+editions; only the window transport differs.
 
 For local development, register this checkout as its own local marketplace:
 

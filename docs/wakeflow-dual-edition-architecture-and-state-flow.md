@@ -1091,14 +1091,20 @@ stateDiagram-v2
 
 ---
 
-### 7.6 Isolation worktree streams (Claude edition, cross-demand only)
+### 7.6 Isolation worktree streams (both editions, cross-demand only)
 
-`stream-open --repo <win> --stream <id> --demand-key <key>` creates a git
-worktree at `.wakeflow-local/worktrees/<Repo__id>` on branch `<demandKey>/<id>`
-(ref-sanitized), launches window `<repo>__<id>`, and registers it ONLY in the
-derived overlay `.wakeflow-local/wakeflow.config.json` (full tracked-config
-copy + stream entries + `derived{baseHash}`; regenerated atomically under the
-global `stream-overlay.lock`). Guards: one stream per (repo, demand) — within-
+The overlay/branch/worktree/cap model lives in the shared core
+(`wakeflow-stream-overlay.mjs`); each edition drives it with its own window
+transport. Claude: `stream-open --repo <win> --stream <id> --demand-key <key>`
+creates a git worktree at `.wakeflow-local/worktrees/<Repo__id>` on branch
+`<demandKey>/<id>` (ref-sanitized), launches window `<repo>__<id>`, and
+registers it ONLY in the derived overlay `.wakeflow-local/wakeflow.config.json`
+(full tracked-config copy + stream entries + `derived{baseHash}`; regenerated
+atomically under the global `stream-overlay.lock`). Codex: the host-neutral
+`wakeflow-pod.mjs` (via `wakeflow_pod_open`) creates the same worktrees +
+overlay entries and emits a windowPlan the agent realizes with `create_thread`
+(cwd = the worktree). Guards are identical by construction
+(`streamOpenRefusal` in core): one stream per (repo, demand) — within-
 demand parallelism is refused by design; `maxStreamsPerRepo` (default 2) bounds
 how many demands may hold worktrees on one repo; open is idempotent-resume
 (registered+dead relaunches and re-registers, registered+live reports).
@@ -1110,21 +1116,29 @@ isolation windows are open. Fleet ops (`launch-all`/`replace-all`/
 never re-homed into the main session. `stream-list` reconciles overlay,
 worktree, and registration state.
 
-### 7.7 Demand pods (Claude edition, multi-demand parallelism)
+### 7.7 Demand pods (both editions, multi-demand parallelism)
 
-One demand = one pod: `pod-open --demand-key <key> --repos <a,b>` opens the
-demand's isolation streams in the pod's OWN tmux session
-(`${tmuxSession}-<podslug>`), plus `Controller__<pod>` (fed a pod-entry prompt:
-claim YOUR demand via `wakeflow_create_demand` with `todoId` + stamped
-`controllerWindow`) and `Test__<pod>`; both are registered via
-`wakeflow-delivery.mjs register-thread`, so a re-run of `pod-open` RESUMES dead
-pod windows with `--resume --session-id` instead of replacing them. Pods are
-mutually unaware; `pod-list` is the one read-only global view (sessions,
+One demand = one pod: its OWN controller (`Controller__<pod>`, fed a pod-entry
+prompt: claim YOUR demand via `wakeflow_create_demand` with `todoId` + stamped
+`controllerWindow`), one isolation worktree window per repo, and its OWN
+`Test__<pod>` — and the WHOLE pod shares the demand's ONE worktree set: every
+window, Test included, works and verifies inside those worktrees, never on a
+main checkout (the Test entry prompt names the worktree paths). Claude
+realization: `pod-open --demand-key <key> --repos <a,b>` opens the fleet in
+the pod's OWN tmux session (`${tmuxSession}-<podslug>`); windows are
+registered via `wakeflow-delivery.mjs register-thread`, so a re-run RESUMES
+dead pod windows with `--resume --session-id` instead of replacing them.
+Codex realization: `wakeflow_pod_open` prepares worktrees + overlay entries
+and returns a windowPlan (controller/Test/work entries with prompts) the
+agent realizes as a per-demand thread set. Pods are mutually unaware;
+`pod-list` / `wakeflow_pod_list` is the one read-only global view (sessions,
 liveness, demand states). Cross-pod repo intersections are warned at open time
-(tomorrow's merge conflict). Close order: `complete-demand` → `stream-close`
-each repo window → `archive` → `pod-close` (refuses until archived unless
-`--force`; sweeps bindings, registry entries, delivery/paste locks, and kills
-the pod session). Merge-back of recorded branches is human-reviewed and
+(tomorrow's merge conflict). Close order — Claude: `complete-demand` →
+`stream-close` each repo window → `archive` → `pod-close` (refuses until
+archived unless `--force`; sweeps bindings, registry entries, delivery/paste
+locks, and kills the pod session); Codex: `complete-demand` →
+`wakeflow_pod_close` (worktrees down, branches to the ledger, registrations
+swept) → `archive`. Merge-back of recorded branches is human-reviewed and
 decentralized — no controller merges pod branches. `maxActiveDemands` bounds
 pods; the one-step `deliver --delivery-file` transport routes controller-returns
 to the pod controller via the envelope's stamped `controllerWindow`.

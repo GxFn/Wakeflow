@@ -263,6 +263,33 @@ Design and Test are supporting roles:
 - **Test** is reserved for real-scenario evidence that the controller or product
   repository cannot safely reproduce alone.
 
+## Demand Pods (multi-demand parallelism)
+
+Parallelism exists ONLY at the demand level. Within one demand each repository
+runs exactly ONE window with ONE combined task package (the window
+self-sequences its items); across demands, up to `maxActiveDemands` (default
+2, `wakeflow.config.json`) demands run side by side as pods:
+
+- One demand = one pod: its own `Controller__<pod>`, per-repo isolation
+  worktree windows (`<repo>__<pod>` on branch `<demandKey>/<pod>`), and its
+  own `Test__<pod>` — a per-demand thread set. The WHOLE pod shares the
+  demand's one worktree set: every window, Test included, works and verifies
+  inside those worktrees, never on a main checkout. Pods are mutually unaware.
+- Open with `wakeflow_pod_open` (idempotent — re-run resumes): it creates the
+  worktrees + overlay entries and returns a windowPlan; create each entry's
+  thread with `create_thread` (cwd = the entry's worktree, prompt = the
+  entry's `createThreadPrompt`) and register it via `wakeflow_register_window`.
+  `wakeflow_pod_list` is the one global view.
+- The pod controller claims its demand itself (`wakeflow_create_demand` with
+  `controllerWindow: "Controller__<pod>"`), so every controller-return routes
+  to the pod, not the default controller.
+- Close order: `complete-demand` → `wakeflow_pod_close` (worktrees down;
+  surviving branches land on `wakeflow-ledger/workspace/pending-merges.md`)
+  → archive. Merge-back is human-reviewed and decentralized — no controller
+  merges pod branches.
+- `maxStreamsPerRepo` bounds how many pods may hold isolation worktrees on
+  one repository; claiming past `maxActiveDemands` fails closed.
+
 ## Automation Semantics
 
 Wakeflow automation is direct-thread delivery plus explicit result return.

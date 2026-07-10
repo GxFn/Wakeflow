@@ -88,7 +88,7 @@ Current scripts:
   already accepted, completed, or blocked. Group-scoped target result files
   keep concurrent controller runs from overwriting each other, and
   `build-controller-return` enforces the dispatch group's return policy:
-  `group-ready` permits one pending/sent controller-return for the group wave,
+  `group-ready` permits one pending/sent controller-return for the dispatch group,
   while `per-target` permits one pending/sent controller-return per
   trigger target/task pair. After a direct-thread delivery run is recorded as
   sent/readback-ok, its agent cue must close the controller dispatch turn; it
@@ -127,6 +127,17 @@ Current scripts:
   and eligible), or an explicitly named eligible row, delegating to
   `create-demand`. It does not dispatch, send thread messages, accept
   evidence, or complete demands.
+- `wakeflow-pod.mjs`: host-neutral demand-pod runner (open / close / list). One
+  demand = one pod — its OWN controller (`Controller__<pod>`), OWN Test
+  (`Test__<pod>`), and one isolation worktree window per repo, the WHOLE pod
+  sharing the demand's one worktree set (Test verifies there, never on a main
+  checkout). In this edition (`fleet.transport: agent-tools`) `open` creates
+  worktrees + overlay entries and emits a windowPlan the agent realizes with
+  `create_thread` (cwd = each entry's worktree) plus `wakeflow_register_window`;
+  `close` is the evidence-first teardown after the demand completed (dirty
+  trees refuse; surviving branches land on the pending-merges ledger; close
+  order: complete-demand -> pod close -> archive). It never dispatches,
+  accepts evidence, or merges branches.
 - `wakeflow-intake.mjs`: state-root intake bridge for the Test surface.
   `test-card` writes a complete pre-test
   boundary machine card under `test-cards/*.json`. It does not mutate

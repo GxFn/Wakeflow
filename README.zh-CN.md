@@ -155,7 +155,8 @@ Claude Code 版本只使用 tmux 常驻终端模型：每个 Wakeflow 窗口（�
 内；Wakeflow thread id 就是该窗口的 Claude Code session id（跨 resume 保持稳定）。
 最多 `maxActiveDemands`（默认 2）个需求可以以 **demand pod** 的方式并行：每个
 pod 是独立的 tmux session，拥有自己的总控、按仓库的 isolation worktree 窗口和
-自己的 Test；超出容量的 claim 会 fail-closed，pod 分支只通过人工审核的
+自己的 Test，整个 pod 共用这条需求的一套 worktree（Test 也在 worktree 上验证，
+绝不碰主检出）；超出容量的 claim 会 fail-closed，pod 分支只通过人工审核的
 `pending-merges.md` 台账合并回主线。
 完整指南见 [plugins/claude-code-wakeflow/README.zh-CN.md](plugins/claude-code-wakeflow/README.zh-CN.md)。
 
@@ -173,6 +174,12 @@ npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.10/plugins/
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
 并把 sparse path 填成 `plugins/codex-wakeflow`。
+
+Codex 版本以按需求划分的线程组运行同一套 demand pod 模型：`wakeflow_pod_open`
+创建这条需求的一套 worktree 并返回 windowPlan，agent 用 `create_thread` 逐条
+落实（每个线程的 cwd 就是它的 worktree），完成后用 `wakeflow_pod_close` 拆除并
+把存活分支记到 pending-merges 台账。模型、容量门与边界两版完全一致，只有窗口
+传输方式不同。
 
 本地开发时，可以把当前 checkout 注册成本地 marketplace：
 

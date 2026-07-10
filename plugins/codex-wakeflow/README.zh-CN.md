@@ -226,6 +226,29 @@ Design 和 Test 是支持角色：
 - **Design** 澄清需求、选项、风险和 handoff 候选。当实现证据有效但用户可见效果仍不对、且不是明确 bug 时，Design 负责重新设计真实调整方案。Design 不投递实现，也不会自动成为产品真相。
 - **Test** 只用于总控或产品仓库无法安全复现的真实场景证据。
 
+## Demand Pods（多需求并行）
+
+并行只存在于需求层面。同一需求内每个仓库只有一个窗口、一个组合任务包
+（窗口自排序）；跨需求最多 `maxActiveDemands`（默认 2，`wakeflow.config.json`）
+个需求以 pod 并行：
+
+- 一个需求 = 一个 pod：自己的 `Controller__<pod>`、按仓库的 isolation worktree
+  窗口（`<repo>__<pod>`，分支 `<demandKey>/<pod>`）和自己的 `Test__<pod>`——
+  一套按需求划分的线程组。整个 pod 共用这条需求的一套 worktree：每个窗口
+  （含 Test）都在这套 worktree 里工作和验证，绝不碰主检出。pod 之间互不感知。
+- 用 `wakeflow_pod_open` 打开（幂等——重跑即续开）：它创建 worktree 和 overlay
+  条目并返回 windowPlan；按计划逐条用 `create_thread` 建线程（cwd = 该条目的
+  worktree，提示词 = `createThreadPrompt`），再用 `wakeflow_register_window`
+  注册。`wakeflow_pod_list` 是唯一全局视图。
+- pod 总控自己 claim 需求（`wakeflow_create_demand` 带
+  `controllerWindow: "Controller__<pod>"`），所有 controller-return 都路由回
+  该 pod，而不是默认总控。
+- 关闭顺序：`complete-demand` → `wakeflow_pod_close`（拆 worktree；存活分支落在
+  `wakeflow-ledger/workspace/pending-merges.md`）→ 归档。合并回主线由人工审核、
+  去中心化——任何总控都不合并 pod 分支。
+- `maxStreamsPerRepo` 限制一个仓库上可有多少 pod 持有 isolation worktree；
+  超出 `maxActiveDemands` 的 claim 会 fail-closed。
+
 ## 自动化语义
 
 Wakeflow 自动化是 direct-thread 投递加显式结果返回。

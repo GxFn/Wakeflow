@@ -205,6 +205,59 @@ kinds present, declared artifacts resolve). The judgment half is yours:
 - A single target result is not group completion unless the group expected only
   that target.
 
+## One Window Per Repo Within A Demand
+
+- WITHIN one demand, each repository runs exactly ONE window and receives ONE
+  combined task package: list every work item for that repo in the package
+  (the state root holds the detail), and the window self-sequences priorities
+  and returns one evidenced result. A window is never dispatched two
+  simultaneous tasks inside the same demand — more work for that repo arrives
+  as the NEXT combined package after review, never as a parallel dispatch.
+- Isolation worktree windows (`<repo>__<id>`, threads whose cwd is the
+  worktree, managed with `wakeflow_pod_open` / `wakeflow_pod_close` /
+  `wakeflow_pod_list`) exist for CROSS-DEMAND isolation only: when more than
+  one demand is active and both touch a repo, the later demand works in its
+  own worktree/branch (`<demandKey>/<id>`) so the main checkout stays
+  coherent. The machine refuses a second isolation window for the same
+  (repo, demand) — that would be same-demand parallelism, which this design
+  rejects; `pool-exhausted` bounds how many demands may hold isolation
+  worktrees on one repo.
+- An isolation branch SURVIVES pod close: it is recorded on
+  `wakeflow-ledger/workspace/pending-merges.md`, and merge-back is
+  human-reviewed and decentralized — no controller merges it. Use
+  `deleteBranch` only for a branch already merged or explicitly dropped;
+  it refuses unmerged work by design.
+
+## Demand Pods (multiple demands = multiple pods, never one multiplexed controller)
+
+- One demand = one pod: its OWN controller (`Controller__<pod>`), per-repo
+  isolation worktree windows, and its OWN `Test__<pod>`, as a per-demand
+  thread set. The WHOLE pod shares the demand's ONE worktree set — every
+  window, Test included, works and verifies inside those worktrees, never on
+  a main checkout. Pods are mutually unaware — never read or touch another
+  pod's state roots, windows, or branches. The default fleet is pod 0: it
+  works on the main checkouts, and its demand is just another active demand.
+- Opening a pod is a spare-moment MECHANICAL action for an incumbent
+  controller: `wakeflow_pod_open` with the demand key and its repos
+  (idempotent; re-run resumes) creates the worktrees + overlay entries and
+  returns a windowPlan — create each entry's thread with `create_thread`
+  (cwd = the entry's worktree, prompt = the entry's createThreadPrompt) and
+  register it via `wakeflow_register_window`. The new pod's controller claims
+  its demand itself via `wakeflow_create_demand` with `controllerWindow:
+  "Controller__<pod>"` — the stamp routes every controller-return home; no
+  per-dispatch flag to remember. Heed the open call's intersection warnings:
+  a repo shared with another pod is tomorrow's merge conflict.
+- Test ENVIRONMENTS may be physical singletons even though Test windows are
+  per-pod: an exclusive environment (per the S1 Test Environment Spec) is a
+  cross-pod serial resource — confirm no other pod is using it before
+  dispatching the card.
+- Close order, then merge: complete-demand → `wakeflow_pod_close` (worktrees
+  down; branches survive onto wakeflow-ledger/workspace/pending-merges.md) →
+  archive. Merge-back is HUMAN-reviewed and decentralized — no controller
+  ever merges pod branches.
+- `wakeflow_pod_list` is the one global view (orphan pods, registrations);
+  `maxActiveDemands` bounds pods, `maxStreamsPerRepo` bounds pods per repo.
+
 ## Intent Alignment
 
 - Two flexible sides, one check: Design's `designIntent` is a sketch, not a

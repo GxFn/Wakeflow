@@ -134,9 +134,9 @@ stream = 独立窗口 `<repo>__<streamId>` + 独立 worktree + 独立分支 `<de
 
 | # | 候选 | 来源 | 触发条件 |
 | --- | --- | --- | --- |
-| E-1 | 按 stream 的流式评审：`reduce-results --scope <taskIds>` 产出子集候选。裁决侧已天然支持子集（候选自带 `targetTaskIds`，`decide-review` 只动候选域，`wakeflow-state.mjs:1346-1377`）；缺的是 reduce 侧 scope 参数 + `review.*` 字段的子集语义 | PD-8 | 波次长尾等待（快 stream 等慢 stream 才能收波）成为真实主要痛点 |
-| E-2 | 多活跃 demand 放松（原 C4，PD-1 移出）——触 `wakeflow-active-demands.mjs:46-50`、`wakeflow-next-work.mjs:267-270`、`wakeflow-demand-sequence.mjs:96-102` 三处硬门 + 归档/索引/TODO rollup 的单需求全面假定，爆炸半径最大 | PD-1 | 需求内多 stream 用满后仍有跨需求并行诉求 |
-| E-3 | stream 依赖门 / 分支合并回主线流程化（dependency-gate + merge 流程） | PD-7 | "B 需 A 的 commit"或波尾合并冲突高频出现 |
+| E-1 | ~~按 stream 的流式评审~~ **已消解（§4.5）**：前提是需求内多 stream 波次，需求内并行被整体删除后不复存在 | PD-8 | ~~波次长尾等待成为真实主要痛点~~ 前提消失 |
+| E-2 | 多活跃 demand 放松（原 C4，PD-1 移出）——**已落地 0.7.5-0.7.6（§4.6 容量模型 + §4.7 需求舱）** | PD-1 | ~~需求内多 stream 用满后仍有跨需求并行诉求~~ 修正（§4.5）：并行只在需求层，触发即"多个需求需要同时开发" |
+| E-3 | ~~stream 依赖门 / 分支合并回主线流程化~~ **已被取代（§4.5/§4.7）**：需求内 stream 依赖随需求内并行删除而消解；合并回主线定为人工评审、去中心化（pending-merges 台账） | PD-7 | ~~"B 需 A 的 commit"或波尾合并冲突高频出现~~ 前提消失 |
 | H-1 | 窗口锁续租：活动监视器对 pane 忙碌的窗口续 TTL（今天固定 7200s——超 2 小时的长任务锁过期后，同窗可被再次派发，两任务在同一 pane 排队混流） | 深读 §4.7 引申（本轮新发现） | 出现一次真实的"长任务锁过期后误派" |
 | H-2 | schema 最小运行时校验：手写断言器（守零依赖 §0-2）接入 state root 读入口与 `wakeflow-validate` | 深读 §6-2 | schema 与代码的漂移真实发生一次 |
 | H-3 | LLM 契约 lint：测试断言每个状态写命令的输出都携带 `agentNext` + `forbiddenConclusions`（软护栏的**存在性**由硬测试保证） | 深读 §6-3 | 随任意 Phase 搭车，成本约一个测试文件 |
@@ -222,7 +222,7 @@ stream = 独立窗口 `<repo>__<streamId>` + 独立 worktree + 独立分支 `<de
 Phase 0  0.6.4  并发地基     state-root 写锁 + 并发回归        S    前置门
 Phase 1  0.7.0  并行开发 F3  stream 生命周期/注册解析/池上界    M    刚需主交付（W1-a..d）
 Phase 2  0.7.1  意图对齐 F1+F2  两句意图并排 + 需求审视提醒（零分数零门禁） S  可与 Phase 1 并行
-Phase 3  —      加固+规模化（观察触发）  E系: 流式评审/多活跃demand/stream依赖 · H系: 锁续租/schema校验/契约lint/readback/setup拆分/批量人体工学  不承诺
+Phase 3  —      加固+规模化（观察触发）  E系: 多活跃demand(已落地0.7.5-0.7.6·§4.6/4.7)·流式评审与stream依赖已随§4.5消解 · H系: 锁续租/schema校验/契约lint/readback/setup拆分/批量人体工学  不承诺
 ```
 
 红线一句话版：additive-only；不改锁键/id/裁决语义；意图对齐只并排提醒、不算分不设门、最终确认归 Agent；池耗尽即停；host 词不进 core；散文双写；每 wave 全测试绿 + 真机验收留证。

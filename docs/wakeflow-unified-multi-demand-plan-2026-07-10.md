@@ -161,6 +161,13 @@ validate + 双 smoke + 全部脚本测试）。落点对照：
   deep-dive:120 的禁词 lint 声称自此为真。
 - M5：demand-sequence 帮助文本讲明"序列=有依赖需求链（内部串行、归档后放行
   下一个）；跨需求并行在序列之外，受容量钳制"。
+- 真机验证（2026-07-10，WakeWorkspace 实舰队）：双需求并排全周期通过——
+  pod 0（cc-craft-utils：自动认领→组合包→craft 执行→评审→归档）与
+  demand pod（cc-pod-slug：pod 总控自主认领、隔离 worktree RED→GREEN、
+  Test__pod 在 worktree 内独立冷复跑、stream-close→pending-merges→归档、
+  pod-close 清扫），主检出零跨需求污染。测试中由 pod 总控上报两个运行时
+  缺陷（wakeflow-pod 未入 runtime 白名单；pod 窗口注册 fail-closed），
+  已修复并以回归钉死（1c8bd74，0.8.2）。
 - N 系：roadmap E-1/E-2/E-3 行与 Phase 3 总览加结局标注；scripts/README
   "group wave"→"dispatch group"（双版）；codex AGENTS.md 派发节补两条正典
   bullet（原 wave 节压缩句删除）；codex governance:117 兑现改写；codex

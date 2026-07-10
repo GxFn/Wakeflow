@@ -165,6 +165,50 @@ test("claude edition defers transport to the host helper on open and refuses clo
   assert.equal(neutral.closedIsolationWindows.length, 1);
 });
 
+// Live-fleet defect W-pod-1: wakeflow_pod_open/close/list handlers reference
+// the wakeflow-pod script, but the runtime allow-list did not carry it, so the
+// MCP layer failed with "Unsupported Wakeflow runtime script". Pin the FORWARD
+// direction: every script an MCP handler names must be allow-listed.
+test("every MCP handler script is on the runtime allow-list", async () => {
+  const { listWakeflowRuntimeScripts } = await import("../core/lib/wakeflow-runtime.mjs");
+  const allowed = new Set(listWakeflowRuntimeScripts());
+  const source = readFileSync(path.join(repoRoot, "core/lib/wakeflow-mcp-tools.mjs"), "utf8");
+  const referenced = [...new Set([...source.matchAll(/script:\s*"([a-z-]+)"/g)].map((m) => m[1]))];
+  assert.ok(referenced.includes("wakeflow-pod"), "the pod tools reference the wakeflow-pod script");
+  const missing = referenced.filter((name) => !allowed.has(name));
+  assert.deepEqual(missing, [], `MCP handlers reference non-allow-listed runtime scripts: ${missing.join(", ")}`);
+});
+
+// Live-fleet defect W-pod-2: register-thread failed closed for pod windows
+// (Controller__<pod>, Test__<pod>) because they are never in the tracked
+// config, so pod fleets could not survive a reboot through the registry.
+// The pod SHAPE — literal Controller prefix, or a configured base window —
+// is now accepted; everything else still fails closed.
+test("register-thread accepts pod-shaped windows and still refuses unknown ones", () => {
+  const { root } = makeWorkspace();
+  const config = JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8"));
+  config.testWindow = "Test";
+  writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify(config, null, 2)}\n`);
+  const delivery = path.join(repoRoot, "plugins/codex-wakeflow/scripts/wakeflow-delivery.mjs");
+  const register = (windowName) => runSync(process.execPath, [
+    delivery, "register-thread", "--root", root,
+    "--window", windowName, "--thread-id", `0192fac-${windowName}`, "--write", "--json",
+  ], { encoding: "utf8", cwd: root });
+
+  const controller = register("Controller__POD-A");
+  assert.equal(controller.status, 0, controller.stderr || controller.stdout);
+  assert.equal(JSON.parse(controller.stdout).ok, true);
+
+  const testWindow = register("Test__POD-A");
+  assert.equal(testWindow.status, 0, testWindow.stderr || testWindow.stdout);
+  assert.equal(JSON.parse(testWindow.stdout).ok, true);
+
+  const bogusSuffixed = register("Bogus__POD-A");
+  assert.equal(bogusSuffixed.status, 1, "an unconfigured base window must still fail closed");
+  const bogusPlain = register("Bogus");
+  assert.equal(bogusPlain.status, 1, "an unconfigured plain window must still fail closed");
+});
+
 test("a prepared pod is resumed by the claude host helper instead of re-created", () => {
   const { root } = makeWorkspace();
   assert.equal(pod(claudePod, root, ["open", "--demand-key", "POD-A", "--repos", "RepoA"]).status, 0);

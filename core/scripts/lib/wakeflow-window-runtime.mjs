@@ -65,7 +65,21 @@ export function createWindowRuntime(ctx) {
     if (windowName === config.controllerWindow) return "controller";
     if (windowName === config.designWindow) return "design";
     if (testWindowNames(config).includes(windowName)) return "test-target";
+    // Demand pods: Controller__<pod> IS a controller; a pod-suffixed test
+    // window (Test__<pod>) inherits its base window's role.
+    const podBase = podBaseWindow(windowName);
+    if (podBase === "Controller") return "controller";
+    if (podBase && testWindowNames(config).includes(podBase)) return "test-target";
     return "target";
+  }
+
+  // Demand pods create runtime windows the tracked config never lists:
+  // Controller__<pod> and Test__<pod> (isolation work windows land in the
+  // derived overlay instead). `<base>__<suffix>` with a configured base — or
+  // the literal Controller role prefix — is the pod shape.
+  function podBaseWindow(windowName) {
+    const marker = windowName.indexOf("__");
+    return marker > 0 ? windowName.slice(0, marker) : null;
   }
 
   function windowRuntimeDescriptor(windowName) {
@@ -124,7 +138,12 @@ export function createWindowRuntime(ctx) {
         ? descriptor.config.repositories.map((item) => item?.windowName)
         : []),
     ].filter(Boolean));
-    if (!configuredWindows.has(windowName)) {
+    // Pod fleets must survive reboots through the registry exactly like main
+    // windows: accept Controller__<pod> and <configured-base>__<pod> (stream
+    // windows arrive here via their derived-overlay repositories[] entry).
+    const podBase = podBaseWindow(windowName);
+    const podShaped = Boolean(podBase) && (podBase === "Controller" || configuredWindows.has(podBase));
+    if (!configuredWindows.has(windowName) && !podShaped) {
       fail(`Window is not configured in wakeflow.config.json: ${windowName}`);
     }
     const registryFile = threadFileFor(windowName);

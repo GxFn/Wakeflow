@@ -137,16 +137,48 @@ export function commandStatus(ctx) {
     return snapshot;
   }
 
-  function packetStillActive(packet, diagnostics) {
+  function packetStateRevision(packet) {
+    const revision = Number(packet.stateRef?.stateRevision);
+    return Number.isFinite(revision) ? revision : null;
+  }
+
+  function packetStillActive(packet, diagnostics, allPackets) {
     const snapshot = stateSnapshot(packet.stateRef?.stateRoot, diagnostics);
     if (!snapshot) return true;
     if (["completed", "archived"].includes(snapshot.state.state)) return false;
     const task = (snapshot.state.targetTasks ?? []).find((item) => item.targetTaskId === packet.taskId);
     if (!task) return true;
     const currentGroup = task.delivery?.dispatchGroup;
-    if (currentGroup && currentGroup !== packet.dispatchGroup) return false;
+    const packetRevision = packetStateRevision(packet);
+    const stateRevision = Number(snapshot.state.revision);
+    const currentDeliveryRevision = currentGroup
+      ? Math.max(
+          ...allPackets
+            .filter((item) => item.taskId === packet.taskId
+              && item.stateRef?.stateRoot === packet.stateRef?.stateRoot
+              && item.dispatchGroup === currentGroup)
+            .map(packetStateRevision)
+            .filter((revision) => revision !== null),
+        )
+      : null;
+    const replacesCurrentDelivery = Boolean(currentGroup && currentGroup !== packet.dispatchGroup)
+      && packetRevision !== null
+      && (Number.isFinite(currentDeliveryRevision)
+        ? packetRevision > currentDeliveryRevision
+        : packetRevision === stateRevision);
+    if (currentGroup && currentGroup !== packet.dispatchGroup && !replacesCurrentDelivery) return false;
     if (["accepted", "blocked"].includes(task.status)) return false;
-    if (["rework", "redesign"].includes(task.reviewDecision) && task.status === "needs-rework") return false;
+    if (["rework", "redesign"].includes(task.reviewDecision) && task.status === "needs-rework") {
+      // The recorded delivery still points at the reviewed group until the host
+      // actually sends a replacement, so a replacement prepared AFTER the rework
+      // decision stays live: its prepare-time revision beats the reviewed
+      // group's packets even when a sibling task advanced the demand-wide
+      // revision in between (replacesCurrentDelivery). The no-recorded-delivery
+      // fallback is deliberately stricter — with no group to compare against it
+      // only trusts a packet prepared from the CURRENT revision exactly.
+      return replacesCurrentDelivery
+        || (!currentGroup && packetRevision !== null && packetRevision === stateRevision);
+    }
     return true;
   }
 
@@ -178,12 +210,18 @@ export function commandStatus(ctx) {
   }
 
   function statusResultForPacket(packet, resultArtifacts, stateRootResultCache, diagnostics) {
-    const local = resultArtifacts.find((item) => {
-      const result = item.value;
+    function resultMatchesPacket(result, { requireTargetWindow = false } = {}) {
       if (!result) return false;
-      if (result.targetWindow !== packet.targetWindow) return false;
+      if (requireTargetWindow
+        ? result.targetWindow !== packet.targetWindow
+        : result.targetWindow && result.targetWindow !== packet.targetWindow) return false;
       if ((result.targetTaskId || result.taskId) !== packet.taskId) return false;
-      return !result.dispatchGroup || result.dispatchGroup === packet.dispatchGroup;
+      const resultGroup = result.dispatchGroup || result.deliveryContext?.dispatchGroup;
+      return !resultGroup || resultGroup === packet.dispatchGroup;
+    }
+
+    const local = resultArtifacts.find((item) => {
+      return resultMatchesPacket(item.value, { requireTargetWindow: true });
     });
     if (local) return local;
 
@@ -205,18 +243,13 @@ export function commandStatus(ctx) {
         stateRootResultCache.set(stateRootRef, artifacts);
       }
     }
-    return stateRootResultCache.get(stateRootRef).find((item) => {
-      const result = item.value;
-      return result
-        && result.targetTaskId === packet.taskId
-        && (!result.targetWindow || result.targetWindow === packet.targetWindow);
-    }) || null;
+    return stateRootResultCache.get(stateRootRef).find((item) => resultMatchesPacket(item.value)) || null;
   }
 
   function buildRuntimeGroupSummaries({ packets, groupArtifacts, resultArtifacts, deliveryStatuses, diagnostics }) {
     const stateRootResultCache = new Map();
     const groupsById = new Map();
-    for (const packet of packets.filter((item) => packetStillActive(item, diagnostics))) {
+    for (const packet of packets) {
       const groupId = packet.dispatchGroup || packet.taskId || packet.id;
       if (!groupsById.has(groupId)) groupsById.set(groupId, []);
       groupsById.get(groupId).push(packet);
@@ -330,7 +363,7 @@ export function commandStatus(ctx) {
         file: path.relative(workspaceRoot, item.file),
         ...statusFromLoadedRuns(item.value, runArtifacts),
       }));
-    const activePackets = packets.filter((packet) => packetStillActive(packet, diagnostics));
+    const activePackets = packets.filter((packet) => packetStillActive(packet, diagnostics, packets));
     const activePacketIds = new Set(activePackets.map((packet) => packet.id));
     const activeGroupIds = new Set(activePackets.map((packet) => packet.dispatchGroup || packet.taskId || packet.id));
     const liveDeliveryStatuses = deliveryStatuses.filter((delivery) => delivery.kind === "DeliveryEnvelope"

@@ -2297,6 +2297,66 @@ test("F18: re-dispatch clears a prior rework decision so a fresh result is not m
   assert.equal(task.reviewDecision, null, "re-dispatch clears the stale rework decision");
 });
 
+test("status keeps a prepared rework replacement live and hides the reviewed delivery", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const first = prepareDispatch(root, stateRootRef, { group: "GROUP-REWORK-G1" });
+  const firstDeliveryFile = path.join(root, first.deliveryFile);
+  parseOk(run(root, [
+    "record-delivery-run",
+    "--delivery-file", firstDeliveryFile,
+    "--status", "sent",
+    "--readback-ok", "true",
+    "--evidence", "initial send evidence",
+    "--write",
+  ]));
+
+  const stateFile = path.join(root, stateRootRef, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.state = "needs-rework";
+  state.revision = 6;
+  state.targetTasks[0].status = "needs-rework";
+  state.targetTasks[0].reviewDecision = "rework";
+  state.taskPackages[0].status = "needs-rework";
+  writeJson(stateFile, state);
+  writeJson(path.join(root, stateRootRef, "target-results/group-rework-g1.json"), {
+    kind: "TargetResultEnvelope",
+    resultId: "result-group-rework-g1",
+    targetTaskId: "CSMR-TASK-1",
+    targetWindow: "AlembicPlugin",
+    dispatchGroup: "GROUP-REWORK-G1",
+    status: "blocked",
+  });
+
+  const replacement = prepareDispatch(root, stateRootRef, { group: "GROUP-REWORK-G2" });
+  const status = parseOk(run(root, ["status"]));
+  assert.equal(status.runtimeSummary.status, "active");
+  assert.equal(status.runtimeSummary.nextAction, "send-target-delivery");
+  assert.deepEqual(
+    status.runtimeSummary.deliveries.pendingHostSend.map((item) => item.dispatchGroup),
+    ["GROUP-REWORK-G2"],
+    "the unsent replacement is live while the reviewed group stays historical",
+  );
+  assert.deepEqual(status.runtimeSummary.groups.items.map((item) => item.groupId), ["GROUP-REWORK-G2"]);
+  assert.equal(
+    status.runtimeSummary.groups.items[0].groupStatus,
+    "pending-host-send",
+    "the prior group's state-root result must not contaminate the replacement group",
+  );
+  assert.equal(status.runtimeSummary.resumePlan.steps[0].deliveryFile, replacement.deliveryFile);
+
+  // Another task may advance the demand-wide revision before this target is
+  // sent. The replacement still supersedes the task's older recorded group.
+  const advanced = JSON.parse(readFileSync(stateFile, "utf8"));
+  advanced.revision = 7;
+  writeJson(stateFile, advanced);
+  const afterSiblingAdvance = parseOk(run(root, ["status"]));
+  assert.deepEqual(
+    afterSiblingAdvance.runtimeSummary.deliveries.pendingHostSend.map((item) => item.dispatchGroup),
+    ["GROUP-REWORK-G2"],
+  );
+});
+
 test("rework-first dispatch blocks ordinary next-step targets until rework is dispatched", () => {
   const { root, stateRootRef, stateRoot } = makeFixture();
   const stateFile = path.join(stateRoot, "wakeflow-state.json");

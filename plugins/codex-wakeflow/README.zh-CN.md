@@ -107,6 +107,9 @@ default_tools_approval_mode = "approve"
 Wakeflow 不要求额外的聚合 marketplace 仓库。单独的 catalog 可以用于品牌展示，
 但不是主要安装或发布路径。
 
+本地重装或更新 Wakeflow 后，需要**完整退出并重启 Codex App**，再创建或恢复
+Wakeflow 窗口。仅在同一个 App 进程里新建任务，仍可能继承旧的或缺失的 MCP 能力面。
+
 ## 快速开始
 
 Codex 版通过 MCP 工具驱动(没有 slash 命令)。用自然语言告诉 Codex 你要做什么,它会调用对应工具。

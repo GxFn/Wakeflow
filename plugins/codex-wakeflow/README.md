@@ -119,6 +119,10 @@ Wakeflow does not require an aggregate marketplace repository. A separate
 catalog can still list Wakeflow for brand discovery, but that is not part of
 the primary install or release path.
 
+After reinstalling or updating Wakeflow locally, **fully quit and restart the
+Codex App** before creating or resuming Wakeflow windows. Creating another task
+inside the same App process may still inherit the stale or missing MCP surface.
+
 ## Quick Start
 
 Wakeflow on Codex is driven through MCP tools (no slash commands). Tell Codex what you want in plain language and it calls the matching tool.

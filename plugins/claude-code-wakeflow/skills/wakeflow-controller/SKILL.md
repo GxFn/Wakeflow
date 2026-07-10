@@ -277,6 +277,12 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   no controller ever merges pod branches.
 - `pod-list` is the one global view (orphan pods, session liveness);
   `maxActiveDemands` bounds pods, `maxStreamsPerRepo` bounds pods per repo.
+- Cancelling instead of finishing: `wakeflow_cancel_demand` stops an
+  in-flight demand WITHOUT pretending completion — no acceptance, evidence
+  stays, open tasks keep their last honest status. A cancelled demand still
+  holds an active-demand slot until archived: stream-close its isolation
+  windows, then archive (the close order accepts cancelled exactly like
+  completed).
 
 ## Storage Hygiene (idle-moment habit)
 

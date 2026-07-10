@@ -171,3 +171,42 @@ test("archive-demand refuses a planted real id unless --redact, then relocates a
   assert.match(ledgerLeak, /<redacted>/);
   assert.ok(payload.archived.redactedFields.some((field) => field.file === "leak.md"));
 });
+
+// Cancel is the escape hatch for an in-flight demand: no acceptance, no
+// evidence gate, and the root still holds capacity until archived — archive
+// accepts cancelled exactly like completed.
+test("cancel-demand stops an in-flight demand and archive accepts the cancelled state", () => {
+  const { root, stateRoot, stateFile } = initDemand({ demandKey: "CXL-1", complete: false });
+
+  const dry = run(["cancel-demand", "--root", root, "--state-root", stateRoot, "--reason", "scope moved", "--json"]);
+  assert.equal(dry.status, 0, dry.stderr || dry.stdout);
+  assert.equal(JSON.parse(dry.stdout).wrote, false);
+  assert.notEqual(readJson(stateFile).state, "cancelled");
+
+  const cancel = run(["cancel-demand", "--root", root, "--state-root", stateRoot, "--reason", "scope moved", "--write", "--json"]);
+  assert.equal(cancel.status, 0, cancel.stderr || cancel.stdout);
+  const payload = JSON.parse(cancel.stdout);
+  assert.equal(payload.nextState, "cancelled");
+  const state = readJson(stateFile);
+  assert.equal(state.state, "cancelled");
+  assert.equal(state.stateReason, "scope moved");
+  const events = readFileSync(path.join(root, stateRoot, "controller-events.jsonl"), "utf8").trim().split("\n");
+  const last = JSON.parse(events[events.length - 1]);
+  assert.equal(last.type, "demand.cancelled");
+  assert.ok(Array.isArray(last.forbiddenConclusions) && last.forbiddenConclusions.length > 0);
+
+  const again = run(["cancel-demand", "--root", root, "--state-root", stateRoot, "--reason", "twice", "--write", "--json"]);
+  assert.notEqual(again.status, 0);
+  assert.match(again.stdout, /already cancelled/);
+
+  const archive = run(["archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "cancelled demand", "--write", "--json"]);
+  assert.equal(archive.status, 0, archive.stderr || archive.stdout);
+  assert.equal(existsSync(path.join(root, stateRoot)), false, "cancelled root moves into the archive ledger");
+});
+
+test("cancel-demand refuses a completed demand", () => {
+  const { root, stateRoot } = initDemand({ demandKey: "CXL-2", complete: true });
+  const result = run(["cancel-demand", "--root", root, "--state-root", stateRoot, "--reason", "x", "--write", "--json"]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /already completed/);
+});

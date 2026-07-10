@@ -46,6 +46,7 @@ Usage:
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
   node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked|redesign> --reason <text> [--evidence-ref <ref>] [--accept-blocked] [--write] [--json]
   node scripts/wakeflow-state.mjs complete-demand --state-root <path> --reason <text> --evidence-ref <ref> [--write] [--json]
+  node scripts/wakeflow-state.mjs cancel-demand --state-root <path> --reason <text> [--write] [--json]
   node scripts/wakeflow-state.mjs archive-demand --state-root <path> --reason <text> [--redact] [--evidence-ref <ref>] [--write] [--json]
   node scripts/wakeflow-state.mjs adopt-demand-host --state-root <path> [--reason <text>] [--write] [--json]
 
@@ -1823,6 +1824,112 @@ function commandCompleteDemandLocked(stateRoot) {
   );
 }
 
+// Cancel is the controller's escape hatch for an in-flight demand: the flow
+// stops being active WITHOUT pretending completion — no acceptance, no
+// evidence gate, open tasks stay in their last honest status as history. A
+// cancelled root still occupies active-demand capacity until it is archived
+// (same rule as completed-but-not-archived), and open isolation windows must
+// still stream-close first: the archive gate is unchanged.
+function commandCancelDemand() {
+  const stateRoot = stateRootFromArg();
+  withLockedStateRoot(stateRoot, () => commandCancelDemandLocked(stateRoot));
+}
+
+function commandCancelDemandLocked(stateRoot) {
+  const reason = requireValue("--reason");
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const eventsFile = path.join(stateRoot, "controller-events.jsonl");
+  const state = readJson(stateFile, "controller state");
+  const hostOwnership = ensureDemandHostOwnership(state);
+  if (state.state === "archived") {
+    fail(`demand is already archived: ${state.demandKey}`);
+  }
+  if (state.state === "completed") {
+    fail(`demand is already completed: ${state.demandKey}; archive it instead of cancelling.`);
+  }
+  if (state.state === "cancelled") {
+    fail(`demand is already cancelled: ${state.demandKey}; archive it to free capacity.`);
+  }
+
+  const createdAt = nowIso();
+  const nextRevision = Number(state.revision ?? 0) + 1;
+  const eventId = nextEventId(createdAt, nextRevision);
+  const openTasks = (state.targetTasks ?? []).filter((task) => !["accepted", "completed"].includes(task.status));
+  const nextState = {
+    ...state,
+    state: "cancelled",
+    stateReason: reason,
+    revision: nextRevision,
+    updatedAt: createdAt,
+    allowedActions: ["wakeflow-render-progress"],
+    decisionsRequired: [],
+    review: {
+      ...(state.review ?? {}),
+      status: "demand-cancelled",
+    },
+    projection: {
+      ...(state.projection ?? {}),
+      status: "stale",
+    },
+  };
+  const event = {
+    eventId,
+    createdAt,
+    actor: "controller",
+    type: "demand.cancelled",
+    from: state.state,
+    to: "cancelled",
+    reason,
+    ...(openTasks.length ? { openTargetTasks: openTasks.map((task) => task.targetTaskId) } : {}),
+    allowedWrites: [
+      "wakeflow-state.json",
+      "controller-events.jsonl",
+    ],
+    forbiddenConclusions: [
+      "cancel-is-acceptance",
+      "cancel-deletes-evidence",
+      "cancel-frees-capacity-before-archive",
+    ],
+    stateRevision: nextRevision,
+    ...(hostOwnership.claimed || hostOwnership.transferredFrom ? { hostOwnership } : {}),
+  };
+
+  if (write) {
+    appendJsonLine(eventsFile, event);
+    writeJson(stateFile, nextState);
+    appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.decisions,
+      `${createdAt} demand cancelled — ${reason}`);
+    refreshWorkspaceProjection({ workspaceRoot, updatedAt: createdAt });
+  }
+
+  output(
+    {
+      ok: true,
+      command: "cancel-demand",
+      hostOwnership,
+      wrote: write,
+      demandKey: state.demandKey,
+      stateRoot: relative(stateRoot),
+      previousState: state.state,
+      nextState: "cancelled",
+      stateRevision: nextRevision,
+      eventId,
+      openTargetTasks: openTasks.map((task) => task.targetTaskId),
+      projectionStatus: "stale",
+      agentNext: "Demand is cancelled, not archived: it still occupies active-demand capacity. Close any open isolation windows (stream-close / pod close), then run archive-demand to free the slot. Recorded evidence stays untouched.",
+      appendLog: {
+        type: "decision",
+        decision: `cancelled: ${reason}`,
+        eventId,
+      },
+    },
+    [
+      `${write ? "Recorded" : "Would record"} demand cancellation for ${state.demandKey}.`,
+      "No acceptance, dispatch, or evidence deletion was performed; archive to free capacity.",
+    ],
+  );
+}
+
 function upsertWindowState(windows, next) {
   const existing = windows.find((item) => item.windowName === next.windowName);
   if (!existing) {
@@ -2098,8 +2205,8 @@ function commandArchiveDemandLocked(stateRoot) {
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const state = readJson(stateFile, "controller state");
 
-  if (state.state !== "completed") {
-    fail(`archive-demand requires state=completed; ${state.demandKey} is ${state.state}.`);
+  if (state.state !== "completed" && state.state !== "cancelled") {
+    fail(`archive-demand requires state=completed or state=cancelled; ${state.demandKey} is ${state.state}.`);
   }
 
   // A demand with live isolation worktree windows must not archive: their worktrees and
@@ -2405,6 +2512,9 @@ try {
       break;
     case "complete-demand":
       commandCompleteDemand();
+      break;
+    case "cancel-demand":
+      commandCancelDemand();
       break;
     case "archive-demand":
       commandArchiveDemand();

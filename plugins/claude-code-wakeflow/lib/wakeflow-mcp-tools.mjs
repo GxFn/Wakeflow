@@ -528,6 +528,21 @@ const toolDefinitions = [
     },
   },
   {
+    name: "wakeflow_cancel_demand",
+    description: "Cancel an in-flight demand: the flow stops being active WITHOUT pretending completion — no acceptance, no evidence gate, open tasks keep their last honest status as history, and recorded evidence stays untouched. Refused on completed/archived/already-cancelled demands. A cancelled root still occupies active-demand capacity until archived (same rule as completed-but-not-archived): close any open isolation windows (stream-close / pod close accepts cancelled), then archive to free the slot. Dispatch preparation, intake, streams, and pods all fail closed on a cancelled demand. Dry-run unless apply is true.",
+    annotations: localWriteTool("Cancel Wakeflow Demand"),
+    inputSchema: {
+      type: "object",
+      required: ["stateRoot", "reason"],
+      properties: {
+        root: { type: "string" },
+        stateRoot: { type: "string", description: "The demand's state root directory." },
+        reason: { type: "string", description: "Why the flow is being cancelled; recorded on the state and the audit event." },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
     name: "wakeflow_pod_open",
     description: "Open a demand pod's host-neutral half: per-repo isolation worktrees (branch <demandKey>/<pod>) + derived overlay entries, plus a windowPlan for the pod's OWN controller (Controller__<pod>), OWN Test (Test__<pod>), and one work window per repo — the WHOLE pod shares the demand's ONE worktree set (Test verifies there, never on a main checkout). Idempotent: re-run resumes a partially opened pod. Warns on cross-pod repo intersections; pool-exhausted blocks at maxStreamsPerRepo. The transport realizes the plan: agent-tools editions create one window per plan entry and register it; host-helper editions follow up with the host pod-open, which resumes prepared worktrees. The pod controller claims the demand itself under the maxActiveDemands gate.",
     annotations: localWriteTool("Open Demand Pod"),
@@ -1098,6 +1113,17 @@ export const handlers = {
       ...optionalValue("--test-decision", args.testDecision),
       ...optionalValue("--stage-plan", args.stagePlan),
       ...(args.taskPackages ? ["--task-packages", JSON.stringify(args.taskPackages)] : []),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
+  wakeflow_cancel_demand: (args) => runWakeflowRuntime({
+    script: "wakeflow-state",
+    args: [
+      "cancel-demand",
+      ...optionalValue("--state-root", args.stateRoot),
+      ...optionalValue("--reason", args.reason),
       ...(args.apply ? ["--write"] : []),
       "--json",
     ],

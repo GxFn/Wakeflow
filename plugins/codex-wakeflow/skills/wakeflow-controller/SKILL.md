@@ -257,6 +257,11 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   ever merges pod branches.
 - `wakeflow_pod_list` is the one global view (orphan pods, registrations);
   `maxActiveDemands` bounds pods, `maxStreamsPerRepo` bounds pods per repo.
+- Cancelling instead of finishing: `wakeflow_cancel_demand` stops an
+  in-flight demand WITHOUT pretending completion — no acceptance, evidence
+  stays, open tasks keep their last honest status. A cancelled demand still
+  holds an active-demand slot until archived: `wakeflow_pod_close` accepts a
+  cancelled demand in its close order, then archive frees the slot.
 
 ## Intent Alignment
 

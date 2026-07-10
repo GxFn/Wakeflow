@@ -218,3 +218,14 @@ test("a prepared pod is resumed by the claude host helper instead of re-created"
   const payload = JSON.parse(opened.stdout);
   assert.deepEqual(payload.windows.map((win) => win.status), ["already-registered"]);
 });
+
+// Cancel path: a pod whose demand was cancelled closes exactly like a
+// completed one — worktrees down, branches on the ledger, then archive.
+test("pod close accepts a cancelled demand in its close order", () => {
+  const { root } = makeWorkspace();
+  assert.equal(pod(codexPod, root, ["open", "--demand-key", "POD-X", "--repos", "RepoA"]).status, 0);
+  setDemandState(root, "POD-X", "cancelled");
+  const closed = pod(codexPod, root, ["close", "--demand-key", "POD-X"]);
+  assert.equal(closed.status, 0, closed.stderr || closed.stdout);
+  assert.equal(JSON.parse(closed.stdout).closedIsolationWindows.length, 1);
+});

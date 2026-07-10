@@ -173,7 +173,7 @@ function resolveStateRoot() {
 
 function commandTestCard() {
   const { stateRoot, state } = resolveStateRoot();
-  if (["blocked", "paused", "review-ready", "accepting", "waiting-results"].includes(state.state)) {
+  if (["blocked", "paused", "cancelled", "review-ready", "accepting", "waiting-results"].includes(state.state)) {
     fail(`cannot create a new test card while demand is ${state.state}; resolve the current state-machine gate first.`);
   }
   const testId = requireValue("--test-id");

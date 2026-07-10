@@ -344,7 +344,7 @@ export function createDispatchCommands(ctx) {
   }
 
   function validatePrepareDispatchEligibility({ state, taskPackage, targetTask }) {
-    if (["completed", "archived", "paused", "blocked"].includes(state.state)) {
+    if (["completed", "archived", "cancelled", "paused", "blocked"].includes(state.state)) {
       fail(`cannot prepare dispatch while controller state is ${state.state}: ${state.demandKey}`);
     }
     if (["review-ready", "accepting"].includes(state.state)) {

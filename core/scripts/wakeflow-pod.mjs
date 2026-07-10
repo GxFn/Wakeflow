@@ -32,6 +32,7 @@ import {
   removeStreamWorktree,
   streamEntries,
   streamOpenRefusal,
+  streamOverlayLockFile,
   streamWindowName,
   trackedConfigFile,
   worktreeDirFor,
@@ -129,9 +130,10 @@ function exec(commandName, argv) {
 }
 
 function withStreamOverlayLock(fn) {
-  mkdirSync(hostDir, { recursive: true });
+  const lockFile = streamOverlayLockFile(workspaceRoot);
+  mkdirSync(path.dirname(lockFile), { recursive: true });
   try {
-    return withFileLock(path.join(hostDir, "stream-overlay.lock"), fn);
+    return withFileLock(lockFile, fn);
   } catch (error) {
     if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);
     throw error;
@@ -248,7 +250,7 @@ function commandOpen() {
   // A pod attaches to a claimable or open demand; a provably closed one would
   // orphan fresh worktrees behind the archive gate.
   const demandState = demandStateFor(demandKey);
-  if (demandState.exists && (demandState.state === "completed" || demandState.state === "archived")) {
+  if (demandState.exists && ["completed", "archived", "cancelled"].includes(demandState.state)) {
     fail(`demand ${demandKey} is ${demandState.state}; a pod attaches to a claimable or open demand.`);
   }
   if (demandState.exists) {
@@ -388,8 +390,8 @@ function commandClose() {
   // The archive reducer refuses while isolation windows are open, so the pod's
   // streams must come down after completion and before archive.
   const demandState = demandStateFor(demandKey);
-  if (!force && demandState.state !== "completed" && demandState.state !== "archived") {
-    fail(`demand ${demandKey} is ${demandState.state ?? "missing"}, not completed. Close order: complete-demand -> pod close -> archive (pass --force to tear the pod's worktrees down anyway).`);
+  if (!force && !["completed", "archived", "cancelled"].includes(demandState.state)) {
+    fail(`demand ${demandKey} is ${demandState.state ?? "missing"}, not completed or cancelled. Close order: complete-demand (or cancel-demand) -> pod close -> archive (pass --force to tear the pod's worktrees down anyway).`);
   }
 
   const closed = [];

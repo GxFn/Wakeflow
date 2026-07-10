@@ -274,7 +274,9 @@ into tracked docs, prompts, or backfill).
 - \`keep-live/\`, \`runtime-meta.json\` (plugin version stamp),
   \`activity-monitor-<server>.pid\` (O_EXCL, owned per --root),
   \`entry-sync-*/deliver-*/pod-entry-*.txt\` (transient prompts),
-  \`paste-<window>.lock\`, \`stream-overlay.lock\` (O_EXCL mutexes).
+  \`paste-<window>.lock\` (O_EXCL mutex). The host-neutral
+  \`stream-overlay.lock\` sits at \`.wakeflow-local/\` beside the overlay it
+  guards — dual-host workspaces mutate ONE overlay under ONE lock.
 
 A dead window resumes from its registered id (\`launch-window --resume\`);
 deleting a registry entry orphans that session.`),

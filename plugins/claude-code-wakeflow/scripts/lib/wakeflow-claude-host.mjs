@@ -34,6 +34,7 @@ import {
   overlayBaseStale,
   removeStreamWorktree,
   streamOpenRefusal,
+  streamOverlayLockFile,
   overlayConfigFile,
   overlayIsDerived,
   readOverlay,
@@ -1788,7 +1789,9 @@ const DEFAULT_MAX_STREAMS = 2;
 // DIFFERENT repos still race the shared overlay file and the second write
 // silently drops the first's entry.
 function streamMutationLockFile() {
-  return path.join(hostDir, "stream-overlay.lock");
+  // Shared with every edition (dual-host workspaces mutate ONE overlay):
+  // the lock sits beside the overlay, not under this host's transport dir.
+  return streamOverlayLockFile(workspaceRoot);
 }
 
 function withStreamMutationLock(fn) {
@@ -1848,7 +1851,7 @@ function commandStreamOpen() {
   if (existsSync(demandStateFile)) {
     try {
       const demandState = JSON.parse(readFileSync(demandStateFile, "utf8")).state;
-      if (demandState === "completed" || demandState === "archived") {
+      if (["completed", "archived", "cancelled"].includes(demandState)) {
         fail(`demand ${demandKey} is ${demandState}; streams attach to open demands only.`);
       }
     } catch (error) {
@@ -2244,7 +2247,7 @@ function commandPodOpen() {
   if (existsSync(stateFile)) {
     try {
       const demandState = JSON.parse(readFileSync(stateFile, "utf8")).state;
-      if (demandState === "completed" || demandState === "archived") {
+      if (["completed", "archived", "cancelled"].includes(demandState)) {
         fail(`demand ${demandKey} is ${demandState}; a pod attaches to a claimable or open demand.`);
       }
       process.stderr.write(`wakeflow-claude-host: demand ${demandKey} already has a state root (${demandState}); the pod controller should RESUME it, not re-create it.\n`);

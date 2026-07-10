@@ -50,6 +50,14 @@ export function trackedConfigFile(workspaceRoot) {
   return preferred;
 }
 
+// The overlay mutation lock lives BESIDE the shared overlay it guards, not
+// under a per-host transport dir: in a dual-host workspace both editions
+// mutate ONE derived overlay, so a host-scoped lock file would let a Codex
+// stream op race a Claude Code one. Same principle as the state-root lock.
+export function streamOverlayLockFile(workspaceRoot) {
+  return path.join(workspaceRoot, ".wakeflow-local", "stream-overlay.lock");
+}
+
 export function overlayConfigFile(workspaceRoot) {
   // Regenerate an existing legacy-named overlay in place (never two overlays);
   // fresh overlays get the canonical name.

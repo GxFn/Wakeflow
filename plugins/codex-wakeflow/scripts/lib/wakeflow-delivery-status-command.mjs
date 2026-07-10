@@ -58,7 +58,7 @@ function scanDemandHostOwnership(workspaceRoot) {
       // completed/archived demands stay countable but are dropped from the
       // embedded list: the live workspace can hold ~100 state roots and the
       // status payload feeds straight into agent context.
-      if (["completed", "archived"].includes(state.state)) continue;
+      if (["completed", "archived", "cancelled"].includes(state.state)) continue;
       active.push({
         demandKey: state.demandKey,
         stateRoot: `.wakeflow-active/current/${entry.name}`,
@@ -122,7 +122,10 @@ export function commandStatus(ctx) {
       return null;
     }
     if (!existsSync(location.stateFile)) {
-      diagnostics.errors.push({ file: path.relative(workspaceRoot, location.stateFile), error: "state root is missing wakeflow-state.json" });
+      // A vanished state root (archived copy pruned, custom archive dir, hand
+      // cleanup) makes its packets HISTORY, not an active-blocking error: the
+      // archived-location resolver already covered every sanctioned move.
+      (diagnostics.warnings ?? (diagnostics.warnings = [])).push({ file: path.relative(workspaceRoot, location.stateFile), warning: "state root file is gone (archived copy pruned or custom location); its packets are treated as historical" });
       stateSnapshotCache.set(stateRootRef, null);
       return null;
     }
@@ -144,8 +147,10 @@ export function commandStatus(ctx) {
 
   function packetStillActive(packet, diagnostics, allPackets) {
     const snapshot = stateSnapshot(packet.stateRef?.stateRoot, diagnostics);
-    if (!snapshot) return true;
-    if (["completed", "archived"].includes(snapshot.state.state)) return false;
+    // No readable state root anywhere (active or archived): treat the packet
+    // as historical rather than resurrecting it into the resume plan.
+    if (!snapshot) return false;
+    if (["completed", "archived", "cancelled"].includes(snapshot.state.state)) return false;
     const task = (snapshot.state.targetTasks ?? []).find((item) => item.targetTaskId === packet.taskId);
     if (!task) return true;
     const currentGroup = task.delivery?.dispatchGroup;
@@ -315,7 +320,7 @@ export function commandStatus(ctx) {
     const stateRootRefs = [...new Set(packets.map((packet) => packet.stateRef?.stateRoot).filter(Boolean))];
     return stateRootRefs.flatMap((stateRootRef) => {
       const snapshot = stateSnapshot(stateRootRef, diagnostics);
-      if (!snapshot || ["completed", "archived"].includes(snapshot.state.state)) return [];
+      if (!snapshot || ["completed", "archived", "cancelled"].includes(snapshot.state.state)) return [];
       const state = snapshot.state;
       return [{
         stateRoot: stateRootRef,

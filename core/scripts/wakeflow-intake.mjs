@@ -160,7 +160,7 @@ function resolveStateRoot() {
     fail(`state root is missing wakeflow-state.json: ${relative(stateRoot)}`);
   }
   const state = readJson(stateFile, "controller state");
-  if (["completed", "archived"].includes(state.state)) {
+  if (["completed", "archived", "cancelled"].includes(state.state)) {
     fail(`cannot attach intake while demand is ${state.state}: ${state.demandKey}`);
   }
   // Intake attaches records into the state root: the non-owning host must not

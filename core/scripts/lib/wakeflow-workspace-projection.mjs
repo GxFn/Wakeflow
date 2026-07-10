@@ -44,7 +44,7 @@ function splitMarkdownRow(line) {
   return text.slice(1, -1).split("|").map((cell) => cell.trim());
 }
 
-export function archiveWorkspaceTodo({ workspaceRoot, designKey, archiveMount, config = null }) {
+export function archiveWorkspaceTodo({ workspaceRoot, designKey, archiveMount, rowStatus = "completed / archived", config = null }) {
   if (!designKey) return { changed: false, reason: "no-design-key" };
   const loaded = config ?? loadWorkspaceConfig({ workspaceRoot });
   const paths = workspaceLedgerPaths({ workspaceRoot, config: loaded });
@@ -64,7 +64,7 @@ export function archiveWorkspaceTodo({ workspaceRoot, designKey, archiveMount, c
       const rowIndex = lines.findIndex((line, index) => index > headerIndex && splitMarkdownRow(line)[0] === designKey);
       if (rowIndex < 0) return { changed: false, reason: "row-missing" };
       const row = splitMarkdownRow(lines[rowIndex]);
-      row[statusIndex] = "completed / archived";
+      row[statusIndex] = rowStatus;
       if (mountIndex >= 0) row[mountIndex] = archiveMount;
       lines[rowIndex] = `| ${row.join(" | ")} |`;
       atomicWrite(board, lines.join("\n"));

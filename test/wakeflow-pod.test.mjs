@@ -78,6 +78,8 @@ test("codex pod open prepares the shared worktree set and an agent-tools window 
   for (const entry of payload.windowPlan) {
     assert.equal(entry.createWindowTool, "create_thread");
     assert.equal(entry.localRegistration.tool, "wakeflow_register_window");
+    assert.equal(entry.localRegistration.args.windowHandle, "<create_thread.threadId>",
+      "registration template carries the host-specific handle placeholder");
     assert.ok(entry.createThreadPrompt.length > 0, `${entry.windowName} carries a prompt`);
   }
   const work = payload.windowPlan[0];
@@ -228,4 +230,30 @@ test("pod close accepts a cancelled demand in its close order", () => {
   const closed = pod(codexPod, root, ["close", "--demand-key", "POD-X"]);
   assert.equal(closed.status, 0, closed.stderr || closed.stdout);
   assert.equal(JSON.parse(closed.stdout).closedIsolationWindows.length, 1);
+});
+
+
+// P0 fix wave: a hard crash between `git worktree add` and the overlay write
+// leaves an orphan worktree with no entry. Re-running open now ADOPTS a
+// worktree that provably belongs to this stream (right repo, right branch)
+// instead of dead-ending; anything else still refuses.
+test("pod open adopts a crash-orphaned worktree and refuses a foreign directory", () => {
+  const { root } = makeWorkspace();
+  const worktreeDir = path.join(root, ".wakeflow-local/worktrees/RepoA__POD-O");
+  mkdirSync(path.dirname(worktreeDir), { recursive: true });
+  git(path.join(root, "RepoA"), ["worktree", "add", worktreeDir, "-b", "POD-O/POD-O"]);
+
+  const open = pod(codexPod, root, ["open", "--demand-key", "POD-O", "--repos", "RepoA"]);
+  assert.equal(open.status, 0, open.stderr || open.stdout);
+  const payload = JSON.parse(open.stdout);
+  assert.deepEqual(payload.workWindows.map((win) => win.status), ["adopted"]);
+  const overlay = JSON.parse(readFileSync(path.join(root, ".wakeflow-local/wakeflow.config.json"), "utf8"));
+  assert.ok(overlay.repositories.some((repo) => repo.windowName === "RepoA__POD-O"), "adopted worktree lands in the overlay");
+
+  const foreignDir = path.join(root, ".wakeflow-local/worktrees/RepoB__POD-F");
+  mkdirSync(foreignDir, { recursive: true });
+  writeFileSync(path.join(foreignDir, "junk.txt"), "not a worktree\n");
+  const refused = pod(codexPod, root, ["open", "--demand-key", "POD-F", "--repos", "RepoB"]);
+  assert.equal(refused.status, 1);
+  assert.match(JSON.parse(refused.stderr).error, /not RepoB__POD-F's worktree on branch/);
 });

@@ -1127,7 +1127,7 @@ function commandImportTargetResult() {
   }
   const state = readJson(path.join(stateRoot, "wakeflow-state.json"), "controller state");
   const hostOwnership = ensureDemandHostOwnership(state, { claim: false });
-  if (["completed", "archived"].includes(state.state)) {
+  if (["completed", "archived", "cancelled"].includes(state.state)) {
     fail(`cannot import target result while demand is ${state.state}: ${state.demandKey}`);
   }
   const targetTask = (state.targetTasks ?? []).find((item) => item.targetTaskId === targetTaskId);
@@ -1288,7 +1288,7 @@ function commandReduceResultsLocked(stateRoot) {
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const state = readJson(stateFile, "controller state");
   const hostOwnership = ensureDemandHostOwnership(state);
-  if (["completed", "archived"].includes(state.state)) {
+  if (["completed", "archived", "cancelled"].includes(state.state)) {
     fail(`cannot reduce results while demand is ${state.state}: ${state.demandKey}`);
   }
   const allTargetTasks = state.targetTasks ?? [];
@@ -1738,6 +1738,9 @@ function commandCompleteDemandLocked(stateRoot) {
   if (state.state === "completed") {
     fail(`demand is already completed: ${state.demandKey}`);
   }
+  if (state.state === "cancelled") {
+    fail(`demand is cancelled: ${state.demandKey}; archive it instead of completing.`);
+  }
   const openTasks = (state.targetTasks ?? []).filter((task) => task.status !== "accepted");
   const openPackages = (state.taskPackages ?? []).filter((taskPackage) => taskPackage.status !== "accepted");
   if (openTasks.length > 0 || openPackages.length > 0) {
@@ -1894,6 +1897,25 @@ function commandCancelDemandLocked(stateRoot) {
     ...(hostOwnership.claimed || hostOwnership.transferredFrom ? { hostOwnership } : {}),
   };
 
+  // Cancel is a real stop: the demand's in-flight window delivery locks are
+  // released NOW, or the documented close order (stream-close / pod close ->
+  // archive) dead-ends on "fresh in-flight delivery lock" for up to the lock
+  // TTL while a zombie demand holds an active-demand slot. Only locks whose
+  // deliveryId belongs to this demand's tasks are touched.
+  const releasedWindowLocks = [];
+  if (write) {
+    for (const task of state.targetTasks ?? []) {
+      const deliveryId = task.delivery?.deliveryId;
+      if (!deliveryId || !task.targetWindow) continue;
+      const lockFile = path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery/locks", `${slug(task.targetWindow)}.json`);
+      const released = releaseWindowLockForResult(
+        lockFile,
+        (lock) => !lock.deliveryId || lock.deliveryId === deliveryId,
+      );
+      if (released) releasedWindowLocks.push(task.targetWindow);
+    }
+  }
+
   if (write) {
     appendJsonLine(eventsFile, event);
     writeJson(stateFile, nextState);
@@ -1915,8 +1937,9 @@ function commandCancelDemandLocked(stateRoot) {
       stateRevision: nextRevision,
       eventId,
       openTargetTasks: openTasks.map((task) => task.targetTaskId),
+      releasedWindowLocks,
       projectionStatus: "stale",
-      agentNext: "Demand is cancelled, not archived: it still occupies active-demand capacity. Close any open isolation windows (stream-close / pod close), then run archive-demand to free the slot. Recorded evidence stays untouched.",
+      agentNext: "Demand is cancelled, not archived: it still occupies active-demand capacity. Its in-flight window delivery locks were released; a window mid-task may still finish and return a late result (recorded as history only). Close any open isolation windows (stream-close / pod close), then run archive-demand to free the slot. Recorded evidence stays untouched.",
       appendLog: {
         type: "decision",
         decision: `cancelled: ${reason}`,
@@ -2204,6 +2227,12 @@ function commandArchiveDemandLocked(stateRoot) {
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const state = readJson(stateFile, "controller state");
+  // Archive relocates and (with --redact) rewrites the root — the most
+  // destructive controller mutation, so it honors the same cross-host
+  // fail-closed invariant as every other driving command.
+  if (state.controllerHost && state.controllerHost !== hostProfile.runtime.hostDirName) {
+    fail(`demand ${state.demandKey} is owned by controller host ${state.controllerHost}; this runtime is ${hostProfile.runtime.hostDirName}. Archive it from the owning host or transfer ownership first (wakeflow_adopt_demand_host).`);
+  }
 
   if (state.state !== "completed" && state.state !== "cancelled") {
     fail(`archive-demand requires state=completed or state=cancelled; ${state.demandKey} is ${state.state}.`);
@@ -2454,6 +2483,8 @@ function commandArchiveDemandLocked(stateRoot) {
     config,
     designKey: state.designKey ?? demandRecord.designKey ?? demandRecord.source?.designKey,
     archiveMount: relative(ledgerDest),
+    // The board must not report a cancelled demand as delivered.
+    rowStatus: state.state === "cancelled" ? "cancelled / archived" : "completed / archived",
   });
   refreshWorkspaceProjection({ workspaceRoot, config, updatedAt: createdAt });
   const archiveWarnings = [

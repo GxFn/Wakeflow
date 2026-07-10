@@ -25,11 +25,19 @@
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { hostProfile } from "./wakeflow-host-profile.mjs";
 
 export const OVERLAY_KIND = "WakeflowLocalConfigOverlay";
+
+function safeRealpath(value) {
+  try {
+    return realpathSync(value);
+  } catch {
+    return path.resolve(value);
+  }
+}
 
 function slug(value) {
   return String(value ?? "")
@@ -211,23 +219,50 @@ export function addStreamWorktree({ workspaceRoot, repoEntry, repoWindow, stream
   const worktreeDir = worktreeDirFor(workspaceRoot, repoWindow, streamId);
   const worktreeRel = path.relative(workspaceRoot, worktreeDir).split(path.sep).join("/");
   const windowName = streamWindowName(repoWindow, streamId);
+  let adopted = false;
   if (existsSync(worktreeDir)) {
-    throw new Error(`worktree directory already exists: ${worktreeDir}; close/remove it or choose another stream id.`);
+    // A worktree with no overlay entry is the residue of a hard crash between
+    // `git worktree add` and the overlay write (the rollback only covers the
+    // exception path). When it provably IS this stream's worktree — attached
+    // to this repo and sitting on the expected branch — adopt it instead of
+    // dead-ending: re-running open converges. Anything else still refuses.
+    const head = exec("git", ["-C", worktreeDir, "rev-parse", "--abbrev-ref", "HEAD"]);
+    const attached = exec("git", ["-C", repoPath, "worktree", "list", "--porcelain"]);
+    // git prints REAL paths; symlinked spellings of the same dir (macOS /var
+    // -> /private/var) must compare equal — same normalization as the state
+    // lock's realpath rule.
+    const realWorktreeDir = safeRealpath(worktreeDir);
+    const isOurs = head.status === 0
+      && head.stdout.trim() === branch
+      && attached.status === 0
+      && attached.stdout.split("\n")
+        .filter((line) => line.startsWith("worktree "))
+        .some((line) => safeRealpath(line.slice("worktree ".length)) === realWorktreeDir);
+    if (!isOurs) {
+      throw new Error(`worktree directory already exists and is not ${windowName}'s worktree on branch ${branch}: ${worktreeDir}; remove it (git worktree remove / rm -rf) or choose another stream id.`);
+    }
+    adopted = true;
+  } else {
+    mkdirSync(path.dirname(worktreeDir), { recursive: true });
+    const added = exec("git", ["-C", repoPath, "worktree", "add", worktreeDir, "-b", branch, ...(baseBranch ? [baseBranch] : [])]);
+    if (added.status !== 0) throw new Error(`git worktree add failed: ${(added.stderr || added.stdout).trim()}`);
   }
-  mkdirSync(path.dirname(worktreeDir), { recursive: true });
-  const added = exec("git", ["-C", repoPath, "worktree", "add", worktreeDir, "-b", branch, ...(baseBranch ? [baseBranch] : [])]);
-  if (added.status !== 0) throw new Error(`git worktree add failed: ${(added.stderr || added.stdout).trim()}`);
   const entry = buildStreamEntry({ repoEntry, windowName, worktreeRel, repoWindow, streamId, demandKey, branch });
   try {
     regenerateOverlay(workspaceRoot, [...streams, entry]);
   } catch (error) {
+    if (adopted) {
+      // The adopted worktree predates this call: keep it for the next retry
+      // instead of destroying crash evidence.
+      throw new Error(`stream registration failed (adopted worktree kept in place): ${error.message}`);
+    }
     // Registration failed: roll the worktree + branch back so nothing is
     // half-open, then rethrow with the real reason.
     exec("git", ["-C", repoPath, "worktree", "remove", "--force", worktreeDir]);
     exec("git", ["-C", repoPath, "branch", "-D", branch]);
     throw new Error(`stream registration failed (worktree rolled back): ${error.message}`);
   }
-  return { entry, worktreeDir, worktreeRel, windowName };
+  return { entry, worktreeDir, worktreeRel, windowName, adopted };
 }
 
 // Remove one isolation stream's worktree (and optionally its branch), with the

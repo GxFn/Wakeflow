@@ -2614,3 +2614,38 @@ test("--compact payloads drop the structured echoes but keep ids, files, and pro
   assert.equal(result.result, undefined, "no result echo");
   assert.ok(result.resultId);
 });
+
+// P0 fix wave: cancel stays STICKY against the delivery runtime. An envelope
+// prepared before the cancel may still be sent by a slow host; recording that
+// run must not resurrect the demand to "dispatched", and the status/resume
+// plan must treat the cancelled demand's packets as history.
+test("a cancelled demand never resurrects: record-delivery-run refuses and status hides its packets", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef, { group: "GROUP-CANCEL-G1" });
+
+  const stateScript = path.join(workspaceRoot, "scripts/wakeflow-state.mjs");
+  const cancel = runSync(process.execPath, [
+    stateScript, "cancel-demand", "--root", root, "--state-root", stateRootRef,
+    "--reason", "user stop", "--write", "--json",
+  ], { cwd: root, encoding: "utf8" });
+  assert.equal(cancel.status, 0, cancel.stderr || cancel.stdout);
+
+  const record = run(root, [
+    "record-delivery-run",
+    "--delivery-file", path.join(root, prepared.deliveryFile),
+    "--status", "sent",
+    "--readback-ok", "true",
+    "--evidence", "late host send after cancel",
+    "--write",
+  ]);
+  const stateAfter = JSON.parse(readFileSync(path.join(root, stateRootRef, "wakeflow-state.json"), "utf8"));
+  assert.equal(stateAfter.state, "cancelled", "recording a late send must not flip cancelled back to dispatched");
+
+  const status = parseOk(run(root, ["status"]));
+  assert.deepEqual(
+    (status.runtimeSummary.deliveries?.pendingHostSend ?? []).map((item) => item.dispatchGroup),
+    [],
+    "cancelled demand's packets stay out of the resume plan",
+  );
+});

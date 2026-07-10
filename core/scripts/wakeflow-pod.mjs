@@ -224,7 +224,7 @@ function buildPodTestPrompt({ demandKey, podSlug, repos }) {
 function registrationTemplate(windowName) {
   return {
     tool: "wakeflow_register_window",
-    args: { window: windowName, windowHandle: hostProfile.launch?.launchResultPlaceholder ?? "<host window handle>", apply: true },
+    args: { window: windowName, windowHandle: hostProfile.handleId?.launchResultPlaceholder ?? "<host window handle>", apply: true },
   };
 }
 
@@ -302,7 +302,7 @@ function commandOpen() {
         if (error instanceof CliExit) throw error;
         fail(`pod open stopped at ${windowName} (already-opened pod windows are kept; fix the cause and re-run open to resume): ${error.message}`);
       }
-      workWindows.push({ windowName, repo, branch, worktree: opened.worktreeRel, status: "opened" });
+      workWindows.push({ windowName, repo, branch, worktree: opened.worktreeRel, status: opened.adopted ? "adopted" : "opened" });
     }
   });
   if (poolExhausted) {

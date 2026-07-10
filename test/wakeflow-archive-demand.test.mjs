@@ -210,3 +210,43 @@ test("cancel-demand refuses a completed demand", () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /already completed/);
 });
+
+// P0 fix wave: cancel is a REAL stop — it releases the demand's in-flight
+// window delivery locks (the documented close order would otherwise dead-end
+// on "fresh in-flight delivery lock" for up to the lock TTL), and the board
+// row of a cancelled demand archives honestly instead of claiming delivery.
+test("cancel-demand releases the demand's in-flight window locks and leaves foreign locks alone", () => {
+  const { root, stateRoot, stateFile } = initDemand({ demandKey: "CXL-3", complete: false });
+  const state = readJson(stateFile);
+  state.targetTasks = [{
+    targetTaskId: "CXL-3-T1", taskPackageId: "CXL-3-P1", targetWindow: "RepoA",
+    status: "sent", delivery: { deliveryId: "d-cxl-3" },
+  }];
+  writeJson(stateFile, state);
+  const locksDir = path.join(root, ".wakeflow-local/wakeflow-delivery/locks");
+  mkdirSync(locksDir, { recursive: true });
+  writeJson(path.join(locksDir, "RepoA.json"), {
+    kind: "WakeflowWindowDeliveryLock", version: 1, windowName: "RepoA",
+    deliveryId: "d-cxl-3", createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 7200000).toISOString(),
+  });
+  writeJson(path.join(locksDir, "RepoB.json"), {
+    kind: "WakeflowWindowDeliveryLock", version: 1, windowName: "RepoB",
+    deliveryId: "d-other-demand", createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 7200000).toISOString(),
+  });
+  const cancel = run(["cancel-demand", "--root", root, "--state-root", stateRoot, "--reason", "stop", "--write", "--json"]);
+  assert.equal(cancel.status, 0, cancel.stderr || cancel.stdout);
+  assert.deepEqual(JSON.parse(cancel.stdout).releasedWindowLocks, ["RepoA"]);
+  assert.equal(existsSync(path.join(locksDir, "RepoA.json")), false, "own in-flight lock released");
+  assert.equal(existsSync(path.join(locksDir, "RepoB.json")), true, "foreign lock untouched");
+});
+
+test("archiving a cancelled demand marks its board row cancelled, not completed", () => {
+  const { root, stateRoot } = initDemand({ demandKey: "CXL-4", complete: false, designKey: "CXL-4" });
+  assert.equal(run(["cancel-demand", "--root", root, "--state-root", stateRoot, "--reason", "scope dropped", "--write", "--json"]).status, 0);
+  assert.equal(run(["archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "cancelled", "--write", "--json"]).status, 0);
+  const board = readFileSync(path.join(root, ".wakeflow-active/current/global-todo-board.md"), "utf8");
+  assert.match(board, /\| CXL-4 \| cancelled \/ archived \|/);
+  assert.doesNotMatch(board, /\| CXL-4 \| completed \/ archived \|/);
+});

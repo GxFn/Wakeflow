@@ -100,6 +100,12 @@ export function createResultRecordingCommands(ctx) {
     const stateFile = path.join(stateRoot, "wakeflow-state.json");
     const eventsFile = path.join(stateRoot, "controller-events.jsonl");
     const state = readJson(stateFile, "controller state");
+    // A closed demand never resurrects to "dispatched": an envelope prepared
+    // before cancel/completion may still be sent by a slow host, but recording
+    // it must not reopen the flow (cancel stays sticky).
+    if (["completed", "archived", "cancelled"].includes(state.state)) {
+      return { updated: false, reason: `demand-${state.state}` };
+    }
     if (state.controllerHost && state.controllerHost !== hostProfile.runtime.hostDirName) {
       fail(`demand ${state.demandKey} is owned by controller host ${state.controllerHost}; this runtime is ${hostProfile.runtime.hostDirName}. Record this delivery on the owning host.`);
     }

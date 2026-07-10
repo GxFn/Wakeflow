@@ -194,3 +194,29 @@ test("build-delivery (packet-file route) refuses a demand owned by the other hos
   assert.notEqual(built.result.status, 0, "stale packet from the old owner must fail at build, not after the send");
   assert.match(built.result.stdout + built.result.stderr, /owned by controller host claude-code/);
 });
+
+// P0 fix wave: archive is the most destructive controller mutation (it
+// relocates — and with --redact rewrites — the state root), so it honors the
+// same cross-host fail-closed invariant as every other driving command.
+test("archive-demand refuses a demand owned by the other host", () => {
+  const root = makeRoot();
+  // Keep the archive ledger INSIDE the fixture: the default ../wakeflow-ledger
+  // would escape the tmp root and collide across runs.
+  writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
+    workspaceName: "Own", controllerWindow: "C", projectLedgerRoot: "wakeflow-ledger",
+  }, null, 2)}\n`);
+  const { stateRootRef, stateFile } = initDemand(root);
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.controllerHost = "claude-code";
+  state.state = "completed";
+  writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+
+  const { result } = runJson(codexState, ["archive-demand", "--root", root, "--state-root", stateRootRef, "--reason", "cross-host attempt", "--write"], root);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout + result.stderr, /owned by controller host claude-code/);
+
+  const { result: adopted } = runJson(codexState, ["adopt-demand-host", "--root", root, "--state-root", stateRootRef, "--reason", "handoff", "--write"], root);
+  assert.equal(adopted.status, 0, adopted.stderr || adopted.stdout);
+  const { result: archived } = runJson(codexState, ["archive-demand", "--root", root, "--state-root", stateRootRef, "--reason", "after adopt", "--write"], root);
+  assert.equal(archived.status, 0, archived.stderr || archived.stdout);
+});

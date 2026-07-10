@@ -248,13 +248,25 @@ if (!currentPlanPath || !existsSync(currentPlanPath)) {
   );
 }
 
+// Thin-entry governance: a workspace may keep its active entry docs as
+// pointer-only surfaces (current state + navigation; demand history lives in
+// its ledger, dispatch truth in state-root projections). The doc opts in with
+// an EXPLICIT machine-readable marker, so default workspaces keep the full
+// section contract and a thin doc is a decision, never an accident.
+const THIN_DOC_CONTRACT = /<!--\s*wakeflow:doc-contract:\s*thin\s*-->/;
+
 if (indexContent) {
   issues.push(
-    ...checkRequiredSections(path.relative(workspaceRoot, indexPath), indexContent, [
-      { name: "Current Controller Entry", regex: /^## Current Controller Entry/m },
-      { name: "Window Coverage Status", regex: /^## Window Coverage Status/m },
-      { name: "Status Enum", regex: /^## Status Enum/m },
-    ]),
+    ...checkRequiredSections(path.relative(workspaceRoot, indexPath), indexContent, THIN_DOC_CONTRACT.test(indexContent)
+      ? [
+        { name: "Status line", regex: /^Status:\s*.+$/m },
+        { name: "Current Controller Entry", regex: /^## Current Controller Entry/m },
+      ]
+      : [
+        { name: "Current Controller Entry", regex: /^## Current Controller Entry/m },
+        { name: "Window Coverage Status", regex: /^## Window Coverage Status/m },
+        { name: "Status Enum", regex: /^## Status Enum/m },
+      ]),
   );
 }
 
@@ -262,11 +274,15 @@ let planContent = "";
 if (currentPlanPath && existsSync(currentPlanPath)) {
   planContent = read(currentPlanPath);
   issues.push(
-    ...checkRequiredSections(path.relative(workspaceRoot, currentPlanPath), planContent, [
-      { name: "Window Dispatch", regex: /^## .*Window Dispatch/m },
-      { name: "Copyable Prompt", regex: /^## .*Copyable/m },
-      { name: "Backfill Area", regex: /^## .*Backfill Area/m },
-    ]),
+    ...checkRequiredSections(path.relative(workspaceRoot, currentPlanPath), planContent, THIN_DOC_CONTRACT.test(planContent)
+      ? [
+        { name: "Current Controller Status", regex: /^## Current Controller Status/m },
+      ]
+      : [
+        { name: "Window Dispatch", regex: /^## .*Window Dispatch/m },
+        { name: "Copyable Prompt", regex: /^## .*Copyable/m },
+        { name: "Backfill Area", regex: /^## .*Backfill Area/m },
+      ]),
   );
   issues.push(...checkCompletedDocsExist(planContent));
 }

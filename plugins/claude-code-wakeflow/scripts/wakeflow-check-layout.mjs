@@ -177,18 +177,28 @@ validateTableSection({
 
 if (existsSync(currentStatusPath)) {
   const currentStatusContent = read(currentStatusPath);
-  if (!/^Status:\s*.+$/m.test(currentStatusContent)) {
-    issues.push(`${relative(currentStatusPath)} is missing a Status: line`);
+  // Thin-entry governance (explicit `wakeflow:doc-contract: thin` marker):
+  // the status doc is a pointer-only surface — dispatch truth lives in
+  // state-root projections, so the Status/Controller/Window Dispatch shape is
+  // not required. It still must carry its controller-status heading.
+  if (/<!--\s*wakeflow:doc-contract:\s*thin\s*-->/.test(currentStatusContent)) {
+    if (!/^## Current Controller Status/m.test(currentStatusContent)) {
+      issues.push(`${relative(currentStatusPath)} opted into the thin doc contract but is missing ## Current Controller Status`);
+    }
+  } else {
+    if (!/^Status:\s*.+$/m.test(currentStatusContent)) {
+      issues.push(`${relative(currentStatusPath)} is missing a Status: line`);
+    }
+    if (!/^Controller window:\s*.+$/m.test(currentStatusContent)) {
+      issues.push(`${relative(currentStatusPath)} is missing a Controller window: line`);
+    }
+    validateTableSection({
+      file: currentStatusPath,
+      label: "window dispatch",
+      heading: "Window Dispatch",
+      requiredColumns: ["Window", "Status"],
+    });
   }
-  if (!/^Controller window:\s*.+$/m.test(currentStatusContent)) {
-    issues.push(`${relative(currentStatusPath)} is missing a Controller window: line`);
-  }
-  validateTableSection({
-    file: currentStatusPath,
-    label: "window dispatch",
-    heading: "Window Dispatch",
-    requiredColumns: ["Window", "Status"],
-  });
 }
 
 validateTableSection({

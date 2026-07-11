@@ -235,11 +235,10 @@ Design 和 Test 是支持角色：
 （窗口自排序）；跨需求最多 `maxActiveDemands`（默认 2，`wakeflow.config.json`）
 个需求以 pod 并行：
 
-- 一个需求 = 一个执行 pod。持久舰队是 pod 0，使用主检出；第 2..N 个需求才
-  获得专属 `Controller__<pod>`、`Test__<pod>` 和按仓库的 isolation worktree
-  窗口（`<repo>__<pod>`，分支 `<demandKey>/<pod>`）。整个隔离 pod 共用 ONE
-  worktree set，其中所有窗口都在该集合工作和验证，绝不碰主检出。pod 之间
-  互不感知。
+- 一个需求 = 一个 pod：自己的 `Controller__<pod>`、按仓库的 isolation worktree
+  窗口（`<repo>__<pod>`，分支 `<demandKey>/<pod>`）和自己的 `Test__<pod>`——
+  一套按需求划分的线程组。整个 pod 共用这条需求的一套 worktree：每个窗口
+  （含 Test）都在这套 worktree 里工作和验证，绝不碰主检出。pod 之间互不感知。
 - 用 `wakeflow_pod_open` 打开（幂等——重跑即续开）：它创建 worktree 和 overlay
   条目并返回 windowPlan；按计划逐条用 `create_thread` 建线程（cwd = 该条目的
   worktree，提示词 = `createThreadPrompt`），再用 `wakeflow_register_window`

@@ -1433,7 +1433,7 @@ test("completed demands reject follow-up task and result mutations", () => {
 });
 
 
-test("import-target-result requires explicit supersession for the same target/group", () => {
+test("import-target-result auto-disambiguates the default result id on rework re-import", () => {
   const root = makeRoot();
   const init = JSON.parse(run(["init", "--root", root, "--demand-key", "REWORK-FIXTURE", "--title", "Rework Fixture", "--write", "--json"]).stdout);
   run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Pkg", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
@@ -1442,17 +1442,9 @@ test("import-target-result requires explicit supersession for the same target/gr
   const first = JSON.parse(run(args).stdout);
   assert.equal(first.ok, true);
 
-  const duplicate = run(args);
-  assert.notEqual(duplicate.status, 0);
-  assert.match(duplicate.stdout, /--supersede-result/);
-
-  const second = JSON.parse(run([...args.slice(0, -2), "--supersede-result", "--write", "--json"]).stdout);
-  assert.equal(second.ok, true);
-  assert.equal(second.resultId, first.resultId, "the canonical current-result id remains stable");
-  assert.equal(second.superseded, true);
-  assert.match(second.supersededFile, /target-results\/superseded\//);
-  const current = readJson(path.join(root, second.resultFile));
-  assert.equal(current.supersedes.resultId, first.resultId);
+  const second = JSON.parse(run(args).stdout);
+  assert.equal(second.ok, true, "rework re-import with the default result id must not collide");
+  assert.notEqual(second.resultId, first.resultId, "second import gets a disambiguated id");
 
   const explicit = run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--result-id", first.resultId, "--evidence-ref", "reports/a.json", "--write", "--json"]);
   assert.notEqual(explicit.status, 0, "an explicit duplicate result id still fails");
@@ -1487,7 +1479,7 @@ test("a blocked review decision is recoverable: new evidence reopens review and 
   assert.equal(blockedDecision.ok, true);
 
   // new evidence arrives -> the blocked task must be reviewable again
-  const reimport = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "reports/fixed.json", "--supersede-result", "--write", "--json"]).stdout);
+  const reimport = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "reports/fixed.json", "--write", "--json"]).stdout);
   assert.equal(reimport.ok, true, "import after a blocked decision must work");
   writeStateRootEvidence(root, init.stateRoot, "reports/fixed.json");
   const reduced2 = JSON.parse(run(["reduce-results", "--root", root, "--state-root", init.stateRoot, "--write", "--json"]).stdout);

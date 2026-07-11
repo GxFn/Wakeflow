@@ -79,60 +79,6 @@ function scanDemandHostOwnership(workspaceRoot) {
   };
 }
 
-function scanStateRootResultCounts(workspaceRoot) {
-  const config = loadWorkspaceConfig({ workspaceRoot });
-  const { workspaceCurrentDir } = workspaceLedgerPaths({ workspaceRoot, config });
-  const currentResults = [];
-  let stateRootResultArtifactCount = 0;
-  let supersededResultCount = 0;
-  const diagnostics = [];
-  if (!existsSync(workspaceCurrentDir)) {
-    return {
-      stateRootResultArtifactCount: 0,
-      uniqueTargetResultCount: 0,
-      supersededResultCount: 0,
-      diagnostics,
-    };
-  }
-
-  for (const demand of readdirSync(workspaceCurrentDir, { withFileTypes: true })) {
-    if (!demand.isDirectory()) continue;
-    const stateRoot = path.join(workspaceCurrentDir, demand.name);
-    if (!existsSync(path.join(stateRoot, "wakeflow-state.json"))) continue;
-    const resultsDir = path.join(stateRoot, "target-results");
-    if (!existsSync(resultsDir)) continue;
-    for (const entry of readdirSync(resultsDir, { withFileTypes: true })) {
-      if (entry.isDirectory() && entry.name === "superseded") {
-        supersededResultCount += readdirSync(path.join(resultsDir, entry.name), { withFileTypes: true })
-          .filter((item) => item.isFile() && item.name.endsWith(".json"))
-          .length;
-        continue;
-      }
-      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
-      stateRootResultArtifactCount += 1;
-      const file = path.join(resultsDir, entry.name);
-      try {
-        currentResults.push(JSON.parse(readFileSync(file, "utf8")));
-      } catch (error) {
-        diagnostics.push({ file: path.relative(workspaceRoot, file), error: error.message });
-      }
-    }
-  }
-
-  const uniqueResults = new Set(currentResults.map((result) => [
-    result.demandKey ?? result.stateRoot ?? "unknown-demand",
-    result.dispatchGroup ?? result.deliveryContext?.dispatchGroup ?? "ungrouped",
-    result.targetWindow ?? "unknown-window",
-    result.targetTaskId ?? result.taskId ?? result.resultId ?? "unknown-task",
-  ].join("\u0000")));
-  return {
-    stateRootResultArtifactCount,
-    uniqueTargetResultCount: uniqueResults.size,
-    supersededResultCount,
-    diagnostics,
-  };
-}
-
 export function commandStatus(ctx) {
   const {
     workspaceRoot,
@@ -394,11 +340,6 @@ export function commandStatus(ctx) {
     deliveryCount,
     deliveryRunCount,
     resultCount,
-    transportResultCount,
-    stateRootResultArtifactCount,
-    uniqueTargetResultCount,
-    supersededResultCount,
-    stateRootResultDiagnostics,
     registeredThreadCount,
     windowConfigCount,
     keepLive,
@@ -411,8 +352,7 @@ export function commandStatus(ctx) {
     const diagnostics = {
       errors: [...packetArtifacts, ...groupArtifacts, ...deliveryArtifacts, ...runArtifacts, ...resultArtifacts]
         .filter((item) => item.error)
-        .map((item) => ({ file: path.relative(workspaceRoot, item.file), error: item.error }))
-        .concat(stateRootResultDiagnostics),
+        .map((item) => ({ file: path.relative(workspaceRoot, item.file), error: item.error })),
     };
     const packets = artifactValues(packetArtifacts, "ControllerDispatchPacket").map((item) => item.value);
     const groups = artifactValues(groupArtifacts, "DispatchGroup");
@@ -477,10 +417,6 @@ export function commandStatus(ctx) {
         deliveryCount,
         deliveryRunCount,
         resultCount,
-        transportResultCount,
-        stateRootResultArtifactCount,
-        uniqueTargetResultCount,
-        supersededResultCount,
         registeredThreadCount,
         windowConfigCount,
       },
@@ -650,17 +586,7 @@ export function commandStatus(ctx) {
   const groupCount = listJsonFiles(dirs.groups).length;
   const deliveryCount = listJsonFiles(dirs.deliveries).length;
   const deliveryRunCount = listJsonFiles(dirs.deliveryRuns).length;
-  const transportResultCount = listJsonFiles(dirs.results).length;
-  const stateRootResultCounts = scanStateRootResultCounts(workspaceRoot);
-  const {
-    stateRootResultArtifactCount,
-    uniqueTargetResultCount,
-    supersededResultCount,
-  } = stateRootResultCounts;
-  const stateRootResultDiagnostics = stateRootResultCounts.diagnostics;
-  // Compatibility alias: resultCount now means current unique state-root
-  // results, never the unrelated transport-local cache count.
-  const resultCount = uniqueTargetResultCount;
+  const resultCount = listJsonFiles(dirs.results).length;
   const registeredThreadCount = listJsonFiles(dirs.registry).length;
   const windowConfigCount = listJsonFiles(dirs.windowConfig).length;
   const verbose = hasFlag("--verbose") || hasFlag("--full");
@@ -672,11 +598,6 @@ export function commandStatus(ctx) {
     deliveryCount,
     deliveryRunCount,
     resultCount,
-    transportResultCount,
-    stateRootResultArtifactCount,
-    uniqueTargetResultCount,
-    supersededResultCount,
-    stateRootResultDiagnostics,
     registeredThreadCount,
     windowConfigCount,
     keepLive,
@@ -691,10 +612,6 @@ export function commandStatus(ctx) {
       deliveryCount,
       deliveryRunCount,
       resultCount,
-      transportResultCount,
-      stateRootResultArtifactCount,
-      uniqueTargetResultCount,
-      supersededResultCount,
       registeredThreadCount,
       windowConfigCount,
       keepLiveStateExists,
@@ -722,10 +639,7 @@ export function commandStatus(ctx) {
       `Dispatch groups: ${groupCount}`,
       `Delivery envelopes: ${deliveryCount}`,
       `Delivery runs: ${deliveryRunCount}`,
-      `Target results (unique current): ${uniqueTargetResultCount}`,
-      `Target result artifacts (state roots): ${stateRootResultArtifactCount}`,
-      `Superseded target results: ${supersededResultCount}`,
-      `Transport-local result cache: ${transportResultCount}`,
+      `Target results: ${resultCount}`,
       `Registered threads: ${registeredThreadCount}`,
       `Window configs: ${windowConfigCount}`,
       `Keep-live: ${keepLive.active ? `active worker=${keepLive.workerPid} child=${keepLive.childPid}` : keepLive.status}`,

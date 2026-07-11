@@ -46,12 +46,6 @@ function withoutGeneratedAt(value) {
   );
 }
 
-function repositorySnapshotComparable(snapshot) {
-  if (!snapshot || typeof snapshot !== "object") return snapshot;
-  const { capturedAt, ...rest } = snapshot;
-  return rest;
-}
-
 function dispatchPacketComparable(packet = {}) {
   return {
     kind: packet.kind,
@@ -64,8 +58,6 @@ function dispatchPacketComparable(packet = {}) {
     humanContextRef: packet.humanContextRef,
     stateRef: packet.stateRef,
     objective: packet.objective,
-    executionContract: packet.executionContract,
-    repositorySnapshot: repositorySnapshotComparable(packet.repositorySnapshot),
     scope: packet.scope ?? [],
     forbidden: packet.forbidden ?? [],
     evidenceRequired: packet.evidenceRequired ?? [],
@@ -88,8 +80,6 @@ function deliveryEnvelopeComparable(envelope = {}) {
     controllerWindow: envelope.controllerWindow,
     humanContextRef: envelope.humanContextRef,
     stateRef: envelope.stateRef,
-    executionContract: envelope.executionContract,
-    repositorySnapshot: repositorySnapshotComparable(envelope.repositorySnapshot),
     prompt: envelope.prompt,
     returnPolicy: envelope.returnPolicy,
     returnRoute: envelope.returnRoute,

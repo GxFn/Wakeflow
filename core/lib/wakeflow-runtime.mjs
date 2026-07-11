@@ -2,7 +2,6 @@ import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnProcess } from "./wakeflow-process.mjs";
-import { currentMcpCaller } from "./wakeflow-mcp-context.mjs";
 import {
   buildWakeflowTrace,
   firstString,
@@ -80,7 +79,6 @@ export async function runWakeflowRuntime({
     args: [scriptPath, ...args],
     cwd: effectiveCwd,
     timeoutMs,
-    caller: currentMcpCaller(),
   });
   const completedAt = new Date().toISOString();
   const safeArgs = redactSensitive(args, secrets);
@@ -142,21 +140,14 @@ function resolveCwd(cwd) {
   return resolved;
 }
 
-function spawnNode({ command, args, cwd, timeoutMs, caller }) {
+function spawnNode({ command, args, cwd, timeoutMs }) {
   return new Promise((resolve) => {
-    const env = {
-      ...process.env,
-      WAKEFLOW_CONTROL_RUNTIME: "1",
-    };
-    delete env.WAKEFLOW_VERIFIED_ACTOR_WINDOW;
-    delete env.WAKEFLOW_VERIFIED_ACTOR_ROLE;
-    if (caller?.enforced && caller.actorWindow) {
-      env.WAKEFLOW_VERIFIED_ACTOR_WINDOW = caller.actorWindow;
-      env.WAKEFLOW_VERIFIED_ACTOR_ROLE = caller.actorRole || "";
-    }
     const child = spawnProcess(command, args, {
       cwd,
-      env,
+      env: {
+        ...process.env,
+        WAKEFLOW_CONTROL_RUNTIME: "1",
+      },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";

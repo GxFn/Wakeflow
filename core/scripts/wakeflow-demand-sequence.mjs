@@ -275,8 +275,6 @@ function commandCreateDemand() {
     if (pkg.sourceRef) tpArgs.push("--source-ref", pkg.sourceRef);
     if (pkg.designIntent) tpArgs.push("--design-intent", pkg.designIntent);
     if (pkg.evidenceContract) tpArgs.push("--evidence-contract", JSON.stringify(pkg.evidenceContract));
-    if (pkg.executionMode) tpArgs.push("--execution-mode", pkg.executionMode);
-    if (pkg.commitExpectation) tpArgs.push("--commit-expectation", pkg.commitExpectation);
     tpArgs.push("--write", "--json");
     runControllerState(tpArgs);
     addedPackages.push(packageId);

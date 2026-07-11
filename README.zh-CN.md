@@ -153,11 +153,10 @@ Wakeflow 采用和 Lark Remote 一样的双层 marketplace 结构：仓库根目
 Claude Code 版本只使用 tmux 常驻终端模型：每个 Wakeflow 窗口（包括总控）都是
 常驻 tmux 的交互式 `claude` 会话，位于名为 `wakeflow` 的 tmux server session
 内；Wakeflow thread id 就是该窗口的 Claude Code session id（跨 resume 保持稳定）。
-最多 `maxActiveDemands`（默认 2）个需求可以以 **demand pod** 的方式并行。
-持久舰队是 pod 0，使用主检出；第 2..N 个需求才创建隔离 pod，每个隔离 pod
-拥有自己的 tmux session、总控、Test 和按仓库的 ONE worktree set，其中所有
-窗口都在该集合工作和验证，绝不碰主检出。超出容量的 claim 会 fail-closed，
-pod 分支只通过人工审核的
+最多 `maxActiveDemands`（默认 2）个需求可以以 **demand pod** 的方式并行：每个
+pod 是独立的 tmux session，拥有自己的总控、按仓库的 isolation worktree 窗口和
+自己的 Test，整个 pod 共用这条需求的一套 worktree（Test 也在 worktree 上验证，
+绝不碰主检出）；超出容量的 claim 会 fail-closed，pod 分支只通过人工审核的
 `pending-merges.md` 台账合并回主线。
 完整指南见 [plugins/claude-code-wakeflow/README.zh-CN.md](plugins/claude-code-wakeflow/README.zh-CN.md)。
 

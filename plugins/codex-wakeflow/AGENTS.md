@@ -143,11 +143,6 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   support only, not task logic, transport, or acceptance evidence.
 - Real thread ids live only in `.wakeflow-local/`; never write them to tracked
   docs, GitHub, prompts, or backfill, and never register placeholders.
-- MCP state mutations are authorized against the host-supplied caller handle
-  and host-scoped thread registry. An initialized workspace rejects an unknown
-  caller; Design writes only through `wakeflow_deliver`, targets return only
-  for their own window, and controller writes require the demand's actual
-  controller. Backend script availability never grants another role.
 - Target windows execute only their assigned packet and return a
   `TargetResultEnvelope`; they do not claim another target/controller role or
   create target-to-target next-hop delivery (a controller return needs
@@ -163,13 +158,13 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   pending-merges ledger, and merge-back is human-reviewed and decentralized —
   no controller merges them.
 - Parallelism exists ONLY at the demand level, as demand pods: up to
-  `maxActiveDemands` (default 2) demands run side by side as mutually unaware
-  pods. The default fleet is pod 0: it uses the persistent controller/Test/work
-  windows and main checkouts. Only demand 2..N opens an isolation pod with its
-  own controller, Test, and ONE worktree set via `wakeflow_pod_open`; every
-  window in that isolation pod works and verifies inside that set, never on a
-  main checkout. Branch merge-back is human-reviewed and decentralized;
-  claiming past capacity fails closed.
+  `maxActiveDemands` (default 2) demands run side by side, each in its own pod
+  (own controller stamped into the state root, own isolation worktrees, own
+  Test — a per-demand thread set opened via `wakeflow_pod_open`), mutually
+  unaware. The WHOLE pod shares its demand's ONE worktree set: every window,
+  Test included, works and verifies inside those worktrees, never on a main
+  checkout. Branch merge-back is human-reviewed and decentralized; claiming
+  past capacity fails closed.
 
 Delivery-envelope fields, host-thread send mechanics, keep-live, and review flow
 live in `skills/wakeflow-governance/references/wakeflow-delivery.md`,

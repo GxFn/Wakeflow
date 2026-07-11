@@ -274,12 +274,11 @@ runs exactly ONE window with ONE combined task package (the window
 self-sequences its items); across demands, up to `maxActiveDemands` (default
 2, `wakeflow.config.json`) demands run side by side as pods:
 
-- One demand = one execution pod. The persistent fleet is pod 0 and uses the
-  main checkouts. Demand 2..N gets its own `Controller__<pod>`, per-repo
-  isolation worktree windows (`<repo>__<pod>` on branch
-  `<demandKey>/<pod>`), and `Test__<pod>`; every window in that isolation pod
-  stays on its ONE worktree set and never uses a main checkout. Pods are
-  mutually unaware.
+- One demand = one pod: its own `Controller__<pod>`, per-repo isolation
+  worktree windows (`<repo>__<pod>` on branch `<demandKey>/<pod>`), and its
+  own `Test__<pod>` — a per-demand thread set. The WHOLE pod shares the
+  demand's one worktree set: every window, Test included, works and verifies
+  inside those worktrees, never on a main checkout. Pods are mutually unaware.
 - Open with `wakeflow_pod_open` (idempotent — re-run resumes): it creates the
   worktrees + overlay entries and returns a windowPlan; create each entry's
   thread with `create_thread` (cwd = the entry's worktree, prompt = the

@@ -41,9 +41,7 @@ export function controllerReturnReadinessIssue({ review, triggerTarget, triggerT
   }
 
   const mode = normalizeReturnPolicyMode(review?.returnPolicy?.mode);
-  if (mode === "group-ready"
-    && !review.groupSnapshot.allSentResultsPresent
-    && review.groupSnapshot.blocked.length === 0) {
+  if (mode === "group-ready" && !review.groupSnapshot.allSentResultsPresent) {
     return {
       code: "group-ready-missing-sent-results",
       message: `Cannot build group-ready controller return while dispatch group has sent targets missing results: ${review.groupSnapshot.missing.map((item) => item.packetId).join(", ")}`,
@@ -70,10 +68,10 @@ function existingDeliveryStatus(deliveries = []) {
   return deliveries.length > 0 ? "unknown" : "not-built";
 }
 
-function callbackUnitStatus({ mode, returnable, missingSent, blocked, existingDeliveries }) {
+function callbackUnitStatus({ mode, returnable, missingSent, existingDeliveries }) {
   const existingStatus = existingDeliveryStatus(existingDeliveries);
   if (existingStatus !== "not-built") return existingStatus;
-  if (mode === "group-ready" && missingSent.length > 0 && blocked.length === 0) return "waiting-for-sent-results";
+  if (mode === "group-ready" && missingSent.length > 0) return "waiting-for-sent-results";
   if (!returnable) return "waiting-for-result";
   return "ready-to-build-controller-return";
 }
@@ -105,7 +103,6 @@ export function buildControllerCallbackPlan({
           mode,
           returnable: returnable.length > 0,
           missingSent: missing,
-          blocked,
           existingDeliveries: controllerReturnDeliveries,
         }),
       }]

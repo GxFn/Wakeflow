@@ -1,5 +1,4 @@
 import { existsSync, readFileSync } from "node:fs";
-import { runSync } from "../../lib/wakeflow-process.mjs";
 import { hostProfile } from "./wakeflow-host-profile.mjs";
 import path from "node:path";
 import { buildControllerReturnEnvelope } from "./wakeflow-controller-return.mjs";
@@ -109,7 +108,6 @@ export function createDispatchCommands(ctx) {
     designIntent = "",
     dispatchGroup = "",
     evidenceContract = null,
-    executionContract = null,
     evidenceRequired = [],
     forbidden = [],
     humanContextRef = "",
@@ -117,7 +115,6 @@ export function createDispatchCommands(ctx) {
     returnPolicyMode = "",
     scope = [],
     stateRef = null,
-    repositorySnapshot = null,
     targetWindow,
     taskId,
   }) {
@@ -169,14 +166,12 @@ export function createDispatchCommands(ctx) {
       // what evidence it must produce. Advisory at dispatch; enforced at reduce-results.
       // Also OUTSIDE the idempotency comparable (like designIntent): back-fill is safe.
       ...(evidenceContract ? { evidenceContract } : {}),
-      ...(executionContract ? { executionContract } : {}),
       scope,
       forbidden,
       evidenceRequired,
       resultContract: "target-result-envelope-v1",
       returnPolicy: dispatchGroupRecord?.returnPolicy,
       contextPolicy: validateContextPolicy(contextPolicy || "refresh-if-missing"),
-      ...(repositorySnapshot ? { repositorySnapshot } : {}),
       prompt,
       wakeflowTrace: artifactTrace({
         artifactKind: "dispatch-packet",
@@ -249,8 +244,6 @@ export function createDispatchCommands(ctx) {
       controllerWindow: packet.controllerWindow,
       humanContextRef: packet.humanContextRef,
       stateRef: packet.stateRef,
-      executionContract: packet.executionContract,
-      repositorySnapshot: packet.repositorySnapshot,
       prompt: packet.prompt,
       returnPolicy: packet.returnPolicy,
       returnRoute: validateReturnRoute(returnRoute),
@@ -407,20 +400,6 @@ export function createDispatchCommands(ctx) {
     const automationEnabled = hasFlag("--automation-enabled");
     const requireThread = hasFlag("--require-thread");
     const windowConfig = buildWindowConfig(targetWindow, { requireThread });
-    const executionMode = taskPackage.executionMode || "implementation";
-    const commitExpectation = taskPackage.commitExpectation
-      || (executionMode === "research-readonly" ? "none-readonly" : "unspecified");
-    const executionContract = {
-      executionMode,
-      commitExpectation,
-      repositorySnapshotPolicy: executionMode === "research-readonly"
-        ? "immutable-head-and-cleanliness"
-        : "report-start-and-end",
-    };
-    const repositorySnapshot = captureRepositorySnapshot(windowConfig, executionContract.repositorySnapshotPolicy);
-    if (executionMode === "research-readonly" && !repositorySnapshot.available) {
-      fail(`research-readonly dispatch requires a readable Git baseline for ${targetWindow}; ${repositorySnapshot.reason}.`);
-    }
     const humanContextRef = getValue(
       "--human-context-ref",
       state.projection?.progressDoc ? path.join(stateRootRef, state.projection.progressDoc) : stateRootRef,
@@ -445,7 +424,6 @@ export function createDispatchCommands(ctx) {
       controllerWindow,
       designIntent,
       evidenceContract,
-      executionContract,
       dispatchGroup,
       evidenceRequired: [
         ...getAllValues("--evidence"),
@@ -466,7 +444,6 @@ export function createDispatchCommands(ctx) {
         `targetTaskId=${targetTaskId}`,
       ],
       stateRef,
-      repositorySnapshot,
       targetWindow,
       taskId: targetTaskId,
     });
@@ -480,13 +457,6 @@ export function createDispatchCommands(ctx) {
     });
     const dispatchGroupFile = dispatchGroup ? groupFileFor(dispatchGroup) : "";
     const existingGroup = dispatchGroup ? loadDispatchGroup(dispatchGroup) : null;
-    const dispatchGroupChanged = Boolean(dispatchGroupRecord && (
-      !existingGroup
-      || existingGroup.controllerWindow !== dispatchGroupRecord.controllerWindow
-      || existingGroup.humanContextRef !== dispatchGroupRecord.humanContextRef
-      || existingGroup.returnPolicy?.mode !== dispatchGroupRecord.returnPolicy?.mode
-      || JSON.stringify(existingGroup.expectedTargets || []) !== JSON.stringify(dispatchGroupRecord.expectedTargets || [])
-    ));
     const existingPacket = existsSync(packetFile) ? readJson(packetFile, "dispatch packet") : null;
     const existingEnvelope = existsSync(deliveryFile) ? readJson(deliveryFile, "delivery envelope") : null;
     if (existingPacket) {
@@ -522,7 +492,7 @@ export function createDispatchCommands(ctx) {
         keepLive = startKeepLive({ automationRunId: dispatchGroup || packet.id });
       }
       if (!idempotentReplay) atomicWriteJson(windowConfigFileFor(targetWindow), windowConfig);
-      if (dispatchGroupChanged && dispatchGroupRecord && dispatchGroup) atomicWriteJson(dispatchGroupFile, dispatchGroupRecord);
+      if (!existingGroup && dispatchGroupRecord && dispatchGroup) atomicWriteJson(dispatchGroupFile, dispatchGroupRecord);
       if (!existingPacket) atomicWriteJson(packetFile, packet);
       if (!existingEnvelope) atomicWriteJson(deliveryFile, envelope);
       if (writeWindowLock && envelope.targetWindow) {
@@ -565,7 +535,7 @@ export function createDispatchCommands(ctx) {
               windowConfig,
               configFile: write ? path.relative(workspaceRoot, windowConfigFileFor(targetWindow)) : "",
               packet: existingPacket || packet,
-              dispatchGroup: dispatchGroupChanged ? dispatchGroupRecord : existingGroup || dispatchGroupRecord,
+              dispatchGroup: dispatchGroupRecord,
               dispatchGroupFile: write && dispatchGroupRecord ? path.relative(workspaceRoot, dispatchGroupFile) : "",
               envelope: redactDeliveryEnvelope(existingEnvelope || envelope),
             }),
@@ -606,39 +576,6 @@ export function createDispatchCommands(ctx) {
         `Delivery: ${path.relative(workspaceRoot, deliveryFile)}`,
       ],
     );
-  }
-
-  function captureRepositorySnapshot(windowConfig, policy) {
-    const configuredPath = windowConfig.repositoryPath || windowConfig.cwd || windowConfig.responsibilityRoot || "";
-    if (!configuredPath) {
-      return { kind: "RepositorySnapshot", version: 1, policy, available: false, reason: "window config has no repository path" };
-    }
-    const repositoryRoot = path.isAbsolute(configuredPath)
-      ? path.resolve(configuredPath)
-      : path.resolve(workspaceRoot, configuredPath);
-    if (!existsSync(repositoryRoot)) {
-      return { kind: "RepositorySnapshot", version: 1, policy, available: false, reason: "configured repository path does not exist" };
-    }
-    const head = runSync("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], { encoding: "utf8" });
-    if (head.status !== 0) {
-      return { kind: "RepositorySnapshot", version: 1, policy, available: false, reason: "configured repository path is not a readable Git worktree" };
-    }
-    const status = runSync("git", ["-C", repositoryRoot, "status", "--porcelain=v1"], { encoding: "utf8" });
-    if (status.status !== 0) {
-      return { kind: "RepositorySnapshot", version: 1, policy, available: false, reason: "Git status is unreadable" };
-    }
-    const changes = status.stdout.split("\n").filter(Boolean);
-    return {
-      kind: "RepositorySnapshot",
-      version: 1,
-      policy,
-      available: true,
-      repositoryPath: path.relative(workspaceRoot, repositoryRoot).split(path.sep).join("/") || ".",
-      head: head.stdout.trim(),
-      dirty: changes.length > 0,
-      changeCount: changes.length,
-      capturedAt: nowIso(),
-    };
   }
 
   function commandBuildControllerReturn() {

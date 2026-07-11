@@ -58,14 +58,6 @@ thread-registry record exists. They may describe:
 They must not contain real thread ids and must not become a second authority for
 window semantics.
 
-## Caller Identity
-
-For mutating MCP calls, the server compares the host-supplied current thread id
-with this host-scoped registry. It does not trust a tool argument claiming an
-actor. Unknown registered-workspace callers fail closed; exact configured cwd
-is only the fallback when the host supplies no handle. The verified window and
-role are added to controller audit events.
-
 ## Send Policy
 
 The host thread tool performs the real send; the send/readback boundary and the
@@ -79,8 +71,8 @@ hidden schedule, heartbeat, or fallback delivery route.
 ## Controller Return
 
 Controller return uses the dispatch group's stored `controllerWindow`, not a
-global default controller. Each demand has exactly one acceptance authority:
-pod 0 uses the persistent controller, while isolation pods use their stamped
-`Controller__<pod>`. Returns are thread messages that become that controller's
-subsequent turns. The visible return prompt follows the controller-return prompt shape in
+global default controller — routing is per-group, but the workspace runs ONE
+controller (the single acceptance authority, across every active demand);
+returns are thread messages that become the controller's subsequent turns. The
+visible return prompt follows the controller-return prompt shape in
 [references/wakeflow-delivery.md](wakeflow-delivery.md) (Prompt Rules).

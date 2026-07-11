@@ -253,12 +253,13 @@ kinds present, declared artifacts resolve). The judgment half is yours:
 
 ## Demand Pods (multiple demands = multiple pods, never one multiplexed controller)
 
-- One demand = one execution pod. The default fleet is pod 0: its persistent
-  controller/Test/work windows use the main checkouts. Demand 2..N gets an
-  isolation pod with its OWN controller (`Controller__<pod>`), per-repo
-  worktree windows, `Test__<pod>`, and tmux session; that WHOLE isolation pod
-  shares ONE worktree set and never uses a main checkout. Pods are mutually
-  unaware — never read or touch another pod's state roots, windows, or branches.
+- One demand = one pod: its OWN controller (`Controller__<pod>`), per-repo
+  isolation worktree windows, and its OWN `Test__<pod>`, in its OWN tmux
+  session. The WHOLE pod shares the demand's ONE worktree set — every window,
+  Test included, works and verifies inside those worktrees, never on a main
+  checkout. Pods are mutually unaware — never read or touch another pod's
+  state roots, windows, or branches. The default fleet is pod 0: it works on
+  the main checkouts, and its demand is just another active demand.
 - Opening a pod is a spare-moment MECHANICAL action for an incumbent
   controller: `wakeflow-claude-host.mjs pod-open --demand-key <key> --repos
   <a,b>` (idempotent; re-run resumes). The new pod's controller claims its

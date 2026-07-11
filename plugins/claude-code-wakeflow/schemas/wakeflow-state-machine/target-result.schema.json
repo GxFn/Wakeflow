@@ -9,8 +9,21 @@
     "resultId": { "type": "string", "minLength": 1 },
     "demandKey": { "type": "string", "minLength": 1 },
     "taskPackageId": { "type": "string", "minLength": 1 },
+    "dispatchGroup": { "type": "string", "minLength": 1 },
     "targetWindow": { "type": "string", "minLength": 1 },
     "targetTaskId": { "type": "string", "minLength": 1 },
+    "currentResult": { "type": "boolean" },
+    "resultRevision": { "type": "integer", "minimum": 1 },
+    "historyReason": { "type": "string", "enum": ["late-dispatch-group"] },
+    "supersedes": {
+      "type": "object",
+      "properties": {
+        "resultId": { "type": "string", "minLength": 1 },
+        "dispatchGroup": { "type": "string", "minLength": 1 },
+        "historyFile": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
     "status": { "type": "string", "enum": ["completed", "blocked", "needs-review"] },
     "summary": { "type": "string" },
     "evidenceRefs": { "type": "array", "items": { "type": "string" } },

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -39,12 +39,39 @@ function run(root, args = []) {
   });
 }
 
-test("after-completion fails closed when current state is not completed or idle", () => {
-  const { root } = makeFixture({ status: "paused / user stop" });
+test("after-completion reads authoritative demand state instead of the workspace projection", () => {
+  const { root } = makeFixture({ status: "idle" });
+  writeJson(path.join(root, ".wakeflow-active/current/current-demand/wakeflow-state.json"), {
+    demandKey: "current-demand",
+    state: "paused",
+  });
   const result = run(root, ["--after-completion"]);
   assert.notEqual(result.status, 0);
   const parsed = JSON.parse(result.stdout);
   assert.match(parsed.issues.join("\n"), /requires current state completed or idle/);
+  assert.equal(parsed.currentStatus.source, "wakeflow-state-roots");
+  assert.equal(parsed.currentStatus.stateId, "paused");
+});
+
+test("missing or stale workspace status projection is advisory when state roots are healthy", () => {
+  const { root } = makeFixture({
+    status: "paused / stale projection",
+    todoRows: "| NEXT-2026-06-04 | pending-claim | requirement | P1 | Wakeflow | next | no | none | Wakeflow | none |",
+  });
+  writeJson(path.join(root, ".wakeflow-active/current/done/wakeflow-state.json"), {
+    demandKey: "done",
+    state: "completed",
+  });
+  const stale = run(root, ["--source", "todo", "--after-completion"]);
+  assert.equal(stale.status, 0, stale.stderr || stale.stdout);
+  const stalePayload = JSON.parse(stale.stdout);
+  assert.equal(stalePayload.currentStatus.stateId, "completed");
+  assert.match(stalePayload.warnings.join("\n"), /projection is stale/);
+
+  rmSync(path.join(root, ".wakeflow-active/current/workspace-current-status.md"));
+  const missing = run(root, ["--source", "todo", "--after-completion"]);
+  assert.equal(missing.status, 0, missing.stderr || missing.stdout);
+  assert.match(JSON.parse(missing.stdout).warnings.join("\n"), /projection is missing/);
 });
 
 test("TODO candidates exclude completed slash-status and Aux-owned rows", () => {
@@ -99,7 +126,7 @@ test("next-work blocks new candidates while another demand state root is unarchi
     state: "needs-rework",
   });
 
-  const result = run(root, ["--source", "todo", "--after-completion"]);
+  const result = run(root, ["--source", "todo"]);
   // At-capacity is a WARNING, not an error: the scan stays ok (in-flight
   // demands still need review/dispatch) while every new claim is blocked.
   assert.equal(result.status, 0, result.stdout);

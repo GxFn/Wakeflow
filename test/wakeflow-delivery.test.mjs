@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -136,6 +137,23 @@ function run(root, args) {
   });
 }
 
+function runAsync(root, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [script, ...args, "--root", root, "--json"], {
+      cwd: root,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", (status) => resolve({ status, stdout, stderr }));
+  });
+}
+
 function runState(root, args) {
   return runSync(process.execPath, [stateScript, ...args, "--root", root, "--json"], {
     cwd: root,
@@ -194,6 +212,7 @@ function prepareDispatch(root, stateRootRef, options = {}) {
   const config = Array.isArray(options) ? { extra: options } : options;
   const group = config.group || "GROUP-STATE";
   const targetTaskId = config.targetTaskId || "CSMR-TASK-1";
+  const groupTaskIds = config.groupTaskIds || [];
   const extra = config.extra || [];
   return parseOk(run(root, [
     "prepare-dispatch-from-state",
@@ -209,9 +228,112 @@ function prepareDispatch(root, stateRootRef, options = {}) {
     `${stateRootRef}/developer-progress.md`,
     "--require-thread",
     "--write",
+    ...groupTaskIds.flatMap((taskId) => ["--group-target-task-id", taskId]),
     ...extra,
   ]));
 }
+
+function addFixtureTarget(stateRoot, {
+  taskPackageId,
+  targetTaskId,
+  targetWindow = "AlembicPlugin",
+}) {
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.taskPackages.push({
+    taskPackageId,
+    summary: `Fixture package ${taskPackageId}`,
+    status: "pending",
+    createdAt: "2026-06-05T00:00:00.000Z",
+  });
+  state.targetTasks.push({
+    targetTaskId,
+    taskPackageId,
+    targetWindow,
+    summary: `Run fixture target task ${targetTaskId}`,
+    status: "pending",
+    createdAt: "2026-06-05T00:00:00.000Z",
+  });
+  const window = state.windows.find((item) => item.windowName === targetWindow);
+  if (window) {
+    window.taskPackageIds.push(taskPackageId);
+    window.targetTaskIds.push(targetTaskId);
+  } else {
+    state.windows.push({
+      windowName: targetWindow,
+      windowState: "pending",
+      taskPackageIds: [taskPackageId],
+      targetTaskIds: [targetTaskId],
+    });
+  }
+  writeJson(stateFile, state);
+  writeJson(path.join(stateRoot, `task-packages/${taskPackageId}.json`), {
+    schemaVersion: 1,
+    taskPackageId,
+    demandKey: "CSMR-FIXTURE",
+    summary: `Fixture package ${taskPackageId}`,
+    status: "pending",
+    targetTasks: [{
+      targetTaskId,
+      taskPackageId,
+      targetWindow,
+      summary: `Run fixture target task ${targetTaskId}`,
+      status: "pending",
+    }],
+    createdAt: "2026-06-05T00:00:00.000Z",
+  });
+}
+
+test("Test dispatch fails closed without alignment anchors and carries the approved goal/plan when bounded", () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  addFixtureTarget(stateRoot, {
+    taskPackageId: "TEST-P1",
+    targetTaskId: "TEST-T1",
+    targetWindow: "Test",
+  });
+  registerThread(root, "Test");
+  const unbounded = run(root, [
+    "prepare-dispatch-from-state", "--state-root", stateRootRef,
+    "--target-task-id", "TEST-T1", "--group", "TEST-G1", "--write",
+  ]);
+  assert.notEqual(unbounded.status, 0);
+  assert.match(unbounded.stdout, /no authoritative testExecution contract/);
+
+  const testExecution = {
+    testCardId: "TEST-T1",
+    testCardRef: `${stateRootRef}/test-cards/TEST-T1.json`,
+    strategySource: "Design/requirement.md#confirmed-test-plan",
+    lineageStep: 1,
+    dispatchAttempt: 1,
+    mode: "initial",
+    requirementGoal: "Prove the confirmed public behavior.",
+    approvedPlan: ["Call the public entry once.", "Compare raw output with AC-1."],
+    allowedSkills: [],
+    setupPolicy: "fresh-once",
+    maxAttempts: 2,
+    restartConditions: [],
+    changeControl: { testMayChangeGoal: false, testMayAddUnmappedSteps: false },
+  };
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.taskPackages.find((item) => item.taskPackageId === "TEST-P1").testExecution = testExecution;
+  state.targetTasks.find((item) => item.targetTaskId === "TEST-T1").testExecution = testExecution;
+  writeJson(stateFile, state);
+  const packageFile = path.join(stateRoot, "task-packages/TEST-P1.json");
+  const taskPackage = JSON.parse(readFileSync(packageFile, "utf8"));
+  taskPackage.testExecution = testExecution;
+  writeJson(packageFile, taskPackage);
+
+  const prepared = parseOk(run(root, [
+    "prepare-dispatch-from-state", "--state-root", stateRootRef,
+    "--target-task-id", "TEST-T1", "--group", "TEST-G2", "--write",
+  ]));
+  assert.equal(prepared.packet.testExecution.requirementGoal, "Prove the confirmed public behavior.");
+  assert.deepEqual(prepared.packet.testExecution.allowedSkills, []);
+  assert.match(prepared.packet.prompt, /testContract: task-packages\/TEST-P1\.json#testExecution/);
+  assert.match(prepared.packet.forbidden.join("\n"), /must not replace the confirmed requirement goal/);
+  assert.match(prepared.packet.evidenceRequired.join("\n"), /step must name the confirmed requirement goal and approvedPlan item/);
+});
 
 test("return policy helpers preserve group-ready and per-target callback semantics", () => {
   const review = {
@@ -254,6 +376,30 @@ test("return policy helpers preserve group-ready and per-target callback semanti
     }).code,
     "group-ready-missing-sent-results",
   );
+  const blockedReview = {
+    ...review,
+    results: [
+      { packet: review.results[0].packet, result: { status: "blocked" } },
+      review.results[1],
+    ],
+    groupSnapshot: {
+      ...review.groupSnapshot,
+      ready: [],
+      blocked: [{ packetId: "packet-a", targetWindow: "WindowA", taskId: "task-a", status: "blocked" }],
+    },
+  };
+  assert.equal(controllerReturnReadinessIssue({
+    review: blockedReview,
+    triggerTarget: "WindowA",
+    triggerTaskId: "task-a",
+  }), null, "a blocker returns immediately even while another sent target is missing");
+  const blockedPlan = buildControllerCallbackPlan({
+    dispatchGroup: "group-fixture",
+    returnPolicy: blockedReview.returnPolicy,
+    groupSnapshot: blockedReview.groupSnapshot,
+  });
+  assert.equal(blockedPlan.status, "ready-to-build");
+  assert.equal(blockedPlan.units[0].buildAllowed, true);
   const groupPlan = buildControllerCallbackPlan({
     dispatchGroup: "group-fixture",
     returnPolicy: review.returnPolicy,
@@ -563,6 +709,10 @@ test("review pack helper preserves evidence repair and pending-dispatch gates", 
       verificationSummary: ["unit passed"],
       hasControllerReviewEvidence: true,
       missingEvidenceRefs: ["missing-evidence.md"],
+      testExecution: {
+        requirementGoal: "Confirmed goal",
+        approvedPlan: ["Approved step"],
+      },
     }],
     generatedAt: "2026-06-10T00:00:00.000Z",
     wakeflowTrace: { dispatchGroup: "group-fixture" },
@@ -579,6 +729,7 @@ test("review pack helper preserves evidence repair and pending-dispatch gates", 
     taskId: "task-a",
     ref: "missing-evidence.md",
   }]);
+  assert.match(pack.testAlignmentCheck, /Reject Test-invented goals, gates, skills, restarts, or unmapped steps/);
 });
 
 // Decoupling: a recorded result must wake the controller even when evidence refs don't resolve.
@@ -1116,7 +1267,29 @@ test("group-ready controller return ignores targets prepared but not sent", () =
     createdAt: "2026-06-05T00:00:00.000Z",
   });
 
-  const first = prepareDispatch(root, stateRootRef);
+  const groupTaskIds = ["CSMR-TASK-1", "CSMR-TASK-2"];
+  const first = prepareDispatch(root, stateRootRef, { groupTaskIds });
+  const finalizedGroup = JSON.parse(readFileSync(path.join(root, first.dispatchGroupFile), "utf8"));
+  assert.equal(finalizedGroup.membershipFinalized, true);
+  assert.deepEqual(
+    finalizedGroup.expectedTargets.map((item) => item.taskId).sort(),
+    groupTaskIds,
+  );
+  const membershipFork = run(root, [
+    "prepare-dispatch-from-state",
+    "--state-root",
+    stateRootRef,
+    "--target-task-id",
+    "CSMR-TASK-1",
+    "--group",
+    "GROUP-STATE",
+    "--controller-window",
+    "AlembicWorkspace",
+    "--require-thread",
+    "--write",
+  ]);
+  assert.notEqual(membershipFork.status, 0);
+  assert.match(membershipFork.stdout, /membership is finalized/);
   parseOk(run(root, [
     "prepare-dispatch-from-state",
     "--state-root",
@@ -1131,6 +1304,10 @@ test("group-ready controller return ignores targets prepared but not sent", () =
     `${stateRootRef}/developer-progress.md`,
     "--require-thread",
     "--write",
+    "--group-target-task-id",
+    "CSMR-TASK-1",
+    "--group-target-task-id",
+    "CSMR-TASK-2",
   ]));
   parseOk(run(root, [
     "record-delivery-run",
@@ -1194,6 +1371,154 @@ test("group-ready controller return ignores targets prepared but not sent", () =
   assert.match(returned.envelope.prompt, /pendingDispatchTargets: AlembicPlugin/);
 });
 
+test("concurrent prepares preserve one finalized complete dispatch-group membership", async () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  try {
+    registerThread(root, "AlembicPlugin");
+    const stateFile = path.join(stateRoot, "wakeflow-state.json");
+    const state = JSON.parse(readFileSync(stateFile, "utf8"));
+    state.taskPackages.push({
+      taskPackageId: "CSMR-PKG-2",
+      summary: "Second fixture package",
+      status: "pending",
+      createdAt: "2026-06-05T00:00:00.000Z",
+    });
+    state.targetTasks.push({
+      targetTaskId: "CSMR-TASK-2",
+      taskPackageId: "CSMR-PKG-2",
+      targetWindow: "AlembicPlugin",
+      summary: "Run second fixture target task",
+      status: "pending",
+      createdAt: "2026-06-05T00:00:00.000Z",
+    });
+    state.windows[0].taskPackageIds.push("CSMR-PKG-2");
+    state.windows[0].targetTaskIds.push("CSMR-TASK-2");
+    writeJson(stateFile, state);
+    writeJson(path.join(stateRoot, "task-packages/CSMR-PKG-2.json"), {
+      schemaVersion: 1,
+      taskPackageId: "CSMR-PKG-2",
+      demandKey: "CSMR-FIXTURE",
+      summary: "Second fixture package",
+      status: "pending",
+      targetTasks: [{
+        targetTaskId: "CSMR-TASK-2",
+        taskPackageId: "CSMR-PKG-2",
+        targetWindow: "AlembicPlugin",
+        summary: "Run second fixture target task",
+        status: "pending",
+      }],
+      createdAt: "2026-06-05T00:00:00.000Z",
+    });
+
+    const common = [
+      "prepare-dispatch-from-state",
+      "--state-root",
+      stateRootRef,
+      "--group",
+      "GROUP-CONCURRENT",
+      "--controller-window",
+      "AlembicWorkspace",
+      "--require-thread",
+      "--write",
+      "--group-target-task-id",
+      "CSMR-TASK-1",
+      "--group-target-task-id",
+      "CSMR-TASK-2",
+    ];
+    const [first, second] = await Promise.all([
+      runAsync(root, [...common, "--target-task-id", "CSMR-TASK-1"]),
+      runAsync(root, [...common, "--target-task-id", "CSMR-TASK-2"]),
+    ]);
+    assert.equal(first.status, 0, first.stderr || first.stdout);
+    assert.equal(second.status, 0, second.stderr || second.stdout);
+    const groupFile = path.join(root, ".wakeflow-local/wakeflow-delivery/dispatch-groups/group-concurrent.json");
+    const group = JSON.parse(readFileSync(groupFile, "utf8"));
+    assert.equal(group.membershipFinalized, true);
+    assert.deepEqual(
+      group.expectedTargets.map((item) => item.taskId).sort(),
+      ["CSMR-TASK-1", "CSMR-TASK-2"],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("group-ready blocker creates exactly one immediate controller return under concurrency", async () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  try {
+    addFixtureTarget(stateRoot, {
+      taskPackageId: "CSMR-PKG-2",
+      targetTaskId: "CSMR-TASK-2",
+    });
+    registerThread(root, "AlembicPlugin");
+    registerThread(root, "AlembicWorkspace");
+    const groupTaskIds = ["CSMR-TASK-1", "CSMR-TASK-2"];
+    const first = prepareDispatch(root, stateRootRef, { group: "GROUP-BLOCKER", groupTaskIds });
+    const second = prepareDispatch(root, stateRootRef, {
+      group: "GROUP-BLOCKER",
+      targetTaskId: "CSMR-TASK-2",
+      groupTaskIds,
+    });
+    for (const prepared of [first, second]) {
+      parseOk(run(root, [
+        "record-delivery-run",
+        "--delivery-file",
+        prepared.deliveryFile,
+        "--status",
+        "sent",
+        "--readback-ok",
+        "true",
+        "--evidence",
+        `${prepared.targetTaskId} accepted prompt`,
+        "--write",
+      ]));
+    }
+    parseOk(run(root, [
+      "record-target-result",
+      "--target-window",
+      "AlembicPlugin",
+      "--task-id",
+      "CSMR-TASK-1",
+      "--group",
+      "GROUP-BLOCKER",
+      "--status",
+      "blocked",
+      "--risk",
+      "Required environment is unavailable",
+      "--write",
+    ]));
+
+    const command = [
+      "build-controller-return",
+      "--group",
+      "GROUP-BLOCKER",
+      "--trigger-target",
+      "AlembicPlugin",
+      "--trigger-task-id",
+      "CSMR-TASK-1",
+      "--return-reason",
+      "blocked",
+      "--require-thread",
+      "--write",
+    ];
+    const attempts = await Promise.all([runAsync(root, command), runAsync(root, command)]);
+    const successes = attempts.filter((item) => item.status === 0);
+    const refusals = attempts.filter((item) => item.status !== 0);
+    assert.equal(successes.length, 1);
+    assert.equal(refusals.length, 1);
+    assert.match(refusals[0].stdout, /already has controller-return delivery status pending-host-send/);
+    const returned = JSON.parse(successes[0].stdout);
+    assert.equal(returned.envelope.deliveryId, "controller-return-GROUP-BLOCKER");
+    assert.equal(returned.envelope.loopGuard.returnReason, "blocked");
+    assert.equal(returned.envelope.groupSnapshot.missing.length, 1);
+    const review = parseOk(run(root, ["review-results", "--group", "GROUP-BLOCKER"]));
+    assert.equal(review.controllerReturnDelivery.envelopeCount, 1);
+    assert.equal(review.controllerReturnDelivery.pendingCount, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("per-target controller return allows independent callbacks per target", () => {
   const { root, stateRootRef, stateRoot } = makeFixture();
   const configFile = path.join(root, "wakeflow.config.json");
@@ -1245,8 +1570,9 @@ test("per-target controller return allows independent callbacks per target", () 
   registerThread(root, "AlembicCore");
   registerThread(root, "AlembicWorkspace");
 
-  prepareDispatch(root, stateRootRef, { extra: ["--return-policy", "per-target"] });
-  prepareDispatch(root, stateRootRef, { targetTaskId: "CSMR-TASK-2" });
+  const groupTaskIds = ["CSMR-TASK-1", "CSMR-TASK-2"];
+  prepareDispatch(root, stateRootRef, { groupTaskIds, extra: ["--return-policy", "per-target"] });
+  prepareDispatch(root, stateRootRef, { targetTaskId: "CSMR-TASK-2", groupTaskIds });
 
   parseOk(run(root, [
     "record-target-result",
@@ -1919,7 +2245,23 @@ test("state-root target result import exposes controller-return context from del
   assert.equal(resultFile.wakeflowTrace.dispatchGroup, "GROUP-STATE");
   assert.equal(resultFile.wakeflowTrace.stateRoot, stateRootRef);
   assert.equal(resultFile.wakeflowTrace.targetTaskId, "CSMR-TASK-1");
+  writeJson(path.join(stateRoot, "target-results/history/CSMR-RESULT-LATE.json"), {
+    ...resultFile,
+    resultId: "CSMR-RESULT-LATE",
+    dispatchGroup: "GROUP-OLD",
+    currentResult: false,
+    historyReason: "late-dispatch-group",
+    resultRevision: 1,
+  });
   const status = parseOk(run(root, ["status"]));
+  assert.equal(status.resultCount, 0, "v1 transport resultCount remains backward compatible");
+  assert.deepEqual(status.stateRootResultCounts, {
+    stateRootCount: 1,
+    currentResultCount: 1,
+    historyResultCount: 1,
+    lateResultCount: 1,
+  });
+  assert.deepEqual(status.runtimeSummary.totals.stateRootResults, status.stateRootResultCounts);
   assert.equal(status.runtimeSummary.nextAction, "build-controller-return");
   assert.equal(status.runtimeSummary.health.checks.controllerCallback.readyUnitCount, 1);
   assert.equal(status.runtimeSummary.resumePlan.controllerDecisionRequired, false);

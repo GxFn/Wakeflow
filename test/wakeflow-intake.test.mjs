@@ -115,6 +115,16 @@ function testCardArgs(stateRootRef, extra = []) {
     "REAL-SCENARIO-T1",
     "--target-window",
     "TestWindow",
+    "--strategy-source",
+    "Design/requirements.md#confirmed-test-plan",
+    "--approved-test-step",
+    "Call the configured runtime entry once and capture its raw response.",
+    "--approved-test-step",
+    "Compare the response with the confirmed success and failure meanings.",
+    "--setup-policy",
+    "fresh-once",
+    "--max-attempts",
+    "2",
     "--question",
     "Does the real scenario produce the expected runtime signal?",
     "--object-boundary",
@@ -160,29 +170,52 @@ test("test-card writes machine boundary card and leaves controller state unchang
   assert.equal(card.status, "draft");
   assert.equal(card.boundaryGate.question, "Does the real scenario produce the expected runtime signal?");
   assert.equal(card.boundaryGate.cannotConclude[0], "This does not prove unrelated UI behavior.");
+  assert.equal(card.executionContract.requirementGoal, "Fixture goal.");
+  assert.deepEqual(card.executionContract.approvedPlan, [
+    "Call the configured runtime entry once and capture its raw response.",
+    "Compare the response with the confirmed success and failure meanings.",
+  ]);
+  assert.deepEqual(card.executionContract.allowedSkills, []);
+  assert.equal(card.executionContract.setupPolicy, "fresh-once");
+  assert.equal(card.executionContract.maxAttempts, 2);
   assert.equal(card.suggestedTaskPackage.sourceRef, "test-cards/REAL-SCENARIO-T1.json");
   assert.match(card.forbiddenConclusions.join("\n"), /test-card-is-dispatch/);
 });
 
-test("W-Test: test-card records strategySource and reminds (never blocks) when absent", () => {
-  // recorded -> persists on the card, no reminder
+test("W-Test: test-card requires strategySource and persists the requirement/test-plan anchors", () => {
   const withF = makeFixture();
   const withPayload = parseOk(run(intakeScript, withF.root, [
-    ...testCardArgs(withF.stateRootRef, ["--strategy-source", "../wakeflow-ledger/requirement-designs/feat.md#testing"]),
+    ...testCardArgs(withF.stateRootRef),
     "--write",
   ]));
-  assert.equal(withPayload.strategySourceReminder, undefined, "no reminder when strategySource is recorded");
   const withCard = readJson(path.join(withF.root, withPayload.cardFile));
-  assert.equal(withCard.strategySource, "../wakeflow-ledger/requirement-designs/feat.md#testing", "strategySource persists on the card");
+  assert.equal(withCard.strategySource, "Design/requirements.md#confirmed-test-plan");
+  assert.equal(withCard.executionContract.changeControl.testMayChangeGoal, false);
+  assert.equal(withCard.executionContract.changeControl.testMayAddUnmappedSteps, false);
 
-  // absent -> reminder surfaces, but test-card still succeeds (reminder-first, not a gate)
   const withoutF = makeFixture();
-  const rawResult = run(intakeScript, withoutF.root, [...testCardArgs(withoutF.stateRootRef), "--write"]);
-  assert.equal(rawResult.status, 0, "test-card succeeds without strategySource (reminder, not a gate)");
-  const withoutPayload = parseOk(rawResult);
-  assert.match(withoutPayload.strategySourceReminder, /strateg/i, "a reminder surfaces when strategySource is absent");
-  const withoutCard = readJson(path.join(withoutF.root, withoutPayload.cardFile));
-  assert.equal("strategySource" in withoutCard, false, "absent strategySource leaves no field (zero trace)");
+  const args = testCardArgs(withoutF.stateRootRef);
+  const rawResult = run(intakeScript, withoutF.root, args.filter((value, index) => value !== "--strategy-source" && args[index - 1] !== "--strategy-source"));
+  assert.notEqual(rawResult.status, 0);
+  assert.match(rawResult.stdout, /--strategy-source is required/);
+});
+
+test("test-card makes PCV opt-in and requires explicit restart conditions", () => {
+  const fixture = makeFixture();
+  const args = testCardArgs(fixture.stateRootRef);
+  args[args.indexOf("--setup-policy") + 1] = "fresh-per-attempt";
+  args.push(
+    "--allowed-test-skill", "progressive-chain-validation",
+    "--restart-condition", "The accepted artifact version changed after a product repair.",
+  );
+  const payload = parseOk(run(intakeScript, fixture.root, [
+    ...args,
+    "--write",
+  ]));
+  const card = readJson(path.join(fixture.root, payload.cardFile));
+  assert.deepEqual(card.executionContract.allowedSkills, ["progressive-chain-validation"]);
+  assert.equal(card.executionContract.setupPolicy, "fresh-per-attempt");
+  assert.deepEqual(card.executionContract.restartConditions, ["The accepted artifact version changed after a product repair."]);
 });
 
 test("test-card supports controller state roots in the configured project ledger", () => {

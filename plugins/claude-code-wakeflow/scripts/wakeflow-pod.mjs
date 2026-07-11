@@ -19,7 +19,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runSync } from "../lib/wakeflow-process.mjs";
-import { mainCheckoutOccupancy } from "./lib/wakeflow-active-demands.mjs";
+import { demandExecutionPlacement, mainCheckoutOccupancy } from "./lib/wakeflow-active-demands.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import { withFileLock, WakeflowStateLockTimeoutError } from "./lib/wakeflow-state-lock.mjs";
 import {
@@ -149,11 +149,17 @@ function readConfigOrFail() {
 
 function demandStateFor(demandKey) {
   const stateFile = path.join(workspaceRoot, ".wakeflow-active", "current", slug(demandKey), "wakeflow-state.json");
-  if (!existsSync(stateFile)) return { exists: false, state: null };
+  if (!existsSync(stateFile)) return { exists: false, state: null, placement: null, controllerWindow: null };
   try {
-    return { exists: true, state: JSON.parse(readFileSync(stateFile, "utf8")).state ?? "unknown" };
+    const value = JSON.parse(readFileSync(stateFile, "utf8"));
+    return {
+      exists: true,
+      state: value.state ?? "unknown",
+      placement: demandExecutionPlacement(value),
+      controllerWindow: value.controllerWindow || null,
+    };
   } catch {
-    return { exists: true, state: "unreadable" };
+    return { exists: true, state: "unreadable", placement: null, controllerWindow: null };
   }
 }
 
@@ -255,6 +261,19 @@ function commandOpen() {
     fail(`demand ${demandKey} is ${demandState.state}; a pod attaches to a claimable or open demand.`);
   }
   if (demandState.exists) {
+    if (!demandState.placement) {
+      fail(`demand ${demandKey} has unreadable execution placement; repair its wakeflow-state.json before opening a pod.`);
+    }
+    if (demandState.placement.mode !== "isolated") {
+      fail(`demand ${demandKey} is assigned to main placement; do not open isolation worktrees for it.`);
+    }
+    if (slug(demandState.placement.podId || demandKey) !== podSlug) {
+      fail(`demand ${demandKey} is assigned to isolated pod ${demandState.placement.podId}; open that recorded pod instead of ${podSlug}.`);
+    }
+    const expectedControllerWindow = `Controller__${podSlug}`;
+    if (demandState.controllerWindow && demandState.controllerWindow !== expectedControllerWindow) {
+      fail(`demand ${demandKey} returns to ${demandState.controllerWindow}, not ${expectedControllerWindow}; repair the recorded controllerWindow before opening this pod.`);
+    }
     process.stderr.write(`wakeflow-pod: demand ${demandKey} already has a state root (${demandState.state}); the pod controller should RESUME it, not re-create it.\n`);
   }
 

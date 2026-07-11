@@ -10,8 +10,9 @@ import test from "node:test";
 
 // Guards W0-a/W0-b (next-phase roadmap Phase 0): every state-root read-modify-write
 // command serializes on the sibling <root>.state-lock file, so parallel MCP calls
-// from one controller turn cannot drop each other's revision. import-target-result
-// stays lock-free by design (it never writes wakeflow-state.json).
+// from one controller turn cannot drop each other's revision or fork the current
+// target result. import-target-result shares the state-root lock even though it
+// does not bump wakeflow-state.json's revision.
 
 const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
 const script = path.join(workspaceRoot, "scripts/wakeflow-state.mjs");
@@ -117,7 +118,7 @@ test("parallel add-task-package calls serialize instead of dropping an update", 
   assert.equal(existsSync(lockFileFor(stateRoot)), false, "lock must be released after the commands finish");
 });
 
-test("parallel import-target-result stays lock-free and never mutates state", async () => {
+test("parallel import-target-result serializes and never mutates state", async () => {
   const root = makeRoot();
   const stateRoot = initDemand(root, "LOCK-PARALLEL-IMPORT-2026-07-02");
   for (const [id, windowName] of [["tp-a", "RepoA"], ["tp-b", "RepoB"]]) {
@@ -166,6 +167,45 @@ test("parallel import-target-result stays lock-free and never mutates state", as
   assert.equal(resultFiles.length, 2);
   const after = readJson(path.join(stateRoot, "wakeflow-state.json"));
   assert.equal(after.revision, before.revision, "import-target-result must not bump the state revision");
+});
+
+test("parallel equivalent imports for one task produce exactly one current result", async () => {
+  const root = makeRoot();
+  const stateRoot = initDemand(root, "LOCK-SAME-TARGET-IMPORT-2026-07-11");
+  const added = run(addTaskArgs(root, stateRoot, "tp-a", "RepoA"));
+  assert.equal(added.status, 0, added.stderr || added.stdout);
+  const args = [
+    "import-target-result",
+    "--root",
+    root,
+    "--state-root",
+    stateRoot,
+    "--target-task-id",
+    "tp-a__RepoA",
+    "--target-window",
+    "RepoA",
+    "--status",
+    "completed",
+    "--evidence-ref",
+    "reports/a.json",
+    "--write",
+    "--json",
+  ];
+
+  const results = await Promise.all([runAsync(args), runAsync(args)]);
+  for (const result of results) {
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+  }
+  const payloads = results.map((result) => JSON.parse(result.stdout));
+  assert.equal(payloads.filter((payload) => payload.wrote).length, 1);
+  assert.equal(payloads.filter((payload) => payload.duplicate).length, 1);
+  const currentFiles = readdirSync(path.join(stateRoot, "target-results"))
+    .filter((name) => name.endsWith(".json"));
+  assert.deepEqual(currentFiles, ["tr-tp-a__RepoA.json"]);
+  const current = readJson(path.join(stateRoot, "target-results", currentFiles[0]));
+  assert.equal(current.currentResult, true);
+  assert.equal(current.resultRevision, 1);
+  assert.equal(existsSync(lockFileFor(stateRoot)), false);
 });
 
 test("a stale lock is broken with a warning instead of wedging the command", () => {

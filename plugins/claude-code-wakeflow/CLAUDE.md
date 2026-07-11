@@ -91,6 +91,13 @@ confirmation gates live in the installed workspace's own rules.
 - Before tests, state the exact question, object boundary, what was already
   self-verified, why real scenario is required, success meaning, failure
   meaning, invalid conclusions, and stop conditions.
+- **The confirmed requirement goal and requirement-stage Test plan remain the
+  controller's alignment anchors at card intake, dispatch, and review.** A Test
+  package must carry `testExecution`; Test may elaborate commands only with a
+  step-to-anchor map, may use only listed Test skills, and must return an
+  unmapped goal/gate/method as a change request before execution. The controller
+  rejects evidence produced by a Test-invented target instead of adopting that
+  target into later rework.
 - Acceptance requires raw evidence review: user scenario, inputs, outputs,
   state/data changes, actual call chain, real consumers, failure paths, edge
   cases, and user-verifiable behavior.

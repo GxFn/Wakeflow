@@ -52,6 +52,8 @@ state root, or human context, stop and report instead of guessing.
      before writing code: it defines how to earn the craft evidence the
      controller's reduce gate will require (a completed result missing a
      required kind hard-fails with `craft-evidence-required`).
+   - When the task package carries `testExecution`, apply the Test alignment
+     gate below before writing a plan or running a command.
 3. Work inside repository boundaries.
    - Change only files permitted by the task and repository rules.
    - Keep commits, tests, and evidence scoped to the owning repository.
@@ -108,6 +110,28 @@ state root, or human context, stop and report instead of guessing.
      then record delivery evidence. Do not replace them with one combined
      target-window tool or duplicate the target result into another local result
      store.
+
+## Test Alignment Gate
+
+**TEST MUST NOT INVENT A TEST GOAL, TEST GATE, OR TEST METHOD OUTSIDE THE CONFIRMED REQUIREMENT GOAL AND APPROVED TEST PLAN.** Violating the letter of this rule is violating its spirit.
+
+For a package with `testExecution`:
+
+1. Treat `requirementGoal` and `approvedPlan` as authority, not suggestions.
+2. Before execution, map every operational plan step to one `approvedPlan`
+   item and state how it serves `requirementGoal`.
+3. Use only skills listed in `allowedSkills`. In particular,
+   `progressive-chain-validation` is forbidden unless that exact id is listed;
+   a long workflow does not authorize PCV by itself.
+4. Follow `mode` and `setupPolicy`. Do not rebuild, restart, or replace the
+   environment unless the package says `mode=restart` and records a
+   controller-approved `restartReason`.
+5. If a useful step, skill, goal, gate, or restart is unmapped or unauthorized,
+   stop before executing it and return `blocked`/`needs-review` as a change
+   request to the controller. Do not run it first and justify it afterward.
+
+The result evidence must include the step-to-anchor map. The controller, not
+Test, decides whether a proposed change becomes a revised Test card/package.
 
 Recovery is not a delivery mode: if this window's tmux pane dies mid-task, the
 same session is finished or recovered by interactive relaunch (`launch-window --resume`; headless `claude -p` bills the separate Agent SDK credit from 2026-06-15) with `claude --resume

@@ -36,6 +36,15 @@
       "type": "string",
       "minLength": 1
     },
+    "executionPlacement": {
+      "type": "object",
+      "required": ["mode", "podId"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["main", "isolated"] },
+        "podId": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
     "state": {
       "type": "string",
       "enum": [

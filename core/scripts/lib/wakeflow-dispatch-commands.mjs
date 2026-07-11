@@ -62,6 +62,8 @@ export function createDispatchCommands(ctx) {
     buildWindowConfig,
     redactDeliveryEnvelope,
     formatTargetPrompt,
+    withFileLock,
+    WakeflowStateLockTimeoutError,
   } = ctx;
 
   function safeStateFileForRef(stateRef) {
@@ -108,6 +110,7 @@ export function createDispatchCommands(ctx) {
     designIntent = "",
     dispatchGroup = "",
     evidenceContract = null,
+    testExecution = null,
     evidenceRequired = [],
     forbidden = [],
     humanContextRef = "",
@@ -117,6 +120,8 @@ export function createDispatchCommands(ctx) {
     stateRef = null,
     targetWindow,
     taskId,
+    groupExpectedTargets = [],
+    membershipExplicit = false,
   }) {
     if (!stateRef) fail("dispatch requires stateRef from controller state root.");
     if (returnPolicyMode && !dispatchGroup) fail("--return-policy requires --group.");
@@ -130,6 +135,7 @@ export function createDispatchCommands(ctx) {
       stateRef,
       interfaceLanguage: interfaceLanguageForStateRef(stateRef),
       craftSkill: Boolean(evidenceContract),
+      testExecution: Boolean(testExecution),
     });
     if (!prompt) fail("Prompt cannot be empty.");
 
@@ -144,6 +150,8 @@ export function createDispatchCommands(ctx) {
           targetWindow,
           taskId,
           packetId: id,
+          expectedTargets: groupExpectedTargets,
+          membershipExplicit,
         })
       : null;
     const createdAt = nowIso();
@@ -166,6 +174,7 @@ export function createDispatchCommands(ctx) {
       // what evidence it must produce. Advisory at dispatch; enforced at reduce-results.
       // Also OUTSIDE the idempotency comparable (like designIntent): back-fill is safe.
       ...(evidenceContract ? { evidenceContract } : {}),
+      ...(testExecution ? { testExecution } : {}),
       scope,
       forbidden,
       evidenceRequired,
@@ -370,6 +379,25 @@ export function createDispatchCommands(ctx) {
   }
 
   function commandPrepareDispatchFromState() {
+    if (!write) return commandPrepareDispatchFromStateUnlocked();
+    const stateRoot = resolveStateRoot(requireValue("--state-root"));
+    const { state } = readControllerStateRoot(stateRoot);
+    const targetTaskId = requireValue("--target-task-id");
+    const targetTask = (state.targetTasks ?? []).find((item) => item.targetTaskId === targetTaskId);
+    if (!targetTask) fail(`target task does not exist in controller state: ${targetTaskId}`);
+    const dispatchGroup = getValue("--group", targetTask.taskPackageId);
+    ensureStateDirs();
+    try {
+      return withFileLock(`${groupFileFor(dispatchGroup)}.lock`, commandPrepareDispatchFromStateUnlocked, {
+        onWarn: (message) => process.stderr.write(`wakeflow-delivery: ${message}\n`),
+      });
+    } catch (error) {
+      if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);
+      throw error;
+    }
+  }
+
+  function commandPrepareDispatchFromStateUnlocked() {
     const stateRoot = resolveStateRoot(requireValue("--state-root"));
     const { state, stateRootRef } = readControllerStateRoot(stateRoot);
     // Demand host-ownership gate: never prepare a dispatch for a demand owned
@@ -390,6 +418,29 @@ export function createDispatchCommands(ctx) {
     const targetWindow = targetTask.targetWindow;
     if (!targetWindow) fail(`target task ${targetTaskId} is missing targetWindow.`);
     validatePrepareDispatchEligibility({ state, taskPackage, targetTask });
+    const config = readWorkspaceConfig();
+    const configuredTestWindow = config.testWindow || "";
+    const isTestTarget = Boolean(configuredTestWindow)
+      && (targetWindow === configuredTestWindow || targetWindow.startsWith(`${configuredTestWindow}__`));
+    if (isTestTarget && !taskPackage.testExecution) {
+      fail(`Test task ${targetTaskId} has no authoritative testExecution contract. Create a bounded Test card/package before dispatch; Test must not invent the missing goal or plan.`);
+    }
+    if (!isTestTarget && taskPackage.testExecution) {
+      fail(`task package ${taskPackageId} carries a Test execution contract but targets non-Test window ${targetWindow}.`);
+    }
+    let testExecution = null;
+    if (taskPackage.testExecution) {
+      const testCardId = taskPackage.testExecution.testCardId;
+      const lineageTasks = (state.targetTasks ?? []).filter((task) => task.testExecution?.testCardId === testCardId);
+      const priorDispatches = lineageTasks.reduce((sum, task) => sum + Number(task.counts?.dispatchCount ?? 0), 0);
+      if (priorDispatches >= taskPackage.testExecution.maxAttempts) {
+        fail(`Test card ${testCardId} already used ${priorDispatches}/${taskPackage.testExecution.maxAttempts} authorized attempts. Return to the user/Design instead of dispatching another round.`);
+      }
+      testExecution = {
+        ...taskPackage.testExecution,
+        dispatchAttempt: priorDispatches + 1,
+      };
+    }
     // Controller-return target default chain: explicit flag > the demand's OWN
     // controller window (stamped into the state root at init — demand pods
     // route home without remembering a flag) > workspace config. An empty
@@ -397,6 +448,22 @@ export function createDispatchCommands(ctx) {
     // mis-route the wake-up (a closed-loop break).
     const controllerWindow = getValue("--controller-window", state.controllerWindow || readWorkspaceConfig().controllerWindow || "");
     const dispatchGroup = getValue("--group", taskPackageId);
+    const rawGroupTaskIds = getAllValues("--group-target-task-id");
+    const membershipExplicit = rawGroupTaskIds.length > 0;
+    if (new Set(rawGroupTaskIds).size !== rawGroupTaskIds.length) {
+      fail("--group-target-task-id values must be unique.");
+    }
+    const groupTaskIds = membershipExplicit ? rawGroupTaskIds : [targetTaskId];
+    const groupExpectedTargets = groupTaskIds.map((groupTaskId) => {
+      const groupTask = (state.targetTasks ?? []).find((item) => item.targetTaskId === groupTaskId);
+      if (!groupTask) fail(`dispatch group target task does not exist in controller state: ${groupTaskId}`);
+      if (!groupTask.targetWindow) fail(`dispatch group target task ${groupTaskId} is missing targetWindow.`);
+      return {
+        targetWindow: groupTask.targetWindow,
+        taskId: groupTaskId,
+        packetId: [dispatchGroup, groupTask.targetWindow, groupTaskId].filter(Boolean).map(slug).join("__"),
+      };
+    });
     const automationEnabled = hasFlag("--automation-enabled");
     const requireThread = hasFlag("--require-thread");
     const windowConfig = buildWindowConfig(targetWindow, { requireThread });
@@ -424,13 +491,23 @@ export function createDispatchCommands(ctx) {
       controllerWindow,
       designIntent,
       evidenceContract,
+      testExecution,
       dispatchGroup,
       evidenceRequired: [
         ...getAllValues("--evidence"),
+        ...(testExecution ? ["Test alignment map: every executed step must name the confirmed requirement goal and approvedPlan item it serves; any unmapped step is a blocker, not evidence."] : []),
         "TargetResultEnvelope with evidence refs; target result is not controller acceptance.",
       ],
       forbidden: [
         ...getAllValues("--forbidden"),
+        ...(testExecution ? [
+          "Test must not replace the confirmed requirement goal, add an unmapped test target/gate, or use a Test skill absent from testExecution.allowedSkills.",
+          testExecution.mode === "restart"
+            ? "This restart is limited to the recorded restartReason and approved restartConditions; it does not authorize a new test plan."
+            : testExecution.mode === "initial" && ["fresh-once", "fresh-per-attempt"].includes(testExecution.setupPolicy)
+              ? "Create only the authorized initial Test environment; do not rebuild it within this attempt or turn setup checks into new acceptance targets."
+              : "Do not rebuild or restart the Test environment; resume/reuse according to testExecution.setupPolicy.",
+        ] : []),
         "Do not treat dispatch packet, delivery run, or target result as total-control acceptance.",
         "Do not parse developer-progress.md as state authority.",
       ],
@@ -446,6 +523,8 @@ export function createDispatchCommands(ctx) {
       stateRef,
       targetWindow,
       taskId: targetTaskId,
+      groupExpectedTargets,
+      membershipExplicit,
     });
     const { deliveryFile, envelope, registration, windowLockWarning } = buildDeliveryArtifacts({
       automationEnabled,
@@ -457,6 +536,14 @@ export function createDispatchCommands(ctx) {
     });
     const dispatchGroupFile = dispatchGroup ? groupFileFor(dispatchGroup) : "";
     const existingGroup = dispatchGroup ? loadDispatchGroup(dispatchGroup) : null;
+    const dispatchGroupChanged = Boolean(dispatchGroupRecord && (
+      !existingGroup
+      || !existingGroup.membershipFinalized
+      || existingGroup.controllerWindow !== dispatchGroupRecord.controllerWindow
+      || existingGroup.humanContextRef !== dispatchGroupRecord.humanContextRef
+      || existingGroup.returnPolicy?.mode !== dispatchGroupRecord.returnPolicy?.mode
+      || JSON.stringify(existingGroup.expectedTargets || []) !== JSON.stringify(dispatchGroupRecord.expectedTargets || [])
+    ));
     const existingPacket = existsSync(packetFile) ? readJson(packetFile, "dispatch packet") : null;
     const existingEnvelope = existsSync(deliveryFile) ? readJson(deliveryFile, "delivery envelope") : null;
     if (existingPacket) {
@@ -480,7 +567,7 @@ export function createDispatchCommands(ctx) {
     }
     const idempotentReplay = Boolean(existingPacket && existingEnvelope);
     const repairArtifacts = [
-      !existingGroup && dispatchGroupRecord ? "dispatch-group" : "",
+      dispatchGroupChanged && dispatchGroupRecord ? "dispatch-group" : "",
       !existingPacket ? "dispatch-packet" : "",
       !existingEnvelope ? "delivery-envelope" : "",
     ].filter(Boolean);
@@ -492,7 +579,7 @@ export function createDispatchCommands(ctx) {
         keepLive = startKeepLive({ automationRunId: dispatchGroup || packet.id });
       }
       if (!idempotentReplay) atomicWriteJson(windowConfigFileFor(targetWindow), windowConfig);
-      if (!existingGroup && dispatchGroupRecord && dispatchGroup) atomicWriteJson(dispatchGroupFile, dispatchGroupRecord);
+      if (dispatchGroupChanged && dispatchGroupRecord && dispatchGroup) atomicWriteJson(dispatchGroupFile, dispatchGroupRecord);
       if (!existingPacket) atomicWriteJson(packetFile, packet);
       if (!existingEnvelope) atomicWriteJson(deliveryFile, envelope);
       if (writeWindowLock && envelope.targetWindow) {
@@ -504,7 +591,7 @@ export function createDispatchCommands(ctx) {
       {
         ok: true,
         command: "prepare-dispatch-from-state",
-        wrote: write && (!idempotentReplay || repairArtifacts.length > 0),
+        wrote: write && (!idempotentReplay || repairArtifacts.length > 0 || dispatchGroupChanged),
         duplicate: idempotentReplay || undefined,
         idempotentReplay: idempotentReplay || undefined,
         repairedArtifacts: write && repairArtifacts.length > 0 ? repairArtifacts : undefined,
@@ -579,6 +666,20 @@ export function createDispatchCommands(ctx) {
   }
 
   function commandBuildControllerReturn() {
+    if (!write) return commandBuildControllerReturnUnlocked();
+    const dispatchGroup = requireValue("--group");
+    ensureStateDirs();
+    try {
+      return withFileLock(`${groupFileFor(dispatchGroup)}.lock`, commandBuildControllerReturnUnlocked, {
+        onWarn: (message) => process.stderr.write(`wakeflow-delivery: ${message}\n`),
+      });
+    } catch (error) {
+      if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);
+      throw error;
+    }
+  }
+
+  function commandBuildControllerReturnUnlocked() {
     const dispatchGroup = requireValue("--group");
     const triggerTarget = requireValue("--trigger-target");
     const triggerTaskId = requireValue("--trigger-task-id");
@@ -618,14 +719,16 @@ export function createDispatchCommands(ctx) {
       dispatchGroup,
       controllerReturnDuplicateSelector({ returnPolicy: review.returnPolicy, triggerTarget, triggerTaskId }),
     );
-    if (existingReturn.pendingCount > 0 || existingReturn.sentCount > 0) {
+    if (existingReturn.envelopeCount > 0) {
       const duplicateScope = controllerReturnDuplicateScopeText({ returnPolicy: review.returnPolicy, triggerTarget, triggerTaskId });
-      fail(`Dispatch group ${dispatchGroup}${duplicateScope} already has controller-return delivery status ${existingReturn.status}; do not create duplicate controller returns.`);
+      fail(`Dispatch group ${dispatchGroup}${duplicateScope} already has controller-return delivery status ${existingReturn.status}; reuse that envelope and record a new delivery run for any transport retry.`);
     }
     const windowConfig = buildWindowConfig(controllerWindow);
     const reviewScope = returnPolicyReviewScope(review.returnPolicy);
 
-    const deliveryId = `controller-return-${slug(dispatchGroup)}__${slug(triggerTarget)}__${slug(triggerTaskId)}`;
+    const deliveryId = reviewScope === "group"
+      ? `controller-return-${slug(dispatchGroup)}`
+      : `controller-return-${slug(dispatchGroup)}__${slug(triggerTarget)}__${slug(triggerTaskId)}`;
     const createdAt = nowIso();
     const envelope = buildControllerReturnEnvelope({
       version: deliveryEnvelopeVersion,

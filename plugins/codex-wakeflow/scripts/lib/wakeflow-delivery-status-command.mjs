@@ -334,6 +334,31 @@ export function commandStatus(ctx) {
     });
   }
 
+  function collectStateRootResultCounts({ packets, diagnostics }) {
+    const counts = {
+      stateRootCount: 0,
+      currentResultCount: 0,
+      historyResultCount: 0,
+      lateResultCount: 0,
+    };
+    const refs = [...new Set(packets.map((packet) => packet.stateRef?.stateRoot).filter(Boolean))];
+    for (const stateRootRef of refs) {
+      const location = stateRootLocation(stateRootRef);
+      if (location.error || !existsSync(location.stateFile)) continue;
+      counts.stateRootCount += 1;
+      const current = listJsonArtifacts(path.join(location.root, "target-results"));
+      const history = listJsonArtifacts(path.join(location.root, "target-results", "history"));
+      for (const artifact of [...current, ...history].filter((item) => item.error)) {
+        diagnostics.errors.push({ file: path.relative(workspaceRoot, artifact.file), error: artifact.error });
+      }
+      counts.currentResultCount += current.filter((item) => !item.error).length;
+      const readableHistory = history.filter((item) => !item.error);
+      counts.historyResultCount += readableHistory.length;
+      counts.lateResultCount += readableHistory.filter((item) => item.value?.historyReason === "late-dispatch-group").length;
+    }
+    return counts;
+  }
+
   function buildRuntimeSummary({
     packetCount,
     groupCount,
@@ -369,6 +394,7 @@ export function commandStatus(ctx) {
         ...statusFromLoadedRuns(item.value, runArtifacts),
       }));
     const activePackets = packets.filter((packet) => packetStillActive(packet, diagnostics, packets));
+    const stateRootResults = collectStateRootResultCounts({ packets, diagnostics });
     const activePacketIds = new Set(activePackets.map((packet) => packet.id));
     const activeGroupIds = new Set(activePackets.map((packet) => packet.dispatchGroup || packet.taskId || packet.id));
     const liveDeliveryStatuses = deliveryStatuses.filter((delivery) => delivery.kind === "DeliveryEnvelope"
@@ -417,6 +443,7 @@ export function commandStatus(ctx) {
         deliveryCount,
         deliveryRunCount,
         resultCount,
+        stateRootResults,
         registeredThreadCount,
         windowConfigCount,
       },
@@ -612,6 +639,7 @@ export function commandStatus(ctx) {
       deliveryCount,
       deliveryRunCount,
       resultCount,
+      stateRootResultCounts: runtimeSummary.totals.stateRootResults,
       registeredThreadCount,
       windowConfigCount,
       keepLiveStateExists,
@@ -640,6 +668,7 @@ export function commandStatus(ctx) {
       `Delivery envelopes: ${deliveryCount}`,
       `Delivery runs: ${deliveryRunCount}`,
       `Target results: ${resultCount}`,
+      `State-root results: ${runtimeSummary.totals.stateRootResults.currentResultCount} current, ${runtimeSummary.totals.stateRootResults.historyResultCount} history (${runtimeSummary.totals.stateRootResults.lateResultCount} late)`,
       `Registered threads: ${registeredThreadCount}`,
       `Window configs: ${windowConfigCount}`,
       `Keep-live: ${keepLive.active ? `active worker=${keepLive.workerPid} child=${keepLive.childPid}` : keepLive.status}`,

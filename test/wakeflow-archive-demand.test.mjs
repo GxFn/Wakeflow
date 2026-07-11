@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
@@ -277,12 +277,24 @@ test("importing a stale-round result leaves the in-flight round's window lock al
     "--target-task-id", "LCK-1-T1", "--target-window", "RepoA", "--status", "completed",
     "--dispatch-group", "G1", "--result-id", "r-old", "--write", "--json"]);
   assert.equal(stale.status, 0, stale.stderr || stale.stdout);
-  assert.equal(JSON.parse(stale.stdout).lockReleased ?? false, false, "stale-round result must not unlock d2");
+  const stalePayload = JSON.parse(stale.stdout);
+  assert.equal(stalePayload.lockReleased ?? false, false, "stale-round result must not unlock d2");
+  assert.equal(stalePayload.historyOnly, true, "stale-round result is audit history, not the task's current result");
+  assert.match(stalePayload.resultFile, /target-results\/history\//);
   assert.equal(existsSync(path.join(locksDir, "RepoA.json")), true);
 
   const current = run(["import-target-result", "--root", root, "--state-root", stateRoot,
     "--target-task-id", "LCK-1-T1", "--target-window", "RepoA", "--status", "completed",
     "--dispatch-group", "G2", "--result-id", "r-new", "--write", "--json"]);
   assert.equal(current.status, 0, current.stderr || current.stdout);
+  const currentPayload = JSON.parse(current.stdout);
+  assert.equal(currentPayload.currentResult, true);
+  assert.equal(currentPayload.historyOnly ?? false, false);
+  const currentResult = readJson(path.join(root, currentPayload.resultFile));
+  assert.equal(currentResult.dispatchGroup, "G2");
+  assert.equal(currentResult.currentResult, true);
+  const topLevelResults = readdirSync(path.join(root, stateRoot, "target-results"))
+    .filter((name) => name.endsWith(".json"));
+  assert.deepEqual(topLevelResults, ["r-new.json"]);
   assert.equal(existsSync(path.join(locksDir, "RepoA.json")), false, "current-round result releases the lock");
 });

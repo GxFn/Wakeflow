@@ -96,6 +96,7 @@ export function createWindowRuntime(ctx) {
     stateRef,
     interfaceLanguage = "en",
     craftSkill = false,
+    testExecution = false,
   }) {
     if (!stateRef) fail("Target prompts require stateRef from a controller state root.");
     // Human-readable sentences follow the demand interfaceLanguage so the
@@ -119,6 +120,7 @@ export function createWindowRuntime(ctx) {
       // wake prompt is the one surface a target is GUARANTEED to read; a craft gate
       // whose skill never activates would fail the target at reduce time.
       ...(craftSkill ? ["- craftSkill: skills/wakeflow-target-craft/SKILL.md"] : []),
+      ...(testExecution ? [`- testContract: task-packages/${stateRef.taskPackageId}.json#testExecution`] : []),
     ].join("\n");
   }
 

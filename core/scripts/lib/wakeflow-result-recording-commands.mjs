@@ -45,6 +45,7 @@ export function createResultRecordingCommands(ctx) {
     writeWindowLock,
     removeWindowLock,
     listDispatchGroupsForTask,
+    loadDispatchGroup,
     artifactTrace,
   } = ctx;
 
@@ -88,6 +89,18 @@ export function createResultRecordingCommands(ctx) {
   function markStateRootDeliverySent(envelope, run, { apply = true } = {}) {
     if (envelope.kind !== "DeliveryEnvelope" || run.status !== "sent") {
       return { updated: false, reason: "not-a-sent-target-delivery" };
+    }
+    if (envelope.dispatchGroup) {
+      const group = loadDispatchGroup(envelope.dispatchGroup);
+      if (!group?.membershipFinalized) {
+        fail(`delivery ${envelope.deliveryId} belongs to dispatch group ${envelope.dispatchGroup}, whose membership is not finalized.`);
+      }
+      const envelopeTaskId = envelope.taskId || envelope.stateRef?.targetTaskId;
+      const member = (group.expectedTargets ?? []).some((target) => target.targetWindow === envelope.targetWindow
+        && target.taskId === envelopeTaskId);
+      if (!member) {
+        fail(`delivery ${envelope.deliveryId} target ${envelope.targetWindow} / ${envelopeTaskId} is not a finalized member of dispatch group ${envelope.dispatchGroup}.`);
+      }
     }
     const stateRootRef = envelope.stateRef?.stateRoot;
     const targetTaskId = envelope.stateRef?.targetTaskId || envelope.taskId;

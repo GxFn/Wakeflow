@@ -22,6 +22,11 @@ import {
   activeDemandConflictSummary,
 } from "./lib/wakeflow-active-demands.mjs";
 import { archiveWorkspaceTodo, refreshWorkspaceProjection } from "./lib/wakeflow-workspace-projection.mjs";
+import {
+  currentStateRootResults,
+  readStateRootTargetResultItems,
+  selectCurrentStateRootResults,
+} from "./lib/wakeflow-state-results.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const wakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -41,8 +46,8 @@ Controller state-machine manager
 
 Usage:
   node scripts/wakeflow-state.mjs init --demand-key <key> --title <title> [--goal <text>] [--completion-definition <text>] [--test-decision <text>] [--stage-plan <text>] [--controller-window <window>] [--language <auto|zh|en>] [--root <workspace>] [--state-root <path>] [--write] [--json]
-  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--source-ref <ref>] [--design-intent <text>] [--evidence-contract <json>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--write] [--json]
-  node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--craft-evidence <json>] [--summary <text>] [--write] [--json]
+  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--source-ref <ref>] [--design-intent <text>] [--evidence-contract <json>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--test-card-id <id>] [--test-continuation-of <task-id>] [--restart-test --test-restart-reason <text>] [--write] [--json]
+  node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--dispatch-group <id>] [--supersede-result] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--craft-evidence <json>] [--summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
   node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked|redesign> --reason <text> [--evidence-ref <ref>] [--accept-blocked] [--write] [--json]
   node scripts/wakeflow-state.mjs complete-demand --state-root <path> --reason <text> --evidence-ref <ref> [--write] [--json]
@@ -144,6 +149,111 @@ function validateEvidenceContractShape(contract) {
     }
   }
   return contract;
+}
+
+function readTestCardForTask(stateRoot, testCardId) {
+  const cardFile = path.join(stateRoot, "test-cards", `${slug(testCardId)}.json`);
+  if (!existsSync(cardFile)) {
+    fail(`configured Test work requires an existing Test card: ${relative(cardFile)}`);
+  }
+  const card = readJson(cardFile, "Test boundary card");
+  const contract = card.executionContract;
+  if (!contract || typeof contract.requirementGoal !== "string" || !contract.requirementGoal.trim() || !Array.isArray(contract.approvedPlan) || contract.approvedPlan.length === 0) {
+    fail(`Test card ${testCardId} has no authoritative executionContract. Create a new bounded Test card; Test must not invent the missing approach.`);
+  }
+  if (!Array.isArray(contract.allowedSkills) || !Array.isArray(contract.restartConditions)) {
+    fail(`Test card ${testCardId} has a malformed executionContract skill/restart list.`);
+  }
+  if (!["reuse-existing", "fresh-once", "fresh-per-attempt"].includes(contract.setupPolicy)) {
+    fail(`Test card ${testCardId} has an invalid executionContract.setupPolicy.`);
+  }
+  if (!Number.isInteger(contract.maxAttempts) || contract.maxAttempts < 1 || contract.maxAttempts > 10) {
+    fail(`Test card ${testCardId} has an invalid executionContract.maxAttempts.`);
+  }
+  return { card, cardFile, contract };
+}
+
+function testExecutionForNewTask({ stateRoot, state, targetWindow, targetTaskId }) {
+  const config = loadWorkspaceConfig({ workspaceRoot, args: options });
+  const configuredTestWindow = testWindowNames(config)[0] || "";
+  const isTestTarget = Boolean(configuredTestWindow)
+    && (targetWindow === configuredTestWindow || targetWindow.startsWith(`${configuredTestWindow}__`));
+  const testCardId = (getValue("--test-card-id", "") || "").trim();
+  const continuationOf = (getValue("--test-continuation-of", "") || "").trim();
+  const restart = hasFlag("--restart-test");
+  const restartReason = (getValue("--test-restart-reason", "") || "").trim();
+  if (!isTestTarget) {
+    if (testCardId || continuationOf || restart || restartReason) {
+      fail("--test-card-id/continuation/restart options are valid only for the configured Test window.");
+    }
+    return null;
+  }
+  if (!testCardId) {
+    fail(`target window ${targetWindow} is the configured Test window; --test-card-id is required.`);
+  }
+  const { card, cardFile, contract } = readTestCardForTask(stateRoot, testCardId);
+  if (card.targetWindow !== targetWindow) {
+    fail(`Test card ${testCardId} belongs to ${card.targetWindow}, not ${targetWindow}.`);
+  }
+  if (!card.strategySource) {
+    fail(`Test card ${testCardId} has no strategySource; Test approach authority is missing.`);
+  }
+  const priorTasks = (state.targetTasks ?? [])
+    .filter((task) => task.testExecution?.testCardId === testCardId)
+    .sort((left, right) => Number(left.testExecution?.lineageStep ?? 0) - Number(right.testExecution?.lineageStep ?? 0));
+  const dispatchCount = priorTasks.reduce((sum, task) => sum + Number(task.counts?.dispatchCount ?? 0), 0);
+  if (dispatchCount >= contract.maxAttempts) {
+    fail(`Test card ${testCardId} already used ${dispatchCount}/${contract.maxAttempts} authorized attempts. Stop and return to the user/Design instead of creating another Test task id.`);
+  }
+  if (priorTasks.length === 0) {
+    const expectedTaskId = card.suggestedTaskPackage?.targetTaskId;
+    if (expectedTaskId && targetTaskId !== expectedTaskId) {
+      fail(`first Test task for card ${testCardId} must use targetTaskId ${expectedTaskId}.`);
+    }
+    if (continuationOf || restart || restartReason) {
+      fail(`first Test task for card ${testCardId} cannot declare continuation or restart.`);
+    }
+    return {
+      testCardId,
+      testCardRef: relative(cardFile),
+      strategySource: card.strategySource,
+      lineageStep: 1,
+      dispatchAttempt: dispatchCount + 1,
+      mode: "initial",
+      ...contract,
+    };
+  }
+  const latest = priorTasks.at(-1);
+  if (!continuationOf) {
+    fail(`later Test work for card ${testCardId} must declare --test-continuation-of ${latest.targetTaskId}; a new task id does not start a new plan.`);
+  }
+  if (continuationOf !== latest.targetTaskId) {
+    fail(`Test continuation must follow the latest lineage task ${latest.targetTaskId}, not ${continuationOf}.`);
+  }
+  if (latest.status !== "accepted") {
+    fail(`Test continuation cannot be added while ${latest.targetTaskId} is ${latest.status}; review it first or re-dispatch that same task.`);
+  }
+  if (restart) {
+    if (contract.setupPolicy !== "fresh-per-attempt" || contract.restartConditions.length === 0) {
+      fail(`Test card ${testCardId} does not authorize fresh environment restarts; resume prior evidence or request a new card.`);
+    }
+    if (!restartReason) {
+      fail("--restart-test requires --test-restart-reason from the controller's explicit decision.");
+    }
+  } else if (restartReason) {
+    fail("--test-restart-reason requires --restart-test.");
+  }
+  return {
+    testCardId,
+    testCardRef: relative(cardFile),
+    strategySource: card.strategySource,
+    lineageStep: priorTasks.length + 1,
+    dispatchAttempt: dispatchCount + 1,
+    mode: restart ? "restart" : "resume",
+    continuationOfTaskId: continuationOf,
+    ...(restart ? { restartReason } : {}),
+    ...contract,
+  };
 }
 
 // Craft evidence entries land in the durable target-result artifact (evidence is
@@ -599,7 +709,10 @@ function commandInit() {
   // The demand's OWN controller window (demand pods: Controller__<pod>). Every
   // dispatch's controller-return defaults to this, so a pod controller never
   // mis-routes wake-ups to the workspace-level controller by forgetting a flag.
-  const demandControllerWindow = (getValue("--controller-window", "") || config.controllerWindow || "").trim() || null;
+  const explicitControllerWindow = (getValue("--controller-window", "") || "").trim();
+  const configuredControllerWindow = (config.controllerWindow || "").trim();
+  let demandControllerWindow = explicitControllerWindow || configuredControllerWindow || null;
+  let executionPlacement = null;
   const completionDefinition = getValue("--completion-definition", locale.defaultCompletionDefinition);
   // Design's testing decision (which validation / real-Test approach). Optional and
   // advisory: surfaced as a REMINDER when absent, never a gate — the controller/Design
@@ -783,6 +896,17 @@ function commandInit() {
       if (capacity.atCapacity) {
         fail(`cannot initialize ${demandKey}: workspace is at its active-demand capacity (${capacity.active.length}/${capacity.max}): ${activeDemandConflictSummary(capacity.active)}. Complete and archive one, or raise maxActiveDemands in wakeflow.config.json.`);
       }
+      const explicitPodController = explicitControllerWindow.includes("__");
+      const placementMode = explicitPodController || capacity.active.length > 0 ? "isolated" : "main";
+      executionPlacement = placementMode === "isolated"
+        ? { mode: "isolated", podId: slug(demandKey) }
+        : { mode: "main", podId: null };
+      if (placementMode === "isolated" && !explicitControllerWindow) {
+        demandControllerWindow = `Controller__${slug(demandKey)}`;
+      }
+      demand.executionPlacement = executionPlacement;
+      state.executionPlacement = executionPlacement;
+      state.controllerWindow = demandControllerWindow;
       if (write) {
         // wakeflow-state.json makes the demand visible to other scanners, so
         // it must land inside the same critical section as the scan.
@@ -816,7 +940,12 @@ function commandInit() {
       generatedRuntimeBoundary: ".wakeflow-active is ignored by the Wakeflow repository; tracked assets are templates, schemas, scripts, skills, and tests.",
       lazyStateDirectories: lazyStateDirectories.map(relative),
       localDeliveryRuntime: ".wakeflow-local/wakeflow-delivery",
+      executionPlacement,
+      controllerWindow: demandControllerWindow,
       outputs: outputs.map(relative),
+      agentNext: executionPlacement?.mode === "isolated"
+        ? `Demand created in isolated placement. Open or resume its demand pod before dispatch (wakeflow_pod_open for pod ${executionPlacement.podId}); no dispatch, delivery, or acceptance was performed.`
+        : "Demand created in main placement. Dispatch is a separate step; no dispatch, delivery, or acceptance was performed.",
     },
     [
       `${write ? "Initialized" : "Would initialize"} controller state root for ${demandKey}.`,
@@ -876,6 +1005,12 @@ function commandAddTaskPackageLocked(stateRoot) {
   if (targetWindow && !targetTaskId) {
     fail("--target-task-id is required when --target-window is provided.");
   }
+  if (targetTaskId && (state.targetTasks ?? []).some((item) => item.targetTaskId === targetTaskId)) {
+    fail(`controller state already contains target task: ${targetTaskId}`);
+  }
+  const testExecution = targetWindow
+    ? testExecutionForNewTask({ stateRoot, state, targetWindow, targetTaskId })
+    : null;
 
   const createdAt = nowIso();
   const nextRevision = Number(state.revision ?? 0) + 1;
@@ -893,6 +1028,7 @@ function commandAddTaskPackageLocked(stateRoot) {
           summary: targetSummary,
           status: "pending",
           createdAt,
+          ...(testExecution ? { testExecution } : {}),
           ...(reviewRoute ? { reviewRoute } : {}),
         },
       ]
@@ -906,6 +1042,7 @@ function commandAddTaskPackageLocked(stateRoot) {
     sourceRef,
     ...(designIntent ? { designIntent } : {}),
     ...(evidenceContract ? { evidenceContract } : {}),
+    ...(testExecution ? { testExecution } : {}),
     createdAt,
     ...(reviewRoute ? { reviewRoute } : {}),
     targetTasks,
@@ -914,7 +1051,7 @@ function commandAddTaskPackageLocked(stateRoot) {
   // contract leaves the craft gate dormant — the same forgotten-decision failure
   // mode testDecisionReminder fixes at create-demand. Surface it; authoring stays
   // Design's / the controller's judgment (doc-only packages legitimately skip it).
-  const evidenceContractReminder = targetWindow && !evidenceContract
+  const evidenceContractReminder = targetWindow && !testExecution && !evidenceContract
     ? "No evidence contract on this package: the craft gate stays dormant. If this is implementation work, consider authoring one (required kinds like tests/change-scope; see wakeflow-target-craft). Reminder only — not a gate."
     : null;
   const nextState = {
@@ -935,6 +1072,7 @@ function commandAddTaskPackageLocked(stateRoot) {
         sourceRef,
         ...(designIntent ? { designIntent } : {}),
         ...(evidenceContract ? { evidenceContract } : {}),
+        ...(testExecution ? { testExecution } : {}),
         createdAt,
         ...(reviewRoute ? { reviewRoute } : {}),
       },
@@ -999,6 +1137,7 @@ function commandAddTaskPackageLocked(stateRoot) {
       stateRevision: nextRevision,
       eventId,
       projectionStatus: "stale",
+      ...(testExecution ? { testExecution } : {}),
       ...(evidenceContractReminder ? { evidenceContractReminder } : {}),
       appendLog: {
         type: "task-package",
@@ -1084,11 +1223,12 @@ function targetResultAgentNext(deliveryContext, reviewReadiness) {
   return "Target result is recorded, but this is not controller acceptance. The resolved delivery envelope does not require a controller return; stop unless the controller sends another task.";
 }
 
-function reviewReadinessAfterImport(state, stateRoot, importedTargetTaskId) {
+function reviewReadinessAfterImport(state, stateRoot, importedTargetTaskId, importedCurrentResult = true) {
   const reviewScope = controllerReviewScope(state.targetTasks ?? []);
   const targetTasks = reviewScope.reviewableTargetTasks;
   const results = latestResultsByTargetTask(readTargetResults(stateRoot));
-  const taskIdsWithResults = new Set([...results.keys(), importedTargetTaskId]);
+  const taskIdsWithResults = new Set(results.keys());
+  if (importedCurrentResult) taskIdsWithResults.add(importedTargetTaskId);
   const reworkCompanionPresent = reviewScope.mode === "rework-first-controller-review-targets"
     && targetTasks.some((task) => task.reviewRoute === "rework" && !hasPendingReworkDecision(task));
   const remainingTaskIds = [];
@@ -1118,6 +1258,49 @@ function reviewReadinessAfterImport(state, stateRoot, importedTargetTaskId) {
 
 function commandImportTargetResult() {
   const stateRoot = stateRootFromArg();
+  withLockedStateRoot(stateRoot, () => commandImportTargetResultLocked(stateRoot));
+}
+
+function targetResultComparable(result = {}) {
+  return JSON.stringify({
+    targetTaskId: result.targetTaskId,
+    targetWindow: result.targetWindow,
+    dispatchGroup: result.dispatchGroup || null,
+    status: result.status,
+    summary: result.summary || "",
+    evidenceRefs: result.evidenceRefs ?? [],
+    verification: result.verification ?? [],
+    risks: result.risks ?? [],
+    craftEvidence: result.craftEvidence ?? [],
+  });
+}
+
+function targetResultsEquivalent(left, right) {
+  return targetResultComparable(left) === targetResultComparable(right);
+}
+
+function readTargetResultHistory(stateRoot) {
+  const dir = path.join(stateRoot, "target-results", "history");
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((name) => name.endsWith(".json"))
+    .map((name) => {
+      const file = path.join(dir, name);
+      return { file, result: readJson(file, "target result history") };
+    });
+}
+
+function targetResultHistoryFile(stateRoot, result, revision, historyKind = "current") {
+  const group = result.dispatchGroup || "ungrouped";
+  return path.join(
+    stateRoot,
+    "target-results",
+    "history",
+    `${slug(result.resultId)}__${slug(group)}__${slug(historyKind)}-r${String(revision).padStart(4, "0")}.json`,
+  );
+}
+
+function commandImportTargetResultLocked(stateRoot) {
   const targetTaskId = requireValue("--target-task-id");
   const targetWindow = requireValue("--target-window");
   const status = requireValue("--status");
@@ -1141,27 +1324,12 @@ function commandImportTargetResult() {
     fail(`target task ${targetTaskId} is already ${targetTask.status}; create a new task package for follow-up work.`);
   }
   const explicitResultId = getValue("--result-id", null);
+  const supersedeResult = hasFlag("--supersede-result");
   // The dispatch group the incoming RESULT ENVELOPE claims (optional): late or
   // duplicate results from a superseded round carry their original group, and
   // must not be allowed to touch the in-flight round's window lock.
   const resultDispatchGroup = getValue("--dispatch-group", null);
-  let resultId = explicitResultId ?? `tr-${slug(targetTaskId)}`;
-  let resultFile = path.join(stateRoot, "target-results", `${slug(resultId)}.json`);
-  if (existsSync(resultFile)) {
-    if (explicitResultId) {
-      fail(`target result already exists: ${relative(resultFile)}`);
-    }
-    // Default-id collision is the normal rework cycle (decide-review rework ->
-    // re-dispatch -> new result for the same target task). Auto-disambiguate
-    // with a timestamp plus entropy (two imports inside one second must not
-    // silently overwrite each other); reduce-results picks latest by createdAt.
-    const stamp = `${nowIso().replace(/[^0-9]/g, "").slice(0, 14)}-${Math.random().toString(36).slice(2, 6)}`;
-    resultId = `tr-${slug(targetTaskId)}-${stamp}`;
-    resultFile = path.join(stateRoot, "target-results", `${slug(resultId)}.json`);
-    if (existsSync(resultFile)) {
-      fail(`target result already exists: ${relative(resultFile)}`);
-    }
-  }
+  const resultId = explicitResultId ?? `tr-${slug(targetTaskId)}`;
   const createdAt = nowIso();
   const evidenceRefs = valuesFor("--evidence-ref");
   const verification = valuesFor("--verification");
@@ -1170,12 +1338,21 @@ function commandImportTargetResult() {
   // of { kind, ref|value|commit, verify }. Absent = zero behavior change.
   const craftEvidence = validateCraftEvidenceEntries(parseOptionalJsonArrayArg("--craft-evidence"));
   const deliveryContext = targetTaskDeliveryContext(targetTask);
-  const result = {
+  const incomingDispatchGroup = resultDispatchGroup ?? deliveryContext.dispatchGroup ?? undefined;
+  const currentDispatchGroup = targetTask.delivery?.dispatchGroup || deliveryContext.dispatchGroup || "";
+  const historyOnly = Boolean(currentDispatchGroup && incomingDispatchGroup && incomingDispatchGroup !== currentDispatchGroup);
+  const currentResults = selectCurrentStateRootResults({
+    items: readStateRootTargetResultItems(stateRoot, readJson),
+    state,
+    fail,
+  });
+  const currentItem = currentResults.get(targetTaskId) ?? null;
+  const baseResult = {
     schemaVersion,
     resultId,
     demandKey: state.demandKey,
     taskPackageId: targetTask.taskPackageId,
-    dispatchGroup: resultDispatchGroup ?? deliveryContext.dispatchGroup ?? undefined,
+    dispatchGroup: incomingDispatchGroup,
     stateRoot: relative(stateRoot),
     targetWindow,
     targetTaskId,
@@ -1191,7 +1368,7 @@ function commandImportTargetResult() {
       artifactKind: "target-result",
       createdAt,
       demandKey: state.demandKey,
-      dispatchGroup: deliveryContext.dispatchGroup ?? undefined,
+      dispatchGroup: incomingDispatchGroup,
       resultId,
       stateRevision: state.revision,
       stateRoot: relative(stateRoot),
@@ -1209,40 +1386,102 @@ function commandImportTargetResult() {
     ],
   };
 
-  if (write) {
-    // Import is lock-free by design (it never mutates wakeflow-state.json),
-    // but a locked archive teardown can race it: re-verify the root still
-    // exists right before writing, or a late import resurrects an orphan
-    // target-results/ dir after the demand moved to the ledger.
-    if (!existsSync(path.join(stateRoot, "wakeflow-state.json"))) {
-      fail(`state root vanished while importing (archived concurrently?): ${relative(stateRoot)}`);
+  let result = baseResult;
+  let resultFile = path.join(stateRoot, "target-results", `${slug(resultId)}.json`);
+  let historyFile = "";
+  let duplicate = false;
+  let superseded = false;
+  if (historyOnly) {
+    const priorHistory = readTargetResultHistory(stateRoot)
+      .filter((item) => (item.result.targetTaskId || item.result.taskId) === targetTaskId)
+      .filter((item) => (item.result.dispatchGroup || "") === (incomingDispatchGroup || ""));
+    const equivalent = priorHistory.find((item) => targetResultsEquivalent(item.result, baseResult));
+    if (equivalent) {
+      duplicate = true;
+      result = equivalent.result;
+      resultFile = equivalent.file;
+    } else {
+      if (priorHistory.length > 0 && !supersedeResult) {
+        fail(`late target result already exists for ${targetTaskId} in dispatch group ${incomingDispatchGroup}; use --supersede-result to append an explicit corrected history revision.`);
+      }
+      const resultRevision = priorHistory.reduce(
+        (max, item) => Math.max(max, Number(item.result.resultRevision ?? 0)),
+        0,
+      ) + 1;
+      result = {
+        ...baseResult,
+        currentResult: false,
+        historyReason: "late-dispatch-group",
+        resultRevision,
+      };
+      resultFile = targetResultHistoryFile(stateRoot, result, resultRevision, "late");
+      if (existsSync(resultFile)) {
+        fail(`target result history already exists with different content: ${relative(resultFile)}`);
+      }
     }
+  } else if (currentItem) {
+    if (targetResultsEquivalent(currentItem.result, baseResult)) {
+      duplicate = true;
+      result = currentItem.result;
+      resultFile = currentItem.file;
+    } else {
+      const sameRound = (currentItem.result.dispatchGroup || "") === (incomingDispatchGroup || "");
+      if (sameRound && !supersedeResult) {
+        fail(`current target result already exists for ${targetTaskId}${incomingDispatchGroup ? ` in dispatch group ${incomingDispatchGroup}` : ""}; use --supersede-result to replace it explicitly.`);
+      }
+      const priorRevision = Number(currentItem.result.resultRevision ?? 1);
+      historyFile = targetResultHistoryFile(stateRoot, currentItem.result, priorRevision, "current");
+      if (existsSync(historyFile)) {
+        const existingHistory = readJson(historyFile, "target result history");
+        if (JSON.stringify(existingHistory) !== JSON.stringify(currentItem.result)) {
+          fail(`target result history already exists with different content: ${relative(historyFile)}`);
+        }
+      }
+      // Keep one stable top-level current file for the task. The resultId may
+      // change, but readers use the actual file path; changing the file name
+      // would create a two-current crash window while replacing it.
+      resultFile = currentItem.file;
+      result = {
+        ...baseResult,
+        currentResult: true,
+        resultRevision: priorRevision + 1,
+        supersedes: {
+          resultId: currentItem.result.resultId,
+          dispatchGroup: currentItem.result.dispatchGroup,
+          historyFile: relative(historyFile),
+        },
+      };
+      superseded = true;
+    }
+  } else {
+    const colliding = readStateRootTargetResultItems(stateRoot, readJson)
+      .find((item) => item.file === resultFile);
+    if (colliding) {
+      fail(`target result file already exists for another current result: ${relative(resultFile)}`);
+    }
+    result = {
+      ...baseResult,
+      currentResult: true,
+      resultRevision: 1,
+    };
+  }
+
+  if (write && !duplicate) {
     mkdirSync(path.dirname(resultFile), { recursive: true });
+    if (historyFile) {
+      mkdirSync(path.dirname(historyFile), { recursive: true });
+      if (!existsSync(historyFile)) writeJson(historyFile, currentItem.result);
+    }
     writeJson(resultFile, result);
     appendProgressTimeline(stateRoot, state, PROGRESS_SECTIONS.backfill,
-      `${createdAt} ${targetWindow}/${targetTaskId} returned ${status} (result ${resultId})`);
-    // The pre-write check narrows the archive race but cannot close it (import
-    // is lock-free by design). Re-verify AFTER writing: when the root was torn
-    // down mid-import, withdraw our own writes so no orphan target-results/
-    // dir resurrects under the archived demand's old path.
-    if (!existsSync(path.join(stateRoot, "wakeflow-state.json"))) {
-      rmSync(resultFile, { force: true });
-      try {
-        if (readdirSync(path.dirname(resultFile)).length === 0) {
-          rmSync(path.dirname(resultFile), { recursive: true, force: true });
-        }
-      } catch {
-        // dir vanished with the root — fine
-      }
-      fail(`state root vanished while importing (archived concurrently); the imported result was withdrawn: ${relative(stateRoot)}`);
-    }
+      `${createdAt} ${targetWindow}/${targetTaskId} returned ${status} (result ${resultId}${historyOnly ? ", history only" : ""})`);
   }
   // Release the shared in-flight window lock when this result answers the
   // delivery that locked it. This is the only release point reachable from the
   // MCP-only flow (wakeflow_record_target_result maps here), so without it
   // codex-side locks would linger the full TTL after the work finished.
   let lockReleased = false;
-  if (write) {
+  if (write && !historyOnly) {
     const lockFile = path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery/locks", `${slug(targetWindow)}.json`);
     const taskDeliveryId = targetTask.delivery?.deliveryId;
     const taskDispatchGroup = targetTask.delivery?.dispatchGroup;
@@ -1259,7 +1498,7 @@ function commandImportTargetResult() {
 
   // Review readiness mirrors reduce-results scope, including rework-first rules,
   // so a stale old result never tells the controller to reduce the wrong lane.
-  const reviewReadiness = reviewReadinessAfterImport(state, stateRoot, targetTaskId);
+  const reviewReadiness = reviewReadinessAfterImport(state, stateRoot, targetTaskId, !historyOnly);
 
   output(
     {
@@ -1268,14 +1507,20 @@ function commandImportTargetResult() {
       reviewReadiness,
       lockReleased,
       hostOwnership,
-      wrote: write,
+      wrote: write && !duplicate,
+      duplicate: duplicate || undefined,
+      currentResult: result.currentResult,
+      historyOnly: historyOnly || undefined,
+      superseded: superseded || undefined,
+      resultRevision: result.resultRevision,
+      historyFile: historyFile ? relative(historyFile) : undefined,
       demandKey: state.demandKey,
       stateRoot: relative(stateRoot),
       resultId,
       resultFile: relative(resultFile),
       targetTaskId,
       status,
-      dispatchGroup: deliveryContext.dispatchGroup,
+      dispatchGroup: incomingDispatchGroup,
       deliveryContext,
       controllerReturn: {
         required: Boolean(deliveryContext.controllerReturnRequired),
@@ -1351,7 +1596,10 @@ function commandReduceResultsLocked(stateRoot) {
     if (result.status === "completed") {
       craftEvidenceGaps.push(...craftEvidenceGapsForTargetResult(stateRoot, state, task, result));
     }
-    evidenceRefs.push(...(result.evidenceRefs ?? []), `target-results/${slug(result.resultId)}.json`);
+    evidenceRefs.push(
+      ...(result.evidenceRefs ?? []),
+      result._resultFile || `target-results/${slug(result.resultId)}.json`,
+    );
     if (result.status === "blocked") {
       blockedResultIds.push(result.resultId);
     } else {
@@ -2017,20 +2265,18 @@ function valuesFor(name) {
 }
 
 function readTargetResults(stateRoot) {
-  const dir = path.join(stateRoot, "target-results");
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((name) => name.endsWith(".json"))
-    .map((name) => readJson(path.join(dir, name), "target result"));
+  const state = readJson(path.join(stateRoot, "wakeflow-state.json"), "controller state");
+  return [...currentStateRootResults({ stateRoot, state, readJson, fail }).values()]
+    .map((item) => ({ ...item.result, _resultFile: path.relative(stateRoot, item.file) }));
 }
 
 function latestResultsByTargetTask(results) {
   const latest = new Map();
   for (const result of results) {
-    const existing = latest.get(result.targetTaskId);
-    if (!existing || String(result.createdAt ?? "") >= String(existing.createdAt ?? "")) {
-      latest.set(result.targetTaskId, result);
+    if (latest.has(result.targetTaskId)) {
+      fail(`multiple current target results were selected for ${result.targetTaskId}.`);
     }
+    latest.set(result.targetTaskId, result);
   }
   return latest;
 }

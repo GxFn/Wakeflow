@@ -85,7 +85,11 @@ or ambiguous = immediate blocker back to the controller; the controller
 resolves it from the Requirement Design or the user — never by guessing. A
 spec stale at Test time is a product-decision gap (quick user confirm) or a
 controller decision WITHIN the confirmed spec's bounds — never Test's guess.
-Results return to S4 review.
+The card also freezes the demand goal, approved Test plan, allowed Test skills,
+setup policy, and attempt bound. Test may elaborate only mapped operational
+steps; unmapped goals/gates/methods return blocked before execution. Results
+return to S4, where the controller compares the step-to-anchor map against the
+same contract before accepting evidence or authoring follow-up work.
 
 ## S6 — Integrate & Close (owner: controller)
 `wakeflow_complete_demand` (all accepted, zero blockers, evidence) →

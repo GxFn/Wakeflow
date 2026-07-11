@@ -19,6 +19,7 @@ import {
   normalizeReturnPolicyMode,
 } from "./lib/wakeflow-return-policy.mjs";
 import { buildReplaySummary, pruneWouldBreakReplay } from "./lib/wakeflow-idempotency.mjs";
+import { WakeflowStateLockTimeoutError, withFileLock } from "./lib/wakeflow-state-lock.mjs";
 
 const args = process.argv.slice(2);
 const command = args[0] && !args[0].startsWith("--") ? args[0] : "status";
@@ -45,7 +46,7 @@ Usage:
   node scripts/wakeflow-delivery.mjs register-thread --window <name> --thread-id <id> --write [--json]
   node scripts/wakeflow-delivery.mjs build-window-config --window <name> [--require-thread] --write [--json]
   node scripts/wakeflow-delivery.mjs build-delivery --packet-file <path> [--delivery-id <id>] [--return-route controller|none] [--automation-enabled] [--require-thread] [--write] [--json]
-  node scripts/wakeflow-delivery.mjs prepare-dispatch-from-state --state-root <path> --target-task-id <id> [--task-package-id <id>] [--human-context-ref <ref>] [--controller-window <name>] [--group <id>] [--return-policy group-ready|per-target] [--automation-enabled] [--require-thread] [--write] [--json]
+  node scripts/wakeflow-delivery.mjs prepare-dispatch-from-state --state-root <path> --target-task-id <id> [--group-target-task-id <id>...] [--task-package-id <id>] [--human-context-ref <ref>] [--controller-window <name>] [--group <id>] [--return-policy group-ready|per-target] [--automation-enabled] [--require-thread] [--write] [--json]
   node scripts/wakeflow-delivery.mjs build-controller-return --group <id> --trigger-target <window> --trigger-task-id <taskId> [--human-context-ref <ref>] [--controller-window <name>] [--return-reason result-ready|blocked] [--automation-enabled] [--require-thread] [--write] [--json]
   node scripts/wakeflow-delivery.mjs record-delivery-run --delivery-file <path> --status sent|blocked|failed [--host-method ${hostProfile.hostTools.sendToWindow}] [--host-mode new-turn|unknown] [--readback-ok true|false] [--evidence <text>] [--error <text>] --write [--json]
   node scripts/wakeflow-delivery.mjs start-keep-live --automation-run-id <id> [--keep-live-command <cmd>] [--keep-live-arg <arg>...] [--no-keep-live] --write [--json]
@@ -332,6 +333,8 @@ function upsertDispatchGroup({
   targetWindow,
   taskId,
   packetId,
+  expectedTargets: requestedTargets = [],
+  membershipExplicit = false,
 }) {
   if (!groupId) return null;
   const existing = loadDispatchGroup(groupId);
@@ -351,13 +354,31 @@ function upsertDispatchGroup({
   }
   const groupControllerWindow = existingControllerWindow || controllerWindow || undefined;
 
-  const expectedTargets = [...(Array.isArray(existing?.expectedTargets) ? existing.expectedTargets : [])];
+  const existingTargets = [...(Array.isArray(existing?.expectedTargets) ? existing.expectedTargets : [])];
   const descriptor = targetDescriptor({ targetWindow, taskId, packetId });
-  const index = expectedTargets.findIndex((item) => sameTargetDescriptor(item, descriptor));
-  if (index >= 0) {
-    expectedTargets[index] = { ...expectedTargets[index], packetId };
-  } else {
-    expectedTargets.push(descriptor);
+  const expectedTargets = (requestedTargets.length > 0 ? requestedTargets : [descriptor])
+    .map((item) => targetDescriptor(item))
+    .sort((left, right) => `${left.targetWindow}\u0000${left.taskId}`.localeCompare(`${right.targetWindow}\u0000${right.taskId}`));
+  const requestedKeys = expectedTargets.map((item) => `${item.targetWindow}\u0000${item.taskId}`);
+  if (new Set(requestedKeys).size !== requestedKeys.length) {
+    fail(`Dispatch group ${groupId} membership contains duplicate targets.`);
+  }
+  if (!expectedTargets.some((item) => sameTargetDescriptor(item, descriptor))) {
+    fail(`Dispatch group ${groupId} membership does not include prepared target ${targetWindow} / ${taskId}.`);
+  }
+  if (existing?.membershipFinalized) {
+    const existingKeys = existingTargets
+      .map((item) => `${item.targetWindow}\u0000${item.taskId}`)
+      .sort();
+    if (JSON.stringify(existingKeys) !== JSON.stringify([...requestedKeys].sort())) {
+      fail(`Dispatch group ${groupId} membership is finalized; prepare with the same complete groupTaskIds or use a new group.`);
+    }
+  } else if (existing && !membershipExplicit && !existingTargets.some((item) => sameTargetDescriptor(item, descriptor))) {
+    fail(`Dispatch group ${groupId} has legacy/unfinalized membership; pass the complete groupTaskIds explicitly before preparing another target.`);
+  }
+  for (const item of expectedTargets) {
+    const prior = existingTargets.find((candidate) => sameTargetDescriptor(candidate, item));
+    if (prior?.packetId && !item.packetId) item.packetId = prior.packetId;
   }
   const updatedAt = nowIso();
   const createdAt = existing?.createdAt || updatedAt;
@@ -370,6 +391,7 @@ function upsertDispatchGroup({
     stateRef: existing?.stateRef ? dispatchGroupStateRef(existing.stateRef) : groupStateRef,
     controllerWindow: groupControllerWindow,
     expectedTargets,
+    membershipFinalized: true,
     returnPolicy: {
       mode,
     },
@@ -613,6 +635,8 @@ const {
   buildWindowConfig,
   redactDeliveryEnvelope,
   formatTargetPrompt,
+  withFileLock,
+  WakeflowStateLockTimeoutError,
 });
 
 const {
@@ -648,6 +672,7 @@ const {
   writeWindowLock,
   removeWindowLock,
   listDispatchGroupsForTask,
+  loadDispatchGroup,
   artifactTrace,
 });
 

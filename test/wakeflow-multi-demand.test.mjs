@@ -53,7 +53,9 @@ test("the demand's own controllerWindow is stamped at init and routes prepare by
   const init = run(["init", "--root", root, "--demand-key", "POD-DK", "--title", "Pod Demand", "--controller-window", "Controller__POD-DK", "--write", "--json"]);
   assert.equal(init.status, 0, init.stderr || init.stdout);
   const stateRoot = path.join(root, ".wakeflow-active/current/POD-DK");
-  assert.equal(readJson(path.join(stateRoot, "wakeflow-state.json")).controllerWindow, "Controller__POD-DK");
+  const podState = readJson(path.join(stateRoot, "wakeflow-state.json"));
+  assert.equal(podState.controllerWindow, "Controller__POD-DK");
+  assert.deepEqual(podState.executionPlacement, { mode: "isolated", podId: "POD-DK" });
 
   assert.equal(run(["add-task-package", "--root", root, "--state-root", stateRoot, "--task-package-id", "tp-a", "--summary", "W", "--target-window", "RepoA__pod-dk", "--write", "--json"]).status, 0);
   const deliveryScript = path.join(pluginRoot, "scripts/wakeflow-delivery.mjs");
@@ -70,6 +72,13 @@ test("two demands run side by side; the third fails closed at capacity", () => {
   const root = makeRoot();
   assert.equal(initDemand(root, "D1").status, 0);
   assert.equal(initDemand(root, "D2").status, 0, "second demand must be claimable under default capacity 2");
+  assert.deepEqual(
+    readJson(path.join(root, ".wakeflow-active/current/D1/wakeflow-state.json")).executionPlacement,
+    { mode: "main", podId: null },
+  );
+  const secondState = readJson(path.join(root, ".wakeflow-active/current/D2/wakeflow-state.json"));
+  assert.deepEqual(secondState.executionPlacement, { mode: "isolated", podId: "D2" });
+  assert.equal(secondState.controllerWindow, "Controller__D2");
 
   const third = initDemand(root, "D3");
   assert.equal(third.status, 1, third.stdout);
@@ -132,4 +141,9 @@ test("completing and archiving one demand frees capacity for the next", () => {
 
   assert.equal(run(["archive-demand", "--root", root, "--state-root", rootD1, "--reason", "shipped", "--write", "--json"]).status, 0);
   assert.equal(initDemand(root, "D3").status, 0, "archiving must free the slot");
+  assert.deepEqual(
+    readJson(path.join(root, ".wakeflow-active/current/D3/wakeflow-state.json")).executionPlacement,
+    { mode: "isolated", podId: "D3" },
+    "an isolated survivor keeps the main checkout reserved; a replacement demand must not silently become a second main editor",
+  );
 });

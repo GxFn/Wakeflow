@@ -100,6 +100,28 @@ test("codex pod open prepares the shared worktree set and an agent-tools window 
   assert.deepEqual(rerun.workWindows.map((win) => win.status), ["already-registered", "already-registered"]);
 });
 
+test("pod open consumes persisted placement and refuses a main demand", () => {
+  const mainWorkspace = makeWorkspace();
+  setDemandState(mainWorkspace.root, "MAIN-A", "planned");
+  const refused = pod(codexPod, mainWorkspace.root, ["open", "--demand-key", "MAIN-A", "--repos", "RepoA"]);
+  assert.equal(refused.status, 1);
+  assert.match(JSON.parse(refused.stderr).error, /assigned to main placement/);
+  assert.equal(existsSync(path.join(mainWorkspace.root, ".wakeflow-local/worktrees/RepoA__MAIN-A")), false);
+
+  const isolatedWorkspace = makeWorkspace();
+  const stateDir = path.join(isolatedWorkspace.root, ".wakeflow-active/current/ISO-A");
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(path.join(stateDir, "wakeflow-state.json"), `${JSON.stringify({
+    demandKey: "ISO-A",
+    state: "planned",
+    controllerWindow: "Controller__ISO-A",
+    executionPlacement: { mode: "isolated", podId: "ISO-A" },
+  }, null, 2)}\n`);
+  const opened = pod(codexPod, isolatedWorkspace.root, ["open", "--demand-key", "ISO-A", "--repos", "RepoA"]);
+  assert.equal(opened.status, 0, opened.stderr || opened.stdout);
+  assert.equal(JSON.parse(opened.stdout).workWindows[0].status, "opened");
+});
+
 test("within a demand a repo never gets a second window; the pool caps demands per repo", () => {
   const { root } = makeWorkspace({ maxStreamsPerRepo: 2 });
   assert.equal(pod(codexPod, root, ["open", "--demand-key", "POD-A", "--repos", "RepoA"]).status, 0);

@@ -23,7 +23,7 @@ const helpText = `
 Control intake bridge for Design and Test surfaces
 
 Usage:
-  node scripts/wakeflow-intake.mjs test-card --state-root <path> --test-id <id> --target-window <window> --question <text> --object-boundary <text> --controller-self-check <text> --real-scenario-condition <text> --success-means <text> --failure-means <text> --cannot-conclude <text> --stop-condition <text> [--source-ref <ref>] [--strategy-source <ref>] [--evidence-required <text>...] [--allowed-operation <text>...] [--forbidden-operation <text>...] [--write] [--json]
+  node scripts/wakeflow-intake.mjs test-card --state-root <path> --test-id <id> --target-window <window> --strategy-source <ref> --approved-test-step <text> --setup-policy <reuse-existing|fresh-once|fresh-per-attempt> --max-attempts <1-10> --question <text> --object-boundary <text> --controller-self-check <text> --real-scenario-condition <text> --success-means <text> --failure-means <text> --cannot-conclude <text> --stop-condition <text> [--allowed-test-skill <id>...] [--restart-condition <text>...] [--source-ref <ref>] [--evidence-required <text>...] [--allowed-operation <text>...] [--forbidden-operation <text>...] [--write] [--json]
 
 Design:
   This script attaches Design handoff intake and Test boundary cards to an
@@ -201,10 +201,30 @@ function commandTestCard() {
 
   const createdAt = nowIso();
   const sourceRef = getValue("--source-ref", null);
-  // W-Test: where the test approach came from (the Design-stage testing decision / test-strategy).
-  // Optional and advisory: when absent, the card is flagged as an approach not decided at Design,
-  // surfaced as a REMINDER (never a gate) so a path-dependent wrong approach is visible.
-  const strategySource = (getValue("--strategy-source", "") || "").trim() || null;
+  const strategySource = requireValue("--strategy-source");
+  const demandFile = path.join(stateRoot, "demand.json");
+  const demand = existsSync(demandFile) ? readJson(demandFile, "demand record") : null;
+  const requirementGoal = typeof demand?.goal === "string" ? demand.goal.trim() : "";
+  if (!requirementGoal) {
+    fail("controller state has no confirmed demand goal; Test cannot invent one. Repair the demand state before creating a Test card.");
+  }
+  const approvedTestPlan = valuesFor("--approved-test-step");
+  if (approvedTestPlan.length === 0) {
+    fail("--approved-test-step is required at least once; Test cannot be delegated authority to invent its own targets.");
+  }
+  const allowedTestSkills = valuesFor("--allowed-test-skill");
+  const setupPolicy = requireValue("--setup-policy");
+  if (!["reuse-existing", "fresh-once", "fresh-per-attempt"].includes(setupPolicy)) {
+    fail("--setup-policy must be reuse-existing, fresh-once, or fresh-per-attempt.");
+  }
+  const maxAttempts = Number(requireValue("--max-attempts"));
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) {
+    fail("--max-attempts must be an integer from 1 to 10.");
+  }
+  const restartConditions = valuesFor("--restart-condition");
+  if (setupPolicy === "fresh-per-attempt" && restartConditions.length === 0) {
+    fail("--setup-policy fresh-per-attempt requires at least one explicit --restart-condition.");
+  }
   const cardFile = path.join(stateRoot, "test-cards", `${slug(testId)}.json`);
   if (existsSync(cardFile)) {
     fail(`test card already exists: ${relative(cardFile)}`);
@@ -219,7 +239,23 @@ function commandTestCard() {
     createdAt,
     stateRevisionObserved: state.revision,
     sourceRef,
-    ...(strategySource ? { strategySource } : {}),
+    strategySource,
+    executionContract: {
+      version: 1,
+      requirementGoal,
+      approvedPlan: approvedTestPlan,
+      allowedSkills: allowedTestSkills,
+      setupPolicy,
+      maxAttempts,
+      restartConditions,
+      changeControl: {
+        testMayChangeApproach: false,
+        testMayChangeGoal: false,
+        testMayAddUnmappedSteps: false,
+        testMayUseUnlistedSkills: false,
+        route: "return-blocked-to-controller",
+      },
+    },
     boundaryGate: {
       question,
       objectBoundary,
@@ -268,9 +304,7 @@ function commandTestCard() {
       stateRoot: relative(stateRoot),
       cardFile: relative(cardFile),
       suggestedTaskPackage: card.suggestedTaskPackage,
-      // Reminder-first (never a gate): if the approach was not sourced from a Design testing
-      // decision, surface a one-line advisory so a path-dependent wrong approach is visible.
-      ...(strategySource ? {} : { strategySourceReminder: "No strategySource recorded: this test approach was not sourced from a Design testing decision. Confirm it fits the demand's risk (challenge path-dependent reuse), or link the Design decision with --strategy-source. Reminder only — not a gate." }),
+      executionContract: card.executionContract,
       forbiddenConclusions: card.forbiddenConclusions,
     },
     [

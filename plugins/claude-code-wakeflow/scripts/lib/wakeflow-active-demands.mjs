@@ -45,6 +45,8 @@ export function scanUnarchivedDemandStateRoots({
       demandKey,
       state: state?.state ?? "unknown",
       stateRoot: relativePosix(root, stateRoot),
+      controllerWindow: state?.controllerWindow ?? null,
+      executionPlacement: demandExecutionPlacement(state),
       reason: state?.state === "completed"
         ? "demand is completed but not archived"
         : `demand is still ${state?.state ?? "unknown"}`,
@@ -52,6 +54,23 @@ export function scanUnarchivedDemandStateRoots({
   }
 
   return conflicts;
+}
+
+export function demandExecutionPlacement(state = {}) {
+  if (state?.executionPlacement?.mode === "main") {
+    return { mode: "main", podId: null, source: "state" };
+  }
+  if (state?.executionPlacement?.mode === "isolated") {
+    return {
+      mode: "isolated",
+      podId: state.executionPlacement.podId || state.demandKey || null,
+      source: "state",
+    };
+  }
+  const legacyIsolated = String(state?.controllerWindow || "").includes("__");
+  return legacyIsolated
+    ? { mode: "isolated", podId: state.demandKey || null, source: "legacy-controller-window" }
+    : { mode: "main", podId: null, source: "legacy-default" };
 }
 
 // Which of these plain repo windows are occupied by an UNARCHIVED demand's
@@ -69,6 +88,7 @@ export function mainCheckoutOccupancy({ workspaceRoot, repos = [], excludeDemand
     } catch {
       continue;
     }
+    if (demandExecutionPlacement(state).mode !== "main") continue;
     for (const task of state?.targetTasks ?? []) {
       if (repoSet.has(task.targetWindow)) {
         occupancy.push({ repo: task.targetWindow, occupiedBy: state.demandKey ?? conflict.demandKey, taskStatus: task.status });
@@ -82,6 +102,33 @@ export function activeDemandConflictSummary(conflicts = []) {
   return conflicts
     .map((item) => `${item.demandKey} (${item.state ?? "unreadable"} at ${item.stateRoot}: ${item.reason})`)
     .join("; ");
+}
+
+export function summarizeAuthoritativeDemandState(activeDemands = []) {
+  const unreadable = activeDemands.filter((item) => !item.state || item.state === "unknown");
+  if (unreadable.length > 0) {
+    return {
+      stateId: null,
+      status: null,
+      eligibleForAfterCompletion: false,
+      issues: unreadable.map((item) => `authoritative demand state is unreadable: ${item.demandKey} at ${item.stateRoot}`),
+    };
+  }
+  if (activeDemands.length === 0) {
+    return { stateId: "idle", status: "idle", eligibleForAfterCompletion: true, issues: [] };
+  }
+  if (activeDemands.every((item) => item.state === "completed")) {
+    return { stateId: "completed", status: "completed", eligibleForAfterCompletion: true, issues: [] };
+  }
+  if (activeDemands.length === 1) {
+    return {
+      stateId: activeDemands[0].state,
+      status: activeDemands[0].state,
+      eligibleForAfterCompletion: false,
+      issues: [],
+    };
+  }
+  return { stateId: "active", status: "active", eligibleForAfterCompletion: false, issues: [] };
 }
 
 // Multi-active demands: the workspace runs up to maxActiveDemands unarchived

@@ -37,6 +37,18 @@ Before handoff, write:
 - conclusions the test cannot support;
 - stop conditions.
 
+Then freeze the Test alignment contract on the Test card:
+
+- the confirmed requirement goal;
+- the requirement-stage approved Test plan items;
+- the exact Test skills allowed (an empty list means none; PCV must be named);
+- setup/reuse policy, attempt limit, and any restart conditions.
+
+Test may turn approved plan items into concrete commands, but every operational
+step must map back to one approved item and the requirement goal. An unmapped
+goal, gate, skill, environment rebuild, or test target is a blocked change
+request to the controller, not something Test may execute speculatively.
+
 ## Acceptance Review
 
 Acceptance requires raw evidence:
@@ -51,3 +63,6 @@ Acceptance requires raw evidence:
 
 Backfill prose is input, not proof. The controller must review the actual
 evidence before accepting, reworking, blocking, or dispatching the next package.
+The controller must also compare the returned step-to-anchor map with the same
+Test alignment contract used at dispatch. Never adopt a Test-invented node or
+goal into the next rework merely because the target already spent time on it.

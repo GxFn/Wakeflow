@@ -9,6 +9,7 @@ import {
   activeDemandConflictSummary,
   maxActiveDemandsFor,
   scanUnarchivedDemandStateRoots,
+  summarizeAuthoritativeDemandState,
 } from "./lib/wakeflow-active-demands.mjs";
 
 const args = process.argv.slice(2);
@@ -210,26 +211,30 @@ function parseTodoCandidates(warnings) {
     });
 }
 
-function currentStatus() {
-  if (!existsSync(currentStatusPath)) {
-    return {
-      path: relativePosix(workspaceRoot, currentStatusPath),
-      status: null,
-      primaryStatus: null,
-      eligibleForAfterCompletion: false,
-      issue: "current status file is missing",
-    };
+function currentStatus(activeDemands) {
+  const authority = summarizeAuthoritativeDemandState(activeDemands);
+  let projectionStatus = null;
+  let projectionIssue = null;
+  if (existsSync(currentStatusPath)) {
+    const content = read(currentStatusPath);
+    projectionStatus = content.match(/^Status:\s*(.+?)\s*$/m)?.[1]?.trim() ?? null;
+    if (!projectionStatus) projectionIssue = "current status projection is missing its Status line";
+  } else {
+    projectionIssue = "current status projection is missing";
   }
-  const content = read(currentStatusPath);
-  const match = content.match(/^Status:\s*(.+?)\s*$/m);
-  const status = match?.[1]?.trim() ?? null;
-  const stateId = normalizeStateId(status);
   return {
     path: relativePosix(workspaceRoot, currentStatusPath),
-    status,
-    stateId,
-    eligibleForAfterCompletion: ["completed", "idle"].includes(stateId),
-    issue: status ? null : "current status line is missing",
+    status: authority.status,
+    stateId: authority.stateId,
+    source: "wakeflow-state-roots",
+    eligibleForAfterCompletion: authority.eligibleForAfterCompletion,
+    issue: authority.issues[0] ?? null,
+    authorityIssues: authority.issues,
+    projection: {
+      status: projectionStatus,
+      stateId: normalizeStateId(projectionStatus),
+      issue: projectionIssue,
+    },
   };
 }
 
@@ -290,9 +295,12 @@ function applyWorkspaceDemandGuard(candidate, conflicts, maxActive) {
 
 const issues = [];
 const warnings = [];
-const status = currentStatus();
-if (status.issue) {
-  issues.push(status.issue);
+const workspaceDemandConflicts = scanUnarchivedDemandStateRoots({ workspaceRoot });
+const status = currentStatus(workspaceDemandConflicts);
+issues.push(...(status.authorityIssues ?? []));
+if (status.projection.issue) warnings.push(status.projection.issue);
+if (status.projection.status && normalizeStateId(status.projection.status) !== status.stateId) {
+  warnings.push(`current status projection is stale (${status.projection.status}); authoritative state roots report ${status.status}`);
 }
 if (afterCompletion && !status.eligibleForAfterCompletion) {
   issues.push(
@@ -302,7 +310,6 @@ if (afterCompletion && !status.eligibleForAfterCompletion) {
 if (!["all", "todo"].includes(sourceMode)) {
   issues.push(`unsupported --source ${sourceMode}; use all or todo`);
 }
-const workspaceDemandConflicts = scanUnarchivedDemandStateRoots({ workspaceRoot });
 const maxActiveDemands = maxActiveDemandsFor(workspaceConfig);
 if (workspaceDemandConflicts.length >= maxActiveDemands) {
   // At-capacity is a NORMAL steady state for the dashboard (in-flight demands
@@ -340,7 +347,13 @@ const result = {
   workspaceDemandConflicts,
   // Multi-active dashboard: what is in flight and how much room is left —
   // the controller's per-wake orientation across demands.
-  activeDemands: workspaceDemandConflicts.map((item) => ({ demandKey: item.demandKey, state: item.state, stateRoot: item.stateRoot })),
+  activeDemands: workspaceDemandConflicts.map((item) => ({
+    demandKey: item.demandKey,
+    state: item.state,
+    stateRoot: item.stateRoot,
+    controllerWindow: item.controllerWindow,
+    executionPlacement: item.executionPlacement,
+  })),
   demandCapacity: {
     active: workspaceDemandConflicts.length,
     max: maxActiveDemands,

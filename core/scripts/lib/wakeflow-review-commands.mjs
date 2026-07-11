@@ -4,6 +4,10 @@ import { buildControllerCallbackPlan } from "./wakeflow-return-policy.mjs";
 import { controllerReviewScope, hasPendingReworkDecision } from "./wakeflow-review-scope.mjs";
 import { buildControllerReviewPack, rawEvidenceRequiredFrom, reviewAdvisories, sharedReviewGates } from "./wakeflow-review-pack.mjs";
 import { loadWorkspaceConfig, testWindowNames } from "./wakeflow-config.mjs";
+import {
+  readStateRootTargetResultItems,
+  selectCurrentStateRootResults,
+} from "./wakeflow-state-results.mjs";
 
 export function createReviewCommands(ctx) {
   const {
@@ -139,6 +143,7 @@ export function createReviewCommands(ctx) {
       // authored one (zero traces otherwise).
       objective: item.packet.objective,
       ...(item.packet.designIntent ? { designIntent: item.packet.designIntent } : {}),
+      ...(item.packet.testExecution ? { testExecution: item.packet.testExecution } : {}),
       // B2: advisory craft kinds (self-review, test-first, ...) declared on the packet's
       // evidence contract, surfaced so the pack can add a craftCheck reminder. Required
       // kinds are enforced at reduce-results; these are advisory only.
@@ -195,23 +200,16 @@ export function createReviewCommands(ctx) {
   }
 
   function stateRootTargetResults(stateRoot) {
-    const dir = path.join(stateRoot, "target-results");
-    if (!existsSync(dir)) return [];
-    return listJsonFiles(dir).map((file) => ({
-      file,
-      result: readJson(file, "state-root target result"),
-    }));
+    return readStateRootTargetResultItems(stateRoot, readJson);
   }
 
   function latestStateRootResultsByTargetTask(stateRoot) {
-    const latest = new Map();
-    for (const item of stateRootTargetResults(stateRoot)) {
-      const existing = latest.get(item.result.targetTaskId);
-      if (!existing || String(item.result.createdAt ?? "") >= String(existing.result.createdAt ?? "")) {
-        latest.set(item.result.targetTaskId, item);
-      }
-    }
-    return latest;
+    const { state } = readControllerStateRoot(stateRoot);
+    return selectCurrentStateRootResults({
+      items: stateRootTargetResults(stateRoot),
+      state,
+      fail,
+    });
   }
 
   function normalizeStateRootResult(result) {
@@ -513,6 +511,7 @@ export function createReviewCommands(ctx) {
         objective: packet?.objective ?? task.summary,
         objectiveSource: packet?.objective ? "dispatch-packet" : "task-summary",
         ...(packet?.designIntent ? { designIntent: packet.designIntent } : {}),
+        ...((packet?.testExecution ?? taskPackage?.testExecution) ? { testExecution: packet?.testExecution ?? taskPackage.testExecution } : {}),
         ...(packet?.evidenceContract?.advisory?.length ? { advisoryCraftKinds: packet.evidenceContract.advisory.map((entry) => entry.kind).filter(Boolean) } : {}),
         ...(Array.isArray(result?.craftEvidence) && result.craftEvidence.length ? { craftEvidence: result.craftEvidence } : {}),
         dispatchGroup: result?.dispatchGroup || result?.deliveryContext?.dispatchGroup || task.delivery?.dispatchGroup,

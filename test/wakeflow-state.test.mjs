@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
@@ -449,6 +449,111 @@ test("add-task-package updates machine state without changing progress doc", () 
   assert.equal(events.length, 2);
   assert.equal(JSON.parse(events[1]).type, "task-package.added");
   assertOnlyTimelineAppend(progressAfter, progressBefore, /CSMR-PKG-1 → AlembicWorkspace/);
+});
+
+test("add-task-package rejects a targetTaskId already owned by another package", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run(["init", "--root", root, "--demand-key", "UNIQUE-TASK", "--title", "Unique task", "--write", "--json"]).stdout);
+  const first = run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "First", "--target-window", "WinA", "--target-task-id", "TASK-SHARED", "--write", "--json"]);
+  assert.equal(first.status, 0, first.stderr || first.stdout);
+  const before = readJson(path.join(root, init.stateRoot, "wakeflow-state.json"));
+  const duplicate = run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-2", "--summary", "Second", "--target-window", "WinB", "--target-task-id", "TASK-SHARED", "--write", "--json"]);
+  assert.notEqual(duplicate.status, 0);
+  assert.match(duplicate.stdout, /already contains target task/);
+  const after = readJson(path.join(root, init.stateRoot, "wakeflow-state.json"));
+  assert.deepEqual(after, before);
+  assert.equal(existsSync(path.join(root, init.stateRoot, "task-packages/PKG-2.json")), false);
+});
+
+test("Test task packages require the confirmed goal/plan card and keep one bounded lineage across new task ids", () => {
+  const root = makeRoot();
+  writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
+    workspaceName: "Fixture",
+    controllerWindow: "Controller",
+    testWindow: "TestWindow",
+    repositories: [{ windowName: "Controller", path: ".", role: "controller" }],
+  }, null, 2)}\n`);
+  const init = JSON.parse(run(["init", "--root", root, "--demand-key", "TEST-LINEAGE", "--title", "Test lineage", "--write", "--json"]).stdout);
+  const missingCard = run([
+    "add-task-package", "--root", root, "--state-root", init.stateRoot,
+    "--task-package-id", "TEST-P1", "--summary", "Run Test",
+    "--target-window", "TestWindow", "--target-task-id", "TEST-T1", "--write", "--json",
+  ]);
+  assert.notEqual(missingCard.status, 0);
+  assert.match(missingCard.stdout, /--test-card-id is required/);
+
+  const stateRoot = path.join(root, init.stateRoot);
+  const cardFile = path.join(stateRoot, "test-cards/TEST-T1.json");
+  mkdirSync(path.dirname(cardFile), { recursive: true });
+  writeFileSync(cardFile, `${JSON.stringify({
+    kind: "TestBoundaryCard",
+    schemaVersion: 1,
+    testId: "TEST-T1",
+    targetWindow: "TestWindow",
+    strategySource: "Design/requirement.md#confirmed-test-plan",
+    executionContract: {
+      version: 1,
+      requirementGoal: "Prove the confirmed user behavior.",
+      approvedPlan: ["Call the public entry once.", "Compare raw output with AC-1."],
+      allowedSkills: [],
+      setupPolicy: "fresh-once",
+      maxAttempts: 2,
+      restartConditions: [],
+      changeControl: { testMayChangeGoal: false, testMayAddUnmappedSteps: false },
+    },
+    suggestedTaskPackage: { targetTaskId: "TEST-T1" },
+  }, null, 2)}\n`);
+
+  const first = run([
+    "add-task-package", "--root", root, "--state-root", init.stateRoot,
+    "--task-package-id", "TEST-P1", "--summary", "Run approved Test plan",
+    "--target-window", "TestWindow", "--target-task-id", "TEST-T1",
+    "--test-card-id", "TEST-T1", "--write", "--json",
+  ]);
+  assert.equal(first.status, 0, first.stderr || first.stdout);
+  const firstPackage = readJson(path.join(stateRoot, "task-packages/TEST-P1.json"));
+  assert.equal(firstPackage.testExecution.requirementGoal, "Prove the confirmed user behavior.");
+  assert.deepEqual(firstPackage.testExecution.allowedSkills, []);
+  assert.equal(firstPackage.testExecution.mode, "initial");
+
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const afterFirst = readJson(stateFile);
+  afterFirst.targetTasks[0].status = "accepted";
+  afterFirst.targetTasks[0].counts = { dispatchCount: 1 };
+  writeFileSync(stateFile, `${JSON.stringify(afterFirst, null, 2)}\n`);
+
+  const unlinked = run([
+    "add-task-package", "--root", root, "--state-root", init.stateRoot,
+    "--task-package-id", "TEST-P2", "--summary", "Continue",
+    "--target-window", "TestWindow", "--target-task-id", "TEST-T2",
+    "--test-card-id", "TEST-T1", "--write", "--json",
+  ]);
+  assert.notEqual(unlinked.status, 0);
+  assert.match(unlinked.stdout, /must declare --test-continuation-of TEST-T1/);
+
+  const second = run([
+    "add-task-package", "--root", root, "--state-root", init.stateRoot,
+    "--task-package-id", "TEST-P2", "--summary", "Resume approved Test plan",
+    "--target-window", "TestWindow", "--target-task-id", "TEST-T2",
+    "--test-card-id", "TEST-T1", "--test-continuation-of", "TEST-T1", "--write", "--json",
+  ]);
+  assert.equal(second.status, 0, second.stderr || second.stdout);
+  const secondPackage = readJson(path.join(stateRoot, "task-packages/TEST-P2.json"));
+  assert.equal(secondPackage.testExecution.mode, "resume");
+  assert.equal(secondPackage.testExecution.lineageStep, 2);
+
+  const afterSecond = readJson(stateFile);
+  afterSecond.targetTasks.find((task) => task.targetTaskId === "TEST-T2").status = "accepted";
+  afterSecond.targetTasks.find((task) => task.targetTaskId === "TEST-T2").counts = { dispatchCount: 1 };
+  writeFileSync(stateFile, `${JSON.stringify(afterSecond, null, 2)}\n`);
+  const third = run([
+    "add-task-package", "--root", root, "--state-root", init.stateRoot,
+    "--task-package-id", "TEST-P3", "--summary", "Try a third plan",
+    "--target-window", "TestWindow", "--target-task-id", "TEST-T3",
+    "--test-card-id", "TEST-T1", "--test-continuation-of", "TEST-T2", "--write", "--json",
+  ]);
+  assert.notEqual(third.status, 0);
+  assert.match(third.stdout, /already used 2\/2 authorized attempts/);
 });
 
 test("wakeflow-render-progress updates only Unified Status after task package changes", () => {
@@ -1433,7 +1538,7 @@ test("completed demands reject follow-up task and result mutations", () => {
 });
 
 
-test("import-target-result auto-disambiguates the default result id on rework re-import", () => {
+test("import-target-result keeps one current result and archives explicit corrections", () => {
   const root = makeRoot();
   const init = JSON.parse(run(["init", "--root", root, "--demand-key", "REWORK-FIXTURE", "--title", "Rework Fixture", "--write", "--json"]).stdout);
   run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Pkg", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
@@ -1443,11 +1548,67 @@ test("import-target-result auto-disambiguates the default result id on rework re
   assert.equal(first.ok, true);
 
   const second = JSON.parse(run(args).stdout);
-  assert.equal(second.ok, true, "rework re-import with the default result id must not collide");
-  assert.notEqual(second.resultId, first.resultId, "second import gets a disambiguated id");
+  assert.equal(second.ok, true, "an equivalent retry must be idempotent");
+  assert.equal(second.resultId, first.resultId);
+  assert.equal(second.duplicate, true);
+  assert.equal(second.wrote, false);
 
   const explicit = run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--result-id", first.resultId, "--evidence-ref", "reports/a.json", "--write", "--json"]);
-  assert.notEqual(explicit.status, 0, "an explicit duplicate result id still fails");
+  assert.equal(explicit.status, 0, explicit.stderr || explicit.stdout);
+  assert.equal(JSON.parse(explicit.stdout).duplicate, true);
+
+  const changed = run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "reports/b.json", "--write", "--json"]);
+  assert.notEqual(changed.status, 0, "changed content in the same round requires an explicit correction");
+  assert.match(changed.stdout, /--supersede-result/);
+
+  // Simulate a crash after the append-only history copy landed but before the
+  // stable current file was atomically replaced. Retrying the correction must
+  // recognize that exact history copy and complete safely.
+  const currentBeforeCorrection = readJson(path.join(root, first.resultFile));
+  const plantedHistory = path.join(root, init.stateRoot, "target-results/history/tr-TASK-1__ungrouped__current-r0001.json");
+  mkdirSync(path.dirname(plantedHistory), { recursive: true });
+  writeFileSync(plantedHistory, `${JSON.stringify(currentBeforeCorrection, null, 2)}\n`);
+  const corrected = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "reports/b.json", "--supersede-result", "--write", "--json"]).stdout);
+  assert.equal(corrected.ok, true);
+  assert.equal(corrected.currentResult, true);
+  assert.equal(corrected.resultRevision, 2);
+  assert.equal(corrected.superseded, true);
+  assert.equal(existsSync(path.join(root, corrected.historyFile)), true);
+  const topLevelResults = readdirSync(path.join(root, init.stateRoot, "target-results"))
+    .filter((name) => name.endsWith(".json"));
+  assert.deepEqual(topLevelResults, ["tr-TASK-1.json"]);
+  const current = readJson(path.join(root, corrected.resultFile));
+  assert.equal(current.currentResult, true);
+  assert.deepEqual(current.evidenceRefs, ["reports/b.json"]);
+});
+
+test("late-result history and current-rotation history cannot collide", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run(["init", "--root", root, "--demand-key", "HISTORY-NAMESPACE", "--title", "History namespace", "--write", "--json"]).stdout);
+  run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Pkg", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
+  const stateFile = path.join(root, init.stateRoot, "wakeflow-state.json");
+  const state = readJson(stateFile);
+  state.targetTasks[0].delivery = { deliveryId: "D1", dispatchGroup: "G1" };
+  writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+  assert.equal(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--dispatch-group", "G1", "--evidence-ref", "g1-current.md", "--write", "--json"]).status, 0);
+
+  const redispatched = readJson(stateFile);
+  redispatched.targetTasks[0].delivery = { deliveryId: "D2", dispatchGroup: "G2" };
+  writeFileSync(stateFile, `${JSON.stringify(redispatched, null, 2)}\n`);
+  const late = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--dispatch-group", "G1", "--evidence-ref", "g1-late.md", "--write", "--json"]).stdout);
+  assert.equal(late.historyOnly, true);
+  assert.match(late.resultFile, /__late-r0001\.json$/);
+
+  const current = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--dispatch-group", "G2", "--evidence-ref", "g2-current.md", "--write", "--json"]).stdout);
+  assert.equal(current.currentResult, true);
+  assert.equal(current.superseded, true);
+  assert.match(current.historyFile, /__current-r0001\.json$/);
+  const historyFiles = readdirSync(path.join(root, init.stateRoot, "target-results/history")).sort();
+  assert.deepEqual(historyFiles, [
+    "tr-TASK-1__G1__current-r0001.json",
+    "tr-TASK-1__G1__late-r0001.json",
+  ]);
+  assert.equal(readJson(path.join(root, current.resultFile)).dispatchGroup, "G2");
 });
 
 test("decide-review refuses to accept over blocked results without --accept-blocked", () => {
@@ -1479,7 +1640,7 @@ test("a blocked review decision is recoverable: new evidence reopens review and 
   assert.equal(blockedDecision.ok, true);
 
   // new evidence arrives -> the blocked task must be reviewable again
-  const reimport = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "reports/fixed.json", "--write", "--json"]).stdout);
+  const reimport = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "reports/fixed.json", "--supersede-result", "--write", "--json"]).stdout);
   assert.equal(reimport.ok, true, "import after a blocked decision must work");
   writeStateRootEvidence(root, init.stateRoot, "reports/fixed.json");
   const reduced2 = JSON.parse(run(["reduce-results", "--root", root, "--state-root", init.stateRoot, "--write", "--json"]).stdout);

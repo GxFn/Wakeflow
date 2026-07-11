@@ -81,7 +81,11 @@ with `wakeflow_intake_test_card`, copying the S1 Test Environment Spec into
 fixes product code, or widens scope. A card whose environment block is missing
 or ambiguous = immediate blocker back to the controller; the controller
 resolves it from the Requirement Design or the user — never by guessing.
-Results return to S4 review.
+The card also freezes the demand goal, approved Test plan, allowed Test skills,
+setup policy, and attempt bound. Test may elaborate only mapped operational
+steps; unmapped goals/gates/methods return blocked before execution. Results
+return to S4, where the controller compares the step-to-anchor map against the
+same contract before accepting evidence or authoring follow-up work.
 
 ## S6 — Integrate & Close (owner: controller)
 `wakeflow_complete_demand` (all accepted, zero blockers, evidence) →

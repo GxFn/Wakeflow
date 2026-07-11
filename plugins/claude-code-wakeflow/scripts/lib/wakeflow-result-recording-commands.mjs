@@ -9,6 +9,7 @@ import {
 import { hostProfile } from "./wakeflow-host-profile.mjs";
 import { releaseWindowLockForResult } from "./wakeflow-delivery-store.mjs";
 import { PROGRESS_SECTIONS, appendProgressTimeline } from "./wakeflow-progress-appends.mjs";
+import { verifiedActorEventFields } from "./wakeflow-verified-actor.mjs";
 
 function eventIdFor(createdAt, revision) {
   return `evt-${createdAt.replace(/[-:.TZ]/g, "").slice(0, 14)}-${String(revision).padStart(4, "0")}`;
@@ -206,7 +207,7 @@ export function createResultRecordingCommands(ctx) {
     const event = {
       eventId,
       createdAt,
-      actor: "delivery-runtime",
+      ...verifiedActorEventFields("delivery-runtime"),
       type: "delivery.sent",
       from: state.state,
       to: "dispatched",

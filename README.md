@@ -174,12 +174,11 @@ The Claude Code edition is terminal-only: every Wakeflow window (controller
 included) is a tmux-resident interactive `claude` session in the `wakeflow`
 tmux server session, and a Wakeflow thread id is the window's Claude Code
 session id (stable across resumes). Up to `maxActiveDemands` (default 2)
-demands may run side by side as **demand pods** — each pod is its own tmux
-session with its own controller, per-repo isolation worktree windows, and its
-own Test, the WHOLE pod sharing the demand's one worktree set (Test verifies
-there, never on a main checkout); claiming past capacity fails closed, and
-pod branches merge back only through the human-reviewed `pending-merges.md`
-ledger. See
+demands may run side by side as **demand pods**. The persistent fleet is pod 0
+and uses the main checkouts; demand 2..N gets its own tmux session, controller,
+Test, and per-repo isolation worktree set (every window in that isolation pod
+stays off the main checkouts). Claiming past capacity fails closed, and pod
+branches merge back only through the human-reviewed `pending-merges.md` ledger. See
 [plugins/claude-code-wakeflow/README.md](plugins/claude-code-wakeflow/README.md)
 for the full Claude Code guide.
 

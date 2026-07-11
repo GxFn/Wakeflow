@@ -22,6 +22,7 @@ import {
   activeDemandConflictSummary,
 } from "./lib/wakeflow-active-demands.mjs";
 import { archiveWorkspaceTodo, refreshWorkspaceProjection } from "./lib/wakeflow-workspace-projection.mjs";
+import { verifiedActorEventFields } from "./lib/wakeflow-verified-actor.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const wakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -41,8 +42,8 @@ Controller state-machine manager
 
 Usage:
   node scripts/wakeflow-state.mjs init --demand-key <key> --title <title> [--goal <text>] [--completion-definition <text>] [--test-decision <text>] [--stage-plan <text>] [--controller-window <window>] [--language <auto|zh|en>] [--root <workspace>] [--state-root <path>] [--write] [--json]
-  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--source-ref <ref>] [--design-intent <text>] [--evidence-contract <json>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--write] [--json]
-  node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--craft-evidence <json>] [--summary <text>] [--write] [--json]
+  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--source-ref <ref>] [--design-intent <text>] [--evidence-contract <json>] [--execution-mode <implementation|research-readonly>] [--commit-expectation <commit|leave-uncommitted|none-readonly>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--write] [--json]
+  node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--supersede-result] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--craft-evidence <json>] [--summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
   node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked|redesign> --reason <text> [--evidence-ref <ref>] [--accept-blocked] [--write] [--json]
   node scripts/wakeflow-state.mjs complete-demand --state-root <path> --reason <text> --evidence-ref <ref> [--write] [--json]
@@ -264,7 +265,7 @@ function commandAdoptDemandHostLocked(stateRoot) {
   const event = {
     eventId,
     createdAt,
-    actor: "controller",
+    ...verifiedActorEventFields("controller"),
     type: previousOwner ? "demand.host-transferred" : "demand.host-adopted",
     from: previousOwner,
     to: currentHost,
@@ -693,7 +694,7 @@ function commandInit() {
   const event = {
     eventId,
     createdAt,
-    actor: "controller",
+    ...verifiedActorEventFields("controller"),
     type: "state.initialized",
     from: null,
     to: "intake",
@@ -844,6 +845,23 @@ function commandAddTaskPackageLocked(stateRoot) {
   // idempotency comparable (like designIntent) so it can be authored/adjusted without
   // breaking replay. Absent = zero behavior change.
   const evidenceContract = validateEvidenceContractShape(parseOptionalJsonArg("--evidence-contract"));
+  const executionMode = getValue("--execution-mode", "implementation");
+  if (!["implementation", "research-readonly"].includes(executionMode)) {
+    fail("--execution-mode must be implementation or research-readonly.");
+  }
+  const commitExpectation = getValue(
+    "--commit-expectation",
+    executionMode === "research-readonly" ? "none-readonly" : null,
+  );
+  if (commitExpectation && !["commit", "leave-uncommitted", "none-readonly"].includes(commitExpectation)) {
+    fail("--commit-expectation must be commit, leave-uncommitted, or none-readonly.");
+  }
+  if (executionMode === "research-readonly" && commitExpectation !== "none-readonly") {
+    fail("research-readonly task packages require --commit-expectation none-readonly.");
+  }
+  if (executionMode === "implementation" && commitExpectation === "none-readonly") {
+    fail("implementation task packages cannot use --commit-expectation none-readonly.");
+  }
   const targetWindow = getValue("--target-window", null);
   const targetTaskId = getValue("--target-task-id", targetWindow ? `${taskPackageId}__${slug(targetWindow)}` : null);
   const targetSummary = getValue("--target-summary", summary);
@@ -906,6 +924,8 @@ function commandAddTaskPackageLocked(stateRoot) {
     sourceRef,
     ...(designIntent ? { designIntent } : {}),
     ...(evidenceContract ? { evidenceContract } : {}),
+    executionMode,
+    ...(commitExpectation ? { commitExpectation } : {}),
     createdAt,
     ...(reviewRoute ? { reviewRoute } : {}),
     targetTasks,
@@ -935,6 +955,8 @@ function commandAddTaskPackageLocked(stateRoot) {
         sourceRef,
         ...(designIntent ? { designIntent } : {}),
         ...(evidenceContract ? { evidenceContract } : {}),
+        executionMode,
+        ...(commitExpectation ? { commitExpectation } : {}),
         createdAt,
         ...(reviewRoute ? { reviewRoute } : {}),
       },
@@ -957,7 +979,7 @@ function commandAddTaskPackageLocked(stateRoot) {
   const event = {
     eventId,
     createdAt,
-    actor: "controller",
+    ...verifiedActorEventFields("controller"),
     type: "task-package.added",
     from: state.state,
     to: nextMainState,
@@ -1118,6 +1140,10 @@ function reviewReadinessAfterImport(state, stateRoot, importedTargetTaskId) {
 
 function commandImportTargetResult() {
   const stateRoot = stateRootFromArg();
+  withLockedStateRoot(stateRoot, () => commandImportTargetResultLocked(stateRoot));
+}
+
+function commandImportTargetResultLocked(stateRoot) {
   const targetTaskId = requireValue("--target-task-id");
   const targetWindow = requireValue("--target-window");
   const status = requireValue("--status");
@@ -1145,12 +1171,36 @@ function commandImportTargetResult() {
   // duplicate results from a superseded round carry their original group, and
   // must not be allowed to touch the in-flight round's window lock.
   const resultDispatchGroup = getValue("--dispatch-group", null);
-  let resultId = explicitResultId ?? `tr-${slug(targetTaskId)}`;
+  const deliveryContext = targetTaskDeliveryContext(targetTask);
+  const effectiveDispatchGroup = resultDispatchGroup ?? deliveryContext.dispatchGroup ?? null;
+  const supersedeResult = hasFlag("--supersede-result");
+  const resultsDir = path.join(stateRoot, "target-results");
+  const existingCurrent = existsSync(resultsDir)
+    ? readdirSync(resultsDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+      .flatMap((entry) => {
+        const file = path.join(resultsDir, entry.name);
+        try {
+          return [{ file, result: JSON.parse(readFileSync(file, "utf8")) }];
+        } catch {
+          return [];
+        }
+      })
+      .find(({ result }) => result.targetTaskId === targetTaskId
+        && (result.dispatchGroup ?? result.deliveryContext?.dispatchGroup ?? null) === effectiveDispatchGroup)
+    : null;
+  if (existingCurrent && !supersedeResult) {
+    fail(`target result already exists for ${targetWindow} / ${targetTaskId}${effectiveDispatchGroup ? ` in group ${effectiveDispatchGroup}` : ""}; pass --supersede-result to replace it explicitly.`);
+  }
+  let resultId = explicitResultId ?? existingCurrent?.result.resultId ?? `tr-${slug(targetTaskId)}`;
   let resultFile = path.join(stateRoot, "target-results", `${slug(resultId)}.json`);
   if (existsSync(resultFile)) {
-    if (explicitResultId) {
+    if (existingCurrent?.file === resultFile && supersedeResult) {
+      // The canonical current-result path is intentionally reused after the
+      // prior value is copied into superseded history below.
+    } else if (explicitResultId) {
       fail(`target result already exists: ${relative(resultFile)}`);
-    }
+    } else {
     // Default-id collision is the normal rework cycle (decide-review rework ->
     // re-dispatch -> new result for the same target task). Auto-disambiguate
     // with a timestamp plus entropy (two imports inside one second must not
@@ -1161,6 +1211,7 @@ function commandImportTargetResult() {
     if (existsSync(resultFile)) {
       fail(`target result already exists: ${relative(resultFile)}`);
     }
+    }
   }
   const createdAt = nowIso();
   const evidenceRefs = valuesFor("--evidence-ref");
@@ -1169,7 +1220,10 @@ function commandImportTargetResult() {
   // Typed craft evidence for the execution-craft contract (W-Target). Optional JSON array
   // of { kind, ref|value|commit, verify }. Absent = zero behavior change.
   const craftEvidence = validateCraftEvidenceEntries(parseOptionalJsonArrayArg("--craft-evidence"));
-  const deliveryContext = targetTaskDeliveryContext(targetTask);
+  const supersessionStamp = `${createdAt.replace(/[^0-9]/g, "").slice(0, 17)}-${Math.random().toString(36).slice(2, 6)}`;
+  const supersededFile = existingCurrent
+    ? path.join(resultsDir, "superseded", `${slug(existingCurrent.result.resultId || targetTaskId)}__superseded-${supersessionStamp}.json`)
+    : null;
   const result = {
     schemaVersion,
     resultId,
@@ -1184,6 +1238,14 @@ function commandImportTargetResult() {
     evidenceRefs,
     verification,
     risks,
+    ...(existingCurrent ? {
+      supersedes: {
+        resultId: existingCurrent.result.resultId,
+        resultFile: relative(existingCurrent.file),
+        archivedResultFile: relative(supersededFile),
+        supersededAt: createdAt,
+      },
+    } : {}),
     ...(craftEvidence.length ? { craftEvidence } : {}),
     deliveryContext,
     controllerActionRequired: Boolean(deliveryContext.controllerReturnRequired),
@@ -1210,21 +1272,30 @@ function commandImportTargetResult() {
   };
 
   if (write) {
-    // Import is lock-free by design (it never mutates wakeflow-state.json),
-    // but a locked archive teardown can race it: re-verify the root still
-    // exists right before writing, or a late import resurrects an orphan
-    // target-results/ dir after the demand moved to the ledger.
+    // Result imports share the demand lock with reduction, review, projection,
+    // and archive. This makes the existing-result check plus supersession write
+    // one critical section and prevents a late import from racing teardown.
     if (!existsSync(path.join(stateRoot, "wakeflow-state.json"))) {
       fail(`state root vanished while importing (archived concurrently?): ${relative(stateRoot)}`);
     }
     mkdirSync(path.dirname(resultFile), { recursive: true });
+    if (existingCurrent && supersededFile) {
+      mkdirSync(path.dirname(supersededFile), { recursive: true });
+      writeJson(supersededFile, {
+        ...existingCurrent.result,
+        supersededBy: {
+          resultId,
+          resultFile: relative(resultFile),
+          supersededAt: createdAt,
+        },
+      });
+      if (existingCurrent.file !== resultFile) rmSync(existingCurrent.file, { force: true });
+    }
     writeJson(resultFile, result);
     appendProgressTimeline(stateRoot, state, PROGRESS_SECTIONS.backfill,
       `${createdAt} ${targetWindow}/${targetTaskId} returned ${status} (result ${resultId})`);
-    // The pre-write check narrows the archive race but cannot close it (import
-    // is lock-free by design). Re-verify AFTER writing: when the root was torn
-    // down mid-import, withdraw our own writes so no orphan target-results/
-    // dir resurrects under the archived demand's old path.
+    // Defensive post-write verification remains for manual filesystem moves
+    // that do not honor Wakeflow's state-root lock.
     if (!existsSync(path.join(stateRoot, "wakeflow-state.json"))) {
       rmSync(resultFile, { force: true });
       try {
@@ -1273,6 +1344,8 @@ function commandImportTargetResult() {
       stateRoot: relative(stateRoot),
       resultId,
       resultFile: relative(resultFile),
+      superseded: Boolean(existingCurrent),
+      supersededFile: supersededFile ? relative(supersededFile) : undefined,
       targetTaskId,
       status,
       dispatchGroup: deliveryContext.dispatchGroup,
@@ -1496,7 +1569,7 @@ function commandReduceResultsLocked(stateRoot) {
   const event = {
     eventId,
     createdAt,
-    actor: "controller-reducer",
+    ...verifiedActorEventFields("controller-reducer"),
     type: "review.reduced",
     from: state.state,
     to: nextMainState,
@@ -1687,7 +1760,7 @@ function commandDecideReviewLocked(stateRoot) {
   const event = {
     eventId,
     createdAt,
-    actor: "controller",
+    ...verifiedActorEventFields("controller"),
     type: "review.decided",
     decision,
     from: state.state,
@@ -1798,7 +1871,7 @@ function commandCompleteDemandLocked(stateRoot) {
   const event = {
     eventId,
     createdAt,
-    actor: "controller",
+    ...verifiedActorEventFields("controller"),
     type: "demand.completed",
     from: state.state,
     to: "completed",
@@ -1903,7 +1976,7 @@ function commandCancelDemandLocked(stateRoot) {
   const event = {
     eventId,
     createdAt,
-    actor: "controller",
+    ...verifiedActorEventFields("controller"),
     type: "demand.cancelled",
     from: state.state,
     to: "cancelled",
@@ -2329,7 +2402,7 @@ function commandArchiveDemandLocked(stateRoot) {
   const event = {
     eventId,
     createdAt,
-    actor: "controller",
+    ...verifiedActorEventFields("controller"),
     type: "demand.archived",
     from: state.state,
     to: "archived",

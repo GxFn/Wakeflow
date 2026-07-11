@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { runWakeflowRuntime } from "./wakeflow-runtime.mjs";
+import { authorizeMcpToolCall } from "./wakeflow-mcp-actor.mjs";
+import { runWithMcpCaller } from "./wakeflow-mcp-context.mjs";
 import { hostProfile } from "../scripts/lib/wakeflow-host-profile.mjs";
 
 function readOnlyTool(title) {
@@ -195,6 +197,8 @@ const toolDefinitions = [
         targetSummary: { type: "string" },
         designIntent: { type: "string", description: "Design's one-line implementation intent ('roughly how'). Optional and advisory: surfaced side-by-side with the controller's objective at dispatch and review for the agent's own alignment check — never a gate or score." },
         evidenceContract: { type: "object", description: "Design-authored execution-craft evidence contract: { version, required:[{kind,verify}], advisory:[{kind}] }. Enforced at reduce-results (a completed result must cover the required kinds); advisory kinds only surface as reminders. Optional; absent = no craft gate." },
+        executionMode: { type: "string", enum: ["implementation", "research-readonly"], description: "Machine execution boundary. research-readonly requires an immutable Git baseline and forbids product writes." },
+        commitExpectation: { type: "string", enum: ["commit", "leave-uncommitted", "none-readonly"], description: "Who owns repository commit closure; research-readonly must use none-readonly." },
         adoptHost: { type: "boolean", description: "Explicitly transfer demand controller-host ownership to this host; without it, acting on a demand owned by the other host fails closed." },
       },
     },
@@ -261,6 +265,7 @@ const toolDefinitions = [
         taskId: { type: "string" },
         status: { type: "string", enum: ["completed", "blocked", "needs-review"] },
         resultId: { type: "string" },
+        supersedeResult: { type: "boolean", description: "Explicitly replace the current result for the same target task and dispatch group; the prior result moves to superseded history." },
         dispatchGroup: { type: "string", description: "The dispatch group the result envelope claims. Pass it whenever the envelope carries one: a late result from a superseded round then leaves the in-flight round's window lock alone." },
         summary: { type: "string" },
         evidenceRefs: { type: "array", items: { type: "string" } },
@@ -521,6 +526,8 @@ const toolDefinitions = [
               sourceRef: { type: "string" },
               designIntent: { type: "string", description: "Design's one-line implementation intent for this package; optional, advisory, never a gate." },
               evidenceContract: { type: "object", description: "Design-authored execution-craft evidence contract for this package; optional, enforced at reduce-results." },
+              executionMode: { type: "string", enum: ["implementation", "research-readonly"] },
+              commitExpectation: { type: "string", enum: ["commit", "leave-uncommitted", "none-readonly"] },
             },
           },
         },
@@ -651,7 +658,7 @@ function prioritizeHostVisibleTools(definitions) {
   ];
 }
 
-export const handlers = {
+const rawHandlers = {
   wakeflow_initialize_workspace: (args) => runWakeflowRuntime({
     script: "wakeflow-setup",
     args: [
@@ -711,7 +718,7 @@ export const handlers = {
     cwd: args.root || undefined,
     sensitiveValues: typeof args.windowHandle === "string" ? [args.windowHandle] : [],
   }),
-  wakeflow_adopt_demand_host: (args) => runWakeflowRuntime({
+  wakeflow_adopt_demand_host: (args) => refreshProgressAfterMutation(args, runWakeflowRuntime({
     script: "wakeflow-state",
     args: [
       "adopt-demand-host",
@@ -722,7 +729,7 @@ export const handlers = {
       "--json",
     ],
     cwd: args.root || undefined,
-  }),
+  })),
   wakeflow_render_progress: (args) => runWakeflowRuntime({
     script: "wakeflow-render-progress",
     args: [
@@ -749,7 +756,7 @@ export const handlers = {
     args: ["status", ...rootArgs(args), "--json"],
     cwd: args.root || undefined,
   }),
-  wakeflow_add_task: (args) => runWakeflowRuntime({
+  wakeflow_add_task: (args) => refreshProgressAfterMutation(args, runWakeflowRuntime({
     script: "wakeflow-state",
     args: [
       "add-task-package",
@@ -762,12 +769,14 @@ export const handlers = {
       ...optionalValue("--source-ref", args.sourceRef),
       ...optionalValue("--design-intent", args.designIntent),
       ...optionalValue("--evidence-contract", args.evidenceContract ? JSON.stringify(args.evidenceContract) : undefined),
+      ...optionalValue("--execution-mode", args.executionMode),
+      ...optionalValue("--commit-expectation", args.commitExpectation),
       ...rootArgs(args),
       "--write",
       ...(args.adoptHost ? ["--adopt-host"] : []),
       "--json",
     ],
-  }),
+  })),
   wakeflow_prepare_delivery: (args) => {
     const direction = args.direction || "target";
     if (direction === "controller-return") {
@@ -814,7 +823,7 @@ export const handlers = {
       ],
     });
   },
-  wakeflow_record_delivery: (args) => runWakeflowRuntime({
+  wakeflow_record_delivery: (args) => refreshProgressAfterMutation(args, runWakeflowRuntime({
     script: "wakeflow-delivery",
     args: [
       "record-delivery-run",
@@ -831,8 +840,8 @@ export const handlers = {
       ...(args.verbose ? [] : ["--compact"]),
       "--json",
     ],
-  }),
-  wakeflow_record_target_result: (args) => runWakeflowRuntime({
+  })),
+  wakeflow_record_target_result: (args) => refreshProgressAfterMutation(args, runWakeflowRuntime({
     script: "wakeflow-state",
     args: [
       "import-target-result",
@@ -841,6 +850,7 @@ export const handlers = {
       "--target-window", args.targetWindow,
       "--status", args.status,
       ...optionalValue("--result-id", args.resultId),
+      ...(args.supersedeResult ? ["--supersede-result"] : []),
       ...optionalValue("--dispatch-group", args.dispatchGroup),
       ...optionalValue("--summary", args.summary),
       ...repeatValues("--evidence-ref", args.evidenceRefs),
@@ -852,7 +862,7 @@ export const handlers = {
       ...(args.verbose ? [] : ["--compact"]),
       "--json",
     ],
-  }),
+  })),
   wakeflow_review_pack: (args) => runWakeflowRuntime({
     script: "wakeflow-delivery",
     args: [
@@ -931,7 +941,7 @@ export const handlers = {
     }
     throw new Error(`wakeflow_view: unknown scope "${args.scope}" (expected task-ledger | window | focus | trace | storage)`);
   },
-  wakeflow_reduce_results: (args) => runWakeflowRuntime({
+  wakeflow_reduce_results: (args) => refreshProgressAfterMutation(args, runWakeflowRuntime({
     script: "wakeflow-state",
     args: [
       "reduce-results",
@@ -941,8 +951,8 @@ export const handlers = {
       ...(args.adoptHost ? ["--adopt-host"] : []),
       "--json",
     ],
-  }),
-  wakeflow_decide_review: (args) => runWakeflowRuntime({
+  })),
+  wakeflow_decide_review: (args) => refreshProgressAfterMutation(args, runWakeflowRuntime({
     script: "wakeflow-state",
     args: [
       "decide-review",
@@ -957,8 +967,8 @@ export const handlers = {
       ...(args.adoptHost ? ["--adopt-host"] : []),
       "--json",
     ],
-  }),
-  wakeflow_complete_demand: (args) => runWakeflowRuntime({
+  })),
+  wakeflow_complete_demand: (args) => refreshProgressAfterMutation(args, runWakeflowRuntime({
     script: "wakeflow-state",
     args: [
       "complete-demand",
@@ -970,7 +980,7 @@ export const handlers = {
       ...(args.adoptHost ? ["--adopt-host"] : []),
       "--json",
     ],
-  }),
+  })),
   wakeflow_archive: async (args) => {
     if (args.target === "demand") {
       const stateRoot = requireValueForTool(args, "stateRoot", "wakeflow_archive target=demand");
@@ -1120,7 +1130,7 @@ export const handlers = {
     ],
     cwd: args.root || undefined,
   }),
-  wakeflow_cancel_demand: (args) => runWakeflowRuntime({
+  wakeflow_cancel_demand: (args) => refreshProgressAfterMutation(args, runWakeflowRuntime({
     script: "wakeflow-state",
     args: [
       "cancel-demand",
@@ -1130,7 +1140,7 @@ export const handlers = {
       "--json",
     ],
     cwd: args.root || undefined,
-  }),
+  })),
   wakeflow_pod_open: (args) => runWakeflowRuntime({
     script: "wakeflow-pod",
     args: [
@@ -1202,6 +1212,22 @@ export const handlers = {
   }),
 };
 
+export const handlers = Object.fromEntries(
+  Object.entries(rawHandlers).map(([toolName, handler]) => [
+    toolName,
+    (args, context = {}) => {
+      const actor = authorizeMcpToolCall({
+        toolName,
+        args,
+        context,
+        defaultRoot: defaultWorkspaceRoot(),
+        hostProfile,
+      });
+      return runWithMcpCaller(actor, () => handler(args));
+    },
+  ]),
+);
+
 async function maybeRefreshArchiveSummaries(args, archiveResult) {
   if (!args.refreshSummaries || !archiveResult?.ok) {
     return archiveResult;
@@ -1219,6 +1245,35 @@ async function maybeRefreshArchiveSummaries(args, archiveResult) {
     ok: Boolean(archiveResult.ok && summaries.ok),
     archive: archiveResult,
     summaries,
+  };
+}
+
+async function refreshProgressAfterMutation(args, mutationPromise) {
+  const mutation = await mutationPromise;
+  const stateRoot = mutation?.parsedJson?.stateRoot
+    || mutation?.parsedJson?.stateUpdate?.stateRoot
+    || args.stateRoot;
+  const wrote = mutation?.ok && mutation?.parsedJson?.wrote !== false;
+  if (!wrote || !stateRoot) return mutation;
+  const refresh = await runWakeflowRuntime({
+    script: "wakeflow-render-progress",
+    args: [
+      "--state-root", stateRoot,
+      ...rootArgs(args),
+      "--write",
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  });
+  return {
+    ...mutation,
+    projectionRefresh: {
+      ok: refresh.ok,
+      stateRoot,
+      progressDoc: refresh.parsedJson?.progressDoc,
+      stateRevision: refresh.parsedJson?.stateRevision,
+      warning: refresh.ok ? undefined : (refresh.wakeflowError?.message || refresh.stderr || "projection refresh failed"),
+    },
   };
 }
 

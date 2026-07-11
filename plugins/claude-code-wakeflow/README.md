@@ -306,11 +306,12 @@ runs exactly ONE window with ONE combined task package (the window
 self-sequences its items); across demands, up to `maxActiveDemands` (default
 2, `wakeflow.config.json`) demands run side by side as pods:
 
-- One demand = one pod: its own `Controller__<pod>`, per-repo isolation
-  worktree windows (`<repo>__<pod>` on branch `<demandKey>/<pod>`), and its
-  own `Test__<pod>`, all in its own tmux session. The WHOLE pod shares the
-  demand's one worktree set — every window, Test included, works and verifies
-  inside those worktrees, never on a main checkout. Pods are mutually unaware.
+- One demand = one execution pod. The persistent fleet is pod 0 and uses the
+  main checkouts. Demand 2..N gets its own `Controller__<pod>`, per-repo
+  isolation worktree windows (`<repo>__<pod>` on branch
+  `<demandKey>/<pod>`), `Test__<pod>`, and tmux session; every window in that
+  isolation pod stays on its ONE worktree set and never uses a main checkout.
+  Pods are mutually unaware.
 - Open/resume/close with the helper: `pod-open --demand-key <key> --repos
   <a,b>` (idempotent — re-run resumes dead windows from the registry),
   `pod-list` (the one global view), `pod-close` after archive.

@@ -262,6 +262,35 @@ test("return policy helpers preserve group-ready and per-target callback semanti
   assert.equal(groupPlan.status, "waiting");
   assert.equal(groupPlan.counts.waitingForSentResultsCount, 1);
 
+  const blockedReview = {
+    ...review,
+    results: [
+      {
+        packet: { packetId: "packet-a", targetWindow: "WindowA", taskId: "task-a" },
+        result: { status: "blocked" },
+      },
+      review.results[1],
+    ],
+    groupSnapshot: {
+      ...review.groupSnapshot,
+      ready: [],
+      blocked: [{ packetId: "packet-a", targetWindow: "WindowA", taskId: "task-a" }],
+    },
+  };
+  assert.equal(controllerReturnReadinessIssue({
+    review: blockedReview,
+    triggerTarget: "WindowA",
+    triggerTaskId: "task-a",
+  }), null, "a blocker makes a group-ready group immediately returnable");
+  const blockedGroupPlan = buildControllerCallbackPlan({
+    dispatchGroup: "group-fixture",
+    returnPolicy: blockedReview.returnPolicy,
+    groupSnapshot: blockedReview.groupSnapshot,
+  });
+  assert.equal(blockedGroupPlan.status, "ready-to-build");
+  assert.equal(blockedGroupPlan.counts.readyToBuildCount, 1);
+  assert.deepEqual(blockedGroupPlan.units[0].missingSentTargets, ["WindowB"]);
+
   const perTargetReview = {
     ...review,
     returnPolicy: { mode: "per-target" },
@@ -891,6 +920,137 @@ test("prepare-dispatch-from-state writes packet, group, and delivery without leg
   assert.match(staleReplay.stdout, /prepared from state revision 3; current revision is 4/);
 });
 
+test("status separates state-root target results from the transport-local cache", () => {
+  const { root, stateRootRef } = makeFixture();
+  const resultDir = path.join(root, stateRootRef, "target-results");
+  writeJson(path.join(resultDir, "current-a.json"), {
+    kind: "TargetResultEnvelope",
+    resultId: "RESULT-A",
+    demandKey: "CSMR-FIXTURE",
+    dispatchGroup: "GROUP-A",
+    targetWindow: "AlembicPlugin",
+    targetTaskId: "CSMR-TASK-1",
+    status: "completed",
+  });
+  writeJson(path.join(resultDir, "legacy-duplicate.json"), {
+    kind: "TargetResultEnvelope",
+    resultId: "RESULT-A-OLD-DUPLICATE",
+    demandKey: "CSMR-FIXTURE",
+    dispatchGroup: "GROUP-A",
+    targetWindow: "AlembicPlugin",
+    targetTaskId: "CSMR-TASK-1",
+    status: "completed",
+  });
+  writeJson(path.join(resultDir, "superseded", "old.json"), {
+    kind: "TargetResultEnvelope",
+    resultId: "RESULT-A-OLD",
+    targetWindow: "AlembicPlugin",
+    targetTaskId: "CSMR-TASK-1",
+    status: "completed",
+  });
+
+  const status = parseOk(run(root, ["status"]));
+  assert.equal(status.transportResultCount, 0);
+  assert.equal(status.stateRootResultArtifactCount, 2);
+  assert.equal(status.uniqueTargetResultCount, 1);
+  assert.equal(status.supersededResultCount, 1);
+  assert.equal(status.resultCount, 1);
+  assert.deepEqual(status.runtimeSummary.totals, {
+    packetCount: 0,
+    groupCount: 0,
+    deliveryCount: 0,
+    deliveryRunCount: 0,
+    resultCount: 1,
+    transportResultCount: 0,
+    stateRootResultArtifactCount: 2,
+    uniqueTargetResultCount: 1,
+    supersededResultCount: 1,
+    registeredThreadCount: 0,
+    windowConfigCount: 0,
+  });
+});
+
+test("research-readonly dispatch captures an immutable Git baseline and detects replay drift", () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  const repo = path.join(root, "TargetRepo");
+  mkdirSync(repo, { recursive: true });
+  for (const args of [
+    ["-C", repo, "init"],
+    ["-C", repo, "config", "user.email", "wakeflow-test@example.invalid"],
+    ["-C", repo, "config", "user.name", "Wakeflow Test"],
+  ]) {
+    const result = runSync("git", args, { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+  }
+  writeText(path.join(repo, "baseline.txt"), "baseline");
+  assert.equal(runSync("git", ["-C", repo, "add", "baseline.txt"], { encoding: "utf8" }).status, 0);
+  assert.equal(runSync("git", ["-C", repo, "commit", "-m", "baseline"], { encoding: "utf8" }).status, 0);
+
+  const configFile = path.join(root, "wakeflow.config.json");
+  const config = JSON.parse(readFileSync(configFile, "utf8"));
+  config.repositories.find((item) => item.windowName === "AlembicPlugin").path = "TargetRepo";
+  writeJson(configFile, config);
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.taskPackages[0].executionMode = "research-readonly";
+  state.taskPackages[0].commitExpectation = "none-readonly";
+  writeJson(stateFile, state);
+  const packageFile = path.join(stateRoot, "task-packages/CSMR-PKG-1.json");
+  const taskPackage = JSON.parse(readFileSync(packageFile, "utf8"));
+  taskPackage.executionMode = "research-readonly";
+  taskPackage.commitExpectation = "none-readonly";
+  writeJson(packageFile, taskPackage);
+
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef, { group: "RESEARCH-SNAPSHOT" });
+  assert.equal(prepared.packet.executionContract.executionMode, "research-readonly");
+  assert.equal(prepared.packet.executionContract.commitExpectation, "none-readonly");
+  assert.equal(prepared.packet.repositorySnapshot.available, true);
+  assert.equal(prepared.packet.repositorySnapshot.policy, "immutable-head-and-cleanliness");
+  assert.equal(prepared.packet.repositorySnapshot.dirty, false);
+  assert.match(prepared.packet.repositorySnapshot.head, /^[0-9a-f]{40}$/);
+  assert.equal(prepared.envelope.repositorySnapshot.head, prepared.packet.repositorySnapshot.head);
+
+  writeText(path.join(repo, "drift.txt"), "concurrent drift");
+  const driftedReplay = run(root, [
+    "prepare-dispatch-from-state",
+    "--state-root", stateRootRef,
+    "--target-task-id", "CSMR-TASK-1",
+    "--group", "RESEARCH-SNAPSHOT",
+    "--controller-window", "AlembicWorkspace",
+    "--human-context-ref", `${stateRootRef}/developer-progress.md`,
+    "--require-thread",
+    "--write",
+  ]);
+  assert.notEqual(driftedReplay.status, 0);
+  assert.match(driftedReplay.stdout, /different content for the same state revision/);
+});
+
+test("research-readonly dispatch refuses when the target has no readable Git baseline", () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.taskPackages[0].executionMode = "research-readonly";
+  state.taskPackages[0].commitExpectation = "none-readonly";
+  writeJson(stateFile, state);
+  const packageFile = path.join(stateRoot, "task-packages/CSMR-PKG-1.json");
+  const taskPackage = JSON.parse(readFileSync(packageFile, "utf8"));
+  taskPackage.executionMode = "research-readonly";
+  taskPackage.commitExpectation = "none-readonly";
+  writeJson(packageFile, taskPackage);
+  registerThread(root, "AlembicPlugin");
+  const result = run(root, [
+    "prepare-dispatch-from-state",
+    "--state-root", stateRootRef,
+    "--target-task-id", "CSMR-TASK-1",
+    "--group", "RESEARCH-NO-GIT",
+    "--require-thread",
+    "--write",
+  ]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /research-readonly dispatch requires a readable Git baseline/);
+});
+
 test("prepare-dispatch-from-state rejects completed and accepted state-root tasks", () => {
   const { root, stateRootRef, stateRoot } = makeFixture();
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
@@ -1117,7 +1277,7 @@ test("group-ready controller return ignores targets prepared but not sent", () =
   });
 
   const first = prepareDispatch(root, stateRootRef);
-  parseOk(run(root, [
+  const second = parseOk(run(root, [
     "prepare-dispatch-from-state",
     "--state-root",
     stateRootRef,
@@ -1132,6 +1292,15 @@ test("group-ready controller return ignores targets prepared but not sent", () =
     "--require-thread",
     "--write",
   ]));
+  const persistedGroup = JSON.parse(readFileSync(path.join(root, second.dispatchGroupFile), "utf8"));
+  assert.deepEqual(
+    persistedGroup.expectedTargets.map(({ targetWindow, taskId }) => ({ targetWindow, taskId })),
+    [
+      { targetWindow: "AlembicPlugin", taskId: "CSMR-TASK-1" },
+      { targetWindow: "AlembicPlugin", taskId: "CSMR-TASK-2" },
+    ],
+    "prepare-dispatch-from-state must persist every target merged into a shared group",
+  );
   parseOk(run(root, [
     "record-delivery-run",
     "--delivery-file",

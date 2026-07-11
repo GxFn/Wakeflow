@@ -64,6 +64,14 @@ thread-registry record exists. They may describe:
 They must not contain real thread ids and must not become a second authority for
 window semantics.
 
+## Caller Identity
+
+For mutating MCP calls, the server compares the host-supplied current session
+id with this host-scoped registry. It does not trust a tool argument claiming
+an actor. Unknown registered-workspace callers fail closed; exact configured
+cwd is only the fallback when the host supplies no handle. The verified window
+and role are added to controller audit events.
+
 ## Send Policy
 
 The delivery envelope stores `targetWindow`, `stateRoot`, `dispatchGroup`, and
@@ -79,9 +87,9 @@ or fallback delivery route.
 ## Controller Return
 
 Controller return uses the dispatch group's stored `controllerWindow`, not a
-global default controller — routing is per-group, but the workspace runs ONE
-controller (the single acceptance authority, across every active demand). The
-controller is itself a tmux-resident window, so the return uses the same helper
+global default controller. Each demand has exactly one acceptance authority:
+pod 0 uses the persistent controller, while isolation pods use their stamped
+`Controller__<pod>`. The controller is itself a tmux-resident window, so the return uses the same helper
 `send`; the controller window takes NO delivery lock (returns queue naturally
 in its input box, and concurrent pastes are serialized by the controller paste
 mutex). The visible return prompt follows the controller-return prompt shape in

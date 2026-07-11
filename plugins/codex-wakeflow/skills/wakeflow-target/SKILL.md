@@ -39,6 +39,10 @@ state root, or human context, stop and report instead of guessing.
      `dispatchGroup`.
    - Read the target repository `AGENTS.md` and declare the current window and
      repository responsibility.
+   - Read the packet's `executionContract` and `repositorySnapshot`. Before
+     work, compare the current Git HEAD/cleanliness with that snapshot. An
+     `immutable-head-and-cleanliness` mismatch is an immediate blocker; do not
+     continue on a newer/dirty checkout and call the evidence comparable.
 2. Read the assigned task.
    - Use the state root, task package, human context document, and target
      repository rules.
@@ -58,12 +62,22 @@ state root, or human context, stop and report instead of guessing.
      logs, runtime JSON, report paths, screenshots, or other reviewable
      evidence.
    - Prose alone is not enough for completion.
+   - Recheck Git HEAD/cleanliness immediately before recording the result. For
+     `research-readonly`, any drift from the packet baseline returns `blocked`
+     with start/end facts, never `completed`. Implementation work reports the
+     start/end HEAD and expected commit outcome instead of treating drift as
+     inherently wrong.
 5. Record a `TargetResultEnvelope`.
    - Use the Wakeflow MCP `wakeflow_record_target_result` tool for the result
      envelope. This is one narrow file/state action: it records target evidence
      only, and it does not review, accept, dispatch, send, or return. Pass the
      `dispatchGroup` from your delivery prompt: a late result from a superseded
      round then leaves the in-flight round's window lock alone.
+   - There is one current result for each
+     `(stateRoot, dispatchGroup, targetWindow, targetTaskId)`. To correct
+     evidence for that same delivery, call with `supersedeResult=true`; never
+     invent a second result id. Wakeflow archives the old value under
+     `target-results/superseded/` and records both lineage directions.
    - Read the tool response's `deliveryContext` / `controllerReturn` fields.
      `returnRoute` and `returnPolicy` live in the local delivery envelope, not
      the controller state root. Do not decide "no callback" by searching only
@@ -109,6 +123,8 @@ Stop and return a blocker when:
 - The window identity or target repository cannot be confirmed.
 - The state root, task id, or dispatch group is missing or inconsistent.
 - Required evidence documents are missing.
+- The packet requires an immutable repository snapshot and current HEAD or
+  cleanliness differs from that baseline.
 - The task asks this target to change another repository without authorization.
 - The task is only a prompt, not a state-root or task-package assignment.
 - Validation fails and the next repair would change scope or repository

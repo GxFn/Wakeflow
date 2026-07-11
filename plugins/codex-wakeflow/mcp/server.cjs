@@ -114,10 +114,28 @@ async function callTool(params, handlers) {
     return toolError(`Unknown Wakeflow tool: ${params.name}`);
   }
   try {
-    return toolContent(await handler(isObject(params.arguments) ? params.arguments : {}));
+    return toolContent(await handler(
+      isObject(params.arguments) ? params.arguments : {},
+      verifiedCallerContext(),
+    ));
   } catch (error) {
     return toolError(error?.message || String(error));
   }
+}
+
+function verifiedCallerContext() {
+  return {
+    enforceActor: true,
+    // These values are consumed only for in-memory comparison with the local
+    // registry/cwd map. They are never included in tool output or errors.
+    callerHandle: process.env.CODEX_THREAD_ID
+      || process.env.CLAUDE_CODE_SESSION_ID
+      || process.env.CLAUDE_SESSION_ID
+      || "",
+    callerProjectDir: process.env.WAKEFLOW_DEFAULT_ROOT
+      || process.env.CLAUDE_PROJECT_DIR
+      || "",
+  };
 }
 
 function toolContent(payload) {

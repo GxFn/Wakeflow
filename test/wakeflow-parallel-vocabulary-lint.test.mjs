@@ -62,12 +62,12 @@ test("semantic-drift parallel vocabulary stays out of code and runtime prose", (
 
 test("the canonical demand-level parallelism sentences stay pinned in both editions", () => {
   const surfaces = [
-    { file: "plugins/claude-code-wakeflow/CLAUDE.md", must: ["Parallelism exists ONLY at the demand level", "ONE worktree set"] },
-    { file: "plugins/codex-wakeflow/AGENTS.md", must: ["Parallelism exists ONLY at the demand level", "ONE worktree set"] },
-    { file: "plugins/claude-code-wakeflow/skills/wakeflow-governance/SKILL.md", must: ["ONE combined task package", "ONE worktree set"] },
-    { file: "plugins/codex-wakeflow/skills/wakeflow-governance/SKILL.md", must: ["ONE combined task package", "ONE worktree set"] },
-    { file: "plugins/claude-code-wakeflow/skills/wakeflow-controller/SKILL.md", must: ["ONE combined task package", "CROSS-DEMAND isolation only"] },
-    { file: "plugins/codex-wakeflow/skills/wakeflow-controller/SKILL.md", must: ["ONE combined task package", "CROSS-DEMAND isolation only"] },
+    { file: "plugins/claude-code-wakeflow/CLAUDE.md", must: ["Parallelism exists ONLY at the demand level", "The default fleet is pod 0", "Only demand 2..N"] },
+    { file: "plugins/codex-wakeflow/AGENTS.md", must: ["Parallelism exists ONLY at the demand level", "The default fleet is pod 0", "Only demand 2..N"] },
+    { file: "plugins/claude-code-wakeflow/skills/wakeflow-governance/SKILL.md", must: ["ONE combined task package", "The default fleet is pod 0", "Only demand 2..N"] },
+    { file: "plugins/codex-wakeflow/skills/wakeflow-governance/SKILL.md", must: ["ONE combined task package", "The default fleet is pod 0", "Only demand 2..N"] },
+    { file: "plugins/claude-code-wakeflow/skills/wakeflow-controller/SKILL.md", must: ["ONE combined task package", "CROSS-DEMAND isolation only", "The default fleet is pod 0"] },
+    { file: "plugins/codex-wakeflow/skills/wakeflow-controller/SKILL.md", must: ["ONE combined task package", "CROSS-DEMAND isolation only", "The default fleet is pod 0"] },
   ];
   for (const surface of surfaces) {
     // Markdown wraps lines: collapse whitespace so a fragment split across a

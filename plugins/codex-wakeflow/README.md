@@ -96,7 +96,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.12/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.13/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository

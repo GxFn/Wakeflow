@@ -7,7 +7,7 @@
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 Wakeflow 把一个本地 Codex 或 Claude Code 工作区变成有纪律的控制系统：
-一个总控窗口、多个聚焦的仓库窗口、明确的 state root、轻量 direct-thread
+每个 active demand 一条由总控负责的闭环、多个聚焦的仓库窗口、明确的 state root、轻量 direct-thread
 或 direct-session 投递，以及基于证据的验收。总控以闭环方式运行这套系统——规划、派发、收集证据、审查、决策、循环往复——并记录每一步，整个过程事后可审计。
 
 </div>
@@ -50,8 +50,9 @@ Wakeflow 就是那个缺失的控制层——一个总控窗口驱动多个聚�
 - **可审计** —— 每次派发、投递、结果、决策都是一个 JSON 工件，串在同一条
   trace 脊椎上；`wakeflow_view`（scope `trace`）可以回放谁在哪个状态版本上、
   凭什么证据做了什么。
-- **可续跑** —— 任意窗口、整支舰队、甚至整台机器重启：会话按注册 id 恢复，
-  需求从磁盘 state root 接着走。任何对话记忆都不承重。
+- **可续跑** —— 需求从磁盘 state root 接着走。Codex thread 与 Claude Code
+  conversation 通过宿主本地注册 id 重新绑定；机器重启后，需要先重新拉起 Claude
+  的 tmux 窗口，再恢复原会话。对话记忆不是状态权威。
 - **难以造假** —— 验收要求 reducer 在磁盘上逐一核验的原始证据（证据引用缺失
   即 fail-closed）；"目标窗口说做完了"永远不算数，结果也永远不能自我验收。
 - **并行不混乱** —— 最多 `maxActiveDemands` 个需求以隔离舱并行（各自的总控、
@@ -66,21 +67,21 @@ agent 工作保持可读、有边界、可恢复。
 ## 架构
 
 Wakeflow 由三层共同工作：你能看到的窗口舰队、推进工作的闭环，以及重启后仍能恢复的
-磁盘布局。Codex 与 Claude Code 两个版本运行同一份共享 core；差异只在传输层
-（Codex host thread tools 对比 tmux send helper）。
+磁盘布局。Codex 与 Claude Code 两个版本运行同一份宿主中立的 state、delivery
+和 validation core；manifest、memory file、窗口生命周期与 transport 仍由各宿主实现
+（Codex host thread tools 对比 tmux helper）。
 
 ### 第 1 层 - 窗口舰队（你看到的东西）
 
-每个 Wakeflow 窗口都是长期存在、绑定单一责任的 agent session。Claude Code
-版本把窗口舰队放在一个 tmux session 里，并带有实时状态徽标；Codex 版本使用
-host threads。
+每个 Wakeflow 窗口都是绑定单一责任的 agent session。Claude Code 的基础舰队
+位于配置的 tmux session，每个 demand pod 另有独立 tmux session；Codex 版本使用 host threads。
 
 | 窗口 | 角色 | 默认推理强度（Claude Code） |
 | --- | --- | --- |
 | Controller | 拥有目标、投递、证据审查和验收 | `max` |
 | Design | 澄清需求、重设非 bug 结果偏差方案、准备 handoff | `xhigh` |
 | Repo windows | 只在一个仓库边界内实现 | `xhigh` |
-| Test | 执行仓库无法自测的真实场景验证 | `xhigh` |
+| Test | 总控验收并完成自身验证后，只探索获批真实环境边界中的隐藏 bug | `xhigh` |
 
 ### 第 2 层 - 闭环（工作如何推进）
 
@@ -88,8 +89,8 @@ host threads。
 demand 都经过同一个闭环：
 
 ```text
- 1 init       总控创建 demand state root                  (未认领)
- 2 claim      第一个驱动命令把它绑定到一个平台             (codex | claude)
+ 1 init       底层 state init 创建 demand root             (未认领)
+ 2 claim      公共 create 或底层 root 首次驱动时绑定宿主     (codex | claude)
  3 add task   任务包命名目标窗口和范围
  4 dispatch   envelope 写入 -> 窗口加锁 -> prompt 投递
  5 work       目标窗口在自己的仓库边界内执行
@@ -124,8 +125,10 @@ demand 都经过同一个闭环：
 
 ### 谁决定什么（信任模型）
 
-脚本和 MCP 工具创建、验证、记录机器数据；它们不会验收工作、扩大范围，或决定产品行为。
-目标窗口只执行被投递的任务包。总控是唯一验收权威，用户拥有产品决策。
+脚本和 MCP 工具创建、验证、记录机器数据；它们不会自行选择验收、扩大范围或决定产品行为，
+只会持久化总控的显式决策。
+目标窗口只执行被投递的任务包。总控是唯一验收权威，并且必须在 Test 开始前证明功能正确；
+Test 不能自创目标、方法或完成标准，只探索获批环境边界。用户拥有产品决策。
 
 ### 双宿主共存
 
@@ -169,7 +172,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.10/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.12/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -178,8 +181,8 @@ npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.10/plugins/
 Codex 版本以按需求划分的线程组运行同一套 demand pod 模型：`wakeflow_pod_open`
 创建这条需求的一套 worktree 并返回 windowPlan，agent 用 `create_thread` 逐条
 落实（每个线程的 cwd 就是它的 worktree），完成后用 `wakeflow_pod_close` 拆除并
-把存活分支记到 pending-merges 台账。模型、容量门与边界两版完全一致，只有窗口
-传输方式不同。
+把存活分支记到 pending-merges 台账。共享不变量是一条需求一个总控、一个 Test、
+每个选中仓库一个 worktree；窗口生命周期与拆除顺序由各宿主负责。
 
 本地开发时，可以把当前 checkout 注册成本地 marketplace：
 
@@ -289,7 +292,11 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
    目标窗口在自己的仓库边界内干活，controller-return 带着证据唤醒总控。
 5. `/wakeflow:review` —— 先读结果背后的原始证据，再记录决策：
    accept / rework / blocked / redesign。
-6. 重复 dispatch → review 直到全部任务 accepted，然后
+6. 重复 dispatch → review，直到所有非 Test 任务 accepted，且总控完成自己的功能验证。
+   之后总控才可添加/派发已确认的 Test card；Test 必须遵守冻结目标、获批测试方案、
+   `controllerSelfChecks`、allowed skills、setup policy 与 attempt bound。
+   progressive-chain-validation 等 Test skill 只有被 card 显式列出时才能使用。
+7. 所有必需任务 accepted 后，运行
    `wakeflow_complete_demand` + `wakeflow_archive`（脱敏门守护）把整个故事
    收进台账。
 
@@ -345,11 +352,9 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 - `per-target` 可以每个 target 唤醒一次 controller，同时保留 group snapshot。
 - 一次真实发送被记录为 `sent` 且有 readback 证据后，总控本轮停止，不在同一轮 sleep 或 poll。
 - Keep-live 只是运行时辅助，不是任务逻辑、传输权威或验收证据。
-- Demand 创建是宿主中立的：`wakeflow_create_demand` 写入
-  `controllerHost: null`，所以 Codex 和 Claude Code 都可以创建或导入需求材料，
-  但不会因此抢占控制权。
-- 第一个真正驱动需求的命令会把 demand 绑定到当前平台，写入
-  `controllerHost: "codex"` 或 `controllerHost: "claude-code"`。
+- 底层 `wakeflow-state init` 是宿主中立的，写入 `controllerHost: null`。
+  公共 `wakeflow_create_demand` 会立即把新 root 认领给调用宿主；独立导入的底层
+  raw root 则保持未认领，直到第一次驱动命令。
 - demand 归属于某个宿主后，另一个宿主的 controller 写操作和投递准备会 fail-closed；
   只有显式 `--adopt-host` 才能转移控制权。
 - 最多 `maxActiveDemands`（默认 2）个需求可以同时 active；超出容量的 claim 会 fail-closed。`wakeflow_next_work` 报告 `activeDemands` 与 `demandCapacity`。
@@ -369,13 +374,13 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 
 | 需求 | MCP tools |
 | --- | --- |
-| 设置和工作区发现 | `wakeflow_initialize_workspace` |
-| 职责窗口替换 | `wakeflow_replace_windows`（单个传 `window`，多个传 `windows`） |
-| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_next_work`, `wakeflow_render_progress` |
+| 设置与窗口注册 | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
+| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
+| 候选扫描与隔离 pod | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_close`, `wakeflow_pod_list` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design 和 Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| 归档、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_prune_runtime`、`wakeflow_verify`、`wakeflow_view`（scope trace） |
+| 归档、视图、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_view`（task-ledger/window/focus/trace/storage）、`wakeflow_prune_runtime`、`wakeflow_verify` |
 | 宿主归属与窗口锁 | `wakeflow_adopt_demand_host`、`wakeflow_release_window_lock` |
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：
@@ -426,8 +431,8 @@ Wakeflow 源仓库只跟踪可复用能力。产品代码、项目特定 active 
 - `.wakeflow-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`
 
 `AGENTS.md`（Codex）与 `CLAUDE.md`（Claude Code）可以在工作区根目录和子目录根
-共存。每个 demand 仍然只有一个 controller host：创建中立，第一次驱动命令认领，
-非归属宿主 fail-closed，`--adopt-host` 是显式转移机制。
+共存。每个 demand 仍然只有一个 controller host：公共 create 立即认领调用宿主，
+底层 raw init 保持中立直到首次驱动；非归属宿主 fail-closed，`--adopt-host` 是显式转移机制。
 
 ## Marketplace 发布
 
@@ -489,19 +494,21 @@ memory 文件模板、skills、template bundle）只存在于各自 artifact 内
 | --- | --- |
 | `core/` | 宿主中立 runtime 的唯一事实源，同步进两个 artifact。 |
 | `tools/sync-core.mjs` | core 同步与漂移检查（`--check`）。 |
-| `plugins/codex-wakeflow/.codex-plugin/plugin.json` | Codex 插件 manifest 和 MCP wiring。 |
-| `plugins/claude-code-wakeflow/.claude-plugin/plugin.json` | Claude Code 插件 manifest 和 MCP wiring。 |
+| `plugins/codex-wakeflow/.codex-plugin/plugin.json` | Codex 插件 metadata；`mcpServers` 指向 `.mcp.json`。 |
+| `plugins/codex-wakeflow/.mcp.json` | Codex MCP 进程 wiring。 |
+| `plugins/claude-code-wakeflow/.claude-plugin/plugin.json` | Claude Code 插件 metadata；`mcpServers` 指向 `.mcp.json`。 |
+| `plugins/claude-code-wakeflow/.mcp.json` | Claude Code MCP 进程 wiring 与工作区根环境。 |
 | `plugins/claude-code-wakeflow/scripts/lib/wakeflow-host-profile.mjs` | Claude Code host profile（tmux 窗口模型、CLAUDE.md、session 词汇）。 |
 | `plugins/codex-wakeflow/mcp/server.cjs` | 无 `node_modules` 依赖的 standalone MCP server entrypoint。 |
 | `plugins/codex-wakeflow/scripts/` | 随插件发布的 setup、state、delivery、intake、archive、validation 和 CLI runtime。 |
-| `plugins/codex-wakeflow/skills/` | 随插件发布的 controller、target、governance 和 validation 操作手册。 |
+| `plugins/codex-wakeflow/skills/` | 随插件发布的 controller、target protocol、target craft 与 governance 操作手册。 |
 | `plugins/codex-wakeflow/templates/wakeflow-template-bundle.json` | 已安装工作区 starter documents 和 support surfaces 的 bundle，用于控制 marketplace scan 文件数。 |
 | `plugins/codex-wakeflow/assets/` | Marketplace 和插件展示资源。 |
 | `test/` | 开发期回归测试，不进入 marketplace 扫描面。 |
 | `docs/` | 开发期规划和架构文档，不进入插件 artifact。 |
 
-详细命令说明在 [scripts/README.md](plugins/codex-wakeflow/scripts/README.md)。顶层 README 解释系统模型；
-script README 是操作者手册。
+后端/源码维护命令说明在 [scripts/README.md](plugins/codex-wakeflow/scripts/README.md)。
+已安装总控使用 MCP tools 与 skills，不把原始脚本当作操作入口。
 
 ## 设计原则
 

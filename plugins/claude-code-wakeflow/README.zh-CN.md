@@ -6,7 +6,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Wakeflow 把一个本地 Claude Code 工作区变成有纪律的控制系统：一个总控窗口、
+Wakeflow 把一个本地 Claude Code 工作区变成有纪律的控制系统：每个 active demand 一条由总控负责的闭环、
 多个聚焦的仓库窗口、明确的 state root、轻量 delivery envelope，以及基于证据的验收。总控以闭环方式运行这套系统——规划、派发、收集证据、审查、决策、循环往复——并记录每一步，整个过程事后可审计。
 
 </div>
@@ -54,8 +54,8 @@ Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环�
 
 ### 第一层 —— 舰队(你看到的)
 
-一个 tmux 会话承载全部工作。每个窗口都是常驻的交互式 Claude Code 会话,
-绑定唯一职责;状态栏一眼看清谁在干什么:
+基础舰队位于配置的 tmux session，每个 demand pod 另有独立 tmux session。每个窗口
+都是绑定唯一职责的交互式 Claude Code 会话；状态栏一眼看清谁在干什么：
 
 ```text
 [wakeflow]  1:Design   >> 2:Controller   3:RepoA  +  4:RepoB   5:Test   6:zsh
@@ -74,10 +74,11 @@ Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环�
 | Controller(总控) | 目标、派发、证据评审、验收 | `max` |
 | Design | 澄清需求、重设非 bug 结果偏差方案、准备交接 | `xhigh` |
 | 仓库窗口 | 只在一个仓库内实现 | `xhigh` |
-| Test | 仓库自己做不了的真实场景验证 | `xhigh` |
+| Test | 总控验收并完成自身验证后，只探索获批真实环境边界中的隐藏 bug | `xhigh` |
 
-每个窗格底部的 statusline 实时显示服务模型与窗口身份(`Fable 5 . RepoA`),
-纯文本无图标。窗口跨重启存活:同一会话恢复,完整上下文不丢。
+每个窗格底部的 statusline 以纯文本显示实时服务模型与窗口身份。tmux 窗口不会跨机器
+重启存活；`launch-all` 或 `launch-window --resume` 会根据已注册 Claude session id
+重新创建窗口，再恢复对应会话。
 
 ### 第二层 —— 闭环(工作如何流动)
 
@@ -85,8 +86,8 @@ Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环�
 每个需求走同一条闭环:
 
 ```text
- 1 init       总控创建需求 state root                       (未认领)
- 2 claim      第一个驱动命令把它绑定到一个平台              (codex | claude)
+ 1 init       底层 state init 创建 demand root              (未认领)
+ 2 claim      公共 create 或底层 root 首次驱动时绑定宿主      (codex | claude)
  3 add task   任务包写明目标窗口与边界
  4 dispatch   写信封 -> 窗口上锁 -> prompt 粘贴进窗格
  5 work       目标窗口在自己的仓库边界内执行
@@ -126,7 +127,8 @@ Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环�
 
 ### 谁能决定什么(信任模型)
 
-- 脚本与 MCP 工具负责创建、校验、记录机器数据;它们不验收、不扩权、不替产品做决定。
+- 脚本与 MCP 工具负责创建、校验、记录机器数据；它们不会自行选择验收、扩权或替产品做决定，
+  只会持久化总控的显式决策。
 - 目标窗口只执行被派发的任务包并回报证据。
 - 总控是唯一的验收权威。
 - 产品决定属于用户。`bypassPermissions` 永不默认开启:只有用户显式同意后才写进
@@ -165,12 +167,13 @@ Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环�
 | Surface | 内容 |
 | --- | --- |
 | MCP server | `.mcp.json` 启动 `node ${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs`，无 `node_modules` 依赖的 standalone server。 |
-| Skills | `wakeflow-controller`、`wakeflow-target`、`wakeflow-governance` 操作手册。 |
+| Skills | `wakeflow-controller`、`wakeflow-target`、`wakeflow-target-craft`、`wakeflow-governance` 操作手册。 |
 | Slash commands | `/wakeflow:init`、`/wakeflow:check`、`/wakeflow:windows`、`/wakeflow:status`、`/wakeflow:dispatch`、`/wakeflow:review`、`/wakeflow:unattended`。 |
-| Host transport helper | `scripts/lib/wakeflow-claude-host.mjs`。舰队：`preflight`、`ensure-server`、`launch-window`、`launch-all`、`replace-all`、`retitle`、`arrange-windows`、`attach-window`、`window-status`、`check-workspace`；投递：`deliver`（主路径）、`send`、`readback`、`release-lock`、`wait-results`、`activity-monitor`；策略：`seed-permissions`、`set-unattended`、`stamp-runtime`；跨需求：`stream-open/close/list`、`pod-open/close/list`。 |
+| Host transport helper | `scripts/lib/wakeflow-claude-host.mjs`。舰队：`preflight`、`ensure-server`、`launch-window`、`launch-all`、`replace-all`、`retitle`、`arrange-windows`、`window-status`、`check-workspace`；投递：`deliver`（主路径）、`send`、`readback`、`wait-results`、`activity-monitor`；策略：`seed-permissions`、`set-unattended`、`stamp-runtime`；跨需求：`stream-open`、`stream-close`、`stream-list`、`pod-open`、`pod-close`、`pod-list`。 |
 
-helper 依赖 tmux。初始化会先运行 `preflight`：缺少 tmux 时，在获得用户一次明确
-同意后用 `brew install tmux` 安装，遇到临时 bottle 错误会重试一次。
+helper 依赖 tmux。`preflight` 只报告可用性与建议安装命令；缺少 tmux 时，初始化
+命令先取得一次明确用户同意，再由 Claude Code 执行 `brew install tmux`，遇到临时
+bottle 错误可重试一次。
 
 ## 快速开始
 
@@ -209,13 +212,18 @@ helper 依赖 tmux。初始化会先运行 `preflight`：缺少 tmux 时，在�
 Wakeflow 是一个强大的本地自动化插件。安装前请清楚它在你机器上做什么——没有任何隐藏:
 
 - **运行一个本地 MCP server**(`node mcp/server.cjs`):独立、无依赖的 Node 进程,读写工作区状态文件,自身不发任何网络请求。
-- **拉起 tmux 会话和交互式 `claude` 窗口**:总控和每个工作窗口都是真实的 `claude` CLI 会话,住在一个 tmux session 里。Wakeflow 通过自带的 host helper 创建、恢复、替换、排版它们。
+- **拉起 tmux 会话和交互式 `claude` 窗口**：基础舰队使用配置的 tmux session，每个 demand pod 使用另一 session。Wakeflow 通过自带 host helper 创建、恢复、替换、排版这些真实 `claude` CLI 会话。
 - **会跑这些 shell 命令**:`node`、`tmux`、`git`、`brew`——最后这个仅在缺 tmux 时、经你一次显式同意后 `brew install tmux`。
 - **权限模型——默认安全**:工作窗口默认 `acceptEdits`(Claude Code 在风险动作前仍会询问)。完全无人值守的 `bypassPermissions`(无提示)**仅显式开启**:工作区通过 `/wakeflow:unattended on` 主动启用,选择记录在 `wakeflow.config.json`,只有这条被记录的同意才让 helper 自动确认启动对话框。无人值守模式下的安全边界是仓库 worktree、`CLAUDE.md` 闸门、Wakeflow 状态机。
 - **本地优先、无遥测**:真实 session/thread id 只存在 `.wakeflow-local/` 下,绝不写入受版本控制的文件、prompt,也不外发。需求、证据、账本都留在你的工作区。
-- **平台**:macOS 优先(tmux + `brew` + iTerm2)。tmux 核心理论上可在 Linux 运行但尚未验证。
+- **平台**：macOS 优先（tmux；缺失 tmux 时文档安装路径使用 Homebrew）。tmux 核心理论上可在 Linux 运行但尚未验证。
 
-你始终掌控:脚本和 MCP 工具只创建、校验、记录机器数据——不验收、不扩权、不替产品做决定。总控是唯一验收权威,产品决定属于你。
+你始终掌控：脚本和 MCP 工具只创建、校验、记录机器数据；它们不会自行选择验收、扩权或替产品做决定，
+只会持久化总控的显式决策。
+总控是唯一验收权威，必须在 Test 开始前完成自己的功能验证，且所有现存非 Test target
+都已 accepted。Test 遵守冻结目标与获批 Test card（`controllerSelfChecks`、获批计划、
+allowed skills、setup policy、attempt bound），不能自创目标、gate、环境、skill 或方法；
+progressive-chain-validation 只有被显式列出时才能使用。产品决定属于你。
 
 ## 窗口模型
 
@@ -253,13 +261,13 @@ Wakeflow thread id 就是该窗口的 Claude Code session id，跨 resume 保持
 把 return 路由回该 pod 自己的总控。`wait-results --group <id>` 只作为脚本化
 流程里的显式同步等待，正常投递不会自动启用它。
 
-**恢复。** tmux 窗口挂掉时，已注册的 session id 仍然是 thread id：先运行
-`launch-window --resume --session-id <已注册 id> --replace` 交互式复活同一会话（订阅额度不变）。`claude -p --resume` 仅作最后手段：2026-06-15 起 `claude -p` 走独立的 Agent SDK 额度按 API 价计费。如确需 headless，再用该 id 运行
-`launch-window --replace`。
+**恢复。** tmux window 挂掉或机器重启后，已注册 session id 仍是 thread id。
+用 `launch-window --resume --session-id <已注册 id> --replace` 交互式恢复同一会话；
+用 `launch-all` 恢复所有已注册的基础窗口。只有交互式恢复不可用时，才使用显式
+`headless-recovery` send adapter 作为最后手段；它不是正常舰队路径，且仍要求 readback 证据。
 
 **观察。** 开一个新终端窗口/标签，运行 `tmux attach -t <session>`（默认
-`wakeflow`）；helper 的 `attach-window --window <name>` 会打印这条指令。这一条
-命令就是唯一受支持的进入方式——不提供程序化开标签或其他 attach 变体。
+`wakeflow`）。这一条命令就是唯一受支持的进入方式——不提供程序化开标签或其他 attach 变体。
 
 **无人值守权限。** 工作窗口默认 `acceptEdits`;舰队级模式记录在
 `hosts.claude-code.permissionMode`，只能通过显式、留痕的决定切换
@@ -274,7 +282,7 @@ Wakeflow thread id 就是该窗口的 Claude Code session id，跨 resume 保持
 个需求以 pod 并行：
 
 - 一个需求 = 一个 pod：自己的 `Controller__<pod>`、按仓库的 isolation worktree
-  窗口（`<repo>__<pod>`，分支 `<demandKey>/<pod>`）和自己的 `Test__<pod>`，
+  窗口（`<repo>__<pod>`，分支 `<sanitized-demand-key>/pod`）和自己的 `Test__<pod>`，
   全部在自己的 tmux session 里。整个 pod 共用这条需求的一套 worktree——
   每个窗口（含 Test）都在这套 worktree 里工作和验证，绝不碰主检出。
   pod 之间互不感知。
@@ -418,13 +426,13 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools，工具名与 
 
 | 需求 | MCP tools |
 | --- | --- |
-| 设置和工作区发现 | `wakeflow_initialize_workspace` |
-| 职责窗口替换 | `wakeflow_replace_windows`（单个传 `window`，多个传 `windows`） |
-| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_next_work`, `wakeflow_render_progress` |
+| 设置与窗口注册 | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
+| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
+| 候选扫描与隔离 pod | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_close`, `wakeflow_pod_list` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design 和 Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| 归档、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_prune_runtime`、`wakeflow_verify`、`wakeflow_view`（scope trace） |
+| 归档、视图、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_view`（task-ledger/window/focus/trace/storage）、`wakeflow_prune_runtime`、`wakeflow_verify` |
 | 宿主归属与窗口锁 | `wakeflow_adopt_demand_host`、`wakeflow_release_window_lock` |
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：
@@ -472,10 +480,10 @@ Wakeflow 源仓库只跟踪可复用能力。产品代码、项目特定 active 
 - `.wakeflow-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`
 
 `AGENTS.md`（Codex）与 `CLAUDE.md`（Claude Code）在工作区根目录和子目录根
-共存，每个 demand 跨宿主只有一个总控。Demand 创建是宿主中立的
-（`controllerHost: null`）；第一个真正驱动命令会把所有权认领为 `codex`
-或 `claude-code`；非归属宿主的 controller 写操作和投递准备会 fail-closed；
-`--adopt-host` 是显式转移机制。`wakeflow_status` 会在
+共存，每个 demand 跨宿主只有一个总控。公共 `wakeflow_create_demand` 会认领调用宿主；
+只有底层 raw state init 才以 `controllerHost: null` 开始并等待首次驱动。
+非归属宿主的 controller 写操作和投递准备会 fail-closed；`--adopt-host` 是显式转移机制。
+`wakeflow_status` 会在
 `dualHost.demandOwnership` 暴露当前映射。
 
 ## 开发本仓库
@@ -493,12 +501,12 @@ npm test
 
 | Path | 用途 |
 | --- | --- |
-| `.claude-plugin/plugin.json` | 插件 manifest 与 MCP server 引用。 |
+| `.claude-plugin/plugin.json` | 插件 metadata；`mcpServers` 指向 `.mcp.json`。 |
 | `.mcp.json` | MCP server wiring（`node ${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs`）。 |
 | `mcp/server.cjs` | 无 `node_modules` 依赖的 standalone MCP server entrypoint。 |
 | `lib/` | MCP 工具定义、runtime helpers、进程与 trace 支持。 |
 | `scripts/` | 随插件发布的 setup、state、delivery、intake、archive、validation 和 CLI runtime。 |
-| `skills/` | 随插件发布的 controller、target 和 governance 操作手册。 |
+| `skills/` | 随插件发布的 controller、target protocol、target craft 与 governance 操作手册。 |
 | `commands/` | `/wakeflow:*` slash command 定义。 |
 | `templates/wakeflow-template-bundle.json` | 已安装工作区 starter documents 和 support surfaces 的 bundle，用于控制 marketplace scan 文件数。 |
 | `assets/` | Marketplace 和插件展示资源。 |

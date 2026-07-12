@@ -7,7 +7,7 @@ A disciplined control loop for multi-window agent work — every step traced, ev
 [English](README.md) | [Simplified Chinese](README.zh-CN.md)
 
 Wakeflow turns a local Codex workspace into a disciplined controller system:
-one controller window, focused repository windows, explicit state roots,
+a controller-owned loop for each active demand, focused repository windows, explicit state roots,
 compact direct-thread delivery, and evidence-based acceptance. The controller runs this as a closed loop — plan, dispatch, collect evidence, review, decide, repeat — and records every step, so the whole run is auditable after the fact.
 
 </div>
@@ -75,8 +75,9 @@ flowchart TD
 ```
 
 The controller is the only acceptance authority. Scripts and MCP tools create,
-validate, summarize, and record machine data, but they do not widen scope,
-decide product behavior, or declare a task complete.
+validate, summarize, and record machine data, but they do not choose acceptance,
+widen scope, or decide product behavior on their own; they only persist an
+explicit controller decision.
 
 ## Install Wakeflow
 
@@ -95,7 +96,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.10/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.12/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository
@@ -264,8 +265,14 @@ Design and Test are supporting roles:
   also redesigns non-bug outcome mismatches when implementation evidence is
   valid but the user-visible effect is still wrong. It does not dispatch
   implementation or become product truth by itself.
-- **Test** is reserved for real-scenario evidence that the controller or product
-  repository cannot safely reproduce alone.
+- **Test** starts only after every existing non-Test target is accepted and the
+  controller has completed its own functional validation. It then explores the
+  approved real-environment boundary for hidden bugs. It cannot invent a goal,
+  gate, environment, skill, or method. The Test card freezes
+  `controllerSelfChecks`, approved plan, allowed skills, setup policy, and
+  attempt bound; progressive-chain-validation is usable only when explicitly
+  listed. Test-only reproduction/environment diagnostics remain valid when
+  there are no non-Test targets.
 
 ## Demand Pods (multi-demand parallelism)
 
@@ -275,7 +282,7 @@ self-sequences its items); across demands, up to `maxActiveDemands` (default
 2, `wakeflow.config.json`) demands run side by side as pods:
 
 - One demand = one pod: its own `Controller__<pod>`, per-repo isolation
-  worktree windows (`<repo>__<pod>` on branch `<demandKey>/<pod>`), and its
+  worktree windows (`<repo>__<pod>` on branch `<sanitized-demand-key>/pod`), and its
   own `Test__<pod>` — a per-demand thread set. The WHOLE pod shares the
   demand's one worktree set: every window, Test included, works and verifies
   inside those worktrees, never on a main checkout. Pods are mutually unaware.
@@ -315,11 +322,10 @@ Core rules:
   turn stops. It does not sleep or poll in the same turn.
 - Keep-live support is runtime assistance only. It is not task logic, transport
   authority, or acceptance evidence.
-- Demand creation is host-neutral: `wakeflow_create_demand` writes
-  `controllerHost: null`, so Codex and Claude Code can both create or import
-  demand material without taking ownership.
-- The first real driving command claims the demand for its platform by writing
-  `controllerHost: "codex"` or `controllerHost: "claude-code"`.
+- Raw `wakeflow-state init` is host-neutral and writes `controllerHost: null`.
+  The public `wakeflow_create_demand` wrapper immediately adopts the new root
+  for the calling host; an independently imported raw root remains unclaimed
+  until its first driving command.
 - After a demand is owned by one host, the other host fails closed on
   controller mutations and dispatch preparation unless ownership is explicitly
   transferred with `--adopt-host`.
@@ -344,13 +350,14 @@ Primary tool groups:
 
 | Need | MCP tools |
 | --- | --- |
-| Setup and workspace discovery | `wakeflow_initialize_workspace` |
-| Responsibility window replacement | `wakeflow_replace_windows` (one via `window`, many via `windows`) |
-| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
+| Setup and window registration | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
+| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
+| Candidate scan and isolated pods | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_close`, `wakeflow_pod_list` |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| Archive, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs), `wakeflow_prune_runtime`, `wakeflow_verify`, `wakeflow_view` (scope trace) |
+| Archive, views, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs), `wakeflow_view` (task-ledger/window/focus/trace/storage), `wakeflow_prune_runtime`, `wakeflow_verify` |
+| Host ownership and locks | `wakeflow_adopt_demand_host`, `wakeflow_release_window_lock` |
 
 Public MCP tools are for outer agent workflows. Target closeout is deliberately
 split: record a target result, review readiness, prepare a controller-return
@@ -410,8 +417,9 @@ path and `wakeflow_verify` reports the migration state.
 
 `AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code) may coexist at the
 workspace and child roots. Each demand still has exactly one controller host:
-creation is neutral, the first driving command claims ownership, non-owning
-hosts fail closed, and `--adopt-host` is the explicit transfer mechanism.
+public creation adopts the calling host, raw state init remains neutral until
+first drive, non-owning hosts fail closed, and `--adopt-host` is the explicit
+transfer mechanism.
 
 ## Marketplace Release
 
@@ -457,18 +465,19 @@ Common source areas:
 
 | Path | Purpose |
 | --- | --- |
-| `.codex-plugin/plugin.json` | Plugin manifest and MCP wiring. |
+| `.codex-plugin/plugin.json` | Plugin metadata; its `mcpServers` field points at `.mcp.json`. |
+| `.mcp.json` | MCP process wiring (`node ./mcp/server.cjs` from the plugin root). |
 | `mcp/server.cjs` | Standalone MCP server entrypoint with no `node_modules` dependency. |
 | `scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime shipped with the plugin. |
-| `skills/` | Controller, target, governance, and validation operating manuals shipped with the plugin. |
+| `skills/` | Controller, target protocol, target craft, and governance manuals shipped with the plugin. |
 | `templates/wakeflow-template-bundle.json` | Installed workspace starter documents and support surfaces, bundled for marketplace scan size. |
 | `assets/` | Marketplace and plugin presentation assets. |
 | `../../test/` | Development-only regression tests kept outside the marketplace scan surface. |
 | `../../docs/` | Development planning and architecture notes kept outside the plugin artifact. |
 
-Detailed command references live in [scripts/README.md](scripts/README.md).
-The top-level README explains the system model; the script README is the
-operator manual.
+Backend/source-maintenance command references live in
+[scripts/README.md](scripts/README.md). Installed controllers use MCP tools and
+skills rather than treating raw scripts as their operator interface.
 
 ## Design Principles
 

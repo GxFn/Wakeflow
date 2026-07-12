@@ -3,6 +3,10 @@
 This directory stores Wakeflow-owned scripts for coordination,
 verification, documentation maintenance, and cross-repository guardrails.
 
+This is the backend/source-maintenance catalog. Installed workspace
+controllers use Wakeflow MCP tools and skills; they should not infer script
+paths or flags from this file.
+
 Scripts in this directory should:
 
 - operate from the workspace root unless documented otherwise;
@@ -55,7 +59,7 @@ Current scripts:
 
 - `wakeflow-cli.mjs`: command-style aggregator for common Wakeflow
   workflows. It maps friendly subcommands such as `status`, `verify`, `sync`,
-  `design`, `intake`, `runtime`, `install`, `scripts`, `loop`, and `next-work`
+  `intake`, `runtime`, `install`, `scripts`, `loop`, and `next-work`
   onto the current scripts without replacing their dry-run / write gates. Use
   `--print` to inspect the exact commands before running them.
 - `wakeflow-state.mjs`: state-root manager. `init` creates a per-demand
@@ -228,31 +232,20 @@ Host transport helper:
 `scripts/lib/wakeflow-claude-host.mjs` is the tmux transport for tmux-resident
 Claude Code windows. The agent runs it directly via Bash as
 `node scripts/lib/wakeflow-claude-host.mjs <command> --root <workspace>` with
-JSON output; it is a script, not an MCP tool. Its nine commands:
+JSON output; it is a script, not an MCP tool. `help` is the command source of
+truth. The current operational commands are grouped below:
 
-- `preflight`: report tmux/claude/brew availability and the install
-  recommendation (ask the user once before `brew install tmux`).
-- `ensure-server`: create the wakeflow tmux server session when missing.
-- `launch-window`: create one tmux-resident `claude --session-id` window
-  (`--window --cwd [--title] [--session-id] [--prompt-file] [--claude-arg ...]
-  [--replace]`), paste the entry-sync prompt, store the window-host binding,
-  and return the generated session id.
-- `retitle`: rename the tmux window that hosts a Wakeflow window
-  (`--window --title`).
-- `send`: paste a prompt file into a window's pane under the shared per-window
-  delivery lock and return pane readback evidence
-  (`--window --prompt-file [--delivery-id] [--lock-ttl-sec] [--force]`).
-- `readback`: capture the current pane tail for evidence (`--window [--lines]`).
-- `release-lock`: remove the shared in-flight delivery lock for a window.
-- `wait-results`: block until target results exist for a dispatch group
-- `arrange-windows`: rename managed windows to short tabs and order them Design, controller, products, Test; unmanaged windows trail.
-- `check-workspace`: read-only health check for an existing workspace (config hosts block, managed CLAUDE.md surfaces, registry/binding/liveness, permission seeds, version stamp).
-- `stamp-runtime`: record the converging plugin version in hosts/claude-code/runtime-meta.json (`--write`).
-- `seed-permissions`: merge wakeflow automation allowlists into .claude/settings.json at the workspace root and every configured repository (`--write`).
-  (`--group [--target <window>...|--expect N] [--timeout-sec] [--poll-ms]`);
-  run it as a background task, it releases finished windows' locks.
-- `attach-window`: print the single supported attach instruction for a
-  window (open a new terminal, `tmux attach -t <session>`) (`--window`).
+- Fleet/lifecycle: `preflight`, `ensure-server`, `activity-monitor`,
+  `launch-window`, `launch-all`, `replace-all`, `retitle`, `arrange-windows`,
+  `window-status`, `check-workspace`, `stamp-runtime`.
+- Delivery: `deliver`, `send`, `readback`, `wait-results`.
+- Policy: `seed-permissions`, `set-unattended`.
+- Cross-demand isolation: `stream-open`, `stream-close`, `stream-list`,
+  `pod-open`, `pod-close`, `pod-list`.
+
+Use MCP `wakeflow_release_window_lock` for deliberate lock recovery. To watch
+the fleet, open a terminal and run `tmux attach -t <session>`; there is no
+helper attach command.
 
 Workspace script tests:
 
@@ -263,8 +256,8 @@ Installed marketplace artifacts do not include this test directory.
 
 ## Common Routes
 
-Use `wakeflow-cli.mjs` as the short entrypoint for ordinary work, then fall
-back to the named script only when a narrower check is needed. For the full
+Use `wakeflow-cli.mjs` as the short entrypoint for backend/source-maintenance
+work, then fall back to the named script only when a narrower check is needed. For the full
 command catalog and selection table, read
 `skills/wakeflow-governance/references/script-pipeline.md`.
 
@@ -273,12 +266,10 @@ command catalog and selection table, read
 | Current repo / closed-loop health | `node scripts/wakeflow-cli.mjs status` |
 | Full Wakeflow verification | `node scripts/wakeflow-cli.mjs verify` |
 | Render a controller state-root progress doc | `node scripts/wakeflow-cli.mjs sync --state-root <state-root> --write` |
-| Design handoff discovery / validation | `node scripts/wakeflow-cli.mjs design --id <design-key> --json` |
-| Attach Design/Test machine intake to a state root | `node scripts/wakeflow-cli.mjs intake <design-handoff|test-card> ... --state-root <state-root>` |
+| Attach Test machine intake to a state root | `node scripts/wakeflow-cli.mjs intake test-card ... --state-root <state-root>` |
 | Script docs plus script tests | `node scripts/wakeflow-cli.mjs scripts --tests` |
 | Runtime residue read-only check | `node scripts/wakeflow-cli.mjs runtime` |
 | Wakeflow Delivery Loop commands | `node scripts/wakeflow-cli.mjs loop <subcommand> ...` |
-| Ordered independent demand sequence | `node scripts/wakeflow-cli.mjs sequence <status|claim-next|sync-doc> --root .. --manifest <manifest.json> ...` |
 | Scan next controller-ready candidate | `node scripts/wakeflow-cli.mjs next-work --after-completion --json` |
 | Focus a named Design/TODO candidate | `node scripts/wakeflow-cli.mjs next-work --id <design-key> --json` |
 | Sibling install / child CLAUDE.md scope writes | `node scripts/wakeflow-cli.mjs install <subcommand> ...` |

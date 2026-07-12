@@ -7,7 +7,7 @@ A disciplined control loop for multi-window agent work — every step traced, ev
 [English](README.md) | [Simplified Chinese](README.zh-CN.md)
 
 Wakeflow turns a local Claude Code workspace into a disciplined controller
-system: one controller window, focused repository windows, explicit state
+system: a controller-owned loop for each active demand, focused repository windows, explicit state
 roots, compact delivery envelopes, and evidence-based acceptance. The controller runs this as a closed loop — plan, dispatch, collect evidence, review, decide, repeat — and records every step, so the whole run is auditable after the fact.
 
 </div>
@@ -64,8 +64,9 @@ closed loop that moves the work, and a disk layout that survives restarts.
 
 ### Layer 1 — the fleet (what you see)
 
-One tmux session holds the whole operation. Every window is a long-lived
-interactive Claude Code session pinned to one responsibility, and the status
+The baseline fleet lives in the configured tmux session; every demand pod gets
+its own additional tmux session. Each window is an interactive Claude Code
+session pinned to one responsibility, and the status
 bar tells you who is doing what at a glance:
 
 ```text
@@ -86,11 +87,12 @@ bar tells you who is doing what at a glance:
 | Controller | owns goals, dispatch, evidence review, acceptance | `max` |
 | Design | clarifies requirements, redesigns non-bug outcome mismatches, prepares handoffs | `xhigh` |
 | Repo windows | implement inside exactly one repository | `xhigh` |
-| Test | real-scenario verification the repos cannot self-run | `xhigh` |
+| Test | after controller validation, explores only the approved real-environment boundary for hidden bugs | `xhigh` |
 
 Inside every pane a seeded statusline shows the live serving model and the
-window identity (`Fable 5 . RepoA`) in plain text. Windows survive reboots:
-the same session resumes with its full conversation.
+window identity in plain text. tmux windows do not survive a machine reboot;
+`launch-all` or `launch-window --resume` recreates them from registered Claude
+session ids so the corresponding conversations can resume.
 
 ### Layer 2 — the loop (how work moves)
 
@@ -98,8 +100,8 @@ Work is organized into demands: one demand = one goal = one state root on
 disk. Every demand moves through the same closed loop:
 
 ```text
- 1 init       controller creates the demand state root            (unclaimed)
- 2 claim      the first driving command binds it to ONE platform  (codex | claude)
+ 1 init       raw state init creates the demand root               (unclaimed)
+ 2 claim      public create, or first raw-state drive, binds host  (codex | claude)
  3 add task   a task package names the target window and scope
  4 dispatch   envelope written -> window LOCKED -> prompt pasted into the pane
  5 work       the target window executes inside its repository boundary
@@ -143,9 +145,15 @@ appear in tracked files, prompts, or backfill text.
 ### Who decides what (trust model)
 
 - Scripts and MCP tools create, validate, and record machine data; they never
-  accept work, widen scope, or decide product behavior.
+  choose acceptance, widen scope, or decide product behavior on their own.
+  They only persist an explicit controller decision.
 - Target windows execute exactly their dispatched package and report evidence.
-- The controller is the only acceptance authority.
+- The controller is the only acceptance authority and must complete its own
+  functional validation before Test starts. All existing non-Test targets must
+  already be accepted. Test follows the frozen demand goal and approved Test
+  card (`controllerSelfChecks`, approved plan, allowed skills, setup policy,
+  and attempt bound); it cannot invent a goal, gate, environment, skill, or
+  method. progressive-chain-validation is usable only when explicitly listed.
 - The user owns product decisions. `bypassPermissions` is never a silent
   default: it is recorded in `wakeflow.config.json` only after an explicit
   yes, and that recorded consent is what authorizes unattended boot dialogs.
@@ -187,13 +195,14 @@ The plugin ships four coordinated surfaces:
 | Surface | Contents |
 | --- | --- |
 | MCP server | `.mcp.json` starts `node ${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs`, a standalone server with no `node_modules` dependency. |
-| Skills | `wakeflow-controller`, `wakeflow-target`, and `wakeflow-governance` operating manuals. |
+| Skills | `wakeflow-controller`, `wakeflow-target`, `wakeflow-target-craft`, and `wakeflow-governance` operating manuals. |
 | Slash commands | `/wakeflow:init`, `/wakeflow:check`, `/wakeflow:windows`, `/wakeflow:status`, `/wakeflow:dispatch`, `/wakeflow:review`, and `/wakeflow:unattended`. |
-| Host transport helper | `scripts/lib/wakeflow-claude-host.mjs`. Fleet: `preflight`, `ensure-server`, `launch-window`, `launch-all`, `replace-all`, `retitle`, `arrange-windows`, `attach-window`, `window-status`, `check-workspace`. Delivery: `deliver` (primary), `send`, `readback`, `release-lock`, `wait-results`, `activity-monitor`. Policy: `seed-permissions`, `set-unattended`, `stamp-runtime`. Cross-demand: `stream-open/close/list`, `pod-open/close/list`. |
+| Host transport helper | `scripts/lib/wakeflow-claude-host.mjs`. Fleet: `preflight`, `ensure-server`, `launch-window`, `launch-all`, `replace-all`, `retitle`, `arrange-windows`, `window-status`, `check-workspace`. Delivery: `deliver` (primary), `send`, `readback`, `wait-results`, `activity-monitor`. Policy: `seed-permissions`, `set-unattended`, `stamp-runtime`. Cross-demand: `stream-open`, `stream-close`, `stream-list`, `pod-open`, `pod-close`, `pod-list`. |
 
-The helper requires tmux. Initialization runs `preflight`, which installs tmux
-with `brew install tmux` after one explicit user consent when it is missing,
-retrying once on transient bottle errors.
+The helper requires tmux. `preflight` only reports availability and the
+recommended install command. When tmux is missing, the initialization command
+asks once for explicit user consent; Claude Code then runs `brew install tmux`
+and may retry once on a transient bottle error.
 
 ## Quick Start
 
@@ -232,13 +241,16 @@ Mnemonic: **`init` builds it, `windows all` powers it on, `windows` just takes a
 Wakeflow is a powerful local automation plugin. Before installing, understand exactly what it does on your machine — none of it is hidden:
 
 - **Runs a local MCP server** (`node mcp/server.cjs`): a standalone, dependency-free Node process. It reads/writes workspace state files; it makes no network calls of its own.
-- **Spawns tmux sessions and interactive `claude` windows**: the controller and each work window are real `claude` CLI sessions living in one tmux session. Wakeflow creates, resumes, replaces, and arranges them via the bundled host helper.
+- **Spawns tmux sessions and interactive `claude` windows**: the baseline fleet uses the configured tmux session; each demand pod uses another session. Wakeflow creates, resumes, replaces, and arranges these real `claude` CLI sessions via the bundled host helper.
 - **Runs these shell commands**: `node`, `tmux`, `git`, and `brew` — the last only to `brew install tmux` once, after a single explicit consent, when tmux is missing.
 - **Permission model — safe by default**: work windows ship with `acceptEdits` (Claude Code still prompts before risky actions). Fully unattended `bypassPermissions` (no prompts) is **opt-in only**: a workspace enables it explicitly via `/wakeflow:unattended on`, that choice is recorded in `wakeflow.config.json`, and only that recorded consent lets the helper auto-confirm the boot dialog. The safety boundary in unattended mode is the repository worktree, the `CLAUDE.md` gates, and the Wakeflow state machine.
 - **Local-first, no telemetry**: real session/thread ids live only under `.wakeflow-local/` and are never written to tracked files, prompts, or sent anywhere. Demands, evidence, and ledgers stay in your workspace.
-- **Platform**: macOS-first (tmux + `brew` + iTerm2). The tmux core should work on Linux but is not yet verified there.
+- **Platform**: macOS-first (tmux; Homebrew is only the documented install path when tmux is missing). The tmux core should work on Linux but is not yet verified there.
 
-You remain in control: scripts and MCP tools create, validate, and record machine data — they never accept work, widen scope, or decide product behavior. The controller is the only acceptance authority, and product decisions are yours.
+You remain in control: scripts and MCP tools create, validate, and record
+machine data; they never choose acceptance, widen scope, or decide product
+behavior on their own. They only persist an explicit controller decision. The
+controller is the acceptance authority, and product decisions are yours.
 
 ## Window Model
 
@@ -282,14 +294,17 @@ the envelope's stamped `controllerWindow` routes the return to the pod's own
 controller. `wait-results --group <id>` is available only for explicit
 synchronous waits in scripted flows; normal dispatch does not arm it.
 
-**Recovery.** When a tmux window dies, the registered session id remains the
-thread id: relaunch the SAME session interactively with `launch-window --resume --session-id <registered id> --replace` (same id; subscription pool). Headless `claude -p --resume` is a last resort that bills the separate Agent SDK credit from 2026-06-15; if used, then
-`launch-window --replace` with that id.
+**Recovery.** When a tmux window dies or the machine reboots, the registered
+session id remains the thread id. Relaunch the same conversation interactively
+with `launch-window --resume --session-id <registered id> --replace`; use
+`launch-all` to restore every registered baseline window. An explicit
+`headless-recovery` send adapter exists as a last resort when interactive
+relaunch is impossible; it is not the normal fleet path and still requires
+readback evidence.
 
 **Watching.** Open a new terminal window/tab and run `tmux attach -t
-<session>` (default `wakeflow`); the helper's `attach-window --window <name>`
-prints this exact instruction for a window. That single command is the
-supported path — no programmatic tab-opening or alternative attach variants.
+<session>` (default `wakeflow`). That single command is the supported path —
+no programmatic tab-opening or alternative attach variants.
 
 **Unattended permissions.** Work windows ship with `acceptEdits`; the
 fleet-wide mode lives in `hosts.claude-code.permissionMode` and changes only
@@ -307,7 +322,7 @@ self-sequences its items); across demands, up to `maxActiveDemands` (default
 2, `wakeflow.config.json`) demands run side by side as pods:
 
 - One demand = one pod: its own `Controller__<pod>`, per-repo isolation
-  worktree windows (`<repo>__<pod>` on branch `<demandKey>/<pod>`), and its
+  worktree windows (`<repo>__<pod>` on branch `<sanitized-demand-key>/pod`), and its
   own `Test__<pod>`, all in its own tmux session. The WHOLE pod shares the
   demand's one worktree set — every window, Test included, works and verifies
   inside those worktrees, never on a main checkout. Pods are mutually unaware.
@@ -476,13 +491,13 @@ Primary tool groups:
 
 | Need | MCP tools |
 | --- | --- |
-| Setup and workspace discovery | `wakeflow_initialize_workspace` |
-| Responsibility window replacement | `wakeflow_replace_windows` (one via `window`, many via `windows`) |
-| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_next_work`, `wakeflow_render_progress` |
+| Setup and window registration | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
+| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
+| Candidate scan and isolated pods | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_close`, `wakeflow_pod_list` |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| Archive, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs), `wakeflow_prune_runtime`, `wakeflow_verify`, `wakeflow_view` (scope trace) |
+| Archive, views, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs), `wakeflow_view` (task-ledger/window/focus/trace/storage), `wakeflow_prune_runtime`, `wakeflow_verify` |
 | Host ownership and locks | `wakeflow_adopt_demand_host`, `wakeflow_release_window_lock` |
 
 Public MCP tools are for outer agent workflows. Target closeout is
@@ -536,11 +551,11 @@ Host-scoped runtime is separated per host:
 - `.wakeflow-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`
 
 `AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code) coexist at the workspace
-and child roots, and each demand has exactly one controller across hosts.
-Demand creation is host-neutral (`controllerHost: null`); the first real
-driving command claims ownership for `codex` or `claude-code`; non-owning
-hosts fail closed on controller mutations and dispatch preparation; and
-`--adopt-host` is the explicit transfer mechanism. `wakeflow_status` exposes
+and child roots, and each demand has exactly one controller across hosts. The
+public `wakeflow_create_demand` adopts the calling host; only raw state init
+starts with `controllerHost: null` and waits for a first drive. Non-owning hosts
+fail closed on controller mutations and dispatch preparation; `--adopt-host`
+is the explicit transfer mechanism. `wakeflow_status` exposes
 the current mapping under `dualHost.demandOwnership`.
 
 ## Working In This Repository
@@ -558,12 +573,12 @@ Common source areas inside this plugin artifact:
 
 | Path | Purpose |
 | --- | --- |
-| `.claude-plugin/plugin.json` | Plugin manifest with the MCP server reference. |
+| `.claude-plugin/plugin.json` | Plugin metadata; its `mcpServers` field points at `.mcp.json`. |
 | `.mcp.json` | MCP server wiring (`node ${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs`). |
 | `mcp/server.cjs` | Standalone MCP server entrypoint with no `node_modules` dependency. |
 | `lib/` | MCP tool definitions, runtime helpers, process and trace support. |
 | `scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime shipped with the plugin. |
-| `skills/` | Controller, target, and governance operating manuals shipped with the plugin. |
+| `skills/` | Controller, target protocol, target craft, and governance manuals shipped with the plugin. |
 | `commands/` | Slash command definitions for `/wakeflow:*`. |
 | `templates/wakeflow-template-bundle.json` | Installed workspace starter documents and support surfaces, bundled for marketplace scan size. |
 | `assets/` | Marketplace and plugin presentation assets. |

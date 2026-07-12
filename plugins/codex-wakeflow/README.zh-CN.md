@@ -6,7 +6,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Wakeflow 把一个本地 Codex 工作区变成有纪律的控制系统：一个总控窗口、
+Wakeflow 把一个本地 Codex 工作区变成有纪律的控制系统：每个 active demand 一条由总控负责的闭环、
 多个聚焦的仓库窗口、明确的 state root、轻量 direct-thread 投递，以及基于证据的验收。总控以闭环方式运行这套系统——规划、派发、收集证据、审查、决策、循环往复——并记录每一步，整个过程事后可审计。
 
 </div>
@@ -65,8 +65,8 @@ flowchart TD
   Controller --> Ledger["wakeflow-ledger<br/>长期项目记录"]
 ```
 
-总控是唯一验收权威。脚本和 MCP 工具可以创建、验证、汇总、记录机器数据，但不能扩大范围、
-决定产品行为，或宣称任务已经完成。
+总控是唯一验收权威。脚本和 MCP 工具可以创建、验证、汇总、记录机器数据，但不能自行
+选择验收、扩大范围或决定产品行为；它们只持久化总控的显式决策。
 
 ## 安装 Wakeflow
 
@@ -84,7 +84,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.7.10/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.12/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -227,7 +227,11 @@ Wakeflow 的正常循环刻意保持小而清晰：
 Design 和 Test 是支持角色：
 
 - **Design** 澄清需求、选项、风险和 handoff 候选。当实现证据有效但用户可见效果仍不对、且不是明确 bug 时，Design 负责重新设计真实调整方案。Design 不投递实现，也不会自动成为产品真相。
-- **Test** 只用于总控或产品仓库无法安全复现的真实场景证据。
+- **Test** 只有在所有现存非 Test target accepted、总控完成自身功能验证后才能开始；
+  它只探索获批真实环境边界中的隐藏 bug，不能自创目标、gate、环境、skill 或方法。
+  Test card 会冻结 `controllerSelfChecks`、获批计划、allowed skills、setup policy 与
+  attempt bound；progressive-chain-validation 只有被显式列出时才能使用。没有非 Test
+  target 的 Test-only 复现/环境诊断仍然有效。
 
 ## Demand Pods（多需求并行）
 
@@ -236,7 +240,7 @@ Design 和 Test 是支持角色：
 个需求以 pod 并行：
 
 - 一个需求 = 一个 pod：自己的 `Controller__<pod>`、按仓库的 isolation worktree
-  窗口（`<repo>__<pod>`，分支 `<demandKey>/<pod>`）和自己的 `Test__<pod>`——
+  窗口（`<repo>__<pod>`，分支 `<sanitized-demand-key>/pod`）和自己的 `Test__<pod>`——
   一套按需求划分的线程组。整个 pod 共用这条需求的一套 worktree：每个窗口
   （含 Test）都在这套 worktree 里工作和验证，绝不碰主检出。pod 之间互不感知。
 - 用 `wakeflow_pod_open` 打开（幂等——重跑即续开）：它创建 worktree 和 overlay
@@ -266,11 +270,9 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 - `per-target` 可以每个 target 唤醒一次 controller，同时保留 group snapshot。
 - 一次真实发送被记录为 `sent` 且有 readback 证据后，总控本轮停止，不在同一轮 sleep 或 poll。
 - Keep-live 只是运行时辅助，不是任务逻辑、传输权威或验收证据。
-- Demand 创建是宿主中立的：`wakeflow_create_demand` 写入
-  `controllerHost: null`，所以 Codex 和 Claude Code 都可以创建或导入需求材料，
-  但不会因此抢占控制权。
-- 第一个真正驱动需求的命令会把 demand 绑定到当前平台，写入
-  `controllerHost: "codex"` 或 `controllerHost: "claude-code"`。
+- 底层 `wakeflow-state init` 是宿主中立的，写入 `controllerHost: null`。
+  公共 `wakeflow_create_demand` 会立即把新 root 认领给调用宿主；独立导入的底层
+  raw root 则保持未认领，直到第一次驱动命令。
 - demand 归属于某个宿主后，另一个宿主的 controller 写操作和投递准备会 fail-closed；
   只有显式 `--adopt-host` 才能转移控制权。
 - 最多 `maxActiveDemands`（默认 2，顶层 `wakeflow.config.json`）个需求可以同时 active；超出容量的 claim 会 fail-closed，直到有需求完成并归档。`wakeflow_next_work` 会报告 `activeDemands` 列表和 `demandCapacity`。
@@ -290,13 +292,14 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 
 | 需求 | MCP tools |
 | --- | --- |
-| 设置和工作区发现 | `wakeflow_initialize_workspace` |
-| 职责窗口替换 | `wakeflow_replace_windows`（单个传 `window`，多个传 `windows`） |
-| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_next_work` |
+| 设置与窗口注册 | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
+| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
+| 候选扫描与隔离 pod | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_close`, `wakeflow_pod_list` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design 和 Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| 归档、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_prune_runtime`、`wakeflow_verify`、`wakeflow_view`（scope trace） |
+| 归档、视图、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_view`（task-ledger/window/focus/trace/storage）、`wakeflow_prune_runtime`、`wakeflow_verify` |
+| 宿主归属与窗口锁 | `wakeflow_adopt_demand_host`、`wakeflow_release_window_lock` |
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：
 记录 target result、审查 readiness、在策略允许时准备 controller-return envelope、
@@ -334,8 +337,8 @@ Claude Code 运行时位于：
 fallback 被读取；新注册写入宿主独立路径，`wakeflow_verify` 会报告迁移状态。
 
 `AGENTS.md`（Codex）与 `CLAUDE.md`（Claude Code）可以在工作区根目录和子目录根
-共存。每个 demand 仍然只有一个 controller host：创建中立，第一次驱动命令认领，
-非归属宿主 fail-closed，`--adopt-host` 是显式转移机制。
+共存。每个 demand 仍然只有一个 controller host：公共 create 立即认领调用宿主，
+底层 raw init 保持中立直到首次驱动；非归属宿主 fail-closed，`--adopt-host` 是显式转移机制。
 
 ## Marketplace 发布
 
@@ -375,17 +378,18 @@ npm test
 
 | Path | 用途 |
 | --- | --- |
-| `.codex-plugin/plugin.json` | 插件 manifest 和 MCP wiring。 |
+| `.codex-plugin/plugin.json` | 插件 metadata；`mcpServers` 指向 `.mcp.json`。 |
+| `.mcp.json` | MCP 进程 wiring（从插件根运行 `node ./mcp/server.cjs`）。 |
 | `mcp/server.cjs` | 无 `node_modules` 依赖的 standalone MCP server entrypoint。 |
 | `scripts/` | 随插件发布的 setup、state、delivery、intake、archive、validation 和 CLI runtime。 |
-| `skills/` | 随插件发布的 controller、target、governance 和 validation 操作手册。 |
+| `skills/` | 随插件发布的 controller、target protocol、target craft 与 governance 操作手册。 |
 | `templates/wakeflow-template-bundle.json` | 已安装工作区 starter documents 和 support surfaces 的 bundle，用于控制 marketplace scan 文件数。 |
 | `assets/` | Marketplace 和插件展示资源。 |
 | `../../test/` | 开发期回归测试，不进入 marketplace 扫描面。 |
 | `../../docs/` | 开发期规划和架构文档，不进入插件 artifact。 |
 
-详细命令说明在 [scripts/README.md](scripts/README.md)。顶层 README 解释系统模型；
-script README 是操作者手册。
+后端/源码维护命令说明在 [scripts/README.md](scripts/README.md)。已安装总控使用 MCP
+tools 与 skills，不把原始脚本当作操作入口。
 
 ## 设计原则
 

@@ -3,6 +3,10 @@
 This directory stores Wakeflow-owned scripts for coordination,
 verification, documentation maintenance, and cross-repository guardrails.
 
+This is the backend/source-maintenance catalog. Installed workspace
+controllers use Wakeflow MCP tools and skills; they should not infer script
+paths or flags from this file.
+
 Scripts in this directory should:
 
 - operate from the workspace root unless documented otherwise;
@@ -55,7 +59,7 @@ Current scripts:
 
 - `wakeflow-cli.mjs`: command-style aggregator for common Wakeflow
   workflows. It maps friendly subcommands such as `status`, `verify`, `sync`,
-  `design`, `intake`, `runtime`, `install`, `scripts`, `loop`, and `next-work`
+  `intake`, `runtime`, `install`, `scripts`, `loop`, and `next-work`
   onto the current scripts without replacing their dry-run / write gates. Use
   `--print` to inspect the exact commands before running them.
 - `wakeflow-state.mjs`: state-root manager. `init` creates a per-demand
@@ -231,8 +235,8 @@ marketplace artifacts do not include this test directory.
 
 ## Common Routes
 
-Use `wakeflow-cli.mjs` as the short entrypoint for ordinary work, then fall
-back to the named script only when a narrower check is needed. For the full
+Use `wakeflow-cli.mjs` as the short entrypoint for backend/source-maintenance
+work, then fall back to the named script only when a narrower check is needed. For the full
 command catalog and selection table, read
 `skills/wakeflow-governance/references/script-pipeline.md`.
 
@@ -241,12 +245,10 @@ command catalog and selection table, read
 | Current repo / closed-loop health | `node scripts/wakeflow-cli.mjs status` |
 | Full Wakeflow verification | `node scripts/wakeflow-cli.mjs verify` |
 | Render a controller state-root progress doc | `node scripts/wakeflow-cli.mjs sync --state-root <state-root> --write` |
-| Design handoff discovery / validation | `node scripts/wakeflow-cli.mjs design --id <design-key> --json` |
-| Attach Design/Test machine intake to a state root | `node scripts/wakeflow-cli.mjs intake <design-handoff|test-card> ... --state-root <state-root>` |
+| Attach Test machine intake to a state root | `node scripts/wakeflow-cli.mjs intake test-card ... --state-root <state-root>` |
 | Script docs plus script tests | `node scripts/wakeflow-cli.mjs scripts --tests` |
 | Runtime residue read-only check | `node scripts/wakeflow-cli.mjs runtime` |
 | Wakeflow Delivery Loop commands | `node scripts/wakeflow-cli.mjs loop <subcommand> ...` |
-| Ordered independent demand sequence | `node scripts/wakeflow-cli.mjs sequence <status|claim-next|sync-doc> --root .. --manifest <manifest.json> ...` |
 | Scan next controller-ready candidate | `node scripts/wakeflow-cli.mjs next-work --after-completion --json` |
 | Focus a named Design/TODO candidate | `node scripts/wakeflow-cli.mjs next-work --id <design-key> --json` |
 | Sibling install / child AGENTS scope writes | `node scripts/wakeflow-cli.mjs install <subcommand> ...` |

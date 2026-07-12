@@ -46,6 +46,7 @@ next package.
 | Target task done | the VCS diff / raw evidence reviewed this turn | the envelope says "done" |
 | Behavior delivered | evidence shows the user-visible behavior | a connection / empty API / static mock exists |
 | Demand complete | line-by-line vs the requirement design + non-goals | all tasks marked done |
+| Ready for Test | existing non-Test targets accepted + controllerSelfChecks recorded | hoping Test will establish correctness |
 
 **Red Flag — a third point-fix on the same task.** Two failed reworks on one task mean the next move
 is a *new* root-cause hypothesis or a non-bug-mismatch route to Design redesign — not another bounce
@@ -82,12 +83,16 @@ machine state.
 4. If the demand is complete, blocked, cancelled, archived, review-ready, or lacks
    evidence, stop instead of preparing another package.
 5. Create or select a task package only when it advances the confirmed goal.
-6. Build a dispatch packet from the state root.
-7. Build a delivery envelope.
-8. Send the envelope prompt through the Codex host thread tool exactly as stored
+6. For a Test package, first confirm every existing non-Test target is
+   `accepted` and `controllerSelfChecks` states what you already verified and
+   why the real scenario remains necessary. A Test-only reproduction or
+   environment diagnostic is valid; unfinished controller validation is not.
+7. Build a dispatch packet from the state root.
+8. Build a delivery envelope.
+9. Send the envelope prompt through the Codex host thread tool exactly as stored
    in the envelope.
-9. Read back the host send evidence and record the delivery run.
-10. End the dispatch turn.
+10. Read back the host send evidence and record the delivery run.
+11. End the dispatch turn.
 
 ## Review Target Results
 
@@ -114,6 +119,10 @@ machine state.
    - Did the target stay inside its assigned window/repository and task package?
    - Are tests or probes at the right seam, and did they cover the behavior that
      matters?
+   - For a non-Test target, have I personally established functional
+     completeness and correctness without relying on a future Test run?
+   - For a Test target, does the evidence only explore the approved real
+     environment or hidden-defect boundary, without redefining completion?
    - If adding a TODO, follow-up, or next package, is it authorized by the
      original requirement decisions rather than inferred from residual code,
      existing tests, target backfill, or implementation leftovers?
@@ -290,7 +299,9 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   Design; research never gets an implementation dispatch. Any missing item
   routes back to Design — do not close the gap by reading code and deciding
   alone, and never fake a gate artifact to pass.
-- Before dispatching a Test card, copy the Design-stage Test Environment Spec
+- Before adding or dispatching a Test package, verify every existing non-Test
+  target is accepted, record the concrete controller reruns in
+  `controllerSelfChecks`, and copy the Design-stage Test Environment Spec
   into the card's realScenarioConditions/allowedOperations. You DECIDE which
   confirmed environment applies; the user CONFIRMED it at Design; Test only
   EXECUTES. Never send Test hunting for env vars, endpoints, or credentials.
@@ -322,7 +333,8 @@ Stop instead of dispatching when:
 
 - The user goal or completion definition is unclear.
 - The Design exit gate is incomplete for a new demand's first implementation
-  dispatch, or a Test dispatch lacks its confirmed environment block.
+  dispatch, or a Test dispatch leaves an existing non-Test target unaccepted,
+  omits the controller's self-checks, or lacks its confirmed environment block.
 - Required evidence is missing or unreadable.
 - The state root is not current or cannot be trusted.
 - The controller is reacting to a keyword, familiar command shape, script hint,

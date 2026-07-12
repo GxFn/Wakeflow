@@ -198,6 +198,15 @@ function testExecutionForNewTask({ stateRoot, state, targetWindow, targetTaskId 
   if (!card.strategySource) {
     fail(`Test card ${testCardId} has no strategySource; Test approach authority is missing.`);
   }
+  const openNonTestTasks = (state.targetTasks ?? []).filter((task) => {
+    const windowName = task.targetWindow || "";
+    const taskIsTest = windowName === configuredTestWindow || windowName.startsWith(`${configuredTestWindow}__`);
+    return !taskIsTest && task.status !== "accepted";
+  });
+  if (openNonTestTasks.length > 0) {
+    const blockers = openNonTestTasks.map((task) => `${task.targetTaskId}:${task.status || "unknown"}`).join(", ");
+    fail(`Test work cannot be packaged until total control accepts the demand's existing non-Test targets. Open targets: ${blockers}.`);
+  }
   const priorTasks = (state.targetTasks ?? [])
     .filter((task) => task.testExecution?.testCardId === testCardId)
     .sort((left, right) => Number(left.testExecution?.lineageStep ?? 0) - Number(right.testExecution?.lineageStep ?? 0));

@@ -71,12 +71,19 @@ Exit gate: results with evidence refs for the wave.
 `wakeflow_reduce_results` → `wakeflow_decide_review`
 (accept / rework / redesign / blocked). Raw evidence before any decision.
 Non-bug outcome mismatch = redesign lane back to S1, never point-fix loops.
+Exit to S5 only after every existing non-Test target is accepted and the
+controller has recorded its concrete validation in the Test card's
+`controllerSelfChecks`. A Test-only reproduction or environment diagnostic
+may enter S5 after the controller establishes that current scope.
 
 ## S5 — Test (conditional; owner: Test window executes, controller composes)
-Runs only when S1's Test decision said yes. The controller builds the card
+Runs only when S1's Test decision said yes AND S4's functional acceptance gate
+passed. The controller builds the card
 with `wakeflow_intake_test_card`, copying the S1 Test Environment Spec into
 `realScenarioConditions` (+ `allowedOperations`/`forbiddenOperations`/
-`evidenceRequired`), then dispatches it like any target task.
+`evidenceRequired`) and recording `controllerSelfChecks`, then
+dispatches it like any target task. Test explores hidden bugs in the approved
+real environment; it does not establish feature completeness or correctness.
 **Test only tests**: it never chooses environments, invents config values,
 fixes product code, or widens scope. A card whose environment block is missing
 or ambiguous = immediate blocker back to the controller; the controller

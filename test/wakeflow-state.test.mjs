@@ -556,6 +556,137 @@ test("Test task packages require the confirmed goal/plan card and keep one bound
   assert.match(third.stdout, /already used 2\/2 authorized attempts/);
 });
 
+test("Test packaging follows a real controller accept decision and Test-only demands remain valid", () => {
+  const root = makeRoot();
+  writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
+    workspaceName: "Fixture",
+    controllerWindow: "Controller",
+    testWindow: "TestWindow",
+    repositories: [{ windowName: "Controller", path: ".", role: "controller" }],
+  }, null, 2)}\n`);
+
+  const init = JSON.parse(run([
+    "init", "--root", root, "--demand-key", "TEST-AFTER-ACCEPT",
+    "--title", "Test after accept", "--goal", "Verify the delivered behavior.",
+    "--write", "--json",
+  ]).stdout);
+  const stateRoot = path.join(root, init.stateRoot);
+  const product = run([
+    "add-task-package", "--root", root, "--state-root", init.stateRoot,
+    "--task-package-id", "PRODUCT-P1", "--summary", "Deliver behavior",
+    "--target-window", "ProductWindow", "--target-task-id", "PRODUCT-T1",
+    "--write", "--json",
+  ]);
+  assert.equal(product.status, 0, product.stderr || product.stdout);
+
+  const cardFile = path.join(stateRoot, "test-cards/TEST-T1.json");
+  mkdirSync(path.dirname(cardFile), { recursive: true });
+  writeFileSync(cardFile, `${JSON.stringify({
+    kind: "TestBoundaryCard",
+    schemaVersion: 1,
+    testId: "TEST-T1",
+    targetWindow: "TestWindow",
+    strategySource: "Design/requirement.md#confirmed-test-plan",
+    executionContract: {
+      version: 1,
+      requirementGoal: "Verify the delivered behavior.",
+      approvedPlan: ["Run the confirmed real-environment check."],
+      allowedSkills: [],
+      setupPolicy: "reuse-existing",
+      maxAttempts: 1,
+      restartConditions: [],
+      changeControl: { testMayChangeGoal: false, testMayAddUnmappedSteps: false },
+    },
+    boundaryGate: {
+      controllerSelfChecks: ["Controller reviewed the product evidence and reran the focused check."],
+    },
+    suggestedTaskPackage: { targetTaskId: "TEST-T1" },
+  }, null, 2)}\n`);
+
+  const beforeAccept = run([
+    "add-task-package", "--root", root, "--state-root", init.stateRoot,
+    "--task-package-id", "TEST-P1", "--summary", "Explore the real environment",
+    "--target-window", "TestWindow", "--target-task-id", "TEST-T1",
+    "--test-card-id", "TEST-T1", "--write", "--json",
+  ]);
+  assert.notEqual(beforeAccept.status, 0);
+  assert.match(beforeAccept.stdout, /cannot be packaged until total control accepts the demand's existing non-Test targets/);
+  assert.match(beforeAccept.stdout, /PRODUCT-T1:pending/);
+
+  writeStateRootEvidence(root, init.stateRoot, "evidence/product.txt", "controller-reviewed product evidence\n");
+  const imported = run([
+    "import-target-result", "--root", root, "--state-root", init.stateRoot,
+    "--target-task-id", "PRODUCT-T1", "--target-window", "ProductWindow",
+    "--status", "completed", "--summary", "Behavior delivered.",
+    "--evidence-ref", "evidence/product.txt", "--verification", "Focused check passed.",
+    "--write", "--json",
+  ]);
+  assert.equal(imported.status, 0, imported.stderr || imported.stdout);
+  const reduced = JSON.parse(run([
+    "reduce-results", "--root", root, "--state-root", init.stateRoot,
+    "--write", "--json",
+  ]).stdout);
+  assert.ok(reduced.candidateId);
+  const accepted = run([
+    "decide-review", "--root", root, "--state-root", init.stateRoot,
+    "--candidate-id", reduced.candidateId, "--decision", "accept",
+    "--reason", "Controller reviewed raw evidence and reran the focused check.",
+    "--evidence-ref", "evidence/product.txt", "--write", "--json",
+  ]);
+  assert.equal(accepted.status, 0, accepted.stderr || accepted.stdout);
+
+  const afterAccept = run([
+    "add-task-package", "--root", root, "--state-root", init.stateRoot,
+    "--task-package-id", "TEST-P1", "--summary", "Explore the real environment",
+    "--target-window", "TestWindow", "--target-task-id", "TEST-T1",
+    "--test-card-id", "TEST-T1", "--write", "--json",
+  ]);
+  assert.equal(afterAccept.status, 0, afterAccept.stderr || afterAccept.stdout);
+
+  const testOnlyRoot = makeRoot();
+  writeFileSync(path.join(testOnlyRoot, "wakeflow.config.json"), `${JSON.stringify({
+    workspaceName: "Fixture",
+    controllerWindow: "Controller",
+    testWindow: "TestWindow",
+    repositories: [{ windowName: "Controller", path: ".", role: "controller" }],
+  }, null, 2)}\n`);
+  const testOnlyInit = JSON.parse(run([
+    "init", "--root", testOnlyRoot, "--demand-key", "TEST-ONLY",
+    "--title", "Test-only reproduction", "--goal", "Reproduce an environment-only issue.",
+    "--write", "--json",
+  ]).stdout);
+  const testOnlyStateRoot = path.join(testOnlyRoot, testOnlyInit.stateRoot);
+  mkdirSync(path.join(testOnlyStateRoot, "test-cards"), { recursive: true });
+  writeFileSync(path.join(testOnlyStateRoot, "test-cards/TEST-ONLY-T1.json"), `${JSON.stringify({
+    kind: "TestBoundaryCard",
+    schemaVersion: 1,
+    testId: "TEST-ONLY-T1",
+    targetWindow: "TestWindow",
+    strategySource: "Design/requirement.md#confirmed-test-plan",
+    executionContract: {
+      version: 1,
+      requirementGoal: "Reproduce an environment-only issue.",
+      approvedPlan: ["Run the confirmed reproduction once."],
+      allowedSkills: [],
+      setupPolicy: "reuse-existing",
+      maxAttempts: 1,
+      restartConditions: [],
+      changeControl: { testMayChangeGoal: false, testMayAddUnmappedSteps: false },
+    },
+    boundaryGate: {
+      controllerSelfChecks: ["Controller confirmed the issue requires the configured real environment."],
+    },
+    suggestedTaskPackage: { targetTaskId: "TEST-ONLY-T1" },
+  }, null, 2)}\n`);
+  const testOnly = run([
+    "add-task-package", "--root", testOnlyRoot, "--state-root", testOnlyInit.stateRoot,
+    "--task-package-id", "TEST-ONLY-P1", "--summary", "Reproduce in the real environment",
+    "--target-window", "TestWindow", "--target-task-id", "TEST-ONLY-T1",
+    "--test-card-id", "TEST-ONLY-T1", "--write", "--json",
+  ]);
+  assert.equal(testOnly.status, 0, testOnly.stderr || testOnly.stdout);
+});
+
 test("wakeflow-render-progress updates only Unified Status after task package changes", () => {
   const root = makeRoot();
   const init = run([

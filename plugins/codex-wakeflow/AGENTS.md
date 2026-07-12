@@ -34,9 +34,11 @@ definition, local code, docs, tests, and release path before decomposing work.
   non-bug outcome mismatches, and prepares signals or handoff candidates.
   Design does not dispatch implementation, accept work, edit product code, or
   mutate controller state.
-- Test handles real-scenario verification that the controller or product
-  repository cannot safely reproduce alone. Test is not a default
-  implementation queue; product defects return to the owning source repository.
+- Test starts only after total control has completed its own validation for the
+  current scope and accepted every existing non-Test target. It explores
+  confirmed real environments for boundary problems and hidden bugs that the
+  controller or product repository cannot safely reproduce alone. Test does
+  not own functional correctness, completion, or product fixes.
 - Product windows are repositories listed in `wakeflow.config.json` or local
   override. Each owns its source, tests, commits, evidence, and backfill.
 - Wakeflow owns reusable controller runtime, plugin packaging, AGENTS
@@ -79,14 +81,21 @@ confirmation gates live in the installed workspace's own rules.
 
 ## Testing And Acceptance
 
+- **No Test dispatch while total control's current validation scope is
+  unfinished.** When the demand has non-Test targets, all must
+  already be `accepted`; the Test card's existing `controllerSelfChecks` records
+  what total control verified and why a real scenario remains necessary.
+  Test-only reproduction/environment diagnostics remain valid. Test output
+  cannot supply missing controller proof or become the quality owner.
 - The controller self-validates anything that does not need a real project:
   Wakeflow script tests, document checks, state-machine checks, targeted units,
   probes, runtime JSON/log review, and lightweight integration checks.
 - Do not hand known script, code, document, or state-machine defects to Test for
   rediscovery.
-- Use Test only for real projects, cold-start/rescan, dashboard or runtime
-  observation, daemon/job/log monitoring, reproduction/regression, or cross-repo
-  integration evidence.
+- After that controller validation gate, use Test only to explore real-project boundaries and
+  hidden defects: cold-start/rescan, dashboard or runtime observation,
+  daemon/job/log monitoring, reproduction/regression, or cross-repo integration
+  evidence.
 - Before tests, state the exact question, object boundary, what was already
   self-verified, why real scenario is required, success meaning, failure
   meaning, invalid conclusions, and stop conditions.
@@ -116,6 +125,9 @@ confirmation gates live in the installed workspace's own rules.
 - Target results are review inputs, not acceptance. Controller acceptance must
   roll TODO/Backlog: close solved items with evidence, keep valid remaining
   items, add newly found items, and explain items that should not enter TODO.
+- A Test pass closes only the stated environmental risk. A Test failure is a
+  defect signal for the controller to classify against the accepted goal and
+  route back to the owning repository; it does not let Test redefine the plan.
 - Product repository commits are handled by the owning repository window.
   Wakeflow documentation commits are made only by the controller after review.
 

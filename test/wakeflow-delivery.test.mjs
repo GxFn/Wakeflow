@@ -324,6 +324,18 @@ test("Test dispatch fails closed without alignment anchors and carries the appro
   taskPackage.testExecution = testExecution;
   writeJson(packageFile, taskPackage);
 
+  const beforeFunctionalAcceptance = run(root, [
+    "prepare-dispatch-from-state", "--state-root", stateRootRef,
+    "--target-task-id", "TEST-T1", "--group", "TEST-G2", "--write",
+  ]);
+  assert.notEqual(beforeFunctionalAcceptance.status, 0);
+  assert.match(beforeFunctionalAcceptance.stdout, /blocked until total control accepts the demand's existing non-Test targets/);
+  assert.match(beforeFunctionalAcceptance.stdout, /CSMR-TASK-1:pending/);
+
+  const acceptedState = JSON.parse(readFileSync(stateFile, "utf8"));
+  acceptedState.targetTasks.find((item) => item.targetTaskId === "CSMR-TASK-1").status = "accepted";
+  writeJson(stateFile, acceptedState);
+
   const prepared = parseOk(run(root, [
     "prepare-dispatch-from-state", "--state-root", stateRootRef,
     "--target-task-id", "TEST-T1", "--group", "TEST-G2", "--write",
@@ -331,8 +343,54 @@ test("Test dispatch fails closed without alignment anchors and carries the appro
   assert.equal(prepared.packet.testExecution.requirementGoal, "Prove the confirmed public behavior.");
   assert.deepEqual(prepared.packet.testExecution.allowedSkills, []);
   assert.match(prepared.packet.prompt, /testContract: task-packages\/TEST-P1\.json#testExecution/);
+  assert.match(prepared.packet.forbidden.join("\n"), /Do not re-plan or take ownership of functional completeness/);
   assert.match(prepared.packet.forbidden.join("\n"), /must not replace the confirmed requirement goal/);
   assert.match(prepared.packet.evidenceRequired.join("\n"), /step must name the confirmed requirement goal and approvedPlan item/);
+});
+
+test("Test-only reproduction can dispatch without inventing a preceding product task", () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.taskPackages = [];
+  state.targetTasks = [];
+  state.windows = [];
+  writeJson(stateFile, state);
+  addFixtureTarget(stateRoot, {
+    taskPackageId: "TEST-ONLY-P1",
+    targetTaskId: "TEST-ONLY-T1",
+    targetWindow: "Test",
+  });
+  registerThread(root, "Test");
+  const testExecution = {
+    testCardId: "TEST-ONLY-T1",
+    testCardRef: `${stateRootRef}/test-cards/TEST-ONLY-T1.json`,
+    strategySource: "Design/requirement.md#confirmed-test-plan",
+    lineageStep: 1,
+    dispatchAttempt: 1,
+    mode: "initial",
+    requirementGoal: "Reproduce the confirmed environment-only issue.",
+    approvedPlan: ["Run the confirmed reproduction once."],
+    allowedSkills: [],
+    setupPolicy: "reuse-existing",
+    maxAttempts: 1,
+    restartConditions: [],
+    changeControl: { testMayChangeGoal: false, testMayAddUnmappedSteps: false },
+  };
+  const boundedState = JSON.parse(readFileSync(stateFile, "utf8"));
+  boundedState.taskPackages.find((item) => item.taskPackageId === "TEST-ONLY-P1").testExecution = testExecution;
+  boundedState.targetTasks.find((item) => item.targetTaskId === "TEST-ONLY-T1").testExecution = testExecution;
+  writeJson(stateFile, boundedState);
+  const packageFile = path.join(stateRoot, "task-packages/TEST-ONLY-P1.json");
+  const taskPackage = JSON.parse(readFileSync(packageFile, "utf8"));
+  taskPackage.testExecution = testExecution;
+  writeJson(packageFile, taskPackage);
+
+  const prepared = parseOk(run(root, [
+    "prepare-dispatch-from-state", "--state-root", stateRootRef,
+    "--target-task-id", "TEST-ONLY-T1", "--group", "TEST-ONLY-G1", "--write",
+  ]));
+  assert.equal(prepared.packet.testExecution.requirementGoal, "Reproduce the confirmed environment-only issue.");
 });
 
 test("return policy helpers preserve group-ready and per-target callback semantics", () => {
@@ -730,6 +788,7 @@ test("review pack helper preserves evidence repair and pending-dispatch gates", 
     ref: "missing-evidence.md",
   }]);
   assert.match(pack.testAlignmentCheck, /Reject Test-invented goals, gates, skills, restarts, or unmapped steps/);
+  assert.match(pack.controllerAcceptanceBoundary, /Test pass cannot fill missing controller proof/);
 });
 
 // Decoupling: a recorded result must wake the controller even when evidence refs don't resolve.

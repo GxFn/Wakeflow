@@ -17,7 +17,10 @@ export function reviewAdvisories(targetResults) {
       ? { craftCheck: "Some tasks declared advisory craft evidence (e.g. self-review, test-first); required craft kinds are already enforced at reduce-results. Reminder only (not a gate): when judging quality, check the target's self-review note and test-first commit history." }
       : {}),
     ...(targetResults.some((item) => item.testExecution)
-      ? { testAlignmentCheck: "Before accepting Test evidence or creating any follow-up, compare the returned step-to-anchor map against testExecution.requirementGoal and approvedPlan. Reject Test-invented goals, gates, skills, restarts, or unmapped steps; do not copy them into rework." }
+      ? {
+          controllerAcceptanceBoundary: "Functional completeness and correctness remain total control's pre-Test validation and acceptance responsibility. Test evidence may expose an environment-specific edge or hidden defect, but a Test pass cannot fill missing controller proof and a Test failure must be classified against the confirmed goal before rework.",
+          testAlignmentCheck: "Before accepting Test evidence or creating any follow-up, compare the returned step-to-anchor map against testExecution.requirementGoal and approvedPlan. Reject Test-invented goals, gates, skills, restarts, or unmapped steps; do not copy them into rework.",
+        }
       : {}),
   };
 }

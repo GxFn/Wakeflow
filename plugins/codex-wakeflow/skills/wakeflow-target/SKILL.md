@@ -110,16 +110,19 @@ state root, or human context, stop and report instead of guessing.
 
 For a package with `testExecution`:
 
-1. Treat `requirementGoal` and `approvedPlan` as authority, not suggestions.
-2. Before execution, map every operational plan step to one `approvedPlan`
+1. Do not reopen, replace, or assume ownership of total control's prior
+   validation. Explore only the assigned environment boundary for hidden
+   defects.
+2. Treat `requirementGoal` and `approvedPlan` as authority, not suggestions.
+3. Before execution, map every operational plan step to one `approvedPlan`
    item and state how it serves `requirementGoal`.
-3. Use only skills listed in `allowedSkills`. In particular,
+4. Use only skills listed in `allowedSkills`. In particular,
    `progressive-chain-validation` is forbidden unless that exact id is listed;
    a long workflow does not authorize PCV by itself.
-4. Follow `mode` and `setupPolicy`. Do not rebuild, restart, or replace the
+5. Follow `mode` and `setupPolicy`. Do not rebuild, restart, or replace the
    environment unless the package says `mode=restart` and records a
    controller-approved `restartReason`.
-5. If a useful step, skill, goal, gate, or restart is unmapped or unauthorized,
+6. If a useful step, skill, goal, gate, or restart is unmapped or unauthorized,
    stop before executing it and return `blocked`/`needs-review` as a change
    request to the controller. Do not run it first and justify it afterward.
 

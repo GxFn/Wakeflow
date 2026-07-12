@@ -430,6 +430,16 @@ export function createDispatchCommands(ctx) {
     }
     let testExecution = null;
     if (taskPackage.testExecution) {
+      const nonTestTasks = (state.targetTasks ?? []).filter((task) => {
+        const windowName = task.targetWindow || "";
+        return !(configuredTestWindow
+          && (windowName === configuredTestWindow || windowName.startsWith(`${configuredTestWindow}__`)));
+      });
+      const openNonTestTasks = nonTestTasks.filter((task) => task.status !== "accepted");
+      if (openNonTestTasks.length > 0) {
+        const blockers = openNonTestTasks.map((task) => `${task.targetTaskId}:${task.status || "unknown"}`).join(", ");
+        fail(`Test task ${targetTaskId} is blocked until total control accepts the demand's existing non-Test targets. Open targets: ${blockers}. Test cannot establish functional completeness or replace controller validation.`);
+      }
       const testCardId = taskPackage.testExecution.testCardId;
       const lineageTasks = (state.targetTasks ?? []).filter((task) => task.testExecution?.testCardId === testCardId);
       const priorDispatches = lineageTasks.reduce((sum, task) => sum + Number(task.counts?.dispatchCount ?? 0), 0);
@@ -495,12 +505,16 @@ export function createDispatchCommands(ctx) {
       dispatchGroup,
       evidenceRequired: [
         ...getAllValues("--evidence"),
-        ...(testExecution ? ["Test alignment map: every executed step must name the confirmed requirement goal and approvedPlan item it serves; any unmapped step is a blocker, not evidence."] : []),
+        ...(testExecution ? [
+          "Test alignment map: every executed step must name the confirmed requirement goal and approvedPlan item it serves; any unmapped step is a blocker, not evidence.",
+          "Real-environment evidence must identify the boundary or hidden defect explored; it supplements the controller's prior validation and any product acceptance, and does not replace them.",
+        ] : []),
         "TargetResultEnvelope with evidence refs; target result is not controller acceptance.",
       ],
       forbidden: [
         ...getAllValues("--forbidden"),
         ...(testExecution ? [
+          "Do not re-plan or take ownership of functional completeness: total control owns that judgment. Test only explores the approved real-environment boundary for hidden defects.",
           "Test must not replace the confirmed requirement goal, add an unmapped test target/gate, or use a Test skill absent from testExecution.allowedSkills.",
           testExecution.mode === "restart"
             ? "This restart is limited to the recorded restartReason and approved restartConditions; it does not authorize a new test plan."

@@ -297,8 +297,12 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
    `controllerSelfChecks`、allowed skills、setup policy 与 attempt bound。
    progressive-chain-validation 等 Test skill 只有被 card 显式列出时才能使用。
 7. 所有必需任务 accepted 后，运行
-   `wakeflow_complete_demand` + `wakeflow_archive`（脱敏门守护）把整个故事
-   收进台账。
+   `wakeflow_complete_demand` + `wakeflow_archive` 把整个故事收进台账。
+   demand 归档 dry-run 会报告真实 ID 与绝对路径发现；使用 `redact: true`
+   提交经二次扫描的可移植副本，并在本地保留原始证据。
+   若完成后、归档前发现仍属于原完成定义的已验证缺陷或已确认补充，
+   `wakeflow_continue_demand` 会保留原完成记录，并在一次受控操作中追加首个 bug／补充／
+   明确授权优化任务包。已归档历史不可恢复；独立后续工作新建 demand。
 
 **Codex（自然语言）：** 同一条闭环、同一套 MCP 工具 ——
 "用 Wakeflow 初始化这个工作区"、"认领下一个需求"、"派发下一个任务包"、
@@ -375,12 +379,12 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 | 需求 | MCP tools |
 | --- | --- |
 | 设置与窗口注册 | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
-| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
+| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
 | 候选扫描与隔离 pod | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_close`, `wakeflow_pod_list` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design 和 Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| 归档、视图、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_view`（task-ledger/window/focus/trace/storage）、`wakeflow_prune_runtime`、`wakeflow_verify` |
+| 归档、视图、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_sanitize_archive`（受限的历史归档修复）、`wakeflow_view`（task-ledger/window/focus/trace/storage）、`wakeflow_prune_runtime`、`wakeflow_verify` |
 | 宿主归属与窗口锁 | `wakeflow_adopt_demand_host`、`wakeflow_release_window_lock` |
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：
@@ -389,8 +393,9 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 总控 review 也保持拆分：review pack、result reduction 和显式 decision 分别处理；
 result reduction 只创建 review candidate，不是验收。内部步骤（例如 archive summary
 refresh internals、keep-live state、script backend execution）留在 Wakeflow
-JS/runtime scripts 和 skills 内。公共 archive MCP tools 只包装总控批准的 TODO
-或 workspace document archive flows；它们不做验收决策，也不发送 host messages。
+JS/runtime scripts 和 skills 内。公共 archive MCP tools 包装总控批准的 demand、TODO
+和 workspace document archive flows。`wakeflow_sanitize_archive` 只把已归档 demand
+替换为隐私清洁副本并在本地保留原件；两者都不做验收决策，也不发送 host messages。
 
 Wakeflow 为每个公共 tool 声明 MCP annotations：只读工具标记为 read-only，写工具
 标记为本地、非破坏性、闭世界。Codex approval policy 仍由用户自己的 Codex 配置控制。

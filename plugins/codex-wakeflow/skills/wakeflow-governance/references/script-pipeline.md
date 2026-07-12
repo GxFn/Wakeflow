@@ -44,7 +44,8 @@ Use these MCP tools for normal installed-workspace control:
 | Prepare or record delivery-loop transport evidence | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result` |
 | Review target results and record controller judgment | `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review` |
 | Scan next controller-ready work | `wakeflow_next_work` |
-| Archive completed workspace docs or TODO rows | `wakeflow_archive` (target=docs / target=todo) |
+| Archive a completed demand, workspace docs, or TODO rows | `wakeflow_archive` (target=demand / docs / todo) |
+| Repair privacy findings in one existing archived demand | `wakeflow_sanitize_archive` (dry-run first; archived ledger roots only) |
 | Verify Wakeflow state and docs | `wakeflow_verify` |
 
 ## Source Runtime Command Set
@@ -70,6 +71,8 @@ repository. They are not the installed controller command surface.
   `node scripts/wakeflow-state.mjs reduce-results --write --json`
   `node scripts/wakeflow-state.mjs decide-review --write --json`
   `node scripts/wakeflow-state.mjs complete-demand --write --json`
+  `node scripts/wakeflow-state.mjs archive-demand --redact --write --json`
+  `node scripts/wakeflow-state.mjs sanitize-archive --state-root <archived-root> --reason <text> --write --json`
   `node scripts/wakeflow-delivery.mjs prepare-dispatch-from-state --write --json`
   `node scripts/wakeflow-delivery.mjs review-pack --json`
 - General pre-acceptance:
@@ -95,7 +98,7 @@ repository. They are not the installed controller command surface.
 | Create a Test boundary card for an active demand | `wakeflow-intake.mjs test-card` | Writes `test-cards/*.json` under the state root. It requires the full pre-test boundary gate and does not dispatch Test or accept test evidence. |
 | Archive completed Wakeflow docs and shrink historical indexes | MCP: `wakeflow_archive` (target=docs / target=todo); backend scripts: `wakeflow-archive-docs.mjs`, `wakeflow-archive-todo.mjs`, `wakeflow-archive-summaries.mjs` | Use MCP for normal controller archive flows. Dry-run first; apply only after current status no longer points at the archived item. |
 | Keep script catalog and tests from drifting | `wakeflow-check-scripts.mjs` | Runs inside `wakeflow-verify`; add tests to `--with-script-tests`. |
-| Manage the controller state root | `wakeflow-state.mjs`, `wakeflow-render-progress.mjs` | Default route for execution surfaces. `wakeflow-state` owns machine state, review candidates, explicit review decisions, and final completion transitions; `wakeflow-render-progress` updates only the generated Unified Status block. |
+| Manage the controller state root | `wakeflow-state.mjs`, `wakeflow-render-progress.mjs` | Default route for execution surfaces. `wakeflow-state` owns machine state, review candidates, explicit review decisions, final completion, privacy-guarded demand archive, and the bounded `sanitize-archive` amendment for an existing archived root; `wakeflow-render-progress` updates only the generated Unified Status block. |
 | Manage Wakeflow Delivery Loop contracts | `wakeflow-delivery.mjs`, `wakeflow-cli.mjs loop ...` | Runtime files stay under ignored `.wakeflow-local/wakeflow-delivery/`; the script derives packets and envelopes from the state root, then writes dispatch packets, groups, envelopes, delivery runs, review packs, controller-return envelopes, stop markers, and thread registry files in the local delivery runtime. It never sends host thread messages, accepts evidence, selects TODOs, or writes product repositories. |
 | Scan next controller-ready demand after completion | `wakeflow-next-work.mjs`, `wakeflow-cli.mjs next-work ...` | Read-only by default. It ranks controller-ready rows on the global TODO board (including rows Design delivered via `wakeflow_deliver`) into a candidate list, but never creates a current plan, accepts a candidate, dispatches windows, or changes TODO board state. Use `--id <design-key>` when the user names a specific ready demand. |
 | Reduce repeated controller dispatch preparation | `wakeflow-delivery.mjs prepare-dispatch-from-state` | Use only after total control has chosen an eligible target task inside the controller state root. It writes a derived window config, dispatch packet, dispatch group, and delivery envelope in one step, then stops before host thread send. It fails closed for terminal / paused / blocked / review-ready demands and accepted / completed / blocked target tasks. |

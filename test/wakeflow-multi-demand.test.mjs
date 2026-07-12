@@ -139,7 +139,7 @@ test("completing and archiving one demand frees capacity for the next", () => {
   assert.equal(blocked.status, 1, blocked.stdout);
   assert.match(JSON.parse(blocked.stdout).error, /completed but not archived/);
 
-  assert.equal(run(["archive-demand", "--root", root, "--state-root", rootD1, "--reason", "shipped", "--write", "--json"]).status, 0);
+  assert.equal(run(["archive-demand", "--root", root, "--state-root", rootD1, "--reason", "shipped", "--redact", "--write", "--json"]).status, 0);
   assert.equal(initDemand(root, "D3").status, 0, "archiving must free the slot");
   assert.deepEqual(
     readJson(path.join(root, ".wakeflow-active/current/D3/wakeflow-state.json")).executionPlacement,

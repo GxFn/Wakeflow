@@ -90,3 +90,19 @@ test("wakeflow_archive target=demand fails closed before runtime when required i
     /wakeflow_archive target=demand requires reason/,
   );
 });
+
+test("wakeflow_sanitize_archive exposes only the bounded archived-root repair inputs", () => {
+  const sanitize = tools.find((tool) => tool.name === "wakeflow_sanitize_archive");
+  assert.ok(sanitize, "wakeflow_sanitize_archive tool must be registered");
+  assert.deepEqual(sanitize.inputSchema?.required, ["stateRoot", "reason"]);
+  assert.deepEqual(Object.keys(sanitize.inputSchema?.properties ?? {}).sort(), ["apply", "reason", "root", "stateRoot"]);
+  assert.equal(typeof handlers.wakeflow_sanitize_archive, "function");
+  assert.throws(
+    () => handlers.wakeflow_sanitize_archive({}),
+    /wakeflow_sanitize_archive requires stateRoot/,
+  );
+  assert.throws(
+    () => handlers.wakeflow_sanitize_archive({ stateRoot: "wakeflow-ledger/workspace/archive/x" }),
+    /wakeflow_sanitize_archive requires reason/,
+  );
+});

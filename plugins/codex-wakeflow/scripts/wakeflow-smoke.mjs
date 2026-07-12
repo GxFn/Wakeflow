@@ -265,19 +265,23 @@ async function runMcpSmoke(rootPath) {
       "wakeflow_view",
       "wakeflow_reduce_results",
       "wakeflow_decide_review",
+      "wakeflow_complete_demand",
+      "wakeflow_continue_demand",
       "wakeflow_archive",
+      "wakeflow_sanitize_archive",
       "wakeflow_verify",
     ]) {
       if (!toolNames.includes(expected)) {
         throw new Error(`MCP tools/list missing ${expected}`);
       }
     }
-    const hostVisiblePrefix = toolNames.slice(0, 13);
+    const hostVisiblePrefix = toolNames.slice(0, 14);
     for (const expected of [
       "wakeflow_review_pack",
       "wakeflow_reduce_results",
       "wakeflow_decide_review",
       "wakeflow_complete_demand",
+      "wakeflow_continue_demand",
     ]) {
       if (!hostVisiblePrefix.includes(expected)) {
         throw new Error(`MCP host-visible tool prefix missing ${expected}`);

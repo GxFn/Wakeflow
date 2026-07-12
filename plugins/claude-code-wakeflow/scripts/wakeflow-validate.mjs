@@ -233,8 +233,10 @@ function validateMcpConfig() {
     "wakeflow_reduce_results",
     "wakeflow_decide_review",
     "wakeflow_complete_demand",
+    "wakeflow_continue_demand",
     "wakeflow_intake_test_card",
     "wakeflow_archive",
+    "wakeflow_sanitize_archive",
     "wakeflow_verify",
   ]) {
     if (!mcpText.includes(`name: "${tool}"`)) errors.push(`MCP tool is missing: ${tool}`);

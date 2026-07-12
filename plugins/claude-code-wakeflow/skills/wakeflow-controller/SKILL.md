@@ -84,8 +84,10 @@ machine state.
    demand status, and eligible target tasks.
 3. State the safe operation, recovery boundary, and one-sentence plan before
    using tools, editing files, dispatching, accepting, archiving, or deleting.
-4. If the demand is complete, blocked, cancelled, archived, review-ready, or lacks
-   evidence, stop instead of preparing another package.
+4. If the demand is blocked, cancelled, archived, review-ready, or lacks
+   evidence, stop instead of preparing another package. If it is completed,
+   classify the new fact before acting: same-demand continuation, independent
+   follow-up, or no work. Never call `wakeflow_add_task` against completed state.
 5. Create or select a task package only when it advances the confirmed goal.
 6. For a Test package, first confirm every existing non-Test target is
    `accepted` and `controllerSelfChecks` states what you already verified and
@@ -293,8 +295,43 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   windows, then archive (the close order accepts cancelled exactly like
   completed).
 
+## Completed Demand Continuations
+
+- Completion is an accepted checkpoint, not permission to rewrite history. If
+  a completed but unarchived demand later has a verified bug inside its
+  original completion definition, a confirmed supplement to that definition,
+  or an explicitly authorized optimization that the user says belongs to the
+  same demand, use `wakeflow_continue_demand`.
+- Read the original plan / Requirement Design and the completion evidence
+  first. Record `continuationType`, a reason that explains why this is still the
+  same demand, evidence or decision references, and the first concrete target
+  package in the SAME call. The operation preserves all accepted tasks and the
+  earlier `demand.completed` event, then returns the state to `planned`; it does
+  not dispatch or accept anything. The demand must pass normal review and
+  `wakeflow_complete_demand` again.
+- Do not split the operation into a manual state edit followed by
+  `wakeflow_add_task`, and do not create a temporary demand/pod to work around
+  the terminal-state guard. If the operation fails, the completed state must
+  remain unchanged.
+- Archived demand roots are immutable to workflow continuation. The only
+  sanctioned in-place amendment is `wakeflow_sanitize_archive`, which may
+  replace a polluted archived root with a re-scanned privacy-clean copy while
+  preserving the original locally; it never reopens tasks or changes
+  acceptance. Independently scoped optimization,
+  backlog work, or anything discovered after archive goes through the normal
+  TODO / `wakeflow_create_demand` path with an explicit reference to the prior
+  demand; never move or edit the archived root back into `current/`.
+
 ## Storage Hygiene (idle-moment habit)
 
+- Archive a completed/cancelled demand through `wakeflow_archive` dry-run
+  first. If it reports real-id or user/workspace absolute-path findings, review
+  the categories and re-run with `redact: true`; the committed staging copy
+  must pass the final scan and the original moves to `preserved/`.
+- If a historical archived demand is already committed with those findings,
+  use `wakeflow_sanitize_archive` on that exact archived state root (dry-run
+  first). Never hand-edit it, move it back to `current/`, or use this repair as
+  a continuation path.
 - In a spare moment (no in-flight deliveries, no pending reviews), glance at
   `wakeflow_view` scope `storage`: known trees with class/size/age, legacy
   residue, unknown trees, aging `preserved/` entries. It is orientation, not
@@ -408,6 +445,7 @@ runtime scripts:
 - `wakeflow_archive` (target=docs / target=todo) for archive
   dry-runs or applies.
 - `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_complete_demand`,
+  `wakeflow_continue_demand`,
   `wakeflow_prepare_delivery`, `wakeflow_record_delivery`,
   `wakeflow_record_target_result`, `wakeflow_review_pack`,
   `wakeflow_reduce_results`, and `wakeflow_decide_review` for state-root,

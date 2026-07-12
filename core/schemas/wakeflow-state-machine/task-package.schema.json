@@ -15,6 +15,20 @@
     "sourceRef": { "type": ["string", "null"] },
     "designIntent": { "type": ["string", "null"] },
     "evidenceContract": { "type": "object" },
+    "continuation": {
+      "type": "object",
+      "required": ["continuationId", "type", "reason", "evidenceRefs", "priorCompletionEventId", "priorCompletionRevision", "createdAt"],
+      "properties": {
+        "continuationId": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "enum": ["verified-bug", "requirement-supplement", "optimization"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "evidenceRefs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "priorCompletionEventId": { "type": "string", "minLength": 1 },
+        "priorCompletionRevision": { "type": "integer", "minimum": 1 },
+        "createdAt": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
     "testExecution": {
       "type": "object",
       "required": ["testCardId", "testCardRef", "strategySource", "lineageStep", "dispatchAttempt", "mode", "requirementGoal", "approvedPlan", "allowedSkills", "setupPolicy", "maxAttempts", "restartConditions", "changeControl"],

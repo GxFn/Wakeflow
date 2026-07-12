@@ -913,8 +913,8 @@ test("wakeflow_register_window writes host-local registration atomically without
   assert.equal(JSON.parse(readFileSync(registryPath, "utf8")).threadId, secondHandle);
 });
 
-test("MCP tool order keeps controller review loop inside the host-visible prefix", () => {
-  assert.deepEqual(tools.slice(0, 13).map((tool) => tool.name), [
+test("MCP tool order keeps controller review and completed-demand continuation inside the host-visible prefix", () => {
+  assert.deepEqual(tools.slice(0, 14).map((tool) => tool.name), [
     "wakeflow_status",
     "wakeflow_initialize_workspace",
     "wakeflow_replace_windows",
@@ -928,6 +928,7 @@ test("MCP tool order keeps controller review loop inside the host-visible prefix
     "wakeflow_reduce_results",
     "wakeflow_decide_review",
     "wakeflow_complete_demand",
+    "wakeflow_continue_demand",
   ]);
 });
 

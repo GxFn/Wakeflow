@@ -374,8 +374,38 @@ const toolDefinitions = [
     },
   },
   {
+    name: "wakeflow_continue_demand",
+    description: "Continue a completed but not yet archived demand when a verified bug, confirmed requirement supplement, or explicitly authorized optimization still belongs to the same demand. This is one locked operation: it preserves the prior completion and accepted evidence, records the continuation authority, changes the demand back to planned, and adds the first concrete task package. It refuses active, cancelled, or archived demands and never dispatches. Use a new demand for archived history or independently scoped follow-up work. Dry-run unless apply is true.",
+    annotations: localWriteTool("Continue Completed Wakeflow Demand"),
+    inputSchema: {
+      type: "object",
+      required: ["stateRoot", "continuationType", "reason", "evidenceRefs", "taskId", "targetWindow", "summary"],
+      properties: {
+        root: { type: "string" },
+        stateRoot: { type: "string", description: "The completed, unarchived demand state root." },
+        continuationType: { type: "string", enum: ["verified-bug", "requirement-supplement", "optimization"] },
+        reason: { type: "string", description: "Why this work remains part of the same demand rather than a new demand." },
+        evidenceRefs: { type: "array", minItems: 1, items: { type: "string" }, description: "Verified defect evidence or explicit requirement/scope decision references." },
+        taskId: { type: "string", description: "The first target task id for the continuation." },
+        targetWindow: { type: "string" },
+        summary: { type: "string" },
+        packageId: { type: "string", description: "Defaults to taskId when omitted." },
+        sourceRef: { type: "string" },
+        targetSummary: { type: "string" },
+        designIntent: { type: "string", description: "Optional advisory implementation intent; never a gate." },
+        evidenceContract: { type: "object", description: "Optional execution-craft evidence contract for the first package." },
+        testCardId: { type: "string", description: "Required when the first target is the configured Test window." },
+        testContinuationOf: { type: "string" },
+        restartTest: { type: "boolean" },
+        testRestartReason: { type: "string" },
+        apply: { type: "boolean" },
+        adoptHost: { type: "boolean", description: "Explicitly transfer demand controller-host ownership to this host." },
+      },
+    },
+  },
+  {
     name: "wakeflow_archive",
-    description: "Archive completed Wakeflow content into the committed ledger; target selects which. demand: relocate a completed demand state root into the ledger — a P1-0 redaction guard refuses on any real-id-shaped string unless redact relocates a cleaned copy (original preserved for audit); commits state-root content to the version-controlled ledger, review redactedFields before pushing. todo: completed TODO rows + historical sync records into the workspace ledger. docs: explicit completed workspace documents into a ledger topic, or prune active index rows that already point at archive topics (never archives the active index/current plan by inference). Dry-run unless apply is true. Records archive facts only — never accepts work, selects next work, or sends host messages. (Transport-runtime GC is the separate wakeflow_prune_runtime.)",
+    description: "Archive completed Wakeflow content into the committed ledger; target selects which. demand: relocate a completed demand state root into the ledger — the archive privacy guard refuses real-id-shaped strings and user/workspace absolute paths unless redact relocates a portable cleaned copy (original preserved for audit); the staged copy is re-scanned before commit. todo: completed TODO rows + historical sync records into the workspace ledger. docs: explicit completed workspace documents into a ledger topic, or prune active index rows that already point at archive topics (never archives the active index/current plan by inference). Dry-run unless apply is true. Records archive facts only — never accepts work, selects next work, or sends host messages. (Transport-runtime GC is the separate wakeflow_prune_runtime.)",
     annotations: localWriteTool("Archive Wakeflow Content"),
     inputSchema: {
       type: "object",
@@ -389,7 +419,7 @@ const toolDefinitions = [
         },
         stateRoot: { type: "string", description: "target=demand: the completed demand state root to relocate." },
         reason: { type: "string", description: "target=demand: required archive reason." },
-        redact: { type: "boolean", description: "target=demand: relocate a redacted copy when real-id-shaped strings are present." },
+        redact: { type: "boolean", description: "target=demand: relocate a portable copy when real ids or user/workspace absolute paths are present; preserve the original locally." },
         evidenceRefs: { type: "array", items: { type: "string" }, description: "target=demand: evidence references to record." },
         month: { type: "string", description: "target=todo/docs: archive month YYYY-MM (backend policy default when omitted)." },
         date: { type: "string", description: "target=todo: archive date YYYY-MM-DD (today when omitted)." },
@@ -400,6 +430,21 @@ const toolDefinitions = [
         keepIndexRows: { type: "boolean", description: "target=docs: keep source index rows instead of trimming archived rows." },
         pruneIndexOnly: { type: "boolean", description: "target=docs: only prune index rows for already-archived docs; do not move files." },
         refreshSummaries: { type: "boolean", description: "target=todo/docs: refresh archive summary indexes after a successful run." },
+        apply: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "wakeflow_sanitize_archive",
+    description: "Sanitize one EXISTING archived demand in the configured project ledger when historical archive content contains real host ids or user/workspace absolute paths. The archive must already be state=archived and carry archive-manifest.json. Replaces only that archive path with a fully re-scanned portable copy, appends archive.sanitized audit history, and moves the original bytes to .wakeflow-local/preserved/. Never reopens the demand, changes acceptance, touches active state, or repairs arbitrary directories. Dry-run unless apply is true.",
+    annotations: localWriteTool("Sanitize Wakeflow Archive", true),
+    inputSchema: {
+      type: "object",
+      required: ["stateRoot", "reason"],
+      properties: {
+        root: { type: "string" },
+        stateRoot: { type: "string", description: "Existing archived demand root below wakeflow-ledger/workspace/archive/." },
+        reason: { type: "string", description: "Audit reason recorded in the archive amendment." },
         apply: { type: "boolean" },
       },
     },
@@ -648,6 +693,7 @@ const HOST_VISIBLE_PRIORITY_TOOLS = [
   "wakeflow_reduce_results",
   "wakeflow_decide_review",
   "wakeflow_complete_demand",
+  "wakeflow_continue_demand",
 ];
 
 export const tools = prioritizeHostVisibleTools(toolDefinitions);
@@ -993,6 +1039,32 @@ export const handlers = {
       "--json",
     ],
   }),
+  wakeflow_continue_demand: (args) => runWakeflowRuntime({
+    script: "wakeflow-state",
+    args: [
+      "continue-demand",
+      "--state-root", args.stateRoot,
+      "--continuation-type", args.continuationType,
+      "--reason", args.reason,
+      ...repeatValues("--evidence-ref", args.evidenceRefs),
+      "--task-package-id", args.packageId || args.taskId,
+      "--summary", args.summary,
+      "--target-window", args.targetWindow,
+      "--target-task-id", args.taskId,
+      ...optionalValue("--source-ref", args.sourceRef),
+      ...optionalValue("--target-summary", args.targetSummary),
+      ...optionalValue("--design-intent", args.designIntent),
+      ...(args.evidenceContract ? ["--evidence-contract", JSON.stringify(args.evidenceContract)] : []),
+      ...optionalValue("--test-card-id", args.testCardId),
+      ...optionalValue("--test-continuation-of", args.testContinuationOf),
+      ...(args.restartTest ? ["--restart-test"] : []),
+      ...optionalValue("--test-restart-reason", args.testRestartReason),
+      ...rootArgs(args),
+      ...(args.apply ? ["--write"] : []),
+      ...(args.adoptHost ? ["--adopt-host"] : []),
+      "--json",
+    ],
+  }),
   wakeflow_archive: async (args) => {
     if (args.target === "demand") {
       const stateRoot = requireValueForTool(args, "stateRoot", "wakeflow_archive target=demand");
@@ -1053,6 +1125,17 @@ export const handlers = {
     }
     throw new Error(`wakeflow_archive: unknown target "${args.target}" (expected demand | todo | docs)`);
   },
+  wakeflow_sanitize_archive: (args) => runWakeflowRuntime({
+    script: "wakeflow-state",
+    args: [
+      "sanitize-archive",
+      "--state-root", requireValueForTool(args, "stateRoot", "wakeflow_sanitize_archive"),
+      "--reason", requireValueForTool(args, "reason", "wakeflow_sanitize_archive"),
+      ...rootArgs(args),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+  }),
   wakeflow_intake_test_card: (args) => runWakeflowRuntime({
     script: "wakeflow-intake",
     args: [
@@ -1153,6 +1236,7 @@ export const handlers = {
       "cancel-demand",
       ...optionalValue("--state-root", args.stateRoot),
       ...optionalValue("--reason", args.reason),
+      ...rootArgs(args),
       ...(args.apply ? ["--write"] : []),
       "--json",
     ],

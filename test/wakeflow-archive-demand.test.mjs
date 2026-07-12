@@ -142,6 +142,11 @@ test("archive-demand write failure leaves the active state root unchanged before
     readFileSync(path.join(root, stateRoot, "controller-events.jsonl"), "utf8"),
     /"type":"demand\.archived"/,
   );
+  assert.doesNotMatch(
+    readFileSync(path.join(root, stateRoot, "developer-progress.md"), "utf8"),
+    /archived →/,
+    "a failed staging commit must not append a false archive timeline entry",
+  );
 });
 
 test("archive-demand refuses a planted real id unless --redact, then relocates a cleaned copy", () => {
@@ -170,6 +175,36 @@ test("archive-demand refuses a planted real id unless --redact, then relocates a
   assert.doesNotMatch(ledgerLeak, new RegExp(uuid), "the committed copy must not carry the real id");
   assert.match(ledgerLeak, /<redacted>/);
   assert.ok(payload.archived.redactedFields.some((field) => field.file === "leak.md"));
+});
+
+test("archive-demand refuses absolute workspace paths and re-scans the portable archive copy", () => {
+  const { root, stateRoot } = initDemand({ demandKey: "ARCH-PATH" });
+  const noteFile = path.join(root, stateRoot, "target-results", "path-leak.json");
+  mkdirSync(path.dirname(noteFile), { recursive: true });
+  writeJson(noteFile, {
+    wakeflowTrace: { root },
+    evidenceRefs: [`${root}/reports/private-result.json`],
+  });
+
+  const refuse = run(["archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "portable archive", "--write", "--json"]);
+  assert.notEqual(refuse.status, 0);
+  const refusedPayload = JSON.parse(refuse.stdout);
+  assert.match(refusedPayload.error, /workspace-absolute-path/);
+  assert.equal(existsSync(noteFile), true, "privacy refusal must leave the active root unchanged");
+
+  const archived = run(["archive-demand", "--root", root, "--state-root", stateRoot, "--reason", `evidence checked under ${root}`, "--redact", "--write", "--json"]);
+  assert.equal(archived.status, 0, archived.stderr || archived.stdout);
+  const payload = JSON.parse(archived.stdout);
+  const ledgerDest = path.join(root, payload.archived.ledgerDest);
+  const copied = readFileSync(path.join(ledgerDest, "target-results", "path-leak.json"), "utf8");
+  const committedManifest = readFileSync(path.join(ledgerDest, "archive-manifest.json"), "utf8");
+  assert.doesNotMatch(copied, new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(copied, /<workspace-root>/);
+  assert.doesNotMatch(committedManifest, new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), "preserved-pointer enrichment must not restore the raw manifest");
+  assert.match(committedManifest, /<workspace-root>/, "archive reason is sanitized in the committed manifest");
+  assert.doesNotMatch(readFileSync(path.join(ledgerDest, "archive-summary.md"), "utf8"), new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), "generated summary is included in the final scan");
+  assert.ok(payload.archived.redactedFields.some((field) => field.kinds?.["workspace-absolute-path"] > 0));
+  assert.equal(existsSync(path.join(root, payload.archived.originalPreservedAt, "target-results", "path-leak.json")), true);
 });
 
 // Cancel is the escape hatch for an in-flight demand: no acceptance, no

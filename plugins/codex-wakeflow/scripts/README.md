@@ -68,7 +68,10 @@ Current scripts:
   `planned`; `import-target-result` stores result evidence; `reduce-results`
   creates review candidates; `decide-review` records explicit total-control
   judgment; `complete-demand` records the final completion transition after
-  accepted task evidence. It does not dispatch work or parse Markdown as state.
+  accepted task evidence; `archive-demand` scans real IDs and user/workspace
+  absolute paths before and after staging; `sanitize-archive` applies the same
+  guard to one existing archived ledger root while preserving the original.
+  It does not dispatch work or parse Markdown as state.
 - `wakeflow-render-progress.mjs`: reads a state root, rebuilds `projection.json`, and
   replaces only the `Unified Status` marker block inside
   `developer-progress.md`.
@@ -188,7 +191,9 @@ Current scripts:
 - `wakeflow-archive-todo.mjs`: dry-run by default; moves completed global
   TODO rows and old sync records from the active TODO board to archive.
 - Normal controller archive flows should call the public MCP wrapper
-  `wakeflow_archive` (target todo/docs). The raw
+  `wakeflow_archive` (target demand/todo/docs). Historical demand archives with
+  privacy findings use `wakeflow_sanitize_archive`; it cannot target active or
+  arbitrary directories. The raw
   scripts remain the backend/fallback surface and preserve the same dry-run /
   explicit-apply semantics.
 - `wakeflow-next-work.mjs`: read-only by default; scans the configured Design

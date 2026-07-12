@@ -6,7 +6,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
+  archivePrivacyFindingCounts,
   scanStateRootForRealIds,
+  scanStateRootForArchivePrivacy,
   redactStateRootIntoCopy,
   realIdPattern,
 } from "../plugins/codex-wakeflow/scripts/lib/wakeflow-redaction.mjs";
@@ -64,6 +66,34 @@ test("redactStateRootIntoCopy redacts into a copy and leaves the source untouche
   assert.match(original, new RegExp(REAL_UUID), "source must be left untouched");
   assert.ok(result.redactedFields.some((f) => f.file === "wakeflow-state.json" && f.count === 1));
   assert.equal(scanStateRootForRealIds(dest, { hostProfile: stubProfile }).clean, true);
+});
+
+test("archive privacy scan categorizes workspace and home paths and produces a portable copy", () => {
+  const userHome = "/Users/wakeflow-test-user";
+  const workspaceRoot = `${userHome}/Documents/Wake Workspace`;
+  const root = makeStateRoot({
+    "target-results/result.json": JSON.stringify({
+      trace: { root: workspaceRoot },
+      workspaceEvidence: `${workspaceRoot}/reports/result.json`,
+      externalEvidence: `${userHome}/.asd/history.sqlite`,
+    }),
+  });
+  const scan = scanStateRootForArchivePrivacy(root, { hostProfile: stubProfile, workspaceRoot, userHome });
+  assert.equal(scan.clean, false);
+  assert.deepEqual(archivePrivacyFindingCounts(scan.findings), {
+    "workspace-absolute-path": 2,
+    "home-absolute-path": 1,
+  });
+
+  const dest = mkdtempSync(path.join(os.tmpdir(), "wakeflow-archive-privacy-dest-"));
+  const result = redactStateRootIntoCopy(root, dest, { hostProfile: stubProfile, workspaceRoot, userHome });
+  const copied = readFileSync(path.join(dest, "target-results/result.json"), "utf8");
+  assert.doesNotMatch(copied, /\/Users\/wakeflow-test-user/);
+  assert.match(copied, /<workspace-root>/);
+  assert.match(copied, /~\/.asd\/history\.sqlite/);
+  assert.equal(readFileSync(path.join(root, "target-results/result.json"), "utf8").includes(userHome), true, "source stays byte-for-byte available");
+  assert.ok(result.redactedFields.some((field) => field.kinds["workspace-absolute-path"] === 2));
+  assert.equal(scanStateRootForArchivePrivacy(dest, { hostProfile: stubProfile, workspaceRoot, userHome }).clean, true);
 });
 
 test("scan refuses when the host profile declares no id shape (cannot audit)", () => {

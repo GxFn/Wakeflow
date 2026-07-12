@@ -57,7 +57,7 @@ threads them into a single navigable spine:
 | State transitions | — | `wakeflow-state.json` (snapshot) + `controller-events.jsonl` (audit truth) | both copied into `archive/<month>/<demand>/` |
 | Acceptance & conclusion | — | `decide-review` events + timeline lines; completion reason/evidence on the `completed` event | `archive-manifest.json conclusion` + Task Ledger table in `archive-summary.md` |
 | Test information | Test Environment Spec in the requirement design (S1) | `test-cards/` in the state root + results as TargetResultEnvelopes | cards ride the archive copy; summary lists them |
-| Un-redacted original | — | stays in the state root | machine-moved to `.wakeflow-local/preserved/<date>-archive-original-<demand>/` (manifest; `originalPreservedAt` in the archive manifest) |
+| Un-redacted original | — | stays in the state root | `archive-demand --redact` moves it to `.wakeflow-local/preserved/<date>-archive-original-<demand>/`; historical `sanitize-archive` moves the polluted archive to `<date>-archive-sanitization-original-<demand>/` |
 
 The execution timeline is machine-appended (dispatch sent, target return,
 decision, completion, archive) into the progress doc's three append-only
@@ -77,6 +77,11 @@ an archived demand: `archive-summary.md` → `developer-progress.md` (timeline)
 - `archive-demand --redact` machine-moves the un-redacted original into
   `preserved/<date>-archive-original-<demand>/` after the ledger commit, so
   `current/` stays clean without manual moves.
+- `wakeflow_sanitize_archive` is the only sanctioned amendment for an already
+  archived demand. It accepts only a state-root below the configured
+  `wakeflow-ledger/workspace/archive/`, requires `state=archived` plus
+  `archive-manifest.json`, appends `archive.sanitized`, and preserves the
+  original locally. It never reopens or re-accepts the demand.
 - GC: `wakeflow_prune_runtime` (transport, default) and
   `wakeflow_prune_runtime target=preserved` (audit holds older than
   `preservedRetentionDays`, default 30) — both dry-run first. Legacy and
@@ -113,7 +118,9 @@ Wakeflow initialization creates starter ledger entries for:
 - `wakeflow-ledger/workspace/archive/index.md`.
 
 Long-term documents must avoid user absolute paths, API keys, tokens, and other
-private information. Use lowercase kebab-case names and dates.
+private information. Demand archive scans real host IDs plus workspace/home
+absolute paths, normalizes paths to `<workspace-root>` or `~`, and re-scans the
+staged tree before commit. Use lowercase kebab-case names and dates.
 
 ## Per-Window Folders
 

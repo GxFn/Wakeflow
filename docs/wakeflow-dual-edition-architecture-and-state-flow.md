@@ -313,11 +313,13 @@ to `--compact` (see §3.4).
 | `wakeflow_reduce_results` | `wakeflow-state` | `reduce-results` — `--state-root`, `apply`→`--write`, `adoptHost`→`--adopt-host` |
 | `wakeflow_decide_review` | `wakeflow-state` | `decide-review` — `--state-root`,`--candidate-id`,`--decision`,`--reason`, repeated `--evidence-ref`, `acceptBlocked`→`--accept-blocked`, `apply`→`--write`, `adoptHost`→`--adopt-host` |
 | `wakeflow_complete_demand` | `wakeflow-state` | `complete-demand` — `--state-root`,`--reason`, repeated `--evidence-ref`, `apply`→`--write`, `adoptHost`→`--adopt-host` |
+| `wakeflow_continue_demand` | `wakeflow-state` | `continue-demand` — completed/unarchived only; `--continuation-type`,`--reason`, repeated `--evidence-ref`, plus the first package/target fields; preserves prior completion, moves to planned, and adds that package in one locked write; archived roots refuse |
 | `wakeflow_deliver` | `wakeflow-todo` | `deliver` — `--type`,`--design-key`,`--title`, optional `--item`/`--priority`/`--original-plan`/`--requirement-design`/`--dependency`, `autoClaim`→`--auto-claim`, `apply`→`--apply`; Design's append-only `pending-claim` row on the global TODO board (board lock; `autoClaim` immutable) |
 | `wakeflow_prune_runtime` | `wakeflow-delivery` | `prune-runtime` — optional `--before`, `apply`→`--write`; replay-safe transport GC (target-results never deleted) |
 | `wakeflow_intake_test_card` | `wakeflow-intake` | `test-card` — `--state-root`,`--test-id`,`--target-window`,`--question`,`--object-boundary`, repeated self-check/scenario/success/failure/cannot-conclude/stop-condition, optional `--source-ref`, repeated evidence/allowed/forbidden operation, `apply`→`--write` |
 | `wakeflow_next_work` | `wakeflow-next-work` | (no subcommand) `--root`, optional `--id`/`--source`/`--limit`, `afterCompletion`→`--after-completion`, `apply`→`--write` |
 | `wakeflow_archive` | `wakeflow-state` / `wakeflow-archive-todo` / `wakeflow-archive-docs` | by `target`: `demand`→`wakeflow-state archive-demand` (`--state-root`/`--reason`, `redact`→`--redact`, repeated `--evidence-ref`, `apply`→`--write`); `todo`→`wakeflow-archive-todo` (optional `--month`/`--date`/`--keep-completed`/`--keep-sync`, `apply`→`--apply`); `docs`→`wakeflow-archive-docs` (optional `--topic`/`--month`, repeated `--file`, `keepIndexRows`/`pruneIndexOnly`, `apply`→`--apply`); todo/docs async — chain `wakeflow-archive-summaries` when `refreshSummaries && ok` |
+| `wakeflow_sanitize_archive` | `wakeflow-state` | `sanitize-archive` — requires one existing state-root below the configured `workspace/archive/`, `state=archived`, and `archive-manifest.json`; dry-run reports categorized real-ID/workspace-path/home-path findings; apply replaces it with a re-scanned portable copy, appends `archive.sanitized`, and moves the original to local `preserved/`; never reopens the demand |
 | `wakeflow_verify` | `wakeflow-cli` | `verify --root <root> [--script-tests] [--with-runtime | --strict-runtime] --json`; timeout 180000ms with any of script-tests/with-runtime/strict-runtime, else 120000ms |
 
 Arg→flag translation is mechanical via four helpers (`wakeflow-mcp-tools.mjs:1061-1117`):
@@ -1224,7 +1226,12 @@ state→delivery→result→reduce in a temp dir).
   once at delivery — requirement+autoClaim requires linked Original Plan +
   Requirement Design), and the controller claims it with `wakeflow_claim_next`
   / `wakeflow_create_demand` under the `maxActiveDemands` capacity gate.
-- **Archive / progress**: `archive-docs` moves `current/*.md` into the ledger
+- **Archive / progress**: demand `archive-demand` scans real host IDs plus
+  workspace/home absolute paths, normalizes paths to `<workspace-root>` / `~`
+  when `--redact` is explicit, and re-scans the complete staged tree before
+  commit. `sanitize-archive` is the sole historical amendment path and accepts
+  only an existing archived demand root; it preserves the polluted original
+  locally and does not change acceptance. `archive-docs` moves `current/*.md` into the ledger
   archive month/topic dir (refusing the current plan, `index.md`, dirs, non-`.md`,
   or paths outside active docs), rewrites links, and trims index rows into the
   record-map; `archive-todo` compacts completed TODO rows + old sync bullets;

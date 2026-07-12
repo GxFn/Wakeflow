@@ -14,7 +14,11 @@ import {
 import { controllerReviewScope, hasPendingReworkDecision, reductionStatusForTargetTask } from "./lib/wakeflow-review-scope.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import { releaseWindowLockForResult } from "./lib/wakeflow-delivery-store.mjs";
-import { scanStateRootForRealIds, redactStateRootIntoCopy } from "./lib/wakeflow-redaction.mjs";
+import {
+  archivePrivacyFindingCounts,
+  redactStateRootIntoCopy,
+  scanStateRootForArchivePrivacy,
+} from "./lib/wakeflow-redaction.mjs";
 import { WakeflowStateLockTimeoutError, withFileLock, withStateRootLock } from "./lib/wakeflow-state-lock.mjs";
 import { PROGRESS_SECTIONS, appendProgressTimeline } from "./lib/wakeflow-progress-appends.mjs";
 import {
@@ -51,8 +55,10 @@ Usage:
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
   node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked|redesign> --reason <text> [--evidence-ref <ref>] [--accept-blocked] [--write] [--json]
   node scripts/wakeflow-state.mjs complete-demand --state-root <path> --reason <text> --evidence-ref <ref> [--write] [--json]
+  node scripts/wakeflow-state.mjs continue-demand --state-root <path> --continuation-type <verified-bug|requirement-supplement|optimization> --reason <text> --evidence-ref <ref> --task-package-id <id> --summary <text> --target-window <window> --target-task-id <id> [--source-ref <ref>] [--design-intent <text>] [--evidence-contract <json>] [--write] [--json]
   node scripts/wakeflow-state.mjs cancel-demand --state-root <path> --reason <text> [--write] [--json]
   node scripts/wakeflow-state.mjs archive-demand --state-root <path> --reason <text> [--redact] [--evidence-ref <ref>] [--write] [--json]
+  node scripts/wakeflow-state.mjs sanitize-archive --state-root <archived-path> --reason <text> [--write] [--json]
   node scripts/wakeflow-state.mjs adopt-demand-host --state-root <path> [--reason <text>] [--write] [--json]
 
 Design:
@@ -485,6 +491,19 @@ function writeJson(file, value) {
 
 function writeText(file, value) {
   atomicWrite(file, `${value.trimEnd()}\n`);
+}
+
+function mergeRedactedFields(...fieldLists) {
+  const merged = new Map();
+  for (const field of fieldLists.flat()) {
+    const current = merged.get(field.file) ?? { file: field.file, count: 0, kinds: {} };
+    current.count += Number(field.count ?? 0);
+    for (const [kind, count] of Object.entries(field.kinds ?? {})) {
+      current.kinds[kind] = (current.kinds[kind] ?? 0) + Number(count ?? 0);
+    }
+    merged.set(field.file, current);
+  }
+  return [...merged.values()].sort((a, b) => a.file.localeCompare(b.file));
 }
 
 function readJson(file, label = "JSON file") {
@@ -1162,6 +1181,216 @@ function commandAddTaskPackageLocked(stateRoot) {
       "No automation, thread registration, dispatch, or acceptance was performed.",
     ],
   );
+}
+
+// A completed-but-unarchived demand may acquire a verified same-demand gap after
+// its first completion decision. Continuing it is deliberately ONE locked
+// controller operation: it records why the old completion is no longer the end
+// of the story and adds the first concrete package in the same locked mutation.
+// There is no empty "reopened" state for a controller to strand or branch from.
+function commandContinueDemand() {
+  const stateRoot = stateRootFromArg();
+  withLockedStateRoot(stateRoot, () => commandContinueDemandLocked(stateRoot));
+}
+
+function commandContinueDemandLocked(stateRoot) {
+  const continuationType = requireValue("--continuation-type");
+  const allowedContinuationTypes = new Set(["verified-bug", "requirement-supplement", "optimization"]);
+  if (!allowedContinuationTypes.has(continuationType)) {
+    fail(`--continuation-type must be one of: ${[...allowedContinuationTypes].join(", ")}.`);
+  }
+  const reason = requireValue("--reason");
+  const evidenceRefs = valuesFor("--evidence-ref");
+  if (evidenceRefs.length === 0) {
+    fail("continue-demand requires at least one --evidence-ref to the verified gap or explicit scope decision.");
+  }
+  const taskPackageId = requireValue("--task-package-id");
+  const summary = requireValue("--summary");
+  const targetWindow = requireValue("--target-window");
+  const targetTaskId = requireValue("--target-task-id");
+  const targetSummary = getValue("--target-summary", summary);
+  const sourceRef = getValue("--source-ref", null);
+  const designIntent = (getValue("--design-intent", "") || "").trim() || null;
+  const evidenceContract = validateEvidenceContractShape(parseOptionalJsonArg("--evidence-contract"));
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const eventsFile = path.join(stateRoot, "controller-events.jsonl");
+  const packageFile = path.join(stateRoot, "task-packages", `${slug(taskPackageId)}.json`);
+  const state = readJson(stateFile, "controller state");
+  const hostOwnership = ensureDemandHostOwnership(state);
+
+  if (state.state !== "completed") {
+    const direction = state.state === "archived"
+      ? "Archived demand history is immutable; create a new demand and cite this archive instead."
+      : "Only a completed, unarchived demand can use continue-demand; use add-task-package for active work.";
+    fail(`continue-demand requires state=completed; ${state.demandKey} is ${state.state}. ${direction}`);
+  }
+  if ((state.blockers ?? []).length > 0) {
+    fail("continue-demand refuses a completed state that still contains blockers; inspect and repair the inconsistent state first.");
+  }
+  const nonAcceptedTasks = (state.targetTasks ?? []).filter((item) => item.status !== "accepted");
+  const nonAcceptedPackages = (state.taskPackages ?? []).filter((item) => item.status !== "accepted");
+  if (nonAcceptedTasks.length > 0 || nonAcceptedPackages.length > 0) {
+    fail(`continue-demand refuses an inconsistent completed state with non-accepted history; tasks: ${nonAcceptedTasks.map((item) => item.targetTaskId).join(", ") || "none"}; packages: ${nonAcceptedPackages.map((item) => item.taskPackageId).join(", ") || "none"}.`);
+  }
+  let priorCompletionEvent = null;
+  try {
+    const events = readFileSync(eventsFile, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    priorCompletionEvent = [...events].reverse().find((item) => item.type === "demand.completed" && item.to === "completed") ?? null;
+  } catch (error) {
+    fail(`continue-demand cannot trust controller completion history: ${error.message}`);
+  }
+  if (!priorCompletionEvent) {
+    fail("continue-demand requires an explicit prior demand.completed event; do not legitimize a hand-edited completed state.");
+  }
+  if (existsSync(packageFile) || (state.taskPackages ?? []).some((item) => item.taskPackageId === taskPackageId)) {
+    fail(`task package already exists: ${taskPackageId}`);
+  }
+  if ((state.targetTasks ?? []).some((item) => item.targetTaskId === targetTaskId)) {
+    fail(`controller state already contains target task: ${targetTaskId}`);
+  }
+
+  const testExecution = testExecutionForNewTask({ stateRoot, state, targetWindow, targetTaskId });
+  const createdAt = nowIso();
+  const nextRevision = Number(state.revision ?? 0) + 1;
+  const eventId = nextEventId(createdAt, nextRevision);
+  const continuationId = `continuation-${String(nextRevision).padStart(4, "0")}`;
+  const continuation = {
+    continuationId,
+    type: continuationType,
+    reason,
+    evidenceRefs,
+    priorCompletionEventId: priorCompletionEvent.eventId,
+    priorCompletionRevision: Number(priorCompletionEvent.stateRevision ?? state.revision ?? 0),
+    createdAt,
+  };
+  const targetTask = {
+    targetTaskId,
+    taskPackageId,
+    targetWindow,
+    summary: targetSummary,
+    status: "pending",
+    createdAt,
+    continuationId,
+    ...(testExecution ? { testExecution } : {}),
+  };
+  const taskPackage = {
+    schemaVersion,
+    taskPackageId,
+    demandKey: state.demandKey,
+    summary,
+    status: "pending",
+    sourceRef,
+    ...(designIntent ? { designIntent } : {}),
+    ...(evidenceContract ? { evidenceContract } : {}),
+    ...(testExecution ? { testExecution } : {}),
+    continuation,
+    createdAt,
+    targetTasks: [targetTask],
+  };
+  const nextState = {
+    ...state,
+    state: "planned",
+    stateReason: `${continuationType} continuation: ${reason}`,
+    revision: nextRevision,
+    updatedAt: createdAt,
+    allowedActions: ["prepare-dispatch-from-state", "add-task-package", "wakeflow-render-progress"],
+    decisionsRequired: [],
+    taskPackages: [
+      ...(state.taskPackages ?? []),
+      {
+        taskPackageId,
+        summary,
+        status: "pending",
+        sourceRef,
+        ...(designIntent ? { designIntent } : {}),
+        ...(evidenceContract ? { evidenceContract } : {}),
+        ...(testExecution ? { testExecution } : {}),
+        continuation,
+        createdAt,
+      },
+    ],
+    targetTasks: [...(state.targetTasks ?? []), targetTask],
+    windows: upsertWindowState(state.windows ?? [], {
+      windowName: targetWindow,
+      windowState: "pending",
+      taskPackageId,
+      targetTaskId,
+    }),
+    review: {
+      status: "none",
+      readyResultIds: [],
+      blockedResultIds: [],
+      missingResultIds: [],
+    },
+    projection: {
+      ...(state.projection ?? {}),
+      status: "stale",
+    },
+  };
+  const event = {
+    eventId,
+    createdAt,
+    actor: "controller",
+    type: "demand.continued",
+    from: "completed",
+    to: "planned",
+    reason: `${continuationType}: ${reason}`,
+    evidenceRefs,
+    continuationId,
+    continuationType,
+    taskPackageId,
+    targetTaskId,
+    allowedWrites: [
+      "wakeflow-state.json",
+      "controller-events.jsonl",
+      `task-packages/${slug(taskPackageId)}.json`,
+    ],
+    forbiddenConclusions: [
+      "continuation-erases-prior-completion",
+      "continuation-is-dispatch",
+      "continuation-authorizes-unrelated-scope",
+      "continuation-reopens-archived-history",
+    ],
+    stateRevision: nextRevision,
+    ...(hostOwnership.claimed || hostOwnership.transferredFrom ? { hostOwnership } : {}),
+  };
+
+  if (write) {
+    mkdirSync(path.dirname(packageFile), { recursive: true });
+    writeJson(packageFile, taskPackage);
+    appendJsonLine(eventsFile, event);
+    writeJson(stateFile, nextState);
+    appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.decisions,
+      `${createdAt} demand continued (${continuationType}) — ${reason}; first package ${taskPackageId} → ${targetWindow}`);
+    refreshWorkspaceProjection({ workspaceRoot, updatedAt: createdAt });
+  }
+
+  output({
+    ok: true,
+    command: "continue-demand",
+    hostOwnership,
+    wrote: write,
+    demandKey: state.demandKey,
+    stateRoot: relative(stateRoot),
+    previousState: "completed",
+    nextState: "planned",
+    continuation,
+    taskPackageId,
+    taskPackageFile: relative(packageFile),
+    targetTaskId,
+    targetWindow,
+    stateRevision: nextRevision,
+    eventId,
+    projectionStatus: "stale",
+    forbiddenConclusions: event.forbiddenConclusions,
+    agentNext: write
+      ? "The prior completion remains in history. Review the new package, then prepare and send its delivery; the demand must pass review and complete-demand again before archive."
+      : "Dry-run only. Re-run with --write to record the continuation and its first task package in one locked operation.",
+  }, [
+    `${write ? "Continued" : "Would continue"} completed demand ${state.demandKey} with ${taskPackageId}.`,
+    "The prior completion event and all accepted task evidence remain unchanged.",
+    "No dispatch, host send, acceptance, or archive was performed.",
+  ]);
 }
 
 function deliveryEnvelopeFileForId(deliveryId) {
@@ -2490,11 +2719,12 @@ function scanDanglingEnvelopeRefs(stateRoot) {
   return refs;
 }
 
-// archive-demand: relocate a completed demand's state root into the committed ledger. The P1-0
-// redaction guard is a HARD precondition — it refuses on any real-id-shaped string unless
-// --redact relocates a cleaned COPY (the original is preserved in the gitignored active tier
-// for a human audit). Dry-run unless --write. The archive copy is fully staged before
-// the ledger is committed, so a filesystem failure cannot half-flip the active state root.
+// archive-demand: relocate a completed demand's state root into the committed ledger. The
+// archive-privacy guard is a HARD precondition — it refuses on real-id-shaped strings and
+// user/workspace absolute paths unless --redact relocates a portable cleaned COPY (the
+// original is preserved in the gitignored active tier for a human audit). Dry-run unless
+// --write. The archive copy is fully staged and re-scanned before the ledger is committed,
+// so a filesystem or redaction failure cannot half-flip the active state root.
 function commandArchiveDemand() {
   const stateRoot = stateRootFromArg();
   withLockedStateRoot(stateRoot, () => commandArchiveDemandLocked(stateRoot));
@@ -2528,12 +2758,13 @@ function commandArchiveDemandLocked(stateRoot) {
     fail(`archive-demand refuses: ${openStreams.length} isolation worktree window(s) are still open for ${state.demandKey}: ${openStreams.map((repo) => repo.windowName).join(", ")}. Close them (stream-close) before archiving.`);
   }
 
-  const scan = scanStateRootForRealIds(stateRoot, { hostProfile });
+  const scan = scanStateRootForArchivePrivacy(stateRoot, { hostProfile, workspaceRoot });
+  const findingCounts = archivePrivacyFindingCounts(scan.findings);
   if (!scan.clean && !redact) {
     fail([
-      `archive-demand refuses: ${scan.findings.length} possible real id(s) in the state-root tree.`,
+      `archive-demand refuses: ${scan.findings.length} archive privacy finding(s) in the state-root tree (${JSON.stringify(findingCounts)}).`,
       "Audit them, then re-run with --redact to relocate a cleaned COPY (original preserved for audit).",
-      ...scan.findings.slice(0, 5).map((finding) => `  ${finding.file ?? "?"}:${finding.line ?? "?"} ${finding.match ?? finding.reason ?? ""}`),
+      ...scan.findings.slice(0, 5).map((finding) => `  [${finding.kind ?? "unknown"}] ${finding.file ?? "?"}:${finding.line ?? "?"} ${finding.match ?? finding.reason ?? ""}`),
     ].join("\n"));
   }
 
@@ -2559,12 +2790,14 @@ function commandArchiveDemandLocked(stateRoot) {
         ledgerDest: relative(ledgerDest),
         redactNeeded: !scan.clean,
         findingCount: scan.findings.length,
+        findingCounts,
+        findings: scan.findings.slice(0, 10),
         danglingRefs,
       },
       forbiddenConclusions: ["archive-is-deletion", "archive-is-acceptance"],
       agentNext: scan.clean
         ? "Dry-run only. Re-run with --write to flip the demand to archived and relocate it into the committed ledger."
-        : "Dry-run only. Real ids found — audit them, then re-run with --redact --write to relocate a cleaned copy.",
+        : "Dry-run only. Archive privacy findings found — audit them, then re-run with --redact --write to relocate a cleaned copy.",
     }, [`Would archive ${state.demandKey} -> ${relative(ledgerDest)}${scan.clean ? "" : " (redaction required)"}`]);
     return;
   }
@@ -2596,7 +2829,11 @@ function commandArchiveDemandLocked(stateRoot) {
   };
 
   let redactedFields = [];
-  const preservedOriginal = redact && !scan.clean;
+  // --redact is an explicit request to produce a sanitized copy. Preserve the
+  // source even when the pre-scan is clean because command inputs used while
+  // rendering the archive summary (for example reason/evidence refs) can add a
+  // finding after the tree copy.
+  const preservedOriginal = redact;
   // Archive spine: thread the whole demand story into the manifest so the
   // archived tree is navigable without archaeology — provenance (design key +
   // source docs), the completion conclusion, the per-task handling rollup,
@@ -2646,18 +2883,19 @@ function commandArchiveDemandLocked(stateRoot) {
     testCards,
   };
   const stagingDest = `${ledgerDest}.tmp-${process.pid}-${Date.now()}`;
-  // Written before the copy so the ARCHIVED progress doc closes its own story.
-  appendProgressTimeline(stateRoot, state, PROGRESS_SECTIONS.decisions,
-    `${createdAt} archived → ${relative(ledgerDest)} — ${reason}`);
 
   try {
     mkdirSync(path.dirname(ledgerDest), { recursive: true });
-    if (preservedOriginal) {
-      ({ redactedFields } = redactStateRootIntoCopy(stateRoot, stagingDest, { hostProfile }));
+    if (redact) {
+      ({ redactedFields } = redactStateRootIntoCopy(stateRoot, stagingDest, { hostProfile, workspaceRoot }));
       archiveManifest.redactedFields = redactedFields;
     } else {
       cpSync(stateRoot, stagingDest, { recursive: true });
     }
+    // Append only inside the staged copy. A failed archive must not leave a
+    // false "archived" line in the still-active human progress document.
+    appendProgressTimeline(stagingDest, state, PROGRESS_SECTIONS.decisions,
+      `${createdAt} archived → ${relative(ledgerDest)} — ${reason}`);
     appendJsonLine(path.join(stagingDest, "controller-events.jsonl"), event);
     writeJson(path.join(stagingDest, "wakeflow-state.json"), nextState);
     writeJson(path.join(stagingDest, "archive-manifest.json"), archiveManifest);
@@ -2703,6 +2941,25 @@ function commandArchiveDemandLocked(stateRoot) {
       `- Un-redacted original: ${preservedOriginal ? "moved to .wakeflow-local/preserved/ (see archive-manifest.json originalPreservedAt)" : "not needed (archive copy is complete)"}`,
       "",
     ].join("\n"));
+    let stagedScan = scanStateRootForArchivePrivacy(stagingDest, { hostProfile, workspaceRoot });
+    if (!stagedScan.clean && redact) {
+      // Generated manifest/summary/event content is written after the first
+      // copy, so sanitize the complete staged tree once more. This closes the
+      // gap where a reason or evidence ref introduces a path that was absent
+      // from the original state root.
+      const restagingDest = `${stagingDest}.sanitized`;
+      const secondPass = redactStateRootIntoCopy(stagingDest, restagingDest, { hostProfile, workspaceRoot });
+      redactedFields = mergeRedactedFields(redactedFields, secondPass.redactedFields);
+      rmSync(stagingDest, { recursive: true, force: true });
+      renameSync(restagingDest, stagingDest);
+      const sanitizedManifest = readJson(path.join(stagingDest, "archive-manifest.json"), "sanitized archive manifest");
+      writeJson(path.join(stagingDest, "archive-manifest.json"), { ...sanitizedManifest, redactedFields });
+      stagedScan = scanStateRootForArchivePrivacy(stagingDest, { hostProfile, workspaceRoot });
+    }
+    if (!stagedScan.clean) {
+      const stagedCounts = archivePrivacyFindingCounts(stagedScan.findings);
+      throw new Error(`staged archive failed the final privacy scan (${JSON.stringify(stagedCounts)}): ${stagedScan.findings.slice(0, 3).map((finding) => `${finding.file ?? "?"}:${finding.line ?? "?"}`).join(", ")}`);
+    }
     renameSync(stagingDest, ledgerDest);
   } catch (error) {
     if (existsSync(stagingDest)) rmSync(stagingDest, { recursive: true, force: true });
@@ -2747,7 +3004,12 @@ function commandArchiveDemandLocked(stateRoot) {
       ].join("\n"));
       originalPreservedAt = relative(preservedDest);
       try {
-        writeJson(path.join(ledgerDest, "archive-manifest.json"), { ...archiveManifest, originalPreservedAt });
+        // Never rehydrate the pre-redaction in-memory manifest after the staged
+        // tree passed its final scan. Read the committed clean manifest and add
+        // only the relative preserved pointer.
+        const committedManifestFile = path.join(ledgerDest, "archive-manifest.json");
+        const committedManifest = JSON.parse(readFileSync(committedManifestFile, "utf8"));
+        writeJson(committedManifestFile, { ...committedManifest, originalPreservedAt });
       } catch {
         // manifest enrichment is best-effort; the archive itself is committed
       }
@@ -2795,10 +3057,214 @@ function commandArchiveDemandLocked(stateRoot) {
   }, [
     `Archived ${state.demandKey} -> ${relative(ledgerDest)}`,
     redactedFields.length
-      ? `Redacted ${redactedFields.reduce((total, field) => total + field.count, 0)} id(s) into the committed copy; original preserved for audit${originalPreservedAt ? ` at ${originalPreservedAt}` : ""}.`
+      ? `Redacted ${redactedFields.reduce((total, field) => total + field.count, 0)} sensitive value(s) into the committed copy; original preserved for audit${originalPreservedAt ? ` at ${originalPreservedAt}` : ""}.`
       : "No redaction needed.",
     danglingRefs.length ? `WARNING: ${danglingRefs.length} delivery envelope(s) still reference the old path.` : "",
   ].filter(Boolean));
+}
+
+// sanitize-archive is deliberately narrower than archive-demand. It can only
+// amend an existing archived demand in the configured project ledger, never an
+// active state root. The original archived bytes move to the gitignored
+// preserved tier, while a fully sanitized/re-scanned replacement keeps the
+// same durable archive path and appends an audit event.
+function commandSanitizeArchive() {
+  const stateRoot = stateRootFromArg();
+  withLockedStateRoot(stateRoot, () => commandSanitizeArchiveLocked(stateRoot));
+}
+
+function commandSanitizeArchiveLocked(stateRoot) {
+  const reason = requireValue("--reason");
+  const config = loadWorkspaceConfig({ workspaceRoot, args: options });
+  const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args: options, config });
+  const archiveRoot = path.join(ledgerPaths.projectLedgerRoot, "workspace", "archive");
+  const archiveRelative = path.relative(archiveRoot, stateRoot);
+  if (!archiveRelative || archiveRelative.startsWith("..") || path.isAbsolute(archiveRelative)) {
+    fail(`sanitize-archive accepts only an existing demand root below ${relative(archiveRoot)}; got ${relative(stateRoot)}.`);
+  }
+
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const eventsFile = path.join(stateRoot, "controller-events.jsonl");
+  const manifestFile = path.join(stateRoot, "archive-manifest.json");
+  const state = readJson(stateFile, "archived controller state");
+  if (state.state !== "archived") {
+    fail(`sanitize-archive requires state=archived; ${state.demandKey ?? relative(stateRoot)} is ${state.state}.`);
+  }
+  if (!existsSync(manifestFile)) {
+    fail(`sanitize-archive requires archive-manifest.json: ${relative(manifestFile)}.`);
+  }
+  const manifest = readJson(manifestFile, "archive manifest");
+  const scan = scanStateRootForArchivePrivacy(stateRoot, { hostProfile, workspaceRoot });
+  const findingCounts = archivePrivacyFindingCounts(scan.findings);
+  if (scan.clean) {
+    output({
+      ok: true,
+      command: "sanitize-archive",
+      wrote: false,
+      alreadyClean: true,
+      stateRoot: relative(stateRoot),
+      findingCount: 0,
+      findingCounts,
+      agentNext: "The archived demand already passes the archive privacy scan; no files were changed.",
+    }, [`Archive already clean: ${relative(stateRoot)}`]);
+    return;
+  }
+
+  if (!write) {
+    output({
+      ok: true,
+      command: "sanitize-archive",
+      wrote: false,
+      wouldSanitize: {
+        demandKey: state.demandKey,
+        stateRoot: relative(stateRoot),
+        findingCount: scan.findings.length,
+        findingCounts,
+        findings: scan.findings.slice(0, 10),
+      },
+      agentNext: "Dry-run only. Review the categorized findings, then re-run with --write to replace the archive with a clean copy while preserving the original under .wakeflow-local/preserved/.",
+    }, [`Would sanitize ${relative(stateRoot)} (${scan.findings.length} finding(s))`]);
+    return;
+  }
+
+  const createdAt = nowIso();
+  const nextRevision = Number(state.revision ?? 0) + 1;
+  const stagingDest = `${stateRoot}.sanitize-tmp-${process.pid}-${Date.now()}`;
+  const preservedRoot = path.join(workspaceRoot, ".wakeflow-local", "preserved");
+  const dateSlug = createdAt.slice(0, 10);
+  let preservedDest = path.join(preservedRoot, `${dateSlug}-archive-sanitization-original-${slug(state.demandKey)}`);
+  for (let n = 2; existsSync(preservedDest); n += 1) {
+    preservedDest = path.join(preservedRoot, `${dateSlug}-archive-sanitization-original-${slug(state.demandKey)}-${n}`);
+  }
+  const originalPreservedAt = relative(preservedDest);
+  const event = {
+    eventId: nextEventId(createdAt, nextRevision),
+    createdAt,
+    actor: "controller",
+    type: "archive.sanitized",
+    from: "archived",
+    to: "archived",
+    reason,
+    evidenceRefs: [],
+    allowedWrites: ["wakeflow-state.json", "controller-events.jsonl", "archive-manifest.json", "archive-summary.md"],
+    forbiddenConclusions: ["archive-sanitization-reopens-demand", "archive-sanitization-changes-acceptance"],
+    stateRevision: nextRevision,
+  };
+  const nextState = {
+    ...state,
+    revision: nextRevision,
+    updatedAt: createdAt,
+  };
+
+  let redactedFields = [];
+  try {
+    ({ redactedFields } = redactStateRootIntoCopy(stateRoot, stagingDest, { hostProfile, workspaceRoot }));
+    const historyEntry = {
+      sanitizedAt: createdAt,
+      reason,
+      source: "sanitize-archive",
+      findingCounts,
+      redactedFields,
+      originalPreservedAt,
+    };
+    const nextManifest = {
+      ...manifest,
+      version: Math.max(Number(manifest.version ?? 2), 3),
+      redactedFields: mergeRedactedFields(manifest.redactedFields ?? [], redactedFields),
+      sanitizationHistory: [...(Array.isArray(manifest.sanitizationHistory) ? manifest.sanitizationHistory : []), historyEntry],
+      sanitizationOriginalPreservedAt: originalPreservedAt,
+    };
+    appendJsonLine(path.join(stagingDest, "controller-events.jsonl"), event);
+    writeJson(path.join(stagingDest, "wakeflow-state.json"), nextState);
+    writeJson(path.join(stagingDest, "archive-manifest.json"), nextManifest);
+    const summaryFile = path.join(stagingDest, "archive-summary.md");
+    const existingSummary = existsSync(summaryFile)
+      ? readFileSync(summaryFile, "utf8").trimEnd()
+      : `# ${state.demandKey} — Archive Summary`;
+    writeText(summaryFile, [
+      existingSummary,
+      "",
+      "## Sanitization Amendments",
+      "",
+      `- ${createdAt}: archive privacy findings removed — ${reason}`,
+      `- Original preserved at: ${originalPreservedAt}`,
+    ].join("\n"));
+
+    let stagedScan = scanStateRootForArchivePrivacy(stagingDest, { hostProfile, workspaceRoot });
+    if (!stagedScan.clean) {
+      const restagingDest = `${stagingDest}.sanitized`;
+      const secondPass = redactStateRootIntoCopy(stagingDest, restagingDest, { hostProfile, workspaceRoot });
+      redactedFields = mergeRedactedFields(redactedFields, secondPass.redactedFields);
+      rmSync(stagingDest, { recursive: true, force: true });
+      renameSync(restagingDest, stagingDest);
+      const sanitizedManifest = readJson(path.join(stagingDest, "archive-manifest.json"), "sanitized archive manifest");
+      const sanitizedHistory = Array.isArray(sanitizedManifest.sanitizationHistory)
+        ? sanitizedManifest.sanitizationHistory
+        : [];
+      const finalizedManifest = {
+        ...sanitizedManifest,
+        redactedFields: mergeRedactedFields(sanitizedManifest.redactedFields ?? [], redactedFields),
+        sanitizationHistory: sanitizedHistory.map((entry, index) => (
+          index === sanitizedHistory.length - 1 ? { ...entry, redactedFields } : entry
+        )),
+      };
+      writeJson(path.join(stagingDest, "archive-manifest.json"), finalizedManifest);
+      stagedScan = scanStateRootForArchivePrivacy(stagingDest, { hostProfile, workspaceRoot });
+    }
+    if (!stagedScan.clean) {
+      throw new Error(`sanitized archive failed the final privacy scan (${JSON.stringify(archivePrivacyFindingCounts(stagedScan.findings))}).`);
+    }
+  } catch (error) {
+    if (existsSync(stagingDest)) rmSync(stagingDest, { recursive: true, force: true });
+    fail(`sanitize-archive failed before replacement; archived root was left unchanged: ${error.message}`);
+  }
+
+  let originalMoved = false;
+  try {
+    mkdirSync(preservedRoot, { recursive: true });
+    renameSync(stateRoot, preservedDest);
+    originalMoved = true;
+    writeFileSync(path.join(preservedDest, "MANIFEST.md"), [
+      `# Preserved: ${path.basename(preservedDest)}`,
+      "",
+      `- Preserved at: ${createdAt}`,
+      `- Source: ${relative(stateRoot)}`,
+      `- Reason: pre-sanitization original of archived demand ${state.demandKey}`,
+      "- Preserved by: sanitize-archive",
+      "- Retention: audit hold; prune-preserved lists it once aged past preservedRetentionDays",
+      "",
+    ].join("\n"));
+    renameSync(stagingDest, stateRoot);
+  } catch (error) {
+    if (originalMoved && !existsSync(stateRoot) && existsSync(preservedDest)) {
+      try {
+        const preserveManifest = path.join(preservedDest, "MANIFEST.md");
+        if (existsSync(preserveManifest)) unlinkSync(preserveManifest);
+        renameSync(preservedDest, stateRoot);
+      } catch {
+        // The error below names both locations for manual recovery.
+      }
+    }
+    if (existsSync(stagingDest)) rmSync(stagingDest, { recursive: true, force: true });
+    fail(`sanitize-archive could not replace ${relative(stateRoot)}; inspect ${relative(preservedDest)} before retrying: ${error.message}`);
+  }
+
+  output({
+    ok: true,
+    command: "sanitize-archive",
+    wrote: true,
+    sanitized: {
+      demandKey: state.demandKey,
+      stateRoot: relative(stateRoot),
+      findingCount: scan.findings.length,
+      findingCounts,
+      redactedFields,
+      originalPreservedAt,
+      stateRevision: nextRevision,
+    },
+    forbiddenConclusions: ["archive-sanitization-reopens-demand", "archive-sanitization-changes-acceptance"],
+    agentNext: "The archive was replaced in place with a privacy-clean copy. Review the manifest amendment and preserved-original pointer before committing.",
+  }, [`Sanitized archive ${relative(stateRoot)}; original preserved at ${originalPreservedAt}`]);
 }
 
 try {
@@ -2824,11 +3290,17 @@ try {
     case "complete-demand":
       commandCompleteDemand();
       break;
+    case "continue-demand":
+      commandContinueDemand();
+      break;
     case "cancel-demand":
       commandCancelDemand();
       break;
     case "archive-demand":
       commandArchiveDemand();
+      break;
+    case "sanitize-archive":
+      commandSanitizeArchive();
       break;
     case "window-view":
       commandWindowView();

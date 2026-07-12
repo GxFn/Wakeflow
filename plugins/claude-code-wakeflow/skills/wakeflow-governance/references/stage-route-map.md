@@ -103,13 +103,19 @@ on `wakeflow-ledger/workspace/pending-merges.md`) → `wakeflow_archive`
 branches is HUMAN-reviewed and decentralized — outside Wakeflow, no controller
 merges them.
 
+Before archive, a verified same-demand gap may return from S6 to S2 only through
+`wakeflow_continue_demand`: it records the bug/supplement/authorized-optimization
+authority and the first package atomically while retaining the earlier completion
+event. Archived history never returns; independent follow-up scope starts at S0/S1
+as a new demand.
+
 ## Capability-to-stage classification
 
 | Stage | MCP tools | Host commands | Skills/prose |
 | --- | --- | --- | --- |
 | S0 | `wakeflow_status` | `check-workspace`, `window-status` | CLAUDE.md posture |
 | S1 | `wakeflow_deliver` | — | Design support surface docs |
-| S2 | `wakeflow_next_work`, `wakeflow_claim_next`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_render_progress` | — | governance TODO intake |
+| S2 | `wakeflow_next_work`, `wakeflow_claim_next`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_render_progress` | — | governance TODO intake |
 | S3 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result`, `wakeflow_release_window_lock` | `deliver`, `send`, `stream-open/close/list`, `launch-*`, `replace-all` | controller dispatch + target skill |
 | S4 | `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_view` | `readback`, `wait-results` | controller acceptance practices |
 | S5 | `wakeflow_intake_test_card` | (dispatch = S3 transport) | testing-validation reference |

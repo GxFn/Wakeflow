@@ -105,13 +105,19 @@ the pending-merges ledger; the archive gate refuses open isolation windows) →
 `wakeflow_archive` (redaction gate) → TODO rollup / `wakeflow_prune_runtime`.
 Merge-back of surviving branches is human-reviewed, outside Wakeflow.
 
+Before archive, a verified same-demand gap may return from S6 to S2 only through
+`wakeflow_continue_demand`: it records the bug/supplement/authorized-optimization
+authority and the first package atomically while retaining the earlier completion
+event. Archived history never returns; independent follow-up scope starts at S0/S1
+as a new demand.
+
 ## Capability-to-stage classification
 
 | Stage | MCP tools | Host tools | Skills/prose |
 | --- | --- | --- | --- |
 | S0 | `wakeflow_status` | — | AGENTS.md posture |
 | S1 | `wakeflow_deliver` | — | Design support surface docs |
-| S2 | `wakeflow_next_work`, `wakeflow_claim_next`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_render_progress` | — | governance TODO intake |
+| S2 | `wakeflow_next_work`, `wakeflow_claim_next`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_render_progress` | — | governance TODO intake |
 | S3 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result`, `wakeflow_release_window_lock`, `wakeflow_pod_open`/`wakeflow_pod_list` | `create_thread`, `set_thread_title`, `send_message_to_thread` | controller dispatch + target skill |
 | S4 | `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_view` | — | controller acceptance practices |
 | S5 | `wakeflow_intake_test_card` | (dispatch = S3 transport) | testing-validation reference |

@@ -341,8 +341,14 @@ The loop is the same on both hosts; only how you drive it differs.
    and attempt bound. A Test skill such as progressive-chain-validation is
    usable only when the card names it explicitly.
 7. When every required task is accepted, run
-   `wakeflow_complete_demand` and `wakeflow_archive` (redaction-guarded) close
-   the story into the ledger.
+   `wakeflow_complete_demand` and `wakeflow_archive` close the story into the
+   ledger. Demand archive dry-run reports real-id and absolute-path findings;
+   use `redact: true` to commit a re-scanned portable copy while preserving the
+   original locally.
+   If a verified same-scope gap appears after completion but before archive,
+   `wakeflow_continue_demand` preserves that completion and adds the
+   first bug/supplement/authorized-optimization package. Archived history stays
+   immutable; independent follow-up work uses a new demand.
 
 **Codex (natural prompts):** the same loop through the same MCP tools —
 "Use Wakeflow to initialize this workspace", "claim the next demand",
@@ -434,12 +440,12 @@ Primary tool groups:
 | Need | MCP tools |
 | --- | --- |
 | Setup and window registration | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
-| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
+| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
 | Candidate scan and isolated pods | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_close`, `wakeflow_pod_list` |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| Archive, views, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs), `wakeflow_view` (task-ledger/window/focus/trace/storage), `wakeflow_prune_runtime`, `wakeflow_verify` |
+| Archive, views, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs), `wakeflow_sanitize_archive` (bounded historical archive repair), `wakeflow_view` (task-ledger/window/focus/trace/storage), `wakeflow_prune_runtime`, `wakeflow_verify` |
 | Host ownership and locks | `wakeflow_adopt_demand_host`, `wakeflow_release_window_lock` |
 
 Public MCP tools are for outer agent workflows. Target closeout is deliberately
@@ -450,9 +456,10 @@ reduction, and explicit decision; result reduction only creates a review
 candidate and is not acceptance. Do not collapse those steps into a single
 target-window MCP tool. Internal steps such as archive summary refresh internals,
 keep-live state, and script backend execution stay inside Wakeflow JS/runtime
-scripts and skills. Public archive MCP tools wrap only controller-approved TODO
-or workspace document archive flows; they do not make acceptance decisions or
-send host messages.
+scripts and skills. Public archive MCP tools wrap controller-approved demand,
+TODO, and workspace-document archive flows. `wakeflow_sanitize_archive` only
+replaces an already archived demand with a privacy-clean copy and preserves the
+original locally; neither tool makes acceptance decisions or sends host messages.
 
 Wakeflow declares MCP tool annotations for every public tool: read-only tools
 are marked read-only, write tools are local, non-destructive, and closed-world.

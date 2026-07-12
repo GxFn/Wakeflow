@@ -28,6 +28,11 @@
     "allowedWrites": { "type": "array", "items": { "type": "string" } },
     "forbiddenConclusions": { "type": "array", "items": { "type": "string" } },
     "wakeflowTrace": { "type": "object" },
+    "continuationId": { "type": "string", "minLength": 1 },
+    "continuationType": { "type": "string", "enum": ["verified-bug", "requirement-supplement", "optimization"] },
+    "taskPackageId": { "type": "string", "minLength": 1 },
+    "targetTaskId": { "type": "string", "minLength": 1 },
+    "hostOwnership": { "type": "object" },
     "stateRevision": { "type": "integer", "minimum": 1 }
   },
   "additionalProperties": false

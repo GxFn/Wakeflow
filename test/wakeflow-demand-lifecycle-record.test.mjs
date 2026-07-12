@@ -97,7 +97,7 @@ test("provenance + execution timeline: create from a TODO row, act, and read the
 
   // Archive: spine manifest v2 + human summary, and the closing line rides the copy
   const archived = run(stateScript, ["archive-demand", "--root", root, "--state-root", stateRoot,
-    "--reason", "story closed", "--write"]);
+    "--reason", "story closed", "--redact", "--write"]);
   assert.equal(archived.status, 0, archived.stderr || archived.stdout);
   const ledgerDest = JSON.parse(archived.stdout).archived.ledgerDest;
   const manifest = JSON.parse(readFileSync(path.join(root, ledgerDest, "archive-manifest.json"), "utf8"));

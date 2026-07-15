@@ -166,7 +166,7 @@ Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环�
 
 | Surface | 内容 |
 | --- | --- |
-| MCP server | `.mcp.json` 启动 `node ${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs`，无 `node_modules` 依赖的 standalone server。 |
+| MCP server | `.mcp.json` 启动 `${CLAUDE_PLUGIN_ROOT}/bin/wakeflow-mcp`；启动器选择 Node.js 20+ 后启动无 `node_modules` 依赖的 `mcp/server.cjs`。 |
 | Skills | `wakeflow-controller`、`wakeflow-target`、`wakeflow-target-craft`、`wakeflow-governance` 操作手册。 |
 | Slash commands | `/wakeflow:init`、`/wakeflow:check`、`/wakeflow:windows`、`/wakeflow:status`、`/wakeflow:dispatch`、`/wakeflow:review`、`/wakeflow:unattended`。 |
 | Host transport helper | `scripts/lib/wakeflow-claude-host.mjs`。舰队：`preflight`、`ensure-server`、`launch-window`、`launch-all`、`replace-all`、`retitle`、`arrange-windows`、`window-status`、`check-workspace`；投递：`deliver`（主路径）、`send`、`readback`、`wait-results`、`activity-monitor`；策略：`seed-permissions`、`set-unattended`、`stamp-runtime`；跨需求：`stream-open`、`stream-close`、`stream-list`、`pod-open`、`pod-close`、`pod-list`。 |
@@ -211,7 +211,7 @@ bottle 错误可重试一次。
 
 Wakeflow 是一个强大的本地自动化插件。安装前请清楚它在你机器上做什么——没有任何隐藏:
 
-- **运行一个本地 MCP server**(`node mcp/server.cjs`):独立、无依赖的 Node 进程,读写工作区状态文件,自身不发任何网络请求。
+- **运行一个本地 MCP server**（`bin/wakeflow-mcp`）：无依赖启动器选择 Node.js 20+ 后启动 `mcp/server.cjs`。server 读写工作区状态文件，自身不发任何网络请求。
 - **拉起 tmux 会话和交互式 `claude` 窗口**：基础舰队使用配置的 tmux session，每个 demand pod 使用另一 session。Wakeflow 通过自带 host helper 创建、恢复、替换、排版这些真实 `claude` CLI 会话。
 - **会跑这些 shell 命令**:`node`、`tmux`、`git`、`brew`——最后这个仅在缺 tmux 时、经你一次显式同意后 `brew install tmux`。
 - **权限模型——默认安全**:工作窗口默认 `acceptEdits`(Claude Code 在风险动作前仍会询问)。完全无人值守的 `bypassPermissions`(无提示)**仅显式开启**:工作区通过 `/wakeflow:unattended on` 主动启用,选择记录在 `wakeflow.config.json`,只有这条被记录的同意才让 helper 自动确认启动对话框。无人值守模式下的安全边界是仓库 worktree、`CLAUDE.md` 闸门、Wakeflow 状态机。
@@ -503,7 +503,8 @@ npm test
 | Path | 用途 |
 | --- | --- |
 | `.claude-plugin/plugin.json` | 插件 metadata；`mcpServers` 指向 `.mcp.json`。 |
-| `.mcp.json` | MCP server wiring（`node ${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs`）。 |
+| `.mcp.json` | MCP server wiring（`${CLAUDE_PLUGIN_ROOT}/bin/wakeflow-mcp`）。 |
+| `bin/wakeflow-mcp` | 无依赖 MCP 启动器。它先尊重 `WAKEFLOW_NODE`，再检查 `PATH` 及受支持的本地 runtime 位置，最后启动 `mcp/server.cjs`。 |
 | `mcp/server.cjs` | 无 `node_modules` 依赖的 standalone MCP server entrypoint。 |
 | `lib/` | MCP 工具定义、runtime helpers、进程与 trace 支持。 |
 | `scripts/` | 随插件发布的 setup、state、delivery、intake、archive、validation 和 CLI runtime。 |

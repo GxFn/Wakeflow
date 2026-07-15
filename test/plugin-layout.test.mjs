@@ -15,6 +15,7 @@ const bundledPluginEntries = [
   "README.md",
   "README.zh-CN.md",
   "assets",
+  "bin",
   "lib",
   "mcp",
   "package.json",
@@ -109,6 +110,15 @@ test("keeps plugin metadata aligned with repository-local marketplace convention
 
   assert.equal(packageJson.homepage, manifest.homepage);
   assert.equal(packageJson.repository.url, "https://github.com/GxFn/Wakeflow.git");
+});
+
+test("routes the Codex MCP server through the bundled runtime launcher", async () => {
+  const mcp = JSON.parse(await fs.readFile(new URL("../plugins/codex-wakeflow/.mcp.json", import.meta.url), "utf8"));
+  const server = mcp.mcpServers?.wakeflow;
+  assert.ok(server, ".mcp.json must expose mcpServers.wakeflow");
+  assert.equal(server.command, "./bin/wakeflow-mcp");
+  assert.deepEqual(server.args, []);
+  assert.equal(server.cwd, ".");
 });
 
 test("keeps development tests outside the plugin artifact", async () => {

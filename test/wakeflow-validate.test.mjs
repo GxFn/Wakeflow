@@ -33,6 +33,7 @@ function makeFixture() {
   for (const entry of [
     ".codex-plugin",
     "assets",
+    "bin",
     "lib",
     "mcp",
     "schemas",
@@ -79,15 +80,15 @@ test("passes for the repository plugin surface", () => {
   assert.ok(payload.checked.skills >= 3);
 });
 
-test("fails when the MCP config points at a missing server entrypoint", () => {
+test("fails when the MCP config points at a missing launcher", () => {
   const root = makeFixture();
   try {
     mutateJson(path.join(root, ".mcp.json"), (payload) => {
-      payload.mcpServers.wakeflow.args = ["./mcp/missing-server.cjs"];
+      payload.mcpServers.wakeflow.command = "./bin/missing-wakeflow-mcp";
     });
     const result = run(root);
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /missing file: mcp\/missing-server\.cjs/);
+    assert.match(result.stderr, /wakeflow MCP command must use \.\/bin\/wakeflow-mcp/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

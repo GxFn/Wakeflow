@@ -79,12 +79,14 @@ export function createHostArtifactChecks({ root, errors, readJson, requireFile, 
   }
 
   function validateMcpServerWiring(server) {
-    if (server.cwd !== ".") errors.push("wakeflow MCP cwd must be .");
-    if (!Array.isArray(server.args) || server.args[0] !== "./mcp/server.cjs") {
-      errors.push("wakeflow MCP args must start with ./mcp/server.cjs");
+    if (server.command !== "./bin/wakeflow-mcp") {
+      errors.push("wakeflow MCP command must use ./bin/wakeflow-mcp");
+    } else {
+      requireFile(stripDotSlash(server.command));
     }
-    for (const arg of server.args || []) {
-      if (arg.endsWith(".mjs") || arg.endsWith(".cjs")) requireFile(stripDotSlash(arg));
+    if (server.cwd !== ".") errors.push("wakeflow MCP cwd must be .");
+    if (!Array.isArray(server.args) || server.args.length !== 0) {
+      errors.push("wakeflow MCP launcher must not receive config arguments");
     }
   }
 

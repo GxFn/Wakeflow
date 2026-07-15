@@ -84,7 +84,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.13/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.14/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -379,7 +379,8 @@ npm test
 | Path | 用途 |
 | --- | --- |
 | `.codex-plugin/plugin.json` | 插件 metadata；`mcpServers` 指向 `.mcp.json`。 |
-| `.mcp.json` | MCP 进程 wiring（从插件根运行 `node ./mcp/server.cjs`）。 |
+| `.mcp.json` | MCP 进程 wiring（从插件根运行 `./bin/wakeflow-mcp`）。即使 Codex Desktop 的 app-server `PATH` 没有导出 `node`，启动器也会选择 Node.js 20+ runtime。 |
+| `bin/wakeflow-mcp` | 无依赖 MCP 启动器。它先尊重 `WAKEFLOW_NODE`，再检查 `PATH` 及受支持的本地/Codex runtime 位置，最后启动 `mcp/server.cjs`。 |
 | `mcp/server.cjs` | 无 `node_modules` 依赖的 standalone MCP server entrypoint。 |
 | `scripts/` | 随插件发布的 setup、state、delivery、intake、archive、validation 和 CLI runtime。 |
 | `skills/` | 随插件发布的 controller、target protocol、target craft 与 governance 操作手册。 |

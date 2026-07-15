@@ -26,6 +26,28 @@ test("wakeflow process boundary allows fixed node and git commands", () => {
   assert.match(gitVersion, /^git version /);
 });
 
+test("wakeflow process boundary allows only the bundled argument-free MCP launcher", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "wakeflow-process-launcher-"));
+  try {
+    const launcher = path.join(root, "bin", "wakeflow-mcp");
+    const prepared = prepareWakeflowCommand(launcher, [], { cwd: root });
+    assert.equal(prepared.kind, "wakeflow-mcp");
+    assert.equal(prepared.command, launcher);
+    assert.deepEqual(prepared.args, []);
+
+    assert.throws(
+      () => prepareWakeflowCommand(launcher, ["--unexpected"], { cwd: root }),
+      /Unsupported Wakeflow MCP launcher arguments/,
+    );
+    assert.throws(
+      () => prepareWakeflowCommand(path.join(root, "other", "wakeflow-mcp"), [], { cwd: root }),
+      /Unsupported Wakeflow process command/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("wakeflow process boundary rejects shell mode and unsupported commands", () => {
   assert.throws(
     () => runSync("sh", ["-c", "echo no"], { shell: true }),

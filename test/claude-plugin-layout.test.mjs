@@ -15,6 +15,7 @@ const bundledPluginEntries = [
   "README.md",
   "README.zh-CN.md",
   "assets",
+  "bin",
   "commands",
   "lib",
   "mcp",
@@ -56,8 +57,8 @@ test("claude plugin manifest is wired for Claude Code", async () => {
   const mcp = JSON.parse(await fs.readFile(new URL(".mcp.json", pluginRootUrl), "utf8"));
   const server = mcp.mcpServers?.wakeflow;
   assert.ok(server, ".mcp.json must expose mcpServers.wakeflow");
-  assert.equal(server.command, "node");
-  assert.equal(server.args[0], "${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs");
+  assert.equal(server.command, "${CLAUDE_PLUGIN_ROOT}/bin/wakeflow-mcp");
+  assert.deepEqual(server.args, []);
   assert.equal(server.cwd, undefined, "claude MCP wiring must not rely on cwd");
 });
 

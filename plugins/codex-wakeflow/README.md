@@ -96,7 +96,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.13/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.14/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository
@@ -467,7 +467,8 @@ Common source areas:
 | Path | Purpose |
 | --- | --- |
 | `.codex-plugin/plugin.json` | Plugin metadata; its `mcpServers` field points at `.mcp.json`. |
-| `.mcp.json` | MCP process wiring (`node ./mcp/server.cjs` from the plugin root). |
+| `.mcp.json` | MCP process wiring (`./bin/wakeflow-mcp` from the plugin root). The launcher selects a Node.js 20+ runtime even when Codex Desktop does not export `node` on the app-server `PATH`. |
+| `bin/wakeflow-mcp` | Dependency-free MCP launcher. It honors `WAKEFLOW_NODE`, then checks `PATH` and supported local/Codex runtime locations before starting `mcp/server.cjs`. |
 | `mcp/server.cjs` | Standalone MCP server entrypoint with no `node_modules` dependency. |
 | `scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime shipped with the plugin. |
 | `skills/` | Controller, target protocol, target craft, and governance manuals shipped with the plugin. |

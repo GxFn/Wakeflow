@@ -197,7 +197,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.13/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.14/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository
@@ -577,6 +577,7 @@ Common source areas:
 | `tools/sync-core.mjs` | Core sync and drift check (`--check`). |
 | `plugins/codex-wakeflow/.codex-plugin/plugin.json` | Codex plugin metadata; its `mcpServers` field points at `.mcp.json`. |
 | `plugins/codex-wakeflow/.mcp.json` | Codex MCP process wiring. |
+| `plugins/codex-wakeflow/bin/wakeflow-mcp` | Shared dependency-free launcher that selects Node.js 20+ without assuming the host exports `node` on `PATH`. |
 | `plugins/claude-code-wakeflow/.claude-plugin/plugin.json` | Claude Code plugin metadata; its `mcpServers` field points at `.mcp.json`. |
 | `plugins/claude-code-wakeflow/.mcp.json` | Claude Code MCP process wiring and workspace-root environment. |
 | `plugins/claude-code-wakeflow/scripts/lib/wakeflow-host-profile.mjs` | Claude Code host profile (tmux window model, CLAUDE.md, session vocabulary). |

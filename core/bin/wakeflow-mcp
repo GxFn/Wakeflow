@@ -1,0 +1,80 @@
+#!/bin/sh
+
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PLUGIN_ROOT=$(dirname -- "$SCRIPT_DIR")
+SERVER="$PLUGIN_ROOT/mcp/server.cjs"
+
+if [ ! -f "$SERVER" ]; then
+  printf '%s\n' "Wakeflow MCP server is missing: $SERVER" >&2
+  exit 127
+fi
+
+node_major() {
+  "$1" -p 'process.versions.node.split(".")[0]' 2>/dev/null
+}
+
+run_node_if_usable() {
+  candidate=$1
+  shift
+  [ -n "$candidate" ] || return 1
+  [ -x "$candidate" ] || return 1
+  major=$(node_major "$candidate") || return 1
+  case "$major" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$major" -ge 20 ] || return 1
+  exec "$candidate" "$SERVER" "$@"
+}
+
+if [ -n "${WAKEFLOW_NODE:-}" ]; then
+  if ! run_node_if_usable "$WAKEFLOW_NODE" "$@"; then
+    printf '%s\n' "WAKEFLOW_NODE must point to an executable Node.js 20+ binary." >&2
+    exit 127
+  fi
+fi
+
+path_node=$(command -v node 2>/dev/null || true)
+if run_node_if_usable "$path_node" "$@"; then
+  exit 0
+fi
+
+# Codex Desktop exposes a pnpm wrapper on PATH. Its bundled Node runtime lives
+# at a stable path relative to that wrapper even when the Node directory itself
+# is not exported on the app-server PATH.
+pnpm_path=$(command -v pnpm 2>/dev/null || true)
+if [ -n "$pnpm_path" ]; then
+  pnpm_dir=$(CDPATH= cd -- "$(dirname -- "$pnpm_path")" && pwd)
+  if run_node_if_usable "$pnpm_dir/../../node/bin/node" "$@"; then
+    exit 0
+  fi
+fi
+
+if [ -n "${HOME:-}" ]; then
+  for candidate in \
+    "$HOME/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node" \
+    "$HOME/.volta/bin/node" \
+    "$HOME/.local/share/mise/shims/node" \
+    "$HOME/.asdf/shims/node" \
+    "$HOME"/.nvm/versions/node/*/bin/node
+  do
+    if run_node_if_usable "$candidate" "$@"; then
+      exit 0
+    fi
+  done
+fi
+
+for candidate in \
+  "/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node" \
+  "/opt/homebrew/bin/node" \
+  "/usr/local/bin/node"
+do
+  if run_node_if_usable "$candidate" "$@"; then
+    exit 0
+  fi
+done
+
+printf '%s\n' \
+  "Wakeflow MCP requires Node.js 20+. Install Node, expose it on PATH, or set WAKEFLOW_NODE to its absolute path." >&2
+exit 127

@@ -63,6 +63,10 @@ export function spawnProcess(command, args, options = {}) {
 export function prepareWakeflowCommand(command, args, options = {}) {
   assertSafeOptions(options);
   assertStringArray(args, "args");
+  if (isBundledMcpLauncher(command, options.cwd)) {
+    assertExactArgs(args, [], "MCP launcher");
+    return { kind: "wakeflow-mcp", command, args };
+  }
   if (command === process.execPath || command === "node") {
     assertNodeArgs(args);
     return { kind: "node", command: process.execPath, args };
@@ -80,6 +84,12 @@ export function prepareWakeflowCommand(command, args, options = {}) {
     return { kind: "caffeinate", command, args };
   }
   throw new Error(`Unsupported Wakeflow process command: ${command}`);
+}
+
+function isBundledMcpLauncher(command, cwd) {
+  if (typeof command !== "string" || command.trim() === "") return false;
+  const workingDirectory = path.resolve(cwd || process.cwd());
+  return path.resolve(workingDirectory, command) === path.join(workingDirectory, "bin", "wakeflow-mcp");
 }
 
 function assertSafeOptions(options) {

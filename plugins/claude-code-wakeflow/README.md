@@ -194,7 +194,7 @@ The plugin ships four coordinated surfaces:
 
 | Surface | Contents |
 | --- | --- |
-| MCP server | `.mcp.json` starts `node ${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs`, a standalone server with no `node_modules` dependency. |
+| MCP server | `.mcp.json` starts `${CLAUDE_PLUGIN_ROOT}/bin/wakeflow-mcp`; the launcher selects Node.js 20+ and starts the standalone `mcp/server.cjs` with no `node_modules` dependency. |
 | Skills | `wakeflow-controller`, `wakeflow-target`, `wakeflow-target-craft`, and `wakeflow-governance` operating manuals. |
 | Slash commands | `/wakeflow:init`, `/wakeflow:check`, `/wakeflow:windows`, `/wakeflow:status`, `/wakeflow:dispatch`, `/wakeflow:review`, and `/wakeflow:unattended`. |
 | Host transport helper | `scripts/lib/wakeflow-claude-host.mjs`. Fleet: `preflight`, `ensure-server`, `launch-window`, `launch-all`, `replace-all`, `retitle`, `arrange-windows`, `window-status`, `check-workspace`. Delivery: `deliver` (primary), `send`, `readback`, `wait-results`, `activity-monitor`. Policy: `seed-permissions`, `set-unattended`, `stamp-runtime`. Cross-demand: `stream-open`, `stream-close`, `stream-list`, `pod-open`, `pod-close`, `pod-list`. |
@@ -240,7 +240,7 @@ Mnemonic: **`init` builds it, `windows all` powers it on, `windows` just takes a
 
 Wakeflow is a powerful local automation plugin. Before installing, understand exactly what it does on your machine — none of it is hidden:
 
-- **Runs a local MCP server** (`node mcp/server.cjs`): a standalone, dependency-free Node process. It reads/writes workspace state files; it makes no network calls of its own.
+- **Runs a local MCP server** (`bin/wakeflow-mcp`): the dependency-free launcher selects Node.js 20+ and starts `mcp/server.cjs`. The server reads/writes workspace state files; it makes no network calls of its own.
 - **Spawns tmux sessions and interactive `claude` windows**: the baseline fleet uses the configured tmux session; each demand pod uses another session. Wakeflow creates, resumes, replaces, and arranges these real `claude` CLI sessions via the bundled host helper.
 - **Runs these shell commands**: `node`, `tmux`, `git`, and `brew` — the last only to `brew install tmux` once, after a single explicit consent, when tmux is missing.
 - **Permission model — safe by default**: work windows ship with `acceptEdits` (Claude Code still prompts before risky actions). Fully unattended `bypassPermissions` (no prompts) is **opt-in only**: a workspace enables it explicitly via `/wakeflow:unattended on`, that choice is recorded in `wakeflow.config.json`, and only that recorded consent lets the helper auto-confirm the boot dialog. The safety boundary in unattended mode is the repository worktree, the `CLAUDE.md` gates, and the Wakeflow state machine.
@@ -575,7 +575,8 @@ Common source areas inside this plugin artifact:
 | Path | Purpose |
 | --- | --- |
 | `.claude-plugin/plugin.json` | Plugin metadata; its `mcpServers` field points at `.mcp.json`. |
-| `.mcp.json` | MCP server wiring (`node ${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs`). |
+| `.mcp.json` | MCP server wiring (`${CLAUDE_PLUGIN_ROOT}/bin/wakeflow-mcp`). |
+| `bin/wakeflow-mcp` | Dependency-free MCP launcher. It honors `WAKEFLOW_NODE`, then checks `PATH` and supported local runtime locations before starting `mcp/server.cjs`. |
 | `mcp/server.cjs` | Standalone MCP server entrypoint with no `node_modules` dependency. |
 | `lib/` | MCP tool definitions, runtime helpers, process and trace support. |
 | `scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime shipped with the plugin. |

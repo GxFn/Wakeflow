@@ -109,9 +109,21 @@ async function runMcpSmoke(rootPath) {
   const server = mcpConfig.mcpServers?.wakeflow;
   if (!server) throw new Error("Wakeflow MCP config is missing mcpServers.wakeflow");
   const cwd = server.cwd === "." ? process.cwd() : path.resolve(process.cwd(), server.cwd ?? ".");
-  const args = (server.args ?? []).map((arg) => arg.replace(/^\$\{[A-Z0-9_]+\}/, "."));
-  const child = spawnProcess(server.command, args, {
+  const variables = {
+    CLAUDE_PLUGIN_ROOT: process.cwd(),
+    CLAUDE_PROJECT_DIR: rootPath,
+  };
+  const command = expandMcpValue(server.command, variables);
+  const args = (server.args ?? []).map((arg) => expandMcpValue(arg, variables));
+  const env = {
+    ...process.env,
+    ...Object.fromEntries(
+      Object.entries(server.env ?? {}).map(([key, value]) => [key, expandMcpValue(value, variables)]),
+    ),
+  };
+  const child = spawnProcess(command, args, {
     cwd,
+    env,
     stdio: ["pipe", "pipe", "pipe"],
   });
   let stderr = "";
@@ -478,6 +490,15 @@ async function runMcpSmoke(rootPath) {
       // Keep stderr visible when the smoke itself fails; successful runs ignore quiet shutdown noise.
     }
   }
+}
+
+function expandMcpValue(value, variables) {
+  if (typeof value !== "string") throw new Error("Wakeflow MCP command values must be strings");
+  return value.replace(/\$\{([A-Z0-9_]+)\}/g, (match, name) => {
+    const resolved = variables[name] ?? process.env[name];
+    if (resolved === undefined) throw new Error(`Wakeflow MCP variable is unresolved: ${match}`);
+    return resolved;
+  });
 }
 
 function assertToolSchemasAcceptedByHost(tools) {

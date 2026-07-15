@@ -58,6 +58,7 @@ const requiredFiles = [
   "package.json",
   hostProfile.pluginManifestPath,
   ".mcp.json",
+  "bin/wakeflow-mcp",
   "mcp/server.cjs",
   "lib/wakeflow-mcp-tools.mjs",
   "lib/wakeflow-process.mjs",
@@ -195,7 +196,6 @@ function validateMcpConfig() {
     errors.push(".mcp.json must expose mcpServers.wakeflow");
     return;
   }
-  if (server.command !== "node") errors.push("wakeflow MCP command must be node");
   hostArtifactChecks.validateMcpServerWiring(server);
 
   const serverText = readText("mcp/server.cjs");

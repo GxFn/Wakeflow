@@ -58,16 +58,16 @@ export function createHostArtifactChecks({ root, errors, readJson, requireFile, 
   }
 
   function validateMcpServerWiring(server) {
+    if (server.command !== `${PLUGIN_ROOT_VAR}/bin/wakeflow-mcp`) {
+      errors.push("wakeflow MCP command must use ${CLAUDE_PLUGIN_ROOT}/bin/wakeflow-mcp");
+    } else {
+      requireFile(stripDotSlash(server.command.replace(`${PLUGIN_ROOT_VAR}/`, "")));
+    }
     if (server.cwd !== undefined) {
       errors.push("wakeflow MCP server must not set cwd; use ${CLAUDE_PLUGIN_ROOT} paths instead");
     }
-    if (!Array.isArray(server.args) || server.args[0] !== `${PLUGIN_ROOT_VAR}/mcp/server.cjs`) {
-      errors.push("wakeflow MCP args must start with ${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs");
-    }
-    for (const arg of server.args || []) {
-      if (arg.endsWith(".mjs") || arg.endsWith(".cjs")) {
-        requireFile(stripDotSlash(arg.replace(`${PLUGIN_ROOT_VAR}/`, "")));
-      }
+    if (!Array.isArray(server.args) || server.args.length !== 0) {
+      errors.push("wakeflow MCP launcher must not receive config arguments");
     }
   }
 

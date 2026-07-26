@@ -49,6 +49,16 @@ Before writing implementation for a behavior, write a test that expresses it and
 watch it FAIL for the right reason. Then write the minimum code to make it pass
 and watch it GREEN.
 
+- **Bug-fix hard gate:** before editing production code, reproduce the defect
+  through the real entrypoint named by the task package and capture the RED.
+  Once implementation starts, do not weaken or change that test's entrypoint or
+  behavioral meaning to fit the patch; make the same test GREEN. Do not mock the
+  fact-producing boundary that the task package asks you to verify.
+- Fix the first point where the correct fact is lost or changed. Downstream
+  code may validate or forward that fact, but must not invent it through a
+  fallback, silently drop unknown fields, or parse human-readable messages into
+  structured truth. If the real RED or root cause cannot be established, return
+  `needs-review` instead of editing by guess.
 - Earns: a test that covers the change, exists, and passes; a git history where
   the failing-test commit precedes the implementation commit.
 - Why the order matters: a test written after the code tends to assert what the

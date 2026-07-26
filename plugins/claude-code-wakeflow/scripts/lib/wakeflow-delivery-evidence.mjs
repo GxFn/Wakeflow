@@ -1,4 +1,5 @@
 import path from "node:path";
+import { controllerReturnResultVersion } from "./wakeflow-return-policy.mjs";
 
 export function createDeliveryEvidence(ctx) {
   const {
@@ -18,6 +19,25 @@ export function createDeliveryEvidence(ctx) {
       .sort((a, b) => String(a.run.createdAt || "").localeCompare(String(b.run.createdAt || "")));
   }
 
+  function resultVersionForEnvelope(envelope) {
+    if (envelope.kind !== "ControllerReturnEnvelope") {
+      return {
+        resultVersionKey: envelope.resultVersionKey,
+        resultVersions: envelope.resultVersions,
+      };
+    }
+    const derived = controllerReturnResultVersion({
+      returnPolicy: envelope.returnPolicy,
+      groupSnapshot: envelope.groupSnapshot,
+      triggerTarget: envelope.triggerTarget,
+      triggerTaskId: envelope.triggerTaskId,
+    });
+    return {
+      resultVersionKey: envelope.resultVersionKey || derived.resultVersionKey,
+      resultVersions: envelope.resultVersions || derived.resultVersions,
+    };
+  }
+
   function deliveryRunStatusForEnvelope(envelope) {
     const runs = deliveryRunsFor(envelope.deliveryId);
     const sentRun = runs.findLast?.((item) => item.run.status === "sent" && item.run.readback?.ok === true)
@@ -28,6 +48,7 @@ export function createDeliveryEvidence(ctx) {
       : runs.length === 0
         ? "pending-host-send"
         : latestRun.run.status;
+    const resultVersion = resultVersionForEnvelope(envelope);
 
     return {
       deliveryId: envelope.deliveryId,
@@ -37,8 +58,8 @@ export function createDeliveryEvidence(ctx) {
       dispatchGroup: envelope.dispatchGroup,
       triggerTarget: envelope.triggerTarget,
       triggerTaskId: envelope.triggerTaskId,
-      resultVersionKey: envelope.resultVersionKey,
-      resultVersions: envelope.resultVersions,
+      resultVersionKey: resultVersion.resultVersionKey,
+      resultVersions: resultVersion.resultVersions,
       reviewScope: envelope.reviewScope,
       returnPolicy: envelope.returnPolicy,
       groupStatus: envelope.groupSnapshot?.groupStatus,
@@ -56,7 +77,6 @@ export function createDeliveryEvidence(ctx) {
       triggerTarget = "",
       triggerTaskId = "",
       resultVersionKey = "",
-      legacyResultVersion = false,
     } = {},
   ) {
     if (!dispatchGroup) {
@@ -84,10 +104,7 @@ export function createDeliveryEvidence(ctx) {
       .filter((item) => !triggerTaskId || item.envelope.triggerTaskId === triggerTaskId)
       .filter((item) => {
         if (!resultVersionKey) return true;
-        if (item.envelope.resultVersionKey) {
-          return item.envelope.resultVersionKey === resultVersionKey;
-        }
-        return legacyResultVersion;
+        return resultVersionForEnvelope(item.envelope).resultVersionKey === resultVersionKey;
       })
       .map((item) => ({
         file: path.relative(workspaceRoot, item.file),

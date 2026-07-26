@@ -19,12 +19,11 @@ export function controllerReturnDuplicateSelector({
   triggerTarget = "",
   triggerTaskId = "",
   resultVersionKey = "",
-  legacyResultVersion = false,
 } = {}) {
   const mode = normalizeReturnPolicyMode(returnPolicy.mode || returnPolicy);
   return {
     ...(mode === "per-target" ? { triggerTarget, triggerTaskId } : {}),
-    ...(resultVersionKey ? { resultVersionKey, legacyResultVersion } : {}),
+    ...(resultVersionKey ? { resultVersionKey } : {}),
   };
 }
 
@@ -84,10 +83,7 @@ export function controllerReturnResultVersion({
   return {
     resultVersions,
     resultVersionKey: resultVersionKey(resultVersions),
-    legacyResultVersion: resultVersions.length > 0
-      && resultVersions.every((item) => item.resultRevision === 1),
     deliveryIdSuffix: resultVersions.length === 0
-      || resultVersions.every((item) => item.resultRevision === 1)
       ? ""
       : resultVersions.length === 1
         ? `r${resultVersions[0].resultRevision}`
@@ -96,12 +92,10 @@ export function controllerReturnResultVersion({
 }
 
 function deliveriesForResultVersion(deliveries = [], version = {}) {
-  return deliveries.filter((delivery) => {
-    if (delivery.resultVersionKey) {
-      return delivery.resultVersionKey === version.resultVersionKey;
-    }
-    return version.legacyResultVersion;
-  });
+  return deliveries.filter((delivery) => (
+    delivery.resultVersionKey
+    && delivery.resultVersionKey === version.resultVersionKey
+  ));
 }
 
 export function controllerReturnReadinessIssue({ review, triggerTarget, triggerTaskId } = {}) {

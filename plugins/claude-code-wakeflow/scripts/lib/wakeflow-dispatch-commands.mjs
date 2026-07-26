@@ -743,7 +743,6 @@ export function createDispatchCommands(ctx) {
         triggerTarget,
         triggerTaskId,
         resultVersionKey: resultVersion.resultVersionKey,
-        legacyResultVersion: resultVersion.legacyResultVersion,
       }),
     );
     if (existingReturn.envelopeCount > 0) {

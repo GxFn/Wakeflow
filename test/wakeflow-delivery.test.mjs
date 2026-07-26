@@ -1621,12 +1621,133 @@ test("group-ready blocker creates exactly one immediate controller return under 
     assert.equal(refusals.length, 1);
     assert.match(refusals[0].stdout, /already has controller-return delivery status pending-host-send/);
     const returned = JSON.parse(successes[0].stdout);
-    assert.equal(returned.envelope.deliveryId, "controller-return-GROUP-BLOCKER");
+    assert.equal(returned.envelope.deliveryId, "controller-return-GROUP-BLOCKER__r1");
     assert.equal(returned.envelope.loopGuard.returnReason, "blocked");
     assert.equal(returned.envelope.groupSnapshot.missing.length, 1);
     const review = parseOk(run(root, ["review-results", "--group", "GROUP-BLOCKER"]));
     assert.equal(review.controllerReturnDelivery.envelopeCount, 1);
     assert.equal(review.controllerReturnDelivery.pendingCount, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("group-ready sends a new callback when later results expand a legacy blocker snapshot", () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  try {
+    addFixtureTarget(stateRoot, {
+      taskPackageId: "CSMR-PKG-2",
+      targetTaskId: "CSMR-TASK-2",
+    });
+    registerThread(root, "AlembicPlugin");
+    registerThread(root, "AlembicWorkspace");
+    const groupTaskIds = ["CSMR-TASK-1", "CSMR-TASK-2"];
+    const first = prepareDispatch(root, stateRootRef, { group: "GROUP-LEGACY-BLOCKER", groupTaskIds });
+    const second = prepareDispatch(root, stateRootRef, {
+      group: "GROUP-LEGACY-BLOCKER",
+      targetTaskId: "CSMR-TASK-2",
+      groupTaskIds,
+    });
+    for (const prepared of [first, second]) {
+      parseOk(run(root, [
+        "record-delivery-run",
+        "--delivery-file",
+        prepared.deliveryFile,
+        "--status",
+        "sent",
+        "--readback-ok",
+        "true",
+        "--evidence",
+        `${prepared.targetTaskId} accepted prompt`,
+        "--write",
+      ]));
+    }
+
+    parseOk(run(root, [
+      "record-target-result",
+      "--target-window",
+      "AlembicPlugin",
+      "--task-id",
+      "CSMR-TASK-1",
+      "--group",
+      "GROUP-LEGACY-BLOCKER",
+      "--status",
+      "blocked",
+      "--risk",
+      "First target is blocked",
+      "--write",
+    ]));
+    const firstReturn = parseOk(run(root, [
+      "build-controller-return",
+      "--group",
+      "GROUP-LEGACY-BLOCKER",
+      "--trigger-target",
+      "AlembicPlugin",
+      "--trigger-task-id",
+      "CSMR-TASK-1",
+      "--return-reason",
+      "blocked",
+      "--require-thread",
+      "--write",
+    ]));
+
+    const firstReturnFile = path.join(root, firstReturn.returnFile);
+    const legacyEnvelope = JSON.parse(readFileSync(firstReturnFile, "utf8"));
+    delete legacyEnvelope.resultVersionKey;
+    delete legacyEnvelope.resultVersions;
+    delete legacyEnvelope.loopGuard.resultVersionKey;
+    writeJson(firstReturnFile, legacyEnvelope);
+    parseOk(run(root, [
+      "record-delivery-run",
+      "--delivery-file",
+      firstReturn.returnFile,
+      "--status",
+      "sent",
+      "--readback-ok",
+      "true",
+      "--evidence",
+      "legacy blocker callback sent",
+      "--write",
+    ]));
+
+    parseOk(run(root, [
+      "record-target-result",
+      "--target-window",
+      "AlembicPlugin",
+      "--task-id",
+      "CSMR-TASK-2",
+      "--group",
+      "GROUP-LEGACY-BLOCKER",
+      "--status",
+      "completed",
+      "--verification",
+      "Second target completed",
+      "--write",
+    ]));
+
+    const expandedPack = parseOk(run(root, [
+      "review-pack",
+      "--group",
+      "GROUP-LEGACY-BLOCKER",
+    ]));
+    assert.equal(expandedPack.reviewPack.callbackPlan.status, "ready-to-build");
+    assert.equal(expandedPack.reviewPack.controllerReturnNextStep, "build-controller-return");
+
+    const secondReturn = parseOk(run(root, [
+      "build-controller-return",
+      "--group",
+      "GROUP-LEGACY-BLOCKER",
+      "--trigger-target",
+      "AlembicPlugin",
+      "--trigger-task-id",
+      "CSMR-TASK-2",
+      "--require-thread",
+      "--write",
+    ]));
+    assert.notEqual(secondReturn.envelope.deliveryId, firstReturn.envelope.deliveryId);
+    assert.notEqual(secondReturn.returnFile, firstReturn.returnFile);
+    assert.equal(existsSync(firstReturnFile), true);
+    assert.equal(secondReturn.envelope.resultVersions.length, 2);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

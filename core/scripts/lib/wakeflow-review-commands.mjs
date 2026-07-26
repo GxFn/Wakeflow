@@ -223,6 +223,8 @@ export function createReviewCommands(ctx) {
     return {
       kind: "TargetResultEnvelope",
       version,
+      resultId: result?.resultId,
+      resultRevision: Number(result?.resultRevision ?? 1),
       targetWindow: result?.targetWindow,
       taskId: result?.targetTaskId || result?.taskId,
       dispatchGroup: result?.dispatchGroup,
@@ -519,6 +521,7 @@ export function createReviewCommands(ctx) {
         returnPolicy: result?.deliveryContext?.returnPolicy || result?.returnPolicy,
         deliveryContext: result?.deliveryContext,
         resultId: result?.resultId,
+        resultRevision: result ? Number(result.resultRevision ?? 1) : undefined,
         resultStatus,
         resultFile: item ? path.relative(workspaceRoot, item.file) : undefined,
         evidenceRefs,

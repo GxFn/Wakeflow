@@ -481,6 +481,7 @@ export function createResultRecordingCommands(ctx) {
         fail(`Target result already exists for ${targetWindow} / ${taskId}${dispatchGroup ? ` in group ${dispatchGroup}` : ""}; use --supersede-result to replace it explicitly.`);
       }
       supersededFile = supersededResultFileFor(targetWindow, taskId, dispatchGroup, reportedAt);
+      result.resultRevision = Number(existingResult.resultRevision ?? 1) + 1;
       result.supersedes = {
         resultFile: path.relative(workspaceRoot, resultFile),
         archivedResultFile: path.relative(workspaceRoot, supersededFile),
@@ -499,6 +500,8 @@ export function createResultRecordingCommands(ctx) {
           },
         });
       }
+    } else {
+      result.resultRevision = 1;
     }
     if (write) {
       ensureStateDirs();

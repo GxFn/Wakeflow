@@ -37,6 +37,8 @@ export function createDeliveryEvidence(ctx) {
       dispatchGroup: envelope.dispatchGroup,
       triggerTarget: envelope.triggerTarget,
       triggerTaskId: envelope.triggerTaskId,
+      resultVersionKey: envelope.resultVersionKey,
+      resultVersions: envelope.resultVersions,
       reviewScope: envelope.reviewScope,
       returnPolicy: envelope.returnPolicy,
       groupStatus: envelope.groupSnapshot?.groupStatus,
@@ -48,7 +50,15 @@ export function createDeliveryEvidence(ctx) {
     };
   }
 
-  function controllerReturnDeliveryStatusForGroup(dispatchGroup, { triggerTarget = "", triggerTaskId = "" } = {}) {
+  function controllerReturnDeliveryStatusForGroup(
+    dispatchGroup,
+    {
+      triggerTarget = "",
+      triggerTaskId = "",
+      resultVersionKey = "",
+      legacyResultVersion = false,
+    } = {},
+  ) {
     if (!dispatchGroup) {
       return {
         status: "not-applicable",
@@ -72,6 +82,13 @@ export function createDeliveryEvidence(ctx) {
       .filter((item) => item.envelope.kind === "ControllerReturnEnvelope" && item.envelope.dispatchGroup === dispatchGroup)
       .filter((item) => !triggerTarget || item.envelope.triggerTarget === triggerTarget)
       .filter((item) => !triggerTaskId || item.envelope.triggerTaskId === triggerTaskId)
+      .filter((item) => {
+        if (!resultVersionKey) return true;
+        if (item.envelope.resultVersionKey) {
+          return item.envelope.resultVersionKey === resultVersionKey;
+        }
+        return legacyResultVersion;
+      })
       .map((item) => ({
         file: path.relative(workspaceRoot, item.file),
         ...deliveryRunStatusForEnvelope(item.envelope),

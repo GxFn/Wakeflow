@@ -1708,7 +1708,7 @@ test("per-target controller return allows independent callbacks per target", () 
     "--write",
   ]);
   assert.notEqual(duplicateFirstReturn.status, 0);
-  assert.match(duplicateFirstReturn.stdout, /GROUP-STATE for AlembicPlugin \/ CSMR-TASK-1 already has controller-return delivery status pending-host-send/);
+  assert.match(duplicateFirstReturn.stdout, /GROUP-STATE for AlembicPlugin \/ CSMR-TASK-1 result revision 1 already has controller-return delivery status pending-host-send/);
 
   const review = parseOk(run(root, ["review-results", "--group", "GROUP-STATE"]));
   assert.equal(review.controllerReturnDelivery.envelopeCount, 2);
@@ -2172,6 +2172,7 @@ test("record-target-result is idempotent and requires explicit supersede for cha
     "--write",
   ]));
   assert.equal(first.wrote, true);
+  assert.equal(first.result.resultRevision, 1);
   assert.equal(first.result.idempotency.key, "target-result:GROUP-STATE:AlembicPlugin:CSMR-TASK-1");
 
   const duplicate = parseOk(run(root, [
@@ -2233,6 +2234,7 @@ test("record-target-result is idempotent and requires explicit supersede for cha
     "--write",
   ]));
   assert.equal(superseded.superseded, true);
+  assert.equal(superseded.result.resultRevision, 2);
   assert.match(superseded.supersededFile, /target-results\/superseded\//);
   assert.equal(superseded.result.supersedes.status, "completed");
   const archived = JSON.parse(readFileSync(path.join(root, superseded.supersededFile), "utf8"));
@@ -2385,6 +2387,168 @@ test("state-root target result import exposes controller-return context from del
   assert.equal(traceByResultFile.selector.deliveryId, prepared.envelope.deliveryId);
   assert.equal(traceByResultFile.coverage.deliveryEnvelopeCount, 1);
   assert.equal(traceByResultFile.coverage.targetResultCount, 1);
+});
+
+test("a superseded state-root result opens a new revision-scoped controller return", () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  registerThread(root, "AlembicWorkspace", "controller");
+  const prepared = prepareDispatch(root, stateRootRef, {
+    extra: ["--return-policy", "per-target"],
+  });
+  parseOk(run(root, [
+    "record-delivery-run",
+    "--delivery-file",
+    prepared.deliveryFile,
+    "--status",
+    "sent",
+    "--readback-ok",
+    "true",
+    "--evidence",
+    "target prompt sent",
+    "--write",
+  ]));
+  writeText(path.join(stateRoot, "reports/plugin-result-v1.json"), "{\"revision\": 1}\n");
+  writeText(path.join(stateRoot, "reports/plugin-result-v2.json"), "{\"revision\": 2}\n");
+
+  const firstResult = parseOk(runState(root, [
+    "import-target-result",
+    "--state-root",
+    stateRootRef,
+    "--target-task-id",
+    "CSMR-TASK-1",
+    "--target-window",
+    "AlembicPlugin",
+    "--status",
+    "completed",
+    "--result-id",
+    "CSMR-RESULT-CALLBACK",
+    "--evidence-ref",
+    "reports/plugin-result-v1.json",
+    "--verification",
+    "first result",
+    "--write",
+  ]));
+  assert.equal(firstResult.resultRevision, 1);
+
+  const firstReturn = parseOk(run(root, [
+    "build-controller-return",
+    "--group",
+    "GROUP-STATE",
+    "--trigger-target",
+    "AlembicPlugin",
+    "--trigger-task-id",
+    "CSMR-TASK-1",
+    "--require-thread",
+    "--write",
+  ]));
+  parseOk(run(root, [
+    "record-delivery-run",
+    "--delivery-file",
+    firstReturn.returnFile,
+    "--status",
+    "sent",
+    "--readback-ok",
+    "true",
+    "--evidence",
+    "first controller return sent",
+    "--write",
+  ]));
+  const afterFirstReturn = parseOk(run(root, [
+    "review-pack",
+    "--state-root",
+    stateRootRef,
+  ]));
+  assert.equal(afterFirstReturn.reviewPack.callbackPlan.status, "sent");
+  assert.equal(afterFirstReturn.reviewPack.controllerReturnNextStep, "controller-return-already-sent");
+
+  const correctedResult = parseOk(runState(root, [
+    "import-target-result",
+    "--state-root",
+    stateRootRef,
+    "--target-task-id",
+    "CSMR-TASK-1",
+    "--target-window",
+    "AlembicPlugin",
+    "--status",
+    "completed",
+    "--result-id",
+    "CSMR-RESULT-CALLBACK",
+    "--evidence-ref",
+    "reports/plugin-result-v2.json",
+    "--verification",
+    "corrected result",
+    "--supersede-result",
+    "--write",
+  ]));
+  assert.equal(correctedResult.resultRevision, 2);
+
+  const correctedPack = parseOk(run(root, [
+    "review-pack",
+    "--state-root",
+    stateRootRef,
+  ]));
+  assert.equal(
+    correctedPack.reviewPack.callbackPlan.status,
+    "ready-to-build",
+    JSON.stringify({
+      targetResults: correctedPack.reviewPack.targetResults,
+      callbackPlan: correctedPack.reviewPack.callbackPlan,
+    }, null, 2),
+  );
+  assert.equal(correctedPack.reviewPack.callbackPlan.counts.readyToBuildCount, 1);
+  assert.equal(correctedPack.reviewPack.controllerReturnNextStep, "build-controller-return");
+  assert.equal(correctedPack.reviewPack.callbackPlan.units[0].resultVersions[0].resultRevision, 2);
+
+  const secondReturn = parseOk(run(root, [
+    "build-controller-return",
+    "--group",
+    "GROUP-STATE",
+    "--trigger-target",
+    "AlembicPlugin",
+    "--trigger-task-id",
+    "CSMR-TASK-1",
+    "--require-thread",
+    "--write",
+  ]));
+  assert.notEqual(secondReturn.envelope.deliveryId, firstReturn.envelope.deliveryId);
+  assert.match(secondReturn.envelope.deliveryId, /__r2$/);
+  assert.equal(secondReturn.envelope.resultVersions[0].resultRevision, 2);
+  parseOk(run(root, [
+    "record-delivery-run",
+    "--delivery-file",
+    secondReturn.returnFile,
+    "--status",
+    "sent",
+    "--readback-ok",
+    "true",
+    "--evidence",
+    "corrected controller return sent",
+    "--write",
+  ]));
+
+  const afterSecondReturn = parseOk(run(root, [
+    "review-pack",
+    "--state-root",
+    stateRootRef,
+  ]));
+  assert.equal(afterSecondReturn.reviewPack.callbackPlan.status, "sent");
+  assert.equal(afterSecondReturn.reviewPack.callbackPlan.counts.sentCount, 1);
+  assert.equal(afterSecondReturn.reviewPack.controllerReturnNextStep, "controller-return-already-sent");
+
+  const duplicateSecondReturn = run(root, [
+    "build-controller-return",
+    "--group",
+    "GROUP-STATE",
+    "--trigger-target",
+    "AlembicPlugin",
+    "--trigger-task-id",
+    "CSMR-TASK-1",
+    "--require-thread",
+    "--write",
+  ]);
+  assert.notEqual(duplicateSecondReturn.status, 0);
+  assert.match(duplicateSecondReturn.stdout, /already has controller-return delivery status sent/);
 });
 
 test("record-delivery-run infers workspace root from an absolute delivery file", () => {

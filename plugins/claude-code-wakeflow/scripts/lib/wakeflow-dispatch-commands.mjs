@@ -10,6 +10,7 @@ import {
 import {
   controllerReturnDuplicateScopeText,
   controllerReturnDuplicateSelector,
+  controllerReturnResultVersion,
   returnPolicyReviewScope,
 } from "./wakeflow-return-policy.mjs";
 import { controllerReviewScope } from "./wakeflow-review-scope.mjs";
@@ -729,20 +730,40 @@ export function createDispatchCommands(ctx) {
     const registration = loadThreadRegistration(controllerWindow);
     if (hasFlag("--require-thread") && !registration) fail(`No registered controller thread for window: ${controllerWindow}`);
     validateControllerReturnAllowed({ review, triggerTarget, triggerTaskId });
+    const resultVersion = controllerReturnResultVersion({
+      returnPolicy: review.returnPolicy,
+      groupSnapshot: review.groupSnapshot,
+      triggerTarget,
+      triggerTaskId,
+    });
     const existingReturn = controllerReturnDeliveryStatusForGroup(
       dispatchGroup,
-      controllerReturnDuplicateSelector({ returnPolicy: review.returnPolicy, triggerTarget, triggerTaskId }),
+      controllerReturnDuplicateSelector({
+        returnPolicy: review.returnPolicy,
+        triggerTarget,
+        triggerTaskId,
+        resultVersionKey: resultVersion.resultVersionKey,
+        legacyResultVersion: resultVersion.legacyResultVersion,
+      }),
     );
     if (existingReturn.envelopeCount > 0) {
-      const duplicateScope = controllerReturnDuplicateScopeText({ returnPolicy: review.returnPolicy, triggerTarget, triggerTaskId });
+      const duplicateScope = controllerReturnDuplicateScopeText({
+        returnPolicy: review.returnPolicy,
+        triggerTarget,
+        triggerTaskId,
+        resultVersions: resultVersion.resultVersions,
+      });
       fail(`Dispatch group ${dispatchGroup}${duplicateScope} already has controller-return delivery status ${existingReturn.status}; reuse that envelope and record a new delivery run for any transport retry.`);
     }
     const windowConfig = buildWindowConfig(controllerWindow);
     const reviewScope = returnPolicyReviewScope(review.returnPolicy);
 
-    const deliveryId = reviewScope === "group"
+    const baseDeliveryId = reviewScope === "group"
       ? `controller-return-${slug(dispatchGroup)}`
       : `controller-return-${slug(dispatchGroup)}__${slug(triggerTarget)}__${slug(triggerTaskId)}`;
+    const deliveryId = resultVersion.deliveryIdSuffix
+      ? `${baseDeliveryId}__${resultVersion.deliveryIdSuffix}`
+      : baseDeliveryId;
     const createdAt = nowIso();
     const envelope = buildControllerReturnEnvelope({
       version: deliveryEnvelopeVersion,
@@ -753,6 +774,8 @@ export function createDispatchCommands(ctx) {
       triggerTaskId,
       interfaceLanguage: inheritedStateRef ? interfaceLanguageForStateRef(inheritedStateRef) : "en",
       returnPolicy: review.returnPolicy,
+      resultVersionKey: resultVersion.resultVersionKey,
+      resultVersions: resultVersion.resultVersions,
       groupSnapshot: review.groupSnapshot,
       reviewScope,
       humanContextRef,

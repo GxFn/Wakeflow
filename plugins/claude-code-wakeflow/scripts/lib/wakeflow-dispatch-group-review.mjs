@@ -69,6 +69,7 @@ export function createDispatchGroupReview(ctx) {
       taskId: item.packet.taskId,
       status: resultStatus,
       resultFile: item.result ? path.relative(workspaceRoot, item.file) : undefined,
+      resultRevision: item.result ? Number(item.result.resultRevision ?? 1) : undefined,
       resultExpected: delivery.resultExpected,
       deliveryStatus: delivery.status,
       deliveryCount: delivery.count,

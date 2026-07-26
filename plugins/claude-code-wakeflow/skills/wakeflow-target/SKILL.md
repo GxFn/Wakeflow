@@ -84,15 +84,25 @@ state root, or human context, stop and report instead of guessing.
      or the local delivery envelope has `returnRoute=controller`, use
      `wakeflow_review_pack` scoped to YOUR OWN dispatch group as a sanctioned
      read-only self-check (reviewing other groups or deciding accept/rework stays
-     with the controller). Send the controller-return when the pack's
-     `controllerReturnNextStep` is `send-controller-return` — that is the transport
-     signal and is INDEPENDENT of evidence. Do NOT withhold the controller-return
-     because `missingEvidenceRefs` is non-empty or `nextAction` says
-     `fix-missing-evidence-refs`: evidence sufficiency is the controller's POST-wake
-     verdict, and the controller cannot act on it until you wake it. Then use
-     `wakeflow_prepare_delivery` with `direction=controller-return` to build
-     exactly one controller-return envelope for the dispatch group's stored
-     `controllerWindow`.
+     with the controller). Always pass `stateRoot`; do not reuse a group-only
+     pack or cache an older `controllerReturnDelivery.status` / `returnFile`.
+     Follow the pack's current-version `callbackPlan`, not the dispatch group's
+     historical send status:
+     - If a unit has `buildAllowed=true` or `controllerReturnNextStep` is
+       `build-controller-return`, use `wakeflow_prepare_delivery` with
+       `direction=controller-return` to build one envelope for the stored
+       `controllerWindow`.
+     - If a unit has `hostSendRequired=true` or `controllerReturnNextStep` is
+       `send-controller-return-and-record-delivery`, send the already-built
+       envelope and record it; do not prepare a duplicate.
+     - Stop only when the current unit has `controllerAlreadyReached=true` or
+       `controllerReturnNextStep` is `controller-return-already-sent`.
+     A delivery for an older `resultVersionKey` never satisfies the current
+     result revision. These transport signals are INDEPENDENT of evidence. Do
+     NOT withhold the callback because `missingEvidenceRefs` is non-empty or
+     `nextAction` says `fix-missing-evidence-refs`: evidence sufficiency is the
+     controller's POST-wake verdict, and the controller cannot act on it until
+     you wake it.
    - If the target task references a delivery id but the local delivery envelope
      cannot be found, stop and report that missing local envelope; do not assume
      no callback is needed.

@@ -134,8 +134,9 @@ export function buildControllerReturnEnvelope({
       deliveryAllowedOnlyFor: ["result-ready", "blocked"],
       controllerReviewRequired: true,
       noEligibleTaskAction: "stop-without-next-delivery",
-      repeatControllerReturnForbidden: true,
+      resultVersionKey,
       repeatControllerReturnForbiddenForSameResultVersion: true,
+      newerResultVersionRequiresNewControllerReturn: true,
       nextDispatchAllowedOnlyWhen: [
         "current plan has eligible unfinished task",
         "target evidence requires controller rework dispatch",

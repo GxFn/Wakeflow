@@ -566,6 +566,9 @@ test("controller-return builder preserves callback prompt scope and transport gu
   assert.equal(envelope.transport.readbackRequired, true);
   assert.equal(envelope.deliveryCompletion.pendingUntil, "host-send-readback-recorded");
   assert.equal(envelope.loopGuard.controllerReviewRequired, true);
+  assert.equal(Object.hasOwn(envelope.loopGuard, "repeatControllerReturnForbidden"), false);
+  assert.equal(envelope.loopGuard.repeatControllerReturnForbiddenForSameResultVersion, true);
+  assert.equal(envelope.loopGuard.newerResultVersionRequiresNewControllerReturn, true);
   assert.equal(envelope.automation.keepLiveStateFile, "keep-live/state.json");
 });
 
@@ -817,11 +820,62 @@ test("controller-return transport is decoupled from evidence quality (no break o
     wakeflowTrace: { dispatchGroup: "group-fixture" },
   });
   // Transport: the wake-up fires regardless of the unresolved evidence ref.
-  assert.equal(pack.controllerReturnNextStep, "send-controller-return");
+  assert.equal(pack.controllerReturnNextStep, "build-controller-return");
   assert.equal(pack.gates.controllerReturnReady, true);
   // Verdict (Iron Law intact): the controller still may not accept without resolvable evidence.
   assert.equal(pack.gates.controllerReviewReady, false);
   assert.equal(pack.nextAction, "fix-missing-evidence-refs-before-controller-verdict");
+});
+
+test("controller-return next step prioritizes current callback work over historical sent deliveries", () => {
+  const pack = buildControllerReviewPack({
+    review: {
+      decision: "ready",
+      group: "group-fixture",
+      returnPolicy: { mode: "per-target" },
+      groupStatus: "ready",
+      groupSnapshot: { missing: [], pendingDispatch: [], ready: [{ packetId: "packet-b" }], blocked: [] },
+      blocked: [],
+    },
+    controllerReturnDelivery: { status: "sent" },
+    callbackPlan: {
+      status: "ready-to-build",
+      counts: { readyToBuildCount: 1, pendingHostSendCount: 0, sentCount: 1 },
+    },
+    targetResults: [{
+      targetWindow: "WindowB",
+      taskId: "task-b",
+      resultStatus: "completed",
+      commits: [],
+      evidenceRefs: ["evidence.json"],
+      verificationSummary: ["passed"],
+      hasControllerReviewEvidence: true,
+      missingEvidenceRefs: [],
+    }],
+    generatedAt: "2026-07-26T00:00:00.000Z",
+    wakeflowTrace: { dispatchGroup: "group-fixture" },
+  });
+  assert.equal(pack.controllerReturnNextStep, "build-controller-return");
+  assert.equal(pack.gates.controllerReturnReady, true);
+  assert.equal(pack.gates.controllerReturnSent, true);
+});
+
+test("target skills follow the current-version callback plan instead of a stale exact next-step value", () => {
+  const skillFiles = [
+    path.join(workspaceRoot, "skills/wakeflow-target/SKILL.md"),
+    path.resolve(workspaceRoot, "../claude-code-wakeflow/skills/wakeflow-target/SKILL.md"),
+  ];
+  for (const file of skillFiles) {
+    const skill = readFileSync(file, "utf8");
+    assert.match(skill, /buildAllowed=true/);
+    assert.match(skill, /hostSendRequired=true/);
+    assert.match(skill, /controllerAlreadyReached=true/);
+    assert.match(skill, /older `resultVersionKey` never satisfies the current/);
+    assert.match(skill, /Always pass `stateRoot`/);
+  }
+  const setupSource = readFileSync(path.resolve(workspaceRoot, "../../core/scripts/wakeflow-setup.mjs"), "utf8");
+  assert.match(setupSource, /exactly one controller-return envelope per callback scope and \\`resultVersionKey\\`/);
+  assert.match(setupSource, /legal superseding target result creates a new result version/);
 });
 
 test("review pack exposes required craft gaps before reduce while keeping callback transport independent", () => {
@@ -854,7 +908,7 @@ test("review pack exposes required craft gaps before reduce while keeping callba
   assert.equal(pack.gates.controllerReviewReady, false);
   assert.equal(pack.gates.craftEvidenceRepairRequired, true);
   assert.equal(pack.nextAction, "fix-required-craft-evidence-before-controller-verdict");
-  assert.equal(pack.controllerReturnNextStep, "send-controller-return", "transport still wakes the controller");
+  assert.equal(pack.controllerReturnNextStep, "build-controller-return", "transport still wakes the controller");
 });
 
 // Regression: a target reports evidence relative to ITS OWN repo (where the work + commit

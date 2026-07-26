@@ -95,7 +95,7 @@ export function buildControllerReviewPack({
     blockedCount: review.blocked.length,
     missingEvidenceRefsPresent,
     craftEvidenceGapsPresent,
-    controllerReturnSent: controllerReturnDelivery.status === "sent",
+    controllerReturnSent: (callbackPlan?.counts?.sentCount || 0) > 0,
     controllerReturnReady: (callbackPlan?.counts?.readyToBuildCount || 0) > 0,
     controllerReturnPendingHostSend: (callbackPlan?.counts?.pendingHostSendCount || 0) > 0,
   });
@@ -105,12 +105,12 @@ export function buildControllerReviewPack({
   // evidence sufficiency is the controller's POST-wake verdict (gates.controllerReviewReady /
   // nextAction), never a reason to withhold the wake-up. Without this split, a failed evidence-ref
   // existence check stalls the controller return and breaks the closed loop (the wake-up never fires).
-  const controllerReturnNextStep = gates.controllerReturnSent
-    ? "controller-return-already-sent"
-    : gates.controllerReturnReady
-      ? "send-controller-return"
-      : gates.controllerReturnPendingHostSend
-        ? "complete-controller-return-host-send"
+  const controllerReturnNextStep = gates.controllerReturnReady
+    ? "build-controller-return"
+    : gates.controllerReturnPendingHostSend
+      ? "send-controller-return-and-record-delivery"
+      : gates.controllerReturnSent
+        ? "controller-return-already-sent"
         : gates.waitForMissingResults
           ? "wait-for-group-results"
           : "no-controller-return-needed";

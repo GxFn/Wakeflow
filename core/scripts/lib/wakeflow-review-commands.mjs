@@ -617,12 +617,12 @@ export function createReviewCommands(ctx) {
     const controllerReturnReady = (callbackPlan?.counts?.readyToBuildCount || 0) > 0;
     const controllerReturnPendingHostSend = (callbackPlan?.counts?.pendingHostSendCount || 0) > 0;
     const controllerReturnSent = (callbackPlan?.counts?.sentCount || 0) > 0;
-    const controllerReturnNextStep = controllerReturnSent
-      ? "controller-return-already-sent"
+    const controllerReturnNextStep = controllerReturnReady
+      ? "build-controller-return"
       : controllerReturnPendingHostSend
         ? "send-controller-return-and-record-delivery"
-        : controllerReturnReady
-          ? "build-controller-return"
+        : controllerReturnSent
+          ? "controller-return-already-sent"
           : missing.length > 0
             ? "wait-for-state-root-target-result"
             : "no-controller-return-needed";

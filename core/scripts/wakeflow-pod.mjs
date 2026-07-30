@@ -20,6 +20,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runSync } from "../lib/wakeflow-process.mjs";
 import { demandExecutionPlacement, mainCheckoutOccupancy } from "./lib/wakeflow-active-demands.mjs";
+import { loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import { withFileLock, WakeflowStateLockTimeoutError } from "./lib/wakeflow-state-lock.mjs";
 import {
@@ -144,11 +145,13 @@ function withStreamOverlayLock(fn) {
 function readConfigOrFail() {
   const trackedFile = trackedConfigFile(workspaceRoot);
   if (!existsSync(trackedFile)) fail("wakeflow.config.json not found; run initialization first.");
-  return readJson(trackedFile, "workspace config");
+  return loadWorkspaceConfig({ workspaceRoot, args: options });
 }
 
-function demandStateFor(demandKey) {
-  const stateFile = path.join(workspaceRoot, ".wakeflow-active", "current", slug(demandKey), "wakeflow-state.json");
+function demandStateFor(demandKey, config = null) {
+  const loaded = config ?? loadWorkspaceConfig({ workspaceRoot, args: options });
+  const paths = workspaceLedgerPaths({ workspaceRoot, args: options, config: loaded });
+  const stateFile = path.join(paths.workspaceCurrentDir, slug(demandKey), "wakeflow-state.json");
   if (!existsSync(stateFile)) return { exists: false, state: null, placement: null, controllerWindow: null };
   try {
     const value = JSON.parse(readFileSync(stateFile, "utf8"));
@@ -256,7 +259,7 @@ function commandOpen() {
 
   // A pod attaches to a claimable or open demand; a provably closed one would
   // orphan fresh worktrees behind the archive gate.
-  const demandState = demandStateFor(demandKey);
+  const demandState = demandStateFor(demandKey, baseConfig);
   if (demandState.exists && ["completed", "archived", "cancelled"].includes(demandState.state)) {
     fail(`demand ${demandKey} is ${demandState.state}; a pod attaches to a claimable or open demand.`);
   }
@@ -286,7 +289,12 @@ function commandOpen() {
   // Pod 0 works the MAIN checkouts and registers no stream — surface its
   // occupancy the same way (a repo edited in place is tomorrow's merge
   // conflict just as much as another pod's worktree).
-  const mainIntersections = mainCheckoutOccupancy({ workspaceRoot, repos, excludeDemandKeys: [demandKey] });
+  const mainIntersections = mainCheckoutOccupancy({
+    workspaceRoot,
+    config: baseConfig,
+    repos,
+    excludeDemandKeys: [demandKey],
+  });
 
   const workWindows = [];
   let poolExhausted = null;
@@ -415,7 +423,7 @@ function commandClose() {
   // Close order: complete-demand -> pod close (worktrees + ledger) -> archive.
   // The archive reducer refuses while isolation windows are open, so the pod's
   // streams must come down after completion and before archive.
-  const demandState = demandStateFor(demandKey);
+  const demandState = demandStateFor(demandKey, baseConfig);
   if (!force && !["completed", "archived", "cancelled"].includes(demandState.state)) {
     fail(`demand ${demandKey} is ${demandState.state ?? "missing"}, not completed or cancelled. Close order: complete-demand (or cancel-demand) -> pod close -> archive (pass --force to tear the pod's worktrees down anyway).`);
   }

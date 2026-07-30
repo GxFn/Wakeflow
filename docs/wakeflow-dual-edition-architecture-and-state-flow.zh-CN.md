@@ -118,13 +118,13 @@ flowchart TB
 额外的版本事实：
 
 - Claude 版本交付 `commands/`（7 个斜杠命令），且 `artifact-checks` 要求 `skills/` 与 `commands/` 同时存在（`wakeflow-host-artifact-checks.mjs:29-34`）；Codex 没有 `commands/`，转而携带一个 `.codex-plugin` 的 `interface{}` 块。
-- 所有版本的 manifest 都在**五处**被版本锁定为 **0.8.17**：两个插件 manifest（`.codex-plugin/plugin.json:3`、`.claude-plugin/plugin.json:3`）、两个插件 `package.json`，以及 marketplace 的 **plugin 条目**（`.claude-plugin/marketplace.json` 的 `plugins[0].version`）。marketplace 文件还携带**第二个、不同的**版本字段——`metadata.version` 为 `1.0.0`（目录元数据，而非插件版本）——所以同一个文件有两个不同的版本字段，只有 `plugins[0]` 那个跟随 0.8.17 的锁定。根 `package.json` 保持 `0.0.0` / `private:true`（私有开发工作区）。`sync-core` **并不**强制版本一致——manifest 只做存在性检查。
+- 所有版本的 manifest 都在**五处**被版本锁定为 **0.8.18**：两个插件 manifest（`.codex-plugin/plugin.json:3`、`.claude-plugin/plugin.json:3`）、两个插件 `package.json`，以及 marketplace 的 **plugin 条目**（`.claude-plugin/marketplace.json` 的 `plugins[0].version`）。marketplace 文件还携带**第二个、不同的**版本字段——`metadata.version` 为 `1.0.0`（目录元数据，而非插件版本）——所以同一个文件有两个不同的版本字段，只有 `plugins[0]` 那个跟随 0.8.18 的锁定。根 `package.json` 保持 `0.0.0` / `private:true`（私有开发工作区）。`sync-core` **并不**强制版本一致——manifest 只做存在性检查。
 - marketplace **只**发布 Claude 版本；Codex 版本的 `artifact.marketplacePath` 指向一个单独的 `.agents/plugins/marketplace.json`。
 - `core/` 中的 host-profile 副本是一个 **Codex 开发桩**（`hostId codex` 但 `workspaceResidueChecks: []`），被排除在同步之外，仅在仓库开发期间从 `core/` 运行时让内核脚本的相对导入得以解析而存在。
 
 **注：** 这是 Wakeflow 唯一的架构参考文档；根据文首声明，凡此处文字与代码相左之处，以代码为准。
 
-> **待核实 / 存疑：** “内核不基于 `hostId` 分支”这一论断，依据是对 `core/` 中 `hostId ===` 的 grep 返回零命中；这会漏掉某些奇异的动态分发（例如把 `hostProfile.hostId` 用作对象键）。当前五处 0.8.17 版本字段彼此一致，但 `check:core` 并不会捕获版本漂移。Codex 的 `.agents/plugins/marketplace.json` 分发路径位于本仓库受跟踪树之外，未予确认。
+> **待核实 / 存疑：** “内核不基于 `hostId` 分支”这一论断，依据是对 `core/` 中 `hostId ===` 的 grep 返回零命中；这会漏掉某些奇异的动态分发（例如把 `hostProfile.hostId` 用作对象键）。当前五处 0.8.18 版本字段彼此一致，但 `check:core` 并不会捕获版本漂移。Codex 的 `.agents/plugins/marketplace.json` 分发路径位于本仓库受跟踪树之外，未予确认。
 
 ---
 

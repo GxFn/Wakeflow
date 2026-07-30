@@ -10,6 +10,7 @@ import test from "node:test";
 const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
 const intakeScript = path.join(workspaceRoot, "scripts/wakeflow-intake.mjs");
 const controllerScript = path.join(workspaceRoot, "scripts/wakeflow-state.mjs");
+const renderScript = path.join(workspaceRoot, "scripts/wakeflow-render-progress.mjs");
 
 function writeText(file, content) {
   mkdirSync(path.dirname(file), { recursive: true });
@@ -45,14 +46,19 @@ Fixture only.
 
 function makeFixture({ demandKey = "enum-flow-2026-05-30", state = "intake", stateRootArg = null } = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-intake-"));
+  const externalLedgerRoot = `../wakeflow-ledger-${path.basename(root)}`;
+  const externalCurrentDir = `${externalLedgerRoot}/current`;
   const resolvedStateRootArg = stateRootArg === "project-ledger"
-    ? `../wakeflow-ledger/current/LEDGER-FIXTURE-${path.basename(root)}`
+    ? `${externalCurrentDir}/LEDGER-FIXTURE-${path.basename(root)}`
     : stateRootArg;
   writeText(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "Wakeflow",
     controllerWindow: "AlembicWorkspace",
     designWindow: "DesignWindow",
     testWindow: "TestWindow",
+    ...(stateRootArg === "project-ledger"
+      ? { workspaceCurrentDir: externalCurrentDir }
+      : {}),
     designHandoffBoard: "DesignWindow/docs/current/workspace-handoff-board.md",
     repositories: [
       { windowName: "AlembicWorkspace", path: ".", role: "controller" },
@@ -218,15 +224,30 @@ test("test-card makes PCV opt-in and requires explicit restart conditions", () =
   assert.deepEqual(card.executionContract.restartConditions, ["The accepted artifact version changed after a product repair."]);
 });
 
-test("test-card supports controller state roots in the configured project ledger", () => {
+test("test-card supports controller state roots in a configured external current ledger", () => {
   const fixture = makeFixture({ stateRootArg: "project-ledger" });
+  parseOk(run(controllerScript, fixture.root, [
+    "add-task-package",
+    "--state-root", fixture.stateRootRef,
+    "--task-package-id", "EXTERNAL-PKG",
+    "--summary", "Exercise the configured external current ledger.",
+    "--target-window", "AlembicWorkspace",
+    "--target-task-id", "EXTERNAL-TASK",
+    "--target-summary", "Keep state, render, and intake on one configured root.",
+    "--write",
+  ]));
+  const rendered = parseOk(run(renderScript, fixture.root, [
+    "--state-root", fixture.stateRootRef,
+    "--write",
+  ]));
+  assert.equal(rendered.wrote, true);
   const payload = parseOk(run(intakeScript, fixture.root, [
     ...testCardArgs(fixture.stateRootRef),
     "--write",
   ]));
 
   assert.equal(payload.ok, true);
-  assert.match(payload.stateRoot, /^\.\.\/wakeflow-ledger\/current\/LEDGER-FIXTURE-wakeflow-intake-/);
+  assert.match(payload.stateRoot, /^\.\.\/wakeflow-ledger-wakeflow-intake-[^/]+\/current\/LEDGER-FIXTURE-wakeflow-intake-/);
   assert.equal(existsSync(path.join(fixture.stateRoot, "test-cards/REAL-SCENARIO-T1.json")), true);
 });
 

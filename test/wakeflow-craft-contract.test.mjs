@@ -240,6 +240,7 @@ test("W-craft-2: recurringProblem reminder appears at prepare-dispatch after two
     const imp = run([
       "import-target-result", "--root", root, "--state-root", stateRootRel,
       "--target-task-id", "R-TASK", "--target-window", "WinA", "--status", "completed",
+      ...(round > 1 ? ["--dispatch-group", `rework-${round - 1}`] : []),
       "--evidence-ref", "notes.md", "--write", "--json",
     ]);
     assert.equal(imp.status, 0, imp.stderr || imp.stdout);

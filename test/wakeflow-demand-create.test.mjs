@@ -9,6 +9,10 @@ const script = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),
   "../plugins/codex-wakeflow/scripts/wakeflow-demand-sequence.mjs",
 );
+const sourceScript = path.resolve(
+  path.dirname(new URL(import.meta.url).pathname),
+  "../core/scripts/wakeflow-demand-sequence.mjs",
+);
 
 const HEADER =
   "| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount | Auto Claim | Testing Decision | Documents |";
@@ -30,6 +34,9 @@ function makeWorkspace(rows = "") {
 
 function run(root, args) {
   return runSync(process.execPath, [script, ...args, "--root", root, "--json"], { cwd: root, encoding: "utf8" });
+}
+function runSource(root, args) {
+  return runSync(process.execPath, [sourceScript, ...args, "--root", root, "--json"], { cwd: root, encoding: "utf8" });
 }
 const parse = (result) => JSON.parse(result.stdout);
 const statePath = (root, key) => path.join(root, `.wakeflow-active/current/${key}/wakeflow-state.json`);
@@ -143,6 +150,63 @@ test("create-demand dry-run does not create a state root", () => {
   const payload = parse(run(root, ["create-demand", "--todo-id", "feat-2026-06-21"]));
   assert.equal(payload.wrote, false);
   assert.equal(existsSync(statePath(root, "feat-2026-06-21")), false);
+});
+
+test("create-demand preflights the complete package list before creating a state root", () => {
+  const cases = [
+    {
+      name: "non-array package list",
+      value: { taskPackageId: "TP-1" },
+      pattern: /must be a JSON array/,
+    },
+    {
+      name: "duplicate package id",
+      value: [{ taskPackageId: "TP-1" }, { taskPackageId: "TP-1" }],
+      pattern: /package ids must be unique/,
+    },
+    {
+      name: "malformed acceptance anchors",
+      value: [{ taskPackageId: "TP-1" }, { taskPackageId: "TP-2", acceptanceAnchors: [{ id: "AC-1" }] }],
+      pattern: /acceptanceAnchors/,
+    },
+    {
+      name: "malformed evidence contract",
+      value: [{ taskPackageId: "TP-1" }, { taskPackageId: "TP-2", evidenceContract: { required: "tests" } }],
+      pattern: /evidenceContract\.required/,
+    },
+    {
+      name: "initial Test package",
+      value: [{ taskPackageId: "TP-1", targetWindow: "Test", targetTaskId: "T-1" }],
+      pattern: /initial Test work/,
+    },
+    {
+      name: "initial test work type",
+      value: [{ taskPackageId: "TP-1", workType: "test" }],
+      pattern: /create the demand.*Test card/i,
+    },
+    {
+      name: "forward dependency",
+      value: [{
+        taskPackageId: "TP-1", targetWindow: "Design", targetTaskId: "T-1",
+        workType: "research", objective: "Research", contextSummary: ["Known fact"],
+        requirementRefs: [{ ref: "plan.md#goal", role: "goal" }],
+        boundaries: { inScope: ["scope"], outOfScope: [], forbidden: [] },
+        completionExpectations: ["report"], dependsOnTaskIds: ["T-2"], commitExpectation: "leave-uncommitted",
+      }, { taskPackageId: "TP-2", targetWindow: "Design", targetTaskId: "T-2" }],
+      pattern: /not an earlier target task/,
+    },
+  ];
+  for (const entry of cases) {
+    const { root } = makeWorkspace();
+    const key = `preflight-${cases.indexOf(entry)}-2026-07-30`;
+    const result = runSource(root, [
+      "create-demand", "--demand-key", key, "--title", entry.name,
+      "--task-packages", JSON.stringify(entry.value), "--write",
+    ]);
+    assert.notEqual(result.status, 0, entry.name);
+    assert.match(parse(result).error, entry.pattern, entry.name);
+    assert.equal(existsSync(statePath(root, key)), false, `${entry.name} must fail before init`);
+  }
 });
 
 test("create-demand refuses an ineligible / unknown TODO row", () => {

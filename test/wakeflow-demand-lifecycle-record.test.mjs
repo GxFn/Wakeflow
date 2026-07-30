@@ -23,7 +23,10 @@ function run(script, args) {
 
 function makeWorkspace() {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-lifecycle-"));
-  writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({ projectLedgerRoot: "wakeflow-ledger" }, null, 2)}\n`);
+  writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
+    projectLedgerRoot: "wakeflow-ledger",
+    workspaceArchiveDir: "wakeflow-ledger/workspace/archive",
+  }, null, 2)}\n`);
   mkdirSync(path.join(root, ".wakeflow-active/current"), { recursive: true });
   return root;
 }

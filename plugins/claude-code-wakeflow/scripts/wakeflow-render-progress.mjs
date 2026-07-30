@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,21 @@ import {
 } from "./lib/wakeflow-language.mjs";
 import { WakeflowStateLockTimeoutError, withStateRootLock } from "./lib/wakeflow-state-lock.mjs";
 import { refreshWorkspaceProjection } from "./lib/wakeflow-workspace-projection.mjs";
+import {
+  controllerEventStateAlignment,
+  futureControllerEvents,
+  readControllerEventsStrict,
+  WakeflowControllerEventLogError,
+} from "./lib/wakeflow-controller-events.mjs";
+import {
+  assertStateAuthorityPaths,
+  recoverPendingStateTransition,
+  WakeflowPendingTransitionError,
+} from "./lib/wakeflow-state-transition.mjs";
+import {
+  resolveStateRootFilePath,
+  WakeflowStatePathError,
+} from "./lib/wakeflow-state-paths.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const wakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -51,8 +66,24 @@ function output(payload, textLines = []) {
   console.log(`Agent next: ${complete.agentNext}`);
 }
 
-function fail(message) {
-  output({ ok: false, command: "wakeflow-render-progress", error: message });
+function fail(message, options = {}) {
+  output({
+    ok: false,
+    command: "wakeflow-render-progress",
+    error: message,
+    ...(options.errorCode ? { errorCode: options.errorCode } : {}),
+    ...(options.errorCode || options.retryable !== undefined || options.recovery
+      ? {
+          diagnostics: {
+            code: options.errorCode || "wakeflow-render-progress-error",
+            severity: "error",
+            plane: "projection",
+            retryable: options.retryable ?? false,
+            ...(options.recovery ? { recovery: options.recovery } : {}),
+          },
+        }
+      : {}),
+  });
   process.exitCode = 1;
   throw new CliExit(message);
 }
@@ -70,13 +101,27 @@ function relative(file) {
 
 function ensureInsideAllowedRoots(file, label, allowedRoots) {
   const absolute = path.resolve(file);
+  const resolved = realPathWithMissingTail(absolute);
   if (allowedRoots.some((root) => {
-    const rel = path.relative(root, absolute);
+    const resolvedRoot = realPathWithMissingTail(path.resolve(root));
+    const rel = path.relative(resolvedRoot, resolved);
     return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
   })) {
     return;
   }
   fail(`${label} must stay inside the Wakeflow runtime or configured project ledger: ${absolute}`);
+}
+
+function realPathWithMissingTail(file) {
+  const tail = [];
+  let cursor = path.resolve(file);
+  while (!existsSync(cursor)) {
+    const parent = path.dirname(cursor);
+    if (parent === cursor) return path.resolve(file);
+    tail.unshift(path.basename(cursor));
+    cursor = parent;
+  }
+  return path.resolve(realpathSync(cursor), ...tail);
 }
 
 function resolveFromWorkspace(value) {
@@ -91,7 +136,17 @@ function stateRootFromArg() {
     workspaceRoot,
     ledgerPaths.projectLedgerRoot,
     ledgerPaths.workspaceDocsDir,
+    ledgerPaths.workspaceCurrentDir,
+    ledgerPaths.workspaceArchiveDir,
   ]);
+  try {
+    assertStateAuthorityPaths({ stateRoot });
+  } catch (error) {
+    if (error instanceof WakeflowPendingTransitionError) {
+      fail(`${error.message}. Refusing to follow a non-canonical state authority path.`);
+    }
+    throw error;
+  }
   return stateRoot;
 }
 
@@ -175,11 +230,119 @@ function beijingTimestamp(iso) {
   }).format(new Date(iso)).replace(",", "") + " CST";
 }
 
-function lastEvent(eventsFile) {
-  if (!existsSync(eventsFile)) return null;
-  const lines = readFileSync(eventsFile, "utf8").trim().split(/\r?\n/).filter(Boolean);
-  if (lines.length === 0) return null;
-  return JSON.parse(lines.at(-1));
+function eventsForSnapshot(stateRoot, state, eventsFile) {
+  let events;
+  try {
+    events = readControllerEventsStrict(eventsFile);
+  } catch (error) {
+    if (error instanceof WakeflowControllerEventLogError) {
+      fail(
+        `${error.message} (${relative(eventsFile)}). Repair the controller event log before rendering; no projection was written.`,
+        {
+          errorCode: "delivery-event-log-repair-required",
+          retryable: true,
+          recovery: {
+            strategy: "repair-event-log-then-render",
+            stateRoot: relative(stateRoot),
+            eventsFile: relative(eventsFile),
+            stateRevision: state.revision,
+            lineNumber: error.lineNumber,
+          },
+        },
+      );
+    }
+    throw error;
+  }
+  let pendingRecovery;
+  try {
+    pendingRecovery = recoverPendingStateTransition({
+      stateRoot,
+      state,
+      events,
+      write: false,
+    });
+  } catch (error) {
+    if (error instanceof WakeflowPendingTransitionError) {
+      fail(
+        `${error.message}. Inspect ${relative(stateRoot)} before rendering; no projection was written.`,
+        {
+          errorCode: "controller-event-manual-recovery-required",
+          retryable: false,
+          recovery: {
+            strategy: "inspect-state-event-transition-journal",
+            stateRoot: relative(stateRoot),
+            eventsFile: relative(eventsFile),
+            stateRevision: state.revision,
+          },
+        },
+      );
+    }
+    throw error;
+  }
+  if (pendingRecovery.status !== "none") {
+    fail(
+      `pending controller transition ${pendingRecovery.eventId ?? "(unknown)"} must be recovered explicitly before rendering. No projection was written.`,
+      {
+        errorCode: "state-transition-recovery-required",
+        retryable: true,
+        recovery: {
+          strategy: "run-recover-state-transition",
+          stateRoot: relative(stateRoot),
+          eventsFile: relative(eventsFile),
+          stateRevision: state.revision,
+          reservedRevision: pendingRecovery.targetRevision,
+          eventId: pendingRecovery.eventId,
+          reason: pendingRecovery.reason,
+        },
+      },
+    );
+  }
+  const alignment = controllerEventStateAlignment(events, state.revision);
+  if (alignment.status === "event-ahead") {
+    const firstReserved = futureControllerEvents(events, state.revision)[0]
+      ?? alignment.latestEvent;
+    const reservedRun = firstReserved.wakeflowTrace?.deliveryRunId;
+    fail(
+      `controller event revision ${firstReserved.stateRevision} is reserved ahead of state revision ${state.revision}; ${
+        reservedRun
+          ? `replay delivery run ${reservedRun}`
+          : "no matching transition journal exists, so manual recovery is required"
+      } before rendering. No projection was written.`,
+      {
+        errorCode: reservedRun
+          ? "delivery-state-recovery-required"
+          : "controller-event-manual-recovery-required",
+        retryable: Boolean(reservedRun),
+        recovery: {
+          strategy: reservedRun
+            ? "replay-reserved-delivery-run-first"
+            : "inspect-state-event-transition-journal",
+          stateRoot: relative(stateRoot),
+          eventsFile: relative(eventsFile),
+          stateRevision: state.revision,
+          reservedRevision: firstReserved.stateRevision,
+          reservedDeliveryRunId: reservedRun,
+        },
+      },
+    );
+  }
+  if (alignment.status === "state-ahead") {
+    fail(
+      `controller state revision ${state.revision} is ahead of event log revision ${alignment.latestEventRevision}; no matching transition journal exists, so manual recovery is required before rendering. No projection was written.`,
+      {
+        errorCode: "controller-event-manual-recovery-required",
+        retryable: false,
+        recovery: {
+          strategy: "inspect-state-event-transition-journal",
+          stateRoot: relative(stateRoot),
+          eventsFile: relative(eventsFile),
+          stateRevision: state.revision,
+          latestEventRevision: alignment.latestEventRevision,
+        },
+      },
+    );
+  }
+  return events;
 }
 
 function selectInterfaceLanguage(state, config) {
@@ -275,12 +438,21 @@ try {
   const config = loadWorkspaceConfig({ workspaceRoot, args: rawArgs });
   const language = selectInterfaceLanguage(state, config);
   const locale = wakeflowStateLocale(language);
-  const event = lastEvent(eventsFile);
-  const progressDoc = state.projection?.progressDoc ?? "developer-progress.md";
-  const progressFile = path.join(stateRoot, progressDoc);
-  if (!existsSync(progressFile)) {
-    fail(`progress doc does not exist: ${relative(progressFile)}`);
+  const event = eventsForSnapshot(stateRoot, state, eventsFile).at(-1) ?? null;
+  const configuredProgressDoc = state.projection?.progressDoc ?? "developer-progress.md";
+  let progressFile;
+  try {
+    progressFile = resolveStateRootFilePath(stateRoot, configuredProgressDoc, {
+      label: "progress document",
+      requireExisting: true,
+    });
+  } catch (error) {
+    if (error instanceof WakeflowStatePathError) {
+      fail(`${error.message}. Refusing to render a progress document outside the state root.`);
+    }
+    throw error;
   }
+  const progressDoc = path.relative(stateRoot, progressFile).split(path.sep).join("/");
 
   const renderedAt = new Date().toISOString();
   const statusValues = {
@@ -392,10 +564,17 @@ try {
         if (fresh.revision !== state.revision) {
           fail(`controller state changed while rendering (revision ${state.revision} -> ${fresh.revision}); re-run wakeflow-render-progress against the current state.`);
         }
+        const freshEvent = eventsForSnapshot(stateRoot, fresh, eventsFile).at(-1) ?? null;
+        if ((freshEvent?.eventId ?? "none") !== (event?.eventId ?? "none")) {
+          fail("controller event log changed while rendering; re-run wakeflow-render-progress against the current state.");
+        }
         writeJson(projectionFile, projection);
         atomicWrite(indexFile, stateRootIndex.endsWith("\n") ? stateRootIndex : `${stateRootIndex}\n`);
-        writeJson(stateFile, { ...fresh, projection: nextState.projection });
         atomicWrite(progressFile, nextProgress.endsWith("\n") ? nextProgress : `${nextProgress}\n`);
+        // Flip the authority marker only after every projection file succeeds.
+        // A failed progress/index write may leave replaceable projection bytes,
+        // but the state remains stale and cannot falsely report "synced".
+        writeJson(stateFile, { ...fresh, projection: nextState.projection });
       }, { onWarn: (message) => process.stderr.write(`wakeflow-render-progress: ${message}\n`) });
     } catch (error) {
       if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);

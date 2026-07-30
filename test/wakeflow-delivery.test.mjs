@@ -49,6 +49,28 @@ function writeJson(file, value) {
   writeText(file, JSON.stringify(value, null, 2));
 }
 
+function appendFixtureControllerEventsThroughRevision(stateRoot, targetRevision) {
+  const eventsFile = path.join(stateRoot, "controller-events.jsonl");
+  const events = existsSync(eventsFile)
+    ? readFileSync(eventsFile, "utf8")
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+    : [];
+  const latestRevision = events.at(-1)?.stateRevision ?? 0;
+  assert.ok(
+    latestRevision <= targetRevision,
+    `fixture controller events are ahead of requested revision ${targetRevision}`,
+  );
+  for (let revision = latestRevision + 1; revision <= targetRevision; revision += 1) {
+    events.push({
+      eventId: `fixture-manual-event-${revision}`,
+      stateRevision: revision,
+    });
+  }
+  writeText(eventsFile, events.map((event) => JSON.stringify(event)).join("\n"));
+}
+
 function makeFixture() {
   const root = mkdtempSync(path.join(os.tmpdir(), "codex-loop-state-only-"));
   writeJson(path.join(root, "wakeflow.config.json"), {
@@ -130,7 +152,22 @@ function makeFixture() {
     }],
     createdAt: "2026-06-05T00:00:00.000Z",
   });
-  writeText(path.join(stateRoot, "developer-progress.md"), "# Controller State Fixture");
+  writeText(path.join(stateRoot, "developer-progress.md"), `
+# Controller State Fixture
+
+<!-- unified-status:start -->
+Fixture projection is aligned with controller state revision 3.
+<!-- unified-status:end -->
+`);
+  writeJson(path.join(stateRoot, "projection.json"), {
+    sourceRevision: 3,
+    sourceEventId: "fixture-event-3",
+  });
+  writeText(path.join(stateRoot, "controller-events.jsonl"), [
+    { eventId: "fixture-event-1", stateRevision: 1 },
+    { eventId: "fixture-event-2", stateRevision: 2 },
+    { eventId: "fixture-event-3", stateRevision: 3 },
+  ].map((event) => JSON.stringify(event)).join("\n"));
   return {
     root,
     stateRootRef: ".wakeflow-active/current/CSMR-FIXTURE",
@@ -2486,6 +2523,8 @@ test("state-root target result import exposes controller-return context from del
     "CSMR-TASK-1",
     "--target-window",
     "AlembicPlugin",
+    "--dispatch-group",
+    "GROUP-STATE",
     "--status",
     "completed",
     "--result-id",
@@ -2630,6 +2669,8 @@ test("a superseded state-root result opens a new revision-scoped controller retu
     "CSMR-TASK-1",
     "--target-window",
     "AlembicPlugin",
+    "--dispatch-group",
+    "GROUP-STATE",
     "--status",
     "completed",
     "--result-id",
@@ -2681,6 +2722,8 @@ test("a superseded state-root result opens a new revision-scoped controller retu
     "CSMR-TASK-1",
     "--target-window",
     "AlembicPlugin",
+    "--dispatch-group",
+    "GROUP-STATE",
     "--status",
     "completed",
     "--result-id",
@@ -2866,13 +2909,14 @@ test("record-delivery-run writes the shared window lock and record-target-result
     "record-target-result",
     "--target-window", "AlembicPlugin",
     "--task-id", "CSMR-TASK-1",
+    "--group", "GROUP-STATE",
     "--status", "completed",
     "--evidence-ref", "docs/evidence.md",
     "--write",
   ]));
   assert.equal(recorded.lockReleased, true, "result for the locked delivery must release the lock");
   assert.equal(existsSync(lockFile), false);
-  assert.equal(recorded.result.dispatchGroup, "GROUP-STATE", "group auto-resolves from the dispatch packet");
+  assert.equal(recorded.result.dispatchGroup, "GROUP-STATE", "result keeps the explicit dispatch identity");
 });
 
 test("record-target-result preserves a fresh lock for a different task in the same window", () => {
@@ -2905,6 +2949,7 @@ test("record-target-result preserves a fresh lock for a different task in the sa
     "record-target-result",
     "--target-window", "AlembicPlugin",
     "--task-id", "CSMR-TASK-1",
+    "--group", "GROUP-STATE",
     "--status", "completed",
     "--evidence-ref", "docs/evidence.md",
     "--write",
@@ -2929,6 +2974,7 @@ test("F51: state-script import-target-result (the MCP path) releases the matchin
     "--state-root", stateRootRef,
     "--target-task-id", "CSMR-TASK-1",
     "--target-window", "AlembicPlugin",
+    "--dispatch-group", "GROUP-STATE",
     "--status", "completed",
     "--evidence-ref", "docs/evidence.md",
     "--write",
@@ -3091,10 +3137,12 @@ test("status keeps a prepared rework replacement live and hides the reviewed del
   const state = JSON.parse(readFileSync(stateFile, "utf8"));
   state.state = "needs-rework";
   state.revision = 6;
+  state.projection.status = "stale";
   state.targetTasks[0].status = "needs-rework";
   state.targetTasks[0].reviewDecision = "rework";
   state.taskPackages[0].status = "needs-rework";
   writeJson(stateFile, state);
+  appendFixtureControllerEventsThroughRevision(path.join(root, stateRootRef), 6);
   writeJson(path.join(root, stateRootRef, "target-results/group-rework-g1.json"), {
     kind: "TargetResultEnvelope",
     resultId: "result-group-rework-g1",
@@ -3125,7 +3173,9 @@ test("status keeps a prepared rework replacement live and hides the reviewed del
   // sent. The replacement still supersedes the task's older recorded group.
   const advanced = JSON.parse(readFileSync(stateFile, "utf8"));
   advanced.revision = 7;
+  advanced.projection.status = "stale";
   writeJson(stateFile, advanced);
+  appendFixtureControllerEventsThroughRevision(path.join(root, stateRootRef), 7);
   const afterSiblingAdvance = parseOk(run(root, ["status"]));
   assert.deepEqual(
     afterSiblingAdvance.runtimeSummary.deliveries.pendingHostSend.map((item) => item.dispatchGroup),
@@ -3212,6 +3262,7 @@ test("F25: a stale lock for the answered delivery is released (unified freshness
   writeJson(lockFile, lock);
   const recorded = parseOk(run(root, [
     "record-target-result", "--target-window", "AlembicPlugin", "--task-id", "CSMR-TASK-1",
+    "--group", "GROUP-STATE",
     "--status", "completed", "--evidence-ref", "docs/e.md", "--write",
   ]));
   assert.equal(recorded.lockReleased, true, "a stale lock for the answered delivery is released under the unified policy");
@@ -3350,6 +3401,7 @@ test("record-target-result releases the lock even when the run used a custom --d
     "record-target-result",
     "--target-window", "AlembicPlugin",
     "--task-id", "CSMR-TASK-1",
+    "--group", "GROUP-STATE",
     "--status", "completed",
     "--evidence-ref", "docs/evidence.md",
     "--write",
@@ -3386,7 +3438,7 @@ test("--compact payloads drop the structured echoes but keep ids, files, and pro
   assert.ok(recorded.deliveryRunId);
   assert.ok(recorded.stateUpdate, "state update summary kept");
 
-  const result = parseOk(run(root, ["record-target-result", "--target-window", "AlembicPlugin", "--task-id", "CSMR-TASK-1", "--status", "completed", "--evidence-ref", "docs/e.md", "--write", "--compact"]));
+  const result = parseOk(run(root, ["record-target-result", "--target-window", "AlembicPlugin", "--task-id", "CSMR-TASK-1", "--group", "GROUP-STATE", "--status", "completed", "--evidence-ref", "docs/e.md", "--write", "--compact"]));
   assert.equal(result.compact, true);
   assert.equal(result.result, undefined, "no result echo");
   assert.ok(result.resultId);

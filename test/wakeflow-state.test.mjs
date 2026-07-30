@@ -176,6 +176,30 @@ test("init refuses to overwrite an existing state root", () => {
   assert.match(repeat.stdout + repeat.stderr, /refuse to re-initialize/);
 });
 
+test("init refuses an existing state-root directory even when it has no known authority files", () => {
+  const root = makeRoot();
+  const stateRoot = path.join(root, ".wakeflow-active/current/RESIDUE-FIXTURE");
+  mkdirSync(stateRoot, { recursive: true });
+  writeFileSync(path.join(stateRoot, "crash-residue.txt"), "must not be adopted or overwritten\n");
+
+  const result = run([
+    "init",
+    "--root",
+    root,
+    "--demand-key",
+    "RESIDUE-FIXTURE",
+    "--title",
+    "Residue Fixture",
+    "--write",
+    "--json",
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout + result.stderr, /state root already exists|refuse to re-initialize/);
+  assert.equal(readFileSync(path.join(stateRoot, "crash-residue.txt"), "utf8"), "must not be adopted or overwritten\n");
+  assert.equal(existsSync(path.join(stateRoot, "wakeflow-state.json")), false);
+});
+
 test("init refuses to start another demand while one is unarchived (maxActiveDemands=1)", () => {
   const root = makeRoot();
   writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({ maxActiveDemands: 1 }, null, 2)}\n`);
@@ -285,10 +309,10 @@ test("RA5: focus-doc distills a per-window card (dry-run default, --write emits 
   assert.match(md, /FOC-TASK/);
 });
 
-// F41: crash-injection — a failed state.json write must NOT advance the revision (the event
-// is written first, so a crash leaves at most a harmless extra event, never a missing-event
-// gap). Skipped under root, where chmod 0555 does not block writes.
-test("F41: a failed state.json commit leaves the revision unadvanced (no half-commit)", {
+// F41: crash-injection — the durable transition journal is created before any
+// package/event/state authority write. If the root cannot accept that journal,
+// the operation must leave every authority byte unchanged.
+test("F41: a transition that cannot create its journal leaves state and events unchanged", {
   skip: typeof process.getuid === "function" && process.getuid() === 0 ? "chmod is bypassed when running as root" : false,
 }, () => {
   const root = makeRoot();
@@ -302,7 +326,8 @@ test("F41: a failed state.json commit leaves the revision unadvanced (no half-co
   const eventsFile = path.join(stateRootAbs, "controller-events.jsonl");
   const beforeRev = readJson(stateFile).revision;
   const beforeEvents = readFileSync(eventsFile, "utf8").trim().split("\n").length;
-  // make the state-root dir read-only so the state.json temp+rename fails AFTER the event append
+  // Make the state-root dir read-only so the journal temp+rename fails before
+  // the package, event, or state snapshot can advance.
   chmodSync(stateRootAbs, 0o555);
   let failed;
   try {
@@ -313,10 +338,15 @@ test("F41: a failed state.json commit leaves the revision unadvanced (no half-co
   } finally {
     chmodSync(stateRootAbs, 0o755);
   }
-  assert.equal(failed, true, "the commit fails when state.json cannot be written");
+  assert.equal(failed, true, "the transition fails when its durable journal cannot be written");
   assert.equal(readJson(stateFile).revision, beforeRev, "state.json revision is NOT advanced on a failed commit");
   const afterEvents = readFileSync(eventsFile, "utf8").trim().split("\n").length;
-  assert.ok(afterEvents >= beforeEvents, "an extra event may exist (harmless), never a missing event for an advanced revision");
+  assert.equal(afterEvents, beforeEvents, "no event is appended before the durable transition journal exists");
+  assert.equal(
+    existsSync(path.join(stateRootAbs, "wakeflow-state.pending-transition.json")),
+    false,
+    "a journal that could not be committed must not leave a partial temp file",
+  );
 });
 
 test("init and render-progress localize generated state-root docs for Chinese workspaces", () => {
@@ -1395,6 +1425,11 @@ test("decide-review records explicit controller judgment before task acceptance"
 
 test("review decisions affect open targets without rewriting accepted history", () => {
   const root = makeRoot();
+  writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
+    workspaceName: "Review scope fixture",
+    controllerWindow: "Controller",
+    repoNames: ["AlembicWorkspace"],
+  }, null, 2)}\n`);
   const init = run([
     "init",
     "--root",
@@ -1503,7 +1538,25 @@ test("review decisions affect open targets without rewriting accepted history", 
     targetTaskIds: ["CSMR-TASK-0", "CSMR-TASK-1"],
     excludedTargetTaskIds: [],
   }, null, 2)}\n`);
-  const reworkDecision = decide(reworkCandidatePayload.candidateId, "rework");
+  const tamperedDecision = run([
+    "decide-review",
+    "--root",
+    root,
+    "--state-root",
+    initPayload.stateRoot,
+    "--candidate-id",
+    reworkCandidatePayload.candidateId,
+    "--decision",
+    "rework",
+    "--reason",
+    "Tampered candidate must be rejected.",
+    "--write",
+    "--json",
+  ]);
+  assert.notEqual(tamperedDecision.status, 0);
+  assert.match(tamperedDecision.stdout, /candidate .* is stale|rerun reduce-results/i);
+  const refreshedReworkCandidate = reduce();
+  const reworkDecision = decide(refreshedReworkCandidate.candidateId, "rework");
   assert.deepEqual(reworkDecision.targetTaskIds, ["CSMR-TASK-1"]);
   assert.deepEqual(reworkDecision.excludedTargetTaskIds, ["CSMR-TASK-0"]);
 
@@ -2090,11 +2143,11 @@ test("import-target-result reports readiness across all dispatched tasks", () =>
   }));
   writeFileSync(stateFile, `${JSON.stringify(dispatched, null, 2)}\n`);
 
-  const first = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "a.md", "--write", "--json"]).stdout);
+  const first = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--dispatch-group", "GROUP-READY", "--evidence-ref", "a.md", "--write", "--json"]).stdout);
   assert.equal(first.reviewReadiness.readyForReduce, false);
   assert.deepEqual(first.reviewReadiness.remainingTaskIds, ["TASK-2"], "names exactly what is still missing");
 
-  const second = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-2", "--target-window", "WinB", "--status", "completed", "--evidence-ref", "b.md", "--write", "--json"]).stdout);
+  const second = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-2", "--target-window", "WinB", "--status", "completed", "--dispatch-group", "GROUP-READY", "--evidence-ref", "b.md", "--write", "--json"]).stdout);
   assert.equal(second.reviewReadiness.readyForReduce, true);
   assert.match(second.agentNext, /not controller acceptance.*run reduce-results/);
 });

@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { buildWakeflowTrace } from "../lib/wakeflow-trace.mjs";
 import { loadWorkspaceConfig, testWindowNames, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 import {
@@ -15,6 +17,7 @@ import {
   controllerReductionScope,
   controllerReviewScope,
   hasPendingReworkDecision,
+  isProductReworkCompanion,
   isReworkRouteTask,
   reductionStatusForTargetTask,
   taskExpectsTargetResult,
@@ -31,6 +34,7 @@ import { PROGRESS_SECTIONS, appendProgressTimeline } from "./lib/wakeflow-progre
 import {
   activeDemandCapacity,
   activeDemandConflictSummary,
+  isWakeflowInitStagingEntry,
 } from "./lib/wakeflow-active-demands.mjs";
 import { archiveWorkspaceTodo, refreshWorkspaceProjection } from "./lib/wakeflow-workspace-projection.mjs";
 import {
@@ -41,7 +45,21 @@ import {
 import {
   TASK_CONTEXT_VERSION,
   normalizeTaskPackageContext,
+  requirementRefIssue,
 } from "./lib/wakeflow-task-package.mjs";
+import {
+  controllerEventStateAlignment,
+  futureControllerEvents,
+  readControllerEventsStrict,
+  WakeflowControllerEventLogError,
+} from "./lib/wakeflow-controller-events.mjs";
+import {
+  assertStateAuthorityPaths,
+  commitStateTransition,
+  readPendingStateTransition,
+  recoverPendingStateTransition,
+  WakeflowPendingTransitionError,
+} from "./lib/wakeflow-state-transition.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const wakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -71,6 +89,7 @@ Usage:
   node scripts/wakeflow-state.mjs archive-demand --state-root <path> --reason <text> [--redact] [--evidence-ref <ref>] [--write] [--json]
   node scripts/wakeflow-state.mjs sanitize-archive --state-root <archived-path> --reason <text> [--write] [--json]
   node scripts/wakeflow-state.mjs adopt-demand-host --state-root <path> [--reason <text>] [--write] [--json]
+  node scripts/wakeflow-state.mjs recover-state-transition --state-root <path> [--write] [--json]
 
 Design:
   This script manages the machine state root for the Wakeflow state-machine
@@ -112,8 +131,24 @@ function output(payload, textLines = []) {
   console.log(`Agent next: ${complete.agentNext}`);
 }
 
-function fail(message) {
-  output({ ok: false, command, error: message });
+function fail(message, options = {}) {
+  output({
+    ok: false,
+    command,
+    error: message,
+    ...(options.errorCode ? { errorCode: options.errorCode } : {}),
+    ...(options.errorCode || options.retryable !== undefined || options.recovery
+      ? {
+          diagnostics: {
+            code: options.errorCode || "wakeflow-state-error",
+            severity: "error",
+            plane: "state-machine",
+            retryable: options.retryable ?? false,
+            ...(options.recovery ? { recovery: options.recovery } : {}),
+          },
+        }
+      : {}),
+  });
   process.exitCode = 1;
   throw new CliExit(message);
 }
@@ -373,8 +408,26 @@ function validateCraftEvidenceEntries(entries) {
     if (!entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.kind !== "string" || !entry.kind.trim()) {
       fail("--craft-evidence entries must be objects with a non-empty string kind (e.g. {\"kind\":\"tests\",\"ref\":\"...\"}).");
     }
+    const proofFields = ["ref", "value", "commit"];
+    for (const field of proofFields) {
+      if (entry[field] !== undefined && (typeof entry[field] !== "string" || !entry[field].trim())) {
+        fail(`--craft-evidence ${field} must be a non-empty string when provided.`);
+      }
+    }
+    if (!proofFields.some((field) => typeof entry[field] === "string" && entry[field].trim())) {
+      fail("--craft-evidence entries must carry reviewable proof in at least one of ref, value, or commit; kind alone is not evidence.");
+    }
+    if (entry.verify !== undefined && (typeof entry.verify !== "string" || !entry.verify.trim())) {
+      fail("--craft-evidence verify must be a non-empty string when provided.");
+    }
   }
   return entries;
+}
+
+function craftEvidenceHasProof(entry) {
+  return ["ref", "value", "commit"].some(
+    (field) => typeof entry?.[field] === "string" && entry[field].trim(),
+  );
 }
 
 function slug(value) {
@@ -453,10 +506,7 @@ function ensureDemandHostOwnership(state, { claim = true } = {}) {
 }
 
 function commandAdoptDemandHost() {
-  const stateRoot = resolveFromWorkspace(requireValue("--state-root"));
-  if (!existsSync(path.join(stateRoot, "wakeflow-state.json"))) {
-    fail(`state root is missing wakeflow-state.json: ${relative(stateRoot)}`);
-  }
+  const stateRoot = stateRootFromArg();
   withLockedStateRoot(stateRoot, () => commandAdoptDemandHostLocked(stateRoot));
 }
 
@@ -498,8 +548,14 @@ function commandAdoptDemandHostLocked(stateRoot) {
     stateRevision: nextRevision,
   };
   if (write) {
-    appendJsonLine(eventsFile, event);
-    writeJson(stateFile, nextState);
+    commitStateTransition({
+      stateRoot,
+      stateFile,
+      eventsFile,
+      event,
+      nextState,
+      command: "adopt-demand-host",
+    });
   }
   output({
     ok: true,
@@ -516,13 +572,27 @@ function commandAdoptDemandHostLocked(stateRoot) {
 
 function ensureInsideAllowedRoots(file, label, allowedRoots) {
   const absolute = path.resolve(file);
+  const resolved = realPathWithMissingTail(absolute);
   if (allowedRoots.some((root) => {
-    const rel = path.relative(root, absolute);
+    const resolvedRoot = realPathWithMissingTail(path.resolve(root));
+    const rel = path.relative(resolvedRoot, resolved);
     return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
   })) {
     return;
   }
   fail(`${label} must stay inside the Wakeflow runtime or configured project ledger: ${absolute}`);
+}
+
+function realPathWithMissingTail(file) {
+  const tail = [];
+  let cursor = path.resolve(file);
+  while (!existsSync(cursor)) {
+    const parent = path.dirname(cursor);
+    if (parent === cursor) return path.resolve(file);
+    tail.unshift(path.basename(cursor));
+    cursor = parent;
+  }
+  return path.resolve(realpathSync(cursor), ...tail);
 }
 
 function readTemplate(name, { language = "en" } = {}) {
@@ -628,9 +698,19 @@ function stateRootFromArg() {
     workspaceRoot,
     ledgerPaths.projectLedgerRoot,
     ledgerPaths.workspaceDocsDir,
+    ledgerPaths.workspaceCurrentDir,
+    ledgerPaths.workspaceArchiveDir,
   ]);
   if (!existsSync(path.join(stateRoot, "wakeflow-state.json"))) {
     fail(`state root is missing wakeflow-state.json: ${relative(stateRoot)}`);
+  }
+  try {
+    assertStateAuthorityPaths({ stateRoot });
+  } catch (error) {
+    if (error instanceof WakeflowPendingTransitionError) {
+      fail(`${error.message}. Refusing to follow a non-canonical state authority path.`);
+    }
+    throw error;
   }
   return stateRoot;
 }
@@ -648,13 +728,355 @@ function appendJsonLine(file, value) {
 // happen INSIDE fn so the whole read-modify-write is one critical section.
 function withLockedStateRoot(stateRoot, fn) {
   try {
-    return withStateRootLock(stateRoot, fn, {
+    return withStateRootLock(stateRoot, () => {
+      const stateFile = path.join(stateRoot, "wakeflow-state.json");
+      const eventsFile = path.join(stateRoot, "controller-events.jsonl");
+      const state = readJson(stateFile, "controller state");
+      let events;
+      try {
+        events = readControllerEventsStrict(eventsFile);
+      } catch (error) {
+        if (error instanceof WakeflowControllerEventLogError) {
+          fail(
+            `${error.message} (${relative(eventsFile)}). Repair the controller event log before running ${command}; state was not changed.`,
+            {
+              errorCode: "delivery-event-log-repair-required",
+              retryable: true,
+              recovery: {
+                strategy: "repair-event-log-then-retry",
+                stateRoot: relative(stateRoot),
+                eventsFile: relative(eventsFile),
+                stateRevision: state.revision,
+                lineNumber: error.lineNumber,
+                command,
+              },
+            },
+          );
+        }
+        throw error;
+      }
+      let pendingRecovery = { status: "none" };
+      try {
+        pendingRecovery = recoverPendingStateTransition({
+          stateRoot,
+          state,
+          events,
+          write: false,
+        });
+      } catch (error) {
+        if (error instanceof WakeflowPendingTransitionError) {
+          fail(
+            `${error.message}. Inspect ${relative(stateRoot)} before running ${command}; state was not changed.`,
+            {
+              errorCode: "controller-event-manual-recovery-required",
+              retryable: false,
+              recovery: {
+                strategy: "inspect-state-event-transition-journal",
+                stateRoot: relative(stateRoot),
+                eventsFile: relative(eventsFile),
+                stateRevision: state.revision,
+                command,
+                ...(error.details?.currentRevision !== undefined
+                  ? { currentRevision: error.details.currentRevision }
+                  : {}),
+                ...(error.details?.targetRevision !== undefined
+                  ? { targetRevision: error.details.targetRevision }
+                  : {}),
+                ...(error.details?.eventId ? { eventId: error.details.eventId } : {}),
+                ...(error.details?.conflictingEventId
+                  ? { conflictingEventId: error.details.conflictingEventId }
+                  : {}),
+                ...(error.details?.conflictingRevision !== undefined
+                  ? { conflictingRevision: error.details.conflictingRevision }
+                  : {}),
+              },
+            },
+          );
+        }
+        throw error;
+      }
+      if (pendingRecovery.status !== "none") {
+        fail(
+          `pending controller transition ${pendingRecovery.eventId ?? "(unknown)"} must be recovered explicitly before running ${command}; state was not changed.`,
+          {
+            errorCode: "state-transition-recovery-required",
+            retryable: true,
+            recovery: {
+              strategy: "run-recover-state-transition",
+              stateRoot: relative(stateRoot),
+              eventsFile: relative(eventsFile),
+              stateRevision: state.revision,
+              reservedRevision: pendingRecovery.targetRevision,
+              eventId: pendingRecovery.eventId,
+              reason: pendingRecovery.reason,
+              command,
+            },
+          },
+        );
+      }
+      const alignment = controllerEventStateAlignment(events, state.revision);
+      if (alignment.status === "event-ahead") {
+        const firstReserved = futureControllerEvents(events, state.revision)[0]
+          ?? alignment.latestEvent;
+        const reservedRun = firstReserved.wakeflowTrace?.deliveryRunId;
+        const deliveryRecovery = Boolean(reservedRun);
+        fail(
+          `controller event revision ${firstReserved.stateRevision} is reserved ahead of state revision ${state.revision}; ${reservedRun ? `replay delivery run ${reservedRun}` : "no matching transition journal exists, so manual recovery is required"} before running ${command}. State was not changed.`,
+          {
+            errorCode: deliveryRecovery
+              ? "delivery-state-recovery-required"
+              : "controller-event-manual-recovery-required",
+            retryable: deliveryRecovery,
+            recovery: {
+              strategy: reservedRun
+                ? "replay-reserved-delivery-run-first"
+                : "inspect-state-event-transition-journal",
+              stateRoot: relative(stateRoot),
+              eventsFile: relative(eventsFile),
+              stateRevision: state.revision,
+              reservedRevision: firstReserved.stateRevision,
+              reservedDeliveryRunId: reservedRun,
+              command,
+            },
+          },
+        );
+      }
+      if (alignment.status === "state-ahead") {
+        fail(
+          `controller state revision ${state.revision} is ahead of the event log revision ${alignment.latestEventRevision}; no matching transition journal exists, so manual recovery is required before running ${command}. State was not changed.`,
+          {
+            errorCode: "controller-event-manual-recovery-required",
+            retryable: false,
+            recovery: {
+              strategy: "inspect-state-event-transition-journal",
+              stateRoot: relative(stateRoot),
+              eventsFile: relative(eventsFile),
+              stateRevision: state.revision,
+              latestEventRevision: alignment.latestEventRevision,
+              command,
+            },
+          },
+        );
+      }
+      try {
+        return fn();
+      } catch (error) {
+        if (error instanceof CliExit) throw error;
+        let pending = null;
+        try {
+          pending = readPendingStateTransition(stateRoot);
+        } catch {
+          // The original error remains primary when the journal itself cannot
+          // be inspected. The next read-only status pass will report both
+          // authority artifacts without guessing.
+        }
+        if (pending) {
+          fail(
+            `state transition ${pending.event?.eventId ?? "(unknown)"} was journaled but did not finish while running ${command}: ${error.message}`,
+            {
+              errorCode: "state-transition-recovery-required",
+              retryable: true,
+              recovery: {
+                strategy: "run-recover-state-transition",
+                stateRoot: relative(stateRoot),
+                eventsFile: relative(eventsFile),
+                stateRevision: state.revision,
+                reservedRevision: pending.nextState?.revision,
+                eventId: pending.event?.eventId,
+                reason: "journaled-transition-write-failed",
+                command,
+              },
+            },
+          );
+        }
+        throw error;
+      }
+    }, {
       onWarn: (message) => process.stderr.write(`wakeflow-state: ${message}\n`),
     });
   } catch (error) {
     if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);
     throw error;
   }
+}
+
+function commandRecoverStateTransition() {
+  const stateRoot = stateRootFromArg();
+  try {
+    withStateRootLock(stateRoot, () => {
+      const stateFile = path.join(stateRoot, "wakeflow-state.json");
+      const eventsFile = path.join(stateRoot, "controller-events.jsonl");
+      const state = readJson(stateFile, "controller state");
+      let events;
+      try {
+        events = readControllerEventsStrict(eventsFile);
+      } catch (error) {
+        if (error instanceof WakeflowControllerEventLogError) {
+          fail(
+            `${error.message} (${relative(eventsFile)}). Repair the controller event log before recovering the pending transition; state was not changed.`,
+            {
+              errorCode: "delivery-event-log-repair-required",
+              retryable: true,
+              recovery: {
+                strategy: "repair-event-log-then-recover",
+                stateRoot: relative(stateRoot),
+                eventsFile: relative(eventsFile),
+                stateRevision: state.revision,
+                lineNumber: error.lineNumber,
+              },
+            },
+          );
+        }
+        throw error;
+      }
+      let pending;
+      try {
+        pending = readPendingStateTransition(stateRoot);
+      } catch (error) {
+        if (error instanceof WakeflowPendingTransitionError) {
+          failPendingStateTransition(error, stateRoot, eventsFile, state.revision);
+        }
+        throw error;
+      }
+      if (!pending) {
+        const alignment = controllerEventStateAlignment(events, state.revision);
+        if (alignment.status !== "aligned") {
+          fail(
+            `no pending transition journal exists and state/event revisions are not aligned (${state.revision}/${alignment.latestEventRevision}); manual recovery is required.`,
+            {
+              errorCode: "controller-event-manual-recovery-required",
+              retryable: false,
+              recovery: {
+                strategy: "inspect-state-event-transition-journal",
+                stateRoot: relative(stateRoot),
+                eventsFile: relative(eventsFile),
+                stateRevision: state.revision,
+                latestEventRevision: alignment.latestEventRevision,
+              },
+            },
+          );
+        }
+        output({
+          ok: true,
+          command: "recover-state-transition",
+          wrote: false,
+          stateRoot: relative(stateRoot),
+          stateRevision: state.revision,
+          note: "no pending transition exists; state and event log are already aligned",
+        });
+        return;
+      }
+
+      authorizePendingTransitionRecovery(state, pending);
+      let recovery;
+      try {
+        recovery = recoverPendingStateTransition({
+          stateRoot,
+          state,
+          events,
+          write,
+        });
+      } catch (error) {
+        if (error instanceof WakeflowPendingTransitionError) {
+          failPendingStateTransition(error, stateRoot, eventsFile, state.revision);
+        }
+        throw error;
+      }
+      if (!write) {
+        output({
+          ok: true,
+          command: "recover-state-transition",
+          wrote: false,
+          stateRoot: relative(stateRoot),
+          pendingEventId: recovery.eventId ?? pending.event?.eventId ?? null,
+          currentRevision: state.revision,
+          targetRevision: recovery.targetRevision ?? pending.nextState?.revision ?? null,
+          recoveryStatus: recovery.status,
+          agentNext: "Dry-run only. Re-run wakeflow_recover_state_transition with apply=true to complete this exact journaled transition.",
+        });
+        return;
+      }
+      const recoveredState = readJson(stateFile, "controller state");
+      const recoveredEvents = readControllerEventsStrict(eventsFile);
+      const alignment = controllerEventStateAlignment(recoveredEvents, recoveredState.revision);
+      if (alignment.status !== "aligned") {
+        fail(
+          `pending transition recovery finished but state/event revisions remain misaligned (${recoveredState.revision}/${alignment.latestEventRevision}); stop for manual inspection.`,
+          {
+            errorCode: "controller-event-manual-recovery-required",
+            retryable: false,
+            recovery: {
+              strategy: "inspect-state-event-transition-journal",
+              stateRoot: relative(stateRoot),
+              eventsFile: relative(eventsFile),
+              stateRevision: recoveredState.revision,
+              latestEventRevision: alignment.latestEventRevision,
+            },
+          },
+        );
+      }
+      output({
+        ok: true,
+        command: "recover-state-transition",
+        wrote: true,
+        stateRoot: relative(stateRoot),
+        recoveredEventId: recovery.eventId ?? pending.event?.eventId ?? null,
+        stateRevision: recoveredState.revision,
+        recoveryStatus: recovery.status,
+        agentNext: "The exact journaled transition is recovered. Re-run the original controller command only if it is still required.",
+      });
+    }, {
+      onWarn: (message) => process.stderr.write(`wakeflow-state: ${message}\n`),
+    });
+  } catch (error) {
+    if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);
+    throw error;
+  }
+}
+
+function authorizePendingTransitionRecovery(state, pending) {
+  const currentHost = hostProfile.runtime.hostDirName;
+  const currentOwner = state.controllerHost ?? null;
+  const pendingOwner = pending.nextState?.controllerHost ?? null;
+  if (pending.command === "adopt-demand-host") {
+    const validHostAdoption = ["demand.host-adopted", "demand.host-transferred"]
+      .includes(pending.event?.type)
+      && pending.event?.to === currentHost
+      && pendingOwner === currentHost;
+    if (!validHostAdoption) {
+      fail(`pending host adoption belongs to ${pendingOwner ?? "(missing owner)"}; this runtime is ${currentHost} and cannot recover it.`);
+    }
+    return;
+  }
+  if (currentOwner && currentOwner !== currentHost) {
+    fail(`demand ${state.demandKey} is owned by controller host ${currentOwner}; this runtime is ${currentHost} and cannot recover its pending transition.`);
+  }
+  if (pendingOwner && pendingOwner !== currentHost) {
+    fail(`pending transition assigns controller host ${pendingOwner}; this runtime is ${currentHost} and cannot recover it.`);
+  }
+}
+
+function failPendingStateTransition(error, stateRoot, eventsFile, stateRevision) {
+  fail(
+    `${error.message}. Inspect ${relative(stateRoot)}; state was not changed.`,
+    {
+      errorCode: "controller-event-manual-recovery-required",
+      retryable: false,
+      recovery: {
+        strategy: "inspect-state-event-transition-journal",
+        stateRoot: relative(stateRoot),
+        eventsFile: relative(eventsFile),
+        stateRevision,
+        ...(error.details?.currentRevision !== undefined
+          ? { currentRevision: error.details.currentRevision }
+          : {}),
+        ...(error.details?.targetRevision !== undefined
+          ? { targetRevision: error.details.targetRevision }
+          : {}),
+        ...(error.details?.eventId ? { eventId: error.details.eventId } : {}),
+      },
+    },
+  );
 }
 
 function nextEventId(createdAt, revision) {
@@ -684,6 +1106,50 @@ function resolveFromWorkspace(value) {
 function evidenceRefLooksLikePath(ref) {
   const text = String(ref ?? "");
   return text.includes("/") || /\.(json|md|log|txt|png|jpg|jpeg|webp|html|csv)$/i.test(text);
+}
+
+function knownDispatchGroupsForTargetTask(targetWindow, targetTaskId, stateRoot, demandKey) {
+  const groups = new Set();
+  const packetDir = path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery/dispatch-packets");
+  if (existsSync(packetDir)) {
+    for (const name of readdirSync(packetDir)) {
+      if (!name.endsWith(".json")) continue;
+      try {
+        const packet = JSON.parse(readFileSync(path.join(packetDir, name), "utf8"));
+        if (
+          packet.targetWindow === targetWindow
+          && (packet.taskId === targetTaskId
+            || packet.targetTaskId === targetTaskId
+            || packet.stateRef?.targetTaskId === targetTaskId)
+          && typeof packet.stateRef?.stateRoot === "string"
+          && path.resolve(workspaceRoot, packet.stateRef.stateRoot) === path.resolve(stateRoot)
+          && (!packet.stateRef?.demandKey || packet.stateRef.demandKey === demandKey)
+          && typeof packet.dispatchGroup === "string"
+          && packet.dispatchGroup
+        ) {
+          groups.add(packet.dispatchGroup);
+        }
+      } catch {
+        // A malformed transport artifact is handled by delivery diagnostics;
+        // it cannot authorize an otherwise unknown result group.
+      }
+    }
+  }
+  for (const item of [
+    ...readStateRootTargetResultItems(stateRoot, readJson),
+    ...readTargetResultHistory(stateRoot),
+  ]) {
+    const result = item.result;
+    if (
+      (result?.targetTaskId || result?.taskId) === targetTaskId
+      && result?.targetWindow === targetWindow
+      && typeof result?.dispatchGroup === "string"
+      && result.dispatchGroup
+    ) {
+      groups.add(result.dispatchGroup);
+    }
+  }
+  return [...groups];
 }
 
 // Map each work window to its repository root from config, so a target's evidence refs
@@ -769,7 +1235,12 @@ function craftEvidenceGapsForTargetResult(stateRoot, state, task, result) {
       gaps.push({ ...base, reason: "missing-kind" });
       continue;
     }
-    for (const entry of entries) {
+    const reviewableEntries = entries.filter(craftEvidenceHasProof);
+    if (reviewableEntries.length === 0) {
+      gaps.push({ ...base, reason: "missing-proof" });
+      continue;
+    }
+    for (const entry of reviewableEntries) {
       const ref = typeof entry?.ref === "string" ? entry.ref : "";
       if (!ref) continue;
       const candidates = evidenceRefResolutionCandidates(stateRoot, ref, task.targetWindow);
@@ -850,11 +1321,15 @@ function commandInit() {
   const sourceDocuments = valuesFor("--source-doc");
   const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args: options, config });
   const stateRoot = resolveFromWorkspace(getValue("--state-root", defaultStateRoot({ demandKey, ledgerPaths })));
-  ensureInsideAllowedRoots(stateRoot, "state root", [
-    workspaceRoot,
-    ledgerPaths.projectLedgerRoot,
-    ledgerPaths.workspaceDocsDir,
-  ]);
+  const configuredCurrentDir = path.resolve(ledgerPaths.workspaceCurrentDir);
+  if (path.dirname(stateRoot) !== configuredCurrentDir) {
+    fail(
+      `state root must stay inside the Wakeflow runtime or configured project ledger; new demand state roots must be direct children of the configured workspaceCurrentDir (${relative(configuredCurrentDir)}), but got ${relative(stateRoot)}. Archive/ledger roots are created only by archive-demand.`,
+    );
+  }
+  if (isWakeflowInitStagingEntry(path.basename(stateRoot))) {
+    fail(`state root basename ${path.basename(stateRoot)} uses the reserved .wakeflow-init- staging namespace.`);
+  }
 
   const createdAt = nowIso();
   const eventId = `evt-${createdAt.replace(/[^0-9]/g, "").slice(0, 14)}-0001`;
@@ -866,10 +1341,6 @@ function commandInit() {
     projection: path.join(stateRoot, "projection.json"),
     progress: path.join(stateRoot, progressDoc),
   };
-  const existingInitFiles = Object.values(files).filter((file) => existsSync(file));
-  if (existingInitFiles.length > 0) {
-    fail(`state root already contains Wakeflow state file(s): ${existingInitFiles.map(relative).join(", ")}; refuse to re-initialize ${demandKey}.`);
-  }
   const demand = {
     schemaVersion,
     demandKey,
@@ -1011,11 +1482,29 @@ function commandInit() {
   mkdirSync(path.dirname(ledgerPaths.workspaceCurrentDir), { recursive: true });
   try {
     withFileLock(`${ledgerPaths.workspaceCurrentDir}.capacity-lock`, () => {
+      // Initialization identity and active-demand capacity share the same
+      // workspace-scoped critical section. Without this re-check, two
+      // processes can both observe an empty same-key root and overwrite one
+      // another even though the capacity scan itself is serialized.
+      let existingStateRoot = null;
+      try {
+        existingStateRoot = lstatSync(stateRoot);
+      } catch (error) {
+        if (error?.code !== "ENOENT") {
+          fail(`cannot inspect state root ${relative(stateRoot)} before initialization: ${error.message}`);
+        }
+      }
+      if (existingStateRoot) {
+        fail(`state root already exists at ${relative(stateRoot)}; refuse to re-initialize ${demandKey} or adopt crash residue.`);
+      }
       const capacity = activeDemandCapacity({
         workspaceRoot,
         config,
-        excludeDemandKeys: [demandKey],
       });
+      const duplicateDemand = capacity.active.find((item) => item.demandKey === demandKey);
+      if (duplicateDemand) {
+        fail(`cannot initialize duplicate demand key ${demandKey}: an unarchived state root already exists at ${duplicateDemand.stateRoot}. Resume or archive that root instead of creating a second identity.`);
+      }
       if (capacity.atCapacity) {
         fail(`cannot initialize ${demandKey}: workspace is at its active-demand capacity (${capacity.active.length}/${capacity.max}): ${activeDemandConflictSummary(capacity.active)}. Complete and archive one, or raise maxActiveDemands in wakeflow.config.json.`);
       }
@@ -1031,21 +1520,59 @@ function commandInit() {
       state.executionPlacement = executionPlacement;
       state.controllerWindow = demandControllerWindow;
       if (write) {
-        // wakeflow-state.json makes the demand visible to other scanners, so
-        // it must land inside the same critical section as the scan.
-        writeJson(files.demand, demand);
-        writeJson(files.state, state);
+        // A demand becomes visible only once all five initial artifacts exist.
+        // The reserved hidden staging root stays outside active-demand scans;
+        // the final same-filesystem directory rename is the publication point.
+        mkdirSync(configuredCurrentDir, { recursive: true });
+        let stagingRoot;
+        for (let attempt = 0; ; attempt += 1) {
+          const suffix = attempt ? `-${attempt}` : "";
+          const candidate = path.join(
+            configuredCurrentDir,
+            `.wakeflow-init-${slug(demandKey)}-${process.pid}-${Date.now()}${suffix}`,
+          );
+          try {
+            lstatSync(candidate);
+          } catch (error) {
+            if (error?.code === "ENOENT") {
+              stagingRoot = candidate;
+              break;
+            }
+            fail(`cannot inspect initialization staging root ${relative(candidate)}: ${error.message}`);
+          }
+        }
+        const stagingFiles = Object.fromEntries(
+          Object.entries(files).map(([key, file]) => [key, path.join(stagingRoot, path.basename(file))]),
+        );
+        try {
+          mkdirSync(stagingRoot);
+          writeJson(stagingFiles.demand, demand);
+          writeJson(stagingFiles.state, state);
+          writeText(stagingFiles.events, JSON.stringify(event));
+          writeJson(stagingFiles.projection, projection);
+          writeText(stagingFiles.progress, progress);
+          let stateRootAppeared = false;
+          try {
+            lstatSync(stateRoot);
+            stateRootAppeared = true;
+          } catch (error) {
+            if (error?.code !== "ENOENT") throw error;
+          }
+          if (stateRootAppeared) {
+            fail(`state root appeared during initialization at ${relative(stateRoot)}; refuse to overwrite it.`);
+          }
+          renameSync(stagingRoot, stateRoot);
+        } catch (error) {
+          if (stagingRoot && existsSync(stagingRoot)) {
+            rmSync(stagingRoot, { recursive: true, force: true });
+          }
+          throw error;
+        }
       }
     });
   } catch (error) {
     if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);
     throw error;
-  }
-
-  if (write) {
-    writeText(files.events, JSON.stringify(event));
-    writeJson(files.projection, projection);
-    writeText(files.progress, progress);
   }
 
   output(
@@ -1130,6 +1657,9 @@ function commandAddTaskPackageLocked(stateRoot) {
   if (targetWindow && !targetTaskId) {
     fail("--target-task-id is required when --target-window is provided.");
   }
+  if (targetTaskId && !targetWindow) {
+    fail("--target-window is required when --target-task-id is provided.");
+  }
   if (targetTaskId && (state.targetTasks ?? []).some((item) => item.targetTaskId === targetTaskId)) {
     fail(`controller state already contains target task: ${targetTaskId}`);
   }
@@ -1143,6 +1673,12 @@ function commandAddTaskPackageLocked(stateRoot) {
     targetTaskId,
     testExecution,
   });
+  for (const requirementRef of taskContext?.requirementRefs ?? []) {
+    const issue = requirementRefIssue(workspaceRoot, requirementRef);
+    if (issue) {
+      fail(`invalid task package context: ${issue}`);
+    }
+  }
 
   const createdAt = nowIso();
   const nextRevision = Number(state.revision ?? 0) + 1;
@@ -1254,9 +1790,15 @@ function commandAddTaskPackageLocked(stateRoot) {
 
   if (write) {
     mkdirSync(path.dirname(packageFile), { recursive: true });
-    writeJson(packageFile, taskPackage);
-    appendJsonLine(eventsFile, event);
-    writeJson(stateFile, nextState);
+    commitStateTransition({
+      stateRoot,
+      stateFile,
+      eventsFile,
+      event,
+      nextState,
+      jsonArtifacts: [{ file: packageFile, value: taskPackage }],
+      command: "add-task-package",
+    });
     appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.taskPackages,
       `${createdAt} ${taskPackageId} → ${targetWindow || "(unassigned)"} — ${summary}${designIntent ? ` (intent: ${designIntent})` : ""}`);
   }
@@ -1368,6 +1910,12 @@ function commandContinueDemandLocked(stateRoot) {
     targetTaskId,
     testExecution,
   });
+  for (const requirementRef of taskContext?.requirementRefs ?? []) {
+    const issue = requirementRefIssue(workspaceRoot, requirementRef);
+    if (issue) {
+      fail(`invalid task package context: ${issue}`);
+    }
+  }
   const createdAt = nowIso();
   const nextRevision = Number(state.revision ?? 0) + 1;
   const eventId = nextEventId(createdAt, nextRevision);
@@ -1480,9 +2028,15 @@ function commandContinueDemandLocked(stateRoot) {
 
   if (write) {
     mkdirSync(path.dirname(packageFile), { recursive: true });
-    writeJson(packageFile, taskPackage);
-    appendJsonLine(eventsFile, event);
-    writeJson(stateFile, nextState);
+    commitStateTransition({
+      stateRoot,
+      stateFile,
+      eventsFile,
+      event,
+      nextState,
+      jsonArtifacts: [{ file: packageFile, value: taskPackage }],
+      command: "continue-demand",
+    });
     appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.decisions,
       `${createdAt} demand continued (${continuationType}) — ${reason}; first package ${taskPackageId} → ${targetWindow}`);
     refreshWorkspaceProjection({ workspaceRoot, updatedAt: createdAt });
@@ -1590,13 +2144,24 @@ function reviewReadinessAfterImport(state, stateRoot, importedTargetTaskId, impo
   if (importedCurrentResult) taskIdsWithResults.add(importedTargetTaskId);
   const reviewScope = controllerReductionScope(state.targetTasks ?? [], taskIdsWithResults);
   const targetTasks = reviewScope.reviewableTargetTasks;
-  const reworkCompanionPresent = reviewScope.mode === "rework-first-controller-review-targets"
-    && targetTasks.some((task) => task.reviewRoute === "rework" && !hasPendingReworkDecision(task));
+  const config = loadWorkspaceConfig({ workspaceRoot, args: options });
+  const reworkCompanionPresentFor = (anchorTask) => (
+    reviewScope.mode === "rework-first-controller-review-targets"
+    && targetTasks.some((task) => isProductReworkCompanion(task, {
+      anchorTask,
+      currentResultTaskIds: taskIdsWithResults,
+      repoNames: config.repoNames,
+      controllerWindow: config.controllerWindow,
+      designWindow: config.designWindow,
+      testWindows: testWindowNames(config),
+      realProjectWindow: config.realProjectWindow,
+    }))
+  );
   const remainingTaskIds = [];
 
   for (const task of targetTasks) {
     if (hasPendingReworkDecision(task)) {
-      if (!reworkCompanionPresent) {
+      if (!reworkCompanionPresentFor(task)) {
         remainingTaskIds.push(task.targetTaskId);
       }
       continue;
@@ -1638,6 +2203,26 @@ function targetResultComparable(result = {}) {
 
 function targetResultsEquivalent(left, right) {
   return targetResultComparable(left) === targetResultComparable(right);
+}
+
+function targetResultIdentity(targetTaskId, result) {
+  return {
+    targetTaskId,
+    resultId: result.resultId,
+    resultRevision: Number(result.resultRevision ?? 1),
+    dispatchGroup: result.dispatchGroup || null,
+    status: result.status,
+  };
+}
+
+function resultSnapshotsForTasks(targetTasks, results) {
+  return targetTasks
+    .map((task) => {
+      const result = results.get(task.targetTaskId);
+      return result ? targetResultIdentity(task.targetTaskId, result) : null;
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.targetTaskId.localeCompare(right.targetTaskId));
 }
 
 function readTargetResultHistory(stateRoot) {
@@ -1698,16 +2283,46 @@ function commandImportTargetResultLocked(stateRoot) {
   // Typed craft evidence for the execution-craft contract (W-Target). Optional JSON array
   // of { kind, ref|value|commit, verify }. Absent = zero behavior change.
   const craftEvidence = validateCraftEvidenceEntries(parseOptionalJsonArrayArg("--craft-evidence"));
+  const summary = (getValue("--summary", "") || "").trim();
+  if (
+    status === "completed"
+    && summary.length === 0
+    && evidenceRefs.length === 0
+    && verification.length === 0
+    && craftEvidence.length === 0
+  ) {
+    fail("a completed target result must include reviewable content: provide --summary, --evidence-ref, --verification, or --craft-evidence.");
+  }
   const deliveryContext = targetTaskDeliveryContext(targetTask);
-  const incomingDispatchGroup = resultDispatchGroup ?? deliveryContext.dispatchGroup ?? undefined;
   const currentDispatchGroup = targetTask.delivery?.dispatchGroup || deliveryContext.dispatchGroup || "";
+  const knownDispatchGroups = new Set(knownDispatchGroupsForTargetTask(targetWindow, targetTaskId, stateRoot, state.demandKey));
+  if (currentDispatchGroup) knownDispatchGroups.add(currentDispatchGroup);
+  if (currentDispatchGroup && !resultDispatchGroup) {
+    fail(`target task ${targetTaskId} was dispatched in group ${currentDispatchGroup}; --dispatch-group is required so a late result cannot be mistaken for the current round.`);
+  }
+  if (resultDispatchGroup && !knownDispatchGroups.has(resultDispatchGroup)) {
+    fail(`--dispatch-group ${resultDispatchGroup} is unknown for ${targetWindow} / ${targetTaskId}; known groups: ${[...knownDispatchGroups].sort().join(", ")}.`);
+  }
+  const incomingDispatchGroup = resultDispatchGroup ?? undefined;
   const historyOnly = Boolean(currentDispatchGroup && incomingDispatchGroup && incomingDispatchGroup !== currentDispatchGroup);
   const currentResults = selectCurrentStateRootResults({
     items: readStateRootTargetResultItems(stateRoot, readJson),
     state,
     fail,
   });
-  const currentItem = currentResults.get(targetTaskId) ?? null;
+  let currentItem = currentResults.get(targetTaskId) ?? null;
+  if (!historyOnly && !currentItem && incomingDispatchGroup === currentDispatchGroup) {
+    // A newer sent round deliberately makes the prior round non-current for
+    // review before its replacement result exists. Keep using that stable
+    // top-level file only as the rotation source when the new round arrives.
+    const markedPrior = readStateRootTargetResultItems(stateRoot, readJson)
+      .filter((item) => (item.result?.targetTaskId || item.result?.taskId) === targetTaskId)
+      .filter((item) => item.result?.currentResult === true);
+    if (markedPrior.length > 1) {
+      fail(`multiple current target results exist for ${targetTaskId}; repair the state root before importing the replacement round.`);
+    }
+    currentItem = markedPrior[0] ?? null;
+  }
   const baseResult = {
     schemaVersion,
     resultId,
@@ -1718,7 +2333,7 @@ function commandImportTargetResultLocked(stateRoot) {
     targetWindow,
     targetTaskId,
     status,
-    summary: getValue("--summary", ""),
+    summary,
     evidenceRefs,
     verification,
     risks,
@@ -1932,8 +2547,19 @@ function commandReduceResultsLocked(stateRoot) {
   if (targetTasks.length === 0) {
     fail("controller state has no dispatched or result-bearing target tasks to reduce; dispatch a pending target before result review.");
   }
-  const reworkCompanionPresent = reviewScope.mode === "rework-first-controller-review-targets"
-    && targetTasks.some((task) => task.reviewRoute === "rework" && !hasPendingReworkDecision(task));
+  const config = loadWorkspaceConfig({ workspaceRoot, args: options });
+  const reworkCompanionPresentFor = (anchorTask) => (
+    reviewScope.mode === "rework-first-controller-review-targets"
+    && targetTasks.some((task) => isProductReworkCompanion(task, {
+      anchorTask,
+      currentResultTaskIds: results.keys(),
+      repoNames: config.repoNames,
+      controllerWindow: config.controllerWindow,
+      designWindow: config.designWindow,
+      testWindows: testWindowNames(config),
+      realProjectWindow: config.realProjectWindow,
+    }))
+  );
   const readyResultIds = [];
   const blockedResultIds = [];
   const missingTargetTaskIds = [];
@@ -1943,7 +2569,7 @@ function commandReduceResultsLocked(stateRoot) {
 
   for (const task of targetTasks) {
     if (hasPendingReworkDecision(task)) {
-      if (!reworkCompanionPresent) {
+      if (!reworkCompanionPresentFor(task)) {
         missingTargetTaskIds.push(task.targetTaskId);
       }
       continue;
@@ -2032,6 +2658,7 @@ function commandReduceResultsLocked(stateRoot) {
       ? "waiting-results"
       : "review-ready";
   const candidateId = missingTargetTaskIds.length > 0 ? null : `tc-${createdAt.replace(/[^0-9]/g, "").slice(0, 14)}-${String(nextRevision).padStart(4, "0")}`;
+  const resultSnapshots = candidateId ? resultSnapshotsForTasks(targetTasks, results) : [];
   const decision = candidateId ? {
     kind: "review-decision",
     candidateId,
@@ -2053,6 +2680,7 @@ function commandReduceResultsLocked(stateRoot) {
     reviewScope: reviewScope.mode,
     targetTaskIds: reviewScope.targetTaskIds,
     excludedTargetTaskIds: reviewScope.excludedTargetTaskIds,
+    resultSnapshots,
     allowedDecisions: ["accept", "rework", "blocked", "redesign"],
     evidenceRefs: [...new Set(evidenceRefs)],
     wakeflowTrace: artifactTrace({
@@ -2143,14 +2771,20 @@ function commandReduceResultsLocked(stateRoot) {
   };
 
   if (write) {
-    // F41: write secondaries + the event first and flip state.json (the authoritative
-    // snapshot) LAST, so a crash mid-commit leaves at most a harmless extra event, never a
-    // revision-without-event audit gap.
-    if (candidate) {
-      writeJson(path.join(stateRoot, "transition-candidates", `${slug(candidate.candidateId)}.json`), candidate);
-    }
-    appendJsonLine(eventsFile, event);
-    writeJson(stateFile, nextState);
+    commitStateTransition({
+      stateRoot,
+      stateFile,
+      eventsFile,
+      event,
+      nextState,
+      jsonArtifacts: candidate
+        ? [{
+            file: path.join(stateRoot, "transition-candidates", `${slug(candidate.candidateId)}.json`),
+            value: candidate,
+          }]
+        : [],
+      command: "reduce-results",
+    });
   }
 
   output(
@@ -2170,6 +2804,7 @@ function commandReduceResultsLocked(stateRoot) {
       blockedResultIds,
       missingResultIds: missingTargetTaskIds,
       candidateId,
+      resultSnapshots,
       reviewScope: reviewScope.mode,
       targetTaskIds: reviewScope.targetTaskIds,
       excludedTargetTaskIds: reviewScope.excludedTargetTaskIds,
@@ -2212,6 +2847,22 @@ function commandDecideReviewLocked(stateRoot) {
   if (candidate.fromRevision !== state.revision) {
     fail(`transition candidate ${candidateId} is stale: candidate revision ${candidate.fromRevision}, current revision ${state.revision}`);
   }
+  const rawCandidateTaskIds = new Set(candidate.targetTaskIds ?? []);
+  const knownCandidateTasks = (state.targetTasks ?? []).filter((item) => rawCandidateTaskIds.has(item.targetTaskId));
+  const unknownCandidateTaskIds = [...rawCandidateTaskIds].filter((targetTaskId) => !knownCandidateTasks.some((item) => item.targetTaskId === targetTaskId));
+  if (unknownCandidateTaskIds.length > 0) {
+    fail(`transition candidate ${candidateId} references unknown target tasks: ${unknownCandidateTaskIds.join(", ")}`);
+  }
+  if (!Array.isArray(candidate.resultSnapshots)) {
+    fail(`transition candidate ${candidateId} predates immutable result snapshots; rerun reduce-results before deciding.`);
+  }
+  const candidateResultSnapshots = [...candidate.resultSnapshots]
+    .sort((left, right) => String(left?.targetTaskId ?? "").localeCompare(String(right?.targetTaskId ?? "")));
+  const currentResults = latestResultsByTargetTask(readTargetResults(stateRoot));
+  const currentResultSnapshots = resultSnapshotsForTasks(knownCandidateTasks, currentResults);
+  if (!isDeepStrictEqual(candidateResultSnapshots, currentResultSnapshots)) {
+    fail(`transition candidate ${candidateId} is stale because its current target result identity changed; rerun reduce-results before deciding.`);
+  }
   if (decision === "accept" && (candidate.blockedResultIds?.length ?? 0) > 0 && !hasFlag("--accept-blocked")) {
     // Accepting over a blocked target result must be an explicit controller
     // override, never a silent sweep into "accepted".
@@ -2225,12 +2876,6 @@ function commandDecideReviewLocked(stateRoot) {
   const reworkLike = decision === "rework" || decision === "redesign";
   const nextMainState = decision === "accept" ? "planned" : reworkLike ? "needs-rework" : "blocked";
   const nextTaskStatus = decision === "accept" ? "accepted" : reworkLike ? "needs-rework" : "blocked";
-  const rawCandidateTaskIds = new Set(candidate.targetTaskIds ?? []);
-  const knownCandidateTasks = (state.targetTasks ?? []).filter((item) => rawCandidateTaskIds.has(item.targetTaskId));
-  const unknownCandidateTaskIds = [...rawCandidateTaskIds].filter((targetTaskId) => !knownCandidateTasks.some((item) => item.targetTaskId === targetTaskId));
-  if (unknownCandidateTaskIds.length > 0) {
-    fail(`transition candidate ${candidateId} references unknown target tasks: ${unknownCandidateTaskIds.join(", ")}`);
-  }
   const decisionScope = controllerReviewScope(knownCandidateTasks);
   if (decisionScope.targetTaskIds.length === 0) {
     fail(`transition candidate ${candidateId} has no open target tasks to decide; complete the demand or add the next task package by total-control judgment.`);
@@ -2327,8 +2972,14 @@ function commandDecideReviewLocked(stateRoot) {
   };
 
   if (write) {
-    appendJsonLine(eventsFile, event);
-    writeJson(stateFile, nextState);
+    commitStateTransition({
+      stateRoot,
+      stateFile,
+      eventsFile,
+      event,
+      nextState,
+      command: "decide-review",
+    });
     appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.decisions,
       `${createdAt} decision ${decision} (candidate ${candidateId}) — ${reason}`);
   }
@@ -2379,11 +3030,11 @@ function commandCompleteDemandLocked(stateRoot) {
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const state = readJson(stateFile, "controller state");
   const hostOwnership = ensureDemandHostOwnership(state);
-  if (state.state === "completed") {
-    fail(`demand is already completed: ${state.demandKey}`);
+  if (["completed", "archived", "cancelled"].includes(state.state)) {
+    fail(`demand is already terminal (${state.state}): ${state.demandKey}`);
   }
-  if (state.state === "cancelled") {
-    fail(`demand is cancelled: ${state.demandKey}; archive it instead of completing.`);
+  if ((state.taskPackages ?? []).length === 0 || (state.targetTasks ?? []).length === 0) {
+    fail("complete-demand requires at least one task package and one target task; an empty demand cannot be completed.");
   }
   const openTasks = (state.targetTasks ?? []).filter((task) => task.status !== "accepted");
   const openPackages = (state.taskPackages ?? []).filter((taskPackage) => taskPackage.status !== "accepted");
@@ -2437,8 +3088,14 @@ function commandCompleteDemandLocked(stateRoot) {
   };
 
   if (write) {
-    appendJsonLine(eventsFile, event);
-    writeJson(stateFile, nextState);
+    commitStateTransition({
+      stateRoot,
+      stateFile,
+      eventsFile,
+      event,
+      nextState,
+      command: "complete-demand",
+    });
     appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.decisions,
       `${createdAt} demand completed — ${reason}`);
     refreshWorkspaceProjection({ workspaceRoot, updatedAt: createdAt });
@@ -2495,7 +3152,27 @@ function commandCancelDemandLocked(stateRoot) {
     fail(`demand is already completed: ${state.demandKey}; archive it instead of cancelling.`);
   }
   if (state.state === "cancelled") {
-    fail(`demand is already cancelled: ${state.demandKey}; archive it to free capacity.`);
+    const releasedWindowLocks = write ? releaseDemandWindowLocks(state) : [];
+    output({
+      ok: true,
+      command: "cancel-demand",
+      hostOwnership,
+      wrote: false,
+      demandKey: state.demandKey,
+      stateRoot: relative(stateRoot),
+      previousState: "cancelled",
+      nextState: "cancelled",
+      stateRevision: state.revision,
+      releasedWindowLocks,
+      note: "idempotent cancellation replay; no second event or revision was created",
+      agentNext: "The demand remains cancelled. Archive it to free capacity after closing any isolation windows.",
+    }, [
+      `Demand ${state.demandKey} was already cancelled; state was not changed.`,
+      releasedWindowLocks.length
+        ? `Released residual delivery lock(s): ${releasedWindowLocks.join(", ")}.`
+        : "No matching residual delivery locks remained.",
+    ]);
+    return;
   }
 
   const createdAt = nowIso();
@@ -2541,28 +3218,20 @@ function commandCancelDemandLocked(stateRoot) {
     ...(hostOwnership.claimed || hostOwnership.transferredFrom ? { hostOwnership } : {}),
   };
 
-  // Cancel is a real stop: the demand's in-flight window delivery locks are
-  // released NOW, or the documented close order (stream-close / pod close ->
-  // archive) dead-ends on "fresh in-flight delivery lock" for up to the lock
-  // TTL while a zombie demand holds an active-demand slot. Only locks whose
-  // deliveryId belongs to this demand's tasks are touched.
-  const releasedWindowLocks = [];
+  let releasedWindowLocks = [];
   if (write) {
-    for (const task of state.targetTasks ?? []) {
-      const deliveryId = task.delivery?.deliveryId;
-      if (!deliveryId || !task.targetWindow) continue;
-      const lockFile = path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery/locks", `${slug(task.targetWindow)}.json`);
-      const released = releaseWindowLockForResult(
-        lockFile,
-        (lock) => !lock.deliveryId || lock.deliveryId === deliveryId,
-      );
-      if (released) releasedWindowLocks.push(task.targetWindow);
-    }
-  }
-
-  if (write) {
-    appendJsonLine(eventsFile, event);
-    writeJson(stateFile, nextState);
+    commitStateTransition({
+      stateRoot,
+      stateFile,
+      eventsFile,
+      event,
+      nextState,
+      command: "cancel-demand",
+    });
+    // Release locks only after cancellation is authoritative. If the process
+    // stops here, replaying cancel-demand against the already-cancelled state
+    // performs this cleanup without creating another event or revision.
+    releasedWindowLocks = releaseDemandWindowLocks(nextState);
     appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.decisions,
       `${createdAt} demand cancelled — ${reason}`);
     refreshWorkspaceProjection({ workspaceRoot, updatedAt: createdAt });
@@ -2595,6 +3264,25 @@ function commandCancelDemandLocked(stateRoot) {
       "No acceptance, dispatch, or evidence deletion was performed; archive to free capacity.",
     ],
   );
+}
+
+function releaseDemandWindowLocks(state) {
+  const releasedWindowLocks = [];
+  for (const task of state.targetTasks ?? []) {
+    const deliveryId = task.delivery?.deliveryId;
+    if (!deliveryId || !task.targetWindow) continue;
+    const lockFile = path.join(
+      workspaceRoot,
+      ".wakeflow-local/wakeflow-delivery/locks",
+      `${slug(task.targetWindow)}.json`,
+    );
+    const released = releaseWindowLockForResult(
+      lockFile,
+      (lock) => !lock.deliveryId || lock.deliveryId === deliveryId,
+    );
+    if (released) releasedWindowLocks.push(task.targetWindow);
+  }
+  return releasedWindowLocks;
 }
 
 function upsertWindowState(windows, next) {
@@ -2852,6 +3540,510 @@ function scanDanglingEnvelopeRefs(stateRoot) {
   return refs;
 }
 
+const ARCHIVE_PENDING_INTENT_FILE = "wakeflow-archive.pending-intent.json";
+
+class WakeflowArchiveStagedPrivacyError extends Error {
+  constructor(message) {
+    super(message);
+    this.code = "WAKEFLOW_ARCHIVE_STAGED_PRIVACY";
+  }
+}
+
+function archivePendingIntentFile(stateRoot) {
+  return path.join(stateRoot, ARCHIVE_PENDING_INTENT_FILE);
+}
+
+function archivePathEntryExists(file) {
+  try {
+    lstatSync(file);
+    return true;
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return false;
+    throw error;
+  }
+}
+
+function assertArchivePreservedBoundary(preservedRoot) {
+  const localRoot = path.join(workspaceRoot, ".wakeflow-local");
+  const expected = path.join(localRoot, "preserved");
+  if (path.resolve(preservedRoot) !== path.resolve(expected)) {
+    fail(`archive preserved root must be ${relative(expected)}.`);
+  }
+  for (const [candidate, label] of [
+    [localRoot, "archive local root"],
+    [preservedRoot, "archive preserved root"],
+  ]) {
+    let stat;
+    try {
+      stat = lstatSync(candidate);
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      fail(`cannot inspect ${label} ${relative(candidate)}: ${error.message}`);
+    }
+    if (stat.isSymbolicLink()) {
+      fail(`${label} cannot be a symbolic link: ${relative(candidate)}.`);
+    }
+    if (candidate === localRoot && !stat.isDirectory()) {
+      fail(`${label} must be a directory when it exists: ${relative(candidate)}.`);
+    }
+  }
+  const canonicalWorkspace = realpathSync(workspaceRoot);
+  const canonicalPreserved = realPathWithMissingTail(preservedRoot);
+  const rel = path.relative(canonicalWorkspace, canonicalPreserved);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    fail(`archive preserved root must stay inside the workspace: ${relative(preservedRoot)}.`);
+  }
+}
+
+function archiveTreeDigest(root) {
+  const hash = createHash("sha256");
+  let entries = 0;
+  const visit = (directory, prefix = "") => {
+    for (const name of readdirSync(directory).sort()) {
+      const absolute = path.join(directory, name);
+      const relativePath = (prefix ? `${prefix}/${name}` : name).split(path.sep).join("/");
+      const stat = lstatSync(absolute);
+      entries += 1;
+      if (stat.isDirectory()) {
+        hash.update(`directory\0${relativePath}\0`);
+        visit(absolute, relativePath);
+        continue;
+      }
+      if (stat.isFile()) {
+        const content = readFileSync(absolute);
+        hash.update(`file\0${relativePath}\0${content.length}\0`);
+        hash.update(content);
+        hash.update("\0");
+        continue;
+      }
+      if (stat.isSymbolicLink()) {
+        const target = readlinkSync(absolute);
+        hash.update(`symlink\0${relativePath}\0${Buffer.byteLength(target)}\0${target}\0`);
+        continue;
+      }
+      throw new Error(`archive tree contains an unsupported filesystem entry: ${relative(absolute)}`);
+    }
+  };
+  visit(root);
+  return {
+    algorithm: "sha256",
+    value: hash.digest("hex"),
+    entries,
+  };
+}
+
+function validArchiveTreeDigest(digest) {
+  return digest
+    && typeof digest === "object"
+    && !Array.isArray(digest)
+    && digest.algorithm === "sha256"
+    && typeof digest.value === "string"
+    && /^[a-f0-9]{64}$/.test(digest.value)
+    && Number.isInteger(digest.entries)
+    && digest.entries >= 0;
+}
+
+function assertArchiveTerminalStateExplained(state, events) {
+  const terminalType = state?.state === "completed"
+    ? "demand.completed"
+    : state?.state === "cancelled"
+      ? "demand.cancelled"
+      : null;
+  if (!terminalType) {
+    fail(`archive-demand requires state=completed or state=cancelled; ${state?.demandKey ?? "(unknown demand)"} is ${state?.state ?? "(missing)"}.`);
+  }
+  const stateRevision = Number(state.revision);
+  const relevantEvents = events.filter((event) => Number(event?.stateRevision) <= stateRevision);
+  let terminalIndex = -1;
+  for (let index = relevantEvents.length - 1; index >= 0; index -= 1) {
+    const event = relevantEvents[index];
+    if (event?.type === terminalType && event?.to === state.state) {
+      terminalIndex = index;
+      break;
+    }
+  }
+  if (terminalIndex < 0) {
+    fail(
+      `archive-demand refuses terminal state ${state.state} at revision ${state.revision}: `
+      + `the controller event history has no matching ${terminalType} event. `
+      + "Repair or recover the state/event authority before archiving.",
+    );
+  }
+  const allowedAfterTerminal = new Set([
+    "demand.host-adopted",
+    "demand.host-transferred",
+  ]);
+  const invalidLaterEvent = relevantEvents
+    .slice(terminalIndex + 1)
+    .find((event) => !allowedAfterTerminal.has(event?.type));
+  if (invalidLaterEvent) {
+    fail(
+      `archive-demand refuses terminal state ${state.state}: controller event `
+      + `${invalidLaterEvent.eventId ?? "(unknown)"} (${invalidLaterEvent.type ?? "unknown"}) `
+      + "appears after the terminal event; only host-ownership events may follow before archival.",
+    );
+  }
+}
+
+function assertArchiveDirectory(file, label) {
+  let stat;
+  try {
+    stat = lstatSync(file);
+  } catch (error) {
+    throw new Error(`cannot inspect ${label} ${relative(file)}: ${error.message}`);
+  }
+  if (stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new Error(`${label} must be a regular directory and cannot be a symbolic link: ${relative(file)}`);
+  }
+}
+
+function copyArchiveTreeVerified(source, destination, label) {
+  assertArchiveDirectory(source, `${label} source`);
+  const sourceDigest = archiveTreeDigest(source);
+  if (archivePathEntryExists(destination)) {
+    assertArchiveDirectory(destination, label);
+    const existingDigest = archiveTreeDigest(destination);
+    if (!isDeepStrictEqual(existingDigest, sourceDigest)) {
+      throw new Error(`${label} already exists but does not match the source tree: ${relative(destination)}`);
+    }
+    return { resumed: true, treeDigest: sourceDigest };
+  }
+  const staging = `${destination}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    cpSync(source, staging, {
+      recursive: true,
+      errorOnExist: true,
+      force: false,
+      verbatimSymlinks: true,
+    });
+    const copiedDigest = archiveTreeDigest(staging);
+    if (!isDeepStrictEqual(copiedDigest, sourceDigest)) {
+      throw new Error(`${label} copy failed its full-tree integrity check`);
+    }
+    renameSync(staging, destination);
+    return { resumed: false, treeDigest: sourceDigest };
+  } catch (error) {
+    if (archivePathEntryExists(staging)) {
+      rmSync(staging, { recursive: true, force: true });
+    }
+    throw error;
+  }
+}
+
+function detachAndRemoveArchivedSource(source, label) {
+  const parent = path.dirname(source);
+  const base = path.basename(source);
+  let detached = path.join(parent, `.wakeflow-init-archive-finalize-${base}-${process.pid}-${Date.now()}`);
+  for (let index = 2; archivePathEntryExists(detached); index += 1) {
+    detached = path.join(parent, `.wakeflow-init-archive-finalize-${base}-${process.pid}-${Date.now()}-${index}`);
+  }
+  renameSync(source, detached);
+  try {
+    rmSync(detached, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 50,
+    });
+    return null;
+  } catch (error) {
+    return `${label} was detached atomically but cleanup remains at ${relative(detached)}: ${error.message}`;
+  }
+}
+
+function readArchivePendingIntent(stateRoot) {
+  const file = archivePendingIntentFile(stateRoot);
+  if (!existsSync(file)) return null;
+  let stat;
+  try {
+    stat = lstatSync(file);
+  } catch (error) {
+    fail(`cannot inspect archive intent ${relative(file)}: ${error.message}`);
+  }
+  if (stat.isSymbolicLink() || !stat.isFile()) {
+    fail(`archive intent must be a regular file and cannot be a symbolic link: ${relative(file)}`);
+  }
+  let intent;
+  try {
+    intent = JSON.parse(readFileSync(file, "utf8"));
+  } catch (error) {
+    fail(`invalid archive intent ${relative(file)}: ${error.message}`);
+  }
+  return intent;
+}
+
+function buildArchiveNextState(sourceState, { createdAt, reason }) {
+  return {
+    ...sourceState,
+    state: "archived",
+    stateReason: reason,
+    revision: Number(sourceState.revision ?? 0) + 1,
+    updatedAt: createdAt,
+    allowedActions: [],
+    decisionsRequired: [],
+    projection: { ...(sourceState.projection ?? {}), status: "stale" },
+  };
+}
+
+function buildArchiveEvent(sourceState, nextState, { createdAt, reason, evidenceRefs }) {
+  return {
+    eventId: nextEventId(createdAt, nextState.revision),
+    createdAt,
+    actor: "controller",
+    type: "demand.archived",
+    from: sourceState.state,
+    to: "archived",
+    reason,
+    evidenceRefs,
+    allowedWrites: ["wakeflow-state.json", "controller-events.jsonl"],
+    forbiddenConclusions: ["archive-is-deletion", "archive-creates-dispatch", "archive-skips-redaction-audit"],
+    stateRevision: nextState.revision,
+  };
+}
+
+function archiveIntentAbsolutePath(relativePath, label, allowedRoot) {
+  if (typeof relativePath !== "string" || !relativePath.trim() || path.isAbsolute(relativePath)) {
+    fail(`${label} in archive intent must be a non-empty workspace-relative path.`);
+  }
+  const absolute = path.resolve(workspaceRoot, relativePath);
+  if (relative(absolute) !== relativePath) {
+    fail(`${label} in archive intent is not canonical: ${relativePath}`);
+  }
+  ensureInsideAllowedRoots(absolute, label, [allowedRoot]);
+  return absolute;
+}
+
+function validateArchivePendingIntent({
+  intent,
+  stateRoot,
+  state,
+  events,
+  reason,
+  redact,
+  evidenceRefs,
+  ledgerPaths,
+}) {
+  if (!intent || typeof intent !== "object" || Array.isArray(intent)
+    || intent.kind !== "WakeflowArchivePendingIntent" || intent.version !== 1
+    || intent.command !== "archive-demand") {
+    fail(`archive intent ${relative(archivePendingIntentFile(stateRoot))} has an unsupported kind/version.`);
+  }
+  const commandArgs = { reason, redact, evidenceRefs };
+  if (!isDeepStrictEqual(intent.commandArgs, commandArgs)) {
+    fail("archive-demand command arguments do not match the persisted archive intent; retry with the original --reason, --redact, and --evidence-ref values.");
+  }
+  if (typeof intent.createdAt !== "string" || !Number.isFinite(Date.parse(intent.createdAt))) {
+    fail("archive intent createdAt is invalid.");
+  }
+  if (intent.sourceStateRoot !== relative(stateRoot)) {
+    fail(`archive intent sourceStateRoot does not match the active root: ${intent.sourceStateRoot ?? "(missing)"}.`);
+  }
+  const sourceState = intent.sourceState;
+  if (!sourceState || typeof sourceState !== "object" || Array.isArray(sourceState)
+    || (sourceState.state !== "completed" && sourceState.state !== "cancelled")) {
+    fail("archive intent sourceState must be the completed or cancelled state captured before archival.");
+  }
+  if (sourceState.demandKey !== state.demandKey) {
+    fail(`archive intent demand ${sourceState.demandKey ?? "(missing)"} does not match active demand ${state.demandKey ?? "(missing)"}.`);
+  }
+  const expectedNextState = buildArchiveNextState(sourceState, {
+    createdAt: intent.createdAt,
+    reason: intent.commandArgs.reason,
+  });
+  const expectedEvent = buildArchiveEvent(sourceState, expectedNextState, {
+    createdAt: intent.createdAt,
+    reason: intent.commandArgs.reason,
+    evidenceRefs: intent.commandArgs.evidenceRefs,
+  });
+  if (!isDeepStrictEqual(intent.nextState, expectedNextState)) {
+    fail("archive intent nextState does not match its fixed source state, timestamp, and command arguments.");
+  }
+  if (!isDeepStrictEqual(intent.event, expectedEvent)) {
+    fail("archive intent event does not match its fixed source state, timestamp, and command arguments.");
+  }
+
+  const expectedLedgerDest = path.join(
+    ledgerPaths.workspaceArchiveDir,
+    intent.createdAt.slice(0, 7),
+    slug(sourceState.demandKey),
+  );
+  const ledgerDest = archiveIntentAbsolutePath(
+    intent.ledgerDest,
+    "archive intent ledger destination",
+    ledgerPaths.workspaceArchiveDir,
+  );
+  if (path.resolve(ledgerDest) !== path.resolve(expectedLedgerDest)) {
+    fail(`archive intent ledger destination does not match its fixed timestamp and demand: ${intent.ledgerDest}.`);
+  }
+
+  const preservedOriginal = intent.commandArgs.redact;
+  let preservedDest = null;
+  if (preservedOriginal) {
+    const preservedRoot = path.join(workspaceRoot, ".wakeflow-local", "preserved");
+    assertArchivePreservedBoundary(preservedRoot);
+    preservedDest = archiveIntentAbsolutePath(
+      intent.preservedDest,
+      "archive intent preserved destination",
+      preservedRoot,
+    );
+    if (path.dirname(preservedDest) !== path.resolve(preservedRoot)) {
+      fail(`archive intent preserved destination must be a direct child of ${relative(preservedRoot)}.`);
+    }
+    const baseName = `${intent.createdAt.slice(0, 10)}-archive-original-${slug(sourceState.demandKey)}`;
+    const actualName = path.basename(preservedDest);
+    if (actualName !== baseName && !new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-[2-9][0-9]*$`).test(actualName)) {
+      fail(`archive intent preserved destination is not canonical for ${sourceState.demandKey}: ${intent.preservedDest}.`);
+    }
+  } else if (intent.preservedDest !== null) {
+    fail("archive intent preservedDest must be null when --redact was not requested.");
+  }
+
+  if (!intent.archiveManifest || typeof intent.archiveManifest !== "object" || Array.isArray(intent.archiveManifest)) {
+    fail("archive intent is missing its archive manifest.");
+  }
+  const manifest = intent.archiveManifest;
+  if (manifest.kind !== "WakeflowArchiveManifest" || manifest.version !== 2
+    || manifest.demandKey !== sourceState.demandKey
+    || manifest.archivedAt !== intent.createdAt
+    || manifest.reason !== intent.commandArgs.reason
+    || manifest.sourceStateRoot !== intent.sourceStateRoot
+    || manifest.preservedOriginal !== preservedOriginal
+    || !isDeepStrictEqual(manifest.redactedFields, [])
+    || (preservedOriginal ? manifest.originalPreservedAt !== intent.preservedDest : manifest.originalPreservedAt !== undefined)) {
+    fail("archive intent manifest does not match its fixed source, destination, timestamp, and command arguments.");
+  }
+  if (!Array.isArray(intent.danglingRefs) || !intent.danglingRefs.every((value) => typeof value === "string")) {
+    fail("archive intent danglingRefs must be an array of strings.");
+  }
+  if (intent.ledgerSnapshot !== null) {
+    const snapshot = intent.ledgerSnapshot;
+    if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)
+      || !snapshot.manifest || !snapshot.nextState || !snapshot.event
+      || !validArchiveTreeDigest(snapshot.treeDigest)) {
+      fail("archive intent ledgerSnapshot is invalid.");
+    }
+    if (snapshot.manifest.kind !== "WakeflowArchiveManifest"
+      || snapshot.manifest.version !== 2
+      || snapshot.manifest.demandKey !== sourceState.demandKey
+      || snapshot.manifest.archivedAt !== intent.createdAt
+      || snapshot.manifest.sourceStateRoot !== intent.sourceStateRoot
+      || snapshot.manifest.preservedOriginal !== preservedOriginal
+      || (preservedOriginal ? snapshot.manifest.originalPreservedAt !== intent.preservedDest : snapshot.manifest.originalPreservedAt !== undefined)
+      || !Array.isArray(snapshot.manifest.redactedFields)) {
+      fail("archive intent ledger manifest snapshot is inconsistent with the fixed archive intent.");
+    }
+    if (snapshot.nextState.state !== "archived"
+      || snapshot.nextState.demandKey !== sourceState.demandKey
+      || snapshot.nextState.revision !== intent.nextState.revision
+      || snapshot.event.eventId !== intent.event.eventId
+      || snapshot.event.createdAt !== intent.createdAt
+      || snapshot.event.type !== "demand.archived"
+      || snapshot.event.to !== "archived"
+      || snapshot.event.stateRevision !== intent.nextState.revision) {
+      fail("archive intent ledger state/event snapshot is inconsistent with the fixed archive intent.");
+    }
+  }
+
+  let activePhase;
+  if (isDeepStrictEqual(state, sourceState)) {
+    activePhase = "source";
+  } else if (isDeepStrictEqual(state, intent.nextState)) {
+    const matchingEvents = events.filter((candidate) => candidate.eventId === intent.event.eventId);
+    if (matchingEvents.length !== 1
+      || !isDeepStrictEqual(matchingEvents[0], intent.event)
+      || !isDeepStrictEqual(events.at(-1), intent.event)) {
+      fail("active archived state does not have the exact archive event recorded by the archive intent.");
+    }
+    activePhase = "archived";
+  } else {
+    fail("active state does not match either the sourceState or nextState fixed by the archive intent; manual recovery is required.");
+  }
+  assertArchiveTerminalStateExplained(sourceState, events);
+  return {
+    sourceState,
+    nextState: intent.nextState,
+    event: intent.event,
+    createdAt: intent.createdAt,
+    ledgerDest,
+    preservedDest,
+    preservedOriginal,
+    activePhase,
+  };
+}
+
+function assertArchiveLedgerRegularPath(file, label, { directory = false } = {}) {
+  let stat;
+  try {
+    stat = lstatSync(file);
+  } catch (error) {
+    fail(`cannot inspect committed archive ${label} ${relative(file)}: ${error.message}`);
+  }
+  if (stat.isSymbolicLink() || (directory ? !stat.isDirectory() : !stat.isFile())) {
+    fail(`committed archive ${label} must be a ${directory ? "directory" : "regular file"} and cannot be a symbolic link: ${relative(file)}.`);
+  }
+}
+
+function readArchiveLedgerSnapshot(ledgerDest) {
+  assertArchiveLedgerRegularPath(ledgerDest, "root", { directory: true });
+  const manifestFile = path.join(ledgerDest, "archive-manifest.json");
+  const stateFile = path.join(ledgerDest, "wakeflow-state.json");
+  const eventsFile = path.join(ledgerDest, "controller-events.jsonl");
+  assertArchiveLedgerRegularPath(manifestFile, "manifest");
+  assertArchiveLedgerRegularPath(stateFile, "state");
+  assertArchiveLedgerRegularPath(eventsFile, "event log");
+  const manifest = readJson(manifestFile, "committed archive manifest");
+  const nextState = readJson(stateFile, "committed archived state");
+  let events;
+  try {
+    events = readControllerEventsStrict(eventsFile);
+  } catch (error) {
+    fail(`committed archive event log is invalid: ${error.message}`);
+  }
+  if (events.length === 0) {
+    fail("committed archive event log is empty.");
+  }
+  return {
+    manifest,
+    nextState,
+    event: events.at(-1),
+    events,
+    treeDigest: archiveTreeDigest(ledgerDest),
+  };
+}
+
+function assertCommittedArchiveMatchesIntent(ledgerDest, intent) {
+  if (!intent.ledgerSnapshot) {
+    fail("archive destination exists but the pending intent has no finalized ledger snapshot; refuse to overwrite or delete the ledger.");
+  }
+  const actual = readArchiveLedgerSnapshot(ledgerDest);
+  const expected = intent.ledgerSnapshot;
+  if (!isDeepStrictEqual(actual.manifest, expected.manifest)) {
+    fail("committed archive manifest does not match the archive intent; refuse to overwrite or delete the ledger.");
+  }
+  if (!isDeepStrictEqual(actual.nextState, expected.nextState)) {
+    fail("committed archived state does not match the archive intent; refuse to overwrite or delete the ledger.");
+  }
+  const eventMatches = actual.events.filter((candidate) => candidate.eventId === expected.event.eventId);
+  if (eventMatches.length !== 1
+    || !isDeepStrictEqual(actual.event, expected.event)
+    || !isDeepStrictEqual(eventMatches[0], expected.event)) {
+    fail("committed archive event does not match the archive intent; refuse to overwrite or delete the ledger.");
+  }
+  if (!isDeepStrictEqual(actual.treeDigest, expected.treeDigest)) {
+    fail("committed archive tree does not match the archive intent; refuse to overwrite or delete the ledger.");
+  }
+  return expected;
+}
+
+function removeArchiveIntentFromStaging(stagingDest) {
+  const file = path.join(stagingDest, ARCHIVE_PENDING_INTENT_FILE);
+  if (existsSync(file)) rmSync(file, { recursive: true, force: true });
+}
+
+function withoutArchiveIntentRedactions(fields) {
+  return (fields ?? []).filter((field) => field.file !== ARCHIVE_PENDING_INTENT_FILE);
+}
+
 // archive-demand: relocate a completed demand's state root into the committed ledger. The
 // archive-privacy guard is a HARD precondition — it refuses on real-id-shaped strings and
 // user/workspace absolute paths unless --redact relocates a portable cleaned COPY (the
@@ -2870,6 +4062,24 @@ function commandArchiveDemandLocked(stateRoot) {
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const state = readJson(stateFile, "controller state");
+  const pendingFile = archivePendingIntentFile(stateRoot);
+  let archiveIntent = readArchivePendingIntent(stateRoot);
+  const resumed = archiveIntent !== null;
+  const intentCreatedThisRun = archiveIntent === null;
+  const config = loadWorkspaceConfig({ workspaceRoot, args: options });
+  const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args: options, config });
+  let sourceState;
+  let nextState;
+  let event;
+  let createdAt;
+  let ledgerDest;
+  let preservedDest;
+  let preservedOriginal;
+  let activePhase;
+  let scan;
+  let findingCounts;
+  let danglingRefs;
+
   // Archive relocates and (with --redact) rewrites the root — the most
   // destructive controller mutation, so it honors the same cross-host
   // fail-closed invariant as every other driving command.
@@ -2877,48 +4087,97 @@ function commandArchiveDemandLocked(stateRoot) {
     fail(`demand ${state.demandKey} is owned by controller host ${state.controllerHost}; this runtime is ${hostProfile.runtime.hostDirName}. Archive it from the owning host or transfer ownership first (wakeflow_adopt_demand_host).`);
   }
 
-  if (state.state !== "completed" && state.state !== "cancelled") {
-    fail(`archive-demand requires state=completed or state=cancelled; ${state.demandKey} is ${state.state}.`);
+  let controllerEvents;
+  try {
+    controllerEvents = readControllerEventsStrict(eventsFile);
+  } catch (error) {
+    fail(`cannot validate archive-demand against the active event log: ${error.message}`);
   }
 
-  // A demand with live isolation worktree windows must not archive: their worktrees and
-  // branches would orphan with no owner. Stream entries are plain config facts
-  // (repositories[].stream, host-neutral) surfaced through the derived local
-  // overlay that loadWorkspaceConfig already prefers.
-  const openStreams = (loadWorkspaceConfig({ workspaceRoot, args: options }).repositories ?? [])
-    .filter((repo) => repo?.stream?.demandKey === state.demandKey);
-  if (openStreams.length > 0) {
-    fail(`archive-demand refuses: ${openStreams.length} isolation worktree window(s) are still open for ${state.demandKey}: ${openStreams.map((repo) => repo.windowName).join(", ")}. Close them (stream-close) before archiving.`);
+  if (archiveIntent) {
+    ({
+      sourceState,
+      nextState,
+      event,
+      createdAt,
+      ledgerDest,
+      preservedDest,
+      preservedOriginal,
+      activePhase,
+    } = validateArchivePendingIntent({
+      intent: archiveIntent,
+      stateRoot,
+      state,
+      events: controllerEvents,
+      reason,
+      redact,
+      evidenceRefs,
+      ledgerPaths,
+    }));
+    scan = archiveIntent.initialScan;
+    if (!scan || typeof scan !== "object" || !Array.isArray(scan.findings) || typeof scan.clean !== "boolean") {
+      fail("archive intent initialScan is invalid.");
+    }
+    findingCounts = archivePrivacyFindingCounts(scan.findings);
+    danglingRefs = archiveIntent.danglingRefs;
+  } else {
+    assertArchiveTerminalStateExplained(state, controllerEvents);
+
+    // A demand with live isolation worktree windows must not archive: their worktrees and
+    // branches would orphan with no owner. Stream entries are plain config facts
+    // (repositories[].stream, host-neutral) surfaced through the derived local
+    // overlay that loadWorkspaceConfig already prefers.
+    const openStreams = (config.repositories ?? [])
+      .filter((repo) => repo?.stream?.demandKey === state.demandKey);
+    if (openStreams.length > 0) {
+      fail(`archive-demand refuses: ${openStreams.length} isolation worktree window(s) are still open for ${state.demandKey}: ${openStreams.map((repo) => repo.windowName).join(", ")}. Close them (stream-close) before archiving.`);
+    }
+
+    scan = scanStateRootForArchivePrivacy(stateRoot, { hostProfile, workspaceRoot });
+    findingCounts = archivePrivacyFindingCounts(scan.findings);
+    if (!scan.clean && !redact) {
+      fail([
+        `archive-demand refuses: ${scan.findings.length} archive privacy finding(s) in the state-root tree (${JSON.stringify(findingCounts)}).`,
+        "Audit them, then re-run with --redact to relocate a cleaned COPY (original preserved for audit).",
+        ...scan.findings.slice(0, 5).map((finding) => `  [${finding.kind ?? "unknown"}] ${finding.file ?? "?"}:${finding.line ?? "?"} ${finding.match ?? finding.reason ?? ""}`),
+      ].join("\n"));
+    }
+
+    sourceState = state;
+    createdAt = nowIso();
+    ledgerDest = path.join(
+      ledgerPaths.workspaceArchiveDir,
+      createdAt.slice(0, 7),
+      slug(sourceState.demandKey),
+    );
+    ensureInsideAllowedRoots(ledgerDest, "archive destination", [ledgerPaths.workspaceArchiveDir]);
+    if (existsSync(ledgerDest)) {
+      fail(`archive destination already exists: ${relative(ledgerDest)}; refuse to overwrite.`);
+    }
+    preservedOriginal = redact;
+    preservedDest = null;
+    if (preservedOriginal) {
+      const preservedRoot = path.join(workspaceRoot, ".wakeflow-local", "preserved");
+      assertArchivePreservedBoundary(preservedRoot);
+      const baseName = `${createdAt.slice(0, 10)}-archive-original-${slug(sourceState.demandKey)}`;
+      preservedDest = path.join(preservedRoot, baseName);
+      for (let n = 2; archivePathEntryExists(preservedDest); n += 1) {
+        preservedDest = path.join(preservedRoot, `${baseName}-${n}`);
+      }
+    }
+    nextState = buildArchiveNextState(sourceState, { createdAt, reason });
+    event = buildArchiveEvent(sourceState, nextState, { createdAt, reason, evidenceRefs });
+    activePhase = "source";
+    danglingRefs = scanDanglingEnvelopeRefs(stateRoot);
   }
 
-  const scan = scanStateRootForArchivePrivacy(stateRoot, { hostProfile, workspaceRoot });
-  const findingCounts = archivePrivacyFindingCounts(scan.findings);
-  if (!scan.clean && !redact) {
-    fail([
-      `archive-demand refuses: ${scan.findings.length} archive privacy finding(s) in the state-root tree (${JSON.stringify(findingCounts)}).`,
-      "Audit them, then re-run with --redact to relocate a cleaned COPY (original preserved for audit).",
-      ...scan.findings.slice(0, 5).map((finding) => `  [${finding.kind ?? "unknown"}] ${finding.file ?? "?"}:${finding.line ?? "?"} ${finding.match ?? finding.reason ?? ""}`),
-    ].join("\n"));
-  }
-
-  const config = loadWorkspaceConfig({ workspaceRoot, args: options });
-  const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args: options, config });
-  const createdAt = nowIso();
-  const month = createdAt.slice(0, 7);
-  const ledgerDest = path.join(ledgerPaths.projectLedgerRoot, "workspace", "archive", month, slug(state.demandKey));
-  ensureInsideAllowedRoots(ledgerDest, "archive destination", [ledgerPaths.projectLedgerRoot]);
-  if (existsSync(ledgerDest)) {
-    fail(`archive destination already exists: ${relative(ledgerDest)}; refuse to overwrite.`);
-  }
-
-  const danglingRefs = scanDanglingEnvelopeRefs(stateRoot);
   if (!write) {
     output({
       ok: true,
       command: "archive-demand",
       wrote: false,
       wouldArchive: {
-        demandKey: state.demandKey,
+        demandKey: sourceState.demandKey,
         sourceStateRoot: relative(stateRoot),
         ledgerDest: relative(ledgerDest),
         redactNeeded: !scan.clean,
@@ -2926,47 +4185,20 @@ function commandArchiveDemandLocked(stateRoot) {
         findingCounts,
         findings: scan.findings.slice(0, 10),
         danglingRefs,
+        resumed,
+        activePhase,
       },
       forbiddenConclusions: ["archive-is-deletion", "archive-is-acceptance"],
-      agentNext: scan.clean
+      agentNext: resumed
+        ? "Dry-run only. Re-run the same archive-demand command with --write to resume the persisted archive intent."
+        : scan.clean
         ? "Dry-run only. Re-run with --write to flip the demand to archived and relocate it into the committed ledger."
         : "Dry-run only. Archive privacy findings found — audit them, then re-run with --redact --write to relocate a cleaned copy.",
-    }, [`Would archive ${state.demandKey} -> ${relative(ledgerDest)}${scan.clean ? "" : " (redaction required)"}`]);
+    }, [`Would ${resumed ? "resume archive" : "archive"} ${sourceState.demandKey} -> ${relative(ledgerDest)}${scan.clean ? "" : " (redaction required)"}`]);
     return;
   }
 
-  const nextRevision = Number(state.revision ?? 0) + 1;
-  const eventId = nextEventId(createdAt, nextRevision);
-  const nextState = {
-    ...state,
-    state: "archived",
-    stateReason: reason,
-    revision: nextRevision,
-    updatedAt: createdAt,
-    allowedActions: [],
-    decisionsRequired: [],
-    projection: { ...(state.projection ?? {}), status: "stale" },
-  };
-  const event = {
-    eventId,
-    createdAt,
-    actor: "controller",
-    type: "demand.archived",
-    from: state.state,
-    to: "archived",
-    reason,
-    evidenceRefs,
-    allowedWrites: ["wakeflow-state.json", "controller-events.jsonl"],
-    forbiddenConclusions: ["archive-is-deletion", "archive-creates-dispatch", "archive-skips-redaction-audit"],
-    stateRevision: nextRevision,
-  };
-
   let redactedFields = [];
-  // --redact is an explicit request to produce a sanitized copy. Preserve the
-  // source even when the pre-scan is clean because command inputs used while
-  // rendering the archive summary (for example reason/evidence refs) can add a
-  // finding after the tree copy.
-  const preservedOriginal = redact;
   // Archive spine: thread the whole demand story into the manifest so the
   // archived tree is navigable without archaeology — provenance (design key +
   // source docs), the completion conclusion, the per-task handling rollup,
@@ -2986,7 +4218,7 @@ function commandArchiveDemandLocked(stateRoot) {
   } catch {
     conclusion = null;
   }
-  const taskLedger = (state.targetTasks ?? []).map((task) => ({
+  const taskLedger = (sourceState.targetTasks ?? []).map((task) => ({
     targetTaskId: task.targetTaskId,
     targetWindow: task.targetWindow ?? null,
     status: task.status ?? null,
@@ -2999,46 +4231,80 @@ function commandArchiveDemandLocked(stateRoot) {
   const testCards = existsSync(testCardsDir)
     ? readdirSync(testCardsDir).filter((name) => name.endsWith(".json") || name.endsWith(".md"))
     : [];
-  const archiveManifest = {
+  const computedArchiveManifest = {
     kind: "WakeflowArchiveManifest",
     version: 2,
-    demandKey: state.demandKey,
-    title: state.title ?? demandRecord.title ?? null,
+    demandKey: sourceState.demandKey,
+    title: sourceState.title ?? demandRecord.title ?? null,
     archivedAt: createdAt,
     reason,
-    redactedFields,
+    redactedFields: [],
     sourceStateRoot: relative(stateRoot),
     preservedOriginal,
+    ...(preservedOriginal ? { originalPreservedAt: relative(preservedDest) } : {}),
     designKey: demandRecord.source?.designKey ?? null,
     sourceDocuments: demandRecord.source?.documents ?? [],
     conclusion,
     taskLedger,
     testCards,
   };
+  const archiveManifest = {
+    ...(archiveIntent?.archiveManifest ?? computedArchiveManifest),
+    redactedFields: [],
+  };
+  if (!archiveIntent) {
+    archiveIntent = {
+      kind: "WakeflowArchivePendingIntent",
+      version: 1,
+      command: "archive-demand",
+      createdAt,
+      sourceStateRoot: relative(stateRoot),
+      ledgerDest: relative(ledgerDest),
+      preservedDest: preservedDest ? relative(preservedDest) : null,
+      commandArgs: { reason, redact, evidenceRefs },
+      sourceState,
+      event,
+      nextState,
+      archiveManifest: computedArchiveManifest,
+      initialScan: scan,
+      danglingRefs,
+      ledgerSnapshot: null,
+    };
+    writeJson(pendingFile, archiveIntent);
+  }
   const stagingDest = `${ledgerDest}.tmp-${process.pid}-${Date.now()}`;
 
-  try {
-    mkdirSync(path.dirname(ledgerDest), { recursive: true });
-    if (redact) {
-      ({ redactedFields } = redactStateRootIntoCopy(stateRoot, stagingDest, { hostProfile, workspaceRoot }));
-      archiveManifest.redactedFields = redactedFields;
-    } else {
-      cpSync(stateRoot, stagingDest, { recursive: true });
+  if (existsSync(ledgerDest)) {
+    const committedSnapshot = assertCommittedArchiveMatchesIntent(ledgerDest, archiveIntent);
+    redactedFields = committedSnapshot.manifest.redactedFields;
+  } else {
+    if (activePhase !== "source") {
+      fail("archive intent says the active state is already archived, but its fixed ledger destination is missing; manual recovery is required.");
     }
+    try {
+      mkdirSync(path.dirname(ledgerDest), { recursive: true });
+      if (redact) {
+        ({ redactedFields } = redactStateRootIntoCopy(stateRoot, stagingDest, { hostProfile, workspaceRoot }));
+        redactedFields = withoutArchiveIntentRedactions(redactedFields);
+        archiveManifest.redactedFields = redactedFields;
+      } else {
+        cpSync(stateRoot, stagingDest, { recursive: true });
+      }
+      removeArchiveIntentFromStaging(stagingDest);
     // Append only inside the staged copy. A failed archive must not leave a
     // false "archived" line in the still-active human progress document.
-    appendProgressTimeline(stagingDest, state, PROGRESS_SECTIONS.decisions,
+      appendProgressTimeline(stagingDest, sourceState, PROGRESS_SECTIONS.decisions,
       `${createdAt} archived → ${relative(ledgerDest)} — ${reason}`);
-    appendJsonLine(path.join(stagingDest, "controller-events.jsonl"), event);
-    writeJson(path.join(stagingDest, "wakeflow-state.json"), nextState);
-    writeJson(path.join(stagingDest, "archive-manifest.json"), archiveManifest);
+      appendJsonLine(path.join(stagingDest, "controller-events.jsonl"), event);
+      writeJson(path.join(stagingDest, "wakeflow-state.json"), nextState);
+      writeJson(path.join(stagingDest, "archive-manifest.json"), archiveManifest);
     // The human one-pager: the archived story in reading order — requirement
     // provenance, conclusion, per-task handling, tests, execution timeline
     // pointer, audit-hold pointer.
     writeText(path.join(stagingDest, "archive-summary.md"), [
-      `# ${state.demandKey} — Archive Summary`,
+      `# ${sourceState.demandKey} — Archive Summary`,
       "",
-      `- Title: ${archiveManifest.title ?? state.demandKey}`,
+      `- Title: ${archiveManifest.title ?? sourceState.demandKey}`,
       `- Archived: ${createdAt} — ${reason}`,
       `- Demand goal: ${demandRecord.goal ?? "(see demand.json)"}`,
       `- Completion definition: ${demandRecord.completionDefinition ?? "(see demand.json)"}`,
@@ -3074,96 +4340,152 @@ function commandArchiveDemandLocked(stateRoot) {
       `- Un-redacted original: ${preservedOriginal ? "moved to .wakeflow-local/preserved/ (see archive-manifest.json originalPreservedAt)" : "not needed (archive copy is complete)"}`,
       "",
     ].join("\n"));
-    let stagedScan = scanStateRootForArchivePrivacy(stagingDest, { hostProfile, workspaceRoot });
-    if (!stagedScan.clean && redact) {
-      // Generated manifest/summary/event content is written after the first
-      // copy, so sanitize the complete staged tree once more. This closes the
-      // gap where a reason or evidence ref introduces a path that was absent
-      // from the original state root.
-      const restagingDest = `${stagingDest}.sanitized`;
-      const secondPass = redactStateRootIntoCopy(stagingDest, restagingDest, { hostProfile, workspaceRoot });
-      redactedFields = mergeRedactedFields(redactedFields, secondPass.redactedFields);
-      rmSync(stagingDest, { recursive: true, force: true });
-      renameSync(restagingDest, stagingDest);
-      const sanitizedManifest = readJson(path.join(stagingDest, "archive-manifest.json"), "sanitized archive manifest");
-      writeJson(path.join(stagingDest, "archive-manifest.json"), { ...sanitizedManifest, redactedFields });
-      stagedScan = scanStateRootForArchivePrivacy(stagingDest, { hostProfile, workspaceRoot });
+      let stagedScan = scanStateRootForArchivePrivacy(stagingDest, { hostProfile, workspaceRoot });
+      if (!stagedScan.clean && redact) {
+        // Generated manifest/summary/event content is written after the first
+        // copy, so sanitize the complete staged tree once more. This closes the
+        // gap where a reason or evidence ref introduces a path that was absent
+        // from the original state root.
+        const restagingDest = `${stagingDest}.sanitized`;
+        const secondPass = redactStateRootIntoCopy(stagingDest, restagingDest, { hostProfile, workspaceRoot });
+        redactedFields = mergeRedactedFields(redactedFields, secondPass.redactedFields);
+        rmSync(stagingDest, { recursive: true, force: true });
+        renameSync(restagingDest, stagingDest);
+        const sanitizedManifest = readJson(path.join(stagingDest, "archive-manifest.json"), "sanitized archive manifest");
+        writeJson(path.join(stagingDest, "archive-manifest.json"), { ...sanitizedManifest, redactedFields });
+        stagedScan = scanStateRootForArchivePrivacy(stagingDest, { hostProfile, workspaceRoot });
+      }
+      if (!stagedScan.clean) {
+        const stagedCounts = archivePrivacyFindingCounts(stagedScan.findings);
+        throw new WakeflowArchiveStagedPrivacyError(
+          `staged archive failed the final privacy scan (${JSON.stringify(stagedCounts)}): ${stagedScan.findings.slice(0, 3).map((finding) => `${finding.file ?? "?"}:${finding.line ?? "?"}`).join(", ")}`,
+        );
+      }
+      const stagedManifest = JSON.parse(readFileSync(path.join(stagingDest, "archive-manifest.json"), "utf8"));
+      const stagedState = JSON.parse(readFileSync(path.join(stagingDest, "wakeflow-state.json"), "utf8"));
+      const stagedEvents = readControllerEventsStrict(path.join(stagingDest, "controller-events.jsonl"));
+      const stagedEvent = stagedEvents.at(-1);
+      const matchingArchiveEvents = stagedEvents.filter((candidate) => candidate.eventId === event.eventId);
+      if (stagedState.state !== "archived"
+        || stagedState.demandKey !== sourceState.demandKey
+        || stagedState.revision !== nextState.revision
+        || matchingArchiveEvents.length !== 1
+        || stagedEvent?.eventId !== event.eventId
+        || stagedEvent?.stateRevision !== nextState.revision
+        || stagedEvent?.type !== "demand.archived") {
+        throw new Error("staged archive state/event does not match the fixed archive intent");
+      }
+      const ledgerSnapshot = {
+        manifest: stagedManifest,
+        nextState: stagedState,
+        event: stagedEvent,
+        treeDigest: archiveTreeDigest(stagingDest),
+      };
+      if (archiveIntent.ledgerSnapshot && !isDeepStrictEqual(archiveIntent.ledgerSnapshot, ledgerSnapshot)) {
+        throw new Error("restaged archive does not match the finalized ledger snapshot in the archive intent");
+      }
+      if (!archiveIntent.ledgerSnapshot) {
+        archiveIntent = { ...archiveIntent, ledgerSnapshot };
+        writeJson(pendingFile, archiveIntent);
+      }
+      renameSync(stagingDest, ledgerDest);
+    } catch (error) {
+      if (existsSync(stagingDest)) rmSync(stagingDest, { recursive: true, force: true });
+      let intentDisposition = "its archive intent was retained";
+      if (error instanceof WakeflowArchiveStagedPrivacyError
+        && intentCreatedThisRun
+        && activePhase === "source"
+        && !archivePathEntryExists(ledgerDest)) {
+        try {
+          const currentIntent = readArchivePendingIntent(stateRoot);
+          if (isDeepStrictEqual(currentIntent, archiveIntent)) {
+            unlinkSync(pendingFile);
+            intentDisposition = "the newly created archive intent was removed so the command can be retried with --redact";
+          }
+        } catch (cleanupError) {
+          intentDisposition = `its archive intent was retained because cleanup failed: ${cleanupError.message}`;
+        }
+      }
+      fail(`archive-demand failed before ledger commit; active state authority was left unchanged and ${intentDisposition}: ${error.message}`);
     }
-    if (!stagedScan.clean) {
-      const stagedCounts = archivePrivacyFindingCounts(stagedScan.findings);
-      throw new Error(`staged archive failed the final privacy scan (${JSON.stringify(stagedCounts)}): ${stagedScan.findings.slice(0, 3).map((finding) => `${finding.file ?? "?"}:${finding.line ?? "?"}`).join(", ")}`);
-    }
-    renameSync(stagingDest, ledgerDest);
-  } catch (error) {
-    if (existsSync(stagingDest)) rmSync(stagingDest, { recursive: true, force: true });
-    fail(`archive-demand failed before ledger commit; active state root was left unchanged: ${error.message}`);
   }
 
   let originalPreservedAt = null;
   let originalPreserveWarning = null;
-  try {
-    if (preservedOriginal) {
-      appendJsonLine(eventsFile, event);
-      writeJson(stateFile, nextState);
-    } else {
-      rmSync(stateRoot, { recursive: true, force: true });
-    }
-  } catch (error) {
-    fail(`archive-demand committed ledger at ${relative(ledgerDest)} but could not finalize the active state root: ${error.message}`);
-  }
+  let activeCleanupWarning = null;
   if (preservedOriginal) {
-    // Canonical audit hold: move the un-redacted original OUT of current/
-    // (keeping the active layer clean without manual moves — the historical
-    // source of unowned residue trees) into preserved/<date>-archive-original-
-    // <demand>/ with a manifest; prune-preserved lists it once it ages.
-    const preservedRoot = path.join(workspaceRoot, ".wakeflow-local", "preserved");
-    const dateSlug = createdAt.slice(0, 10);
-    let preservedDest = path.join(preservedRoot, `${dateSlug}-archive-original-${slug(state.demandKey)}`);
-    for (let n = 2; existsSync(preservedDest); n += 1) {
-      preservedDest = path.join(preservedRoot, `${dateSlug}-archive-original-${slug(state.demandKey)}-${n}`);
+    if (activePhase === "source") {
+      try {
+        commitStateTransition({
+          stateRoot,
+          stateFile,
+          eventsFile,
+          event,
+          nextState,
+          command: "archive-demand",
+        });
+        activePhase = "archived";
+      } catch (error) {
+        fail(`archive-demand committed ledger at ${relative(ledgerDest)} but could not record its fixed active state/event: ${error.message}`);
+      }
     }
+
+    // Canonical audit hold: move the un-redacted original OUT of current/.
+    // The destination was selected once in the archive intent, and the
+    // committed manifest already carries that exact relative pointer.
+    const preservedRoot = path.dirname(preservedDest);
+    assertArchivePreservedBoundary(preservedRoot);
     try {
       mkdirSync(preservedRoot, { recursive: true });
-      renameSync(stateRoot, preservedDest);
-      writeFileSync(path.join(preservedDest, "MANIFEST.md"), [
+      writeFileSync(path.join(stateRoot, "MANIFEST.md"), [
         `# Preserved: ${path.basename(preservedDest)}`,
         "",
         `- Preserved at: ${createdAt}`,
         `- Source: ${relative(stateRoot)}`,
-        `- Reason: un-redacted original of archived demand ${state.demandKey} (redacted copy committed at ${relative(ledgerDest)})`,
+        `- Reason: un-redacted original of archived demand ${sourceState.demandKey} (redacted copy committed at ${relative(ledgerDest)})`,
         "- Preserved by: archive-demand --redact",
         "- Retention: audit hold; prune-preserved lists it once aged past preservedRetentionDays",
         "",
       ].join("\n"));
+      copyArchiveTreeVerified(stateRoot, preservedDest, "archive preserved original");
+      activeCleanupWarning = detachAndRemoveArchivedSource(
+        stateRoot,
+        "archived active source",
+      );
       originalPreservedAt = relative(preservedDest);
       try {
-        // Never rehydrate the pre-redaction in-memory manifest after the staged
-        // tree passed its final scan. Read the committed clean manifest and add
-        // only the relative preserved pointer.
-        const committedManifestFile = path.join(ledgerDest, "archive-manifest.json");
-        const committedManifest = JSON.parse(readFileSync(committedManifestFile, "utf8"));
-        writeJson(committedManifestFile, { ...committedManifest, originalPreservedAt });
-      } catch {
-        // manifest enrichment is best-effort; the archive itself is committed
+        unlinkSync(path.join(preservedDest, ARCHIVE_PENDING_INTENT_FILE));
+      } catch (error) {
+        originalPreserveWarning = `preserved original still contains ${ARCHIVE_PENDING_INTENT_FILE}: ${error.message}`;
       }
     } catch (error) {
-      // The ledger commit already succeeded; a failed move degrades to the
-      // old in-place behavior instead of failing the archive.
-      originalPreserveWarning = `original left at ${relative(stateRoot)} (move to preserved/ failed: ${error.message}); move it with wakeflow-storage preserve.`;
+      fail(`archive-demand committed ledger at ${relative(ledgerDest)} but could not copy and finalize the archived active root at its fixed preserved destination ${relative(preservedDest)}; retry the same command after fixing the destination: ${error.message}`);
+    }
+  } else {
+    try {
+      // Non-redacted archives commit a complete copy, so removing the active
+      // root also removes the persisted archive intent.
+      activeCleanupWarning = detachAndRemoveArchivedSource(
+        stateRoot,
+        "archived active source",
+      );
+    } catch (error) {
+      fail(`archive-demand committed ledger at ${relative(ledgerDest)} but could not finalize the active state root: ${error.message}`);
     }
   }
 
   const todoArchive = archiveWorkspaceTodo({
     workspaceRoot,
     config,
-    designKey: state.designKey ?? demandRecord.designKey ?? demandRecord.source?.designKey,
+    designKey: sourceState.designKey ?? demandRecord.designKey ?? demandRecord.source?.designKey,
     archiveMount: relative(ledgerDest),
     // The board must not report a cancelled demand as delivered.
-    rowStatus: state.state === "cancelled" ? "cancelled / archived" : "completed / archived",
+    rowStatus: sourceState.state === "cancelled" ? "cancelled / archived" : "completed / archived",
   });
   refreshWorkspaceProjection({ workspaceRoot, config, updatedAt: createdAt });
   const archiveWarnings = [
     originalPreserveWarning,
+    activeCleanupWarning,
     todoArchive.reason && !["no-design-key", "row-missing"].includes(todoArchive.reason)
       ? `Global TODO archive projection was not updated: ${todoArchive.reason}`
       : null,
@@ -3174,7 +4496,7 @@ function commandArchiveDemandLocked(stateRoot) {
     command: "archive-demand",
     wrote: true,
     archived: {
-      demandKey: state.demandKey,
+      demandKey: sourceState.demandKey,
       ledgerDest: relative(ledgerDest),
       manifest: relative(path.join(ledgerDest, "archive-manifest.json")),
       redactedFields,
@@ -3182,13 +4504,14 @@ function commandArchiveDemandLocked(stateRoot) {
       originalPreservedAt,
       danglingRefs,
       todoArchive,
+      resumed,
     },
     ...(archiveWarnings.length ? { warnings: archiveWarnings } : {}),
     indexRefreshNeeded: false,
     forbiddenConclusions: ["archive-is-deletion", "archive-is-acceptance"],
     agentNext: "The active workspace projection was refreshed. Review redactedFields before committing the ledger to git.",
   }, [
-    `Archived ${state.demandKey} -> ${relative(ledgerDest)}`,
+    `Archived ${sourceState.demandKey} -> ${relative(ledgerDest)}`,
     redactedFields.length
       ? `Redacted ${redactedFields.reduce((total, field) => total + field.count, 0)} sensitive value(s) into the committed copy; original preserved for audit${originalPreservedAt ? ` at ${originalPreservedAt}` : ""}.`
       : "No redaction needed.",
@@ -3199,22 +4522,32 @@ function commandArchiveDemandLocked(stateRoot) {
 // sanitize-archive is deliberately narrower than archive-demand. It can only
 // amend an existing archived demand in the configured project ledger, never an
 // active state root. The original archived bytes move to the gitignored
-// preserved tier, while a fully sanitized/re-scanned replacement keeps the
+// preserved tier by verified copy, while a fully sanitized/re-scanned replacement keeps the
 // same durable archive path and appends an audit event.
+function assertSanitizeArchiveBoundary(stateRoot, archiveRoot) {
+  const canonicalArchiveRoot = realPathWithMissingTail(path.resolve(archiveRoot));
+  const canonicalStateRoot = realPathWithMissingTail(path.resolve(stateRoot));
+  const archiveRelative = path.relative(canonicalArchiveRoot, canonicalStateRoot);
+  if (!archiveRelative
+    || archiveRelative.startsWith("..")
+    || path.isAbsolute(archiveRelative)) {
+    fail(`sanitize-archive accepts only an existing demand root below ${relative(archiveRoot)}; got ${relative(stateRoot)}.`);
+  }
+}
+
 function commandSanitizeArchive() {
   const stateRoot = stateRootFromArg();
-  withLockedStateRoot(stateRoot, () => commandSanitizeArchiveLocked(stateRoot));
+  const config = loadWorkspaceConfig({ workspaceRoot, args: options });
+  const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args: options, config });
+  assertSanitizeArchiveBoundary(stateRoot, ledgerPaths.workspaceArchiveDir);
+  withLockedStateRoot(
+    stateRoot,
+    () => commandSanitizeArchiveLocked(stateRoot),
+  );
 }
 
 function commandSanitizeArchiveLocked(stateRoot) {
   const reason = requireValue("--reason");
-  const config = loadWorkspaceConfig({ workspaceRoot, args: options });
-  const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args: options, config });
-  const archiveRoot = path.join(ledgerPaths.projectLedgerRoot, "workspace", "archive");
-  const archiveRelative = path.relative(archiveRoot, stateRoot);
-  if (!archiveRelative || archiveRelative.startsWith("..") || path.isAbsolute(archiveRelative)) {
-    fail(`sanitize-archive accepts only an existing demand root below ${relative(archiveRoot)}; got ${relative(stateRoot)}.`);
-  }
 
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
@@ -3264,9 +4597,10 @@ function commandSanitizeArchiveLocked(stateRoot) {
   const nextRevision = Number(state.revision ?? 0) + 1;
   const stagingDest = `${stateRoot}.sanitize-tmp-${process.pid}-${Date.now()}`;
   const preservedRoot = path.join(workspaceRoot, ".wakeflow-local", "preserved");
+  assertArchivePreservedBoundary(preservedRoot);
   const dateSlug = createdAt.slice(0, 10);
   let preservedDest = path.join(preservedRoot, `${dateSlug}-archive-sanitization-original-${slug(state.demandKey)}`);
-  for (let n = 2; existsSync(preservedDest); n += 1) {
+  for (let n = 2; archivePathEntryExists(preservedDest); n += 1) {
     preservedDest = path.join(preservedRoot, `${dateSlug}-archive-sanitization-original-${slug(state.demandKey)}-${n}`);
   }
   const originalPreservedAt = relative(preservedDest);
@@ -3352,11 +4686,19 @@ function commandSanitizeArchiveLocked(stateRoot) {
     fail(`sanitize-archive failed before replacement; archived root was left unchanged: ${error.message}`);
   }
 
-  let originalMoved = false;
+  assertArchivePreservedBoundary(preservedRoot);
+  if (archivePathEntryExists(preservedDest)) {
+    fail(`sanitize-archive fixed preserved destination already exists: ${relative(preservedDest)}; refuse to overwrite.`);
+  }
+  let preservedCreated = false;
   try {
     mkdirSync(preservedRoot, { recursive: true });
-    renameSync(stateRoot, preservedDest);
-    originalMoved = true;
+    copyArchiveTreeVerified(
+      stateRoot,
+      preservedDest,
+      "archive sanitization preserved original",
+    );
+    preservedCreated = true;
     writeFileSync(path.join(preservedDest, "MANIFEST.md"), [
       `# Preserved: ${path.basename(preservedDest)}`,
       "",
@@ -3367,19 +4709,69 @@ function commandSanitizeArchiveLocked(stateRoot) {
       "- Retention: audit hold; prune-preserved lists it once aged past preservedRetentionDays",
       "",
     ].join("\n"));
+  } catch (error) {
+    if (preservedCreated && archivePathEntryExists(preservedDest)) {
+      rmSync(preservedDest, { recursive: true, force: true });
+    }
+    if (existsSync(stagingDest)) rmSync(stagingDest, { recursive: true, force: true });
+    fail(`sanitize-archive could not preserve ${relative(stateRoot)}; the archived root was left unchanged: ${error.message}`);
+  }
+
+  const originalDetached = path.join(
+    path.dirname(stateRoot),
+    `.wakeflow-sanitize-original-${path.basename(stateRoot)}-${process.pid}-${Date.now()}`,
+  );
+  let detached = false;
+  try {
+    renameSync(stateRoot, originalDetached);
+    detached = true;
+    // stagingDest and stateRoot are siblings on the same filesystem. The only
+    // cross-device transfer is the verified copy into the preserved tier.
     renameSync(stagingDest, stateRoot);
   } catch (error) {
-    if (originalMoved && !existsSync(stateRoot) && existsSync(preservedDest)) {
+    let rollbackError = null;
+    let preserveCleanupError = null;
+    if (detached && !existsSync(stateRoot) && archivePathEntryExists(originalDetached)) {
       try {
-        const preserveManifest = path.join(preservedDest, "MANIFEST.md");
-        if (existsSync(preserveManifest)) unlinkSync(preserveManifest);
-        renameSync(preservedDest, stateRoot);
-      } catch {
-        // The error below names both locations for manual recovery.
+        renameSync(originalDetached, stateRoot);
+        detached = false;
+      } catch (recoveryError) {
+        rollbackError = recoveryError;
+      }
+    }
+    if (!detached && archivePathEntryExists(preservedDest)) {
+      try {
+        rmSync(preservedDest, {
+          recursive: true,
+          force: true,
+          maxRetries: 3,
+          retryDelay: 50,
+        });
+      } catch (cleanupError) {
+        preserveCleanupError = cleanupError;
       }
     }
     if (existsSync(stagingDest)) rmSync(stagingDest, { recursive: true, force: true });
-    fail(`sanitize-archive could not replace ${relative(stateRoot)}; inspect ${relative(preservedDest)} before retrying: ${error.message}`);
+    fail(
+      `sanitize-archive could not replace ${relative(stateRoot)}`
+      + `${detached
+        ? ` and the detached original remains at ${relative(originalDetached)}`
+        : "; the archived root was restored"}: `
+      + `${error.message}${rollbackError ? `; rollback failed: ${rollbackError.message}` : ""}`
+      + `${preserveCleanupError ? `; preserved-copy cleanup failed: ${preserveCleanupError.message}` : ""}`,
+    );
+  }
+
+  let cleanupWarning = null;
+  try {
+    rmSync(originalDetached, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 50,
+    });
+  } catch (error) {
+    cleanupWarning = `sanitized archive replacement committed, but detached original cleanup remains at ${relative(originalDetached)}: ${error.message}`;
   }
 
   output({
@@ -3395,6 +4787,7 @@ function commandSanitizeArchiveLocked(stateRoot) {
       originalPreservedAt,
       stateRevision: nextRevision,
     },
+    ...(cleanupWarning ? { warnings: [cleanupWarning] } : {}),
     forbiddenConclusions: ["archive-sanitization-reopens-demand", "archive-sanitization-changes-acceptance"],
     agentNext: "The archive was replaced in place with a privacy-clean copy. Review the manifest amendment and preserved-original pointer before committing.",
   }, [`Sanitized archive ${relative(stateRoot)}; original preserved at ${originalPreservedAt}`]);
@@ -3416,6 +4809,9 @@ try {
       break;
     case "adopt-demand-host":
       commandAdoptDemandHost();
+      break;
+    case "recover-state-transition":
+      commandRecoverStateTransition();
       break;
     case "decide-review":
       commandDecideReview();

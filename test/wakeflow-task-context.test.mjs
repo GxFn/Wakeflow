@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
@@ -300,8 +301,87 @@ test("readiness fails closed on missing requirement anchors and unaccepted depen
     ]);
     assert.notEqual(missingImplementationAnchors.status, 0);
     assert.match(missingImplementationAnchors.stdout, /implementation task packages require at least one controller-authored acceptanceAnchor/);
+
+    const stateBeforeBadRef = JSON.parse(readFileSync(path.join(root, stateRoot, "wakeflow-state.json"), "utf8"));
+    const missingRequirementAnchor = run(stateScript, root, [
+      "add-task-package",
+      "--state-root", stateRoot,
+      "--task-package-id", "NO-REF-ANCHOR",
+      "--summary", "Missing requirement section",
+      "--target-window", "Product",
+      "--target-task-id", "NO-REF-ANCHOR-T1",
+      ...fullContextArgs({
+        workType: "research",
+        requirementRefs: [{ ref: "docs/requirement.md", role: "goal" }],
+      }),
+      "--write",
+    ]);
+    assert.notEqual(missingRequirementAnchor.status, 0);
+    assert.match(missingRequirementAnchor.stdout, /role=goal must name a document section with #anchor/);
+    assert.equal(
+      existsSync(path.join(root, stateRoot, "task-packages/NO-REF-ANCHOR.json")),
+      false,
+      "invalid static requirement anchors must fail before creating an immutable task package",
+    );
+    assert.equal(
+      JSON.parse(readFileSync(path.join(root, stateRoot, "wakeflow-state.json"), "utf8")).revision,
+      stateBeforeBadRef.revision,
+      "invalid task-package context must not advance controller state",
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("task-package creation rejects requirement refs that escape through traversal or symlinks", () => {
+  const { root, stateRoot } = makeFixture();
+  const outside = mkdtempSync(path.join(os.tmpdir(), "wakeflow-task-context-outside-"));
+  try {
+    const outsideRequirement = path.join(outside, "requirement.md");
+    writeFileSync(outsideRequirement, "# External Requirement\n\n## Goal\n\nOutside the workspace.\n");
+    const relativeEscape = `${path.relative(root, outsideRequirement).split(path.sep).join("/")}#goal`;
+    const stateFile = path.join(root, stateRoot, "wakeflow-state.json");
+    const initialRevision = JSON.parse(readFileSync(stateFile, "utf8")).revision;
+
+    const traversal = run(stateScript, root, [
+      "add-task-package",
+      "--state-root", stateRoot,
+      "--task-package-id", "ESCAPE-P1",
+      "--summary", "Traversal escape",
+      "--target-window", "Product",
+      "--target-task-id", "ESCAPE-T1",
+      ...fullContextArgs({
+        workType: "research",
+        requirementRefs: [{ ref: relativeEscape, role: "goal" }],
+      }),
+      "--write",
+    ]);
+    assert.notEqual(traversal.status, 0);
+    assert.match(traversal.stdout, /must stay inside the workspace root/);
+    assert.equal(existsSync(path.join(root, stateRoot, "task-packages/ESCAPE-P1.json")), false);
+    assert.equal(JSON.parse(readFileSync(stateFile, "utf8")).revision, initialRevision);
+
+    symlinkSync(outsideRequirement, path.join(root, "docs/external-requirement.md"));
+    const symlinkEscape = run(stateScript, root, [
+      "add-task-package",
+      "--state-root", stateRoot,
+      "--task-package-id", "SYMLINK-P1",
+      "--summary", "Symlink escape",
+      "--target-window", "Product",
+      "--target-task-id", "SYMLINK-T1",
+      ...fullContextArgs({
+        workType: "research",
+        requirementRefs: [{ ref: "docs/external-requirement.md#goal", role: "goal" }],
+      }),
+      "--write",
+    ]);
+    assert.notEqual(symlinkEscape.status, 0);
+    assert.match(symlinkEscape.stdout, /resolves outside the workspace root/);
+    assert.equal(existsSync(path.join(root, stateRoot, "task-packages/SYMLINK-P1.json")), false);
+    assert.equal(JSON.parse(readFileSync(stateFile, "utf8")).revision, initialRevision);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
   }
 });
 

@@ -204,12 +204,35 @@ test("archive-demand refuses a demand owned by the other host", () => {
   // would escape the tmp root and collide across runs.
   writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
     workspaceName: "Own", controllerWindow: "C", projectLedgerRoot: "wakeflow-ledger",
+    workspaceArchiveDir: "wakeflow-ledger/workspace/archive",
   }, null, 2)}\n`);
   const { stateRootRef, stateFile } = initDemand(root);
   const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  const completedAt = new Date().toISOString();
+  const completedRevision = state.revision + 1;
   state.controllerHost = "claude-code";
   state.state = "completed";
+  state.stateReason = "archive ownership fixture";
+  state.revision = completedRevision;
+  state.updatedAt = completedAt;
   writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+  writeFileSync(
+    path.join(root, stateRootRef, "controller-events.jsonl"),
+    `${JSON.stringify({
+      eventId: `evt-owner-completed-${completedRevision}`,
+      createdAt: completedAt,
+      actor: "controller",
+      type: "demand.completed",
+      from: "intake",
+      to: "completed",
+      reason: "archive ownership fixture",
+      evidenceRefs: ["controller-events.jsonl"],
+      allowedWrites: ["wakeflow-state.json", "controller-events.jsonl"],
+      forbiddenConclusions: ["completion-implies-archive"],
+      stateRevision: completedRevision,
+    })}\n`,
+    { flag: "a" },
+  );
 
   const { result } = runJson(codexState, ["archive-demand", "--root", root, "--state-root", stateRootRef, "--reason", "cross-host attempt", "--write"], root);
   assert.notEqual(result.status, 0);

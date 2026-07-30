@@ -44,6 +44,7 @@ function makeWorkspace({ maxStreamsPerRepo = 2 } = {}) {
     workspaceName: "StreamFixture",
     controllerWindow: "Controller",
     projectLedgerRoot: "wakeflow-ledger",
+    workspaceArchiveDir: "wakeflow-ledger/workspace/archive",
     repositories: [
       { windowName: "RepoA", path: "RepoA", role: "Fixture repo" },
       { windowName: "RepoB", path: "RepoB", role: "Second fixture repo" },
@@ -261,7 +262,33 @@ test("archive-demand refuses while the demand's streams are open (PD-4 gate)", (
   // completed/archived demands), THEN flip to completed for the archive gate.
   assert.equal(openStream(root, "a", "ARCH-DK").status, 0);
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
-  writeFileSync(stateFile, `${JSON.stringify({ ...readJson(stateFile), state: "completed" }, null, 2)}\n`);
+  const activeState = readJson(stateFile);
+  const completedAt = new Date().toISOString();
+  const completedRevision = activeState.revision + 1;
+  writeFileSync(stateFile, `${JSON.stringify({
+    ...activeState,
+    state: "completed",
+    stateReason: "archive stream gate fixture",
+    revision: completedRevision,
+    updatedAt: completedAt,
+  }, null, 2)}\n`);
+  writeFileSync(
+    path.join(stateRoot, "controller-events.jsonl"),
+    `${JSON.stringify({
+      eventId: `evt-stream-completed-${completedRevision}`,
+      createdAt: completedAt,
+      actor: "controller",
+      type: "demand.completed",
+      from: activeState.state,
+      to: "completed",
+      reason: "archive stream gate fixture",
+      evidenceRefs: ["controller-events.jsonl"],
+      allowedWrites: ["wakeflow-state.json", "controller-events.jsonl"],
+      forbiddenConclusions: ["completion-implies-archive"],
+      stateRevision: completedRevision,
+    })}\n`,
+    { flag: "a" },
+  );
 
   const refused = runSync(process.execPath, [stateScript, "archive-demand", "--root", root, "--state-root", stateRoot, "--reason", "done", "--json"]);
   assert.equal(refused.status, 1, refused.stdout);

@@ -9,6 +9,17 @@ import {
 import { hostProfile } from "./wakeflow-host-profile.mjs";
 import { releaseWindowLockForResult } from "./wakeflow-delivery-store.mjs";
 import { PROGRESS_SECTIONS, appendProgressTimeline } from "./wakeflow-progress-appends.mjs";
+import {
+  controllerEventStateAlignment,
+  futureControllerEvents,
+  readControllerEventsStrict,
+  WakeflowControllerEventLogError,
+} from "./wakeflow-controller-events.mjs";
+import {
+  assertStateAuthorityPaths,
+  readPendingStateTransition,
+  WakeflowPendingTransitionError,
+} from "./wakeflow-state-transition.mjs";
 
 function eventIdFor(createdAt, revision) {
   return `evt-${createdAt.replace(/[-:.TZ]/g, "").slice(0, 14)}-${String(revision).padStart(4, "0")}`;
@@ -30,9 +41,11 @@ export function createResultRecordingCommands(ctx) {
     version,
     deliveryRunVersion,
     readJson,
+    readStateRootJson,
+    atomicWriteStateRootJson,
+    appendStateRootJsonLine,
     ensureStateDirs,
     atomicWriteJson,
-    appendJsonLine,
     resolveInputPath,
     resolveStateRoot,
     deliveryFileFor,
@@ -47,6 +60,9 @@ export function createResultRecordingCommands(ctx) {
     listDispatchGroupsForTask,
     loadDispatchGroup,
     artifactTrace,
+    withFileLock,
+    withStateRootLock,
+    WakeflowStateLockTimeoutError,
   } = ctx;
 
   function validateResultStatus(value) {
@@ -82,11 +98,42 @@ export function createResultRecordingCommands(ctx) {
     fail(`Boolean value expected, got: ${value}`);
   }
 
+  function parseCraftEvidence() {
+    const raw = getValue("--craft-evidence", "");
+    if (!raw) return [];
+    let entries;
+    try {
+      entries = JSON.parse(raw);
+    } catch (error) {
+      fail(`--craft-evidence must be a JSON array: ${error.message}`);
+    }
+    if (!Array.isArray(entries)) fail("--craft-evidence must be a JSON array.");
+    for (const entry of entries) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)
+        || typeof entry.kind !== "string" || !entry.kind.trim()) {
+        fail("--craft-evidence entries must be objects with a non-empty string kind.");
+      }
+      const proofFields = ["ref", "value", "commit"];
+      for (const field of proofFields) {
+        if (entry[field] !== undefined && (typeof entry[field] !== "string" || !entry[field].trim())) {
+          fail(`--craft-evidence ${field} must be a non-empty string when provided.`);
+        }
+      }
+      if (!proofFields.some((field) => typeof entry[field] === "string" && entry[field].trim())) {
+        fail("--craft-evidence entries must carry reviewable proof in at least one of ref, value, or commit.");
+      }
+      if (entry.verify !== undefined && (typeof entry.verify !== "string" || !entry.verify.trim())) {
+        fail("--craft-evidence verify must be a non-empty string when provided.");
+      }
+    }
+    return entries;
+  }
+
   function lockPathNote(windowName) {
     return path.join(stateDir, "locks", `${slug(windowName)}.json`);
   }
 
-  function markStateRootDeliverySent(envelope, run, { apply = true } = {}) {
+  function markStateRootDeliverySent(envelope, run, { apply = true, stateRoot: resolvedStateRoot = null } = {}) {
     if (envelope.kind !== "DeliveryEnvelope" || run.status !== "sent") {
       return { updated: false, reason: "not-a-sent-target-delivery" };
     }
@@ -109,18 +156,109 @@ export function createResultRecordingCommands(ctx) {
       return { updated: false, reason: "missing-state-ref" };
     }
 
-    const stateRoot = resolveStateRoot(stateRootRef);
+    const stateRoot = resolvedStateRoot ?? resolveStateRoot(stateRootRef);
     const stateFile = path.join(stateRoot, "wakeflow-state.json");
     const eventsFile = path.join(stateRoot, "controller-events.jsonl");
-    const state = readJson(stateFile, "controller state");
-    // A closed demand never resurrects to "dispatched": an envelope prepared
-    // before cancel/completion may still be sent by a slow host, but recording
-    // it must not reopen the flow (cancel stays sticky).
-    if (["completed", "archived", "cancelled"].includes(state.state)) {
-      return { updated: false, reason: `demand-${state.state}` };
+    try {
+      assertStateAuthorityPaths({ stateRoot, stateFile, eventsFile });
+    } catch (error) {
+      if (error instanceof WakeflowPendingTransitionError) {
+        fail(`${error.message}. Refusing to record delivery through a non-canonical state authority path.`);
+      }
+      throw error;
     }
+    const state = readStateRootJson(stateRoot, "wakeflow-state.json", "controller state");
     if (state.controllerHost && state.controllerHost !== hostProfile.runtime.hostDirName) {
       fail(`demand ${state.demandKey} is owned by controller host ${state.controllerHost}; this runtime is ${hostProfile.runtime.hostDirName}. Record this delivery on the owning host.`);
+    }
+    let controllerEvents = [];
+    if (apply) {
+      try {
+        controllerEvents = readControllerEventsStrict(eventsFile);
+      } catch (error) {
+        if (error instanceof WakeflowControllerEventLogError) {
+          fail(
+            `${error.message} (${path.relative(workspaceRoot, eventsFile)}). Repair the event log without discarding valid audit entries, then replay the same delivery run ${run.deliveryRunId}; state was not changed.`,
+            {
+              errorCode: "delivery-event-log-repair-required",
+              retryable: true,
+              recovery: {
+                strategy: "repair-event-log-then-replay",
+                stateRoot: path.relative(workspaceRoot, stateRoot),
+                eventsFile: path.relative(workspaceRoot, eventsFile),
+                stateRevision: state.revision,
+                lineNumber: error.lineNumber,
+                deliveryRunId: run.deliveryRunId,
+              },
+            },
+          );
+        }
+        throw error;
+      }
+      try {
+        const pending = readPendingStateTransition(stateRoot);
+        if (pending) {
+          fail(
+            `pending controller transition ${pending.event?.eventId ?? "(unknown)"} must be recovered explicitly before recording delivery run ${run.deliveryRunId}; state was not changed.`,
+            {
+              errorCode: "state-transition-recovery-required",
+              retryable: true,
+              recovery: {
+                strategy: "run-recover-state-transition",
+                stateRoot: path.relative(workspaceRoot, stateRoot),
+                eventsFile: path.relative(workspaceRoot, eventsFile),
+                stateRevision: state.revision,
+                reservedRevision: pending.nextState?.revision,
+                eventId: pending.event?.eventId,
+                deliveryRunId: run.deliveryRunId,
+              },
+            },
+          );
+        }
+      } catch (error) {
+        if (error instanceof WakeflowPendingTransitionError) {
+          fail(
+            `${error.message}. Inspect ${path.relative(workspaceRoot, stateRoot)} before recording delivery run ${run.deliveryRunId}; state was not changed.`,
+            {
+              errorCode: "controller-event-manual-recovery-required",
+              retryable: false,
+              recovery: {
+                strategy: "inspect-state-event-transition-journal",
+                stateRoot: path.relative(workspaceRoot, stateRoot),
+                eventsFile: path.relative(workspaceRoot, eventsFile),
+                stateRevision: state.revision,
+                deliveryRunId: run.deliveryRunId,
+              },
+            },
+          );
+        }
+        throw error;
+      }
+      const alignment = controllerEventStateAlignment(controllerEvents, state.revision);
+      if (alignment.status === "state-ahead") {
+        fail(
+          `controller state revision ${state.revision} is ahead of event log revision ${alignment.latestEventRevision}; manual recovery is required before recording delivery run ${run.deliveryRunId}. State was not changed.`,
+          {
+            errorCode: "controller-event-manual-recovery-required",
+            retryable: false,
+            recovery: {
+              strategy: "inspect-state-event-transition-journal",
+              stateRoot: path.relative(workspaceRoot, stateRoot),
+              eventsFile: path.relative(workspaceRoot, eventsFile),
+              stateRevision: state.revision,
+              latestEventRevision: alignment.latestEventRevision,
+              deliveryRunId: run.deliveryRunId,
+            },
+          },
+        );
+      }
+    }
+    // A closed demand never resurrects to "dispatched": an envelope prepared
+    // before cancel/completion may still be sent by a slow host, but recording
+    // it must not reopen the flow (cancel stays sticky). Authority is checked
+    // first so this history-only path cannot hide a damaged state/event pair.
+    if (["completed", "archived", "cancelled"].includes(state.state)) {
+      return { updated: false, reason: `demand-${state.state}` };
     }
     const targetTask = (state.targetTasks ?? []).find((item) => item.targetTaskId === targetTaskId);
     if (!targetTask) {
@@ -131,6 +269,9 @@ export function createResultRecordingCommands(ctx) {
     }
     if (targetTask.taskPackageId !== taskPackageId) {
       fail(`delivery run task package mismatch: state has ${targetTask.taskPackageId}, envelope has ${taskPackageId}`);
+    }
+    if (!apply) {
+      return { updated: false, reason: "validated" };
     }
     if (targetTask.status === "sent") {
       if (targetTask.delivery?.deliveryId && targetTask.delivery.deliveryId !== envelope.deliveryId) {
@@ -151,16 +292,48 @@ export function createResultRecordingCommands(ctx) {
     if (["accepted", "completed", "blocked", "needs-review"].includes(targetTask.status)) {
       return { updated: false, reason: `target-task-already-${targetTask.status}` };
     }
-    if (!apply) {
-      // Validation pass: all envelope-vs-state consistency checks above ran
-      // and passed; the caller may now durably record the run file knowing the
-      // state advance cannot fail on a mismatch afterwards.
-      return { updated: false, reason: "validated" };
-    }
-
-    const createdAt = nowIso();
     const nextRevision = Number(state.revision ?? 0) + 1;
-    const eventId = eventIdFor(createdAt, nextRevision);
+    // F41 recovery: controller events reserve their revision because the
+    // append happens before the authoritative state snapshot. Only the exact
+    // immutable delivery run that created a single R+1 event may consume that
+    // reservation. Every other writer fails closed and replays later.
+    const exactRunEvent = (event) => event?.type === "delivery.sent"
+      && event.wakeflowTrace?.deliveryRunId === run.deliveryRunId
+      && event.wakeflowTrace?.deliveryId === envelope.deliveryId
+      && event.wakeflowTrace?.targetTaskId === targetTaskId
+      && path.resolve(workspaceRoot, event.wakeflowTrace?.stateRoot || "") === stateRoot;
+    const reservedEvents = futureControllerEvents(controllerEvents, state.revision);
+    const recoverableEvent = reservedEvents.length === 1
+      && reservedEvents[0].stateRevision === nextRevision
+      && exactRunEvent(reservedEvents[0])
+      ? reservedEvents[0]
+      : null;
+    if (reservedEvents.length > 0 && !recoverableEvent) {
+      const firstReserved = reservedEvents[0];
+      fail(
+        `controller event revision ${firstReserved.stateRevision} is reserved ahead of state revision ${state.revision}; recover or replay delivery run ${firstReserved.wakeflowTrace?.deliveryRunId || "recorded in the event log"} before replaying ${run.deliveryRunId}. State was not changed.`,
+        {
+          errorCode: "delivery-state-recovery-required",
+          retryable: true,
+          recovery: {
+            strategy: "replay-reserved-delivery-run-first",
+            stateRoot: path.relative(workspaceRoot, stateRoot),
+            eventsFile: path.relative(workspaceRoot, eventsFile),
+            stateRevision: state.revision,
+            reservedRevision: firstReserved.stateRevision,
+            reservedDeliveryRunId: firstReserved.wakeflowTrace?.deliveryRunId,
+            deliveryRunId: run.deliveryRunId,
+          },
+        },
+      );
+    }
+    const existingDeliveryEvent = recoverableEvent
+      ?? controllerEvents.find((event) => exactRunEvent(event));
+    if (existingDeliveryEvent && existingDeliveryEvent.stateRevision !== nextRevision) {
+      fail(`delivery run ${run.deliveryRunId} has an orphan event at state revision ${existingDeliveryEvent.stateRevision}, but recovery requires revision ${nextRevision}; inspect the state/event audit trail.`);
+    }
+    const createdAt = existingDeliveryEvent?.createdAt || nowIso();
+    const eventId = existingDeliveryEvent?.eventId || eventIdFor(createdAt, nextRevision);
     const nextTargetTasks = (state.targetTasks ?? []).map((item) => item.targetTaskId === targetTaskId
       ? {
           ...item,
@@ -249,10 +422,43 @@ export function createResultRecordingCommands(ctx) {
       }),
     };
 
-    // F41: event first, state.json (the authoritative snapshot) last, so a crash leaves at
-    // most a harmless extra event, never a revision-without-event audit gap.
-    appendJsonLine(eventsFile, event);
-    atomicWriteJson(stateFile, nextState);
+    // F41: publish the event first and state.json (the authoritative snapshot)
+    // last. A crash can reserve one event revision, which replaying this exact
+    // immutable delivery run completes; it cannot create a revision-without-event
+    // audit gap.
+    try {
+      if (!existingDeliveryEvent) {
+        appendStateRootJsonLine(
+          stateRoot,
+          "controller-events.jsonl",
+          event,
+          "controller event log",
+        );
+      }
+      atomicWriteStateRootJson(
+        stateRoot,
+        "wakeflow-state.json",
+        nextState,
+        "controller state",
+      );
+    } catch (error) {
+      fail(
+        `delivery run ${run.deliveryRunId} is persisted, but its controller state transition did not finish: ${error.message}`,
+        {
+          errorCode: "delivery-state-recovery-required",
+          retryable: true,
+          recovery: {
+            strategy: "replay-delivery-run",
+            stateRoot: path.relative(workspaceRoot, stateRoot),
+            eventsFile: path.relative(workspaceRoot, eventsFile),
+            stateRevision: state.revision,
+            reservedRevision: nextRevision,
+            reservedDeliveryRunId: run.deliveryRunId,
+            deliveryRunId: run.deliveryRunId,
+          },
+        },
+      );
+    }
     appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.decisions,
       `${createdAt} dispatched ${targetTaskId} → ${targetTask.targetWindow} (delivery ${envelope.deliveryId})`);
     return {
@@ -344,63 +550,106 @@ export function createResultRecordingCommands(ctx) {
     }
 
     const runFile = deliveryRunFileFor(deliveryRunId);
-    if (existsSync(runFile)) {
-      const existingRun = readJson(runFile, "delivery run");
-      if (!sameDeliveryRunContent(existingRun, run)) {
-        fail(`Delivery run ${deliveryRunId} already exists with different content; use a new --delivery-run-id for a distinct retry attempt.`);
+    const recordTransaction = (lockedStateRoot = null) => {
+      if (existsSync(runFile)) {
+        const existingRun = readJson(runFile, "delivery run");
+        const existingStateRootRef = existingRun.wakeflowTrace?.stateRoot;
+        if (
+          lockedStateRoot
+          && existingStateRootRef
+          && path.resolve(workspaceRoot, existingStateRootRef) !== lockedStateRoot
+        ) {
+          fail(`Delivery run ${deliveryRunId} already belongs to a different state root; use a globally unique --delivery-run-id.`);
+        }
+        if (!sameDeliveryRunContent(existingRun, run)) {
+          fail(`Delivery run ${deliveryRunId} already exists with different content; use a new --delivery-run-id for a distinct retry attempt.`);
+        }
+        // Recovery replay is intentional: a crash may have persisted the run
+        // before the state snapshot. Replaying the same run while holding the
+        // state-root lock completes that missing state/event update exactly once.
+        const stateUpdate = markStateRootDeliverySent(envelope, existingRun, { stateRoot: lockedStateRoot });
+        const windowLock = refreshSentWindowLock(existingRun.status);
+        output(
+          {
+            ok: true,
+            command: "record-delivery-run",
+            wrote: false,
+            duplicate: true,
+            idempotentReplay: true,
+            status: existingRun.status,
+            ...(hasFlag("--compact")
+              ? { compact: true, deliveryRunId: existingRun.deliveryRunId, deliveryId: existingRun.deliveryId, targetWindow: existingRun.targetWindow }
+              : { run: existingRun }),
+            runFile: path.relative(workspaceRoot, runFile),
+            stateUpdate,
+            windowLock,
+          },
+          [
+            `Delivery run ${deliveryRunId} already recorded; treated as idempotent replay.`,
+            `Status: ${existingRun.status}`,
+          ],
+        );
+        return;
       }
-      const stateUpdate = markStateRootDeliverySent(envelope, existingRun);
-      const windowLock = refreshSentWindowLock(existingRun.status);
+      ensureStateDirs();
+      // Validation, run persistence, and the authoritative state/event update
+      // are one state-root critical section for target deliveries. This keeps
+      // parallel window sends from reading the same revision and dropping one
+      // another's updates.
+      markStateRootDeliverySent(envelope, run, { apply: false, stateRoot: lockedStateRoot });
+      atomicWriteJson(runFile, run);
+      const stateUpdate = markStateRootDeliverySent(envelope, run, { stateRoot: lockedStateRoot });
+      const windowLock = refreshSentWindowLock(run.status);
       output(
         {
           ok: true,
           command: "record-delivery-run",
-          wrote: false,
-          duplicate: true,
-          idempotentReplay: true,
-          status: existingRun.status,
+          wrote: true,
+          status,
+          // --compact: the run record is on disk at runFile; echoing it back was
+          // pure context burn
           ...(hasFlag("--compact")
-            ? { compact: true, deliveryRunId: existingRun.deliveryRunId, deliveryId: existingRun.deliveryId, targetWindow: existingRun.targetWindow }
-            : { run: existingRun }),
+            ? { compact: true, deliveryRunId: run.deliveryRunId, deliveryId: run.deliveryId, targetWindow: run.targetWindow }
+            : { run }),
           runFile: path.relative(workspaceRoot, runFile),
           stateUpdate,
           windowLock,
         },
         [
-          `Delivery run ${deliveryRunId} already recorded; treated as idempotent replay.`,
-          `Status: ${existingRun.status}`,
+          `Recorded direct-thread delivery run ${deliveryRunId}.`,
+          `Status: ${status}`,
         ],
       );
-      return;
-    }
+    };
+
     ensureStateDirs();
-    // Validate the envelope-state consistency BEFORE the run file exists: a
-    // mismatch must fail cleanly instead of leaving a recorded-but-unapplied
-    // run that wedges every retry.
-    markStateRootDeliverySent(envelope, run, { apply: false });
-    atomicWriteJson(runFile, run);
-    const stateUpdate = markStateRootDeliverySent(envelope, run);
-    const windowLock = refreshSentWindowLock(run.status);
-    output(
-      {
-        ok: true,
-        command: "record-delivery-run",
-        wrote: true,
-        status,
-        // --compact: the run record is on disk at runFile; echoing it back was
-        // pure context burn
-        ...(hasFlag("--compact")
-          ? { compact: true, deliveryRunId: run.deliveryRunId, deliveryId: run.deliveryId, targetWindow: run.targetWindow }
-          : { run }),
-        runFile: path.relative(workspaceRoot, runFile),
-        stateUpdate,
-        windowLock,
-      },
-      [
-        `Recorded direct-thread delivery run ${deliveryRunId}.`,
-        `Status: ${status}`,
-      ],
-    );
+    // Delivery-run ids share one workspace-wide namespace. Serialize that
+    // immutable record before taking a target's state lock so two independent
+    // demands cannot concurrently claim the same explicit run id.
+    const runLockFile = `${runFile}.record-lock`;
+    try {
+      withFileLock(runLockFile, () => {
+        if (envelope.kind !== "DeliveryEnvelope") {
+          // Controller-return is transport-only and has no target-task state
+          // mutation, so it must not acquire an unrelated demand state lock.
+          recordTransaction();
+          return;
+        }
+        const stateRootRef = envelope.stateRef?.stateRoot;
+        if (!stateRootRef) {
+          fail(`Delivery envelope ${envelope.deliveryId} is missing stateRef.stateRoot; cannot record a target delivery without its canonical state root.`);
+        }
+        const stateRoot = resolveStateRoot(stateRootRef);
+        withStateRootLock(stateRoot, () => recordTransaction(stateRoot), {
+          onWarn: (message) => process.stderr.write(`wakeflow-delivery: ${message}\n`),
+        });
+      }, {
+        onWarn: (message) => process.stderr.write(`wakeflow-delivery: ${message}\n`),
+      });
+    } catch (error) {
+      if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);
+      throw error;
+    }
   }
 
   function commandRecordTargetResult() {
@@ -415,17 +664,16 @@ export function createResultRecordingCommands(ctx) {
     if (dispatchGroup && knownGroups.length > 0 && !knownGroups.includes(dispatchGroup)) {
       fail(`--group ${dispatchGroup} does not match any dispatch packet for ${targetWindow} / ${taskId}; known groups: ${knownGroups.join(", ")}.`);
     }
-    if (!dispatchGroup && knownGroups.length === 1) {
-      dispatchGroup = knownGroups[0];
-    } else if (!dispatchGroup && knownGroups.length > 1) {
-      fail(`Multiple dispatch groups exist for ${targetWindow} / ${taskId} (${knownGroups.join(", ")}); pass --group explicitly.`);
+    if (!dispatchGroup && knownGroups.length > 0) {
+      fail(`--group is required for ${targetWindow} / ${taskId}; known dispatch groups: ${knownGroups.join(", ")}.`);
     }
     const evidenceRefs = getAllValues("--evidence-ref");
     const verificationSummary = getAllValues("--verification");
     const commits = getAllValues("--commit");
+    const craftEvidence = parseCraftEvidence();
     const supersedeResult = hasFlag("--supersede-result");
-    if (status === "completed" && evidenceRefs.length === 0 && verificationSummary.length === 0 && commits.length === 0) {
-      fail("completed results require --evidence-ref, --verification, or --commit.");
+    if (status === "completed" && evidenceRefs.length === 0 && verificationSummary.length === 0 && commits.length === 0 && craftEvidence.length === 0) {
+      fail("completed results require --evidence-ref, --verification, --commit, or --craft-evidence.");
     }
 
     const reportedAt = nowIso();
@@ -443,6 +691,7 @@ export function createResultRecordingCommands(ctx) {
       evidenceRefs,
       verificationSummary,
       riskSummary: getAllValues("--risk"),
+      ...(craftEvidence.length ? { craftEvidence } : {}),
       nextSuggestion: getValue("--next-suggestion", "") || undefined,
       wakeflowTrace: artifactTrace({
         artifactKind: "target-result",
@@ -456,116 +705,139 @@ export function createResultRecordingCommands(ctx) {
     });
 
     const resultFile = resultFileFor(targetWindow, taskId, dispatchGroup);
-    let supersededFile = "";
-    if (existsSync(resultFile)) {
-      const existingResult = readJson(resultFile, "target result");
-      if (sameTargetResultContent(existingResult, result)) {
-        output(
-          {
-            ok: true,
-            command: "record-target-result",
-            wrote: false,
-            duplicate: true,
-            idempotentReplay: true,
-            result: existingResult,
-            resultFile: path.relative(workspaceRoot, resultFile),
-          },
-          [
-            `Target result for ${targetWindow} / ${taskId} already recorded; treated as idempotent replay.`,
-            `Status: ${existingResult.status}`,
-          ],
-        );
-        return;
-      }
-      if (!supersedeResult) {
-        fail(`Target result already exists for ${targetWindow} / ${taskId}${dispatchGroup ? ` in group ${dispatchGroup}` : ""}; use --supersede-result to replace it explicitly.`);
-      }
-      supersededFile = supersededResultFileFor(targetWindow, taskId, dispatchGroup, reportedAt);
-      result.resultRevision = Number(existingResult.resultRevision ?? 1) + 1;
-      result.supersedes = {
-        resultFile: path.relative(workspaceRoot, resultFile),
-        archivedResultFile: path.relative(workspaceRoot, supersededFile),
-        resultId: existingResult.resultId,
-        status: existingResult.status,
-        reportedAt: existingResult.reportedAt,
-        supersededAt: reportedAt,
-      };
-      if (write) {
-        atomicWriteJson(supersededFile, {
-          ...existingResult,
-          supersededBy: {
-            resultId: result.resultId,
-            resultFile: path.relative(workspaceRoot, resultFile),
-            supersededAt: reportedAt,
-          },
-        });
-      }
-    } else {
-      result.resultRevision = 1;
-    }
-    if (write) {
-      ensureStateDirs();
-      atomicWriteJson(resultFile, result);
-    }
-    // Release the shared in-flight window lock when it belongs to the delivery
-    // this result answers; a lock for a different (newer) delivery survives.
-    // Release through the shared releaseWindowLockForResult authority (same contract as the
-    // state script). The belongsHere predicate keeps the run-scan that handles custom
-    // --delivery-run-id retries; freshness is no longer a gate (unified release policy).
-    let lockReleased = false;
-    if (write) {
-      const lockFile = path.join(stateDir, "locks", `${slug(targetWindow)}.json`);
-      const belongsHere = (lock) => {
-        if (!lock.deliveryId) return true;
-        const matchRun = (run) => {
-          if (!run || run.deliveryId !== lock.deliveryId) return false;
-          const runTaskId = run.taskId || run.targetTaskId;
-          return run.targetWindow === targetWindow && (!runTaskId || runTaskId === taskId);
-        };
-        const guessedFile = deliveryRunFileFor(`run-${lock.deliveryId}`);
-        if (existsSync(guessedFile)) {
-          try {
-            if (matchRun(JSON.parse(readFileSync(guessedFile, "utf8")))) return true;
-          } catch {
-            // fall through to the directory scan
-          }
+    const recordTransaction = () => {
+      let supersededFile = "";
+      if (existsSync(resultFile)) {
+        const existingResult = readJson(resultFile, "target result");
+        if (sameTargetResultContent(existingResult, result)) {
+          output(
+            {
+              ok: true,
+              command: "record-target-result",
+              wrote: false,
+              duplicate: true,
+              idempotentReplay: true,
+              result: existingResult,
+              resultFile: path.relative(workspaceRoot, resultFile),
+            },
+            [
+              `Target result for ${targetWindow} / ${taskId} already recorded; treated as idempotent replay.`,
+              `Status: ${existingResult.status}`,
+            ],
+          );
+          return;
         }
-        // custom --delivery-run-id retries do not follow the run-<deliveryId> naming;
-        // scan the runs directory for the matching delivery id.
-        const runsDir = path.dirname(guessedFile);
-        if (existsSync(runsDir)) {
-          for (const name of readdirSync(runsDir)) {
-            if (!name.endsWith(".json")) continue;
+        if (!supersedeResult) {
+          fail(`Target result already exists for ${targetWindow} / ${taskId}${dispatchGroup ? ` in group ${dispatchGroup}` : ""}; use --supersede-result to replace it explicitly.`);
+        }
+        const archivedRevision = Number(existingResult.resultRevision ?? 1);
+        supersededFile = supersededResultFileFor(
+          targetWindow,
+          taskId,
+          dispatchGroup,
+          reportedAt,
+          archivedRevision,
+        );
+        result.resultRevision = archivedRevision + 1;
+        result.supersedes = {
+          resultFile: path.relative(workspaceRoot, resultFile),
+          archivedResultFile: path.relative(workspaceRoot, supersededFile),
+          resultId: existingResult.resultId,
+          status: existingResult.status,
+          reportedAt: existingResult.reportedAt,
+          supersededAt: reportedAt,
+        };
+        if (write) {
+          atomicWriteJson(supersededFile, {
+            ...existingResult,
+            supersededBy: {
+              resultId: result.resultId,
+              resultFile: path.relative(workspaceRoot, resultFile),
+              supersededAt: reportedAt,
+            },
+          });
+        }
+      } else {
+        result.resultRevision = 1;
+      }
+      if (write) {
+        atomicWriteJson(resultFile, result);
+      }
+      // Release the shared in-flight window lock when it belongs to the delivery
+      // this result answers; a lock for a different (newer) delivery survives.
+      // Release through the shared releaseWindowLockForResult authority (same contract as the
+      // state script). The belongsHere predicate keeps the run-scan that handles custom
+      // --delivery-run-id retries; freshness is no longer a gate (unified release policy).
+      let lockReleased = false;
+      if (write) {
+        const lockFile = path.join(stateDir, "locks", `${slug(targetWindow)}.json`);
+        const belongsHere = (lock) => {
+          if (!lock.deliveryId) return true;
+          const matchRun = (run) => {
+            if (!run || run.deliveryId !== lock.deliveryId) return false;
+            const runTaskId = run.taskId || run.targetTaskId;
+            return run.targetWindow === targetWindow && (!runTaskId || runTaskId === taskId);
+          };
+          const guessedFile = deliveryRunFileFor(`run-${lock.deliveryId}`);
+          if (existsSync(guessedFile)) {
             try {
-              if (matchRun(JSON.parse(readFileSync(path.join(runsDir, name), "utf8")))) return true;
+              if (matchRun(JSON.parse(readFileSync(guessedFile, "utf8")))) return true;
             } catch {
-              // skip unreadable run files
+              // fall through to the directory scan
             }
           }
-        }
-        return false;
-      };
-      lockReleased = releaseWindowLockForResult(lockFile, belongsHere);
+          // custom --delivery-run-id retries do not follow the run-<deliveryId> naming;
+          // scan the runs directory for the matching delivery id.
+          const runsDir = path.dirname(guessedFile);
+          if (existsSync(runsDir)) {
+            for (const name of readdirSync(runsDir)) {
+              if (!name.endsWith(".json")) continue;
+              try {
+                if (matchRun(JSON.parse(readFileSync(path.join(runsDir, name), "utf8")))) return true;
+              } catch {
+                // skip unreadable run files
+              }
+            }
+          }
+          return false;
+        };
+        lockReleased = releaseWindowLockForResult(lockFile, belongsHere);
+      }
+      output(
+        {
+          ok: true,
+          command: "record-target-result",
+          lockReleased,
+          wrote: write,
+          superseded: Boolean(supersededFile),
+          // --compact: the envelope is on disk at resultFile
+          ...(hasFlag("--compact")
+            ? { compact: true, resultId: result.resultId, status: result.status, dispatchGroup: result.dispatchGroup, targetWindow: result.targetWindow, taskId: result.taskId }
+            : { result }),
+          resultFile: write ? path.relative(workspaceRoot, resultFile) : "",
+          supersededFile: supersededFile && write ? path.relative(workspaceRoot, supersededFile) : undefined,
+        },
+        [
+          `${write ? "Recorded" : "Would record"} result envelope for ${targetWindow} / ${taskId}.`,
+          `Status: ${status}`,
+        ],
+      );
+    };
+
+    if (!write) {
+      recordTransaction();
+      return;
     }
-    output(
-      {
-        ok: true,
-        command: "record-target-result",
-        lockReleased,
-        wrote: write,
-        superseded: Boolean(supersededFile),
-        // --compact: the envelope is on disk at resultFile
-        ...(hasFlag("--compact")
-          ? { compact: true, resultId: result.resultId, status: result.status, dispatchGroup: result.dispatchGroup, targetWindow: result.targetWindow, taskId: result.taskId }
-          : { result }),
-        resultFile: write ? path.relative(workspaceRoot, resultFile) : "",
-        supersededFile: supersededFile && write ? path.relative(workspaceRoot, supersededFile) : undefined,
-      },
-      [
-        `${write ? "Recorded" : "Would record"} result envelope for ${targetWindow} / ${taskId}.`,
-        `Status: ${status}`,
-      ],
-    );
+
+    ensureStateDirs();
+    try {
+      withFileLock(`${resultFile}.record-lock`, recordTransaction, {
+        onWarn: (message) => process.stderr.write(`wakeflow-delivery: ${message}\n`),
+      });
+    } catch (error) {
+      if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);
+      throw error;
+    }
   }
 
   return {

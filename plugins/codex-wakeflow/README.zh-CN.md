@@ -86,7 +86,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.17/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.18/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -295,7 +295,7 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 | 需求 | MCP tools |
 | --- | --- |
 | 设置与窗口注册 | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
-| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
+| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
 | 候选扫描与隔离 pod | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_close`, `wakeflow_pod_list` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |

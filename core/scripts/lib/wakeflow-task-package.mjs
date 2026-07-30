@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 
 export const TASK_CONTEXT_VERSION = 1;
@@ -100,7 +100,13 @@ function markdownAnchor(text) {
     .replace(/^-+|-+$/g, "");
 }
 
-function requirementRefIssue(workspaceRoot, entry) {
+function pathIsInside(root, file) {
+  const relative = path.relative(root, file);
+  return relative === ""
+    || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
+}
+
+export function requirementRefIssue(workspaceRoot, entry) {
   if (/^[a-z]+:\/\//i.test(entry.ref)) {
     return `requirement reference must be a workspace-local file, not a URL: ${entry.ref}`;
   }
@@ -114,8 +120,21 @@ function requirementRefIssue(workspaceRoot, entry) {
   if (entry.role !== "evidence" && !fragment) {
     return `requirement reference role=${entry.role} must name a document section with #anchor: ${entry.ref}`;
   }
-  const file = path.resolve(workspaceRoot, fileRef);
+  const lexicalWorkspaceRoot = path.resolve(workspaceRoot);
+  const file = path.resolve(lexicalWorkspaceRoot, fileRef);
+  if (!pathIsInside(lexicalWorkspaceRoot, file)) {
+    return `requirement reference must stay inside the workspace root: ${entry.ref}`;
+  }
   if (!existsSync(file)) return `requirement reference does not exist: ${entry.ref}`;
+  try {
+    const realWorkspaceRoot = realpathSync(lexicalWorkspaceRoot);
+    const realFile = realpathSync(file);
+    if (!pathIsInside(realWorkspaceRoot, realFile)) {
+      return `requirement reference resolves outside the workspace root: ${entry.ref}`;
+    }
+  } catch (error) {
+    return `requirement reference is unreadable: ${entry.ref} (${error.message})`;
+  }
   if (!fragment) return null;
   let content = "";
   try {

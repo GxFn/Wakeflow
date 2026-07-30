@@ -295,7 +295,10 @@ function applyWorkspaceDemandGuard(candidate, conflicts, maxActive) {
 
 const issues = [];
 const warnings = [];
-const workspaceDemandConflicts = scanUnarchivedDemandStateRoots({ workspaceRoot });
+const workspaceDemandConflicts = scanUnarchivedDemandStateRoots({
+  workspaceRoot,
+  currentDir: ledgerPaths.workspaceCurrentDir,
+});
 const status = currentStatus(workspaceDemandConflicts);
 issues.push(...(status.authorityIssues ?? []));
 if (status.projection.issue) warnings.push(status.projection.issue);

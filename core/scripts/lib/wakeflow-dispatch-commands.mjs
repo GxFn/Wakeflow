@@ -20,6 +20,10 @@ import {
   hasTaskPackageContext,
   taskPackageReadiness,
 } from "./wakeflow-task-package.mjs";
+import {
+  resolveStateRootFilePath,
+  WakeflowStatePathError,
+} from "./wakeflow-state-paths.mjs";
 
 export function createDispatchCommands(ctx) {
   const {
@@ -528,10 +532,25 @@ export function createDispatchCommands(ctx) {
     if (fullContextPackage && explicitHumanContextRef) {
       fail("full-context task packages derive humanContextRef from their authoritative task package; remove --human-context-ref.");
     }
+    let defaultHumanContextRef = stateRootRef;
+    if (state.projection?.progressDoc) {
+      try {
+        const progressFile = resolveStateRootFilePath(stateRoot, state.projection.progressDoc, {
+          label: "progress document",
+          requireExisting: true,
+        });
+        defaultHumanContextRef = path.relative(workspaceRoot, progressFile);
+      } catch (error) {
+        if (error instanceof WakeflowStatePathError) {
+          fail(`${error.message}. Repair the authoritative progressDoc reference before dispatch.`);
+        }
+        throw error;
+      }
+    }
     const humanContextRef = fullContextPackage
       ? taskBriefing.taskPackageRef
       : explicitHumanContextRef
-        || (state.projection?.progressDoc ? path.join(stateRootRef, state.projection.progressDoc) : stateRootRef);
+        || defaultHumanContextRef;
     const stateRef = {
       stateRoot: stateRootRef,
       demandKey: state.demandKey,

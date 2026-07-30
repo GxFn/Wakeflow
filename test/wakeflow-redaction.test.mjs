@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -11,7 +18,7 @@ import {
   scanStateRootForArchivePrivacy,
   redactStateRootIntoCopy,
   realIdPattern,
-} from "../plugins/codex-wakeflow/scripts/lib/wakeflow-redaction.mjs";
+} from "../core/scripts/lib/wakeflow-redaction.mjs";
 import { hostProfile as codexProfile } from "../plugins/codex-wakeflow/scripts/lib/wakeflow-host-profile.mjs";
 import { hostProfile as claudeProfile } from "../plugins/claude-code-wakeflow/scripts/lib/wakeflow-host-profile.mjs";
 
@@ -94,6 +101,99 @@ test("archive privacy scan categorizes workspace and home paths and produces a p
   assert.equal(readFileSync(path.join(root, "target-results/result.json"), "utf8").includes(userHome), true, "source stays byte-for-byte available");
   assert.ok(result.redactedFields.some((field) => field.kinds["workspace-absolute-path"] === 2));
   assert.equal(scanStateRootForArchivePrivacy(dest, { hostProfile: stubProfile, workspaceRoot, userHome }).clean, true);
+});
+
+test("opaque evidence is scanned and cannot be destructively redacted", () => {
+  const root = makeStateRoot({
+    "evidence/report.pdf": Buffer.from(`%PDF-1.4\0thread=${REAL_UUID}\nworkspace=PLACEHOLDER\0`),
+    "evidence/raw.bin": Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from(`thread=${REAL_UUID}\n`),
+    ]),
+  });
+  const file = path.join(root, "evidence/report.pdf");
+  writeFileSync(
+    file,
+    readFileSync(file).toString("utf8").replace("PLACEHOLDER", `${root}/private/result.json`),
+  );
+  const scan = scanStateRootForArchivePrivacy(root, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  });
+  assert.equal(scan.clean, false);
+  assert.ok(scan.findings.some((finding) => finding.kind === "opaque-real-id"));
+  assert.ok(scan.findings.some((finding) => (
+    finding.kind === "opaque-real-id"
+    && finding.file === "evidence/raw.bin"
+  )));
+  assert.ok(scan.findings.some((finding) => finding.kind === "opaque-workspace-absolute-path"));
+
+  const dest = mkdtempSync(path.join(os.tmpdir(), "wakeflow-opaque-redaction-"));
+  assert.throws(
+    () => redactStateRootIntoCopy(root, dest, {
+      hostProfile: stubProfile,
+      workspaceRoot: root,
+    }),
+    /cannot be safely redacted/i,
+  );
+  assert.equal(existsSync(path.join(dest, "evidence/report.pdf")), false);
+  assert.match(readFileSync(file, "utf8"), new RegExp(REAL_UUID));
+});
+
+test("sensitive filenames fail closed instead of breaking evidence references", () => {
+  const root = makeStateRoot({
+    [`target-results/${REAL_UUID}.json`]: "{}\n",
+  });
+  const scan = scanStateRootForArchivePrivacy(root, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  });
+  assert.equal(scan.clean, false);
+  assert.ok(scan.findings.some((finding) => (
+    finding.kind === "real-id-filename"
+    && finding.file === `target-results/${REAL_UUID}.json`
+  )));
+
+  const dest = mkdtempSync(path.join(os.tmpdir(), "wakeflow-filename-redaction-"));
+  assert.throws(
+    () => redactStateRootIntoCopy(root, dest, {
+      hostProfile: stubProfile,
+      workspaceRoot: root,
+    }),
+    /cannot be safely redacted/i,
+  );
+});
+
+test("state-root symlinks are reported without following or copying their target", () => {
+  const root = makeStateRoot({ "wakeflow-state.json": "{}\n" });
+  const external = mkdtempSync(path.join(os.tmpdir(), "wakeflow-symlink-target-"));
+  writeFileSync(path.join(external, "secret.json"), `{"thread":"${REAL_UUID}"}\n`);
+  symlinkSync(external, path.join(root, "linked-evidence"), "dir");
+
+  const scan = scanStateRootForArchivePrivacy(root, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  });
+  assert.equal(scan.clean, false);
+  assert.ok(scan.findings.some((finding) => (
+    finding.kind === "symbolic-link"
+    && finding.file === "linked-evidence"
+  )));
+  assert.equal(
+    scan.findings.some((finding) => finding.file === "linked-evidence/secret.json"),
+    false,
+    "scanner must not traverse the symlink target",
+  );
+
+  const dest = mkdtempSync(path.join(os.tmpdir(), "wakeflow-symlink-redaction-"));
+  assert.throws(
+    () => redactStateRootIntoCopy(root, dest, {
+      hostProfile: stubProfile,
+      workspaceRoot: root,
+    }),
+    /symbolic-link|cannot be safely redacted/i,
+  );
+  assert.equal(existsSync(path.join(dest, "linked-evidence")), false);
 });
 
 test("scan refuses when the host profile declares no id shape (cannot audit)", () => {

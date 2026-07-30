@@ -38,7 +38,7 @@ function initDemand(root, demandKey) {
 function driveToAccepted(root, stateRoot, id) {
   for (const args of [
     ["add-task-package", "--root", root, "--state-root", stateRoot, "--task-package-id", `tp-${id}`, "--summary", `Work ${id}`, "--target-window", "RepoA", "--write", "--json"],
-    ["import-target-result", "--root", root, "--state-root", stateRoot, "--target-task-id", `tp-${id}__RepoA`, "--target-window", "RepoA", "--status", "completed", "--write", "--json"],
+    ["import-target-result", "--root", root, "--state-root", stateRoot, "--target-task-id", `tp-${id}__RepoA`, "--target-window", "RepoA", "--status", "completed", "--summary", `Work ${id} completed.`, "--write", "--json"],
     ["reduce-results", "--root", root, "--state-root", stateRoot, "--write", "--json"],
   ]) {
     const result = run(args);
@@ -126,7 +126,12 @@ test("two active demands' loops are fully independent — interleaved drive, per
 test("completing and archiving one demand frees capacity for the next", () => {
   // ledger INSIDE the sandbox: the default ../wakeflow-ledger would land in the
   // shared tmpdir and collide across test runs
-  const root = makeRoot({ workspaceName: "MultiArchive", controllerWindow: "Ctl", projectLedgerRoot: "wakeflow-ledger" });
+  const root = makeRoot({
+    workspaceName: "MultiArchive",
+    controllerWindow: "Ctl",
+    projectLedgerRoot: "wakeflow-ledger",
+    workspaceArchiveDir: "wakeflow-ledger/workspace/archive",
+  });
   assert.equal(initDemand(root, "D1").status, 0);
   assert.equal(initDemand(root, "D2").status, 0);
   const rootD1 = path.join(root, ".wakeflow-active/current/D1");
@@ -139,7 +144,8 @@ test("completing and archiving one demand frees capacity for the next", () => {
   assert.equal(blocked.status, 1, blocked.stdout);
   assert.match(JSON.parse(blocked.stdout).error, /completed but not archived/);
 
-  assert.equal(run(["archive-demand", "--root", root, "--state-root", rootD1, "--reason", "shipped", "--redact", "--write", "--json"]).status, 0);
+  const archived = run(["archive-demand", "--root", root, "--state-root", rootD1, "--reason", "shipped", "--redact", "--write", "--json"]);
+  assert.equal(archived.status, 0, archived.stderr || archived.stdout);
   assert.equal(initDemand(root, "D3").status, 0, "archiving must free the slot");
   assert.deepEqual(
     readJson(path.join(root, ".wakeflow-active/current/D3/wakeflow-state.json")).executionPlacement,

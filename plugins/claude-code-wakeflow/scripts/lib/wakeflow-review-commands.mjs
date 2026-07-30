@@ -4,6 +4,7 @@ import { buildControllerCallbackPlan } from "./wakeflow-return-policy.mjs";
 import {
   controllerReviewScope,
   hasPendingReworkDecision,
+  isProductReworkCompanion,
   taskExpectsTargetResult,
 } from "./wakeflow-review-scope.mjs";
 import { buildControllerReviewPack, rawEvidenceRequiredFrom, reviewAdvisories, sharedReviewGates } from "./wakeflow-review-pack.mjs";
@@ -107,7 +108,16 @@ export function createReviewCommands(ctx) {
         gaps.push({ ...base, reason: "missing-kind" });
         continue;
       }
-      for (const entry of entries) {
+      const reviewableEntries = entries.filter((entry) => (
+        ["ref", "value", "commit"].some(
+          (field) => typeof entry?.[field] === "string" && entry[field].trim(),
+        )
+      ));
+      if (reviewableEntries.length === 0) {
+        gaps.push({ ...base, reason: "missing-proof" });
+        continue;
+      }
+      for (const entry of reviewableEntries) {
         if (typeof entry?.ref !== "string" || !entry.ref) continue;
         const summary = stateRoot
           ? stateRootEvidenceRefSummary(stateRoot, stateRootRef, entry.ref, targetWindow)
@@ -247,6 +257,7 @@ export function createReviewCommands(ctx) {
         : Array.isArray(result?.risks)
           ? result.risks
           : [],
+      craftEvidence: Array.isArray(result?.craftEvidence) ? result.craftEvidence : [],
       nextSuggestion: result?.nextSuggestion || result?.controllerActionRequired,
       reportedAt: result?.reportedAt || result?.createdAt,
     };
@@ -258,6 +269,10 @@ export function createReviewCommands(ctx) {
     if (!item) return null;
     if (item.result.targetWindow && item.result.targetWindow !== packet.targetWindow) {
       fail(`state-root target result window mismatch for ${packet.taskId}: result has ${item.result.targetWindow}, packet has ${packet.targetWindow}`);
+    }
+    const resultDispatchGroup = item.result.dispatchGroup || item.result.deliveryContext?.dispatchGroup || "";
+    if (resultDispatchGroup !== (packet.dispatchGroup || "")) {
+      return null;
     }
     return {
       packet,
@@ -484,17 +499,35 @@ export function createReviewCommands(ctx) {
     const allTargetTasks = state.targetTasks ?? [];
     const reviewScope = controllerReviewScope(allTargetTasks);
     const targetTasks = reviewScope.reviewableTargetTasks;
-    const reworkCompanionPresent = reviewScope.mode === "rework-first-controller-review-targets"
-      && targetTasks.some((task) => task.reviewRoute === "rework" && !hasPendingReworkDecision(task));
+    const config = loadWorkspaceConfig({ workspaceRoot });
+    const reworkCompanionPresentFor = (anchorTask) => (
+      reviewScope.mode === "rework-first-controller-review-targets"
+      && targetTasks.some((task) => isProductReworkCompanion(task, {
+        anchorTask,
+        currentResultTaskIds: resultsByTask.keys(),
+        repoNames: config.repoNames,
+        controllerWindow: config.controllerWindow,
+        designWindow: config.designWindow,
+        testWindows: testWindowNames(config),
+        realProjectWindow: config.realProjectWindow,
+      }))
+    );
     const targetResults = targetTasks.map((task) => {
-      const reworkAnchorCovered = hasPendingReworkDecision(task) && reworkCompanionPresent;
-      const item = hasPendingReworkDecision(task) ? null : resultsByTask.get(task.targetTaskId);
+      const pendingReworkDecision = hasPendingReworkDecision(task);
+      const reworkAnchorCovered = pendingReworkDecision && reworkCompanionPresentFor(task);
+      const item = pendingReworkDecision ? null : resultsByTask.get(task.targetTaskId);
       const result = item?.result ?? null;
       const evidenceRefs = Array.isArray(result?.evidenceRefs) ? result.evidenceRefs : [];
       const verificationSummary = Array.isArray(result?.verification) ? result.verification : [];
       const evidenceRefSummaries = evidenceRefs.map((ref) => stateRootEvidenceRefSummary(stateRoot, stateRootRef, ref, task.targetWindow));
       const missingEvidenceRefs = missingEvidenceRefsFromSummaries(evidenceRefSummaries);
-      const resultExpected = stateRootTaskResultExpected(task);
+      // A parked rework/redesign anchor remains missing until a same-product
+      // companion covers it. Treating it as merely pending-dispatch made the
+      // review pack claim controllerReviewReady while reduce-results correctly
+      // refused to form a candidate.
+      const resultExpected = pendingReworkDecision
+        ? !reworkAnchorCovered
+        : stateRootTaskResultExpected(task);
       const resultStatus = reworkAnchorCovered
         ? "covered-by-rework-route"
         : result?.status || (resultExpected ? "missing" : "pending-dispatch");

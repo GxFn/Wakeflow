@@ -10,9 +10,15 @@ import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
 
 const pluginRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
 const stateScript = path.join(pluginRoot, "scripts/wakeflow-state.mjs");
+const coreRoot = path.resolve(pluginRoot, "../../core");
+const coreStateScript = path.join(coreRoot, "scripts/wakeflow-state.mjs");
 
 function run(args) {
   return runSync(process.execPath, [stateScript, ...args], { cwd: pluginRoot, encoding: "utf8" });
+}
+
+function runCore(args) {
+  return runSync(process.execPath, [coreStateScript, ...args], { cwd: coreRoot, encoding: "utf8" });
 }
 
 function readJson(file) {
@@ -37,9 +43,35 @@ function makeCompletedDemand(demandKey = "CONT-1") {
   assert.equal(initialized.status, 0, initialized.stderr || initialized.stdout);
   const stateRoot = JSON.parse(initialized.stdout).stateRoot;
   const stateFile = path.join(root, stateRoot, "wakeflow-state.json");
+  assert.equal(run([
+    "add-task-package", "--root", root, "--state-root", stateRoot,
+    "--task-package-id", "OLD-P1", "--summary", "Original work",
+    "--target-window", "Plugin", "--target-task-id", "OLD-T1", "--write", "--json",
+  ]).status, 0);
+  mkdirSync(path.join(root, stateRoot, "reports"), { recursive: true });
+  writeFileSync(path.join(root, stateRoot, "reports/old.json"), "{}\n");
+  const imported = run([
+    "import-target-result", "--root", root, "--state-root", stateRoot,
+    "--target-task-id", "OLD-T1", "--target-window", "Plugin", "--status", "completed",
+    "--summary", "Original work completed and verified.",
+    "--evidence-ref", "reports/old.json", "--write", "--json",
+  ]);
+  assert.equal(imported.status, 0, imported.stderr || imported.stdout);
+  const reduced = run([
+    "reduce-results", "--root", root, "--state-root", stateRoot, "--write", "--json",
+  ]);
+  assert.equal(reduced.status, 0, reduced.stderr || reduced.stdout);
+  const candidateId = JSON.parse(reduced.stdout).candidateId;
+  assert.ok(candidateId);
+  const accepted = run([
+    "decide-review", "--root", root, "--state-root", stateRoot,
+    "--candidate-id", candidateId, "--decision", "accept", "--reason", "original accepted",
+    "--evidence-ref", "reports/old.json", "--write", "--json",
+  ]);
+  assert.equal(accepted.status, 0, accepted.stderr || accepted.stdout);
   const completed = run([
     "complete-demand", "--root", root, "--state-root", stateRoot,
-    "--reason", "first completion", "--evidence-ref", "reports/first-completion.json",
+    "--reason", "first completion", "--evidence-ref", "reports/old.json",
     "--write", "--json",
   ]);
   assert.equal(completed.status, 0, completed.stderr || completed.stdout);
@@ -60,45 +92,9 @@ function continuationArgs(root, stateRoot, apply = false) {
 }
 
 function makeCompletedDemandWithAcceptedTask() {
-  // Build the fixture through the full state machine. This mirrors the real
-  // report: old
-  // accepted work must remain accepted while only the continuation is reviewed.
-  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-continuation-lifecycle-"));
-  writeJson(path.join(root, "wakeflow.config.json"), {
-    workspaceName: "Continuation Lifecycle Fixture",
-    controllerWindow: "Controller",
-    projectLedgerRoot: "wakeflow-ledger",
-  });
-  const initialized = JSON.parse(run([
-    "init", "--root", root, "--demand-key", "CONT-LIFECYCLE", "--title", "Lifecycle",
-    "--write", "--json",
-  ]).stdout);
-  const stateRoot = initialized.stateRoot;
-  assert.equal(run([
-    "add-task-package", "--root", root, "--state-root", stateRoot,
-    "--task-package-id", "OLD-P1", "--summary", "Original work",
-    "--target-window", "Plugin", "--target-task-id", "OLD-T1", "--write", "--json",
-  ]).status, 0);
-  mkdirSync(path.join(root, stateRoot, "reports"), { recursive: true });
-  writeFileSync(path.join(root, stateRoot, "reports/old.json"), "{}\n");
-  assert.equal(run([
-    "import-target-result", "--root", root, "--state-root", stateRoot,
-    "--target-task-id", "OLD-T1", "--target-window", "Plugin", "--status", "completed",
-    "--evidence-ref", "reports/old.json", "--write", "--json",
-  ]).status, 0);
-  const reduced = JSON.parse(run([
-    "reduce-results", "--root", root, "--state-root", stateRoot, "--write", "--json",
-  ]).stdout);
-  assert.equal(run([
-    "decide-review", "--root", root, "--state-root", stateRoot,
-    "--candidate-id", reduced.candidateId, "--decision", "accept", "--reason", "original accepted",
-    "--evidence-ref", "reports/old.json", "--write", "--json",
-  ]).status, 0);
-  assert.equal(run([
-    "complete-demand", "--root", root, "--state-root", stateRoot,
-    "--reason", "original demand complete", "--evidence-ref", "reports/old.json", "--write", "--json",
-  ]).status, 0);
-  return { root, stateRoot, stateFile: path.join(root, stateRoot, "wakeflow-state.json") };
+  // Build the fixture through the same real lifecycle as every other
+  // completed-demand fixture. Accepted history must exist before continuation.
+  return makeCompletedDemand("CONT-LIFECYCLE");
 }
 
 test("continue-demand dry-run preserves the completed state and creates no package", () => {
@@ -116,6 +112,10 @@ test("continue-demand dry-run preserves the completed state and creates no packa
 
 test("continue-demand preserves completion history and adds the first package in one locked operation", () => {
   const { root, stateRoot, stateFile } = makeCompletedDemand("CONT-WRITE");
+  const completedState = readJson(stateFile);
+  const completedEvents = readFileSync(path.join(root, stateRoot, "controller-events.jsonl"), "utf8")
+    .trim().split("\n").map(JSON.parse);
+  const priorCompletionEvent = completedEvents.at(-1);
   const result = run(continuationArgs(root, stateRoot, true));
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse(result.stdout);
@@ -132,12 +132,12 @@ test("continue-demand preserves completion history and adds the first package in
   assert.deepEqual(state.allowedActions, ["prepare-dispatch-from-state", "add-task-package", "wakeflow-render-progress"]);
 
   const packageRecord = readJson(path.join(root, stateRoot, "task-packages/CONT-P1.json"));
-  assert.equal(packageRecord.continuation.priorCompletionRevision, 2);
+  assert.equal(packageRecord.continuation.priorCompletionRevision, completedState.revision);
   const events = readFileSync(path.join(root, stateRoot, "controller-events.jsonl"), "utf8")
     .trim().split("\n").map(JSON.parse);
   assert.equal(events[0].type, "state.initialized", "the earlier history remains present");
   assert.equal(events.at(-2).type, "demand.completed", "the prior completion remains an explicit historical event");
-  assert.equal(packageRecord.continuation.priorCompletionEventId, events.at(-2).eventId);
+  assert.equal(packageRecord.continuation.priorCompletionEventId, priorCompletionEvent.eventId);
   assert.equal(events.at(-1).type, "demand.continued");
   assert.equal(events.at(-1).from, "completed");
   assert.equal(events.at(-1).to, "planned");
@@ -217,6 +217,49 @@ test("continue-demand refuses active or archived roots and requires evidence", (
   const inconsistentResult = run(continuationArgs(inconsistent.root, inconsistent.stateRoot, true));
   assert.notEqual(inconsistentResult.status, 0);
   assert.match(inconsistentResult.stdout, /inconsistent completed state with non-accepted history/);
+});
+
+test("continue-demand validates requirement anchors before writing its immutable first package", () => {
+  const { root, stateRoot, stateFile } = makeCompletedDemand("CONT-BAD-REQUIREMENT-REF");
+  mkdirSync(path.join(root, "docs"), { recursive: true });
+  writeFileSync(
+    path.join(root, "docs/continuation-requirement.md"),
+    "# Continuation requirement\n\n## Confirmed scope\n\nRepair only the confirmed regression.\n",
+  );
+  const beforeState = readJson(stateFile);
+  const args = continuationArgs(root, stateRoot, true);
+  const writeIndex = args.indexOf("--write");
+  args.splice(writeIndex, 0,
+    "--work-type", "research",
+    "--objective", "Locate the confirmed continuation defect without widening scope.",
+    "--context-summary", JSON.stringify(["The prior completion remains immutable history."]),
+    "--requirement-refs", JSON.stringify([{
+      ref: "docs/continuation-requirement.md#missing-section",
+      role: "goal",
+    }]),
+    "--boundaries", JSON.stringify({
+      inScope: ["The confirmed continuation defect."],
+      outOfScope: ["Previously accepted behavior."],
+      forbidden: ["Do not rewrite accepted task history."],
+    }),
+    "--completion-expectations", JSON.stringify(["Return evidence for the confirmed defect."]),
+    "--depends-on-task-ids", "[]",
+    "--commit-expectation", "leave-uncommitted",
+  );
+
+  const rejected = runCore(args);
+  assert.notEqual(rejected.status, 0);
+  assert.match(rejected.stdout + rejected.stderr, /requirement reference section was not found/);
+  assert.equal(
+    existsSync(path.join(root, stateRoot, "task-packages/CONT-P1.json")),
+    false,
+    "invalid continuation context must not create its immutable task package",
+  );
+  assert.equal(
+    readJson(stateFile).revision,
+    beforeState.revision,
+    "invalid continuation context must not advance controller state",
+  );
 });
 
 test("MCP exposes continue-demand and cancel forwards root to the state runtime", async () => {

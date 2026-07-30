@@ -4,7 +4,13 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runSync } from "../lib/wakeflow-process.mjs";
-import { trackedWorkspaceConfigPath } from "./lib/wakeflow-config.mjs";
+import {
+  loadWorkspaceConfig,
+  testWindowNames,
+  trackedWorkspaceConfigPath,
+  workspaceLedgerPaths,
+} from "./lib/wakeflow-config.mjs";
+import { normalizeTaskPackageContext } from "./lib/wakeflow-task-package.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const scriptsDir = path.dirname(scriptPath);
@@ -16,6 +22,7 @@ const workspaceRoot = path.resolve(getValue("--root", wakeflowRoot));
 const write = hasFlag("--write");
 const json = hasFlag("--json");
 let cachedWorkspaceConfig = undefined;
+let activeCreateStateRoot = null;
 
 const helpText = `
 Controller demand claim/create runner
@@ -67,7 +74,32 @@ function output(payload, textLines = []) {
 }
 
 function fail(message) {
-  output({ ok: false, command, error: message });
+  const activeRoot = activeCreateStateRoot ? resolveFromWorkspace(activeCreateStateRoot) : null;
+  const authorityArtifacts = activeRoot
+    ? [
+        "demand.json",
+        "wakeflow-state.json",
+        "controller-events.jsonl",
+        "projection.json",
+        "developer-progress.md",
+      ].filter((name) => existsSync(path.join(activeRoot, name)))
+    : [];
+  const partial = authorityArtifacts.length > 0;
+  output({
+    ok: false,
+    command,
+    error: partial
+      ? `${message}\ncreate-demand found or left authority artifacts in the state root; they were preserved because concurrent, prior, or external progress cannot be ruled out.`
+      : message,
+    ...(partial
+      ? {
+          partial: true,
+          stateRoot: activeCreateStateRoot,
+          partialArtifacts: authorityArtifacts,
+          recovery: `Inspect ${activeCreateStateRoot}; reconcile or explicitly remove it before retrying the same demand key.`,
+        }
+      : {}),
+  });
   process.exitCode = 1;
   throw new CliExit(message);
 }
@@ -176,6 +208,74 @@ function runCreateDemandTodo(todoId, { controllerWindow = "" } = {}) {
   ], { cwd: workspaceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 
+function preflightTaskPackages(taskPackages) {
+  if (!Array.isArray(taskPackages)) fail("--task-packages must be a JSON array of task package objects.");
+  const packageIds = new Set(), targetTaskIds = new Set();
+  const configuredTestWindows = testWindowNames(loadWorkspaceConfig({ workspaceRoot, args: options }));
+  taskPackages.forEach((pkg, index) => {
+    if (!pkg || typeof pkg !== "object" || Array.isArray(pkg)) fail(`--task-packages entry ${index + 1} must be a JSON object.`);
+    for (const field of ["summary", "targetWindow", "targetTaskId", "sourceRef", "designIntent"]) {
+      if (pkg[field] !== undefined && (typeof pkg[field] !== "string" || !pkg[field].trim())) {
+        fail(`--task-packages entry ${index + 1}.${field} must be a non-empty string.`);
+      }
+    }
+    const packageId = pkg.taskPackageId ?? pkg.targetTaskId;
+    if (typeof packageId !== "string" || !packageId.trim()) fail(`--task-packages entry ${index + 1} needs a non-empty taskPackageId or targetTaskId.`);
+    const packageStorageId = slug(packageId);
+    if (packageIds.has(packageStorageId)) fail(`--task-packages task package ids must be unique after path normalization; duplicate: ${packageId}.`);
+    packageIds.add(packageStorageId);
+    if (configuredTestWindows.some((window) => pkg.targetWindow === window || pkg.targetWindow?.startsWith(`${window}__`))) {
+      fail(`--task-packages entry ${index + 1} targets ${pkg.targetWindow}; initial Test work requires a state-root Test card and cannot be added by create-demand.`);
+    }
+    if (pkg.workType === "test") {
+      fail(`--task-packages entry ${index + 1} uses workType=test; create the demand, intake its Test card, then add the bounded Test task separately.`);
+    }
+    const targetTaskId = pkg.targetWindow ? (pkg.targetTaskId ?? `${packageId}__${slug(pkg.targetWindow)}`) : null;
+    if (pkg.targetTaskId !== undefined && pkg.targetWindow === undefined) {
+      fail(`--task-packages entry ${index + 1}.targetTaskId requires targetWindow.`);
+    }
+    if (targetTaskId) {
+      if (targetTaskIds.has(targetTaskId)) fail(`--task-packages target task ids must be unique; duplicate: ${targetTaskId}.`);
+    }
+    if (pkg.acceptanceAnchors !== undefined) {
+      const ids = new Set();
+      if (!Array.isArray(pkg.acceptanceAnchors) || pkg.acceptanceAnchors.length === 0) fail(`--task-packages entry ${index + 1}.acceptanceAnchors must be a non-empty array.`);
+      for (const anchor of pkg.acceptanceAnchors) {
+        const anchorId = typeof anchor?.id === "string" ? anchor.id.trim() : "";
+        if (!anchor || typeof anchor !== "object" || Array.isArray(anchor)
+          || ["id", "claim", "probe", "expected"].some((field) => typeof anchor[field] !== "string" || !anchor[field].trim())
+          || ids.has(anchorId)) fail(`--task-packages entry ${index + 1}.acceptanceAnchors must contain unique {id, claim, probe, expected} string fields.`);
+        ids.add(anchorId);
+      }
+    }
+    if (pkg.evidenceContract !== undefined && (!pkg.evidenceContract || typeof pkg.evidenceContract !== "object" || Array.isArray(pkg.evidenceContract))) {
+      fail(`--task-packages entry ${index + 1}.evidenceContract must be a JSON object.`);
+    }
+    for (const listName of ["required", "advisory"]) {
+      const list = pkg.evidenceContract?.[listName];
+      if (list !== undefined && (!Array.isArray(list)
+        || list.some((entry) => !entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.kind !== "string" || !entry.kind.trim()))) {
+        fail(`--task-packages entry ${index + 1}.evidenceContract.${listName} must be an array of objects with a non-empty kind.`);
+      }
+    }
+    const contextKeys = ["workType", "objective", "contextSummary", "requirementRefs", "boundaries", "completionExpectations", "dependsOnTaskIds", "commitExpectation"];
+    if (contextKeys.some((key) => pkg[key] !== undefined)) {
+      try {
+        const context = normalizeTaskPackageContext({ ...pkg, acceptanceAnchors: pkg.acceptanceAnchors, contextVersion: 1 });
+        if (new Set(context.dependsOnTaskIds).size !== context.dependsOnTaskIds.length) {
+          fail(`--task-packages entry ${index + 1}.dependsOnTaskIds must not contain duplicates.`);
+        }
+        const missing = context.dependsOnTaskIds.find((dependency) => !targetTaskIds.has(dependency));
+        if (missing) fail(`--task-packages entry ${index + 1} depends on ${missing}, which is not an earlier target task in this create-demand sequence.`);
+      } catch (error) {
+        if (error instanceof CliExit) throw error;
+        fail(`--task-packages entry ${index + 1} has invalid task context: ${error.message}`);
+      }
+    }
+    if (targetTaskId) targetTaskIds.add(targetTaskId);
+  });
+}
+
 // Unified create: replaces init_demand + intake_design_handoff + add_task + adopt_demand_host.
 // From a delivered TODO row (--todo-id) it reads the title + Documents and synthesizes the
 // goal/completion from them (or takes them explicitly); it inits the state root, adopts host,
@@ -199,6 +299,7 @@ function commandCreateDemand() {
       fail("--task-packages must be a valid JSON array of {taskPackageId, summary, targetWindow, targetTaskId}.");
     }
   }
+  preflightTaskPackages(taskPackages);
 
   let sourceDocumentRefs = [];
   if (todoId) {
@@ -235,7 +336,9 @@ function commandCreateDemand() {
   if (!demandKey) fail("--demand-key or --todo-id is required.");
   if (!title) fail("--title is required (or pass --todo-id pointing at a titled delivered row).");
 
-  const stateRootAbs = resolveFromWorkspace(`.wakeflow-active/current/${slug(demandKey)}`);
+  const config = loadWorkspaceConfig({ workspaceRoot, args: options });
+  const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, args: options, config });
+  const stateRootAbs = path.join(ledgerPaths.workspaceCurrentDir, slug(demandKey));
   const stateRoot = relative(stateRootAbs);
   if (existsSync(path.join(stateRootAbs, "wakeflow-state.json"))) {
     fail(`a demand state root already exists at ${stateRoot}; refuse to re-create ${demandKey}.`);
@@ -261,6 +364,7 @@ function commandCreateDemand() {
   const demandControllerWindow = getValue("--controller-window", "");
   if (demandControllerWindow) initArgs.push("--controller-window", demandControllerWindow);
   initArgs.push("--write", "--json");
+  activeCreateStateRoot = stateRoot;
   const initOut = runControllerState(initArgs);
 
   runControllerState(["adopt-demand-host", "--root", workspaceRoot, "--state-root", stateRoot, "--reason", "create-demand", "--write", "--json"]);
@@ -268,7 +372,6 @@ function commandCreateDemand() {
   const addedPackages = [];
   for (const pkg of taskPackages) {
     const packageId = pkg.taskPackageId ?? pkg.targetTaskId;
-    if (!packageId) fail("each --task-packages entry needs taskPackageId or targetTaskId.");
     const tpArgs = ["add-task-package", "--root", workspaceRoot, "--state-root", stateRoot, "--task-package-id", packageId, "--summary", pkg.summary ?? title];
     if (pkg.targetWindow) tpArgs.push("--target-window", pkg.targetWindow);
     if (pkg.targetTaskId) tpArgs.push("--target-task-id", pkg.targetTaskId);
@@ -299,6 +402,7 @@ function commandCreateDemand() {
     }
     consumedTodoId = todoId;
   }
+  activeCreateStateRoot = null;
 
   output({
     ok: true,

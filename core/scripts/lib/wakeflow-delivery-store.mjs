@@ -1,6 +1,68 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
+import { appendControllerEventAtomic } from "./wakeflow-controller-events.mjs";
 import { hostProfile } from "./wakeflow-host-profile.mjs";
+import {
+  createSanctionedStateRootResolver,
+  WakeflowStatePathError,
+} from "./wakeflow-state-paths.mjs";
+
+function pathIsInside(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return relative === ""
+    || (!path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`));
+}
+
+// Resolve every existing path component (including symlinks), then append only
+// the still-missing suffix. This covers both existing inputs and future output
+// files: a symlinked parent cannot redirect a lexically in-workspace path.
+function projectedRealPath(file) {
+  const missing = [];
+  let current = path.resolve(file);
+  while (true) {
+    try {
+      lstatSync(current);
+    } catch (error) {
+      if (!["ENOENT", "ENOTDIR"].includes(error.code)) throw error;
+      const parent = path.dirname(current);
+      if (parent === current) throw error;
+      missing.push(path.basename(current));
+      current = parent;
+      continue;
+    }
+    const resolved = realpathSync(current);
+    return path.join(resolved, ...missing.reverse());
+  }
+}
+
+function pathResolvesInside(root, file) {
+  try {
+    return pathIsInside(realpathSync(path.resolve(root)), projectedRealPath(file));
+  } catch {
+    return false;
+  }
+}
+
+function inferredWorkspaceRootForRuntimeLock(lockFile) {
+  const absolute = path.resolve(lockFile);
+  const marker = `${path.sep}.wakeflow-local${path.sep}wakeflow-delivery${path.sep}locks${path.sep}`;
+  const markerIndex = absolute.lastIndexOf(marker);
+  if (markerIndex < 0) return null;
+  return absolute.slice(0, markerIndex) || path.parse(absolute).root;
+}
 
 // F25: single authority for releasing a window delivery lock when a result answers it — read
 // the lock file, apply the caller's matches(lock) decision, unlink on a match. Both the
@@ -10,6 +72,8 @@ import { hostProfile } from "./wakeflow-host-profile.mjs";
 // or stale (a stale lock is ignored by dispatch anyway); a different-delivery lock survives.
 export function releaseWindowLockForResult(lockFile, matches) {
   if (!existsSync(lockFile)) return false;
+  const inferredWorkspaceRoot = inferredWorkspaceRootForRuntimeLock(lockFile);
+  if (inferredWorkspaceRoot && !pathResolvesInside(inferredWorkspaceRoot, lockFile)) return false;
   let lock;
   try {
     lock = JSON.parse(readFileSync(lockFile, "utf8"));
@@ -24,6 +88,7 @@ export function releaseWindowLockForResult(lockFile, matches) {
 export function createDeliveryStore({
   workspaceRoot,
   stateDir,
+  sanctionedStateRoots = [],
   slug,
   nowIso,
   fail,
@@ -41,22 +106,33 @@ export function createDeliveryStore({
     windowConfig: path.join(hostRuntimeDir, "window-config"),
     keepLive: path.join(hostRuntimeDir, "keep-live"),
   };
+  const realWorkspaceRoot = realpathSync(path.resolve(workspaceRoot));
+  const stateRootResolver = createSanctionedStateRootResolver({
+    workspaceRoot,
+    sanctionedRoots: sanctionedStateRoots,
+  });
 
   function ensureInsideWorkspace(file, label) {
-    const relative = path.relative(workspaceRoot, file);
-    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    let realCandidate;
+    try {
+      realCandidate = projectedRealPath(file);
+    } catch {
+      fail(`${label} must stay inside workspace: ${file}`);
+      return;
+    }
+    if (!pathIsInside(realWorkspaceRoot, realCandidate)) {
       fail(`${label} must stay inside workspace: ${file}`);
     }
   }
 
   function ensureStateDirs() {
     for (const dir of Object.values(dirs)) {
+      ensureInsideWorkspace(dir, "closed-loop state directory");
       mkdirSync(dir, { recursive: true });
     }
   }
 
-  function atomicWriteJson(file, value) {
-    ensureInsideWorkspace(file, "closed-loop state");
+  function atomicWriteJsonUnchecked(file, value) {
     mkdirSync(path.dirname(file), { recursive: true });
     const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
     try {
@@ -68,13 +144,35 @@ export function createDeliveryStore({
     }
   }
 
-  function appendJsonLine(file, value) {
-    ensureInsideWorkspace(file, "controller event log");
-    mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(file, `${JSON.stringify(value)}\n`, { flag: "a" });
+  function atomicWriteJson(file, value) {
+    ensureInsideWorkspace(file, "closed-loop state");
+    atomicWriteJsonUnchecked(file, value);
   }
 
-  function readJson(file, label = "JSON file") {
+  function appendJsonLineUnchecked(file, value) {
+    mkdirSync(path.dirname(file), { recursive: true });
+    let fd;
+    try {
+      fd = openSync(
+        file,
+        constants.O_WRONLY
+          | constants.O_APPEND
+          | constants.O_CREAT
+          | (constants.O_NOFOLLOW ?? 0),
+        0o600,
+      );
+      writeFileSync(fd, `${JSON.stringify(value)}\n`);
+    } finally {
+      if (fd !== undefined) closeSync(fd);
+    }
+  }
+
+  function appendJsonLine(file, value) {
+    ensureInsideWorkspace(file, "controller event log");
+    appendJsonLineUnchecked(file, value);
+  }
+
+  function readJsonUnchecked(file, label = "JSON file") {
     try {
       return JSON.parse(readFileSync(file, "utf8"));
     } catch (error) {
@@ -82,23 +180,73 @@ export function createDeliveryStore({
     }
   }
 
+  function readJson(file, label = "JSON file") {
+    ensureInsideWorkspace(file, label);
+    return readJsonUnchecked(file, label);
+  }
+
   function resolveInputPath(value, label) {
     if (!value) fail(`${label} is required.`);
     const file = path.isAbsolute(value) ? value : path.resolve(workspaceRoot, value);
     if (!existsSync(file)) fail(`${label} does not exist: ${value}`);
+    ensureInsideWorkspace(file, label);
     return file;
   }
 
   function resolveStateRoot(value) {
-    const stateRoot = resolveInputPath(value, "--state-root");
-    ensureInsideWorkspace(stateRoot, "state root");
-    const stateFile = path.join(stateRoot, "wakeflow-state.json");
-    if (!existsSync(stateFile)) fail(`--state-root is missing wakeflow-state.json: ${value}`);
-    return stateRoot;
+    try {
+      return stateRootResolver.resolveStateRoot(value);
+    } catch (error) {
+      if (error instanceof WakeflowStatePathError) {
+        fail(error.message);
+      }
+      throw error;
+    }
+  }
+
+  function resolveStateFile(stateRoot, relativePath, {
+    label = "state-root file",
+    requireExisting = false,
+  } = {}) {
+    try {
+      return stateRootResolver.resolveStateRootFile(stateRoot, relativePath, {
+        label,
+        requireExisting,
+      });
+    } catch (error) {
+      if (error instanceof WakeflowStatePathError) {
+        fail(error.message);
+      }
+      throw error;
+    }
+  }
+
+  function readStateRootJson(stateRoot, relativePath, label = "state-root JSON file") {
+    const file = resolveStateFile(stateRoot, relativePath, {
+      label,
+      requireExisting: true,
+    });
+    return readJsonUnchecked(file, label);
+  }
+
+  function atomicWriteStateRootJson(stateRoot, relativePath, value, label = "state-root JSON file") {
+    const file = resolveStateFile(stateRoot, relativePath, {
+      label,
+      requireExisting: existsSync(path.join(stateRoot, relativePath)),
+    });
+    atomicWriteJsonUnchecked(file, value);
+  }
+
+  function appendStateRootJsonLine(stateRoot, relativePath, value, label = "state-root JSONL file") {
+    const file = resolveStateFile(stateRoot, relativePath, {
+      label,
+      requireExisting: existsSync(path.join(stateRoot, relativePath)),
+    });
+    appendControllerEventAtomic(file, value);
   }
 
   function readControllerStateRoot(stateRoot) {
-    const state = readJson(path.join(stateRoot, "wakeflow-state.json"), "controller state");
+    const state = readStateRootJson(stateRoot, "wakeflow-state.json", "controller state");
     return {
       state,
       stateRootRef: path.relative(workspaceRoot, stateRoot),
@@ -106,9 +254,10 @@ export function createDeliveryStore({
   }
 
   function readTaskPackageFromStateRoot(stateRoot, taskPackageId) {
-    const file = path.join(stateRoot, "task-packages", `${slug(taskPackageId)}.json`);
+    const relativePath = path.join("task-packages", `${slug(taskPackageId)}.json`);
+    const file = path.join(stateRoot, relativePath);
     if (!existsSync(file)) fail(`task package does not exist in state root: ${taskPackageId}`);
-    return readJson(file, "task package");
+    return readStateRootJson(stateRoot, relativePath, "task package");
   }
 
   function packetFileFor(packetId) {
@@ -143,10 +292,15 @@ export function createDeliveryStore({
 
   function legacyThreadRegistryEntries() {
     if (!hostProfile.runtime.legacyRegistryFallback || !existsSync(legacyRegistryDir)) return [];
+    ensureInsideWorkspace(legacyRegistryDir, "legacy thread registry");
     return readdirSync(legacyRegistryDir)
       .filter((name) => name.endsWith(".json"))
       .sort()
-      .map((name) => path.join(legacyRegistryDir, name));
+      .map((name) => {
+        const file = path.join(legacyRegistryDir, name);
+        ensureInsideWorkspace(file, "legacy thread registration");
+        return file;
+      });
   }
 
   function lockFileFor(windowName) {
@@ -156,6 +310,7 @@ export function createDeliveryStore({
   function readWindowLock(windowName) {
     const file = lockFileFor(windowName);
     if (!existsSync(file)) return null;
+    ensureInsideWorkspace(file, "window delivery lock");
     try {
       return JSON.parse(readFileSync(file, "utf8"));
     } catch {
@@ -185,13 +340,17 @@ export function createDeliveryStore({
 
   function removeWindowLock(windowName) {
     const file = lockFileFor(windowName);
-    if (existsSync(file)) unlinkSync(file);
+    if (existsSync(file)) {
+      ensureInsideWorkspace(file, "window delivery lock");
+      unlinkSync(file);
+    }
   }
 
   // Generic prune helper: unlink one runtime transport file (e.g. a delivery-run). Returns
   // whether the file existed and was removed. Used by prune-runtime.
   function removeRuntimeFile(file) {
     if (!existsSync(file)) return false;
+    ensureInsideWorkspace(file, "runtime transport file");
     unlinkSync(file);
     return true;
   }
@@ -213,6 +372,7 @@ export function createDeliveryStore({
     // controller can see the other host's registrations (read-only).
     const hostsDir = path.join(stateDir, "hosts");
     if (!existsSync(hostsDir)) return [];
+    ensureInsideWorkspace(hostsDir, "host runtime directory");
     return readdirSync(hostsDir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       // a host runtime dir carries at least one known runtime surface; stray
@@ -221,9 +381,14 @@ export function createDeliveryStore({
         .some((marker) => existsSync(path.join(hostsDir, entry.name, marker))))
       .map((entry) => {
         const registry = path.join(hostsDir, entry.name, "thread-registry");
-        const registeredWindows = existsSync(registry)
-          ? readdirSync(registry).filter((name) => name.endsWith(".json")).map((name) => name.replace(/\.json$/, "")).sort()
-          : [];
+        let registeredWindows = [];
+        if (existsSync(registry)) {
+          ensureInsideWorkspace(registry, "host thread registry");
+          registeredWindows = readdirSync(registry)
+            .filter((name) => name.endsWith(".json"))
+            .map((name) => name.replace(/\.json$/, ""))
+            .sort();
+        }
         return { host: entry.name, registeredWindows };
       });
   }
@@ -254,18 +419,36 @@ export function createDeliveryStore({
     return path.join(dirs.results, `${parts.join("__")}.json`);
   }
 
-  function supersededResultFileFor(targetWindow, taskId, dispatchGroup = "", supersededAt = nowIso()) {
+  function supersededResultFileFor(
+    targetWindow,
+    taskId,
+    dispatchGroup = "",
+    supersededAt = nowIso(),
+    resultRevision = null,
+  ) {
     const parts = [dispatchGroup, targetWindow, taskId].filter(Boolean).map(slug);
     const stamp = supersededAt.replace(/[-:.TZ]/g, "").slice(0, 14);
-    return path.join(dirs.results, "superseded", `${parts.join("__")}__superseded-${stamp}.json`);
+    const revisionSuffix = Number.isInteger(resultRevision) && resultRevision > 0
+      ? `__revision-${String(resultRevision).padStart(4, "0")}`
+      : "";
+    return path.join(
+      dirs.results,
+      "superseded",
+      `${parts.join("__")}__superseded-${stamp}${revisionSuffix}.json`,
+    );
   }
 
   function listJsonFiles(dir) {
     if (!existsSync(dir)) return [];
+    ensureInsideWorkspace(dir, "runtime JSON directory");
     return readdirSync(dir)
       .filter((name) => name.endsWith(".json"))
       .sort()
-      .map((name) => path.join(dir, name));
+      .map((name) => {
+        const file = path.join(dir, name);
+        ensureInsideWorkspace(file, "runtime JSON file");
+        return file;
+      });
   }
 
   return {
@@ -275,6 +458,9 @@ export function createDeliveryStore({
     atomicWriteJson,
     appendJsonLine,
     readJson,
+    readStateRootJson,
+    atomicWriteStateRootJson,
+    appendStateRootJsonLine,
     resolveInputPath,
     resolveStateRoot,
     readControllerStateRoot,

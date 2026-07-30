@@ -3,7 +3,7 @@
   "$id": "https://example.invalid/wakeflow/transition-candidate.schema.json",
   "title": "Transition Candidate",
   "type": "object",
-  "required": ["schemaVersion", "candidateId", "demandKey", "fromRevision", "candidateState", "reason"],
+  "required": ["schemaVersion", "candidateId", "demandKey", "fromRevision", "candidateState", "reason", "resultSnapshots"],
   "properties": {
     "schemaVersion": { "type": "integer", "const": 1 },
     "candidateId": { "type": "string", "minLength": 1 },
@@ -18,6 +18,21 @@
     "reviewScope": { "type": "string" },
     "targetTaskIds": { "type": "array", "items": { "type": "string" } },
     "excludedTargetTaskIds": { "type": "array", "items": { "type": "string" } },
+    "resultSnapshots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["targetTaskId", "resultId", "resultRevision", "dispatchGroup", "status"],
+        "properties": {
+          "targetTaskId": { "type": "string", "minLength": 1 },
+          "resultId": { "type": "string", "minLength": 1 },
+          "resultRevision": { "type": "integer", "minimum": 1 },
+          "dispatchGroup": { "type": ["string", "null"] },
+          "status": { "type": "string", "enum": ["completed", "blocked", "needs-review"] }
+        },
+        "additionalProperties": false
+      }
+    },
     "allowedDecisions": { "type": "array", "items": { "type": "string" } },
     "evidenceRefs": { "type": "array", "items": { "type": "string" } },
     "wakeflowTrace": { "type": "object" },

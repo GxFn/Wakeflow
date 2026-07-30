@@ -500,7 +500,7 @@ Primary tool groups:
 | Need | MCP tools |
 | --- | --- |
 | Setup and window registration | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
-| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
+| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
 | Candidate scan and isolated pods | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_close`, `wakeflow_pod_list` |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |

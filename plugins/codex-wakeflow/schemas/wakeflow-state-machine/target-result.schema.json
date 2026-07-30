@@ -33,7 +33,26 @@
     "createdAt": { "type": "string" },
     "stateRevisionObserved": { "type": "integer", "minimum": 1 },
     "forbiddenConclusions": { "type": "array", "items": { "type": "string" } },
-    "craftEvidence": { "type": "array", "items": { "type": "object" } }
+    "craftEvidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind"],
+        "properties": {
+          "kind": { "type": "string", "minLength": 1 },
+          "ref": { "type": "string", "minLength": 1 },
+          "value": { "type": "string", "minLength": 1 },
+          "commit": { "type": "string", "minLength": 1 },
+          "verify": { "type": "string", "minLength": 1 }
+        },
+        "anyOf": [
+          { "required": ["ref"] },
+          { "required": ["value"] },
+          { "required": ["commit"] }
+        ],
+        "additionalProperties": true
+      }
+    }
   },
   "additionalProperties": true
 }

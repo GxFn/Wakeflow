@@ -1,8 +1,13 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import {
+  inspectActiveDemandStateRoot,
+  isWakeflowInitStagingEntry,
+} from "./wakeflow-active-demands.mjs";
 import { buildReplaySummary } from "./wakeflow-idempotency.mjs";
 import { buildControllerCallbackPlan } from "./wakeflow-return-policy.mjs";
 import { loadWorkspaceConfig, workspaceLedgerPaths } from "./wakeflow-config.mjs";
+import { createSanctionedStateRootResolver } from "./wakeflow-state-paths.mjs";
 import {
   buildRuntimeHealth,
   buildRuntimeResumePlan,
@@ -39,35 +44,60 @@ function scanArchivedStateRoots(workspaceRoot) {
 }
 
 function scanDemandHostOwnership(workspaceRoot) {
-  // Active demand state roots live under the conventional current-plan dir.
   // Read-only visibility: which host's controller owns each active demand.
-  const currentDir = path.join(workspaceRoot, ".wakeflow-active/current");
-  if (!existsSync(currentDir)) return [];
+  const config = loadWorkspaceConfig({ workspaceRoot });
+  const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, config });
+  const currentDir = ledgerPaths.workspaceCurrentDir;
+  const empty = {
+    total: 0,
+    activeCount: 0,
+    byHost: {},
+    truncated: 0,
+    demands: [],
+    unreadableCount: 0,
+    unreadable: [],
+    authorityErrorCount: 0,
+    authorityErrors: [],
+  };
+  if (!existsSync(currentDir)) return empty;
   const active = [];
+  const unreadable = [];
+  const authorityErrors = [];
   const byHost = {};
   let total = 0;
   for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const stateFile = path.join(currentDir, entry.name, "wakeflow-state.json");
-    if (!existsSync(stateFile)) continue;
-    try {
-      const state = JSON.parse(readFileSync(stateFile, "utf8"));
-      total += 1;
-      const host = state.controllerHost ?? "unclaimed";
-      byHost[host] = (byHost[host] ?? 0) + 1;
-      // completed/archived demands stay countable but are dropped from the
-      // embedded list: the live workspace can hold ~100 state roots and the
-      // status payload feeds straight into agent context.
-      if (["completed", "archived", "cancelled"].includes(state.state)) continue;
-      active.push({
-        demandKey: state.demandKey,
-        stateRoot: `.wakeflow-active/current/${entry.name}`,
-        controllerHost: state.controllerHost ?? null,
-        state: state.state,
+    if (isWakeflowInitStagingEntry(entry.name)) continue;
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+    const stateRoot = path.join(currentDir, entry.name);
+    const inspected = inspectActiveDemandStateRoot({ workspaceRoot, stateRoot });
+    if (inspected.missingState && inspected.issues.length === 0) continue;
+    total += 1;
+    if (!inspected.state) {
+      const issue = inspected.issues[0] ?? {
+        file: inspected.stateFileRef,
+        error: "active demand state is unavailable",
+      };
+      unreadable.push({
+        stateRoot: inspected.stateRootRef,
+        stateFile: issue.file,
+        error: issue.error,
       });
-    } catch {
-      // unreadable state roots are skipped; verify reports them separately
+      continue;
     }
+    const state = inspected.state;
+    authorityErrors.push(...inspected.issues.map(({ file, error }) => ({ file, error })));
+    const host = state.controllerHost ?? "unclaimed";
+    byHost[host] = (byHost[host] ?? 0) + 1;
+    // completed/archived demands stay countable but are dropped from the
+    // embedded list: the live workspace can hold ~100 state roots and the
+    // status payload feeds straight into agent context.
+    if (["completed", "archived", "cancelled"].includes(state.state)) continue;
+    active.push({
+      demandKey: state.demandKey,
+      stateRoot: inspected.stateRootRef,
+      controllerHost: state.controllerHost ?? null,
+      state: state.state,
+    });
   }
   const cap = 30;
   return {
@@ -76,6 +106,10 @@ function scanDemandHostOwnership(workspaceRoot) {
     byHost,
     truncated: active.length > cap ? active.length - cap : 0,
     demands: active.slice(0, cap),
+    unreadableCount: unreadable.length,
+    unreadable: unreadable.slice(0, cap),
+    authorityErrorCount: authorityErrors.length,
+    authorityErrors: authorityErrors.slice(0, cap),
   };
 }
 
@@ -98,18 +132,71 @@ export function commandStatus(ctx) {
     listHostRuntimes,
     listFreshWindowLocks,
   } = ctx;
+  const workspaceConfig = loadWorkspaceConfig({ workspaceRoot });
+  const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, config: workspaceConfig });
+  const stateRootResolver = createSanctionedStateRootResolver({
+    workspaceRoot,
+    sanctionedRoots: [
+      ledgerPaths.workspaceCurrentDir,
+      ledgerPaths.projectLedgerRoot,
+    ],
+  });
   const archivedStateRoots = scanArchivedStateRoots(workspaceRoot);
   const stateSnapshotCache = new Map();
 
   function stateRootLocation(stateRootRef) {
     const normalized = String(stateRootRef ?? "").split(path.sep).join("/");
-    const activeRoot = path.resolve(workspaceRoot, normalized);
-    const rel = path.relative(workspaceRoot, activeRoot);
-    if (rel.startsWith("..") || path.isAbsolute(rel)) return { error: "state root is outside workspace" };
-    const activeStateFile = path.join(activeRoot, "wakeflow-state.json");
-    if (existsSync(activeStateFile)) return { root: activeRoot, stateFile: activeStateFile, archived: false };
-    const archived = archivedStateRoots.get(normalized);
-    return archived ? { ...archived, archived: true } : { root: activeRoot, stateFile: activeStateFile, archived: false };
+    const requestedRoot = path.isAbsolute(normalized)
+      ? path.resolve(normalized)
+      : path.resolve(workspaceRoot, normalized);
+    try {
+      const activeRoot = stateRootResolver.resolveStateRoot(normalized, {
+        label: "packet state root",
+        requireStateFile: true,
+      });
+      return {
+        root: activeRoot,
+        stateFile: path.join(activeRoot, "wakeflow-state.json"),
+        archived: false,
+      };
+    } catch (error) {
+      const missingRoot = error?.details?.cause?.code === "ENOENT";
+      if (missingRoot) {
+        const archived = archivedStateRoots.get(normalized);
+        if (archived) {
+          try {
+            const archivedRoot = stateRootResolver.resolveStateRoot(archived.root, {
+              label: "archived packet state root",
+              requireStateFile: true,
+            });
+            return {
+              root: archivedRoot,
+              stateFile: path.join(archivedRoot, "wakeflow-state.json"),
+              archived: true,
+            };
+          } catch (archivedError) {
+            return { error: String(archivedError?.message ?? archivedError) };
+          }
+        }
+        const allowedMissingRoots = [
+          path.resolve(workspaceRoot),
+          path.resolve(ledgerPaths.workspaceCurrentDir),
+          path.resolve(ledgerPaths.projectLedgerRoot),
+        ];
+        const lexicallySanctioned = allowedMissingRoots.some((root) => {
+          const rel = path.relative(root, requestedRoot);
+          return rel === "" || (!path.isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${path.sep}`));
+        });
+        if (lexicallySanctioned) {
+          return {
+            root: requestedRoot,
+            stateFile: path.join(requestedRoot, "wakeflow-state.json"),
+            archived: false,
+          };
+        }
+      }
+      return { error: String(error?.message ?? error) };
+    }
   }
 
   function stateSnapshot(stateRootRef, diagnostics) {
@@ -368,6 +455,7 @@ export function commandStatus(ctx) {
     registeredThreadCount,
     windowConfigCount,
     keepLive,
+    demandOwnership,
   }) {
     const packetArtifacts = listJsonArtifacts(dirs.packets);
     const groupArtifacts = listJsonArtifacts(dirs.groups);
@@ -379,6 +467,13 @@ export function commandStatus(ctx) {
         .filter((item) => item.error)
         .map((item) => ({ file: path.relative(workspaceRoot, item.file), error: item.error })),
     };
+    diagnostics.errors.push(
+      ...(demandOwnership?.unreadable ?? []).map((item) => ({
+        file: item.stateFile,
+        error: `unreadable active demand state: ${item.error}`,
+      })),
+      ...(demandOwnership?.authorityErrors ?? []),
+    );
     const packets = artifactValues(packetArtifacts, "ControllerDispatchPacket").map((item) => item.value);
     const groups = artifactValues(groupArtifacts, "DispatchGroup");
     const results = artifactValues(resultArtifacts);
@@ -409,6 +504,9 @@ export function commandStatus(ctx) {
       deliveryStatuses: liveDeliveryStatuses,
       diagnostics,
     });
+    diagnostics.errors = [...new Map(
+      diagnostics.errors.map((item) => [item.file, item]),
+    ).values()];
     const deliveryCounts = countBy(liveDeliveryStatuses, "status");
     const groupCounts = countBy(groupSummaries, "groupStatus");
     const nextAction = summarizeRuntimeNextAction({ diagnostics, deliveryStatuses: liveDeliveryStatuses, groupSummaries });
@@ -619,6 +717,7 @@ export function commandStatus(ctx) {
   const verbose = hasFlag("--verbose") || hasFlag("--full");
   const keepLive = keepLiveStatus();
   const keepLiveStateExists = existsSync(keepLiveStateFile());
+  const demandOwnership = scanDemandHostOwnership(workspaceRoot);
   const runtimeSummary = buildRuntimeSummary({
     packetCount,
     groupCount,
@@ -628,6 +727,7 @@ export function commandStatus(ctx) {
     registeredThreadCount,
     windowConfigCount,
     keepLive,
+    demandOwnership,
   });
   output(
     {
@@ -648,7 +748,7 @@ export function commandStatus(ctx) {
       // workspace and which windows hold a fresh in-flight delivery lock.
       dualHost: {
         hosts: listHostRuntimes ? listHostRuntimes() : [],
-        demandOwnership: scanDemandHostOwnership(workspaceRoot),
+        demandOwnership,
         freshLocks: listFreshWindowLocks
           ? listFreshWindowLocks().map((lock) => ({
               windowName: lock.windowName,

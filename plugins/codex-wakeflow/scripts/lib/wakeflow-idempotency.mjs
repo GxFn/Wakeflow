@@ -34,6 +34,7 @@ function targetResultComparable(result = {}) {
     evidenceRefs: result.evidenceRefs ?? [],
     verificationSummary: result.verificationSummary ?? [],
     riskSummary: result.riskSummary ?? [],
+    craftEvidence: result.craftEvidence ?? [],
     nextSuggestion: result.nextSuggestion,
   };
 }

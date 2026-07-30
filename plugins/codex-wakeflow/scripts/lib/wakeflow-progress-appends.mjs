@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import path from "node:path";
+import { resolveStateRootFilePath } from "./wakeflow-state-paths.mjs";
 
 // The execution timeline: reducers append one human-readable line per real
 // action into the demand's developer-progress.md, under the three append-only
@@ -20,7 +20,14 @@ export const PROGRESS_SECTIONS = {
 };
 
 function progressDocFile(stateRoot, state) {
-  return path.join(stateRoot, state?.projection?.progressDoc ?? "developer-progress.md");
+  return resolveStateRootFilePath(
+    stateRoot,
+    state?.projection?.progressDoc ?? "developer-progress.md",
+    {
+      label: "progress document",
+      requireExisting: true,
+    },
+  );
 }
 
 export function appendProgressLine(stateRoot, state, section, line) {

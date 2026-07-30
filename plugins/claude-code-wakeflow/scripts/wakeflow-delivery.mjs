@@ -19,13 +19,27 @@ import {
   normalizeReturnPolicyMode,
 } from "./lib/wakeflow-return-policy.mjs";
 import { buildReplaySummary, pruneWouldBreakReplay } from "./lib/wakeflow-idempotency.mjs";
-import { WakeflowStateLockTimeoutError, withFileLock } from "./lib/wakeflow-state-lock.mjs";
+import {
+  WakeflowStateLockTimeoutError,
+  withFileLock,
+  withStateRootLock,
+} from "./lib/wakeflow-state-lock.mjs";
+import {
+  loadWorkspaceConfig,
+  workspaceLedgerPaths,
+} from "./lib/wakeflow-config.mjs";
 
 const args = process.argv.slice(2);
 const command = args[0] && !args[0].startsWith("--") ? args[0] : "status";
 const options = args[0] && !args[0].startsWith("--") ? args.slice(1) : args;
 const workspaceRoot = inferWorkspaceRoot();
 const stateDir = resolveStateDir();
+const deliveryWorkspaceConfig = loadWorkspaceConfig({ workspaceRoot, args: [] });
+const deliveryLedgerPaths = workspaceLedgerPaths({
+  workspaceRoot,
+  args: [],
+  config: deliveryWorkspaceConfig,
+});
 const scriptPath = new URL(import.meta.url).pathname;
 const write = hasFlag("--write");
 const json = hasFlag("--json");
@@ -52,7 +66,7 @@ Usage:
   node scripts/wakeflow-delivery.mjs start-keep-live --automation-run-id <id> [--keep-live-command <cmd>] [--keep-live-arg <arg>...] [--no-keep-live] --write [--json]
   node scripts/wakeflow-delivery.mjs stop-keep-live --automation-run-id <id> [--reason <text>] --write [--json]
   node scripts/wakeflow-delivery.mjs keep-live-state --automation-run-id <id> --status running|stopped|failed [--mechanism macos-caffeinate|manual|none] [--pid <pid>] [--error <text>] --write [--json]
-  node scripts/wakeflow-delivery.mjs record-target-result --target-window <name> --task-id <id> --status completed|blocked|needs-review [--group <id>] [--changed-repo <repo>...] [--commit <hash>...] [--evidence-ref <ref>...] [--verification <text>...] [--risk <text>...] [--next-suggestion <text>] [--supersede-result] [--write] [--json]
+  node scripts/wakeflow-delivery.mjs record-target-result --target-window <name> --task-id <id> --status completed|blocked|needs-review [--group <id>] [--changed-repo <repo>...] [--commit <hash>...] [--evidence-ref <ref>...] [--verification <text>...] [--risk <text>...] [--craft-evidence <json>] [--next-suggestion <text>] [--supersede-result] [--write] [--json]
   node scripts/wakeflow-delivery.mjs review-results (--group <id>|--task-id <id>) [--json]
   node scripts/wakeflow-delivery.mjs review-pack (--group <id>|--task-id <id>|--state-root <path>) [--json]
   node scripts/wakeflow-delivery.mjs task-ledger --state-root <path> [--task-id <id>] [--target-window <name>] [--json]
@@ -193,6 +207,8 @@ function inferAgentNext(payload) {
 function classifyErrorCode(message = "") {
   const text = String(message);
   const rules = [
+    [/controller event revision .*reserved|recover or replay delivery run/i, "delivery-state-recovery-required"],
+    [/controller event log .*malformed|repair the event log/i, "delivery-event-log-repair-required"],
     [/state revision/i, "stale-state-revision"],
     [/outside workspace/i, "scope-boundary-violation"],
     [/No registered .*thread|thread.*missing|thread id/i, "thread-registration-invalid"],
@@ -208,8 +224,8 @@ function classifyErrorCode(message = "") {
   return rules.find(([pattern]) => pattern.test(text))?.[1] || "wakeflow-contract-error";
 }
 
-function fail(message) {
-  const errorCode = classifyErrorCode(message);
+function fail(message, options = {}) {
+  const errorCode = options.errorCode || classifyErrorCode(message);
   output({
     ok: false,
     command,
@@ -219,7 +235,9 @@ function fail(message) {
       code: errorCode,
       severity: "error",
       plane: "delivery-loop",
-      retryable: ["host-readback-unconfirmed", "thread-registration-invalid"].includes(errorCode),
+      retryable: options.retryable
+        ?? ["host-readback-unconfirmed", "thread-registration-invalid", "delivery-state-recovery-required", "delivery-event-log-repair-required"].includes(errorCode),
+      ...(options.recovery ? { recovery: options.recovery } : {}),
     },
   });
   process.exitCode = 1;
@@ -231,8 +249,10 @@ const {
   ensureInsideWorkspace,
   ensureStateDirs,
   atomicWriteJson,
-  appendJsonLine,
   readJson,
+  readStateRootJson,
+  atomicWriteStateRootJson,
+  appendStateRootJsonLine,
   resolveInputPath,
   resolveStateRoot,
   readControllerStateRoot,
@@ -259,6 +279,10 @@ const {
 } = createDeliveryStore({
   workspaceRoot,
   stateDir,
+  sanctionedStateRoots: [
+    deliveryLedgerPaths.workspaceCurrentDir,
+    deliveryLedgerPaths.projectLedgerRoot,
+  ],
   slug,
   nowIso,
   fail,
@@ -657,9 +681,11 @@ const {
   version,
   deliveryRunVersion,
   readJson,
+  readStateRootJson,
+  atomicWriteStateRootJson,
+  appendStateRootJsonLine,
   ensureStateDirs,
   atomicWriteJson,
-  appendJsonLine,
   resolveInputPath,
   resolveStateRoot,
   deliveryFileFor,
@@ -674,6 +700,9 @@ const {
   listDispatchGroupsForTask,
   loadDispatchGroup,
   artifactTrace,
+  withFileLock,
+  withStateRootLock,
+  WakeflowStateLockTimeoutError,
 });
 
 function commandReleaseWindowLock() {

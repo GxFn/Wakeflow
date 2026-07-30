@@ -84,6 +84,11 @@ machine state.
    demand status, and eligible target tasks.
 3. State the safe operation, recovery boundary, and one-sentence plan before
    using tools, editing files, dispatching, accepting, archiving, or deleting.
+   If a tool returns `state-transition-recovery-required`, stop the original
+   operation, run `wakeflow_recover_state_transition` as a dry-run and then
+   with `apply=true`, re-read state, and only then decide whether the original
+   operation is still needed. Never make another state writer recover it
+   implicitly.
 4. If the demand is blocked, cancelled, archived, review-ready, or lacks
    evidence, stop instead of preparing another package. If it is completed,
    classify the new fact before acting: same-demand continuation, independent

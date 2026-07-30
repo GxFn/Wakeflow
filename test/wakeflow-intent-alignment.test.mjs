@@ -92,7 +92,7 @@ test("without designIntent the whole chain leaves zero traces", () => {
   const imported = run(stateScript, [
     "import-target-result", "--root", root, "--state-root", stateRoot,
     "--target-task-id", "tp-a__RepoA", "--target-window", "RepoA", "--status", "completed",
-    "--write", "--json",
+    "--summary", "Parser refactor fixture completed.", "--write", "--json",
   ]);
   assert.equal(imported.status, 0, imported.stderr || imported.stdout);
   const pack = JSON.parse(run(deliveryScript, ["review-pack", "--root", root, "--state-root", stateRoot, "--json"]).stdout);
@@ -141,7 +141,7 @@ test("B2: no craftCheck when the task declares no advisory craft evidence (zero 
   const imported = run(stateScript, [
     "import-target-result", "--root", root, "--state-root", stateRoot,
     "--target-task-id", "tp-a__RepoA", "--target-window", "RepoA", "--status", "completed",
-    "--write", "--json",
+    "--summary", "Parser refactor fixture completed.", "--write", "--json",
   ]);
   assert.equal(imported.status, 0, imported.stderr || imported.stdout);
   const pack = JSON.parse(run(deliveryScript, ["review-pack", "--root", root, "--state-root", stateRoot, "--json"]).stdout).reviewPack;
@@ -156,7 +156,7 @@ test("one corrupt packet file never takes down the state-root review pack", () =
   const imported = run(stateScript, [
     "import-target-result", "--root", root, "--state-root", stateRoot,
     "--target-task-id", "tp-a__RepoA", "--target-window", "RepoA", "--status", "completed",
-    "--write", "--json",
+    "--summary", "Parser refactor fixture completed.", "--write", "--json",
   ]);
   assert.equal(imported.status, 0, imported.stderr || imported.stdout);
   const packetsDir = path.join(root, ".wakeflow-local/wakeflow-delivery/dispatch-packets");
@@ -176,7 +176,7 @@ test("review packs show the intent triple side by side and gates stay byte-ident
     const imported = run(stateScript, [
       "import-target-result", "--root", fixture.root, "--state-root", fixture.stateRoot,
       "--target-task-id", "tp-a__RepoA", "--target-window", "RepoA", "--status", "completed",
-      "--write", "--json",
+      "--summary", "Parser refactor fixture completed.", "--write", "--json",
     ]);
     assert.equal(imported.status, 0, imported.stderr || imported.stdout);
   }

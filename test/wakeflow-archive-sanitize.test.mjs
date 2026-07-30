@@ -5,10 +5,10 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
+import { runSync } from "../core/lib/wakeflow-process.mjs";
 
-const pluginRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
-const stateScript = path.join(pluginRoot, "scripts/wakeflow-state.mjs");
+const coreRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../core");
+const stateScript = path.join(coreRoot, "scripts/wakeflow-state.mjs");
 
 function writeJson(file, value) {
   mkdirSync(path.dirname(file), { recursive: true });
@@ -20,17 +20,20 @@ function readJson(file) {
 }
 
 function run(args) {
-  return runSync(process.execPath, [stateScript, ...args], { cwd: pluginRoot, encoding: "utf8" });
+  return runSync(process.execPath, [stateScript, ...args], { cwd: coreRoot, encoding: "utf8" });
 }
 
-function makeLegacyArchive() {
+function makeLegacyArchive({
+  workspaceArchiveDir = "custom-ledger/archive-store",
+} = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-sanitize-archive-"));
   writeJson(path.join(root, "wakeflow.config.json"), {
     workspaceName: "Archive sanitize fixture",
     controllerWindow: "Controller",
     projectLedgerRoot: "wakeflow-ledger",
+    workspaceArchiveDir,
   });
-  const archiveRoot = path.join(root, "wakeflow-ledger/workspace/archive/2026-07/legacy-archive");
+  const archiveRoot = path.join(root, workspaceArchiveDir, "2026-07/legacy-archive");
   mkdirSync(archiveRoot, { recursive: true });
   writeJson(path.join(archiveRoot, "wakeflow-state.json"), {
     schemaVersion: 1,
@@ -43,19 +46,29 @@ function makeLegacyArchive() {
     allowedActions: [],
     decisionsRequired: [],
   });
-  writeFileSync(path.join(archiveRoot, "controller-events.jsonl"), `${JSON.stringify({
-    eventId: "evt-old",
-    createdAt: "2026-07-11T00:00:00.000Z",
-    actor: "controller",
-    type: "demand.archived",
-    from: "completed",
-    to: "archived",
-    reason: "legacy",
-    evidenceRefs: [`${root}/evidence/result.json`],
-    allowedWrites: [],
-    forbiddenConclusions: [],
-    stateRevision: 5,
-  })}\n`);
+  const eventSpecs = [
+    ["demand.created", null, "planned"],
+    ["task-package.added", "planned", "planned"],
+    ["controller.review-decided", "planned", "reviewing"],
+    ["demand.completed", "reviewing", "completed"],
+    ["demand.archived", "completed", "archived"],
+  ];
+  writeFileSync(
+    path.join(archiveRoot, "controller-events.jsonl"),
+    `${eventSpecs.map(([type, from, to], index) => JSON.stringify({
+      eventId: `evt-legacy-${index + 1}`,
+      createdAt: `2026-07-11T00:00:0${index}.000Z`,
+      actor: "controller",
+      type,
+      from,
+      to,
+      reason: index === 4 ? "legacy" : `legacy fixture revision ${index + 1}`,
+      evidenceRefs: index === 4 ? [`${root}/evidence/result.json`] : [],
+      allowedWrites: [],
+      forbiddenConclusions: [],
+      stateRevision: index + 1,
+    })).join("\n")}\n`,
+  );
   writeJson(path.join(archiveRoot, "archive-manifest.json"), {
     kind: "WakeflowArchiveManifest",
     version: 2,
@@ -118,12 +131,22 @@ test("sanitize-archive dry-runs, preserves the original, and replaces only the a
 
 test("sanitize-archive refuses an archived-looking root outside the configured archive ledger", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-sanitize-boundary-"));
-  writeJson(path.join(root, "wakeflow.config.json"), { workspaceName: "X", controllerWindow: "C", projectLedgerRoot: "wakeflow-ledger" });
+  writeJson(path.join(root, "wakeflow.config.json"), {
+    workspaceName: "X",
+    controllerWindow: "C",
+    projectLedgerRoot: "wakeflow-ledger",
+    workspaceArchiveDir: "separate-ledger/archives",
+  });
   const outside = path.join(root, ".wakeflow-active/current/not-an-archive");
   writeJson(path.join(outside, "wakeflow-state.json"), { demandKey: "OUTSIDE", state: "archived", revision: 1 });
   writeJson(path.join(outside, "archive-manifest.json"), { demandKey: "OUTSIDE", version: 2 });
   const result = run(["sanitize-archive", "--root", root, "--state-root", outside, "--reason", "must refuse", "--write", "--json"]);
   assert.notEqual(result.status, 0);
-  assert.match(result.stdout, /only an existing demand root below/);
+  assert.match(result.stdout, /only an existing demand root below separate-ledger\/archives/);
+  assert.doesNotMatch(
+    result.stdout + result.stderr,
+    /event log|revision.*ahead|controller event history/i,
+    "archive boundary must be rejected before the state-root event lock preflight",
+  );
   assert.equal(readJson(path.join(outside, "wakeflow-state.json")).revision, 1);
 });

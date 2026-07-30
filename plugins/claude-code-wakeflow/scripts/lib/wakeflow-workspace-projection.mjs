@@ -1,5 +1,9 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import {
+  inspectActiveDemandStateRoot,
+  isWakeflowInitStagingEntry,
+} from "./wakeflow-active-demands.mjs";
 import { loadWorkspaceConfig, resolveConfigPath, testWindowNames, workspaceLedgerPaths } from "./wakeflow-config.mjs";
 import { WakeflowStateLockTimeoutError, withFileLock } from "./wakeflow-state-lock.mjs";
 
@@ -19,23 +23,27 @@ function atomicWrite(file, content) {
   }
 }
 
-function activeDemandSnapshots(currentDir) {
+function activeDemandSnapshots(currentDir, workspaceRoot) {
   if (!existsSync(currentDir)) return [];
   return readdirSync(currentDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
+    .filter((entry) => !isWakeflowInitStagingEntry(entry.name))
+    .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
     .flatMap((entry) => {
       const root = path.join(currentDir, entry.name);
-      const stateFile = path.join(root, "wakeflow-state.json");
-      if (!existsSync(stateFile)) return [];
-      try {
-        const state = JSON.parse(readFileSync(stateFile, "utf8"));
-        if (state.state === "archived") return [];
-        return [{ root, state }];
-      } catch {
-        return [];
-      }
+      const inspected = inspectActiveDemandStateRoot({ workspaceRoot, stateRoot: root });
+      if (inspected.missingState && inspected.issues.length === 0) return [];
+      if (inspected.state?.state === "archived") return [];
+      return [{
+        root,
+        state: inspected.state,
+        progress: inspected.progressFile,
+        issues: inspected.issues,
+      }];
     })
-    .sort((left, right) => String(right.state.updatedAt ?? "").localeCompare(String(left.state.updatedAt ?? "")));
+    .sort((left, right) => {
+      if (!left.state || !right.state) return left.state ? 1 : right.state ? -1 : left.root.localeCompare(right.root);
+      return String(right.state.updatedAt ?? "").localeCompare(String(left.state.updatedAt ?? ""));
+    });
 }
 
 function splitMarkdownRow(line) {
@@ -79,7 +87,9 @@ export function archiveWorkspaceTodo({ workspaceRoot, designKey, archiveMount, r
 function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, updatedAt = new Date().toISOString() }) {
   const loaded = config ?? loadWorkspaceConfig({ workspaceRoot });
   const paths = workspaceLedgerPaths({ workspaceRoot, config: loaded });
-  const demands = activeDemandSnapshots(paths.workspaceCurrentDir);
+  const demands = activeDemandSnapshots(paths.workspaceCurrentDir, workspaceRoot);
+  const unreadableDemands = demands.filter((item) => !item.state);
+  const unhealthyDemands = demands.filter((item) => item.issues.length > 0);
   const statusFile = paths.workspaceCurrentStatusPath;
   const statusDir = path.dirname(statusFile);
   const testExchangeFile = resolveConfigPath(
@@ -87,11 +97,21 @@ function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, upda
     loaded.testExchangePath ?? path.join(paths.workspaceCurrentDir, "test-exchange.md"),
   );
   const testWindowLabel = testWindowNames(loaded).join(", ") || "Test";
-  const overall = demands.length === 0 ? "idle" : demands.some((item) => item.state.state === "blocked") ? "blocked" : "active";
+  const overall = demands.length === 0
+    ? "idle"
+    : unhealthyDemands.length > 0 || demands.some((item) => item.state?.state === "blocked")
+      ? "blocked"
+      : "active";
   const demandLines = demands.length === 0
     ? ["- Active demand: none."]
-    : demands.map(({ root, state }) => {
-        const progress = path.join(root, state.projection?.progressDoc ?? "developer-progress.md");
+    : demands.map(({ root, state, progress, issues }) => {
+        const issueText = issues.map((item) => item.error).join("; ");
+        if (!state) {
+          return `- Unreadable state root \`${path.basename(root)}\` — \`blocked\`: ${issueText}.`;
+        }
+        if (issues.length > 0) {
+          return `- [${state.demandKey}](${posixRelative(statusDir, root)}/) — \`blocked\`: ${issueText}.`;
+        }
         return `- [${state.demandKey}](${posixRelative(statusDir, progress)}) — \`${state.state}\`, revision ${state.revision}, controller host \`${state.controllerHost ?? "unclaimed"}\`.`;
       });
   const status = [
@@ -124,7 +144,9 @@ function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, upda
     "## Copyable Prompt",
     "",
     demands.length
-      ? "Open the active demand link above and continue only through its allowed state-machine action."
+      ? unhealthyDemands.length
+        ? "Repair the blocked state-root authority issue listed above before claiming or advancing demand work."
+        : "Open the active demand link above and continue only through its allowed state-machine action."
       : "No active demand exists. Wait for a controller task or claim an eligible delivered TODO.",
     "",
     "## Backfill Area",
@@ -167,13 +189,33 @@ function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, upda
     "| complete | Work is accepted and awaiting archive or already archived. |",
     "",
     ...(demands.length
-      ? ["## Active Demands", "", ...demands.map(({ root, state }) => `- [${state.demandKey}](${posixRelative(indexDir, root)}/) — \`${state.state}\`, revision ${state.revision}`), ""]
+      ? [
+          "## Active Demands",
+          "",
+          ...demands.map(({ root, state, issues }) => {
+            const issueText = issues.map((item) => item.error).join("; ");
+            if (!state) {
+              return `- Unreadable state root \`${path.basename(root)}\` — \`blocked\`: ${issueText}.`;
+            }
+            return issues.length > 0
+              ? `- [${state.demandKey}](${posixRelative(indexDir, root)}/) — \`blocked\`: ${issueText}.`
+              : `- [${state.demandKey}](${posixRelative(indexDir, root)}/) — \`${state.state}\`, revision ${state.revision}`;
+          }),
+          "",
+        ]
       : ["No active demand is initialized. Windows are ready and should wait for a task wakeup.", ""]),
   ].join("\n");
 
   atomicWrite(statusFile, status);
   atomicWrite(paths.workspaceIndexPath, index);
-  return { statusFile, indexFile: paths.workspaceIndexPath, activeDemandCount: demands.length, status: overall };
+  return {
+    statusFile,
+    indexFile: paths.workspaceIndexPath,
+    activeDemandCount: demands.length,
+    unreadableDemandCount: unreadableDemands.length,
+    unhealthyDemandCount: unhealthyDemands.length,
+    status: overall,
+  };
 }
 
 export function refreshWorkspaceProjection({ workspaceRoot, config = null, updatedAt = new Date().toISOString() }) {

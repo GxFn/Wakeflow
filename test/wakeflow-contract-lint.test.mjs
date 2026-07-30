@@ -36,7 +36,8 @@ test("every state-machine payload carries agentNext; every durable artifact carr
   ]));
   payloads.push(run([
     "import-target-result", "--root", root, "--state-root", stateRoot,
-    "--target-task-id", "tp-a__RepoA", "--target-window", "RepoA", "--status", "completed", "--write", "--json",
+    "--target-task-id", "tp-a__RepoA", "--target-window", "RepoA", "--status", "completed",
+    "--summary", "Lint probe completed.", "--write", "--json",
   ]));
   const reduced = run(["reduce-results", "--root", root, "--state-root", stateRoot, "--write", "--json"]);
   payloads.push(reduced);

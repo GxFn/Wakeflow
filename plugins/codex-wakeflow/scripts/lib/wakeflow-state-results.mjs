@@ -23,18 +23,13 @@ export function selectCurrentStateRootResults({ items, state, fail }) {
 
   const selected = new Map();
   for (const [targetTaskId, candidates] of byTask) {
-    const marked = candidates.filter((item) => item.result?.currentResult === true);
-    if (marked.length > 1) {
-      fail(`multiple current target results exist for ${targetTaskId}; repair the state root before reducing or reviewing.`);
-    }
-    if (marked.length === 1) {
-      selected.set(targetTaskId, marked[0]);
-      continue;
-    }
-
     const task = (state?.targetTasks ?? []).find((item) => item.targetTaskId === targetTaskId);
     const currentGroup = task?.delivery?.dispatchGroup || "";
     if (currentGroup) {
+      // The task's latest sent delivery is authoritative. A top-level result
+      // from an older round may still carry currentResult=true until the new
+      // round returns and rotates that stable file; it must not satisfy the
+      // new round in the meantime.
       const matchingGroup = candidates.filter((item) => item.result?.dispatchGroup === currentGroup);
       if (matchingGroup.length > 1) {
         fail(`multiple legacy target results match current dispatch group ${currentGroup} for ${targetTaskId}; repair the state root before reducing or reviewing.`);
@@ -47,6 +42,15 @@ export function selectCurrentStateRootResults({ items, state, fail }) {
       if (candidates.length === 1 && ungrouped.length === 1) {
         selected.set(targetTaskId, ungrouped[0]);
       }
+      continue;
+    }
+
+    const marked = candidates.filter((item) => item.result?.currentResult === true);
+    if (marked.length > 1) {
+      fail(`multiple current target results exist for ${targetTaskId}; repair the state root before reducing or reviewing.`);
+    }
+    if (marked.length === 1) {
+      selected.set(targetTaskId, marked[0]);
       continue;
     }
 

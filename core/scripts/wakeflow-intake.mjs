@@ -93,6 +93,8 @@ function allowedStateRoots() {
     workspaceRoot,
     ledgerPaths.projectLedgerRoot,
     ledgerPaths.workspaceDocsDir,
+    ledgerPaths.workspaceCurrentDir,
+    ledgerPaths.workspaceArchiveDir,
   ];
 }
 

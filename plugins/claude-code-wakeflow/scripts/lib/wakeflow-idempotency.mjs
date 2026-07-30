@@ -58,6 +58,7 @@ function dispatchPacketComparable(packet = {}) {
     humanContextRef: packet.humanContextRef,
     stateRef: packet.stateRef,
     objective: packet.objective,
+    acceptanceAnchors: packet.acceptanceAnchors ?? [],
     testExecution: packet.testExecution,
     scope: packet.scope ?? [],
     forbidden: packet.forbidden ?? [],

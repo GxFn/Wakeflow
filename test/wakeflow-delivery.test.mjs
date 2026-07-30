@@ -33,6 +33,12 @@ import {
 const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
 const script = path.join(workspaceRoot, "scripts/wakeflow-delivery.mjs");
 const stateScript = path.join(workspaceRoot, "scripts/wakeflow-state.mjs");
+const FIXTURE_ACCEPTANCE_ANCHORS = [{
+  id: "AC-DELIVERY-1",
+  claim: "The target preserves the existing public behavior.",
+  probe: "Run the public-entry regression before and after the change.",
+  expected: "The regression fails before the implementation and passes after it.",
+}];
 
 function writeText(file, content) {
   mkdirSync(path.dirname(file), { recursive: true });
@@ -74,6 +80,7 @@ function makeFixture() {
       taskPackageId: "CSMR-PKG-1",
       summary: "Fixture package",
       status: "pending",
+      acceptanceAnchors: FIXTURE_ACCEPTANCE_ANCHORS,
       createdAt: "2026-06-05T00:00:00.000Z",
     }],
     targetTasks: [{
@@ -113,6 +120,7 @@ function makeFixture() {
     demandKey: "CSMR-FIXTURE",
     summary: "Fixture package",
     status: "pending",
+    acceptanceAnchors: FIXTURE_ACCEPTANCE_ANCHORS,
     targetTasks: [{
       targetTaskId: "CSMR-TASK-1",
       taskPackageId: "CSMR-PKG-1",
@@ -872,6 +880,8 @@ test("target skills follow the current-version callback plan instead of a stale 
     assert.match(skill, /controllerAlreadyReached=true/);
     assert.match(skill, /older `resultVersionKey` never satisfies the current/);
     assert.match(skill, /Always pass `stateRoot`/);
+    assert.match(skill, /map every anchor id to a RED test\/probe before implementation/);
+    assert.match(skill, /delivery-sent event may[\s\S]*advance the live state root/);
   }
   const setupSource = readFileSync(path.resolve(workspaceRoot, "../../core/scripts/wakeflow-setup.mjs"), "utf8");
   assert.match(setupSource, /exactly one controller-return envelope per callback scope and \\`resultVersionKey\\`/);
@@ -900,6 +910,7 @@ test("review pack exposes required craft gaps before reduce while keeping callba
       verificationSummary: ["passed"],
       hasControllerReviewEvidence: true,
       missingEvidenceRefs: [],
+      acceptanceAnchors: FIXTURE_ACCEPTANCE_ANCHORS,
       craftEvidenceGaps: [{ targetWindow: "WindowA", taskId: "task-a", kind: "self-review", reason: "missing-kind" }],
     }],
     generatedAt: "2026-07-10T00:00:00.000Z",
@@ -909,6 +920,7 @@ test("review pack exposes required craft gaps before reduce while keeping callba
   assert.equal(pack.gates.craftEvidenceRepairRequired, true);
   assert.equal(pack.nextAction, "fix-required-craft-evidence-before-controller-verdict");
   assert.equal(pack.controllerReturnNextStep, "build-controller-return", "transport still wakes the controller");
+  assert.match(pack.acceptanceAnchorCheck, /independently rerun or challenge/);
 });
 
 // Regression: a target reports evidence relative to ITS OWN repo (where the work + commit
@@ -1072,6 +1084,7 @@ test("prepare-dispatch-from-state writes packet, group, and delivery without leg
   assert.equal(payload.packet.stateRef.stateRoot, stateRootRef);
   assert.equal(payload.packet.stateRef.taskPackageId, "CSMR-PKG-1");
   assert.equal(payload.packet.stateRef.stateRevision, 3);
+  assert.deepEqual(payload.packet.acceptanceAnchors, FIXTURE_ACCEPTANCE_ANCHORS);
   assert.equal(payload.dispatchGroup.stateRef.stateRoot, stateRootRef);
   assert.equal(payload.envelope.stateRef.targetTaskId, "CSMR-TASK-1");
   assert.equal(payload.packet.wakeflowTrace.artifactKind, "dispatch-packet");
@@ -1100,9 +1113,13 @@ test("prepare-dispatch-from-state writes packet, group, and delivery without leg
   assert.equal(status.runtimeSummary.resumePlan.steps[1].tool, "wakeflow_record_delivery");
   assert.match(payload.packet.prompt, /- stateRoot: \.wakeflow-active\/current\/CSMR-FIXTURE/);
   assert.match(payload.packet.prompt, /- dispatchGroup: GROUP-STATE/);
+  assert.match(payload.packet.prompt, /Task focus \(full authority remains in the task package\):/);
+  assert.match(payload.packet.prompt, /- Run fixture target task/);
+  assert.match(payload.packet.prompt, /- taskPackageId: CSMR-PKG-1/);
+  assert.match(payload.packet.prompt, /- stateRevision: 3/);
+  assert.match(payload.packet.prompt, /acceptanceAnchors: task-packages\/CSMR-PKG-1\.json#acceptanceAnchors/);
+  assert.match(payload.packet.prompt, /map every acceptanceAnchor to a RED test or probe before implementation/);
   assert.doesNotMatch(payload.packet.prompt, /humanContextRef:/);
-  assert.doesNotMatch(payload.packet.prompt, /stateRevision:/);
-  assert.doesNotMatch(payload.packet.prompt, /taskPackageId:/);
   assert.doesNotMatch(payload.packet.prompt, /demandKey:/);
   assert.doesNotMatch(payload.packet.prompt, /controllerWindow:/);
   assert.doesNotMatch(payload.packet.prompt, /rules:/);
@@ -1153,6 +1170,22 @@ test("prepare-dispatch-from-state writes packet, group, and delivery without leg
   ]);
   assert.notEqual(staleReplay.status, 0);
   assert.match(staleReplay.stdout, /prepared from state revision 3; current revision is 4/);
+});
+
+test("target prompt keeps one bounded objective while the packet retains full authority", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const objective = `Preserve the confirmed behavior while applying the narrow fix ${"x".repeat(400)} END-OF-FULL-OBJECTIVE`;
+  const payload = prepareDispatch(root, stateRootRef, {
+    group: "GROUP-BOUNDED-OBJECTIVE",
+    extra: ["--objective", objective],
+  });
+  assert.equal(payload.packet.objective, objective);
+  assert.doesNotMatch(payload.packet.prompt, /END-OF-FULL-OBJECTIVE/);
+  const focusLine = payload.packet.prompt.split("\n").find((line) => line.startsWith("- Preserve the confirmed behavior"));
+  assert.ok(focusLine);
+  assert.ok(focusLine.length <= 242, `bounded focus line was ${focusLine.length} characters`);
+  assert.match(focusLine, /…$/);
 });
 
 test("prepare-dispatch-from-state rejects completed and accepted state-root tasks", () => {

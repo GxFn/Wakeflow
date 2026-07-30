@@ -42,6 +42,7 @@ Wakeflow 提供缺失的控制层：
 - **一个需求一个 state root**：任务包、目标结果、review candidate、决策和进度投影都绑定到同一个需求。
 - **聚焦的子窗口**：每个仓库窗口只在配置好的责任边界内工作。
 - **轻量投递**：delivery prompt 只负责用一个小 envelope 唤醒正确窗口；state root 和 skills 保存任务细节。
+- **验收锚点驱动工艺**：实现任务包可携带明确的 claim/probe/expected 锚点，子窗口编码前先映射为 RED 检查；总控仍独立复验和判断证据。
 - **先证据，后验收**：target backfill 是输入，不是结论；总控仍然要检查原始证据。
 - **本地优先运行时**：真实 session id 只存在本地 thread registry；window config 是派生视图，active state 不进入源码。
 

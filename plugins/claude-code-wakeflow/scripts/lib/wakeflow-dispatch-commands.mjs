@@ -106,6 +106,7 @@ export function createDispatchCommands(ctx) {
   }
 
   function buildDispatchArtifacts({
+    acceptanceAnchors = [],
     contextPolicy,
     controllerWindow = "",
     designIntent = "",
@@ -134,9 +135,11 @@ export function createDispatchCommands(ctx) {
       controllerWindow,
       humanContextRef,
       stateRef,
+      objective,
       interfaceLanguage: interfaceLanguageForStateRef(stateRef),
-      craftSkill: Boolean(evidenceContract),
+      craftSkill: Boolean(evidenceContract || acceptanceAnchors.length),
       testExecution: Boolean(testExecution),
+      acceptanceAnchors: acceptanceAnchors.length > 0,
     });
     if (!prompt) fail("Prompt cannot be empty.");
 
@@ -171,6 +174,7 @@ export function createDispatchCommands(ctx) {
       // dispatch and review. Advisory only, and deliberately OUTSIDE the
       // idempotency comparable: same-revision replay ignores it.
       ...(designIntent ? { designIntent } : {}),
+      ...(acceptanceAnchors.length ? { acceptanceAnchors } : {}),
       // Design-authored execution-craft evidence contract, carried so the target sees
       // what evidence it must produce. Advisory at dispatch; enforced at reduce-results.
       // Also OUTSIDE the idempotency comparable (like designIntent): back-fill is safe.
@@ -490,6 +494,22 @@ export function createDispatchCommands(ctx) {
       stateRevision: state.revision,
     };
     const designIntent = typeof taskPackage.designIntent === "string" ? taskPackage.designIntent.trim() : "";
+    const acceptanceAnchors = taskPackage.acceptanceAnchors ?? [];
+    if (
+      !Array.isArray(acceptanceAnchors)
+      || acceptanceAnchors.some((anchor) => (
+        !anchor
+        || typeof anchor !== "object"
+        || Array.isArray(anchor)
+        || ["id", "claim", "probe", "expected"].some((field) => typeof anchor[field] !== "string" || !anchor[field].trim())
+      ))
+    ) {
+      fail(`task package ${taskPackageId} has malformed acceptanceAnchors; repair the authoritative task package before dispatch.`);
+    }
+    const acceptanceAnchorIds = acceptanceAnchors.map((anchor) => anchor.id.trim());
+    if (new Set(acceptanceAnchorIds).size !== acceptanceAnchorIds.length) {
+      fail(`task package ${taskPackageId} has duplicate acceptanceAnchor ids; repair the authoritative task package before dispatch.`);
+    }
     // Defense-in-depth: intake validates the shape (fail-closed); this guard only
     // keeps a hand-edited mis-shaped contract (arrays included) off the packet.
     const evidenceContract = taskPackage.evidenceContract
@@ -498,6 +518,7 @@ export function createDispatchCommands(ctx) {
       ? taskPackage.evidenceContract
       : null;
     const { dispatchGroupRecord, packet, packetFile } = buildDispatchArtifacts({
+      acceptanceAnchors,
       contextPolicy: getValue("--context-policy", "refresh-if-missing"),
       controllerWindow,
       designIntent,

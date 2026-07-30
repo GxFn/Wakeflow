@@ -1,7 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { buildControllerCallbackPlan } from "./wakeflow-return-policy.mjs";
-import { controllerReviewScope, hasPendingReworkDecision } from "./wakeflow-review-scope.mjs";
+import {
+  controllerReviewScope,
+  hasPendingReworkDecision,
+  taskExpectsTargetResult,
+} from "./wakeflow-review-scope.mjs";
 import { buildControllerReviewPack, rawEvidenceRequiredFrom, reviewAdvisories, sharedReviewGates } from "./wakeflow-review-pack.mjs";
 import { loadWorkspaceConfig, testWindowNames } from "./wakeflow-config.mjs";
 import {
@@ -143,6 +147,7 @@ export function createReviewCommands(ctx) {
       // authored one (zero traces otherwise).
       objective: item.packet.objective,
       ...(item.packet.designIntent ? { designIntent: item.packet.designIntent } : {}),
+      ...(item.packet.acceptanceAnchors?.length ? { acceptanceAnchors: item.packet.acceptanceAnchors } : {}),
       ...(item.packet.testExecution ? { testExecution: item.packet.testExecution } : {}),
       // B2: advisory craft kinds (self-review, test-first, ...) declared on the packet's
       // evidence contract, surfaced so the pack can add a craftCheck reminder. Required
@@ -293,8 +298,7 @@ export function createReviewCommands(ctx) {
   }
 
   function stateRootTaskResultExpected(task) {
-    if (task?.delivery?.deliveryRunId) return true;
-    return ["sent", "active", "missing-result"].includes(task?.status || "");
+    return taskExpectsTargetResult(task);
   }
 
   function notApplicableStateRootCallbackPlan(dispatchGroup, returnPolicy, reason) {
@@ -513,6 +517,9 @@ export function createReviewCommands(ctx) {
         objective: packet?.objective ?? task.summary,
         objectiveSource: packet?.objective ? "dispatch-packet" : "task-summary",
         ...(packet?.designIntent ? { designIntent: packet.designIntent } : {}),
+        ...((packet?.acceptanceAnchors ?? taskPackage?.acceptanceAnchors)?.length
+          ? { acceptanceAnchors: packet?.acceptanceAnchors ?? taskPackage.acceptanceAnchors }
+          : {}),
         ...((packet?.testExecution ?? taskPackage?.testExecution) ? { testExecution: packet?.testExecution ?? taskPackage.testExecution } : {}),
         ...(packet?.evidenceContract?.advisory?.length ? { advisoryCraftKinds: packet.evidenceContract.advisory.map((entry) => entry.kind).filter(Boolean) } : {}),
         ...(Array.isArray(result?.craftEvidence) && result.craftEvidence.length ? { craftEvidence: result.craftEvidence } : {}),

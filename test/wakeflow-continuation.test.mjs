@@ -224,6 +224,7 @@ test("MCP exposes continue-demand and cancel forwards root to the state runtime"
   assert.ok(continuationTool);
   assert.deepEqual(continuationTool.inputSchema.properties.continuationType.enum,
     ["verified-bug", "requirement-supplement", "optimization"]);
+  assert.equal(continuationTool.inputSchema.properties.acceptanceAnchors.type, "array");
 
   const continued = makeCompletedDemand("CONT-MCP");
   const continuationResult = await handlers.wakeflow_continue_demand({
@@ -236,10 +237,18 @@ test("MCP exposes continue-demand and cancel forwards root to the state runtime"
     packageId: "CONT-MCP-P1",
     targetWindow: "Plugin",
     summary: "Implement the confirmed supplement",
+    acceptanceAnchors: [{
+      id: "AC-CONT-1",
+      claim: "The confirmed supplemental case is handled.",
+      probe: "Run the supplemental regression through the public entrypoint.",
+      expected: "The previously missing case succeeds.",
+    }],
     apply: true,
   });
   assert.equal(continuationResult.ok, true, continuationResult.stderr || continuationResult.stdout);
-  assert.equal(readJson(continued.stateFile).state, "planned");
+  const continuedState = readJson(continued.stateFile);
+  assert.equal(continuedState.state, "planned");
+  assert.equal(continuedState.taskPackages.at(-1).acceptanceAnchors[0].id, "AC-CONT-1");
 
   const cancelled = makeCompletedDemand("CANCEL-MCP-ROOT");
   const cancelState = readJson(cancelled.stateFile);

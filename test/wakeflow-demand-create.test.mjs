@@ -64,7 +64,18 @@ test("create-demand from a delivered TODO row: inits, adopts host, renders, cons
 test("create-demand with initial task packages adds them and plans the demand", () => {
   const { root } = makeWorkspace(DELIVERED_ROW);
   const taskPackages = JSON.stringify([
-    { taskPackageId: "TP-1", summary: "First package", targetWindow: "Design", targetTaskId: "T-1" },
+    {
+      taskPackageId: "TP-1",
+      summary: "First package",
+      targetWindow: "Design",
+      targetTaskId: "T-1",
+      acceptanceAnchors: [{
+        id: "AC-1",
+        claim: "The confirmed behavior is implemented.",
+        probe: "Run the public-entry behavior check.",
+        expected: "The observed output matches the requirement.",
+      }],
+    },
   ]);
   const payload = parse(run(root, ["create-demand", "--todo-id", "feat-2026-06-21", "--task-packages", taskPackages, "--write"]));
   assert.equal(payload.ok, true);
@@ -72,6 +83,7 @@ test("create-demand with initial task packages adds them and plans the demand", 
   const state = JSON.parse(readFileSync(statePath(root, "feat-2026-06-21"), "utf8"));
   // add-task-package moves the demand out of intake into planned.
   assert.equal(state.state, "planned");
+  assert.equal(state.taskPackages[0].acceptanceAnchors[0].id, "AC-1");
 });
 
 test("create-demand inline (demandKey + title) inits without a TODO row", () => {

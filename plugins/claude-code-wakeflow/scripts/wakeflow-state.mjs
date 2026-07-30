@@ -11,7 +11,14 @@ import {
   normalizeInterfaceLanguage,
   wakeflowStateLocale,
 } from "./lib/wakeflow-language.mjs";
-import { controllerReviewScope, hasPendingReworkDecision, reductionStatusForTargetTask } from "./lib/wakeflow-review-scope.mjs";
+import {
+  controllerReductionScope,
+  controllerReviewScope,
+  hasPendingReworkDecision,
+  isReworkRouteTask,
+  reductionStatusForTargetTask,
+  taskExpectsTargetResult,
+} from "./lib/wakeflow-review-scope.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import { releaseWindowLockForResult } from "./lib/wakeflow-delivery-store.mjs";
 import {
@@ -50,12 +57,12 @@ Controller state-machine manager
 
 Usage:
   node scripts/wakeflow-state.mjs init --demand-key <key> --title <title> [--goal <text>] [--completion-definition <text>] [--test-decision <text>] [--stage-plan <text>] [--controller-window <window>] [--language <auto|zh|en>] [--root <workspace>] [--state-root <path>] [--write] [--json]
-  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--source-ref <ref>] [--design-intent <text>] [--evidence-contract <json>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--test-card-id <id>] [--test-continuation-of <task-id>] [--restart-test --test-restart-reason <text>] [--write] [--json]
+  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--source-ref <ref>] [--design-intent <text>] [--acceptance-anchors <json>] [--evidence-contract <json>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--test-card-id <id>] [--test-continuation-of <task-id>] [--restart-test --test-restart-reason <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--dispatch-group <id>] [--supersede-result] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--craft-evidence <json>] [--summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
   node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked|redesign> --reason <text> [--evidence-ref <ref>] [--accept-blocked] [--write] [--json]
   node scripts/wakeflow-state.mjs complete-demand --state-root <path> --reason <text> --evidence-ref <ref> [--write] [--json]
-  node scripts/wakeflow-state.mjs continue-demand --state-root <path> --continuation-type <verified-bug|requirement-supplement|optimization> --reason <text> --evidence-ref <ref> --task-package-id <id> --summary <text> --target-window <window> --target-task-id <id> [--source-ref <ref>] [--design-intent <text>] [--evidence-contract <json>] [--write] [--json]
+  node scripts/wakeflow-state.mjs continue-demand --state-root <path> --continuation-type <verified-bug|requirement-supplement|optimization> --reason <text> --evidence-ref <ref> --task-package-id <id> --summary <text> --target-window <window> --target-task-id <id> [--source-ref <ref>] [--design-intent <text>] [--acceptance-anchors <json>] [--evidence-contract <json>] [--write] [--json]
   node scripts/wakeflow-state.mjs cancel-demand --state-root <path> --reason <text> [--write] [--json]
   node scripts/wakeflow-state.mjs archive-demand --state-root <path> --reason <text> [--redact] [--evidence-ref <ref>] [--write] [--json]
   node scripts/wakeflow-state.mjs sanitize-archive --state-root <archived-path> --reason <text> [--write] [--json]
@@ -155,6 +162,35 @@ function validateEvidenceContractShape(contract) {
     }
   }
   return contract;
+}
+
+// A small controller-authored bridge between the confirmed requirement and the
+// target's first RED checks. Anchors are behavior probes, not another test plan:
+// each one must say what is claimed, how the target can challenge it, and what
+// observable outcome proves the claim.
+function validateAcceptanceAnchorsShape(anchors) {
+  if (anchors == null) return null;
+  if (!Array.isArray(anchors) || anchors.length === 0) {
+    fail("--acceptance-anchors must be a non-empty JSON array of {id, claim, probe, expected} entries.");
+  }
+  const seen = new Set();
+  return anchors.map((anchor) => {
+    if (!anchor || typeof anchor !== "object" || Array.isArray(anchor)) {
+      fail("--acceptance-anchors entries must be objects with non-empty id, claim, probe, and expected strings.");
+    }
+    const normalized = {};
+    for (const field of ["id", "claim", "probe", "expected"]) {
+      if (typeof anchor[field] !== "string" || !anchor[field].trim()) {
+        fail("--acceptance-anchors entries must contain non-empty id, claim, probe, and expected strings.");
+      }
+      normalized[field] = anchor[field].trim();
+    }
+    if (seen.has(normalized.id)) {
+      fail(`--acceptance-anchors entries must have a unique id; duplicate: ${normalized.id}.`);
+    }
+    seen.add(normalized.id);
+    return normalized;
+  });
 }
 
 function readTestCardForTask(stateRoot, testCardId) {
@@ -1001,6 +1037,7 @@ function commandAddTaskPackageLocked(stateRoot) {
   // idempotency comparable (like designIntent) so it can be authored/adjusted without
   // breaking replay. Absent = zero behavior change.
   const evidenceContract = validateEvidenceContractShape(parseOptionalJsonArg("--evidence-contract"));
+  const acceptanceAnchors = validateAcceptanceAnchorsShape(parseOptionalJsonArg("--acceptance-anchors"));
   const targetWindow = getValue("--target-window", null);
   const targetTaskId = getValue("--target-task-id", targetWindow ? `${taskPackageId}__${slug(targetWindow)}` : null);
   const targetSummary = getValue("--target-summary", summary);
@@ -1069,6 +1106,7 @@ function commandAddTaskPackageLocked(stateRoot) {
     status: "pending",
     sourceRef,
     ...(designIntent ? { designIntent } : {}),
+    ...(acceptanceAnchors ? { acceptanceAnchors } : {}),
     ...(evidenceContract ? { evidenceContract } : {}),
     ...(testExecution ? { testExecution } : {}),
     createdAt,
@@ -1099,6 +1137,7 @@ function commandAddTaskPackageLocked(stateRoot) {
         status: "pending",
         sourceRef,
         ...(designIntent ? { designIntent } : {}),
+        ...(acceptanceAnchors ? { acceptanceAnchors } : {}),
         ...(evidenceContract ? { evidenceContract } : {}),
         ...(testExecution ? { testExecution } : {}),
         createdAt,
@@ -1211,6 +1250,7 @@ function commandContinueDemandLocked(stateRoot) {
   const targetSummary = getValue("--target-summary", summary);
   const sourceRef = getValue("--source-ref", null);
   const designIntent = (getValue("--design-intent", "") || "").trim() || null;
+  const acceptanceAnchors = validateAcceptanceAnchorsShape(parseOptionalJsonArg("--acceptance-anchors"));
   const evidenceContract = validateEvidenceContractShape(parseOptionalJsonArg("--evidence-contract"));
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
@@ -1281,6 +1321,7 @@ function commandContinueDemandLocked(stateRoot) {
     status: "pending",
     sourceRef,
     ...(designIntent ? { designIntent } : {}),
+    ...(acceptanceAnchors ? { acceptanceAnchors } : {}),
     ...(evidenceContract ? { evidenceContract } : {}),
     ...(testExecution ? { testExecution } : {}),
     continuation,
@@ -1303,6 +1344,7 @@ function commandContinueDemandLocked(stateRoot) {
         status: "pending",
         sourceRef,
         ...(designIntent ? { designIntent } : {}),
+        ...(acceptanceAnchors ? { acceptanceAnchors } : {}),
         ...(evidenceContract ? { evidenceContract } : {}),
         ...(testExecution ? { testExecution } : {}),
         continuation,
@@ -1462,11 +1504,11 @@ function targetResultAgentNext(deliveryContext, reviewReadiness) {
 }
 
 function reviewReadinessAfterImport(state, stateRoot, importedTargetTaskId, importedCurrentResult = true) {
-  const reviewScope = controllerReviewScope(state.targetTasks ?? []);
-  const targetTasks = reviewScope.reviewableTargetTasks;
   const results = latestResultsByTargetTask(readTargetResults(stateRoot));
   const taskIdsWithResults = new Set(results.keys());
   if (importedCurrentResult) taskIdsWithResults.add(importedTargetTaskId);
+  const reviewScope = controllerReductionScope(state.targetTasks ?? [], taskIdsWithResults);
+  const targetTasks = reviewScope.reviewableTargetTasks;
   const reworkCompanionPresent = reviewScope.mode === "rework-first-controller-review-targets"
     && targetTasks.some((task) => task.reviewRoute === "rework" && !hasPendingReworkDecision(task));
   const remainingTaskIds = [];
@@ -1803,12 +1845,12 @@ function commandReduceResultsLocked(stateRoot) {
   if (allTargetTasks.length === 0) {
     fail("controller state has no target tasks to reduce.");
   }
-  const reviewScope = controllerReviewScope(allTargetTasks);
+  const results = latestResultsByTargetTask(readTargetResults(stateRoot));
+  const reviewScope = controllerReductionScope(allTargetTasks, results.keys());
   const targetTasks = reviewScope.reviewableTargetTasks;
   if (targetTasks.length === 0) {
-    fail("controller state has no open target tasks to reduce; complete the demand or add the next task package by total-control judgment.");
+    fail("controller state has no dispatched or result-bearing target tasks to reduce; dispatch a pending target before result review.");
   }
-  const results = latestResultsByTargetTask(readTargetResults(stateRoot));
   const reworkCompanionPresent = reviewScope.mode === "rework-first-controller-review-targets"
     && targetTasks.some((task) => task.reviewRoute === "rework" && !hasPendingReworkDecision(task));
   const readyResultIds = [];
@@ -1965,8 +2007,18 @@ function commandReduceResultsLocked(stateRoot) {
       missingResultIds: missingTargetTaskIds,
     },
     targetTasks: allTargetTasks.map((task) => {
-      if (!reviewScope.targetTaskIds.includes(task.targetTaskId)) return task;
       const result = results.get(task.targetTaskId);
+      if (!reviewScope.targetTaskIds.includes(task.targetTaskId)) {
+        if (
+          task.status === "missing-result"
+          && !result
+          && !taskExpectsTargetResult(task)
+          && !isReworkRouteTask(task)
+        ) {
+          return { ...task, status: "pending", resultId: null };
+        }
+        return task;
+      }
       return {
         ...task,
         status: reductionStatusForTargetTask(task, result),

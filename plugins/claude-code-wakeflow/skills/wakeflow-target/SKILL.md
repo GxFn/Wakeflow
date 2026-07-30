@@ -16,10 +16,15 @@ Target wakeups should be task-first and compact:
 ```text
 Continue current window task: <currentWindow> / <taskId>.
 
+Task focus (full authority remains in the task package):
+- <one-line objective>
+
 Variables:
 - currentWindow: <window>
 - taskId: <taskId>
+- taskPackageId: <package>
 - stateRoot: <path>
+- stateRevision: <revision>
 - dispatchGroup: <group>
 - skill: skills/wakeflow-target/SKILL.md
 ```
@@ -27,9 +32,13 @@ Variables:
 Do not expect the prompt to repeat command manuals. Derive commands from the
 visible variables, this skill, the state root, and the local dispatch/delivery
 envelope. Fields such as `controllerWindow`, `returnPolicy`, `taskPackageId`,
-`stateRevision`, `humanContextRef`, and long rules belong in machine state, not
-in the visible prompt. If the prompt conflicts with the target repository,
-state root, or human context, stop and report instead of guessing.
+`stateRevision`, and `humanContextRef` remain authoritative in machine state;
+the visible `taskPackageId` / `stateRevision` are navigation and freshness
+anchors, not a second copy of task content. `stateRevision` identifies the
+dispatch snapshot in the packet/envelope; the later delivery-sent event may
+legitimately advance the live state root. Long rules stay out of the prompt. If
+the prompt conflicts with the packet/envelope, target repository, state root
+identity, or human context, stop and report instead of guessing.
 
 ## Target Flow
 
@@ -48,10 +57,11 @@ state root, or human context, stop and report instead of guessing.
    - Execute only the task assigned to this target window.
    - Do not claim another target, Test role, or controller role.
    - If the wake prompt carries a `craftSkill` line, or the task package carries
-     an `evidenceContract`, ALSO load `skills/wakeflow-target-craft/SKILL.md`
-     before writing code: it defines how to earn the craft evidence the
-     controller's reduce gate will require (a completed result missing a
-     required kind hard-fails with `craft-evidence-required`).
+     an `evidenceContract` or `acceptanceAnchors`, ALSO load
+     `skills/wakeflow-target-craft/SKILL.md` before writing code. When anchors
+     exist, map every anchor id to a RED test/probe before implementation; an
+     untestable or conflicting anchor is `needs-review`, never permission to
+     invent a replacement requirement.
    - When the task package carries `testExecution`, apply the Test alignment
      gate below before writing a plan or running a command.
 3. Work inside repository boundaries.

@@ -64,8 +64,10 @@ Current scripts:
   `--print` to inspect the exact commands before running them.
 - `wakeflow-state.mjs`: state-root manager. `init` creates a per-demand
   machine directory from `templates/wakeflow-template-bundle.json`; `add-task-package`
-  writes task package JSON and moves an intake / rework demand back to
-  `planned`; `import-target-result` stores result evidence; `reduce-results`
+  validates and writes optional controller-authored
+  `{id,claim,probe,expected}` acceptance anchors with the task package, then
+  moves an intake / rework demand back to `planned`; `import-target-result`
+  stores result evidence; `reduce-results`
   creates review candidates; `decide-review` records explicit total-control
   judgment; `complete-demand` records the final completion transition after
   accepted task evidence; `archive-demand` scans real IDs and user/workspace

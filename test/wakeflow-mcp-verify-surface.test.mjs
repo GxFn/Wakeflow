@@ -50,6 +50,18 @@ test("wakeflow_claim_next MCP tool is registered with a handler", () => {
   assert.equal(typeof handlers.wakeflow_claim_next, "function", "wakeflow_claim_next must have a handler");
 });
 
+test("task-package MCP tools expose bounded acceptance anchors", () => {
+  const addTask = tools.find((tool) => tool.name === "wakeflow_add_task");
+  const createDemand = tools.find((tool) => tool.name === "wakeflow_create_demand");
+  const continueDemand = tools.find((tool) => tool.name === "wakeflow_continue_demand");
+  assert.equal(addTask.inputSchema.properties.acceptanceAnchors.type, "array");
+  assert.equal(
+    createDemand.inputSchema.properties.taskPackages.items.properties.acceptanceAnchors.type,
+    "array",
+  );
+  assert.equal(continueDemand.inputSchema.properties.acceptanceAnchors.type, "array");
+});
+
 test("wakeflow_prune_runtime MCP tool is registered with a handler", () => {
   const prune = tools.find((t) => t.name === "wakeflow_prune_runtime");
   assert.ok(prune, "wakeflow_prune_runtime tool must be registered");

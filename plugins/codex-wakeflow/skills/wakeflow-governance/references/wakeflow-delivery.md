@@ -19,13 +19,22 @@ Target prompts stay compact:
 ```text
 Continue current window task: <currentWindow> / <taskId>.
 
+Task focus (full authority remains in the task package):
+- <one-line objective>
+
 Variables:
 - currentWindow: <window>
 - taskId: <taskId>
+- taskPackageId: <package>
 - stateRoot: <path>
+- stateRevision: <revision>
 - dispatchGroup: <group>
 - skill: skills/wakeflow-target/SKILL.md
 ```
+
+When the task package carries `acceptanceAnchors`, the prompt also points to
+that field and tells the target to map every anchor to a RED test/probe before
+implementation. Full anchor content remains in machine state.
 
 Controller-return prompts stay compact:
 

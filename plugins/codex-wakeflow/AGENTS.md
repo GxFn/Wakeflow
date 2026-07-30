@@ -169,6 +169,12 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   delivery is controller-started unless the plan and envelope authorize an
   exception. Old claim/finish/chain-next/start-plan/resume-plan routes are
   retired.
+- An implementation task package may carry controller-authored
+  `acceptanceAnchors` derived from confirmed requirement authority. Before
+  coding, the target maps every `{id,claim,probe,expected}` anchor to a RED
+  test/probe; an untestable or conflicting anchor returns `needs-review`.
+  Neither the controller nor target invents missing requirement scope through
+  an anchor.
 - Within one demand each repository runs exactly ONE window with ONE combined
   task package (the window self-sequences its items); a window is never
   dispatched two simultaneous tasks inside the same demand. Isolation worktree

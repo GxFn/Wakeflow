@@ -15,6 +15,11 @@ export function isReworkRouteTask(task) {
   return hasPendingReworkDecision(task) || task?.reviewRoute === "rework";
 }
 
+export function taskExpectsTargetResult(task) {
+  if (task?.delivery?.deliveryRunId) return true;
+  return ["sent", "active", "completed", "blocked", "needs-review"].includes(task?.status || "");
+}
+
 export function controllerReviewScope(targetTasks = []) {
   const openTargetTasks = [];
   const excludedTargetTaskIds = [];
@@ -48,6 +53,25 @@ export function controllerReviewScope(targetTasks = []) {
     targetTaskIds: openTargetTasks.map((task) => task.targetTaskId),
     excludedTargetTaskIds,
     reviewableTargetTasks: openTargetTasks,
+  };
+}
+
+export function controllerReductionScope(targetTasks = [], currentResultTaskIds = []) {
+  const resultTaskIds = new Set(currentResultTaskIds);
+  const reductionCandidates = targetTasks.filter((task) => (
+    hasFinalControllerDecision(task)
+    || isReworkRouteTask(task)
+    || resultTaskIds.has(task.targetTaskId)
+    || taskExpectsTargetResult(task)
+  ));
+  const scope = controllerReviewScope(reductionCandidates);
+  const targetTaskIds = new Set(scope.targetTaskIds);
+
+  return {
+    ...scope,
+    excludedTargetTaskIds: targetTasks
+      .filter((task) => !targetTaskIds.has(task.targetTaskId))
+      .map((task) => task.targetTaskId),
   };
 }
 

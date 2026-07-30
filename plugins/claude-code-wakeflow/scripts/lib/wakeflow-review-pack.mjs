@@ -16,6 +16,9 @@ export function reviewAdvisories(targetResults) {
     ...(targetResults.some((item) => item.advisoryCraftKinds?.length)
       ? { craftCheck: "Some tasks declared advisory craft evidence (e.g. self-review, test-first); required craft kinds are already enforced at reduce-results. Reminder only (not a gate): when judging quality, check the target's self-review note and test-first commit history." }
       : {}),
+    ...(targetResults.some((item) => item.acceptanceAnchors?.length)
+      ? { acceptanceAnchorCheck: "For each controller-authored acceptanceAnchor, inspect the target's RED/GREEN mapping and independently rerun or challenge the named probe. An anchor is requirement authority, but the target's mapping is still review input rather than acceptance proof." }
+      : {}),
     ...(targetResults.some((item) => item.testExecution)
       ? {
           controllerAcceptanceBoundary: "Functional completeness and correctness remain total control's pre-Test validation and acceptance responsibility. Test evidence may expose an environment-specific edge or hidden defect, but a Test pass cannot fill missing controller proof and a Test failure must be classified against the confirmed goal before rework.",

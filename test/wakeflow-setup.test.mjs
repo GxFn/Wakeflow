@@ -1200,9 +1200,11 @@ test("write-agents is dry-run by default and writes managed access cards with --
   assert.match(baseAgents, /Current plan directory: `\.\.\/Wakeflow\/\.wakeflow-active\/current`/);
   assert.match(baseAgents, /Window ledger: `\.\.\/wakeflow-ledger\/BaseWindow`/);
   assert.match(baseAgents, /Direct-thread delivery is the normal work transport/);
-  assert.match(baseAgents, /Delivery prompts carry only a few dynamic variables and a skill pointer/);
-  assert.match(baseAgents, /visible `currentWindow` \/ `taskId` \/ `stateRoot` \/ optional `dispatchGroup`/);
-  assert.match(baseAgents, /Machine fields such as `controllerWindow`, `returnPolicy`, `humanContextRef`, and `stateRevision`/);
+  assert.match(baseAgents, /Delivery prompts carry one bounded task-focus sentence, navigation\/freshness variables/);
+  assert.match(baseAgents, /`currentWindow`, `taskId`, `taskPackageId`, `stateRoot`, `stateRevision`/);
+  assert.match(baseAgents, /visible `stateRevision` identifies the dispatch snapshot/);
+  assert.match(baseAgents, /implementation package carries `acceptanceAnchors`/);
+  assert.match(baseAgents, /map each anchor to a RED test\/probe before coding/);
   assert.match(baseAgents, /returns `TargetResultEnvelope`/);
   assert.match(baseAgents, /The full group snapshot stays in the controller-return envelope/);
   assert.match(baseAgents, /Codex subagents are recommended for bounded parallel assistance/);

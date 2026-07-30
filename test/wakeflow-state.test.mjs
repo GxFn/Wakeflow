@@ -418,6 +418,13 @@ test("add-task-package updates machine state without changing progress doc", () 
     "Create the first task package.",
     "--source-ref",
     "test-source",
+    "--acceptance-anchors",
+    JSON.stringify([{
+      id: "AC-1",
+      claim: "The package preserves the existing public behavior.",
+      probe: "Run the existing public-entry regression.",
+      expected: "The regression remains green.",
+    }]),
     "--target-window",
     "AlembicWorkspace",
     "--target-task-id",
@@ -441,14 +448,62 @@ test("add-task-package updates machine state without changing progress doc", () 
   assert.deepEqual(state.allowedActions, ["prepare-dispatch-from-state", "add-task-package", "wakeflow-render-progress"]);
   assert.equal(state.projection.status, "stale");
   assert.equal(state.taskPackages[0].taskPackageId, "CSMR-PKG-1");
+  assert.deepEqual(state.taskPackages[0].acceptanceAnchors, [{
+    id: "AC-1",
+    claim: "The package preserves the existing public behavior.",
+    probe: "Run the existing public-entry regression.",
+    expected: "The regression remains green.",
+  }]);
   assert.equal(state.targetTasks[0].targetTaskId, "CSMR-TASK-1");
   assert.equal(state.windows[0].windowName, "AlembicWorkspace");
   assert.equal(taskPackage.targetTasks[0].targetWindow, "AlembicWorkspace");
+  assert.deepEqual(taskPackage.acceptanceAnchors, state.taskPackages[0].acceptanceAnchors);
   assert.equal(existsSync(path.join(stateRoot, "task-packages")), true);
   assert.equal(existsSync(path.join(stateRoot, "automation")), false);
   assert.equal(events.length, 2);
   assert.equal(JSON.parse(events[1]).type, "task-package.added");
   assertOnlyTimelineAppend(progressAfter, progressBefore, /CSMR-PKG-1 → AlembicWorkspace/);
+});
+
+test("add-task-package rejects malformed or duplicate acceptance anchors", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run([
+    "init", "--root", root, "--demand-key", "ANCHOR-SHAPE", "--title", "Anchor shape", "--write", "--json",
+  ]).stdout);
+  const baseArgs = [
+    "add-task-package",
+    "--root", root,
+    "--state-root", init.stateRoot,
+    "--task-package-id", "PKG-1",
+    "--summary", "Implement the package.",
+    "--target-window", "WinA",
+    "--target-task-id", "TASK-1",
+    "--write",
+    "--json",
+  ];
+
+  const malformed = run([
+    ...baseArgs,
+    "--acceptance-anchors",
+    JSON.stringify([{ id: "AC-1", claim: "A claim without a probe.", expected: "reject" }]),
+  ]);
+  assert.notEqual(malformed.status, 0);
+  assert.match(malformed.stdout, /claim, probe, and expected/);
+
+  const duplicate = run([
+    ...baseArgs,
+    "--acceptance-anchors",
+    JSON.stringify([
+      { id: "AC-1", claim: "First", probe: "Probe first", expected: "Pass first" },
+      { id: "AC-1", claim: "Second", probe: "Probe second", expected: "Pass second" },
+    ]),
+  ]);
+  assert.notEqual(duplicate.status, 0);
+  assert.match(duplicate.stdout, /unique id/);
+
+  const state = readJson(path.join(root, init.stateRoot, "wakeflow-state.json"));
+  assert.equal(state.revision, 1);
+  assert.equal(state.taskPackages.length, 0);
 });
 
 test("add-task-package rejects a targetTaskId already owned by another package", () => {
@@ -937,6 +992,184 @@ test("reduce-results creates controller review candidate without accepting work"
   assert.equal(reviewEvent.wakeflowTrace.stateRoot, initPayload.stateRoot);
   assert.equal(reviewEvent.wakeflowTrace.stateRevision, 3);
   assert.equal(progressAfter, progressBefore);
+});
+
+test("reduce-results scopes a staged wave to dispatched or result-bearing tasks", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run([
+    "init",
+    "--root",
+    root,
+    "--demand-key",
+    "PARTIAL-WAVE-FIXTURE",
+    "--title",
+    "Partial Wave Fixture",
+    "--write",
+    "--json",
+  ]).stdout);
+  const stateRoot = path.join(root, init.stateRoot);
+  const tasks = [
+    ["PKG-CORE", "TASK-CORE", "Core"],
+    ["PKG-AGENT", "TASK-AGENT", "Agent"],
+    ["PKG-MAIN", "TASK-MAIN", "Main"],
+    ["PKG-PLUGIN", "TASK-PLUGIN", "Plugin"],
+  ];
+  for (const [taskPackageId, targetTaskId, targetWindow] of tasks) {
+    run([
+      "add-task-package",
+      "--root",
+      root,
+      "--state-root",
+      init.stateRoot,
+      "--task-package-id",
+      taskPackageId,
+      "--summary",
+      `Implement ${targetWindow}.`,
+      "--target-window",
+      targetWindow,
+      "--target-task-id",
+      targetTaskId,
+      "--write",
+      "--json",
+    ]);
+  }
+
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const before = readJson(stateFile);
+  before.targetTasks = before.targetTasks.map((task) => {
+    if (!["TASK-CORE", "TASK-AGENT"].includes(task.targetTaskId)) return task;
+    return {
+      ...task,
+      status: "sent",
+      delivery: {
+        deliveryId: `DELIVERY-${task.targetTaskId}`,
+        deliveryRunId: `RUN-${task.targetTaskId}`,
+        dispatchGroup: "GROUP-UPSTREAM",
+      },
+    };
+  });
+  writeFileSync(stateFile, `${JSON.stringify(before, null, 2)}\n`);
+
+  for (const [targetTaskId, targetWindow] of [["TASK-CORE", "Core"], ["TASK-AGENT", "Agent"]]) {
+    const evidenceRef = `reports/${targetTaskId.toLowerCase()}.json`;
+    run([
+      "import-target-result",
+      "--root",
+      root,
+      "--state-root",
+      init.stateRoot,
+      "--target-task-id",
+      targetTaskId,
+      "--target-window",
+      targetWindow,
+      "--status",
+      "completed",
+      "--result-id",
+      `RESULT-${targetTaskId}`,
+      "--dispatch-group",
+      "GROUP-UPSTREAM",
+      "--evidence-ref",
+      evidenceRef,
+      "--write",
+      "--json",
+    ]);
+    writeStateRootEvidence(root, init.stateRoot, evidenceRef);
+  }
+
+  const reduced = JSON.parse(run([
+    "reduce-results",
+    "--root",
+    root,
+    "--state-root",
+    init.stateRoot,
+    "--write",
+    "--json",
+  ]).stdout);
+  assert.equal(reduced.nextState, "review-ready");
+  assert.deepEqual(reduced.targetTaskIds, ["TASK-CORE", "TASK-AGENT"]);
+  assert.deepEqual(reduced.missingResultIds, []);
+
+  const state = readJson(stateFile);
+  const candidate = readJson(path.join(stateRoot, `transition-candidates/${reduced.candidateId}.json`));
+  assert.deepEqual(candidate.excludedTargetTaskIds, ["TASK-MAIN", "TASK-PLUGIN"]);
+  assert.equal(state.targetTasks.find((task) => task.targetTaskId === "TASK-MAIN").status, "pending");
+  assert.equal(state.targetTasks.find((task) => task.targetTaskId === "TASK-PLUGIN").status, "pending");
+});
+
+test("reduce-results repairs legacy false missing-result status on an undispatched task", () => {
+  const root = makeRoot();
+  const init = JSON.parse(run([
+    "init",
+    "--root",
+    root,
+    "--demand-key",
+    "FALSE-MISSING-RECOVERY",
+    "--title",
+    "False Missing Recovery",
+    "--write",
+    "--json",
+  ]).stdout);
+  const stateRoot = path.join(root, init.stateRoot);
+  for (const [taskPackageId, targetTaskId] of [["PKG-UPSTREAM", "TASK-UPSTREAM"], ["PKG-DOWNSTREAM", "TASK-DOWNSTREAM"]]) {
+    run([
+      "add-task-package",
+      "--root",
+      root,
+      "--state-root",
+      init.stateRoot,
+      "--task-package-id",
+      taskPackageId,
+      "--summary",
+      taskPackageId,
+      "--target-window",
+      taskPackageId,
+      "--target-task-id",
+      targetTaskId,
+      "--write",
+      "--json",
+    ]);
+  }
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const corrupted = readJson(stateFile);
+  corrupted.targetTasks = corrupted.targetTasks.map((task) => task.targetTaskId === "TASK-DOWNSTREAM"
+    ? { ...task, status: "missing-result", resultId: null }
+    : task);
+  writeFileSync(stateFile, `${JSON.stringify(corrupted, null, 2)}\n`);
+  const evidenceRef = "reports/upstream.json";
+  run([
+    "import-target-result",
+    "--root",
+    root,
+    "--state-root",
+    init.stateRoot,
+    "--target-task-id",
+    "TASK-UPSTREAM",
+    "--target-window",
+    "PKG-UPSTREAM",
+    "--status",
+    "completed",
+    "--result-id",
+    "RESULT-UPSTREAM",
+    "--evidence-ref",
+    evidenceRef,
+    "--write",
+    "--json",
+  ]);
+  writeStateRootEvidence(root, init.stateRoot, evidenceRef);
+
+  const reduced = JSON.parse(run([
+    "reduce-results",
+    "--root",
+    root,
+    "--state-root",
+    init.stateRoot,
+    "--write",
+    "--json",
+  ]).stdout);
+  assert.deepEqual(reduced.targetTaskIds, ["TASK-UPSTREAM"]);
+  assert.deepEqual(reduced.missingResultIds, []);
+  const repaired = readJson(stateFile);
+  assert.equal(repaired.targetTasks.find((task) => task.targetTaskId === "TASK-DOWNSTREAM").status, "pending");
 });
 
 test("reduce-results refuses to create a review candidate with missing evidence refs", () => {
@@ -1839,11 +2072,23 @@ test("import-target-result never claims an unclaimed demand and rejects --adopt-
 });
 
 
-test("import-target-result reports review readiness so reduce is never speculative", () => {
+test("import-target-result reports readiness across all dispatched tasks", () => {
   const root = makeRoot();
   const init = JSON.parse(run(["init", "--root", root, "--demand-key", "READY-FIXTURE", "--title", "Ready", "--write", "--json"]).stdout);
   run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Pkg", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
   run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-2", "--summary", "Pkg2", "--target-window", "WinB", "--target-task-id", "TASK-2", "--write", "--json"]);
+  const stateFile = path.join(root, init.stateRoot, "wakeflow-state.json");
+  const dispatched = readJson(stateFile);
+  dispatched.targetTasks = dispatched.targetTasks.map((task) => ({
+    ...task,
+    status: "sent",
+    delivery: {
+      deliveryId: `DELIVERY-${task.targetTaskId}`,
+      deliveryRunId: `RUN-${task.targetTaskId}`,
+      dispatchGroup: "GROUP-READY",
+    },
+  }));
+  writeFileSync(stateFile, `${JSON.stringify(dispatched, null, 2)}\n`);
 
   const first = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "a.md", "--write", "--json"]).stdout);
   assert.equal(first.reviewReadiness.readyForReduce, false);

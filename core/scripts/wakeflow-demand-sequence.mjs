@@ -274,6 +274,7 @@ function commandCreateDemand() {
     if (pkg.targetTaskId) tpArgs.push("--target-task-id", pkg.targetTaskId);
     if (pkg.sourceRef) tpArgs.push("--source-ref", pkg.sourceRef);
     if (pkg.designIntent) tpArgs.push("--design-intent", pkg.designIntent);
+    if (pkg.acceptanceAnchors) tpArgs.push("--acceptance-anchors", JSON.stringify(pkg.acceptanceAnchors));
     if (pkg.evidenceContract) tpArgs.push("--evidence-contract", JSON.stringify(pkg.evidenceContract));
     tpArgs.push("--write", "--json");
     runControllerState(tpArgs);

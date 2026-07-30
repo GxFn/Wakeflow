@@ -89,6 +89,12 @@ machine state.
    classify the new fact before acting: same-demand continuation, independent
    follow-up, or no work. Never call `wakeflow_add_task` against completed state.
 5. Create or select a task package only when it advances the confirmed goal.
+   For implementation work, author a small `acceptanceAnchors` list from the
+   confirmed requirement: each entry names `{id, claim, probe, expected}` that
+   the target can turn into a RED check before coding. Do not invent anchors
+   from implementation leftovers; if the required behavior cannot be stated as
+   a probe, the package is not ready. Doc-only and research packages may omit
+   anchors.
 6. For a Test package, first confirm every existing non-Test target is
    `accepted` and `controllerSelfChecks` states what you already verified and
    why the real scenario remains necessary. A Test-only reproduction or
@@ -143,6 +149,8 @@ id>` (the session id is stable), then relaunch the resident window with
    - Are inputs, outputs, state/data changes, call chains, real consumers,
      failure paths, and edge cases covered enough for this task scope?
    - Did the target stay inside its assigned window/repository and task package?
+   - For every authored acceptance anchor, where is the target's RED/GREEN
+     mapping, and what fresh independent probe did I run against the claim?
    - Are tests or probes at the right seam, and did they cover the behavior that
      matters?
    - For a non-Test target, have I personally established functional

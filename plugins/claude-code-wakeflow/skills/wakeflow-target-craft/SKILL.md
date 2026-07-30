@@ -19,14 +19,27 @@ Do the practice and the evidence is a by-product; skip it and you will be asked
 for evidence you never produced. Craft is how you earn the gate, not extra
 ceremony on top of it.
 
+**NO IMPLEMENTATION UNTIL EVERY AUTHORED `acceptanceAnchor` IS MAPPED TO A RED TEST OR PROBE.**
+Violating the letter of this rule is violating its spirit.
+
+- Read `objective`, `designIntent`, `forbidden`, and `acceptanceAnchors` from
+  the assigned packet/package before planning code.
+- For each anchor, record `id -> test/probe seam -> expected RED -> expected
+  GREEN`. Use the exact confirmed claim; do not widen it.
+- If an anchor is untestable, conflicts with another authority, or requires
+  missing facts, return `needs-review`. Never invent a replacement goal.
+- When no anchors were authored, do not create requirement authority yourself;
+  use the package's existing requirement and evidence contract.
+
 ## The seven practices (each earns a piece of evidence)
 
 ### 1. Plan before you code (self-sequence the combined package)
 
 Your window receives ONE combined task package and self-sequences its items.
 Before touching code, write a short ordered plan: item order, the files each
-item touches, and how each item will be verified. Then execute ONE item at a
-time — verify it before starting the next; do not interleave half-done items.
+item touches, how each item will be verified, and the acceptance-anchor mapping
+when present. Then execute ONE item at a time — verify it before starting the
+next; do not interleave half-done items.
 
 - Earns: an execution-plan note (kind `execution-plan`, optional but welcome).
 - The plan also protects you across session compaction: re-read it and the
@@ -49,6 +62,9 @@ Before writing implementation for a behavior, write a test that expresses it and
 watch it FAIL for the right reason. Then write the minimum code to make it pass
 and watch it GREEN.
 
+- For authored acceptance anchors, the RED must exercise the anchor's declared
+  probe or a demonstrably equivalent public seam. Report the mapping by anchor
+  id; a general green suite does not prove an unmapped anchor.
 - **Bug-fix hard gate:** before editing production code, reproduce the defect
   through the real entrypoint named by the task package and capture the RED.
   Once implementation starts, do not weaken or change that test's entrypoint or
@@ -85,8 +101,9 @@ Do not guess-and-patch. Build a feedback loop first:
 Before writing the `TargetResultEnvelope`, review your own diff in TWO passes:
 
 - **Stage 1 — spec compliance**: does the diff do what the task package,
-  `designIntent`, and evidence contract ask — nothing missing, nothing extra?
-  Compare against the ORIGINAL wording, not your memory of it.
+  `designIntent`, acceptance anchors, and evidence contract ask — nothing
+  missing, nothing extra? Compare against the ORIGINAL wording, not your memory
+  of it.
 - **Stage 2 — code quality**: as a skeptical reviewer — correctness, safety,
   maintainability, tests. List findings by severity; fix blockers before
   returning, record the rest.
@@ -155,6 +172,7 @@ The reduce gate matches `kind` strings EXACTLY — use these spellings:
 | `regression` | The fail-before/pass-after regression test for a defect |
 | `baseline` | Pre-change suite/typecheck/lint outcome (practice 2) |
 | `execution-plan` | The ordered self-sequencing plan (practice 1) |
+| `acceptance-anchors` | Mapping from each authored anchor id to its RED/GREEN test or probe |
 | `self-review` | Two-stage self-review note; carries rework responses |
 | `test-first` | Pointer showing the failing-test commit precedes impl |
 | `change-scope` | Statement/diff-stat that changes stay inside designIntent |
@@ -191,7 +209,8 @@ line.
 
 A task done with craft returns a `TargetResultEnvelope` whose evidence a
 controller can accept without a round-trip: a plan that was followed, a pinned
-baseline, tests that exist and pass, a diff within declared scope, verification
+baseline, every authored acceptance anchor mapped to observed RED/GREEN
+evidence, tests that exist and pass, a diff within declared scope, verification
 output, and — for defects — a reproduction and regression. If any of these is
 missing, say so honestly (`blocked` / `needs-review`) rather than reporting
 `completed`.

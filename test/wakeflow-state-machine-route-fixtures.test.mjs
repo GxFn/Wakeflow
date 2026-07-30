@@ -302,8 +302,8 @@ test("unattended route prepares dispatch and controller return from stateRoot wi
   assert.equal(preparedPayload.packet.stateRef.stateRoot, stateRootRef);
   assert.doesNotMatch(preparedPayload.packet.prompt, /controlPlan:/);
   assert.doesNotMatch(preparedPayload.packet.prompt, /humanContextRef:/);
-  assert.doesNotMatch(preparedPayload.packet.prompt, /stateRevision:/);
-  assert.doesNotMatch(preparedPayload.packet.prompt, /taskPackageId:/);
+  assert.match(preparedPayload.packet.prompt, /stateRevision:/);
+  assert.match(preparedPayload.packet.prompt, /taskPackageId:/);
   assert.doesNotMatch(preparedPayload.packet.prompt, /demandKey:/);
   assert.doesNotMatch(preparedPayload.packet.prompt, /rules:/);
 
@@ -390,10 +390,12 @@ test("failure route waits on missing results, surfaces blocked evidence, and rej
   assert.equal(missingPayload.reviewPack.gates.pendingDispatchTargetsPresent, true);
   assert.equal(missingPayload.reviewPack.nextAction, "dispatch-pending-target-before-result-review");
 
-  const reducedMissing = reduceResults(root, stateRootRef);
-  assert.equal(reducedMissing.nextState, "waiting-results");
-  assert.equal(reducedMissing.candidateId, null);
-  assert.deepEqual(reducedMissing.missingResultIds, [manifest.taskPackage.targetTaskId]);
+  const reducedMissingRun = runController(["reduce-results", "--state-root", stateRootRef, "--write"], root);
+  assert.notEqual(reducedMissingRun.status, 0);
+  const reducedMissing = JSON.parse(reducedMissingRun.stdout);
+  assert.equal(reducedMissing.ok, false);
+  assert.match(reducedMissing.error, /dispatch a pending target before result review/);
+  assert.equal(readJson(path.join(stateRoot, "wakeflow-state.json")).revision, 2);
 
   writeJson(path.join(stateRoot, manifest.result.evidenceRef), { ok: false, route: "failure" });
   importResult(root, stateRootRef, manifest);

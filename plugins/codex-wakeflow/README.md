@@ -47,6 +47,9 @@ Wakeflow provides the missing control layer:
   configured responsibility boundary.
 - **Compact delivery**: direct-thread prompts wake the right window with a small
   envelope; the state root and skills hold the task details.
+- **Acceptance-anchored craft**: implementation packages may carry concrete
+  claim/probe/expected anchors that targets map to RED checks before coding;
+  the controller still reruns and judges the evidence independently.
 - **Evidence before acceptance**: target backfill is input, not a conclusion.
   The controller still reviews raw evidence before completing work.
 - **Local-first runtime**: real thread ids live only in the local thread
@@ -96,7 +99,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.16/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.17/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository

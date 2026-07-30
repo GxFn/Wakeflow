@@ -81,6 +81,12 @@ Each task package must state:
 - whether completion leads to next phase, observation, archive, or user
   decision.
 
+For implementation packages, add a small `acceptanceAnchors` array derived
+only from confirmed requirement authority. Each `{id, claim, probe, expected}`
+entry names one behavior the target must pin as RED before coding. This is not a
+second test plan: omit it for doc-only/research work, and route an unstated
+requirement back to Design/user instead of inventing an anchor.
+
 ## Status Rules
 
 State-machine sources should store machine ids and let
@@ -96,20 +102,23 @@ migration input only.
 ## Standard Prompt
 
 ```text
-Execute your assigned combined task package: <taskPackageId — one-line summary>.
+Continue current window task: <currentWindow> / <taskId>.
 
-First read: CLAUDE.md, .wakeflow-active/index.md,
-.wakeflow-active/current/<current-controller-document>.md, and this
-window/repository CLAUDE.md.
+Task focus (full authority remains in the task package):
+- <one-line objective>
 
-Identity: state the current window and repository responsibility.
-
-Claim: take only the task assigned to this window by the current plan.
-
-When done, backfill evidence, boundaries, risks, and recommended next steps
-according to the current plan.
+Variables:
+- currentWindow: <window>
+- taskId: <taskId>
+- taskPackageId: <package>
+- stateRoot: <path>
+- stateRevision: <dispatch-snapshot-revision>
+- dispatchGroup: <group>
+- skill: skills/wakeflow-target/SKILL.md
 ```
 
 Prompts must stay short. Detailed goals, validation commands, forbidden paths,
 evidence fields, and test inference boundaries belong in the state root, task
-package, repository `CLAUDE.md`, or skill references.
+package, repository `CLAUDE.md`, or skill references. When acceptance anchors
+exist, add only the craft-skill and anchor pointers plus the pre-code RED
+reminder; do not copy the anchor bodies into the prompt.

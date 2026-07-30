@@ -94,32 +94,51 @@ export function createWindowRuntime(ctx) {
     taskId,
     dispatchGroup,
     stateRef,
+    objective = "",
     interfaceLanguage = "en",
     craftSkill = false,
     testExecution = false,
+    acceptanceAnchors = false,
   }) {
     if (!stateRef) fail("Target prompts require stateRef from a controller state root.");
     // Human-readable sentences follow the demand interfaceLanguage so the
     // target window answers in the workspace language; machine variable KEYS
-    // (currentWindow/taskId/stateRoot/dispatchGroup/skill) stay English by
-    // contract.
+    // (currentWindow/taskId/taskPackageId/stateRoot/stateRevision/
+    // dispatchGroup/skill) stay English by contract.
     const zh = interfaceLanguage === "zh";
+    const normalizedObjective = String(objective || `Complete ${taskId}.`).replace(/\s+/g, " ").trim();
+    const promptObjective = normalizedObjective.length > 240
+      ? `${normalizedObjective.slice(0, 239).trimEnd()}…`
+      : normalizedObjective;
     return [
       zh
         ? `\u7ee7\u7eed\u5f53\u524d\u7a97\u53e3\u4efb\u52a1\uff1a${targetWindow} / ${taskId}\u3002`
         : `Continue current window task: ${targetWindow} / ${taskId}.`,
       "",
+      zh ? "\u4efb\u52a1\u7126\u70b9\uff08\u5b8c\u6574\u6743\u5a01\u4ecd\u4ee5\u4efb\u52a1\u5305\u4e3a\u51c6\uff09\uff1a" : "Task focus (full authority remains in the task package):",
+      `- ${promptObjective}`,
+      "",
+      ...(acceptanceAnchors
+        ? [
+            zh
+              ? "\u7f16\u7801\u524d\uff1a\u8bfb\u53d6\u6307\u5b9a\u4efb\u52a1\u5305\uff0c\u5c06\u6bcf\u4e2a acceptanceAnchor \u6620\u5c04\u4e3a RED \u6d4b\u8bd5\u6216\u63a2\u9488\uff1b\u65e0\u6cd5\u9a8c\u8bc1\u6216\u5b58\u5728\u51b2\u7a81\u65f6\u8fd4\u56de needs-review\uff0c\u4e0d\u5f97\u81ea\u884c\u8865\u5145\u9700\u6c42\u3002"
+              : "Before coding: read the assigned task package and map every acceptanceAnchor to a RED test or probe before implementation; return needs-review instead of inventing requirements when an anchor is untestable or conflicting.",
+            "",
+          ]
+        : []),
       zh ? "\u53d8\u91cf\uff1a" : "Variables:",
       `- currentWindow: ${targetWindow}`,
       `- taskId: ${taskId}`,
+      `- taskPackageId: ${stateRef.taskPackageId}`,
       `- stateRoot: ${stateRef.stateRoot}`,
+      `- stateRevision: ${stateRef.stateRevision}`,
       ...(dispatchGroup ? [`- dispatchGroup: ${dispatchGroup}`] : []),
       "- skill: skills/wakeflow-target/SKILL.md",
-      // Activation chain for the execution-craft skill: only when the task package
-      // carries an evidence contract (zero traces otherwise — reminder-first). The
-      // wake prompt is the one surface a target is GUARANTEED to read; a craft gate
-      // whose skill never activates would fail the target at reduce time.
+      // Activation chain for execution craft: an evidence contract or authored
+      // acceptance anchors require the target to load the craft skill. The wake
+      // prompt is the one surface a target is GUARANTEED to read.
       ...(craftSkill ? ["- craftSkill: skills/wakeflow-target-craft/SKILL.md"] : []),
+      ...(acceptanceAnchors ? [`- acceptanceAnchors: task-packages/${stateRef.taskPackageId}.json#acceptanceAnchors`] : []),
       ...(testExecution ? [`- testContract: task-packages/${stateRef.taskPackageId}.json#testExecution`] : []),
     ].join("\n");
   }

@@ -44,10 +44,15 @@ Wakeflow provides the missing control layer:
   dispatch decisions, acceptance, TODO routing, and archive decisions.
 - **One state root per demand**: task packages, target results, review
   candidates, decisions, and progress projections stay tied to the same demand.
+- **Context-complete task packages**: each new package records one objective,
+  anchored requirement references, boundaries, completion expectations,
+  dependencies, and the repository commit decision; dispatch derives the
+  required execution Skills from that package.
 - **Focused child windows**: each repository window works only inside its
   configured responsibility boundary.
-- **Compact delivery**: delivery prompts wake the right window with a small
-  envelope; the state root and skills hold the task details.
+- **Preview-gated compact delivery**: the controller reviews the resolved
+  repository, task briefing, Skills, and exact prompt before a digest-matched
+  apply can write the delivery envelope.
 - **Acceptance-anchored craft**: implementation packages may carry concrete
   claim/probe/expected anchors that targets map to RED checks before coding;
   the controller still reruns and judges the evidence independently.
@@ -105,8 +110,8 @@ disk. Every demand moves through the same closed loop:
 ```text
  1 init       raw state init creates the demand root               (unclaimed)
  2 claim      public create, or first raw-state drive, binds host  (codex | claude)
- 3 add task   a task package names the target window and scope
- 4 dispatch   envelope written -> window LOCKED -> prompt pasted into the pane
+ 3 add task   a task package freezes target context and requirement anchors
+ 4 dispatch   preview -> digest-matched apply -> LOCK -> prompt pasted
  5 work       the target window executes inside its repository boundary
  6 result     TargetResultEnvelope lands with evidence refs -> lock released
  7 review     controller reads RAW evidence, then accepts / reworks / blocks
@@ -597,8 +602,10 @@ the Claude Code edition manual.
    are evidence, not acceptance.
 2. **One demand, one state root**: JSON state and Markdown progress surfaces
    stay tied to the same demand.
-3. **Prompts wake, state instructs**: prompts should be compact; task detail
-   belongs in state roots, task packages, and installed skills.
+3. **Prompts wake, packages contextualize, skills execute**: prompts carry the
+   current target and reading order; task packages own complete per-target
+   context, requirement anchors retain original background, and installed
+   skills own execution procedure.
 4. **Repository boundaries matter**: each window owns its source, tests,
    commits, and evidence.
 5. **Automation moves work, not authority**: delivery proves that a prompt was

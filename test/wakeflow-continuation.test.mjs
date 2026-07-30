@@ -227,6 +227,11 @@ test("MCP exposes continue-demand and cancel forwards root to the state runtime"
   assert.equal(continuationTool.inputSchema.properties.acceptanceAnchors.type, "array");
 
   const continued = makeCompletedDemand("CONT-MCP");
+  mkdirSync(path.join(continued.root, "decisions"), { recursive: true });
+  writeFileSync(
+    path.join(continued.root, "decisions/user-confirmation.md"),
+    "# Confirmation\n\n## Confirmed supplement\n\nThe missing case remains in the original completion scope.\n",
+  );
   const continuationResult = await handlers.wakeflow_continue_demand({
     root: continued.root,
     stateRoot: continued.stateRoot,
@@ -237,6 +242,18 @@ test("MCP exposes continue-demand and cancel forwards root to the state runtime"
     packageId: "CONT-MCP-P1",
     targetWindow: "Plugin",
     summary: "Implement the confirmed supplement",
+    workType: "implementation",
+    objective: "Implement the confirmed missing case without reopening accepted history.",
+    contextSummary: ["The user confirmed this case remains in the original demand scope."],
+    requirementRefs: [{ ref: "decisions/user-confirmation.md#confirmed-supplement", role: "goal" }],
+    boundaries: {
+      inScope: ["The confirmed supplemental case."],
+      outOfScope: ["Previously accepted behavior."],
+      forbidden: ["Do not rewrite accepted task history."],
+    },
+    completionExpectations: ["The supplemental regression passes through the public entrypoint."],
+    dependsOnTaskIds: [],
+    commitExpectation: "leave-uncommitted",
     acceptanceAnchors: [{
       id: "AC-CONT-1",
       claim: "The confirmed supplemental case is handled.",

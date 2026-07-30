@@ -89,6 +89,13 @@ machine state.
    classify the new fact before acting: same-demand continuation, independent
    follow-up, or no work. Never call `wakeflow_add_task` against completed state.
 5. Create or select a task package only when it advances the confirmed goal.
+   New packages must record the complete dispatch context once: `workType`,
+   one observable `objective`, a short ordered `contextSummary`, anchored
+   `requirementRefs`, `boundaries` (`inScope`, `outOfScope`, `forbidden`),
+   `completionExpectations`, explicit `dependsOnTaskIds`, and
+   `commitExpectation`. The prompt is a compact briefing generated from this
+   package; do not defer these decisions to the target or re-author them during
+   dispatch.
    For implementation work, author a small `acceptanceAnchors` list from the
    confirmed requirement: each entry names `{id, claim, probe, expected}` that
    the target can turn into a RED check before coding. Do not invent anchors
@@ -99,8 +106,17 @@ machine state.
    `accepted` and `controllerSelfChecks` states what you already verified and
    why the real scenario remains necessary. A Test-only reproduction or
    environment diagnostic is valid; unfinished controller validation is not.
-7. Build a dispatch packet from the state root.
-8. Build a delivery envelope.
+7. Call `wakeflow_prepare_delivery` for the target without `apply`. Review its
+   `readiness`, `taskBriefing`, repository identity, requirement anchors,
+   dependency status, required Skills, and exact prompt. A preview writes no
+   packet, envelope, window config, or lock.
+8. If the preview is correct, call the same tool again with `apply=true`. This
+   freezes the validated packet and delivery envelope; pass
+   `previewDigest` back as `expectedPreviewDigest`. Do not
+   override the package objective or substitute another human-context
+   reference. The digest covers the package, state revision, resolved
+   repository, prompt, and transport configuration; any change requires a
+   fresh preview.
 9. Send the envelope prompt exactly as stored in the envelope with the tmux
    host helper in ONE step:
    `node <plugin>/scripts/lib/wakeflow-claude-host.mjs deliver --root <workspace>

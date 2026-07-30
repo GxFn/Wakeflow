@@ -350,7 +350,7 @@ test("Test dispatch fails closed without alignment anchors and carries the appro
   ]));
   assert.equal(prepared.packet.testExecution.requirementGoal, "Prove the confirmed public behavior.");
   assert.deepEqual(prepared.packet.testExecution.allowedSkills, []);
-  assert.match(prepared.packet.prompt, /testContract: task-packages\/TEST-P1\.json#testExecution/);
+  assert.match(prepared.packet.prompt, /Test execution contract: .*\/task-packages\/TEST-P1\.json#testExecution/);
   assert.match(prepared.packet.forbidden.join("\n"), /Do not re-plan or take ownership of functional completeness/);
   assert.match(prepared.packet.forbidden.join("\n"), /must not replace the confirmed requirement goal/);
   assert.match(prepared.packet.evidenceRequired.join("\n"), /step must name the confirmed requirement goal and approvedPlan item/);
@@ -1113,11 +1113,14 @@ test("prepare-dispatch-from-state writes packet, group, and delivery without leg
   assert.equal(status.runtimeSummary.resumePlan.steps[1].tool, "wakeflow_record_delivery");
   assert.match(payload.packet.prompt, /- stateRoot: \.wakeflow-active\/current\/CSMR-FIXTURE/);
   assert.match(payload.packet.prompt, /- dispatchGroup: GROUP-STATE/);
-  assert.match(payload.packet.prompt, /Task focus \(full authority remains in the task package\):/);
+  assert.match(payload.packet.prompt, /Current objective \(the task package is authoritative\):/);
   assert.match(payload.packet.prompt, /- Run fixture target task/);
   assert.match(payload.packet.prompt, /- taskPackageId: CSMR-PKG-1/);
   assert.match(payload.packet.prompt, /- stateRevision: 3/);
-  assert.match(payload.packet.prompt, /acceptanceAnchors: task-packages\/CSMR-PKG-1\.json#acceptanceAnchors/);
+  assert.match(payload.packet.prompt, /Key acceptance anchors \(full probes and expectations are in the task package\):/);
+  assert.match(payload.packet.prompt, /- AC-DELIVERY-1: The target preserves the existing public behavior\./);
+  assert.match(payload.packet.prompt, /Task package \(complete task context\): .*\/task-packages\/CSMR-PKG-1\.json/);
+  assert.match(payload.packet.prompt, /Required execution Skills[\s\S]*skills\/wakeflow-target-craft\/SKILL\.md/);
   assert.match(payload.packet.prompt, /map every acceptanceAnchor to a RED test or probe before implementation/);
   assert.doesNotMatch(payload.packet.prompt, /humanContextRef:/);
   assert.doesNotMatch(payload.packet.prompt, /demandKey:/);
@@ -3245,9 +3248,10 @@ test("envelope prompts follow the demand interfaceLanguage (zh)", () => {
   const prepared = prepareDispatch(root, stateRootRef);
   const prompt = prepared.envelope.prompt;
   assert.match(prompt, /\u7ee7\u7eed\u5f53\u524d\u7a97\u53e3\u4efb\u52a1\uff1a/, "zh headline");
-  assert.match(prompt, /\u53d8\u91cf\uff1a/, "zh variables label");
-  assert.match(prompt, /- currentWindow: AlembicPlugin/, "machine keys stay English");
-  assert.match(prompt, /- skill: skills\/wakeflow-target\/SKILL\.md/, "skill pointer unchanged");
+  assert.match(prompt, /\u5f00\u59cb\u524d\u6309\u987a\u5e8f\u8bfb\u53d6\uff1a/, "zh reading-order label");
+  assert.match(prompt, /- \u5f53\u524d\u804c\u8d23\u7a97\u53e3: AlembicPlugin/, "window identity is explicit");
+  assert.match(prompt, /- skills\/wakeflow-target\/SKILL\.md/, "skill pointer unchanged");
+  assert.match(prompt, /- taskId: CSMR-TASK-1/, "routing keys stay English");
 });
 
 test("controller-return prompt localizes sentences for zh demands", async () => {

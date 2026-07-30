@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 function stableJson(value) {
   return JSON.stringify(value ?? null);
 }
@@ -58,9 +60,12 @@ function dispatchPacketComparable(packet = {}) {
     humanContextRef: packet.humanContextRef,
     stateRef: packet.stateRef,
     objective: packet.objective,
+    taskBriefing: packet.taskBriefing,
+    taskPackageDigest: packet.taskPackageDigest,
     acceptanceAnchors: packet.acceptanceAnchors ?? [],
     testExecution: packet.testExecution,
     scope: packet.scope ?? [],
+    outOfScope: packet.outOfScope ?? [],
     forbidden: packet.forbidden ?? [],
     evidenceRequired: packet.evidenceRequired ?? [],
     resultContract: packet.resultContract,
@@ -92,6 +97,23 @@ function deliveryEnvelopeComparable(envelope = {}) {
     automation: envelope.automation,
     windowConfig: withoutGeneratedAt(envelope.windowConfig),
   };
+}
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.keys(value).sort().map((key) => [key, stableValue(value[key])]),
+  );
+}
+
+export function dispatchPreparationDigest({ packet, envelope }) {
+  return createHash("sha256")
+    .update(JSON.stringify(stableValue({
+      packet: dispatchPacketComparable(packet),
+      envelope: deliveryEnvelopeComparable(envelope),
+    })))
+    .digest("hex");
 }
 
 export function deliveryRunIdempotencyKey({ deliveryId, deliveryRunId }) {

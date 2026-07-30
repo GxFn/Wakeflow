@@ -273,6 +273,14 @@ function commandCreateDemand() {
     if (pkg.targetWindow) tpArgs.push("--target-window", pkg.targetWindow);
     if (pkg.targetTaskId) tpArgs.push("--target-task-id", pkg.targetTaskId);
     if (pkg.sourceRef) tpArgs.push("--source-ref", pkg.sourceRef);
+    if (pkg.workType) tpArgs.push("--work-type", pkg.workType);
+    if (pkg.objective) tpArgs.push("--objective", pkg.objective);
+    if (pkg.contextSummary) tpArgs.push("--context-summary", JSON.stringify(pkg.contextSummary));
+    if (pkg.requirementRefs) tpArgs.push("--requirement-refs", JSON.stringify(pkg.requirementRefs));
+    if (pkg.boundaries) tpArgs.push("--boundaries", JSON.stringify(pkg.boundaries));
+    if (pkg.completionExpectations) tpArgs.push("--completion-expectations", JSON.stringify(pkg.completionExpectations));
+    if (pkg.dependsOnTaskIds) tpArgs.push("--depends-on-task-ids", JSON.stringify(pkg.dependsOnTaskIds));
+    if (pkg.commitExpectation) tpArgs.push("--commit-expectation", pkg.commitExpectation);
     if (pkg.designIntent) tpArgs.push("--design-intent", pkg.designIntent);
     if (pkg.acceptanceAnchors) tpArgs.push("--acceptance-anchors", JSON.stringify(pkg.acceptanceAnchors));
     if (pkg.evidenceContract) tpArgs.push("--evidence-contract", JSON.stringify(pkg.evidenceContract));

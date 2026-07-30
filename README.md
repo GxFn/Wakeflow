@@ -45,10 +45,15 @@ leaves a verifiable artifact on disk:
   dispatch decisions, acceptance, TODO routing, and archive decisions.
 - **One state root per demand**: task packages, target results, review
   candidates, decisions, and progress projections stay tied to the same demand.
+- **Context-complete task packages**: each new package records one objective,
+  anchored requirement references, boundaries, completion expectations,
+  dependencies, and the repository commit decision; dispatch derives the
+  required execution Skills from that package.
 - **Focused child windows**: each repository window works only inside its
   configured responsibility boundary.
-- **Compact delivery**: direct-thread prompts wake the right window with a small
-  envelope; the state root and skills hold the task details.
+- **Preview-gated compact delivery**: the controller reviews the resolved
+  repository, task briefing, Skills, and exact prompt before a digest-matched
+  apply can write the direct-thread envelope.
 - **Evidence before acceptance**: target backfill is input, not a conclusion.
   The controller still reviews raw evidence before completing work.
 - **Local-first runtime**: real thread ids live only in the local thread
@@ -106,8 +111,8 @@ disk. Every demand moves through the same closed loop:
 ```text
  1 init       raw state init creates the demand root               (unclaimed)
  2 claim      public create, or first raw-state drive, binds host  (codex | claude)
- 3 add task   a task package names the target window and scope
- 4 dispatch   envelope written -> window LOCKED -> prompt delivered
+ 3 add task   a task package freezes target context and requirement anchors
+ 4 dispatch   preview -> digest-matched apply -> LOCK -> prompt delivered
  5 work       the target window executes inside its repository boundary
  6 result     TargetResultEnvelope lands with evidence refs -> lock released
  7 review     controller reads RAW evidence, then accepts / reworks / blocks
@@ -600,8 +605,10 @@ their operator interface.
    are evidence, not acceptance.
 2. **One demand, one state root**: JSON state and Markdown progress surfaces
    stay tied to the same demand.
-3. **Prompts wake, state instructs**: prompts should be compact; task detail
-   belongs in state roots, task packages, and installed skills.
+3. **Prompts wake, packages contextualize, skills execute**: prompts carry the
+   current target and reading order; task packages own complete per-target
+   context, requirement anchors retain original background, and installed
+   skills own execution procedure.
 4. **Repository boundaries matter**: each window owns its source, tests,
    commits, and evidence.
 5. **Automation moves work, not authority**: direct-thread delivery proves that

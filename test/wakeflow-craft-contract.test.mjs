@@ -176,14 +176,14 @@ test("W-Target: junk craft-evidence entries fail import instead of landing in th
 });
 
 test("W-craft-2: the wake prompt activates the craft skill exactly when a contract is present", () => {
-  // With a contract -> the prompt carries the craftSkill line (activation chain).
+  // With a contract -> the prompt lists the craft skill in the required process layer.
   const withC = seedContractedTask("ACT-YES");
   const prepared = runDelivery([
     "prepare-dispatch-from-state", "--root", withC.root, "--state-root", withC.stateRootRel,
     "--target-task-id", "GATE-TASK", "--write", "--compact", "--json",
   ]);
   assert.equal(prepared.status, 0, prepared.stderr || prepared.stdout);
-  assert.match(JSON.parse(prepared.stdout).prompt, /craftSkill: skills\/wakeflow-target-craft\/SKILL\.md/,
+  assert.match(JSON.parse(prepared.stdout).prompt, /Required execution Skills[\s\S]*- skills\/wakeflow-target-craft\/SKILL\.md/,
     "contract present -> wake prompt points at the craft skill");
 
   // Without a contract -> zero traces (reminder-first).
@@ -199,7 +199,7 @@ test("W-craft-2: the wake prompt activates the craft skill exactly when a contra
     "--target-task-id", "PLAIN-TASK", "--write", "--compact", "--json",
   ]);
   assert.equal(plain.status, 0, plain.stderr || plain.stdout);
-  assert.doesNotMatch(JSON.parse(plain.stdout).prompt, /craftSkill/, "no contract -> no craft line in the prompt");
+  assert.doesNotMatch(JSON.parse(plain.stdout).prompt, /skills\/wakeflow-target-craft\/SKILL\.md/, "no contract -> no craft line in the prompt");
 });
 
 test("W-craft-2: add-task-package reminds when a dispatchable package lacks a contract (never a gate)", () => {

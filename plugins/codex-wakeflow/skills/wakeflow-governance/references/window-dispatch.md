@@ -63,19 +63,25 @@ Dispatch by task package, not tiny fragments. A task package should group
 mainline work, same-window TODOs, and evidence work that share the same boundary
 and validation path.
 
-Each task package must state:
+New task packages record the dispatch context once in machine-readable fields:
 
-- current phase goal;
-- included mainline tasks;
-- TODOs it can close;
-- explicit non-goals;
-- file/module boundary;
-- dependencies;
-- unified validation command;
-- backfill requirements;
-- how it advances the final completion definition;
-- whether completion leads to next phase, observation, archive, or user
-  decision.
+- `workType`: implementation, research, documentation, or test;
+- `objective`: one observable outcome for this target;
+- `contextSummary`: a small ordered list of confirmed facts;
+- `requirementRefs`: workspace-relative document references. Goal, completion,
+  constraint, validation, and design references name an exact Markdown
+  `#anchor`; background stays in the document instead of being copied into the
+  prompt;
+- `boundaries`: explicit `inScope`, `outOfScope`, and `forbidden` lists;
+- `completionExpectations`: concrete results required before `completed`;
+- `dependsOnTaskIds`: real upstream task ids, all controller-accepted before
+  dispatch;
+- `commitExpectation`: `commit` or `leave-uncommitted`.
+
+The JSON task package is the complete per-target context. Requirement documents
+remain the original goal/background authority. Skills remain the execution
+procedure. Do not introduce a second context document or ask the target to
+reconstruct these fields from progress prose.
 
 For implementation packages, add a small `acceptanceAnchors` array derived
 only from confirmed requirement authority. Each `{id, claim, probe, expected}`
@@ -100,21 +106,45 @@ migration input only.
 ```text
 Continue current window task: <currentWindow> / <taskId>.
 
-Task focus (full authority remains in the task package):
+Current objective (the task package is authoritative):
 - <one-line objective>
 
-Variables:
-- currentWindow: <window>
+Completion expectations:
+- <bounded observable result>
+
+Read before execution, in order:
+- Task package (complete task context): <absolute package path>
+- Requirement background anchor [goal]: <document#section>
+- Repository instructions: <repository>/AGENTS.md
+
+Required execution Skills (execution-process authority):
+- skills/wakeflow-target/SKILL.md
+- <craft or Test skill when selected by the package>
+
+Identity and boundaries:
+- Current responsibility window: <window>
+- Only working repository: <absolute repository path>
+
+Return requirement:
+- Return a TargetResultEnvelope with verifiable evidence.
+
+Dispatch record (routing and trace only):
 - taskId: <taskId>
 - taskPackageId: <package>
 - stateRoot: <path>
 - stateRevision: <dispatch-snapshot-revision>
 - dispatchGroup: <group>
-- skill: skills/wakeflow-target/SKILL.md
 ```
 
-Prompts must stay short. Detailed goals, validation commands, forbidden paths,
-evidence fields, and test inference boundaries belong in the state root, task
-package, repository `AGENTS.md`, or skill references. When acceptance anchors
-exist, add only the craft-skill and anchor pointers plus the pre-code RED
-reminder; do not copy the anchor bodies into the prompt.
+Prompts stay bounded: include only a small completion/boundary summary and
+anchor ids/claims; full probes, detailed scope, validation commands, evidence
+fields, and Test contracts stay in the task package, repository `AGENTS.md`, or
+listed Skills.
+
+Before writing transport files, run the target prepare as a preview and inspect
+`readiness`, `taskBriefing`, the resolved repository root, required Skills, and
+the exact prompt. Only a correct preview is repeated with `apply=true`, passing
+the preview's `previewDigest` as `expectedPreviewDigest`. The digest covers the
+package, state revision, resolved repository, prompt, and transport
+configuration; any change requires a new preview. Preview must not create a
+packet, envelope, window config, or delivery lock.

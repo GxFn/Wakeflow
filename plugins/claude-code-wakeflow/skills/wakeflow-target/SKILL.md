@@ -5,9 +5,12 @@ description: Use when a tmux-resident target Claude Code window session receives
 
 # Wakeflow Target
 
-Use this skill only inside a target-window automation wakeup. The workspace
-`CLAUDE.md`, the dispatch packet state root or human context document, and the
-target repository `CLAUDE.md` remain higher authority.
+Use this skill only inside a target-window automation wakeup. Workspace and
+target-repository `CLAUDE.md` files remain hard boundaries. The dispatch prompt
+states the current objective and reading order; the referenced JSON task
+package owns complete task context; anchored requirement documents own original
+goal/background; this skill and any listed craft/Test skills own execution
+procedure.
 
 ## Prompt Shape
 
@@ -16,29 +19,44 @@ Target wakeups should be task-first and compact:
 ```text
 Continue current window task: <currentWindow> / <taskId>.
 
-Task focus (full authority remains in the task package):
+Current objective (the task package is authoritative):
 - <one-line objective>
 
-Variables:
-- currentWindow: <window>
+Completion expectations:
+- <bounded observable result>
+
+Read before execution, in order:
+- Task package (complete task context): <absolute package path>
+- Requirement background anchor [goal]: <document#section>
+- Repository instructions: <repository>/CLAUDE.md
+
+Required execution Skills (execution-process authority):
+- skills/wakeflow-target/SKILL.md
+- <other package-selected skill, when required>
+
+Identity and boundaries:
+- Current responsibility window: <window>
+- Only working repository: <absolute repository path>
+
+Return requirement:
+- Return a TargetResultEnvelope with verifiable evidence.
+
+Dispatch record (routing and trace only):
 - taskId: <taskId>
 - taskPackageId: <package>
 - stateRoot: <path>
 - stateRevision: <revision>
 - dispatchGroup: <group>
-- skill: skills/wakeflow-target/SKILL.md
 ```
 
-Do not expect the prompt to repeat command manuals. Derive commands from the
-visible variables, this skill, the state root, and the local dispatch/delivery
-envelope. Fields such as `controllerWindow`, `returnPolicy`, `taskPackageId`,
-`stateRevision`, and `humanContextRef` remain authoritative in machine state;
-the visible `taskPackageId` / `stateRevision` are navigation and freshness
-anchors, not a second copy of task content. `stateRevision` identifies the
-dispatch snapshot in the packet/envelope; the later delivery-sent event may
-legitimately advance the live state root. Long rules stay out of the prompt. If
-the prompt conflicts with the packet/envelope, target repository, state root
-identity, or human context, stop and report instead of guessing.
+Do not expect the prompt to repeat command manuals or the whole requirement.
+Read the package first, then its requirement anchors, then execute through the
+listed Skills. Fields such as `controllerWindow`, `returnPolicy`,
+`taskPackageId`, and `stateRevision` remain authoritative in machine state.
+The prompt's task/package/revision fields are navigation and freshness anchors,
+not a second copy of task content. `stateRevision` identifies the dispatch
+snapshot in the packet/envelope; the later delivery-sent event may legitimately
+advance the live state root.
 
 ## Target Flow
 
@@ -47,21 +65,23 @@ identity, or human context, stop and report instead of guessing.
      as a user message pasted into this window's tmux pane by the Wakeflow host
      helper (`wakeflow-claude-host.mjs send`); arrival is transport evidence,
      not authority.
-   - Confirm `currentWindow`, `taskId`, `stateRoot`, and optional
+   - Confirm the responsibility window, `taskId`, `stateRoot`, and optional
      `dispatchGroup`.
    - Read the target repository `CLAUDE.md` and declare the current window and
      repository responsibility.
 2. Read the assigned task.
-   - Use the state root, task package, human context document, and target
-     repository rules.
+   - Read the task package at the exact prompt path, then its ordered
+     `requirementRefs`, then every `requiredSkills` entry. Do not substitute a
+     progress summary for the package or treat background documents as an
+     execution procedure.
    - Execute only the task assigned to this target window.
    - Do not claim another target, Test role, or controller role.
-   - If the wake prompt carries a `craftSkill` line, or the task package carries
-     an `evidenceContract` or `acceptanceAnchors`, ALSO load
+   - If the prompt lists the craft skill, or the task package carries an
+     `evidenceContract` or `acceptanceAnchors`, ALSO load
      `skills/wakeflow-target-craft/SKILL.md` before writing code. When anchors
      exist, map every anchor id to a RED test/probe before implementation; an
-     untestable or conflicting anchor is `needs-review`, never permission to
-     invent a replacement requirement.
+     untestable anchor is `needs-review`, never permission to invent a
+     replacement requirement.
    - When the task package carries `testExecution`, apply the Test alignment
      gate below before writing a plan or running a command.
 3. Work inside repository boundaries.

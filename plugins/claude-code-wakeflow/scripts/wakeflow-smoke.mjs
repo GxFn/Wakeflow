@@ -349,6 +349,18 @@ async function runMcpSmoke(rootPath) {
     ) {
       throw new Error("MCP wakeflow_initialize_workspace did not return a dry-run discovery plan");
     }
+    writeFileSync(
+      path.join(rootPath, "wakeflow.config.json"),
+      `${JSON.stringify({
+        workspaceName: "MCP Smoke",
+        controllerWindow: "Controller",
+        repositories: [
+          { windowName: "Controller", path: ".", role: "controller" },
+          { windowName: "Target", path: ".", role: "product" },
+        ],
+      }, null, 2)}\n`,
+    );
+    writeFileSync(path.join(rootPath, "AGENTS.md"), "# MCP Smoke Workspace\n");
 
     const called = await request("tools/call", {
       name: "wakeflow_create_demand",
@@ -368,6 +380,10 @@ async function runMcpSmoke(rootPath) {
       throw new Error("MCP tools/call did not create a state root");
     }
     const mcpStateRoot = payload.parsedJson.created.stateRoot;
+    writeFileSync(
+      path.join(rootPath, "mcp-smoke-requirement.md"),
+      "# MCP Smoke Requirement\n\n## Goal\n\nExercise the target delivery surface.\n\n## Completion\n\nThe MCP delivery envelope is created from a reviewed preview.\n",
+    );
 
     const addedTask = await request("tools/call", {
       name: "wakeflow_add_task",
@@ -378,6 +394,27 @@ async function runMcpSmoke(rootPath) {
         targetWindow: "Target",
         summary: "MCP smoke task package.",
         targetSummary: "Return MCP smoke evidence.",
+        workType: "implementation",
+        objective: "Return evidence from the MCP smoke target without widening scope.",
+        contextSummary: ["This package exercises the installed MCP target-delivery path."],
+        requirementRefs: [
+          { ref: "mcp-smoke-requirement.md#goal", role: "goal" },
+          { ref: "mcp-smoke-requirement.md#completion", role: "completion" },
+        ],
+        boundaries: {
+          inScope: ["MCP smoke target delivery."],
+          outOfScope: ["Product implementation."],
+          forbidden: ["Do not create unrelated work."],
+        },
+        completionExpectations: ["The target delivery envelope is created from the package."],
+        dependsOnTaskIds: [],
+        commitExpectation: "leave-uncommitted",
+        acceptanceAnchors: [{
+          id: "AC-MCP-SMOKE-1",
+          claim: "The MCP surface prepares a target delivery from package context.",
+          probe: "Preview and apply the same target delivery.",
+          expected: "The applied envelope prompt equals the reviewed preview prompt.",
+        }],
       },
     });
     const addedTaskPayload = JSON.parse(addedTask.result.content?.[0]?.text);
@@ -385,6 +422,27 @@ async function runMcpSmoke(rootPath) {
       throw new Error("MCP wakeflow_add_task did not create a task package");
     }
 
+    const previewed = await request("tools/call", {
+      name: "wakeflow_prepare_delivery",
+      arguments: {
+        root: rootPath,
+        direction: "target",
+        stateRoot: mcpStateRoot,
+        taskId: "mcp-smoke-task",
+        dispatchGroup: "mcp-smoke-group",
+      },
+    });
+    const previewedPayload = JSON.parse(previewed.result.content?.[0]?.text);
+    const previewedJson = previewedPayload.parsedJson;
+    if (
+      !previewedPayload.ok
+      || previewedJson?.command !== "prepare-dispatch-from-state"
+      || previewedJson?.preview !== true
+      || !previewedJson?.readiness?.taskPackageDigest
+      || previewedJson?.deliveryFile
+    ) {
+      throw new Error("MCP wakeflow_prepare_delivery did not return a non-writing target preview");
+    }
     const prepared = await request("tools/call", {
       name: "wakeflow_prepare_delivery",
       arguments: {
@@ -393,6 +451,8 @@ async function runMcpSmoke(rootPath) {
         stateRoot: mcpStateRoot,
         taskId: "mcp-smoke-task",
         dispatchGroup: "mcp-smoke-group",
+        expectedPreviewDigest: previewedJson.previewDigest,
+        apply: true,
       },
     });
     const preparedPayload = JSON.parse(prepared.result.content?.[0]?.text);
@@ -403,8 +463,10 @@ async function runMcpSmoke(rootPath) {
     if (
       !preparedPayload.ok
       || preparedJson?.command !== "prepare-dispatch-from-state"
+      || preparedJson?.preview !== false
       || !preparedPrompt?.includes("mcp-smoke-task")
       || !preparedJson?.deliveryFile
+      || preparedPrompt !== (previewedJson?.prompt ?? previewedJson?.packet?.prompt)
     ) {
       throw new Error("MCP wakeflow_prepare_delivery did not create a target delivery envelope");
     }

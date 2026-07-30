@@ -4,6 +4,7 @@ import path from "node:path";
 import { buildControllerReturnEnvelope } from "./wakeflow-controller-return.mjs";
 import {
   annotateDispatchPacketIdempotency,
+  dispatchPreparationDigest,
   sameDeliveryEnvelopeContent,
   sameDispatchPacketContent,
 } from "./wakeflow-idempotency.mjs";
@@ -14,6 +15,11 @@ import {
   returnPolicyReviewScope,
 } from "./wakeflow-return-policy.mjs";
 import { controllerReviewScope } from "./wakeflow-review-scope.mjs";
+import {
+  buildTaskBriefing,
+  hasTaskPackageContext,
+  taskPackageReadiness,
+} from "./wakeflow-task-package.mjs";
 
 export function createDispatchCommands(ctx) {
   const {
@@ -117,9 +123,12 @@ export function createDispatchCommands(ctx) {
     forbidden = [],
     humanContextRef = "",
     objective,
+    outOfScope = [],
     returnPolicyMode = "",
     scope = [],
     stateRef = null,
+    taskBriefing = null,
+    taskPackageDigest = "",
     targetWindow,
     taskId,
     groupExpectedTargets = [],
@@ -136,6 +145,7 @@ export function createDispatchCommands(ctx) {
       humanContextRef,
       stateRef,
       objective,
+      taskBriefing,
       interfaceLanguage: interfaceLanguageForStateRef(stateRef),
       craftSkill: Boolean(evidenceContract || acceptanceAnchors.length),
       testExecution: Boolean(testExecution),
@@ -170,6 +180,8 @@ export function createDispatchCommands(ctx) {
       humanContextRef: humanContextRef || undefined,
       stateRef: stateRef || undefined,
       objective,
+      ...(taskBriefing ? { taskBriefing } : {}),
+      ...(taskPackageDigest ? { taskPackageDigest } : {}),
       // Design's implementation intent, carried for the SIDE-BY-SIDE view at
       // dispatch and review. Advisory only, and deliberately OUTSIDE the
       // idempotency comparable: same-revision replay ignores it.
@@ -181,6 +193,7 @@ export function createDispatchCommands(ctx) {
       ...(evidenceContract ? { evidenceContract } : {}),
       ...(testExecution ? { testExecution } : {}),
       scope,
+      outOfScope,
       forbidden,
       evidenceRequired,
       resultContract: "target-result-envelope-v1",
@@ -482,10 +495,43 @@ export function createDispatchCommands(ctx) {
     const automationEnabled = hasFlag("--automation-enabled");
     const requireThread = hasFlag("--require-thread");
     const windowConfig = buildWindowConfig(targetWindow, { requireThread });
-    const humanContextRef = getValue(
-      "--human-context-ref",
-      state.projection?.progressDoc ? path.join(stateRootRef, state.projection.progressDoc) : stateRootRef,
-    );
+    const repositoryRoot = windowConfig.cwd
+      ? (path.isAbsolute(windowConfig.cwd) ? path.resolve(windowConfig.cwd) : path.resolve(workspaceRoot, windowConfig.cwd))
+      : "";
+    const readiness = taskPackageReadiness({
+      taskPackage,
+      state,
+      targetTask,
+      workspaceRoot,
+      repositoryRoot,
+    });
+    if (!readiness.ready) {
+      fail(`task package ${taskPackageId} is not dispatch-ready:\n- ${readiness.errors.join("\n- ")}`);
+    }
+    const fullContextPackage = hasTaskPackageContext(taskPackage);
+    const legacyObjective = getValue("--objective", targetTask.summary || taskPackage.summary || `Complete ${targetTaskId}.`);
+    const baseTaskBriefing = buildTaskBriefing({
+      taskPackage,
+      targetTask,
+      stateRoot,
+      workspaceRoot,
+      repositoryRoot,
+      readiness,
+    });
+    const taskBriefing = fullContextPackage
+      ? baseTaskBriefing
+      : { ...baseTaskBriefing, objective: legacyObjective };
+    if (fullContextPackage && (getValue("--objective", "") || "").trim()) {
+      fail("full-context task packages own objective; remove the dispatch-time --objective override.");
+    }
+    const explicitHumanContextRef = (getValue("--human-context-ref", "") || "").trim();
+    if (fullContextPackage && explicitHumanContextRef) {
+      fail("full-context task packages derive humanContextRef from their authoritative task package; remove --human-context-ref.");
+    }
+    const humanContextRef = fullContextPackage
+      ? taskBriefing.taskPackageRef
+      : explicitHumanContextRef
+        || (state.projection?.progressDoc ? path.join(stateRootRef, state.projection.progressDoc) : stateRootRef);
     const stateRef = {
       stateRoot: stateRootRef,
       demandKey: state.demandKey,
@@ -526,7 +572,9 @@ export function createDispatchCommands(ctx) {
       testExecution,
       dispatchGroup,
       evidenceRequired: [
-        ...getAllValues("--evidence"),
+        ...(fullContextPackage
+          ? taskBriefing.completionExpectations.map((item) => `Completion expectation: ${item}`)
+          : getAllValues("--evidence")),
         ...(testExecution ? [
           "Test alignment map: every executed step must name the confirmed requirement goal and approvedPlan item it serves; any unmapped step is a blocker, not evidence.",
           "Real-environment evidence must identify the boundary or hidden defect explored; it supplements the controller's prior validation and any product acceptance, and does not replace them.",
@@ -534,7 +582,7 @@ export function createDispatchCommands(ctx) {
         "TargetResultEnvelope with evidence refs; target result is not controller acceptance.",
       ],
       forbidden: [
-        ...getAllValues("--forbidden"),
+        ...(fullContextPackage ? taskBriefing.boundaries.forbidden : getAllValues("--forbidden")),
         ...(testExecution ? [
           "Do not re-plan or take ownership of functional completeness: total control owns that judgment. Test only explores the approved real-environment boundary for hidden defects.",
           "Test must not replace the confirmed requirement goal, add an unmapped test target/gate, or use a Test skill absent from testExecution.allowedSkills.",
@@ -548,15 +596,18 @@ export function createDispatchCommands(ctx) {
         "Do not parse developer-progress.md as state authority.",
       ],
       humanContextRef,
-      objective: getValue("--objective", targetTask.summary || taskPackage.summary || `Complete ${targetTaskId}.`),
+      objective: taskBriefing.objective,
+      outOfScope: taskBriefing.boundaries.outOfScope,
       returnPolicyMode: getValue("--return-policy", ""),
       scope: [
-        ...getAllValues("--scope"),
+        ...(fullContextPackage ? taskBriefing.boundaries.inScope : getAllValues("--scope")),
         `demandKey=${state.demandKey}`,
         `taskPackageId=${taskPackageId}`,
         `targetTaskId=${targetTaskId}`,
       ],
       stateRef,
+      taskBriefing,
+      taskPackageDigest: readiness.taskPackageDigest,
       targetWindow,
       taskId: targetTaskId,
       groupExpectedTargets,
@@ -570,6 +621,14 @@ export function createDispatchCommands(ctx) {
       returnRoute: getValue("--return-route", "controller"),
       windowConfig,
     });
+    const previewDigest = dispatchPreparationDigest({ packet, envelope });
+    const expectedPreviewDigest = (getValue("--expected-preview-digest", "") || "").trim();
+    if (expectedPreviewDigest && expectedPreviewDigest !== previewDigest) {
+      fail(`target dispatch changed after preview: expected digest ${expectedPreviewDigest}, current digest ${previewDigest}. Review a fresh preview before apply.`);
+    }
+    if (write && fullContextPackage && !expectedPreviewDigest) {
+      fail("full-context target apply requires --expected-preview-digest from the reviewed preview.");
+    }
     const dispatchGroupFile = dispatchGroup ? groupFileFor(dispatchGroup) : "";
     const existingGroup = dispatchGroup ? loadDispatchGroup(dispatchGroup) : null;
     const dispatchGroupChanged = Boolean(dispatchGroupRecord && (
@@ -627,6 +686,7 @@ export function createDispatchCommands(ctx) {
       {
         ok: true,
         command: "prepare-dispatch-from-state",
+        preview: !write,
         wrote: write && (!idempotentReplay || repairArtifacts.length > 0 || dispatchGroupChanged),
         duplicate: idempotentReplay || undefined,
         idempotentReplay: idempotentReplay || undefined,
@@ -638,6 +698,9 @@ export function createDispatchCommands(ctx) {
         targetTaskId,
         humanContextRef,
         windowName: targetWindow,
+        readiness,
+        taskBriefing,
+        previewDigest,
         // --compact: the structured artifacts live on disk (deliveryFile /
         // packetFile); embedding them in every payload was the controller's
         // single biggest context burner (60-70KB per dispatch in production).
@@ -679,13 +742,11 @@ export function createDispatchCommands(ctx) {
         // Dispatch-time intent check: a one-line conditional reminder, never a
         // gate. The agent authoring the objective IS the confirmation; an
         // intentional adaptation belongs in the objective wording.
-        ...(designIntent
-          ? {
-              agentNext: `${registration
-                ? "Send the prepared prompt with the host thread tool, then record a delivery run."
-                : "Register the target thread before direct-thread delivery."} Intent check: confirm this dispatch is an intentional match or an intentional adaptation of the designIntent shown beside the objective; adaptations should be visible in the objective wording.`,
-            }
-          : {}),
+        agentNext: !write
+          ? `Review readiness, taskBriefing, and the exact prompt; then call wakeflow_prepare_delivery again with apply=true to freeze transport.${designIntent ? " Confirm the task objective remains an intentional match or adaptation of designIntent." : ""}`
+          : `${registration
+            ? "Send the prepared prompt with the host thread tool, then record a delivery run."
+            : "Register the target thread before direct-thread delivery."}${designIntent ? " Intent check: confirm this dispatch remains an intentional match or adaptation of designIntent." : ""}`,
         forbiddenConclusions: hasFlag("--compact") ? undefined : [
           "prepared-dispatch-is-host-send",
           "prepared-dispatch-is-target-result",

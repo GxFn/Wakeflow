@@ -40,8 +40,9 @@ Wakeflow 提供缺失的控制层：
 
 - **总控优先判断**：父工作区负责目标、边界、投递决策、验收、TODO 路由和归档决策。
 - **一个需求一个 state root**：任务包、目标结果、review candidate、决策和进度投影都绑定到同一个需求。
+- **上下文完整的任务包**：每个新任务包一次性记录目标、带锚点的需求引用、边界、完成预期、依赖与仓库提交决定；派发再据此推导必须加载的执行 Skills。
 - **聚焦的子窗口**：每个仓库窗口只在配置好的责任边界内工作。
-- **轻量投递**：delivery prompt 只负责用一个小 envelope 唤醒正确窗口；state root 和 skills 保存任务细节。
+- **先预览再投递**：总控先审阅解析后的仓库、任务简报、Skills 和最终 prompt，再用匹配预览摘要的 `apply=true` 写入 delivery envelope。
 - **验收锚点驱动工艺**：实现任务包可携带明确的 claim/probe/expected 锚点，子窗口编码前先映射为 RED 检查；总控仍独立复验和判断证据。
 - **先证据，后验收**：target backfill 是输入，不是结论；总控仍然要检查原始证据。
 - **本地优先运行时**：真实 session id 只存在本地 thread registry；window config 是派生视图，active state 不进入源码。
@@ -89,8 +90,8 @@ Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环�
 ```text
  1 init       底层 state init 创建 demand root              (未认领)
  2 claim      公共 create 或底层 root 首次驱动时绑定宿主      (codex | claude)
- 3 add task   任务包写明目标窗口与边界
- 4 dispatch   写信封 -> 窗口上锁 -> prompt 粘贴进窗格
+ 3 add task   任务包冻结目标窗口上下文与需求锚点
+ 4 dispatch   预览 -> 摘要匹配 apply -> 上锁 -> 粘贴 prompt
  5 work       目标窗口在自己的仓库边界内执行
  6 result     带证据引用的 TargetResultEnvelope 落盘 -> 锁释放
  7 review     总控读原始证据,然后 accept / rework / blocked
@@ -520,7 +521,7 @@ npm test
 
 1. **判断必须可见**：脚本输出、状态行、target backfill 是证据，不是验收。
 2. **一个需求，一个 state root**：JSON state 和 Markdown progress surface 绑定到同一个 demand。
-3. **Prompt 负责唤醒，state 负责指令**：prompt 应轻量；任务细节属于 state roots、task packages 和 installed skills。
+3. **Prompt 唤醒，任务包提供上下文，Skills 负责执行工艺**：prompt 只携带本轮目标和读取顺序；任务包保存完整任务上下文，需求锚点保留原始背景，installed skills 保存执行流程。
 4. **仓库边界很重要**：每个窗口拥有自己的源码、测试、提交和证据。
 5. **自动化移动工作，不转移权威**：投递只能证明 prompt 已发送，不能证明结果完成。
 6. **本地运行时留在本地**：真实 session id 只留在本地 thread registry，active runtime state 不进入 tracked docs。

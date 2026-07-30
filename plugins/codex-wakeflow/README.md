@@ -43,10 +43,15 @@ Wakeflow provides the missing control layer:
   dispatch decisions, acceptance, TODO routing, and archive decisions.
 - **One state root per demand**: task packages, target results, review
   candidates, decisions, and progress projections stay tied to the same demand.
+- **Context-complete task packages**: each new package records one objective,
+  anchored requirement references, boundaries, completion expectations,
+  dependencies, and the repository commit decision; dispatch derives the
+  required execution Skills from that package.
 - **Focused child windows**: each repository window works only inside its
   configured responsibility boundary.
-- **Compact delivery**: direct-thread prompts wake the right window with a small
-  envelope; the state root and skills hold the task details.
+- **Preview-gated compact delivery**: the controller reviews the resolved
+  repository, task briefing, Skills, and exact prompt before a digest-matched
+  apply can write the direct-thread envelope.
 - **Acceptance-anchored craft**: implementation packages may carry concrete
   claim/probe/expected anchors that targets map to RED checks before coding;
   the controller still reruns and judges the evidence independently.
@@ -146,7 +151,7 @@ Wakeflow on Codex is driven through MCP tools (no slash commands). Tell Codex wh
 | Rebuild a stale window | `wakeflow_replace_windows` |
 | See demands / eligible work / readiness | `wakeflow_status`, `wakeflow_next_work` |
 | Start a demand | `wakeflow_create_demand` -> `wakeflow_add_task` |
-| Hand work to a window | `wakeflow_prepare_delivery` -> host send -> `wakeflow_record_delivery` |
+| Hand work to a window | `wakeflow_prepare_delivery` preview -> digest-matched `apply=true` -> host send -> `wakeflow_record_delivery` |
 | Record a target's result | `wakeflow_record_target_result` |
 | Review and decide | `wakeflow_review_pack` -> `wakeflow_reduce_results` -> `wakeflow_decide_review` -> `wakeflow_complete_demand` |
 | Hand a demand to the other host | `wakeflow_adopt_demand_host` |
@@ -490,8 +495,10 @@ skills rather than treating raw scripts as their operator interface.
    are evidence, not acceptance.
 2. **One demand, one state root**: JSON state and Markdown progress surfaces
    stay tied to the same demand.
-3. **Prompts wake, state instructs**: prompts should be compact; task detail
-   belongs in state roots, task packages, and installed skills.
+3. **Prompts wake, packages contextualize, skills execute**: prompts carry the
+   current target and reading order; task packages own complete per-target
+   context, requirement anchors retain original background, and installed
+   skills own execution procedure.
 4. **Repository boundaries matter**: each window owns its source, tests,
    commits, and evidence.
 5. **Automation moves work, not authority**: direct-thread delivery proves that

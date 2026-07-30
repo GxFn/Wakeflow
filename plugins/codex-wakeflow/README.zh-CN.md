@@ -39,8 +39,9 @@ Wakeflow 提供缺失的控制层：
 
 - **总控优先判断**：父工作区负责目标、边界、投递决策、验收、TODO 路由和归档决策。
 - **一个需求一个 state root**：任务包、目标结果、review candidate、决策和进度投影都绑定到同一个需求。
+- **上下文完整的任务包**：每个新任务包一次性记录目标、带锚点的需求引用、边界、完成预期、依赖与仓库提交决定；派发再据此推导必须加载的执行 Skills。
 - **聚焦的子窗口**：每个仓库窗口只在配置好的责任边界内工作。
-- **轻量投递**：direct-thread prompt 只负责唤醒正确窗口；state root 和 skills 保存任务细节。
+- **先预览再投递**：总控先审阅解析后的仓库、任务简报、Skills 和最终 prompt，再用匹配预览摘要的 `apply=true` 写入 direct-thread envelope。
 - **验收锚点驱动工艺**：实现任务包可携带明确的 claim/probe/expected 锚点，子窗口编码前先映射为 RED 检查；总控仍独立复验和判断证据。
 - **先证据，后验收**：target backfill 是输入，不是结论；总控仍然要检查原始证据。
 - **本地优先运行时**：真实 thread id 只存在本地 thread registry；window config 是派生视图，active state 不进入源码。
@@ -130,7 +131,7 @@ Codex 版通过 MCP 工具驱动(没有 slash 命令)。用自然语言告诉 Co
 | 重建陈旧窗口 | `wakeflow_replace_windows` |
 | 看需求 / 可领取工作 / 就绪度 | `wakeflow_status`、`wakeflow_next_work` |
 | 启动一个需求 | `wakeflow_create_demand` -> `wakeflow_add_task` |
-| 把活交给窗口 | `wakeflow_prepare_delivery` -> 宿主发送 -> `wakeflow_record_delivery` |
+| 把活交给窗口 | `wakeflow_prepare_delivery` 预览 -> 携带摘要 `apply=true` -> 宿主发送 -> `wakeflow_record_delivery` |
 | 记录目标结果 | `wakeflow_record_target_result` |
 | 评审并决策 | `wakeflow_review_pack` -> `wakeflow_reduce_results` -> `wakeflow_decide_review` -> `wakeflow_complete_demand` |
 | 把需求移交另一宿主 | `wakeflow_adopt_demand_host` |
@@ -397,7 +398,7 @@ tools 与 skills，不把原始脚本当作操作入口。
 
 1. **判断必须可见**：脚本输出、状态行、target backfill 是证据，不是验收。
 2. **一个需求，一个 state root**：JSON state 和 Markdown progress surface 绑定到同一个 demand。
-3. **Prompt 负责唤醒，state 负责指令**：prompt 应轻量；任务细节属于 state roots、task packages 和 installed skills。
+3. **Prompt 唤醒，任务包提供上下文，Skills 负责执行工艺**：prompt 只携带本轮目标和读取顺序；任务包保存完整任务上下文，需求锚点保留原始背景，installed skills 保存执行流程。
 4. **仓库边界很重要**：每个窗口拥有自己的源码、测试、提交和证据。
 5. **自动化移动工作，不转移权威**：direct-thread delivery 只能证明 prompt 已发送，不能证明结果完成。
 6. **本地运行时留在本地**：真实 thread id 只留在本地 thread registry，active runtime state 不进入 tracked docs。

@@ -38,6 +38,10 @@ import {
   readStateRootTargetResultItems,
   selectCurrentStateRootResults,
 } from "./lib/wakeflow-state-results.mjs";
+import {
+  TASK_CONTEXT_VERSION,
+  normalizeTaskPackageContext,
+} from "./lib/wakeflow-task-package.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const wakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -57,12 +61,12 @@ Controller state-machine manager
 
 Usage:
   node scripts/wakeflow-state.mjs init --demand-key <key> --title <title> [--goal <text>] [--completion-definition <text>] [--test-decision <text>] [--stage-plan <text>] [--controller-window <window>] [--language <auto|zh|en>] [--root <workspace>] [--state-root <path>] [--write] [--json]
-  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--source-ref <ref>] [--design-intent <text>] [--acceptance-anchors <json>] [--evidence-contract <json>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--test-card-id <id>] [--test-continuation-of <task-id>] [--restart-test --test-restart-reason <text>] [--write] [--json]
+  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--work-type <implementation|research|documentation|test> --objective <text> --context-summary <json> --requirement-refs <json> --boundaries <json> --completion-expectations <json> --depends-on-task-ids <json> --commit-expectation <commit|leave-uncommitted>] [--source-ref <ref>] [--design-intent <text>] [--acceptance-anchors <json>] [--evidence-contract <json>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--test-card-id <id>] [--test-continuation-of <task-id>] [--restart-test --test-restart-reason <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--dispatch-group <id>] [--supersede-result] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--craft-evidence <json>] [--summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
   node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked|redesign> --reason <text> [--evidence-ref <ref>] [--accept-blocked] [--write] [--json]
   node scripts/wakeflow-state.mjs complete-demand --state-root <path> --reason <text> --evidence-ref <ref> [--write] [--json]
-  node scripts/wakeflow-state.mjs continue-demand --state-root <path> --continuation-type <verified-bug|requirement-supplement|optimization> --reason <text> --evidence-ref <ref> --task-package-id <id> --summary <text> --target-window <window> --target-task-id <id> [--source-ref <ref>] [--design-intent <text>] [--acceptance-anchors <json>] [--evidence-contract <json>] [--write] [--json]
+  node scripts/wakeflow-state.mjs continue-demand --state-root <path> --continuation-type <verified-bug|requirement-supplement|optimization> --reason <text> --evidence-ref <ref> --task-package-id <id> --summary <text> --target-window <window> --target-task-id <id> [--work-type <implementation|research|documentation|test> --objective <text> --context-summary <json> --requirement-refs <json> --boundaries <json> --completion-expectations <json> --depends-on-task-ids <json> --commit-expectation <commit|leave-uncommitted>] [--source-ref <ref>] [--design-intent <text>] [--acceptance-anchors <json>] [--evidence-contract <json>] [--write] [--json]
   node scripts/wakeflow-state.mjs cancel-demand --state-root <path> --reason <text> [--write] [--json]
   node scripts/wakeflow-state.mjs archive-demand --state-root <path> --reason <text> [--redact] [--evidence-ref <ref>] [--write] [--json]
   node scripts/wakeflow-state.mjs sanitize-archive --state-root <archived-path> --reason <text> [--write] [--json]
@@ -191,6 +195,61 @@ function validateAcceptanceAnchorsShape(anchors) {
     seen.add(normalized.id);
     return normalized;
   });
+}
+
+function parseTaskPackageContext(acceptanceAnchors) {
+  const contextFlags = [
+    "--work-type",
+    "--objective",
+    "--context-summary",
+    "--requirement-refs",
+    "--boundaries",
+    "--completion-expectations",
+    "--depends-on-task-ids",
+    "--commit-expectation",
+  ];
+  const hasContextInput = contextFlags.some((flag) => (getValue(flag, "") || "").trim());
+  if (!hasContextInput) return null;
+  try {
+    return normalizeTaskPackageContext({
+      contextVersion: TASK_CONTEXT_VERSION,
+      workType: getValue("--work-type"),
+      objective: getValue("--objective"),
+      contextSummary: parseOptionalJsonArg("--context-summary"),
+      requirementRefs: parseOptionalJsonArg("--requirement-refs"),
+      boundaries: parseOptionalJsonArg("--boundaries"),
+      completionExpectations: parseOptionalJsonArg("--completion-expectations"),
+      dependsOnTaskIds: parseOptionalJsonArg("--depends-on-task-ids") ?? [],
+      commitExpectation: getValue("--commit-expectation"),
+      acceptanceAnchors,
+    });
+  } catch (error) {
+    fail(`invalid task package context: ${error.message}`);
+  }
+}
+
+function validateTaskPackageContextForTarget({ taskContext, acceptanceAnchors, state, targetTaskId, testExecution }) {
+  if (!taskContext) return;
+  if (new Set(taskContext.dependsOnTaskIds).size !== taskContext.dependsOnTaskIds.length) {
+    fail("--depends-on-task-ids must not contain duplicates.");
+  }
+  if (taskContext.dependsOnTaskIds.includes(targetTaskId)) {
+    fail(`target task ${targetTaskId} cannot depend on itself.`);
+  }
+  for (const dependencyId of taskContext.dependsOnTaskIds) {
+    if (!(state.targetTasks ?? []).some((task) => task.targetTaskId === dependencyId)) {
+      fail(`dependency target task does not exist in controller state: ${dependencyId}`);
+    }
+  }
+  if (taskContext.workType === "test" && !testExecution) {
+    fail("workType=test requires an authoritative Test card / testExecution contract.");
+  }
+  if (taskContext.workType !== "test" && testExecution) {
+    fail(`a Test task package must use workType=test, not ${taskContext.workType}.`);
+  }
+  if (taskContext.workType === "implementation" && (!acceptanceAnchors || acceptanceAnchors.length === 0)) {
+    fail("implementation task packages require at least one controller-authored acceptanceAnchor.");
+  }
 }
 
 function readTestCardForTask(stateRoot, testCardId) {
@@ -1038,6 +1097,7 @@ function commandAddTaskPackageLocked(stateRoot) {
   // breaking replay. Absent = zero behavior change.
   const evidenceContract = validateEvidenceContractShape(parseOptionalJsonArg("--evidence-contract"));
   const acceptanceAnchors = validateAcceptanceAnchorsShape(parseOptionalJsonArg("--acceptance-anchors"));
+  const taskContext = parseTaskPackageContext(acceptanceAnchors);
   const targetWindow = getValue("--target-window", null);
   const targetTaskId = getValue("--target-task-id", targetWindow ? `${taskPackageId}__${slug(targetWindow)}` : null);
   const targetSummary = getValue("--target-summary", summary);
@@ -1076,6 +1136,13 @@ function commandAddTaskPackageLocked(stateRoot) {
   const testExecution = targetWindow
     ? testExecutionForNewTask({ stateRoot, state, targetWindow, targetTaskId })
     : null;
+  validateTaskPackageContextForTarget({
+    taskContext,
+    acceptanceAnchors,
+    state,
+    targetTaskId,
+    testExecution,
+  });
 
   const createdAt = nowIso();
   const nextRevision = Number(state.revision ?? 0) + 1;
@@ -1093,6 +1160,7 @@ function commandAddTaskPackageLocked(stateRoot) {
           summary: targetSummary,
           status: "pending",
           createdAt,
+          ...(taskContext?.dependsOnTaskIds.length ? { dependsOnTaskIds: taskContext.dependsOnTaskIds } : {}),
           ...(testExecution ? { testExecution } : {}),
           ...(reviewRoute ? { reviewRoute } : {}),
         },
@@ -1105,6 +1173,7 @@ function commandAddTaskPackageLocked(stateRoot) {
     summary,
     status: "pending",
     sourceRef,
+    ...(taskContext ?? {}),
     ...(designIntent ? { designIntent } : {}),
     ...(acceptanceAnchors ? { acceptanceAnchors } : {}),
     ...(evidenceContract ? { evidenceContract } : {}),
@@ -1136,6 +1205,7 @@ function commandAddTaskPackageLocked(stateRoot) {
         summary,
         status: "pending",
         sourceRef,
+        ...(taskContext ?? {}),
         ...(designIntent ? { designIntent } : {}),
         ...(acceptanceAnchors ? { acceptanceAnchors } : {}),
         ...(evidenceContract ? { evidenceContract } : {}),
@@ -1251,6 +1321,7 @@ function commandContinueDemandLocked(stateRoot) {
   const sourceRef = getValue("--source-ref", null);
   const designIntent = (getValue("--design-intent", "") || "").trim() || null;
   const acceptanceAnchors = validateAcceptanceAnchorsShape(parseOptionalJsonArg("--acceptance-anchors"));
+  const taskContext = parseTaskPackageContext(acceptanceAnchors);
   const evidenceContract = validateEvidenceContractShape(parseOptionalJsonArg("--evidence-contract"));
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
@@ -1290,6 +1361,13 @@ function commandContinueDemandLocked(stateRoot) {
   }
 
   const testExecution = testExecutionForNewTask({ stateRoot, state, targetWindow, targetTaskId });
+  validateTaskPackageContextForTarget({
+    taskContext,
+    acceptanceAnchors,
+    state,
+    targetTaskId,
+    testExecution,
+  });
   const createdAt = nowIso();
   const nextRevision = Number(state.revision ?? 0) + 1;
   const eventId = nextEventId(createdAt, nextRevision);
@@ -1311,6 +1389,7 @@ function commandContinueDemandLocked(stateRoot) {
     status: "pending",
     createdAt,
     continuationId,
+    ...(taskContext?.dependsOnTaskIds.length ? { dependsOnTaskIds: taskContext.dependsOnTaskIds } : {}),
     ...(testExecution ? { testExecution } : {}),
   };
   const taskPackage = {
@@ -1320,6 +1399,7 @@ function commandContinueDemandLocked(stateRoot) {
     summary,
     status: "pending",
     sourceRef,
+    ...(taskContext ?? {}),
     ...(designIntent ? { designIntent } : {}),
     ...(acceptanceAnchors ? { acceptanceAnchors } : {}),
     ...(evidenceContract ? { evidenceContract } : {}),
@@ -1343,6 +1423,7 @@ function commandContinueDemandLocked(stateRoot) {
         summary,
         status: "pending",
         sourceRef,
+        ...(taskContext ?? {}),
         ...(designIntent ? { designIntent } : {}),
         ...(acceptanceAnchors ? { acceptanceAnchors } : {}),
         ...(evidenceContract ? { evidenceContract } : {}),

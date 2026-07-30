@@ -2,6 +2,10 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { runWakeflowRuntime } from "./wakeflow-runtime.mjs";
 import { hostProfile } from "../scripts/lib/wakeflow-host-profile.mjs";
+import {
+  TASK_CONTEXT_VERSION,
+  normalizeTaskPackageContext,
+} from "../scripts/lib/wakeflow-task-package.mjs";
 
 function readOnlyTool(title) {
   return {
@@ -22,6 +26,73 @@ function localWriteTool(title, idempotentHint = false) {
     openWorldHint: false,
   };
 }
+
+const taskPackageContextRequired = [
+  "workType",
+  "objective",
+  "contextSummary",
+  "requirementRefs",
+  "boundaries",
+  "completionExpectations",
+  "commitExpectation",
+];
+
+const taskPackageContextProperties = {
+  workType: {
+    type: "string",
+    enum: ["implementation", "research", "documentation", "test"],
+    description: "Classifies the package so pre-dispatch readiness can apply the right execution gate.",
+  },
+  objective: {
+    type: "string",
+    description: "The one observable outcome this target must deliver. Stored on the task package; target dispatch cannot replace it.",
+  },
+  contextSummary: {
+    type: "array",
+    minItems: 1,
+    items: { type: "string" },
+    description: "Small ordered set of confirmed facts the target needs before execution. Background detail stays in requirementRefs.",
+  },
+  requirementRefs: {
+    type: "array",
+    minItems: 1,
+    description: "Workspace-relative requirement/background references. Non-evidence roles must include an exact Markdown #anchor.",
+    items: {
+      type: "object",
+      required: ["ref", "role"],
+      properties: {
+        ref: { type: "string" },
+        role: { type: "string", enum: ["goal", "completion", "constraint", "validation", "design", "evidence"] },
+        label: { type: "string" },
+      },
+    },
+  },
+  boundaries: {
+    type: "object",
+    required: ["inScope", "outOfScope", "forbidden"],
+    properties: {
+      inScope: { type: "array", minItems: 1, items: { type: "string" } },
+      outOfScope: { type: "array", items: { type: "string" } },
+      forbidden: { type: "array", items: { type: "string" } },
+    },
+  },
+  completionExpectations: {
+    type: "array",
+    minItems: 1,
+    items: { type: "string" },
+    description: "Concrete results that must be present before the target can return completed.",
+  },
+  dependsOnTaskIds: {
+    type: "array",
+    items: { type: "string" },
+    description: "Explicit upstream target task ids. Dispatch is blocked until every dependency is controller-accepted.",
+  },
+  commitExpectation: {
+    type: "string",
+    enum: ["commit", "leave-uncommitted"],
+    description: "Whether the owning repository window must commit its scoped work before returning.",
+  },
+};
 
 const toolDefinitions = [
   {
@@ -183,7 +254,7 @@ const toolDefinitions = [
     annotations: localWriteTool("Add Wakeflow Task Package"),
     inputSchema: {
       type: "object",
-      required: ["stateRoot", "taskId", "targetWindow", "summary"],
+      required: ["stateRoot", "taskId", "targetWindow", "summary", ...taskPackageContextRequired],
       properties: {
         root: { type: "string" },
         stateRoot: { type: "string" },
@@ -193,6 +264,7 @@ const toolDefinitions = [
         packageId: { type: "string" },
         sourceRef: { type: "string" },
         targetSummary: { type: "string" },
+        ...taskPackageContextProperties,
         designIntent: { type: "string", description: "Design's one-line implementation intent ('roughly how'). Optional and advisory: surfaced side-by-side with the controller's objective at dispatch and review for the agent's own alignment check — never a gate or score." },
         acceptanceAnchors: {
           type: "array",
@@ -234,13 +306,14 @@ const toolDefinitions = [
         dispatchGroup: { type: "string" },
         controllerWindow: { type: "string", description: "Return-route override. Default chain: this flag > the state root's stamped controllerWindow (pod demands) > wakeflow.config.json controllerWindow — normally omit and let the stamp route." },
         taskPackageId: { type: "string" },
-        objective: { type: "string", description: "direction=target: the authored controller dispatch intent ('what I am arranging'); defaults to the task summary when omitted. Author it at the FIRST prepare — a same-revision re-prepare with different content fails closed by the idempotency guard." },
-        humanContextRef: { type: "string" },
+        humanContextRef: { type: "string", description: "direction=controller-return only. Target dispatch derives its task context from the authoritative task package." },
         returnPolicy: { type: "string", enum: ["group-ready", "per-target"] },
         triggerTarget: { type: "string" },
         triggerTaskId: { type: "string" },
         returnReason: { type: "string", enum: ["result-ready", "blocked"] },
         automationEnabled: { type: "boolean" },
+        apply: { type: "boolean", description: "direction=target: false/omitted previews the exact dispatch briefing without writing transport files; true writes the validated packet/envelope." },
+        expectedPreviewDigest: { type: "string", description: "direction=target with apply=true: required digest copied from the reviewed preview previewDigest. Apply fails if task context, state revision, resolved repository, prompt, or transport config changed." },
       },
     },
   },
@@ -393,7 +466,7 @@ const toolDefinitions = [
     annotations: localWriteTool("Continue Completed Wakeflow Demand"),
     inputSchema: {
       type: "object",
-      required: ["stateRoot", "continuationType", "reason", "evidenceRefs", "taskId", "targetWindow", "summary"],
+      required: ["stateRoot", "continuationType", "reason", "evidenceRefs", "taskId", "targetWindow", "summary", ...taskPackageContextRequired],
       properties: {
         root: { type: "string" },
         stateRoot: { type: "string", description: "The completed, unarchived demand state root." },
@@ -406,6 +479,7 @@ const toolDefinitions = [
         packageId: { type: "string", description: "Defaults to taskId when omitted." },
         sourceRef: { type: "string" },
         targetSummary: { type: "string" },
+        ...taskPackageContextProperties,
         designIntent: { type: "string", description: "Optional advisory implementation intent; never a gate." },
         acceptanceAnchors: {
           type: "array",
@@ -602,12 +676,14 @@ const toolDefinitions = [
           description: "Optional initial task packages to add right after init.",
           items: {
             type: "object",
+            required: ["summary", "targetWindow", ...taskPackageContextRequired],
             properties: {
               taskPackageId: { type: "string" },
               summary: { type: "string" },
               targetWindow: { type: "string" },
               targetTaskId: { type: "string" },
               sourceRef: { type: "string" },
+              ...taskPackageContextProperties,
               designIntent: { type: "string", description: "Design's one-line implementation intent for this package; optional, advisory, never a gate." },
               acceptanceAnchors: {
                 type: "array",
@@ -853,30 +929,41 @@ export const handlers = {
     args: ["status", ...rootArgs(args), "--json"],
     cwd: args.root || undefined,
   }),
-  wakeflow_add_task: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "add-task-package",
-      "--state-root", args.stateRoot,
-      "--task-package-id", args.packageId || args.taskId,
-      "--summary", args.summary,
-      "--target-window", args.targetWindow,
-      "--target-task-id", args.taskId,
-      ...optionalValue("--target-summary", args.targetSummary),
-      ...optionalValue("--source-ref", args.sourceRef),
-      ...optionalValue("--design-intent", args.designIntent),
-      ...optionalValue("--acceptance-anchors", args.acceptanceAnchors ? JSON.stringify(args.acceptanceAnchors) : undefined),
-      ...optionalValue("--evidence-contract", args.evidenceContract ? JSON.stringify(args.evidenceContract) : undefined),
-      ...optionalValue("--test-card-id", args.testCardId),
-      ...optionalValue("--test-continuation-of", args.testContinuationOf),
-      ...(args.restartTest ? ["--restart-test"] : []),
-      ...optionalValue("--test-restart-reason", args.testRestartReason),
-      ...rootArgs(args),
-      "--write",
-      ...(args.adoptHost ? ["--adopt-host"] : []),
-      "--json",
-    ],
-  }),
+  wakeflow_add_task: (args) => {
+    validateMcpTaskPackageContext(args, "wakeflow_add_task");
+    return runWakeflowRuntime({
+      script: "wakeflow-state",
+      args: [
+        "add-task-package",
+        "--state-root", args.stateRoot,
+        "--task-package-id", args.packageId || args.taskId,
+        "--summary", args.summary,
+        "--target-window", args.targetWindow,
+        "--target-task-id", args.taskId,
+        ...optionalValue("--target-summary", args.targetSummary),
+        ...optionalValue("--source-ref", args.sourceRef),
+        ...optionalValue("--work-type", args.workType),
+        ...optionalValue("--objective", args.objective),
+        ...optionalValue("--context-summary", args.contextSummary ? JSON.stringify(args.contextSummary) : undefined),
+        ...optionalValue("--requirement-refs", args.requirementRefs ? JSON.stringify(args.requirementRefs) : undefined),
+        ...optionalValue("--boundaries", args.boundaries ? JSON.stringify(args.boundaries) : undefined),
+        ...optionalValue("--completion-expectations", args.completionExpectations ? JSON.stringify(args.completionExpectations) : undefined),
+        ...optionalValue("--depends-on-task-ids", args.dependsOnTaskIds ? JSON.stringify(args.dependsOnTaskIds) : undefined),
+        ...optionalValue("--commit-expectation", args.commitExpectation),
+        ...optionalValue("--design-intent", args.designIntent),
+        ...optionalValue("--acceptance-anchors", args.acceptanceAnchors ? JSON.stringify(args.acceptanceAnchors) : undefined),
+        ...optionalValue("--evidence-contract", args.evidenceContract ? JSON.stringify(args.evidenceContract) : undefined),
+        ...optionalValue("--test-card-id", args.testCardId),
+        ...optionalValue("--test-continuation-of", args.testContinuationOf),
+        ...(args.restartTest ? ["--restart-test"] : []),
+        ...optionalValue("--test-restart-reason", args.testRestartReason),
+        ...rootArgs(args),
+        "--write",
+        ...(args.adoptHost ? ["--adopt-host"] : []),
+        "--json",
+      ],
+    });
+  },
   wakeflow_prepare_delivery: (args) => {
     const direction = args.direction || "target";
     if (direction === "controller-return") {
@@ -903,6 +990,9 @@ export const handlers = {
     }
     const stateRoot = requireValueForTool(args, "stateRoot", "wakeflow_prepare_delivery direction=target");
     const taskId = requireValueForTool(args, "taskId", "wakeflow_prepare_delivery direction=target");
+    const expectedPreviewDigest = args.apply
+      ? requireValueForTool(args, "expectedPreviewDigest", "wakeflow_prepare_delivery direction=target with apply=true")
+      : args.expectedPreviewDigest;
     return runWakeflowRuntime({
       script: "wakeflow-delivery",
       args: [
@@ -911,14 +1001,13 @@ export const handlers = {
         "--target-task-id", taskId,
         ...repeatValues("--group-target-task-id", args.groupTaskIds),
         ...optionalValue("--task-package-id", args.taskPackageId),
-        ...optionalValue("--objective", args.objective),
-        ...optionalValue("--human-context-ref", args.humanContextRef),
         ...optionalValue("--controller-window", args.controllerWindow),
         ...optionalValue("--group", args.dispatchGroup),
         ...optionalValue("--return-policy", args.returnPolicy),
+        ...optionalValue("--expected-preview-digest", expectedPreviewDigest),
         ...(args.automationEnabled ? ["--automation-enabled"] : []),
         ...rootArgs(args),
-        "--write",
+        ...(args.apply ? ["--write"] : []),
         ...(args.verbose ? [] : ["--compact"]),
       "--json",
       ],
@@ -1082,33 +1171,44 @@ export const handlers = {
       "--json",
     ],
   }),
-  wakeflow_continue_demand: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "continue-demand",
-      "--state-root", args.stateRoot,
-      "--continuation-type", args.continuationType,
-      "--reason", args.reason,
-      ...repeatValues("--evidence-ref", args.evidenceRefs),
-      "--task-package-id", args.packageId || args.taskId,
-      "--summary", args.summary,
-      "--target-window", args.targetWindow,
-      "--target-task-id", args.taskId,
-      ...optionalValue("--source-ref", args.sourceRef),
-      ...optionalValue("--target-summary", args.targetSummary),
-      ...optionalValue("--design-intent", args.designIntent),
-      ...(args.acceptanceAnchors ? ["--acceptance-anchors", JSON.stringify(args.acceptanceAnchors)] : []),
-      ...(args.evidenceContract ? ["--evidence-contract", JSON.stringify(args.evidenceContract)] : []),
-      ...optionalValue("--test-card-id", args.testCardId),
-      ...optionalValue("--test-continuation-of", args.testContinuationOf),
-      ...(args.restartTest ? ["--restart-test"] : []),
-      ...optionalValue("--test-restart-reason", args.testRestartReason),
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      ...(args.adoptHost ? ["--adopt-host"] : []),
-      "--json",
-    ],
-  }),
+  wakeflow_continue_demand: (args) => {
+    validateMcpTaskPackageContext(args, "wakeflow_continue_demand");
+    return runWakeflowRuntime({
+      script: "wakeflow-state",
+      args: [
+        "continue-demand",
+        "--state-root", args.stateRoot,
+        "--continuation-type", args.continuationType,
+        "--reason", args.reason,
+        ...repeatValues("--evidence-ref", args.evidenceRefs),
+        "--task-package-id", args.packageId || args.taskId,
+        "--summary", args.summary,
+        "--target-window", args.targetWindow,
+        "--target-task-id", args.taskId,
+        ...optionalValue("--source-ref", args.sourceRef),
+        ...optionalValue("--target-summary", args.targetSummary),
+        ...optionalValue("--work-type", args.workType),
+        ...optionalValue("--objective", args.objective),
+        ...optionalValue("--context-summary", args.contextSummary ? JSON.stringify(args.contextSummary) : undefined),
+        ...optionalValue("--requirement-refs", args.requirementRefs ? JSON.stringify(args.requirementRefs) : undefined),
+        ...optionalValue("--boundaries", args.boundaries ? JSON.stringify(args.boundaries) : undefined),
+        ...optionalValue("--completion-expectations", args.completionExpectations ? JSON.stringify(args.completionExpectations) : undefined),
+        ...optionalValue("--depends-on-task-ids", args.dependsOnTaskIds ? JSON.stringify(args.dependsOnTaskIds) : undefined),
+        ...optionalValue("--commit-expectation", args.commitExpectation),
+        ...optionalValue("--design-intent", args.designIntent),
+        ...(args.acceptanceAnchors ? ["--acceptance-anchors", JSON.stringify(args.acceptanceAnchors)] : []),
+        ...(args.evidenceContract ? ["--evidence-contract", JSON.stringify(args.evidenceContract)] : []),
+        ...optionalValue("--test-card-id", args.testCardId),
+        ...optionalValue("--test-continuation-of", args.testContinuationOf),
+        ...(args.restartTest ? ["--restart-test"] : []),
+        ...optionalValue("--test-restart-reason", args.testRestartReason),
+        ...rootArgs(args),
+        ...(args.apply ? ["--write"] : []),
+        ...(args.adoptHost ? ["--adopt-host"] : []),
+        "--json",
+      ],
+    });
+  },
   wakeflow_archive: async (args) => {
     if (args.target === "demand") {
       const stateRoot = requireValueForTool(args, "stateRoot", "wakeflow_archive target=demand");
@@ -1255,25 +1355,35 @@ export const handlers = {
     ],
     cwd: args.root || undefined,
   }),
-  wakeflow_create_demand: (args) => runWakeflowRuntime({
-    script: "wakeflow-demand-sequence",
-    args: [
-      "create-demand",
-      ...rootArgs(args),
-      ...optionalValue("--todo-id", args.todoId),
-      ...optionalValue("--demand-key", args.demandKey),
-      ...optionalValue("--title", args.title),
-      ...optionalValue("--controller-window", args.controllerWindow),
-      ...optionalValue("--goal", args.goal),
-      ...optionalValue("--completion-definition", args.completionDefinition),
-      ...optionalValue("--test-decision", args.testDecision),
-      ...optionalValue("--stage-plan", args.stagePlan),
-      ...(args.taskPackages ? ["--task-packages", JSON.stringify(args.taskPackages)] : []),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
+  wakeflow_create_demand: (args) => {
+    if (args.taskPackages !== undefined) {
+      if (!Array.isArray(args.taskPackages)) {
+        throw new Error("wakeflow_create_demand taskPackages must be an array");
+      }
+      args.taskPackages.forEach((taskPackage, index) => {
+        validateMcpTaskPackageContext(taskPackage, `wakeflow_create_demand taskPackages[${index}]`);
+      });
+    }
+    return runWakeflowRuntime({
+      script: "wakeflow-demand-sequence",
+      args: [
+        "create-demand",
+        ...rootArgs(args),
+        ...optionalValue("--todo-id", args.todoId),
+        ...optionalValue("--demand-key", args.demandKey),
+        ...optionalValue("--title", args.title),
+        ...optionalValue("--controller-window", args.controllerWindow),
+        ...optionalValue("--goal", args.goal),
+        ...optionalValue("--completion-definition", args.completionDefinition),
+        ...optionalValue("--test-decision", args.testDecision),
+        ...optionalValue("--stage-plan", args.stagePlan),
+        ...(args.taskPackages ? ["--task-packages", JSON.stringify(args.taskPackages)] : []),
+        ...(args.apply ? ["--write"] : []),
+        "--json",
+      ],
+      cwd: args.root || undefined,
+    });
+  },
   wakeflow_cancel_demand: (args) => runWakeflowRuntime({
     script: "wakeflow-state",
     args: [
@@ -1379,6 +1489,28 @@ async function maybeRefreshArchiveSummaries(args, archiveResult) {
 
 function optionalValue(flag, value) {
   return value === undefined || value === null || value === "" ? [] : [flag, String(value)];
+}
+
+function validateMcpTaskPackageContext(args, context) {
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    throw new Error(`${context} requires a task package object`);
+  }
+  try {
+    normalizeTaskPackageContext({
+      contextVersion: TASK_CONTEXT_VERSION,
+      workType: args.workType,
+      objective: args.objective,
+      contextSummary: args.contextSummary,
+      requirementRefs: args.requirementRefs,
+      boundaries: args.boundaries,
+      completionExpectations: args.completionExpectations,
+      dependsOnTaskIds: args.dependsOnTaskIds ?? [],
+      commitExpectation: args.commitExpectation,
+      acceptanceAnchors: args.acceptanceAnchors,
+    });
+  } catch (error) {
+    throw new Error(`${context} requires complete task context: ${error.message}`);
+  }
 }
 
 function requireValueForTool(args, name, context) {

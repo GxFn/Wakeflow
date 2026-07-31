@@ -196,7 +196,7 @@ Do not expose empty `blockedTargets`, `remainingTargets`, or
      increments `redesignCount` instead of bouncing point-fixes between product windows.
      Mainline may use its stateless Design delivery and then add a full-context replacement
      with `replacesTargetTaskId=<parked task>`. A Pod must stay in its own Design lane;
-     because 0.9.1 supports only one frozen Pod Design request/handoff
+     because 0.9.2 supports only one frozen Pod Design request/handoff
      generation, a redesign may use that sole generation only before any
      request exists; a different second request remains blocked rather than
      falling back to mainline Design or overwriting the recorded handoff;
@@ -322,7 +322,7 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   `create_thread` with `environment.type=worktree`; never fall back to the
   workspace parent or `local`. Control roles are three distinct local threads.
 - Immediately before each host create call, record `creating` through
-  `wakeflow_pod_record_materialization`. If Codex returns `clientThreadId`,
+  `wakeflow_pod_record event=materialization`. If Codex returns `clientThreadId`,
   record `pending`, then call bounded `list_threads(limit=50)` and match the
   exact `launchCorrelationId` marker in each task `preview`; do not create
   again. Use `query` only when the current host schema supports it, never as a
@@ -335,16 +335,16 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   bindings; `execution-ready` additionally requires the recorded Pod Design
   handoff and every planned product binding.
 - The Pod's single Design generation uses
-  `wakeflow_pod_prepare_design_request → PodDesignRequest →
-  PodDesignHandoffEnvelope → wakeflow_pod_record_design_handoff`; the frozen
+  `wakeflow_pod_plan action=design-request → PodDesignRequest →
+  PodDesignHandoffEnvelope → wakeflow_pod_record event=design-handoff`; the frozen
   request supplies exact lineage and cannot be replaced by a different
-  request. Wakeflow 0.9.1 does not yet persist multiple Pod Design generations:
+  request. Wakeflow 0.9.2 does not yet persist multiple Pod Design generations:
   if a later supplement or redesign needs a new request/handoff, stop with a
   capability blocker. Never overwrite the frozen request, route the Pod
   through the mainline Design window, or create a duplicate global TODO.
-- Before Pod Test dispatch, call `wakeflow_pod_prepare_test_access`, execute
+- Before Pod Test dispatch, call `wakeflow_pod_plan action=test-access`, execute
   that exact host-local probe from `Test__<pod>`, and record the redacted
-  receipt with `wakeflow_pod_record_test_access`. Only validated
+  receipt with `wakeflow_pod_record event=test-access`. Only validated
   `direct-multi-root` access across all active product bindings opens dispatch.
   Unsupported access stays blocked; a verifiable per-repository executor is
   not currently implemented.
@@ -352,11 +352,11 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   per-pod: an exclusive environment (per the S1 Test Environment Spec) is a
   cross-pod serial resource — confirm no other pod is using it before
   dispatching the card.
-- Close is two-stage: `wakeflow_pod_close` emits host-close operations; the
+- Close is two-stage: `wakeflow_pod_plan action=close` emits host-close operations; the
   Agent archives/handoffs the Codex threads and records each result through
-  `wakeflow_pod_record_close_receipt`. Only then does Wakeflow close the
+  `wakeflow_pod_record event=close-receipt`. Only then does Wakeflow close the
   logical binding. Physical Codex worktree GC remains a separate host fact.
-- `wakeflow_pod_list` reads canonical state plus host-scoped operations and
+- `wakeflow_view scope=pods` reads canonical state plus host-scoped operations and
   bindings. It never guesses identity from a path or overlay.
 - Cancelling instead of finishing: `wakeflow_cancel_demand` stops an
   in-flight demand WITHOUT pretending completion — no acceptance, evidence
@@ -382,7 +382,7 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   the terminal-state guard. If the operation fails, the completed state must
   remain unchanged.
 - Archived demand roots are immutable to workflow continuation. The only
-  sanctioned in-place amendment is `wakeflow_sanitize_archive`, which may
+  sanctioned in-place amendment is `wakeflow_archive target=sanitize-demand`, which may
   replace a polluted archived root with a re-scanned privacy-clean copy while
   preserving the original locally; it never reopens tasks or changes
   acceptance. Independently scoped optimization,
@@ -439,7 +439,7 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   opaque evidence stays byte-for-byte in that local original; the portable
   archive contains only its safe placeholder and manifest metadata.
 - If a historical archived demand is already committed with those findings,
-  use `wakeflow_sanitize_archive` on that exact archived state root (dry-run
+  use `wakeflow_archive target=sanitize-demand` on that exact archived state root (dry-run
   first). Never hand-edit it, move it back to `current/`, or use this repair as
   a continuation path.
 - In a spare moment (no in-flight deliveries, no pending reviews), glance at
@@ -493,7 +493,7 @@ Stop instead of dispatching when:
   `wakeflow_deliver`; after the corrected requirement returns, add a full-context replacement
   package to the SAME demand with `replacesTargetTaskId` set to the parked product task. Do
   not create a new demand or re-dispatch the old task. For a Pod demand, do not use mainline
-  Design: Wakeflow 0.9.1 cannot create a second frozen Pod Design generation, so keep the
+  Design: Wakeflow 0.9.2 cannot create a second frozen Pod Design generation, so keep the
   demand blocked and report that capability gap rather than overwriting the recorded handoff.
   Accepting a valid replacement marks the old task/package `superseded`; the parked demand's
   history and counts carry over.

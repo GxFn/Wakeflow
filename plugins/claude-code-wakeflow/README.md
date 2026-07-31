@@ -135,7 +135,7 @@ Two rules keep the loop honest:
   full-context implementation task in the product responsibility window with
   `replacesTargetTaskId` after the Design handoff. Accepting that replacement
   supersedes the old task and package.
-  Version 0.9.1 freezes exactly one Design request/handoff generation per Pod;
+  Version 0.9.2 freezes exactly one Design request/handoff generation per Pod;
   that sole request may be `initial-design`, `supplement`, or `redesign`. A
   different second generation remains blocked rather than overwriting it or
   falling back to mainline Design.
@@ -374,7 +374,7 @@ per-repository limit.
   `claude --worktree` product sessions from exact repository roots. It never
   nests Claude's `--tmux` or grants the whole workspace with a default
   `--add-dir`.
-- `wakeflow_pod_record_materialization` can journal the exact launch
+- `wakeflow_pod_record event=materialization` can journal the exact launch
   correlation around the helper call. Claude returns a final session id
   synchronously; it has no Codex `clientThreadId` pending state, and no
   temporary request id belongs in the registry.
@@ -385,14 +385,14 @@ per-repository limit.
 - The Pod's single Design generation stays between `Controller__<pod>` and
   `Design__<pod>`.
   Freeze the controller request with
-  `wakeflow_pod_prepare_design_request`, then record its exact
-  `PodDesignHandoffEnvelope` with `wakeflow_pod_record_design_handoff`; neither
-  step creates a second global TODO. Version 0.9.1 does not persist a second
+  `wakeflow_pod_plan action=design-request`, then record its exact
+  `PodDesignHandoffEnvelope` with `wakeflow_pod_record event=design-handoff`; neither
+  step creates a second global TODO. Version 0.9.2 does not persist a second
   Pod Design generation, so later supplement/redesign is an explicit
   capability blocker.
-- Before Pod Test dispatch, run `wakeflow_pod_prepare_test_access` and record
+- Before Pod Test dispatch, run `wakeflow_pod_plan action=test-access` and record
   the independent Test session's exact probe through
-  `wakeflow_pod_record_test_access`. Only `validated` +
+  `wakeflow_pod_record event=test-access`. Only `validated` +
   `direct-multi-root` coverage of every active product binding opens dispatch.
   Unsupported multi-root access remains blocked; no main-checkout, product-
   window, or unverified per-repository-executor fallback is implemented.
@@ -400,9 +400,9 @@ per-repository limit.
   still pending and unbound. `mode=resume` contains only already-bound
   operations: it verifies or resumes the exact session at the recorded actual
   cwd, and never creates a missing session, passes `--worktree`, or rebinds it.
-- Core `wakeflow_pod_close` emits a host-close plan. Helper `pod-close` closes
+- Core `wakeflow_pod_plan action=close` emits a host-close plan. Helper `pod-close` closes
   tmux/Claude sessions and reports worktree disposition; record each result
-  with `wakeflow_pod_record_close_receipt`. Wakeflow never runs Git worktree
+  with `wakeflow_pod_record event=close-receipt`. Wakeflow never runs Git worktree
   cleanup for the new Pod path.
 
 ## One Vocabulary Across Hosts
@@ -564,12 +564,12 @@ Primary tool groups:
 | Need | MCP tools |
 | --- | --- |
 | Setup and window registration | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
-| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
-| Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind`, `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff`, `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_pod_close`, `wakeflow_pod_record_close_receipt`, `wakeflow_pod_list` |
+| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_cancel_demand` |
+| Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_bind`, `wakeflow_pod_plan` (action design-request/test-access/close), `wakeflow_pod_record` (event materialization/design-handoff/test-access/close-receipt) |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| Archive, views, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs), `wakeflow_sanitize_archive` (bounded historical archive repair), `wakeflow_view` (task-ledger/window/focus/trace/storage), `wakeflow_storage_preserve`, `wakeflow_prune_runtime`, `wakeflow_verify` |
+| Archive, views, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs/sanitize-demand), `wakeflow_view` (task-ledger/window/focus/trace/storage/progress/pods), `wakeflow_storage_preserve`, `wakeflow_prune_runtime`, `wakeflow_verify` |
 | Host ownership and locks | `wakeflow_adopt_demand_host`, `wakeflow_release_window_lock` |
 
 Public MCP tools are for outer agent workflows. Target closeout is
@@ -581,13 +581,20 @@ review candidate and is not acceptance. Do not collapse those steps into a
 single target-window MCP tool. Internal steps such as archive summary refresh
 internals, keep-live state, and script backend execution stay inside Wakeflow
 runtime scripts and skills. Public archive MCP tools wrap controller-approved
-demand, TODO, and workspace-document archive flows. `wakeflow_sanitize_archive`
-only replaces an already archived demand with a privacy-clean copy and preserves
+demand, TODO, and workspace-document archive flows. `wakeflow_archive`
+with `target=sanitize-demand` only replaces an already archived demand with a privacy-clean copy and preserves
 the original locally. `wakeflow_storage_preserve` is the dry-run-first public
 route to the existing local evidence-preservation backend. With archive
 redaction, sensitive opaque evidence remains byte-for-byte in the local
 preserved original while the portable archive carries a safe placeholder
 manifest. None of these tools makes acceptance decisions or sends host messages.
+
+Migration note: pre-consolidation Pod stage calls now use
+`wakeflow_pod_plan` for planning and `wakeflow_pod_record` for
+receipts/handoffs. Progress projection uses `wakeflow_view scope=progress`,
+public Pod inventory uses `wakeflow_view scope=pods`, and historical archive
+repair uses `wakeflow_archive target=sanitize-demand`. The Claude helper CLI
+commands `pod-open`, `pod-close`, and `pod-list` are unchanged.
 
 Wakeflow declares MCP tool annotations for every public tool: read-only tools
 are marked read-only, write tools are local, non-destructive, and

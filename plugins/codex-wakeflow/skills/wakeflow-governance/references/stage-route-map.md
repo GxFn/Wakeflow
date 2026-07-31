@@ -31,7 +31,7 @@ create its minimal canonical `state=intake` root, record
 `selection=explicit-user-pod` plus `authorizationRef`, run
 `wakeflow_pod_open`, and ask Codex to create the three independent control
 threads. Journal each create by launch correlation with
-`wakeflow_pod_record_materialization`; a returned `clientThreadId` is pending
+`wakeflow_pod_record event=materialization`; a returned `clientThreadId` is pending
 recovery evidence, never a registry handle or permission to create again.
 Recovery uses bounded `list_threads(limit=50)` plus an exact correlation-marker
 match in `preview`; `query` is optional, and only one match may finalize.
@@ -62,14 +62,14 @@ never guesses current behavior).
 5. Delivery: mainline Design uses `wakeflow_deliver` (append-only TODO row;
    requirement + autoClaim requires the linked Original Plan + Requirement
    Design). A Pod controller freezes the anchored request with
-   `wakeflow_pod_prepare_design_request`; Pod Design returns the matching
+   `wakeflow_pod_plan action=design-request`; Pod Design returns the matching
    `PodDesignHandoffEnvelope`, which the Pod controller records with
-   `wakeflow_pod_record_design_handoff`. Neither step creates a second global
+   `wakeflow_pod_record event=design-handoff`. Neither step creates a second global
    TODO for the same demand.
 
 ## S2 — Claim & Plan (owner: controller)
 `wakeflow_next_work` → `wakeflow_claim_next` / `wakeflow_create_demand`
-(taskPackages carry designIntent) → `wakeflow_render_progress`.
+(taskPackages carry designIntent) → `wakeflow_view scope=progress`.
 **Entry check:** the controller verifies the Design exit gate at the demand's
 scale. Any missing item = route back to Design (redesign lane) — do NOT patch
 the gap by reading code and deciding alone. Exit gate: state root + task
@@ -101,7 +101,7 @@ Wakeflow never creates or deletes those worktrees.)
 `wakeflow_reduce_results` → `wakeflow_decide_review`
 (accept / rework / redesign / blocked). Raw evidence before any decision.
 Non-bug outcome mismatch = redesign lane back to S1, never point-fix loops.
-For a Pod, redesign must never return to mainline Design. Version 0.9.1 cannot
+For a Pod, redesign must never return to mainline Design. Version 0.9.2 cannot
 persist a second frozen Pod Design request/handoff generation, so the demand
 stays blocked as a capability gap instead of overwriting its recorded Design generation.
 Exit to S5 only after every active required non-Test target is accepted and the
@@ -111,9 +111,9 @@ may enter S5 after the controller establishes that current scope.
 
 ## S5 — Test (conditional; owner: Test window executes, controller composes)
 Runs only when S1's Test decision said yes AND S4's functional acceptance gate
-passed. For a Pod, first run `wakeflow_pod_prepare_test_access` from the
+passed. For a Pod, first run `wakeflow_pod_plan action=test-access` from the
 controller, execute that exact host-local probe from the independent Test task,
-and record it with `wakeflow_pod_record_test_access`. Only validated
+and record it with `wakeflow_pod_record event=test-access`. Only validated
 `direct-multi-root` coverage of every active product binding opens Test
 dispatch. Unsupported access stays blocked; no main-checkout/product-window
 fallback exists, and no per-repository executor is claimed as implemented.
@@ -137,9 +137,9 @@ same contract before accepting evidence or authoring follow-up work.
 
 ## S6 — Integrate & Close (owner: controller)
 `wakeflow_complete_demand` (all accepted, zero blockers, evidence) →
-`wakeflow_pod_close` when the demand ran as a Pod (generate a host-close plan)
+`wakeflow_pod_plan action=close` when the demand ran as a Pod (generate a host-close plan)
 → Codex archives/handoffs each thread → record every
-`wakeflow_pod_record_close_receipt` → `wakeflow_archive` (redaction gate) →
+`wakeflow_pod_record event=close-receipt` → `wakeflow_archive` (redaction gate) →
 TODO rollup / `wakeflow_prune_runtime`. Logical binding close is not proof of
 physical worktree removal; integration and Codex GC stay outside Wakeflow.
 
@@ -153,13 +153,13 @@ as a new demand.
 
 | Stage | MCP tools | Host tools | Skills/prose |
 | --- | --- | --- | --- |
-| S0 | `wakeflow_status`, explicit-Pod `wakeflow_create_demand`, `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind` | `list_projects`, `create_thread`, `list_threads`, `set_thread_title` | AGENTS.md posture |
-| S1 | mainline `wakeflow_deliver`; Pod `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff` | Pod Design direct-thread send | Design support surface docs |
-| S2 | `wakeflow_next_work`, `wakeflow_claim_next`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_render_progress`, Pod `wakeflow_pod_record_materialization`, `wakeflow_pod_bind` | Pod product `create_thread(environment=worktree)`, `list_threads` | governance TODO intake |
-| S3 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result`, `wakeflow_release_window_lock`, `wakeflow_pod_list` | `send_message_to_thread` | controller dispatch + target skill |
+| S0 | `wakeflow_status`, explicit-Pod `wakeflow_create_demand`, `wakeflow_pod_open`, `wakeflow_pod_record event=materialization`, `wakeflow_pod_bind` | `list_projects`, `create_thread`, `list_threads`, `set_thread_title` | AGENTS.md posture |
+| S1 | mainline `wakeflow_deliver`; Pod `wakeflow_pod_plan action=design-request`, `wakeflow_pod_record event=design-handoff` | Pod Design direct-thread send | Design support surface docs |
+| S2 | `wakeflow_next_work`, `wakeflow_claim_next`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_view scope=progress`, Pod `wakeflow_pod_record event=materialization`, `wakeflow_pod_bind` | Pod product `create_thread(environment=worktree)`, `list_threads` | governance TODO intake |
+| S3 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result`, `wakeflow_release_window_lock`, `wakeflow_view scope=pods` | `send_message_to_thread` | controller dispatch + target skill |
 | S4 | `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_view` | — | controller acceptance practices |
-| S5 | `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_intake_test_card` | exact Pod Test multi-root probe; dispatch = S3 transport | testing-validation reference |
-| S6 | `wakeflow_complete_demand`, `wakeflow_pod_close`, `wakeflow_pod_record_close_receipt`, `wakeflow_archive`, `wakeflow_prune_runtime`, `wakeflow_adopt_demand_host` | `set_thread_archived` / host handoff | ledger reference |
+| S5 | `wakeflow_pod_plan action=test-access`, `wakeflow_pod_record event=test-access`, `wakeflow_intake_test_card` | exact Pod Test multi-root probe; dispatch = S3 transport | testing-validation reference |
+| S6 | `wakeflow_complete_demand`, `wakeflow_pod_plan action=close`, `wakeflow_pod_record event=close-receipt`, `wakeflow_archive`, `wakeflow_prune_runtime`, `wakeflow_adopt_demand_host` | `set_thread_archived` / host handoff | ledger reference |
 | Cross | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_verify` | — | this map |
 
 ## The three escalation lanes (a missing input is NEVER guessed)

@@ -197,8 +197,8 @@ Current scripts:
 - `wakeflow-archive-todo.mjs`: dry-run by default; moves completed global
   TODO rows and old sync records from the active TODO board to archive.
 - Normal controller archive flows should call the public MCP wrapper
-  `wakeflow_archive` (target demand/todo/docs). Historical demand archives with
-  privacy findings use `wakeflow_sanitize_archive`; it cannot target active or
+  `wakeflow_archive` (target demand/todo/docs/sanitize-demand). Historical demand archives with
+  privacy findings use `target=sanitize-demand`; it cannot target active or
   arbitrary directories. The raw
   scripts remain the backend/fallback surface and preserve the same dry-run /
   explicit-apply semantics.
@@ -254,7 +254,10 @@ truth. The current operational commands are grouped below:
 - Explicit Pod host lifecycle: `pod-open`, `pod-close`, `pod-list`. These use
   native Claude worktrees for products. `stream-open`, `stream-close`, and
   `stream-list` remain legacy recovery commands only; they are not the new Pod
-  path.
+  path. These helper commands are unchanged by the public MCP consolidation:
+  controller planning uses `wakeflow_pod_plan`, receipt/handoff recording uses
+  `wakeflow_pod_record`, and public Pod inventory uses
+  `wakeflow_view scope=pods`.
 
 Matching target results release their target leases automatically. For proven
 pre-send recovery, use MCP `wakeflow_release_window_lock` with

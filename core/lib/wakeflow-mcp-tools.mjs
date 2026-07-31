@@ -100,6 +100,158 @@ const taskPackageContextProperties = {
   },
 };
 
+const podMaterializationAttemptSchema = {
+  type: "object",
+  required: ["launchCorrelationId", "host", "status", "observedAt"],
+  properties: {
+    launchCorrelationId: { type: "string" },
+    host: { type: "string", enum: ["codex", "claude-code"] },
+    status: { type: "string", enum: ["creating", "pending", "finalized", "failed"] },
+    observedAt: { type: "string" },
+    hostRequestId: { type: "string", description: "Host temporary async request id; accepted only for pending and persisted only as a digest." },
+    terminalFailure: { type: "boolean", const: true },
+    failureReason: { type: "string" },
+    retryAuthorizationRef: { type: "string" },
+  },
+};
+
+const podDesignRequestSchema = {
+  type: "object",
+  required: [
+    "demandKey",
+    "podId",
+    "requestType",
+    "originalGoal",
+    "requirementAnchors",
+    "codeEvidenceRefs",
+    "pausedTargetIdentity",
+    "pausedReviewIdentity",
+    "nonGoals",
+    "decisionsRequired",
+  ],
+  properties: {
+    demandKey: { type: "string" },
+    podId: { type: "string" },
+    requestType: { type: "string", enum: ["initial-design", "supplement", "redesign"] },
+    originalGoal: { type: "string" },
+    requirementAnchors: { type: "array", minItems: 1, items: { type: "string" } },
+    codeEvidenceRefs: { type: "array", minItems: 1, items: { type: "string" } },
+    pausedTargetIdentity: { type: ["object", "null"] },
+    pausedReviewIdentity: { type: ["object", "null"] },
+    nonGoals: { type: "array", items: { type: "string" } },
+    decisionsRequired: { type: "array", items: { type: "string" } },
+  },
+};
+
+const podDesignHandoffSchema = {
+  type: "object",
+  required: [
+    "demandKey",
+    "podId",
+    "designRequestId",
+    "designRequestRef",
+    "designRequestDigest",
+    "requestType",
+    "preservesOriginalGoal",
+    "requirementAnchors",
+    "evidenceRefs",
+    "userConfirmationRefs",
+    "landingPlan",
+    "designIntent",
+    "testDecision",
+    "environmentSpec",
+  ],
+  properties: {
+    demandKey: { type: "string" },
+    podId: { type: "string" },
+    designRequestId: { type: "string" },
+    designRequestRef: { type: "string" },
+    designRequestDigest: { type: "string" },
+    requestType: { type: "string", enum: ["initial-design", "supplement", "redesign"] },
+    preservesOriginalGoal: { type: "boolean", const: true },
+    requirementAnchors: { type: "array", minItems: 1, items: { type: "string" } },
+    evidenceRefs: { type: "array", items: { type: "string" } },
+    userConfirmationRefs: { type: "array", items: { type: "string" } },
+    landingPlan: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        required: ["repositoryWindow"],
+        properties: {
+          repositoryWindow: { type: "string" },
+          objective: { type: "string" },
+          boundaries: { type: "array", items: { type: "string" } },
+        },
+      },
+    },
+    designIntent: { type: "string" },
+    testDecision: { type: "string" },
+    environmentSpec: { type: "object" },
+    replacementLineage: { type: "object" },
+  },
+};
+
+const podTestAccessReceiptSchema = {
+  type: "object",
+  required: [
+    "probeId",
+    "demandKey",
+    "podId",
+    "host",
+    "testWindowName",
+    "testBindingId",
+    "status",
+    "capability",
+    "observedAt",
+  ],
+  properties: {
+    probeId: { type: "string" },
+    demandKey: { type: "string" },
+    podId: { type: "string" },
+    host: { type: "string", enum: ["codex", "claude-code"] },
+    testWindowName: { type: "string" },
+    testBindingId: { type: "string", description: "Opaque Test registry/binding correlation, never the host thread/session handle." },
+    status: { type: "string", enum: ["validated", "blocked"] },
+    capability: { type: "string", enum: ["direct-multi-root", "unsupported", "per-repo-executor-unavailable"] },
+    productAccess: {
+      type: "array",
+      description: "Required for validated direct-multi-root. One redacted identity observation per planned product binding; contains digests and Git HEAD, never cwd or host handles.",
+      items: {
+        type: "object",
+        required: ["windowName", "repositoryWindow", "bindingId", "rootDigest", "gitTopLevelDigest", "head", "readable", "gitIdentityVerified"],
+        properties: {
+          windowName: { type: "string" },
+          repositoryWindow: { type: "string" },
+          bindingId: { type: "string" },
+          rootDigest: { type: "string" },
+          gitTopLevelDigest: { type: "string" },
+          head: { type: "string" },
+          readable: { type: "boolean" },
+          gitIdentityVerified: { type: "boolean" },
+        },
+      },
+    },
+    reasonCode: { type: "string", enum: ["direct-multi-root-unsupported", "access-probe-failed", "per-repo-executor-unavailable"] },
+    observedAt: { type: "string" },
+  },
+};
+
+const podCloseReceiptSchema = {
+  type: "object",
+  required: ["closeCorrelationId", "bindingId", "windowName", "host", "sessionStatus", "worktreeStatus", "confirmedAt"],
+  properties: {
+    closeCorrelationId: { type: "string" },
+    bindingId: { type: ["string", "null"] },
+    windowName: { type: "string" },
+    host: { type: "string" },
+    sessionStatus: { type: "string", enum: ["archived", "closed", "handed-off", "not-found"] },
+    worktreeStatus: { type: "string", enum: ["removed", "retained", "not-applicable", "unknown"] },
+    confirmedAt: { type: "string" },
+    error: { type: "string" },
+  },
+};
+
 const toolDefinitions = [
   {
     name: "wakeflow_initialize_workspace",
@@ -222,20 +374,6 @@ const toolDefinitions = [
     name: "wakeflow_recover_state_transition",
     description: "Inspect or explicitly recover the pending state/event transition journal for one demand state root. Dry-run unless apply is true. This is the sanctioned recovery path for a consistent wakeflow-state.pending-transition.json; it never guesses through malformed or conflicting authority artifacts.",
     annotations: localWriteTool("Recover Wakeflow State Transition", true),
-    inputSchema: {
-      type: "object",
-      required: ["stateRoot"],
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string" },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_render_progress",
-    description: "Re-render the developer progress projection for a demand state root (the projection goes stale after every state mutation). Owner-host only; does not change machine state semantics. Dry-run unless apply is true.",
-    annotations: localWriteTool("Render Wakeflow Progress"),
     inputSchema: {
       type: "object",
       required: ["stateRoot"],
@@ -434,22 +572,31 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_view",
-    description: "Read-only (mostly) projections for a demand state root; scope selects which. task-ledger: unified per-task rollup for EVERY target task (accepted history preserved) — execution status, acceptance decision, latest result, test-card status, and handling counts (dispatchCount/reworkCount/redesignCount persisted; retestCount derived as rounds dispatched to a Test window — an informational hint, not a gate) plus a recurringProblem flag (reworkCount >= 2). window: per-window orientation card — the tasks that belong to a window (with the same handling counts and recurringProblem flag), its task packages, its rollup, and the file areas where its state-root/transport files live. focus: generate a focused, regenerable sub-document for one window (or best-effort one phase) under focus/ — dry-run by default, apply:true writes under the owning-host gate (focus docs are never state authority). trace: trace the evidence spine for a state root, dispatch group, delivery, target, or target result. storage: the local-storage map — every known tree under .wakeflow-active/.wakeflow-local/ledger with class (authority/projection/transport/evidence/handles/preserved), size, and age, plus legacy residue, unknown trees, and aging preserved/ entries; classification is descriptive guidance, never a deletion authorization. Evidence, not acceptance, and never a host send.",
+    description: "Read-only (mostly) projections for a demand state root; scope selects which. task-ledger: unified per-task rollup for EVERY target task (accepted history preserved) — execution status, acceptance decision, latest result, test-card status, and handling counts (dispatchCount/reworkCount/redesignCount persisted; retestCount derived as rounds dispatched to a Test window — an informational hint, not a gate) plus a recurringProblem flag (reworkCount >= 2). window: per-window orientation card — the tasks that belong to a window (with the same handling counts and recurringProblem flag), its task packages, its rollup, and the file areas where its state-root/transport files live. focus: generate a focused, regenerable sub-document for one window (or best-effort one phase) under focus/ — dry-run by default, apply:true writes under the owning-host gate (focus docs are never state authority). trace: trace the evidence spine for a state root, dispatch group, delivery, target, or target result. storage: the local-storage map — every known tree under .wakeflow-active/.wakeflow-local/ledger with class (authority/projection/transport/evidence/handles/preserved), size, and age, plus legacy residue, unknown trees, and aging preserved/ entries; classification is descriptive guidance, never a deletion authorization. progress: re-render the developer progress projection for one state root, dry-run unless apply=true. pods: read-only Pod inventory from canonical demand state plus host-local launch operations and bindings. Evidence, not acceptance, and never a host send.",
     annotations: localWriteTool("Wakeflow View Projection"),
     inputSchema: {
       type: "object",
       required: ["scope"],
+      oneOf: [
+        { properties: { scope: { const: "task-ledger" } } },
+        { properties: { scope: { const: "window" } } },
+        { properties: { scope: { const: "focus" } } },
+        { properties: { scope: { const: "trace" } } },
+        { properties: { scope: { const: "storage" } } },
+        { required: ["stateRoot"], properties: { scope: { const: "progress" } } },
+        { properties: { scope: { const: "pods" } } },
+      ],
       properties: {
         root: { type: "string" },
         scope: {
           type: "string",
-          enum: ["task-ledger", "window", "focus", "trace", "storage"],
-          description: "Which projection to return: task-ledger | window | focus | trace | storage.",
+          enum: ["task-ledger", "window", "focus", "trace", "storage", "progress", "pods"],
+          description: "Which projection to return: task-ledger | window | focus | trace | storage | progress | pods.",
         },
         stateRoot: { type: "string" },
         window: { type: "string", description: "Window name for scope=window or scope=focus." },
         phase: { type: "string", description: "Best-effort phase for scope=focus." },
-        apply: { type: "boolean", description: "scope=focus only: write the focus doc (default dry-run)." },
+        apply: { type: "boolean", description: "scope=focus: write the focus doc; scope=progress: write the refreshed progress projection. Both default to dry-run." },
         taskId: { type: "string", description: "Task id for scope=task-ledger or scope=trace." },
         targetWindow: { type: "string", description: "Target window for scope=task-ledger or scope=trace." },
         dispatchGroup: { type: "string", description: "Dispatch group for scope=trace." },
@@ -578,20 +725,26 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_archive",
-    description: "Archive completed Wakeflow content into the committed ledger; target selects which. demand: relocate a completed demand state root into the ledger — the archive privacy guard refuses real-id-shaped strings and user/workspace absolute paths unless redact relocates a portable cleaned copy (original preserved for audit); sensitive opaque evidence stays in that local original and becomes a safe placeholder in the portable copy. Clean opaque evidence remains fail-closed unless allowOpaque is explicitly true. The staged copy is re-scanned before commit. todo: completed TODO rows + historical sync records into the workspace ledger. docs: explicit completed workspace documents into a ledger topic, or prune active index rows that already point at archive topics (never archives the active index/current plan by inference). Dry-run unless apply is true. Records archive facts only — never accepts work, selects next work, or sends host messages. (Transport-runtime GC is the separate wakeflow_prune_runtime.)",
+    description: "Archive or sanitize Wakeflow ledger content; target selects which. demand: relocate a completed demand state root into the ledger — the archive privacy guard refuses real-id-shaped strings and user/workspace absolute paths unless redact relocates a portable cleaned copy (original preserved for audit); sensitive opaque evidence stays in that local original and becomes a safe placeholder in the portable copy. Clean opaque evidence remains fail-closed unless allowOpaque is explicitly true. The staged copy is re-scanned before commit. todo: completed TODO rows + historical sync records into the workspace ledger. docs: explicit completed workspace documents into a ledger topic, or prune active index rows that already point at archive topics (never archives the active index/current plan by inference). sanitize-demand: replace one EXISTING archived demand carrying archive-manifest.json with a fully re-scanned portable copy, append archive.sanitized audit history, and preserve the original bytes locally; never reopens the demand or touches active state. Dry-run unless apply is true. Records archive facts only — never accepts work, selects next work, or sends host messages. (Transport-runtime GC is the separate wakeflow_prune_runtime.)",
     annotations: localWriteTool("Archive Wakeflow Content"),
     inputSchema: {
       type: "object",
       required: ["target"],
+      oneOf: [
+        { required: ["stateRoot", "reason"], properties: { target: { const: "demand" } } },
+        { properties: { target: { const: "todo" } } },
+        { properties: { target: { const: "docs" } } },
+        { required: ["stateRoot", "reason"], properties: { target: { const: "sanitize-demand" } } },
+      ],
       properties: {
         root: { type: "string" },
         target: {
           type: "string",
-          enum: ["demand", "todo", "docs"],
-          description: "What to archive: demand (a completed demand state root) | todo (completed TODO rows + sync records) | docs (explicit workspace documents).",
+          enum: ["demand", "todo", "docs", "sanitize-demand"],
+          description: "What to process: demand | todo | docs | sanitize-demand (an existing archived demand).",
         },
-        stateRoot: { type: "string", description: "target=demand: the completed demand state root to relocate." },
-        reason: { type: "string", description: "target=demand: required archive reason." },
+        stateRoot: { type: "string", description: "target=demand: completed demand root; target=sanitize-demand: existing archived demand root." },
+        reason: { type: "string", description: "Required for target=demand and target=sanitize-demand." },
         redact: { type: "boolean", description: "target=demand: relocate a portable copy when real ids, user/workspace absolute paths, or sensitive opaque evidence are present; preserve the original locally." },
         allowOpaque: { type: "boolean", description: "target=demand: explicitly allow clean opaque evidence to remain byte-for-byte in the portable archive; hashes are recorded. Sensitive opaque evidence under redact is still omitted into a placeholder." },
         evidenceRefs: { type: "array", items: { type: "string" }, description: "target=demand: evidence references to record." },
@@ -604,21 +757,6 @@ const toolDefinitions = [
         keepIndexRows: { type: "boolean", description: "target=docs: keep source index rows instead of trimming archived rows." },
         pruneIndexOnly: { type: "boolean", description: "target=docs: only prune index rows for already-archived docs; do not move files." },
         refreshSummaries: { type: "boolean", description: "target=todo/docs: refresh archive summary indexes after a successful run." },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_sanitize_archive",
-    description: "Sanitize one EXISTING archived demand in the configured project ledger when historical archive content contains real host ids or user/workspace absolute paths. The archive must already be state=archived and carry archive-manifest.json. Replaces only that archive path with a fully re-scanned portable copy, appends archive.sanitized audit history, and moves the original bytes to .wakeflow-local/preserved/. Never reopens the demand, changes acceptance, touches active state, or repairs arbitrary directories. Dry-run unless apply is true.",
-    annotations: localWriteTool("Sanitize Wakeflow Archive", true),
-    inputSchema: {
-      type: "object",
-      required: ["stateRoot", "reason"],
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string", description: "Existing archived demand root below wakeflow-ledger/workspace/archive/." },
-        reason: { type: "string", description: "Audit reason recorded in the archive amendment." },
         apply: { type: "boolean" },
       },
     },
@@ -830,34 +968,47 @@ const toolDefinitions = [
     },
   },
   {
-    name: "wakeflow_pod_record_materialization",
-    description: "Record the host-local lifecycle of one exact Pod launch correlation. Call with status=creating immediately before the host create call; if Codex returns clientThreadId, record status=pending with that temporary id, then use the host profile's bounded discovery protocol and record finalized only when exactly one final session matches launchCorrelationId. Temporary ids are stored only as a digest and can never enter the window registry. A creating/pending attempt forbids blind duplicate creation; a terminal failure requires explicit retry authorization. Dry-run unless apply is true.",
-    annotations: localWriteTool("Record Pod Host Materialization", true),
+    name: "wakeflow_pod_record",
+    description: "Record one host-confirmed Pod lifecycle event without combining host action and state mutation. event=materialization records one exact launch correlation; design-handoff records the immutable Design handoff; test-access records the redacted Test access receipt; close-receipt records one host close outcome. Each event accepts only its matching payload field and preserves the existing backend validation. Dry-run unless apply is true.",
+    annotations: localWriteTool("Record Pod Host Evidence", true),
     inputSchema: {
       type: "object",
-      required: ["attempt"],
+      required: ["event"],
+      not: { required: ["action"] },
+      oneOf: [
+        {
+          required: ["attempt"],
+          properties: { event: { const: "materialization" } },
+          not: { anyOf: [{ required: ["handoff"] }, { required: ["receipt"] }] },
+        },
+        {
+          required: ["handoff"],
+          properties: { event: { const: "design-handoff" } },
+          not: { anyOf: [{ required: ["attempt"] }, { required: ["receipt"] }] },
+        },
+        {
+          required: ["receipt"],
+          properties: {
+            event: { const: "test-access" },
+            receipt: podTestAccessReceiptSchema,
+          },
+          not: { anyOf: [{ required: ["attempt"] }, { required: ["handoff"] }] },
+        },
+        {
+          required: ["receipt"],
+          properties: {
+            event: { const: "close-receipt" },
+            receipt: podCloseReceiptSchema,
+          },
+          not: { anyOf: [{ required: ["attempt"] }, { required: ["handoff"] }] },
+        },
+      ],
       properties: {
         root: { type: "string" },
-        attempt: {
-          type: "object",
-          required: ["launchCorrelationId", "host", "status", "observedAt"],
-          properties: {
-            launchCorrelationId: { type: "string" },
-            host: { type: "string", enum: ["codex", "claude-code"] },
-            status: {
-              type: "string",
-              enum: ["creating", "pending", "finalized", "failed"],
-            },
-            observedAt: { type: "string" },
-            hostRequestId: {
-              type: "string",
-              description: "Host temporary async request id; accepted only for pending and persisted only as a digest.",
-            },
-            terminalFailure: { type: "boolean", const: true },
-            failureReason: { type: "string" },
-            retryAuthorizationRef: { type: "string" },
-          },
-        },
+        event: { type: "string", enum: ["materialization", "design-handoff", "test-access", "close-receipt"] },
+        attempt: podMaterializationAttemptSchema,
+        handoff: podDesignHandoffSchema,
+        receipt: { type: "object" },
         apply: { type: "boolean" },
       },
     },
@@ -907,260 +1058,36 @@ const toolDefinitions = [
     },
   },
   {
-    name: "wakeflow_pod_prepare_design_request",
-    description: "Freeze one controller-authored PodDesignRequest after the independent Controller/Design/Test sessions are bound. The digest-named artifact carries the original goal, requirement anchors, code evidence, paused redesign identity, non-goals, and pending decisions; it advances only podProvisioning.phase to designing and is neither a target result nor a global TODO. A different request cannot replace the frozen request. Dry-run unless apply is true.",
-    annotations: localWriteTool("Prepare Pod Design Request", true),
+    name: "wakeflow_pod_plan",
+    description: "Prepare one Pod host-action plan while keeping the later host action and receipt recording separate. action=design-request freezes the controller-authored PodDesignRequest; test-access creates the host-local access probe plan; close creates the idempotent host close plan. Each action accepts only its matching input field and preserves the existing backend gate. Dry-run unless apply is true.",
+    annotations: localWriteTool("Prepare Pod Host Action", true),
     inputSchema: {
       type: "object",
-      required: ["request"],
-      properties: {
-        root: { type: "string" },
-        request: {
-          type: "object",
-          required: [
-            "demandKey",
-            "podId",
-            "requestType",
-            "originalGoal",
-            "requirementAnchors",
-            "codeEvidenceRefs",
-            "pausedTargetIdentity",
-            "pausedReviewIdentity",
-            "nonGoals",
-            "decisionsRequired",
-          ],
-          properties: {
-            demandKey: { type: "string" },
-            podId: { type: "string" },
-            requestType: { type: "string", enum: ["initial-design", "supplement", "redesign"] },
-            originalGoal: { type: "string" },
-            requirementAnchors: { type: "array", minItems: 1, items: { type: "string" } },
-            codeEvidenceRefs: { type: "array", minItems: 1, items: { type: "string" } },
-            pausedTargetIdentity: { type: ["object", "null"] },
-            pausedReviewIdentity: { type: ["object", "null"] },
-            nonGoals: { type: "array", items: { type: "string" } },
-            decisionsRequired: { type: "array", items: { type: "string" } },
-          },
+      required: ["action"],
+      not: { required: ["event"] },
+      oneOf: [
+        {
+          required: ["request"],
+          properties: { action: { const: "design-request" } },
+          not: { required: ["demandKey"] },
         },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_pod_record_design_handoff",
-    description: "Controller-side record of a PodDesignHandoffEnvelope for the exact immutable PodDesignRequest. The handoff must cite the request id/ref/digest and preserve its request type and requirement anchors; it freezes per-repository landing and Test decisions, never creates a global TODO, and never counts as a target result. Product dispatch remains blocked until this handoff and all required product bindings are present. Dry-run unless apply is true.",
-    annotations: localWriteTool("Record Pod Design Handoff", true),
-    inputSchema: {
-      type: "object",
-      required: ["handoff"],
-      properties: {
-        root: { type: "string" },
-        handoff: {
-          type: "object",
-          required: [
-            "demandKey",
-            "podId",
-            "designRequestId",
-            "designRequestRef",
-            "designRequestDigest",
-            "requestType",
-            "preservesOriginalGoal",
-            "requirementAnchors",
-            "evidenceRefs",
-            "userConfirmationRefs",
-            "landingPlan",
-            "designIntent",
-            "testDecision",
-            "environmentSpec",
-          ],
-          properties: {
-            demandKey: { type: "string" },
-            podId: { type: "string" },
-            designRequestId: { type: "string" },
-            designRequestRef: { type: "string" },
-            designRequestDigest: { type: "string" },
-            requestType: { type: "string", enum: ["initial-design", "supplement", "redesign"] },
-            preservesOriginalGoal: { type: "boolean", const: true },
-            requirementAnchors: { type: "array", minItems: 1, items: { type: "string" } },
-            evidenceRefs: { type: "array", items: { type: "string" } },
-            userConfirmationRefs: { type: "array", items: { type: "string" } },
-            landingPlan: {
-              type: "array",
-              minItems: 1,
-              items: {
-                type: "object",
-                required: ["repositoryWindow"],
-                properties: {
-                  repositoryWindow: { type: "string" },
-                  objective: { type: "string" },
-                  boundaries: { type: "array", items: { type: "string" } },
-                },
-              },
-            },
-            designIntent: { type: "string" },
-            testDecision: { type: "string" },
-            environmentSpec: { type: "object" },
-            replacementLineage: { type: "object" },
-          },
+        {
+          required: ["demandKey"],
+          properties: { action: { const: "test-access" } },
+          not: { required: ["request"] },
         },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_pod_prepare_test_access",
-    description: "Create the host-local access probe plan for an independent Pod Test session after all frozen product worktrees are bound. The exact worktree roots stay only in host-local runtime; tool output and tracked state contain only opaque probe/digest summaries. This does not make Test dispatchable. Dry-run unless apply is true.",
-    annotations: localWriteTool("Prepare Pod Test Access Probe", true),
-    inputSchema: {
-      type: "object",
-      required: ["demandKey"],
+        {
+          required: ["demandKey"],
+          properties: { action: { const: "close" } },
+          not: { required: ["request"] },
+        },
+      ],
       properties: {
         root: { type: "string" },
+        action: { type: "string", enum: ["design-request", "test-access", "close"] },
+        request: podDesignRequestSchema,
         demandKey: { type: "string" },
         apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_pod_record_test_access",
-    description: "Record the exact redacted receipt from the independent Pod Test access probe. Only validated direct-multi-root coverage of every active product binding opens Test dispatch. Unsupported hosts remain blocked; Wakeflow never falls back to a main checkout, lets a product window impersonate Test, or claims an unverified per-repository executor. Dry-run unless apply is true.",
-    annotations: localWriteTool("Record Pod Test Access Receipt", true),
-    inputSchema: {
-      type: "object",
-      required: ["receipt"],
-      properties: {
-        root: { type: "string" },
-        receipt: {
-          type: "object",
-          required: [
-            "probeId",
-            "demandKey",
-            "podId",
-            "host",
-            "testWindowName",
-            "testBindingId",
-            "status",
-            "capability",
-            "observedAt"
-          ],
-          properties: {
-            probeId: { type: "string" },
-            demandKey: { type: "string" },
-            podId: { type: "string" },
-            host: { type: "string", enum: ["codex", "claude-code"] },
-            testWindowName: { type: "string" },
-            testBindingId: {
-              type: "string",
-              description: "Opaque Test registry/binding correlation, never the host thread/session handle.",
-            },
-            status: { type: "string", enum: ["validated", "blocked"] },
-            capability: {
-              type: "string",
-              enum: [
-                "direct-multi-root",
-                "unsupported",
-                "per-repo-executor-unavailable"
-              ],
-            },
-            productAccess: {
-              type: "array",
-              description: "Required for validated direct-multi-root. One redacted identity observation per planned product binding; contains digests and Git HEAD, never cwd or host handles.",
-              items: {
-                type: "object",
-                required: [
-                  "windowName",
-                  "repositoryWindow",
-                  "bindingId",
-                  "rootDigest",
-                  "gitTopLevelDigest",
-                  "head",
-                  "readable",
-                  "gitIdentityVerified"
-                ],
-                properties: {
-                  windowName: { type: "string" },
-                  repositoryWindow: { type: "string" },
-                  bindingId: { type: "string" },
-                  rootDigest: { type: "string" },
-                  gitTopLevelDigest: { type: "string" },
-                  head: { type: "string" },
-                  readable: { type: "boolean" },
-                  gitIdentityVerified: { type: "boolean" },
-                },
-              },
-            },
-            reasonCode: {
-              type: "string",
-              enum: [
-                "direct-multi-root-unsupported",
-                "access-probe-failed",
-                "per-repo-executor-unavailable"
-              ],
-            },
-            observedAt: { type: "string" },
-          },
-        },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_pod_close",
-    description: "Generate an idempotent host close plan for a completed, cancelled, or archived Pod. Wakeflow does not inspect or delete Git worktrees/branches and does not claim that archiving a session physically removed its worktree. The Agent executes each host operation and records the outcome with wakeflow_pod_record_close_receipt. Dry-run unless apply is true.",
-    annotations: localWriteTool("Close Demand Pod"),
-    inputSchema: {
-      type: "object",
-      required: ["demandKey"],
-      properties: {
-        root: { type: "string" },
-        demandKey: { type: "string" },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_pod_record_close_receipt",
-    description: "Record one host-confirmed Pod close result. Session closure and physical worktree cleanup are separate facts: retained/unknown never becomes removed. A binding is logically closed only after a matching host receipt, and the Pod reaches closed only after every planned window has one. Dry-run unless apply is true.",
-    annotations: localWriteTool("Record Pod Close Receipt", true),
-    inputSchema: {
-      type: "object",
-      required: ["receipt"],
-      properties: {
-        root: { type: "string" },
-        receipt: {
-          type: "object",
-          required: [
-            "closeCorrelationId",
-            "bindingId",
-            "windowName",
-            "host",
-            "sessionStatus",
-            "worktreeStatus",
-            "confirmedAt",
-          ],
-          properties: {
-            closeCorrelationId: { type: "string" },
-            bindingId: { type: ["string", "null"] },
-            windowName: { type: "string" },
-            host: { type: "string" },
-            sessionStatus: { type: "string", enum: ["archived", "closed", "handed-off", "not-found"] },
-            worktreeStatus: { type: "string", enum: ["removed", "retained", "not-applicable", "unknown"] },
-            confirmedAt: { type: "string" },
-            error: { type: "string" },
-          },
-        },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_pod_list",
-    description: "Read-only Pod inventory from canonical demand state plus host-local launch operations and bindings. It does not scan guessed worktree paths or a dynamic repository overlay.",
-    annotations: readOnlyTool("List Demand Pods"),
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
       },
     },
   },
@@ -1317,16 +1244,9 @@ export const handlers = {
     ],
     cwd: args.root || undefined,
   }),
-  wakeflow_render_progress: (args) => runWakeflowRuntime({
-    script: "wakeflow-render-progress",
-    args: [
-      "--state-root", args.stateRoot,
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
+  // Hidden for one compatibility release. New clients use
+  // wakeflow_view(scope="progress").
+  wakeflow_render_progress: (args) => runProgressProjection(args),
   wakeflow_release_window_lock: (args) => runWakeflowRuntime({
     script: "wakeflow-delivery",
     args: [
@@ -1552,7 +1472,13 @@ export const handlers = {
         cwd: args.root || undefined,
       });
     }
-    throw new Error(`wakeflow_view: unknown scope "${args.scope}" (expected task-ledger | window | focus | trace | storage)`);
+    if (args.scope === "progress") {
+      return runProgressProjection(args);
+    }
+    if (args.scope === "pods") {
+      return runPodInventory(args);
+    }
+    throw new Error(`wakeflow_view: unknown scope "${args.scope}" (expected task-ledger | window | focus | trace | storage | progress | pods)`);
   },
   wakeflow_storage_preserve: (args) => runWakeflowRuntime({
     script: "wakeflow-storage",
@@ -1704,19 +1630,14 @@ export const handlers = {
       });
       return maybeRefreshArchiveSummaries(args, archive);
     }
-    throw new Error(`wakeflow_archive: unknown target "${args.target}" (expected demand | todo | docs)`);
+    if (args.target === "sanitize-demand") {
+      return runArchiveSanitize(args, "wakeflow_archive target=sanitize-demand");
+    }
+    throw new Error(`wakeflow_archive: unknown target "${args.target}" (expected demand | todo | docs | sanitize-demand)`);
   },
-  wakeflow_sanitize_archive: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "sanitize-archive",
-      "--state-root", requireValueForTool(args, "stateRoot", "wakeflow_sanitize_archive"),
-      "--reason", requireValueForTool(args, "reason", "wakeflow_sanitize_archive"),
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-  }),
+  // Hidden for one compatibility release. New clients use
+  // wakeflow_archive(target="sanitize-demand").
+  wakeflow_sanitize_archive: (args) => runArchiveSanitize(args, "wakeflow_sanitize_archive"),
   wakeflow_intake_test_card: (args) => runWakeflowRuntime({
     script: "wakeflow-intake",
     args: [
@@ -1857,21 +1778,10 @@ export const handlers = {
     ],
     cwd: args.root || undefined,
   }),
-  wakeflow_pod_record_materialization: (args) => runWakeflowRuntime({
-    script: "wakeflow-pod",
-    args: [
-      "record-materialization",
-      ...rootArgs(args),
-      "--attempt-json",
-      JSON.stringify({
-        ...args.attempt,
-        host: hostProfile.hostId,
-      }),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
+  wakeflow_pod_record: (args) => runPodRecord(args),
+  // Hidden compatibility aliases. They intentionally remain callable while
+  // no longer appearing in tools/list.
+  wakeflow_pod_record_materialization: (args) => runPodRecord({ ...args, event: "materialization" }),
   wakeflow_pod_bind: (args) => runWakeflowRuntime({
     script: "wakeflow-pod",
     args: [
@@ -1884,90 +1794,14 @@ export const handlers = {
     ],
     cwd: args.root || undefined,
   }),
-  wakeflow_pod_prepare_design_request: (args) => runWakeflowRuntime({
-    script: "wakeflow-pod",
-    args: [
-      "prepare-design-request",
-      ...rootArgs(args),
-      "--request-json",
-      JSON.stringify(args.request),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_pod_record_design_handoff: (args) => runWakeflowRuntime({
-    script: "wakeflow-pod",
-    args: [
-      "record-design-handoff",
-      ...rootArgs(args),
-      "--handoff-json",
-      JSON.stringify(args.handoff),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_pod_prepare_test_access: (args) => runWakeflowRuntime({
-    script: "wakeflow-pod",
-    args: [
-      "prepare-test-access",
-      ...rootArgs(args),
-      "--demand-key",
-      requireValueForTool(
-        args,
-        "demandKey",
-        "wakeflow_pod_prepare_test_access",
-      ),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_pod_record_test_access: (args) => runWakeflowRuntime({
-    script: "wakeflow-pod",
-    args: [
-      "record-test-access",
-      ...rootArgs(args),
-      "--receipt-json",
-      JSON.stringify(args.receipt),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_pod_close: (args) => runWakeflowRuntime({
-    script: "wakeflow-pod",
-    args: [
-      "close",
-      ...rootArgs(args),
-      ...optionalValue("--demand-key", args.demandKey),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_pod_record_close_receipt: (args) => runWakeflowRuntime({
-    script: "wakeflow-pod",
-    args: [
-      "record-close-receipt",
-      ...rootArgs(args),
-      "--receipt-json",
-      JSON.stringify(args.receipt),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_pod_list: (args) => runWakeflowRuntime({
-    script: "wakeflow-pod",
-    args: [
-      "list",
-      ...rootArgs(args),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
+  wakeflow_pod_plan: (args) => runPodPlan(args),
+  wakeflow_pod_prepare_design_request: (args) => runPodPlan({ ...args, action: "design-request" }),
+  wakeflow_pod_record_design_handoff: (args) => runPodRecord({ ...args, event: "design-handoff" }),
+  wakeflow_pod_prepare_test_access: (args) => runPodPlan({ ...args, action: "test-access" }),
+  wakeflow_pod_record_test_access: (args) => runPodRecord({ ...args, event: "test-access" }),
+  wakeflow_pod_close: (args) => runPodPlan({ ...args, action: "close" }),
+  wakeflow_pod_record_close_receipt: (args) => runPodRecord({ ...args, event: "close-receipt" }),
+  wakeflow_pod_list: (args) => runPodInventory(args),
   wakeflow_prune_runtime: (args) => (args.target === "preserved"
     ? runWakeflowRuntime({
       script: "wakeflow-storage",
@@ -2004,6 +1838,145 @@ export const handlers = {
     timeoutMs: args.scriptTests || args.withRuntime || args.strictRuntime ? 180000 : 120000,
   }),
 };
+
+function runProgressProjection(args) {
+  return runWakeflowRuntime({
+    script: "wakeflow-render-progress",
+    args: [
+      "--state-root", requireValueForTool(args, "stateRoot", "wakeflow_view scope=progress"),
+      ...rootArgs(args),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  });
+}
+
+function runArchiveSanitize(args, context) {
+  return runWakeflowRuntime({
+    script: "wakeflow-state",
+    args: [
+      "sanitize-archive",
+      "--state-root", requireValueForTool(args, "stateRoot", context),
+      "--reason", requireValueForTool(args, "reason", context),
+      ...rootArgs(args),
+      ...(args.apply ? ["--write"] : []),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  });
+}
+
+function runPodInventory(args) {
+  return runWakeflowRuntime({
+    script: "wakeflow-pod",
+    args: ["list", ...rootArgs(args), "--json"],
+    cwd: args.root || undefined,
+  });
+}
+
+function runPodPlan(args) {
+  const action = requireValueForTool(args, "action", "wakeflow_pod_plan");
+  if (action === "design-request") {
+    rejectPodBranchFields(args, ["action", "request"], "wakeflow_pod_plan action=design-request");
+    const request = requireObjectForTool(args, "request", "wakeflow_pod_plan action=design-request");
+    return runWakeflowRuntime({
+      script: "wakeflow-pod",
+      args: [
+        "prepare-design-request",
+        ...rootArgs(args),
+        "--request-json", JSON.stringify(request),
+        ...(args.apply ? ["--write"] : []),
+        "--json",
+      ],
+      cwd: args.root || undefined,
+    });
+  }
+  if (action === "test-access" || action === "close") {
+    const context = `wakeflow_pod_plan action=${action}`;
+    rejectPodBranchFields(args, ["action", "demandKey"], context);
+    const demandKey = requireValueForTool(args, "demandKey", context);
+    return runWakeflowRuntime({
+      script: "wakeflow-pod",
+      args: [
+        action === "test-access" ? "prepare-test-access" : "close",
+        ...rootArgs(args),
+        "--demand-key", demandKey,
+        ...(args.apply ? ["--write"] : []),
+        "--json",
+      ],
+      cwd: args.root || undefined,
+    });
+  }
+  throw new Error(`wakeflow_pod_plan: unknown action "${action}" (expected design-request | test-access | close)`);
+}
+
+function runPodRecord(args) {
+  const event = requireValueForTool(args, "event", "wakeflow_pod_record");
+  if (event === "materialization") {
+    rejectPodBranchFields(args, ["event", "attempt"], "wakeflow_pod_record event=materialization");
+    const attempt = requireObjectForTool(args, "attempt", "wakeflow_pod_record event=materialization");
+    return runWakeflowRuntime({
+      script: "wakeflow-pod",
+      args: [
+        "record-materialization",
+        ...rootArgs(args),
+        "--attempt-json", JSON.stringify({ ...attempt, host: hostProfile.hostId }),
+        ...(args.apply ? ["--write"] : []),
+        "--json",
+      ],
+      cwd: args.root || undefined,
+    });
+  }
+  if (event === "design-handoff") {
+    rejectPodBranchFields(args, ["event", "handoff"], "wakeflow_pod_record event=design-handoff");
+    const handoff = requireObjectForTool(args, "handoff", "wakeflow_pod_record event=design-handoff");
+    return runWakeflowRuntime({
+      script: "wakeflow-pod",
+      args: [
+        "record-design-handoff",
+        ...rootArgs(args),
+        "--handoff-json", JSON.stringify(handoff),
+        ...(args.apply ? ["--write"] : []),
+        "--json",
+      ],
+      cwd: args.root || undefined,
+    });
+  }
+  if (event === "test-access" || event === "close-receipt") {
+    const context = `wakeflow_pod_record event=${event}`;
+    rejectPodBranchFields(args, ["event", "receipt"], context);
+    const receipt = requireObjectForTool(args, "receipt", context);
+    return runWakeflowRuntime({
+      script: "wakeflow-pod",
+      args: [
+        event === "test-access" ? "record-test-access" : "record-close-receipt",
+        ...rootArgs(args),
+        "--receipt-json", JSON.stringify(receipt),
+        ...(args.apply ? ["--write"] : []),
+        "--json",
+      ],
+      cwd: args.root || undefined,
+    });
+  }
+  throw new Error(`wakeflow_pod_record: unknown event "${event}" (expected materialization | design-handoff | test-access | close-receipt)`);
+}
+
+function requireObjectForTool(args, name, context) {
+  const value = args?.[name];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${context} requires ${name} object`);
+  }
+  return value;
+}
+
+function rejectPodBranchFields(args, allowed, context) {
+  const branchFields = ["action", "event", "request", "demandKey", "attempt", "handoff", "receipt"];
+  const unexpected = branchFields.filter((name) => !allowed.includes(name) && args?.[name] !== undefined);
+  if (unexpected.length > 0) {
+    throw new Error(`${context} does not accept ${unexpected.join(", ")}`);
+  }
+}
 
 async function maybeRefreshArchiveSummaries(args, archiveResult) {
   if (!args.refreshSummaries || !archiveResult?.ok) {

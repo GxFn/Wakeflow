@@ -37,12 +37,12 @@ Use these MCP tools for normal installed-workspace control:
 | Need | MCP tool |
 | --- | --- |
 | Setup and window registration | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
-| Demand/status lifecycle | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
-| Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind`, `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff`, `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_pod_close`, `wakeflow_pod_record_close_receipt`, `wakeflow_pod_list` |
+| Demand/status lifecycle | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_cancel_demand` |
+| Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_bind`, `wakeflow_pod_plan` (action design-request/test-access/close), `wakeflow_pod_record` (event materialization/design-handoff/test-access/close-receipt) |
 | Delivery transport | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results, review, and completion | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| Archive, views, maintenance, verification | `wakeflow_archive`, `wakeflow_sanitize_archive`, `wakeflow_view`, `wakeflow_storage_preserve`, `wakeflow_prune_runtime`, `wakeflow_verify` |
+| Archive, views, maintenance, verification | `wakeflow_archive` (including target=sanitize-demand), `wakeflow_view` (including scope=progress/pods), `wakeflow_storage_preserve`, `wakeflow_prune_runtime`, `wakeflow_verify` |
 | Host ownership and target work leases | `wakeflow_adopt_demand_host`, `wakeflow_release_window_lock` |
 
 ## Source Runtime Command Set

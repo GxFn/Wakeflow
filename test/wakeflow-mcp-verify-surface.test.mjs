@@ -29,8 +29,8 @@ test("wakeflow_view MCP tool is registered with a handler and scope routing", ()
   assert.deepEqual(view.inputSchema?.required, ["scope"]);
   assert.deepEqual(
     props.scope?.enum,
-    ["task-ledger", "window", "focus", "trace", "storage"],
-    "wakeflow_view scope must enumerate task-ledger|window|focus|trace|storage",
+    ["task-ledger", "window", "focus", "trace", "storage", "progress", "pods"],
+    "wakeflow_view scope must enumerate task-ledger|window|focus|trace|storage|progress|pods",
   );
   // Inputs fused from the former task_ledger / window_view / focus_doc / trace_spine tools.
   for (const field of [
@@ -39,6 +39,24 @@ test("wakeflow_view MCP tool is registered with a handler and scope routing", ()
     assert.ok(props[field], `wakeflow_view must expose '${field}'`);
   }
   assert.equal(typeof handlers.wakeflow_view, "function", "wakeflow_view must have a handler");
+  const progressBranch = view.inputSchema.oneOf.find(
+    (branch) => branch.properties?.scope?.const === "progress",
+  );
+  assert.deepEqual(progressBranch?.required, ["stateRoot"]);
+  assert.equal(
+    tools.some((tool) => tool.name === "wakeflow_render_progress"),
+    false,
+    "progress must be exposed only through wakeflow_view",
+  );
+  assert.equal(
+    tools.some((tool) => tool.name === "wakeflow_pod_list"),
+    false,
+    "Pod inventory must be exposed only through wakeflow_view",
+  );
+  assert.throws(
+    () => handlers.wakeflow_view({ scope: "progress" }),
+    /wakeflow_view scope=progress requires stateRoot/,
+  );
 });
 
 test("wakeflow_claim_next MCP tool is registered with a handler", () => {
@@ -99,8 +117,8 @@ test("wakeflow_archive MCP tool is registered with a handler and target routing"
   assert.deepEqual(archive.inputSchema?.required, ["target"]);
   assert.deepEqual(
     props.target?.enum,
-    ["demand", "todo", "docs"],
-    "wakeflow_archive target must enumerate demand|todo|docs",
+    ["demand", "todo", "docs", "sanitize-demand"],
+    "wakeflow_archive target must enumerate demand|todo|docs|sanitize-demand",
   );
   // demand redaction-guard inputs + todo/docs inputs fused into one tool.
   assert.equal(props.redact?.type, "boolean", "wakeflow_archive must keep a boolean 'redact' input (target=demand)");
@@ -109,6 +127,10 @@ test("wakeflow_archive MCP tool is registered with a handler and target routing"
     assert.ok(props[field], `wakeflow_archive must expose '${field}'`);
   }
   assert.equal(typeof handlers.wakeflow_archive, "function", "wakeflow_archive must have a handler");
+  const sanitizeBranch = archive.inputSchema.oneOf.find(
+    (branch) => branch.properties?.target?.const === "sanitize-demand",
+  );
+  assert.deepEqual(sanitizeBranch?.required, ["stateRoot", "reason"]);
 });
 
 test("wakeflow_archive target=demand fails closed before runtime when required inputs are missing", async () => {
@@ -122,18 +144,22 @@ test("wakeflow_archive target=demand fails closed before runtime when required i
   );
 });
 
-test("wakeflow_sanitize_archive exposes only the bounded archived-root repair inputs", () => {
-  const sanitize = tools.find((tool) => tool.name === "wakeflow_sanitize_archive");
-  assert.ok(sanitize, "wakeflow_sanitize_archive tool must be registered");
-  assert.deepEqual(sanitize.inputSchema?.required, ["stateRoot", "reason"]);
-  assert.deepEqual(Object.keys(sanitize.inputSchema?.properties ?? {}).sort(), ["apply", "reason", "root", "stateRoot"]);
-  assert.equal(typeof handlers.wakeflow_sanitize_archive, "function");
-  assert.throws(
-    () => handlers.wakeflow_sanitize_archive({}),
-    /wakeflow_sanitize_archive requires stateRoot/,
+test("wakeflow_archive target=sanitize-demand owns the public bounded archive repair route", async () => {
+  assert.equal(
+    tools.some((tool) => tool.name === "wakeflow_sanitize_archive"),
+    false,
+    "the legacy sanitize tool must not remain public",
   );
-  assert.throws(
-    () => handlers.wakeflow_sanitize_archive({ stateRoot: "wakeflow-ledger/workspace/archive/x" }),
-    /wakeflow_sanitize_archive requires reason/,
+  assert.equal(typeof handlers.wakeflow_sanitize_archive, "function");
+  await assert.rejects(
+    handlers.wakeflow_archive({ target: "sanitize-demand" }),
+    /wakeflow_archive target=sanitize-demand requires stateRoot/,
+  );
+  await assert.rejects(
+    handlers.wakeflow_archive({
+      target: "sanitize-demand",
+      stateRoot: "wakeflow-ledger/workspace/archive/x",
+    }),
+    /wakeflow_archive target=sanitize-demand requires reason/,
   );
 });

@@ -313,11 +313,33 @@ async function runMcpSmoke(rootPath) {
       "wakeflow_complete_demand",
       "wakeflow_continue_demand",
       "wakeflow_archive",
-      "wakeflow_sanitize_archive",
+      "wakeflow_pod_open",
+      "wakeflow_pod_bind",
+      "wakeflow_pod_plan",
+      "wakeflow_pod_record",
       "wakeflow_verify",
     ]) {
       if (!toolNames.includes(expected)) {
         throw new Error(`MCP tools/list missing ${expected}`);
+      }
+    }
+    if (toolNames.length !== 31) {
+      throw new Error(`MCP tools/list expected 31 public tools, found ${toolNames.length}`);
+    }
+    for (const retired of [
+      "wakeflow_render_progress",
+      "wakeflow_pod_list",
+      "wakeflow_sanitize_archive",
+      "wakeflow_pod_prepare_design_request",
+      "wakeflow_pod_prepare_test_access",
+      "wakeflow_pod_close",
+      "wakeflow_pod_record_materialization",
+      "wakeflow_pod_record_design_handoff",
+      "wakeflow_pod_record_test_access",
+      "wakeflow_pod_record_close_receipt",
+    ]) {
+      if (toolNames.includes(retired)) {
+        throw new Error(`MCP tools/list exposes retired tool ${retired}`);
       }
     }
     const hostVisiblePrefix = toolNames.slice(0, 14);
@@ -609,6 +631,24 @@ async function runMcpSmoke(rootPath) {
       || tracedPayload.parsedJson?.traceSpine?.coverage?.targetResultCount !== 1
     ) {
       throw new Error("MCP wakeflow_view(scope=trace) did not return the task evidence spine");
+    }
+
+    const progressPreview = await request("tools/call", {
+      name: "wakeflow_view",
+      arguments: { root: rootPath, scope: "progress", stateRoot: mcpStateRoot },
+    });
+    const progressPreviewPayload = JSON.parse(progressPreview.result.content?.[0]?.text);
+    if (!progressPreviewPayload.ok) {
+      throw new Error("MCP wakeflow_view(scope=progress) did not preserve dry-run projection routing");
+    }
+
+    const podsView = await request("tools/call", {
+      name: "wakeflow_view",
+      arguments: { root: rootPath, scope: "pods" },
+    });
+    const podsViewPayload = JSON.parse(podsView.result.content?.[0]?.text);
+    if (!podsViewPayload.ok || !Array.isArray(podsViewPayload.parsedJson?.pods)) {
+      throw new Error("MCP wakeflow_view(scope=pods) did not return the Pod inventory");
     }
 
     const preserveSource = path.join(rootPath, ".wakeflow-local", "mcp-preserve-smoke.txt");

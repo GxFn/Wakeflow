@@ -237,7 +237,10 @@ function validateMcpConfig() {
     "wakeflow_continue_demand",
     "wakeflow_intake_test_card",
     "wakeflow_archive",
-    "wakeflow_sanitize_archive",
+    "wakeflow_pod_open",
+    "wakeflow_pod_bind",
+    "wakeflow_pod_plan",
+    "wakeflow_pod_record",
     "wakeflow_verify",
   ]) {
     if (!mcpText.includes(`name: "${tool}"`)) errors.push(`MCP tool is missing: ${tool}`);
@@ -274,6 +277,24 @@ async function validateMcpToolDeclarations() {
   if (!Array.isArray(tools) || tools.length === 0) {
     errors.push("Wakeflow MCP tools export must be a non-empty array");
     return;
+  }
+  if (tools.length !== 31) {
+    errors.push(`Wakeflow MCP public surface must contain exactly 31 tools, found ${tools.length}`);
+  }
+  const publicNames = new Set(tools.map((tool) => tool?.name).filter(Boolean));
+  for (const retired of [
+    "wakeflow_render_progress",
+    "wakeflow_pod_list",
+    "wakeflow_sanitize_archive",
+    "wakeflow_pod_prepare_design_request",
+    "wakeflow_pod_prepare_test_access",
+    "wakeflow_pod_close",
+    "wakeflow_pod_record_materialization",
+    "wakeflow_pod_record_design_handoff",
+    "wakeflow_pod_record_test_access",
+    "wakeflow_pod_record_close_receipt",
+  ]) {
+    if (publicNames.has(retired)) errors.push(`retired MCP tool must not be public: ${retired}`);
   }
   const readOnlyTools = new Set([
     "wakeflow_status",

@@ -87,7 +87,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.1/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.2/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -132,7 +132,7 @@ Codex 版通过 MCP 工具驱动(没有 slash 命令)。用自然语言告诉 Co
 | 重建陈旧窗口 | `wakeflow_replace_windows` |
 | 看需求 / 可领取工作 / 就绪度 | `wakeflow_status`、`wakeflow_next_work` |
 | 启动一个需求 | `wakeflow_create_demand` -> `wakeflow_add_task` |
-| 打开用户明确授权的 Pod | `wakeflow_pod_open` -> `wakeflow_pod_record_materialization` / 宿主创建 -> `wakeflow_pod_bind` |
+| 打开用户明确授权的 Pod | `wakeflow_pod_open` -> `wakeflow_pod_record event=materialization` / 宿主创建 -> `wakeflow_pod_bind` |
 | 把活交给窗口 | `wakeflow_prepare_delivery` 预览 -> 携带摘要 `apply=true` -> 宿主发送 -> `wakeflow_record_delivery` |
 | 记录目标结果 | `wakeflow_record_target_result` |
 | 评审并决策 | `wakeflow_review_pack` -> `wakeflow_reduce_results` -> `wakeflow_decide_review` -> `wakeflow_complete_demand` |
@@ -256,7 +256,7 @@ Design 和 Test 是支持角色：
   产品线程必须使用精确 saved repository project +
   `environment.type=worktree`。找不到精确项目就 fail-closed，不回退父项目或
   `local`。
-- 每次调用 Codex 创建前，先用 `wakeflow_pod_record_materialization` 记录
+- 每次调用 Codex 创建前，先用 `wakeflow_pod_record event=materialization` 记录
   `creating`。如果 `create_thread` 返回临时 `clientThreadId`，记录
   `pending`，再调用有界 `list_threads(limit=50)`，在 `preview` 中精确匹配
   launch-correlation 标记；宿主支持时可用 `query` 优化，但不能依赖。零个或
@@ -266,18 +266,19 @@ Design 和 Test 是支持角色：
   Git common dir、base HEAD 与 `mainCheckout=false`。三个 control 绑定形成
   `control-ready`；Pod Design handoff 加全部产品绑定形成 `execution-ready`。
 - Pod 唯一一代 Design 只在 `Controller__<pod>` 与 `Design__<pod>` 之间往返。
-  先用 `wakeflow_pod_prepare_design_request` 冻结总控请求，再用
-  `wakeflow_pod_record_design_handoff` 记录精确
-  `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。0.9.1 不持久化
+  先用 `wakeflow_pod_plan action=design-request` 冻结总控请求，再用
+  `wakeflow_pod_record event=design-handoff` 记录精确
+  `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。0.9.2 不持久化
   第二代 Pod Design，后续 supplement/redesign 必须作为能力 blocker 停止，
   不覆盖旧 handoff，也不回退主线 Design。
-- Pod Test 派发前，先运行 `wakeflow_pod_prepare_test_access`，再用
-  `wakeflow_pod_record_test_access` 记录独立 Test 会话的精确探测结果。只有覆盖
+- Pod Test 派发前，先运行 `wakeflow_pod_plan action=test-access`，再用
+  `wakeflow_pod_record event=test-access` 记录独立 Test 会话的精确探测结果。只有覆盖
   全部 active 产品绑定的 `validated` + `direct-multi-root` 才开放派发。宿主不支持
   时保持 blocked，不回退主检出、产品窗口或未经验证的 per-repository executor。
-- `wakeflow_pod_close` 只生成 host-close plan；每个 archive/Handoff 结果通过
-  `wakeflow_pod_record_close_receipt` 记录。逻辑关闭不声称 Codex 已物理删除
-  worktree；`wakeflow_pod_list` 只读取 canonical state 与宿主回执，不猜路径。
+- `wakeflow_pod_plan action=close` 只生成 host-close plan；每个
+  archive/Handoff 结果通过 `wakeflow_pod_record event=close-receipt` 记录。
+  逻辑关闭不声称 Codex 已物理删除 worktree；`wakeflow_view scope=pods`
+  只读取 canonical state 与宿主回执，不猜路径。
 
 ## 自动化语义
 
@@ -321,12 +322,12 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 | 需求 | MCP tools |
 | --- | --- |
 | 设置与窗口注册 | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
-| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
-| 候选扫描与显式 Pod 生命周期 | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind`, `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff`, `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_pod_close`, `wakeflow_pod_record_close_receipt`, `wakeflow_pod_list` |
+| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_cancel_demand` |
+| 候选扫描与显式 Pod 生命周期 | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_bind`, `wakeflow_pod_plan`（design-request/test-access/close）、`wakeflow_pod_record`（materialization/design-handoff/test-access/close-receipt） |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design 和 Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| 归档、视图、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_sanitize_archive`（受限的历史归档修复）、`wakeflow_view`（task-ledger/window/focus/trace/storage）、`wakeflow_storage_preserve`、`wakeflow_prune_runtime`、`wakeflow_verify` |
+| 归档、视图、维护和验证 | `wakeflow_archive`（target demand/todo/docs/sanitize-demand）、`wakeflow_view`（task-ledger/window/focus/trace/storage/progress/pods）、`wakeflow_storage_preserve`、`wakeflow_prune_runtime`、`wakeflow_verify` |
 | 宿主归属与窗口锁 | `wakeflow_adopt_demand_host`、`wakeflow_release_window_lock` |
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：

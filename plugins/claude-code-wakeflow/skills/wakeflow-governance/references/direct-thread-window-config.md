@@ -39,7 +39,7 @@ Do not register placeholders such as `current-thread`, `unknown`, or
 `<thread-id>`.
 
 For a Pod launch, journal the exact launch correlation with
-`wakeflow_pod_record_materialization`. The Claude helper returns the final
+`wakeflow_pod_record event=materialization`. The Claude helper returns the final
 session id synchronously; it has no Codex `clientThreadId` pending state and no
 temporary request id belongs in the registry.
 

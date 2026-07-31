@@ -102,3 +102,40 @@ test("Claude recovery guidance keeps baseline and Pod identity separate", () => 
   }
   assert.doesNotMatch(`${controller}\n${target}\n${governance}`, /2026-06-15|Agent SDK credit/);
 });
+
+test("installed docs advertise only the consolidated public MCP routes", () => {
+  const retired = [
+    "wakeflow_render_progress",
+    "wakeflow_sanitize_archive",
+    "wakeflow_pod_record_materialization",
+    "wakeflow_pod_prepare_design_request",
+    "wakeflow_pod_record_design_handoff",
+    "wakeflow_pod_prepare_test_access",
+    "wakeflow_pod_record_test_access",
+    "wakeflow_pod_close",
+    "wakeflow_pod_record_close_receipt",
+    "wakeflow_pod_list",
+  ];
+  for (const host of hosts) {
+    const text = [
+      `${host.dir}/README.md`,
+      `${host.dir}/README.zh-CN.md`,
+      `${host.dir}/skills/wakeflow-controller/SKILL.md`,
+      `${host.dir}/skills/wakeflow-governance/SKILL.md`,
+      `${host.dir}/skills/wakeflow-governance/references/script-pipeline.md`,
+    ].map(read).join("\n");
+    for (const current of [
+      "wakeflow_review_pack",
+      "wakeflow_pod_open",
+      "wakeflow_pod_bind",
+      "wakeflow_pod_plan",
+      "wakeflow_pod_record",
+      "sanitize-demand",
+    ]) {
+      assert.match(text, new RegExp(current), `${host.dir} documents ${current}`);
+    }
+    for (const oldName of retired) {
+      assert.doesNotMatch(text, new RegExp(oldName), `${host.dir} retires ${oldName}`);
+    }
+  }
+});

@@ -11,9 +11,10 @@ Design participates in requirement discussion, signal judgment, non-bug outcome
 redesign, and handoff drafting. On the mainline, Design uses its stateless
 `wakeflow_deliver` path and is not a product dispatch target. Inside an
 explicitly authorized Pod, `Controller__<pod>` first freezes a
-`PodDesignRequest` with `wakeflow_pod_prepare_design_request`, sends that exact
+`PodDesignRequest` with `wakeflow_pod_plan action=design-request`, sends that exact
 request directly to `Design__<pod>`, and records the matching
-`PodDesignHandoffEnvelope`; the same-demand handoff never creates a second
+`PodDesignHandoffEnvelope` with `wakeflow_pod_record event=design-handoff`;
+the same-demand handoff never creates a second
 global TODO or routes through mainline Design. Test is included only when
 real-scenario evidence is required.
 
@@ -102,7 +103,7 @@ full-context implementation task in the product responsibility window with
 redesign task cannot be re-dispatched; accepting the replacement marks it
 `superseded`.
 
-For Pod redesign, never use the mainline stateless Design path. Version 0.9.1
+For Pod redesign, never use the mainline stateless Design path. Version 0.9.2
 has only one immutable Pod Design request/handoff slot, so a later redesign is
 a capability blocker; do not author a replacement until a next-generation Pod
 Design lineage exists.

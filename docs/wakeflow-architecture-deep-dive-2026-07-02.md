@@ -4,7 +4,7 @@
 > stream lifecycle 结论只描述 2026-07-02 时的实现，已被
 > `docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md`
 > 取代；保留为演进证据，不再是当前 Pod 规范。文中的 prompt 形状、工具/文件
-> 数量、脚本职责和代码行号也都是当时快照，不得作为 0.9.1 操作事实。
+> 数量、脚本职责和代码行号也都是当时快照，不得作为 0.9.2 操作事实。
 
 > 生成于 2026-07-02，基线 v0.6.3（commit 570f8d8）；同日修订至 **v0.7.7**（并发地基 / 意图对齐 / 跨需求并行 / 需求舱 / 全仓审计加固落地后）。以代码为准。本文是对 Wakeflow 真实源码的独立深读分析——聚焦"这个架构为什么长成这样"与"付出了什么代价"，与 `wakeflow-dual-edition-architecture-and-state-flow.md`（系统参考文档）互补，不替代它。文件引用采用 `path:line` 形式，行号对应 v0.6.3。
 

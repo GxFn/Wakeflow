@@ -81,7 +81,7 @@ an archived demand: `archive-summary.md` → `developer-progress.md` (timeline)
   `current/` stays clean without manual moves. Sensitive opaque files are
   omitted from the portable archive and represented by safe placeholder
   manifests; their original bytes remain only in that preserved copy.
-- `wakeflow_sanitize_archive` is the only sanctioned amendment for an already
+- `wakeflow_archive target=sanitize-demand` is the only sanctioned amendment for an already
   archived demand. It accepts only a state-root below the configured
   `wakeflow-ledger/workspace/archive/`, requires `state=archived` plus
   `archive-manifest.json`, appends `archive.sanitized`, and preserves the
@@ -145,7 +145,7 @@ support surface. Mainline Design enters through controller TODO delivery via
 `wakeflow_deliver`. The Pod's single Design generation stays inside that Pod:
 `pod-design-requests/` freezes the controller-authored request and
 `pod-design-handoffs/` records the matching envelope in the same demand state
-root. Neither artifact creates another global TODO. Version 0.9.1 persists one
+root. Neither artifact creates another global TODO. Version 0.9.2 persists one
 Pod Design request/handoff generation whose request type may be
 `initial-design`, `supplement`, or `redesign`; a different second generation is
 a capability blocker, not permission to overwrite the ledgers or use mainline Design.

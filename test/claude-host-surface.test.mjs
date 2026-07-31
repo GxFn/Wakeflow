@@ -8,6 +8,10 @@ import {
   handlers as claudeMcpHandlers,
   tools as claudeMcpTools,
 } from "../plugins/claude-code-wakeflow/lib/wakeflow-mcp-tools.mjs";
+import {
+  handlers as codexMcpHandlers,
+  tools as codexMcpTools,
+} from "../plugins/codex-wakeflow/lib/wakeflow-mcp-tools.mjs";
 import { hostProfile as codexProfile } from "../plugins/codex-wakeflow/scripts/lib/wakeflow-host-profile.mjs";
 import { hostProfile as claudeProfile } from "../plugins/claude-code-wakeflow/scripts/lib/wakeflow-host-profile.mjs";
 import * as codexAdapter from "../plugins/codex-wakeflow/scripts/lib/wakeflow-host-send-adapter.mjs";
@@ -45,6 +49,72 @@ function assertSameShape(reference, candidate, trail = "hostProfile") {
 
 test("claude host profile matches the codex host profile contract shape", () => {
   assertSameShape(codexProfile, claudeProfile);
+});
+
+test("both hosts expose the same consolidated 31-tool MCP surface", () => {
+  const codexNames = codexMcpTools.map((tool) => tool.name);
+  const claudeNames = claudeMcpTools.map((tool) => tool.name);
+  assert.equal(codexNames.length, 31);
+  assert.deepEqual(claudeNames, codexNames);
+  assert.deepEqual([...codexNames].sort(), [
+    "wakeflow_add_task",
+    "wakeflow_adopt_demand_host",
+    "wakeflow_archive",
+    "wakeflow_cancel_demand",
+    "wakeflow_claim_next",
+    "wakeflow_complete_demand",
+    "wakeflow_continue_demand",
+    "wakeflow_create_demand",
+    "wakeflow_decide_review",
+    "wakeflow_deliver",
+    "wakeflow_initialize_workspace",
+    "wakeflow_intake_test_card",
+    "wakeflow_next_work",
+    "wakeflow_pod_bind",
+    "wakeflow_pod_open",
+    "wakeflow_pod_plan",
+    "wakeflow_pod_record",
+    "wakeflow_prepare_delivery",
+    "wakeflow_prune_runtime",
+    "wakeflow_record_delivery",
+    "wakeflow_record_target_result",
+    "wakeflow_recover_state_transition",
+    "wakeflow_reduce_results",
+    "wakeflow_register_window",
+    "wakeflow_release_window_lock",
+    "wakeflow_replace_windows",
+    "wakeflow_review_pack",
+    "wakeflow_status",
+    "wakeflow_storage_preserve",
+    "wakeflow_verify",
+    "wakeflow_view",
+  ]);
+  for (const current of [
+    "wakeflow_review_pack",
+    "wakeflow_pod_open",
+    "wakeflow_pod_bind",
+    "wakeflow_pod_plan",
+    "wakeflow_pod_record",
+  ]) {
+    assert.ok(codexNames.includes(current), `${current} remains public`);
+  }
+  for (const retired of [
+    "wakeflow_render_progress",
+    "wakeflow_sanitize_archive",
+    "wakeflow_pod_record_materialization",
+    "wakeflow_pod_prepare_design_request",
+    "wakeflow_pod_record_design_handoff",
+    "wakeflow_pod_prepare_test_access",
+    "wakeflow_pod_record_test_access",
+    "wakeflow_pod_close",
+    "wakeflow_pod_record_close_receipt",
+    "wakeflow_pod_list",
+  ]) {
+    assert.equal(codexNames.includes(retired), false, `${retired} is hidden on Codex`);
+    assert.equal(claudeNames.includes(retired), false, `${retired} is hidden on Claude`);
+    assert.equal(typeof codexMcpHandlers[retired], "function", `${retired} keeps Codex compatibility`);
+    assert.equal(typeof claudeMcpHandlers[retired], "function", `${retired} keeps Claude compatibility`);
+  }
 });
 
 test("claude host profile carries terminal-only Claude Code semantics", () => {

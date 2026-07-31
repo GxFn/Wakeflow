@@ -6,7 +6,7 @@
 > `docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md`.
 > Keep them as implementation history; do not use them to operate or extend
 > the current Pod path. Prompt shape, MCP tool counts, file counts, commands,
-> and line references are also period snapshots, not 0.9.1 operating facts.
+> and line references are also period snapshots, not 0.9.2 operating facts.
 
 > Generated 2026-06-19 from source at commit HEAD; **revised 2026-07-02 against v0.7.8** (state-root locks, multi-demand capacity, intent alignment, isolation worktrees, demand pods, unified create/claim/deliver, wakeflow.config.json naming). Code is the source of truth.
 
@@ -190,13 +190,13 @@ Additional edition facts:
   requires both `skills/` and `commands/` (`wakeflow-host-artifact-checks.mjs:29-34`);
   Codex has no `commands/` and instead carries a `.codex-plugin` `interface{}`
   block.
-- All edition manifests are version-locked at **0.9.1** in **five places**: both
+- All edition manifests are version-locked at **0.9.2** in **five places**: both
   plugin manifests (`.codex-plugin/plugin.json:3`, `.claude-plugin/plugin.json:3`),
   both plugin `package.json`s, and the marketplace **plugin entry**
   (`.claude-plugin/marketplace.json` `plugins[0].version`). The marketplace file
   also carries a **second, distinct** version field — `metadata.version` is
   `1.0.0` (the catalog metadata, not the plugin version) — so the same file has
-  two different version fields and only the `plugins[0]` one tracks the 0.9.1
+  two different version fields and only the `plugins[0]` one tracks the 0.9.2
   lock. Root `package.json` stays `0.0.0` / `private:true` (private dev
   workspace). `sync-core` does **not** enforce version equality; the release
   consistency check does.
@@ -212,7 +212,7 @@ where any prose here and the code disagree, the code is authoritative.
 
 > **Open questions / verify:** The no-`hostId`-branch claim rests on a grep for
 > `hostId ===` returning zero hits in `core/`; this would miss exotic dynamic
-> dispatch (e.g. `hostProfile.hostId` used as an object key). The five 0.9.1
+> dispatch (e.g. `hostProfile.hostId` used as an object key). The five 0.9.2
 > version fields currently match. `check:core` alone does not catch version
 > drift; `tools/check-release-consistency.mjs` does.
 

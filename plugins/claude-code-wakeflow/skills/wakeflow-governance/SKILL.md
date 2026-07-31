@@ -172,22 +172,23 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
   resources. The helper materializes
   products with native `claude --worktree` (never nested `--tmux`, never a
   default whole-workspace `--add-dir`). Record the launch correlation through
-  `wakeflow_pod_record_materialization`; Claude returns a final session id
+  `wakeflow_pod_record event=materialization`; Claude returns a final session id
   synchronously and has no Codex `clientThreadId` state. Wakeflow then verifies
   receipts with `wakeflow_pod_bind`.
 - **Pod Design and Test have machine gates**:
-  `wakeflow_pod_prepare_design_request` freezes the exact request before
-  `wakeflow_pod_record_design_handoff`. Version 0.9.1 persists exactly one Pod
+  `wakeflow_pod_plan action=design-request` freezes the exact request before
+  `wakeflow_pod_record event=design-handoff`. Version 0.9.2 persists exactly one Pod
   Design request/handoff generation; its sole request may be `initial-design`,
   `supplement`, or `redesign`. A different second generation stops as an
   unsupported capability instead of overwriting that request or using mainline Design.
   Before Test dispatch,
-  `wakeflow_pod_prepare_test_access` plus
-  `wakeflow_pod_record_test_access` must prove validated
+  `wakeflow_pod_plan action=test-access` plus
+  `wakeflow_pod_record event=test-access` must prove validated
   `direct-multi-root` coverage of every active product binding. Unsupported
   access stays blocked; never fall back to a main checkout, product window, or
-  unverified per-repository executor. Logical close, tmux/session close, and
-  Claude worktree cleanup are recorded separately.
+  unverified per-repository executor. `wakeflow_pod_plan action=close` and
+  `wakeflow_pod_record event=close-receipt` keep logical close, tmux/session
+  close, and Claude worktree cleanup as separate recorded facts.
 
 ## Minimal Workflow
 

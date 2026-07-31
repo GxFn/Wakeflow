@@ -195,8 +195,9 @@ Current scripts:
 - `wakeflow-archive-todo.mjs`: dry-run by default; moves completed global
   TODO rows and old sync records from the active TODO board to archive.
 - Normal controller archive flows should call the public MCP wrapper
-  `wakeflow_archive` (target demand/todo/docs). Historical demand archives with
-  privacy findings use `wakeflow_sanitize_archive`; it cannot target active or
+  `wakeflow_archive` (target demand/todo/docs/sanitize-demand). Historical
+  demand archives with privacy findings use `target=sanitize-demand`; it
+  cannot target active or
   arbitrary directories. The raw
   scripts remain the backend/fallback surface and preserve the same dry-run /
   explicit-apply semantics.

@@ -213,7 +213,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.1/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.2/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository
@@ -368,7 +368,7 @@ The loop is the same on both hosts; only how you drive it differs.
    the product responsibility window with
    `replacesTargetTaskId`; accepting that replacement supersedes the old task
    and package explicitly.
-   In 0.9.1 a Pod has exactly one frozen Design request/handoff generation;
+   In 0.9.2 a Pod has exactly one frozen Design request/handoff generation;
    that sole request may be `initial-design`, `supplement`, or `redesign`. A
    different second generation remains blocked rather than overwriting the
    recorded handoff or falling back to mainline Design.
@@ -488,12 +488,12 @@ Primary tool groups:
 | Need | MCP tools |
 | --- | --- |
 | Setup and window registration | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
-| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
-| Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind`, `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff`, `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_pod_close`, `wakeflow_pod_record_close_receipt`, `wakeflow_pod_list` |
+| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_cancel_demand` |
+| Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_bind`, `wakeflow_pod_plan` (design-request/test-access/close), `wakeflow_pod_record` (materialization/design-handoff/test-access/close-receipt) |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| Archive, views, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs), `wakeflow_sanitize_archive` (bounded historical archive repair), `wakeflow_view` (task-ledger/window/focus/trace/storage), `wakeflow_storage_preserve`, `wakeflow_prune_runtime`, `wakeflow_verify` |
+| Archive, views, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs/sanitize-demand), `wakeflow_view` (task-ledger/window/focus/trace/storage/progress/pods), `wakeflow_storage_preserve`, `wakeflow_prune_runtime`, `wakeflow_verify` |
 | Host ownership and locks | `wakeflow_adopt_demand_host`, `wakeflow_release_window_lock` |
 
 Public MCP tools are for outer agent workflows. Target closeout is deliberately
@@ -505,9 +505,10 @@ candidate and is not acceptance. Do not collapse those steps into a single
 target-window MCP tool. Internal steps such as archive summary refresh internals,
 keep-live state, and script backend execution stay inside Wakeflow JS/runtime
 scripts and skills. Public archive MCP tools wrap controller-approved demand,
-TODO, and workspace-document archive flows. `wakeflow_sanitize_archive` only
-replaces an already archived demand with a privacy-clean copy and preserves the
-original locally. `wakeflow_storage_preserve` is the dry-run-first public route
+TODO, and workspace-document archive flows. `wakeflow_archive`
+`target=sanitize-demand` only replaces an already archived demand with a
+privacy-clean copy and preserves the original locally.
+`wakeflow_storage_preserve` is the dry-run-first public route
 to the existing local evidence-preservation backend. With archive redaction,
 sensitive opaque evidence remains byte-for-byte in the local preserved original
 while the portable archive carries a safe placeholder manifest. None of these
@@ -618,7 +619,7 @@ host send adapter, manifests, READMEs, memory-file template, skills, template
 bundle) live only inside each artifact. `npm run check:core` keeps the copies
 honest.
 
-Current 0.9.1 Pod behavior and acceptance authority are documented in
+Current 0.9.2 Pod behavior and acceptance authority are documented in
 [docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md](docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md).
 The non-Pod hardening history is recorded in
 [docs/wakeflow-hardening-design-compliance-2026-07-30.md](docs/wakeflow-hardening-design-compliance-2026-07-30.md).

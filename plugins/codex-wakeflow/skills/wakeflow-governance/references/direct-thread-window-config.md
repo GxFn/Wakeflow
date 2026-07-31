@@ -33,7 +33,7 @@ Never write real thread ids to:
 Do not register placeholders such as `current-thread`, `unknown`, or
 `<thread-id>`.
 
-For a Pod launch, call `wakeflow_pod_record_materialization` immediately
+For a Pod launch, call `wakeflow_pod_record event=materialization` immediately
 before the one Codex create call. If Codex returns `clientThreadId`, record it
 as pending (the runtime persists only its digest), then call bounded
 `list_threads(limit=50)` and match the exact launch-correlation marker in

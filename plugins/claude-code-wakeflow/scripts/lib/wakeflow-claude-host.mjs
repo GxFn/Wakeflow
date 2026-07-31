@@ -3166,7 +3166,7 @@ function readCanonicalPodClosePlan() {
   const raw = getValue("--plan-json");
   const planFile = getValue("--plan-file");
   if (Boolean(raw) === Boolean(planFile)) {
-    fail("Provide exactly one of --plan-json or --plan-file from wakeflow_pod_close.");
+    fail("Provide exactly one of --plan-json or --plan-file from wakeflow_pod_plan action=close.");
   }
   let plan;
   try {
@@ -3254,7 +3254,7 @@ function commandPodClose() {
     hostCloseReceipts,
     sessionClosed: true,
     worktreeCleanupAsserted: false,
-    agentNext: "Record each returned receipt with wakeflow_pod_record_close_receipt. Native Claude worktree cleanup remains a Claude/user decision; Wakeflow did not run Git cleanup.",
+    agentNext: "Record each returned receipt with wakeflow_pod_record event=close-receipt. Native Claude worktree cleanup remains a Claude/user decision; Wakeflow did not run Git cleanup.",
   });
 }
 

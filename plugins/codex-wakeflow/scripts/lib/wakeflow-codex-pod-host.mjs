@@ -122,7 +122,8 @@ export function codexPodEntryExtras(operation, { workspaceRoot, stateRoot = null
         registerOnlyFinalThreadId: true,
       },
       materializationProtocol: {
-        recordTool: "wakeflow_pod_record_materialization",
+        recordTool: "wakeflow_pod_record",
+        recordEvent: "materialization",
         beforeCreateStatus: "creating",
         asynchronousStatus: "pending",
         finalStatus: "finalized",

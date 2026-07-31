@@ -179,7 +179,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.1/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.2/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -310,7 +310,7 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
    accept / rework / blocked / redesign。
    普通 rework 使用同一任务和新的 dispatch group。主线 redesign 在 Design 返回后
    创建带 `replacesTargetTaskId` 的完整 replacement 包；接受 replacement 后旧任务
-   明确变为 `superseded`。0.9.1 的 Pod 只冻结一代 Design request/handoff；
+   明确变为 `superseded`。0.9.2 的 Pod 只冻结一代 Design request/handoff；
    这一代的 `requestType` 可以是 `initial-design`、`supplement` 或 `redesign`。
    不同的第二代请求保持 blocked，不覆盖既有 handoff，也不回退主线 Design。
 6. 重复 dispatch → review，直到所有活跃必需非 Test 任务 accepted（或具有有效
@@ -406,12 +406,12 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 | 需求 | MCP tools |
 | --- | --- |
 | 设置与窗口注册 | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
-| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
-| 候选扫描与显式 Pod 生命周期 | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind`, `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff`, `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_pod_close`, `wakeflow_pod_record_close_receipt`, `wakeflow_pod_list` |
+| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_cancel_demand` |
+| 候选扫描与显式 Pod 生命周期 | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_bind`, `wakeflow_pod_plan`（design-request/test-access/close）、`wakeflow_pod_record`（materialization/design-handoff/test-access/close-receipt） |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design 和 Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| 归档、视图、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_sanitize_archive`（受限的历史归档修复）、`wakeflow_view`（task-ledger/window/focus/trace/storage）、`wakeflow_storage_preserve`、`wakeflow_prune_runtime`、`wakeflow_verify` |
+| 归档、视图、维护和验证 | `wakeflow_archive`（target demand/todo/docs/sanitize-demand）、`wakeflow_view`（task-ledger/window/focus/trace/storage/progress/pods）、`wakeflow_storage_preserve`、`wakeflow_prune_runtime`、`wakeflow_verify` |
 | 宿主归属与窗口锁 | `wakeflow_adopt_demand_host`、`wakeflow_release_window_lock` |
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：
@@ -421,8 +421,9 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 result reduction 只创建 review candidate，不是验收。内部步骤（例如 archive summary
 refresh internals、keep-live state、script backend execution）留在 Wakeflow
 JS/runtime scripts 和 skills 内。公共 archive MCP tools 包装总控批准的 demand、TODO
-和 workspace document archive flows。`wakeflow_sanitize_archive` 只把已归档 demand
-替换为隐私清洁副本并在本地保留原件。`wakeflow_storage_preserve` 是现有本地证据
+和 workspace document archive flows。`wakeflow_archive target=sanitize-demand`
+只把已归档 demand 替换为隐私清洁副本并在本地保留原件。
+`wakeflow_storage_preserve` 是现有本地证据
 保全后端的公共入口，默认只做 dry-run。归档脱敏遇到敏感二进制时，原始字节只留在
 本地 preserved 原件中，可移植归档写入安全占位清单。这些工具都不做验收决策，也不发送 host messages。
 
@@ -517,7 +518,7 @@ npm test             # check:core + 双 validate + 双 smoke + 全部测试
 memory 文件模板、skills、template bundle）只存在于各自 artifact 内。
 `npm run check:core` 负责保证副本不漂移。
 
-当前 0.9.1 Pod 行为与验收权威见
+当前 0.9.2 Pod 行为与验收权威见
 [docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md](docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md)；
 非 Pod 硬化演进记录见
 [docs/wakeflow-hardening-design-compliance-2026-07-30.md](docs/wakeflow-hardening-design-compliance-2026-07-30.md)。

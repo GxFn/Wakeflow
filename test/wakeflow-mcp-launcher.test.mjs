@@ -77,6 +77,12 @@ function mcpProbeInput() {
     }),
     JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
     JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }),
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: { name: "wakeflow_render_progress", arguments: {} },
+    }),
     "",
   ].join("\n");
 }
@@ -85,8 +91,9 @@ function assertMcpProbe(stdout) {
   const messages = stdout.trim().split("\n").map((line) => JSON.parse(line));
   const initialized = messages.find((message) => message.id === 1);
   const listed = messages.find((message) => message.id === 2);
+  const compatibilityCall = messages.find((message) => message.id === 3);
   assert.equal(initialized?.result?.protocolVersion, "2024-11-05");
-  assert.equal(listed?.result?.tools?.length, 39);
+  assert.equal(listed?.result?.tools?.length, 31);
   assert.ok(
     listed?.result?.tools?.some((tool) => tool.name === "wakeflow_storage_preserve"),
     "storage preserve must be reachable through the launched MCP server",
@@ -96,15 +103,42 @@ function assertMcpProbe(stdout) {
     "the explicit state-transition recovery tool must be discoverable",
   );
   for (const toolName of [
-    "wakeflow_pod_record_materialization",
-    "wakeflow_pod_prepare_design_request",
-    "wakeflow_pod_record_design_handoff",
-    "wakeflow_pod_prepare_test_access",
-    "wakeflow_pod_record_test_access",
+    "wakeflow_pod_open",
+    "wakeflow_pod_bind",
+    "wakeflow_pod_plan",
+    "wakeflow_pod_record",
   ]) {
     assert.ok(
       listed?.result?.tools?.some((tool) => tool.name === toolName),
       `${toolName} must be discoverable`,
     );
   }
+  for (const retired of [
+    "wakeflow_render_progress",
+    "wakeflow_sanitize_archive",
+    "wakeflow_pod_record_materialization",
+    "wakeflow_pod_prepare_design_request",
+    "wakeflow_pod_record_design_handoff",
+    "wakeflow_pod_prepare_test_access",
+    "wakeflow_pod_record_test_access",
+    "wakeflow_pod_close",
+    "wakeflow_pod_record_close_receipt",
+    "wakeflow_pod_list",
+  ]) {
+    assert.equal(
+      listed?.result?.tools?.some((tool) => tool.name === retired),
+      false,
+      `${retired} must not remain on the public MCP surface`,
+    );
+  }
+  assert.equal(compatibilityCall?.result?.isError, true);
+  assert.match(
+    compatibilityCall?.result?.content?.[0]?.text ?? "",
+    /requires stateRoot/,
+    "a stale client can still reach the hidden compatibility handler",
+  );
+  assert.doesNotMatch(
+    compatibilityCall?.result?.content?.[0]?.text ?? "",
+    /Unknown Wakeflow tool/,
+  );
 }

@@ -10,7 +10,10 @@ import {
   exactCodexProject,
 } from "../plugins/codex-wakeflow/scripts/lib/wakeflow-codex-pod-host.mjs";
 import { hostProfile } from "../plugins/codex-wakeflow/scripts/lib/wakeflow-host-profile.mjs";
-import { tools as wakeflowTools } from "../core/lib/wakeflow-mcp-tools.mjs";
+import {
+  handlers as wakeflowHandlers,
+  tools as wakeflowTools,
+} from "../core/lib/wakeflow-mcp-tools.mjs";
 
 test("Codex Pod project resolution requires an exact saved-project root", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-codex-pod-project-"));
@@ -72,7 +75,8 @@ test("Codex Pod product launch uses the exact project and host worktree environm
   assert.equal(extras.hostCreateThread.asynchronousHandlePolicy.rejectClientThreadId, true);
   assert.equal(extras.hostCreateThread.asynchronousHandlePolicy.registerOnlyFinalThreadId, true);
   assert.deepEqual(extras.hostCreateThread.materializationProtocol, {
-    recordTool: "wakeflow_pod_record_materialization",
+    recordTool: "wakeflow_pod_record",
+    recordEvent: "materialization",
     beforeCreateStatus: "creating",
     asynchronousStatus: "pending",
     finalStatus: "finalized",
@@ -179,15 +183,23 @@ test("the MCP surface exposes the two-stage Pod protocol and explicit placement 
   const toolsByName = new Map(wakeflowTools.map((tool) => [tool.name, tool]));
   for (const name of [
     "wakeflow_pod_open",
-    "wakeflow_pod_record_materialization",
     "wakeflow_pod_bind",
+    "wakeflow_pod_plan",
+    "wakeflow_pod_record",
+  ]) {
+    assert.ok(toolsByName.has(name), `${name} is public`);
+  }
+  for (const retired of [
+    "wakeflow_pod_record_materialization",
     "wakeflow_pod_prepare_design_request",
     "wakeflow_pod_record_design_handoff",
+    "wakeflow_pod_prepare_test_access",
+    "wakeflow_pod_record_test_access",
     "wakeflow_pod_close",
     "wakeflow_pod_record_close_receipt",
     "wakeflow_pod_list",
   ]) {
-    assert.ok(toolsByName.has(name), `${name} is public`);
+    assert.equal(toolsByName.has(retired), false, `${retired} is not public`);
   }
 
   const createProperties = toolsByName.get("wakeflow_create_demand").inputSchema.properties;
@@ -205,5 +217,132 @@ test("the MCP surface exposes the two-stage Pod protocol and explicit placement 
     /worktree.*thread|thread.*worktree/i.test(open.description)
       && /never creates/i.test(open.description),
     true,
+  );
+
+  const plan = toolsByName.get("wakeflow_pod_plan");
+  assert.deepEqual(plan.inputSchema.required, ["action"]);
+  assert.deepEqual(plan.inputSchema.properties.action.enum, [
+    "design-request",
+    "test-access",
+    "close",
+  ]);
+  for (const field of ["root", "action", "demandKey", "request", "apply"]) {
+    assert.ok(plan.inputSchema.properties[field], `wakeflow_pod_plan exposes ${field}`);
+  }
+  assert.deepEqual(plan.inputSchema.properties.request.required, [
+    "demandKey",
+    "podId",
+    "requestType",
+    "originalGoal",
+    "requirementAnchors",
+    "codeEvidenceRefs",
+    "pausedTargetIdentity",
+    "pausedReviewIdentity",
+    "nonGoals",
+    "decisionsRequired",
+  ]);
+  const planBranches = new Map(
+    plan.inputSchema.oneOf.map((branch) => [branch.properties.action.const, branch]),
+  );
+  assert.deepEqual(planBranches.get("design-request").required, ["request"]);
+  assert.deepEqual(planBranches.get("test-access").required, ["demandKey"]);
+  assert.deepEqual(planBranches.get("close").required, ["demandKey"]);
+
+  const record = toolsByName.get("wakeflow_pod_record");
+  assert.deepEqual(record.inputSchema.required, ["event"]);
+  assert.deepEqual(record.inputSchema.properties.event.enum, [
+    "materialization",
+    "design-handoff",
+    "test-access",
+    "close-receipt",
+  ]);
+  for (const field of ["root", "event", "attempt", "handoff", "receipt", "apply"]) {
+    assert.ok(record.inputSchema.properties[field], `wakeflow_pod_record exposes ${field}`);
+  }
+  assert.deepEqual(record.inputSchema.properties.attempt.required, [
+    "launchCorrelationId",
+    "host",
+    "status",
+    "observedAt",
+  ]);
+  const recordBranches = new Map(
+    record.inputSchema.oneOf.map((branch) => [branch.properties.event.const, branch]),
+  );
+  assert.deepEqual(recordBranches.get("materialization").required, ["attempt"]);
+  assert.deepEqual(recordBranches.get("design-handoff").required, ["handoff"]);
+  assert.deepEqual(recordBranches.get("test-access").required, ["receipt"]);
+  assert.deepEqual(recordBranches.get("close-receipt").required, ["receipt"]);
+  assert.deepEqual(
+    ["test-access", "close-receipt"].map(
+      (event) => recordBranches.get(event).properties.receipt.required,
+    ),
+    [
+      [
+        "probeId",
+        "demandKey",
+        "podId",
+        "host",
+        "testWindowName",
+        "testBindingId",
+        "status",
+        "capability",
+        "observedAt",
+      ],
+      [
+        "closeCorrelationId",
+        "bindingId",
+        "windowName",
+        "host",
+        "sessionStatus",
+        "worktreeStatus",
+        "confirmedAt",
+      ],
+    ],
+  );
+});
+
+test("consolidated Pod routers reject payloads from another action or event", () => {
+  assert.throws(
+    () => wakeflowHandlers.wakeflow_pod_plan({
+      action: "design-request",
+      request: {},
+      demandKey: "wrong-branch",
+    }),
+    /action=design-request does not accept demandKey/,
+  );
+  assert.throws(
+    () => wakeflowHandlers.wakeflow_pod_plan({
+      action: "test-access",
+      request: {},
+    }),
+    /action=test-access does not accept request/,
+  );
+  assert.throws(
+    () => wakeflowHandlers.wakeflow_pod_record({
+      event: "materialization",
+      attempt: {},
+      receipt: {},
+    }),
+    /event=materialization does not accept receipt/,
+  );
+  assert.throws(
+    () => wakeflowHandlers.wakeflow_pod_record({ event: "unknown" }),
+    /unknown event/,
+  );
+  assert.throws(
+    () => wakeflowHandlers.wakeflow_pod_plan({
+      action: "close",
+      event: "close-receipt",
+      demandKey: "pod-a",
+    }),
+    /action=close does not accept event/,
+  );
+  assert.throws(
+    () => wakeflowHandlers.wakeflow_pod_record({
+      event: "close-receipt",
+      action: "close",
+      receipt: {},
+    }),
+    /event=close-receipt does not accept action/,
   );
 });

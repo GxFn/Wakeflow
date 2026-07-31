@@ -110,7 +110,7 @@ Pod 恢复走独立路径：`mode=resume` 只验真或恢复已绑定 session �
   重新开启评审。
 - **替代关系必须显式。** 普通 rework 重派同一任务；主线 redesign 在 Design
   handoff 后创建带 `replacesTargetTaskId` 的完整 replacement 包，接受后旧任务
-  和包变为 `superseded`。0.9.1 的 Pod 只冻结一代 Design request/handoff，
+  和包变为 `superseded`。0.9.2 的 Pod 只冻结一代 Design request/handoff，
   这一代的 `requestType` 可以是 `initial-design`、`supplement` 或 `redesign`；
   不同的第二代请求保持 blocked，不覆盖既有 handoff，也不回退主线 Design。
 
@@ -319,28 +319,28 @@ cwd> --resume --session-id <已注册 id> --replace [--server <配置 server>]`
   operations。helper 负责实体化：
   三个独立 control session，以及从精确仓库根以原生 `claude --worktree` 创建的
   产品 session；不得嵌套 Claude `--tmux`，也不得默认 `--add-dir` 整个 workspace。
-- `wakeflow_pod_record_materialization` 可围绕 helper 调用按精确 launch
+- `wakeflow_pod_record event=materialization` 可围绕 helper 调用按精确 launch
   correlation 记录实体化过程。Claude 同步返回最终 session id，没有 Codex
   `clientThreadId` pending 状态，registry 中也不存在临时 request id。
 - 只登记最终 Claude session id，再用 `wakeflow_pod_bind` 验真 pane cwd、Git
   common dir、base HEAD 与 `mainCheckout=false`。三个 control 绑定形成
   `control-ready`；Pod Design handoff 加全部产品绑定形成 `execution-ready`。
 - Pod 唯一一代 Design 只在 `Controller__<pod>` 与 `Design__<pod>` 之间往返。
-  先用 `wakeflow_pod_prepare_design_request` 冻结总控请求，再用
-  `wakeflow_pod_record_design_handoff` 记录精确
-  `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。0.9.1 不持久化
+  先用 `wakeflow_pod_plan action=design-request` 冻结总控请求，再用
+  `wakeflow_pod_record event=design-handoff` 记录精确
+  `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。0.9.2 不持久化
   第二代 Pod Design，后续 supplement/redesign 必须作为能力 blocker 停止。
-- Pod Test 派发前，先运行 `wakeflow_pod_prepare_test_access`，再用
-  `wakeflow_pod_record_test_access` 记录独立 Test session 的精确探测结果。只有
+- Pod Test 派发前，先运行 `wakeflow_pod_plan action=test-access`，再用
+  `wakeflow_pod_record event=test-access` 记录独立 Test session 的精确探测结果。只有
   覆盖全部 active 产品绑定的 `validated` + `direct-multi-root` 才开放派发。若
   multi-root 不受支持则保持 blocked；没有主检出、产品窗口或未经验证的
   per-repository executor 回退实现。
 - 重跑 `mode=create` 只可实体化仍为 pending 且尚未绑定的 canonical operation；
   `mode=resume` 只包含已绑定 operation，按记录的 actual cwd 验真或恢复精确 session，
   绝不创建缺失会话、再次传入 `--worktree` 或重绑。
-- core `wakeflow_pod_close` 只生成 host-close plan。helper `pod-close` 关闭
+- core `wakeflow_pod_plan action=close` 只生成 host-close plan。helper `pod-close` 关闭
   tmux/Claude session 并回报 worktree disposition，每条结果通过
-  `wakeflow_pod_record_close_receipt` 记录；新 Pod 路径中 Wakeflow 不执行 Git
+  `wakeflow_pod_record event=close-receipt` 记录；新 Pod 路径中 Wakeflow 不执行 Git
   worktree 清理。
 
 ## 跨宿主统一词汇
@@ -478,12 +478,12 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools，工具名与 
 | 需求 | MCP tools |
 | --- | --- |
 | 设置与窗口注册 | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
-| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
-| 候选扫描与显式 Pod 生命周期 | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind`, `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff`, `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_pod_close`, `wakeflow_pod_record_close_receipt`, `wakeflow_pod_list` |
+| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_cancel_demand` |
+| 候选扫描与显式 Pod 生命周期 | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_bind`, `wakeflow_pod_plan`（action design-request/test-access/close）、`wakeflow_pod_record`（event materialization/design-handoff/test-access/close-receipt） |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design 和 Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| 归档、视图、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_sanitize_archive`（受限的历史归档修复）、`wakeflow_view`（task-ledger/window/focus/trace/storage）、`wakeflow_storage_preserve`、`wakeflow_prune_runtime`、`wakeflow_verify` |
+| 归档、视图、维护和验证 | `wakeflow_archive`（target demand/todo/docs/sanitize-demand）、`wakeflow_view`（task-ledger/window/focus/trace/storage/progress/pods）、`wakeflow_storage_preserve`、`wakeflow_prune_runtime`、`wakeflow_verify` |
 | 宿主归属与窗口锁 | `wakeflow_adopt_demand_host`、`wakeflow_release_window_lock` |
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：
@@ -493,10 +493,17 @@ review pack、result reduction、显式决策；result reduction 只创建 revie
 不是验收。不要把这些步骤合并成一个 target-window MCP tool。归档摘要刷新内部步骤、
 keep-live 状态和脚本后端执行这类内部环节留在 Wakeflow runtime scripts 和 skills 里。
 公共归档 MCP tools 包装总控批准的 demand、TODO 和工作区文档归档流程。
-`wakeflow_sanitize_archive` 只把已归档 demand 替换为隐私清洁副本并在本地保留原件；
+`wakeflow_archive target=sanitize-demand` 只把已归档 demand 替换为隐私清洁副本并在本地保留原件；
 `wakeflow_storage_preserve` 是现有本地证据保全后端的公共入口，默认只做 dry-run。
 归档脱敏遇到敏感二进制时，原始字节只留在本地 preserved 原件中，可移植归档写入
 安全占位清单。这些工具都不做验收决策，也不发送 host 消息。
+
+迁移说明：收敛前的 Pod 分阶段调用现在用
+`wakeflow_pod_plan` 完成规划，用 `wakeflow_pod_record` 记录 receipt/handoff；
+进度投影使用 `wakeflow_view scope=progress`，Pod 公开清单使用
+`wakeflow_view scope=pods`，历史归档修复使用
+`wakeflow_archive target=sanitize-demand`。
+Claude helper CLI 的 `pod-open`、`pod-close`、`pod-list` 保持不变。
 
 Wakeflow 为每个公共工具声明 MCP tool annotations：只读工具标记为 read-only，
 写工具是 local、non-destructive、closed-world。工具审批仍由用户的 Claude Code

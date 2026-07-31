@@ -1,10 +1,10 @@
 # Wakeflow 宿主管理的完整 Pod 需求设计（2026-07-31）
 
-状态：0.9.1 当前实现对照与验收权威；完整实现状态及缺口见下述说明。
+状态：0.9.2 当前实现对照与验收权威；完整实现状态及缺口见下述说明。
 范围：Codex 版、Claude Code 版、共享 core、主线/Pod 放置决策。
 不包含：本文件不授权发布、提交、合并产品仓库，亦不把尚未验证的宿主能力写成已完成事实。
 
-实现说明：0.9.1 已落地主线优先、显式 Pod、无数字上限、宿主创建产品
+实现说明：0.9.2 已落地主线优先、显式 Pod、无数字上限、宿主创建产品
 worktree、完整独立角色舰队、两阶段 ready、Test direct-multi-root gate 和两阶段
 close。当前仍有一个已确认能力缺口：
 
@@ -18,6 +18,29 @@ clean-main / `expectedBaseHead` 创建门禁；`mode=resume` 只读验真已经�
 manifest、binding、registry、cwd 与 Git common-dir，并把当前 HEAD/dirty 当作
 观察结果。宿主只能验证存活的精确 session，或在相同 cwd 恢复同一个已登记
 session；不得再次创建/发现 worktree、重绑 core 或回退主线。
+
+### 当前公共 MCP 表面迁移说明
+
+后续表面整理只合并公共 MCP 入口，不改变本需求已经确认的 Pod 状态、宿主
+边界、两阶段验真、Design/Test 门禁或 close 语义。当前公共调用面从 39 个
+工具收敛为 31 个；底层脚本命令和历史 artifact vocabulary 不随之改名：
+
+| 原公共 MCP 入口 | 当前公共 MCP 入口 |
+| --- | --- |
+| `wakeflow_render_progress` | `wakeflow_view scope=progress` |
+| `wakeflow_pod_list` | `wakeflow_view scope=pods` |
+| `wakeflow_sanitize_archive` | `wakeflow_archive target=sanitize-demand` |
+| `wakeflow_pod_prepare_design_request` | `wakeflow_pod_plan action=design-request` |
+| `wakeflow_pod_prepare_test_access` | `wakeflow_pod_plan action=test-access` |
+| `wakeflow_pod_close` | `wakeflow_pod_plan action=close` |
+| `wakeflow_pod_record_materialization` | `wakeflow_pod_record event=materialization` |
+| `wakeflow_pod_record_design_handoff` | `wakeflow_pod_record event=design-handoff` |
+| `wakeflow_pod_record_test_access` | `wakeflow_pod_record event=test-access` |
+| `wakeflow_pod_record_close_receipt` | `wakeflow_pod_record event=close-receipt` |
+
+`wakeflow_pod_open`、`wakeflow_pod_bind`、`wakeflow_review_pack`、状态恢复和
+窗口 lease 恢复入口继续保持独立。以下正文沿用原需求结构，但所有当前调用
+示例使用收敛后的公共入口。
 
 ## 0. 结论
 
@@ -428,7 +451,7 @@ Controller/Design/Test 验证：
 
 ### 7.4 本地存储
 
-0.9.1 实际本地布局：
+0.9.2 实际本地布局：
 
 ```text
 .wakeflow-local/wakeflow-delivery/hosts/<host>/
@@ -489,10 +512,10 @@ Pod Design 不调用全局 `wakeflow_deliver`，也不向全局 TODO 新建同�
 
 ```text
 Controller__pod
-  -> wakeflow_pod_prepare_design_request
+  -> wakeflow_pod_plan action=design-request
   -> host send to Design__pod
   -> Design__pod returns PodDesignHandoffEnvelope
-  -> wakeflow_pod_record_design_handoff
+  -> wakeflow_pod_record event=design-handoff
   -> controller validates Design exit gate
   -> create/update task packages
 ```
@@ -667,10 +690,10 @@ Design 不在产品 worktree 中写代码。
 
 当前实现只开放一条可验证路径：
 
-1. `wakeflow_pod_prepare_test_access` 生成绑定集合对应的宿主本地探测计划；
+1. `wakeflow_pod_plan action=test-access` 生成绑定集合对应的宿主本地探测计划；
 2. 独立 `Test__<pod>` 对全部产品 worktree 做 direct-multi-root 读取与 Git
    身份探测；
-3. `wakeflow_pod_record_test_access` 只有在全部 active binding 都匹配时记录
+3. `wakeflow_pod_record event=test-access` 只有在全部 active binding 都匹配时记录
    `validated + direct-multi-root` 并开放 Test 派发；
 4. 宿主不支持或探测失败时记录 blocked，禁止回到主检出或让产品窗口冒充
    独立 Test。

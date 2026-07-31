@@ -307,6 +307,7 @@ async function runMcpSmoke(rootPath) {
       "wakeflow_record_target_result",
       "wakeflow_review_pack",
       "wakeflow_view",
+      "wakeflow_storage_preserve",
       "wakeflow_reduce_results",
       "wakeflow_decide_review",
       "wakeflow_complete_demand",
@@ -608,6 +609,44 @@ async function runMcpSmoke(rootPath) {
       || tracedPayload.parsedJson?.traceSpine?.coverage?.targetResultCount !== 1
     ) {
       throw new Error("MCP wakeflow_view(scope=trace) did not return the task evidence spine");
+    }
+
+    const preserveSource = path.join(rootPath, ".wakeflow-local", "mcp-preserve-smoke.txt");
+    mkdirSync(path.dirname(preserveSource), { recursive: true });
+    writeFileSync(preserveSource, "preserve through the public MCP surface\n");
+    const preservePreview = await request("tools/call", {
+      name: "wakeflow_storage_preserve",
+      arguments: {
+        root: rootPath,
+        source: ".wakeflow-local/mcp-preserve-smoke.txt",
+        reason: "mcp-smoke",
+      },
+    });
+    const preservePreviewPayload = JSON.parse(preservePreview.result.content?.[0]?.text);
+    if (
+      !preservePreviewPayload.ok
+      || preservePreviewPayload.parsedJson?.command !== "preserve"
+      || preservePreviewPayload.parsedJson?.wrote !== false
+    ) {
+      throw new Error("MCP wakeflow_storage_preserve did not preserve dry-run semantics");
+    }
+    const preserveApply = await request("tools/call", {
+      name: "wakeflow_storage_preserve",
+      arguments: {
+        root: rootPath,
+        source: ".wakeflow-local/mcp-preserve-smoke.txt",
+        reason: "mcp-smoke",
+        note: "MCP smoke audit hold",
+        apply: true,
+      },
+    });
+    const preserveApplyPayload = JSON.parse(preserveApply.result.content?.[0]?.text);
+    if (
+      !preserveApplyPayload.ok
+      || preserveApplyPayload.parsedJson?.command !== "preserve"
+      || preserveApplyPayload.parsedJson?.wrote !== true
+    ) {
+      throw new Error("MCP wakeflow_storage_preserve did not apply through the storage backend");
     }
 
     return { ok: true, toolCount: toolNames.length, stateRoot: mcpStateRoot };

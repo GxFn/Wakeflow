@@ -461,6 +461,22 @@ const toolDefinitions = [
     },
   },
   {
+    name: "wakeflow_storage_preserve",
+    description: "Relocate one explicitly selected file or directory already under .wakeflow-local/ into the canonical preserved audit-hold tier and write its MANIFEST.md. This is the sanctioned rescue path for local runtime evidence that must be retained without entering tracked archives. Dry-run unless apply is true; the existing storage backend enforces path containment and refuses sources already under preserved/.",
+    annotations: localWriteTool("Preserve Wakeflow Local Evidence"),
+    inputSchema: {
+      type: "object",
+      required: ["source", "reason"],
+      properties: {
+        root: { type: "string" },
+        source: { type: "string", description: "Workspace-relative or absolute path to a file/directory inside .wakeflow-local/." },
+        reason: { type: "string", description: "Short reason slug used in the preserved entry name." },
+        note: { type: "string", description: "Optional human-readable reason recorded in MANIFEST.md." },
+        apply: { type: "boolean", description: "Move the source only when true; default is dry-run." },
+      },
+    },
+  },
+  {
     name: "wakeflow_reduce_results",
     description: "Reduce imported target results into a controller review candidate. This creates the transition candidate needed by wakeflow_decide_review, but it is not acceptance, completion, or dispatch. Dry-run unless apply is true.",
     annotations: localWriteTool("Reduce Wakeflow Target Results"),
@@ -562,7 +578,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_archive",
-    description: "Archive completed Wakeflow content into the committed ledger; target selects which. demand: relocate a completed demand state root into the ledger — the archive privacy guard refuses real-id-shaped strings and user/workspace absolute paths unless redact relocates a portable cleaned copy (original preserved for audit); the staged copy is re-scanned before commit. todo: completed TODO rows + historical sync records into the workspace ledger. docs: explicit completed workspace documents into a ledger topic, or prune active index rows that already point at archive topics (never archives the active index/current plan by inference). Dry-run unless apply is true. Records archive facts only — never accepts work, selects next work, or sends host messages. (Transport-runtime GC is the separate wakeflow_prune_runtime.)",
+    description: "Archive completed Wakeflow content into the committed ledger; target selects which. demand: relocate a completed demand state root into the ledger — the archive privacy guard refuses real-id-shaped strings and user/workspace absolute paths unless redact relocates a portable cleaned copy (original preserved for audit); sensitive opaque evidence stays in that local original and becomes a safe placeholder in the portable copy. Clean opaque evidence remains fail-closed unless allowOpaque is explicitly true. The staged copy is re-scanned before commit. todo: completed TODO rows + historical sync records into the workspace ledger. docs: explicit completed workspace documents into a ledger topic, or prune active index rows that already point at archive topics (never archives the active index/current plan by inference). Dry-run unless apply is true. Records archive facts only — never accepts work, selects next work, or sends host messages. (Transport-runtime GC is the separate wakeflow_prune_runtime.)",
     annotations: localWriteTool("Archive Wakeflow Content"),
     inputSchema: {
       type: "object",
@@ -576,7 +592,8 @@ const toolDefinitions = [
         },
         stateRoot: { type: "string", description: "target=demand: the completed demand state root to relocate." },
         reason: { type: "string", description: "target=demand: required archive reason." },
-        redact: { type: "boolean", description: "target=demand: relocate a portable copy when real ids or user/workspace absolute paths are present; preserve the original locally." },
+        redact: { type: "boolean", description: "target=demand: relocate a portable copy when real ids, user/workspace absolute paths, or sensitive opaque evidence are present; preserve the original locally." },
+        allowOpaque: { type: "boolean", description: "target=demand: explicitly allow clean opaque evidence to remain byte-for-byte in the portable archive; hashes are recorded. Sensitive opaque evidence under redact is still omitted into a placeholder." },
         evidenceRefs: { type: "array", items: { type: "string" }, description: "target=demand: evidence references to record." },
         month: { type: "string", description: "target=todo/docs: archive month YYYY-MM (backend policy default when omitted)." },
         date: { type: "string", description: "target=todo: archive date YYYY-MM-DD (today when omitted)." },
@@ -1537,6 +1554,19 @@ export const handlers = {
     }
     throw new Error(`wakeflow_view: unknown scope "${args.scope}" (expected task-ledger | window | focus | trace | storage)`);
   },
+  wakeflow_storage_preserve: (args) => runWakeflowRuntime({
+    script: "wakeflow-storage",
+    args: [
+      "preserve",
+      "--source", requireValueForTool(args, "source", "wakeflow_storage_preserve"),
+      "--reason", requireValueForTool(args, "reason", "wakeflow_storage_preserve"),
+      ...optionalValue("--note", args.note),
+      ...(args.apply ? ["--write"] : []),
+      ...rootArgs(args),
+      "--json",
+    ],
+    cwd: args.root || undefined,
+  }),
   wakeflow_reduce_results: (args) => runWakeflowRuntime({
     script: "wakeflow-state",
     args: [
@@ -1626,6 +1656,7 @@ export const handlers = {
           "--state-root", stateRoot,
           "--reason", reason,
           ...(args.redact ? ["--redact"] : []),
+          ...(args.allowOpaque ? ["--allow-opaque"] : []),
           ...repeatValues("--evidence-ref", args.evidenceRefs ?? []),
           ...rootArgs(args),
           ...(args.apply ? ["--write"] : []),

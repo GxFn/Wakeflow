@@ -136,6 +136,7 @@ Codex 版通过 MCP 工具驱动(没有 slash 命令)。用自然语言告诉 Co
 | 把活交给窗口 | `wakeflow_prepare_delivery` 预览 -> 携带摘要 `apply=true` -> 宿主发送 -> `wakeflow_record_delivery` |
 | 记录目标结果 | `wakeflow_record_target_result` |
 | 评审并决策 | `wakeflow_review_pack` -> `wakeflow_reduce_results` -> `wakeflow_decide_review` -> `wakeflow_complete_demand` |
+| 保全用户选定的本地证据 | `wakeflow_storage_preserve` dry-run -> `apply=true` |
 | 把需求移交另一宿主 | `wakeflow_adopt_demand_host` |
 | 体检 / 收敛运行时 | `wakeflow_verify` |
 
@@ -325,12 +326,14 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design 和 Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| 归档、视图、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_sanitize_archive`（受限的历史归档修复）、`wakeflow_view`（task-ledger/window/focus/trace/storage）、`wakeflow_prune_runtime`、`wakeflow_verify` |
+| 归档、视图、维护和验证 | `wakeflow_archive`（target demand/todo/docs）、`wakeflow_sanitize_archive`（受限的历史归档修复）、`wakeflow_view`（task-ledger/window/focus/trace/storage）、`wakeflow_storage_preserve`、`wakeflow_prune_runtime`、`wakeflow_verify` |
 | 宿主归属与窗口锁 | `wakeflow_adopt_demand_host`、`wakeflow_release_window_lock` |
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：
 记录 target result、审查 readiness、在策略允许时准备 controller-return envelope、
 用 Codex host thread tool 发送，再记录 delivery evidence。不要把这些步骤合并成一个 target-window MCP tool。
+`wakeflow_storage_preserve` 是现有本地证据保全后端的公共入口，默认只做 dry-run。
+归档脱敏遇到敏感二进制时，原始字节只留在本地 preserved 原件中，可移植归档写入安全占位清单。
 
 ## 运行时与账本边界
 

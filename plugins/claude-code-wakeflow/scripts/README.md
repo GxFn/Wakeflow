@@ -219,9 +219,10 @@ Current scripts:
   (authority/projection/transport/evidence/handles/preserved), size, and age,
   plus legacy residue, unknown trees, and aging `preserved/` entries.
   `seed-readmes --write` converges the in-place orientation READMEs;
-  `preserve --source --reason --write` is the ONE sanctioned manual-rescue
-  move (relocates into `.wakeflow-local/preserved/<date>-<reason>/` with a
-  MANIFEST.md); `prune-preserved [--apply]` lists/deletes preserved entries
+  `preserve --source --reason --write` is the backend for the public
+  dry-run-first `wakeflow_storage_preserve` MCP rescue tool (relocates into
+  `.wakeflow-local/preserved/<date>-<reason>/` with a MANIFEST.md);
+  `prune-preserved [--apply]` lists/deletes preserved entries
   past `preservedRetentionDays` (default 30). It never auto-deletes legacy or
   unknown trees — those route to the user.
 - `wakeflow-archive-summaries.mjs`: dry-run by default; creates or

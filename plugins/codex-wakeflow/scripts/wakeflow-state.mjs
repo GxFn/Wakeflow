@@ -718,6 +718,18 @@ function mergeRedactedFields(...fieldLists) {
   return [...merged.values()].sort((a, b) => a.file.localeCompare(b.file));
 }
 
+function mergeOpaquePlaceholders(...placeholderLists) {
+  const merged = new Map();
+  for (const placeholder of placeholderLists.flat()) {
+    if (!placeholder?.originalFile || !placeholder?.placeholderFile) continue;
+    merged.set(`${placeholder.originalFile}\0${placeholder.placeholderFile}`, placeholder);
+  }
+  return [...merged.values()].sort((a, b) => (
+    a.originalFile.localeCompare(b.originalFile)
+    || a.placeholderFile.localeCompare(b.placeholderFile)
+  ));
+}
+
 function readJson(file, label = "JSON file") {
   try {
     return JSON.parse(readFileSync(file, "utf8"));
@@ -4614,6 +4626,7 @@ function validateArchivePendingIntent({
     || manifest.sourceStateRoot !== intent.sourceStateRoot
     || manifest.preservedOriginal !== preservedOriginal
     || !isDeepStrictEqual(manifest.redactedFields, [])
+    || (manifest.opaquePlaceholders !== undefined && !isDeepStrictEqual(manifest.opaquePlaceholders, []))
     || (preservedOriginal ? manifest.originalPreservedAt !== intent.preservedDest : manifest.originalPreservedAt !== undefined)) {
     fail("archive intent manifest does not match its fixed source, destination, timestamp, and command arguments.");
   }
@@ -4634,7 +4647,8 @@ function validateArchivePendingIntent({
       || snapshot.manifest.sourceStateRoot !== intent.sourceStateRoot
       || snapshot.manifest.preservedOriginal !== preservedOriginal
       || (preservedOriginal ? snapshot.manifest.originalPreservedAt !== intent.preservedDest : snapshot.manifest.originalPreservedAt !== undefined)
-      || !Array.isArray(snapshot.manifest.redactedFields)) {
+      || !Array.isArray(snapshot.manifest.redactedFields)
+      || (snapshot.manifest.opaquePlaceholders !== undefined && !Array.isArray(snapshot.manifest.opaquePlaceholders))) {
       fail("archive intent ledger manifest snapshot is inconsistent with the fixed archive intent.");
     }
     if (snapshot.nextState.state !== "archived"
@@ -4855,7 +4869,10 @@ function commandArchiveDemandLocked(stateRoot) {
       allowOpaque,
     });
     findingCounts = archivePrivacyFindingCounts(scan.findings);
-    const opaqueBlockers = scan.findings.filter((finding) => finding.kind === "opaque-file");
+    const sensitiveOpaqueFiles = new Set(scan.sensitiveOpaqueFiles ?? []);
+    const opaqueBlockers = (scan.opaqueFiles ?? []).filter((item) => (
+      !(redact && sensitiveOpaqueFiles.has(item.file))
+    ));
     if (opaqueBlockers.length > 0 && !allowOpaque) {
       fail(
         `archive-demand refuses ${opaqueBlockers.length} opaque file(s); inspect their recorded sha256 values, then retry with --allow-opaque to preserve those exact bytes.`,
@@ -4925,6 +4942,7 @@ function commandArchiveDemandLocked(stateRoot) {
   }
 
   let redactedFields = [];
+  let opaquePlaceholders = [];
   // Archive spine: thread the whole demand story into the manifest so the
   // archived tree is navigable without archaeology — provenance (design key +
   // source docs), the completion conclusion, the per-task handling rollup,
@@ -4965,6 +4983,7 @@ function commandArchiveDemandLocked(stateRoot) {
     archivedAt: createdAt,
     reason,
     redactedFields: [],
+    opaquePlaceholders: [],
     sourceStateRoot: relative(stateRoot),
     preservedOriginal,
     ...(preservedOriginal ? { originalPreservedAt: relative(preservedDest) } : {}),
@@ -4978,6 +4997,7 @@ function commandArchiveDemandLocked(stateRoot) {
   const archiveManifest = {
     ...(archiveIntent?.archiveManifest ?? computedArchiveManifest),
     redactedFields: [],
+    opaquePlaceholders: archiveIntent?.archiveManifest?.opaquePlaceholders ?? [],
   };
   if (!archiveIntent) {
     archiveIntent = {
@@ -5004,6 +5024,7 @@ function commandArchiveDemandLocked(stateRoot) {
   if (existsSync(ledgerDest)) {
     const committedSnapshot = assertCommittedArchiveMatchesIntent(ledgerDest, archiveIntent);
     redactedFields = committedSnapshot.manifest.redactedFields;
+    opaquePlaceholders = committedSnapshot.manifest.opaquePlaceholders ?? [];
   } else {
     if (activePhase !== "source") {
       fail("archive intent says the active state is already archived, but its fixed ledger destination is missing; manual recovery is required.");
@@ -5011,9 +5032,10 @@ function commandArchiveDemandLocked(stateRoot) {
     try {
       mkdirSync(path.dirname(ledgerDest), { recursive: true });
       if (redact) {
-        ({ redactedFields } = redactStateRootIntoCopy(stateRoot, stagingDest, { hostProfile, workspaceRoot }));
+        ({ redactedFields, opaquePlaceholders } = redactStateRootIntoCopy(stateRoot, stagingDest, { hostProfile, workspaceRoot }));
         redactedFields = withoutArchiveIntentRedactions(redactedFields);
         archiveManifest.redactedFields = redactedFields;
+        archiveManifest.opaquePlaceholders = opaquePlaceholders;
       } else {
         cpSync(stateRoot, stagingDest, { recursive: true });
       }
@@ -5065,6 +5087,7 @@ function commandArchiveDemandLocked(stateRoot) {
       "- Execution timeline: developer-progress.md (Task Packages / Backfill Summaries / Decisions And Append Log)",
       "- Machine audit trail: controller-events.jsonl + wakeflow-state.json",
       `- Un-redacted original: ${preservedOriginal ? "moved to .wakeflow-local/preserved/ (see archive-manifest.json originalPreservedAt)" : "not needed (archive copy is complete)"}`,
+      `- Opaque evidence placeholders: ${opaquePlaceholders.length ? `${opaquePlaceholders.length} (see archive-manifest.json opaquePlaceholders)` : "none"}`,
       "",
     ].join("\n"));
       let stagedScan = scanStateRootForArchivePrivacy(stagingDest, {
@@ -5080,10 +5103,15 @@ function commandArchiveDemandLocked(stateRoot) {
         const restagingDest = `${stagingDest}.sanitized`;
         const secondPass = redactStateRootIntoCopy(stagingDest, restagingDest, { hostProfile, workspaceRoot });
         redactedFields = mergeRedactedFields(redactedFields, secondPass.redactedFields);
+        opaquePlaceholders = mergeOpaquePlaceholders(opaquePlaceholders, secondPass.opaquePlaceholders);
         rmSync(stagingDest, { recursive: true, force: true });
         renameSync(restagingDest, stagingDest);
         const sanitizedManifest = readJson(path.join(stagingDest, "archive-manifest.json"), "sanitized archive manifest");
-        writeJson(path.join(stagingDest, "archive-manifest.json"), { ...sanitizedManifest, redactedFields });
+        writeJson(path.join(stagingDest, "archive-manifest.json"), {
+          ...sanitizedManifest,
+          redactedFields,
+          opaquePlaceholders,
+        });
         stagedScan = scanStateRootForArchivePrivacy(stagingDest, {
           hostProfile,
           workspaceRoot,
@@ -5235,6 +5263,7 @@ function commandArchiveDemandLocked(stateRoot) {
       ledgerDest: relative(ledgerDest),
       manifest: relative(path.join(ledgerDest, "archive-manifest.json")),
       redactedFields,
+      opaquePlaceholders,
       preservedOriginal,
       originalPreservedAt,
       danglingRefs,
@@ -5364,20 +5393,23 @@ function commandSanitizeArchiveLocked(stateRoot) {
   };
 
   let redactedFields = [];
+  let opaquePlaceholders = [];
   try {
-    ({ redactedFields } = redactStateRootIntoCopy(stateRoot, stagingDest, { hostProfile, workspaceRoot }));
+    ({ redactedFields, opaquePlaceholders } = redactStateRootIntoCopy(stateRoot, stagingDest, { hostProfile, workspaceRoot }));
     const historyEntry = {
       sanitizedAt: createdAt,
       reason,
       source: "sanitize-archive",
       findingCounts,
       redactedFields,
+      opaquePlaceholders,
       originalPreservedAt,
     };
     const nextManifest = {
       ...manifest,
       version: Math.max(Number(manifest.version ?? 2), 3),
       redactedFields: mergeRedactedFields(manifest.redactedFields ?? [], redactedFields),
+      opaquePlaceholders: mergeOpaquePlaceholders(manifest.opaquePlaceholders ?? [], opaquePlaceholders),
       sanitizationHistory: [...(Array.isArray(manifest.sanitizationHistory) ? manifest.sanitizationHistory : []), historyEntry],
       sanitizationOriginalPreservedAt: originalPreservedAt,
     };
@@ -5406,6 +5438,7 @@ function commandSanitizeArchiveLocked(stateRoot) {
       const restagingDest = `${stagingDest}.sanitized`;
       const secondPass = redactStateRootIntoCopy(stagingDest, restagingDest, { hostProfile, workspaceRoot });
       redactedFields = mergeRedactedFields(redactedFields, secondPass.redactedFields);
+      opaquePlaceholders = mergeOpaquePlaceholders(opaquePlaceholders, secondPass.opaquePlaceholders);
       rmSync(stagingDest, { recursive: true, force: true });
       renameSync(restagingDest, stagingDest);
       const sanitizedManifest = readJson(path.join(stagingDest, "archive-manifest.json"), "sanitized archive manifest");
@@ -5415,8 +5448,9 @@ function commandSanitizeArchiveLocked(stateRoot) {
       const finalizedManifest = {
         ...sanitizedManifest,
         redactedFields: mergeRedactedFields(sanitizedManifest.redactedFields ?? [], redactedFields),
+        opaquePlaceholders: mergeOpaquePlaceholders(sanitizedManifest.opaquePlaceholders ?? [], opaquePlaceholders),
         sanitizationHistory: sanitizedHistory.map((entry, index) => (
-          index === sanitizedHistory.length - 1 ? { ...entry, redactedFields } : entry
+          index === sanitizedHistory.length - 1 ? { ...entry, redactedFields, opaquePlaceholders } : entry
         )),
       };
       writeJson(path.join(stagingDest, "archive-manifest.json"), finalizedManifest);
@@ -5532,6 +5566,7 @@ function commandSanitizeArchiveLocked(stateRoot) {
       findingCount: scan.findings.length,
       findingCounts,
       redactedFields,
+      opaquePlaceholders,
       originalPreservedAt,
       stateRevision: nextRevision,
     },

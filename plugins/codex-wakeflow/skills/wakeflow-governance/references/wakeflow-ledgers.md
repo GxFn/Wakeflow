@@ -68,15 +68,18 @@ an archived demand: `archive-summary.md` → `developer-progress.md` (timeline)
 
 ## Rescue Convention And GC
 
-- The ONE sanctioned manual-rescue move is `wakeflow-storage preserve
-  --source <path> --reason <slug> --write`: it relocates the path into
+- The ONE sanctioned installed-workspace rescue move is
+  `wakeflow_storage_preserve`: call it with `source` and `reason` as a dry-run,
+  then repeat with `apply: true`. It delegates to the storage backend and relocates the path into
   `.wakeflow-local/preserved/<YYYY-MM-DD>-<reason>/` and writes the
   `MANIFEST.md` (who/why/source/retention). Inventing any other holding
   location recreates the unowned-residue problem this convention exists to
   end.
 - `archive-demand --redact` machine-moves the un-redacted original into
   `preserved/<date>-archive-original-<demand>/` after the ledger commit, so
-  `current/` stays clean without manual moves.
+  `current/` stays clean without manual moves. Sensitive opaque files are
+  omitted from the portable archive and represented by safe placeholder
+  manifests; their original bytes remain only in that preserved copy.
 - `wakeflow_sanitize_archive` is the only sanctioned amendment for an already
   archived demand. It accepts only a state-root below the configured
   `wakeflow-ledger/workspace/archive/`, requires `state=archived` plus

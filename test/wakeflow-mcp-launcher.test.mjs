@@ -86,7 +86,11 @@ function assertMcpProbe(stdout) {
   const initialized = messages.find((message) => message.id === 1);
   const listed = messages.find((message) => message.id === 2);
   assert.equal(initialized?.result?.protocolVersion, "2024-11-05");
-  assert.equal(listed?.result?.tools?.length, 38);
+  assert.equal(listed?.result?.tools?.length, 39);
+  assert.ok(
+    listed?.result?.tools?.some((tool) => tool.name === "wakeflow_storage_preserve"),
+    "storage preserve must be reachable through the launched MCP server",
+  );
   assert.ok(
     listed?.result?.tools?.some((tool) => tool.name === "wakeflow_recover_state_transition"),
     "the explicit state-transition recovery tool must be discoverable",

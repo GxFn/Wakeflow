@@ -316,6 +316,48 @@ test("archive-demand refuses opaque files by default and records hashes when exp
   assert.match(manifest.opaqueFiles[0].sha256, /^[a-f0-9]{64}$/);
 });
 
+test("archive-demand --redact preserves sensitive opaque bytes locally and commits a safe placeholder", () => {
+  const { root, stateRoot, stateFile } = initDemand({ demandKey: "ARCH-OPAQUE-SENSITIVE" });
+  const uuid = "3f8a1c2b-9d4e-4f6a-8b1c-2d3e4f5a6b7c";
+  const opaqueRelative = "evidence/sensitive.bin";
+  const opaqueFile = path.join(root, stateRoot, opaqueRelative);
+  const opaqueBytes = Buffer.concat([
+    Buffer.from([0xff, 0xfe, 0x00]),
+    Buffer.from(`thread=${uuid}\nworkspace=${root}/private/result.json\n`),
+  ]);
+  mkdirSync(path.dirname(opaqueFile), { recursive: true });
+  writeFileSync(opaqueFile, opaqueBytes);
+
+  const archived = run([
+    "archive-demand", "--root", root, "--state-root", stateRoot,
+    "--reason", "sensitive opaque fixture", "--redact", "--write", "--json",
+  ]);
+  assert.equal(archived.status, 0, archived.stderr || archived.stdout);
+  const payload = JSON.parse(archived.stdout);
+  const ledgerDest = path.join(root, payload.archived.ledgerDest);
+  const preservedDest = path.join(root, payload.archived.originalPreservedAt);
+  const placeholderFile = path.join(ledgerDest, `${opaqueRelative}.wakeflow-preserved.json`);
+
+  assert.equal(existsSync(path.join(ledgerDest, opaqueRelative)), false, "portable archive omits the sensitive binary");
+  assert.equal(existsSync(placeholderFile), true);
+  assert.equal(readFileSync(path.join(preservedDest, opaqueRelative)).equals(opaqueBytes), true, "local preserved tier keeps exact bytes");
+  assert.equal(existsSync(stateFile), false, "active state root is finalized after archival");
+
+  const placeholder = readJson(placeholderFile);
+  assert.equal(placeholder.originalFile, opaqueRelative);
+  assert.equal(placeholder.bytes, opaqueBytes.length);
+  assert.equal(placeholder.sha256, createHash("sha256").update(opaqueBytes).digest("hex"));
+  assert.equal(placeholder.findingKinds["opaque-real-id"], 1);
+  assert.equal(placeholder.findingKinds["opaque-workspace-absolute-path"], 1);
+  assert.doesNotMatch(JSON.stringify(placeholder), new RegExp(uuid));
+  assert.doesNotMatch(JSON.stringify(placeholder), new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+
+  const manifest = readJson(path.join(ledgerDest, "archive-manifest.json"));
+  assert.equal(manifest.opaquePlaceholders.length, 1);
+  assert.deepEqual(manifest.opaquePlaceholders[0], placeholder);
+  assert.equal(payload.archived.opaquePlaceholders.length, 1);
+});
+
 test("archived demand transport history does not poison live runtime status", () => {
   const { root, stateRoot } = initDemand({ demandKey: "ARCH-STATUS" });
   const packetsDir = path.join(root, ".wakeflow-local/wakeflow-delivery/dispatch-packets");

@@ -26,13 +26,16 @@ import path from "node:path";
 
 // Opaque/binary files are never rewritten: replacing bytes in an image, PDF,
 // archive, font, or NUL-bearing file would corrupt evidence. They are still
-// scanned for ASCII-compatible ID/path strings and fail closed when one is
-// found.
+// scanned for ASCII-compatible ID/path strings. A portable redacted copy omits
+// an opaque file that contains such a value and writes a safe placeholder
+// manifest instead; the caller remains responsible for preserving the
+// untouched source tree in the local audit tier.
 const OPAQUE_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".gz", ".tgz", ".woff", ".woff2", ".ico"]);
 const MAX_FINDINGS = 100;
 const REDACTION_TOKEN = "<redacted>";
 const WORKSPACE_ROOT_TOKEN = "<workspace-root>";
 const HOME_ROOT_TOKEN = "~";
+const OPAQUE_PLACEHOLDER_SUFFIX = ".wakeflow-preserved.json";
 
 // The real-id shape is declared per host edition on host-profile (handleId.idShape), because
 // the host-profile is host-local and not byte-synced; check:core cannot cross-check it.
@@ -185,7 +188,6 @@ function scanText({
 function nonRedactableFindings(entries, {
   pattern,
   placeholders,
-  pathRules,
 }) {
   const findings = [];
   for (const entry of entries) {
@@ -218,9 +220,8 @@ function nonRedactableFindings(entries, {
       continue;
     }
     if (entry.type !== "file") continue;
-    let content;
     try {
-      content = readFileSync(entry.absolute);
+      readFileSync(entry.absolute);
     } catch (error) {
       findings.push({
         kind: "unreadable-file",
@@ -230,8 +231,28 @@ function nonRedactableFindings(entries, {
       if (findings.length >= MAX_FINDINGS) return findings;
       continue;
     }
+  }
+  return findings;
+}
+
+function opaqueSensitiveFindingsByFile(entries, {
+  pattern,
+  placeholders,
+  pathRules,
+}) {
+  const grouped = new Map();
+  for (const entry of entries) {
+    if (entry.type !== "file") continue;
+    let content;
+    try {
+      content = readFileSync(entry.absolute);
+    } catch {
+      // The structural scan records unreadable files as blockers.
+      continue;
+    }
     if (!isOpaqueFile(entry.absolute, content)) continue;
-    scanText({
+    const findings = [];
+    const truncated = scanText({
       text: content.toString("utf8"),
       file: entry.relative,
       pattern,
@@ -240,9 +261,9 @@ function nonRedactableFindings(entries, {
       opaque: true,
       findings,
     });
-    if (findings.length >= MAX_FINDINGS) return findings;
+    if (findings.length > 0) grouped.set(entry.relative, { findings, truncated });
   }
-  return findings;
+  return grouped;
 }
 
 // Scan every text file under stateRoot. Returns { clean, scanned, findings }.
@@ -280,8 +301,17 @@ function scanStateRoot(stateRoot, {
   findings.push(...nonRedactableFindings(entries, {
     pattern,
     placeholders,
-    pathRules,
   }));
+  const opaqueSensitive = opaqueSensitiveFindingsByFile(entries, {
+    pattern,
+    placeholders,
+    pathRules,
+  });
+  const sensitiveOpaqueFiles = [...opaqueSensitive.keys()].sort();
+  for (const sensitive of opaqueSensitive.values()) {
+    if (findings.length >= MAX_FINDINGS) break;
+    findings.push(...sensitive.findings.slice(0, MAX_FINDINGS - findings.length));
+  }
   const opaqueFiles = opaqueFileInventory(entries);
   if (enforceOpaque && !allowOpaque) {
     findings.push(...opaqueFiles.map((item) => ({
@@ -299,6 +329,7 @@ function scanStateRoot(stateRoot, {
       scanned,
       findings: findings.slice(0, MAX_FINDINGS),
       opaqueFiles,
+      sensitiveOpaqueFiles,
       truncated: true,
     };
   }
@@ -314,7 +345,7 @@ function scanStateRoot(stateRoot, {
         reason: `cannot audit file before archival: ${error.message}`,
       });
       if (findings.length >= MAX_FINDINGS) {
-        return { clean: false, scanned, findings, opaqueFiles, truncated: true };
+        return { clean: false, scanned, findings, opaqueFiles, sensitiveOpaqueFiles, truncated: true };
       }
       continue;
     }
@@ -330,9 +361,9 @@ function scanStateRoot(stateRoot, {
       opaque: false,
       findings,
     });
-    if (truncated) return { clean: false, scanned, findings, opaqueFiles, truncated: true };
+    if (truncated) return { clean: false, scanned, findings, opaqueFiles, sensitiveOpaqueFiles, truncated: true };
   }
-  return { clean: findings.length === 0, scanned, findings, opaqueFiles };
+  return { clean: findings.length === 0, scanned, findings, opaqueFiles, sensitiveOpaqueFiles };
 }
 
 export function scanStateRootForRealIds(stateRoot, { hostProfile } = {}) {
@@ -363,6 +394,23 @@ export function archivePrivacyFindingCounts(findings = []) {
   }, {});
 }
 
+function opaquePlaceholderRecord(entry, raw, findings, findingsTruncated) {
+  const findingKinds = archivePrivacyFindingCounts(findings);
+  return {
+    kind: "WakeflowPreservedOpaqueEvidence",
+    version: 1,
+    originalFile: entry.relative,
+    placeholderFile: `${entry.relative}${OPAQUE_PLACEHOLDER_SUFFIX}`,
+    algorithm: "sha256",
+    sha256: createHash("sha256").update(raw).digest("hex"),
+    bytes: raw.length,
+    findingKinds,
+    findingsTruncated,
+    disposition: "omitted-from-portable-archive",
+    preservedOriginalPointer: "archive-manifest.json#originalPreservedAt",
+  };
+}
+
 // Copy stateRoot into destination, replacing real IDs with <redacted>, the
 // workspace prefix with <workspace-root>, and other home prefixes with ~. The
 // source tree is never mutated. redactedFields records counts by category.
@@ -376,6 +424,10 @@ export function redactStateRootIntoCopy(stateRoot, destination, { hostProfile, w
   const blockers = nonRedactableFindings(entries, {
     pattern,
     placeholders,
+  });
+  const opaqueSensitive = opaqueSensitiveFindingsByFile(entries, {
+    pattern,
+    placeholders,
     pathRules,
   });
   if (blockers.length > 0) {
@@ -386,7 +438,17 @@ export function redactStateRootIntoCopy(stateRoot, destination, { hostProfile, w
       `archive contains ${blockers.length} finding(s) that cannot be safely redacted (${summary}); remove or replace these entries before retrying`,
     );
   }
+  const sourcePaths = new Set(entries.map((entry) => entry.relative));
+  for (const sourceFile of opaqueSensitive.keys()) {
+    const placeholderFile = `${sourceFile}${OPAQUE_PLACEHOLDER_SUFFIX}`;
+    if (sourcePaths.has(placeholderFile)) {
+      throw new Error(
+        `archive cannot create opaque evidence placeholder ${placeholderFile}: the source tree already contains that path`,
+      );
+    }
+  }
   const redactedFields = [];
+  const opaquePlaceholders = [];
   for (const entry of entries) {
     const destFile = path.join(destination, entry.relative);
     if (entry.type === "directory") {
@@ -399,6 +461,22 @@ export function redactStateRootIntoCopy(stateRoot, destination, { hostProfile, w
     mkdirSync(path.dirname(destFile), { recursive: true });
     const raw = readFileSync(entry.absolute);
     if (isOpaqueFile(entry.absolute, raw)) {
+      const sensitive = opaqueSensitive.get(entry.relative);
+      if (sensitive) {
+        const placeholder = opaquePlaceholderRecord(entry, raw, sensitive.findings, sensitive.truncated);
+        const count = sensitive.findings.length;
+        redactedFields.push({
+          file: entry.relative,
+          count,
+          kinds: placeholder.findingKinds,
+        });
+        opaquePlaceholders.push(placeholder);
+        writeFileSync(
+          path.join(destination, placeholder.placeholderFile),
+          `${JSON.stringify(placeholder, null, 2)}\n`,
+        );
+        continue;
+      }
       writeFileSync(destFile, raw);
       continue;
     }
@@ -420,5 +498,5 @@ export function redactStateRootIntoCopy(stateRoot, destination, { hostProfile, w
     if (count > 0) redactedFields.push({ file: entry.relative, count, kinds });
     writeFileSync(destFile, portable);
   }
-  return { redactedFields };
+  return { redactedFields, opaquePlaceholders };
 }

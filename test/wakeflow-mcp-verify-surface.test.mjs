@@ -71,6 +71,24 @@ test("wakeflow_prune_runtime MCP tool is registered with a handler", () => {
   assert.equal(typeof handlers.wakeflow_prune_runtime, "function", "wakeflow_prune_runtime must have a handler");
 });
 
+test("wakeflow_storage_preserve exposes the sanctioned local evidence rescue path", () => {
+  const preserve = tools.find((tool) => tool.name === "wakeflow_storage_preserve");
+  assert.ok(preserve, "wakeflow_storage_preserve tool must be registered");
+  assert.deepEqual(preserve.inputSchema?.required, ["source", "reason"]);
+  const props = preserve.inputSchema?.properties ?? {};
+  assert.deepEqual(Object.keys(props).sort(), ["apply", "note", "reason", "root", "source"]);
+  assert.equal(props.apply?.type, "boolean");
+  assert.equal(typeof handlers.wakeflow_storage_preserve, "function");
+  assert.throws(
+    () => handlers.wakeflow_storage_preserve({ reason: "audit-hold" }),
+    /wakeflow_storage_preserve requires source/,
+  );
+  assert.throws(
+    () => handlers.wakeflow_storage_preserve({ source: ".wakeflow-local/evidence" }),
+    /wakeflow_storage_preserve requires reason/,
+  );
+});
+
 // Guards RA6 (converged): demand/todo/docs archival is reachable through the unified
 // wakeflow_archive tool selected by target; the demand redaction-guard inputs survive
 // the merge. Transport-runtime GC stays separate as wakeflow_prune_runtime (asserted above).
@@ -86,6 +104,7 @@ test("wakeflow_archive MCP tool is registered with a handler and target routing"
   );
   // demand redaction-guard inputs + todo/docs inputs fused into one tool.
   assert.equal(props.redact?.type, "boolean", "wakeflow_archive must keep a boolean 'redact' input (target=demand)");
+  assert.equal(props.allowOpaque?.type, "boolean", "wakeflow_archive must expose explicit clean-opaque consent (target=demand)");
   for (const field of ["stateRoot", "reason", "evidenceRefs", "month", "date", "files", "topic", "apply"]) {
     assert.ok(props[field], `wakeflow_archive must expose '${field}'`);
   }

@@ -42,7 +42,7 @@ Use these MCP tools for normal installed-workspace control:
 | Delivery transport | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results, review, and completion | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| Archive, views, maintenance, verification | `wakeflow_archive`, `wakeflow_sanitize_archive`, `wakeflow_view`, `wakeflow_prune_runtime`, `wakeflow_verify` |
+| Archive, views, maintenance, verification | `wakeflow_archive`, `wakeflow_sanitize_archive`, `wakeflow_view`, `wakeflow_storage_preserve`, `wakeflow_prune_runtime`, `wakeflow_verify` |
 | Host ownership and target work leases | `wakeflow_adopt_demand_host`, `wakeflow_release_window_lock` |
 
 ## Source Runtime Command Set

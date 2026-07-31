@@ -38,7 +38,6 @@ const forbiddenPluginEntries = [
 const forbiddenRootPluginEntries = [
   ".codex-plugin",
   ".mcp.json",
-  "AGENTS.md",
   "assets",
   "lib",
   "mcp",

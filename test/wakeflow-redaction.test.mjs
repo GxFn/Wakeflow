@@ -103,7 +103,7 @@ test("archive privacy scan categorizes workspace and home paths and produces a p
   assert.equal(scanStateRootForArchivePrivacy(dest, { hostProfile: stubProfile, workspaceRoot, userHome }).clean, true);
 });
 
-test("opaque evidence is scanned and cannot be destructively redacted", () => {
+test("sensitive opaque evidence becomes a portable placeholder while source bytes stay untouched", () => {
   const root = makeStateRoot({
     "evidence/report.pdf": Buffer.from(`%PDF-1.4\0thread=${REAL_UUID}\nworkspace=PLACEHOLDER\0`),
     "evidence/raw.bin": Buffer.concat([
@@ -129,14 +129,34 @@ test("opaque evidence is scanned and cannot be destructively redacted", () => {
   assert.ok(scan.findings.some((finding) => finding.kind === "opaque-workspace-absolute-path"));
 
   const dest = mkdtempSync(path.join(os.tmpdir(), "wakeflow-opaque-redaction-"));
-  assert.throws(
-    () => redactStateRootIntoCopy(root, dest, {
-      hostProfile: stubProfile,
-      workspaceRoot: root,
-    }),
-    /cannot be safely redacted/i,
-  );
+  const reportBefore = readFileSync(file);
+  const rawBefore = readFileSync(path.join(root, "evidence/raw.bin"));
+  const result = redactStateRootIntoCopy(root, dest, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  });
   assert.equal(existsSync(path.join(dest, "evidence/report.pdf")), false);
+  assert.equal(existsSync(path.join(dest, "evidence/raw.bin")), false);
+  assert.equal(readFileSync(file).equals(reportBefore), true, "report source bytes stay untouched");
+  assert.equal(readFileSync(path.join(root, "evidence/raw.bin")).equals(rawBefore), true, "raw source bytes stay untouched");
+  assert.equal(result.opaquePlaceholders.length, 2);
+  const reportPlaceholder = result.opaquePlaceholders.find((item) => item.originalFile === "evidence/report.pdf");
+  assert.ok(reportPlaceholder);
+  assert.deepEqual(reportPlaceholder.findingKinds, {
+    "opaque-real-id": 1,
+    "opaque-workspace-absolute-path": 1,
+  });
+  assert.match(reportPlaceholder.sha256, /^[a-f0-9]{64}$/);
+  const portablePlaceholder = readFileSync(
+    path.join(dest, "evidence/report.pdf.wakeflow-preserved.json"),
+    "utf8",
+  );
+  assert.doesNotMatch(portablePlaceholder, new RegExp(REAL_UUID));
+  assert.doesNotMatch(portablePlaceholder, new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.equal(scanStateRootForArchivePrivacy(dest, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  }).clean, true);
   assert.match(readFileSync(file, "utf8"), new RegExp(REAL_UUID));
 });
 
@@ -160,6 +180,52 @@ test("clean opaque archive evidence requires explicit allowance and always retur
   });
   assert.equal(allowed.clean, true, JSON.stringify(allowed.findings));
   assert.deepEqual(allowed.opaqueFiles, refused.opaqueFiles);
+});
+
+test("opaque placeholder creation fails closed on a source-path collision", () => {
+  const root = makeStateRoot({
+    "evidence/report.pdf": Buffer.from(`%PDF-1.4\0thread=${REAL_UUID}\n`),
+    "evidence/report.pdf.wakeflow-preserved.json": "{}\n",
+  });
+  const dest = mkdtempSync(path.join(os.tmpdir(), "wakeflow-placeholder-collision-"));
+  assert.throws(
+    () => redactStateRootIntoCopy(root, dest, {
+      hostProfile: stubProfile,
+      workspaceRoot: root,
+    }),
+    /already contains that path/i,
+  );
+  assert.equal(existsSync(path.join(dest, "evidence/report.pdf.wakeflow-preserved.json")), false);
+});
+
+test("sensitive opaque file discovery is complete even when detailed findings are truncated", () => {
+  const repeated = Array.from({ length: 101 }, () => `thread=${REAL_UUID}`).join("\n");
+  const root = makeStateRoot({
+    "evidence/first.bin": Buffer.concat([Buffer.from([0x00]), Buffer.from(repeated)]),
+    "evidence/second.bin": Buffer.concat([Buffer.from([0x00]), Buffer.from(`thread=${REAL_UUID}`)]),
+  });
+  const scan = scanStateRootForArchivePrivacy(root, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  });
+  assert.equal(scan.truncated, true);
+  assert.deepEqual(scan.sensitiveOpaqueFiles, ["evidence/first.bin", "evidence/second.bin"]);
+
+  const dest = mkdtempSync(path.join(os.tmpdir(), "wakeflow-opaque-truncated-"));
+  const result = redactStateRootIntoCopy(root, dest, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  });
+  assert.deepEqual(
+    result.opaquePlaceholders.map((item) => item.originalFile),
+    ["evidence/first.bin", "evidence/second.bin"],
+  );
+  assert.equal(result.opaquePlaceholders[0].findingsTruncated, true);
+  assert.equal(result.opaquePlaceholders[1].findingsTruncated, false);
+  assert.equal(scanStateRootForArchivePrivacy(dest, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  }).clean, true);
 });
 
 test("sensitive filenames fail closed instead of breaking evidence references", () => {

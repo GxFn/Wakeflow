@@ -435,7 +435,9 @@ kinds present, declared artifacts resolve). The judgment half is yours:
 - Archive a completed/cancelled demand through `wakeflow_archive` dry-run
   first. If it reports real-id or user/workspace absolute-path findings, review
   the categories and re-run with `redact: true`; the committed staging copy
-  must pass the final scan and the original moves to `preserved/`.
+  must pass the final scan and the original moves to `preserved/`. Sensitive
+  opaque evidence stays byte-for-byte in that local original; the portable
+  archive contains only its safe placeholder and manifest metadata.
 - If a historical archived demand is already committed with those findings,
   use `wakeflow_sanitize_archive` on that exact archived state root (dry-run
   first). Never hand-edit it, move it back to `current/`, or use this repair as
@@ -444,10 +446,11 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   `wakeflow_view` scope `storage`: known trees with class/size/age, legacy
   residue, unknown trees, aging `preserved/` entries. It is orientation, not
   a work queue — nothing there authorizes deletion.
-- An `unknown-tree` under `.wakeflow-local/` always routes to the user. Fold
-  keepers with `wakeflow-storage preserve --source <path> --reason <slug>
-  --write` (the ONE sanctioned manual-rescue move; writes the manifest);
-  never invent another holding location and never auto-delete.
+- An `unknown-tree` under `.wakeflow-local/` always routes to the user. After
+  the user selects a keeper, call `wakeflow_storage_preserve` with `source`
+  and `reason` first as a dry-run, then repeat with `apply: true` (the ONE
+  sanctioned rescue move; writes the manifest). Never invent another holding
+  location and never auto-delete.
 - Aged audit holds: review each `MANIFEST.md`, then
   `wakeflow_prune_runtime target=preserved` (dry-run first) or keep with an
   updated manifest. Transport GC stays `wakeflow_prune_runtime` (default

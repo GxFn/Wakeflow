@@ -155,6 +155,7 @@ Wakeflow on Codex is driven through MCP tools (no slash commands). Tell Codex wh
 | Hand work to a window | `wakeflow_prepare_delivery` preview -> digest-matched `apply=true` -> host send -> `wakeflow_record_delivery` |
 | Record a target's result | `wakeflow_record_target_result` |
 | Review and decide | `wakeflow_review_pack` -> `wakeflow_reduce_results` -> `wakeflow_decide_review` -> `wakeflow_complete_demand` |
+| Preserve selected local evidence | `wakeflow_storage_preserve` dry-run -> `apply=true` |
 | Hand a demand to the other host | `wakeflow_adopt_demand_host` |
 | Health-check / converge runtime | `wakeflow_verify` |
 
@@ -409,7 +410,7 @@ Primary tool groups:
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| Archive, views, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs), `wakeflow_sanitize_archive` (bounded historical archive repair), `wakeflow_view` (task-ledger/window/focus/trace/storage), `wakeflow_prune_runtime`, `wakeflow_verify` |
+| Archive, views, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs), `wakeflow_sanitize_archive` (bounded historical archive repair), `wakeflow_view` (task-ledger/window/focus/trace/storage), `wakeflow_storage_preserve`, `wakeflow_prune_runtime`, `wakeflow_verify` |
 | Host ownership and locks | `wakeflow_adopt_demand_host`, `wakeflow_release_window_lock` |
 
 Public MCP tools are for outer agent workflows. Target closeout is deliberately
@@ -423,7 +424,11 @@ keep-live state, and script backend execution stay inside Wakeflow JS/runtime
 scripts and skills. Public archive MCP tools wrap controller-approved demand,
 TODO, and workspace-document archive flows. `wakeflow_sanitize_archive` only
 replaces an already archived demand with a privacy-clean copy and preserves the
-original locally; neither tool makes acceptance decisions or sends host messages.
+original locally. `wakeflow_storage_preserve` is the dry-run-first public route
+to the existing local evidence-preservation backend. With archive redaction,
+sensitive opaque evidence remains byte-for-byte in the local preserved original
+while the portable archive carries a safe placeholder manifest. None of these
+tools makes acceptance decisions or sends host messages.
 
 Wakeflow declares MCP tool annotations for every public tool: read-only tools
 are marked read-only, write tools are local, non-destructive, and closed-world.

@@ -103,7 +103,7 @@ full-context implementation task in the product responsibility window with
 redesign task cannot be re-dispatched; accepting the replacement marks it
 `superseded`.
 
-For Pod redesign, never use the mainline stateless Design path. Version 0.9.2
+For Pod redesign, never use the mainline stateless Design path. Version 0.9.3
 has only one immutable Pod Design request/handoff slot, so a later redesign is
 a capability blocker; do not author a replacement until a next-generation Pod
 Design lineage exists.

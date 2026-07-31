@@ -94,7 +94,7 @@ Exit gate: results with evidence refs for the wave.
 `wakeflow_reduce_results` → `wakeflow_decide_review`
 (accept / rework / redesign / blocked). Raw evidence before any decision.
 Non-bug outcome mismatch = redesign lane back to S1, never point-fix loops.
-For a Pod, redesign must never return to mainline Design. Version 0.9.2 cannot
+For a Pod, redesign must never return to mainline Design. Version 0.9.3 cannot
 persist a second frozen Pod Design request/handoff generation, so the demand
 stays blocked as a capability gap instead of overwriting its recorded Design generation.
 Exit to S5 only after every active required non-Test target is accepted and the

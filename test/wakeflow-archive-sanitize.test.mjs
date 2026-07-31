@@ -129,6 +129,39 @@ test("sanitize-archive dry-runs, preserves the original, and replaces only the a
   assert.equal(readJson(path.join(archiveRoot, "wakeflow-state.json")).revision, 6, "clean no-op does not create another event");
 });
 
+test("sanitize-archive preserves sensitive paths and clean opaque bytes behind portable placeholders", () => {
+  const { root, archiveRoot } = makeLegacyArchive();
+  const uuid = "3f8a1c2b-9d4e-4f6a-8b1c-2d3e4f5a6b7c";
+  const sensitiveDir = path.join(archiveRoot, `evidence/generation-${uuid}`);
+  const opaqueFile = path.join(archiveRoot, "evidence/clean.bin");
+  const opaqueBytes = Buffer.from([0xff, 0xfe, 0x00, 0x41]);
+  mkdirSync(sensitiveDir, { recursive: true });
+  writeJson(path.join(sensitiveDir, "manifest.json"), { generationId: uuid });
+  writeFileSync(opaqueFile, opaqueBytes);
+
+  const applied = run([
+    "sanitize-archive", "--root", root, "--state-root", archiveRoot,
+    "--reason", "portable path and opaque repair", "--write", "--json",
+  ]);
+  assert.equal(applied.status, 0, applied.stderr || applied.stdout);
+  const payload = JSON.parse(applied.stdout);
+  const pathPlaceholder = "evidence/generation-redacted-id-1/.wakeflow-preserved.json";
+  const opaquePlaceholder = "evidence/clean.bin.wakeflow-preserved.json";
+  assert.equal(existsSync(path.join(archiveRoot, pathPlaceholder)), true);
+  assert.equal(existsSync(path.join(archiveRoot, opaquePlaceholder)), true);
+  assert.equal(existsSync(path.join(archiveRoot, `evidence/generation-${uuid}`)), false);
+  assert.equal(existsSync(opaqueFile), false);
+
+  const manifest = readJson(path.join(archiveRoot, "archive-manifest.json"));
+  assert.equal(manifest.pathPlaceholders.length, 1);
+  assert.equal(manifest.opaquePlaceholders.length, 1);
+  assert.equal(manifest.sanitizationHistory.at(-1).pathPlaceholders.length, 1);
+  assert.equal(manifest.sanitizationHistory.at(-1).opaquePlaceholders.length, 1);
+  const preserved = path.join(root, payload.sanitized.originalPreservedAt);
+  assert.equal(existsSync(path.join(preserved, `evidence/generation-${uuid}/manifest.json`)), true);
+  assert.equal(readFileSync(path.join(preserved, "evidence/clean.bin")).equals(opaqueBytes), true);
+});
+
 test("sanitize-archive refuses an archived-looking root outside the configured archive ledger", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-sanitize-boundary-"));
   writeJson(path.join(root, "wakeflow.config.json"), {

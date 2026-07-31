@@ -110,7 +110,7 @@ Pod 恢复走独立路径：`mode=resume` 只验真或恢复已绑定 session �
   重新开启评审。
 - **替代关系必须显式。** 普通 rework 重派同一任务；主线 redesign 在 Design
   handoff 后创建带 `replacesTargetTaskId` 的完整 replacement 包，接受后旧任务
-  和包变为 `superseded`。0.9.2 的 Pod 只冻结一代 Design request/handoff，
+  和包变为 `superseded`。0.9.3 的 Pod 只冻结一代 Design request/handoff，
   这一代的 `requestType` 可以是 `initial-design`、`supplement` 或 `redesign`；
   不同的第二代请求保持 blocked，不覆盖既有 handoff，也不回退主线 Design。
 
@@ -328,7 +328,7 @@ cwd> --resume --session-id <已注册 id> --replace [--server <配置 server>]`
 - Pod 唯一一代 Design 只在 `Controller__<pod>` 与 `Design__<pod>` 之间往返。
   先用 `wakeflow_pod_plan action=design-request` 冻结总控请求，再用
   `wakeflow_pod_record event=design-handoff` 记录精确
-  `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。0.9.2 不持久化
+  `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。0.9.3 不持久化
   第二代 Pod Design，后续 supplement/redesign 必须作为能力 blocker 停止。
 - Pod Test 派发前，先运行 `wakeflow_pod_plan action=test-access`，再用
   `wakeflow_pod_record event=test-access` 记录独立 Test session 的精确探测结果。只有
@@ -495,8 +495,10 @@ keep-live 状态和脚本后端执行这类内部环节留在 Wakeflow runtime s
 公共归档 MCP tools 包装总控批准的 demand、TODO 和工作区文档归档流程。
 `wakeflow_archive target=sanitize-demand` 只把已归档 demand 替换为隐私清洁副本并在本地保留原件；
 `wakeflow_storage_preserve` 是现有本地证据保全后端的公共入口，默认只做 dry-run。
-归档脱敏遇到敏感二进制时，原始字节只留在本地 preserved 原件中，可移植归档写入
-安全占位清单。这些工具都不做验收决策，也不发送 host 消息。
+归档脱敏遇到不透明文件时，除非用 `allowOpaque` 明确授权干净原始字节进入可移植归档，
+否则原始字节只留在本地 preserved 原件中，可移植归档写入安全占位清单。文件名或目录名包含真实 host id 时，最高层敏感文件/子树同样只保留在
+本地原件中，可移植归档以同一 `redacted-id-N` 别名保留一份路径占位和引用；别名路径
+碰撞时仍会安全拒绝。这些工具都不做验收决策，也不发送 host 消息。
 
 迁移说明：收敛前的 Pod 分阶段调用现在用
 `wakeflow_pod_plan` 完成规划，用 `wakeflow_pod_record` 记录 receipt/handoff；

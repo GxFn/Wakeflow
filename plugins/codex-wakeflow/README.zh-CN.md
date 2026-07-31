@@ -87,7 +87,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.2/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.3/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -268,7 +268,7 @@ Design 和 Test 是支持角色：
 - Pod 唯一一代 Design 只在 `Controller__<pod>` 与 `Design__<pod>` 之间往返。
   先用 `wakeflow_pod_plan action=design-request` 冻结总控请求，再用
   `wakeflow_pod_record event=design-handoff` 记录精确
-  `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。0.9.2 不持久化
+  `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。0.9.3 不持久化
   第二代 Pod Design，后续 supplement/redesign 必须作为能力 blocker 停止，
   不覆盖旧 handoff，也不回退主线 Design。
 - Pod Test 派发前，先运行 `wakeflow_pod_plan action=test-access`，再用
@@ -334,7 +334,7 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 记录 target result、审查 readiness、在策略允许时准备 controller-return envelope、
 用 Codex host thread tool 发送，再记录 delivery evidence。不要把这些步骤合并成一个 target-window MCP tool。
 `wakeflow_storage_preserve` 是现有本地证据保全后端的公共入口，默认只做 dry-run。
-归档脱敏遇到敏感二进制时，原始字节只留在本地 preserved 原件中，可移植归档写入安全占位清单。
+归档脱敏遇到不透明文件时，除非用 `allowOpaque` 明确授权干净原始字节进入可移植归档，否则原始字节只留在本地 preserved 原件中，可移植归档写入安全占位清单。文件名或目录名包含真实 host id 时，最高层敏感文件/子树同样只保留在本地原件中，可移植归档以同一 `redacted-id-N` 别名保留一份路径占位和引用；别名路径碰撞时仍会安全拒绝。
 
 ## 运行时与账本边界
 

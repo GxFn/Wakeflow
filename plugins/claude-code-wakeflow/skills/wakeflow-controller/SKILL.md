@@ -223,7 +223,7 @@ mainline. Missing or ambiguous identity remains blocked.
      increments `redesignCount` instead of bouncing point-fixes between product windows.
      Mainline may use its stateless Design delivery and then add a full-context replacement
      with `replacesTargetTaskId=<parked task>`. A Pod must stay in its own Design lane;
-     because 0.9.2 supports only one frozen Pod Design request/handoff
+     because 0.9.3 supports only one frozen Pod Design request/handoff
      generation, a redesign may use that sole generation only before any
      request exists; a different second request remains blocked rather than
      falling back to mainline Design or overwriting the recorded handoff;
@@ -361,7 +361,7 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   `wakeflow_pod_plan action=design-request → PodDesignRequest →
   PodDesignHandoffEnvelope → wakeflow_pod_record event=design-handoff`; the frozen
   request supplies exact lineage and cannot be replaced by a different
-  request. Wakeflow 0.9.2 does not yet persist multiple Pod Design generations:
+  request. Wakeflow 0.9.3 does not yet persist multiple Pod Design generations:
   if a later supplement or redesign needs a new request/handoff, stop with a
   capability blocker. Never overwrite the frozen request, route the Pod
   through the mainline Design window, or create a duplicate global TODO.
@@ -420,9 +420,13 @@ kinds present, declared artifacts resolve). The judgment half is yours:
 - Archive a completed/cancelled demand through `wakeflow_archive` dry-run
   first. If it reports real-id or user/workspace absolute-path findings, review
   the categories and re-run with `redact: true`; the committed staging copy
-  must pass the final scan and the original moves to `preserved/`. Sensitive
-  opaque evidence stays byte-for-byte in that local original; the portable
-  archive contains only its safe placeholder and manifest metadata.
+  must pass the final scan and the original moves to `preserved/`. Opaque
+  evidence stays byte-for-byte in that local original; unless clean opaque byte
+  inclusion was explicitly authorized with `allowOpaque`, the portable archive
+  contains only its safe placeholder and manifest metadata. A real id
+  in a path preserves the highest sensitive file/subtree once, writes one
+  `redacted-id-N` path placeholder, and applies the same alias to text
+  references; a portable-path collision remains a blocker.
 - If a historical archived demand is already committed with those findings,
   use `wakeflow_archive target=sanitize-demand` on that exact archived state root (dry-run
   first). Never hand-edit it, move it back to `current/`, or use this repair as
@@ -521,7 +525,7 @@ Stop instead of dispatching when:
   `wakeflow_deliver`; after the corrected requirement returns, add a full-context replacement
   package to the SAME demand with `replacesTargetTaskId` set to the parked product task. Do
   not create a new demand or re-dispatch the old task. For a Pod demand, do not use mainline
-  Design: Wakeflow 0.9.2 cannot create a second frozen Pod Design generation, so keep the
+  Design: Wakeflow 0.9.3 cannot create a second frozen Pod Design generation, so keep the
   demand blocked and report that capability gap rather than overwriting the recorded handoff.
   Accepting a valid replacement marks the old task/package `superseded`; the parked demand's
   history and counts carry over.

@@ -12,7 +12,7 @@ Run one controller review step. Use the wakeflow-controller skill acceptance rul
    rework / blocked / redesign, or `wakeflow_complete_demand` when the
    completion definition is met with evidence. Mainline redesign uses the
    stateless mainline Design handoff before a replacement task. A Pod must not
-   fall back to mainline Design; 0.9.2 supports only one frozen Pod Design
+   fall back to mainline Design; 0.9.3 supports only one frozen Pod Design
    request/handoff generation (whose sole request may be `initial-design`,
    `supplement`, or `redesign`), so a different second request stays blocked as
    a capability gap.

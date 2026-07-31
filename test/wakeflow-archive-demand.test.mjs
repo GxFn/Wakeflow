@@ -316,6 +316,32 @@ test("archive-demand refuses opaque files by default and records hashes when exp
   assert.match(manifest.opaqueFiles[0].sha256, /^[a-f0-9]{64}$/);
 });
 
+test("archive-demand --redact omits clean opaque bytes when allowOpaque is false", () => {
+  const { root, stateRoot } = initDemand({ demandKey: "ARCH-OPAQUE-REDACT" });
+  const opaqueRelative = "evidence/fixture.bin";
+  const opaqueBytes = Buffer.from([0xff, 0xfe, 0x00, 0x41]);
+  const opaqueFile = path.join(root, stateRoot, opaqueRelative);
+  mkdirSync(path.dirname(opaqueFile), { recursive: true });
+  writeFileSync(opaqueFile, opaqueBytes);
+
+  const archived = run([
+    "archive-demand", "--root", root, "--state-root", stateRoot,
+    "--reason", "opaque redacted fixture", "--redact", "--write", "--json",
+  ]);
+  assert.equal(archived.status, 0, archived.stderr || archived.stdout);
+  const payload = JSON.parse(archived.stdout);
+  const ledgerDest = path.join(root, payload.archived.ledgerDest);
+  const preservedDest = path.join(root, payload.archived.originalPreservedAt);
+  const placeholderFile = path.join(ledgerDest, `${opaqueRelative}.wakeflow-preserved.json`);
+
+  assert.equal(existsSync(path.join(ledgerDest, opaqueRelative)), false);
+  assert.equal(existsSync(placeholderFile), true);
+  assert.equal(readFileSync(path.join(preservedDest, opaqueRelative)).equals(opaqueBytes), true);
+  const placeholder = readJson(placeholderFile);
+  assert.equal(placeholder.findingKinds["opaque-file"], 1);
+  assert.equal(payload.archived.opaquePlaceholders.length, 1);
+});
+
 test("archive-demand --redact preserves sensitive opaque bytes locally and commits a safe placeholder", () => {
   const { root, stateRoot, stateFile } = initDemand({ demandKey: "ARCH-OPAQUE-SENSITIVE" });
   const uuid = "3f8a1c2b-9d4e-4f6a-8b1c-2d3e4f5a6b7c";
@@ -356,6 +382,48 @@ test("archive-demand --redact preserves sensitive opaque bytes locally and commi
   assert.equal(manifest.opaquePlaceholders.length, 1);
   assert.deepEqual(manifest.opaquePlaceholders[0], placeholder);
   assert.equal(payload.archived.opaquePlaceholders.length, 1);
+});
+
+test("archive-demand --redact preserves a sensitive path subtree and commits one portable placeholder", () => {
+  const { root, stateRoot, stateFile } = initDemand({ demandKey: "ARCH-SENSITIVE-PATH" });
+  const uuid = "3f8a1c2b-9d4e-4f6a-8b1c-2d3e4f5a6b7c";
+  const sensitiveRelative = `evidence/generation-${uuid}`;
+  mkdirSync(path.join(root, stateRoot, sensitiveRelative, "store"), { recursive: true });
+  writeJson(path.join(root, stateRoot, sensitiveRelative, "manifest.json"), { generationId: uuid });
+  writeJson(path.join(root, stateRoot, sensitiveRelative, "store/index.json"), { ready: true });
+  writeJson(path.join(root, stateRoot, "public-route.json"), {
+    manifest: `${sensitiveRelative}/manifest.json`,
+  });
+
+  const archived = run([
+    "archive-demand", "--root", root, "--state-root", stateRoot,
+    "--reason", "sensitive path fixture", "--redact", "--write", "--json",
+  ]);
+  assert.equal(archived.status, 0, archived.stderr || archived.stdout);
+  const payload = JSON.parse(archived.stdout);
+  const ledgerDest = path.join(root, payload.archived.ledgerDest);
+  const preservedDest = path.join(root, payload.archived.originalPreservedAt);
+  const portableRelative = "evidence/generation-redacted-id-1";
+  const placeholderRelative = `${portableRelative}/.wakeflow-preserved.json`;
+
+  assert.equal(existsSync(path.join(ledgerDest, sensitiveRelative)), false);
+  assert.equal(existsSync(path.join(ledgerDest, placeholderRelative)), true);
+  assert.equal(existsSync(path.join(preservedDest, sensitiveRelative, "manifest.json")), true);
+  assert.equal(existsSync(stateFile), false);
+  assert.match(readFileSync(path.join(ledgerDest, "public-route.json"), "utf8"), /generation-redacted-id-1\/manifest\.json/);
+
+  const placeholder = readJson(path.join(ledgerDest, placeholderRelative));
+  assert.equal(placeholder.kind, "WakeflowPreservedPathEvidence");
+  assert.equal(placeholder.portablePath, portableRelative);
+  assert.equal(placeholder.files, 2);
+  assert.match(placeholder.sha256, /^[a-f0-9]{64}$/);
+  assert.doesNotMatch(JSON.stringify(placeholder), new RegExp(uuid));
+
+  const manifest = readJson(path.join(ledgerDest, "archive-manifest.json"));
+  assert.equal(manifest.pathPlaceholders.length, 1);
+  assert.deepEqual(manifest.pathPlaceholders[0], placeholder);
+  assert.deepEqual(payload.archived.pathPlaceholders, [placeholder]);
+  assert.match(readFileSync(path.join(ledgerDest, "archive-summary.md"), "utf8"), /Sensitive path placeholders: 1/);
 });
 
 test("archived demand transport history does not poison live runtime status", () => {
@@ -700,6 +768,46 @@ test("archive-demand reuses its fixed intent after a pre-ledger staging failure"
   assert.equal(payload.archived.ledgerDest, intentBefore.ledgerDest);
   assert.equal(existsSync(path.join(root, stateRoot)), false);
   assert.equal(readJson(path.join(root, intentBefore.ledgerDest, "wakeflow-state.json")).state, "archived");
+});
+
+test("archive-demand resumes a 0.9.2 pending intent without pathPlaceholders metadata", () => {
+  const {
+    root, stateRoot, pendingFile, runCore,
+  } = initCoreDemand({ demandKey: "ARCH-LEGACY-PATH-INTENT" });
+  const uuid = "3f8a1c2b-9d4e-4f6a-8b1c-2d3e4f5a6b7c";
+  const sensitiveDir = path.join(root, stateRoot, `evidence/generation-${uuid}`);
+  const collisionDir = path.join(root, stateRoot, "evidence/generation-redacted-id-1");
+  mkdirSync(sensitiveDir, { recursive: true });
+  mkdirSync(collisionDir, { recursive: true });
+  writeJson(path.join(sensitiveDir, "manifest.json"), { generationId: uuid });
+  writeJson(path.join(collisionDir, "existing.json"), { collision: true });
+  const archiveArgs = [
+    "archive-demand",
+    "--root", root,
+    "--state-root", stateRoot,
+    "--reason", "legacy path intent retry",
+    "--redact",
+    "--write",
+    "--json",
+  ];
+
+  const interrupted = runCore(archiveArgs);
+  assert.notEqual(interrupted.status, 0);
+  assert.match(interrupted.stdout, /portable path collides with source entry/i);
+  assert.equal(existsSync(pendingFile), true);
+  const legacyIntent = readJson(pendingFile);
+  delete legacyIntent.archiveManifest.pathPlaceholders;
+  writeJson(pendingFile, legacyIntent);
+
+  rmSync(collisionDir, { recursive: true, force: true });
+  const resumed = runCore(archiveArgs);
+  assert.equal(resumed.status, 0, resumed.stderr || resumed.stdout);
+  const payload = JSON.parse(resumed.stdout);
+  assert.equal(payload.archived.resumed, true);
+  assert.equal(payload.archived.pathPlaceholders.length, 1);
+  const manifest = readJson(path.join(root, payload.archived.ledgerDest, "archive-manifest.json"));
+  assert.equal(manifest.pathPlaceholders.length, 1);
+  assert.equal(manifest.pathPlaceholders[0].portablePath, "evidence/generation-redacted-id-1");
 });
 
 test("archive-demand resumes non-redacted active deletion after the ledger commit", () => {

@@ -28,14 +28,18 @@ import path from "node:path";
 // archive, font, or NUL-bearing file would corrupt evidence. They are still
 // scanned for ASCII-compatible ID/path strings. A portable redacted copy omits
 // an opaque file that contains such a value and writes a safe placeholder
-// manifest instead; the caller remains responsible for preserving the
-// untouched source tree in the local audit tier.
+// manifest instead. Clean opaque bytes are copied only with explicit
+// allowOpaque consent; otherwise they receive the same preserve-and-placeholder
+// treatment. The caller remains responsible for preserving the untouched
+// source tree in the local audit tier.
 const OPAQUE_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".gz", ".tgz", ".woff", ".woff2", ".ico"]);
 const MAX_FINDINGS = 100;
 const REDACTION_TOKEN = "<redacted>";
 const WORKSPACE_ROOT_TOKEN = "<workspace-root>";
 const HOME_ROOT_TOKEN = "~";
 const OPAQUE_PLACEHOLDER_SUFFIX = ".wakeflow-preserved.json";
+const PATH_PLACEHOLDER_FILE = ".wakeflow-preserved.json";
+const PATH_REDACTION_PREFIX = "redacted-id";
 
 // The real-id shape is declared per host edition on host-profile (handleId.idShape), because
 // the host-profile is host-local and not byte-synced; check:core cannot cross-check it.
@@ -197,7 +201,7 @@ function nonRedactableFindings(entries, {
         kind: "real-id-filename",
         file: entry.relative,
         match: match[0],
-        reason: "sensitive filenames cannot be rewritten without breaking evidence references",
+        reason: "sensitive path must be represented by a preserved-subtree placeholder in a portable archive",
       });
       if (findings.length >= MAX_FINDINGS) return findings;
     }
@@ -233,6 +237,144 @@ function nonRedactableFindings(entries, {
     }
   }
   return findings;
+}
+
+function sensitiveMatches(value, pattern, placeholders) {
+  return [...String(value).matchAll(new RegExp(pattern.source, "gi"))]
+    .map((match) => match[0])
+    .filter((match) => !placeholders.has(match.toLowerCase()));
+}
+
+function isSameOrDescendant(candidate, root) {
+  return candidate === root || candidate.startsWith(`${root}/`);
+}
+
+function replaceSensitiveIds(value, pattern, placeholders, aliases, fallback = REDACTION_TOKEN) {
+  return String(value).replace(new RegExp(pattern.source, "gi"), (match) => {
+    if (placeholders.has(match.toLowerCase())) return match;
+    return aliases.get(match.toLowerCase()) ?? fallback;
+  });
+}
+
+function preservedSubtreeSummary(rootEntry, members) {
+  const digest = createHash("sha256");
+  let files = 0;
+  let directories = 0;
+  let bytes = 0;
+  for (const entry of members) {
+    const memberPath = entry.relative === rootEntry.relative
+      ? "."
+      : entry.relative.slice(rootEntry.relative.length + 1);
+    if (entry.type === "directory") {
+      directories += 1;
+      digest.update(`${JSON.stringify(["directory", memberPath])}\n`);
+      continue;
+    }
+    if (entry.type !== "file") continue;
+    const raw = readFileSync(entry.absolute);
+    const contentHash = createHash("sha256").update(raw).digest("hex");
+    files += 1;
+    bytes += raw.length;
+    digest.update(`${JSON.stringify(["file", memberPath, raw.length, contentHash])}\n`);
+  }
+  return {
+    algorithm: "sha256",
+    sha256: digest.digest("hex"),
+    bytes,
+    files,
+    directories,
+    entries: members.length,
+  };
+}
+
+function sensitivePathPreservationPlan(entries, { pattern, placeholders }) {
+  const sensitiveIds = new Set();
+  for (const entry of entries) {
+    for (const match of sensitiveMatches(entry.relative, pattern, placeholders)) {
+      sensitiveIds.add(match.toLowerCase());
+    }
+  }
+  const aliases = new Map(
+    [...sensitiveIds]
+      .sort()
+      .map((id, index) => [id, `${PATH_REDACTION_PREFIX}-${index + 1}`]),
+  );
+  const roots = new Map();
+  for (const entry of entries) {
+    const parts = entry.relative.split("/");
+    for (let index = 0; index < parts.length; index += 1) {
+      if (sensitiveMatches(parts[index], pattern, placeholders).length === 0) continue;
+      const root = parts.slice(0, index + 1).join("/");
+      if (!roots.has(root)) {
+        const rootEntry = entries.find((candidate) => candidate.relative === root);
+        if (!rootEntry) throw new Error(`archive could not resolve sensitive path root: ${root}`);
+        roots.set(root, rootEntry);
+      }
+      break;
+    }
+  }
+
+  const plans = [...roots.values()].map((rootEntry) => {
+    const members = entries.filter((entry) => isSameOrDescendant(entry.relative, rootEntry.relative));
+    const portablePath = replaceSensitiveIds(rootEntry.relative, pattern, placeholders, aliases);
+    const placeholderFile = rootEntry.type === "directory"
+      ? `${portablePath}/${PATH_PLACEHOLDER_FILE}`
+      : `${portablePath}${OPAQUE_PLACEHOLDER_SUFFIX}`;
+    const findingCount = members.reduce(
+      (count, entry) => count + sensitiveMatches(entry.relative, pattern, placeholders).length,
+      0,
+    );
+    return {
+      root: rootEntry.relative,
+      rootType: rootEntry.type,
+      portablePath,
+      placeholderFile,
+      findingCount,
+      members,
+    };
+  }).sort((a, b) => a.root.localeCompare(b.root));
+
+  const ordinaryEntries = entries.filter((entry) => (
+    !plans.some((plan) => isSameOrDescendant(entry.relative, plan.root))
+  ));
+  for (const plan of plans) {
+    const ordinaryCollision = ordinaryEntries.find((entry) => (
+      isSameOrDescendant(entry.relative, plan.portablePath)
+      || isSameOrDescendant(entry.relative, plan.placeholderFile)
+      || (entry.type === "file" && plan.portablePath.startsWith(`${entry.relative}/`))
+      || (entry.type === "file" && plan.placeholderFile.startsWith(`${entry.relative}/`))
+    ));
+    if (ordinaryCollision) {
+      throw new Error(
+        `archive cannot create preserved path placeholder ${plan.placeholderFile}: portable path collides with source entry ${ordinaryCollision.relative}`,
+      );
+    }
+    const mappedCollision = plans.find((candidate) => (
+      candidate !== plan
+      && (isSameOrDescendant(candidate.portablePath, plan.portablePath)
+        || isSameOrDescendant(plan.portablePath, candidate.portablePath))
+    ));
+    if (mappedCollision) {
+      throw new Error(
+        `archive cannot create preserved path placeholder ${plan.placeholderFile}: multiple sensitive paths map to the same portable subtree`,
+      );
+    }
+  }
+  return { aliases, plans };
+}
+
+function pathPlaceholderRecord(plan) {
+  return {
+    kind: "WakeflowPreservedPathEvidence",
+    version: 1,
+    portablePath: plan.portablePath,
+    placeholderFile: plan.placeholderFile,
+    sourceEntryType: plan.rootType,
+    ...preservedSubtreeSummary(plan.members[0], plan.members),
+    findingKinds: { "real-id-filename": plan.findingCount },
+    disposition: "subtree-omitted-from-portable-archive",
+    preservedOriginalPointer: "archive-manifest.json#originalPreservedAt",
+  };
 }
 
 function opaqueSensitiveFindingsByFile(entries, {
@@ -414,7 +556,12 @@ function opaquePlaceholderRecord(entry, raw, findings, findingsTruncated) {
 // Copy stateRoot into destination, replacing real IDs with <redacted>, the
 // workspace prefix with <workspace-root>, and other home prefixes with ~. The
 // source tree is never mutated. redactedFields records counts by category.
-export function redactStateRootIntoCopy(stateRoot, destination, { hostProfile, workspaceRoot, userHome = homedir() } = {}) {
+export function redactStateRootIntoCopy(stateRoot, destination, {
+  hostProfile,
+  workspaceRoot,
+  userHome = homedir(),
+  allowOpaque = false,
+} = {}) {
   const pattern = realIdPattern(hostProfile);
   if (!pattern) throw new Error("host profile declares no handleId.idShape; cannot redact.");
   if (!existsSync(stateRoot)) throw new Error(`state root does not exist: ${stateRoot}`);
@@ -422,6 +569,10 @@ export function redactStateRootIntoCopy(stateRoot, destination, { hostProfile, w
   const pathRules = archivePathRules({ workspaceRoot, userHome });
   const entries = listTreeEntries(stateRoot);
   const blockers = nonRedactableFindings(entries, {
+    pattern,
+    placeholders,
+  }).filter((finding) => finding.kind !== "real-id-filename");
+  const pathPlan = sensitivePathPreservationPlan(entries, {
     pattern,
     placeholders,
   });
@@ -438,8 +589,18 @@ export function redactStateRootIntoCopy(stateRoot, destination, { hostProfile, w
       `archive contains ${blockers.length} finding(s) that cannot be safely redacted (${summary}); remove or replace these entries before retrying`,
     );
   }
-  const sourcePaths = new Set(entries.map((entry) => entry.relative));
-  for (const sourceFile of opaqueSensitive.keys()) {
+  const omittedByPathPlaceholder = (relative) => pathPlan.plans.some((plan) => (
+    isSameOrDescendant(relative, plan.root)
+  ));
+  const sourcePaths = new Set(entries
+    .filter((entry) => !omittedByPathPlaceholder(entry.relative))
+    .map((entry) => entry.relative));
+  const opaqueFilesToPlaceholder = new Set(opaqueSensitive.keys());
+  if (!allowOpaque) {
+    for (const item of opaqueFileInventory(entries)) opaqueFilesToPlaceholder.add(item.file);
+  }
+  for (const sourceFile of opaqueFilesToPlaceholder) {
+    if (omittedByPathPlaceholder(sourceFile)) continue;
     const placeholderFile = `${sourceFile}${OPAQUE_PLACEHOLDER_SUFFIX}`;
     if (sourcePaths.has(placeholderFile)) {
       throw new Error(
@@ -449,7 +610,21 @@ export function redactStateRootIntoCopy(stateRoot, destination, { hostProfile, w
   }
   const redactedFields = [];
   const opaquePlaceholders = [];
+  const pathPlaceholders = [];
+  for (const plan of pathPlan.plans) {
+    const placeholder = pathPlaceholderRecord(plan);
+    pathPlaceholders.push(placeholder);
+    redactedFields.push({
+      file: placeholder.placeholderFile,
+      count: plan.findingCount,
+      kinds: placeholder.findingKinds,
+    });
+    const placeholderDest = path.join(destination, placeholder.placeholderFile);
+    mkdirSync(path.dirname(placeholderDest), { recursive: true });
+    writeFileSync(placeholderDest, `${JSON.stringify(placeholder, null, 2)}\n`);
+  }
   for (const entry of entries) {
+    if (omittedByPathPlaceholder(entry.relative)) continue;
     const destFile = path.join(destination, entry.relative);
     if (entry.type === "directory") {
       mkdirSync(destFile, { recursive: true });
@@ -462,9 +637,14 @@ export function redactStateRootIntoCopy(stateRoot, destination, { hostProfile, w
     const raw = readFileSync(entry.absolute);
     if (isOpaqueFile(entry.absolute, raw)) {
       const sensitive = opaqueSensitive.get(entry.relative);
-      if (sensitive) {
-        const placeholder = opaquePlaceholderRecord(entry, raw, sensitive.findings, sensitive.truncated);
-        const count = sensitive.findings.length;
+      if (sensitive || !allowOpaque) {
+        const findings = sensitive?.findings ?? [{
+          kind: "opaque-file",
+          file: entry.relative,
+          reason: "clean opaque evidence omitted because portable byte inclusion was not authorized",
+        }];
+        const placeholder = opaquePlaceholderRecord(entry, raw, findings, sensitive?.truncated ?? false);
+        const count = findings.length;
         redactedFields.push({
           file: entry.relative,
           count,
@@ -485,7 +665,7 @@ export function redactStateRootIntoCopy(stateRoot, destination, { hostProfile, w
     const cleaned = content.replace(new RegExp(pattern.source, "gi"), (match) => {
       if (placeholders.has(match.toLowerCase())) return match;
       kinds["real-id"] = (kinds["real-id"] ?? 0) + 1;
-      return REDACTION_TOKEN;
+      return pathPlan.aliases.get(match.toLowerCase()) ?? REDACTION_TOKEN;
     });
     let portable = cleaned;
     for (const rule of pathRules) {
@@ -498,5 +678,5 @@ export function redactStateRootIntoCopy(stateRoot, destination, { hostProfile, w
     if (count > 0) redactedFields.push({ file: entry.relative, count, kinds });
     writeFileSync(destFile, portable);
   }
-  return { redactedFields, opaquePlaceholders };
+  return { redactedFields, opaquePlaceholders, pathPlaceholders };
 }

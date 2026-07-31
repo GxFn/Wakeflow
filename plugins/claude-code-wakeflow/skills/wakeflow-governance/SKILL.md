@@ -177,7 +177,7 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
   receipts with `wakeflow_pod_bind`.
 - **Pod Design and Test have machine gates**:
   `wakeflow_pod_plan action=design-request` freezes the exact request before
-  `wakeflow_pod_record event=design-handoff`. Version 0.9.2 persists exactly one Pod
+  `wakeflow_pod_record event=design-handoff`. Version 0.9.3 persists exactly one Pod
   Design request/handoff generation; its sole request may be `initial-design`,
   `supplement`, or `redesign`. A different second generation stops as an
   unsupported capability instead of overwriting that request or using mainline Design.

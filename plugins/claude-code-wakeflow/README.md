@@ -135,7 +135,7 @@ Two rules keep the loop honest:
   full-context implementation task in the product responsibility window with
   `replacesTargetTaskId` after the Design handoff. Accepting that replacement
   supersedes the old task and package.
-  Version 0.9.2 freezes exactly one Design request/handoff generation per Pod;
+  Version 0.9.3 freezes exactly one Design request/handoff generation per Pod;
   that sole request may be `initial-design`, `supplement`, or `redesign`. A
   different second generation remains blocked rather than overwriting it or
   falling back to mainline Design.
@@ -387,7 +387,7 @@ per-repository limit.
   Freeze the controller request with
   `wakeflow_pod_plan action=design-request`, then record its exact
   `PodDesignHandoffEnvelope` with `wakeflow_pod_record event=design-handoff`; neither
-  step creates a second global TODO. Version 0.9.2 does not persist a second
+  step creates a second global TODO. Version 0.9.3 does not persist a second
   Pod Design generation, so later supplement/redesign is an explicit
   capability blocker.
 - Before Pod Test dispatch, run `wakeflow_pod_plan action=test-access` and record
@@ -585,9 +585,14 @@ demand, TODO, and workspace-document archive flows. `wakeflow_archive`
 with `target=sanitize-demand` only replaces an already archived demand with a privacy-clean copy and preserves
 the original locally. `wakeflow_storage_preserve` is the dry-run-first public
 route to the existing local evidence-preservation backend. With archive
-redaction, sensitive opaque evidence remains byte-for-byte in the local
-preserved original while the portable archive carries a safe placeholder
-manifest. None of these tools makes acceptance decisions or sends host messages.
+redaction, opaque evidence remains byte-for-byte in the local preserved
+original while the portable archive carries a safe placeholder manifest,
+unless clean opaque byte inclusion was explicitly authorized with
+`allowOpaque`. A real host id inside a filename or directory name preserves that
+highest sensitive file/subtree locally and represents it once at a
+`redacted-id-N` portable path; matching text references use the same alias, and
+path collisions still fail closed. None of these tools makes acceptance
+decisions or sends host messages.
 
 Migration note: pre-consolidation Pod stage calls now use
 `wakeflow_pod_plan` for planning and `wakeflow_pod_record` for

@@ -180,6 +180,33 @@ test("clean opaque archive evidence requires explicit allowance and always retur
   });
   assert.equal(allowed.clean, true, JSON.stringify(allowed.findings));
   assert.deepEqual(allowed.opaqueFiles, refused.opaqueFiles);
+
+  const omittedDest = mkdtempSync(path.join(os.tmpdir(), "wakeflow-clean-opaque-omitted-"));
+  const omitted = redactStateRootIntoCopy(root, omittedDest, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  });
+  assert.equal(existsSync(path.join(omittedDest, "evidence/clean.bin")), false);
+  assert.equal(existsSync(path.join(omittedDest, "evidence/clean.bin.wakeflow-preserved.json")), true);
+  assert.equal(omitted.opaquePlaceholders[0].findingKinds["opaque-file"], 1);
+  assert.equal(scanStateRootForArchivePrivacy(omittedDest, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  }).clean, true);
+
+  const includedDest = mkdtempSync(path.join(os.tmpdir(), "wakeflow-clean-opaque-included-"));
+  const included = redactStateRootIntoCopy(root, includedDest, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+    allowOpaque: true,
+  });
+  assert.equal(readFileSync(path.join(includedDest, "evidence/clean.bin")).equals(bytes), true);
+  assert.deepEqual(included.opaquePlaceholders, []);
+  assert.equal(scanStateRootForArchivePrivacy(includedDest, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+    allowOpaque: true,
+  }).clean, true);
 });
 
 test("opaque placeholder creation fails closed on a source-path collision", () => {
@@ -228,9 +255,10 @@ test("sensitive opaque file discovery is complete even when detailed findings ar
   }).clean, true);
 });
 
-test("sensitive filenames fail closed instead of breaking evidence references", () => {
+test("sensitive file paths become portable placeholders with aligned text references", () => {
   const root = makeStateRoot({
     [`target-results/${REAL_UUID}.json`]: "{}\n",
+    "review.md": `Evidence: target-results/${REAL_UUID}.json\n`,
   });
   const scan = scanStateRootForArchivePrivacy(root, {
     hostProfile: stubProfile,
@@ -243,13 +271,100 @@ test("sensitive filenames fail closed instead of breaking evidence references", 
   )));
 
   const dest = mkdtempSync(path.join(os.tmpdir(), "wakeflow-filename-redaction-"));
+  const result = redactStateRootIntoCopy(root, dest, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  });
+  const portableFile = "target-results/redacted-id-1.json";
+  const placeholderFile = `${portableFile}.wakeflow-preserved.json`;
+  assert.equal(existsSync(path.join(dest, `target-results/${REAL_UUID}.json`)), false);
+  assert.equal(existsSync(path.join(dest, placeholderFile)), true);
+  assert.match(readFileSync(path.join(dest, "review.md"), "utf8"), new RegExp(portableFile));
+  assert.match(readFileSync(path.join(root, "review.md"), "utf8"), new RegExp(REAL_UUID));
+  assert.equal(result.pathPlaceholders.length, 1);
+  assert.equal(result.pathPlaceholders[0].portablePath, portableFile);
+  assert.equal(result.pathPlaceholders[0].placeholderFile, placeholderFile);
+  assert.equal(result.pathPlaceholders[0].sourceEntryType, "file");
+  assert.equal(result.pathPlaceholders[0].files, 1);
+  assert.doesNotMatch(JSON.stringify(result.pathPlaceholders), new RegExp(REAL_UUID));
+  assert.equal(scanStateRootForArchivePrivacy(dest, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  }).clean, true);
+});
+
+test("a sensitive opaque filename uses a JSON-suffixed placeholder that remains portable", () => {
+  const root = makeStateRoot({
+    [`evidence/${REAL_UUID}.pdf`]: Buffer.from("%PDF-1.4\0opaque evidence"),
+  });
+  const dest = mkdtempSync(path.join(os.tmpdir(), "wakeflow-opaque-path-redaction-"));
+  const result = redactStateRootIntoCopy(root, dest, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  });
+  const placeholderFile = "evidence/redacted-id-1.pdf.wakeflow-preserved.json";
+  assert.equal(result.pathPlaceholders[0].placeholderFile, placeholderFile);
+  assert.equal(existsSync(path.join(dest, placeholderFile)), true);
+  assert.equal(scanStateRootForArchivePrivacy(dest, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  }).clean, true);
+});
+
+test("a sensitive directory and all descendants collapse to one preserved-subtree placeholder", () => {
+  const sensitiveDir = `evidence/generation-${REAL_UUID}`;
+  const root = makeStateRoot({
+    [`${sensitiveDir}/manifest.json`]: `{"generation":"${REAL_UUID}"}\n`,
+    [`${sensitiveDir}/store/index.json`]: "{\"ok\":true}\n",
+    "public-route.json": JSON.stringify({
+      manifest: `${sensitiveDir}/manifest.json`,
+      index: `${sensitiveDir}/store/index.json`,
+    }),
+  });
+  const dest = mkdtempSync(path.join(os.tmpdir(), "wakeflow-subtree-redaction-"));
+  const result = redactStateRootIntoCopy(root, dest, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  });
+
+  const portableDir = "evidence/generation-redacted-id-1";
+  const placeholderFile = `${portableDir}/.wakeflow-preserved.json`;
+  assert.equal(existsSync(path.join(dest, sensitiveDir)), false);
+  assert.equal(existsSync(path.join(dest, placeholderFile)), true);
+  assert.equal(existsSync(path.join(root, `${sensitiveDir}/manifest.json`)), true, "source subtree stays untouched");
+  assert.equal(result.pathPlaceholders.length, 1, "descendant matches do not create duplicate placeholders");
+  const placeholder = result.pathPlaceholders[0];
+  assert.equal(placeholder.portablePath, portableDir);
+  assert.equal(placeholder.placeholderFile, placeholderFile);
+  assert.equal(placeholder.sourceEntryType, "directory");
+  assert.equal(placeholder.files, 2);
+  assert.equal(placeholder.directories, 2);
+  assert.equal(placeholder.findingKinds["real-id-filename"], 4);
+  assert.match(placeholder.sha256, /^[a-f0-9]{64}$/);
+  const portableReference = readFileSync(path.join(dest, "public-route.json"), "utf8");
+  assert.match(portableReference, /evidence\/generation-redacted-id-1\/manifest\.json/);
+  assert.doesNotMatch(portableReference, new RegExp(REAL_UUID));
+  assert.doesNotMatch(readFileSync(path.join(dest, placeholderFile), "utf8"), new RegExp(REAL_UUID));
+  assert.equal(scanStateRootForArchivePrivacy(dest, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  }).clean, true);
+});
+
+test("sensitive path placeholder creation fails closed on a portable-path collision", () => {
+  const root = makeStateRoot({
+    [`evidence/generation-${REAL_UUID}/manifest.json`]: "{}\n",
+    "evidence/generation-redacted-id-1/existing.json": "{}\n",
+  });
+  const dest = mkdtempSync(path.join(os.tmpdir(), "wakeflow-path-collision-"));
   assert.throws(
     () => redactStateRootIntoCopy(root, dest, {
       hostProfile: stubProfile,
       workspaceRoot: root,
     }),
-    /cannot be safely redacted/i,
+    /portable path collides with source entry/i,
   );
+  assert.equal(existsSync(path.join(dest, "evidence/generation-redacted-id-1/.wakeflow-preserved.json")), false);
 });
 
 test("state-root symlinks are reported without following or copying their target", () => {

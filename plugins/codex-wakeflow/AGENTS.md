@@ -204,7 +204,7 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   local control-project threads. Journal each create by launch correlation; a
   temporary `clientThreadId` is pending search/recovery evidence only and can
   never enter the registry. Freeze Pod Design with
-  `wakeflow_pod_plan action=design-request`. Version 0.9.2 freezes exactly one Pod
+  `wakeflow_pod_plan action=design-request`. Version 0.9.3 freezes exactly one Pod
   Design request/handoff generation; that sole request may be `initial-design`,
   `supplement`, or `redesign`. A different second generation must stop as an
   unsupported capability rather than overwrite it or fall back to mainline Design. A pod reaches `control-ready` only

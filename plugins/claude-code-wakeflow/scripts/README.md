@@ -97,8 +97,8 @@ Current scripts:
   `build-controller-return` enforces the dispatch group's return policy:
   `group-ready` permits one pending/sent controller-return for the dispatch group,
   while `per-target` permits one pending/sent controller-return per
-  trigger target/task pair. After a direct-thread delivery run is recorded as
-  sent/readback-ok, its agent cue must close the controller dispatch turn; it
+  trigger target/task pair. After accepted transport is recorded as sent with
+  its actual independent readback status, its agent cue must close the controller dispatch turn; it
   must not tell total control to sleep, poll, or wait in place for target
   results. Re-recording the same delivery run or identical target result is an
   idempotent replay and must not advance state again; changed target results
@@ -122,9 +122,11 @@ Current scripts:
   demand / task package / dispatch / delivery / result / controller-event chain
   without sending messages or making an acceptance decision. Resume plans expose
   a `WakeflowHostSendAdapter` descriptor for Claude Code dispatch to
-  tmux-resident windows; the adapter describes the `wakeflow-claude-host send`
-  command the agent must run, consumes delivery envelopes, requires pane
-  readback, and never stores real thread ids or performs controller acceptance.
+  tmux-resident windows; the adapter describes the envelope-aware
+  `wakeflow-claude-host deliver --delivery-file` command the agent must run,
+  consumes delivery envelopes, requires one bounded pane observation, records
+  `confirmed` / `pending` / `unavailable`, and never makes confirmed visibility
+  a send gate, stores real thread ids, or performs controller acceptance.
 - `wakeflow-demand-sequence.mjs`: TODO-board claim/create runner. `create-demand`
   inits a demand state root (adopting this host), adds any initial task
   packages, renders the progress doc, and consumes the originating TODO row;
@@ -253,9 +255,13 @@ truth. The current operational commands are grouped below:
   `stream-list` remain legacy recovery commands only; they are not the new Pod
   path.
 
-Use MCP `wakeflow_release_window_lock` for deliberate lock recovery. To watch
-the fleet, open a terminal and run `tmux attach -t <session>`; there is no
-helper attach command.
+Matching target results release their target leases automatically. For proven
+pre-send recovery, use MCP `wakeflow_release_window_lock` with
+`expectedDeliveryId`; omit the id only for deliberate stale/corrupt recovery,
+and never release an accepted, ambiguous, or readback-pending send. To watch
+the fleet, open a terminal and run `tmux attach -t <session>` without a
+dedicated socket, or `tmux -L <tmuxSocket> attach -t <session>` when configured;
+there is no helper attach command.
 
 Workspace script tests:
 

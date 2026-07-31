@@ -33,22 +33,36 @@ Current objective (the task package is authoritative):
 - <one-line objective>
 
 Completion focus (full criteria are in the task package):
-- <bounded observable result>
+- <up to two ordered observable results>
+
+- Priority context: <highest-priority confirmed fact>
+- Critical boundary [forbidden|outOfScope|inScope]: <highest-priority boundary>
+
+Key acceptance anchors (full probes and expectations are in the task package):
+- <up to four anchor ids/claims>
 
 Read before execution, in order:
 - Task package (complete task context): <absolute package path>
 - Requirement background entry (full anchors are in the task package) [goal]: <document#section>
+- Workspace instructions: <workspace>/CLAUDE.md
 - Repository instructions: <repository>/CLAUDE.md
+- Current state root: <absolute state-root path>
 
 Required execution Skills (execution-process authority):
 - skills/wakeflow-target/SKILL.md
+- <other derived Skill, when required>
 
 Identity (full boundaries are in the task package):
 - Current responsibility window: <window>
 - Only working repository: <absolute repository path>
 
+Before coding: map every package acceptanceAnchor to a RED test or probe; if an
+anchor is untestable, return needs-review instead of inventing a requirement.
+
 Return requirement:
-- Return a TargetResultEnvelope with verifiable evidence.
+- Execute only this task package. Return a TargetResultEnvelope with verifiable
+  evidence. A target result is not controller acceptance.
+- Test execution contract: <package>#testExecution
 
 Dispatch record (routing and trace only):
 - taskId: <taskId>
@@ -58,13 +72,13 @@ Dispatch record (routing and trace only):
 - dispatchGroup: <group>
 ```
 
-When the task package carries `acceptanceAnchors`, the prompt includes only
-their ids/claims and tells the target to map each full package anchor to a RED
-test/probe before implementation. Full probe/expected content remains in the
-task package. The prompt likewise shows only the first two ordered completion
-expectations and one original requirement entry; complete context, requirement
-anchors, boundaries, commit policy, and completion criteria remain in the task
-package. Target prepare previews this exact prompt and readiness without
+Anchor, RED, workspace, and Test lines are conditional. The prompt contains
+the objective, at most two completion expectations, one priority-context fact,
+one critical boundary, at most four anchor ids/claims, and one original
+requirement entry. Complete context, requirement anchors, boundary lists,
+commit policy, probes, Test policy, and completion criteria remain in the task
+package. Skills are derived during briefing from work type, evidence/anchor
+needs, and the Test contract. Target prepare previews this exact prompt without
 writing; `apply=true` freezes the packet/envelope only after controller review
 and requires the preview's `previewDigest` as `expectedPreviewDigest`. That
 digest covers the complete prepared dispatch, not only the task package.
@@ -74,13 +88,16 @@ Controller-return prompts stay compact:
 ```text
 Continue controller review: <window> backfill.
 
-Variables:
+Review context:
 - stateRoot: <path>
 - dispatchGroup: <group>
 - trigger: <window/task>
 - blockedTargets: <only when non-empty>
-- missingTargets: <only when non-empty>
-- skill: skills/wakeflow-controller/SKILL.md
+- remainingTargets: <only when non-empty>
+- pendingDispatchTargets: <only when non-empty>
+
+Required execution Skill:
+- skills/wakeflow-controller/SKILL.md
 ```
 
 Do not wrap prompts in XML/JSON/delegation tags. Pass the envelope `prompt`
@@ -96,31 +113,43 @@ prompt, resolves the target window (pod demands route controller-returns via
 the envelope's stamped `controllerWindow`), and needs no temp file. For custom
 prompts outside an envelope, the low-level path remains: write the prompt to a
 temp file, then `send --root <workspace> --window <target> --prompt-file
-<file> [--delivery-id <id>]`. Either way the helper
-enforces the shared per-window delivery lock
-(`.wakeflow-local/wakeflow-delivery/locks/<window>.json`, one in-flight
-delivery per window across hosts), pastes via a tmux buffer (multiline-safe),
-and returns pane readback evidence. The send evidence is `readback.paneTail`
-plus the recorded delivery run (`wakeflow_record_delivery`, default host
-method `wakeflow-claude-host send`). A mid-turn target queues the pasted
-message for its next turn.
+<file> --delivery-id <id>`. This low-level form is not a controller-return
+transport. For target delivery the helper enforces the
+shared per-window work lease already reserved by applied envelope preparation
+(`.wakeflow-local/wakeflow-delivery/locks/<window>.json`, one in-flight target
+delivery per window across hosts). It reuses/revalidates the same delivery id,
+pastes via a tmux buffer (multiline-safe), and returns pane readback evidence.
+The send evidence is `readback.paneTail`
+plus the recorded delivery run (`wakeflow_record_delivery`, host method
+`wakeflow-claude-host deliver`). A different fresh delivery cannot queue behind
+an active target work lease; it fails closed.
 
-Every Wakeflow window (controller included) is a tmux-resident interactive
-`claude` session, so a controller return uses the same helper `send` aimed at
-the dispatch group's stored controller window, recorded the same way.
+Every Wakeflow window is a tmux-resident interactive `claude` session. A
+controller return uses the envelope-aware `deliver --delivery-file` path aimed
+at the stamped controller window. It does not acquire a target work lease; the
+helper still serializes pane paste/readback and the run is recorded normally.
 
-Once send/readback is recorded as sent and readback-ok, stop the controller
-turn; do not poll for target completion. The wake-up is the target's
+If send is accepted but the new pane turn is not visible yet, retry only
+readback within the fixed bounded attempt/time budget; never resend while
+confirming the accepted send. Record `status=sent` from accepted transport with
+the actual independent readback status (`confirmed`, `pending`, or
+`unavailable`). Pending visibility is observation for Agent judgment, not a
+send failure or a strict completion gate. Then stop the controller turn; do not
+poll for target completion. The wake-up is the target's
 controller-return delivery, and the activity monitor flips the delivered window's tab to done when the result lands (lock released); silence is never auto-judged — whether a quiet window is stalled is the controller's judgment, made when it chooses to inspect. `wait-results
 --group <id> [--target <w>...] [--timeout-sec N]` remains available as an
 EXPLICIT synchronous wait for scripted flows only (pure observation, no lock
-or glyph side effects); it is not a default dispatch step. Recovery is not a
-mode: when a tmux window dies, the registered session id remains the thread
-id — relaunch the SAME session interactively with `launch-window --resume
---session-id <registered id> --replace` (subscription pool, same id).
-Headless `claude -p --resume` is a last resort: from 2026-06-15 it bills the
-separate Agent SDK credit. (Claude Code desktop windows are not an automation
-transport.)
+or glyph side effects); it is not a default dispatch step. Creation and
+recovery are separate operations. Resume a dead baseline window with
+`launch-window --root <workspace>
+--window <window> --cwd <recorded actual cwd> --resume --session-id
+<registered id> --replace [--server <configured server>]`. A Pod instead uses
+the read-only `wakeflow_pod_open mode=resume` plan. The helper verifies or
+resumes only the exact registered session at the immutable bound cwd; it never
+repeats the creation HEAD gate, adds `--worktree`, creates/discovers a
+replacement, rebinds core state, or falls back to mainline. Missing or
+ambiguous identity remains blocked. (Claude Code desktop windows are not an
+automation transport.)
 
 ## Result Review
 

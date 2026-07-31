@@ -35,7 +35,8 @@ definition, local code, docs, tests, and release path before decomposing work.
   Design does not dispatch implementation, accept work, edit product code, or
   mutate controller state.
 - Test starts only after total control has completed its own validation for the
-  current scope and accepted every existing non-Test target. It explores
+  current scope and accepted every active required non-Test target (with valid
+  superseded lineage excluded). It explores
   confirmed real environments for boundary problems and hidden bugs that the
   controller or product repository cannot safely reproduce alone. Test does
   not own functional correctness, completion, or product fixes.
@@ -84,8 +85,9 @@ without creating a demand, Pod, thread, or worktree.
 ## Testing And Acceptance
 
 - **No Test dispatch while total control's current validation scope is
-  unfinished.** When the demand has non-Test targets, all must
-  already be `accepted`; the Test card's existing `controllerSelfChecks` records
+  unfinished.** Every active/open non-Test target must already be `accepted`;
+  canonical `superseded` replacement history is not an open target. The Test
+  card's existing `controllerSelfChecks` records
   what total control verified and why a real scenario remains necessary.
   Test-only reproduction/environment diagnostics remain valid. Test output
   cannot supply missing controller proof or become the quality owner.
@@ -159,8 +161,10 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   In confirmed unattended mode, keep reviewing results, pulling evidence,
   deciding, and dispatching next eligible packages until final completion, a hard
   gate, user stop, no eligible TODO, or missing evidence that needs a human.
-- After a real direct-thread send records `status=sent` with `readback.ok=true`,
-  stop the send turn — do not sleep, poll, or wait. Keep-live is unattended
+- After a real direct-thread send records `status=sent` with
+  `transportStatus=accepted`, stop the send turn — do not sleep, poll, or wait.
+  `readback.status` is independent observation; pending/unavailable never
+  authorizes resend or lease release. Keep-live is unattended
   support only, not task logic, transport, or acceptance evidence.
 - Real thread ids live only in `.wakeflow-local/`; never write them to tracked
   docs, GitHub, prompts, or backfill, and never register placeholders.
@@ -171,8 +175,10 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   delivery is controller-started unless the plan and envelope authorize an
   exception. Old claim/finish/chain-next/start-plan/resume-plan routes are
   retired.
-- An implementation task package may carry controller-authored
-  `acceptanceAnchors` derived from confirmed requirement authority. Before
+- Every newly authored full-context implementation task package must carry at
+  least one controller-authored `acceptanceAnchor` derived from confirmed
+  requirement authority. Research/documentation packages may omit anchors;
+  legacy packages remain read-only compatibility input. Before
   coding, the target maps every `{id,claim,probe,expected}` anchor to a RED
   test/probe; an untestable or conflicting anchor returns `needs-review`.
   Neither the controller nor target invents missing requirement scope through
@@ -190,14 +196,18 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
 - A demand pod exists only after an explicit user-authority anchor selects it.
   Wakeflow sets no numeric pod admission limit. Each pod owns independent
   `Controller__<pod>`, `Design__<pod>`, `Test__<pod>`, and product sessions.
-  Wakeflow plans, binds, verifies, and logically closes them; it never creates,
-  removes, or adopts a Git worktree or branch.
+  Wakeflow plans, binds, verifies, and logically closes them. The current
+  public Pod lifecycle never creates, removes, or adopts a Git worktree or
+  branch; those actions belong to the Codex host.
 - Codex creates every pod product thread from the exact saved repository
   project with `environment.type=worktree`; Controller/Design/Test are distinct
   local control-project threads. Journal each create by launch correlation; a
   temporary `clientThreadId` is pending search/recovery evidence only and can
   never enter the registry. Freeze Pod Design with
-  `wakeflow_pod_prepare_design_request`. A pod reaches `control-ready` only
+  `wakeflow_pod_prepare_design_request`. Version 0.9.1 freezes exactly one Pod
+  Design request/handoff generation; that sole request may be `initial-design`,
+  `supplement`, or `redesign`. A different second generation must stop as an
+  unsupported capability rather than overwrite it or fall back to mainline Design. A pod reaches `control-ready` only
   after all three control receipts bind, and `execution-ready` only after its
   matching Design handoff and every required product receipt bind. Pod Test
   dispatch additionally requires validated `direct-multi-root` access to every
@@ -269,11 +279,13 @@ live in `skills/wakeflow-governance/references/wakeflow-delivery.md`,
 
 ## Standard Dispatch Prompt
 
-A dispatch prompt is a compact wakeup envelope: it navigates (read parent
-`AGENTS.md`, the active index, the current controller doc, and the target
-repository `AGENTS.md`; state window/repository identity; claim only the assigned
-task; backfill evidence/boundaries/risks/next-steps when done) while the state
-root, task package, and skills define the work. The copyable template lives in
+A dispatch prompt is a bounded, priority-ordered briefing: objective; at most
+two completion focuses; one priority context; one critical boundary; up to
+four acceptance-anchor ids/claims; ordered navigation to the task package,
+original requirement entry, workspace/repository instructions, current state
+root, and derived Skills; then identity, return, and trace fields. The task
+package owns complete context and boundaries, requirement documents own
+original background, and Skills own execution procedure. The copyable template lives in
 `skills/wakeflow-governance/references/window-dispatch.md`. Do not put
 wave-specific window lists, blocked/observing decisions, validation commands,
 forbidden paths, or automation manuals in `AGENTS.md`.

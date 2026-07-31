@@ -145,6 +145,20 @@ export function createWindowRuntime(ctx) {
     ) {
       fail(`Active Pod binding for ${windowName} points at a missing actualCwd.`);
     }
+    const registryFile = (findThreadFile ?? threadFileFor)(windowName);
+    if (!existsSync(registryFile)) {
+      fail(`Active Pod binding for ${windowName} has no final host registry.`);
+    }
+    const registration = readJson(registryFile, "thread registration");
+    if (
+      registration.kind !== hostProfile.kinds.windowRegistration
+      || registration.windowName !== windowName
+      || registration.bindingId !== binding.bindingId
+      || !registration.threadId
+      || contentDigest({ host: hostProfile.hostId, handle: registration.threadId }) !== binding.handleDigest
+    ) {
+      fail(`Active Pod binding for ${windowName} does not match its registered final host session.`);
+    }
     return binding;
   }
 
@@ -492,13 +506,41 @@ export function createWindowRuntime(ctx) {
     const registryFile = threadFileFor(windowName);
     const previousRegistryFile = (findThreadFile ?? threadFileFor)(windowName);
     const replacedExistingThread = existsSync(previousRegistryFile);
+    const existingRegistration = existsSync(previousRegistryFile)
+      ? readJson(previousRegistryFile, "thread registration")
+      : null;
+    const existingPodBinding = podOperation?.status === "bound"
+      ? podRuntime().readBinding(podOperation.podId, windowName)
+      : null;
+    if (podOperation?.status === "bound" && !existingPodBinding) {
+      fail(`Bound Pod window ${windowName} is missing its immutable binding; repair that authority instead of replacing the registered host session.`);
+    }
+    if (existingPodBinding) {
+      const requestedHandleDigest = contentDigest({
+        host: hostProfile.hostId,
+        handle: threadId,
+      });
+      if (
+        existingPodBinding.status !== "active"
+        || existingPodBinding.bindingId !== bindingId
+        || existingPodBinding.handleDigest !== requestedHandleDigest
+        || existingRegistration?.threadId !== threadId
+        || existingRegistration?.bindingId !== bindingId
+      ) {
+        fail(`Bound Pod window ${windowName} cannot replace its final host session; resume the exact registered handle instead.`);
+      }
+    }
+    const verifiedAt = nowIso();
     const registration = createThreadRegistration({
       windowName,
       threadId,
-      registeredAt: nowIso(),
+      registeredAt: existingPodBinding && existingRegistration?.registeredAt
+        ? existingRegistration.registeredAt
+        : verifiedAt,
       ...(podOperation ? { bindingId } : {}),
       version: threadRegistrationVersion,
     });
+    registration.lastVerifiedAt = verifiedAt;
     const configFile = windowConfigFileFor(windowName);
     const config = applyPodDispatchGate(buildWindowDispatchConfig({
       windowName,

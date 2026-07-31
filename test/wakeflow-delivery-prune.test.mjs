@@ -14,6 +14,7 @@ const script = path.join(workspaceRoot, "scripts/wakeflow-delivery.mjs");
 // the replay gate), a recent confirmed send (retained by the cutoff), and a non-confirmed run.
 const RUNS = [
   { deliveryRunId: "run-old", deliveryId: "d-old", status: "sent", readback: { ok: true }, createdAt: "2026-01-01T00:00:00.000Z" },
+  { deliveryRunId: "run-canonical", deliveryId: "d-canonical", status: "sent", readback: { ok: true }, createdAt: "2026-01-01T00:00:00.000Z" },
   { deliveryRunId: "run-chain-1", deliveryId: "d-chain", status: "sent", readback: { ok: true }, createdAt: "2026-01-02T00:00:00.000Z" },
   { deliveryRunId: "run-chain-2", deliveryId: "d-chain", status: "sent", readback: { ok: true }, createdAt: "2026-01-03T00:00:00.000Z" },
   { deliveryRunId: "run-recent", deliveryId: "d-recent", status: "sent", readback: { ok: true }, createdAt: "2026-12-01T00:00:00.000Z" },
@@ -24,10 +25,16 @@ function makeFixture() {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-prune-"));
   const stateDir = path.join(root, ".wakeflow-local/wakeflow-delivery");
   const runsDir = path.join(stateDir, "delivery-runs");
+  const deliveriesDir = path.join(stateDir, "delivery-envelopes");
   mkdirSync(runsDir, { recursive: true });
+  mkdirSync(deliveriesDir, { recursive: true });
   for (const run of RUNS) {
     writeFileSync(path.join(runsDir, `${run.deliveryRunId}.json`), `${JSON.stringify({ kind: "DirectThreadDeliveryRun", ...run })}\n`);
   }
+  writeFileSync(path.join(deliveriesDir, "d-canonical.json"), `${JSON.stringify({
+    kind: "DeliveryEnvelope",
+    deliveryId: "d-canonical",
+  })}\n`);
   return { root, stateDir, runsDir };
 }
 
@@ -58,7 +65,7 @@ test("prune-runtime --write requires --before to bound the deletion", () => {
   assert.match(result.stdout, /requires --before/);
 });
 
-test("prune-runtime --write deletes only the replay-safe confirmed-send run before the cutoff", () => {
+test("prune-runtime --write deletes only replay-safe evidence without a surviving canonical envelope", () => {
   const { root, stateDir, runsDir } = makeFixture();
   const result = run(root, stateDir, ["--write", "--before", CUTOFF]);
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -66,12 +73,13 @@ test("prune-runtime --write deletes only the replay-safe confirmed-send run befo
   assert.equal(payload.wrote, true);
   assert.equal(payload.removed, 1);
   assert.equal(existsSync(path.join(runsDir, "run-old.json")), false, "old replay-safe run is pruned");
-  // retained: replay chain, recent, non-confirmed
-  for (const kept of ["run-chain-1", "run-chain-2", "run-recent", "run-failed"]) {
+  // retained: canonical envelope authority, replay chain, recent, non-confirmed
+  for (const kept of ["run-canonical", "run-chain-1", "run-chain-2", "run-recent", "run-failed"]) {
     assert.equal(existsSync(path.join(runsDir, `${kept}.json`)), true, `${kept} must be retained`);
   }
   const reasons = Object.fromEntries(payload.retained.map((r) => [r.deliveryRunId, r.reasons]));
+  assert.ok(reasons["run-canonical"].includes("delivery-envelope-still-present"));
   assert.ok(reasons["run-chain-1"].includes("in-replay-chain"));
   assert.ok(reasons["run-recent"].includes("not-before-cutoff"));
-  assert.ok(reasons["run-failed"].includes("not-a-confirmed-send"));
+  assert.ok(reasons["run-failed"].includes("not-a-confirmed-send-observation"));
 });

@@ -33,6 +33,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { hostProfile } from "./wakeflow-host-profile.mjs";
 import { stableArtifactPart } from "./wakeflow-artifact-identity.mjs";
+import { claudePaneReadbackPolicy } from "./wakeflow-host-send-adapter.mjs";
+import { contentDigest } from "./wakeflow-pod-runtime.mjs";
 import { withFileLock } from "./wakeflow-state-lock.mjs";
 import {
   addStreamWorktree,
@@ -159,6 +161,7 @@ const stateDir = path.resolve(getValue("--state-dir", path.join(workspaceRoot, "
 const hostDir = path.join(stateDir, "hosts", HOST_DIR_NAME);
 const windowHostDir = path.join(hostDir, "window-host");
 const locksDir = path.join(stateDir, "locks");
+const deliveryRunsDir = path.join(stateDir, "delivery-runs");
 const resultsDir = path.join(stateDir, "target-results");
 const tmuxBin = process.env.WAKEFLOW_TMUX_BIN || "tmux";
 const claudeBin = process.env.WAKEFLOW_CLAUDE_BIN || "claude";
@@ -303,6 +306,19 @@ function tmux(tmuxArgs, { allowFailure = false, env = null } = {}) {
   return result;
 }
 
+function shellDisplayArg(value) {
+  const text = String(value);
+  return /^[A-Za-z0-9_./:@%+=,-]+$/.test(text)
+    ? text
+    : `'${text.replace(/'/g, `'\\''`)}'`;
+}
+
+function tmuxAttachCommand(serverSession) {
+  return [tmuxBin, ...tmuxSocketArgs, "attach", "-t", serverSession]
+    .map(shellDisplayArg)
+    .join(" ");
+}
+
 // The tmux SERVER captures the spawning process's environment and every window
 // inherits it. When the fleet is (re)built from inside an agent session, that
 // environment carries the agent's own session variables — empirically enough
@@ -328,6 +344,15 @@ function threadRegistryFileFor(windowName) {
     "thread-registry",
     `${stableArtifactPart(windowName, { fallback: "window" })}.json`,
   );
+}
+
+function threadRegistryFileCandidates(windowName) {
+  const registryDir = path.join(hostDir, "thread-registry");
+  return [...new Set([
+    slug(windowName),
+    stableArtifactPart(windowName, { fallback: "window" }),
+    contentDigest(windowName).slice(0, 12),
+  ])].map((name) => path.join(registryDir, `${name}.json`));
 }
 
 function windowConfigFileFor(windowName) {
@@ -394,6 +419,49 @@ function acquireWorkLease(windowName, deliveryId, lockTtlSec) {
   });
 }
 
+function releaseExactWorkLease(windowName, lease) {
+  if (!lease?.deliveryId || !lease?.leaseId) return false;
+  const file = lockFileFor(windowName);
+  return withFileLock(`${file}.guard`, () => {
+    if (!existsSync(file)) return false;
+    let current;
+    try {
+      current = JSON.parse(readFileSync(file, "utf8"));
+    } catch {
+      return false;
+    }
+    if (current.deliveryId !== lease.deliveryId || current.leaseId !== lease.leaseId) return false;
+    rmSync(file, { force: true });
+    return true;
+  });
+}
+
+function acceptedDeliveryRun(deliveryId, windowName) {
+  if (!deliveryId || !existsSync(deliveryRunsDir)) return null;
+  const matches = [];
+  for (const name of readdirSync(deliveryRunsDir)) {
+    if (!name.endsWith(".json")) continue;
+    try {
+      const run = JSON.parse(readFileSync(path.join(deliveryRunsDir, name), "utf8"));
+      const accepted = run?.status === "sent"
+        && (run.transportStatus === "accepted"
+          || (!run.transportStatus && run.readback?.ok === true));
+      if (
+        run?.kind === "DirectThreadDeliveryRun"
+        && run.deliveryId === deliveryId
+        && run.targetWindow === windowName
+        && accepted
+      ) {
+        matches.push(run);
+      }
+    } catch {
+      // Canonical status reports corrupt run artifacts. Do not infer accepted
+      // transport from unreadable evidence here.
+    }
+  }
+  return matches.sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || ""))).at(-1) ?? null;
+}
+
 function setWindowState(windowName, state) {
   const file = bindingFileFor(windowName);
   if (!existsSync(file)) return;
@@ -411,10 +479,17 @@ function getWindowState(binding) {
 }
 
 function capturePaneTail(binding, lines) {
+  return capturePaneTailObservation(binding, lines).paneTail;
+}
+
+function capturePaneTailObservation(binding, lines) {
   const result = tmux(["capture-pane", "-p", "-t", binding.tmux.windowId], { allowFailure: true });
-  if (result.status !== 0) return "";
+  if (result.status !== 0) return { available: false, paneTail: "" };
   const all = result.stdout.replace(/\s+$/, "").split("\n");
-  return all.slice(Math.max(0, all.length - lines)).join("\n");
+  return {
+    available: true,
+    paneTail: all.slice(Math.max(0, all.length - lines)).join("\n"),
+  };
 }
 
 function sleep(ms) {
@@ -698,15 +773,28 @@ function pastePromptFile(binding, promptFile) {
   const file = path.resolve(workspaceRoot, promptFile);
   if (!existsSync(file)) fail(`--prompt-file does not exist: ${promptFile}`);
   const bufferName = `wakeflow-${slug(binding.windowName)}-${Date.now()}`;
-  tmux(["load-buffer", "-b", bufferName, file]);
   try {
+    tmux(["load-buffer", "-b", bufferName, file]);
+  } catch (error) {
+    throw new CliExit(error.message, {
+      code: "host-send-rejected-before-send",
+      details: { transportStatus: "rejected-before-send", sendAttempted: false },
+    });
+  }
+  try {
+    // Once paste-buffer is invoked, a non-zero exit cannot prove that tmux
+    // performed no side effect. Any error from this point is ambiguous and the
+    // delivery lease must survive.
     tmux(["paste-buffer", "-d", "-b", bufferName, "-t", binding.tmux.windowId]);
+    tmux(["send-keys", "-t", binding.tmux.windowId, "Enter"]);
   } catch (error) {
     // paste-buffer -d only deletes on success; drop the orphan buffer
     tmux(["delete-buffer", "-b", bufferName], { allowFailure: true });
-    throw error;
+    throw new CliExit(error.message, {
+      code: "host-send-ambiguous",
+      details: { transportStatus: "ambiguous", sendAttempted: true },
+    });
   }
-  tmux(["send-keys", "-t", binding.tmux.windowId, "Enter"]);
 }
 
 function existingRealpath(value) {
@@ -764,7 +852,11 @@ function hostProvisioningReceipt({
   expectedBaseHead,
   launchCorrelationId,
   stateRootRelative,
+  verificationMode = "create",
 }) {
+  if (!new Set(["create", "resume"]).has(verificationMode)) {
+    fail(`Unsupported host receipt verification mode: ${verificationMode}`);
+  }
   const actualCwd = paneCurrentPath(binding);
   if (!actualCwd) {
     retryableFail(`host pane for ${binding.windowName} has no stable current directory yet; retry the same launch correlation without creating another session.`, {
@@ -806,7 +898,7 @@ function hostProvisioningReceipt({
         expectedCommonDir,
       });
     }
-    if (expectedBaseHead && identity.head !== expectedBaseHead) {
+    if (verificationMode === "create" && expectedBaseHead && identity.head !== expectedBaseHead) {
       retryableFail(`Claude worktree for ${binding.windowName} started at ${identity.head}, not the requested HEAD ${expectedBaseHead}.`, {
         launchCorrelationId,
         windowName: binding.windowName,
@@ -838,6 +930,7 @@ function hostProvisioningReceipt({
     detached: identity?.detached ?? null,
     mainCheckout: identity?.mainCheckout ?? null,
     expectedBaseHead: expectedBaseHead || null,
+    ...(verificationMode === "resume" ? { verificationMode } : {}),
     createdAt: binding.createdAt,
     observedAt: nowIso(),
   };
@@ -875,18 +968,7 @@ async function commandLaunchWindow() {
     fail("--resume must restore the recorded Claude session and cwd without --host-worktree; passing both could create a second worktree.");
   }
 
-  ensureServer(serverSession);
   const existing = existsSync(bindingFileFor(windowName)) ? readJson(bindingFileFor(windowName), "window-host binding") : null;
-  const existingAlive = Boolean(existing) && windowAlive({ tmux: existing.tmux });
-  if (existingAlive && !hasFlag("--replace")) {
-    fail(`Window ${windowName} already has a live tmux window (${existing.tmux.windowId}); pass --replace to relaunch.`);
-  }
-  if (existingAlive) {
-    // --replace must not leak the old window: kill it before creating the new
-    // one. tmux window ids are unique across the whole server, so this targets
-    // the right window even if it previously lived under a different session.
-    tmux(["kill-window", "-t", existing.tmux.windowId], { allowFailure: true });
-  }
 
   // Repository windows must read the parent workspace (CLAUDE.md, state roots,
   // task packages), which lives outside their cwd; grant it at launch so entry
@@ -930,6 +1012,18 @@ async function commandLaunchWindow() {
   }
   if (existing?.bindingId && registrationBindingId !== existing.bindingId) {
     fail(`Pod launch bindingId for ${windowName} conflicts with its existing host binding.`);
+  }
+  if (resume && existing && (
+    existing.threadId !== sessionId
+    || existing.launchCorrelationId !== launchCorrelationId
+    || existing.podId !== podId
+    || existing.stateRootRelative !== stateRootRelative
+    || existing.environmentIntent !== environmentIntent
+    || (existing.repositoryRoot
+      && repositoryRoot
+      && existingRealpath(existing.repositoryRoot) !== existingRealpath(repositoryRoot))
+  )) {
+    fail(`Resume identity for ${windowName} conflicts with its existing final session, Pod correlation, state root, or repository.`);
   }
   const managedFlags = ["--tmux", "--worktree", "-w", "--resume", "--session-id"];
   const disallowed = [...configClaudeArgs, ...extraClaudeArgs].find((arg) => (
@@ -978,6 +1072,21 @@ async function commandLaunchWindow() {
   const claudeCommand = [claudeBin, ...sessionArgs, ...worktreeArgs, ...addDirArgs, ...modeArgs, ...effortArgs, ...modelArgs, ...configClaudeArgs, ...extraClaudeArgs]
     .map((part) => `'${String(part).replace(/'/g, `'\\''`)}'`)
     .join(" ");
+  // Validate every immutable resume identity above before mutating tmux. A
+  // stale/wrong recovery request must never kill the correct live window and
+  // only then discover that its session, binding, state root, or repository
+  // did not match.
+  ensureServer(serverSession);
+  const existingAlive = Boolean(existing) && windowAlive({ tmux: existing.tmux });
+  if (existingAlive && !hasFlag("--replace")) {
+    fail(`Window ${windowName} already has a live tmux window (${existing.tmux.windowId}); pass --replace to relaunch.`);
+  }
+  if (existingAlive) {
+    // --replace must not leak the old window: kill it before creating the new
+    // one. tmux window ids are unique across the whole server, so this targets
+    // the right window even if it previously lived under a different session.
+    tmux(["kill-window", "-t", existing.tmux.windowId], { allowFailure: true });
+  }
   const created = tmux([
     "new-window",
     "-t", sessionTarget(serverSession),
@@ -996,6 +1105,10 @@ async function commandLaunchWindow() {
   tmux(["set-option", "-w", "-u", "-t", windowId, "@wakeflow_prev_state"], { allowFailure: true });
 
   const binding = {
+    // Resume updates the live tmux locator while preserving immutable creation
+    // evidence even if login/boot/cwd verification fails later. Creation starts
+    // a new binding authority.
+    ...(resume && existing ? existing : {}),
     kind: BINDING_KIND,
     version: 2,
     bindingId: registrationBindingId ?? (resume && existing?.bindingId ? existing.bindingId : randomUUID()),
@@ -1062,10 +1175,10 @@ async function commandLaunchWindow() {
       windowName,
       ...(privatePodLaunch ? {} : { server: serverSession, windowId }),
       threadIdRedacted: true,
-      ...(privatePodLaunch ? {} : { attach: `${tmuxBin} attach -t ${serverSession}` }),
+      ...(privatePodLaunch ? {} : { attach: tmuxAttachCommand(serverSession) }),
       error: privatePodLaunch
         ? "the Claude CLI on this machine is not logged in. Log in from a user-owned Claude session, then retry the same Pod launch correlation; the host-local window was preserved."
-        : `the claude CLI on this machine is not logged in, so every Wakeflow window would wedge at the login prompt. One-time fix: attach (${tmuxBin} attach -t ${serverSession}) and run /login in this pane — or run claude anywhere and /login — then re-run this launch. The window was left open for that.`,
+        : `the claude CLI on this machine is not logged in, so every Wakeflow window would wedge at the login prompt. One-time fix: attach (${tmuxAttachCommand(serverSession)}) and run /login in this pane — or run claude anywhere and /login — then re-run this launch. The window was left open for that.`,
     });
     process.exitCode = 1;
     return;
@@ -1077,6 +1190,7 @@ async function commandLaunchWindow() {
     expectedBaseHead,
     launchCorrelationId,
     stateRootRelative,
+    verificationMode: resume ? "resume" : "create",
   });
   if (podId && !hostReceipt.handleRegistered) {
     // Pod handles never cross the helper's public JSON boundary. Register the
@@ -1090,7 +1204,15 @@ async function commandLaunchWindow() {
     hostReceipt = { ...hostReceipt, handleRegistered: true, observedAt: nowIso() };
   }
   binding.cwd = hostReceipt.actualCwd;
-  binding.hostReceipt = hostReceipt;
+  if (resume && existing?.hostReceipt) {
+    // The first provisioning receipt is immutable bind evidence. Recovery
+    // observes the current HEAD/cwd without rewriting that creation fact or
+    // inviting a second pod bind.
+    binding.hostReceipt = existing.hostReceipt;
+    binding.lastResumeObservation = hostReceipt;
+  } else {
+    binding.hostReceipt = hostReceipt;
+  }
   binding.observedAt = hostReceipt.observedAt;
   writeJson(bindingFileFor(windowName), binding);
   if (promptFile) {
@@ -1127,7 +1249,7 @@ async function commandLaunchWindow() {
     ],
     ...(environmentIntent === "host-worktree" || podId
       ? {}
-      : { attach: `${tmuxBin} attach -t ${serverSession}` }),
+      : { attach: tmuxAttachCommand(serverSession) }),
   });
 }
 
@@ -1173,92 +1295,168 @@ async function commandDeliver() {
 
 async function performSend({ windowName, promptFile, deliveryId, commandName, controllerReturn = false }) {
   const lockTtlSec = Number(getValue("--lock-ttl-sec", "7200"));
-  const binding = readBinding(windowName);
-  if (!windowAlive(binding)) {
-    fail(`tmux window for ${windowName} is not alive (${binding.tmux.windowId}); relaunch the same session interactively with launch-window --resume --session-id <registered id> --replace, then resend.`);
-  }
-
   // A delivery to ANY controller window — the workspace controller or a pod's
   // Controller__<pod> (recognized by the ControllerReturnEnvelope it receives)
   // — is a return/notification: a controller never records a target-result for
   // itself, so a lock or busy marker written here would never be released and
   // would read as a stalled controller. Returns queue naturally in the input box.
   const isControllerTarget = controllerReturn || windowName === workspaceControllerWindow();
-  // Work-window lease semantics are host-neutral: one physical window can run
-  // one delivery at a time. The exact same delivery may replay; every other
-  // fresh delivery fails closed.
-  const lock = isControllerTarget ? null : readLock(windowName);
-  let effectiveDeliveryId = deliveryId;
-  if (lock && lockIsFresh(lock)) {
-    if (!effectiveDeliveryId && lock.deliveryId) {
-      effectiveDeliveryId = lock.deliveryId;
-    }
+  const effectiveDeliveryId = deliveryId;
+  const alreadyAccepted = acceptedDeliveryRun(effectiveDeliveryId, windowName);
+  if (alreadyAccepted) {
+    const readbackStatus = alreadyAccepted.readback?.status
+      || (alreadyAccepted.readback?.ok ? "confirmed" : alreadyAccepted.readback?.checked ? "pending" : "unavailable");
+    output({
+      ok: true,
+      command: commandName,
+      duplicate: true,
+      pasted: false,
+      transportStatus: "accepted",
+      windowName,
+      deliveryId: effectiveDeliveryId,
+      controllerNotification: isControllerTarget || undefined,
+      readback: {
+        status: readbackStatus,
+        attemptCount: alreadyAccepted.readback?.attempts ?? 0,
+        paneTail: alreadyAccepted.readback?.evidence ?? "",
+        reusedRecordedObservation: true,
+      },
+      readbackWarning: readbackStatus === "confirmed"
+        ? undefined
+        : "accepted transport is already recorded; do not paste this delivery again—reuse the recorded observation or inspect read-only",
+    });
+    return;
   }
-  if (!isControllerTarget) {
-    acquireWorkLease(windowName, effectiveDeliveryId, lockTtlSec);
-  }
-
-  // before/after MUST capture the same line count: a 5-line "before" against a
-  // 25-line "after" differs by construction, making paneChanged always true and
-  // the no-echo warning unreachable.
-  const tailLines = Number(getValue("--lines", "25"));
-  const captureLines = Number.isFinite(tailLines) ? tailLines : 25;
-  const before = capturePaneTail(binding, captureLines);
-  if (isControllerTarget) {
-    // Multi-active demands mean concurrent controller-returns are normal. Two
-    // simultaneous pastes can interleave at the tmux level (paste-A, paste-B,
-    // Enter, Enter) and merge into one garbled message; serialize ONLY the
-    // paste+Enter, PER controller window (pods each have their own). This is
-    // NOT a delivery lock — a controller never goes busy, and returns still
-    // queue naturally in its input box.
-    try {
-      withFileLock(path.join(hostDir, `paste-${slug(windowName)}.lock`), () => pastePromptFile(binding, promptFile));
-    } catch (error) {
-      if (error?.code === "WAKEFLOW_STATE_LOCK_TIMEOUT") fail(`controller paste mutex timed out (another return is mid-paste): ${error.message}`);
-      throw error;
-    }
-  } else {
-    pastePromptFile(binding, promptFile);
-  }
-  if (!isControllerTarget) setWindowState(windowName, "busy");
-  const readbackWait = Number(getValue("--readback-wait-ms", "1200"));
-  await sleep(Number.isFinite(readbackWait) ? readbackWait : 1200);
-  const paneTail = capturePaneTail(binding, captureLines);
-  // Cheap transport assertion: the prompt's first line should surface in the
-  // pane. Claude Code may collapse large pastes, so a missing echo alone is
-  // NOT an error — only a byte-stable pane AND no echo means "nothing visibly
-  // happened" (paste landed in a dialog or a dead pane) and earns a warning.
-  let promptFirstLine = "";
+  let transportStatus = "rejected-before-send";
+  let workLease = null;
   try {
-    promptFirstLine = readFileSync(path.resolve(workspaceRoot, promptFile), "utf8")
-      .split("\n")
-      .find((line) => line.trim()) || "";
-  } catch {
-    // prompt file already cleaned up by a concurrent teardown: the echo check
-    // degrades to paneChanged-only rather than crashing an already-sent send
-  }
-  const promptEchoed = Boolean(promptFirstLine) && paneTail.includes(promptFirstLine.slice(0, 24));
-  const paneChanged = paneTail !== before;
-  const readbackWarning = !paneChanged && !promptEchoed
-    ? "pane is byte-stable and the prompt's first line is not visible; the paste may have landed in a dialog or a dead pane — inspect the window before relying on this send"
-    : undefined;
+    const binding = readBinding(windowName);
+    if (!windowAlive(binding)) {
+      fail(`tmux window for ${windowName} is not alive (${binding.tmux.windowId}); baseline windows resume from their recorded session/cwd, while Pod windows use wakeflow_pod_open mode=resume and the immutable registered session/worktree identity. This failure occurred before paste.`);
+    }
 
-  output({
-    ok: true,
-    command: commandName,
-    readbackWarning,
-    windowName,
-    windowId: binding.tmux.windowId,
-    deliveryId: effectiveDeliveryId || undefined,
-    sentAt: nowIso(),
-    lockFile: isControllerTarget ? undefined : path.relative(workspaceRoot, lockFileFor(windowName)),
-    controllerNotification: isControllerTarget || undefined,
-    readback: {
-      paneTail,
-      paneChanged,
-      promptEchoed,
-    },
-  });
+    // Work-window lease semantics are host-neutral: one physical window can
+    // run one delivery at a time. A low-level readback never inherits a lease
+    // id and therefore cannot accidentally become a second paste.
+    if (!isControllerTarget) {
+      workLease = acquireWorkLease(windowName, effectiveDeliveryId, lockTtlSec);
+    }
+
+    // before/after MUST capture the same line count: a 5-line "before" against
+    // a 25-line "after" differs by construction.
+    const tailLines = Number(getValue("--lines", "25"));
+    const captureLines = Number.isFinite(tailLines) ? tailLines : 25;
+    const before = capturePaneTailObservation(binding, captureLines);
+    if (isControllerTarget) {
+      // Serialize only paste+Enter per controller; this is not a work lease.
+      try {
+        withFileLock(path.join(hostDir, `paste-${slug(windowName)}.lock`), () => pastePromptFile(binding, promptFile));
+      } catch (error) {
+        if (error?.code === "WAKEFLOW_STATE_LOCK_TIMEOUT") {
+          throw new CliExit(`controller paste mutex timed out (another return is mid-paste): ${error.message}`, {
+            code: "host-send-rejected-before-send",
+            details: { transportStatus: "rejected-before-send", sendAttempted: false },
+          });
+        }
+        throw error;
+      }
+    } else {
+      pastePromptFile(binding, promptFile);
+    }
+    transportStatus = "accepted";
+    if (!isControllerTarget) setWindowState(windowName, "busy");
+
+    let promptFirstLine = "";
+    try {
+      promptFirstLine = readFileSync(path.resolve(workspaceRoot, promptFile), "utf8")
+        .split("\n")
+        .find((line) => line.trim()) || "";
+    } catch {
+      // The prompt was already accepted; observation degrades to pane change.
+    }
+
+    const waitValue = Number(getValue("--readback-wait-ms", "1200"));
+    const readbackWait = Number.isFinite(waitValue) ? Math.max(0, waitValue) : 1200;
+    const attemptValue = Number(getValue("--readback-attempts", String(claudePaneReadbackPolicy.maxReadAttempts)));
+    const maxAttempts = Number.isFinite(attemptValue)
+      ? Math.max(1, Math.min(claudePaneReadbackPolicy.maxReadAttempts, Math.floor(attemptValue)))
+      : claudePaneReadbackPolicy.maxReadAttempts;
+    const maxWaitValue = Number(getValue("--readback-max-wait-ms", String(claudePaneReadbackPolicy.maxWaitMs)));
+    const maxWaitMs = Number.isFinite(maxWaitValue)
+      ? Math.max(0, Math.min(claudePaneReadbackPolicy.maxWaitMs, maxWaitValue))
+      : claudePaneReadbackPolicy.maxWaitMs;
+    const readbackStartedAt = Date.now();
+    let attemptCount = 0;
+    let latest = { available: false, paneTail: "" };
+    let paneChanged = false;
+    let promptEchoed = false;
+    while (attemptCount < maxAttempts) {
+      const elapsed = Date.now() - readbackStartedAt;
+      const remaining = Math.max(0, maxWaitMs - elapsed);
+      if (attemptCount > 0 && remaining === 0) break;
+      const waitMs = Math.min(readbackWait, remaining);
+      if (waitMs > 0) await sleep(waitMs);
+      latest = capturePaneTailObservation(binding, captureLines);
+      attemptCount += 1;
+      promptEchoed = latest.available
+        && Boolean(promptFirstLine)
+        && latest.paneTail.includes(promptFirstLine.slice(0, 24));
+      paneChanged = latest.available && before.available && latest.paneTail !== before.paneTail;
+      if (promptEchoed || paneChanged) break;
+    }
+    const readbackStatus = promptEchoed || paneChanged
+      ? "confirmed"
+      : latest.available ? "pending" : "unavailable";
+    const elapsedMs = Date.now() - readbackStartedAt;
+    const acceptedWarningSuffix = isControllerTarget
+      ? "do not resend; controller notification uses only the paste mutex and has no target work lease"
+      : "do not resend or release the lease—Agent may inspect again or wait for the callback";
+    const readbackWarning = readbackStatus === "pending"
+      ? `host accepted the prompt, but bounded pane observation is still byte-stable; ${acceptedWarningSuffix}`
+      : readbackStatus === "unavailable"
+        ? `host accepted the prompt, but pane observation was unavailable; ${acceptedWarningSuffix}`
+        : undefined;
+
+    output({
+      ok: true,
+      command: commandName,
+      transportStatus,
+      readbackWarning,
+      windowName,
+      windowId: binding.tmux.windowId,
+      deliveryId: effectiveDeliveryId || undefined,
+      sentAt: nowIso(),
+      lockFile: isControllerTarget ? undefined : path.relative(workspaceRoot, lockFileFor(windowName)),
+      controllerNotification: isControllerTarget || undefined,
+      readback: {
+        status: readbackStatus,
+        attemptCount,
+        elapsedMs,
+        paneTail: latest.paneTail,
+        paneChanged,
+        promptEchoed,
+      },
+    });
+  } catch (error) {
+    const classified = error?.details?.transportStatus ?? transportStatus;
+    const leaseReleased = classified === "rejected-before-send" && !isControllerTarget
+      ? releaseExactWorkLease(windowName, workLease)
+      : false;
+    throw new CliExit(error.message, {
+      code: error?.code ?? (classified === "accepted"
+        ? "host-send-accepted-readback-unavailable"
+        : classified === "ambiguous" ? "host-send-ambiguous" : "host-send-rejected-before-send"),
+      retryable: error?.retryable === true,
+      details: {
+        ...(error?.details ?? {}),
+        transportStatus: classified,
+        readbackStatus: "unavailable",
+        sendAttempted: classified !== "rejected-before-send",
+        leaseReleased,
+        deliveryId: effectiveDeliveryId || undefined,
+      },
+    });
+  }
 }
 
 function commandReadback() {
@@ -1625,8 +1823,9 @@ function commandSetUnattended() {
     config.hosts = hosts;
     writeJson(configFile, config);
   }
-  // Windows already running keep their launch-time mode; report which need a
-  // resume-restart to pick up the new mode, and which are mid-turn (skip).
+  // Windows already running keep their launch-time mode. The delivery lock can
+  // prove only a fresh TARGET work lease; controller/manual turns may have no
+  // lease, so callers must also consult live activity before restarting.
   // The derived stream overlay is a full COPY of the tracked config; a tracked
   // write would leave it stale until the next stream operation, so regenerate
   // it in the same turn (H-8).
@@ -1651,7 +1850,17 @@ function commandSetUnattended() {
       const binding = readJson(path.join(windowHostDir, name), "window-host binding");
       const alive = windowAlive(binding);
       const lock = readLock(binding.windowName);
-      restart.push({ window: binding.windowName, alive, needsRestart: alive, inFlight: lockIsFresh(lock) });
+      const targetLeaseActive = lockIsFresh(lock);
+      const activityState = alive ? readWindowState(binding) : null;
+      restart.push({
+        window: binding.windowName,
+        alive,
+        needsRestart: alive,
+        targetLeaseActive,
+        activityState,
+        // Backward-compatible alias. It never proves a generic mid-turn.
+        inFlight: targetLeaseActive,
+      });
     }
   }
   output({
@@ -1663,7 +1872,7 @@ function commandSetUnattended() {
     previousMode: previous,
     mode,
     note: mode === "bypassPermissions"
-      ? "Unattended mode: work windows run with no permission prompts. They stay bounded by repository worktrees, CLAUDE.md gates, and the Wakeflow state machine. Resume-restart live windows to apply; in-flight windows must finish first."
+      ? "Unattended mode: work windows run with no permission prompts. They stay bounded by repository worktrees, CLAUDE.md gates, and the Wakeflow state machine. Resume-restart a live baseline window only when targetLeaseActive=false and live activity is not running; inFlight is a compatibility alias for the target lease, not generic mid-turn proof."
       : "Windows resume-restart into this mode; bypass auto-consent no longer applies.",
     restart,
   });
@@ -1770,13 +1979,13 @@ function commandCheckWorkspace() {
     }
     const bindingFile = bindingFileFor(windowName);
     if (!existsSync(bindingFile)) {
-      note("window", "no-tmux-binding", "Restore with /wakeflow:windows <window> (launch-window --resume --session-id <registered id>).", { window: windowName });
+      note("window", "no-tmux-binding", "Restore this baseline window with /wakeflow:windows <window> (full launch-window --root/--window/--cwd/--resume/--session-id/--replace identity is required).", { window: windowName });
       continue;
     }
     if (tmuxPresent) {
       const binding = readJson(bindingFile, "window-host binding");
       if (!windowAlive(binding)) {
-        note("window", "dead", "Restore with /wakeflow:windows <window> (launch-window --resume --session-id <registered id>).", { window: windowName });
+        note("window", "dead", "Restore this baseline window with /wakeflow:windows <window> (full launch-window --root/--window/--cwd/--resume/--session-id/--replace identity is required).", { window: windowName });
       }
     }
   }
@@ -2549,14 +2758,49 @@ function parseHelperPayload(result) {
   return null;
 }
 
-function registeredSessionId(windowName) {
-  const file = threadRegistryFileFor(windowName);
-  if (!existsSync(file)) return null;
-  try {
-    return JSON.parse(readFileSync(file, "utf8")).threadId ?? null;
-  } catch {
-    return null;
+function registeredSession(windowName, expectedBindingId = null) {
+  const registrations = [];
+  for (const file of threadRegistryFileCandidates(windowName)) {
+    if (!existsSync(file)) continue;
+    try {
+      const registration = JSON.parse(readFileSync(file, "utf8"));
+      if (registration?.windowName === windowName) registrations.push({ file, registration });
+    } catch {
+      retryableFail(`Thread registry for ${windowName} is unreadable; preserve it and repair the exact registration.`, {
+        windowName,
+        expectedBindingId,
+      });
+    }
   }
+  if (registrations.length === 0) return null;
+  if (registrations.length !== 1) {
+    retryableFail(`Thread registry identity for ${windowName} is ambiguous across ${registrations.length} files; preserve all evidence and repair the registry.`, {
+      windowName,
+      expectedBindingId,
+    });
+  }
+  try {
+    const registration = registrations[0].registration;
+    if (
+      registration?.kind !== hostProfile.kinds.windowRegistration
+      || registration.windowName !== windowName
+      || !registration.threadId
+      || (expectedBindingId && registration.bindingId !== expectedBindingId)
+    ) {
+      retryableFail(`Thread registry identity for ${windowName} does not match its canonical Pod binding.`, {
+        windowName,
+        expectedBindingId,
+      });
+    }
+    return registration;
+  } catch (error) {
+    if (error instanceof CliExit) throw error;
+    retryableFail(`Thread registry for ${windowName} is unreadable; preserve it and repair the exact registration.`, {
+      windowName,
+      expectedBindingId,
+    });
+  }
+  return null;
 }
 
 function registerPodSession(windowName, sessionId, {
@@ -2606,12 +2850,16 @@ function discoverHostWorktree(plan) {
   return candidates.length === 1 ? candidates[0].worktree : null;
 }
 
-function persistRegisteredReceipt(windowName, receipt) {
+function persistRegisteredReceipt(windowName, receipt, { recovery = false } = {}) {
   const file = bindingFileFor(windowName);
   if (!existsSync(file)) return receipt;
   const binding = readJson(file, "window-host binding");
   const updated = { ...receipt, handleRegistered: true, observedAt: nowIso() };
-  binding.hostReceipt = updated;
+  if (recovery && binding.hostReceipt) {
+    binding.lastResumeObservation = updated;
+  } else {
+    binding.hostReceipt = updated;
+  }
   binding.cwd = updated.actualCwd;
   binding.observedAt = updated.observedAt;
   writeJson(file, binding);
@@ -2619,15 +2867,27 @@ function persistRegisteredReceipt(windowName, receipt) {
 }
 
 function realizePodWindow(plan, { podSession, bootWait }) {
+  const recovery = plan.recovery?.mode === "resume";
+  if (recovery && (plan.requiresCoreBind !== false || !plan.recovery?.actualCwd)) {
+    retryableFail(`Pod recovery plan for ${plan.windowName} is missing its immutable binding/cwd observation.`, {
+      launchCorrelationId: plan.launchCorrelationId,
+      windowName: plan.windowName,
+    });
+  }
   const bindingFile = bindingFileFor(plan.windowName);
   const binding = existsSync(bindingFile) ? readJson(bindingFile, "window-host binding") : null;
-  const registeredId = registeredSessionId(plan.windowName);
+  const registration = registeredSession(plan.windowName, plan.registrationBindingId);
+  const registeredId = registration?.threadId ?? null;
   if (
     binding
     && (
       binding.launchCorrelationId !== plan.launchCorrelationId
       || binding.bindingId !== plan.registrationBindingId
       || binding.podId !== plan.podId
+      || binding.stateRootRelative !== plan.stateRootRelative
+      || binding.environmentIntent !== plan.environmentIntent
+      || (plan.repositoryRoot
+        && existingRealpath(binding.repositoryRoot) !== existingRealpath(plan.repositoryRoot))
     )
   ) {
     retryableFail(`Claude host binding for ${plan.windowName} conflicts with the canonical Pod launch operation.`, {
@@ -2650,22 +2910,48 @@ function realizePodWindow(plan, { podSession, bootWait }) {
       expectedBaseHead: plan.expectedBaseHead,
       launchCorrelationId: plan.launchCorrelationId,
       stateRootRelative: plan.stateRootRelative,
+      verificationMode: recovery ? "resume" : "create",
     });
-    if (!registeredId) registerPodSession(plan.windowName, binding.threadId, {
+    if (recovery && existingRealpath(receipt.actualCwd) !== existingRealpath(plan.recovery.actualCwd)) {
+      retryableFail(`Live Pod session ${plan.windowName} is attached to a different cwd than its canonical recovery binding.`, {
+        launchCorrelationId: plan.launchCorrelationId,
+        windowName: plan.windowName,
+        expectedCwd: plan.recovery.actualCwd,
+        actualCwd: receipt.actualCwd,
+      });
+    }
+    if (recovery && !registeredId) {
+      retryableFail(`Pod recovery for ${plan.windowName} lost its registered final session; do not create or rebind a replacement.`, {
+        launchCorrelationId: plan.launchCorrelationId,
+        windowName: plan.windowName,
+      });
+    }
+    if (!recovery && !registeredId) registerPodSession(plan.windowName, binding.threadId, {
       launchCorrelationId: plan.launchCorrelationId,
       bindingId: plan.registrationBindingId,
       stateRootRelative: plan.stateRootRelative,
     });
     return {
       window: plan.windowName,
-      status: registeredId ? "already-live" : "bound-existing",
-      hostReceipt: persistRegisteredReceipt(plan.windowName, receipt),
+      status: recovery ? "recovery-verified-live" : registeredId ? "already-live" : "bound-existing",
+      requiresCoreBind: !recovery,
+      ...(recovery
+        ? { recoveryObservation: persistRegisteredReceipt(plan.windowName, receipt, { recovery: true }) }
+        : { hostReceipt: persistRegisteredReceipt(plan.windowName, receipt) }),
     };
   }
 
   const finalSessionId = registeredId ?? binding?.threadId ?? null;
-  let resumeCwd = binding?.hostReceipt?.actualCwd ?? binding?.cwd ?? null;
-  if (plan.environmentIntent === "host-worktree" && (!resumeCwd || existingRealpath(resumeCwd) === plan.repositoryRoot)) {
+  if (recovery && (!binding || !registeredId || binding.threadId !== registeredId)) {
+    retryableFail(`Pod recovery for ${plan.windowName} requires its exact existing host binding and registered final session.`, {
+      launchCorrelationId: plan.launchCorrelationId,
+      windowName: plan.windowName,
+    });
+  }
+  let resumeCwd = recovery
+    ? plan.recovery.actualCwd
+    : binding?.hostReceipt?.actualCwd ?? binding?.cwd ?? null;
+  if (!recovery && plan.environmentIntent === "host-worktree" && (!resumeCwd || existingRealpath(resumeCwd) === plan.repositoryRoot)) {
     resumeCwd = discoverHostWorktree(plan);
   }
   if (finalSessionId && !resumeCwd) {
@@ -2676,8 +2962,10 @@ function realizePodWindow(plan, { podSession, bootWait }) {
   }
 
   const promptFile = path.join(hostDir, `pod-entry-${stableArtifactPart(plan.windowName)}.txt`);
-  mkdirSync(hostDir, { recursive: true });
-  writeFileSync(promptFile, plan.createPrompt);
+  if (!finalSessionId) {
+    mkdirSync(hostDir, { recursive: true });
+    writeFileSync(promptFile, plan.createPrompt);
+  }
   const launchArgs = [
     "launch-window", "--root", workspaceRoot, "--server", podSession,
     "--window", plan.windowName, "--title", plan.displayTitle,
@@ -2687,10 +2975,10 @@ function realizePodWindow(plan, { podSession, bootWait }) {
     "--binding-id", plan.registrationBindingId,
     "--pod-id", plan.podId,
     "--state-root-relative", plan.stateRootRelative,
-    "--prompt-file", promptFile,
+    ...(!finalSessionId ? ["--prompt-file", promptFile] : []),
     "--replace", "--boot-wait-ms", bootWait,
     ...(plan.repositoryRoot ? ["--repository-root", plan.repositoryRoot] : []),
-    ...(plan.expectedBaseHead ? ["--expected-base-head", plan.expectedBaseHead] : []),
+    ...(!recovery && plan.expectedBaseHead ? ["--expected-base-head", plan.expectedBaseHead] : []),
     ...(finalSessionId
       ? ["--resume", "--session-id", finalSessionId]
       : plan.environmentIntent === "host-worktree"
@@ -2707,8 +2995,16 @@ function realizePodWindow(plan, { podSession, bootWait }) {
       cause: parsed?.error || (launched.stderr || launched.stdout).slice(-240),
     });
   }
+  if (recovery && existingRealpath(parsed.hostReceipt?.actualCwd) !== existingRealpath(plan.recovery.actualCwd)) {
+    retryableFail(`Resumed Pod session ${plan.windowName} did not return to its canonical recovery cwd.`, {
+      launchCorrelationId: plan.launchCorrelationId,
+      windowName: plan.windowName,
+      expectedCwd: plan.recovery.actualCwd,
+      actualCwd: parsed.hostReceipt?.actualCwd,
+    });
+  }
   const launchedBinding = readJson(bindingFileFor(plan.windowName), "window-host binding");
-  if (!registeredSessionId(plan.windowName)) registerPodSession(plan.windowName, launchedBinding.threadId, {
+  if (!registeredSession(plan.windowName, plan.registrationBindingId)) registerPodSession(plan.windowName, launchedBinding.threadId, {
     launchCorrelationId: plan.launchCorrelationId,
     bindingId: plan.registrationBindingId,
     stateRootRelative: plan.stateRootRelative,
@@ -2716,7 +3012,10 @@ function realizePodWindow(plan, { podSession, bootWait }) {
   return {
     window: plan.windowName,
     status: finalSessionId ? "resumed" : "launched",
-    hostReceipt: persistRegisteredReceipt(plan.windowName, parsed.hostReceipt),
+    requiresCoreBind: !recovery,
+    ...(recovery
+      ? { recoveryObservation: persistRegisteredReceipt(plan.windowName, parsed.hostReceipt, { recovery: true }) }
+      : { hostReceipt: persistRegisteredReceipt(plan.windowName, parsed.hostReceipt) }),
   };
 }
 
@@ -2736,15 +3035,16 @@ function readCanonicalPodLaunchPlan() {
   }
   if (
     !plan
-    || plan.kind !== "WakeflowPodLaunchPlan"
+    || !["WakeflowPodLaunchPlan", "WakeflowPodResumePlan"].includes(plan.kind)
     || plan.host !== HOST_DIR_NAME
     || !plan.demandKey
     || !plan.podId
     || !Array.isArray(plan.operations)
     || plan.operations.length === 0
   ) {
-    fail("Pod plan must be the unmodified WakeflowPodLaunchPlan returned by this Claude Code edition.");
+    fail("Pod plan must be an unmodified WakeflowPodLaunchPlan or WakeflowPodResumePlan returned by this Claude Code edition.");
   }
+  const recoveryPlan = plan.kind === "WakeflowPodResumePlan";
   for (const operation of plan.operations) {
     if (
       operation?.demandKey !== plan.demandKey
@@ -2754,23 +3054,55 @@ function readCanonicalPodLaunchPlan() {
       || !operation?.launchCorrelationId
       || !operation?.registrationBindingId
       || !operation?.stateRootRelative
-      || !operation?.hostCwd
+      || (!recoveryPlan && !operation?.hostCwd)
     ) {
       fail(`Canonical Pod launch operation is incomplete for ${operation?.windowName ?? "(unknown window)"}.`);
     }
-    if (
-      operation.role === "product"
-      && (
-        operation.environmentIntent !== "host-worktree"
-        || !operation.repositoryRoot
-        || !operation.expectedBaseHead
-        || !operation.hostWorktreeName
-      )
-    ) {
+    if (recoveryPlan && (
+      operation.requiresCoreBind !== false
+      || operation.recovery?.mode !== "resume"
+      || !operation.recovery?.actualCwd
+      || operation.recovery?.bindingId !== operation.registrationBindingId
+      || Object.hasOwn(operation, "createPrompt")
+      || Object.hasOwn(operation, "hostCreateThread")
+      || Object.hasOwn(operation, "localRegistration")
+      || Object.hasOwn(operation, "hostLaunch")
+    )) {
+      fail(`Canonical Pod recovery operation is incomplete for ${operation.windowName}.`);
+    }
+    if (operation.role === "product" && (
+      operation.environmentIntent !== "host-worktree"
+      || !operation.repositoryRoot
+      || (!recoveryPlan && (!operation.expectedBaseHead || !operation.hostWorktreeName))
+    )) {
       fail(`Canonical product launch operation is incomplete for ${operation.windowName}.`);
     }
   }
   return plan;
+}
+
+function assertPodRecoveryPlanCurrent(plan) {
+  const roots = [...new Set(plan.operations.map((operation) => operation.stateRootRelative))];
+  if (roots.length !== 1) {
+    fail("Pod recovery operations must name one canonical state root.");
+  }
+  const stateRoot = path.resolve(workspaceRoot, roots[0]);
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  if (!existsSync(stateFile)) fail(`Pod recovery state authority is missing: ${stateFile}`);
+  const state = readJson(stateFile, "Pod recovery controller state");
+  if (
+    state.demandKey !== plan.demandKey
+    || state.executionPlacement?.mode !== "isolated"
+    || state.executionPlacement?.selection !== "explicit-user-pod"
+    || state.executionPlacement?.podId !== plan.podId
+    || state.podProvisioning?.podId !== plan.podId
+    || state.revision !== plan.stateRevision
+    || state.podProvisioning?.phase !== plan.phase
+    || ["completed", "archived", "cancelled"].includes(state.state)
+    || ["closing", "cancelling", "closed"].includes(state.podProvisioning?.phase)
+  ) {
+    fail("Pod recovery plan is stale or the demand entered a terminal/closing phase; request a fresh read-only mode=resume plan before touching host sessions.");
+  }
 }
 
 // pod-open materializes the exact host-neutral launch operations emitted by
@@ -2778,6 +3110,8 @@ function readCanonicalPodLaunchPlan() {
 // or binding identities inside the Claude helper.
 function commandPodOpen() {
   const canonicalPlan = readCanonicalPodLaunchPlan();
+  const recoveryPlan = canonicalPlan.kind === "WakeflowPodResumePlan";
+  if (recoveryPlan) assertPodRecoveryPlanCurrent(canonicalPlan);
   const demandKey = canonicalPlan.demandKey;
   const podSlug = canonicalPlan.podId;
   const noLaunch = hasFlag("--no-launch");
@@ -2795,7 +3129,9 @@ function commandPodOpen() {
       windows: [],
       hostOperationsPerformed: 0,
       quantityLimit: null,
-      agentNext: "Materialize only these canonical operations with the Claude host adapter; no session, worktree, branch, or overlay was created by this dry run.",
+      agentNext: recoveryPlan
+        ? "Verify or resume only these exact registered sessions at their recorded cwd. This recovery plan never creates or rebinds a session/worktree."
+        : "Materialize only these canonical operations with the Claude host adapter; no session, worktree, branch, or overlay was created by this dry run.",
     });
     return;
   }
@@ -2820,7 +3156,9 @@ function commandPodOpen() {
     testLaunched: windows.some((entry) => entry.window === testWindow),
     hostOperationsPerformed: windows.length,
     quantityLimit: null,
-    agentNext: "Claude host sessions are materialized and receipts are available for wakeflow_pod_bind. Re-run wakeflow_pod_open after a Design handoff only when core appends the exact product operations; never synthesize them here.",
+    agentNext: recoveryPlan
+      ? "Recovery observations are complete. Do not call wakeflow_pod_bind: the immutable creation receipts and final registered session identities were preserved."
+      : "Claude host sessions are materialized and creation receipts are available for wakeflow_pod_bind. Re-run wakeflow_pod_open after a Design handoff only when core appends the exact product operations; never synthesize them here.",
   });
 }
 
@@ -2988,12 +3326,12 @@ function commandHelp() {
       "activity-monitor": "Background visibility poller: lights the running badge while a pane is active (hint or content change) and flips delivered windows to done when their lock is released by a recorded result. It never marks stalls and never wakes anyone - silence judgment belongs to the controller. Started automatically by ensure-server/launches: [--server] [--poll-ms] [--once].",
       "launch-window": "Create one tmux-resident Claude window: --window --cwd [--title] [--session-id] [--prompt-file] [--server] [--boot-wait-ms] [--claude-arg ...] [--replace] [--no-auto-trust]. For a Pod product use --environment-intent host-worktree --repository-root <repo> --host-worktree <name> --expected-base-head <sha> --launch-correlation-id <id>; the helper invokes native claude --worktree and returns a cwd/Git receipt. Resume uses --resume with the registered session and recorded actual cwd, never --host-worktree.",
       retitle: "Rename the tmux window that hosts a Wakeflow window: --window --title.",
-      send: "Paste a prompt file into a window and record pane readback: --window --prompt-file [--delivery-id] [--lock-ttl-sec] [--force].",
-      "deliver": "One-step dispatch transport: read the delivery envelope file, write the prompt to a temp file, send it into the registered tmux window, and return compact readback evidence: --delivery-file <envelope.json> [--readback-wait-ms] [--lines] [--force]. Replaces the manual prompt-file + send ceremony.",
+      send: "Low-level custom-prompt transport. A fresh target send requires --delivery-id; controller-return must use deliver --delivery-file: --window --prompt-file [--delivery-id for exact existing-lease replay] [--lock-ttl-sec] [--force].",
+      "deliver": "One-step dispatch transport: read the delivery envelope, paste exactly once, then return independent transportStatus plus bounded readback.status evidence: --delivery-file <envelope.json> [--readback-wait-ms] [--readback-attempts] [--readback-max-wait-ms] [--lines]. Pending visibility never triggers resend.",
       readback: "Capture the current pane tail for evidence: --window [--lines].",
       "wait-results": "Explicit synchronous wait for target results of one dispatch group (scans both result layers; pure observation, no lock or glyph side effects). NOT a default dispatch step: the controller-return delivery is the wake-up. A timeout is a report, not a verdict - whether the delivery is stalled is the controller judgment: --group <id> [--target <w>...] [--expect n] [--timeout-sec] [--poll-ms] [--state-root <path>].",
-      "launch-all": "Resume every registered window in canonical order (Design, controller, products, Test) using the recorded permissionMode, skipping in-flight windows: [--server <name>].",
-      "replace-all": "Tear down and rebuild the whole fleet (or a named subset) with BRAND-NEW sessions: kills each old tmux window, launches a fresh claude session (empty context), and registers the new id via core replace-windows (config/docs untouched). Skips in-flight windows: [--server <name>] [--window <name> ...] [--boot-wait-ms].",
+      "launch-all": "Resume every registered BASELINE window in canonical order (Design, controller, products, Test) using the recorded permissionMode, skipping fresh target leases: [--server <name>]. It never restores Pod windows.",
+      "replace-all": "Tear down and rebuild the BASELINE fleet (or a named subset) with BRAND-NEW sessions: kills each old tmux window, launches a fresh claude session (empty context), and registers the new id via core replace-windows (config/docs untouched). Skips fresh target leases; inspect live activity too. It never replaces Pod windows: [--server <name>] [--window <name> ...] [--boot-wait-ms].",
       "set-unattended": "Set hosts.claude-code.permissionMode (acceptEdits|bypassPermissions|...), regenerate the derived stream overlay when present (a tracked-config write must not leave it stale), and report which live windows need a resume-restart: --mode <m> [--write].",
       "window-status": "Report per-window dispatch state (busy/done, lock, delivery id) plus activity-monitor ownership (pid/root/server — clean up monitors by --root, never by bare process name): [--reconcile] recomputes busy from shared locks and clears stale visual markers.",
       "check-workspace": "Read-only health check for an existing workspace: config hosts block, managed CLAUDE.md surfaces, registry/binding/liveness per window, permission seeds, legacy codex registry, plugin version stamp.",
@@ -3003,7 +3341,7 @@ function commandHelp() {
       "stream-open": "Open one CROSS-DEMAND isolation window: git worktree on branch <demand-key>/<id> + a registered window <repo>__<id> in the derived local config overlay, then launch + register its claude session: --repo <window> --stream <id> --demand-key <key> [--base <branch>] [--no-launch] [--server] [--boot-wait-ms]. Refuses a second window for the same (repo, demand) — within a demand each repo runs ONE window with a combined task package. Blocks with pool-exhausted at maxStreams (bounds concurrent demands per repo, default 2).",
       "stream-close": "Close one stream: refuse a dirty worktree without --force, git worktree remove, optional --delete-branch (-d refuses unmerged; --force upgrades to -D), kill the tmux window, drop registry/binding/lock, regenerate (or remove) the overlay: --window <repo>__<stream> [--delete-branch] [--force].",
       "stream-list": "Three-way stream reconcile (overlay registration / worktree / tmux liveness) with per-stream status (active|resumable|prepared|broken) and overlay base-hash staleness. Read-only.",
-      "pod-open": "Materialize the exact WakeflowPodLaunchPlan returned by wakeflow_pod_open: --plan-json <json> | --plan-file <file> [--no-launch] [--boot-wait-ms]. The helper never rebuilds repository coverage, correlations, or binding ids. Re-running resumes the same operations and never creates a second worktree.",
+      "pod-open": "Materialize an exact WakeflowPodLaunchPlan (create) or WakeflowPodResumePlan (read-only recovery) returned by wakeflow_pod_open: --plan-json <json> | --plan-file <file> [--no-launch] [--boot-wait-ms]. Create uses native --worktree once. Recovery resumes only the exact registered session/cwd, never --worktree, rediscovery, or core rebind; current HEAD is observational.",
       "pod-close": "Execute the exact WakeflowPodClosePlan returned after complete/cancel: --plan-json <json> | --plan-file <file>. Returns one core-compatible close receipt per operation. Native Claude worktree cleanup remains host/user owned; this command never runs git worktree remove and never claims physical cleanup.",
       "pod-list": "Read-only pod inventory: demand state, session liveness, isolation windows per pod — the one global view a mutually-unaware pod model needs (orphan-pod detection).",
     },

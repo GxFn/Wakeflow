@@ -1,8 +1,23 @@
 # Wakeflow 宿主管理的完整 Pod 需求设计（2026-07-31）
 
-状态：需求设计，作为后续代码实现与验收的权威输入。
+状态：0.9.1 当前实现对照与验收权威；完整实现状态及缺口见下述说明。
 范围：Codex 版、Claude Code 版、共享 core、主线/Pod 放置决策。
 不包含：本文件不授权发布、提交、合并产品仓库，亦不把尚未验证的宿主能力写成已完成事实。
+
+实现说明：0.9.1 已落地主线优先、显式 Pod、无数字上限、宿主创建产品
+worktree、完整独立角色舰队、两阶段 ready、Test direct-multi-root gate 和两阶段
+close。当前仍有一个已确认能力缺口：
+
+1. 每个 Pod 只持久化一代冻结的 `PodDesignRequest` / handoff；这一代的
+   `requestType` 可以是 `initial-design`、`supplement` 或 `redesign`，但不同的
+   第二代 request/handoff lineage 尚未实现，因此必须 fail-closed，不能覆盖
+   已记录 handoff，也不能回退主线 Design。
+
+Pod 创建与恢复现已分离：`mode=create` 只负责首次 materialization，继续执行
+clean-main / `expectedBaseHead` 创建门禁；`mode=resume` 只读验真已经绑定的
+manifest、binding、registry、cwd 与 Git common-dir，并把当前 HEAD/dirty 当作
+观察结果。宿主只能验证存活的精确 session，或在相同 cwd 恢复同一个已登记
+session；不得再次创建/发现 worktree、重绑 core 或回退主线。
 
 ## 0. 结论
 
@@ -58,7 +73,7 @@
 
 ## 2. 真实代码与宿主事实
 
-### 2.1 当前 Wakeflow 的真实偏差
+### 2.1 实现前 Wakeflow 的真实偏差（历史基线）
 
 当前实现不是“宿主拥有 worktree”：
 
@@ -413,18 +428,23 @@ Controller/Design/Test 验证：
 
 ### 7.4 本地存储
 
-建议新增：
+0.9.1 实际本地布局：
 
 ```text
 .wakeflow-local/wakeflow-delivery/hosts/<host>/
   thread-registry/
   window-config/
+  pod-manifests/<pod-id>.json
   pod-bindings/<pod-id>/<window>.json
   pod-operations/<launch-correlation-id>.json
+  pod-test-access-plans/<pod-id>.json
+  pod-test-access-receipts/<pod-id>.json
 ```
 
 - registry 继续只保存 logical window、真实 handle、bindingId 和时间；
 - cwd/Git/宿主操作事实进入 `pod-bindings`；
+- close receipt 写回对应的 `pod-operations`，并在现有
+  `pod-bindings` 中记录逻辑关闭事实，不创建另一套 close-receipt 目录；
 - tracked state 只保存逻辑窗口状态与宿主无关事件；
 - 不再用一份跨宿主动态 config overlay 充当 Pod cwd 权威。
 
@@ -671,7 +691,7 @@ fallback。
 | 身份验真失败 | 保留证据、标 blocked；不得改 cwd 或降级主线 |
 | Controller/Design/Test 缺一 | Pod 不 ready |
 | 产品窗口创建失败 | Pod 不 dispatch；可取消并由宿主清理已建窗口 |
-| 宿主重启 | 从 registry + pod-binding 恢复，不推导路径 |
+| 宿主重启 | 运行只读 `wakeflow_pod_open mode=resume`：按 registry + pod-binding + 精确 cwd/common-dir 验真已有资源，并观察当前 HEAD/dirty；宿主只验证存活窗口或恢复同一个已登记 session，不重跑创建门禁、不新建/发现 worktree、不重绑、不回退主线；身份缺失或歧义时 fail-closed |
 | close 部分成功 | 逐窗口记录 host-close receipt，幂等续关 |
 
 ## 12. 状态与历史迁移
@@ -725,7 +745,7 @@ fallback。
 | `claude edition defers transport...neutral-only` | REWRITE | Claude intent 使用 native `--worktree`；删除 `neutral-only` 旧补丁语义 |
 | `every MCP handler script is on the runtime allow-list` | KEEP | 保留 |
 | `register-thread accepts pod-shaped windows...` | REWRITE | 不能仅凭 `__` 名称注册；必须命中 launch correlation、角色和 Pod；加入 `Design__pod` |
-| `prepared pod is resumed...` | REWRITE | correlation + binding receipt 恢复；已创建窗口不得再次 materialize |
+| `prepared pod is resumed...` | **REWRITE / IMPLEMENTED** | correlation + binding receipt 恢复；已创建窗口不得再次 materialize；`test/wakeflow-pod.test.mjs` 与 `test/wakeflow-claude-pod-host.test.mjs` 已覆盖产品和主检出 HEAD/dirty 变化后仍验真或恢复同一 worktree/session，且不再次 create/rebind |
 | `pod close accepts a cancelled demand...` | REWRITE | cancelled 可生成 close plan，但 Wakeflow 不物理删除 worktree |
 | `adopts a crash-orphaned worktree...` | DELETE | 新路径禁止按目录/branch 名猜测和收养；如保留，只能作为显式 legacy recovery |
 
@@ -807,6 +827,8 @@ fallback。
    - 不嵌套 `--tmux`，不默认添加 workspaceRoot；
    - `baseRef=head` 与 actual HEAD receipt；
    - resume 不再次传 `--worktree`；
+   - product worktree 与 main checkout 分别推进后，resume 仍使用同一 session/cwd，
+     保留首次 creation receipt，并把当前 HEAD 只记入 recovery observation；
    - helper 重跑不创建第二套 session/worktree；
    - session close 与 worktree removal receipt 分离。
 
@@ -989,6 +1011,12 @@ Pod 场景，不再另拆重复测试文件。
 - Pod redesign 只返回 `Design__A`。
 - 部分创建重跑只补缺失窗口。
 - 宿主重启后不通过路径命名猜测身份。
+- `mode=create` 的 clean-main / expected-base 门禁不能被 `mode=resume` 绕过；
+  `mode=resume` 也不能重跑该创建门禁。
+- 已绑定 Pod 在产品 worktree 与主检出各自推进、dirty 后，resume 仍只读验证同一
+  binding/registry/cwd/common-dir，并把 HEAD/dirty 作为观察返回。
+- Pod resume 不创建/发现替代 thread/worktree，不更新不可变 creation receipt，
+  不要求 core rebind；宿主恢复记录只进入独立 recovery observation。
 - 任意 binding 冲突保持 blocked，不覆盖旧绑定。
 - tracked docs、归档和工具输出均不泄露真实 handle。
 

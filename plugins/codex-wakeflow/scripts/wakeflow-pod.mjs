@@ -39,6 +39,7 @@ import {
   correlationId,
   createPodRuntime,
 } from "./lib/wakeflow-pod-runtime.mjs";
+import { stableArtifactPart } from "./lib/wakeflow-artifact-identity.mjs";
 import {
   WakeflowStateLockTimeoutError,
   withFileLock,
@@ -65,8 +66,9 @@ const helpText = `
 Host-managed complete Pod lifecycle
 
 Usage:
-  node scripts/wakeflow-pod.mjs open --request-json '<json>' [--write] [--root <workspace>] [--json]
-  node scripts/wakeflow-pod.mjs open --request-file <file> [--write] [--root <workspace>] [--json]
+  node scripts/wakeflow-pod.mjs open --mode create --request-json '<json>' [--write] [--root <workspace>] [--json]
+  node scripts/wakeflow-pod.mjs open --mode create --request-file <file> [--write] [--root <workspace>] [--json]
+  node scripts/wakeflow-pod.mjs open --mode resume --request-json '<json>' [--root <workspace>] [--json]
   node scripts/wakeflow-pod.mjs record-materialization --attempt-json '<json>' [--write] [--root <workspace>] [--json]
   node scripts/wakeflow-pod.mjs record-materialization --attempt-file <file> [--write] [--root <workspace>] [--json]
   node scripts/wakeflow-pod.mjs bind --receipt-json '<json>' [--write] [--root <workspace>] [--json]
@@ -705,6 +707,181 @@ function stateWindowFor(intent, existing = null) {
   };
 }
 
+function commandResume(request) {
+  if (write) {
+    fail("Pod resume planning is read-only; omit --write/apply and let the host verify or resume the existing sessions.");
+  }
+  const demandKey = requireString(request.demandKey, "demandKey");
+  assertRequestHost(request.host);
+  if (Array.isArray(request.repositories) && request.repositories.length > 0) {
+    fail("Pod resume reads frozen launch operations; do not supply repositories or new base identities.");
+  }
+  const config = readConfig();
+  return accessDemandState(demandKey, config, ({ stateRoot, state }) => {
+    const authority = assertPodAuthority(state, demandKey);
+    const runtime = createPodRuntime({
+      workspaceRoot,
+      stateDir,
+      host: currentHost,
+      write: false,
+    });
+    const manifest = runtime.readManifest(authority.podId);
+    if (
+      !manifest
+      || manifest.kind !== POD_MANIFEST_KIND
+      || manifest.podId !== authority.podId
+      || manifest.demandKey !== demandKey
+      || manifest.host !== currentHost
+      || manifest.stateRootRelative !== slash(path.relative(workspaceRoot, stateRoot))
+      || !Array.isArray(manifest.operationIds)
+    ) {
+      fail(`Pod ${authority.podId} has no complete host-local manifest to resume.`);
+    }
+    if (!state.podProvisioning || state.podProvisioning.podId !== authority.podId) {
+      fail(`Pod ${authority.podId} has no matching canonical provisioning state.`);
+    }
+    if (
+      ["completed", "archived", "cancelled"].includes(state.state)
+      || ["closing", "cancelling", "closed"].includes(state.podProvisioning.phase)
+    ) {
+      fail(`Pod ${authority.podId} cannot resume while demand=${state.state} and provisioning=${state.podProvisioning.phase}.`);
+    }
+
+    const plannedWindows = new Map(
+      (state.podProvisioning.windows ?? []).map((item) => [item.launchCorrelationId, item]),
+    );
+    const pendingWindowNames = [];
+    const operations = [];
+    for (const operationId of manifest.operationIds) {
+      const operation = runtime.readOperation(operationId);
+      if (
+        !operation
+        || operation.kind !== POD_OPERATION_KIND
+        || operation.operationType !== "launch"
+        || operation.operationId !== operationId
+        || operation.host !== currentHost
+        || operation.demandKey !== demandKey
+        || operation.podId !== authority.podId
+        || operation.intentDigest !== contentDigest(operation.intent)
+        || operation.intent?.launchCorrelationId !== operationId
+        || !operation.intent?.registrationBindingId
+      ) {
+        fail(`Pod ${authority.podId} has an invalid persisted launch operation ${operationId}.`);
+      }
+      const planned = plannedWindows.get(operationId);
+      if (!planned || planned.windowName !== operation.windowName || planned.role !== operation.role) {
+        fail(`Pod state does not match persisted launch operation ${operationId}.`);
+      }
+      if (operation.status !== "bound" || planned.status !== "bound") {
+        pendingWindowNames.push(operation.windowName);
+        continue;
+      }
+      const binding = runtime.readBinding(authority.podId, operation.windowName);
+      const registration = registrationFor(operation.windowName);
+      if (
+        !binding
+        || binding.kind !== POD_BINDING_KIND
+        || binding.status !== "active"
+        || binding.host !== currentHost
+        || binding.demandKey !== demandKey
+        || binding.podId !== authority.podId
+        || binding.windowName !== operation.windowName
+        || binding.role !== operation.role
+        || binding.launchCorrelationId !== operationId
+        || binding.bindingId !== operation.bindingId
+        || binding.bindingId !== registration.bindingId
+        || binding.receiptDigest !== contentDigest(binding.receipt)
+        || binding.handleDigest !== contentDigest({ host: currentHost, handle: registration.threadId })
+        || operation.receiptDigest !== binding.receiptDigest
+      ) {
+        fail(`Pod ${authority.podId} cannot trust the existing binding/registry identity for ${operation.windowName}.`);
+      }
+      const actualCwd = assertExistingDirectory(binding.receipt.actualCwd, "binding receipt actualCwd");
+      let observation = { actualCwd };
+      if (operation.role === "product") {
+        const repositoryRoot = realpathSync(operation.intent.repositoryRoot);
+        const expectedCommonDir = configuredGitCommonDir(repositoryRoot);
+        const observed = probeProductGitIdentity(actualCwd);
+        const receiptTopLevel = assertExistingDirectory(binding.receipt.gitTopLevel, "binding receipt gitTopLevel");
+        const receiptCommonDir = assertExistingDirectory(binding.receipt.gitCommonDir, "binding receipt gitCommonDir");
+        if (
+          actualCwd === repositoryRoot
+          || receiptTopLevel !== actualCwd
+          || observed.gitTopLevel !== actualCwd
+          || receiptCommonDir !== expectedCommonDir
+          || observed.gitCommonDir !== expectedCommonDir
+        ) {
+          fail(`Pod recovery identity for ${operation.windowName} no longer resolves to its exact independent repository worktree.`);
+        }
+        observation = {
+          ...observation,
+          gitTopLevel: observed.gitTopLevel,
+          gitCommonDir: observed.gitCommonDir,
+          currentHead: observed.head,
+          branch: observed.branch,
+          detached: observed.detached,
+          dirty: Boolean(gitProbe(
+            actualCwd,
+            ["status", "--porcelain=v1", "--untracked-files=normal"],
+            "Pod recovery Git status",
+          )),
+        };
+      } else {
+        const expectedControlRoot = assertExistingDirectory(
+          operation.intent.expectedControlRoot,
+          "expectedControlRoot",
+        );
+        if (actualCwd !== expectedControlRoot) {
+          fail(`Pod recovery control cwd for ${operation.windowName} no longer matches ${expectedControlRoot}.`);
+        }
+      }
+      operations.push({
+        demandKey,
+        podId: authority.podId,
+        windowName: operation.windowName,
+        role: operation.role,
+        ...(operation.intent.repositoryWindow
+          ? {
+              repositoryWindow: operation.intent.repositoryWindow,
+              repositoryRoot: operation.intent.repositoryRoot,
+            }
+          : {}),
+        host: currentHost,
+        environmentIntent: operation.intent.environmentIntent,
+        displayTitle: operation.intent.displayTitle || operation.windowName,
+        launchCorrelationId: operationId,
+        registrationBindingId: operation.intent.registrationBindingId,
+        stateRootRelative: operation.intent.stateRootRelative,
+        hostAction: "verify-live-or-resume-same-session",
+        requiresCoreBind: false,
+        recovery: {
+          mode: "resume",
+          bindingId: binding.bindingId,
+          receiptDigest: binding.receiptDigest,
+          ...observation,
+        },
+      });
+    }
+
+    return output({
+      kind: "WakeflowPodResumePlan",
+      mode: "resume",
+      demandKey,
+      podId: authority.podId,
+      host: currentHost,
+      phase: state.podProvisioning.phase,
+      stateRevision: state.revision,
+      operations,
+      boundWindowNames: operations.map((item) => item.windowName),
+      pendingWindowNames,
+      readOnly: true,
+      agentNext: pendingWindowNames.length > 0
+        ? "Resume only the verified bound windows with their same registered final sessions. Pending windows are not recovery candidates; return to create mode only when the canonical launch plan still authorizes their first materialization."
+        : "Ask the host to verify live sessions or resume each exact registered final session at recovery.actualCwd. Do not create, rediscover, or rebind any thread/worktree; current HEAD and dirty state are observations for Agent judgment.",
+    });
+  });
+}
+
 function sameStateProvisioning(left, right) {
   return isDeepStrictEqual(left ?? null, right ?? null);
 }
@@ -854,6 +1031,11 @@ function commandOpen() {
     fileFlag: "--request-file",
     label: "Pod open request",
   });
+  const mode = getValue("--mode", "create");
+  if (!new Set(["create", "resume"]).has(mode)) {
+    fail("--mode must be create or resume.");
+  }
+  if (mode === "resume") return commandResume(request);
   const demandKey = requireString(request.demandKey, "demandKey");
   const config = readConfig();
   return accessDemandState(demandKey, config, ({
@@ -1072,6 +1254,7 @@ function commandOpen() {
       .map((item) => item.windowName);
     output({
       kind: "WakeflowPodLaunchPlan",
+      mode: "create",
       demandKey,
       podId,
       host: currentHost,
@@ -1276,8 +1459,10 @@ function registryFileCandidates(windowName) {
   );
   const names = new Set([
     legacySlug(windowName, "item"),
-    // Stable ASCII names are identical to the runtime artifact name; retaining
-    // the second candidate also supports non-ASCII migrations.
+    stableArtifactPart(windowName, { fallback: "item" }),
+    // Transitional digest-only artifact names were briefly emitted during the
+    // stable-name migration; they remain readable but can never coexist with a
+    // second registration for the same logical window.
     contentDigest(windowName).slice(0, 12),
   ]);
   return [...names].map((name) => path.join(registryDir, `${name}.json`));
@@ -1285,13 +1470,23 @@ function registryFileCandidates(windowName) {
 
 function registrationFor(windowName) {
   const candidates = registryFileCandidates(windowName);
-  const legacy = candidates[0];
-  if (!existsSync(legacy)) {
-    // Current delivery registration uses the legacy-safe slug. Do not infer a
-    // successful handle registration from the receipt alone.
+  const registrations = candidates
+    .filter((file) => existsSync(file))
+    .map((file) => ({
+      file,
+      registration: readJsonObjectText(
+        readFileSync(file, "utf8"),
+        `thread registration for ${windowName}`,
+      ),
+    }))
+    .filter(({ registration }) => registration.windowName === windowName);
+  if (registrations.length === 0) {
     fail(`Final host handle is not registered for ${windowName}; register it before bind.`);
   }
-  const registration = readJsonObjectText(readFileSync(legacy, "utf8"), `thread registration for ${windowName}`);
+  if (registrations.length !== 1) {
+    fail(`Final host handle for ${windowName} is ambiguous across ${registrations.length} registry files; preserve all evidence and repair the registry before bind/resume.`);
+  }
+  const registration = registrations[0].registration;
   if (
     registration.kind !== hostProfile.kinds.windowRegistration
     || registration.windowName !== windowName
@@ -1358,6 +1553,7 @@ function gitProbe(cwd, args, label, { allowDetached = false } = {}) {
   const result = spawnSync("git", ["-C", cwd, ...args], {
     encoding: "utf8",
     shell: false,
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
   });
   if (allowDetached && result.status === 1) return null;
   if (result.status !== 0) {
@@ -1710,9 +1906,14 @@ function commandBind() {
   });
   if (!write) return bindWithStateAuthority();
   try {
+    // Final registry identity and immutable Pod binding are one transaction:
+    // registration cannot swap the handle between bind validation and write.
     return withFileLock(
-      path.join(runtime.dirs.hostRoot, "pod-bindings.lock"),
-      bindWithStateAuthority,
+      path.join(runtime.dirs.hostRoot, "thread-registry.lock"),
+      () => withFileLock(
+        path.join(runtime.dirs.hostRoot, "pod-bindings.lock"),
+        bindWithStateAuthority,
+      ),
     );
   } catch (error) {
     if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);

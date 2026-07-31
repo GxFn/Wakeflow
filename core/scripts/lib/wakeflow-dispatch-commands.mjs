@@ -67,6 +67,8 @@ export function createDispatchCommands(ctx) {
     readWindowLock,
     windowLockFresh,
     writeWindowLock,
+    lockFileFor,
+    releaseWindowLockForResult,
     windowConfigFileFor,
     keepLiveStateFile,
     startKeepLive,
@@ -352,10 +354,22 @@ export function createDispatchCommands(ctx) {
     });
     if (write) {
       ensureStateDirs();
-      if (writeWindowLock && envelope.targetWindow) {
-        writeWindowLock(envelope.targetWindow, { deliveryId: envelope.deliveryId });
+      let leaseWrite = null;
+      try {
+        if (writeWindowLock && envelope.targetWindow) {
+          leaseWrite = writeWindowLock(envelope.targetWindow, { deliveryId: envelope.deliveryId });
+        }
+        atomicWriteJson(deliveryFile, envelope);
+      } catch (error) {
+        if (leaseWrite?.acquired && envelope.targetWindow && releaseWindowLockForResult && lockFileFor) {
+          releaseWindowLockForResult(
+            lockFileFor(envelope.targetWindow),
+            (lock) => lock.deliveryId === envelope.deliveryId
+              && lock.leaseId === leaseWrite.lease?.leaseId,
+          );
+        }
+        throw error;
       }
-      atomicWriteJson(deliveryFile, envelope);
     }
     const buildPayload = {
         ok: true,
@@ -732,16 +746,31 @@ export function createDispatchCommands(ctx) {
     let keepLive = null;
     if (write) {
       ensureStateDirs();
-      if (writeWindowLock && envelope.targetWindow) {
-        writeWindowLock(envelope.targetWindow, { deliveryId: envelope.deliveryId });
+      let leaseWrite = null;
+      try {
+        if (writeWindowLock && envelope.targetWindow) {
+          leaseWrite = writeWindowLock(envelope.targetWindow, { deliveryId: envelope.deliveryId });
+        }
+        if (automationEnabled && !idempotentReplay) {
+          keepLive = startKeepLive({ automationRunId: dispatchGroup || packet.id });
+        }
+        if (!idempotentReplay) atomicWriteJson(windowConfigFileFor(targetWindow), windowConfig);
+        if (dispatchGroupChanged && dispatchGroupRecord && dispatchGroup) atomicWriteJson(dispatchGroupFile, dispatchGroupRecord);
+        if (!existingPacket) atomicWriteJson(packetFile, packet);
+        if (!existingEnvelope) atomicWriteJson(deliveryFile, envelope);
+      } catch (error) {
+        // Only a lease created by THIS prepare can be rolled back. A replayed
+        // or pre-existing lease may already represent an accepted send and is
+        // never removed because a later projection/artifact write failed.
+        if (leaseWrite?.acquired && envelope.targetWindow && releaseWindowLockForResult && lockFileFor) {
+          releaseWindowLockForResult(
+            lockFileFor(envelope.targetWindow),
+            (lock) => lock.deliveryId === envelope.deliveryId
+              && lock.leaseId === leaseWrite.lease?.leaseId,
+          );
+        }
+        throw error;
       }
-      if (automationEnabled && !idempotentReplay) {
-        keepLive = startKeepLive({ automationRunId: dispatchGroup || packet.id });
-      }
-      if (!idempotentReplay) atomicWriteJson(windowConfigFileFor(targetWindow), windowConfig);
-      if (dispatchGroupChanged && dispatchGroupRecord && dispatchGroup) atomicWriteJson(dispatchGroupFile, dispatchGroupRecord);
-      if (!existingPacket) atomicWriteJson(packetFile, packet);
-      if (!existingEnvelope) atomicWriteJson(deliveryFile, envelope);
     }
 
     output(

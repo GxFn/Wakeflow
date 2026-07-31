@@ -10,6 +10,10 @@ const helperScript = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),
   "../plugins/claude-code-wakeflow/scripts/lib/wakeflow-claude-host.mjs",
 );
+const claudePodScript = path.resolve(
+  path.dirname(new URL(import.meta.url).pathname),
+  "../plugins/claude-code-wakeflow/scripts/wakeflow-pod.mjs",
+);
 
 const tmuxPresent = spawnSync("tmux", ["-V"], { encoding: "utf8" }).status === 0;
 let serverSessionCounter = 0;
@@ -44,6 +48,10 @@ function parseOk(result) {
 
 function killServer(serverSession) {
   spawnSync("tmux", ["kill-session", "-t", serverSession], { encoding: "utf8" });
+}
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
 test("preflight reports tmux and recommendation", () => {
@@ -89,6 +97,23 @@ test("ensure-server honors a configured dedicated tmux socket (isolated from the
     spawnSync("tmux", ["has-session", "-t", serverSession], { encoding: "utf8" }).status,
     0,
     "session must not appear on the default socket",
+  );
+
+  const promptFile = path.join(root, "socket-entry-prompt.txt");
+  writeFileSync(promptFile, "socket-entry-sync\n");
+  const launched = parseOk(runHelper(root, [
+    "launch-window",
+    "--server", serverSession,
+    "--window", "RepoA",
+    "--title", "RepoA Work",
+    "--cwd", "RepoA",
+    "--prompt-file", promptFile,
+    "--boot-wait-ms", "200",
+  ], { WAKEFLOW_DISABLE_MONITOR: "1" }));
+  assert.equal(
+    launched.attach,
+    `tmux -L ${socket} attach -t ${serverSession}`,
+    "printed attach command must target the configured dedicated socket",
   );
 });
 
@@ -141,8 +166,10 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
   assert.equal(busyStatus.windows.find((row) => row.window === "RepoA").state, "busy", "send marks the window busy");
 
   // The exact same delivery may replay against its existing lease.
-  const sameHostResend = parseOk(runHelper(root, ["send", "--window", "RepoA", "--prompt-file", deliveryPrompt], noAuto));
-  assert.equal(sameHostResend.deliveryId, "dlv-test-1", "same-host resend without an explicit id preserves the locked delivery id");
+  const sameHostResend = parseOk(runHelper(root, [
+    "send", "--window", "RepoA", "--prompt-file", deliveryPrompt, "--delivery-id", "dlv-test-1",
+  ], noAuto));
+  assert.equal(sameHostResend.deliveryId, "dlv-test-1", "an explicit replay preserves the locked delivery id");
   const sameHostLock = JSON.parse(readFileSync(path.join(root, sent.lockFile), "utf8"));
   assert.equal(sameHostLock.deliveryId, "dlv-test-1", "same-host resend must not erase the lock delivery id");
 
@@ -479,6 +506,132 @@ test("send to the controller window is a lock-free notification (no busy residue
   assert.equal(state, "", "no busy residue on the controller");
 });
 
+test("deliver routes a ControllerReturnEnvelope to its Pod controller without a target lease", { skip: !tmuxPresent }, async (t) => {
+  const root = makeWorkspace();
+  const serverSession = makeServerSession();
+  const repo = path.join(root, "RepoA");
+  for (const args of [
+    ["init"],
+    ["config", "user.email", "wakeflow-test@example.invalid"],
+    ["config", "user.name", "Wakeflow Test"],
+  ]) {
+    const gitResult = spawnSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+    assert.equal(gitResult.status, 0, gitResult.stderr || gitResult.stdout);
+  }
+  writeFileSync(path.join(repo, "README.md"), "fixture\n");
+  for (const args of [["add", "README.md"], ["commit", "-m", "fixture"]]) {
+    const gitResult = spawnSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+    assert.equal(gitResult.status, 0, gitResult.stderr || gitResult.stdout);
+  }
+  const head = spawnSync("git", ["-C", repo, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+  mkdirSync(path.join(root, "Design"), { recursive: true });
+  mkdirSync(path.join(root, "Test"), { recursive: true });
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
+    workspaceName: "PodReturnFlow", controllerWindow: "PodReturnFlow",
+    designWindow: "Design", testWindow: "Test",
+    internalDesignPath: "Design", internalTestPath: "Test",
+    hosts: { "claude-code": { tmuxSession: serverSession } },
+    repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
+  }));
+  t.after(() => killServer(serverSession));
+  const noAuto = { WAKEFLOW_DISABLE_MONITOR: "1" };
+  const demandKey = "POD-RETURN";
+  const stateRoot = path.join(root, ".wakeflow-active/current", demandKey);
+  mkdirSync(stateRoot, { recursive: true });
+  const createdAt = "2026-07-31T00:00:00.000Z";
+  writeFileSync(path.join(stateRoot, "wakeflow-state.json"), `${JSON.stringify({
+    schemaVersion: 1,
+    demandKey,
+    title: "Pod controller return fixture",
+    controllerHost: null,
+    controllerWindow: `Controller__${demandKey}`,
+    executionPlacement: {
+      mode: "isolated",
+      podId: demandKey,
+      selection: "explicit-user-pod",
+      authorizationRef: "goal-stage-confirmation.md#pod",
+    },
+    state: "intake",
+    stateReason: "fixture",
+    revision: 1,
+    activeStageId: null,
+    updatedAt: createdAt,
+    allowedActions: [],
+    blockers: [],
+    decisionsRequired: [],
+    stages: [],
+    taskPackages: [],
+    targetTasks: [],
+    windows: [],
+    review: { status: "none", readyResultIds: [], blockedResultIds: [], missingResultIds: [] },
+    automation: { enabled: false, activeRunIds: [], lastReviewPack: null },
+    projection: { status: "stale", lastRenderedAt: createdAt, progressDoc: "developer-progress.md" },
+  }, null, 2)}\n`);
+  writeFileSync(path.join(stateRoot, "controller-events.jsonl"), `${JSON.stringify({
+    eventId: "evt-pod-return-init",
+    createdAt,
+    actor: "controller",
+    type: "demand.initialized",
+    from: null,
+    to: "intake",
+    reason: "fixture",
+    evidenceRefs: [],
+    allowedWrites: ["wakeflow-state.json", "controller-events.jsonl"],
+    forbiddenConclusions: [],
+    stateRevision: 1,
+  })}\n`);
+  const plan = parseOk(runSync(process.execPath, [
+    claudePodScript,
+    "open",
+    "--root", root,
+    "--request-json", JSON.stringify({
+      demandKey,
+      host: "claude-code",
+      repositories: [{ windowName: "RepoA", expectedBaseHead: head, basePolicy: "local-head" }],
+    }),
+    "--write",
+    "--json",
+  ], { encoding: "utf8", cwd: root }));
+  const controllerOperation = plan.operations.find((entry) => entry.role === "controller");
+  assert.ok(controllerOperation, "canonical Pod plan must contain its controller operation");
+  const podController = controllerOperation.windowName;
+  const launched = parseOk(runHelper(root, [
+    "launch-window",
+    "--server", serverSession,
+    "--window", podController,
+    "--cwd", ".",
+    "--environment-intent", "host-local",
+    "--launch-correlation-id", controllerOperation.launchCorrelationId,
+    "--binding-id", controllerOperation.registrationBindingId,
+    "--pod-id", demandKey,
+    "--state-root-relative", controllerOperation.stateRootRelative,
+    "--boot-wait-ms", "400",
+  ], noAuto));
+  assert.equal(launched.hostReceipt.windowName, podController);
+
+  const envelopeFile = path.join(root, "pod-controller-return.json");
+  writeFileSync(envelopeFile, JSON.stringify({
+    kind: "ControllerReturnEnvelope",
+    version: 1,
+    deliveryId: "controller-return-pod-1",
+    controllerWindow: podController,
+    prompt: "review pod result\n",
+  }));
+  const delivered = parseOk(runHelper(root, [
+    "deliver",
+    "--delivery-file", envelopeFile,
+    "--readback-wait-ms", "200",
+  ], noAuto));
+  assert.equal(delivered.windowName, podController);
+  assert.equal(delivered.controllerNotification, true);
+  assert.equal(delivered.lockFile, undefined);
+  assert.equal(
+    existsSync(path.join(root, `.wakeflow-local/wakeflow-delivery/locks/${podController}.json`)),
+    false,
+    "Pod controller-return must not acquire a target work lease",
+  );
+});
+
 test("seed-permissions keeps committed settings portable and migrates old residue to settings.local.json", () => {
   const root = makeWorkspace();
   writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
@@ -539,6 +692,106 @@ test("deliver sends straight from a delivery envelope file (one-step transport)"
   assert.match(sent.readback.paneTail, /RepoA \/ T1/, "prompt landed in the pane");
   const lock = JSON.parse(readFileSync(path.join(root, ".wakeflow-local/wakeflow-delivery/locks/RepoA.json"), "utf8"));
   assert.equal(lock.deliveryId, "dlv-deliver-1", "lock carries the envelope delivery id");
+});
+
+test("deliver pastes once, bounds readback to three observations, and preserves pending leases", { skip: !tmuxPresent }, async (t) => {
+  const root = makeWorkspace();
+  const serverSession = makeServerSession();
+  const inputLog = path.join(root, "stub-input.log");
+  writeFileSync(path.join(root, "stub-claude"), `#!/bin/sh
+stty -echo -echonl
+printf '%s\\n' ready
+while IFS= read -r line; do
+  printf '%s\\n' "$line" >> ${shellQuote(inputLog)}
+  case "$line" in
+    delayed-visibility-marker*)
+      sleep 0.4
+      printf 'visible:%s\\n' "$line"
+      ;;
+  esac
+done
+`, { mode: 0o755 });
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
+    workspaceName: "ReadbackFlow",
+    controllerWindow: "ReadbackFlow",
+    hosts: { "claude-code": { tmuxSession: serverSession } },
+    repositories: [{ windowName: "RepoA", path: "RepoA", role: "Repository window" }],
+  }));
+  t.after(() => killServer(serverSession));
+  const noAuto = { WAKEFLOW_DISABLE_MONITOR: "1" };
+  for (const windowName of ["PendingWindow", "DelayedWindow"]) {
+    parseOk(runHelper(root, [
+      "launch-window",
+      "--server", serverSession,
+      "--window", windowName,
+      "--cwd", "RepoA",
+      "--boot-wait-ms", "150",
+      "--no-auto-trust",
+    ], noAuto));
+    let ready;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      ready = parseOk(runHelper(root, ["readback", "--window", windowName, "--lines", "10"], noAuto));
+      if (/ready/.test(ready.paneTail)) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert.match(ready.paneTail, /ready/, `${windowName} fixture must be stable before transport starts`);
+  }
+
+  const pendingEnvelope = path.join(root, "pending-delivery.json");
+  writeFileSync(pendingEnvelope, JSON.stringify({
+    kind: "DeliveryEnvelope",
+    deliveryId: "dlv-pending-readback",
+    targetWindow: "PendingWindow",
+    taskId: "pending-task",
+    dispatchGroup: "readback-group",
+    prompt: "pending-visibility-marker",
+  }));
+  const pending = parseOk(runHelper(root, [
+    "deliver",
+    "--delivery-file", pendingEnvelope,
+    "--readback-wait-ms", "20",
+    "--readback-attempts", "9",
+    "--readback-max-wait-ms", "99999",
+  ], noAuto));
+  assert.equal(pending.transportStatus, "accepted");
+  assert.equal(pending.readback.status, "pending");
+  assert.equal(pending.readback.attemptCount, 3, "caller input cannot expand the fixed three-read budget");
+  assert.ok(pending.readback.elapsedMs < 5_000, "pending observation exits inside the fixed time budget");
+  assert.match(pending.readbackWarning, /do not resend or release the lease/);
+  const pendingLock = JSON.parse(readFileSync(
+    path.join(root, ".wakeflow-local/wakeflow-delivery/locks/PendingWindow.json"),
+    "utf8",
+  ));
+  assert.equal(pendingLock.deliveryId, "dlv-pending-readback", "accepted+pending preserves the exact lease");
+
+  const delayedEnvelope = path.join(root, "delayed-delivery.json");
+  writeFileSync(delayedEnvelope, JSON.stringify({
+    kind: "DeliveryEnvelope",
+    deliveryId: "dlv-delayed-readback",
+    targetWindow: "DelayedWindow",
+    taskId: "delayed-task",
+    dispatchGroup: "readback-group",
+    prompt: "delayed-visibility-marker",
+  }));
+  const delayed = parseOk(runHelper(root, [
+    "deliver",
+    "--delivery-file", delayedEnvelope,
+    "--readback-wait-ms", "170",
+    "--readback-attempts", "9",
+    "--readback-max-wait-ms", "800",
+  ], noAuto));
+  assert.equal(delayed.transportStatus, "accepted");
+  assert.equal(delayed.readback.status, "confirmed");
+  assert.ok(delayed.readback.attemptCount >= 1 && delayed.readback.attemptCount <= 3);
+  assert.match(delayed.readback.paneTail, /visible:delayed-visibility-marker/);
+
+  const deadline = Date.now() + 1_000;
+  while (!existsSync(inputLog) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  const input = existsSync(inputLog) ? readFileSync(inputLog, "utf8") : "";
+  assert.equal(input.match(/^pending-visibility-marker$/gm)?.length, 1, "pending readback never pastes again");
+  assert.equal(input.match(/^delayed-visibility-marker$/gm)?.length, 1, "delayed confirmation came from reads, not resend");
 });
 
 test("replace-all tears down and rebuilds the whole fleet with fresh registered sessions", { skip: !tmuxPresent }, async (t) => {

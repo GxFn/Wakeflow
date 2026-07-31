@@ -210,7 +210,7 @@ function deliveryFailureResumeSteps(deliveryStatuses) {
       targetWindow: item.targetWindow,
       taskId: item.taskId,
       latestRunFile: item.latestRunFile,
-      reason: "A delivery transport attempt did not complete with sent/readback.ok=true; total control must inspect the run before retrying or accepting.",
+      reason: "A delivery transport attempt was not recorded as host-accepted; total control must inspect its transportStatus before any retry. Readback visibility alone never authorizes resend.",
     }));
 }
 

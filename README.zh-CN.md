@@ -40,8 +40,12 @@ Wakeflow 就是那个缺失的控制层——一个总控窗口驱动多个聚�
 
 - **总控优先判断**：父工作区负责目标、边界、投递决策、验收、TODO 路由和归档决策。
 - **一个需求一个 state root**：任务包、目标结果、review candidate、决策和进度投影都绑定到同一个需求。
+- **上下文完整任务包**：新任务包一次性记录目标、需求锚点、边界、完成条件、依赖和提交策略。
 - **聚焦的子窗口**：每个仓库窗口只在配置好的责任边界内工作。
-- **轻量投递**：direct-thread prompt 只负责唤醒正确窗口；state root 和 skills 保存任务细节。
+- **预览门控的分层提示词**：总控先检查仓库、任务摘要、Skills 和完整 prompt，
+  只有匹配预览摘要的 apply 才能写入 direct-thread envelope。
+- **验收锚点驱动实现**：每个新 implementation 包至少包含一个总控编写的
+  claim/probe/expected 锚点；子窗口证明 RED→GREEN，总控独立复验。
 - **先证据，后验收**：target backfill 是输入，不是结论；总控仍然要检查原始证据。
 - **本地优先运行时**：真实 thread id 只存在本地 thread registry；window config 是派生视图，active state 不进入源码。
 
@@ -95,11 +99,12 @@ demand 都经过同一个闭环：
  5 work       目标窗口在自己的仓库边界内执行
  6 result     TargetResultEnvelope 携带 evidence refs 落地 -> 解锁
  7 review     总控读取原始证据，再 accept / rework / block
- 8 complete   所有任务 accepted 且没有 blockers 后才完成
+ 8 complete   活跃必需任务 accepted、替代链有效且没有 blocker 后才完成
 ```
 
-两条规则保证闭环可靠：**Prompt 负责唤醒，state 负责指令**（投递 prompt 只命名
-窗口、task id 和 state root；任务定义存在 state root 和 skills 里），以及
+两条规则保证闭环可靠：**Prompt 分层提示、任务包提供完整上下文、Skills 定义工艺**
+（有界 prompt 携带目标、最高优先完成/上下文/边界提示、读取顺序、身份和追踪信息；
+任务包保存完整上下文，需求文档保存原始背景，Skills 保存执行流程），以及
 **backfill 是输入，不是验收**（总控先审查原始证据再做决策；blocked decision
 在新证据到达后始终可恢复）。
 
@@ -114,9 +119,10 @@ demand 都经过同一个闭环：
   .wakeflow-local/wakeflow-delivery/                                local
     dispatch-packets/  delivery-envelopes/  delivery-runs/    transport records
     target-results/                                           evidence envelopes
-    locks/                       每窗口一个 in-flight delivery，跨宿主
+    locks/                       每窗口一个 in-flight 目标投递，跨宿主
     hosts/codex/                 codex thread registry（宿主内）
     hosts/claude-code/           claude session registry + tmux bindings
+    hosts/<host>/pod-*           pod 计划、操作、绑定、访问回执
 ```
 
 经验规则：**业务真相是宿主中立并共享的；传输句柄按宿主隔离，且永远不离开
@@ -132,7 +138,8 @@ Test 不能自创目标、方法或完成标准，只探索获批环境边界。
 ### 双宿主共存
 
 同一个工作区可以并行运行两个版本：demand 在 claim 时绑定到一个平台（每个驱动命令都会
-机器校验），共享的每窗口 lock 会跨宿主串行化投递，所有权只通过显式且可审计的
+机器校验），共享的每窗口工作租约会跨宿主串行化目标投递（controller-return 使用
+独立 send mutex），所有权只通过显式且可审计的
 `adopt-demand-host` 转移。
 
 ## 安装 Wakeflow
@@ -159,6 +166,8 @@ Claude Code 版本只使用 tmux 常驻终端模型：每个 Wakeflow 窗口（�
 `claude --worktree`，Wakeflow 只规划并验真宿主回执。Wakeflow 不设置数字 Pod
 上限。Claude 同步返回最终 session id，没有 Codex `clientThreadId` 状态；Pod
 Test 只有在全部已绑定产品 worktree 的 direct-multi-root 访问通过验真后才可派发。
+`wakeflow_pod_open mode=create` 保留首次创建的严格 base 门禁；只读
+`mode=resume` 后续仅验真不可变 binding 与精确 session/cwd，不重跑创建门禁。
 完整指南见 [plugins/claude-code-wakeflow/README.zh-CN.md](plugins/claude-code-wakeflow/README.zh-CN.md)。
 
 安装公开 Codex 插件 artifact：
@@ -170,7 +179,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.0/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.1/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -184,6 +193,8 @@ Wakeflow journal；临时 `clientThreadId` 只用于搜索/恢复，绝不能进
 registry。Wakeflow 验真 cwd/Git 回执，并要求 Pod Test 派发前已有通过验真的
 direct-multi-root 回执；逻辑关闭归 Wakeflow，物理 worktree 生命周期归 Codex。
 主线不可用时返回 `mainline-unavailable` 并先恢复主线，不静默改走 Pod。
+`wakeflow_pod_open mode=resume` 只是已绑定 Pod 的只读身份与当前状态检查，绝不
+创建或重绑 thread/worktree。
 
 本地开发时，可以把当前 checkout 注册成本地 marketplace：
 
@@ -282,18 +293,28 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
 **Claude Code（slash 命令）：**
 
 1. `/wakeflow:init` —— 发现工作区、和你确认范围、写入配置/文档、拉起 tmux
-   舰队（`tmux attach -t wakeflow` 随时旁观）。
+   舰队。默认 socket 用 `tmux attach -t wakeflow` 旁观；配置专用 socket 时用
+   `tmux -L <tmuxSocket> attach -t wakeflow`。
 2. 把目标交给 Design 窗口（或自己写需求）。Design 澄清后调用
    `wakeflow_deliver` —— 需求以 `pending-claim` 行落到全局 TODO 板，挂着
    设计文档链接。
 3. 在总控里：`/wakeflow:status` 看板，然后认领 —— `wakeflow_claim_next`
    （可自动认领的行）或 `wakeflow_create_demand`（显式指定）。这一步初始化
    state root 并消费该行；派发前总控会和你确认计划与任务包。
-4. `/wakeflow:dispatch` —— 备好 envelope、一步投递、记录 readback、结束本轮。
+4. `/wakeflow:dispatch` —— 备好 envelope、一步投递、记录已接受 transport 与独立
+   readback 状态、结束本轮。
    目标窗口在自己的仓库边界内干活，controller-return 带着证据唤醒总控。
+   如果 send 已被接受但新 turn 暂不可见，只在有界预算内重试 readback；暂不可见
+   是交给 Agent 判断的观察结果，不是 send 失败，更不授权重复发送。
 5. `/wakeflow:review` —— 先读结果背后的原始证据，再记录决策：
    accept / rework / blocked / redesign。
-6. 重复 dispatch → review，直到所有非 Test 任务 accepted，且总控完成自己的功能验证。
+   普通 rework 使用同一任务和新的 dispatch group。主线 redesign 在 Design 返回后
+   创建带 `replacesTargetTaskId` 的完整 replacement 包；接受 replacement 后旧任务
+   明确变为 `superseded`。0.9.1 的 Pod 只冻结一代 Design request/handoff；
+   这一代的 `requestType` 可以是 `initial-design`、`supplement` 或 `redesign`。
+   不同的第二代请求保持 blocked，不覆盖既有 handoff，也不回退主线 Design。
+6. 重复 dispatch → review，直到所有活跃必需非 Test 任务 accepted（或具有有效
+   superseded lineage），且总控完成自己的功能验证。
    之后总控才可添加/派发已确认的 Test card；Test 必须遵守冻结目标、获批测试方案、
    `controllerSelfChecks`、allowed skills、setup policy 与 attempt bound。
    progressive-chain-validation 等 Test skill 只有被 card 显式列出时才能使用。
@@ -313,7 +334,7 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
 
 | 你想 | 做 |
 | --- | --- |
-| 进入舰队 | 开个终端，`tmux attach -t wakeflow` |
+| 进入舰队 | 开个终端；默认用 `tmux attach -t wakeflow`，配置专用 socket 时加 `-L <tmuxSocket>` |
 | 看全局在哪 | `/wakeflow:status` |
 | 推进工作 | `/wakeflow:dispatch` |
 | 评判返回的工作 | `/wakeflow:review` |
@@ -353,9 +374,13 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 - Delivery prompts 保持轻量、可读。
 - Host 通过自己的传输边界发送 prompt：Codex 使用 thread tools，Claude Code 使用
   tmux host helper。Wakeflow 记录发送和 readback 证据。
+- transport 已接受才是发送完成事实。readback 是独立的 `confirmed` / `pending` /
+  `unavailable` 观察，不授权重发；匹配的 target result 会正常释放目标工作租约。
+  发送失败恢复中，只有证明“发送前拒绝”才可释放精确匹配的 delivery lease，结果
+  不明确时保留 lease 交给 Agent 判断。
 - `group-ready` 会等待预期 target results，再允许 controller return。
 - `per-target` 可以每个 target 唤醒一次 controller，同时保留 group snapshot。
-- 一次真实发送被记录为 `sent` 且有 readback 证据后，总控本轮停止，不在同一轮 sleep 或 poll。
+- 已接受 transport 连同真实 readback 状态被记录为 `sent` 后，总控本轮停止，不在同一轮 sleep 或 poll。
 - Keep-live 只是运行时辅助，不是任务逻辑、传输权威或验收证据。
 - 底层 `wakeflow-state init` 是宿主中立的，写入 `controllerHost: null`。
   公共 `wakeflow_create_demand` 会立即把新 root 认领给调用宿主；独立导入的底层
@@ -381,7 +406,7 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 | 需求 | MCP tools |
 | --- | --- |
 | 设置与窗口注册 | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
-| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
+| Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
 | 候选扫描与显式 Pod 生命周期 | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind`, `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff`, `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_pod_close`, `wakeflow_pod_record_close_receipt`, `wakeflow_pod_list` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
@@ -490,10 +515,12 @@ npm test             # check:core + 双 validate + 双 smoke + 全部测试
 memory 文件模板、skills、template bundle）只存在于各自 artifact 内。
 `npm run check:core` 负责保证副本不漂移。
 
-完整的双版本架构、代码逻辑、本地存储（共享业务状态与宿主独立运行时的划分）与状态流转，
-见 [docs/wakeflow-dual-edition-architecture-and-state-flow.md](docs/wakeflow-dual-edition-architecture-and-state-flow.md)；
-配套的设计模式深读（架构为什么长成这样、付出了什么代价）见
-[docs/wakeflow-architecture-deep-dive-2026-07-02.md](docs/wakeflow-architecture-deep-dive-2026-07-02.md)。
+当前 0.9.1 Pod 行为与验收权威见
+[docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md](docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md)；
+非 Pod 硬化演进记录见
+[docs/wakeflow-hardening-design-compliance-2026-07-30.md](docs/wakeflow-hardening-design-compliance-2026-07-30.md)。
+双版本架构流和 deep-dive 是保留的 v0.7.x 历史快照，不代表当前命令、工具数量、
+提示词结构或 Pod 归属。
 
 常见源码区域：
 
@@ -521,7 +548,8 @@ memory 文件模板、skills、template bundle）只存在于各自 artifact 内
 
 1. **判断必须可见**：脚本输出、状态行、target backfill 是证据，不是验收。
 2. **一个需求，一个 state root**：JSON state 和 Markdown progress surface 绑定到同一个 demand。
-3. **Prompt 负责唤醒，state 负责指令**：prompt 应轻量；任务细节属于 state roots、task packages 和 installed skills。
+3. **Prompt 分层提示、任务包提供上下文、Skills 执行**：prompt 只带有界优先信息、
+   当前目标和读取顺序；完整任务上下文属于 task package，原始背景属于需求锚点。
 4. **仓库边界很重要**：每个窗口拥有自己的源码、测试、提交和证据。
 5. **自动化移动工作，不转移权威**：direct-thread delivery 只能证明 prompt 已发送，不能证明结果完成。
 6. **本地运行时留在本地**：真实 thread id 只留在本地 thread registry，active runtime state 不进入 tracked docs。

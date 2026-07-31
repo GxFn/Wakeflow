@@ -17,7 +17,8 @@ redacts the real id from its output.
 Records in the legacy `.wakeflow-local/wakeflow-delivery/thread-registry/`
 location are still read as a fallback while new registrations write the
 host-scoped path, and the shared `.wakeflow-local/wakeflow-delivery/locks/`
-directory enforces one in-flight delivery per window across hosts.
+directory enforces one in-flight target delivery per window across hosts.
+Controller returns do not take that target work lease.
 
 Never write real thread ids to:
 
@@ -77,8 +78,9 @@ window semantics.
 
 ## Send Policy
 
-The host thread tool performs the real send; the send/readback boundary and the
-"stop the controller turn once sent and readback-ok" rule live in
+The host thread tool performs the real send; the accepted-transport/readback
+boundary and the "stop the controller turn once accepted transport plus the
+actual independent readback status are recorded" rule live in
 [references/wakeflow-delivery.md](wakeflow-delivery.md) (Send Boundary).
 
 Transport-specific: if the target is busy or unavailable and no host-level queued

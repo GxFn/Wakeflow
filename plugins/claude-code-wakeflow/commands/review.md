@@ -8,7 +8,14 @@ Run one controller review step. Use the wakeflow-controller skill acceptance rul
 1. Confirm this session is the controller window. Resolve the dispatch group or task id from `$ARGUMENTS`, or from the newest result-ready group in `wakeflow_status`.
 2. Call `wakeflow_review_pack` for the group/task and read the listed raw evidence (files, commits, commands, logs, reports) before judging anything. Each entry also carries the intent triple — Design's `designIntent`, the authored dispatch `objective`, and the result — plus an `intentCheck` reminder; it is advisory context for YOUR drift judgment (no scores, no gates), and a real drift routes to redesign, not a point fix.
 3. When multiple target results need consolidation, call `wakeflow_reduce_results`; treat the reduction as a review candidate only.
-4. Decide explicitly and record it: `wakeflow_decide_review` with accept / rework / blocked / redesign (redesign parks the task and routes a non-bug outcome mismatch back to Design), or `wakeflow_complete_demand` when the completion definition is met with evidence.
+4. Decide explicitly and record it: `wakeflow_decide_review` with accept /
+   rework / blocked / redesign, or `wakeflow_complete_demand` when the
+   completion definition is met with evidence. Mainline redesign uses the
+   stateless mainline Design handoff before a replacement task. A Pod must not
+   fall back to mainline Design; 0.9.1 supports only one frozen Pod Design
+   request/handoff generation (whose sole request may be `initial-design`,
+   `supplement`, or `redesign`), so a different second request stays blocked as
+   a capability gap.
 5. After recording the decision, clear transient window glyphs with `wakeflow-claude-host window-status --reconcile --root <workspace>` (green + means result-ready; reconcile returns settled windows to plain tabs).
 6. Report the decision, the evidence that supports it, and the next eligible step (next package, intake, archive, or stop for user judgment).
 

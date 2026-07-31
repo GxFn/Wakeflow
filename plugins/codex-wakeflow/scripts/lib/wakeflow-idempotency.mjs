@@ -4,6 +4,52 @@ function stableJson(value) {
   return JSON.stringify(value ?? null);
 }
 
+const DELIVERY_TRANSPORT_STATUSES = new Set([
+  "accepted",
+  "rejected-before-send",
+  "ambiguous",
+]);
+
+const DELIVERY_READBACK_STATUSES = new Set([
+  "confirmed",
+  "pending",
+  "unavailable",
+]);
+
+// Delivery runs written before transport/readback were split used
+// status=sent + readback.ok=true as the single completion signal. Keep those
+// artifacts readable while allowing current runs to record the two independent
+// facts explicitly: whether the host accepted the send, and what the bounded
+// read-only observation could see afterwards.
+export function deliveryTransportStatus(run = {}) {
+  if (DELIVERY_TRANSPORT_STATUSES.has(run.transportStatus)) {
+    return run.transportStatus;
+  }
+  if (run.status === "sent" && run.readback?.ok === true) {
+    return "accepted";
+  }
+  // Older blocked/failed records did not capture the host-send phase. Never
+  // infer a proven pre-send rejection from their prose error alone.
+  return "ambiguous";
+}
+
+export function deliveryReadbackStatus(run = {}) {
+  if (DELIVERY_READBACK_STATUSES.has(run.readback?.status)) {
+    return run.readback.status;
+  }
+  if (run.readback?.ok === true) return "confirmed";
+  if (run.readback?.checked === true) return "pending";
+  return "unavailable";
+}
+
+export function deliveryTransportAccepted(run = {}) {
+  return run.status === "sent" && deliveryTransportStatus(run) === "accepted";
+}
+
+export function deliveryReadbackConfirmed(run = {}) {
+  return deliveryReadbackStatus(run) === "confirmed";
+}
+
 function deliveryRunComparable(run = {}) {
   return {
     deliveryId: run.deliveryId,
@@ -14,10 +60,15 @@ function deliveryRunComparable(run = {}) {
     triggerTaskId: run.triggerTaskId,
     reviewScope: run.reviewScope,
     transport: run.transport,
+    transportStatus: deliveryTransportStatus(run),
     status: run.status,
     thread: run.thread,
     hostAction: run.hostAction,
-    readback: run.readback,
+    readback: {
+      status: deliveryReadbackStatus(run),
+      attempts: run.readback?.attempts ?? null,
+      evidence: run.readback?.evidence,
+    },
     keepLive: run.keepLive,
     error: run.error,
   };
@@ -215,7 +266,7 @@ export function buildReplaySummary({ deliveryRuns = [], targetResults = [] } = {
     .map(([deliveryId, runs]) => ({
       deliveryId,
       attempts: runs.length,
-      sentAttempts: runs.filter((run) => run.status === "sent" && run.readback?.ok === true).length,
+      sentAttempts: runs.filter((run) => deliveryTransportAccepted(run)).length,
       runIds: runs.map((run) => run.deliveryRunId).filter(Boolean),
     }));
   const missingIdempotencyKeys = [

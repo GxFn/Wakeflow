@@ -53,7 +53,7 @@ Wakeflow provides the missing control layer:
 - **Preview-gated compact delivery**: the controller reviews the resolved
   repository, task briefing, Skills, and exact prompt before a digest-matched
   apply can write the delivery envelope.
-- **Acceptance-anchored craft**: implementation packages may carry concrete
+- **Acceptance-anchored craft**: every new implementation package carries concrete
   claim/probe/expected anchors that targets map to RED checks before coding;
   the controller still reruns and judges the evidence independently.
 - **Evidence before acceptance**: target backfill is input, not a conclusion.
@@ -98,9 +98,11 @@ bar tells you who is doing what at a glance:
 | Test | after controller validation, explores only the approved real-environment boundary for hidden bugs | `xhigh` |
 
 Inside every pane a seeded statusline shows the live serving model and the
-window identity in plain text. tmux windows do not survive a machine reboot;
-`launch-all` or `launch-window --resume` recreates them from registered Claude
-session ids so the corresponding conversations can resume.
+window identity in plain text. tmux windows do not survive a machine reboot.
+`launch-all` and direct `launch-window --resume` apply only to the configured
+baseline fleet. Pod recovery is separate: `mode=resume` verifies or resumes
+only the exact bound session at its recorded cwd, while current product/main
+HEAD and dirty state remain observations rather than recovery gates.
 
 ### Layer 2 — the loop (how work moves)
 
@@ -115,23 +117,28 @@ disk. Every demand moves through the same closed loop:
  5 work       the target window executes inside its repository boundary
  6 result     TargetResultEnvelope lands with evidence refs -> lock released
  7 review     controller reads RAW evidence, then accepts / reworks / blocks / redesigns
- 8 complete   only when every task is accepted and no blockers remain
+ 8 complete   active required tasks accepted, replacement lineage valid, no blocker
 ```
 
 Two rules keep the loop honest:
 
-- **Prompts wake, state instructs.** The pasted prompt only names the window,
-  task id, and state root; the task definition lives in the state root and the
-  installed skills. A lost prompt loses nothing.
+- **Prompts brief, packages contextualize, Skills execute.** The bounded prompt
+  carries objective, priority completion/context/boundary cues, reading order,
+  identity, and trace. The package owns complete task context, requirement
+  anchors preserve background, and Skills own procedure.
 - **Backfill is input, not acceptance.** A target's self-report never closes
   work. The controller reviews the raw evidence (commits, command output,
   reports) before recording a decision, and a blocked decision is always
   recoverable: new evidence reopens review.
 - **Replacement is explicit.** Ordinary rework redispatches the same task.
-  Redesign preserves the rejected task, then the controller creates a new
+  Mainline redesign preserves the rejected task, then the controller creates a new
   full-context implementation task in the product responsibility window with
   `replacesTargetTaskId` after the Design handoff. Accepting that replacement
   supersedes the old task and package.
+  Version 0.9.1 freezes exactly one Design request/handoff generation per Pod;
+  that sole request may be `initial-design`, `supplement`, or `redesign`. A
+  different second generation remains blocked rather than overwriting it or
+  falling back to mainline Design.
 
 ### Layer 3 — the ground (what's on disk)
 
@@ -146,9 +153,10 @@ Two rules keep the loop honest:
   .wakeflow-local/wakeflow-delivery/                                      local
     dispatch-packets/  delivery-envelopes/  delivery-runs/   transport records
     target-results/                                          evidence envelopes
-    locks/                       one in-flight delivery per window, cross-host
+    locks/                       one in-flight target delivery per window, cross-host
     hosts/codex/                 codex session registry (host-scoped)
     hosts/claude-code/           claude session registry + tmux bindings
+    hosts/<host>/pod-*           pod plans, operations, bindings, access receipts
 ```
 
 Rule of thumb: **business truth is host-neutral and shared; transport handles
@@ -162,8 +170,9 @@ appear in tracked files, prompts, or backfill text.
   They only persist an explicit controller decision.
 - Target windows execute exactly their dispatched package and report evidence.
 - The controller is the only acceptance authority and must complete its own
-  functional validation before Test starts. All existing non-Test targets must
-  already be accepted. Test follows the frozen demand goal and approved Test
+  functional validation before Test starts. Every active/open non-Test target
+  must already be accepted; canonical superseded replacement history is not an
+  open target. Test follows the frozen demand goal and approved Test
   card (`controllerSelfChecks`, approved plan, allowed skills, setup policy,
   and attempt bound); it cannot invent a goal, gate, environment, skill, or
   method. progressive-chain-validation is usable only when explicitly listed.
@@ -175,16 +184,18 @@ appear in tracked files, prompts, or backfill text.
 
 The same workspace can run the Codex edition and the Claude Code edition side
 by side. Demands bind to one platform at claim time (machine-enforced on every
-driving command), the shared per-window lock serializes deliveries across
-hosts, and ownership moves only through an explicit, audited
+driving command), the shared per-window work lease serializes target
+deliveries across hosts (controller returns use a separate paste mutex), and
+ownership moves only through an explicit, audited
 `adopt-demand-host` transfer.
 
 ## Install Wakeflow
 
 > Platform support: macOS-first. The tmux fleet and `brew` preflight are
 > exercised daily on macOS; the tmux core should work on Linux but is not yet
-> verified there. Entering the fleet is always the same printed instruction:
-> open a new terminal and run `tmux attach -t <session>`.
+> verified there. Enter the fleet from a new terminal with `tmux attach -t
+> <session>` when `tmuxSocket` is unset, or `tmux -L <tmuxSocket> attach -t
+> <session>` when the dedicated socket is configured.
 
 
 The repository root is the development workspace, and the installable Claude
@@ -226,7 +237,7 @@ Three steps from install to a running fleet, then a command cheat sheet.
    /wakeflow:init
    ```
    Preview the plan, confirm, and Wakeflow writes the config + access cards, launches every window, and registers it. Already initialized? `init` stops on purpose — use `/wakeflow:windows <name> --replace` for a stale window, or re-run only on an explicit reset.
-2. **Enter the workspace** — open a NEW terminal window or tab, `cd` into the workspace, and run (substitute your `hosts.claude-code.tmuxSession`):
+2. **Enter the workspace** — open a NEW terminal window or tab, `cd` into the workspace, and run (substitute your `hosts.claude-code.tmuxSession`; add `-L <tmuxSocket>` before `attach` when configured):
    ```text
    tmux attach -t wakeflow
    ```
@@ -298,26 +309,43 @@ registry.
 
 **Dispatch.** The primary transport is one step: `deliver --delivery-file
 <envelope.json>` reads the prepared envelope, renders the prompt, resolves the
-target window itself, enforces the shared per-window delivery lock, pastes
-through a tmux buffer, and returns pane readback evidence; the agent records
+target window itself, reuses/revalidates the work lease reserved by applied
+envelope preparation, pastes through a tmux buffer, and returns pane readback evidence; the agent records
 it with `wakeflow_record_delivery`. (`send --window <target> --prompt-file
-<file>` remains the low-level path for custom prompts.) Target windows
+<file> --delivery-id <id>` remains the low-level path for an explicitly
+identified custom target prompt, never a controller-return.) Target windows
 controller-return the same way toward the controller window — for pod demands
 the envelope's stamped `controllerWindow` routes the return to the pod's own
-controller. `wait-results --group <id>` is available only for explicit
+controller without taking a target work lease. If a send is accepted before
+the new pane turn is visible, only bounded readback is retried; the prompt is
+never sent twice. Accepted transport is recorded as `sent`; readback is an
+independent `confirmed` / `pending` / `unavailable` observation for Agent
+judgment, not a send gate. A matching target result normally releases a target
+work lease. For send-failure recovery, only a proven pre-send rejection may
+release the exact matching lease; ambiguous outcomes preserve it. `wait-results --group
+<id>` is available only for explicit
 synchronous waits in scripted flows; normal dispatch does not arm it.
 
-**Recovery.** When a tmux window dies or the machine reboots, the registered
-session id remains the thread id. Relaunch the same conversation interactively
-with `launch-window --resume --session-id <registered id> --replace`; use
-`launch-all` to restore every registered baseline window. An explicit
+**Recovery.** Creation and recovery are separate. When a tmux window dies or
+the machine reboots, the registered
+session id remains the thread id. Relaunch a baseline conversation with
+`launch-window --root <workspace> --window <window> --cwd <recorded actual cwd>
+--resume --session-id <registered id> --replace [--server <configured server>]`;
+use `launch-all` only for the registered baseline fleet. A Pod uses the
+read-only `wakeflow_pod_open mode=resume` plan. The helper verifies a live
+window or resumes only the exact registered session at the immutable bound
+cwd; it never repeats the creation HEAD gate, adds `--worktree`, discovers or
+creates a replacement, rebinds core state, or falls back to mainline. Missing
+or ambiguous identity remains blocked. A baseline-only
 `headless-recovery` send adapter exists as a last resort when interactive
-relaunch is impossible; it is not the normal fleet path and still requires
-readback evidence.
+relaunch is impossible; it is not the normal fleet path, records one bounded
+readback observation without requiring confirmed visibility, and must never
+recover a Pod window.
 
 **Watching.** Open a new terminal window/tab and run `tmux attach -t
-<session>` (default `wakeflow`). That single command is the supported path —
-no programmatic tab-opening or alternative attach variants.
+<session>` (default `wakeflow`) without a dedicated socket, or `tmux -L
+<tmuxSocket> attach -t <session>` when configured. There is no programmatic
+tab-opening path.
 
 **Unattended permissions.** Work windows ship with `acceptEdits`; the
 fleet-wide mode lives in `hosts.claude-code.permissionMode` and changes only
@@ -340,8 +368,9 @@ per-repository limit.
   `Test__<pod>`, and one product session per selected repository, in its own
   tmux container. Within the demand, each repository still receives one
   combined package at a time.
-- Core `wakeflow_pod_open` only records host-neutral launch operations. The
-  helper materializes them: three distinct control sessions and native
+- Core `wakeflow_pod_open mode=create` records host-neutral first-
+  materialization operations. The helper materializes them: three distinct
+  control sessions and native
   `claude --worktree` product sessions from exact repository roots. It never
   nests Claude's `--tmux` or grants the whole workspace with a default
   `--add-dir`.
@@ -353,20 +382,24 @@ per-repository limit.
   dir, base HEAD, and `mainCheckout=false` with `wakeflow_pod_bind`. All three
   control bindings produce `control-ready`; the Pod Design handoff plus all
   product bindings produce `execution-ready`.
-- Pod Design and redesign stay between `Controller__<pod>` and
-  `Design__<pod>`. Freeze the controller request with
+- The Pod's single Design generation stays between `Controller__<pod>` and
+  `Design__<pod>`.
+  Freeze the controller request with
   `wakeflow_pod_prepare_design_request`, then record its exact
   `PodDesignHandoffEnvelope` with `wakeflow_pod_record_design_handoff`; neither
-  step creates a second global TODO.
+  step creates a second global TODO. Version 0.9.1 does not persist a second
+  Pod Design generation, so later supplement/redesign is an explicit
+  capability blocker.
 - Before Pod Test dispatch, run `wakeflow_pod_prepare_test_access` and record
   the independent Test session's exact probe through
   `wakeflow_pod_record_test_access`. Only `validated` +
   `direct-multi-root` coverage of every active product binding opens dispatch.
   Unsupported multi-root access remains blocked; no main-checkout, product-
   window, or unverified per-repository-executor fallback is implemented.
-- Re-running `pod-open` reuses launch correlations and receipts, creating only
-  missing sessions. Resume uses `--resume` and the recorded actual cwd, never
-  a second `--worktree`.
+- Re-running `mode=create` may materialize only canonical operations that are
+  still pending and unbound. `mode=resume` contains only already-bound
+  operations: it verifies or resumes the exact session at the recorded actual
+  cwd, and never creates a missing session, passes `--worktree`, or rebinds it.
 - Core `wakeflow_pod_close` emits a host-close plan. Helper `pod-close` closes
   tmux/Claude sessions and reports worktree disposition; record each result
   with `wakeflow_pod_record_close_receipt`. Wakeflow never runs Git worktree
@@ -491,19 +524,25 @@ Core rules:
   presence; it is not a second session-id or window-semantics authority.
 - Delivery prompts remain compact and human-readable.
 - The controller sends a prepared envelope in one step with the host helper
-  (`deliver --delivery-file <envelope.json>`; `send --window --prompt-file` is
-  the low-level custom-prompt path); the helper enforces the shared per-window
-  delivery lock, pastes through a tmux buffer, and returns pane readback
+  (`deliver --delivery-file <envelope.json>`; `send --window --prompt-file
+  --delivery-id <id>` is the low-level custom-target-prompt path, never a
+  controller-return); applied preparation reserves the shared per-window work
+  lease, and target delivery reuses/revalidates it, pastes through a tmux buffer, and returns pane readback
   evidence that the agent records with `wakeflow_record_delivery`.
-- Targets controller-return through the same helper send toward the
-  controller window; `wait-results --group <id>` is available only for explicit
+- Targets controller-return with envelope-aware `deliver --delivery-file`
+  toward the stamped controller window without taking a target work lease;
+  `wait-results --group <id>` is available only for explicit
   synchronous waits in scripted flows.
 - `group-ready` waits for the expected target results before a controller
   return.
 - `per-target` can wake the controller once per target while still preserving
   a group snapshot.
-- After a real send is recorded as sent with readback evidence, the controller
-  turn stops. It does not sleep or poll in the same turn.
+- After accepted transport is recorded as sent with its actual independent
+  readback status (`confirmed`, `pending`, or `unavailable`), the controller
+  turn stops. It does not sleep or poll in the same turn; readback is not a
+  send gate.
+- If an accepted send is not yet visible in the pane, retry only bounded
+  readback and never resend the prompt.
 - Keep-live support is runtime assistance only. It is not task logic,
   transport authority, or acceptance evidence.
 
@@ -627,8 +666,8 @@ the Claude Code edition manual.
    are evidence, not acceptance.
 2. **One demand, one state root**: JSON state and Markdown progress surfaces
    stay tied to the same demand.
-3. **Prompts wake, packages contextualize, skills execute**: prompts carry the
-   current target and reading order; task packages own complete per-target
+3. **Prompts brief, packages contextualize, skills execute**: prompts carry
+   bounded priority cues, the current target, and reading order; task packages own complete per-target
    context, requirement anchors retain original background, and installed
    skills own execution procedure.
 4. **Repository boundaries matter**: each window owns its source, tests,

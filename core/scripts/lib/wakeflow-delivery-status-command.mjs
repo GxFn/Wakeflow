@@ -4,7 +4,12 @@ import {
   inspectActiveDemandStateRoot,
   isWakeflowInitStagingEntry,
 } from "./wakeflow-active-demands.mjs";
-import { buildReplaySummary } from "./wakeflow-idempotency.mjs";
+import {
+  buildReplaySummary,
+  deliveryReadbackStatus,
+  deliveryTransportAccepted,
+  deliveryTransportStatus,
+} from "./wakeflow-idempotency.mjs";
 import { listPodReservations } from "./wakeflow-pod-reservations.mjs";
 import { buildControllerCallbackPlan } from "./wakeflow-return-policy.mjs";
 import { loadWorkspaceConfig, workspaceLedgerPaths } from "./wakeflow-config.mjs";
@@ -483,7 +488,7 @@ export function commandStatus(ctx) {
     const runs = runArtifacts
       .filter((item) => item.value?.kind === "DirectThreadDeliveryRun" && item.value.deliveryId === envelope.deliveryId)
       .sort((left, right) => String(left.value.createdAt || "").localeCompare(String(right.value.createdAt || "")));
-    const sentRun = [...runs].reverse().find((item) => item.value.status === "sent" && item.value.readback?.ok === true);
+    const sentRun = [...runs].reverse().find((item) => deliveryTransportAccepted(item.value));
     const latestRun = runs[runs.length - 1] || null;
     const status = sentRun
       ? "sent"
@@ -500,6 +505,10 @@ export function commandStatus(ctx) {
       status,
       sent: Boolean(sentRun),
       readbackOk: Boolean(sentRun?.value.readback?.ok),
+      readbackStatus: sentRun ? deliveryReadbackStatus(sentRun.value) : undefined,
+      transportStatus: sentRun
+        ? deliveryTransportStatus(sentRun.value)
+        : latestRun ? deliveryTransportStatus(latestRun.value) : undefined,
       runCount: runs.length,
       latestRunFile: latestRun ? path.relative(workspaceRoot, latestRun.file) : undefined,
       wakeflowTrace: envelope.wakeflowTrace,
@@ -811,6 +820,8 @@ export function commandStatus(ctx) {
       status: item.status,
       sent: item.sent,
       readbackOk: item.readbackOk,
+      readbackStatus: item.readbackStatus,
+      transportStatus: item.transportStatus,
       runCount: item.runCount,
       latestRunFile: item.latestRunFile,
     };

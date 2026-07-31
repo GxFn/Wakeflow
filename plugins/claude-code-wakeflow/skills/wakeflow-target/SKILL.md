@@ -22,16 +22,20 @@ Continue current window task: <currentWindow> / <taskId>.
 Current objective (the task package is authoritative):
 - <one-line objective>
 
-Completion focus (full criteria are in the task package):
+Completion focus (up to two; full criteria are in the task package):
 - <bounded observable result>
+- <optional second bounded observable result>
 
 - Priority context: <the highest-priority confirmed fact>
 - Critical boundary [forbidden|outOfScope|inScope]: <the highest-priority boundary>
 
+Key acceptance anchors (full probes and expectations are in the task package):
+- <anchor id>: <claim>
+
 Read before execution, in order:
 - Task package (complete task context): <absolute package path>
 - Requirement background entry (full anchors are in the task package) [goal]: <document#section>
-- Workspace instructions: <workspace>/CLAUDE.md
+- Workspace instructions (only when distinct from repository instructions): <workspace>/CLAUDE.md
 - Repository instructions: <repository>/CLAUDE.md
 - Current state root: <absolute state-root path>
 
@@ -43,8 +47,14 @@ Identity (full boundaries are in the task package):
 - Current responsibility window: <window>
 - Only working repository: <absolute repository path>
 
+Before coding: map every acceptanceAnchor in the task package to a RED test or
+probe; return needs-review instead of inventing a requirement when an anchor
+cannot be tested.
+
 Return requirement:
-- Return a TargetResultEnvelope with verifiable evidence.
+- Execute only this task package. Return a TargetResultEnvelope with verifiable
+  evidence through this Skill. A target result is not controller acceptance.
+- Test execution contract: <package path>#testExecution
 
 Dispatch record (routing and trace only):
 - taskId: <taskId>
@@ -55,9 +65,12 @@ Dispatch record (routing and trace only):
 ```
 
 Do not expect the prompt to repeat command manuals or the whole requirement.
-It repeats at most the highest-priority `contextSummary` entry and one critical
-boundary for immediate orientation; it does not repeat the remaining context,
-complete boundary lists, commit policy, or every completion/requirement entry.
+It repeats at most two completion expectations, the highest-priority
+`contextSummary` entry, one critical boundary, and four acceptance-anchor
+ids/claims for immediate orientation. Workspace instructions, anchors, the RED
+instruction, and the Test contract are conditional.
+It does not repeat remaining context, complete boundary lists, commit policy,
+full probes/expectations, or every completion/requirement entry.
 Read the package first, then its ordered requirement anchors, then execute
 through the listed Skills. Fields such as `controllerWindow`, `returnPolicy`,
 `taskPackageId`, and `stateRevision` remain authoritative in machine state.
@@ -71,7 +84,7 @@ advance the live state root.
 1. Consume the delivery envelope.
    - Direct-thread delivery proves only that a prompt was delivered. It arrives
      as a user message pasted into this window's tmux pane by the Wakeflow host
-     helper (`wakeflow-claude-host.mjs send`); arrival is transport evidence,
+     helper (`wakeflow-claude-host.mjs deliver --delivery-file`); arrival is transport evidence,
      not authority.
    - Confirm the responsibility window, `taskId`, `stateRoot`, and optional
      `dispatchGroup`.
@@ -79,9 +92,11 @@ advance the live state root.
      prompt and declare the current window and repository responsibility.
 2. Read the assigned task.
    - Read the task package at the exact prompt path, then its ordered
-     `requirementRefs`, then every `requiredSkills` entry. Do not substitute a
-     progress summary for the package or treat background documents as an
-     execution procedure.
+     `requirementRefs`, then every Skill listed by the delivery prompt /
+     `taskBriefing`. Those Skills are derived from work type, evidence/anchor
+     needs, and the Test contract; they are not ordinary task-package prose.
+     Do not substitute a progress summary for the package or treat background
+     documents as an execution procedure.
    - Execute only the task assigned to this target window.
    - Do not claim another target, Test role, or controller role.
    - If the prompt lists the craft skill, or the task package carries an
@@ -151,14 +166,17 @@ advance the live state root.
    - If the target task references a delivery id but the local delivery envelope
      cannot be found, stop and report that missing local envelope; do not assume
      no callback is needed.
-   - Complete the real host send/readback with the same tmux helper used for
-     controller-to-target delivery: write the controller-return envelope prompt
-     to a temp file, then run
-     `node <plugin>/scripts/lib/wakeflow-claude-host.mjs send --root <workspace>
-     --window <controllerWindow> --prompt-file <file>`. The controller is also
-     a tmux-resident window; the helper enforces the controller window's shared
-     delivery lock and returns pane readback evidence (`readback.paneTail`).
-     Then use `wakeflow_record_delivery` to record the delivery run.
+   - Complete the real host send/readback with the envelope-aware helper:
+     `node <plugin>/scripts/lib/wakeflow-claude-host.mjs deliver --root
+     <workspace> --delivery-file <controller-return-envelope>`. It resolves the
+     stamped `controllerWindow`, pastes the exact prompt, and returns pane
+     readback evidence. Controller returns do not acquire a target work lease.
+     Then use `wakeflow_record_delivery` to record the delivery run. The helper
+     returns independent `transportStatus` and `readback.status` facts. An
+     accepted send with pending/unavailable visibility is still sent: record it,
+     and leave any further read-only inspection to Agent judgment. Controller-
+     return has no target work lease. Never resend while observing an accepted
+     send.
    - Do not stop after writing the target result when controller return is
      allowed. The closeout steps stay separate: record target result, review
      readiness, prepare controller-return envelope, send with the host helper,
@@ -194,11 +212,15 @@ the approvedPlan text at that index. A missing, duplicate, or unknown index is
 not a completed Test result. The controller, not Test, decides whether a
 proposed change becomes a revised Test card/package.
 
-Recovery is not a delivery mode: if this window's tmux pane dies mid-task, the
-same session is finished or recovered by interactive relaunch (`launch-window --resume`; headless `claude -p` bills the separate Agent SDK credit from 2026-06-15) with `claude --resume
-<registered session id>` (the session id is stable and stays registered), and
-the resident window is relaunched with `launch-window --replace
---session-id <same id>`.
+Creation and recovery are separate operations. A dead baseline window resumes the same
+registered session with `launch-window --root <workspace> --window <window>
+--cwd <recorded actual cwd> --resume --session-id <registered id> --replace
+[--server <configured server>]`. A Pod uses the read-only
+`wakeflow_pod_open mode=resume` plan. The helper may verify or resume only the
+exact registered session at its immutable bound cwd; it never repeats the
+creation HEAD gate, passes `--worktree`, creates/discovers a replacement,
+rebinds core state, or falls back to mainline. Missing or ambiguous identity is
+a blocker.
 
 ## Stop Conditions
 
@@ -214,12 +236,17 @@ Stop and return a blocker when:
 - A Test delivery appears in a non-Test window without explicit authorization.
 - This window is an isolation worktree window (`<repo>__<id>`) and the task
   would touch anything outside its own worktree/branch — the repository's main
-  checkout, another demand's worktree, or a merge back to the main line
-  (merging is a controller step, never this window's).
+  checkout, another demand's worktree, or a merge back to the main line.
+  Merge-back is a separate human-reviewed repository integration step; neither
+  the target nor the controller performs it automatically.
 
-## Result Envelope Minimum
+## Result Envelope Contract
 
-Every target result should include:
+For the MCP call, pass the task as `taskId`; the persisted artifact records it
+as `targetTaskId`. Every `completed` result must include the following complete
+contract. `blocked` or `needs-review` may carry partial execution evidence, but
+must still identify the task/group/state and provide a concrete blocker
+summary:
 
 - `targetWindow`
 - `targetTaskId`

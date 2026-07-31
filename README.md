@@ -49,6 +49,9 @@ leaves a verifiable artifact on disk:
   anchored requirement references, boundaries, completion expectations,
   dependencies, and the repository commit decision; dispatch derives the
   required execution Skills from that package.
+- **Acceptance-anchored implementation**: every new implementation package
+  carries at least one controller-authored claim/probe/expected anchor; the
+  target proves RED→GREEN and the controller independently verifies it.
 - **Focused child windows**: each repository window works only inside its
   configured responsibility boundary.
 - **Preview-gated compact delivery**: the controller reviews the resolved
@@ -117,14 +120,16 @@ disk. Every demand moves through the same closed loop:
  5 work       the target window executes inside its repository boundary
  6 result     TargetResultEnvelope lands with evidence refs -> lock released
  7 review     controller reads RAW evidence, then accepts / reworks / blocks
- 8 complete   only when every task is accepted and no blockers remain
+ 8 complete   active required tasks accepted, replacement lineage valid, no blocker
 ```
 
-Two rules keep the loop honest: **prompts wake, state instructs** (the
-delivered prompt only names window, task id, and state root; the task
-definition lives in the state root and skills), and **backfill is input, not
-acceptance** (the controller reviews raw evidence before any decision; a
-blocked decision is always recoverable once new evidence arrives).
+Two rules keep the loop honest: **prompts brief, packages contextualize,
+skills execute** (the bounded prompt carries the objective, highest-priority
+completion/context/boundary cues, reading order, identity, and trace; the task
+package owns complete context, requirement documents preserve background, and
+Skills own procedure), and **backfill is input, not acceptance** (the
+controller reviews raw evidence before any decision; a blocked decision is
+always recoverable once new evidence arrives).
 
 ### Layer 3 — the ground (what's on disk)
 
@@ -137,9 +142,10 @@ blocked decision is always recoverable once new evidence arrives).
   .wakeflow-local/wakeflow-delivery/                                local
     dispatch-packets/  delivery-envelopes/  delivery-runs/    transport records
     target-results/                                           evidence envelopes
-    locks/                       one in-flight delivery per window, cross-host
+    locks/                       one in-flight target delivery per window, cross-host
     hosts/codex/                 codex thread registry  (host-scoped)
     hosts/claude-code/           claude session registry + tmux bindings
+    hosts/<host>/pod-*           pod plans, operations, bindings, access receipts
 ```
 
 Rule of thumb: **business truth is host-neutral and shared; transport handles
@@ -159,7 +165,8 @@ approved environment boundary. The user owns product decisions.
 
 One workspace may run both editions side by side: demands bind to one platform
 at claim time (machine-enforced on every driving command), the shared
-per-window lock serializes deliveries across hosts, and ownership moves only
+per-window work lease serializes target deliveries across hosts (controller
+returns use a separate send mutex), and ownership moves only
 through the explicit, audited `adopt-demand-host` transfer.
 
 ## Install Wakeflow
@@ -190,7 +197,10 @@ product session uses Claude's native `claude --worktree`, while Wakeflow only
 plans and verifies the resulting receipt. Claude returns final session ids
 synchronously (there is no Codex `clientThreadId` state), and Pod Test remains
 blocked until direct-multi-root access to every bound product worktree is
-validated. Wakeflow applies no numeric Pod limit. See
+validated. `wakeflow_pod_open mode=create` keeps the strict initial base gate;
+the read-only `mode=resume` path later verifies the immutable binding and exact
+registered session/cwd without rerunning that creation gate. Wakeflow applies
+no numeric Pod limit. See
 [plugins/claude-code-wakeflow/README.md](plugins/claude-code-wakeflow/README.md)
 for the full Claude Code guide.
 
@@ -203,7 +213,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.0/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.1/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository
@@ -219,7 +229,9 @@ the thread registry. Wakeflow binds verified cwd/Git receipts, requires a
 validated direct-multi-root receipt before Pod Test dispatch, and logically
 closes the Pod; Codex owns physical worktree lifecycle. An unavailable
 mainline returns `mainline-unavailable` and is repaired rather than silently
-replaced by a Pod.
+replaced by a Pod. `wakeflow_pod_open mode=resume` is a read-only identity and
+current-state check for an already-bound Pod; it never creates or rebinds a
+thread/worktree.
 
 For local development, register this checkout as its own local marketplace:
 
@@ -331,7 +343,9 @@ The loop is the same on both hosts; only how you drive it differs.
 **Claude Code (slash commands):**
 
 1. `/wakeflow:init` — discover the workspace, confirm scope with you, write
-   config/docs, and launch the tmux fleet (`tmux attach -t wakeflow` to watch).
+   config/docs, and launch the tmux fleet. Watch with `tmux attach -t wakeflow`
+   on the default socket, or `tmux -L <tmuxSocket> attach -t wakeflow` when a
+   dedicated socket is configured.
 2. Feed the goal to the Design window (or write the requirement yourself).
    Design clarifies it and calls `wakeflow_deliver` — the demand lands as a
    `pending-claim` row on the global TODO board with its design docs linked.
@@ -340,23 +354,32 @@ The loop is the same on both hosts; only how you drive it differs.
    (explicit). This inits the state root and consumes the row; the controller
    confirms the plan and task packages with you before any dispatch.
 4. `/wakeflow:dispatch` — prepare one envelope, deliver it in one step, record
-   the readback, end the turn. The target window works inside its repository
+   the accepted transport and independent readback status, then end the turn.
+   The target window works inside its repository
    and its controller-return wakes the controller with evidence attached.
+   If a send is accepted before the new turn becomes visible, only readback is
+   retried within a bounded budget; pending visibility remains an observation
+   for Agent judgment, not a send failure or authority to send twice.
 5. `/wakeflow:review` — read the raw evidence behind the result, then record
    the decision: accept / rework / blocked / redesign.
    Ordinary rework redispatches the same task with a new dispatch group.
-   Redesign keeps the rejected task as history: after Design returns its
+   Mainline redesign keeps the rejected task as history: after Design returns its
    handoff, the controller creates a new full-context implementation task in
    the product responsibility window with
    `replacesTargetTaskId`; accepting that replacement supersedes the old task
    and package explicitly.
-6. Repeat dispatch → review until every non-Test task is accepted and the
+   In 0.9.1 a Pod has exactly one frozen Design request/handoff generation;
+   that sole request may be `initial-design`, `supplement`, or `redesign`. A
+   different second generation remains blocked rather than overwriting the
+   recorded handoff or falling back to mainline Design.
+6. Repeat dispatch → review until every active required non-Test task is
+   accepted (or has valid superseded lineage) and the
    controller has completed its own functional validation. Only then may the
    controller add/dispatch a confirmed Test card; Test follows the frozen goal,
    approved Test plan, `controllerSelfChecks`, allowed skills, setup policy,
    and attempt bound. A Test skill such as progressive-chain-validation is
    usable only when the card names it explicitly.
-7. When every required task is accepted, run
+7. When every active required task is accepted and replacement lineage is valid, run
    `wakeflow_complete_demand` and `wakeflow_archive` close the story into the
    ledger. Demand archive dry-run reports real-id and absolute-path findings;
    use `redact: true` to commit a re-scanned portable copy while preserving the
@@ -375,7 +398,7 @@ archive the demand".
 
 | You want | Do |
 | --- | --- |
-| Enter the fleet | open a terminal, `tmux attach -t wakeflow` |
+| Enter the fleet | open a terminal; use `tmux attach -t wakeflow`, or add `-L <tmuxSocket>` when configured |
 | See where everything is | `/wakeflow:status` |
 | Push work forward | `/wakeflow:dispatch` |
 | Judge returned work | `/wakeflow:review` |
@@ -419,11 +442,17 @@ Core rules:
 - The host sends prompts through its transport boundary: Codex thread tools for
   Codex, and the tmux host helper for Claude Code. Wakeflow records the send
   and readback evidence.
+- Accepted transport is the send-completion fact. Readback is an independent
+  `confirmed` / `pending` / `unavailable` observation; it never authorizes a
+  resend. A matching target result normally releases its target work lease.
+  For send-failure recovery, only a proven rejection before send may release
+  the exact matching delivery lease. Ambiguous outcomes preserve it for Agent
+  judgment.
 - `group-ready` waits for the expected target results before a controller
   return.
 - `per-target` can wake the controller once per target while still preserving a
   group snapshot.
-- After a real send is recorded as sent with readback evidence, the controller
+- After accepted transport is recorded as sent with its actual readback status, the controller
   turn stops. It does not sleep or poll in the same turn.
 - Keep-live support is runtime assistance only. It is not task logic, transport
   authority, or acceptance evidence.
@@ -459,7 +488,7 @@ Primary tool groups:
 | Need | MCP tools |
 | --- | --- |
 | Setup and window registration | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
-| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
+| Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
 | Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind`, `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff`, `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_pod_close`, `wakeflow_pod_record_close_receipt`, `wakeflow_pod_list` |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
@@ -585,13 +614,13 @@ host send adapter, manifests, READMEs, memory-file template, skills, template
 bundle) live only inside each artifact. `npm run check:core` keeps the copies
 honest.
 
-The full dual-edition architecture, code logic, local file storage (the
-shared-business-state vs host-scoped-runtime split), and state flow are
-documented in
-[docs/wakeflow-dual-edition-architecture-and-state-flow.md](docs/wakeflow-dual-edition-architecture-and-state-flow.md);
-the companion design-pattern read — why the architecture looks like this and
-what it costs — is
-[docs/wakeflow-architecture-deep-dive-2026-07-02.md](docs/wakeflow-architecture-deep-dive-2026-07-02.md).
+Current 0.9.1 Pod behavior and acceptance authority are documented in
+[docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md](docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md).
+The non-Pod hardening history is recorded in
+[docs/wakeflow-hardening-design-compliance-2026-07-30.md](docs/wakeflow-hardening-design-compliance-2026-07-30.md).
+The dual-edition flow and architecture deep dive are historical v0.7.x
+snapshots, retained to explain evolution rather than current commands,
+tool counts, prompt shape, or Pod ownership.
 
 Common source areas:
 
@@ -624,8 +653,8 @@ their operator interface.
    are evidence, not acceptance.
 2. **One demand, one state root**: JSON state and Markdown progress surfaces
    stay tied to the same demand.
-3. **Prompts wake, packages contextualize, skills execute**: prompts carry the
-   current target and reading order; task packages own complete per-target
+3. **Prompts brief, packages contextualize, skills execute**: prompts carry
+   bounded priority cues, the current target, and reading order; task packages own complete per-target
    context, requirement anchors retain original background, and installed
    skills own execution procedure.
 4. **Repository boundaries matter**: each window owns its source, tests,

@@ -1,4 +1,9 @@
 import path from "node:path";
+import {
+  deliveryReadbackStatus,
+  deliveryTransportAccepted,
+  deliveryTransportStatus,
+} from "./wakeflow-idempotency.mjs";
 import { controllerReturnResultVersion } from "./wakeflow-return-policy.mjs";
 
 export function createDeliveryEvidence(ctx) {
@@ -40,8 +45,8 @@ export function createDeliveryEvidence(ctx) {
 
   function deliveryRunStatusForEnvelope(envelope) {
     const runs = deliveryRunsFor(envelope.deliveryId);
-    const sentRun = runs.findLast?.((item) => item.run.status === "sent" && item.run.readback?.ok === true)
-      || [...runs].reverse().find((item) => item.run.status === "sent" && item.run.readback?.ok === true);
+    const sentRun = runs.findLast?.((item) => deliveryTransportAccepted(item.run))
+      || [...runs].reverse().find((item) => deliveryTransportAccepted(item.run));
     const latestRun = runs[runs.length - 1] || null;
     const status = sentRun
       ? "sent"
@@ -66,6 +71,10 @@ export function createDeliveryEvidence(ctx) {
       status,
       sent: Boolean(sentRun),
       readbackOk: Boolean(sentRun?.run.readback?.ok),
+      readbackStatus: sentRun ? deliveryReadbackStatus(sentRun.run) : undefined,
+      transportStatus: sentRun
+        ? deliveryTransportStatus(sentRun.run)
+        : latestRun ? deliveryTransportStatus(latestRun.run) : undefined,
       runCount: runs.length,
       latestRunFile: latestRun ? path.relative(workspaceRoot, latestRun.file) : undefined,
     };

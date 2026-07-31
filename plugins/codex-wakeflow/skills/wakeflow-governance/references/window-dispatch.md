@@ -48,14 +48,17 @@ executor.
 
 ## Identity Gate
 
-Every task package and copyable prompt for an execution window must require the
-target to:
+Every task package must preserve the full identity boundary. The compact prompt
+must navigate to that package and the applicable instruction files, and must
+surface the current window, repository, and highest-priority boundary. The
+target then:
 
 - read parent `AGENTS.md`;
 - read the current state root or controller document;
 - read the target repository `AGENTS.md`;
 - state the current window, repository, and responsibility;
-- state what the window is not responsible for.
+- confirms the complete in-scope, out-of-scope, and forbidden lists from the
+  package before execution.
 
 If the target cannot confirm identity, it stops and reports a blocker.
 
@@ -98,9 +101,10 @@ full-context implementation task in the product responsibility window with
 redesign task cannot be re-dispatched; accepting the replacement marks it
 `superseded`.
 
-For Pod redesign, replace “Design delivers through its stateless path” above
-with the Pod request/handoff loop. The product replacement still uses
-`replacesTargetTaskId`; only the Design transport differs.
+For Pod redesign, never use the mainline stateless Design path. Version 0.9.1
+has only one immutable Pod Design request/handoff slot, so a later redesign is
+a capability blocker; do not author a replacement until a next-generation Pod
+Design lineage exists.
 
 Dispatch by task package, not tiny fragments. A task package should group
 mainline work, same-window TODOs, and evidence work that share the same boundary
@@ -153,12 +157,20 @@ Current objective (the task package is authoritative):
 - <one-line objective>
 
 Completion focus (full criteria are in the task package):
-- <bounded observable result>
+- <up to two ordered observable results>
+
+- Priority context: <highest-priority confirmed fact>
+- Critical boundary [forbidden|outOfScope|inScope]: <highest-priority boundary>
+
+Key acceptance anchors (full probes and expectations are in the task package):
+- <up to four anchor ids/claims>
 
 Read before execution, in order:
 - Task package (complete task context): <absolute package path>
 - Requirement background entry (full anchors are in the task package) [goal]: <document#section>
+- Workspace instructions: <workspace>/AGENTS.md
 - Repository instructions: <repository>/AGENTS.md
+- Current state root: <absolute state-root path>
 
 Required execution Skills (execution-process authority):
 - skills/wakeflow-target/SKILL.md
@@ -168,8 +180,13 @@ Identity (full boundaries are in the task package):
 - Current responsibility window: <window>
 - Only working repository: <absolute repository path>
 
+Before coding: map every package acceptanceAnchor to a RED test or probe; if an
+anchor is untestable, return needs-review instead of inventing a requirement.
+
 Return requirement:
-- Return a TargetResultEnvelope with verifiable evidence.
+- Execute only this task package. Return a TargetResultEnvelope with verifiable
+  evidence. A target result is not controller acceptance.
+- Test execution contract: <package>#testExecution
 
 Dispatch record (routing and trace only):
 - taskId: <taskId>
@@ -179,11 +196,12 @@ Dispatch record (routing and trace only):
 - dispatchGroup: <group>
 ```
 
-Prompts stay bounded: include only the first two ordered completion
-expectations, one original requirement entry, and acceptance-anchor ids/claims.
-Full context, requirement anchors, boundaries, commit policy, probes,
-validation commands, evidence fields, and Test contracts stay in the task
-package, repository `AGENTS.md`, or listed Skills.
+Anchor, RED, workspace, and Test lines are conditional. Prompts stay bounded:
+objective, at most two ordered completion expectations, one priority-context
+fact, one critical boundary, at most four anchor ids/claims, one original
+requirement entry, and ordered navigation. Full context, requirement anchors,
+boundary lists, commit policy, probes, validation commands, evidence fields,
+and Test contracts stay in the task package or listed instruction/Skill files.
 
 Before writing transport files, run the target prepare as a preview and inspect
 `readiness`, `taskBriefing`, the resolved repository root, required Skills, and
@@ -191,4 +209,4 @@ the exact prompt. Only a correct preview is repeated with `apply=true`, passing
 the preview's `previewDigest` as `expectedPreviewDigest`. The digest covers the
 package, state revision, resolved repository, prompt, and transport
 configuration; any change requires a new preview. Preview must not create a
-packet, envelope, window config, or delivery lock.
+packet, envelope, window config, or target work lease.

@@ -52,7 +52,7 @@ Wakeflow provides the missing control layer:
 - **Preview-gated compact delivery**: the controller reviews the resolved
   repository, task briefing, Skills, and exact prompt before a digest-matched
   apply can write the direct-thread envelope.
-- **Acceptance-anchored craft**: implementation packages may carry concrete
+- **Acceptance-anchored craft**: every new implementation package carries concrete
   claim/probe/expected anchors that targets map to RED checks before coding;
   the controller still reruns and judges the evidence independently.
 - **Evidence before acceptance**: target backfill is input, not a conclusion.
@@ -104,7 +104,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.0/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.1/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository
@@ -266,11 +266,15 @@ The normal Wakeflow loop is deliberately small:
 6. The controller reviews raw evidence, records a decision, and either creates
    the next eligible package, stops for user judgment, marks the demand blocked,
    or completes the demand.
-   Ordinary rework redispatches the same task. Redesign preserves the rejected
+   Ordinary rework redispatches the same task. Mainline redesign preserves the rejected
    task, then the controller creates a new full-context implementation task in
    the product responsibility window with
    `replacesTargetTaskId` after the Design handoff; accepting the replacement
    explicitly supersedes the old task and package.
+   Version 0.9.1 freezes exactly one Design request/handoff generation per
+   Pod; that sole request may be `initial-design`, `supplement`, or `redesign`.
+   A different second generation remains blocked rather than overwriting it or
+   falling back to mainline Design.
 7. Durable conclusions move to `wakeflow-ledger/`; local runtime stays local.
 
 Design and Test are supporting roles:
@@ -279,7 +283,8 @@ Design and Test are supporting roles:
   also redesigns non-bug outcome mismatches when implementation evidence is
   valid but the user-visible effect is still wrong. It does not dispatch
   implementation or become product truth by itself.
-- **Test** starts only after every existing non-Test target is accepted and the
+- **Test** starts only after every active required non-Test target is accepted
+  (valid superseded lineage is excluded) and the
   controller has completed its own functional validation. It then explores the
   approved real-environment boundary for hidden bugs. It cannot invent a goal,
   gate, environment, skill, or method. The Test card freezes
@@ -300,8 +305,11 @@ per-repository limit.
 - One Pod owns independent `Controller__<pod>`, `Design__<pod>`,
   `Test__<pod>`, and one product thread per selected repository. Within the
   demand, each repository still receives one combined package at a time.
-- `wakeflow_pod_open` only records host-neutral launch operations. It creates no
-  Git branch/worktree, Codex thread, or dynamic repository overlay.
+- `wakeflow_pod_open mode=create` only records host-neutral launch operations.
+  It creates no Git branch/worktree, Codex thread, or dynamic repository
+  overlay. For an already-bound Pod, `mode=resume` is read-only: it verifies
+  the manifest/binding/registry/cwd/Git common-dir identity, reports current
+  HEAD/dirty as observations, and never creates or rebinds a resource.
 - Codex creates Controller/Design/Test as three distinct local control-project
   threads. Each product uses the exact saved repository project with
   `environment.type=worktree`; missing project identity fails closed and never
@@ -318,11 +326,14 @@ per-repository limit.
   Git common dir, base HEAD, and `mainCheckout=false` receipt with
   `wakeflow_pod_bind`. All three control bindings produce `control-ready`; the
   Pod Design handoff plus all product bindings produce `execution-ready`.
-- Pod Design and redesign stay between `Controller__<pod>` and
-  `Design__<pod>`. Freeze the controller request with
+- The Pod's single Design generation stays between `Controller__<pod>` and
+  `Design__<pod>`.
+  Freeze the controller request with
   `wakeflow_pod_prepare_design_request`, then record its exact
   `PodDesignHandoffEnvelope` with `wakeflow_pod_record_design_handoff`; neither
-  step creates a second global TODO.
+  step creates a second global TODO. Version 0.9.1 does not persist a second
+  Pod Design generation, so later supplement/redesign is an explicit
+  capability blocker.
 - Before Pod Test dispatch, run `wakeflow_pod_prepare_test_access` and record
   the independent Test session's exact probe through
   `wakeflow_pod_record_test_access`. Only `validated` +
@@ -347,11 +358,19 @@ Core rules:
 - Delivery prompts remain compact and human-readable.
 - The host sends prompts with Codex thread tools; Wakeflow records the send and
   readback evidence.
+- If a send is accepted before the new turn is visible, retry only bounded
+  readback and never resend the prompt. Pending visibility is an observation
+  for Agent judgment, not a send gate.
+- Accepted transport is the send-completion fact. Readback is independently
+  recorded as `confirmed`, `pending`, or `unavailable`. A matching target result
+  normally releases its target work lease; for send-failure recovery, only a
+  proven pre-send rejection may release the exact matching delivery lease,
+  while an ambiguous outcome preserves it.
 - `group-ready` waits for the expected target results before a controller
   return.
 - `per-target` can wake the controller once per target while still preserving a
   group snapshot.
-- After a real send is recorded as sent with readback evidence, the controller
+- After accepted transport is recorded as sent with its actual readback status, the controller
   turn stops. It does not sleep or poll in the same turn.
 - Keep-live support is runtime assistance only. It is not task logic, transport
   authority, or acceptance evidence.
@@ -439,13 +458,16 @@ A workspace may run the Codex and Claude Code Wakeflow editions side by side.
 Shared business state (`.wakeflow-active/`, `wakeflow-ledger/`, and the
 dispatch packets, dispatch groups, delivery envelopes, delivery runs, target
 results, and shared `locks/` under `.wakeflow-local/wakeflow-delivery/`)
-stays host-neutral. Shared locks enforce one in-flight delivery per window
-across hosts.
+stays host-neutral. Shared work leases enforce one in-flight target delivery
+per window across hosts; controller-return paste/readback is serialized
+without taking that target work lease.
 
 Codex runtime remains host-scoped under
 `.wakeflow-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`.
 Claude Code stores its own runtime under
 `.wakeflow-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`.
+Pod manifests, operations, bindings, Test-access plans/receipts, and close
+receipts live under the corresponding host-scoped runtime.
 Records in the legacy `.wakeflow-local/wakeflow-delivery/thread-registry/`
 location are still read as a fallback; new registrations write the host-scoped
 path and `wakeflow_verify` reports the migration state.
@@ -521,8 +543,8 @@ skills rather than treating raw scripts as their operator interface.
    are evidence, not acceptance.
 2. **One demand, one state root**: JSON state and Markdown progress surfaces
    stay tied to the same demand.
-3. **Prompts wake, packages contextualize, skills execute**: prompts carry the
-   current target and reading order; task packages own complete per-target
+3. **Prompts brief, packages contextualize, skills execute**: prompts carry
+   bounded priority cues, the current target, and reading order; task packages own complete per-target
    context, requirement anchors retain original background, and installed
    skills own execution procedure.
 4. **Repository boundaries matter**: each window owns its source, tests,

@@ -138,10 +138,13 @@ value, not the controller's planning trail.
 
 Design drafts may live in an external Design repository or internal Design
 support surface. Mainline Design enters through controller TODO delivery via
-`wakeflow_deliver`. Pod initial Design, supplement, and redesign stay inside
-that Pod: `pod-design-requests/` freezes the controller-authored request and
+`wakeflow_deliver`. The Pod's single Design generation stays inside that Pod:
+`pod-design-requests/` freezes the controller-authored request and
 `pod-design-handoffs/` records the matching envelope in the same demand state
-root. Neither artifact creates another global TODO.
+root. Neither artifact creates another global TODO. Version 0.9.1 persists one
+Pod Design request/handoff generation whose request type may be
+`initial-design`, `supplement`, or `redesign`; a different second generation is
+a capability blocker, not permission to overwrite the ledgers or use mainline Design.
 
 Test plans and reports may live in an external Test repository or internal Test
 support surface. Wakeflow links to evidence instead of duplicating execution
@@ -153,6 +156,7 @@ verified product bindings; it must not infer mainline or another Pod's paths.
 Host-local Pod facts are split by purpose:
 
 - `hosts/<host>/thread-registry/`: final real handle only;
+- `hosts/<host>/pod-manifests/`: host-local materialization manifest;
 - `hosts/<host>/pod-operations/`: launch/close correlations and the
   materialization journal. A Codex `clientThreadId` is retained only as a
   digest while pending and never enters the registry;

@@ -48,9 +48,9 @@ export function buildRecordDeliveryRunResumeStep(delivery) {
     arguments: {
       deliveryFile: delivery.file,
       status: "sent",
-      readbackOk: true,
+      transportStatus: "accepted",
     },
-    after: "Only after host send succeeds and the same envelope prompt is visible in readback, record delivery evidence with the observed evidence text. Do not record an empty in-progress turn as sent or failed; first exhaust the adapter's bounded read-only retry policy, without resending.",
+    after: "A successful send_message_to_thread call is accepted transport. Perform the bounded read_thread observation, then add the actual readbackStatus (confirmed|pending|unavailable), readbackAttempts, and evidence. Pending visibility is still sent: record it, preserve the lease, and let the Agent decide whether to inspect again or wait. Never resend from readback uncertainty.",
   };
 }
 

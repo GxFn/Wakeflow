@@ -23,6 +23,11 @@ import {
   deriveRuntimeGroupStatus,
   summarizeRuntimeNextAction,
 } from "../plugins/codex-wakeflow/scripts/lib/wakeflow-runtime-summary.mjs";
+import {
+  deliveryReadbackStatus,
+  deliveryTransportAccepted,
+  deliveryTransportStatus,
+} from "../plugins/codex-wakeflow/scripts/lib/wakeflow-idempotency.mjs";
 import { buildControllerReviewPack } from "../plugins/codex-wakeflow/scripts/lib/wakeflow-review-pack.mjs";
 import {
   buildWindowDispatchConfig,
@@ -570,14 +575,20 @@ test("controller-return builder preserves callback prompt scope and transport gu
     pendingDispatchTargets: ["WindowE"],
   };
 
-  assert.match(formatControllerReturnPrompt({
+  const groupPrompt = formatControllerReturnPrompt({
     dispatchGroup: "group-fixture",
     triggerTarget: "WindowA",
     triggerTaskId: "task-a",
     stateRef,
     reviewScope: "group",
     groupSnapshot,
-  }), /Continue controller review: WindowA, WindowB, WindowC backfill\./);
+  });
+  assert.match(groupPrompt, /Continue controller review: WindowA, WindowB, WindowC backfill\./);
+  assert.match(groupPrompt, /Review context:/);
+  assert.match(groupPrompt, /- remainingTargets: WindowD/);
+  assert.match(groupPrompt, /- pendingDispatchTargets: WindowE/);
+  assert.match(groupPrompt, /Required execution Skill:\n- skills\/wakeflow-controller\/SKILL\.md/);
+  assert.doesNotMatch(groupPrompt, /Variables:|missingTargets:/);
   assert.match(formatControllerReturnPrompt({
     dispatchGroup: "group-fixture",
     triggerTarget: "WindowA",
@@ -619,7 +630,7 @@ test("controller-return builder preserves callback prompt scope and transport gu
   assert.equal(envelope.targetThread.threadIdRedacted, true);
   assert.equal(Object.hasOwn(envelope.targetThread, "threadId"), false);
   assert.equal(envelope.transport.readbackRequired, true);
-  assert.equal(envelope.deliveryCompletion.pendingUntil, "host-send-readback-recorded");
+  assert.equal(envelope.deliveryCompletion.pendingUntil, "accepted-host-send-recorded");
   assert.equal(envelope.loopGuard.controllerReviewRequired, true);
   assert.equal(Object.hasOwn(envelope.loopGuard, "repeatControllerReturnForbidden"), false);
   assert.equal(envelope.loopGuard.repeatControllerReturnForbiddenForSameResultVersion, true);
@@ -696,8 +707,9 @@ test("runtime summary helpers separate host-send, review, wait, and dispatch res
   assert.match(hostSendPlan.steps[0].instruction, /retry read_thread only/);
   assert.match(hostSendPlan.steps[0].instruction, /Never resend the prompt/);
   assert.equal(hostSendPlan.steps[1].kind, "record-delivery-run");
-  assert.match(hostSendPlan.steps[1].after, /Do not record an empty in-progress turn as sent or failed/);
-  assert.match(hostSendPlan.steps[1].after, /without resending/);
+  assert.match(hostSendPlan.steps[1].after, /successful send_message_to_thread call is accepted transport/);
+  assert.match(hostSendPlan.steps[1].after, /Pending visibility is still sent/);
+  assert.match(hostSendPlan.steps[1].after, /Never resend from readback uncertainty/);
 
   const callbackPlan = buildRuntimeResumePlan({
     nextAction: "build-controller-return",
@@ -2328,6 +2340,17 @@ test("completed target results require reviewable evidence", () => {
   assert.match(result.stdout, /completed results require/);
 });
 
+test("legacy sent runs with readback.ok remain accepted and confirmed", () => {
+  const legacyRun = {
+    kind: "DirectThreadDeliveryRun",
+    status: "sent",
+    readback: { checked: true, ok: true, evidence: "legacy host readback" },
+  };
+  assert.equal(deliveryTransportStatus(legacyRun), "accepted");
+  assert.equal(deliveryTransportAccepted(legacyRun), true);
+  assert.equal(deliveryReadbackStatus(legacyRun), "confirmed");
+});
+
 test("record-delivery-run enforces sent readback evidence", () => {
   const { root, stateRootRef, stateRoot } = makeFixture();
   registerThread(root, "AlembicPlugin");
@@ -2359,7 +2382,11 @@ test("record-delivery-run enforces sent readback evidence", () => {
     "--write",
   ]));
   assert.equal(recorded.status, "sent");
+  assert.equal(recorded.transportStatus, "accepted", "legacy sent + readback-ok input still maps to accepted transport");
+  assert.equal(recorded.readbackStatus, "confirmed", "legacy readback-ok=true input still maps to confirmed readback");
+  assert.equal(recorded.run.transportStatus, "accepted");
   assert.equal(recorded.run.readback.ok, true);
+  assert.equal(recorded.run.readback.status, "confirmed");
   assert.equal(recorded.stateUpdate.updated, true);
   assert.equal(recorded.stateUpdate.targetTaskId, "CSMR-TASK-1");
   assert.equal(recorded.stateUpdate.projectionStatus, "stale");
@@ -2447,6 +2474,334 @@ test("record-delivery-run enforces sent readback evidence", () => {
   assert.equal(status.runtimeSummary.resumePlan.status, "waiting");
   assert.equal(status.runtimeSummary.resumePlan.stopRequired, true);
   assert.equal(status.runtimeSummary.resumePlan.steps[0].kind, "stop-and-wait");
+});
+
+test("accepted transport with pending readback advances once without authorizing resend or releasing the lease", () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
+
+  const recorded = parseOk(run(root, [
+    "record-delivery-run",
+    "--delivery-file", prepared.deliveryFile,
+    "--status", "sent",
+    "--transport-status", "accepted",
+    "--readback-status", "pending",
+    "--readback-attempts", "3",
+    "--evidence", "host accepted one send; three bounded reads did not yet expose the new turn",
+    "--write",
+  ]));
+
+  assert.equal(recorded.status, "sent");
+  assert.equal(recorded.transportStatus, "accepted");
+  assert.equal(recorded.readbackStatus, "pending");
+  assert.equal(recorded.readbackAttempts, 3);
+  assert.equal(recorded.run.readback.checked, true);
+  assert.equal(recorded.run.readback.ok, false);
+  assert.equal(recorded.run.readback.status, "pending");
+  assert.equal(recorded.run.readback.attempts, 3);
+  assert.equal(recorded.stateUpdate.updated, true, "accepted transport advances the target task to sent");
+  assert.equal(existsSync(lockFile), true, "readback uncertainty must preserve the exact in-flight lease");
+  assert.equal(JSON.parse(readFileSync(lockFile, "utf8")).deliveryId, prepared.envelope.deliveryId);
+  assert.match(recorded.agentNext, /do not resend/i);
+  assert.match(recorded.agentNext, /Readback remains an observation/);
+
+  const state = JSON.parse(readFileSync(path.join(stateRoot, "wakeflow-state.json"), "utf8"));
+  assert.equal(state.targetTasks[0].status, "sent");
+  const status = parseOk(run(root, ["status", "--verbose"]));
+  assert.deepEqual(status.runtimeSummary.deliveries.pendingHostSend, [], "accepted transport is not queued for another send");
+  assert.equal(status.runtimeSummary.deliveries.sent.length, 1);
+  assert.equal(status.runtimeSummary.deliveries.sent[0].transportStatus, "accepted");
+  assert.equal(status.runtimeSummary.deliveries.sent[0].readbackStatus, "pending");
+  assert.equal(status.runtimeSummary.nextAction, "wait-for-target-result");
+});
+
+test("rejected-before-send releases only its exact lease while ambiguous transport preserves it", () => {
+  {
+    const { root, stateRootRef, stateRoot } = makeFixture();
+    registerThread(root, "AlembicPlugin");
+    const prepared = prepareDispatch(root, stateRootRef);
+    const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
+
+    const rejected = parseOk(run(root, [
+      "record-delivery-run",
+      "--delivery-file", prepared.deliveryFile,
+      "--status", "failed",
+      "--transport-status", "rejected-before-send",
+      "--readback-status", "unavailable",
+      "--error", "host binding was missing before any send call",
+      "--write",
+    ]));
+
+    assert.equal(rejected.transportStatus, "rejected-before-send");
+    assert.equal(rejected.readbackStatus, "unavailable");
+    assert.equal(rejected.windowLockReleased, true);
+    assert.equal(existsSync(lockFile), false, "a proven pre-send rejection releases its matching lease");
+    assert.match(rejected.agentNext, /exact matching delivery lease was released/);
+    const state = JSON.parse(readFileSync(path.join(stateRoot, "wakeflow-state.json"), "utf8"));
+    assert.equal(state.targetTasks[0].status, "pending", "a rejected send does not advance the target task");
+  }
+
+  {
+    const { root, stateRootRef, stateRoot } = makeFixture();
+    registerThread(root, "AlembicPlugin");
+    const prepared = prepareDispatch(root, stateRootRef);
+    const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
+
+    const ambiguous = parseOk(run(root, [
+      "record-delivery-run",
+      "--delivery-file", prepared.deliveryFile,
+      "--status", "failed",
+      "--transport-status", "ambiguous",
+      "--readback-status", "unavailable",
+      "--error", "host call returned no definitive acceptance fact",
+      "--write",
+    ]));
+
+    assert.equal(ambiguous.transportStatus, "ambiguous");
+    assert.equal(ambiguous.readbackStatus, "unavailable");
+    assert.equal(ambiguous.windowLockReleased, false);
+    assert.equal(existsSync(lockFile), true, "an ambiguous send must preserve the lease and prevent duplicate work");
+    assert.equal(JSON.parse(readFileSync(lockFile, "utf8")).deliveryId, prepared.envelope.deliveryId);
+    assert.match(ambiguous.agentNext, /Do not resend/);
+    const state = JSON.parse(readFileSync(path.join(stateRoot, "wakeflow-state.json"), "utf8"));
+    assert.equal(state.targetTasks[0].status, "pending", "ambiguous transport is left for controller judgment");
+  }
+});
+
+test("replaying an old rejected run cannot release a replacement lease for the same delivery", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  const originalLease = JSON.parse(readFileSync(lockFile, "utf8"));
+  const rejectArgs = [
+    "record-delivery-run",
+    "--delivery-file", prepared.deliveryFile,
+    "--status", "failed",
+    "--transport-status", "rejected-before-send",
+    "--readback-status", "unavailable",
+    "--error", "host rejected the delivery before the send call",
+    "--write",
+  ];
+
+  const rejected = parseOk(run(root, rejectArgs));
+  assert.equal(rejected.run.windowLease.deliveryId, prepared.envelope.deliveryId);
+  assert.equal(rejected.run.windowLease.leaseId, originalLease.leaseId, "the rejected run records the exact lease it owned");
+  assert.equal(rejected.windowLockReleased, true);
+  assert.equal(existsSync(lockFile), false);
+
+  const rePrepared = prepareDispatch(root, stateRootRef);
+  const replacementLease = JSON.parse(readFileSync(lockFile, "utf8"));
+  assert.equal(rePrepared.envelope.deliveryId, prepared.envelope.deliveryId, "the immutable envelope is reused");
+  assert.notEqual(replacementLease.leaseId, originalLease.leaseId, "a deliberate retry owns a new lease generation");
+
+  const replay = parseOk(run(root, rejectArgs));
+  assert.equal(replay.duplicate, true);
+  assert.equal(replay.idempotentReplay, true);
+  assert.equal(replay.windowLockReleased, false, "the old run cannot release a newer lease generation");
+  assert.equal(JSON.parse(readFileSync(lockFile, "utf8")).leaseId, replacementLease.leaseId);
+});
+
+test("accepted run replay never resurrects a lease after a matching result or terminal cancellation", () => {
+  {
+    const { root, stateRootRef } = makeFixture();
+    registerThread(root, "AlembicPlugin");
+    const prepared = prepareDispatch(root, stateRootRef);
+    const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
+    const sendArgs = [
+      "record-delivery-run",
+      "--delivery-file", prepared.deliveryFile,
+      "--status", "sent",
+      "--transport-status", "accepted",
+      "--readback-status", "confirmed",
+      "--evidence", "host accepted the send and bounded readback confirmed it",
+      "--write",
+    ];
+    parseOk(run(root, sendArgs));
+    assert.equal(existsSync(lockFile), true);
+
+    const result = parseOk(run(root, [
+      "record-target-result",
+      "--target-window", "AlembicPlugin",
+      "--task-id", "CSMR-TASK-1",
+      "--group", "GROUP-STATE",
+      "--status", "completed",
+      "--evidence-ref", "docs/result-evidence.md",
+      "--write",
+    ]));
+    assert.equal(result.lockReleased, true);
+    assert.equal(existsSync(lockFile), false);
+
+    const replay = parseOk(run(root, sendArgs));
+    assert.equal(replay.duplicate, true);
+    assert.equal(replay.windowLock, undefined);
+    assert.equal(existsSync(lockFile), false, "the canonical result keeps an accepted replay from recreating work");
+  }
+
+  {
+    const { root, stateRootRef } = makeFixture();
+    registerThread(root, "AlembicPlugin");
+    const prepared = prepareDispatch(root, stateRootRef, { group: "GROUP-CANCEL-REPLAY" });
+    const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
+    const sendArgs = [
+      "record-delivery-run",
+      "--delivery-file", prepared.deliveryFile,
+      "--status", "sent",
+      "--transport-status", "accepted",
+      "--readback-status", "confirmed",
+      "--evidence", "host accepted the send before cancellation",
+      "--write",
+    ];
+    parseOk(run(root, sendArgs));
+    assert.equal(existsSync(lockFile), true);
+    parseOk(runState(root, [
+      "cancel-demand",
+      "--state-root", stateRootRef,
+      "--reason", "terminal replay regression",
+      "--write",
+    ]));
+    assert.equal(existsSync(lockFile), false, "terminal cancellation releases the in-flight lease");
+
+    const replay = parseOk(run(root, sendArgs));
+    assert.equal(replay.duplicate, true);
+    assert.equal(replay.stateUpdate.reason, "demand-cancelled");
+    assert.equal(replay.windowLock, undefined);
+    assert.equal(existsSync(lockFile), false, "a terminal demand cannot regain a lease from accepted-run replay");
+  }
+});
+
+test("a non-owning controller host cannot persist a rejected run or release its lease", () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  const leaseBefore = JSON.parse(readFileSync(lockFile, "utf8"));
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.controllerHost = "claude-code";
+  writeJson(stateFile, state);
+  const runsDir = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-runs");
+  const runsBefore = existsSync(runsDir) ? readdirSync(runsDir).sort() : [];
+
+  const rejected = run(root, [
+    "record-delivery-run",
+    "--delivery-file", prepared.deliveryFile,
+    "--status", "failed",
+    "--transport-status", "rejected-before-send",
+    "--readback-status", "unavailable",
+    "--error", "non-owning host must not mutate this demand",
+    "--write",
+  ]);
+  assert.notEqual(rejected.status, 0);
+  assert.match(rejected.stdout + rejected.stderr, /owned by controller host claude-code/);
+  assert.deepEqual(existsSync(runsDir) ? readdirSync(runsDir).sort() : [], runsBefore, "ownership is checked before run persistence");
+  assert.deepEqual(JSON.parse(readFileSync(lockFile, "utf8")), leaseBefore, "ownership is checked before exact lease release");
+});
+
+test("legacy v1 accepted and confirmed run is idempotent with an equivalent explicit v2 replay", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const replayArgs = [
+    "record-delivery-run",
+    "--delivery-file", prepared.deliveryFile,
+    "--status", "sent",
+    "--transport-status", "accepted",
+    "--readback-status", "confirmed",
+    "--evidence", "same accepted transport and confirmed observation",
+    "--write",
+  ];
+  const recorded = parseOk(run(root, replayArgs));
+  const runFile = path.join(root, recorded.runFile);
+  const legacyRun = JSON.parse(readFileSync(runFile, "utf8"));
+  legacyRun.version = 1;
+  delete legacyRun.transportStatus;
+  delete legacyRun.readback.status;
+  writeJson(runFile, legacyRun);
+
+  const replay = parseOk(run(root, replayArgs));
+  assert.equal(replay.duplicate, true);
+  assert.equal(replay.idempotentReplay, true);
+  assert.equal(replay.wrote, false);
+  assert.equal(replay.transportStatus, "accepted");
+  assert.equal(replay.readbackStatus, "confirmed");
+  assert.equal(replay.run.version, 1, "the equivalent replay returns the immutable legacy artifact instead of replacing it");
+});
+
+test("record-delivery-run rejects contradictory transport and readback facts", () => {
+  const cases = [
+    {
+      name: "sent cannot claim pre-send rejection",
+      status: "sent",
+      transport: "rejected-before-send",
+      readback: "unavailable",
+      expected: /sent delivery runs require --transport-status accepted/,
+    },
+    {
+      name: "sent cannot claim ambiguous transport",
+      status: "sent",
+      transport: "ambiguous",
+      readback: "pending",
+      expected: /sent delivery runs require --transport-status accepted/,
+    },
+    {
+      name: "failed cannot claim accepted transport",
+      status: "failed",
+      transport: "accepted",
+      readback: "confirmed",
+      expected: /accepted host transport must be recorded with --status sent/,
+    },
+    {
+      name: "pre-send rejection cannot have pending readback",
+      status: "failed",
+      transport: "rejected-before-send",
+      readback: "pending",
+      expected: /rejected-before-send delivery runs require --readback-status unavailable/,
+    },
+  ];
+
+  for (const item of cases) {
+    const { root, stateRootRef } = makeFixture();
+    registerThread(root, "AlembicPlugin");
+    const prepared = prepareDispatch(root, stateRootRef);
+    const result = run(root, [
+      "record-delivery-run",
+      "--delivery-file", prepared.deliveryFile,
+      "--delivery-run-id", `invalid-${item.transport}-${item.readback}`,
+      "--status", item.status,
+      "--transport-status", item.transport,
+      "--readback-status", item.readback,
+      "--evidence", "invalid matrix fixture",
+      "--error", "invalid matrix fixture",
+      "--write",
+    ]);
+    assert.notEqual(result.status, 0, item.name);
+    assert.match(result.stdout + result.stderr, item.expected, item.name);
+    const runDir = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-runs");
+    assert.deepEqual(readdirSync(runDir).filter((name) => name.endsWith(".json")), [], `${item.name}: no run is persisted`);
+    const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
+    assert.equal(existsSync(lockFile), true, `${item.name}: validation must not release the prepared lease`);
+  }
+
+  {
+    const { root, stateRootRef } = makeFixture();
+    registerThread(root, "AlembicPlugin");
+    const prepared = prepareDispatch(root, stateRootRef);
+    const conflict = run(root, [
+      "record-delivery-run",
+      "--delivery-file", prepared.deliveryFile,
+      "--status", "sent",
+      "--transport-status", "accepted",
+      "--readback-status", "pending",
+      "--readback-ok", "true",
+      "--evidence", "contradictory compatibility inputs",
+      "--write",
+    ]);
+    assert.notEqual(conflict.status, 0);
+    assert.match(conflict.stdout + conflict.stderr, /--readback-ok conflicts with --readback-status/);
+  }
 });
 
 test("record-target-result is idempotent and requires explicit supersede for changed content", () => {
@@ -3397,8 +3752,10 @@ test("controller-return prompt localizes sentences for zh demands", async () => 
     interfaceLanguage: "zh",
   });
   assert.match(zhPrompt, /\u7ee7\u7eed\u603b\u63a7\u8bc4\u5ba1\uff1aWindowA \u56de\u586b\u3002/, "zh title");
-  assert.match(zhPrompt, /\u53d8\u91cf\uff1a/, "zh variables label");
+  assert.match(zhPrompt, /\u8bc4\u5ba1\u4e0a\u4e0b\u6587\uff1a/, "zh review-context label");
   assert.match(zhPrompt, /- trigger: WindowA \/ T1/, "machine keys stay English");
+  assert.match(zhPrompt, /\u5fc5\u987b\u52a0\u8f7d\u7684\u6267\u884c Skill\uff1a\n- skills\/wakeflow-controller\/SKILL\.md/);
+  assert.doesNotMatch(zhPrompt, /\u53d8\u91cf\uff1a|Variables:/);
 
   const enPrompt = formatControllerReturnPrompt({
     dispatchGroup: "GRP-1",
@@ -3409,6 +3766,7 @@ test("controller-return prompt localizes sentences for zh demands", async () => 
     groupSnapshot: { readyTargets: ["WindowA"], blockedTargets: [], missingTargets: [], pendingDispatchTargets: [] },
   });
   assert.match(enPrompt, /Continue controller review: WindowA backfill\./, "en default unchanged");
+  assert.match(enPrompt, /Review context:/);
 });
 
 
@@ -3448,6 +3806,36 @@ test("release-window-lock is dry-run by default and releases with --write", () =
   assert.equal(again.released, false, "idempotent when no lock present");
 });
 
+test("release-window-lock compare-and-delete preserves a different delivery and releases an exact match", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const deliveryId = prepared.envelope.deliveryId;
+  const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
+
+  const mismatch = parseOk(run(root, [
+    "release-window-lock",
+    "--window", "AlembicPlugin",
+    "--expected-delivery-id", `${deliveryId}-different`,
+    "--write",
+  ]));
+  assert.equal(mismatch.released, false);
+  assert.equal(mismatch.currentLock.deliveryId, deliveryId);
+  assert.match(mismatch.note, /does not match expectedDeliveryId/);
+  assert.equal(existsSync(lockFile), true, "a compare mismatch must not delete the current lease");
+  assert.equal(JSON.parse(readFileSync(lockFile, "utf8")).deliveryId, deliveryId);
+
+  const exact = parseOk(run(root, [
+    "release-window-lock",
+    "--window", "AlembicPlugin",
+    "--expected-delivery-id", deliveryId,
+    "--write",
+  ]));
+  assert.equal(exact.released, true);
+  assert.equal(exact.releasedLock.deliveryId, deliveryId);
+  assert.equal(existsSync(lockFile), false, "an exact compare-and-delete may release the proven lease");
+});
+
 
 test("release-window-lock removes a corrupt lock file with --write", () => {
   const { root } = makeFixture();
@@ -3461,10 +3849,20 @@ test("release-window-lock removes a corrupt lock file with --write", () => {
   assert.match(dry.note, /corrupt/);
   assert.equal(existsSync(lockFile), true, "dry-run keeps the corrupt file");
 
+  const exact = parseOk(run(root, [
+    "release-window-lock",
+    "--window", "WinX",
+    "--expected-delivery-id", "delivery-unprovable",
+    "--write",
+  ]));
+  assert.equal(exact.released, false);
+  assert.match(exact.note, /cannot prove ownership/);
+  assert.equal(existsSync(lockFile), true, "exact recovery preserves an unreadable lease instead of guessing ownership");
+
   const released = parseOk(run(root, ["release-window-lock", "--window", "WinX", "--write"]));
   assert.equal(released.released, true);
   assert.match(released.note, /corrupt/);
-  assert.equal(existsSync(lockFile), false);
+  assert.equal(existsSync(lockFile), false, "manual recovery without an expected id may deliberately remove a corrupt lease");
 });
 
 test("record-target-result releases the lock even when the run used a custom --delivery-run-id", () => {

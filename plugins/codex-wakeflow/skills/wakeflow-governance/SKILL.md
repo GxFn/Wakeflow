@@ -114,7 +114,7 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
 - `designIntent` is one optional sentence of implementation intent on a task package ("roughly how"), authored by Design at delivery/handoff when useful. It is advisory input for the controller's own alignment check at dispatch and review — never an acceptance standard, a score, or a gate.
 - **Design exit gate before ANY implementation dispatch, at the demand's scale** (full five items for a requirement; lighter for bug/supplement; research never dispatches implementation): Original Plan; Requirement Design with code-fact reconciliation (real current behavior, verified against source), landing plan (per-window breakdown + designIntent), and non-goals; a user-confirmation ledger with every open product question ANSWERED; and the Test decision (needed or not — if yes, a Test Environment Spec confirmed with the user at Design time). A goal arriving without these is S1 work, not execution work: route it to Design instead of "reviewing code and just starting" (see [references/stage-route-map.md](references/stage-route-map.md)).
 - **Test only tests**: the controller decides which confirmed environment a test card uses (from the Design-stage spec), the user confirms it at Design, Test only executes. A card with a missing/ambiguous environment block is a blocker back to the controller — Test never chooses environments, invents config values, or fixes product code. A missing input at any stage is never guessed: requirement gap → Design; product decision → user; fact gap → bounded read-only investigation.
-- **Test follows controller validation**: total control owns functional correctness and completion. When non-Test targets exist, all must be accepted before the Test package is added or dispatched; the card's existing `controllerSelfChecks` states what the controller verified. Test-only reproduction/environment diagnostics remain valid. Test explores only the approved real-environment boundary for hidden bugs; its pass cannot fill missing controller proof and its failure cannot redefine the requirement.
+- **Test follows controller validation**: total control owns functional correctness and completion. Every active/open non-Test target must be accepted before the Test package is added or dispatched; canonical `superseded` replacement history is excluded from that open set. The card's existing `controllerSelfChecks` states what the controller verified. Test-only reproduction/environment diagnostics remain valid. Test explores only the approved real-environment boundary for hidden bugs; its pass cannot fill missing controller proof and its failure cannot redefine the requirement.
 - **Test does not define the target**: every Test card freezes the demand goal from `demand.json`, the requirement-stage approved Test plan, allowed Test skills, setup policy, and attempt bound. The controller re-checks those same anchors at dispatch and review. Test may elaborate mapped commands, but an unmapped goal/gate/method (including PCV when not explicitly listed) is a blocked change request, never an executable Test invention.
 - **Mainline first; Pod only by explicit user authority**: ordinary and Auto
   Claim work enters only an idle, healthy mainline. A busy mainline waits; an
@@ -123,8 +123,12 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
   may select a Pod, and Wakeflow applies no numeric Pod limit.
 - **A Pod is a complete independent host fleet**: independent
   `Controller__<pod>`, `Design__<pod>`, `Test__<pod>`, and one product session
-  per repository. `wakeflow_pod_open` only plans host-neutral launch
-  operations. Codex materialization is journaled by launch correlation with
+  per repository. `wakeflow_pod_open mode=create` plans host-neutral first
+  materialization under the strict clean-main/expected-HEAD gate.
+  `wakeflow_pod_open mode=resume` is read-only recovery for already-bound
+  windows: it verifies the immutable registry/binding/cwd/common-dir chain,
+  reports current HEAD/dirty only as observations, and never creates or rebinds
+  a thread/worktree. Codex materialization is journaled by launch correlation with
   `wakeflow_pod_record_materialization`; a temporary `clientThreadId` is
   search/recovery evidence only, stored as a digest and never registered.
   Codex creates product threads with the exact saved project and
@@ -132,7 +136,11 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
   verifies cwd/Git receipts with `wakeflow_pod_bind`.
 - **Pod Design and Test have machine gates**:
   `wakeflow_pod_prepare_design_request` freezes the exact request before
-  `wakeflow_pod_record_design_handoff`. Before Test dispatch,
+  `wakeflow_pod_record_design_handoff`. Version 0.9.1 persists exactly one Pod
+  Design request/handoff generation; its sole request may be `initial-design`,
+  `supplement`, or `redesign`. A different second generation stops as an
+  unsupported capability instead of overwriting that request or using mainline Design.
+  Before Test dispatch,
   `wakeflow_pod_prepare_test_access` plus
   `wakeflow_pod_record_test_access` must prove validated
   `direct-multi-root` coverage of every active product binding. Unsupported

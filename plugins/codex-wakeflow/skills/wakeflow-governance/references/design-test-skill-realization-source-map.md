@@ -2,13 +2,15 @@
 
 Date: 2026-06-08
 
-> **Reactivated living baseline (2026-07-09).** Originally 2026-06-08; un-frozen and being
-> re-derived against the current architecture (unified create/claim/deliver, the 23-tool MCP
+> **Living baseline, aligned 2026-07-31.** Originally 2026-06-08; re-derived
+> against the current architecture (unified create/claim/deliver, the 38-tool MCP
 > surface, the `redesign` review decision, deliver-only Design, demand pods, the evidence gate
 > and per-window evidence contract). It now also governs a fourth role — the development/target
 > window's execution craft (`wakeflow-target-craft`, a plugin skill, not a window-support
 > template). Where a specific `SKILL.md` has not yet been re-derived, the live file wins on
 > tool/intake vocabulary; this map governs capability, role boundaries, and acceptance intent.
+> Wakeflow 0.9.1 persists one Pod Design request/handoff generation; a different
+> second generation remains a documented capability gap.
 > Staged re-derivation: `docs/wakeflow-execution-craft-plan-2026-07-09.md`.
 
 ## Purpose

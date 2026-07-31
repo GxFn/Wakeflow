@@ -248,7 +248,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_release_window_lock",
-    description: "Release the shared cross-host in-flight delivery lock for one window. Recovery action for stalled or ownerless locks; releasing another host's fresh lock must be a deliberate controller decision. Dry-run unless apply is true.",
+    description: "Release the shared cross-host target work lease for one target window. expectedDeliveryId makes this a compare-and-delete recovery for one proven pre-send failure; omit it only for deliberate manual stale/corrupt recovery. Accepted, ambiguous, or readback-pending sends must retain the lease. Dry-run unless apply is true.",
     annotations: localWriteTool("Release Wakeflow Window Lock"),
     inputSchema: {
       type: "object",
@@ -256,6 +256,7 @@ const toolDefinitions = [
       properties: {
         root: { type: "string" },
         window: { type: "string" },
+        expectedDeliveryId: { type: "string", description: "Optional exact delivery id. When supplied, a different or unreadable current lease is preserved." },
         apply: { type: "boolean" },
       },
     },
@@ -343,7 +344,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_record_delivery",
-    description: "Record external host-send evidence for a delivery envelope, after the host tool performs the real send. A recorded status=sent with readbackOk=true closes the dispatch turn; this does not send the message or accept the result.",
+    description: "Record external host-send evidence for a delivery envelope after the host tool runs. Transport acceptance and bounded readback visibility are independent: status=sent + transportStatus=accepted prevents resend even when readbackStatus=pending/unavailable. Only an explicit rejected-before-send fact may release the exact delivery lease. This does not send the message or accept the result.",
     annotations: localWriteTool("Record Wakeflow Delivery Evidence"),
     inputSchema: {
       type: "object",
@@ -353,6 +354,9 @@ const toolDefinitions = [
         verbose: { type: "boolean", description: "Return the full structured payload (envelope/packet/run echoes). Default is a compact summary; the artifacts are on disk at the reported file paths." },
         deliveryFile: { type: "string" },
         status: { type: "string", enum: ["sent", "blocked", "failed"] },
+        transportStatus: { type: "string", enum: ["accepted", "rejected-before-send", "ambiguous"], description: "Host send fact. accepted must use status=sent; rejected-before-send is the only lease-releasable failure; ambiguous always preserves the lease." },
+        readbackStatus: { type: "string", enum: ["confirmed", "pending", "unavailable"], description: "Independent bounded observation after the send. pending/unavailable is not permission to resend." },
+        readbackAttempts: { type: "integer", minimum: 0 },
         evidence: { type: "string" },
         deliveryRunId: { type: "string", description: "Distinct run id for retrying the same delivery after a failed attempt (defaults to run-<deliveryId>, which cannot be re-recorded with different content)." },
         error: { type: "string" },
@@ -781,13 +785,14 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_pod_open",
-    description: "Plan/reserve an explicitly authorized Pod without creating host resources. Wakeflow never creates a worktree or thread; the current host materializes those resources. Pass repositories=[] for the standard first phase, which plans only independent Controller/Design/Test sessions. After the recorded Design handoff freezes its landing plan, call this tool again with the exact repository coverage and expected local HEADs to append product launch operations. If S0 already froze exact coverage, repositories may be supplied on the first call. Existing launch correlations are immutable. The Agent records each verified receipt with wakeflow_pod_bind. Dry-run unless apply is true.",
+    description: "Create or resume an explicitly authorized Pod without Wakeflow creating host resources. mode=create (default) keeps the strict clean-main/expectedBaseHead creation gate and may append Design-frozen product operations; apply writes the reviewed plan. mode=resume is read-only: it validates only the already-bound manifest/binding/registry/cwd/Git common-dir identity, reports current HEAD/dirty as observations, and never creates or rebinds a thread/worktree. The host decides whether an exact registered session is live or must be resumed.",
     annotations: localWriteTool("Open Demand Pod"),
     inputSchema: {
       type: "object",
       required: ["demandKey"],
       properties: {
         root: { type: "string" },
+        mode: { type: "string", enum: ["create", "resume"], description: "create plans first materialization; resume verifies/reopens existing bound host resources without re-running creation baselines." },
         demandKey: { type: "string", description: "The canonical demand whose executionPlacement is an explicitly authorized Pod." },
         repositories: {
           type: "array",
@@ -1310,6 +1315,7 @@ export const handlers = {
     args: [
       "release-window-lock",
       "--window", args.window,
+      ...optionalValue("--expected-delivery-id", args.expectedDeliveryId),
       ...rootArgs(args),
       ...(args.apply ? ["--write"] : []),
       "--json",
@@ -1413,6 +1419,9 @@ export const handlers = {
       "record-delivery-run",
       "--delivery-file", args.deliveryFile,
       "--status", args.status,
+      ...optionalValue("--transport-status", args.transportStatus),
+      ...optionalValue("--readback-status", args.readbackStatus),
+      ...(Number.isInteger(args.readbackAttempts) ? ["--readback-attempts", String(args.readbackAttempts)] : []),
       ...optionalValue("--evidence", args.evidence),
       ...optionalValue("--error", args.error),
       ...optionalValue("--host-method", args.hostMethod),
@@ -1803,6 +1812,7 @@ export const handlers = {
     script: "wakeflow-pod",
     args: [
       "open",
+      "--mode", args.mode ?? "create",
       ...rootArgs(args),
       "--request-json",
       JSON.stringify({

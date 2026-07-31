@@ -20,8 +20,11 @@ next eligible packages, and dispatching until final completion, a hard gate,
 explicit user stop, missing evidence that needs human judgment, or no eligible
 TODO remains.
 
-After a delivery is sent, read back, and recorded as `status=sent` with
-`readback.ok=true`, the controller dispatch turn is complete. Do not keep the
+After the host accepts a delivery, record `status=sent` with
+`transportStatus=accepted`. `readback.status` separately records the bounded
+observation; `pending` or `unavailable` never authorizes a resend or lease
+release. The controller dispatch turn is then complete unless the Agent chooses
+one more bounded read-only inspection. Do not keep the
 turn open with `sleep`, repeated result review, repeated thread reads, or manual
 polling. The target returns later through a `TargetResultEnvelope` and, if
 policy allows, a controller-return delivery.
@@ -59,17 +62,20 @@ Controller return prompts should be compact:
 ```text
 Continue controller review: <windowA>, <windowB> backfill.
 
-Variables:
+Review context:
 - stateRoot: <path>
 - dispatchGroup: <group>
 - trigger: <window/task>
 - blockedTargets: <only when non-empty>
-- missingTargets: <only when non-empty>
-- skill: skills/wakeflow-controller/SKILL.md
+- remainingTargets: <only when non-empty>
+- pendingDispatchTargets: <only when non-empty>
+
+Required execution Skill:
+- skills/wakeflow-controller/SKILL.md
 ```
 
-Do not expose empty `blockedTargets` or `missingTargets`; keep group details in
-machine state.
+Do not expose empty `blockedTargets`, `remainingTargets`, or
+`pendingDispatchTargets`; keep full group details in machine state.
 
 ## Start Or Resume A Dispatch
 
@@ -95,9 +101,11 @@ machine state.
    `requirementRefs`, `boundaries` (`inScope`, `outOfScope`, `forbidden`),
    `completionExpectations` ordered most important first, explicit `dependsOnTaskIds`, and
    `commitExpectation`. The prompt is a compact briefing generated from this
-   package: it surfaces only the first two completion expectations and one
-   original requirement entry, while the package retains every context fact,
-   requirement anchor, boundary, and completion condition. Do not defer these
+   package: it surfaces the objective, at most the first two completion
+   expectations, one highest-priority context fact, one critical boundary, up
+   to four acceptance-anchor ids/claims, and the ordered document/Skill
+   navigation. The package retains every context fact, requirement anchor,
+   boundary, completion condition, probe, and policy. Do not defer these
    decisions to the target or re-author them during dispatch.
    Order each boundary list most important first. The compact prompt surfaces
    only the first available boundary in `forbidden → outOfScope → inScope`
@@ -108,7 +116,7 @@ machine state.
    from implementation leftovers; if the required behavior cannot be stated as
    a probe, the package is not ready. Doc-only and research packages may omit
    anchors.
-6. For a Test package, first confirm every existing non-Test target is
+6. For a Test package, first confirm every active required non-Test target is
    `accepted` and `controllerSelfChecks` states what you already verified and
    why the real scenario remains necessary. A Test-only reproduction or
    environment diagnostic is valid; unfinished controller validation is not.
@@ -185,11 +193,13 @@ machine state.
      (`decide-review --decision rework`, reworkCount++);
    - **redesign** — a non-bug mismatch, or a small requirement-level fix that is Design's
      job and not a code defect: `decide-review --decision redesign` parks the task and
-     routes it back to Design (redesignCount++), instead of bouncing point-fixes between
-     product windows. After Design delivers the corrected requirement, add a new full-context
-     implementation task in the product responsibility window with
-     `replacesTargetTaskId=<parked task>`; never re-dispatch or accept the old
-     redesign task as the correction;
+     increments `redesignCount` instead of bouncing point-fixes between product windows.
+     Mainline may use its stateless Design delivery and then add a full-context replacement
+     with `replacesTargetTaskId=<parked task>`. A Pod must stay in its own Design lane;
+     because 0.9.1 supports only one frozen Pod Design request/handoff
+     generation, a redesign may use that sole generation only before any
+     request exists; a different second request remains blocked rather than
+     falling back to mainline Design or overwriting the recorded handoff;
    - **blocked** — a hard blocker that needs a human;
    - wait for missing targets, complete the demand, or create the next eligible package.
    - **Brake:** when the task-ledger shows `recurringProblem` (reworkCount ≥ 2) on a task,
@@ -224,6 +234,7 @@ Use this shape when recording or reporting controller acceptance:
 
 - `accept-target-result`
 - `request-rework`
+- `request-redesign`
 - `mark-blocked`
 - `wait-for-missing-target`
 - `needs-user-decision`
@@ -323,12 +334,14 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   suffix is not a binding. `control-ready` requires all three control
   bindings; `execution-ready` additionally requires the recorded Pod Design
   handoff and every planned product binding.
-- Pod initial Design, supplement, and redesign use
+- The Pod's single Design generation uses
   `wakeflow_pod_prepare_design_request → PodDesignRequest →
   PodDesignHandoffEnvelope → wakeflow_pod_record_design_handoff`; the frozen
   request supplies exact lineage and cannot be replaced by a different
-  request. They never route through the mainline Design window or create a
-  duplicate global TODO for the same demand.
+  request. Wakeflow 0.9.1 does not yet persist multiple Pod Design generations:
+  if a later supplement or redesign needs a new request/handoff, stop with a
+  capability blocker. Never overwrite the frozen request, route the Pod
+  through the mainline Design window, or create a duplicate global TODO.
 - Before Pod Test dispatch, call `wakeflow_pod_prepare_test_access`, execute
   that exact host-local probe from `Test__<pod>`, and record the redacted
   receipt with `wakeflow_pod_record_test_access`. Only validated
@@ -404,7 +417,7 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   Design; research never gets an implementation dispatch. Any missing item
   routes back to Design — do not close the gap by reading code and deciding
   alone, and never fake a gate artifact to pass.
-- Before adding or dispatching a Test package, verify every existing non-Test
+- Before adding or dispatching a Test package, verify every active required non-Test
   target is accepted, record the concrete controller reruns in
   `controllerSelfChecks`, and copy the Design-stage Test Environment Spec
   into the card's realScenarioConditions/allowedOperations. You DECIDE which
@@ -473,13 +486,14 @@ Stop instead of dispatching when:
 - The evidence shows a non-bug outcome mismatch, or a small requirement-level fix that is
   Design's job and not a code defect: `decide-review --decision redesign` parks the demand
   (needs-rework, redesignCount++) instead of bouncing point fixes between product windows.
-  This reuses the normal rhythm — no new transport: surface the redesign to Design; Design
-  re-examines and **delivers** the corrected requirement with `wakeflow_deliver` (its normal
-  stateless path); then **resume the same demand with `add-task-package`** (a full-context
-  implementation package in the product responsibility window) and set
-  `replacesTargetTaskId` to the parked product task — do NOT `create_demand`
-  a new one or re-dispatch the old redesign task. Accepting the replacement marks the old
-  task/package `superseded`; the parked demand's history and counts carry over.
+  For a mainline demand, surface the redesign to the stateless mainline Design window with
+  `wakeflow_deliver`; after the corrected requirement returns, add a full-context replacement
+  package to the SAME demand with `replacesTargetTaskId` set to the parked product task. Do
+  not create a new demand or re-dispatch the old task. For a Pod demand, do not use mainline
+  Design: Wakeflow 0.9.1 cannot create a second frozen Pod Design generation, so keep the
+  demand blocked and report that capability gap rather than overwriting the recorded handoff.
+  Accepting a valid replacement marks the old task/package `superseded`; the parked demand's
+  history and counts carry over.
 - A completed result would leave TODO/backlog, archive state, or current status
   inconsistent.
 - The controller is about to poll/wait for targets after a send was recorded.
@@ -520,4 +534,10 @@ Wakeflow scripts or automation, source-repo verification may use:
 
 Script output is evidence, not acceptance.
 
-- Stalled or ownerless window locks (`locks/<window>.json`) are recovered with `release-window-lock --window <name> --write` (MCP: `wakeflow_release_window_lock`); dry-run first, and treat releasing another host's fresh lock as a deliberate controller decision.
+- A proven host rejection before send is normally released automatically by
+  exact compare-and-delete during host-send recording. If that cleanup is not
+  recorded, use the manual fallback
+  `release-window-lock --window <name> --expected-delivery-id <id> --write`
+  (MCP `expectedDeliveryId`). Accepted, ambiguous, or readback-pending sends
+  retain the lease. Omitting the id remains deliberate manual stale/corrupt
+  recovery; dry-run first and never infer pre-send failure from old prose.

@@ -101,9 +101,10 @@ Wakeflow never creates or deletes those worktrees.)
 `wakeflow_reduce_results` → `wakeflow_decide_review`
 (accept / rework / redesign / blocked). Raw evidence before any decision.
 Non-bug outcome mismatch = redesign lane back to S1, never point-fix loops.
-For a Pod, the redesign request and handoff stay between
-`Controller__<pod>` and `Design__<pod>`; they do not return to mainline Design.
-Exit to S5 only after every existing non-Test target is accepted and the
+For a Pod, redesign must never return to mainline Design. Version 0.9.1 cannot
+persist a second frozen Pod Design request/handoff generation, so the demand
+stays blocked as a capability gap instead of overwriting its recorded Design generation.
+Exit to S5 only after every active required non-Test target is accepted and the
 controller has recorded its concrete validation in the Test card's
 `controllerSelfChecks`. A Test-only reproduction or environment diagnostic
 may enter S5 after the controller establishes that current scope.

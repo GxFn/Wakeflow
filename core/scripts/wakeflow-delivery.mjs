@@ -5,7 +5,10 @@ import path from "node:path";
 import { buildWakeflowTrace } from "../lib/wakeflow-trace.mjs";
 import { createDeliveryEvidence } from "./lib/wakeflow-delivery-evidence.mjs";
 import { commandStatus as runStatusCommand } from "./lib/wakeflow-delivery-status-command.mjs";
-import { createDeliveryStore } from "./lib/wakeflow-delivery-store.mjs";
+import {
+  createDeliveryStore,
+  releaseWindowLockForResult,
+} from "./lib/wakeflow-delivery-store.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import { createDispatchCommands } from "./lib/wakeflow-dispatch-commands.mjs";
 import { createDispatchGroupReview } from "./lib/wakeflow-dispatch-group-review.mjs";
@@ -18,7 +21,12 @@ import {
   controllerReturnReadinessIssue,
   normalizeReturnPolicyMode,
 } from "./lib/wakeflow-return-policy.mjs";
-import { buildReplaySummary, pruneWouldBreakReplay } from "./lib/wakeflow-idempotency.mjs";
+import {
+  buildReplaySummary,
+  deliveryReadbackConfirmed,
+  deliveryTransportAccepted,
+  pruneWouldBreakReplay,
+} from "./lib/wakeflow-idempotency.mjs";
 import {
   WakeflowStateLockTimeoutError,
   withFileLock,
@@ -47,7 +55,7 @@ const version = 1;
 const threadRegistrationVersion = 3;
 const deliveryEnvelopeVersion = 3;
 const windowConfigVersion = 1;
-const deliveryRunVersion = 1;
+const deliveryRunVersion = 2;
 const keepLiveVersion = 1;
 
 const helpText = `
@@ -56,13 +64,13 @@ Wakeflow delivery-loop contract manager
 Usage:
   node scripts/wakeflow-delivery.mjs status [--json] [--verbose]
   node scripts/wakeflow-delivery.mjs prune-runtime [--before <iso>] [--write] [--json]
-  node scripts/wakeflow-delivery.mjs release-window-lock --window <name> [--write] [--json]
+  node scripts/wakeflow-delivery.mjs release-window-lock --window <name> [--expected-delivery-id <id>] [--write] [--json]
   node scripts/wakeflow-delivery.mjs register-thread --window <name> --thread-id <id> [--launch-correlation-id <id> --binding-id <id> --state-root <path>] --write [--json]
   node scripts/wakeflow-delivery.mjs build-window-config --window <name> [--require-thread] --write [--json]
   node scripts/wakeflow-delivery.mjs build-delivery --packet-file <path> [--delivery-id <id>] [--return-route controller|none] [--automation-enabled] [--require-thread] [--write] [--json]
   node scripts/wakeflow-delivery.mjs prepare-dispatch-from-state --state-root <path> --target-task-id <id> [--group-target-task-id <id>...] [--task-package-id <id>] [--human-context-ref <ref>] [--controller-window <name>] [--group <id>] [--return-policy group-ready|per-target] [--expected-preview-digest <sha256>] [--automation-enabled] [--require-thread] [--write] [--json]
   node scripts/wakeflow-delivery.mjs build-controller-return --group <id> --trigger-target <window> --trigger-task-id <taskId> [--state-root <path>] [--human-context-ref <ref>] [--controller-window <name>] [--return-reason result-ready|blocked] [--automation-enabled] [--require-thread] [--write] [--json]
-  node scripts/wakeflow-delivery.mjs record-delivery-run --delivery-file <path> --status sent|blocked|failed [--host-method ${hostProfile.hostTools.sendToWindow}] [--host-mode new-turn|unknown] [--readback-ok true|false] [--evidence <text>] [--error <text>] --write [--json]
+  node scripts/wakeflow-delivery.mjs record-delivery-run --delivery-file <path> --status sent|blocked|failed [--transport-status accepted|rejected-before-send|ambiguous] [--readback-status confirmed|pending|unavailable] [--readback-attempts <n>] [--readback-ok true|false] [--host-method ${hostProfile.hostTools.sendToWindow}] [--host-mode new-turn|unknown] [--evidence <text>] [--error <text>] --write [--json]
   node scripts/wakeflow-delivery.mjs start-keep-live --automation-run-id <id> [--keep-live-command <cmd>] [--keep-live-arg <arg>...] [--no-keep-live] --write [--json]
   node scripts/wakeflow-delivery.mjs stop-keep-live --automation-run-id <id> [--reason <text>] --write [--json]
   node scripts/wakeflow-delivery.mjs keep-live-state --automation-run-id <id> --status running|stopped|failed [--mechanism macos-caffeinate|manual|none] [--pid <pid>] [--error <text>] --write [--json]
@@ -187,7 +195,19 @@ function inferAgentNext(payload) {
   if (payload.command === "build-window-config") return "Use this child-window config when creating direct-thread delivery envelopes.";
   if (payload.command === "build-delivery") return payload.threadReady ? "Send the prompt with the host thread tool, then record a delivery run." : "Register the target thread before direct-thread delivery.";
   if (payload.command === "build-controller-return") return payload.threadReady ? "Send the controller-return prompt with the host thread tool, then record a delivery run." : "Register the controller thread before unattended return.";
-  if (payload.command === "record-delivery-run") return payload.status === "sent" ? "Controller-side delivery is complete; end this dispatch turn and wait for a controller-return or new user input. Do not poll, sleep, or run review-results just to wait." : "Return to total control judgment for the delivery block.";
+  if (payload.command === "record-delivery-run") {
+    if (payload.status !== "sent") {
+      return payload.transportStatus === "rejected-before-send"
+        ? payload.windowLockReleased
+          ? "The host rejected the send before it began and the exact matching delivery lease was released; total control may repair the host and deliberately retry the same envelope."
+          : "The host rejected the send before it began, but no exact matching delivery lease was released. Inspect the current lease before any deliberate retry; do not infer ownership from delivery id alone."
+        : "Transport outcome is ambiguous; preserve the lease and return to total-control judgment. Do not resend from readback uncertainty.";
+    }
+    if (payload.readbackStatus === "confirmed") {
+      return "Controller-side delivery is complete; end this dispatch turn and wait for a controller-return or new user input. Do not poll, sleep, or run review-results just to wait.";
+    }
+    return "The host accepted this delivery, so do not resend it or release its lease. Readback remains an observation: the Agent may do another bounded read-only check, report the uncertainty, or wait for the target callback.";
+  }
   if (payload.command === "start-keep-live") return payload.keepLive?.active ? "Continue unattended direct-thread dispatch; keep-live is active." : "Treat keep-live as an automation readiness risk before claiming unattended reliability.";
   if (payload.command === "stop-keep-live") return payload.keepLive?.retainedByOtherRuns ? "Keep-live is retained by other active automation runs." : payload.keepLive?.active ? "Inspect and stop the recorded keep-live process before claiming shutdown is clean." : "Keep-live is stopped; continue only by total-control judgment.";
   if (payload.command === "keep-live-state") return "Continue or stop unattended automation according to the current plan and keep-live status.";
@@ -660,6 +680,8 @@ const {
   readWindowLock,
   windowLockFresh,
   writeWindowLock,
+  lockFileFor,
+  releaseWindowLockForResult,
   keepLiveStateFile,
   startKeepLive,
   artifactTrace,
@@ -727,13 +749,23 @@ const {
 
 function commandReleaseWindowLock() {
   const windowName = requireValue("--window");
+  const expectedDeliveryId = getValue("--expected-delivery-id", "");
   const lock = readWindowLock(windowName);
   if (!lock) {
     // readWindowLock returns null for BOTH missing and unparsable files; a
     // corrupt lock must still be removable by this recovery command.
     const file = lockFileFor(windowName);
     if (existsSync(file)) {
-      if (write) {
+      if (write && expectedDeliveryId) {
+        output({
+          ok: true,
+          command: "release-window-lock",
+          windowName,
+          expectedDeliveryId,
+          released: false,
+          note: "lock file is unreadable; an exact delivery-id release cannot prove ownership, so the lock was preserved",
+        });
+      } else if (write) {
         removeWindowLock(windowName);
         output({ ok: true, command: "release-window-lock", windowName, released: true, note: "corrupt lock file removed" });
       } else {
@@ -752,17 +784,38 @@ function commandReleaseWindowLock() {
       released: false,
       dryRun: true,
       lock: { host: lock.host, deliveryId: lock.deliveryId, createdAt: lock.createdAt, expiresAt: lock.expiresAt, fresh: windowLockFresh(lock) },
-      note: "pass --write to release; releasing another host's fresh lock should be a deliberate recovery decision",
+      expectedDeliveryId: expectedDeliveryId || undefined,
+      expectedDeliveryMatches: expectedDeliveryId ? lock.deliveryId === expectedDeliveryId : undefined,
+      note: expectedDeliveryId
+        ? "pass --write to compare-and-release only this delivery id"
+        : "pass --write to release; releasing another host's fresh lock should be a deliberate recovery decision",
     });
     return;
   }
-  removeWindowLock(windowName);
+  const lockFile = lockFileFor(windowName);
+  const released = releaseWindowLockForResult(
+    lockFile,
+    (current) => expectedDeliveryId
+      ? current.deliveryId === expectedDeliveryId
+      : current.leaseId === lock.leaseId && current.deliveryId === lock.deliveryId,
+  );
+  const current = released ? null : readWindowLock(windowName);
   output({
     ok: true,
     command: "release-window-lock",
     windowName,
-    released: true,
-    releasedLock: { host: lock.host, deliveryId: lock.deliveryId, expiresAt: lock.expiresAt },
+    expectedDeliveryId: expectedDeliveryId || undefined,
+    released,
+    ...(released
+      ? { releasedLock: { host: lock.host, deliveryId: lock.deliveryId, expiresAt: lock.expiresAt } }
+      : {
+          currentLock: current
+            ? { host: current.host, deliveryId: current.deliveryId, expiresAt: current.expiresAt }
+            : undefined,
+          note: current
+            ? "current lock does not match expectedDeliveryId; it was preserved"
+            : "lock disappeared before release; no different lease was removed",
+        }),
   });
 }
 
@@ -929,8 +982,22 @@ function commandPruneRuntime() {
   const retained = [];
   for (const { file, run } of runEntries) {
     const reasons = [];
-    if (!(run.status === "sent" && run.readback?.ok === true)) reasons.push("not-a-confirmed-send");
+    // Transport-accepted but readback-pending evidence is intentionally kept:
+    // the observation may still be needed to explain why no resend occurred.
+    if (!(deliveryTransportAccepted(run) && deliveryReadbackConfirmed(run))) reasons.push("not-a-confirmed-send-observation");
     if (pruneWouldBreakReplay(run.deliveryId, replay)) reasons.push("in-replay-chain");
+    // A surviving envelope derives its host-send status from this run. Removing
+    // the last accepted run while keeping the envelope would make status say
+    // pending-host-send and could invite a duplicate delivery.
+    const runStateRef = run.wakeflowTrace?.stateRoot || run.wakeflowTrace?.demandKey
+      ? {
+          stateRoot: run.wakeflowTrace?.stateRoot,
+          demandKey: run.wakeflowTrace?.demandKey,
+        }
+      : null;
+    if (existsSync(findDeliveryFile(run.deliveryId, runStateRef))) {
+      reasons.push("delivery-envelope-still-present");
+    }
     if (beforeMs !== null) {
       const runMs = run.createdAt ? Date.parse(run.createdAt) : NaN;
       if (Number.isNaN(runMs) || runMs >= beforeMs) reasons.push("not-before-cutoff");

@@ -74,15 +74,21 @@ tool first:
   context bloat. Replacement tools return only replacement launch entries plus
   `localRegistration.callTemplate`; launch only those host windows and register
   their real session ids through `wakeflow_register_window`.
-- All Wakeflow windows (controller included) live in the tmux server session
-  named by `wakeflow.config.json`
-  `"hosts": { "claude-code": { "tmuxSession": "wakeflow" } }` (default
-  `wakeflow`). A Wakeflow thread id IS the window's Claude Code session id:
-  generated at launch, stable across resumes, registered once. Recovery is not
-  a mode: when a window is dead, finish or recover the same session headless
-  with `launch-window --resume --session-id <registered id> --replace (interactive; headless claude -p bills the separate Agent SDK credit from 2026-06-15)`, then relaunch the resident
-  window with `launch-window --replace --session-id <same id>`. (Claude Code
-  desktop windows are not an automation transport.)
+- Baseline Wakeflow windows use the tmux server session configured by
+  `wakeflow.config.json` (default `wakeflow`); every explicit Pod uses its own
+  derived server session. A Wakeflow thread id is the window's stable Claude
+  Code session id. Resume a dead baseline window with
+  `launch-window --root <workspace> --window <window> --cwd <recorded actual
+  cwd> --resume --session-id <registered id> --replace [--server <configured
+  server>]`. Pod creation and recovery are separate: use
+  `wakeflow_pod_open mode=create` only for first materialization under the
+  strict clean-main/expected-HEAD gate; use the read-only
+  `wakeflow_pod_open mode=resume` plan for already-bound windows. The helper
+  verifies or resumes the exact registered session at its immutable cwd without
+  `--worktree`, rebind, or comparison of current HEAD to the creation base.
+  Missing/ambiguous identity stops; never fall back to mainline or a discovered
+  same-named worktree.
+  (Claude Code desktop windows are not an automation transport.)
 - tmux windows cannot answer permission prompts while the user is away.
   Per-repository `.claude/settings.json` allowlists, or an explicit
   `--claude-arg --permission-mode=acceptEdits` at launch, are the user's
@@ -142,9 +148,17 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
   active binding for the same (host, demand, repo), but does not cap how many
   explicitly authorized Pods may use that repo.
 - `designIntent` is one optional sentence of implementation intent on a task package ("roughly how"), authored by Design at delivery/handoff when useful. It is advisory input for the controller's own alignment check at dispatch and review — never an acceptance standard, a score, or a gate.
-- **Design exit gate before ANY implementation dispatch**: Original Plan; Requirement Design with code-fact reconciliation (real current behavior, verified against source), landing plan (per-window breakdown + designIntent), and non-goals; a user-confirmation ledger with every open product question ANSWERED; and the Test decision (needed or not — if yes, a Test Environment Spec confirmed with the user at Design time). A goal arriving without these is S1 work, not execution work: route it to Design instead of "reviewing code and just starting" (see [references/stage-route-map.md](references/stage-route-map.md)).
+- **Design exit gate before the first implementation dispatch, proportional to
+  demand scale**: a requirement needs the full Original Plan, reconciled
+  Requirement Design, landing plan/non-goals, answered product decisions, and
+  Test decision/environment spec. A bug needs reproduction, bounded scope,
+  non-goals, and Test decision without Original Plan ceremony. A supplement
+  needs an explicit delta against the existing Requirement Design. Research
+  never enters implementation dispatch. Missing items route to Design instead
+  of being invented by the controller (see
+  [references/stage-route-map.md](references/stage-route-map.md)).
 - **Test only tests**: the controller decides which confirmed environment a test card uses (from the Design-stage spec), the user confirms it at Design, Test only executes. A card with a missing/ambiguous environment block is a blocker back to the controller — Test never chooses environments, invents config values, or fixes product code. A missing input at any stage is never guessed: requirement gap → Design; product decision → user; fact gap → bounded read-only investigation.
-- **Test follows controller validation**: total control owns functional correctness and completion. When non-Test targets exist, all must be accepted before the Test package is added or dispatched; the card's existing `controllerSelfChecks` states what the controller verified. Test-only reproduction/environment diagnostics remain valid. Test explores only the approved real-environment boundary for hidden bugs; its pass cannot fill missing controller proof and its failure cannot redefine the requirement.
+- **Test follows controller validation**: total control owns functional correctness and completion. Every active/open non-Test target must be accepted before the Test package is added or dispatched; canonical `superseded` replacement history is excluded from that open set. The card's existing `controllerSelfChecks` states what the controller verified. Test-only reproduction/environment diagnostics remain valid. Test explores only the approved real-environment boundary for hidden bugs; its pass cannot fill missing controller proof and its failure cannot redefine the requirement.
 - **Test does not define the target**: every Test card freezes the demand goal from `demand.json`, the requirement-stage approved Test plan, allowed Test skills, setup policy, and attempt bound. The controller re-checks those same anchors at dispatch and review. Test may elaborate mapped commands, but an unmapped goal/gate/method (including PCV when not explicitly listed) is a blocked change request, never an executable Test invention.
 - **Mainline first; Pod only by explicit user authority**: ordinary and Auto
   Claim work enters only an idle, healthy mainline. A busy mainline waits; an
@@ -153,7 +167,9 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
   may select a Pod, and Wakeflow applies no numeric Pod limit.
 - **A Pod is a complete independent host fleet**: independent
   `Controller__<pod>`, `Design__<pod>`, `Test__<pod>`, and one product session
-  per repository. Core `wakeflow_pod_open` only plans. The helper materializes
+  per repository. Core `wakeflow_pod_open mode=create` plans first
+  materialization; `mode=resume` validates and reports only existing bound
+  resources. The helper materializes
   products with native `claude --worktree` (never nested `--tmux`, never a
   default whole-workspace `--add-dir`). Record the launch correlation through
   `wakeflow_pod_record_materialization`; Claude returns a final session id
@@ -161,7 +177,11 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
   receipts with `wakeflow_pod_bind`.
 - **Pod Design and Test have machine gates**:
   `wakeflow_pod_prepare_design_request` freezes the exact request before
-  `wakeflow_pod_record_design_handoff`. Before Test dispatch,
+  `wakeflow_pod_record_design_handoff`. Version 0.9.1 persists exactly one Pod
+  Design request/handoff generation; its sole request may be `initial-design`,
+  `supplement`, or `redesign`. A different second generation stops as an
+  unsupported capability instead of overwriting that request or using mainline Design.
+  Before Test dispatch,
   `wakeflow_pod_prepare_test_access` plus
   `wakeflow_pod_record_test_access` must prove validated
   `direct-multi-root` coverage of every active product binding. Unsupported

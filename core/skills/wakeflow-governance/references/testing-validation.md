@@ -22,8 +22,9 @@ rediscovery. Do not leave a missing functional check for Test to perform. A
 target result, Test pass, or Test report cannot replace controller acceptance.
 
 Record the controller's concrete reruns in the card's existing
-`controllerSelfChecks`. When the demand has non-Test targets, all of them must
-be `accepted` before the Test package is added or dispatched; Test-only
+`controllerSelfChecks`. Every active/open non-Test target must be `accepted`
+before the Test package is added or dispatched; canonical `superseded`
+replacement history is excluded from that open set. Test-only
 reproduction and environment-diagnostic demands remain valid when the
 controller has already established the current scope and records why the real
 scenario is still needed.

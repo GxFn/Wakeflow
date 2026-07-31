@@ -42,7 +42,8 @@ Wakeflow 提供缺失的控制层：
 - **上下文完整的任务包**：每个新任务包一次性记录目标、带锚点的需求引用、边界、完成预期、依赖与仓库提交决定；派发再据此推导必须加载的执行 Skills。
 - **聚焦的子窗口**：每个仓库窗口只在配置好的责任边界内工作。
 - **先预览再投递**：总控先审阅解析后的仓库、任务简报、Skills 和最终 prompt，再用匹配预览摘要的 `apply=true` 写入 direct-thread envelope。
-- **验收锚点驱动工艺**：实现任务包可携带明确的 claim/probe/expected 锚点，子窗口编码前先映射为 RED 检查；总控仍独立复验和判断证据。
+- **验收锚点驱动工艺**：每个新 implementation 任务包必须携带至少一个明确的
+  claim/probe/expected 锚点，子窗口编码前先映射为 RED 检查；总控仍独立复验。
 - **先证据，后验收**：target backfill 是输入，不是结论；总控仍然要检查原始证据。
 - **本地优先运行时**：真实 thread id 只存在本地 thread registry；window config 是派生视图，active state 不进入源码。
 
@@ -86,7 +87,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.0/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.1/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -230,7 +231,8 @@ Wakeflow 的正常循环刻意保持小而清晰：
 Design 和 Test 是支持角色：
 
 - **Design** 澄清需求、选项、风险和 handoff 候选。当实现证据有效但用户可见效果仍不对、且不是明确 bug 时，Design 负责重新设计真实调整方案。Design 不投递实现，也不会自动成为产品真相。
-- **Test** 只有在所有现存非 Test target accepted、总控完成自身功能验证后才能开始；
+- **Test** 只有在所有活跃/开放的非 Test target accepted、总控完成自身功能验证后
+  才能开始；具有正典 replacement lineage 的 `superseded` 历史不属于开放目标。
   它只探索获批真实环境边界中的隐藏 bug，不能自创目标、gate、环境、skill 或方法。
   Test card 会冻结 `controllerSelfChecks`、获批计划、allowed skills、setup policy 与
   attempt bound；progressive-chain-validation 只有被显式列出时才能使用。没有非 Test
@@ -245,8 +247,10 @@ Design 和 Test 是支持角色：
 
 - 一个 Pod 有独立的 `Controller__<pod>`、`Design__<pod>`、
   `Test__<pod>`，以及每个选中仓库一个产品线程；需求内每仓仍一次只收一个组合包。
-- `wakeflow_pod_open` 只记录宿主中立 launch operations，不创建 Git
-  branch/worktree、Codex thread 或动态仓库 overlay。
+- `wakeflow_pod_open mode=create` 只记录宿主中立 launch operations，不创建
+  Git branch/worktree、Codex thread 或动态仓库 overlay。已绑定 Pod 使用只读
+  `mode=resume`：验真 manifest/binding/registry/cwd/Git common-dir 身份，把当前
+  HEAD/dirty 作为观察返回，绝不创建或重绑资源。
 - Codex 把 Controller/Design/Test 建成三个独立 control-project local thread；
   产品线程必须使用精确 saved repository project +
   `environment.type=worktree`。找不到精确项目就 fail-closed，不回退父项目或
@@ -260,10 +264,12 @@ Design 和 Test 是支持角色：
 - 只登记最终真实 `threadId`，再用 `wakeflow_pod_bind` 验真 entry-sync 的 cwd、
   Git common dir、base HEAD 与 `mainCheckout=false`。三个 control 绑定形成
   `control-ready`；Pod Design handoff 加全部产品绑定形成 `execution-ready`。
-- Pod Design/redesign 只在 `Controller__<pod>` 与 `Design__<pod>` 之间往返。
+- Pod 唯一一代 Design 只在 `Controller__<pod>` 与 `Design__<pod>` 之间往返。
   先用 `wakeflow_pod_prepare_design_request` 冻结总控请求，再用
   `wakeflow_pod_record_design_handoff` 记录精确
-  `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。
+  `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。0.9.1 不持久化
+  第二代 Pod Design，后续 supplement/redesign 必须作为能力 blocker 停止，
+  不覆盖旧 handoff，也不回退主线 Design。
 - Pod Test 派发前，先运行 `wakeflow_pod_prepare_test_access`，再用
   `wakeflow_pod_record_test_access` 记录独立 Test 会话的精确探测结果。只有覆盖
   全部 active 产品绑定的 `validated` + `direct-multi-root` 才开放派发。宿主不支持
@@ -282,9 +288,14 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 - Window config 从 `wakeflow.config.json` 和 thread-registry presence 派生，不是第二份 thread-id 权威。
 - Delivery prompts 保持轻量、可读。
 - Host 通过 Codex thread tools 发送 prompt；Wakeflow 记录发送和 readback 证据。
+- send 已接受但新 turn 暂不可见时，只重试有界 readback，绝不重复发送；暂不可见
+  是交给 Agent 判断的观察结果，不是发送门禁。
+- transport 已接受才是发送完成事实。readback 独立记录为 `confirmed` / `pending` /
+  `unavailable`；匹配的 target result 会正常释放目标工作租约。发送失败恢复中，只有
+  证明“发送前拒绝”才可释放精确匹配的 delivery lease，结果不明确时保留 lease。
 - `group-ready` 会等待预期 target results，再允许 controller return。
 - `per-target` 可以每个 target 唤醒一次 controller，同时保留 group snapshot。
-- 一次真实发送被记录为 `sent` 且有 readback 证据后，总控本轮停止，不在同一轮 sleep 或 poll。
+- 已接受 transport 连同真实 readback 状态被记录为 `sent` 后，总控本轮停止，不在同一轮 sleep 或 poll。
 - Keep-live 只是运行时辅助，不是任务逻辑、传输权威或验收证据。
 - 底层 `wakeflow-state init` 是宿主中立的，写入 `controllerHost: null`。
   公共 `wakeflow_create_demand` 会立即把新 root 认领给调用宿主；独立导入的底层
@@ -412,7 +423,8 @@ tools 与 skills，不把原始脚本当作操作入口。
 
 1. **判断必须可见**：脚本输出、状态行、target backfill 是证据，不是验收。
 2. **一个需求，一个 state root**：JSON state 和 Markdown progress surface 绑定到同一个 demand。
-3. **Prompt 唤醒，任务包提供上下文，Skills 负责执行工艺**：prompt 只携带本轮目标和读取顺序；任务包保存完整任务上下文，需求锚点保留原始背景，installed skills 保存执行流程。
+3. **Prompt 分层提示，任务包提供上下文，Skills 负责执行工艺**：prompt 携带有界
+   优先信息、本轮目标和读取顺序；任务包保存完整任务上下文，需求锚点保留原始背景。
 4. **仓库边界很重要**：每个窗口拥有自己的源码、测试、提交和证据。
 5. **自动化移动工作，不转移权威**：direct-thread delivery 只能证明 prompt 已发送，不能证明结果完成。
 6. **本地运行时留在本地**：真实 thread id 只留在本地 thread registry，active runtime state 不进入 tracked docs。

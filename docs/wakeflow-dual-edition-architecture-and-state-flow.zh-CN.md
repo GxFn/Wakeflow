@@ -3,7 +3,8 @@
 > **这是 v0.7.8 的历史架构快照。** 其中关于 Pod 放置、数字容量、共享
 > worktree、全局 Design、stream overlay 和拆除的描述，已被
 > `docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md`
-> 取代。保留它们作为实现历史，不得再用来操作或扩展当前 Pod 路径。
+> 取代。保留它们作为实现历史，不得再用来操作或扩展当前 Pod 路径。文中的
+> prompt 形状、MCP 工具数、文件数、命令和行号同样只是当时快照，不代表 0.9.1。
 
 > 于 2026-06-19 从 commit HEAD 处源码生成；**2026-07-02 对照 v0.7.8 修订**（state-root 文件锁、多活跃需求容量、意图对齐、隔离 worktree、需求舱、统一 create/claim/deliver、wakeflow.config.json 命名）。以代码为准。
 
@@ -123,13 +124,13 @@ flowchart TB
 额外的版本事实：
 
 - Claude 版本交付 `commands/`（7 个斜杠命令），且 `artifact-checks` 要求 `skills/` 与 `commands/` 同时存在（`wakeflow-host-artifact-checks.mjs:29-34`）；Codex 没有 `commands/`，转而携带一个 `.codex-plugin` 的 `interface{}` 块。
-- 所有版本的 manifest 都在**五处**被版本锁定为 **0.9.0**：两个插件 manifest（`.codex-plugin/plugin.json:3`、`.claude-plugin/plugin.json:3`）、两个插件 `package.json`，以及 marketplace 的 **plugin 条目**（`.claude-plugin/marketplace.json` 的 `plugins[0].version`）。marketplace 文件还携带**第二个、不同的**版本字段——`metadata.version` 为 `1.0.0`（目录元数据，而非插件版本）——所以同一个文件有两个不同的版本字段，只有 `plugins[0]` 那个跟随 0.9.0 的锁定。根 `package.json` 保持 `0.0.0` / `private:true`（私有开发工作区）。`sync-core` 本身不强制版本一致；发行一致性检查会校验五处版本。
+- 所有版本的 manifest 都在**五处**被版本锁定为 **0.9.1**：两个插件 manifest（`.codex-plugin/plugin.json:3`、`.claude-plugin/plugin.json:3`）、两个插件 `package.json`，以及 marketplace 的 **plugin 条目**（`.claude-plugin/marketplace.json` 的 `plugins[0].version`）。marketplace 文件还携带**第二个、不同的**版本字段——`metadata.version` 为 `1.0.0`（目录元数据，而非插件版本）——所以同一个文件有两个不同的版本字段，只有 `plugins[0]` 那个跟随 0.9.1 的锁定。根 `package.json` 保持 `0.0.0` / `private:true`（私有开发工作区）。`sync-core` 本身不强制版本一致；发行一致性检查会校验五处版本。
 - 仓库为双版本提供独立目录：Claude Code 使用 `.claude-plugin/marketplace.json`，Codex 使用 `.agents/plugins/marketplace.json`。
 - `core/` 中的 host-profile 副本是一个 **Codex 开发桩**（`hostId codex` 但 `workspaceResidueChecks: []`），被排除在同步之外，仅在仓库开发期间从 `core/` 运行时让内核脚本的相对导入得以解析而存在。
 
 **注：** 这是 Wakeflow 唯一的架构参考文档；根据文首声明，凡此处文字与代码相左之处，以代码为准。
 
-> **待核实 / 存疑：** “内核不基于 `hostId` 分支”这一论断，依据是对 `core/` 中 `hostId ===` 的 grep 返回零命中；这会漏掉某些奇异的动态分发（例如把 `hostProfile.hostId` 用作对象键）。当前五处 0.9.0 版本字段彼此一致；`check:core` 本身不捕获版本漂移，`tools/check-release-consistency.mjs` 会捕获。
+> **待核实 / 存疑：** “内核不基于 `hostId` 分支”这一论断，依据是对 `core/` 中 `hostId ===` 的 grep 返回零命中；这会漏掉某些奇异的动态分发（例如把 `hostProfile.hostId` 用作对象键）。当前五处 0.9.1 版本字段彼此一致；`check:core` 本身不捕获版本漂移，`tools/check-release-consistency.mjs` 会捕获。
 
 ---
 
@@ -183,13 +184,13 @@ flowchart TB
 | `wakeflow_replace_windows` | `wakeflow-setup` | `window`→`replace-window`（`--window`）；否则 `replace-windows`（来自 `windows` 的可重复 `--window`）；只读 plan |
 | `wakeflow_adopt_demand_host` | `wakeflow-state` | `adopt-demand-host` — `--state-root`，可选 `--reason`，`apply`→`--write` |
 | `wakeflow_render_progress` | `wakeflow-render-progress` | （无子命令）`--state-root`，`--root`，`apply`→`--write` |
-| `wakeflow_release_window_lock` | `wakeflow-delivery` | `release-window-lock`（`--window`，`apply`→`--write`） |
+| `wakeflow_release_window_lock` | `wakeflow-delivery` | `release-window-lock`（`--window`，精确 compare-and-delete 恢复可带 `--expected-delivery-id`，`apply`→`--write`） |
 | `wakeflow_status` | `wakeflow-cli` | `status --root <root> --json`（扇出，见 §3.5） |
 | `wakeflow_create_demand` | `wakeflow-demand-sequence` | `create-demand` — `--todo-id` 或 `--demand-key`+`--title`，可选 `--controller-window`/`--goal`/`--completion-definition`/`--stage-plan`/`--task-packages <json>`，`apply`→`--write`；init state root、adopt 宿主、添加 package、渲染并消费该 TODO 行 |
 | `wakeflow_claim_next` | `wakeflow-demand-sequence` | `claim-todo` — 可选 `--design-key`/`--controller-window`，`apply`→`--write`；无人值守地自动认领唯一一条 Auto Claim=yes 的合格行；在 `maxActiveDemands` 容量门下委托给 create-demand |
 | `wakeflow_add_task` | `wakeflow-state` | `add-task-package` — `--state-root`，`--task-package-id`，`--summary`，`--target-window`，`--target-task-id`，可选 `--target-summary`/`--source-ref`/`--design-intent`，`adoptHost`→`--adopt-host`，`--write` |
 | `wakeflow_prepare_delivery` | `wakeflow-delivery` | `direction=controller-return` → `build-controller-return`；`direction=target`（默认）→ `prepare-dispatch-from-state`（追加 `--objective`/`--task-package-id`/`--controller-window`——回程路由链：标志 > 打戳的 state.controllerWindow > 工作区配置——以及 `--return-policy`）；除非 `verbose`，否则 `--compact` |
-| `wakeflow_record_delivery` | `wakeflow-delivery` | `record-delivery-run` — `--delivery-file`,`--status`，可选 `--evidence`/`--error`/`--host-method`/`--host-mode`，`--readback-ok <bool>`，可选 `--delivery-run-id`，除非 `verbose`，否则 `--compact` |
+| `wakeflow_record_delivery` | `wakeflow-delivery` | `record-delivery-run` — `--delivery-file`,`--status`，可选 `--transport-status accepted\|rejected-before-send\|ambiguous`、独立的 `--readback-status confirmed\|pending\|unavailable`、`--readback-attempts`、证据/error/host 字段和 `--delivery-run-id`；`--readback-ok` 只保留为旧兼容别名；除非 `verbose`，否则 `--compact` |
 | `wakeflow_record_target_result` | `wakeflow-state` | `import-target-result` — `--state-root`,`--target-task-id`,`--target-window`,`--status`，可选 `--result-id`/`--summary`，可重复的 `--evidence-ref`/`--verification`/`--risk`，除非 `verbose`，否则 `--compact` |
 | `wakeflow_review_pack` | `wakeflow-delivery` | `review-pack` — 可选 `--state-root`/`--group`/`--task-id`；只读 |
 | `wakeflow_view` | `wakeflow-state` / `wakeflow-delivery` | 按 `scope`：`task-ledger`→`wakeflow-delivery task-ledger`（`--task-id`/`--target-window`）；`window`→`wakeflow-state window-view`（`--window`）；`focus`→`wakeflow-state focus-doc`（`--window`/`--phase`，`apply`→`--write`）；`trace`→`wakeflow-delivery trace-spine`（`--group`/`--target-window`/`--task-id`/`--result-file`/`--result-id`/`--delivery-file`/`--delivery-id`）；除 focus+apply 外只读 |
@@ -258,8 +259,8 @@ sequenceDiagram
     DL->>DL: eligibility gate + write packet/group/envelope + ACQUIRE window lock (TTL 7200s)
     DL-->>U: envelope.prompt (NO state change)
     U->>H: host send (paste prompt into tmux pane / send_message_to_thread)
-    H-->>U: readback evidence (paneTail / thread reply)
-    U->>DL: record_delivery status=sent (needs readback.ok + evidence)
+    H-->>U: 独立 readback 观察 (confirmed / pending / unavailable)
+    U->>DL: record_delivery status=sent (需要 transport accepted + evidence；readback 不是发送门禁)
     DL->>ST: markStateRootDeliverySent ⇒ task=sent, state=dispatched, refresh lock
     Note over TW: target executes its dispatch packet
     TW-->>U: TargetResultEnvelope (completed|blocked|needs-review)
@@ -298,7 +299,7 @@ sequenceDiagram
 | `add-task-package` | 在 `completed`/`archived`/`paused` 时拒绝，在 `review-ready`/`accepting`/`waiting-results`（“先 reduce 或 decide”）时拒绝，在 `blocked` 或存在任何 blocker 时拒绝；rework 通道打开期间拒绝普通新工作（新工作以 `reviewRoute=rework` 加入该通道）；可选 `--design-intent`；**第一条驱动命令认领 `controllerHost`** |
 | `prepare-dispatch-from-state` | 需求-宿主归属门；资格条件：需求未 completed/archived/paused/blocked/review-ready/accepting，目标任务处于 `pending`/`needs-rework`/`missing-result`，package 处于 `pending`/`needs-rework`；rework 优先：rework 目标尚未关闭期间不派发非 rework 目标；获取跨宿主窗口锁（遇到他宿主的新鲜锁则失败关闭） |
 | host send | （Claude）目标窗口必须存活；按窗口的派发锁；（Codex）控制器直接调用原生宿主工具 |
-| `record-delivery-run status=sent` | 要求 `--readback-ok true` **且** 非空 `--evidence`；`markStateRootDeliverySent` 推进状态；刷新锁 |
+| `record-delivery-run status=sent` | 要求 `transportStatus=accepted` **且** 非空 `--evidence`；真实 readback 状态独立记录；即便暂不可见/不可读，`markStateRootDeliverySent` 仍推进状态并刷新锁 |
 | `import-target-result` | 若目标任务已 `accepted` 则拒绝；默认 id 冲突时以时间戳自动消歧（rework）；**不**改动控制器状态（`stateRevisionUnchanged`）；释放与所应答派发相匹配的锁 |
 | `reduce-results` | 在 `completed`/`archived` 时拒绝；零打开任务时拒绝；任何路径形态的 evidence ref 缺失时硬失败（`evidence-repair-required`）（ref 依次按 state root → 产出窗口的仓库 → 工作区根解析）；只 reduce 控制器评审范围（rework 通道打开期间 rework 通道任务优先——仍缺失的 rework 结果解析为 `needs-rework`，而非 `waiting-results`）；仅当范围内无任何缺失时才创建一个转换候选 |
 | `decide-review accept` | 候选 `fromRevision == revision`；`demandKey` 匹配；若候选有 `blockedResultIds` 则需 `--accept-blocked`；清除 review-blocker |
@@ -402,7 +403,7 @@ stateDiagram-v2
 | 起态 | 终态 | 触发 | 守卫 |
 |---|---|---|---|
 | （无） | pending | add-task-package `--target-window` | 给定 `--target-window` 时需要 `--target-task-id` |
-| pending | sent | record-delivery-run | 派发 `readback.ok` |
+| pending | sent | record-delivery-run | 派发 transport 为 `accepted`；真实 readback 状态独立记录 |
 | pending/sent | missing-result | reduce-results | 无最新结果 |
 | sent | completed\|blocked\|needs-review | reduce-results | 当先前 `reviewDecision != rework` 时，由最新 `result.status` 映射而来 |
 | sent | needs-rework | reduce-results | `task.reviewDecision === 'rework'` 覆盖结果状态 |
@@ -460,7 +461,7 @@ stateDiagram-v2
   }
   state "Delivery (out-of-state-root)" as DV {
     [*] --> pending_host_send : build/prepare-delivery [writes window lock]
-    pending_host_send --> sent : record-delivery-run sent [readback.ok + evidence]
+    pending_host_send --> sent : record-delivery-run sent [transport accepted + evidence]
     pending_host_send --> failed : record-delivery-run failed [requires --error]
     pending_host_send --> blocked_d : record-delivery-run blocked [requires --error]
     sent --> released : record-target-result [matching deliveryId]
@@ -474,7 +475,7 @@ stateDiagram-v2
 | | accepting\|blocked | （consumed/陈旧） | decide-review | 若 `fromRevision != current revision` 则失败 |
 | 目标结果 | （无） | completed\|blocked\|needs-review | import-target-result `--status` | 任务存在且属于该窗口；尚未 accepted；需求未 completed/archived；revision 不变 |
 | 派发运行 | （无） | pending-host-send | build/prepare-delivery | 写入窗口锁（TTL 7200s） |
-| | pending-host-send | sent | record-delivery-run `--status sent` | 需要 `readback.ok` |
+| | pending-host-send | sent | record-delivery-run `--status sent` | `transportStatus=accepted`；readback 可为 confirmed/pending/unavailable，且不授权重发 |
 | | pending-host-send | failed\|blocked | record-delivery-run failed\|blocked | failed **与** blocked **二者都**需要 `--error`（`status !== "sent" && !error.trim()` 则失败，`result-recording-commands.mjs:248-249`） |
 | | sent | （锁已释放） | record-target-result / import-target-result | 当结果应答持锁的 `deliveryId` 时释放锁 |
 

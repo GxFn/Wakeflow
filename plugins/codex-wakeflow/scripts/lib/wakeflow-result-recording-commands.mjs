@@ -9,6 +9,9 @@ import path from "node:path";
 import {
   annotateDeliveryRunIdempotency,
   annotateTargetResultIdempotency,
+  deliveryReadbackStatus,
+  deliveryTransportAccepted,
+  deliveryTransportStatus,
   dispatchPacketDigest,
   dispatchPreparationDigest,
   sameDeliveryRunContent,
@@ -100,6 +103,22 @@ export function createResultRecordingCommands(ctx) {
     return value;
   }
 
+  function validateDeliveryTransportStatus(value) {
+    const allowed = new Set(["accepted", "rejected-before-send", "ambiguous"]);
+    if (!allowed.has(value)) {
+      fail(`--transport-status must be one of: ${[...allowed].join(", ")}`);
+    }
+    return value;
+  }
+
+  function validateDeliveryReadbackStatus(value) {
+    const allowed = new Set(["confirmed", "pending", "unavailable"]);
+    if (!allowed.has(value)) {
+      fail(`--readback-status must be one of: ${[...allowed].join(", ")}`);
+    }
+    return value;
+  }
+
   function validateHostMode(value) {
     const allowed = new Set(["new-turn", "unknown"]);
     if (!allowed.has(value)) {
@@ -161,8 +180,8 @@ export function createResultRecordingCommands(ctx) {
   }
 
   function markStateRootDeliverySent(envelope, run, { apply = true, stateRoot: resolvedStateRoot = null } = {}) {
-    if (envelope.kind !== "DeliveryEnvelope" || run.status !== "sent") {
-      return { updated: false, reason: "not-a-sent-target-delivery" };
+    if (envelope.kind !== "DeliveryEnvelope") {
+      return { updated: false, reason: "not-a-target-delivery" };
     }
     if (envelope.dispatchGroup) {
       const group = loadDispatchGroup(envelope.dispatchGroup, envelope.stateRef);
@@ -180,7 +199,7 @@ export function createResultRecordingCommands(ctx) {
     const targetTaskId = envelope.stateRef?.targetTaskId || envelope.taskId;
     const taskPackageId = envelope.stateRef?.taskPackageId;
     if (!stateRootRef || !targetTaskId || !taskPackageId) {
-      return { updated: false, reason: "missing-state-ref" };
+      fail(`target delivery ${envelope.deliveryId} is missing its authoritative state/task/package reference.`);
     }
 
     const stateRoot = resolvedStateRoot ?? resolveStateRoot(stateRootRef);
@@ -197,6 +216,16 @@ export function createResultRecordingCommands(ctx) {
     const state = readStateRootJson(stateRoot, "wakeflow-state.json", "controller state");
     if (state.controllerHost && state.controllerHost !== hostProfile.runtime.hostDirName) {
       fail(`demand ${state.demandKey} is owned by controller host ${state.controllerHost}; this runtime is ${hostProfile.runtime.hostDirName}. Record this delivery on the owning host.`);
+    }
+    // Failed/blocked transport records do not advance controller state, but
+    // they still belong to this demand and can release a shared window lease.
+    // Validate host ownership before allowing either side effect.
+    if (run.status !== "sent") {
+      return {
+        updated: false,
+        reason: "non-sent-target-delivery-validated",
+        stateRoot: path.relative(workspaceRoot, stateRoot),
+      };
     }
     let controllerEvents = [];
     if (apply) {
@@ -382,6 +411,8 @@ export function createResultRecordingCommands(ctx) {
             dispatchGroup: envelope.dispatchGroup,
             sentAt: run.createdAt,
             readbackOk: Boolean(run.readback?.ok),
+            readbackStatus: deliveryReadbackStatus(run),
+            transportStatus: deliveryTransportStatus(run),
           },
         }
       : item);
@@ -543,11 +574,40 @@ export function createResultRecordingCommands(ctx) {
       }
     }
     const status = validateDeliveryRunStatus(requireValue("--status"));
-    const readbackOk = parseBoolean(getValue("--readback-ok", ""), status === "sent");
+    const readbackOkInput = getValue("--readback-ok", "");
+    const explicitReadbackStatus = getValue("--readback-status", "");
+    const transportStatusInput = getValue("--transport-status", "");
+    const transportStatus = validateDeliveryTransportStatus(
+      transportStatusInput || (status === "sent" ? "accepted" : "ambiguous"),
+    );
+    const readbackStatus = validateDeliveryReadbackStatus(
+      explicitReadbackStatus
+        || (readbackOkInput !== ""
+          ? (parseBoolean(readbackOkInput) ? "confirmed" : "pending")
+          : status === "sent" && !transportStatusInput ? "confirmed" : "unavailable"),
+    );
+    const readbackOk = readbackStatus === "confirmed";
+    if (readbackOkInput !== "" && parseBoolean(readbackOkInput) !== readbackOk) {
+      fail("--readback-ok conflicts with --readback-status.");
+    }
+    const readbackAttemptsRaw = getValue("--readback-attempts", "");
+    const readbackAttempts = readbackAttemptsRaw === "" ? null : Number(readbackAttemptsRaw);
+    if (readbackAttempts !== null && (!Number.isInteger(readbackAttempts) || readbackAttempts < 0)) {
+      fail("--readback-attempts must be a non-negative integer.");
+    }
     const evidence = getValue("--evidence", "");
     const error = getValue("--error", "");
-    if (status === "sent" && (!readbackOk || !evidence.trim())) {
-      fail("sent delivery runs require --readback-ok true and --evidence.");
+    if (status === "sent" && transportStatus !== "accepted") {
+      fail("sent delivery runs require --transport-status accepted.");
+    }
+    if (status !== "sent" && transportStatus === "accepted") {
+      fail("accepted host transport must be recorded with --status sent so the same prompt is not resent.");
+    }
+    if (transportStatus === "rejected-before-send" && readbackStatus !== "unavailable") {
+      fail("rejected-before-send delivery runs require --readback-status unavailable.");
+    }
+    if (status === "sent" && !evidence.trim()) {
+      fail("sent delivery runs require --evidence describing host acceptance and the readback observation.");
     }
     if (status !== "sent" && !error.trim()) {
       fail("blocked/failed delivery runs require --error.");
@@ -556,6 +616,17 @@ export function createResultRecordingCommands(ctx) {
     const keepLiveState = envelope.automation?.keepLive ? path.relative(stateDir, keepLiveStateFile()) : null;
     const deliveryWindow = envelope.targetWindow || envelope.targetThread?.windowName || envelope.controllerWindow;
     const createdAt = nowIso();
+    const observedWindowLease = envelope.kind === "DeliveryEnvelope" && envelope.targetWindow
+      ? readWindowLock(envelope.targetWindow)
+      : null;
+    const windowLease = observedWindowLease?.deliveryId === envelope.deliveryId
+      && typeof observedWindowLease.leaseId === "string"
+      && observedWindowLease.leaseId
+      ? {
+          leaseId: observedWindowLease.leaseId,
+          deliveryId: observedWindowLease.deliveryId,
+        }
+      : null;
     const run = annotateDeliveryRunIdempotency({
       kind: "DirectThreadDeliveryRun",
       version: deliveryRunVersion,
@@ -568,7 +639,9 @@ export function createResultRecordingCommands(ctx) {
       triggerTaskId: envelope.triggerTaskId,
       reviewScope: envelope.reviewScope,
       transport: "direct-thread",
+      transportStatus,
       status,
+      ...(windowLease ? { windowLease } : {}),
       thread: {
         windowName: deliveryWindow,
         threadIdRedacted: true,
@@ -579,8 +652,10 @@ export function createResultRecordingCommands(ctx) {
         mode: validateHostMode(getValue("--host-mode", "unknown")),
       },
       readback: {
-        checked: status === "sent" || getValue("--readback-ok", "") !== "",
+        checked: readbackStatus !== "unavailable",
         ok: readbackOk,
+        status: readbackStatus,
+        ...(readbackAttempts !== null ? { attempts: readbackAttempts } : {}),
         evidence: evidence || undefined,
       },
       keepLive: {
@@ -601,15 +676,51 @@ export function createResultRecordingCommands(ctx) {
       }),
       createdAt,
     });
-    function refreshSentWindowLock(runStatus) {
+    function matchingTargetResultExists() {
+      if (envelope.kind !== "DeliveryEnvelope" || !envelope.targetWindow) return false;
+      const resultFile = findResultFile(
+        envelope.targetWindow,
+        envelope.taskId || envelope.stateRef?.targetTaskId,
+        envelope.dispatchGroup,
+        envelope.stateRef,
+      );
+      return existsSync(resultFile);
+    }
+
+    function refreshSentWindowLock(runStatus, stateUpdate) {
       // The prepare-time lock may have expired before a crashed record was
-      // replayed; (re)write it on every sent record so the in-flight delivery
-      // is never unlocked.
-      if (runStatus === "sent" && envelope.kind === "DeliveryEnvelope" && envelope.targetWindow) {
+      // replayed. Refresh only while the delivery is still in flight: a
+      // matching result or terminal/reviewed task has already released the
+      // lease and an old run replay must never recreate it.
+      const activeState = stateUpdate?.updated === true
+        || stateUpdate?.reason === "target-task-already-sent";
+      if (
+        deliveryTransportAccepted(runStatus)
+        && envelope.kind === "DeliveryEnvelope"
+        && envelope.targetWindow
+        && activeState
+        && !matchingTargetResultExists()
+      ) {
         writeWindowLock(envelope.targetWindow, { deliveryId: envelope.deliveryId });
         return path.relative(workspaceRoot, lockPathNote(envelope.targetWindow));
       }
       return undefined;
+    }
+
+    function releaseRejectedWindowLock(runStatus) {
+      if (
+        envelope.kind !== "DeliveryEnvelope"
+        || !envelope.targetWindow
+        || deliveryTransportStatus(runStatus) !== "rejected-before-send"
+        || !runStatus.windowLease?.leaseId
+      ) {
+        return false;
+      }
+      return releaseWindowLockForResult(
+        lockFileFor(envelope.targetWindow),
+        (lock) => lock.deliveryId === envelope.deliveryId
+          && lock.leaseId === runStatus.windowLease.leaseId,
+      );
     }
 
     const runFile = findDeliveryRunFile(deliveryRunId, envelope.stateRef);
@@ -638,7 +749,8 @@ export function createResultRecordingCommands(ctx) {
         // before the state snapshot. Replaying the same run while holding the
         // state-root lock completes that missing state/event update exactly once.
         const stateUpdate = markStateRootDeliverySent(envelope, existingRun, { stateRoot: lockedStateRoot });
-        const windowLock = refreshSentWindowLock(existingRun.status);
+        const windowLock = refreshSentWindowLock(existingRun, stateUpdate);
+        const windowLockReleased = releaseRejectedWindowLock(existingRun);
         output(
           {
             ok: true,
@@ -647,12 +759,16 @@ export function createResultRecordingCommands(ctx) {
             duplicate: true,
             idempotentReplay: true,
             status: existingRun.status,
+            transportStatus: deliveryTransportStatus(existingRun),
+            readbackStatus: deliveryReadbackStatus(existingRun),
+            readbackAttempts: existingRun.readback?.attempts,
             ...(hasFlag("--compact")
               ? { compact: true, deliveryRunId: existingRun.deliveryRunId, deliveryId: existingRun.deliveryId, targetWindow: existingRun.targetWindow }
               : { run: existingRun }),
             runFile: path.relative(workspaceRoot, runFile),
             stateUpdate,
             windowLock,
+            windowLockReleased,
           },
           [
             `Delivery run ${deliveryRunId} already recorded; treated as idempotent replay.`,
@@ -669,13 +785,17 @@ export function createResultRecordingCommands(ctx) {
       markStateRootDeliverySent(envelope, run, { apply: false, stateRoot: lockedStateRoot });
       atomicWriteJson(runFile, run);
       const stateUpdate = markStateRootDeliverySent(envelope, run, { stateRoot: lockedStateRoot });
-      const windowLock = refreshSentWindowLock(run.status);
+      const windowLock = refreshSentWindowLock(run, stateUpdate);
+      const windowLockReleased = releaseRejectedWindowLock(run);
       output(
         {
           ok: true,
           command: "record-delivery-run",
           wrote: true,
           status,
+          transportStatus,
+          readbackStatus,
+          readbackAttempts: readbackAttempts ?? undefined,
           // --compact: the run record is on disk at runFile; echoing it back was
           // pure context burn
           ...(hasFlag("--compact")
@@ -684,6 +804,7 @@ export function createResultRecordingCommands(ctx) {
           runFile: path.relative(workspaceRoot, runFile),
           stateUpdate,
           windowLock,
+          windowLockReleased,
         },
         [
           `Recorded direct-thread delivery run ${deliveryRunId}.`,

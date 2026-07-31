@@ -36,18 +36,14 @@ Use these MCP tools for normal installed-workspace control:
 
 | Need | MCP tool |
 | --- | --- |
-| Inspect repository, state-root, and delivery-loop status | `wakeflow_status` |
-| Initialize first-time setup, or explicitly reset initialized setup after user confirmation | `wakeflow_initialize_workspace` |
-| Recreate/rebind one or selected responsibility windows without workspace initialization | `wakeflow_replace_windows` (single `window` arg for one, `windows[]` for a group) |
-| Register a host-created or replacement window and refresh its derived config | `wakeflow_register_window` |
-| Create, extend, or complete a controller demand | `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_complete_demand` |
-| Plan, materialize, bind, Design, Test-access-gate, inspect, and close an explicitly authorized Pod | `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind`, `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff`, `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_pod_list`, `wakeflow_pod_close`, `wakeflow_pod_record_close_receipt` |
-| Prepare or record delivery-loop transport evidence | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result` |
-| Review target results and record controller judgment | `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review` |
-| Scan next controller-ready work | `wakeflow_next_work` |
-| Archive a completed demand, workspace docs, or TODO rows | `wakeflow_archive` (target=demand / docs / todo) |
-| Repair privacy findings in one existing archived demand | `wakeflow_sanitize_archive` (dry-run first; archived ledger roots only) |
-| Verify Wakeflow state and docs | `wakeflow_verify` |
+| Setup and window registration | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
+| Demand/status lifecycle | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
+| Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind`, `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff`, `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_pod_close`, `wakeflow_pod_record_close_receipt`, `wakeflow_pod_list` |
+| Delivery transport | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
+| Results, review, and completion | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
+| Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
+| Archive, views, maintenance, verification | `wakeflow_archive`, `wakeflow_sanitize_archive`, `wakeflow_view`, `wakeflow_prune_runtime`, `wakeflow_verify` |
+| Host ownership and target work leases | `wakeflow_adopt_demand_host`, `wakeflow_release_window_lock` |
 
 ## Source Runtime Command Set
 

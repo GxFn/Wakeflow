@@ -33,22 +33,36 @@ Current objective (the task package is authoritative):
 - <one-line objective>
 
 Completion focus (full criteria are in the task package):
-- <bounded observable result>
+- <up to two ordered observable results>
+
+- Priority context: <highest-priority confirmed fact>
+- Critical boundary [forbidden|outOfScope|inScope]: <highest-priority boundary>
+
+Key acceptance anchors (full probes and expectations are in the task package):
+- <up to four anchor ids/claims>
 
 Read before execution, in order:
 - Task package (complete task context): <absolute package path>
 - Requirement background entry (full anchors are in the task package) [goal]: <document#section>
+- Workspace instructions: <workspace>/AGENTS.md
 - Repository instructions: <repository>/AGENTS.md
+- Current state root: <absolute state-root path>
 
 Required execution Skills (execution-process authority):
 - skills/wakeflow-target/SKILL.md
+- <other derived Skill, when required>
 
 Identity (full boundaries are in the task package):
 - Current responsibility window: <window>
 - Only working repository: <absolute repository path>
 
+Before coding: map every package acceptanceAnchor to a RED test or probe; if an
+anchor is untestable, return needs-review instead of inventing a requirement.
+
 Return requirement:
-- Return a TargetResultEnvelope with verifiable evidence.
+- Execute only this task package. Return a TargetResultEnvelope with verifiable
+  evidence. A target result is not controller acceptance.
+- Test execution contract: <package>#testExecution
 
 Dispatch record (routing and trace only):
 - taskId: <taskId>
@@ -58,13 +72,13 @@ Dispatch record (routing and trace only):
 - dispatchGroup: <group>
 ```
 
-When the task package carries `acceptanceAnchors`, the prompt includes only
-their ids/claims and tells the target to map each full package anchor to a RED
-test/probe before implementation. Full probe/expected content remains in the
-task package. The prompt likewise shows only the first two ordered completion
-expectations and one original requirement entry; complete context, requirement
-anchors, boundaries, commit policy, and completion criteria remain in the task
-package. Target prepare previews this exact prompt and readiness without
+Anchor, RED, workspace, and Test lines are conditional. The prompt contains
+the objective, at most two completion expectations, one priority-context fact,
+one critical boundary, at most four anchor ids/claims, and one original
+requirement entry. Complete context, requirement anchors, boundary lists,
+commit policy, probes, Test policy, and completion criteria remain in the task
+package. Skills are derived during briefing from work type, evidence/anchor
+needs, and the Test contract. Target prepare previews this exact prompt without
 writing; `apply=true` freezes the packet/envelope only after controller review
 and requires the preview's `previewDigest` as `expectedPreviewDigest`. That
 digest covers the complete prepared dispatch, not only the task package.
@@ -74,13 +88,16 @@ Controller-return prompts stay compact:
 ```text
 Continue controller review: <window> backfill.
 
-Variables:
+Review context:
 - stateRoot: <path>
 - dispatchGroup: <group>
 - trigger: <window/task>
 - blockedTargets: <only when non-empty>
-- missingTargets: <only when non-empty>
-- skill: skills/wakeflow-controller/SKILL.md
+- remainingTargets: <only when non-empty>
+- pendingDispatchTargets: <only when non-empty>
+
+Required execution Skill:
+- skills/wakeflow-controller/SKILL.md
 ```
 
 Do not wrap prompts in XML/JSON/delegation tags. Pass the envelope `prompt`
@@ -88,9 +105,17 @@ field exactly to the host send tool.
 
 ## Send Boundary
 
-Scripts build envelopes and record evidence. The Codex host tool performs the
-real send. Once send/readback is recorded as sent and readback-ok, stop the
-controller turn; do not poll for target completion.
+Applied envelope preparation stores the envelope and reserves the shared
+per-window target work lease with that delivery id, covering the prepare-to-send
+gap. The Codex host tool performs the real send against that same lease;
+controller-return delivery takes no target work lease. If the send is accepted
+but the new turn is not visible yet, retry
+only readback within a bounded attempt/time budget; never resend while
+confirming that accepted send. Record accepted transport as `status=sent` with
+the actual independent readback status (`confirmed`, `pending`, or
+`unavailable`). Pending visibility is observation for Agent judgment, not a
+send failure or strict gate. Then stop the controller turn; do not poll for
+target completion.
 
 ## Result Review
 

@@ -94,9 +94,10 @@ Exit gate: results with evidence refs for the wave.
 `wakeflow_reduce_results` → `wakeflow_decide_review`
 (accept / rework / redesign / blocked). Raw evidence before any decision.
 Non-bug outcome mismatch = redesign lane back to S1, never point-fix loops.
-For a Pod, the redesign request and handoff stay between
-`Controller__<pod>` and `Design__<pod>`; they do not return to mainline Design.
-Exit to S5 only after every existing non-Test target is accepted and the
+For a Pod, redesign must never return to mainline Design. Version 0.9.1 cannot
+persist a second frozen Pod Design request/handoff generation, so the demand
+stays blocked as a capability gap instead of overwriting its recorded Design generation.
+Exit to S5 only after every active required non-Test target is accepted and the
 controller has recorded its concrete validation in the Test card's
 `controllerSelfChecks`. A Test-only reproduction or environment diagnostic
 may enter S5 after the controller establishes that current scope.
@@ -145,7 +146,7 @@ as a new demand.
 | --- | --- | --- | --- |
 | S0 | `wakeflow_status`, explicit-Pod `wakeflow_create_demand`, `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind` | `check-workspace`, Pod control `pod-open` | CLAUDE.md posture |
 | S1 | mainline `wakeflow_deliver`; Pod `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff` | Pod Design `deliver` | Design support surface docs |
-| S2 | `wakeflow_next_work`, `wakeflow_claim_next`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_render_progress`, Pod `wakeflow_pod_record_materialization`, `wakeflow_pod_bind` | Pod product `pod-open` / `launch-window --host-worktree` | governance TODO intake |
+| S2 | `wakeflow_next_work`, `wakeflow_claim_next`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_render_progress`, Pod `wakeflow_pod_record_materialization`, `wakeflow_pod_bind` | Pod product: `mode=create` materializes only canonical pending/unbound operations; `mode=resume` verifies or resumes the exact bound session/cwd and treats HEAD/dirty as observations | governance TODO intake |
 | S3 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result`, `wakeflow_release_window_lock` | `deliver`, `send` | controller dispatch + target skill |
 | S4 | `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_view` | `readback`, `wait-results` | controller acceptance practices |
 | S5 | `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_intake_test_card` | exact Pod Test multi-root probe; dispatch = S3 transport | testing-validation reference |

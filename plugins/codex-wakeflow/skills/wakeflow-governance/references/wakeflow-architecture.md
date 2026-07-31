@@ -45,14 +45,13 @@ of constructing cache paths or guessing script parameters.
 ```text
 ParentWorkspace/
   AGENTS.md
-  Wakeflow/
-  ProductRepo/
-  DesignRepo/
-  TestRepo/
+  ProductRepo/                  one or more configured responsibilities
   wakeflow-ledger/
 ```
 
-Product repositories remain siblings. Active state and local runtime files are
+Product repositories may be siblings or otherwise explicitly configured;
+Wakeflow source, Design, and Test repositories are not required installed
+workspace children. Active state and local runtime files are
 ignored. Long-term project records live outside the reusable Wakeflow repo.
 
 The initialized fleet is the default mainline. An additional Pod is created

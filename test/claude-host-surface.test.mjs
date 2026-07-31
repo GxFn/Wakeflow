@@ -71,7 +71,7 @@ test("claude host profile carries terminal-only Claude Code semantics", () => {
     assert.match(steps, /hostLaunch\.sessionId/, `launch workflow (${language}) must identify the real host handle source`);
   }
   assert.match(claudeProfile.texts.registeredHandle("Repo"), /Claude Code session for Repo/);
-  assert.match(claudeProfile.hostTools.sendToWindow, /wakeflow-claude-host send/);
+  assert.match(claudeProfile.hostTools.sendToWindow, /wakeflow-claude-host deliver/);
 });
 
 test("host entryExtras emit host-specific launch specs", () => {
@@ -183,10 +183,26 @@ test("claude send adapters keep the codex adapter step contract", () => {
     );
   }
   assert.equal(claudeSteps[0].adapter.adapterId, "claude-tmux-resident");
-  assert.match(claudeSteps[0].hostTool, /--delivery-id <delivery id>/);
-  assert.match(claudeSteps[0].instruction, /wakeflow-claude-host send/);
-  assert.match(claudeSteps[0].instruction, /--delivery-id dlv-1/);
+  assert.match(claudeSteps[0].hostTool, /deliver --root <workspace-root> --delivery-file/);
+  assert.match(claudeSteps[0].instruction, /wakeflow-claude-host deliver/);
+  assert.match(claudeSteps[0].instruction, /deliveries\/example\.json/);
+  assert.match(claudeSteps[0].instruction, /never deliver or paste the prompt again/);
+  assert.equal(claudeSteps[0].adapter.readbackPolicy.maxReadAttempts, 3);
+  assert.equal(claudeSteps[0].adapter.readbackPolicy.maxWaitMs, 5_000);
+  assert.equal(claudeSteps[0].adapter.readbackPolicy.resendOnRetry, false);
   assert.equal(claudeSteps[1].tool, "wakeflow_record_delivery");
+  assert.equal(
+    Object.hasOwn(claudeSteps[1].arguments, "readbackOk"),
+    false,
+    "the adapter must record the helper's real observation instead of hard-coding readback success",
+  );
+  assert.deepEqual(claudeSteps[1].arguments, {
+    deliveryFile: "deliveries/example.json",
+    status: "sent",
+    transportStatus: "accepted",
+  });
+  assert.match(claudeSteps[1].after, /actual readback\.status/);
+  assert.match(claudeSteps[1].after, /preserve the lease/);
 });
 
 test("adapterForWindowMode pins tmux-resident with headless recovery", () => {
@@ -194,7 +210,8 @@ test("adapterForWindowMode pins tmux-resident with headless recovery", () => {
   assert.equal(adapterForWindowMode(undefined), claudeTmuxResidentAdapter);
   assert.equal(adapterForWindowMode("headless-recovery"), claudeHeadlessRecoveryAdapter);
   assert.match(claudeHeadlessRecoveryAdapter.hostTool, /claude -p --resume/);
-  assert.match(claudeHeadlessRecoveryAdapter.hostTool, /last resort/);
+  assert.match(claudeHeadlessRecoveryAdapter.hostTool, /baseline-only last resort/);
+  assert.match(claudeHeadlessRecoveryAdapter.hostTool, /never use for a Pod window/);
 });
 
 test("claude artifact registers a session id under the host-scoped registry", () => {

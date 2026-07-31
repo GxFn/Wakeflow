@@ -96,8 +96,8 @@ Current scripts:
   `build-controller-return` enforces the dispatch group's return policy:
   `group-ready` permits one pending/sent controller-return for the dispatch group,
   while `per-target` permits one pending/sent controller-return per
-  trigger target/task pair. After a direct-thread delivery run is recorded as
-  sent/readback-ok, its agent cue must close the controller dispatch turn; it
+  trigger target/task pair. After accepted transport is recorded as sent with
+  its actual independent readback status, its agent cue must close the controller dispatch turn; it
   must not tell total control to sleep, poll, or wait in place for target
   results. Re-recording the same delivery run or identical target result is an
   idempotent replay and must not advance state again; changed target results
@@ -121,8 +121,10 @@ Current scripts:
   demand / task package / dispatch / delivery / result / controller-event chain
   without sending messages or making an acceptance decision. Resume plans expose
   a `WakeflowHostSendAdapter` descriptor for Codex app thread dispatch; the
-  adapter consumes delivery envelopes, requires readback, and never stores real
-  thread ids or performs controller acceptance.
+  adapter consumes delivery envelopes, requires one bounded read-only
+  observation, records `confirmed` / `pending` / `unavailable`, and never makes
+  confirmed visibility a send gate, stores real thread ids, or performs
+  controller acceptance.
 - `wakeflow-demand-sequence.mjs`: TODO-board claim/create runner. `create-demand`
   inits a demand state root (adopting this host), adds any initial task
   packages, renders the progress doc, and consumes the originating TODO row;

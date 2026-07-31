@@ -4,6 +4,13 @@
 > 对照设计：附件《整体修复方向应该收敛成一句话》
 > 核心原则：保留 Agent 的判断自由，用确定性的机器外壳保证身份、状态、证据、隔离和历史不可分叉。
 
+> **版本范围：0.8.18 历史实现记录。** 本文关于 prompt/task/result/TODO、身份、
+> 状态和证据硬化的结论仍用于解释实现；其中 Stage 4 的数字容量、Wakeflow 自建
+> worktree、derived overlay 和共享/全局 Pod 角色设计，已被 2026-07-31 的宿主管理
+> 完整 Pod 设计及 0.9.0 实现取代。当前规则是主线优先、仅用户显式启用 Pod、无数字
+> 上限、宿主创建产品 worktree、每个 Pod 有独立完整角色舰队。本文保留当时测试数字，
+> 不作为当前 Pod 操作手册。
+
 ## 1. 结论
 
 审计前的 Wakeflow **不能认定为严格按完整设计实现**；截至本记录最终复核，
@@ -19,7 +26,7 @@
 - demand、packet、group、delivery、result、binding 和 lease 均有稳定身份，
   且 transport artifact 按 demand namespace 隔离；
 - redesign 使用显式 replacement lineage，旧结果和旧 group 只能进入历史；
-- pod 在创建 worktree 前预留容量，配置分 durable / derived / effective 三层；
+- 当时的 Pod capacity/worktree/overlay 实现（已被 0.9.0 宿主管理 Pod 取代）；
 - TargetResultEnvelope v2 对 acceptance anchor、Test plan、change/commit disposition
   做结构化映射；
 - TODO 使用统一 13 列 codec、共享锁和原子归档；

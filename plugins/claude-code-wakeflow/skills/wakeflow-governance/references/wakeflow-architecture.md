@@ -19,7 +19,7 @@ judgment.
 | skills | operation steps, commands, field templates, examples, troubleshooting |
 | MCP tools | stable outer capability interface for workspace setup, status, state roots, packages, Pod plan/materialization/bind/Design/Test-access/close receipts, delivery envelope preparation/recording, review packs, controller decisions, Design/Test intake, next-work scans, archive actions, and verification |
 | scripts | local implementation backend for file/state operations, result import/reduction, controller-return construction, archive internals, keep-live state, and backend checks |
-| host transport | `scripts/lib/wakeflow-claude-host.mjs`, the tmux helper the agent runs via Bash for preflight, window launch/retitle, prompt send/readback, lock release, wait-results, and attach |
+| host transport | `scripts/lib/wakeflow-claude-host.mjs`, the tmux helper the agent runs for preflight, window launch/retitle, envelope delivery, low-level custom send, readback, and explicit wait; work-lease release is `wakeflow_release_window_lock`, while observation uses native `tmux attach` |
 | templates | reusable starter surfaces for installed workspaces |
 | `.wakeflow-active/` | ignored active runtime state |
 | `.wakeflow-local/` | ignored local config plus delivery runtime; final session ids live in `wakeflow-delivery/hosts/claude-code/thread-registry/`, tmux bindings in `window-host/`, verified Pod operations/materialization/bindings/Test-access receipts stay host-scoped, shared locks in `wakeflow-delivery/locks/` |
@@ -32,8 +32,9 @@ manipulate real thread ids, fake host sends, expose every runtime script, or
 decide acceptance. Target closeout stays split into narrow actions: record the
 target result envelope, review readiness, prepare a controller-return envelope
 when policy allows, send with the Claude Code host transport (the agent runs
-`wakeflow-claude-host.mjs send` against the controller's tmux-resident
-window), and record delivery evidence. The helper is a Bash-run script, not an
+`wakeflow-claude-host.mjs deliver --delivery-file` against the controller's
+tmux-resident window), and record delivery evidence. Low-level
+`send` is for custom prompts. The helper is a Bash-run script, not an
 MCP tool. Internal runtime scripts remain available to Wakeflow skills and
 tests without becoming public MCP tools.
 
@@ -48,14 +49,13 @@ of constructing cache paths or guessing script parameters.
 ```text
 ParentWorkspace/
   CLAUDE.md
-  Wakeflow/
-  ProductRepo/
-  DesignRepo/
-  TestRepo/
+  ProductRepo/                  one or more configured responsibilities
   wakeflow-ledger/
 ```
 
-Product repositories remain siblings. Active state and local runtime files are
+Product repositories may be siblings or otherwise explicitly configured;
+Wakeflow source, Design, and Test repositories are not required installed
+workspace children. Active state and local runtime files are
 ignored. Long-term project records live outside the reusable Wakeflow repo.
 Every Wakeflow window (controller included) runs as a tmux-resident `claude`
 session inside the tmux server session named by `wakeflow.config.json`
@@ -77,7 +77,8 @@ Business state is shared across hosts: `.wakeflow-active/`,
 Host transport runtime is host-scoped:
 `.wakeflow-local/wakeflow-delivery/hosts/claude-code/` (this plugin's thread
 registry and window-host bindings) and `hosts/codex/` (the Codex plugin's
-twin). `locks/` is shared so each window has at most one in-flight delivery
-across both hosts. `AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code) coexist,
+twin). `locks/` is shared so each target window has at most one in-flight work
+delivery across both hosts; controller returns use a separate paste mutex.
+`AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code) coexist,
 each owned by its plugin, and each demand has exactly ONE controller across
 hosts.

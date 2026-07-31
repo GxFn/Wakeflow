@@ -82,9 +82,10 @@ window semantics.
 
 The delivery envelope stores `targetWindow`, `stateRoot`, `dispatchGroup`, and
 the compact prompt. The agent performs the real send with the tmux host helper and
-records it with `record-delivery-run` — see
+records it with the public MCP tool `wakeflow_record_delivery` — see
 [references/wakeflow-delivery.md](wakeflow-delivery.md) (Send Boundary) for the helper
-command, the shared per-window lock, mid-turn queueing, and recovery/relaunch.
+command, the cross-host target work lease, fail-closed concurrent target
+delivery, and recovery/relaunch.
 
 Transport-specific: if the lock is held or the window-host binding is missing, fail
 closed and return to controller judgment. Do not create a hidden schedule, heartbeat,
@@ -96,8 +97,8 @@ Controller return uses the dispatch group's stored `controllerWindow`, not a
 global default controller. Mainline has its controller; each explicitly
 authorized Pod has an independent `Controller__<pod>` that is the sole
 acceptance authority for that demand. The controller is itself a tmux-resident
-window, so the return uses the same helper `send`; the controller window takes
-NO delivery lock (returns queue naturally in its input box, and concurrent
+window, so the return uses envelope-aware `deliver --delivery-file`; the controller window takes
+NO target work lease (returns queue naturally in its input box, and concurrent
 pastes are serialized by the controller paste mutex). The visible return
 prompt follows the controller-return prompt shape in
 [references/wakeflow-delivery.md](wakeflow-delivery.md) (Prompt Rules).

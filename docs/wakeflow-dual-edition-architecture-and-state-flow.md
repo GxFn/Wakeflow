@@ -5,7 +5,8 @@
 > descriptions are superseded by
 > `docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md`.
 > Keep them as implementation history; do not use them to operate or extend
-> the current Pod path.
+> the current Pod path. Prompt shape, MCP tool counts, file counts, commands,
+> and line references are also period snapshots, not 0.9.1 operating facts.
 
 > Generated 2026-06-19 from source at commit HEAD; **revised 2026-07-02 against v0.7.8** (state-root locks, multi-demand capacity, intent alignment, isolation worktrees, demand pods, unified create/claim/deliver, wakeflow.config.json naming). Code is the source of truth.
 
@@ -189,13 +190,13 @@ Additional edition facts:
   requires both `skills/` and `commands/` (`wakeflow-host-artifact-checks.mjs:29-34`);
   Codex has no `commands/` and instead carries a `.codex-plugin` `interface{}`
   block.
-- All edition manifests are version-locked at **0.9.0** in **five places**: both
+- All edition manifests are version-locked at **0.9.1** in **five places**: both
   plugin manifests (`.codex-plugin/plugin.json:3`, `.claude-plugin/plugin.json:3`),
   both plugin `package.json`s, and the marketplace **plugin entry**
   (`.claude-plugin/marketplace.json` `plugins[0].version`). The marketplace file
   also carries a **second, distinct** version field — `metadata.version` is
   `1.0.0` (the catalog metadata, not the plugin version) — so the same file has
-  two different version fields and only the `plugins[0]` one tracks the 0.9.0
+  two different version fields and only the `plugins[0]` one tracks the 0.9.1
   lock. Root `package.json` stays `0.0.0` / `private:true` (private dev
   workspace). `sync-core` does **not** enforce version equality; the release
   consistency check does.
@@ -211,7 +212,7 @@ where any prose here and the code disagree, the code is authoritative.
 
 > **Open questions / verify:** The no-`hostId`-branch claim rests on a grep for
 > `hostId ===` returning zero hits in `core/`; this would miss exotic dynamic
-> dispatch (e.g. `hostProfile.hostId` used as an object key). The five 0.9.0
+> dispatch (e.g. `hostProfile.hostId` used as an object key). The five 0.9.1
 > version fields currently match. `check:core` alone does not catch version
 > drift; `tools/check-release-consistency.mjs` does.
 
@@ -307,13 +308,13 @@ to `--compact` (see §3.4).
 | `wakeflow_replace_windows` | `wakeflow-setup` | `window`→`replace-window` (`--window`); else `replace-windows` (repeated `--window` from `windows`); readOnly plan |
 | `wakeflow_adopt_demand_host` | `wakeflow-state` | `adopt-demand-host` — `--state-root`, optional `--reason`, `apply`→`--write` |
 | `wakeflow_render_progress` | `wakeflow-render-progress` | (no subcommand) `--state-root`, `--root`, `apply`→`--write` |
-| `wakeflow_release_window_lock` | `wakeflow-delivery` | `release-window-lock` (`--window`, `apply`→`--write`) |
+| `wakeflow_release_window_lock` | `wakeflow-delivery` | `release-window-lock` (`--window`, optional `--expected-delivery-id` for compare-and-delete recovery, `apply`→`--write`) |
 | `wakeflow_status` | `wakeflow-cli` | `status --root <root> --json` (fans out, §3.5) |
 | `wakeflow_create_demand` | `wakeflow-demand-sequence` | `create-demand` — `--todo-id` or `--demand-key`+`--title`, optional `--controller-window`/`--goal`/`--completion-definition`/`--stage-plan`/`--task-packages <json>`, `apply`→`--write`; inits the root, adopts host, adds packages, renders, consumes the TODO row |
 | `wakeflow_claim_next` | `wakeflow-demand-sequence` | `claim-todo` — optional `--design-key`/`--controller-window`, `apply`→`--write`; unattended auto-claim of the single Auto Claim=yes eligible row; delegates to create-demand under the `maxActiveDemands` capacity gate |
 | `wakeflow_add_task` | `wakeflow-state` | `add-task-package` — `--state-root`, `--task-package-id`, `--summary`, `--target-window`, `--target-task-id`, optional `--target-summary`/`--source-ref`/`--design-intent`, `adoptHost`→`--adopt-host`, `--write` |
 | `wakeflow_prepare_delivery` | `wakeflow-delivery` | `direction=controller-return` → `build-controller-return`; `direction=target` (default) → `prepare-dispatch-from-state` (adds `--objective`/`--task-package-id`/`--controller-window` — return-route chain: flag > stamped state.controllerWindow > workspace config — and `--return-policy`); `--compact` unless `verbose` |
-| `wakeflow_record_delivery` | `wakeflow-delivery` | `record-delivery-run` — `--delivery-file`,`--status`, optional `--evidence`/`--error`/`--host-method`/`--host-mode`, `--readback-ok <bool>`, optional `--delivery-run-id`, `--compact` unless `verbose` |
+| `wakeflow_record_delivery` | `wakeflow-delivery` | `record-delivery-run` — `--delivery-file`,`--status`, optional `--transport-status accepted\|rejected-before-send\|ambiguous`, independent `--readback-status confirmed\|pending\|unavailable`, optional `--readback-attempts`, evidence/error/host fields and `--delivery-run-id`; `--readback-ok` remains a legacy compatibility alias; `--compact` unless `verbose` |
 | `wakeflow_record_target_result` | `wakeflow-state` | `import-target-result` — `--state-root`,`--target-task-id`,`--target-window`,`--status`, optional `--result-id`/`--summary`, repeated `--evidence-ref`/`--verification`/`--risk`, `--compact` unless `verbose` |
 | `wakeflow_review_pack` | `wakeflow-delivery` | `review-pack` — optional `--state-root`/`--group`/`--task-id`; readOnly |
 | `wakeflow_view` | `wakeflow-state` / `wakeflow-delivery` | by `scope`: `task-ledger`→`wakeflow-delivery task-ledger` (`--task-id`/`--target-window`); `window`→`wakeflow-state window-view` (`--window`); `focus`→`wakeflow-state focus-doc` (`--window`/`--phase`, `apply`→`--write`); `trace`→`wakeflow-delivery trace-spine` (`--group`/`--target-window`/`--task-id`/`--result-file`/`--result-id`/`--delivery-file`/`--delivery-id`); readOnly except focus+apply |
@@ -428,8 +429,8 @@ sequenceDiagram
     DL->>DL: eligibility gate + write packet/group/envelope + ACQUIRE window lock (TTL 7200s)
     DL-->>U: envelope.prompt (NO state change)
     U->>H: host send (paste prompt into tmux pane / send_message_to_thread)
-    H-->>U: readback evidence (paneTail / thread reply)
-    U->>DL: record_delivery status=sent (needs readback.ok + evidence)
+    H-->>U: independent readback observation (confirmed / pending / unavailable)
+    U->>DL: record_delivery status=sent (needs transport accepted + evidence; readback is not a send gate)
     DL->>ST: markStateRootDeliverySent ⇒ task=sent, state=dispatched, refresh lock
     Note over TW: target executes its dispatch packet
     TW-->>U: TargetResultEnvelope (completed|blocked|needs-review)
@@ -468,7 +469,7 @@ sequenceDiagram
 | `add-task-package` | refuses while `completed`/`archived`/`paused`, while `review-ready`/`accepting`/`waiting-results` ("reduce or decide first"), while `blocked` or any blockers; refuses ordinary work while a rework route is open (new work joins the route with `reviewRoute=rework`); optional `--design-intent`; **first driving command claims `controllerHost`** |
 | `prepare-dispatch-from-state` | demand-host ownership gate; eligibility: demand not completed/archived/paused/blocked/review-ready/accepting, target task in `pending`/`needs-rework`/`missing-result`, package in `pending`/`needs-rework`; rework-first: non-rework targets are undispatched while rework targets are open; acquires the cross-host window lock (fail closed on a fresh other-host lock) |
 | host send | (Claude) target window must be alive; per-window delivery lock; (Codex) controller calls the native host tool directly |
-| `record-delivery-run status=sent` | requires `--readback-ok true` **and** non-empty `--evidence`; `markStateRootDeliverySent` advances state; refreshes lock |
+| `record-delivery-run status=sent` | requires `transportStatus=accepted` **and** non-empty `--evidence`; records actual readback status independently; `markStateRootDeliverySent` advances state and refreshes the lock even when visibility is pending/unavailable |
 | `import-target-result` | refuses if target task is already `accepted`; default-id collision auto-disambiguates with timestamp (rework); does **not** mutate controller state (`stateRevisionUnchanged`); releases the lock matching the answered delivery |
 | `reduce-results` | refuses while `completed`/`archived`; refuses with zero open tasks; hard-fails (`evidence-repair-required`) when any path-like evidence ref is missing (refs resolve state root → producing window's repo → workspace root); reduces only the controller review scope (rework-route tasks first while a rework route is open — a still-missing rework result resolves to `needs-rework`, not `waiting-results`); creates a transition candidate only when nothing in scope is missing |
 | `decide-review accept` | candidate `fromRevision == revision`; `demandKey` match; requires `--accept-blocked` if the candidate has `blockedResultIds`; clears review-blockers |
@@ -647,7 +648,7 @@ one decision (see §5.1).
 | From | To | Trigger | Guard |
 |---|---|---|---|
 | (none) | pending | add-task-package `--target-window` | `--target-task-id` required when `--target-window` given |
-| pending | sent | record-delivery-run | delivery `readback.ok` |
+| pending | sent | record-delivery-run | delivery transport is `accepted`; actual readback status is recorded independently |
 | pending/sent | missing-result | reduce-results | no latest result |
 | sent | completed\|blocked\|needs-review | reduce-results | maps from latest `result.status` when prior `reviewDecision != rework` |
 | sent | needs-rework | reduce-results | `task.reviewDecision === 'rework'` overrides result status |
@@ -712,7 +713,7 @@ stateDiagram-v2
   }
   state "Delivery (out-of-state-root)" as DV {
     [*] --> pending_host_send : build/prepare-delivery [writes window lock]
-    pending_host_send --> sent : record-delivery-run sent [readback.ok + evidence]
+    pending_host_send --> sent : record-delivery-run sent [transport accepted + evidence]
     pending_host_send --> failed : record-delivery-run failed [requires --error]
     pending_host_send --> blocked_d : record-delivery-run blocked [requires --error]
     sent --> released : record-target-result [matching deliveryId]
@@ -726,7 +727,7 @@ stateDiagram-v2
 | | accepting\|blocked | (consumed/stale) | decide-review | fails if `fromRevision != current revision` |
 | Target result | (none) | completed\|blocked\|needs-review | import-target-result `--status` | task exists & belongs to window; not already-accepted; demand not completed/archived; revision unchanged |
 | Delivery run | (none) | pending-host-send | build/prepare-delivery | writes window lock (TTL 7200s) |
-| | pending-host-send | sent | record-delivery-run `--status sent` | `readback.ok` required |
+| | pending-host-send | sent | record-delivery-run `--status sent` | `transportStatus=accepted`; readback may be confirmed/pending/unavailable and never authorizes resend |
 | | pending-host-send | failed\|blocked | record-delivery-run failed\|blocked | **both** failed AND blocked require `--error` (`status !== "sent" && !error.trim()` fails, `result-recording-commands.mjs:248-249`) |
 | | sent | (lock released) | record-target-result / import-target-result | releases lock when result answers the locking `deliveryId` |
 

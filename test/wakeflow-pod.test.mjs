@@ -195,6 +195,8 @@ function registryDir(root) {
 function podAuthoritySnapshot(root, stateRoot, podId) {
   const hostRoot = path.join(root, ".wakeflow-local/wakeflow-delivery/hosts/codex");
   const operationDir = path.join(hostRoot, "pod-operations");
+  const bindingDir = path.join(hostRoot, "pod-bindings", podId);
+  const threadRegistry = registryDir(root);
   return {
     state: readFileSync(path.join(stateRoot, "wakeflow-state.json"), "utf8"),
     events: readFileSync(path.join(stateRoot, "controller-events.jsonl"), "utf8"),
@@ -204,6 +206,18 @@ function podAuthoritySnapshot(root, stateRoot, podId) {
           .filter((name) => name.endsWith(".json"))
           .sort()
           .map((name) => [name, readFileSync(path.join(operationDir, name), "utf8")]))
+      : {},
+    bindings: existsSync(bindingDir)
+      ? Object.fromEntries(readdirSync(bindingDir)
+          .filter((name) => name.endsWith(".json"))
+          .sort()
+          .map((name) => [name, readFileSync(path.join(bindingDir, name), "utf8")]))
+      : {},
+    registry: existsSync(threadRegistry)
+      ? Object.fromEntries(readdirSync(threadRegistry)
+          .filter((name) => name.endsWith(".json"))
+          .sort()
+          .map((name) => [name, readFileSync(path.join(threadRegistry, name), "utf8")]))
       : {},
   };
 }
@@ -628,6 +642,287 @@ test("open emits a complete host-owned launch plan without touching Git or a der
     revisionBeforeResume,
     "an exact retry must not append another state transition",
   );
+});
+
+test("Pod create mode requires the exact clean main checkout before it writes launch authority", () => {
+  const { root, heads } = makeWorkspace();
+  const stateRoot = createDemand(root, "POD-CREATE-GATE");
+  const stateBefore = readFileSync(path.join(stateRoot, "wakeflow-state.json"), "utf8");
+  const eventsBefore = readFileSync(path.join(stateRoot, "controller-events.jsonl"), "utf8");
+
+  const staleBase = pod(
+    root,
+    "open",
+    "--request-json",
+    openRequest(
+      "POD-CREATE-GATE",
+      { ...heads, RepoA: "0".repeat(40) },
+      ["RepoA"],
+    ),
+    ["--mode", "create"],
+    false,
+  );
+  assert.equal(staleBase.status, 1, staleBase.stderr || staleBase.stdout);
+  assert.match(JSON.parse(staleBase.stderr).error, /Expected base HEAD.*configured main checkout/i);
+
+  writeFileSync(path.join(root, "RepoA", "UNTRACKED.txt"), "create must fail closed\n");
+  const dirtyMain = pod(
+    root,
+    "open",
+    "--request-json",
+    openRequest("POD-CREATE-GATE", heads, ["RepoA"]),
+    ["--mode", "create"],
+    false,
+  );
+  assert.equal(dirtyMain.status, 1, dirtyMain.stderr || dirtyMain.stdout);
+  assert.match(JSON.parse(dirtyMain.stderr).error, /uncommitted or untracked changes/i);
+
+  assert.equal(existsSync(path.join(root, ".wakeflow-local")), false);
+  assert.equal(readFileSync(path.join(stateRoot, "wakeflow-state.json"), "utf8"), stateBefore);
+  assert.equal(readFileSync(path.join(stateRoot, "controller-events.jsonl"), "utf8"), eventsBefore);
+});
+
+test("Pod resume mode observes the exact bound worktree after both Pod and main checkout diverge", () => {
+  const { root, heads } = makeWorkspace();
+  const demandKey = "POD-RESUME-DIVERGED";
+  const { stateRoot, operation, identity } = materializeReadySingleRepoPod(
+    root,
+    heads,
+    demandKey,
+  );
+  const bindingFile = path.join(
+    root,
+    ".wakeflow-local/wakeflow-delivery/hosts/codex/pod-bindings",
+    demandKey,
+    `${operation.windowName}.json`,
+  );
+  const bindingBefore = readJson(bindingFile);
+
+  writeFileSync(path.join(identity.actualCwd, "POD-COMMIT.txt"), "advanced only in Pod\n");
+  git(identity.actualCwd, ["add", "POD-COMMIT.txt"]);
+  git(identity.actualCwd, ["commit", "-q", "-m", "advance pod worktree"]);
+  const podHead = git(identity.actualCwd, ["rev-parse", "HEAD"]);
+  assert.notEqual(podHead, operation.expectedBaseHead);
+  writeFileSync(path.join(identity.actualCwd, "POD-DIRTY.txt"), "observed, not rejected\n");
+
+  const mainRoot = path.join(root, "RepoA");
+  writeFileSync(path.join(mainRoot, "MAIN-COMMIT.txt"), "advanced only on main\n");
+  git(mainRoot, ["add", "MAIN-COMMIT.txt"]);
+  git(mainRoot, ["commit", "-q", "-m", "advance main checkout"]);
+  const mainHead = git(mainRoot, ["rev-parse", "HEAD"]);
+  assert.notEqual(mainHead, operation.expectedBaseHead);
+  writeFileSync(path.join(mainRoot, "MAIN-DIRTY.txt"), "resume must ignore this checkout\n");
+
+  const beforeResume = podAuthoritySnapshot(root, stateRoot, demandKey);
+  const resumed = parseOk(pod(
+    root,
+    "open",
+    "--request-json",
+    { demandKey, host: "codex" },
+    ["--mode", "resume"],
+    false,
+  ));
+  const recoveredProduct = resumed.operations.find(
+    (item) => item.windowName === operation.windowName,
+  );
+
+  assert.equal(resumed.kind, "WakeflowPodResumePlan");
+  assert.equal(resumed.mode, "resume");
+  assert.equal(resumed.readOnly, true);
+  assert.equal(recoveredProduct.launchCorrelationId, operation.launchCorrelationId);
+  assert.equal(recoveredProduct.registrationBindingId, operation.registrationBindingId);
+  assert.equal(recoveredProduct.requiresCoreBind, false);
+  assert.equal(recoveredProduct.recovery.bindingId, bindingBefore.bindingId);
+  assert.equal(recoveredProduct.recovery.actualCwd, identity.actualCwd);
+  assert.equal(recoveredProduct.recovery.gitTopLevel, identity.gitTopLevel);
+  assert.equal(recoveredProduct.recovery.gitCommonDir, identity.gitCommonDir);
+  assert.equal(recoveredProduct.recovery.currentHead, podHead);
+  assert.equal(recoveredProduct.recovery.dirty, true);
+  assert.notEqual(recoveredProduct.recovery.currentHead, mainHead);
+  for (const recovered of resumed.operations) {
+    for (const createOnlyField of [
+      "createPrompt",
+      "hostCreateThread",
+      "localRegistration",
+      "hostLaunch",
+      "hostCwd",
+      "expectedBaseHead",
+      "hostWorktreeName",
+    ]) {
+      assert.equal(
+        Object.hasOwn(recovered, createOnlyField),
+        false,
+        `resume operation must not expose create-only field ${createOnlyField}`,
+      );
+      assert.equal(
+        Object.hasOwn(recovered.recovery, createOnlyField),
+        false,
+        `resume observation must not reintroduce create-only field ${createOnlyField}`,
+      );
+    }
+  }
+  assert.deepEqual(
+    podAuthoritySnapshot(root, stateRoot, demandKey),
+    beforeResume,
+    "resume planning must not rewrite state, events, manifest, operations, bindings, or registry",
+  );
+});
+
+test("a bound Pod window rejects a different registry handle without replacing the original", () => {
+  const { root, heads } = makeWorkspace();
+  const demandKey = "POD-RESUME-HANDLE";
+  const { stateRoot, operation } = materializeReadySingleRepoPod(
+    root,
+    heads,
+    demandKey,
+  );
+  const registryFile = path.join(registryDir(root), `${operation.windowName}.json`);
+  const registryBefore = readFileSync(registryFile, "utf8");
+
+  const replacement = runSync(process.execPath, [
+    deliveryScript,
+    "register-thread",
+    "--root", root,
+    "--window", operation.windowName,
+    "--thread-id", threadIdFor(`${operation.windowName}-replacement`),
+    "--launch-correlation-id", operation.launchCorrelationId,
+    "--binding-id", operation.registrationBindingId,
+    "--state-root", stateRoot,
+    "--write",
+    "--json",
+  ], { encoding: "utf8", cwd: root });
+  assert.equal(replacement.status, 1, replacement.stderr || replacement.stdout);
+  assert.match(
+    JSON.parse(replacement.stderr || replacement.stdout).error,
+    /cannot replace its final host session/i,
+  );
+  assert.equal(readFileSync(registryFile, "utf8"), registryBefore);
+
+  const resumed = parseOk(pod(
+    root,
+    "open",
+    "--request-json",
+    { demandKey, host: "codex" },
+    ["--mode", "resume"],
+    false,
+  ));
+  assert.ok(resumed.boundWindowNames.includes(operation.windowName));
+});
+
+test("Pod resume rejects terminal demand state and a nonterminal closing lifecycle", () => {
+  for (const scenario of [
+    {
+      demandKey: "POD-RESUME-TERMINAL",
+      mutate(stateRoot) {
+        completeDemand(stateRoot);
+      },
+      expected: /cannot resume while demand=completed/i,
+    },
+    {
+      demandKey: "POD-RESUME-CLOSING",
+      mutate(stateRoot) {
+        const stateFile = path.join(stateRoot, "wakeflow-state.json");
+        const state = readJson(stateFile);
+        writeJson(stateFile, {
+          ...state,
+          podProvisioning: {
+            ...state.podProvisioning,
+            phase: "closing",
+          },
+        });
+      },
+      expected: /provisioning=closing/i,
+    },
+  ]) {
+    const { root, heads } = makeWorkspace();
+    const { stateRoot } = materializeReadySingleRepoPod(
+      root,
+      heads,
+      scenario.demandKey,
+    );
+    scenario.mutate(stateRoot);
+
+    const resume = pod(
+      root,
+      "open",
+      "--request-json",
+      { demandKey: scenario.demandKey, host: "codex" },
+      ["--mode", "resume"],
+      false,
+    );
+    assert.equal(resume.status, 1, resume.stderr || resume.stdout);
+    assert.match(JSON.parse(resume.stderr).error, scenario.expected);
+  }
+});
+
+test("Pod resume rejects ambiguous legacy and canonical registry files", () => {
+  const { root, heads } = makeWorkspace();
+  const demandKey = "POD-REGISTRY-重复";
+  const { operation } = materializeReadySingleRepoPod(root, heads, demandKey);
+  const registrations = readdirSync(registryDir(root))
+    .filter((name) => name.endsWith(".json"))
+    .map((name) => ({
+      name,
+      registration: readJson(path.join(registryDir(root), name)),
+    }))
+    .filter(({ registration }) => registration.windowName === operation.windowName);
+  assert.equal(registrations.length, 1);
+  const canonical = registrations[0];
+  const legacyName = `${operation.windowName
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "item"}.json`;
+  assert.notEqual(legacyName, canonical.name, "fixture must produce distinct legacy/canonical names");
+  copyFileSync(
+    path.join(registryDir(root), canonical.name),
+    path.join(registryDir(root), legacyName),
+  );
+
+  const resume = pod(
+    root,
+    "open",
+    "--request-json",
+    { demandKey, host: "codex" },
+    ["--mode", "resume"],
+    false,
+  );
+  assert.equal(resume.status, 1, resume.stderr || resume.stdout);
+  assert.match(JSON.parse(resume.stderr).error, /ambiguous across 2 registry files/i);
+});
+
+test("register-thread refuses a bound Pod operation whose immutable binding is missing", () => {
+  const { root, heads } = makeWorkspace();
+  const demandKey = "POD-MISSING-BINDING";
+  const { stateRoot, operation } = materializeReadySingleRepoPod(root, heads, demandKey);
+  const registryFile = path.join(registryDir(root), `${operation.windowName}.json`);
+  const registryBefore = readFileSync(registryFile, "utf8");
+  const registration = JSON.parse(registryBefore);
+  const bindingFile = path.join(
+    root,
+    ".wakeflow-local/wakeflow-delivery/hosts/codex/pod-bindings",
+    demandKey,
+    `${operation.windowName}.json`,
+  );
+  unlinkSync(bindingFile);
+
+  const replacement = runSync(process.execPath, [
+    deliveryScript,
+    "register-thread",
+    "--root", root,
+    "--window", operation.windowName,
+    "--thread-id", registration.threadId,
+    "--launch-correlation-id", operation.launchCorrelationId,
+    "--binding-id", operation.registrationBindingId,
+    "--state-root", stateRoot,
+    "--write",
+    "--json",
+  ], { encoding: "utf8", cwd: root });
+  assert.equal(replacement.status, 1, replacement.stderr || replacement.stdout);
+  assert.match(
+    JSON.parse(replacement.stderr || replacement.stdout).error,
+    /missing its immutable binding/i,
+  );
+  assert.equal(readFileSync(registryFile, "utf8"), registryBefore);
 });
 
 test("materialization journal prevents blind async host retries and never stores a temporary handle", () => {

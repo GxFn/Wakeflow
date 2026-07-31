@@ -691,7 +691,7 @@ test("controller-return delivery remains transport-only and needs no state-root 
     ]));
     assert.equal(recorded.wrote, true);
     assert.equal(recorded.stateUpdate.updated, false);
-    assert.equal(recorded.stateUpdate.reason, "not-a-sent-target-delivery");
+    assert.equal(recorded.stateUpdate.reason, "not-a-target-delivery");
     assert.equal(readJson(fixture.stateFile).revision, INITIAL_REVISION);
     assert.equal(existsSync(`${fixture.stateRoot}.state-lock`), false);
   } finally {

@@ -14,7 +14,7 @@ export function formatControllerReturnPrompt({
   interfaceLanguage = "en",
 }) {
   if (!stateRef) throw new Error("Controller return prompts require stateRef from a controller state root.");
-  // Sentences follow the demand interfaceLanguage; machine variable KEYS stay
+  // Sentences follow the demand interfaceLanguage; machine context keys stay
   // English by contract.
   const zh = interfaceLanguage === "zh";
   const returnedTargets = [
@@ -36,14 +36,16 @@ export function formatControllerReturnPrompt({
   return [
     title,
     "",
-    zh ? "\u53d8\u91cf\uff1a" : "Variables:",
+    zh ? "\u8bc4\u5ba1\u4e0a\u4e0b\u6587\uff1a" : "Review context:",
     `- stateRoot: ${stateRef.stateRoot}`,
     `- dispatchGroup: ${dispatchGroup}`,
     `- trigger: ${triggerTarget} / ${triggerTaskId}`,
     ...(hasBlockedTargets ? [`- blockedTargets: ${blockedTargets}`] : []),
     ...(hasRemainingTargets ? [`- remainingTargets: ${remainingTargets}`] : []),
     ...(hasPendingDispatchTargets ? [`- pendingDispatchTargets: ${pendingDispatchTargets}`] : []),
-    "- skill: skills/wakeflow-controller/SKILL.md",
+    "",
+    zh ? "\u5fc5\u987b\u52a0\u8f7d\u7684\u6267\u884c Skill\uff1a" : "Required execution Skill:",
+    "- skills/wakeflow-controller/SKILL.md",
   ].join("\n");
 }
 
@@ -120,8 +122,8 @@ export function buildControllerReturnEnvelope({
     },
     deliveryCompletion: {
       required: true,
-      pendingUntil: "host-send-readback-recorded",
-      completionProof: "DirectThreadDeliveryRun status=sent with readback.ok=true",
+      pendingUntil: "accepted-host-send-recorded",
+      completionProof: "DirectThreadDeliveryRun status=sent with transportStatus=accepted; readback.status is an independent observation",
       blockedAction: "record-delivery-run status=blocked or failed, then stop for total-control judgment",
     },
     loopGuard: {

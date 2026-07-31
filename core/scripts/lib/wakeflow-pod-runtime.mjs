@@ -489,6 +489,20 @@ export function resolvePodTargetWorkRoot({
       `Active Pod binding receipt for ${targetWindow} does not match its canonical identity.`,
     );
   }
+  const registryDir = path.join(runtime.dirs.hostRoot, "thread-registry");
+  const registrations = jsonFiles(registryDir)
+    .map((file) => readJsonFile(file, "Pod thread registration"))
+    .filter((registration) => registration?.windowName === targetWindow);
+  if (
+    registrations.length !== 1
+    || registrations[0].bindingId !== binding.bindingId
+    || !registrations[0].threadId
+    || contentDigest({ host, handle: registrations[0].threadId }) !== binding.handleDigest
+  ) {
+    throw new Error(
+      `Active Pod binding for ${targetWindow} does not match exactly one registered final host session.`,
+    );
+  }
 
   const actualCwd = canonicalExistingDirectory(
     binding.receipt.actualCwd,

@@ -1,6 +1,6 @@
 ---
 name: wakeflow-target-craft
-description: Use when a Wakeflow development/product window is implementing its assigned task package and needs execution craft — plan-first, clean baseline, test-first, systematic debugging, two-stage self-review, scope discipline, and verify-before-done. It shapes HOW the code is written so the window naturally produces the evidence the controller's acceptance gate requires, and how to receive a rework verdict without blind re-patching. It never changes the delivery/return protocol (that stays with wakeflow-target) and grants no claim, accept, dispatch, cross-window, or state-machine-write authority.
+description: Use when a Wakeflow product target is about to implement or rework its assigned task package.
 ---
 
 # Wakeflow Target Craft
@@ -22,14 +22,22 @@ ceremony on top of it.
 **NO IMPLEMENTATION UNTIL EVERY AUTHORED `acceptanceAnchor` IS MAPPED TO A RED TEST OR PROBE.**
 Violating the letter of this rule is violating its spirit.
 
-- Read `objective`, `designIntent`, `forbidden`, and `acceptanceAnchors` from
-  the assigned packet/package before planning code.
+- Read the package's `objective`, `requirementRefs`, complete `boundaries`,
+  `completionExpectations`, `acceptanceAnchors`, and advisory `designIntent`
+  before planning code.
 - For each anchor, record `id -> test/probe seam -> expected RED -> expected
   GREEN`. Use the exact confirmed claim; do not widen it.
 - If an anchor is untestable, conflicts with another authority, or requires
   missing facts, return `needs-review`. Never invent a replacement goal.
-- When no anchors were authored, do not create requirement authority yourself;
-  use the package's existing requirement and evidence contract.
+- A newly authored implementation package without anchors is invalid and must
+  return `needs-review`. Non-implementation packages (including research,
+  documentation, and Test work) and read-only legacy compatibility packages
+  may legitimately omit them; never create requirement authority yourself.
+- A Test package may list this Skill because it carries an `evidenceContract`.
+  In that case use only the evidence vocabulary and result-shape guidance here;
+  the package's `testExecution` and the target Skill's Test Alignment Gate stay
+  authoritative, and the product implementation practices below do not widen
+  Test's assignment.
 
 ## The seven practices (each earns a piece of evidence)
 
@@ -75,8 +83,12 @@ and watch it GREEN.
   fallback, silently drop unknown fields, or parse human-readable messages into
   structured truth. If the real RED or root cause cannot be established, return
   `needs-review` instead of editing by guess.
-- Earns: a test that covers the change, exists, and passes; a git history where
-  the failing-test commit precedes the implementation commit.
+- Earns: a test that covers the change plus ordered, reviewable evidence that
+  the same behavior failed before the implementation and passed afterward.
+  When the package says `commitExpectation=commit` and repository policy
+  permits, separate commits may prove that order. For
+  `leave-uncommitted`, preserve it through test output, logs, or evidence
+  files instead of creating commits against the package policy.
 - Why the order matters: a test written after the code tends to assert what the
   code already does, not what the requirement needs. Test-first pins the
   requirement.
@@ -100,10 +112,11 @@ Do not guess-and-patch. Build a feedback loop first:
 
 Before writing the `TargetResultEnvelope`, review your own diff in TWO passes:
 
-- **Stage 1 — spec compliance**: does the diff do what the task package,
-  `designIntent`, acceptance anchors, and evidence contract ask — nothing
-  missing, nothing extra? Compare against the ORIGINAL wording, not your memory
-  of it.
+- **Stage 1 — spec compliance**: does the diff do what the task package's
+  objective, requirement references, boundaries, completion expectations,
+  acceptance anchors, and evidence contract ask — nothing missing, nothing
+  extra? Treat `designIntent` as an implementation sketch, never as scope
+  authority. Compare against the ORIGINAL wording, not your memory of it.
 - **Stage 2 — code quality**: as a skeptical reviewer — correctness, safety,
   maintainability, tests. List findings by severity; fix blockers before
   returning, record the rest.
@@ -115,11 +128,13 @@ Before writing the `TargetResultEnvelope`, review your own diff in TWO passes:
 
 ### 6. Scope discipline (YAGNI)
 
-Implement only what the task package and `designIntent` ask for. No speculative
-abstraction, no adjacent "while I'm here" edits, no widening the diff beyond the
-declared scope.
+Implement only what the task package objective, requirement references,
+boundaries, completion expectations, and acceptance anchors authorize.
+`designIntent` may guide the approach, but evidence may justify another
+implementation without expanding or shrinking scope. No speculative
+abstraction, no adjacent "while I'm here" edits.
 
-- Earns: a git diff confined to the files/scope `designIntent` declared
+- Earns: a git diff confined to the task package's authorized files/scope
   (kind `change-scope`).
 - A change outside declared scope is either a new task (backfill it) or scope
   creep (drop it) — never a silent add.
@@ -172,15 +187,21 @@ The reduce gate matches `kind` strings EXACTLY — use these spellings:
 | `regression` | The fail-before/pass-after regression test for a defect |
 | `baseline` | Pre-change suite/typecheck/lint outcome (practice 2) |
 | `execution-plan` | The ordered self-sequencing plan (practice 1) |
-| `acceptance-anchors` | Mapping from each authored anchor id to its RED/GREEN test or probe |
+| `acceptance-anchor` | Mapping from one authored anchor id to its RED/GREEN test or probe |
 | `self-review` | Two-stage self-review note; carries rework responses |
-| `test-first` | Pointer showing the failing-test commit precedes impl |
-| `change-scope` | Statement/diff-stat that changes stay inside designIntent |
+| `test-first` | Pointer to ordered fail-before/pass-after evidence; commits are optional and package-dependent |
+| `change-scope` | Statement/diff-stat that changes stay inside task-package boundaries |
 | `root-cause-note` | Re-derived hypothesis after recurringProblem |
 | `typecheck` / `lint` / `verification` | Tool outputs from practice 7 |
 
-Entry shape: `{ kind, ref | value | commit, verify? }` — `ref` is a repo/state
-relative path the controller can resolve; prefer `ref` over prose `value`.
+General entry shape: `{ kind, ref | value | commit, verify? }` — `ref` is a
+repo/state-relative path the controller can resolve; prefer `ref` over prose
+`value`. The exact acceptance mapping is the required special case:
+`{ kind: "acceptance-anchor", anchorId, red, green, ref }`, one entry per
+authored anchor id. Omitting any of those fields makes a completed result
+contract-invalid. A Test package uses its own exact mapping:
+`{ kind: "test-step", planIndex, step, ref }`, where `step` must equal the
+approved-plan entry at that zero-based index.
 
 ## Branch hygiene at the end
 
@@ -199,11 +220,11 @@ line.
 - It does not decide acceptance — it produces the evidence; the controller
   decides.
 - Product code and commits stay inside this window's own repository boundary.
-- This is a development/product-window skill. It is not the Design or Test
-  window's craft — do not invoke Design skills (requirement-clarification,
-  option-planning, requirement-design, work-slicing, design-handoff) or Test
-  skills (test-strategy, debugging-and-triage, regression-design,
-  evidence-review, progressive-chain-validation) from here.
+- This is primarily development/product-window craft. It is not Design craft.
+  When readiness lists it for a Test package solely because an
+  `evidenceContract` exists, apply only the evidence/result-contract guidance
+  described above; do not import product implementation scope into Test or
+  replace Test's approved plan and Test Skills.
 
 ## Quality bar
 

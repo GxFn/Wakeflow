@@ -9,11 +9,13 @@
  *
  * Window model: every Wakeflow window (controller included) is a tmux-resident
  * interactive `claude` session, created and driven by the host transport
- * helper scripts/lib/wakeflow-claude-host.mjs (launch-window / send /
- * readback / wait-results). Dead windows are recovered by relaunching the
- * SAME session interactively (launch-window --resume); headless `claude -p`
- * is a last resort that bills the separate Agent SDK credit from 2026-06-15. Claude Code desktop
- * windows are not part of the automation surface.
+ * helper scripts/lib/wakeflow-claude-host.mjs (launch-window / deliver / send /
+ * readback / wait-results). Dead baseline windows resume the SAME registered
+ * session with their recorded cwd. Pod creation and recovery are separate:
+ * recovery consumes the read-only pod resume plan and verifies or resumes only
+ * the exact registered session at the immutable bound cwd, without repeating
+ * the creation HEAD gate or creating/discovering another session/worktree.
+ * Claude Code desktop windows are not part of the automation surface.
  *
  * Contract rule: core files may interpolate these values but must not branch on
  * hostId. Anything that needs structurally different behavior per host belongs
@@ -60,7 +62,7 @@ export const hostProfile = {
   hostTools: {
     createWindow: "wakeflow-claude-host launch-window",
     retitleWindow: "wakeflow-claude-host retitle",
-    sendToWindow: "wakeflow-claude-host send",
+    sendToWindow: "wakeflow-claude-host deliver",
   },
   handleId: {
     placeholders: [
@@ -170,8 +172,11 @@ export const hostProfile = {
           "--prompt-file", "<temp file containing the delivery envelope prompt>",
           "--delivery-id", "<delivery envelope id>",
         ],
-        attachArgv: ["node", hostHelperPath, "attach-window", "--root", "<workspace-root>", "--window", entry.windowName],
-        recovery: "When the tmux window is dead, relaunch the SAME session interactively: launch-window --resume --session-id <registered id> --replace (the session id is stable across resumes; interactive sessions stay on the subscription pool). Headless claude -p --resume is a last resort only: from 2026-06-15 it bills the separate Agent SDK credit at API rates.",
+        attachCommands: {
+          defaultSocketArgv: ["tmux", "attach", "-t", "<configured tmux server>"],
+          configuredSocketArgv: ["tmux", "-L", "<configured tmux socket>", "attach", "-t", "<configured tmux server>"],
+        },
+        recovery: "For a dead baseline window, relaunch the SAME registered session with launch-window --root <workspace-root> --window <window> --cwd <recorded actual cwd> --resume --session-id <registered id> --replace [--server <configured server>]. A Pod uses the read-only wakeflow_pod_open mode=resume plan; verify or resume only the exact registered session at its immutable bound cwd, never repeat the creation HEAD gate, add --worktree, rebind, rediscover, or fall back to mainline.",
       },
     }),
   },

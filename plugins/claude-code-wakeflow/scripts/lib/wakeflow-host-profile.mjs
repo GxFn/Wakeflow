@@ -21,9 +21,17 @@
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { stableArtifactPart } from "./wakeflow-artifact-identity.mjs";
 
 const pluginRoot = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const hostHelperPath = path.join(pluginRoot, "scripts/lib/wakeflow-claude-host.mjs");
+
+function podHostWorktreeName(operation) {
+  return stableArtifactPart(
+    `wakeflow-${operation.podId || operation.demandKey}-${operation.repositoryWindow || operation.windowName}`,
+    { fallback: "wakeflow-pod" },
+  );
+}
 
 export const hostProfile = {
   hostId: "claude-code",
@@ -34,9 +42,9 @@ export const hostProfile = {
     legacyRegistryFallback: false,
   },
   fleet: {
-    // The tmux fleet is launched/resumed and torn down by wakeflow-claude-host
-    // pod-open/pod-close; wakeflow-pod only PREPARES (worktrees + overlay) and
-    // defers the window transport to the helper.
+    // Wakeflow emits host-neutral intent. This helper launches/resumes Claude
+    // sessions; Claude's own --worktree capability owns product worktrees.
+    // Shared core never creates or removes those Git resources.
     transport: "host-helper",
   },
   memoryFile: "CLAUDE.md",
@@ -166,6 +174,88 @@ export const hostProfile = {
         recovery: "When the tmux window is dead, relaunch the SAME session interactively: launch-window --resume --session-id <registered id> --replace (the session id is stable across resumes; interactive sessions stay on the subscription pool). Headless claude -p --resume is a last resort only: from 2026-06-15 it bills the separate Agent SDK credit at API rates.",
       },
     }),
+  },
+  pod: {
+    entryExtras: (operation, { workspaceRoot = "<workspace-root>", stateRoot = null } = {}) => {
+      const hostWorktree = operation.environmentIntent === "host-worktree" || operation.role === "product";
+      const hostWorktreeName = hostWorktree ? podHostWorktreeName(operation) : null;
+      const cwd = hostWorktree
+        ? operation.repositoryRoot
+        : (operation.hostCwd || workspaceRoot);
+      const explicitStateAccess = stateRoot ? ["--add-dir", stateRoot] : [];
+      const stateRootRelative = operation.stateRootRelative
+        || (stateRoot ? path.relative(workspaceRoot, stateRoot).split(path.sep).join("/") : null);
+      const nativeArgvIntent = hostWorktree
+        ? [
+            "claude",
+            "--worktree", hostWorktreeName,
+            "--settings", JSON.stringify({ worktree: { baseRef: "head" } }),
+          ]
+        : ["claude", "--session-id", "<host-generated-session-id>"];
+      const launchArgv = [
+        "node", hostHelperPath, "launch-window",
+        "--root", workspaceRoot,
+        "--window", operation.windowName,
+        "--title", operation.displayTitle || operation.windowName,
+        "--cwd", cwd,
+        "--environment-intent", hostWorktree ? "host-worktree" : "host-local",
+        "--launch-correlation-id", operation.launchCorrelationId,
+        "--binding-id", operation.registrationBindingId,
+        "--pod-id", operation.podId,
+        ...(stateRootRelative ? ["--state-root-relative", stateRootRelative] : []),
+        "--prompt-file", "<temp file containing createPrompt>",
+        ...(hostWorktree
+          ? [
+              "--repository-root", operation.repositoryRoot,
+              "--host-worktree", hostWorktreeName,
+              "--expected-base-head", operation.expectedBaseHead,
+              ...explicitStateAccess,
+            ]
+          : []),
+      ];
+      return {
+        windowMode: "tmux-resident",
+        nativeEnvironmentIntent: hostWorktree ? "host-worktree" : "host-local",
+        hostCwd: cwd,
+        nativeBasePolicy: hostWorktree ? "head" : "local",
+        hostWorktreeName,
+        nativeArgvIntent,
+        addDirectories: hostWorktree && stateRoot ? [stateRoot] : [],
+        hostLaunch: {
+          helper: hostHelperPath,
+          launchArgv,
+          resumeArgv: [
+            "node", hostHelperPath, "launch-window",
+            "--root", workspaceRoot,
+            "--window", operation.windowName,
+            "--title", operation.displayTitle || operation.windowName,
+            "--cwd", "<actualCwd from verified host receipt>",
+            "--environment-intent", hostWorktree ? "host-worktree" : "host-local",
+            "--launch-correlation-id", operation.launchCorrelationId,
+            "--binding-id", operation.registrationBindingId,
+            "--pod-id", operation.podId,
+            ...(stateRootRelative ? ["--state-root-relative", stateRootRelative] : []),
+            "--resume",
+            "--session-id", "<registered final session id>",
+            ...(hostWorktree
+              ? [
+                  "--repository-root", operation.repositoryRoot,
+                  "--expected-base-head", operation.expectedBaseHead,
+                  ...explicitStateAccess,
+                ]
+              : []),
+          ],
+          receiptField: "hostReceipt",
+          receiptContract: {
+            handleRedacted: true,
+            bindingId: "hostReceipt.bindingId",
+            handleKind: "final",
+            stateRootRelative,
+          },
+          retryPolicy: "retry the same launchCorrelationId; never create a second session or worktree",
+        },
+      };
+    },
   },
   artifact: {
     packageName: "claude-code-wakeflow",

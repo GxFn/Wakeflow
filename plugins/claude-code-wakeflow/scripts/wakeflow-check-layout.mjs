@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { getArgValue, loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
+import { TODO_COLUMNS, parseMarkdownRow, parseTodoBoard } from "./lib/wakeflow-todo-table.mjs";
 
 const args = process.argv.slice(2);
 const workspaceRoot = path.resolve(getArgValue(args, "--root", process.cwd()));
@@ -69,21 +70,10 @@ function listFiles(dir, predicate = () => true) {
   return files;
 }
 
-function splitMarkdownRow(line) {
-  const trimmed = line.trim();
-  if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) {
-    return [];
-  }
-  return trimmed
-    .slice(1, -1)
-    .split("|")
-    .map((cell) => cell.trim());
-}
-
 function tableRows(section) {
   return section
     .split("\n")
-    .map(splitMarkdownRow)
+    .map(parseMarkdownRow)
     .filter((row) => row.length > 0 && !row.every((cell) => /^:?-{3,}:?$/.test(cell)));
 }
 
@@ -120,6 +110,26 @@ function validateTableSection({ file, label, heading, requiredColumns }) {
   }
 }
 
+function validateGlobalTodo() {
+  if (!existsSync(globalTodoPath)) return;
+  const parsed = parseTodoBoard(read(globalTodoPath));
+  if (!parsed.range || parsed.headerIndex === undefined) {
+    issues.push(`${relative(globalTodoPath)} is missing ## Global TODO`);
+    return;
+  }
+  if (!parsed.canonical) {
+    const missing = TODO_COLUMNS.filter((column) => !parsed.header.includes(column));
+    issues.push(
+      `${relative(globalTodoPath)} global TODO table is missing required columns: ${
+        missing.length > 0 ? missing.join(", ") : `none; expected the canonical ordered ${TODO_COLUMNS.length}-column header and divider`
+      }`,
+    );
+  }
+  for (const issue of parsed.issues) {
+    issues.push(`${relative(globalTodoPath)} ${issue}`);
+  }
+}
+
 function extractFirstLinkTarget(markdown) {
   const match = markdown.match(/\[[^\]]+]\(([^)]+)\)/);
   return match ? match[1].split("#")[0] : null;
@@ -129,7 +139,7 @@ function currentPlanTarget(indexContent) {
   const section = sectionContent(indexContent, "Current Controller Entry");
   const rows = section
     .split("\n")
-    .map(splitMarkdownRow)
+    .map(parseMarkdownRow)
     .filter((row) => row.length > 0);
   const row = rows.find((candidate) => candidate[0] !== "Type" && !candidate.every((cell) => /^:?-{3,}:?$/.test(cell)));
   return row && row.length >= 2 ? extractFirstLinkTarget(row[1]) : null;
@@ -201,23 +211,7 @@ if (existsSync(currentStatusPath)) {
   }
 }
 
-validateTableSection({
-  file: globalTodoPath,
-  label: "global TODO",
-  heading: "Global TODO",
-  requiredColumns: [
-    "ID",
-    "Status",
-    "Type",
-    "Priority",
-    "Owner",
-    "Item / Goal",
-    "Affects Retest / Dispatch",
-    "Dependency / Trigger",
-    "Recommended Window",
-    "Current Mount",
-  ],
-});
+validateGlobalTodo();
 
 const activeFiles = [
   path.join(workspaceRoot, hostProfile.memoryFile),

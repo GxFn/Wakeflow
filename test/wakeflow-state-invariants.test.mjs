@@ -50,6 +50,13 @@ function run(args) {
   });
 }
 
+function runRender(args) {
+  return runSync(process.execPath, [renderScript, ...args], {
+    cwd: wakeflowRoot,
+    encoding: "utf8",
+  });
+}
+
 function runAsync(args) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [stateScript, ...args], {
@@ -117,18 +124,18 @@ test("state invariant: concurrent same-key init has one winner and one coherent 
   const demandKey = "SAME-KEY-INVARIANT";
   const titles = Array.from({ length: 16 }, (_, index) => `Concurrent title ${String(index).padStart(2, "0")}`);
 
-  // Hold the capacity lock long enough for every child to pass the current
+  // Hold the identity lock long enough for every child to reach the current
   // lock-external existence check. Once released, they contend on the real
   // production lock, making the same-key race deterministic.
-  const capacityLock = path.join(root, ".wakeflow-active", "current.capacity-lock");
-  mkdirSync(path.dirname(capacityLock), { recursive: true });
+  const identityLock = path.join(root, ".wakeflow-active", "current.identity-lock");
+  mkdirSync(path.dirname(identityLock), { recursive: true });
   writeFileSync(
-    capacityLock,
+    identityLock,
     `${JSON.stringify({
       kind: "WakeflowStateLock",
       version: 1,
       pid: process.pid,
-      token: "state-invariant-capacity-barrier",
+      token: "state-invariant-identity-barrier",
       createdAt: new Date().toISOString(),
     })}\n`,
     { flag: "wx" },
@@ -146,7 +153,7 @@ test("state invariant: concurrent same-key init has one winner and one coherent 
     "--json",
   ]));
   await new Promise((resolve) => setTimeout(resolve, 1000));
-  unlinkSync(capacityLock);
+  unlinkSync(identityLock);
   const results = await Promise.all(pending);
 
   const winnerIndexes = results
@@ -238,7 +245,154 @@ test("state invariant: an empty demand cannot complete", () => {
   assert.deepEqual(after.targetTasks, []);
 });
 
-test("state invariant: an archived ledger root is immutable to complete-demand", () => {
+test("state invariant: accepted-looking tasks cannot bypass pending review or decisions", () => {
+  const root = makeRoot();
+  const init = initDemand(root, "PENDING-REVIEW-COMPLETE-INVARIANT");
+  const added = run([
+    "add-task-package",
+    "--root", root,
+    "--state-root", init.stateRoot,
+    "--task-package-id", "PKG",
+    "--summary", "Pending review fixture.",
+    "--target-window", "Product",
+    "--target-task-id", "TASK",
+    "--write", "--json",
+  ]);
+  assert.equal(added.status, 0, added.stderr || added.stdout);
+  const stateFile = path.join(root, init.stateRoot, "wakeflow-state.json");
+  const state = readJson(stateFile);
+  const inconsistent = {
+    ...state,
+    state: "waiting-results",
+    taskPackages: state.taskPackages.map((item) => ({ ...item, status: "accepted" })),
+    targetTasks: state.targetTasks.map((item) => ({ ...item, status: "accepted" })),
+    decisionsRequired: [{ id: "DECISION-1", summary: "Controller verdict is still pending." }],
+  };
+  writeJson(stateFile, inconsistent);
+  const before = readFileSync(stateFile, "utf8");
+  const completed = run([
+    "complete-demand",
+    "--root", root,
+    "--state-root", init.stateRoot,
+    "--reason", "Must not bypass review.",
+    "--evidence-ref", "controller-events.jsonl",
+    "--write", "--json",
+  ]);
+  assert.notEqual(completed.status, 0);
+  assert.match(completed.stdout + completed.stderr, /pending controller decisions|review cycle/i);
+  assert.equal(readFileSync(stateFile, "utf8"), before);
+});
+
+test("state invariant: complete requires explicit accept decisions and valid replacement lineage", () => {
+  const forgedRoot = makeRoot();
+  const forgedInit = initDemand(forgedRoot, "FORGED-ACCEPT-INVARIANT");
+  assert.equal(run([
+    "add-task-package",
+    "--root", forgedRoot,
+    "--state-root", forgedInit.stateRoot,
+    "--task-package-id", "PKG-FORGED",
+    "--summary", "Forged acceptance.",
+    "--target-window", "Product",
+    "--target-task-id", "TASK-FORGED",
+    "--write", "--json",
+  ]).status, 0);
+  const forgedStateFile = path.join(forgedRoot, forgedInit.stateRoot, "wakeflow-state.json");
+  const forgedState = readJson(forgedStateFile);
+  forgedState.state = "planned";
+  forgedState.taskPackages[0].status = "accepted";
+  forgedState.targetTasks[0].status = "accepted";
+  writeJson(forgedStateFile, forgedState);
+  const forgedBefore = readFileSync(forgedStateFile, "utf8");
+  const forgedComplete = run([
+    "complete-demand",
+    "--root", forgedRoot,
+    "--state-root", forgedInit.stateRoot,
+    "--reason", "Forged labels are not a verdict.",
+    "--evidence-ref", "controller-events.jsonl",
+    "--write", "--json",
+  ]);
+  assert.notEqual(forgedComplete.status, 0);
+  assert.match(forgedComplete.stdout + forgedComplete.stderr, /no explicit accept decision/);
+  assert.equal(readFileSync(forgedStateFile, "utf8"), forgedBefore);
+
+  const orphanRoot = makeRoot();
+  const orphanInit = initDemand(orphanRoot, "ORPHAN-SUPERSEDED-INVARIANT");
+  assert.equal(run([
+    "add-task-package",
+    "--root", orphanRoot,
+    "--state-root", orphanInit.stateRoot,
+    "--task-package-id", "PKG-ORPHAN",
+    "--summary", "Orphan superseded task.",
+    "--target-window", "Product",
+    "--target-task-id", "TASK-ORPHAN",
+    "--write", "--json",
+  ]).status, 0);
+  const orphanStateFile = path.join(orphanRoot, orphanInit.stateRoot, "wakeflow-state.json");
+  const orphanState = readJson(orphanStateFile);
+  orphanState.state = "planned";
+  orphanState.taskPackages[0].status = "superseded";
+  orphanState.targetTasks[0].status = "superseded";
+  writeJson(orphanStateFile, orphanState);
+  const orphanComplete = run([
+    "complete-demand",
+    "--root", orphanRoot,
+    "--state-root", orphanInit.stateRoot,
+    "--reason", "Orphan lineage must not close.",
+    "--evidence-ref", "controller-events.jsonl",
+    "--write", "--json",
+  ]);
+  assert.notEqual(orphanComplete.status, 0);
+  assert.match(orphanComplete.stdout + orphanComplete.stderr, /has no replacement/);
+});
+
+test("state invariant: complete accepts a fully linked transitive replacement chain", () => {
+  const root = makeRoot();
+  const init = initDemand(root, "TRANSITIVE-REPLACEMENT-INVARIANT");
+  for (const id of ["A", "B", "C"]) {
+    const added = run([
+      "add-task-package",
+      "--root", root,
+      "--state-root", init.stateRoot,
+      "--task-package-id", `PKG-${id}`,
+      "--summary", `Task ${id}.`,
+      "--target-window", "Product",
+      "--target-task-id", `TASK-${id}`,
+      "--write", "--json",
+    ]);
+    assert.equal(added.status, 0, added.stderr || added.stdout);
+  }
+  const stateFile = path.join(root, init.stateRoot, "wakeflow-state.json");
+  const state = readJson(stateFile);
+  state.state = "planned";
+  const taskA = state.targetTasks.find((task) => task.targetTaskId === "TASK-A");
+  const taskB = state.targetTasks.find((task) => task.targetTaskId === "TASK-B");
+  const taskC = state.targetTasks.find((task) => task.targetTaskId === "TASK-C");
+  Object.assign(taskA, { status: "superseded", reviewDecision: "redesign", replacedByTargetTaskId: "TASK-B" });
+  Object.assign(taskB, {
+    status: "superseded",
+    reviewDecision: "redesign",
+    replacesTargetTaskId: "TASK-A",
+    replacedByTargetTaskId: "TASK-C",
+  });
+  Object.assign(taskC, { status: "accepted", reviewDecision: "accept", replacesTargetTaskId: "TASK-B" });
+  state.taskPackages.find((pkg) => pkg.taskPackageId === "PKG-A").status = "superseded";
+  state.taskPackages.find((pkg) => pkg.taskPackageId === "PKG-B").status = "superseded";
+  state.taskPackages.find((pkg) => pkg.taskPackageId === "PKG-C").status = "accepted";
+  writeJson(stateFile, state);
+
+  const completed = run([
+    "complete-demand",
+    "--root", root,
+    "--state-root", init.stateRoot,
+    "--reason", "The final replacement is explicitly accepted.",
+    "--evidence-ref", "controller-events.jsonl",
+    "--write", "--json",
+  ]);
+  assert.equal(completed.status, 0, completed.stderr || completed.stdout);
+  assert.equal(readJson(stateFile).state, "completed");
+});
+
+test("state invariant: an archived ledger root rejects every ordinary write surface", () => {
   const root = makeRoot();
   writeJson(path.join(root, "wakeflow.config.json"), {
     workspaceName: "Archive invariant",
@@ -293,22 +447,47 @@ test("state invariant: an archived ledger root is immutable to complete-demand",
   const archiveRoot = path.join(root, JSON.parse(archived.stdout).archived.ledgerDest);
   const before = snapshotTree(archiveRoot);
 
-  const completedAgain = run([
-    "complete-demand",
-    "--root",
-    root,
-    "--state-root",
-    archiveRoot,
-    "--reason",
-    "Archived history must not reopen.",
-    "--evidence-ref",
-    "controller-events.jsonl",
-    "--write",
-    "--json",
-  ]);
+  const attempts = [
+    run([
+      "complete-demand",
+      "--root", root,
+      "--state-root", archiveRoot,
+      "--reason", "Archived history must not reopen.",
+      "--evidence-ref", "controller-events.jsonl",
+      "--write", "--json",
+    ]),
+    run([
+      "adopt-demand-host",
+      "--root", root,
+      "--state-root", archiveRoot,
+      "--reason", "Archived ownership must not change.",
+      "--write", "--json",
+    ]),
+    run([
+      "recover-state-transition",
+      "--root", root,
+      "--state-root", archiveRoot,
+      "--write", "--json",
+    ]),
+    run([
+      "focus-doc",
+      "--root", root,
+      "--state-root", archiveRoot,
+      "--window", "Product",
+      "--write", "--json",
+    ]),
+    runRender([
+      "--root", root,
+      "--state-root", archiveRoot,
+      "--write", "--json",
+    ]),
+  ];
 
-  assert.notEqual(completedAgain.status, 0, completedAgain.stdout);
-  assert.deepEqual(snapshotTree(archiveRoot), before, "every archived file must remain byte-identical");
+  for (const attempt of attempts) {
+    assert.notEqual(attempt.status, 0, attempt.stdout);
+    assert.match(attempt.stdout + attempt.stderr, /archived|immutable/i);
+    assert.deepEqual(snapshotTree(archiveRoot), before, "every archived file must remain byte-identical");
+  }
 });
 
 test("state invariant: a completed target result needs a summary or review evidence", () => {

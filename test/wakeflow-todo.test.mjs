@@ -87,11 +87,35 @@ test("dry-run does not write and a duplicate ID is refused", () => {
   assert.match(parse(dupe).error, /already on the board/);
 });
 
-test("a legacy board missing the Auto Claim column is refused (must migrate first)", () => {
-  const { root } = makeBoard("", LEGACY_HEADER, "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+test("deliver migrates a legacy 10-column board to the canonical schema", () => {
+  const { root, boardPath } = makeBoard(
+    "| legacy-2026-06-20 | pending-claim | bug | P2 | Design | Legacy | no | none | Wakeflow | none |",
+    LEGACY_HEADER,
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+  );
   const result = run(root, ["deliver", "--type", "bug", "--design-key", "x-2026-06-21", "--title", "X", "--apply"]);
-  assert.notEqual(result.status, 0);
-  assert.match(parse(result).error, /missing the 'Auto Claim' column/);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const board = readFileSync(boardPath, "utf8");
+  assert.match(board, new RegExp(UNIFIED_HEADER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(board, /legacy-2026-06-20[^\n]+\| none \|  \|  \|  \|/);
+  assert.match(board, /x-2026-06-21/);
+});
+
+test("TODO cells preserve literal pipes and normalize newlines as <br>", () => {
+  const { root, boardPath } = makeBoard();
+  const result = run(root, [
+    "deliver",
+    "--type", "bug",
+    "--design-key", "escaped-2026-06-21",
+    "--title", "Escaped",
+    "--item", "left | right\nsecond line",
+    "--test-decision", "unit | smoke",
+    "--apply",
+  ]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const board = readFileSync(boardPath, "utf8");
+  assert.match(board, /left \\\| right<br>second line/);
+  assert.match(board, /unit \\\| smoke/);
 });
 
 test("consume marks a delivered row claimed and links the demand state root", () => {

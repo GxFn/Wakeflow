@@ -37,17 +37,76 @@ function makeRuntime() {
 
 function makeWorkspace(config = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-workspace-invariant-"));
-  writeJson(path.join(root, "wakeflow.config.json"), {
+  const workspaceConfig = {
     workspaceName: "Workspace invariant fixture",
     controllerWindow: "Controller",
+    designWindow: "Design",
+    testWindow: "Test",
     repositories: [
       { windowName: "Controller", path: ".", role: "controller" },
       { windowName: "RepoA", path: ".", role: "implementation" },
       { windowName: "RepoB", path: ".", role: "implementation" },
       { windowName: "Design", path: ".", role: "design" },
+      { windowName: "Test", path: ".", role: "test" },
     ],
     ...config,
-  });
+  };
+  writeJson(path.join(root, "wakeflow.config.json"), workspaceConfig);
+  writeFileSync(path.join(root, "requirements.md"), "# Goal\n\nFixture requirement.\n");
+
+  const registeredWindows = new Set([
+    workspaceConfig.controllerWindow,
+    workspaceConfig.designWindow,
+    workspaceConfig.testWindow,
+    ...(workspaceConfig.repositories ?? []).map((item) => item.windowName),
+  ]);
+  const registryDir = path.join(
+    root,
+    ".wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry",
+  );
+  const windowConfigDir = path.join(
+    root,
+    ".wakeflow-local/wakeflow-delivery/hosts/codex/window-config",
+  );
+  let index = 0;
+  for (const windowName of registeredWindows) {
+    if (!windowName) continue;
+    index += 1;
+    const repository = (workspaceConfig.repositories ?? [])
+      .find((item) => item.windowName === windowName);
+    const cwd = windowName === workspaceConfig.controllerWindow
+      ? root
+      : path.resolve(root, repository?.path ?? ".");
+    mkdirSync(cwd, { recursive: true });
+    const role = windowName === workspaceConfig.controllerWindow
+      ? "controller"
+      : windowName === workspaceConfig.designWindow
+        ? "design"
+        : windowName === workspaceConfig.testWindow
+          ? "test-target"
+          : "target";
+    const timestamp = "2026-07-31T00:00:00.000Z";
+    writeJson(path.join(registryDir, `${windowName}.json`), {
+      kind: "CodexWindowThreadRegistration",
+      version: 3,
+      windowName,
+      bindingId: `binding-${windowName}`,
+      threadId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+      registeredAt: timestamp,
+      lastVerifiedAt: timestamp,
+    });
+    writeJson(path.join(windowConfigDir, `${windowName}.json`), {
+      kind: "CodexSubwindowDispatchConfig",
+      version: 1,
+      windowName,
+      threadRegistered: true,
+      dispatchable: role !== "design",
+      cwd,
+      responsibilityRoot: cwd,
+      deliveryRole: role,
+      generatedAt: timestamp,
+    });
+  }
   return root;
 }
 
@@ -176,11 +235,10 @@ test("create-demand rejects duplicate dependency ids before creating any state-r
   );
 });
 
-test("configured workspaceCurrentDir participates in the same max-active-demand capacity scan", () => {
+test("configured workspaceCurrentDir participates in the same mainline placement scan", () => {
   const runtime = makeRuntime();
   const root = makeWorkspace({
     workspaceCurrentDir: "custom/current",
-    maxActiveDemands: 1,
   });
 
   const first = initDemand(runtime, root, "CUSTOM-CAPACITY-1");
@@ -189,8 +247,10 @@ test("configured workspaceCurrentDir participates in the same max-active-demand 
   assert.equal(firstPayload.stateRoot, "custom/current/CUSTOM-CAPACITY-1");
 
   const second = initDemand(runtime, root, "CUSTOM-CAPACITY-2");
-  assert.notEqual(second.status, 0, "the first configured-current demand must consume the only slot");
-  assert.match(second.stdout + second.stderr, /active-demand capacity|at its active-demand capacity/i);
+  assert.notEqual(second.status, 0, "the first configured-current demand must occupy the mainline lane");
+  const secondPayload = JSON.parse(second.stdout);
+  assert.equal(secondPayload.errorCode, "mainline-busy");
+  assert.equal(secondPayload.status, "waiting");
   assert.equal(
     existsSync(path.join(root, "custom/current/CUSTOM-CAPACITY-2/wakeflow-state.json")),
     false,
@@ -198,13 +258,12 @@ test("configured workspaceCurrentDir participates in the same max-active-demand 
   );
 });
 
-test("create-demand writes into configured workspaceCurrentDir and cannot bypass its capacity", () => {
+test("create-demand writes into configured workspaceCurrentDir and cannot bypass its mainline lane", () => {
   const runtime = makeRuntime();
   const root = makeWorkspace({
     workspaceCurrentDir: "custom/current",
     workspaceCurrentStatusPath: "custom/current/workspace-current-status.md",
     workspaceCurrentIndexPath: "custom/current/index.md",
-    maxActiveDemands: 1,
   });
 
   const first = parseOk(run(runtime, "wakeflow-demand-sequence.mjs", [
@@ -220,7 +279,9 @@ test("create-demand writes into configured workspaceCurrentDir and cannot bypass
     "--write", "--json",
   ]);
   assert.notEqual(second.status, 0, "create-demand must see the first demand in the configured current directory");
-  assert.match(second.stdout + second.stderr, /active-demand capacity/i);
+  const secondPayload = JSON.parse(second.stdout);
+  assert.equal(secondPayload.errorCode, "mainline-busy");
+  assert.equal(secondPayload.status, "waiting");
   assert.equal(existsSync(path.join(root, "custom/current/CUSTOM-CREATE-2/wakeflow-state.json")), false);
 });
 
@@ -229,7 +290,6 @@ test("next-work guards a TODO whose demand is active under configured workspaceC
   const root = makeWorkspace({
     workspaceCurrentDir: "custom/current",
     globalTodoPath: "custom/current/global-todo-board.md",
-    maxActiveDemands: 2,
   });
   parseOk(initDemand(runtime, root, "ACTIVE-SAME"));
   writeFileSync(path.join(root, "custom/current/global-todo-board.md"), [
@@ -254,49 +314,69 @@ test("next-work guards a TODO whose demand is active under configured workspaceC
   assert.match(next.issues.join("\n"), /already has an unarchived state root/i);
 });
 
-test("pod state lookup and main-checkout occupancy use configured workspaceCurrentDir", () => {
+test("pod planning resolves configured workspaceCurrentDir without materializing worktrees", () => {
   const runtime = makeRuntime();
 
   const mainRoot = makeWorkspace({
     workspaceCurrentDir: "custom/current",
     repositories: [{ windowName: "RepoA", path: "RepoA", role: "Fixture repo" }],
-    hosts: { codex: { maxStreamsPerRepo: 2 }, "claude-code": { maxStreamsPerRepo: 2 } },
   });
-  initGitRepository(mainRoot);
-  writeJson(path.join(mainRoot, "custom/current/MAIN-DEMAND/wakeflow-state.json"), {
-    demandKey: "MAIN-DEMAND",
-    state: "planned",
-    executionPlacement: { mode: "main", podId: null },
-  });
+  const mainRepo = initGitRepository(mainRoot);
+  const mainHeadResult = spawnSync("git", ["-C", mainRepo, "rev-parse", "HEAD"], { encoding: "utf8" });
+  assert.equal(mainHeadResult.status, 0, mainHeadResult.stderr || mainHeadResult.stdout);
+  const mainHead = mainHeadResult.stdout.trim();
+  parseOk(initDemand(runtime, mainRoot, "MAIN-DEMAND"));
   const refused = run(runtime, "wakeflow-pod.mjs", [
-    "open", "--root", mainRoot, "--demand-key", "MAIN-DEMAND", "--repos", "RepoA", "--json",
+    "open", "--root", mainRoot,
+    "--request-json", JSON.stringify({
+      demandKey: "MAIN-DEMAND",
+      host: "codex",
+      repositories: [{
+        windowName: "RepoA",
+        expectedBaseHead: mainHead,
+        basePolicy: "local-head",
+      }],
+    }),
+    "--json",
   ]);
   assert.notEqual(refused.status, 0);
-  assert.match(refused.stdout + refused.stderr, /assigned to main placement/i);
+  assert.match(refused.stdout + refused.stderr, /assigned to main placement.*explicit isolated placement/is);
   assert.equal(existsSync(path.join(mainRoot, ".wakeflow-local/worktrees/RepoA__MAIN-DEMAND")), false);
 
   const occupancyRoot = makeWorkspace({
     workspaceCurrentDir: "custom/current",
     repositories: [{ windowName: "RepoA", path: "RepoA", role: "Fixture repo" }],
-    hosts: { codex: { maxStreamsPerRepo: 2 }, "claude-code": { maxStreamsPerRepo: 2 } },
   });
-  initGitRepository(occupancyRoot);
-  writeJson(path.join(occupancyRoot, "custom/current/ACTIVE-MAIN/wakeflow-state.json"), {
-    demandKey: "ACTIVE-MAIN",
-    state: "planned",
-    executionPlacement: { mode: "main", podId: null },
-    targetTasks: [{ targetTaskId: "ACTIVE-TASK", targetWindow: "RepoA", status: "active" }],
-  });
-  const opened = parseOk(run(runtime, "wakeflow-pod.mjs", [
-    "open", "--root", occupancyRoot, "--demand-key", "ISOLATED-NEXT", "--repos", "RepoA", "--json",
+  const podRepo = initGitRepository(occupancyRoot);
+  const podHeadResult = spawnSync("git", ["-C", podRepo, "rev-parse", "HEAD"], { encoding: "utf8" });
+  assert.equal(podHeadResult.status, 0, podHeadResult.stderr || podHeadResult.stdout);
+  const podHead = podHeadResult.stdout.trim();
+  parseOk(initDemand(runtime, occupancyRoot, "ACTIVE-MAIN"));
+  parseOk(initDemand(runtime, occupancyRoot, "ISOLATED-NEXT", [
+    "--placement", "pod",
+    "--authorization-ref", "user://workspace-invariant/ISOLATED-NEXT",
   ]));
-  assert.deepEqual(
-    opened.mainCheckoutIntersections.map((item) => [item.repo, item.occupiedBy]),
-    [["RepoA", "ACTIVE-MAIN"]],
-  );
+  const opened = parseOk(run(runtime, "wakeflow-pod.mjs", [
+    "open", "--root", occupancyRoot,
+    "--request-json", JSON.stringify({
+      demandKey: "ISOLATED-NEXT",
+      host: "codex",
+      repositories: [{
+        windowName: "RepoA",
+        expectedBaseHead: podHead,
+        basePolicy: "local-head",
+      }],
+    }),
+    "--json",
+  ]));
+  assert.equal(opened.kind, "WakeflowPodLaunchPlan");
+  assert.ok(opened.operations.some((item) => (
+    item.role === "product" && item.repositoryWindow === "RepoA"
+  )));
+  assert.equal(existsSync(path.join(occupancyRoot, ".wakeflow-local/worktrees")), false);
 });
 
-test("unreadable active state makes workspace projection and runtime health blocked", async () => {
+test("unreadable active state makes workspace projection degraded and runtime health blocked", async () => {
   const runtime = makeRuntime();
   const root = makeWorkspace({
     workspaceCurrentDir: "custom/current",
@@ -332,11 +412,11 @@ test("unreadable active state makes workspace projection and runtime health bloc
     path.join(runtime, "scripts/lib/wakeflow-workspace-projection.mjs"),
   ).href);
   const projection = projectionModule.refreshWorkspaceProjection({ workspaceRoot: root });
-  assert.equal(projection.status, "blocked");
+  assert.equal(projection.status, "degraded");
   assert.equal(projection.activeDemandCount, 2);
   assert.equal(projection.unreadableDemandCount, 1);
   const statusDoc = readFileSync(path.join(root, "custom/current/workspace-current-status.md"), "utf8");
-  assert.match(statusDoc, /^Status: blocked$/m);
+  assert.match(statusDoc, /^Status: degraded$/m);
   assert.match(statusDoc, /Unreadable state root/);
   assert.doesNotMatch(statusDoc, /Active demand: none/);
 
@@ -361,7 +441,6 @@ test("a symlink demand root is a blocking occupancy and is never followed", asyn
     workspaceCurrentDir: "custom/current",
     workspaceCurrentStatusPath: "custom/current/workspace-current-status.md",
     workspaceCurrentIndexPath: "custom/current/index.md",
-    maxActiveDemands: 1,
   });
   const external = mkdtempSync(path.join(os.tmpdir(), "wakeflow-symlink-demand-target-"));
   writeJson(path.join(external, "wakeflow-state.json"), {
@@ -382,7 +461,7 @@ test("a symlink demand root is a blocking occupancy and is never followed", asyn
     path.join(runtime, "scripts/lib/wakeflow-workspace-projection.mjs"),
   ).href);
   const projection = projectionModule.refreshWorkspaceProjection({ workspaceRoot: root });
-  assert.equal(projection.status, "blocked");
+  assert.equal(projection.status, "degraded");
   assert.equal(projection.activeDemandCount, 1);
   const statusDoc = readFileSync(path.join(root, "custom/current/workspace-current-status.md"), "utf8");
   assert.match(statusDoc, /SYMLINK-DEMAND/);
@@ -409,17 +488,16 @@ test("a symlink demand root is a blocking occupancy and is never followed", asyn
     "--write", "--json",
   ]);
   assert.notEqual(rejected.status, 0);
-  assert.match(rejected.stdout + rejected.stderr, /active-demand capacity/i);
+  assert.match(rejected.stdout + rejected.stderr, /active demand authority is unreadable/i);
   assert.equal(existsSync(path.join(root, "custom/current/NEW-DEMAND")), false);
 });
 
-test("reserved init staging entries are ignored by capacity, projection, and delivery status", async () => {
+test("reserved init staging entries are ignored by placement, projection, and delivery status", async () => {
   const runtime = makeRuntime();
   const root = makeWorkspace({
     workspaceCurrentDir: "custom/current",
     workspaceCurrentStatusPath: "custom/current/workspace-current-status.md",
     workspaceCurrentIndexPath: "custom/current/index.md",
-    maxActiveDemands: 1,
   });
   const external = mkdtempSync(path.join(os.tmpdir(), "wakeflow-init-staging-target-"));
   writeJson(path.join(external, "wakeflow-state.json"), {
@@ -438,12 +516,14 @@ test("reserved init staging entries are ignored by capacity, projection, and del
   const activeModule = await import(pathToFileURL(
     path.join(runtime, "scripts/lib/wakeflow-active-demands.mjs"),
   ).href);
-  const capacity = activeModule.activeDemandCapacity({
+  const active = activeModule.scanUnarchivedDemandStateRoots({
     workspaceRoot: root,
-    config: { workspaceCurrentDir: "custom/current", maxActiveDemands: 1 },
+    currentDir: "custom/current",
   });
-  assert.equal(capacity.active.length, 0);
-  assert.equal(capacity.atCapacity, false);
+  const placement = activeModule.activeDemandPlacementSummary(active);
+  assert.equal(placement.active.length, 0);
+  assert.equal(placement.mainlineBusy, false);
+  assert.equal(placement.authoritySafe, true);
 
   const projectionModule = await import(pathToFileURL(
     path.join(runtime, "scripts/lib/wakeflow-workspace-projection.mjs"),
@@ -458,6 +538,189 @@ test("reserved init staging entries are ignored by capacity, projection, and del
   assert.equal(deliveryStatus.runtimeSummary.status, "idle");
   assert.equal(deliveryStatus.runtimeSummary.health.status, "healthy");
   assert.equal(deliveryStatus.dualHost.demandOwnership.total, 0);
+});
+
+test("legacy pod reservations stay migration-only and never drive canonical status or health", async () => {
+  const runtime = makeRuntime();
+  const root = makeWorkspace({
+    workspaceCurrentDir: "custom/current",
+    workspaceCurrentStatusPath: "custom/current/workspace-current-status.md",
+    workspaceCurrentIndexPath: "custom/current/index.md",
+  });
+  const reservationModule = await import(pathToFileURL(
+    path.join(runtime, "scripts/lib/wakeflow-pod-reservations.mjs"),
+  ).href);
+  const written = reservationModule.writePodReservation(root, {
+    demandKey: "PREPARING-POD",
+    podId: "PREPARING-POD",
+    repositories: ["RepoA"],
+    status: "prepared",
+    reservedAt: "2026-07-30T00:00:00.000Z",
+    preparedAt: "2026-07-30T00:00:01.000Z",
+    updatedAt: "2026-07-30T00:00:01.000Z",
+  });
+  const projectionModule = await import(pathToFileURL(
+    path.join(runtime, "scripts/lib/wakeflow-workspace-projection.mjs"),
+  ).href);
+  const legacyProjection = projectionModule.refreshWorkspaceProjection({ workspaceRoot: root });
+  assert.equal(legacyProjection.status, "idle");
+  assert.equal(legacyProjection.activeDemandCount, 0);
+  assert.equal(legacyProjection.podDemandCount, 0);
+  assert.equal(legacyProjection.legacyMigration.status, "legacy-artifacts-present");
+  assert.equal(legacyProjection.legacyMigration.reservationCount, 1);
+  let statusDoc = readFileSync(path.join(root, "custom/current/workspace-current-status.md"), "utf8");
+  assert.match(statusDoc, /^Status: idle$/m);
+  assert.match(statusDoc, /^## Legacy Pod Reservation Migration$/m);
+  assert.match(statusDoc, /migration evidence only.*do not define active placement/is);
+  assert.match(statusDoc, /PREPARING-POD/);
+
+  let deliveryStatus = parseOk(run(runtime, "wakeflow-delivery.mjs", [
+    "status", "--root", root, "--verbose", "--json",
+  ]));
+  assert.equal(deliveryStatus.runtimeSummary.status, "idle");
+  assert.equal(deliveryStatus.runtimeSummary.nextAction, "idle");
+  assert.equal(deliveryStatus.runtimeSummary.health.status, "healthy");
+  assert.equal(deliveryStatus.dualHost.demandOwnership.podCount, 0);
+  assert.equal(deliveryStatus.dualHost.demandOwnership.total, 0);
+  assert.equal(deliveryStatus.legacyMigration.podReservations.authority, "migration-only");
+  assert.equal(deliveryStatus.legacyMigration.podReservations.reservationCount, 1);
+
+  writeFileSync(written.file, "{ broken reservation\n");
+  const unreadableLegacyProjection = projectionModule.refreshWorkspaceProjection({ workspaceRoot: root });
+  assert.equal(unreadableLegacyProjection.status, "idle");
+  assert.equal(unreadableLegacyProjection.legacyMigration.status, "legacy-artifacts-unreadable");
+  assert.equal(unreadableLegacyProjection.legacyMigration.issueCount, 1);
+  statusDoc = readFileSync(path.join(root, "custom/current/workspace-current-status.md"), "utf8");
+  assert.match(statusDoc, /^Status: idle$/m);
+  assert.match(statusDoc, /Unreadable legacy artifacts: 1/);
+
+  deliveryStatus = parseOk(run(runtime, "wakeflow-delivery.mjs", [
+    "status", "--root", root, "--verbose", "--json",
+  ]));
+  assert.equal(deliveryStatus.runtimeSummary.status, "idle");
+  assert.equal(deliveryStatus.runtimeSummary.health.status, "healthy");
+  assert.equal(deliveryStatus.legacyMigration.podReservations.issueCount, 1);
+  assert.equal(
+    deliveryStatus.runtimeSummary.diagnostics.errors.some((item) => /pod-reservations/.test(item.file)),
+    false,
+    "legacy migration residue is not canonical runtime authority",
+  );
+});
+
+test("canonical Pod state projects placement, phase, logical windows, and redacted host-runtime health", async () => {
+  const runtime = makeRuntime();
+  const root = makeWorkspace({
+    workspaceCurrentDir: "custom/current",
+    workspaceCurrentStatusPath: "custom/current/workspace-current-status.md",
+    workspaceCurrentIndexPath: "custom/current/index.md",
+  });
+  parseOk(initDemand(runtime, root, "CANONICAL-POD", [
+    "--placement", "pod",
+    "--pod-id", "POD-CANONICAL",
+    "--authorization-ref", "user://workspace-invariant/canonical-pod",
+  ]));
+  const opened = parseOk(run(runtime, "wakeflow-pod.mjs", [
+    "open", "--root", root,
+    "--request-json", JSON.stringify({
+      demandKey: "CANONICAL-POD",
+      host: "codex",
+      repositories: [],
+    }),
+    "--write", "--json",
+  ]));
+  assert.equal(opened.phase, "creating-control");
+
+  const secretCwd = "/private/host-only/secret-worktree";
+  const secretHandle = "private-thread-handle";
+  writeJson(
+    path.join(
+      root,
+      ".wakeflow-local/wakeflow-delivery/hosts/codex/pod-bindings/POD-CANONICAL/Controller__POD-CANONICAL.json",
+    ),
+    {
+      kind: "WakeflowHostPodBinding",
+      version: 1,
+      status: "active",
+      actualCwd: secretCwd,
+      threadId: secretHandle,
+    },
+  );
+
+  const projectionModule = await import(pathToFileURL(
+    path.join(runtime, "scripts/lib/wakeflow-workspace-projection.mjs"),
+  ).href);
+  const projection = projectionModule.refreshWorkspaceProjection({ workspaceRoot: root });
+  assert.equal(projection.status, "active");
+  assert.equal(projection.podDemandCount, 1);
+  assert.equal(projection.podPhaseCounts["creating-control"], 1);
+  assert.deepEqual(projection.pods[0], {
+    demandKey: "CANONICAL-POD",
+    stateRoot: "custom/current/CANONICAL-POD",
+    state: "intake",
+    placement: "pod",
+    podId: "POD-CANONICAL",
+    host: "codex",
+    phase: "creating-control",
+    logicalWindows: {
+      total: 3,
+      byStatus: { planned: 3, bound: 0, closed: 0 },
+      byRole: { controller: 1, design: 1, test: 1, product: 0 },
+    },
+  });
+  const statusDoc = readFileSync(path.join(root, "custom/current/workspace-current-status.md"), "utf8");
+  assert.match(statusDoc, /placement `pod`, pod `POD-CANONICAL`, host `codex`, phase `creating-control`/);
+  assert.match(statusDoc, /3 logical window\(s\): 3 planned, 0 bound, 0 closed/);
+
+  const deliveryStatus = parseOk(run(runtime, "wakeflow-delivery.mjs", [
+    "status", "--root", root, "--verbose", "--json",
+  ]));
+  const ownership = deliveryStatus.dualHost.demandOwnership;
+  assert.deepEqual(ownership.placementCounts, { main: 0, pod: 1 });
+  assert.equal(ownership.podCount, 1);
+  assert.equal(ownership.podPhaseCounts["creating-control"], 1);
+  assert.equal(ownership.demands[0].placement, "pod");
+  assert.equal(ownership.demands[0].logicalWindows.total, 3);
+  assert.equal(deliveryStatus.runtimeSummary.pods.items[0].phase, "creating-control");
+  assert.deepEqual(deliveryStatus.dualHost.podRuntime, {
+    status: "observed",
+    health: "healthy",
+    hostCount: 1,
+    operationCount: 3,
+    bindingCount: 1,
+    issueCount: 0,
+    hosts: [{
+      host: "codex",
+      health: "healthy",
+      operationCount: 3,
+      operationStatusCounts: { planned: 3 },
+      bindingCount: 1,
+      bindingStatusCounts: { active: 1 },
+      issueCount: 0,
+    }],
+  });
+  const serializedStatus = JSON.stringify(deliveryStatus);
+  assert.doesNotMatch(serializedStatus, new RegExp(secretCwd));
+  assert.doesNotMatch(serializedStatus, new RegExp(secretHandle));
+
+  writeFileSync(
+    path.join(
+      root,
+      ".wakeflow-local/wakeflow-delivery/hosts/codex/pod-operations/unreadable.json",
+    ),
+    `{ broken host-only operation containing ${secretHandle}\n`,
+  );
+  const degradedHostRuntime = parseOk(run(runtime, "wakeflow-delivery.mjs", [
+    "status", "--root", root, "--verbose", "--json",
+  ]));
+  assert.equal(degradedHostRuntime.runtimeSummary.health.status, "healthy");
+  assert.equal(degradedHostRuntime.dualHost.podRuntime.health, "degraded");
+  assert.equal(degradedHostRuntime.dualHost.podRuntime.issueCount, 1);
+  assert.equal(
+    degradedHostRuntime.runtimeSummary.diagnostics.errors.length,
+    0,
+    "host-local receipt health is visible but does not replace canonical demand authority",
+  );
+  assert.doesNotMatch(JSON.stringify(degradedHostRuntime), new RegExp(secretHandle));
 });
 
 test("delivery status rejects packet state roots that are symlinks or outside sanctioned roots", () => {
@@ -548,7 +811,7 @@ test("an invalid progressDoc blocks both workspace projection and delivery statu
     path.join(runtime, "scripts/lib/wakeflow-workspace-projection.mjs"),
   ).href);
   const projection = projectionModule.refreshWorkspaceProjection({ workspaceRoot: root });
-  assert.equal(projection.status, "blocked");
+  assert.equal(projection.status, "degraded");
   assert.equal(projection.activeDemandCount, 1);
   const statusDoc = readFileSync(path.join(root, "custom/current/workspace-current-status.md"), "utf8");
   assert.match(statusDoc, /BAD-PROGRESS/);
@@ -642,7 +905,7 @@ test("marker and synced projection drift block both workspace projection and del
     path.join(runtime, "scripts/lib/wakeflow-workspace-projection.mjs"),
   ).href);
   const projection = projectionModule.refreshWorkspaceProjection({ workspaceRoot: root });
-  assert.equal(projection.status, "blocked");
+  assert.equal(projection.status, "degraded");
   assert.equal(projection.activeDemandCount, 4);
   const statusDoc = readFileSync(path.join(root, "custom/current/workspace-current-status.md"), "utf8");
   assert.match(statusDoc, /BAD-MARKER-COUNT.*found start=2, end=1/is);
@@ -700,7 +963,7 @@ test("state-ahead and event gaps block both workspace projection and delivery st
     path.join(runtime, "scripts/lib/wakeflow-workspace-projection.mjs"),
   ).href);
   const projection = projectionModule.refreshWorkspaceProjection({ workspaceRoot: root });
-  assert.equal(projection.status, "blocked");
+  assert.equal(projection.status, "degraded");
   assert.equal(projection.activeDemandCount, 2);
   const statusDoc = readFileSync(path.join(root, "custom/current/workspace-current-status.md"), "utf8");
   assert.match(statusDoc, /STATE-AHEAD.*active state revision 2 is ahead of controller event revision 1/is);
@@ -843,12 +1106,12 @@ test("create-demand reports any init authority residue as partial with recovery"
   assert.equal(payload.partial, true);
   assert.equal(payload.stateRoot, stateRoot);
   assert.deepEqual(payload.partialArtifacts, ["demand.json"]);
-  assert.match(payload.recovery, /Inspect .*RESIDUE.*remove it before retrying/i);
+  assert.match(payload.recovery, /Inspect .*RESIDUE.*reconcile it before retrying/i);
 });
 
 test("one demand identity cannot be initialized into two explicit roots", () => {
   const runtime = makeRuntime();
-  const root = makeWorkspace({ maxActiveDemands: 2 });
+  const root = makeWorkspace();
   const firstRoot = ".wakeflow-active/current/same-identity-one";
   const secondRoot = ".wakeflow-active/current/same-identity-two";
 
@@ -865,7 +1128,7 @@ test("one demand identity cannot be initialized into two explicit roots", () => 
   );
 });
 
-test("a Design-only redesign result cannot make parked product tasks reviewable", () => {
+test("redesign keeps Design stateless and parked product tasks unreviewable", () => {
   const runtime = makeRuntime();
   const root = makeWorkspace();
   const initialized = parseOk(initDemand(runtime, root, "REDESIGN-SCOPE"));
@@ -900,18 +1163,13 @@ test("a Design-only redesign result cannot make parked product tasks reviewable"
     "--write", "--json",
   ]));
 
-  parseOk(runState(runtime, [
+  const designStateTask = runState(runtime, [
     "add-task-package", "--root", root, "--state-root", initialized.stateRoot,
     "--task-package-id", "DESIGN-PKG", "--summary", "Deliver the corrected requirement.",
     "--target-window", "Design", "--target-task-id", "DESIGN-TASK", "--write", "--json",
-  ]));
-  writeJson(path.join(root, initialized.stateRoot, "reports/design.json"), { correctedRequirement: true });
-  parseOk(runState(runtime, [
-    "import-target-result", "--root", root, "--state-root", initialized.stateRoot,
-    "--target-task-id", "DESIGN-TASK", "--target-window", "Design", "--status", "completed",
-    "--summary", "The corrected requirement was delivered.",
-    "--evidence-ref", "reports/design.json", "--write", "--json",
-  ]));
+  ]);
+  assert.notEqual(designStateTask.status, 0, "Design must use stateless wakeflow_deliver instead of becoming a target task");
+  assert.match(designStateTask.stdout + designStateTask.stderr, /explicit replacesTargetTaskId/);
 
   const afterDesignOnly = parseOk(runState(runtime, [
     "reduce-results", "--root", root, "--state-root", initialized.stateRoot, "--write", "--json",

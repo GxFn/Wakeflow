@@ -26,6 +26,9 @@
     },
     "status": { "type": "string", "enum": ["completed", "blocked", "needs-review"] },
     "summary": { "type": "string" },
+    "changedRepos": { "type": "array", "items": { "type": "string" } },
+    "commits": { "type": "array", "items": { "type": "string" } },
+    "commitDisposition": { "type": "string", "enum": ["committed", "left-uncommitted", "no-changes"] },
     "evidenceRefs": { "type": "array", "items": { "type": "string" } },
     "verification": { "type": "array", "items": { "type": "string" } },
     "risks": { "type": "array", "items": { "type": "string" } },
@@ -43,7 +46,12 @@
           "ref": { "type": "string", "minLength": 1 },
           "value": { "type": "string", "minLength": 1 },
           "commit": { "type": "string", "minLength": 1 },
-          "verify": { "type": "string", "minLength": 1 }
+          "verify": { "type": "string", "minLength": 1 },
+          "anchorId": { "type": "string", "minLength": 1 },
+          "red": { "type": "string", "minLength": 1 },
+          "green": { "type": "string", "minLength": 1 },
+          "planIndex": { "type": "integer", "minimum": 0 },
+          "step": { "type": "string", "minLength": 1 }
         },
         "anyOf": [
           { "required": ["ref"] },
@@ -52,6 +60,18 @@
         ],
         "additionalProperties": true
       }
+    },
+    "resultMapping": {
+      "type": "object",
+      "required": ["contract", "compatibility", "status"],
+      "properties": {
+        "contract": { "type": "string", "enum": ["target-result-envelope-v1", "target-result-envelope-v2"] },
+        "compatibility": { "type": "string", "enum": ["legacy", "enforced"] },
+        "status": { "type": "string", "enum": ["legacy-unenforced", "partial", "complete", "invalid"] },
+        "acceptanceAnchorIds": { "type": "array", "items": { "type": "string" } },
+        "testPlanIndices": { "type": "array", "items": { "type": "integer", "minimum": 0 } }
+      },
+      "additionalProperties": true
     }
   },
   "additionalProperties": true

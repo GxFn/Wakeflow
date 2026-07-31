@@ -35,12 +35,13 @@ export function sharedReviewGates({
   blockedCount,
   missingEvidenceRefsPresent,
   craftEvidenceGapsPresent,
+  resultContractGapsPresent,
   controllerReturnSent,
   controllerReturnReady,
   controllerReturnPendingHostSend,
 }) {
   return {
-    controllerReviewReady: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent,
+    controllerReviewReady: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent && !resultContractGapsPresent,
     waitForMissingResults: missingCount > 0,
     pendingDispatchTargetsPresent: pendingDispatchCount > 0,
     blockedResultsPresent: blockedCount > 0,
@@ -48,11 +49,13 @@ export function sharedReviewGates({
     evidenceRepairRequired: missingEvidenceRefsPresent,
     craftEvidenceGapsPresent,
     craftEvidenceRepairRequired: craftEvidenceGapsPresent,
+    resultContractGapsPresent,
+    resultContractRepairRequired: resultContractGapsPresent,
     controllerReturnSent,
     controllerReturnReady,
     controllerReturnPendingHostSend,
     rawEvidencePullRequired: reviewReady,
-    totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent,
+    totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent && !resultContractGapsPresent,
   };
 }
 
@@ -69,6 +72,7 @@ export function rawEvidenceRequiredFrom(targetResults) {
       hasControllerReviewEvidence: item.hasControllerReviewEvidence,
       missingEvidenceRefs: item.missingEvidenceRefs,
       craftEvidenceGaps: item.craftEvidenceGaps ?? [],
+      resultContractGaps: item.resultContractGaps ?? [],
     }));
 }
 
@@ -90,6 +94,8 @@ export function buildControllerReviewPack({
   const missingEvidenceRefsPresent = missingEvidenceRefs.length > 0;
   const craftEvidenceGaps = targetResults.flatMap((item) => item.craftEvidenceGaps ?? []);
   const craftEvidenceGapsPresent = craftEvidenceGaps.length > 0;
+  const resultContractGaps = targetResults.flatMap((item) => item.resultContractGaps ?? []);
+  const resultContractGapsPresent = resultContractGaps.length > 0;
   const rawEvidenceRequired = rawEvidenceRequiredFrom(targetResults);
   const gates = sharedReviewGates({
     reviewReady,
@@ -98,6 +104,7 @@ export function buildControllerReviewPack({
     blockedCount: review.blocked.length,
     missingEvidenceRefsPresent,
     craftEvidenceGapsPresent,
+    resultContractGapsPresent,
     controllerReturnSent: (callbackPlan?.counts?.sentCount || 0) > 0,
     controllerReturnReady: (callbackPlan?.counts?.readyToBuildCount || 0) > 0,
     controllerReturnPendingHostSend: (callbackPlan?.counts?.pendingHostSendCount || 0) > 0,
@@ -132,6 +139,7 @@ export function buildControllerReviewPack({
     rawEvidenceRequired,
     missingEvidenceRefs,
     craftEvidenceGaps,
+    resultContractGaps,
     gates,
     ...reviewAdvisories(targetResults),
     nextAction: review.decision === "wait"
@@ -142,6 +150,8 @@ export function buildControllerReviewPack({
           ? "fix-missing-evidence-refs-before-controller-verdict"
           : craftEvidenceGapsPresent
             ? "fix-required-craft-evidence-before-controller-verdict"
+          : resultContractGapsPresent
+            ? "fix-target-result-contract-before-controller-verdict"
           : (review.groupSnapshot.pendingDispatch ?? []).length > 0
             ? "pull-raw-evidence-and-continue-pending-dispatch"
             : "pull-raw-evidence-and-make-total-control-verdict",

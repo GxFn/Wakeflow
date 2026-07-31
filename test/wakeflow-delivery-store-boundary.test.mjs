@@ -168,6 +168,37 @@ test("configured external ledger state roots are readable without widening trans
   assert.equal(existsSync(path.join(externalTransport, "dispatch-packets")), false);
 });
 
+test("transport identity namespaces reused logical ids and keeps CJK windows distinct", () => {
+  const workspaceRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-store-identity-"));
+  const store = makeStore(workspaceRoot);
+  store.ensureStateDirs();
+
+  const demandA = { demandKey: "需求甲", stateRoot: ".wakeflow-active/current/需求甲" };
+  const demandB = { demandKey: "需求乙", stateRoot: ".wakeflow-active/current/需求乙" };
+  assert.notEqual(
+    store.packetFileFor("PKG-1", demandA),
+    store.packetFileFor("PKG-1", demandB),
+  );
+  assert.notEqual(
+    store.groupFileFor("GROUP-1", demandA),
+    store.groupFileFor("GROUP-1", demandB),
+  );
+  assert.notEqual(store.threadFileFor("产品甲"), store.threadFileFor("产品乙"));
+  assert.notEqual(store.windowConfigFileFor("产品甲"), store.windowConfigFileFor("产品乙"));
+  assert.notEqual(store.lockFileFor("产品甲"), store.lockFileFor("产品乙"));
+  assert.match(path.basename(store.threadFileFor("产品甲")), /^产品甲--[0-9a-f]{12}\.json$/);
+
+  const first = store.writeWindowLock("产品甲", { deliveryId: "delivery-1" });
+  const replay = store.writeWindowLock("产品甲", { deliveryId: "delivery-1" });
+  assert.equal(first.acquired, true);
+  assert.equal(replay.replay, true);
+  assert.equal(replay.lease.leaseId, first.lease.leaseId);
+  assert.throws(
+    () => store.writeWindowLock("产品甲", { deliveryId: "delivery-2" }),
+    /fresh in-flight delivery lease/,
+  );
+});
+
 test("a configured external ledger does not authorize state-root symlink escapes", () => {
   const parent = mkdtempSync(path.join(os.tmpdir(), "wakeflow-store-parent-"));
   const workspaceRoot = path.join(parent, "Workspace");

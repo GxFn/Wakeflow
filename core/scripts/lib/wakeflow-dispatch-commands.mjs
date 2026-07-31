@@ -4,6 +4,7 @@ import path from "node:path";
 import { buildControllerReturnEnvelope } from "./wakeflow-controller-return.mjs";
 import {
   annotateDispatchPacketIdempotency,
+  dispatchPacketDigest,
   dispatchPreparationDigest,
   sameDeliveryEnvelopeContent,
   sameDispatchPacketContent,
@@ -24,6 +25,10 @@ import {
   resolveStateRootFilePath,
   WakeflowStatePathError,
 } from "./wakeflow-state-paths.mjs";
+import {
+  TARGET_RESULT_CONTRACT_V1,
+  TARGET_RESULT_CONTRACT_V2,
+} from "./wakeflow-result-contract.mjs";
 
 export function createDispatchCommands(ctx) {
   const {
@@ -52,8 +57,11 @@ export function createDispatchCommands(ctx) {
     readControllerStateRoot,
     readTaskPackageFromStateRoot,
     packetFileFor,
+    findPacketFile,
     groupFileFor,
+    findGroupFile,
     deliveryFileFor,
+    findDeliveryFile,
     threadFileFor,
     findThreadFile,
     readWindowLock,
@@ -129,6 +137,7 @@ export function createDispatchCommands(ctx) {
     objective,
     outOfScope = [],
     returnPolicyMode = "",
+    resultContract = TARGET_RESULT_CONTRACT_V1,
     scope = [],
     stateRef = null,
     taskBriefing = null,
@@ -200,7 +209,7 @@ export function createDispatchCommands(ctx) {
       outOfScope,
       forbidden,
       evidenceRequired,
-      resultContract: "target-result-envelope-v1",
+      resultContract,
       returnPolicy: dispatchGroupRecord?.returnPolicy,
       contextPolicy: validateContextPolicy(contextPolicy || "refresh-if-missing"),
       prompt,
@@ -216,14 +225,14 @@ export function createDispatchCommands(ctx) {
       createdAt,
     });
 
-    const packetFile = packetFileFor(packet.id);
+    const packetFile = packetFileFor(packet.id, packet.stateRef);
     return { dispatchGroupRecord, packet, packetFile };
   }
 
   function writeDispatchArtifacts({ dispatchGroup = "", dispatchGroupRecord, packet, packetFile }) {
     ensureStateDirs();
     if (dispatchGroupRecord && dispatchGroup) {
-      atomicWriteJson(groupFileFor(dispatchGroup), dispatchGroupRecord);
+      atomicWriteJson(groupFileFor(dispatchGroup, dispatchGroupRecord.stateRef), dispatchGroupRecord);
     }
     atomicWriteJson(packetFile, packet);
   }
@@ -239,6 +248,10 @@ export function createDispatchCommands(ctx) {
     if (packet.kind !== "ControllerDispatchPacket") fail("Packet file must contain a ControllerDispatchPacket.");
     if (!packet.targetWindow || !packet.prompt || !packet.taskId) fail("Dispatch packet is missing targetWindow, taskId, or prompt.");
     if (!packet.stateRef) fail("Dispatch packet is missing stateRef; legacy Markdown-plan packets are no longer supported.");
+    const computedPacketDigest = dispatchPacketDigest(packet);
+    if (packet.packetDigest && packet.packetDigest !== computedPacketDigest) {
+      fail(`Dispatch packet ${packet.id} digest does not match its content.`);
+    }
 
     const registration = loadThreadRegistration(packet.targetWindow);
     if (requireThread && !registration) fail(`No registered thread for target window: ${packet.targetWindow}`);
@@ -249,26 +262,35 @@ export function createDispatchCommands(ctx) {
     if (demandOwner?.owner && demandOwner.owner !== hostProfile.runtime.hostDirName) {
       fail(`demand ${demandOwner.demandKey} is owned by controller host ${demandOwner.owner}; this runtime is ${hostProfile.runtime.hostDirName}. Dispatch from the owning controller, or transfer ownership explicitly first (adopt-demand-host; MCP: wakeflow_adopt_demand_host).`);
     }
+    const resolvedWindowConfig = windowConfig || buildWindowConfig(packet.targetWindow);
+    if (!resolvedWindowConfig.dispatchable) {
+      const podPhase = resolvedWindowConfig.pod?.phase;
+      const podDetail = podPhase
+        ? resolvedWindowConfig.pod?.testAccess
+          ? ` Pod phase is ${podPhase}; Test access is ${resolvedWindowConfig.pod.testAccess.status}`
+            + `/${resolvedWindowConfig.pod.testAccess.capability ?? "unverified"}. `
+            + "Test dispatch requires a validated direct-multi-root receipt."
+          : ` Pod phase is ${podPhase}; product dispatch requires execution-ready.`
+        : "";
+      fail(`Target window ${packet.targetWindow} is not dispatchable.${podDetail}`);
+    }
     const resolvedDeliveryId = deliveryId || `delivery-${packet.id}`;
-    // Cross-host in-flight guard: a fresh delivery lock written by the OTHER
-    // host means another controller is already driving this window's working
-    // tree. Fail closed; same-host locks are reported as a warning because the
-    // per-task sent-state guard already prevents double-sending here.
+    // A physical work window is single-flight regardless of which host edition
+    // prepared the delivery. Replaying the exact same delivery is safe; every
+    // other fresh lease is a hard conflict.
     const windowLock = readWindowLock ? readWindowLock(packet.targetWindow) : null;
     const windowLockIsFresh = Boolean(windowLock) && windowLockFresh(windowLock);
-    if (windowLockIsFresh && windowLock.host && windowLock.host !== hostProfile.runtime.hostDirName) {
-      fail(`Window ${packet.targetWindow} has a fresh in-flight delivery lock from host ${windowLock.host} (delivery ${windowLock.deliveryId || "unknown"}, expires ${windowLock.expiresAt}); wait for that delivery or coordinate before dispatching from this host.`);
+    if (windowLockIsFresh && windowLock.deliveryId !== resolvedDeliveryId) {
+      fail(`Window ${packet.targetWindow} already has a fresh in-flight delivery lease from host ${windowLock.host || "unknown"} (delivery ${windowLock.deliveryId || "unknown"}, expires ${windowLock.expiresAt}); wait for its matching result before dispatching another delivery.`);
     }
-    const windowLockWarning = windowLockIsFresh && windowLock.deliveryId !== resolvedDeliveryId
-      ? `Window ${packet.targetWindow} already has a fresh same-host delivery lock (${windowLock.deliveryId || "unknown"}); confirm the prior delivery finished before sending.`
-      : undefined;
-    const resolvedWindowConfig = windowConfig || buildWindowConfig(packet.targetWindow);
+    const windowLockWarning = undefined;
     const createdAt = nowIso();
     const envelope = {
       kind: "DeliveryEnvelope",
       version: deliveryEnvelopeVersion,
       deliveryId: resolvedDeliveryId,
       sourcePacketId: packet.id,
+      sourcePacketDigest: packet.packetDigest || computedPacketDigest,
       targetWindow: packet.targetWindow,
       taskId: packet.taskId,
       dispatchGroup: packet.dispatchGroup,
@@ -283,6 +305,7 @@ export function createDispatchCommands(ctx) {
       targetThread: registration
         ? {
             windowName: registration.windowName,
+            bindingId: registration.bindingId,
             threadIdRedacted: true,
             threadRegistryFile: registration.threadRegistryFile,
           }
@@ -311,8 +334,9 @@ export function createDispatchCommands(ctx) {
       }),
       createdAt,
     };
+    envelope.preparationDigest = dispatchPreparationDigest({ packet, envelope });
 
-    const deliveryFile = deliveryFileFor(envelope.deliveryId);
+    const deliveryFile = deliveryFileFor(envelope.deliveryId, packet.stateRef);
     return { deliveryFile, envelope, registration, windowLockWarning };
   }
 
@@ -328,14 +352,10 @@ export function createDispatchCommands(ctx) {
     });
     if (write) {
       ensureStateDirs();
-      atomicWriteJson(deliveryFile, envelope);
-      // Acquire the shared cross-host window lock at envelope time so it
-      // covers the whole build -> host send -> record window on every host
-      // (the codex host send has no wakeflow hook of its own). Same-id
-      // re-acquisition just refreshes the TTL.
       if (writeWindowLock && envelope.targetWindow) {
         writeWindowLock(envelope.targetWindow, { deliveryId: envelope.deliveryId });
       }
+      atomicWriteJson(deliveryFile, envelope);
     }
     const buildPayload = {
         ok: true,
@@ -381,6 +401,12 @@ export function createDispatchCommands(ctx) {
     if (state.state === "review-ready") {
       fail(`cannot prepare dispatch while controller state is ${state.state}; decide review before dispatching more work.`);
     }
+    if (targetTask.reviewDecision === "redesign") {
+      const replacement = targetTask.replacedByTargetTaskId
+        ? `; its explicit replacement is ${targetTask.replacedByTargetTaskId}`
+        : "";
+      fail(`target task ${targetTask.targetTaskId} is parked by redesign and cannot be re-dispatched${replacement}. Add a new product task with replacesTargetTaskId=${targetTask.targetTaskId}; ordinary rework re-dispatches the original task instead.`);
+    }
     const reviewScope = controllerReviewScope(state.targetTasks ?? []);
     if (
       reviewScope.mode === "rework-first-controller-review-targets"
@@ -410,7 +436,10 @@ export function createDispatchCommands(ctx) {
     const dispatchGroup = getValue("--group", targetTask.taskPackageId);
     ensureStateDirs();
     try {
-      return withFileLock(`${groupFileFor(dispatchGroup)}.lock`, commandPrepareDispatchFromStateUnlocked, {
+      return withFileLock(`${groupFileFor(dispatchGroup, {
+        stateRoot: path.relative(workspaceRoot, stateRoot),
+        demandKey: state.demandKey,
+      })}.lock`, commandPrepareDispatchFromStateUnlocked, {
         onWarn: (message) => process.stderr.write(`wakeflow-delivery: ${message}\n`),
       });
     } catch (error) {
@@ -499,6 +528,17 @@ export function createDispatchCommands(ctx) {
     const automationEnabled = hasFlag("--automation-enabled");
     const requireThread = hasFlag("--require-thread");
     const windowConfig = buildWindowConfig(targetWindow, { requireThread });
+    if (!windowConfig.dispatchable) {
+      const podPhase = windowConfig.pod?.phase;
+      const podDetail = podPhase
+        ? windowConfig.pod?.testAccess
+          ? ` Pod phase is ${podPhase}; Test access is ${windowConfig.pod.testAccess.status}`
+            + `/${windowConfig.pod.testAccess.capability ?? "unverified"}. `
+            + "Test dispatch requires a validated direct-multi-root receipt."
+          : ` Pod phase is ${podPhase}; product dispatch requires execution-ready.`
+        : "";
+      fail(`Target window ${targetWindow} is not dispatchable.${podDetail}`);
+    }
     const repositoryRoot = windowConfig.cwd
       ? (path.isAbsolute(windowConfig.cwd) ? path.resolve(windowConfig.cwd) : path.resolve(workspaceRoot, windowConfig.cwd))
       : "";
@@ -618,6 +658,9 @@ export function createDispatchCommands(ctx) {
       objective: taskBriefing.objective,
       outOfScope: taskBriefing.boundaries.outOfScope,
       returnPolicyMode: getValue("--return-policy", ""),
+      resultContract: fullContextPackage
+        ? TARGET_RESULT_CONTRACT_V2
+        : TARGET_RESULT_CONTRACT_V1,
       scope: [
         ...(fullContextPackage ? taskBriefing.boundaries.inScope : getAllValues("--scope")),
         `demandKey=${state.demandKey}`,
@@ -648,8 +691,8 @@ export function createDispatchCommands(ctx) {
     if (write && fullContextPackage && !expectedPreviewDigest) {
       fail("full-context target apply requires --expected-preview-digest from the reviewed preview.");
     }
-    const dispatchGroupFile = dispatchGroup ? groupFileFor(dispatchGroup) : "";
-    const existingGroup = dispatchGroup ? loadDispatchGroup(dispatchGroup) : null;
+    const dispatchGroupFile = dispatchGroup ? groupFileFor(dispatchGroup, stateRef) : "";
+    const existingGroup = dispatchGroup ? loadDispatchGroup(dispatchGroup, stateRef) : null;
     const dispatchGroupChanged = Boolean(dispatchGroupRecord && (
       !existingGroup
       || !existingGroup.membershipFinalized
@@ -689,6 +732,9 @@ export function createDispatchCommands(ctx) {
     let keepLive = null;
     if (write) {
       ensureStateDirs();
+      if (writeWindowLock && envelope.targetWindow) {
+        writeWindowLock(envelope.targetWindow, { deliveryId: envelope.deliveryId });
+      }
       if (automationEnabled && !idempotentReplay) {
         keepLive = startKeepLive({ automationRunId: dispatchGroup || packet.id });
       }
@@ -696,9 +742,6 @@ export function createDispatchCommands(ctx) {
       if (dispatchGroupChanged && dispatchGroupRecord && dispatchGroup) atomicWriteJson(dispatchGroupFile, dispatchGroupRecord);
       if (!existingPacket) atomicWriteJson(packetFile, packet);
       if (!existingEnvelope) atomicWriteJson(deliveryFile, envelope);
-      if (writeWindowLock && envelope.targetWindow) {
-        writeWindowLock(envelope.targetWindow, { deliveryId: envelope.deliveryId });
-      }
     }
 
     output(
@@ -784,9 +827,16 @@ export function createDispatchCommands(ctx) {
   function commandBuildControllerReturn() {
     if (!write) return commandBuildControllerReturnUnlocked();
     const dispatchGroup = requireValue("--group");
+    const stateRootArg = getValue("--state-root", "");
+    let lockStateRef = null;
+    if (stateRootArg) {
+      const stateRoot = resolveStateRoot(stateRootArg);
+      const { state, stateRootRef } = readControllerStateRoot(stateRoot);
+      lockStateRef = { stateRoot: stateRootRef, demandKey: state.demandKey };
+    }
     ensureStateDirs();
     try {
-      return withFileLock(`${groupFileFor(dispatchGroup)}.lock`, commandBuildControllerReturnUnlocked, {
+      return withFileLock(`${groupFileFor(dispatchGroup, lockStateRef)}.lock`, commandBuildControllerReturnUnlocked, {
         onWarn: (message) => process.stderr.write(`wakeflow-delivery: ${message}\n`),
       });
     } catch (error) {
@@ -800,10 +850,14 @@ export function createDispatchCommands(ctx) {
     const triggerTarget = requireValue("--trigger-target");
     const triggerTaskId = requireValue("--trigger-task-id");
     const config = readWorkspaceConfig();
+    const requestedStateRoot = getValue("--state-root", "");
+    const requestedStateRootRef = requestedStateRoot
+      ? readControllerStateRoot(resolveStateRoot(requestedStateRoot)).stateRootRef
+      : "";
     const explicitControllerWindow = getValue("--controller-window", "");
     const returnReason = validateReturnReason(getValue("--return-reason", "result-ready"));
     const automationEnabled = hasFlag("--automation-enabled");
-    const review = computeReviewResults({ group: dispatchGroup });
+    const review = computeReviewResults({ group: dispatchGroup, stateRootRef: requestedStateRootRef });
     const inheritedStateRef = review.groupRecord?.stateRef
       || review.packets.find((packet) => packet.stateRef)?.stateRef
       || null;
@@ -845,6 +899,7 @@ export function createDispatchCommands(ctx) {
         triggerTaskId,
         resultVersionKey: resultVersion.resultVersionKey,
       }),
+      inheritedStateRef,
     );
     if (existingReturn.envelopeCount > 0) {
       const duplicateScope = controllerReturnDuplicateScopeText({
@@ -900,7 +955,7 @@ export function createDispatchCommands(ctx) {
       createdAt,
     });
 
-    const returnFile = deliveryFileFor(envelope.deliveryId);
+    const returnFile = deliveryFileFor(envelope.deliveryId, inheritedStateRef);
     if (write) {
       ensureStateDirs();
       atomicWriteJson(returnFile, envelope);

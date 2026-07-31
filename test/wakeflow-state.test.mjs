@@ -200,37 +200,6 @@ test("init refuses an existing state-root directory even when it has no known au
   assert.equal(existsSync(path.join(stateRoot, "wakeflow-state.json")), false);
 });
 
-test("init refuses to start another demand while one is unarchived (maxActiveDemands=1)", () => {
-  const root = makeRoot();
-  writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({ maxActiveDemands: 1 }, null, 2)}\n`);
-  const first = run([
-    "init",
-    "--root",
-    root,
-    "--demand-key",
-    "ACTIVE-FIXTURE",
-    "--title",
-    "Active Fixture",
-    "--write",
-    "--json",
-  ]);
-  assert.equal(first.status, 0, first.stderr || first.stdout);
-  const second = run([
-    "init",
-    "--root",
-    root,
-    "--demand-key",
-    "SECOND-FIXTURE",
-    "--title",
-    "Second Fixture",
-    "--write",
-    "--json",
-  ]);
-  assert.notEqual(second.status, 0);
-  assert.match(second.stdout + second.stderr, /cannot initialize SECOND-FIXTURE: workspace is at its active-demand capacity \(1\/1\)/);
-  assert.equal(existsSync(path.join(root, ".wakeflow-active/current/SECOND-FIXTURE/wakeflow-state.json")), false);
-});
-
 test("RA5: render-progress emits structured projection slices alongside the display strings", () => {
   const root = makeRoot();
   const init = JSON.parse(run([
@@ -1464,7 +1433,7 @@ test("review decisions affect open targets without rewriting accepted history", 
     ]);
     assert.equal(result.status, 0, result.stderr || result.stdout);
   };
-  const importResult = (targetTaskId, resultId) => {
+  const importResult = (targetTaskId, resultId, { supersede = false } = {}) => {
     const result = run([
       "import-target-result",
       "--root",
@@ -1481,6 +1450,7 @@ test("review decisions affect open targets without rewriting accepted history", 
       resultId,
       "--evidence-ref",
       `reports/${resultId}.json`,
+      ...(supersede ? ["--supersede-result"] : []),
       "--write",
       "--json",
     ]);
@@ -1565,7 +1535,7 @@ test("review decisions affect open targets without rewriting accepted history", 
   assert.equal(afterRework.targetTasks.find((item) => item.targetTaskId === "CSMR-TASK-0").status, "accepted");
   assert.equal(afterRework.taskPackages.find((item) => item.taskPackageId === "CSMR-PKG-1").status, "needs-rework");
   assert.equal(afterRework.targetTasks.find((item) => item.targetTaskId === "CSMR-TASK-1").status, "needs-rework");
-  assert.deepEqual(afterRework.allowedActions, ["prepare-dispatch-from-state", "add-task-package", "wakeflow-render-progress"], "product rework exposes same-task re-dispatch");
+  assert.deepEqual(afterRework.allowedActions, ["prepare-dispatch-from-state", "wakeflow-render-progress"], "product rework exposes only same-task re-dispatch");
 
   const prematureReduce = reduce();
   assert.equal(prematureReduce.candidateId, null);
@@ -1574,8 +1544,19 @@ test("review decisions affect open targets without rewriting accepted history", 
   assert.deepEqual(prematureReduce.targetTaskIds, ["CSMR-TASK-1"]);
   assert.deepEqual(prematureReduce.missingResultIds, ["CSMR-TASK-1"]);
 
-  addTask("CSMR-PKG-1A", "CSMR-TASK-1A");
-  importResult("CSMR-TASK-1A", "CSMR-RESULT-1A");
+  // Mirror the state effect of a real same-task re-dispatch before importing
+  // the new round. record-delivery-run clears the stale decision but preserves
+  // an explicit rework route so unrelated pending work remains excluded.
+  const redispatchedStateFile = path.join(stateRoot, "wakeflow-state.json");
+  const redispatchedState = readJson(redispatchedStateFile);
+  redispatchedState.state = "dispatched";
+  redispatchedState.taskPackages.find((item) => item.taskPackageId === "CSMR-PKG-1").status = "sent";
+  const redispatchedTask = redispatchedState.targetTasks.find((item) => item.targetTaskId === "CSMR-TASK-1");
+  redispatchedTask.status = "sent";
+  redispatchedTask.reviewDecision = null;
+  redispatchedTask.reviewRoute = "rework";
+  writeFileSync(redispatchedStateFile, `${JSON.stringify(redispatchedState, null, 2)}\n`);
+  importResult("CSMR-TASK-1", "CSMR-RESULT-1-FIXED", { supersede: true });
   const stateWithLegacyNextStepFile = path.join(stateRoot, "wakeflow-state.json");
   const stateWithLegacyNextStep = readJson(stateWithLegacyNextStepFile);
   stateWithLegacyNextStep.taskPackages.push({
@@ -1612,10 +1593,10 @@ test("review decisions affect open targets without rewriting accepted history", 
   const acceptCandidatePayload = reduce();
   const acceptCandidate = readJson(path.join(stateRoot, `transition-candidates/${acceptCandidatePayload.candidateId}.json`));
   assert.equal(acceptCandidate.reviewScope, "rework-first-controller-review-targets");
-  assert.deepEqual(acceptCandidate.targetTaskIds, ["CSMR-TASK-1", "CSMR-TASK-1A"]);
+  assert.deepEqual(acceptCandidate.targetTaskIds, ["CSMR-TASK-1"]);
   assert.deepEqual(acceptCandidate.excludedTargetTaskIds, ["CSMR-TASK-0", "CSMR-TASK-2"]);
   const reworkAccept = decide(acceptCandidatePayload.candidateId, "accept");
-  assert.deepEqual(reworkAccept.targetTaskIds, ["CSMR-TASK-1", "CSMR-TASK-1A"]);
+  assert.deepEqual(reworkAccept.targetTaskIds, ["CSMR-TASK-1"]);
   assert.deepEqual(reworkAccept.excludedTargetTaskIds, ["CSMR-TASK-0", "CSMR-TASK-2"]);
 
   const afterReworkRouteAccept = readJson(path.join(stateRoot, "wakeflow-state.json"));
@@ -1626,12 +1607,12 @@ test("review decisions affect open targets without rewriting accepted history", 
   const nextCandidate = readJson(path.join(stateRoot, `transition-candidates/${nextCandidatePayload.candidateId}.json`));
   assert.equal(nextCandidate.reviewScope, "open-controller-review-targets");
   assert.deepEqual(nextCandidate.targetTaskIds, ["CSMR-TASK-2"]);
-  assert.deepEqual(nextCandidate.excludedTargetTaskIds, ["CSMR-TASK-0", "CSMR-TASK-1", "CSMR-TASK-1A"]);
+  assert.deepEqual(nextCandidate.excludedTargetTaskIds, ["CSMR-TASK-0", "CSMR-TASK-1"]);
   decide(nextCandidatePayload.candidateId, "accept");
 
   const finalState = readJson(path.join(stateRoot, "wakeflow-state.json"));
-  assert.deepEqual(finalState.taskPackages.map((item) => item.status), ["accepted", "accepted", "accepted", "accepted"]);
-  assert.deepEqual(finalState.targetTasks.map((item) => item.status), ["accepted", "accepted", "accepted", "accepted"]);
+  assert.deepEqual(finalState.taskPackages.map((item) => item.status), ["accepted", "accepted", "accepted"]);
+  assert.deepEqual(finalState.targetTasks.map((item) => item.status), ["accepted", "accepted", "accepted"]);
 
   const completed = run([
     "complete-demand",
@@ -2073,7 +2054,7 @@ test("a blocked review decision is recoverable: new evidence reopens review and 
   assert.equal(added.ok, true, "demand is drivable again after the unblock cycle");
 });
 
-test("a redesign decision parks the task needs-rework and counts a Design rethink, not a product rework", () => {
+test("a redesign decision parks the task for a stateless Design handoff and explicit replacement", () => {
   const root = makeRoot();
   const init = JSON.parse(run(["init", "--root", root, "--demand-key", "REDESIGN-FIXTURE", "--title", "Redesign Fixture", "--write", "--json"]).stdout);
   run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Pkg", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
@@ -2093,9 +2074,9 @@ test("a redesign decision parks the task needs-rework and counts a Design rethin
   assert.equal(task.counts.reworkCount ?? 0, 0, "a redesign is NOT a product rework — reworkCount untouched");
   assert.equal((state.blockers ?? []).length, 0, "redesign is not a hard block");
 
-  // needs-rework allows the controller's next package: a Design outcome-redesign, not a product point-fix.
-  const added = JSON.parse(run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-2", "--summary", "Design outcome redesign", "--target-window", "Design", "--target-task-id", "TASK-2", "--write", "--json"]).stdout);
-  assert.equal(added.ok, true, "after redesign, add a Design redesign task package");
+  const implicitDesignTask = run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-2", "--summary", "Implicit Design state task", "--target-window", "Design", "--target-task-id", "TASK-2", "--write", "--json"]);
+  assert.notEqual(implicitDesignTask.status, 0, "Design handoff is stateless and cannot become an implicit replacement branch");
+  assert.match(implicitDesignTask.stdout + implicitDesignTask.stderr, /explicit replacesTargetTaskId/);
 });
 
 test("import-target-result never claims an unclaimed demand and rejects --adopt-host", () => {
@@ -2203,7 +2184,7 @@ test("import-target-result readiness follows rework-first scope instead of stale
   assert.match(ordinary.agentNext, /rework is still open/);
 });
 
-test("add-task-package refuses ordinary next-step work while a rework route is active", () => {
+test("add-task-package refuses new branches while a rework route is active", () => {
   const root = makeRoot();
   const init = JSON.parse(run(["init", "--root", root, "--demand-key", "REWORK-ADD-FIXTURE", "--title", "Rework Add", "--write", "--json"]).stdout);
   run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Needs review", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
@@ -2226,15 +2207,10 @@ test("add-task-package refuses ordinary next-step work while a rework route is a
   needsReworkState.targetTasks[0].reviewDecision = "rework";
   writeFileSync(stateFile, `${JSON.stringify(needsReworkState, null, 2)}\n`);
 
-  const extension = JSON.parse(run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-R", "--summary", "Rework extension", "--target-window", "WinA", "--target-task-id", "TASK-R", "--write", "--json"]).stdout);
-  assert.equal(extension.ok, true);
+  const extension = run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-R", "--summary", "Rework extension", "--target-window", "WinA", "--target-task-id", "TASK-R", "--write", "--json"]);
+  assert.notEqual(extension.status, 0);
+  assert.match(extension.stdout + extension.stderr, /ordinary rework must re-dispatch the original task/);
   const afterExtension = readJson(stateFile);
-  assert.equal(afterExtension.taskPackages.find((item) => item.taskPackageId === "PKG-R").reviewRoute, "rework");
-  assert.equal(afterExtension.targetTasks.find((item) => item.targetTaskId === "TASK-R").reviewRoute, "rework");
-
-  const secondExtension = JSON.parse(run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-R2", "--summary", "Second rework extension", "--target-window", "WinB", "--target-task-id", "TASK-R2", "--write", "--json"]).stdout);
-  assert.equal(secondExtension.ok, true);
-  const afterSecondExtension = readJson(stateFile);
-  assert.equal(afterSecondExtension.taskPackages.find((item) => item.taskPackageId === "PKG-R2").reviewRoute, "rework");
-  assert.equal(afterSecondExtension.targetTasks.find((item) => item.targetTaskId === "TASK-R2").reviewRoute, "rework");
+  assert.equal(afterExtension.taskPackages.some((item) => item.taskPackageId === "PKG-R"), false);
+  assert.equal(afterExtension.targetTasks.some((item) => item.targetTaskId === "TASK-R"), false);
 });

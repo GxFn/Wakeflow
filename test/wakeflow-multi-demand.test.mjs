@@ -2,22 +2,52 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-// Guards E-2: parallelism exists ONLY at the demand level. Up to
-// maxActiveDemands (default 2) demands run side by side; claiming past
-// capacity fails closed; two demands' loops are fully independent (per-root
-// state, revisions, candidates); the knob maxActiveDemands=1 restores the
-// old single-active behavior exactly.
+// Multi-demand concurrency is an explicit placement contract: one ordinary
+// mainline lane plus any number of user-authorized isolated pods. Wakeflow does
+// not convert a second ordinary demand into a pod and does not admit by count.
 
-const pluginRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
-const stateScript = path.join(pluginRoot, "scripts/wakeflow-state.mjs");
+const repositoryRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const runtimeTemp = mkdtempSync(path.join(os.tmpdir(), "wakeflow-multi-runtime-"));
+const runtimeRoot = path.join(runtimeTemp, "runtime");
+cpSync(path.join(repositoryRoot, "core"), runtimeRoot, { recursive: true });
+cpSync(
+  path.join(repositoryRoot, "plugins/codex-wakeflow/templates"),
+  path.join(runtimeRoot, "templates"),
+  { recursive: true },
+);
+cpSync(
+  path.join(repositoryRoot, "plugins/codex-wakeflow/scripts/lib/wakeflow-host-send-adapter.mjs"),
+  path.join(runtimeRoot, "scripts/lib/wakeflow-host-send-adapter.mjs"),
+);
+const stateScript = path.join(runtimeRoot, "scripts/wakeflow-state.mjs");
+const podScript = path.join(runtimeRoot, "scripts/wakeflow-pod.mjs");
+const deliveryScript = path.join(runtimeRoot, "scripts/wakeflow-delivery.mjs");
+
+test.after(() => rmSync(runtimeTemp, { recursive: true, force: true }));
 
 function run(args) {
   return spawnSync(process.execPath, [stateScript, ...args], { encoding: "utf8", shell: false });
+}
+
+function runScript(script, args, cwd) {
+  return spawnSync(process.execPath, [script, ...args], {
+    cwd,
+    encoding: "utf8",
+    shell: false,
+  });
 }
 
 function readJson(file) {
@@ -31,14 +61,181 @@ function makeRoot(config = null) {
   return root;
 }
 
-function initDemand(root, demandKey) {
-  return run(["init", "--root", root, "--demand-key", demandKey, "--title", `Demand ${demandKey}`, "--write", "--json"]);
+function initDemand(root, demandKey, extra = []) {
+  return run([
+    "init", "--root", root, "--demand-key", demandKey, "--title", `Demand ${demandKey}`,
+    ...extra, "--write", "--json",
+  ]);
 }
 
-function driveToAccepted(root, stateRoot, id) {
+function initPod(root, demandKey) {
+  return initDemand(root, demandKey, [
+    "--placement", "pod",
+    "--authorization-ref", `user://multi-demand/${demandKey}`,
+  ]);
+}
+
+function git(root, args) {
+  const result = spawnSync(
+    "git",
+    ["-C", root, "-c", "user.name=Wakeflow Test", "-c", "user.email=wakeflow@test", ...args],
+    { encoding: "utf8", shell: false },
+  );
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return result.stdout.trim();
+}
+
+function configuredRepositoryRoot() {
+  const root = makeRoot({
+    controllerWindow: "Controller",
+    designWindow: "Design",
+    testWindow: "Test",
+    repositories: [
+      { windowName: "RepoA", path: "RepoA", role: "fixture implementation" },
+    ],
+  });
+  const repositoryRoot = path.join(root, "RepoA");
+  mkdirSync(repositoryRoot, { recursive: true });
+  git(repositoryRoot, ["init", "-q", "-b", "main"]);
+  writeFileSync(path.join(repositoryRoot, "README.md"), "RepoA\n");
+  git(repositoryRoot, ["add", "README.md"]);
+  git(repositoryRoot, ["commit", "-q", "-m", "initial"]);
+  return { root, repositoryRoot, head: git(repositoryRoot, ["rev-parse", "HEAD"]) };
+}
+
+function podCommand(root, command, option = null, value = null) {
+  const args = [command, "--root", root];
+  if (option) args.push(option, typeof value === "string" ? value : JSON.stringify(value));
+  args.push("--write", "--json");
+  return runScript(podScript, args, root);
+}
+
+function registerPodWindow(root, stateRoot, operation, threadIndex) {
+  const threadId = `00000000-0000-4000-8000-${String(threadIndex).padStart(12, "0")}`;
+  const registered = runScript(deliveryScript, [
+    "register-thread",
+    "--root", root,
+    "--window", operation.windowName,
+    "--thread-id", threadId,
+    "--launch-correlation-id", operation.launchCorrelationId,
+    "--binding-id", operation.registrationBindingId,
+    "--state-root", stateRoot,
+    "--write",
+    "--json",
+  ], root);
+  assert.equal(registered.status, 0, registered.stderr || registered.stdout);
+  return threadId;
+}
+
+function bindPodReceipt(root, receipt) {
+  const bound = podCommand(root, "bind", "--receipt-json", receipt);
+  assert.equal(bound.status, 0, bound.stderr || bound.stdout);
+  return JSON.parse(bound.stdout);
+}
+
+function materializeReadyPod(root, demandKey, repositoryRoot, expectedBaseHead) {
+  const stateRoot = path.join(root, ".wakeflow-active/current", demandKey);
+  const controls = podCommand(root, "open", "--request-json", {
+    demandKey,
+    host: "codex",
+    repositories: [],
+  });
+  assert.equal(controls.status, 0, controls.stderr || controls.stdout);
+  const controlPlan = JSON.parse(controls.stdout);
+  controlPlan.operations.forEach((operation, index) => {
+    registerPodWindow(root, stateRoot, operation, index + 1);
+    bindPodReceipt(root, {
+      launchCorrelationId: operation.launchCorrelationId,
+      windowName: operation.windowName,
+      host: "codex",
+      bindingId: operation.registrationBindingId,
+      handleRegistered: true,
+      handleKind: "final",
+      stateRootRelative: path.relative(root, stateRoot).split(path.sep).join("/"),
+      actualCwd: root,
+      createdAt: new Date().toISOString(),
+    });
+  });
+
+  const designRequestResult = podCommand(root, "prepare-design-request", "--request-json", {
+    demandKey,
+    podId: demandKey,
+    requestType: "initial-design",
+    originalGoal: "Exercise an isolated result loop without changing its confirmed scope.",
+    requirementAnchors: ["goal-stage-confirmation.md#goal"],
+    codeEvidenceRefs: ["evidence/fixture-repository-facts.json"],
+    pausedTargetIdentity: null,
+    pausedReviewIdentity: null,
+    nonGoals: ["Do not use the main checkout as the Pod target."],
+    decisionsRequired: [],
+  });
+  assert.equal(
+    designRequestResult.status,
+    0,
+    designRequestResult.stderr || designRequestResult.stdout,
+  );
+  const designRequest = JSON.parse(designRequestResult.stdout);
+  const handoff = podCommand(root, "record-design-handoff", "--handoff-json", {
+    demandKey,
+    podId: demandKey,
+    designRequestId: designRequest.requestId,
+    designRequestRef: designRequest.requestRef,
+    designRequestDigest: designRequest.requestDigest,
+    requestType: designRequest.requestType,
+    preservesOriginalGoal: true,
+    requirementAnchors: ["goal-stage-confirmation.md#goal"],
+    evidenceRefs: ["evidence/fixture-repository-facts.json"],
+    userConfirmationRefs: ["controller-events.jsonl#explicit-pod"],
+    landingPlan: [
+      { repositoryWindow: "RepoA", responsibility: "Exercise the isolated fixture." },
+    ],
+    designIntent: "Keep the Pod result loop isolated from the mainline demand.",
+    testDecision: "No separate environment test is required for this state-isolation fixture.",
+    environmentSpec: { authority: "fixture", scope: "pod-worktree" },
+  });
+  assert.equal(handoff.status, 0, handoff.stderr || handoff.stdout);
+
+  const expanded = podCommand(root, "open", "--request-json", {
+    demandKey,
+    host: "codex",
+    repositories: [
+      { windowName: "RepoA", expectedBaseHead, basePolicy: "local-head" },
+    ],
+  });
+  assert.equal(expanded.status, 0, expanded.stderr || expanded.stdout);
+  const productOperation = JSON.parse(expanded.stdout).operations
+    .find((operation) => operation.role === "product");
+  assert.ok(productOperation);
+  const worktree = path.join(root, ".host-worktrees", `${demandKey}-RepoA`);
+  mkdirSync(path.dirname(worktree), { recursive: true });
+  git(repositoryRoot, ["worktree", "add", "--detach", worktree, expectedBaseHead]);
+  const actualCwd = realpathSync(worktree);
+  registerPodWindow(root, stateRoot, productOperation, 4);
+  const commonDirRaw = git(actualCwd, ["rev-parse", "--git-common-dir"]);
+  bindPodReceipt(root, {
+    launchCorrelationId: productOperation.launchCorrelationId,
+    windowName: productOperation.windowName,
+    host: "codex",
+    bindingId: productOperation.registrationBindingId,
+    handleRegistered: true,
+    handleKind: "final",
+    stateRootRelative: path.relative(root, stateRoot).split(path.sep).join("/"),
+    actualCwd,
+    gitTopLevel: realpathSync(git(actualCwd, ["rev-parse", "--show-toplevel"])),
+    gitCommonDir: realpathSync(path.resolve(actualCwd, commonDirRaw)),
+    head: expectedBaseHead,
+    branch: null,
+    detached: true,
+    mainCheckout: false,
+    createdAt: new Date().toISOString(),
+  });
+  return productOperation.windowName;
+}
+
+function driveToAccepted(root, stateRoot, id, targetWindow = "RepoA") {
   for (const args of [
-    ["add-task-package", "--root", root, "--state-root", stateRoot, "--task-package-id", `tp-${id}`, "--summary", `Work ${id}`, "--target-window", "RepoA", "--write", "--json"],
-    ["import-target-result", "--root", root, "--state-root", stateRoot, "--target-task-id", `tp-${id}__RepoA`, "--target-window", "RepoA", "--status", "completed", "--summary", `Work ${id} completed.`, "--write", "--json"],
+    ["add-task-package", "--root", root, "--state-root", stateRoot, "--task-package-id", `tp-${id}`, "--summary", `Work ${id}`, "--target-window", targetWindow, "--write", "--json"],
+    ["import-target-result", "--root", root, "--state-root", stateRoot, "--target-task-id", `tp-${id}__${targetWindow}`, "--target-window", targetWindow, "--status", "completed", "--summary", `Work ${id} completed.`, "--write", "--json"],
     ["reduce-results", "--root", root, "--state-root", stateRoot, "--write", "--json"],
   ]) {
     const result = run(args);
@@ -48,108 +245,94 @@ function driveToAccepted(root, stateRoot, id) {
   return null;
 }
 
-test("the demand's own controllerWindow is stamped at init and routes prepare by default", () => {
+test("explicit pod controller identity is stamped in canonical state", () => {
   const root = makeRoot();
-  const init = run(["init", "--root", root, "--demand-key", "POD-DK", "--title", "Pod Demand", "--controller-window", "Controller__POD-DK", "--write", "--json"]);
-  assert.equal(init.status, 0, init.stderr || init.stdout);
+  const initialized = initPod(root, "POD-DK");
+  assert.equal(initialized.status, 0, initialized.stderr || initialized.stdout);
   const stateRoot = path.join(root, ".wakeflow-active/current/POD-DK");
   const podState = readJson(path.join(stateRoot, "wakeflow-state.json"));
   assert.equal(podState.controllerWindow, "Controller__POD-DK");
-  assert.deepEqual(podState.executionPlacement, { mode: "isolated", podId: "POD-DK" });
-
-  assert.equal(run(["add-task-package", "--root", root, "--state-root", stateRoot, "--task-package-id", "tp-a", "--summary", "W", "--target-window", "RepoA__pod-dk", "--write", "--json"]).status, 0);
-  const deliveryScript = path.join(pluginRoot, "scripts/wakeflow-delivery.mjs");
-  const prepared = spawnSync(process.execPath, [
-    deliveryScript, "prepare-dispatch-from-state", "--root", root, "--state-root", stateRoot,
-    "--target-task-id", "tp-a__RepoA__pod-dk", "--write", "--json",
-  ], { encoding: "utf8", shell: false });
-  assert.equal(prepared.status, 0, prepared.stderr || prepared.stdout);
-  const packet = readJson(path.join(root, ".wakeflow-local/wakeflow-delivery/dispatch-packets", "tp-a__RepoA__pod-dk__tp-a__RepoA__pod-dk.json"));
-  assert.equal(packet.controllerWindow, "Controller__POD-DK", "prepare must default the return route to the demand's own controller — the pod mis-route killer");
+  assert.equal(podState.executionPlacement.selection, "explicit-user-pod");
 });
 
-test("two demands run side by side; the third fails closed at capacity", () => {
-  const root = makeRoot();
-  assert.equal(initDemand(root, "D1").status, 0);
-  assert.equal(initDemand(root, "D2").status, 0, "second demand must be claimable under default capacity 2");
-  assert.deepEqual(
-    readJson(path.join(root, ".wakeflow-active/current/D1/wakeflow-state.json")).executionPlacement,
-    { mode: "main", podId: null },
-  );
-  const secondState = readJson(path.join(root, ".wakeflow-active/current/D2/wakeflow-state.json"));
-  assert.deepEqual(secondState.executionPlacement, { mode: "isolated", podId: "D2" });
-  assert.equal(secondState.controllerWindow, "Controller__D2");
+test("ordinary second demand waits; explicitly authorized pods have no numeric ceiling", () => {
+  const root = makeRoot({ maxActiveDemands: 1 });
+  assert.equal(initDemand(root, "MAIN").status, 0);
+  const ordinary = initDemand(root, "ORDINARY");
+  assert.equal(ordinary.status, 1, ordinary.stdout);
+  assert.equal(JSON.parse(ordinary.stdout).errorCode, "mainline-busy");
 
-  const third = initDemand(root, "D3");
-  assert.equal(third.status, 1, third.stdout);
-  const payload = JSON.parse(third.stdout);
-  assert.match(payload.error, /active-demand capacity \(2\/2\)/);
-  assert.match(payload.error, /D1/);
-  assert.match(payload.error, /D2/);
+  for (const demandKey of ["POD-1", "POD-2", "POD-3", "POD-4"]) {
+    const pod = initPod(root, demandKey);
+    assert.equal(pod.status, 0, pod.stderr || pod.stdout);
+  }
 });
 
-test("maxActiveDemands=1 restores single-active behavior exactly", () => {
-  const root = makeRoot({ workspaceName: "Single", controllerWindow: "Ctl", maxActiveDemands: 1 });
-  assert.equal(initDemand(root, "ONLY").status, 0);
-  const second = initDemand(root, "NEXT");
-  assert.equal(second.status, 1, second.stdout);
-  assert.match(JSON.parse(second.stdout).error, /capacity \(1\/1\)/);
+test("mainline and isolated demand loops remain independent when interleaved", () => {
+  const { root, repositoryRoot, head } = configuredRepositoryRoot();
+  assert.equal(initDemand(root, "MAIN").status, 0);
+  assert.equal(initPod(root, "POD").status, 0);
+  const mainRoot = path.join(root, ".wakeflow-active/current/MAIN");
+  const podRoot = path.join(root, ".wakeflow-active/current/POD");
+  const podTargetWindow = materializeReadyPod(root, "POD", repositoryRoot, head);
+  const mainRevisionBeforeWork = readJson(path.join(mainRoot, "wakeflow-state.json")).revision;
+  const podRevisionBeforeWork = readJson(path.join(podRoot, "wakeflow-state.json")).revision;
+
+  const mainCandidate = driveToAccepted(root, mainRoot, "main");
+  const podCandidate = driveToAccepted(root, podRoot, "pod", podTargetWindow);
+  assert.equal(run([
+    "decide-review", "--root", root, "--state-root", podRoot,
+    "--candidate-id", podCandidate, "--decision", "accept",
+    "--reason", "independent pod", "--write", "--json",
+  ]).status, 0);
+  assert.equal(run([
+    "decide-review", "--root", root, "--state-root", mainRoot,
+    "--candidate-id", mainCandidate, "--decision", "accept",
+    "--reason", "independent main", "--write", "--json",
+  ]).status, 0);
+
+  const mainState = readJson(path.join(mainRoot, "wakeflow-state.json"));
+  const podState = readJson(path.join(podRoot, "wakeflow-state.json"));
+  assert.equal(mainState.executionPlacement.mode, "main");
+  assert.equal(podState.executionPlacement.mode, "isolated");
+  assert.equal(mainState.revision, mainRevisionBeforeWork + 3);
+  assert.equal(podState.revision, podRevisionBeforeWork + 3);
+  assert.equal(mainState.targetTasks[0].status, "accepted");
+  assert.equal(podState.targetTasks[0].status, "accepted");
 });
 
-test("two active demands' loops are fully independent — interleaved drive, per-root state", () => {
-  const root = makeRoot();
-  assert.equal(initDemand(root, "D1").status, 0);
-  assert.equal(initDemand(root, "D2").status, 0);
-  const rootD1 = path.join(root, ".wakeflow-active/current/D1");
-  const rootD2 = path.join(root, ".wakeflow-active/current/D2");
-
-  // interleave the two demands' loops deliberately
-  const candidateD1 = driveToAccepted(root, rootD1, "a");
-  const candidateD2 = driveToAccepted(root, rootD2, "b");
-  const decideD2 = run(["decide-review", "--root", root, "--state-root", rootD2, "--candidate-id", candidateD2, "--decision", "accept", "--reason", "independent loop D2", "--write", "--json"]);
-  assert.equal(decideD2.status, 0, decideD2.stderr || decideD2.stdout);
-  const decideD1 = run(["decide-review", "--root", root, "--state-root", rootD1, "--candidate-id", candidateD1, "--decision", "accept", "--reason", "independent loop D1", "--write", "--json"]);
-  assert.equal(decideD1.status, 0, decideD1.stderr || decideD1.stdout);
-
-  const stateD1 = readJson(path.join(rootD1, "wakeflow-state.json"));
-  const stateD2 = readJson(path.join(rootD2, "wakeflow-state.json"));
-  assert.equal(stateD1.demandKey, "D1");
-  assert.equal(stateD2.demandKey, "D2");
-  assert.equal(stateD1.state, "planned");
-  assert.equal(stateD2.state, "planned");
-  assert.equal(stateD1.revision, 4, "D1 revisions must be untouched by D2's loop");
-  assert.equal(stateD2.revision, 4, "D2 revisions must be untouched by D1's loop");
-  assert.equal(stateD1.targetTasks[0].status, "accepted");
-  assert.equal(stateD2.targetTasks[0].status, "accepted");
-});
-
-test("completing and archiving one demand frees capacity for the next", () => {
-  // ledger INSIDE the sandbox: the default ../wakeflow-ledger would land in the
-  // shared tmpdir and collide across test runs
+test("completed mainline still waits until archive, while pods never hold the lane", () => {
   const root = makeRoot({
-    workspaceName: "MultiArchive",
-    controllerWindow: "Ctl",
     projectLedgerRoot: "wakeflow-ledger",
     workspaceArchiveDir: "wakeflow-ledger/workspace/archive",
   });
-  assert.equal(initDemand(root, "D1").status, 0);
-  assert.equal(initDemand(root, "D2").status, 0);
-  const rootD1 = path.join(root, ".wakeflow-active/current/D1");
-  const candidate = driveToAccepted(root, rootD1, "a");
-  assert.equal(run(["decide-review", "--root", root, "--state-root", rootD1, "--candidate-id", candidate, "--decision", "accept", "--reason", "done", "--write", "--json"]).status, 0);
-  assert.equal(run(["complete-demand", "--root", root, "--state-root", rootD1, "--reason", "done", "--evidence-ref", "controller-events.jsonl", "--write", "--json"]).status, 0);
+  assert.equal(initDemand(root, "MAIN").status, 0);
+  assert.equal(initPod(root, "POD").status, 0);
+  const mainRoot = path.join(root, ".wakeflow-active/current/MAIN");
+  const candidate = driveToAccepted(root, mainRoot, "main");
+  assert.equal(run([
+    "decide-review", "--root", root, "--state-root", mainRoot,
+    "--candidate-id", candidate, "--decision", "accept",
+    "--reason", "done", "--write", "--json",
+  ]).status, 0);
+  assert.equal(run([
+    "complete-demand", "--root", root, "--state-root", mainRoot,
+    "--reason", "done", "--evidence-ref", "controller-events.jsonl",
+    "--write", "--json",
+  ]).status, 0);
 
-  // completed-but-not-archived still occupies capacity
-  const blocked = initDemand(root, "D3");
-  assert.equal(blocked.status, 1, blocked.stdout);
-  assert.match(JSON.parse(blocked.stdout).error, /completed but not archived/);
-
-  const archived = run(["archive-demand", "--root", root, "--state-root", rootD1, "--reason", "shipped", "--redact", "--write", "--json"]);
-  assert.equal(archived.status, 0, archived.stderr || archived.stdout);
-  assert.equal(initDemand(root, "D3").status, 0, "archiving must free the slot");
-  assert.deepEqual(
-    readJson(path.join(root, ".wakeflow-active/current/D3/wakeflow-state.json")).executionPlacement,
-    { mode: "isolated", podId: "D3" },
-    "an isolated survivor keeps the main checkout reserved; a replacement demand must not silently become a second main editor",
+  const waiting = initDemand(root, "NEXT");
+  assert.equal(waiting.status, 1, waiting.stdout);
+  assert.match(JSON.parse(waiting.stdout).error, /completed but not archived/);
+  assert.equal(run([
+    "archive-demand", "--root", root, "--state-root", mainRoot,
+    "--reason", "shipped", "--redact", "--write", "--json",
+  ]).status, 0);
+  const next = initDemand(root, "NEXT");
+  assert.equal(next.status, 0, next.stderr || next.stdout);
+  assert.equal(
+    readJson(path.join(root, ".wakeflow-active/current/NEXT/wakeflow-state.json"))
+      .executionPlacement.mode,
+    "main",
   );
 });

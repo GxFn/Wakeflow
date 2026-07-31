@@ -3,6 +3,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadWorkspaceConfig, resolveWorkspaceRoot, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
+import { assertExistingPathInside } from "./lib/wakeflow-fs-safety.mjs";
 import { isCompletedState } from "./lib/wakeflow-status-machine.mjs";
 
 const args = process.argv.slice(2);
@@ -159,6 +160,11 @@ function requireWorkspaceDoc(input) {
   if (!existsSync(absolutePath)) {
     throw new Error(`Workspace doc does not exist: ${input}`);
   }
+  const inspected = assertExistingPathInside({
+    root: workspaceDocsDir,
+    candidate: absolutePath,
+    label: "workspace archive source document",
+  });
 
   if (!absolutePath.endsWith(".md")) {
     throw new Error(`Only Markdown workspace docs can be archived: ${input}`);
@@ -168,8 +174,8 @@ function requireWorkspaceDoc(input) {
     throw new Error("Refusing to archive active workspace index.md");
   }
 
-  if (statSync(absolutePath).isDirectory()) {
-    throw new Error(`Refusing to archive directory: ${input}`);
+  if (!inspected.stat.isFile()) {
+    throw new Error(`Refusing to archive non-regular document: ${input}`);
   }
 
   return absolutePath;

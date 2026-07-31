@@ -1,5 +1,13 @@
 # Wakeflow 多需求并行统一方案（2026-07-10）
 
+> **历史方案，已被
+> `docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md`
+> 取代。** 本文保留 2026-07-10 的实现与测试记录，不再指导新 Pod：
+> 新正典要求默认主线、只有用户明确授权才启用 Pod、Pod 包含独立 Design，
+> 且 Codex/Claude Code 宿主创建并管理产品 worktree，Wakeflow 不再直接
+> 创建或删除 worktree/branch，也不再用 `maxActiveDemands` 或
+> `maxStreamsPerRepo` 限制 Pod 数量。
+
 前置：并行叙述全仓深挖完成（机制层 + docs/README + skills/templates/commands 三面）。
 本文是执行计划：先定正典模型，再列机制与叙述的全部修正点，按波次落地。
 

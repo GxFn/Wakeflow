@@ -76,12 +76,16 @@ export function normalizeTaskPackageContext(value) {
   if (workType === "implementation" && (!Array.isArray(value.acceptanceAnchors) || value.acceptanceAnchors.length === 0)) {
     throw new Error("implementation task packages require at least one controller-authored acceptanceAnchor.");
   }
+  const requirementRefs = normalizeRequirementRefs(value.requirementRefs);
+  if (!requirementRefs.some((entry) => entry.role === "goal")) {
+    throw new Error("requirementRefs must include at least one role=goal entry.");
+  }
   return {
     contextVersion,
     workType,
     objective: nonEmptyString(value.objective, "objective"),
     contextSummary: stringList(value.contextSummary, "contextSummary"),
-    requirementRefs: normalizeRequirementRefs(value.requirementRefs),
+    requirementRefs,
     boundaries: normalizeBoundaries(value.boundaries),
     completionExpectations: stringList(value.completionExpectations, "completionExpectations"),
     dependsOnTaskIds: stringList(value.dependsOnTaskIds ?? [], "dependsOnTaskIds", { allowEmpty: true }),
@@ -173,6 +177,7 @@ export function taskPackageAuthoritySnapshot(taskPackage = {}) {
     evidenceContract: taskPackage.evidenceContract ?? null,
     testExecution: taskPackage.testExecution ?? null,
     continuation: taskPackage.continuation ?? null,
+    replacesTargetTaskId: taskPackage.replacesTargetTaskId ?? null,
   };
 }
 
@@ -234,6 +239,26 @@ export function taskPackageReadiness({
     }
     if (context.workType !== "test" && isTestTask) {
       errors.push(`task package with testExecution must use workType=test, not ${context.workType}.`);
+    }
+  }
+  const replacementId = taskPackage.replacesTargetTaskId ?? targetTask?.replacesTargetTaskId ?? null;
+  if ((taskPackage.replacesTargetTaskId ?? null) !== (targetTask?.replacesTargetTaskId ?? null)) {
+    errors.push("task package and target task disagree on replacesTargetTaskId.");
+  }
+  if (replacementId) {
+    if (!context || context.workType !== "implementation") {
+      errors.push("a redesign replacement must be a full-context implementation task package.");
+    }
+    const replacedTask = (state?.targetTasks ?? []).find((item) => item.targetTaskId === replacementId);
+    if (!replacedTask) {
+      errors.push(`replacement lineage target does not exist: ${replacementId}`);
+    } else {
+      if (replacedTask.replacedByTargetTaskId !== targetTask?.targetTaskId) {
+        errors.push(`replacement lineage is not reciprocal: ${replacementId} does not point to ${targetTask?.targetTaskId}.`);
+      }
+      if (replacedTask.reviewDecision !== "redesign" || replacedTask.status !== "needs-rework") {
+        errors.push(`replacement lineage target is not parked by redesign: ${replacementId}:${replacedTask.status || "unknown"}/${replacedTask.reviewDecision || "undecided"}.`);
+      }
     }
   }
   if (context && !repositoryRoot) {

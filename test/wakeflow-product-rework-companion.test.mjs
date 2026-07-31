@@ -41,6 +41,14 @@ function runDelivery(runtimeRoot, args) {
   });
 }
 
+function runTodo(runtimeRoot, args) {
+  const todoScript = path.join(runtimeRoot, "scripts/wakeflow-todo.mjs");
+  return runSync(process.execPath, [todoScript, ...args], {
+    cwd: runtimeRoot,
+    encoding: "utf8",
+  });
+}
+
 function readJson(file) {
   return JSON.parse(readFileSync(file, "utf8"));
 }
@@ -51,7 +59,7 @@ function writeEvidence(root, stateRoot, ref) {
   writeFileSync(file, "{}\n");
 }
 
-test("only configured product repo results can cover an old redesign task", () => {
+test("a same-repository task without replacesTargetTaskId cannot cover an old redesign task", () => {
   const runtimeRoot = makeCoreRuntime();
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-product-companion-"));
   writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
@@ -70,6 +78,11 @@ test("only configured product repo results can cover an old redesign task", () =
       { windowName: "Support", path: "Support", role: "Auxiliary support" },
     ],
   }, null, 2)}\n`);
+  writeFileSync(path.join(root, "requirements.md"), [
+    "# Goal",
+    "",
+    "Replace the redesigned implementation without rewriting history.",
+  ].join("\n"));
 
   const initResult = run(runtimeRoot, [
     "init", "--root", root,
@@ -128,49 +141,83 @@ test("only configured product repo results can cover an old redesign task", () =
   ]);
   assert.equal(redesign.status, 0, redesign.stderr || redesign.stdout);
 
-  addTask("PKG-REAL", "TASK-REAL", "RealProject");
-  importResult("TASK-REAL", "RealProject");
-  const afterRealProject = reduce();
-  assert.equal(afterRealProject.candidateId, null);
-  assert.equal(afterRealProject.reviewStatus, "rework-route-waiting-results");
-  assert.deepEqual(afterRealProject.missingResultIds, ["TASK-ORIGINAL"]);
-  assert.equal(
-    readJson(stateFile).targetTasks.find((task) => task.targetTaskId === "TASK-ORIGINAL").status,
-    "needs-rework",
-  );
+  const directRedispatch = runDelivery(runtimeRoot, [
+    "prepare-dispatch-from-state", "--root", root, "--state-root", init.stateRoot,
+    "--target-task-id", "TASK-ORIGINAL", "--write", "--json",
+  ]);
+  assert.notEqual(directRedispatch.status, 0, "redesign must require a new explicit replacement task");
+  assert.match(directRedispatch.stdout + directRedispatch.stderr, /replacesTargetTaskId|explicit replacement/i);
 
-  addTask("PKG-SUPPORT", "TASK-SUPPORT", "Support");
-  importResult("TASK-SUPPORT", "Support");
-  const afterSupport = reduce();
-  assert.equal(afterSupport.candidateId, null);
-  assert.equal(afterSupport.reviewStatus, "rework-route-waiting-results");
-  assert.deepEqual(afterSupport.missingResultIds, ["TASK-ORIGINAL"]);
-  assert.equal(
-    readJson(stateFile).targetTasks.find((task) => task.targetTaskId === "TASK-ORIGINAL").status,
-    "needs-rework",
-  );
-
-  // Pod/worktree suffixes keep the base product-repository identity.
-  addTask("PKG-PRODUCT", "TASK-PRODUCT", "ProductRepo__POD-A");
-  importResult("TASK-PRODUCT", "ProductRepo__POD-A");
-  const productCandidate = reduce();
-  assert.ok(productCandidate.candidateId, "a configured product repo companion unlocks review");
-
-  const accepted = run(runtimeRoot, [
-    "decide-review", "--root", root, "--state-root", init.stateRoot,
-    "--candidate-id", productCandidate.candidateId,
-    "--decision", "accept",
-    "--reason", "Corrected product implementation is verified.",
+  const nonProductReplacement = (targetWindow, suffix) => run(runtimeRoot, [
+    "add-task-package", "--root", root, "--state-root", init.stateRoot,
+    "--task-package-id", `PKG-NON-PRODUCT-${suffix}`,
+    "--summary", `Invalid replacement through ${targetWindow}.`,
+    "--target-window", targetWindow,
+    "--target-task-id", `TASK-NON-PRODUCT-${suffix}`,
+    "--replaces-target-task-id", "TASK-ORIGINAL",
+    "--work-type", "implementation",
+    "--objective", "Implement the corrected product behavior.",
+    "--context-summary", JSON.stringify(["The original task was rejected by redesign."]),
+    "--requirement-refs", JSON.stringify([{ ref: "requirements.md#goal", role: "goal" }]),
+    "--boundaries", JSON.stringify({
+      inScope: ["Implement the corrected product behavior."],
+      outOfScope: ["Unrelated repositories."],
+      forbidden: ["Rewrite superseded history."],
+    }),
+    "--completion-expectations", JSON.stringify(["The corrected behavior is independently reviewable."]),
+    "--depends-on-task-ids", "[]",
+    "--commit-expectation", "leave-uncommitted",
+    "--acceptance-anchors", JSON.stringify([{
+      id: `replacement-${suffix}`,
+      claim: "The corrected product behavior replaces the rejected outcome.",
+      probe: "Run the focused product verification.",
+      expected: "The corrected outcome passes.",
+    }]),
     "--write", "--json",
   ]);
-  assert.equal(accepted.status, 0, accepted.stderr || accepted.stdout);
+  for (const [targetWindow, suffix] of [
+    ["Controller", "CONTROLLER"],
+    ["RealProject", "REAL-PROJECT"],
+    ["Support", "SUPPORT"],
+    ["Unknown", "UNKNOWN"],
+  ]) {
+    const invalidReplacement = nonProductReplacement(targetWindow, suffix);
+    assert.notEqual(
+      invalidReplacement.status,
+      0,
+      `${targetWindow} must not supersede product work merely because it is a configured or named window`,
+    );
+    assert.match(
+      invalidReplacement.stdout + invalidReplacement.stderr,
+      /product responsibility window/,
+    );
+  }
+
+  const unrelatedTask = run(runtimeRoot, [
+    "add-task-package", "--root", root, "--state-root", init.stateRoot,
+    "--task-package-id", "PKG-PRODUCT",
+    "--summary", "Implicit same-repository replacement.",
+    "--target-window", "ProductRepo__POD-A",
+    "--target-task-id", "TASK-PRODUCT",
+    "--write", "--json",
+  ]);
+  assert.notEqual(unrelatedTask.status, 0, "a same-repository task cannot create an implicit replacement branch");
+  assert.match(unrelatedTask.stdout + unrelatedTask.stderr, /explicit replacesTargetTaskId/);
+  const afterSameRepositoryTask = reduce();
+  assert.equal(afterSameRepositoryTask.candidateId, null);
+  assert.equal(afterSameRepositoryTask.reviewStatus, "rework-route-waiting-results");
+  assert.deepEqual(afterSameRepositoryTask.missingResultIds, ["TASK-ORIGINAL"]);
   assert.equal(
     readJson(stateFile).targetTasks.find((task) => task.targetTaskId === "TASK-ORIGINAL").status,
-    "accepted",
+    "needs-rework",
+  );
+  assert.equal(
+    readJson(stateFile).targetTasks.some((task) => task.targetTaskId === "TASK-PRODUCT"),
+    false,
   );
 });
 
-test("a product companion covers only pending anchors from the same configured repo lineage", () => {
+test("an explicit redesign replacement supersedes the old task and the demand can complete", () => {
   const runtimeRoot = makeCoreRuntime();
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-product-lineage-"));
   writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
@@ -183,6 +230,11 @@ test("a product companion covers only pending anchors from the same configured r
       { windowName: "Controller", path: ".", role: "Controller" },
     ],
   }, null, 2)}\n`);
+  writeFileSync(path.join(root, "requirements.md"), [
+    "# Goal",
+    "",
+    "Replace the redesigned implementation without rewriting history.",
+  ].join("\n"));
 
   const initResult = run(runtimeRoot, [
     "init", "--root", root,
@@ -193,24 +245,65 @@ test("a product companion covers only pending anchors from the same configured r
   assert.equal(initResult.status, 0, initResult.stderr || initResult.stdout);
   const init = JSON.parse(initResult.stdout);
 
-  const addTask = (packageId, taskId, targetWindow) => {
+  const addTask = (
+    packageId,
+    taskId,
+    targetWindow,
+    replacesTargetTaskId = "",
+    requirementRef = "requirements.md#goal",
+  ) => {
     const result = run(runtimeRoot, [
       "add-task-package", "--root", root, "--state-root", init.stateRoot,
       "--task-package-id", packageId,
       "--summary", `Implement ${taskId}.`,
       "--target-window", targetWindow,
       "--target-task-id", taskId,
+      ...(replacesTargetTaskId ? ["--replaces-target-task-id", replacesTargetTaskId] : []),
+      ...(replacesTargetTaskId ? [
+        "--work-type", "implementation",
+        "--objective", `Implement the corrected behavior in ${targetWindow}.`,
+        "--context-summary", JSON.stringify(["The original task was rejected by an explicit redesign decision."]),
+        "--requirement-refs", JSON.stringify([{ ref: requirementRef, role: "goal" }]),
+        "--boundaries", JSON.stringify({
+          inScope: ["Implement the corrected product behavior."],
+          outOfScope: ["Unrelated repositories."],
+          forbidden: ["Rewrite the superseded task history."],
+        }),
+        "--completion-expectations", JSON.stringify(["The corrected behavior is independently reviewable."]),
+        "--depends-on-task-ids", "[]",
+        "--commit-expectation", "leave-uncommitted",
+        "--acceptance-anchors", JSON.stringify([{
+          id: "replacement-behavior",
+          claim: "The corrected behavior replaces the rejected outcome.",
+          probe: "Run the focused product verification.",
+          expected: "The corrected outcome passes without mutating old history.",
+        }]),
+      ] : []),
       "--write", "--json",
     ]);
     assert.equal(result.status, 0, result.stderr || result.stdout);
   };
-  const importResult = (taskId, targetWindow) => {
+  const importResult = (taskId, targetWindow, { replacement = false } = {}) => {
+    const evidenceRef = `evidence/${taskId}.md`;
+    mkdirSync(path.join(root, init.stateRoot, "evidence"), { recursive: true });
+    writeFileSync(path.join(root, init.stateRoot, evidenceRef), `${taskId} focused verification passed.\n`);
     const result = run(runtimeRoot, [
       "import-target-result", "--root", root, "--state-root", init.stateRoot,
       "--target-task-id", taskId,
       "--target-window", targetWindow,
       "--status", "completed",
       "--summary", `${taskId} completed.`,
+      "--evidence-ref", evidenceRef,
+      "--commit-disposition", "no-changes",
+      ...(replacement ? [
+        "--craft-evidence", JSON.stringify([{
+          kind: "acceptance-anchor",
+          anchorId: "replacement-behavior",
+          red: "The original target result was explicitly rejected for redesign.",
+          green: "The replacement passed the focused product verification.",
+          ref: evidenceRef,
+        }]),
+      ] : []),
       "--write", "--json",
     ]);
     assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -225,38 +318,144 @@ test("a product companion covers only pending anchors from the same configured r
   };
 
   addTask("PKG-A", "TASK-A", "RepoA");
-  addTask("PKG-B", "TASK-B", "RepoB");
   importResult("TASK-A", "RepoA");
-  importResult("TASK-B", "RepoB");
   const originalCandidate = reduce();
-  const rework = run(runtimeRoot, [
+  const redesign = run(runtimeRoot, [
     "decide-review", "--root", root, "--state-root", init.stateRoot,
     "--candidate-id", originalCandidate.candidateId,
-    "--decision", "rework",
-    "--reason", "Both product repositories require corrections.",
+    "--decision", "redesign",
+    "--reason", "The requirement must be replaced explicitly.",
     "--write", "--json",
   ]);
-  assert.equal(rework.status, 0, rework.stderr || rework.stdout);
+  assert.equal(redesign.status, 0, redesign.stderr || redesign.stdout);
 
-  addTask("PKG-A-FIX", "TASK-A-FIX", "RepoA__POD-A");
-  importResult("TASK-A-FIX", "RepoA__POD-A");
-  const reviewAfterOnlyA = runDelivery(runtimeRoot, [
+  const todoBoard = path.join(root, ".wakeflow-active/current/global-todo-board.md");
+  mkdirSync(path.dirname(todoBoard), { recursive: true });
+  writeFileSync(todoBoard, [
+    "# Global TODO",
+    "",
+    "## Global TODO",
+    "",
+    "| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount | Auto Claim | Testing Decision | Documents |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    "",
+  ].join("\n"));
+  writeFileSync(path.join(root, "corrected-requirement.md"), [
+    "# Goal",
+    "",
+    "Implement the corrected behavior without accepting the rejected result.",
+  ].join("\n"));
+  const designDelivery = runTodo(runtimeRoot, [
+    "deliver", "--root", root,
+    "--type", "supplement",
+    "--design-key", "product-redesign-2026-07-30",
+    "--title", "Corrected product requirement",
+    "--requirement-design", "corrected-requirement.md",
+    "--apply", "--json",
+  ]);
+  assert.equal(designDelivery.status, 0, designDelivery.stderr || designDelivery.stdout);
+  assert.match(
+    readFileSync(todoBoard, "utf8"),
+    /\| product-redesign-2026-07-30 \| pending-claim \| supplement \|/,
+    "Design correction must arrive through the stateless append-only delivery surface",
+  );
+
+  const researchReplacement = run(runtimeRoot, [
+    "add-task-package", "--root", root, "--state-root", init.stateRoot,
+    "--task-package-id", "PKG-A-RESEARCH",
+    "--summary", "Research cannot replace product work.",
+    "--target-window", "RepoA__POD-RESEARCH",
+    "--target-task-id", "TASK-A-RESEARCH",
+    "--replaces-target-task-id", "TASK-A",
+    "--work-type", "research",
+    "--objective", "Inspect the redesigned behavior.",
+    "--context-summary", JSON.stringify(["The original task was redesigned."]),
+    "--requirement-refs", JSON.stringify([{ ref: "requirements.md#goal", role: "goal" }]),
+    "--boundaries", JSON.stringify({ inScope: ["Read-only inspection."], outOfScope: [], forbidden: ["Product changes."] }),
+    "--completion-expectations", JSON.stringify(["Return a read-only finding."]),
+    "--depends-on-task-ids", "[]",
+    "--commit-expectation", "leave-uncommitted",
+    "--write", "--json",
+  ]);
+  assert.notEqual(researchReplacement.status, 0);
+  assert.match(researchReplacement.stdout + researchReplacement.stderr, /implementation task package/);
+
+  addTask(
+    "PKG-A-FIX",
+    "TASK-A-FIX",
+    "RepoA__POD-A",
+    "TASK-A",
+    "corrected-requirement.md#goal",
+  );
+  const linkedState = readJson(path.join(root, init.stateRoot, "wakeflow-state.json"));
+  const oldTask = linkedState.targetTasks.find((task) => task.targetTaskId === "TASK-A");
+  const replacementTask = linkedState.targetTasks.find((task) => task.targetTaskId === "TASK-A-FIX");
+  assert.equal(oldTask.replacedByTargetTaskId, "TASK-A-FIX");
+  assert.equal(replacementTask.replacesTargetTaskId, "TASK-A");
+
+  importResult("TASK-A-FIX", "RepoA__POD-A", { replacement: true });
+  const replacementReviewPackResult = runDelivery(runtimeRoot, [
     "review-pack", "--root", root, "--state-root", init.stateRoot, "--json",
   ]);
-  assert.equal(reviewAfterOnlyA.status, 0, reviewAfterOnlyA.stderr || reviewAfterOnlyA.stdout);
-  const reviewPack = JSON.parse(reviewAfterOnlyA.stdout).reviewPack;
-  assert.equal(reviewPack.gates.controllerReviewReady, false);
+  assert.equal(replacementReviewPackResult.status, 0, replacementReviewPackResult.stderr || replacementReviewPackResult.stdout);
+  const replacementReviewPack = JSON.parse(replacementReviewPackResult.stdout).reviewPack;
+  assert.equal(replacementReviewPack.gates.controllerReviewReady, true);
   assert.deepEqual(
-    reviewPack.groupSnapshot.missing.map((item) => item.taskId),
-    ["TASK-B"],
+    replacementReviewPack.groupSnapshot.ready.map((item) => item.taskId),
+    ["TASK-A-FIX"],
   );
-  const onlyA = reduce();
-  assert.equal(onlyA.candidateId, null);
-  assert.deepEqual(onlyA.missingResultIds, ["TASK-B"]);
+  const replacementCandidate = reduce();
+  assert.ok(replacementCandidate.candidateId);
+  assert.deepEqual(replacementCandidate.targetTaskIds, ["TASK-A-FIX"]);
 
-  addTask("PKG-B-FIX", "TASK-B-FIX", "RepoB");
-  importResult("TASK-B-FIX", "RepoB");
-  const bothRepos = reduce();
-  assert.ok(bothRepos.candidateId, "each configured repo lineage now has a current companion");
-  assert.deepEqual(bothRepos.missingResultIds, []);
+  const accepted = run(runtimeRoot, [
+    "decide-review", "--root", root, "--state-root", init.stateRoot,
+    "--candidate-id", replacementCandidate.candidateId,
+    "--decision", "accept",
+    "--reason", "The explicit replacement is verified.",
+    "--write", "--json",
+  ]);
+  assert.equal(accepted.status, 0, accepted.stderr || accepted.stdout);
+
+  const acceptedState = readJson(path.join(root, init.stateRoot, "wakeflow-state.json"));
+  assert.equal(
+    acceptedState.targetTasks.find((task) => task.targetTaskId === "TASK-A").status,
+    "superseded",
+  );
+  assert.equal(
+    acceptedState.targetTasks.find((task) => task.targetTaskId === "TASK-A-FIX").status,
+    "accepted",
+  );
+  assert.equal(
+    acceptedState.taskPackages.find((taskPackage) => taskPackage.taskPackageId === "PKG-A").status,
+    "superseded",
+  );
+  const stateBeforeLateResult = readFileSync(path.join(root, init.stateRoot, "wakeflow-state.json"), "utf8");
+  const lateOldResult = run(runtimeRoot, [
+    "import-target-result", "--root", root, "--state-root", init.stateRoot,
+    "--target-task-id", "TASK-A",
+    "--target-window", "RepoA",
+    "--status", "completed",
+    "--summary", "A late result must not revive superseded work.",
+    "--supersede-result",
+    "--write", "--json",
+  ]);
+  assert.notEqual(lateOldResult.status, 0);
+  assert.match(lateOldResult.stdout + lateOldResult.stderr, /already superseded/);
+  assert.equal(
+    readFileSync(path.join(root, init.stateRoot, "wakeflow-state.json"), "utf8"),
+    stateBeforeLateResult,
+  );
+
+  const completionEvidence = path.join(root, init.stateRoot, "reports/completion.json");
+  mkdirSync(path.dirname(completionEvidence), { recursive: true });
+  writeFileSync(completionEvidence, "{}\n");
+  const completed = run(runtimeRoot, [
+    "complete-demand", "--root", root, "--state-root", init.stateRoot,
+    "--reason", "The explicit replacement is accepted.",
+    "--evidence-ref", "reports/completion.json",
+    "--write", "--json",
+  ]);
+  assert.equal(completed.status, 0, completed.stderr || completed.stdout);
+  assert.equal(readJson(path.join(root, init.stateRoot, "wakeflow-state.json")).state, "completed");
 });

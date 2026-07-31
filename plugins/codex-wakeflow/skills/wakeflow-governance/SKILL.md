@@ -116,7 +116,29 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
 - **Test only tests**: the controller decides which confirmed environment a test card uses (from the Design-stage spec), the user confirms it at Design, Test only executes. A card with a missing/ambiguous environment block is a blocker back to the controller — Test never chooses environments, invents config values, or fixes product code. A missing input at any stage is never guessed: requirement gap → Design; product decision → user; fact gap → bounded read-only investigation.
 - **Test follows controller validation**: total control owns functional correctness and completion. When non-Test targets exist, all must be accepted before the Test package is added or dispatched; the card's existing `controllerSelfChecks` states what the controller verified. Test-only reproduction/environment diagnostics remain valid. Test explores only the approved real-environment boundary for hidden bugs; its pass cannot fill missing controller proof and its failure cannot redefine the requirement.
 - **Test does not define the target**: every Test card freezes the demand goal from `demand.json`, the requirement-stage approved Test plan, allowed Test skills, setup policy, and attempt bound. The controller re-checks those same anchors at dispatch and review. Test may elaborate mapped commands, but an unmapped goal/gate/method (including PCV when not explicitly listed) is a blocked change request, never an executable Test invention.
-- **Multiple demands = demand pods**: up to `maxActiveDemands` (default 2) demands run side by side, each with its OWN controller (stamped into the state root at create so returns route home), OWN Test, and one isolation worktree window per repo — a per-demand thread set opened via `wakeflow_pod_open` (each thread's cwd IS its worktree) and closed after completion via `wakeflow_pod_close` (close order: complete-demand -> pod close -> archive). Pods are mutually unaware. Parallelism exists ONLY at the demand level — never inside a demand (each repo = one window = ONE combined task package), and the WHOLE pod shares its demand's ONE worktree set: every window, Test included, works and verifies inside those worktrees, never on a main checkout. Branch merge-back is human-reviewed and decentralized (pending-merges ledger); claiming past capacity fails closed.
+- **Mainline first; Pod only by explicit user authority**: ordinary and Auto
+  Claim work enters only an idle, healthy mainline. A busy mainline waits; an
+  unavailable mainline fails before demand/TODO mutation with
+  `mainline-unavailable` and is repaired. Only an auditable user authorization
+  may select a Pod, and Wakeflow applies no numeric Pod limit.
+- **A Pod is a complete independent host fleet**: independent
+  `Controller__<pod>`, `Design__<pod>`, `Test__<pod>`, and one product session
+  per repository. `wakeflow_pod_open` only plans host-neutral launch
+  operations. Codex materialization is journaled by launch correlation with
+  `wakeflow_pod_record_materialization`; a temporary `clientThreadId` is
+  search/recovery evidence only, stored as a digest and never registered.
+  Codex creates product threads with the exact saved project and
+  `environment.type=worktree`; Wakeflow records the final handle locally and
+  verifies cwd/Git receipts with `wakeflow_pod_bind`.
+- **Pod Design and Test have machine gates**:
+  `wakeflow_pod_prepare_design_request` freezes the exact request before
+  `wakeflow_pod_record_design_handoff`. Before Test dispatch,
+  `wakeflow_pod_prepare_test_access` plus
+  `wakeflow_pod_record_test_access` must prove validated
+  `direct-multi-root` coverage of every active product binding. Unsupported
+  access stays blocked; never fall back to a main checkout, product window, or
+  unverified per-repository executor. `wakeflow_pod_close` creates a logical
+  host-close plan; Codex owns physical worktree lifecycle.
 
 ## Minimal Workflow
 

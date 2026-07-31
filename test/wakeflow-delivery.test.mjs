@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -251,6 +251,16 @@ function registerThread(root, windowName) {
     `0192fac-${windowName}`,
     "--write",
   ]));
+}
+
+function addConfiguredRepository(root, windowName) {
+  const configFile = path.join(root, "wakeflow.config.json");
+  const config = JSON.parse(readFileSync(configFile, "utf8"));
+  if (!config.repositories.some((item) => item.windowName === windowName)) {
+    config.repositories.push({ windowName, path: `../${windowName}`, role: "implementation" });
+  }
+  if (!config.dispatchWindows.includes(windowName)) config.dispatchWindows.push(windowName);
+  writeJson(configFile, config);
 }
 
 function prepareDispatch(root, stateRootRef, options = {}) {
@@ -679,7 +689,15 @@ test("runtime summary helpers separate host-send, review, wait, and dispatch res
   assert.equal(hostSendPlan.steps[0].adapter.kind, "WakeflowHostSendAdapter");
   assert.equal(hostSendPlan.steps[0].adapter.adapterId, "codex-app-thread");
   assert.equal(hostSendPlan.steps[0].adapter.storesThreadIds, false);
+  assert.equal(hostSendPlan.steps[0].adapter.readbackPolicy.maxReadAttempts, 3);
+  assert.equal(hostSendPlan.steps[0].adapter.readbackPolicy.maxWaitMs, 5_000);
+  assert.equal(hostSendPlan.steps[0].adapter.readbackPolicy.resendOnRetry, false);
+  assert.match(hostSendPlan.steps[0].instruction, /in-progress turn with no visible items/);
+  assert.match(hostSendPlan.steps[0].instruction, /retry read_thread only/);
+  assert.match(hostSendPlan.steps[0].instruction, /Never resend the prompt/);
   assert.equal(hostSendPlan.steps[1].kind, "record-delivery-run");
+  assert.match(hostSendPlan.steps[1].after, /Do not record an empty in-progress turn as sent or failed/);
+  assert.match(hostSendPlan.steps[1].after, /without resending/);
 
   const callbackPlan = buildRuntimeResumePlan({
     nextAction: "build-controller-return",
@@ -1131,6 +1149,11 @@ test("prepare-dispatch-from-state writes packet, group, and delivery without leg
   assert.equal(payload.dispatchGroup.wakeflowTrace.artifactKind, "dispatch-group");
   assert.equal(payload.envelope.wakeflowTrace.artifactKind, "delivery-envelope");
   assert.equal(payload.envelope.wakeflowTrace.deliveryId, payload.envelope.deliveryId);
+  assert.match(payload.packet.packetDigest, /^[0-9a-f]{64}$/);
+  assert.equal(payload.envelope.sourcePacketDigest, payload.packet.packetDigest);
+  assert.match(payload.envelope.preparationDigest, /^[0-9a-f]{64}$/);
+  assert.match(payload.envelope.targetThread.bindingId, /^[0-9a-f-]{36}$/);
+  assert.equal(Object.hasOwn(payload.envelope.targetThread, "threadId"), false);
   const status = parseOk(run(root, ["status"]));
   assert.equal(status.runtimeSummary.kind, "WakeflowClosedLoopRuntimeSummary");
   assert.equal(status.runtimeSummary.nextAction, "send-target-delivery");
@@ -1415,7 +1438,9 @@ test("review-results and controller return require state-root group evidence", (
 
 test("group-ready controller return ignores targets prepared but not sent", () => {
   const { root, stateRootRef, stateRoot } = makeFixture();
+  addConfiguredRepository(root, "AlembicCore");
   registerThread(root, "AlembicPlugin");
+  registerThread(root, "AlembicCore");
   registerThread(root, "AlembicWorkspace", "controller");
 
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
@@ -1429,13 +1454,17 @@ test("group-ready controller return ignores targets prepared but not sent", () =
   state.targetTasks.push({
     targetTaskId: "CSMR-TASK-2",
     taskPackageId: "CSMR-PKG-2",
-    targetWindow: "AlembicPlugin",
+    targetWindow: "AlembicCore",
     summary: "Run second fixture target task",
     status: "pending",
     createdAt: "2026-06-05T00:00:00.000Z",
   });
-  state.windows[0].taskPackageIds.push("CSMR-PKG-2");
-  state.windows[0].targetTaskIds.push("CSMR-TASK-2");
+  state.windows.push({
+    windowName: "AlembicCore",
+    windowState: "pending",
+    taskPackageIds: ["CSMR-PKG-2"],
+    targetTaskIds: ["CSMR-TASK-2"],
+  });
   writeJson(stateFile, state);
   writeJson(path.join(stateRoot, "task-packages/CSMR-PKG-2.json"), {
     schemaVersion: 1,
@@ -1446,7 +1475,7 @@ test("group-ready controller return ignores targets prepared but not sent", () =
     targetTasks: [{
       targetTaskId: "CSMR-TASK-2",
       taskPackageId: "CSMR-PKG-2",
-      targetWindow: "AlembicPlugin",
+      targetWindow: "AlembicCore",
       summary: "Run second fixture target task",
       status: "pending",
     }],
@@ -1554,13 +1583,15 @@ test("group-ready controller return ignores targets prepared but not sent", () =
   assert.equal(status.runtimeSummary.resumePlan.steps[0].deliveryKind, "ControllerReturnEnvelope");
   assert.equal(status.runtimeSummary.resumePlan.steps[0].deliveryId, returned.envelope.deliveryId);
   assert.equal(returned.envelope.groupSnapshot.pendingDispatch[0].taskId, "CSMR-TASK-2");
-  assert.match(returned.envelope.prompt, /pendingDispatchTargets: AlembicPlugin/);
+  assert.match(returned.envelope.prompt, /pendingDispatchTargets: AlembicCore/);
 });
 
 test("concurrent prepares preserve one finalized complete dispatch-group membership", async () => {
   const { root, stateRootRef, stateRoot } = makeFixture();
   try {
+    addConfiguredRepository(root, "AlembicCore");
     registerThread(root, "AlembicPlugin");
+    registerThread(root, "AlembicCore");
     const stateFile = path.join(stateRoot, "wakeflow-state.json");
     const state = JSON.parse(readFileSync(stateFile, "utf8"));
     state.taskPackages.push({
@@ -1572,13 +1603,17 @@ test("concurrent prepares preserve one finalized complete dispatch-group members
     state.targetTasks.push({
       targetTaskId: "CSMR-TASK-2",
       taskPackageId: "CSMR-PKG-2",
-      targetWindow: "AlembicPlugin",
+      targetWindow: "AlembicCore",
       summary: "Run second fixture target task",
       status: "pending",
       createdAt: "2026-06-05T00:00:00.000Z",
     });
-    state.windows[0].taskPackageIds.push("CSMR-PKG-2");
-    state.windows[0].targetTaskIds.push("CSMR-TASK-2");
+    state.windows.push({
+      windowName: "AlembicCore",
+      windowState: "pending",
+      taskPackageIds: ["CSMR-PKG-2"],
+      targetTaskIds: ["CSMR-TASK-2"],
+    });
     writeJson(stateFile, state);
     writeJson(path.join(stateRoot, "task-packages/CSMR-PKG-2.json"), {
       schemaVersion: 1,
@@ -1589,7 +1624,7 @@ test("concurrent prepares preserve one finalized complete dispatch-group members
       targetTasks: [{
         targetTaskId: "CSMR-TASK-2",
         taskPackageId: "CSMR-PKG-2",
-        targetWindow: "AlembicPlugin",
+        targetWindow: "AlembicCore",
         summary: "Run second fixture target task",
         status: "pending",
       }],
@@ -1617,7 +1652,8 @@ test("concurrent prepares preserve one finalized complete dispatch-group members
     ]);
     assert.equal(first.status, 0, first.stderr || first.stdout);
     assert.equal(second.status, 0, second.stderr || second.stdout);
-    const groupFile = path.join(root, ".wakeflow-local/wakeflow-delivery/dispatch-groups/group-concurrent.json");
+    const firstPayload = JSON.parse(first.stdout);
+    const groupFile = path.join(root, firstPayload.dispatchGroupFile);
     const group = JSON.parse(readFileSync(groupFile, "utf8"));
     assert.equal(group.membershipFinalized, true);
     assert.deepEqual(
@@ -1632,11 +1668,14 @@ test("concurrent prepares preserve one finalized complete dispatch-group members
 test("group-ready blocker creates exactly one immediate controller return under concurrency", async () => {
   const { root, stateRootRef, stateRoot } = makeFixture();
   try {
+    addConfiguredRepository(root, "AlembicCore");
     addFixtureTarget(stateRoot, {
       taskPackageId: "CSMR-PKG-2",
       targetTaskId: "CSMR-TASK-2",
+      targetWindow: "AlembicCore",
     });
     registerThread(root, "AlembicPlugin");
+    registerThread(root, "AlembicCore");
     registerThread(root, "AlembicWorkspace");
     const groupTaskIds = ["CSMR-TASK-1", "CSMR-TASK-2"];
     const first = prepareDispatch(root, stateRootRef, { group: "GROUP-BLOCKER", groupTaskIds });
@@ -1708,11 +1747,14 @@ test("group-ready blocker creates exactly one immediate controller return under 
 test("group-ready sends a new callback when later results expand a legacy blocker snapshot", () => {
   const { root, stateRootRef, stateRoot } = makeFixture();
   try {
+    addConfiguredRepository(root, "AlembicCore");
     addFixtureTarget(stateRoot, {
       taskPackageId: "CSMR-PKG-2",
       targetTaskId: "CSMR-TASK-2",
+      targetWindow: "AlembicCore",
     });
     registerThread(root, "AlembicPlugin");
+    registerThread(root, "AlembicCore");
     registerThread(root, "AlembicWorkspace");
     const groupTaskIds = ["CSMR-TASK-1", "CSMR-TASK-2"];
     const first = prepareDispatch(root, stateRootRef, { group: "GROUP-LEGACY-BLOCKER", groupTaskIds });
@@ -1786,7 +1828,7 @@ test("group-ready sends a new callback when later results expand a legacy blocke
     parseOk(run(root, [
       "record-target-result",
       "--target-window",
-      "AlembicPlugin",
+      "AlembicCore",
       "--task-id",
       "CSMR-TASK-2",
       "--group",
@@ -1811,7 +1853,7 @@ test("group-ready sends a new callback when later results expand a legacy blocke
       "--group",
       "GROUP-LEGACY-BLOCKER",
       "--trigger-target",
-      "AlembicPlugin",
+      "AlembicCore",
       "--trigger-task-id",
       "CSMR-TASK-2",
       "--require-thread",
@@ -1967,6 +2009,12 @@ test("target results are scoped by dispatch group to avoid parallel run collisio
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   prepareDispatch(root, stateRootRef, { group: "GROUP-A" });
+  parseOk(run(root, [
+    "release-window-lock",
+    "--window",
+    "AlembicPlugin",
+    "--write",
+  ]));
   prepareDispatch(root, stateRootRef, { group: "GROUP-B" });
 
   const resultA = parseOk(run(root, [
@@ -2880,23 +2928,23 @@ test("record-delivery-run validates envelope-state consistency before writing th
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, prepared.deliveryFile);
   const envelope = JSON.parse(readFileSync(deliveryFile, "utf8"));
   envelope.stateRef.taskPackageId = "CSMR-PKG-WRONG";
   writeJson(deliveryFile, envelope);
 
   const result = run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "test send evidence", "--write"]);
   assert.notEqual(result.status, 0);
-  assert.match(result.stdout + result.stderr, /task package mismatch/);
-  const runFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-runs", `run-${prepared.envelope.deliveryId}.json`);
-  assert.equal(existsSync(runFile), false, "a mismatched record must not leave a wedged run file on disk");
+  assert.match(result.stdout + result.stderr, /preparation digest does not match/);
+  const runDir = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-runs");
+  assert.deepEqual(readdirSync(runDir).filter((name) => name.endsWith(".json")), [], "a mismatched record must not leave a wedged run file on disk");
 });
 
 test("record-delivery-run writes the shared window lock and record-target-result releases it", () => {
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, prepared.deliveryFile);
   parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "test send evidence", "--write"]));
 
   const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
@@ -2962,7 +3010,7 @@ test("F51: state-script import-target-result (the MCP path) releases the matchin
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, prepared.deliveryFile);
   parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "state-script send", "--write"]));
   const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
   assert.equal(existsSync(lockFile), true, "sent delivery must write the shared window lock");
@@ -2980,6 +3028,30 @@ test("F51: state-script import-target-result (the MCP path) releases the matchin
     "--write",
   ]));
   assert.equal(existsSync(lockFile), false, "the state-script import must release the matching delivery lock");
+});
+
+test("state-script import resolves a prepared delivery chain and releases its lease without a recorded host send", () => {
+  const { root, stateRootRef } = makeFixture();
+  registerThread(root, "AlembicPlugin");
+  const prepared = prepareDispatch(root, stateRootRef);
+  const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
+  assert.equal(existsSync(lockFile), true, "freezing the delivery must acquire the shared window lease");
+
+  const imported = parseOk(runState(root, [
+    "import-target-result",
+    "--state-root", stateRootRef,
+    "--target-task-id", "CSMR-TASK-1",
+    "--target-window", "AlembicPlugin",
+    "--dispatch-group", "GROUP-STATE",
+    "--status", "completed",
+    "--evidence-ref", "docs/evidence.md",
+    "--write",
+  ]));
+  assert.equal(imported.deliveryContext.deliveryId, prepared.envelope.deliveryId);
+  assert.equal(imported.deliveryContext.deliveryEnvelopeFound, true);
+  assert.equal(imported.deliveryContext.resolution, "controller-return-required");
+  assert.equal(imported.lockReleased, true);
+  assert.equal(existsSync(lockFile), false, "the exact prepared delivery result releases its lease");
 });
 
 test("F52: dispatch is fail-closed against a fresh other-host window lock", () => {
@@ -3006,7 +3078,7 @@ test("F52: dispatch is fail-closed against a fresh other-host window lock", () =
     "--write",
   ]);
   assert.notEqual(blocked.status, 0, "a fresh other-host lock must fail closed");
-  assert.match(blocked.stdout + blocked.stderr, /lock/i);
+  assert.match(blocked.stdout + blocked.stderr, /lease/i);
 });
 
 test("F53: an expired other-host window lock self-heals and allows dispatch", () => {
@@ -3030,7 +3102,7 @@ test("RA2: record-delivery-run sets per-task dispatchCount and is idempotent on 
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, prepared.deliveryFile);
   const sendArgs = ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "send evidence", "--write"];
   parseOk(run(root, sendArgs));
   const stateFile = path.join(root, stateRootRef, "wakeflow-state.json");
@@ -3045,7 +3117,7 @@ test("RA2: task-ledger reports a unified per-task rollup with handling counts", 
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, prepared.deliveryFile);
   parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "send evidence", "--write"]));
   const ledger = parseOk(run(root, ["task-ledger", "--state-root", stateRootRef]));
   assert.equal(ledger.command, "task-ledger");
@@ -3111,7 +3183,7 @@ test("F18: re-dispatch clears a prior rework decision so a fresh result is not m
   writeJson(stateFile, state);
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, prepared.deliveryFile);
   parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "redispatch evidence", "--write"]));
   const after = JSON.parse(readFileSync(stateFile, "utf8"));
   const task = after.targetTasks.find((t) => t.targetTaskId === "CSMR-TASK-1");
@@ -3151,6 +3223,12 @@ test("status keeps a prepared rework replacement live and hides the reviewed del
     dispatchGroup: "GROUP-REWORK-G1",
     status: "blocked",
   });
+  parseOk(run(root, [
+    "release-window-lock",
+    "--window",
+    "AlembicPlugin",
+    "--write",
+  ]));
 
   const replacement = prepareDispatch(root, stateRootRef, { group: "GROUP-REWORK-G2" });
   const status = parseOk(run(root, ["status"]));
@@ -3253,7 +3331,7 @@ test("F25: a stale lock for the answered delivery is released (unified freshness
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, prepared.deliveryFile);
   parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--status", "sent", "--readback-ok", "true", "--evidence", "send", "--write"]));
   const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");
   // make the lock stale but still belonging to the answered delivery
@@ -3300,6 +3378,8 @@ test("envelope prompts follow the demand interfaceLanguage (zh)", () => {
   const prompt = prepared.envelope.prompt;
   assert.match(prompt, /\u7ee7\u7eed\u5f53\u524d\u7a97\u53e3\u4efb\u52a1\uff1a/, "zh headline");
   assert.match(prompt, /\u5f00\u59cb\u524d\u6309\u987a\u5e8f\u8bfb\u53d6\uff1a/, "zh reading-order label");
+  assert.match(prompt, /\u8eab\u4efd\u5b9a\u4f4d\uff08\u5b8c\u6574\u8fb9\u754c\u89c1\u4efb\u52a1\u5305\uff09\uff1a/, "zh identity label");
+  assert.doesNotMatch(prompt, /\u4fe1\u606f\u5206\u5de5\uff1a/, "repeated authority boilerplate stays out of the wakeup");
   assert.match(prompt, /- \u5f53\u524d\u804c\u8d23\u7a97\u53e3: AlembicPlugin/, "window identity is explicit");
   assert.match(prompt, /- skills\/wakeflow-target\/SKILL\.md/, "skill pointer unchanged");
   assert.match(prompt, /- taskId: CSMR-TASK-1/, "routing keys stay English");
@@ -3391,7 +3471,7 @@ test("record-target-result releases the lock even when the run used a custom --d
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
-  const deliveryFile = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${prepared.envelope.deliveryId}.json`);
+  const deliveryFile = path.join(root, prepared.deliveryFile);
   parseOk(run(root, ["record-delivery-run", "--delivery-file", deliveryFile, "--delivery-run-id", "retry-custom-7", "--status", "sent", "--readback-ok", "true", "--evidence", "retry evidence", "--write"]));
 
   const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/AlembicPlugin.json");

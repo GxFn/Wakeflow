@@ -72,12 +72,13 @@ What you get, concretely:
 - **Hard to fake** — acceptance requires raw evidence that the reducers verify
   on disk (missing evidence refs fail closed); "the target said done" is never
   enough, and results never accept themselves.
-- **Parallel without chaos** — up to `maxActiveDemands` demands run side by
-  side as isolated pods (own controller, own worktrees, own Test); within one
-  demand each repo stays strictly one-window-one-package, and pod branches
-  merge back only through a human-reviewed ledger.
-- **Safe by construction** — fail-closed guards on ownership, capacity, locks,
-  and archive redaction; real session ids never leave the local registry.
+- **Parallel without silent branching** — mainline is always the default.
+  Only explicit user authority creates a Pod with independent Controller,
+  Design, Test, and product sessions; within one demand each repo stays
+  strictly one-window-one-package.
+- **Safe by construction** — fail-closed guards on ownership, verified host
+  bindings, locks, and archive redaction; real session ids never leave the
+  local registry.
 
 Wakeflow is not a command launcher with nicer names. It is a reusable workflow
 capability for keeping multi-window agent work legible, bounded, and resumable.
@@ -181,15 +182,15 @@ Install the Claude Code edition from inside Claude Code:
 ```
 
 The Claude Code edition is terminal-only: every Wakeflow window (controller
-included) is a tmux-resident interactive `claude` session in the `wakeflow`
-tmux server session, and a Wakeflow thread id is the window's Claude Code
-session id (stable across resumes). Up to `maxActiveDemands` (default 2)
-demands may run side by side as **demand pods** — each pod is its own tmux
-session with its own controller, per-repo isolation worktree windows, and its
-own Test, the WHOLE pod sharing the demand's one worktree set (Test verifies
-there, never on a main checkout); claiming past capacity fails closed, and
-pod branches merge back only through the human-reviewed `pending-merges.md`
-ledger. See
+included) is a tmux-resident interactive `claude` session, and a Wakeflow
+thread id is the window's Claude Code session id (stable across resumes).
+Mainline remains the default. When the user explicitly requests a Pod, the
+helper creates an independent Controller/Design/Test/product fleet; each
+product session uses Claude's native `claude --worktree`, while Wakeflow only
+plans and verifies the resulting receipt. Claude returns final session ids
+synchronously (there is no Codex `clientThreadId` state), and Pod Test remains
+blocked until direct-multi-root access to every bound product worktree is
+validated. Wakeflow applies no numeric Pod limit. See
 [plugins/claude-code-wakeflow/README.md](plugins/claude-code-wakeflow/README.md)
 for the full Claude Code guide.
 
@@ -202,19 +203,23 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.18/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.0/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository
 URL, the desired ref, and `plugins/codex-wakeflow` as the sparse path.
 
-The Codex edition runs the shared demand-pod model as per-demand thread sets:
-`wakeflow_pod_open` creates the demand's worktree set and returns a windowPlan
-the agent realizes with `create_thread` (each thread's cwd is its worktree),
-and `wakeflow_pod_close` tears it down onto the pending-merges ledger after
-completion. The invariant is shared (one controller, one Test, and one
-worktree per selected repository for the demand), while each host owns its
-window lifecycle and teardown sequence.
+The Codex edition keeps ordinary work on the initialized mainline fleet. For an
+explicitly authorized Pod, `wakeflow_pod_open` emits a host-neutral launch plan:
+Codex creates three independent local Controller/Design/Test threads and one
+`environment.type=worktree` thread from each exact saved repository project.
+Wakeflow journals an asynchronous Codex create by launch correlation; a
+temporary `clientThreadId` is search/recovery evidence only and can never enter
+the thread registry. Wakeflow binds verified cwd/Git receipts, requires a
+validated direct-multi-root receipt before Pod Test dispatch, and logically
+closes the Pod; Codex owns physical worktree lifecycle. An unavailable
+mainline returns `mainline-unavailable` and is repaired rather than silently
+replaced by a Pod.
 
 For local development, register this checkout as its own local marketplace:
 
@@ -339,6 +344,12 @@ The loop is the same on both hosts; only how you drive it differs.
    and its controller-return wakes the controller with evidence attached.
 5. `/wakeflow:review` — read the raw evidence behind the result, then record
    the decision: accept / rework / blocked / redesign.
+   Ordinary rework redispatches the same task with a new dispatch group.
+   Redesign keeps the rejected task as history: after Design returns its
+   handoff, the controller creates a new full-context implementation task in
+   the product responsibility window with
+   `replacesTargetTaskId`; accepting that replacement supersedes the old task
+   and package explicitly.
 6. Repeat dispatch → review until every non-Test task is accepted and the
    controller has completed its own functional validation. Only then may the
    controller add/dispatch a confirmed Test card; Test follows the frozen goal,
@@ -370,7 +381,7 @@ archive the demand".
 | Judge returned work | `/wakeflow:review` |
 | Health check / fix a stale window | `/wakeflow:check` · `/wakeflow:windows <name> --replace` |
 | Hands-off mode (recorded consent) | `/wakeflow:unattended on` |
-| A second demand in parallel | ask the controller to open a demand pod (`pod-open`) — own session, own controller, own Test |
+| A demand explicitly in parallel | ask the controller to open a Pod — independent Controller, Design, Test, and host-created product worktrees |
 
 ## What Wakeflow Creates
 
@@ -383,7 +394,7 @@ boundary:
 | Child `AGENTS.md` access cards | Per-window responsibility and read paths. |
 | `wakeflow.config.json` | Managed windows, repository paths, roles, and default language. |
 | `.wakeflow-active/` | Active state roots, current indexes, progress docs, TODO projections, intake, and test cards. |
-| `.wakeflow-local/` | Thread registry, direct-thread runtime, local overrides, and derived window config. |
+| `.wakeflow-local/` | Thread registry, direct-thread runtime, host-scoped Pod operation/binding receipts, local overrides, and derived window config. |
 | `wakeflow-ledger/` | Long-term project coordination records and archives. |
 | `Design/` | Internal requirement-design workspace when no external Design repository is mapped. |
 | `Test/` | Internal test coordination workspace when no external Test repository is mapped. |
@@ -423,7 +434,10 @@ Core rules:
 - After a demand is owned by one host, the other host fails closed on
   controller mutations and dispatch preparation unless ownership is explicitly
   transferred with `--adopt-host`.
-- Up to `maxActiveDemands` (default 2, top-level `wakeflow.config.json`) demands may be active at once; claiming past capacity fails closed until one completes and archives. `wakeflow_next_work` reports `activeDemands` + `demandCapacity`.
+- `activeDemands` remains an observation. It does not impose a numeric
+  admission limit or automatically select Pod placement. Ordinary/Auto Claim
+  work waits while mainline is busy; only an explicit user authorization
+  creates a Pod.
 - `wakeflow_status` exposes demand ownership under `dualHost.demandOwnership`
   so mixed-host controllers can see which platform owns active work before
   acting.
@@ -446,7 +460,7 @@ Primary tool groups:
 | --- | --- |
 | Setup and window registration | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
 | Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
-| Candidate scan and isolated pods | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_close`, `wakeflow_pod_list` |
+| Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind`, `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff`, `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_pod_close`, `wakeflow_pod_record_close_receipt`, `wakeflow_pod_list` |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
@@ -486,7 +500,7 @@ Wakeflow keeps source, active runtime, and durable records separate:
 | `scripts/` | Runtime implementation and validation scripts packaged by the plugin. |
 | `templates/wakeflow-template-bundle.json` | Bundled starter state, Design/Test, and ledger skeletons expanded during setup. |
 | `.wakeflow-active/` | Current active work in a target workspace; ignored by Git. |
-| `.wakeflow-local/` | Machine-local thread registry, derived runtime views, and local state; ignored by Git. |
+| `.wakeflow-local/` | Machine-local thread registry, Pod operation/binding receipts, derived runtime views, and local state; ignored by Git. |
 | `wakeflow-ledger/` | Project-specific durable records outside reusable Wakeflow source. |
 
 The source repository tracks reusable Wakeflow capability. Product code,
@@ -535,14 +549,18 @@ nested artifact for the target host, not the development workspace root.
 Before publishing a release tag:
 
 1. Run `npm test` from this repository.
-2. Run the host-specific plugin manifest validators where available.
-3. Confirm `plugins/codex-wakeflow/.codex-plugin/plugin.json` has no more than
+2. Run `npm run release:check` after the intended version is committed, tagged,
+   and reflected by the local `origin/main` tracking ref. This independently
+   checks version parity, exact shared-core sync, both dry-run package surfaces,
+   the `main` branch, clean worktree, tag target, and remote-tracking target.
+3. Run the host-specific plugin manifest validators where available.
+4. Confirm `plugins/codex-wakeflow/.codex-plugin/plugin.json` has no more than
    three starter prompts.
-4. Confirm both host catalogs point only at their nested plugin artifacts.
-5. Confirm runtime scripts and installed skills contain no project-specific
+5. Confirm both host catalogs point only at their nested plugin artifacts.
+6. Confirm runtime scripts and installed skills contain no project-specific
    default controller names, product overlays, local paths, or private thread
    ids.
-6. Tag the exact commit that the host marketplace should install.
+7. Tag the exact commit that the host marketplace should install.
 
 ## Working In This Repository
 
@@ -557,6 +575,7 @@ npm run smoke        # codex artifact smoke
 npm run smoke:claude
 npm run test:wakeflow
 npm test             # check:core + both validates + both smokes + tests
+npm run release:check # strict, independent pre-publish consistency check
 ```
 
 Shared-core rule: host-neutral runtime files live in `core/` and are synced

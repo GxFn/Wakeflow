@@ -103,6 +103,65 @@ test("host entryExtras emit host-specific launch specs", () => {
   assert.match(extras.hostLaunch.recovery, /--resume/);
 });
 
+test("Claude Pod entryExtras use native host worktrees and keep resume/local roles distinct", () => {
+  const workspaceRoot = "/tmp/wakeflow-host-profile";
+  const stateRoot = "/tmp/wakeflow-host-profile/.wakeflow-active/current/pod-a";
+  const product = claudeProfile.pod.entryExtras({
+    demandKey: "pod-a",
+    podId: "pod-a",
+    windowName: "RepoA__pod-a",
+    role: "product",
+    repositoryWindow: "RepoA",
+    repositoryRoot: "/tmp/repo-a",
+    host: "claude-code",
+    environmentIntent: "host-worktree",
+    basePolicy: "head",
+    expectedBaseHead: "a".repeat(40),
+    displayTitle: "RepoA Pod",
+    createPrompt: "entry sync",
+    launchCorrelationId: "corr-pod-a-repo-a",
+    registrationBindingId: "binding-pod-a-repo-a",
+  }, { workspaceRoot, stateRoot });
+  assert.equal(product.nativeEnvironmentIntent, "host-worktree");
+  assert.equal(product.hostCwd, "/tmp/repo-a");
+  assert.equal(product.nativeBasePolicy, "head");
+  assert.deepEqual(product.addDirectories, [stateRoot]);
+  assert.equal(product.nativeArgvIntent.filter((arg) => arg === "--worktree").length, 1);
+  assert.ok(product.nativeArgvIntent.includes("--settings"));
+  assert.ok(!product.nativeArgvIntent.includes("--tmux"));
+  const launch = product.hostLaunch.launchArgv;
+  assert.ok(launch.includes("--host-worktree"));
+  assert.ok(launch.includes("--repository-root"));
+  const addDirIndices = launch.flatMap((arg, index) => arg === "--add-dir" ? [index] : []);
+  assert.deepEqual(addDirIndices.map((index) => launch[index + 1]), [stateRoot]);
+  assert.ok(!addDirIndices.some((index) => launch[index + 1] === workspaceRoot));
+  assert.ok(!product.hostLaunch.resumeArgv.includes("--host-worktree"), "resume does not create another worktree");
+  assert.ok(product.hostLaunch.resumeArgv.includes("--resume"));
+  assert.equal(product.hostLaunch.receiptContract.handleRedacted, true);
+  assert.equal(product.hostLaunch.receiptContract.handleKind, "final");
+
+  for (const role of ["controller", "design", "test"]) {
+    const local = claudeProfile.pod.entryExtras({
+      demandKey: "pod-a",
+      podId: "pod-a",
+      windowName: `${role}__pod-a`,
+      role,
+      repositoryRoot: null,
+      host: "claude-code",
+      environmentIntent: "host-local",
+      basePolicy: "local",
+      displayTitle: `${role} Pod`,
+      createPrompt: "entry sync",
+      launchCorrelationId: `corr-pod-a-${role}`,
+      registrationBindingId: `binding-pod-a-${role}`,
+    }, { workspaceRoot, stateRoot });
+    assert.equal(local.nativeEnvironmentIntent, "host-local");
+    assert.equal(local.hostWorktreeName, null);
+    assert.ok(!local.hostLaunch.launchArgv.includes("--host-worktree"));
+    assert.ok(!local.nativeArgvIntent.includes("--worktree"));
+  }
+});
+
 test("claude send adapters keep the codex adapter step contract", () => {
   const delivery = {
     file: "deliveries/example.json",

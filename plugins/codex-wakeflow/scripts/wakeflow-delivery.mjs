@@ -44,8 +44,8 @@ const scriptPath = new URL(import.meta.url).pathname;
 const write = hasFlag("--write");
 const json = hasFlag("--json");
 const version = 1;
-const threadRegistrationVersion = 2;
-const deliveryEnvelopeVersion = 2;
+const threadRegistrationVersion = 3;
+const deliveryEnvelopeVersion = 3;
 const windowConfigVersion = 1;
 const deliveryRunVersion = 1;
 const keepLiveVersion = 1;
@@ -57,16 +57,16 @@ Usage:
   node scripts/wakeflow-delivery.mjs status [--json] [--verbose]
   node scripts/wakeflow-delivery.mjs prune-runtime [--before <iso>] [--write] [--json]
   node scripts/wakeflow-delivery.mjs release-window-lock --window <name> [--write] [--json]
-  node scripts/wakeflow-delivery.mjs register-thread --window <name> --thread-id <id> --write [--json]
+  node scripts/wakeflow-delivery.mjs register-thread --window <name> --thread-id <id> [--launch-correlation-id <id> --binding-id <id> --state-root <path>] --write [--json]
   node scripts/wakeflow-delivery.mjs build-window-config --window <name> [--require-thread] --write [--json]
   node scripts/wakeflow-delivery.mjs build-delivery --packet-file <path> [--delivery-id <id>] [--return-route controller|none] [--automation-enabled] [--require-thread] [--write] [--json]
   node scripts/wakeflow-delivery.mjs prepare-dispatch-from-state --state-root <path> --target-task-id <id> [--group-target-task-id <id>...] [--task-package-id <id>] [--human-context-ref <ref>] [--controller-window <name>] [--group <id>] [--return-policy group-ready|per-target] [--expected-preview-digest <sha256>] [--automation-enabled] [--require-thread] [--write] [--json]
-  node scripts/wakeflow-delivery.mjs build-controller-return --group <id> --trigger-target <window> --trigger-task-id <taskId> [--human-context-ref <ref>] [--controller-window <name>] [--return-reason result-ready|blocked] [--automation-enabled] [--require-thread] [--write] [--json]
+  node scripts/wakeflow-delivery.mjs build-controller-return --group <id> --trigger-target <window> --trigger-task-id <taskId> [--state-root <path>] [--human-context-ref <ref>] [--controller-window <name>] [--return-reason result-ready|blocked] [--automation-enabled] [--require-thread] [--write] [--json]
   node scripts/wakeflow-delivery.mjs record-delivery-run --delivery-file <path> --status sent|blocked|failed [--host-method ${hostProfile.hostTools.sendToWindow}] [--host-mode new-turn|unknown] [--readback-ok true|false] [--evidence <text>] [--error <text>] --write [--json]
   node scripts/wakeflow-delivery.mjs start-keep-live --automation-run-id <id> [--keep-live-command <cmd>] [--keep-live-arg <arg>...] [--no-keep-live] --write [--json]
   node scripts/wakeflow-delivery.mjs stop-keep-live --automation-run-id <id> [--reason <text>] --write [--json]
   node scripts/wakeflow-delivery.mjs keep-live-state --automation-run-id <id> --status running|stopped|failed [--mechanism macos-caffeinate|manual|none] [--pid <pid>] [--error <text>] --write [--json]
-  node scripts/wakeflow-delivery.mjs record-target-result --target-window <name> --task-id <id> --status completed|blocked|needs-review [--group <id>] [--changed-repo <repo>...] [--commit <hash>...] [--evidence-ref <ref>...] [--verification <text>...] [--risk <text>...] [--craft-evidence <json>] [--next-suggestion <text>] [--supersede-result] [--write] [--json]
+  node scripts/wakeflow-delivery.mjs record-target-result --target-window <name> --task-id <id> --status completed|blocked|needs-review [--group <id>] [--summary <text>] [--changed-repo <repo>...] [--commit <hash>...] [--commit-disposition <committed|left-uncommitted|no-changes>] [--evidence-ref <ref>...] [--verification <text>...] [--risk <text>...] [--craft-evidence <json>] [--next-suggestion <text>] [--supersede-result] [--write] [--json]
   node scripts/wakeflow-delivery.mjs review-results (--group <id>|--task-id <id>) [--json]
   node scripts/wakeflow-delivery.mjs review-pack (--group <id>|--task-id <id>|--state-root <path>) [--json]
   node scripts/wakeflow-delivery.mjs task-ledger --state-root <path> [--task-id <id>] [--target-window <name>] [--json]
@@ -258,13 +258,18 @@ const {
   readControllerStateRoot,
   readTaskPackageFromStateRoot,
   packetFileFor,
+  findPacketFile,
   groupFileFor,
+  findGroupFile,
   deliveryFileFor,
+  findDeliveryFile,
   deliveryRunFileFor,
+  findDeliveryRunFile,
   threadFileFor,
   findThreadFile,
   windowConfigFileFor,
   resultFileFor,
+  findResultFile,
   supersededResultFileFor,
   listJsonFiles,
   lockFileFor,
@@ -275,6 +280,7 @@ const {
   removeRuntimeFile,
   listFreshWindowLocks,
   listHostRuntimes,
+  dispatchPacketsForTask,
   listDispatchGroupsForTask,
 } = createDeliveryStore({
   workspaceRoot,
@@ -309,9 +315,9 @@ const {
   atomicWriteJson,
 });
 
-function loadDispatchGroup(groupId) {
+function loadDispatchGroup(groupId, stateRef = null) {
   if (!groupId) return null;
-  const file = groupFileFor(groupId);
+  const file = findGroupFile(groupId, stateRef);
   if (!existsSync(file)) return null;
   const group = readJson(file, "dispatch group");
   if (group.kind !== "DispatchGroup" || group.groupId !== groupId) {
@@ -361,7 +367,7 @@ function upsertDispatchGroup({
   membershipExplicit = false,
 }) {
   if (!groupId) return null;
-  const existing = loadDispatchGroup(groupId);
+  const existing = loadDispatchGroup(groupId, stateRef);
   const mode = existing?.returnPolicy?.mode || validateReturnPolicyMode(returnPolicyMode || "group-ready");
   if (returnPolicyMode && existing?.returnPolicy?.mode && existing.returnPolicy.mode !== returnPolicyMode) {
     fail(`Dispatch group ${groupId} already uses return policy ${existing.returnPolicy.mode}; cannot change to ${returnPolicyMode}.`);
@@ -562,6 +568,7 @@ const {
   commandTaskLedger,
 } = createReviewCommands({
   workspaceRoot,
+  stateDir,
   dirs,
   version,
   getValue,
@@ -574,6 +581,7 @@ const {
   listJsonFiles,
   readJson,
   resultFileFor,
+  findResultFile,
   controllerReturnDeliveryStatusForGroup,
   targetDeliveryStatusesForPacket,
   groupFromPackets,
@@ -594,6 +602,7 @@ const {
   stateDir,
   write,
   hasFlag,
+  getValue,
   requireValue,
   nowIso,
   fail,
@@ -606,6 +615,8 @@ const {
   windowConfigFileFor,
   threadRegistrationVersion,
   windowConfigVersion,
+  withFileLock,
+  WakeflowStateLockTimeoutError,
 });
 
 const {
@@ -638,8 +649,11 @@ const {
   readControllerStateRoot,
   readTaskPackageFromStateRoot,
   packetFileFor,
+  findPacketFile,
   groupFileFor,
+  findGroupFile,
   deliveryFileFor,
+  findDeliveryFile,
   threadFileFor,
   findThreadFile,
   windowConfigFileFor,
@@ -689,14 +703,20 @@ const {
   resolveInputPath,
   resolveStateRoot,
   deliveryFileFor,
+  findDeliveryFile,
+  findPacketFile,
   deliveryRunFileFor,
+  findDeliveryRunFile,
   keepLiveStateFile,
   resultFileFor,
+  findResultFile,
   supersededResultFileFor,
+  lockFileFor,
   readWindowLock,
   windowLockFresh,
   writeWindowLock,
   removeWindowLock,
+  dispatchPacketsForTask,
   listDispatchGroupsForTask,
   loadDispatchGroup,
   artifactTrace,

@@ -10,6 +10,7 @@
 // structural envelope decode. Redaction NEVER rewrites in place — it only ever writes a
 // cleaned COPY, so the original evidence is preserved for a human audit.
 
+import { createHash } from "node:crypto";
 import { isUtf8 } from "node:buffer";
 import {
   existsSync,
@@ -112,6 +113,27 @@ function isOpaqueFile(file, content) {
   return OPAQUE_EXT.has(path.extname(file).toLowerCase())
     || content.includes(0)
     || !isUtf8(content);
+}
+
+function opaqueFileInventory(entries) {
+  const files = [];
+  for (const entry of entries) {
+    if (entry.type !== "file") continue;
+    let content;
+    try {
+      content = readFileSync(entry.absolute);
+    } catch {
+      continue;
+    }
+    if (!isOpaqueFile(entry.absolute, content)) continue;
+    files.push({
+      file: entry.relative,
+      algorithm: "sha256",
+      sha256: createHash("sha256").update(content).digest("hex"),
+      bytes: content.length,
+    });
+  }
+  return files;
 }
 
 function findingKind(kind, opaque) {
@@ -226,7 +248,14 @@ function nonRedactableFindings(entries, {
 // Scan every text file under stateRoot. Returns { clean, scanned, findings }.
 // clean is false when the selected real-id/path categories are present, when
 // the host profile cannot audit IDs, or when the root is missing.
-function scanStateRoot(stateRoot, { hostProfile, workspaceRoot, userHome, includePaths = false } = {}) {
+function scanStateRoot(stateRoot, {
+  hostProfile,
+  workspaceRoot,
+  userHome,
+  includePaths = false,
+  enforceOpaque = false,
+  allowOpaque = false,
+} = {}) {
   const pattern = realIdPattern(hostProfile);
   if (!pattern) {
     return { clean: false, scanned: 0, findings: [{ reason: "host profile declares no handleId.idShape; cannot audit." }] };
@@ -253,8 +282,25 @@ function scanStateRoot(stateRoot, { hostProfile, workspaceRoot, userHome, includ
     placeholders,
     pathRules,
   }));
+  const opaqueFiles = opaqueFileInventory(entries);
+  if (enforceOpaque && !allowOpaque) {
+    findings.push(...opaqueFiles.map((item) => ({
+      kind: "opaque-file",
+      file: item.file,
+      reason: "opaque archive evidence requires explicit --allow-opaque and a recorded per-file hash",
+      algorithm: item.algorithm,
+      sha256: item.sha256,
+      bytes: item.bytes,
+    })));
+  }
   if (findings.length >= MAX_FINDINGS) {
-    return { clean: false, scanned, findings: findings.slice(0, MAX_FINDINGS), truncated: true };
+    return {
+      clean: false,
+      scanned,
+      findings: findings.slice(0, MAX_FINDINGS),
+      opaqueFiles,
+      truncated: true,
+    };
   }
   for (const entry of entries) {
     if (entry.type !== "file") continue;
@@ -268,7 +314,7 @@ function scanStateRoot(stateRoot, { hostProfile, workspaceRoot, userHome, includ
         reason: `cannot audit file before archival: ${error.message}`,
       });
       if (findings.length >= MAX_FINDINGS) {
-        return { clean: false, scanned, findings, truncated: true };
+        return { clean: false, scanned, findings, opaqueFiles, truncated: true };
       }
       continue;
     }
@@ -284,17 +330,29 @@ function scanStateRoot(stateRoot, { hostProfile, workspaceRoot, userHome, includ
       opaque: false,
       findings,
     });
-    if (truncated) return { clean: false, scanned, findings, truncated: true };
+    if (truncated) return { clean: false, scanned, findings, opaqueFiles, truncated: true };
   }
-  return { clean: findings.length === 0, scanned, findings };
+  return { clean: findings.length === 0, scanned, findings, opaqueFiles };
 }
 
 export function scanStateRootForRealIds(stateRoot, { hostProfile } = {}) {
   return scanStateRoot(stateRoot, { hostProfile, includePaths: false });
 }
 
-export function scanStateRootForArchivePrivacy(stateRoot, { hostProfile, workspaceRoot, userHome = homedir() } = {}) {
-  return scanStateRoot(stateRoot, { hostProfile, workspaceRoot, userHome, includePaths: true });
+export function scanStateRootForArchivePrivacy(stateRoot, {
+  hostProfile,
+  workspaceRoot,
+  userHome = homedir(),
+  allowOpaque = false,
+} = {}) {
+  return scanStateRoot(stateRoot, {
+    hostProfile,
+    workspaceRoot,
+    userHome,
+    includePaths: true,
+    enforceOpaque: true,
+    allowOpaque,
+  });
 }
 
 export function archivePrivacyFindingCounts(findings = []) {

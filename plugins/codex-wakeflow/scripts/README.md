@@ -128,20 +128,20 @@ Current scripts:
   packages, renders the progress doc, and consumes the originating TODO row;
   `claim-todo` auto-claims the single controller-claimable row (Auto Claim =
   yes and eligible) or an explicitly named eligible row by delegating to
-  `create-demand`. Claiming past `maxActiveDemands` fails closed at the state
-  init gate. It does not dispatch, send session messages, accept evidence, or
-  complete demands.
-- `wakeflow-pod.mjs`: host-neutral demand-pod runner (open / close / list). One
-  demand = one pod — its OWN controller (`Controller__<pod>`), OWN Test
-  (`Test__<pod>`), and one isolation worktree window per repo, the WHOLE pod
-  sharing the demand's one worktree set (Test verifies there, never on a main
-  checkout). In this edition (`fleet.transport: agent-tools`) `open` creates
-  worktrees + overlay entries and emits a windowPlan the agent realizes with
-  `create_thread` (cwd = each entry's worktree) plus `wakeflow_register_window`;
-  `close` is the evidence-first teardown after the demand completed (dirty
-  trees refuse; surviving branches land on the pending-merges ledger; close
-  order: complete-demand -> pod close -> archive). It never dispatches,
-  accepts evidence, or merges branches.
+  `create-demand`. Ordinary/Auto Claim work is mainline-only and waits while
+  mainline is busy. Pod placement requires an explicit authorization anchor;
+  active-demand counts never create or reject a Pod. It does not dispatch,
+  send session messages, accept evidence, or complete demands.
+- `wakeflow-pod.mjs`: host-neutral Pod plan/bind/design-handoff/close/list
+  runner. An explicit Pod has independent Controller, Design, Test, and product
+  sessions. `open` records launch operations only; it performs no Git or host
+  create action. The Agent uses exact Codex projects and
+  `create_thread(environment=worktree)` for products, then `bind` verifies
+  final-handle cwd/Git receipts. `record-design-handoff` plus every product
+  binding publishes `execution-ready`. `close` emits host-close operations and
+  `record-close-receipt` closes logical bindings without claiming physical
+  worktree deletion. It never dispatches, accepts evidence, merges, or manages
+  Git worktrees.
 - `wakeflow-intake.mjs`: state-root intake bridge for the Test surface.
   `test-card` writes a complete pre-test
   boundary machine card under `test-cards/*.json`. It does not mutate

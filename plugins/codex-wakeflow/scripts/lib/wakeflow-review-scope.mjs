@@ -4,7 +4,7 @@
 // (add-task refuses while blockers exist, reduce sees no open tasks, and
 // complete refuses open tasks - no escape).
 export function hasFinalControllerDecision(task) {
-  return task?.status === "accepted" || task?.reviewDecision === "accept";
+  return ["accepted", "superseded"].includes(task?.status) || task?.reviewDecision === "accept";
 }
 
 export function hasPendingReworkDecision(task) {
@@ -12,79 +12,17 @@ export function hasPendingReworkDecision(task) {
 }
 
 export function isReworkRouteTask(task) {
-  return hasPendingReworkDecision(task) || task?.reviewRoute === "rework";
+  // Once redesign has an explicit replacement, only that replacement remains
+  // in the active review route. The old task stays as immutable lineage until
+  // the replacement is accepted, when it becomes superseded.
+  if (task?.replacedByTargetTaskId) return false;
+  return hasPendingReworkDecision(task)
+    || ["rework", "redesign-replacement"].includes(task?.reviewRoute);
 }
 
 export function taskExpectsTargetResult(task) {
   if (task?.delivery?.deliveryRunId) return true;
   return ["sent", "active", "completed", "blocked", "needs-review"].includes(task?.status || "");
-}
-
-function matchesConfiguredWindow(windowName, configuredWindow) {
-  if (!windowName || !configuredWindow) return false;
-  return windowName === configuredWindow || windowName.startsWith(`${configuredWindow}__`);
-}
-
-function configuredProductRepoLineage(windowName, productRepoNames) {
-  return productRepoNames.find((repoName) => matchesConfiguredWindow(windowName, repoName)) ?? null;
-}
-
-function productCompanionPolicy({
-  repoNames,
-  controllerWindow,
-  designWindow,
-  testWindows,
-  realProjectWindow,
-}) {
-  const productRepoNames = Array.isArray(repoNames) ? repoNames : [];
-  const excludedWindows = [
-    controllerWindow,
-    designWindow ?? "Design",
-    ...(Array.isArray(testWindows) ? testWindows : []),
-    realProjectWindow,
-  ].filter(Boolean);
-  return { productRepoNames, excludedWindows };
-}
-
-// A corrected product-repository task may close the review gap left by one or
-// more tasks parked for rework/redesign. Merely being a non-Design/Test window
-// is insufficient: controller, real-project, support, and other auxiliary
-// results are not product companions unless their base window is explicitly in
-// config.repoNames. Requiring a current result also prevents merely adding a
-// package from making the old tasks reviewable.
-export function isProductReworkCompanion(
-  task,
-  {
-    currentResultTaskIds = [],
-    repoNames,
-    controllerWindow,
-    designWindow,
-    testWindows,
-    realProjectWindow,
-    anchorTask,
-  } = {},
-) {
-  const resultTaskIds = currentResultTaskIds instanceof Set
-    ? currentResultTaskIds
-    : new Set(currentResultTaskIds);
-  const targetWindow = task?.targetWindow || "";
-  const { productRepoNames, excludedWindows } = productCompanionPolicy({
-    repoNames,
-    controllerWindow,
-    designWindow,
-    testWindows,
-    realProjectWindow,
-  });
-  const companionLineage = configuredProductRepoLineage(targetWindow, productRepoNames);
-  const anchorLineage = anchorTask
-    ? configuredProductRepoLineage(anchorTask.targetWindow || "", productRepoNames)
-    : null;
-  return task?.reviewRoute === "rework"
-    && !hasPendingReworkDecision(task)
-    && resultTaskIds.has(task?.targetTaskId)
-    && Boolean(companionLineage)
-    && (!anchorTask || (Boolean(anchorLineage) && companionLineage === anchorLineage))
-    && !excludedWindows.some((windowName) => matchesConfiguredWindow(targetWindow, windowName));
 }
 
 export function controllerReviewScope(targetTasks = []) {

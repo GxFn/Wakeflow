@@ -59,6 +59,13 @@ export function withFileLock(lockFile, fn, { acquireTimeoutMs = ACQUIRE_TIMEOUT_
       const ageMs = holder?.createdAt
         ? Date.now() - Date.parse(holder.createdAt)
         : lockFileAgeMs(lockFile);
+      // The holder may release the lock between EEXIST/readLock/stat. In that
+      // case there is no stale artifact to break: retry acquisition. Treating
+      // the vanished file as infinitely old lets this contender race with the
+      // next owner and unlink that owner's just-created, not-yet-written lock.
+      if (!Number.isFinite(ageMs)) {
+        continue;
+      }
       if (!(ageMs <= staleMs)) {
         // The fixed stale threshold cannot tell a crash from a legitimate long
         // hold (archive-demand staging a large state root). A LIVE holder pid
@@ -81,7 +88,14 @@ export function withFileLock(lockFile, fn, { acquireTimeoutMs = ACQUIRE_TIMEOUT_
         // each other's FRESH lock; the remaining microsecond TOCTOU only
         // exists on the 30s-stuck recovery path, never in normal contention.
         const recheck = readLock(lockFile);
-        if ((recheck?.token ?? null) === (holder?.token ?? null)) {
+        const recheckAgeMs = recheck?.createdAt
+          ? Date.now() - Date.parse(recheck.createdAt)
+          : lockFileAgeMs(lockFile);
+        if (
+          Number.isFinite(recheckAgeMs)
+          && recheckAgeMs > staleMs
+          && (recheck?.token ?? null) === (holder?.token ?? null)
+        ) {
           onWarn?.(`breaking stale state lock ${lockFile} (held by dead pid ${holder?.pid ?? "unknown"} since ${holder?.createdAt ?? "unknown"})`);
           try {
             unlinkSync(lockFile);

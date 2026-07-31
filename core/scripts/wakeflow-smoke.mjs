@@ -7,6 +7,38 @@ import { spawnProcess } from "../lib/wakeflow-process.mjs";
 import { runWakeflowRuntime } from "../lib/wakeflow-runtime.mjs";
 
 const root = mkdtempSync(path.join(tmpdir(), "wakeflow-smoke-"));
+const targetRoot = path.join(root, "Target");
+mkdirSync(targetRoot, { recursive: true });
+writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
+  workspaceName: "Wakeflow Smoke",
+  controllerWindow: "Wakeflow",
+  designWindow: "Design",
+  testWindow: "Test",
+  activeLedgerRoot: ".wakeflow-active",
+  workspaceCurrentDir: ".wakeflow-active/current",
+  projectLedgerRoot: "wakeflow-ledger",
+  repositories: [
+    {
+      windowName: "Target",
+      path: "Target",
+      role: "Smoke target",
+      managedAgents: false,
+      mode: "internal",
+    },
+  ],
+}, null, 2)}\n`);
+
+assertOk(await runWakeflowRuntime({
+  script: "wakeflow-delivery",
+  args: [
+    "register-thread",
+    "--root", root,
+    "--window", "Target",
+    "--thread-id", "wakeflow-smoke-target-session",
+    "--write",
+    "--json",
+  ],
+}), "wakeflow-delivery register-thread");
 
 const init = await runWakeflowRuntime({
   script: "wakeflow-state",
@@ -354,13 +386,38 @@ async function runMcpSmoke(rootPath) {
       `${JSON.stringify({
         workspaceName: "MCP Smoke",
         controllerWindow: "Controller",
+        designWindow: "Design",
+        testWindow: "Test",
         repositories: [
           { windowName: "Controller", path: ".", role: "controller" },
+          { windowName: "Design", path: ".", role: "design" },
+          { windowName: "Test", path: ".", role: "test" },
           { windowName: "Target", path: ".", role: "product" },
         ],
       }, null, 2)}\n`,
     );
     writeFileSync(path.join(rootPath, "AGENTS.md"), "# MCP Smoke Workspace\n");
+    const smokeWindowHandles = {
+      Controller: "10000000-0000-4000-8000-000000000001",
+      Design: "10000000-0000-4000-8000-000000000002",
+      Test: "10000000-0000-4000-8000-000000000003",
+      Target: "10000000-0000-4000-8000-000000000004",
+    };
+    for (const [window, windowHandle] of Object.entries(smokeWindowHandles)) {
+      const registered = await request("tools/call", {
+        name: "wakeflow_register_window",
+        arguments: {
+          root: rootPath,
+          window,
+          windowHandle,
+          apply: true,
+        },
+      });
+      const registeredPayload = JSON.parse(registered.result.content?.[0]?.text);
+      if (!registeredPayload.ok || registeredPayload.parsedJson?.threadRegistered !== true) {
+        throw new Error(`MCP wakeflow_register_window did not register ${window}`);
+      }
+    }
 
     const called = await request("tools/call", {
       name: "wakeflow_create_demand",
@@ -483,9 +540,19 @@ async function runMcpSmoke(rootPath) {
         stateRoot: mcpStateRoot,
         targetWindow: "Target",
         taskId: "mcp-smoke-task",
+        dispatchGroup: "mcp-smoke-group",
         status: "completed",
+        summary: "MCP smoke target delivery matched the reviewed preview and produced evidence.",
+        commitDisposition: "no-changes",
         evidenceRefs: [mcpSmokeEvidenceRef],
         verification: ["mcp smoke target result recorded"],
+        craftEvidence: [{
+          kind: "acceptance-anchor",
+          anchorId: "AC-MCP-SMOKE-1",
+          red: "Before apply, the reviewed preview carried a stable digest and no delivery file.",
+          green: "Apply used the reviewed digest and produced the same prompt in a delivery envelope.",
+          ref: mcpSmokeEvidenceRef,
+        }],
       },
     });
     const recordedTargetResultPayload = JSON.parse(recordedTargetResult.result.content?.[0]?.text);

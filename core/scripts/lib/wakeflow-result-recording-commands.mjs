@@ -1,8 +1,16 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+} from "node:fs";
 import path from "node:path";
 import {
   annotateDeliveryRunIdempotency,
   annotateTargetResultIdempotency,
+  dispatchPacketDigest,
+  dispatchPreparationDigest,
   sameDeliveryRunContent,
   sameTargetResultContent,
 } from "./wakeflow-idempotency.mjs";
@@ -20,6 +28,11 @@ import {
   readPendingStateTransition,
   WakeflowPendingTransitionError,
 } from "./wakeflow-state-transition.mjs";
+import {
+  COMMIT_DISPOSITIONS,
+  evaluateTargetResultContract,
+  targetResultContractIssueMessage,
+} from "./wakeflow-result-contract.mjs";
 
 function eventIdFor(createdAt, revision) {
   return `evt-${createdAt.replace(/[-:.TZ]/g, "").slice(0, 14)}-${String(revision).padStart(4, "0")}`;
@@ -49,14 +62,20 @@ export function createResultRecordingCommands(ctx) {
     resolveInputPath,
     resolveStateRoot,
     deliveryFileFor,
+    findDeliveryFile,
+    findPacketFile,
     deliveryRunFileFor,
+    findDeliveryRunFile,
     keepLiveStateFile,
     resultFileFor,
+    findResultFile,
     supersededResultFileFor,
+    lockFileFor,
     readWindowLock,
     windowLockFresh,
     writeWindowLock,
     removeWindowLock,
+    dispatchPacketsForTask,
     listDispatchGroupsForTask,
     loadDispatchGroup,
     artifactTrace,
@@ -125,12 +144,20 @@ export function createResultRecordingCommands(ctx) {
       if (entry.verify !== undefined && (typeof entry.verify !== "string" || !entry.verify.trim())) {
         fail("--craft-evidence verify must be a non-empty string when provided.");
       }
+      for (const field of ["anchorId", "red", "green", "step"]) {
+        if (entry[field] !== undefined && (typeof entry[field] !== "string" || !entry[field].trim())) {
+          fail(`--craft-evidence ${field} must be a non-empty string when provided.`);
+        }
+      }
+      if (entry.planIndex !== undefined && (!Number.isInteger(entry.planIndex) || entry.planIndex < 0)) {
+        fail("--craft-evidence planIndex must be a non-negative integer when provided.");
+      }
     }
     return entries;
   }
 
   function lockPathNote(windowName) {
-    return path.join(stateDir, "locks", `${slug(windowName)}.json`);
+    return lockFileFor(windowName);
   }
 
   function markStateRootDeliverySent(envelope, run, { apply = true, stateRoot: resolvedStateRoot = null } = {}) {
@@ -138,7 +165,7 @@ export function createResultRecordingCommands(ctx) {
       return { updated: false, reason: "not-a-sent-target-delivery" };
     }
     if (envelope.dispatchGroup) {
-      const group = loadDispatchGroup(envelope.dispatchGroup);
+      const group = loadDispatchGroup(envelope.dispatchGroup, envelope.stateRef);
       if (!group?.membershipFinalized) {
         fail(`delivery ${envelope.deliveryId} belongs to dispatch group ${envelope.dispatchGroup}, whose membership is not finalized.`);
       }
@@ -289,7 +316,7 @@ export function createResultRecordingCommands(ctx) {
         replayedDeliveryRunId: run.deliveryRunId,
       };
     }
-    if (["accepted", "completed", "blocked", "needs-review"].includes(targetTask.status)) {
+    if (["accepted", "superseded", "completed", "blocked", "needs-review"].includes(targetTask.status)) {
       return { updated: false, reason: `target-task-already-${targetTask.status}` };
     }
     const nextRevision = Number(state.revision ?? 0) + 1;
@@ -350,7 +377,7 @@ export function createResultRecordingCommands(ctx) {
           counts: { ...(item.counts ?? {}), dispatchCount: (item.counts?.dispatchCount ?? 0) + 1 },
           delivery: {
             deliveryId: envelope.deliveryId,
-            deliveryFile: path.relative(workspaceRoot, deliveryFileFor(envelope.deliveryId)),
+            deliveryFile: path.relative(workspaceRoot, deliveryFileFor(envelope.deliveryId, envelope.stateRef)),
             deliveryRunId: run.deliveryRunId,
             dispatchGroup: envelope.dispatchGroup,
             sentAt: run.createdAt,
@@ -359,7 +386,7 @@ export function createResultRecordingCommands(ctx) {
         }
       : item);
     const nextTaskPackages = (state.taskPackages ?? []).map((item) => item.taskPackageId === taskPackageId
-      ? { ...item, status: item.status === "accepted" ? item.status : "sent" }
+      ? { ...item, status: ["accepted", "superseded"].includes(item.status) ? item.status : "sent" }
       : item);
     const nextWindows = (state.windows ?? []).map((item) => item.windowName === targetTask.targetWindow
       ? { ...item, windowState: "active" }
@@ -397,7 +424,7 @@ export function createResultRecordingCommands(ctx) {
       from: state.state,
       to: "dispatched",
       reason: `delivery run recorded as sent: ${run.deliveryRunId}`,
-      evidenceRefs: [path.relative(workspaceRoot, deliveryRunFileFor(run.deliveryRunId))],
+      evidenceRefs: [path.relative(workspaceRoot, deliveryRunFileFor(run.deliveryRunId, envelope.stateRef))],
       allowedWrites: [
         "wakeflow-state.json",
         "controller-events.jsonl",
@@ -411,7 +438,7 @@ export function createResultRecordingCommands(ctx) {
       wakeflowTrace: artifactTrace({
         artifactKind: "controller-event",
         createdAt,
-        deliveryFile: path.relative(workspaceRoot, deliveryFileFor(envelope.deliveryId)),
+        deliveryFile: path.relative(workspaceRoot, deliveryFileFor(envelope.deliveryId, envelope.stateRef)),
         deliveryId: envelope.deliveryId,
         deliveryRunId: run.deliveryRunId,
         dispatchGroup: envelope.dispatchGroup,
@@ -478,6 +505,42 @@ export function createResultRecordingCommands(ctx) {
     const envelope = readJson(deliveryFile, "delivery envelope");
     if (!["DeliveryEnvelope", "ControllerReturnEnvelope"].includes(envelope.kind)) {
       fail("Delivery file must contain a DeliveryEnvelope or ControllerReturnEnvelope.");
+    }
+    if (typeof envelope.deliveryId !== "string" || !envelope.deliveryId.trim()) {
+      fail("Delivery envelope is missing deliveryId.");
+    }
+    const canonicalDeliveryFile = findDeliveryFile(envelope.deliveryId, envelope.stateRef);
+    if (!existsSync(canonicalDeliveryFile)) {
+      fail(`canonical delivery envelope does not exist for ${envelope.deliveryId}: ${path.relative(workspaceRoot, canonicalDeliveryFile)}`);
+    }
+    if (lstatSync(deliveryFile).isSymbolicLink() || lstatSync(canonicalDeliveryFile).isSymbolicLink()) {
+      fail("record-delivery-run requires a canonical regular delivery envelope, not a symlink.");
+    }
+    if (
+      path.resolve(deliveryFile) !== path.resolve(canonicalDeliveryFile)
+      || realpathSync(deliveryFile) !== realpathSync(canonicalDeliveryFile)
+    ) {
+      fail(`--delivery-file must be the canonical envelope for ${envelope.deliveryId}: ${path.relative(workspaceRoot, canonicalDeliveryFile)}`);
+    }
+    if (envelope.kind === "DeliveryEnvelope") {
+      if (!envelope.sourcePacketId || !envelope.sourcePacketDigest || !envelope.preparationDigest) {
+        fail(`Delivery envelope ${envelope.deliveryId} is missing its packet/preparation digest chain.`);
+      }
+      const sourcePacketFile = findPacketFile(envelope.sourcePacketId, envelope.stateRef);
+      if (!existsSync(sourcePacketFile)) {
+        fail(`canonical dispatch packet does not exist for ${envelope.sourcePacketId}: ${path.relative(workspaceRoot, sourcePacketFile)}`);
+      }
+      const sourcePacket = readJson(sourcePacketFile, "canonical dispatch packet");
+      const computedPacketDigest = dispatchPacketDigest(sourcePacket);
+      if (
+        sourcePacket.packetDigest !== computedPacketDigest
+        || envelope.sourcePacketDigest !== computedPacketDigest
+      ) {
+        fail(`Delivery envelope ${envelope.deliveryId} does not match canonical packet ${envelope.sourcePacketId}.`);
+      }
+      if (dispatchPreparationDigest({ packet: sourcePacket, envelope }) !== envelope.preparationDigest) {
+        fail(`Delivery envelope ${envelope.deliveryId} preparation digest does not match its canonical packet, thread binding, and transport configuration.`);
+      }
     }
     const status = validateDeliveryRunStatus(requireValue("--status"));
     const readbackOk = parseBoolean(getValue("--readback-ok", ""), status === "sent");
@@ -549,8 +612,15 @@ export function createResultRecordingCommands(ctx) {
       return undefined;
     }
 
-    const runFile = deliveryRunFileFor(deliveryRunId);
+    const runFile = findDeliveryRunFile(deliveryRunId, envelope.stateRef);
     const recordTransaction = (lockedStateRoot = null) => {
+      // The host may have supplied the path before waiting on run/state locks.
+      // Re-read the canonical artifact inside the critical section so a
+      // workspace-local copy or a file swap cannot advance state.
+      const lockedEnvelope = readJson(canonicalDeliveryFile, "canonical delivery envelope");
+      if (JSON.stringify(lockedEnvelope) !== JSON.stringify(envelope)) {
+        fail(`canonical delivery envelope ${envelope.deliveryId} changed before recording; prepare and send the current envelope again.`);
+      }
       if (existsSync(runFile)) {
         const existingRun = readJson(runFile, "delivery run");
         const existingStateRootRef = existingRun.wakeflowTrace?.stateRoot;
@@ -667,13 +737,41 @@ export function createResultRecordingCommands(ctx) {
     if (!dispatchGroup && knownGroups.length > 0) {
       fail(`--group is required for ${targetWindow} / ${taskId}; known dispatch groups: ${knownGroups.join(", ")}.`);
     }
+    const matchingPackets = dispatchPacketsForTask(targetWindow, taskId, dispatchGroup);
+    const matchingStateRoots = new Set(matchingPackets.map((packet) => packet.stateRef?.stateRoot).filter(Boolean));
+    if (matchingStateRoots.size > 1) {
+      fail(`Target ${targetWindow} / ${taskId}${dispatchGroup ? ` in group ${dispatchGroup}` : ""} exists in multiple demands; use the state-root target result API so the result cannot be attached to the wrong demand.`);
+    }
+    const resultStateRef = matchingPackets[0]?.stateRef || null;
     const evidenceRefs = getAllValues("--evidence-ref");
     const verificationSummary = getAllValues("--verification");
     const commits = getAllValues("--commit");
     const craftEvidence = parseCraftEvidence();
+    const summary = (getValue("--summary", "") || "").trim();
+    const commitDisposition = (getValue("--commit-disposition", "") || "").trim();
+    if (commitDisposition && !COMMIT_DISPOSITIONS.includes(commitDisposition)) {
+      fail(`--commit-disposition must be one of: ${COMMIT_DISPOSITIONS.join(", ")}.`);
+    }
     const supersedeResult = hasFlag("--supersede-result");
     if (status === "completed" && evidenceRefs.length === 0 && verificationSummary.length === 0 && commits.length === 0 && craftEvidence.length === 0) {
       fail("completed results require --evidence-ref, --verification, --commit, or --craft-evidence.");
+    }
+    const changedRepos = getAllValues("--changed-repo");
+    const resultContract = evaluateTargetResultContract({
+      packet: matchingPackets[0] ?? null,
+      result: {
+        status,
+        summary,
+        changedRepos,
+        commits,
+        commitDisposition: commitDisposition || undefined,
+        evidenceRefs,
+        verificationSummary,
+        craftEvidence,
+      },
+    });
+    if (resultContract.recordIssues.length > 0) {
+      fail(`target result does not satisfy ${resultContract.contract}: ${targetResultContractIssueMessage(resultContract.recordIssues)}.`);
     }
 
     const reportedAt = nowIso();
@@ -685,13 +783,17 @@ export function createResultRecordingCommands(ctx) {
       targetWindow,
       taskId,
       dispatchGroup: dispatchGroup || undefined,
+      stateRef: resultStateRef || undefined,
       status,
-      changedRepos: getAllValues("--changed-repo"),
+      summary,
+      changedRepos,
       commits,
+      ...(commitDisposition ? { commitDisposition } : {}),
       evidenceRefs,
       verificationSummary,
       riskSummary: getAllValues("--risk"),
       ...(craftEvidence.length ? { craftEvidence } : {}),
+      resultMapping: resultContract.mapping,
       nextSuggestion: getValue("--next-suggestion", "") || undefined,
       wakeflowTrace: artifactTrace({
         artifactKind: "target-result",
@@ -704,7 +806,7 @@ export function createResultRecordingCommands(ctx) {
       reportedAt,
     });
 
-    const resultFile = resultFileFor(targetWindow, taskId, dispatchGroup);
+    const resultFile = findResultFile(targetWindow, taskId, dispatchGroup, resultStateRef);
     const recordTransaction = () => {
       let supersededFile = "";
       if (existsSync(resultFile)) {
@@ -770,7 +872,7 @@ export function createResultRecordingCommands(ctx) {
       // --delivery-run-id retries; freshness is no longer a gate (unified release policy).
       let lockReleased = false;
       if (write) {
-        const lockFile = path.join(stateDir, "locks", `${slug(targetWindow)}.json`);
+        const lockFile = lockFileFor(targetWindow);
         const belongsHere = (lock) => {
           if (!lock.deliveryId) return true;
           const matchRun = (run) => {
@@ -778,7 +880,7 @@ export function createResultRecordingCommands(ctx) {
             const runTaskId = run.taskId || run.targetTaskId;
             return run.targetWindow === targetWindow && (!runTaskId || runTaskId === taskId);
           };
-          const guessedFile = deliveryRunFileFor(`run-${lock.deliveryId}`);
+          const guessedFile = findDeliveryRunFile(`run-${lock.deliveryId}`);
           if (existsSync(guessedFile)) {
             try {
               if (matchRun(JSON.parse(readFileSync(guessedFile, "utf8")))) return true;

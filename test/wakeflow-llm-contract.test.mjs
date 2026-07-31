@@ -33,7 +33,21 @@ function assertAgentNext(payload, label) {
 
 test("H-3: every chain hop carries agentNext; durable artifacts carry forbiddenConclusions", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-llmlint-"));
-  mkdirSync(root, { recursive: true });
+  mkdirSync(path.join(root, "WinL"), { recursive: true });
+  writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
+    controllerWindow: "Controller",
+    repositories: [
+      { windowName: "WinL", path: "WinL", role: "fixture implementation" },
+    ],
+  }, null, 2)}\n`);
+  parseOk(run(deliveryScript, [
+    "register-thread",
+    "--root", root,
+    "--window", "WinL",
+    "--thread-id", "00000000-0000-4000-8000-000000000001",
+    "--write",
+    "--json",
+  ]), "register-thread");
 
   const init = parseOk(run(stateScript, ["init", "--root", root, "--demand-key", "LINT-DK", "--title", "Lint", "--write", "--json"]), "init");
   assertAgentNext(init, "init");

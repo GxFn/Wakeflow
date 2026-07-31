@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { handlers, tools } from "../plugins/codex-wakeflow/lib/wakeflow-mcp-tools.mjs";
 import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
 import {
@@ -120,6 +121,44 @@ test("configure writes user-confirmed sibling mappings into wakeflow.config.json
   assert.equal(config.testExchangePath, ".wakeflow-active/current/test-exchange.md");
   assert.equal(config.goalStageConfirmationDir, "../wakeflow-ledger/goal-stage-confirmation");
   assert.deepEqual(config.protectedWorkspacePrefixes, []);
+});
+
+test("configure writes durable config without overwriting the derived stream overlay", () => {
+  const fixture = makeFixture();
+  const durableFile = path.join(fixture.control, "wakeflow.config.json");
+  const durableRaw = readFileSync(durableFile, "utf8");
+  const durable = JSON.parse(durableRaw);
+  const overlayFile = path.join(fixture.control, ".wakeflow-local/wakeflow.config.json");
+  const overlay = {
+    ...durable,
+    repositories: [
+      ...durable.repositories,
+      {
+        windowName: "BaseWindow__POD-A",
+        path: ".wakeflow-local/worktrees/BaseWindow__POD-A",
+        stream: { repo: "BaseWindow", demandKey: "POD-A" },
+      },
+    ],
+    derived: {
+      kind: "WakeflowLocalConfigOverlay",
+      version: 1,
+      from: "wakeflow.config.json",
+      baseHash: createHash("sha256").update(durableRaw).digest("hex"),
+      streamWindows: ["BaseWindow__POD-A"],
+    },
+  };
+  writeFile(overlayFile, JSON.stringify(overlay, null, 2));
+  const beforeOverlay = readFileSync(overlayFile, "utf8");
+
+  const payload = runJson(fixture, [
+    "configure",
+    "--workspace-name", "DurableChanged",
+    "--repo", "BaseWindow=../BaseWindow",
+    "--write",
+  ]);
+  assert.equal(path.resolve(payload.configPath), durableFile);
+  assert.equal(JSON.parse(readFileSync(durableFile, "utf8")).workspaceName, "DurableChanged");
+  assert.equal(readFileSync(overlayFile, "utf8"), beforeOverlay);
 });
 
 test("sync-gitignore adds Wakeflow runtime entries idempotently", () => {

@@ -73,6 +73,7 @@
       }
     },
     "evidenceContract": { "type": "object" },
+    "replacesTargetTaskId": { "type": "string", "minLength": 1 },
     "continuation": {
       "type": "object",
       "required": ["continuationId", "type", "reason", "evidenceRefs", "priorCompletionEventId", "priorCompletionRevision", "createdAt"],
@@ -120,7 +121,17 @@
           "completionExpectations",
           "dependsOnTaskIds",
           "commitExpectation"
-        ]
+        ],
+        "properties": {
+          "requirementRefs": {
+            "contains": {
+              "type": "object",
+              "properties": { "role": { "const": "goal" } },
+              "required": ["role"]
+            },
+            "minContains": 1
+          }
+        }
       }
     },
     {

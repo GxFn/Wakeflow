@@ -16,6 +16,11 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { runWakeflowRuntime } from "../core/lib/wakeflow-runtime.mjs";
+import { transportArtifactFileName } from "../core/scripts/lib/wakeflow-artifact-identity.mjs";
+import {
+  dispatchPacketDigest,
+  dispatchPreparationDigest,
+} from "../core/scripts/lib/wakeflow-idempotency.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const runtimeTemp = mkdtempSync(path.join(os.tmpdir(), "wakeflow-delivery-runtime-"));
@@ -31,10 +36,29 @@ const deliveryScript = path.join(runtimeRoot, "scripts/wakeflow-delivery.mjs");
 const stateScript = path.join(runtimeRoot, "scripts/wakeflow-state.mjs");
 const renderScript = path.join(runtimeRoot, "scripts/wakeflow-render-progress.mjs");
 const INITIAL_REVISION = 11;
-const TASK_COUNT = 8;
+const TASK_COUNT = 24;
 
 test.after(() => {
   rmSync(runtimeTemp, { recursive: true, force: true });
+});
+
+test("a canonical late delivery cannot revive a superseded task or package", () => {
+  const fixture = makeFixture(1);
+  const state = readJson(fixture.stateFile);
+  state.taskPackages[0].status = "superseded";
+  state.targetTasks[0].status = "superseded";
+  state.targetTasks[0].replacedByTargetTaskId = "ATOMIC-REPLACEMENT";
+  writeJson(fixture.stateFile, state);
+  const stateBefore = readFileSync(fixture.stateFile, "utf8");
+  const eventsBefore = readFileSync(fixture.eventsFile, "utf8");
+
+  const recorded = run(fixture.root, deliveryArgs(fixture.deliveries[0]));
+  assert.equal(recorded.status, 0, recorded.stderr || recorded.stdout);
+  const payload = JSON.parse(recorded.stdout);
+  assert.equal(payload.stateUpdate.updated, false);
+  assert.equal(payload.stateUpdate.reason, "target-task-already-superseded");
+  assert.equal(readFileSync(fixture.stateFile, "utf8"), stateBefore);
+  assert.equal(readFileSync(fixture.eventsFile, "utf8"), eventsBefore);
 });
 
 function writeText(file, content) {
@@ -158,7 +182,16 @@ function makeFixture(taskCount = TASK_COUNT) {
   ].join("\n"));
 
   const deliveryDir = path.join(root, ".wakeflow-local/wakeflow-delivery/delivery-envelopes");
-  const groupFile = path.join(root, ".wakeflow-local/wakeflow-delivery/dispatch-groups", `${groupId}.json`);
+  const groupStateRef = {
+    stateRoot: stateRootRef,
+    demandKey: "ATOMIC",
+    stateRevision: INITIAL_REVISION,
+  };
+  const groupFile = path.join(
+    root,
+    ".wakeflow-local/wakeflow-delivery/dispatch-groups",
+    transportArtifactFileName(groupId, groupStateRef),
+  );
   const expectedTargets = tasks.map((task) => ({
     targetWindow: task.targetWindow,
     taskId: task.targetTaskId,
@@ -168,11 +201,7 @@ function makeFixture(taskCount = TASK_COUNT) {
     kind: "DispatchGroup",
     version: 1,
     groupId,
-    stateRef: {
-      stateRoot: stateRootRef,
-      demandKey: "ATOMIC",
-      stateRevision: INITIAL_REVISION,
-    },
+    stateRef: groupStateRef,
     controllerWindow: "Controller",
     expectedTargets,
     membershipFinalized: true,
@@ -183,24 +212,49 @@ function makeFixture(taskCount = TASK_COUNT) {
 
   const deliveries = tasks.map((task) => {
     const deliveryId = `delivery-${groupId}__${task.targetWindow}__${task.targetTaskId}`;
-    const file = path.join(deliveryDir, `${deliveryId}.json`);
-    writeJson(file, {
-      kind: "DeliveryEnvelope",
+    const stateRef = {
+      stateRoot: stateRootRef,
+      demandKey: "ATOMIC",
+      taskPackageId: task.taskPackageId,
+      targetTaskId: task.targetTaskId,
+      stateRevision: INITIAL_REVISION,
+    };
+    const packetId = `${groupId}__${task.targetWindow}__${task.targetTaskId}`;
+    const packet = {
+      kind: "ControllerDispatchPacket",
       version: 2,
-      deliveryId,
-      sourcePacketId: `${groupId}__${task.targetWindow}__${task.targetTaskId}`,
+      id: packetId,
       targetWindow: task.targetWindow,
       taskId: task.targetTaskId,
       dispatchGroup: groupId,
       controllerWindow: "Controller",
-      stateRef: {
-        stateRoot: stateRootRef,
-        demandKey: "ATOMIC",
-        taskPackageId: task.taskPackageId,
-        targetTaskId: task.targetTaskId,
-        stateRevision: INITIAL_REVISION,
-      },
+      stateRef,
+      objective: task.summary,
+      scope: [],
+      outOfScope: [],
+      forbidden: [],
+      evidenceRequired: [],
       prompt: `Execute ${task.targetTaskId}.`,
+    };
+    packet.packetDigest = dispatchPacketDigest(packet);
+    writeJson(path.join(
+      root,
+      ".wakeflow-local/wakeflow-delivery/dispatch-packets",
+      transportArtifactFileName(packetId, stateRef),
+    ), packet);
+    const file = path.join(deliveryDir, transportArtifactFileName(deliveryId, stateRef));
+    const envelope = {
+      kind: "DeliveryEnvelope",
+      version: 2,
+      deliveryId,
+      sourcePacketId: packetId,
+      sourcePacketDigest: packet.packetDigest,
+      targetWindow: task.targetWindow,
+      taskId: task.targetTaskId,
+      dispatchGroup: groupId,
+      controllerWindow: "Controller",
+      stateRef,
+      prompt: packet.prompt,
       returnRoute: "controller",
       oneShot: true,
       automation: {
@@ -208,8 +262,10 @@ function makeFixture(taskCount = TASK_COUNT) {
         keepLive: false,
       },
       createdAt: "2026-07-30T00:00:00.000Z",
-    });
-    return { ...task, deliveryId, file };
+    };
+    envelope.preparationDigest = dispatchPreparationDigest({ packet, envelope });
+    writeJson(file, envelope);
+    return { ...task, deliveryId, file, stateRef };
   });
 
   return {
@@ -284,27 +340,50 @@ function addIndependentDelivery(fixture) {
     "## Decisions And Append Log",
   ].join("\n"));
   const deliveryId = "delivery-ATOMIC-B";
-  const file = path.join(
-    fixture.root,
-    ".wakeflow-local/wakeflow-delivery/delivery-envelopes",
-    `${deliveryId}.json`,
-  );
-  writeJson(file, {
-    kind: "DeliveryEnvelope",
+  const stateRef = {
+    stateRoot: stateRootRef,
+    demandKey: "ATOMIC-B",
+    taskPackageId: task.taskPackageId,
+    targetTaskId: task.targetTaskId,
+    stateRevision: INITIAL_REVISION,
+  };
+  const packet = {
+    kind: "ControllerDispatchPacket",
     version: 2,
-    deliveryId,
-    sourcePacketId: "ATOMIC-B-PACKET",
+    id: "ATOMIC-B-PACKET",
     targetWindow: task.targetWindow,
     taskId: task.targetTaskId,
     controllerWindow: "Controller",
-    stateRef: {
-      stateRoot: stateRootRef,
-      demandKey: "ATOMIC-B",
-      taskPackageId: task.taskPackageId,
-      targetTaskId: task.targetTaskId,
-      stateRevision: INITIAL_REVISION,
-    },
+    stateRef,
+    objective: task.summary,
+    scope: [],
+    outOfScope: [],
+    forbidden: [],
+    evidenceRequired: [],
     prompt: `Execute ${task.targetTaskId}.`,
+  };
+  packet.packetDigest = dispatchPacketDigest(packet);
+  writeJson(path.join(
+    fixture.root,
+    ".wakeflow-local/wakeflow-delivery/dispatch-packets",
+    transportArtifactFileName(packet.id, stateRef),
+  ), packet);
+  const file = path.join(
+    fixture.root,
+    ".wakeflow-local/wakeflow-delivery/delivery-envelopes",
+    transportArtifactFileName(deliveryId, stateRef),
+  );
+  const envelope = {
+    kind: "DeliveryEnvelope",
+    version: 2,
+    deliveryId,
+    sourcePacketId: packet.id,
+    sourcePacketDigest: packet.packetDigest,
+    targetWindow: task.targetWindow,
+    taskId: task.targetTaskId,
+    controllerWindow: "Controller",
+    stateRef,
+    prompt: packet.prompt,
     returnRoute: "controller",
     oneShot: true,
     automation: {
@@ -312,11 +391,14 @@ function addIndependentDelivery(fixture) {
       keepLive: false,
     },
     createdAt: "2026-07-30T00:00:00.000Z",
-  });
+  };
+  envelope.preparationDigest = dispatchPreparationDigest({ packet, envelope });
+  writeJson(file, envelope);
   return {
     ...task,
     deliveryId,
     file,
+    stateRef,
     stateRoot,
     stateFile,
   };
@@ -336,6 +418,14 @@ function deliveryArgs(delivery, extra = []) {
     "--write",
     ...extra,
   ];
+}
+
+function deliveryRunFile(root, delivery, runId = `run-${delivery.deliveryId}`) {
+  return path.join(
+    root,
+    ".wakeflow-local/wakeflow-delivery/delivery-runs",
+    transportArtifactFileName(runId, delivery.stateRef),
+  );
 }
 
 function run(root, args) {
@@ -432,6 +522,26 @@ test("parallel delivery records serialize state and event revisions", async () =
   }
 });
 
+test("a workspace-local copied envelope cannot advance delivery state", () => {
+  const fixture = makeFixture(1);
+  try {
+    const delivery = fixture.deliveries[0];
+    const forgedFile = path.join(fixture.root, "copied-envelope.json");
+    writeJson(forgedFile, readJson(delivery.file));
+    const stateBefore = readFileSync(fixture.stateFile, "utf8");
+    const eventsBefore = readFileSync(fixture.eventsFile, "utf8");
+    const forged = run(fixture.root, deliveryArgs({ ...delivery, file: forgedFile }));
+    assert.notEqual(forged.status, 0);
+    assert.match(forged.stdout + forged.stderr, /canonical envelope/i);
+    assert.equal(readFileSync(fixture.stateFile, "utf8"), stateBefore);
+    assert.equal(readFileSync(fixture.eventsFile, "utf8"), eventsBefore);
+    const runFile = deliveryRunFile(fixture.root, delivery);
+    assert.equal(existsSync(runFile), false);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test("same delivery-run replay is idempotent and repairs an interrupted state update", () => {
   const fixture = makeFixture(1);
   try {
@@ -497,11 +607,7 @@ test("delivery event publication failure leaves no partial tail and replay compl
       beforeEvents,
       "failed publication must leave no partial JSONL tail",
     );
-    const runFile = path.join(
-      fixture.root,
-      ".wakeflow-local/wakeflow-delivery/delivery-runs",
-      `run-${delivery.deliveryId}.json`,
-    );
+    const runFile = deliveryRunFile(fixture.root, delivery);
     assert.equal(existsSync(runFile), true, "the immutable host-send run remains the replay journal");
 
     const recovered = parseOk(run(fixture.root, deliveryArgs(delivery)));
@@ -517,7 +623,7 @@ test("delivery event publication failure leaves no partial tail and replay compl
   }
 });
 
-test("one delivery-run id cannot be claimed concurrently by different state roots", async () => {
+test("the same logical delivery-run id is isolated by demand state root", async () => {
   const fixture = makeFixture(1);
   try {
     const independent = addIndependentDelivery(fixture);
@@ -526,24 +632,21 @@ test("one delivery-run id cannot be claimed concurrently by different state root
       runAsync(fixture.root, deliveryArgs(fixture.deliveries[0], sharedRun)),
       runAsync(fixture.root, deliveryArgs(independent, sharedRun)),
     ]);
-    assert.deepEqual(results.map((result) => result.status).sort(), [0, 1]);
-    const failed = results.find((result) => result.status !== 0);
-    assert.match(failed.stdout + failed.stderr, /delivery run .* already/i);
+    assert.deepEqual(results.map((result) => result.status).sort(), [0, 0]);
 
     const states = [readJson(fixture.stateFile), readJson(independent.stateFile)];
-    assert.equal(states.filter((state) => state.state === "dispatched").length, 1);
-    assert.equal(states.filter((state) => state.state === "planned").length, 1);
+    assert.equal(states.filter((state) => state.state === "dispatched").length, 2);
     assert.equal(
       states.reduce((sum, state) => sum + state.revision, 0),
-      (INITIAL_REVISION * 2) + 1,
+      (INITIAL_REVISION * 2) + 2,
     );
-    assert.equal(
-      existsSync(path.join(
-        fixture.root,
-        ".wakeflow-local/wakeflow-delivery/delivery-runs/run-shared-across-state-roots.json.record-lock",
-      )),
-      false,
-    );
+    const runFiles = [
+      deliveryRunFile(fixture.root, fixture.deliveries[0], "run-shared-across-state-roots"),
+      deliveryRunFile(fixture.root, independent, "run-shared-across-state-roots"),
+    ];
+    assert.notEqual(runFiles[0], runFiles[1]);
+    assert.ok(runFiles.every((file) => existsSync(file)));
+    assert.ok(runFiles.every((file) => !existsSync(`${file}.record-lock`)));
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
   }
@@ -855,11 +958,7 @@ test("P1: a truncated events tail returns a structured retryable error and repla
     );
     assert.equal(readJson(fixture.stateFile).revision, INITIAL_REVISION);
     assert.equal(readJson(fixture.stateFile).targetTasks[0].status, "pending");
-    const runFile = path.join(
-      fixture.root,
-      ".wakeflow-local/wakeflow-delivery/delivery-runs",
-      `run-${delivery.deliveryId}.json`,
-    );
+    const runFile = deliveryRunFile(fixture.root, delivery);
     assert.equal(
       existsSync(runFile),
       true,

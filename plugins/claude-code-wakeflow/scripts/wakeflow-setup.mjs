@@ -13,12 +13,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   defaultWorkspaceConfig,
-  loadWorkspaceConfig,
-  readWorkspaceConfig,
+  durableWorkspaceConfigPath,
+  loadDurableWorkspaceConfig,
+  readDurableWorkspaceConfig,
   resolveConfigPath,
   windowLedgerDirFor,
   workspaceLedgerPaths,
-  workspaceConfigPath,
 } from "./lib/wakeflow-config.mjs";
 import {
   detectInterfaceLanguage,
@@ -215,15 +215,15 @@ function commandContext() {
   const wakeflowRoot = rootArg
     ? (path.isAbsolute(rootArg) ? path.resolve(rootArg) : path.resolve(process.cwd(), rootArg))
     : defaultWakeflowRoot;
-  const configPath = workspaceConfigPath({ workspaceRoot: wakeflowRoot, args });
-  const userConfig = readWorkspaceConfig({ workspaceRoot: wakeflowRoot, args });
+  const configPath = durableWorkspaceConfigPath({ workspaceRoot: wakeflowRoot, args });
+  const userConfig = readDurableWorkspaceConfig({ workspaceRoot: wakeflowRoot, args });
   const configuredRootExists = existsSync(configPath);
   const runtimeRoot = looksLikeWakeflowRuntimeRoot(wakeflowRoot);
   const configuredPluginTarget = configuredRootExists
     && !runtimeRoot
     && (userConfig.runtimeMode === "plugin" || userConfig.wakeflowRepoDir === "");
   const pluginTargetMode = (!configuredRootExists && !runtimeRoot) || configuredPluginTarget;
-  const loadedConfig = loadWorkspaceConfig({ workspaceRoot: wakeflowRoot, args });
+  const loadedConfig = loadDurableWorkspaceConfig({ workspaceRoot: wakeflowRoot, args });
   const config = pluginTargetMode
     ? applyPluginTargetDefaults(loadedConfig, userConfig, wakeflowRoot)
     : loadedConfig;

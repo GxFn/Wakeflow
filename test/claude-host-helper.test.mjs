@@ -140,25 +140,30 @@ test("launch-window, send, readback, lock, and wait-results work end to end", { 
   const busyStatus = parseOk(runHelper(root, ["window-status"], noAuto));
   assert.equal(busyStatus.windows.find((row) => row.window === "RepoA").state, "busy", "send marks the window busy");
 
-  // A SAME-host fresh lock is advisory: re-send proceeds with a warning (a
-  // controller-return to a window holding its own inbound lock must not
-  // deadlock). Only a CROSS-host lock hard-blocks.
+  // The exact same delivery may replay against its existing lease.
   const sameHostResend = parseOk(runHelper(root, ["send", "--window", "RepoA", "--prompt-file", deliveryPrompt], noAuto));
-  assert.match(sameHostResend.lockWarning || "", /same-host delivery lock/);
   assert.equal(sameHostResend.deliveryId, "dlv-test-1", "same-host resend without an explicit id preserves the locked delivery id");
   const sameHostLock = JSON.parse(readFileSync(path.join(root, sent.lockFile), "utf8"));
   assert.equal(sameHostLock.deliveryId, "dlv-test-1", "same-host resend must not erase the lock delivery id");
 
-  // Simulate a fresh lock from the OTHER host -> hard block.
+  const sameHostDifferent = runHelper(root, [
+    "send", "--window", "RepoA", "--prompt-file", deliveryPrompt, "--delivery-id", "dlv-test-2",
+  ], noAuto);
+  assert.notEqual(sameHostDifferent.status, 0);
+  assert.match(sameHostDifferent.stderr + sameHostDifferent.stdout, /fresh in-flight delivery lease/);
+
+  // A different delivery from the other host follows the same hard block.
   const lockFile = path.join(root, ".wakeflow-local/wakeflow-delivery/locks/RepoA.json");
   writeFileSync(lockFile, JSON.stringify({
     kind: "WakeflowWindowDeliveryLock", windowName: "RepoA", host: "codex",
     deliveryId: "dlv-codex", createdAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 3600_000).toISOString(),
   }));
-  const crossHostSend = runHelper(root, ["send", "--window", "RepoA", "--prompt-file", deliveryPrompt], noAuto);
+  const crossHostSend = runHelper(root, [
+    "send", "--window", "RepoA", "--prompt-file", deliveryPrompt, "--delivery-id", "dlv-claude-next",
+  ], noAuto);
   assert.notEqual(crossHostSend.status, 0);
-  assert.match(crossHostSend.stderr + crossHostSend.stdout, /fresh in-flight delivery lock from host codex/);
+  assert.match(crossHostSend.stderr + crossHostSend.stdout, /fresh in-flight delivery lease from host codex/);
 
   const readback = parseOk(runHelper(root, ["readback", "--window", "RepoA", "--lines", "30"], noAuto));
   assert.equal(readback.alive, true);
@@ -494,7 +499,7 @@ test("seed-permissions keeps committed settings portable and migrates old residu
   assert.equal(committed.statusLine, undefined, "wakeflow statusLine migrated out of the committed file");
   const dirs = committed.permissions.additionalDirectories;
   assert.ok(!dirs.includes(root), "absolute workspace path removed");
-  assert.ok(dirs.includes(".."), "relative parent reference present");
+  assert.ok(!dirs.includes(".."), "legacy relative parent grant removed");
   assert.ok(!JSON.stringify(committed).includes(root), "no absolute machine path anywhere in the committed file");
 
   const local = JSON.parse(readFileSync(path.join(repoSettingsDir, "settings.local.json"), "utf8"));

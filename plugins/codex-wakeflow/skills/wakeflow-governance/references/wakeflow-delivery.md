@@ -12,6 +12,16 @@
 - `ControllerReturn`: a delivery envelope that wakes the originating controller
   when policy allows.
 
+For a Pod product target, delivery readiness also requires
+`podProvisioning.phase=execution-ready` and a verified host-scoped binding.
+For Pod Test, those facts are not enough: the exact current binding set must
+also have `podProvisioning.testAccess.status=validated` with
+`capability=direct-multi-root`. Unsupported access blocks delivery without a
+main-checkout, product-window, or unverified per-repository-executor fallback.
+The envelope may reference the logical binding but must not copy the real
+thread id or infer cwd from static config, a window suffix, or the parent
+workspace.
+
 ## Prompt Rules
 
 Target prompts stay compact:
@@ -22,18 +32,18 @@ Continue current window task: <currentWindow> / <taskId>.
 Current objective (the task package is authoritative):
 - <one-line objective>
 
-Completion expectations:
+Completion focus (full criteria are in the task package):
 - <bounded observable result>
 
 Read before execution, in order:
 - Task package (complete task context): <absolute package path>
-- Requirement background anchor [goal]: <document#section>
+- Requirement background entry (full anchors are in the task package) [goal]: <document#section>
 - Repository instructions: <repository>/AGENTS.md
 
 Required execution Skills (execution-process authority):
 - skills/wakeflow-target/SKILL.md
 
-Identity and boundaries:
+Identity (full boundaries are in the task package):
 - Current responsibility window: <window>
 - Only working repository: <absolute repository path>
 
@@ -51,7 +61,10 @@ Dispatch record (routing and trace only):
 When the task package carries `acceptanceAnchors`, the prompt includes only
 their ids/claims and tells the target to map each full package anchor to a RED
 test/probe before implementation. Full probe/expected content remains in the
-task package. Target prepare previews this exact prompt and readiness without
+task package. The prompt likewise shows only the first two ordered completion
+expectations and one original requirement entry; complete context, requirement
+anchors, boundaries, commit policy, and completion criteria remain in the task
+package. Target prepare previews this exact prompt and readiness without
 writing; `apply=true` freezes the packet/envelope only after controller review
 and requires the preview's `previewDigest` as `expectedPreviewDigest`. That
 digest covers the complete prepared dispatch, not only the task package.

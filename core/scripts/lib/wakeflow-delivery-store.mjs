@@ -13,8 +13,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import {
+  stableArtifactPart,
+  transportArtifactFileName,
+} from "./wakeflow-artifact-identity.mjs";
 import { appendControllerEventAtomic } from "./wakeflow-controller-events.mjs";
 import { hostProfile } from "./wakeflow-host-profile.mjs";
+import { withFileLock } from "./wakeflow-state-lock.mjs";
 import {
   createSanctionedStateRootResolver,
   WakeflowStatePathError,
@@ -74,15 +80,18 @@ export function releaseWindowLockForResult(lockFile, matches) {
   if (!existsSync(lockFile)) return false;
   const inferredWorkspaceRoot = inferredWorkspaceRootForRuntimeLock(lockFile);
   if (inferredWorkspaceRoot && !pathResolvesInside(inferredWorkspaceRoot, lockFile)) return false;
-  let lock;
-  try {
-    lock = JSON.parse(readFileSync(lockFile, "utf8"));
-  } catch {
-    return false; // unreadable lock: leave it for release-window-lock recovery
-  }
-  if (!matches(lock)) return false;
-  unlinkSync(lockFile);
-  return true;
+  return withFileLock(`${lockFile}.guard`, () => {
+    if (!existsSync(lockFile)) return false;
+    let lock;
+    try {
+      lock = JSON.parse(readFileSync(lockFile, "utf8"));
+    } catch {
+      return false; // unreadable lock: leave it for release-window-lock recovery
+    }
+    if (!matches(lock)) return false;
+    unlinkSync(lockFile);
+    return true;
+  });
 }
 
 export function createDeliveryStore({
@@ -260,24 +269,55 @@ export function createDeliveryStore({
     return readStateRootJson(stateRoot, relativePath, "task package");
   }
 
-  function packetFileFor(packetId) {
-    return path.join(dirs.packets, `${slug(packetId)}.json`);
+  function legacyArtifactFileFor(dir, logicalId) {
+    return path.join(dir, `${slug(logicalId)}.json`);
   }
 
-  function groupFileFor(groupId) {
-    return path.join(dirs.groups, `${slug(groupId)}.json`);
+  function artifactFileFor(dir, logicalId, stateRef = null) {
+    return path.join(dir, transportArtifactFileName(logicalId, stateRef));
   }
 
-  function deliveryFileFor(deliveryId) {
-    return path.join(dirs.deliveries, `${slug(deliveryId)}.json`);
+  function findArtifactFile(dir, logicalId, stateRef = null) {
+    const canonical = artifactFileFor(dir, logicalId, stateRef);
+    if (existsSync(canonical)) return canonical;
+    const legacy = legacyArtifactFileFor(dir, logicalId);
+    return existsSync(legacy) ? legacy : canonical;
   }
 
-  function deliveryRunFileFor(deliveryRunId) {
-    return path.join(dirs.deliveryRuns, `${slug(deliveryRunId)}.json`);
+  function packetFileFor(packetId, stateRef = null) {
+    return artifactFileFor(dirs.packets, packetId, stateRef);
+  }
+
+  function findPacketFile(packetId, stateRef = null) {
+    return findArtifactFile(dirs.packets, packetId, stateRef);
+  }
+
+  function groupFileFor(groupId, stateRef = null) {
+    return artifactFileFor(dirs.groups, groupId, stateRef);
+  }
+
+  function findGroupFile(groupId, stateRef = null) {
+    return findArtifactFile(dirs.groups, groupId, stateRef);
+  }
+
+  function deliveryFileFor(deliveryId, stateRef = null) {
+    return artifactFileFor(dirs.deliveries, deliveryId, stateRef);
+  }
+
+  function findDeliveryFile(deliveryId, stateRef = null) {
+    return findArtifactFile(dirs.deliveries, deliveryId, stateRef);
+  }
+
+  function deliveryRunFileFor(deliveryRunId, stateRef = null) {
+    return artifactFileFor(dirs.deliveryRuns, deliveryRunId, stateRef);
+  }
+
+  function findDeliveryRunFile(deliveryRunId, stateRef = null) {
+    return findArtifactFile(dirs.deliveryRuns, deliveryRunId, stateRef);
   }
 
   function threadFileFor(windowName) {
-    return path.join(dirs.registry, `${slug(windowName)}.json`);
+    return path.join(dirs.registry, `${stableArtifactPart(windowName, { fallback: "window" })}.json`);
   }
 
   function findThreadFile(windowName) {
@@ -304,7 +344,7 @@ export function createDeliveryStore({
   }
 
   function lockFileFor(windowName) {
-    return path.join(dirs.locks, `${slug(windowName)}.json`);
+    return path.join(dirs.locks, `${stableArtifactPart(windowName, { fallback: "window" })}.json`);
   }
 
   function readWindowLock(windowName) {
@@ -324,26 +364,41 @@ export function createDeliveryStore({
   }
 
   function writeWindowLock(windowName, { deliveryId, ttlSeconds = 7200 } = {}) {
-    // Shared cross-host advisory lock: one in-flight delivery per window. Both
-    // host editions write it on record-delivery-run (status=sent) and check it
-    // before dispatching into the same repository working tree.
-    atomicWriteJson(lockFileFor(windowName), {
-      kind: "WakeflowWindowDeliveryLock",
-      version: 1,
-      windowName,
-      host: hostProfile.runtime.hostDirName,
-      deliveryId: deliveryId || undefined,
-      createdAt: nowIso(),
-      expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
+    if (!deliveryId) fail(`window work lease for ${windowName} requires deliveryId.`);
+    ensureStateDirs();
+    const leaseFile = lockFileFor(windowName);
+    return withFileLock(`${leaseFile}.guard`, () => {
+      const existing = readWindowLock(windowName);
+      if (windowLockFresh(existing)) {
+        if (existing.deliveryId !== deliveryId) {
+          fail(`Window ${windowName} already has a fresh in-flight delivery lease from host ${existing.host || "unknown"} (delivery ${existing.deliveryId || "unknown"}, expires ${existing.expiresAt}); wait for its matching result or release the stale lease explicitly.`);
+        }
+        return { acquired: false, replay: true, lease: existing };
+      }
+      const createdAt = nowIso();
+      const lease = {
+        kind: "WakeflowWindowDeliveryLock",
+        version: 2,
+        leaseId: randomUUID(),
+        windowName,
+        host: hostProfile.runtime.hostDirName,
+        deliveryId,
+        createdAt,
+        expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
+      };
+      atomicWriteJson(leaseFile, lease);
+      return { acquired: true, replay: false, lease };
     });
   }
 
   function removeWindowLock(windowName) {
     const file = lockFileFor(windowName);
-    if (existsSync(file)) {
-      ensureInsideWorkspace(file, "window delivery lock");
-      unlinkSync(file);
-    }
+    withFileLock(`${file}.guard`, () => {
+      if (existsSync(file)) {
+        ensureInsideWorkspace(file, "window delivery lock");
+        unlinkSync(file);
+      }
+    });
   }
 
   // Generic prune helper: unlink one runtime transport file (e.g. a delivery-run). Returns
@@ -393,30 +448,41 @@ export function createDeliveryStore({
       });
   }
 
-  function listDispatchGroupsForTask(targetWindow, taskId) {
-    const groups = new Set();
+  function dispatchPacketsForTask(targetWindow, taskId, dispatchGroup = "") {
+    const packets = [];
     for (const file of listJsonFiles(dirs.packets)) {
       try {
         const packet = JSON.parse(readFileSync(file, "utf8"));
         if (packet.targetWindow === targetWindow
           && (packet.taskId === taskId || packet.targetTaskId === taskId || packet.stateRef?.targetTaskId === taskId)
-          && packet.dispatchGroup) {
-          groups.add(packet.dispatchGroup);
+          && (!dispatchGroup || packet.dispatchGroup === dispatchGroup)) {
+          packets.push(packet);
         }
       } catch {
         // unreadable packets are skipped
       }
     }
-    return [...groups];
+    return packets;
+  }
+
+  function listDispatchGroupsForTask(targetWindow, taskId) {
+    return [...new Set(dispatchPacketsForTask(targetWindow, taskId)
+      .map((packet) => packet.dispatchGroup)
+      .filter(Boolean))];
   }
 
   function windowConfigFileFor(windowName) {
-    return path.join(dirs.windowConfig, `${slug(windowName)}.json`);
+    return path.join(dirs.windowConfig, `${stableArtifactPart(windowName, { fallback: "window" })}.json`);
   }
 
-  function resultFileFor(targetWindow, taskId, dispatchGroup = "") {
-    const parts = [dispatchGroup, targetWindow, taskId].filter(Boolean).map(slug);
-    return path.join(dirs.results, `${parts.join("__")}.json`);
+  function resultFileFor(targetWindow, taskId, dispatchGroup = "", stateRef = null) {
+    const logicalId = [dispatchGroup, targetWindow, taskId].filter(Boolean).join("__");
+    return artifactFileFor(dirs.results, logicalId, stateRef);
+  }
+
+  function findResultFile(targetWindow, taskId, dispatchGroup = "", stateRef = null) {
+    const logicalId = [dispatchGroup, targetWindow, taskId].filter(Boolean).join("__");
+    return findArtifactFile(dirs.results, logicalId, stateRef);
   }
 
   function supersededResultFileFor(
@@ -426,7 +492,9 @@ export function createDeliveryStore({
     supersededAt = nowIso(),
     resultRevision = null,
   ) {
-    const parts = [dispatchGroup, targetWindow, taskId].filter(Boolean).map(slug);
+    const parts = [dispatchGroup, targetWindow, taskId]
+      .filter(Boolean)
+      .map((value) => stableArtifactPart(value));
     const stamp = supersededAt.replace(/[-:.TZ]/g, "").slice(0, 14);
     const revisionSuffix = Number.isInteger(resultRevision) && resultRevision > 0
       ? `__revision-${String(resultRevision).padStart(4, "0")}`
@@ -466,9 +534,13 @@ export function createDeliveryStore({
     readControllerStateRoot,
     readTaskPackageFromStateRoot,
     packetFileFor,
+    findPacketFile,
     groupFileFor,
+    findGroupFile,
     deliveryFileFor,
+    findDeliveryFile,
     deliveryRunFileFor,
+    findDeliveryRunFile,
     threadFileFor,
     findThreadFile,
     legacyThreadRegistryEntries,
@@ -480,9 +552,11 @@ export function createDeliveryStore({
     removeRuntimeFile,
     listFreshWindowLocks,
     listHostRuntimes,
+    dispatchPacketsForTask,
     listDispatchGroupsForTask,
     windowConfigFileFor,
     resultFileFor,
+    findResultFile,
     supersededResultFileFor,
     listJsonFiles,
   };

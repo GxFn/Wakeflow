@@ -11,6 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
+import { transportArtifactFileName } from "../core/scripts/lib/wakeflow-artifact-identity.mjs";
 
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const coreRoot = path.join(repoRoot, "core");
@@ -87,18 +88,57 @@ function parseOk(result) {
   return JSON.parse(result.stdout);
 }
 
-function initDemand(runtime, root, demandKey) {
+function initDemand(runtime, root, demandKey, extra = []) {
   return parseOk(run(runtime, "wakeflow-state.mjs", [
-    "init", "--root", root, "--demand-key", demandKey, "--title", demandKey, "--write", "--json",
+    "init", "--root", root, "--demand-key", demandKey, "--title", demandKey,
+    ...extra, "--write", "--json",
   ]));
 }
 
-function addContractedTask(runtime, root, stateRoot, { packageId, taskId }) {
+function addContractedTask(runtime, root, stateRoot, { packageId, taskId, targetWindow = "Target" }) {
   return parseOk(run(runtime, "wakeflow-state.mjs", [
     "add-task-package", "--root", root, "--state-root", stateRoot,
     "--task-package-id", packageId, "--summary", packageId,
     "--evidence-contract", JSON.stringify({ required: [{ kind: "tests" }] }),
-    "--target-window", "Target", "--target-task-id", taskId, "--target-summary", taskId,
+    "--target-window", targetWindow, "--target-task-id", taskId, "--target-summary", taskId,
+    "--write", "--json",
+  ]));
+}
+
+function fullContextArgs({
+  workType = "implementation",
+  commitExpectation = "leave-uncommitted",
+  acceptanceAnchors = [{ id: "AC-1", claim: "The confirmed behavior works.", probe: "Run the focused probe.", expected: "The probe passes." }],
+} = {}) {
+  return [
+    "--work-type", workType,
+    "--objective", "Implement only the confirmed behavior.",
+    "--context-summary", JSON.stringify(["The requirement and validation target are confirmed."]),
+    "--requirement-refs", JSON.stringify([{ ref: "requirements.md#goal", role: "goal" }]),
+    "--boundaries", JSON.stringify({ inScope: ["Confirmed behavior"], outOfScope: ["Unrelated behavior"], forbidden: ["Do not expand scope"] }),
+    "--completion-expectations", JSON.stringify(["Return reviewable evidence."]),
+    "--depends-on-task-ids", "[]",
+    "--commit-expectation", commitExpectation,
+    ...(acceptanceAnchors ? ["--acceptance-anchors", JSON.stringify(acceptanceAnchors)] : []),
+  ];
+}
+
+function addFullContextTask(runtime, root, stateRoot, {
+  packageId = "PKG",
+  taskId = "TASK",
+  targetWindow = "Target",
+  workType = "implementation",
+  commitExpectation = "leave-uncommitted",
+  acceptanceAnchors,
+  extra = [],
+} = {}) {
+  writeFileSync(path.join(root, "requirements.md"), "# Goal\n\nConfirmed behavior.\n");
+  return parseOk(run(runtime, "wakeflow-state.mjs", [
+    "add-task-package", "--root", root, "--state-root", stateRoot,
+    "--task-package-id", packageId, "--summary", packageId,
+    ...fullContextArgs({ workType, commitExpectation, acceptanceAnchors }),
+    "--target-window", targetWindow, "--target-task-id", taskId, "--target-summary", taskId,
+    ...extra,
     "--write", "--json",
   ]));
 }
@@ -106,26 +146,33 @@ function addContractedTask(runtime, root, stateRoot, { packageId, taskId }) {
 function importResult(runtime, root, stateRoot, args) {
   return run(runtime, "wakeflow-state.mjs", [
     "import-target-result", "--root", root, "--state-root", stateRoot,
-    "--target-task-id", args.taskId, "--target-window", "Target", "--status", "completed",
+    "--target-task-id", args.taskId, "--target-window", args.targetWindow || "Target", "--status", "completed",
     ...args.extra,
     "--write", "--json",
   ]);
 }
 
-function registerAndSend(runtime, root, stateRoot, group) {
+function registerAndSend(runtime, root, stateRoot, group, targetWindow = "Target") {
   const registered = run(runtime, "wakeflow-delivery.mjs", [
-    "register-thread", "--root", root, "--window", "Target", "--thread-id", "0192fac-target", "--write", "--json",
+    "register-thread", "--root", root, "--window", targetWindow, "--thread-id", `0192fac-${targetWindow}`, "--write", "--json",
   ]);
   assert.equal(registered.status, 0, registered.stderr || registered.stdout);
-  const prepared = parseOk(run(runtime, "wakeflow-delivery.mjs", [
+  const prepareArgs = [
     "prepare-dispatch-from-state", "--root", root, "--state-root", stateRoot,
     "--target-task-id", "TASK", "--group", group, "--controller-window", "Controller",
-    "--human-context-ref", `${stateRoot}/developer-progress.md`, "--require-thread", "--write", "--json",
+    "--require-thread", "--json",
+  ];
+  const preview = parseOk(run(runtime, "wakeflow-delivery.mjs", prepareArgs));
+  const prepared = parseOk(run(runtime, "wakeflow-delivery.mjs", [
+    ...prepareArgs,
+    "--expected-preview-digest", preview.previewDigest,
+    "--write",
   ]));
-  return parseOk(run(runtime, "wakeflow-delivery.mjs", [
+  const recorded = parseOk(run(runtime, "wakeflow-delivery.mjs", [
     "record-delivery-run", "--root", root, "--delivery-file", prepared.deliveryFile,
     "--status", "sent", "--readback-ok", "true", "--evidence", `${group} sent`, "--write", "--json",
   ]));
+  return { prepared, recorded };
 }
 
 function targetResultSnapshot(root, stateRoot) {
@@ -246,19 +293,47 @@ test("P1: a known dispatched task rejects an explicit result group that has no d
   assert.deepEqual(targetResultSnapshot(root, init.stateRoot), before, "an unknown group cannot create audit history");
 });
 
-test("P1: dispatch groups are scoped to their own demand state root", () => {
+test("P1: two demands can reuse the same package, task, and group ids without merging transport history", () => {
   const runtime = makeRuntime();
-  const root = makeRoot({ maxActiveDemands: 2 });
+  const root = makeRoot({
+    repositories: [
+      { windowName: "Controller", path: ".", role: "controller" },
+      { windowName: "Target", path: ".", role: "implementation" },
+      { windowName: "TargetB", path: ".", role: "implementation" },
+    ],
+    dispatchWindows: ["Target", "TargetB"],
+  });
   const first = initDemand(runtime, root, "GROUP-SCOPE-A");
-  const second = initDemand(runtime, root, "GROUP-SCOPE-B");
-  addContractedTask(runtime, root, first.stateRoot, { packageId: "PKG-A", taskId: "TASK" });
-  addContractedTask(runtime, root, second.stateRoot, { packageId: "PKG-B", taskId: "TASK" });
-  registerAndSend(runtime, root, first.stateRoot, "G-A");
-  registerAndSend(runtime, root, second.stateRoot, "G-B");
+  const second = initDemand(runtime, root, "GROUP-SCOPE-B", [
+    "--placement", "pod",
+    "--authorization-ref", "user://result-contract/GROUP-SCOPE-B",
+  ]);
+  addContractedTask(runtime, root, first.stateRoot, { packageId: "PKG", taskId: "TASK" });
+  addContractedTask(runtime, root, second.stateRoot, { packageId: "PKG", taskId: "TASK", targetWindow: "TargetB" });
+  registerAndSend(runtime, root, first.stateRoot, "G-SAME");
+  registerAndSend(runtime, root, second.stateRoot, "G-SAME", "TargetB");
+
+  for (const directory of ["dispatch-packets", "dispatch-groups", "delivery-envelopes", "delivery-runs"]) {
+    const files = readdirSync(path.join(root, ".wakeflow-local/wakeflow-delivery", directory))
+      .filter((name) => name.endsWith(".json"));
+    assert.equal(files.length, 2, `${directory} keeps one canonical artifact per demand`);
+  }
+  const ambiguousReview = run(runtime, "wakeflow-delivery.mjs", [
+    "review-results", "--root", root, "--group", "G-SAME", "--json",
+  ]);
+  assert.notEqual(ambiguousReview.status, 0);
+  assert.match(ambiguousReview.stdout + ambiguousReview.stderr, /matches multiple demands.*--state-root/i);
+  parseOk(run(runtime, "wakeflow-delivery.mjs", [
+    "review-results", "--root", root, "--group", "G-SAME", "--state-root", first.stateRoot, "--json",
+  ]));
+  parseOk(run(runtime, "wakeflow-delivery.mjs", [
+    "review-results", "--root", root, "--group", "G-SAME", "--state-root", second.stateRoot, "--json",
+  ]));
 
   const crossDemandGroup = importResult(runtime, root, second.stateRoot, {
     taskId: "TASK",
-    extra: ["--dispatch-group", "G-A", "--summary", "must not cross demand roots"],
+    targetWindow: "TargetB",
+    extra: ["--dispatch-group", "G-UNKNOWN", "--summary", "must not cross demand roots"],
   });
   assert.notEqual(crossDemandGroup.status, 0);
   assert.match(crossDemandGroup.stdout + crossDemandGroup.stderr, /unknown.*group|known groups/i);
@@ -284,6 +359,11 @@ test("P1: required craft evidence requires proof before a target result can land
     extra: ["--summary", "tests ran", "--craft-evidence", JSON.stringify([{ kind: "tests", value: "12 tests passed" }])],
   }));
   assert.equal(withValue.currentResult, true, "a required kind with a value is accepted");
+  assert.equal(
+    readJson(path.join(root, withValue.resultFile)).resultMapping.status,
+    "legacy-unenforced",
+    "legacy packages remain readable but newly recorded results identify that mapping was not enforced",
+  );
 
   addContractedTask(runtime, root, init.stateRoot, { packageId: "REF-PKG", taskId: "REF-TASK" });
   writeJson(path.join(root, init.stateRoot, "reports/tests.json"), { passed: 12 });
@@ -292,6 +372,194 @@ test("P1: required craft evidence requires proof before a target result can land
     extra: ["--summary", "tests ran", "--craft-evidence", JSON.stringify([{ kind: "tests", ref: "reports/tests.json" }])],
   }));
   assert.equal(withExistingRef.currentResult, true, "a required kind with an existing ref is accepted");
+});
+
+test("P1: full-context implementation completion maps every acceptance anchor exactly once", () => {
+  const runtime = makeRuntime();
+  const root = makeRoot();
+  const init = initDemand(runtime, root, "RESULT-MAPPING-IMPLEMENTATION");
+  addFullContextTask(runtime, root, init.stateRoot);
+
+  const missing = importResult(runtime, root, init.stateRoot, {
+    taskId: "TASK",
+    extra: [
+      "--summary", "Implementation is complete.",
+      "--commit-disposition", "left-uncommitted",
+      "--verification", "Focused probe passed.",
+    ],
+  });
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stdout + missing.stderr, /acceptance-anchor-missing/);
+
+  const duplicate = importResult(runtime, root, init.stateRoot, {
+    taskId: "TASK",
+    extra: [
+      "--summary", "Implementation is complete.",
+      "--commit-disposition", "left-uncommitted",
+      "--craft-evidence", JSON.stringify([
+        { kind: "acceptance-anchor", anchorId: "AC-1", red: "Failed before.", green: "Passed after.", ref: "reports/ac-1.json" },
+        { kind: "acceptance-anchor", anchorId: "AC-1", red: "Failed before.", green: "Passed after.", ref: "reports/ac-1-again.json" },
+      ]),
+    ],
+  });
+  assert.notEqual(duplicate.status, 0);
+  assert.match(duplicate.stdout + duplicate.stderr, /acceptance-anchor-duplicate/);
+
+  writeJson(path.join(root, init.stateRoot, "reports/ac-1.json"), { red: "failed", green: "passed" });
+  const accepted = parseOk(importResult(runtime, root, init.stateRoot, {
+    taskId: "TASK",
+    extra: [
+      "--summary", "Implementation is complete.",
+      "--changed-repo", "Target",
+      "--commit-disposition", "left-uncommitted",
+      "--craft-evidence", JSON.stringify([
+        { kind: "acceptance-anchor", anchorId: "AC-1", red: "Failed before.", green: "Passed after.", ref: "reports/ac-1.json" },
+      ]),
+    ],
+  }));
+  const result = readJson(path.join(root, accepted.resultFile));
+  assert.deepEqual(result.changedRepos, ["Target"]);
+  assert.equal(result.commitDisposition, "left-uncommitted");
+  assert.equal(result.resultMapping.status, "complete");
+  assert.deepEqual(result.resultMapping.acceptanceAnchorIds, ["AC-1"]);
+
+  const review = parseOk(run(runtime, "wakeflow-delivery.mjs", [
+    "review-pack", "--root", root, "--state-root", init.stateRoot, "--json",
+  ])).reviewPack;
+  assert.deepEqual(review.resultContractGaps, []);
+  assert.equal(review.gates.controllerReviewReady, true);
+  assert.equal(review.targetResults[0].resultMapping.status, "complete");
+});
+
+test("P1: commit expectation mismatch blocks review without pretending mapping is acceptance", () => {
+  const runtime = makeRuntime();
+  const root = makeRoot();
+  const init = initDemand(runtime, root, "RESULT-COMMIT-EXPECTATION");
+  addFullContextTask(runtime, root, init.stateRoot, { commitExpectation: "commit" });
+  writeJson(path.join(root, init.stateRoot, "reports/ac-1.json"), { green: true });
+
+  parseOk(importResult(runtime, root, init.stateRoot, {
+    taskId: "TASK",
+    extra: [
+      "--summary", "Behavior is implemented but intentionally left uncommitted.",
+      "--commit-disposition", "left-uncommitted",
+      "--craft-evidence", JSON.stringify([
+        { kind: "acceptance-anchor", anchorId: "AC-1", red: "Failed.", green: "Passed.", ref: "reports/ac-1.json" },
+      ]),
+    ],
+  }));
+
+  const review = parseOk(run(runtime, "wakeflow-delivery.mjs", [
+    "review-pack", "--root", root, "--state-root", init.stateRoot, "--json",
+  ])).reviewPack;
+  assert.equal(review.gates.controllerReviewReady, false);
+  assert.equal(review.resultContractGaps[0].reason, "commit-expectation-not-met");
+  assert.equal(review.targetResults[0].resultMapping.status, "complete", "complete mapping is still only review input");
+
+  const reduced = run(runtime, "wakeflow-state.mjs", [
+    "reduce-results", "--root", root, "--state-root", init.stateRoot, "--write", "--json",
+  ]);
+  assert.notEqual(reduced.status, 0);
+  assert.match(reduced.stdout + reduced.stderr, /target-result-contract-required|commit-expectation-not-met/);
+});
+
+test("P1: blocked full-context results allow an honest partial map with a blocker summary", () => {
+  const runtime = makeRuntime();
+  const root = makeRoot();
+  const init = initDemand(runtime, root, "RESULT-MAPPING-BLOCKED");
+  addFullContextTask(runtime, root, init.stateRoot);
+
+  const noSummary = run(runtime, "wakeflow-state.mjs", [
+    "import-target-result", "--root", root, "--state-root", init.stateRoot,
+    "--target-task-id", "TASK", "--target-window", "Target", "--status", "blocked",
+    "--write", "--json",
+  ]);
+  assert.notEqual(noSummary.status, 0);
+  assert.match(noSummary.stdout + noSummary.stderr, /blocker-summary-missing/);
+
+  const blocked = parseOk(run(runtime, "wakeflow-state.mjs", [
+    "import-target-result", "--root", root, "--state-root", init.stateRoot,
+    "--target-task-id", "TASK", "--target-window", "Target", "--status", "blocked",
+    "--summary", "The required external fixture is unavailable.",
+    "--craft-evidence", JSON.stringify([
+      { kind: "acceptance-anchor", anchorId: "AC-1", red: "Failure reproduced.", ref: "reports/blocker.json" },
+    ]),
+    "--write", "--json",
+  ]));
+  const result = readJson(path.join(root, blocked.resultFile));
+  assert.equal(result.resultMapping.status, "partial");
+  assert.ok(result.resultMapping.partialIssues.some((entry) => entry.reason === "acceptance-anchor-green-missing"));
+});
+
+test("P1: full-context Test completion covers only the approved plan indices", () => {
+  const runtime = makeRuntime();
+  const root = makeRoot({
+    testWindow: "Test",
+    repositories: [
+      { windowName: "Controller", path: ".", role: "controller" },
+      { windowName: "Test", path: ".", role: "test" },
+    ],
+    dispatchWindows: ["Test"],
+  });
+  const init = initDemand(runtime, root, "RESULT-MAPPING-TEST");
+  const cardFile = path.join(root, init.stateRoot, "test-cards/TEST-CARD.json");
+  writeJson(cardFile, {
+    kind: "TestBoundaryCard",
+    schemaVersion: 1,
+    testId: "TEST-CARD",
+    targetWindow: "Test",
+    strategySource: "requirements.md#goal",
+    executionContract: {
+      version: 1,
+      requirementGoal: "Explore the confirmed environment boundary.",
+      approvedPlan: ["Run the public entry.", "Capture the raw response."],
+      allowedSkills: [],
+      setupPolicy: "reuse-existing",
+      maxAttempts: 2,
+      restartConditions: [],
+      changeControl: { testMayChangeGoal: false, testMayAddUnmappedSteps: false },
+    },
+    suggestedTaskPackage: { targetTaskId: "TEST-TASK" },
+  });
+  addFullContextTask(runtime, root, init.stateRoot, {
+    packageId: "TEST-PKG",
+    taskId: "TEST-TASK",
+    targetWindow: "Test",
+    workType: "test",
+    acceptanceAnchors: null,
+    extra: ["--test-card-id", "TEST-CARD"],
+  });
+
+  const invented = importResult(runtime, root, init.stateRoot, {
+    taskId: "TEST-TASK",
+    targetWindow: "Test",
+    extra: [
+      "--summary", "Test completed.",
+      "--commit-disposition", "no-changes",
+      "--craft-evidence", JSON.stringify([
+        { kind: "test-step", planIndex: 0, step: "Run the public entry.", ref: "reports/test-0.json" },
+        { kind: "test-step", planIndex: 2, step: "Invented extra gate.", ref: "reports/test-2.json" },
+      ]),
+    ],
+  });
+  assert.notEqual(invented.status, 0);
+  assert.match(invented.stdout + invented.stderr, /unknown-test-step|test-step-missing/);
+
+  const completed = parseOk(importResult(runtime, root, init.stateRoot, {
+    taskId: "TEST-TASK",
+    targetWindow: "Test",
+    extra: [
+      "--summary", "The approved real-environment plan completed.",
+      "--commit-disposition", "no-changes",
+      "--craft-evidence", JSON.stringify([
+        { kind: "test-step", planIndex: 0, step: "Run the public entry.", ref: "reports/test-0.json" },
+        { kind: "test-step", planIndex: 1, step: "Capture the raw response.", ref: "reports/test-1.json" },
+      ]),
+    ],
+  }));
+  const result = readJson(path.join(root, completed.resultFile));
+  assert.equal(result.resultMapping.status, "complete");
+  assert.deepEqual(result.resultMapping.testPlanIndices, [0, 1]);
 });
 
 test("P1: transport result recording preserves contracted craft evidence instead of silently dropping it", () => {
@@ -311,6 +579,37 @@ test("P1: transport result recording preserves contracted craft evidence instead
   assert.deepEqual(recorded.result.craftEvidence, craftEvidence, "transport CLI must persist --craft-evidence for packet evidenceContract review");
 });
 
+test("P1: transport recording enforces the full-context packet result contract", () => {
+  const runtime = makeRuntime();
+  const root = makeRoot();
+  const init = initDemand(runtime, root, "TRANSPORT-FULL-CONTEXT");
+  addFullContextTask(runtime, root, init.stateRoot);
+  const sent = registerAndSend(runtime, root, init.stateRoot, "G-FULL");
+  const packet = readJson(path.join(root, sent.prepared.packetFile));
+  assert.equal(packet.resultContract, "target-result-envelope-v2");
+
+  const missingMap = run(runtime, "wakeflow-delivery.mjs", [
+    "record-target-result", "--root", root, "--target-window", "Target", "--task-id", "TASK",
+    "--group", "G-FULL", "--status", "completed", "--summary", "Implementation complete.",
+    "--commit-disposition", "left-uncommitted", "--verification", "Focused verification passed.",
+    "--write", "--json",
+  ]);
+  assert.notEqual(missingMap.status, 0);
+  assert.match(missingMap.stdout + missingMap.stderr, /acceptance-anchor-missing/);
+
+  const recorded = parseOk(run(runtime, "wakeflow-delivery.mjs", [
+    "record-target-result", "--root", root, "--target-window", "Target", "--task-id", "TASK",
+    "--group", "G-FULL", "--status", "completed", "--summary", "Implementation complete.",
+    "--changed-repo", "Target", "--commit-disposition", "left-uncommitted",
+    "--craft-evidence", JSON.stringify([
+      { kind: "acceptance-anchor", anchorId: "AC-1", red: "Failed.", green: "Passed.", ref: "reports/ac-1.json" },
+    ]),
+    "--write", "--json",
+  ]));
+  assert.equal(recorded.result.resultMapping.status, "complete");
+  assert.equal(recorded.result.commitDisposition, "left-uncommitted");
+});
+
 test("P1: transport result recording fails closed while the same result is locked", () => {
   const runtime = makeRuntime();
   const root = makeRoot();
@@ -320,7 +619,11 @@ test("P1: transport result recording fails closed while the same result is locke
 
   const resultFile = path.join(
     root,
-    ".wakeflow-local/wakeflow-delivery/target-results/G-LOCK__Target__TASK.json",
+    ".wakeflow-local/wakeflow-delivery/target-results",
+    transportArtifactFileName("G-LOCK__Target__TASK", {
+      demandKey: "TRANSPORT-RESULT-LOCK",
+      stateRoot: init.stateRoot,
+    }),
   );
   const resultLock = `${resultFile}.record-lock`;
   writeJson(resultLock, {
@@ -354,7 +657,11 @@ test("P1: concurrent transport result writers serialize conflict checks and pres
 
   const resultFile = path.join(
     root,
-    ".wakeflow-local/wakeflow-delivery/target-results/G-CONCURRENT__Target__TASK.json",
+    ".wakeflow-local/wakeflow-delivery/target-results",
+    transportArtifactFileName("G-CONCURRENT__Target__TASK", {
+      demandKey: "TRANSPORT-RESULT-CONCURRENCY",
+      stateRoot: init.stateRoot,
+    }),
   );
   const resultLock = `${resultFile}.record-lock`;
   const commandArgs = (verification, supersede = false) => [

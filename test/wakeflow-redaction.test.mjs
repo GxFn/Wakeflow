@@ -140,6 +140,28 @@ test("opaque evidence is scanned and cannot be destructively redacted", () => {
   assert.match(readFileSync(file, "utf8"), new RegExp(REAL_UUID));
 });
 
+test("clean opaque archive evidence requires explicit allowance and always returns its hash", () => {
+  const bytes = Buffer.from([0xff, 0xfe, 0x00, 0x41, 0x42, 0x43]);
+  const root = makeStateRoot({ "evidence/clean.bin": bytes });
+  const refused = scanStateRootForArchivePrivacy(root, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+  });
+  assert.equal(refused.clean, false);
+  assert.ok(refused.findings.some((finding) => finding.kind === "opaque-file"));
+  assert.equal(refused.opaqueFiles.length, 1);
+  assert.match(refused.opaqueFiles[0].sha256, /^[a-f0-9]{64}$/);
+  assert.equal(refused.opaqueFiles[0].bytes, bytes.length);
+
+  const allowed = scanStateRootForArchivePrivacy(root, {
+    hostProfile: stubProfile,
+    workspaceRoot: root,
+    allowOpaque: true,
+  });
+  assert.equal(allowed.clean, true, JSON.stringify(allowed.findings));
+  assert.deepEqual(allowed.opaqueFiles, refused.opaqueFiles);
+});
+
 test("sensitive filenames fail closed instead of breaking evidence references", () => {
   const root = makeStateRoot({
     [`target-results/${REAL_UUID}.json`]: "{}\n",

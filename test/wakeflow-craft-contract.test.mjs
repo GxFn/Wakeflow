@@ -18,7 +18,27 @@ const deliveryScript = path.join(workspaceRoot, "scripts/wakeflow-delivery.mjs")
 
 function makeRoot() {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-craft-"));
-  mkdirSync(root, { recursive: true });
+  const targetWindows = ["WinA", "WinB"];
+  writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
+    controllerWindow: "Controller",
+    repositories: targetWindows.map((windowName) => ({
+      windowName,
+      path: windowName,
+      role: "fixture implementation",
+    })),
+  }, null, 2)}\n`);
+  targetWindows.forEach((windowName, index) => {
+    mkdirSync(path.join(root, windowName), { recursive: true });
+    const registered = runDelivery([
+      "register-thread",
+      "--root", root,
+      "--window", windowName,
+      "--thread-id", `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      "--write",
+      "--json",
+    ]);
+    assert.equal(registered.status, 0, registered.stderr || registered.stdout);
+  });
   return root;
 }
 

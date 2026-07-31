@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -91,6 +92,19 @@ export function trackedWorkspaceConfigPath(workspaceRoot = process.cwd()) {
   );
 }
 
+// Durable configuration is the setup/configure authority. It is the tracked
+// workspace file unless the caller deliberately supplies --config.
+export function durableWorkspaceConfigPath({
+  workspaceRoot = process.cwd(),
+  args = process.argv.slice(2),
+} = {}) {
+  const configArg = getArgValue(args, "--config", process.env.WAKEFLOW_CONFIG ?? null);
+  if (configArg) {
+    return path.isAbsolute(configArg) ? configArg : path.join(workspaceRoot, configArg);
+  }
+  return trackedWorkspaceConfigPath(workspaceRoot);
+}
+
 // The local (never committed) config under .wakeflow-local/ — normally the
 // derived stream overlay, or a hand-maintained user override.
 export function localWorkspaceConfigPath(workspaceRoot = process.cwd()) {
@@ -100,7 +114,9 @@ export function localWorkspaceConfigPath(workspaceRoot = process.cwd()) {
   );
 }
 
-export function workspaceConfigPath({ workspaceRoot = process.cwd(), args = process.argv.slice(2) } = {}) {
+export const derivedStreamOverlayConfigPath = localWorkspaceConfigPath;
+
+export function effectiveWorkspaceConfigPath({ workspaceRoot = process.cwd(), args = process.argv.slice(2) } = {}) {
   const configArg = getArgValue(args, "--config", process.env.WAKEFLOW_CONFIG ?? null);
   if (configArg) {
     return path.isAbsolute(configArg) ? configArg : path.join(workspaceRoot, configArg);
@@ -114,12 +130,14 @@ export function workspaceConfigPath({ workspaceRoot = process.cwd(), args = proc
   return trackedWorkspaceConfigPath(workspaceRoot);
 }
 
-export function readWorkspaceConfig({ workspaceRoot = process.cwd(), args = process.argv.slice(2), onError = null } = {}) {
-  const configPath = workspaceConfigPath({ workspaceRoot, args });
-  if (!existsSync(configPath)) {
-    return {};
-  }
+export const workspaceConfigPath = effectiveWorkspaceConfigPath;
 
+function sha256(text) {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+function readConfigFile(configPath, { onError = null } = {}) {
+  if (!existsSync(configPath)) return {};
   try {
     return JSON.parse(readFileSync(configPath, "utf8"));
   } catch (error) {
@@ -131,8 +149,92 @@ export function readWorkspaceConfig({ workspaceRoot = process.cwd(), args = proc
   }
 }
 
-export function loadWorkspaceConfig(options = {}) {
-  const userConfig = readWorkspaceConfig(options);
+export function readWorkspaceConfig({ workspaceRoot = process.cwd(), args = process.argv.slice(2), onError = null } = {}) {
+  const configPath = effectiveWorkspaceConfigPath({ workspaceRoot, args });
+  const explicitConfig = Boolean(getArgValue(args, "--config", process.env.WAKEFLOW_CONFIG ?? null));
+  try {
+    const value = readConfigFile(configPath);
+    const localPath = localWorkspaceConfigPath(workspaceRoot);
+    if (!explicitConfig && path.resolve(configPath) === path.resolve(localPath) && existsSync(configPath)) {
+      if (value?.derived?.kind !== "WakeflowLocalConfigOverlay") {
+        throw new Error(
+          `local Wakeflow config ${configPath} is not a derived stream overlay; `
+          + "move durable settings into wakeflow.config.json or pass an explicit --config path",
+        );
+      }
+      const durablePath = trackedWorkspaceConfigPath(workspaceRoot);
+      if (!existsSync(durablePath)) {
+        throw new Error(`derived stream overlay ${configPath} has no durable base config ${durablePath}`);
+      }
+      const durableRaw = readFileSync(durablePath, "utf8");
+      if (value.derived.baseHash !== sha256(durableRaw)) {
+        throw new Error(
+          `derived stream overlay ${configPath} is stale relative to ${durablePath}; `
+          + "resume pod/stream setup to regenerate it before running Wakeflow",
+        );
+      }
+    }
+    return value;
+  } catch (error) {
+    if (onError) {
+      onError(configPath, error);
+      return {};
+    }
+    throw error;
+  }
+}
+
+export function readDurableWorkspaceConfig({
+  workspaceRoot = process.cwd(),
+  args = process.argv.slice(2),
+  onError = null,
+} = {}) {
+  return readConfigFile(durableWorkspaceConfigPath({ workspaceRoot, args }), { onError });
+}
+
+function mergeWorkspaceConfig(userConfig) {
+  const configMigrationWarnings = [];
+  const {
+    maxActiveDemands: legacyMaxActiveDemands,
+    configMigrationWarnings: _legacyWarnings,
+    ...withoutTopLevelCapacity
+  } = userConfig ?? {};
+  if (legacyMaxActiveDemands !== undefined) {
+    configMigrationWarnings.push(
+      "maxActiveDemands is deprecated and has no admission effect; ordinary work uses the mainline lane and explicitly authorized pods use isolated placement.",
+    );
+  }
+  const hosts = withoutTopLevelCapacity.hosts && typeof withoutTopLevelCapacity.hosts === "object"
+    ? Object.fromEntries(Object.entries(withoutTopLevelCapacity.hosts).map(([hostName, hostConfig]) => {
+        if (!hostConfig || typeof hostConfig !== "object" || Array.isArray(hostConfig)) {
+          return [hostName, hostConfig];
+        }
+        const { maxStreamsPerRepo, ...rest } = hostConfig;
+        if (maxStreamsPerRepo !== undefined) {
+          configMigrationWarnings.push(
+            `hosts.${hostName}.maxStreamsPerRepo is deprecated and has no admission effect.`,
+          );
+        }
+        return [hostName, rest];
+      }))
+    : withoutTopLevelCapacity.hosts;
+  const configuredRepositories = Array.isArray(withoutTopLevelCapacity.repositories)
+    ? withoutTopLevelCapacity.repositories.map((repo) => {
+        if (!repo || typeof repo !== "object" || Array.isArray(repo)) return repo;
+        const { maxStreams, maxStreamsPerRepo, ...rest } = repo;
+        if (maxStreams !== undefined || maxStreamsPerRepo !== undefined) {
+          configMigrationWarnings.push(
+            `repositories.${repo.windowName ?? repo.path ?? "unknown"}.maxStreams is deprecated and has no admission effect.`,
+          );
+        }
+        return rest;
+      })
+    : withoutTopLevelCapacity.repositories;
+  userConfig = {
+    ...withoutTopLevelCapacity,
+    ...(hosts === undefined ? {} : { hosts }),
+    ...(configuredRepositories === undefined ? {} : { repositories: configuredRepositories }),
+  };
   const merged = { ...defaultWorkspaceConfig, ...userConfig };
   const configuredRoles = {
     ...defaultWorkspaceConfig.repositoryRoles,
@@ -186,7 +288,16 @@ export function loadWorkspaceConfig(options = {}) {
     realProjectWindow,
     repositoryRoles,
     repositories,
+    configMigrationWarnings,
   };
+}
+
+export function loadWorkspaceConfig(options = {}) {
+  return mergeWorkspaceConfig(readWorkspaceConfig(options));
+}
+
+export function loadDurableWorkspaceConfig(options = {}) {
+  return mergeWorkspaceConfig(readDurableWorkspaceConfig(options));
 }
 
 // The window names that count as "Test" targets. Used to derive retest churn — how

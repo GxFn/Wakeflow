@@ -1,10 +1,11 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
   inspectActiveDemandStateRoot,
   isWakeflowInitStagingEntry,
 } from "./wakeflow-active-demands.mjs";
 import { buildReplaySummary } from "./wakeflow-idempotency.mjs";
+import { listPodReservations } from "./wakeflow-pod-reservations.mjs";
 import { buildControllerCallbackPlan } from "./wakeflow-return-policy.mjs";
 import { loadWorkspaceConfig, workspaceLedgerPaths } from "./wakeflow-config.mjs";
 import { createSanctionedStateRootResolver } from "./wakeflow-state-paths.mjs";
@@ -43,61 +44,257 @@ function scanArchivedStateRoots(workspaceRoot) {
   return archived;
 }
 
+function countValues(items, key, expected = []) {
+  const counts = Object.fromEntries(expected.map((value) => [value, 0]));
+  for (const item of items) {
+    const value = typeof item?.[key] === "string" && item[key] ? item[key] : "unknown";
+    counts[value] = (counts[value] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function canonicalExecutionProjection(state) {
+  const placement = state?.executionPlacement ?? {};
+  const isPod = placement.mode === "isolated"
+    && placement.selection === "explicit-user-pod";
+  const provisioning = isPod && state?.podProvisioning && typeof state.podProvisioning === "object"
+    ? state.podProvisioning
+    : null;
+  const windows = Array.isArray(provisioning?.windows) ? provisioning.windows : [];
+  return {
+    placement: isPod ? "pod" : "main",
+    podId: isPod ? placement.podId ?? provisioning?.podId ?? null : null,
+    host: isPod ? provisioning?.host ?? null : state?.controllerHost ?? null,
+    phase: isPod ? provisioning?.phase ?? null : null,
+    logicalWindows: {
+      total: windows.length,
+      byStatus: countValues(windows, "status", ["planned", "bound", "closed"]),
+      byRole: countValues(windows, "role", ["controller", "design", "test", "product"]),
+    },
+  };
+}
+
+function scanLegacyPodReservationMigration(workspaceRoot) {
+  const snapshot = listPodReservations(workspaceRoot);
+  return {
+    status: snapshot.issues.length > 0
+      ? "legacy-artifacts-unreadable"
+      : snapshot.reservations.length > 0
+        ? "legacy-artifacts-present"
+        : "not-needed",
+    reservationCount: snapshot.reservations.length,
+    issueCount: snapshot.issues.length,
+    records: snapshot.reservations.slice(0, 10).map(({ value }) => ({
+      demandKey: value.demandKey,
+      podId: value.podId ?? null,
+      status: value.status,
+    })),
+    recordsTruncated: Math.max(0, snapshot.reservations.length - 10),
+    authority: "migration-only",
+  };
+}
+
+function scanPodHostRuntime(stateDir) {
+  const hostsDir = path.join(stateDir, "hosts");
+  const totals = {
+    operationCount: 0,
+    bindingCount: 0,
+    issueCount: 0,
+  };
+  if (!existsSync(hostsDir)) {
+    return {
+      status: "idle",
+      health: "healthy",
+      hostCount: 0,
+      ...totals,
+      hosts: [],
+    };
+  }
+  try {
+    if (lstatSync(hostsDir).isSymbolicLink()) {
+      return {
+        status: "idle",
+        health: "degraded",
+        hostCount: 0,
+        operationCount: 0,
+        bindingCount: 0,
+        issueCount: 1,
+        hosts: [],
+      };
+    }
+  } catch {
+    return {
+      status: "idle",
+      health: "degraded",
+      hostCount: 0,
+      operationCount: 0,
+      bindingCount: 0,
+      issueCount: 1,
+      hosts: [],
+    };
+  }
+
+  const hostSummaries = [];
+  let hostEntries = [];
+  try {
+    hostEntries = readdirSync(hostsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !entry.isSymbolicLink())
+      .sort((left, right) => left.name.localeCompare(right.name));
+  } catch {
+    totals.issueCount += 1;
+  }
+
+  function readCountedArtifact(file, expectedKind, summary, kind) {
+    try {
+      if (lstatSync(file).isSymbolicLink()) throw new Error("symbolic-link");
+      const value = JSON.parse(readFileSync(file, "utf8"));
+      if (!value || typeof value !== "object" || Array.isArray(value) || value.kind !== expectedKind) {
+        throw new Error("invalid-kind");
+      }
+      const status = typeof value.status === "string" && value.status ? value.status : "unknown";
+      summary[`${kind}StatusCounts`][status] = (summary[`${kind}StatusCounts`][status] ?? 0) + 1;
+      summary[`${kind}Count`] += 1;
+    } catch {
+      summary.issueCount += 1;
+    }
+  }
+
+  for (const hostEntry of hostEntries) {
+    const hostRoot = path.join(hostsDir, hostEntry.name);
+    const operationsDir = path.join(hostRoot, "pod-operations");
+    const bindingsDir = path.join(hostRoot, "pod-bindings");
+    if (!existsSync(operationsDir) && !existsSync(bindingsDir)) continue;
+    const summary = {
+      host: hostEntry.name,
+      health: "healthy",
+      operationCount: 0,
+      operationStatusCounts: {},
+      bindingCount: 0,
+      bindingStatusCounts: {},
+      issueCount: 0,
+    };
+    try {
+      if (existsSync(operationsDir)) {
+        if (lstatSync(operationsDir).isSymbolicLink()) throw new Error("operations-symlink");
+        for (const entry of readdirSync(operationsDir, { withFileTypes: true })) {
+          if (!entry.name.endsWith(".json")) continue;
+          if (entry.isSymbolicLink() || !entry.isFile()) {
+            summary.issueCount += 1;
+            continue;
+          }
+          readCountedArtifact(
+            path.join(operationsDir, entry.name),
+            "WakeflowHostPodOperation",
+            summary,
+            "operation",
+          );
+        }
+      }
+    } catch {
+      summary.issueCount += 1;
+    }
+    try {
+      if (existsSync(bindingsDir)) {
+        if (lstatSync(bindingsDir).isSymbolicLink()) throw new Error("bindings-symlink");
+        for (const podEntry of readdirSync(bindingsDir, { withFileTypes: true })) {
+          if (podEntry.isSymbolicLink()) {
+            summary.issueCount += 1;
+            continue;
+          }
+          if (!podEntry.isDirectory()) continue;
+          const podDir = path.join(bindingsDir, podEntry.name);
+          for (const entry of readdirSync(podDir, { withFileTypes: true })) {
+            if (!entry.name.endsWith(".json")) continue;
+            if (entry.isSymbolicLink() || !entry.isFile()) {
+              summary.issueCount += 1;
+              continue;
+            }
+            readCountedArtifact(
+              path.join(podDir, entry.name),
+              "WakeflowHostPodBinding",
+              summary,
+              "binding",
+            );
+          }
+        }
+      }
+    } catch {
+      summary.issueCount += 1;
+    }
+    summary.health = summary.issueCount > 0 ? "degraded" : "healthy";
+    totals.operationCount += summary.operationCount;
+    totals.bindingCount += summary.bindingCount;
+    totals.issueCount += summary.issueCount;
+    hostSummaries.push(summary);
+  }
+
+  return {
+    status: totals.operationCount > 0 || totals.bindingCount > 0 ? "observed" : "idle",
+    health: totals.issueCount > 0 ? "degraded" : "healthy",
+    hostCount: hostSummaries.length,
+    ...totals,
+    hosts: hostSummaries,
+  };
+}
+
 function scanDemandHostOwnership(workspaceRoot) {
   // Read-only visibility: which host's controller owns each active demand.
   const config = loadWorkspaceConfig({ workspaceRoot });
   const ledgerPaths = workspaceLedgerPaths({ workspaceRoot, config });
   const currentDir = ledgerPaths.workspaceCurrentDir;
-  const empty = {
-    total: 0,
-    activeCount: 0,
-    byHost: {},
-    truncated: 0,
-    demands: [],
-    unreadableCount: 0,
-    unreadable: [],
-    authorityErrorCount: 0,
-    authorityErrors: [],
-  };
-  if (!existsSync(currentDir)) return empty;
   const active = [];
   const unreadable = [];
   const authorityErrors = [];
   const byHost = {};
+  const placements = [];
+  const pods = [];
   let total = 0;
-  for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
-    if (isWakeflowInitStagingEntry(entry.name)) continue;
-    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
-    const stateRoot = path.join(currentDir, entry.name);
-    const inspected = inspectActiveDemandStateRoot({ workspaceRoot, stateRoot });
-    if (inspected.missingState && inspected.issues.length === 0) continue;
-    total += 1;
-    if (!inspected.state) {
-      const issue = inspected.issues[0] ?? {
-        file: inspected.stateFileRef,
-        error: "active demand state is unavailable",
-      };
-      unreadable.push({
+  if (existsSync(currentDir)) {
+    for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
+      if (isWakeflowInitStagingEntry(entry.name)) continue;
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+      const stateRoot = path.join(currentDir, entry.name);
+      const inspected = inspectActiveDemandStateRoot({ workspaceRoot, stateRoot });
+      if (inspected.missingState && inspected.issues.length === 0) continue;
+      total += 1;
+      if (!inspected.state) {
+        const issue = inspected.issues[0] ?? {
+          file: inspected.stateFileRef,
+          error: "active demand state is unavailable",
+        };
+        unreadable.push({
+          stateRoot: inspected.stateRootRef,
+          stateFile: issue.file,
+          error: issue.error,
+        });
+        continue;
+      }
+      const state = inspected.state;
+      authorityErrors.push(...inspected.issues.map(({ file, error }) => ({ file, error })));
+      const host = state.controllerHost ?? "unclaimed";
+      byHost[host] = (byHost[host] ?? 0) + 1;
+      const execution = canonicalExecutionProjection(state);
+      placements.push(execution);
+      if (execution.placement === "pod") {
+        pods.push({
+          demandKey: state.demandKey,
+          stateRoot: inspected.stateRootRef,
+          state: state.state,
+          ...execution,
+        });
+      }
+      // completed/archived demands stay countable but are dropped from the
+      // embedded list: the live workspace can hold ~100 state roots and the
+      // status payload feeds straight into agent context.
+      if (["completed", "archived", "cancelled"].includes(state.state)) continue;
+      active.push({
+        demandKey: state.demandKey,
         stateRoot: inspected.stateRootRef,
-        stateFile: issue.file,
-        error: issue.error,
+        controllerHost: state.controllerHost ?? null,
+        state: state.state,
+        ...execution,
       });
-      continue;
     }
-    const state = inspected.state;
-    authorityErrors.push(...inspected.issues.map(({ file, error }) => ({ file, error })));
-    const host = state.controllerHost ?? "unclaimed";
-    byHost[host] = (byHost[host] ?? 0) + 1;
-    // completed/archived demands stay countable but are dropped from the
-    // embedded list: the live workspace can hold ~100 state roots and the
-    // status payload feeds straight into agent context.
-    if (["completed", "archived", "cancelled"].includes(state.state)) continue;
-    active.push({
-      demandKey: state.demandKey,
-      stateRoot: inspected.stateRootRef,
-      controllerHost: state.controllerHost ?? null,
-      state: state.state,
-    });
   }
   const cap = 30;
   return {
@@ -110,6 +307,14 @@ function scanDemandHostOwnership(workspaceRoot) {
     unreadable: unreadable.slice(0, cap),
     authorityErrorCount: authorityErrors.length,
     authorityErrors: authorityErrors.slice(0, cap),
+    placementCounts: countValues(placements, "placement", ["main", "pod"]),
+    podCount: pods.length,
+    podPhaseCounts: countValues(
+      pods.map((item) => ({ phase: item.phase ?? "not-provisioned" })),
+      "phase",
+    ),
+    pods: pods.slice(0, cap),
+    podsTruncated: pods.length > cap ? pods.length - cap : 0,
   };
 }
 
@@ -509,7 +714,11 @@ export function commandStatus(ctx) {
     ).values()];
     const deliveryCounts = countBy(liveDeliveryStatuses, "status");
     const groupCounts = countBy(groupSummaries, "groupStatus");
-    const nextAction = summarizeRuntimeNextAction({ diagnostics, deliveryStatuses: liveDeliveryStatuses, groupSummaries });
+    const nextAction = summarizeRuntimeNextAction({
+      diagnostics,
+      deliveryStatuses: liveDeliveryStatuses,
+      groupSummaries,
+    });
     const resumePlan = buildRuntimeResumePlan({
       nextAction,
       diagnostics,
@@ -559,6 +768,12 @@ export function commandStatus(ctx) {
       groups: {
         counts: groupCounts,
         items: groupSummaries,
+      },
+      pods: {
+        count: demandOwnership?.podCount ?? 0,
+        phaseCounts: demandOwnership?.podPhaseCounts ?? {},
+        items: demandOwnership?.pods ?? [],
+        itemsTruncated: demandOwnership?.podsTruncated ?? 0,
       },
       replay: replaySummary,
       diagnostics,
@@ -665,6 +880,13 @@ export function commandStatus(ctx) {
         items: compactArray(summary.groups?.items, 10).map(compactGroupSummary),
         itemsTruncated: truncatedCount(summary.groups?.items, 10),
       },
+      pods: {
+        count: summary.pods?.count ?? 0,
+        phaseCounts: summary.pods?.phaseCounts ?? {},
+        items: compactArray(summary.pods?.items, 10),
+        itemsTruncated: (summary.pods?.itemsTruncated ?? 0)
+          + truncatedCount(summary.pods?.items, 10),
+      },
       replay: {
         kind: replay.kind,
         version: replay.version,
@@ -718,6 +940,8 @@ export function commandStatus(ctx) {
   const keepLive = keepLiveStatus();
   const keepLiveStateExists = existsSync(keepLiveStateFile());
   const demandOwnership = scanDemandHostOwnership(workspaceRoot);
+  const podRuntime = scanPodHostRuntime(stateDir);
+  const legacyMigration = scanLegacyPodReservationMigration(workspaceRoot);
   const runtimeSummary = buildRuntimeSummary({
     packetCount,
     groupCount,
@@ -749,6 +973,7 @@ export function commandStatus(ctx) {
       dualHost: {
         hosts: listHostRuntimes ? listHostRuntimes() : [],
         demandOwnership,
+        podRuntime,
         freshLocks: listFreshWindowLocks
           ? listFreshWindowLocks().map((lock) => ({
               windowName: lock.windowName,
@@ -757,6 +982,9 @@ export function commandStatus(ctx) {
               expiresAt: lock.expiresAt,
             }))
           : [],
+      },
+      legacyMigration: {
+        podReservations: legacyMigration,
       },
       runtimeSummary: verbose ? runtimeSummary : compactRuntimeSummary(runtimeSummary),
     },
@@ -771,6 +999,10 @@ export function commandStatus(ctx) {
       `State-root results: ${runtimeSummary.totals.stateRootResults.currentResultCount} current, ${runtimeSummary.totals.stateRootResults.historyResultCount} history (${runtimeSummary.totals.stateRootResults.lateResultCount} late)`,
       `Registered threads: ${registeredThreadCount}`,
       `Window configs: ${windowConfigCount}`,
+      `Pod demands: ${demandOwnership.podCount} (${Object.entries(demandOwnership.podPhaseCounts)
+        .map(([phase, count]) => `${phase}=${count}`)
+        .join(", ") || "none"})`,
+      `Pod host runtime: ${podRuntime.operationCount} operation(s), ${podRuntime.bindingCount} binding(s), health=${podRuntime.health}`,
       `Keep-live: ${keepLive.active ? `active worker=${keepLive.workerPid} child=${keepLive.childPid}` : keepLive.status}`,
       `Next action: ${runtimeSummary.nextAction}`,
     ],

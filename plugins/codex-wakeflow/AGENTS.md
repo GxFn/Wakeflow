@@ -78,6 +78,8 @@ requirement, requires a linked Original Plan + Requirement Design, so it carries
 ready-row invariants plus design-key provenance. It is init-only — dispatch and
 acceptance still require their own evidence and confirmation. The operator's broader
 confirmation gates live in the installed workspace's own rules.
+Auto Claim is mainline-only: while mainline is busy or unavailable it waits
+without creating a demand, Pod, thread, or worktree.
 
 ## Testing And Acceptance
 
@@ -177,19 +179,30 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   an anchor.
 - Within one demand each repository runs exactly ONE window with ONE combined
   task package (the window self-sequences its items); a window is never
-  dispatched two simultaneous tasks inside the same demand. Isolation worktree
-  windows (`<repo>__<id>`, threads whose cwd is the worktree) exist for
-  cross-demand isolation only; their surviving branches land on the
-  pending-merges ledger, and merge-back is human-reviewed and decentralized —
-  no controller merges them.
-- Parallelism exists ONLY at the demand level, as demand pods: up to
-  `maxActiveDemands` (default 2) demands run side by side, each in its own pod
-  (own controller stamped into the state root, own isolation worktrees, own
-  Test — a per-demand thread set opened via `wakeflow_pod_open`), mutually
-  unaware. The WHOLE pod shares its demand's ONE worktree set: every window,
-  Test included, works and verifies inside those worktrees, never on a main
-  checkout. Branch merge-back is human-reviewed and decentralized; claiming
-  past capacity fails closed.
+  dispatched two simultaneous tasks inside the same demand. Host-created Pod
+  product windows (`<repo>__<pod>`) exist only for explicitly authorized
+  cross-demand isolation. Their integration disposition is human-reviewed; no
+  controller merges or removes their worktrees.
+- The mainline fleet is the default execution surface. A busy mainline waits;
+  missing/unhealthy required identity returns `mainline-unavailable` before
+  demand/TODO mutation and is repaired. It never silently creates an isolated
+  demand.
+- A demand pod exists only after an explicit user-authority anchor selects it.
+  Wakeflow sets no numeric pod admission limit. Each pod owns independent
+  `Controller__<pod>`, `Design__<pod>`, `Test__<pod>`, and product sessions.
+  Wakeflow plans, binds, verifies, and logically closes them; it never creates,
+  removes, or adopts a Git worktree or branch.
+- Codex creates every pod product thread from the exact saved repository
+  project with `environment.type=worktree`; Controller/Design/Test are distinct
+  local control-project threads. Journal each create by launch correlation; a
+  temporary `clientThreadId` is pending search/recovery evidence only and can
+  never enter the registry. Freeze Pod Design with
+  `wakeflow_pod_prepare_design_request`. A pod reaches `control-ready` only
+  after all three control receipts bind, and `execution-ready` only after its
+  matching Design handoff and every required product receipt bind. Pod Test
+  dispatch additionally requires validated `direct-multi-root` access to every
+  active product binding; unsupported access stays blocked without fallback.
+  Logical close and Codex physical worktree cleanup are separate facts.
 
 Delivery-envelope fields, host-thread send mechanics, keep-live, and review flow
 live in `skills/wakeflow-governance/references/wakeflow-delivery.md`,

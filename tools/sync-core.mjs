@@ -18,13 +18,34 @@
  * that those contract files exist.
  */
 
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+function argValue(name, fallback = null) {
+  const args = process.argv.slice(2);
+  const equals = args.find((arg) => arg.startsWith(`${name}=`));
+  if (equals) return equals.slice(name.length + 1);
+  const index = args.indexOf(name);
+  return index >= 0 && args[index + 1] && !args[index + 1].startsWith("--")
+    ? args[index + 1]
+    : fallback;
+}
+
+const defaultRepoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const repoRoot = path.resolve(argValue("--repo-root", defaultRepoRoot));
 const coreRoot = path.join(repoRoot, "core");
 const check = process.argv.includes("--check");
+const CORE_MANIFEST = "scripts/wakeflow-core-manifest.json";
 
 const TARGETS = [
   {
@@ -81,6 +102,39 @@ function sameContent(a, b) {
   return readFileSync(a).equals(readFileSync(b));
 }
 
+function validManagedPath(relative) {
+  return Boolean(relative)
+    && !path.isAbsolute(relative)
+    && relative !== ".."
+    && !relative.startsWith(`..${path.sep}`)
+    && !relative.split(/[\\/]/u).includes("..");
+}
+
+function readManagedManifest(targetRoot) {
+  const file = path.join(targetRoot, CORE_MANIFEST);
+  if (!existsSync(file)) return { file, value: null, issue: `${path.relative(repoRoot, file)} is missing` };
+  try {
+    const value = JSON.parse(readFileSync(file, "utf8"));
+    if (value?.schemaVersion !== 1 || value?.source !== "core" || !Array.isArray(value.files)) {
+      return { file, value: null, issue: `${path.relative(repoRoot, file)} has an invalid shape` };
+    }
+    if (value.files.some((relative) => !validManagedPath(relative))) {
+      return { file, value: null, issue: `${path.relative(repoRoot, file)} contains an unsafe managed path` };
+    }
+    return { file, value, issue: null };
+  } catch (error) {
+    return { file, value: null, issue: `${path.relative(repoRoot, file)} is unreadable: ${error.message}` };
+  }
+}
+
+function expectedManifest(coreFiles) {
+  return {
+    schemaVersion: 1,
+    source: "core",
+    files: coreFiles,
+  };
+}
+
 if (!existsSync(coreRoot) || !statSync(coreRoot).isDirectory()) {
   console.error("core/ directory is missing; nothing to sync.");
   process.exitCode = 1;
@@ -97,6 +151,26 @@ if (!existsSync(coreRoot) || !statSync(coreRoot).isDirectory()) {
         continue;
       }
       mkdirSync(targetRoot, { recursive: true });
+    }
+
+    const managed = readManagedManifest(targetRoot);
+    const stale = (managed.value?.files ?? [])
+      .filter((relative) => !coreFiles.includes(relative))
+      .filter((relative) => existsSync(path.join(targetRoot, relative)));
+    if (check) {
+      if (managed.issue) issues.push(managed.issue);
+      for (const relative of stale) {
+        issues.push(`${target.dir}/${relative} is a stale core-managed file`);
+      }
+      const expected = JSON.stringify(expectedManifest(coreFiles));
+      const actual = managed.value ? JSON.stringify(managed.value) : null;
+      if (managed.value && actual !== expected) {
+        issues.push(`${target.dir}/${CORE_MANIFEST} does not match the current core file set`);
+      }
+    } else {
+      for (const relative of stale) {
+        rmSync(path.join(targetRoot, relative), { force: true });
+      }
     }
 
     for (const relative of coreFiles) {
@@ -117,6 +191,11 @@ if (!existsSync(coreRoot) || !statSync(coreRoot).isDirectory()) {
       if (!existsSync(required)) {
         issues.push(`${target.dir}/${relative} is missing (host contract file)`);
       }
+    }
+
+    if (!check) {
+      mkdirSync(path.dirname(managed.file), { recursive: true });
+      writeFileSync(managed.file, `${JSON.stringify(expectedManifest(coreFiles), null, 2)}\n`);
     }
   }
 

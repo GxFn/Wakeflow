@@ -5,12 +5,12 @@ import path from "node:path";
 import { loadWorkspaceConfig, resolveWorkspaceRoot, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 import { isCompletedState, isPausedLikeState, normalizeStateId } from "./lib/wakeflow-status-machine.mjs";
 import {
-  activeDemandCapacityBlockers,
   activeDemandConflictSummary,
-  maxActiveDemandsFor,
+  activeDemandPlacementSummary,
   scanUnarchivedDemandStateRoots,
   summarizeAuthoritativeDemandState,
 } from "./lib/wakeflow-active-demands.mjs";
+import { parseTodoBoard } from "./lib/wakeflow-todo-table.mjs";
 
 const args = process.argv.slice(2);
 const workspaceRoot = resolveWorkspaceRoot(args);
@@ -90,42 +90,6 @@ function read(file) {
   return readFileSync(file, "utf8");
 }
 
-function splitMarkdownRow(line) {
-  const trimmed = line.trim();
-  if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) {
-    return [];
-  }
-  return trimmed
-    .slice(1, -1)
-    .split("|")
-    .map((cell) => cell.trim());
-}
-
-function tableRows(section) {
-  return section
-    .split("\n")
-    .map(splitMarkdownRow)
-    .filter((row) => row.length > 0 && !row.every((cell) => /^:?-{3,}:?$/.test(cell)));
-}
-
-function sectionContent(content, heading) {
-  const start = content.indexOf(`## ${heading}`);
-  if (start < 0) {
-    return "";
-  }
-  const rest = content.slice(start);
-  const next = rest.slice(1).search(/\n## /);
-  return next >= 0 ? rest.slice(0, next + 1) : rest;
-}
-
-function rowObject(header, row) {
-  const out = {};
-  for (const [index, column] of header.entries()) {
-    out[column] = row[index] ?? "";
-  }
-  return out;
-}
-
 function normalizePriority(value) {
   const text = String(value ?? "").trim().toUpperCase();
   if (priorityRank.has(text)) {
@@ -144,24 +108,15 @@ function parseTodoCandidates(warnings) {
     return [];
   }
 
-  const content = read(todoBoardPath);
-  const section = sectionContent(content, "Global TODO");
-  if (!section) {
-    warnings.push("Global TODO board is missing ## Global TODO.");
+  const parsed = parseTodoBoard(read(todoBoardPath));
+  if (!parsed.range || parsed.headerIndex === undefined) {
+    warnings.push(`${parsed.issues[0]}.`);
     return [];
   }
-  const rows = tableRows(section);
-  const header = rows.find((row) => row.includes("ID") && row.includes("Status"));
-  if (!header) {
-    warnings.push("Global TODO board is missing a table headed by ID / Status.");
-    return [];
-  }
+  if (parsed.issues.length > 0) warnings.push(...parsed.issues);
 
-  return rows
-    .filter((row) => row !== header)
-    .filter((row) => row.some((cell) => cell && !/^:?-{3,}:?$/.test(cell)))
-    .map((row) => rowObject(header, row))
-    .filter((entry) => entry.ID)
+  return parsed.rows
+    .map((row) => row.value)
     .map((entry) => {
       const status = entry["Status"];
       const stateId = normalizeStateId(status);
@@ -261,7 +216,7 @@ function compareCandidates(left, right) {
   return 0;
 }
 
-function applyWorkspaceDemandGuard(candidate, conflicts, maxActive) {
+function applyWorkspaceDemandGuard(candidate, conflicts, placementSummary) {
   // A candidate whose OWN demand already has an unarchived state root is in
   // flight, not claimable — re-claiming it would double-create the demand.
   const own = conflicts.find((item) => item.demandKey === candidate.id);
@@ -273,22 +228,33 @@ function applyWorkspaceDemandGuard(candidate, conflicts, maxActive) {
         `demand ${candidate.id} already has an unarchived state root (${own.stateRoot}, ${own.state}); it is in flight — continue it there instead of re-claiming`,
       ],
       eligible: false,
+      placementStatus: "identity-active",
       ...(candidate.source === "design" ? { controllerClaimable: false } : {}),
     };
   }
-  // Multi-active demands: otherwise a candidate is blocked only when claiming
-  // it would EXCEED workspace capacity.
-  const candidateConflicts = conflicts;
-  const capacity = { active: candidateConflicts, max: maxActive, atCapacity: candidateConflicts.length >= maxActive };
-  if (!capacity.atCapacity) return candidate;
-  const blockers = [
-    ...(candidate.blockers ?? []),
-    ...activeDemandCapacityBlockers(capacity),
-  ];
+  if (!placementSummary.authoritySafe) {
+    return {
+      ...candidate,
+      blockers: [
+        ...(candidate.blockers ?? []),
+        `active demand authority is unreadable: ${activeDemandConflictSummary(placementSummary.unreadable)}`,
+      ],
+      eligible: false,
+      placementStatus: "authority-blocked",
+      ...(candidate.source === "design" ? { controllerClaimable: false } : {}),
+    };
+  }
+  if (!placementSummary.mainlineBusy) {
+    return { ...candidate, placementStatus: "mainline-ready" };
+  }
   return {
     ...candidate,
-    blockers,
+    blockers: [
+      ...(candidate.blockers ?? []),
+      `mainline is busy: ${activeDemandConflictSummary(placementSummary.mainline)}`,
+    ],
     eligible: false,
+    placementStatus: "waiting-mainline",
     ...(candidate.source === "design" ? { controllerClaimable: false } : {}),
   };
 }
@@ -313,28 +279,32 @@ if (afterCompletion && !status.eligibleForAfterCompletion) {
 if (!["all", "todo"].includes(sourceMode)) {
   issues.push(`unsupported --source ${sourceMode}; use all or todo`);
 }
-const maxActiveDemands = maxActiveDemandsFor(workspaceConfig);
-if (workspaceDemandConflicts.length >= maxActiveDemands) {
-  // At-capacity is a NORMAL steady state for the dashboard (in-flight demands
-  // still need review/dispatch); it blocks new claims per candidate, not the
-  // whole scan — so it is a warning, never an ok:false issue.
-  warnings.push(`workspace is at its active-demand capacity (${workspaceDemandConflicts.length}/${maxActiveDemands}): ${activeDemandConflictSummary(workspaceDemandConflicts)}; new claims are blocked until one completes and archives`);
+warnings.push(...(workspaceConfig.configMigrationWarnings ?? []));
+const placementSummary = activeDemandPlacementSummary(workspaceDemandConflicts);
+if (placementSummary.mainlineBusy) {
+  warnings.push(`mainline is busy: ${activeDemandConflictSummary(placementSummary.mainline)}; ordinary candidates remain visible as waiting until the mainline demand archives`);
 }
 
 const todoCandidates = parseTodoCandidates(warnings)
-  .map((candidate) => applyWorkspaceDemandGuard(candidate, workspaceDemandConflicts, maxActiveDemands));
+  .map((candidate) => applyWorkspaceDemandGuard(candidate, workspaceDemandConflicts, placementSummary));
 const allCandidates = [...todoCandidates].sort(compareCandidates);
 const matchedCandidates = targetId ? allCandidates.filter((candidate) => candidate.id === targetId) : allCandidates;
 if (targetId && matchedCandidates.length === 0) {
   issues.push(`target candidate not found: ${targetId}`);
 }
 if (targetId) {
-  for (const candidate of matchedCandidates.filter((item) => !item.eligible)) {
+  for (const candidate of matchedCandidates.filter((item) => (
+    !item.eligible && item.placementStatus !== "waiting-mainline"
+  ))) {
     issues.push(`${targetId} is not claimable: ${candidate.blockers.join("; ") || "unknown blocker"}`);
   }
 }
 const candidates = matchedCandidates
   .filter((candidate) => candidate.eligible)
+  .sort(compareCandidates)
+  .slice(0, Number.isFinite(limit) && limit > 0 ? limit : 8);
+const waitingCandidates = matchedCandidates
+  .filter((candidate) => candidate.placementStatus === "waiting-mainline")
   .sort(compareCandidates)
   .slice(0, Number.isFinite(limit) && limit > 0 ? limit : 8);
 const recommended = candidates[0] ?? null;
@@ -348,8 +318,7 @@ const result = {
   targetId,
   currentStatus: status,
   workspaceDemandConflicts,
-  // Multi-active dashboard: what is in flight and how much room is left —
-  // the controller's per-wake orientation across demands.
+  // Active roots are observation, not a numeric capacity gate.
   activeDemands: workspaceDemandConflicts.map((item) => ({
     demandKey: item.demandKey,
     state: item.state,
@@ -357,13 +326,16 @@ const result = {
     controllerWindow: item.controllerWindow,
     executionPlacement: item.executionPlacement,
   })),
-  demandCapacity: {
-    active: workspaceDemandConflicts.length,
-    max: maxActiveDemands,
-    atCapacity: workspaceDemandConflicts.length >= maxActiveDemands,
+  placement: {
+    mainlineBusy: placementSummary.mainlineBusy,
+    authoritySafe: placementSummary.authoritySafe,
+    activeMainlineDemandKeys: placementSummary.mainline.map((item) => item.demandKey),
+    activeIsolatedDemandKeys: placementSummary.isolated.map((item) => item.demandKey),
   },
   candidateCount: candidates.length,
   candidates,
+  waitingCandidateCount: waitingCandidates.length,
+  waitingCandidates,
   recommended,
   autoClaimable,
   wrote: false,
@@ -376,6 +348,8 @@ const result = {
       ? "Total control may claim the single eligible candidate by creating or updating a current plan; scripts still must not accept evidence or dispatch without the plan gate."
       : candidates.length > 1
         ? "Multiple eligible candidates exist; total control must choose one before creating a current plan or continuing unattended automation."
+        : waitingCandidates.length > 0
+          ? "Ordinary candidates are waiting for the mainline lane. Continue the active mainline demand, or request an isolated pod only with explicit user authorization."
         : "No eligible Design/TODO candidate was found; stop the unattended loop or wait for a new handoff/TODO.",
 };
 

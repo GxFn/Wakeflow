@@ -1,10 +1,25 @@
+import { createHash, randomUUID } from "node:crypto";
 import { hostProfile } from "./wakeflow-host-profile.mjs";
 
-export function createThreadRegistration({ windowName, threadId, registeredAt, version = 2 }) {
+function legacyBindingId({ windowName, registeredAt }) {
+  return `legacy-${createHash("sha256")
+    .update(JSON.stringify({ windowName, registeredAt: registeredAt || null }))
+    .digest("hex")
+    .slice(0, 24)}`;
+}
+
+export function createThreadRegistration({
+  windowName,
+  threadId,
+  registeredAt,
+  bindingId = randomUUID(),
+  version = 3,
+}) {
   return {
     kind: hostProfile.kinds.windowRegistration,
     version,
     windowName,
+    bindingId,
     threadId,
     registeredAt,
     lastVerifiedAt: registeredAt,
@@ -15,7 +30,7 @@ export function normalizeThreadRegistrationRecord({
   windowName,
   registration,
   threadRegistryFile,
-  version = 2,
+  version = 3,
 }) {
   if (registration.kind !== hostProfile.kinds.windowRegistration) {
     throw new Error(`Invalid thread registration for ${windowName}.`);
@@ -27,6 +42,10 @@ export function normalizeThreadRegistrationRecord({
     kind: hostProfile.kinds.windowRegistration,
     version,
     windowName: registration.windowName || windowName,
+    bindingId: registration.bindingId || legacyBindingId({
+      windowName: registration.windowName || windowName,
+      registeredAt: registration.registeredAt,
+    }),
     threadId: registration.threadId,
     registeredAt: registration.registeredAt,
     lastVerifiedAt: registration.lastVerifiedAt,
@@ -61,6 +80,7 @@ export function buildWindowDispatchConfig({
     responsibility: repository?.role,
     dispatchable,
     threadRegistered: Boolean(registration),
+    threadBindingId: registration?.bindingId,
     threadRegistryFile,
     cwd,
     responsibilityRoot,

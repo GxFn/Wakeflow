@@ -8,12 +8,40 @@ builds, runtime packages, plugin assets, dashboard outputs, and release paths,
 not only from the repository named by the user.
 
 Design participates in requirement discussion, signal judgment, non-bug outcome
-redesign, and handoff drafting — but through Design's own stateless `wakeflow_deliver`
-path, not as a controller dispatch target. The controller does not build a dispatch
-packet or delivery envelope for Design; on a `redesign` review decision it parks the
-demand and surfaces it to Design, then resumes the same demand with `add-task-package`
-once Design delivers the corrected requirement. Test is included only when real-scenario
-evidence is required.
+redesign, and handoff drafting. On the mainline, Design uses its stateless
+`wakeflow_deliver` path and is not a product dispatch target. Inside an
+explicitly authorized Pod, `Controller__<pod>` first freezes a
+`PodDesignRequest` with `wakeflow_pod_prepare_design_request`, sends that exact
+request directly to `Design__<pod>`, and records the matching
+`PodDesignHandoffEnvelope`; the same-demand handoff never creates a second
+global TODO or routes through mainline Design. Test is included only when
+real-scenario evidence is required.
+
+## Placement And Binding Gate
+
+**NO PRODUCT DISPATCH BEFORE THE EXECUTION SURFACE IS VERIFIED.**
+
+| Surface | Required fact |
+| --- | --- |
+| mainline | selected by default, healthy, idle, exact configured repository |
+| Pod | explicit user `authorizationRef`, `execution-ready`, verified host binding |
+
+A busy mainline waits. Missing/unhealthy required mainline identity returns
+`mainline-unavailable` before demand/TODO mutation and is repaired; neither
+condition authorizes a Pod. Pod product dispatch resolves cwd and Git identity
+only from the host-scoped binding receipt. Never derive it from a window
+suffix, static config overlay, parent workspace, or prompt assertion.
+
+Journal the exact launch correlation around the Claude helper call. The helper
+returns the final session id synchronously: Claude has no Codex
+`clientThreadId` pending state, and no temporary request id belongs in the
+registry.
+
+Pod Test has one extra gate: prepare and record the independent Test access
+probe. Dispatch opens only for `validated` + `direct-multi-root` coverage of
+every active product binding. Unsupported access stays blocked; do not
+substitute a main checkout, a product window, or an unverified per-repository
+executor.
 
 ## Identity Gate
 
@@ -27,6 +55,10 @@ tmux-resident Claude Code window session) must require the target to:
 - state what the window is not responsible for.
 
 If the target cannot confirm identity, it stops and reports a blocker.
+
+For a Pod product window, identity must also match its verified binding
+(`podId`, repository, actual worktree root, Git common dir, base HEAD, and
+`mainCheckout=false`). Identity text cannot repair a failed binding.
 
 A dispatch prompt arrives as a user message pasted into the target's tmux pane
 by the host helper. Arrival proves transport only; it never grants identity or
@@ -58,10 +90,18 @@ decision — say it in the package, and check it at acceptance.
 
 An explicit controller `rework` normally re-dispatches the same target task and
 package with a fresh dispatch group. This preserves that task's `reworkCount`
-and recurring-problem signal. Add a rework companion package only when the
-review truly changes or extends task scope; never create one merely because the
-state is `needs-rework`. A `redesign` decision is different: route a new Design
-outcome package and do not re-dispatch the product task.
+and recurring-problem signal. New scope cannot branch while that rework route
+is active; after the original task is accepted, the controller may add a
+separate supplemental package. A `redesign` decision is different: Design delivers the
+corrected requirement through its stateless path, then the controller adds a new
+full-context implementation task in the product responsibility window with
+`replacesTargetTaskId` pointing to the parked task. The old
+redesign task cannot be re-dispatched; accepting the replacement marks it
+`superseded`.
+
+For Pod redesign, replace “Design delivers through its stateless path” above
+with the Pod request/handoff loop. The product replacement still uses
+`replacesTargetTaskId`; only the Design transport differs.
 
 Dispatch by task package, not tiny fragments. A task package should group
 mainline work, same-window TODOs, and evidence work that share the same boundary
@@ -113,19 +153,19 @@ Continue current window task: <currentWindow> / <taskId>.
 Current objective (the task package is authoritative):
 - <one-line objective>
 
-Completion expectations:
+Completion focus (full criteria are in the task package):
 - <bounded observable result>
 
 Read before execution, in order:
 - Task package (complete task context): <absolute package path>
-- Requirement background anchor [goal]: <document#section>
+- Requirement background entry (full anchors are in the task package) [goal]: <document#section>
 - Repository instructions: <repository>/CLAUDE.md
 
 Required execution Skills (execution-process authority):
 - skills/wakeflow-target/SKILL.md
 - <craft or Test skill when selected by the package>
 
-Identity and boundaries:
+Identity (full boundaries are in the task package):
 - Current responsibility window: <window>
 - Only working repository: <absolute repository path>
 
@@ -140,10 +180,11 @@ Dispatch record (routing and trace only):
 - dispatchGroup: <group>
 ```
 
-Prompts stay bounded: include only a small completion/boundary summary and
-anchor ids/claims; full probes, detailed scope, validation commands, evidence
-fields, and Test contracts stay in the task package, repository `CLAUDE.md`, or
-listed Skills.
+Prompts stay bounded: include only the first two ordered completion
+expectations, one original requirement entry, and acceptance-anchor ids/claims.
+Full context, requirement anchors, boundaries, commit policy, probes,
+validation commands, evidence fields, and Test contracts stay in the task
+package, repository `CLAUDE.md`, or listed Skills.
 
 Before writing transport files, run the target prepare as a preview and inspect
 `readiness`, `taskBriefing`, the resolved repository root, required Skills, and

@@ -4,7 +4,6 @@ import { buildControllerCallbackPlan } from "./wakeflow-return-policy.mjs";
 import {
   controllerReviewScope,
   hasPendingReworkDecision,
-  isProductReworkCompanion,
   taskExpectsTargetResult,
 } from "./wakeflow-review-scope.mjs";
 import { buildControllerReviewPack, rawEvidenceRequiredFrom, reviewAdvisories, sharedReviewGates } from "./wakeflow-review-pack.mjs";
@@ -13,10 +12,14 @@ import {
   readStateRootTargetResultItems,
   selectCurrentStateRootResults,
 } from "./wakeflow-state-results.mjs";
+import { evaluateTargetResultContract } from "./wakeflow-result-contract.mjs";
+import { hostProfile } from "./wakeflow-host-profile.mjs";
+import { resolvePodTargetWorkRoot } from "./wakeflow-pod-runtime.mjs";
 
 export function createReviewCommands(ctx) {
   const {
     workspaceRoot,
+    stateDir,
     dirs,
     version,
     getValue,
@@ -29,6 +32,7 @@ export function createReviewCommands(ctx) {
     listJsonFiles,
     readJson,
     resultFileFor,
+    findResultFile,
     controllerReturnDeliveryStatusForGroup,
     targetDeliveryStatusesForPacket,
     groupFromPackets,
@@ -51,22 +55,35 @@ export function createReviewCommands(ctx) {
       }
     }
     const direct = repoRootByWindow.get(windowName);
-    if (direct) return direct;
-    // Isolation-worktree / pod-suffixed windows (Repo__pod) resolve against
-    // the base window's repo; the local overlay may already be gone by review
-    // time and the base checkout still contains the committed evidence.
-    const base = String(windowName).split("__")[0];
-    return (base && base !== windowName ? repoRootByWindow.get(base) : null) ?? null;
+    return direct ?? null;
   }
 
-  // Candidate roots for a relative evidence ref, most-specific first: the producing target
-  // window's repo (where the work + commit happened), then the workspace root (plus any
-  // extra roots such as the state root). Resolving ONLY against the workspace root
-  // false-flags a target's own repo-relative evidence as "missing", which stalls the
-  // controller return / verdict — a real closed-loop break.
-  function evidenceRefCandidates(text, targetWindow, extraRoots = []) {
+  function podTargetWorkRoot(stateRoot, state, targetWindow) {
+    try {
+      return resolvePodTargetWorkRoot({
+        workspaceRoot,
+        stateDir,
+        host: hostProfile.hostId || hostProfile.runtime.hostDirName,
+        stateRoot,
+        state,
+        targetWindow,
+      });
+    } catch (error) {
+      fail(error.message);
+    }
+    return null;
+  }
+
+  // Candidate roots for a relative evidence ref, most-specific first.
+  // Mainline targets retain the configured repository/workspace fallback.
+  // Pod targets are different: their only execution root is the verified
+  // binding receipt actualCwd, never the configured main checkout.
+  function evidenceRefCandidates(text, targetWindow, extraRoots = [], podTarget = null) {
     if (path.isAbsolute(text)) return [text];
-    return [...extraRoots, repoRootForWindow(targetWindow), workspaceRoot]
+    const roots = podTarget?.isPod
+      ? [...extraRoots, podTarget.actualCwd]
+      : [...extraRoots, repoRootForWindow(targetWindow), workspaceRoot];
+    return roots
       .filter(Boolean)
       .map((root) => path.resolve(root, text));
   }
@@ -90,7 +107,17 @@ export function createReviewCommands(ctx) {
       .map((item) => item.ref);
   }
 
-  function calculateCraftEvidenceGaps({ required, result, targetWindow, taskId, taskPackageId, stateRoot, stateRootRef }) {
+  function calculateCraftEvidenceGaps({
+    required,
+    result,
+    targetWindow,
+    taskId,
+    taskPackageId,
+    stateRoot,
+    stateRootRef,
+    state,
+    podTarget,
+  }) {
     if (result?.status !== "completed" || !Array.isArray(required) || required.length === 0) return [];
     const provided = Array.isArray(result.craftEvidence) ? result.craftEvidence : [];
     const byKind = new Map();
@@ -120,7 +147,14 @@ export function createReviewCommands(ctx) {
       for (const entry of reviewableEntries) {
         if (typeof entry?.ref !== "string" || !entry.ref) continue;
         const summary = stateRoot
-          ? stateRootEvidenceRefSummary(stateRoot, stateRootRef, entry.ref, targetWindow)
+          ? stateRootEvidenceRefSummary(
+              stateRoot,
+              stateRootRef,
+              entry.ref,
+              targetWindow,
+              state,
+              podTarget,
+            )
           : evidenceRefSummary(entry.ref, targetWindow);
         if (summary.looksLikePath && !summary.exists) {
           gaps.push({ ...base, ref: entry.ref, reason: "artifact-missing" });
@@ -132,11 +166,24 @@ export function createReviewCommands(ctx) {
 
   function targetResultReviewEntry(item) {
     const result = item.result;
+    const state = item.stateRoot
+      ? readControllerStateRoot(item.stateRoot).state
+      : null;
+    const podTarget = item.stateRoot
+      ? podTargetWorkRoot(item.stateRoot, state, item.packet.targetWindow)
+      : null;
     const evidenceRefs = Array.isArray(result?.evidenceRefs) ? result.evidenceRefs : [];
     const verificationSummary = Array.isArray(result?.verificationSummary) ? result.verificationSummary : [];
     const commits = Array.isArray(result?.commits) ? result.commits : [];
     const evidenceRefSummaries = item.stateRoot
-      ? evidenceRefs.map((ref) => stateRootEvidenceRefSummary(item.stateRoot, item.stateRootRef, ref, item.packet.targetWindow))
+      ? evidenceRefs.map((ref) => stateRootEvidenceRefSummary(
+          item.stateRoot,
+          item.stateRootRef,
+          ref,
+          item.packet.targetWindow,
+          state,
+          podTarget,
+        ))
       : evidenceRefs.map((ref) => evidenceRefSummary(ref, item.packet.targetWindow));
     const missingEvidenceRefs = missingEvidenceRefsFromSummaries(evidenceRefSummaries);
     const craftEvidenceGaps = calculateCraftEvidenceGaps({
@@ -147,7 +194,26 @@ export function createReviewCommands(ctx) {
       taskPackageId: item.packet.stateRef?.taskPackageId,
       stateRoot: item.stateRoot,
       stateRootRef: item.stateRootRef,
+      state,
+      podTarget,
     });
+    const resultContract = evaluateTargetResultContract({
+      packet: item.packet,
+      taskPackage: {
+        contextVersion: item.packet.resultContract === "target-result-envelope-v2" ? 1 : 0,
+        acceptanceAnchors: item.packet.acceptanceAnchors ?? [],
+        testExecution: item.packet.testExecution ?? null,
+        commitExpectation: item.packet.taskBriefing?.commitExpectation ?? null,
+      },
+      result,
+    });
+    const resultContractGaps = [...resultContract.recordIssues, ...resultContract.reviewIssues]
+      .map((gap) => ({
+        targetWindow: item.packet.targetWindow,
+        taskId: item.packet.taskId,
+        taskPackageId: item.packet.stateRef?.taskPackageId,
+        ...gap,
+      }));
     return {
       packetId: item.packet.id,
       targetWindow: item.packet.targetWindow,
@@ -169,26 +235,37 @@ export function createReviewCommands(ctx) {
       // this data in the pack to do it.
       ...(Array.isArray(result?.craftEvidence) && result.craftEvidence.length ? { craftEvidence: result.craftEvidence } : {}),
       resultStatus: result?.status || "missing",
+      summary: result?.summary || "",
       resultFile: result ? path.relative(workspaceRoot, item.file) : undefined,
       changedRepos: Array.isArray(result?.changedRepos) ? result.changedRepos : [],
       commits,
+      commitDisposition: result?.commitDisposition ?? null,
+      resultMapping: result?.resultMapping ?? resultContract.mapping,
       evidenceRefs,
       evidenceRefSummaries,
       missingEvidenceRefs,
       craftEvidenceGaps,
+      resultContractGaps,
       verificationSummary,
       riskSummary: Array.isArray(result?.riskSummary) ? result.riskSummary : [],
       nextSuggestion: result?.nextSuggestion,
       reportedAt: result?.reportedAt,
-      hasControllerReviewEvidence: commits.length > 0 || evidenceRefs.length > 0 || verificationSummary.length > 0,
-      targetDeliveries: targetDeliveryStatusesForPacket(item.packet.id),
+      hasControllerReviewEvidence: commits.length > 0
+        || evidenceRefs.length > 0
+        || verificationSummary.length > 0
+        || (result?.craftEvidence ?? []).length > 0,
+      targetDeliveries: targetDeliveryStatusesForPacket(item.packet.id, item.packet.stateRef),
       stateRootResult: Boolean(item.stateRootResult),
     };
   }
 
   function buildReviewPack(review) {
     const returnGroup = review.group || (review.packets.length === 1 ? review.packets[0].dispatchGroup : "");
-    const controllerReturnDelivery = controllerReturnDeliveryStatusForGroup(returnGroup);
+    const controllerReturnDelivery = controllerReturnDeliveryStatusForGroup(
+      returnGroup,
+      {},
+      review.packets[0]?.stateRef,
+    );
     const callbackPlan = buildControllerCallbackPlan({
       dispatchGroup: returnGroup,
       returnPolicy: review.returnPolicy,
@@ -244,8 +321,10 @@ export function createReviewCommands(ctx) {
       taskId: result?.targetTaskId || result?.taskId,
       dispatchGroup: result?.dispatchGroup,
       status: result?.status,
+      summary: result?.summary || "",
       changedRepos,
       commits,
+      commitDisposition: result?.commitDisposition ?? null,
       evidenceRefs: Array.isArray(result?.evidenceRefs) ? result.evidenceRefs : [],
       verificationSummary: Array.isArray(result?.verificationSummary)
         ? result.verificationSummary
@@ -258,6 +337,7 @@ export function createReviewCommands(ctx) {
           ? result.risks
           : [],
       craftEvidence: Array.isArray(result?.craftEvidence) ? result.craftEvidence : [],
+      resultMapping: result?.resultMapping,
       nextSuggestion: result?.nextSuggestion || result?.controllerActionRequired,
       reportedAt: result?.reportedAt || result?.createdAt,
     };
@@ -284,11 +364,21 @@ export function createReviewCommands(ctx) {
     };
   }
 
-  function stateRootEvidenceRefSummary(stateRoot, stateRootRef, ref, targetWindow) {
+  function stateRootEvidenceRefSummary(
+    stateRoot,
+    stateRootRef,
+    ref,
+    targetWindow,
+    state,
+    podTarget = null,
+  ) {
     const text = String(ref ?? "");
     const looksLikePath = text.includes("/") || /\.(json|md|log|txt|png|jpg|jpeg|webp|html|csv)$/i.test(text);
     const absoluteRef = path.isAbsolute(text);
-    const candidatePaths = looksLikePath ? evidenceRefCandidates(text, targetWindow, [stateRoot]) : [];
+    const targetContext = podTarget ?? podTargetWorkRoot(stateRoot, state, targetWindow);
+    const candidatePaths = looksLikePath
+      ? evidenceRefCandidates(text, targetWindow, [stateRoot], targetContext)
+      : [];
     const resolvedPath = candidatePaths.find((candidate) => existsSync(candidate)) || candidatePaths[0] || "";
     const stateRootCandidate = looksLikePath && !absoluteRef ? path.resolve(stateRoot, text) : "";
     return {
@@ -300,7 +390,10 @@ export function createReviewCommands(ctx) {
       resolvedAgainst: resolvedPath && existsSync(resolvedPath)
         ? (() => {
             const relativeToStateRoot = path.relative(stateRoot, resolvedPath);
-            return !relativeToStateRoot.startsWith("..") && !path.isAbsolute(relativeToStateRoot) ? "state-root" : "workspace-root";
+            if (!relativeToStateRoot.startsWith("..") && !path.isAbsolute(relativeToStateRoot)) {
+              return "state-root";
+            }
+            return targetContext?.isPod ? "pod-binding-actual-cwd" : "workspace-root";
           })()
         : undefined,
     };
@@ -342,7 +435,7 @@ export function createReviewCommands(ctx) {
     };
   }
 
-  function stateRootCallbackContext(targetResults) {
+  function stateRootCallbackContext(targetResults, stateRootRef) {
     const controllerReturnResults = targetResults
       .filter((item) => item.dispatchGroup && item.returnRoute === "controller");
     const dispatchGroups = [...new Set(controllerReturnResults.map((item) => item.dispatchGroup))];
@@ -402,7 +495,9 @@ export function createReviewCommands(ctx) {
     const dispatchGroup = dispatchGroups[0];
     const packetsForGroup = listJsonFiles(dirs.packets)
       .map((file) => readJson(file, "dispatch packet"))
-      .filter((packet) => packet.kind === "ControllerDispatchPacket" && packet.dispatchGroup === dispatchGroup);
+      .filter((packet) => packet.kind === "ControllerDispatchPacket"
+        && packet.dispatchGroup === dispatchGroup
+        && packet.stateRef?.stateRoot === stateRootRef);
     if (packetsForGroup.length === 0) {
       const returnPolicy = controllerReturnResults[0]?.returnPolicy || { mode: "group-ready" };
       return {
@@ -442,8 +537,12 @@ export function createReviewCommands(ctx) {
       };
     }
 
-    const review = computeReviewResults({ group: dispatchGroup });
-    const controllerReturnDelivery = controllerReturnDeliveryStatusForGroup(dispatchGroup);
+    const review = computeReviewResults({ group: dispatchGroup, stateRootRef });
+    const controllerReturnDelivery = controllerReturnDeliveryStatusForGroup(
+      dispatchGroup,
+      {},
+      packetsForGroup[0]?.stateRef,
+    );
     return {
       dispatchGroup,
       review,
@@ -499,38 +598,27 @@ export function createReviewCommands(ctx) {
     const allTargetTasks = state.targetTasks ?? [];
     const reviewScope = controllerReviewScope(allTargetTasks);
     const targetTasks = reviewScope.reviewableTargetTasks;
-    const config = loadWorkspaceConfig({ workspaceRoot });
-    const reworkCompanionPresentFor = (anchorTask) => (
-      reviewScope.mode === "rework-first-controller-review-targets"
-      && targetTasks.some((task) => isProductReworkCompanion(task, {
-        anchorTask,
-        currentResultTaskIds: resultsByTask.keys(),
-        repoNames: config.repoNames,
-        controllerWindow: config.controllerWindow,
-        designWindow: config.designWindow,
-        testWindows: testWindowNames(config),
-        realProjectWindow: config.realProjectWindow,
-      }))
-    );
     const targetResults = targetTasks.map((task) => {
+      const podTarget = podTargetWorkRoot(stateRoot, state, task.targetWindow);
       const pendingReworkDecision = hasPendingReworkDecision(task);
-      const reworkAnchorCovered = pendingReworkDecision && reworkCompanionPresentFor(task);
       const item = pendingReworkDecision ? null : resultsByTask.get(task.targetTaskId);
       const result = item?.result ?? null;
       const evidenceRefs = Array.isArray(result?.evidenceRefs) ? result.evidenceRefs : [];
       const verificationSummary = Array.isArray(result?.verification) ? result.verification : [];
-      const evidenceRefSummaries = evidenceRefs.map((ref) => stateRootEvidenceRefSummary(stateRoot, stateRootRef, ref, task.targetWindow));
+      const evidenceRefSummaries = evidenceRefs.map((ref) => stateRootEvidenceRefSummary(
+        stateRoot,
+        stateRootRef,
+        ref,
+        task.targetWindow,
+        state,
+        podTarget,
+      ));
       const missingEvidenceRefs = missingEvidenceRefsFromSummaries(evidenceRefSummaries);
-      // A parked rework/redesign anchor remains missing until a same-product
-      // companion covers it. Treating it as merely pending-dispatch made the
-      // review pack claim controllerReviewReady while reduce-results correctly
-      // refused to form a candidate.
-      const resultExpected = pendingReworkDecision
-        ? !reworkAnchorCovered
-        : stateRootTaskResultExpected(task);
-      const resultStatus = reworkAnchorCovered
-        ? "covered-by-rework-route"
-        : result?.status || (resultExpected ? "missing" : "pending-dispatch");
+      // A parked task stays missing until the SAME task is re-dispatched, or
+      // redesign creates an explicit replacement edge. Review scope excludes
+      // the old redesign task only after that edge exists.
+      const resultExpected = pendingReworkDecision || stateRootTaskResultExpected(task);
+      const resultStatus = result?.status || (resultExpected ? "missing" : "pending-dispatch");
       const packet = packetForTask(task.targetTaskId, item?.result ?? null);
       const taskPackage = (state.taskPackages ?? []).find((candidate) => candidate.taskPackageId === task.taskPackageId);
       const requiredCraftEvidence = packet?.evidenceContract?.required ?? taskPackage?.evidenceContract?.required;
@@ -542,7 +630,22 @@ export function createReviewCommands(ctx) {
         taskPackageId: task.taskPackageId,
         stateRoot,
         stateRootRef,
+        state,
+        podTarget,
       });
+      const resultContract = evaluateTargetResultContract({
+        packet,
+        taskPackage,
+        result,
+      });
+      const resultContractGaps = result
+        ? [...resultContract.recordIssues, ...resultContract.reviewIssues].map((gap) => ({
+            targetWindow: task.targetWindow,
+            taskId: task.targetTaskId,
+            taskPackageId: task.taskPackageId,
+            ...gap,
+          }))
+        : [];
       return {
         targetWindow: task.targetWindow,
         taskId: task.targetTaskId,
@@ -563,15 +666,24 @@ export function createReviewCommands(ctx) {
         resultId: result?.resultId,
         resultRevision: result ? Number(result.resultRevision ?? 1) : undefined,
         resultStatus,
+        summary: result?.summary || "",
         resultFile: item ? path.relative(workspaceRoot, item.file) : undefined,
         evidenceRefs,
         evidenceRefSummaries,
         missingEvidenceRefs,
         craftEvidenceGaps,
+        resultContractGaps,
+        changedRepos: Array.isArray(result?.changedRepos) ? result.changedRepos : [],
+        commits: Array.isArray(result?.commits) ? result.commits : [],
+        commitDisposition: result?.commitDisposition ?? null,
+        resultMapping: result?.resultMapping ?? resultContract.mapping,
         verificationSummary,
         riskSummary: Array.isArray(result?.risks) ? result.risks : [],
         reportedAt: result?.createdAt,
-        hasControllerReviewEvidence: evidenceRefs.length > 0 || verificationSummary.length > 0,
+        hasControllerReviewEvidence: evidenceRefs.length > 0
+          || verificationSummary.length > 0
+          || (result?.commits ?? []).length > 0
+          || (result?.craftEvidence ?? []).length > 0,
         stateRootResult: true,
         resultExpected,
         deliveryStatus: stateRootTaskDeliveryStatus(task),
@@ -650,8 +762,10 @@ export function createReviewCommands(ctx) {
     const missingEvidenceRefsPresent = missingEvidenceRefs.length > 0;
     const craftEvidenceGaps = targetResults.flatMap((item) => item.craftEvidenceGaps ?? []);
     const craftEvidenceGapsPresent = craftEvidenceGaps.length > 0;
+    const resultContractGaps = targetResults.flatMap((item) => item.resultContractGaps ?? []);
+    const resultContractGapsPresent = resultContractGaps.length > 0;
     const generatedAt = nowIso();
-    const callbackContext = stateRootCallbackContext(targetResults);
+    const callbackContext = stateRootCallbackContext(targetResults, stateRootRef);
     const callbackPlan = callbackContext.callbackPlan;
     const controllerReturnDelivery = callbackContext.controllerReturnDelivery;
     const controllerReturnReady = (callbackPlan?.counts?.readyToBuildCount || 0) > 0;
@@ -692,6 +806,7 @@ export function createReviewCommands(ctx) {
       rawEvidenceRequired: rawEvidenceRequiredFrom(targetResults),
       missingEvidenceRefs,
       craftEvidenceGaps,
+      resultContractGaps,
       gates: {
         ...sharedReviewGates({
           reviewReady,
@@ -700,6 +815,7 @@ export function createReviewCommands(ctx) {
           blockedCount: blocked.length,
           missingEvidenceRefsPresent,
           craftEvidenceGapsPresent,
+          resultContractGapsPresent,
           controllerReturnSent,
           controllerReturnReady,
           controllerReturnPendingHostSend,
@@ -725,6 +841,8 @@ export function createReviewCommands(ctx) {
             ? "fix-missing-evidence-refs-before-wakeflow-state-reducer"
             : craftEvidenceGapsPresent
               ? "fix-required-craft-evidence-before-controller-verdict"
+            : resultContractGapsPresent
+              ? "fix-target-result-contract-before-controller-verdict"
             : pendingDispatch.length > 0
               ? "pull-raw-evidence-and-continue-pending-dispatch"
               : "pull-raw-evidence-and-run-wakeflow-state-reducer",
@@ -746,29 +864,36 @@ export function createReviewCommands(ctx) {
     };
   }
 
-  function loadPacketsForScope({ group = "", taskId = "" } = {}) {
+  function loadPacketsForScope({ group = "", taskId = "", stateRootRef = "" } = {}) {
     if (!group && !taskId) fail("review-results requires --group or --task-id.");
     const packets = listJsonFiles(dirs.packets)
       .map((file) => readJson(file, "dispatch packet"))
       .filter((packet) => packet.kind === "ControllerDispatchPacket")
-      .filter((packet) => (group ? packet.dispatchGroup === group : packet.taskId === taskId));
-    return { group, taskId, packets };
+      .filter((packet) => (group ? packet.dispatchGroup === group : packet.taskId === taskId))
+      .filter((packet) => !stateRootRef || packet.stateRef?.stateRoot === stateRootRef);
+    const roots = new Set(packets.map((packet) => packet.stateRef?.stateRoot).filter(Boolean));
+    if (!stateRootRef && roots.size > 1) {
+      fail(`Review selector matches multiple demands (${[...roots].join(", ")}); pass --state-root so review cannot merge unrelated transport histories.`);
+    }
+    return { group, taskId, stateRootRef, packets };
   }
 
-  function computeReviewResults({ group = "", taskId = "" } = {}) {
-    const { packets } = loadPacketsForScope({ group, taskId });
+  function computeReviewResults({ group = "", taskId = "", stateRootRef = "" } = {}) {
+    const { packets } = loadPacketsForScope({ group, taskId, stateRootRef });
     if (packets.length === 0) fail("No matching dispatch packets found for review.");
     const groupRecord = groupFromPackets({ groupId: group || packets[0]?.dispatchGroup || "", packets });
-    const stateRootRef = groupRecord.stateRef?.stateRoot || packets.find((packet) => packet.stateRef?.stateRoot)?.stateRef?.stateRoot || "";
-    const stateRoot = stateRootRef ? resolveStateRoot(stateRootRef) : null;
+    const resolvedStateRootRef = groupRecord.stateRef?.stateRoot
+      || packets.find((packet) => packet.stateRef?.stateRoot)?.stateRef?.stateRoot
+      || "";
+    const stateRoot = resolvedStateRootRef ? resolveStateRoot(resolvedStateRootRef) : null;
     const stateRootResultsByTask = stateRoot ? latestStateRootResultsByTargetTask(stateRoot) : null;
     const unorderedResults = packets.map((packet) => {
-      const file = resultFileFor(packet.targetWindow, packet.taskId, packet.dispatchGroup);
+      const file = findResultFile(packet.targetWindow, packet.taskId, packet.dispatchGroup, packet.stateRef);
       if (!existsSync(file)) {
         const stateRootResult = stateRootResultForPacket({
           packet,
           stateRoot,
-          stateRootRef,
+          stateRootRef: resolvedStateRootRef,
           resultsByTask: stateRootResultsByTask,
         });
         if (stateRootResult) return stateRootResult;
@@ -777,6 +902,8 @@ export function createReviewCommands(ctx) {
         packet,
         file,
         result: existsSync(file) ? readJson(file, "target result") : null,
+        stateRoot,
+        stateRootRef: resolvedStateRootRef,
       };
     });
     const results = orderResultsByGroup({ groupRecord, results: unorderedResults });
@@ -817,9 +944,14 @@ export function createReviewCommands(ctx) {
   function commandReviewResults() {
     const group = getValue("--group", "");
     const taskId = getValue("--task-id", "");
-    const review = computeReviewResults({ group, taskId });
+    const stateRootRef = getValue("--state-root", "");
+    const review = computeReviewResults({ group, taskId, stateRootRef });
     const returnGroup = review.group || (review.packets.length === 1 ? review.packets[0].dispatchGroup : "");
-    const controllerReturnDelivery = controllerReturnDeliveryStatusForGroup(returnGroup);
+    const controllerReturnDelivery = controllerReturnDeliveryStatusForGroup(
+      returnGroup,
+      {},
+      review.packets[0]?.stateRef,
+    );
     const callbackPlan = buildControllerCallbackPlan({
       dispatchGroup: returnGroup,
       returnPolicy: review.returnPolicy,
@@ -885,7 +1017,7 @@ export function createReviewCommands(ctx) {
     }
     const group = getValue("--group", "");
     const taskId = getValue("--task-id", "");
-    const review = computeReviewResults({ group, taskId });
+    const review = computeReviewResults({ group, taskId, stateRootRef: "" });
     const reviewPack = buildReviewPack(review);
     output(
       {

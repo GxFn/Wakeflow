@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -102,4 +102,36 @@ test("preserve refuses a missing source and a source already inside preserved/",
   const inside = run(["preserve", "--root", root, "--source", ".wakeflow-local/preserved/2026-01-01-held", "--reason", "x", "--write"]);
   assert.notEqual(inside.status, 0);
   assert.match(JSON.parse(inside.stdout).error, /already inside preserved/);
+});
+
+test("preserve is confined to real non-symlink .wakeflow-local content and supports files", () => {
+  const root = makeWorkspace();
+  const outside = mkdtempSync(path.join(os.tmpdir(), "wakeflow-storage-outside-"));
+  writeFileSync(path.join(outside, "outside.txt"), "outside\n");
+
+  const external = run([
+    "preserve", "--root", root, "--source", path.join(outside, "outside.txt"),
+    "--reason", "must-not-move", "--write",
+  ]);
+  assert.notEqual(external.status, 0);
+  assert.match(JSON.parse(external.stdout).error, /must stay below/);
+  assert.equal(existsSync(path.join(outside, "outside.txt")), true);
+
+  symlinkSync(path.join(outside, "outside.txt"), path.join(root, ".wakeflow-local/linked.txt"));
+  const linked = run([
+    "preserve", "--root", root, "--source", ".wakeflow-local/linked.txt",
+    "--reason", "must-not-follow", "--write",
+  ]);
+  assert.notEqual(linked.status, 0);
+  assert.match(JSON.parse(linked.stdout).error, /symbolic link|resolves outside/i);
+  assert.equal(readFileSync(path.join(outside, "outside.txt"), "utf8"), "outside\n");
+
+  writeFileSync(path.join(root, ".wakeflow-local/local.log"), "local\n");
+  const fileMove = JSON.parse(run([
+    "preserve", "--root", root, "--source", ".wakeflow-local/local.log",
+    "--reason", "single-file", "--write",
+  ]).stdout);
+  assert.equal(fileMove.moved.payload, "local.log");
+  assert.equal(existsSync(path.join(root, fileMove.moved.to, "local.log")), true);
+  assert.equal(existsSync(path.join(root, fileMove.moved.to, "MANIFEST.md")), true);
 });

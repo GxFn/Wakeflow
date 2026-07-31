@@ -1,5 +1,10 @@
 # Wakeflow 下一阶段开发方向与落地方案（并行开发 · 意图对齐 · 并发地基）
 
+> **历史路线图。** 本文的 stream、容量门、共享 Pod worktree、全局 Design
+> 与 teardown 方案仅记录 2026-07-02 的实现阶段，已被
+> `docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md`
+> 取代；不得作为当前 Pod 的实现或操作指引。
+
 > 生成于 2026-07-02，基线 v0.6.3（commit 570f8d8）。本方案合并两个输入：
 > ① `docs/wakeflow-architecture-deep-dive-2026-07-02.md`（架构深读，含薄弱点评估）；
 > ② `AlembicWorkspace/Design/docs/current/wakeflow-parallel-dev-intent-drift-2026-06-26.md`（并行开发 + 意图漂移 + 验收即产出，修订稿，一直封存等待 Fable 5 就位）。

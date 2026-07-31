@@ -63,6 +63,13 @@ step must map back to one approved item and the requirement goal. An unmapped
 goal, gate, skill, environment rebuild, or test target is a blocked change
 request to the controller, not something Test may execute speculatively.
 
+For Pod Test, prepare the access plan only after every frozen product worktree
+is bound, then record the independent Test window's exact probe. Only
+`validated` + `direct-multi-root` coverage of every active product binding
+opens dispatch. `unsupported` remains blocked; never replace Test with a
+product window, read a main checkout, or claim an unverified per-repository
+executor.
+
 | Shortcut | Reality |
 |---|---|
 | “Test will prove the feature works.” | Total control must already have proved and accepted that. |

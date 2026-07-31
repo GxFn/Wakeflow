@@ -22,19 +22,24 @@ Continue current window task: <currentWindow> / <taskId>.
 Current objective (the task package is authoritative):
 - <one-line objective>
 
-Completion expectations:
+Completion focus (full criteria are in the task package):
 - <bounded observable result>
+
+- Priority context: <the highest-priority confirmed fact>
+- Critical boundary [forbidden|outOfScope|inScope]: <the highest-priority boundary>
 
 Read before execution, in order:
 - Task package (complete task context): <absolute package path>
-- Requirement background anchor [goal]: <document#section>
+- Requirement background entry (full anchors are in the task package) [goal]: <document#section>
+- Workspace instructions: <workspace>/AGENTS.md
 - Repository instructions: <repository>/AGENTS.md
+- Current state root: <absolute state-root path>
 
 Required execution Skills (execution-process authority):
 - skills/wakeflow-target/SKILL.md
 - <other package-selected skill, when required>
 
-Identity and boundaries:
+Identity (full boundaries are in the task package):
 - Current responsibility window: <window>
 - Only working repository: <absolute repository path>
 
@@ -50,8 +55,11 @@ Dispatch record (routing and trace only):
 ```
 
 Do not expect the prompt to repeat command manuals or the whole requirement.
-Read the package first, then its requirement anchors, then execute through the
-listed Skills. Fields such as `controllerWindow`, `returnPolicy`,
+It repeats at most the highest-priority `contextSummary` entry and one critical
+boundary for immediate orientation; it does not repeat the remaining context,
+complete boundary lists, commit policy, or every completion/requirement entry.
+Read the package first, then its ordered requirement anchors, then execute
+through the listed Skills. Fields such as `controllerWindow`, `returnPolicy`,
 `taskPackageId`, and `stateRevision` remain authoritative in machine state.
 The prompt's task/package/revision fields are navigation and freshness anchors,
 not a second copy of task content. `stateRevision` identifies the dispatch
@@ -64,8 +72,8 @@ advance the live state root.
    - Direct-thread delivery proves only that a prompt was delivered.
    - Confirm the responsibility window, `taskId`, `stateRoot`, and optional
      `dispatchGroup`.
-   - Read the target repository `AGENTS.md` and declare the current window and
-     repository responsibility.
+   - Read the workspace and target repository `AGENTS.md` files listed in the
+     prompt and declare the current window and repository responsibility.
 2. Read the assigned task.
    - Read the task package at the exact prompt path, then its ordered
      `requirementRefs`, then every `requiredSkills` entry. Do not substitute a
@@ -101,6 +109,13 @@ advance the live state root.
      the controller state root. Do not decide "no callback" by searching only
      `wakeflow-state.json`.
    - Report `completed`, `blocked`, or `needs-review` honestly.
+   - Include a non-empty summary, changed repositories, commits, and
+     `commitDisposition` (`committed`, `left-uncommitted`, or `no-changes`) so
+     the controller can compare the result with the package's
+     `commitExpectation`.
+   - For a completed implementation package, add exactly one
+     `craftEvidence` entry per authored anchor:
+     `{kind:"acceptance-anchor", anchorId, red, green, ref}`.
    - Include evidence references and residual risks.
 6. Return to the controller only when allowed.
    - Target-to-target next-hop delivery is forbidden by default.
@@ -166,8 +181,11 @@ For a package with `testExecution`:
    stop before executing it and return `blocked`/`needs-review` as a change
    request to the controller. Do not run it first and justify it afterward.
 
-The result evidence must include the step-to-anchor map. The controller, not
-Test, decides whether a proposed change becomes a revised Test card/package.
+The completed result must map every approved item exactly once with
+`{kind:"test-step", planIndex, step, ref}` in `craftEvidence`; `step` must be
+the approvedPlan text at that index. A missing, duplicate, or unknown index is
+not a completed Test result. The controller, not Test, decides whether a
+proposed change becomes a revised Test card/package.
 
 ## Stop Conditions
 
@@ -191,10 +209,17 @@ Every target result should include:
 - `dispatchGroup`
 - `stateRoot`
 - status and summary
-- changed repositories and commits when available
+- changed repositories, commits, and explicit commit disposition
 - evidence references
 - verification commands and outcomes
 - residual risks
 - whether controller action is required
+- for completed implementation work, exactly one
+  `{kind:"acceptance-anchor", anchorId, red, green, ref}` per authored anchor
+- for completed Test work, exactly one
+  `{kind:"test-step", planIndex, step, ref}` per approved plan item
+
+Complete mapping means only that the result can enter controller review. It is
+never automatic acceptance.
 
 Do not write real thread ids into tracked documents, prompts, or backfill text.

@@ -15,6 +15,7 @@
     "validate:claude": "npm --workspace claude-code-wakeflow run validate",
     "smoke": "npm --workspace wakeflow run smoke",
     "smoke:claude": "npm --workspace claude-code-wakeflow run smoke",
+    "release:check": "node tools/check-release-consistency.mjs --require-main --require-clean --require-tag --require-remote",
     "mcp": "npm --workspace wakeflow run mcp",
     "mcp:claude": "npm --workspace claude-code-wakeflow run mcp",
     "test:wakeflow": "node --test test/*.test.mjs",

@@ -86,7 +86,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.8.18/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.0/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -131,6 +131,7 @@ Codex 版通过 MCP 工具驱动(没有 slash 命令)。用自然语言告诉 Co
 | 重建陈旧窗口 | `wakeflow_replace_windows` |
 | 看需求 / 可领取工作 / 就绪度 | `wakeflow_status`、`wakeflow_next_work` |
 | 启动一个需求 | `wakeflow_create_demand` -> `wakeflow_add_task` |
+| 打开用户明确授权的 Pod | `wakeflow_pod_open` -> `wakeflow_pod_record_materialization` / 宿主创建 -> `wakeflow_pod_bind` |
 | 把活交给窗口 | `wakeflow_prepare_delivery` 预览 -> 携带摘要 `apply=true` -> 宿主发送 -> `wakeflow_record_delivery` |
 | 记录目标结果 | `wakeflow_record_target_result` |
 | 评审并决策 | `wakeflow_review_pack` -> `wakeflow_reduce_results` -> `wakeflow_decide_review` -> `wakeflow_complete_demand` |
@@ -205,7 +206,7 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
 | 子窗口 `AGENTS.md` access cards | 每个窗口的责任和读取路径。 |
 | `wakeflow.config.json` | 受管窗口、仓库路径、角色和默认语言。 |
 | `.wakeflow-active/` | active state roots、当前索引、progress docs、TODO 投影、intake 和 test cards。 |
-| `.wakeflow-local/` | thread registry、direct-thread runtime、本地 overrides 和派生 window config。 |
+| `.wakeflow-local/` | thread registry、direct-thread runtime、宿主独立的 Pod operation/binding receipts、本地 overrides 和派生 window config。 |
 | `wakeflow-ledger/` | 长期项目协作记录和归档。 |
 | `Design/` | 未映射外部 Design 仓库时创建的内部需求设计工作区。 |
 | `Test/` | 未映射外部 Test 仓库时创建的内部测试协作工作区。 |
@@ -237,26 +238,39 @@ Design 和 Test 是支持角色：
 
 ## Demand Pods（多需求并行）
 
-并行只存在于需求层面。同一需求内每个仓库只有一个窗口、一个组合任务包
-（窗口自排序）；跨需求最多 `maxActiveDemands`（默认 2，`wakeflow.config.json`）
-个需求以 pod 并行：
+主线是默认执行面。主线忙时普通需求和 Auto Claim 等待；必需主线身份缺失/不健康
+会在 demand/TODO 写入前返回 `mainline-unavailable`，先恢复主线。Wakeflow 不会
+因为第二个需求出现就自动创建 Pod。Pod 必须带用户明确授权的可审计锚点，Wakeflow
+不设置数字总量或每仓上限。
 
-- 一个需求 = 一个 pod：自己的 `Controller__<pod>`、按仓库的 isolation worktree
-  窗口（`<repo>__<pod>`，分支 `<sanitized-demand-key>/pod`）和自己的 `Test__<pod>`——
-  一套按需求划分的线程组。整个 pod 共用这条需求的一套 worktree：每个窗口
-  （含 Test）都在这套 worktree 里工作和验证，绝不碰主检出。pod 之间互不感知。
-- 用 `wakeflow_pod_open` 打开（幂等——重跑即续开）：它创建 worktree 和 overlay
-  条目并返回 windowPlan；按计划逐条用 `create_thread` 建线程（cwd = 该条目的
-  worktree，提示词 = `createThreadPrompt`），再用 `wakeflow_register_window`
-  注册。`wakeflow_pod_list` 是唯一全局视图。
-- pod 总控自己 claim 需求（`wakeflow_create_demand` 带
-  `controllerWindow: "Controller__<pod>"`），所有 controller-return 都路由回
-  该 pod，而不是默认总控。
-- 关闭顺序：`complete-demand` → `wakeflow_pod_close`（拆 worktree；存活分支落在
-  `wakeflow-ledger/workspace/pending-merges.md`）→ 归档。合并回主线由人工审核、
-  去中心化——任何总控都不合并 pod 分支。
-- `maxStreamsPerRepo` 限制一个仓库上可有多少 pod 持有 isolation worktree；
-  超出 `maxActiveDemands` 的 claim 会 fail-closed。
+- 一个 Pod 有独立的 `Controller__<pod>`、`Design__<pod>`、
+  `Test__<pod>`，以及每个选中仓库一个产品线程；需求内每仓仍一次只收一个组合包。
+- `wakeflow_pod_open` 只记录宿主中立 launch operations，不创建 Git
+  branch/worktree、Codex thread 或动态仓库 overlay。
+- Codex 把 Controller/Design/Test 建成三个独立 control-project local thread；
+  产品线程必须使用精确 saved repository project +
+  `environment.type=worktree`。找不到精确项目就 fail-closed，不回退父项目或
+  `local`。
+- 每次调用 Codex 创建前，先用 `wakeflow_pod_record_materialization` 记录
+  `creating`。如果 `create_thread` 返回临时 `clientThreadId`，记录
+  `pending`，再调用有界 `list_threads(limit=50)`，在 `preview` 中精确匹配
+  launch-correlation 标记；宿主支持时可用 `query` 优化，但不能依赖。零个或
+  多个匹配都不能 finalized，也绝不重复 create。只有唯一匹配的最终
+  `threadId` 能进入 registry；临时 id 只保存摘要。
+- 只登记最终真实 `threadId`，再用 `wakeflow_pod_bind` 验真 entry-sync 的 cwd、
+  Git common dir、base HEAD 与 `mainCheckout=false`。三个 control 绑定形成
+  `control-ready`；Pod Design handoff 加全部产品绑定形成 `execution-ready`。
+- Pod Design/redesign 只在 `Controller__<pod>` 与 `Design__<pod>` 之间往返。
+  先用 `wakeflow_pod_prepare_design_request` 冻结总控请求，再用
+  `wakeflow_pod_record_design_handoff` 记录精确
+  `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。
+- Pod Test 派发前，先运行 `wakeflow_pod_prepare_test_access`，再用
+  `wakeflow_pod_record_test_access` 记录独立 Test 会话的精确探测结果。只有覆盖
+  全部 active 产品绑定的 `validated` + `direct-multi-root` 才开放派发。宿主不支持
+  时保持 blocked，不回退主检出、产品窗口或未经验证的 per-repository executor。
+- `wakeflow_pod_close` 只生成 host-close plan；每个 archive/Handoff 结果通过
+  `wakeflow_pod_record_close_receipt` 记录。逻辑关闭不声称 Codex 已物理删除
+  worktree；`wakeflow_pod_list` 只读取 canonical state 与宿主回执，不猜路径。
 
 ## 自动化语义
 
@@ -277,7 +291,7 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
   raw root 则保持未认领，直到第一次驱动命令。
 - demand 归属于某个宿主后，另一个宿主的 controller 写操作和投递准备会 fail-closed；
   只有显式 `--adopt-host` 才能转移控制权。
-- 最多 `maxActiveDemands`（默认 2，顶层 `wakeflow.config.json`）个需求可以同时 active；超出容量的 claim 会 fail-closed，直到有需求完成并归档。`wakeflow_next_work` 会报告 `activeDemands` 列表和 `demandCapacity`。
+- `activeDemands` 只用于观测，不计算数字 admission，也不授权 Pod 放置。
 - `wakeflow_status` 会在 `dualHost.demandOwnership` 暴露 active demand 的宿主归属，
   让混合宿主总控在行动前先看清归属。
 
@@ -296,7 +310,7 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 | --- | --- |
 | 设置与窗口注册 | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
 | Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
-| 候选扫描与隔离 pod | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_close`, `wakeflow_pod_list` |
+| 候选扫描与显式 Pod 生命周期 | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind`, `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff`, `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_pod_close`, `wakeflow_pod_record_close_receipt`, `wakeflow_pod_list` |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design 和 Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
@@ -317,7 +331,7 @@ Wakeflow 把源码、active runtime 和长期记录分开：
 | `scripts/` | 插件打包的运行时实现和验证脚本。 |
 | `templates/wakeflow-template-bundle.json` | setup 时展开的 starter state、Design/Test 和 ledger skeletons bundle。 |
 | `.wakeflow-active/` | 目标工作区中的当前 active work；被 Git 忽略。 |
-| `.wakeflow-local/` | 机器本地 thread registry、派生 runtime views 和 local state；被 Git 忽略。 |
+| `.wakeflow-local/` | 机器本地 thread registry、Pod operation/binding receipts、派生 runtime views 和 local state；被 Git 忽略。 |
 | `wakeflow-ledger/` | 项目特定的长期记录，不属于可复用 Wakeflow 源码。 |
 
 Wakeflow 源仓库只跟踪可复用能力。产品代码、项目特定 active state、真实 thread id

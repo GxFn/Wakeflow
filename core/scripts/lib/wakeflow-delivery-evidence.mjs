@@ -78,6 +78,7 @@ export function createDeliveryEvidence(ctx) {
       triggerTaskId = "",
       resultVersionKey = "",
     } = {},
+    stateRef = null,
   ) {
     if (!dispatchGroup) {
       return {
@@ -100,6 +101,7 @@ export function createDeliveryEvidence(ctx) {
         envelope: readJson(file, "delivery envelope"),
       }))
       .filter((item) => item.envelope.kind === "ControllerReturnEnvelope" && item.envelope.dispatchGroup === dispatchGroup)
+      .filter((item) => !stateRef?.stateRoot || item.envelope.stateRef?.stateRoot === stateRef.stateRoot)
       .filter((item) => !triggerTarget || item.envelope.triggerTarget === triggerTarget)
       .filter((item) => !triggerTaskId || item.envelope.triggerTaskId === triggerTaskId)
       .filter((item) => {
@@ -141,21 +143,22 @@ export function createDeliveryEvidence(ctx) {
     };
   }
 
-  function targetDeliveryStatusesForPacket(packetId) {
+  function targetDeliveryStatusesForPacket(packetId, stateRef = null) {
     return listJsonFiles(dirs.deliveries)
       .map((file) => ({
         file,
         envelope: readJson(file, "delivery envelope"),
       }))
       .filter((item) => item.envelope.kind === "DeliveryEnvelope" && item.envelope.sourcePacketId === packetId)
+      .filter((item) => !stateRef?.stateRoot || item.envelope.stateRef?.stateRoot === stateRef.stateRoot)
       .map((item) => ({
         file: path.relative(workspaceRoot, item.file),
         ...deliveryRunStatusForEnvelope(item.envelope),
       }));
   }
 
-  function deliveryExpectationForPacket(packetId) {
-    const deliveries = targetDeliveryStatusesForPacket(packetId);
+  function deliveryExpectationForPacket(packetId, stateRef = null) {
+    const deliveries = targetDeliveryStatusesForPacket(packetId, stateRef);
     if (deliveries.some((item) => item.status === "sent")) {
       return {
         status: "sent",

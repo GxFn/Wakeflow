@@ -29,9 +29,9 @@ export function createDispatchGroupReview(ctx) {
 
   function groupFromPackets({ groupId = "", packets = [] }) {
     if (!groupId) return null;
-    const existing = loadDispatchGroup(groupId);
-    if (existing) return existing;
     const firstPacket = packets[0] || {};
+    const existing = loadDispatchGroup(groupId, firstPacket.stateRef);
+    if (existing) return existing;
     if (!firstPacket.stateRef) {
       fail(`Dispatch group ${groupId} is missing stateRef; legacy Markdown-plan groups are no longer supported.`);
     }
@@ -61,7 +61,7 @@ export function createDispatchGroupReview(ctx) {
   }
 
   function resultSummary(item) {
-    const delivery = deliveryExpectationForPacket(item.packet.id);
+    const delivery = deliveryExpectationForPacket(item.packet.id, item.packet.stateRef);
     const resultStatus = item.result?.status || (delivery.resultExpected ? "missing" : "pending-dispatch");
     return {
       packetId: item.packet.id,

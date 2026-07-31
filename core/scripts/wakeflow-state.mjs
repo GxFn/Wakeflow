@@ -17,13 +17,20 @@ import {
   controllerReductionScope,
   controllerReviewScope,
   hasPendingReworkDecision,
-  isProductReworkCompanion,
   isReworkRouteTask,
   reductionStatusForTargetTask,
   taskExpectsTargetResult,
 } from "./lib/wakeflow-review-scope.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import { releaseWindowLockForResult } from "./lib/wakeflow-delivery-store.mjs";
+import {
+  stableArtifactPart,
+  transportArtifactFileName,
+} from "./lib/wakeflow-artifact-identity.mjs";
+import {
+  dispatchPacketDigest,
+  dispatchPreparationDigest,
+} from "./lib/wakeflow-idempotency.mjs";
 import {
   archivePrivacyFindingCounts,
   redactStateRootIntoCopy,
@@ -32,9 +39,10 @@ import {
 import { WakeflowStateLockTimeoutError, withFileLock, withStateRootLock } from "./lib/wakeflow-state-lock.mjs";
 import { PROGRESS_SECTIONS, appendProgressTimeline } from "./lib/wakeflow-progress-appends.mjs";
 import {
-  activeDemandCapacity,
+  activeDemandPlacementSummary,
   activeDemandConflictSummary,
   isWakeflowInitStagingEntry,
+  scanUnarchivedDemandStateRoots,
 } from "./lib/wakeflow-active-demands.mjs";
 import { archiveWorkspaceTodo, refreshWorkspaceProjection } from "./lib/wakeflow-workspace-projection.mjs";
 import {
@@ -47,6 +55,13 @@ import {
   normalizeTaskPackageContext,
   requirementRefIssue,
 } from "./lib/wakeflow-task-package.mjs";
+import {
+  COMMIT_DISPOSITIONS,
+  evaluateTargetResultContract,
+  targetResultContractIssueMessage,
+} from "./lib/wakeflow-result-contract.mjs";
+import { inspectMainlineHealth } from "./lib/wakeflow-mainline-health.mjs";
+import { resolvePodTargetWorkRoot } from "./lib/wakeflow-pod-runtime.mjs";
 import {
   controllerEventStateAlignment,
   futureControllerEvents,
@@ -78,16 +93,16 @@ const helpText = `
 Controller state-machine manager
 
 Usage:
-  node scripts/wakeflow-state.mjs init --demand-key <key> --title <title> [--goal <text>] [--completion-definition <text>] [--test-decision <text>] [--stage-plan <text>] [--controller-window <window>] [--language <auto|zh|en>] [--root <workspace>] [--state-root <path>] [--write] [--json]
-  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--work-type <implementation|research|documentation|test> --objective <text> --context-summary <json> --requirement-refs <json> --boundaries <json> --completion-expectations <json> --depends-on-task-ids <json> --commit-expectation <commit|leave-uncommitted>] [--source-ref <ref>] [--design-intent <text>] [--acceptance-anchors <json>] [--evidence-contract <json>] [--target-window <window>] [--target-task-id <id>] [--target-summary <text>] [--test-card-id <id>] [--test-continuation-of <task-id>] [--restart-test --test-restart-reason <text>] [--write] [--json]
-  node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--dispatch-group <id>] [--supersede-result] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--craft-evidence <json>] [--summary <text>] [--write] [--json]
+  node scripts/wakeflow-state.mjs init --demand-key <key> --title <title> [--placement <main|pod>] [--authorization-ref <user-authority>] [--pod-id <id>] [--goal <text>] [--completion-definition <text>] [--test-decision <text>] [--stage-plan <text>] [--controller-window <window>] [--language <auto|zh|en>] [--root <workspace>] [--state-root <path>] [--write] [--json]
+  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--work-type <implementation|research|documentation|test> --objective <text> --context-summary <json> --requirement-refs <json> --boundaries <json> --completion-expectations <json> --depends-on-task-ids <json> --commit-expectation <commit|leave-uncommitted>] [--source-ref <ref>] [--design-intent <text>] [--acceptance-anchors <json>] [--evidence-contract <json>] [--target-window <window>] [--target-task-id <id>] [--replaces-target-task-id <id>] [--target-summary <text>] [--test-card-id <id>] [--test-continuation-of <task-id>] [--restart-test --test-restart-reason <text>] [--write] [--json]
+  node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--dispatch-group <id>] [--supersede-result] [--changed-repo <repo>] [--commit <hash>] [--commit-disposition <committed|left-uncommitted|no-changes>] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--craft-evidence <json>] [--summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
   node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked|redesign> --reason <text> [--evidence-ref <ref>] [--accept-blocked] [--write] [--json]
   node scripts/wakeflow-state.mjs complete-demand --state-root <path> --reason <text> --evidence-ref <ref> [--write] [--json]
   node scripts/wakeflow-state.mjs continue-demand --state-root <path> --continuation-type <verified-bug|requirement-supplement|optimization> --reason <text> --evidence-ref <ref> --task-package-id <id> --summary <text> --target-window <window> --target-task-id <id> [--work-type <implementation|research|documentation|test> --objective <text> --context-summary <json> --requirement-refs <json> --boundaries <json> --completion-expectations <json> --depends-on-task-ids <json> --commit-expectation <commit|leave-uncommitted>] [--source-ref <ref>] [--design-intent <text>] [--acceptance-anchors <json>] [--evidence-contract <json>] [--write] [--json]
   node scripts/wakeflow-state.mjs cancel-demand --state-root <path> --reason <text> [--write] [--json]
-  node scripts/wakeflow-state.mjs archive-demand --state-root <path> --reason <text> [--redact] [--evidence-ref <ref>] [--write] [--json]
-  node scripts/wakeflow-state.mjs sanitize-archive --state-root <archived-path> --reason <text> [--write] [--json]
+  node scripts/wakeflow-state.mjs archive-demand --state-root <path> --reason <text> [--redact] [--allow-opaque] [--evidence-ref <ref>] [--write] [--json]
+  node scripts/wakeflow-state.mjs sanitize-archive --state-root <archived-path> --reason <text> [--allow-opaque] [--write] [--json]
   node scripts/wakeflow-state.mjs adopt-demand-host --state-root <path> [--reason <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs recover-state-transition --state-root <path> [--write] [--json]
 
@@ -136,7 +151,11 @@ function fail(message, options = {}) {
     ok: false,
     command,
     error: message,
+    ...(options.status ? { status: options.status } : {}),
     ...(options.errorCode ? { errorCode: options.errorCode } : {}),
+    ...(options.activeDemands ? { activeDemands: options.activeDemands } : {}),
+    ...(options.placement ? { placement: options.placement } : {}),
+    ...(options.mainlineHealth ? { mainlineHealth: options.mainlineHealth } : {}),
     ...(options.errorCode || options.retryable !== undefined || options.recovery
       ? {
           diagnostics: {
@@ -337,7 +356,7 @@ function testExecutionForNewTask({ stateRoot, state, targetWindow, targetTaskId 
   const openNonTestTasks = (state.targetTasks ?? []).filter((task) => {
     const windowName = task.targetWindow || "";
     const taskIsTest = windowName === configuredTestWindow || windowName.startsWith(`${configuredTestWindow}__`);
-    return !taskIsTest && task.status !== "accepted";
+    return !taskIsTest && !["accepted", "superseded"].includes(task.status);
   });
   if (openNonTestTasks.length > 0) {
     const blockers = openNonTestTasks.map((task) => `${task.targetTaskId}:${task.status || "unknown"}`).join(", ");
@@ -420,6 +439,14 @@ function validateCraftEvidenceEntries(entries) {
     if (entry.verify !== undefined && (typeof entry.verify !== "string" || !entry.verify.trim())) {
       fail("--craft-evidence verify must be a non-empty string when provided.");
     }
+    for (const field of ["anchorId", "red", "green", "step"]) {
+      if (entry[field] !== undefined && (typeof entry[field] !== "string" || !entry[field].trim())) {
+        fail(`--craft-evidence ${field} must be a non-empty string when provided.`);
+      }
+    }
+    if (entry.planIndex !== undefined && (!Number.isInteger(entry.planIndex) || entry.planIndex < 0)) {
+      fail("--craft-evidence planIndex must be a non-negative integer when provided.");
+    }
   }
   return entries;
 }
@@ -497,12 +524,27 @@ function ensureDemandHostOwnership(state, { claim = true } = {}) {
       if (!claim) {
         fail(`--adopt-host cannot persist from ${command}; transfer ownership with a state-writing command first (e.g. add-task-package --adopt-host or decide-review --adopt-host).`);
       }
+      assertPodHostTransferAllowed(state);
       state.controllerHost = currentHost;
       return { controllerHost: currentHost, transferredFrom: owner };
     }
     fail(`demand ${state.demandKey} is owned by controller host ${owner}; this runtime is ${currentHost}. Continue on the ${owner} controller, or transfer ownership explicitly with adopt-demand-host (MCP: wakeflow_adopt_demand_host), or pass --adopt-host on a state-writing command.`);
   }
   return { controllerHost: owner };
+}
+
+function assertPodHostTransferAllowed(state) {
+  const explicitPod = (
+    state.executionPlacement?.mode === "isolated"
+    && state.executionPlacement?.selection === "explicit-user-pod"
+  );
+  const phase = state.podProvisioning?.phase ?? null;
+  if (explicitPod && phase && phase !== "closed") {
+    fail(
+      `demand ${state.demandKey} has an active Pod lifecycle in phase ${phase} on host `
+      + `${state.podProvisioning?.host || state.controllerHost || "unknown"}; close or cancel that Pod on its owning host before transferring controller ownership.`,
+    );
+  }
 }
 
 function commandAdoptDemandHost() {
@@ -521,6 +563,11 @@ function commandAdoptDemandHostLocked(stateRoot) {
     output({ ok: true, command: "adopt-demand-host", wrote: false, controllerHost: currentHost, note: "this host already owns the demand" });
     return;
   }
+  // The first host claim is not a transfer. An explicitly authorized Pod is
+  // initialized host-neutral, so its creator must be able to claim it once
+  // even though provisioning has already entered creating-control. Only an
+  // existing owner moving to another host is blocked by the active-Pod gate.
+  if (previousOwner) assertPodHostTransferAllowed(state);
   const reason = getValue("--reason", previousOwner ? `ownership transferred from ${previousOwner}` : "unclaimed demand adopted");
   const createdAt = nowIso();
   const nextRevision = Number(state.revision ?? 0) + 1;
@@ -722,6 +769,19 @@ function appendJsonLine(file, value) {
   writeFileSync(file, `${JSON.stringify(value)}\n`, { flag: "a" });
 }
 
+function assertDemandWritable(state, operation, stateRoot) {
+  if (state?.state !== "archived") return;
+  if (operation === "sanitize-archive") return;
+  if (
+    operation === "archive-demand"
+    && stateRoot
+    && existsSync(path.join(stateRoot, "wakeflow-archive.pending-intent.json"))
+  ) {
+    return;
+  }
+  fail(`cannot run ${operation} while demand is archived: ${state?.demandKey ?? relative(stateRoot)}. Archived demand history is immutable; only sanitize-archive or an already-journaled archive finalization may write it.`);
+}
+
 // Cross-process mutex for every state-root read-modify-write command. Parallel MCP
 // calls from one controller turn (e.g. two add-task-package) otherwise both read
 // revision N and the second write silently drops the first. The state readJson must
@@ -732,6 +792,7 @@ function withLockedStateRoot(stateRoot, fn) {
       const stateFile = path.join(stateRoot, "wakeflow-state.json");
       const eventsFile = path.join(stateRoot, "controller-events.jsonl");
       const state = readJson(stateFile, "controller state");
+      assertDemandWritable(state, command, stateRoot);
       let events;
       try {
         events = readControllerEventsStrict(eventsFile);
@@ -907,6 +968,7 @@ function commandRecoverStateTransition() {
       const stateFile = path.join(stateRoot, "wakeflow-state.json");
       const eventsFile = path.join(stateRoot, "controller-events.jsonl");
       const state = readJson(stateFile, "controller state");
+      assertDemandWritable(state, "recover-state-transition", stateRoot);
       let events;
       try {
         events = readControllerEventsStrict(eventsFile);
@@ -1170,30 +1232,52 @@ function evidenceRepoRootForWindow(windowName) {
     }
   }
   const direct = evidenceRepoRootByWindow.get(windowName);
-  if (direct) return direct;
-  // Pod-suffixed windows (Repo__pod, Test__pod) have no repositories[] entry of
-  // their own once the overlay entry is gone (or never existed, for Test/
-  // Controller pod windows): resolve against the base window's repo so their
-  // repo-relative evidence refs do not false-fail the reducer.
-  const base = String(windowName).split("__")[0];
-  return (base && base !== windowName ? evidenceRepoRootByWindow.get(base) : null) ?? null;
+  return direct ?? null;
 }
 
-function evidenceRefResolutionCandidates(stateRoot, ref, targetWindow) {
+function evidenceWorkRootForTarget(stateRoot, state, targetWindow) {
+  try {
+    return resolvePodTargetWorkRoot({
+      workspaceRoot,
+      stateDir: path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery"),
+      host: hostProfile.hostId || hostProfile.runtime.hostDirName,
+      stateRoot,
+      state,
+      targetWindow,
+    });
+  } catch (error) {
+    fail(error.message);
+  }
+  return null;
+}
+
+function evidenceRefResolutionCandidates(stateRoot, state, ref, targetWindow, podTarget = null) {
   const text = String(ref ?? "");
   if (!evidenceRefLooksLikePath(text)) return [];
+  const podContext = podTarget ?? evidenceWorkRootForTarget(stateRoot, state, targetWindow);
   if (path.isAbsolute(text)) return [path.resolve(text)];
-  // Most-specific first: the state root, the producing window's repo, then the workspace root.
-  return [stateRoot, evidenceRepoRootForWindow(targetWindow), workspaceRoot]
+  // Pod evidence is either copied into the canonical state root or remains
+  // relative to the exact verified host worktree. It must never resolve from
+  // the configured main checkout or the parent workspace.
+  const roots = podContext?.isPod
+    ? [stateRoot, podContext.actualCwd]
+    : [stateRoot, evidenceRepoRootForWindow(targetWindow), workspaceRoot];
+  return roots
     .filter(Boolean)
     .map((root) => path.resolve(root, text));
 }
 
-function missingEvidenceRefsForTargetResult(stateRoot, task, result) {
+function missingEvidenceRefsForTargetResult(stateRoot, state, task, result, podTarget) {
   const refs = Array.isArray(result?.evidenceRefs) ? result.evidenceRefs : [];
   return refs
     .map((ref) => {
-      const candidates = evidenceRefResolutionCandidates(stateRoot, ref, task.targetWindow);
+      const candidates = evidenceRefResolutionCandidates(
+        stateRoot,
+        state,
+        ref,
+        task.targetWindow,
+        podTarget,
+      );
       return {
         targetWindow: task.targetWindow,
         targetTaskId: task.targetTaskId,
@@ -1214,7 +1298,7 @@ function missingEvidenceRefsForTargetResult(stateRoot, task, result) {
 // declared craft-artifact path resolves on disk. Absent contract => no gap. Only
 // completed results are enforced: blocked / needs-review honestly report an incomplete
 // task and must never be wedged by the contract.
-function craftEvidenceGapsForTargetResult(stateRoot, state, task, result) {
+function craftEvidenceGapsForTargetResult(stateRoot, state, task, result, podTarget) {
   const pkg = (state.taskPackages ?? []).find((item) => item.taskPackageId === task.taskPackageId);
   const required = Array.isArray(pkg?.evidenceContract?.required) ? pkg.evidenceContract.required : [];
   if (required.length === 0) return [];
@@ -1243,7 +1327,13 @@ function craftEvidenceGapsForTargetResult(stateRoot, state, task, result) {
     for (const entry of reviewableEntries) {
       const ref = typeof entry?.ref === "string" ? entry.ref : "";
       if (!ref) continue;
-      const candidates = evidenceRefResolutionCandidates(stateRoot, ref, task.targetWindow);
+      const candidates = evidenceRefResolutionCandidates(
+        stateRoot,
+        state,
+        ref,
+        task.targetWindow,
+        podTarget,
+      );
       if (candidates.length > 0 && !candidates.some((candidate) => existsSync(candidate))) {
         gaps.push({ ...base, ref, reason: "artifact-missing" });
       }
@@ -1296,10 +1386,46 @@ function commandInit() {
   assertWorkspaceRootResolved();
   const demandKey = requireValue("--demand-key");
   const title = requireValue("--title");
-  const config = loadWorkspaceConfig({ workspaceRoot, args: options });
+  const requireMainlineHealth = hasFlag("--require-mainline-health");
+  let config;
+  try {
+    config = loadWorkspaceConfig({ workspaceRoot, args: options });
+  } catch (error) {
+    if (requireMainlineHealth) {
+      fail(`mainline is unavailable for ${demandKey}: Wakeflow workspace config is unreadable.`, {
+        status: "blocked",
+        errorCode: "mainline-unavailable",
+        retryable: true,
+        placement: { requested: "main", selection: "mainline-default" },
+        mainlineHealth: {
+          available: false,
+          requiredWindows: [],
+          windows: [],
+          issues: [{
+            code: "workspace-config-unreadable",
+            message: String(error?.message ?? error).replace(/\s+/g, " "),
+          }],
+        },
+        recovery: "Repair wakeflow.config.json or its derived local configuration, then retry mainline demand creation. Wakeflow will not create a Pod automatically.",
+      });
+    }
+    throw error;
+  }
   const language = selectInterfaceLanguage(config);
   const locale = wakeflowStateLocale(language);
   const goal = getValue("--goal", locale.defaultGoal);
+  const requestedPlacement = String(getValue("--placement", "main") || "main").trim().toLowerCase();
+  const authorizationRef = String(getValue("--authorization-ref", "") || "").trim() || null;
+  const requestedPodId = String(getValue("--pod-id", "") || "").trim() || null;
+  if (!["main", "pod"].includes(requestedPlacement)) {
+    fail(`--placement must be main or pod, got ${requestedPlacement || "(empty)"}.`);
+  }
+  if (requestedPlacement === "pod" && !authorizationRef) {
+    fail("--authorization-ref is required when --placement pod is explicitly requested.");
+  }
+  if (requestedPlacement === "main" && (authorizationRef || requestedPodId)) {
+    fail("--authorization-ref and --pod-id are valid only with --placement pod.");
+  }
   // The demand's OWN controller window (demand pods: Controller__<pod>). Every
   // dispatch's controller-return defaults to this, so a pod controller never
   // mis-routes wake-ups to the workspace-level controller by forgetting a flag.
@@ -1476,16 +1602,13 @@ function commandInit() {
     files.progress,
   ];
 
-  // Capacity is a CROSS-root invariant, so the per-root lock cannot guard it:
-  // serialize the scan against the state-file write on a workspace-scoped lock,
-  // or two parallel claims both scan at N-1 and overshoot maxActiveDemands.
+  // Demand identity and mainline placement are CROSS-root invariants. Serialize
+  // the scan and publication so concurrent creators cannot duplicate an
+  // identity or both claim the one main checkout. Explicit pods are not
+  // numerically capped; their authorization is carried by the init request.
   mkdirSync(path.dirname(ledgerPaths.workspaceCurrentDir), { recursive: true });
   try {
-    withFileLock(`${ledgerPaths.workspaceCurrentDir}.capacity-lock`, () => {
-      // Initialization identity and active-demand capacity share the same
-      // workspace-scoped critical section. Without this re-check, two
-      // processes can both observe an empty same-key root and overwrite one
-      // another even though the capacity scan itself is serialized.
+    withFileLock(`${ledgerPaths.workspaceCurrentDir}.identity-lock`, () => {
       let existingStateRoot = null;
       try {
         existingStateRoot = lstatSync(stateRoot);
@@ -1497,27 +1620,93 @@ function commandInit() {
       if (existingStateRoot) {
         fail(`state root already exists at ${relative(stateRoot)}; refuse to re-initialize ${demandKey} or adopt crash residue.`);
       }
-      const capacity = activeDemandCapacity({
+      const activeDemands = scanUnarchivedDemandStateRoots({
         workspaceRoot,
-        config,
+        currentDir: ledgerPaths.workspaceCurrentDir,
       });
-      const duplicateDemand = capacity.active.find((item) => item.demandKey === demandKey);
+      const duplicateDemand = activeDemands.find((item) => item.demandKey === demandKey);
       if (duplicateDemand) {
         fail(`cannot initialize duplicate demand key ${demandKey}: an unarchived state root already exists at ${duplicateDemand.stateRoot}. Resume or archive that root instead of creating a second identity.`);
       }
-      if (capacity.atCapacity) {
-        fail(`cannot initialize ${demandKey}: workspace is at its active-demand capacity (${capacity.active.length}/${capacity.max}): ${activeDemandConflictSummary(capacity.active)}. Complete and archive one, or raise maxActiveDemands in wakeflow.config.json.`);
+      const placementSummary = activeDemandPlacementSummary(activeDemands);
+      if (!placementSummary.authoritySafe) {
+        fail(
+          `cannot initialize ${demandKey}: active demand authority is unreadable: ${activeDemandConflictSummary(placementSummary.unreadable)}.`,
+          {
+            errorCode: "active-demand-authority-unreadable",
+            retryable: false,
+            activeDemands,
+            recovery: "Repair or archive the unreadable active demand root before creating another demand.",
+          },
+        );
       }
-      const explicitPodController = explicitControllerWindow.includes("__");
-      const placementMode = explicitPodController || capacity.active.length > 0 ? "isolated" : "main";
-      executionPlacement = placementMode === "isolated"
-        ? { mode: "isolated", podId: slug(demandKey) }
-        : { mode: "main", podId: null };
-      if (placementMode === "isolated" && !explicitControllerWindow) {
-        demandControllerWindow = `Controller__${slug(demandKey)}`;
+      if (requestedPlacement === "main" && placementSummary.mainlineBusy) {
+        fail(
+          `mainline is busy for ${demandKey}: ${activeDemandConflictSummary(placementSummary.mainline)}.`,
+          {
+            status: "waiting",
+            errorCode: "mainline-busy",
+            retryable: true,
+            activeDemands,
+            placement: { requested: "main", selection: "mainline-default" },
+            recovery: "Continue the active mainline demand, wait until it is archived, or retry only after the user explicitly authorizes an isolated pod.",
+          },
+        );
+      }
+      if (requestedPlacement === "main" && requireMainlineHealth) {
+        const mainlineHealth = inspectMainlineHealth({
+          workspaceRoot,
+          args: options,
+          config,
+          requiredProductWindows: valuesFor("--required-mainline-window"),
+          ignoredCreateIntentFile: getValue("--ignore-create-intent-file", null),
+        });
+        if (!mainlineHealth.available) {
+          fail(
+            `mainline is unavailable for ${demandKey}: ${mainlineHealth.issues.map((item) => item.message).join("; ")}`,
+            {
+              status: "blocked",
+              errorCode: "mainline-unavailable",
+              retryable: true,
+              placement: { requested: "main", selection: "mainline-default" },
+              mainlineHealth,
+              recovery: "Restore or replace the reported mainline windows/configuration and resolve recovery residue, then retry. Wakeflow will not create a Pod automatically.",
+            },
+          );
+        }
+      }
+      executionPlacement = requestedPlacement === "pod"
+        ? {
+            mode: "isolated",
+            podId: slug(requestedPodId ?? demandKey),
+            selection: "explicit-user-pod",
+            authorizationRef,
+          }
+        : {
+            mode: "main",
+            podId: null,
+            selection: "mainline-default",
+            authorizationRef: null,
+          };
+      if (requestedPlacement === "pod" && !explicitControllerWindow) {
+        demandControllerWindow = `Controller__${executionPlacement.podId}`;
+      }
+      if (
+        requestedPlacement === "pod"
+        && explicitControllerWindow
+        && explicitControllerWindow !== `Controller__${executionPlacement.podId}`
+      ) {
+        fail(`pod ${executionPlacement.podId} requires controller window Controller__${executionPlacement.podId}, not ${explicitControllerWindow}.`);
       }
       demand.executionPlacement = executionPlacement;
       state.executionPlacement = executionPlacement;
+      if (requestedPlacement === "pod") {
+        state.podProvisioning = {
+          phase: "creating-control",
+          podId: executionPlacement.podId,
+          authorizationRef,
+        };
+      }
       state.controllerWindow = demandControllerWindow;
       if (write) {
         // A demand becomes visible only once all five initial artifacts exist.
@@ -1627,6 +1816,7 @@ function commandAddTaskPackageLocked(stateRoot) {
   const taskContext = parseTaskPackageContext(acceptanceAnchors);
   const targetWindow = getValue("--target-window", null);
   const targetTaskId = getValue("--target-task-id", targetWindow ? `${taskPackageId}__${slug(targetWindow)}` : null);
+  const replacesTargetTaskId = (getValue("--replaces-target-task-id", "") || "").trim() || null;
   const targetSummary = getValue("--target-summary", summary);
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
@@ -1645,8 +1835,8 @@ function commandAddTaskPackageLocked(stateRoot) {
   }
   const existingReviewScope = controllerReviewScope(state.targetTasks ?? []);
   const reworkRouteActive = existingReviewScope.mode === "rework-first-controller-review-targets";
-  if (reworkRouteActive && !["needs-rework", "planned"].includes(state.state)) {
-    fail(`cannot add task package while rework route is active; finish or explicitly extend the rework route before adding ordinary next-step work.`);
+  if (reworkRouteActive && !replacesTargetTaskId) {
+    fail(`cannot add task package while rework route is active; ordinary rework must re-dispatch the original task, while redesign must use an explicit replacesTargetTaskId.`);
   }
   if (existsSync(packageFile)) {
     fail(`task package already exists: ${relative(packageFile)}`);
@@ -1662,6 +1852,51 @@ function commandAddTaskPackageLocked(stateRoot) {
   }
   if (targetTaskId && (state.targetTasks ?? []).some((item) => item.targetTaskId === targetTaskId)) {
     fail(`controller state already contains target task: ${targetTaskId}`);
+  }
+  if (replacesTargetTaskId && !targetTaskId) {
+    fail("--replaces-target-task-id requires a target task.");
+  }
+  if (replacesTargetTaskId === targetTaskId) {
+    fail("a redesign replacement cannot replace itself.");
+  }
+  const replacedTargetTask = replacesTargetTaskId
+    ? (state.targetTasks ?? []).find((item) => item.targetTaskId === replacesTargetTaskId)
+    : null;
+  if (replacesTargetTaskId && !replacedTargetTask) {
+    fail(`redesign replacement target task does not exist: ${replacesTargetTaskId}`);
+  }
+  if (
+    replacedTargetTask
+    && (
+      replacedTargetTask.status !== "needs-rework"
+      || replacedTargetTask.reviewDecision !== "redesign"
+    )
+  ) {
+    fail(`--replaces-target-task-id requires a task parked by a redesign decision; ${replacesTargetTaskId} is ${replacedTargetTask.status || "unknown"}/${replacedTargetTask.reviewDecision || "undecided"}.`);
+  }
+  if (replacedTargetTask?.replacedByTargetTaskId) {
+    fail(`redesign task ${replacesTargetTaskId} is already replaced by ${replacedTargetTask.replacedByTargetTaskId}.`);
+  }
+  if (replacedTargetTask && taskContext?.workType !== "implementation") {
+    fail("a redesign replacement must be a full-context implementation task package; Design handoff remains stateless and research, documentation, Test, or legacy packages cannot supersede product work.");
+  }
+  if (replacedTargetTask) {
+    const config = loadWorkspaceConfig({ workspaceRoot, args: options });
+    const baseTargetWindow = targetWindow.split("__", 1)[0];
+    const baseReplacedWindow = String(replacedTargetTask.targetWindow ?? "").split("__", 1)[0];
+    const specialWindows = new Set([
+      config.controllerWindow,
+      config.designWindow,
+      config.realProjectWindow,
+      ...testWindowNames(config),
+    ].filter(Boolean));
+    const productWindows = new Set(config.repoNames ?? []);
+    if (!productWindows.has(baseReplacedWindow) || specialWindows.has(baseReplacedWindow)) {
+      fail(`a redesign replacement can only replace work owned by a product responsibility window; ${replacesTargetTaskId} belongs to ${baseReplacedWindow || "(unknown)"}.`);
+    }
+    if (!productWindows.has(baseTargetWindow) || specialWindows.has(baseTargetWindow)) {
+      fail(`a redesign replacement must target a product responsibility window, not ${baseTargetWindow}.`);
+    }
   }
   const testExecution = targetWindow
     ? testExecutionForNewTask({ stateRoot, state, targetWindow, targetTaskId })
@@ -1686,7 +1921,11 @@ function commandAddTaskPackageLocked(stateRoot) {
   const nextMainState = state.state === "intake" || state.state === "needs-rework"
     ? "planned"
     : state.state;
-  const reviewRoute = state.state === "needs-rework" || reworkRouteActive ? "rework" : null;
+  // A new task never acquires authority over parked work merely because it was
+  // added while a rework route was open or happens to target the same repo.
+  // Product rework re-dispatches the original task id; redesign uses the
+  // explicit replacement edge below.
+  const reviewRoute = replacesTargetTaskId ? "redesign-replacement" : null;
   const targetTasks = targetWindow
     ? [
         {
@@ -1698,6 +1937,7 @@ function commandAddTaskPackageLocked(stateRoot) {
           createdAt,
           ...(taskContext?.dependsOnTaskIds.length ? { dependsOnTaskIds: taskContext.dependsOnTaskIds } : {}),
           ...(testExecution ? { testExecution } : {}),
+          ...(replacesTargetTaskId ? { replacesTargetTaskId } : {}),
           ...(reviewRoute ? { reviewRoute } : {}),
         },
       ]
@@ -1714,6 +1954,7 @@ function commandAddTaskPackageLocked(stateRoot) {
     ...(acceptanceAnchors ? { acceptanceAnchors } : {}),
     ...(evidenceContract ? { evidenceContract } : {}),
     ...(testExecution ? { testExecution } : {}),
+    ...(replacesTargetTaskId ? { replacesTargetTaskId } : {}),
     createdAt,
     ...(reviewRoute ? { reviewRoute } : {}),
     targetTasks,
@@ -1746,12 +1987,17 @@ function commandAddTaskPackageLocked(stateRoot) {
         ...(acceptanceAnchors ? { acceptanceAnchors } : {}),
         ...(evidenceContract ? { evidenceContract } : {}),
         ...(testExecution ? { testExecution } : {}),
+        ...(replacesTargetTaskId ? { replacesTargetTaskId } : {}),
         createdAt,
         ...(reviewRoute ? { reviewRoute } : {}),
       },
     ],
     targetTasks: [
-      ...(state.targetTasks ?? []),
+      ...(state.targetTasks ?? []).map((item) => (
+        item.targetTaskId === replacesTargetTaskId
+          ? { ...item, replacedByTargetTaskId: targetTaskId }
+          : item
+      )),
       ...targetTasks,
     ],
     windows: targetWindow ? upsertWindowState(state.windows ?? [], {
@@ -1817,6 +2063,7 @@ function commandAddTaskPackageLocked(stateRoot) {
       eventId,
       projectionStatus: "stale",
       ...(testExecution ? { testExecution } : {}),
+      ...(replacesTargetTaskId ? { replacesTargetTaskId } : {}),
       ...(evidenceContractReminder ? { evidenceContractReminder } : {}),
       appendLog: {
         type: "task-package",
@@ -1880,8 +2127,8 @@ function commandContinueDemandLocked(stateRoot) {
   if ((state.blockers ?? []).length > 0) {
     fail("continue-demand refuses a completed state that still contains blockers; inspect and repair the inconsistent state first.");
   }
-  const nonAcceptedTasks = (state.targetTasks ?? []).filter((item) => item.status !== "accepted");
-  const nonAcceptedPackages = (state.taskPackages ?? []).filter((item) => item.status !== "accepted");
+  const nonAcceptedTasks = (state.targetTasks ?? []).filter((item) => !["accepted", "superseded"].includes(item.status));
+  const nonAcceptedPackages = (state.taskPackages ?? []).filter((item) => !["accepted", "superseded"].includes(item.status));
   if (nonAcceptedTasks.length > 0 || nonAcceptedPackages.length > 0) {
     fail(`continue-demand refuses an inconsistent completed state with non-accepted history; tasks: ${nonAcceptedTasks.map((item) => item.targetTaskId).join(", ") || "none"}; packages: ${nonAcceptedPackages.map((item) => item.taskPackageId).join(", ") || "none"}.`);
   }
@@ -2070,17 +2317,82 @@ function commandContinueDemandLocked(stateRoot) {
   ]);
 }
 
-function deliveryEnvelopeFileForId(deliveryId) {
-  return path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery/delivery-envelopes", `${slug(deliveryId)}.json`);
+function deliveryEnvelopeFileForId(deliveryId, stateRef = null) {
+  return path.join(
+    workspaceRoot,
+    ".wakeflow-local/wakeflow-delivery/delivery-envelopes",
+    transportArtifactFileName(deliveryId, stateRef),
+  );
 }
 
-function targetTaskDeliveryContext(targetTask) {
-  const delivery = targetTask.delivery ?? null;
+function preparedDeliveryForTargetTask(targetTask, stateRef, dispatchGroup) {
+  if (!dispatchGroup || !stateRef?.stateRoot) return null;
+  const deliveryDir = path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery/delivery-envelopes");
+  const packetDir = path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery/dispatch-packets");
+  if (!existsSync(deliveryDir) || !existsSync(packetDir)) return null;
+  const packets = [];
+  for (const name of readdirSync(packetDir)) {
+    if (!name.endsWith(".json")) continue;
+    try {
+      const file = path.join(packetDir, name);
+      const packet = JSON.parse(readFileSync(file, "utf8"));
+      if (
+        packet.targetWindow === targetTask.targetWindow
+        && (packet.taskId === targetTask.targetTaskId
+          || packet.targetTaskId === targetTask.targetTaskId
+          || packet.stateRef?.targetTaskId === targetTask.targetTaskId)
+        && packet.dispatchGroup === dispatchGroup
+        && path.resolve(workspaceRoot, packet.stateRef?.stateRoot ?? "") === path.resolve(workspaceRoot, stateRef.stateRoot)
+        && (!packet.stateRef?.demandKey || packet.stateRef.demandKey === stateRef.demandKey)
+        && packet.packetDigest === dispatchPacketDigest(packet)
+      ) {
+        packets.push({ file, packet });
+      }
+    } catch {
+      // Delivery diagnostics own malformed transport artifacts. They cannot
+      // authorize a state-only result to release a delivery lease.
+    }
+  }
+  const matches = [];
+  for (const name of readdirSync(deliveryDir)) {
+    if (!name.endsWith(".json")) continue;
+    try {
+      const file = path.join(deliveryDir, name);
+      const envelope = JSON.parse(readFileSync(file, "utf8"));
+      const source = packets.find(({ packet }) => packet.id === envelope.sourcePacketId);
+      if (
+        source
+        && envelope.targetWindow === targetTask.targetWindow
+        && envelope.taskId === targetTask.targetTaskId
+        && envelope.dispatchGroup === dispatchGroup
+        && envelope.sourcePacketDigest === source.packet.packetDigest
+        && envelope.preparationDigest === dispatchPreparationDigest({ packet: source.packet, envelope })
+      ) {
+        matches.push({ file, envelope });
+      }
+    } catch {
+      // Fail closed: an unreadable or broken chain is not a delivery context.
+    }
+  }
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function targetTaskDeliveryContext(targetTask, stateRef = null, resultDispatchGroup = "") {
+  const prepared = !targetTask.delivery
+    ? preparedDeliveryForTargetTask(targetTask, stateRef, resultDispatchGroup)
+    : null;
+  const delivery = targetTask.delivery ?? (prepared
+    ? {
+        deliveryId: prepared.envelope.deliveryId,
+        deliveryFile: relative(prepared.file),
+        dispatchGroup: prepared.envelope.dispatchGroup,
+      }
+    : null);
   const deliveryId = delivery?.deliveryId ?? null;
   const envelopeFile = delivery?.deliveryFile
     ? resolveFromWorkspace(delivery.deliveryFile)
     : deliveryId
-      ? deliveryEnvelopeFileForId(deliveryId)
+      ? deliveryEnvelopeFileForId(deliveryId, stateRef)
       : null;
   if (envelopeFile) {
     ensureInsideAllowedRoots(envelopeFile, "delivery envelope", [workspaceRoot]);
@@ -2144,26 +2456,11 @@ function reviewReadinessAfterImport(state, stateRoot, importedTargetTaskId, impo
   if (importedCurrentResult) taskIdsWithResults.add(importedTargetTaskId);
   const reviewScope = controllerReductionScope(state.targetTasks ?? [], taskIdsWithResults);
   const targetTasks = reviewScope.reviewableTargetTasks;
-  const config = loadWorkspaceConfig({ workspaceRoot, args: options });
-  const reworkCompanionPresentFor = (anchorTask) => (
-    reviewScope.mode === "rework-first-controller-review-targets"
-    && targetTasks.some((task) => isProductReworkCompanion(task, {
-      anchorTask,
-      currentResultTaskIds: taskIdsWithResults,
-      repoNames: config.repoNames,
-      controllerWindow: config.controllerWindow,
-      designWindow: config.designWindow,
-      testWindows: testWindowNames(config),
-      realProjectWindow: config.realProjectWindow,
-    }))
-  );
   const remainingTaskIds = [];
 
   for (const task of targetTasks) {
     if (hasPendingReworkDecision(task)) {
-      if (!reworkCompanionPresentFor(task)) {
-        remainingTaskIds.push(task.targetTaskId);
-      }
+      remainingTaskIds.push(task.targetTaskId);
       continue;
     }
     if (!taskIdsWithResults.has(task.targetTaskId)) {
@@ -2197,7 +2494,11 @@ function targetResultComparable(result = {}) {
     evidenceRefs: result.evidenceRefs ?? [],
     verification: result.verification ?? [],
     risks: result.risks ?? [],
+    changedRepos: result.changedRepos ?? [],
+    commits: result.commits ?? [],
+    commitDisposition: result.commitDisposition ?? null,
     craftEvidence: result.craftEvidence ?? [],
+    resultMapping: result.resultMapping ?? null,
   });
 }
 
@@ -2266,7 +2567,7 @@ function commandImportTargetResultLocked(stateRoot) {
   if (targetTask.targetWindow !== targetWindow) {
     fail(`target task ${targetTaskId} belongs to ${targetTask.targetWindow}, not ${targetWindow}`);
   }
-  if (["accepted"].includes(targetTask.status)) {
+  if (["accepted", "superseded"].includes(targetTask.status)) {
     fail(`target task ${targetTaskId} is already ${targetTask.status}; create a new task package for follow-up work.`);
   }
   const explicitResultId = getValue("--result-id", null);
@@ -2280,6 +2581,12 @@ function commandImportTargetResultLocked(stateRoot) {
   const evidenceRefs = valuesFor("--evidence-ref");
   const verification = valuesFor("--verification");
   const risks = valuesFor("--risk");
+  const changedRepos = valuesFor("--changed-repo");
+  const commits = valuesFor("--commit");
+  const commitDisposition = (getValue("--commit-disposition", "") || "").trim();
+  if (commitDisposition && !COMMIT_DISPOSITIONS.includes(commitDisposition)) {
+    fail(`--commit-disposition must be one of: ${COMMIT_DISPOSITIONS.join(", ")}.`);
+  }
   // Typed craft evidence for the execution-craft contract (W-Target). Optional JSON array
   // of { kind, ref|value|commit, verify }. Absent = zero behavior change.
   const craftEvidence = validateCraftEvidenceEntries(parseOptionalJsonArrayArg("--craft-evidence"));
@@ -2289,11 +2596,32 @@ function commandImportTargetResultLocked(stateRoot) {
     && summary.length === 0
     && evidenceRefs.length === 0
     && verification.length === 0
+    && commits.length === 0
     && craftEvidence.length === 0
   ) {
-    fail("a completed target result must include reviewable content: provide --summary, --evidence-ref, --verification, or --craft-evidence.");
+    fail("a completed target result must include reviewable content: provide --summary plus --evidence-ref, --verification, --commit, or --craft-evidence.");
   }
-  const deliveryContext = targetTaskDeliveryContext(targetTask);
+  const taskPackage = (state.taskPackages ?? []).find((item) => item.taskPackageId === targetTask.taskPackageId) ?? null;
+  const resultContract = evaluateTargetResultContract({
+    taskPackage,
+    result: {
+      status,
+      summary,
+      evidenceRefs,
+      verification,
+      changedRepos,
+      commits,
+      commitDisposition: commitDisposition || undefined,
+      craftEvidence,
+    },
+  });
+  if (resultContract.recordIssues.length > 0) {
+    fail(`target result does not satisfy ${resultContract.contract}: ${targetResultContractIssueMessage(resultContract.recordIssues)}.`);
+  }
+  const deliveryContext = targetTaskDeliveryContext(targetTask, {
+    demandKey: state.demandKey,
+    stateRoot: relative(stateRoot),
+  }, resultDispatchGroup);
   const currentDispatchGroup = targetTask.delivery?.dispatchGroup || deliveryContext.dispatchGroup || "";
   const knownDispatchGroups = new Set(knownDispatchGroupsForTargetTask(targetWindow, targetTaskId, stateRoot, state.demandKey));
   if (currentDispatchGroup) knownDispatchGroups.add(currentDispatchGroup);
@@ -2334,10 +2662,14 @@ function commandImportTargetResultLocked(stateRoot) {
     targetTaskId,
     status,
     summary,
+    changedRepos,
+    commits,
+    ...(commitDisposition ? { commitDisposition } : {}),
     evidenceRefs,
     verification,
     risks,
     ...(craftEvidence.length ? { craftEvidence } : {}),
+    resultMapping: resultContract.mapping,
     deliveryContext,
     controllerActionRequired: Boolean(deliveryContext.controllerReturnRequired),
     wakeflowTrace: artifactTrace({
@@ -2458,9 +2790,13 @@ function commandImportTargetResultLocked(stateRoot) {
   // codex-side locks would linger the full TTL after the work finished.
   let lockReleased = false;
   if (write && !historyOnly) {
-    const lockFile = path.join(workspaceRoot, ".wakeflow-local/wakeflow-delivery/locks", `${slug(targetWindow)}.json`);
-    const taskDeliveryId = targetTask.delivery?.deliveryId;
-    const taskDispatchGroup = targetTask.delivery?.dispatchGroup;
+    const lockFile = path.join(
+      workspaceRoot,
+      ".wakeflow-local/wakeflow-delivery/locks",
+      `${stableArtifactPart(targetWindow, { fallback: "window" })}.json`,
+    );
+    const taskDeliveryId = targetTask.delivery?.deliveryId || deliveryContext.deliveryId;
+    const taskDispatchGroup = targetTask.delivery?.dispatchGroup || deliveryContext.dispatchGroup;
     // Release only when this result answers the round the lock guards: a late
     // result that declares an OLDER dispatch group (rework re-dispatched the
     // task) must leave the in-flight round's lock alone. Results without a
@@ -2547,31 +2883,18 @@ function commandReduceResultsLocked(stateRoot) {
   if (targetTasks.length === 0) {
     fail("controller state has no dispatched or result-bearing target tasks to reduce; dispatch a pending target before result review.");
   }
-  const config = loadWorkspaceConfig({ workspaceRoot, args: options });
-  const reworkCompanionPresentFor = (anchorTask) => (
-    reviewScope.mode === "rework-first-controller-review-targets"
-    && targetTasks.some((task) => isProductReworkCompanion(task, {
-      anchorTask,
-      currentResultTaskIds: results.keys(),
-      repoNames: config.repoNames,
-      controllerWindow: config.controllerWindow,
-      designWindow: config.designWindow,
-      testWindows: testWindowNames(config),
-      realProjectWindow: config.realProjectWindow,
-    }))
-  );
   const readyResultIds = [];
   const blockedResultIds = [];
   const missingTargetTaskIds = [];
   const missingEvidenceRefs = [];
   const craftEvidenceGaps = [];
+  const resultContractGaps = [];
   const evidenceRefs = [];
 
   for (const task of targetTasks) {
+    const podTarget = evidenceWorkRootForTarget(stateRoot, state, task.targetWindow);
     if (hasPendingReworkDecision(task)) {
-      if (!reworkCompanionPresentFor(task)) {
-        missingTargetTaskIds.push(task.targetTaskId);
-      }
+      missingTargetTaskIds.push(task.targetTaskId);
       continue;
     }
     const result = results.get(task.targetTaskId);
@@ -2579,9 +2902,31 @@ function commandReduceResultsLocked(stateRoot) {
       missingTargetTaskIds.push(task.targetTaskId);
       continue;
     }
-    missingEvidenceRefs.push(...missingEvidenceRefsForTargetResult(stateRoot, task, result));
+    missingEvidenceRefs.push(...missingEvidenceRefsForTargetResult(
+      stateRoot,
+      state,
+      task,
+      result,
+      podTarget,
+    ));
     if (result.status === "completed") {
-      craftEvidenceGaps.push(...craftEvidenceGapsForTargetResult(stateRoot, state, task, result));
+      craftEvidenceGaps.push(...craftEvidenceGapsForTargetResult(
+        stateRoot,
+        state,
+        task,
+        result,
+        podTarget,
+      ));
+      const taskPackage = (state.taskPackages ?? []).find((item) => item.taskPackageId === task.taskPackageId) ?? null;
+      const contract = evaluateTargetResultContract({ taskPackage, result });
+      resultContractGaps.push(
+        ...[...contract.recordIssues, ...contract.reviewIssues].map((gap) => ({
+          targetWindow: task.targetWindow,
+          targetTaskId: task.targetTaskId,
+          taskPackageId: task.taskPackageId,
+          ...gap,
+        })),
+      );
     }
     evidenceRefs.push(
       ...(result.evidenceRefs ?? []),
@@ -2639,6 +2984,33 @@ function commandReduceResultsLocked(stateRoot) {
     });
     process.exitCode = 1;
     throw new CliExit("craft evidence gaps block reduce-results");
+  }
+
+  if (
+    missingTargetTaskIds.length === 0
+    && missingEvidenceRefs.length === 0
+    && craftEvidenceGaps.length === 0
+    && resultContractGaps.length > 0
+  ) {
+    output({
+      ok: false,
+      command: "reduce-results",
+      wrote: false,
+      demandKey: state.demandKey,
+      stateRoot: relative(stateRoot),
+      previousState: state.state,
+      stateRevisionUnchanged: state.revision,
+      reviewGate: "target-result-contract-required",
+      resultContractGaps,
+      forbiddenConclusions: [
+        "complete-result-mapping-is-controller-acceptance",
+        "commit-expectation-mismatch-can-enter-transition-candidate",
+        "reduce-results-repairs-target-result",
+      ],
+      agentNext: "Stop: a completed target result does not match its authoritative task package result contract. Record a corrected result with the required acceptance/Test mapping and commit disposition, or record the honest blocked/needs-review status; then rerun reduce-results. No state was changed.",
+    });
+    process.exitCode = 1;
+    throw new CliExit("target result contract gaps block reduce-results");
   }
 
   const createdAt = nowIso();
@@ -2887,13 +3259,13 @@ function commandDecideReviewLocked(stateRoot) {
       ...decisionScope.excludedTargetTaskIds,
     ]),
   ];
-  const nextTargetTasks = (state.targetTasks ?? []).map((item) => {
+  const decidedTargetTasks = (state.targetTasks ?? []).map((item) => {
     if (!candidateTaskIds.has(item.targetTaskId)) return item;
     // RA2 / redesign-route: per-task handling counts. A rework decision is one rework cycle (same
     // product window, re-dispatched). A redesign decision is one Design-rethink cycle: the task is
     // parked needs-rework like rework, but it is routed back to Design (reviewDecision="redesign"
-    // + redesignCount), not re-dispatched to a product window — the controller's next package is a
-    // Design outcome-redesign, not a product point-fix.
+    // + redesignCount), not re-dispatched to a product window. Design's handoff remains stateless;
+    // the next state-root product task must explicitly replace this parked task.
     if (decision === "rework") {
       return { ...item, status: nextTaskStatus, reviewDecision: decision, counts: { ...(item.counts ?? {}), reworkCount: (item.counts?.reworkCount ?? 0) + 1 } };
     }
@@ -2902,6 +3274,43 @@ function commandDecideReviewLocked(stateRoot) {
     }
     return { ...item, status: nextTaskStatus, reviewDecision: decision };
   });
+  const acceptedReplacementTaskIds = decision === "accept"
+    ? new Set(decidedTargetTasks
+      .filter((item) => candidateTaskIds.has(item.targetTaskId) && item.replacesTargetTaskId)
+      .map((item) => item.targetTaskId))
+    : new Set();
+  const supersededTargetTaskIds = new Set();
+  const acceptedLineageTaskIds = new Set(acceptedReplacementTaskIds);
+  let lineageExpanded = true;
+  while (lineageExpanded) {
+    lineageExpanded = false;
+    for (const item of decidedTargetTasks) {
+      if (
+        !item.replacedByTargetTaskId
+        || !acceptedLineageTaskIds.has(item.replacedByTargetTaskId)
+        || supersededTargetTaskIds.has(item.targetTaskId)
+      ) {
+        continue;
+      }
+      supersededTargetTaskIds.add(item.targetTaskId);
+      acceptedLineageTaskIds.add(item.targetTaskId);
+      lineageExpanded = true;
+    }
+  }
+  const nextTargetTasks = decidedTargetTasks.map((item) => {
+    if (!supersededTargetTaskIds.has(item.targetTaskId)) {
+      return item;
+    }
+    return {
+      ...item,
+      status: "superseded",
+      supersededAt: createdAt,
+    };
+  });
+  const decisionAndLineageTaskIds = new Set([
+    ...candidateTaskIds,
+    ...supersededTargetTaskIds,
+  ]);
   const nextState = {
     ...state,
     state: nextMainState,
@@ -2911,7 +3320,7 @@ function commandDecideReviewLocked(stateRoot) {
     allowedActions: decision === "accept"
       ? ["add-task-package", "complete-demand", "wakeflow-render-progress"]
       : decision === "rework"
-        ? ["prepare-dispatch-from-state", "add-task-package", "wakeflow-render-progress"]
+        ? ["prepare-dispatch-from-state", "wakeflow-render-progress"]
         : decision === "redesign"
         ? ["add-task-package", "wakeflow-render-progress"]
         : ["wakeflow-render-progress"],
@@ -2935,13 +3344,20 @@ function commandDecideReviewLocked(stateRoot) {
       ...(state.review ?? {}),
       status: `decision-${decision}`,
     },
-    taskPackages: updatePackageStatusesForDecision(state.taskPackages ?? [], nextTargetTasks, candidateTaskIds, nextTaskStatus),
+    taskPackages: updatePackageStatusesForDecision(
+      state.taskPackages ?? [],
+      nextTargetTasks,
+      decisionAndLineageTaskIds,
+      nextTaskStatus,
+    ),
     targetTasks: nextTargetTasks,
     windows: (state.windows ?? []).map((item) => ({
       ...item,
       windowState: (item.targetTaskIds ?? []).some((targetTaskId) => candidateTaskIds.has(targetTaskId))
         ? nextTaskStatus
-        : item.windowState,
+        : (item.targetTaskIds ?? []).some((targetTaskId) => supersededTargetTaskIds.has(targetTaskId))
+          ? "superseded"
+          : item.windowState,
     })),
     projection: {
       ...(state.projection ?? {}),
@@ -2997,6 +3413,7 @@ function commandDecideReviewLocked(stateRoot) {
       previousState: state.state,
       nextState: nextMainState,
       targetTaskIds: decisionScope.targetTaskIds,
+      supersededTargetTaskIds: [...supersededTargetTaskIds],
       excludedTargetTaskIds: outputExcludedTargetTaskIds,
       stateRevision: nextRevision,
       eventId,
@@ -3036,13 +3453,81 @@ function commandCompleteDemandLocked(stateRoot) {
   if ((state.taskPackages ?? []).length === 0 || (state.targetTasks ?? []).length === 0) {
     fail("complete-demand requires at least one task package and one target task; an empty demand cannot be completed.");
   }
-  const openTasks = (state.targetTasks ?? []).filter((task) => task.status !== "accepted");
-  const openPackages = (state.taskPackages ?? []).filter((taskPackage) => taskPackage.status !== "accepted");
+  const openTasks = (state.targetTasks ?? []).filter((task) => !["accepted", "superseded"].includes(task.status));
+  const openPackages = (state.taskPackages ?? []).filter((taskPackage) => !["accepted", "superseded"].includes(taskPackage.status));
   if (openTasks.length > 0 || openPackages.length > 0) {
     fail(`complete-demand requires all task packages and target tasks to be accepted; open tasks: ${openTasks.map((item) => item.targetTaskId).join(", ") || "none"}; open packages: ${openPackages.map((item) => item.taskPackageId).join(", ") || "none"}`);
   }
   if ((state.blockers ?? []).length > 0) {
     fail("complete-demand cannot close a demand with active blockers.");
+  }
+  if ((state.decisionsRequired ?? []).length > 0) {
+    fail("complete-demand cannot close a demand with pending controller decisions.");
+  }
+  if (["review-ready", "waiting-results"].includes(state.state)) {
+    fail(`complete-demand cannot close a demand while controller state is ${state.state}; finish the current result/review cycle first.`);
+  }
+  if (state.state !== "planned") {
+    fail(`complete-demand requires controller state planned after the final explicit accept decision; current state is ${state.state}.`);
+  }
+
+  const targetTasks = state.targetTasks ?? [];
+  const taskById = new Map(targetTasks.map((task) => [task.targetTaskId, task]));
+  const terminalLineageIssue = (task, trail = new Set()) => {
+    if (trail.has(task.targetTaskId)) {
+      return `replacement lineage contains a cycle at ${task.targetTaskId}`;
+    }
+    if (task.status === "accepted") {
+      if (task.reviewDecision !== "accept") {
+        return `accepted task ${task.targetTaskId} has no explicit accept decision`;
+      }
+      if (task.replacesTargetTaskId) {
+        const replaced = taskById.get(task.replacesTargetTaskId);
+        if (!replaced || replaced.replacedByTargetTaskId !== task.targetTaskId || replaced.status !== "superseded") {
+          return `accepted replacement ${task.targetTaskId} has no mutually linked superseded predecessor`;
+        }
+      }
+      return null;
+    }
+    if (task.status !== "superseded") {
+      return `task ${task.targetTaskId} is not terminal`;
+    }
+    if (!task.replacedByTargetTaskId) {
+      return `superseded task ${task.targetTaskId} has no replacement`;
+    }
+    const replacement = taskById.get(task.replacedByTargetTaskId);
+    if (!replacement || replacement.replacesTargetTaskId !== task.targetTaskId) {
+      return `superseded task ${task.targetTaskId} has no mutually linked replacement`;
+    }
+    return terminalLineageIssue(replacement, new Set([...trail, task.targetTaskId]));
+  };
+  const lineageIssue = targetTasks
+    .map((task) => terminalLineageIssue(task))
+    .find(Boolean);
+  if (lineageIssue) {
+    fail(`complete-demand rejected invalid terminal task lineage: ${lineageIssue}.`);
+  }
+  const packageIssue = (state.taskPackages ?? [])
+    .map((taskPackage) => {
+      const packageTasks = targetTasks.filter((task) => task.taskPackageId === taskPackage.taskPackageId);
+      if (packageTasks.length === 0) return `task package ${taskPackage.taskPackageId} has no target tasks`;
+      if (taskPackage.status === "superseded" && !packageTasks.every((task) => task.status === "superseded")) {
+        return `superseded task package ${taskPackage.taskPackageId} contains non-superseded tasks`;
+      }
+      if (
+        taskPackage.status === "accepted"
+        && (
+          !packageTasks.every((task) => ["accepted", "superseded"].includes(task.status))
+          || !packageTasks.some((task) => task.status === "accepted")
+        )
+      ) {
+        return `accepted task package ${taskPackage.taskPackageId} has no accepted terminal task set`;
+      }
+      return null;
+    })
+    .find(Boolean);
+  if (packageIssue) {
+    fail(`complete-demand rejected invalid terminal package lineage: ${packageIssue}.`);
   }
 
   const createdAt = nowIso();
@@ -3131,9 +3616,10 @@ function commandCompleteDemandLocked(stateRoot) {
 // Cancel is the controller's escape hatch for an in-flight demand: the flow
 // stops being active WITHOUT pretending completion — no acceptance, no
 // evidence gate, open tasks stay in their last honest status as history. A
-// cancelled root still occupies active-demand capacity until it is archived
-// (same rule as completed-but-not-archived), and open isolation windows must
-// still stream-close first: the archive gate is unchanged.
+// cancelled root remains unarchived authority until it is archived. A
+// cancelled main-placement demand therefore still owns the mainline lane,
+// while a cancelled isolated demand remains observable without becoming a
+// numeric slot. Open isolation windows must still close before archive.
 function commandCancelDemand() {
   const stateRoot = stateRootFromArg();
   withLockedStateRoot(stateRoot, () => commandCancelDemandLocked(stateRoot));
@@ -3165,7 +3651,7 @@ function commandCancelDemandLocked(stateRoot) {
       stateRevision: state.revision,
       releasedWindowLocks,
       note: "idempotent cancellation replay; no second event or revision was created",
-      agentNext: "The demand remains cancelled. Archive it to free capacity after closing any isolation windows.",
+      agentNext: "The demand remains cancelled. Archive it to retire the active authority after closing any isolation windows.",
     }, [
       `Demand ${state.demandKey} was already cancelled; state was not changed.`,
       releasedWindowLocks.length
@@ -3178,7 +3664,7 @@ function commandCancelDemandLocked(stateRoot) {
   const createdAt = nowIso();
   const nextRevision = Number(state.revision ?? 0) + 1;
   const eventId = nextEventId(createdAt, nextRevision);
-  const openTasks = (state.targetTasks ?? []).filter((task) => !["accepted", "completed"].includes(task.status));
+  const openTasks = (state.targetTasks ?? []).filter((task) => !["accepted", "completed", "superseded"].includes(task.status));
   const nextState = {
     ...state,
     state: "cancelled",
@@ -3212,7 +3698,7 @@ function commandCancelDemandLocked(stateRoot) {
     forbiddenConclusions: [
       "cancel-is-acceptance",
       "cancel-deletes-evidence",
-      "cancel-frees-capacity-before-archive",
+      "cancel-releases-mainline-before-archive",
     ],
     stateRevision: nextRevision,
     ...(hostOwnership.claimed || hostOwnership.transferredFrom ? { hostOwnership } : {}),
@@ -3252,7 +3738,9 @@ function commandCancelDemandLocked(stateRoot) {
       openTargetTasks: openTasks.map((task) => task.targetTaskId),
       releasedWindowLocks,
       projectionStatus: "stale",
-      agentNext: "Demand is cancelled, not archived: it still occupies active-demand capacity. Its in-flight window delivery locks were released; a window mid-task may still finish and return a late result (recorded as history only). Close any open isolation windows (stream-close / pod close), then run archive-demand to free the slot. Recorded evidence stays untouched.",
+      agentNext: state.executionPlacement?.mode === "main"
+        ? "Demand is cancelled, not archived: it still owns the mainline lane. Its in-flight window delivery locks were released; a window mid-task may still finish and return a late result (recorded as history only). Archive after cleanup to release the mainline lane. Recorded evidence stays untouched."
+        : "Demand is cancelled, not archived: it remains observable isolated authority. Its in-flight window delivery locks were released; a window mid-task may still finish and return a late result (recorded as history only). Close any open isolation windows, then archive it. Recorded evidence stays untouched.",
       appendLog: {
         type: "decision",
         decision: `cancelled: ${reason}`,
@@ -3261,7 +3749,7 @@ function commandCancelDemandLocked(stateRoot) {
     },
     [
       `${write ? "Recorded" : "Would record"} demand cancellation for ${state.demandKey}.`,
-      "No acceptance, dispatch, or evidence deletion was performed; archive to free capacity.",
+      "No acceptance, dispatch, or evidence deletion was performed; archive to retire the active authority.",
     ],
   );
 }
@@ -3274,7 +3762,7 @@ function releaseDemandWindowLocks(state) {
     const lockFile = path.join(
       workspaceRoot,
       ".wakeflow-local/wakeflow-delivery/locks",
-      `${slug(task.targetWindow)}.json`,
+      `${stableArtifactPart(task.targetWindow, { fallback: "window" })}.json`,
     );
     const released = releaseWindowLockForResult(
       lockFile,
@@ -3359,10 +3847,19 @@ function updatePackageStatusesForDecision(taskPackages, targetTasks, candidateTa
     const packageTasks = targetTasks.filter((task) => task.taskPackageId === item.taskPackageId);
     const touched = packageTasks.some((task) => candidateTaskIds.has(task.targetTaskId));
     if (!touched) return item;
-    const allPackageTasksDecided = packageTasks.length > 0 && packageTasks.every((task) => task.status === nextTaskStatus);
+    const terminalStatuses = new Set(["accepted", "superseded"]);
+    const allPackageTasksDecided = packageTasks.length > 0 && (
+      nextTaskStatus === "accepted"
+        ? packageTasks.every((task) => terminalStatuses.has(task.status))
+        : packageTasks.every((task) => task.status === nextTaskStatus)
+    );
+    const decidedStatus = nextTaskStatus === "accepted"
+      && packageTasks.every((task) => task.status === "superseded")
+      ? "superseded"
+      : nextTaskStatus;
     return {
       ...item,
-      status: allPackageTasksDecided ? nextTaskStatus : item.status,
+      status: allPackageTasksDecided ? decidedStatus : item.status,
     };
   });
 }
@@ -3426,7 +3923,7 @@ function buildWindowCard(state, stateRoot, window) {
     demandKey: state.demandKey,
     stateRoot: stateRootRel,
     windowState: windowRollup?.windowState ?? null,
-    counts: { open: tasks.filter((task) => task.status !== "accepted").length, total: tasks.length },
+    counts: { open: tasks.filter((task) => !["accepted", "superseded"].includes(task.status)).length, total: tasks.length },
     tasks,
     taskPackages: myPackages.map((pkg) => ({ taskPackageId: pkg.taskPackageId, status: pkg.status, summary: pkg.summary })),
     fileAreas,
@@ -3483,6 +3980,7 @@ function commandFocusDoc() {
   const window = getValue("--window");
   const phase = getValue("--phase");
   if (!window && !phase) fail("focus-doc requires --window or --phase.");
+  if (write) assertDemandWritable(state, "focus-doc", stateRoot);
   if (write && state.controllerHost && state.controllerHost !== hostProfile.runtime.hostDirName) {
     fail(`demand ${state.demandKey} is owned by controller host ${state.controllerHost}; this runtime is ${hostProfile.runtime.hostDirName}. Generate focus docs from the owning controller.`);
   }
@@ -3643,6 +4141,199 @@ function validArchiveTreeDigest(digest) {
     && digest.entries >= 0;
 }
 
+const ARCHIVE_HOST_EVENTS_AFTER_TERMINAL = new Set([
+  "demand.host-adopted",
+  "demand.host-transferred",
+]);
+const ARCHIVE_POD_CLOSE_EVENTS_AFTER_TERMINAL = new Set([
+  "pod.close-planned",
+  "pod.window-logically-closed",
+  "pod.closed",
+]);
+const ARCHIVE_POD_CLOSE_WRITES = new Set([
+  "wakeflow-state.json",
+  "controller-events.jsonl",
+]);
+const ARCHIVE_POD_CLOSE_FORBIDDEN_CONCLUSIONS = new Set([
+  "pod-resource-state-is-demand-acceptance",
+  "host-receipt-is-product-result",
+  "logical-close-proves-physical-worktree-removal",
+]);
+const ARCHIVE_POD_PRE_CLOSE_PHASES = new Set([
+  "reserved",
+  "creating-control",
+  "control-ready",
+  "designing",
+  "creating-products",
+  "execution-ready",
+  "retryable",
+  "blocked",
+  "cancelling",
+]);
+const POD_CLOSE_RECEIPT_REASON_PREFIX = "host close receipt recorded for ";
+
+function exactStringSet(values, expected) {
+  return Array.isArray(values)
+    && values.length === expected.size
+    && new Set(values).size === expected.size
+    && values.every((value) => typeof value === "string" && expected.has(value));
+}
+
+function assertArchivePodCloseEventEnvelope(event, { demandKey, podId }) {
+  if (
+    event.actor !== "controller"
+    || typeof event.eventId !== "string"
+    || !event.eventId.startsWith("evt-pod-")
+    || !Array.isArray(event.evidenceRefs)
+    || event.evidenceRefs.length !== 0
+    || !exactStringSet(event.allowedWrites, ARCHIVE_POD_CLOSE_WRITES)
+    || !exactStringSet(
+      event.forbiddenConclusions,
+      ARCHIVE_POD_CLOSE_FORBIDDEN_CONCLUSIONS,
+    )
+    || (event.demandKey !== undefined && event.demandKey !== demandKey)
+    || (event.podId !== undefined && event.podId !== podId)
+  ) {
+    fail(
+      `archive-demand refuses invalid Pod close event ${event.eventId ?? "(unknown)"} `
+      + `(${event.type ?? "unknown"}): its actor, authority identity, evidence, `
+      + "or allowed-write boundary does not match the canonical Pod close reducer.",
+    );
+  }
+}
+
+function assertArchivePodCloseLifecycle(state, closeEvents) {
+  const placement = state.executionPlacement;
+  const provisioning = state.podProvisioning;
+  const demandKey = state.demandKey;
+  const podId = placement?.podId;
+  if (
+    placement?.mode !== "isolated"
+    || placement?.selection !== "explicit-user-pod"
+    || typeof podId !== "string"
+    || !podId
+    || typeof placement.authorizationRef !== "string"
+    || !placement.authorizationRef
+    || !provisioning
+    || typeof provisioning !== "object"
+    || Array.isArray(provisioning)
+    || provisioning.podId !== podId
+    || provisioning.authorizationRef !== placement.authorizationRef
+  ) {
+    fail(
+      `archive-demand refuses terminal Pod close events for ${demandKey ?? "(unknown demand)"}: `
+      + "executionPlacement and podProvisioning do not identify the same explicitly authorized Pod.",
+    );
+  }
+  if (provisioning.phase !== "closed") {
+    fail(
+      `archive-demand refuses terminal Pod ${podId}: its close lifecycle ended at `
+      + `${provisioning.phase ?? "(missing)"}, not closed.`,
+    );
+  }
+  if (!Array.isArray(provisioning.windows)) {
+    fail(`archive-demand refuses terminal Pod ${podId}: podProvisioning.windows is not an array.`);
+  }
+  const windowNames = provisioning.windows.map((window) => window?.windowName);
+  const uniqueWindowNames = new Set(windowNames);
+  if (
+    windowNames.some((windowName) => typeof windowName !== "string" || !windowName)
+    || uniqueWindowNames.size !== windowNames.length
+    || provisioning.windows.some((window) => window?.status !== "closed")
+  ) {
+    fail(
+      `archive-demand refuses terminal Pod ${podId}: every planned window must `
+      + "have one unique identity and status=closed.",
+    );
+  }
+  if (closeEvents.length === 0) {
+    fail(
+      `archive-demand refuses terminal Pod ${podId}: the event history has no `
+      + "post-terminal Pod close lifecycle.",
+    );
+  }
+  for (const event of closeEvents) {
+    assertArchivePodCloseEventEnvelope(event, { demandKey, podId });
+  }
+
+  if (windowNames.length === 0) {
+    const [closedEvent] = closeEvents;
+    if (
+      state.state !== "cancelled"
+      || closeEvents.length !== 1
+      || closedEvent.type !== "pod.closed"
+      || closedEvent.to !== "closed"
+      || (
+        closedEvent.from !== null
+        && !ARCHIVE_POD_PRE_CLOSE_PHASES.has(closedEvent.from)
+      )
+      || closedEvent.reason
+        !== "cancelled Pod closed before any host launch operation was planned"
+    ) {
+      fail(
+        `archive-demand refuses terminal Pod ${podId}: a zero-resource close `
+        + "must contain exactly one canonical pod.closed event.",
+      );
+    }
+    return;
+  }
+
+  const expectedEventCount = windowNames.length + 1;
+  const [plannedEvent, ...receiptEvents] = closeEvents;
+  if (
+    closeEvents.length !== expectedEventCount
+    || plannedEvent.type !== "pod.close-planned"
+    || !ARCHIVE_POD_PRE_CLOSE_PHASES.has(plannedEvent.from)
+    || plannedEvent.to !== "closing"
+    || plannedEvent.reason
+      !== "host close operations planned without physical resource mutation"
+  ) {
+    fail(
+      `archive-demand refuses terminal Pod ${podId}: its close lifecycle must `
+      + `start with one canonical pod.close-planned event and contain exactly `
+      + `one receipt event for each of ${windowNames.length} planned windows.`,
+    );
+  }
+
+  const receiptWindowNames = [];
+  for (let index = 0; index < receiptEvents.length; index += 1) {
+    const event = receiptEvents[index];
+    const finalReceipt = index === receiptEvents.length - 1;
+    const expectedType = finalReceipt ? "pod.closed" : "pod.window-logically-closed";
+    const expectedTo = finalReceipt ? "closed" : "closing";
+    if (
+      event.type !== expectedType
+      || event.from !== "closing"
+      || event.to !== expectedTo
+      || typeof event.reason !== "string"
+      || !event.reason.startsWith(POD_CLOSE_RECEIPT_REASON_PREFIX)
+    ) {
+      fail(
+        `archive-demand refuses terminal Pod ${podId}: receipt event `
+        + `${event.eventId ?? "(unknown)"} does not follow the ordered `
+        + `closing -> ${expectedTo} transition ending in one pod.closed event.`,
+      );
+    }
+    const windowName = event.reason.slice(POD_CLOSE_RECEIPT_REASON_PREFIX.length);
+    if (!uniqueWindowNames.has(windowName) || receiptWindowNames.includes(windowName)) {
+      fail(
+        `archive-demand refuses terminal Pod ${podId}: receipt event `
+        + `${event.eventId ?? "(unknown)"} names an unknown or duplicate window ${windowName || "(missing)"}.`,
+      );
+    }
+    receiptWindowNames.push(windowName);
+  }
+  if (
+    receiptWindowNames.length !== windowNames.length
+    || windowNames.some((windowName) => !receiptWindowNames.includes(windowName))
+  ) {
+    fail(
+      `archive-demand refuses terminal Pod ${podId}: close receipts do not `
+      + "cover the exact canonical Pod window set.",
+    );
+  }
+}
+
 function assertArchiveTerminalStateExplained(state, events) {
   const terminalType = state?.state === "completed"
     ? "demand.completed"
@@ -3669,19 +4360,28 @@ function assertArchiveTerminalStateExplained(state, events) {
       + "Repair or recover the state/event authority before archiving.",
     );
   }
-  const allowedAfterTerminal = new Set([
-    "demand.host-adopted",
-    "demand.host-transferred",
-  ]);
-  const invalidLaterEvent = relevantEvents
-    .slice(terminalIndex + 1)
-    .find((event) => !allowedAfterTerminal.has(event?.type));
+  const laterEvents = relevantEvents.slice(terminalIndex + 1);
+  const invalidLaterEvent = laterEvents.find((event) => (
+    !ARCHIVE_HOST_EVENTS_AFTER_TERMINAL.has(event?.type)
+    && !ARCHIVE_POD_CLOSE_EVENTS_AFTER_TERMINAL.has(event?.type)
+  ));
   if (invalidLaterEvent) {
     fail(
       `archive-demand refuses terminal state ${state.state}: controller event `
       + `${invalidLaterEvent.eventId ?? "(unknown)"} (${invalidLaterEvent.type ?? "unknown"}) `
-      + "appears after the terminal event; only host-ownership events may follow before archival.",
+      + "appears after the terminal event; only host-ownership events or the "
+      + "canonical close lifecycle of that same Pod may follow before archival.",
     );
+  }
+  const closeEvents = laterEvents.filter((event) => (
+    ARCHIVE_POD_CLOSE_EVENTS_AFTER_TERMINAL.has(event?.type)
+  ));
+  const isExplicitPod = (
+    state.executionPlacement?.mode === "isolated"
+    && state.executionPlacement?.selection === "explicit-user-pod"
+  );
+  if (closeEvents.length > 0 || (isExplicitPod && state.podProvisioning?.phase === "closed")) {
+    assertArchivePodCloseLifecycle(state, closeEvents);
   }
 }
 
@@ -3820,6 +4520,7 @@ function validateArchivePendingIntent({
   events,
   reason,
   redact,
+  allowOpaque,
   evidenceRefs,
   ledgerPaths,
 }) {
@@ -3828,9 +4529,13 @@ function validateArchivePendingIntent({
     || intent.command !== "archive-demand") {
     fail(`archive intent ${relative(archivePendingIntentFile(stateRoot))} has an unsupported kind/version.`);
   }
-  const commandArgs = { reason, redact, evidenceRefs };
-  if (!isDeepStrictEqual(intent.commandArgs, commandArgs)) {
-    fail("archive-demand command arguments do not match the persisted archive intent; retry with the original --reason, --redact, and --evidence-ref values.");
+  const commandArgs = { reason, redact, allowOpaque, evidenceRefs };
+  const persistedCommandArgs = {
+    ...intent.commandArgs,
+    allowOpaque: Boolean(intent.commandArgs?.allowOpaque),
+  };
+  if (!isDeepStrictEqual(persistedCommandArgs, commandArgs)) {
+    fail("archive-demand command arguments do not match the persisted archive intent; retry with the original --reason, --redact, --allow-opaque, and --evidence-ref values.");
   }
   if (typeof intent.createdAt !== "string" || !Number.isFinite(Date.parse(intent.createdAt))) {
     fail("archive intent createdAt is invalid.");
@@ -4058,6 +4763,7 @@ function commandArchiveDemand() {
 function commandArchiveDemandLocked(stateRoot) {
   const reason = requireValue("--reason");
   const redact = options.includes("--redact");
+  const allowOpaque = options.includes("--allow-opaque");
   const evidenceRefs = valuesFor("--evidence-ref");
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
@@ -4111,6 +4817,7 @@ function commandArchiveDemandLocked(stateRoot) {
       events: controllerEvents,
       reason,
       redact,
+      allowOpaque,
       evidenceRefs,
       ledgerPaths,
     }));
@@ -4123,6 +4830,15 @@ function commandArchiveDemandLocked(stateRoot) {
   } else {
     assertArchiveTerminalStateExplained(state, controllerEvents);
 
+    if (
+      state.executionPlacement?.selection === "explicit-user-pod"
+      && state.podProvisioning?.phase !== "closed"
+    ) {
+      fail(
+        `archive-demand refuses: Pod ${state.executionPlacement.podId || state.demandKey} is ${state.podProvisioning?.phase || "untracked"}, not closed. Generate the host close plan and record every matching host close receipt before archiving; Wakeflow does not delete host worktrees itself.`,
+      );
+    }
+
     // A demand with live isolation worktree windows must not archive: their worktrees and
     // branches would orphan with no owner. Stream entries are plain config facts
     // (repositories[].stream, host-neutral) surfaced through the derived local
@@ -4133,8 +4849,18 @@ function commandArchiveDemandLocked(stateRoot) {
       fail(`archive-demand refuses: ${openStreams.length} isolation worktree window(s) are still open for ${state.demandKey}: ${openStreams.map((repo) => repo.windowName).join(", ")}. Close them (stream-close) before archiving.`);
     }
 
-    scan = scanStateRootForArchivePrivacy(stateRoot, { hostProfile, workspaceRoot });
+    scan = scanStateRootForArchivePrivacy(stateRoot, {
+      hostProfile,
+      workspaceRoot,
+      allowOpaque,
+    });
     findingCounts = archivePrivacyFindingCounts(scan.findings);
+    const opaqueBlockers = scan.findings.filter((finding) => finding.kind === "opaque-file");
+    if (opaqueBlockers.length > 0 && !allowOpaque) {
+      fail(
+        `archive-demand refuses ${opaqueBlockers.length} opaque file(s); inspect their recorded sha256 values, then retry with --allow-opaque to preserve those exact bytes.`,
+      );
+    }
     if (!scan.clean && !redact) {
       fail([
         `archive-demand refuses: ${scan.findings.length} archive privacy finding(s) in the state-root tree (${JSON.stringify(findingCounts)}).`,
@@ -4244,6 +4970,7 @@ function commandArchiveDemandLocked(stateRoot) {
     ...(preservedOriginal ? { originalPreservedAt: relative(preservedDest) } : {}),
     designKey: demandRecord.source?.designKey ?? null,
     sourceDocuments: demandRecord.source?.documents ?? [],
+    opaqueFiles: scan.opaqueFiles ?? [],
     conclusion,
     taskLedger,
     testCards,
@@ -4261,7 +4988,7 @@ function commandArchiveDemandLocked(stateRoot) {
       sourceStateRoot: relative(stateRoot),
       ledgerDest: relative(ledgerDest),
       preservedDest: preservedDest ? relative(preservedDest) : null,
-      commandArgs: { reason, redact, evidenceRefs },
+      commandArgs: { reason, redact, allowOpaque, evidenceRefs },
       sourceState,
       event,
       nextState,
@@ -4340,7 +5067,11 @@ function commandArchiveDemandLocked(stateRoot) {
       `- Un-redacted original: ${preservedOriginal ? "moved to .wakeflow-local/preserved/ (see archive-manifest.json originalPreservedAt)" : "not needed (archive copy is complete)"}`,
       "",
     ].join("\n"));
-      let stagedScan = scanStateRootForArchivePrivacy(stagingDest, { hostProfile, workspaceRoot });
+      let stagedScan = scanStateRootForArchivePrivacy(stagingDest, {
+        hostProfile,
+        workspaceRoot,
+        allowOpaque,
+      });
       if (!stagedScan.clean && redact) {
         // Generated manifest/summary/event content is written after the first
         // copy, so sanitize the complete staged tree once more. This closes the
@@ -4353,7 +5084,11 @@ function commandArchiveDemandLocked(stateRoot) {
         renameSync(restagingDest, stagingDest);
         const sanitizedManifest = readJson(path.join(stagingDest, "archive-manifest.json"), "sanitized archive manifest");
         writeJson(path.join(stagingDest, "archive-manifest.json"), { ...sanitizedManifest, redactedFields });
-        stagedScan = scanStateRootForArchivePrivacy(stagingDest, { hostProfile, workspaceRoot });
+        stagedScan = scanStateRootForArchivePrivacy(stagingDest, {
+          hostProfile,
+          workspaceRoot,
+          allowOpaque,
+        });
       }
       if (!stagedScan.clean) {
         const stagedCounts = archivePrivacyFindingCounts(stagedScan.findings);
@@ -4548,6 +5283,7 @@ function commandSanitizeArchive() {
 
 function commandSanitizeArchiveLocked(stateRoot) {
   const reason = requireValue("--reason");
+  const allowOpaque = options.includes("--allow-opaque");
 
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
@@ -4560,7 +5296,11 @@ function commandSanitizeArchiveLocked(stateRoot) {
     fail(`sanitize-archive requires archive-manifest.json: ${relative(manifestFile)}.`);
   }
   const manifest = readJson(manifestFile, "archive manifest");
-  const scan = scanStateRootForArchivePrivacy(stateRoot, { hostProfile, workspaceRoot });
+  const scan = scanStateRootForArchivePrivacy(stateRoot, {
+    hostProfile,
+    workspaceRoot,
+    allowOpaque,
+  });
   const findingCounts = archivePrivacyFindingCounts(scan.findings);
   if (scan.clean) {
     output({
@@ -4657,7 +5397,11 @@ function commandSanitizeArchiveLocked(stateRoot) {
       `- Original preserved at: ${originalPreservedAt}`,
     ].join("\n"));
 
-    let stagedScan = scanStateRootForArchivePrivacy(stagingDest, { hostProfile, workspaceRoot });
+    let stagedScan = scanStateRootForArchivePrivacy(stagingDest, {
+      hostProfile,
+      workspaceRoot,
+      allowOpaque,
+    });
     if (!stagedScan.clean) {
       const restagingDest = `${stagingDest}.sanitized`;
       const secondPass = redactStateRootIntoCopy(stagingDest, restagingDest, { hostProfile, workspaceRoot });
@@ -4676,7 +5420,11 @@ function commandSanitizeArchiveLocked(stateRoot) {
         )),
       };
       writeJson(path.join(stagingDest, "archive-manifest.json"), finalizedManifest);
-      stagedScan = scanStateRootForArchivePrivacy(stagingDest, { hostProfile, workspaceRoot });
+      stagedScan = scanStateRootForArchivePrivacy(stagingDest, {
+        hostProfile,
+        workspaceRoot,
+        allowOpaque,
+      });
     }
     if (!stagedScan.clean) {
       throw new Error(`sanitized archive failed the final privacy scan (${JSON.stringify(archivePrivacyFindingCounts(stagedScan.findings))}).`);

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
+import { runSync } from "../core/lib/wakeflow-process.mjs";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
+const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../core");
 const script = path.join(workspaceRoot, "scripts/wakeflow-next-work.mjs");
 
 function writeFile(file, content) {
@@ -115,7 +115,7 @@ test("unified-surface TODO row: Auto Claim drives controllerClaimable", () => {
   assert.equal(manual.controllerClaimable, false);
 });
 
-test("next-work blocks new candidates while another demand state root is unarchived (maxActiveDemands=1)", () => {
+test("next-work keeps ordinary candidates visible as waiting while mainline is busy", () => {
   const { root } = makeFixture({
     todoRows:
       "| NEXT-2026-06-04 | pending-claim | requirement | P1 | Wakeflow | next | no | none | Wakeflow | none |",
@@ -127,15 +127,44 @@ test("next-work blocks new candidates while another demand state root is unarchi
   });
 
   const result = run(root, ["--source", "todo"]);
-  // At-capacity is a WARNING, not an error: the scan stays ok (in-flight
-  // demands still need review/dispatch) while every new claim is blocked.
   assert.equal(result.status, 0, result.stdout);
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.ok, true);
   assert.equal(parsed.candidateCount, 0);
-  assert.match(parsed.warnings.join("\n"), /workspace is at its active-demand capacity \(1\/1\)/);
+  assert.equal(parsed.waitingCandidateCount, 1);
+  assert.equal(parsed.waitingCandidates[0].id, "NEXT-2026-06-04");
+  assert.equal(parsed.waitingCandidates[0].placementStatus, "waiting-mainline");
+  assert.match(parsed.warnings.join("\n"), /mainline is busy/);
+  assert.match(parsed.warnings.join("\n"), /maxActiveDemands is deprecated and has no admission effect/);
   assert.equal(parsed.workspaceDemandConflicts[0].demandKey, "current-demand");
-  assert.equal(parsed.demandCapacity.atCapacity, true);
+  assert.equal(parsed.placement.mainlineBusy, true);
+  assert.equal("demandCapacity" in parsed, false);
+});
+
+test("next-work does not let isolated pods block an ordinary mainline candidate", () => {
+  const { root } = makeFixture({
+    todoRows:
+      "| NEXT-2026-06-04 | pending-claim | requirement | P1 | Wakeflow | next | no | none | Wakeflow | none |",
+  });
+  writeJson(path.join(root, ".wakeflow-active/current/pod/wakeflow-state.json"), {
+    demandKey: "pod",
+    state: "waiting-results",
+    executionPlacement: {
+      mode: "isolated",
+      podId: "pod",
+      selection: "explicit-user-pod",
+      authorizationRef: "user://pod",
+    },
+  });
+
+  const result = run(root, ["--source", "todo"]);
+  assert.equal(result.status, 0, result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.candidateCount, 1);
+  assert.equal(parsed.candidates[0].id, "NEXT-2026-06-04");
+  assert.equal(parsed.candidates[0].placementStatus, "mainline-ready");
+  assert.equal(parsed.placement.mainlineBusy, false);
+  assert.deepEqual(parsed.placement.activeIsolatedDemandKeys, ["pod"]);
 });
 
 // Regression: the MCP server's cwd is the plugin cache, not the workspace, so it passes

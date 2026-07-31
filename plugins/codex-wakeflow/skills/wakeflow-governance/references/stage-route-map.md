@@ -22,8 +22,22 @@ unexamined work as designed.
 
 ## S0 — Intake (owner: controller, with the user)
 User goal captured; orientation read (`AGENTS.md`, active index, current
-status). No writes beyond notes. Exit gate: a one-sentence goal the user
-recognizes.
+status). A normal demand stays on the mainline and writes no execution state
+yet. Missing/unhealthy required mainline identity returns
+`mainline-unavailable` before demand/TODO mutation and routes to mainline
+repair; it never authorizes a Pod. If and only if the user explicitly
+authorizes a Pod, the controller may
+create its minimal canonical `state=intake` root, record
+`selection=explicit-user-pod` plus `authorizationRef`, run
+`wakeflow_pod_open`, and ask Codex to create the three independent control
+threads. Journal each create by launch correlation with
+`wakeflow_pod_record_materialization`; a returned `clientThreadId` is pending
+recovery evidence, never a registry handle or permission to create again.
+Recovery uses bounded `list_threads(limit=50)` plus an exact correlation-marker
+match in `preview`; `query` is optional, and only one match may finalize.
+`control-ready` requires verified Controller/Design/Test receipts.
+Exit gate: a one-sentence goal the user recognizes and, for a Pod, a
+`control-ready` state root.
 
 ## S1 — Design (owner: Design window) — THE stage that prevents "review code and just start"
 Design turns the goal into an executable requirement BEFORE any implementation
@@ -45,8 +59,13 @@ never guesses current behavior).
    config values, accounts/credentials location (reference, never the secret),
    data fixtures, allowed operations, reset/cleanup steps. Confirmed with the
    user HERE, not after implementation.
-5. Delivery: `wakeflow_deliver` (append-only TODO row; requirement + autoClaim
-   requires the linked Original Plan + Requirement Design).
+5. Delivery: mainline Design uses `wakeflow_deliver` (append-only TODO row;
+   requirement + autoClaim requires the linked Original Plan + Requirement
+   Design). A Pod controller freezes the anchored request with
+   `wakeflow_pod_prepare_design_request`; Pod Design returns the matching
+   `PodDesignHandoffEnvelope`, which the Pod controller records with
+   `wakeflow_pod_record_design_handoff`. Neither step creates a second global
+   TODO for the same demand.
 
 ## S2 — Claim & Plan (owner: controller)
 `wakeflow_next_work` → `wakeflow_claim_next` / `wakeflow_create_demand`
@@ -54,7 +73,16 @@ never guesses current behavior).
 **Entry check:** the controller verifies the Design exit gate at the demand's
 scale. Any missing item = route back to Design (redesign lane) — do NOT patch
 the gap by reading code and deciding alone. Exit gate: state root + task
-packages + wave plan (which windows, producer/consumer order).
+packages + wave plan (which windows, producer/consumer order). Mainline is the
+default: if another mainline demand is active, ordinary and Auto Claim work
+waits without creating a state root or host resource. A Pod is valid only with
+its existing explicit authorization. After Pod Design freezes repository
+coverage, Codex creates each product thread from the exact saved project with
+`environment.type=worktree`. If Codex returns a temporary `clientThreadId`,
+record it as pending and use bounded `list_threads(limit=50)` plus exact
+correlation-marker matching in `preview` for the final task instead of creating
+again. Only one match may finalize; verified bindings advance the Pod to
+`execution-ready`.
 
 ## S3 — Dispatch & Execute (owners: controller dispatches, targets execute)
 `wakeflow_prepare_delivery` (author the objective; intent check against
@@ -64,15 +92,17 @@ designIntent) → send with the host thread tool (`send_message_to_thread`) →
 window with ONE combined task package (the window self-sequences its items;
 never two simultaneous tasks to one window inside a demand). Exit gate:
 results with evidence refs for the wave. (Isolation worktree windows —
-`wakeflow_pod_open`/`wakeflow_pod_close`, threads whose cwd is the worktree —
-exist for CROSS-DEMAND repo isolation only; the whole pod shares its demand's
-one worktree set.)
+`<repo>__<pod>` — exist only inside an explicitly authorized Pod and use
+Codex-created worktrees. Dispatch is forbidden before `execution-ready`;
+Wakeflow never creates or deletes those worktrees.)
 
 ## S4 — Review & Decide (owner: controller — the ONLY acceptance authority)
 `wakeflow_review_pack` (intent triple: designIntent / objective / result) →
 `wakeflow_reduce_results` → `wakeflow_decide_review`
 (accept / rework / redesign / blocked). Raw evidence before any decision.
 Non-bug outcome mismatch = redesign lane back to S1, never point-fix loops.
+For a Pod, the redesign request and handoff stay between
+`Controller__<pod>` and `Design__<pod>`; they do not return to mainline Design.
 Exit to S5 only after every existing non-Test target is accepted and the
 controller has recorded its concrete validation in the Test card's
 `controllerSelfChecks`. A Test-only reproduction or environment diagnostic
@@ -80,7 +110,13 @@ may enter S5 after the controller establishes that current scope.
 
 ## S5 — Test (conditional; owner: Test window executes, controller composes)
 Runs only when S1's Test decision said yes AND S4's functional acceptance gate
-passed. The controller builds the card
+passed. For a Pod, first run `wakeflow_pod_prepare_test_access` from the
+controller, execute that exact host-local probe from the independent Test task,
+and record it with `wakeflow_pod_record_test_access`. Only validated
+`direct-multi-root` coverage of every active product binding opens Test
+dispatch. Unsupported access stays blocked; no main-checkout/product-window
+fallback exists, and no per-repository executor is claimed as implemented.
+The controller then builds the card
 with `wakeflow_intake_test_card`, copying the S1 Test Environment Spec into
 `realScenarioConditions` (+ `allowedOperations`/`forbiddenOperations`/
 `evidenceRequired`) and recording `controllerSelfChecks`, then
@@ -100,10 +136,11 @@ same contract before accepting evidence or authoring follow-up work.
 
 ## S6 — Integrate & Close (owner: controller)
 `wakeflow_complete_demand` (all accepted, zero blockers, evidence) →
-`wakeflow_pod_close` when the demand ran as a pod (worktrees down, branches on
-the pending-merges ledger; the archive gate refuses open isolation windows) →
-`wakeflow_archive` (redaction gate) → TODO rollup / `wakeflow_prune_runtime`.
-Merge-back of surviving branches is human-reviewed, outside Wakeflow.
+`wakeflow_pod_close` when the demand ran as a Pod (generate a host-close plan)
+→ Codex archives/handoffs each thread → record every
+`wakeflow_pod_record_close_receipt` → `wakeflow_archive` (redaction gate) →
+TODO rollup / `wakeflow_prune_runtime`. Logical binding close is not proof of
+physical worktree removal; integration and Codex GC stay outside Wakeflow.
 
 Before archive, a verified same-demand gap may return from S6 to S2 only through
 `wakeflow_continue_demand`: it records the bug/supplement/authorized-optimization
@@ -115,13 +152,13 @@ as a new demand.
 
 | Stage | MCP tools | Host tools | Skills/prose |
 | --- | --- | --- | --- |
-| S0 | `wakeflow_status` | — | AGENTS.md posture |
-| S1 | `wakeflow_deliver` | — | Design support surface docs |
-| S2 | `wakeflow_next_work`, `wakeflow_claim_next`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_render_progress` | — | governance TODO intake |
-| S3 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result`, `wakeflow_release_window_lock`, `wakeflow_pod_open`/`wakeflow_pod_list` | `create_thread`, `set_thread_title`, `send_message_to_thread` | controller dispatch + target skill |
+| S0 | `wakeflow_status`, explicit-Pod `wakeflow_create_demand`, `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind` | `list_projects`, `create_thread`, `list_threads`, `set_thread_title` | AGENTS.md posture |
+| S1 | mainline `wakeflow_deliver`; Pod `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff` | Pod Design direct-thread send | Design support surface docs |
+| S2 | `wakeflow_next_work`, `wakeflow_claim_next`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_render_progress`, Pod `wakeflow_pod_record_materialization`, `wakeflow_pod_bind` | Pod product `create_thread(environment=worktree)`, `list_threads` | governance TODO intake |
+| S3 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result`, `wakeflow_release_window_lock`, `wakeflow_pod_list` | `send_message_to_thread` | controller dispatch + target skill |
 | S4 | `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_view` | — | controller acceptance practices |
-| S5 | `wakeflow_intake_test_card` | (dispatch = S3 transport) | testing-validation reference |
-| S6 | `wakeflow_complete_demand`, `wakeflow_archive`, `wakeflow_prune_runtime`, `wakeflow_adopt_demand_host`, `wakeflow_pod_close` | — | ledger reference |
+| S5 | `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_intake_test_card` | exact Pod Test multi-root probe; dispatch = S3 transport | testing-validation reference |
+| S6 | `wakeflow_complete_demand`, `wakeflow_pod_close`, `wakeflow_pod_record_close_receipt`, `wakeflow_archive`, `wakeflow_prune_runtime`, `wakeflow_adopt_demand_host` | `set_thread_archived` / host handoff | ledger reference |
 | Cross | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_verify` | — | this map |
 
 ## The three escalation lanes (a missing input is NEVER guessed)

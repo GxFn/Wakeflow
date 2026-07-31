@@ -72,8 +72,8 @@ closed loop that moves the work, and a disk layout that survives restarts.
 
 ### Layer 1 — the fleet (what you see)
 
-The baseline fleet lives in the configured tmux session; every demand pod gets
-its own additional tmux session. Each window is an interactive Claude Code
+The baseline fleet lives in the configured tmux session; every explicitly
+authorized Pod gets its own additional tmux session. Each window is an interactive Claude Code
 session pinned to one responsibility, and the status
 bar tells you who is doing what at a glance:
 
@@ -114,7 +114,7 @@ disk. Every demand moves through the same closed loop:
  4 dispatch   preview -> digest-matched apply -> LOCK -> prompt pasted
  5 work       the target window executes inside its repository boundary
  6 result     TargetResultEnvelope lands with evidence refs -> lock released
- 7 review     controller reads RAW evidence, then accepts / reworks / blocks
+ 7 review     controller reads RAW evidence, then accepts / reworks / blocks / redesigns
  8 complete   only when every task is accepted and no blockers remain
 ```
 
@@ -127,6 +127,11 @@ Two rules keep the loop honest:
   work. The controller reviews the raw evidence (commits, command output,
   reports) before recording a decision, and a blocked decision is always
   recoverable: new evidence reopens review.
+- **Replacement is explicit.** Ordinary rework redispatches the same task.
+  Redesign preserves the rejected task, then the controller creates a new
+  full-context implementation task in the product responsibility window with
+  `replacesTargetTaskId` after the Design handoff. Accepting that replacement
+  supersedes the old task and package.
 
 ### Layer 3 — the ground (what's on disk)
 
@@ -205,7 +210,7 @@ The plugin ships four coordinated surfaces:
 | MCP server | `.mcp.json` starts `${CLAUDE_PLUGIN_ROOT}/bin/wakeflow-mcp`; the launcher selects Node.js 20+ and starts the standalone `mcp/server.cjs` with no `node_modules` dependency. |
 | Skills | `wakeflow-controller`, `wakeflow-target`, `wakeflow-target-craft`, and `wakeflow-governance` operating manuals. |
 | Slash commands | `/wakeflow:init`, `/wakeflow:check`, `/wakeflow:windows`, `/wakeflow:status`, `/wakeflow:dispatch`, `/wakeflow:review`, and `/wakeflow:unattended`. |
-| Host transport helper | `scripts/lib/wakeflow-claude-host.mjs`. Fleet: `preflight`, `ensure-server`, `launch-window`, `launch-all`, `replace-all`, `retitle`, `arrange-windows`, `window-status`, `check-workspace`. Delivery: `deliver` (primary), `send`, `readback`, `wait-results`, `activity-monitor`. Policy: `seed-permissions`, `set-unattended`, `stamp-runtime`. Cross-demand: `stream-open`, `stream-close`, `stream-list`, `pod-open`, `pod-close`, `pod-list`. |
+| Host transport helper | `scripts/lib/wakeflow-claude-host.mjs`. Fleet: `preflight`, `ensure-server`, `launch-window`, `launch-all`, `replace-all`, `retitle`, `arrange-windows`, `window-status`, `check-workspace`. Delivery: `deliver` (primary), `send`, `readback`, `wait-results`, `activity-monitor`. Policy: `seed-permissions`, `set-unattended`, `stamp-runtime`. Explicit Pod host lifecycle: `pod-open`, `pod-close`, `pod-list` (native `claude --worktree` for products). `stream-open/close/list` is legacy recovery only, not the new Pod path. |
 
 The helper requires tmux. `preflight` only reports availability and the
 recommended install command. When tmux is missing, the initialization command
@@ -324,28 +329,48 @@ recorded.
 
 ## Demand Pods (multi-demand parallelism)
 
-Parallelism exists ONLY at the demand level. Within one demand each repository
-runs exactly ONE window with ONE combined task package (the window
-self-sequences its items); across demands, up to `maxActiveDemands` (default
-2, `wakeflow.config.json`) demands run side by side as pods:
+Mainline is the default execution surface. If it is busy, ordinary work and
+Auto Claim wait. Missing/unhealthy required mainline identity returns
+`mainline-unavailable` before demand/TODO mutation and is repaired. Wakeflow
+never turns a second demand into a Pod automatically. A Pod requires an
+auditable, explicit user authorization and Wakeflow applies no numeric Pod or
+per-repository limit.
 
-- One demand = one pod: its own `Controller__<pod>`, per-repo isolation
-  worktree windows (`<repo>__<pod>` on branch `<sanitized-demand-key>/pod`), and its
-  own `Test__<pod>`, all in its own tmux session. The WHOLE pod shares the
-  demand's one worktree set — every window, Test included, works and verifies
-  inside those worktrees, never on a main checkout. Pods are mutually unaware.
-- Open/resume/close with the helper: `pod-open --demand-key <key> --repos
-  <a,b>` (idempotent — re-run resumes dead windows from the registry),
-  `pod-list` (the one global view), `pod-close` after archive.
-- The pod controller claims its demand itself (`wakeflow_create_demand` with
-  `controllerWindow: "Controller__<pod>"`), so every controller-return routes
-  to the pod, not the default controller.
-- Close order: `complete-demand` → `stream-close` each repo window → archive
-  → `pod-close`. Surviving branches land on
-  `wakeflow-ledger/workspace/pending-merges.md`; merge-back is human-reviewed
-  and decentralized — no controller merges pod branches.
-- `maxStreamsPerRepo` bounds how many pods may hold isolation worktrees on
-  one repository; claiming past `maxActiveDemands` fails closed.
+- One Pod owns independent `Controller__<pod>`, `Design__<pod>`,
+  `Test__<pod>`, and one product session per selected repository, in its own
+  tmux container. Within the demand, each repository still receives one
+  combined package at a time.
+- Core `wakeflow_pod_open` only records host-neutral launch operations. The
+  helper materializes them: three distinct control sessions and native
+  `claude --worktree` product sessions from exact repository roots. It never
+  nests Claude's `--tmux` or grants the whole workspace with a default
+  `--add-dir`.
+- `wakeflow_pod_record_materialization` can journal the exact launch
+  correlation around the helper call. Claude returns a final session id
+  synchronously; it has no Codex `clientThreadId` pending state, and no
+  temporary request id belongs in the registry.
+- Register only the final Claude session id, then verify pane cwd, Git common
+  dir, base HEAD, and `mainCheckout=false` with `wakeflow_pod_bind`. All three
+  control bindings produce `control-ready`; the Pod Design handoff plus all
+  product bindings produce `execution-ready`.
+- Pod Design and redesign stay between `Controller__<pod>` and
+  `Design__<pod>`. Freeze the controller request with
+  `wakeflow_pod_prepare_design_request`, then record its exact
+  `PodDesignHandoffEnvelope` with `wakeflow_pod_record_design_handoff`; neither
+  step creates a second global TODO.
+- Before Pod Test dispatch, run `wakeflow_pod_prepare_test_access` and record
+  the independent Test session's exact probe through
+  `wakeflow_pod_record_test_access`. Only `validated` +
+  `direct-multi-root` coverage of every active product binding opens dispatch.
+  Unsupported multi-root access remains blocked; no main-checkout, product-
+  window, or unverified per-repository-executor fallback is implemented.
+- Re-running `pod-open` reuses launch correlations and receipts, creating only
+  missing sessions. Resume uses `--resume` and the recorded actual cwd, never
+  a second `--worktree`.
+- Core `wakeflow_pod_close` emits a host-close plan. Helper `pod-close` closes
+  tmux/Claude sessions and reports worktree disposition; record each result
+  with `wakeflow_pod_record_close_receipt`. Wakeflow never runs Git worktree
+  cleanup for the new Pod path.
 
 ## One Vocabulary Across Hosts
 
@@ -444,7 +469,7 @@ boundary:
 | Child `CLAUDE.md` access cards | Per-window responsibility and read paths. |
 | `wakeflow.config.json` | Managed windows, repository paths, roles, host transport settings such as the tmux session name, and default language. |
 | `.wakeflow-active/` | Active state roots, current indexes, progress docs, TODO projections, intake, and test cards. |
-| `.wakeflow-local/` | Thread registry, delivery runtime, local overrides, and derived window config. |
+| `.wakeflow-local/` | Thread registry, delivery runtime, host-scoped Pod operation/binding receipts, local overrides, and derived window config. |
 | `wakeflow-ledger/` | Long-term project coordination records and archives. |
 | `Design/` | Internal requirement-design workspace when no external Design repository is mapped. |
 | `Test/` | Internal test coordination workspace when no external Test repository is mapped. |
@@ -501,7 +526,7 @@ Primary tool groups:
 | --- | --- |
 | Setup and window registration | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
 | Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_render_progress`, `wakeflow_cancel_demand` |
-| Candidate scan and isolated pods | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_close`, `wakeflow_pod_list` |
+| Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_record_materialization`, `wakeflow_pod_bind`, `wakeflow_pod_prepare_design_request`, `wakeflow_pod_record_design_handoff`, `wakeflow_pod_prepare_test_access`, `wakeflow_pod_record_test_access`, `wakeflow_pod_close`, `wakeflow_pod_record_close_receipt`, `wakeflow_pod_list` |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
@@ -537,7 +562,7 @@ Wakeflow keeps source, active runtime, and durable records separate:
 | `scripts/` | Runtime implementation and validation scripts packaged by the plugin. |
 | `templates/wakeflow-template-bundle.json` | Bundled starter state, Design/Test, and ledger skeletons expanded during setup. |
 | `.wakeflow-active/` | Current active work in a target workspace; ignored by Git. |
-| `.wakeflow-local/` | Machine-local thread registry, derived runtime views, and local state; ignored by Git. |
+| `.wakeflow-local/` | Machine-local thread registry, Pod operation/binding receipts, derived runtime views, and local state; ignored by Git. |
 | `wakeflow-ledger/` | Project-specific durable records outside reusable Wakeflow source. |
 
 The source repository tracks reusable Wakeflow capability. Product code,

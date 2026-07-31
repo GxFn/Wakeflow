@@ -1,6 +1,12 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { hostProfile } from "./wakeflow-host-profile.mjs";
+import {
+  POD_BINDING_KIND,
+  POD_OPERATION_KIND,
+  contentDigest,
+  createPodRuntime,
+} from "./wakeflow-pod-runtime.mjs";
 import {
   buildWindowDispatchConfig,
   createThreadRegistration,
@@ -14,6 +20,7 @@ export function createWindowRuntime(ctx) {
     stateDir,
     write,
     hasFlag,
+    getValue,
     requireValue,
     nowIso,
     fail,
@@ -26,6 +33,8 @@ export function createWindowRuntime(ctx) {
     windowConfigFileFor,
     threadRegistrationVersion,
     windowConfigVersion,
+    withFileLock,
+    WakeflowStateLockTimeoutError,
   } = ctx;
 
   function validateThreadId(value) {
@@ -64,29 +73,252 @@ export function createWindowRuntime(ctx) {
     // Demand pods: Controller__<pod> IS a controller; a pod-suffixed test
     // window (Test__<pod>) inherits its base window's role.
     const podBase = podBaseWindow(windowName);
-    if (podBase === "Controller") return "controller";
+    if (podBase === config.controllerWindow || podBase === "Controller") return "controller";
+    if (podBase === config.designWindow) return "design";
     if (podBase && testWindowNames(config).includes(podBase)) return "test-target";
     return "target";
   }
 
-  // Demand pods create runtime windows the tracked config never lists:
-  // Controller__<pod> and Test__<pod> (isolation work windows land in the
-  // derived overlay instead). `<base>__<suffix>` with a configured base — or
-  // the literal Controller role prefix — is the pod shape.
+  // Complete Pods create runtime windows the tracked config never lists.
+  // A suffix is only a naming shape; registration still requires a matching
+  // host-local launch operation and binding correlation below.
   function podBaseWindow(windowName) {
     const marker = windowName.indexOf("__");
     return marker > 0 ? windowName.slice(0, marker) : null;
   }
 
-  function windowRuntimeDescriptor(windowName) {
-    const { config, repository } = repositoryForWindow(windowName);
+  function podRuntime() {
+    return createPodRuntime({
+      workspaceRoot,
+      stateDir,
+      host: hostProfile.hostId,
+      write: false,
+    });
+  }
+
+  function activePodBinding(windowName) {
+    const runtime = podRuntime();
+    const matches = runtime.listBindings()
+      .map((entry) => entry.value)
+      .filter((binding) => binding?.windowName === windowName && binding?.status === "active");
+    if (matches.length > 1) {
+      fail(`More than one active Pod binding exists for ${windowName}; repair the host-local binding authority before dispatch.`);
+    }
+    const binding = matches[0] ?? null;
+    if (!binding) return null;
+    if (
+      binding.kind !== POD_BINDING_KIND
+      || binding.host !== hostProfile.hostId
+      || !binding.podId
+      || !binding.demandKey
+      || !binding.launchCorrelationId
+      || !binding.bindingId
+      || !binding.receipt
+      || binding.receiptDigest !== contentDigest(binding.receipt)
+    ) {
+      fail(`Active Pod binding for ${windowName} is incomplete or has a mismatched receipt digest.`);
+    }
+    const manifest = runtime.readManifest(binding.podId);
+    const operation = runtime.readOperation(binding.launchCorrelationId);
+    if (
+      !manifest
+      || manifest.host !== hostProfile.hostId
+      || manifest.demandKey !== binding.demandKey
+      || !manifest.operationIds?.includes(binding.launchCorrelationId)
+      || !operation
+      || operation.kind !== POD_OPERATION_KIND
+      || operation.operationType !== "launch"
+      || operation.status !== "bound"
+      || operation.host !== hostProfile.hostId
+      || operation.demandKey !== binding.demandKey
+      || operation.podId !== binding.podId
+      || operation.windowName !== binding.windowName
+      || operation.role !== binding.role
+      || operation.bindingId !== binding.bindingId
+      || operation.receiptDigest !== binding.receiptDigest
+    ) {
+      fail(`Active Pod binding for ${windowName} does not match its manifest and launch operation.`);
+    }
+    if (
+      !existsSync(binding.receipt.actualCwd)
+      || realpathSync(binding.receipt.actualCwd) !== binding.receipt.actualCwd
+    ) {
+      fail(`Active Pod binding for ${windowName} points at a missing actualCwd.`);
+    }
+    return binding;
+  }
+
+  function podStateForRuntimeRecord(record) {
+    if (!record?.podId) return null;
+    const manifest = podRuntime().readManifest(record.podId);
+    if (!manifest?.stateRootRelative) return null;
+    const stateRoot = path.resolve(workspaceRoot, manifest.stateRootRelative);
+    const relativeStateRoot = path.relative(workspaceRoot, stateRoot);
+    if (
+      path.isAbsolute(relativeStateRoot)
+      || relativeStateRoot === ".."
+      || relativeStateRoot.startsWith(`..${path.sep}`)
+    ) {
+      fail(`Pod manifest ${record.podId} points outside the workspace.`);
+    }
+    const stateFile = path.join(stateRoot, "wakeflow-state.json");
+    if (!existsSync(stateFile)) {
+      fail(`Pod runtime record ${record.windowName} has no canonical demand state at ${manifest.stateRootRelative}.`);
+    }
+    const state = readJson(stateFile, "Pod controller state");
+    if (
+      state.demandKey !== record.demandKey
+      || state.executionPlacement?.podId !== record.podId
+      || state.executionPlacement?.selection !== "explicit-user-pod"
+    ) {
+      fail(`Pod runtime record ${record.windowName} does not match its canonical demand placement.`);
+    }
+    return { manifest, state, stateRoot };
+  }
+
+  function deliveryRoleForPodRecord(record) {
+    if (record?.role === "controller") return "controller";
+    if (record?.role === "design") return "design";
+    if (record?.role === "test") return "test-target";
+    if (record?.role === "product") return "target";
+    return null;
+  }
+
+  function windowRuntimeDescriptor(windowName, podOperation = null) {
+    const { config } = repositoryForWindow(windowName);
+    const podBase = podBaseWindow(windowName);
+    const binding = podBase ? activePodBinding(windowName) : null;
+    const podRecord = binding ?? podOperation;
+    const repositoryWindow = podRecord?.repositoryWindow
+      ?? podRecord?.intent?.repositoryWindow
+      ?? podBase
+      ?? windowName;
+    const repository = (Array.isArray(config.repositories) ? config.repositories : [])
+      .find((item) => item?.windowName === repositoryWindow) ?? null;
+    const podState = podRecord ? podStateForRuntimeRecord(podRecord) : null;
     return {
       config,
       repository,
-      deliveryRole: deliveryRoleForWindow(config, windowName),
-      cwd: repository?.path,
-      responsibilityRoot: repository?.path,
+      deliveryRole: deliveryRoleForPodRecord(podRecord) ?? deliveryRoleForWindow(config, windowName),
+      cwd: podBase
+        ? (binding?.receipt?.actualCwd ?? null)
+        : windowName === config.controllerWindow
+          ? workspaceRoot
+          : repository?.path,
+      responsibilityRoot: podBase
+        ? (binding?.receipt?.actualCwd ?? null)
+        : windowName === config.controllerWindow
+          ? workspaceRoot
+          : repository?.path,
+      podBinding: binding,
+      podOperation,
+      podState,
     };
+  }
+
+  function applyPodDispatchGate(config, descriptor) {
+    const podRecord = descriptor?.podBinding ?? descriptor?.podOperation;
+    const podBase = podBaseWindow(podRecord?.windowName ?? config.windowName);
+    if (!podBase) return config;
+    const phase = descriptor.podState?.state?.podProvisioning?.phase ?? null;
+    const testAccess = descriptor.podState?.state?.podProvisioning?.testAccess ?? null;
+    const bindingVerified = Boolean(descriptor.podBinding && descriptor.podState);
+    const role = descriptor.deliveryRole;
+    const phaseAllowsDispatch = role === "controller"
+      ? bindingVerified
+      : role === "design"
+        ? false
+        : role === "test-target"
+          ? phase === "execution-ready"
+            && testAccess?.status === "validated"
+            && testAccess?.capability === "direct-multi-root"
+          : phase === "execution-ready";
+    return {
+      ...config,
+      dispatchable: Boolean(config.dispatchable && bindingVerified && phaseAllowsDispatch),
+      pod: {
+        bindingVerified,
+        phase,
+        demandKey: descriptor.podBinding?.demandKey ?? null,
+        podId: descriptor.podBinding?.podId ?? null,
+        ...(role === "test-target"
+          ? {
+              testAccess: {
+                status: testAccess?.status ?? "missing",
+                capability: testAccess?.capability ?? null,
+                probeId: testAccess?.probeId ?? null,
+              },
+            }
+          : {}),
+        dispatchGate: phaseAllowsDispatch ? "open" : "blocked",
+      },
+    };
+  }
+
+  function normalizeStateRootRelative(value) {
+    const resolved = path.resolve(workspaceRoot, value);
+    const relativeStateRoot = path.relative(workspaceRoot, resolved);
+    if (
+      !relativeStateRoot
+      || path.isAbsolute(relativeStateRoot)
+      || relativeStateRoot === ".."
+      || relativeStateRoot.startsWith(`..${path.sep}`)
+    ) {
+      fail("--state-root for a Pod registration must resolve below the workspace root.");
+    }
+    return relativeStateRoot.split(path.sep).join("/");
+  }
+
+  function podLaunchOperationForRegistration({ windowName, launchCorrelationId, bindingId, stateRoot }) {
+    if (!launchCorrelationId || !bindingId || !stateRoot) {
+      fail(`Pod window ${windowName} requires --launch-correlation-id, --binding-id, and --state-root from its launch plan.`);
+    }
+    const runtime = podRuntime();
+    const operation = runtime.readOperation(launchCorrelationId);
+    if (
+      !operation
+      || operation.kind !== POD_OPERATION_KIND
+      || operation.operationType !== "launch"
+      || operation.operationId !== launchCorrelationId
+    ) {
+      fail(`No canonical Pod launch operation matches ${launchCorrelationId}.`);
+    }
+    if (operation.host !== hostProfile.hostId || operation.windowName !== windowName) {
+      fail(`Pod launch operation ${launchCorrelationId} does not authorize ${windowName} on ${hostProfile.hostId}.`);
+    }
+    if (
+      !operation.intent?.registrationBindingId
+      || operation.intent.registrationBindingId !== bindingId
+    ) {
+      fail(`Pod registration ${windowName} must reuse the launch operation's exact registrationBindingId.`);
+    }
+    if (operation.status === "closed") {
+      fail(`Pod launch operation ${launchCorrelationId} is already closed.`);
+    }
+    if (operation.bindingId && operation.bindingId !== bindingId) {
+      fail(`Pod launch operation ${launchCorrelationId} is already associated with a different binding.`);
+    }
+    const manifest = runtime.readManifest(operation.podId);
+    if (!manifest || manifest.host !== hostProfile.hostId || manifest.demandKey !== operation.demandKey) {
+      fail(`Pod launch operation ${launchCorrelationId} has no matching host-local manifest.`);
+    }
+    if (normalizeStateRootRelative(stateRoot) !== manifest.stateRootRelative) {
+      fail(`Pod registration ${windowName} does not match the launch plan's canonical state root.`);
+    }
+    return operation;
+  }
+
+  function rejectDuplicateRegisteredHandle(windowName, threadId) {
+    const registryDir = path.dirname(threadFileFor(windowName));
+    if (!existsSync(registryDir)) return;
+    for (const entry of readdirSync(registryDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      const file = path.join(registryDir, entry.name);
+      const registration = readJson(file, "thread registration");
+      if (registration.windowName !== windowName && registration.threadId === threadId) {
+        fail(`The same host session is already registered to ${registration.windowName}; every Pod role requires an independent session.`);
+      }
+    }
   }
 
   function formatTargetPrompt({
@@ -115,17 +347,20 @@ export function createWindowRuntime(ctx) {
       .slice(0, limit);
     const briefing = taskBriefing && typeof taskBriefing === "object" ? taskBriefing : {};
     const promptObjective = cleanLine(briefing.objective || objective || `Complete ${taskId}.`);
-    const completionExpectations = lines(briefing.completionExpectations, 4);
-    const contextSummary = lines(briefing.contextSummary, 3);
+    const completionExpectations = lines(briefing.completionExpectations, 2);
+    const priorityContext = lines(briefing.contextSummary, 1)[0] || "";
     const requirementRefs = (Array.isArray(briefing.requirementRefs) ? briefing.requirementRefs : [])
-      .filter((item) => item && typeof item === "object" && item.ref)
-      .slice(0, 4);
+      .filter((item) => item && typeof item === "object" && item.ref);
+    const requirementEntry = requirementRefs.find((entry) => entry.role === "goal")
+      ?? requirementRefs[0];
     const boundaries = briefing.boundaries && typeof briefing.boundaries === "object"
       ? briefing.boundaries
       : {};
-    const inScope = lines(boundaries.inScope, 3);
-    const outOfScope = lines(boundaries.outOfScope, 2);
-    const forbidden = lines(boundaries.forbidden, 2);
+    const criticalBoundary = [
+      { kind: "forbidden", value: lines(boundaries.forbidden, 1)[0] },
+      { kind: "outOfScope", value: lines(boundaries.outOfScope, 1)[0] },
+      { kind: "inScope", value: lines(boundaries.inScope, 1)[0] },
+    ].find((entry) => entry.value);
     const anchors = (Array.isArray(briefing.acceptanceAnchors) ? briefing.acceptanceAnchors : [])
       .filter((item) => item && typeof item === "object")
       .slice(0, 4);
@@ -141,11 +376,13 @@ export function createWindowRuntime(ctx) {
     const repositoryInstructions = repositoryRoot
       ? path.join(repositoryRoot, hostProfile.memoryFile)
       : hostProfile.memoryFile;
-    const commitExpectation = briefing.commitExpectation === "commit"
-      ? (zh ? "\u63d0\u4ea4\u672c\u4efb\u52a1\u8303\u56f4\u5185\u7684\u4ed3\u5e93\u6539\u52a8\u540e\u518d\u56de\u4f20\u3002" : "Commit the repository changes in this task's scope before returning.")
-      : briefing.commitExpectation === "leave-uncommitted"
-        ? (zh ? "\u4fdd\u7559\u672c\u4efb\u52a1\u6539\u52a8\u4e3a\u672a\u63d0\u4ea4\u72b6\u6001\uff0c\u7531\u603b\u63a7\u51b3\u5b9a\u540e\u7eed\u63d0\u4ea4\u3002" : "Leave this task's changes uncommitted for controller handling.")
-        : "";
+    const workspaceRoot = cleanLine(briefing.workspaceRoot, 500);
+    const workspaceInstructions = workspaceRoot
+      ? path.join(workspaceRoot, hostProfile.memoryFile)
+      : "";
+    const distinctWorkspaceInstructions = workspaceInstructions
+      && path.resolve(workspaceInstructions) !== path.resolve(repositoryInstructions);
+    const currentStateRoot = cleanLine(briefing.stateRoot || stateRef.stateRoot, 500);
     return [
       zh
         ? `\u7ee7\u7eed\u5f53\u524d\u7a97\u53e3\u4efb\u52a1\uff1a${targetWindow} / ${taskId}\u3002`
@@ -156,10 +393,16 @@ export function createWindowRuntime(ctx) {
       "",
       ...(completionExpectations.length > 0
         ? [
-            zh ? "\u5b8c\u6210\u9884\u671f\uff1a" : "Completion expectations:",
+            zh ? "\u672c\u8f6e\u5b8c\u6210\u91cd\u70b9\uff08\u5b8c\u6574\u6761\u4ef6\u89c1\u4efb\u52a1\u5305\uff09\uff1a" : "Completion focus (full criteria are in the task package):",
             ...completionExpectations.map((item) => `- ${item}`),
             "",
           ]
+        : []),
+      ...(priorityContext
+        ? [`- ${zh ? "\u4f18\u5148\u4e0a\u4e0b\u6587" : "Priority context"}: ${priorityContext}`]
+        : []),
+      ...(criticalBoundary
+        ? [`- ${zh ? "\u5173\u952e\u8fb9\u754c" : "Critical boundary"} [${criticalBoundary.kind}]: ${criticalBoundary.value}`]
         : []),
       ...(anchors.length > 0
         ? [
@@ -168,43 +411,25 @@ export function createWindowRuntime(ctx) {
             "",
           ]
         : []),
-      ...(contextSummary.length > 0
-        ? [
-            zh ? "\u5df2\u786e\u8ba4\u4e0a\u4e0b\u6587\uff1a" : "Confirmed context:",
-            ...contextSummary.map((item) => `- ${item}`),
-            "",
-          ]
-        : []),
       zh ? "\u5f00\u59cb\u524d\u6309\u987a\u5e8f\u8bfb\u53d6\uff1a" : "Read before execution, in order:",
       `- ${zh ? "\u4efb\u52a1\u5305\uff08\u672c\u4efb\u52a1\u5b8c\u6574\u4e0a\u4e0b\u6587\uff09" : "Task package (complete task context)"}: ${taskPackageRef}`,
-      ...requirementRefs.map((entry) => `- ${zh ? "\u9700\u6c42\u80cc\u666f\u951a\u70b9" : "Requirement background anchor"} [${entry.role}]: ${entry.resolvedRef || entry.ref}`),
+      ...(requirementEntry
+        ? [`- ${zh ? "\u9700\u6c42\u80cc\u666f\u5165\u53e3\uff08\u5b8c\u6574\u951a\u70b9\u89c1\u4efb\u52a1\u5305\uff09" : "Requirement background entry (full anchors are in the task package)"} [${requirementEntry.role}]: ${requirementEntry.resolvedRef || requirementEntry.ref}`]
+        : []),
+      ...(distinctWorkspaceInstructions
+        ? [`- ${zh ? "\u5de5\u4f5c\u7a7a\u95f4\u6307\u4ee4" : "Workspace instructions"}: ${workspaceInstructions}`]
+        : []),
       `- ${zh ? "\u4ed3\u5e93\u6307\u4ee4" : "Repository instructions"}: ${repositoryInstructions}`,
+      ...(currentStateRoot
+        ? [`- ${zh ? "\u5f53\u524d state root" : "Current state root"}: ${currentStateRoot}`]
+        : []),
       "",
       zh ? "\u5fc5\u987b\u52a0\u8f7d\u7684\u6267\u884c Skills\uff08\u6267\u884c\u6d41\u7a0b\u6743\u5a01\uff09\uff1a" : "Required execution Skills (execution-process authority):",
       ...requiredSkills.map((skill) => `- ${skill}`),
       "",
-      zh ? "\u4fe1\u606f\u5206\u5de5\uff1a" : "Authority by purpose:",
-      ...(zh
-        ? [
-            "- \u672c\u63d0\u793a\u8bcd\uff1a\u672c\u8f6e\u76ee\u6807\u3001\u8bfb\u53d6\u987a\u5e8f\u4e0e\u56de\u4f20\u8981\u6c42\u3002",
-            "- \u4efb\u52a1\u5305\uff1a\u5b8c\u6574\u4efb\u52a1\u4e0a\u4e0b\u6587\u3001\u8fb9\u754c\u3001\u5b8c\u6210\u9884\u671f\u548c\u9a8c\u6536\u951a\u70b9\u3002",
-            "- \u9700\u6c42\u6587\u6863\u951a\u70b9\uff1a\u539f\u59cb\u76ee\u6807\u4e0e\u80cc\u666f\uff0c\u4e0d\u662f\u65b0\u7684\u6267\u884c\u6d41\u7a0b\u3002",
-            "- Skills\uff1a\u5177\u4f53\u6267\u884c\u5de5\u827a\uff1b\u4e0d\u5f97\u501f\u5de5\u827a\u6269\u5199\u9700\u6c42\u3002",
-          ]
-        : [
-            "- This prompt: the current objective, reading order, and return requirement.",
-            "- Task package: complete task context, boundaries, completion expectations, and acceptance anchors.",
-            "- Requirement anchors: original goals and background, not a new execution plan.",
-            "- Skills: execution procedure; never use procedure to expand the requirement.",
-          ]),
-      "",
-      zh ? "\u8eab\u4efd\u4e0e\u8fb9\u754c\uff1a" : "Identity and boundaries:",
+      zh ? "\u8eab\u4efd\u5b9a\u4f4d\uff08\u5b8c\u6574\u8fb9\u754c\u89c1\u4efb\u52a1\u5305\uff09\uff1a" : "Identity (full boundaries are in the task package):",
       `- ${zh ? "\u5f53\u524d\u804c\u8d23\u7a97\u53e3" : "Current responsibility window"}: ${targetWindow}`,
       ...(repositoryRoot ? [`- ${zh ? "\u552f\u4e00\u5de5\u4f5c\u4ed3\u5e93" : "Only working repository"}: ${repositoryRoot}`] : []),
-      ...inScope.map((item) => `- ${zh ? "\u8303\u56f4\u5185" : "In scope"}: ${item}`),
-      ...outOfScope.map((item) => `- ${zh ? "\u8303\u56f4\u5916" : "Out of scope"}: ${item}`),
-      ...forbidden.map((item) => `- ${zh ? "\u7981\u6b62" : "Forbidden"}: ${item}`),
-      ...(commitExpectation ? [`- ${commitExpectation}`] : []),
       "",
       ...(acceptanceAnchors
         ? [
@@ -229,26 +454,41 @@ export function createWindowRuntime(ctx) {
     ].join("\n");
   }
 
-  function commandRegisterThread() {
+  function commandRegisterThreadUnlocked() {
     const windowName = requireValue("--window");
     const threadId = validateThreadId(requireValue("--thread-id"));
-    const descriptor = windowRuntimeDescriptor(windowName);
+    const launchCorrelationId = getValue("--launch-correlation-id", "");
+    const bindingId = getValue("--binding-id", "");
+    const stateRoot = getValue("--state-root", "");
+    const initialDescriptor = windowRuntimeDescriptor(windowName);
     const configuredWindows = new Set([
-      descriptor.config.controllerWindow,
-      descriptor.config.designWindow,
-      ...testWindowNames(descriptor.config),
-      ...(Array.isArray(descriptor.config.repositories)
-        ? descriptor.config.repositories.map((item) => item?.windowName)
+      initialDescriptor.config.controllerWindow,
+      initialDescriptor.config.designWindow,
+      ...testWindowNames(initialDescriptor.config),
+      ...(Array.isArray(initialDescriptor.config.repositories)
+        ? initialDescriptor.config.repositories.map((item) => item?.windowName)
         : []),
     ].filter(Boolean));
-    // Pod fleets must survive reboots through the registry exactly like main
-    // windows: accept Controller__<pod> and <configured-base>__<pod> (stream
-    // windows arrive here via their derived-overlay repositories[] entry).
     const podBase = podBaseWindow(windowName);
-    const podShaped = Boolean(podBase) && (podBase === "Controller" || configuredWindows.has(podBase));
-    if (!configuredWindows.has(windowName) && !podShaped) {
+    const podShaped = Boolean(podBase) && !configuredWindows.has(windowName);
+    const podOperation = podShaped
+      ? podLaunchOperationForRegistration({
+          windowName,
+          launchCorrelationId,
+          bindingId,
+          stateRoot,
+        })
+      : null;
+    if (!configuredWindows.has(windowName) && !podOperation) {
       fail(`Window is not configured in wakeflow.config.json: ${windowName}`);
     }
+    if (!podOperation && (launchCorrelationId || bindingId || stateRoot)) {
+      fail("Pod launch correlation fields are valid only for a window authorized by a canonical Pod launch plan.");
+    }
+    const descriptor = podOperation
+      ? windowRuntimeDescriptor(windowName, podOperation)
+      : initialDescriptor;
+    rejectDuplicateRegisteredHandle(windowName, threadId);
     const registryFile = threadFileFor(windowName);
     const previousRegistryFile = (findThreadFile ?? threadFileFor)(windowName);
     const replacedExistingThread = existsSync(previousRegistryFile);
@@ -256,10 +496,11 @@ export function createWindowRuntime(ctx) {
       windowName,
       threadId,
       registeredAt: nowIso(),
+      ...(podOperation ? { bindingId } : {}),
       version: threadRegistrationVersion,
     });
     const configFile = windowConfigFileFor(windowName);
-    const config = buildWindowDispatchConfig({
+    const config = applyPodDispatchGate(buildWindowDispatchConfig({
       windowName,
       config: descriptor.config,
       repository: descriptor.repository,
@@ -270,7 +511,7 @@ export function createWindowRuntime(ctx) {
       threadRegistryFile: path.relative(stateDir, registryFile),
       generatedAt: nowIso(),
       version: windowConfigVersion,
-    });
+    }), descriptor);
     if (write) {
       ensureStateDirs();
       atomicWriteJson(registryFile, registration);
@@ -293,6 +534,26 @@ export function createWindowRuntime(ctx) {
       },
       [write ? hostProfile.texts.registeredHandle(windowName) : `Would register ${windowName}.`],
     );
+  }
+
+  function commandRegisterThread() {
+    if (!write) return commandRegisterThreadUnlocked();
+    // The lock lives under the host runtime root. Fresh workspaces do not have
+    // that parent until the first registration, so establish the validated
+    // runtime directories before trying O_EXCL on the lock file.
+    ensureStateDirs();
+    const lockFile = path.join(
+      stateDir,
+      "hosts",
+      hostProfile.runtime.hostDirName,
+      "thread-registry.lock",
+    );
+    try {
+      return withFileLock(lockFile, commandRegisterThreadUnlocked);
+    } catch (error) {
+      if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);
+      throw error;
+    }
   }
 
   function loadThreadRegistration(windowName) {
@@ -323,8 +584,15 @@ export function createWindowRuntime(ctx) {
   function buildWindowConfig(windowName, { requireThread = false } = {}) {
     const registration = loadThreadRegistration(windowName);
     if (requireThread && !registration) fail(`No registered thread for window: ${windowName}`);
-    const { config, repository, deliveryRole, cwd, responsibilityRoot } = windowRuntimeDescriptor(windowName);
-    return buildWindowDispatchConfig({
+    const descriptor = windowRuntimeDescriptor(windowName);
+    const {
+      config,
+      repository,
+      deliveryRole,
+      cwd,
+      responsibilityRoot,
+    } = descriptor;
+    return applyPodDispatchGate(buildWindowDispatchConfig({
       windowName,
       config,
       repository,
@@ -335,7 +603,7 @@ export function createWindowRuntime(ctx) {
       threadRegistryFile: path.relative(stateDir, (findThreadFile ?? threadFileFor)(windowName)),
       generatedAt: nowIso(),
       version: windowConfigVersion,
-    });
+    }), descriptor);
   }
 
   function commandBuildWindowConfig() {

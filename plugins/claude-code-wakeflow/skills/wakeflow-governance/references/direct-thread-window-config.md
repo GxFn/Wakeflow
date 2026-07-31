@@ -38,16 +38,30 @@ Never write real thread ids to:
 Do not register placeholders such as `current-thread`, `unknown`, or
 `<thread-id>`.
 
+For a Pod launch, journal the exact launch correlation with
+`wakeflow_pod_record_materialization`. The Claude helper returns the final
+session id synchronously; it has no Codex `clientThreadId` pending state and no
+temporary request id belongs in the registry.
+
 ## Registry Record Shape
 
 Thread-registry records should contain only:
 
 - logical window name;
 - real thread id;
+- opaque binding id when the window belongs to a Pod;
 - registration / verification timestamps.
 
 Do not store window role, display title, cwd, responsibility root, dispatchable
 state, or delivery policy in the registry.
+
+Pod cwd/Git facts live separately under
+`hosts/claude-code/pod-bindings/<pod-id>/`, keyed by launch correlation and
+binding id. Product dispatch reads that verified receipt; derived
+`window-config`, `window-host`, and the logical window suffix are never a Pod
+cwd authority. Pod Test dispatch also requires the matching validated
+`direct-multi-root` access receipt; a binding alone does not prove Test can
+read every product worktree.
 
 ## Derived Window Config
 
@@ -79,10 +93,11 @@ or fallback delivery route.
 ## Controller Return
 
 Controller return uses the dispatch group's stored `controllerWindow`, not a
-global default controller — routing is per-group, but the workspace runs ONE
-controller (the single acceptance authority, across every active demand). The
-controller is itself a tmux-resident window, so the return uses the same helper
-`send`; the controller window takes NO delivery lock (returns queue naturally
-in its input box, and concurrent pastes are serialized by the controller paste
-mutex). The visible return prompt follows the controller-return prompt shape in
+global default controller. Mainline has its controller; each explicitly
+authorized Pod has an independent `Controller__<pod>` that is the sole
+acceptance authority for that demand. The controller is itself a tmux-resident
+window, so the return uses the same helper `send`; the controller window takes
+NO delivery lock (returns queue naturally in its input box, and concurrent
+pastes are serialized by the controller paste mutex). The visible return
+prompt follows the controller-return prompt shape in
 [references/wakeflow-delivery.md](wakeflow-delivery.md) (Prompt Rules).

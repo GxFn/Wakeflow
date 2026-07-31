@@ -3,6 +3,7 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadWorkspaceConfig, resolveWorkspaceRoot } from "./lib/wakeflow-config.mjs";
+import { assertExistingPathInside } from "./lib/wakeflow-fs-safety.mjs";
 import {
   PRESERVED_DIR,
   PRESERVED_MANIFEST,
@@ -145,7 +146,29 @@ function commandPreserve() {
   if (!reasonSlug) fail("--reason must contain at least one [a-z0-9] character.");
   const sourceAbs = path.resolve(workspaceRoot, source);
   if (!existsSync(sourceAbs)) fail(`--source does not exist: ${relative(sourceAbs)}`);
+  const localRoot = path.join(workspaceRoot, ".wakeflow-local");
+  let sourceSafety;
+  try {
+    sourceSafety = assertExistingPathInside({
+      root: localRoot,
+      candidate: sourceAbs,
+      label: "preserve source",
+    });
+  } catch (error) {
+    fail(error.message);
+  }
   const preservedRoot = path.join(workspaceRoot, ".wakeflow-local", PRESERVED_DIR);
+  if (existsSync(preservedRoot)) {
+    try {
+      assertExistingPathInside({
+        root: localRoot,
+        candidate: preservedRoot,
+        label: "preserved storage root",
+      });
+    } catch (error) {
+      fail(error.message);
+    }
+  }
   if (sourceAbs === preservedRoot || sourceAbs.startsWith(`${preservedRoot}${path.sep}`)) {
     fail("--source is already inside preserved/.");
   }
@@ -173,17 +196,23 @@ function commandPreserve() {
       ok: true,
       command: "preserve",
       wrote: false,
-      wouldMove: { from: relative(sourceAbs), to: relative(dest) },
+      wouldMove: {
+        from: relative(sourceAbs),
+        to: relative(dest),
+        payload: sourceSafety.stat.isDirectory() ? "." : path.basename(sourceAbs),
+      },
       agentNext: "Dry-run only; re-run with --write to move the source under preserved/ with its manifest.",
     }, [`Would preserve ${relative(sourceAbs)} -> ${relative(dest)}`]);
     return;
   }
   mkdirSync(path.dirname(dest), { recursive: true });
+  const payloadDest = sourceSafety.stat.isDirectory() ? dest : path.join(dest, path.basename(sourceAbs));
+  if (!sourceSafety.stat.isDirectory()) mkdirSync(dest);
   try {
-    renameSync(sourceAbs, dest);
+    renameSync(sourceAbs, payloadDest);
   } catch (error) {
     if (error.code === "EXDEV") {
-      cpSync(sourceAbs, dest, { recursive: true });
+      cpSync(sourceAbs, payloadDest, { recursive: true });
       rmSync(sourceAbs, { recursive: true, force: true });
     } else {
       throw error;
@@ -194,7 +223,11 @@ function commandPreserve() {
     ok: true,
     command: "preserve",
     wrote: true,
-    moved: { from: relative(sourceAbs), to: relative(dest) },
+    moved: {
+      from: relative(sourceAbs),
+      to: relative(dest),
+      payload: sourceSafety.stat.isDirectory() ? "." : path.basename(sourceAbs),
+    },
     manifest: relative(path.join(dest, PRESERVED_MANIFEST)),
     agentNext: "Preserved with manifest. prune-preserved will surface it once it ages past retention.",
   }, [`Preserved ${relative(sourceAbs)} -> ${relative(dest)}`]);

@@ -16,8 +16,10 @@ import test from "node:test";
 import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
 import { handlers, tools } from "../plugins/codex-wakeflow/lib/wakeflow-mcp-tools.mjs";
 import {
+  taskPackageDigest,
   taskPackageReadiness,
-} from "../plugins/codex-wakeflow/scripts/lib/wakeflow-task-package.mjs";
+} from "../core/scripts/lib/wakeflow-task-package.mjs";
+import { createWindowRuntime } from "../core/scripts/lib/wakeflow-window-runtime.mjs";
 
 const pluginRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
 const stateScript = path.join(pluginRoot, "scripts/wakeflow-state.mjs");
@@ -42,6 +44,7 @@ function parseOk(result) {
 
 function makeFixture() {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-task-context-"));
+  writeFileSync(path.join(root, "AGENTS.md"), "# Workspace instructions\n");
   for (const repository of ["product", "bad-target"]) {
     mkdirSync(path.join(root, repository), { recursive: true });
     writeFileSync(path.join(root, repository, "AGENTS.md"), `# ${repository}\n`);
@@ -101,6 +104,7 @@ function fullContextArgs(overrides = {}) {
     completionExpectations: [
       "The focused regression fails before the fix and passes after it.",
       "The repository validation for changed code passes.",
+      "The target result cites the exact regression evidence.",
     ],
     dependsOnTaskIds: [],
     commitExpectation: "leave-uncommitted",
@@ -127,6 +131,100 @@ function fullContextArgs(overrides = {}) {
   ];
 }
 
+test("core target prompt keeps one priority context and one critical boundary with navigation", () => {
+  const workspaceRoot = "/tmp/wakeflow-prompt-workspace";
+  const stateRoot = path.join(workspaceRoot, ".wakeflow-active/current/CTX-1");
+  const repositoryRoot = path.join(workspaceRoot, "product");
+  const runtime = createWindowRuntime({
+    workspaceRoot,
+    fail(message) {
+      throw new Error(message);
+    },
+  });
+  const prompt = runtime.formatTargetPrompt({
+    targetWindow: "Product",
+    taskId: "CTX-T1",
+    dispatchGroup: "CTX-G1",
+    stateRef: {
+      stateRoot: ".wakeflow-active/current/CTX-1",
+      taskPackageId: "CTX-P1",
+      stateRevision: 4,
+    },
+    taskBriefing: {
+      objective: "Fix the confirmed defect without widening scope.",
+      completionExpectations: ["The regression passes.", "Repository validation passes.", "Evidence is cited."],
+      contextSummary: ["The controller reproduced the defect.", "A lower-priority implementation note."],
+      requirementRefs: [
+          { role: "completion", ref: "docs/requirement.md#completion", resolvedRef: `${workspaceRoot}/docs/requirement.md#completion` },
+          { role: "goal", ref: "docs/requirement.md#goal", resolvedRef: `${workspaceRoot}/docs/requirement.md#goal` },
+      ],
+      boundaries: {
+        inScope: ["Product implementation."],
+        outOfScope: ["Release work."],
+        forbidden: ["Do not redesign the confirmed requirement.", "Do not touch another repository."],
+      },
+      requiredSkills: ["skills/wakeflow-target/SKILL.md"],
+      workspaceRoot,
+      repositoryRoot,
+      stateRoot,
+      taskPackageRef: path.join(stateRoot, "task-packages/CTX-P1.json"),
+    },
+  });
+
+  assert.match(prompt, /Priority context: The controller reproduced the defect\./);
+  assert.doesNotMatch(prompt, /A lower-priority implementation note\./);
+  assert.match(prompt, /Critical boundary \[forbidden\]: Do not redesign the confirmed requirement\./);
+  assert.doesNotMatch(prompt, /Do not touch another repository\./);
+  assert.doesNotMatch(prompt, /Product implementation\./);
+  assert.doesNotMatch(prompt, /Release work\./);
+  assert.match(prompt, new RegExp(`Workspace instructions: ${workspaceRoot}/AGENTS\\.md`));
+  assert.match(prompt, new RegExp(`Current state root: ${stateRoot}`));
+  assert.match(prompt, /Requirement background entry .*\[goal\]: .*#goal/);
+  assert.doesNotMatch(prompt, /Requirement background entry .*\[completion\]/);
+  assert.ok(
+    prompt.split("\n").filter(Boolean).length <= 33,
+    "the core wakeup prompt stays compact while surfacing only priority navigation",
+  );
+});
+
+test("core target prompt falls back from forbidden to out-of-scope and then in-scope", () => {
+  const workspaceRoot = "/tmp/wakeflow-prompt-boundary";
+  const runtime = createWindowRuntime({
+    workspaceRoot,
+    fail(message) {
+      throw new Error(message);
+    },
+  });
+  const base = {
+    targetWindow: "Product",
+    taskId: "CTX-T1",
+    dispatchGroup: "CTX-G1",
+    stateRef: {
+      stateRoot: ".wakeflow-active/current/CTX-1",
+      taskPackageId: "CTX-P1",
+      stateRevision: 4,
+    },
+  };
+  const outOfScopePrompt = runtime.formatTargetPrompt({
+    ...base,
+    taskBriefing: {
+      objective: "Keep scope stable.",
+      boundaries: { inScope: ["Product implementation."], outOfScope: ["Release work."], forbidden: [] },
+    },
+  });
+  assert.match(outOfScopePrompt, /Critical boundary \[outOfScope\]: Release work\./);
+  assert.doesNotMatch(outOfScopePrompt, /Critical boundary \[inScope\]/);
+
+  const inScopePrompt = runtime.formatTargetPrompt({
+    ...base,
+    taskBriefing: {
+      objective: "Keep scope stable.",
+      boundaries: { inScope: ["Product implementation."], outOfScope: [], forbidden: [] },
+    },
+  });
+  assert.match(inScopePrompt, /Critical boundary \[inScope\]: Product implementation\./);
+});
+
 test("full-context package is the dispatch authority and target prepare is preview-first", () => {
   const { root, stateRoot } = makeFixture();
   try {
@@ -147,6 +245,9 @@ test("full-context package is the dispatch authority and target prepare is previ
     assert.equal(taskPackage.contextVersion, 1);
     assert.equal(taskPackage.objective, "Fix the confirmed public-entry defect without widening product scope.");
     assert.equal(taskPackage.requirementRefs[0].ref, "docs/requirement.md#goal");
+    assert.equal(taskPackage.contextSummary.length, 2);
+    assert.equal(taskPackage.completionExpectations.length, 3);
+    assert.equal(taskPackage.boundaries.forbidden.length, 1);
     assert.deepEqual(taskPackage.dependsOnTaskIds, []);
 
     const preview = parseOk(run(deliveryScript, root, [
@@ -159,16 +260,36 @@ test("full-context package is the dispatch authority and target prepare is previ
     assert.equal(preview.wrote, false);
     assert.equal(preview.readiness.ready, true);
     assert.equal(preview.readiness.mode, "full-context");
+    assert.equal(preview.packet.resultContract, "target-result-envelope-v2");
     assert.match(preview.previewDigest, /^[a-f0-9]{64}$/);
     assert.equal(existsSync(path.join(root, ".wakeflow-local")), false);
     assert.equal(preview.taskBriefing.taskPackageRef, packageFile);
     assert.equal(preview.taskBriefing.repositoryRoot, path.join(root, "product"));
     assert.match(preview.packet.prompt, /Current objective \(the task package is authoritative\):/);
+    assert.match(preview.packet.prompt, /Completion focus \(full criteria are in the task package\):/);
+    assert.match(preview.packet.prompt, /The focused regression fails before the fix and passes after it\./);
+    assert.match(preview.packet.prompt, /The repository validation for changed code passes\./);
+    assert.doesNotMatch(preview.packet.prompt, /The target result cites the exact regression evidence\./);
     assert.match(preview.packet.prompt, /Task package \(complete task context\): .*CTX-P1\.json/);
-    assert.match(preview.packet.prompt, /Requirement background anchor \[goal\]: .*\/docs\/requirement\.md#goal/);
+    assert.match(preview.packet.prompt, /Requirement background entry \(full anchors are in the task package\) \[goal\]: .*\/docs\/requirement\.md#goal/);
+    assert.doesNotMatch(preview.packet.prompt, /Requirement background entry .*\[completion\]/);
     assert.match(preview.packet.prompt, /Required execution Skills[\s\S]*wakeflow-target-craft\/SKILL\.md/);
+    assert.match(preview.packet.prompt, /Identity \(full boundaries are in the task package\):/);
     assert.match(preview.packet.prompt, /Only working repository: .*\/product/);
+    assert.match(preview.packet.prompt, /Priority context: The controller reproduced the defect through the public entry\./);
+    assert.doesNotMatch(preview.packet.prompt, /The target owns only the Product repository implementation\./);
+    assert.match(preview.packet.prompt, /Critical boundary \[forbidden\]: Do not replace the confirmed requirement with a new design\./);
+    assert.doesNotMatch(preview.packet.prompt, /Product public-entry implementation and its focused regression\./);
+    assert.doesNotMatch(preview.packet.prompt, /Other repositories and release work\./);
+    assert.match(preview.packet.prompt, new RegExp(`Workspace instructions: ${root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/AGENTS\\.md`));
+    assert.match(preview.packet.prompt, /Current state root: .*\/\.wakeflow-active\/current\/CTX-1/);
+    assert.doesNotMatch(preview.packet.prompt, /Leave this task's changes uncommitted/);
+    assert.doesNotMatch(preview.packet.prompt, /Authority by purpose:/);
     assert.doesNotMatch(preview.packet.prompt, /\nVariables:/);
+    assert.ok(
+      preview.packet.prompt.split("\n").filter(Boolean).length <= 33,
+      "the wakeup prompt stays compact while the package retains complete context",
+    );
 
     const override = run(deliveryScript, root, [
       "prepare-dispatch-from-state",
@@ -214,18 +335,43 @@ test("full-context package is the dispatch authority and target prepare is previ
     assert.match(changedRepositoryAfterPreview.stdout, /changed after preview/);
     writeFileSync(configFile, originalConfig);
 
-    const applied = parseOk(run(deliveryScript, root, [
+    parseOk(run(deliveryScript, root, [
+      "register-thread",
+      "--window", "Product",
+      "--thread-id", "0192fac-product-rebound",
+      "--write",
+    ]));
+    const staleBindingPreview = run(deliveryScript, root, [
       "prepare-dispatch-from-state",
       "--state-root", stateRoot,
       "--target-task-id", "CTX-T1",
       "--group", "CTX-G1",
       "--expected-preview-digest", preview.previewDigest,
       "--write",
+    ]);
+    assert.notEqual(staleBindingPreview.status, 0);
+    assert.match(staleBindingPreview.stdout, /changed after preview/);
+
+    const reboundPreview = parseOk(run(deliveryScript, root, [
+      "prepare-dispatch-from-state",
+      "--state-root", stateRoot,
+      "--target-task-id", "CTX-T1",
+      "--group", "CTX-G1",
+    ]));
+    assert.notEqual(reboundPreview.previewDigest, preview.previewDigest);
+
+    const applied = parseOk(run(deliveryScript, root, [
+      "prepare-dispatch-from-state",
+      "--state-root", stateRoot,
+      "--target-task-id", "CTX-T1",
+      "--group", "CTX-G1",
+      "--expected-preview-digest", reboundPreview.previewDigest,
+      "--write",
     ]));
     assert.equal(applied.preview, false);
     assert.equal(applied.wrote, true);
-    assert.equal(applied.packet.prompt, preview.packet.prompt);
-    assert.equal(applied.packet.taskPackageDigest, preview.readiness.taskPackageDigest);
+    assert.equal(applied.packet.prompt, reboundPreview.packet.prompt);
+    assert.equal(applied.packet.taskPackageDigest, reboundPreview.readiness.taskPackageDigest);
     assert.equal(existsSync(path.join(root, applied.packetFile)), true);
     assert.equal(existsSync(path.join(root, applied.deliveryFile)), true);
   } finally {
@@ -278,6 +424,17 @@ test("readiness fails closed on missing requirement anchors and unaccepted depen
     });
     assert.equal(ready.ready, true);
 
+    packageRecord.requirementRefs = [{ ref: "docs/requirement.md#completion", role: "completion" }];
+    const missingGoal = taskPackageReadiness({
+      taskPackage: packageRecord,
+      state,
+      targetTask,
+      workspaceRoot: root,
+      repositoryRoot: path.join(root, "product"),
+    });
+    assert.equal(missingGoal.ready, false);
+    assert.match(missingGoal.errors.join("\n"), /requirementRefs must include at least one role=goal entry/);
+
     packageRecord.requirementRefs = [{ ref: "docs/requirement.md#missing-section", role: "goal" }];
     const missingAnchor = taskPackageReadiness({
       taskPackage: packageRecord,
@@ -288,6 +445,21 @@ test("readiness fails closed on missing requirement anchors and unaccepted depen
     });
     assert.equal(missingAnchor.ready, false);
     assert.match(missingAnchor.errors.join("\n"), /requirement reference section was not found/);
+
+    const legacy = taskPackageReadiness({
+      taskPackage: {
+        taskPackageId: "LEGACY",
+        demandKey: "CTX-1",
+        summary: "Legacy task package",
+        sourceRef: "docs/requirement.md#completion",
+      },
+      state,
+      targetTask,
+      workspaceRoot: root,
+      repositoryRoot: path.join(root, "product"),
+    });
+    assert.equal(legacy.ready, true);
+    assert.equal(legacy.mode, "legacy-compatible");
 
     const missingImplementationAnchors = run(stateScript, root, [
       "add-task-package",
@@ -403,6 +575,7 @@ test("MCP surface requires structured task context and exposes target apply", ()
     assert.ok(continueDemand.inputSchema.required.includes(field), `wakeflow_continue_demand requires ${field}`);
     assert.ok(createDemand.inputSchema.properties.taskPackages.items.required.includes(field), `wakeflow_create_demand taskPackages require ${field}`);
   }
+  assert.equal(addTask.inputSchema.properties.replacesTargetTaskId.type, "string");
   assert.equal(prepare.inputSchema.properties.apply.type, "boolean");
   assert.equal(prepare.inputSchema.properties.expectedPreviewDigest.type, "string");
   assert.equal(prepare.inputSchema.properties.objective, undefined);
@@ -425,4 +598,87 @@ test("MCP surface requires structured task context and exposes target apply", ()
     }),
     /apply=true requires expectedPreviewDigest/,
   );
+});
+
+test("replacement lineage changes the authoritative task package digest", () => {
+  const base = {
+    taskPackageId: "PKG-NEW",
+    demandKey: "D",
+    summary: "replacement",
+    contextVersion: 1,
+    workType: "implementation",
+    objective: "Replace the redesigned implementation.",
+    contextSummary: ["The controller decided redesign."],
+    requirementRefs: [{ ref: "docs/requirement.md#goal", role: "goal" }],
+    boundaries: { inScope: ["product"], outOfScope: [], forbidden: [] },
+    completionExpectations: ["replacement verified"],
+    dependsOnTaskIds: [],
+    commitExpectation: "leave-uncommitted",
+    acceptanceAnchors: [{ id: "AC-1", claim: "works", probe: "probe", expected: "green" }],
+  };
+  assert.notEqual(
+    taskPackageDigest(base),
+    taskPackageDigest({ ...base, replacesTargetTaskId: "TASK-OLD" }),
+    "replacement identity is part of dispatch freshness authority",
+  );
+});
+
+test("replacement readiness rejects non-implementation or legacy packages", (t) => {
+  const { root } = makeFixture();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const oldTask = {
+    targetTaskId: "TASK-OLD",
+    taskPackageId: "PKG-OLD",
+    targetWindow: "Product",
+    status: "needs-rework",
+    reviewDecision: "redesign",
+    replacedByTargetTaskId: "TASK-NEW",
+  };
+  const targetTask = {
+    targetTaskId: "TASK-NEW",
+    taskPackageId: "PKG-NEW",
+    targetWindow: "Product",
+    status: "pending",
+    replacesTargetTaskId: "TASK-OLD",
+  };
+  const state = { targetTasks: [oldTask, targetTask] };
+  const researchPackage = {
+    taskPackageId: "PKG-NEW",
+    demandKey: "D",
+    summary: "Research is not a replacement.",
+    contextVersion: 1,
+    workType: "research",
+    objective: "Inspect the redesigned implementation.",
+    contextSummary: ["The prior task was redesigned."],
+    requirementRefs: [{ ref: "docs/requirement.md#goal", role: "goal" }],
+    boundaries: { inScope: ["inspection"], outOfScope: [], forbidden: ["implementation"] },
+    completionExpectations: ["Return findings."],
+    dependsOnTaskIds: [],
+    commitExpectation: "leave-uncommitted",
+    replacesTargetTaskId: "TASK-OLD",
+  };
+  const researchReadiness = taskPackageReadiness({
+    taskPackage: researchPackage,
+    state,
+    targetTask,
+    workspaceRoot: root,
+    repositoryRoot: path.join(root, "product"),
+  });
+  assert.equal(researchReadiness.ready, false);
+  assert.match(researchReadiness.errors.join("\n"), /full-context implementation/);
+
+  const legacyReadiness = taskPackageReadiness({
+    taskPackage: {
+      taskPackageId: "PKG-NEW",
+      demandKey: "D",
+      summary: "Legacy replacement.",
+      replacesTargetTaskId: "TASK-OLD",
+    },
+    state,
+    targetTask,
+    workspaceRoot: root,
+    repositoryRoot: path.join(root, "product"),
+  });
+  assert.equal(legacyReadiness.ready, false);
+  assert.match(legacyReadiness.errors.join("\n"), /full-context implementation/);
 });

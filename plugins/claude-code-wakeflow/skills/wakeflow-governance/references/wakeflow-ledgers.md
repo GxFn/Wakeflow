@@ -10,10 +10,11 @@ plus legacy residue, unknown trees, and aging audit holds.
 - `.wakeflow-active/`: ignored ACTIVE business state. `index.md` is the single
   controller entry; `current/` holds the status doc, global TODO board,
   test-exchange, and one state root per active demand.
-- `.wakeflow-local/`: ignored machine-local runtime — real thread ids (Claude Code
-  session ids),
-  the derived config overlay, isolation worktrees, delivery transport, host
-  handles, and `preserved/` audit holds. Never committed.
+- `.wakeflow-local/`: ignored machine-local runtime — real thread ids (Claude
+  Code session ids), derived window config, delivery transport, host-scoped Pod
+  operations and binding receipts, host handles, and `preserved/` audit holds.
+  Claude-created worktrees do not live here as Wakeflow-owned storage. Never
+  committed.
 - `../Design/` and `../Test/`: sibling Design/Test working surfaces when the
   user has not configured external Design/Test repositories.
 - `../wakeflow-ledger/` (location is `projectLedgerRoot` in
@@ -30,7 +31,7 @@ The storage map classifies every tree; the class answers "may I touch it":
 
 | Class | Meaning | Touch rule |
 | --- | --- | --- |
-| authority | machine/human truth (state roots, worktrees, ledger) | never hand-delete while active |
+| authority | machine/human truth (state roots, host binding receipts, ledger) | never hand-delete while active |
 | projection | regenerable views (progress docs, window-config, focus docs) | safe to delete; a render rebuilds |
 | transport | replay-safe delivery artifacts | GC only via `wakeflow_prune_runtime` |
 | evidence | target results | never deleted by any GC |
@@ -137,11 +138,37 @@ value, not the controller's planning trail.
 ## Design/Test Records
 
 Design drafts may live in an external Design repository or internal Design
-support surface. Wakeflow accepts them through controller TODO delivery via `wakeflow_deliver`.
+support surface. Mainline Design enters through controller TODO delivery via
+`wakeflow_deliver`. Pod initial Design, supplement, and redesign stay inside
+that Pod: `pod-design-requests/` freezes the controller-authored request and
+`pod-design-handoffs/` records the matching envelope in the same demand state
+root. Neither artifact creates another global TODO.
 
 Test plans and reports may live in an external Test repository or internal Test
 support surface. Wakeflow links to evidence instead of duplicating execution
-details in controller docs.
+details in controller docs. A Pod Test record references only that Pod's
+verified product bindings; it must not infer mainline or another Pod's paths.
+
+## Pod Host Runtime
+
+Host-local Pod facts are split by purpose:
+
+- `hosts/<host>/thread-registry/`: final real handle only;
+- `hosts/<host>/pod-operations/`: launch/close correlations and the
+  materialization journal. Claude returns a final session synchronously and
+  has no Codex `clientThreadId` pending state;
+- `hosts/<host>/pod-bindings/<pod-id>/`: verified cwd/Git/session receipts.
+- `hosts/<host>/pod-test-access-plans/` and
+  `pod-test-access-receipts/`: private exact probe plans and host receipts; the
+  tracked state stores only redacted identity/digest summaries.
+
+Tracked state keeps logical role, phase, and audit events. `control-ready` and
+`execution-ready` are derived from canonical state plus verified bindings.
+Pod Test dispatch additionally requires a validated `direct-multi-root`
+receipt covering every active product binding. Unsupported access stays
+blocked; no fallback or per-repository executor is implied.
+Logical close, tmux/session close, and Claude physical worktree cleanup are
+separate receipts.
 
 ## Archive
 

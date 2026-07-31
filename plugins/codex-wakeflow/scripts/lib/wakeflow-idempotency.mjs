@@ -29,12 +29,15 @@ function targetResultComparable(result = {}) {
     taskId: result.taskId,
     dispatchGroup: result.dispatchGroup,
     status: result.status,
+    summary: result.summary ?? "",
     changedRepos: result.changedRepos ?? [],
     commits: result.commits ?? [],
+    commitDisposition: result.commitDisposition ?? null,
     evidenceRefs: result.evidenceRefs ?? [],
     verificationSummary: result.verificationSummary ?? [],
     riskSummary: result.riskSummary ?? [],
     craftEvidence: result.craftEvidence ?? [],
+    resultMapping: result.resultMapping ?? null,
     nextSuggestion: result.nextSuggestion,
   };
 }
@@ -82,6 +85,7 @@ function deliveryEnvelopeComparable(envelope = {}) {
     version: envelope.version,
     deliveryId: envelope.deliveryId,
     sourcePacketId: envelope.sourcePacketId,
+    sourcePacketDigest: envelope.sourcePacketDigest,
     targetWindow: envelope.targetWindow,
     taskId: envelope.taskId,
     dispatchGroup: envelope.dispatchGroup,
@@ -117,6 +121,12 @@ export function dispatchPreparationDigest({ packet, envelope }) {
     .digest("hex");
 }
 
+export function dispatchPacketDigest(packet) {
+  return createHash("sha256")
+    .update(JSON.stringify(stableValue(dispatchPacketComparable(packet))))
+    .digest("hex");
+}
+
 export function deliveryRunIdempotencyKey({ deliveryId, deliveryRunId }) {
   return `delivery-run:${deliveryId}:${deliveryRunId}`;
 }
@@ -138,8 +148,10 @@ export function targetResultIdempotencyKey({ targetWindow, taskId, dispatchGroup
 }
 
 export function annotateDispatchPacketIdempotency(packet) {
+  const packetDigest = dispatchPacketDigest(packet);
   return {
     ...packet,
+    packetDigest,
     idempotency: {
       key: dispatchPacketIdempotencyKey(packet),
       duplicateBehavior: "return-existing-if-equivalent",

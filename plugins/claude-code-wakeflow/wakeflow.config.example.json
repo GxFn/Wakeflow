@@ -20,17 +20,12 @@
   "internalDesignPath": "../wakeflow-ledger/design",
   "internalTestPath": "../wakeflow-ledger/testing",
   "allowMissingRepos": true,
-  "maxActiveDemands": 2,
   "testExchangePath": ".wakeflow-active/current/test-exchange.md",
   "runtimeProcessMatchers": [],
   "runtimeProcessLabel": "configured",
   "protectedWorkspacePrefixes": [],
   "hosts": {
-    "claude-code": {
-      "maxStreamsPerRepo": 2
-    },
-    "codex": {
-      "maxStreamsPerRepo": 2
-    }
+    "claude-code": {},
+    "codex": {}
   }
 }

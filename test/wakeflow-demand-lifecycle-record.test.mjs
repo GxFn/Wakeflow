@@ -16,6 +16,7 @@ const pluginRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname),
 const stateScript = path.join(pluginRoot, "scripts/wakeflow-state.mjs");
 const seqScript = path.join(pluginRoot, "scripts/wakeflow-demand-sequence.mjs");
 const renderScript = path.join(pluginRoot, "scripts/wakeflow-render-progress.mjs");
+const deliveryScript = path.join(pluginRoot, "scripts/wakeflow-delivery.mjs");
 
 function run(script, args) {
   return spawnSync(process.execPath, [script, ...args, "--json"], { encoding: "utf8", shell: false });
@@ -23,11 +24,33 @@ function run(script, args) {
 
 function makeWorkspace() {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-lifecycle-"));
+  const repositories = [
+    { windowName: "Design", path: "Design", role: "requirement design" },
+    { windowName: "Test", path: "Test", role: "real environment test" },
+    { windowName: "RepoA", path: "RepoA", role: "fixture implementation" },
+  ];
   writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
+    controllerWindow: "Wakeflow",
+    designWindow: "Design",
+    testWindow: "Test",
     projectLedgerRoot: "wakeflow-ledger",
     workspaceArchiveDir: "wakeflow-ledger/workspace/archive",
+    repositories,
   }, null, 2)}\n`);
+  repositories.forEach((repository) => {
+    mkdirSync(path.join(root, repository.path), { recursive: true });
+  });
   mkdirSync(path.join(root, ".wakeflow-active/current"), { recursive: true });
+  ["Wakeflow", "Design", "Test", "RepoA"].forEach((windowName, index) => {
+    const registered = run(deliveryScript, [
+      "register-thread",
+      "--root", root,
+      "--window", windowName,
+      "--thread-id", `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      "--write",
+    ]);
+    assert.equal(registered.status, 0, registered.stderr || registered.stdout);
+  });
   return root;
 }
 
@@ -41,9 +64,9 @@ test("provenance + execution timeline: create from a TODO row, act, and read the
     path.join(root, ".wakeflow-active/current/global-todo-board.md"),
     [
       "# Global TODO", "", "## Global TODO", "",
-      "| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount | Auto Claim | Documents |",
-      "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-      "| LIFE-2026-07-04 | pending-claim | requirement | P1 | Wakeflow | lifecycle fixture | no | none | Wakeflow | none | yes | [design](wakeflow-ledger/requirement-designs/life/design.md) [plan](wakeflow-ledger/requirement-designs/life/plan.md) |",
+      "| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount | Auto Claim | Testing Decision | Documents |",
+      "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+      "| LIFE-2026-07-04 | pending-claim | requirement | P1 | Wakeflow | lifecycle fixture | no | none | Wakeflow | none | yes | unit tests only | [design](wakeflow-ledger/requirement-designs/life/design.md) [plan](wakeflow-ledger/requirement-designs/life/plan.md) |",
       "",
     ].join("\n"),
   );

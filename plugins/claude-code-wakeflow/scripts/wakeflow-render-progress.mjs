@@ -435,6 +435,9 @@ try {
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const projectionFile = path.join(stateRoot, "projection.json");
   const state = readJson(stateFile, "controller state");
+  if (write && state.state === "archived") {
+    fail(`cannot render-progress --write for archived demand ${state.demandKey}; archived history is immutable. Use sanitize-archive only for an explicit privacy amendment.`);
+  }
   const config = loadWorkspaceConfig({ workspaceRoot, args: rawArgs });
   const language = selectInterfaceLanguage(state, config);
   const locale = wakeflowStateLocale(language);

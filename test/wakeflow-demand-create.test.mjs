@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -13,6 +22,9 @@ const sourceScript = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),
   "../core/scripts/wakeflow-demand-sequence.mjs",
 );
+const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const coreRoot = path.join(repoRoot, "core");
+const codexBundleRoot = path.join(repoRoot, "plugins", "codex-wakeflow");
 
 const HEADER =
   "| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount | Auto Claim | Testing Decision | Documents |";
@@ -26,6 +38,66 @@ const MANUAL_ROW =
 
 function makeWorkspace(rows = "") {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-create-"));
+  const repositories = ["Design", "Test", "WinA", "WinB"].map((windowName) => ({
+    windowName,
+    path: windowName,
+    role: windowName === "Design"
+      ? "requirement design"
+      : windowName === "Test"
+        ? "real environment test"
+        : "product implementation",
+  }));
+  writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
+    controllerWindow: "Wakeflow",
+    designWindow: "Design",
+    testWindow: "Test",
+    repositories,
+  }, null, 2)}\n`);
+  for (const repository of repositories) {
+    mkdirSync(path.join(root, repository.path), { recursive: true });
+  }
+  const registryDir = path.join(
+    root,
+    ".wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry",
+  );
+  const windowConfigDir = path.join(
+    root,
+    ".wakeflow-local/wakeflow-delivery/hosts/codex/window-config",
+  );
+  mkdirSync(registryDir, { recursive: true });
+  mkdirSync(windowConfigDir, { recursive: true });
+  ["Wakeflow", ...repositories.map((item) => item.windowName)]
+    .forEach((windowName, index) => {
+      const role = windowName === "Wakeflow"
+        ? "controller"
+        : windowName === "Design"
+          ? "design"
+          : windowName === "Test"
+            ? "test-target"
+            : "target";
+      const cwd = windowName === "Wakeflow" ? root : path.join(root, windowName);
+      const now = new Date().toISOString();
+      writeFileSync(path.join(registryDir, `${windowName}.json`), `${JSON.stringify({
+        kind: "CodexWindowThreadRegistration",
+        version: 3,
+        windowName,
+        bindingId: `binding-${windowName}`,
+        threadId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+        registeredAt: now,
+        lastVerifiedAt: now,
+      }, null, 2)}\n`);
+      writeFileSync(path.join(windowConfigDir, `${windowName}.json`), `${JSON.stringify({
+        kind: "CodexSubwindowDispatchConfig",
+        version: 1,
+        windowName,
+        threadRegistered: true,
+        dispatchable: role !== "design",
+        cwd,
+        responsibilityRoot: cwd,
+        deliveryRole: role,
+        generatedAt: now,
+      }, null, 2)}\n`);
+    });
   const boardPath = path.join(root, ".wakeflow-active/current/global-todo-board.md");
   mkdirSync(path.dirname(boardPath), { recursive: true });
   writeFileSync(boardPath, `${`# Global TODO\n\n## Global TODO\n\n${HEADER}\n${DIVIDER}\n${rows}`.trimEnd()}\n`);
@@ -37,6 +109,108 @@ function run(root, args) {
 }
 function runSource(root, args) {
   return runSync(process.execPath, [sourceScript, ...args, "--root", root, "--json"], { cwd: root, encoding: "utf8" });
+}
+function makeFaultRuntime() {
+  const container = mkdtempSync(path.join(os.tmpdir(), "wakeflow-create-runtime-"));
+  const runtime = path.join(container, "runtime");
+  cpSync(codexBundleRoot, runtime, { recursive: true });
+  const hostProfile = readFileSync(path.join(runtime, "scripts/lib/wakeflow-host-profile.mjs"));
+  cpSync(coreRoot, runtime, { recursive: true, force: true });
+  writeFileSync(path.join(runtime, "scripts/lib/wakeflow-host-profile.mjs"), hostProfile);
+  const stateScript = path.join(runtime, "scripts/wakeflow-state.mjs");
+  const realStateScript = path.join(runtime, "scripts/wakeflow-state-real.mjs");
+  renameSync(stateScript, realStateScript);
+  writeFileSync(stateScript, `#!/usr/bin/env node
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+const args = process.argv.slice(2);
+const counterFile = process.env.WAKEFLOW_TEST_CREATE_COUNTER || "";
+if (args[0] === "add-task-package" && counterFile) {
+  const count = existsSync(counterFile) ? Number(readFileSync(counterFile, "utf8")) + 1 : 1;
+  writeFileSync(counterFile, String(count));
+  if (count === Number(process.env.WAKEFLOW_TEST_FAIL_ADD_NUMBER || 0)) {
+    if (process.env.WAKEFLOW_TEST_EXTERNAL_PROGRESS === "1") {
+      const valueAfter = (name) => args[args.indexOf(name) + 1];
+      const root = valueAfter("--root");
+      const stateRoot = valueAfter("--state-root");
+      const stateFile = path.resolve(root, stateRoot, "wakeflow-state.json");
+      const state = JSON.parse(readFileSync(stateFile, "utf8"));
+      if (state.targetTasks?.[0]) {
+        if (state.taskPackages?.[0]) state.taskPackages[0].status = "sent";
+        state.targetTasks[0].status = "sent";
+        state.targetTasks[0].delivery = { deliveryRunId: "external-progress" };
+      }
+      writeFileSync(stateFile, JSON.stringify(state, null, 2) + "\\n");
+    }
+    console.error("injected second package failure");
+    process.exit(42);
+  }
+}
+await import("./wakeflow-state-real.mjs");
+if (args[0] === "init" && args.includes("--write") && process.env.WAKEFLOW_TEST_FAIL_AFTER_INIT_PUBLISH === "1") {
+  console.error("injected failure after init published its state root");
+  process.exit(43);
+}
+`);
+  const demandScript = path.join(runtime, "scripts/wakeflow-demand-sequence.mjs");
+  const demandSource = readFileSync(demandScript, "utf8")
+    .replace(
+      "writeJsonAtomic(sidecarFile, manifest);",
+      `writeJsonAtomic(sidecarFile, manifest);
+    if (Number(process.env.WAKEFLOW_TEST_CREATE_HOLD_MS || 0) > 0) {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(process.env.WAKEFLOW_TEST_CREATE_HOLD_MS));
+    }`,
+    )
+    .replace(
+      "activeCreateRecovery.createdRoot = true;",
+      `activeCreateRecovery.createdRoot = true;
+      if (process.env.WAKEFLOW_TEST_CRASH_AFTER_INIT === "1") process.exit(86);`,
+    )
+    .replace(
+      "consumedTodoId = todoId;",
+      `consumedTodoId = todoId;
+      if (process.env.WAKEFLOW_TEST_CRASH_AFTER_TODO === "1") process.exit(87);`,
+    )
+    .replace(
+      "writeJsonAtomic(manifestFile, completedManifest);",
+      `writeJsonAtomic(manifestFile, completedManifest);
+    if (process.env.WAKEFLOW_TEST_CRASH_AFTER_COMPLETE_MANIFEST === "1") process.exit(88);`,
+    );
+  writeFileSync(demandScript, demandSource);
+  return runtime;
+}
+function runFaultRuntime(runtime, root, args, env = {}) {
+  return spawnSync(process.execPath, [
+    path.join(runtime, "scripts/wakeflow-demand-sequence.mjs"),
+    ...args,
+    "--root", root,
+    "--json",
+  ], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  });
+}
+function runFaultRuntimeAsync(runtime, root, args, env = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [
+      path.join(runtime, "scripts/wakeflow-demand-sequence.mjs"),
+      ...args,
+      "--root", root,
+      "--json",
+    ], {
+      cwd: root,
+      env: { ...process.env, ...env },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("close", (status) => resolve({ status, stdout, stderr }));
+  });
 }
 const parse = (result) => JSON.parse(result.stdout);
 const statePath = (root, key) => path.join(root, `.wakeflow-active/current/${key}/wakeflow-state.json`);
@@ -152,6 +326,20 @@ test("create-demand dry-run does not create a state root", () => {
   assert.equal(existsSync(statePath(root, "feat-2026-06-21")), false);
 });
 
+test("a delivered TODO id is the canonical demand identity", () => {
+  const { root } = makeWorkspace(DELIVERED_ROW);
+  const result = runSource(root, [
+    "create-demand",
+    "--todo-id", "feat-2026-06-21",
+    "--demand-key", "different-alias-2026-06-21",
+    "--write",
+  ]);
+  assert.notEqual(result.status, 0);
+  assert.match(parse(result).error, /must equal --todo-id|canonical demand identity/);
+  assert.equal(existsSync(statePath(root, "feat-2026-06-21")), false);
+  assert.equal(existsSync(statePath(root, "different-alias-2026-06-21")), false);
+});
+
 test("create-demand preflights the complete package list before creating a state root", () => {
   const cases = [
     {
@@ -162,6 +350,11 @@ test("create-demand preflights the complete package list before creating a state
     {
       name: "duplicate package id",
       value: [{ taskPackageId: "TP-1" }, { taskPackageId: "TP-1" }],
+      pattern: /package ids must be unique/,
+    },
+    {
+      name: "case-folded package file collision",
+      value: [{ taskPackageId: "PKG" }, { taskPackageId: "pkg" }],
       pattern: /package ids must be unique/,
     },
     {
@@ -189,11 +382,22 @@ test("create-demand preflights the complete package list before creating a state
       value: [{
         taskPackageId: "TP-1", targetWindow: "Design", targetTaskId: "T-1",
         workType: "research", objective: "Research", contextSummary: ["Known fact"],
-        requirementRefs: [{ ref: "plan.md#goal", role: "goal" }],
+        requirementRefs: [{ ref: ".wakeflow-active/current/global-todo-board.md#global-todo", role: "goal" }],
         boundaries: { inScope: ["scope"], outOfScope: [], forbidden: [] },
         completionExpectations: ["report"], dependsOnTaskIds: ["T-2"], commitExpectation: "leave-uncommitted",
       }, { taskPackageId: "TP-2", targetWindow: "Design", targetTaskId: "T-2" }],
       pattern: /not an earlier target task/,
+    },
+    {
+      name: "missing requirement anchor",
+      value: [{
+        taskPackageId: "TP-1", targetWindow: "Design", targetTaskId: "T-1",
+        workType: "research", objective: "Research", contextSummary: ["Known fact"],
+        requirementRefs: [{ ref: "missing.md#goal", role: "goal" }],
+        boundaries: { inScope: ["scope"], outOfScope: [], forbidden: [] },
+        completionExpectations: ["report"], dependsOnTaskIds: [], commitExpectation: "leave-uncommitted",
+      }],
+      pattern: /requirement reference does not exist/,
     },
   ];
   for (const entry of cases) {
@@ -209,6 +413,330 @@ test("create-demand preflights the complete package list before creating a state
   }
 });
 
+test("create-demand compensates a package failure when no external progress exists", () => {
+  const runtime = makeFaultRuntime();
+  const { root } = makeWorkspace();
+  const key = "create-rollback-2026-07-30";
+  const counter = path.join(root, "create-counter.txt");
+  const packages = JSON.stringify([
+    { taskPackageId: "P1", summary: "first", targetWindow: "WinA", targetTaskId: "T1" },
+    { taskPackageId: "P2", summary: "second", targetWindow: "WinB", targetTaskId: "T2" },
+  ]);
+  const failed = runFaultRuntime(runtime, root, [
+    "create-demand", "--demand-key", key, "--title", "Rollback",
+    "--task-packages", packages, "--write",
+  ], {
+    WAKEFLOW_TEST_CREATE_COUNTER: counter,
+    WAKEFLOW_TEST_FAIL_ADD_NUMBER: "2",
+  });
+  assert.notEqual(failed.status, 0);
+  const payload = parse(failed);
+  assert.equal(payload.partialCreated, undefined, "a private failed attempt is compensated, not exposed as a partial demand");
+  assert.match(payload.error, /removed the state root created by this failed attempt/);
+  assert.equal(existsSync(statePath(root, key)), false);
+});
+
+test("create-demand preserves external progress and resumes only the same intent", () => {
+  const runtime = makeFaultRuntime();
+  const { root } = makeWorkspace();
+  const key = "create-resume-2026-07-30";
+  const counter = path.join(root, "create-counter.txt");
+  const taskPackages = [
+    { taskPackageId: "P1", summary: "first", targetWindow: "WinA", targetTaskId: "T1" },
+    { taskPackageId: "P2", summary: "second", targetWindow: "WinB", targetTaskId: "T2" },
+  ];
+  const common = [
+    "create-demand", "--demand-key", key, "--title", "Resume",
+    "--task-packages", JSON.stringify(taskPackages), "--write",
+  ];
+  const failed = runFaultRuntime(runtime, root, common, {
+    WAKEFLOW_TEST_CREATE_COUNTER: counter,
+    WAKEFLOW_TEST_FAIL_ADD_NUMBER: "2",
+    WAKEFLOW_TEST_EXTERNAL_PROGRESS: "1",
+  });
+  assert.notEqual(failed.status, 0);
+  const partial = parse(failed);
+  assert.equal(partial.partialCreated, true);
+  assert.match(partial.recovery, /same input/);
+  assert.equal(existsSync(statePath(root, key)), true);
+  const manifestFile = path.join(root, ".wakeflow-active/current", key, ".wakeflow-create-demand.json");
+  assert.equal(JSON.parse(readFileSync(manifestFile, "utf8")).status, "partial");
+
+  const changedIntent = runFaultRuntime(runtime, root, [
+    "create-demand", "--demand-key", key, "--title", "Different title",
+    "--task-packages", JSON.stringify(taskPackages), "--write",
+  ]);
+  assert.notEqual(changedIntent.status, 0);
+  assert.match(parse(changedIntent).error, /intent differs/);
+
+  const resumed = runFaultRuntime(runtime, root, common);
+  assert.equal(resumed.status, 0, resumed.stderr || resumed.stdout);
+  const resumedPayload = parse(resumed);
+  assert.equal(resumedPayload.resumedPartial, true);
+  assert.deepEqual(resumedPayload.created.taskPackages, ["P1", "P2"]);
+  const state = JSON.parse(readFileSync(statePath(root, key), "utf8"));
+  assert.deepEqual(state.taskPackages.map((pkg) => pkg.taskPackageId), ["P1", "P2"]);
+  assert.equal(JSON.parse(readFileSync(manifestFile, "utf8")).status, "complete");
+});
+
+test("create-demand serializes concurrent same-intent creators", async () => {
+  const runtime = makeFaultRuntime();
+  const { root } = makeWorkspace();
+  const key = "create-concurrent-2026-07-30";
+  const args = ["create-demand", "--demand-key", key, "--title", "Concurrent", "--write"];
+  const firstPromise = runFaultRuntimeAsync(runtime, root, args, {
+    WAKEFLOW_TEST_CREATE_HOLD_MS: "500",
+  });
+  await new Promise((resolve) => setTimeout(resolve, 75));
+  const second = runFaultRuntime(runtime, root, args);
+  const first = await firstPromise;
+  const successes = [first, second].filter((result) => result.status === 0);
+  const failures = [first, second].filter((result) => result.status !== 0);
+  assert.equal(successes.length, 1, `exactly one creator must succeed: ${first.stderr}${second.stderr}`);
+  assert.equal(failures.length, 1);
+  assert.match(parse(failures[0]).error, /already exists|refuse to re-create/);
+  const state = JSON.parse(readFileSync(statePath(root, key), "utf8"));
+  assert.equal(state.demandKey, key);
+  assert.equal(
+    existsSync(path.join(root, ".wakeflow-active/current", `${key}.create-intent.json`)),
+    false,
+    "the successful creator removes its pre-intent sidecar",
+  );
+});
+
+test("create-demand resumes a crash after init from the sibling pre-intent", () => {
+  const runtime = makeFaultRuntime();
+  const { root } = makeWorkspace();
+  const key = "create-init-crash-2026-07-30";
+  const taskPackages = JSON.stringify([
+    { taskPackageId: "P1", summary: "first", targetWindow: "WinA", targetTaskId: "T1" },
+  ]);
+  const args = [
+    "create-demand", "--demand-key", key, "--title", "Init crash",
+    "--task-packages", taskPackages, "--write",
+  ];
+  const crashed = runFaultRuntime(runtime, root, args, {
+    WAKEFLOW_TEST_CRASH_AFTER_INIT: "1",
+  });
+  assert.equal(crashed.status, 86);
+  const stateRoot = path.join(root, ".wakeflow-active/current", key);
+  assert.equal(existsSync(path.join(stateRoot, "wakeflow-state.json")), true);
+  assert.equal(existsSync(path.join(stateRoot, ".wakeflow-create-demand.json")), false);
+  assert.equal(existsSync(`${stateRoot}.create-intent.json`), true);
+
+  const resumed = runFaultRuntime(runtime, root, args);
+  assert.equal(resumed.status, 0, resumed.stderr || resumed.stdout);
+  assert.equal(parse(resumed).resumedPartial, true);
+  const state = JSON.parse(readFileSync(path.join(stateRoot, "wakeflow-state.json"), "utf8"));
+  assert.deepEqual(state.taskPackages.map((pkg) => pkg.taskPackageId), ["P1"]);
+  assert.equal(JSON.parse(readFileSync(path.join(stateRoot, ".wakeflow-create-demand.json"), "utf8")).status, "complete");
+  assert.equal(existsSync(`${stateRoot}.create-intent.json`), false);
+});
+
+test("create-demand compensates when init publishes the root but its process returns failure", () => {
+  const runtime = makeFaultRuntime();
+  const { root } = makeWorkspace();
+  const key = "create-init-return-failure-2026-07-30";
+  const failed = runFaultRuntime(runtime, root, [
+    "create-demand", "--demand-key", key, "--title", "Init return failure", "--write",
+  ], {
+    WAKEFLOW_TEST_FAIL_AFTER_INIT_PUBLISH: "1",
+  });
+  assert.notEqual(failed.status, 0);
+  const payload = parse(failed);
+  assert.match(payload.error, /removed the state root created by this failed attempt/);
+  const stateRoot = path.join(root, ".wakeflow-active/current", key);
+  assert.equal(existsSync(stateRoot), false);
+  assert.equal(existsSync(`${stateRoot}.create-intent.json`), false);
+});
+
+test("create-demand resumes after TODO consume but before complete manifest", () => {
+  const runtime = makeFaultRuntime();
+  const { root, boardPath } = makeWorkspace(DELIVERED_ROW);
+  const args = ["create-demand", "--todo-id", "feat-2026-06-21", "--write"];
+  const crashed = runFaultRuntime(runtime, root, args, {
+    WAKEFLOW_TEST_CRASH_AFTER_TODO: "1",
+  });
+  assert.equal(crashed.status, 87);
+  assert.match(readFileSync(boardPath, "utf8"), /feat-2026-06-21 \| completed \/ claimed \|/);
+  const stateRoot = path.join(root, ".wakeflow-active/current", "feat-2026-06-21");
+  assert.equal(JSON.parse(readFileSync(path.join(stateRoot, ".wakeflow-create-demand.json"), "utf8")).status, "partial");
+
+  const resumed = runFaultRuntime(runtime, root, args);
+  assert.equal(resumed.status, 0, resumed.stderr || resumed.stdout);
+  assert.equal(parse(resumed).resumedPartial, true);
+  assert.equal(JSON.parse(readFileSync(path.join(stateRoot, ".wakeflow-create-demand.json"), "utf8")).status, "complete");
+});
+
+test("create-demand finishes cleanup after the complete manifest was committed", () => {
+  const runtime = makeFaultRuntime();
+  const { root } = makeWorkspace();
+  const key = "create-complete-cleanup-2026-07-30";
+  const args = [
+    "create-demand", "--demand-key", key, "--title", "Complete cleanup",
+    "--write",
+  ];
+  const crashed = runFaultRuntime(runtime, root, args, {
+    WAKEFLOW_TEST_CRASH_AFTER_COMPLETE_MANIFEST: "1",
+  });
+  assert.equal(crashed.status, 88);
+  const stateRoot = path.join(root, ".wakeflow-active/current", key);
+  const manifest = JSON.parse(readFileSync(path.join(stateRoot, ".wakeflow-create-demand.json"), "utf8"));
+  assert.equal(manifest.status, "complete");
+  const sidecar = `${stateRoot}.create-intent.json`;
+  assert.equal(existsSync(sidecar), true);
+
+  const resumed = runFaultRuntime(runtime, root, args);
+  assert.equal(resumed.status, 0, resumed.stderr || resumed.stdout);
+  const payload = JSON.parse(resumed.stdout);
+  assert.equal(payload.recoveredCompleted, true);
+  assert.equal(existsSync(sidecar), false);
+  assert.equal(JSON.parse(readFileSync(path.join(stateRoot, ".wakeflow-create-demand.json"), "utf8")).status, "complete");
+});
+
+test("create-demand complete recovery requires the full intended package and target set", () => {
+  const runtime = makeFaultRuntime();
+  const { root } = makeWorkspace();
+  const key = "create-complete-set-2026-07-30";
+  const packages = JSON.stringify([
+    { taskPackageId: "P1", summary: "first", targetWindow: "WinA", targetTaskId: "T1" },
+    { taskPackageId: "P2", summary: "second", targetWindow: "WinB", targetTaskId: "T2" },
+  ]);
+  const args = [
+    "create-demand", "--demand-key", key, "--title", "Complete set",
+    "--task-packages", packages, "--write",
+  ];
+  const crashed = runFaultRuntime(runtime, root, args, {
+    WAKEFLOW_TEST_CRASH_AFTER_COMPLETE_MANIFEST: "1",
+  });
+  assert.equal(crashed.status, 88);
+  const stateRoot = path.join(root, ".wakeflow-active/current", key);
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.taskPackages = state.taskPackages.filter((pkg) => pkg.taskPackageId !== "P2");
+  state.targetTasks = state.targetTasks.filter((target) => target.targetTaskId !== "T2");
+  writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+
+  const recovered = runFaultRuntime(runtime, root, args);
+  assert.notEqual(recovered.status, 0);
+  assert.match(parse(recovered).error, /full package\/target set|does not contain/);
+  assert.equal(
+    existsSync(`${stateRoot}.create-intent.json`),
+    true,
+    "failed validation must preserve the recovery sidecar for manual reconciliation",
+  );
+});
+
+test("create-demand partial recovery rejects target identity drift", () => {
+  const runtime = makeFaultRuntime();
+  const { root } = makeWorkspace();
+  const key = "create-target-drift-2026-07-30";
+  const counter = path.join(root, "create-counter.txt");
+  const packages = [
+    { taskPackageId: "P1", summary: "first", targetWindow: "WinA", targetTaskId: "T1" },
+    { taskPackageId: "P2", summary: "second", targetWindow: "WinB", targetTaskId: "T2" },
+  ];
+  const args = [
+    "create-demand", "--demand-key", key, "--title", "Target drift",
+    "--task-packages", JSON.stringify(packages), "--write",
+  ];
+  const failed = runFaultRuntime(runtime, root, args, {
+    WAKEFLOW_TEST_CREATE_COUNTER: counter,
+    WAKEFLOW_TEST_FAIL_ADD_NUMBER: "2",
+    WAKEFLOW_TEST_EXTERNAL_PROGRESS: "1",
+  });
+  assert.notEqual(failed.status, 0);
+  const stateRoot = path.join(root, ".wakeflow-active/current", key);
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.targetTasks[0].summary = "drifted target summary";
+  writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+
+  const resumed = runFaultRuntime(runtime, root, args);
+  assert.notEqual(resumed.status, 0);
+  assert.match(parse(resumed).error, /target task T1 .*drifted|drifted from/i);
+});
+
+test("create-demand partial recovery rejects immutable package artifact drift", () => {
+  const runtime = makeFaultRuntime();
+  const { root } = makeWorkspace();
+  const key = "create-package-identity-drift-2026-07-30";
+  const counter = path.join(root, "create-counter.txt");
+  const packages = [
+    { taskPackageId: "P1", summary: "first", targetWindow: "WinA", targetTaskId: "T1" },
+    { taskPackageId: "P2", summary: "second", targetWindow: "WinB", targetTaskId: "T2" },
+  ];
+  const args = [
+    "create-demand", "--demand-key", key, "--title", "Package identity drift",
+    "--task-packages", JSON.stringify(packages), "--write",
+  ];
+  const failed = runFaultRuntime(runtime, root, args, {
+    WAKEFLOW_TEST_CREATE_COUNTER: counter,
+    WAKEFLOW_TEST_FAIL_ADD_NUMBER: "2",
+    WAKEFLOW_TEST_EXTERNAL_PROGRESS: "1",
+  });
+  assert.notEqual(failed.status, 0);
+  const packageFile = path.join(
+    root,
+    ".wakeflow-active/current",
+    key,
+    "task-packages",
+    "P1.json",
+  );
+  const packageArtifact = JSON.parse(readFileSync(packageFile, "utf8"));
+  packageArtifact.status = "accepted";
+  writeFileSync(packageFile, `${JSON.stringify(packageArtifact, null, 2)}\n`);
+
+  const resumed = runFaultRuntime(runtime, root, args);
+  assert.notEqual(resumed.status, 0);
+  assert.match(parse(resumed).error, /package artifact .*drifted|drifted from/i);
+
+  packageArtifact.status = "pending";
+  packageArtifact.targetTasks[0].dependsOnTaskIds = ["ghost-task"];
+  writeFileSync(packageFile, `${JSON.stringify(packageArtifact, null, 2)}\n`);
+  const dependencyDrift = runFaultRuntime(runtime, root, args);
+  assert.notEqual(dependencyDrift.status, 0);
+  assert.match(parse(dependencyDrift).error, /package artifact .*drifted|drifted from/i);
+});
+
+test("create-demand rejects drifted recovery intent and existing package content", () => {
+  const runtime = makeFaultRuntime();
+  const { root } = makeWorkspace();
+  const key = "create-drift-2026-07-30";
+  const counter = path.join(root, "create-counter.txt");
+  const packages = [
+    { taskPackageId: "P1", summary: "first", targetWindow: "WinA", targetTaskId: "T1" },
+    { taskPackageId: "P2", summary: "second", targetWindow: "WinB", targetTaskId: "T2" },
+  ];
+  const args = [
+    "create-demand", "--demand-key", key, "--title", "Drift",
+    "--task-packages", JSON.stringify(packages), "--write",
+  ];
+  const failed = runFaultRuntime(runtime, root, args, {
+    WAKEFLOW_TEST_CREATE_COUNTER: counter,
+    WAKEFLOW_TEST_FAIL_ADD_NUMBER: "2",
+    WAKEFLOW_TEST_EXTERNAL_PROGRESS: "1",
+  });
+  assert.notEqual(failed.status, 0);
+  const stateRoot = path.join(root, ".wakeflow-active/current", key);
+  const packageFile = path.join(stateRoot, "task-packages", "P1.json");
+  const packageArtifact = JSON.parse(readFileSync(packageFile, "utf8"));
+  packageArtifact.summary = "drifted";
+  writeFileSync(packageFile, `${JSON.stringify(packageArtifact, null, 2)}\n`);
+
+  const driftedPackage = runFaultRuntime(runtime, root, args);
+  assert.notEqual(driftedPackage.status, 0);
+  assert.match(parse(driftedPackage).error, /artifact .*drifted|drifted from/i);
+
+  const manifestFile = path.join(stateRoot, ".wakeflow-create-demand.json");
+  const manifest = JSON.parse(readFileSync(manifestFile, "utf8"));
+  manifest.intent.title = "tampered without digest";
+  writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
+  const driftedManifest = runFaultRuntime(runtime, root, args);
+  assert.notEqual(driftedManifest.status, 0);
+  assert.match(parse(driftedManifest).error, /digest does not match/);
+});
+
 test("create-demand refuses an ineligible / unknown TODO row", () => {
   const { root } = makeWorkspace();
   const result = run(root, ["create-demand", "--todo-id", "missing-2026-06-21", "--write"]);
@@ -222,7 +750,7 @@ test("create-demand refuses to re-create an existing demand state root", () => {
   // The row is consumed now; an inline retry on the same key hits the state-root guard.
   const second = run(root, ["create-demand", "--demand-key", "feat-2026-06-21", "--title", "Dup", "--write"]);
   assert.notEqual(second.status, 0);
-  assert.match(parse(second).error ?? "", /already exists/);
+  assert.match(parse(second).error ?? "", /already exists|intent differs/);
 });
 
 test("claim-todo auto-claims the single controller-claimable row and consumes it", () => {

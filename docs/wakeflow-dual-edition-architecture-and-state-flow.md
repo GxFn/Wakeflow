@@ -1,5 +1,12 @@
 # Wakeflow: Dual-Edition Architecture and State Flow
 
+> **Historical v0.7.8 architecture snapshot.** Its Pod placement, numeric
+> capacity, shared-worktree, global-Design, stream-overlay, and teardown
+> descriptions are superseded by
+> `docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md`.
+> Keep them as implementation history; do not use them to operate or extend
+> the current Pod path.
+
 > Generated 2026-06-19 from source at commit HEAD; **revised 2026-07-02 against v0.7.8** (state-root locks, multi-demand capacity, intent alignment, isolation worktrees, demand pods, unified create/claim/deliver, wakeflow.config.json naming). Code is the source of truth.
 
 This document synthesizes seven parallel subsystem reads of the Wakeflow source.
@@ -182,18 +189,19 @@ Additional edition facts:
   requires both `skills/` and `commands/` (`wakeflow-host-artifact-checks.mjs:29-34`);
   Codex has no `commands/` and instead carries a `.codex-plugin` `interface{}`
   block.
-- All edition manifests are version-locked at **0.8.18** in **five places**: both
+- All edition manifests are version-locked at **0.9.0** in **five places**: both
   plugin manifests (`.codex-plugin/plugin.json:3`, `.claude-plugin/plugin.json:3`),
   both plugin `package.json`s, and the marketplace **plugin entry**
   (`.claude-plugin/marketplace.json` `plugins[0].version`). The marketplace file
   also carries a **second, distinct** version field — `metadata.version` is
   `1.0.0` (the catalog metadata, not the plugin version) — so the same file has
-  two different version fields and only the `plugins[0]` one tracks the 0.8.18
+  two different version fields and only the `plugins[0]` one tracks the 0.9.0
   lock. Root `package.json` stays `0.0.0` / `private:true` (private dev
-  workspace). `sync-core` does **not** enforce version equality — manifests are
-  existence-only.
-- The marketplace publishes **only** the Claude edition; the Codex edition's
-  `artifact.marketplacePath` points at a separate `.agents/plugins/marketplace.json`.
+  workspace). `sync-core` does **not** enforce version equality; the release
+  consistency check does.
+- The repository exposes separate catalogs for both editions:
+  `.claude-plugin/marketplace.json` for Claude Code and
+  `.agents/plugins/marketplace.json` for Codex.
 - The `core/` host-profile copy is a **Codex dev stub** (`hostId codex` but
   `workspaceResidueChecks: []`) excluded from sync, present only so core scripts'
   relative imports resolve when running from `core/` during repo development.
@@ -203,10 +211,9 @@ where any prose here and the code disagree, the code is authoritative.
 
 > **Open questions / verify:** The no-`hostId`-branch claim rests on a grep for
 > `hostId ===` returning zero hits in `core/`; this would miss exotic dynamic
-> dispatch (e.g. `hostProfile.hostId` used as an object key). The five 0.8.18
-> version fields currently match but `check:core` does not catch version drift. The
-> Codex `.agents/plugins/marketplace.json` distribution path lives outside this
-> repo's tracked tree and was not confirmed.
+> dispatch (e.g. `hostProfile.hostId` used as an object key). The five 0.9.0
+> version fields currently match. `check:core` alone does not catch version
+> drift; `tools/check-release-consistency.mjs` does.
 
 ---
 

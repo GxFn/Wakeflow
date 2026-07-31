@@ -1,3 +1,5 @@
+import { codexPodEntryExtras } from "./wakeflow-codex-pod-host.mjs";
+
 /**
  * Wakeflow host profile: the single host-coupling surface for this plugin artifact.
  *
@@ -123,6 +125,9 @@ export const hostProfile = {
       title,
     }),
     entryExtras: (entry, context) => codexEntryExtras(entry, context),
+  },
+  pod: {
+    entryExtras: (operation, context) => codexPodEntryExtras(operation, context),
   },
   artifact: {
     packageName: "wakeflow",

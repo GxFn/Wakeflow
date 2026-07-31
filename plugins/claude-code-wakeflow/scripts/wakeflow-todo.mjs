@@ -12,6 +12,13 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import path from "node:path";
 import { loadWorkspaceConfig, resolveWorkspaceRoot, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 import { WakeflowStateLockTimeoutError, withFileLock } from "./lib/wakeflow-state-lock.mjs";
+import {
+  formatTodoRow,
+  normalizeTodoBoard,
+  parseTodoBoard,
+  replaceTodoSection,
+  todoBoardLockPath,
+} from "./lib/wakeflow-todo-table.mjs";
 
 const args = process.argv.slice(2);
 const workspaceRoot = resolveWorkspaceRoot(args);
@@ -44,20 +51,6 @@ class CliError extends Error {}
 
 function fail(message) {
   throw new CliError(message);
-}
-
-function splitRow(line) {
-  const t = line.trim();
-  if (!t.startsWith("|") || !t.endsWith("|")) return [];
-  return t.slice(1, -1).split("|").map((cell) => cell.trim());
-}
-
-function sectionRange(content, heading) {
-  const start = content.indexOf(`## ${heading}`);
-  if (start < 0) return null;
-  const rest = content.slice(start + 1);
-  const next = rest.search(/\n## /);
-  return { start, end: next >= 0 ? start + 1 + next : content.length };
 }
 
 function atomicWrite(file, content) {
@@ -110,38 +103,18 @@ function commandDeliver() {
 
   if (!existsSync(todoPath)) fail(`global TODO board missing: ${todoPath}`);
   const content = readFileSync(todoPath, "utf8");
-  const range = sectionRange(content, "Global TODO");
-  if (!range) fail("global TODO board is missing ## Global TODO");
-  const lines = content.slice(range.start, range.end).split("\n");
-  const headerIndex = lines.findIndex((line) => {
-    const cells = splitRow(line);
-    return cells.includes("ID") && cells.includes("Status");
+  const initial = parseTodoBoard(content);
+  if (!initial.range || initial.headerIndex === undefined) fail(initial.issues[0]);
+  const normalized = normalizeTodoBoard(content, {
+    mapCell: ({ column, value }) => column === "Documents" && !initial.canonical
+      ? value.replace(/\]\(([^)]+)\)/g, (_match, target) => `](${boardRelativeDocumentRef(target, { existingBoardLink: true })})`)
+      : value,
   });
-  if (headerIndex < 0) fail("global TODO board is missing the ID/Status table header");
-  let header = splitRow(lines[headerIndex]);
-  if (!header.includes("Auto Claim")) {
-    fail("global TODO board is missing the 'Auto Claim' column; migrate the board to the unified schema first");
-  }
-  if (!header.includes("Testing Decision")) {
-    const documentsAt = header.indexOf("Documents");
-    const insertAt = documentsAt >= 0 ? documentsAt : header.length;
-    for (let i = headerIndex; i < lines.length; i += 1) {
-      const cells = splitRow(lines[i]);
-      if (cells.length === 0) continue;
-      if (documentsAt >= 0 && i > headerIndex + 1 && cells[documentsAt]) {
-        cells[documentsAt] = cells[documentsAt].replace(/\]\(([^)]+)\)/g, (_match, target) => `](${boardRelativeDocumentRef(target, { existingBoardLink: true })})`);
-      }
-      cells.splice(insertAt, 0, i === headerIndex ? "Testing Decision" : /^:?-{3,}:?$/.test(cells[0]) ? "---" : "");
-      lines[i] = `| ${cells.join(" | ")} |`;
-    }
-    header = splitRow(lines[headerIndex]);
-  }
+  if (!normalized.ok) fail(normalized.issues[0]);
+  const lines = [...normalized.lines];
 
   // Refuse duplicate ID (append-only; never restates an existing row).
-  for (let i = headerIndex + 2; i < lines.length; i += 1) {
-    const cells = splitRow(lines[i]);
-    if (cells.length && cells[0] === designKey) fail(`ID already on the board: ${designKey}`);
-  }
+  if (normalized.rows.some((row) => row.value.ID === designKey)) fail(`ID already on the board: ${designKey}`);
 
   const documents = [
     originalPlan ? `[plan](${boardRelativeDocumentRef(originalPlan)})` : null,
@@ -162,15 +135,14 @@ function commandDeliver() {
     "Testing Decision": testingDecision,
     "Documents": documents,
   };
-  const newRow = `| ${header.map((name) => cellByName[name] ?? "").join(" | ")} |`;
+  const newRow = formatTodoRow(cellByName);
 
   // Insert after the last existing data row (or right after the divider when empty).
-  let insertAt = headerIndex + 2;
-  for (let i = headerIndex + 2; i < lines.length; i += 1) {
-    if (splitRow(lines[i]).length) insertAt = i + 1;
-  }
+  const insertAt = normalized.rows.length > 0
+    ? normalized.rows.at(-1).lineIndex + 1
+    : normalized.dividerIndex + 1;
   const newLines = [...lines.slice(0, insertAt), newRow, ...lines.slice(insertAt)];
-  const newContent = content.slice(0, range.start) + newLines.join("\n") + content.slice(range.end);
+  const newContent = replaceTodoSection(normalized.content, normalized, newLines);
 
   if (apply) atomicWrite(todoPath, newContent);
   output({
@@ -194,36 +166,22 @@ function commandConsume() {
 
   if (!existsSync(todoPath)) fail(`global TODO board missing: ${todoPath}`);
   const content = readFileSync(todoPath, "utf8");
-  const range = sectionRange(content, "Global TODO");
-  if (!range) fail("global TODO board is missing ## Global TODO");
-  const lines = content.slice(range.start, range.end).split("\n");
-  const headerIndex = lines.findIndex((line) => {
-    const cells = splitRow(line);
-    return cells.includes("ID") && cells.includes("Status");
-  });
-  if (headerIndex < 0) fail("global TODO board is missing the ID/Status table header");
-  const header = splitRow(lines[headerIndex]);
-  const statusIdx = header.indexOf("Status");
-  const mountIdx = header.indexOf("Current Mount");
-
-  let rowIndex = -1;
-  for (let i = headerIndex + 2; i < lines.length; i += 1) {
-    const cells = splitRow(lines[i]);
-    if (cells.length && cells[0] === designKey) {
-      rowIndex = i;
-      break;
-    }
-  }
-  if (rowIndex < 0) fail(`no TODO row with ID ${designKey}`);
-  const cells = splitRow(lines[rowIndex]);
+  const normalized = normalizeTodoBoard(content);
+  if (!normalized.ok) fail(normalized.issues[0]);
+  const record = normalized.rows.find((row) => row.value.ID === designKey);
+  if (!record) fail(`no TODO row with ID ${designKey}`);
+  const lines = [...normalized.lines];
   // Consume = the delivery is taken up by a demand: mark it claimed and link the state
   // root in Current Mount. The demand's own state machine carries the execution lifecycle
   // from here, so the row is no longer a pending candidate (it will archive via the
   // existing completed-row path). A side effect of create-demand, never a standalone edit.
-  cells[statusIdx] = "completed / claimed";
-  if (mountIdx >= 0) cells[mountIdx] = mount;
-  lines[rowIndex] = `| ${cells.join(" | ")} |`;
-  const newContent = content.slice(0, range.start) + lines.join("\n") + content.slice(range.end);
+  const value = {
+    ...record.value,
+    Status: "completed / claimed",
+    "Current Mount": mount,
+  };
+  lines[record.lineIndex] = formatTodoRow(value);
+  const newContent = replaceTodoSection(normalized.content, normalized, lines);
 
   if (apply) atomicWrite(todoPath, newContent);
   output({
@@ -232,7 +190,7 @@ function commandConsume() {
     wrote: apply,
     designKey,
     mount,
-    row: lines[rowIndex],
+    row: lines[record.lineIndex],
     board: path.relative(workspaceRoot, todoPath).split(path.sep).join("/"),
   });
 }
@@ -243,7 +201,7 @@ function commandConsume() {
 function withBoardLock(fn) {
   try {
     mkdirSync(path.dirname(todoPath), { recursive: true });
-    withFileLock(`${todoPath}.lock`, fn);
+    withFileLock(todoBoardLockPath(todoPath), fn);
   } catch (error) {
     if (error instanceof WakeflowStateLockTimeoutError) fail(error.message);
     throw error;

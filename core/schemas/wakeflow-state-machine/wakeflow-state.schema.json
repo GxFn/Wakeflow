@@ -41,7 +41,109 @@
       "required": ["mode", "podId"],
       "properties": {
         "mode": { "type": "string", "enum": ["main", "isolated"] },
-        "podId": { "type": ["string", "null"] }
+        "podId": { "type": ["string", "null"] },
+        "selection": {
+          "type": "string",
+          "enum": ["mainline-default", "explicit-user-pod"]
+        },
+        "authorizationRef": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "podProvisioning": {
+      "type": "object",
+      "required": ["phase", "podId", "authorizationRef"],
+      "properties": {
+        "phase": {
+          "type": "string",
+          "enum": [
+            "reserved",
+            "creating-control",
+            "control-ready",
+            "designing",
+            "creating-products",
+            "execution-ready",
+            "retryable",
+            "blocked",
+            "cancelling",
+            "closing",
+            "closed"
+          ]
+        },
+        "podId": { "type": "string", "minLength": 1 },
+        "host": {
+          "type": "string",
+          "enum": ["codex", "claude-code"]
+        },
+        "authorizationRef": { "type": "string", "minLength": 1 },
+        "windows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["windowName", "role", "launchCorrelationId", "status"],
+            "properties": {
+              "windowName": { "type": "string", "minLength": 1 },
+              "role": {
+                "type": "string",
+                "enum": ["controller", "design", "test", "product"]
+              },
+              "repositoryWindow": { "type": "string", "minLength": 1 },
+              "launchCorrelationId": { "type": "string", "minLength": 1 },
+              "status": {
+                "type": "string",
+                "enum": ["planned", "bound", "closed"]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "designRequestId": { "type": "string", "minLength": 1 },
+        "designRequestRef": { "type": "string", "minLength": 1 },
+        "designHandoffRef": { "type": "string", "minLength": 1 },
+        "testAccess": {
+          "type": "object",
+          "required": [
+            "probeId",
+            "status",
+            "capability",
+            "bindingSetDigest",
+            "planDigest",
+            "productBindingCount",
+            "updatedAt"
+          ],
+          "properties": {
+            "probeId": { "type": "string", "minLength": 1 },
+            "status": {
+              "type": "string",
+              "enum": ["pending", "validated", "blocked"]
+            },
+            "capability": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "direct-multi-root",
+                "unsupported",
+                "per-repo-executor-unavailable"
+              ]
+            },
+            "bindingSetDigest": { "type": "string", "minLength": 1 },
+            "planDigest": { "type": "string", "minLength": 1 },
+            "productBindingCount": { "type": "integer", "minimum": 1 },
+            "receiptDigest": { "type": "string", "minLength": 1 },
+            "reasonCode": {
+              "type": "string",
+              "enum": [
+                "direct-multi-root-unsupported",
+                "access-probe-failed",
+                "per-repo-executor-unavailable"
+              ]
+            },
+            "validatedAt": { "type": "string", "minLength": 1 },
+            "updatedAt": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "updatedAt": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": false
     },

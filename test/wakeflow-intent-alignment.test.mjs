@@ -27,9 +27,29 @@ function readJson(file) {
   return JSON.parse(readFileSync(file, "utf8"));
 }
 
+function makeConfiguredRoot(prefix = "wakeflow-intent-") {
+  const root = mkdtempSync(path.join(os.tmpdir(), prefix));
+  mkdirSync(path.join(root, "RepoA"), { recursive: true });
+  writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
+    controllerWindow: "Controller",
+    repositories: [
+      { windowName: "RepoA", path: "RepoA", role: "fixture implementation" },
+    ],
+  }, null, 2)}\n`);
+  const registered = run(deliveryScript, [
+    "register-thread",
+    "--root", root,
+    "--window", "RepoA",
+    "--thread-id", "00000000-0000-4000-8000-000000000001",
+    "--write",
+    "--json",
+  ]);
+  assert.equal(registered.status, 0, registered.stderr || registered.stdout);
+  return root;
+}
+
 function makeDemand({ withIntent }) {
-  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-intent-"));
-  mkdirSync(root, { recursive: true });
+  const root = makeConfiguredRoot();
   const init = run(stateScript, ["init", "--root", root, "--demand-key", "INTENT-DK", "--title", "Intent Fixture", "--write", "--json"]);
   assert.equal(init.status, 0, init.stderr || init.stdout);
   const stateRoot = path.join(root, JSON.parse(init.stdout).stateRoot);
@@ -68,7 +88,7 @@ test("designIntent persists on the task package and rides the packet beside the 
   assert.equal(payload.objective, OBJECTIVE);
   assert.match(payload.agentNext, /Intent check/);
 
-  const packet = readJson(path.join(root, ".wakeflow-local/wakeflow-delivery/dispatch-packets", "tp-a__RepoA__tp-a__RepoA.json"));
+  const packet = readJson(path.join(root, payload.packetFile));
   assert.equal(packet.designIntent, DESIGN_INTENT);
   assert.equal(packet.objective, OBJECTIVE);
 });
@@ -104,8 +124,7 @@ test("without designIntent the whole chain leaves zero traces", () => {
 });
 
 test("B2: review pack surfaces craftCheck when a task declares advisory craft evidence (never a gate)", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-craftcheck-"));
-  mkdirSync(root, { recursive: true });
+  const root = makeConfiguredRoot("wakeflow-craftcheck-");
   const init = run(stateScript, ["init", "--root", root, "--demand-key", "CRAFTCHECK-DK", "--title", "CraftCheck", "--write", "--json"]);
   assert.equal(init.status, 0, init.stderr || init.stdout);
   const stateRoot = path.join(root, JSON.parse(init.stdout).stateRoot);

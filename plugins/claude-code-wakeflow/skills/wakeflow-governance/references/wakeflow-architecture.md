@@ -17,12 +17,12 @@ judgment.
 | --- | --- |
 | `CLAUDE.md` | hard gates, controller identity, repository boundaries, confirmation gates, testing boundaries, acceptance floor |
 | skills | operation steps, commands, field templates, examples, troubleshooting |
-| MCP tools | stable outer capability interface for workspace setup, status, state roots, packages, delivery envelope preparation/recording, review packs, controller decisions, Design/Test intake, next-work scans, archive actions, and verification |
+| MCP tools | stable outer capability interface for workspace setup, status, state roots, packages, Pod plan/materialization/bind/Design/Test-access/close receipts, delivery envelope preparation/recording, review packs, controller decisions, Design/Test intake, next-work scans, archive actions, and verification |
 | scripts | local implementation backend for file/state operations, result import/reduction, controller-return construction, archive internals, keep-live state, and backend checks |
 | host transport | `scripts/lib/wakeflow-claude-host.mjs`, the tmux helper the agent runs via Bash for preflight, window launch/retitle, prompt send/readback, lock release, wait-results, and attach |
 | templates | reusable starter surfaces for installed workspaces |
 | `.wakeflow-active/` | ignored active runtime state |
-| `.wakeflow-local/` | ignored local config plus delivery runtime; real thread ids (Claude Code session ids) live in `wakeflow-delivery/hosts/claude-code/thread-registry/`, window-host bindings in `hosts/claude-code/window-host/`, shared locks in `wakeflow-delivery/locks/` |
+| `.wakeflow-local/` | ignored local config plus delivery runtime; final session ids live in `wakeflow-delivery/hosts/claude-code/thread-registry/`, tmux bindings in `window-host/`, verified Pod operations/materialization/bindings/Test-access receipts stay host-scoped, shared locks in `wakeflow-delivery/locks/` |
 | `../wakeflow-ledger/` | project-specific long-term records |
 
 ## MCP Boundary
@@ -60,6 +60,13 @@ ignored. Long-term project records live outside the reusable Wakeflow repo.
 Every Wakeflow window (controller included) runs as a tmux-resident `claude`
 session inside the tmux server session named by `wakeflow.config.json`
 `"hosts": { "claude-code": { "tmuxSession": "wakeflow" } }`.
+
+The initialized fleet is the default mainline. An additional Pod is created
+only from explicit user authority and contains independent Controller, Design,
+Test, and product sessions. Claude creates each product worktree with native
+`claude --worktree` and returns a final session id synchronously (no Codex
+`clientThreadId` state). Wakeflow plans, binds verified receipts, gates Test on
+validated direct-multi-root access, routes, and logically closes the Pod.
 
 ## Dual-Host Storage
 

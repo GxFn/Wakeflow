@@ -93,10 +93,15 @@ machine state.
    New packages must record the complete dispatch context once: `workType`,
    one observable `objective`, a short ordered `contextSummary`, anchored
    `requirementRefs`, `boundaries` (`inScope`, `outOfScope`, `forbidden`),
-   `completionExpectations`, explicit `dependsOnTaskIds`, and
+   `completionExpectations` ordered most important first, explicit `dependsOnTaskIds`, and
    `commitExpectation`. The prompt is a compact briefing generated from this
-   package; do not defer these decisions to the target or re-author them during
-   dispatch.
+   package: it surfaces only the first two completion expectations and one
+   original requirement entry, while the package retains every context fact,
+   requirement anchor, boundary, and completion condition. Do not defer these
+   decisions to the target or re-author them during dispatch.
+   Order each boundary list most important first. The compact prompt surfaces
+   only the first available boundary in `forbidden → outOfScope → inScope`
+   order, so its first entry must be the one the target cannot safely miss.
    For implementation work, author a small `acceptanceAnchors` list from the
    confirmed requirement: each entry names `{id, claim, probe, expected}` that
    the target can turn into a RED check before coding. Do not invent anchors
@@ -107,6 +112,14 @@ machine state.
    `accepted` and `controllerSelfChecks` states what you already verified and
    why the real scenario remains necessary. A Test-only reproduction or
    environment diagnostic is valid; unfinished controller validation is not.
+   For any Pod product/Test dispatch, also require
+   `podProvisioning.phase=execution-ready` and the target's verified
+   host-scoped binding. A suffix, static config path, or prompt identity is not
+   a binding. For Pod Test specifically, additionally require
+   `podProvisioning.testAccess.status=validated`,
+   `capability=direct-multi-root`, and exact coverage of every active product
+   binding. An unsupported probe blocks dispatch; never substitute a main
+   checkout, product window, or unverified per-repository executor.
 7. Call `wakeflow_prepare_delivery` for the target without `apply`. Review its
    `readiness`, `taskBriefing`, repository identity, requirement anchors,
    dependency status, required Skills, and exact prompt. A preview writes no
@@ -120,7 +133,11 @@ machine state.
    fresh preview.
 9. Send the envelope prompt through the Codex host thread tool exactly as stored
    in the envelope.
-10. Read back the host send evidence and record the delivery run.
+10. Read back the host send evidence and record the delivery run. If the send
+    succeeded but the newest turn is still in progress with no visible items,
+    or the sent prompt is not visible yet, treat that read as inconclusive:
+    retry only the readback within the host adapter's bounded attempt/time
+    budget. Never resend the prompt while confirming the same accepted send.
 11. End the dispatch turn.
 
 ## Review Target Results
@@ -169,7 +186,10 @@ machine state.
    - **redesign** — a non-bug mismatch, or a small requirement-level fix that is Design's
      job and not a code defect: `decide-review --decision redesign` parks the task and
      routes it back to Design (redesignCount++), instead of bouncing point-fixes between
-     product windows;
+     product windows. After Design delivers the corrected requirement, add a new full-context
+     implementation task in the product responsibility window with
+     `replacesTargetTaskId=<parked task>`; never re-dispatch or accept the old
+     redesign task as the correction;
    - **blocked** — a hard blocker that needs a human;
    - wait for missing targets, complete the demand, or create the next eligible package.
    - **Brake:** when the task-ledger shows `recurringProblem` (reworkCount ≥ 2) on a task,
@@ -235,6 +255,14 @@ kinds present, declared artifacts resolve). The judgment half is yours:
 - A package WITHOUT a contract is not a defect (doc-only work legitimately
   skips it) — the create/add reminders exist so the omission is a decision,
   never an accident.
+- For a full-context result, `resultMapping.status=complete` means every
+  authored acceptance anchor or approved Test step is represented exactly
+  once. It is only a review-readiness fact: independently inspect/rerun the
+  evidence before accepting.
+- Check `commitDisposition`, `commits`, and `changedRepos` against the task
+  package's `commitExpectation`. A `resultContractGap` blocks a verdict until
+  the target records a corrected result or an honest blocked/needs-review
+  result.
 
 ## Group Policies
 
@@ -253,55 +281,74 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   and returns one evidenced result. A window is never dispatched two
   simultaneous tasks inside the same demand — more work for that repo arrives
   as the NEXT combined package after review, never as a parallel dispatch.
-- Isolation worktree windows (`<repo>__<id>`, threads whose cwd is the
-  worktree, managed with `wakeflow_pod_open` / `wakeflow_pod_close` /
-  `wakeflow_pod_list`) exist for CROSS-DEMAND isolation only: when more than
-  one demand is active and both touch a repo, the later demand works in its
-  own worktree/branch (`<demandKey>/<id>`) so the main checkout stays
-  coherent. The machine refuses a second isolation window for the same
-  (repo, demand) — that would be same-demand parallelism, which this design
-  rejects; `pool-exhausted` bounds how many demands may hold isolation
-  worktrees on one repo.
-- An isolation branch SURVIVES pod close: it is recorded on
-  `wakeflow-ledger/workspace/pending-merges.md`, and merge-back is
-  human-reviewed and decentralized — no controller merges it. Use
-  `deleteBranch` only for a branch already merged or explicitly dropped;
-  it refuses unmerged work by design.
+- Mainline work uses the configured mainline product window. A Pod product
+  window (`<repo>__<pod>`) exists only after explicit user Pod authorization
+  and a host-created worktree receipt. Wakeflow refuses a second active binding
+  for the same `(host, demand, repo)`; it does not impose a numeric Pod or
+  per-repository limit.
+- Merge/integration remains a human-reviewed repository decision. Logical Pod
+  close records the host's disposition; it never treats an archived thread as
+  proof that Codex physically removed a worktree or branch.
 
-## Demand Pods (multiple demands = multiple pods, never one multiplexed controller)
+## Demand Pods (explicit parallel execution, never automatic placement)
 
-- One demand = one pod: its OWN controller (`Controller__<pod>`), per-repo
-  isolation worktree windows, and its OWN `Test__<pod>`, as a per-demand
-  thread set. The WHOLE pod shares the demand's ONE worktree set — every
-  window, Test included, works and verifies inside those worktrees, never on
-  a main checkout. Pods are mutually unaware — never read or touch another
-  pod's state roots, windows, or branches. The default fleet is pod 0: it
-  works on the main checkouts, and its demand is just another active demand.
-- Opening a pod is a spare-moment MECHANICAL action for an incumbent
-  controller: `wakeflow_pod_open` with the demand key and its repos
-  (idempotent; re-run resumes) creates the worktrees + overlay entries and
-  returns a windowPlan — create each entry's thread with `create_thread`
-  (cwd = the entry's worktree, prompt = the entry's createThreadPrompt) and
-  register it via `wakeflow_register_window`. The new pod's controller claims
-  its demand itself via `wakeflow_create_demand` with `controllerWindow:
-  "Controller__<pod>"` — the stamp routes every controller-return home; no
-  per-dispatch flag to remember. Heed the open call's intersection warnings:
-  a repo shared with another pod is tomorrow's merge conflict.
+- **Default:** ordinary and Auto Claim work uses the idle, healthy mainline.
+  If mainline is busy, wait. Missing/unhealthy required mainline identity
+  returns `mainline-unavailable` before demand/TODO mutation; repair the
+  mainline. Never infer Pod placement from another active demand or a
+  `Controller__*` name.
+- **Authorization:** a Pod demand must already carry
+  `executionPlacement.selection=explicit-user-pod` and an auditable
+  `authorizationRef`. Legacy `maxActiveDemands` / `maxStreamsPerRepo` fields
+  are migration warnings only; they neither authorize nor reject a Pod.
+- One Pod = independent `Controller__<pod>`, `Design__<pod>`,
+  `Test__<pod>`, and one product session per selected repository. Pods are
+  mutually unaware and every controller-return uses that demand's stamped
+  controller window.
+- `wakeflow_pod_open` is plan/reserve only. It creates host-neutral launch
+  operations and no branch, worktree, thread, or dynamic repository overlay.
+  For each product operation, resolve the exact saved Codex project and call
+  `create_thread` with `environment.type=worktree`; never fall back to the
+  workspace parent or `local`. Control roles are three distinct local threads.
+- Immediately before each host create call, record `creating` through
+  `wakeflow_pod_record_materialization`. If Codex returns `clientThreadId`,
+  record `pending`, then call bounded `list_threads(limit=50)` and match the
+  exact `launchCorrelationId` marker in each task `preview`; do not create
+  again. Use `query` only when the current host schema supports it, never as a
+  requirement. The temporary id is persisted only as a digest and can never
+  enter the registry. Record `finalized` only when exactly one final task
+  matches; zero or multiple matches stay pending/blocked.
+- Register only that final real `threadId`, collect the entry-sync cwd/Git
+  receipt, then call `wakeflow_pod_bind`. A prompt assertion or window-name
+  suffix is not a binding. `control-ready` requires all three control
+  bindings; `execution-ready` additionally requires the recorded Pod Design
+  handoff and every planned product binding.
+- Pod initial Design, supplement, and redesign use
+  `wakeflow_pod_prepare_design_request → PodDesignRequest →
+  PodDesignHandoffEnvelope → wakeflow_pod_record_design_handoff`; the frozen
+  request supplies exact lineage and cannot be replaced by a different
+  request. They never route through the mainline Design window or create a
+  duplicate global TODO for the same demand.
+- Before Pod Test dispatch, call `wakeflow_pod_prepare_test_access`, execute
+  that exact host-local probe from `Test__<pod>`, and record the redacted
+  receipt with `wakeflow_pod_record_test_access`. Only validated
+  `direct-multi-root` access across all active product bindings opens dispatch.
+  Unsupported access stays blocked; a verifiable per-repository executor is
+  not currently implemented.
 - Test ENVIRONMENTS may be physical singletons even though Test windows are
   per-pod: an exclusive environment (per the S1 Test Environment Spec) is a
   cross-pod serial resource — confirm no other pod is using it before
   dispatching the card.
-- Close order, then merge: complete-demand → `wakeflow_pod_close` (worktrees
-  down; branches survive onto wakeflow-ledger/workspace/pending-merges.md) →
-  archive. Merge-back is HUMAN-reviewed and decentralized — no controller
-  ever merges pod branches.
-- `wakeflow_pod_list` is the one global view (orphan pods, registrations);
-  `maxActiveDemands` bounds pods, `maxStreamsPerRepo` bounds pods per repo.
+- Close is two-stage: `wakeflow_pod_close` emits host-close operations; the
+  Agent archives/handoffs the Codex threads and records each result through
+  `wakeflow_pod_record_close_receipt`. Only then does Wakeflow close the
+  logical binding. Physical Codex worktree GC remains a separate host fact.
+- `wakeflow_pod_list` reads canonical state plus host-scoped operations and
+  bindings. It never guesses identity from a path or overlay.
 - Cancelling instead of finishing: `wakeflow_cancel_demand` stops an
   in-flight demand WITHOUT pretending completion — no acceptance, evidence
-  stays, open tasks keep their last honest status. A cancelled demand still
-  holds an active-demand slot until archived: `wakeflow_pod_close` accepts a
-  cancelled demand in its close order, then archive frees the slot.
+  stays, open tasks keep their last honest status. A cancelled Pod still needs
+  the same logical close receipts before archive.
 
 ## Completed Demand Continuations
 
@@ -428,8 +475,11 @@ Stop instead of dispatching when:
   (needs-rework, redesignCount++) instead of bouncing point fixes between product windows.
   This reuses the normal rhythm — no new transport: surface the redesign to Design; Design
   re-examines and **delivers** the corrected requirement with `wakeflow_deliver` (its normal
-  stateless path); then **resume the same demand with `add-task-package`** (the corrected task
-  package) — do NOT `create_demand` a new one. The parked demand's history and counts carry over.
+  stateless path); then **resume the same demand with `add-task-package`** (a full-context
+  implementation package in the product responsibility window) and set
+  `replacesTargetTaskId` to the parked product task — do NOT `create_demand`
+  a new one or re-dispatch the old redesign task. Accepting the replacement marks the old
+  task/package `superseded`; the parked demand's history and counts carry over.
 - A completed result would leave TODO/backlog, archive state, or current status
   inconsistent.
 - The controller is about to poll/wait for targets after a send was recorded.

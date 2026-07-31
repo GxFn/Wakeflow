@@ -282,6 +282,40 @@ test("archive-demand --write flips to archived, relocates into the ledger, write
   assert.match(readFileSync(path.join(ledgerDest, "controller-events.jsonl"), "utf8"), /"type":"demand\.archived"/);
 });
 
+test("archive-demand refuses opaque files by default and records hashes when explicitly allowed", () => {
+  const { root, stateRoot, stateFile } = initDemand({ demandKey: "ARCH-OPAQUE" });
+  const opaqueFile = path.join(root, stateRoot, "evidence", "fixture.bin");
+  mkdirSync(path.dirname(opaqueFile), { recursive: true });
+  writeFileSync(opaqueFile, Buffer.from([0xff, 0xfe, 0x00, 0x41]));
+
+  const refused = run([
+    "archive-demand", "--root", root, "--state-root", stateRoot,
+    "--reason", "opaque fixture", "--write", "--json",
+  ]);
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stdout + refused.stderr, /opaque file.*--allow-opaque/i);
+  assert.equal(readJson(stateFile).state, "completed");
+  assert.equal(existsSync(path.join(root, stateRoot, archivePendingFileName)), false);
+
+  const allowed = run([
+    "archive-demand", "--root", root, "--state-root", stateRoot,
+    "--reason", "opaque fixture", "--allow-opaque", "--write", "--json",
+  ]);
+  assert.equal(allowed.status, 0, allowed.stderr || allowed.stdout);
+  const payload = JSON.parse(allowed.stdout);
+  const manifest = readJson(path.join(root, payload.archived.ledgerDest, "archive-manifest.json"));
+  assert.deepEqual(manifest.opaqueFiles.map((item) => ({
+    file: item.file,
+    algorithm: item.algorithm,
+    bytes: item.bytes,
+  })), [{
+    file: "evidence/fixture.bin",
+    algorithm: "sha256",
+    bytes: 4,
+  }]);
+  assert.match(manifest.opaqueFiles[0].sha256, /^[a-f0-9]{64}$/);
+});
+
 test("archived demand transport history does not poison live runtime status", () => {
   const { root, stateRoot } = initDemand({ demandKey: "ARCH-STATUS" });
   const packetsDir = path.join(root, ".wakeflow-local/wakeflow-delivery/dispatch-packets");

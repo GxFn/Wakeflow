@@ -1,11 +1,10 @@
-// Parallel-vocabulary contract lint: the unified multi-demand model has one
-// narrative — parallelism ONLY at the demand level, one window + one combined
-// task package per repo within a demand, one shared worktree set per pod.
-// This lint keeps semantic-drift terms from the deleted within-demand-parallel
-// design out of code and prose (both editions + core + tests), and pins the
-// canonical sentences in the load-bearing surfaces. docs/ is exempt: it keeps
-// the superseded design history (roadmap §4.5 records the deletion) and may
-// QUOTE banned terms when describing this very lint.
+// Pod placement vocabulary contract.
+//
+// This suite deliberately replaces the retired "one shared Wakeflow
+// worktree set / numeric pool" narrative. The current product contract is:
+// mainline by default, Pod only with explicit user authority, a complete
+// independent Pod fleet, product worktrees created by the host, and no
+// numeric admission cap.
 
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -14,15 +13,22 @@ import test from "node:test";
 
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 
-const BANNED = [
-  // The within-demand parallel-stream era must not resurface in runtime
-  // narrative or code. Historical docs live in docs/ (exempt).
-  { pattern: /parallel stream/i, label: "parallel stream" },
-  { pattern: /波内并行/, label: "波内并行" },
-  { pattern: /同仓多\s*stream/i, label: "同仓多 stream" },
+const RETIRED_NARRATIVE = [
+  { pattern: /Parallelism exists ONLY at the demand level/i, label: "demand-level-only parallelism" },
+  { pattern: /ONE worktree set/i, label: "one Wakeflow-owned worktree set" },
+  { pattern: /shared Wakeflow worktree set/i, label: "shared Wakeflow worktree set" },
+  { pattern: /pool-exhausted blocks at maxStreamsPerRepo/i, label: "numeric pool admission" },
+  {
+    pattern: /automatic(?:ally)? (?:assign|convert|place|select)[^\n]{0,100}(?:isolated|Pod)/i,
+    label: "automatic Pod placement",
+    allowedContext: /(?:does not|never|without)[\s\S]{0,180}automatic(?:ally)? (?:assign|convert|place|select)[^\n]{0,100}(?:isolated|Pod)/i,
+  },
+  {
+    pattern: /Wakeflow[- ](?:created|managed|owned)[^\n]{0,80}(?:Git )?worktree/i,
+    label: "Wakeflow-owned product worktree",
+  },
 ];
 
-const SCAN_ROOTS = ["core", "plugins", "test", "tools"];
 const SCAN_EXTENSIONS = new Set([".md", ".mjs", ".cjs", ".json"]);
 const EXCLUDED_DIRS = new Set(["node_modules", ".git"]);
 
@@ -39,45 +45,73 @@ function walk(directory, files = []) {
   return files;
 }
 
-test("semantic-drift parallel vocabulary stays out of code and runtime prose", () => {
+function containsRetiredNarrative(text, pattern, allowedContext) {
+  const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+  const matches = text.matchAll(new RegExp(pattern.source, flags));
+  for (const match of matches) {
+    const start = Math.max(0, (match.index ?? 0) - 220);
+    const end = Math.min(text.length, (match.index ?? 0) + match[0].length + 220);
+    const context = text.slice(start, end);
+    if (!allowedContext || !allowedContext.test(context)) return true;
+  }
+  return false;
+}
+
+test("normative runtime surfaces do not restore the retired shared-worktree or numeric-pool design", () => {
+  const normativeDirectories = [
+    "plugins/claude-code-wakeflow/skills",
+    "plugins/codex-wakeflow/skills",
+  ];
   const files = [
-    ...SCAN_ROOTS.flatMap((root) => walk(path.join(repoRoot, root))),
     path.join(repoRoot, "README.md"),
     path.join(repoRoot, "README.zh-CN.md"),
+    path.join(repoRoot, "core/lib/wakeflow-mcp-tools.mjs"),
+    path.join(repoRoot, "core/scripts/wakeflow-pod.mjs"),
+    path.join(repoRoot, "plugins/claude-code-wakeflow/CLAUDE.md"),
+    path.join(repoRoot, "plugins/claude-code-wakeflow/README.md"),
+    path.join(repoRoot, "plugins/claude-code-wakeflow/README.zh-CN.md"),
+    path.join(repoRoot, "plugins/claude-code-wakeflow/lib/wakeflow-mcp-tools.mjs"),
+    path.join(repoRoot, "plugins/claude-code-wakeflow/scripts/wakeflow-pod.mjs"),
+    path.join(repoRoot, "plugins/codex-wakeflow/AGENTS.md"),
+    path.join(repoRoot, "plugins/codex-wakeflow/README.md"),
+    path.join(repoRoot, "plugins/codex-wakeflow/README.zh-CN.md"),
+    path.join(repoRoot, "plugins/codex-wakeflow/lib/wakeflow-mcp-tools.mjs"),
+    path.join(repoRoot, "plugins/codex-wakeflow/scripts/wakeflow-pod.mjs"),
+    ...normativeDirectories.flatMap((directory) => walk(path.join(repoRoot, directory))),
   ];
-  // This lint file quotes the banned terms by necessity.
-  const self = new URL(import.meta.url).pathname;
   const violations = [];
   for (const file of files) {
-    if (path.resolve(file) === path.resolve(self)) continue;
     const text = readFileSync(file, "utf8");
-    for (const { pattern, label } of BANNED) {
-      if (pattern.test(text)) {
-        violations.push(`${path.relative(repoRoot, file)}: banned term "${label}"`);
+    for (const { pattern, label, allowedContext = null } of RETIRED_NARRATIVE) {
+      const found = containsRetiredNarrative(text, pattern, allowedContext);
+      if (found) {
+        violations.push(`${path.relative(repoRoot, file)}: retired narrative "${label}"`);
       }
     }
   }
-  assert.deepEqual(violations, [], `semantic-drift terms found:\n${violations.join("\n")}`);
+  assert.deepEqual(violations, [], `retired Pod contract found:\n${violations.join("\n")}`);
 });
 
-test("the canonical demand-level parallelism sentences stay pinned in both editions", () => {
+test("load-bearing host and skill surfaces retain the new placement and complete-Pod contract", () => {
   const surfaces = [
-    { file: "plugins/claude-code-wakeflow/CLAUDE.md", must: ["Parallelism exists ONLY at the demand level", "ONE worktree set"] },
-    { file: "plugins/codex-wakeflow/AGENTS.md", must: ["Parallelism exists ONLY at the demand level", "ONE worktree set"] },
-    { file: "plugins/claude-code-wakeflow/skills/wakeflow-governance/SKILL.md", must: ["ONE combined task package", "ONE worktree set"] },
-    { file: "plugins/codex-wakeflow/skills/wakeflow-governance/SKILL.md", must: ["ONE combined task package", "ONE worktree set"] },
-    { file: "plugins/claude-code-wakeflow/skills/wakeflow-controller/SKILL.md", must: ["ONE combined task package", "CROSS-DEMAND isolation only"] },
-    { file: "plugins/codex-wakeflow/skills/wakeflow-controller/SKILL.md", must: ["ONE combined task package", "CROSS-DEMAND isolation only"] },
+    "plugins/claude-code-wakeflow/CLAUDE.md",
+    "plugins/codex-wakeflow/AGENTS.md",
+    "plugins/claude-code-wakeflow/skills/wakeflow-governance/SKILL.md",
+    "plugins/codex-wakeflow/skills/wakeflow-governance/SKILL.md",
+    "plugins/claude-code-wakeflow/skills/wakeflow-controller/SKILL.md",
+    "plugins/codex-wakeflow/skills/wakeflow-controller/SKILL.md",
   ];
-  for (const surface of surfaces) {
-    // Markdown wraps lines: collapse whitespace so a fragment split across a
-    // line break still counts as present.
-    const text = readFileSync(path.join(repoRoot, surface.file), "utf8").replace(/\s+/g, " ");
-    for (const sentence of surface.must) {
-      assert.ok(
-        text.includes(sentence),
-        `${surface.file} must carry the canonical sentence fragment: "${sentence}"`,
-      );
+  const requiredSemantics = [
+    { pattern: /mainline (?:fleet )?(?:is )?(?:the )?default|Mainline first|\*\*Default:\*\*[\s\S]{0,120}mainline/i, label: "mainline default" },
+    { pattern: /explicit[\s\S]{0,180}(?:user|authorization|authority)[\s\S]{0,180}Pod|Pod[\s\S]{0,180}explicit[\s\S]{0,180}(?:user|authorization|authority)/i, label: "explicit user Pod authority" },
+    { pattern: /Controller__<pod>[\s\S]{0,180}Design__<pod>[\s\S]{0,180}Test__<pod>/i, label: "complete independent Pod roles" },
+    { pattern: /host-(?:created|managed)[\s\S]{0,160}worktree|(?:Codex|Claude Code)[\s\S]{0,160}(?:owns|creates)[\s\S]{0,160}worktree|native[\s\S]{0,80}--worktree/i, label: "host-created product worktree" },
+    { pattern: /no numeric[\s\S]{0,100}(?:Pod )?(?:admission )?limit|does not impose[\s\S]{0,80}numeric[\s\S]{0,80}limit|applies no numeric Pod limit/i, label: "no numeric Pod admission cap" },
+  ];
+  for (const relative of surfaces) {
+    const text = readFileSync(path.join(repoRoot, relative), "utf8");
+    for (const { pattern, label } of requiredSemantics) {
+      assert.match(text, pattern, `${relative} must retain: ${label}`);
     }
   }
 });

@@ -130,19 +130,20 @@ Current scripts:
   packages, renders the progress doc, and consumes the originating TODO row;
   `claim-todo` auto-claims the single controller-claimable row (Auto Claim =
   yes and eligible) or an explicitly named eligible row by delegating to
-  `create-demand`. Claiming past `maxActiveDemands` fails closed at the state
-  init gate. It does not dispatch, send session messages, accept evidence, or
-  complete demands.
-- `wakeflow-pod.mjs`: host-neutral demand-pod runner (open / close / list). One
-  demand = one pod — its OWN controller, OWN Test, and one isolation worktree
-  window per repo, the WHOLE pod sharing the demand's one worktree set. `open`
-  creates worktrees + overlay entries and emits a window plan; in this edition
-  (`fleet.transport: host-helper`) launch and teardown belong to
-  `wakeflow-claude-host` `pod-open`/`pod-close`, which resume prepared
-  worktrees. `close` is the evidence-first neutral teardown (dirty trees
-  refuse; surviving branches land on the pending-merges ledger) and runs here
-  only with `--neutral-only`. It never dispatches, accepts evidence, or merges
-  branches.
+  `create-demand`. Ordinary/Auto Claim work is mainline-only and waits while
+  mainline is busy. Pod placement requires an explicit authorization anchor;
+  active-demand counts never create or reject a Pod. It does not dispatch,
+  send session messages, accept evidence, or complete demands.
+- `wakeflow-pod.mjs`: host-neutral Pod plan/bind/design-handoff/close/list
+  runner. An explicit Pod has independent Controller, Design, Test, and product
+  sessions. `open` records launch operations only; it performs no Git or host
+  create action. The helper materializes products with native `claude
+  --worktree`, then `bind` verifies final-session cwd/Git receipts.
+  `record-design-handoff` plus every product binding publishes
+  `execution-ready`. `close` emits host-close operations and
+  `record-close-receipt` closes logical bindings without claiming physical
+  worktree deletion. It never dispatches, accepts evidence, merges, or manages
+  Git worktrees.
 - `wakeflow-intake.mjs`: state-root intake bridge for the Test surface.
   `test-card` writes a complete pre-test
   boundary machine card under `test-cards/*.json`. It does not mutate
@@ -247,8 +248,10 @@ truth. The current operational commands are grouped below:
   `window-status`, `check-workspace`, `stamp-runtime`.
 - Delivery: `deliver`, `send`, `readback`, `wait-results`.
 - Policy: `seed-permissions`, `set-unattended`.
-- Cross-demand isolation: `stream-open`, `stream-close`, `stream-list`,
-  `pod-open`, `pod-close`, `pod-list`.
+- Explicit Pod host lifecycle: `pod-open`, `pod-close`, `pod-list`. These use
+  native Claude worktrees for products. `stream-open`, `stream-close`, and
+  `stream-list` remain legacy recovery commands only; they are not the new Pod
+  path.
 
 Use MCP `wakeflow_release_window_lock` for deliberate lock recovery. To watch
 the fleet, open a terminal and run `tmux attach -t <session>`; there is no

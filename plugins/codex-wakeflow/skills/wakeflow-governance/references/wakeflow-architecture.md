@@ -17,11 +17,11 @@ judgment.
 | --- | --- |
 | `AGENTS.md` | hard gates, controller identity, repository boundaries, confirmation gates, testing boundaries, acceptance floor |
 | skills | operation steps, commands, field templates, examples, troubleshooting |
-| MCP tools | stable outer capability interface for workspace setup, status, state roots, packages, delivery envelope preparation/recording, review packs, controller decisions, Design/Test intake, next-work scans, archive actions, and verification |
+| MCP tools | stable outer capability interface for workspace setup, status, state roots, packages, Pod plan/materialization/bind/Design/Test-access/close receipts, delivery envelope preparation/recording, review packs, controller decisions, Design/Test intake, next-work scans, archive actions, and verification |
 | scripts | local implementation backend for file/state operations, result import/reduction, controller-return construction, archive internals, keep-live state, and backend checks |
 | templates | reusable starter surfaces for installed workspaces |
 | `.wakeflow-active/` | ignored active runtime state |
-| `.wakeflow-local/` | ignored local config and real thread ids |
+| `.wakeflow-local/` | ignored local config, final real thread ids, and host-scoped Pod operation/materialization/binding/Test-access receipts |
 | `../wakeflow-ledger/` | project-specific long-term records |
 
 ## MCP Boundary
@@ -54,3 +54,11 @@ ParentWorkspace/
 
 Product repositories remain siblings. Active state and local runtime files are
 ignored. Long-term project records live outside the reusable Wakeflow repo.
+
+The initialized fleet is the default mainline. An additional Pod is created
+only from explicit user authority and contains independent Controller, Design,
+Test, and product threads. Codex creates each product worktree from the exact
+saved repository project; asynchronous creation is recovered by launch
+correlation and only the final thread id is registered. Wakeflow plans, binds
+verified receipts, gates Test on validated direct-multi-root access, routes,
+and logically closes the Pod.

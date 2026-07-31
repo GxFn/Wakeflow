@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -10,11 +10,9 @@ import test from "node:test";
 // wakeflow.config.json is the canonical config name; the legacy
 // workspace.config.json keeps resolving READ-side so pre-rename workspaces
 // never break. These tests pin that contract on both the tracked file and the
-// .wakeflow-local overlay layer.
+// explicit local-config safety boundary without treating a Pod binding as config.
 
-const codexPluginRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
 const claudePluginRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/claude-code-wakeflow");
-const nextWorkScript = path.join(codexPluginRoot, "scripts/wakeflow-next-work.mjs");
 const hostScript = path.join(claudePluginRoot, "scripts/lib/wakeflow-claude-host.mjs");
 
 function runSync(command, args, options = {}) {
@@ -37,59 +35,72 @@ function makeBoardFixture(root) {
   );
 }
 
-test("legacy tracked workspace.config.json still resolves (capacity read through the old name)", () => {
+test("legacy tracked workspace.config.json still resolves while capacity fields become warnings", async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-legacy-config-"));
-  makeBoardFixture(root);
-  writeFile(path.join(root, "workspace.config.json"), JSON.stringify({ maxActiveDemands: 1 }, null, 2));
-  writeFile(path.join(root, ".wakeflow-active/current/other-demand/wakeflow-state.json"), JSON.stringify({
-    demandKey: "other-demand",
-    state: "planned",
+  writeFile(path.join(root, "workspace.config.json"), JSON.stringify({
+    workspaceName: "Legacy name",
+    maxActiveDemands: 1,
   }, null, 2));
-
-  const result = runSync(process.execPath, [nextWorkScript, "--json", "--source", "todo"], { cwd: root });
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  const parsed = JSON.parse(result.stdout);
-  // maxActiveDemands=1 only takes effect if the LEGACY file name was read.
-  assert.equal(parsed.demandCapacity.max, 1);
-  assert.equal(parsed.demandCapacity.atCapacity, true);
+  const { loadWorkspaceConfig } = await import("../core/scripts/lib/wakeflow-config.mjs");
+  const config = loadWorkspaceConfig({ workspaceRoot: root, args: [] });
+  assert.equal(config.workspaceName, "Legacy name");
+  assert.equal(config.maxActiveDemands, undefined);
+  assert.match(config.configMigrationWarnings.join("\n"), /maxActiveDemands.*no admission effect/);
 });
 
-test("wakeflow.config.json wins over a coexisting legacy file", () => {
+test("wakeflow.config.json wins over a coexisting legacy file without reviving capacity admission", async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-config-pref-"));
-  makeBoardFixture(root);
-  writeFile(path.join(root, "workspace.config.json"), JSON.stringify({ maxActiveDemands: 1 }, null, 2));
-  writeFile(path.join(root, "wakeflow.config.json"), JSON.stringify({ maxActiveDemands: 7 }, null, 2));
-
-  const result = runSync(process.execPath, [nextWorkScript, "--json", "--source", "todo"], { cwd: root });
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.equal(JSON.parse(result.stdout).demandCapacity.max, 7);
+  writeFile(path.join(root, "workspace.config.json"), JSON.stringify({
+    workspaceName: "Legacy",
+    maxActiveDemands: 1,
+  }, null, 2));
+  writeFile(path.join(root, "wakeflow.config.json"), JSON.stringify({
+    workspaceName: "Canonical",
+    maxActiveDemands: 7,
+  }, null, 2));
+  const { loadWorkspaceConfig } = await import("../core/scripts/lib/wakeflow-config.mjs");
+  const config = loadWorkspaceConfig({ workspaceRoot: root, args: [] });
+  assert.equal(config.workspaceName, "Canonical");
+  assert.equal(config.maxActiveDemands, undefined);
+  assert.match(config.configMigrationWarnings.join("\n"), /maxActiveDemands.*no admission effect/);
 });
 
-test("stream-open on a legacy-named workspace works and writes the canonical overlay name; check-workspace suggests the rename", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-legacy-stream-"));
+test("legacy host and repository stream limits are observation-only migration warnings", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-config-stream-limits-"));
+  writeFile(path.join(root, "wakeflow.config.json"), JSON.stringify({
+    hosts: {
+      codex: { maxStreamsPerRepo: 1, launcher: "host-managed" },
+    },
+    repositories: [{
+      windowName: "RepoA",
+      path: "RepoA",
+      role: "Fixture",
+      maxStreams: 1,
+    }],
+  }, null, 2));
+  const { loadWorkspaceConfig } = await import("../core/scripts/lib/wakeflow-config.mjs");
+  const config = loadWorkspaceConfig({ workspaceRoot: root, args: [] });
+  assert.equal(config.hosts.codex.maxStreamsPerRepo, undefined);
+  assert.equal(config.hosts.codex.launcher, "host-managed");
+  assert.equal(config.repositories[0].maxStreams, undefined);
+  assert.match(config.configMigrationWarnings.join("\n"), /maxStreamsPerRepo.*no admission effect/);
+  assert.match(config.configMigrationWarnings.join("\n"), /repositories\.RepoA\.maxStreams.*no admission effect/);
+});
+
+test("check-workspace recognizes a legacy config name and recommends the canonical rename", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-legacy-name-check-"));
   const repoDir = path.join(root, "RepoA");
   mkdirSync(repoDir, { recursive: true });
-  runSync("git", ["init", "-q", "-b", "main", repoDir]);
-  writeFileSync(path.join(repoDir, "README.md"), "fixture\n");
-  runSync("git", ["-C", repoDir, "-c", "user.email=t@t", "-c", "user.name=t", "add", "README.md"]);
-  runSync("git", ["-C", repoDir, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "init"]);
+  makeBoardFixture(root);
   writeFile(path.join(root, "workspace.config.json"), JSON.stringify({
     workspaceName: "LegacyFixture",
     controllerWindow: "Controller",
     projectLedgerRoot: "wakeflow-ledger",
     repositories: [{ windowName: "RepoA", path: "RepoA", role: "Fixture repo" }],
-    hosts: { "claude-code": { maxStreamsPerRepo: 2 } },
   }, null, 2));
 
-  const opened = runSync(process.execPath, [hostScript, "stream-open", "--root", root, "--repo", "RepoA", "--stream", "a", "--demand-key", "LEG-DK", "--no-launch"]);
-  assert.equal(opened.status, 0, opened.stderr || opened.stdout);
-  // Fresh overlays get the canonical name even when the tracked file is legacy.
-  const overlay = path.join(root, ".wakeflow-local/wakeflow.config.json");
-  assert.equal(existsSync(overlay), true);
-  const parsed = JSON.parse(readFileSync(overlay, "utf8"));
-  assert.equal(parsed.derived.from, "workspace.config.json");
-
   const check = runSync(process.execPath, [hostScript, "check-workspace", "--root", root]);
+  assert.equal(check.status, 0, check.stderr || check.stdout);
   const payload = JSON.parse(check.stdout);
   const legacyNote = (payload.gaps ?? []).find((gap) => gap.status === "legacy-name");
   assert.ok(legacyNote, `check-workspace must suggest the rename: ${check.stdout}`);
@@ -100,7 +111,7 @@ test("stream-open on a legacy-named workspace works and writes the canonical ove
 // loader produces the four views setup used to persist. Explicit values in
 // legacy configs still win.
 test("loader derives the window-list views from repositories[]", async () => {
-  const { loadWorkspaceConfig } = await import("../plugins/codex-wakeflow/scripts/lib/wakeflow-config.mjs");
+  const { loadWorkspaceConfig } = await import("../core/scripts/lib/wakeflow-config.mjs");
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-derive-"));
   writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "Derive",
@@ -132,4 +143,25 @@ test("loader derives the window-list views from repositories[]", async () => {
   }));
   const explicit = loadWorkspaceConfig({ workspaceRoot: root, args: [] });
   assert.deepEqual(explicit.repoNames, ["OnlyA"]);
+});
+
+test("automatic config reads reject a hand-written local override while explicit and durable reads stay independent", async () => {
+  const {
+    loadDurableWorkspaceConfig,
+    loadWorkspaceConfig,
+  } = await import("../core/scripts/lib/wakeflow-config.mjs");
+  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-config-layers-"));
+  writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
+    workspaceName: "Durable",
+  }));
+  const local = path.join(root, ".wakeflow-local/wakeflow.config.json");
+  writeFile(local, JSON.stringify({ workspaceName: "Explicit local override" }));
+  assert.throws(
+    () => loadWorkspaceConfig({ workspaceRoot: root, args: [] }),
+    /move durable settings|explicit --config/i,
+  );
+  const explicit = loadWorkspaceConfig({ workspaceRoot: root, args: ["--config", local] });
+  assert.equal(explicit.workspaceName, "Explicit local override");
+  const durable = loadDurableWorkspaceConfig({ workspaceRoot: root, args: [] });
+  assert.equal(durable.workspaceName, "Durable");
 });

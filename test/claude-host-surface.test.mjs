@@ -256,8 +256,10 @@ test("claude send adapters keep the codex adapter step contract", () => {
   assert.match(claudeSteps[0].hostTool, /deliver --root <workspace-root> --delivery-file/);
   assert.match(claudeSteps[0].instruction, /wakeflow-claude-host deliver/);
   assert.match(claudeSteps[0].instruction, /deliveries\/example\.json/);
-  assert.match(claudeSteps[0].instruction, /never deliver or paste the prompt again/);
-  assert.equal(claudeSteps[0].adapter.readbackPolicy.maxReadAttempts, 3);
+  assert.match(claudeSteps[0].instruction, /exactly one pane observation/);
+  assert.match(claudeSteps[0].instruction, /paste the prompt again/);
+  assert.equal(claudeSteps[0].adapter.readbackPolicy.maxReadAttempts, 1);
+  assert.equal(claudeSteps[0].adapter.readbackPolicy.observationDelayMs, 1_200);
   assert.equal(claudeSteps[0].adapter.readbackPolicy.maxWaitMs, 5_000);
   assert.equal(claudeSteps[0].adapter.readbackPolicy.resendOnRetry, false);
   assert.equal(claudeSteps[1].tool, "wakeflow_record_delivery");
@@ -268,10 +270,9 @@ test("claude send adapters keep the codex adapter step contract", () => {
   );
   assert.deepEqual(claudeSteps[1].arguments, {
     deliveryFile: "deliveries/example.json",
-    status: "sent",
-    transportStatus: "accepted",
   });
-  assert.match(claudeSteps[1].after, /actual readback\.status/);
+  assert.match(claudeSteps[1].after, /explicit transportStatus/);
+  assert.match(claudeSteps[1].after, /sent-unconfirmed/);
   assert.match(claudeSteps[1].after, /preserve the lease/);
 });
 

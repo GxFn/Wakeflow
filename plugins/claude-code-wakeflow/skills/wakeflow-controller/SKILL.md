@@ -24,11 +24,11 @@ inspecting inputs, validating, deciding, planning next eligible packages, and
 dispatching until final completion, a hard gate, explicit user stop, missing review inputs that need
 human judgment, or no eligible TODO remains.
 
-After the helper returns `transportStatus=accepted`, record `status=sent` with
-the actual `readback.status` and attempt count. Pending/unavailable pane
-visibility never authorizes resend or lease release; whether to make another
-bounded read-only inspection is Agent judgment. The controller dispatch turn is
-then complete. Do not keep the
+After explicit helper acceptance, record `status=sent` with the actual
+`readback.status` and attempt count from its single bounded pane observation.
+Pending/unavailable pane visibility is `sent-unconfirmed`; it never authorizes
+another pane read, resend, or lease release. The controller dispatch turn then
+stops without claiming destination reachability. Do not keep the
 turn open with `sleep`, repeated result review, repeated session reads, or
 manual polling. The target returns later through a `TargetResultEnvelope` and,
 if policy allows, a controller-return delivery sent to the controller's own
@@ -160,8 +160,10 @@ Do not expose empty `blockedTargets`, `remainingTargets`, or
    (`readback.paneTail`). A different fresh delivery cannot queue behind an
    active target lease; it fails closed. (Claude Code desktop windows are not
    an automation transport.)
-10. Read back the helper send evidence and record the delivery run with
-   `wakeflow_record_delivery` (host method `wakeflow-claude-host deliver`).
+10. Inspect the helper's explicit transport result and single pane observation,
+   then record every transport/readback field with `wakeflow_record_delivery`
+   (host method `wakeflow-claude-host deliver`). Do not infer acceptance from
+   process completion.
 11. End the dispatch turn. The controller-return delivery is the wake-up, and
    the activity monitor only updates live/done tab indicators; it never judges
    quiet windows as stalled or wakes anyone. Do not arm a per-dispatch watcher.

@@ -422,6 +422,7 @@ export function createReviewCommands(ctx) {
         readyToBuildCount: 0,
         pendingHostSendCount: 0,
         sentCount: 0,
+        sentUnconfirmedCount: 0,
         waitingForSentResultsCount: 0,
         waitingForResultCount: 0,
         transportReviewCount: 0,
@@ -475,6 +476,7 @@ export function createReviewCommands(ctx) {
             readyToBuildCount: 0,
             pendingHostSendCount: 0,
             sentCount: 0,
+            sentUnconfirmedCount: 0,
             waitingForSentResultsCount: 0,
             waitingForResultCount: 0,
             transportReviewCount: dispatchGroups.length,
@@ -486,6 +488,7 @@ export function createReviewCommands(ctx) {
             buildAllowed: false,
             hostSendRequired: false,
             controllerAlreadyReached: false,
+            controllerReachUnconfirmed: false,
             failureNeedsReview: true,
           })),
         },
@@ -520,6 +523,7 @@ export function createReviewCommands(ctx) {
             readyToBuildCount: 0,
             pendingHostSendCount: 0,
             sentCount: 0,
+            sentUnconfirmedCount: 0,
             waitingForSentResultsCount: 0,
             waitingForResultCount: 0,
             transportReviewCount: 1,
@@ -531,6 +535,7 @@ export function createReviewCommands(ctx) {
             buildAllowed: false,
             hostSendRequired: false,
             controllerAlreadyReached: false,
+            controllerReachUnconfirmed: false,
             failureNeedsReview: true,
           }],
         },
@@ -771,10 +776,13 @@ export function createReviewCommands(ctx) {
     const controllerReturnReady = (callbackPlan?.counts?.readyToBuildCount || 0) > 0;
     const controllerReturnPendingHostSend = (callbackPlan?.counts?.pendingHostSendCount || 0) > 0;
     const controllerReturnSent = (callbackPlan?.counts?.sentCount || 0) > 0;
+    const controllerReturnUnconfirmed = (callbackPlan?.counts?.sentUnconfirmedCount || 0) > 0;
     const controllerReturnNextStep = controllerReturnReady
       ? "build-controller-return"
       : controllerReturnPendingHostSend
         ? "send-controller-return-and-record-delivery"
+        : controllerReturnUnconfirmed
+          ? "controller-return-sent-unconfirmed"
         : controllerReturnSent
           ? "controller-return-already-sent"
           : missing.length > 0
@@ -819,6 +827,7 @@ export function createReviewCommands(ctx) {
           controllerReturnSent,
           controllerReturnReady,
           controllerReturnPendingHostSend,
+          controllerReturnUnconfirmed,
         }),
         noTargetTasks,
         noOpenTargetTasks,

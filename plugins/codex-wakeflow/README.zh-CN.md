@@ -290,14 +290,15 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 - Window config 从 `wakeflow.config.json` 和 thread-registry presence 派生，不是第二份 thread-id 权威。
 - Delivery prompts 保持轻量、可读。
 - Host 通过 Codex thread tools 发送 prompt；Wakeflow 记录发送和 readback 证据。
-- send 已接受但新 turn 暂不可见时，只重试有界 readback，绝不重复发送；暂不可见
-  是交给 Agent 判断的观察结果，不是发送门禁。
+- send 明确接受后只做一次有界 readback；新 turn 暂不可见时记录为
+  `sent-unconfirmed`，既不声称总控已收到，也不再次读取或自动重发。
 - transport 已接受才是发送完成事实。readback 独立记录为 `confirmed` / `pending` /
   `unavailable`；匹配的 target result 会正常释放目标工作租约。发送失败恢复中，只有
   证明“发送前拒绝”才可释放精确匹配的 delivery lease，结果不明确时保留 lease。
 - `group-ready` 会等待预期 target results，再允许 controller return。
 - `per-target` 可以每个 target 唤醒一次 controller，同时保留 group snapshot。
-- 已接受 transport 连同真实 readback 状态被记录为 `sent` 后，总控本轮停止，不在同一轮 sleep 或 poll。
+- 只有 `readbackStatus=confirmed` 才证明目标窗口已收到；`sent-unconfirmed`
+  保留不重发语义，但不会被折叠成成功。
 - Keep-live 只是运行时辅助，不是任务逻辑、传输权威或验收证据。
 - 底层 `wakeflow-state init` 是宿主中立的，写入 `controllerHost: null`。
   公共 `wakeflow_create_demand` 会立即把新 root 认领给调用宿主；独立导入的底层

@@ -1,10 +1,8 @@
 export const codexThreadReadbackPolicy = Object.freeze({
-  maxReadAttempts: 3,
+  maxReadAttempts: 1,
+  observationDelayMs: 1_200,
   maxWaitMs: 5_000,
-  retryWhen: [
-    "latest-turn-in-progress-without-visible-items",
-    "sent-prompt-not-yet-visible",
-  ],
+  observation: "one-read-after-send",
   resendOnRetry: false,
 });
 
@@ -37,7 +35,7 @@ export function buildHostSendResumeStep(delivery, adapter = codexAppThreadHostAd
     taskId: delivery.taskId,
     dispatchGroup: delivery.dispatchGroup,
     sourceTrace: delivery.wakeflowTrace,
-    instruction: "Read the delivery envelope prompt and send it exactly once through send_message_to_thread; do not edit product files from this resume step. After the send succeeds, confirm it with read_thread. A newly created in-progress turn with no visible items, or a turn where the sent prompt is not visible yet, is inconclusive rather than failed: retry read_thread only, for at most 3 total reads and at most 5 seconds. Never resend the prompt during readback confirmation.",
+    instruction: "Read the canonical delivery envelope and use its stamped targetThread.threadRegistryFile under .wakeflow-local/wakeflow-delivery/ to resolve the registered thread; never guess a registry path. Send the exact prompt once through send_message_to_thread and inspect the returned value, not merely the fact that the tool call returned. An error or error-looking response such as Invalid URL is rejected-before-send, never accepted. After explicit host acceptance, wait 1200 ms (hard cap 5 seconds) and call read_thread exactly once for the exact new turn. Visible matching content is confirmed; missing content is pending; an unavailable read is unavailable. Do not retry read_thread and never resend the prompt.",
   };
 }
 
@@ -47,10 +45,8 @@ export function buildRecordDeliveryRunResumeStep(delivery) {
     tool: "wakeflow_record_delivery",
     arguments: {
       deliveryFile: delivery.file,
-      status: "sent",
-      transportStatus: "accepted",
     },
-    after: "A successful send_message_to_thread call is accepted transport. Perform the bounded read_thread observation, then add the actual readbackStatus (confirmed|pending|unavailable), readbackAttempts, and evidence. Pending visibility is still sent: record it, preserve the lease, and let the Agent decide whether to inspect again or wait. Never resend from readback uncertainty.",
+    after: "Classify the actual host result before recording. Explicit host acceptance uses status=sent and transportStatus=accepted; a definite pre-send error uses status=failed and transportStatus=rejected-before-send; an indeterminate outcome uses status=failed and transportStatus=ambiguous. Always supply the one observation's readbackStatus, readbackAttempts (1 after a read, 0 only when no read was possible), and evidence/error. accepted+pending/unavailable is sent-unconfirmed: preserve the lease, do not claim controllerAlreadyReached, do not read again, and never resend automatically.",
   };
 }
 

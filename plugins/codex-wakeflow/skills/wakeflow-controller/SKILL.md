@@ -142,11 +142,11 @@ Do not expose empty `blockedTargets`, `remainingTargets`, or
    fresh preview.
 9. Send the envelope prompt through the Codex host thread tool exactly as stored
    in the envelope.
-10. Read back the host send evidence and record the delivery run. If the send
-    succeeded but the newest turn is still in progress with no visible items,
-    or the sent prompt is not visible yet, treat that read as inconclusive:
-    retry only the readback within the host adapter's bounded attempt/time
-    budget. Never resend the prompt while confirming the same accepted send.
+10. Inspect the host tool's actual result, wait 1200 ms, then make exactly one
+    `read_thread` observation (hard cap five seconds) and record every transport
+    and readback field explicitly. An error-like host response is not accepted.
+    If the prompt is not visible, record `sent-unconfirmed`; do not read again,
+    infer controller reachability, or resend automatically.
 11. End the dispatch turn.
 
 ## Review Target Results

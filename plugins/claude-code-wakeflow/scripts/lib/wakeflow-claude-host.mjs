@@ -1410,7 +1410,7 @@ async function performSend({ windowName, promptFile, deliveryId, commandName, co
     const elapsedMs = Date.now() - readbackStartedAt;
     const acceptedWarningSuffix = isControllerTarget
       ? "do not resend; controller notification uses only the paste mutex and has no target work lease"
-      : "do not resend or release the lease—Agent may inspect again or wait for the callback";
+      : "do not resend or release the lease; preserve the unconfirmed observation for controller judgment";
     const readbackWarning = readbackStatus === "pending"
       ? `host accepted the prompt, but bounded pane observation is still byte-stable; ${acceptedWarningSuffix}`
       : readbackStatus === "unavailable"

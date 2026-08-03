@@ -577,21 +577,25 @@ export function createResultRecordingCommands(ctx) {
     const readbackOkInput = getValue("--readback-ok", "");
     const explicitReadbackStatus = getValue("--readback-status", "");
     const transportStatusInput = getValue("--transport-status", "");
-    const transportStatus = validateDeliveryTransportStatus(
-      transportStatusInput || (status === "sent" ? "accepted" : "ambiguous"),
-    );
+    const legacyConfirmedInput = status === "sent" && readbackOkInput !== "";
+    if (!transportStatusInput && !legacyConfirmedInput) {
+      fail("record-delivery-run requires explicit --transport-status; host invocation completion is not proof of acceptance.");
+    }
+    if (!explicitReadbackStatus && !legacyConfirmedInput) {
+      fail("record-delivery-run requires explicit --readback-status; transport acceptance is not proof that the destination observed the message.");
+    }
+    const transportStatus = validateDeliveryTransportStatus(transportStatusInput || "accepted");
     const readbackStatus = validateDeliveryReadbackStatus(
-      explicitReadbackStatus
-        || (readbackOkInput !== ""
-          ? (parseBoolean(readbackOkInput) ? "confirmed" : "pending")
-          : status === "sent" && !transportStatusInput ? "confirmed" : "unavailable"),
+      explicitReadbackStatus || (parseBoolean(readbackOkInput) ? "confirmed" : "pending"),
     );
     const readbackOk = readbackStatus === "confirmed";
     if (readbackOkInput !== "" && parseBoolean(readbackOkInput) !== readbackOk) {
       fail("--readback-ok conflicts with --readback-status.");
     }
     const readbackAttemptsRaw = getValue("--readback-attempts", "");
-    const readbackAttempts = readbackAttemptsRaw === "" ? null : Number(readbackAttemptsRaw);
+    const readbackAttempts = readbackAttemptsRaw === ""
+      ? readbackStatus === "unavailable" ? 0 : 1
+      : Number(readbackAttemptsRaw);
     if (readbackAttempts !== null && (!Number.isInteger(readbackAttempts) || readbackAttempts < 0)) {
       fail("--readback-attempts must be a non-negative integer.");
     }

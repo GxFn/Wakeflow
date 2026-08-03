@@ -361,9 +361,9 @@ Core rules:
 - Delivery prompts remain compact and human-readable.
 - The host sends prompts with Codex thread tools; Wakeflow records the send and
   readback evidence.
-- If a send is accepted before the new turn is visible, retry only bounded
-  readback and never resend the prompt. Pending visibility is an observation
-  for Agent judgment, not a send gate.
+- After explicit host acceptance, make one bounded readback observation. If the
+  new turn is not visible, expose `sent-unconfirmed`; do not read again or
+  resend automatically.
 - Accepted transport is the send-completion fact. Readback is independently
   recorded as `confirmed`, `pending`, or `unavailable`. A matching target result
   normally releases its target work lease; for send-failure recovery, only a
@@ -373,8 +373,9 @@ Core rules:
   return.
 - `per-target` can wake the controller once per target while still preserving a
   group snapshot.
-- After accepted transport is recorded as sent with its actual readback status, the controller
-  turn stops. It does not sleep or poll in the same turn.
+- Only confirmed readback proves the destination was reached. Accepted
+  transport with pending/unavailable readback is exposed as `sent-unconfirmed`;
+  the turn stops without polling or automatic resend.
 - Keep-live support is runtime assistance only. It is not task logic, transport
   authority, or acceptance evidence.
 - Raw `wakeflow-state init` is host-neutral and writes `controllerHost: null`.

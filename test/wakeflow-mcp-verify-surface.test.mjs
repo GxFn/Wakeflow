@@ -80,6 +80,20 @@ test("task-package MCP tools expose bounded acceptance anchors", () => {
   assert.equal(continueDemand.inputSchema.properties.acceptanceAnchors.type, "array");
 });
 
+test("wakeflow_record_delivery requires explicit transport and one observation", () => {
+  const recordDelivery = tools.find((tool) => tool.name === "wakeflow_record_delivery");
+  assert.ok(recordDelivery, "wakeflow_record_delivery tool must be registered");
+  assert.deepEqual(recordDelivery.inputSchema.required, [
+    "deliveryFile",
+    "status",
+    "transportStatus",
+    "readbackStatus",
+    "readbackAttempts",
+  ]);
+  assert.match(recordDelivery.description, /neither status defaults to success/);
+  assert.match(recordDelivery.description, /only readbackStatus=confirmed proves/);
+});
+
 test("wakeflow_prune_runtime MCP tool is registered with a handler", () => {
   const prune = tools.find((t) => t.name === "wakeflow_prune_runtime");
   assert.ok(prune, "wakeflow_prune_runtime tool must be registered");

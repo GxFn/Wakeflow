@@ -482,11 +482,11 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_record_delivery",
-    description: "Record external host-send facts for a delivery envelope after the host tool runs. Transport acceptance and bounded readback visibility are independent: status=sent + transportStatus=accepted prevents resend even when readbackStatus=pending/unavailable. Only an explicit rejected-before-send fact may release the exact delivery lease. This does not send the message or accept the result.",
+    description: "Record explicit external host-send facts after the host tool runs. The caller must classify the actual host result and one bounded readback observation; neither status defaults to success. status=sent + transportStatus=accepted prevents resend, but only readbackStatus=confirmed proves the destination observed the message. This does not send the message or accept the result.",
     annotations: localWriteTool("Record Wakeflow Delivery Facts"),
     inputSchema: {
       type: "object",
-      required: ["deliveryFile", "status"],
+      required: ["deliveryFile", "status", "transportStatus", "readbackStatus", "readbackAttempts"],
       properties: {
         root: { type: "string" },
         verbose: { type: "boolean", description: "Return the full structured payload (envelope/packet/run echoes). Default is a compact summary; the artifacts are on disk at the reported file paths." },

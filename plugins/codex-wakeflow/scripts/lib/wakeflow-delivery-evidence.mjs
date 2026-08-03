@@ -48,8 +48,11 @@ export function createDeliveryEvidence(ctx) {
     const sentRun = runs.findLast?.((item) => deliveryTransportAccepted(item.run))
       || [...runs].reverse().find((item) => deliveryTransportAccepted(item.run));
     const latestRun = runs[runs.length - 1] || null;
+    const sentReadbackStatus = sentRun ? deliveryReadbackStatus(sentRun.run) : undefined;
     const status = sentRun
-      ? "sent"
+      ? envelope.kind === "ControllerReturnEnvelope" && sentReadbackStatus !== "confirmed"
+        ? "sent-unconfirmed"
+        : "sent"
       : runs.length === 0
         ? "pending-host-send"
         : latestRun.run.status;
@@ -71,7 +74,7 @@ export function createDeliveryEvidence(ctx) {
       status,
       sent: Boolean(sentRun),
       readbackOk: Boolean(sentRun?.run.readback?.ok),
-      readbackStatus: sentRun ? deliveryReadbackStatus(sentRun.run) : undefined,
+      readbackStatus: sentReadbackStatus,
       transportStatus: sentRun
         ? deliveryTransportStatus(sentRun.run)
         : latestRun ? deliveryTransportStatus(latestRun.run) : undefined,
@@ -97,6 +100,7 @@ export function createDeliveryEvidence(ctx) {
         triggerTaskId: triggerTaskId || undefined,
         envelopeCount: 0,
         sentCount: 0,
+        sentUnconfirmedCount: 0,
         pendingCount: 0,
         failedCount: 0,
         blockedCount: 0,
@@ -123,6 +127,7 @@ export function createDeliveryEvidence(ctx) {
       }));
 
     const sentCount = deliveries.filter((item) => item.status === "sent").length;
+    const sentUnconfirmedCount = deliveries.filter((item) => item.status === "sent-unconfirmed").length;
     const pendingCount = deliveries.filter((item) => item.status === "pending-host-send").length;
     const failedCount = deliveries.filter((item) => item.status === "failed").length;
     const blockedCount = deliveries.filter((item) => item.status === "blocked").length;
@@ -130,13 +135,15 @@ export function createDeliveryEvidence(ctx) {
       ? "not-built"
       : sentCount > 0
         ? "sent"
-        : pendingCount > 0
-          ? "pending-host-send"
-          : failedCount > 0
-            ? "failed"
-            : blockedCount > 0
-              ? "blocked"
-              : "unknown";
+        : sentUnconfirmedCount > 0
+          ? "sent-unconfirmed"
+          : pendingCount > 0
+            ? "pending-host-send"
+            : failedCount > 0
+              ? "failed"
+              : blockedCount > 0
+                ? "blocked"
+                : "unknown";
 
     return {
       status,
@@ -145,6 +152,7 @@ export function createDeliveryEvidence(ctx) {
       triggerTaskId: triggerTaskId || undefined,
       envelopeCount: deliveries.length,
       sentCount,
+      sentUnconfirmedCount,
       pendingCount,
       failedCount,
       blockedCount,

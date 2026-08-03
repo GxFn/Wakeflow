@@ -356,13 +356,14 @@ The loop is the same on both hosts; only how you drive it differs.
    `wakeflow_claim_next` (auto-claimable rows) or `wakeflow_create_demand`
    (explicit). This inits the state root and consumes the row; the controller
    confirms the plan and task packages with you before any dispatch.
-4. `/wakeflow:dispatch` — prepare one envelope, deliver it in one step, record
-   the accepted transport and independent readback status, then end the turn.
+4. `/wakeflow:dispatch` — prepare one envelope, deliver it in one step, inspect
+   the actual host result, make one bounded readback observation, and record
+   every transport/readback field explicitly before ending the turn.
    The target window works inside its repository
    and its controller-return wakes the controller with result materials attached.
-   If a send is accepted before the new turn becomes visible, only readback is
-   retried within a bounded budget; pending visibility remains an observation
-   for Agent judgment, not a send failure or authority to send twice.
+   If accepted transport is not visible in that observation, it is recorded as
+   `sent-unconfirmed`: it prevents resend but does not claim destination
+   reachability or trigger another automatic read.
 5. `/wakeflow:review` — inspect the target-authored inputs, independently
    validate the relevant behavior, then record the decision: accept / rework /
    blocked / redesign.
@@ -456,8 +457,9 @@ Core rules:
   return.
 - `per-target` can wake the controller once per target while still preserving a
   group snapshot.
-- After accepted transport is recorded as sent with its actual readback status, the controller
-  turn stops. It does not sleep or poll in the same turn.
+- Only confirmed readback proves the destination was reached. Accepted
+  transport with pending/unavailable readback is exposed as `sent-unconfirmed`;
+  the turn stops without polling or automatic resend.
 - Keep-live support is runtime assistance only. It is not task logic, transport
   authority, or acceptance evidence.
 - Raw `wakeflow-state init` is host-neutral and writes `controllerHost: null`.

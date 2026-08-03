@@ -39,6 +39,7 @@ export function sharedReviewGates({
   controllerReturnSent,
   controllerReturnReady,
   controllerReturnPendingHostSend,
+  controllerReturnUnconfirmed,
 }) {
   return {
     reviewInputsComplete: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent && !resultContractGapsPresent,
@@ -54,6 +55,7 @@ export function sharedReviewGates({
     controllerReturnSent,
     controllerReturnReady,
     controllerReturnPendingHostSend,
+    controllerReturnUnconfirmed,
     reviewInputInspectionRequired: reviewReady,
     totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent && !resultContractGapsPresent,
   };
@@ -108,6 +110,7 @@ export function buildControllerReviewPack({
     controllerReturnSent: (callbackPlan?.counts?.sentCount || 0) > 0,
     controllerReturnReady: (callbackPlan?.counts?.readyToBuildCount || 0) > 0,
     controllerReturnPendingHostSend: (callbackPlan?.counts?.pendingHostSendCount || 0) > 0,
+    controllerReturnUnconfirmed: (callbackPlan?.counts?.sentUnconfirmedCount || 0) > 0,
   });
   // Transport-facing next step for whoever SENDS the controller return (the target's sanctioned
   // self-check, or the controller for its own return). INDEPENDENT of review-input quality on purpose:
@@ -119,6 +122,8 @@ export function buildControllerReviewPack({
     ? "build-controller-return"
     : gates.controllerReturnPendingHostSend
       ? "send-controller-return-and-record-delivery"
+      : gates.controllerReturnUnconfirmed
+        ? "controller-return-sent-unconfirmed"
       : gates.controllerReturnSent
         ? "controller-return-already-sent"
         : gates.waitForMissingResults

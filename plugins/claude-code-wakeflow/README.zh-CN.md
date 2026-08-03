@@ -275,9 +275,9 @@ envelope preparation 已用该 delivery id 预留共享的按窗口工作租约�
 严禁用作 controller-return。）目标窗口以同样方式向
 总控窗口做 controller-return——pod 需求由 envelope 里盖章的 `controllerWindow`
 把 return 路由回该 pod 自己的总控，且 controller-return 不取得目标工作租约。
-send 已接受但新 pane turn 暂不可见时，只做有界 readback，绝不重复发送。
-已接受 transport 记录为 `sent`；readback 是独立的 `confirmed` / `pending` /
-`unavailable` 观察，交给 Agent 判断而不是作为发送门禁。匹配的 target result 会正常
+send 明确接受后只做一次有界 pane readback。只有 `confirmed` 证明目标窗口已收到；
+`pending` / `unavailable` 记录为 `sent-unconfirmed`，不会触发再次读取或自动重发。
+匹配的 target result 会正常
 释放目标工作租约；发送失败恢复中，只有证明“发送前拒绝”才可释放精确匹配的 lease，
 结果不明确时保留 lease。
 `wait-results --group <id>` 只作为脚本化
@@ -457,10 +457,8 @@ Wakeflow 自动化是直接 session 投递加显式结果返回。
   `wait-results --group <id>` 只作为脚本化流程里的显式同步等待。
 - `group-ready` 会等待预期 target results，再允许 controller return。
 - `per-target` 可以每个 target 唤醒一次 controller，同时保留 group snapshot。
-- 已接受 transport 连同真实独立 readback 状态（`confirmed` / `pending` /
-  `unavailable`）被记录为 `sent` 后，总控本轮停止，不在同一轮 sleep 或 poll；
-  readback 不是发送门禁。
-- send 已接受但新 pane turn 暂不可见时，只重试有界 readback，绝不重复发送。
+- helper 只做一次有界 pane readback。只有 `confirmed` 才证明目标窗口已收到；
+  `pending` / `unavailable` 记录为 `sent-unconfirmed`，本轮停止且不再次读取或自动重发。
 - Keep-live 只是运行时辅助，不是任务逻辑、传输权威或验收证据。
 
 自动化会在最终完成、硬 gate、用户停止、没有 eligible work、缺失审查输入、blocked state、

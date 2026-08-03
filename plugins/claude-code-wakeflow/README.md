@@ -539,12 +539,10 @@ Core rules:
   return.
 - `per-target` can wake the controller once per target while still preserving
   a group snapshot.
-- After accepted transport is recorded as sent with its actual independent
-  readback status (`confirmed`, `pending`, or `unavailable`), the controller
-  turn stops. It does not sleep or poll in the same turn; readback is not a
-  send gate.
-- If an accepted send is not yet visible in the pane, retry only bounded
-  readback and never resend the prompt.
+- The helper makes one bounded pane observation. Only `confirmed` proves the
+  destination was reached; accepted transport with `pending`/`unavailable`
+  readback is exposed as `sent-unconfirmed`. The turn stops without another
+  pane read or automatic resend.
 - Keep-live support is runtime assistance only. It is not task logic,
   transport authority, or acceptance evidence.
 

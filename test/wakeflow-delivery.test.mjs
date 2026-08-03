@@ -630,7 +630,8 @@ test("controller-return builder preserves callback prompt scope and transport gu
   assert.equal(envelope.targetThread.threadIdRedacted, true);
   assert.equal(Object.hasOwn(envelope.targetThread, "threadId"), false);
   assert.equal(envelope.transport.readbackRequired, true);
-  assert.equal(envelope.deliveryCompletion.pendingUntil, "accepted-host-send-recorded");
+  assert.equal(envelope.deliveryCompletion.pendingUntil, "destination-readback-confirmed");
+  assert.match(envelope.deliveryCompletion.completionProof, /readback\.status=confirmed/);
   assert.equal(envelope.loopGuard.controllerReviewRequired, true);
   assert.equal(Object.hasOwn(envelope.loopGuard, "repeatControllerReturnForbidden"), false);
   assert.equal(envelope.loopGuard.repeatControllerReturnForbiddenForSameResultVersion, true);
@@ -645,10 +646,31 @@ test("runtime summary helpers separate host-send, review, wait, and dispatch res
   assert.equal(deriveRuntimeGroupStatus({ "pending-dispatch": 1 }), "pending-dispatch");
 
   const diagnostics = { errors: [] };
+  const pendingControllerReturn = {
+    kind: "ControllerReturnEnvelope",
+    status: "pending-host-send",
+    file: ".wakeflow-local/wakeflow-delivery/delivery-envelopes/controller-return.json",
+    deliveryId: "controller-return-1",
+    targetWindow: "Controller",
+    taskId: "task-a",
+    dispatchGroup: "group-fixture",
+    wakeflowTrace: { dispatchGroup: "group-fixture" },
+  };
+  const pendingControllerReturnGroups = [{
+    groupStatus: "partially-ready",
+    callbackPlan: {
+      units: [{
+        status: "pending-host-send",
+        scope: "group",
+        resultVersionKey: "task-a\u0000r1",
+        existingDeliveries: [pendingControllerReturn],
+      }],
+    },
+  }];
   assert.equal(summarizeRuntimeNextAction({
     diagnostics,
-    deliveryStatuses: [{ kind: "ControllerReturnEnvelope", status: "pending-host-send" }],
-    groupSummaries: [],
+    deliveryStatuses: [pendingControllerReturn],
+    groupSummaries: pendingControllerReturnGroups,
   }), "send-controller-return");
   assert.equal(summarizeRuntimeNextAction({
     diagnostics,
@@ -682,17 +704,8 @@ test("runtime summary helpers separate host-send, review, wait, and dispatch res
   const hostSendPlan = buildRuntimeResumePlan({
     nextAction: "send-controller-return",
     diagnostics,
-    deliveryStatuses: [{
-      kind: "ControllerReturnEnvelope",
-      status: "pending-host-send",
-      file: ".wakeflow-local/wakeflow-delivery/delivery-envelopes/controller-return.json",
-      deliveryId: "controller-return-1",
-      targetWindow: "Controller",
-      taskId: "task-a",
-      dispatchGroup: "group-fixture",
-      wakeflowTrace: { dispatchGroup: "group-fixture" },
-    }],
-    groupSummaries: [],
+    deliveryStatuses: [pendingControllerReturn],
+    groupSummaries: pendingControllerReturnGroups,
   });
   assert.equal(hostSendPlan.status, "ready");
   assert.equal(hostSendPlan.hostSendRequired, true);
@@ -700,16 +713,20 @@ test("runtime summary helpers separate host-send, review, wait, and dispatch res
   assert.equal(hostSendPlan.steps[0].adapter.kind, "WakeflowHostSendAdapter");
   assert.equal(hostSendPlan.steps[0].adapter.adapterId, "codex-app-thread");
   assert.equal(hostSendPlan.steps[0].adapter.storesThreadIds, false);
-  assert.equal(hostSendPlan.steps[0].adapter.readbackPolicy.maxReadAttempts, 3);
+  assert.equal(hostSendPlan.steps[0].adapter.readbackPolicy.maxReadAttempts, 1);
+  assert.equal(hostSendPlan.steps[0].adapter.readbackPolicy.observationDelayMs, 1_200);
   assert.equal(hostSendPlan.steps[0].adapter.readbackPolicy.maxWaitMs, 5_000);
   assert.equal(hostSendPlan.steps[0].adapter.readbackPolicy.resendOnRetry, false);
-  assert.match(hostSendPlan.steps[0].instruction, /in-progress turn with no visible items/);
-  assert.match(hostSendPlan.steps[0].instruction, /retry read_thread only/);
-  assert.match(hostSendPlan.steps[0].instruction, /Never resend the prompt/);
+  assert.match(hostSendPlan.steps[0].instruction, /targetThread\.threadRegistryFile/);
+  assert.match(hostSendPlan.steps[0].instruction, /Invalid URL is rejected-before-send/);
+  assert.match(hostSendPlan.steps[0].instruction, /read_thread exactly once/);
+  assert.match(hostSendPlan.steps[0].instruction, /wait 1200 ms/);
+  assert.match(hostSendPlan.steps[0].instruction, /never resend the prompt/i);
   assert.equal(hostSendPlan.steps[1].kind, "record-delivery-run");
-  assert.match(hostSendPlan.steps[1].after, /successful send_message_to_thread call is accepted transport/);
-  assert.match(hostSendPlan.steps[1].after, /Pending visibility is still sent/);
-  assert.match(hostSendPlan.steps[1].after, /Never resend from readback uncertainty/);
+  assert.deepEqual(hostSendPlan.steps[1].arguments, { deliveryFile: hostSendPlan.steps[0].deliveryFile });
+  assert.match(hostSendPlan.steps[1].after, /Classify the actual host result/);
+  assert.match(hostSendPlan.steps[1].after, /sent-unconfirmed/);
+  assert.match(hostSendPlan.steps[1].after, /never resend automatically/i);
 
   const callbackPlan = buildRuntimeResumePlan({
     nextAction: "build-controller-return",
@@ -947,6 +964,8 @@ test("target skills follow the current-version callback plan instead of a stale 
     assert.match(skill, /buildAllowed=true/);
     assert.match(skill, /hostSendRequired=true/);
     assert.match(skill, /controllerAlreadyReached=true/);
+    assert.match(skill, /controllerReachUnconfirmed=true/);
+    assert.match(skill, /controller-return-sent-unconfirmed/);
     assert.match(skill, /older `resultVersionKey` never satisfies the current/);
     assert.match(skill, /Always pass `stateRoot`/);
     assert.match(skill, /map every anchor id to a RED test\/probe before implementation/);
@@ -2159,6 +2178,12 @@ test("controller-return blocked delivery records controller window context", () 
     returned.returnFile,
     "--status",
     "blocked",
+    "--transport-status",
+    "rejected-before-send",
+    "--readback-status",
+    "unavailable",
+    "--readback-attempts",
+    "0",
     "--error",
     "controller thread missing",
     "--write",
@@ -2353,10 +2378,23 @@ test("legacy sent runs with readback.ok remain accepted and confirmed", () => {
   assert.equal(deliveryReadbackStatus(legacyRun), "confirmed");
 });
 
-test("record-delivery-run enforces sent readback facts", () => {
+test("record-delivery-run enforces explicit new-write facts while reading legacy runs compatibly", () => {
   const { root, stateRootRef, stateRoot } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
+
+  const implicitSuccess = run(root, [
+    "record-delivery-run",
+    "--delivery-file",
+    prepared.deliveryFile,
+    "--status",
+    "sent",
+    "--evidence",
+    "a returned host call was incorrectly assumed to be success",
+    "--write",
+  ]);
+  assert.notEqual(implicitSuccess.status, 0);
+  assert.match(implicitSuccess.stdout, /requires explicit --transport-status/);
 
   const missingEvidence = run(root, [
     "record-delivery-run",
@@ -2490,24 +2528,24 @@ test("accepted transport with pending readback advances once without authorizing
     "--status", "sent",
     "--transport-status", "accepted",
     "--readback-status", "pending",
-    "--readback-attempts", "3",
-    "--evidence", "host accepted one send; three bounded reads did not yet expose the new turn",
+    "--readback-attempts", "1",
+    "--evidence", "host accepted one send; the single bounded read did not expose the new turn",
     "--write",
   ]));
 
   assert.equal(recorded.status, "sent");
   assert.equal(recorded.transportStatus, "accepted");
   assert.equal(recorded.readbackStatus, "pending");
-  assert.equal(recorded.readbackAttempts, 3);
+  assert.equal(recorded.readbackAttempts, 1);
   assert.equal(recorded.run.readback.checked, true);
   assert.equal(recorded.run.readback.ok, false);
   assert.equal(recorded.run.readback.status, "pending");
-  assert.equal(recorded.run.readback.attempts, 3);
+  assert.equal(recorded.run.readback.attempts, 1);
   assert.equal(recorded.stateUpdate.updated, true, "accepted transport advances the target task to sent");
   assert.equal(existsSync(lockFile), true, "readback uncertainty must preserve the exact in-flight lease");
   assert.equal(JSON.parse(readFileSync(lockFile, "utf8")).deliveryId, prepared.envelope.deliveryId);
   assert.match(recorded.agentNext, /do not resend/i);
-  assert.match(recorded.agentNext, /Readback remains an observation/);
+  assert.match(recorded.agentNext, /sent-unconfirmed/);
 
   const state = JSON.parse(readFileSync(path.join(stateRoot, "wakeflow-state.json"), "utf8"));
   assert.equal(state.targetTasks[0].status, "sent");
@@ -3105,10 +3143,14 @@ test("a superseded state-root result opens a new revision-scoped controller retu
     firstReturn.returnFile,
     "--status",
     "sent",
-    "--readback-ok",
-    "true",
+    "--transport-status",
+    "accepted",
+    "--readback-status",
+    "pending",
+    "--readback-attempts",
+    "1",
     "--evidence",
-    "first controller return sent",
+    "first controller return accepted, but the one bounded read did not expose it",
     "--write",
   ]));
   const afterFirstReturn = parseOk(run(root, [
@@ -3116,8 +3158,22 @@ test("a superseded state-root result opens a new revision-scoped controller retu
     "--state-root",
     stateRootRef,
   ]));
-  assert.equal(afterFirstReturn.reviewPack.callbackPlan.status, "sent");
-  assert.equal(afterFirstReturn.reviewPack.controllerReturnNextStep, "controller-return-already-sent");
+  assert.equal(afterFirstReturn.reviewPack.callbackPlan.status, "sent-unconfirmed");
+  assert.equal(afterFirstReturn.reviewPack.callbackPlan.counts.sentUnconfirmedCount, 1);
+  assert.equal(afterFirstReturn.reviewPack.callbackPlan.units[0].controllerAlreadyReached, false);
+  assert.equal(afterFirstReturn.reviewPack.callbackPlan.units[0].controllerReachUnconfirmed, true);
+  assert.equal(afterFirstReturn.reviewPack.gates.controllerReturnSent, false);
+  assert.equal(afterFirstReturn.reviewPack.gates.controllerReturnUnconfirmed, true);
+  assert.equal(afterFirstReturn.reviewPack.controllerReturnNextStep, "controller-return-sent-unconfirmed");
+  const unconfirmedRuntime = parseOk(run(root, ["status", "--verbose"])).runtimeSummary;
+  assert.equal(unconfirmedRuntime.nextAction, "inspect-controller-return-unconfirmed");
+  assert.equal(unconfirmedRuntime.deliveries.sentUnconfirmed.length, 1);
+  assert.equal(unconfirmedRuntime.deliveries.sentUnconfirmed[0].deliveryId, firstReturn.envelope.deliveryId);
+  assert.equal(unconfirmedRuntime.health.checks.controllerCallback.status, "unconfirmed");
+  assert.equal(unconfirmedRuntime.resumePlan.status, "needs-observation-review");
+  assert.equal(unconfirmedRuntime.resumePlan.hostSendRequired, false);
+  assert.equal(unconfirmedRuntime.resumePlan.stopRequired, true);
+  assert.equal(unconfirmedRuntime.resumePlan.steps[0].kind, "stop-with-unconfirmed-controller-return");
 
   const correctedResult = parseOk(runState(root, [
     "import-target-result",
@@ -3158,6 +3214,9 @@ test("a superseded state-root result opens a new revision-scoped controller retu
   assert.equal(correctedPack.reviewPack.callbackPlan.counts.readyToBuildCount, 1);
   assert.equal(correctedPack.reviewPack.controllerReturnNextStep, "build-controller-return");
   assert.equal(correctedPack.reviewPack.callbackPlan.units[0].resultVersions[0].resultRevision, 2);
+  const correctedRuntime = parseOk(run(root, ["status", "--verbose"])).runtimeSummary;
+  assert.equal(correctedRuntime.nextAction, "build-controller-return", "an old unconfirmed callback must not block the current result revision");
+  assert.equal(correctedRuntime.resumePlan.steps[0].kind, "prepare-controller-return");
 
   const secondReturn = parseOk(run(root, [
     "build-controller-return",

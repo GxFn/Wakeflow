@@ -18,12 +18,10 @@
  */
 
 export const claudePaneReadbackPolicy = Object.freeze({
-  maxReadAttempts: 3,
+  maxReadAttempts: 1,
+  observationDelayMs: 1_200,
   maxWaitMs: 5_000,
-  retryWhen: [
-    "deliver-returned-readback-warning",
-    "sent-prompt-not-yet-visible",
-  ],
+  observation: "one-pane-read-after-paste",
   resendOnRetry: false,
 });
 
@@ -66,7 +64,7 @@ export function adapterForWindowMode(windowMode) {
 export function buildHostSendResumeStep(delivery, adapter = claudeTmuxResidentAdapter) {
   const instruction = adapter.adapterId === "claude-headless-recovery"
     ? "Use this adapter only for a baseline window after proving interactive recovery is unavailable. Read the prepared delivery envelope, resume the same registered Claude session once with its exact prompt, preserve the raw JSON response as readback evidence, and never use this path for a Pod window."
-    : `Run wakeflow-claude-host deliver --root <workspace-root> --delivery-file ${delivery.file} exactly once; the helper reads the canonical envelope, resolves ${delivery.targetWindow}, sends its prompt, and returns pane readback. Do not reconstruct a prompt file or call the low-level send path. If the send succeeded but readback is not yet conclusive, retry readback only (at most 3 total reads and 5 seconds); never deliver or paste the prompt again.`;
+    : `Run wakeflow-claude-host deliver --root <workspace-root> --delivery-file ${delivery.file} exactly once; the helper reads the canonical envelope, resolves ${delivery.targetWindow}, pastes its prompt once, waits 1200 ms by default (hard cap 5 seconds), and performs exactly one pane observation. Do not reconstruct a prompt file, call the low-level send path, repeat readback, or paste the prompt again.`;
   return {
     kind: "host-send",
     adapter,
@@ -88,10 +86,8 @@ export function buildRecordDeliveryRunResumeStep(delivery) {
     tool: "wakeflow_record_delivery",
     arguments: {
       deliveryFile: delivery.file,
-      status: "sent",
-      transportStatus: "accepted",
     },
-    after: "When the helper returns transportStatus=accepted, record the delivery once with its actual readback.status, attemptCount, and evidence even if visibility remains pending/unavailable. That observation is not a send gate: preserve the lease and let the Agent decide whether to inspect again or wait. rejected-before-send may release only the exact delivery lease; ambiguous never does.",
+    after: "Copy the helper's explicit transportStatus and single readback.status/attemptCount into wakeflow_record_delivery; do not infer success from process completion. accepted uses status=sent, rejected-before-send or ambiguous uses status=failed with the actual error. accepted+pending/unavailable is sent-unconfirmed: preserve the lease, do not claim controllerAlreadyReached, do not observe again, and never resend automatically.",
   };
 }
 

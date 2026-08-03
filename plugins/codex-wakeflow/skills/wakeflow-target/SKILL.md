@@ -149,6 +149,10 @@ advance the live state root.
      - If a unit has `hostSendRequired=true` or `controllerReturnNextStep` is
        `send-controller-return-and-record-delivery`, send the already-built
        envelope and record it; do not prepare a duplicate.
+     - If a unit has `controllerReachUnconfirmed=true` or
+       `controllerReturnNextStep` is `controller-return-sent-unconfirmed`, end
+       the transport turn without resending and report that controller
+       visibility is unconfirmed; this is not callback success.
      - Stop only when the current unit has `controllerAlreadyReached=true` or
        `controllerReturnNextStep` is `controller-return-already-sent`.
      A delivery for an older `resultVersionKey` never satisfies the current
@@ -165,14 +169,18 @@ advance the live state root.
      redacts the thread handle: read its `targetThread.threadRegistryFile`
      under `.wakeflow-local/wakeflow-delivery/`, load the registered `threadId`,
      call `send_message_to_thread`, then use `read_thread` only for bounded
-     observation of the exact new turn. Use `wakeflow_record_delivery` to
+     observation of the exact new turn. Inspect the host tool's returned value:
+     an error or error-looking string such as `Invalid URL` is
+     `rejected-before-send`, not acceptance. Never classify transport from the
+     JavaScript return type or from the absence of a thrown exception. Use `wakeflow_record_delivery` to
      record the delivery run. Do not guess thread object keys or expose the id
      in tracked files.
-     A successful host call is `transportStatus=accepted`. If the new turn is
-     not visible yet, retry only readback within the bounded attempt/time budget,
-     then record the actual `readbackStatus=pending|unavailable`; never resend
-     that accepted prompt. Controller-return does not acquire a target work
-     lease. Further inspection is Agent judgment, not a machine visibility gate.
+     After explicit host acceptance, wait 1200 ms (hard cap five seconds) and
+     call `read_thread` exactly once. If the new turn is not visible, record
+     `readbackStatus=pending|unavailable` and `readbackAttempts=1` (or `0` only
+     when no read was possible). That record is `sent-unconfirmed`, not
+     controller reachability; never read again or resend automatically.
+     Controller-return does not acquire a target work lease.
    - Do not stop after writing the target result when controller return is
      allowed. The closeout steps stay separate: record target result, review
      readiness, prepare controller-return envelope, send with the host thread

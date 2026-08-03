@@ -122,8 +122,8 @@ export function buildControllerReturnEnvelope({
     },
     deliveryCompletion: {
       required: true,
-      pendingUntil: "accepted-host-send-recorded",
-      completionProof: "DirectThreadDeliveryRun status=sent with transportStatus=accepted; readback.status is an independent observation",
+      pendingUntil: "destination-readback-confirmed",
+      completionProof: "DirectThreadDeliveryRun status=sent with transportStatus=accepted and readback.status=confirmed; accepted transport with pending/unavailable readback is sent-unconfirmed and must not be resent",
       blockedAction: "record-delivery-run status=blocked or failed, then stop for total-control judgment",
     },
     loopGuard: {

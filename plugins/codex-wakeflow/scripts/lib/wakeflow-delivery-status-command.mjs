@@ -11,7 +11,10 @@ import {
   deliveryTransportStatus,
 } from "./wakeflow-idempotency.mjs";
 import { listPodReservations } from "./wakeflow-pod-reservations.mjs";
-import { buildControllerCallbackPlan } from "./wakeflow-return-policy.mjs";
+import {
+  buildControllerCallbackPlan,
+  controllerReturnResultVersion,
+} from "./wakeflow-return-policy.mjs";
 import { loadWorkspaceConfig, workspaceLedgerPaths } from "./wakeflow-config.mjs";
 import { createSanctionedStateRootResolver } from "./wakeflow-state-paths.mjs";
 import {
@@ -490,11 +493,22 @@ export function commandStatus(ctx) {
       .sort((left, right) => String(left.value.createdAt || "").localeCompare(String(right.value.createdAt || "")));
     const sentRun = [...runs].reverse().find((item) => deliveryTransportAccepted(item.value));
     const latestRun = runs[runs.length - 1] || null;
+    const sentReadbackStatus = sentRun ? deliveryReadbackStatus(sentRun.value) : undefined;
     const status = sentRun
-      ? "sent"
+      ? envelope.kind === "ControllerReturnEnvelope" && sentReadbackStatus !== "confirmed"
+        ? "sent-unconfirmed"
+        : "sent"
       : runs.length === 0
         ? "pending-host-send"
         : latestRun.value.status;
+    const derivedResultVersion = envelope.kind === "ControllerReturnEnvelope"
+      ? controllerReturnResultVersion({
+          returnPolicy: envelope.returnPolicy,
+          groupSnapshot: envelope.groupSnapshot,
+          triggerTarget: envelope.triggerTarget,
+          triggerTaskId: envelope.triggerTaskId,
+        })
+      : {};
     return {
       deliveryId: envelope.deliveryId,
       kind: envelope.kind,
@@ -502,10 +516,14 @@ export function commandStatus(ctx) {
       taskId: envelope.taskId || envelope.triggerTaskId,
       dispatchGroup: envelope.dispatchGroup,
       sourcePacketId: envelope.sourcePacketId,
+      triggerTarget: envelope.triggerTarget,
+      triggerTaskId: envelope.triggerTaskId,
+      resultVersionKey: envelope.resultVersionKey || derivedResultVersion.resultVersionKey,
+      resultVersions: envelope.resultVersions || derivedResultVersion.resultVersions,
       status,
       sent: Boolean(sentRun),
       readbackOk: Boolean(sentRun?.value.readback?.ok),
-      readbackStatus: sentRun ? deliveryReadbackStatus(sentRun.value) : undefined,
+      readbackStatus: sentReadbackStatus,
       transportStatus: sentRun
         ? deliveryTransportStatus(sentRun.value)
         : latestRun ? deliveryTransportStatus(latestRun.value) : undefined,
@@ -583,6 +601,7 @@ export function commandStatus(ctx) {
           stateRoot: packet.stateRef?.stateRoot,
           status: resultStatus,
           deliveryStatus: deliveries[0]?.status || "not-built",
+          resultRevision: result?.value?.resultRevision,
           resultFile: result ? path.relative(workspaceRoot, result.file) : undefined,
         };
       });
@@ -770,6 +789,7 @@ export function commandStatus(ctx) {
       deliveries: {
         counts: deliveryCounts,
         pendingHostSend: liveDeliveryStatuses.filter((item) => item.status === "pending-host-send"),
+        sentUnconfirmed: liveDeliveryStatuses.filter((item) => item.status === "sent-unconfirmed"),
         sent: liveDeliveryStatuses.filter((item) => item.status === "sent"),
         failed: liveDeliveryStatuses.filter((item) => item.status === "failed"),
         blocked: liveDeliveryStatuses.filter((item) => item.status === "blocked"),
@@ -882,9 +902,11 @@ export function commandStatus(ctx) {
       deliveries: {
         counts: summary.deliveries?.counts || {},
         pendingHostSend: compactArray(summary.deliveries?.pendingHostSend, 10).map(compactDeliveryStatus),
+        sentUnconfirmed: compactArray(summary.deliveries?.sentUnconfirmed, 10).map(compactDeliveryStatus),
         failed: compactArray(summary.deliveries?.failed, 10).map(compactDeliveryStatus),
         blocked: compactArray(summary.deliveries?.blocked, 10).map(compactDeliveryStatus),
         sentCount: summary.deliveries?.sent?.length || 0,
+        sentUnconfirmedCount: summary.deliveries?.sentUnconfirmed?.length || 0,
       },
       groups: {
         counts: summary.groups?.counts || {},

@@ -694,10 +694,11 @@ test("deliver sends straight from a delivery envelope file (one-step transport)"
   assert.equal(lock.deliveryId, "dlv-deliver-1", "lock carries the envelope delivery id");
 });
 
-test("deliver pastes once, bounds readback to three observations, and preserves pending leases", { skip: !tmuxPresent }, async (t) => {
+test("deliver pastes once, performs one bounded observation, and preserves pending leases", { skip: !tmuxPresent }, async (t) => {
   const root = makeWorkspace();
   const serverSession = makeServerSession();
   const inputLog = path.join(root, "stub-input.log");
+  const delayedVisibilityRelease = path.join(root, "delayed-visibility.release");
   writeFileSync(path.join(root, "stub-claude"), `#!/bin/sh
 stty -echo -echonl
 printf '%s\\n' ready
@@ -705,7 +706,7 @@ while IFS= read -r line; do
   printf '%s\\n' "$line" >> ${shellQuote(inputLog)}
   case "$line" in
     delayed-visibility-marker*)
-      sleep 0.4
+      while [ ! -f ${shellQuote(delayedVisibilityRelease)} ]; do sleep 0.05; done
       printf 'visible:%s\\n' "$line"
       ;;
   esac
@@ -755,7 +756,7 @@ done
   ], noAuto));
   assert.equal(pending.transportStatus, "accepted");
   assert.equal(pending.readback.status, "pending");
-  assert.equal(pending.readback.attemptCount, 3, "caller input cannot expand the fixed three-read budget");
+  assert.equal(pending.readback.attemptCount, 1, "caller input cannot expand the fixed one-read budget");
   assert.ok(pending.readback.elapsedMs < 5_000, "pending observation exits inside the fixed time budget");
   assert.match(pending.readbackWarning, /do not resend or release the lease/);
   const pendingLock = JSON.parse(readFileSync(
@@ -781,9 +782,18 @@ done
     "--readback-max-wait-ms", "800",
   ], noAuto));
   assert.equal(delayed.transportStatus, "accepted");
-  assert.equal(delayed.readback.status, "confirmed");
-  assert.ok(delayed.readback.attemptCount >= 1 && delayed.readback.attemptCount <= 3);
-  assert.match(delayed.readback.paneTail, /visible:delayed-visibility-marker/);
+  assert.equal(delayed.readback.status, "pending", "one early observation stays honest even when the pane becomes visible later");
+  assert.equal(delayed.readback.attemptCount, 1);
+
+  writeFileSync(delayedVisibilityRelease, "release\n");
+  let delayedVisible = "";
+  const visibilityDeadline = Date.now() + 1_000;
+  while (Date.now() < visibilityDeadline) {
+    delayedVisible = parseOk(runHelper(root, ["readback", "--window", "DelayedWindow", "--lines", "10"], noAuto)).paneTail;
+    if (/visible:delayed-visibility-marker/.test(delayedVisible)) break;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.match(delayedVisible, /visible:delayed-visibility-marker/, "the fixture becomes visible only after the delivery observation has closed");
 
   const deadline = Date.now() + 1_000;
   while (!existsSync(inputLog) && Date.now() < deadline) {

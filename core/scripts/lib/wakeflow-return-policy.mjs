@@ -138,6 +138,7 @@ function unique(values) {
 function existingDeliveryStatus(deliveries = []) {
   if (deliveries.some((item) => item.status === "pending-host-send")) return "pending-host-send";
   if (deliveries.some((item) => item.status === "sent")) return "sent";
+  if (deliveries.some((item) => item.status === "sent-unconfirmed")) return "sent-unconfirmed";
   if (deliveries.some((item) => item.status === "failed")) return "failed";
   if (deliveries.some((item) => item.status === "blocked")) return "blocked";
   return deliveries.length > 0 ? "unknown" : "not-built";
@@ -224,6 +225,7 @@ export function buildControllerCallbackPlan({
     buildAllowed: unit.status === "ready-to-build-controller-return",
     hostSendRequired: unit.status === "pending-host-send",
     controllerAlreadyReached: unit.status === "sent",
+    controllerReachUnconfirmed: unit.status === "sent-unconfirmed",
     failureNeedsReview: ["failed", "blocked", "unknown"].includes(unit.status),
   }));
   const statusCounts = normalizedUnits.reduce((acc, unit) => {
@@ -242,14 +244,17 @@ export function buildControllerCallbackPlan({
         ? "pending-host-send"
         : statusCounts.sent > 0
           ? "sent"
-          : statusCounts.failed > 0 || statusCounts.blocked > 0 || statusCounts.unknown > 0
-            ? "needs-transport-review"
-            : "waiting",
+          : statusCounts["sent-unconfirmed"] > 0
+            ? "sent-unconfirmed"
+            : statusCounts.failed > 0 || statusCounts.blocked > 0 || statusCounts.unknown > 0
+              ? "needs-transport-review"
+              : "waiting",
     counts: {
       unitCount: normalizedUnits.length,
       readyToBuildCount: statusCounts["ready-to-build-controller-return"] || 0,
       pendingHostSendCount: statusCounts["pending-host-send"] || 0,
       sentCount: statusCounts.sent || 0,
+      sentUnconfirmedCount: statusCounts["sent-unconfirmed"] || 0,
       waitingForSentResultsCount: statusCounts["waiting-for-sent-results"] || 0,
       waitingForResultCount: statusCounts["waiting-for-result"] || 0,
       transportReviewCount: (statusCounts.failed || 0) + (statusCounts.blocked || 0) + (statusCounts.unknown || 0),

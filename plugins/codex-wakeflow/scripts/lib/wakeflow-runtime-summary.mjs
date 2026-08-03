@@ -21,8 +21,21 @@ export function deriveRuntimeGroupStatus(counts) {
   return "waiting";
 }
 
+function currentControllerReturnDeliveries(groupSummaries, status) {
+  return groupSummaries.flatMap((group) => (group.callbackPlan?.units || [])
+    .filter((unit) => unit.status === status)
+    .flatMap((unit) => (unit.existingDeliveries || [])
+      .filter((item) => item.status === status)
+      .map((item) => ({
+        ...item,
+        callbackScope: unit.scope,
+        resultVersionKey: unit.resultVersionKey,
+      }))));
+}
+
 export function summarizeRuntimeNextAction({ diagnostics, deliveryStatuses, groupSummaries }) {
-  const controllerReturnPending = deliveryStatuses.filter((item) => item.kind === "ControllerReturnEnvelope" && item.status === "pending-host-send");
+  const controllerReturnPending = currentControllerReturnDeliveries(groupSummaries, "pending-host-send");
+  const controllerReturnUnconfirmed = currentControllerReturnDeliveries(groupSummaries, "sent-unconfirmed");
   const targetPending = deliveryStatuses.filter((item) => item.kind === "DeliveryEnvelope" && item.status === "pending-host-send");
   const failedDeliveries = deliveryStatuses.filter((item) => item.status === "failed");
   const blockedDeliveries = deliveryStatuses.filter((item) => item.status === "blocked");
@@ -34,6 +47,7 @@ export function summarizeRuntimeNextAction({ diagnostics, deliveryStatuses, grou
   if (failedDeliveries.length > 0) return "inspect-delivery-failures";
   if (blockedDeliveries.length > 0) return "review-delivery-blockers";
   if (controllerReturnPending.length > 0) return "send-controller-return";
+  if (controllerReturnUnconfirmed.length > 0) return "inspect-controller-return-unconfirmed";
   if (targetPending.length > 0) return "send-target-delivery";
   if (callbackReady.length > 0) return "build-controller-return";
   if (reviewable.length > 0) return "review-target-results";
@@ -61,6 +75,7 @@ export function buildRuntimeHealth({
 } = {}) {
   const artifactErrorCount = diagnostics.errors?.length || 0;
   const pendingHostSend = deliveryStatuses.filter((item) => item.status === "pending-host-send");
+  const controllerReturnUnconfirmed = currentControllerReturnDeliveries(groupSummaries, "sent-unconfirmed");
   const failedDeliveries = deliveryStatuses.filter((item) => item.status === "failed");
   const blockedDeliveries = deliveryStatuses.filter((item) => item.status === "blocked");
   const reviewableGroups = groupSummaries.filter((group) => ["ready", "blocked", "partially-ready"].includes(group.groupStatus));
@@ -96,6 +111,9 @@ export function buildRuntimeHealth({
       : []),
     ...(pendingHostSend.length > 0
       ? [issue("info", "host-send-pending", "Delivery envelopes are built and waiting for host send/readback.", { count: pendingHostSend.length })]
+      : []),
+    ...(controllerReturnUnconfirmed.length > 0
+      ? [issue("warning", "controller-return-unconfirmed", "Controller-return transport was accepted, but the one bounded destination observation did not confirm visibility. Do not resend automatically.", { count: controllerReturnUnconfirmed.length })]
       : []),
     ...(reviewableGroups.length > 0
       ? [issue("info", "controller-review-ready", "Target review inputs are present and require controller inspection and validation.", { count: reviewableGroups.length })]
@@ -146,8 +164,9 @@ export function buildRuntimeHealth({
         readyGroupCount: reviewableGroups.length,
       },
       controllerCallback: {
-        status: callbackReadyUnits.length > 0 ? "ready" : callbackWaitingForSentResults.length > 0 ? "waiting" : "ok",
+        status: controllerReturnUnconfirmed.length > 0 ? "unconfirmed" : callbackReadyUnits.length > 0 ? "ready" : callbackWaitingForSentResults.length > 0 ? "waiting" : "ok",
         readyUnitCount: callbackReadyUnits.length,
+        unconfirmedCount: controllerReturnUnconfirmed.length,
         waitingForSentResultsCount: callbackWaitingForSentResults.length,
       },
       targetResults: {
@@ -269,7 +288,8 @@ function waitForResultResumeSteps(groups) {
 }
 
 export function buildRuntimeResumePlan({ nextAction, diagnostics, deliveryStatuses, groupSummaries }) {
-  const controllerReturnPending = deliveryStatuses.filter((item) => item.kind === "ControllerReturnEnvelope" && item.status === "pending-host-send");
+  const controllerReturnPending = currentControllerReturnDeliveries(groupSummaries, "pending-host-send");
+  const controllerReturnUnconfirmed = currentControllerReturnDeliveries(groupSummaries, "sent-unconfirmed");
   const targetPending = deliveryStatuses.filter((item) => item.kind === "DeliveryEnvelope" && item.status === "pending-host-send");
   const failedDeliveries = deliveryStatuses.filter((item) => item.status === "failed");
   const blockedDeliveries = deliveryStatuses.filter((item) => item.status === "blocked");
@@ -323,6 +343,23 @@ export function buildRuntimeResumePlan({ nextAction, diagnostics, deliveryStatus
       hostSendRequired: true,
       reason: "Controller-return envelopes are built but not sent/readback-recorded.",
       steps: buildHostSendResumeSteps(controllerReturnPending),
+    };
+  }
+  if (controllerReturnUnconfirmed.length > 0) {
+    return {
+      ...base,
+      status: "needs-observation-review",
+      stopRequired: true,
+      reason: "Controller-return transport was accepted, but the single bounded readback did not confirm destination visibility. Preserve the record and do not resend automatically.",
+      steps: controllerReturnUnconfirmed.map((item) => ({
+        kind: "stop-with-unconfirmed-controller-return",
+        deliveryFile: item.file,
+        deliveryId: item.deliveryId,
+        dispatchGroup: item.dispatchGroup,
+        targetWindow: item.targetWindow,
+        readbackStatus: item.readbackStatus,
+        reason: "The callback is sent-unconfirmed, not successful and not eligible for automatic resend.",
+      })),
     };
   }
   if (targetPending.length > 0) {

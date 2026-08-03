@@ -70,7 +70,7 @@ Usage:
   node scripts/wakeflow-delivery.mjs build-delivery --packet-file <path> [--delivery-id <id>] [--return-route controller|none] [--automation-enabled] [--require-thread] [--write] [--json]
   node scripts/wakeflow-delivery.mjs prepare-dispatch-from-state --state-root <path> --target-task-id <id> [--group-target-task-id <id>...] [--task-package-id <id>] [--human-context-ref <ref>] [--controller-window <name>] [--group <id>] [--return-policy group-ready|per-target] [--expected-preview-digest <sha256>] [--automation-enabled] [--require-thread] [--write] [--json]
   node scripts/wakeflow-delivery.mjs build-controller-return --group <id> --trigger-target <window> --trigger-task-id <taskId> [--state-root <path>] [--human-context-ref <ref>] [--controller-window <name>] [--return-reason result-ready|blocked] [--automation-enabled] [--require-thread] [--write] [--json]
-  node scripts/wakeflow-delivery.mjs record-delivery-run --delivery-file <path> --status sent|blocked|failed [--transport-status accepted|rejected-before-send|ambiguous] [--readback-status confirmed|pending|unavailable] [--readback-attempts <n>] [--readback-ok true|false] [--host-method ${hostProfile.hostTools.sendToWindow}] [--host-mode new-turn|unknown] [--evidence <text>] [--error <text>] --write [--json]
+  node scripts/wakeflow-delivery.mjs record-delivery-run --delivery-file <path> --status sent|blocked|failed --transport-status accepted|rejected-before-send|ambiguous --readback-status confirmed|pending|unavailable --readback-attempts <n> [--readback-ok true|false] [--host-method ${hostProfile.hostTools.sendToWindow}] [--host-mode new-turn|unknown] [--evidence <text>] [--error <text>] --write [--json]
   node scripts/wakeflow-delivery.mjs start-keep-live --automation-run-id <id> [--keep-live-command <cmd>] [--keep-live-arg <arg>...] [--no-keep-live] --write [--json]
   node scripts/wakeflow-delivery.mjs stop-keep-live --automation-run-id <id> [--reason <text>] --write [--json]
   node scripts/wakeflow-delivery.mjs keep-live-state --automation-run-id <id> --status running|stopped|failed [--mechanism macos-caffeinate|manual|none] [--pid <pid>] [--error <text>] --write [--json]
@@ -206,7 +206,7 @@ function inferAgentNext(payload) {
     if (payload.readbackStatus === "confirmed") {
       return "Controller-side delivery is complete; end this dispatch turn and wait for a controller-return or new user input. Do not poll, sleep, or run review-results just to wait.";
     }
-    return "The host accepted this delivery, so do not resend it or release its lease. Readback remains an observation: the Agent may do another bounded read-only check, report the uncertainty, or wait for the target callback.";
+    return "The host accepted this delivery, but the one bounded readback did not confirm destination visibility. Record it as sent-unconfirmed, do not resend or release its lease, and stop with the uncertainty visible for controller judgment.";
   }
   if (payload.command === "start-keep-live") return payload.keepLive?.active ? "Continue unattended direct-thread dispatch; keep-live is active." : "Treat keep-live as an automation readiness risk before claiming unattended reliability.";
   if (payload.command === "stop-keep-live") return payload.keepLive?.retainedByOtherRuns ? "Keep-live is retained by other active automation runs." : payload.keepLive?.active ? "Inspect and stop the recorded keep-live process before claiming shutdown is clean." : "Keep-live is stopped; continue only by total-control judgment.";

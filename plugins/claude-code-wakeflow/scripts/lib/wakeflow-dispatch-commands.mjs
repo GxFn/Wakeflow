@@ -938,7 +938,12 @@ export function createDispatchCommands(ctx) {
         triggerTaskId,
         resultVersions: resultVersion.resultVersions,
       });
-      fail(`Dispatch group ${dispatchGroup}${duplicateScope} already has controller-return delivery status ${existingReturn.status}; reuse that envelope and record a new delivery run for any transport retry.`);
+      const recovery = ["sent", "sent-unconfirmed"].includes(existingReturn.status)
+        ? "The host already accepted that envelope; do not resend it. A sent-unconfirmed record remains visible for controller judgment rather than being converted to success."
+        : existingReturn.status === "pending-host-send"
+          ? "Use the existing envelope for its first host send; do not build a duplicate."
+          : "Inspect the recorded transport fact first; retry the same envelope only after a proven rejected-before-send outcome.";
+      fail(`Dispatch group ${dispatchGroup}${duplicateScope} already has controller-return delivery status ${existingReturn.status}. ${recovery}`);
     }
     const windowConfig = buildWindowConfig(controllerWindow);
     const reviewScope = returnPolicyReviewScope(review.returnPolicy);

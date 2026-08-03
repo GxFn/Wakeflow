@@ -95,12 +95,13 @@ Current scripts:
   already accepted, completed, or blocked. Group-scoped target result files
   keep concurrent controller runs from overwriting each other, and
   `build-controller-return` enforces the dispatch group's return policy:
-  `group-ready` permits one pending/sent controller-return for the dispatch group,
-  while `per-target` permits one pending/sent controller-return per
-  trigger target/task pair. After accepted transport is recorded as sent with
-  its actual independent readback status, its agent cue must close the controller dispatch turn; it
-  must not tell total control to sleep, poll, or wait in place for target
-  results. Re-recording the same delivery run or identical target result is an
+  `group-ready` permits one pending/accepted controller-return for the dispatch group,
+  while `per-target` permits one pending/accepted controller-return per
+  trigger target/task pair. Delivery recording requires explicit transport,
+  readback status, and attempt count. Only confirmed readback means the
+  destination was reached; accepted transport with pending/unavailable
+  readback is `sent-unconfirmed`, closes the transport turn, and must not be
+  retried or resent automatically. Re-recording the same delivery run or identical target result is an
   idempotent replay and must not advance state again; changed target results
   require explicit `--supersede-result`, which archives the previous envelope
   under local delivery runtime before replacing it. `status` includes a compact

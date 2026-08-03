@@ -155,6 +155,10 @@ advance the live state root.
      - If a unit has `hostSendRequired=true` or `controllerReturnNextStep` is
        `send-controller-return-and-record-delivery`, send the already-built
        envelope and record it; do not prepare a duplicate.
+     - If a unit has `controllerReachUnconfirmed=true` or
+       `controllerReturnNextStep` is `controller-return-sent-unconfirmed`, end
+       the transport turn without resending and report that controller
+       visibility is unconfirmed; this is not callback success.
      - Stop only when the current unit has `controllerAlreadyReached=true` or
        `controllerReturnNextStep` is `controller-return-already-sent`.
      A delivery for an older `resultVersionKey` never satisfies the current
@@ -173,10 +177,11 @@ advance the live state root.
      readback evidence. Controller returns do not acquire a target work lease.
      Then use `wakeflow_record_delivery` to record the delivery run. The helper
      returns independent `transportStatus` and `readback.status` facts. An
-     accepted send with pending/unavailable visibility is still sent: record it,
-     and leave any further read-only inspection to Agent judgment. Controller-
-     return has no target work lease. Never resend while observing an accepted
-     send.
+     accepted send waits 1200 ms by default and receives exactly one pane
+     observation (hard cap five seconds). Pending/unavailable visibility is
+     `sent-unconfirmed`, not controller reachability: record the helper's
+     attempt count, do not observe again, and never resend automatically.
+     Controller-return has no target work lease.
    - Do not stop after writing the target result when controller return is
      allowed. The closeout steps stay separate: record target result, review
      readiness, prepare controller-return envelope, send with the host helper,

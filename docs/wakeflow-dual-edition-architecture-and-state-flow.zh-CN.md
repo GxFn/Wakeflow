@@ -190,7 +190,7 @@ flowchart TB
 | `wakeflow_claim_next` | `wakeflow-demand-sequence` | `claim-todo` — 可选 `--design-key`/`--controller-window`，`apply`→`--write`；无人值守地自动认领唯一一条 Auto Claim=yes 的合格行；在 `maxActiveDemands` 容量门下委托给 create-demand |
 | `wakeflow_add_task` | `wakeflow-state` | `add-task-package` — `--state-root`，`--task-package-id`，`--summary`，`--target-window`，`--target-task-id`，可选 `--target-summary`/`--source-ref`/`--design-intent`，`adoptHost`→`--adopt-host`，`--write` |
 | `wakeflow_prepare_delivery` | `wakeflow-delivery` | `direction=controller-return` → `build-controller-return`；`direction=target`（默认）→ `prepare-dispatch-from-state`（追加 `--objective`/`--task-package-id`/`--controller-window`——回程路由链：标志 > 打戳的 state.controllerWindow > 工作区配置——以及 `--return-policy`）；除非 `verbose`，否则 `--compact` |
-| `wakeflow_record_delivery` | `wakeflow-delivery` | `record-delivery-run` — `--delivery-file`,`--status`，可选 `--transport-status accepted\|rejected-before-send\|ambiguous`、独立的 `--readback-status confirmed\|pending\|unavailable`、`--readback-attempts`、证据/error/host 字段和 `--delivery-run-id`；`--readback-ok` 只保留为旧兼容别名；除非 `verbose`，否则 `--compact` |
+| `wakeflow_record_delivery` | `wakeflow-delivery` | `record-delivery-run` — MCP 要求 `--delivery-file`,`--status`、显式 `--transport-status accepted\|rejected-before-send\|ambiguous`、显式 `--readback-status confirmed\|pending\|unavailable`、显式 `--readback-attempts`、证据/error/host 字段和 `--delivery-run-id`；仅底层 CLI 继续读取旧 `--readback-ok` confirmed 写入；除非 `verbose`，否则 `--compact` |
 | `wakeflow_record_target_result` | `wakeflow-state` | `import-target-result` — `--state-root`,`--target-task-id`,`--target-window`,`--status`，可选 `--result-id`/`--summary`，可重复的 `--evidence-ref`/`--verification`/`--risk`，除非 `verbose`，否则 `--compact` |
 | `wakeflow_review_pack` | `wakeflow-delivery` | `review-pack` — 可选 `--state-root`/`--group`/`--task-id`；只读 |
 | `wakeflow_view` | `wakeflow-state` / `wakeflow-delivery` | 按 `scope`：`task-ledger`→`wakeflow-delivery task-ledger`（`--task-id`/`--target-window`）；`window`→`wakeflow-state window-view`（`--window`）；`focus`→`wakeflow-state focus-doc`（`--window`/`--phase`，`apply`→`--write`）；`trace`→`wakeflow-delivery trace-spine`（`--group`/`--target-window`/`--task-id`/`--result-file`/`--result-id`/`--delivery-file`/`--delivery-id`）；除 focus+apply 外只读 |
@@ -299,7 +299,7 @@ sequenceDiagram
 | `add-task-package` | 在 `completed`/`archived`/`paused` 时拒绝，在 `review-ready`/`accepting`/`waiting-results`（“先 reduce 或 decide”）时拒绝，在 `blocked` 或存在任何 blocker 时拒绝；rework 通道打开期间拒绝普通新工作（新工作以 `reviewRoute=rework` 加入该通道）；可选 `--design-intent`；**第一条驱动命令认领 `controllerHost`** |
 | `prepare-dispatch-from-state` | 需求-宿主归属门；资格条件：需求未 completed/archived/paused/blocked/review-ready/accepting，目标任务处于 `pending`/`needs-rework`/`missing-result`，package 处于 `pending`/`needs-rework`；rework 优先：rework 目标尚未关闭期间不派发非 rework 目标；获取跨宿主窗口锁（遇到他宿主的新鲜锁则失败关闭） |
 | host send | （Claude）目标窗口必须存活；按窗口的派发锁；（Codex）控制器直接调用原生宿主工具 |
-| `record-delivery-run status=sent` | 要求 `transportStatus=accepted` **且** 非空 `--evidence`；真实 readback 状态独立记录；即便暂不可见/不可读，`markStateRootDeliverySent` 仍推进状态并刷新锁 |
+| `record-delivery-run status=sent` | 要求显式 `transportStatus=accepted`、显式 readback 状态/次数和非空 `--evidence`；目标投递仍推进 state 并刷新锁，而 controller-return 的 pending/unavailable readback 投影为 `sent-unconfirmed`，不会声称已到达 |
 | `import-target-result` | 若目标任务已 `accepted` 则拒绝；默认 id 冲突时以时间戳自动消歧（rework）；**不**改动控制器状态（`stateRevisionUnchanged`）；释放与所应答派发相匹配的锁 |
 | `reduce-results` | 在 `completed`/`archived` 时拒绝；零打开任务时拒绝；任何路径形态的 evidence ref 缺失时硬失败（`evidence-repair-required`）（ref 依次按 state root → 产出窗口的仓库 → 工作区根解析）；只 reduce 控制器评审范围（rework 通道打开期间 rework 通道任务优先——仍缺失的 rework 结果解析为 `needs-rework`，而非 `waiting-results`）；仅当范围内无任何缺失时才创建一个转换候选 |
 | `decide-review accept` | 候选 `fromRevision == revision`；`demandKey` 匹配；若候选有 `blockedResultIds` 则需 `--accept-blocked`；清除 review-blocker |
@@ -482,7 +482,7 @@ stateDiagram-v2
 ### 5.6 派发组、controller-return、return policy
 
 - **派发组状态**（`buildGroupSnapshot.groupStatus`）：`waiting`、`pending-dispatch`、`partially-ready`、`ready`、`blocked`。
-- **组的 controller-return 派发状态**：`not-applicable` → `not-built` → `pending-host-send` → `sent`（阻止重复返回）。
+- **组的 controller-return 派发状态**：`not-applicable` → `not-built` → `pending-host-send` → `sent-unconfirmed` | `sent`。两个 accepted 状态都阻止重复返回，但只有 `sent` 表示已确认目标可见。
 - **return policy**（`DispatchGroup.returnPolicy.mode`）：`group-ready` | `per-target`。代码中**没有显式的 mode 不可变守卫**；强制是基于非覆盖的：一个既有的 dispatch-group 记录会被**复用而不被覆盖**（写入受 `!existingGroup` 门控，`dispatch-commands.mjs:461`）；若存储的状态 revision 与当前不同，则复用**失败**（`:444-445`）；并且 controller-return **不能覆盖**已存储的 `controllerWindow`（`:541-545`）。（`returnPolicyModes` 在 `return-policy.mjs:1` 处被 `Object.freeze`，但那冻结的是 enum 数组，而非任何按组的字段。）`returnRoute`：`controller` | `none`。
 
 ### 5.7 宿主归属、锁、活动监视器（交叉引用）

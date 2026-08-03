@@ -163,10 +163,11 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   validating, deciding, and dispatching next eligible packages until final
   completion, a hard gate, user stop, no eligible TODO, or missing review input
   that needs a human.
-- After a real direct-thread send records `status=sent` with
-  `transportStatus=accepted`, stop the send turn — do not sleep, poll, or wait.
-  `readback.status` is independent observation; pending/unavailable never
-  authorizes resend or lease release. Keep-live is unattended
+- After explicit host acceptance, make exactly one bounded destination
+  observation and record all transport/readback fields without success
+  defaults. Only `readback.status=confirmed` proves reachability;
+  pending/unavailable is `sent-unconfirmed`. Stop without polling again,
+  resending, or releasing the lease. Keep-live is unattended
   support only, not task logic, transport, or acceptance evidence.
 - Real thread ids live only in `.wakeflow-local/`; never write them to tracked
   docs, GitHub, prompts, or backfill, and never register placeholders.

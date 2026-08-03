@@ -98,7 +98,7 @@ export function buildRuntimeHealth({
       ? [issue("info", "host-send-pending", "Delivery envelopes are built and waiting for host send/readback.", { count: pendingHostSend.length })]
       : []),
     ...(reviewableGroups.length > 0
-      ? [issue("info", "controller-review-ready", "Target evidence is present and requires controller review.", { count: reviewableGroups.length })]
+      ? [issue("info", "controller-review-ready", "Target review inputs are present and require controller inspection and validation.", { count: reviewableGroups.length })]
       : []),
     ...(callbackReadyUnits.length > 0
       ? [issue("info", "controller-return-ready", "Return policy permits controller-return envelope creation.", { count: callbackReadyUnits.length })]
@@ -193,7 +193,7 @@ function reviewResumeSteps(groups) {
       : { dispatchGroup: group.groupId },
     dispatchGroup: group.groupId,
     stateRoot: group.stateRoot,
-    reason: "Target results are present or blocked; total control must inspect raw evidence before reduce/decision.",
+    reason: "Target results are present or blocked; total control must inspect target review inputs and independently validate relevant behavior before reduce/decision.",
   }));
 }
 
@@ -232,7 +232,7 @@ function controllerReturnBuildResumeSteps(groups) {
       triggerTaskId: unit.triggerTaskId,
       returnPolicy: group.returnPolicy,
       callbackScope: unit.scope,
-      reason: "Target result evidence is present and the dispatch group's return policy allows a controller-return envelope.",
+      reason: "A target result is present and the dispatch group's return policy allows a controller-return envelope.",
     })));
 }
 
@@ -338,7 +338,7 @@ export function buildRuntimeResumePlan({ nextAction, diagnostics, deliveryStatus
     return {
       ...base,
       status: "ready",
-      reason: "Return policy permits controller-return envelope creation for completed or blocked target evidence.",
+      reason: "Return policy permits controller-return envelope creation for completed or blocked target results.",
       steps: controllerReturnBuildResumeSteps(callbackReady),
     };
   }
@@ -347,7 +347,7 @@ export function buildRuntimeResumePlan({ nextAction, diagnostics, deliveryStatus
       ...base,
       status: "needs-controller-review",
       controllerDecisionRequired: true,
-      reason: "Target results are available; total control must inspect raw evidence before reducing or deciding.",
+      reason: "Target results are available; total control must inspect target review inputs and independently validate relevant behavior before reducing or deciding.",
       steps: reviewResumeSteps(reviewable),
     };
   }

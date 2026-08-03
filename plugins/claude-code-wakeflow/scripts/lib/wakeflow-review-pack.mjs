@@ -1,6 +1,6 @@
 // ONE source for the pieces both review-pack constructors share (the
 // group-snapshot pack below and the state-root pack in review-commands):
-// the advisory texts, the common gate keys, and the raw-evidence projection.
+// the advisory texts, the common gate keys, and the target-review-input projection.
 // Keeping them here means the review judgment vocabulary cannot drift
 // between the two entry points.
 
@@ -14,14 +14,14 @@ export function reviewAdvisories(targetResults) {
     // B2 craft check: additive advisory, present only when a reviewable entry carries
     // advisory craft kinds. Required kinds are enforced at reduce-results; reminder only.
     ...(targetResults.some((item) => item.advisoryCraftKinds?.length)
-      ? { craftCheck: "Some tasks declared advisory craft evidence (e.g. self-review, test-first); required craft kinds are already enforced at reduce-results. Reminder only (not a gate): when judging quality, check the target's self-review note and test-first commit history." }
+      ? { craftCheck: "Some tasks declared advisory craft inputs (e.g. self-review, test-first); required craft kinds are already enforced structurally at reduce-results. Reminder only (not a gate): when judging quality, inspect and independently challenge the target's self-review note and test-first commit history." }
       : {}),
     ...(targetResults.some((item) => item.acceptanceAnchors?.length)
       ? { acceptanceAnchorCheck: "For each controller-authored acceptanceAnchor, inspect the target's RED/GREEN mapping and independently rerun or challenge the named probe. An anchor is requirement authority, but the target's mapping is still review input rather than acceptance proof." }
       : {}),
     ...(targetResults.some((item) => item.testExecution)
       ? {
-          controllerAcceptanceBoundary: "Functional completeness and correctness remain total control's pre-Test validation and acceptance responsibility. Test evidence may expose an environment-specific edge or hidden defect, but a Test pass cannot fill missing controller proof and a Test failure must be classified against the confirmed goal before rework.",
+          controllerAcceptanceBoundary: "Functional completeness and correctness remain total control's pre-Test validation and acceptance responsibility. Test inputs may expose an environment-specific edge or hidden defect, but a Test pass cannot complete unfinished controller validation and a Test failure must be classified against the confirmed goal before rework.",
           testAlignmentCheck: "Before accepting Test evidence or creating any follow-up, compare the returned step-to-anchor map against testExecution.requirementGoal and approvedPlan. Reject Test-invented goals, gates, skills, restarts, or unmapped steps; do not copy them into rework.",
         }
       : {}),
@@ -41,12 +41,12 @@ export function sharedReviewGates({
   controllerReturnPendingHostSend,
 }) {
   return {
-    controllerReviewReady: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent && !resultContractGapsPresent,
+    reviewInputsComplete: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent && !resultContractGapsPresent,
     waitForMissingResults: missingCount > 0,
     pendingDispatchTargetsPresent: pendingDispatchCount > 0,
     blockedResultsPresent: blockedCount > 0,
     missingEvidenceRefsPresent,
-    evidenceRepairRequired: missingEvidenceRefsPresent,
+    reviewInputRepairRequired: missingEvidenceRefsPresent,
     craftEvidenceGapsPresent,
     craftEvidenceRepairRequired: craftEvidenceGapsPresent,
     resultContractGapsPresent,
@@ -54,12 +54,12 @@ export function sharedReviewGates({
     controllerReturnSent,
     controllerReturnReady,
     controllerReturnPendingHostSend,
-    rawEvidencePullRequired: reviewReady,
+    reviewInputInspectionRequired: reviewReady,
     totalControlVerdictRequired: reviewReady && !missingEvidenceRefsPresent && !craftEvidenceGapsPresent && !resultContractGapsPresent,
   };
 }
 
-export function rawEvidenceRequiredFrom(targetResults) {
+export function targetReviewInputsFrom(targetResults) {
   return targetResults
     .filter((item) => item.resultStatus !== "missing")
     .map((item) => ({
@@ -69,7 +69,7 @@ export function rawEvidenceRequiredFrom(targetResults) {
       commits: item.commits,
       evidenceRefs: item.evidenceRefs,
       verificationSummary: item.verificationSummary,
-      hasControllerReviewEvidence: item.hasControllerReviewEvidence,
+      hasReviewInputs: item.hasReviewInputs,
       missingEvidenceRefs: item.missingEvidenceRefs,
       craftEvidenceGaps: item.craftEvidenceGaps ?? [],
       resultContractGaps: item.resultContractGaps ?? [],
@@ -96,7 +96,7 @@ export function buildControllerReviewPack({
   const craftEvidenceGapsPresent = craftEvidenceGaps.length > 0;
   const resultContractGaps = targetResults.flatMap((item) => item.resultContractGaps ?? []);
   const resultContractGapsPresent = resultContractGaps.length > 0;
-  const rawEvidenceRequired = rawEvidenceRequiredFrom(targetResults);
+  const targetReviewInputs = targetReviewInputsFrom(targetResults);
   const gates = sharedReviewGates({
     reviewReady,
     missingCount: review.groupSnapshot.missing.length,
@@ -110,11 +110,11 @@ export function buildControllerReviewPack({
     controllerReturnPendingHostSend: (callbackPlan?.counts?.pendingHostSendCount || 0) > 0,
   });
   // Transport-facing next step for whoever SENDS the controller return (the target's sanctioned
-  // self-check, or the controller for its own return). INDEPENDENT of evidence quality on purpose:
-  // a recorded result must wake the controller even when its evidence refs do not resolve —
-  // evidence sufficiency is the controller's POST-wake verdict (gates.controllerReviewReady /
-  // nextAction), never a reason to withhold the wake-up. Without this split, a failed evidence-ref
-  // existence check stalls the controller return and breaks the closed loop (the wake-up never fires).
+  // self-check, or the controller for its own return). INDEPENDENT of review-input quality on purpose:
+  // a recorded result must wake the controller even when its declared review-input refs do not resolve —
+  // review-input completeness is the controller's POST-wake starting point
+  // (gates.reviewInputsComplete / nextAction), never a reason to withhold the wake-up. Without this split, a failed
+  // review-input-ref existence check stalls the controller return and breaks the closed loop (the wake-up never fires).
   const controllerReturnNextStep = gates.controllerReturnReady
     ? "build-controller-return"
     : gates.controllerReturnPendingHostSend
@@ -136,7 +136,7 @@ export function buildControllerReviewPack({
     controllerReturnDelivery,
     callbackPlan,
     targetResults,
-    rawEvidenceRequired,
+    targetReviewInputs,
     missingEvidenceRefs,
     craftEvidenceGaps,
     resultContractGaps,
@@ -145,16 +145,16 @@ export function buildControllerReviewPack({
     nextAction: review.decision === "wait"
       ? "wait-for-target-result-envelope"
       : review.decision === "blocked"
-        ? "pull-block-evidence-and-classify"
+        ? "inspect-block-review-inputs-and-classify"
         : missingEvidenceRefsPresent
-          ? "fix-missing-evidence-refs-before-controller-verdict"
+          ? "fix-missing-review-input-refs-before-controller-verdict"
           : craftEvidenceGapsPresent
-            ? "fix-required-craft-evidence-before-controller-verdict"
+            ? "fix-required-craft-review-inputs-before-controller-verdict"
           : resultContractGapsPresent
             ? "fix-target-result-contract-before-controller-verdict"
           : (review.groupSnapshot.pendingDispatch ?? []).length > 0
-            ? "pull-raw-evidence-and-continue-pending-dispatch"
-            : "pull-raw-evidence-and-make-total-control-verdict",
+            ? "inspect-target-review-inputs-and-continue-pending-dispatch"
+            : "inspect-target-review-inputs-and-make-total-control-verdict",
     controllerReturnNextStep,
     wakeflowTrace,
     generatedAt,

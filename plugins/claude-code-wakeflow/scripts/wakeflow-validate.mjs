@@ -424,14 +424,14 @@ function validateTemplateBundle() {
       errors.push(`template bundle missing ${required}`);
     }
   }
-  for (const [label, key] of [
-    ["Design", `templates/window-support/design/${hostProfile.memoryFile}`],
-    ["Test", `templates/window-support/testing/${hostProfile.memoryFile}`],
+  for (const [label, key, roleBoundary] of [
+    ["Design", `templates/window-support/design/${hostProfile.memoryFile}`, "Do not rely on the controller to discover obvious gaps"],
+    ["Test", `templates/window-support/testing/${hostProfile.memoryFile}`, "do not present them as controller validation or acceptance"],
   ]) {
     const content = bundle.files[key] ?? "";
     for (const required of [
       "## Functional Completeness Self-Check",
-      "Do not rely on the controller to discover obvious gaps",
+      roleBoundary,
       "downgrade a complete",
     ]) {
       if (!content.includes(required)) {

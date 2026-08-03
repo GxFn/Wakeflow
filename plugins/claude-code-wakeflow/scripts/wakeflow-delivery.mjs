@@ -85,8 +85,8 @@ Design:
   This script is the ${hostProfile.closedLoopContractName} contract surface. Dispatches
   are state-root only. The script does not parse current plans, decide
   sendable windows, claim target work, create legacy automation jobs, or
-  accept evidence. Total control creates dispatch packets and later reviews
-  raw evidence. Delivery adapters only consume the delivery envelope. Target
+  accept results. Total control creates dispatch packets and later inspects
+  target review inputs and independently validates behavior. Delivery adapters only consume the delivery envelope. Target
   windows return result envelopes.
 `.trim();
 
@@ -212,12 +212,12 @@ function inferAgentNext(payload) {
   if (payload.command === "stop-keep-live") return payload.keepLive?.retainedByOtherRuns ? "Keep-live is retained by other active automation runs." : payload.keepLive?.active ? "Inspect and stop the recorded keep-live process before claiming shutdown is clean." : "Keep-live is stopped; continue only by total-control judgment.";
   if (payload.command === "keep-live-state") return "Continue or stop unattended automation according to the current plan and keep-live status.";
   if (payload.command === "record-target-result") return "Run review-results for the dispatch group; if controller return is allowed, build the controller-return envelope, send it with the host thread tool, then record that delivery run.";
-  if (payload.command === "review-results") return payload.decision === "wait" ? "No controller review is available yet; stop this turn and wait for the target/controller-return instead of polling or sleeping." : "If this is a target window and controller return is allowed, build-controller-return, send it with the host thread tool, then record that delivery run; total control must still review raw evidence before acceptance.";
+  if (payload.command === "review-results") return payload.decision === "wait" ? "No controller review is available yet; stop this turn and wait for the target/controller-return instead of polling or sleeping." : "If this is a target window and controller return is allowed, build-controller-return, send it with the host thread tool, then record that delivery run; total control must still inspect the review inputs and independently validate behavior before acceptance.";
   if (payload.command === "review-pack") {
     if (payload.decision === "completed") return "Demand is completed; stop without creating new deliveries.";
     if (payload.decision === "no-target-tasks") return "No target tasks are reviewable; add a task package before dispatch or review.";
     if (payload.reviewPack?.nextAction === "dispatch-pending-target-before-result-review") return "No sent target result is missing; return to total-control judgment and dispatch the pending target before waiting for a result.";
-    return payload.decision === "wait" ? "No controller review is available yet; stop this turn and wait for the target/controller-return instead of polling or sleeping." : "Use this review pack to pull raw evidence, then make a total-control verdict.";
+    return payload.decision === "wait" ? "No controller review is available yet; stop this turn and wait for the target/controller-return instead of polling or sleeping." : "Use this review pack to inspect target review inputs, independently validate the relevant behavior, then make a total-control verdict.";
   }
   if (payload.command === "trace-spine") return "Use the trace spine to inspect evidence and runtime gaps; it is read-only and not a controller acceptance verdict.";
   if (payload.command === "stop-loop") return payload.keepLive?.retainedByOtherRuns ? "Closed-loop delivery is stopped for this run; keep-live remains active for other runs." : "Closed-loop delivery is stopped; do not create new deliveries.";
@@ -955,7 +955,7 @@ function commandStopLoop() {
 }
 
 // prune-runtime: GC replay-safe, confirmed-send delivery-run files older than a cutoff.
-// Target-results are evidence and are NEVER deleted; a run inside a surviving repeated-attempt
+// Target-results are durable result history and are NEVER deleted; a run inside a surviving repeated-attempt
 // chain is retained so idempotency dup-detection keeps working. Dry-run unless --write, and
 // --write requires --before to bound the deletion.
 function commandPruneRuntime() {
@@ -1031,11 +1031,11 @@ function commandPruneRuntime() {
       "pruned-run-is-undelivered-work",
     ],
     agentNext: write
-      ? "Pruned replay-safe confirmed-send delivery-runs older than the cutoff. Target-results (evidence) are never pruned."
+      ? "Pruned replay-safe confirmed-send delivery-runs older than the cutoff. Target-results are durable result history and are never pruned."
       : "Dry-run only. Review the prunable list, then rerun with --write --before <iso> to delete.",
   }, [
     `${write ? "Pruned" : "Would prune"} ${prunable.length} replay-safe delivery-run file(s)${write ? ` (${removed} removed)` : ""}.`,
-    "Target-results are evidence and are never deleted by prune-runtime.",
+    "Target-results are durable result history and are never deleted by prune-runtime.",
   ]);
 }
 

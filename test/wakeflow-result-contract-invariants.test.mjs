@@ -116,7 +116,7 @@ function fullContextArgs({
     "--context-summary", JSON.stringify(["The requirement and validation target are confirmed."]),
     "--requirement-refs", JSON.stringify([{ ref: "requirements.md#goal", role: "goal" }]),
     "--boundaries", JSON.stringify({ inScope: ["Confirmed behavior"], outOfScope: ["Unrelated behavior"], forbidden: ["Do not expand scope"] }),
-    "--completion-expectations", JSON.stringify(["Return reviewable evidence."]),
+    "--completion-expectations", JSON.stringify(["Return reviewable inputs."]),
     "--depends-on-task-ids", "[]",
     "--commit-expectation", commitExpectation,
     ...(acceptanceAnchors ? ["--acceptance-anchors", JSON.stringify(acceptanceAnchors)] : []),
@@ -340,18 +340,18 @@ test("P1: two demands can reuse the same package, task, and group ids without me
   assert.deepEqual(targetResultSnapshot(root, second.stateRoot), {});
 });
 
-test("P1: required craft evidence requires proof before a target result can land", () => {
+test("P1: required craft evidence requires a concrete review input before a target result can land", () => {
   const runtime = makeRuntime();
   const root = makeRoot();
   const init = initDemand(runtime, root, "CRAFT-PROOF-INVARIANT");
   addContractedTask(runtime, root, init.stateRoot, { packageId: "VALUE-PKG", taskId: "VALUE-TASK" });
 
-  const proofless = importResult(runtime, root, init.stateRoot, {
+  const inputless = importResult(runtime, root, init.stateRoot, {
     taskId: "VALUE-TASK",
     extra: ["--summary", "tests ran", "--craft-evidence", JSON.stringify([{ kind: "tests" }])],
   });
-  assert.notEqual(proofless.status, 0, "kind-only evidence must fail at import, before reduce can observe it");
-  assert.match(proofless.stdout + proofless.stderr, /ref, value, or commit|kind alone is not evidence/i);
+  assert.notEqual(inputless.status, 0, "kind-only evidence must fail at import, before reduce can observe it");
+  assert.match(inputless.stdout + inputless.stderr, /ref, value, or commit|kind alone is not review material/i);
   assert.equal(existsSync(path.join(root, init.stateRoot, "target-results", "tr-VALUE-TASK.json")), false);
 
   const withValue = parseOk(importResult(runtime, root, init.stateRoot, {
@@ -427,7 +427,9 @@ test("P1: full-context implementation completion maps every acceptance anchor ex
     "review-pack", "--root", root, "--state-root", init.stateRoot, "--json",
   ])).reviewPack;
   assert.deepEqual(review.resultContractGaps, []);
-  assert.equal(review.gates.controllerReviewReady, true);
+  assert.equal(review.gates.reviewInputsComplete, true);
+  assert.equal(Object.hasOwn(review.gates, "controllerReviewReady"), false);
+  assert.equal(Object.hasOwn(review.targetResults[0], "hasControllerReviewEvidence"), false);
   assert.equal(review.targetResults[0].resultMapping.status, "complete");
 });
 
@@ -452,7 +454,7 @@ test("P1: commit expectation mismatch blocks review without pretending mapping i
   const review = parseOk(run(runtime, "wakeflow-delivery.mjs", [
     "review-pack", "--root", root, "--state-root", init.stateRoot, "--json",
   ])).reviewPack;
-  assert.equal(review.gates.controllerReviewReady, false);
+  assert.equal(review.gates.reviewInputsComplete, false);
   assert.equal(review.resultContractGaps[0].reason, "commit-expectation-not-met");
   assert.equal(review.targetResults[0].resultMapping.status, "complete", "complete mapping is still only review input");
 

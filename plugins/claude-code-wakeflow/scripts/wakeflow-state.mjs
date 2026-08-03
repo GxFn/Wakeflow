@@ -198,8 +198,9 @@ function parseOptionalJsonArrayArg(name) {
   return Array.isArray(parsed) ? parsed : [parsed];
 }
 
-// The evidence contract is the AUTHORITY SOURCE for the only hard craft gate
-// (craft-evidence-required). A malformed shape must fail intake here (fail-closed),
+// The evidenceContract field (persistent compatibility name) is the AUTHORITY
+// SOURCE for the only hard craft review-input gate
+// (craft-review-inputs-required). A malformed shape must fail intake here (fail-closed),
 // never silently disable the gate at reduce time: reduce's Array.isArray guard
 // treats a mis-shaped `required` as "no required kinds" — a fail-open on the gate.
 function validateEvidenceContractShape(contract) {
@@ -225,7 +226,7 @@ function validateEvidenceContractShape(contract) {
 // A small controller-authored bridge between the confirmed requirement and the
 // target's first RED checks. Anchors are behavior probes, not another test plan:
 // each one must say what is claimed, how the target can challenge it, and what
-// observable outcome proves the claim.
+// observable outcome the controller can independently validate against the claim.
 function validateAcceptanceAnchorsShape(anchors) {
   if (anchors == null) return null;
   if (!Array.isArray(anchors) || anchors.length === 0) {
@@ -420,21 +421,22 @@ function testExecutionForNewTask({ stateRoot, state, targetWindow, targetTaskId 
   };
 }
 
-// Craft evidence entries land in the durable target-result artifact (evidence is
-// never deleted); reject junk shapes at the door instead of archiving them.
+// Craft evidence entries are target-authored review inputs stored in the durable
+// target-result artifact. Reject empty shapes at the door, but do not confuse
+// structural validity with controller verification or acceptance.
 function validateCraftEvidenceEntries(entries) {
   for (const entry of entries) {
     if (!entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.kind !== "string" || !entry.kind.trim()) {
       fail("--craft-evidence entries must be objects with a non-empty string kind (e.g. {\"kind\":\"tests\",\"ref\":\"...\"}).");
     }
-    const proofFields = ["ref", "value", "commit"];
-    for (const field of proofFields) {
+    const reviewInputFields = ["ref", "value", "commit"];
+    for (const field of reviewInputFields) {
       if (entry[field] !== undefined && (typeof entry[field] !== "string" || !entry[field].trim())) {
         fail(`--craft-evidence ${field} must be a non-empty string when provided.`);
       }
     }
-    if (!proofFields.some((field) => typeof entry[field] === "string" && entry[field].trim())) {
-      fail("--craft-evidence entries must carry reviewable proof in at least one of ref, value, or commit; kind alone is not evidence.");
+    if (!reviewInputFields.some((field) => typeof entry[field] === "string" && entry[field].trim())) {
+      fail("--craft-evidence entries must carry a reviewable input in at least one of ref, value, or commit; kind alone is not review material.");
     }
     if (entry.verify !== undefined && (typeof entry.verify !== "string" || !entry.verify.trim())) {
       fail("--craft-evidence verify must be a non-empty string when provided.");
@@ -451,7 +453,7 @@ function validateCraftEvidenceEntries(entries) {
   return entries;
 }
 
-function craftEvidenceHasProof(entry) {
+function craftEvidenceHasReviewInput(entry) {
   return ["ref", "value", "commit"].some(
     (field) => typeof entry?.[field] === "string" && entry[field].trim(),
   );
@@ -1317,11 +1319,13 @@ function missingEvidenceRefsForTargetResult(stateRoot, state, task, result, podT
     .map(({ exists, ...item }) => item);
 }
 
-// W-Target execution-craft gate: a COMPLETED target result must satisfy its task
-// package's evidence contract — each `required` kind present in craftEvidence, and any
-// declared craft-artifact path resolves on disk. Absent contract => no gap. Only
-// completed results are enforced: blocked / needs-review honestly report an incomplete
-// task and must never be wedged by the contract.
+// W-Target execution-craft gate: a COMPLETED target result must provide the review
+// inputs declared by its task package — each `required` kind is present in
+// craftEvidence and each declared artifact path resolves on disk. This verifies
+// structure and locatability only; the controller still validates truth and quality.
+// Absent contract => no gap. Only completed results are enforced: blocked /
+// needs-review honestly report an incomplete task and must never be wedged by the
+// contract.
 function craftEvidenceGapsForTargetResult(stateRoot, state, task, result, podTarget) {
   const pkg = (state.taskPackages ?? []).find((item) => item.taskPackageId === task.taskPackageId);
   const required = Array.isArray(pkg?.evidenceContract?.required) ? pkg.evidenceContract.required : [];
@@ -1343,9 +1347,9 @@ function craftEvidenceGapsForTargetResult(stateRoot, state, task, result, podTar
       gaps.push({ ...base, reason: "missing-kind" });
       continue;
     }
-    const reviewableEntries = entries.filter(craftEvidenceHasProof);
+    const reviewableEntries = entries.filter(craftEvidenceHasReviewInput);
     if (reviewableEntries.length === 0) {
-      gaps.push({ ...base, reason: "missing-proof" });
+      gaps.push({ ...base, reason: "missing-review-input" });
       continue;
     }
     for (const entry of reviewableEntries) {
@@ -1831,7 +1835,7 @@ function commandAddTaskPackageLocked(stateRoot) {
   // advisory: it is surfaced side-by-side with the controller's objective at
   // dispatch and review for the agent's own alignment check — never a gate.
   const designIntent = (getValue("--design-intent", "") || "").trim() || null;
-  // Design-authored execution-craft evidence contract (W-Target). Optional JSON
+  // Design-authored execution-craft review-input contract (W-Target; persistent field name). Optional JSON
   // { version, required:[{kind,verify}], advisory:[{kind}] }; kept OUT of the dispatch
   // idempotency comparable (like designIntent) so it can be authored/adjusted without
   // breaking replay. Absent = zero behavior change.
@@ -1988,7 +1992,7 @@ function commandAddTaskPackageLocked(stateRoot) {
   // mode testDecisionReminder fixes at create-demand. Surface it; authoring stays
   // Design's / the controller's judgment (doc-only packages legitimately skip it).
   const evidenceContractReminder = targetWindow && !testExecution && !evidenceContract
-    ? "No evidence contract on this package: the craft gate stays dormant. If this is implementation work, consider authoring one (required kinds like tests/change-scope; see wakeflow-target-craft). Reminder only — not a gate."
+    ? "No craft review-input contract on this package: the craft gate stays dormant. If this is implementation work, consider authoring evidenceContract requirements (kinds like tests/change-scope; see wakeflow-target-craft). Reminder only — not a gate."
     : null;
   const nextState = {
     ...state,
@@ -2972,17 +2976,17 @@ function commandReduceResultsLocked(stateRoot) {
       stateRoot: relative(stateRoot),
       previousState: state.state,
       stateRevisionUnchanged: state.revision,
-      reviewGate: "evidence-repair-required",
+      reviewGate: "review-input-repair-required",
       missingEvidenceRefs,
       forbiddenConclusions: [
         "all-results-present-is-not-evidence-ready",
         "missing-evidence-ref-can-enter-transition-candidate",
         "reduce-results-repairs-target-result",
       ],
-      agentNext: "Stop: target results are present, but path-like evidence refs are missing. Run wakeflow_review_pack, repair or re-record the target result evidence, then rerun reduce-results; no state was changed.",
+      agentNext: "Stop: target results are present, but declared path-like review-input refs are missing. Run wakeflow_review_pack, repair or re-record the target result inputs, then rerun reduce-results; no state was changed.",
     });
     process.exitCode = 1;
-    throw new CliExit("missing evidence refs block reduce-results");
+    throw new CliExit("missing declared review-input refs block reduce-results");
   }
 
   if (missingTargetTaskIds.length === 0 && missingEvidenceRefs.length === 0 && craftEvidenceGaps.length > 0) {
@@ -2994,7 +2998,7 @@ function commandReduceResultsLocked(stateRoot) {
       stateRoot: relative(stateRoot),
       previousState: state.state,
       stateRevisionUnchanged: state.revision,
-      reviewGate: "craft-evidence-required",
+      reviewGate: "craft-review-inputs-required",
       craftEvidenceGaps,
       forbiddenConclusions: [
         "completed-result-without-required-craft-evidence-is-acceptable",
@@ -3003,8 +3007,8 @@ function commandReduceResultsLocked(stateRoot) {
       ],
       // NOTE: do NOT say "re-dispatch" here — the gated task is `sent`, and dispatch
       // eligibility only admits pending/needs-rework/missing-result. The recovery path
-      // (same as evidence-repair) is a CORRECTED IMPORT: a sent task accepts a new result.
-      agentNext: "Stop: a completed target result does not satisfy its task package's evidence contract (a required craft-evidence kind is absent, or a declared craft artifact does not resolve). Have the target window produce the required evidence (the wakeflow-target-craft skill lists how) and record a corrected result — a sent task accepts a new import — or record the honest blocked/needs-review status; then rerun reduce-results. No state was changed.",
+      // (same as review-input repair) is a CORRECTED IMPORT: a sent task accepts a new result.
+      agentNext: "Stop: a completed target result does not satisfy its task package's craft review-input requirements (a required craftEvidence kind is absent, or a declared artifact does not resolve). Have the target window produce the required review inputs (the wakeflow-target-craft skill lists how) and record a corrected result — a sent task accepts a new import — or record the honest blocked/needs-review status; then rerun reduce-results. No state was changed.",
     });
     process.exitCode = 1;
     throw new CliExit("craft evidence gaps block reduce-results");
@@ -3059,7 +3063,7 @@ function commandReduceResultsLocked(stateRoot) {
     kind: "review-decision",
     candidateId,
     summary: blockedResultIds.length > 0
-      ? "Target results include blocked evidence; total-control decision is required."
+      ? "Target results include blocked outcomes; total-control decision is required."
       : "All target results are present; total-control acceptance/rework decision is required.",
   } : null;
   const candidate = candidateId ? {
@@ -3639,7 +3643,7 @@ function commandCompleteDemandLocked(stateRoot) {
 
 // Cancel is the controller's escape hatch for an in-flight demand: the flow
 // stops being active WITHOUT pretending completion — no acceptance, no
-// evidence gate, open tasks stay in their last honest status as history. A
+// review-input gate, open tasks stay in their last honest status as history. A
 // cancelled root remains unarchived authority until it is archived. A
 // cancelled main-placement demand therefore still owns the mainline lane,
 // while a cancelled isolated demand remains observable without becoming a

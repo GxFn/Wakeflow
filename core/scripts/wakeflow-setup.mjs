@@ -794,20 +794,20 @@ ${windowLedgerText}${roleNoteText}
 - Direct-thread delivery is the normal work transport. It does not change this window responsibility or expand task scope. Specific work comes from the dispatch packet, current plan, and repository rules.
 - Delivery prompts carry one bounded task-focus sentence, navigation/freshness variables (\`currentWindow\`, \`taskId\`, \`taskPackageId\`, \`stateRoot\`, \`stateRevision\`, optional \`dispatchGroup\`), and skill pointers. Do not treat the prompt as a full command manual. The visible \`stateRevision\` identifies the dispatch snapshot in the packet/envelope; the later delivery-sent event may legitimately advance the live state root. Machine fields such as \`controllerWindow\`, \`returnPolicy\`, and \`humanContextRef\` are read from the state root, dispatch group, and delivery envelope. When an implementation package carries \`acceptanceAnchors\`, map each anchor to a RED test/probe before coding; an untestable or conflicting anchor is \`needs-review\`, not permission to invent scope. Stop and report if \`stateRoot\` is missing or identities conflict.
 ${dispatchPacketRule}
-- Child windows do not create target-to-target next-hop delivery by default. Evidence repair, redispatch, and next phases are decided by controller review. If delivery has \`returnRoute=controller\` and \`review-results\` shows that \`DispatchGroup.returnPolicy\` allows a callback, create exactly one controller-return envelope per callback scope and \`resultVersionKey\` with \`build-controller-return\`, returning by default to the original controller named by \`DispatchGroup.controllerWindow\`. A legal superseding target result creates a new result version and therefore requires a new controller-return. A transport retry for the same result version is allowed only when the host proves \`rejected-before-send\`; reuse its existing envelope. \`accepted\`, \`ambiguous\`, or readback-pending transport is never resent. Then complete the real direct-thread send, bounded read-only observation, and \`record-delivery-run\`. A controller return is complete when a \`DirectThreadDeliveryRun\` records \`status=sent\` with \`transportStatus=accepted\`; \`readback.status\` is independent evidence and never authorizes a resend. The full group snapshot stays in the controller-return envelope; the visible prompt shows only non-empty exceptional targets and must not treat one target backfill as whole-group completion.
+- Child windows do not create target-to-target next-hop delivery by default. Review-input repair, redispatch, and next phases are decided by controller review. If delivery has \`returnRoute=controller\` and \`review-results\` shows that \`DispatchGroup.returnPolicy\` allows a callback, create exactly one controller-return envelope per callback scope and \`resultVersionKey\` with \`build-controller-return\`, returning by default to the original controller named by \`DispatchGroup.controllerWindow\`. A legal superseding target result creates a new result version and therefore requires a new controller-return. A transport retry for the same result version is allowed only when the host proves \`rejected-before-send\`; reuse its existing envelope. \`accepted\`, \`ambiguous\`, or readback-pending transport is never resent. Then complete the real direct-thread send, bounded read-only observation, and \`record-delivery-run\`. A controller return is complete when a \`DirectThreadDeliveryRun\` records \`status=sent\` with \`transportStatus=accepted\`; \`readback.status\` is an independent observation and never authorizes a resend. The full group snapshot stays in the controller-return envelope; the visible prompt shows only non-empty exceptional targets and must not treat one target backfill as whole-group completion.
 ${testWindowDeliveryBoundaryLine(context)}
 - Thread ids may only be written to Wakeflow local runtime. Do not write them to tracked documents, backfill text, or GitHub.
 ${skillAssistanceText(context, samePathWindowNames)}
 
 ### Functional Completeness Self-Check
 
-Before returning a \`TargetResultEnvelope\` or handoff, this child window must self-check the assigned feature or evidence path for functional completeness. Do not rely on the controller to discover obvious gaps.
+Before returning a \`TargetResultEnvelope\` or handoff, this child window must self-check the assigned feature or review-input path for functional completeness. Do not rely on the controller to discover obvious gaps.
 
-- Re-read the state root, task package, current plan, repository rules, and acceptance/evidence requirements.
-- Verify the implementation or evidence covers the requested behavior end to end, including edge cases, integration boundaries, docs/config/API surfaces, and tests that the target window can reasonably run.
-- Compare the final diff/evidence against the original user goal and explicit non-goals; do not downgrade a complete capability into a thin adapter, placeholder, mock-only flow, or partial scaffold.
+- Re-read the state root, task package, current plan, repository rules, and acceptance/review-input requirements.
+- Verify the implementation or review inputs cover the requested behavior end to end, including edge cases, integration boundaries, docs/config/API surfaces, and tests that the target window can reasonably run.
+- Compare the final diff and review materials against the original user goal and explicit non-goals; do not downgrade a complete capability into a thin adapter, placeholder, mock-only flow, or partial scaffold.
 - When recommending follow-up work, label whether it is authorized by the original requirement or only discovered by code/test inspection. Residual implementation fields, existing tests, old adapters, and target observations do not become new requirements unless the original plan, requirement design, or a user/controller decision allows them.
-- If completeness cannot be proven inside this window boundary, return \`blocked\` or \`needs-review\` with the missing evidence and next recommendation instead of reporting \`completed\`.
+- If this window cannot produce reviewable support for completion inside its boundary, return \`blocked\` or \`needs-review\` with the missing inputs and next recommendation instead of reporting \`completed\`.
 
 ### Document Destinations
 
@@ -842,7 +842,7 @@ function skillAssistanceText(context, samePathWindowNames) {
     roleLines.push(`- Test work should proactively surface relevant local Test skills while planning validation, reproducing or triaging failures, designing regressions, reviewing evidence, or validating long chains. Read \`skills/README.md\` when available, name the smallest matching skill, explain why it helps, and use it to shape evidence before running or recording test work. If no skill is genuinely needed, say so briefly and proceed with the assigned test boundary.`);
   }
   if (!samePathWindowNames.includes(context.config.designWindow) && !samePathWindowNames.includes(context.config.testWindow)) {
-    roleLines.push(`- Development work uses the plugin execution-craft skill \`wakeflow-target-craft\` (test-first, systematic debugging, self-review by severity, scope discipline, verify-before-done) so it earns the machine-checkable evidence the controller acceptance gate requires. It loads via the Wakeflow plugin alongside \`wakeflow-target\`; this window does NOT use the Design or Test windows' built-in skills.`);
+    roleLines.push(`- Development work uses the plugin execution-craft skill \`wakeflow-target-craft\` (test-first, systematic debugging, self-review by severity, scope discipline, verify-before-done) so it produces structured review inputs whose presence, mapping, and declared paths can be machine-checked. The controller still independently validates truth and acceptance. The craft skill loads via the Wakeflow plugin alongside \`wakeflow-target\`; this window does NOT use the Design or Test windows' built-in skills.`);
   }
   return `
 ### Skill Assistance
@@ -1292,8 +1292,8 @@ Use this directory when the user does not have an external ${config.testWindow} 
 - Default config: \`config/defaults.json\`
 - Test-owned scripts: \`scripts/\`
 - Test skill map: \`skills/README.md\`
-- Test skills are evidence methods first. Use them proactively to plan
-  validation, triage failures, design regressions, review evidence, and handle
+- Test skills are validation methods first. Use them proactively to plan
+  validation, triage failures, design regressions, inspect review inputs, and handle
   long-chain validation before recording backfill.
 - Testing operation policy: \`docs/testing-operation-policy.md\`
 - Test handoff template: \`templates/test-handoff-template.md\`

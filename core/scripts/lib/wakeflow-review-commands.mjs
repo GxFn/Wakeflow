@@ -6,7 +6,7 @@ import {
   hasPendingReworkDecision,
   taskExpectsTargetResult,
 } from "./wakeflow-review-scope.mjs";
-import { buildControllerReviewPack, rawEvidenceRequiredFrom, reviewAdvisories, sharedReviewGates } from "./wakeflow-review-pack.mjs";
+import { buildControllerReviewPack, targetReviewInputsFrom, reviewAdvisories, sharedReviewGates } from "./wakeflow-review-pack.mjs";
 import { loadWorkspaceConfig, testWindowNames } from "./wakeflow-config.mjs";
 import {
   readStateRootTargetResultItems,
@@ -141,7 +141,7 @@ export function createReviewCommands(ctx) {
         )
       ));
       if (reviewableEntries.length === 0) {
-        gaps.push({ ...base, reason: "missing-proof" });
+        gaps.push({ ...base, reason: "missing-review-input" });
         continue;
       }
       for (const entry of reviewableEntries) {
@@ -226,7 +226,7 @@ export function createReviewCommands(ctx) {
       ...(item.packet.acceptanceAnchors?.length ? { acceptanceAnchors: item.packet.acceptanceAnchors } : {}),
       ...(item.packet.testExecution ? { testExecution: item.packet.testExecution } : {}),
       // B2: advisory craft kinds (self-review, test-first, ...) declared on the packet's
-      // evidence contract, surfaced so the pack can add a craftCheck reminder. Required
+      // craft input contract, surfaced so the pack can add a craftCheck reminder. Required
       // kinds are enforced at reduce-results; these are advisory only.
       ...(item.packet.evidenceContract?.advisory?.length ? { advisoryCraftKinds: item.packet.evidenceContract.advisory.map((entry) => entry.kind).filter(Boolean) } : {}),
       // Echo the result's typed craft evidence so acceptance can act on the declared
@@ -250,7 +250,7 @@ export function createReviewCommands(ctx) {
       riskSummary: Array.isArray(result?.riskSummary) ? result.riskSummary : [],
       nextSuggestion: result?.nextSuggestion,
       reportedAt: result?.reportedAt,
-      hasControllerReviewEvidence: commits.length > 0
+      hasReviewInputs: commits.length > 0
         || evidenceRefs.length > 0
         || verificationSummary.length > 0
         || (result?.craftEvidence ?? []).length > 0,
@@ -680,7 +680,7 @@ export function createReviewCommands(ctx) {
         verificationSummary,
         riskSummary: Array.isArray(result?.risks) ? result.risks : [],
         reportedAt: result?.createdAt,
-        hasControllerReviewEvidence: evidenceRefs.length > 0
+        hasReviewInputs: evidenceRefs.length > 0
           || verificationSummary.length > 0
           || (result?.commits ?? []).length > 0
           || (result?.craftEvidence ?? []).length > 0,
@@ -799,11 +799,11 @@ export function createReviewCommands(ctx) {
       },
       controllerReturnDelivery: {
         ...controllerReturnDelivery,
-        reason: controllerReturnDelivery.reason || "state-root review pack resolved controller-return evidence from the delivery runtime",
+        reason: controllerReturnDelivery.reason || "state-root review pack resolved controller-return eligibility from the delivery runtime",
       },
       callbackPlan,
       targetResults,
-      rawEvidenceRequired: rawEvidenceRequiredFrom(targetResults),
+      targetReviewInputs: targetReviewInputsFrom(targetResults),
       missingEvidenceRefs,
       craftEvidenceGaps,
       resultContractGaps,
@@ -836,16 +836,16 @@ export function createReviewCommands(ctx) {
           ? "wait-for-state-root-target-result"
           : "dispatch-pending-target-before-result-review"
         : decision === "blocked"
-          ? "pull-block-evidence-and-run-wakeflow-state-reducer"
+          ? "inspect-block-review-inputs-and-run-wakeflow-state-reducer"
         : missingEvidenceRefsPresent
-            ? "fix-missing-evidence-refs-before-wakeflow-state-reducer"
+            ? "fix-missing-review-input-refs-before-wakeflow-state-reducer"
             : craftEvidenceGapsPresent
-              ? "fix-required-craft-evidence-before-controller-verdict"
+              ? "fix-required-craft-review-inputs-before-controller-verdict"
             : resultContractGapsPresent
               ? "fix-target-result-contract-before-controller-verdict"
             : pendingDispatch.length > 0
-              ? "pull-raw-evidence-and-continue-pending-dispatch"
-              : "pull-raw-evidence-and-run-wakeflow-state-reducer",
+              ? "inspect-target-review-inputs-and-continue-pending-dispatch"
+              : "inspect-target-review-inputs-and-run-wakeflow-state-reducer",
       controllerReturnNextStep,
       forbiddenConclusions: [
         "review-pack-is-controller-acceptance",

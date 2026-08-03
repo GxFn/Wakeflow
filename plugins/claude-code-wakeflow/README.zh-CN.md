@@ -2,12 +2,12 @@
 
 # Wakeflow for Claude Code
 
-面向多窗口 agent 工作的严谨控制循环——每一步留痕、每个结果实证。
+面向多窗口 agent 工作的严谨控制循环——每一步留痕、每个结果可审查。
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 Wakeflow 把一个本地 Claude Code 工作区变成有纪律的控制系统：每个 active demand 一条由总控负责的闭环、
-多个聚焦的仓库窗口、明确的 state root、轻量 delivery envelope，以及基于证据的验收。总控以闭环方式运行这套系统——规划、派发、收集证据、审查、决策、循环往复——并记录每一步，整个过程事后可审计。
+多个聚焦的仓库窗口、明确的 state root、轻量 delivery envelope，以及由总控独立验证的验收。总控以闭环方式运行这套系统——规划、派发、收集审查输入、独立复验、决策、循环往复——并记录每一步，整个过程事后可审计。
 
 </div>
 
@@ -45,7 +45,7 @@ Wakeflow 提供缺失的控制层：
 - **先预览再投递**：总控先审阅解析后的仓库、任务简报、Skills 和最终 prompt，再用匹配预览摘要的 `apply=true` 写入 delivery envelope。
 - **验收锚点驱动工艺**：每个新 implementation 任务包必须携带至少一个明确的
   claim/probe/expected 锚点，子窗口编码前先映射为 RED 检查；总控仍独立复验。
-- **先证据，后验收**：target backfill 是输入，不是结论；总控仍然要检查原始证据。
+- **先有审查输入，再做验收**：target backfill、日志、路径和测试摘要是输入，不是结论；Wakeflow 只检查结构和路径可定位性，总控仍要独立验证行为。
 - **本地优先运行时**：真实 session id 只存在本地 thread registry；window config 是派生视图，active state 不进入源码。
 
 Wakeflow 不是换了名字的命令启动器。它是一个可复用的工作流能力，用来让多窗口
@@ -74,7 +74,7 @@ Wakeflow 由三层协同构成:看得见的窗口舰队、推动工作的闭环�
 
 | 窗口 | 职责 | 默认推理力度 |
 | --- | --- | --- |
-| Controller(总控) | 目标、派发、证据评审、验收 | `max` |
+| Controller(总控) | 目标、派发、独立验证、验收 | `max` |
 | Design | 澄清需求、重设非 bug 结果偏差方案、准备交接 | `xhigh` |
 | 仓库窗口 | 只在一个仓库内实现 | `xhigh` |
 | Test | 总控验收并完成自身验证后，只探索获批真实环境边界中的隐藏 bug | `xhigh` |
@@ -95,8 +95,8 @@ Pod 恢复走独立路径：`mode=resume` 只验真或恢复已绑定 session �
  3 add task   任务包冻结目标窗口上下文与需求锚点
  4 dispatch   预览 -> 摘要匹配 apply -> 上锁 -> 粘贴 prompt
  5 work       目标窗口在自己的仓库边界内执行
- 6 result     带证据引用的 TargetResultEnvelope 落盘 -> 锁释放
- 7 review     总控读原始证据,然后 accept / rework / blocked
+ 6 result     带目标声明审查材料引用的 TargetResultEnvelope 落盘 -> 锁释放
+ 7 review     总控检查输入并独立复验,然后 accept / rework / blocked
  8 complete   活跃必需任务通过、替代链有效且无 blocker 时才能完结
 ```
 
@@ -105,8 +105,8 @@ Pod 恢复走独立路径：`mode=resume` 只验真或恢复已绑定 session �
 - **Prompt 分层提示、任务包提供上下文、Skills 执行。** 有界 prompt 携带目标、
   最高优先完成/上下文/边界提示、读取顺序、身份与追踪；任务包保存完整任务上下文，
   需求锚点保存原始背景，Skills 保存执行流程。
-- **回填是输入,不是验收。** 目标窗口的自述永远不能关闭工作;总控先读原始证据
-  (commit、命令输出、报告)再记录决定。blocked 决定永远可恢复:新证据到来即
+- **回填是输入,不是验收。** 目标窗口的自述永远不能关闭工作;总控先检查目标提交的
+  commit、命令输出和报告，并独立复验相关行为后再记录决定。blocked 决定永远可恢复:新审查输入到来即
   重新开启评审。
 - **替代关系必须显式。** 普通 rework 重派同一任务；主线 redesign 在 Design
   handoff 后创建带 `replacesTargetTaskId` 的完整 replacement 包，接受后旧任务
@@ -126,7 +126,7 @@ Pod 恢复走独立路径：`mode=resume` 只验真或恢复已绑定 session �
   .wakeflow-active/             需求 state root(第二层住这里)    本机
   .wakeflow-local/wakeflow-delivery/                               本机
     dispatch-packets/  delivery-envelopes/  delivery-runs/   传输记录
-    target-results/                                          证据信封
+    target-results/                                          目标窗口自述结果信封
     locks/                       每窗口一把在途锁,跨宿主共享
     hosts/codex/                 codex 会话注册表(宿主私有)
     hosts/claude-code/           claude 会话注册表 + tmux 绑定
@@ -140,8 +140,8 @@ Pod 恢复走独立路径：`mode=resume` 只验真或恢复已绑定 session �
 
 - 脚本与 MCP 工具负责创建、校验、记录机器数据；它们不会自行选择验收、扩权或替产品做决定，
   只会持久化总控的显式决策。
-- 目标窗口只执行被派发的任务包并回报证据。
-- 总控是唯一的验收权威。
+- 目标窗口只执行被派发的任务包并回报审查输入。
+- 总控是唯一的验收权威，必须独立验证相关行为。
 - 产品决定属于用户。`bypassPermissions` 永不默认开启:只有用户显式同意后才写进
   `wakeflow.config.json`,这条被记录的同意才是无人值守启动对话框的授权来源。
 
@@ -214,7 +214,7 @@ bottle 错误可重试一次。
 | `/wakeflow:windows <名> --replace` | 用全新 session 重建单个窗口 | 窗口陈旧 / 上下文太重 |
 | `/wakeflow:status` | 需求、可领取工作、投递、窗口就绪度 | 派发前 |
 | `/wakeflow:dispatch` | 给目标窗口准备并发送一次投递 | 把活交给某窗口 |
-| `/wakeflow:review` | 看目标的原始证据,记录 accept / rework / blocked | 有结果回来了 |
+| `/wakeflow:review` | 检查目标回传、独立验证并记录 accept / rework / blocked | 有结果回来了 |
 | `/wakeflow:unattended on|off` | 切换工作窗口的权限模式 | 无人值守 ↔ 逐操作提示 |
 | `/wakeflow:check` | 体检已有工作区,收敛陈旧/缺失的面 | 升级之后 |
 
@@ -228,7 +228,7 @@ Wakeflow 是一个强大的本地自动化插件。安装前请清楚它在你�
 - **拉起 tmux 会话和交互式 `claude` 窗口**：基础舰队使用配置的 tmux session，每个 demand pod 使用另一 session。Wakeflow 通过自带 host helper 创建、恢复、替换、排版这些真实 `claude` CLI 会话。
 - **会跑这些 shell 命令**:`node`、`tmux`、`git`、`brew`——最后这个仅在缺 tmux 时、经你一次显式同意后 `brew install tmux`。
 - **权限模型——默认安全**:工作窗口默认 `acceptEdits`(Claude Code 在风险动作前仍会询问)。完全无人值守的 `bypassPermissions`(无提示)**仅显式开启**:工作区通过 `/wakeflow:unattended on` 主动启用,选择记录在 `wakeflow.config.json`,只有这条被记录的同意才让 helper 自动确认启动对话框。无人值守模式下的安全边界是仓库 worktree、`CLAUDE.md` 闸门、Wakeflow 状态机。
-- **本地优先、无遥测**:真实 session/thread id 只存在 `.wakeflow-local/` 下,绝不写入受版本控制的文件、prompt,也不外发。需求、证据、账本都留在你的工作区。
+- **本地优先、无遥测**:真实 session/thread id 只存在 `.wakeflow-local/` 下,绝不写入受版本控制的文件、prompt,也不外发。需求、结果材料、账本都留在你的工作区。
 - **平台**：macOS 优先（tmux；缺失 tmux 时文档安装路径使用 Homebrew）。tmux 核心理论上可在 Linux 运行但尚未验证。
 
 你始终掌控：脚本和 MCP 工具只创建、校验、记录机器数据；它们不会自行选择验收、扩权或替产品做决定，
@@ -258,7 +258,7 @@ progressive-chain-validation 只有被显式列出时才能使用。产品决定
 ```
 
 Wakeflow thread id 就是该窗口的 Claude Code session id，跨 resume 保持稳定。
-桌面窗口不是自动化传输通道。envelope、证据和 review 合约与共享 Wakeflow
+桌面窗口不是自动化传输通道。envelope、target-result 和 review 合约与共享 Wakeflow
 模型完全一致。
 
 **启动。** 初始化先运行 helper 的 `preflight`（缺少 tmux 时在用户同意后安装），
@@ -415,7 +415,7 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
 后续的 Unified Status 渲染也使用所选界面语言。
 
 总控和子窗口可以使用 Claude Code subagent 加速有边界的代码搜索、日志分诊、
-测试定位和证据汇总。Subagent 输出只是证据或建议；总控 review、投递、状态写入
+测试定位和输入汇总。Subagent 输出只是审查输入或建议；总控独立验证、投递、状态写入
 和仓库边界仍归拥有该任务的 Wakeflow 窗口。
 
 ## Wakeflow 会创建什么
@@ -463,7 +463,7 @@ Wakeflow 自动化是直接 session 投递加显式结果返回。
 - send 已接受但新 pane turn 暂不可见时，只重试有界 readback，绝不重复发送。
 - Keep-live 只是运行时辅助，不是任务逻辑、传输权威或验收证据。
 
-自动化会在最终完成、硬 gate、用户停止、没有 eligible work、缺失证据、blocked state、
+自动化会在最终完成、硬 gate、用户停止、没有 eligible work、缺失审查输入、blocked state、
 或任何需要总控/用户判断的条件下停止。
 
 ## MCP 能力面
@@ -488,13 +488,13 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools，工具名与 
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：
 记录 target result、审查 readiness、在策略允许时准备 controller-return envelope、
-通过 tmux host helper 发送，再记录 delivery evidence。总控 review 也保持拆分：
+通过 tmux host helper 发送，再记录 delivery facts。总控 review 也保持拆分：
 review pack、result reduction、显式决策；result reduction 只创建 review candidate，
 不是验收。不要把这些步骤合并成一个 target-window MCP tool。归档摘要刷新内部步骤、
 keep-live 状态和脚本后端执行这类内部环节留在 Wakeflow runtime scripts 和 skills 里。
 公共归档 MCP tools 包装总控批准的 demand、TODO 和工作区文档归档流程。
 `wakeflow_archive target=sanitize-demand` 只把已归档 demand 替换为隐私清洁副本并在本地保留原件；
-`wakeflow_storage_preserve` 是现有本地证据保全后端的公共入口，默认只做 dry-run。
+`wakeflow_storage_preserve` 是现有本地材料保全后端的公共入口，默认只做 dry-run。
 归档脱敏遇到不透明文件时，除非用 `allowOpaque` 明确授权干净原始字节进入可移植归档，
 否则原始字节只留在本地 preserved 原件中，可移植归档写入安全占位清单。文件名或目录名包含真实 host id 时，最高层敏感文件/子树同样只保留在
 本地原件中，可移植归档以同一 `redacted-id-N` 别名保留一份路径占位和引用；别名路径
@@ -579,13 +579,13 @@ npm test
 
 ## 设计原则
 
-1. **判断必须可见**：脚本输出、状态行、target backfill 是证据，不是验收。
+1. **判断必须可见**：脚本输出、状态行、target backfill 是审查输入，不是验收。
 2. **一个需求，一个 state root**：JSON state 和 Markdown progress surface 绑定到同一个 demand。
 3. **Prompt 分层提示，任务包提供上下文，Skills 负责执行工艺**：prompt 携带有界
    优先信息、本轮目标和读取顺序；任务包保存完整任务上下文，需求锚点保留原始背景。
-4. **仓库边界很重要**：每个窗口拥有自己的源码、测试、提交和证据。
+4. **仓库边界很重要**：每个窗口拥有自己的源码、测试、提交和审查输入。
 5. **自动化移动工作，不转移权威**：投递只能证明 prompt 已发送，不能证明结果完成。
 6. **本地运行时留在本地**：真实 session id 只留在本地 thread registry，active runtime state 不进入 tracked docs。
 7. **默认创建新的支持窗口**：Design 和 Test 默认作为清晰的 Wakeflow support surfaces 创建，除非用户明确映射既有目录。
 
-Wakeflow 的目标是让多窗口 agent 工作可以安全恢复、容易审查，并且难以伪造完成。
+Wakeflow 的目标是让多窗口 agent 工作可以安全恢复、容易审查，并且难以跳过总控的独立验证。

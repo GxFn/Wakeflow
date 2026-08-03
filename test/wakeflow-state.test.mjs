@@ -684,7 +684,7 @@ test("Test packaging follows a real controller accept decision and Test-only dem
   const accepted = run([
     "decide-review", "--root", root, "--state-root", init.stateRoot,
     "--candidate-id", reduced.candidateId, "--decision", "accept",
-    "--reason", "Controller reviewed raw evidence and reran the focused check.",
+    "--reason", "Controller inspected the target inputs and reran the focused check.",
     "--evidence-ref", "evidence/product.txt", "--write", "--json",
   ]);
   assert.equal(accepted.status, 0, accepted.stderr || accepted.stdout);
@@ -803,7 +803,7 @@ test("wakeflow-render-progress updates only Unified Status after task package ch
 });
 
 
-test("import-target-result stores result evidence without changing controller state", () => {
+test("import-target-result stores target-authored review inputs without changing controller state", () => {
   const root = makeRoot();
   const init = run([
     "init",
@@ -1171,7 +1171,7 @@ test("reduce-results repairs legacy false missing-result status on an undispatch
   assert.equal(repaired.targetTasks.find((task) => task.targetTaskId === "TASK-DOWNSTREAM").status, "pending");
 });
 
-test("reduce-results refuses to create a review candidate with missing evidence refs", () => {
+test("reduce-results refuses to create a review candidate with missing declared review-input refs", () => {
   const root = makeRoot();
   const init = JSON.parse(run([
     "init",
@@ -1180,7 +1180,7 @@ test("reduce-results refuses to create a review candidate with missing evidence 
     "--demand-key",
     "MISSING-EVIDENCE-FIXTURE",
     "--title",
-    "Missing Evidence Fixture",
+    "Missing Review Input Fixture",
     "--write",
     "--json",
   ]).stdout);
@@ -1194,7 +1194,7 @@ test("reduce-results refuses to create a review candidate with missing evidence 
     "--task-package-id",
     "PKG-1",
     "--summary",
-    "Package with missing evidence.",
+    "Package with a missing declared review input.",
     "--target-window",
     "WinA",
     "--target-task-id",
@@ -1231,13 +1231,13 @@ test("reduce-results refuses to create a review candidate with missing evidence 
     "--write",
     "--json",
   ]);
-  assert.notEqual(refused.status, 0, "missing evidence must block candidate creation");
+  assert.notEqual(refused.status, 0, "missing declared review input must block candidate creation");
   const refusedPayload = JSON.parse(refused.stdout);
   assert.equal(refusedPayload.ok, false);
-  assert.equal(refusedPayload.reviewGate, "evidence-repair-required");
+  assert.equal(refusedPayload.reviewGate, "review-input-repair-required");
   assert.equal(refusedPayload.stateRevisionUnchanged, 2);
   assert.deepEqual(refusedPayload.missingEvidenceRefs.map((item) => item.ref), ["reports/missing.json"]);
-  assert.match(refusedPayload.agentNext, /repair.*target result evidence.*rerun reduce-results/);
+  assert.match(refusedPayload.agentNext, /repair.*target result inputs.*rerun reduce-results/);
   const unchangedState = readJson(path.join(stateRoot, "wakeflow-state.json"));
   assert.equal(unchangedState.state, "planned");
   assert.equal(unchangedState.revision, 2);
@@ -1262,7 +1262,7 @@ test("reduce-results refuses to create a review candidate with missing evidence 
 // "missing" evidence, so resolving such refs only against the state/workspace root false-fails the
 // reducer and stalls the loop one step past the controller-return. The producing window's repo
 // must be a resolution candidate (parallel to the review-pack evidence fix).
-test("reduce-results resolves evidence under the producing window's repo (no false evidence-repair)", () => {
+test("reduce-results resolves evidenceRefs under the producing window's repo (no false review-input repair)", () => {
   const root = makeRoot();
   writeFileSync(path.join(root, "wakeflow.config.json"), JSON.stringify({
     workspaceName: "Wakeflow",
@@ -1363,7 +1363,7 @@ test("decide-review records explicit controller judgment before task acceptance"
     "--decision",
     "accept",
     "--reason",
-    "Evidence reviewed by total-control.",
+    "Target inputs inspected and focused check rerun by total-control.",
     "--evidence-ref",
     "reports/result.json",
     "--write",
@@ -1838,7 +1838,7 @@ test("complete-demand refuses open tasks and records final completion explicitly
     "--decision",
     "accept",
     "--reason",
-    "Evidence reviewed by total-control.",
+    "Target inputs inspected and focused check rerun by total-control.",
     "--evidence-ref",
     "reports/result.json",
     "--write",
@@ -2028,7 +2028,7 @@ test("decide-review refuses to accept over blocked results without --accept-bloc
 });
 
 
-test("a blocked review decision is recoverable: new evidence reopens review and accept clears blockers", () => {
+test("a blocked review decision is recoverable: a corrected result reopens review and accept clears blockers", () => {
   const root = makeRoot();
   const init = JSON.parse(run(["init", "--root", root, "--demand-key", "UNBLOCK-FIXTURE", "--title", "Unblock Fixture", "--write", "--json"]).stdout);
   run(["add-task-package", "--root", root, "--state-root", init.stateRoot, "--task-package-id", "PKG-1", "--summary", "Pkg", "--target-window", "WinA", "--target-task-id", "TASK-1", "--write", "--json"]);
@@ -2037,7 +2037,7 @@ test("a blocked review decision is recoverable: new evidence reopens review and 
   const blockedDecision = JSON.parse(run(["decide-review", "--root", root, "--state-root", init.stateRoot, "--candidate-id", reduced1.candidateId, "--decision", "blocked", "--reason", "blocked pending env fix", "--write", "--json"]).stdout);
   assert.equal(blockedDecision.ok, true);
 
-  // new evidence arrives -> the blocked task must be reviewable again
+  // A corrected target result arrives -> the blocked task must be reviewable again.
   const reimport = JSON.parse(run(["import-target-result", "--root", root, "--state-root", init.stateRoot, "--target-task-id", "TASK-1", "--target-window", "WinA", "--status", "completed", "--evidence-ref", "reports/fixed.json", "--supersede-result", "--write", "--json"]).stdout);
   assert.equal(reimport.ok, true, "import after a blocked decision must work");
   writeStateRootEvidence(root, init.stateRoot, "reports/fixed.json");

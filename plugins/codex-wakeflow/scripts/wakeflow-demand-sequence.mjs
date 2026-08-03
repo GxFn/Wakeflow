@@ -1166,7 +1166,7 @@ function commandCreateDemand() {
       controllerOutputs: [initOut, renderOut].filter(Boolean),
       ...(testDecision ? {} : { testDecisionReminder: "No testing decision recorded for this demand. Confirm the test approach was decided at Design (requirement-design testing decision), or record it with --test-decision. Reminder only — not a gate." }),
       ...(taskPackages.length > 0 && taskPackages.every((pkg) => !pkg.evidenceContract)
-        ? { evidenceContractReminder: "None of the initial task packages carries an evidence contract: the craft gate stays dormant for this demand. If this is implementation work, author one per package (required kinds like tests/change-scope; see wakeflow-target-craft). Reminder only — not a gate." }
+        ? { evidenceContractReminder: "None of the initial task packages carries a craft review-input contract: the craft gate stays dormant for this demand. If this is implementation work, author evidenceContract requirements per package (kinds like tests/change-scope; see wakeflow-target-craft). Reminder only — not a gate." }
         : {}),
       forbiddenConclusions: ["create-demand-is-dispatch", "create-demand-is-acceptance"],
       agentNext: `Demand created and any delivered TODO row consumed. Dispatch is a separate step; no dispatch, delivery, or acceptance was performed.${testDecision ? "" : " Reminder: no testing decision recorded — confirm the Design-stage test approach or record it."}`,

@@ -27,10 +27,22 @@
     "status": { "type": "string", "enum": ["completed", "blocked", "needs-review"] },
     "summary": { "type": "string" },
     "changedRepos": { "type": "array", "items": { "type": "string" } },
-    "commits": { "type": "array", "items": { "type": "string" } },
+    "commits": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Target-authored commit locators for controller inspection; presence does not establish correctness."
+    },
     "commitDisposition": { "type": "string", "enum": ["committed", "left-uncommitted", "no-changes"] },
-    "evidenceRefs": { "type": "array", "items": { "type": "string" } },
-    "verification": { "type": "array", "items": { "type": "string" } },
+    "evidenceRefs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Target-authored artifact locators. Wakeflow may check path existence; it does not verify artifact truth."
+    },
+    "verification": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Target-authored validation summaries supplied as controller review inputs, not independent verification."
+    },
     "risks": { "type": "array", "items": { "type": "string" } },
     "wakeflowTrace": { "type": "object" },
     "createdAt": { "type": "string" },
@@ -38,6 +50,7 @@
     "forbiddenConclusions": { "type": "array", "items": { "type": "string" } },
     "craftEvidence": {
       "type": "array",
+      "description": "Target-authored typed review inputs. Required kinds, mappings, and path locatability may be checked mechanically; truth and acceptance remain controller judgments.",
       "items": {
         "type": "object",
         "required": ["kind"],
@@ -63,6 +76,7 @@
     },
     "resultMapping": {
       "type": "object",
+      "description": "Structural coverage of controller-authored acceptance anchors or approved Test steps. Complete means mapped, not verified or accepted.",
       "required": ["contract", "compatibility", "status"],
       "properties": {
         "contract": { "type": "string", "enum": ["target-result-envelope-v1", "target-result-envelope-v2"] },

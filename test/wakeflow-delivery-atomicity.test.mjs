@@ -670,7 +670,7 @@ test("controller-return delivery remains transport-only and needs no state-root 
         mode: "group-ready",
         dispatchGroup: "GROUP-ATOMIC",
       },
-      prompt: "Review the returned target evidence.",
+      prompt: "Inspect the returned target inputs and validate independently.",
       automation: {
         enabled: false,
         keepLive: false,

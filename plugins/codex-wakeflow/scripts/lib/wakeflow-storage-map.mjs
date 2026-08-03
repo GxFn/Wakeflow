@@ -130,7 +130,7 @@ export function scanStorage({ workspaceRoot, config = {} }) {
     "Send/readback evidence per delivery attempt.");
   add(".wakeflow-local/wakeflow-delivery/target-results", path.join(deliveryDir, "target-results"), "evidence",
     "record-target-result", "NEVER deleted by GC", "no",
-    "TargetResultEnvelopes — acceptance evidence; prune-runtime always retains them.");
+    "TargetResultEnvelopes — target-authored review inputs and audit history; prune-runtime always retains them.");
   add(".wakeflow-local/wakeflow-delivery/locks", path.join(deliveryDir, "locks"), "handles",
     "applied delivery preparation / target host send", "released on target result; release-window-lock recovers", "only via release-window-lock",
     "One in-flight target work lease per target window (cross-host), reserved with the prepared envelope and revalidated by target send; controller-return takes none.");

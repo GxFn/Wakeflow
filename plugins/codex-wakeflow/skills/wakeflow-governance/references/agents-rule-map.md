@@ -8,7 +8,7 @@ This is a navigation and maintenance map for the reusable Wakeflow
 
 | Rule family | Current owner |
 | --- | --- |
-| Controller entry posture and evidence-first judgment | `AGENTS.md#Controller Posture` |
+| Controller entry posture, context-first reading, and independent-validation judgment | `AGENTS.md#Controller Posture` |
 | Controller, Product, Design, Test, Wakeflow, and host roles | `AGENTS.md#Role Map` |
 | Task classification and execution partition | `AGENTS.md#Task Partitions` |
 | Auto Claim limits | `AGENTS.md#Auto-Claim Boundary` |

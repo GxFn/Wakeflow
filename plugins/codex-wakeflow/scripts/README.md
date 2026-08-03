@@ -67,10 +67,10 @@ Current scripts:
   validates and writes optional controller-authored
   `{id,claim,probe,expected}` acceptance anchors with the task package, then
   moves an intake / rework demand back to `planned`; `import-target-result`
-  stores result evidence; `reduce-results`
+  stores target-authored result inputs; `reduce-results`
   creates review candidates; `decide-review` records explicit total-control
   judgment; `complete-demand` records the final completion transition after
-  accepted task evidence; `archive-demand` scans real IDs and user/workspace
+  explicit controller acceptance decisions; `archive-demand` scans real IDs and user/workspace
   absolute paths before and after staging; `sanitize-archive` applies the same
   guard to one existing archived ledger root while preserving the original.
   It does not dispatch work or parse Markdown as state.
@@ -81,10 +81,10 @@ Current scripts:
   registers real thread ids in the local thread registry, derives window
   configs from workspace config plus registry presence, prepares dispatch
   packets from state roots, builds delivery envelopes, records delivery-run
-  evidence, records target result envelopes, reviews group readiness, builds
+  facts, records target-authored result envelopes, reviews group readiness, builds
   controller-return envelopes, manages keep-live state, and writes stop
   markers. It does not read current plan Markdown as authority, create legacy
-  automation jobs, send host thread messages, or accept evidence. Runtime
+  automation jobs, send host thread messages, verify target truth, or accept results. Runtime
   packets, envelopes, delivery runs, review packs, and thread registry files
   stay under ignored `.wakeflow-local/wakeflow-delivery/` unless an explicit
   state directory is provided.
@@ -107,14 +107,14 @@ Current scripts:
   controller-return callback readiness, missing target results, stale state-root
   projections, and replay audit issues. Its resume plan separates failed /
   blocked delivery runs, pending host sends, callback-envelope creation,
-  evidence review, wait-for-result, and pending dispatch as different next
+  target-input inspection, wait-for-result, and pending dispatch as different next
   actions. `review-results`, `review-pack`, and `status` expose a
   `callbackPlan`: `group-ready` waits for all sent target results before one
   group callback, while `per-target` can produce one independent callback per
   completed or blocked target/task and still tracks later siblings. Failed
   delivery commands include a stable `errorCode` plus diagnostics so MCP callers
   can distinguish stale revisions, duplicate callbacks, missing results,
-  evidence gaps, thread registration issues, and boundary violations without
+  review-input gaps, thread registration issues, and boundary violations without
   parsing prose.
   `trace-spine` is a read-only evidence lookup that can start from a state root,
   dispatch group, delivery, target, or target result and report the matching
@@ -142,7 +142,7 @@ Current scripts:
   final-handle cwd/Git receipts. `record-design-handoff` plus every product
   binding publishes `execution-ready`. `close` emits host-close operations and
   `record-close-receipt` closes logical bindings without claiming physical
-  worktree deletion. It never dispatches, accepts evidence, merges, or manages
+  worktree deletion. It never dispatches, accepts results, merges, or manages
   Git worktrees.
 - `wakeflow-intake.mjs`: state-root intake bridge for the Test surface.
   `test-card` writes a complete pre-test
@@ -205,7 +205,7 @@ Current scripts:
   handoff board and global TODO board for controller-ready candidates after a
   demand completes. It lifecycle-blocks Design rows whose demand state root is
   already active, completed, or archived, so stale rows cannot be claimed again.
-  It never creates a current plan, accepts evidence, dispatches windows, or
+  It never creates a current plan, accepts results, dispatches windows, or
   changes TODO / Design status.
 - `wakeflow-todo.mjs`: dry-run by default; `deliver` appends one Design-ready item
   (requirement / bug / supplement / research) to the global TODO board as a

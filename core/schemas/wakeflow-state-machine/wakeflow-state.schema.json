@@ -149,6 +149,7 @@
     },
     "state": {
       "type": "string",
+      "description": "Demand workflow state. review-ready means target review inputs are structurally available for controller inspection; it does not mean truth was verified or work was accepted.",
       "enum": [
         "intake",
         "planned",

@@ -72,7 +72,10 @@
         "additionalProperties": false
       }
     },
-    "evidenceContract": { "type": "object" },
+    "evidenceContract": {
+      "type": "object",
+      "description": "Execution-craft review-input requirements (persistent compatibility name). Reducers check required kinds, mappings, and declared path locatability only; controller validation establishes truth."
+    },
     "replacesTargetTaskId": { "type": "string", "minLength": 1 },
     "continuation": {
       "type": "object",

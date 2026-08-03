@@ -3,9 +3,9 @@
 Date: 2026-06-08
 
 > **Living baseline, aligned 2026-07-31.** Originally 2026-06-08; re-derived
-> against the current architecture (unified create/claim/deliver, the 38-tool MCP
-> surface, the `redesign` review decision, deliver-only Design, demand pods, the evidence gate
-> and per-window evidence contract). It now also governs a fourth role — the development/target
+> against the current architecture (unified create/claim/deliver, the 31-tool MCP
+> surface, the `redesign` review decision, deliver-only Design, demand pods, the
+> structural review-input gate and per-window `evidenceContract` compatibility field). It now also governs a fourth role — the development/target
 > window's execution craft (`wakeflow-target-craft`, a plugin skill, not a window-support
 > template). Where a specific `SKILL.md` has not yet been re-derived, the live file wins on
 > tool/intake vocabulary; this map governs capability, role boundaries, and acceptance intent.
@@ -43,9 +43,10 @@ entry points.
   - Design clarifies, helps confirm, proposes options, writes requirement
     designs, redesigns non-bug outcome mismatches, proposes candidate slices,
     and hands off.
-  - Test plans real validation, reproduces, designs regression evidence, and
-    reviews evidence.
-  - Controller accepts, archives, routes TODOs, and decides final state.
+  - Test plans real validation, reproduces, designs regression checks, and
+    reviews result materials without accepting them.
+  - Controller independently validates, accepts, archives, routes TODOs, and
+    decides final state.
 
 ## External Research And Practice Basis
 
@@ -165,8 +166,8 @@ Sources:
 
 Wakeflow conclusions:
 
-- Evidence should distinguish symptom and cause. Black-box evidence proves
-  user-visible behavior; white-box evidence helps explain internal cause. They
+- Review inputs should distinguish symptom and cause. Black-box probes observe
+  user-visible behavior; white-box material helps explain internal cause. They
   do not replace each other.
 - Monitoring, debugging, load testing, log analysis, and review are related but
   should remain loosely coupled.
@@ -175,9 +176,10 @@ Wakeflow conclusions:
 
 Implications:
 
-- Controller acceptance must read raw evidence and independently judge user
+- Controller acceptance must inspect target-authored materials, run fresh
+  independent checks, and judge user
   goal, scope, implementation reality, validation, and residual risk.
-- Archive requires closed active work, rolled TODOs, and traceable evidence.
+- Archive requires closed active work, rolled TODOs, and a traceable validation record.
 - Removing controller review logic is allowed only if target result, Test
   review, or script output still cannot be mistaken for final acceptance.
 
@@ -302,15 +304,15 @@ developer usage.
 | Role | Must cover | Must not do |
 | --- | --- | --- |
 | Design | Clarification, assisted confirmation, options, requirement design, candidate slicing, handoff | Dispatch, product implementation, final product decision |
-| Test | Risk strategy, reproduction, regression design, evidence review, failure classification | Product takeover, final acceptance, unbounded QA |
-| Controller | Entry sync, state roots, task packages, dispatch, result review, TODO rollup, archive | Accept target prose, skip raw evidence, let scripts make product decisions |
-| Product / Target craft | Test-first, systematic debugging, self-review by severity, scope discipline (YAGNI), verify-before-done; produce controller-acceptable evidence | Claim, accept, dispatch, cross-window or state-machine writes; invoke Design/Test skills; decide acceptance |
+| Test | Risk strategy, reproduction, regression design, result-input review, failure classification | Product takeover, final acceptance, unbounded QA |
+| Controller | Entry sync, state roots, task packages, dispatch, result review, independent validation, TODO rollup, archive | Accept target prose, skip independent checks, let scripts make product decisions |
+| Product / Target craft | Test-first, systematic debugging, self-review by severity, scope discipline (YAGNI), verify-before-done; produce controller-reviewable inputs | Claim, accept, dispatch, cross-window or state-machine writes; invoke Design/Test skills; decide acceptance |
 
 ## Skill To Source Matrix
 
 | Wakeflow skill | Source skill body | Industry basis | Required judgment |
 | --- | --- | --- | --- |
-| `requirement-clarification` | `define-goal`, `grill-me`, `grill-with-docs`, `feature-design-assistant` | ISO/IEC/IEEE 29148, NASA SWE-050, Double Diamond, clarifying-question research | Ask only scope/evidence-changing questions and output verifiable goals |
+| `requirement-clarification` | `define-goal`, `grill-me`, `grill-with-docs`, `feature-design-assistant` | ISO/IEC/IEEE 29148, NASA SWE-050, Double Diamond, clarifying-question research | Ask only scope/outcome-changing questions and output verifiable goals |
 | `option-planning` | `feature-design-assistant`, `senior-architect`, `zoom-out` | Double Diamond, architecture decisions | Compare alternatives with boundaries, interfaces, risks, and validation |
 | `requirement-design` | `to-prd`, `agile-product-owner`, `planning-with-files` | ISO/IEC/IEEE 29148, INVEST | Produce controller-intake design, not empty PRD prose |
 | `work-slicing` | `to-issues`, `agile-product-owner` | INVEST, vertical slicing | Block horizontal slices, empty interfaces, and unused adapters |
@@ -318,9 +320,9 @@ developer usage.
 | `test-strategy` | `senior-qa` | Risk-based testing, test pyramid | Choose validation by risk and confidence |
 | `debugging-and-triage` | `diagnose`, `systematic-debugging`, `triage` | Scientific debugging, SRE symptom/cause separation | Build feedback loop before claims |
 | `regression-design` | `tdd` | Test pyramid, behavior-focused testing | Use public seams and fail-before/pass-after evidence |
-| `evidence-review` | `code-reviewer`, `senior-qa` | Google code review, test evidence confidence | Identify blockers, missing evidence, and residual risk without accepting |
-| `wakeflow-controller` acceptance | `code-reviewer`, `senior-qa`, existing Wakeflow controller | Google code review, SRE evidence model | Independently review raw evidence, roll TODOs, and decide accept/rework/block/archive |
-| `wakeflow-target-craft` | Superpowers `test-driven-development` / `systematic-debugging` / `verification-before-completion` / `requesting-code-review`, mattpocock `tdd` / `diagnose` | Test pyramid, scientific debugging, evidence-first code review | Earn machine-checkable evidence during implementation; stop point-fixing at `recurringProblem`; hold no claim/accept/dispatch authority |
+| `evidence-review` | `code-reviewer`, `senior-qa` | Google code review, test confidence | Inspect target materials and identify blockers, missing inputs, and residual risk without accepting |
+| `wakeflow-controller` acceptance | `code-reviewer`, `senior-qa`, existing Wakeflow controller | Google code review, SRE validation model | Inspect target inputs, run independent checks, roll TODOs, and decide accept/rework/block/archive |
+| `wakeflow-target-craft` | Superpowers `test-driven-development` / `systematic-debugging` / `verification-before-completion` / `requesting-code-review`, mattpocock `tdd` / `diagnose` | Test pyramid, scientific debugging, artifact-based code review | Produce structured review inputs with machine-checkable presence/mapping; stop point-fixing at `recurringProblem`; hold no claim/accept/dispatch authority |
 
 ## Design Skills To Implement
 
@@ -457,12 +459,12 @@ Required behavior:
 - Reproduce the exact reported behavior.
 - Produce ranked falsifiable hypotheses.
 - Probe one variable at a time.
-- Classify product defect, test defect, environment, flaky, missing evidence,
+- Classify product defect, test defect, environment, flaky, missing review inputs,
   out of scope, or needs owner decision.
 
 Acceptance:
 
-- The report contains signal, evidence, hypotheses, probes, classification,
+- The report contains signal, observations, hypotheses, probes, classification,
   owner recommendation, and residual risk.
 - It is not log-reading guesswork.
 
@@ -494,9 +496,9 @@ Path:
 Required behavior:
 
 - Understand intent and boundary.
-- Inventory raw evidence.
+- Inventory target-authored review inputs.
 - Review high-risk surfaces first.
-- Separate blockers, missing evidence, minor issues, residual risks, invalid
+- Separate blockers, missing review inputs, minor issues, residual risks, invalid
   conclusions, and recommended controller decision.
 
 Acceptance:
@@ -516,19 +518,21 @@ product repositories and load it via the Wakeflow plugin, alongside `wakeflow-ta
 
 Required behavior:
 
-- Shape HOW the development window writes code so it earns machine-checkable evidence:
+- Shape HOW the development window writes code so it produces structured review inputs whose presence and mapping are machine-checkable, while truth remains a controller judgment:
   test-first (RED→GREEN), systematic debugging (reproduce → falsifiable hypotheses →
   one-variable probes → regression), self-review by severity, scope discipline (YAGNI),
   verify-before-done (typecheck/lint/test output).
 - At `recurringProblem` (reworked twice), stop point-fixing: re-derive from root cause, or
   return `needs-review` recommending a Design redesign for a non-bug outcome mismatch.
 - Forbid claim, accept, dispatch, cross-window, or state-machine writes; forbid invoking
-  Design/Test skills; never decide acceptance (produce evidence, controller decides).
+  Design/Test skills; never decide acceptance (produce review inputs, controller decides).
 
 Acceptance:
 
-- Returns a `TargetResultEnvelope` whose evidence a controller can accept without a
-  round-trip; honestly returns `blocked`/`needs-review` when evidence is missing.
+- Returns a `TargetResultEnvelope` whose review inputs are concrete enough to inspect
+  without asking the target to restate its claim; honestly returns
+  `blocked`/`needs-review` when required inputs are missing. Acceptance still
+  requires controller validation.
 - Adds craft, not authority: `wakeflow-target` remains higher authority for the delivery and
   return protocol.
 
@@ -541,19 +545,20 @@ Path:
 Required behavior:
 
 - Acceptance inputs include state root, task package, dispatch group, target
-  result, raw evidence, Test/Design artifacts, product rules, and TODO impact.
+  result, target-authored materials, fresh controller checks, Test/Design
+  artifacts, product rules, and TODO impact.
 - Acceptance review checks user goal, scope, identity, implementation reality,
-  validation evidence, risks, and TODO rollup.
+  independent validation results, risks, and TODO rollup.
 - Decisions are explicit: accept result, request rework, mark blocked, wait,
   need user decision, complete demand, archive, or create next package.
-- Stop when evidence is target prose only, superficial script output, missing
-  raw artifacts, empty interface/mock/adapter work, or inconsistent TODO/archive
+- Stop when target inputs are prose only, superficial script output, missing
+  referenced artifacts, empty interface/mock/adapter work, or inconsistent TODO/archive
   state.
 
 Acceptance:
 
 - Target self-report cannot become final acceptance.
-- Every decision can be traced to raw evidence.
+- Every decision can be traced to inspected inputs and fresh controller checks.
 
 ## Installation Requirements
 
@@ -587,7 +592,7 @@ After implementation:
 - Design/Test do not gain controller authority.
 - Controller acceptance is strengthened, not delegated.
 - Setup sync installs the real skill directories.
-- Node-only validation proves template files, setup tests, and script checks
-  are aligned.
+- Node-only validation checks that template files, setup tests, and script
+  checks are aligned; it does not validate loaded host surfaces.
 - No project-specific names, local paths, thread ids, secrets, non-English text,
   or unsupported runtime dependencies remain in reusable Wakeflow package files.

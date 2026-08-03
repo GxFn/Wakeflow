@@ -14,9 +14,10 @@ actionable is a hard stop until the safe operation and the explicit one-sentence
 step are clear. For a new request, analyze the feature, user scenario, completion
 definition, local code, docs, tests, and release path before decomposing work.
 
-- Machine envelopes are evidence-first: read the named state root, skill, dispatch
-  group, task package, and evidence documents before acting; missing or conflicting
-  references stop the work as missing evidence, pending decision, or blocked.
+- Machine envelopes are context-first: read the named state root, skill,
+  dispatch group, task package, and referenced review materials before acting;
+  missing or conflicting references stop the work as missing review input,
+  pending decision, or blocked.
 - On entering a managed workspace, read `CLAUDE.md`, `.wakeflow-active/index.md`, and
   `.wakeflow-active/current/workspace-current-status.md`, then continue from the
   current controller document. Reading status is orientation, not permission to edit
@@ -50,12 +51,12 @@ definition, local code, docs, tests, and release path before decomposing work.
   not confuse it with any managed product's internal agent.
 - Claude Code subagents (the Task/Agent tool) may assist controller and child
   windows with bounded parallel code search, log triage, test localization, and
-  evidence summarization. Their output is advisory evidence; it never transfers
+  input summarization. Their output is advisory review input; it never transfers
   dispatch, acceptance, state-machine writes, repository ownership, or
   user-confirmation authority.
 
 Do not move responsibilities between repositories to make boundaries look tidy.
-Boundary changes require a real caller, replacement entrypoint, and evidence.
+Boundary changes require a real caller, replacement entrypoint, and independent validation.
 Browse official or authoritative sources when current platform rules, external
 standards, release behavior, protocols, security, or best practices matter.
 Local code facts still win over generic advice.
@@ -91,7 +92,7 @@ without creating a demand, Pod, session, or worktree.
   card's existing `controllerSelfChecks` records
   what total control verified and why a real scenario remains necessary.
   Test-only reproduction/environment diagnostics remain valid. Test output
-  cannot supply missing controller proof or become the quality owner.
+  cannot complete unfinished controller validation or become the quality owner.
 - The controller self-validates anything that does not need a real project:
   Wakeflow script tests, document checks, state-machine checks, targeted units,
   probes, runtime JSON/log review, and lightweight integration checks.
@@ -109,9 +110,9 @@ without creating a demand, Pod, session, or worktree.
   package must carry `testExecution`; Test may elaborate commands only with a
   step-to-anchor map, may use only listed Test skills, and must return an
   unmapped goal/gate/method as a change request before execution. The controller
-  rejects evidence produced by a Test-invented target instead of adopting that
+  rejects materials produced for a Test-invented target instead of adopting that
   target into later rework.
-- Acceptance requires raw evidence review: user scenario, inputs, outputs,
+- Acceptance requires fresh observations plus independent controller validation: user scenario, inputs, outputs,
   state/data changes, actual call chain, real consumers, failure paths, edge
   cases, and user-verifiable behavior.
 - Before accepting or adding follow-up work, check original requirement
@@ -154,15 +155,16 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   after controller intake.
 - Claude Code subagents (the Task/Agent tool) do bounded parallel investigation
   only — never to manufacture progress, bypass a blocker, or replace controller
-  review.
+  validation.
 - Automation packets and envelopes are transport data, not authority transfer.
-  The controller may delete any automation that cannot prove its goal, state
+  The controller may delete any automation that cannot identify its goal, state
   root, window, thread id, dispatch group, target task, and next-hop rule.
 - Direct-thread dispatch is the normal transport; it does not make ordinary
   discussion, Design work, or single-window development unattended automation.
-  In confirmed unattended mode, keep reviewing results, pulling evidence,
-  deciding, and dispatching next eligible packages until final completion, a hard
-  gate, user stop, no eligible TODO, or missing evidence that needs a human.
+  In confirmed unattended mode, keep reviewing results, inspecting inputs,
+  validating, deciding, and dispatching next eligible packages until final
+  completion, a hard gate, user stop, no eligible TODO, or missing review input
+  that needs a human.
 - After a real direct-thread send records `status=sent` with
   `transportStatus=accepted`, stop the send turn — do not sleep, poll, or wait;
   `readback.status` is independent observation, and pending/unavailable never

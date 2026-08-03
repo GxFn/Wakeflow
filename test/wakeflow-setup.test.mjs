@@ -1501,11 +1501,11 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   assert.match(testAgents, /proactively recommend the smallest matching Test skill/);
   assert.match(testAgents, /skills\/evidence-review\/SKILL\.md/);
   assert.match(testAgents, /Functional Completeness Self-Check/);
-  assert.match(testAgents, /Do not rely on the controller to discover obvious gaps/);
+  assert.match(testAgents, /do not present them as controller validation or acceptance, and do not rely on the controller to discover obvious gaps/i);
   assert.match(testAgents, /downgrade a complete/);
   const testReadme = readFileSync(path.join(fixture.parent, "Test/README.md"), "utf8");
   assert.match(testReadme, /Test skill map: `skills\/README\.md`/);
-  assert.match(testReadme, /Test skills are evidence methods first/);
+  assert.match(testReadme, /Test skills are validation methods first/);
   const testSkills = readFileSync(path.join(fixture.parent, "Test/skills/README.md"), "utf8");
   assert.match(testSkills, /How To Use These Skills/);
   assert.match(testSkills, /Use these skills proactively/);

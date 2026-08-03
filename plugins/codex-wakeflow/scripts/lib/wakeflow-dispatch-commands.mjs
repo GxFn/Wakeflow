@@ -202,7 +202,8 @@ export function createDispatchCommands(ctx) {
       // idempotency comparable: same-revision replay ignores it.
       ...(designIntent ? { designIntent } : {}),
       ...(acceptanceAnchors.length ? { acceptanceAnchors } : {}),
-      // Design-authored execution-craft evidence contract, carried so the target sees
+      // Design-authored execution-craft input contract (persisted under the
+      // compatibility field evidenceContract), carried so the target sees
       // what evidence it must produce. Advisory at dispatch; enforced at reduce-results.
       // Also OUTSIDE the idempotency comparable (like designIntent): back-fill is safe.
       ...(evidenceContract ? { evidenceContract } : {}),
@@ -652,7 +653,7 @@ export function createDispatchCommands(ctx) {
           "Test alignment map: every executed step must name the confirmed requirement goal and approvedPlan item it serves; any unmapped step is a blocker, not evidence.",
           "Real-environment evidence must identify the boundary or hidden defect explored; it supplements the controller's prior validation and any product acceptance, and does not replace them.",
         ] : []),
-        "TargetResultEnvelope with evidence refs; target result is not controller acceptance.",
+        "TargetResultEnvelope with target-authored review inputs and artifact refs; Wakeflow checks structure and locatability only, and the target result is not controller acceptance.",
       ],
       forbidden: [
         ...(fullContextPackage ? taskBriefing.boundaries.forbidden : getAllValues("--forbidden")),

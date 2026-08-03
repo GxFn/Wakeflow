@@ -13,7 +13,7 @@ A skill is a sharp reference future agents scan under pressure — not a narrati
 
 | Convention | Rule |
 |---|---|
-| **Iron Law** | For a hard rule, lead with one bold non-negotiable sentence (e.g. `NO ACCEPTANCE WITHOUT FRESH RAW-EVIDENCE.`). One per gate — three rules means three gates. |
+| **Iron Law** | For a hard rule, lead with one bold non-negotiable sentence (e.g. `NO ACCEPTANCE UNTIL THE CONTROLLER HAS INDEPENDENTLY VALIDATED THE INTENDED BEHAVIOR.`). One per gate — three rules means three gates. |
 | **Letter = spirit** | Add once, early, to a hard rule: "Violating the letter of this rule is violating its spirit." It closes the "I'm following the spirit" loophole. |
 | **Rationalization table** | Pre-empt shortcuts with a `\| Excuse \| Reality \|` table — sharper and more scannable than prose warnings. |
 | **Red Flags — STOP** | A short bullet list of the thoughts that mean "you are rationalizing right now", so the agent can self-check. |

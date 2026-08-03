@@ -30,12 +30,13 @@ unclear, record a pending decision or risk instead of new work.
 
 When accepting or archiving work:
 
-- close solved TODOs with evidence;
+- close solved TODOs with controller validation references;
 - keep valid remaining TODOs with updated blockers;
-- add newly found TODOs with evidence and original-requirement authority;
+- add newly found TODOs with validation references and original-requirement authority;
 - explain why an observed issue does not enter TODO.
 
-Do not close a TODO from script output alone. Review raw evidence.
+Do not close a TODO from script output alone. Inspect the relevant inputs and
+run the required independent checks.
 
 ## Dispatch Use
 

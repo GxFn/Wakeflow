@@ -455,8 +455,8 @@ export function createWindowRuntime(ctx) {
         : []),
       zh ? "\u56de\u4f20\u8981\u6c42\uff1a" : "Return requirement:",
       zh
-        ? "- \u4ec5\u6267\u884c\u8be5\u4efb\u52a1\u5305\uff1b\u5b8c\u6210\u540e\u6309 wakeflow-target Skill \u56de\u4f20 TargetResultEnvelope \u4e0e\u53ef\u6838\u9a8c\u8bc1\u636e\u3002Target \u7ed3\u679c\u4e0d\u662f\u603b\u63a7\u9a8c\u6536\u3002"
-        : "- Execute only this task package. Return a TargetResultEnvelope with verifiable evidence through the wakeflow-target skill. A target result is not controller acceptance.",
+        ? "- \u4ec5\u6267\u884c\u8be5\u4efb\u52a1\u5305\uff1b\u5b8c\u6210\u540e\u6309 wakeflow-target Skill \u56de\u4f20 TargetResultEnvelope\u3001\u53ef\u5ba1\u67e5\u8f93\u5165\u4e0e\u53ef\u590d\u73b0\u7684\u9a8c\u8bc1\u8be6\u60c5\u3002Target \u7ed3\u679c\u4e0d\u662f\u603b\u63a7\u9a8c\u6536\u3002"
+        : "- Execute only this task package. Return a TargetResultEnvelope with reviewable inputs and reproducible validation details through the wakeflow-target skill. A target result is not controller acceptance.",
       ...(testExecution ? [`- ${zh ? "Test \u6267\u884c\u5951\u7ea6" : "Test execution contract"}: ${taskPackageRef}#testExecution`] : []),
       "",
       zh ? "\u6d3e\u53d1\u8bb0\u5f55\uff08\u4ec5\u7528\u4e8e\u8def\u7531\u4e0e\u8ffd\u8e2a\uff09\uff1a" : "Dispatch record (routing and trace only):",

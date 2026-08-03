@@ -2282,7 +2282,7 @@ test("Pod review and reducer never fall back to a base repo and fail closed with
     "--write",
   ]);
   assert.equal(reduced.status, 1, reduced.stderr || reduced.stdout);
-  assert.equal(JSON.parse(reduced.stdout).reviewGate, "evidence-repair-required");
+  assert.equal(JSON.parse(reduced.stdout).reviewGate, "review-input-repair-required");
 
   const missingBinding = makeWorkspace();
   const second = materializeReadySingleRepoPod(

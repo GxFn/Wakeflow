@@ -111,7 +111,7 @@ function testStepMappingIssues(testExecution, evidence, { completed }) {
   };
 }
 
-function resultProofPresent(result) {
+function resultReviewInputPresent(result) {
   return array(result?.evidenceRefs).length > 0
     || resultVerification(result).length > 0
     || array(result?.commits).length > 0
@@ -187,8 +187,8 @@ export function evaluateTargetResultContract({
   if (!nonEmpty(result?.summary)) {
     recordIssues.push(issue(completed ? "completed-summary-missing" : "blocker-summary-missing"));
   }
-  if (completed && !resultProofPresent(result)) {
-    recordIssues.push(issue("completed-proof-missing"));
+  if (completed && !resultReviewInputPresent(result)) {
+    recordIssues.push(issue("completed-review-input-missing"));
   }
   if (completed) {
     recordIssues.push(...dispositionConsistencyIssues(result));

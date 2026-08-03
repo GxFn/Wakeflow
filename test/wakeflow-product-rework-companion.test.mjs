@@ -399,7 +399,7 @@ test("an explicit redesign replacement supersedes the old task and the demand ca
   ]);
   assert.equal(replacementReviewPackResult.status, 0, replacementReviewPackResult.stderr || replacementReviewPackResult.stdout);
   const replacementReviewPack = JSON.parse(replacementReviewPackResult.stdout).reviewPack;
-  assert.equal(replacementReviewPack.gates.controllerReviewReady, true);
+  assert.equal(replacementReviewPack.gates.reviewInputsComplete, true);
   assert.deepEqual(
     replacementReviewPack.groupSnapshot.ready.map((item) => item.taskId),
     ["TASK-A-FIX"],

@@ -105,7 +105,7 @@ test("provenance + execution timeline: create from a TODO row, act, and read the
   const candidateId = JSON.parse(reduced.stdout).candidateId
     ?? JSON.parse(reduced.stdout).transitionCandidate?.candidateId;
   const decided = run(stateScript, ["decide-review", "--root", root, "--state-root", stateRoot,
-    "--candidate-id", candidateId, "--decision", "accept", "--reason", "evidence reviewed", "--write"]);
+    "--candidate-id", candidateId, "--decision", "accept", "--reason", "target inputs inspected and independent check passed", "--write"]);
   assert.equal(decided.status, 0, decided.stderr || decided.stdout);
   const completed = run(stateScript, ["complete-demand", "--root", root, "--state-root", stateRoot,
     "--reason", "all accepted", "--evidence-ref", `${stateRoot}/demand.json`, "--write"]);

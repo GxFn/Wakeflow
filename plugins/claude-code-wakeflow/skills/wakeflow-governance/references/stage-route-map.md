@@ -87,12 +87,13 @@ one window inside a demand). Pod product windows exist only inside an
 explicitly authorized Pod and use Claude-created native worktrees. Dispatch is
 forbidden before `execution-ready`; Wakeflow never creates or deletes those
 worktrees.
-Exit gate: results with evidence refs for the wave.
+Exit gate: target results with the required declared review-input refs for the wave.
 
 ## S4 — Review & Decide (owner: controller — the ONLY acceptance authority)
 `wakeflow_review_pack` (intent triple: designIntent / objective / result) →
 `wakeflow_reduce_results` → `wakeflow_decide_review`
-(accept / rework / redesign / blocked). Raw evidence before any decision.
+(accept / rework / redesign / blocked). Inspect target inputs and run fresh
+independent checks before any decision.
 Non-bug outcome mismatch = redesign lane back to S1, never point-fix loops.
 For a Pod, redesign must never return to mainline Design. Version 0.9.3 cannot
 persist a second frozen Pod Design request/handoff generation, so the demand

@@ -80,11 +80,11 @@ export const hostProfile = {
   texts: {
     registeredHandle: (windowName) => `Registered Codex thread for ${windowName}.`,
     subagentAssist: {
-      zh: "可把代码搜索、日志归因、测试定位、证据汇总等窄任务交给 Codex 子 agent 并行辅助；子 agent 只提供证据和建议，不改变窗口职责、验收、派发或状态机写入边界。",
-      en: "Use Codex subagents for narrow parallel assistance such as code search, log triage, test localization, or evidence summarization when useful. Subagents only provide evidence and recommendations; they do not change window responsibility, acceptance, dispatch, or state-machine write boundaries.",
+      zh: "可把代码搜索、日志归因、测试定位、输入汇总等窄任务交给 Codex 子 agent 并行辅助；子 agent 只提供审查输入和建议，不改变窗口职责、验收、派发或状态机写入边界。",
+      en: "Use Codex subagents for narrow parallel assistance such as code search, log triage, test localization, or input summarization when useful. Subagents only provide review inputs and recommendations; they do not change window responsibility, acceptance, dispatch, or state-machine write boundaries.",
     },
     skillAssistanceLine:
-      "- Codex subagents are recommended for bounded parallel assistance such as code search, log triage, test localization, and evidence summarization. Treat subagent output as evidence or advice only; it must not accept work, dispatch another window, write controller state, or expand repository boundaries.",
+      "- Codex subagents are recommended for bounded parallel assistance such as code search, log triage, test localization, and input summarization. Treat subagent output as review input or advice only; it must not accept work, dispatch another window, write controller state, or expand repository boundaries.",
     rootGeneratedFromBanner: (wakeflowRel) =>
       `> This file is generated from \`${wakeflowRel}/AGENTS.md\` and is the parent workspace Codex entrypoint. Do not maintain it by hand long term. After changing the source file, run \`cd ${wakeflowRel} && node scripts/wakeflow-setup.mjs sync-root-agents --write\` to refresh it. Script commands default to \`${wakeflowRel}/\` before execution.`,
     rootPluginGeneratedBanner:
@@ -116,8 +116,8 @@ export const hostProfile = {
       "Immediately call set_thread_title for the returned thread id, using the entry displayTitle.",
       "Call wakeflow_register_window once per returned create_thread.threadId using the entry localRegistration.callTemplate. The tool stores the id only in thread-registry and refreshes derived window-config status; do not hand-write runtime files.",
       language === "zh"
-        ? "总控和子窗口可使用 Codex 子 agent 并行做代码搜索、日志归因、测试定位和证据汇总；子 agent 不拥有验收、派发、状态机写入或跨仓库边界。"
-        : "Controller and child windows may use Codex subagents for parallel code search, log triage, test localization, and evidence summarization. Subagents do not own acceptance, dispatch, state-machine writes, or cross-repository boundaries.",
+        ? "总控和子窗口可使用 Codex 子 agent 并行做代码搜索、日志归因、测试定位和输入汇总；子 agent 不拥有验收、派发、状态机写入或跨仓库边界。"
+        : "Controller and child windows may use Codex subagents for parallel code search, log triage, test localization, and input summarization. Subagents do not own acceptance, dispatch, state-machine writes, or cross-repository boundaries.",
     ],
     titleReset: (title) => ({
       required: true,

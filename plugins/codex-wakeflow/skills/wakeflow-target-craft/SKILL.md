@@ -13,11 +13,12 @@ through rework.
 
 ## Core stance
 
-The controller accepts on machine-checkable EVIDENCE, not on "looks done". Every
-craft practice below exists to leave a specific piece of that evidence on disk.
-Do the practice and the evidence is a by-product; skip it and you will be asked
-for evidence you never produced. Craft is how you earn the gate, not extra
-ceremony on top of it.
+The target must leave structured, reproducible REVIEW INPUTS, not a "looks done"
+claim. Wakeflow can check that required kinds and mappings exist and that declared
+paths resolve; it cannot establish that the contents are true. Every craft
+practice below exists to give the controller something concrete to inspect and
+independently rerun before acceptance. Craft prepares an honest review; it does
+not earn acceptance by itself.
 
 **NO IMPLEMENTATION UNTIL EVERY AUTHORED `acceptanceAnchor` IS MAPPED TO A RED TEST OR PROBE.**
 Violating the letter of this rule is violating its spirit.
@@ -83,7 +84,7 @@ and watch it GREEN.
   fallback, silently drop unknown fields, or parse human-readable messages into
   structured truth. If the real RED or root cause cannot be established, return
   `needs-review` instead of editing by guess.
-- Earns: a test that covers the change plus ordered, reviewable evidence that
+- Produces: a test that covers the change plus ordered, reviewable inputs showing
   the same behavior failed before the implementation and passed afterward.
   When the package says `commitExpectation=commit` and repository policy
   permits, separate commits may prove that order. For
@@ -101,12 +102,12 @@ Do not guess-and-patch. Build a feedback loop first:
 
 1. Reproduce the exact reported behavior as a check you can run on demand.
 2. Form ranked, falsifiable hypotheses.
-3. Probe ONE variable at a time until the root cause is proven, not assumed.
+3. Probe ONE variable at a time until the root cause is established, not assumed.
 4. Fix the cause, then add a regression test that fails before and passes after.
 
 - Earns: a reproduction plus a regression test tied to the real cause.
-- Separate symptom from cause: black-box evidence proves user-visible behavior;
-  white-box evidence explains the internal cause. Report which one you have.
+- Separate symptom from cause: black-box probes observe user-visible behavior;
+  white-box material helps explain the internal cause. Report which one you have.
 
 ### 5. Self-review before return (two stages)
 
@@ -114,7 +115,7 @@ Before writing the `TargetResultEnvelope`, review your own diff in TWO passes:
 
 - **Stage 1 — spec compliance**: does the diff do what the task package's
   objective, requirement references, boundaries, completion expectations,
-  acceptance anchors, and evidence contract ask — nothing missing, nothing
+  acceptance anchors, and review-input contract (`evidenceContract`) ask — nothing missing, nothing
   extra? Treat `designIntent` as an implementation sketch, never as scope
   authority. Compare against the ORIGINAL wording, not your memory of it.
 - **Stage 2 — code quality**: as a skeptical reviewer — correctness, safety,
@@ -156,8 +157,8 @@ A rework is review input, not an insult and not noise. Before re-touching code:
 2. Respond point by point in your next self-review note: agree → fix it;
    disagree → say why WITH evidence. Never silently ignore a point, and never
    blind-patch to "make the message go away".
-3. Only then re-enter the practices above (a rework is a defect until proven
-   otherwise: reproduce first, practice 4).
+3. Only then re-enter the practices above (treat a rework as a defect until the
+   investigation establishes otherwise: reproduce first, practice 4).
 
 - Earns: the next result's self-review note carries the point-by-point response.
 
@@ -217,8 +218,8 @@ line.
   unchanged and remain higher authority.
 - It grants no claim, accept, dispatch, cross-window, or state-machine-write
   authority.
-- It does not decide acceptance — it produces the evidence; the controller
-  decides.
+- It does not decide acceptance — it produces target-side review inputs; the
+  controller independently validates the result and decides.
 - Product code and commits stay inside this window's own repository boundary.
 - This is primarily development/product-window craft. It is not Design craft.
   When readiness lists it for a Test package solely because an
@@ -228,13 +229,14 @@ line.
 
 ## Quality bar
 
-A task done with craft returns a `TargetResultEnvelope` whose evidence a
-controller can accept without a round-trip: a plan that was followed, a pinned
+A task done with craft returns a `TargetResultEnvelope` whose review inputs are
+concrete enough for the controller to inspect without asking the target to
+restate its claim: a plan that was followed, a pinned
 baseline, every authored acceptance anchor mapped to observed RED/GREEN
-evidence, tests that exist and pass, a diff within declared scope, verification
+inputs, tests that exist and pass, a diff within declared scope, verification
 output, and — for defects — a reproduction and regression. If any of these is
 missing, say so honestly (`blocked` / `needs-review`) rather than reporting
-`completed`.
+`completed`. The controller still independently validates and decides acceptance.
 
 ## Source methods
 
@@ -246,4 +248,4 @@ one-variable probes → regression), two-stage code review (spec compliance, the
 quality by severity), receiving code review (point-by-point, non-defensive),
 YAGNI / scope discipline, verification-before-completion, and
 finishing-a-branch hygiene. Industry basis: the practical test pyramid,
-scientific debugging, and evidence-first code review.
+scientific debugging, and artifact-based code review.

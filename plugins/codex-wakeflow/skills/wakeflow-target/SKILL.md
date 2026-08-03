@@ -52,8 +52,9 @@ probe; return needs-review instead of inventing a requirement when an anchor
 cannot be tested.
 
 Return requirement:
-- Execute only this task package. Return a TargetResultEnvelope with verifiable
-  evidence through this Skill. A target result is not controller acceptance.
+- Execute only this task package. Return a TargetResultEnvelope with target-authored
+  review inputs and reproducible validation details through this Skill. Wakeflow
+  checks their structure and locatability only; a target result is not controller acceptance.
 - Test execution contract: <package path>#testExecution
 
 Dispatch record (routing and trace only):
@@ -108,14 +109,13 @@ advance the live state root.
    - Change only files permitted by the task and repository rules.
    - Keep commits, tests, and evidence scoped to the owning repository.
    - If another repository must change first, stop and backfill a blocker.
-4. Produce evidence.
+4. Produce controller review inputs.
    - Include changed files, commands, test output, commit hash when available,
-     logs, runtime JSON, report paths, screenshots, or other reviewable
-     evidence.
+     logs, runtime JSON, report paths, screenshots, or other reviewable inputs.
    - Prose alone is not enough for completion.
 5. Record a `TargetResultEnvelope`.
    - Use the Wakeflow MCP `wakeflow_record_target_result` tool for the result
-     envelope. This is one narrow file/state action: it records target evidence
+     envelope. This is one narrow file/state action: it records target-authored review inputs
      only, and it does not review, accept, dispatch, send, or return. Pass the
      `dispatchGroup` from your delivery prompt: a late result from a superseded
      round then leaves the in-flight round's window lock alone.
@@ -152,10 +152,10 @@ advance the live state root.
      - Stop only when the current unit has `controllerAlreadyReached=true` or
        `controllerReturnNextStep` is `controller-return-already-sent`.
      A delivery for an older `resultVersionKey` never satisfies the current
-     result revision. These transport signals are INDEPENDENT of evidence. Do
+     result revision. These transport signals are INDEPENDENT of review-input quality. Do
      NOT withhold the callback because `missingEvidenceRefs` is non-empty or
-     `nextAction` says `fix-missing-evidence-refs`: evidence sufficiency is the
-     controller's POST-wake verdict, and the controller cannot act on it until
+     `nextAction` says `fix-missing-review-input-refs-before-controller-verdict`:
+     review-input completeness is the controller's POST-wake starting point, and the controller cannot act on it until
      you wake it.
    - If the target task references a delivery id but the local delivery envelope
      cannot be found, stop and report that missing local envelope; do not assume
@@ -176,7 +176,7 @@ advance the live state root.
    - Do not stop after writing the target result when controller return is
      allowed. The closeout steps stay separate: record target result, review
      readiness, prepare controller-return envelope, send with the host thread
-     tool, then record delivery evidence. Do not replace them with one combined
+     tool, then record delivery facts. Do not replace them with one combined
      target-window tool or duplicate the target result into another local result
      store.
 
@@ -214,7 +214,7 @@ Stop and return a blocker when:
 
 - The window identity or target repository cannot be confirmed.
 - The state root, task id, or dispatch group is missing or inconsistent.
-- Required evidence documents are missing.
+- Required referenced input documents are missing.
 - The task asks this target to change another repository without authorization.
 - The task is only a prompt, not a state-root or task-package assignment.
 - Validation fails and the next repair would change scope or repository
@@ -225,7 +225,7 @@ Stop and return a blocker when:
 
 For the MCP call, pass the task as `taskId`; the persisted artifact records it
 as `targetTaskId`. Every `completed` result must include the following complete
-contract. `blocked` or `needs-review` may carry partial execution evidence, but
+contract. `blocked` or `needs-review` may carry partial review inputs, but
 must still identify the task/group/state and provide a concrete blocker
 summary:
 
@@ -244,7 +244,8 @@ summary:
 - for completed Test work, exactly one
   `{kind:"test-step", planIndex, step, ref}` per approved plan item
 
-Complete mapping means only that the result can enter controller review. It is
-never automatic acceptance.
+Complete mapping means only that the target covered the declared anchors or Test
+steps and the result can enter controller review. It does not verify the claims
+and is never automatic acceptance.
 
 Do not write real thread ids into tracked documents, prompts, or backfill text.

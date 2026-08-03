@@ -11,16 +11,17 @@ this skill owns the mechanical loop steps.
 ## Purpose
 
 Wakeflow Delivery Loop lets the controller fan out work to target window
-sessions, receive compact result envelopes, review raw evidence, and decide the
-next package. It does not replace planning, scope control, or acceptance.
+sessions, receive compact result envelopes, inspect target-authored review
+inputs, run independent checks, and decide the next package. It does not
+replace planning, scope control, validation, or acceptance.
 
 Direct-thread dispatch is the normal transport; on Claude Code a Wakeflow
 thread id is the window's Claude Code session id, generated at launch and
 stable across resumes. Every Wakeflow window (the controller included) is a
 tmux-resident interactive `claude` session inside the workspace tmux server
-session. In explicitly enabled unattended mode, keep reviewing results, pulling
-evidence, deciding, planning next eligible packages, and dispatching until
-final completion, a hard gate, explicit user stop, missing evidence that needs
+session. In explicitly enabled unattended mode, keep reviewing results,
+inspecting inputs, validating, deciding, planning next eligible packages, and
+dispatching until final completion, a hard gate, explicit user stop, missing review inputs that need
 human judgment, or no eligible TODO remains.
 
 After the helper returns `transportStatus=accepted`, record `status=sent` with
@@ -35,8 +36,8 @@ tmux window. The activity monitor flips the tab to done when the result lands (l
 
 ## Source Practices For Acceptance
 
-**Iron Law: NO ACCEPTANCE WITHOUT FRESH RAW-EVIDENCE THAT PROVES THE INTENDED BEHAVIOR.** A result
-envelope, a script's `OK`, or a window's success report is a review input, never the proof.
+**Iron Law: NO ACCEPTANCE UNTIL THE CONTROLLER HAS PERSONALLY ESTABLISHED THE INTENDED BEHAVIOR FROM FRESH RAW INPUTS AND INDEPENDENT CHECKS.** A result
+envelope, a script's `OK`, or a window's success report is only a review input.
 Violating the letter of this rule is violating its spirit.
 
 Controller acceptance adapts mature review practice — `code-reviewer` (understand intent first, then
@@ -50,8 +51,8 @@ blocks, waits, completes a demand, archives, or creates the next package.
 
 | Claim | Requires | Not sufficient |
 |---|---|---|
-| Target task done | the VCS diff / raw evidence reviewed this turn | the envelope says "done" |
-| Behavior delivered | evidence shows the user-visible behavior | a connection / empty API / static mock exists |
+| Target task done | the VCS diff inspected and relevant behavior independently checked this turn | the envelope says "done" |
+| Behavior delivered | the controller reproduced or directly inspected the user-visible behavior | a connection / empty API / static mock exists |
 | Demand complete | line-by-line vs the requirement design + non-goals | all tasks marked done |
 | Ready for Test | existing non-Test targets accepted + controllerSelfChecks recorded | hoping Test will establish correctness |
 
@@ -96,7 +97,7 @@ Do not expose empty `blockedTargets`, `remainingTargets`, or
    operation is still needed. Never make another state writer recover it
    implicitly.
 4. If the demand is blocked, cancelled, archived, review-ready, or lacks
-   evidence, stop instead of preparing another package. If it is completed,
+   required review inputs, stop instead of preparing another package. If it is completed,
    classify the new fact before acting: same-demand continuation, independent
    follow-up, or no work. Never call `wakeflow_add_task` against completed state.
 5. Create or select a task package only when it advances the confirmed goal.
@@ -180,7 +181,7 @@ mainline. Missing or ambiguous identity remains blocked.
 1. Import or locate target result envelopes for the dispatch group.
 2. Run group review against the state root.
 3. Check for missing, blocked, or ready targets.
-4. Pull raw evidence before deciding.
+4. Inspect the target-authored materials and plan fresh independent checks before deciding.
 5. Review acceptance inputs:
    - full original plan / requirement design, including explicit decisions,
      non-goals, and forbidden shortcuts;
@@ -188,13 +189,13 @@ mainline. Missing or ambiguous identity remains blocked.
    - current state root and task package;
    - dispatch group and target identity;
    - target result envelope;
-   - raw evidence paths, commits, commands, reports, logs, screenshots, runtime
-     JSON, probes, or Test evidence;
+   - target-authored paths, commits, commands, reports, logs, screenshots,
+     runtime JSON, probes, or Test materials;
    - product repository rules and relevant Design/Test artifacts;
    - TODO/backlog implications.
 6. Check acceptance questions:
-   - Does the evidence prove the intended user/system behavior, not only that a
-     script ran?
+   - Do my fresh independent checks establish the intended user/system
+     behavior, rather than merely confirm that a target-reported script ran?
    - Are inputs, outputs, state/data changes, call chains, real consumers,
      failure paths, and edge cases covered enough for this task scope?
    - Did the target stay inside its assigned window/repository and task package?
@@ -204,7 +205,7 @@ mainline. Missing or ambiguous identity remains blocked.
      matters?
    - For a non-Test target, have I personally established functional
      completeness and correctness without relying on a future Test run?
-   - For a Test target, does the evidence only explore the approved real
+   - For a Test target, do its materials only explore the approved real
      environment or hidden-defect boundary, without redefining completion?
    - If adding a TODO, follow-up, or next package, is it authorized by the
      original requirement decisions rather than inferred from residual code,
@@ -246,11 +247,12 @@ Use this shape when recording or reporting controller acceptance:
 - Scope reviewed:
 - Original requirement authority:
 - Target/window:
-- Evidence reviewed:
+- Target inputs inspected:
+- Independent checks run:
 - Implementation reality:
 - Validation result:
 - Blockers:
-- Missing evidence:
+- Missing review inputs:
 - Residual risks:
 - TODO/backlog rollup:
 - Decision:
@@ -269,14 +271,14 @@ Use this shape when recording or reporting controller acceptance:
 - `archive-completed-work`
 - `create-next-package`
 
-Never use `accepted` as a shorthand unless the evidence, scope, and TODO rollup
-are already stated.
+Never use `accepted` as a shorthand unless the independent checks, scope, and
+TODO rollup are already stated.
 
-## Craft Evidence At Acceptance
+## Target Craft Inputs At Acceptance
 
-When a task package carries an `evidenceContract`, the machinery has already
-hard-checked the objective half at reduce (`craft-evidence-required`: required
-kinds present, declared artifacts resolve). The judgment half is yours:
+When a task package carries an `evidenceContract`, the machinery has checked only
+the structural half at reduce (`craft-review-inputs-required`: required kinds present,
+declared artifacts resolve). It has not checked truth. Validation and judgment are yours:
 
 - The review pack echoes each result's `craftEvidence` and a `craftCheck` /
   `advisoryCraftKinds` reminder. Entries with `verify: controller-rerun` mean
@@ -296,7 +298,7 @@ kinds present, declared artifacts resolve). The judgment half is yours:
 - For a full-context result, `resultMapping.status=complete` means every
   authored acceptance anchor or approved Test step is represented exactly
   once. It is only a review-readiness fact: independently inspect/rerun the
-  evidence before accepting.
+  referenced materials and run the required independent checks before accepting.
 - Check `commitDisposition`, `commits`, and `changedRepos` against the task
   package's `commitExpectation`. A `resultContractGap` blocks a verdict until
   the target records a corrected result or an honest blocked/needs-review
@@ -307,7 +309,7 @@ kinds present, declared artifacts resolve). The judgment half is yours:
 - `group-ready`: wait until every expected target is ready or a blocker makes
   the group impossible. Then return once to the controller.
 - `per-target`: return when a target result arrives, still with group context.
-- Empty target groups are not completion evidence.
+- Empty target groups are not grounds for completion.
 - A single target result is not group completion unless the group expected only
   that target.
 
@@ -384,8 +386,8 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   operations and bindings. Neither guesses identity from a worktree path or
   dynamic overlay.
 - Cancelling instead of finishing: `wakeflow_cancel_demand` stops an
-  in-flight demand WITHOUT pretending completion — no acceptance, evidence
-  stays, open tasks keep their last honest status. A cancelled Pod still needs
+  in-flight demand WITHOUT pretending completion — no acceptance, result
+  history stays, open tasks keep their last honest status. A cancelled Pod still needs
   the same logical close receipts before archive.
 
 ## Completed Demand Continuations
@@ -395,9 +397,9 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   original completion definition, a confirmed supplement to that definition,
   or an explicitly authorized optimization that the user says belongs to the
   same demand, use `wakeflow_continue_demand`.
-- Read the original plan / Requirement Design and the completion evidence
-  first. Record `continuationType`, a reason that explains why this is still the
-  same demand, evidence or decision references, and the first concrete target
+- Read the original plan / Requirement Design, accepted result history, and
+  controller validation record first. Record `continuationType`, a reason that explains why this is still the
+  same demand, review-input or decision references, and the first concrete target
   package in the SAME call. The operation preserves all accepted tasks and the
   earlier `demand.completed` event, then returns the state to `planned`; it does
   not dispatch or accept anything. The demand must pass normal review and
@@ -463,8 +465,8 @@ kinds present, declared artifacts resolve). The judgment half is yours:
   intent without a declared adaptation, run a requirement review (Original
   Plan / Requirement Design) first; if the requirement itself must change,
   decide `redesign`. Your decide-review reason is the confirmation record.
-- No scores, no gates: intent alignment never blocks anything; evidence-based
-  acceptance stays the only verdict.
+- No scores, no gates: intent alignment never blocks anything;
+  controller-validated acceptance stays the only verdict.
 
 ## Stage Gates (route map: wakeflow-governance/references/stage-route-map.md)
 
@@ -496,7 +498,7 @@ Stop instead of dispatching when:
 - The Design exit gate is incomplete for a new demand's first implementation
   dispatch, or a Test dispatch leaves an existing non-Test target unaccepted,
   omits the controller's self-checks, or lacks its confirmed environment block.
-- Required evidence is missing or unreadable.
+- Required review inputs are missing or unreadable.
 - The state root is not current or cannot be trusted.
 - The controller is reacting to a keyword, familiar command shape, script hint,
   or urgency before naming the safe operation, recovery boundary, explicit
@@ -506,19 +508,19 @@ Stop instead of dispatching when:
 - The next action would change scope, delete capability, downgrade capability,
   or make a product decision without user confirmation.
 - The next action would add a TODO, follow-up requirement, task package, or
-  scope expansion from code facts, test output, target evidence, implementation
+  scope expansion from code facts, test output, target backfill, implementation
   leftovers, or residual fields without first reading the full original plan /
   requirement design and confirming that the addition stays inside the original
   decisions and non-goals.
-- A target result lacks reviewable evidence.
-- Evidence is only target prose, superficial script output, or status-table
+- A target result lacks reviewable inputs.
+- Review inputs are only target prose, superficial script output, or status-table
   motion.
-- Test says evidence is acceptable but the controller has not reviewed the raw
-  artifacts named by Test.
+- Test says its result is acceptable but the controller has not inspected the
+  named materials and run its own relevant probe.
 - The result is only an empty interface, static mock, unused adapter, type-only
   contract, unreachable route, or documentation motion without a real consumer
   and validation path.
-- The evidence shows a non-bug outcome mismatch, or a small requirement-level fix that is
+- Controller validation establishes a non-bug outcome mismatch, or a small requirement-level fix that is
   Design's job and not a code defect: `decide-review --decision redesign` parks the demand
   (needs-rework, redesignCount++) instead of bouncing point fixes between product windows.
   For a mainline demand, surface the redesign to the stateless mainline Design window with
@@ -569,7 +571,7 @@ Wakeflow scripts or automation, source-repo verification may use:
 - `node scripts/wakeflow-smoke.mjs`
 - `npm test`
 
-Script output is evidence, not acceptance.
+Script output is a review input, not acceptance.
 
 - A proven helper rejection before paste is normally released automatically by
   exact compare-and-delete during helper/recording cleanup. If that cleanup is

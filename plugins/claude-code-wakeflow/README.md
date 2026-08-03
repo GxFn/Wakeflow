@@ -2,13 +2,13 @@
 
 # Wakeflow for Claude Code
 
-A disciplined control loop for multi-window agent work — every step traced, every result proven.
+A disciplined control loop for multi-window agent work — every step traced, every result reviewable.
 
 [English](README.md) | [Simplified Chinese](README.zh-CN.md)
 
 Wakeflow turns a local Claude Code workspace into a disciplined controller
 system: a controller-owned loop for each active demand, focused repository windows, explicit state
-roots, compact delivery envelopes, and evidence-based acceptance. The controller runs this as a closed loop — plan, dispatch, collect evidence, review, decide, repeat — and records every step, so the whole run is auditable after the fact.
+roots, compact delivery envelopes, and controller-validated acceptance. The controller runs this as a closed loop — plan, dispatch, collect review inputs, independently validate, decide, repeat — and records every step, so the whole run is auditable after the fact.
 
 </div>
 
@@ -36,7 +36,7 @@ Large agent-assisted work rarely lives in one repository or one conversation.
 A single goal may require a controller, product repositories, a design window,
 and a real-scenario test window. Without a shared operating model, the work
 degrades into scattered prompts, copied status tables, unclear ownership, and
-unfinished evidence review.
+unfinished controller validation.
 
 Wakeflow provides the missing control layer:
 
@@ -55,9 +55,10 @@ Wakeflow provides the missing control layer:
   apply can write the delivery envelope.
 - **Acceptance-anchored craft**: every new implementation package carries concrete
   claim/probe/expected anchors that targets map to RED checks before coding;
-  the controller still reruns and judges the evidence independently.
-- **Evidence before acceptance**: target backfill is input, not a conclusion.
-  The controller still reviews raw evidence before completing work.
+  the mapping is review input and the controller still validates independently.
+- **Review inputs before acceptance**: target backfill, logs, paths, and test
+  summaries are inputs, not conclusions. Wakeflow checks structure and path
+  locatability; the controller independently validates behavior before completing work.
 - **Local-first runtime**: real session ids live only in the local thread
   registry; window config is a derived sendability view, and active state stays
   out of tracked source.
@@ -92,7 +93,7 @@ bar tells you who is doing what at a glance:
 
 | Window | Role | Default reasoning effort |
 | --- | --- | --- |
-| Controller | owns goals, dispatch, evidence review, acceptance | `max` |
+| Controller | owns goals, dispatch, independent validation, acceptance | `max` |
 | Design | clarifies requirements, redesigns non-bug outcome mismatches, prepares handoffs | `xhigh` |
 | Repo windows | implement inside exactly one repository | `xhigh` |
 | Test | after controller validation, explores only the approved real-environment boundary for hidden bugs | `xhigh` |
@@ -115,8 +116,8 @@ disk. Every demand moves through the same closed loop:
  3 add task   a task package freezes target context and requirement anchors
  4 dispatch   preview -> digest-matched apply -> LOCK -> prompt pasted
  5 work       the target window executes inside its repository boundary
- 6 result     TargetResultEnvelope lands with evidence refs -> lock released
- 7 review     controller reads RAW evidence, then accepts / reworks / blocks / redesigns
+ 6 result     TargetResultEnvelope lands with declared review-input refs -> lock released
+ 7 review     controller inspects inputs + independently validates, then decides
  8 complete   active required tasks accepted, replacement lineage valid, no blocker
 ```
 
@@ -127,9 +128,10 @@ Two rules keep the loop honest:
   identity, and trace. The package owns complete task context, requirement
   anchors preserve background, and Skills own procedure.
 - **Backfill is input, not acceptance.** A target's self-report never closes
-  work. The controller reviews the raw evidence (commits, command output,
-  reports) before recording a decision, and a blocked decision is always
-  recoverable: new evidence reopens review.
+  work. The controller inspects target-authored materials (commits, command
+  output, reports) and independently validates the relevant behavior before
+  recording a decision. A blocked decision is always recoverable when new
+  review inputs arrive.
 - **Replacement is explicit.** Ordinary rework redispatches the same task.
   Mainline redesign preserves the rejected task, then the controller creates a new
   full-context implementation task in the product responsibility window with
@@ -152,7 +154,7 @@ Two rules keep the loop honest:
   .wakeflow-active/             demand state roots (layer 2 lives here)   local
   .wakeflow-local/wakeflow-delivery/                                      local
     dispatch-packets/  delivery-envelopes/  delivery-runs/   transport records
-    target-results/                                          evidence envelopes
+    target-results/                                          target-authored result envelopes
     locks/                       one in-flight target delivery per window, cross-host
     hosts/codex/                 codex session registry (host-scoped)
     hosts/claude-code/           claude session registry + tmux bindings
@@ -168,7 +170,7 @@ appear in tracked files, prompts, or backfill text.
 - Scripts and MCP tools create, validate, and record machine data; they never
   choose acceptance, widen scope, or decide product behavior on their own.
   They only persist an explicit controller decision.
-- Target windows execute exactly their dispatched package and report evidence.
+- Target windows execute exactly their dispatched package and report review inputs.
 - The controller is the only acceptance authority and must complete its own
   functional validation before Test starts. Every active/open non-Test target
   must already be accepted; canonical superseded replacement history is not an
@@ -254,7 +256,7 @@ Three steps from install to a running fleet, then a command cheat sheet.
 | `/wakeflow:windows <name> --replace` | Rebuild one window with a fresh session | A window is stale / context-heavy |
 | `/wakeflow:status` | Demands, eligible work, deliveries, window readiness | Before dispatching |
 | `/wakeflow:dispatch` | Prepare and send one delivery to a target window | Hand work to a window |
-| `/wakeflow:review` | Review a target's raw evidence, record accept / rework / blocked | A result came back |
+| `/wakeflow:review` | Inspect target inputs, independently validate, then record accept / rework / blocked | A result came back |
 | `/wakeflow:unattended on|off` | Toggle the work windows' permission mode | Switch hands-off ↔ prompted |
 | `/wakeflow:check` | Health-check an existing workspace, converge stale or missing surfaces | After an upgrade |
 
@@ -268,7 +270,7 @@ Wakeflow is a powerful local automation plugin. Before installing, understand ex
 - **Spawns tmux sessions and interactive `claude` windows**: the baseline fleet uses the configured tmux session; each demand pod uses another session. Wakeflow creates, resumes, replaces, and arranges these real `claude` CLI sessions via the bundled host helper.
 - **Runs these shell commands**: `node`, `tmux`, `git`, and `brew` — the last only to `brew install tmux` once, after a single explicit consent, when tmux is missing.
 - **Permission model — safe by default**: work windows ship with `acceptEdits` (Claude Code still prompts before risky actions). Fully unattended `bypassPermissions` (no prompts) is **opt-in only**: a workspace enables it explicitly via `/wakeflow:unattended on`, that choice is recorded in `wakeflow.config.json`, and only that recorded consent lets the helper auto-confirm the boot dialog. The safety boundary in unattended mode is the repository worktree, the `CLAUDE.md` gates, and the Wakeflow state machine.
-- **Local-first, no telemetry**: real session/thread ids live only under `.wakeflow-local/` and are never written to tracked files, prompts, or sent anywhere. Demands, evidence, and ledgers stay in your workspace.
+- **Local-first, no telemetry**: real session/thread ids live only under `.wakeflow-local/` and are never written to tracked files, prompts, or sent anywhere. Demands, result inputs, and ledgers stay in your workspace.
 - **Platform**: macOS-first (tmux; Homebrew is only the documented install path when tmux is missing). The tmux core should work on Linux but is not yet verified there.
 
 You remain in control: scripts and MCP tools create, validate, and record
@@ -297,7 +299,7 @@ tmux server session named `wakeflow`; each demand pod (below) adds its own
 
 A Wakeflow thread id is the window's Claude Code session id, which stays
 stable across resumes. Desktop windows are not an automation transport. The
-envelope, evidence, and review contracts are unchanged from the shared
+envelope, target-result, and review contracts are unchanged from the shared
 Wakeflow model.
 
 **Launch.** Initialization runs the helper's `preflight` (tmux install with
@@ -487,8 +489,8 @@ sidebars. New state-root progress documents and subsequent Unified Status
 renders also use the selected interface language.
 
 Controller and child windows can use Claude Code subagents to speed up bounded
-code search, log triage, test localization, and evidence summaries. Subagent
-output is evidence or advice only; controller review, dispatch, state writes,
+code search, log triage, test localization, and input summaries. Subagent
+output is review input or advice only; controller validation, dispatch, state writes,
 and repository boundaries remain with the Wakeflow window that owns the task.
 
 ## What Wakeflow Creates
@@ -547,7 +549,7 @@ Core rules:
   transport authority, or acceptance evidence.
 
 Automation stops on final completion, hard gates, user stop, no eligible work,
-missing evidence, blocked state, or any condition that requires controller or
+missing review inputs, blocked state, or any condition that requires controller or
 user judgment.
 
 ## MCP Capability Surface
@@ -575,7 +577,7 @@ Primary tool groups:
 Public MCP tools are for outer agent workflows. Target closeout is
 deliberately split: record a target result, review readiness, prepare a
 controller-return envelope when policy allows, send through the tmux host
-helper, and record delivery evidence. Controller review stays split as review
+helper, and record delivery facts. Controller review stays split as review
 pack, result reduction, and explicit decision; result reduction only creates a
 review candidate and is not acceptance. Do not collapse those steps into a
 single target-window MCP tool. Internal steps such as archive summary refresh
@@ -584,8 +586,8 @@ runtime scripts and skills. Public archive MCP tools wrap controller-approved
 demand, TODO, and workspace-document archive flows. `wakeflow_archive`
 with `target=sanitize-demand` only replaces an already archived demand with a privacy-clean copy and preserves
 the original locally. `wakeflow_storage_preserve` is the dry-run-first public
-route to the existing local evidence-preservation backend. With archive
-redaction, opaque evidence remains byte-for-byte in the local preserved
+route to the existing local artifact-preservation backend. With archive
+redaction, opaque artifacts remain byte-for-byte in the local preserved
 original while the portable archive carries a safe placeholder manifest,
 unless clean opaque byte inclusion was explicitly authorized with
 `allowOpaque`. A real host id inside a filename or directory name preserves that
@@ -679,7 +681,7 @@ the Claude Code edition manual.
 ## Design Principles
 
 1. **Judgment stays visible**: script output, status rows, and target backfill
-   are evidence, not acceptance.
+   are review inputs, not acceptance.
 2. **One demand, one state root**: JSON state and Markdown progress surfaces
    stay tied to the same demand.
 3. **Prompts brief, packages contextualize, skills execute**: prompts carry
@@ -687,7 +689,7 @@ the Claude Code edition manual.
    context, requirement anchors retain original background, and installed
    skills own execution procedure.
 4. **Repository boundaries matter**: each window owns its source, tests,
-   commits, and evidence.
+   commits, and review inputs.
 5. **Automation moves work, not authority**: delivery proves that a prompt was
    sent, not that the result is complete.
 6. **Local runtime stays local**: real session ids stay only in the local
@@ -697,4 +699,4 @@ the Claude Code edition manual.
    Wakeflow support surfaces unless the user explicitly maps existing ones.
 
 Wakeflow exists to make multi-window agent work safe to resume, easy to
-inspect, and hard to fake.
+inspect, and hard to accept without controller review.

@@ -820,7 +820,7 @@ test("thread registry helpers build dispatch config without leaking thread ids",
   assert.equal(unlisted.dispatchable, false);
 });
 
-test("review pack helper preserves evidence repair and pending-dispatch gates", () => {
+test("review pack helper exposes review-input repair and pending-dispatch gates", () => {
   const review = {
     group: "group-fixture",
     taskId: "",
@@ -843,7 +843,7 @@ test("review pack helper preserves evidence repair and pending-dispatch gates", 
       commits: [],
       evidenceRefs: ["missing-evidence.md"],
       verificationSummary: ["unit passed"],
-      hasControllerReviewEvidence: true,
+      hasReviewInputs: true,
       missingEvidenceRefs: ["missing-evidence.md"],
       testExecution: {
         requirementGoal: "Confirmed goal",
@@ -855,24 +855,26 @@ test("review pack helper preserves evidence repair and pending-dispatch gates", 
   });
 
   assert.equal(pack.kind, "ControllerReviewPack");
-  assert.equal(pack.gates.controllerReviewReady, false);
-  assert.equal(pack.gates.evidenceRepairRequired, true);
+  assert.equal(pack.gates.reviewInputsComplete, false);
+  assert.equal(pack.gates.reviewInputRepairRequired, true);
   assert.equal(pack.gates.pendingDispatchTargetsPresent, true);
-  assert.equal(pack.nextAction, "fix-missing-evidence-refs-before-controller-verdict");
-  assert.deepEqual(pack.rawEvidenceRequired[0].verificationSummary, ["unit passed"]);
+  assert.equal(pack.nextAction, "fix-missing-review-input-refs-before-controller-verdict");
+  assert.deepEqual(pack.targetReviewInputs[0].verificationSummary, ["unit passed"]);
+  assert.equal(Object.hasOwn(pack.gates, "controllerReviewReady"), false);
+  assert.equal(Object.hasOwn(pack, "rawEvidenceRequired"), false);
   assert.deepEqual(pack.missingEvidenceRefs, [{
     targetWindow: "WindowA",
     taskId: "task-a",
     ref: "missing-evidence.md",
   }]);
   assert.match(pack.testAlignmentCheck, /Reject Test-invented goals, gates, skills, restarts, or unmapped steps/);
-  assert.match(pack.controllerAcceptanceBoundary, /Test pass cannot fill missing controller proof/);
+  assert.match(pack.controllerAcceptanceBoundary, /Test pass cannot complete unfinished controller validation/);
 });
 
-// Decoupling: a recorded result must wake the controller even when evidence refs don't resolve.
-// controllerReturnNextStep (transport) is independent of evidence; the Iron Law (controller may
-// not ACCEPT without resolvable evidence) still holds via gates.controllerReviewReady / nextAction.
-test("controller-return transport is decoupled from evidence quality (no break on missing evidence)", () => {
+// Decoupling: a recorded result must wake the controller even when target review-input refs don't resolve.
+// controllerReturnNextStep (transport) is independent of input quality; acceptance still requires
+// controller validation after gates.reviewInputsComplete / nextAction exposes structural gaps.
+test("controller-return transport is decoupled from review-input quality", () => {
   const review = {
     decision: "ready",
     group: "group-fixture",
@@ -888,7 +890,7 @@ test("controller-return transport is decoupled from evidence quality (no break o
     targetResults: [{
       targetWindow: "WindowA", taskId: "task-a", resultStatus: "completed", commits: [],
       evidenceRefs: ["only-in-target-repo.json"], verificationSummary: ["unit passed"],
-      hasControllerReviewEvidence: true,
+      hasReviewInputs: true,
       missingEvidenceRefs: ["only-in-target-repo.json"],
     }],
     generatedAt: "2026-06-24T00:00:00.000Z",
@@ -897,9 +899,9 @@ test("controller-return transport is decoupled from evidence quality (no break o
   // Transport: the wake-up fires regardless of the unresolved evidence ref.
   assert.equal(pack.controllerReturnNextStep, "build-controller-return");
   assert.equal(pack.gates.controllerReturnReady, true);
-  // Verdict (Iron Law intact): the controller still may not accept without resolvable evidence.
-  assert.equal(pack.gates.controllerReviewReady, false);
-  assert.equal(pack.nextAction, "fix-missing-evidence-refs-before-controller-verdict");
+  // The pack exposes an incomplete review input; it never decides the verdict.
+  assert.equal(pack.gates.reviewInputsComplete, false);
+  assert.equal(pack.nextAction, "fix-missing-review-input-refs-before-controller-verdict");
 });
 
 test("controller-return next step prioritizes current callback work over historical sent deliveries", () => {
@@ -924,7 +926,7 @@ test("controller-return next step prioritizes current callback work over histori
       commits: [],
       evidenceRefs: ["evidence.json"],
       verificationSummary: ["passed"],
-      hasControllerReviewEvidence: true,
+      hasReviewInputs: true,
       missingEvidenceRefs: [],
     }],
     generatedAt: "2026-07-26T00:00:00.000Z",
@@ -975,7 +977,7 @@ test("review pack exposes required craft gaps before reduce while keeping callba
       commits: [],
       evidenceRefs: ["evidence.json"],
       verificationSummary: ["passed"],
-      hasControllerReviewEvidence: true,
+      hasReviewInputs: true,
       missingEvidenceRefs: [],
       acceptanceAnchors: FIXTURE_ACCEPTANCE_ANCHORS,
       craftEvidenceGaps: [{ targetWindow: "WindowA", taskId: "task-a", kind: "self-review", reason: "missing-kind" }],
@@ -983,18 +985,18 @@ test("review pack exposes required craft gaps before reduce while keeping callba
     generatedAt: "2026-07-10T00:00:00.000Z",
     wakeflowTrace: { dispatchGroup: "group-craft" },
   });
-  assert.equal(pack.gates.controllerReviewReady, false);
+  assert.equal(pack.gates.reviewInputsComplete, false);
   assert.equal(pack.gates.craftEvidenceRepairRequired, true);
-  assert.equal(pack.nextAction, "fix-required-craft-evidence-before-controller-verdict");
+  assert.equal(pack.nextAction, "fix-required-craft-review-inputs-before-controller-verdict");
   assert.equal(pack.controllerReturnNextStep, "build-controller-return", "transport still wakes the controller");
   assert.match(pack.acceptanceAnchorCheck, /independently rerun or challenge/);
 });
 
 // Regression: a target reports evidence relative to ITS OWN repo (where the work + commit
 // happened). Resolving evidence refs only against the workspace root false-flagged that
-// evidence as "missing", flipping nextAction to fix-missing-evidence-refs and stalling the
+// review input as "missing", flipping nextAction to fix-missing-review-input-refs and stalling the
 // controller return / verdict — a real closed-loop break observed in live MCP use.
-test("evidence ref relative to a target window's repo resolves, not false-missing (closed-loop break fix)", () => {
+test("review-input ref relative to a target window's repo resolves, not false-missing (closed-loop break fix)", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-evidence-repo-"));
   writeJson(path.join(root, "wakeflow.config.json"), {
     workspaceName: "Wakeflow",
@@ -1358,7 +1360,7 @@ test("build-delivery rejects legacy packets without stateRef", () => {
   assert.match(result.stdout, /missing stateRef/);
 });
 
-test("review-results and controller return require state-root group evidence", () => {
+test("review-results and controller return require state-root group results", () => {
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   registerThread(root, "AlembicWorkspace", "controller");
@@ -2073,7 +2075,7 @@ test("target results are scoped by dispatch group to avoid parallel run collisio
   assert.equal(reviewB.groupSnapshot.blocked[0].status, "blocked");
 });
 
-test("review-pack gates missing path evidence refs before controller verdict", () => {
+test("review-pack gates missing path-like review-input refs before controller verdict", () => {
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   prepareDispatch(root, stateRootRef);
@@ -2100,25 +2102,25 @@ test("review-pack gates missing path evidence refs before controller verdict", (
   assert.equal(missing.reviewPack.wakeflowTrace.artifactKind, "review-pack");
   assert.equal(missing.reviewPack.wakeflowTrace.dispatchGroup, "GROUP-STATE");
   assert.equal(missing.reviewPack.wakeflowTrace.stateRoot, stateRootRef);
-  assert.equal(missing.reviewPack.gates.controllerReviewReady, false);
+  assert.equal(missing.reviewPack.gates.reviewInputsComplete, false);
   assert.equal(missing.reviewPack.gates.missingEvidenceRefsPresent, true);
-  assert.equal(missing.reviewPack.gates.evidenceRepairRequired, true);
+  assert.equal(missing.reviewPack.gates.reviewInputRepairRequired, true);
   assert.equal(missing.reviewPack.gates.totalControlVerdictRequired, false);
   assert.deepEqual(missing.reviewPack.missingEvidenceRefs, [{
     targetWindow: "AlembicPlugin",
     taskId: "CSMR-TASK-1",
     ref: "reports/missing-result.json",
   }]);
-  assert.match(missing.reviewPack.nextAction, /fix-missing-evidence-refs/);
+  assert.match(missing.reviewPack.nextAction, /fix-missing-review-input-refs/);
 
   writeText(path.join(root, "reports/missing-result.json"), "{\"ok\": true}");
   const repaired = parseOk(run(root, ["review-pack", "--group", "GROUP-STATE"]));
-  assert.equal(repaired.reviewPack.gates.controllerReviewReady, true);
+  assert.equal(repaired.reviewPack.gates.reviewInputsComplete, true);
   assert.equal(repaired.reviewPack.gates.missingEvidenceRefsPresent, false);
   assert.deepEqual(repaired.reviewPack.missingEvidenceRefs, []);
 });
 
-test("controller-return blocked delivery records controller window evidence", () => {
+test("controller-return blocked delivery records controller window context", () => {
   const { root, stateRootRef } = makeFixture();
   registerThread(root, "AlembicPlugin");
   prepareDispatch(root, stateRootRef);
@@ -2198,7 +2200,7 @@ test("group review and controller return read state-root target results", () => 
   assert.equal(review.readyResults[0].resultFile, `${stateRootRef}/target-results/result-1.json`);
 
   const pack = parseOk(run(root, ["review-pack", "--group", "GROUP-STATE"]));
-  assert.equal(pack.reviewPack.gates.controllerReviewReady, true);
+  assert.equal(pack.reviewPack.gates.reviewInputsComplete, true);
   assert.equal(pack.reviewPack.targetResults[0].stateRootResult, true);
   assert.equal(pack.reviewPack.targetResults[0].evidenceRefSummaries[0].resolvedAgainst, "state-root");
 
@@ -2244,10 +2246,10 @@ test("state-root review-pack reads target results from controller state root", (
   assert.equal(payload.reviewPack.wakeflowTrace.stateRoot, stateRootRef);
   assert.equal(payload.reviewPack.wakeflowTrace.stateRevision, 3);
   assert.equal(payload.reviewPack.gates.stateRootBased, true);
-  assert.equal(payload.reviewPack.gates.controllerReviewReady, true);
+  assert.equal(payload.reviewPack.gates.reviewInputsComplete, true);
   assert.equal(payload.reviewPack.gates.missingEvidenceRefsPresent, false);
   assert.equal(payload.reviewPack.targetResults[0].stateRootResult, true);
-  assert.equal(payload.reviewPack.rawEvidenceRequired[0].evidenceRefs[0], "reports/plugin-result.json");
+  assert.equal(payload.reviewPack.targetReviewInputs[0].evidenceRefs[0], "reports/plugin-result.json");
   const summaries = payload.reviewPack.targetResults[0].evidenceRefSummaries;
   assert.equal(summaries[0].stateRootRelativePath, `${stateRootRef}/reports/plugin-result.json`);
   assert.equal(summaries[0].resolvedAgainst, "state-root");
@@ -2273,7 +2275,7 @@ test("state-root review-pack does not mark empty target lists as review ready", 
   assert.equal(payload.decision, "no-target-tasks");
   assert.equal(payload.groupStatus, "empty");
   assert.equal(payload.reviewPack.gates.noTargetTasks, true);
-  assert.equal(payload.reviewPack.gates.controllerReviewReady, false);
+  assert.equal(payload.reviewPack.gates.reviewInputsComplete, false);
   assert.equal(payload.reviewPack.gates.totalControlVerdictRequired, false);
   assert.equal(payload.reviewPack.nextAction, "add-task-package-before-review");
   assert.equal(payload.agentNext, "No target tasks are reviewable; add a task package before dispatch or review.");
@@ -2317,14 +2319,14 @@ test("completed state-root review-pack stops instead of asking for another verdi
   assert.equal(payload.decision, "completed");
   assert.equal(payload.groupStatus, "completed");
   assert.equal(payload.reviewPack.controllerState, "completed");
-  assert.equal(payload.reviewPack.gates.controllerReviewReady, false);
+  assert.equal(payload.reviewPack.gates.reviewInputsComplete, false);
   assert.equal(payload.reviewPack.gates.totalControlVerdictRequired, false);
-  assert.equal(payload.reviewPack.gates.rawEvidencePullRequired, false);
+  assert.equal(payload.reviewPack.gates.reviewInputInspectionRequired, false);
   assert.equal(payload.reviewPack.nextAction, "demand-completed-stop-without-next-dispatch");
   assert.equal(payload.agentNext, "Demand is completed; stop without creating new deliveries.");
 });
 
-test("completed target results require reviewable evidence", () => {
+test("completed target results require at least one concrete review input", () => {
   const { root } = makeFixture();
   const result = run(root, [
     "record-target-result",
@@ -2351,7 +2353,7 @@ test("legacy sent runs with readback.ok remain accepted and confirmed", () => {
   assert.equal(deliveryReadbackStatus(legacyRun), "confirmed");
 });
 
-test("record-delivery-run enforces sent readback evidence", () => {
+test("record-delivery-run enforces sent readback facts", () => {
   const { root, stateRootRef, stateRoot } = makeFixture();
   registerThread(root, "AlembicPlugin");
   const prepared = prepareDispatch(root, stateRootRef);
@@ -2998,7 +3000,7 @@ test("state-root target result import exposes controller-return context from del
   assert.equal(stateRootPack.reviewPack.callbackPlan.counts.readyToBuildCount, 1);
   assert.equal(stateRootPack.reviewPack.gates.controllerReturnReady, true);
   assert.equal(stateRootPack.reviewPack.controllerReturnDelivery.status, "not-built");
-  assert.equal(stateRootPack.reviewPack.nextAction, "pull-raw-evidence-and-run-wakeflow-state-reducer");
+  assert.equal(stateRootPack.reviewPack.nextAction, "inspect-target-review-inputs-and-run-wakeflow-state-reducer");
   assert.equal(stateRootPack.reviewPack.controllerReturnNextStep, "build-controller-return");
   assert.equal(stateRootPack.reviewPack.callbackPlan.units[0].triggerTarget, "AlembicPlugin");
   assert.equal(stateRootPack.reviewPack.callbackPlan.units[0].triggerTaskId, "CSMR-TASK-1");

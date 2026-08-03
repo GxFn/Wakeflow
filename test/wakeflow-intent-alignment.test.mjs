@@ -123,7 +123,7 @@ test("without designIntent the whole chain leaves zero traces", () => {
   assert.equal(entry.objectiveSource, "dispatch-packet");
 });
 
-test("B2: review pack surfaces craftCheck when a task declares advisory craft evidence (never a gate)", () => {
+test("B2: review pack surfaces craftCheck when a task declares advisory craft inputs (never a gate)", () => {
   const root = makeConfiguredRoot("wakeflow-craftcheck-");
   const init = run(stateScript, ["init", "--root", root, "--demand-key", "CRAFTCHECK-DK", "--title", "CraftCheck", "--write", "--json"]);
   assert.equal(init.status, 0, init.stderr || init.stdout);
@@ -144,7 +144,7 @@ test("B2: review pack surfaces craftCheck when a task declares advisory craft ev
   assert.equal(imported.status, 0, imported.stderr || imported.stdout);
 
   const pack = JSON.parse(run(deliveryScript, ["review-pack", "--root", root, "--state-root", stateRoot, "--json"]).stdout).reviewPack;
-  assert.match(pack.craftCheck, /advisory craft evidence/i, "craftCheck surfaces when advisory kinds are declared");
+  assert.match(pack.craftCheck, /advisory craft inputs/i, "craftCheck surfaces when advisory kinds are declared");
   assert.match(pack.craftCheck, /not a gate/i, "craftCheck states it is a reminder, not a gate");
   const entry = pack.targetResults.find((item) => item.taskId === "tp-a__RepoA");
   assert.deepEqual(entry.advisoryCraftKinds, ["self-review", "test-first"], "the entry lists the advisory craft kinds");
@@ -154,7 +154,7 @@ test("B2: review pack surfaces craftCheck when a task declares advisory craft ev
   assert.equal(entry.craftEvidence?.[0]?.kind, "tests", "the entry echoes the result's craftEvidence for acceptance-time re-runs");
 });
 
-test("B2: no craftCheck when the task declares no advisory craft evidence (zero trace)", () => {
+test("B2: no craftCheck when the task declares no advisory craft inputs (zero trace)", () => {
   const { root, stateRoot } = makeDemand({ withIntent: false });
   assert.equal(prepare(root, stateRoot, { objective: OBJECTIVE }).status, 0);
   const imported = run(stateScript, [

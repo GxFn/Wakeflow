@@ -1,5 +1,5 @@
 // "accept" is the only FINAL review decision. A "blocked" decision parks the
-// task pending new evidence: once a fresh target result is imported the task
+// task pending a corrected result: once a fresh target result is imported the task
 // must become reviewable again, otherwise the demand wedges permanently
 // (add-task refuses while blockers exist, reduce sees no open tasks, and
 // complete refuses open tasks - no escape).

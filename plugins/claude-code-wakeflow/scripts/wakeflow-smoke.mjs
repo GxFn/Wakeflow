@@ -565,7 +565,7 @@ async function runMcpSmoke(rootPath) {
         taskId: "mcp-smoke-task",
         dispatchGroup: "mcp-smoke-group",
         status: "completed",
-        summary: "MCP smoke target delivery matched the reviewed preview and produced evidence.",
+        summary: "MCP smoke target delivery matched the reviewed preview and produced review inputs.",
         commitDisposition: "no-changes",
         evidenceRefs: [mcpSmokeEvidenceRef],
         verification: ["mcp smoke target result recorded"],
@@ -583,7 +583,7 @@ async function runMcpSmoke(rootPath) {
       !recordedTargetResultPayload.ok
       || recordedTargetResultPayload.parsedJson?.command !== "import-target-result"
     ) {
-      throw new Error("MCP wakeflow_record_target_result did not record target evidence");
+      throw new Error("MCP wakeflow_record_target_result did not record target review inputs");
     }
 
     const reducedResults = await request("tools/call", {

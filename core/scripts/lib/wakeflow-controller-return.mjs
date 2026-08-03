@@ -141,7 +141,7 @@ export function buildControllerReturnEnvelope({
       newerResultVersionRequiresNewControllerReturn: true,
       nextDispatchAllowedOnlyWhen: [
         "current plan has eligible unfinished task",
-        "target evidence requires controller rework dispatch",
+        "controller validation of target review inputs requires rework dispatch",
         "user-approved unattended automation remains inside boundary",
       ],
     },

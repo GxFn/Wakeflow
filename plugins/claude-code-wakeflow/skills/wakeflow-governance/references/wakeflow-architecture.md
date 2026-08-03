@@ -33,7 +33,7 @@ decide acceptance. Target closeout stays split into narrow actions: record the
 target result envelope, review readiness, prepare a controller-return envelope
 when policy allows, send with the Claude Code host transport (the agent runs
 `wakeflow-claude-host.mjs deliver --delivery-file` against the controller's
-tmux-resident window), and record delivery evidence. Low-level
+tmux-resident window), and record delivery facts. Low-level
 `send` is for custom prompts. The helper is a Bash-run script, not an
 MCP tool. Internal runtime scripts remain available to Wakeflow skills and
 tests without becoming public MCP tools.

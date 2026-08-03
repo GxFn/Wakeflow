@@ -73,13 +73,13 @@ executor.
 
 | Shortcut | Reality |
 |---|---|
-| “Test will prove the feature works.” | Total control must already have proved and accepted that. |
-| “A Test pass closes missing controller evidence.” | It only narrows the approved environmental risk. |
+| “Test will prove the feature works.” | Total control must already have independently validated and accepted the functional chain. |
+| “A Test pass completes unfinished controller validation.” | It only narrows the approved environmental risk. |
 | “A Test failure means the whole design is wrong.” | It is a defect signal to classify against the accepted goal and exact environment. |
 
 ## Acceptance Review
 
-Acceptance requires raw evidence:
+Acceptance requires fresh review inputs plus independent controller validation:
 
 - commits or changed files;
 - command output;
@@ -89,11 +89,12 @@ Acceptance requires raw evidence:
 - screenshots when relevant;
 - evidence paths.
 
-Backfill prose is input, not proof. The controller must review the actual
-evidence before accepting, reworking, blocking, or dispatching the next package.
-Test evidence is reviewed as environmental risk evidence, never as retroactive
-proof of functional completeness. If Test finds a real defect, the controller
-reopens the owning product task with the reproduced boundary and raw evidence;
+Backfill prose is input, not validation. The controller must inspect the actual
+artifacts and reproduce the relevant behavior before accepting, reworking,
+blocking, or dispatching the next package. Test output is reviewed as an
+environmental-risk input, never as a replacement for functional validation. If Test finds a real defect, the controller
+reopens the owning product task with the reproduced boundary and reviewable
+reproduction materials;
 if Test finds none, the controller closes only the stated environmental risk.
 The controller must also compare the returned step-to-anchor map with the same
 Test alignment contract used at dispatch. Never adopt a Test-invented node or

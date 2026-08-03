@@ -2,13 +2,13 @@
 
 # Wakeflow
 
-面向多窗口 agent 工作的严谨控制循环——每一步留痕、每个结果实证。
+面向多窗口 agent 工作的严谨控制循环——每一步留痕、每个结果可审查。
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 Wakeflow 把一个本地 Codex 或 Claude Code 工作区变成有纪律的控制系统：
 每个 active demand 一条由总控负责的闭环、多个聚焦的仓库窗口、明确的 state root、轻量 direct-thread
-或 direct-session 投递，以及基于证据的验收。总控以闭环方式运行这套系统——规划、派发、收集证据、审查、决策、循环往复——并记录每一步，整个过程事后可审计。
+或 direct-session 投递，以及由总控独立验证的验收。总控以闭环方式运行这套系统——规划、派发、收集审查输入、独立复验、决策、循环往复——并记录每一步，整个过程事后可审计。
 
 </div>
 
@@ -31,7 +31,7 @@ Wakeflow 把一个本地 Codex 或 Claude Code 工作区变成有纪律的控制
 ## 为什么需要 Wakeflow
 
 把一个真实的多仓库目标交给一队 agent，过几天回来问三个最要紧的问题：
-**到底做了什么？什么证据能证明？还剩什么没做？** 没有控制层时，诚实的答案
+**到底做了什么？目标窗口提交了什么支撑材料？总控实际复验了什么？还剩什么没做？** 没有控制层时，诚实的答案
 只能是一堆零散 prompt、复制粘贴的状态表、不清晰的责任边界，和一句"看起来
 完成了"——无法审计、无法续跑、无法信任。
 
@@ -45,20 +45,22 @@ Wakeflow 就是那个缺失的控制层——一个总控窗口驱动多个聚�
 - **预览门控的分层提示词**：总控先检查仓库、任务摘要、Skills 和完整 prompt，
   只有匹配预览摘要的 apply 才能写入 direct-thread envelope。
 - **验收锚点驱动实现**：每个新 implementation 包至少包含一个总控编写的
-  claim/probe/expected 锚点；子窗口证明 RED→GREEN，总控独立复验。
-- **先证据，后验收**：target backfill 是输入，不是结论；总控仍然要检查原始证据。
+  claim/probe/expected 锚点；子窗口记录 RED→GREEN 映射，总控独立复验。
+- **先有审查输入，再做验收**：target backfill、日志、路径和测试摘要都是输入，
+  不是结论；Wakeflow 只检查结构和路径可定位性，总控仍要独立验证行为。
 - **本地优先运行时**：真实 thread id 只存在本地 thread registry；window config 是派生视图，active state 不进入源码。
 
 你具体得到什么：
 
 - **可审计** —— 每次派发、投递、结果、决策都是一个 JSON 工件，串在同一条
   trace 脊椎上；`wakeflow_view`（scope `trace`）可以回放谁在哪个状态版本上、
-  凭什么证据做了什么。
+  提交了哪些审查输入、记录了什么决策。
 - **可续跑** —— 需求从磁盘 state root 接着走。Codex thread 与 Claude Code
   conversation 通过宿主本地注册 id 重新绑定；机器重启后，需要先重新拉起 Claude
   的 tmux 窗口，再恢复原会话。对话记忆不是状态权威。
-- **难以造假** —— 验收要求 reducer 在磁盘上逐一核验的原始证据（证据引用缺失
-  即 fail-closed）；"目标窗口说做完了"永远不算数，结果也永远不能自我验收。
+- **难以跳过审查** —— reducer 会对缺失的必需输入或不可定位的工件路径
+  fail-closed，但不会认证内容真实性；"目标窗口说做完了"永远不算数，只有总控
+  独立复验后才能验收。
 - **并行但不静默分叉** —— 主线永远是默认执行面；只有用户明确授权才创建包含
   独立总控、Design、Test 和产品会话的 Pod。需求内部每仓仍严格一窗口一组合包。
 - **构造上安全** —— 归属、宿主绑定验真、锁、归档脱敏全部 fail-closed；真实
@@ -81,7 +83,7 @@ Wakeflow 由三层共同工作：你能看到的窗口舰队、推进工作的�
 
 | 窗口 | 角色 | 默认推理强度（Claude Code） |
 | --- | --- | --- |
-| Controller | 拥有目标、投递、证据审查和验收 | `max` |
+| Controller | 拥有目标、投递、独立验证和验收 | `max` |
 | Design | 澄清需求、重设非 bug 结果偏差方案、准备 handoff | `xhigh` |
 | Repo windows | 只在一个仓库边界内实现 | `xhigh` |
 | Test | 总控验收并完成自身验证后，只探索获批真实环境边界中的隐藏 bug | `xhigh` |
@@ -97,16 +99,16 @@ demand 都经过同一个闭环：
  3 add task   任务包命名目标窗口和范围
  4 dispatch   envelope 写入 -> 窗口加锁 -> prompt 投递
  5 work       目标窗口在自己的仓库边界内执行
- 6 result     TargetResultEnvelope 携带 evidence refs 落地 -> 解锁
- 7 review     总控读取原始证据，再 accept / rework / block
+ 6 result     TargetResultEnvelope 携带目标声明的审查材料引用落地 -> 解锁
+ 7 review     总控检查目标回传并独立验证，再 accept / rework / block
  8 complete   活跃必需任务 accepted、替代链有效且没有 blocker 后才完成
 ```
 
 两条规则保证闭环可靠：**Prompt 分层提示、任务包提供完整上下文、Skills 定义工艺**
 （有界 prompt 携带目标、最高优先完成/上下文/边界提示、读取顺序、身份和追踪信息；
 任务包保存完整上下文，需求文档保存原始背景，Skills 保存执行流程），以及
-**backfill 是输入，不是验收**（总控先审查原始证据再做决策；blocked decision
-在新证据到达后始终可恢复）。
+**backfill 是输入，不是验收**（总控先检查目标窗口提交的原始材料，并独立复验相关
+行为后再做决策；blocked decision 在新审查输入到达后始终可恢复）。
 
 ### 第 3 层 - 地面事实（磁盘上的内容）
 
@@ -118,7 +120,7 @@ demand 都经过同一个闭环：
   .wakeflow-active/             demand state roots（第 2 层）       local
   .wakeflow-local/wakeflow-delivery/                                local
     dispatch-packets/  delivery-envelopes/  delivery-runs/    transport records
-    target-results/                                           evidence envelopes
+    target-results/                                           目标窗口自述结果信封
     locks/                       每窗口一个 in-flight 目标投递，跨宿主
     hosts/codex/                 codex thread registry（宿主内）
     hosts/claude-code/           claude session registry + tmux bindings
@@ -132,7 +134,7 @@ demand 都经过同一个闭环：
 
 脚本和 MCP 工具创建、验证、记录机器数据；它们不会自行选择验收、扩大范围或决定产品行为，
 只会持久化总控的显式决策。
-目标窗口只执行被投递的任务包。总控是唯一验收权威，并且必须在 Test 开始前证明功能正确；
+目标窗口只执行被投递的任务包。总控是唯一验收权威，并且必须在 Test 开始前独立验证功能正确；
 Test 不能自创目标、方法或完成标准，只探索获批环境边界。用户拥有产品决策。
 
 ### 双宿主共存
@@ -283,7 +285,7 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
 渲染也会使用所选界面语言。
 
 总控和子窗口可以使用 Codex 或 Claude Code subagent 加速有边界的代码搜索、日志分诊、
-测试定位和证据汇总。Subagent 输出只是证据或建议；总控 review、投递、状态写入
+测试定位和输入汇总。Subagent 输出只是审查输入或建议；总控独立验证、投递、状态写入
 和仓库边界仍归拥有该任务的 Wakeflow 窗口。
 
 ## 跑通第一个需求
@@ -303,10 +305,10 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
    state root 并消费该行；派发前总控会和你确认计划与任务包。
 4. `/wakeflow:dispatch` —— 备好 envelope、一步投递、记录已接受 transport 与独立
    readback 状态、结束本轮。
-   目标窗口在自己的仓库边界内干活，controller-return 带着证据唤醒总控。
+   目标窗口在自己的仓库边界内干活，controller-return 带着结果材料唤醒总控。
    如果 send 已被接受但新 turn 暂不可见，只在有界预算内重试 readback；暂不可见
    是交给 Agent 判断的观察结果，不是 send 失败，更不授权重复发送。
-5. `/wakeflow:review` —— 先读结果背后的原始证据，再记录决策：
+5. `/wakeflow:review` —— 检查目标窗口回传的材料，独立验证相关行为，再记录决策：
    accept / rework / blocked / redesign。
    普通 rework 使用同一任务和新的 dispatch group。主线 redesign 在 Design 返回后
    创建带 `replacesTargetTaskId` 的完整 replacement 包；接受 replacement 后旧任务
@@ -321,7 +323,7 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
 7. 所有必需任务 accepted 后，运行
    `wakeflow_complete_demand` + `wakeflow_archive` 把整个故事收进台账。
    demand 归档 dry-run 会报告真实 ID 与绝对路径发现；使用 `redact: true`
-   提交经二次扫描的可移植副本，并在本地保留原始证据。
+   提交经二次扫描的可移植副本，并在本地保留原始材料。
    若完成后、归档前发现仍属于原完成定义的已验证缺陷或已确认补充，
    `wakeflow_continue_demand` 会保留原完成记录，并在一次受控操作中追加首个 bug／补充／
    明确授权优化任务包。已归档历史不可恢复；独立后续工作新建 demand。
@@ -392,7 +394,7 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 - `wakeflow_status` 会在 `dualHost.demandOwnership` 暴露 active demand 的宿主归属，
   让混合宿主总控在行动前先看清归属。
 
-自动化会在最终完成、硬 gate、用户停止、没有 eligible work、缺失证据、blocked state、
+自动化会在最终完成、硬 gate、用户停止、没有 eligible work、缺失审查输入、blocked state、
 或任何需要总控/用户判断的条件下停止。
 
 ## MCP 能力面
@@ -416,14 +418,14 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：
 记录 target result、审查 readiness、在策略允许时准备 controller-return envelope、
-通过当前归属宿主的 transport 发送，再记录 delivery evidence。不要把这些步骤合并成一个 target-window MCP tool。
+通过当前归属宿主的 transport 发送，再记录 delivery facts。不要把这些步骤合并成一个 target-window MCP tool。
 总控 review 也保持拆分：review pack、result reduction 和显式 decision 分别处理；
 result reduction 只创建 review candidate，不是验收。内部步骤（例如 archive summary
 refresh internals、keep-live state、script backend execution）留在 Wakeflow
 JS/runtime scripts 和 skills 内。公共 archive MCP tools 包装总控批准的 demand、TODO
 和 workspace document archive flows。`wakeflow_archive target=sanitize-demand`
 只把已归档 demand 替换为隐私清洁副本并在本地保留原件。
-`wakeflow_storage_preserve` 是现有本地证据
+`wakeflow_storage_preserve` 是现有本地材料
 保全后端的公共入口，默认只做 dry-run。归档脱敏遇到敏感二进制时，原始字节只留在
 本地 preserved 原件中，可移植归档写入安全占位清单。这些工具都不做验收决策，也不发送 host messages。
 
@@ -549,13 +551,13 @@ memory 文件模板、skills、template bundle）只存在于各自 artifact 内
 
 ## 设计原则
 
-1. **判断必须可见**：脚本输出、状态行、target backfill 是证据，不是验收。
+1. **判断必须可见**：脚本输出、状态行、target backfill 是审查输入，不是验收。
 2. **一个需求，一个 state root**：JSON state 和 Markdown progress surface 绑定到同一个 demand。
 3. **Prompt 分层提示、任务包提供上下文、Skills 执行**：prompt 只带有界优先信息、
    当前目标和读取顺序；完整任务上下文属于 task package，原始背景属于需求锚点。
-4. **仓库边界很重要**：每个窗口拥有自己的源码、测试、提交和证据。
+4. **仓库边界很重要**：每个窗口拥有自己的源码、测试、提交和审查输入。
 5. **自动化移动工作，不转移权威**：direct-thread delivery 只能证明 prompt 已发送，不能证明结果完成。
 6. **本地运行时留在本地**：真实 thread id 只留在本地 thread registry，active runtime state 不进入 tracked docs。
 7. **默认创建新的支持窗口**：Design 和 Test 默认作为清晰的 Wakeflow support surfaces 创建，除非用户明确映射既有目录。
 
-Wakeflow 的目标是让多窗口 agent 工作可以安全恢复、容易审查，并且难以伪造完成。
+Wakeflow 的目标是让多窗口 agent 工作可以安全恢复、容易审查，并且难以跳过总控的独立验证。

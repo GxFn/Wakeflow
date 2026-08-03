@@ -7,8 +7,8 @@
 - `DeliveryEnvelope`: the prompt and transport metadata for a target window.
 - `DirectThreadDeliveryRun`: evidence that the Codex host send/readback
   happened.
-- `TargetResultEnvelope`: the target's structured result and evidence refs.
-- `ReviewPack`: controller-side aggregation of target results.
+- `TargetResultEnvelope`: the target's structured claims and review-input refs.
+- `ReviewPack`: controller-side aggregation of target results and structural gaps; it does not verify truth.
 - `ControllerReturn`: a delivery envelope that wakes the originating controller
   when policy allows.
 
@@ -60,8 +60,9 @@ Before coding: map every package acceptanceAnchor to a RED test or probe; if an
 anchor is untestable, return needs-review instead of inventing a requirement.
 
 Return requirement:
-- Execute only this task package. Return a TargetResultEnvelope with verifiable
-  evidence. A target result is not controller acceptance.
+- Execute only this task package. Return a TargetResultEnvelope with reviewable
+  inputs and reproducible validation details. Wakeflow checks structure and
+  path locatability only; a target result is not controller acceptance.
 - Test execution contract: <package>#testExecution
 
 Dispatch record (routing and trace only):
@@ -124,7 +125,8 @@ result is not group completion unless the group expected only that target.
 
 - `group-ready` waits for all expected targets or a blocker.
 - `per-target` may return after each target, but still carries group context.
-- Missing evidence blocks acceptance.
+- Missing required review inputs blocks reduction. Acceptance additionally
+  requires the controller's fresh independent validation.
 
 ## Thread Id Boundary
 

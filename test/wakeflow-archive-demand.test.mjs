@@ -874,7 +874,7 @@ test("archive-demand resumes non-redacted active deletion after the ledger commi
 });
 
 // Cancel is the escape hatch for an in-flight demand: no acceptance, no
-// evidence gate, and the root still holds capacity until archived — archive
+// review-input gate, and the root still holds capacity until archived — archive
 // accepts cancelled exactly like completed.
 test("cancel-demand stops an in-flight demand and archive accepts the cancelled state", () => {
   const { root, stateRoot, stateFile } = initDemand({ demandKey: "CXL-1", complete: false });

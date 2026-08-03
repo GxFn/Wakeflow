@@ -443,7 +443,7 @@ const toolDefinitions = [
             },
           },
         },
-        evidenceContract: { type: "object", description: "Design-authored execution-craft evidence contract: { version, required:[{kind,verify}], advisory:[{kind}] }. Enforced at reduce-results (a completed result must cover the required kinds); advisory kinds only surface as reminders. Optional; absent = no craft gate." },
+        evidenceContract: { type: "object", description: "Design-authored execution-craft review-input contract (persistent compatibility name): { version, required:[{kind,verify}], advisory:[{kind}] }. Reduce-results checks required-kind coverage and declared path locatability only; advisory kinds surface as reminders. Optional; absent = no craft-input gate." },
         testCardId: { type: "string", description: "Required when targetWindow is the configured Test window. Links this task to the authoritative Test boundary/execution card." },
         testContinuationOf: { type: "string", description: "For a later Test attempt, the immediately preceding targetTaskId in the same Test-card lineage." },
         restartTest: { type: "boolean", description: "Declare that this continuation restarts environment/setup instead of resuming prior evidence. Allowed only by the Test card contract." },
@@ -482,8 +482,8 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_record_delivery",
-    description: "Record external host-send evidence for a delivery envelope after the host tool runs. Transport acceptance and bounded readback visibility are independent: status=sent + transportStatus=accepted prevents resend even when readbackStatus=pending/unavailable. Only an explicit rejected-before-send fact may release the exact delivery lease. This does not send the message or accept the result.",
-    annotations: localWriteTool("Record Wakeflow Delivery Evidence"),
+    description: "Record external host-send facts for a delivery envelope after the host tool runs. Transport acceptance and bounded readback visibility are independent: status=sent + transportStatus=accepted prevents resend even when readbackStatus=pending/unavailable. Only an explicit rejected-before-send fact may release the exact delivery lease. This does not send the message or accept the result.",
+    annotations: localWriteTool("Record Wakeflow Delivery Facts"),
     inputSchema: {
       type: "object",
       required: ["deliveryFile", "status"],
@@ -495,7 +495,7 @@ const toolDefinitions = [
         transportStatus: { type: "string", enum: ["accepted", "rejected-before-send", "ambiguous"], description: "Host send fact. accepted must use status=sent; rejected-before-send is the only lease-releasable failure; ambiguous always preserves the lease." },
         readbackStatus: { type: "string", enum: ["confirmed", "pending", "unavailable"], description: "Independent bounded observation after the send. pending/unavailable is not permission to resend." },
         readbackAttempts: { type: "integer", minimum: 0 },
-        evidence: { type: "string" },
+        evidence: { type: "string", description: "Compatibility field for the host's transport observation; it is not product-result evidence." },
         deliveryRunId: { type: "string", description: "Distinct run id for retrying the same delivery after a failed attempt (defaults to run-<deliveryId>, which cannot be re-recorded with different content)." },
         error: { type: "string" },
         readbackOk: { type: "boolean" },
@@ -506,7 +506,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_record_target_result",
-    description: "Record one target-window TargetResultEnvelope into a demand state root. This is target closeout evidence, not controller acceptance or next dispatch; when returnRoute=controller applies, follow with review pack, controller-return delivery, host send, and delivery-run recording.",
+    description: "Record one target-window TargetResultEnvelope into a demand state root. This stores target-authored closeout claims and review inputs; it does not verify truth, grant controller acceptance, or create the next dispatch. When returnRoute=controller applies, follow with review pack, controller-return delivery, host send, and delivery-run recording.",
     annotations: localWriteTool("Record Wakeflow Target Result"),
     inputSchema: {
       type: "object",
@@ -525,8 +525,8 @@ const toolDefinitions = [
         changedRepos: { type: "array", items: { type: "string" }, description: "Repositories whose working or committed content changed for this result." },
         commits: { type: "array", items: { type: "string" }, description: "Commit ids created for this result." },
         commitDisposition: { type: "string", enum: ["committed", "left-uncommitted", "no-changes"], description: "How this result honored the task package commit expectation." },
-        evidenceRefs: { type: "array", items: { type: "string" } },
-        verification: { type: "array", items: { type: "string" } },
+        evidenceRefs: { type: "array", items: { type: "string" }, description: "Target-authored artifact locators for controller inspection. Wakeflow may check path existence; it does not verify the artifact's truth." },
+        verification: { type: "array", items: { type: "string" }, description: "Target-authored validation summaries. These are review inputs, not independent verification or acceptance." },
         risks: { type: "array", items: { type: "string" } },
         craftEvidence: {
           type: "array",
@@ -551,14 +551,14 @@ const toolDefinitions = [
               { required: ["commit"] },
             ],
           },
-          description: "Typed execution evidence. Generic entries use {kind, ref|value|commit, verify}; implementation completion maps each acceptance anchor with {kind:'acceptance-anchor', anchorId, red, green, ref}; Test completion maps each approved step with {kind:'test-step', planIndex, step, ref}. Mapping completeness enables controller review but never implies acceptance.",
+          description: "Target-authored typed review inputs. Generic entries use {kind, ref|value|commit, verify}; implementation completion maps each acceptance anchor with {kind:'acceptance-anchor', anchorId, red, green, ref}; Test completion maps each approved step with {kind:'test-step', planIndex, step, ref}. Wakeflow checks required kinds, mapping completeness, and declared path locatability only; it does not establish truth or acceptance.",
         },
       },
     },
   },
   {
     name: "wakeflow_review_pack",
-    description: "Build a review evidence pack for a state root, dispatch group, or task id, including callbackPlan when direct-thread controller return is applicable. Read-only, two sanctioned uses: (1) controller review preparation; (2) a TARGET window confirming its OWN dispatch group's return readiness before building a controller-return. Targets must scope it to their own group; review decisions (accept/rework/blocked) stay controller-only. This is evidence, not acceptance.",
+    description: "Build a controller review-input pack for a state root, dispatch group, or task id, including callbackPlan when direct-thread controller return is applicable. It aggregates target claims, artifact locators, mapping completeness, and structural gaps; it does not verify truth. Read-only, two sanctioned uses: (1) controller review preparation; (2) a TARGET window confirming its OWN dispatch group's return readiness before building a controller-return. Targets must scope it to their own group; review decisions (accept/rework/blocked) stay controller-only.",
     annotations: readOnlyTool("Build Wakeflow Review Pack"),
     inputSchema: {
       type: "object",
@@ -640,7 +640,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_decide_review",
-    description: "Record an explicit controller decision for a review candidate created by wakeflow_reduce_results. decision=redesign parks the old task (needs-rework), routes the requirement back to Design (redesignCount++), and requires the later corrected product task to declare replacesTargetTaskId; the old task cannot be re-dispatched or accepted as the correction. Use redesign for a non-bug mismatch or a small requirement-level fix. Dry-run unless apply is true.",
+    description: "Record an explicit controller judgment for a review candidate created by wakeflow_reduce_results. Wakeflow does not verify target truth before this call; the controller must independently inspect and validate the relevant behavior. decision=redesign parks the old task (needs-rework), routes the requirement back to Design (redesignCount++), and requires the later corrected product task to declare replacesTargetTaskId; the old task cannot be re-dispatched or accepted as the correction. Use redesign for a non-bug mismatch or a small requirement-level fix. Dry-run unless apply is true.",
     annotations: localWriteTool("Record Wakeflow Review Decision"),
     inputSchema: {
       type: "object",
@@ -651,7 +651,7 @@ const toolDefinitions = [
         candidateId: { type: "string" },
         decision: { type: "string", enum: ["accept", "rework", "blocked", "redesign"] },
         reason: { type: "string" },
-        evidenceRefs: { type: "array", items: { type: "string" } },
+        evidenceRefs: { type: "array", items: { type: "string" }, description: "Controller-inspected material or independent-check references recorded under the compatibility field evidenceRefs; Wakeflow does not validate their truth." },
         acceptBlocked: {
           type: "boolean",
           description: "Explicitly accept a candidate that contains blocked target results. Without this, accept fails when blocked results are present.",
@@ -663,7 +663,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_complete_demand",
-    description: "Complete a demand after all task packages and target tasks are accepted. Dry-run unless apply is true.",
+    description: "Complete a demand after explicit controller decisions have accepted all task packages and target tasks. This records completion; it does not perform or infer validation. Dry-run unless apply is true.",
     annotations: localWriteTool("Complete Wakeflow Demand"),
     inputSchema: {
       type: "object",
@@ -672,7 +672,7 @@ const toolDefinitions = [
         root: { type: "string" },
         stateRoot: { type: "string" },
         reason: { type: "string" },
-        evidenceRefs: { type: "array", items: { type: "string" } },
+        evidenceRefs: { type: "array", items: { type: "string" }, description: "Controller validation or decision references recorded under the compatibility field evidenceRefs; the tool does not verify them." },
         apply: { type: "boolean" },
         adoptHost: { type: "boolean", description: "Explicitly transfer demand controller-host ownership to this host; without it, acting on a demand owned by the other host fails closed." },
       },
@@ -680,7 +680,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_continue_demand",
-    description: "Continue a completed but not yet archived demand when a verified bug, confirmed requirement supplement, or explicitly authorized optimization still belongs to the same demand. This is one locked operation: it preserves the prior completion and accepted evidence, records the continuation authority, changes the demand back to planned, and adds the first concrete task package. It refuses active, cancelled, or archived demands and never dispatches. Use a new demand for archived history or independently scoped follow-up work. Dry-run unless apply is true.",
+    description: "Continue a completed but not yet archived demand when a controller-verified bug, confirmed requirement supplement, or explicitly authorized optimization still belongs to the same demand. This is one locked operation: it preserves the prior completion, accepted result history, and decisions; records the continuation authority; changes the demand back to planned; and adds the first concrete task package. It refuses active, cancelled, or archived demands and never dispatches. Use a new demand for archived history or independently scoped follow-up work. Dry-run unless apply is true.",
     annotations: localWriteTool("Continue Completed Wakeflow Demand"),
     inputSchema: {
       type: "object",
@@ -690,7 +690,7 @@ const toolDefinitions = [
         stateRoot: { type: "string", description: "The completed, unarchived demand state root." },
         continuationType: { type: "string", enum: ["verified-bug", "requirement-supplement", "optimization"] },
         reason: { type: "string", description: "Why this work remains part of the same demand rather than a new demand." },
-        evidenceRefs: { type: "array", minItems: 1, items: { type: "string" }, description: "Verified defect evidence or explicit requirement/scope decision references." },
+        evidenceRefs: { type: "array", minItems: 1, items: { type: "string" }, description: "References to controller validation of the defect or to explicit requirement/scope decisions. Wakeflow records but does not verify them." },
         taskId: { type: "string", description: "The first target task id for the continuation." },
         targetWindow: { type: "string" },
         summary: { type: "string" },
@@ -713,7 +713,7 @@ const toolDefinitions = [
             },
           },
         },
-        evidenceContract: { type: "object", description: "Optional execution-craft evidence contract for the first package." },
+        evidenceContract: { type: "object", description: "Optional execution-craft review-input contract for the first package (persistent compatibility name); checks structure and declared path locatability, not truth." },
         testCardId: { type: "string", description: "Required when the first target is the configured Test window." },
         testContinuationOf: { type: "string" },
         restartTest: { type: "boolean" },
@@ -746,8 +746,8 @@ const toolDefinitions = [
         stateRoot: { type: "string", description: "target=demand: completed demand root; target=sanitize-demand: existing archived demand root." },
         reason: { type: "string", description: "Required for target=demand and target=sanitize-demand." },
         redact: { type: "boolean", description: "target=demand: relocate a portable copy when real ids, user/workspace absolute paths, or opaque evidence are present; preserve the original locally and use placeholders where bytes or paths are omitted." },
-        allowOpaque: { type: "boolean", description: "target=demand: explicitly allow clean opaque evidence to remain byte-for-byte in the portable archive; hashes are recorded. Without this consent, redact preserves clean opaque bytes only in the local original and writes placeholders. Sensitive opaque evidence under redact is always omitted into a placeholder." },
-        evidenceRefs: { type: "array", items: { type: "string" }, description: "target=demand: evidence references to record." },
+        allowOpaque: { type: "boolean", description: "target=demand: explicitly allow clean opaque artifacts to remain byte-for-byte in the portable archive; hashes are recorded. Without this consent, redact preserves clean opaque bytes only in the local original and writes placeholders. Sensitive opaque artifacts under redact are always omitted into a placeholder." },
+        evidenceRefs: { type: "array", items: { type: "string" }, description: "target=demand: review-input or decision references to record under the compatibility field evidenceRefs." },
         month: { type: "string", description: "target=todo/docs: archive month YYYY-MM (backend policy default when omitted)." },
         date: { type: "string", description: "target=todo: archive date YYYY-MM-DD (today when omitted)." },
         keepCompleted: { type: "number", description: "target=todo: completed TODO rows to keep on the active board." },
@@ -870,7 +870,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_create_demand",
-    description: "Unified controller create: init a demand state root, adopt this window as its host, add any initial task packages, render its progress doc, and consume the originating TODO row (Current Mount = state root) in one call. Replaces init_demand + intake_design_handoff + add_task + adopt_demand_host. Pass todoId to create from a delivered TODO row (its title + linked docs synthesize the goal/completion and the row is consumed), or demandKey + title to create inline. Dry-run unless apply is true. Inits only — it never dispatches, accepts evidence, or weakens per-demand user confirmation.",
+    description: "Unified controller create: init a demand state root, adopt this window as its host, add any initial task packages, render its progress doc, and consume the originating TODO row (Current Mount = state root) in one call. Replaces init_demand + intake_design_handoff + add_task + adopt_demand_host. Pass todoId to create from a delivered TODO row (its title + linked docs synthesize the goal/completion and the row is consumed), or demandKey + title to create inline. Dry-run unless apply is true. Inits only — it never dispatches, accepts results, or weakens per-demand user confirmation.",
     annotations: localWriteTool("Create Controller Demand"),
     inputSchema: {
       type: "object",
@@ -915,7 +915,7 @@ const toolDefinitions = [
                   },
                 },
               },
-              evidenceContract: { type: "object", description: "Design-authored execution-craft evidence contract for this package; optional, enforced at reduce-results." },
+              evidenceContract: { type: "object", description: "Design-authored execution-craft review-input contract for this package (persistent compatibility name); optional, structurally enforced at reduce-results without verifying truth." },
             },
           },
         },
@@ -925,7 +925,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_cancel_demand",
-    description: "Cancel an in-flight demand without pretending completion: no acceptance, no evidence gate, open tasks keep their last honest status, and recorded evidence stays untouched. Refused on completed/archived/already-cancelled demands. A cancelled Pod still needs logical Pod close receipts before archive. Dry-run unless apply is true.",
+    description: "Cancel an in-flight demand without pretending completion: no acceptance, no review-input gate, open tasks keep their last honest status, and recorded result history stays untouched. Refused on completed/archived/already-cancelled demands. A cancelled Pod still needs logical Pod close receipts before archive. Dry-run unless apply is true.",
     annotations: localWriteTool("Cancel Wakeflow Demand"),
     inputSchema: {
       type: "object",
@@ -1093,7 +1093,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_prune_runtime",
-    description: "Prune replay-safe local runtime; target selects which. transport (default): confirmed-send delivery-run transport files older than a cutoff — dry-run unless apply is true; apply requires before; target-results (evidence) are never deleted, and runs inside a surviving repeated-attempt chain are retained. preserved: audit holds under .wakeflow-local/preserved/ older than the retention (preservedRetentionDays, default 30) or an explicit before — dry-run lists candidates with their manifests; apply deletes them. Legacy/unknown trees are NEVER pruned by any target — they route to the user.",
+    description: "Prune replay-safe local runtime; target selects which. transport (default): confirmed-send delivery-run transport files older than a cutoff — dry-run unless apply is true; apply requires before; durable target-result history is never deleted, and runs inside a surviving repeated-attempt chain are retained. preserved: audit holds under .wakeflow-local/preserved/ older than the retention (preservedRetentionDays, default 30) or an explicit before — dry-run lists candidates with their manifests; apply deletes them. Legacy/unknown trees are NEVER pruned by any target — they route to the user.",
     annotations: localWriteTool("Prune Wakeflow Runtime Transport"),
     inputSchema: {
       type: "object",

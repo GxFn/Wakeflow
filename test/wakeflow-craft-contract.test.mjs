@@ -60,8 +60,9 @@ function initRoot(demandKey) {
   return { root, stateRootRel: init.stateRoot };
 }
 
-// Make a path-like evidence ref resolve on disk so the existing evidence-repair gate
-// passes and the craft gate is what these tests actually exercise.
+// Make a path-like evidenceRefs compatibility value resolve on disk so the
+// review-input-repair gate passes and the craft gate is what these tests
+// actually exercise.
 function writeEvidence(root, stateRootRel, ref, content = "ok\n") {
   const file = path.join(root, stateRootRel, ref);
   mkdirSync(path.dirname(file), { recursive: true });
@@ -334,14 +335,14 @@ test("W-Target: reduce-results hard-fails a completed result missing a required 
   ]);
   const gated = run(["reduce-results", "--root", root, "--state-root", stateRootRel, "--write", "--json"]);
   assert.notEqual(gated.status, 0, "reduce blocks a completed result missing a required craft kind");
-  assert.match(gated.stdout, /craft-evidence-required/, "reduce reports the craft gate");
+  assert.match(gated.stdout, /craft-review-inputs-required/, "reduce reports the craft review-input gate");
 
   const pack = runDelivery(["review-pack", "--root", root, "--state-root", stateRootRel, "--json"]);
   assert.equal(pack.status, 0, pack.stderr || pack.stdout);
   const review = JSON.parse(pack.stdout).reviewPack;
-  assert.equal(review.gates.controllerReviewReady, false, "review pack agrees with the reducer before mutation");
+  assert.equal(review.gates.reviewInputsComplete, false, "review pack agrees with the reducer before mutation");
   assert.equal(review.gates.craftEvidenceRepairRequired, true);
-  assert.equal(review.nextAction, "fix-required-craft-evidence-before-controller-verdict");
+  assert.equal(review.nextAction, "fix-required-craft-review-inputs-before-controller-verdict");
 });
 
 test("W-Target: reduce-results accepts a completed result that satisfies the contract", () => {
@@ -370,5 +371,5 @@ test("W-Target: reduce-results exempts a blocked result from the craft gate", ()
   ]);
   const reduced = run(["reduce-results", "--root", root, "--state-root", stateRootRel, "--write", "--json"]);
   assert.equal(reduced.status, 0, reduced.stderr || reduced.stdout);
-  assert.doesNotMatch(reduced.stdout, /craft-evidence-required/, "blocked results are not craft-gated");
+  assert.doesNotMatch(reduced.stdout, /craft-review-inputs-required/, "blocked results are not craft-gated");
 });

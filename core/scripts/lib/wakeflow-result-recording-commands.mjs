@@ -151,14 +151,14 @@ export function createResultRecordingCommands(ctx) {
         || typeof entry.kind !== "string" || !entry.kind.trim()) {
         fail("--craft-evidence entries must be objects with a non-empty string kind.");
       }
-      const proofFields = ["ref", "value", "commit"];
-      for (const field of proofFields) {
+      const reviewInputFields = ["ref", "value", "commit"];
+      for (const field of reviewInputFields) {
         if (entry[field] !== undefined && (typeof entry[field] !== "string" || !entry[field].trim())) {
           fail(`--craft-evidence ${field} must be a non-empty string when provided.`);
         }
       }
-      if (!proofFields.some((field) => typeof entry[field] === "string" && entry[field].trim())) {
-        fail("--craft-evidence entries must carry reviewable proof in at least one of ref, value, or commit.");
+      if (!reviewInputFields.some((field) => typeof entry[field] === "string" && entry[field].trim())) {
+        fail("--craft-evidence entries must carry a reviewable input in at least one of ref, value, or commit.");
       }
       if (entry.verify !== undefined && (typeof entry.verify !== "string" || !entry.verify.trim())) {
         fail("--craft-evidence verify must be a non-empty string when provided.");

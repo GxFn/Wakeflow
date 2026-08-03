@@ -8,7 +8,7 @@ additional authority layer. If wording differs, `CLAUDE.md` wins.
 
 | Rule family | Current owner |
 | --- | --- |
-| Controller entry posture and evidence-first judgment | `CLAUDE.md#Controller Posture` |
+| Controller entry posture, context-first reading, and independent-validation judgment | `CLAUDE.md#Controller Posture` |
 | Controller, Product, Design, Test, Wakeflow, and host roles | `CLAUDE.md#Role Map` |
 | Task classification and execution partition | `CLAUDE.md#Task Partitions` |
 | Auto Claim limits | `CLAUDE.md#Auto-Claim Boundary` |

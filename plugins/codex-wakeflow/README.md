@@ -2,13 +2,13 @@
 
 # Wakeflow
 
-A disciplined control loop for multi-window agent work — every step traced, every result proven.
+A disciplined control loop for multi-window agent work — every step traced, every result reviewable.
 
 [English](README.md) | [Simplified Chinese](README.zh-CN.md)
 
 Wakeflow turns a local Codex workspace into a disciplined controller system:
 a controller-owned loop for each active demand, focused repository windows, explicit state roots,
-compact direct-thread delivery, and evidence-based acceptance. The controller runs this as a closed loop — plan, dispatch, collect evidence, review, decide, repeat — and records every step, so the whole run is auditable after the fact.
+compact direct-thread delivery, and controller-validated acceptance. The controller runs this as a closed loop — plan, dispatch, collect review inputs, independently validate, decide, repeat — and records every step, so the whole run is auditable after the fact.
 
 </div>
 
@@ -35,7 +35,7 @@ Large agent-assisted work rarely lives in one repository or one conversation.
 A single goal may require a controller, product repositories, a design window,
 and a real-scenario test window. Without a shared operating model, the work
 degrades into scattered prompts, copied status tables, unclear ownership, and
-unfinished evidence review.
+unfinished controller validation.
 
 Wakeflow provides the missing control layer:
 
@@ -54,9 +54,10 @@ Wakeflow provides the missing control layer:
   apply can write the direct-thread envelope.
 - **Acceptance-anchored craft**: every new implementation package carries concrete
   claim/probe/expected anchors that targets map to RED checks before coding;
-  the controller still reruns and judges the evidence independently.
-- **Evidence before acceptance**: target backfill is input, not a conclusion.
-  The controller still reviews raw evidence before completing work.
+  the mapping is review input and the controller still validates independently.
+- **Review inputs before acceptance**: target backfill, logs, paths, and test
+  summaries are inputs, not conclusions. Wakeflow checks structure and path
+  locatability; the controller independently validates behavior before completing work.
 - **Local-first runtime**: real thread ids live only in the local thread
   registry; window config is a derived sendability view, and active state stays
   out of tracked source.
@@ -69,7 +70,7 @@ capability for keeping multi-window agent work legible, bounded, and resumable.
 ```mermaid
 flowchart TD
   User["User goal"] --> Controller["Controller Codex window"]
-  Controller --> Gates["AGENTS.md gates<br/>goal, boundary, evidence, stop rules"]
+  Controller --> Gates["AGENTS.md gates<br/>goal, boundary, review inputs, stop rules"]
   Controller <--> StateRoot["State root<br/>.wakeflow-active/..."]
   StateRoot --> Tasks["Task packages"]
   Tasks --> Delivery["Delivery envelopes"]
@@ -77,7 +78,7 @@ flowchart TD
   Delivery --> Host["Codex host thread tools"]
   Host --> Targets["Repository / Design / Test windows"]
   Targets --> Repos["Responsibility roots"]
-  Targets --> Results["TargetResultEnvelope<br/>with evidence refs"]
+  Targets --> Results["TargetResultEnvelope<br/>with declared review-input refs"]
   Results --> Controller
   Controller --> Ledger["wakeflow-ledger<br/>durable project records"]
 ```
@@ -155,7 +156,7 @@ Wakeflow on Codex is driven through MCP tools (no slash commands). Tell Codex wh
 | Hand work to a window | `wakeflow_prepare_delivery` preview -> digest-matched `apply=true` -> host send -> `wakeflow_record_delivery` |
 | Record a target's result | `wakeflow_record_target_result` |
 | Review and decide | `wakeflow_review_pack` -> `wakeflow_reduce_results` -> `wakeflow_decide_review` -> `wakeflow_complete_demand` |
-| Preserve selected local evidence | `wakeflow_storage_preserve` dry-run -> `apply=true` |
+| Preserve selected local artifacts | `wakeflow_storage_preserve` dry-run -> `apply=true` |
 | Hand a demand to the other host | `wakeflow_adopt_demand_host` |
 | Health-check / converge runtime | `wakeflow_verify` |
 
@@ -228,8 +229,8 @@ New state-root progress documents and subsequent Unified Status renders also
 use the selected interface language.
 
 Controller and child windows can use Codex subagents to speed up bounded code
-search, log triage, test localization, and evidence summaries. Subagent output
-is evidence or advice only; controller review, dispatch, state writes, and
+search, log triage, test localization, and input summaries. Subagent output
+is review input or advice only; controller validation, dispatch, state writes, and
 repository boundaries remain with the Wakeflow window that owns the task.
 
 ## What Wakeflow Creates
@@ -263,8 +264,8 @@ The normal Wakeflow loop is deliberately small:
 3. A state root records the demand and creates eligible task packages.
 4. The controller prepares compact delivery envelopes for the target windows.
 5. Target windows read their own rules, execute only their assigned package, and
-   return target result envelopes with reviewable evidence.
-6. The controller reviews raw evidence, records a decision, and either creates
+   return target result envelopes with target-authored review inputs.
+6. The controller inspects those inputs, independently validates the relevant behavior, records a decision, and either creates
    the next eligible package, stops for user judgment, marks the demand blocked,
    or completes the demand.
    Ordinary rework redispatches the same task. Mainline redesign preserves the rejected
@@ -281,7 +282,7 @@ The normal Wakeflow loop is deliberately small:
 Design and Test are supporting roles:
 
 - **Design** clarifies requirements, options, risks, and handoff candidates. It
-  also redesigns non-bug outcome mismatches when implementation evidence is
+  also redesigns non-bug outcome mismatches when implementation inputs are
   valid but the user-visible effect is still wrong. It does not dispatch
   implementation or become product truth by itself.
 - **Test** starts only after every active required non-Test target is accepted
@@ -390,7 +391,7 @@ Core rules:
   acting.
 
 Automation stops on final completion, hard gates, user stop, no eligible work,
-missing evidence, blocked state, or any condition that requires controller or
+missing review inputs, blocked state, or any condition that requires controller or
 user judgment.
 
 ## MCP Capability Surface
@@ -417,7 +418,7 @@ Primary tool groups:
 Public MCP tools are for outer agent workflows. Target closeout is deliberately
 split: record a target result, review readiness, prepare a controller-return
 envelope when policy allows, send with the Codex host thread tool, and record
-delivery evidence. Controller review stays split as review pack, result
+delivery facts. Controller review stays split as review pack, result
 reduction, and explicit decision; result reduction only creates a review
 candidate and is not acceptance. Do not collapse those steps into a single
 target-window MCP tool. Internal steps such as archive summary refresh internals,
@@ -427,8 +428,8 @@ TODO, and workspace-document archive flows. `wakeflow_archive`
 `target=sanitize-demand` only replaces an already archived demand with a
 privacy-clean copy and preserves the original locally.
 `wakeflow_storage_preserve` is the dry-run-first public route
-to the existing local evidence-preservation backend. With archive redaction,
-opaque evidence remains byte-for-byte in the local preserved original while the
+to the existing local artifact-preservation backend. With archive redaction,
+opaque artifacts remain byte-for-byte in the local preserved original while the
 portable archive carries a safe placeholder manifest, unless clean opaque byte
 inclusion was explicitly authorized with `allowOpaque`. A real host id
 inside a filename or directory name preserves that highest sensitive
@@ -551,7 +552,7 @@ skills rather than treating raw scripts as their operator interface.
 ## Design Principles
 
 1. **Judgment stays visible**: script output, status rows, and target backfill
-   are evidence, not acceptance.
+   are review inputs, not acceptance.
 2. **One demand, one state root**: JSON state and Markdown progress surfaces
    stay tied to the same demand.
 3. **Prompts brief, packages contextualize, skills execute**: prompts carry
@@ -559,7 +560,7 @@ skills rather than treating raw scripts as their operator interface.
    context, requirement anchors retain original background, and installed
    skills own execution procedure.
 4. **Repository boundaries matter**: each window owns its source, tests,
-   commits, and evidence.
+   commits, and review inputs.
 5. **Automation moves work, not authority**: direct-thread delivery proves that
    a prompt was sent, not that the result is complete.
 6. **Local runtime stays local**: real thread ids stay only in the local thread
@@ -568,4 +569,4 @@ skills rather than treating raw scripts as their operator interface.
    Wakeflow support surfaces unless the user explicitly maps existing ones.
 
 Wakeflow exists to make multi-window agent work safe to resume, easy to
-inspect, and hard to fake.
+inspect, and hard to accept without controller review.

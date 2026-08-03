@@ -210,7 +210,7 @@ test("manual route keeps state, result, decision, and progress projection separa
   assert.match(progress, /Main state: planned/);
   assert.match(progress, /CSMR-MANUAL-PKG\(accepted\)/);
   assert.match(progress, /CSMR-MANUAL-TASK returned completed/);
-  assert.match(progress, /decision accept .*Manual route fixture evidence reviewed by total control/);
+  assert.match(progress, /decision accept .*Manual route inputs inspected and independently checked by total control/);
 });
 
 test("state-root review pack excludes accepted targets from the next review scope", () => {
@@ -375,7 +375,7 @@ test("unattended route prepares dispatch and controller return from stateRoot wi
   assert.match(progress, /Main state: planned/);
 });
 
-test("failure route waits on missing results, surfaces blocked evidence, and rejects stale candidates", () => {
+test("failure route waits on missing results, surfaces blocked outcomes, and rejects stale candidates", () => {
   const manifest = readFixture("failure-route");
   const root = makeRoot("csmr-failure-");
   const { stateRootRef, stateRoot } = initDemand(root, manifest);

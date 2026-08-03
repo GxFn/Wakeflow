@@ -91,7 +91,7 @@ designIntent) → send with the host thread tool (`send_message_to_thread`) →
 `wakeflow_record_target_result`. WITHIN one demand each repo runs exactly ONE
 window with ONE combined task package (the window self-sequences its items;
 never two simultaneous tasks to one window inside a demand). Exit gate:
-results with evidence refs for the wave. (Isolation worktree windows —
+target results with the required declared review-input refs for the wave. (Isolation worktree windows —
 `<repo>__<pod>` — exist only inside an explicitly authorized Pod and use
 Codex-created worktrees. Dispatch is forbidden before `execution-ready`;
 Wakeflow never creates or deletes those worktrees.)
@@ -99,7 +99,8 @@ Wakeflow never creates or deletes those worktrees.)
 ## S4 — Review & Decide (owner: controller — the ONLY acceptance authority)
 `wakeflow_review_pack` (intent triple: designIntent / objective / result) →
 `wakeflow_reduce_results` → `wakeflow_decide_review`
-(accept / rework / redesign / blocked). Raw evidence before any decision.
+(accept / rework / redesign / blocked). Inspect target inputs and run fresh
+independent checks before any decision.
 Non-bug outcome mismatch = redesign lane back to S1, never point-fix loops.
 For a Pod, redesign must never return to mainline Design. Version 0.9.3 cannot
 persist a second frozen Pod Design request/handoff generation, so the demand

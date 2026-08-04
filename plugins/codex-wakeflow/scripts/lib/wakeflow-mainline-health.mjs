@@ -250,34 +250,15 @@ function inspectRegistration({ windowName, record }) {
       { windowName, path: record.file },
     );
   }
-  const entrySyncStatus = registration.entrySyncStatus === undefined
-    ? "legacy-assumed-ready"
-    : registration.entrySyncStatus;
-  if (!["pending", "ready", "failed", "legacy-assumed-ready"].includes(entrySyncStatus)) {
-    return issue(
-      "window-entry-sync-invalid",
-      `Required mainline window ${windowName} has an invalid entry-sync status.`,
-      { windowName, path: record.file, entrySyncStatus },
-    );
-  }
-  for (const timestampField of ["registeredAt", "entrySyncCheckedAt", "lastVerifiedAt"]) {
+  for (const timestampField of ["registeredAt", "lastVerifiedAt"]) {
     const timestamp = registration[timestampField];
-    if (timestamp !== undefined && timestamp !== null && !Number.isFinite(Date.parse(timestamp))) {
+    if (timestamp !== undefined && !Number.isFinite(Date.parse(timestamp))) {
       return issue(
         "window-registration-invalid",
         `Required mainline window ${windowName} has an invalid ${timestampField}.`,
         { windowName, path: record.file },
       );
     }
-  }
-  if (entrySyncStatus !== "ready" && entrySyncStatus !== "legacy-assumed-ready") {
-    return issue(
-      `window-entry-sync-${entrySyncStatus}`,
-      entrySyncStatus === "pending"
-        ? `Required mainline window ${windowName} is registered, but its entry-sync reply has not been observed.`
-        : `Required mainline window ${windowName} reported an entry-sync failure.`,
-      { windowName, path: record.file, entrySyncStatus },
-    );
   }
   return null;
 }
@@ -288,7 +269,6 @@ function inspectWindowConfig({
   windowName,
   record,
   identity,
-  registration,
 }) {
   if (!record) {
     return issue(
@@ -299,25 +279,11 @@ function inspectWindowConfig({
   }
   const runtime = record.value;
   const role = expectedDeliveryRole(config, windowName);
-  const registrationStatus = registration?.value?.entrySyncStatus === undefined
-    ? registration
-      ? "legacy-assumed-ready"
-      : "missing"
-    : registration.value.entrySyncStatus;
-  const runtimeStatus = runtime.entrySyncStatus === undefined
-    ? runtime.threadRegistered
-      ? "legacy-assumed-ready"
-      : "missing"
-    : runtime.entrySyncStatus;
-  const runtimeReady = runtime.threadReady === undefined
-    ? runtime.threadRegistered === true
-    : runtime.threadReady === true;
   if (
     runtime.kind !== hostProfile.kinds.windowDispatchConfig
     || runtime.windowName !== windowName
     || runtime.threadRegistered !== true
     || runtime.deliveryRole !== role
-    || runtimeStatus !== registrationStatus
   ) {
     return issue(
       "window-runtime-invalid",
@@ -325,7 +291,6 @@ function inspectWindowConfig({
       { windowName, path: record.file },
     );
   }
-  if (!runtimeReady) return null;
   if (role !== "design" && runtime.dispatchable !== true) {
     return issue(
       "window-runtime-not-dispatchable",
@@ -506,14 +471,12 @@ export function inspectMainlineHealth({
         windowName,
         record: runtimeConfig,
         identity: rootInspection.identity,
-        registration,
       });
       if (runtimeIssue) issues.push(runtimeIssue);
       windows.push({
         windowName,
         role: expectedDeliveryRole(config, windowName),
-        registered: Boolean(registration),
-        entrySyncReady: !registrationIssue,
+        registered: !registrationIssue,
         runtimeHealthy: !runtimeIssue,
         projectIdentity: rootInspection.identity,
       });

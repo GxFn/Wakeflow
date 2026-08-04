@@ -265,8 +265,6 @@ test("unattended route prepares dispatch and controller return from stateRoot wi
     manifest.taskPackage.targetWindow,
     "--thread-id",
     "019e-state-root-target-thread",
-    "--entry-sync-status",
-    "ready",
     "--write",
   ], root);
   assert.equal(registerTarget.status, 0, registerTarget.stderr || registerTarget.stdout);
@@ -277,8 +275,6 @@ test("unattended route prepares dispatch and controller return from stateRoot wi
     manifest.controllerWindow,
     "--thread-id",
     "019e-state-root-controller-thread",
-    "--entry-sync-status",
-    "ready",
     "--write",
   ], root);
   assert.equal(registerController.status, 0, registerController.stderr || registerController.stdout);

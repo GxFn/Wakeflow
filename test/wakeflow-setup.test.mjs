@@ -331,12 +331,8 @@ test("initialize localizes launch titles and prompts with the window name first"
     required: true,
     hostTool: "set_thread_title",
     title: `AppRepo ${zhDutyWindow}`,
-    phase: "after-entry-sync-registration",
+    phase: "after-registration",
   });
-  assert.equal(app.entrySyncObservation.hostTool, "wait_threads");
-  assert.equal(app.entrySyncObservation.boundedWaitMs, 15000);
-  assert.equal(app.entrySyncObservation.attempts, 1);
-  assert.equal(app.entrySyncObservation.automaticResend, false);
   assert.equal(app.localRegistration.required, true);
   assert.equal(app.localRegistration.hostTool, "wakeflow_register_window");
   assert.equal(app.localRegistration.applyRequired, true);
@@ -348,7 +344,6 @@ test("initialize localizes launch titles and prompts with the window name first"
     root: parent,
     window: "AppRepo",
     windowHandle: "<create_thread.threadId>",
-    entrySyncStatus: "pending",
     apply: true,
   });
   assert.equal(app.createThreadPrompt.split("\n")[0], `AppRepo ${zhDutyWindow}${zhColon}\u521d\u59cb\u5316\u5165\u53e3\u540c\u6b65\uff0c\u4e0d\u662f\u4efb\u52a1\u6295\u9012\u3002`);
@@ -465,9 +460,9 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.doesNotMatch(currentStatus, /Controller window: Wakeflow/);
   assert.match(currentStatus, /Wakeflow MCP `wakeflow_create_demand` tool/);
   assert.doesNotMatch(currentStatus, /node scripts\/wakeflow-state\.mjs/);
-  assert.match(currentStatus, /Status: idle \/ initialization ready \/ waiting for controller task/);
-  assert.match(currentStatus, /Entry-sync windows should report readiness and stop/);
-  assert.match(currentStatus, new RegExp(`\\| ${path.basename(parent)} \\| idle \\| No active demand; waiting for controller task\\. \\| Initialization ready state\\. \\|`));
+  assert.match(currentStatus, /Status: idle \/ waiting for controller task/);
+  assert.match(currentStatus, /With no active demand, windows remain idle/);
+  assert.match(currentStatus, new RegExp(`\\| ${path.basename(parent)} \\| idle \\| No active demand; waiting for controller task\\. \\| Workspace initialized; no extra registration state is required\\. \\|`));
   assert.match(currentStatus, /\| AppRepo \| standby \| No assigned task package\. \| Configured responsibility:/);
   const testExchange = readFileSync(path.join(parent, ".wakeflow-active/current/test-exchange.md"), "utf8");
   assert.match(testExchange, /human-readable projection of active and historical Test cards/);
@@ -602,8 +597,8 @@ Status: idle / no active demand
   const currentStatus = readFileSync(path.join(parent, ".wakeflow-active/current/workspace-current-status.md"), "utf8");
   assert.match(currentStatus, new RegExp(`# ${path.basename(parent)} Current Status`));
   assert.match(currentStatus, new RegExp(`Controller window: ${path.basename(parent)}`));
-  assert.match(currentStatus, /Status: idle \/ initialization ready \/ waiting for controller task/);
-  assert.match(currentStatus, new RegExp(`\\| ${path.basename(parent)} \\| idle \\| No active demand; waiting for controller task\\. \\| Initialization ready state\\. \\|`));
+  assert.match(currentStatus, /Status: idle \/ waiting for controller task/);
+  assert.match(currentStatus, new RegExp(`\\| ${path.basename(parent)} \\| idle \\| No active demand; waiting for controller task\\. \\| Workspace initialized; no extra registration state is required\\. \\|`));
   assert.match(currentStatus, /Wakeflow MCP `wakeflow_create_demand` tool/);
   assert.doesNotMatch(currentStatus, /node scripts\/wakeflow-state\.mjs/);
   assert.doesNotMatch(currentStatus, /Controller window: Wakeflow/);
@@ -828,7 +823,6 @@ test("replace-window replaces one registered window thread without initializatio
     root: fixture.control,
     window: "BaseWindow",
     windowHandle: "<create_thread.threadId>",
-    entrySyncStatus: "pending",
     apply: true,
   });
 
@@ -886,7 +880,6 @@ test("replace-windows regenerates only selected responsibility windows without i
     root: fixture.control,
     window: "BaseWindow",
     windowHandle: "<create_thread.threadId>",
-    entrySyncStatus: "pending",
     apply: true,
   });
 
@@ -970,7 +963,6 @@ test("wakeflow_replace_windows(window) MCP wrapper returns one scoped replacemen
     root: fixture.control,
     window: "BaseWindow",
     windowHandle: "<create_thread.threadId>",
-    entrySyncStatus: "pending",
     apply: true,
   });
 });
@@ -992,7 +984,6 @@ test("wakeflow_register_window writes host-local registration atomically without
     root: fixture.control,
     window: "BaseWindow",
     windowHandle: firstHandle,
-    entrySyncStatus: "pending",
     apply: false,
   });
   assert.equal(dryRun.ok, true, dryRun.stderr || dryRun.stdout);
@@ -1006,14 +997,11 @@ test("wakeflow_register_window writes host-local registration atomically without
     root: fixture.control,
     window: "BaseWindow",
     windowHandle: firstHandle,
-    entrySyncStatus: "pending",
     apply: true,
   });
   assert.equal(applied.ok, true, applied.stderr || applied.stdout);
   assert.equal(applied.parsedJson.wrote, true);
   assert.equal(applied.parsedJson.threadRegistered, true);
-  assert.equal(applied.parsedJson.threadReady, false);
-  assert.equal(applied.parsedJson.entrySyncStatus, "pending");
   assert.equal(applied.parsedJson.registrationValid, true);
   assert.equal(applied.parsedJson.windowConfigWritten, true);
   assert.equal(applied.parsedJson.replacedExistingThread, false);
@@ -1022,79 +1010,19 @@ test("wakeflow_register_window writes host-local registration atomically without
   assert.equal(JSON.parse(readFileSync(registryPath, "utf8")).threadId, firstHandle);
   const windowConfig = JSON.parse(readFileSync(windowConfigPath, "utf8"));
   assert.equal(windowConfig.threadRegistered, true);
-  assert.equal(windowConfig.threadReady, false);
-  assert.equal(windowConfig.dispatchable, false);
+  assert.equal(windowConfig.dispatchable, true);
   assert.equal(Object.hasOwn(windowConfig, "threadId"), false);
-  const pendingStatus = await handlers.wakeflow_status({ root: fixture.control });
-  assert.equal(pendingStatus.ok, true, pendingStatus.stderr || pendingStatus.stdout);
-  const closedLoopStatus = pendingStatus.parsedJson.checks
-    .find((check) => check.key === "closedLoopStatus")?.payload;
-  assert.equal(closedLoopStatus.runtimeSummary.nextAction, "inspect-window-entry-sync");
-  assert.equal(closedLoopStatus.runtimeSummary.health.status, "attention");
-  assert.equal(closedLoopStatus.runtimeSummary.totals.windowReadiness.notReadyCount, 1);
-
-  const ready = await handlers.wakeflow_register_window({
-    root: fixture.control,
-    window: "BaseWindow",
-    windowHandle: firstHandle,
-    entrySyncStatus: "ready",
-    apply: true,
-  });
-  assert.equal(ready.ok, true, ready.stderr || ready.stdout);
-  assert.equal(ready.parsedJson.replacedExistingThread, false);
-  assert.equal(ready.parsedJson.updatedExistingThread, true);
-  assert.equal(ready.parsedJson.threadReady, true);
-  const readyRegistry = JSON.parse(readFileSync(registryPath, "utf8"));
-  assert.equal(readyRegistry.entrySyncStatus, "ready");
-  assert.equal(typeof readyRegistry.lastVerifiedAt, "string");
-  assert.equal(JSON.parse(readFileSync(windowConfigPath, "utf8")).dispatchable, true);
-
-  const noDowngrade = await handlers.wakeflow_register_window({
-    root: fixture.control,
-    window: "BaseWindow",
-    windowHandle: firstHandle,
-    entrySyncStatus: "failed",
-    apply: true,
-  });
-  assert.equal(noDowngrade.parsedJson.entrySyncStatus, "ready");
 
   const replaced = await handlers.wakeflow_register_window({
     root: fixture.control,
     window: "BaseWindow",
     windowHandle: secondHandle,
-    entrySyncStatus: "ready",
     apply: true,
   });
   assert.equal(replaced.ok, true, replaced.stderr || replaced.stdout);
   assert.equal(replaced.parsedJson.replacedExistingThread, true);
   assert.doesNotMatch(JSON.stringify(replaced), new RegExp(secondHandle));
   assert.equal(JSON.parse(readFileSync(registryPath, "utf8")).threadId, secondHandle);
-});
-
-test("status surfaces legacy assumed-ready registrations for explicit one-observation confirmation", async () => {
-  const fixture = makeFixture();
-  const registryPath = path.join(
-    fixture.control,
-    ".wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/BaseWindow.json",
-  );
-  writeFile(registryPath, JSON.stringify({
-    kind: "CodexWindowThreadRegistration",
-    version: 3,
-    windowName: "BaseWindow",
-    bindingId: "legacy-binding",
-    threadId: "01900000-0000-7000-8000-000000000001",
-    registeredAt: "2026-08-04T00:00:00.000Z",
-    lastVerifiedAt: "2026-08-04T00:00:00.000Z",
-  }, null, 2));
-
-  const status = await handlers.wakeflow_status({ root: fixture.control });
-  assert.equal(status.ok, true, status.stderr || status.stdout);
-  const closedLoop = status.parsedJson.checks
-    .find((check) => check.key === "closedLoopStatus")?.payload;
-  assert.equal(closedLoop.runtimeSummary.nextAction, "confirm-legacy-window-entry-sync");
-  assert.equal(closedLoop.runtimeSummary.health.status, "attention");
-  assert.equal(closedLoop.runtimeSummary.totals.windowReadiness.legacyAssumedReadyCount, 1);
-  assert.equal(closedLoop.runtimeSummary.resumePlan.status, "needs-window-entry-sync-confirmation");
 });
 
 test("MCP tool order keeps controller review and completed-demand continuation inside the host-visible prefix", () => {
@@ -1115,8 +1043,7 @@ test("MCP tool order keeps controller review and completed-demand continuation i
     "wakeflow_continue_demand",
   ]);
   const registerTool = tools.find((tool) => tool.name === "wakeflow_register_window");
-  assert.ok(registerTool.inputSchema.required.includes("entrySyncStatus"));
-  assert.deepEqual(registerTool.inputSchema.properties.entrySyncStatus.enum, ["pending", "ready", "failed"]);
+  assert.deepEqual(registerTool.inputSchema.required, ["window", "windowHandle"]);
 });
 
 test("initialize MCP schema does not expose replacement-window compatibility input", () => {

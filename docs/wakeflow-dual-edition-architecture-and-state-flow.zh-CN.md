@@ -214,7 +214,7 @@ flowchart TB
 
 逐命令而言，紧凑保留以下内容（且完整文件始终会落盘）：
 
-- `build-delivery` → `{ok,command,wrote,compact,deliveryId,targetWindow,taskId,dispatchGroup,returnRoute,prompt,deliveryFile,threadReady,windowLockWarning}`。
+- `build-delivery` → `{ok,command,wrote,compact,deliveryId,targetWindow,taskId,dispatchGroup,returnRoute,prompt,deliveryFile,threadRegistered,windowLockWarning}`。
 - `prepare-dispatch-from-state` → `{compact,deliveryId,dispatchGroup,prompt}` + `packetFile`/`deliveryFile` 路径（丢弃 windowConfig/packet/envelope；省略 forbiddenConclusions）。
 - `build-controller-return` → `{compact,deliveryId,controllerWindow,dispatchGroup,prompt}`。
 - `record-delivery-run` → `{compact,deliveryRunId,deliveryId,targetWindow}`。

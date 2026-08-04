@@ -192,55 +192,6 @@ test("normal create-demand requires healthy Controller, Design, Test, and task p
   assert.equal(existsSync(path.join(root, ".wakeflow-active/current/MISSING-REPO-WINDOW")), false);
 });
 
-test("new mainline registrations stay unavailable until entry sync is observed", () => {
-  const root = makeHealthyMainlineRoot({ products: ["RepoA"] });
-  const registryFile = path.join(
-    root,
-    ".wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/RepoA.json",
-  );
-  const runtimeFile = path.join(
-    root,
-    ".wakeflow-local/wakeflow-delivery/hosts/codex/window-config/RepoA.json",
-  );
-  const registration = readJson(registryFile);
-  writeFileSync(registryFile, `${JSON.stringify({
-    ...registration,
-    version: 4,
-    entrySyncStatus: "pending",
-    entrySyncCheckedAt: new Date().toISOString(),
-    lastVerifiedAt: null,
-  }, null, 2)}\n`);
-  const runtime = readJson(runtimeFile);
-  writeFileSync(runtimeFile, `${JSON.stringify({
-    ...runtime,
-    version: 2,
-    entrySyncStatus: "pending",
-    threadReady: false,
-    dispatchable: false,
-  }, null, 2)}\n`);
-
-  const result = run(demandScript, [
-    "create-demand",
-    "--root", root,
-    "--demand-key", "PENDING-ENTRY-SYNC",
-    "--title", "Pending entry sync",
-    "--task-packages", JSON.stringify([{
-      taskPackageId: "PKG-REPO-A",
-      targetWindow: "RepoA",
-      targetTaskId: "TASK-REPO-A",
-    }]),
-    "--write",
-    "--json",
-  ]);
-  assert.equal(result.status, 1, result.stdout);
-  const payload = JSON.parse(result.stdout);
-  assert.equal(payload.errorCode, "mainline-unavailable");
-  assert.ok(payload.mainlineHealth.issues.some(
-    (item) => item.code === "window-entry-sync-pending" && item.windowName === "RepoA",
-  ));
-  assert.equal(existsSync(path.join(root, ".wakeflow-active/current/PENDING-ENTRY-SYNC")), false);
-});
-
 test("normal create-demand rejects a configured project identity that no longer resolves", () => {
   const root = makeHealthyMainlineRoot({ products: ["RepoA"] });
   rmSync(path.join(root, "RepoA"), { recursive: true });

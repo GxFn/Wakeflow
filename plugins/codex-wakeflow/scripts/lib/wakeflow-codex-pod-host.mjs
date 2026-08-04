@@ -158,7 +158,6 @@ export function codexPodEntryExtras(operation, { workspaceRoot, stateRoot = null
         root: workspaceRoot,
         window: operation.windowName,
         windowHandle: "<create_thread.threadId>",
-        entrySyncStatus: "pending",
         launchCorrelationId: operation.launchCorrelationId,
         bindingId: operation.registrationBindingId,
         stateRoot: stateRootRelative ?? "<canonical Pod state root from launch plan>",

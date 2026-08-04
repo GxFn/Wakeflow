@@ -47,21 +47,16 @@ tool first:
   thread title; it keeps the window/repository name first.
 - After apply, read the returned `windowLaunchPlan`, use the Codex host
   `create_thread` tool to create real controller / Design / Test / product
-  windows. For each returned thread, make exactly one bounded `wait_threads`
-  observation and never resend automatically. Set
-  `localRegistration.callTemplate.entrySyncStatus` to `ready` only when the
-  expected entry-sync reply is visible, leave `pending` when no reply is
-  visible, or use `failed` for an explicit host/identity error; then call
-  `wakeflow_register_window`. A later manual recovery may observe once and
-  re-register the same handle as `ready`. Finally call `set_thread_title` with
-  `displayTitle`; this post-reply reset repairs Codex auto-title drift. Only
-  `ready` windows are dispatchable. The tool writes the local registry and
-  derived `window-config` without exposing the id.
+  windows. Call `wakeflow_register_window` once for each returned real
+  `create_thread.threadId`, then call `set_thread_title` with `displayTitle` as
+  the final title reset. Registration records routing identity only; Wakeflow
+  does not classify host-thread initialization replies as ready/pending/failed.
+  The tool writes the local registry and derived `window-config` without
+  exposing the id.
 - To rebuild selected windows, use `wakeflow_replace_windows` (single `window`
   arg for one heavy or stale responsibility window, `windows[]` for a selected
   group). Create threads only for the returned replacement launch entries, then
-  apply the same one-observation/status-registration/final-title-reset sequence
-  to each new real thread id. Do not rewrite
+  register each new real thread id and perform the final title reset. Do not rewrite
   unrelated window registrations or store window role / cwd / title metadata in
   the registry.
 - Do not use `wakeflow_initialize_workspace` as a refresh path for window

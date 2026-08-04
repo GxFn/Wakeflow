@@ -639,7 +639,7 @@ ${statusStep}
 
 ${refreshStep}
 
-如果当前没有 active demand、state root、task package 或 dispatch packet，请报告“入口同步完成，等待总控任务”后停止。这是初始化后的正常 ready 状态，不是失败。
+如果当前没有 active demand、state root、task package 或 dispatch packet，请报告“入口同步完成，等待总控任务”后停止。这表示窗口当前没有任务，不是失败，也不需要登记额外状态。
 只有收到包含 currentWindow、taskId、stateRoot 的 Wakeflow task wakeup / delivery prompt 时，才执行本窗口任务。
 ${hostProfile.texts.subagentAssist.zh}
 
@@ -667,7 +667,7 @@ ${statusStep}
 
 ${refreshStep}
 
-If there is no active demand, state root, task package, or dispatch packet, report "entry sync complete; waiting for controller task" and stop. This is the normal ready state after initialization, not a failure.
+If there is no active demand, state root, task package, or dispatch packet, report "entry sync complete; waiting for controller task" and stop. This means the window has no current task; it is not a failure and no extra status must be recorded.
 Execute window work only after receiving a Wakeflow task wakeup / delivery prompt containing currentWindow, taskId, and stateRoot.
 ${hostProfile.texts.subagentAssist.en}
 
@@ -1276,9 +1276,8 @@ function isStarterGeneratedContent(existing) {
     "Status: starter inbox",
     "Status: starter long-term map",
     "Status: idle / no active demand",
-    "Status: idle / initialization ready",
     "Fresh template status",
-    "Initialization ready state",
+    "Workspace initialized.",
     "Template initialized.",
     "TODO-EXAMPLE-001",
   ].some((marker) => existing.includes(marker));
@@ -1300,8 +1299,7 @@ function hasNonStarterStatus(existing) {
     "starter inbox",
     "starter long-term map",
     "idle / no active demand",
-    "idle / initialization ready",
-    "idle / initialization ready / waiting for controller task",
+    "idle / waiting for controller task",
   ]).has(status);
 }
 
@@ -1372,7 +1370,7 @@ function configuredWindowRows(context, kind) {
     const repo = repositories.find((item) => item.windowName === windowName);
     if (kind === "index") {
       if (windowName === controllerWindow) {
-        return `| ${markdownCell(windowName)} | idle | No active demand has been initialized; entry-sync windows should report ready and stop. |`;
+        return `| ${markdownCell(windowName)} | idle | No active demand has been initialized; waiting for controller task. |`;
       }
       if (windowName === designWindow) {
         return `| ${markdownCell(windowName)} | standby | Delivers confirmed requirements through the global TODO board. |`;
@@ -1383,7 +1381,7 @@ function configuredWindowRows(context, kind) {
       return `| ${markdownCell(windowName)} | standby | Configured responsibility window: ${markdownCell(repo?.role ?? "product work")}. |`;
     }
     if (windowName === controllerWindow) {
-      return `| ${markdownCell(windowName)} | idle | No active demand; waiting for controller task. | Initialization ready state. |`;
+      return `| ${markdownCell(windowName)} | idle | No active demand; waiting for controller task. | Workspace initialized; no extra registration state is required. |`;
     }
     if (windowName === designWindow) {
       return `| ${markdownCell(windowName)} | standby | No active handoff. | Requirements arrive as pending-claim rows on the global TODO board via wakeflow_deliver. |`;
@@ -1441,10 +1439,8 @@ function configuredStarterContent(context, relativePath) {
       "Create a real active demand with the Wakeflow MCP `wakeflow_create_demand` tool; then read the generated `developer-progress.md`.",
     );
   }
-  content = replaceAllLiteral(content, "| Controller | idle | No active demand has been initialized; entry-sync windows should report ready and stop. |", `| ${controllerWindow} | idle | No active demand has been initialized; entry-sync windows should report ready and stop. |`);
-  content = replaceAllLiteral(content, "| Controller | idle | No active demand; waiting for controller task. | Initialization ready state. |", `| ${controllerWindow} | idle | No active demand; waiting for controller task. | Initialization ready state. |`);
-  content = replaceAllLiteral(content, "| Controller | idle | No active demand has been initialized. |", `| ${controllerWindow} | idle | No active demand has been initialized; entry-sync windows should report ready and stop. |`);
-  content = replaceAllLiteral(content, "| Controller | idle | No active demand. | Starter status only. |", `| ${controllerWindow} | idle | No active demand; waiting for controller task. | Initialization ready state. |`);
+  content = replaceAllLiteral(content, "| Controller | idle | No active demand has been initialized. |", `| ${controllerWindow} | idle | No active demand has been initialized; waiting for controller task. |`);
+  content = replaceAllLiteral(content, "| Controller | idle | No active demand. | Starter status only. |", `| ${controllerWindow} | idle | No active demand; waiting for controller task. | Workspace initialized; no extra registration state is required. |`);
   content = replaceAllLiteral(content, "| TODO-EXAMPLE-001 | parked | template | P3 | Wakeflow |", `| TODO-EXAMPLE-001 | parked | template | P3 | ${controllerWindow} |`);
   content = replaceAllLiteral(content, "| New project setup. | Wakeflow | none |", `| New project setup. | ${controllerWindow} | none |`);
   content = replaceAllLiteral(content, "`../wakeflow-ledger/workspace/workspace-record-map.md`", `\`${workspaceRecordMapRel}\``);
@@ -2098,7 +2094,7 @@ function localWindowPrompt(context, windowName, deliveryRole, language) {
       `窗口职责：${localRoot.role}`,
       "",
       `先读取 ${readRefs}。`,
-      "如果当前没有 active demand、state root、task package 或 dispatch packet，请报告“入口同步完成，等待总控任务”后停止。这是初始化后的正常 ready 状态，不是失败。",
+      "如果当前没有 active demand、state root、task package 或 dispatch packet，请报告“入口同步完成，等待总控任务”后停止。这表示窗口当前没有任务，不是失败，也不需要登记额外状态。",
       "只有收到包含 currentWindow、taskId、stateRoot 的 Wakeflow task wakeup / delivery prompt 时，才执行本窗口任务。",
       hostProfile.texts.subagentAssist.zh,
       "如果窗口身份、仓库路径、state root 或 Wakeflow 配置不一致，停止并回报总控。",
@@ -2110,7 +2106,7 @@ function localWindowPrompt(context, windowName, deliveryRole, language) {
     `Responsibility: ${localRoot.role}`,
     "",
     `First read ${readRefs}.`,
-    "If there is no active demand, state root, task package, or dispatch packet, report \"entry sync complete; waiting for controller task\" and stop. This is the normal ready state after initialization, not a failure.",
+    "If there is no active demand, state root, task package, or dispatch packet, report \"entry sync complete; waiting for controller task\" and stop. This means the window has no current task; it is not a failure and no extra status must be recorded.",
     "Execute window work only after receiving a Wakeflow task wakeup / delivery prompt containing currentWindow, taskId, and stateRoot.",
     hostProfile.texts.subagentAssist.en,
     "If the window identity, repository path, state root, or Wakeflow configuration is inconsistent, stop and report to the controller.",
@@ -2180,19 +2176,6 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
       displayTitle: entry.displayTitle,
       promptPurpose: entry.promptPurpose,
       titleReset: hostProfile.launch.titleReset(entry.displayTitle),
-      entrySyncObservation: {
-        required: true,
-        hostTool: hostProfile.hostTools.readWindow,
-        boundedWaitMs: 15000,
-        attempts: 1,
-        automaticResend: false,
-        statusMapping: {
-          expectedReadyReplyVisible: "ready",
-          noReplyVisible: "pending",
-          explicitHostOrIdentityError: "failed",
-        },
-        recovery: "After a manual resend or other explicit recovery, observe once again and re-register the same handle. Never infer ready from host acceptance alone.",
-      },
       ...(typeof hostProfile.launch.entryExtras === "function" ? hostProfile.launch.entryExtras(entry, context) : {}),
       localRegistration: {
         required: true,
@@ -2206,7 +2189,6 @@ function windowLaunchPlanPayload(context, entries, options = {}) {
           root: context.wakeflowRoot,
           window: entry.windowName,
           windowHandle: hostProfile.handleId.launchResultPlaceholder,
-          entrySyncStatus: "pending",
           apply: true,
         },
       },

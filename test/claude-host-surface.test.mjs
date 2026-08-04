@@ -308,8 +308,6 @@ test("claude artifact registers a session id under the host-scoped registry", ()
       "RepoA",
       "--thread-id",
       "a1b2c3d4-5678-90ab-cdef-claude-session",
-      "--entry-sync-status",
-      "ready",
       "--write",
       "--json",
     ],
@@ -366,7 +364,7 @@ test("claude artifact rejects placeholder session ids", () => {
   const deliveryScript = path.join(claudePluginRoot, "scripts/wakeflow-delivery.mjs");
   const result = runSync(
     process.execPath,
-    [deliveryScript, "register-thread", "--root", workspaceRoot, "--window", "RepoA", "--thread-id", "current-claude-session", "--entry-sync-status", "ready", "--write", "--json"],
+    [deliveryScript, "register-thread", "--root", workspaceRoot, "--window", "RepoA", "--thread-id", "current-claude-session", "--write", "--json"],
     { encoding: "utf8", cwd: workspaceRoot },
   );
   assert.notEqual(result.status, 0);

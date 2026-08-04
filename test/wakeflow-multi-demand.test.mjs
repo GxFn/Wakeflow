@@ -128,7 +128,6 @@ function registerPodWindow(root, stateRoot, operation, threadIndex) {
     "--root", root,
     "--window", operation.windowName,
     "--thread-id", threadId,
-    "--entry-sync-status", "ready",
     "--launch-correlation-id", operation.launchCorrelationId,
     "--binding-id", operation.registrationBindingId,
     "--state-root", stateRoot,

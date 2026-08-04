@@ -88,22 +88,18 @@ function makeWorkspace(config = {}) {
     const timestamp = "2026-07-31T00:00:00.000Z";
     writeJson(path.join(registryDir, `${windowName}.json`), {
       kind: "CodexWindowThreadRegistration",
-      version: 4,
+      version: 3,
       windowName,
       bindingId: `binding-${windowName}`,
       threadId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
       registeredAt: timestamp,
-      entrySyncStatus: "ready",
-      entrySyncCheckedAt: timestamp,
       lastVerifiedAt: timestamp,
     });
     writeJson(path.join(windowConfigDir, `${windowName}.json`), {
       kind: "CodexSubwindowDispatchConfig",
-      version: 2,
+      version: 1,
       windowName,
       threadRegistered: true,
-      threadReady: true,
-      entrySyncStatus: "ready",
       dispatchable: role !== "design",
       cwd,
       responsibilityRoot: cwd,

@@ -35,7 +35,6 @@ assertOk(await runWakeflowRuntime({
     "--root", root,
     "--window", "Target",
     "--thread-id", "wakeflow-smoke-target-session",
-    "--entry-sync-status", "ready",
     "--write",
     "--json",
   ],
@@ -434,7 +433,6 @@ async function runMcpSmoke(rootPath) {
           root: rootPath,
           window,
           windowHandle,
-          entrySyncStatus: "ready",
           apply: true,
         },
       });

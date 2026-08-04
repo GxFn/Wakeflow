@@ -154,7 +154,7 @@ function importResult(runtime, root, stateRoot, args) {
 
 function registerAndSend(runtime, root, stateRoot, group, targetWindow = "Target") {
   const registered = run(runtime, "wakeflow-delivery.mjs", [
-    "register-thread", "--root", root, "--window", targetWindow, "--thread-id", `0192fac-${targetWindow}`, "--entry-sync-status", "ready", "--write", "--json",
+    "register-thread", "--root", root, "--window", targetWindow, "--thread-id", `0192fac-${targetWindow}`, "--write", "--json",
   ]);
   assert.equal(registered.status, 0, registered.stderr || registered.stdout);
   const prepareArgs = [

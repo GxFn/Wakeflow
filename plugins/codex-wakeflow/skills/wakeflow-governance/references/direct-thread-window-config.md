@@ -10,25 +10,17 @@ project documentation.
 
 Store real thread ids only in the local thread registry under
 `.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/`. Wakeflow
-setup or host-controlled tooling should make one bounded entry-sync observation
-without automatic resend, then pass each real thread id and its explicit
-`entrySyncStatus` (`ready`, `pending`, or `failed`) to
-`wakeflow_register_window`; agents must not hand-write runtime files. Only a
-visible expected reply is `ready`, and only ready registrations are
-dispatchable. A later manual recovery reuses the same handle and promotes its
-status with another explicit registration. The
-tool updates the host-local registry and derived window config together and
+setup or host-controlled tooling should pass each real thread id to
+`wakeflow_register_window`; agents must not
+hand-write runtime files. Wakeflow records the host routing identity but does
+not classify the initialization reply or maintain a separate readiness state.
+The tool updates the host-local registry and derived window config together and
 redacts the real id from its output.
 Records in the legacy `.wakeflow-local/wakeflow-delivery/thread-registry/`
 location are still read as a fallback while new registrations write the
 host-scoped path, and the shared `.wakeflow-local/wakeflow-delivery/locks/`
 directory enforces one in-flight target delivery per window across hosts.
 Controller returns do not take that target work lease.
-
-Version-3 records remain dispatch-compatible during migration, but runtime
-health reports them as `legacy-assumed-ready` attention rather than explicit
-entry-sync proof. Observe the existing destination once and re-register the
-same handle as `ready`; do not resend automatically or replace the handle.
 
 Never write real thread ids to:
 
@@ -53,11 +45,6 @@ issue a blind second create; register only the uniquely matched final
 `threadId`.
 
 ## Registry Record Shape
-
-New records separate `threadRegistered` from `threadReady`. They store
-`entrySyncStatus`, `entrySyncCheckedAt`, and set `lastVerifiedAt` only for
-`ready`. Version-3 records without this field remain readable as
-`legacy-assumed-ready`; newly created records never infer readiness.
 
 Thread-registry records should contain only:
 

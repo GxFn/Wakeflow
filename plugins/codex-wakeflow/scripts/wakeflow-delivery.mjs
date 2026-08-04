@@ -52,9 +52,9 @@ const scriptPath = new URL(import.meta.url).pathname;
 const write = hasFlag("--write");
 const json = hasFlag("--json");
 const version = 1;
-const threadRegistrationVersion = 4;
+const threadRegistrationVersion = 3;
 const deliveryEnvelopeVersion = 3;
-const windowConfigVersion = 2;
+const windowConfigVersion = 1;
 const deliveryRunVersion = 2;
 const keepLiveVersion = 1;
 
@@ -65,7 +65,7 @@ Usage:
   node scripts/wakeflow-delivery.mjs status [--json] [--verbose]
   node scripts/wakeflow-delivery.mjs prune-runtime [--before <iso>] [--write] [--json]
   node scripts/wakeflow-delivery.mjs release-window-lock --window <name> [--expected-delivery-id <id>] [--write] [--json]
-  node scripts/wakeflow-delivery.mjs register-thread --window <name> --thread-id <id> --entry-sync-status pending|ready|failed [--launch-correlation-id <id> --binding-id <id> --state-root <path>] --write [--json]
+  node scripts/wakeflow-delivery.mjs register-thread --window <name> --thread-id <id> [--launch-correlation-id <id> --binding-id <id> --state-root <path>] --write [--json]
   node scripts/wakeflow-delivery.mjs build-window-config --window <name> [--require-thread] --write [--json]
   node scripts/wakeflow-delivery.mjs build-delivery --packet-file <path> [--delivery-id <id>] [--return-route controller|none] [--automation-enabled] [--require-thread] [--write] [--json]
   node scripts/wakeflow-delivery.mjs prepare-dispatch-from-state --state-root <path> --target-task-id <id> [--group-target-task-id <id>...] [--task-package-id <id>] [--human-context-ref <ref>] [--controller-window <name>] [--group <id>] [--return-policy group-ready|per-target] [--expected-preview-digest <sha256>] [--automation-enabled] [--require-thread] [--write] [--json]
@@ -190,11 +190,11 @@ function output(payload, textLines = []) {
 
 function inferAgentNext(payload) {
   if (!payload.ok) return "Stop and inspect the reported closed-loop contract issue.";
-  if (payload.command === "prepare-dispatch-from-state") return payload.threadReady ? "Send the prepared prompt with the host thread tool, then record a delivery run." : "Register the target thread before direct-thread delivery.";
+  if (payload.command === "prepare-dispatch-from-state") return payload.threadRegistered ? "Send the prepared prompt with the host thread tool, then record a delivery run." : "Register the target thread before direct-thread delivery.";
   if (payload.command === "register-thread") return "Build or refresh the derived local window config, then build delivery envelopes when total control decides to dispatch.";
   if (payload.command === "build-window-config") return "Use this child-window config when creating direct-thread delivery envelopes.";
-  if (payload.command === "build-delivery") return payload.threadReady ? "Send the prompt with the host thread tool, then record a delivery run." : "Register the target thread before direct-thread delivery.";
-  if (payload.command === "build-controller-return") return payload.threadReady ? "Send the controller-return prompt with the host thread tool, then record a delivery run." : "Register the controller thread before unattended return.";
+  if (payload.command === "build-delivery") return payload.threadRegistered ? "Send the prompt with the host thread tool, then record a delivery run." : "Register the target thread before direct-thread delivery.";
+  if (payload.command === "build-controller-return") return payload.threadRegistered ? "Send the controller-return prompt with the host thread tool, then record a delivery run." : "Register the controller thread before unattended return.";
   if (payload.command === "record-delivery-run") {
     if (payload.status !== "sent") {
       return payload.transportStatus === "rejected-before-send"

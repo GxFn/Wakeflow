@@ -197,13 +197,11 @@ The operating flow is:
    before writing. It must not use a broad discovered-directory import.
 6. After user confirmation for a fresh workspace, Codex calls
    `wakeflow_initialize_workspace` with `apply: true`.
-7. Codex creates the returned threads, performs one bounded readback observation
-   without automatic resend, and calls `wakeflow_register_window` with
-   `entrySyncStatus=ready|pending|failed` for each real thread id. Only a visible
-   expected reply is `ready`; no reply is `pending`. It then resets each title
-   to `displayTitle` after the entry-sync turn so host auto-title cannot persist.
-   The tool updates the local registry and derived window config without
-   exposing the id; a later manual recovery promotes the same handle to ready.
+7. Codex creates the returned threads and calls `wakeflow_register_window` for
+   each real thread id, then resets each title to `displayTitle` so host
+   auto-title cannot persist. The tool updates the local routing registry and
+   derived window config without exposing the id. Wakeflow does not classify
+   initialization replies or maintain a separate thread-readiness state.
 
 For an already initialized workspace, `wakeflow_initialize_workspace` is not a
 general refresh button. It may write only after the user explicitly requests a

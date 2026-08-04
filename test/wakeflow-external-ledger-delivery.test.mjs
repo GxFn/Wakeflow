@@ -93,7 +93,6 @@ test("prepare and record delivery support a configured external current ledger w
     "--root", root,
     "--window", "Target",
     "--thread-id", "0192fac-external-ledger-target",
-    "--entry-sync-status", "ready",
     "--write",
     "--json",
   ]));

@@ -254,7 +254,6 @@ test("full-context package is the dispatch authority and target prepare is previ
       "register-thread",
       "--window", "Product",
       "--thread-id", "0192fac-product-initial",
-      "--entry-sync-status", "ready",
       "--write",
     ]));
 
@@ -346,7 +345,6 @@ test("full-context package is the dispatch authority and target prepare is previ
       "register-thread",
       "--window", "Product",
       "--thread-id", "0192fac-product-rebound",
-      "--entry-sync-status", "ready",
       "--write",
     ]));
     const staleBindingPreview = run(deliveryScript, root, [

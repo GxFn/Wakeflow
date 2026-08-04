@@ -350,7 +350,7 @@ the full artifact is always written to disk regardless — described in-code as
 
 Per command, compact keeps (and the full file always lands on disk):
 
-- `build-delivery` → `{ok,command,wrote,compact,deliveryId,targetWindow,taskId,dispatchGroup,returnRoute,prompt,deliveryFile,threadReady,windowLockWarning}`.
+- `build-delivery` → `{ok,command,wrote,compact,deliveryId,targetWindow,taskId,dispatchGroup,returnRoute,prompt,deliveryFile,threadRegistered,windowLockWarning}`.
 - `prepare-dispatch-from-state` → `{compact,deliveryId,dispatchGroup,prompt}` + `packetFile`/`deliveryFile` paths (drops windowConfig/packet/envelope; omits forbiddenConclusions).
 - `build-controller-return` → `{compact,deliveryId,controllerWindow,dispatchGroup,prompt}`.
 - `record-delivery-run` → `{compact,deliveryRunId,deliveryId,targetWindow}`.

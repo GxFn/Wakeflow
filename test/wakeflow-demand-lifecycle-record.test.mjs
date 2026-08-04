@@ -58,7 +58,6 @@ function makeWorkspace() {
       "--root", root,
       "--window", windowName,
       "--thread-id", `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
-      "--entry-sync-status", "ready",
       "--write",
     ]);
     assert.equal(registered.status, 0, registered.stderr || registered.stdout);

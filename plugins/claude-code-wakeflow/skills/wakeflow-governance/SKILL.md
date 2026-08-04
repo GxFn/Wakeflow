@@ -60,21 +60,16 @@ tool first:
   `claude --session-id <generated uuid>`, pastes the entry-sync prompt, stores
   the window-host binding at
   `.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/<window>.json`,
-  and returns the session id. For each session, use helper `readback` exactly
-  once as the bounded entry-sync observation and never resend automatically.
-  Set `localRegistration.callTemplate.entrySyncStatus` to `ready` only when the
-  expected reply is visible, leave `pending` when no reply is visible, or use
-  `failed` for an explicit host/identity error; then call
-  `wakeflow_register_window`. A later manual recovery may observe once and
-  re-register the same session as `ready`. Finally run helper `retitle` with
-  `displayTitle` to perform the post-reply title reset. Only `ready` windows are
-  dispatchable. The tool writes the host-local registry and derived
+  and returns the session id. Call `wakeflow_register_window` once for each
+  returned final session id, then run helper `retitle` with `displayTitle` as
+  the final title reset. Registration records routing identity only; Wakeflow
+  does not classify initialization readback as ready/pending/failed. The tool
+  writes the host-local registry and derived
   `window-config` without exposing the id.
 - To rebuild selected windows, use `wakeflow_replace_windows` (single `window`
   arg for one heavy or stale responsibility window, `windows[]` for a selected
   group). Run `launch-window --replace` only for the returned replacement launch
-  entries, then apply the same observation/status-registration/final-retitle
-  sequence to each new real session id.
+  entries, then register and retitle each new real session id.
   Do not rewrite unrelated window registrations or store window role / cwd /
   title metadata in the registry.
 - Do not use `wakeflow_initialize_workspace` as a refresh path for window

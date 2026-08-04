@@ -382,7 +382,7 @@ export function createDispatchCommands(ctx) {
         wrote: write,
         envelope: redactDeliveryEnvelope(envelope),
         deliveryFile: write ? path.relative(workspaceRoot, deliveryFile) : "",
-        threadReady: Boolean(registration),
+        threadRegistered: Boolean(registration),
         threadIdRedacted: Boolean(registration),
         windowLockWarning,
     };
@@ -400,7 +400,7 @@ export function createDispatchCommands(ctx) {
             returnRoute: envelope.returnRoute,
             prompt: envelope.prompt,
             deliveryFile: buildPayload.deliveryFile,
-            threadReady: buildPayload.threadReady,
+            threadRegistered: buildPayload.threadRegistered,
             windowLockWarning,
           }
         : buildPayload,
@@ -873,7 +873,7 @@ export function createDispatchCommands(ctx) {
             }),
         packetFile: write ? path.relative(workspaceRoot, packetFile) : "",
         deliveryFile: write ? path.relative(workspaceRoot, deliveryFile) : "",
-        threadReady: Boolean(registration),
+        threadRegistered: Boolean(registration),
         threadIdRedacted: Boolean(registration),
         windowLockWarning,
         // W-Target/P5 recurring-problem stop: when this task has already been reworked
@@ -1058,7 +1058,7 @@ export function createDispatchCommands(ctx) {
           ? { compact: true, deliveryId: envelope.deliveryId, controllerWindow: envelope.controllerWindow, dispatchGroup: envelope.dispatchGroup, prompt: envelope.prompt }
           : { envelope: redactDeliveryEnvelope(envelope) }),
         returnFile: write ? path.relative(workspaceRoot, returnFile) : "",
-        threadReady: Boolean(registration),
+        threadRegistered: Boolean(registration),
         threadIdRedacted: Boolean(registration),
         deliveryStatus: "pending-host-send",
         deliveryCompletionRequired: true,

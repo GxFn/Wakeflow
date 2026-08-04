@@ -255,8 +255,6 @@ function registerThread(root, windowName) {
     windowName,
     "--thread-id",
     `0192fac-${windowName}`,
-    "--entry-sync-status",
-    "ready",
     "--write",
   ]));
 }
@@ -786,10 +784,8 @@ test("thread registry helpers build dispatch config without leaking thread ids",
     windowName: "WindowA",
     threadId: "0192fac-window-a",
     registeredAt,
-    entrySyncStatus: "ready",
   });
   assert.equal(rawRegistration.lastVerifiedAt, registeredAt);
-  assert.equal(rawRegistration.entrySyncStatus, "ready");
 
   const registration = normalizeThreadRegistrationRecord({
     windowName: "WindowA",
@@ -820,7 +816,6 @@ test("thread registry helpers build dispatch config without leaking thread ids",
   });
   assert.equal(config.dispatchable, true);
   assert.equal(config.threadRegistered, true);
-  assert.equal(config.threadReady, true);
   assert.equal(config.threadRegistryFile, "thread-registry/WindowA.json");
   assert.equal(config.delivery.missingThread, "fail-closed");
   assert.equal(config.result.returnRoute, "controller");
@@ -841,7 +836,6 @@ test("thread registry helpers build dispatch config without leaking thread ids",
     generatedAt: registeredAt,
   });
   assert.equal(unlisted.dispatchable, false);
-  assert.equal(unlisted.threadReady, false);
 });
 
 test("review pack helper exposes review-input repair and pending-dispatch gates", () => {
@@ -2212,7 +2206,7 @@ test("controller-return blocked delivery records controller window context", () 
     "CSMR-TASK-1",
     "--write",
   ]));
-  assert.equal(returned.threadReady, false);
+  assert.equal(returned.threadRegistered, false);
 
   const recorded = parseOk(run(root, [
     "record-delivery-run",

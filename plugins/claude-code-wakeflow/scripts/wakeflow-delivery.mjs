@@ -52,9 +52,9 @@ const scriptPath = new URL(import.meta.url).pathname;
 const write = hasFlag("--write");
 const json = hasFlag("--json");
 const version = 1;
-const threadRegistrationVersion = 3;
+const threadRegistrationVersion = 4;
 const deliveryEnvelopeVersion = 3;
-const windowConfigVersion = 1;
+const windowConfigVersion = 2;
 const deliveryRunVersion = 2;
 const keepLiveVersion = 1;
 
@@ -65,7 +65,7 @@ Usage:
   node scripts/wakeflow-delivery.mjs status [--json] [--verbose]
   node scripts/wakeflow-delivery.mjs prune-runtime [--before <iso>] [--write] [--json]
   node scripts/wakeflow-delivery.mjs release-window-lock --window <name> [--expected-delivery-id <id>] [--write] [--json]
-  node scripts/wakeflow-delivery.mjs register-thread --window <name> --thread-id <id> [--launch-correlation-id <id> --binding-id <id> --state-root <path>] --write [--json]
+  node scripts/wakeflow-delivery.mjs register-thread --window <name> --thread-id <id> --entry-sync-status pending|ready|failed [--launch-correlation-id <id> --binding-id <id> --state-root <path>] --write [--json]
   node scripts/wakeflow-delivery.mjs build-window-config --window <name> [--require-thread] --write [--json]
   node scripts/wakeflow-delivery.mjs build-delivery --packet-file <path> [--delivery-id <id>] [--return-route controller|none] [--automation-enabled] [--require-thread] [--write] [--json]
   node scripts/wakeflow-delivery.mjs prepare-dispatch-from-state --state-root <path> --target-task-id <id> [--group-target-task-id <id>...] [--task-package-id <id>] [--human-context-ref <ref>] [--controller-window <name>] [--group <id>] [--return-policy group-ready|per-target] [--expected-preview-digest <sha256>] [--automation-enabled] [--require-thread] [--write] [--json]

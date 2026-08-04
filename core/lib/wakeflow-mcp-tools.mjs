@@ -384,15 +384,16 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_register_window",
-    description: `Register one host-created Wakeflow window using ${hostProfile.handleId.realIdRequirement}. Mainline windows must be configured. Pod windows additionally require the exact launchCorrelationId, bindingId, and canonical stateRoot from wakeflow_pod_open; a __ suffix alone never authorizes registration. The handle is stored only in the host-scoped local registry and redacted from all output. Registration does not make a Pod product dispatchable until wakeflow_pod_bind verifies its receipt. Dry-run unless apply is true.`,
+    description: `Register one host-created Wakeflow window using ${hostProfile.handleId.realIdRequirement} and the result of one bounded entry-sync observation. entrySyncStatus=ready is the only new-registration state that permits dispatch; pending records no visible reply without retrying, and failed records an explicit host or identity failure. Re-register the same handle after a later manual recovery to promote it to ready; a ready handle cannot be downgraded. Mainline windows must be configured. Pod windows additionally require the exact launchCorrelationId, bindingId, and canonical stateRoot from wakeflow_pod_open; a __ suffix alone never authorizes registration. The handle is stored only in the host-scoped local registry and redacted from all output. Registration does not make a Pod product dispatchable until wakeflow_pod_bind verifies its receipt. Dry-run unless apply is true.`,
     annotations: localWriteTool("Register Wakeflow Window", true),
     inputSchema: {
       type: "object",
-      required: ["window", "windowHandle"],
+      required: ["window", "windowHandle", "entrySyncStatus"],
       properties: {
         root: { type: "string" },
         window: { type: "string", description: "Configured Wakeflow logical window name." },
         windowHandle: { type: "string", description: `The ${hostProfile.handleId.realIdRequirement} returned by the host launch tool. It is never echoed.` },
+        entrySyncStatus: { type: "string", enum: ["pending", "ready", "failed"], description: "Result of exactly one bounded host observation after the entry-sync prompt: ready only when the expected window reply is visible; pending when no reply is visible yet; failed on an explicit host or identity error. This tool never retries or resends." },
         launchCorrelationId: { type: "string", description: "Required only for a Pod window; must match its canonical host-local launch operation." },
         bindingId: { type: "string", description: "Required only for a Pod window; opaque registry/binding correlation, not the real host handle." },
         stateRoot: { type: "string", description: "Required only for a Pod window; canonical demand state root authorized by the launch manifest." },
@@ -1261,6 +1262,7 @@ export const handlers = {
       ...rootArgs(args),
       ...optionalValue("--window", args.window),
       ...optionalValue("--thread-id", args.windowHandle),
+      ...optionalValue("--entry-sync-status", args.entrySyncStatus),
       ...optionalValue("--launch-correlation-id", args.launchCorrelationId),
       ...optionalValue("--binding-id", args.bindingId),
       ...optionalValue("--state-root", args.stateRoot),

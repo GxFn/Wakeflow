@@ -2832,6 +2832,7 @@ function registerPodSession(windowName, sessionId, {
     path.join(pluginRootDir, "scripts", "wakeflow-delivery.mjs"),
     "register-thread", "--root", workspaceRoot,
     "--window", windowName, "--thread-id", sessionId, "--write", "--json",
+    "--entry-sync-status", "ready",
     "--launch-correlation-id", launchCorrelationId,
     "--binding-id", bindingId,
     "--state-root", stateRootRelative,

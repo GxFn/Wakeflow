@@ -3,7 +3,9 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { getArgValue, loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
+import { documentPlacements } from "./lib/wakeflow-document-placement.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
+import { readmeContents } from "./lib/wakeflow-storage-map.mjs";
 import { TODO_COLUMNS, parseMarkdownRow, parseTodoBoard } from "./lib/wakeflow-todo-table.mjs";
 import {
   DEMAND_AUTHORITY_FILE,
@@ -112,6 +114,63 @@ function validateTableSection({ file, label, heading, requiredColumns }) {
   const header = rows.find((row) => hasRequiredColumns(row, requiredColumns));
   if (!header) {
     issues.push(`${relative(file)} ${label} table is missing required columns: ${requiredColumns.join(", ")}`);
+  }
+}
+
+function configuredWindowNames() {
+  // The controller row is a projection-owned role row and older starter
+  // templates intentionally use the generic label `Controller`. Repository
+  // windows, however, are explicit dispatch targets from workspace config and
+  // must never disappear from either active entry table.
+  return [...new Set((Array.isArray(workspaceConfig.repositories)
+    ? workspaceConfig.repositories.map((repo) => repo?.windowName)
+    : []).filter(Boolean))];
+}
+
+function validateConfiguredWindowCoverage({ file, heading, label }) {
+  if (!existsSync(file)) return;
+  const rows = tableRows(sectionContent(read(file), heading));
+  const present = new Set(rows
+    .filter((row) => row[0] && !["Window", "Window / Status"].includes(row[0]))
+    .map((row) => row[0]));
+  const missing = configuredWindowNames().filter((windowName) => !present.has(windowName));
+  if (missing.length > 0) {
+    issues.push(`${relative(file)} ${label} is missing configured window rows: ${missing.join(", ")}`);
+  }
+}
+
+function validateStorageOrientationReadmes() {
+  const ledgerRel = relative(ledgerPaths.projectLedgerRoot);
+  const placements = documentPlacements({
+    workspaceRoot,
+    config: workspaceConfig,
+    displayRoot: ledgerPaths.projectLedgerRoot,
+  });
+  for (const item of readmeContents({ ledgerRel, placements })) {
+    const file = path.resolve(workspaceRoot, item.file);
+    if (!existsSync(file)) {
+      issues.push(`missing storage orientation README: ${relative(file)}`);
+      continue;
+    }
+    if (read(file) !== item.content) {
+      issues.push(`stale storage orientation README: ${relative(file)}`);
+    }
+  }
+}
+
+function validatePortableManagedAccessCards() {
+  for (const repo of workspaceConfig.repositories ?? []) {
+    if (!repo?.path || repo.managedAgents === false) continue;
+    const memoryFile = path.join(path.resolve(workspaceRoot, repo.path), hostProfile.memoryFile);
+    if (!existsSync(memoryFile)) continue;
+    const content = read(memoryFile);
+    const start = content.indexOf("<!-- wakeflow:scope:start -->");
+    const end = content.indexOf("<!-- wakeflow:scope:end -->");
+    if (start < 0 || end <= start) continue;
+    const block = content.slice(start, end);
+    if (block.includes(workspaceRoot) || block.includes(path.resolve(workspaceRoot, repo.path))) {
+      issues.push(`${relative(memoryFile)} managed access card contains a machine-local absolute path`);
+    }
   }
 }
 
@@ -241,6 +300,13 @@ if (!existsSync(indexPath)) {
   if (!indexContent.includes("[current/](current/)")) {
     warnings.push(`${relative(indexPath)} should expose ${relative(currentDir)}/ as the short-term work area`);
   }
+  if (!/<!--\s*wakeflow:doc-contract:\s*thin\s*-->/.test(indexContent)) {
+    validateConfiguredWindowCoverage({
+      file: indexPath,
+      heading: "Window Coverage Status",
+      label: "window coverage",
+    });
+  }
 }
 
 validateTableSection({
@@ -273,11 +339,18 @@ if (existsSync(currentStatusPath)) {
       heading: "Window Dispatch",
       requiredColumns: ["Window", "Status"],
     });
+    validateConfiguredWindowCoverage({
+      file: currentStatusPath,
+      heading: "Window Dispatch",
+      label: "window dispatch",
+    });
   }
 }
 
 validateGlobalTodo();
 validateDemandAuthorities();
+validateStorageOrientationReadmes();
+validatePortableManagedAccessCards();
 
 const activeFiles = [
   path.join(workspaceRoot, hostProfile.memoryFile),

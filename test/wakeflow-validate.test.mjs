@@ -175,6 +175,21 @@ test("fails when the shipped v2 config contains a derived legacy field", () => {
   }
 });
 
+test("fails when a Test support template restores implementation takeover", () => {
+  const root = makeFixture();
+  try {
+    mutateJson(path.join(root, "templates/wakeflow-template-bundle.json"), (payload) => {
+      const key = "templates/window-support/testing/skills/README.md";
+      payload.files[key] += "\nThe Test window may take over product implementation when a controller explicitly authorizes it.\n";
+    });
+    const result = run(root);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /must not let a test card or state root grant product implementation ownership/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("fails when plugin starter prompts exceed the Codex UI limit", () => {
   const root = makeFixture();
   try {

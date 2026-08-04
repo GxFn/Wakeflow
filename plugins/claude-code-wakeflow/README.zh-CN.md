@@ -388,9 +388,11 @@ Preview the plan first and wait for my confirmation before writing.
 7. Claude Code 运行 host helper：先 `preflight`，再对返回 launch plan 中的
    每个窗口运行 `launch-window`。每次 launch 创建运行 `claude --session-id`
    的 tmux 窗口、粘贴 entry-sync prompt、把 `displayTitle` 设为 tmux 窗口名，
-   并返回 session id；对每个真实 `hostLaunch.sessionId` 调用一次
-   `wakeflow_register_window`。工具会更新本地 registry 和派生 window config，
-   并从输出中隐藏 id。
+   并返回 session id；随后只做一次有界 helper `readback` 且不自动重发，按
+   可见预期回复 / 暂无回复 / 明确错误登记为 `ready|pending|failed`，再调用
+   helper `retitle` 做最终标题复位。只有 ready 可派发；人工恢复后可用同一
+   session id 提升为 ready。工具会更新本地 registry 和派生 window config，
+   并隐藏 id。
 
 已经初始化过的工作区里，`wakeflow_initialize_workspace` 不是通用“刷新”按钮。
 只有用户明确要求“重置初始化”时才能写入；apply 调用必须设置

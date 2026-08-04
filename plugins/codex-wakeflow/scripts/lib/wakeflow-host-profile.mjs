@@ -54,6 +54,7 @@ export const hostProfile = {
   hostTools: {
     createWindow: "create_thread",
     retitleWindow: "set_thread_title",
+    readWindow: "wait_threads",
     sendToWindow: "send_message_to_thread",
   },
   handleId: {
@@ -92,7 +93,7 @@ export const hostProfile = {
     rootPluginUsageBanner:
       "> Wakeflow is installed as a Codex plugin for this workspace. Use Wakeflow MCP tools for setup, status, state roots, delivery, review, archive, next-work scans, and verification. Do not call installed runtime scripts directly or infer their Node parameters; if a required Wakeflow MCP tool is unavailable, stop and report that the Wakeflow plugin surface must be reloaded or reinstalled. After a local reinstall or update, fully restart the Codex App before resuming; creating another task in the same App process may still inherit the stale or missing MCP surface.\n\n",
     initializeApplyNextAction:
-      "Create the Codex windows in windowLaunchPlan with create_thread, reset each title with set_thread_title, then call wakeflow_register_window once per returned threadId before dispatching work.",
+      "Create the Codex windows in windowLaunchPlan, make one bounded entry-sync observation without resending, register each real threadId with the observed pending/ready/failed status, then perform the final set_thread_title reset. Dispatch only ready windows.",
   },
   launch: {
     // Default Codex reasoning effort for newly created Wakeflow windows. The
@@ -113,8 +114,9 @@ export const hostProfile = {
     },
     workflowSteps: (language) => [
       "Call create_thread for each launch entry with the entry cwd, createThreadPrompt, and hostCreateThread settings. These prompts perform initialization entry sync only; they are not task deliveries.",
-      "Immediately call set_thread_title for the returned thread id, using the entry displayTitle.",
-      "Call wakeflow_register_window once per returned create_thread.threadId using the entry localRegistration.callTemplate. The tool stores the id only in thread-registry and refreshes derived window-config status; do not hand-write runtime files.",
+      "For each returned thread id, perform exactly one bounded wait_threads observation using entrySyncObservation. Do not automatically resend. Set localRegistration.callTemplate.entrySyncStatus to ready only when the expected entry-sync reply is visible, leave it pending when no reply is visible, or set failed on an explicit host or identity error.",
+      "Call wakeflow_register_window once per returned create_thread.threadId using the classified localRegistration.callTemplate. The tool stores the id only in thread-registry and refreshes derived window-config status; do not hand-write runtime files. A later manual recovery promotes the same handle by observing once and re-registering it as ready.",
+      "After the observation and registration, call set_thread_title for the returned thread id using the entry displayTitle. This final reset repairs host auto-title changes caused by the entry-sync turn.",
       language === "zh"
         ? "总控和子窗口可使用 Codex 子 agent 并行做代码搜索、日志归因、测试定位和输入汇总；子 agent 不拥有验收、派发、状态机写入或跨仓库边界。"
         : "Controller and child windows may use Codex subagents for parallel code search, log triage, test localization, and input summarization. Subagents do not own acceptance, dispatch, state-machine writes, or cross-repository boundaries.",
@@ -123,6 +125,7 @@ export const hostProfile = {
       required: true,
       hostTool: "set_thread_title",
       title,
+      phase: "after-entry-sync-registration",
     }),
     entryExtras: (entry, context) => codexEntryExtras(entry, context),
   },

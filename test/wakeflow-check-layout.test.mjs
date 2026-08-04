@@ -10,6 +10,7 @@ import test from "node:test";
 const wakeflowRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
 const checkScript = path.join(wakeflowRoot, "scripts/wakeflow-check-layout.mjs");
 const nextWorkScript = path.join(wakeflowRoot, "scripts/wakeflow-next-work.mjs");
+const storageScript = path.join(wakeflowRoot, "scripts/wakeflow-storage.mjs");
 const templateBundle = JSON.parse(readFileSync(path.join(wakeflowRoot, "templates/wakeflow-template-bundle.json"), "utf8"));
 
 function writeFile(file, content) {
@@ -47,6 +48,13 @@ function makeStarterFixture() {
       2,
     ),
   );
+  mkdirSync(path.join(root, ".wakeflow-local/wakeflow-delivery/hosts"), { recursive: true });
+  mkdirSync(path.join(root, "wakeflow-ledger/workspace"), { recursive: true });
+  const seeded = runSync(process.execPath, [storageScript, "seed-readmes", "--root", root, "--write", "--json"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  assert.equal(seeded.status, 0, seeded.stderr || seeded.stdout);
   return root;
 }
 
@@ -101,4 +109,34 @@ test("layout check catches starter TODO columns that next-work depends on", () =
   const parsed = JSON.parse(result.stdout);
   assert.match(parsed.issues.join("\n"), /global TODO table is missing required columns/);
   assert.match(parsed.issues.join("\n"), /Item \/ Goal/);
+});
+
+test("layout check requires every configured window in both active entry tables", () => {
+  const root = makeStarterFixture();
+  const configFile = path.join(root, "wakeflow.config.json");
+  const config = JSON.parse(readFileSync(configFile, "utf8"));
+  config.repositories = [{
+    windowName: "RepoA",
+    path: "RepoA",
+    role: "Product responsibility",
+    mode: "external",
+    managedAgents: false,
+  }];
+  writeFile(configFile, JSON.stringify(config, null, 2));
+
+  const result = run(checkScript, root);
+  assert.notEqual(result.status, 0);
+  const parsed = JSON.parse(result.stdout);
+  assert.match(parsed.issues.join("\n"), /window coverage is missing configured window rows: RepoA/);
+  assert.match(parsed.issues.join("\n"), /window dispatch is missing configured window rows: RepoA/);
+});
+
+test("layout check requires current generated storage orientation READMEs", () => {
+  const root = makeStarterFixture();
+  writeFile(path.join(root, ".wakeflow-active/README.md"), "# stale orientation");
+
+  const result = run(checkScript, root);
+  assert.notEqual(result.status, 0);
+  const parsed = JSON.parse(result.stdout);
+  assert.match(parsed.issues.join("\n"), /stale storage orientation README: \.wakeflow-active\/README\.md/);
 });

@@ -33,7 +33,7 @@ function currentControllerReturnDeliveries(groupSummaries, status) {
       }))));
 }
 
-export function summarizeRuntimeNextAction({ diagnostics, deliveryStatuses, groupSummaries }) {
+export function summarizeRuntimeNextAction({ diagnostics, deliveryStatuses, groupSummaries, windowReadiness = {} }) {
   const controllerReturnPending = currentControllerReturnDeliveries(groupSummaries, "pending-host-send");
   const controllerReturnUnconfirmed = currentControllerReturnDeliveries(groupSummaries, "sent-unconfirmed");
   const targetPending = deliveryStatuses.filter((item) => item.kind === "DeliveryEnvelope" && item.status === "pending-host-send");
@@ -53,6 +53,8 @@ export function summarizeRuntimeNextAction({ diagnostics, deliveryStatuses, grou
   if (reviewable.length > 0) return "review-target-results";
   if (waiting.length > 0) return "wait-for-target-result";
   if (pendingDispatch.length > 0) return "dispatch-pending-target";
+  if ((windowReadiness.notReadyCount || 0) > 0) return "inspect-window-entry-sync";
+  if ((windowReadiness.legacyAssumedReadyCount || 0) > 0) return "confirm-legacy-window-entry-sync";
   return "idle";
 }
 
@@ -72,6 +74,7 @@ export function buildRuntimeHealth({
   replaySummary = {},
   projectionHealth = [],
   keepLive = {},
+  windowReadiness = {},
 } = {}) {
   const artifactErrorCount = diagnostics.errors?.length || 0;
   const pendingHostSend = deliveryStatuses.filter((item) => item.status === "pending-host-send");
@@ -99,6 +102,12 @@ export function buildRuntimeHealth({
     })));
   const staleProjections = projectionHealth.filter((item) => item.projectionStatus === "stale");
   const missingIdempotencyKeyCount = replaySummary.missingIdempotencyKeyCount || 0;
+  const notReadyWindows = Array.isArray(windowReadiness.notReady)
+    ? windowReadiness.notReady
+    : [];
+  const legacyAssumedReadyWindows = Array.isArray(windowReadiness.legacyAssumedReady)
+    ? windowReadiness.legacyAssumedReady
+    : [];
   const issues = [
     ...(artifactErrorCount > 0
       ? [issue("error", "artifact-errors", "Runtime artifacts contain unreadable JSON or unsafe paths.", { count: artifactErrorCount })]
@@ -135,6 +144,18 @@ export function buildRuntimeHealth({
       : []),
     ...(missingIdempotencyKeyCount > 0
       ? [issue("warning", "replay-idempotency-missing", "Replay audit found artifacts without idempotency keys.", { count: missingIdempotencyKeyCount })]
+      : []),
+    ...(notReadyWindows.length > 0
+      ? [issue("warning", "window-entry-sync-not-ready", "Registered host windows are waiting for entry-sync confirmation or reported an explicit failure; they are not dispatchable.", {
+          count: notReadyWindows.length,
+          windows: notReadyWindows.map((item) => ({ windowName: item.windowName, entrySyncStatus: item.entrySyncStatus })),
+        })]
+      : []),
+    ...(legacyAssumedReadyWindows.length > 0
+      ? [issue("warning", "window-entry-sync-legacy-assumed-ready", "Legacy window registrations remain dispatch-compatible, but their entry-sync readiness was never recorded explicitly. Observe each destination once and re-register the same handle as ready.", {
+          count: legacyAssumedReadyWindows.length,
+          windows: legacyAssumedReadyWindows.map((item) => ({ windowName: item.windowName })),
+        })]
       : []),
   ];
   const errorCount = issues.filter((item) => item.severity === "error").length;
@@ -192,6 +213,14 @@ export function buildRuntimeHealth({
       keepLive: {
         active: Boolean(keepLive.active),
         status: keepLive.status || "unknown",
+      },
+      windowEntrySync: {
+        status: notReadyWindows.length > 0 ? "not-ready" : legacyAssumedReadyWindows.length > 0 ? "legacy-needs-confirmation" : "ok",
+        registeredCount: windowReadiness.registeredCount || 0,
+        readyCount: windowReadiness.readyCount || 0,
+        explicitReadyCount: windowReadiness.explicitReadyCount || 0,
+        notReadyCount: notReadyWindows.length,
+        legacyAssumedReadyCount: legacyAssumedReadyWindows.length,
       },
     },
     issues,
@@ -287,7 +316,7 @@ function waitForResultResumeSteps(groups) {
     })));
 }
 
-export function buildRuntimeResumePlan({ nextAction, diagnostics, deliveryStatuses, groupSummaries }) {
+export function buildRuntimeResumePlan({ nextAction, diagnostics, deliveryStatuses, groupSummaries, windowReadiness = {} }) {
   const controllerReturnPending = currentControllerReturnDeliveries(groupSummaries, "pending-host-send");
   const controllerReturnUnconfirmed = currentControllerReturnDeliveries(groupSummaries, "sent-unconfirmed");
   const targetPending = deliveryStatuses.filter((item) => item.kind === "DeliveryEnvelope" && item.status === "pending-host-send");
@@ -403,6 +432,38 @@ export function buildRuntimeResumePlan({ nextAction, diagnostics, deliveryStatus
       status: "ready",
       reason: "Known target tasks have not yet been prepared/sent.",
       steps: dispatchPendingResumeSteps(pendingDispatch),
+    };
+  }
+  if ((windowReadiness.notReadyCount || 0) > 0) {
+    return {
+      ...base,
+      status: "needs-window-entry-sync",
+      stopRequired: true,
+      reason: "One or more registered windows are not entry-sync ready. Observe each destination once; do not resend automatically.",
+      steps: (windowReadiness.notReady || []).map((item) => ({
+        kind: "observe-window-entry-sync",
+        windowName: item.windowName,
+        entrySyncStatus: item.entrySyncStatus,
+        attempts: 1,
+        automaticResend: false,
+        reason: "Promote the same registered handle to ready only after the expected entry-sync reply is visible.",
+      })),
+    };
+  }
+  if ((windowReadiness.legacyAssumedReadyCount || 0) > 0) {
+    return {
+      ...base,
+      status: "needs-window-entry-sync-confirmation",
+      stopRequired: true,
+      reason: "Legacy registrations are dispatch-compatible, but their entry-sync reply was never recorded explicitly. Confirm rather than infer readiness.",
+      steps: (windowReadiness.legacyAssumedReady || []).map((item) => ({
+        kind: "confirm-legacy-window-entry-sync",
+        windowName: item.windowName,
+        entrySyncStatus: item.entrySyncStatus,
+        attempts: 1,
+        automaticResend: false,
+        reason: "Observe the existing destination once and re-register the same handle as ready only when the expected entry-sync reply is visible.",
+      })),
     };
   }
   return {

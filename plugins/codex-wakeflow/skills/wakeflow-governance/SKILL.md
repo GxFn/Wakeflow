@@ -47,17 +47,21 @@ tool first:
   thread title; it keeps the window/repository name first.
 - After apply, read the returned `windowLaunchPlan`, use the Codex host
   `create_thread` tool to create real controller / Design / Test / product
-  windows, immediately call the Codex host `set_thread_title` tool for every
-  newly created thread using that entry's `displayTitle`, then call
-  `wakeflow_register_window` once per returned `create_thread.threadId` using
-  that entry's `localRegistration.callTemplate`. The tool writes the local
-  registry and refreshes derived `window-config` without exposing the id. Do
-  this title reset at the end of initialization instead of manually renaming ad
-  hoc windows later.
+  windows. For each returned thread, make exactly one bounded `wait_threads`
+  observation and never resend automatically. Set
+  `localRegistration.callTemplate.entrySyncStatus` to `ready` only when the
+  expected entry-sync reply is visible, leave `pending` when no reply is
+  visible, or use `failed` for an explicit host/identity error; then call
+  `wakeflow_register_window`. A later manual recovery may observe once and
+  re-register the same handle as `ready`. Finally call `set_thread_title` with
+  `displayTitle`; this post-reply reset repairs Codex auto-title drift. Only
+  `ready` windows are dispatchable. The tool writes the local registry and
+  derived `window-config` without exposing the id.
 - To rebuild selected windows, use `wakeflow_replace_windows` (single `window`
   arg for one heavy or stale responsibility window, `windows[]` for a selected
   group). Create threads only for the returned replacement launch entries, then
-  call `wakeflow_register_window` with each new real thread id. Do not rewrite
+  apply the same one-observation/status-registration/final-title-reset sequence
+  to each new real thread id. Do not rewrite
   unrelated window registrations or store window role / cwd / title metadata in
   the registry.
 - Do not use `wakeflow_initialize_workspace` as a refresh path for window

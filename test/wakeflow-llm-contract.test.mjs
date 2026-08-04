@@ -45,6 +45,7 @@ test("H-3: every chain hop carries agentNext; durable artifacts carry forbiddenC
     "--root", root,
     "--window", "WinL",
     "--thread-id", "00000000-0000-4000-8000-000000000001",
+    "--entry-sync-status", "ready",
     "--write",
     "--json",
   ]), "register-thread");

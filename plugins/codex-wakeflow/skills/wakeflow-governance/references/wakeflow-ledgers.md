@@ -39,11 +39,11 @@ The storage map classifies every tree; the class answers "may I touch it":
 | legacy | known residue from older runtimes | fold via `preserve` or delete — after user review |
 | unknown | anything else under `.wakeflow-local/` | route to the user; NEVER auto-delete |
 
-In-place orientation: `wakeflow-storage seed-readmes --write` converges short
+Initialization and `sync-templates` converge the same short in-place orientation
 READMEs at `.wakeflow-active/`, `.wakeflow-local/`, `wakeflow-delivery/`,
-`hosts/`, and the ledger root — each answers "what is this / who writes it /
-may I touch it" right next to the data. `check-workspace` (Claude edition)
-reminds when they are missing or stale.
+`hosts/`, and the ledger root that `wakeflow-storage seed-readmes --write`
+maintains. Each answers "what is this / who writes it / may I touch it" next to
+the data, and workspace layout verification fails when one is missing or stale.
 
 ## Demand Information Lifecycle (what lives where, when)
 

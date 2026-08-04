@@ -116,7 +116,7 @@ test("dispatch preparation refuses a demand owned by the other host", () => {
   const { stateRootRef, stateFile } = initDemand(root);
   const added = runJson(codexState, [...addTaskArgs(stateRootRef, "T5"), "--root", root], root);
   assert.equal(added.result.status, 0);
-  const reg = runJson(codexDelivery, ["register-thread", "--root", root, "--window", "WinA", "--thread-id", "thread-own-1", "--write"], root);
+  const reg = runJson(codexDelivery, ["register-thread", "--root", root, "--window", "WinA", "--thread-id", "thread-own-1", "--entry-sync-status", "ready", "--write"], root);
   assert.equal(reg.result.status, 0);
 
   // hand the demand to claude-code, then codex tries to dispatch it
@@ -180,7 +180,7 @@ test("build-delivery (packet-file route) refuses a demand owned by the other hos
   }));
   const { stateRootRef, stateFile } = initDemand(root);
   runJson(codexState, [...addTaskArgs(stateRootRef, "T6"), "--root", root], root);
-  runJson(codexDelivery, ["register-thread", "--root", root, "--window", "WinA", "--thread-id", "thread-own-2", "--write"], root);
+  runJson(codexDelivery, ["register-thread", "--root", root, "--window", "WinA", "--thread-id", "thread-own-2", "--entry-sync-status", "ready", "--write"], root);
   const prepared = runJson(codexDelivery, ["prepare-dispatch-from-state", "--root", root, "--state-root", stateRootRef, "--target-task-id", "T6", "--controller-window", "OwnFlow", "--write"], root);
   assert.equal(prepared.result.status, 0);
   const packetFile = path.join(root, prepared.payload.packetFile);

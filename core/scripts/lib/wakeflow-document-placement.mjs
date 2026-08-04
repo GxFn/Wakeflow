@@ -37,7 +37,7 @@ export const DOCUMENT_CATEGORIES = Object.freeze({
     storageClass: "authority",
     owner: "the named responsibility window",
     lifecycle: "append-only responsibility history; never demand authority",
-    description: "Window-specific handoff, acceptance, operating, and investigation records.",
+    description: "Durable window-specific handoff conclusions and responsibility history.",
   }),
   activeState: Object.freeze({
     id: "active-state",

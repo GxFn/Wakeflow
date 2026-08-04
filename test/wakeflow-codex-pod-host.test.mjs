@@ -107,6 +107,7 @@ test("Codex Pod product launch uses the exact project and host worktree environm
     root,
     window: operation.windowName,
     windowHandle: "<create_thread.threadId>",
+    entrySyncStatus: "pending",
     launchCorrelationId: operation.launchCorrelationId,
     bindingId: operation.registrationBindingId,
     stateRoot: ".wakeflow-active/current/pod-a",

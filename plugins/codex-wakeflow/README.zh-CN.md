@@ -87,7 +87,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.4/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.6/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -173,9 +173,12 @@ Preview the plan first and wait for my confirmation before writing.
 5. 对 messy 工作区，Codex 先问用户哪些目录是受管窗口，不能直接广泛导入 discovered 目录。
 6. 对首次初始化的工作区，用户确认后，Codex 调用
    `wakeflow_initialize_workspace`，`apply: true`。
-7. Codex 创建返回的线程，将标题重设为 `displayTitle`，再对每个真实
-   `create_thread.threadId` 调用一次 `wakeflow_register_window`。工具会更新本地
-   registry 和派生 window config，并从输出中隐藏 id。
+7. Codex 创建返回的线程，对每个线程做一次有界读回观察且不自动重发，再对每个
+   真实 `create_thread.threadId` 调用 `wakeflow_register_window` 并明确传入
+   `entrySyncStatus=ready|pending|failed`。只有看见预期入口回复才是 `ready`，暂未
+   看见则是 `pending`。入口 turn 完成后再把标题最终复位为 `displayTitle`，避免
+   宿主自动标题漂移。工具会更新本地 registry 和派生 window config，并隐藏 id；
+   人工恢复后可用同一句柄重新登记为 ready。
 
 已经初始化过的工作区里，`wakeflow_initialize_workspace` 不是通用“刷新”按钮。
 只有用户明确要求“重置初始化”时才能写入；apply 调用必须设置

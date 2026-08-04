@@ -250,6 +250,14 @@ test("full-context package is the dispatch authority and target prepare is previ
     assert.equal(taskPackage.boundaries.forbidden.length, 1);
     assert.deepEqual(taskPackage.dependsOnTaskIds, []);
 
+    parseOk(run(deliveryScript, root, [
+      "register-thread",
+      "--window", "Product",
+      "--thread-id", "0192fac-product-initial",
+      "--entry-sync-status", "ready",
+      "--write",
+    ]));
+
     const preview = parseOk(run(deliveryScript, root, [
       "prepare-dispatch-from-state",
       "--state-root", stateRoot,
@@ -262,7 +270,6 @@ test("full-context package is the dispatch authority and target prepare is previ
     assert.equal(preview.readiness.mode, "full-context");
     assert.equal(preview.packet.resultContract, "target-result-envelope-v2");
     assert.match(preview.previewDigest, /^[a-f0-9]{64}$/);
-    assert.equal(existsSync(path.join(root, ".wakeflow-local")), false);
     assert.equal(preview.taskBriefing.taskPackageRef, packageFile);
     assert.equal(preview.taskBriefing.repositoryRoot, path.join(root, "product"));
     assert.match(preview.packet.prompt, /Current objective \(the task package is authoritative\):/);
@@ -339,6 +346,7 @@ test("full-context package is the dispatch authority and target prepare is previ
       "register-thread",
       "--window", "Product",
       "--thread-id", "0192fac-product-rebound",
+      "--entry-sync-status", "ready",
       "--write",
     ]));
     const staleBindingPreview = run(deliveryScript, root, [

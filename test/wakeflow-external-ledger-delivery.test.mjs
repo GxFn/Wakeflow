@@ -88,6 +88,16 @@ test("prepare and record delivery support a configured external current ledger w
     "--json",
   ]));
 
+  parseOk(run(runtime, "wakeflow-delivery.mjs", [
+    "register-thread",
+    "--root", root,
+    "--window", "Target",
+    "--thread-id", "0192fac-external-ledger-target",
+    "--entry-sync-status", "ready",
+    "--write",
+    "--json",
+  ]));
+
   const prepared = parseOk(run(runtime, "wakeflow-delivery.mjs", [
     "prepare-dispatch-from-state",
     "--root", root,

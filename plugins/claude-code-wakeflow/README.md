@@ -463,8 +463,11 @@ The operating flow is:
    for each window in the returned launch plan. Each launch creates a tmux
    window running `claude --session-id`, pastes the entry-sync prompt, sets
    the `displayTitle` as the tmux window name, and returns the session id.
-   Claude Code calls `wakeflow_register_window` once per returned
-   `hostLaunch.sessionId`; the tool updates the local registry and derived
+   Claude Code then performs one bounded helper `readback` without resending,
+   registers the session with `entrySyncStatus=ready|pending|failed`, and runs
+   helper `retitle` as the final title reset. Only the visible expected reply
+   is ready; no reply is pending. A later manual recovery may re-register the
+   same session as ready. The tool updates the local registry and derived
    window config without exposing the id.
 
 For an already initialized workspace, `wakeflow_initialize_workspace` is not a

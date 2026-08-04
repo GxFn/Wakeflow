@@ -460,6 +460,32 @@ function validateTemplateBundle() {
       errors.push(`template bundle must not duplicate generated role memory: ${obsolete}`);
     }
   }
+  const designSkills = bundle.files["templates/window-support/design/skills/README.md"] ?? "";
+  const testSkills = bundle.files["templates/window-support/testing/skills/README.md"] ?? "";
+  const testStrategy = bundle.files["templates/window-support/testing/skills/test-strategy/SKILL.md"] ?? "";
+  const progressive = bundle.files["templates/window-support/testing/skills/progressive-chain-validation/SKILL.md"] ?? "";
+  const testPolicy = bundle.files["templates/window-support/testing/docs/testing-operation-policy.md"] ?? "";
+  if (/edit product code unless|authorizes\s+an exception/u.test(designSkills)) {
+    errors.push("Design skill template must not let controller state override the no-product-implementation boundary");
+  }
+  if (/take over product implementation unless|explicitly authorizes it/u.test(testSkills)) {
+    errors.push("Test skill template must not let a test card or state root grant product implementation ownership");
+  }
+  if (!testSkills.includes("Progressive Chain Validation is unavailable unless")) {
+    errors.push("Test skill template must require explicit test-card authorization for progressive-chain-validation");
+  }
+  if (/validate or repair|Product source edits are allowed/u.test(progressive)) {
+    errors.push("progressive-chain-validation must validate only and return repair work to the owning product window");
+  }
+  if (!progressive.includes("DO NOT USE THIS SKILL UNLESS THE CURRENT TEST CARD EXPLICITLY LISTS")) {
+    errors.push("progressive-chain-validation is missing its explicit test-card gate");
+  }
+  if (/if it is improvised, say so and justify/u.test(testStrategy)) {
+    errors.push("Test strategy must block unmapped methods instead of authorizing improvised execution");
+  }
+  if (!testPolicy.includes("Durable conclusion") && !testPolicy.includes("durable conclusion")) {
+    errors.push("Test operation policy must separate active Test working material from durable ledger conclusions");
+  }
 }
 
 function validateTextSurface() {

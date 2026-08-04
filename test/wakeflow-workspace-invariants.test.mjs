@@ -88,18 +88,22 @@ function makeWorkspace(config = {}) {
     const timestamp = "2026-07-31T00:00:00.000Z";
     writeJson(path.join(registryDir, `${windowName}.json`), {
       kind: "CodexWindowThreadRegistration",
-      version: 3,
+      version: 4,
       windowName,
       bindingId: `binding-${windowName}`,
       threadId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
       registeredAt: timestamp,
+      entrySyncStatus: "ready",
+      entrySyncCheckedAt: timestamp,
       lastVerifiedAt: timestamp,
     });
     writeJson(path.join(windowConfigDir, `${windowName}.json`), {
       kind: "CodexSubwindowDispatchConfig",
-      version: 1,
+      version: 2,
       windowName,
       threadRegistered: true,
+      threadReady: true,
+      entrySyncStatus: "ready",
       dispatchable: role !== "design",
       cwd,
       responsibilityRoot: cwd,
@@ -243,6 +247,10 @@ test("workspace entries distinguish pending, frozen, and legacy-terminal demand 
 
   let status = readFileSync(statusFile, "utf8");
   let index = readFileSync(indexFile, "utf8");
+  assert.match(status, /\| RepoA \| standby \|/);
+  assert.match(status, /\| RepoB \| standby \|/);
+  assert.match(index, /\| RepoA \| standby \|/);
+  assert.match(index, /\| RepoB \| standby \|/);
   assert.match(status, /demand authority `draft-unfrozen` \(confirmation pending\)/);
   assert.match(status, /Pending confirmation: `AUTHORITY-PROJECTION`/);
   assert.match(index, /demand authority `draft-unfrozen` \(confirmation pending\)/);

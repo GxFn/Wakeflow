@@ -18,6 +18,7 @@ import test from "node:test";
 const wakeflowRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
 const layoutScript = path.join(wakeflowRoot, "scripts/wakeflow-check-layout.mjs");
 const docsScript = path.join(wakeflowRoot, "scripts/verify-workspace-docs.mjs");
+const storageScript = path.join(wakeflowRoot, "scripts/wakeflow-storage.mjs");
 const templateBundle = JSON.parse(readFileSync(path.join(wakeflowRoot, "templates/wakeflow-template-bundle.json"), "utf8"));
 
 function writeFile(file, content) {
@@ -49,6 +50,13 @@ function makeStarterFixture() {
     globalTodoPath: ".wakeflow-active/current/global-todo-board.md",
     testExchangePath: ".wakeflow-active/current/test-exchange.md",
   }, null, 2));
+  mkdirSync(path.join(root, ".wakeflow-local/wakeflow-delivery/hosts"), { recursive: true });
+  mkdirSync(path.join(root, "wakeflow-ledger/workspace"), { recursive: true });
+  const seeded = runSync(process.execPath, [storageScript, "seed-readmes", "--root", root, "--write", "--json"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  assert.equal(seeded.status, 0, seeded.stderr || seeded.stdout);
   return root;
 }
 

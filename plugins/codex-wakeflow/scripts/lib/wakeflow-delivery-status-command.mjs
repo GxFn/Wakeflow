@@ -679,6 +679,39 @@ export function commandStatus(ctx) {
     return counts;
   }
 
+  function collectWindowReadiness(diagnostics) {
+    const artifacts = listJsonArtifacts(dirs.registry);
+    for (const artifact of artifacts.filter((item) => item.error)) {
+      diagnostics.errors.push({
+        file: path.relative(workspaceRoot, artifact.file),
+        error: artifact.error,
+      });
+    }
+    const items = artifacts.filter((item) => !item.error).map((item) => {
+      const record = item.value || {};
+      const entrySyncStatus = record.entrySyncStatus === undefined
+        ? "legacy-assumed-ready"
+        : record.entrySyncStatus;
+      return {
+        windowName: record.windowName || path.basename(item.file, ".json"),
+        entrySyncStatus,
+        ready: ["ready", "legacy-assumed-ready"].includes(entrySyncStatus),
+        registrationFile: path.relative(workspaceRoot, item.file),
+      };
+    });
+    const notReady = items.filter((item) => !item.ready);
+    const legacyAssumedReady = items.filter((item) => item.entrySyncStatus === "legacy-assumed-ready");
+    return {
+      registeredCount: items.length,
+      readyCount: items.length - notReady.length,
+      explicitReadyCount: items.filter((item) => item.entrySyncStatus === "ready").length,
+      notReadyCount: notReady.length,
+      notReady,
+      legacyAssumedReadyCount: legacyAssumedReady.length,
+      legacyAssumedReady,
+    };
+  }
+
   function buildRuntimeSummary({
     packetCount,
     groupCount,
@@ -723,6 +756,7 @@ export function commandStatus(ctx) {
       }));
     const activePackets = packets.filter((packet) => packetStillActive(packet, diagnostics, packets));
     const stateRootResults = collectStateRootResultCounts({ packets, diagnostics });
+    const windowReadiness = collectWindowReadiness(diagnostics);
     const activePacketIds = new Set(activePackets.map((packet) => packet.id));
     const activeGroupIds = new Set(activePackets.map((packet) => packet.dispatchGroup || packet.taskId || packet.id));
     const liveDeliveryStatuses = deliveryStatuses.filter((delivery) => delivery.kind === "DeliveryEnvelope"
@@ -746,12 +780,14 @@ export function commandStatus(ctx) {
       diagnostics,
       deliveryStatuses: liveDeliveryStatuses,
       groupSummaries,
+      windowReadiness,
     });
     const resumePlan = buildRuntimeResumePlan({
       nextAction,
       diagnostics,
       deliveryStatuses: liveDeliveryStatuses,
       groupSummaries,
+      windowReadiness,
     });
     const health = buildRuntimeHealth({
       diagnostics,
@@ -760,6 +796,7 @@ export function commandStatus(ctx) {
       replaySummary,
       projectionHealth,
       keepLive,
+      windowReadiness,
     });
     return {
       kind: "WakeflowClosedLoopRuntimeSummary",
@@ -781,6 +818,7 @@ export function commandStatus(ctx) {
         stateRootResults,
         registeredThreadCount,
         windowConfigCount,
+        windowReadiness,
       },
       keepLive: {
         active: Boolean(keepLive.active),
@@ -806,6 +844,7 @@ export function commandStatus(ctx) {
       },
       replay: replaySummary,
       diagnostics,
+      windowReadiness,
     };
   }
 

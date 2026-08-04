@@ -101,6 +101,52 @@ function authoritySummaryText(authority) {
   return "demand authority `draft-unfrozen` (confirmation pending)";
 }
 
+function markdownCell(value) {
+  return String(value ?? "").replaceAll("|", "\\|").replaceAll("\n", " ").trim();
+}
+
+function configuredWindowProjection({ config, demands, overall, kind }) {
+  const repositories = Array.isArray(config.repositories) ? config.repositories : [];
+  const controllerWindow = config.controllerWindow;
+  const designWindow = config.designWindow;
+  const testWindows = new Set(testWindowNames(config));
+  const names = [controllerWindow, ...repositories.map((repo) => repo?.windowName)].filter(Boolean);
+  const unique = [...new Set(names)];
+  const openTasks = demands.flatMap((item) => (item.state?.targetTasks ?? [])
+    .filter((task) => !["accepted", "completed", "superseded", "cancelled"].includes(task.status)));
+  return unique.map((windowName) => {
+    const repo = repositories.find((item) => item?.windowName === windowName);
+    const assigned = openTasks.filter((task) => task.targetWindow === windowName);
+    const status = windowName === controllerWindow
+      ? overall
+      : assigned.length > 0
+        ? "active"
+        : "standby";
+    if (kind === "status") {
+      if (windowName === controllerWindow) {
+        return `| ${markdownCell(windowName)} | ${status} | ${demands.length ? `${demands.length} active/unarchived demand(s)` : "No active demand; waiting for controller task."} | See Active Demands above. |`;
+      }
+      if (windowName === designWindow) {
+        return `| ${markdownCell(windowName)} | ${status} | Design intake only. | Global TODO delivery rows. |`;
+      }
+      if (testWindows.has(windowName)) {
+        return `| ${markdownCell(windowName)} | ${status} | ${assigned.length ? `${assigned.length} assigned Test task(s).` : "Test only when assigned by a state root."} | State-root test cards. |`;
+      }
+      return `| ${markdownCell(windowName)} | ${status} | ${assigned.length ? `${assigned.length} assigned target task(s).` : "No assigned task package."} | ${markdownCell(repo?.role ?? "Configured responsibility window")}. |`;
+    }
+    if (windowName === controllerWindow) {
+      return `| ${markdownCell(windowName)} | ${status} | ${demands.length ? `${demands.length} unarchived demand(s).` : "No active demand; ready for controller work."} |`;
+    }
+    if (windowName === designWindow) {
+      return `| ${markdownCell(windowName)} | ${status} | Delivers requirements through the global TODO board. |`;
+    }
+    if (testWindows.has(windowName)) {
+      return `| ${markdownCell(windowName)} | ${status} | Receives only explicit state-root Test work after controller acceptance. |`;
+    }
+    return `| ${markdownCell(windowName)} | ${status} | ${assigned.length ? `${assigned.length} active target task(s).` : markdownCell(repo?.role ?? "Configured responsibility window")} |`;
+  });
+}
+
 function legacyPodReservationMigration(workspaceRoot, demandKeys) {
   const snapshot = listPodReservations(workspaceRoot);
   const records = snapshot.reservations.slice(0, 10).map(({ value }) => ({
@@ -181,7 +227,6 @@ function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, upda
     workspaceRoot,
     loaded.testExchangePath ?? path.join(paths.workspaceCurrentDir, "test-exchange.md"),
   );
-  const testWindowLabel = testWindowNames(loaded).join(", ") || "Test";
   const overall = unhealthyDemands.length > 0
     ? "degraded"
     : demands.some((item) => item.state?.state === "blocked")
@@ -189,6 +234,18 @@ function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, upda
       : demands.length > 0
         ? "active"
         : "idle";
+  const statusWindowRows = configuredWindowProjection({
+    config: loaded,
+    demands: canonicalDemands,
+    overall,
+    kind: "status",
+  });
+  const indexWindowRows = configuredWindowProjection({
+    config: loaded,
+    demands: canonicalDemands,
+    overall,
+    kind: "index",
+  });
   const demandLines = [
     ...(canonicalDemands.length === 0 ? ["- Active demand: none."] : canonicalDemands.map(({
       root,
@@ -258,13 +315,7 @@ function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, upda
     "",
     "| Window | Status | Assigned Work | Evidence |",
     "| --- | --- | --- | --- |",
-    `| ${loaded.controllerWindow} | ${overall} | ${
-      demands.length
-        ? `${demands.length} active/unarchived demand(s)`
-        : "No active demand; waiting for controller task."
-    } | See Active Demands above. |`,
-    `| ${loaded.designWindow} | standby | Design intake only. | Global TODO delivery rows. |`,
-    `| ${testWindowLabel} | standby | Test only when assigned by a state root. | State-root test cards. |`,
+    ...statusWindowRows,
     "",
     "## Copyable Prompt",
     "",
@@ -302,13 +353,7 @@ function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, upda
     "",
     "| Window | Status | Notes |",
     "| --- | --- | --- |",
-    `| ${loaded.controllerWindow} | ${overall} | ${
-      demands.length
-        ? `${demands.length} unarchived demand(s).`
-        : "No active demand; ready for controller work."
-    } |`,
-    `| ${loaded.designWindow} | standby | Delivers requirements through the global TODO board. |`,
-    `| ${testWindowLabel} | standby | Receives only explicit state-root test work. |`,
+    ...indexWindowRows,
     "",
     "## Status Enum",
     "",

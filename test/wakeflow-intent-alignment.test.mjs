@@ -41,6 +41,7 @@ function makeConfiguredRoot(prefix = "wakeflow-intent-") {
     "--root", root,
     "--window", "RepoA",
     "--thread-id", "00000000-0000-4000-8000-000000000001",
+    "--entry-sync-status", "ready",
     "--write",
     "--json",
   ]);

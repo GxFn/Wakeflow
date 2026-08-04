@@ -478,6 +478,10 @@ export function createWindowRuntime(ctx) {
   function commandRegisterThreadUnlocked() {
     const windowName = requireValue("--window");
     const threadId = validateThreadId(requireValue("--thread-id"));
+    const entrySyncStatus = getValue("--entry-sync-status", "pending");
+    if (!["pending", "ready", "failed"].includes(entrySyncStatus)) {
+      fail(`Invalid --entry-sync-status for ${windowName}: ${entrySyncStatus}`);
+    }
     const launchCorrelationId = getValue("--launch-correlation-id", "");
     const bindingId = getValue("--binding-id", "");
     const stateRoot = getValue("--state-root", "");
@@ -512,10 +516,12 @@ export function createWindowRuntime(ctx) {
     rejectDuplicateRegisteredHandle(windowName, threadId);
     const registryFile = threadFileFor(windowName);
     const previousRegistryFile = (findThreadFile ?? threadFileFor)(windowName);
-    const replacedExistingThread = existsSync(previousRegistryFile);
+    const hadExistingRegistration = existsSync(previousRegistryFile);
     const existingRegistration = existsSync(previousRegistryFile)
       ? readJson(previousRegistryFile, "thread registration")
       : null;
+    const sameHandleUpdate = existingRegistration?.threadId === threadId;
+    const replacedExistingThread = Boolean(hadExistingRegistration && !sameHandleUpdate);
     const existingPodBinding = podOperation?.status === "bound"
       ? podRuntime().readBinding(podOperation.podId, windowName)
       : null;
@@ -537,17 +543,27 @@ export function createWindowRuntime(ctx) {
         fail(`Bound Pod window ${windowName} cannot replace its final host session; resume the exact registered handle instead.`);
       }
     }
-    const verifiedAt = nowIso();
+    const checkedAt = nowIso();
+    const existingReady = sameHandleUpdate
+      && ["ready", "legacy-assumed-ready"].includes(
+        existingRegistration?.entrySyncStatus ?? "legacy-assumed-ready",
+      );
+    const effectiveEntrySyncStatus = existingReady ? "ready" : entrySyncStatus;
     const registration = createThreadRegistration({
       windowName,
       threadId,
-      registeredAt: existingPodBinding && existingRegistration?.registeredAt
+      registeredAt: sameHandleUpdate && existingRegistration?.registeredAt
         ? existingRegistration.registeredAt
-        : verifiedAt,
-      ...(podOperation ? { bindingId } : {}),
+        : checkedAt,
+      entrySyncStatus: effectiveEntrySyncStatus,
+      entrySyncCheckedAt: checkedAt,
+      ...(sameHandleUpdate && existingRegistration?.bindingId
+        ? { bindingId: existingRegistration.bindingId }
+        : podOperation
+          ? { bindingId }
+          : {}),
       version: threadRegistrationVersion,
     });
-    registration.lastVerifiedAt = verifiedAt;
     const configFile = windowConfigFileFor(windowName);
     const config = applyPodDispatchGate(buildWindowDispatchConfig({
       windowName,
@@ -573,8 +589,11 @@ export function createWindowRuntime(ctx) {
         wrote: write,
         windowName,
         threadRegistered: write,
+        threadReady: write && registration.entrySyncStatus === "ready",
+        entrySyncStatus: registration.entrySyncStatus,
         registrationValid: true,
         replacedExistingThread,
+        updatedExistingThread: sameHandleUpdate,
         threadIdRedacted: true,
         windowHandleRedacted: true,
         registryFile: path.relative(workspaceRoot, registryFile),

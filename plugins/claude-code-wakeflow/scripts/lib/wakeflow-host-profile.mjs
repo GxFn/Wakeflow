@@ -62,6 +62,7 @@ export const hostProfile = {
   hostTools: {
     createWindow: "wakeflow-claude-host launch-window",
     retitleWindow: "wakeflow-claude-host retitle",
+    readWindow: "wakeflow-claude-host readback",
     sendToWindow: "wakeflow-claude-host deliver",
   },
   handleId: {
@@ -110,7 +111,7 @@ export const hostProfile = {
     rootPluginUsageBanner:
       "> Wakeflow is installed as a Claude Code plugin for this workspace. Use Wakeflow MCP tools for setup, status, state roots, delivery, review, archive, next-work scans, and verification. Do not call installed runtime scripts directly or infer their Node parameters; if a required Wakeflow MCP tool is unavailable, stop and report that the Wakeflow plugin surface must be reloaded or reinstalled.\n\n",
     initializeApplyNextAction:
-      "Create the tmux-resident window sessions in windowLaunchPlan, then call wakeflow_register_window once per returned hostLaunch.sessionId before dispatching any work.",
+      "Create the tmux-resident sessions in windowLaunchPlan, perform one bounded readback without resending, register each final session id with pending/ready/failed, then perform the final retitle. Dispatch only ready windows.",
   },
   launch: {
     tabNames: {
@@ -138,19 +139,24 @@ export const hostProfile = {
         ? [
             "先运行 host helper 预检：`node <plugin>/scripts/lib/wakeflow-claude-host.mjs preflight --root <workspace>`。缺 tmux 时征求用户同意一次后执行 `brew install tmux`（遇瞬时 bottle 错误重试一次），再继续。",
             "为每个 launch entry 创建 tmux 常驻窗口：把 createThreadPrompt 写入临时文件，执行该 entry hostLaunch.launchArgv 给出的 helper launch-window 命令（--window、--title displayTitle、--cwd、--prompt-file）。helper 会创建运行 `claude --session-id` 的 tmux 窗口、注入入口同步 prompt、写入 window-host 绑定并返回生成的 session id。这些 prompt 只做初始化入口同步，不是任务投递。",
-            "对每个返回的 hostLaunch.sessionId，按 entry 的 localRegistration.callTemplate 调用一次 wakeflow_register_window。该工具只把 id 存入本宿主 thread-registry 并刷新派生 window-config 状态；不要手写 runtime 文件。",
+            "对每个返回的 hostLaunch.sessionId，按 entrySyncObservation 用 helper readback 做一次有界观察，不自动重发。看见预期入口同步回复才标记 ready；暂未看见标记 pending；明确宿主或身份错误标记 failed。",
+            "按观察结果设置 localRegistration.callTemplate.entrySyncStatus，再调用一次 wakeflow_register_window。人工恢复后可再次观察并用同一 session id 提升为 ready；不要手写 runtime 文件。",
+            "观察和登记完成后，用 helper retitle 将窗口最终复位为 displayTitle，修复入口同步回复造成的自动标题漂移。",
             "总控和子窗口可使用 Claude Code 子 agent（Task 工具）并行做代码搜索、日志归因、测试定位和输入汇总；子 agent 不拥有验收、派发、状态机写入或跨仓库边界。",
           ]
         : [
             "Run the host helper preflight first: `node <plugin>/scripts/lib/wakeflow-claude-host.mjs preflight --root <workspace>`. When tmux is missing, ask the user once, run `brew install tmux` (retry once on a transient bottle error), then continue.",
             "Create one tmux-resident window per launch entry: write createThreadPrompt to a temp file and run the helper launch-window command from the entry's hostLaunch.launchArgv (--window, --title displayTitle, --cwd, --prompt-file). The helper creates the tmux window running `claude --session-id`, pastes the entry-sync prompt, stores the window-host binding, and returns the generated session id. These prompts perform initialization entry sync only; they are not task deliveries.",
-            "Call wakeflow_register_window once per returned hostLaunch.sessionId using the entry localRegistration.callTemplate. The tool stores the id only in this host's thread-registry and refreshes derived window-config status; do not hand-write runtime files.",
+            "For each returned hostLaunch.sessionId, use the helper readback once as the bounded entrySyncObservation and never resend automatically. Mark ready only when the expected reply is visible, pending when it is not yet visible, or failed on an explicit host or identity error.",
+            "Set localRegistration.callTemplate.entrySyncStatus from that observation and call wakeflow_register_window once. After a manual recovery, observe once and re-register the same session id to promote it to ready; do not hand-write runtime files.",
+            "After observation and registration, use the helper retitle command to reset the window to displayTitle and repair entry-sync auto-title drift.",
             "Controller and child windows may use Claude Code subagents (the Task/Agent tool) for parallel code search, log triage, test localization, and input summarization. Subagents do not own acceptance, dispatch, state-machine writes, or cross-repository boundaries.",
           ],
     titleReset: (title) => ({
       required: true,
       hostTool: "wakeflow-claude-host retitle",
       title,
+      phase: "after-entry-sync-registration",
     }),
     entryExtras: (entry) => ({
       windowMode: "tmux-resident",

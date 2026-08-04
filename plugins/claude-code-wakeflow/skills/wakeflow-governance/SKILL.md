@@ -148,14 +148,18 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
   active binding for the same (host, demand, repo), but does not cap how many
   explicitly authorized Pods may use that repo.
 - `designIntent` is one optional sentence of implementation intent on a task package ("roughly how"), authored by Design at delivery/handoff when useful. It is advisory input for the controller's own alignment check at dispatch and review — never an acceptance standard, a score, or a gate.
-- **Design exit gate before the first implementation dispatch, proportional to
-  demand scale**: a requirement needs the full Original Plan, reconciled
-  Requirement Design, landing plan/non-goals, answered product decisions, and
-  Test decision/environment spec. A bug needs reproduction, bounded scope,
-  non-goals, and Test decision without Original Plan ceremony. A supplement
-  needs an explicit delta against the existing Requirement Design. Research
-  never enters implementation dispatch. Missing items route to Design instead
-  of being invented by the controller (see
+- **One proportional demand authority before the first implementation dispatch**:
+  Design delivery is the default for substantial new product behavior, while
+  total control may directly create bounded or already-documented work when it
+  can cite the same inputs. Both paths freeze one `demand-authority.json`: a
+  requirement needs the full Original Plan, reconciled Requirement Design,
+  code facts, landing plan/non-goals, answered product decisions, and Test
+  decision/environment spec; a bug needs reproduction, bounded scope,
+  non-goals, and Test decision; a supplement needs Requirement Design, explicit
+  delta, user confirmation, and Test decision. Research needs a question and
+  boundaries and never enters implementation dispatch. `Auto Claim` changes
+  claim timing only. Missing items route to Design/user instead of being
+  invented by the controller (see
   [references/stage-route-map.md](references/stage-route-map.md)).
 - **Test only tests**: the controller decides which confirmed environment a test card uses (from the Design-stage spec), the user confirms it at Design, Test only executes. A card with a missing/ambiguous environment block is a blocker back to the controller — Test never chooses environments, invents config values, or fixes product code. A missing input at any stage is never guessed: requirement gap → Design; product decision → user; fact gap → bounded read-only investigation.
 - **Test follows controller validation**: total control owns functional correctness and completion. Every active/open non-Test target must be accepted before the Test package is added or dispatched; canonical `superseded` replacement history is excluded from that open set. The card's existing `controllerSelfChecks` states what the controller verified. Test-only reproduction/environment diagnostics remain valid. Test explores only the approved real-environment boundary for hidden bugs; its pass cannot complete unfinished controller validation and its failure cannot redefine the requirement.
@@ -177,7 +181,7 @@ This skill may guide workspace documentation, TODO intake, dispatch planning, an
   receipts with `wakeflow_pod_bind`.
 - **Pod Design and Test have machine gates**:
   `wakeflow_pod_plan action=design-request` freezes the exact request before
-  `wakeflow_pod_record event=design-handoff`. Version 0.9.3 persists exactly one Pod
+  `wakeflow_pod_record event=design-handoff`. The current implementation persists exactly one Pod
   Design request/handoff generation; its sole request may be `initial-design`,
   `supplement`, or `redesign`. A different second generation stops as an
   unsupported capability instead of overwriting that request or using mainline Design.

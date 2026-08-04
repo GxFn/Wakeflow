@@ -100,6 +100,45 @@ const taskPackageContextProperties = {
   },
 };
 
+const demandAuthoritySchema = {
+  type: "object",
+  required: ["demandKey", "demandType", "entryMode", "authorityRefs", "testDecision"],
+  properties: {
+    schemaVersion: { type: "integer", enum: [1] },
+    artifactKind: { type: "string", enum: ["wakeflow-demand-authority"] },
+    demandKey: { type: "string" },
+    demandType: { type: "string", enum: ["requirement", "bug", "supplement", "research"] },
+    entryMode: { type: "string", enum: ["design-delivery", "controller-inline", "pod-design"] },
+    authorityRefs: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        required: ["role", "ref"],
+        properties: {
+          role: {
+            type: "string",
+            enum: ["original-plan", "requirement-design", "code-facts", "landing-plan", "non-goals", "user-confirmation", "reproduction", "scope", "requirement-delta", "research-question", "boundaries", "test-environment"],
+          },
+          ref: { type: "string", description: "Workspace-relative Markdown anchor such as docs/design.md#goal." },
+        },
+        additionalProperties: false,
+      },
+    },
+    testDecision: {
+      type: "object",
+      required: ["mode", "summary"],
+      properties: {
+        mode: { type: "string", enum: ["controller-only", "real-environment", "not-applicable"] },
+        summary: { type: "string" },
+        environmentSpecRef: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  },
+  additionalProperties: false,
+};
+
 const podMaterializationAttemptSchema = {
   type: "object",
   required: ["launchCorrelationId", "host", "status", "observedAt"],
@@ -120,6 +159,7 @@ const podDesignRequestSchema = {
   required: [
     "demandKey",
     "podId",
+    "demandType",
     "requestType",
     "originalGoal",
     "requirementAnchors",
@@ -132,6 +172,7 @@ const podDesignRequestSchema = {
   properties: {
     demandKey: { type: "string" },
     podId: { type: "string" },
+    demandType: { type: "string", enum: ["requirement", "bug", "supplement", "research"] },
     requestType: { type: "string", enum: ["initial-design", "supplement", "redesign"] },
     originalGoal: { type: "string" },
     requirementAnchors: { type: "array", minItems: 1, items: { type: "string" } },
@@ -148,6 +189,7 @@ const podDesignHandoffSchema = {
   required: [
     "demandKey",
     "podId",
+    "demandType",
     "designRequestId",
     "designRequestRef",
     "designRequestDigest",
@@ -160,10 +202,12 @@ const podDesignHandoffSchema = {
     "designIntent",
     "testDecision",
     "environmentSpec",
+    "demandAuthority",
   ],
   properties: {
     demandKey: { type: "string" },
     podId: { type: "string" },
+    demandType: { type: "string", enum: ["requirement", "bug", "supplement", "research"] },
     designRequestId: { type: "string" },
     designRequestRef: { type: "string" },
     designRequestDigest: { type: "string" },
@@ -188,6 +232,7 @@ const podDesignHandoffSchema = {
     designIntent: { type: "string" },
     testDecision: { type: "string" },
     environmentSpec: { type: "object" },
+    demandAuthority: { ...demandAuthoritySchema, description: "Immutable proportional demand contract produced by Pod Design. Must use entryMode=pod-design." },
     replacementLineage: { type: "object" },
   },
 };
@@ -412,7 +457,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_add_task",
-    description: "Add a full runtime task package and optional target task to a Wakeflow demand state root. Plans the next work; it does not dispatch, send, or accept.",
+    description: "Add a full runtime task package and optional target task to a Wakeflow demand state root. The first implementation package must also freeze a complete demandAuthority when the demand does not already have one. Plans the next work; it does not dispatch, send, or accept.",
     annotations: localWriteTool("Add Wakeflow Task Package"),
     inputSchema: {
       type: "object",
@@ -427,6 +472,7 @@ const toolDefinitions = [
         sourceRef: { type: "string" },
         targetSummary: { type: "string" },
         replacesTargetTaskId: { type: "string", description: "For controller-decided redesign only: the exact prior targetTaskId this new full-context implementation task replaces. The prior task must be parked by reviewDecision=redesign and the replacement must target a product responsibility window. Ordinary rework must re-dispatch the original task instead." },
+        demandAuthority: { ...demandAuthoritySchema, description: "Immutable proportional demand contract. Required with the first implementation package when the demand was created as a draft without one." },
         ...taskPackageContextProperties,
         designIntent: { type: "string", description: "Design's one-line implementation intent ('roughly how'). Optional and advisory: surfaced side-by-side with the controller's objective at dispatch and review for the agent's own alignment check — never a gate or score." },
         acceptanceAnchors: {
@@ -695,6 +741,7 @@ const toolDefinitions = [
         targetWindow: { type: "string" },
         summary: { type: "string" },
         packageId: { type: "string", description: "Defaults to taskId when omitted." },
+        demandAuthority: { ...demandAuthoritySchema, description: "Required when a typed completed draft has no frozen authority; optional as an explicit migration for a truly legacy untyped demand. Once supplied it is frozen atomically with this package." },
         sourceRef: { type: "string" },
         targetSummary: { type: "string" },
         ...taskPackageContextProperties,
@@ -814,22 +861,22 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_deliver",
-    description: "Design-side append-only delivery: append one ready item (type requirement|bug|supplement|research) to the workspace global TODO board as a `pending-claim` row for the controller to claim. Sets immutable Auto Claim and Testing Decision delivery properties once — autoClaim=true authorizes unattended controller auto-claim and, for type=requirement, requires linked Original Plan + Requirement Design; otherwise the controller confirms first. Append-only: it never edits or re-statuses an existing row, and is the only controller-surface write Design performs. Dry-run unless apply is true.",
+    description: "Design-side append-only delivery: validate one proportional demandAuthority and append the ready requirement|bug|supplement|research item to the global TODO board. Auto Claim controls unattended claiming only; it never weakens demand readiness. Documents and Testing Decision are human-readable projections of the same authority object. Append-only and dry-run unless apply is true.",
     annotations: localWriteTool("Deliver Item To Controller TODO"),
     inputSchema: {
       type: "object",
-      required: ["type", "designKey", "title"],
+      required: ["type", "designKey", "title", "demandAuthority"],
       properties: {
         root: { type: "string" },
         type: { type: "string", enum: ["requirement", "bug", "supplement", "research"] },
         designKey: { type: "string", description: "<topic>-YYYY-MM-DD; becomes the TODO ID and, on claim, the demandKey." },
         title: { type: "string" },
         item: { type: "string", description: "TODO Item / Goal text; defaults to title." },
-        autoClaim: { type: "boolean", description: "true = authorize unattended controller auto-claim (requires the design docs for type=requirement); default false = controller confirms first." },
+        autoClaim: { type: "boolean", description: "true authorizes unattended controller claiming; false requires controller confirmation. Demand readiness is identical in both modes." },
         priority: { type: "string", description: "P0..P3; defaults to P2." },
-        originalPlan: { type: "string", description: "link to the Original Plan (required for requirement + autoClaim)." },
-        requirementDesign: { type: "string", description: "link to the Requirement Design (required for requirement + autoClaim)." },
-        testDecision: { type: "string", description: "Design's testing approach/decision for this demand; carried into the claimed demand state." },
+        originalPlan: { type: "string", description: "Deprecated compatibility assertion. When supplied, it must equal demandAuthority role=original-plan." },
+        requirementDesign: { type: "string", description: "Deprecated compatibility assertion. When supplied, it must equal demandAuthority role=requirement-design." },
+        demandAuthority: { ...demandAuthoritySchema, description: "Complete Design delivery contract. entryMode must be design-delivery and demandKey/type must match the row." },
         dependency: { type: "string" },
         apply: { type: "boolean" },
       },
@@ -870,7 +917,7 @@ const toolDefinitions = [
   },
   {
     name: "wakeflow_create_demand",
-    description: "Unified controller create: init a demand state root, adopt this window as its host, add any initial task packages, render its progress doc, and consume the originating TODO row (Current Mount = state root) in one call. Replaces init_demand + intake_design_handoff + add_task + adopt_demand_host. Pass todoId to create from a delivered TODO row (its title + linked docs synthesize the goal/completion and the row is consumed), or demandKey + title to create inline. Dry-run unless apply is true. Inits only — it never dispatches, accepts results, or weakens per-demand user confirmation.",
+    description: "Unified controller create: init a demand state root, preserve the delivered or controller-authored proportional demandAuthority, add any initial task packages, render progress, and consume an originating TODO row. TODO rows carry entryMode=design-delivery; inline controller creation uses entryMode=controller-inline. A draft/research root may omit authority only while it has no implementation package. Dry-run unless apply is true; never dispatches or accepts results.",
     annotations: localWriteTool("Create Controller Demand"),
     inputSchema: {
       type: "object",
@@ -879,13 +926,15 @@ const toolDefinitions = [
         todoId: { type: "string", description: "ID of a delivered TODO row to claim; its title and linked Documents seed the demand, and the row is consumed (marked claimed, Current Mount = state root)." },
         demandKey: { type: "string", description: "<topic>-YYYY-MM-DD; the demand key and state-root slug. Defaults to todoId when omitted; when todoId is present this must be omitted or exactly equal to todoId so one delivered row has one canonical demand identity." },
         title: { type: "string", description: "Demand title; taken from the TODO row when todoId is given." },
+        demandType: { type: "string", enum: ["requirement", "bug", "supplement", "research"] },
+        demandAuthority: { ...demandAuthoritySchema, description: "Inline controller demand contract. Omit when claiming a TODO row because the row provides it. Required before any initial implementation package." },
         controllerWindow: { type: "string", description: "The demand's OWN controller window (demand pods: Controller__<pod>). Stamped into the state root so every dispatch's controller-return routes home by default; omit to use the workspace controllerWindow." },
         placement: { type: "string", enum: ["main", "pod"], description: "Execution surface. Omit for mainline; pod requires authorizationRef and creates only the canonical Pod provisioning state, never host resources." },
         authorizationRef: { type: "string", description: "Auditable requirement/controller anchor proving the user explicitly requested this Pod. Required for placement=pod; forbidden for main." },
         podId: { type: "string", description: "Stable logical Pod id. Optional for placement=pod (defaults from demand identity); forbidden for main." },
         goal: { type: "string", description: "Demand goal; synthesized from the delivered docs when todoId is given and goal is omitted." },
         completionDefinition: { type: "string" },
-        testDecision: { type: "string", description: "Design's testing decision (which validation / real-Test approach). Optional; surfaced as a reminder at create-demand when absent, never a gate." },
+        testDecision: { type: "string", description: "Legacy display summary only. New demand readiness comes from demandAuthority.testDecision." },
         stagePlan: { type: "string" },
         taskPackages: {
           type: "array",
@@ -1277,6 +1326,7 @@ export const handlers = {
         "--target-task-id", args.taskId,
         ...optionalValue("--replaces-target-task-id", args.replacesTargetTaskId),
         ...optionalValue("--target-summary", args.targetSummary),
+        ...optionalValue("--demand-authority", args.demandAuthority ? JSON.stringify(args.demandAuthority) : undefined),
         ...optionalValue("--source-ref", args.sourceRef),
         ...optionalValue("--work-type", args.workType),
         ...optionalValue("--objective", args.objective),
@@ -1549,6 +1599,7 @@ export const handlers = {
         "--target-task-id", args.taskId,
         ...optionalValue("--source-ref", args.sourceRef),
         ...optionalValue("--target-summary", args.targetSummary),
+        ...optionalValue("--demand-authority", args.demandAuthority ? JSON.stringify(args.demandAuthority) : undefined),
         ...optionalValue("--work-type", args.workType),
         ...optionalValue("--objective", args.objective),
         ...optionalValue("--context-summary", args.contextSummary ? JSON.stringify(args.contextSummary) : undefined),
@@ -1680,7 +1731,7 @@ export const handlers = {
       ...optionalValue("--priority", args.priority),
       ...optionalValue("--original-plan", args.originalPlan),
       ...optionalValue("--requirement-design", args.requirementDesign),
-      ...optionalValue("--test-decision", args.testDecision),
+      ...optionalValue("--demand-authority", args.demandAuthority ? JSON.stringify(args.demandAuthority) : undefined),
       ...optionalValue("--dependency", args.dependency),
       ...rootArgs(args),
       ...(args.apply ? ["--apply"] : []),
@@ -1733,6 +1784,8 @@ export const handlers = {
         ...optionalValue("--todo-id", args.todoId),
         ...optionalValue("--demand-key", args.demandKey),
         ...optionalValue("--title", args.title),
+        ...optionalValue("--demand-type", args.demandType),
+        ...optionalValue("--demand-authority", args.demandAuthority ? JSON.stringify(args.demandAuthority) : undefined),
         ...optionalValue("--controller-window", args.controllerWindow),
         ...optionalValue("--placement", args.placement),
         ...optionalValue("--authorization-ref", args.authorizationRef),

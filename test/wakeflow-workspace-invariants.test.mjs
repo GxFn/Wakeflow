@@ -135,7 +135,13 @@ function writeProjection(stateRoot, {
 }
 
 function run(runtime, script, args) {
-  return spawnSync(process.execPath, [path.join(runtime, "scripts", script), ...args], {
+  const effectiveArgs = script === "wakeflow-demand-sequence.mjs"
+    && args[0] === "create-demand"
+    && !args.includes("--todo-id")
+    && !args.includes("--demand-type")
+      ? [args[0], "--demand-type", "bug", ...args.slice(1)]
+      : args;
+  return spawnSync(process.execPath, [path.join(runtime, "scripts", script), ...effectiveArgs], {
     cwd: runtime,
     encoding: "utf8",
   });

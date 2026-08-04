@@ -1,6 +1,6 @@
 {
   "name": "wakeflow",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "type": "module",
   "description": "Unattended control loops for Codex workspaces, aligned with Wakeflow's Claude Code edition.",
   "license": "MIT",

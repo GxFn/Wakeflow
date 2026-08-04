@@ -74,6 +74,7 @@ const requiredFiles = [
   "scripts/wakeflow-verify.mjs",
   "templates/wakeflow-template-bundle.json",
   "schemas/wakeflow-state-machine/wakeflow-state.schema.json",
+  "schemas/wakeflow-state-machine/demand-authority.schema.json",
   "schemas/wakeflow-state-machine/task-package.schema.json",
   "schemas/wakeflow-state-machine/target-result.schema.json",
   "schemas/wakeflow-state-machine/transition-candidate.schema.json",

@@ -29,12 +29,22 @@ const codexBundleRoot = path.join(repoRoot, "plugins", "codex-wakeflow");
 const HEADER =
   "| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount | Auto Claim | Testing Decision | Documents |";
 const DIVIDER = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
+const REQUIREMENT_REFS = [
+  "original-plan",
+  "requirement-design",
+  "code-facts",
+  "landing-plan",
+  "non-goals",
+  "user-confirmation",
+].map((role) => `[${role}](../../authority.md#${role})`).join(" ");
+const BUG_REFS = ["reproduction", "scope", "non-goals"]
+  .map((role) => `[${role}](../../authority.md#${role})`).join(" ");
 // A delivered, controller-recommended, auto-claimable requirement row.
 const DELIVERED_ROW =
-  "| feat-2026-06-21 | pending-claim | requirement | P1 | Design | Build the feature | no | none | Wakeflow | none | yes | unit tests in target; no Test window | [plan](plan.md) [design](design.md) |";
+  `| feat-2026-06-21 | pending-claim | requirement | P1 | Design | Build the feature | no | none | Wakeflow | none | yes | controller-only: unit tests in target; no Test window | ${REQUIREMENT_REFS} |`;
 // Eligible but NOT auto-claimable (Auto Claim = no): claimable only with an explicit key.
 const MANUAL_ROW =
-  "| manual-2026-06-21 | pending-claim | bug | P2 | Design | Fix the bug | no | none | Wakeflow | none | no | smoke |  |";
+  `| manual-2026-06-21 | pending-claim | bug | P2 | Design | Fix the bug | no | none | Wakeflow | none | no | controller-only: smoke | ${BUG_REFS} |`;
 
 function makeWorkspace(rows = "") {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-create-"));
@@ -56,6 +66,23 @@ function makeWorkspace(rows = "") {
   for (const repository of repositories) {
     mkdirSync(path.join(root, repository.path), { recursive: true });
   }
+  writeFileSync(path.join(root, "authority.md"), [
+    "# Demand authority",
+    "",
+    "## Original plan",
+    "## Requirement design",
+    "## Code facts",
+    "## Landing plan",
+    "## Non goals",
+    "## User confirmation",
+    "## Reproduction",
+    "## Scope",
+    "## Requirement delta",
+    "## Research question",
+    "## Boundaries",
+    "## Test environment",
+    "",
+  ].join("\n"));
   const registryDir = path.join(
     root,
     ".wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry",
@@ -104,11 +131,24 @@ function makeWorkspace(rows = "") {
   return { root, boardPath };
 }
 
+function withFixtureDemandType(args) {
+  if (
+    args[0] === "create-demand"
+    && args.includes("--demand-key")
+    && !args.includes("--todo-id")
+    && !args.includes("--demand-type")
+    && !args.includes("--demand-authority")
+  ) {
+    return [args[0], "--demand-type", "bug", ...args.slice(1)];
+  }
+  return args;
+}
+
 function run(root, args) {
-  return runSync(process.execPath, [script, ...args, "--root", root, "--json"], { cwd: root, encoding: "utf8" });
+  return runSync(process.execPath, [script, ...withFixtureDemandType(args), "--root", root, "--json"], { cwd: root, encoding: "utf8" });
 }
 function runSource(root, args) {
-  return runSync(process.execPath, [sourceScript, ...args, "--root", root, "--json"], { cwd: root, encoding: "utf8" });
+  return runSync(process.execPath, [sourceScript, ...withFixtureDemandType(args), "--root", root, "--json"], { cwd: root, encoding: "utf8" });
 }
 function makeFaultRuntime() {
   const container = mkdtempSync(path.join(os.tmpdir(), "wakeflow-create-runtime-"));
@@ -182,7 +222,7 @@ if (args[0] === "init" && args.includes("--write") && process.env.WAKEFLOW_TEST_
 function runFaultRuntime(runtime, root, args, env = {}) {
   return spawnSync(process.execPath, [
     path.join(runtime, "scripts/wakeflow-demand-sequence.mjs"),
-    ...args,
+    ...withFixtureDemandType(args),
     "--root", root,
     "--json",
   ], {
@@ -195,7 +235,7 @@ function runFaultRuntimeAsync(runtime, root, args, env = {}) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [
       path.join(runtime, "scripts/wakeflow-demand-sequence.mjs"),
-      ...args,
+      ...withFixtureDemandType(args),
       "--root", root,
       "--json",
     ], {
@@ -229,9 +269,10 @@ test("create-demand from a delivered TODO row: inits, adopts host, renders, cons
   const state = JSON.parse(readFileSync(file, "utf8"));
   assert.equal(state.demandKey, "feat-2026-06-21");
   assert.ok(state.controllerHost, "controllerHost is adopted by create-demand");
-  assert.equal(state.testDecision, "unit tests in target; no Test window", "Design testing decision survives TODO claim");
+  assert.equal(state.testDecision, "controller-only: unit tests in target; no Test window", "Design testing decision survives TODO claim");
   const demand = JSON.parse(readFileSync(path.join(root, ".wakeflow-active/current/feat-2026-06-21/demand.json"), "utf8"));
-  assert.deepEqual(demand.source.documents, ["plan.md", "design.md"], "legacy workspace-relative board links stay canonical");
+  assert.equal(demand.source.documents.length, 6, "the complete proportional authority refs survive TODO claim");
+  assert.ok(demand.source.documents.includes("authority.md#original-plan"));
   const workspaceStatus = readFileSync(path.join(root, ".wakeflow-active/current/workspace-current-status.md"), "utf8");
   assert.match(workspaceStatus, /Status: active/);
   assert.match(workspaceStatus, /feat-2026-06-21/, "entry projection links the newly active demand");
@@ -278,7 +319,7 @@ test("create-demand inline (demandKey + title) inits without a TODO row", () => 
   assert.equal(existsSync(statePath(root, "inline-2026-06-21")), true);
 });
 
-test("W-Design: create-demand records testDecision and reminds (never blocks) when absent", () => {
+test("a controller inline draft records a legacy display testDecision and reminds when absent", () => {
   // recorded -> persists on the demand state, no reminder
   const yes = makeWorkspace();
   const withDecision = parse(run(yes.root, [
@@ -290,10 +331,11 @@ test("W-Design: create-demand records testDecision and reminds (never blocks) wh
   const stateYes = JSON.parse(readFileSync(statePath(yes.root, "td-yes-2026-07-09"), "utf8"));
   assert.equal(stateYes.testDecision, "unit tests in AppWindow; no real Test needed", "testDecision persists on the demand state");
 
-  // absent -> reminder surfaces, but create-demand still succeeds (reminder-first, not a gate)
+  // A draft may stay incomplete. The first implementation package, not draft
+  // creation, is the authority freeze gate.
   const no = makeWorkspace();
   const result = run(no.root, ["create-demand", "--demand-key", "td-no-2026-07-09", "--title", "TD No", "--write"]);
-  assert.equal(result.status, 0, "create-demand succeeds without a testing decision (reminder, not a gate)");
+  assert.equal(result.status, 0, "controller draft creation succeeds before authority is complete");
   const withoutDecision = parse(result);
   assert.match(withoutDecision.testDecisionReminder, /testing decision/i, "a reminder surfaces when the testing decision is absent");
   const stateNo = JSON.parse(readFileSync(statePath(no.root, "td-no-2026-07-09"), "utf8"));
@@ -782,7 +824,7 @@ test("claim-todo claims an explicit eligible row even when not auto-claimable", 
 
 test("claim-todo refuses when multiple rows are controller-claimable", () => {
   const second =
-    "| feat2-2026-06-21 | pending-claim | requirement | P1 | Design | Second | no | none | Wakeflow | none | yes | unit | [plan](p.md) [design](d.md) |";
+    `| feat2-2026-06-21 | pending-claim | requirement | P1 | Design | Second | no | none | Wakeflow | none | yes | controller-only: unit | ${REQUIREMENT_REFS} |`;
   const { root } = makeWorkspace(`${DELIVERED_ROW}\n${second}`);
   const result = run(root, ["claim-todo", "--write"]);
   assert.notEqual(result.status, 0);

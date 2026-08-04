@@ -121,8 +121,14 @@ disk. Every demand moves through the same closed loop:
  8 complete   active required tasks accepted, replacement lineage valid, no blocker
 ```
 
-Two rules keep the loop honest:
+These rules keep the loop honest:
 
+- **One demand authority, regardless of who creates it.** Design is the default
+  author for substantial new product behavior; the controller may create
+  bounded or already-documented work directly only with the same proportional
+  anchored inputs. The first implementation package freezes them once as
+  `demand-authority.json`. A typed draft may precede that freeze; `Auto Claim`
+  changes claim timing only.
 - **Prompts brief, packages contextualize, Skills execute.** The bounded prompt
   carries objective, priority completion/context/boundary cues, reading order,
   identity, and trace. The package owns complete task context, requirement
@@ -137,7 +143,7 @@ Two rules keep the loop honest:
   full-context implementation task in the product responsibility window with
   `replacesTargetTaskId` after the Design handoff. Accepting that replacement
   supersedes the old task and package.
-  Version 0.9.3 freezes exactly one Design request/handoff generation per Pod;
+  The current implementation freezes exactly one Design request/handoff generation per Pod;
   that sole request may be `initial-design`, `supplement`, or `redesign`. A
   different second generation remains blocked rather than overwriting it or
   falling back to mainline Design.
@@ -389,7 +395,7 @@ per-repository limit.
   Freeze the controller request with
   `wakeflow_pod_plan action=design-request`, then record its exact
   `PodDesignHandoffEnvelope` with `wakeflow_pod_record event=design-handoff`; neither
-  step creates a second global TODO. Version 0.9.3 does not persist a second
+  step creates a second global TODO. The current implementation does not persist a second
   Pod Design generation, so later supplement/redesign is an explicit
   capability blocker.
 - Before Pod Test dispatch, run `wakeflow_pod_plan action=test-access` and record

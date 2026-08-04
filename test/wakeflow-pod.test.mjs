@@ -100,6 +100,18 @@ function makeWorkspace() {
     maxActiveDemands: 0,
     hosts: { codex: { maxStreamsPerRepo: 0 } },
   });
+  writeFileSync(path.join(root, "goal-stage-confirmation.md"), [
+    "# Confirmed demand",
+    "",
+    "## Goal",
+    "## Completion",
+    "## Requirement design",
+    "## Code facts",
+    "## Landing plan",
+    "## Non goals",
+    "## User confirmation",
+    "",
+  ].join("\n"));
   return { root, heads };
 }
 
@@ -117,6 +129,7 @@ function createDemand(root, demandKey, {
     schemaVersion: 1,
     demandKey,
     title: `Demand ${demandKey}`,
+    demandType: "requirement",
     controllerHost: null,
     controllerWindow: `Controller__${podId}`,
     executionPlacement: { mode, podId: mode === "isolated" ? podId : null, selection, authorizationRef },
@@ -145,6 +158,14 @@ function createDemand(root, demandKey, {
       progressDoc: "developer-progress.md",
     },
   };
+  writeJson(path.join(stateRoot, "demand.json"), {
+    schemaVersion: 1,
+    demandKey,
+    title: `Demand ${demandKey}`,
+    demandType: "requirement",
+    createdAt,
+    source: { kind: "test-fixture" },
+  });
   writeJson(path.join(stateRoot, "wakeflow-state.json"), controllerState);
   writeFileSync(path.join(stateRoot, "controller-events.jsonl"), `${JSON.stringify({
     eventId: `evt-${demandKey}-0001`,
@@ -524,6 +545,7 @@ function validDesignRequest(demandKey, podId, requestType = "initial-design") {
   return {
     demandKey,
     podId,
+    demandType: "requirement",
     requestType,
     originalGoal: `Complete ${demandKey} without changing its confirmed scope.`,
     requirementAnchors: ["goal-stage-confirmation.md#goal", "goal-stage-confirmation.md#completion"],
@@ -554,6 +576,7 @@ function validHandoff(
   return {
     demandKey,
     podId,
+    demandType: "requirement",
     designRequestId: designRequest.requestId,
     designRequestRef: designRequest.requestRef,
     designRequestDigest: designRequest.requestDigest,
@@ -569,6 +592,25 @@ function validHandoff(
     designIntent: "Preserve the confirmed goal and isolate each repository in its host worktree.",
     testDecision: "Run confirmed environment tests only after controller acceptance.",
     environmentSpec: { authority: "requirement-design", scope: "pod-bound-worktrees" },
+    demandAuthority: {
+      schemaVersion: 1,
+      artifactKind: "wakeflow-demand-authority",
+      demandKey,
+      demandType: "requirement",
+      entryMode: "pod-design",
+      authorityRefs: [
+        { role: "original-plan", ref: "goal-stage-confirmation.md#goal" },
+        { role: "requirement-design", ref: "goal-stage-confirmation.md#requirement-design" },
+        { role: "code-facts", ref: "goal-stage-confirmation.md#code-facts" },
+        { role: "landing-plan", ref: "goal-stage-confirmation.md#landing-plan" },
+        { role: "non-goals", ref: "goal-stage-confirmation.md#non-goals" },
+        { role: "user-confirmation", ref: "goal-stage-confirmation.md#user-confirmation" },
+      ],
+      testDecision: {
+        mode: "controller-only",
+        summary: "Controller verifies the accepted implementation before completion.",
+      },
+    },
   };
 }
 

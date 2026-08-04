@@ -5,6 +5,10 @@ import path from "node:path";
 import { getArgValue, loadWorkspaceConfig, workspaceLedgerPaths } from "./lib/wakeflow-config.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
 import { TODO_COLUMNS, parseMarkdownRow, parseTodoBoard } from "./lib/wakeflow-todo-table.mjs";
+import {
+  DEMAND_AUTHORITY_FILE,
+  demandAuthorityReadiness,
+} from "./lib/wakeflow-demand-authority.mjs";
 
 const args = process.argv.slice(2);
 const workspaceRoot = path.resolve(getArgValue(args, "--root", process.cwd()));
@@ -130,6 +134,61 @@ function validateGlobalTodo() {
   }
 }
 
+function validateDemandAuthorities() {
+  if (!existsSync(currentDir)) return;
+  for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name.startsWith(".wakeflow-init-")) continue;
+    const stateRoot = path.join(currentDir, entry.name);
+    const stateFile = path.join(stateRoot, "wakeflow-state.json");
+    if (!existsSync(stateFile)) continue;
+    let state;
+    try {
+      state = JSON.parse(read(stateFile));
+    } catch (error) {
+      issues.push(`${relative(stateFile)} is invalid JSON: ${error.message}`);
+      continue;
+    }
+    const authorityFile = path.join(stateRoot, DEMAND_AUTHORITY_FILE);
+    if (!state.demandAuthorityRef) {
+      if (existsSync(authorityFile)) {
+        issues.push(`${relative(authorityFile)} exists but ${relative(stateFile)} does not reference it`);
+      }
+      if ((state.taskPackages ?? []).some((taskPackage) => taskPackage.workType === "implementation")) {
+        warnings.push(`${relative(stateRoot)} is a legacy implementation demand without ${DEMAND_AUTHORITY_FILE}; new implementation dispatches require the immutable demand contract.`);
+      }
+      continue;
+    }
+    if (state.demandAuthorityRef !== DEMAND_AUTHORITY_FILE) {
+      issues.push(`${relative(stateFile)} demandAuthorityRef must equal ${DEMAND_AUTHORITY_FILE}`);
+      continue;
+    }
+    if (!state.demandAuthorityDigest) {
+      issues.push(`${relative(stateFile)} is missing the frozen demandAuthorityDigest`);
+      continue;
+    }
+    if (!existsSync(authorityFile)) {
+      issues.push(`${relative(stateFile)} references missing ${relative(authorityFile)}`);
+      continue;
+    }
+    let authority;
+    try {
+      authority = JSON.parse(read(authorityFile));
+    } catch (error) {
+      issues.push(`${relative(authorityFile)} is invalid JSON: ${error.message}`);
+      continue;
+    }
+    const readiness = demandAuthorityReadiness(authority, {
+      workspaceRoot,
+      demandKey: state.demandKey,
+      demandType: state.demandType ?? null,
+      expectedDigest: state.demandAuthorityDigest,
+    });
+    if (!readiness.ready) {
+      issues.push(`${relative(authorityFile)} is incomplete: ${readiness.errors.join("; ")}`);
+    }
+  }
+}
+
 function extractFirstLinkTarget(markdown) {
   const match = markdown.match(/\[[^\]]+]\(([^)]+)\)/);
   return match ? match[1].split("#")[0] : null;
@@ -212,6 +271,7 @@ if (existsSync(currentStatusPath)) {
 }
 
 validateGlobalTodo();
+validateDemandAuthorities();
 
 const activeFiles = [
   path.join(workspaceRoot, hostProfile.memoryFile),

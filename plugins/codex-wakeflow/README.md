@@ -105,7 +105,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.3/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.4/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository
@@ -259,6 +259,12 @@ workspace noise to `.gitignore`.
 The normal Wakeflow loop is deliberately small:
 
 1. A user goal, Design handoff, or controller intake creates a demand.
+   Design is the default author for substantial new product behavior, but the
+   controller may create bounded or already-documented work directly. Both
+   routes use the same proportional `demandAuthority`; before implementation it
+   is frozen once as `demand-authority.json`. A typed draft may exist before
+   that point, but cannot carry an implementation package. `Auto Claim` only
+   controls unattended claiming and never substitutes for missing anchors.
 2. The controller defines completion, boundaries, phase order, and the first
    blocker.
 3. A state root records the demand and creates eligible task packages.
@@ -273,7 +279,7 @@ The normal Wakeflow loop is deliberately small:
    the product responsibility window with
    `replacesTargetTaskId` after the Design handoff; accepting the replacement
    explicitly supersedes the old task and package.
-   Version 0.9.3 freezes exactly one Design request/handoff generation per
+   The current implementation freezes exactly one Design request/handoff generation per
    Pod; that sole request may be `initial-design`, `supplement`, or `redesign`.
    A different second generation remains blocked rather than overwriting it or
    falling back to mainline Design.
@@ -333,7 +339,7 @@ per-repository limit.
   Freeze the controller request with
   `wakeflow_pod_plan action=design-request`, then record its exact
   `PodDesignHandoffEnvelope` with `wakeflow_pod_record event=design-handoff`; neither
-  step creates a second global TODO. Version 0.9.3 does not persist a second
+  step creates a second global TODO. The current implementation does not persist a second
   Pod Design generation, so later supplement/redesign is an explicit
   capability blocker.
 - Before Pod Test dispatch, run `wakeflow_pod_plan action=test-access` and

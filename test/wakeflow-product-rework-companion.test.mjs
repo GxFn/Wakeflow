@@ -341,16 +341,39 @@ test("an explicit redesign replacement supersedes the old task and the demand ca
     "",
   ].join("\n"));
   writeFileSync(path.join(root, "corrected-requirement.md"), [
-    "# Goal",
+    "# Corrected requirement",
     "",
+    "## Goal",
     "Implement the corrected behavior without accepting the rejected result.",
+    "",
+    "## Requirement design",
+    "Implement the corrected behavior without accepting the rejected result.",
+    "",
+    "## Requirement delta",
+    "Replace only the rejected product behavior.",
+    "",
+    "## User confirmation",
+    "The corrected requirement is authorized for the redesign route.",
   ].join("\n"));
   const designDelivery = runTodo(runtimeRoot, [
     "deliver", "--root", root,
     "--type", "supplement",
     "--design-key", "product-redesign-2026-07-30",
     "--title", "Corrected product requirement",
-    "--requirement-design", "corrected-requirement.md",
+    "--demand-authority", JSON.stringify({
+      demandKey: "product-redesign-2026-07-30",
+      demandType: "supplement",
+      entryMode: "design-delivery",
+      authorityRefs: [
+        { role: "requirement-design", ref: "corrected-requirement.md#requirement-design" },
+        { role: "requirement-delta", ref: "corrected-requirement.md#requirement-delta" },
+        { role: "user-confirmation", ref: "corrected-requirement.md#user-confirmation" },
+      ],
+      testDecision: {
+        mode: "controller-only",
+        summary: "Controller verifies the corrected product behavior before acceptance.",
+      },
+    }),
     "--apply", "--json",
   ]);
   assert.equal(designDelivery.status, 0, designDelivery.stderr || designDelivery.stdout);

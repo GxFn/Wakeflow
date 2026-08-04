@@ -19,6 +19,10 @@ import {
   replaceTodoSection,
   todoBoardLockPath,
 } from "./lib/wakeflow-todo-table.mjs";
+import {
+  assertDemandAuthorityReady,
+  normalizeDemandAuthority,
+} from "./lib/wakeflow-demand-authority.mjs";
 
 const args = process.argv.slice(2);
 const workspaceRoot = resolveWorkspaceRoot(args);
@@ -40,6 +44,16 @@ function getArgValue(name, fallback = null) {
   return index >= 0 && args[index + 1] !== undefined && !args[index + 1].startsWith("--")
     ? args[index + 1]
     : fallback;
+}
+
+function parseJsonArg(name) {
+  const raw = getArgValue(name);
+  if (!raw) fail(`${name} is required`);
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    fail(`${name} must be valid JSON: ${error.message}`);
+  }
 }
 
 function output(payload) {
@@ -91,14 +105,33 @@ function commandDeliver() {
   const priority = getArgValue("--priority", "P2");
   const originalPlan = getArgValue("--original-plan");
   const requirementDesign = getArgValue("--requirement-design");
-  const testingDecision = getArgValue("--test-decision", "");
-
-  // Ready invariants: a requirement that authorizes unattended auto-claim must carry both
-  // design documents (so create_demand can synthesize goal/completion). A not-fully-designed
-  // requirement cannot satisfy this, so it cannot be delivered as auto-claimable — by design.
-  if (type === "requirement" && autoClaim) {
-    if (!originalPlan) fail("type=requirement with --auto-claim requires --original-plan");
-    if (!requirementDesign) fail("type=requirement with --auto-claim requires --requirement-design");
+  let demandAuthority;
+  try {
+    demandAuthority = normalizeDemandAuthority(parseJsonArg("--demand-authority"), {
+      demandKey: designKey,
+      entryMode: "design-delivery",
+    });
+    demandAuthority = assertDemandAuthorityReady(demandAuthority, {
+      workspaceRoot,
+      demandKey: designKey,
+      demandType: type,
+      entryMode: "design-delivery",
+    }).authority;
+  } catch (error) {
+    if (error instanceof CliError) throw error;
+    fail(error.message);
+  }
+  if (demandAuthority.demandType !== type) {
+    fail(`--type ${type} does not match demandAuthority.demandType ${demandAuthority.demandType}`);
+  }
+  if (demandAuthority.entryMode !== "design-delivery") {
+    fail("Design TODO delivery requires demandAuthority.entryMode=design-delivery");
+  }
+  if (originalPlan && !demandAuthority.authorityRefs.some((entry) => entry.role === "original-plan" && entry.ref === originalPlan)) {
+    fail("--original-plan must match the role=original-plan ref in demandAuthority");
+  }
+  if (requirementDesign && !demandAuthority.authorityRefs.some((entry) => entry.role === "requirement-design" && entry.ref === requirementDesign)) {
+    fail("--requirement-design must match the role=requirement-design ref in demandAuthority");
   }
 
   if (!existsSync(todoPath)) fail(`global TODO board missing: ${todoPath}`);
@@ -117,9 +150,9 @@ function commandDeliver() {
   if (normalized.rows.some((row) => row.value.ID === designKey)) fail(`ID already on the board: ${designKey}`);
 
   const documents = [
-    originalPlan ? `[plan](${boardRelativeDocumentRef(originalPlan)})` : null,
-    requirementDesign ? `[design](${boardRelativeDocumentRef(requirementDesign)})` : null,
+    ...demandAuthority.authorityRefs.map(({ role, ref }) => `[${role}](${boardRelativeDocumentRef(ref)})`),
   ].filter(Boolean).join(" ");
+  const testingDecision = `${demandAuthority.testDecision.mode}: ${demandAuthority.testDecision.summary}`;
   const cellByName = {
     "ID": designKey,
     "Status": "pending-claim",
@@ -153,6 +186,7 @@ function commandDeliver() {
     type,
     autoClaim,
     priority,
+    demandAuthority,
     row: newRow,
     board: path.relative(workspaceRoot, todoPath).split(path.sep).join("/"),
   });

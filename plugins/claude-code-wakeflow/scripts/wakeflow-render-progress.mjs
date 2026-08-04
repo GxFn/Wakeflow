@@ -28,6 +28,10 @@ import {
   resolveStateRootFilePath,
   WakeflowStatePathError,
 } from "./lib/wakeflow-state-paths.mjs";
+import {
+  DEMAND_AUTHORITY_FILE,
+  demandAuthorityReadiness,
+} from "./lib/wakeflow-demand-authority.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const wakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -381,6 +385,9 @@ function buildStateRootIndex(state, stateRoot, progressDoc, eventId) {
     "## Core records",
     "",
     "- [demand.json](demand.json) — immutable demand record",
+    ...(state.demandAuthorityRef
+      ? [`- [${DEMAND_AUTHORITY_FILE}](${DEMAND_AUTHORITY_FILE}) — immutable demand type, testing decision, and background anchors`]
+      : []),
     `- [wakeflow-state.json](wakeflow-state.json) — authoritative state machine (state: ${state.state}, revision ${state.revision})`,
     "- [controller-events.jsonl](controller-events.jsonl) — append-only controller event log",
     "- [projection.json](projection.json) — machine-readable projection + structured slices",
@@ -435,6 +442,31 @@ try {
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const projectionFile = path.join(stateRoot, "projection.json");
   const state = readJson(stateFile, "controller state");
+  let demandAuthority = null;
+  let demandAuthorityStatus = null;
+  const authorityFile = path.join(stateRoot, DEMAND_AUTHORITY_FILE);
+  if (!state.demandAuthorityRef && existsSync(authorityFile)) {
+    fail(`unreferenced ${DEMAND_AUTHORITY_FILE} already exists; refuse to project ambiguous demand authority.`);
+  }
+  if (state.demandAuthorityRef) {
+    if (state.demandAuthorityRef !== DEMAND_AUTHORITY_FILE) {
+      fail(`controller state demandAuthorityRef must equal ${DEMAND_AUTHORITY_FILE}.`);
+    }
+    if (!state.demandAuthorityDigest) {
+      fail(`controller state is missing the frozen demandAuthorityDigest for ${DEMAND_AUTHORITY_FILE}.`);
+    }
+    demandAuthority = readJson(authorityFile, "demand authority");
+    demandAuthorityStatus = demandAuthorityReadiness(demandAuthority, {
+      workspaceRoot,
+      demandKey: state.demandKey,
+      demandType: state.demandType ?? null,
+      expectedDigest: state.demandAuthorityDigest,
+    });
+    if (!demandAuthorityStatus.ready) {
+      fail(`demand authority is invalid:\n- ${demandAuthorityStatus.errors.join("\n- ")}`);
+    }
+    demandAuthority = demandAuthorityStatus.authority;
+  }
   if (write && state.state === "archived") {
     fail(`cannot render-progress --write for archived demand ${state.demandKey}; archived history is immutable. Use sanitize-archive only for an explicit privacy amendment.`);
   }
@@ -483,6 +515,16 @@ try {
     sourceRevision: state.revision,
     sourceEventId: event?.eventId ?? "none",
     progressDoc,
+    ...(demandAuthority ? {
+      demandAuthority: {
+        ref: DEMAND_AUTHORITY_FILE,
+        digest: demandAuthorityStatus.digest,
+        demandType: demandAuthority.demandType,
+        entryMode: demandAuthority.entryMode,
+        testDecision: demandAuthority.testDecision,
+        authorityRefs: demandAuthority.authorityRefs,
+      },
+    } : {}),
     unifiedStatus: {
       demand: `${state.demandKey} - ${state.title}`,
       mainState: state.state,
@@ -596,6 +638,15 @@ try {
       projectionFile: relative(projectionFile),
       sourceRevision: state.revision,
       sourceEventId: event?.eventId ?? "none",
+      ...(demandAuthority ? {
+        demandAuthority: {
+          ref: relative(path.join(stateRoot, DEMAND_AUTHORITY_FILE)),
+          digest: demandAuthorityStatus.digest,
+          demandType: demandAuthority.demandType,
+          entryMode: demandAuthority.entryMode,
+          testDecision: demandAuthority.testDecision,
+        },
+      } : {}),
       changed: nextProgress !== progress || state.projection?.status !== "synced",
     },
     [

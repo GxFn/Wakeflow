@@ -31,7 +31,13 @@ function makeRoot(config = null) {
 }
 
 function run(script, args) {
-  return runSync(process.execPath, [script, ...args], {
+  const effectiveArgs = script === demandScript
+    && args[0] === "create-demand"
+    && !args.includes("--todo-id")
+    && !args.includes("--demand-type")
+      ? [args[0], "--demand-type", "bug", ...args.slice(1)]
+      : args;
+  return runSync(process.execPath, [script, ...effectiveArgs], {
     cwd: runtimeRoot,
     encoding: "utf8",
   });

@@ -216,7 +216,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 For a pinned release after the matching tag exists:
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.3/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.4/plugins/codex-wakeflow --plugin
 ```
 
 If the Codex dialog separates source, ref, and sparse path, use the repository
@@ -351,11 +351,16 @@ The loop is the same on both hosts; only how you drive it differs.
    dedicated socket is configured.
 2. Feed the goal to the Design window (or write the requirement yourself).
    Design clarifies it and calls `wakeflow_deliver` — the demand lands as a
-   `pending-claim` row on the global TODO board with its design docs linked.
+   `pending-claim` row on the global TODO board with its proportional authority
+   anchors projected. The controller may instead create bounded or already
+   documented work directly, but it uses the same demand-type contract; this is
+   not a lighter second format.
 3. In the controller: `/wakeflow:status` to see the board, then claim it —
    `wakeflow_claim_next` (auto-claimable rows) or `wakeflow_create_demand`
    (explicit). This inits the state root and consumes the row; the controller
-   confirms the plan and task packages with you before any dispatch.
+   confirms the plan and task packages with you before any dispatch. The first
+   implementation package freezes those anchors once as
+   `demand-authority.json`; `Auto Claim` controls unattended claim timing only.
 4. `/wakeflow:dispatch` — prepare one envelope, deliver it in one step, inspect
    the actual host result, make one bounded readback observation, and record
    every transport/readback field explicitly before ending the turn.
@@ -373,7 +378,7 @@ The loop is the same on both hosts; only how you drive it differs.
    the product responsibility window with
    `replacesTargetTaskId`; accepting that replacement supersedes the old task
    and package explicitly.
-   In 0.9.3 a Pod has exactly one frozen Design request/handoff generation;
+   The current implementation gives a Pod exactly one frozen Design request/handoff generation;
    that sole request may be `initial-design`, `supplement`, or `redesign`. A
    different second generation remains blocked rather than overwriting the
    recorded handoff or falling back to mainline Design.
@@ -629,7 +634,7 @@ host send adapter, manifests, READMEs, memory-file template, skills, template
 bundle) live only inside each artifact. `npm run check:core` keeps the copies
 honest.
 
-Current 0.9.3 Pod behavior and acceptance authority are documented in
+Current Pod behavior and acceptance authority are documented in
 [docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md](docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md).
 The non-Pod hardening history is recorded in
 [docs/wakeflow-hardening-design-compliance-2026-07-30.md](docs/wakeflow-hardening-design-compliance-2026-07-30.md).

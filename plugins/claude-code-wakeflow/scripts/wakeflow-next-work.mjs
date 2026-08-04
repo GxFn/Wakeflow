@@ -11,6 +11,7 @@ import {
   summarizeAuthoritativeDemandState,
 } from "./lib/wakeflow-active-demands.mjs";
 import { parseTodoBoard } from "./lib/wakeflow-todo-table.mjs";
+import { demandAuthorityReadiness } from "./lib/wakeflow-demand-authority.mjs";
 
 const args = process.argv.slice(2);
 const workspaceRoot = resolveWorkspaceRoot(args);
@@ -86,6 +87,24 @@ function todoDocumentRefs(documents) {
   });
 }
 
+function todoAuthorityRefs(documents) {
+  return [...String(documents ?? "").matchAll(/\[([^\]]+)\]\(([^)]+)\)/g)].map((match) => ({
+    role: match[1].trim(),
+    ref: todoDocumentRefs(`[${match[1]}](${match[2]})`)[0],
+  }));
+}
+
+function todoTestDecision(value, authorityRefs) {
+  const match = String(value ?? "").trim().match(/^(controller-only|real-environment|not-applicable)\s*:\s*(.+)$/u);
+  if (!match) return null;
+  const environmentSpecRef = authorityRefs.find((entry) => entry.role === "test-environment")?.ref;
+  return {
+    mode: match[1],
+    summary: match[2].trim(),
+    ...(match[1] === "real-environment" && environmentSpecRef ? { environmentSpecRef } : {}),
+  };
+}
+
 function read(file) {
   return readFileSync(file, "utf8");
 }
@@ -142,6 +161,28 @@ function parseTodoCandidates(warnings) {
       // once. yes = Design+user authorized unattended auto-claim; absent/no = controller
       // confirms first. Mirrors the design-row controllerClaimable computation.
       const autoClaim = /^yes$/i.test((entry["Auto Claim"] ?? "").trim());
+      const authorityRefs = todoAuthorityRefs(entry["Documents"] ?? "");
+      const structuredTestDecision = todoTestDecision(entry["Testing Decision"] ?? "", authorityRefs);
+      const demandAuthority = structuredTestDecision
+        ? {
+            schemaVersion: 1,
+            artifactKind: "wakeflow-demand-authority",
+            demandKey: entry.ID,
+            demandType: entry["Type"],
+            entryMode: "design-delivery",
+            authorityRefs,
+            testDecision: structuredTestDecision,
+          }
+        : null;
+      const authorityReadiness = demandAuthorityReadiness(demandAuthority, {
+        workspaceRoot,
+        demandKey: entry.ID,
+        demandType: entry["Type"],
+        entryMode: "design-delivery",
+      });
+      if (!authorityReadiness.ready) {
+        blockers.push(`demand authority is incomplete: ${authorityReadiness.errors.join("; ")}`);
+      }
       return {
         source: "todo",
         id: entry.ID,
@@ -158,6 +199,12 @@ function parseTodoCandidates(warnings) {
         documents: entry["Documents"] ?? "",
         documentRefs: todoDocumentRefs(entry["Documents"] ?? ""),
         testDecision: entry["Testing Decision"] ?? "",
+        demandAuthority: authorityReadiness.authority ?? demandAuthority,
+        demandAuthorityReadiness: {
+          ready: authorityReadiness.ready,
+          errors: authorityReadiness.errors,
+          digest: authorityReadiness.digest,
+        },
         autoClaim,
         blockers,
         eligible: blockers.length === 0,

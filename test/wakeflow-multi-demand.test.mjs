@@ -98,6 +98,17 @@ function configuredRepositoryRoot() {
   mkdirSync(repositoryRoot, { recursive: true });
   git(repositoryRoot, ["init", "-q", "-b", "main"]);
   writeFileSync(path.join(repositoryRoot, "README.md"), "RepoA\n");
+  writeFileSync(path.join(root, "goal-stage-confirmation.md"), [
+    "# Pod authority",
+    "",
+    "## Goal",
+    "## Requirement design",
+    "## Code facts",
+    "## Landing plan",
+    "## Non goals",
+    "## User confirmation",
+    "",
+  ].join("\n"));
   git(repositoryRoot, ["add", "README.md"]);
   git(repositoryRoot, ["commit", "-q", "-m", "initial"]);
   return { root, repositoryRoot, head: git(repositoryRoot, ["rev-parse", "HEAD"]) };
@@ -160,6 +171,7 @@ function materializeReadyPod(root, demandKey, repositoryRoot, expectedBaseHead) 
   const designRequestResult = podCommand(root, "prepare-design-request", "--request-json", {
     demandKey,
     podId: demandKey,
+    demandType: "requirement",
     requestType: "initial-design",
     originalGoal: "Exercise an isolated result loop without changing its confirmed scope.",
     requirementAnchors: ["goal-stage-confirmation.md#goal"],
@@ -178,6 +190,7 @@ function materializeReadyPod(root, demandKey, repositoryRoot, expectedBaseHead) 
   const handoff = podCommand(root, "record-design-handoff", "--handoff-json", {
     demandKey,
     podId: demandKey,
+    demandType: "requirement",
     designRequestId: designRequest.requestId,
     designRequestRef: designRequest.requestRef,
     designRequestDigest: designRequest.requestDigest,
@@ -192,6 +205,23 @@ function materializeReadyPod(root, demandKey, repositoryRoot, expectedBaseHead) 
     designIntent: "Keep the Pod result loop isolated from the mainline demand.",
     testDecision: "No separate environment test is required for this state-isolation fixture.",
     environmentSpec: { authority: "fixture", scope: "pod-worktree" },
+    demandAuthority: {
+      demandKey,
+      demandType: "requirement",
+      entryMode: "pod-design",
+      authorityRefs: [
+        { role: "original-plan", ref: "goal-stage-confirmation.md#goal" },
+        { role: "requirement-design", ref: "goal-stage-confirmation.md#requirement-design" },
+        { role: "code-facts", ref: "goal-stage-confirmation.md#code-facts" },
+        { role: "landing-plan", ref: "goal-stage-confirmation.md#landing-plan" },
+        { role: "non-goals", ref: "goal-stage-confirmation.md#non-goals" },
+        { role: "user-confirmation", ref: "goal-stage-confirmation.md#user-confirmation" },
+      ],
+      testDecision: {
+        mode: "controller-only",
+        summary: "Controller verifies this isolated state-loop fixture.",
+      },
+    },
   });
   assert.equal(handoff.status, 0, handoff.stderr || handoff.stdout);
 

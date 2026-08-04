@@ -75,9 +75,9 @@ implementation churn until Design returns a complete adjustment plan.
 
 The controller may auto-claim (init) a demand without a fresh user prompt ONLY from a
 global TODO row that Design delivered with Auto Claim = yes, via `wakeflow_claim_next`:
-that immutable delivery property is set once at `wakeflow_deliver` time and, for a
-requirement, requires a linked Original Plan + Requirement Design, so it carries the
-ready-row invariants plus design-key provenance. It is init-only — dispatch and
+that immutable delivery property is set once at `wakeflow_deliver` time. Every
+delivered type must already carry its complete proportional `demandAuthority`;
+Auto Claim does not reduce that readiness contract. It is init-only — dispatch and
 acceptance still require their own evidence and confirmation. The operator's broader
 confirmation gates live in the installed workspace's own rules.
 Auto Claim is mainline-only: while mainline is busy or unavailable it waits
@@ -207,7 +207,7 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   local control-project threads. Journal each create by launch correlation; a
   temporary `clientThreadId` is pending search/recovery evidence only and can
   never enter the registry. Freeze Pod Design with
-  `wakeflow_pod_plan action=design-request`. Version 0.9.3 freezes exactly one Pod
+  `wakeflow_pod_plan action=design-request`. The current implementation freezes exactly one Pod
   Design request/handoff generation; that sole request may be `initial-design`,
   `supplement`, or `redesign`. A different second generation must stop as an
   unsupported capability rather than overwrite it or fall back to mainline Design. A pod reaches `control-ready` only

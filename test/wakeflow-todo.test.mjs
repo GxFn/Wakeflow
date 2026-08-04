@@ -20,14 +20,63 @@ const LEGACY_HEADER =
 
 function makeBoard(rows = "", header = UNIFIED_HEADER, divider = DIVIDER) {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-todo-"));
+  writeFileSync(path.join(root, "authority.md"), [
+    "# Demand authority",
+    "",
+    "## Original plan",
+    "## Requirement design",
+    "## Code facts",
+    "## Landing plan",
+    "## Non goals",
+    "## User confirmation",
+    "## Reproduction",
+    "## Scope",
+    "## Requirement delta",
+    "## Research question",
+    "## Boundaries",
+    "## Test environment",
+    "",
+  ].join("\n"));
   const boardPath = path.join(root, ".wakeflow-active/current/global-todo-board.md");
   mkdirSync(path.dirname(boardPath), { recursive: true });
   writeFileSync(boardPath, `${`# Global TODO\n\n## Global TODO\n\n${header}\n${divider}\n${rows}`.trimEnd()}\n`);
   return { root, boardPath };
 }
 
+function demandAuthority(root, demandKey, demandType, summary = "controller verification") {
+  const roles = {
+    requirement: ["original-plan", "requirement-design", "code-facts", "landing-plan", "non-goals", "user-confirmation"],
+    bug: ["reproduction", "scope", "non-goals"],
+    supplement: ["requirement-design", "requirement-delta", "user-confirmation"],
+    research: ["research-question", "boundaries"],
+  }[demandType];
+  assert.ok(roles, `test authority type ${demandType}`);
+  return {
+    schemaVersion: 1,
+    artifactKind: "wakeflow-demand-authority",
+    demandKey,
+    demandType,
+    entryMode: "design-delivery",
+    authorityRefs: roles.map((role) => ({ role, ref: `authority.md#${role}` })),
+    testDecision: {
+      mode: demandType === "research" ? "not-applicable" : "controller-only",
+      summary,
+    },
+  };
+}
+
 function run(root, args) {
-  return runSync(process.execPath, [script, ...args, "--json"], { cwd: root, encoding: "utf8" });
+  const effective = [...args];
+  if (effective[0] === "deliver" && !effective.includes("--demand-authority")) {
+    const valueAfter = (flag) => effective[effective.indexOf(flag) + 1];
+    const type = valueAfter("--type");
+    const key = valueAfter("--design-key");
+    const summary = effective.includes("--test-decision")
+      ? valueAfter("--test-decision")
+      : "controller verification";
+    effective.push("--demand-authority", JSON.stringify(demandAuthority(root, key, type, summary)));
+  }
+  return runSync(process.execPath, [script, ...effective, "--json"], { cwd: root, encoding: "utf8" });
 }
 const parse = (result) => JSON.parse(result.stdout);
 
@@ -35,7 +84,7 @@ test("deliver appends a pending-claim row carrying the immutable Auto Claim prop
   const { root, boardPath } = makeBoard();
   const payload = parse(run(root, [
     "deliver", "--type", "requirement", "--design-key", "feat-2026-06-21", "--title", "Feature",
-    "--auto-claim", "--original-plan", "plan.md", "--requirement-design", "design.md",
+    "--auto-claim",
     "--test-decision", "target unit tests; no Test window", "--priority", "P1", "--apply",
   ]));
   assert.equal(payload.ok, true);
@@ -43,7 +92,8 @@ test("deliver appends a pending-claim row carrying the immutable Auto Claim prop
   assert.equal(payload.autoClaim, true);
   const board = readFileSync(boardPath, "utf8");
   assert.match(board, /\| feat-2026-06-21 \| pending-claim \| requirement \|/);
-  assert.match(board, /\| yes \| target unit tests; no Test window \| \[plan\]\(\.\.\/\.\.\/plan\.md\) \[design\]\(\.\.\/\.\.\/design\.md\) \|/);
+  assert.match(board, /\| yes \| controller-only: target unit tests; no Test window \|/);
+  assert.match(board, /\[original-plan\]\(\.\.\/\.\.\/authority\.md#original-plan\)/);
 });
 
 test("deliver migrates a pre-testing-decision board without dropping existing rows", () => {
@@ -57,14 +107,19 @@ test("deliver migrates a pre-testing-decision board without dropping existing ro
   assert.match(board, /old-2026-06-20/);
   assert.match(board, /\[plan\]\(\.\.\/\.\.\/old\.md\)/, "legacy workspace-relative links are rebased to the board");
   assert.match(board, /\[design\]\(\.\.\/\.\.\/design\.md\)/, "an already board-relative legacy link is not rebased twice");
-  assert.match(board, /new-2026-06-21[^\n]+\| smoke \|/);
+  assert.match(board, /new-2026-06-21[^\n]+\| controller-only: smoke \|/);
 });
 
-test("requirement + auto-claim without both design docs is refused", () => {
+test("requirement delivery is refused when its proportional authority is incomplete", () => {
   const { root } = makeBoard();
-  const result = run(root, ["deliver", "--type", "requirement", "--design-key", "x-2026-06-21", "--title", "X", "--auto-claim", "--apply"]);
+  const incomplete = demandAuthority(root, "x-2026-06-21", "requirement");
+  incomplete.authorityRefs = incomplete.authorityRefs.filter((entry) => entry.role !== "user-confirmation");
+  const result = run(root, [
+    "deliver", "--type", "requirement", "--design-key", "x-2026-06-21", "--title", "X",
+    "--auto-claim", "--demand-authority", JSON.stringify(incomplete), "--apply",
+  ]);
   assert.notEqual(result.status, 0);
-  assert.match(parse(result).error, /requires --original-plan/);
+  assert.match(parse(result).error, /requires role=user-confirmation/);
 });
 
 test("bug delivery needs no design docs and defaults to not auto-claimable", () => {

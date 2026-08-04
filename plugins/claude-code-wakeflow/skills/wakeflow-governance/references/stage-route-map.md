@@ -57,8 +57,8 @@ current behavior).
    data fixtures, allowed operations, reset/cleanup steps. Confirmed with the
    user HERE, not after implementation.
 5. Delivery: mainline Design uses `wakeflow_deliver` (append-only TODO row;
-   requirement + autoClaim requires the linked Original Plan + Requirement
-   Design). A Pod controller freezes the anchored request with
+   one complete proportional `demandAuthority`; `autoClaim` changes claim
+   timing, not readiness). A Pod controller freezes the anchored request with
    `wakeflow_pod_plan action=design-request`; Pod Design returns the matching
    `PodDesignHandoffEnvelope`, which the Pod controller records with
    `wakeflow_pod_record event=design-handoff`. Neither step creates a second global
@@ -67,9 +67,12 @@ current behavior).
 ## S2 — Claim & Plan (owner: controller)
 `wakeflow_next_work` → `wakeflow_claim_next` / `wakeflow_create_demand`
 (taskPackages carry designIntent) → `wakeflow_view scope=progress`.
-**Entry check:** the controller verifies the Design exit gate is complete. Any
-missing item = route back to Design (redesign lane) — do NOT patch the gap by
-reading code and deciding alone. Mainline is the default: if another mainline
+**Entry check:** the controller verifies the proportional demand authority.
+Design is the default author for substantial new behavior; the controller may
+create bounded/already-documented work inline only by citing the same anchored
+inputs. Any missing item stays S1 and routes to Design/user — do not invent the
+gap. The first implementation package atomically freezes
+`demand-authority.json`. Mainline is the default: if another mainline
 demand is active, ordinary and Auto Claim work waits without creating state or
 host resources. A Pod is valid only with its existing explicit authorization.
 After Pod Design freezes repository coverage, the helper creates each product
@@ -95,7 +98,7 @@ Exit gate: target results with the required declared review-input refs for the w
 (accept / rework / redesign / blocked). Inspect target inputs and run fresh
 independent checks before any decision.
 Non-bug outcome mismatch = redesign lane back to S1, never point-fix loops.
-For a Pod, redesign must never return to mainline Design. Version 0.9.3 cannot
+For a Pod, redesign must never return to mainline Design. The current implementation cannot
 persist a second frozen Pod Design request/handoff generation, so the demand
 stays blocked as a capability gap instead of overwriting its recorded Design generation.
 Exit to S5 only after every active required non-Test target is accepted and the

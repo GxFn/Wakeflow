@@ -232,6 +232,7 @@ test("the MCP surface exposes the two-stage Pod protocol and explicit placement 
   assert.deepEqual(plan.inputSchema.properties.request.required, [
     "demandKey",
     "podId",
+    "demandType",
     "requestType",
     "originalGoal",
     "requirementAnchors",

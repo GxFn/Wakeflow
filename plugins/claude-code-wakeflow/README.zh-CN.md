@@ -110,7 +110,7 @@ Pod 恢复走独立路径：`mode=resume` 只验真或恢复已绑定 session �
   重新开启评审。
 - **替代关系必须显式。** 普通 rework 重派同一任务；主线 redesign 在 Design
   handoff 后创建带 `replacesTargetTaskId` 的完整 replacement 包，接受后旧任务
-  和包变为 `superseded`。0.9.3 的 Pod 只冻结一代 Design request/handoff，
+  和包变为 `superseded`。当前 Pod 只冻结一代 Design request/handoff，
   这一代的 `requestType` 可以是 `initial-design`、`supplement` 或 `redesign`；
   不同的第二代请求保持 blocked，不覆盖既有 handoff，也不回退主线 Design。
 
@@ -328,7 +328,7 @@ cwd> --resume --session-id <已注册 id> --replace [--server <配置 server>]`
 - Pod 唯一一代 Design 只在 `Controller__<pod>` 与 `Design__<pod>` 之间往返。
   先用 `wakeflow_pod_plan action=design-request` 冻结总控请求，再用
   `wakeflow_pod_record event=design-handoff` 记录精确
-  `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。0.9.3 不持久化
+  `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。当前实现不持久化
   第二代 Pod Design，后续 supplement/redesign 必须作为能力 blocker 停止。
 - Pod Test 派发前，先运行 `wakeflow_pod_plan action=test-access`，再用
   `wakeflow_pod_record event=test-access` 记录独立 Test session 的精确探测结果。只有

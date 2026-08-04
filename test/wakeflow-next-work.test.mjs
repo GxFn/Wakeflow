@@ -19,15 +19,49 @@ function writeJson(file, value) {
   writeFile(file, JSON.stringify(value, null, 2));
 }
 
+function authorityRefs(type) {
+  const roles = type === "requirement"
+    ? ["original-plan", "requirement-design", "code-facts", "landing-plan", "non-goals", "user-confirmation"]
+    : ["reproduction", "scope", "non-goals"];
+  return roles.map((role) => `[${role}](../../authority.md#${role})`).join(" ");
+}
+
+function canonicalRows(rows) {
+  return rows.split("\n").map((row) => {
+    if (!row.trim()) return row;
+    const cells = row.split("|").slice(1, -1).map((cell) => cell.trim());
+    if (cells.length !== 10) return row;
+    const type = ["requirement", "bug", "supplement", "research"].includes(cells[2])
+      ? cells[2]
+      : "bug";
+    cells[2] = type;
+    const autoClaim = /completed|Aux claimed/i.test(cells[1]) ? "no" : "yes";
+    return `| ${[...cells, autoClaim, "controller-only: controller verifies completion", authorityRefs(type)].join(" | ")} |`;
+  }).join("\n");
+}
+
 function makeFixture({ status = "idle", todoRows = "" } = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-next-work-"));
+  writeFile(
+    path.join(root, "authority.md"),
+    `# Demand authority
+
+## Original plan
+## Requirement design
+## Code facts
+## Landing plan
+## Non goals
+## User confirmation
+## Reproduction
+## Scope`,
+  );
   writeFile(
     path.join(root, ".wakeflow-active/current/workspace-current-status.md"),
     `# Status\n\nStatus: ${status}\n`,
   );
   writeFile(
     path.join(root, ".wakeflow-active/current/global-todo-board.md"),
-    `# Global TODO\n\n## Global TODO\n\n| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n${todoRows}\n`,
+    `# Global TODO\n\n## Global TODO\n\n| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount | Auto Claim | Testing Decision | Documents |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n${canonicalRows(todoRows)}\n`,
   );
   return { root };
 }
@@ -98,10 +132,10 @@ test("unified-surface TODO row: Auto Claim drives controllerClaimable", () => {
 
 ## Global TODO
 
-| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount | Auto Claim | Documents |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| AUTO-2026-06-04 | pending-claim | requirement | P1 | Wakeflow | auto deliverable | no | none | Wakeflow | none | yes | [plan](p.md) |
-| MANUAL-2026-06-04 | pending-claim | requirement | P1 | Wakeflow | manual deliverable | no | none | Wakeflow | none | no |  |`,
+| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount | Auto Claim | Testing Decision | Documents |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| AUTO-2026-06-04 | pending-claim | requirement | P1 | Wakeflow | auto deliverable | no | none | Wakeflow | none | yes | controller-only: controller verifies completion | ${authorityRefs("requirement")} |
+| MANUAL-2026-06-04 | pending-claim | requirement | P1 | Wakeflow | manual deliverable | no | none | Wakeflow | none | no | controller-only: controller verifies completion | ${authorityRefs("requirement")} |`,
   );
   const result = run(root, ["--source", "todo", "--after-completion"]);
   assert.equal(result.status, 0, result.stderr || result.stdout);

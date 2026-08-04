@@ -386,6 +386,7 @@ export function createWindowRuntime(ctx) {
         ];
     const taskPackageRef = briefing.taskPackageRef
       || `task-packages/${stateRef.taskPackageId}.json`;
+    const demandAuthorityRef = cleanLine(briefing.demandAuthority?.ref, 500);
     const repositoryRoot = cleanLine(briefing.repositoryRoot, 500);
     const repositoryInstructions = repositoryRoot
       ? path.join(repositoryRoot, hostProfile.memoryFile)
@@ -427,6 +428,9 @@ export function createWindowRuntime(ctx) {
         : []),
       zh ? "\u5f00\u59cb\u524d\u6309\u987a\u5e8f\u8bfb\u53d6\uff1a" : "Read before execution, in order:",
       `- ${zh ? "\u4efb\u52a1\u5305\uff08\u672c\u4efb\u52a1\u5b8c\u6574\u4e0a\u4e0b\u6587\uff09" : "Task package (complete task context)"}: ${taskPackageRef}`,
+      ...(demandAuthorityRef
+        ? [`- ${zh ? "\u9700\u6c42\u6743\u5a01\uff08\u9700\u6c42\u7c7b\u578b\u3001\u6d4b\u8bd5\u51b3\u7b56\u548c\u80cc\u666f\u951a\u70b9\uff09" : "Demand authority (type, testing decision, and background anchors)"}: ${demandAuthorityRef}`]
+        : []),
       ...(requirementEntry
         ? [`- ${zh ? "\u9700\u6c42\u80cc\u666f\u5165\u53e3\uff08\u5b8c\u6574\u951a\u70b9\u89c1\u4efb\u52a1\u5305\uff09" : "Requirement background entry (full anchors are in the task package)"} [${requirementEntry.role}]: ${requirementEntry.resolvedRef || requirementEntry.ref}`]
         : []),

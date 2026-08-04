@@ -40,6 +40,17 @@ function makeWorkspace() {
   repositories.forEach((repository) => {
     mkdirSync(path.join(root, repository.path), { recursive: true });
   });
+  writeFileSync(path.join(root, "authority.md"), [
+    "# Authority",
+    "",
+    "## Original plan",
+    "## Requirement design",
+    "## Code facts",
+    "## Landing plan",
+    "## Non goals",
+    "## User confirmation",
+    "",
+  ].join("\n"));
   mkdirSync(path.join(root, ".wakeflow-active/current"), { recursive: true });
   ["Wakeflow", "Design", "Test", "RepoA"].forEach((windowName, index) => {
     const registered = run(deliveryScript, [
@@ -60,13 +71,21 @@ function progressDoc(root, stateRoot) {
 
 test("provenance + execution timeline: create from a TODO row, act, and read the story in the progress doc", () => {
   const root = makeWorkspace();
+  const authorityRefs = [
+    "original-plan",
+    "requirement-design",
+    "code-facts",
+    "landing-plan",
+    "non-goals",
+    "user-confirmation",
+  ].map((role) => `[${role}](../../authority.md#${role})`).join(" ");
   writeFileSync(
     path.join(root, ".wakeflow-active/current/global-todo-board.md"),
     [
       "# Global TODO", "", "## Global TODO", "",
       "| ID | Status | Type | Priority | Owner | Item / Goal | Affects Retest / Dispatch | Dependency / Trigger | Recommended Window | Current Mount | Auto Claim | Testing Decision | Documents |",
       "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-      "| LIFE-2026-07-04 | pending-claim | requirement | P1 | Wakeflow | lifecycle fixture | no | none | Wakeflow | none | yes | unit tests only | [design](wakeflow-ledger/requirement-designs/life/design.md) [plan](wakeflow-ledger/requirement-designs/life/plan.md) |",
+      `| LIFE-2026-07-04 | pending-claim | requirement | P1 | Wakeflow | lifecycle fixture | no | none | Wakeflow | none | yes | controller-only: lifecycle regression | ${authorityRefs} |`,
       "",
     ].join("\n"),
   );
@@ -79,8 +98,12 @@ test("provenance + execution timeline: create from a TODO row, act, and read the
   const demand = JSON.parse(readFileSync(path.join(root, stateRoot, "demand.json"), "utf8"));
   assert.equal(demand.source.designKey, "LIFE-2026-07-04");
   assert.deepEqual(demand.source.documents, [
-    "wakeflow-ledger/requirement-designs/life/design.md",
-    "wakeflow-ledger/requirement-designs/life/plan.md",
+    "authority.md#original-plan",
+    "authority.md#requirement-design",
+    "authority.md#code-facts",
+    "authority.md#landing-plan",
+    "authority.md#non-goals",
+    "authority.md#user-confirmation",
   ]);
 
   // Task package appended to the timeline (with intent)
@@ -129,7 +152,7 @@ test("provenance + execution timeline: create from a TODO row, act, and read the
   const manifest = JSON.parse(readFileSync(path.join(root, ledgerDest, "archive-manifest.json"), "utf8"));
   assert.equal(manifest.version, 2);
   assert.equal(manifest.designKey, "LIFE-2026-07-04");
-  assert.equal(manifest.sourceDocuments.length, 2);
+  assert.equal(manifest.sourceDocuments.length, 6);
   assert.equal(manifest.conclusion.reason, "all accepted");
   assert.equal(manifest.taskLedger[0].targetTaskId, "pkg-1__RepoA");
   assert.equal(manifest.taskLedger[0].reviewDecision, "accept");
@@ -137,7 +160,7 @@ test("provenance + execution timeline: create from a TODO row, act, and read the
   const summary = readFileSync(path.join(root, ledgerDest, "archive-summary.md"), "utf8");
   assert.match(summary, /## Provenance/);
   assert.match(summary, /Design key: LIFE-2026-07-04/);
-  assert.match(summary, /wakeflow-ledger\/requirement-designs\/life\/design\.md/);
+  assert.match(summary, /authority\.md#requirement-design/);
   assert.match(summary, /## Conclusion/);
   assert.match(summary, /all accepted/);
   assert.match(summary, /\| pkg-1__RepoA \| RepoA \| accepted \| accept \| 0 \| 0 \| 0 \|/);

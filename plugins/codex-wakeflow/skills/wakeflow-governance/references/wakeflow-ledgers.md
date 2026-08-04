@@ -53,6 +53,7 @@ threads them into a single navigable spine:
 | Information | Intake | Active | Archived |
 | --- | --- | --- | --- |
 | Requirement design / original plan | `wakeflow-ledger/requirement-designs/<key>/` (Design writes; TODO row links them) | unchanged — the demand POINTS at it (`demand.json source.designKey/documents`) | unchanged; `archive-summary.md` + manifest link back |
+| Frozen demand authority | proportional refs are produced by Design delivery or controller inline intake | `demand-authority.json` is written once before implementation; state pins its SHA-256 digest and dispatch rechecks it | copied into the demand archive and summarized with the same digest |
 | Execution actions (dispatch/return) | — | transport artifacts in `.wakeflow-local/wakeflow-delivery/` (pruned later) + one human line each in the progress doc's execution timeline | timeline rides the archived `developer-progress.md`; transport is GC'd |
 | State transitions | — | `wakeflow-state.json` (snapshot) + `controller-events.jsonl` (audit truth) | both copied into `archive/<month>/<demand>/` |
 | Acceptance & conclusion | — | `decide-review` events + timeline lines; completion reason/evidence on the `completed` event | `archive-manifest.json conclusion` + Task Ledger table in `archive-summary.md` |
@@ -148,7 +149,7 @@ support surface. Mainline Design enters through controller TODO delivery via
 `wakeflow_deliver`. The Pod's single Design generation stays inside that Pod:
 `pod-design-requests/` freezes the controller-authored request and
 `pod-design-handoffs/` records the matching envelope in the same demand state
-root. Neither artifact creates another global TODO. Version 0.9.3 persists one
+root. Neither artifact creates another global TODO. The current implementation persists one
 Pod Design request/handoff generation whose request type may be
 `initial-design`, `supplement`, or `redesign`; a different second generation is
 a capability blocker, not permission to overwrite the ledgers or use mainline Design.

@@ -80,6 +80,45 @@ test("task-package MCP tools expose bounded acceptance anchors", () => {
   assert.equal(continueDemand.inputSchema.properties.acceptanceAnchors.type, "array");
 });
 
+test("demand creation surfaces share one typed proportional authority contract", () => {
+  const deliver = tools.find((tool) => tool.name === "wakeflow_deliver");
+  const createDemand = tools.find((tool) => tool.name === "wakeflow_create_demand");
+  const addTask = tools.find((tool) => tool.name === "wakeflow_add_task");
+  const podPlan = tools.find((tool) => tool.name === "wakeflow_pod_plan");
+  const podRecord = tools.find((tool) => tool.name === "wakeflow_pod_record");
+
+  assert.ok(deliver && createDemand && addTask && podPlan && podRecord);
+  assert.ok(deliver.inputSchema.required.includes("demandAuthority"));
+  assert.deepEqual(
+    createDemand.inputSchema.properties.demandType.enum,
+    ["requirement", "bug", "supplement", "research"],
+  );
+  assert.equal(createDemand.inputSchema.properties.demandAuthority.type, "object");
+  assert.equal(addTask.inputSchema.properties.demandAuthority.type, "object");
+  assert.ok(podPlan.inputSchema.properties.request.required.includes("demandType"));
+  assert.ok(podRecord.inputSchema.properties.handoff.required.includes("demandAuthority"));
+
+  for (const schema of [
+    deliver.inputSchema.properties.demandAuthority,
+    createDemand.inputSchema.properties.demandAuthority,
+    addTask.inputSchema.properties.demandAuthority,
+    podRecord.inputSchema.properties.handoff.properties.demandAuthority,
+  ]) {
+    assert.deepEqual(schema.required, [
+      "demandKey",
+      "demandType",
+      "entryMode",
+      "authorityRefs",
+      "testDecision",
+    ]);
+    assert.deepEqual(schema.properties.entryMode.enum, [
+      "design-delivery",
+      "controller-inline",
+      "pod-design",
+    ]);
+  }
+});
+
 test("wakeflow_record_delivery requires explicit transport and one observation", () => {
   const recordDelivery = tools.find((tool) => tool.name === "wakeflow_record_delivery");
   assert.ok(recordDelivery, "wakeflow_record_delivery tool must be registered");

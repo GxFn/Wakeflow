@@ -87,7 +87,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.3/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.4/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -268,7 +268,7 @@ Design 和 Test 是支持角色：
 - Pod 唯一一代 Design 只在 `Controller__<pod>` 与 `Design__<pod>` 之间往返。
   先用 `wakeflow_pod_plan action=design-request` 冻结总控请求，再用
   `wakeflow_pod_record event=design-handoff` 记录精确
-  `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。0.9.3 不持久化
+  `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。当前实现不持久化
   第二代 Pod Design，后续 supplement/redesign 必须作为能力 blocker 停止，
   不覆盖旧 handoff，也不回退主线 Design。
 - Pod Test 派发前，先运行 `wakeflow_pod_plan action=test-access`，再用

@@ -63,7 +63,10 @@ Current scripts:
   onto the current scripts without replacing their dry-run / write gates. Use
   `--print` to inspect the exact commands before running them.
 - `wakeflow-state.mjs`: state-root manager. `init` creates a per-demand
-  machine directory from `templates/wakeflow-template-bundle.json`; `add-task-package`
+  machine directory from `templates/wakeflow-template-bundle.json` and records
+  an immutable demand type plus optional `demand-authority.json`;
+  `add-task-package` atomically freezes a complete proportional authority with
+  the first typed implementation package when the root began as a draft, then
   validates and writes optional controller-authored
   `{id,claim,probe,expected}` acceptance anchors with the task package, then
   moves an intake / rework demand back to `planned`; `import-target-result`
@@ -74,6 +77,10 @@ Current scripts:
   absolute paths before and after staging; `sanitize-archive` applies the same
   guard to one existing archived ledger root while preserving the original.
   It does not dispatch work or parse Markdown as state.
+- `wakeflow-demand-sequence.mjs`, `wakeflow-todo.mjs`, and
+  `wakeflow-next-work.mjs`: Design delivery and controller-inline creation share
+  one demand-authority contract. TODO `Documents`/`Testing Decision` columns are
+  projections of that contract; `Auto Claim` affects claiming only.
 - `wakeflow-render-progress.mjs`: reads a state root, rebuilds `projection.json`, and
   replaces only the `Unified Status` marker block inside
   `developer-progress.md`.
@@ -210,9 +217,10 @@ Current scripts:
   changes TODO / Design status.
 - `wakeflow-todo.mjs`: dry-run by default; `deliver` appends one Design-ready item
   (requirement / bug / supplement / research) to the global TODO board as a
-  `pending-claim` row, setting the immutable Auto Claim property once. Append-only:
-  it never edits or re-statuses an existing row. A requirement that authorizes
-  unattended auto-claim must link an Original Plan and a Requirement Design.
+  `pending-claim` row after validating its complete proportional
+  `demandAuthority`, setting the immutable Auto Claim property once. Append-only:
+  it never edits or re-statuses an existing row. Auto Claim changes unattended
+  claim timing only; it never weakens the authority required for that demand type.
 - `wakeflow-storage.mjs`: read-only `map` is the local-storage projection
   (`wakeflow_view scope=storage`): every known tree under
   `.wakeflow-active/`, `.wakeflow-local/`, and the ledger with class

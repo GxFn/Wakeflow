@@ -36,6 +36,18 @@
       "type": "string",
       "minLength": 1
     },
+    "demandAuthorityRef": {
+      "type": "string",
+      "const": "demand-authority.json"
+    },
+    "demandAuthorityDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "demandType": {
+      "type": "string",
+      "enum": ["requirement", "bug", "supplement", "research"]
+    },
     "executionPlacement": {
       "type": "object",
       "required": ["mode", "podId"],
@@ -303,6 +315,10 @@
       },
       "additionalProperties": false
     }
+  },
+  "dependentRequired": {
+    "demandAuthorityRef": ["demandAuthorityDigest"],
+    "demandAuthorityDigest": ["demandAuthorityRef"]
   },
   "additionalProperties": false
 }

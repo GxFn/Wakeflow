@@ -22,6 +22,10 @@ import {
   taskPackageReadiness,
 } from "./wakeflow-task-package.mjs";
 import {
+  DEMAND_AUTHORITY_FILE,
+  demandAuthorityReadiness,
+} from "./wakeflow-demand-authority.mjs";
+import {
   resolveStateRootFilePath,
   WakeflowStatePathError,
 } from "./wakeflow-state-paths.mjs";
@@ -564,10 +568,44 @@ export function createDispatchCommands(ctx) {
       workspaceRoot,
       repositoryRoot,
     });
+    const fullContextPackage = hasTaskPackageContext(taskPackage);
+    let demandAuthority = null;
+    let demandAuthorityStatus = null;
+    const authorityFile = path.join(stateRoot, DEMAND_AUTHORITY_FILE);
+    if (!state.demandAuthorityRef && existsSync(authorityFile)) {
+      fail(`unreferenced ${DEMAND_AUTHORITY_FILE} already exists; refuse to dispatch with ambiguous demand authority.`);
+    }
+    if (state.demandAuthorityRef) {
+      if (state.demandAuthorityRef !== DEMAND_AUTHORITY_FILE) {
+        fail(`controller state demandAuthorityRef must equal ${DEMAND_AUTHORITY_FILE}.`);
+      }
+      if (!state.demandAuthorityDigest) {
+        fail(`controller state is missing the frozen demandAuthorityDigest for ${DEMAND_AUTHORITY_FILE}.`);
+      }
+      if (!existsSync(authorityFile)) {
+        fail(`controller state references missing ${DEMAND_AUTHORITY_FILE}.`);
+      }
+      demandAuthority = readJson(authorityFile, "demand authority");
+      demandAuthorityStatus = demandAuthorityReadiness(demandAuthority, {
+        workspaceRoot,
+        demandKey: state.demandKey,
+        demandType: state.demandType ?? null,
+        expectedDigest: state.demandAuthorityDigest,
+      });
+      if (!demandAuthorityStatus.ready) {
+        fail(`demand authority is not dispatch-ready:\n- ${demandAuthorityStatus.errors.join("\n- ")}`);
+      }
+      demandAuthority = demandAuthorityStatus.authority;
+    }
+    if (state.demandType && fullContextPackage && ["implementation", "test"].includes(taskPackage.workType) && !demandAuthority) {
+      fail(`${taskPackage.workType} task package ${taskPackageId} requires a frozen ${DEMAND_AUTHORITY_FILE} before dispatch.`);
+    }
+    if (taskPackage.workType === "implementation" && demandAuthority?.demandType === "research") {
+      fail(`research demand ${state.demandKey} cannot dispatch implementation; create a requirement, bug, or supplement demand from the research decision.`);
+    }
     if (!readiness.ready) {
       fail(`task package ${taskPackageId} is not dispatch-ready:\n- ${readiness.errors.join("\n- ")}`);
     }
-    const fullContextPackage = hasTaskPackageContext(taskPackage);
     const legacyObjective = getValue("--objective", targetTask.summary || taskPackage.summary || `Complete ${targetTaskId}.`);
     const baseTaskBriefing = buildTaskBriefing({
       taskPackage,
@@ -580,6 +618,16 @@ export function createDispatchCommands(ctx) {
     const taskBriefing = fullContextPackage
       ? baseTaskBriefing
       : { ...baseTaskBriefing, objective: legacyObjective };
+    if (demandAuthority) {
+      taskBriefing.demandAuthority = {
+        ref: path.relative(workspaceRoot, path.join(stateRoot, DEMAND_AUTHORITY_FILE)).split(path.sep).join("/"),
+        digest: demandAuthorityStatus.digest,
+        demandType: demandAuthority.demandType,
+        entryMode: demandAuthority.entryMode,
+        testDecision: demandAuthority.testDecision,
+        authorityRefs: demandAuthority.authorityRefs,
+      };
+    }
     if (fullContextPackage && (getValue("--objective", "") || "").trim()) {
       fail("full-context task packages own objective; remove the dispatch-time --objective override.");
     }

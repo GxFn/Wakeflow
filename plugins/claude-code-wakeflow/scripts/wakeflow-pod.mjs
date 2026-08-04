@@ -49,6 +49,12 @@ import {
   commitStateTransition,
   recoverPendingStateTransition,
 } from "./lib/wakeflow-state-transition.mjs";
+import {
+  DEMAND_AUTHORITY_FILE,
+  DEMAND_TYPES,
+  assertDemandAuthorityReady,
+  demandAuthorityDigest,
+} from "./lib/wakeflow-demand-authority.mjs";
 
 const rawArgs = process.argv.slice(2);
 const command = rawArgs[0] && !rawArgs[0].startsWith("--") ? rawArgs[0] : "list";
@@ -915,7 +921,7 @@ function readRecordedDesignHandoff(stateRoot, handoffRef) {
   return handoff;
 }
 
-function normalizeDesignRequest(value, { demandKey, podId }) {
+function normalizeDesignRequest(value, { demandKey, podId, allowLegacy = false }) {
   const request = requireObject(value, "Pod Design request");
   if (requireString(request.demandKey, "demandKey") !== demandKey) {
     fail(`Pod Design request demandKey must equal ${demandKey}.`);
@@ -927,10 +933,18 @@ function normalizeDesignRequest(value, { demandKey, podId }) {
   if (!DESIGN_REQUEST_TYPES.has(requestType)) {
     fail("Pod Design request requestType must be initial-design, supplement, or redesign.");
   }
+  const demandType = typeof request.demandType === "string" ? request.demandType.trim() : "";
+  if (!demandType && !allowLegacy) {
+    fail("Pod Design request demandType is required.");
+  }
+  if (demandType && !DEMAND_TYPES.includes(demandType)) {
+    fail(`Pod Design request demandType must be one of: ${DEMAND_TYPES.join(", ")}.`);
+  }
   return {
     demandKey,
     podId,
     requestType,
+    ...(demandType ? { demandType } : {}),
     originalGoal: requireString(request.originalGoal, "originalGoal"),
     requirementAnchors: requireStringArray(
       request.requirementAnchors,
@@ -993,6 +1007,7 @@ function readRecordedDesignRequest(stateRoot, provisioning, manifest) {
   const body = normalizeDesignRequest(artifact, {
     demandKey: manifest.demandKey,
     podId: manifest.podId,
+    allowLegacy: true,
   });
   const expected = designRequestArtifact(body);
   const expectedRef = slash(path.join(
@@ -1935,6 +1950,13 @@ function validateDesignHandoff(handoff, manifest, config, designRequest) {
   if (handoff.requestType !== designRequest.requestType) {
     fail(`Design handoff requestType must match ${designRequest.requestType}.`);
   }
+  const handoffDemandType = requireString(handoff.demandType, "demandType");
+  if (!DEMAND_TYPES.includes(handoffDemandType)) {
+    fail(`Design handoff demandType must be one of: ${DEMAND_TYPES.join(", ")}.`);
+  }
+  if (designRequest.demandType && handoffDemandType !== designRequest.demandType) {
+    fail(`Design handoff demandType must match ${designRequest.demandType}.`);
+  }
   if (handoff.preservesOriginalGoal !== true) {
     fail("Design handoff must explicitly preserve the original goal.");
   }
@@ -1950,6 +1972,24 @@ function validateDesignHandoff(handoff, manifest, config, designRequest) {
   requireString(handoff.designIntent, "designIntent");
   requireString(handoff.testDecision, "testDecision");
   requireObject(handoff.environmentSpec, "environmentSpec");
+  let demandAuthority;
+  try {
+    demandAuthority = assertDemandAuthorityReady(handoff.demandAuthority, {
+      workspaceRoot,
+      demandKey: manifest.demandKey,
+      demandType: handoffDemandType,
+      entryMode: "pod-design",
+    }).authority;
+  } catch (error) {
+    fail(error.message);
+  }
+  if (
+    demandAuthority.demandKey !== manifest.demandKey
+    || demandAuthority.demandType !== handoffDemandType
+    || demandAuthority.entryMode !== "pod-design"
+  ) {
+    fail("Pod Design handoff demandAuthority must match demandKey/demandType and use entryMode=pod-design.");
+  }
   if (!Array.isArray(handoff.landingPlan) || handoff.landingPlan.length === 0) {
     fail("Design handoff landingPlan must be a non-empty array.");
   }
@@ -1978,6 +2018,7 @@ function validateDesignHandoff(handoff, manifest, config, designRequest) {
   ) {
     fail(`Design handoff landingPlan must cover exactly: ${expected.join(", ")}.`);
   }
+  return demandAuthority;
 }
 
 function commandPrepareDesignRequest() {
@@ -2145,10 +2186,55 @@ function commandRecordDesignHandoff() {
       state.podProvisioning,
       manifest,
     );
-    validateDesignHandoff(handoff, manifest, config, {
+    const demandAuthority = validateDesignHandoff(handoff, manifest, config, {
       ...recordedRequest.artifact,
       requestRef: recordedRequest.requestRef,
     });
+    const demandIdentityFile = path.join(stateRoot, "demand.json");
+    const demandIdentity = existsSync(demandIdentityFile)
+      ? readJsonObjectText(readFileSync(demandIdentityFile, "utf8"), "demand identity")
+      : {};
+    if (demandIdentity.demandType && demandIdentity.demandType !== demandAuthority.demandType) {
+      fail(`Pod Design handoff demandType ${demandAuthority.demandType} does not match immutable demand type ${demandIdentity.demandType}.`);
+    }
+    if (state.demandType && state.demandType !== demandAuthority.demandType) {
+      fail(`Pod Design handoff demandType ${demandAuthority.demandType} does not match controller state demandType ${state.demandType}.`);
+    }
+    if (state.demandAuthorityRef && state.demandAuthorityRef !== DEMAND_AUTHORITY_FILE) {
+      fail(`controller state demandAuthorityRef must equal ${DEMAND_AUTHORITY_FILE}.`);
+    }
+    if (state.demandAuthorityRef && !state.demandAuthorityDigest) {
+      fail(`controller state is missing the frozen demandAuthorityDigest for ${DEMAND_AUTHORITY_FILE}.`);
+    }
+    const authorityFile = path.join(stateRoot, DEMAND_AUTHORITY_FILE);
+    if (!state.demandAuthorityRef && existsSync(authorityFile)) {
+      fail(`unreferenced ${DEMAND_AUTHORITY_FILE} already exists; refuse to overwrite ambiguous Pod demand authority.`);
+    }
+    if (state.demandAuthorityRef && !existsSync(authorityFile)) {
+      fail(`controller state references missing ${DEMAND_AUTHORITY_FILE}.`);
+    }
+    let existingDemandAuthority = state.demandAuthorityRef
+      ? readJsonObjectText(readFileSync(authorityFile, "utf8"), "demand authority")
+      : null;
+    if (existingDemandAuthority) {
+      try {
+        existingDemandAuthority = assertDemandAuthorityReady(existingDemandAuthority, {
+          workspaceRoot,
+          demandKey: manifest.demandKey,
+          demandType: demandAuthority.demandType,
+          entryMode: "pod-design",
+          expectedDigest: state.demandAuthorityDigest,
+        }).authority;
+      } catch (error) {
+        fail(`stored Pod demand authority is invalid: ${error.message}`);
+      }
+    }
+    if (
+      existingDemandAuthority
+      && demandAuthorityDigest(existingDemandAuthority) !== demandAuthorityDigest(demandAuthority)
+    ) {
+      fail(`${DEMAND_AUTHORITY_FILE} is immutable and does not match this Pod Design handoff.`);
+    }
     const controls = state.podProvisioning.windows
       .filter((item) => CONTROL_ROLES.has(item.role));
     const controlsReady = controls.length === 3
@@ -2166,7 +2252,7 @@ function commandRecordDesignHandoff() {
     if (existingRef && existingRef !== handoffRef) {
       fail(`Pod Design request ${handoff.designRequestId} already records immutable handoff ${existingRef}.`);
     }
-    if (existingRef === handoffRef) {
+    if (existingRef === handoffRef && existingDemandAuthority) {
       readRecordedDesignHandoff(stateRoot, handoffRef);
       output({
         kind: "WakeflowPodDesignHandoffRecord",
@@ -2193,6 +2279,9 @@ function commandRecordDesignHandoff() {
     nextProvisioning.updatedAt = nowIso();
     const nextState = {
       ...state,
+      demandType: demandAuthority.demandType,
+      demandAuthorityRef: DEMAND_AUTHORITY_FILE,
+      demandAuthorityDigest: demandAuthorityDigest(demandAuthority),
       ...(nextProvisioning.phase === "execution-ready" && state.state === "intake"
         ? { state: "planned", stateReason: "pod-provisioning-execution-ready" }
         : {}),
@@ -2206,10 +2295,13 @@ function commandRecordDesignHandoff() {
       nextState,
       eventType: "pod.design-handoff-recorded",
       reason: `Pod Design handoff ${handoff.requestType} recorded by Controller`,
-      artifacts: [{
-        file: path.join(stateRoot, handoffRef),
-        value: handoff,
-      }],
+      artifacts: [
+        ...(!existingDemandAuthority ? [{ file: authorityFile, value: demandAuthority }] : []),
+        {
+          file: path.join(stateRoot, handoffRef),
+          value: handoff,
+        },
+      ],
     });
     if (write) {
       runtime.writeManifest({

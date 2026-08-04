@@ -448,6 +448,7 @@ async function runMcpSmoke(rootPath) {
         root: rootPath,
         demandKey: "mcp-smoke",
         title: "MCP Smoke",
+        demandType: "bug",
         goal: "Verify Wakeflow MCP tools/call.",
         completionDefinition: "MCP call creates a state root through the capability interface.",
         stagePlan: "Call wakeflow_create_demand.",
@@ -462,8 +463,24 @@ async function runMcpSmoke(rootPath) {
     const mcpStateRoot = payload.parsedJson.created.stateRoot;
     writeFileSync(
       path.join(rootPath, "mcp-smoke-requirement.md"),
-      "# MCP Smoke Requirement\n\n## Goal\n\nExercise the target delivery surface.\n\n## Completion\n\nThe MCP delivery envelope is created from a reviewed preview.\n",
+      "# MCP Smoke Requirement\n\n## Goal\n\nExercise the target delivery surface.\n\n## Completion\n\nThe MCP delivery envelope is created from a reviewed preview.\n\n## Reproduction\n\nThe MCP smoke creates a typed draft and freezes its authority with the first implementation package.\n\n## Scope\n\nOnly the synthetic MCP smoke workspace and target delivery path are in scope.\n\n## Non-goals\n\nNo product implementation or external repository is in scope.\n",
     );
+
+    const mcpSmokeDemandAuthority = {
+      schemaVersion: 1,
+      artifactKind: "wakeflow-demand-authority",
+      demandKey: "mcp-smoke",
+      demandType: "bug",
+      entryMode: "controller-inline",
+      authorityRefs: ["reproduction", "scope", "non-goals"].map((role) => ({
+        role,
+        ref: `mcp-smoke-requirement.md#${role}`,
+      })),
+      testDecision: {
+        mode: "controller-only",
+        summary: "The controller independently reproduces the MCP target delivery smoke path.",
+      },
+    };
 
     const addedTask = await request("tools/call", {
       name: "wakeflow_add_task",
@@ -474,6 +491,7 @@ async function runMcpSmoke(rootPath) {
         targetWindow: "Target",
         summary: "MCP smoke task package.",
         targetSummary: "Return MCP smoke evidence.",
+        demandAuthority: mcpSmokeDemandAuthority,
         workType: "implementation",
         objective: "Return evidence from the MCP smoke target without widening scope.",
         contextSummary: ["This package exercises the installed MCP target-delivery path."],

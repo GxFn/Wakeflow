@@ -52,6 +52,32 @@ next package.
 | Demand complete | line-by-line vs the requirement design + non-goals | all tasks marked done |
 | Ready for Test | existing non-Test targets accepted + controllerSelfChecks recorded | hoping Test will establish correctness |
 
+## Demand Creation Authority
+
+Default substantial new product behavior to the Design window. Total control
+may still create a bounded bug, supplement, research demand, or an already
+documented requirement directly when doing so avoids pointless handoff and it
+can cite the same proportional inputs Design would have supplied. This is
+flexibility, not a second requirement format.
+
+Both entry paths converge on one immutable `demand-authority.json` before the
+first implementation package:
+
+- `requirement`: Original Plan, Requirement Design, code facts, landing plan,
+  non-goals, user-confirmation ledger, and Test decision;
+- `bug`: reproduction, bounded scope, non-goals, and Test decision;
+- `supplement`: existing Requirement Design, explicit delta, user confirmation,
+  and Test decision;
+- `research`: research question and boundaries; no implementation package.
+
+Every reference is a workspace-relative Markdown anchor. A real-environment
+Test decision also names the exact `test-environment` anchor. `Auto Claim`
+authorizes unattended claiming only; it never supplies missing requirement
+authority. `wakeflow_create_demand` may create a typed draft without authority,
+but `wakeflow_add_task` must freeze the complete authority atomically with the
+first implementation package. Do not manufacture missing anchors to make the
+machine gate pass; route the gap to Design or the user.
+
 **Red Flag — a third point-fix on the same task.** Two failed reworks on one task mean the next move
 is a *new* root-cause hypothesis or a non-bug-mismatch route to Design redesign — not another bounce
 between product windows.
@@ -197,7 +223,7 @@ Do not expose empty `blockedTargets`, `remainingTargets`, or
      increments `redesignCount` instead of bouncing point-fixes between product windows.
      Mainline may use its stateless Design delivery and then add a full-context replacement
      with `replacesTargetTaskId=<parked task>`. A Pod must stay in its own Design lane;
-     because 0.9.3 supports only one frozen Pod Design request/handoff
+     because the current implementation supports only one frozen Pod Design request/handoff
      generation, a redesign may use that sole generation only before any
      request exists; a different second request remains blocked rather than
      falling back to mainline Design or overwriting the recorded handoff;
@@ -340,7 +366,7 @@ declared artifacts resolve). It has not checked truth. Validation and judgment a
   `wakeflow_pod_plan action=design-request → PodDesignRequest →
   PodDesignHandoffEnvelope → wakeflow_pod_record event=design-handoff`; the frozen
   request supplies exact lineage and cannot be replaced by a different
-  request. Wakeflow 0.9.3 does not yet persist multiple Pod Design generations:
+  request. Wakeflow does not yet persist multiple Pod Design generations:
   if a later supplement or redesign needs a new request/handoff, stop with a
   capability blocker. Never overwrite the frozen request, route the Pod
   through the mainline Design window, or create a duplicate global TODO.
@@ -412,13 +438,14 @@ declared artifacts resolve). It has not checked truth. Validation and judgment a
 
 ## Stage Gates (route map: wakeflow-governance/references/stage-route-map.md)
 
-- Before the FIRST implementation dispatch of a demand, verify the Design exit
-  gate AT THE DEMAND'S SCALE: full five-item gate for a requirement; a bug
+- Before the FIRST implementation dispatch of a demand, verify the frozen
+  demand authority AT THE DEMAND'S SCALE: full six-role contract for a requirement; a bug
   needs reproduction + scope + non-goals + Test decision (no Original Plan
   ceremony); a supplement needs a delta against the existing Requirement
   Design; research never gets an implementation dispatch. Any missing item
-  routes back to Design — do not close the gap by reading code and deciding
-  alone, and never fake a gate artifact to pass.
+  remains S1 and routes to its actual owner (Design or user). Total control may
+  author an inline authority only for bounded/already-documented work whose
+  anchors already exist; never invent a gate artifact to pass.
 - Before adding or dispatching a Test package, verify every active required non-Test
   target is accepted, record the concrete controller reruns in
   `controllerSelfChecks`, and copy the Design-stage Test Environment Spec
@@ -467,7 +494,7 @@ declared artifacts resolve). It has not checked truth. Validation and judgment a
 Stop instead of dispatching when:
 
 - The user goal or completion definition is unclear.
-- The Design exit gate is incomplete for a new demand's first implementation
+- The proportional demand authority is incomplete for a new demand's first implementation
   dispatch, or a Test dispatch leaves an existing non-Test target unaccepted,
   omits the controller's self-checks, or lacks its confirmed environment block.
 - Required review inputs are missing or unreadable.
@@ -499,7 +526,7 @@ Stop instead of dispatching when:
   `wakeflow_deliver`; after the corrected requirement returns, add a full-context replacement
   package to the SAME demand with `replacesTargetTaskId` set to the parked product task. Do
   not create a new demand or re-dispatch the old task. For a Pod demand, do not use mainline
-  Design: Wakeflow 0.9.3 cannot create a second frozen Pod Design generation, so keep the
+  Design: Wakeflow cannot create a second frozen Pod Design generation, so keep the
   demand blocked and report that capability gap rather than overwriting the recorded handoff.
   Accepting a valid replacement marks the old task/package `superseded`; the parked demand's
   history and counts carry over.

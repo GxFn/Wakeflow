@@ -24,6 +24,12 @@ import {
   requirementRefIssue,
 } from "./lib/wakeflow-task-package.mjs";
 import {
+  DEMAND_AUTHORITY_FILE,
+  DEMAND_TYPES,
+  assertDemandAuthorityReady,
+  demandAuthorityDigest,
+} from "./lib/wakeflow-demand-authority.mjs";
+import {
   WakeflowStateLockTimeoutError,
   withFileLock,
   withStateRootLock,
@@ -45,7 +51,7 @@ const helpText = `
 Controller demand claim/create runner
 
 Usage:
-  node scripts/wakeflow-demand-sequence.mjs create-demand --todo-id <id> | --demand-key <key> --title <title> [--placement <main|pod> --authorization-ref <user-authority> --pod-id <id>] [--controller-window <window>] [--root <workspace>] [--write] [--json]
+  node scripts/wakeflow-demand-sequence.mjs create-demand --todo-id <id> | --demand-key <key> --title <title> [--demand-type <requirement|bug|supplement|research>] [--demand-authority <json>] [--placement <main|pod> --authorization-ref <user-authority> --pod-id <id>] [--controller-window <window>] [--root <workspace>] [--write] [--json]
   node scripts/wakeflow-demand-sequence.mjs claim-todo [--design-key <id>] [--placement <main|pod> --authorization-ref <user-authority> --pod-id <id>] [--controller-window <window>] [--root <workspace>] [--write] [--json]
 
 Design:
@@ -105,8 +111,9 @@ function fail(message, details = {}) {
   }
   const authorityArtifacts = activeRoot
     ? [
-        "demand.json",
-        "wakeflow-state.json",
+      "demand.json",
+      DEMAND_AUTHORITY_FILE,
+      "wakeflow-state.json",
         "controller-events.jsonl",
         "projection.json",
         "developer-progress.md",
@@ -149,6 +156,16 @@ function requireValue(name) {
   const value = getValue(name);
   if (!value) fail(`${name} is required.`);
   return value;
+}
+
+function parseOptionalJsonArg(name) {
+  const raw = String(getValue(name, "") || "").trim();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    fail(`${name} must be valid JSON: ${error.message}`);
+  }
 }
 
 function resolveFromWorkspace(value) {
@@ -360,6 +377,9 @@ function assertPartialStateMatchesIntent(stateRootAbs, intent) {
   const criticalState = {
     demandKey: state.demandKey,
     title: state.title,
+    demandType: state.demandType ?? null,
+    demandAuthorityRef: state.demandAuthorityRef ?? null,
+    demandAuthorityDigest: state.demandAuthorityDigest ?? null,
     testDecision: state.testDecision ?? null,
     ...(expectedControllerWindow ? { controllerWindow: state.controllerWindow ?? null } : {}),
     ...(podPlacement
@@ -372,6 +392,9 @@ function assertPartialStateMatchesIntent(stateRootAbs, intent) {
   const expectedState = {
     demandKey: intent.demandKey,
     title: intent.title,
+    demandType: intent.demandType ?? null,
+    demandAuthorityRef: intent.demandAuthority ? DEMAND_AUTHORITY_FILE : null,
+    demandAuthorityDigest: intent.demandAuthority ? demandAuthorityDigest(intent.demandAuthority) : null,
     testDecision: intent.testDecision ?? null,
     ...(expectedControllerWindow ? { controllerWindow: expectedControllerWindow } : {}),
     ...(podPlacement
@@ -393,6 +416,7 @@ function assertPartialStateMatchesIntent(stateRootAbs, intent) {
   const criticalDemand = {
     demandKey: demand.demandKey,
     title: demand.title,
+    demandType: demand.demandType ?? null,
     designKey: demand.source?.designKey ?? null,
     sourceDocuments: demand.source?.documents ?? [],
     ...(intent.goal ? { goal: demand.goal } : {}),
@@ -401,6 +425,7 @@ function assertPartialStateMatchesIntent(stateRootAbs, intent) {
   const expectedDemand = {
     demandKey: intent.demandKey,
     title: intent.title,
+    demandType: intent.demandType ?? null,
     designKey: intent.todoId ?? null,
     sourceDocuments: intent.sourceDocumentRefs ?? [],
     ...(intent.goal ? { goal: intent.goal } : {}),
@@ -408,6 +433,14 @@ function assertPartialStateMatchesIntent(stateRootAbs, intent) {
   };
   if (!sameStableValue(criticalState, expectedState) || !sameStableValue(criticalDemand, expectedDemand)) {
     throw new Error(`partial create authority at ${relative(stateRootAbs)} no longer matches its recorded create intent. Manual reconciliation is required.`);
+  }
+  const storedAuthority = rawReadJson(path.join(stateRootAbs, DEMAND_AUTHORITY_FILE));
+  if (
+    intent.demandAuthority
+      ? !storedAuthority || demandAuthorityDigest(storedAuthority) !== demandAuthorityDigest(intent.demandAuthority)
+      : Boolean(storedAuthority)
+  ) {
+    throw new Error(`partial create authority at ${relative(stateRootAbs)} has a missing or drifted ${DEMAND_AUTHORITY_FILE}. Manual reconciliation is required.`);
   }
 
   const intendedPackages = new Map(
@@ -531,6 +564,7 @@ function createHasExternalProgress(stateRootAbs, recovery) {
     ".wakeflow-create-demand.json",
     "controller-events.jsonl",
     "demand.json",
+    ...(recovery?.manifest?.intent?.demandAuthority ? [DEMAND_AUTHORITY_FILE] : []),
     "developer-progress.md",
     "index.md",
     "projection.json",
@@ -835,6 +869,11 @@ function commandCreateDemand() {
     fail(`--demand-key must equal --todo-id when creating from a delivered TODO row; ${todoId} is the canonical demand identity.`);
   }
   let demandKey = explicitDemandKey ?? todoId;
+  let demandType = String(getValue("--demand-type", "") || "").trim() || null;
+  if (demandType && !DEMAND_TYPES.includes(demandType)) {
+    fail(`--demand-type must be one of: ${DEMAND_TYPES.join(", ")}.`);
+  }
+  let demandAuthority = parseOptionalJsonArg("--demand-authority");
   let title = getValue("--title");
   let goal = getValue("--goal");
   let completionDefinition = getValue("--completion-definition");
@@ -877,12 +916,16 @@ function commandCreateDemand() {
       }
       title = title ?? recoveryIntent.title;
       sourceDocumentRefs = recoveryIntent.sourceDocumentRefs ?? [];
+      demandType = demandType ?? recoveryIntent.demandType;
+      demandAuthority = demandAuthority ?? recoveryIntent.demandAuthority;
       goal = goal ?? recoveryIntent.goal;
       completionDefinition = completionDefinition ?? recoveryIntent.completionDefinition;
       testDecision = testDecision ?? recoveryIntent.testDecision;
       stagePlan = stagePlan ?? recoveryIntent.stagePlan;
     } else {
       title = title ?? candidate.title;
+      demandType = demandType ?? candidate.type;
+      demandAuthority = demandAuthority ?? candidate.demandAuthority;
       const documents = candidate.documents ?? "";
       // next-work resolves board-relative Markdown targets back to workspace refs.
       // Keep the fallback for older next-work payloads and hand-authored rows.
@@ -909,6 +952,43 @@ function commandCreateDemand() {
 
   if (!demandKey) fail("--demand-key or --todo-id is required.");
   if (!title) fail("--title is required (or pass --todo-id pointing at a titled delivered row).");
+  if (!todoId && !demandType && !demandAuthority) {
+    fail("controller-created demands require --demand-type; use requirement, bug, supplement, or research instead of an unclassified workflow root.");
+  }
+  if (demandAuthority) {
+    try {
+      demandAuthority = assertDemandAuthorityReady(demandAuthority, {
+        workspaceRoot,
+        demandKey,
+        demandType,
+        entryMode: todoId ? "design-delivery" : "controller-inline",
+      }).authority;
+    } catch (error) {
+      fail(error.message);
+    }
+    if (demandAuthority.demandKey !== demandKey) {
+      fail(`demandAuthority.demandKey must equal ${demandKey}.`);
+    }
+    if (demandType && demandAuthority.demandType !== demandType) {
+      fail(`--demand-type ${demandType} does not match demandAuthority.demandType ${demandAuthority.demandType}.`);
+    }
+    if (todoId && demandAuthority.entryMode !== "design-delivery") {
+      fail("a TODO-delivered demand requires demandAuthority.entryMode=design-delivery.");
+    }
+    if (!todoId && demandAuthority.entryMode !== "controller-inline") {
+      fail("a controller-created demand requires demandAuthority.entryMode=controller-inline.");
+    }
+    demandType = demandAuthority.demandType;
+  }
+  if (taskPackages.some((pkg) => pkg.workType === "implementation") && !demandAuthority) {
+    fail("create-demand requires demandAuthority before adding an initial implementation package.");
+  }
+  if (taskPackages.some((pkg) => pkg.workType === "implementation") && demandType === "research") {
+    fail("research demands cannot include initial implementation packages.");
+  }
+  if (placement === "pod" && !demandType) {
+    fail("Pod demand creation requires --demand-type so immutable demand identity and the later Pod Design handoff cannot disagree.");
+  }
 
   const stateRootAbs = path.join(ledgerPaths.workspaceCurrentDir, slug(demandKey));
   const stateRoot = relative(stateRootAbs);
@@ -923,6 +1003,8 @@ function commandCreateDemand() {
     title,
     todoId: todoId ?? null,
     sourceDocumentRefs,
+    demandType: demandType ?? null,
+    demandAuthority: demandAuthority ?? null,
     goal: goal ?? null,
     completionDefinition: completionDefinition ?? null,
     testDecision: testDecision ?? null,
@@ -943,6 +1025,8 @@ function commandCreateDemand() {
   const existingStateFile = path.join(stateRootAbs, "wakeflow-state.json");
   const stateInitArgs = ({ apply = false } = {}) => {
     const initArgs = ["init", "--root", workspaceRoot, "--state-root", stateRoot, "--demand-key", demandKey, "--title", title];
+    if (demandType) initArgs.push("--demand-type", demandType);
+    if (demandAuthority) initArgs.push("--demand-authority", JSON.stringify(demandAuthority));
     if (todoId) initArgs.push("--design-key", todoId);
     for (const doc of sourceDocumentRefs) initArgs.push("--source-doc", doc);
     if (goal) initArgs.push("--goal", goal);

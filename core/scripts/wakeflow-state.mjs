@@ -56,6 +56,12 @@ import {
   requirementRefIssue,
 } from "./lib/wakeflow-task-package.mjs";
 import {
+  DEMAND_AUTHORITY_FILE,
+  DEMAND_TYPES,
+  assertDemandAuthorityReady,
+  demandAuthorityDigest,
+} from "./lib/wakeflow-demand-authority.mjs";
+import {
   COMMIT_DISPOSITIONS,
   evaluateTargetResultContract,
   targetResultContractIssueMessage,
@@ -93,8 +99,8 @@ const helpText = `
 Controller state-machine manager
 
 Usage:
-  node scripts/wakeflow-state.mjs init --demand-key <key> --title <title> [--placement <main|pod>] [--authorization-ref <user-authority>] [--pod-id <id>] [--goal <text>] [--completion-definition <text>] [--test-decision <text>] [--stage-plan <text>] [--controller-window <window>] [--language <auto|zh|en>] [--root <workspace>] [--state-root <path>] [--write] [--json]
-  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--work-type <implementation|research|documentation|test> --objective <text> --context-summary <json> --requirement-refs <json> --boundaries <json> --completion-expectations <json> --depends-on-task-ids <json> --commit-expectation <commit|leave-uncommitted>] [--source-ref <ref>] [--design-intent <text>] [--acceptance-anchors <json>] [--evidence-contract <json>] [--target-window <window>] [--target-task-id <id>] [--replaces-target-task-id <id>] [--target-summary <text>] [--test-card-id <id>] [--test-continuation-of <task-id>] [--restart-test --test-restart-reason <text>] [--write] [--json]
+  node scripts/wakeflow-state.mjs init --demand-key <key> --title <title> [--demand-type <requirement|bug|supplement|research>] [--demand-authority <json>] [--placement <main|pod>] [--authorization-ref <user-authority>] [--pod-id <id>] [--goal <text>] [--completion-definition <text>] [--test-decision <text>] [--stage-plan <text>] [--controller-window <window>] [--language <auto|zh|en>] [--root <workspace>] [--state-root <path>] [--write] [--json]
+  node scripts/wakeflow-state.mjs add-task-package --state-root <path> --task-package-id <id> --summary <text> [--demand-authority <json>] [--work-type <implementation|research|documentation|test> --objective <text> --context-summary <json> --requirement-refs <json> --boundaries <json> --completion-expectations <json> --depends-on-task-ids <json> --commit-expectation <commit|leave-uncommitted>] [--source-ref <ref>] [--design-intent <text>] [--acceptance-anchors <json>] [--evidence-contract <json>] [--target-window <window>] [--target-task-id <id>] [--replaces-target-task-id <id>] [--target-summary <text>] [--test-card-id <id>] [--test-continuation-of <task-id>] [--restart-test --test-restart-reason <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs import-target-result --state-root <path> --target-task-id <id> --target-window <window> --status <completed|blocked|needs-review> [--result-id <id>] [--dispatch-group <id>] [--supersede-result] [--changed-repo <repo>] [--commit <hash>] [--commit-disposition <committed|left-uncommitted|no-changes>] [--evidence-ref <ref>] [--verification <text>] [--risk <text>] [--craft-evidence <json>] [--summary <text>] [--write] [--json]
   node scripts/wakeflow-state.mjs reduce-results --state-root <path> [--write] [--json]
   node scripts/wakeflow-state.mjs decide-review --state-root <path> --candidate-id <id> --decision <accept|rework|blocked|redesign> --reason <text> [--evidence-ref <ref>] [--accept-blocked] [--write] [--json]
@@ -1414,6 +1420,11 @@ function commandInit() {
   assertWorkspaceRootResolved();
   const demandKey = requireValue("--demand-key");
   const title = requireValue("--title");
+  const demandType = String(getValue("--demand-type", "") || "").trim() || null;
+  if (demandType && !DEMAND_TYPES.includes(demandType)) {
+    fail(`--demand-type must be one of: ${DEMAND_TYPES.join(", ")}.`);
+  }
+  const demandAuthorityInput = parseOptionalJsonArg("--demand-authority");
   const requireMainlineHealth = hasFlag("--require-mainline-health");
   let config;
   try {
@@ -1462,9 +1473,8 @@ function commandInit() {
   let demandControllerWindow = explicitControllerWindow || configuredControllerWindow || null;
   let executionPlacement = null;
   const completionDefinition = getValue("--completion-definition", locale.defaultCompletionDefinition);
-  // Design's testing decision (which validation / real-Test approach). Optional and
-  // advisory: surfaced as a REMINDER when absent, never a gate — the controller/Design
-  // decide whether real Test is needed (reminder-first per the user's design philosophy).
+  // Legacy display projection only. New typed demand readiness is derived from
+  // demand-authority.json; this string remains for older roots and progress prose.
   const testDecision = (getValue("--test-decision", "") || "").trim() || null;
   const stagePlan = getValue("--stage-plan", locale.defaultStagePlan);
   // Provenance: the design key (usually the delivered TODO row id) and the
@@ -1484,12 +1494,39 @@ function commandInit() {
   if (isWakeflowInitStagingEntry(path.basename(stateRoot))) {
     fail(`state root basename ${path.basename(stateRoot)} uses the reserved .wakeflow-init- staging namespace.`);
   }
+  let demandAuthority = null;
+  let demandAuthorityReadiness = null;
+  if (demandAuthorityInput) {
+    try {
+      demandAuthorityReadiness = assertDemandAuthorityReady(demandAuthorityInput, {
+        workspaceRoot,
+        demandKey,
+        demandType,
+        entryMode: requestedPlacement === "pod"
+          ? "pod-design"
+          : designKey
+            ? "design-delivery"
+            : "controller-inline",
+      });
+      demandAuthority = demandAuthorityReadiness.authority;
+    } catch (error) {
+      fail(error.message);
+    }
+    if (demandAuthority.demandKey !== demandKey) {
+      fail(`demandAuthority.demandKey must equal ${demandKey}.`);
+    }
+    if (demandType && demandAuthority.demandType !== demandType) {
+      fail(`--demand-type ${demandType} does not match demandAuthority.demandType ${demandAuthority.demandType}.`);
+    }
+  }
+  const effectiveDemandType = demandAuthority?.demandType ?? demandType;
 
   const createdAt = nowIso();
   const eventId = `evt-${createdAt.replace(/[^0-9]/g, "").slice(0, 14)}-0001`;
   const progressDoc = "developer-progress.md";
   const files = {
     demand: path.join(stateRoot, "demand.json"),
+    authority: path.join(stateRoot, DEMAND_AUTHORITY_FILE),
     state: path.join(stateRoot, "wakeflow-state.json"),
     events: path.join(stateRoot, "controller-events.jsonl"),
     projection: path.join(stateRoot, "projection.json"),
@@ -1503,6 +1540,7 @@ function commandInit() {
     goal,
     completionDefinition,
     createdAt,
+    ...(effectiveDemandType ? { demandType: effectiveDemandType } : {}),
     source: {
       kind: "wakeflow-state-init",
       trackedTemplates: "templates/wakeflow-state-machine",
@@ -1520,6 +1558,11 @@ function commandInit() {
     // first driving command claims the demand for its platform.
     controllerHost: null,
     controllerWindow: demandControllerWindow,
+    ...(effectiveDemandType ? { demandType: effectiveDemandType } : {}),
+    ...(demandAuthority ? {
+      demandAuthorityRef: DEMAND_AUTHORITY_FILE,
+      demandAuthorityDigest: demandAuthorityReadiness.digest,
+    } : {}),
     ...(testDecision ? { testDecision } : {}),
     state: "intake",
     stateReason: "wakeflow-state-init",
@@ -1562,6 +1605,7 @@ function commandInit() {
     evidenceRefs: [],
     allowedWrites: [
       "demand.json",
+      ...(demandAuthority ? [DEMAND_AUTHORITY_FILE] : []),
       "wakeflow-state.json",
       "controller-events.jsonl",
       "projection.json",
@@ -1624,6 +1668,7 @@ function commandInit() {
   ];
   const outputs = [
     files.demand,
+    ...(demandAuthority ? [files.authority] : []),
     files.state,
     files.events,
     files.projection,
@@ -1764,6 +1809,7 @@ function commandInit() {
         try {
           mkdirSync(stagingRoot);
           writeJson(stagingFiles.demand, demand);
+          if (demandAuthority) writeJson(stagingFiles.authority, demandAuthority);
           writeJson(stagingFiles.state, state);
           writeText(stagingFiles.events, JSON.stringify(event));
           writeJson(stagingFiles.projection, projection);
@@ -1803,6 +1849,11 @@ function commandInit() {
       stateFile: relative(files.state),
       eventFile: relative(files.events),
       projectionFile: relative(files.projection),
+      ...(demandAuthority ? {
+        demandAuthorityFile: relative(files.authority),
+        demandAuthorityDigest: demandAuthorityReadiness.digest,
+        demandType: demandAuthority.demandType,
+      } : effectiveDemandType ? { demandType: effectiveDemandType } : {}),
       templateRoot: relative(templateRoot),
       generatedRuntimeBoundary: ".wakeflow-active is ignored by the Wakeflow repository; tracked assets are templates, schemas, scripts, skills, and tests.",
       lazyStateDirectories: lazyStateDirectories.map(relative),
@@ -1842,6 +1893,7 @@ function commandAddTaskPackageLocked(stateRoot) {
   const evidenceContract = validateEvidenceContractShape(parseOptionalJsonArg("--evidence-contract"));
   const acceptanceAnchors = validateAcceptanceAnchorsShape(parseOptionalJsonArg("--acceptance-anchors"));
   const taskContext = parseTaskPackageContext(acceptanceAnchors);
+  const demandAuthorityInput = parseOptionalJsonArg("--demand-authority");
   const targetWindow = getValue("--target-window", null);
   const targetTaskId = getValue("--target-task-id", targetWindow ? `${taskPackageId}__${slug(targetWindow)}` : null);
   const replacesTargetTaskId = (getValue("--replaces-target-task-id", "") || "").trim() || null;
@@ -1850,6 +1902,8 @@ function commandAddTaskPackageLocked(stateRoot) {
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const packageFile = path.join(stateRoot, "task-packages", `${slug(taskPackageId)}.json`);
   const state = readJson(stateFile, "controller state");
+  const demandFile = path.join(stateRoot, "demand.json");
+  const demand = readJson(demandFile, "demand identity");
   const hostOwnership = ensureDemandHostOwnership(state);
 
   if (["completed", "archived", "cancelled"].includes(state.state)) {
@@ -1942,6 +1996,84 @@ function commandAddTaskPackageLocked(stateRoot) {
       fail(`invalid task package context: ${issue}`);
     }
   }
+  if (state.demandAuthorityRef && state.demandAuthorityRef !== DEMAND_AUTHORITY_FILE) {
+    fail(`controller state demandAuthorityRef must equal ${DEMAND_AUTHORITY_FILE}.`);
+  }
+  if (state.demandAuthorityRef && !state.demandAuthorityDigest) {
+    fail(`controller state is missing the frozen demandAuthorityDigest for ${DEMAND_AUTHORITY_FILE}.`);
+  }
+  const authorityFile = path.join(stateRoot, DEMAND_AUTHORITY_FILE);
+  if (!state.demandAuthorityRef && existsSync(authorityFile)) {
+    fail(`unreferenced ${DEMAND_AUTHORITY_FILE} already exists; refuse to overwrite ambiguous demand authority. Reconcile the state root before adding work.`);
+  }
+  if (state.demandType && demand.demandType && state.demandType !== demand.demandType) {
+    fail(`controller state demandType ${state.demandType} does not match immutable demand type ${demand.demandType}.`);
+  }
+  const immutableDemandType = demand.demandType ?? state.demandType ?? null;
+  const expectedAuthorityEntryMode = state.executionPlacement?.mode === "isolated"
+    ? "pod-design"
+    : demand.source?.designKey
+      ? "design-delivery"
+      : "controller-inline";
+  const existingAuthority = state.demandAuthorityRef
+    ? readJson(authorityFile, "demand authority")
+    : null;
+  let demandAuthority = null;
+  let freezeDemandAuthority = false;
+  if (existingAuthority) {
+    try {
+      demandAuthority = assertDemandAuthorityReady(existingAuthority, {
+        workspaceRoot,
+        demandKey: state.demandKey,
+        demandType: immutableDemandType,
+        entryMode: expectedAuthorityEntryMode,
+        expectedDigest: state.demandAuthorityDigest,
+      }).authority;
+    } catch (error) {
+      fail(`stored demand authority is invalid: ${error.message}`);
+    }
+    if (demandAuthorityInput) {
+      let supplied;
+      try {
+        supplied = assertDemandAuthorityReady(demandAuthorityInput, {
+          workspaceRoot,
+          demandKey: state.demandKey,
+          demandType: immutableDemandType,
+          entryMode: expectedAuthorityEntryMode,
+        }).authority;
+      } catch (error) {
+        fail(error.message);
+      }
+      if (demandAuthorityDigest(supplied) !== demandAuthorityDigest(demandAuthority)) {
+        fail(`${DEMAND_AUTHORITY_FILE} is immutable after it is frozen; supplied demandAuthority does not match stored authority.`);
+      }
+    }
+  } else if (demandAuthorityInput) {
+    try {
+      demandAuthority = assertDemandAuthorityReady(demandAuthorityInput, {
+        workspaceRoot,
+        demandKey: state.demandKey,
+        demandType: immutableDemandType,
+        entryMode: expectedAuthorityEntryMode,
+      }).authority;
+    } catch (error) {
+      fail(error.message);
+    }
+    freezeDemandAuthority = true;
+  }
+  if (demandAuthority) {
+    if (demandAuthority.demandKey !== state.demandKey) {
+      fail(`demandAuthority.demandKey must equal ${state.demandKey}.`);
+    }
+  }
+  if (taskContext?.workType === "implementation" && (state.demandType || demand.demandType || demandAuthority)) {
+    if (!demandAuthority) {
+      fail(`the first implementation package requires --demand-authority; freeze the proportional Design/controller demand contract before implementation dispatch.`);
+    }
+    if (demandAuthority.demandType === "research") {
+      fail("research demand authority cannot authorize an implementation task package; create a requirement, bug, or supplement demand after the research decision.");
+    }
+  }
 
   const createdAt = nowIso();
   const nextRevision = Number(state.revision ?? 0) + 1;
@@ -1996,6 +2128,11 @@ function commandAddTaskPackageLocked(stateRoot) {
     : null;
   const nextState = {
     ...state,
+    ...(freezeDemandAuthority ? {
+      demandType: demandAuthority.demandType,
+      demandAuthorityRef: DEMAND_AUTHORITY_FILE,
+      demandAuthorityDigest: demandAuthorityDigest(demandAuthority),
+    } : {}),
     state: nextMainState,
     stateReason: `task package added: ${taskPackageId}`,
     revision: nextRevision,
@@ -2047,10 +2184,14 @@ function commandAddTaskPackageLocked(stateRoot) {
     from: state.state,
     to: nextMainState,
     reason: `task package added: ${taskPackageId}`,
-    evidenceRefs: sourceRef ? [sourceRef] : [],
+    evidenceRefs: [
+      ...(sourceRef ? [sourceRef] : []),
+      ...(freezeDemandAuthority ? [DEMAND_AUTHORITY_FILE] : []),
+    ],
     allowedWrites: [
       "wakeflow-state.json",
       "controller-events.jsonl",
+      ...(freezeDemandAuthority ? [DEMAND_AUTHORITY_FILE] : []),
       `task-packages/${slug(taskPackageId)}.json`,
     ],
     forbiddenConclusions: [
@@ -2070,7 +2211,10 @@ function commandAddTaskPackageLocked(stateRoot) {
       eventsFile,
       event,
       nextState,
-      jsonArtifacts: [{ file: packageFile, value: taskPackage }],
+      jsonArtifacts: [
+        ...(freezeDemandAuthority ? [{ file: authorityFile, value: demandAuthority }] : []),
+        { file: packageFile, value: taskPackage },
+      ],
       command: "add-task-package",
     });
     appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.taskPackages,
@@ -2087,6 +2231,12 @@ function commandAddTaskPackageLocked(stateRoot) {
       stateRoot: relative(stateRoot),
       taskPackageId,
       taskPackageFile: relative(packageFile),
+      ...(demandAuthority ? {
+        demandAuthorityFile: relative(authorityFile),
+        demandAuthorityDigest: demandAuthorityDigest(demandAuthority),
+        demandType: demandAuthority.demandType,
+        demandAuthorityFrozen: freezeDemandAuthority,
+      } : {}),
       stateRevision: nextRevision,
       eventId,
       projectionStatus: "stale",
@@ -2140,10 +2290,12 @@ function commandContinueDemandLocked(stateRoot) {
   const acceptanceAnchors = validateAcceptanceAnchorsShape(parseOptionalJsonArg("--acceptance-anchors"));
   const taskContext = parseTaskPackageContext(acceptanceAnchors);
   const evidenceContract = validateEvidenceContractShape(parseOptionalJsonArg("--evidence-contract"));
+  const demandAuthorityInput = parseOptionalJsonArg("--demand-authority");
   const stateFile = path.join(stateRoot, "wakeflow-state.json");
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const packageFile = path.join(stateRoot, "task-packages", `${slug(taskPackageId)}.json`);
   const state = readJson(stateFile, "controller state");
+  const demand = readJson(path.join(stateRoot, "demand.json"), "demand identity");
   const hostOwnership = ensureDemandHostOwnership(state);
 
   if (state.state !== "completed") {
@@ -2191,6 +2343,67 @@ function commandContinueDemandLocked(stateRoot) {
       fail(`invalid task package context: ${issue}`);
     }
   }
+  if (state.demandAuthorityRef && state.demandAuthorityRef !== DEMAND_AUTHORITY_FILE) {
+    fail(`controller state demandAuthorityRef must equal ${DEMAND_AUTHORITY_FILE}.`);
+  }
+  if (state.demandAuthorityRef && !state.demandAuthorityDigest) {
+    fail(`controller state is missing the frozen demandAuthorityDigest for ${DEMAND_AUTHORITY_FILE}.`);
+  }
+  const authorityFile = path.join(stateRoot, DEMAND_AUTHORITY_FILE);
+  if (!state.demandAuthorityRef && existsSync(authorityFile)) {
+    fail(`unreferenced ${DEMAND_AUTHORITY_FILE} already exists; refuse to overwrite ambiguous demand authority. Reconcile the state root before continuing work.`);
+  }
+  if (state.demandType && demand.demandType && state.demandType !== demand.demandType) {
+    fail(`controller state demandType ${state.demandType} does not match immutable demand type ${demand.demandType}.`);
+  }
+  const immutableDemandType = demand.demandType ?? state.demandType ?? null;
+  const expectedAuthorityEntryMode = state.executionPlacement?.mode === "isolated"
+    ? "pod-design"
+    : demand.source?.designKey
+      ? "design-delivery"
+      : "controller-inline";
+  let demandAuthority = null;
+  let freezeDemandAuthority = false;
+  if (state.demandAuthorityRef) {
+    if (!existsSync(authorityFile)) fail(`controller state references missing ${DEMAND_AUTHORITY_FILE}.`);
+    try {
+      demandAuthority = assertDemandAuthorityReady(readJson(authorityFile, "demand authority"), {
+        workspaceRoot,
+        demandKey: state.demandKey,
+        demandType: immutableDemandType,
+        entryMode: expectedAuthorityEntryMode,
+        expectedDigest: state.demandAuthorityDigest,
+      }).authority;
+    } catch (error) {
+      fail(`stored demand authority is invalid: ${error.message}`);
+    }
+  }
+  if (demandAuthorityInput) {
+    let supplied;
+    try {
+      supplied = assertDemandAuthorityReady(demandAuthorityInput, {
+        workspaceRoot,
+        demandKey: state.demandKey,
+        demandType: immutableDemandType,
+        entryMode: expectedAuthorityEntryMode,
+      }).authority;
+    } catch (error) {
+      fail(error.message);
+    }
+    if (demandAuthority && demandAuthorityDigest(supplied) !== demandAuthorityDigest(demandAuthority)) {
+      fail(`${DEMAND_AUTHORITY_FILE} is immutable after it is frozen; supplied demandAuthority does not match stored authority.`);
+    }
+    if (!demandAuthority) {
+      demandAuthority = supplied;
+      freezeDemandAuthority = true;
+    }
+  }
+  if (taskContext?.workType === "implementation" && (state.demandType || demand.demandType) && !demandAuthority) {
+    fail(`continue-demand requires --demand-authority for the first implementation continuation of a legacy demand.`);
+  }
+  if (taskContext?.workType === "implementation" && demandAuthority?.demandType === "research") {
+    fail("research demand authority cannot authorize an implementation continuation.");
+  }
   const createdAt = nowIso();
   const nextRevision = Number(state.revision ?? 0) + 1;
   const eventId = nextEventId(createdAt, nextRevision);
@@ -2233,6 +2446,11 @@ function commandContinueDemandLocked(stateRoot) {
   };
   const nextState = {
     ...state,
+    ...(freezeDemandAuthority ? {
+      demandType: demandAuthority.demandType,
+      demandAuthorityRef: DEMAND_AUTHORITY_FILE,
+      demandAuthorityDigest: demandAuthorityDigest(demandAuthority),
+    } : {}),
     state: "planned",
     stateReason: `${continuationType} continuation: ${reason}`,
     revision: nextRevision,
@@ -2281,7 +2499,7 @@ function commandContinueDemandLocked(stateRoot) {
     from: "completed",
     to: "planned",
     reason: `${continuationType}: ${reason}`,
-    evidenceRefs,
+    evidenceRefs: [...evidenceRefs, ...(freezeDemandAuthority ? [DEMAND_AUTHORITY_FILE] : [])],
     continuationId,
     continuationType,
     taskPackageId,
@@ -2289,6 +2507,7 @@ function commandContinueDemandLocked(stateRoot) {
     allowedWrites: [
       "wakeflow-state.json",
       "controller-events.jsonl",
+      ...(freezeDemandAuthority ? [DEMAND_AUTHORITY_FILE] : []),
       `task-packages/${slug(taskPackageId)}.json`,
     ],
     forbiddenConclusions: [
@@ -2309,7 +2528,10 @@ function commandContinueDemandLocked(stateRoot) {
       eventsFile,
       event,
       nextState,
-      jsonArtifacts: [{ file: packageFile, value: taskPackage }],
+      jsonArtifacts: [
+        ...(freezeDemandAuthority ? [{ file: authorityFile, value: demandAuthority }] : []),
+        { file: packageFile, value: taskPackage },
+      ],
       command: "continue-demand",
     });
     appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.decisions,
@@ -2333,6 +2555,11 @@ function commandContinueDemandLocked(stateRoot) {
     targetWindow,
     stateRevision: nextRevision,
     eventId,
+    ...(demandAuthority ? {
+      demandAuthorityFile: relative(authorityFile),
+      demandAuthorityDigest: demandAuthorityDigest(demandAuthority),
+      demandAuthorityFrozen: freezeDemandAuthority,
+    } : {}),
     projectionStatus: "stale",
     forbiddenConclusions: event.forbiddenConclusions,
     agentNext: write
@@ -4968,6 +5195,39 @@ function commandArchiveDemandLocked(stateRoot) {
   // and the test cards.
   const demandFile = path.join(stateRoot, "demand.json");
   const demandRecord = existsSync(demandFile) ? JSON.parse(readFileSync(demandFile, "utf8")) : {};
+  if (sourceState.demandType && demandRecord.demandType && sourceState.demandType !== demandRecord.demandType) {
+    fail(`controller state demandType ${sourceState.demandType} does not match immutable demand type ${demandRecord.demandType}.`);
+  }
+  let archivedDemandAuthority = null;
+  let archivedDemandAuthorityDigest = null;
+  if (!sourceState.demandAuthorityRef && existsSync(path.join(stateRoot, DEMAND_AUTHORITY_FILE))) {
+    fail(`unreferenced ${DEMAND_AUTHORITY_FILE} already exists; refuse to archive ambiguous demand authority.`);
+  }
+  if (sourceState.demandAuthorityRef) {
+    if (sourceState.demandAuthorityRef !== DEMAND_AUTHORITY_FILE) {
+      fail(`controller state demandAuthorityRef must equal ${DEMAND_AUTHORITY_FILE}.`);
+    }
+    if (!sourceState.demandAuthorityDigest) {
+      fail(`controller state is missing the frozen demandAuthorityDigest for ${DEMAND_AUTHORITY_FILE}.`);
+    }
+    const authorityFile = path.join(stateRoot, DEMAND_AUTHORITY_FILE);
+    if (!existsSync(authorityFile)) {
+      fail(`controller state references missing ${DEMAND_AUTHORITY_FILE}.`);
+    }
+    let readiness;
+    try {
+      readiness = assertDemandAuthorityReady(readJson(authorityFile, "demand authority"), {
+        workspaceRoot,
+        demandKey: sourceState.demandKey,
+        demandType: demandRecord.demandType ?? sourceState.demandType ?? null,
+        expectedDigest: sourceState.demandAuthorityDigest,
+      });
+    } catch (error) {
+      fail(`cannot archive invalid demand authority: ${error.message}`);
+    }
+    archivedDemandAuthority = readiness.authority;
+    archivedDemandAuthorityDigest = readiness.digest;
+  }
   let conclusion = null;
   try {
     const eventLines = readFileSync(eventsFile, "utf8").split("\n").filter(Boolean);
@@ -5009,6 +5269,14 @@ function commandArchiveDemandLocked(stateRoot) {
     ...(preservedOriginal ? { originalPreservedAt: relative(preservedDest) } : {}),
     designKey: demandRecord.source?.designKey ?? null,
     sourceDocuments: demandRecord.source?.documents ?? [],
+    demandType: archivedDemandAuthority?.demandType ?? demandRecord.demandType ?? null,
+    demandAuthority: archivedDemandAuthority ? {
+      ref: DEMAND_AUTHORITY_FILE,
+      digest: archivedDemandAuthorityDigest,
+      entryMode: archivedDemandAuthority.entryMode,
+      testDecision: archivedDemandAuthority.testDecision,
+      authorityRefs: archivedDemandAuthority.authorityRefs,
+    } : null,
     opaqueFiles: scan.opaqueFiles ?? [],
     conclusion,
     taskLedger,
@@ -5091,6 +5359,14 @@ function commandArchiveDemandLocked(stateRoot) {
       ...(archiveManifest.sourceDocuments.length
         ? archiveManifest.sourceDocuments.map((doc) => `- Source document: ${doc}`)
         : ["- Source documents: (none recorded)"]),
+      `- Demand type: ${archiveManifest.demandType ?? "(legacy / not recorded)"}`,
+      ...(archiveManifest.demandAuthority
+        ? [
+            `- Demand authority: ${archiveManifest.demandAuthority.ref}`,
+            `- Demand authority digest: ${archiveManifest.demandAuthority.digest}`,
+            `- Testing decision: ${archiveManifest.demandAuthority.testDecision.mode} — ${archiveManifest.demandAuthority.testDecision.summary}`,
+          ]
+        : ["- Demand authority: (legacy / not recorded)"]),
       "",
       "## Conclusion",
       "",

@@ -40,8 +40,30 @@ Completed TODOs, historical sync records, and source archives are queried from [
 `,
   );
   writeFile(path.join(root, ".wakeflow-active/current/plan.md"), "# Plan\n");
+  writeFile(path.join(root, "authority.md"), `# Authority
+
+## Reproduction
+
+## Scope
+
+## Non goals
+`);
   writeFile(path.resolve(root, "../wakeflow-ledger/workspace/workspace-record-map.md"), "# Record Map\n");
   return root;
+}
+
+function bugAuthority(demandKey) {
+  return JSON.stringify({
+    demandKey,
+    demandType: "bug",
+    entryMode: "design-delivery",
+    authorityRefs: ["reproduction", "scope", "non-goals"]
+      .map((role) => ({ role, ref: `authority.md#${role}` })),
+    testDecision: {
+      mode: "controller-only",
+      summary: "Controller verifies the bounded archive/TODO concurrency fixture.",
+    },
+  });
 }
 
 function run(root, args = []) {
@@ -118,10 +140,12 @@ test("archive and TODO deliveries share one board lock without dropping rows", a
   const results = await Promise.all([
     runAsync(script, ["--month", "2026-06", "--date", "2026-06-04", "--apply", "--json"], root),
     runAsync(todoScript, [
-      "deliver", "--type", "bug", "--design-key", "parallel-a-2026-07-30", "--title", "Parallel A", "--apply", "--json",
+      "deliver", "--type", "bug", "--design-key", "parallel-a-2026-07-30", "--title", "Parallel A",
+      "--demand-authority", bugAuthority("parallel-a-2026-07-30"), "--apply", "--json",
     ], root),
     runAsync(todoScript, [
-      "deliver", "--type", "bug", "--design-key", "parallel-b-2026-07-30", "--title", "Parallel B", "--apply", "--json",
+      "deliver", "--type", "bug", "--design-key", "parallel-b-2026-07-30", "--title", "Parallel B",
+      "--demand-authority", bugAuthority("parallel-b-2026-07-30"), "--apply", "--json",
     ], root),
   ]);
   for (const result of results) assert.equal(result.status, 0, result.stderr || result.stdout);

@@ -181,7 +181,7 @@ npx codex-marketplace add GxFn/Wakeflow/plugins/codex-wakeflow --plugin
 如果已经有匹配 tag，可以固定版本安装：
 
 ```bash
-npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.3/plugins/codex-wakeflow --plugin
+npx codex-marketplace add https://github.com/GxFn/Wakeflow/tree/v0.9.4/plugins/codex-wakeflow --plugin
 ```
 
 如果 Codex 对话框把 source、ref 和 sparse path 分开填写，请使用仓库 URL、目标 ref，
@@ -312,7 +312,7 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
    accept / rework / blocked / redesign。
    普通 rework 使用同一任务和新的 dispatch group。主线 redesign 在 Design 返回后
    创建带 `replacesTargetTaskId` 的完整 replacement 包；接受 replacement 后旧任务
-   明确变为 `superseded`。0.9.3 的 Pod 只冻结一代 Design request/handoff；
+   明确变为 `superseded`。当前 Pod 只冻结一代 Design request/handoff；
    这一代的 `requestType` 可以是 `initial-design`、`supplement` 或 `redesign`。
    不同的第二代请求保持 blocked，不覆盖既有 handoff，也不回退主线 Design。
 6. 重复 dispatch → review，直到所有活跃必需非 Test 任务 accepted（或具有有效
@@ -520,7 +520,7 @@ npm test             # check:core + 双 validate + 双 smoke + 全部测试
 memory 文件模板、skills、template bundle）只存在于各自 artifact 内。
 `npm run check:core` 负责保证副本不漂移。
 
-当前 0.9.3 Pod 行为与验收权威见
+当前 Pod 行为与验收权威见
 [docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md](docs/wakeflow-host-managed-complete-pod-requirement-design-2026-07-31.md)；
 非 Pod 硬化演进记录见
 [docs/wakeflow-hardening-design-compliance-2026-07-30.md](docs/wakeflow-hardening-design-compliance-2026-07-30.md)。

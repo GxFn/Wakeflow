@@ -5,6 +5,11 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { listWakeflowRuntimeScriptEntries } from "../lib/wakeflow-runtime.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
+import {
+  normalizeWorkspaceConfigInput,
+  WAKEFLOW_CONFIG_SCHEMA_URL,
+  WAKEFLOW_CONFIG_SCHEMA_VERSION,
+} from "./lib/wakeflow-config.mjs";
 // host-artifact-checks is host-local (one per edition) and is not present in core/. Import
 // it dynamically so a core/-rooted dev run gets a clear message instead of a bare
 // ERR_MODULE_NOT_FOUND; the host-artifact validation is then no-op'd for that dev run. A
@@ -44,6 +49,7 @@ const localizedRuntimeTextFiles = new Set([
   "scripts/lib/wakeflow-language.mjs",
   "scripts/lib/wakeflow-host-profile.mjs",
   "scripts/wakeflow-setup.mjs",
+  "scripts/lib/wakeflow-rule-model.mjs",
 ]);
 const localizedDocumentationTextFiles = new Set([
   "README.zh-CN.md",
@@ -73,6 +79,9 @@ const requiredFiles = [
   "scripts/wakeflow-smoke.mjs",
   "scripts/wakeflow-verify.mjs",
   "templates/wakeflow-template-bundle.json",
+  "wakeflow.config.json",
+  "wakeflow.config.example.json",
+  "schemas/wakeflow-config.schema.json",
   "schemas/wakeflow-state-machine/wakeflow-state.schema.json",
   "schemas/wakeflow-state-machine/demand-authority.schema.json",
   "schemas/wakeflow-state-machine/task-package.schema.json",
@@ -109,6 +118,7 @@ validatePackage();
 validatePluginManifest();
 validateMarketplaceIfPresent();
 validateMcpConfig();
+validateWorkspaceConfigs();
 await validateMcpToolDeclarations();
 validateRuntimeWhitelist();
 validateSkillSurface();
@@ -265,6 +275,25 @@ function validateMcpConfig() {
   }
 }
 
+function validateWorkspaceConfigs() {
+  for (const file of ["wakeflow.config.json", "wakeflow.config.example.json"]) {
+    const config = readJson(file);
+    if (!config) continue;
+    if (config.$schema !== WAKEFLOW_CONFIG_SCHEMA_URL) {
+      errors.push(`${file} must reference ${WAKEFLOW_CONFIG_SCHEMA_URL}`);
+    }
+    if (config.schemaVersion !== WAKEFLOW_CONFIG_SCHEMA_VERSION) {
+      errors.push(`${file} must use schemaVersion ${WAKEFLOW_CONFIG_SCHEMA_VERSION}`);
+      continue;
+    }
+    try {
+      normalizeWorkspaceConfigInput(config);
+    } catch (error) {
+      errors.push(`${file} does not satisfy the runtime v2 contract: ${error.message}`);
+    }
+  }
+}
+
 async function validateMcpToolDeclarations() {
   const toolModule = path.join(root, "lib/wakeflow-mcp-tools.mjs");
   if (!existsSync(toolModule)) return;
@@ -406,13 +435,11 @@ function validateTemplateBundle() {
     "templates/starter-workspace/ledger/workspace/todo-window-scheduling-policy.md",
     "templates/starter-workspace/ledger/workspace/workspace-doc-archive-policy.md",
     "templates/starter-workspace/ledger/workspace/archive/index.md",
-    `templates/window-support/design/${hostProfile.memoryFile}`,
     "templates/window-support/design/skills/requirement-clarification/SKILL.md",
     "templates/window-support/design/skills/option-planning/SKILL.md",
     "templates/window-support/design/skills/requirement-design/SKILL.md",
     "templates/window-support/design/skills/work-slicing/SKILL.md",
     "templates/window-support/design/skills/design-handoff/SKILL.md",
-    `templates/window-support/testing/${hostProfile.memoryFile}`,
     "templates/window-support/testing/skills/test-strategy/SKILL.md",
     "templates/window-support/testing/skills/debugging-and-triage/SKILL.md",
     "templates/window-support/testing/skills/regression-design/SKILL.md",
@@ -425,19 +452,12 @@ function validateTemplateBundle() {
       errors.push(`template bundle missing ${required}`);
     }
   }
-  for (const [label, key, roleBoundary] of [
-    ["Design", `templates/window-support/design/${hostProfile.memoryFile}`, "Do not rely on the controller to discover obvious gaps"],
-    ["Test", `templates/window-support/testing/${hostProfile.memoryFile}`, "do not present them as controller validation or acceptance"],
+  for (const obsolete of [
+    `templates/window-support/design/${hostProfile.memoryFile}`,
+    `templates/window-support/testing/${hostProfile.memoryFile}`,
   ]) {
-    const content = bundle.files[key] ?? "";
-    for (const required of [
-      "## Functional Completeness Self-Check",
-      roleBoundary,
-      "downgrade a complete",
-    ]) {
-      if (!content.includes(required)) {
-        errors.push(`${label} support ${hostProfile.memoryFile} missing functional completeness guard: ${required}`);
-      }
+    if (Object.hasOwn(bundle.files, obsolete)) {
+      errors.push(`template bundle must not duplicate generated role memory: ${obsolete}`);
     }
   }
 }

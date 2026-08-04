@@ -812,7 +812,7 @@ test("replace-all tears down and rebuilds the whole fleet with fresh registered 
   const init = runSync(process.execPath, [setupScript, "initialize", "--root", root, "--repo", "RepoA=./RepoA", "--internal-design", "--internal-test", "--write", "--json"], { encoding: "utf8", cwd: root });
   assert.equal(init.status, 0, init.stderr || init.stdout);
   const cfg = JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8"));
-  const controllerWindow = cfg.controllerWindow;
+  const controllerWindow = cfg.roles.controller;
   t.after(() => spawnSync("tmux", ["kill-session", "-t", serverSession], { encoding: "utf8" }));
 
   const out = parseOk(runHelper(root, ["replace-all", "--server", serverSession, "--boot-wait-ms", "600"], noAuto));

@@ -124,6 +124,7 @@ test("demand authority readiness is proportional to each demand type", () => {
     const authority = authorityFor(`AUTH-${demandType}`, demandType);
     const readiness = demandAuthorityReadiness(authority, { workspaceRoot: root });
     assert.equal(readiness.ready, true, readiness.errors.join("\n"));
+    assert.match(readiness.warnings.join("\n"), /outside the canonical requirement roots/);
     assert.equal(readiness.authority.demandType, demandType);
     assert.match(readiness.digest, /^[a-f0-9]{64}$/);
   }

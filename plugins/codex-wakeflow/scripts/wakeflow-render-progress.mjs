@@ -31,6 +31,8 @@ import {
 import {
   DEMAND_AUTHORITY_FILE,
   demandAuthorityReadiness,
+  demandAuthorityPendingConfirmation,
+  demandAuthorityProjectionStatus,
 } from "./lib/wakeflow-demand-authority.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
@@ -387,7 +389,7 @@ function buildStateRootIndex(state, stateRoot, progressDoc, eventId) {
     "- [demand.json](demand.json) — immutable demand record",
     ...(state.demandAuthorityRef
       ? [`- [${DEMAND_AUTHORITY_FILE}](${DEMAND_AUTHORITY_FILE}) — immutable demand type, testing decision, and background anchors`]
-      : []),
+      : [`- \`${DEMAND_AUTHORITY_FILE}\` — _(not frozen; no authority file exists yet)_`]),
     `- [wakeflow-state.json](wakeflow-state.json) — authoritative state machine (state: ${state.state}, revision ${state.revision})`,
     "- [controller-events.jsonl](controller-events.jsonl) — append-only controller event log",
     "- [projection.json](projection.json) — machine-readable projection + structured slices",
@@ -442,6 +444,7 @@ try {
   const eventsFile = path.join(stateRoot, "controller-events.jsonl");
   const projectionFile = path.join(stateRoot, "projection.json");
   const state = readJson(stateFile, "controller state");
+  const config = loadWorkspaceConfig({ workspaceRoot, args: rawArgs });
   let demandAuthority = null;
   let demandAuthorityStatus = null;
   const authorityFile = path.join(stateRoot, DEMAND_AUTHORITY_FILE);
@@ -458,6 +461,7 @@ try {
     demandAuthority = readJson(authorityFile, "demand authority");
     demandAuthorityStatus = demandAuthorityReadiness(demandAuthority, {
       workspaceRoot,
+      config,
       demandKey: state.demandKey,
       demandType: state.demandType ?? null,
       expectedDigest: state.demandAuthorityDigest,
@@ -470,9 +474,18 @@ try {
   if (write && state.state === "archived") {
     fail(`cannot render-progress --write for archived demand ${state.demandKey}; archived history is immutable. Use sanitize-archive only for an explicit privacy amendment.`);
   }
-  const config = loadWorkspaceConfig({ workspaceRoot, args: rawArgs });
   const language = selectInterfaceLanguage(state, config);
   const locale = wakeflowStateLocale(language);
+  const authorityPending = demandAuthorityPendingConfirmation(state);
+  const authorityProjectionStatus = demandAuthorityProjectionStatus(state);
+  const effectiveDecisionsRequired = [
+    ...(state.decisionsRequired ?? []),
+    ...(authorityPending ? [{
+      id: "demand-authority-not-frozen",
+      summary: locale.authorityPendingDecision,
+      source: "projection",
+    }] : []),
+  ];
   const event = eventsForSnapshot(stateRoot, state, eventsFile).at(-1) ?? null;
   const configuredProgressDoc = state.projection?.progressDoc ?? "developer-progress.md";
   let progressFile;
@@ -501,7 +514,7 @@ try {
     nextAction: nextActionFor(state, locale),
     review: displayMachineNone(state.review?.status, locale),
     automation: state.automation?.enabled ? locale.automationEnabled : locale.automationDisabled,
-    decisionsRequired: summarizeBlockers(state.decisionsRequired, locale),
+    decisionsRequired: summarizeBlockers(effectiveDecisionsRequired, locale),
     updatedAt: beijingTimestamp(renderedAt),
     revision: state.revision,
     eventId: event?.eventId ?? locale.none,
@@ -515,16 +528,19 @@ try {
     sourceRevision: state.revision,
     sourceEventId: event?.eventId ?? "none",
     progressDoc,
-    ...(demandAuthority ? {
-      demandAuthority: {
+    demandAuthority: demandAuthority ? {
+      status: "frozen",
         ref: DEMAND_AUTHORITY_FILE,
         digest: demandAuthorityStatus.digest,
         demandType: demandAuthority.demandType,
         entryMode: demandAuthority.entryMode,
         testDecision: demandAuthority.testDecision,
         authorityRefs: demandAuthority.authorityRefs,
-      },
-    } : {}),
+    } : {
+      status: authorityProjectionStatus,
+      ref: null,
+      digest: null,
+    },
     unifiedStatus: {
       demand: `${state.demandKey} - ${state.title}`,
       mainState: state.state,
@@ -564,9 +580,10 @@ try {
         id: item.id ?? null,
         summary: item.summary ?? item.reason ?? null,
       })),
-      decisionsRequired: (state.decisionsRequired ?? []).map((item) => ({
+      decisionsRequired: effectiveDecisionsRequired.map((item) => ({
         id: item.id ?? null,
         summary: item.summary ?? item.reason ?? null,
+        source: item.source ?? "state",
       })),
     },
   };
@@ -638,15 +655,18 @@ try {
       projectionFile: relative(projectionFile),
       sourceRevision: state.revision,
       sourceEventId: event?.eventId ?? "none",
-      ...(demandAuthority ? {
-        demandAuthority: {
+      demandAuthority: demandAuthority ? {
+          status: "frozen",
           ref: relative(path.join(stateRoot, DEMAND_AUTHORITY_FILE)),
           digest: demandAuthorityStatus.digest,
           demandType: demandAuthority.demandType,
           entryMode: demandAuthority.entryMode,
           testDecision: demandAuthority.testDecision,
-        },
-      } : {}),
+      } : {
+        status: authorityProjectionStatus,
+        ref: null,
+        digest: null,
+      },
       changed: nextProgress !== progress || state.projection?.status !== "synced",
     },
     [

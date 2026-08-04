@@ -129,10 +129,15 @@ test("init --write creates ignored state root from tracked templates", () => {
   assert.equal(state.revision, 1);
   assert.equal(state.automation.enabled, false);
   assert.equal(projection.sourceRevision, 1);
+  assert.equal(projection.demandAuthority.status, "draft-unfrozen");
+  assert.equal(projection.demandAuthority.ref, null);
+  assert.equal(projection.slices.decisionsRequired[0].id, "demand-authority-not-frozen");
+  assert.equal(projection.slices.decisionsRequired[0].source, "projection");
   assert.equal(events.length, 1);
   assert.match(progress, /<!-- unified-status:start -->/);
   assert.match(progress, /Main state: intake/);
   assert.match(progress, /Prove init can create a state root\./);
+  assert.match(progress, /Demand authority is not frozen/);
   assert.deepEqual(payload.outputs.sort(), [
     ".wakeflow-active/current/CSMR-FIXTURE-2026-06-05/controller-events.jsonl",
     ".wakeflow-active/current/CSMR-FIXTURE-2026-06-05/demand.json",
@@ -349,6 +354,7 @@ test("init and render-progress localize generated state-root docs for Chinese wo
   assert.match(progress, /\u7edf\u4e00\u72b6\u6001/);
   assert.match(progress, /\u4e3b\u72b6\u6001: intake/);
   assert.match(progress, /\u7531\u603b\u63a7\u5224\u65ad\u8865\u5145\u3002/);
+  assert.match(progress, /\u9700\u6c42\u6743\u5a01\u5c1a\u672a\u51bb\u7ed3/);
   assert.doesNotMatch(progress, /Main state:/);
 
   const render = runScript(renderScript, [

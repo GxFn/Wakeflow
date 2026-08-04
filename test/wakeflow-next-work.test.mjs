@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { runSync } from "../core/lib/wakeflow-process.mjs";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -106,6 +106,24 @@ test("missing or stale workspace status projection is advisory when state roots 
   const missing = run(root, ["--source", "todo", "--after-completion"]);
   assert.equal(missing.status, 0, missing.stderr || missing.stdout);
   assert.match(JSON.parse(missing.stdout).warnings.join("\n"), /projection is missing/);
+});
+
+test("--write stores the regenerable scan under runtime handles, never the legacy intake tree", () => {
+  const { root } = makeFixture();
+  const result = run(root, ["--write"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(
+    payload.output,
+    ".wakeflow-local/wakeflow-delivery/handles/wakeflow-next-work.json",
+  );
+  assert.equal(payload.wrote, true);
+  assert.equal(existsSync(path.join(root, payload.output)), true);
+  assert.equal(
+    JSON.parse(readFileSync(path.join(root, payload.output), "utf8")).scriptComplete,
+    true,
+  );
+  assert.equal(existsSync(path.join(root, ".wakeflow-local/wakeflow-intake")), false);
 });
 
 test("TODO candidates exclude completed slash-status and Aux-owned rows", () => {

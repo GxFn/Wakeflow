@@ -4,7 +4,7 @@ import path from "node:path";
 import { existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runSync } from "../lib/wakeflow-process.mjs";
-import { loadWorkspaceConfig } from "./lib/wakeflow-config.mjs";
+import { loadWorkspaceConfig, workspaceConfigDiagnostics } from "./lib/wakeflow-config.mjs";
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const rawArgs = process.argv.slice(2);
@@ -345,7 +345,16 @@ function runStatusJson(steps) {
     });
   }
 
-  console.log(JSON.stringify({ ok, command: "status", checks }, null, 2));
+  console.log(JSON.stringify({
+    ok,
+    command: "status",
+    configuration: workspaceConfigDiagnostics({
+      workspaceRoot: targetRoot,
+      args: rawArgs,
+      effectiveConfig: workspaceConfig,
+    }),
+    checks,
+  }, null, 2));
   process.exitCode = ok ? 0 : 1;
 }
 

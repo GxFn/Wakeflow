@@ -1,10 +1,11 @@
 import { existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
-// The storage map is the single source for "what lives where, who writes it,
-// and may a human touch it" — consumed by `wakeflow-storage map` (the
-// wakeflow_view scope=storage projection), by seed-readmes (the in-place
-// README generators), and by the claude-host check-workspace storage section.
+import { documentPlacements } from "./wakeflow-document-placement.mjs";
+
+// The document-placement registry owns category/path/owner/lifecycle semantics.
+// This module adds physical tree statistics, GC commands, and hand-edit advice
+// for `wakeflow-storage map`, seed-readmes, and host workspace checks.
 // Classes are DESCRIPTIVE, never gates:
 //   authority   machine/human truth — never hand-delete while active
 //   projection  regenerable views — safe to delete, a render rebuilds them
@@ -23,6 +24,7 @@ export const DEFAULT_PRESERVED_RETENTION_DAYS = 30;
 // rescues. Presence is reported as `legacy` (fold into preserved/ or delete
 // after review), never auto-handled.
 export const LEGACY_LOCAL_TREES = [
+  "pod-reservations", // pre-0.9.0 Pod placement hint (state root is now canonical)
   "preserved-state-roots",
   "preserved-wakeflow-delivery",
   "preserved-delivery-artifacts",
@@ -91,6 +93,7 @@ const KNOWN_DELIVERY_ENTRIES = new Set([
   "delivery-envelopes",
   "delivery-runs",
   "target-results",
+  "handles",
   "locks",
   "stop.json",
   "keep-live",
@@ -101,51 +104,76 @@ const KNOWN_DELIVERY_ENTRIES = new Set([
 ]);
 
 export function scanStorage({ workspaceRoot, config = {} }) {
-  const localDir = path.join(workspaceRoot, ".wakeflow-local");
-  const deliveryDir = path.join(localDir, "wakeflow-delivery");
-  const activeDir = path.join(workspaceRoot, ".wakeflow-active");
+  const placements = documentPlacements({ workspaceRoot, config });
+  const localDir = placements.localRuntime.path;
+  const deliveryDir = placements.transport.path;
+  const activeDir = placements.activeState.rootPath;
   const ledgerRoot = path.resolve(workspaceRoot, config.projectLedgerRoot ?? "../wakeflow-ledger");
 
   const trees = [];
-  const add = (relPath, absPath, cls, writer, gc, handEdit, description) => {
-    trees.push({ path: relPath, class: cls, writer, gc, handEdit, description, ...statsFor(absPath) });
+  const add = (relPath, absPath, placement, {
+    writer = placement.owner,
+    gc = placement.lifecycle,
+    handEdit,
+    description = placement.description,
+  } = {}) => {
+    trees.push({
+      path: relPath,
+      category: placement.id,
+      class: placement.storageClass,
+      owner: placement.owner,
+      lifecycle: placement.lifecycle,
+      writer,
+      gc,
+      handEdit,
+      description,
+      ...statsFor(absPath),
+    });
   };
 
-  add(".wakeflow-active", activeDir, "authority",
-    "controller (docs) + wakeflow-state reducers (state roots)",
-    "archive-demand relocates completed roots into the ledger",
-    "docs yes (controller-maintained); state roots never by hand",
-    "Active business state: index.md is the single controller entry; current/ holds the board, status doc, and one state root per active demand.");
-  add(".wakeflow-local/wakeflow-delivery/dispatch-packets", path.join(deliveryDir, "dispatch-packets"), "transport",
-    "prepare-dispatch", "wakeflow_prune_runtime", "no",
-    "Dispatch packets (replay-safe transport).");
-  add(".wakeflow-local/wakeflow-delivery/dispatch-groups", path.join(deliveryDir, "dispatch-groups"), "transport",
-    "prepare-dispatch", "wakeflow_prune_runtime", "no",
-    "Dispatch group snapshots.");
-  add(".wakeflow-local/wakeflow-delivery/delivery-envelopes", path.join(deliveryDir, "delivery-envelopes"), "transport",
-    "prepare/build delivery", "wakeflow_prune_runtime", "no",
-    "Delivery + controller-return envelopes.");
-  add(".wakeflow-local/wakeflow-delivery/delivery-runs", path.join(deliveryDir, "delivery-runs"), "transport",
-    "record-delivery-run", "wakeflow_prune_runtime", "no",
-    "Send/readback evidence per delivery attempt.");
-  add(".wakeflow-local/wakeflow-delivery/target-results", path.join(deliveryDir, "target-results"), "evidence",
-    "record-target-result", "NEVER deleted by GC", "no",
-    "TargetResultEnvelopes — target-authored review inputs and audit history; prune-runtime always retains them.");
-  add(".wakeflow-local/wakeflow-delivery/locks", path.join(deliveryDir, "locks"), "handles",
-    "applied delivery preparation / target host send", "released on target result; release-window-lock recovers", "only via release-window-lock",
-    "One in-flight target work lease per target window (cross-host), reserved with the prepared envelope and revalidated by target send; controller-return takes none.");
-  add(".wakeflow-local/wakeflow-delivery/hosts", path.join(deliveryDir, "hosts"), "handles",
-    "host helpers", "regenerated on launch/registration", "no (regenerable; real session ids live here)",
-    "Per-host runtime: thread-registry (REAL session ids), window-config, tmux bindings, monitor pidfile, transient prompt/lock files.");
-  add(".wakeflow-local/worktrees", path.join(localDir, "worktrees"), "authority",
-    "stream-open (git worktree)", "stream-close removes its worktree", "no (git worktrees; close via stream-close)",
-    "Isolation worktrees for cross-demand streams (claude edition).");
-  add(`.wakeflow-local/${PRESERVED_DIR}`, path.join(localDir, PRESERVED_DIR), "preserved",
-    "wakeflow-storage preserve + archive-demand --redact", "wakeflow_prune_runtime target=preserved (after retention)", "review then delete is fine",
-    `Canonical audit holds: preserved/<YYYY-MM-DD>-<reason>/ each with ${PRESERVED_MANIFEST} (who/why/source/retention).`);
-  add(path.relative(workspaceRoot, ledgerRoot).split(path.sep).join("/") || "wakeflow-ledger", ledgerRoot, "authority",
-    "controller (archives, records)", "none — durable, version-controlled", "yes (documents; keep record-map indexed)",
-    "Durable ledger: record-map, policies, requirement designs, monthly archive/<YYYY-MM>/<demand>/ trees, pending-merges.");
+  add(".wakeflow-active", activeDir, placements.activeState, {
+    gc: "archive-demand relocates completed roots into the ledger",
+    handEdit: "docs yes (controller-maintained); state roots never by hand",
+  });
+  add(".wakeflow-local/wakeflow-delivery/dispatch-packets", path.join(deliveryDir, "dispatch-packets"), placements.transport, {
+    writer: "prepare-dispatch", gc: "wakeflow_prune_runtime", handEdit: "no", description: "Dispatch packets (replay-safe transport).",
+  });
+  add(".wakeflow-local/wakeflow-delivery/dispatch-groups", path.join(deliveryDir, "dispatch-groups"), placements.transport, {
+    writer: "prepare-dispatch", gc: "wakeflow_prune_runtime", handEdit: "no", description: "Dispatch group snapshots.",
+  });
+  add(".wakeflow-local/wakeflow-delivery/delivery-envelopes", path.join(deliveryDir, "delivery-envelopes"), placements.transport, {
+    writer: "prepare/build delivery", gc: "wakeflow_prune_runtime", handEdit: "no", description: "Delivery + controller-return envelopes.",
+  });
+  add(".wakeflow-local/wakeflow-delivery/delivery-runs", path.join(deliveryDir, "delivery-runs"), placements.transport, {
+    writer: "record-delivery-run", gc: "wakeflow_prune_runtime", handEdit: "no", description: "Send/readback observations per delivery attempt.",
+  });
+  add(".wakeflow-local/wakeflow-delivery/target-results", placements.evidence.path, placements.evidence, {
+    writer: "record-target-result", gc: "NEVER deleted by transport GC", handEdit: "no",
+  });
+  add(".wakeflow-local/wakeflow-delivery/handles", path.join(deliveryDir, "handles"), placements.runtimeHandle, {
+    writer: "Wakeflow runtime scans", gc: "regenerated by the owning command", handEdit: "no",
+    description: "Regenerable runtime scan handles such as the optional next-work output.",
+  });
+  add(".wakeflow-local/wakeflow-delivery/locks", path.join(deliveryDir, "locks"), placements.runtimeHandle, {
+    writer: "applied delivery preparation / target host send", gc: "released on target result; release-window-lock recovers", handEdit: "only via release-window-lock",
+  });
+  add(".wakeflow-local/wakeflow-delivery/hosts", placements.hostState.path, placements.hostState, {
+    writer: "host helpers", gc: "regenerated on launch/registration", handEdit: "no (regenerable; real session ids live here)",
+  });
+  add(".wakeflow-local/worktrees", path.join(localDir, "worktrees"), {
+    id: "legacy-claude-stream",
+    storageClass: "legacy",
+    owner: "legacy Claude stream helper",
+    lifecycle: "legacy stream-close removes its worktree",
+    description: "Legacy stream worktrees only. Current Pods use host-created worktrees and do not store them under Wakeflow runtime.",
+  }, { handEdit: "no" });
+  add(`.wakeflow-local/${PRESERVED_DIR}`, placements.preserved.path, placements.preserved, {
+    writer: "wakeflow-storage preserve + archive-demand --redact", gc: "wakeflow_prune_runtime target=preserved (after retention)", handEdit: "review then delete is fine",
+  });
+  add(path.relative(workspaceRoot, ledgerRoot).split(path.sep).join("/") || "wakeflow-ledger", ledgerRoot, placements.workspaceRecord, {
+    writer: "controller, Design promotion, and Wakeflow archive operations", gc: "none — durable, version-controlled", handEdit: "yes (documents; keep record-map indexed)",
+    description: "Durable ledger root containing requirement, goal/stage, workspace, window, and archive records governed by the placement registry.",
+  });
 
   // Legacy residue (report only when present)
   const legacy = [];
@@ -186,7 +214,14 @@ export function scanStorage({ workspaceRoot, config = {} }) {
     }
   }
 
-  return { trees, legacy, unknown, preserved };
+  const layout = Object.fromEntries(Object.entries(placements).map(([key, placement]) => [key, {
+    id: placement.id,
+    path: placement.relativePath,
+    class: placement.storageClass,
+    owner: placement.owner,
+    lifecycle: placement.lifecycle,
+  }]));
+  return { layout, trees, legacy, unknown, preserved };
 }
 
 const README_MARKER_START = "<!-- wakeflow:storage-readme:start -->";
@@ -199,7 +234,16 @@ function wrap(body) {
 // Short in-place orientation: each answers "what is this / who writes it /
 // may I touch it". Regenerated by `wakeflow-storage seed-readmes`; do not
 // hand-maintain inside the markers.
-export function readmeContents({ ledgerRel = "../wakeflow-ledger" } = {}) {
+export function readmeContents({
+  ledgerRel = "../wakeflow-ledger",
+  placements = null,
+  requirementRel = "requirement-designs",
+  goalStageRel = "goal-stage-confirmation",
+  workspaceRecordRel = "workspace",
+} = {}) {
+  const effectiveRequirementRel = placements?.requirement?.relativePath ?? requirementRel;
+  const effectiveGoalStageRel = placements?.goalStage?.relativePath ?? goalStageRel;
+  const effectiveWorkspaceRecordRel = placements?.workspaceRecord?.relativePath ?? workspaceRecordRel;
   return [
     {
       file: ".wakeflow-active/README.md",
@@ -231,8 +275,8 @@ Real session/thread ids live only here. One command explains everything:
 | Entry | What | May I touch? |
 | --- | --- | --- |
 | \`wakeflow-delivery/\` | delivery transport + host handles (own README inside) | via tools only |
-| \`worktrees/<Repo__id>/\` | isolation git worktrees (cross-demand streams) | close via \`stream-close\` |
-| \`wakeflow.config.json\` | DERIVED stream overlay (regenerated; \`derived{}\` marker) | no — regenerate via stream ops |
+| \`worktrees/\` | legacy Claude stream compatibility only; current Pod worktrees are host-created and live outside Wakeflow runtime | do not create for Pods |
+| \`wakeflow.config.json\` | legacy derived stream overlay only; current Pod placement does not write this file | do not hand-edit |
 | \`wakeflow-statusline.mjs\` | generated statusline script | no — reseeded |
 | \`preserved/<date>-<reason>/\` | canonical audit holds, each with \`MANIFEST.md\` | review, then delete or \`prune-runtime target=preserved\` |
 
@@ -289,13 +333,16 @@ deleting a registry entry orphans that session.`),
 
 Generated by \`wakeflow-storage seed-readmes\`; do not hand-edit this file.
 
-- \`workspace/workspace-record-map.md\`: the INDEX — every durable record hangs
-  off it. \`workspace/pending-merges.md\`: isolation branches awaiting
+- \`${effectiveWorkspaceRecordRel}/workspace-record-map.md\`: the INDEX — every durable record hangs
+  off it. \`${effectiveWorkspaceRecordRel}/pending-merges.md\`: isolation branches awaiting
   human-reviewed merge-back (delete a row once merged/dropped).
-- \`workspace/archive/<YYYY-MM>/<demand>/\`: archived demand state roots
+- \`${effectiveWorkspaceRecordRel}/archive/<YYYY-MM>/<demand>/\`: archived demand state roots
   (P1-0 redaction-guarded) and archived workspace docs, by month.
-- \`requirement-designs/\`, \`goal-stage-confirmation/\`: Design-side durable
-  documents. \`<window>/\`: per-window long-term ledgers.
+- \`${effectiveRequirementRel}/\`: canonical demand definitions, requirement deltas,
+  test-environment specifications, and confirmed demand boundaries.
+- \`${effectiveGoalStageRel}/\`: goal/stage confirmations and cross-window execution
+  decisions. \`<window>/\`: responsibility-specific history only; never put a
+  demand definition there.
 - Rule: no user absolute paths, API keys, tokens, or real session ids in
   anything committed here.`),
     },

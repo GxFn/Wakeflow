@@ -22,6 +22,7 @@ const currentIndexPath = ledgerPaths.workspaceCurrentIndexPath;
 const currentStatusPath = ledgerPaths.workspaceCurrentStatusPath;
 const globalTodoPath = ledgerPaths.globalTodoPath;
 const configuredTestExchangeFile = path.basename(workspaceConfig.testExchangePath);
+const configMigrationWarnings = workspaceConfig.configMigrationWarnings ?? [];
 
 function configuredCurrentFile(configuredPath) {
   const absolute = path.resolve(workspaceRoot, configuredPath);
@@ -179,12 +180,16 @@ function validateDemandAuthorities() {
     }
     const readiness = demandAuthorityReadiness(authority, {
       workspaceRoot,
+      config: workspaceConfig,
       demandKey: state.demandKey,
       demandType: state.demandType ?? null,
       expectedDigest: state.demandAuthorityDigest,
     });
     if (!readiness.ready) {
       issues.push(`${relative(authorityFile)} is incomplete: ${readiness.errors.join("; ")}`);
+    }
+    for (const warning of readiness.warnings ?? []) {
+      warnings.push(`${relative(authorityFile)}: ${warning}`);
     }
   }
 }
@@ -206,6 +211,7 @@ function currentPlanTarget(indexContent) {
 
 const issues = [];
 const warnings = [];
+warnings.push(...configMigrationWarnings);
 
 for (const file of requiredCurrentFiles) {
   const absolute = path.join(currentDir, file);

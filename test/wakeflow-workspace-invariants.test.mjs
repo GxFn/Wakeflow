@@ -213,6 +213,131 @@ function richPackage({ packageId, taskId, targetWindow, dependsOnTaskIds = [] })
   };
 }
 
+function bugDemandAuthority(demandKey) {
+  return {
+    demandKey,
+    demandType: "bug",
+    entryMode: "controller-inline",
+    authorityRefs: ["reproduction", "scope", "non-goals"].map((role) => ({
+      role,
+      ref: "requirements.md#goal",
+    })),
+    testDecision: {
+      mode: "controller-only",
+      summary: "The controller reruns the bounded regression probe.",
+    },
+  };
+}
+
+test("workspace entries distinguish pending, frozen, and legacy-terminal demand authority", async () => {
+  const runtime = makeRuntime();
+  const root = makeWorkspace();
+  const demandKey = "AUTHORITY-PROJECTION";
+  const initialized = parseOk(initDemand(runtime, root, demandKey, ["--demand-type", "bug"]));
+  const projectionModule = await import(pathToFileURL(
+    path.join(runtime, "scripts/lib/wakeflow-workspace-projection.mjs"),
+  ).href);
+  projectionModule.refreshWorkspaceProjection({ workspaceRoot: root });
+  const statusFile = path.join(root, ".wakeflow-active/current/workspace-current-status.md");
+  const indexFile = path.join(root, ".wakeflow-active/index.md");
+
+  let status = readFileSync(statusFile, "utf8");
+  let index = readFileSync(indexFile, "utf8");
+  assert.match(status, /demand authority `draft-unfrozen` \(confirmation pending\)/);
+  assert.match(status, /Pending confirmation: `AUTHORITY-PROJECTION`/);
+  assert.match(index, /demand authority `draft-unfrozen` \(confirmation pending\)/);
+
+  const authority = bugDemandAuthority(demandKey);
+  const added = runState(runtime, [
+    "add-task-package", "--root", root, "--state-root", initialized.stateRoot,
+    "--task-package-id", "PKG-AUTHORITY", "--summary", "Implement the confirmed defect.",
+    "--target-window", "RepoA", "--target-task-id", "TASK-AUTHORITY",
+    "--work-type", "implementation",
+    "--objective", "Implement only the confirmed defect.",
+    "--context-summary", JSON.stringify(["The reproduction and boundary are confirmed."]),
+    "--requirement-refs", JSON.stringify([{ role: "goal", ref: "requirements.md#goal" }]),
+    "--boundaries", JSON.stringify({
+      inScope: ["The confirmed defect."],
+      outOfScope: ["Unrelated behavior."],
+      forbidden: ["Do not widen the demand."],
+    }),
+    "--completion-expectations", JSON.stringify(["The bounded regression probe passes."]),
+    "--depends-on-task-ids", "[]",
+    "--commit-expectation", "leave-uncommitted",
+    "--acceptance-anchors", JSON.stringify([{
+      id: "AC-AUTHORITY",
+      claim: "The confirmed defect is corrected.",
+      probe: "Run the controller-authored regression probe.",
+      expected: "The probe passes without widening scope.",
+    }]),
+    "--demand-authority", JSON.stringify(authority),
+    "--write", "--json",
+  ]);
+  assert.equal(added.status, 0, added.stderr || added.stdout);
+  const frozen = JSON.parse(added.stdout);
+
+  status = readFileSync(statusFile, "utf8");
+  index = readFileSync(indexFile, "utf8");
+  assert.ok(status.includes(
+    `demand authority \`frozen\` (${frozen.demandAuthorityDigest.slice(0, 12)})`,
+  ));
+  assert.doesNotMatch(status, /Pending confirmation: `AUTHORITY-PROJECTION`/);
+  assert.match(index, /demand authority `frozen`/);
+
+  const authorityFile = path.join(root, initialized.stateRoot, "demand-authority.json");
+  writeJson(authorityFile, {
+    ...readJson(authorityFile),
+    testDecision: {
+      ...readJson(authorityFile).testDecision,
+      summary: "Tampered after freeze.",
+    },
+  });
+  const tamperedProjection = projectionModule.refreshWorkspaceProjection({ workspaceRoot: root });
+  assert.equal(tamperedProjection.status, "degraded");
+  assert.match(readFileSync(statusFile, "utf8"), /does not match frozen state digest/i);
+
+  const legacyRoot = makeWorkspace();
+  const legacyStateRoot = path.join(legacyRoot, ".wakeflow-active/current/LEGACY-COMPLETE");
+  writeJson(path.join(legacyStateRoot, "wakeflow-state.json"), {
+    demandKey: "LEGACY-COMPLETE",
+    state: "completed",
+    revision: 1,
+    controllerHost: "codex",
+    projection: { status: "synced", progressDoc: "developer-progress.md" },
+    targetTasks: [],
+  });
+  writeFileSync(
+    path.join(legacyStateRoot, "controller-events.jsonl"),
+    `${JSON.stringify({ eventId: "evt-legacy-complete", stateRevision: 1 })}\n`,
+  );
+  writeFileSync(
+    path.join(legacyStateRoot, "developer-progress.md"),
+    "# Progress\n\n<!-- unified-status:start -->\ncomplete\n<!-- unified-status:end -->\n",
+  );
+  writeJson(path.join(legacyStateRoot, "projection.json"), {
+    schemaVersion: 1,
+    demandKey: "LEGACY-COMPLETE",
+    sourceRevision: 1,
+    sourceEventId: "evt-legacy-complete",
+    progressDoc: "developer-progress.md",
+    demandAuthority: {
+      status: "legacy-terminal-unfrozen",
+      ref: null,
+      digest: null,
+      pendingConfirmation: false,
+    },
+  });
+  const legacyProjection = projectionModule.refreshWorkspaceProjection({ workspaceRoot: legacyRoot });
+  assert.equal(legacyProjection.status, "active");
+  const legacyStatus = readFileSync(
+    path.join(legacyRoot, ".wakeflow-active/current/workspace-current-status.md"),
+    "utf8",
+  );
+  assert.match(legacyStatus, /legacy-terminal-unfrozen/);
+  assert.match(legacyStatus, /Pending confirmation: none\./);
+  assert.doesNotMatch(legacyStatus, /Pending confirmation: `LEGACY-COMPLETE`/);
+});
+
 test("create-demand rejects duplicate dependency ids before creating any state-root artifact", () => {
   const runtime = makeRuntime();
   const root = makeWorkspace();

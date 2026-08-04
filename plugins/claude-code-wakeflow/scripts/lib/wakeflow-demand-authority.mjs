@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { requirementRefIssue } from "./wakeflow-task-package.mjs";
+import { demandAuthorityPlacementIssue } from "./wakeflow-document-placement.mjs";
 
 export const DEMAND_AUTHORITY_SCHEMA_VERSION = 1;
 export const DEMAND_AUTHORITY_FILE = "demand-authority.json";
@@ -29,6 +30,17 @@ export const DEMAND_TEST_MODES = Object.freeze([
   "real-environment",
   "not-applicable",
 ]);
+export const TERMINAL_DEMAND_STATES = Object.freeze(["completed", "archived", "cancelled"]);
+
+export function demandAuthorityProjectionStatus(state = {}) {
+  if (state.demandAuthorityRef) return "frozen";
+  if (TERMINAL_DEMAND_STATES.includes(state.state)) return "legacy-terminal-unfrozen";
+  return "draft-unfrozen";
+}
+
+export function demandAuthorityPendingConfirmation(state = {}) {
+  return demandAuthorityProjectionStatus(state) === "draft-unfrozen";
+}
 
 const REQUIRED_ROLES = Object.freeze({
   requirement: [
@@ -157,14 +169,16 @@ export function demandAuthorityReadiness(authority, {
   demandType = null,
   entryMode = null,
   expectedDigest = null,
+  config = null,
 } = {}) {
   const errors = [];
+  const warnings = [];
   let normalized = null;
   try {
     normalized = normalizeDemandAuthority(authority, { demandKey, entryMode });
   } catch (error) {
     errors.push(error.message);
-    return { ready: false, errors, authority: null, digest: null };
+    return { ready: false, errors, warnings, authority: null, digest: null };
   }
 
   if (demandType && normalized.demandType !== demandType) {
@@ -205,6 +219,12 @@ export function demandAuthorityReadiness(authority, {
     for (const entry of normalized.authorityRefs) {
       const issue = requirementRefIssue(workspaceRoot, entry);
       if (issue) errors.push(issue.replace(/^requirement reference/u, "demand authority reference"));
+      const placementIssue = demandAuthorityPlacementIssue({
+        workspaceRoot,
+        config,
+        ref: entry.ref,
+      });
+      if (!issue && placementIssue) warnings.push(placementIssue);
     }
   }
 
@@ -216,6 +236,7 @@ export function demandAuthorityReadiness(authority, {
   return {
     ready: errors.length === 0,
     errors,
+    warnings: [...new Set(warnings)],
     authority: normalized,
     digest,
   };

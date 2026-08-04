@@ -89,6 +89,9 @@ test("status --json returns a machine-readable aggregate", () => {
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true);
   assert.equal(payload.command, "status");
+  assert.equal(payload.configuration.sourceShape, "nested-v2");
+  assert.equal(payload.configuration.durableInput.schemaVersion, 2);
+  assert.equal(payload.configuration.effectiveLayout.roles.controller, "Wakeflow");
   assert.deepEqual(
     payload.checks.map((check) => check.key),
     ["repoStatus", "closedLoopStatus"],

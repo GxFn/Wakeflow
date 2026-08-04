@@ -588,6 +588,7 @@ export function createDispatchCommands(ctx) {
       demandAuthority = readJson(authorityFile, "demand authority");
       demandAuthorityStatus = demandAuthorityReadiness(demandAuthority, {
         workspaceRoot,
+        config,
         demandKey: state.demandKey,
         demandType: state.demandType ?? null,
         expectedDigest: state.demandAuthorityDigest,
@@ -619,8 +620,13 @@ export function createDispatchCommands(ctx) {
       ? baseTaskBriefing
       : { ...baseTaskBriefing, objective: legacyObjective };
     if (demandAuthority) {
+      const demandAuthorityRef = path.relative(
+        workspaceRoot,
+        path.join(stateRoot, DEMAND_AUTHORITY_FILE),
+      ).split(path.sep).join("/");
       taskBriefing.demandAuthority = {
-        ref: path.relative(workspaceRoot, path.join(stateRoot, DEMAND_AUTHORITY_FILE)).split(path.sep).join("/"),
+        ref: demandAuthorityRef,
+        resolvedRef: path.resolve(workspaceRoot, demandAuthorityRef),
         digest: demandAuthorityStatus.digest,
         demandType: demandAuthority.demandType,
         entryMode: demandAuthority.entryMode,

@@ -15,16 +15,25 @@ import {
   defaultWorkspaceConfig,
   durableWorkspaceConfigPath,
   loadDurableWorkspaceConfig,
+  normalizeWorkspaceConfigInput,
   readDurableWorkspaceConfig,
   resolveConfigPath,
   windowLedgerDirFor,
   workspaceLedgerPaths,
+  workspaceConfigV2FromEffective,
 } from "./lib/wakeflow-config.mjs";
 import {
   detectInterfaceLanguage,
   normalizeInterfaceLanguage,
 } from "./lib/wakeflow-language.mjs";
 import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
+import { documentDestinationLines, documentPlacements } from "./lib/wakeflow-document-placement.mjs";
+import {
+  renderInternalRoleMemory,
+  renderResponsibilityAccessCard,
+  renderRootWorkspaceMemory,
+  wakeflowRuleIds,
+} from "./lib/wakeflow-rule-model.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const defaultWakeflowRoot = path.dirname(path.dirname(scriptPath));
@@ -216,14 +225,15 @@ function commandContext() {
     ? (path.isAbsolute(rootArg) ? path.resolve(rootArg) : path.resolve(process.cwd(), rootArg))
     : defaultWakeflowRoot;
   const configPath = durableWorkspaceConfigPath({ workspaceRoot: wakeflowRoot, args });
-  const userConfig = readDurableWorkspaceConfig({ workspaceRoot: wakeflowRoot, args });
+  const durableConfig = readDurableWorkspaceConfig({ workspaceRoot: wakeflowRoot, args });
+  const userConfig = normalizeWorkspaceConfigInput(durableConfig);
   const configuredRootExists = existsSync(configPath);
   const runtimeRoot = looksLikeWakeflowRuntimeRoot(wakeflowRoot);
+  const loadedConfig = loadDurableWorkspaceConfig({ workspaceRoot: wakeflowRoot, args });
   const configuredPluginTarget = configuredRootExists
     && !runtimeRoot
-    && (userConfig.runtimeMode === "plugin" || userConfig.wakeflowRepoDir === "");
+    && (loadedConfig.runtimeMode === "plugin" || loadedConfig.wakeflowRepoDir === "");
   const pluginTargetMode = (!configuredRootExists && !runtimeRoot) || configuredPluginTarget;
-  const loadedConfig = loadDurableWorkspaceConfig({ workspaceRoot: wakeflowRoot, args });
   const config = pluginTargetMode
     ? applyPluginTargetDefaults(loadedConfig, userConfig, wakeflowRoot)
     : loadedConfig;
@@ -235,6 +245,7 @@ function commandContext() {
     pluginTargetMode,
     config,
     userConfig,
+    durableConfig,
     configPath,
     parentRoot,
     ledgerPaths,
@@ -451,6 +462,8 @@ function parseRepoSpecs(context) {
     return repoSpecs.map((spec) => {
       const [windowName, repoPath] = parseKeyValueSpec(spec, "--repo");
       const absolutePath = resolveMaybeRelative(context.wakeflowRoot, repoPath);
+      const previous = normalizedRepositories(context.config)
+        .find((repo) => repo.windowName === windowName);
       if (!isInside(absolutePath, context.parentRoot)) {
         fail(`Repository path for ${windowName} is outside the parent workspace: ${repoPath}`);
       }
@@ -461,7 +474,9 @@ function parseRepoSpecs(context) {
         role: roleOverrides.get(windowName)
           ?? context.config.repositoryRoles?.[windowName]
           ?? "Project repository; confirm scope and responsibility before enabling.",
-        managedAgents: true,
+        // Re-selecting an existing mapping during a schema migration must not
+        // silently widen setup's permission to write that repository's memory.
+        managedAgents: previous?.managedAgents !== false,
       };
     }).filter((repo) => !excluded.has(repo.windowName));
   }
@@ -532,15 +547,13 @@ function configurePayload(context = commandContext()) {
   // loadWorkspaceConfig at read time — one fact on disk, four views in
   // memory. setup stops persisting them (and strips legacy copies below) so
   // the tracked config cannot drift against its own repositories[].
-  const names = repositories.map((repo) => repo.windowName);
-  const designRepo = repositories.find((repo) => repo.windowName === designWindow);
   const protectedWorkspacePrefixes = repositories
     .filter((repo) => repo.mode !== "internal")
     .map((repo) => repo.path)
     .filter((repoPath) => !repoPath.startsWith("../") && repoPath !== ".")
     .map((repoPath) => `${repoPath.replace(/\/+$/, "")}/`);
-  const nextConfig = {
-    ...context.userConfig,
+  const nextEffectiveConfig = {
+    ...context.config,
     workspaceName,
     runtimeMode: context.pluginTargetMode ? "plugin" : (context.config.runtimeMode ?? "repository"),
     interfaceLanguage: requestedLanguage,
@@ -571,12 +584,10 @@ function configurePayload(context = commandContext()) {
     protectedWorkspacePrefixes,
     repositories,
   };
-  for (const derived of ["dispatchWindows", "requiredDispatchWindows", "repoNames", "repositoryRoles", "windows"]) {
-    delete nextConfig[derived];
-  }
-  nextConfig.wakeflowRepoDir = context.pluginTargetMode
+  nextEffectiveConfig.wakeflowRepoDir = context.pluginTargetMode
     ? context.config.wakeflowRepoDir
     : path.basename(context.wakeflowRoot);
+  const nextConfig = workspaceConfigV2FromEffective(nextEffectiveConfig);
 
   if (write) {
     writeJson(context.configPath, nextConfig);
@@ -588,6 +599,7 @@ function configurePayload(context = commandContext()) {
     wrote: write,
     configPath: context.configPath,
     nextConfig,
+    nextEffectiveConfig,
   };
 }
 
@@ -727,92 +739,86 @@ function scopeBlock(context, repo) {
   const activeIndex = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceIndexPath ?? ".wakeflow-active/index.md"));
   const activeStatus = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentStatusPath ?? ".wakeflow-active/current/workspace-current-status.md"));
   const currentDir = relativePathFrom(absolutePath, path.resolve(context.wakeflowRoot, context.config.workspaceCurrentDir ?? ".wakeflow-active/current"));
-  const windowLedger = relativePathFrom(absolutePath, windowLedgerDirFor({
-    workspaceRoot: context.wakeflowRoot,
-    config: context.config,
-    windowName: primaryRepo.windowName,
-  }));
-  const windowLedgerText = hasWindowAliases
-    ? `- Window ledger: \`${windowLedger}\`
-- Window ledgers for this repository:
-${samePathRepos.map((item) => {
-  const itemLedger = relativePathFrom(absolutePath, windowLedgerDirFor({
-    workspaceRoot: context.wakeflowRoot,
-    config: context.config,
+  const ledgerByWindow = samePathRepos.map((item) => ({
     windowName: item.windowName,
+    path: relativePathFrom(absolutePath, windowLedgerDirFor({
+      workspaceRoot: context.wakeflowRoot,
+      config: context.config,
+      windowName: item.windowName,
+    })),
   }));
-  return `  - \`${item.windowName}\`: \`${itemLedger}\``;
-}).join("\n")}`
-    : `- Window ledger: \`${windowLedger}\``;
   const testExchange = relativePathFrom(
     absolutePath,
     resolveMaybeRelative(context.wakeflowRoot, context.config.testExchangePath ?? ".wakeflow-active/current/test-exchange.md"),
   );
   const isDesign = samePathWindowNames.includes(context.config.designWindow);
   const isTest = samePathWindowNames.includes(context.config.testWindow);
-  const roleNote = [];
-  if (isTest) {
-    roleNote.push(`- Test exchange projection: \`${testExchange}\``);
-  }
-  const roleNoteText = roleNote.length > 0 ? `\n${roleNote.join("\n")}` : "";
-  const windowNameText = hasWindowAliases
-    ? `- Window name: \`${primaryRepo.windowName}\`
-- Window aliases for this repository: ${windowNamesInline}`
-    : `- Window name: \`${primaryRepo.windowName}\``;
   const taskTargetText = hasWindowAliases
     ? `one of the windows listed in this access card (${windowNamesInline})`
     : `\`${primaryRepo.windowName}\``;
-  const dispatchPacketRule = hasWindowAliases
-    ? `- This repository only handles dispatch packets for the windows listed in this access card (${windowNamesInline}). Before execution, route by \`currentWindow\` in the prompt, delivery envelope, or current plan, then return the matching \`TargetResultEnvelope\`. Do not claim, accept, or process other window tasks.`
-    : `- This window only handles dispatch packets for \`${primaryRepo.windowName}\` and returns \`TargetResultEnvelope\`. Do not claim, accept, or process other window tasks.`;
-  return `${AGENTS_START}
-## Workspace Access Card
-
-This section is maintained by the Wakeflow runtime installer. It records this window access coordinates and the minimum automation gate. Hard rules come from the parent AGENTS and this file; do not duplicate repository-specific rules here.
-
-### Coordinates
-
-- Wakeflow runtime: \`${wakeflowRelative}\`
-${windowNameText}
-- Parent workspace AGENTS: \`${parentAgents}\`
-- Active workspace index: \`${activeIndex}\`
-- Active workspace status: \`${activeStatus}\`
-- Current plan directory: \`${currentDir}\`
-${windowLedgerText}${roleNoteText}
-
-### When claiming workspace work
-
-1. Read this file first.
-2. Then read parent \`${parentAgents}\`.
-3. Then read \`${activeIndex}\` and \`${activeStatus}\`.
-4. If there is a current plan, task package, or direct-thread delivery, execute only the content under \`${currentDir}\` explicitly assigned to ${taskTargetText}.
-5. Goals, scope, forbidden actions, validation commands, and backfill fields come from the current plan, task package, and repository rules. Prompts are only wakeup entrypoints, not the full task specification.
-6. If a keyword, familiar command, script hint, or urgency is pulling you into action before a safe operation, recovery boundary, and one-sentence plan are clear, stop and report the blocker.
-
-### Direct Thread Dispatch Minimum Gate
-
-- Direct-thread delivery is the normal work transport. It does not change this window responsibility or expand task scope. Specific work comes from the dispatch packet, current plan, and repository rules.
-- Delivery prompts carry one bounded task-focus sentence, navigation/freshness variables (\`currentWindow\`, \`taskId\`, \`taskPackageId\`, \`stateRoot\`, \`stateRevision\`, optional \`dispatchGroup\`), and skill pointers. Do not treat the prompt as a full command manual. The visible \`stateRevision\` identifies the dispatch snapshot in the packet/envelope; the later delivery-sent event may legitimately advance the live state root. Machine fields such as \`controllerWindow\`, \`returnPolicy\`, and \`humanContextRef\` are read from the state root, dispatch group, and delivery envelope. When an implementation package carries \`acceptanceAnchors\`, map each anchor to a RED test/probe before coding; an untestable or conflicting anchor is \`needs-review\`, not permission to invent scope. Stop and report if \`stateRoot\` is missing or identities conflict.
-${dispatchPacketRule}
-- Child windows do not create target-to-target next-hop delivery by default. Review-input repair, redispatch, and next phases are decided by controller review. If delivery has \`returnRoute=controller\` and \`review-results\` shows that \`DispatchGroup.returnPolicy\` allows a callback, create exactly one controller-return envelope per callback scope and \`resultVersionKey\` with \`build-controller-return\`, returning by default to the original controller named by \`DispatchGroup.controllerWindow\`. A legal superseding target result creates a new result version and therefore requires a new controller-return. A transport retry for the same result version is allowed only when the host proves \`rejected-before-send\`; reuse its existing envelope. \`accepted\`, \`ambiguous\`, or readback-pending transport is never resent. Then complete the real direct-thread send, exactly one bounded read-only observation, and \`record-delivery-run\` with explicit transport/readback fields. A controller return is complete only when a \`DirectThreadDeliveryRun\` records \`status=sent\`, \`transportStatus=accepted\`, and \`readback.status=confirmed\`; accepted transport with pending/unavailable readback is \`sent-unconfirmed\`, not controller reachability. The full group snapshot stays in the controller-return envelope; the visible prompt shows only non-empty exceptional targets and must not treat one target backfill as whole-group completion.
-${testWindowDeliveryBoundaryLine(context)}
-- Thread ids may only be written to Wakeflow local runtime. Do not write them to tracked documents, backfill text, or GitHub.
-${skillAssistanceText(context, samePathWindowNames)}
-
-### Functional Completeness Self-Check
-
-Before returning a \`TargetResultEnvelope\` or handoff, this child window must self-check the assigned feature or review-input path for functional completeness. Do not rely on the controller to discover obvious gaps.
-
-- Re-read the state root, task package, current plan, repository rules, and acceptance/review-input requirements.
-- Verify the implementation or review inputs cover the requested behavior end to end, including edge cases, integration boundaries, docs/config/API surfaces, and tests that the target window can reasonably run.
-- Compare the final diff and review materials against the original user goal and explicit non-goals; do not downgrade a complete capability into a thin adapter, placeholder, mock-only flow, or partial scaffold.
-- When recommending follow-up work, label whether it is authorized by the original requirement or only discovered by code/test inspection. Residual implementation fields, existing tests, old adapters, and target observations do not become new requirements unless the original plan, requirement design, or a user/controller decision allows them.
-- If this window cannot produce reviewable support for completion inside its boundary, return \`blocked\` or \`needs-review\` with the missing inputs and next recommendation instead of reporting \`completed\`.
-
-### Document Destinations
-
-- Long-term cross-repository collaboration docs, plans, acceptance records, scans, and boundary records go to \`${windowLedger}\`. This repository \`docs/\` is only for product, release, or user docs maintained with the source.
-${AGENTS_END}`;
+  const coordinates = [
+    `Wakeflow runtime: \`${wakeflowRelative}\``,
+    `Window name: \`${primaryRepo.windowName}\``,
+    hasWindowAliases ? `Window aliases for this repository: ${windowNamesInline}` : "",
+    `Parent workspace ${hostProfile.memoryFileLabel}: \`${parentAgents}\``,
+    `Active workspace index: \`${activeIndex}\``,
+    `Active workspace status: \`${activeStatus}\``,
+    `Current plan directory: \`${currentDir}\``,
+    ...(hasWindowAliases
+      ? ["Window ledgers for this repository:", ...ledgerByWindow.map((item) => `  - \`${item.windowName}\`: \`${item.path}\``)]
+      : [`Window ledger: \`${ledgerByWindow[0].path}\``]),
+    isTest ? `Test exchange projection: \`${testExchange}\`` : "",
+  ];
+  const roleSkillLine = isDesign
+    ? "For Design work, read `skills/README.md` and load the smallest matching local Design Skill. Skills define method, not authority."
+    : isTest
+      ? "For Test work, read `skills/README.md` and load the smallest matching local Test Skill. Skills define method, not authority."
+      : "For implementation/rework, load both `wakeflow-target` and `wakeflow-target-craft`; acceptance anchors become RED probes before coding.";
+  const content = renderResponsibilityAccessCard({
+    coordinates,
+    identityLines: [
+      `This repository serves ${taskTargetText}. Read this file, parent \`${parentAgents}\`, \`${activeIndex}\`, and \`${activeStatus}\` first.`,
+      `For active work, read only the state root and task package under \`${currentDir}\` assigned to ${taskTargetText}. The prompt is a wakeup/navigation aid, not the full specification.`,
+      "Stop if the state root, task/package identity, repository mapping, or required Skill is missing, stale, or contradictory.",
+    ],
+    boundaryLines: [
+      `Work only in \`${absolutePath}\` and only for the assigned package. Do not claim another window's work or cross into another repository.`,
+      "Before returning a result, compare the diff and validation against the original objective, explicit non-goals, acceptance anchors, integration boundaries, and repository rules.",
+      "If functional completion cannot be supported inside this boundary, return `blocked` or `needs-review`; do not report completion and rely on total control to find obvious gaps.",
+    ],
+    stateLines: [
+      "`controller-events.jsonl` and `wakeflow-state.json` are controller-owned facts. Prompts, progress Markdown, transport claims, and target self-reports are not acceptance or state authority.",
+      "Write target results and controller returns only through the assigned Wakeflow Skill/tool surface. Thread ids and host receipts remain local runtime data.",
+    ],
+    freezeLines: [
+      "Execute only the frozen demand authority and assigned task package. Do not infer new requirements from existing code, tests, adapters, or discovered follow-up work.",
+      "Map each acceptance anchor to a concrete RED probe before implementation. An untestable/conflicting anchor requires `needs-review`, not invented scope.",
+    ],
+    testLines: [
+      isTest
+        ? "Test only the explicitly authorized, controller-accepted implementation objective. Do not invent goals, fix product code, or replace controller acceptance."
+        : testWindowDeliveryBoundaryLine(context).replace(/^- /, ""),
+    ],
+    destructiveLines: [
+      "Do not reset, revert, delete user work, rewrite history, mutate unrelated repositories, or bypass state/authority gates without explicit user authorization.",
+      "Commit, push, tag, publish, release, cache refresh, and destructive cleanup require explicit authorization.",
+    ],
+    skillLines: [
+      "Use `wakeflow-target` for delivery receipt, bounded execution, TargetResultEnvelope, and controller return.",
+      roleSkillLine,
+      "Detailed transport, readback, retry, Pod, and archive procedures live in the matching Skill/reference; do not reconstruct them from this memory file.",
+    ],
+    documentLines: [
+      ...documentDestinationLines({
+        workspaceRoot: context.wakeflowRoot,
+        config: context.config,
+        windowName: primaryRepo.windowName,
+        displayRoot: absolutePath,
+      }).map((line) => line.replace(/^- /, "")),
+      "This repository `docs/` is only for product, release, or user documentation maintained with the source.",
+    ],
+  });
+  return `${AGENTS_START}\n${content}\n${AGENTS_END}`;
 }
 
 function repositoriesSharingPath(context, repo) {
@@ -829,25 +835,6 @@ function primaryRepositoryForScope(context, repo) {
     ?? samePathRepos.find((candidate) => candidate.managedAgents !== false)
     ?? samePathRepos[0]
     ?? repo;
-}
-
-function skillAssistanceText(context, samePathWindowNames) {
-  const roleLines = [
-    hostProfile.texts.skillAssistanceLine,
-  ];
-  if (samePathWindowNames.includes(context.config.designWindow)) {
-    roleLines.push(`- Design work should proactively surface relevant local Design skills while the user is clarifying requirements, comparing options, writing a requirement design, redesigning a non-bug outcome mismatch, slicing work, or preparing a handoff. Read \`skills/README.md\` when available, name the smallest matching skill, explain why it helps, and use it in conversation before writing tracked Design artifacts. If no skill is genuinely needed, say so briefly and answer directly.`);
-  }
-  if (samePathWindowNames.includes(context.config.testWindow)) {
-    roleLines.push(`- Test work should proactively surface relevant local Test skills while planning validation, reproducing or triaging failures, designing regressions, reviewing evidence, or validating long chains. Read \`skills/README.md\` when available, name the smallest matching skill, explain why it helps, and use it to shape evidence before running or recording test work. If no skill is genuinely needed, say so briefly and proceed with the assigned test boundary.`);
-  }
-  if (!samePathWindowNames.includes(context.config.designWindow) && !samePathWindowNames.includes(context.config.testWindow)) {
-    roleLines.push(`- Development work uses the plugin execution-craft skill \`wakeflow-target-craft\` (test-first, systematic debugging, self-review by severity, scope discipline, verify-before-done) so it produces structured review inputs whose presence, mapping, and declared paths can be machine-checked. The controller still independently validates truth and acceptance. The craft skill loads via the Wakeflow plugin alongside \`wakeflow-target\`; this window does NOT use the Design or Test windows' built-in skills.`);
-  }
-  return `
-### Skill Assistance
-
-${roleLines.join("\n")}`;
 }
 
 function scopeBlockContent(existing) {
@@ -898,7 +885,7 @@ function expectedScopeCoordinates(context, repo) {
 function coordinateChecks(block, coordinates) {
   const checks = [
     ["wakeflowRuntime", `- Wakeflow runtime: \`${coordinates.wakeflowRuntime}\``],
-    ["parentAgents", `- Parent workspace AGENTS: \`${coordinates.parentAgents}\``],
+    ["parentAgents", `- Parent workspace ${hostProfile.memoryFileLabel}: \`${coordinates.parentAgents}\``],
     ["activeIndex", `- Active workspace index: \`${coordinates.activeIndex}\``],
     ["activeStatus", `- Active workspace status: \`${coordinates.activeStatus}\``],
     ["currentPlanDirectory", `- Current plan directory: \`${coordinates.currentPlanDirectory}\``],
@@ -939,33 +926,40 @@ function accessProfileFor(context, repo) {
   const hasWindowAliases = coordinates.windowNames.length > 1;
   const automationChecks = [
     {
+      key: "semanticRuleSet",
+      ok: Object.values(wakeflowRuleIds).every((id) => block.includes(`wakeflow:rule:${id}`)),
+    },
+    {
       key: "targetResultEnvelope",
       ok: block.includes("TargetResultEnvelope"),
     },
     {
       key: "singleWindowDispatchPacket",
       ok: hasWindowAliases
-        ? block.includes("This repository only handles dispatch packets for the windows listed in this access card")
+        ? block.includes("Window aliases for this repository")
           && coordinates.windowNames.every((name) => block.includes(`\`${name}\``))
-        : block.includes(`This window only handles dispatch packets for \`${repo.windowName}\``),
+        : block.includes(`This repository serves \`${repo.windowName}\``),
     },
     {
-      key: "noTargetNextHop",
-      ok: block.includes("Child windows do not create target-to-target next-hop delivery by default"),
+      key: "procedureDelegatedToSkills",
+      ok: block.includes("Detailed transport, readback, retry, Pod, and archive procedures live in the matching Skill/reference")
+        && !block.includes("build-controller-return")
+        && !block.includes("record-delivery-run"),
     },
     {
       key: "testWindowBoundary",
-      ok: block.includes(testWindowDeliveryBoundaryLine(context)),
+      ok: coordinates.windowNames.includes(context.config.testWindow)
+        ? block.includes("Do not invent goals, fix product code, or replace controller acceptance")
+        : block.includes(testWindowDeliveryBoundaryLine(context)),
     },
     {
       key: "threadIdLocalOnly",
-      ok: block.includes("Thread ids may only be written to Wakeflow local runtime"),
+      ok: block.includes("Thread ids and host receipts remain local runtime data"),
     },
     {
       key: "functionalCompletenessSelfCheck",
-      ok: block.includes("Functional Completeness Self-Check")
-        && block.includes("Do not rely on the controller to discover obvious gaps")
-        && block.includes("do not downgrade a complete capability into a thin adapter"),
+      ok: block.includes("compare the diff and validation against the original objective")
+        && block.includes("do not report completion and rely on total control to find obvious gaps"),
     },
   ];
   const required = repo.managedAgents !== false;
@@ -1046,90 +1040,31 @@ function replaceAllLiteral(content, from, to) {
   return content.split(from).join(to);
 }
 
-function pluginRootScriptGuidance(content) {
-  return content
-    .replace(
-      /- `scripts\/README\.md` is the script index\. After adding, renaming, or deleting\s+`scripts\/\*\.mjs`, update the index and run\s+`node scripts\/wakeflow-check-scripts\.mjs`\./,
-      `- In installed parent workspaces, Wakeflow runtime scripts are backend
-  implementation details. Use Wakeflow MCP tools for setup, status, state
-  roots, delivery, review, archive, next-work scans, and verification. Do not
-  call installed plugin-cache scripts directly from total control.`,
-    )
-    .replace(
-      /- `node scripts\/wakeflow-verify\.mjs` is the default verification orchestrator\./,
-      `- Use the Wakeflow verification MCP capability as the default
-  verification orchestrator. If the MCP surface is unavailable, stop and report
-  that the Wakeflow plugin must be reloaded or reinstalled; do not fall back to
-  installed runtime scripts.`,
-    )
-    .replace(
-      /- After creating or activating a phase confirmation or execution wave, run\s+`node scripts\/wakeflow-verify\.mjs`\./,
-      `- After creating or activating a phase confirmation or execution wave,
-  run Wakeflow verification through the MCP capability. If that capability is
-  unavailable, stop and report the plugin-surface blocker.`,
-    )
-    .replace(
-      /- If scripts, script README, or script skills change, run\s+`node scripts\/wakeflow-verify\.mjs --with-script-tests`\./,
-      `- If Wakeflow scripts, script index, or installed skills change, run
-  Wakeflow source verification with script tests before refreshing the plugin
-  cache.`,
-    );
-}
-
-function pluginRootCapabilityReferences(content) {
-  return content
-    .replace(/`node scripts\/([^`]+)`/g, "`Wakeflow MCP tool surface`")
-    .replace(/`scripts\/([^`]+)`/g, "`Wakeflow source-maintenance script $1`")
-    .replace(/`skills\/([^`]+)`/g, "`installed Wakeflow skill $1`")
-    .replace(/`templates\/([^`]+)`/g, "`installed Wakeflow template $1`");
-}
-
 function rootAgentsContent(context) {
   const wakeflowRel = slash(path.relative(context.parentRoot, context.wakeflowRoot)) || ".";
   const wakeflowPrefix = wakeflowRel === "." ? "" : `${wakeflowRel}/`;
   const runtimePrefix = context.pluginTargetMode ? "" : wakeflowPrefix;
-  const ledgerRel = slash(path.relative(context.parentRoot, context.ledgerPaths.projectLedgerRoot)) || "wakeflow-ledger";
-  let content = readWakeflowFile(context.templateRoot, hostProfile.memoryFile);
-  content = replaceAllLiteral(content, "Wakeflow is the controller workspace", `${context.config.workspaceName} is the controller workspace`);
-  content = replaceAllLiteral(content, "Wakeflow controller", `${context.config.workspaceName} controller`);
-
-  const localConfigPlaceholder = "__WAKEFLOW_LOCAL_CONFIG__";
-  content = replaceAllLiteral(content, ".wakeflow-local/wakeflow.config.json", localConfigPlaceholder);
-  content = replaceAllLiteral(content, ".wakeflow-local/workspace.config.json", localConfigPlaceholder);
-  content = replaceAllLiteral(content, ".wakeflow-active/", `${runtimePrefix}.wakeflow-active/`);
-  content = replaceAllLiteral(content, ".wakeflow-local/", `${runtimePrefix}.wakeflow-local/`);
-  content = replaceAllLiteral(content, "../wakeflow-ledger/", `${ledgerRel}/`);
-  content = replaceAllLiteral(content, "../wakeflow-ledger", ledgerRel);
-  content = content.replace(/(?<![\w./-])wakeflow\.config\.json/g, `${runtimePrefix}wakeflow.config.json`);
-  content = content.replace(/(?<![\w./-])workspace\.config\.json/g, `${runtimePrefix}wakeflow.config.json`);
-  content = replaceAllLiteral(content, localConfigPlaceholder, `${runtimePrefix}.wakeflow-local/wakeflow.config.json`);
-
-  if (context.pluginTargetMode) {
-    content = pluginRootScriptGuidance(content);
-    content = pluginRootCapabilityReferences(content);
-  } else {
-    content = replaceAllLiteral(content, "skills/", `${wakeflowPrefix}skills/`);
-    content = replaceAllLiteral(content, "templates/", `${wakeflowPrefix}templates/`);
-    content = replaceAllLiteral(content, "scripts/", `${wakeflowPrefix}scripts/`);
-    content = replaceAllLiteral(content, `node ${wakeflowPrefix}scripts/`, `cd ${wakeflowRel} && node scripts/`);
-  }
-
-  content = content.replace(/^# .+$/m, `# ${context.config.workspaceName} Agent Instructions`);
-  content = content.replace(
-    /^# .+$/m,
-    (heading) => `${heading}\n\n${hostProfile.texts.rootGeneratedFromBanner(wakeflowRel)}`,
-  );
-  if (context.pluginTargetMode) {
-    content = content.replace(
-      /> This file is generated from[\s\S]*?before execution\./,
-      hostProfile.texts.rootPluginGeneratedBanner,
-    );
-    content = content.replace(
-      /^# .+?\n\n/s,
-      (heading) => `${heading}${hostProfile.texts.rootPluginUsageBanner}`,
-    );
-  }
-
+  const fromParent = (target) => slash(path.relative(context.parentRoot, target)) || ".";
+  const placements = documentPlacements({ workspaceRoot: context.wakeflowRoot, config: context.config });
+  const content = renderRootWorkspaceMemory({
+    workspaceName: context.config.workspaceName,
+    hostName: hostProfile.hostName,
+    generatedBanner: context.pluginTargetMode
+      ? hostProfile.texts.rootPluginGeneratedBanner
+      : hostProfile.texts.rootGeneratedFromBanner(wakeflowRel),
+    usageBanner: context.pluginTargetMode ? hostProfile.texts.rootPluginUsageBanner.trim() : "",
+    configPath: `${runtimePrefix}wakeflow.config.json`,
+    activeIndex: fromParent(path.resolve(context.wakeflowRoot, context.config.workspaceIndexPath)),
+    activeStatus: fromParent(path.resolve(context.wakeflowRoot, context.config.workspaceCurrentStatusPath)),
+    currentDir: fromParent(path.resolve(context.wakeflowRoot, context.config.workspaceCurrentDir)),
+    requirementDir: fromParent(context.ledgerPaths.requirementDesignsDir),
+    goalStageDir: fromParent(placements.goalStage.path),
+    workspaceLedgerDir: fromParent(placements.workspaceRecord.path),
+    archiveDir: fromParent(context.ledgerPaths.workspaceArchiveDir),
+    controllerWindow: context.config.controllerWindow,
+    designWindow: context.config.designWindow,
+    testWindow: context.config.testWindow,
+  });
   return `${ROOT_AGENTS_START}\n${content.trimEnd()}\n${ROOT_AGENTS_END}`;
 }
 
@@ -1164,7 +1099,7 @@ function syncRootAgentsPayload(context = commandContext()) {
     wrote: write && changed,
     changed,
     target,
-    source: path.join(context.templateRoot, hostProfile.memoryFile),
+    source: path.join(context.templateRoot, "scripts/lib/wakeflow-rule-model.mjs"),
     parentRoot: context.parentRoot,
     wakeflowRoot: context.wakeflowRoot,
   };
@@ -1456,17 +1391,15 @@ function configuredStarterContent(context, relativePath) {
   const workspaceName = context.config.workspaceName ?? "Wakeflow";
   const controllerWindow = context.config.controllerWindow ?? workspaceName;
   const updated = new Date().toISOString().slice(0, 10);
+  const placements = documentPlacements({
+    workspaceRoot: context.wakeflowRoot,
+    config: context.config,
+  });
   const projectLedgerRel = relativeFromWorkspaceRoot(context, context.ledgerPaths.projectLedgerRoot);
-  const requirementDesignsRel = relativeFromWorkspaceRoot(context, context.ledgerPaths.requirementDesignsDir);
-  const goalStageConfirmationRel = relativeFromWorkspaceRoot(
-    context,
-    resolveConfigPath(
-      context.wakeflowRoot,
-      context.config.goalStageConfirmationDir ?? path.join(context.config.projectLedgerRoot ?? "wakeflow-ledger", "goal-stage-confirmation"),
-    ),
-  );
+  const requirementDesignsRel = placements.requirement.relativePath;
+  const goalStageConfirmationRel = placements.goalStage.relativePath;
   const workspaceRecordMapRel = relativeFromWorkspaceRoot(context, context.ledgerPaths.workspaceRecordMapPath);
-  const workspaceArchiveRel = relativeFromWorkspaceRoot(context, context.ledgerPaths.workspaceArchiveDir);
+  const workspaceArchiveRel = placements.archive.relativePath;
 
   let content = readWakeflowFile(context.templateRoot, relativePath);
   content = replaceAllLiteral(content, "# Wakeflow Workspace Index", `# ${workspaceName} Workspace Index`);
@@ -1503,6 +1436,18 @@ function configuredStarterContent(context, relativePath) {
   content = replaceAllLiteral(content, "../wakeflow-ledger/workspace/archive/", `${workspaceArchiveRel}/`);
   content = replaceAllLiteral(content, "../wakeflow-ledger/", `${projectLedgerRel}/`);
   content = replaceAllLiteral(content, "../wakeflow-ledger", projectLedgerRel);
+  if (relativePath.endsWith("ledger/requirement-designs/README.md")) {
+    content = content.replace(
+      "## Workflow\n",
+      `## Canonical promotion\n\nDesign may draft in its own \`docs/current/\` area. Before delivery, Design or the controller acting through the same contract must promote the confirmed demand documents into one subdirectory here. Only those promoted files (or goal/stage confirmation records) may be frozen as demand-authority anchors. Window ledgers hold responsibility history, not demand definitions.\n\n## Workflow\n`,
+    );
+  }
+  if (relativePath.endsWith("ledger/goal-stage-confirmation/README.md")) {
+    content = content.replace(
+      "Keep reusable process rules here. Put concrete per-demand confirmation documents\nin the active workspace current directory or the demand's state root, and archive\nthem after acceptance.",
+      "Keep the reusable process and concrete per-demand goal/stage confirmations here. Use one demand-specific document or subdirectory, then let the active state root point to it; do not make an active projection the durable confirmation authority.",
+    );
+  }
   return content;
 }
 
@@ -1547,21 +1492,64 @@ function syncWindowSupportFiles(context, repoRoot, supportName, relativePaths, p
   );
 }
 
+function configuredDesignSupportContent(context, relativePath) {
+  let content = readWakeflowFile(context.templateRoot, `templates/window-support/design/${relativePath}`);
+  const requirementRoot = documentPlacements({
+    workspaceRoot: context.wakeflowRoot,
+    config: context.config,
+  }).requirement.relativePath;
+  if (relativePath === "docs/current/README.md") {
+    content = content.replace(
+      "Design drafts are not executable controller plans. They become executable only\nafter Wakeflow intake attaches them to a state root, TODO, task package, or\ncontroller decision.",
+      `Design drafts are not executable controller plans and are not durable demand authority. When the design is confirmed, promote the demand-defining files into \`${requirementRoot}/<demand-key>/\`; then delivery or controller-inline creation may freeze anchors to those promoted files. Do not freeze \`docs/current/\` or a per-window ledger as demand authority.`,
+    );
+  }
+  if (relativePath === "docs/design-window-operating-policy.md") {
+    content = content.replace(
+      "- A design draft becomes executable only after Wakeflow accepts it, attaches or\n  creates a state root, and creates task packages.",
+      `- A design draft becomes executable only after its confirmed demand documents are promoted to \`${requirementRoot}/<demand-key>/\`, Wakeflow freezes those anchors as demand authority, and the controller creates task packages.`,
+    );
+  }
+  return content;
+}
+
+function configuredInternalRoleMemory(context, repoRoot, role) {
+  const windowName = role === "design" ? context.config.designWindow : context.config.testWindow;
+  const placements = documentPlacements({
+    workspaceRoot: context.wakeflowRoot,
+    config: context.config,
+    windowName,
+  });
+  const fromRole = (target) => relativePathFrom(repoRoot, target);
+  return `${renderInternalRoleMemory({
+    role,
+    hostName: hostProfile.hostName,
+    parentMemory: fromRole(path.join(context.parentRoot, hostProfile.memoryFile)),
+    activeIndex: fromRole(path.resolve(context.wakeflowRoot, context.config.workspaceIndexPath)),
+    activeStatus: fromRole(path.resolve(context.wakeflowRoot, context.config.workspaceCurrentStatusPath)),
+    currentDir: fromRole(path.resolve(context.wakeflowRoot, context.config.workspaceCurrentDir)),
+    requirementDir: fromRole(placements.requirement.path),
+    goalStageDir: fromRole(placements.goalStage.path),
+    windowLedger: fromRole(placements.windowRecord.path),
+    testExchange: fromRole(resolveMaybeRelative(context.wakeflowRoot, context.config.testExchangePath)),
+  })}\n`;
+}
+
 function syncDesignSupportFiles(context, repoRoot, mode) {
   const prefix = mode === "internal" ? "internal design" : "external design";
   const files = [
     ...(mode === "internal"
       ? [
           ensureTextFile(path.join(repoRoot, ".gitignore"), readWakeflowFile(context.templateRoot, "templates/window-support/design/.gitignore"), `${prefix} gitignore`),
-          ensureTextFile(path.join(repoRoot, hostProfile.memoryFile), readWakeflowFile(context.templateRoot, `templates/window-support/design/${hostProfile.memoryFile}`), `${prefix} agents`),
+          ensureTextFile(path.join(repoRoot, hostProfile.memoryFile), configuredInternalRoleMemory(context, repoRoot, "design"), `${prefix} agents`),
           ensureTextFile(path.join(repoRoot, "README.md"), internalDesignReadme(context.config), `${prefix} readme`),
         ]
       : []),
     ensureTextFile(path.join(repoRoot, "docs/index.md"), readWakeflowFile(context.templateRoot, "templates/window-support/design/docs/index.md"), `${prefix} docs index`),
-    ensureTextFile(path.join(repoRoot, "docs/current/README.md"), readWakeflowFile(context.templateRoot, "templates/window-support/design/docs/current/README.md"), `${prefix} current readme`),
+    ensureTextFile(path.join(repoRoot, "docs/current/README.md"), configuredDesignSupportContent(context, "docs/current/README.md"), `${prefix} current readme`),
     ensureTextFile(
       path.join(repoRoot, "docs/design-window-operating-policy.md"),
-      readWakeflowFile(context.templateRoot, "templates/window-support/design/docs/design-window-operating-policy.md"),
+      configuredDesignSupportContent(context, "docs/design-window-operating-policy.md"),
       `${prefix} operating policy`,
     ),
     ensureTextFile(
@@ -1584,7 +1572,7 @@ function syncTestSupportFiles(context, repoRoot, mode) {
     ...(mode === "internal"
       ? [
           ensureTextFile(path.join(repoRoot, ".gitignore"), readWakeflowFile(context.templateRoot, "templates/window-support/testing/.gitignore"), `${prefix} gitignore`),
-          ensureTextFile(path.join(repoRoot, hostProfile.memoryFile), readWakeflowFile(context.templateRoot, `templates/window-support/testing/${hostProfile.memoryFile}`), `${prefix} agents`),
+          ensureTextFile(path.join(repoRoot, hostProfile.memoryFile), configuredInternalRoleMemory(context, repoRoot, "test"), `${prefix} agents`),
           ensureTextFile(path.join(repoRoot, "README.md"), internalTestingReadme(context.config), `${prefix} readme`),
         ]
       : []),
@@ -1611,11 +1599,9 @@ function syncTestSupportFiles(context, repoRoot, mode) {
 function syncStarterLedgerFiles(context) {
   const sourceRoot = "templates/starter-workspace/workspace";
   const ledgerRoot = "templates/starter-workspace/ledger";
-  const workspaceLedgerDir = path.dirname(context.ledgerPaths.workspaceRecordMapPath);
-  const goalStageConfirmationDir = resolveConfigPath(
-    context.wakeflowRoot,
-    context.config.goalStageConfirmationDir ?? path.join(context.config.projectLedgerRoot ?? "wakeflow-ledger", "goal-stage-confirmation"),
-  );
+  const placements = documentPlacements({ workspaceRoot: context.wakeflowRoot, config: context.config });
+  const workspaceLedgerDir = placements.workspaceRecord.path;
+  const goalStageConfirmationDir = placements.goalStage.path;
   return [
     ensureTextFile(context.ledgerPaths.workspaceIndexPath, configuredStarterContent(context, `${sourceRoot}/index.md`), "active workspace index", { refreshStarter: true }),
     ensureTextFile(context.ledgerPaths.workspaceCurrentIndexPath, configuredStarterContent(context, `${sourceRoot}/current/index.md`), "active current index", { refreshStarter: true }),
@@ -1634,6 +1620,11 @@ function syncStarterLedgerFiles(context) {
 }
 
 function windowLedgerReadme(context, repo) {
+  const placement = documentPlacements({
+    workspaceRoot: context.wakeflowRoot,
+    config: context.config,
+    windowName: repo.windowName,
+  }).windowRecord;
   return `# ${repo.windowName}
 
 This directory stores project-specific coordination records for ${repo.windowName}.
@@ -1641,7 +1632,9 @@ This directory stores project-specific coordination records for ${repo.windowNam
 - Window responsibility: ${repo.role}
 - Source repository scope: \`${repo.path}\`
 - Keep source code changes in the source repository.
-- Keep cross-window task records, backfills, acceptance notes, and handoff evidence here.
+- Keep ${placement.description.toLowerCase()} here.
+- Lifecycle: ${placement.lifecycle}.
+- Do not place requirement definitions, goal/stage decisions, or workspace-wide plans here.
 `;
 }
 
@@ -2389,8 +2382,9 @@ function initializePayload() {
         wrote: false,
         configPath: context.configPath,
         nextConfig: context.config,
+        nextEffectiveConfig: context.config,
       };
-  const installContext = contextWithConfig(context, configured.nextConfig);
+  const installContext = contextWithConfig(context, configured.nextEffectiveConfig);
   const language = interfaceLanguage(installContext);
   const launchEntries = windowLaunchEntries(installContext, {
     includeRealProject: hasFlag("--include-real-project"),

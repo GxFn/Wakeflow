@@ -17,6 +17,8 @@ import test from "node:test";
 
 const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
 const installScript = path.join(workspaceRoot, "scripts/wakeflow-setup.mjs");
+const claudeWorkspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/claude-code-wakeflow");
+const claudeInstallScript = path.join(claudeWorkspaceRoot, "scripts/wakeflow-setup.mjs");
 
 function writeFile(file, content) {
   mkdirSync(path.dirname(file), { recursive: true });
@@ -103,8 +105,11 @@ test("configure writes user-confirmed sibling mappings into wakeflow.config.json
   ]);
   assert.equal(payload.wrote, true);
   const config = JSON.parse(readFileSync(path.join(fixture.control, "wakeflow.config.json"), "utf8"));
-  assert.equal(config.workspaceRoot, "..");
-  assert.equal(config.wakeflowRepoDir, "Wakeflow");
+  assert.equal(config.schemaVersion, 2);
+  assert.match(config.$schema, /wakeflow-config\.schema\.json$/);
+  assert.equal(config.workspace.root, "..");
+  assert.equal(config.workspace.wakeflowRepoDir, "Wakeflow");
+  assert.equal(config.roles.controller, "FixtureWorkspace");
   // Derived views are no longer persisted; the loader produces them.
   assert.equal(config.repoNames, undefined);
   assert.equal(config.dispatchWindows, undefined);
@@ -118,9 +123,10 @@ test("configure writes user-confirmed sibling mappings into wakeflow.config.json
       ["Test", "../Test"],
     ],
   );
-  assert.equal(config.testExchangePath, ".wakeflow-active/current/test-exchange.md");
-  assert.equal(config.goalStageConfirmationDir, "../wakeflow-ledger/goal-stage-confirmation");
-  assert.deepEqual(config.protectedWorkspacePrefixes, []);
+  assert.equal(config.testExchangePath, undefined);
+  assert.equal(config.goalStageConfirmationDir, undefined);
+  assert.equal(config.storage.paths, undefined);
+  assert.equal(config.policy.protectedWorkspacePrefixes, undefined);
 });
 
 test("configure writes durable config without overwriting the derived stream overlay", () => {
@@ -157,8 +163,27 @@ test("configure writes durable config without overwriting the derived stream ove
     "--write",
   ]);
   assert.equal(path.resolve(payload.configPath), durableFile);
-  assert.equal(JSON.parse(readFileSync(durableFile, "utf8")).workspaceName, "DurableChanged");
+  assert.equal(JSON.parse(readFileSync(durableFile, "utf8")).workspace.name, "DurableChanged");
   assert.equal(readFileSync(overlayFile, "utf8"), beforeOverlay);
+});
+
+test("configure preserves an existing unmanaged repository boundary during v2 migration", () => {
+  const fixture = makeFixture();
+  const file = path.join(fixture.control, "wakeflow.config.json");
+  const config = JSON.parse(readFileSync(file, "utf8"));
+  config.repositories[0].managedAgents = false;
+  writeFile(file, JSON.stringify(config, null, 2));
+
+  const payload = runJson(fixture, [
+    "configure",
+    "--repo", "BaseWindow=../BaseWindow",
+    "--repo", "PluginWindow=../PluginWindow",
+  ]);
+  const base = payload.nextConfig.repositories.find((repo) => repo.windowName === "BaseWindow");
+  const plugin = payload.nextConfig.repositories.find((repo) => repo.windowName === "PluginWindow");
+  assert.equal(base.managedAgents, false);
+  assert.equal(plugin.managedAgents, true);
+  assert.equal(payload.wrote, false);
 });
 
 test("sync-gitignore adds Wakeflow runtime entries idempotently", () => {
@@ -224,10 +249,10 @@ test("initialize previews a plugin-managed target workspace without a local Wake
   payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true);
   assert.equal(payload.mode, "plan");
-  assert.equal(payload.steps.configure.nextConfig.workspaceRoot, ".");
-  assert.equal(payload.steps.configure.nextConfig.projectLedgerRoot, "wakeflow-ledger");
+  assert.equal(payload.steps.configure.nextConfig.workspace.root, ".");
+  assert.equal(payload.steps.configure.nextConfig.storage.ledgerRoot, "wakeflow-ledger");
   assert.equal(payload.steps.configure.nextConfig.repositories[0].path, "AppRepo");
-  assert.equal(payload.steps.syncRootAgents.source, path.join(workspaceRoot, "AGENTS.md"));
+  assert.equal(payload.steps.syncRootAgents.source, path.join(workspaceRoot, "scripts/lib/wakeflow-rule-model.mjs"));
   assert.equal(payload.steps.writeAgents.ok, true);
   assert.equal(existsSync(path.join(parent, "AGENTS.md")), false);
   assert.equal(existsSync(path.join(parent, "Design/AGENTS.md")), false);
@@ -336,14 +361,15 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.equal(payload.mode, "apply");
   assert.equal(payload.steps.gitignore.wakeflowManagedOnly, true);
   assert.match(payload.steps.gitignore.policy, /Do not add product repositories/);
-  assert.equal(payload.steps.configure.nextConfig.workspaceRoot, ".");
-  assert.equal(payload.steps.configure.nextConfig.projectLedgerRoot, "wakeflow-ledger");
+  assert.equal(payload.steps.configure.nextConfig.workspace.root, ".");
+  assert.equal(payload.steps.configure.nextConfig.storage.ledgerRoot, "wakeflow-ledger");
 
   const config = JSON.parse(readFileSync(path.join(parent, "wakeflow.config.json"), "utf8"));
-  assert.equal(config.workspaceRoot, ".");
-  assert.equal(config.runtimeMode, "plugin");
-  assert.equal(config.projectLedgerRoot, "wakeflow-ledger");
-  assert.deepEqual(config.protectedWorkspacePrefixes, ["AppRepo/"]);
+  assert.equal(config.workspace.root, ".");
+  assert.equal(config.workspace.runtimeMode, "plugin");
+  assert.equal(config.storage.ledgerRoot, "wakeflow-ledger");
+  assert.equal(config.policy.protectedWorkspacePrefixes, undefined);
+  assert.deepEqual(payload.steps.configure.nextEffectiveConfig.protectedWorkspacePrefixes, ["AppRepo/"]);
   assert.equal(payload.steps.gitignore.wrote, true);
   const gitignore = readFileSync(path.join(parent, ".gitignore"), "utf8");
   assert.match(gitignore, /^\.wakeflow-active\/$/m);
@@ -352,8 +378,9 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.doesNotMatch(gitignore, /^AppRepo\/$/m);
   assert.doesNotMatch(gitignore, /^Design\/$/m);
   assert.doesNotMatch(gitignore, /^Test\/$/m);
-  assert.equal(config.goalStageConfirmationDir, "wakeflow-ledger/goal-stage-confirmation");
-  assert.equal(config.wakeflowRepoDir, "");
+  assert.equal(config.goalStageConfirmationDir, undefined);
+  assert.equal(payload.steps.configure.nextEffectiveConfig.goalStageConfirmationDir, "wakeflow-ledger/goal-stage-confirmation");
+  assert.equal(config.workspace.wakeflowRepoDir, "");
   assert.equal(config.repositories[0].path, "AppRepo");
   assert.equal(config.repositories.find((repo) => repo.windowName === "Design").path, "Design");
   assert.equal(config.repositories.find((repo) => repo.windowName === "Test").path, "Test");
@@ -362,7 +389,8 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.match(rootAgents, /Wakeflow is installed as a Codex plugin for this workspace/);
   assert.match(rootAgents, /Use Wakeflow MCP tools/);
   assert.match(rootAgents, /Do not call installed runtime scripts directly/);
-  assert.match(rootAgents, /Wakeflow verification MCP capability/);
+  assert.match(rootAgents, /wakeflow:rule:WF-STATE-AUTHORITY/);
+  assert.match(rootAgents, /wakeflow-controller.*wakeflow-governance/);
   assert.match(rootAgents, /wakeflow\.config\.json/);
   assert.doesNotMatch(rootAgents, /node scripts\/wakeflow-setup\.mjs/);
   assert.doesNotMatch(rootAgents, /installed runtime fallback/);
@@ -375,9 +403,27 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   const appAgents = readFileSync(path.join(parent, "AppRepo", "AGENTS.md"), "utf8");
   assert.match(appAgents, /## Workspace Access Card/);
   assert.match(appAgents, /Existing app rule/);
+  assert.match(appAgents, /wakeflow:rule:WF-DEMAND-FREEZE/);
+  assert.match(appAgents, /load both `wakeflow-target` and `wakeflow-target-craft`/);
+  assert.doesNotMatch(appAgents, /build-controller-return|record-delivery-run/);
   assert.match(appAgents, /Active workspace index: `\.\.\/\.wakeflow-active\/index\.md`/);
+  assert.match(appAgents, /Demand definitions.*`\.\.\/wakeflow-ledger\/requirement-designs\/`/);
+  assert.match(appAgents, /responsibility-specific.*do not place demand definitions there/);
+  assert.doesNotMatch(appAgents, /Long-term cross-repository collaboration docs.*window ledger/);
   assert.equal(existsSync(path.join(parent, "Design/AGENTS.md")), true);
+  assert.match(
+    readFileSync(path.join(parent, "Design/docs/current/README.md"), "utf8"),
+    /promote the demand-defining files.*wakeflow-ledger\/requirement-designs/s,
+  );
   assert.equal(existsSync(path.join(parent, "Test/AGENTS.md")), true);
+  assert.match(
+    readFileSync(path.join(parent, "wakeflow-ledger/goal-stage-confirmation/README.md"), "utf8"),
+    /concrete per-demand goal\/stage confirmations here/,
+  );
+  assert.doesNotMatch(
+    readFileSync(path.join(parent, "wakeflow-ledger/goal-stage-confirmation/README.md"), "utf8"),
+    /Put concrete per-demand confirmation documents\s+in the active workspace current directory/,
+  );
   assert.equal(existsSync(path.join(parent, "scripts/README.md")), false);
   assert.equal(existsSync(path.join(parent, "wakeflow-ledger/requirement-designs/README.md")), true);
   assert.equal(existsSync(path.join(parent, "wakeflow-ledger/goal-stage-confirmation/README.md")), true);
@@ -408,7 +454,7 @@ test("initialize applies a plugin-managed target workspace without copying Wakef
   assert.equal(synced.status, 0, synced.stderr || synced.stdout);
   const rootAgentsAfterSync = readFileSync(path.join(parent, "AGENTS.md"), "utf8");
   assert.match(rootAgentsAfterSync, /Wakeflow is installed as a Codex plugin for this workspace/);
-  assert.match(rootAgentsAfterSync, /Wakeflow verification MCP capability/);
+  assert.match(rootAgentsAfterSync, /wakeflow:rule:WF-STATE-AUTHORITY/);
   assert.match(rootAgentsAfterSync, /Do not call installed runtime scripts directly/);
   assert.doesNotMatch(rootAgentsAfterSync, /node scripts\/wakeflow-setup\.mjs/);
   assert.doesNotMatch(rootAgentsAfterSync, /installed runtime fallback/);
@@ -453,10 +499,8 @@ test("initialize does not reuse similar Design/Test directories unless explicitl
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse(result.stdout);
   const config = JSON.parse(readFileSync(path.join(parent, "wakeflow.config.json"), "utf8"));
-  assert.equal(config.designWindow, "Design");
-  assert.equal(config.testWindow, "Test");
-  assert.equal(config.internalDesignPath, "Design");
-  assert.equal(config.internalTestPath, "Test");
+  assert.equal(config.roles.design, "Design");
+  assert.equal(config.roles.test, "Test");
   assert.deepEqual(
     config.repositories.map((repo) => [repo.windowName, repo.path, repo.mode]),
     [
@@ -1232,24 +1276,20 @@ test("write-agents is dry-run by default and writes managed access cards with --
   const baseAgents = readFileSync(path.join(fixture.base, "AGENTS.md"), "utf8");
   assert.match(baseAgents, /wakeflow:scope:start/);
   assert.match(baseAgents, /## Workspace Access Card/);
-  assert.match(baseAgents, /records this window access coordinates and the minimum automation gate/);
+  assert.match(baseAgents, /stable identity and authority boundaries/);
   assert.match(baseAgents, /Window name: `BaseWindow`/);
   assert.match(baseAgents, /Parent workspace AGENTS: `\.\.\/AGENTS\.md`/);
   assert.match(baseAgents, /Active workspace index: `\.\.\/Wakeflow\/\.wakeflow-active\/index\.md`/);
   assert.match(baseAgents, /Current plan directory: `\.\.\/Wakeflow\/\.wakeflow-active\/current`/);
   assert.match(baseAgents, /Window ledger: `\.\.\/wakeflow-ledger\/BaseWindow`/);
-  assert.match(baseAgents, /Direct-thread delivery is the normal work transport/);
-  assert.match(baseAgents, /Delivery prompts carry one bounded task-focus sentence, navigation\/freshness variables/);
-  assert.match(baseAgents, /`currentWindow`, `taskId`, `taskPackageId`, `stateRoot`, `stateRevision`/);
-  assert.match(baseAgents, /visible `stateRevision` identifies the dispatch snapshot/);
-  assert.match(baseAgents, /implementation package carries `acceptanceAnchors`/);
-  assert.match(baseAgents, /map each anchor to a RED test\/probe before coding/);
-  assert.match(baseAgents, /returns `TargetResultEnvelope`/);
-  assert.match(baseAgents, /The full group snapshot stays in the controller-return envelope/);
-  assert.match(baseAgents, /Codex subagents are recommended for bounded parallel assistance/);
-  assert.match(baseAgents, /Functional Completeness Self-Check/);
-  assert.match(baseAgents, /Do not rely on the controller to discover obvious gaps/);
-  assert.match(baseAgents, /do not downgrade a complete capability into a thin adapter/);
+  assert.match(baseAgents, /wakeflow:rule:WF-IDENTITY/);
+  assert.match(baseAgents, /The prompt is a wakeup\/navigation aid, not the full specification/);
+  assert.match(baseAgents, /Map each acceptance anchor to a concrete RED probe before implementation/);
+  assert.match(baseAgents, /TargetResultEnvelope/);
+  assert.match(baseAgents, /compare the diff and validation against the original objective/);
+  assert.match(baseAgents, /do not report completion and rely on total control to find obvious gaps/);
+  assert.match(baseAgents, /Detailed transport, readback, retry, Pod, and archive procedures live in the matching Skill\/reference/);
+  assert.doesNotMatch(baseAgents, /build-controller-return|record-delivery-run|resultVersionKey/);
   assert.match(baseAgents, /return `blocked` or `needs-review`/);
   assert.doesNotMatch(baseAgents, /controlPlan/);
   assert.doesNotMatch(baseAgents, /backfill must include completion scope/);
@@ -1327,22 +1367,18 @@ test("write-agents can explicitly include unmanaged Design/Test windows while sk
 
   const designAgents = readFileSync(path.join(design, "AGENTS.md"), "utf8");
   assert.match(designAgents, /Window name: `Design`/);
-  assert.match(designAgents, /### Skill Assistance/);
-  assert.match(designAgents, /Design work should proactively surface relevant local Design skills/);
-  assert.match(designAgents, /name the smallest matching skill/);
-  assert.match(designAgents, /Functional Completeness Self-Check/);
-  assert.match(designAgents, /Do not rely on the controller to discover obvious gaps/);
+  assert.match(designAgents, /## Skill routing/);
+  assert.match(designAgents, /smallest matching local Design Skill/);
+  assert.match(designAgents, /compare the diff and validation against the original objective/);
   assert.doesNotMatch(designAgents, /must not dispatch implementation/);
 
   const testAgents = readFileSync(path.join(testWindow, "AGENTS.md"), "utf8");
   assert.match(testAgents, /Window name: `Test`/);
   assert.match(testAgents, /Test exchange projection: `\.\.\/Wakeflow\/\.wakeflow-active\/current\/test-exchange\.md`/);
-  assert.match(testAgents, /Non-Test windows must not create, process, or verify Test delivery/);
-  assert.match(testAgents, /### Skill Assistance/);
-  assert.match(testAgents, /Test work should proactively surface relevant local Test skills/);
-  assert.match(testAgents, /validating long chains/);
-  assert.match(testAgents, /Functional Completeness Self-Check/);
-  assert.match(testAgents, /Do not rely on the controller to discover obvious gaps/);
+  assert.match(testAgents, /Do not invent goals, fix product code, or replace controller acceptance/);
+  assert.match(testAgents, /## Skill routing/);
+  assert.match(testAgents, /smallest matching local Test Skill/);
+  assert.match(testAgents, /compare the diff and validation against the original objective/);
   assert.doesNotMatch(testAgents, /default test queue/);
 });
 
@@ -1371,11 +1407,10 @@ test("write-agents supports multiple workspace windows sharing one AGENTS.md", (
   assert.match(sharedAgents, /Window ledgers for this repository:/);
   assert.match(sharedAgents, /`TestIDE`: `\.\.\/wakeflow-ledger\/TestIDE`/);
   assert.match(sharedAgents, /`TestWindow`: `\.\.\/wakeflow-ledger\/TestWindow`/);
-  assert.match(sharedAgents, /only handles dispatch packets for the windows listed in this access card/);
-  assert.match(sharedAgents, /Non-Test windows must not create, process, or verify TestWindow \/ TestIDE delivery/);
-  assert.match(sharedAgents, /currentWindow/);
-  assert.match(sharedAgents, /### Skill Assistance/);
-  assert.match(sharedAgents, /Test work should proactively surface relevant local Test skills/);
+  assert.match(sharedAgents, /This repository serves one of the windows listed in this access card/);
+  assert.match(sharedAgents, /Do not invent goals, fix product code, or replace controller acceptance/);
+  assert.match(sharedAgents, /## Skill routing/);
+  assert.match(sharedAgents, /smallest matching local Test Skill/);
 
   const ideProfile = runJson(fixture, ["access-profiles", "--window", "TestIDE"]).profiles[0];
   const testProfile = runJson(fixture, ["access-profiles", "--window", "TestWindow"]).profiles[0];
@@ -1399,9 +1434,11 @@ test("sync-root-agents unpacks parent AGENTS with Wakeflow repo paths", () => {
   assert.match(rootAgents, /Wakeflow\/\.wakeflow-active\/index\.md|controller state roots/);
   assert.match(rootAgents, /cd Wakeflow && node scripts\/wakeflow-setup\.mjs sync-root-agents --write/);
   assert.match(rootAgents, /Wakeflow\/wakeflow\.config\.json/);
-  assert.match(rootAgents, /## Controller Posture/);
-  assert.match(rootAgents, /## Role Map/);
-  assert.match(rootAgents, /The controller workspace owns cross-repository goal intake/);
+  assert.match(rootAgents, /## Identity and first read/);
+  assert.match(rootAgents, /## Repository boundary/);
+  assert.match(rootAgents, /owns cross-repository sequencing and final acceptance/);
+  assert.match(rootAgents, /wakeflow:rule:WF-SKILL-ROUTING/);
+  assert.doesNotMatch(rootAgents, /build-controller-return|record-delivery-run|resultVersionKey/);
   // The operator's stop-card / confirmation-gate discipline is no longer baked into the
   // reusable render; it lives in each workspace's own preserved Personal Operating Constraints.
   assert.doesNotMatch(rootAgents, /## Highest Stop Card/);
@@ -1409,6 +1446,64 @@ test("sync-root-agents unpacks parent AGENTS with Wakeflow repo paths", () => {
   assert.doesNotMatch(rootAgents, /FixtureWorkspace is the controller workspace/);
   assert.doesNotMatch(rootAgents, /plugin form/);
   assert.doesNotMatch(rootAgents, /FixtureWorkspace repository/);
+});
+
+test("sync-root-agents refreshes only its managed block and preserves personal rules", () => {
+  const fixture = makeFixture();
+  writeFile(path.join(fixture.parent, "AGENTS.md"), "# Personal Workspace Rules\n\nKeep this operator rule exactly.");
+
+  runJson(fixture, ["sync-root-agents", "--write"]);
+  let rootAgents = readFileSync(path.join(fixture.parent, "AGENTS.md"), "utf8");
+  assert.match(rootAgents, /wakeflow:root-agents:start/);
+  assert.match(rootAgents, /Keep this operator rule exactly\./);
+
+  runJson(fixture, ["sync-root-agents", "--write"]);
+  rootAgents = readFileSync(path.join(fixture.parent, "AGENTS.md"), "utf8");
+  assert.equal((rootAgents.match(/Keep this operator rule exactly\./g) ?? []).length, 1);
+  assert.equal((rootAgents.match(/wakeflow:root-agents:start/g) ?? []).length, 1);
+});
+
+test("Codex and Claude generated memories share one semantic rule set without operation manuals", () => {
+  const cases = [
+    { script: installScript, memoryFile: "AGENTS.md" },
+    { script: claudeInstallScript, memoryFile: "CLAUDE.md" },
+  ];
+  const markerSets = [];
+  for (const item of cases) {
+    const parent = mkdtempSync(path.join(os.tmpdir(), "wakeflow-memory-semantics-"));
+    mkdirSync(path.join(parent, "AppRepo", ".git"), { recursive: true });
+    const result = runSync(process.execPath, [
+      item.script,
+      "initialize",
+      "--root", parent,
+      "--use-discovered",
+      "--internal-design",
+      "--internal-test",
+      "--write",
+      "--json",
+    ], { cwd: path.dirname(item.script), encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(JSON.parse(result.stdout).ok, true);
+    const memories = [
+      path.join(parent, item.memoryFile),
+      path.join(parent, "AppRepo", item.memoryFile),
+      path.join(parent, "Design", item.memoryFile),
+      path.join(parent, "Test", item.memoryFile),
+    ].map((file) => readFileSync(file, "utf8"));
+    const markers = [...memories[0].matchAll(/wakeflow:rule:(WF-[A-Z-]+)/g)].map((match) => match[1]);
+    markerSets.push(markers);
+    for (const memory of memories) {
+      assert.match(memory, /wakeflow:rule:WF-IDENTITY/);
+      assert.match(memory, /wakeflow:rule:WF-STATE-AUTHORITY/);
+      assert.match(memory, /wakeflow:rule:WF-SKILL-ROUTING/);
+      assert.doesNotMatch(memory, /build-controller-return|record-delivery-run|resultVersionKey|clientThreadId|boot-wait-ms/);
+    }
+    assert.match(memories[0], /read the selected state root/);
+    assert.match(memories[1], /Stop if the state root, task\/package identity/);
+    assert.match(memories[2], /Drafts stay under `docs\/current\/`/);
+    assert.match(memories[3], /Do not invent targets, strengthen requirements/);
+  }
+  assert.deepEqual(markerSets[0], markerSets[1]);
 });
 
 test("sync-templates creates internal Design and Test surfaces when no external directories exist", () => {
@@ -1447,14 +1542,11 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   assert.equal(existsSync(path.join(fixture.parent, "Design/skills/design-handoff/SKILL.md")), true);
   const designAgents = readFileSync(path.join(fixture.parent, "Design/AGENTS.md"), "utf8");
   assert.match(designAgents, /`skills\/README\.md`/);
-  assert.match(designAgents, /skill-fit check/);
-  assert.match(designAgents, /Default to chat first/);
-  assert.match(designAgents, /not automatic file writers/);
-  assert.match(designAgents, /whenever a requirement conversation matches a skill purpose/);
-  assert.match(designAgents, /Functional Completeness Self-Check/);
-  assert.match(designAgents, /Do not rely on the controller to discover obvious gaps/);
-  assert.match(designAgents, /downgrade a complete/);
-  assert.doesNotMatch(designAgents, /optional Design-local methods/);
+  assert.match(designAgents, /This is the Design responsibility window/);
+  assert.match(designAgents, /Drafts stay under `docs\/current\/`/);
+  assert.match(designAgents, /promote demand-defining files to `\.\.\/wakeflow-ledger\/requirement-designs/);
+  assert.match(designAgents, /Skills define the method/);
+  assert.doesNotMatch(designAgents, /build-controller-return|record-delivery-run|clientThreadId/);
   const designReadme = readFileSync(path.join(fixture.parent, "Design/README.md"), "utf8");
   assert.match(designReadme, /Design skill map: `skills\/README\.md`/);
   assert.match(designReadme, /conversational methods first/);
@@ -1497,12 +1589,11 @@ test("sync-templates creates internal Design and Test surfaces when no external 
   assert.equal(existsSync(path.join(fixture.parent, "Test/templates/test-handoff-template.md")), true);
   const testAgents = readFileSync(path.join(fixture.parent, "Test/AGENTS.md"), "utf8");
   assert.match(testAgents, /`skills\/README\.md`/);
-  assert.match(testAgents, /Skill Routing/);
-  assert.match(testAgents, /proactively recommend the smallest matching Test skill/);
-  assert.match(testAgents, /skills\/evidence-review\/SKILL\.md/);
-  assert.match(testAgents, /Functional Completeness Self-Check/);
-  assert.match(testAgents, /do not present them as controller validation or acceptance, and do not rely on the controller to discover obvious gaps/i);
-  assert.match(testAgents, /downgrade a complete/);
+  assert.match(testAgents, /## Skill routing/);
+  assert.match(testAgents, /smallest matching skill for strategy, triage, regression, evidence review/);
+  assert.match(testAgents, /Do not invent targets, strengthen requirements/);
+  assert.match(testAgents, /Start only after total control has validated and accepted/);
+  assert.doesNotMatch(testAgents, /build-controller-return|record-delivery-run|clientThreadId/);
   const testReadme = readFileSync(path.join(fixture.parent, "Test/README.md"), "utf8");
   assert.match(testReadme, /Test skill map: `skills\/README\.md`/);
   assert.match(testReadme, /Test skills are validation methods first/);

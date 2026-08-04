@@ -32,6 +32,7 @@ import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { hostProfile } from "./wakeflow-host-profile.mjs";
+import { loadWorkspaceConfig } from "./wakeflow-config.mjs";
 import { stableArtifactPart } from "./wakeflow-artifact-identity.mjs";
 import { claudePaneReadbackPolicy } from "./wakeflow-host-send-adapter.mjs";
 import { contentDigest } from "./wakeflow-pod-runtime.mjs";
@@ -190,9 +191,20 @@ function readEffectiveConfig() {
   const configFile = effectiveConfigFile();
   if (!existsSync(configFile)) return {};
   try {
-    return JSON.parse(readFileSync(configFile, "utf8"));
+    return loadWorkspaceConfig({ workspaceRoot, args: ["--config", configFile] });
   } catch (error) {
     fail(`unreadable workspace config ${configFile}: ${error.message}; fix or remove it before host operations.`);
+  }
+  return {};
+}
+
+function readTrackedEffectiveConfig() {
+  const configFile = trackedConfigFile(workspaceRoot);
+  if (!existsSync(configFile)) return {};
+  try {
+    return loadWorkspaceConfig({ workspaceRoot, args: ["--config", configFile] });
+  } catch (error) {
+    fail(`unreadable workspace config ${configFile}: ${error.message}; fix it before host operations.`);
   }
   return {};
 }
@@ -1549,7 +1561,7 @@ function readWorkspaceWindowModel() {
   // isolation. Pods resume via pod-open.
   const configFile = trackedConfigFile(workspaceRoot);
   if (!existsSync(configFile)) fail("wakeflow.config.json not found; run initialization first.");
-  const config = readJson(configFile, "workspace config");
+  const config = readTrackedEffectiveConfig();
   const repositories = Array.isArray(config.repositories) ? config.repositories : [];
   const names = repositories.map((repo) => repo.windowName).filter(Boolean);
   const controller = config.controllerWindow;
@@ -1789,7 +1801,7 @@ function buildEntrySyncPrompt(windowName, repo) {
 }
 
 function readRepositoryForWindow(windowName) {
-  const config = readJson(effectiveConfigFile(), "workspace config");
+  const config = readEffectiveConfig();
   // Titles are ASCII by design: CJK names were repeatedly mangled by shell
   // locale hops between the controller agent, tmux, and display surfaces.
   if (windowName === config.controllerWindow) {
@@ -1941,8 +1953,9 @@ function commandCheckWorkspace() {
   if (path.basename(configFile) === "workspace.config.json") {
     note("workspace-config", "legacy-name", "Rename workspace.config.json to wakeflow.config.json (git mv; reads keep working on the legacy name, but the canonical name makes it clearly Wakeflow's config).");
   }
-  const config = readJson(configFile, "workspace config");
-  if (!config.hosts || typeof config.hosts !== "object" || !config.hosts["claude-code"]) {
+  const durableConfig = readJson(configFile, "workspace config");
+  const config = readTrackedEffectiveConfig();
+  if (!durableConfig.hosts || typeof durableConfig.hosts !== "object" || !durableConfig.hosts["claude-code"]) {
     note("workspace-config", "hosts-block-missing", "Add hosts.claude-code (e.g. { \"tmuxSession\": \"wakeflow\" }) to wakeflow.config.json.");
   }
 
@@ -2155,7 +2168,8 @@ process.stdin.on("end", () => {
   let label = windowName || path.basename(cwd);
   try {
     const config = JSON.parse(readFileSync(trackedConfigFile(root), "utf8"));
-    if (windowName && windowName === config.controllerWindow) label = "Controller";
+    const controllerWindow = config.roles?.controller ?? config.controllerWindow;
+    if (windowName && windowName === controllerWindow) label = "Controller";
   } catch { /* keep label */ }
   const name = model.display_name || model.id || "model?";
   console.log(\`\${name} \u00b7 \${label}\`);
@@ -2187,7 +2201,7 @@ const SEED_ALLOW_RULES = [
 function readWorkspaceRepositories() {
   const configFile = trackedConfigFile(workspaceRoot);
   if (!existsSync(configFile)) return [];
-  const config = readJson(configFile, "workspace config");
+  const config = readTrackedEffectiveConfig();
   return (Array.isArray(config.repositories) ? config.repositories : [])
     .filter((repo) => repo && repo.path)
     .map((repo) => path.resolve(workspaceRoot, repo.path))
@@ -2343,7 +2357,7 @@ function commandStreamOpen() {
   } catch (error) {
     fail(error.message);
   }
-  const baseConfig = readJson(trackedFile, "workspace config");
+  const baseConfig = readTrackedEffectiveConfig();
   const repoEntry = (Array.isArray(baseConfig.repositories) ? baseConfig.repositories : [])
     .find((repo) => repo.windowName === repoWindow);
   if (!repoEntry) fail(`--repo ${repoWindow} is not a configured repository window.`);

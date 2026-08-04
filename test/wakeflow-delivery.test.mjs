@@ -29,6 +29,7 @@ import {
   deliveryTransportStatus,
 } from "../plugins/codex-wakeflow/scripts/lib/wakeflow-idempotency.mjs";
 import { buildControllerReviewPack } from "../plugins/codex-wakeflow/scripts/lib/wakeflow-review-pack.mjs";
+import { demandAuthorityDigest } from "../plugins/codex-wakeflow/scripts/lib/wakeflow-demand-authority.mjs";
 import {
   buildWindowDispatchConfig,
   createThreadRegistration,
@@ -972,8 +973,9 @@ test("target skills follow the current-version callback plan instead of a stale 
     assert.match(skill, /delivery-sent event may[\s\S]*advance the live state root/);
   }
   const setupSource = readFileSync(path.resolve(workspaceRoot, "../../core/scripts/wakeflow-setup.mjs"), "utf8");
-  assert.match(setupSource, /exactly one controller-return envelope per callback scope and \\`resultVersionKey\\`/);
-  assert.match(setupSource, /legal superseding target result creates a new result version/);
+  assert.match(setupSource, /Detailed transport, readback, retry, Pod, and archive procedures live in the matching Skill\/reference/);
+  assert.doesNotMatch(setupSource, /exactly one controller-return envelope per callback scope and \\`resultVersionKey\\`/);
+  assert.doesNotMatch(setupSource, /legal superseding target result creates a new result version/);
 });
 
 test("review pack exposes required craft gaps before reduce while keeping callback transport independent", () => {
@@ -1157,6 +1159,40 @@ test("prepare-dispatch defaults the dispatch group's controllerWindow to the con
   // never an empty value that the controller-return would then resolve by guessing.
   assert.equal(payload.dispatchGroup.controllerWindow, "AlembicWorkspace",
     "dispatch group must carry the configured controllerWindow even without --controller-window");
+});
+
+test("target prompt resolves frozen demand authority from the target repository cwd", () => {
+  const { root, stateRootRef, stateRoot } = makeFixture();
+  const authority = {
+    schemaVersion: 1,
+    artifactKind: "wakeflow-demand-authority",
+    demandKey: "CSMR-FIXTURE",
+    demandType: "research",
+    entryMode: "controller-inline",
+    authorityRefs: [
+      { role: "research-question", ref: "authority.md#research-question" },
+      { role: "boundaries", ref: "authority.md#boundaries" },
+    ],
+    testDecision: {
+      mode: "not-applicable",
+      summary: "Read-only research fixture.",
+    },
+  };
+  writeText(path.join(root, "authority.md"), "# Research question\n\nFixture.\n\n# Boundaries\n\nRead only.");
+  writeJson(path.join(stateRoot, "demand-authority.json"), authority);
+  const stateFile = path.join(stateRoot, "wakeflow-state.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8"));
+  state.demandType = "research";
+  state.demandAuthorityRef = "demand-authority.json";
+  state.demandAuthorityDigest = demandAuthorityDigest(authority);
+  writeJson(stateFile, state);
+  registerThread(root, "AlembicPlugin");
+
+  const payload = prepareDispatch(root, stateRootRef);
+  const authorityPath = path.join(stateRoot, "demand-authority.json");
+  assert.equal(payload.packet.taskBriefing.demandAuthority.ref, `${stateRootRef}/demand-authority.json`);
+  assert.equal(payload.packet.taskBriefing.demandAuthority.resolvedRef, authorityPath);
+  assert.match(payload.packet.prompt, new RegExp(`Demand authority[^\n]+: ${authorityPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
 });
 
 test("prepare-dispatch-from-state writes packet, group, and delivery without legacy controlPlan authority", () => {

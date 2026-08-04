@@ -28,7 +28,7 @@ const todoBoardPath = path.resolve(workspaceRoot, getArgValue("--todo", ledgerPa
 const currentStatusPath = path.resolve(workspaceRoot, getArgValue("--status", ledgerPaths.workspaceCurrentStatusPath));
 const outputPath = path.resolve(
   workspaceRoot,
-  getArgValue("--out", ".wakeflow-local/wakeflow-intake/wakeflow-next-work.json"),
+  getArgValue("--out", ".wakeflow-local/wakeflow-delivery/handles/wakeflow-next-work.json"),
 );
 
 const priorityRank = new Map([
@@ -176,12 +176,17 @@ function parseTodoCandidates(warnings) {
         : null;
       const authorityReadiness = demandAuthorityReadiness(demandAuthority, {
         workspaceRoot,
+        config: workspaceConfig,
         demandKey: entry.ID,
         demandType: entry["Type"],
         entryMode: "design-delivery",
       });
       if (!authorityReadiness.ready) {
         blockers.push(`demand authority is incomplete: ${authorityReadiness.errors.join("; ")}`);
+      }
+      const authorityWarnings = authorityReadiness.warnings ?? [];
+      if (authorityWarnings.length > 0) {
+        warnings.push(`${entry.ID}: demand authority documents should be promoted before the next authority rewrite: ${authorityWarnings.join("; ")}`);
       }
       return {
         source: "todo",
@@ -203,6 +208,7 @@ function parseTodoCandidates(warnings) {
         demandAuthorityReadiness: {
           ready: authorityReadiness.ready,
           errors: authorityReadiness.errors,
+          warnings: authorityWarnings,
           digest: authorityReadiness.digest,
         },
         autoClaim,

@@ -16,7 +16,6 @@ import { runSync } from "../lib/wakeflow-process.mjs";
 import {
   loadWorkspaceConfig,
   testWindowNames,
-  trackedWorkspaceConfigPath,
   workspaceLedgerPaths,
 } from "./lib/wakeflow-config.mjs";
 import {
@@ -44,7 +43,6 @@ const options = rawArgs[0] && !rawArgs[0].startsWith("--") ? rawArgs.slice(1) : 
 const workspaceRoot = path.resolve(getValue("--root", wakeflowRoot));
 const write = hasFlag("--write");
 const json = hasFlag("--json");
-let cachedWorkspaceConfig = undefined;
 let activeCreateRecovery = null;
 
 const helpText = `
@@ -671,12 +669,6 @@ function readJson(file, label = "JSON file") {
     fail(`Invalid ${label} ${relative(file)}: ${error.message}`);
   }
   return null;
-}
-function readWorkspaceConfig() {
-  if (cachedWorkspaceConfig !== undefined) return cachedWorkspaceConfig;
-  const configPath = trackedWorkspaceConfigPath(workspaceRoot);
-  cachedWorkspaceConfig = existsSync(configPath) ? readJson(configPath, "workspace config") : null;
-  return cachedWorkspaceConfig;
 }
 function runControllerState(argsForScript) {
   const result = runSync(process.execPath, [path.join(scriptsDir, "wakeflow-state.mjs"), ...argsForScript], {

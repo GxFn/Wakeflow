@@ -53,6 +53,7 @@ function makeFixture() {
     "README.md",
     "README.zh-CN.md",
     "package.json",
+    "wakeflow.config.example.json",
     "wakeflow.config.json",
   ]) {
     cpSync(path.join(workspaceRoot, file), path.join(root, file));
@@ -155,6 +156,20 @@ test("fails when package metadata is still private", () => {
     const result = run(root);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /package\.json must not be private/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("fails when the shipped v2 config contains a derived legacy field", () => {
+  const root = makeFixture();
+  try {
+    mutateJson(path.join(root, "wakeflow.config.json"), (payload) => {
+      payload.dispatchWindows = ["duplicate-view"];
+    });
+    const result = run(root);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /does not satisfy the runtime v2 contract.*dispatchWindows/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

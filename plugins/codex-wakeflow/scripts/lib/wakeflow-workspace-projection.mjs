@@ -43,6 +43,7 @@ function activeDemandSnapshots(currentDir, workspaceRoot) {
       return [{
         root,
         state: inspected.state,
+        authority: inspected.authority,
         progress: inspected.progressFile,
         issues: inspected.issues,
       }];
@@ -87,6 +88,17 @@ function logicalWindowSummaryText(logicalWindows) {
   const counts = logicalWindows?.byStatus ?? {};
   return `${logicalWindows?.total ?? 0} logical window(s): `
     + `${counts.planned ?? 0} planned, ${counts.bound ?? 0} bound, ${counts.closed ?? 0} closed`;
+}
+
+function authoritySummaryText(authority) {
+  if (!authority) return "demand authority `unavailable`";
+  if (authority.status === "frozen") {
+    return `demand authority \`frozen\` (${String(authority.digest ?? "missing-digest").slice(0, 12)})`;
+  }
+  if (authority.status === "legacy-terminal-unfrozen") {
+    return "demand authority `legacy-terminal-unfrozen` (compatibility only; no confirmation pending)";
+  }
+  return "demand authority `draft-unfrozen` (confirmation pending)";
 }
 
 function legacyPodReservationMigration(workspaceRoot, demandKeys) {
@@ -153,6 +165,11 @@ function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, upda
     execution: item.state ? canonicalExecutionProjection(item.state) : null,
   }));
   const canonicalPods = canonicalDemands.filter((item) => item.execution?.placement === "pod");
+  const frozenAuthorityDemands = canonicalDemands.filter((item) => item.authority?.status === "frozen");
+  const pendingAuthorityDemands = canonicalDemands.filter((item) => item.authority?.status === "draft-unfrozen");
+  const legacyTerminalAuthorityDemands = canonicalDemands.filter((item) => (
+    item.authority?.status === "legacy-terminal-unfrozen"
+  ));
   const podPhaseCounts = countValues(
     canonicalPods.map((item) => ({ phase: item.execution.phase ?? "not-provisioned" })),
     "phase",
@@ -179,6 +196,7 @@ function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, upda
       progress,
       issues,
       execution,
+      authority,
     }) => {
         const issueText = issues.map((item) => item.error).join("; ");
         if (!state) {
@@ -188,9 +206,9 @@ function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, upda
           return `- [${state.demandKey}](${posixRelative(statusDir, root)}/) — \`degraded\`: ${issueText}.`;
         }
         if (execution.placement === "pod") {
-          return `- [${state.demandKey}](${posixRelative(statusDir, progress)}) — \`${state.state}\`, revision ${state.revision}, placement \`pod\`, pod \`${execution.podId ?? "unassigned"}\`, host \`${execution.host ?? "unbound"}\`, phase \`${execution.phase ?? "not-provisioned"}\`, ${logicalWindowSummaryText(execution.logicalWindows)}.`;
+          return `- [${state.demandKey}](${posixRelative(statusDir, progress)}) — \`${state.state}\`, revision ${state.revision}, ${authoritySummaryText(authority)}, placement \`pod\`, pod \`${execution.podId ?? "unassigned"}\`, host \`${execution.host ?? "unbound"}\`, phase \`${execution.phase ?? "not-provisioned"}\`, ${logicalWindowSummaryText(execution.logicalWindows)}.`;
         }
-        return `- [${state.demandKey}](${posixRelative(statusDir, progress)}) — \`${state.state}\`, revision ${state.revision}, controller host \`${state.controllerHost ?? "unclaimed"}\`, placement \`main\`.`;
+        return `- [${state.demandKey}](${posixRelative(statusDir, progress)}) — \`${state.state}\`, revision ${state.revision}, ${authoritySummaryText(authority)}, controller host \`${state.controllerHost ?? "unclaimed"}\`, placement \`main\`.`;
       })),
   ];
   const legacyMigrationSection = legacyMigration.status === "not-needed"
@@ -219,6 +237,17 @@ function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, upda
     "",
     "This file is a generated entry projection. Each demand's `wakeflow-state.json` is authoritative; delivery transport state is local under `.wakeflow-local/wakeflow-delivery/`.",
     "",
+    "## Demand Authority",
+    "",
+    `- Frozen: ${frozenAuthorityDemands.length}.`,
+    `- Draft/unfrozen: ${pendingAuthorityDemands.length}.`,
+    `- Legacy terminal/unfrozen: ${legacyTerminalAuthorityDemands.length}.`,
+    ...(pendingAuthorityDemands.length > 0
+      ? pendingAuthorityDemands.map(({ state }) => (
+          `- Pending confirmation: \`${state.demandKey}\` must freeze its demand authority before task-package creation or dispatch.`
+        ))
+      : ["- Pending confirmation: none."]),
+    "",
     "## Current Ledgers",
     "",
     `- Global TODO: [global-todo-board.md](${posixRelative(statusDir, paths.globalTodoPath)})`,
@@ -241,7 +270,9 @@ function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, upda
     "",
     overall === "degraded"
       ? "Repair the degraded state-root authority issue listed above before claiming or advancing demand work."
-      : demands.length
+      : pendingAuthorityDemands.length > 0
+        ? "Freeze the pending demand authority listed above before creating task packages or dispatching work."
+        : demands.length
         ? "Open the active demand link above and continue only through its allowed state-machine action."
         : "No active demand exists. Wait for a controller task or claim an eligible delivered TODO.",
     ...legacyMigrationSection,
@@ -294,7 +325,7 @@ function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, upda
       ? [
           "## Active Demands",
           "",
-          ...canonicalDemands.map(({ root, state, issues, execution }) => {
+          ...canonicalDemands.map(({ root, state, authority, issues, execution }) => {
             const issueText = issues.map((item) => item.error).join("; ");
             if (!state) {
               return `- Unreadable state root \`${path.basename(root)}\` — \`degraded\`: ${issueText}.`;
@@ -302,8 +333,8 @@ function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, upda
             return issues.length > 0
               ? `- [${state.demandKey}](${posixRelative(indexDir, root)}/) — \`degraded\`: ${issueText}.`
               : execution.placement === "pod"
-                ? `- [${state.demandKey}](${posixRelative(indexDir, root)}/) — \`${state.state}\`, revision ${state.revision}, placement \`pod\`, pod \`${execution.podId ?? "unassigned"}\`, host \`${execution.host ?? "unbound"}\`, phase \`${execution.phase ?? "not-provisioned"}\`, ${logicalWindowSummaryText(execution.logicalWindows)}.`
-                : `- [${state.demandKey}](${posixRelative(indexDir, root)}/) — \`${state.state}\`, revision ${state.revision}, placement \`main\`.`;
+                ? `- [${state.demandKey}](${posixRelative(indexDir, root)}/) — \`${state.state}\`, revision ${state.revision}, ${authoritySummaryText(authority)}, placement \`pod\`, pod \`${execution.podId ?? "unassigned"}\`, host \`${execution.host ?? "unbound"}\`, phase \`${execution.phase ?? "not-provisioned"}\`, ${logicalWindowSummaryText(execution.logicalWindows)}.`
+                : `- [${state.demandKey}](${posixRelative(indexDir, root)}/) — \`${state.state}\`, revision ${state.revision}, ${authoritySummaryText(authority)}, placement \`main\`.`;
           }),
           "",
         ]
@@ -328,6 +359,12 @@ function refreshWorkspaceProjectionUnlocked({ workspaceRoot, config = null, upda
     activeDemandCount: demands.length,
     unreadableDemandCount: unreadableDemands.length,
     unhealthyDemandCount: unhealthyDemands.length,
+    demandAuthority: {
+      frozen: frozenAuthorityDemands.length,
+      draftUnfrozen: pendingAuthorityDemands.length,
+      legacyTerminalUnfrozen: legacyTerminalAuthorityDemands.length,
+      pendingConfirmation: pendingAuthorityDemands.map((item) => item.state.demandKey),
+    },
     podDemandCount: canonicalPods.length,
     podPhaseCounts,
     pods: canonicalPods.map(({ root, state, execution }) => ({

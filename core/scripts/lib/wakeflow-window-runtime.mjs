@@ -386,7 +386,10 @@ export function createWindowRuntime(ctx) {
         ];
     const taskPackageRef = briefing.taskPackageRef
       || `task-packages/${stateRef.taskPackageId}.json`;
-    const demandAuthorityRef = cleanLine(briefing.demandAuthority?.ref, 500);
+    const demandAuthorityRef = cleanLine(
+      briefing.demandAuthority?.resolvedRef || briefing.demandAuthority?.ref,
+      500,
+    );
     const repositoryRoot = cleanLine(briefing.repositoryRoot, 500);
     const repositoryInstructions = repositoryRoot
       ? path.join(repositoryRoot, hostProfile.memoryFile)

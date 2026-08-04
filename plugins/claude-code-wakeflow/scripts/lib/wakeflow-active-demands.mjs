@@ -11,6 +11,12 @@ import {
   readPendingStateTransition,
   recoverPendingStateTransition,
 } from "./wakeflow-state-transition.mjs";
+import {
+  DEMAND_AUTHORITY_FILE,
+  demandAuthorityDigest,
+  demandAuthorityPendingConfirmation,
+  demandAuthorityProjectionStatus,
+} from "./wakeflow-demand-authority.mjs";
 
 export const WAKEFLOW_INIT_STAGING_PREFIX = ".wakeflow-init-";
 
@@ -49,6 +55,7 @@ export function inspectActiveDemandStateRoot({ workspaceRoot, stateRoot } = {}) 
     stateFile,
     stateFileRef,
     state: null,
+    authority: null,
     progressFile: null,
     issues: [],
     missingState: false,
@@ -134,6 +141,53 @@ export function inspectActiveDemandStateRoot({ workspaceRoot, stateRoot } = {}) 
   }
 
   const issues = [];
+  const authorityStatus = demandAuthorityProjectionStatus(state);
+  const authority = {
+    status: authorityStatus,
+    ref: state.demandAuthorityRef ?? null,
+    digest: state.demandAuthorityDigest ?? null,
+    pendingConfirmation: demandAuthorityPendingConfirmation(state),
+  };
+  const authorityFile = path.join(demandRoot, DEMAND_AUTHORITY_FILE);
+  const authorityFileRef = relativePosix(root, authorityFile);
+  if (authorityStatus === "frozen") {
+    if (state.demandAuthorityRef !== DEMAND_AUTHORITY_FILE) {
+      issues.push(inspectionIssue(
+        "invalid-demand-authority-ref",
+        stateFileRef,
+        `demandAuthorityRef must equal ${DEMAND_AUTHORITY_FILE}`,
+      ));
+    }
+    if (!state.demandAuthorityDigest) {
+      issues.push(inspectionIssue(
+        "missing-demand-authority-digest",
+        stateFileRef,
+        "frozen demand authority is missing demandAuthorityDigest",
+      ));
+    }
+    try {
+      const authorityStat = lstatSync(authorityFile);
+      if (authorityStat.isSymbolicLink()) throw new Error(`${DEMAND_AUTHORITY_FILE} is a symbolic link and was not followed`);
+      if (!authorityStat.isFile()) throw new Error(`${DEMAND_AUTHORITY_FILE} is not a regular file`);
+      const storedAuthority = JSON.parse(readFileSync(authorityFile, "utf8"));
+      const storedDigest = demandAuthorityDigest(storedAuthority);
+      if (state.demandAuthorityDigest && storedDigest !== state.demandAuthorityDigest) {
+        throw new Error(`stored digest ${storedDigest} does not match frozen state digest ${state.demandAuthorityDigest}`);
+      }
+    } catch (error) {
+      issues.push(inspectionIssue(
+        "invalid-demand-authority",
+        authorityFileRef,
+        `cannot verify frozen demand authority: ${oneLineError(error)}`,
+      ));
+    }
+  } else if (existsSync(authorityFile)) {
+    issues.push(inspectionIssue(
+      "unreferenced-demand-authority",
+      authorityFileRef,
+      `${DEMAND_AUTHORITY_FILE} exists but wakeflow-state.json does not freeze it`,
+    ));
+  }
   const progressRef = state?.projection?.progressDoc ?? "developer-progress.md";
   let progressFile = null;
   try {
@@ -196,6 +250,25 @@ export function inspectActiveDemandStateRoot({ workspaceRoot, stateRoot } = {}) 
       projectionFileRef,
       `invalid projection document: ${oneLineError(error)}`,
     ));
+  }
+  if (projection?.demandAuthority && state?.projection?.status === "synced") {
+    if (projection.demandAuthority.status !== authority.status) {
+      issues.push(inspectionIssue(
+        "stale-demand-authority-projection",
+        projectionFileRef,
+        `projection authority status ${projection.demandAuthority.status ?? "(missing)"} does not match state-derived status ${authority.status}`,
+      ));
+    }
+    if (authority.status === "frozen" && (
+      projection.demandAuthority.ref !== authority.ref
+      || projection.demandAuthority.digest !== authority.digest
+    )) {
+      issues.push(inspectionIssue(
+        "stale-demand-authority-projection",
+        projectionFileRef,
+        "projection frozen authority ref/digest does not match wakeflow-state.json",
+      ));
+    }
   }
 
   const eventsFile = path.join(demandRoot, "controller-events.jsonl");
@@ -292,6 +365,7 @@ export function inspectActiveDemandStateRoot({ workspaceRoot, stateRoot } = {}) 
   return {
     ...base,
     state,
+    authority,
     progressFile,
     issues,
   };

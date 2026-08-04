@@ -60,6 +60,7 @@ import {
   DEMAND_TYPES,
   assertDemandAuthorityReady,
   demandAuthorityDigest,
+  demandAuthorityProjectionStatus,
 } from "./lib/wakeflow-demand-authority.mjs";
 import {
   COMMIT_DISPOSITIONS,
@@ -1382,7 +1383,7 @@ function selectInterfaceLanguage(config) {
   return detectInterfaceLanguage({ requested });
 }
 
-function unifiedStatusText({ demandKey, title, state, updatedAt, revision, eventId, language }) {
+function unifiedStatusText({ demandKey, title, state, updatedAt, revision, eventId, language, decisionsRequired = null }) {
   const locale = wakeflowStateLocale(language);
   return render(readTemplate("unified-status.template.md", { language }), {
     demandKey,
@@ -1395,7 +1396,7 @@ function unifiedStatusText({ demandKey, title, state, updatedAt, revision, event
     nextAction: locale.initialNextAction,
     review: locale.none,
     automation: locale.automationDisabled,
-    decisionsRequired: locale.none,
+    decisionsRequired: decisionsRequired ?? locale.none,
     updatedAt: beijingTimestamp(updatedAt),
     revision,
     eventId,
@@ -1618,6 +1619,11 @@ function commandInit() {
     ],
     stateRevision: 1,
   };
+  const authorityPendingDecision = demandAuthority ? null : {
+    id: "demand-authority-not-frozen",
+    summary: locale.authorityPendingDecision,
+    source: "projection",
+  };
   const unifiedStatus = unifiedStatusText({
     demandKey,
     title,
@@ -1626,6 +1632,7 @@ function commandInit() {
     revision: state.revision,
     eventId,
     language,
+    decisionsRequired: authorityPendingDecision?.summary ?? locale.none,
   });
   const projection = {
     schemaVersion,
@@ -1635,6 +1642,19 @@ function commandInit() {
     sourceRevision: state.revision,
     sourceEventId: eventId,
     progressDoc,
+    demandAuthority: demandAuthority ? {
+      status: demandAuthorityProjectionStatus(state),
+      ref: DEMAND_AUTHORITY_FILE,
+      digest: demandAuthorityReadiness.digest,
+      demandType: demandAuthority.demandType,
+      entryMode: demandAuthority.entryMode,
+      testDecision: demandAuthority.testDecision,
+      authorityRefs: demandAuthority.authorityRefs,
+    } : {
+      status: demandAuthorityProjectionStatus(state),
+      ref: null,
+      digest: null,
+    },
     unifiedStatus: {
       demand: `${demandKey} - ${title}`,
       mainState: state.state,
@@ -1645,8 +1665,15 @@ function commandInit() {
       nextAction: locale.initialNextAction,
       review: locale.none,
       automation: locale.automationDisabled,
-      userDecisionsNeeded: locale.none,
+      userDecisionsNeeded: authorityPendingDecision?.summary ?? locale.none,
       lastUpdated: createdAt,
+    },
+    slices: {
+      windows: [],
+      taskPackages: [],
+      targetTasks: [],
+      blockers: [],
+      decisionsRequired: authorityPendingDecision ? [authorityPendingDecision] : [],
     },
   };
   const progress = progressDocText({
@@ -2219,6 +2246,10 @@ function commandAddTaskPackageLocked(stateRoot) {
     });
     appendProgressTimeline(stateRoot, nextState, PROGRESS_SECTIONS.taskPackages,
       `${createdAt} ${taskPackageId} → ${targetWindow || "(unassigned)"} — ${summary}${designIntent ? ` (intent: ${designIntent})` : ""}`);
+    // The demand progress projection intentionally remains stale until render,
+    // but the workspace entry must immediately reflect the authoritative state
+    // change (especially the first demand-authority freeze).
+    refreshWorkspaceProjection({ workspaceRoot, updatedAt: createdAt });
   }
 
   output(

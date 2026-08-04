@@ -47,6 +47,7 @@ export function wakeflowStateLocale(language) {
       defaultStagePlan: "由总控判断补充。",
       initialNextAction: "由总控判断定义阶段和任务包。",
       staleNextAction: "复核状态变化并选择下一步总控动作。",
+      authorityPendingDecision: "需求权威尚未冻结；开始首个实现任务包前必须确认并冻结需求类型、背景锚点与测试决策。",
     };
   }
 
@@ -59,5 +60,6 @@ export function wakeflowStateLocale(language) {
     defaultStagePlan: "TBD by total-control judgment.",
     initialNextAction: "Define stages and task packages by total-control judgment.",
     staleNextAction: "Review state changes and choose the next total-control action.",
+    authorityPendingDecision: "Demand authority is not frozen; confirm and freeze the demand type, background anchors, and testing decision before the first implementation package.",
   };
 }

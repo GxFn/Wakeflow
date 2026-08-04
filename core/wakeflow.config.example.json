@@ -1,29 +1,44 @@
 {
-  "workspaceName": "Wakeflow",
-  "controllerWindow": "Wakeflow",
-  "designWindow": "Design",
-  "testWindow": "Test",
-  "realProjectWindow": "",
-  "baseWindow": "",
-  "activeLedgerRoot": ".wakeflow-active",
-  "projectLedgerRoot": "../wakeflow-ledger",
-  "windowLedgerRoot": "../wakeflow-ledger",
-  "workspaceDocsDir": ".wakeflow-active",
-  "workspaceCurrentDir": ".wakeflow-active/current",
-  "workspaceArchiveDir": "../wakeflow-ledger/workspace/archive",
-  "workspaceIndexPath": ".wakeflow-active/index.md",
-  "workspaceCurrentIndexPath": ".wakeflow-active/current/index.md",
-  "workspaceCurrentStatusPath": ".wakeflow-active/current/workspace-current-status.md",
-  "workspaceRecordMapPath": "../wakeflow-ledger/workspace/workspace-record-map.md",
-  "globalTodoPath": ".wakeflow-active/current/global-todo-board.md",
-  "requirementDesignsDir": "../wakeflow-ledger/requirement-designs",
-  "internalDesignPath": "../wakeflow-ledger/design",
-  "internalTestPath": "../wakeflow-ledger/testing",
-  "allowMissingRepos": true,
-  "testExchangePath": ".wakeflow-active/current/test-exchange.md",
-  "runtimeProcessMatchers": [],
-  "runtimeProcessLabel": "configured",
-  "protectedWorkspacePrefixes": [],
+  "$schema": "https://raw.githubusercontent.com/GxFn/Wakeflow/main/core/schemas/wakeflow-config.schema.json",
+  "schemaVersion": 2,
+  "workspace": {
+    "name": "Wakeflow",
+    "language": "auto",
+    "runtimeMode": "repository",
+    "root": "..",
+    "wakeflowRepoDir": "Wakeflow"
+  },
+  "roles": {
+    "controller": "Wakeflow",
+    "design": "Design",
+    "test": "Test"
+  },
+  "storage": {
+    "activeRoot": ".wakeflow-active",
+    "localRoot": ".wakeflow-local",
+    "ledgerRoot": "../wakeflow-ledger"
+  },
+  "policy": {
+    "allowMissingRepos": true,
+    "runtimeProcessMatchers": [],
+    "runtimeProcessLabel": "configured"
+  },
+  "repositories": [
+    {
+      "windowName": "Design",
+      "path": "../Design",
+      "role": "Internal requirement and outcome design workspace",
+      "managedAgents": false,
+      "mode": "internal"
+    },
+    {
+      "windowName": "Test",
+      "path": "../Test",
+      "role": "Internal test coordination workspace",
+      "managedAgents": false,
+      "mode": "internal"
+    }
+  ],
   "hosts": {
     "claude-code": {},
     "codex": {}

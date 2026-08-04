@@ -2,8 +2,9 @@
 
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { loadWorkspaceConfig, resolveWorkspaceRoot } from "./lib/wakeflow-config.mjs";
+import { loadWorkspaceConfig, resolveWorkspaceRoot, workspaceConfigDiagnostics } from "./lib/wakeflow-config.mjs";
 import { assertExistingPathInside } from "./lib/wakeflow-fs-safety.mjs";
+import { documentPlacements } from "./lib/wakeflow-document-placement.mjs";
 import {
   PRESERVED_DIR,
   PRESERVED_MANIFEST,
@@ -73,6 +74,7 @@ function relative(file) {
 
 function commandMap() {
   const config = loadWorkspaceConfig({ workspaceRoot, args: options });
+  const configuration = workspaceConfigDiagnostics({ workspaceRoot, args: options, effectiveConfig: config });
   const scan = scanStorage({ workspaceRoot, config });
   const retentionDays = preservedRetentionDays(config);
   const now = Date.now();
@@ -83,6 +85,8 @@ function commandMap() {
   output({
     ok: true,
     command: "map",
+    configuration,
+    layout: scan.layout,
     trees: scan.trees,
     legacy: scan.legacy,
     unknown: scan.unknown,
@@ -106,8 +110,13 @@ function commandMap() {
 function commandSeedReadmes() {
   const config = loadWorkspaceConfig({ workspaceRoot, args: options });
   const ledgerRel = (config.projectLedgerRoot ?? "../wakeflow-ledger").split(path.sep).join("/");
+  const ledgerRoot = path.resolve(workspaceRoot, config.projectLedgerRoot ?? "../wakeflow-ledger");
+  const placements = documentPlacements({ workspaceRoot, config, displayRoot: ledgerRoot });
   const results = [];
-  for (const item of readmeContents({ ledgerRel })) {
+  for (const item of readmeContents({
+    ledgerRel,
+    placements,
+  })) {
     const file = path.resolve(workspaceRoot, item.file);
     // Seed only where the parent tier already exists — never invent layers.
     if (!existsSync(path.dirname(file))) {

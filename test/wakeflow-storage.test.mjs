@@ -32,6 +32,7 @@ test("map classifies known trees and flags legacy residue + unknown trees withou
   const root = makeWorkspace();
   mkdirSync(path.join(root, ".wakeflow-local/preserved-state-roots/old"), { recursive: true });
   writeFileSync(path.join(root, ".wakeflow-local/preserved-state-roots/old/x.json"), "{}\n");
+  mkdirSync(path.join(root, ".wakeflow-local/pod-reservations"), { recursive: true });
   mkdirSync(path.join(root, ".wakeflow-local/mystery"), { recursive: true });
   writeFileSync(path.join(root, ".wakeflow-local/mystery/blob.bin"), "data\n");
 
@@ -39,9 +40,31 @@ test("map classifies known trees and flags legacy residue + unknown trees withou
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const payload = JSON.parse(result.stdout);
   assert.ok(payload.trees.length >= 10);
+  assert.equal(payload.configuration.sourceShape, "legacy-flat");
+  assert.equal(payload.configuration.durableInput.projectLedgerRoot, "wakeflow-ledger");
+  assert.equal(payload.configuration.effectiveLayout.storage.requirementDesignsDir, "wakeflow-ledger/requirement-designs");
+  assert.match(payload.configuration.migrationWarnings.join("\n"), /legacy flat Wakeflow config/);
+  assert.equal(payload.layout.requirement.path, "wakeflow-ledger/requirement-designs");
+  assert.equal(payload.layout.transport.path, ".wakeflow-local/wakeflow-delivery");
+  assert.equal(payload.layout.evidence.class, "evidence");
   const ledger = payload.trees.find((t) => t.path === "wakeflow-ledger");
   assert.equal(ledger.class, "authority");
-  assert.deepEqual(payload.legacy.map((l) => l.path), [".wakeflow-local/preserved-state-roots"]);
+  assert.equal(ledger.category, "workspace-record");
+  const resultEvidence = payload.trees.find((t) => t.path.endsWith("/target-results"));
+  assert.equal(resultEvidence.category, "evidence");
+  assert.equal(resultEvidence.owner, payload.layout.evidence.owner);
+  const runtimeHandles = payload.trees.find((t) => t.path.endsWith("/handles"));
+  assert.equal(runtimeHandles.category, "runtime-handle");
+  assert.equal(runtimeHandles.class, "handles");
+  const hostState = payload.trees.find((t) => t.path.endsWith("/hosts"));
+  assert.equal(hostState.category, "host-state");
+  assert.equal(hostState.class, "handles");
+  const legacyWorktrees = payload.trees.find((t) => t.path === ".wakeflow-local/worktrees");
+  assert.equal(legacyWorktrees.class, "legacy");
+  assert.deepEqual(payload.legacy.map((l) => l.path), [
+    ".wakeflow-local/pod-reservations",
+    ".wakeflow-local/preserved-state-roots",
+  ]);
   assert.deepEqual(payload.unknown.map((u) => u.path), [".wakeflow-local/mystery"]);
   assert.match(payload.agentNext, /route to the user/);
   assert.ok(payload.forbiddenConclusions.includes("legacy-or-unknown-trees-are-safe-to-auto-delete"));
@@ -57,6 +80,11 @@ test("seed-readmes converges in-place READMEs idempotently and honors the config
   assert.ok(created.includes(".wakeflow-local/README.md"));
   assert.ok(created.includes("wakeflow-ledger/README.md"), "ledger README lands at the CONFIGURED ledger root");
   assert.match(readFileSync(path.join(root, ".wakeflow-local/README.md"), "utf8"), /never auto-delete/i);
+  assert.match(readFileSync(path.join(root, ".wakeflow-local/README.md"), "utf8"), /current Pod worktrees are host-created/i);
+  assert.doesNotMatch(readFileSync(path.join(root, ".wakeflow-local/README.md"), "utf8"), /isolation git worktrees \(cross-demand streams\)/i);
+  const ledgerReadme = readFileSync(path.join(root, "wakeflow-ledger/README.md"), "utf8");
+  assert.match(ledgerReadme, /canonical demand definitions/i);
+  assert.match(ledgerReadme, /never put a\s+demand definition there/i);
 
   const second = JSON.parse(run(["seed-readmes", "--root", root, "--write"]).stdout);
   assert.ok(second.results.every((r) => r.status === "current" || r.status === "skipped-missing-parent"), JSON.stringify(second.results));

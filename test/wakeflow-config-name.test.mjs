@@ -46,6 +46,100 @@ test("legacy tracked workspace.config.json still resolves while capacity fields 
   assert.equal(config.workspaceName, "Legacy name");
   assert.equal(config.maxActiveDemands, undefined);
   assert.match(config.configMigrationWarnings.join("\n"), /maxActiveDemands.*no admission effect/);
+  assert.equal(config.schemaVersion, 2, "the effective in-memory config uses the current contract");
+});
+
+test("workspace config v2 is compact on disk, derives the effective view, and rejects a future schema", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-config-v2-"));
+  const {
+    loadWorkspaceConfig,
+    WAKEFLOW_CONFIG_SCHEMA_URL,
+    workspaceConfigV2FromEffective,
+  } = await import("../core/scripts/lib/wakeflow-config.mjs");
+  writeFile(path.join(root, "wakeflow.config.json"), JSON.stringify({
+    $schema: WAKEFLOW_CONFIG_SCHEMA_URL,
+    schemaVersion: 2,
+    workspace: {
+      name: "V2",
+      language: "zh",
+      runtimeMode: "plugin",
+      root: ".",
+      wakeflowRepoDir: "",
+    },
+    roles: { controller: "V2", design: "Design", test: "Test" },
+    storage: {
+      activeRoot: ".wakeflow-active-v2",
+      localRoot: ".wakeflow-local",
+      ledgerRoot: "ledger-v2",
+    },
+    repositories: [
+      { windowName: "App", path: "App", role: "Product" },
+      { windowName: "Design", path: "Design", mode: "internal" },
+      { windowName: "Test", path: "Test", mode: "internal" },
+    ],
+    hosts: {},
+  }, null, 2));
+  const current = loadWorkspaceConfig({ workspaceRoot: root, args: [] });
+  assert.equal(current.schemaVersion, 2);
+  assert.equal(current.workspaceName, "V2");
+  assert.equal(current.workspaceCurrentDir, ".wakeflow-active-v2/current");
+  assert.equal(current.requirementDesignsDir, "ledger-v2/requirement-designs");
+  assert.deepEqual(current.dispatchWindows, ["App", "Test"]);
+  assert.deepEqual(current.repoNames, ["App"]);
+  assert.equal(current.configSourceShape, "nested-v2");
+  assert.equal(current.configMigrationWarnings.length, 0);
+
+  const durable = workspaceConfigV2FromEffective(current);
+  assert.deepEqual(Object.keys(durable), [
+    "$schema", "schemaVersion", "workspace", "roles", "storage", "policy", "repositories", "hosts",
+  ]);
+  assert.equal(durable.workspace.name, "V2");
+  assert.equal(durable.dispatchWindows, undefined);
+  assert.equal(durable.repositoryRoles, undefined);
+  assert.equal(durable.storage.paths, undefined, "standard leaf paths stay derived from their roots");
+
+  writeFile(path.join(root, "wakeflow.config.json"), JSON.stringify({
+    ...durable,
+    dispatchWindows: ["invented-v2-duplicate"],
+  }, null, 2));
+  assert.throws(
+    () => loadWorkspaceConfig({ workspaceRoot: root, args: [] }),
+    /unsupported field.*dispatchWindows/,
+  );
+
+  writeFile(path.join(root, "wakeflow.config.json"), JSON.stringify({ schemaVersion: 99 }, null, 2));
+  assert.throws(
+    () => loadWorkspaceConfig({ workspaceRoot: root, args: [] }),
+    /schemaVersion 99 is not supported/,
+  );
+});
+
+test("Codex and Claude Code derive byte-stable effective layout from the same v2 input", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-config-dual-host-"));
+  writeFile(path.join(root, "wakeflow.config.json"), JSON.stringify({
+    $schema: "https://raw.githubusercontent.com/GxFn/Wakeflow/main/core/schemas/wakeflow-config.schema.json",
+    schemaVersion: 2,
+    workspace: {
+      name: "DualHost",
+      language: "auto",
+      runtimeMode: "plugin",
+      root: ".",
+      wakeflowRepoDir: "",
+    },
+    roles: { controller: "DualHost", design: "Design", test: "Test" },
+    storage: {
+      activeRoot: ".wakeflow-active",
+      localRoot: ".wakeflow-local",
+      ledgerRoot: "wakeflow-ledger",
+    },
+    repositories: [{ windowName: "App", path: "App", role: "Product" }],
+    hosts: { codex: {}, "claude-code": {} },
+  }, null, 2));
+  const codex = await import("../plugins/codex-wakeflow/scripts/lib/wakeflow-config.mjs");
+  const claude = await import("../plugins/claude-code-wakeflow/scripts/lib/wakeflow-config.mjs");
+  const codexView = codex.workspaceConfigDiagnostics({ workspaceRoot: root, args: [] });
+  const claudeView = claude.workspaceConfigDiagnostics({ workspaceRoot: root, args: [] });
+  assert.equal(JSON.stringify(codexView), JSON.stringify(claudeView));
 });
 
 test("wakeflow.config.json wins over a coexisting legacy file without reviving capacity admission", async () => {
@@ -62,6 +156,8 @@ test("wakeflow.config.json wins over a coexisting legacy file without reviving c
   const config = loadWorkspaceConfig({ workspaceRoot: root, args: [] });
   assert.equal(config.workspaceName, "Canonical");
   assert.equal(config.maxActiveDemands, undefined);
+  assert.equal(config.configSourceShape, "legacy-flat");
+  assert.match(config.configMigrationWarnings.join("\n"), /legacy flat Wakeflow config/);
   assert.match(config.configMigrationWarnings.join("\n"), /maxActiveDemands.*no admission effect/);
 });
 

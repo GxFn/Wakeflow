@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "demandKey": "SCENARIO-TRANSPORT",
+  "title": "Legacy transport lifecycle scenario",
+  "interfaceLanguage": "en",
+  "controllerHost": "claude-code",
+  "controllerWindow": "WakeflowFixture",
+  "state": "planned",
+  "stateReason": "Synthetic controller inspected the exact result and accepted the scenario task.",
+  "revision": 5,
+  "activeStageId": null,
+  "updatedAt": "@wakeflow-scenario-time-cbc13485dc",
+  "allowedActions": [
+    "add-task-package",
+    "complete-demand",
+    "wakeflow-render-progress"
+  ],
+  "blockers": [],
+  "decisionsRequired": [],
+  "stages": [],
+  "taskPackages": [
+    {
+      "taskPackageId": "SCENARIO-PACKAGE",
+      "summary": "Execute the portable transport lifecycle fixture.",
+      "status": "accepted",
+      "sourceRef": "scenario://transport-result-reviewed",
+      "createdAt": "@wakeflow-scenario-time-a27749c251"
+    }
+  ],
+  "targetTasks": [
+    {
+      "targetTaskId": "SCENARIO-TASK",
+      "taskPackageId": "SCENARIO-PACKAGE",
+      "targetWindow": "ProductWindow",
+      "summary": "Return one completed scenario result.",
+      "status": "accepted",
+      "createdAt": "@wakeflow-scenario-time-46f511145e",
+      "reviewDecision": "accept",
+      "counts": {
+        "dispatchCount": 1
+      },
+      "delivery": {
+        "deliveryId": "delivery-SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+        "deliveryFile": ".wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__delivery-SCENARIO-GROUP__ProductWindow__SCENARIO--d5353dd0843b.json",
+        "deliveryRunId": "run-delivery-SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+        "dispatchGroup": "SCENARIO-GROUP",
+        "sentAt": "@wakeflow-scenario-time-01b40fe193",
+        "readbackOk": true,
+        "readbackStatus": "confirmed",
+        "transportStatus": "accepted"
+      },
+      "resultId": "SCENARIO-RESULT"
+    }
+  ],
+  "windows": [
+    {
+      "windowName": "ProductWindow",
+      "windowState": "accepted",
+      "taskPackageIds": [
+        "SCENARIO-PACKAGE"
+      ],
+      "targetTaskIds": [
+        "SCENARIO-TASK"
+      ]
+    }
+  ],
+  "review": {
+    "status": "decision-accept",
+    "readyResultIds": [
+      "SCENARIO-RESULT"
+    ],
+    "blockedResultIds": [],
+    "missingResultIds": []
+  },
+  "automation": {
+    "enabled": false,
+    "activeRunIds": [],
+    "lastReviewPack": null
+  },
+  "projection": {
+    "status": "stale",
+    "lastRenderedAt": "@wakeflow-scenario-time-0d8cd54b21",
+    "interfaceLanguage": "en",
+    "progressDoc": "developer-progress.md"
+  },
+  "executionPlacement": {
+    "mode": "main",
+    "podId": null,
+    "selection": "mainline-default",
+    "authorizationRef": null
+  },
+  "delivery": {
+    "lastDeliveryId": "delivery-SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+    "lastDeliveryRunId": "run-delivery-SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+    "lastDispatchGroup": "SCENARIO-GROUP",
+    "lastTargetTaskId": "SCENARIO-TASK",
+    "lastStatus": "sent",
+    "updatedAt": "@wakeflow-scenario-time-0ef9cf74b6"
+  }
+}

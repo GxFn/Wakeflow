@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:pod:test-access-receipt:v1",
+  "title": "Wakeflow Pod Test Access Receipt",
+  "$comment": "Create-once redacted observation. Runtime validation joins the exact plan, identity bindings, creation receipts, current state, time bounds, and derives the logical gate.",
+  "type": "object",
+  "required": [
+    "kind",
+    "schemaVersion",
+    "programId",
+    "hostId",
+    "podId",
+    "demandId",
+    "probeId",
+    "planDigest",
+    "bindingSetDigest",
+    "observerBindingId",
+    "observerIdentityBindingDigest",
+    "status",
+    "capability",
+    "targetObservations",
+    "observedAt",
+    "recordedAt"
+  ],
+  "properties": {
+    "kind": { "type": "string", "const": "WakeflowPodTestAccessReceipt" },
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "programId": { "$ref": "#/$defs/programId" },
+    "hostId": { "$ref": "#/$defs/hostId" },
+    "podId": { "$ref": "#/$defs/podId" },
+    "demandId": { "$ref": "#/$defs/demandId" },
+    "probeId": { "$ref": "#/$defs/probeId" },
+    "planDigest": { "$ref": "#/$defs/digest" },
+    "bindingSetDigest": { "$ref": "#/$defs/digest" },
+    "observerBindingId": { "$ref": "#/$defs/bindingId" },
+    "observerIdentityBindingDigest": { "$ref": "#/$defs/digest" },
+    "status": { "type": "string", "enum": ["validated", "blocked"] },
+    "capability": { "type": "string", "const": "direct-multi-root" },
+    "targetObservations": {
+      "type": "array",
+      "minItems": 0,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/targetObservation" }
+    },
+    "reasonCode": {
+      "type": "string",
+      "enum": [
+        "capability-unsupported",
+        "git-identity-mismatch",
+        "observer-identity-mismatch",
+        "probe-execution-failed",
+        "root-unreadable"
+      ]
+    },
+    "observedAt": { "$ref": "#/$defs/timestamp" },
+    "recordedAt": { "$ref": "#/$defs/timestamp" }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "blocked" } }, "required": ["status"] },
+      "then": { "required": ["reasonCode"] },
+      "else": { "not": { "required": ["reasonCode"] } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "validated" } }, "required": ["status"] },
+      "then": { "properties": { "targetObservations": { "minItems": 1 } } }
+    }
+  ],
+  "$defs": {
+    "programId": { "type": "string", "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "hostId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+    "podId": { "type": "string", "pattern": "^pod_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "demandId": { "type": "string", "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "windowId": { "type": "string", "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "repositoryId": { "type": "string", "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "probeId": { "type": "string", "pattern": "^pod-test-probe_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "bindingId": { "type": "string", "pattern": "^binding_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "gitObject": { "type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$" },
+    "timestamp": { "type": "string", "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$" },
+    "targetObservation": {
+      "type": "object",
+      "required": ["windowId", "repositoryId", "bindingId", "creationReceiptDigest", "accessResult"],
+      "properties": {
+        "windowId": { "$ref": "#/$defs/windowId" },
+        "repositoryId": { "$ref": "#/$defs/repositoryId" },
+        "bindingId": { "$ref": "#/$defs/bindingId" },
+        "creationReceiptDigest": { "$ref": "#/$defs/digest" },
+        "accessResult": { "type": "string", "enum": ["readable", "unreadable"] },
+        "observedRootDigest": { "$ref": "#/$defs/digest" },
+        "observedGitTopLevelDigest": { "$ref": "#/$defs/digest" },
+        "observedGitCommonDirDigest": { "$ref": "#/$defs/digest" },
+        "currentHead": { "$ref": "#/$defs/gitObject" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "accessResult": { "const": "readable" } }, "required": ["accessResult"] },
+          "then": { "required": ["observedRootDigest", "observedGitTopLevelDigest", "observedGitCommonDirDigest", "currentHead"] },
+          "else": { "not": { "anyOf": [
+            { "required": ["observedRootDigest"] },
+            { "required": ["observedGitTopLevelDigest"] },
+            { "required": ["observedGitCommonDirDigest"] },
+            { "required": ["currentHead"] }
+          ] } }
+        }
+      ]
+    }
+  }
+}

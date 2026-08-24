@@ -1,3 +1,9 @@
+/**
+ * TODO authority表格的一行级Markdown codec。
+ *
+ * 本模块只固定13列顺序以及pipe、backslash、newline的可逆表示；完整文档形状、
+ * 字段语义、容量、lineage、锁、CAS和archive权限全部属于wakeflow-todo-service。
+ */
 export const TODO_COLUMNS = Object.freeze([
   "ID",
   "Status",
@@ -17,24 +23,26 @@ export const TODO_COLUMNS = Object.freeze([
 export const TODO_HEADER = formatMarkdownRow(TODO_COLUMNS);
 export const TODO_DIVIDER = formatMarkdownRow(TODO_COLUMNS.map(() => "---"));
 
-export function todoBoardLockPath(boardPath) {
-  return `${boardPath}.lock`;
+function stringValue(value, label) {
+  if (typeof value !== "string") throw new TypeError(`${label} must be a string`);
+  return value;
 }
 
-export function encodeMarkdownCell(value) {
-  return String(value ?? "")
+function encodeMarkdownCell(value) {
+  return stringValue(value, "Markdown cell")
     .replace(/\\/g, "\\\\")
     .replace(/\|/g, "\\|")
     .replace(/\r\n?|\n/g, "<br>");
 }
 
-export function decodeMarkdownCell(value) {
-  return String(value ?? "")
+function decodeMarkdownCell(value) {
+  return stringValue(value, "Markdown cell")
     .replace(/<br\s*\/?>/gi, "\n");
 }
 
+/** 把一行canonical Markdown table bytes解码为cell字符串；非表格行返回空数组。 */
 export function parseMarkdownRow(line) {
-  const trimmed = String(line ?? "").trim();
+  const trimmed = stringValue(line, "Markdown row").trim();
   if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) return [];
   const source = trimmed.slice(1, -1);
   const cells = [];
@@ -60,101 +68,34 @@ export function parseMarkdownRow(line) {
   return cells;
 }
 
-export function formatMarkdownRow(cells) {
+function formatMarkdownRow(cells) {
   return `| ${cells.map(encodeMarkdownCell).join(" | ")} |`;
 }
 
-export function isMarkdownDivider(cells) {
-  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/u.test(cell));
-}
-
-export function todoSectionRange(content) {
-  const start = content.indexOf("## Global TODO");
-  if (start < 0) return null;
-  const rest = content.slice(start + 1);
-  const next = rest.search(/\n## /u);
-  return {
-    start,
-    end: next >= 0 ? start + 1 + next : content.length,
-  };
-}
-
-function rowObject(header, cells) {
-  return Object.fromEntries(header.map((column, index) => [column, cells[index] ?? ""]));
-}
-
+/** 从被动、闭合的13字段行对象生成唯一canonical Markdown row bytes。 */
 export function formatTodoRow(value) {
-  return formatMarkdownRow(TODO_COLUMNS.map((column) => value[column] ?? ""));
-}
-
-export function parseTodoBoard(content) {
-  const range = todoSectionRange(content);
-  if (!range) {
-    return { ok: false, issues: ["global TODO board is missing ## Global TODO"] };
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("TODO row must be a plain data object");
   }
-  const lines = content.slice(range.start, range.end).split("\n");
-  const headerIndex = lines.findIndex((line) => {
-    const cells = parseMarkdownRow(line);
-    return cells.includes("ID") && cells.includes("Status");
-  });
-  if (headerIndex < 0) {
-    return { ok: false, range, lines, issues: ["global TODO board is missing the ID/Status table header"] };
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError("TODO row must be a plain data object");
   }
-  const header = parseMarkdownRow(lines[headerIndex]);
-  const dividerIndex = headerIndex + 1;
-  const divider = parseMarkdownRow(lines[dividerIndex]);
-  const issues = [];
-  if (!isMarkdownDivider(divider)) issues.push("global TODO table is missing its divider row");
-  const rows = [];
-  const ids = new Set();
-  for (let lineIndex = headerIndex + 2; lineIndex < lines.length; lineIndex += 1) {
-    const cells = parseMarkdownRow(lines[lineIndex]);
-    if (cells.length === 0) continue;
-    if (isMarkdownDivider(cells)) continue;
-    const value = rowObject(header, cells);
-    if (!value.ID) continue;
-    if (ids.has(value.ID)) issues.push(`global TODO board contains duplicate ID: ${value.ID}`);
-    ids.add(value.ID);
-    rows.push({ lineIndex, cells, value });
+  const keys = Reflect.ownKeys(value);
+  if (
+    keys.length !== TODO_COLUMNS.length
+    || keys.some((key) => typeof key !== "string" || !TODO_COLUMNS.includes(key))
+    || TODO_COLUMNS.some((column) => !keys.includes(column))
+  ) {
+    throw new TypeError("TODO row must contain exactly the canonical 13 columns");
   }
-  return {
-    ok: issues.length === 0,
-    issues,
-    range,
-    lines,
-    headerIndex,
-    dividerIndex,
-    header,
-    rows,
-    canonical: header.length === TODO_COLUMNS.length
-      && header.every((column, index) => column === TODO_COLUMNS[index])
-      && divider.length === TODO_COLUMNS.length,
-  };
-}
-
-export function replaceTodoSection(content, parsed, nextLines) {
-  return `${content.slice(0, parsed.range.start)}${nextLines.join("\n")}${content.slice(parsed.range.end)}`;
-}
-
-export function normalizeTodoBoard(content, { mapCell = null } = {}) {
-  const parsed = parseTodoBoard(content);
-  if (!parsed.range || parsed.headerIndex === undefined) return { ...parsed, content, changed: false };
-  const lines = [...parsed.lines];
-  lines[parsed.headerIndex] = TODO_HEADER;
-  lines[parsed.dividerIndex] = TODO_DIVIDER;
-  for (const row of parsed.rows) {
-    const value = {};
-    for (const column of TODO_COLUMNS) {
-      const current = row.value[column] ?? "";
-      value[column] = mapCell ? mapCell({ column, value: current, row: row.value }) : current;
+  const cells = [];
+  for (const column of TODO_COLUMNS) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, column);
+    if (!descriptor?.enumerable || !Object.hasOwn(descriptor, "value")) {
+      throw new TypeError(`TODO row ${column} must be an enumerable data property`);
     }
-    lines[row.lineIndex] = formatTodoRow(value);
+    cells.push(stringValue(descriptor.value, `TODO row ${column}`));
   }
-  const nextContent = replaceTodoSection(content, parsed, lines);
-  const normalized = parseTodoBoard(nextContent);
-  return {
-    ...normalized,
-    content: nextContent,
-    changed: nextContent !== content,
-  };
+  return formatMarkdownRow(cells);
 }

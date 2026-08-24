@@ -11,9 +11,9 @@ Design participates in requirement discussion, signal judgment, non-bug outcome
 redesign, and handoff drafting. On the mainline, Design uses its stateless
 `wakeflow_deliver` path and is not a product dispatch target. Inside an
 explicitly authorized Pod, `Controller__<pod>` first freezes a
-`PodDesignRequest` with `wakeflow_pod_plan action=design-request`, sends that exact
+`PodDesignRequest` with `wakeflow_pod_plan operation=design-request`, sends that exact
 request directly to `Design__<pod>`, and records the matching
-`PodDesignHandoffEnvelope` with `wakeflow_pod_record event=design-handoff`;
+`PodDesignHandoffEnvelope` with `wakeflow_pod_record operation=design-handoff`;
 the same-demand handoff never creates a second
 global TODO or routes through mainline Design. Test is included only when
 real-scenario evidence is required.
@@ -33,8 +33,8 @@ condition authorizes a Pod. Pod product dispatch resolves cwd and Git identity
 only from the host-scoped binding receipt. Never derive it from a window
 suffix, static config overlay, parent workspace, or prompt assertion.
 
-Journal the exact launch correlation around the Claude helper call. The helper
-returns the final session id synchronously: Claude has no Codex
+Journal the exact launch correlation around the current v3 host facade's
+`pod-materialize` call. Claude returns the final session id synchronously and has no Codex
 `clientThreadId` pending state, and no temporary request id belongs in the
 registry.
 
@@ -65,8 +65,9 @@ For a Pod product window, identity must also match its verified binding
 `mainCheckout=false`). Identity text cannot repair a failed binding.
 
 A dispatch prompt arrives as a user message pasted into the target's tmux pane
-by the host helper. Arrival proves transport only; it never grants identity or
-authority.
+by the fenced v3 Claude transport owner through the facade's exact
+`target-delivery` command. Arrival proves transport only; it never grants
+identity or authority. Retired public-v2 helper commands are not aliases.
 
 ## Coverage And Dependencies
 
@@ -80,11 +81,11 @@ fallbacks, or run empty validation before upstream evidence exists.
 
 ## Task Packages
 
-Within one demand each repository runs exactly ONE window with ONE combined
-task package: the window self-sequences the package's items, and a window is
-never dispatched two simultaneous tasks inside the same demand (the machine
-refuses a second in-flight dispatch to the same window). More work for that
-repository arrives as the NEXT combined package after review.
+Within one demand each repository has one active task lineage at a time. Each
+target task binds one immutable TaskPackage; an objective may contain coherent
+ordered steps, but the schema has no package `items` collection. More work for
+that repository arrives only as an exact replacement or completed-lineage
+continuation after the current lineage closes, never as a parallel target task.
 
 Every package's completion definition must state its COMMIT expectation: does
 the repo window commit the work (repo windows own their commits), or leave it
@@ -93,13 +94,14 @@ archived work sitting uncommitted on a main checkout with nobody owning the
 decision — say it in the package, and check it at acceptance.
 
 An explicit controller `rework` normally re-dispatches the same target task and
-package with a fresh dispatch group. This preserves that task's `reworkCount`
-and recurring-problem signal. New scope cannot branch while that rework route
+package with a fresh dispatch group. The exact controller-event history records
+the rounds; current v3 has no rework counter. New scope cannot branch while that rework route
 is active; after the original task is accepted, the controller may add a
 separate supplemental package. A `redesign` decision is different: Design delivers the
 corrected requirement through its stateless path, then the controller adds a new
 full-context implementation task in the product responsibility window with
-`replacesTargetTaskId` pointing to the parked task. The old
+`replacesTargetTask:{targetTaskId,taskPackageRef,taskPackageDigest}` bound to the
+parked task/package. The old
 redesign task cannot be re-dispatched; accepting the replacement marks it
 `superseded`.
 
@@ -116,16 +118,20 @@ New task packages record the dispatch context once in machine-readable fields:
 
 - `workType`: implementation, research, documentation, or test;
 - `objective`: one observable outcome for this target;
-- `contextSummary`: a small ordered list of confirmed facts;
+- `confirmedContext`: a small ordered list of confirmed facts;
 - `requirementRefs`: workspace-relative document references. Goal, completion,
   constraint, validation, and design references name an exact Markdown
   `#anchor`; background stays in the document instead of being copied into the
   prompt;
 - `boundaries`: explicit `inScope`, `outOfScope`, and `forbidden` lists;
 - `completionExpectations`: concrete results required before `completed`;
-- `dependsOnTaskIds`: real upstream task ids, all controller-accepted before
+- `dependsOnTargetTaskIds`: real upstream target-task ids, all controller-accepted before
   dispatch;
-- `commitExpectation`: `commit` or `leave-uncommitted`.
+- `acceptanceAnchors`: `{anchorId,claim,probe,expected}` entries, required for
+  implementation work;
+- `reviewInputContract`: required evidence kinds and required anchor IDs;
+- `repositoryId` plus `commitExpectation` (`commit` or `leave-uncommitted`) for
+  non-Test work, or one exact `testCard` tuple for Test work.
 
 The JSON task package is the complete per-target context. Requirement documents
 remain the original goal/background authority. Skills remain the execution
@@ -133,16 +139,16 @@ procedure. Do not introduce a second context document or ask the target to
 reconstruct these fields from progress prose.
 
 For implementation packages, add a small `acceptanceAnchors` array derived
-only from confirmed requirement authority. Each `{id, claim, probe, expected}`
+only from confirmed requirement authority. Each `{anchorId, claim, probe, expected}`
 entry names one behavior the target must pin as RED before coding. This is not a
 second test plan: omit it for doc-only/research work, and route an unstated
 requirement back to Design/user instead of inventing an anchor.
 
 ## Status Rules
 
-State-machine sources should store machine ids and let
-`scripts/lib/wakeflow-status-machine.mjs` render labels. Legacy display text is
-migration input only.
+Typed state owners store machine ids; the active projector and observability
+owner render labels from validated v3 authority. Historical display text is
+migration evidence only and never current state authority.
 
 - `completed`, `observing`, `none`, `idle`, and `paused` are not send targets.
 - `blocked` is sent only when it owns the unblock step or the upstream blocker
@@ -182,13 +188,14 @@ Identity (full boundaries are in the task package):
 - Current responsibility window: <window>
 - Only working repository: <absolute repository path>
 
-Before coding: map every package acceptanceAnchor to a RED test or probe; if an
+Before coding: map every package acceptance anchor to a RED test or probe; if an
 anchor is untestable, return needs-review instead of inventing a requirement.
 
 Return requirement:
-- Execute only this task package. Return a TargetResultEnvelope with verifiable
-  evidence. A target result is not controller acceptance.
-- Test execution contract: <package>#testExecution
+- Execute only this task package. Return one strict
+  `artifactKind:"wakeflow-target-result"` TargetResult with verifiable evidence.
+  A target result is not controller acceptance.
+- Test execution contract: <dispatch packet>#testContract.executionContract
 
 Dispatch record (routing and trace only):
 - taskId: <taskId>
@@ -202,13 +209,14 @@ Anchor, RED, workspace, and Test lines are conditional. Prompts stay bounded:
 objective, at most two ordered completion expectations, one priority-context
 fact, one critical boundary, at most four anchor ids/claims, one original
 requirement entry, and ordered navigation. Full context, requirement anchors,
-boundary lists, commit policy, probes, validation commands, evidence fields,
-and Test contracts stay in the task package or listed instruction/Skill files.
+boundary lists, commit policy, probes, and `reviewInputContract` stay in the
+task package; the Test execution contract stays in the dispatch packet; listed
+instruction/Skill files own procedure.
 
-Before writing transport files, run the target prepare as a preview and inspect
-`readiness`, `taskBriefing`, the resolved repository root, required Skills, and
-the exact prompt. Only a correct preview is repeated with `apply=true`, passing
-the preview's `previewDigest` as `expectedPreviewDigest`. The digest covers the
-package, state revision, resolved repository, prompt, and transport
-configuration; any change requires a new preview. Preview must not create a
-packet, envelope, window config, or target work lease.
+Before writing transport files, call `wakeflow_prepare_delivery
+operation=target-preview` and inspect readiness, TaskPackage, exact typed
+repository/window identity, prompt, complete plan, and `planDigest`. Only a
+correct preview may be passed unchanged to `operation=target-apply` as
+`{plan,planDigest}`. Any authority drift requires a new preview. Apply creates
+the immutable group, packet, and envelope only; the separate immediate
+`target-claim` operation acquires the target work lease before the host effect.

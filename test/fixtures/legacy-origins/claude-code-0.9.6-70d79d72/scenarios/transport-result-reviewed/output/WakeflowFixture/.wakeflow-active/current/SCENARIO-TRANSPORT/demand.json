@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "demandKey": "SCENARIO-TRANSPORT",
+  "title": "Legacy transport lifecycle scenario",
+  "interfaceLanguage": "en",
+  "goal": "Produce one exact sent and reviewed legacy transport chain.",
+  "completionDefinition": "The target result is imported and explicitly accepted.",
+  "createdAt": "@wakeflow-scenario-time-83a4fd6fbd",
+  "source": {
+    "kind": "wakeflow-state-init",
+    "trackedTemplates": "templates/wakeflow-state-machine",
+    "generatedStateRoot": ".wakeflow-active/current/SCENARIO-TRANSPORT"
+  },
+  "executionPlacement": {
+    "mode": "main",
+    "podId": null,
+    "selection": "mainline-default",
+    "authorizationRef": null
+  }
+}

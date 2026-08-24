@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:maintenance:recovery-claim:v1",
+  "title": "Wakeflow Internal Workspace Recovery Claim",
+  "$comment": "Generation-scoped O_EXCL recovery claim for one workspace mutation operation. planDigest binds the complete confirmed plan supplied separately. Runtime validation additionally enforces canonical bytes, 0600 single-link file identity, operation/generation continuity, exact predecessor artifact observations, owner-token digest equality, and equality between the claim, successor gate, and journal checkpoint.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "operationId",
+    "recoveryGeneration",
+    "planDigest",
+    "previousOwner",
+    "nextOwner",
+    "previousJournal",
+    "previousLock",
+    "previousClaim",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "artifactKind": { "type": "string", "const": "wakeflow-workspace-recovery-claim" },
+    "operationId": { "$ref": "#/$defs/operationId" },
+    "recoveryGeneration": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "planDigest": { "$ref": "#/$defs/digest" },
+    "previousOwner": { "$ref": "#/$defs/previousOwner" },
+    "nextOwner": { "$ref": "#/$defs/nextOwner" },
+    "previousJournal": { "$ref": "#/$defs/previousArtifact" },
+    "previousLock": { "$ref": "#/$defs/previousArtifact" },
+    "previousClaim": { "$ref": "#/$defs/previousArtifact" },
+    "createdAt": { "$ref": "#/$defs/timestamp" }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "previousOwner": {
+            "properties": { "recoveryGeneration": { "const": 0 } },
+            "required": ["recoveryGeneration"]
+          }
+        },
+        "required": ["previousOwner"]
+      },
+      "then": {
+        "properties": {
+          "previousOwner": {
+            "properties": {
+              "mode": { "enum": ["runtime-mutation", "maintenance"] }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "previousOwner": {
+            "properties": { "mode": { "const": "recovery-cleanup" } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "previousLock": {
+            "properties": { "type": { "const": "file" } },
+            "required": ["type"]
+          }
+        },
+        "required": ["previousLock"]
+      },
+      "then": {
+        "properties": {
+          "previousOwner": {
+            "properties": { "ownerDisposition": { "const": "active" } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "previousJournal": {
+            "properties": { "type": { "const": "absent" } },
+            "required": ["type"]
+          }
+        },
+        "required": ["previousJournal"]
+      },
+      "then": {
+        "properties": {
+          "previousLock": {
+            "properties": { "type": { "const": "file" } }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "operationId": {
+      "type": "string",
+      "pattern": "^workspace-mutation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "ownerToken": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "boundedToken": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "portableRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\s)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\/$)[^\\u0000-\\u001F\\u007F-\\u009F]*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "decimalIdentity": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]*)$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+    },
+    "processIdentity": {
+      "type": "object",
+      "required": ["platform", "pid", "startIdentity"],
+      "properties": {
+        "platform": { "type": "string", "enum": ["darwin", "linux"] },
+        "pid": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "startIdentity": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "previousOwner": {
+      "type": "object",
+      "required": [
+        "mode",
+        "operationKind",
+        "domainOwner",
+        "ownerTokenDigest",
+        "recoveryGeneration",
+        "processIdentity",
+        "ownerDisposition"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["runtime-mutation", "maintenance", "recovery-cleanup"]
+        },
+        "operationKind": { "$ref": "#/$defs/boundedToken" },
+        "domainOwner": { "$ref": "#/$defs/boundedToken" },
+        "ownerTokenDigest": { "$ref": "#/$defs/digest" },
+        "recoveryGeneration": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "processIdentity": { "$ref": "#/$defs/processIdentity" },
+        "ownerDisposition": {
+          "$comment": "A predecessor read from an existing lock is active. A predecessor read from a lock-absent stable journal may be relinquished and does not require the recorded process identity to become gone or reused before takeover.",
+          "type": "string",
+          "enum": ["active", "relinquished"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "nextOwner": {
+      "type": "object",
+      "required": [
+        "mode",
+        "operationKind",
+        "domainOwner",
+        "ownerToken",
+        "recoveryGeneration",
+        "processIdentity",
+        "acquiredAt"
+      ],
+      "properties": {
+        "mode": { "type": "string", "const": "recovery-cleanup" },
+        "operationKind": { "$ref": "#/$defs/boundedToken" },
+        "domainOwner": { "$ref": "#/$defs/boundedToken" },
+        "ownerToken": { "$ref": "#/$defs/ownerToken" },
+        "recoveryGeneration": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "processIdentity": { "$ref": "#/$defs/processIdentity" },
+        "acquiredAt": { "$ref": "#/$defs/timestamp" }
+      },
+      "additionalProperties": false
+    },
+    "absentArtifact": {
+      "type": "object",
+      "required": ["type", "ref"],
+      "properties": {
+        "type": { "const": "absent" },
+        "ref": { "$ref": "#/$defs/portableRef" }
+      },
+      "additionalProperties": false
+    },
+    "fileArtifact": {
+      "type": "object",
+      "required": [
+        "type",
+        "ref",
+        "mode",
+        "digest",
+        "deviceId",
+        "inodeId",
+        "linkCount"
+      ],
+      "properties": {
+        "type": { "const": "file" },
+        "ref": { "$ref": "#/$defs/portableRef" },
+        "mode": { "const": "0600" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "deviceId": { "$ref": "#/$defs/decimalIdentity" },
+        "inodeId": { "$ref": "#/$defs/decimalIdentity" },
+        "linkCount": { "type": "integer", "const": 1 }
+      },
+      "additionalProperties": false
+    },
+    "previousArtifact": {
+      "oneOf": [
+        { "$ref": "#/$defs/absentArtifact" },
+        { "$ref": "#/$defs/fileArtifact" }
+      ]
+    }
+  }
+}

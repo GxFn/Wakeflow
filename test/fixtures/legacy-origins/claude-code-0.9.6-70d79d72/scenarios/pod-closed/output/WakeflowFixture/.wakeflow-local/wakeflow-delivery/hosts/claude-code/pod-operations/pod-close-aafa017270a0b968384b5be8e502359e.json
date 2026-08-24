@@ -1,0 +1,36 @@
+{
+  "kind": "WakeflowHostPodOperation",
+  "version": 1,
+  "operationType": "close",
+  "operationId": "pod-close-aafa017270a0b968384b5be8e502359e",
+  "demandKey": "SCENARIO-POD",
+  "podId": "SCENARIO-POD",
+  "host": "claude-code",
+  "windowName": "Design__SCENARIO-POD",
+  "role": "design",
+  "intentDigest": "@wakeflow-scenario-derived-digest-178c2df5bb",
+  "intent": {
+    "demandKey": "SCENARIO-POD",
+    "podId": "SCENARIO-POD",
+    "host": "claude-code",
+    "launchCorrelationId": "pod-launch-adc590324c503c5fc8f63dedd92d4859",
+    "bindingId": "@wakeflow-scenario-binding-id-d8e4005e30",
+    "windowName": "Design__SCENARIO-POD",
+    "role": "design",
+    "sessionIntent": "archive-or-close",
+    "worktreeIntent": "not-applicable"
+  },
+  "status": "closed",
+  "createdAt": "@wakeflow-scenario-time-4accc716bc",
+  "updatedAt": "@wakeflow-scenario-time-396fac5005",
+  "receiptDigest": "@wakeflow-scenario-derived-digest-61be7ec8b2",
+  "receipt": {
+    "closeCorrelationId": "pod-close-aafa017270a0b968384b5be8e502359e",
+    "bindingId": "@wakeflow-scenario-binding-id-d8e4005e30",
+    "windowName": "Design__SCENARIO-POD",
+    "host": "claude-code",
+    "sessionStatus": "closed",
+    "worktreeStatus": "not-applicable",
+    "confirmedAt": "@wakeflow-scenario-time-bc35962868"
+  }
+}

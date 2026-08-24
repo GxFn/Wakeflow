@@ -1,14 +1,18 @@
 # Design/Test Skill Realization Source Map
 
-Date: 2026-06-08
+Date: 2026-08-24
 
-> **Living baseline, aligned 2026-07-31.** Originally 2026-06-08; re-derived
-> against the current architecture (unified create/claim/deliver, the 31-tool MCP
-> surface, the `redesign` review decision, deliver-only Design, demand pods, the
-> structural review-input gate and per-window `evidenceContract` compatibility field). It now also governs a fourth role — the development/target
-> window's execution craft (`wakeflow-target-craft`, a plugin skill, not a window-support
-> template). Where a specific `SKILL.md` has not yet been re-derived, the live file wins on
-> tool/intake vocabulary; this map governs capability, role boundaries, and acceptance intent.
+> **Living baseline, aligned 2026-08-24.** Originally 2026-06-08; re-derived
+> against the current architecture (the 31-tool MCP surface, strict TODO append
+> for Design intake, the `redesign` review decision, immutable TaskPackages,
+> dispatch-packet `reviewInputContract` and `testContract.executionContract`,
+> strict `wakeflow-target-result` artifacts, and demand pods). M1B originally
+> realized Design and basic Test as plugin-discovered shared Skills:
+> canonical host-neutral source lives under `core/skills/`, and `sync-core`
+> copies it byte-for-byte into both host artifacts. It also governs the
+> development/target window's execution craft (`wakeflow-target-craft`). Where
+> a live `SKILL.md` has been re-derived, that file wins on tool/intake
+> vocabulary; this map governs capability, role boundaries, and acceptance intent.
 > Wakeflow currently persists one Pod Design request/handoff generation; a different
 > second generation remains a documented capability gap.
 > Staged re-derivation: `docs/wakeflow-execution-craft-plan-2026-07-09.md`.
@@ -43,8 +47,8 @@ entry points.
   - Design clarifies, helps confirm, proposes options, writes requirement
     designs, redesigns non-bug outcome mismatches, proposes candidate slices,
     and hands off.
-  - Test plans real validation, reproduces, designs regression checks, and
-    reviews result materials without accepting them.
+  - Test plans real validation, reproduces, advises regression checks, and
+    reviews only its own evidence without accepting implementation.
   - Controller independently validates, accepts, archives, routes TODOs, and
     decides final state.
 
@@ -82,7 +86,7 @@ Wakeflow conclusions:
 
 Implications:
 
-- `requirement-clarification` must output goal, evidence, scope, non-goals,
+- `wakeflow-design/references/clarification.md` must output goal, evidence, scope, non-goals,
   stop condition, and unresolved decisions.
 - `requirement-design` must be useful for controller intake, not just PRD
   prose.
@@ -145,11 +149,14 @@ Wakeflow conclusions:
 
 Implications:
 
-- `test-strategy` must state why Test is needed, what risk is tested, and what
+- `wakeflow-test/references/risk-strategy.md` must state why Test is needed, what risk is tested, and what
   success, failure, and invalid conclusions mean.
-- `debugging-and-triage` must build a feedback loop before root-cause claims.
-- `regression-design` must state public seam and fail-before/pass-after
+- `wakeflow-test/references/debugging-triage.md` must build a feedback loop before root-cause claims.
+- `wakeflow-test/references/regression-advisory.md` must state public seam and fail-before/pass-after
   evidence.
+- `wakeflow-test/references/self-evidence-review.md` must inspect only Test's
+  own mapped evidence; product diff, target-result, and acceptance review stay
+  with the controller.
 - Removing test logic must not reduce risk priority, evidence confidence, or
   failure classification.
 
@@ -180,8 +187,9 @@ Implications:
   independent checks, and judge user
   goal, scope, implementation reality, validation, and residual risk.
 - Archive requires closed active work, rolled TODOs, and a traceable validation record.
-- Removing controller review logic is allowed only if target result, Test
-  review, or script output still cannot be mistaken for final acceptance.
+- Removing controller review logic is allowed only if target results, Test
+  self-evidence review, and script output still cannot be mistaken for final
+  acceptance.
 
 ## External Skill Sources
 
@@ -303,8 +311,8 @@ developer usage.
 
 | Role | Must cover | Must not do |
 | --- | --- | --- |
-| Design | Clarification, assisted confirmation, options, requirement design, candidate slicing, handoff | Dispatch, product implementation, final product decision |
-| Test | Risk strategy, reproduction, regression design, result-input review, failure classification | Product takeover, final acceptance, unbounded QA |
+| Design | Clarification, assisted confirmation, options, requirement design, candidate slicing, explicitly confirmed `wakeflow_deliver` handoff | Direct TODO/state mutation, dispatch, product implementation, acceptance, final product decision |
+| Test | Risk strategy, reproduction, regression advice, self-evidence review, failure classification | Product-source mutation, product-target review, final acceptance, unbounded QA |
 | Controller | Entry sync, state roots, task packages, dispatch, result review, independent validation, TODO rollup, archive | Accept target prose, skip independent checks, let scripts make product decisions |
 | Product / Target craft | Test-first, systematic debugging, self-review by severity, scope discipline (YAGNI), verify-before-done; produce controller-reviewable inputs | Claim, accept, dispatch, cross-window or state-machine writes; invoke Design/Test skills; decide acceptance |
 
@@ -312,25 +320,34 @@ developer usage.
 
 | Wakeflow skill | Source skill body | Industry basis | Required judgment |
 | --- | --- | --- | --- |
-| `requirement-clarification` | `define-goal`, `grill-me`, `grill-with-docs`, `feature-design-assistant` | ISO/IEC/IEEE 29148, NASA SWE-050, Double Diamond, clarifying-question research | Ask only scope/outcome-changing questions and output verifiable goals |
-| `option-planning` | `feature-design-assistant`, `senior-architect`, `zoom-out` | Double Diamond, architecture decisions | Compare alternatives with boundaries, interfaces, risks, and validation |
-| `requirement-design` | `to-prd`, `agile-product-owner`, `planning-with-files` | ISO/IEC/IEEE 29148, INVEST | Produce controller-intake design, not empty PRD prose |
-| `work-slicing` | `to-issues`, `agile-product-owner` | INVEST, vertical slicing | Block horizontal slices, empty interfaces, and unused adapters |
-| `design-handoff` | `handoff`, `planning-with-files` | Handoff and redaction practice | Hand off decisions, risks, open questions, and sources without duplication |
-| `test-strategy` | `senior-qa` | Risk-based testing, test pyramid | Choose validation by risk and confidence |
-| `debugging-and-triage` | `diagnose`, `systematic-debugging`, `triage` | Scientific debugging, SRE symptom/cause separation | Build feedback loop before claims |
-| `regression-design` | `tdd` | Test pyramid, behavior-focused testing | Use public seams and fail-before/pass-after evidence |
-| `evidence-review` | `code-reviewer`, `senior-qa` | Google code review, test confidence | Inspect target materials and identify blockers, missing inputs, and residual risk without accepting |
+| `wakeflow-design/references/clarification.md` | `define-goal`, `grill-me`, `grill-with-docs`, `feature-design-assistant` | ISO/IEC/IEEE 29148, NASA SWE-050, Double Diamond, clarifying-question research | Ask only scope/outcome-changing questions and output verifiable goals |
+| `wakeflow-design/references/option-planning.md` | `feature-design-assistant`, `senior-architect`, `zoom-out` | Double Diamond, architecture decisions | Compare alternatives with boundaries, interfaces, risks, and validation |
+| `wakeflow-design/references/requirement-design.md` | `to-prd`, `agile-product-owner`, `planning-with-files` | ISO/IEC/IEEE 29148, INVEST | Produce controller-intake design, not empty PRD prose |
+| `wakeflow-design/references/work-slicing.md` | `to-issues`, `agile-product-owner` | INVEST, vertical slicing | Block horizontal slices, empty interfaces, and unused adapters |
+| `wakeflow-design/references/design-handoff.md` | `handoff`, `planning-with-files` | Handoff and redaction practice | Submit only explicitly confirmed, complete Design input through `wakeflow_deliver` |
+| `wakeflow-test/references/risk-strategy.md` | `senior-qa` | Risk-based testing, test pyramid | Elaborate the approved plan by risk and confidence without choosing a new target |
+| `wakeflow-test/references/debugging-triage.md` | `diagnose`, `systematic-debugging`, `triage` | Scientific debugging, SRE symptom/cause separation | Build a feedback loop before claims and return ownership classification |
+| `wakeflow-test/references/regression-advisory.md` | `tdd` | Test pyramid, behavior-focused testing | Advise public-seam fail-before/pass-after coverage without implementing product tests |
+| `wakeflow-test/references/self-evidence-review.md` | evidence discipline retained from `code-reviewer` and `senior-qa` | SRE observation discipline, test confidence | Review only Test-authored mapped evidence; never review product completion or recommend acceptance |
 | `wakeflow-controller` acceptance | `code-reviewer`, `senior-qa`, existing Wakeflow controller | Google code review, SRE validation model | Inspect target inputs, run independent checks, roll TODOs, and decide accept/rework/block/archive |
-| `wakeflow-target-craft` | Superpowers `test-driven-development` / `systematic-debugging` / `verification-before-completion` / `requesting-code-review`, mattpocock `tdd` / `diagnose` | Test pyramid, scientific debugging, artifact-based code review | Produce structured review inputs with machine-checkable presence/mapping; stop point-fixing at `recurringProblem`; hold no claim/accept/dispatch authority |
+| `wakeflow-target-craft` | Superpowers `test-driven-development` / `systematic-debugging` / `verification-before-completion` / `requesting-code-review`, mattpocock `tdd` / `diagnose` | Test pyramid, scientific debugging, artifact-based code review | Produce structured review inputs with machine-checkable presence/mapping; stop point-fixing only when supplied history proves repeated rework; hold no claim/accept/dispatch authority |
 
-## Design Skills To Implement
+## Design Shared Skill
 
-### `requirement-clarification`
+Canonical router:
+
+- `core/skills/wakeflow-design/SKILL.md`
+
+The router owns the Design role boundary, progressive disclosure, draft-only
+write gate, and explicitly confirmed `wakeflow_deliver` handoff. Focused methods
+remain separate references so merging five discoverable entry points into one
+plugin Skill does not lose their judgments or quality bars.
+
+### `clarification.md`
 
 Path:
 
-- `templates/window-support/design/skills/requirement-clarification/SKILL.md`
+- `core/skills/wakeflow-design/references/clarification.md`
 
 Required behavior:
 
@@ -353,7 +370,7 @@ Acceptance:
 
 Path:
 
-- `templates/window-support/design/skills/option-planning/SKILL.md`
+- `core/skills/wakeflow-design/references/option-planning.md`
 
 Required behavior:
 
@@ -373,7 +390,7 @@ Acceptance:
 
 Path:
 
-- `templates/window-support/design/skills/requirement-design/SKILL.md`
+- `core/skills/wakeflow-design/references/requirement-design.md`
 
 Required behavior:
 
@@ -393,7 +410,7 @@ Acceptance:
 
 Path:
 
-- `templates/window-support/design/skills/work-slicing/SKILL.md`
+- `core/skills/wakeflow-design/references/work-slicing.md`
 
 Required behavior:
 
@@ -411,7 +428,7 @@ Acceptance:
 
 Path:
 
-- `templates/window-support/design/skills/design-handoff/SKILL.md`
+- `core/skills/wakeflow-design/references/design-handoff.md`
 
 Required behavior:
 
@@ -419,20 +436,45 @@ Required behavior:
   non-goals, risks, required controller judgment, suggested action, suggested
   skills, sources, redaction notes, and intake status.
 - Reference existing artifacts instead of duplicating full content.
-- Forbid TODO mutation, dispatch, acceptance, and final product decisions.
+- Require explicit confirmation before one `wakeflow_deliver` append using an
+  exact 13-column TODO row and current-board `expectedBoardDigest`.
+- State that append validates intake-row syntax and CAS only; the controller
+  must resolve submitted references and freeze proportional demand authority
+  before task packaging.
+- Forbid hand-edited TODO mutation, dispatch, acceptance, and final product
+  decisions.
 
 Acceptance:
 
 - Controller can quickly decide intake, decision, or stop.
 - The handoff separates fact, suggestion, and decision.
 
-## Test Skills To Implement
+Design draft assets:
 
-### `test-strategy`
+- `core/skills/wakeflow-design/assets/original-plan.md`
+- `core/skills/wakeflow-design/assets/requirement-design.md`
+
+They are instantiated only for an explicit persistent-draft request. Their
+path, title, and status never become demand authority by themselves.
+
+## Test Shared Skill
+
+Canonical router:
+
+- `core/skills/wakeflow-test/SKILL.md`
+
+The router supports only controller-accepted implementation validation or a
+controller-scoped Test-only reproduction/environment diagnostic. Product source
+is unconditionally read-only. A card may authorize mutation only in its
+confirmed environment and in Test-owned harness/fixture assets. Every result is
+returned as a strict `TargetResult` with exact evidence locators and craft
+mappings; Test self-review never replaces controller acceptance.
+
+### `risk-strategy.md`
 
 Path:
 
-- `templates/window-support/testing/skills/test-strategy/SKILL.md`
+- `core/skills/wakeflow-test/references/risk-strategy.md`
 
 Required behavior:
 
@@ -447,11 +489,11 @@ Acceptance:
 - Every test activity serves a specific controller question and risk.
 - It does not expand into unbounded QA.
 
-### `debugging-and-triage`
+### `debugging-triage.md`
 
 Path:
 
-- `templates/window-support/testing/skills/debugging-and-triage/SKILL.md`
+- `core/skills/wakeflow-test/references/debugging-triage.md`
 
 Required behavior:
 
@@ -468,11 +510,11 @@ Acceptance:
   owner recommendation, and residual risk.
 - It is not log-reading guesswork.
 
-### `regression-design`
+### `regression-advisory.md`
 
 Path:
 
-- `templates/window-support/testing/skills/regression-design/SKILL.md`
+- `core/skills/wakeflow-test/references/regression-advisory.md`
 
 Required behavior:
 
@@ -481,31 +523,35 @@ Required behavior:
 - State why the seam exercises the real bug or requirement.
 - Define fail-before and pass-after evidence.
 - Start with one tracer bullet.
+- Keep product regression implementation with the owning product window;
+  Test's output is advisory.
 
 Acceptance:
 
 - The design protects observable behavior.
 - It does not bind to private implementation shape.
 
-### `evidence-review`
+### `self-evidence-review.md`
 
 Path:
 
-- `templates/window-support/testing/skills/evidence-review/SKILL.md`
+- `core/skills/wakeflow-test/references/self-evidence-review.md`
 
 Required behavior:
 
-- Understand intent and boundary.
-- Inventory target-authored review inputs.
-- Review high-risk surfaces first.
-- Separate blockers, missing review inputs, minor issues, residual risks, invalid
-  conclusions, and recommended controller decision.
+- Restate the frozen controller question and approved plan.
+- Inventory only Test-authored commands, observations, mappings, portable refs,
+  flake facts, limitations, and residual risks.
+- Check exact `test-step` coverage plus evidence reproducibility and redaction.
+- Return honest completed/blocked/needs-review readiness for the strict
+  `TargetResult` without reviewing product completion.
 
 Acceptance:
 
-- Controller can decide accept, rework, wait, block, or ask user without
-  rereading every artifact.
-- It does not treat successful command output as full acceptance.
+- Test can return complete, bounded evidence without asking the controller to
+  reconstruct the run.
+- It does not inspect product diffs/target results on the controller's behalf,
+  recommend acceptance, or treat successful command output as full acceptance.
 
 ## Product / Target Craft Skill To Implement
 
@@ -522,15 +568,18 @@ Required behavior:
   test-first (RED→GREEN), systematic debugging (reproduce → falsifiable hypotheses →
   one-variable probes → regression), self-review by severity, scope discipline (YAGNI),
   verify-before-done (typecheck/lint/test output).
-- At `recurringProblem` (reworked twice), stop point-fixing: re-derive from root cause, or
-  return `needs-review` recommending a Design redesign for a non-bug outcome mismatch.
+- When supplied assignment history proves two prior controller rework decisions,
+  stop point-fixing: re-derive from root cause, or return `needs-review`
+  recommending a Design redesign for a non-bug outcome mismatch. Do not invent
+  a machine rework counter that v3 target-task state does not expose.
 - Forbid claim, accept, dispatch, cross-window, or state-machine writes; forbid invoking
   Design/Test skills; never decide acceptance (produce review inputs, controller decides).
 
 Acceptance:
 
-- Returns a `TargetResultEnvelope` whose review inputs are concrete enough to inspect
-  without asking the target to restate its claim; honestly returns
+- Returns a strict `TargetResult` whose `{ kind, ref, digest }` evidence locators
+  and acceptance/test-step mappings are concrete enough to inspect without
+  asking the target to restate its claim; honestly returns
   `blocked`/`needs-review` when required inputs are missing. Acceptance still
   requires controller validation.
 - Adds craft, not authority: `wakeflow-target` remains higher authority for the delivery and
@@ -562,37 +611,57 @@ Acceptance:
 
 ## Installation Requirements
 
-Final template layout:
+Canonical shared layout:
 
 ```text
-templates/window-support/design/skills/
-  requirement-clarification/SKILL.md
-  option-planning/SKILL.md
-  requirement-design/SKILL.md
-  work-slicing/SKILL.md
-  design-handoff/SKILL.md
+core/skills/wakeflow-design/
+  SKILL.md
+  references/clarification.md
+  references/option-planning.md
+  references/requirement-design.md
+  references/work-slicing.md
+  references/design-handoff.md
+  assets/original-plan.md
+  assets/requirement-design.md
 
-templates/window-support/testing/skills/
-  test-strategy/SKILL.md
-  debugging-and-triage/SKILL.md
-  regression-design/SKILL.md
-  evidence-review/SKILL.md
+core/skills/wakeflow-test/
+  SKILL.md
+  references/risk-strategy.md
+  references/debugging-triage.md
+  references/regression-advisory.md
+  references/self-evidence-review.md
+
+core/skills/wakeflow-target-craft/
+  SKILL.md
 ```
 
-`wakeflow-setup.mjs` must copy these complete skill directories during
-Design/Test template sync. It must not install only `skills/README.md`.
+`core/skills/` is the only source for these host-neutral capabilities.
+`sync-core` discovers the complete directories as shared copy members and
+mirrors them byte-for-byte to both plugin artifacts under the same `skills/`
+paths. They are plugin-discovered Skills, not template-bundle entries and not
+files copied into Design/Test workspaces. Do not directly maintain either
+artifact copy.
 
 ## Verification Checklist
 
 After implementation:
 
-- Each skill names source skills and preserved methods.
+- Each shared Skill names source skills and preserves every focused method.
 - Each skill states Wakeflow role boundaries.
 - Allowed and forbidden outputs are explicit.
 - Design/Test do not gain controller authority.
 - Controller acceptance is strengthened, not delegated.
-- Setup sync installs the real skill directories.
-- Node-only validation checks that template files, setup tests, and script
-  checks are aligned; it does not validate loaded host surfaces.
+- Design delivery requires explicit confirmation and uses only
+  `wakeflow_deliver` with the current TODO-row/CAS contract; no local handoff
+  transport or removed authority-promotion call is restored.
+- Test self-evidence review covers only Test-authored mapped evidence; product
+  diff/target-result review stays with the controller.
+- Target craft names `reviewInputContract`, `testContract.executionContract`,
+  strict `TargetResult`, `{ kind, ref, digest }` evidence locators, and current
+  acceptance/test-step mappings; it does not teach legacy envelope fields.
+- `sync-core` installs all three shared Skill directories into both artifacts,
+  and parity checks compare every byte after synchronization.
+- Node-only validation recursively checks local Markdown links, path
+  containment, orphan files, frontmatter, and forbidden auxiliary surfaces.
 - No project-specific names, local paths, thread ids, secrets, non-English text,
   or unsupported runtime dependencies remain in reusable Wakeflow package files.

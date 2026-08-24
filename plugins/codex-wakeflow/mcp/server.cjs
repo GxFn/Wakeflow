@@ -2,6 +2,17 @@
 
 "use strict";
 
+/**
+ * Wakeflow MCP 的 stdio / JSON-RPC 传输入口。
+ *
+ * 能力导航：
+ * - 协议协商与消息分派：main、handleMessage、negotiateProtocolVersion。
+ * - 精确工具调用：callTool，只允许注册表自己的可调用属性。
+ * - 公共结果与脱敏错误：toolContent、publicToolError、toolError。
+ * - 行与 Content-Length framing：LineJsonRpcTransport。
+ *
+ * 本文件不拥有任何领域操作；它只把已注册工具暴露给 MCP 客户端，并保持公共错误边界。
+ */
 const { readFileSync } = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
@@ -11,6 +22,8 @@ const packageVersion = readPackageVersion();
 const JSONRPC_VERSION = "2.0";
 const LATEST_PROTOCOL_VERSION = "2025-11-25";
 const DEFAULT_NEGOTIATED_PROTOCOL_VERSION = "2025-03-26";
+const PUBLIC_MCP_ERROR_CODE_PATTERN = /^wakeflow-public-mcp-[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const STABLE_WAKEFLOW_CODE_PATTERN = /^wakeflow-[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const SUPPORTED_PROTOCOL_VERSIONS = [
   LATEST_PROTOCOL_VERSION,
   "2025-06-18",
@@ -32,6 +45,7 @@ main().catch((error) => {
   process.exitCode = 1;
 });
 
+// 加载同一安装产物的精确工具表，并把每个输入 frame 交给统一协议分派。
 async function main() {
   const { tools, handlers } = await import(pathToFileURL(path.join(pluginRoot, "lib/wakeflow-mcp-tools.mjs")).href);
   const transport = new LineJsonRpcTransport(process.stdin, process.stdout);
@@ -56,6 +70,7 @@ async function main() {
   transport.start();
 }
 
+// 处理 JSON-RPC 协议方法；tools/call 的领域失败仍作为 MCP tool result 返回。
 async function handleMessage(message, tools, handlers) {
   if (isJsonRpcResponse(message)) {
     return null;
@@ -101,25 +116,36 @@ async function handleMessage(message, tools, handlers) {
     }
   } catch (error) {
     if (!hasId) return null;
-    return jsonRpcError(id, ERROR_CODES.internalError, error?.message || String(error));
+    return jsonRpcError(id, ERROR_CODES.internalError, "Internal error");
   }
 }
 
+/**
+ * 调用一个精确注册的 Wakeflow 工具。
+ * own-property 与 function 两项检查共同阻断 constructor、toString 等原型链名字进入执行路径。
+ */
 async function callTool(params, handlers) {
   if (!isObject(params) || typeof params.name !== "string") {
-    return toolError("tools/call requires params.name");
+    return toolError({
+      code: "wakeflow-mcp-invalid-call",
+      message: "tools/call requires params.name",
+    });
+  }
+  if (!Object.hasOwn(handlers, params.name) || typeof handlers[params.name] !== "function") {
+    return toolError({
+      code: "wakeflow-mcp-unknown-tool",
+      message: "Unknown Wakeflow tool",
+    });
   }
   const handler = handlers[params.name];
-  if (!handler) {
-    return toolError(`Unknown Wakeflow tool: ${params.name}`);
-  }
   try {
     return toolContent(await handler(isObject(params.arguments) ? params.arguments : {}));
   } catch (error) {
-    return toolError(error?.message || String(error));
+    return toolError(publicToolError(error));
   }
 }
 
+// 成功结果保持领域 owner 已经生成的可移植 JSON 结构，不增加第二套 envelope。
 function toolContent(payload) {
   return {
     content: [
@@ -131,13 +157,46 @@ function toolContent(payload) {
   };
 }
 
-function toolError(message) {
+/**
+ * 只保留共享 MCP 组合层显式产生的稳定公开错误。
+ * 未识别异常会收敛为通用失败，避免内部 message、stack、路径或任意 details 穿透传输层。
+ */
+function publicToolError(error) {
+  if (
+    error?.name === "WakeflowPublicMcpError"
+    && PUBLIC_MCP_ERROR_CODE_PATTERN.test(error.code)
+    && typeof error.message === "string"
+  ) {
+    const causeCode = STABLE_WAKEFLOW_CODE_PATTERN.test(error?.details?.causeCode)
+      ? error.details.causeCode
+      : undefined;
+    return {
+      code: error.code,
+      message: error.message,
+      ...(causeCode === undefined ? {} : { causeCode }),
+    };
+  }
+  return {
+    code: "wakeflow-mcp-tool-failed",
+    message: "Wakeflow tool failed inside its bounded public owner",
+  };
+}
+
+// MCP tool error 固定返回 code/message/可选 causeCode，不回显调用参数或内部 details。
+function toolError({ code, message, causeCode = undefined }) {
   return {
     isError: true,
     content: [
       {
         type: "text",
-        text: JSON.stringify({ ok: false, error: message }, null, 2),
+        text: JSON.stringify({
+          ok: false,
+          error: {
+            code,
+            message,
+            ...(causeCode === undefined ? {} : { causeCode }),
+          },
+        }, null, 2),
       },
     ],
   };
@@ -190,6 +249,7 @@ function readPackageVersion() {
   }
 }
 
+// 同时兼容逐行 JSON 与 MCP Content-Length frame；framing 只负责传输，不解释业务内容。
 class LineJsonRpcTransport {
   constructor(input, output) {
     this.input = input;

@@ -1,0 +1,11 @@
+{
+  "kind": "AutomationKeepLiveState",
+  "version": 1,
+  "enabled": false,
+  "automationRunId": "scenario-terminal-run",
+  "mechanism": "manual",
+  "stoppedAt": "@wakeflow-scenario-time-78f8b7145f",
+  "status": "stopped",
+  "lastCheckedAt": "@wakeflow-scenario-time-7ef114e505",
+  "error": null
+}

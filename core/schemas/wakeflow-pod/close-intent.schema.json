@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:pod:close-intent:v1",
+  "title": "Wakeflow Pod Close Intent",
+  "$comment": "Create-once logical close request. The adapter observes but never infers host-owned worktree removal.",
+  "type": "object",
+  "required": [
+    "kind",
+    "schemaVersion",
+    "programId",
+    "hostId",
+    "podId",
+    "demandId",
+    "windowId",
+    "launchOperationId",
+    "bindingId",
+    "closeOperationId",
+    "role",
+    "sessionIntent",
+    "worktreeReportingPolicy",
+    "createdAt"
+  ],
+  "properties": {
+    "kind": { "type": "string", "const": "WakeflowPodCloseIntent" },
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "programId": { "$ref": "#/$defs/programId" },
+    "hostId": { "$ref": "#/$defs/hostId" },
+    "podId": { "$ref": "#/$defs/podId" },
+    "demandId": { "$ref": "#/$defs/demandId" },
+    "windowId": { "$ref": "#/$defs/windowId" },
+    "launchOperationId": { "$ref": "#/$defs/launchOperationId" },
+    "bindingId": { "$ref": "#/$defs/bindingId" },
+    "closeOperationId": { "$ref": "#/$defs/closeOperationId" },
+    "role": { "type": "string", "enum": ["controller", "design", "test", "product"] },
+    "creationReceiptDigest": { "$ref": "#/$defs/digest" },
+    "sessionIntent": { "type": "string", "const": "close" },
+    "worktreeReportingPolicy": { "type": "string", "const": "observe-only" },
+    "createdAt": { "$ref": "#/$defs/timestamp" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "programId": { "type": "string", "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "hostId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+    "podId": { "type": "string", "pattern": "^pod_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "demandId": { "type": "string", "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "windowId": { "type": "string", "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "launchOperationId": { "type": "string", "pattern": "^pod-launch_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "bindingId": { "type": "string", "pattern": "^binding_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "closeOperationId": { "type": "string", "pattern": "^pod-close_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "timestamp": { "type": "string", "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$" }
+  }
+}

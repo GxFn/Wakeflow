@@ -1,101 +1,1537 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/GxFn/Wakeflow/main/core/schemas/wakeflow-config.schema.json",
-  "title": "Wakeflow workspace configuration v2",
+  "title": "Wakeflow Config v3",
+  "description": "Strict public schema for Wakeflow durable program intent. Runtime facts, host handles, fixed protocol roots, derived paths, and migration history are intentionally excluded.",
   "type": "object",
-  "required": ["schemaVersion", "workspace", "roles", "storage", "repositories", "hosts"],
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "kind",
+    "schemaVersion",
+    "program",
+    "topology",
+    "storage",
+    "governance",
+    "hosts"
+  ],
   "properties": {
-    "$schema": { "type": "string" },
-    "schemaVersion": { "const": 2 },
-    "workspace": {
-      "type": "object",
-      "required": ["name", "language", "runtimeMode", "root", "wakeflowRepoDir"],
-      "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "language": { "enum": ["auto", "zh", "en"] },
-        "runtimeMode": { "enum": ["plugin", "repository"] },
-        "root": { "type": "string", "minLength": 1 },
-        "wakeflowRepoDir": { "type": "string" }
-      },
-      "additionalProperties": false
+    "$schema": {
+      "const": "https://raw.githubusercontent.com/GxFn/Wakeflow/main/core/schemas/wakeflow-config.schema.json",
+      "description": "Canonical public schema URL for the tracked durable configuration.",
+      "examples": [
+        "https://raw.githubusercontent.com/GxFn/Wakeflow/main/core/schemas/wakeflow-config.schema.json"
+      ]
     },
-    "roles": {
-      "type": "object",
-      "required": ["controller", "design", "test"],
-      "properties": {
-        "controller": { "type": "string", "minLength": 1 },
-        "design": { "type": "string", "minLength": 1 },
-        "test": { "type": "string", "minLength": 1 },
-        "realProject": { "type": "string" },
-        "base": { "type": "string" }
-      },
-      "additionalProperties": false
+    "kind": {
+      "const": "WakeflowConfig",
+      "description": "Discriminator for a Wakeflow durable configuration.",
+      "examples": [
+        "WakeflowConfig"
+      ]
+    },
+    "schemaVersion": {
+      "const": 3,
+      "description": "Durable configuration schema version.",
+      "examples": [
+        3
+      ]
+    },
+    "program": {
+      "$ref": "#/$defs/program"
+    },
+    "topology": {
+      "$ref": "#/$defs/topology"
     },
     "storage": {
-      "type": "object",
-      "required": ["activeRoot", "localRoot", "ledgerRoot"],
-      "properties": {
-        "activeRoot": { "type": "string", "minLength": 1 },
-        "localRoot": { "const": ".wakeflow-local" },
-        "ledgerRoot": { "type": "string", "minLength": 1 },
-        "windowLedgerRoot": { "type": "string", "minLength": 1 },
-        "windowLedgerDirs": {
-          "type": "object",
-          "additionalProperties": { "type": "string", "minLength": 1 }
-        },
-        "paths": {
-          "type": "object",
-          "properties": {
-            "workspaceDocsDir": { "type": "string", "minLength": 1 },
-            "workspaceCurrentDir": { "type": "string", "minLength": 1 },
-            "workspaceArchiveDir": { "type": "string", "minLength": 1 },
-            "workspaceIndexPath": { "type": "string", "minLength": 1 },
-            "workspaceCurrentIndexPath": { "type": "string", "minLength": 1 },
-            "workspaceCurrentStatusPath": { "type": "string", "minLength": 1 },
-            "workspaceRecordMapPath": { "type": "string", "minLength": 1 },
-            "globalTodoPath": { "type": "string", "minLength": 1 },
-            "requirementDesignsDir": { "type": "string", "minLength": 1 },
-            "goalStageConfirmationDir": { "type": "string", "minLength": 1 },
-            "testExchangePath": { "type": "string", "minLength": 1 }
-          },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
+      "$ref": "#/$defs/storage"
     },
-    "policy": {
-      "type": "object",
-      "properties": {
-        "allowMissingRepos": { "type": "boolean" },
-        "preservedRetentionDays": { "type": "number", "exclusiveMinimum": 0 },
-        "disallowedTrackedPaths": { "type": "array", "items": { "type": "string" } },
-        "allowedRepositoryResiduePaths": { "type": "array", "items": { "type": "string" } },
-        "runtimeProcessMatchers": { "type": "array", "items": { "type": "string" } },
-        "runtimeProcessLabel": { "type": "string" }
-      },
-      "additionalProperties": false
+    "governance": {
+      "$ref": "#/$defs/governance"
     },
-    "repositories": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["windowName", "path"],
-        "properties": {
-          "windowName": { "type": "string", "minLength": 1 },
-          "path": { "type": "string", "minLength": 1 },
-          "role": { "type": "string" },
-          "mode": { "enum": ["internal", "external"] },
-          "managedAgents": { "type": "boolean" },
-          "stream": { "type": "object" }
-        },
-        "additionalProperties": true
-      }
-    },
-    "hosts": { "type": "object" },
-    "derived": {
-      "type": "object",
-      "description": "Legacy local stream overlay metadata; durable setup never writes it."
+    "hosts": {
+      "$ref": "#/$defs/hosts"
     }
   },
-  "additionalProperties": false
+  "$defs": {
+    "trimmedNonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)[\\s\\S]*\\S$",
+      "description": "A non-empty string whose first and last characters are not whitespace; this mirrors the strict loader's trim check.",
+      "examples": [
+        "Example Program"
+      ]
+    },
+    "nonEmptyString": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/trimmedNonEmptyString"
+        }
+      ],
+      "description": "Compatibility alias for the shared trimmed non-empty string constraint used by durable text fields.",
+      "examples": [
+        "Controller-visible explanation"
+      ]
+    },
+    "portableRelativePlacement": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/trimmedNonEmptyString"
+        }
+      ],
+      "pattern": "^(?![A-Za-z]:)(?:\\.\\./)*(?!\\.{1,2}(?:/|$))[^/\\\\\\u0000\\r\\n]+(?:/(?!\\.{1,2}(?:/|$))[^/\\\\\\u0000\\r\\n]+)*$",
+      "description": "Canonical portable relative placement. A leading ../ chain may address a named sibling root; absolute paths, drive-relative paths, backslashes, empty or dot-only paths, empty segments, and embedded dot traversal are rejected.",
+      "examples": [
+        "Design",
+        "../ProductA",
+        "../wakeflow-ledger"
+      ]
+    },
+    "repositoryChildPath": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/trimmedNonEmptyString"
+        }
+      ],
+      "pattern": "^(?![A-Za-z]:)(?!\\.{1,2}(?:/|$))[^/\\\\\\u0000\\r\\n]+(?:/(?!\\.{1,2}(?:/|$))[^/\\\\\\u0000\\r\\n]+)*$",
+      "description": "Canonical portable path that remains below its owning repository; parent traversal and all other non-canonical placement forms are rejected.",
+      "examples": [
+        ".cursor/skills",
+        "generated/reports"
+      ]
+    },
+    "regexPattern": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/trimmedNonEmptyString"
+        }
+      ],
+      "format": "regex",
+      "description": "A trimmed ECMAScript regular-expression source validated with Unicode semantics before runtime use.",
+      "examples": [
+        "node\\s+server\\.mjs"
+      ]
+    },
+    "claudeTmuxSessionName": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/trimmedNonEmptyString"
+        }
+      ],
+      "maxLength": 128,
+      "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$",
+      "description": "Desired Claude tmux session name, bounded to 128 control-free characters before any host effect.",
+      "examples": [
+        "wakeflow"
+      ]
+    },
+    "claudeTmuxSocketName": {
+      "type": "string",
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,128}$",
+      "description": "Safe tmux -L socket name shared with the Claude locator contract; slash, whitespace, controls, and dot-only aliases are rejected.",
+      "examples": [
+        "wakeflow-example"
+      ]
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "Stable program identity: the program_ prefix followed by a lowercase RFC 4122 variant UUID v4.",
+      "examples": [
+        "program_11111111-1111-4111-8111-111111111111"
+      ]
+    },
+    "repositoryId": {
+      "type": "string",
+      "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "Stable product-repository identity: the repository_ prefix followed by a lowercase UUID v4.",
+      "examples": [
+        "repository_22222222-2222-4222-8222-222222222222"
+      ]
+    },
+    "surfaceId": {
+      "type": "string",
+      "pattern": "^surface_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "Stable Design or Test support-surface identity: the surface_ prefix followed by a lowercase UUID v4.",
+      "examples": [
+        "surface_33333333-3333-4333-8333-333333333333"
+      ]
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "Stable logical-window identity: the window_ prefix followed by a lowercase UUID v4.",
+      "examples": [
+        "window_55555555-5555-4555-8555-555555555555"
+      ]
+    },
+    "program": {
+      "description": "Tracked durable program identity and human-facing presentation preferences; it contains no paths, runtime state, or host handles.",
+      "examples": [
+        {
+          "programId": "program_11111111-1111-4111-8111-111111111111",
+          "displayName": "Example Program",
+          "interfaceLanguage": "zh"
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "programId",
+        "displayName",
+        "interfaceLanguage"
+      ],
+      "properties": {
+        "programId": {
+          "$ref": "#/$defs/programId",
+          "description": "Stable program identity generated once; never derived from display text or paths."
+        },
+        "displayName": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Human-facing program title; it is not identity or a foreign key."
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional human explanation; it does not affect identity or state."
+        },
+        "interfaceLanguage": {
+          "enum": [
+            "auto",
+            "en",
+            "zh"
+          ],
+          "description": "Persistent presentation-language preference: auto inherits the current interface, while en and zh request an explicit language.",
+          "examples": [
+            "zh"
+          ]
+        }
+      }
+    },
+    "topology": {
+      "description": "Durable product repositories, Design/Test support surfaces, and stable logical windows connected only through typed references.",
+      "examples": [
+        {
+          "repositories": [
+            {
+              "repositoryId": "repository_22222222-2222-4222-8222-222222222222",
+              "path": "../ProductA",
+              "displayName": "Product A",
+              "instructionManagement": "owner-managed"
+            }
+          ],
+          "supportSurfaces": [
+            {
+              "surfaceId": "surface_33333333-3333-4333-8333-333333333333",
+              "capability": "design",
+              "path": "Design",
+              "displayName": "Design",
+              "ownership": "wakeflow-managed"
+            },
+            {
+              "surfaceId": "surface_44444444-4444-4444-8444-444444444444",
+              "capability": "test",
+              "path": "Test",
+              "displayName": "Test",
+              "ownership": "wakeflow-managed"
+            }
+          ],
+          "windows": [
+            {
+              "windowId": "window_55555555-5555-4555-8555-555555555555",
+              "role": "controller",
+              "displayName": "Controller",
+              "root": {
+                "kind": "program"
+              }
+            },
+            {
+              "windowId": "window_66666666-6666-4666-8666-666666666666",
+              "role": "design",
+              "displayName": "Design",
+              "root": {
+                "kind": "support-surface",
+                "surfaceId": "surface_33333333-3333-4333-8333-333333333333"
+              }
+            },
+            {
+              "windowId": "window_77777777-7777-4777-8777-777777777777",
+              "role": "test",
+              "displayName": "Test",
+              "root": {
+                "kind": "support-surface",
+                "surfaceId": "surface_44444444-4444-4444-8444-444444444444"
+              }
+            },
+            {
+              "windowId": "window_88888888-8888-4888-8888-888888888888",
+              "role": "product",
+              "displayName": "Product A",
+              "root": {
+                "kind": "repository",
+                "repositoryId": "repository_22222222-2222-4222-8222-222222222222"
+              }
+            }
+          ]
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositories",
+        "supportSurfaces",
+        "windows"
+      ],
+      "properties": {
+        "repositories": {
+          "type": "array",
+          "minItems": 1,
+          "description": "At least one durable product-repository entity; array order is presentation order, not identity.",
+          "examples": [
+            [
+              {
+                "repositoryId": "repository_22222222-2222-4222-8222-222222222222",
+                "path": "../ProductA",
+                "displayName": "Product A",
+                "instructionManagement": "owner-managed"
+              }
+            ]
+          ],
+          "items": {
+            "$ref": "#/$defs/repository"
+          }
+        },
+        "supportSurfaces": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Exactly one Design surface and one Test surface. The strict loader also requires each singleton role window to reference its matching capability.",
+          "examples": [
+            [
+              {
+                "surfaceId": "surface_33333333-3333-4333-8333-333333333333",
+                "capability": "design",
+                "path": "Design",
+                "displayName": "Design",
+                "ownership": "wakeflow-managed"
+              },
+              {
+                "surfaceId": "surface_44444444-4444-4444-8444-444444444444",
+                "capability": "test",
+                "path": "Test",
+                "displayName": "Test",
+                "ownership": "wakeflow-managed"
+              }
+            ]
+          ],
+          "items": {
+            "$ref": "#/$defs/supportSurface"
+          },
+          "allOf": [
+            {
+              "description": "Exactly one durable Design support surface is required.",
+              "contains": {
+                "properties": {
+                  "capability": {
+                    "const": "design"
+                  }
+                },
+                "required": [
+                  "capability"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "description": "Exactly one durable Test support surface is required.",
+              "contains": {
+                "properties": {
+                  "capability": {
+                    "const": "test"
+                  }
+                },
+                "required": [
+                  "capability"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ]
+        },
+        "windows": {
+          "type": "array",
+          "minItems": 4,
+          "description": "Stable logical windows with exactly one controller, one Design, one Test, and at least one product window; dynamic Pod windows are excluded.",
+          "examples": [
+            [
+              {
+                "windowId": "window_55555555-5555-4555-8555-555555555555",
+                "role": "controller",
+                "displayName": "Controller",
+                "root": {
+                  "kind": "program"
+                }
+              },
+              {
+                "windowId": "window_66666666-6666-4666-8666-666666666666",
+                "role": "design",
+                "displayName": "Design",
+                "root": {
+                  "kind": "support-surface",
+                  "surfaceId": "surface_33333333-3333-4333-8333-333333333333"
+                }
+              },
+              {
+                "windowId": "window_77777777-7777-4777-8777-777777777777",
+                "role": "test",
+                "displayName": "Test",
+                "root": {
+                  "kind": "support-surface",
+                  "surfaceId": "surface_44444444-4444-4444-8444-444444444444"
+                }
+              },
+              {
+                "windowId": "window_88888888-8888-4888-8888-888888888888",
+                "role": "product",
+                "displayName": "Product A",
+                "root": {
+                  "kind": "repository",
+                  "repositoryId": "repository_22222222-2222-4222-8222-222222222222"
+                }
+              }
+            ]
+          ],
+          "items": {
+            "$ref": "#/$defs/window"
+          },
+          "allOf": [
+            {
+              "description": "Exactly one durable controller window is required.",
+              "contains": {
+                "properties": {
+                  "role": {
+                    "const": "controller"
+                  }
+                },
+                "required": [
+                  "role"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "description": "Exactly one durable Design window is required.",
+              "contains": {
+                "properties": {
+                  "role": {
+                    "const": "design"
+                  }
+                },
+                "required": [
+                  "role"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "description": "Exactly one durable Test window is required.",
+              "contains": {
+                "properties": {
+                  "role": {
+                    "const": "test"
+                  }
+                },
+                "required": [
+                  "role"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "description": "At least one durable product window is required.",
+              "contains": {
+                "properties": {
+                  "role": {
+                    "const": "product"
+                  }
+                },
+                "required": [
+                  "role"
+                ]
+              },
+              "minContains": 1
+            }
+          ]
+        }
+      }
+    },
+    "repository": {
+      "description": "A stable product-source responsibility root; path and display text may change without changing repositoryId.",
+      "examples": [
+        {
+          "repositoryId": "repository_22222222-2222-4222-8222-222222222222",
+          "path": "../ProductA",
+          "displayName": "Product A",
+          "instructionManagement": "owner-managed"
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositoryId",
+        "path",
+        "displayName",
+        "instructionManagement"
+      ],
+      "properties": {
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        },
+        "path": {
+          "$ref": "#/$defs/portableRelativePlacement",
+          "description": "Canonical relative placement from the program root."
+        },
+        "displayName": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Human-facing repository title; never an identity key.",
+          "examples": [
+            "Product A"
+          ]
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional human explanation of the repository responsibility.",
+          "examples": [
+            "Product source responsibility root."
+          ]
+        },
+        "instructionManagement": {
+          "enum": [
+            "owner-managed",
+            "managed-block"
+          ],
+          "description": "owner-managed leaves instructions entirely to the repository owner; managed-block permits only Wakeflow's bounded managed block.",
+          "examples": [
+            "owner-managed"
+          ]
+        },
+        "validation": {
+          "$ref": "#/$defs/repositoryValidation",
+          "description": "Repository-scoped validation exceptions with explicit owner reasons.",
+          "examples": [
+            {
+              "residueExceptions": []
+            }
+          ]
+        }
+      }
+    },
+    "repositoryValidation": {
+      "description": "Strict repository-specific validation policy; it cannot weaken workspace protocol boundaries.",
+      "examples": [
+        {
+          "residueExceptions": [
+            {
+              "path": ".cursor/skills",
+              "reason": "The repository owner keeps this integration."
+            }
+          ]
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "residueExceptions"
+      ],
+      "properties": {
+        "residueExceptions": {
+          "type": "array",
+          "description": "Exact repository-child paths allowed as intentional residue; duplicate paths are rejected by the shared loader.",
+          "examples": [
+            [
+              {
+                "path": ".cursor/skills",
+                "reason": "The repository owner keeps this integration."
+              }
+            ]
+          ],
+          "items": {
+            "$ref": "#/$defs/residueException"
+          }
+        }
+      }
+    },
+    "residueException": {
+      "description": "One exact repository-child residue exception and its non-empty owner justification.",
+      "examples": [
+        {
+          "path": ".cursor/skills",
+          "reason": "The repository owner keeps this integration."
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "reason"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/repositoryChildPath",
+          "description": "Canonical repository-relative child path."
+        },
+        "reason": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Human-readable repository-owner justification; it grants only the exact path above.",
+          "examples": [
+            "The repository owner keeps this integration."
+          ]
+        }
+      }
+    },
+    "supportSurface": {
+      "description": "A discriminated Design or Test support surface with either whole-surface Wakeflow ownership or explicit external ownership.",
+      "examples": [
+        {
+          "surfaceId": "surface_33333333-3333-4333-8333-333333333333",
+          "capability": "design",
+          "path": "Design",
+          "displayName": "Design",
+          "ownership": "wakeflow-managed"
+        }
+      ],
+      "oneOf": [
+        {
+          "$ref": "#/$defs/wakeflowManagedSurface"
+        },
+        {
+          "$ref": "#/$defs/externalOwnedSurface"
+        }
+      ]
+    },
+    "wakeflowManagedSurface": {
+      "description": "A built-in Design/Test surface whose generated memory and scaffold are wholly owned by Wakeflow; instructionManagement is forbidden.",
+      "examples": [
+        {
+          "surfaceId": "surface_33333333-3333-4333-8333-333333333333",
+          "capability": "design",
+          "path": "Design",
+          "displayName": "Design",
+          "ownership": "wakeflow-managed"
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "surfaceId",
+        "capability",
+        "path",
+        "displayName",
+        "ownership"
+      ],
+      "properties": {
+        "surfaceId": {
+          "$ref": "#/$defs/surfaceId"
+        },
+        "capability": {
+          "enum": [
+            "design",
+            "test"
+          ],
+          "description": "Protocol capability provided by this support surface: requirements design or independent testing.",
+          "examples": [
+            "design"
+          ]
+        },
+        "path": {
+          "$ref": "#/$defs/portableRelativePlacement"
+        },
+        "displayName": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Human-facing support-surface title; never an identity key.",
+          "examples": [
+            "Design"
+          ]
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional human explanation of the support-surface responsibility.",
+          "examples": [
+            "Requirement and outcome design surface."
+          ]
+        },
+        "ownership": {
+          "const": "wakeflow-managed",
+          "description": "Wakeflow owns the entire generated support surface and memory file.",
+          "examples": [
+            "wakeflow-managed"
+          ]
+        }
+      }
+    },
+    "externalOwnedSurface": {
+      "description": "An externally owned Design/Test surface; Wakeflow creates no scaffold and manages instructions only under the explicit policy.",
+      "examples": [
+        {
+          "surfaceId": "surface_33333333-3333-4333-8333-333333333333",
+          "capability": "design",
+          "path": "../ProductDesign",
+          "displayName": "Design",
+          "ownership": "external-owned",
+          "instructionManagement": "managed-block"
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "surfaceId",
+        "capability",
+        "path",
+        "displayName",
+        "ownership",
+        "instructionManagement"
+      ],
+      "properties": {
+        "surfaceId": {
+          "$ref": "#/$defs/surfaceId"
+        },
+        "capability": {
+          "enum": [
+            "design",
+            "test"
+          ],
+          "description": "Protocol capability supplied by the external surface: requirements design or independent testing.",
+          "examples": [
+            "design"
+          ]
+        },
+        "path": {
+          "$ref": "#/$defs/portableRelativePlacement"
+        },
+        "displayName": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Human-facing external support-surface title; never an identity key.",
+          "examples": [
+            "Design"
+          ]
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional human explanation of the external support responsibility.",
+          "examples": [
+            "External requirement design surface."
+          ]
+        },
+        "ownership": {
+          "const": "external-owned",
+          "description": "The external owner controls the surface; Wakeflow must not create its normal scaffold.",
+          "examples": [
+            "external-owned"
+          ]
+        },
+        "instructionManagement": {
+          "enum": [
+            "owner-managed",
+            "managed-block"
+          ],
+          "description": "owner-managed forbids Wakeflow instruction writes; managed-block permits only the bounded Wakeflow block.",
+          "examples": [
+            "managed-block"
+          ]
+        }
+      }
+    },
+    "window": {
+      "description": "A discriminated stable logical window. Its role determines the exact typed root reference shape.",
+      "examples": [
+        {
+          "windowId": "window_55555555-5555-4555-8555-555555555555",
+          "role": "controller",
+          "displayName": "Controller",
+          "root": {
+            "kind": "program"
+          }
+        }
+      ],
+      "oneOf": [
+        {
+          "$ref": "#/$defs/controllerWindow"
+        },
+        {
+          "$ref": "#/$defs/designWindow"
+        },
+        {
+          "$ref": "#/$defs/testWindow"
+        },
+        {
+          "$ref": "#/$defs/productWindow"
+        }
+      ]
+    },
+    "controllerWindow": {
+      "description": "The single durable Controller window rooted at the program boundary.",
+      "examples": [
+        {
+          "windowId": "window_55555555-5555-4555-8555-555555555555",
+          "role": "controller",
+          "displayName": "Controller",
+          "root": {
+            "kind": "program"
+          }
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windowId",
+        "role",
+        "displayName",
+        "root"
+      ],
+      "properties": {
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        },
+        "role": {
+          "const": "controller",
+          "description": "Protocol role for the unique Controller window.",
+          "examples": [
+            "controller"
+          ]
+        },
+        "displayName": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Human-facing Controller title; never an identity key.",
+          "examples": [
+            "Controller"
+          ]
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional human explanation of the Controller responsibility.",
+          "examples": [
+            "Wakeflow control window."
+          ]
+        },
+        "root": {
+          "$ref": "#/$defs/programRoot"
+        }
+      }
+    },
+    "designWindow": {
+      "description": "The single durable Design window, referencing a design-capable support surface by surfaceId.",
+      "examples": [
+        {
+          "windowId": "window_66666666-6666-4666-8666-666666666666",
+          "role": "design",
+          "displayName": "Design",
+          "root": {
+            "kind": "support-surface",
+            "surfaceId": "surface_33333333-3333-4333-8333-333333333333"
+          }
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windowId",
+        "role",
+        "displayName",
+        "root"
+      ],
+      "properties": {
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        },
+        "role": {
+          "const": "design",
+          "description": "Protocol role for the unique Design window.",
+          "examples": [
+            "design"
+          ]
+        },
+        "displayName": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Human-facing Design title; never an identity key.",
+          "examples": [
+            "Design"
+          ]
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional human explanation of the Design responsibility.",
+          "examples": [
+            "Requirement design window."
+          ]
+        },
+        "root": {
+          "$ref": "#/$defs/supportRoot"
+        }
+      }
+    },
+    "testWindow": {
+      "description": "The single durable Test window, referencing a test-capable support surface by surfaceId.",
+      "examples": [
+        {
+          "windowId": "window_77777777-7777-4777-8777-777777777777",
+          "role": "test",
+          "displayName": "Test",
+          "root": {
+            "kind": "support-surface",
+            "surfaceId": "surface_44444444-4444-4444-8444-444444444444"
+          }
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windowId",
+        "role",
+        "displayName",
+        "root"
+      ],
+      "properties": {
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        },
+        "role": {
+          "const": "test",
+          "description": "Protocol role for the unique independent Test window.",
+          "examples": [
+            "test"
+          ]
+        },
+        "displayName": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Human-facing Test title; never an identity key.",
+          "examples": [
+            "Test"
+          ]
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional human explanation of the independent Test responsibility.",
+          "examples": [
+            "Independent test coordination window."
+          ]
+        },
+        "root": {
+          "$ref": "#/$defs/supportRoot"
+        }
+      }
+    },
+    "productWindow": {
+      "description": "A durable product-responsibility window referencing one stable repository; multiple product windows may share that repository.",
+      "examples": [
+        {
+          "windowId": "window_88888888-8888-4888-8888-888888888888",
+          "role": "product",
+          "displayName": "Product A",
+          "root": {
+            "kind": "repository",
+            "repositoryId": "repository_22222222-2222-4222-8222-222222222222"
+          }
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windowId",
+        "role",
+        "displayName",
+        "root"
+      ],
+      "properties": {
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        },
+        "role": {
+          "const": "product",
+          "description": "Protocol role for a product implementation window.",
+          "examples": [
+            "product"
+          ]
+        },
+        "displayName": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Human-facing product-window title; never an identity key.",
+          "examples": [
+            "Product A"
+          ]
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional human explanation of this product-window responsibility.",
+          "examples": [
+            "Product backend responsibility."
+          ]
+        },
+        "root": {
+          "$ref": "#/$defs/repositoryRoot"
+        }
+      }
+    },
+    "programRoot": {
+      "description": "Discriminated root reference for the Controller: the program boundary itself, with no duplicated path or programId.",
+      "examples": [
+        {
+          "kind": "program"
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "program",
+          "description": "Selects the fixed program root for the Controller window.",
+          "examples": [
+            "program"
+          ]
+        }
+      }
+    },
+    "supportRoot": {
+      "description": "Typed root reference from a Design/Test window to one declared support surface.",
+      "examples": [
+        {
+          "kind": "support-surface",
+          "surfaceId": "surface_33333333-3333-4333-8333-333333333333"
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "surfaceId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "support-surface",
+          "description": "Selects a support-surface root resolved through surfaceId.",
+          "examples": [
+            "support-surface"
+          ]
+        },
+        "surfaceId": {
+          "$ref": "#/$defs/surfaceId"
+        }
+      }
+    },
+    "repositoryRoot": {
+      "description": "Typed root reference from a product window to one declared product repository.",
+      "examples": [
+        {
+          "kind": "repository",
+          "repositoryId": "repository_22222222-2222-4222-8222-222222222222"
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "repositoryId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "repository",
+          "description": "Selects a product-repository root resolved through repositoryId.",
+          "examples": [
+            "repository"
+          ]
+        },
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        }
+      }
+    },
+    "storage": {
+      "description": "Durable user-selectable storage placement. Active and local roots and every leaf path remain fixed protocol constants outside config.",
+      "examples": [
+        {
+          "ledgerRoot": "../wakeflow-ledger"
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ledgerRoot"
+      ],
+      "properties": {
+        "ledgerRoot": {
+          "$ref": "#/$defs/portableRelativePlacement",
+          "description": "Only configurable durable placement root; active and local roots are fixed protocol constants."
+        }
+      }
+    },
+    "governance": {
+      "description": "Optional cross-run audit and validation intent; it contains no current process, lease, delivery, or demand observations. Omitting audit configures no preservation-review policy, so preservation planning fails closed instead of inventing a default.",
+      "examples": [
+        {},
+        {
+          "audit": {
+            "preservedReviewAfterDays": 30
+          }
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "audit": {
+          "$ref": "#/$defs/auditGovernance"
+        },
+        "validation": {
+          "$ref": "#/$defs/validationGovernance"
+        }
+      }
+    },
+    "auditGovernance": {
+      "description": "Audit-review policy. Review age never grants automatic deletion authority.",
+      "examples": [
+        {
+          "preservedReviewAfterDays": 30
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preservedReviewAfterDays"
+      ],
+      "properties": {
+        "preservedReviewAfterDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 36500,
+          "description": "Whole-day age from 1 through 36500 for review eligibility only; never deletion authority.",
+          "examples": [
+            30
+          ]
+        }
+      }
+    },
+    "validationGovernance": {
+      "description": "Persistent user validation intent for runtime residue; observations and PIDs remain outside config.",
+      "examples": [
+        {
+          "runtimeResidue": {
+            "label": "product runtime",
+            "matchers": [
+              {
+                "kind": "substring",
+                "value": "product-dev-server"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtimeResidue"
+      ],
+      "properties": {
+        "runtimeResidue": {
+          "$ref": "#/$defs/runtimeResidue"
+        }
+      }
+    },
+    "runtimeResidue": {
+      "description": "Named collection of one or more typed process-command matchers used only by validation.",
+      "examples": [
+        {
+          "label": "product runtime",
+          "matchers": [
+            {
+              "kind": "substring",
+              "value": "product-dev-server"
+            }
+          ]
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "matchers"
+      ],
+      "properties": {
+        "label": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Human-facing label used when reporting matched runtime residue.",
+          "examples": [
+            "product runtime"
+          ]
+        },
+        "matchers": {
+          "type": "array",
+          "minItems": 1,
+          "description": "One or more typed substring/regex matchers; each regex is compiled during strict loading.",
+          "examples": [
+            [
+              {
+                "kind": "substring",
+                "value": "product-dev-server"
+              }
+            ]
+          ],
+          "items": {
+            "$ref": "#/$defs/runtimeMatcher"
+          }
+        }
+      }
+    },
+    "runtimeMatcher": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/substringRuntimeMatcher"
+        },
+        {
+          "$ref": "#/$defs/regexRuntimeMatcher"
+        }
+      ],
+      "description": "Discriminated runtime-residue matcher. Substring and regex values use separate lexical contracts.",
+      "examples": [
+        {
+          "kind": "substring",
+          "value": "product-dev-server"
+        },
+        {
+          "kind": "regex",
+          "value": "node\\s+server\\.mjs"
+        }
+      ]
+    },
+    "substringRuntimeMatcher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "const": "substring",
+          "description": "Selects literal substring matching without regular-expression interpretation.",
+          "examples": [
+            "substring"
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/trimmedNonEmptyString",
+          "description": "Literal non-empty process-command fragment.",
+          "examples": [
+            "product-dev-server"
+          ]
+        }
+      },
+      "description": "Strict literal substring matcher for runtime-residue validation.",
+      "examples": [
+        {
+          "kind": "substring",
+          "value": "product-dev-server"
+        }
+      ]
+    },
+    "regexRuntimeMatcher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "const": "regex",
+          "description": "Selects a validated ECMAScript regular-expression source.",
+          "examples": [
+            "regex"
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/regexPattern",
+          "description": "Validated Unicode ECMAScript regular-expression source.",
+          "examples": [
+            "node\\s+server\\.mjs"
+          ]
+        }
+      },
+      "description": "Strict regular-expression matcher for runtime-residue validation.",
+      "examples": [
+        {
+          "kind": "regex",
+          "value": "node\\s+server\\.mjs"
+        }
+      ]
+    },
+    "hosts": {
+      "description": "Optional durable launch/container preferences for the two supported hosts. Omission inherits the tested host profile and never means disabled, registered, or live.",
+      "examples": [
+        {},
+        {
+          "codex": {
+            "launch": {
+              "reasoningEffortByRole": {
+                "product": "xhigh"
+              }
+            }
+          }
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "codex": {
+          "$ref": "#/$defs/codexHost"
+        },
+        "claude-code": {
+          "$ref": "#/$defs/claudeHost"
+        }
+      }
+    },
+    "codexHost": {
+      "description": "Codex-specific durable launch preferences; real thread handles and live model observations are forbidden.",
+      "examples": [
+        {},
+        {
+          "launch": {
+            "modelByRole": {
+              "product": "gpt-5.6-codex"
+            }
+          }
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "launch": {
+          "$ref": "#/$defs/codexLaunch"
+        }
+      }
+    },
+    "claudeHost": {
+      "description": "Claude Code durable launch and desired tmux-container preferences; actual socket/session/window/pane locators remain host-local runtime facts.",
+      "examples": [
+        {},
+        {
+          "launch": {
+            "permissionMode": "acceptEdits"
+          },
+          "tmux": {
+            "sessionName": "wakeflow"
+          }
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "launch": {
+          "$ref": "#/$defs/claudeLaunch"
+        },
+        "tmux": {
+          "$ref": "#/$defs/claudeTmux"
+        }
+      }
+    },
+    "codexLaunch": {
+      "description": "Optional Codex model and reasoning-effort pins by protocol role; missing keys inherit the current tested profile.",
+      "examples": [
+        {},
+        {
+          "modelByRole": {
+            "product": "gpt-5.6-codex"
+          },
+          "reasoningEffortByRole": {
+            "product": "xhigh"
+          }
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modelByRole": {
+          "$ref": "#/$defs/modelByRole"
+        },
+        "reasoningEffortByRole": {
+          "$ref": "#/$defs/reasoningEffortByRole"
+        }
+      }
+    },
+    "claudeLaunch": {
+      "description": "Optional Claude model, reasoning-effort, and permission-mode preferences by protocol role; missing values inherit the tested profile.",
+      "examples": [
+        {},
+        {
+          "modelByRole": {
+            "default": "claude-opus"
+          },
+          "permissionMode": "acceptEdits"
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modelByRole": {
+          "$ref": "#/$defs/modelByRole"
+        },
+        "reasoningEffortByRole": {
+          "$ref": "#/$defs/reasoningEffortByRole"
+        },
+        "permissionMode": {
+          "enum": [
+            "acceptEdits",
+            "bypassPermissions"
+          ],
+          "description": "Persistent Claude permission preference. acceptEdits is the safe mode; bypassPermissions requires an explicit durable user choice.",
+          "examples": [
+            "acceptEdits"
+          ]
+        }
+      }
+    },
+    "modelByRole": {
+      "description": "Optional non-empty host model identifiers keyed only by supported protocol roles or default.",
+      "examples": [
+        {},
+        {
+          "product": "gpt-5.6-codex"
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "controller": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional host model identifier for Controller launches.",
+          "examples": [
+            "gpt-5.6-codex"
+          ]
+        },
+        "design": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional host model identifier for Design launches.",
+          "examples": [
+            "gpt-5.6-codex"
+          ]
+        },
+        "test": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional host model identifier for Test launches.",
+          "examples": [
+            "gpt-5.6-codex"
+          ]
+        },
+        "product": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional host model identifier for product-window launches.",
+          "examples": [
+            "gpt-5.6-codex"
+          ]
+        },
+        "default": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional fallback host model identifier when a role-specific value is absent.",
+          "examples": [
+            "gpt-5.6-codex"
+          ]
+        }
+      }
+    },
+    "reasoningEffortByRole": {
+      "description": "Optional tested reasoning-effort preferences keyed only by supported protocol roles or default.",
+      "examples": [
+        {},
+        {
+          "controller": "max",
+          "product": "xhigh"
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "controller": {
+          "$ref": "#/$defs/reasoningEffort",
+          "description": "Optional tested reasoning effort for Controller launches.",
+          "examples": [
+            "max"
+          ]
+        },
+        "design": {
+          "$ref": "#/$defs/reasoningEffort",
+          "description": "Optional tested reasoning effort for Design launches.",
+          "examples": [
+            "high"
+          ]
+        },
+        "test": {
+          "$ref": "#/$defs/reasoningEffort",
+          "description": "Optional tested reasoning effort for Test launches.",
+          "examples": [
+            "high"
+          ]
+        },
+        "product": {
+          "$ref": "#/$defs/reasoningEffort",
+          "description": "Optional tested reasoning effort for product-window launches.",
+          "examples": [
+            "xhigh"
+          ]
+        },
+        "default": {
+          "$ref": "#/$defs/reasoningEffort",
+          "description": "Optional fallback reasoning effort when a role-specific value is absent.",
+          "examples": [
+            "high"
+          ]
+        }
+      }
+    },
+    "reasoningEffort": {
+      "enum": [
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "description": "A Wakeflow-tested persistent reasoning-effort value; host adapters map this shared concept to their own launch parameter.",
+      "examples": [
+        "high",
+        "xhigh"
+      ]
+    },
+    "claudeTmux": {
+      "description": "Desired Claude tmux container names only; actual live locator identity is intentionally excluded from durable config.",
+      "examples": [
+        {},
+        {
+          "sessionName": "wakeflow",
+          "socketName": "wakeflow-example"
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sessionName": {
+          "$ref": "#/$defs/claudeTmuxSessionName",
+          "description": "Desired bounded, control-free tmux session name; omission inherits the Claude host profile.",
+          "examples": [
+            "wakeflow"
+          ]
+        },
+        "socketName": {
+          "$ref": "#/$defs/claudeTmuxSocketName",
+          "description": "Optional safe tmux -L socket name; omission uses the adapter's tested default container.",
+          "examples": [
+            "wakeflow-example"
+          ]
+        }
+      }
+    }
+  }
 }

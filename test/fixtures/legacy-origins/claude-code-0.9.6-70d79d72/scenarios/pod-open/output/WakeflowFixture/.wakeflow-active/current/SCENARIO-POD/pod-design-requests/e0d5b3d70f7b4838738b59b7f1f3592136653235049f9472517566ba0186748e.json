@@ -1,0 +1,24 @@
+{
+  "kind": "WakeflowPodDesignRequest",
+  "version": 1,
+  "requestId": "pod-design-request-e0d5b3d70f7b4838738b59b7f1f35921",
+  "requestDigest": "@wakeflow-scenario-derived-digest-348936fd1e",
+  "demandKey": "SCENARIO-POD",
+  "podId": "SCENARIO-POD",
+  "requestType": "initial-design",
+  "demandType": "requirement",
+  "originalGoal": "Complete SCENARIO-POD without changing its confirmed scope.",
+  "requirementAnchors": [
+    "goal-stage-confirmation.md#goal",
+    "goal-stage-confirmation.md#completion"
+  ],
+  "codeEvidenceRefs": [
+    "evidence/repository-facts.json"
+  ],
+  "pausedTargetIdentity": null,
+  "pausedReviewIdentity": null,
+  "nonGoals": [
+    "Do not create a second demand."
+  ],
+  "decisionsRequired": []
+}

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "candidateId": "@wakeflow-scenario-candidate-id-f8bc73ed4e",
+  "demandKey": "SCENARIO-TRANSPORT",
+  "fromRevision": 4,
+  "candidateState": "accepting",
+  "reason": "All target results are present; total-control acceptance/rework decision is required.",
+  "reviewStatus": "ready-for-controller-review",
+  "readyResultIds": [
+    "SCENARIO-RESULT"
+  ],
+  "blockedResultIds": [],
+  "missingResultIds": [],
+  "reviewScope": "open-controller-review-targets",
+  "targetTaskIds": [
+    "SCENARIO-TASK"
+  ],
+  "excludedTargetTaskIds": [],
+  "resultSnapshots": [
+    {
+      "targetTaskId": "SCENARIO-TASK",
+      "resultId": "SCENARIO-RESULT",
+      "resultRevision": 1,
+      "dispatchGroup": "SCENARIO-GROUP",
+      "status": "completed"
+    }
+  ],
+  "allowedDecisions": [
+    "accept",
+    "rework",
+    "blocked",
+    "redesign"
+  ],
+  "evidenceRefs": [
+    "target-results/SCENARIO-RESULT.json"
+  ],
+  "wakeflowTrace": {
+    "kind": "WakeflowTrace",
+    "version": 1,
+    "artifactKind": "transition-candidate",
+    "source": "wakeflow-state",
+    "command": "reduce-results",
+    "root": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+    "stateRoot": ".wakeflow-active/current/SCENARIO-TRANSPORT",
+    "stateRevision": 4,
+    "demandKey": "SCENARIO-TRANSPORT",
+    "candidateId": "@wakeflow-scenario-candidate-id-f8bc73ed4e",
+    "createdAt": "@wakeflow-scenario-time-7c2e32f09d"
+  },
+  "forbiddenConclusions": [
+    "transition-candidate-is-acceptance",
+    "reducer-decision-closes-task-package",
+    "reducer-decision-creates-next-dispatch"
+  ]
+}

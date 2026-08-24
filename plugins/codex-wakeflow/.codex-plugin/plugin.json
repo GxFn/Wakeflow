@@ -1,7 +1,7 @@
 {
   "name": "wakeflow",
   "version": "0.9.6",
-  "description": "A disciplined control loop for multi-window Codex workspaces, aligned with Wakeflow's Claude Code edition: a controller window plans, dispatches scoped task packages, collects evidence, reviews, and decides — then repeats. Built for traceability and evidence-based acceptance: every step is recorded in explicit state roots, so a run is auditable end to end and a task closes only on reviewable evidence.",
+  "description": "A disciplined control loop for multi-window Codex workspaces, aligned with Wakeflow's Claude Code edition: a controller window plans, dispatches scoped task packages, collects immutable target results, obtains independent Test validation, reviews the evidence, and decides the next step. Explicit state roots keep the run auditable; evidence alone does not close a task.",
   "category": "workflow",
   "author": {
     "name": "gaoxuefeng",
@@ -23,7 +23,7 @@
   "interface": {
     "displayName": "Wakeflow",
     "shortDescription": "Dual-host control loops for agent work",
-    "longDescription": "Wakeflow ships Codex and Claude Code editions for the same local-first control model. This Codex artifact packages controller state roots, task packages, Design/Test intake, delivery envelopes, target result envelopes, review reducers, controller-return envelopes, progress templates, verification scripts, and controller/target skills for Codex workspaces. It coordinates unattended workflows without secretly sending prompts or replacing controller judgment, and can share demand state with the Claude Code edition in dual-host workspaces.",
+    "longDescription": "Wakeflow ships Codex and Claude Code editions for the same local-first control model. This Codex artifact packages controller state roots, task packages, Design/Test intake, delivery envelopes, immutable TargetResult records, review reducers, controller-return envelopes, two localized demand-progress assets, verification scripts, and controller/target skills for Codex workspaces. It coordinates unattended workflows without secretly sending prompts or replacing independent Test validation or controller judgment, and can share demand state with the Claude Code edition in dual-host workspaces.",
     "developerName": "GxFn",
     "category": "Productivity",
     "capabilities": [

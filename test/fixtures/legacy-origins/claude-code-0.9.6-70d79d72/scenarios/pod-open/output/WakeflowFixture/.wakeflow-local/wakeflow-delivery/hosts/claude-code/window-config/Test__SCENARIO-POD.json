@@ -1,0 +1,42 @@
+{
+  "kind": "ClaudeSubwindowDispatchConfig",
+  "version": 1,
+  "windowName": "Test__SCENARIO-POD",
+  "repositoryPath": "Test",
+  "responsibility": "Internal test coordination workspace",
+  "dispatchable": false,
+  "threadRegistered": true,
+  "threadBindingId": "@wakeflow-scenario-binding-id-64beb5c8db",
+  "threadRegistryFile": "hosts/claude-code/thread-registry/Test__SCENARIO-POD.json",
+  "cwd": null,
+  "responsibilityRoot": null,
+  "deliveryRole": "test-target",
+  "delivery": {
+    "transport": "direct-thread",
+    "requireThread": true,
+    "missingThread": "fail-closed",
+    "readbackRequired": true
+  },
+  "automation": {
+    "mode": "manual-or-unattended",
+    "continuousWhenEnabled": true,
+    "keepLive": "required-when-automation-enabled"
+  },
+  "result": {
+    "returnRoute": "controller",
+    "resultEnvelopeRequired": true
+  },
+  "generatedAt": "@wakeflow-scenario-time-60306cfc01",
+  "pod": {
+    "bindingVerified": false,
+    "phase": "creating-control",
+    "demandKey": null,
+    "podId": null,
+    "testAccess": {
+      "status": "missing",
+      "capability": null,
+      "probeId": null
+    },
+    "dispatchGate": "blocked"
+  }
+}

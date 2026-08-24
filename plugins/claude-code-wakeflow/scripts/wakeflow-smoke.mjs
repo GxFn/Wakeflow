@@ -1,769 +1,499 @@
 #!/usr/bin/env node
 
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+/**
+ * 已发布 Wakeflow artifact 的一次性端到端验收探针。
+ *
+ * 能力导航：
+ * - snapshotTree：记录包括 Git 元数据在内的稳定文件树，用作 preview 和 owner-product 零写入证据。
+ * - runSetup：只通过公开 setup facade 执行 fresh preview/apply 与 reconcile preview/apply。
+ * - assertTargetTree：复核初始化产物、空事件根、宿主表面和外部 ledger 投影。
+ * - observability：在写入完成后独立读取 config、storage、status 与 15 项 verification gate。
+ *
+ * 本文件不规划初始化内容、不直接执行 maintenance 写入，也不持有 workspace authority；真实计划、
+ * 事务与恢复仍由 setup 后面的 maintenance owners 负责。所有测试状态必须留在本进程创建的一次性目录中。
+ */
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import {
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  readdirSync,
+  rmSync,
+} from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { spawnProcess } from "../lib/wakeflow-process.mjs";
-import { runWakeflowRuntime } from "../lib/wakeflow-runtime.mjs";
+import { fileURLToPath } from "node:url";
 
-const root = mkdtempSync(path.join(tmpdir(), "wakeflow-smoke-"));
-const targetRoot = path.join(root, "Target");
-mkdirSync(targetRoot, { recursive: true });
-writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({
-  workspaceName: "Wakeflow Smoke",
-  controllerWindow: "Wakeflow",
-  designWindow: "Design",
-  testWindow: "Test",
-  activeLedgerRoot: ".wakeflow-active",
-  workspaceCurrentDir: ".wakeflow-active/current",
-  projectLedgerRoot: "wakeflow-ledger",
-  repositories: [
+import {
+  canonicalJson,
+  canonicalJsonDigest,
+} from "./lib/wakeflow-canonical-json.mjs";
+import { loadWakeflowConfigV3Snapshot } from "./lib/wakeflow-config-v3-snapshot.mjs";
+import { normalizeWakeflowHostCapabilityProfile } from "./lib/wakeflow-host-capability.mjs";
+import { hostProfile } from "./lib/wakeflow-host-profile.mjs";
+import { loadWakeflowHostSettingsAssetsAdapter } from "./lib/wakeflow-host-settings-assets-owner.mjs";
+import { createWakeflowLayoutDescriptor } from "./lib/wakeflow-layout-descriptor.mjs";
+import {
+  inspectWakeflowObservabilityV3,
+  projectWakeflowConfigView,
+  projectWakeflowStatus,
+  projectWakeflowStorageView,
+  verifyWakeflowWorkspaceV3,
+} from "./lib/wakeflow-observability-v3.mjs";
+import { planWakeflowReconcileBackbone } from "./lib/wakeflow-reconcile.mjs";
+import { loadWakeflowAssetBundle } from "./lib/wakeflow-template-renderer.mjs";
+
+const artifactRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const setupExecutable = path.join(artifactRoot, "scripts/wakeflow-setup.mjs");
+const normalizedHost = normalizeWakeflowHostCapabilityProfile(hostProfile);
+let base;
+let workspaceRoot;
+let productRoot;
+let ledgerRoot;
+
+class WakeflowSmokeError extends Error {
+  constructor(code) {
+    super(code);
+    this.name = "WakeflowSmokeError";
+    this.code = code;
+  }
+}
+
+function fail(code) {
+  throw new WakeflowSmokeError(code);
+}
+
+// smoke 必须自己闭合 Git 夹具边界；继承的 GIT_DIR/GIT_WORK_TREE/GIT_TRACE 等变量可能改写命令目标或产生外部副作用。
+function clearInheritedGitEnvironment() {
+  for (const key of Object.keys(process.env)) {
+    if (key.toUpperCase().startsWith("GIT_")) delete process.env[key];
+  }
+}
+
+function digestBytes(bytes) {
+  return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+}
+
+function digestFile(file) {
+  return digestBytes(readFileSync(file));
+}
+
+function modeString(mode) {
+  return `0${Number(mode & 0o777n).toString(8).padStart(3, "0")}`;
+}
+
+/**
+ * 记录一次 settled tree evidence。
+ *
+ * 文件摘要保护内容，BigInt stat 元数据还能发现“写回相同字节”或创建后删除的瞬时写入；符号链接
+ * 只记录目标摘要，不跟随到边界外。零写入检查默认包含 `.git`，仅协议残留扫描显式排除宿主拥有的
+ * Git 元数据，避免把用户 Git template 中的文件误判为 Wakeflow residue。
+ */
+function snapshotTree(root, { includeGitMetadata = true } = {}) {
+  const result = [];
+  function visit(current, ref) {
+    const stat = lstatSync(current, { bigint: true });
+    const type = stat.isSymbolicLink()
+      ? "symlink"
+      : stat.isDirectory()
+        ? "directory"
+        : stat.isFile()
+          ? "file"
+          : "other";
+    result.push({
+      ref: ref || ".",
+      type,
+      mode: modeString(stat.mode),
+      device: String(stat.dev),
+      inode: String(stat.ino),
+      links: String(stat.nlink),
+      size: String(stat.size),
+      modifiedNs: String(stat.mtimeNs),
+      changedNs: String(stat.ctimeNs),
+      ...(type === "file" ? { digest: digestFile(current) } : {}),
+      ...(type === "symlink"
+        ? { targetDigest: digestBytes(readlinkSync(current, { encoding: "buffer" })) }
+        : {}),
+    });
+    if (type !== "directory") return;
+    for (const name of readdirSync(current).sort()) {
+      if (!includeGitMetadata && name === ".git") continue;
+      visit(path.join(current, name), ref ? `${ref}/${name}` : name);
+    }
+  }
+  visit(root, "");
+  return result;
+}
+
+function snapshotWorld() {
+  return canonicalJson(snapshotTree(base));
+}
+
+// 只初始化空 Git 夹具；仓库内容和后续 Wakeflow 写入不由本 helper 管理。
+function initializeGit(root) {
+  const result = spawnSync("git", ["-C", root, "init", "--quiet"], {
+    encoding: "utf8",
+    shell: false,
+  });
+  if (result.status !== 0) fail("git-fixture-unavailable");
+}
+
+// 在已解析 JSON 值上查找私有根，避免 Windows 转义或兄弟 ledger 路径绕过原始 stdout 字符串检查。
+function containsPrivatePath(value, privateRoots) {
+  if (typeof value === "string") {
+    return privateRoots.some((root) => value.includes(root));
+  }
+  if (Array.isArray(value)) return value.some((entry) => containsPrivatePath(entry, privateRoots));
+  if (value === null || typeof value !== "object") return false;
+  return Object.entries(value).some(([key, entry]) => (
+    containsPrivatePath(key, privateRoots) || containsPrivatePath(entry, privateRoots)
+  ));
+}
+
+// setup 是被测公开进程；本层只验证其单一 JSON envelope、静默 stderr、退出状态与路径隐私。
+function runSetup(request) {
+  const result = spawnSync(
+    process.execPath,
+    [setupExecutable, "--request-stdin", "--json"],
     {
-      windowName: "Target",
-      path: "Target",
-      role: "Smoke target",
-      managedAgents: false,
-      mode: "internal",
+      cwd: artifactRoot,
+      encoding: "utf8",
+      input: JSON.stringify(request),
+      maxBuffer: 32 * 1024 * 1024,
+      shell: false,
+      timeout: 120_000,
     },
-  ],
-}, null, 2)}\n`);
-
-assertOk(await runWakeflowRuntime({
-  script: "wakeflow-delivery",
-  args: [
-    "register-thread",
-    "--root", root,
-    "--window", "Target",
-    "--thread-id", "wakeflow-smoke-target-session",
-    "--write",
-    "--json",
-  ],
-}), "wakeflow-delivery register-thread");
-
-const init = await runWakeflowRuntime({
-  script: "wakeflow-state",
-  args: [
-    "init",
-    "--root", root,
-    "--demand-key", "smoke",
-    "--title", "Smoke",
-    "--goal", "Check Wakeflow full controller runtime.",
-    "--completion-definition", "Review reaches review-ready after a target result.",
-    "--stage-plan", "Initialize, add a task package, prepare delivery, import result, reduce review.",
-    "--write",
-    "--json",
-  ],
-});
-assertOk(init, "wakeflow-state init");
-const stateRoot = init.parsedJson?.stateRoot;
-if (!stateRoot) throw new Error("wakeflow-state init did not return a stateRoot");
-
-assertOk(await runWakeflowRuntime({
-  script: "wakeflow-state",
-  args: [
-    "add-task-package",
-    "--root", root,
-    "--state-root", stateRoot,
-    "--task-package-id", "SMOKE-P1",
-    "--summary", "Check full delivery intent generation.",
-    "--target-window", "Target",
-    "--target-task-id", "SMOKE-T1",
-    "--target-summary", "Return smoke evidence.",
-    "--write",
-    "--json",
-  ],
-}), "wakeflow-state add-task-package");
-
-const delivery = await runWakeflowRuntime({
-  script: "wakeflow-delivery",
-  args: [
-    "prepare-dispatch-from-state",
-    "--root", root,
-    "--state-root", stateRoot,
-    "--target-task-id", "SMOKE-T1",
-    "--group", "SMOKE-G1",
-    "--write",
-    "--json",
-  ],
-});
-assertOk(delivery, "wakeflow-delivery prepare-dispatch-from-state");
-if (!delivery.parsedJson?.envelope?.prompt?.includes("SMOKE-T1")) {
-  throw new Error("delivery envelope prompt did not include the target task id");
-}
-
-assertOk(await runWakeflowRuntime({
-  script: "wakeflow-state",
-  args: [
-    "import-target-result",
-    "--root", root,
-    "--state-root", stateRoot,
-    "--target-task-id", "SMOKE-T1",
-    "--target-window", "Target",
-    "--status", "completed",
-    "--summary", "Smoke result.",
-    "--evidence-ref", "smoke:evidence",
-    "--write",
-    "--json",
-  ],
-}), "wakeflow-state import-target-result");
-
-const reviewed = await runWakeflowRuntime({
-  script: "wakeflow-state",
-  args: ["reduce-results", "--root", root, "--state-root", stateRoot, "--write", "--json"],
-});
-assertOk(reviewed, "wakeflow-state reduce-results");
-if (reviewed.parsedJson?.nextState !== "review-ready" && reviewed.parsedJson?.review?.status !== "ready") {
-  throw new Error("review reduction did not reach review-ready");
-}
-
-const controlStatus = await runWakeflowRuntime({
-  script: "wakeflow-cli",
-  args: ["--print", "status"],
-  timeoutMs: 30000,
-});
-if (!controlStatus.ok || !controlStatus.stdout.includes("wakeflow-repo-status.mjs")) {
-  throw new Error("embedded runtime did not print status route");
-}
-
-const mcpRoot = mkdtempSync(path.join(tmpdir(), "wakeflow-mcp-smoke-"));
-const mcpSmoke = await runMcpSmoke(mcpRoot);
-
-console.log(JSON.stringify({ ok: true, root, stateRoot, wakeflowRuntime: "ok", mcpRoot, mcp: mcpSmoke }, null, 2));
-
-function assertOk(result, label) {
-  if (!result.ok) {
-    throw new Error(`${label} failed: ${result.stderr || result.stdout}`);
-  }
-}
-
-async function runMcpSmoke(rootPath) {
-  const mcpConfig = JSON.parse(readFileSync(".mcp.json", "utf8"));
-  const server = mcpConfig.mcpServers?.wakeflow;
-  if (!server) throw new Error("Wakeflow MCP config is missing mcpServers.wakeflow");
-  const cwd = server.cwd === "." ? process.cwd() : path.resolve(process.cwd(), server.cwd ?? ".");
-  const variables = {
-    CLAUDE_PLUGIN_ROOT: process.cwd(),
-    CLAUDE_PROJECT_DIR: rootPath,
-  };
-  const command = expandMcpValue(server.command, variables);
-  const args = (server.args ?? []).map((arg) => expandMcpValue(arg, variables));
-  const env = {
-    ...process.env,
-    ...Object.fromEntries(
-      Object.entries(server.env ?? {}).map(([key, value]) => [key, expandMcpValue(value, variables)]),
-    ),
-  };
-  const child = spawnProcess(command, args, {
-    cwd,
-    env,
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-  let stderr = "";
-  let buffer = Buffer.alloc(0);
-  let nextId = 1;
-  const pending = new Map();
-  const timeout = setTimeout(() => {
-    child.kill("SIGTERM");
-    for (const { reject } of pending.values()) {
-      reject(new Error("MCP smoke timed out"));
-    }
-    pending.clear();
-  }, 15000);
-
-  child.stderr.on("data", (chunk) => {
-    stderr += chunk.toString("utf8");
-  });
-  child.stdout.on("data", (chunk) => {
-    buffer = Buffer.concat([buffer, chunk]);
-    drainFrames();
-  });
-
-  function writeMessage(payload) {
-    child.stdin.write(`${JSON.stringify(payload)}\n`);
-  }
-
-  function writeFramedMessage(payload) {
-    const body = JSON.stringify(payload);
-    child.stdin.write(`Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`);
-  }
-
-  function notify(method, params = undefined) {
-    const payload = { jsonrpc: "2.0", method };
-    if (params !== undefined) payload.params = params;
-    writeMessage(payload);
-  }
-
-  function request(method, params = undefined) {
-    const id = nextId;
-    nextId += 1;
-    const payload = { jsonrpc: "2.0", id, method };
-    if (params !== undefined) payload.params = params;
-    return new Promise((resolve, reject) => {
-      pending.set(id, { resolve, reject });
-      writeMessage(payload);
-    });
-  }
-
-  function rawRequest(payload, { framed = false } = {}) {
-    return new Promise((resolve, reject) => {
-      pending.set(payload.id, { resolve, reject });
-      if (framed) writeFramedMessage(payload);
-      else writeMessage(payload);
-    });
-  }
-
-  function requestError(payload) {
-    return new Promise((resolve, reject) => {
-      pending.set(payload.id, {
-        resolveErrors: true,
-        resolve: (message) => {
-          if (!message.error) {
-            reject(new Error(`Expected JSON-RPC error for ${payload.method || "raw request"}`));
-            return;
-          }
-          resolve(message.error);
-        },
-        reject,
-      });
-      writeMessage(payload);
-    });
-  }
-
-  function drainFrames() {
-    while (buffer.length > 0) {
-      if (buffer.toString("utf8", 0, Math.min(buffer.length, 15)).startsWith("Content-Length:")) {
-        const headerEnd = buffer.indexOf("\r\n\r\n");
-        if (headerEnd < 0) return;
-        const header = buffer.toString("utf8", 0, headerEnd);
-        const match = /Content-Length:\s*(\d+)/i.exec(header);
-        if (!match) throw new Error("Invalid MCP frame header");
-        const length = Number(match[1]);
-        const bodyStart = headerEnd + 4;
-        if (buffer.length < bodyStart + length) return;
-        const body = buffer.toString("utf8", bodyStart, bodyStart + length);
-        buffer = buffer.slice(bodyStart + length);
-        resolveMessage(JSON.parse(body));
-        continue;
-      }
-      const newline = buffer.indexOf("\n");
-      if (newline < 0) return;
-      const line = buffer.toString("utf8", 0, newline).trim();
-      buffer = buffer.slice(newline + 1);
-      if (line) resolveMessage(JSON.parse(line));
-    }
-  }
-
-  function resolveMessage(message) {
-    const waiter = pending.get(message.id);
-    if (waiter) {
-      pending.delete(message.id);
-      if (message.error && !waiter.resolveErrors) waiter.reject(new Error(message.error.message));
-      else waiter.resolve(message);
-    }
-  }
-
+  );
+  if (result.error !== undefined) fail("public-process-unavailable");
+  if (result.stderr !== "") fail("public-stderr-not-empty");
+  let payload;
   try {
-    const initializedServer = await request("initialize", {
-      protocolVersion: "2024-11-05",
-      capabilities: {},
-      clientInfo: { name: "wakeflow-smoke", version: "0.0.0" },
-    });
-    if (initializedServer.result.protocolVersion !== "2024-11-05") {
-      throw new Error("MCP initialize did not preserve a supported protocol version");
-    }
-    notify("notifications/initialized");
-    const pong = await request("ping");
-    if (!pong.result || Object.keys(pong.result).length !== 0) {
-      throw new Error("MCP ping did not return an empty result");
-    }
-    const unsupportedVersion = await request("initialize", {
-      protocolVersion: "2099-01-01",
-      capabilities: {},
-      clientInfo: { name: "wakeflow-smoke", version: "0.0.0" },
-    });
-    if (unsupportedVersion.result.protocolVersion !== "2025-03-26") {
-      throw new Error("MCP initialize did not negotiate unsupported protocol versions to the default");
-    }
-    const unknown = await requestError({ jsonrpc: "2.0", id: nextId++, method: "wakeflow/unknown" });
-    if (unknown.code !== -32601) {
-      throw new Error("MCP unknown request did not return MethodNotFound");
-    }
-    const invalidParams = await requestError({ jsonrpc: "2.0", id: nextId++, method: "tools/list", params: "bad" });
-    if (invalidParams.code !== -32602) {
-      throw new Error("MCP non-object params did not return InvalidParams");
-    }
-    const listed = await rawRequest({ jsonrpc: "2.0", id: nextId++, method: "tools/list" }, { framed: true });
-    const tools = listed.result.tools;
-    assertToolSchemasAcceptedByHost(tools);
-    assertToolAnnotationsAcceptedByHost(tools);
-    const toolNames = tools.map((tool) => tool.name);
-    for (const expected of [
-      "wakeflow_initialize_workspace",
-      "wakeflow_replace_windows",
-      "wakeflow_register_window",
-      "wakeflow_status",
-      "wakeflow_prepare_delivery",
-      "wakeflow_record_delivery",
-      "wakeflow_record_target_result",
-      "wakeflow_review_pack",
-      "wakeflow_view",
-      "wakeflow_storage_preserve",
-      "wakeflow_reduce_results",
-      "wakeflow_decide_review",
-      "wakeflow_complete_demand",
-      "wakeflow_continue_demand",
-      "wakeflow_archive",
-      "wakeflow_pod_open",
-      "wakeflow_pod_bind",
-      "wakeflow_pod_plan",
-      "wakeflow_pod_record",
-      "wakeflow_verify",
-    ]) {
-      if (!toolNames.includes(expected)) {
-        throw new Error(`MCP tools/list missing ${expected}`);
-      }
-    }
-    if (toolNames.length !== 31) {
-      throw new Error(`MCP tools/list expected 31 public tools, found ${toolNames.length}`);
-    }
-    for (const retired of [
-      "wakeflow_render_progress",
-      "wakeflow_pod_list",
-      "wakeflow_sanitize_archive",
-      "wakeflow_pod_prepare_design_request",
-      "wakeflow_pod_prepare_test_access",
-      "wakeflow_pod_close",
-      "wakeflow_pod_record_materialization",
-      "wakeflow_pod_record_design_handoff",
-      "wakeflow_pod_record_test_access",
-      "wakeflow_pod_record_close_receipt",
-    ]) {
-      if (toolNames.includes(retired)) {
-        throw new Error(`MCP tools/list exposes retired tool ${retired}`);
-      }
-    }
-    const hostVisiblePrefix = toolNames.slice(0, 14);
-    for (const expected of [
-      "wakeflow_review_pack",
-      "wakeflow_reduce_results",
-      "wakeflow_decide_review",
-      "wakeflow_complete_demand",
-      "wakeflow_continue_demand",
-    ]) {
-      if (!hostVisiblePrefix.includes(expected)) {
-        throw new Error(`MCP host-visible tool prefix missing ${expected}`);
-      }
-    }
-    for (const internal of [
-      "wakeflow_discover_workspace",
-      "wakeflow_access_profiles",
-      "wakeflow_sync_agents",
-      "wakeflow_review",
-      "wakeflow_build_controller_return",
-      "wakeflow_stop_loop",
-      "wakeflow_keep_live_state",
-      "wakeflow_run_backend",
-      "wakeflow_full_status",
-      "wakeflow_full_verify",
-    ]) {
-      if (toolNames.includes(internal)) {
-        throw new Error(`MCP tools/list exposes internal tool ${internal}`);
-      }
-    }
-    const initializeTool = tools.find((tool) => tool.name === "wakeflow_initialize_workspace");
-    const deliveryTool = tools.find((tool) => tool.name === "wakeflow_prepare_delivery");
-    const initializeSchema = JSON.stringify(initializeTool.inputSchema);
-    const deliverySchema = JSON.stringify(deliveryTool.inputSchema);
-    if (initializeSchema.includes("threadId") || initializeSchema.includes("\"threads\"")) {
-      throw new Error("wakeflow_initialize_workspace schema exposes thread id fields");
-    }
-    if (initializeSchema.includes("replaceWindows")) {
-      throw new Error("wakeflow_initialize_workspace schema exposes replacement-window input");
-    }
-    if (deliverySchema.includes("requireThread")) {
-      throw new Error("wakeflow_prepare_delivery schema exposes requireThread");
-    }
-    if (!deliverySchema.includes("controller-return")) {
-      throw new Error("wakeflow_prepare_delivery schema must cover controller-return direction");
-    }
+    payload = JSON.parse(result.stdout);
+  } catch {
+    fail("public-output-invalid");
+  }
+  if (containsPrivatePath(payload, [base, artifactRoot])) fail("public-output-private-path");
+  if (result.status !== 0 || payload?.ok !== true) {
+    fail(typeof payload?.error?.code === "string" ? payload.error.code : "public-process-failed");
+  }
+  return payload;
+}
 
-    const initialized = await request("tools/call", {
-      name: "wakeflow_initialize_workspace",
-      arguments: {
-        root: rootPath,
-        parent: rootPath,
-      },
-    });
-    const initializedText = initialized.result.content?.[0]?.text;
-    const initializedPayload = JSON.parse(initializedText);
-    if (
-      !initializedPayload.ok
-      || initializedPayload.parsedJson?.command !== "initialize"
-      || initializedPayload.parsedJson?.mode !== "discovery"
-      || initializedPayload.parsedJson?.wrote !== false
-    ) {
-      throw new Error("MCP wakeflow_initialize_workspace did not return a dry-run discovery plan");
-    }
-    writeFileSync(
-      path.join(rootPath, "wakeflow.config.json"),
-      `${JSON.stringify({
-        workspaceName: "MCP Smoke",
-        controllerWindow: "Controller",
-        designWindow: "Design",
-        testWindow: "Test",
-        repositories: [
-          { windowName: "Controller", path: ".", role: "controller" },
-          { windowName: "Design", path: ".", role: "design" },
-          { windowName: "Test", path: ".", role: "test" },
-          { windowName: "Target", path: ".", role: "product" },
-        ],
-      }, null, 2)}\n`,
-    );
-    writeFileSync(path.join(rootPath, "AGENTS.md"), "# MCP Smoke Workspace\n");
-    const smokeWindowHandles = {
-      Controller: "10000000-0000-4000-8000-000000000001",
-      Design: "10000000-0000-4000-8000-000000000002",
-      Test: "10000000-0000-4000-8000-000000000003",
-      Target: "10000000-0000-4000-8000-000000000004",
-    };
-    for (const [window, windowHandle] of Object.entries(smokeWindowHandles)) {
-      const registered = await request("tools/call", {
-        name: "wakeflow_register_window",
-        arguments: {
-          root: rootPath,
-          window,
-          windowHandle,
-          apply: true,
-        },
-      });
-      const registeredPayload = JSON.parse(registered.result.content?.[0]?.text);
-      if (!registeredPayload.ok || registeredPayload.parsedJson?.threadRegistered !== true) {
-        throw new Error(`MCP wakeflow_register_window did not register ${window}`);
-      }
-    }
+// 固定的最小双宿主拓扑同时覆盖 program、owner-managed product、Design/Test surface 与外部 ledger。
+function freshSelection() {
+  return {
+    program: {
+      displayName: "Public Smoke",
+      interfaceLanguage: "zh",
+    },
+    topology: {
+      repositories: [{
+        selectionKey: "product-a",
+        path: "../ProductA",
+        displayName: "Product A",
+        instructionManagement: "owner-managed",
+      }],
+      supportSurfaces: [{
+        selectionKey: "design",
+        capability: "design",
+        path: "Design",
+        displayName: "Design",
+        ownership: "wakeflow-managed",
+      }, {
+        selectionKey: "test",
+        capability: "test",
+        path: "Test",
+        displayName: "Test",
+        ownership: "wakeflow-managed",
+      }],
+      windows: [{
+        role: "controller",
+        displayName: "Controller",
+        root: { kind: "program" },
+      }, {
+        role: "design",
+        displayName: "Design",
+        root: { kind: "support-surface", selectionKey: "design" },
+      }, {
+        role: "test",
+        displayName: "Test",
+        root: { kind: "support-surface", selectionKey: "test" },
+      }, {
+        role: "product",
+        displayName: "Product A",
+        root: { kind: "repository", selectionKey: "product-a" },
+      }],
+    },
+    storage: { ledgerRoot: "../wakeflow-ledger" },
+    governance: {},
+    hosts: {},
+  };
+}
 
-    const called = await request("tools/call", {
-      name: "wakeflow_create_demand",
-      arguments: {
-        root: rootPath,
-        demandKey: "mcp-smoke",
-        title: "MCP Smoke",
-        demandType: "bug",
-        goal: "Verify Wakeflow MCP tools/call.",
-        completionDefinition: "MCP call creates a state root through the capability interface.",
-        stagePlan: "Call wakeflow_create_demand.",
-        apply: true,
-      },
-    });
-    const text = called.result.content?.[0]?.text;
-    const payload = JSON.parse(text);
-    if (!payload.ok || !payload.parsedJson?.created?.stateRoot) {
-      throw new Error("MCP tools/call did not create a state root");
-    }
-    const mcpStateRoot = payload.parsedJson.created.stateRoot;
-    writeFileSync(
-      path.join(rootPath, "mcp-smoke-requirement.md"),
-      "# MCP Smoke Requirement\n\n## Goal\n\nExercise the target delivery surface.\n\n## Completion\n\nThe MCP delivery envelope is created from a reviewed preview.\n\n## Reproduction\n\nThe MCP smoke creates a typed draft and freezes its authority with the first implementation package.\n\n## Scope\n\nOnly the synthetic MCP smoke workspace and target delivery path are in scope.\n\n## Non-goals\n\nNo product implementation or external repository is in scope.\n",
-    );
+// 目标树检查不跟随符号链接；ref 只来自本文件固定路径或 strict config/layout descriptor。
+function assertNode(ref, type) {
+  const file = path.resolve(workspaceRoot, ...ref.split("/"));
+  let stat;
+  try {
+    stat = lstatSync(file);
+  } catch {
+    fail(`target-missing-${type}`);
+  }
+  if (stat.isSymbolicLink()) fail("target-symlink");
+  if ((type === "file" && !stat.isFile()) || (type === "directory" && !stat.isDirectory())) {
+    fail(`target-wrong-${type}`);
+  }
+}
 
-    const mcpSmokeDemandAuthority = {
-      schemaVersion: 1,
-      artifactKind: "wakeflow-demand-authority",
-      demandKey: "mcp-smoke",
-      demandType: "bug",
-      entryMode: "controller-inline",
-      authorityRefs: ["reproduction", "scope", "non-goals"].map((role) => ({
-        role,
-        ref: `mcp-smoke-requirement.md#${role}`,
-      })),
-      testDecision: {
-        mode: "controller-only",
-        summary: "The controller independently reproduces the MCP target delivery smoke path.",
-      },
-    };
+// 初始化后的事件根必须存在但保持空；后续领域事件只能由对应 owner 首次写入。
+function assertEmptyDirectory(ref) {
+  assertNode(ref, "directory");
+  const directory = path.resolve(workspaceRoot, ...ref.split("/"));
+  if (readdirSync(directory).length !== 0) fail("event-root-not-empty");
+}
 
-    const addedTask = await request("tools/call", {
-      name: "wakeflow_add_task",
-      arguments: {
-        root: rootPath,
-        stateRoot: mcpStateRoot,
-        taskId: "mcp-smoke-task",
-        targetWindow: "Target",
-        summary: "MCP smoke task package.",
-        targetSummary: "Return MCP smoke evidence.",
-        demandAuthority: mcpSmokeDemandAuthority,
-        workType: "implementation",
-        objective: "Return evidence from the MCP smoke target without widening scope.",
-        contextSummary: ["This package exercises the installed MCP target-delivery path."],
-        requirementRefs: [
-          { ref: "mcp-smoke-requirement.md#goal", role: "goal" },
-          { ref: "mcp-smoke-requirement.md#completion", role: "completion" },
-        ],
-        boundaries: {
-          inScope: ["MCP smoke target delivery."],
-          outOfScope: ["Product implementation."],
-          forbidden: ["Do not create unrelated work."],
-        },
-        completionExpectations: ["The target delivery envelope is created from the package."],
-        dependsOnTaskIds: [],
-        commitExpectation: "leave-uncommitted",
-        acceptanceAnchors: [{
-          id: "AC-MCP-SMOKE-1",
-          claim: "The MCP surface prepares a target delivery from package context.",
-          probe: "Preview and apply the same target delivery.",
-          expected: "The applied envelope prompt equals the reviewed preview prompt.",
-        }],
-      },
-    });
-    const addedTaskPayload = JSON.parse(addedTask.result.content?.[0]?.text);
-    if (!addedTaskPayload.ok || addedTaskPayload.parsedJson?.command !== "add-task-package") {
-      throw new Error("MCP wakeflow_add_task did not create a task package");
-    }
-
-    const previewed = await request("tools/call", {
-      name: "wakeflow_prepare_delivery",
-      arguments: {
-        root: rootPath,
-        direction: "target",
-        stateRoot: mcpStateRoot,
-        taskId: "mcp-smoke-task",
-        dispatchGroup: "mcp-smoke-group",
-      },
-    });
-    const previewedPayload = JSON.parse(previewed.result.content?.[0]?.text);
-    const previewedJson = previewedPayload.parsedJson;
-    if (
-      !previewedPayload.ok
-      || previewedJson?.command !== "prepare-dispatch-from-state"
-      || previewedJson?.preview !== true
-      || !previewedJson?.readiness?.taskPackageDigest
-      || previewedJson?.deliveryFile
-    ) {
-      throw new Error("MCP wakeflow_prepare_delivery did not return a non-writing target preview");
-    }
-    const prepared = await request("tools/call", {
-      name: "wakeflow_prepare_delivery",
-      arguments: {
-        root: rootPath,
-        direction: "target",
-        stateRoot: mcpStateRoot,
-        taskId: "mcp-smoke-task",
-        dispatchGroup: "mcp-smoke-group",
-        expectedPreviewDigest: previewedJson.previewDigest,
-        apply: true,
-      },
-    });
-    const preparedPayload = JSON.parse(prepared.result.content?.[0]?.text);
-    // MCP payloads are compact by default: the prompt is still present, the
-    // full envelope lives on disk at deliveryFile.
-    const preparedJson = preparedPayload.parsedJson;
-    const preparedPrompt = preparedJson?.prompt ?? preparedJson?.envelope?.prompt;
-    if (
-      !preparedPayload.ok
-      || preparedJson?.command !== "prepare-dispatch-from-state"
-      || preparedJson?.preview !== false
-      || !preparedPrompt?.includes("mcp-smoke-task")
-      || !preparedJson?.deliveryFile
-      || preparedPrompt !== (previewedJson?.prompt ?? previewedJson?.packet?.prompt)
-    ) {
-      throw new Error("MCP wakeflow_prepare_delivery did not create a target delivery envelope");
-    }
-
-    const mcpSmokeEvidenceRef = "target-results/mcp-smoke.md";
-    const mcpSmokeEvidenceFile = path.join(rootPath, mcpStateRoot, mcpSmokeEvidenceRef);
-    mkdirSync(path.dirname(mcpSmokeEvidenceFile), { recursive: true });
-    writeFileSync(mcpSmokeEvidenceFile, "mcp smoke evidence\n");
-
-    const recordedTargetResult = await request("tools/call", {
-      name: "wakeflow_record_target_result",
-      arguments: {
-        root: rootPath,
-        stateRoot: mcpStateRoot,
-        targetWindow: "Target",
-        taskId: "mcp-smoke-task",
-        dispatchGroup: "mcp-smoke-group",
-        status: "completed",
-        summary: "MCP smoke target delivery matched the reviewed preview and produced review inputs.",
-        commitDisposition: "no-changes",
-        evidenceRefs: [mcpSmokeEvidenceRef],
-        verification: ["mcp smoke target result recorded"],
-        craftEvidence: [{
-          kind: "acceptance-anchor",
-          anchorId: "AC-MCP-SMOKE-1",
-          red: "Before apply, the reviewed preview carried a stable digest and no delivery file.",
-          green: "Apply used the reviewed digest and produced the same prompt in a delivery envelope.",
-          ref: mcpSmokeEvidenceRef,
-        }],
-      },
-    });
-    const recordedTargetResultPayload = JSON.parse(recordedTargetResult.result.content?.[0]?.text);
-    if (
-      !recordedTargetResultPayload.ok
-      || recordedTargetResultPayload.parsedJson?.command !== "import-target-result"
-    ) {
-      throw new Error("MCP wakeflow_record_target_result did not record target review inputs");
-    }
-
-    const reducedResults = await request("tools/call", {
-      name: "wakeflow_reduce_results",
-      arguments: {
-        root: rootPath,
-        stateRoot: mcpStateRoot,
-        apply: true,
-      },
-    });
-    const reducedResultsPayload = JSON.parse(reducedResults.result.content?.[0]?.text);
-    if (
-      !reducedResultsPayload.ok
-      || reducedResultsPayload.parsedJson?.command !== "reduce-results"
-      || !reducedResultsPayload.parsedJson?.candidateId
-    ) {
-      throw new Error("MCP wakeflow_reduce_results did not create a review candidate");
-    }
-
-    const statusCall = await request("tools/call", {
-      name: "wakeflow_status",
-      arguments: { root: rootPath },
-    });
-    const statusText = statusCall.result.content?.[0]?.text;
-    const statusPayload = JSON.parse(statusText);
-    if (!statusPayload.ok || statusPayload.parsedJson?.command !== "status") {
-      throw new Error("MCP wakeflow_status did not inspect the requested root");
-    }
-
-    const traced = await request("tools/call", {
-      name: "wakeflow_view",
-      arguments: {
-        root: rootPath,
-        scope: "trace",
-        stateRoot: mcpStateRoot,
-        targetWindow: "Target",
-        taskId: "mcp-smoke-task",
-      },
-    });
-    const tracedPayload = JSON.parse(traced.result.content?.[0]?.text);
-    if (
-      !tracedPayload.ok
-      || tracedPayload.parsedJson?.command !== "trace-spine"
-      || tracedPayload.parsedJson?.traceSpine?.coverage?.dispatchPacketCount !== 1
-      || tracedPayload.parsedJson?.traceSpine?.coverage?.targetResultCount !== 1
-    ) {
-      throw new Error("MCP wakeflow_view(scope=trace) did not return the task evidence spine");
-    }
-
-    const progressPreview = await request("tools/call", {
-      name: "wakeflow_view",
-      arguments: { root: rootPath, scope: "progress", stateRoot: mcpStateRoot },
-    });
-    const progressPreviewPayload = JSON.parse(progressPreview.result.content?.[0]?.text);
-    if (!progressPreviewPayload.ok) {
-      throw new Error("MCP wakeflow_view(scope=progress) did not preserve dry-run projection routing");
-    }
-
-    const podsView = await request("tools/call", {
-      name: "wakeflow_view",
-      arguments: { root: rootPath, scope: "pods" },
-    });
-    const podsViewPayload = JSON.parse(podsView.result.content?.[0]?.text);
-    if (!podsViewPayload.ok || !Array.isArray(podsViewPayload.parsedJson?.pods)) {
-      throw new Error("MCP wakeflow_view(scope=pods) did not return the Pod inventory");
-    }
-
-    const preserveSource = path.join(rootPath, ".wakeflow-local", "mcp-preserve-smoke.txt");
-    mkdirSync(path.dirname(preserveSource), { recursive: true });
-    writeFileSync(preserveSource, "preserve through the public MCP surface\n");
-    const preservePreview = await request("tools/call", {
-      name: "wakeflow_storage_preserve",
-      arguments: {
-        root: rootPath,
-        source: ".wakeflow-local/mcp-preserve-smoke.txt",
-        reason: "mcp-smoke",
-      },
-    });
-    const preservePreviewPayload = JSON.parse(preservePreview.result.content?.[0]?.text);
-    if (
-      !preservePreviewPayload.ok
-      || preservePreviewPayload.parsedJson?.command !== "preserve"
-      || preservePreviewPayload.parsedJson?.wrote !== false
-    ) {
-      throw new Error("MCP wakeflow_storage_preserve did not preserve dry-run semantics");
-    }
-    const preserveApply = await request("tools/call", {
-      name: "wakeflow_storage_preserve",
-      arguments: {
-        root: rootPath,
-        source: ".wakeflow-local/mcp-preserve-smoke.txt",
-        reason: "mcp-smoke",
-        note: "MCP smoke audit hold",
-        apply: true,
-      },
-    });
-    const preserveApplyPayload = JSON.parse(preserveApply.result.content?.[0]?.text);
-    if (
-      !preserveApplyPayload.ok
-      || preserveApplyPayload.parsedJson?.command !== "preserve"
-      || preserveApplyPayload.parsedJson?.wrote !== true
-    ) {
-      throw new Error("MCP wakeflow_storage_preserve did not apply through the storage backend");
-    }
-
-    return { ok: true, toolCount: toolNames.length, stateRoot: mcpStateRoot };
-  } finally {
-    clearTimeout(timeout);
-    child.stdin.end();
-    child.kill("SIGTERM");
-    if (stderr.trim()) {
-      // Keep stderr visible when the smoke itself fails; successful runs ignore quiet shutdown noise.
+function assertNoForbiddenFreshResidue() {
+  for (const root of [workspaceRoot, ledgerRoot]) {
+    for (const entry of snapshotTree(root, { includeGitMetadata: false })) {
+      if (entry.ref === ".") continue;
+      const segments = entry.ref.split("/");
+      const basename = segments.at(-1);
+      if (
+        basename === "README.md"
+        || basename?.endsWith(".jsonl")
+        || segments.includes("next-work")
+        || segments.includes("target-results")
+      ) fail("forbidden-fresh-residue");
     }
   }
 }
 
-function expandMcpValue(value, variables) {
-  if (typeof value !== "string") throw new Error("Wakeflow MCP command values must be strings");
-  return value.replace(/\$\{([A-Z0-9_]+)\}/g, (match, name) => {
-    const resolved = variables[name] ?? process.env[name];
-    if (resolved === undefined) throw new Error(`Wakeflow MCP variable is unresolved: ${match}`);
-    return resolved;
+// 交叉复核 strict config 与 layout descriptor 落地后的核心目录，不复制初始化 planner 的写入实现。
+function assertTargetTree(snapshot, descriptor) {
+  for (const ref of [
+    "wakeflow.config.json",
+    normalizedHost.memoryFile,
+    ".gitignore",
+    ".wakeflow-active/index.md",
+    ".wakeflow-active/current/workspace-current-status.md",
+    ".wakeflow-active/current/global-todo-board.md",
+  ]) assertNode(ref, "file");
+  for (const ref of [
+    ".wakeflow-local/runtime/maintenance/transactions",
+    ".wakeflow-local/runtime/shared/transport/demands",
+    ".wakeflow-local/runtime/shared/coordination/window-leases",
+    ".wakeflow-local/audit/preserved",
+    `.wakeflow-local/runtime/hosts/${normalizedHost.hostDirName}/identity/window-bindings`,
+    `.wakeflow-local/runtime/hosts/${normalizedHost.hostDirName}/projections/window-runtime`,
+  ]) assertNode(ref, "directory");
+  for (const ref of [
+    ".wakeflow-local/runtime/maintenance/transactions",
+    ".wakeflow-local/runtime/shared/transport/demands",
+    ".wakeflow-local/runtime/shared/coordination/window-leases",
+    ".wakeflow-local/audit/preserved",
+    `.wakeflow-local/runtime/hosts/${normalizedHost.hostDirName}/identity/window-bindings`,
+  ]) assertEmptyDirectory(ref);
+
+  for (const window of snapshot.model.topology.windows) {
+    assertNode(
+      `.wakeflow-local/runtime/hosts/${normalizedHost.hostDirName}/projections/window-runtime/${window.windowId}.json`,
+      "file",
+    );
+  }
+  for (const surface of snapshot.model.topology.supportSurfaces) {
+    assertNode(`${surface.path}/${normalizedHost.memoryFile}`, "file");
+    if (surface.capability === "design") assertNode(`${surface.path}/drafts`, "directory");
+    if (surface.capability === "test") {
+      assertNode(`${surface.path}/fixtures`, "directory");
+      assertNode(`${surface.path}/harnesses`, "directory");
+    }
+  }
+  for (const ref of [
+    "requirement-designs/index.md",
+    "goal-stage-confirmation/index.md",
+    "workspace/workspace-record-map.md",
+    "workspace/archive/index.md",
+  ]) {
+    const file = path.join(ledgerRoot, ...ref.split("/"));
+    let stat;
+    try {
+      stat = lstatSync(file);
+    } catch {
+      fail("ledger-projection-missing");
+    }
+    if (stat.isSymbolicLink() || !stat.isFile()) fail("ledger-projection-invalid");
+  }
+
+  const applicableHostFiles = descriptor.entries.filter((entry) => (
+    entry.pathKind === "file"
+    && entry.scope === "current-host"
+    && entry.owner === "host-settings-plan"
+    && !String(entry.condition).includes("explicit-product-host-surface-authorization")
+  ));
+  for (const entry of applicableHostFiles) assertNode(entry.path, "file");
+  const statusline = descriptor.entries.find((entry) => entry.key === "local.host.operations.assets.statusline");
+  if (normalizedHost.capabilities.assets.applicable) {
+    if (statusline === undefined) fail("host-asset-descriptor-missing");
+    assertNode(statusline.path, "file");
+  } else if (statusline !== undefined) {
+    fail("host-asset-descriptor-not-applicable");
+  }
+  assertNoForbiddenFreshResidue();
+}
+
+// 只公开本 smoke 自己产生的稳定错误码；依赖或系统异常不得借 error.code 注入私有信息。
+function publicSmokeErrorCode(cause) {
+  return cause instanceof WakeflowSmokeError ? cause.code : "public-smoke-failed";
+}
+
+let output;
+try {
+  clearInheritedGitEnvironment();
+  base = mkdtempSync(path.join(os.tmpdir(), "wakeflow-public-smoke-"));
+  workspaceRoot = path.join(base, "Program");
+  productRoot = path.join(base, "ProductA");
+  ledgerRoot = path.join(base, "wakeflow-ledger");
+
+  // 第一段通过公开 facade 验证 fresh preview 严格零写入，再应用同一份确认计划。
+  mkdirSync(workspaceRoot, { mode: 0o700 });
+  mkdirSync(productRoot, { mode: 0o755 });
+  initializeGit(workspaceRoot);
+  initializeGit(productRoot);
+  const productBefore = canonicalJson(snapshotTree(productRoot));
+  const beforePreview = snapshotWorld();
+
+  const preview = runSetup({
+    root: workspaceRoot,
+    action: "fresh-initialize",
+    mode: "preview",
+    request: { selection: freshSelection(), language: "zh" },
   });
+  if (preview.result?.status !== "ready") fail("fresh-preview-not-ready");
+  if (snapshotWorld() !== beforePreview) fail("fresh-preview-wrote");
+  const confirmedPlan = preview.result.confirmedActionPlan;
+  // setup facade 直接返回 coordinator 结果；MCP 才派生 confirmedActionPlanDigest，因此此调用方按精确计划计算摘要。
+  const planDigest = canonicalJsonDigest(confirmedPlan);
+  const applied = runSetup({
+    root: workspaceRoot,
+    action: "fresh-initialize",
+    mode: "apply",
+    confirmedPlan,
+    planDigest,
+  });
+  if (applied.result?.status !== "completed") fail("fresh-apply-not-completed");
+  if (canonicalJson(snapshotTree(productRoot)) !== productBefore) fail("owner-product-was-written");
+
+  // 第二段从落地结果重新加载 authority，并以 descriptor/owner 视角独立复核目标树。
+  const snapshot = loadWakeflowConfigV3Snapshot({ workspaceRoot });
+  const bundle = loadWakeflowAssetBundle({ wakeflowRoot: artifactRoot });
+  const hostSettingsAssetsAdapter = await loadWakeflowHostSettingsAssetsAdapter({
+    wakeflowRoot: artifactRoot,
+    hostProfile,
+  });
+  const descriptor = createWakeflowLayoutDescriptor({ model: snapshot.model, hostProfile });
+  assertTargetTree(snapshot, descriptor);
+
+  // 第三段同时检查内部 reconcile planner 与公开 setup facade 均收敛为同一零步骤 no-op。
+  const reconcile = planWakeflowReconcileBackbone({
+    workspaceRoot,
+    hostProfile,
+    bundle,
+    language: "zh",
+    authorizedRepositoryIds: [],
+    hostSettingsAssetsAdapter,
+  });
+  if (
+    reconcile.status !== "ready"
+    || reconcile.confirmedActionPlan?.payload?.aggregatePlan?.payload?.steps?.length !== 0
+  ) fail("reconcile-not-zero-step");
+  const reconcilePreview = runSetup({
+    root: workspaceRoot,
+    action: "reconcile",
+    mode: "preview",
+    request: { language: "zh", authorizedRepositoryIds: [] },
+  });
+  if (
+    reconcilePreview.result?.status !== "ready"
+    || reconcilePreview.result.confirmedActionPlan?.payload?.aggregatePlan?.payload?.steps?.length !== 0
+  ) fail("public-reconcile-not-zero-step");
+  const reconcilePlan = reconcilePreview.result.confirmedActionPlan;
+  const noOp = runSetup({
+    root: workspaceRoot,
+    action: "reconcile",
+    mode: "apply",
+    confirmedPlan: reconcilePlan,
+    planDigest: canonicalJsonDigest(reconcilePlan),
+  });
+  if (noOp.result?.status !== "no-op") fail("public-reconcile-apply-not-no-op");
+
+  // 最后一段只读聚合 config/storage/status/verification，确保初始化结果能被正常运行面真实消费。
+  const observation = inspectWakeflowObservabilityV3({
+    workspaceRoot,
+    hostProfile,
+    bundle,
+    language: "zh",
+    hostSettingsAssetsAdapter,
+  });
+  const configView = projectWakeflowConfigView({ observation });
+  const storageView = projectWakeflowStorageView({ observation });
+  const status = projectWakeflowStatus({ observation });
+  const verification = verifyWakeflowWorkspaceV3({ observation });
+  if (configView.status !== "valid") fail("public-config-view-unhealthy");
+  if (storageView.overall !== "healthy") {
+    const acceptable = new Set(["current", "empty-ready", "not-created-yet", "not-applicable"]);
+    const unhealthy = storageView.items.find((entry) => !acceptable.has(entry.health));
+    const diagnosticCode = storageView.diagnostics[0]?.code ?? "no-diagnostic";
+    const itemKey = unhealthy?.key ?? "no-item";
+    const itemHealth = unhealthy?.health ?? "no-health";
+    fail(`public-storage-${storageView.overall}-${diagnosticCode}-${itemKey}-${itemHealth}`);
+  }
+  const failedGate = verification.gates.find((gate) => gate.status !== "pass");
+  if (verification.ok !== true || failedGate !== undefined) {
+    const gateId = typeof failedGate?.name === "string"
+      ? failedGate.name.replace(/[^a-z0-9.-]/gu, "-")
+      : "unknown";
+    fail(`public-verification-${gateId}`);
+  }
+  if (status.overall !== "idle") fail(`public-status-${status.overall}`);
+
+  output = {
+    ok: true,
+    hostId: normalizedHost.hostId,
+    checked: {
+      freshApply: true,
+      previewZeroWrite: true,
+      productZeroWrite: true,
+      reconcileNoOp: true,
+      targetTree: true,
+      verificationGates: verification.gates.length,
+    },
+  };
+} catch (cause) {
+  output = {
+    ok: false,
+    hostId: normalizedHost.hostId,
+    error: {
+      code: publicSmokeErrorCode(cause),
+    },
+  };
+  process.exitCode = 1;
+} finally {
+  if (typeof base === "string") {
+    try {
+      rmSync(base, { recursive: true, force: true });
+    } catch {
+      // 无法证明一次性状态已经收口时，成功结果必须降级为稳定、脱敏的终结失败。
+      output = {
+        ok: false,
+        hostId: normalizedHost.hostId,
+        error: { code: "public-smoke-cleanup-failed" },
+      };
+      process.exitCode = 1;
+    }
+  }
 }
 
-function assertToolSchemasAcceptedByHost(tools) {
-  for (const tool of tools) {
-    if (!tool.inputSchema || tool.inputSchema.type !== "object") {
-      throw new Error(`${tool.name} inputSchema must be an object schema`);
-    }
-    assertEnumSchemasHaveTypes(tool.inputSchema, tool.name);
-  }
-}
-
-function assertToolAnnotationsAcceptedByHost(tools) {
-  for (const tool of tools) {
-    const annotations = tool.annotations;
-    if (!annotations || typeof annotations !== "object" || Array.isArray(annotations)) {
-      throw new Error(`${tool.name} annotations must be present`);
-    }
-    for (const field of ["title", "readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"]) {
-      if (!(field in annotations)) {
-        throw new Error(`${tool.name} annotations missing ${field}`);
-      }
-    }
-    if (annotations.destructiveHint !== false || annotations.openWorldHint !== false) {
-      throw new Error(`${tool.name} annotations must describe a local non-destructive tool`);
-    }
-  }
-}
-
-function assertEnumSchemasHaveTypes(schema, location) {
-  if (!schema || typeof schema !== "object") return;
-  if (Array.isArray(schema.enum) && !schema.type) {
-    throw new Error(`${location} enum schema is missing an explicit type`);
-  }
-  for (const [key, value] of Object.entries(schema)) {
-    if (key === "enum") continue;
-    if (Array.isArray(value)) {
-      value.forEach((item, index) => assertEnumSchemasHaveTypes(item, `${location}.${key}[${index}]`));
-    } else {
-      assertEnumSchemasHaveTypes(value, `${location}.${key}`);
-    }
-  }
-}
+process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);

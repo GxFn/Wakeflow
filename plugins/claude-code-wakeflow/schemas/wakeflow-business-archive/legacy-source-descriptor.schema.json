@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:business-archive:legacy-source-descriptor:v1",
+  "title": "Wakeflow Legacy Demand Archive Source Descriptor",
+  "$comment": "Migration-only portable descriptor for one strictly imported legacy demand archive. It stores opaque member identities and digests, never legacy paths or private raw bytes. Runtime validation is mandatory for T06 lineage, member identity, preservation closure, ordering, counts, and privacy admission.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "programId",
+    "demandId",
+    "migrationId",
+    "archiveImportId",
+    "legacyOwnerArtifactDigest",
+    "migrationInventoryDigest",
+    "ownerDrainAssessmentDigest",
+    "source",
+    "rawPayload",
+    "members"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "artifactKind": { "const": "wakeflow-legacy-demand-archive-source" },
+    "programId": { "$ref": "#/$defs/programId" },
+    "demandId": { "$ref": "#/$defs/demandId" },
+    "migrationId": { "$ref": "#/$defs/token" },
+    "archiveImportId": { "$ref": "#/$defs/digest" },
+    "legacyOwnerArtifactDigest": { "$ref": "#/$defs/digest" },
+    "migrationInventoryDigest": { "$ref": "#/$defs/digest" },
+    "ownerDrainAssessmentDigest": { "$ref": "#/$defs/digest" },
+    "source": { "$ref": "#/$defs/source" },
+    "rawPayload": { "$ref": "#/$defs/rawPayload" },
+    "members": {
+      "type": "array",
+      "maxItems": 20000,
+      "items": { "$ref": "#/$defs/member" }
+    }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "token": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,127}$" },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "preservationId": {
+      "type": "string",
+      "pattern": "^preservation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "archiveEvidenceDigest",
+        "archiveSourceId",
+        "archiveTreeDigest",
+        "eventsDigest",
+        "manifestDigest",
+        "resultDigests",
+        "stateDigest"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "archiveEvidenceDigest": { "$ref": "#/$defs/digest" },
+        "archiveSourceId": { "$ref": "#/$defs/digest" },
+        "archiveTreeDigest": { "$ref": "#/$defs/digest" },
+        "eventsDigest": { "$ref": "#/$defs/digest" },
+        "manifestDigest": { "$ref": "#/$defs/digest" },
+        "resultDigests": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/digest" }
+        },
+        "stateDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "treeDigest": {
+      "type": "object",
+      "required": ["algorithm", "value", "entries"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "value": { "$ref": "#/$defs/digest" },
+        "entries": { "type": "integer", "minimum": 1, "maximum": 20000 }
+      }
+    },
+    "preservation": {
+      "type": "object",
+      "required": ["preservationId", "payloadTreeDigest", "retentionClass"],
+      "additionalProperties": false,
+      "properties": {
+        "preservationId": { "$ref": "#/$defs/preservationId" },
+        "payloadTreeDigest": { "$ref": "#/$defs/treeDigest" },
+        "retentionClass": { "const": "reviewable-local-audit" }
+      }
+    },
+    "rawPayload": {
+      "type": "object",
+      "required": ["disposition", "portableMemberCount", "retainedMemberCount", "preservation"],
+      "additionalProperties": false,
+      "properties": {
+        "disposition": { "enum": ["portable", "preserved"] },
+        "portableMemberCount": { "type": "integer", "minimum": 0, "maximum": 20000 },
+        "retainedMemberCount": { "type": "integer", "minimum": 0, "maximum": 20000 },
+        "preservation": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/preservation" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "disposition": { "const": "preserved" } },
+            "required": ["disposition"]
+          },
+          "then": { "properties": { "preservation": { "$ref": "#/$defs/preservation" } } },
+          "else": { "properties": { "preservation": { "type": "null" } } }
+        }
+      ]
+    },
+    "member": {
+      "type": "object",
+      "required": [
+        "memberRef",
+        "sourceMemberId",
+        "sourceRefDigest",
+        "digest",
+        "mode",
+        "size",
+        "portableDisposition"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "memberRef": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^payload/legacy/member-[0-9]{5}\\.bin$" }
+          ]
+        },
+        "sourceMemberId": { "$ref": "#/$defs/digest" },
+        "sourceRefDigest": { "$ref": "#/$defs/digest" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "mode": { "type": "string", "pattern": "^0[0-7]{3}$" },
+        "size": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "portableDisposition": { "enum": ["portable-member", "source-retained"] }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "portableDisposition": { "const": "portable-member" } },
+            "required": ["portableDisposition"]
+          },
+          "then": {
+            "properties": {
+              "memberRef": { "type": "string", "pattern": "^payload/legacy/member-[0-9]{5}\\.bin$" }
+            }
+          },
+          "else": { "properties": { "memberRef": { "type": "null" } } }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://raw.githubusercontent.com/GxFn/Wakeflow/main/core/schemas/wakeflow-config.schema.json",
+  "schemaVersion": 2,
+  "workspace": {
+    "name": "WakeflowFixture",
+    "language": "en",
+    "runtimeMode": "plugin",
+    "root": "..",
+    "wakeflowRepoDir": ""
+  },
+  "roles": {
+    "controller": "WakeflowFixture",
+    "design": "Design",
+    "test": "Test"
+  },
+  "storage": {
+    "activeRoot": ".wakeflow-active",
+    "localRoot": ".wakeflow-local",
+    "ledgerRoot": "wakeflow-ledger"
+  },
+  "policy": {
+    "allowMissingRepos": true,
+    "disallowedTrackedPaths": [
+      ".DS_Store"
+    ],
+    "allowedRepositoryResiduePaths": [],
+    "runtimeProcessMatchers": [],
+    "runtimeProcessLabel": "configured"
+  },
+  "repositories": [
+    {
+      "windowName": "ProductWindow",
+      "path": "../ProductWorkspace",
+      "mode": "external",
+      "role": "Project repository; confirm scope and responsibility before enabling.",
+      "managedAgents": true
+    },
+    {
+      "windowName": "Design",
+      "path": "Design",
+      "mode": "internal",
+      "role": "Internal requirement design workspace",
+      "managedAgents": false
+    },
+    {
+      "windowName": "Test",
+      "path": "Test",
+      "mode": "internal",
+      "role": "Internal test coordination workspace",
+      "managedAgents": false
+    },
+    {
+      "windowName": "ProductWindow__scenario",
+      "path": ".wakeflow-local/worktrees/ProductWindow__scenario",
+      "role": "Isolation worktree of ProductWindow",
+      "mode": "internal",
+      "managedAgents": false,
+      "stream": {
+        "repo": "ProductWindow",
+        "repoPath": "../ProductWorkspace",
+        "streamId": "scenario",
+        "demandKey": "SCENARIO-STREAM",
+        "branch": "SCENARIO-STREAM/scenario",
+        "openedAt": "@wakeflow-scenario-time-48b71be6d2"
+      }
+    }
+  ],
+  "hosts": {},
+  "derived": {
+    "kind": "WakeflowLocalConfigOverlay",
+    "version": 1,
+    "from": "wakeflow.config.json",
+    "baseHash": "08733cf53a37f06534f6a1f87e2d8a9ef161b50da46239e372a950cdb06f4983",
+    "generatedAt": "@wakeflow-scenario-time-d3365eb624",
+    "streamWindows": [
+      "ProductWindow__scenario"
+    ]
+  }
+}

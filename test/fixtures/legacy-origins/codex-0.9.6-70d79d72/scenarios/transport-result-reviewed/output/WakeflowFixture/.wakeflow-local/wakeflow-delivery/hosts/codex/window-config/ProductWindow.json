@@ -1,0 +1,30 @@
+{
+  "kind": "CodexSubwindowDispatchConfig",
+  "version": 1,
+  "windowName": "ProductWindow",
+  "repositoryPath": "../ProductWorkspace",
+  "responsibility": "Project repository; confirm scope and responsibility before enabling.",
+  "dispatchable": true,
+  "threadRegistered": true,
+  "threadBindingId": "@wakeflow-scenario-binding-id-45574ba56f",
+  "threadRegistryFile": "hosts/codex/thread-registry/ProductWindow.json",
+  "cwd": "../ProductWorkspace",
+  "responsibilityRoot": "../ProductWorkspace",
+  "deliveryRole": "target",
+  "delivery": {
+    "transport": "direct-thread",
+    "requireThread": true,
+    "missingThread": "fail-closed",
+    "readbackRequired": true
+  },
+  "automation": {
+    "mode": "manual-or-unattended",
+    "continuousWhenEnabled": true,
+    "keepLive": "required-when-automation-enabled"
+  },
+  "result": {
+    "returnRoute": "controller",
+    "resultEnvelopeRequired": true
+  },
+  "generatedAt": "@wakeflow-scenario-time-944fc0d096"
+}

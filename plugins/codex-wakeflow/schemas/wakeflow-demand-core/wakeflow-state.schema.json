@@ -1,0 +1,722 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:demand-core:wakeflow-state:v1",
+  "title": "Wakeflow Candidate Demand State",
+  "$comment": "This schema validates structural and lexical shape only. The candidate demand-core runtime validator is mandatory for demand and authority digest equality, optional authority tuple atomicity, revision and event-tail relations, canonical ordering, exact inventory references, lifecycle relations, and current-snapshot semantics. Artifact payloads never belong in this state snapshot.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "programId",
+    "demandId",
+    "demandRef",
+    "demandDigest",
+    "revision",
+    "state",
+    "stateReason",
+    "updatedAt",
+    "lastEvent",
+    "taskPackages",
+    "targetTasks",
+    "targetResults",
+    "testCards",
+    "evidence",
+    "review"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "artifactKind": { "type": "string", "const": "wakeflow-state" },
+    "programId": { "$ref": "#/$defs/programId" },
+    "demandId": { "$ref": "#/$defs/demandId" },
+    "demandRef": { "type": "string", "const": "demand.json" },
+    "demandDigest": { "$ref": "#/$defs/digest" },
+    "demandAuthorityRef": { "type": "string", "const": "demand-authority.json" },
+    "demandAuthorityDigest": { "$ref": "#/$defs/digest" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "state": {
+      "type": "string",
+      "enum": [
+        "intake",
+        "planned",
+        "dispatched",
+        "waiting-results",
+        "review-ready",
+        "needs-rework",
+        "blocked",
+        "cancelled",
+        "completed",
+        "archived"
+      ]
+    },
+    "stateReason": { "$ref": "#/$defs/trimmedText" },
+    "updatedAt": { "$ref": "#/$defs/timestamp" },
+    "lastEvent": { "$ref": "#/$defs/eventTail" },
+    "taskPackages": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/taskPackageState" }
+    },
+    "targetTasks": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/targetTaskState" }
+    },
+    "targetResults": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/targetResultState" }
+    },
+    "testCards": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/testCardState" }
+    },
+    "evidence": {
+      "type": "array",
+      "uniqueItems": true,
+      "$comment": "The runtime validator requires lexical evidenceId ordering and exact canonical manifest refs. State stores only immutable manifest identities, never lifecycle or payload copies.",
+      "items": { "$ref": "#/$defs/evidenceState" }
+    },
+    "pod": { "$ref": "#/$defs/podState" },
+    "review": { "$ref": "#/$defs/reviewState" }
+  },
+  "additionalProperties": false,
+  "dependentRequired": {
+    "demandAuthorityRef": ["demandAuthorityDigest"],
+    "demandAuthorityDigest": ["demandAuthorityRef"]
+  },
+  "$defs": {
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "evidenceId": {
+      "type": "string",
+      "pattern": "^evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "repositoryId": {
+      "type": "string",
+      "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "reviewCandidateId": {
+      "type": "string",
+      "pattern": "^review-candidate_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetResultId": {
+      "type": "string",
+      "pattern": "^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetTaskId": {
+      "type": "string",
+      "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "dispatchGroupId": {
+      "type": "string",
+      "pattern": "^dispatch-group_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "dispatchPacketId": {
+      "type": "string",
+      "pattern": "^dispatch-packet_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "deliveryId": {
+      "type": "string",
+      "pattern": "^delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "deliveryRunId": {
+      "type": "string",
+      "pattern": "^delivery-run_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "leaseId": {
+      "type": "string",
+      "pattern": "^lease_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "testAttemptId": {
+      "type": "string",
+      "pattern": "^test-attempt_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "taskPackageId": {
+      "type": "string",
+      "pattern": "^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "testCardId": {
+      "type": "string",
+      "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "podId": {
+      "type": "string",
+      "pattern": "^pod_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "podLaunchOperationId": {
+      "type": "string",
+      "pattern": "^pod-launch_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "podMaterializationEventId": {
+      "type": "string",
+      "pattern": "^pod-materialization-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "podTestProbeId": {
+      "type": "string",
+      "pattern": "^pod-test-probe_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "podCloseOperationId": {
+      "type": "string",
+      "pattern": "^pod-close_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "bindingId": {
+      "type": "string",
+      "pattern": "^binding_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "opaqueEventId": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)[^\\u0000-\\u001F\\u007F-\\u009F]*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+    },
+    "trimmedText": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)(?:[\\r\\n]|[^\\u0000-\\u001F\\u007F-\\u009F])*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "portableRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\s)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*/$)[^\\u0000-\\u001F\\u007F-\\u009F]*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "taskPackageRef": {
+      "type": "string",
+      "pattern": "^task-packages/task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+    },
+    "targetResultRef": {
+      "type": "string",
+      "pattern": "^target-results/target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+    },
+    "testCardRef": {
+      "type": "string",
+      "pattern": "^test-cards/test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+    },
+    "evidenceRef": {
+      "type": "string",
+      "pattern": "^evidence/evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/evidence\\.json$"
+    },
+    "reviewCandidateRef": {
+      "type": "string",
+      "pattern": "^review-candidates/review-candidate_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+    },
+    "eventTail": {
+      "type": "object",
+      "required": ["eventId", "eventDigest"],
+      "properties": {
+        "eventId": { "$ref": "#/$defs/opaqueEventId" },
+        "eventDigest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "eventAuthority": {
+      "type": "object",
+      "$comment": "The exact event digest remains durable authority. deliveryTransition summary digests use the runtime-defined currentDelivery projection that retains revision/eventId but omits eventDigest from preparedBy/authorizedBy/claimedBy/recordedBy, avoiding a self-digest cycle without weakening historical event binding.",
+      "required": ["revision", "eventId", "eventDigest"],
+      "properties": {
+        "revision": { "type": "integer", "minimum": 1 },
+        "eventId": { "$ref": "#/$defs/opaqueEventId" },
+        "eventDigest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "sourceState": {
+      "type": "object",
+      "required": ["revision", "stateDigest", "eventId", "eventDigest"],
+      "properties": {
+        "revision": { "type": "integer", "minimum": 1 },
+        "stateDigest": { "$ref": "#/$defs/digest" },
+        "eventId": { "$ref": "#/$defs/opaqueEventId" },
+        "eventDigest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "dispatchGroupTuple": {
+      "type": "object",
+      "required": ["groupId", "ref", "digest"],
+      "properties": {
+        "groupId": { "$ref": "#/$defs/dispatchGroupId" },
+        "ref": {
+          "type": "string",
+          "pattern": "^\\.wakeflow-local/runtime/shared/transport/demands/demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/groups/dispatch-group_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "dispatchPacketTuple": {
+      "type": "object",
+      "required": ["packetId", "ref", "digest"],
+      "properties": {
+        "packetId": { "$ref": "#/$defs/dispatchPacketId" },
+        "ref": {
+          "type": "string",
+          "pattern": "^\\.wakeflow-local/runtime/shared/transport/demands/demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/packets/dispatch-packet_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "deliveryEnvelopeTuple": {
+      "type": "object",
+      "required": ["deliveryId", "ref", "digest"],
+      "properties": {
+        "deliveryId": { "$ref": "#/$defs/deliveryId" },
+        "ref": {
+          "type": "string",
+          "pattern": "^\\.wakeflow-local/runtime/shared/transport/demands/demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/envelopes/delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "deliveryRunTuple": {
+      "type": "object",
+      "required": [
+        "runId",
+        "ref",
+        "digest",
+        "attemptOrdinal",
+        "transportStatus",
+        "readbackStatus"
+      ],
+      "properties": {
+        "runId": { "$ref": "#/$defs/deliveryRunId" },
+        "ref": {
+          "type": "string",
+          "pattern": "^\\.wakeflow-local/runtime/shared/transport/demands/demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/runs/delivery-run_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" },
+        "attemptOrdinal": { "type": "integer", "minimum": 1 },
+        "transportStatus": {
+          "type": "string",
+          "enum": ["accepted", "rejected-before-send", "ambiguous"]
+        },
+        "readbackStatus": {
+          "type": "string",
+          "enum": ["confirmed", "pending", "unavailable"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "coordinationLeaseTuple": {
+      "type": "object",
+      "required": ["leaseId", "ref", "digest"],
+      "properties": {
+        "leaseId": { "$ref": "#/$defs/leaseId" },
+        "ref": {
+          "type": "string",
+          "pattern": "^\\.wakeflow-local/runtime/shared/coordination/window-leases/window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "restartAuthorization": {
+      "type": "object",
+      "required": ["conditionIndex", "condition", "reason"],
+      "properties": {
+        "conditionIndex": { "type": "integer", "minimum": 0 },
+        "condition": { "$ref": "#/$defs/trimmedText" },
+        "reason": { "$ref": "#/$defs/trimmedText", "maxLength": 1024 }
+      },
+      "additionalProperties": false
+    },
+    "testDeliveryAuthorization": {
+      "type": "object",
+      "$comment": "One logical Test execution attempt may need a replacement immutable envelope after a proved rejected-before-send outcome. These entries are append-only authorization history; same-envelope rearm remains currentDelivery.sendGeneration and does not append here.",
+      "required": [
+        "ordinal",
+        "group",
+        "packet",
+        "envelope",
+        "authorizedBy"
+      ],
+      "properties": {
+        "ordinal": { "type": "integer", "minimum": 1 },
+        "group": { "$ref": "#/$defs/dispatchGroupTuple" },
+        "packet": { "$ref": "#/$defs/dispatchPacketTuple" },
+        "envelope": { "$ref": "#/$defs/deliveryEnvelopeTuple" },
+        "authorizedBy": { "$ref": "#/$defs/eventAuthority" },
+        "replacesRun": { "$ref": "#/$defs/deliveryRunTuple" }
+      },
+      "additionalProperties": false
+    },
+    "testAttempt": {
+      "type": "object",
+      "required": [
+        "testAttemptId",
+        "ordinal",
+        "mode",
+        "testCard",
+        "deliveryAuthorizations"
+      ],
+      "properties": {
+        "testAttemptId": { "$ref": "#/$defs/testAttemptId" },
+        "ordinal": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "mode": { "type": "string", "enum": ["initial", "resume", "restart"] },
+        "testCard": { "$ref": "#/$defs/testCardTuple" },
+        "deliveryAuthorizations": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/testDeliveryAuthorization" }
+        },
+        "previousAttemptId": { "$ref": "#/$defs/testAttemptId" },
+        "previousResult": { "$ref": "#/$defs/currentResult" },
+        "restart": { "$ref": "#/$defs/restartAuthorization" }
+      },
+      "additionalProperties": false
+    },
+    "currentDelivery": {
+      "type": "object",
+      "required": [
+        "sourceState",
+        "group",
+        "packet",
+        "envelope",
+        "lease",
+        "phase",
+        "sendGeneration",
+        "preparedBy",
+        "authorizedBy"
+      ],
+      "properties": {
+        "sourceState": { "$ref": "#/$defs/sourceState" },
+        "group": { "$ref": "#/$defs/dispatchGroupTuple" },
+        "packet": { "$ref": "#/$defs/dispatchPacketTuple" },
+        "envelope": { "$ref": "#/$defs/deliveryEnvelopeTuple" },
+        "lease": { "$ref": "#/$defs/coordinationLeaseTuple" },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "prepared",
+            "send-claimed",
+            "accepted",
+            "rejected-before-send",
+            "ambiguous"
+          ]
+        },
+        "sendGeneration": { "type": "integer", "minimum": 1 },
+        "preparedBy": { "$ref": "#/$defs/eventAuthority" },
+        "authorizedBy": { "$ref": "#/$defs/eventAuthority" },
+        "claimedBy": { "$ref": "#/$defs/eventAuthority" },
+        "recordedBy": { "$ref": "#/$defs/eventAuthority" },
+        "rearmedFrom": { "$ref": "#/$defs/deliveryRunTuple" },
+        "latestRun": { "$ref": "#/$defs/deliveryRunTuple" },
+        "testAttemptId": { "$ref": "#/$defs/testAttemptId" }
+      },
+      "additionalProperties": false
+    },
+    "taskPackageState": {
+      "type": "object",
+      "required": ["taskPackageId", "ref", "digest", "lifecycleStatus"],
+      "properties": {
+        "taskPackageId": { "$ref": "#/$defs/taskPackageId" },
+        "ref": { "$ref": "#/$defs/taskPackageRef" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "lifecycleStatus": { "type": "string", "enum": ["active", "closed", "superseded"] }
+      },
+      "additionalProperties": false
+    },
+    "currentResult": {
+      "type": "object",
+      "required": ["targetResultId", "ref", "digest"],
+      "properties": {
+        "targetResultId": { "$ref": "#/$defs/targetResultId" },
+        "ref": { "$ref": "#/$defs/targetResultRef" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "testCardTuple": {
+      "type": "object",
+      "required": ["testCardId", "ref", "digest"],
+      "properties": {
+        "testCardId": { "$ref": "#/$defs/testCardId" },
+        "ref": { "$ref": "#/$defs/testCardRef" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "targetTaskState": {
+      "type": "object",
+      "required": ["targetTaskId", "taskPackageId", "windowId", "lifecycleStatus"],
+      "properties": {
+        "targetTaskId": { "$ref": "#/$defs/targetTaskId" },
+        "taskPackageId": { "$ref": "#/$defs/taskPackageId" },
+        "windowId": { "$ref": "#/$defs/windowId" },
+        "repositoryId": { "$ref": "#/$defs/repositoryId" },
+        "lifecycleStatus": {
+          "type": "string",
+          "enum": ["accepted", "blocked", "cancelled", "dispatched", "needs-rework", "planned", "review-ready", "superseded", "waiting-result"]
+        },
+        "currentResult": { "$ref": "#/$defs/currentResult" },
+        "testCard": { "$ref": "#/$defs/testCardTuple" },
+        "currentDelivery": { "$ref": "#/$defs/currentDelivery" },
+        "testAttempts": {
+          "type": "array",
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/testAttempt" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "targetResultState": {
+      "type": "object",
+      "required": ["targetResultId", "targetTaskId", "ref", "digest", "lifecycleStatus"],
+      "properties": {
+        "targetResultId": { "$ref": "#/$defs/targetResultId" },
+        "targetTaskId": { "$ref": "#/$defs/targetTaskId" },
+        "ref": { "$ref": "#/$defs/targetResultRef" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "lifecycleStatus": { "type": "string", "enum": ["current", "historical"] }
+      },
+      "additionalProperties": false
+    },
+    "testCardState": {
+      "type": "object",
+      "required": ["testCardId", "ref", "digest", "lifecycleStatus"],
+      "properties": {
+        "testCardId": { "$ref": "#/$defs/testCardId" },
+        "ref": { "$ref": "#/$defs/testCardRef" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "lifecycleStatus": { "type": "string", "enum": ["active", "closed", "superseded"] }
+      },
+      "additionalProperties": false
+    },
+    "evidenceState": {
+      "type": "object",
+      "required": ["evidenceId", "ref", "digest"],
+      "properties": {
+        "evidenceId": { "$ref": "#/$defs/evidenceId" },
+        "ref": { "$ref": "#/$defs/evidenceRef" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "pendingCandidate": {
+      "type": "object",
+      "required": ["reviewCandidateId", "ref", "digest"],
+      "properties": {
+        "reviewCandidateId": { "$ref": "#/$defs/reviewCandidateId" },
+        "ref": { "$ref": "#/$defs/reviewCandidateRef" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "targetTaskIdSet": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/targetTaskId" }
+    },
+    "podEvidenceTuple": {
+      "type": "object",
+      "$comment": "Runtime validation derives the exact capability/Pod/member-specific ref; JSON Schema provides only the closed portable tuple shape.",
+      "required": ["ref", "digest"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/portableRef" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "podMaterializationTuple": {
+      "type": "object",
+      "required": ["eventId", "ref", "digest"],
+      "properties": {
+        "eventId": { "$ref": "#/$defs/podMaterializationEventId" },
+        "ref": { "$ref": "#/$defs/portableRef" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "podCloseTuple": {
+      "type": "object",
+      "required": ["closeOperationId", "intent"],
+      "properties": {
+        "closeOperationId": { "$ref": "#/$defs/podCloseOperationId" },
+        "intent": { "$ref": "#/$defs/podEvidenceTuple" },
+        "receipt": { "$ref": "#/$defs/podEvidenceTuple" }
+      },
+      "additionalProperties": false
+    },
+    "podWindowState": {
+      "type": "object",
+      "required": ["windowId", "role", "launchOperationId", "bindingId", "launchIntent", "status"],
+      "properties": {
+        "windowId": { "$ref": "#/$defs/windowId" },
+        "role": { "type": "string", "enum": ["controller", "design", "test", "product"] },
+        "repositoryId": { "$ref": "#/$defs/repositoryId" },
+        "launchOperationId": { "$ref": "#/$defs/podLaunchOperationId" },
+        "bindingId": { "$ref": "#/$defs/bindingId" },
+        "launchIntent": { "$ref": "#/$defs/podEvidenceTuple" },
+        "status": { "type": "string", "enum": ["planned", "bound", "closing", "closed"] },
+        "materializationFinalEvent": { "$ref": "#/$defs/podMaterializationTuple" },
+        "identityBindingDigest": { "$ref": "#/$defs/digest" },
+        "creationReceipt": { "$ref": "#/$defs/podEvidenceTuple" },
+        "close": { "$ref": "#/$defs/podCloseTuple" },
+        "resourceClaimStatus": { "type": "string", "enum": ["reserved", "active", "retained", "unknown", "released"] }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "role": { "const": "product" } }, "required": ["role"] },
+          "then": { "required": ["repositoryId", "resourceClaimStatus"] },
+          "else": { "not": { "anyOf": [{ "required": ["repositoryId"] }, { "required": ["resourceClaimStatus"] }] } }
+        },
+        {
+          "if": { "properties": { "status": { "const": "bound" } }, "required": ["status"] },
+          "then": { "required": ["materializationFinalEvent", "identityBindingDigest", "creationReceipt"] }
+        },
+        {
+          "if": { "properties": { "status": { "enum": ["closing", "closed"] } }, "required": ["status"] },
+          "then": { "required": ["close"] }
+        },
+        {
+          "if": { "properties": { "status": { "const": "closed" } }, "required": ["status"] },
+          "then": { "properties": { "close": { "required": ["receipt"] } } }
+        }
+      ]
+    },
+    "podTestAccessState": {
+      "type": "object",
+      "required": ["probeId", "attempt", "status", "bindingSetDigest", "productBindingCount", "plan", "plannedAt"],
+      "properties": {
+        "probeId": { "$ref": "#/$defs/podTestProbeId" },
+        "attempt": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "previousProbeId": { "$ref": "#/$defs/podTestProbeId" },
+        "status": { "type": "string", "enum": ["pending", "validated", "blocked"] },
+        "bindingSetDigest": { "$ref": "#/$defs/digest" },
+        "productBindingCount": { "type": "integer", "minimum": 1 },
+        "plan": { "$ref": "#/$defs/podEvidenceTuple" },
+        "plannedAt": { "$ref": "#/$defs/timestamp" },
+        "receipt": { "$ref": "#/$defs/podEvidenceTuple" },
+        "capability": { "type": "string", "const": "direct-multi-root" },
+        "reasonCode": {
+          "type": "string",
+          "enum": ["capability-unsupported", "git-identity-mismatch", "observer-identity-mismatch", "probe-execution-failed", "root-unreadable"]
+        },
+        "observedAt": { "$ref": "#/$defs/timestamp" },
+        "recordedAt": { "$ref": "#/$defs/timestamp" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "attempt": { "minimum": 2 } }, "required": ["attempt"] },
+          "then": { "required": ["previousProbeId"] },
+          "else": { "not": { "required": ["previousProbeId"] } }
+        },
+        {
+          "if": { "properties": { "status": { "const": "validated" } }, "required": ["status"] },
+          "then": { "required": ["receipt", "capability", "observedAt", "recordedAt"] }
+        },
+        {
+          "if": { "properties": { "status": { "const": "blocked" } }, "required": ["status"] },
+          "then": { "required": ["receipt", "reasonCode", "observedAt", "recordedAt"] }
+        },
+        {
+          "if": { "properties": { "status": { "const": "pending" } }, "required": ["status"] },
+          "then": { "not": { "anyOf": [
+            { "required": ["receipt"] },
+            { "required": ["capability"] },
+            { "required": ["reasonCode"] },
+            { "required": ["observedAt"] },
+            { "required": ["recordedAt"] }
+          ] } }
+        }
+      ]
+    },
+    "podState": {
+      "type": "object",
+      "$comment": "Runtime validation owns exact role cardinality, lexical window order, repository uniqueness, phase/status relations, resource claims, evidence refs, and current Test binding-set digest.",
+      "required": ["podId", "hostId", "placementAuthorizationDigest", "scope", "phase", "windows"],
+      "properties": {
+        "podId": { "$ref": "#/$defs/podId" },
+        "hostId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+        "placementAuthorizationDigest": { "$ref": "#/$defs/digest" },
+        "scope": { "$ref": "#/$defs/podEvidenceTuple" },
+        "phase": {
+          "type": "string",
+          "enum": ["reserved", "creating-control", "control-ready", "designing", "creating-products", "execution-ready", "retryable", "blocked", "cancelling", "closing", "closed"]
+        },
+        "windows": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/podWindowState" }
+        },
+        "designRequest": { "$ref": "#/$defs/podDesignRequestTuple" },
+        "designHandoff": { "$ref": "#/$defs/podDesignHandoffTuple" },
+        "testAccess": { "$ref": "#/$defs/podTestAccessState" }
+      },
+      "additionalProperties": false
+    },
+    "podDesignRequestTuple": {
+      "type": "object",
+      "required": ["podDesignRequestId", "ref", "digest"],
+      "properties": {
+        "podDesignRequestId": {
+          "type": "string",
+          "pattern": "^pod-design-request_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^pod/design-requests/pod-design-request_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "podDesignHandoffTuple": {
+      "type": "object",
+      "required": ["podDesignHandoffId", "ref", "digest"],
+      "properties": {
+        "podDesignHandoffId": {
+          "type": "string",
+          "pattern": "^pod-design-handoff_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^pod/design-handoffs/pod-design-handoff_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "reviewState": {
+      "type": "object",
+      "required": ["status", "readyTargetTaskIds", "blockedTargetTaskIds", "missingTargetTaskIds"],
+      "properties": {
+        "status": { "type": "string", "enum": ["idle", "pending"] },
+        "readyTargetTaskIds": { "$ref": "#/$defs/targetTaskIdSet" },
+        "blockedTargetTaskIds": { "$ref": "#/$defs/targetTaskIdSet" },
+        "missingTargetTaskIds": { "$ref": "#/$defs/targetTaskIdSet" },
+        "pendingCandidate": { "$ref": "#/$defs/pendingCandidate" }
+      },
+      "additionalProperties": false,
+      "if": {
+        "properties": { "status": { "const": "pending" } },
+        "required": ["status"]
+      },
+      "then": { "required": ["pendingCandidate"] },
+      "else": { "not": { "required": ["pendingCandidate"] } }
+    }
+  }
+}

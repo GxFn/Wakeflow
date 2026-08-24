@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "artifactKind": "wakeflow-template-sources",
+  "source": "core/template-sources",
+  "assets": [
+    {
+      "id": "progress.demand.en",
+      "kind": "projection-template",
+      "owner": "demand-projector",
+      "consumers": [
+        "wakeflow-demand-document-builder"
+      ],
+      "source": "progress/demand-progress.template.md",
+      "input": {
+        "authority": "string",
+        "completionDefinition": "string",
+        "currentState": "string",
+        "demand": "string",
+        "events": "string",
+        "goal": "string",
+        "projectionMarker": "string",
+        "source": "string",
+        "title": "string"
+      }
+    },
+    {
+      "id": "progress.demand.zh-CN",
+      "kind": "projection-template",
+      "owner": "demand-projector",
+      "consumers": [
+        "wakeflow-demand-document-builder"
+      ],
+      "source": "progress/demand-progress.zh-CN.template.md",
+      "input": {
+        "authority": "string",
+        "completionDefinition": "string",
+        "currentState": "string",
+        "demand": "string",
+        "events": "string",
+        "goal": "string",
+        "projectionMarker": "string",
+        "source": "string",
+        "title": "string"
+      }
+    }
+  ]
+}

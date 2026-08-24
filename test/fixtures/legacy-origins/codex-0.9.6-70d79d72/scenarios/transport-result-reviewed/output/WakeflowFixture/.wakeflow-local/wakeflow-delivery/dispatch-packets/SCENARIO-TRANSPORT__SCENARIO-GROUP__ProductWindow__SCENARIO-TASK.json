@@ -1,0 +1,96 @@
+{
+  "kind": "ControllerDispatchPacket",
+  "version": 1,
+  "id": "SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+  "targetWindow": "ProductWindow",
+  "taskId": "SCENARIO-TASK",
+  "dispatchGroup": "SCENARIO-GROUP",
+  "controllerWindow": "WakeflowFixture",
+  "humanContextRef": ".wakeflow-active/current/SCENARIO-TRANSPORT/developer-progress.md",
+  "stateRef": {
+    "stateRoot": ".wakeflow-active/current/SCENARIO-TRANSPORT",
+    "demandKey": "SCENARIO-TRANSPORT",
+    "taskPackageId": "SCENARIO-PACKAGE",
+    "targetTaskId": "SCENARIO-TASK",
+    "stateRevision": 2
+  },
+  "objective": "Return one completed scenario result.",
+  "taskBriefing": {
+    "mode": "legacy-compatible",
+    "targetWindow": "ProductWindow",
+    "targetTaskId": "SCENARIO-TASK",
+    "taskPackageId": "SCENARIO-PACKAGE",
+    "objective": "Return one completed scenario result.",
+    "contextSummary": [],
+    "requirementRefs": [
+      {
+        "ref": "scenario://transport-result-reviewed",
+        "role": "evidence",
+        "resolvedRef": "scenario://transport-result-reviewed"
+      }
+    ],
+    "boundaries": {
+      "inScope": [
+        "Return one completed scenario result."
+      ],
+      "outOfScope": [],
+      "forbidden": []
+    },
+    "completionExpectations": [],
+    "dependsOnTaskIds": [],
+    "commitExpectation": null,
+    "acceptanceAnchors": [],
+    "requiredSkills": [
+      "skills/wakeflow-target/SKILL.md"
+    ],
+    "workspaceRoot": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+    "repositoryRoot": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/ProductWorkspace",
+    "stateRoot": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT",
+    "taskPackageRef": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/task-packages/SCENARIO-PACKAGE.json",
+    "taskPackageDigest": "@wakeflow-scenario-derived-digest-439a569594"
+  },
+  "taskPackageDigest": "@wakeflow-scenario-derived-digest-439a569594",
+  "scope": [
+    "demandKey=SCENARIO-TRANSPORT",
+    "taskPackageId=SCENARIO-PACKAGE",
+    "targetTaskId=SCENARIO-TASK"
+  ],
+  "outOfScope": [],
+  "forbidden": [
+    "Do not treat dispatch packet, delivery run, or target result as total-control acceptance.",
+    "Do not parse developer-progress.md as state authority."
+  ],
+  "evidenceRequired": [
+    "TargetResultEnvelope with target-authored review inputs and artifact refs; Wakeflow checks structure and locatability only, and the target result is not controller acceptance."
+  ],
+  "resultContract": "target-result-envelope-v1",
+  "returnPolicy": {
+    "mode": "group-ready"
+  },
+  "contextPolicy": "refresh-if-missing",
+  "prompt": "Continue current window task: ProductWindow / SCENARIO-TASK.\n\nCurrent objective (the task package is authoritative):\n- Return one completed scenario result.\n\n- Critical boundary [inScope]: Return one completed scenario result.\nRead before execution, in order:\n- Task package (complete task context): @wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/task-packages/SCENARIO-PACKAGE.json\n- Requirement background entry (full anchors are in the task package) [evidence]: scenario://transport-result-reviewed\n- Workspace instructions: @wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture/AGENTS.md\n- Repository instructions: @wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/ProductWorkspace/AGENTS.md\n- Current state root: @wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT\n\nRequired execution Skills (execution-process authority):\n- skills/wakeflow-target/SKILL.md\n\nIdentity (full boundaries are in the task package):\n- Current responsibility window: ProductWindow\n- Only working repository: @wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/ProductWorkspace\n\nReturn requirement:\n- Execute only this task package. Return a TargetResultEnvelope with reviewable inputs and reproducible validation details through the wakeflow-target skill. A target result is not controller acceptance.\n\nDispatch record (routing and trace only):\n- taskId: SCENARIO-TASK\n- taskPackageId: SCENARIO-PACKAGE\n- stateRoot: .wakeflow-active/current/SCENARIO-TRANSPORT\n- stateRevision: 2\n- dispatchGroup: SCENARIO-GROUP",
+  "wakeflowTrace": {
+    "kind": "WakeflowTrace",
+    "version": 1,
+    "artifactKind": "dispatch-packet",
+    "source": "wakeflow-delivery",
+    "command": "prepare-dispatch-from-state",
+    "root": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+    "stateRoot": ".wakeflow-active/current/SCENARIO-TRANSPORT",
+    "stateRevision": 2,
+    "demandKey": "SCENARIO-TRANSPORT",
+    "taskPackageId": "SCENARIO-PACKAGE",
+    "targetTaskId": "SCENARIO-TASK",
+    "targetWindow": "ProductWindow",
+    "dispatchGroup": "SCENARIO-GROUP",
+    "createdAt": "@wakeflow-scenario-time-e7b93757a5"
+  },
+  "createdAt": "@wakeflow-scenario-time-b654e7dfd9",
+  "packetDigest": "@wakeflow-scenario-derived-digest-6adb7d49ff",
+  "idempotency": {
+    "key": "dispatch-packet:.wakeflow-active/current/SCENARIO-TRANSPORT:SCENARIO-PACKAGE:SCENARIO-TASK:2:SCENARIO-GROUP:ProductWindow",
+    "duplicateBehavior": "return-existing-if-equivalent",
+    "staleRevisionBehavior": "fail-if-existing-packet-state-revision-differs",
+    "unsafeRetry": "same-packet-id-with-different-state-revision-or-content"
+  }
+}

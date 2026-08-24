@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:business-archive:todo-history:v1",
+  "title": "Wakeflow Candidate Business Archive TODO History",
+  "$comment": "Strict portable member preserving the exact pending-to-claimed TODO lineage consumed only after the immutable archive manifest commits.",
+  "type": "object",
+  "required": ["schemaVersion", "artifactKind", "archiveId", "programId", "demandId", "boardRef", "todoId", "lineageRef", "mount", "intakeRow", "claimedRow"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "artifactKind": { "const": "wakeflow-business-archive-todo-history" },
+    "archiveId": { "type": "string", "pattern": "^archive_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "programId": { "type": "string", "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "demandId": { "$ref": "#/$defs/demandId" },
+    "boardRef": { "$ref": "#/$defs/ref" },
+    "todoId": { "$ref": "#/$defs/token" },
+    "lineageRef": { "$ref": "#/$defs/todoLineageRef" },
+    "mount": { "$ref": "#/$defs/mount" },
+    "intakeRow": { "$ref": "#/$defs/snapshot" },
+    "claimedRow": { "$ref": "#/$defs/snapshot" }
+  },
+  "$defs": {
+    "demandId": { "type": "string", "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "ref": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)[^\\u0000-\\u001F\\u007F-\\u009F]+$" },
+    "token": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$" },
+    "todoLineageRef": {
+      "type": "object",
+      "required": ["schemaVersion", "artifactKind", "boardRef", "todoId", "intakeRowDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "artifactKind": { "const": "wakeflow-todo-lineage-ref" },
+        "boardRef": { "const": ".wakeflow-active/current/global-todo-board.md" },
+        "todoId": { "$ref": "#/$defs/token" },
+        "intakeRowDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "mount": {
+      "type": "object",
+      "required": ["demandId", "identityDigest", "stateRootRef"],
+      "additionalProperties": false,
+      "properties": {
+        "demandId": { "$ref": "#/$defs/demandId" },
+        "identityDigest": { "$ref": "#/$defs/digest" },
+        "stateRootRef": { "$ref": "#/$defs/ref" }
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "required": ["schemaVersion", "artifactKind", "todoId", "row", "rowDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "artifactKind": { "const": "wakeflow-todo-row-snapshot" },
+        "todoId": { "$ref": "#/$defs/token" },
+        "row": { "type": "string", "minLength": 1 },
+        "rowDigest": { "$ref": "#/$defs/digest" }
+      }
+    }
+  }
+}

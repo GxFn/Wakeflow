@@ -1,70 +1,70 @@
+import { inspectClaudeActivityForLayout } from "./wakeflow-claude-activity.mjs";
+import { inspectClaudeWindowLocatorInventoryForLayout } from "./wakeflow-claude-locator.mjs";
+
 /**
- * Wakeflow host profile: the single host-coupling surface for this plugin artifact.
+ * Claude Code 插件的宿主画像。
  *
- * This is the Claude Code edition (terminal-only). Core runtime files are
- * host-neutral: they keep Wakeflow's internal machine vocabulary ("thread" = a
- * registered window conversation handle; for Claude Code a thread id is a
- * Claude Code session id) identical across hosts, and read everything
- * host-visible from this profile instead.
- *
- * Window model: every Wakeflow window (controller included) is a tmux-resident
- * interactive `claude` session, created and driven by the host transport
- * helper scripts/lib/wakeflow-claude-host.mjs (launch-window / deliver / send /
- * readback / wait-results). Dead baseline windows resume the SAME registered
- * session with their recorded cwd. Pod creation and recovery are separate:
- * recovery consumes the read-only pod resume plan and verifies or resumes only
- * the exact registered session at the immutable bound cwd, without repeating
- * the creation HEAD gate or creating/discovering another session/worktree.
- * Claude Code desktop windows are not part of the automation surface.
- *
- * Contract rule: core files may interpolate these values but must not branch on
- * hostId. Anything that needs structurally different behavior per host belongs
- * in this module (or in wakeflow-host-send-adapter.mjs for delivery transport).
+ * 职责导航：
+ * 1. 向共享核心声明 Claude Code 的协议身份、运行目录与能力现状。
+ * 2. 只暴露布局观察器和启动偏好这两类有真实消费者的 Claude 扩展。
+ * 3. 登记 facade、lifecycle、settings/assets 等宿主 owner 的产物路径。
+ * 4. 不在画像中重建 tmux argv、语义文件名或窗口生命周期状态。
  */
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { stableArtifactPart } from "./wakeflow-artifact-identity.mjs";
 
-const pluginRoot = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
-const hostHelperPath = path.join(pluginRoot, "scripts/lib/wakeflow-claude-host.mjs");
-
-function podHostWorktreeName(operation) {
-  return stableArtifactPart(
-    `wakeflow-${operation.podId || operation.demandKey}-${operation.repositoryWindow || operation.windowName}`,
-    { fallback: "wakeflow-pod" },
-  );
+// 观察器函数本身保持可调用；其所在对象和所有数据子树都不可被调用者替换。
+function deepFreeze(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
 }
 
-export const hostProfile = {
+export const hostProfile = deepFreeze({
+  // 协议身份和磁盘运行目录分别声明，不能互相推导。
   hostId: "claude-code",
   hostName: "Claude Code",
-  decisionOwner: "claude-agent",
   runtime: {
     hostDirName: "claude-code",
-    legacyRegistryFallback: false,
   },
   fleet: {
-    // Wakeflow emits host-neutral intent. This helper launches/resumes Claude
-    // sessions; Claude's own --worktree capability owns product worktrees.
-    // Shared core never creates or removes those Git resources.
     transport: "host-helper",
   },
-  memoryFile: "CLAUDE.md",
-  memoryFileLabel: "CLAUDE",
-  pluginManifestDir: ".claude-plugin",
-  pluginManifestPath: ".claude-plugin/plugin.json",
-  closedLoopContractName: "ClaudeAutomationClosedLoop",
-  kinds: {
-    windowRegistration: "ClaudeWindowSessionRegistration",
-    windowDispatchConfig: "ClaudeSubwindowDispatchConfig",
-    automationLoopStop: "ClaudeAutomationLoopStop",
+
+  // capability 只说明共享核心可期待什么，不接管 Claude 的物理实现。
+  capabilities: {
+    identity: { applicable: true, realization: "current" },
+    pod: { applicable: true, realization: "current" },
+    keepLive: { applicable: true, realization: "runtime-probed" },
+    locator: { applicable: true, realization: "current" },
+    settings: {
+      applicable: true,
+      realization: "current",
+      paths: {
+        portable: ".claude/settings.json",
+        local: ".claude/settings.local.json",
+      },
+    },
+    assets: {
+      applicable: true,
+      realization: "current",
+      statuslineFileName: "statusline.mjs",
+    },
+    activity: { applicable: true, realization: "current" },
+    temp: { applicable: true, realization: "current" },
+    close: { applicable: true, realization: "current" },
+    revoke: { applicable: true, realization: "current" },
+    activation: { applicable: true, realization: "runtime-probed" },
   },
+
+  // 共享初始化只需要统一的建窗意图；retitle 与 delivery 仍由 Claude facade 路由。
+  memoryFile: "CLAUDE.md",
+  pluginManifestPath: ".claude-plugin/plugin.json",
   hostTools: {
     createWindow: "wakeflow-claude-host launch-window",
-    retitleWindow: "wakeflow-claude-host retitle",
-    sendToWindow: "wakeflow-claude-host deliver",
   },
+
+  // handleId 只约束登记到窗口绑定服务的真实 session ID。
   handleId: {
+    kind: "claude-session",
     placeholders: [
       "current-claude-session",
       "current session",
@@ -75,53 +75,17 @@ export const hostProfile = {
       "unknown",
       "",
     ],
-    realIdRequirement: "a real Claude Code session id",
-    launchResultField: "hostLaunch.sessionId",
-    launchResultPlaceholder: "<hostLaunch.sessionId>",
-    // P1-0 redaction guard: real Claude Code session ids are UUID-shaped. Declared per
-    // edition because host-profile is host-local and not byte-synced (check:core cannot
-    // cross-check it).
     idShape: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
   },
-  keepLiveEnv: {
-    command: "CLAUDE_AUTOMATION_KEEP_LIVE_COMMAND",
-    argsJson: "CLAUDE_AUTOMATION_KEEP_LIVE_ARGS_JSON",
-    disable: "CLAUDE_AUTOMATION_KEEP_LIVE",
+
+  // 共享布局检查只调用这两个只读观察器，不把它们升级为通用宿主管理器。
+  localEventInspectors: {
+    activityTemp: inspectClaudeActivityForLayout,
+    locator: inspectClaudeWindowLocatorInventoryForLayout,
   },
-  workspaceResidueChecks: [
-    {
-      relPath: ".claude/skills",
-      kind: "claude-project-skill-projection",
-      message: "Claude Code project skill projections require explicit current-plan authorization.",
-    },
-  ],
-  texts: {
-    registeredHandle: (windowName) => `Registered Claude Code session for ${windowName}.`,
-    subagentAssist: {
-      zh: "可把代码搜索、日志归因、测试定位、输入汇总等窄任务交给 Claude Code 子 agent（Task 工具）并行辅助；子 agent 只提供审查输入和建议，不改变窗口职责、验收、派发或状态机写入边界。",
-      en: "Use Claude Code subagents (the Task/Agent tool) for narrow parallel assistance such as code search, log triage, test localization, or input summarization when useful. Subagents only provide review inputs and recommendations; they do not change window responsibility, acceptance, dispatch, or state-machine write boundaries.",
-    },
-    skillAssistanceLine:
-      "- Claude Code subagents (the Task/Agent tool) are recommended for bounded parallel assistance such as code search, log triage, test localization, and input summarization. Treat subagent output as review input or advice only; it must not accept work, dispatch another window, write controller state, or expand repository boundaries.",
-    rootGeneratedFromBanner: (wakeflowRel) =>
-      `> This file is generated from \`${wakeflowRel}/CLAUDE.md\` and is the parent workspace Claude Code entrypoint. Do not maintain it by hand long term. After changing the source file, run \`cd ${wakeflowRel} && node scripts/wakeflow-setup.mjs sync-root-agents --write\` to refresh it. Script commands default to \`${wakeflowRel}/\` before execution.`,
-    rootPluginGeneratedBanner:
-      "> This file is generated by the installed Wakeflow plugin and is the parent workspace Claude Code entrypoint. Do not maintain it by hand long term. Refresh it with the Wakeflow MCP sync/initialize tools after changing plugin source rules.",
-    rootPluginUsageBanner:
-      "> Wakeflow is installed as a Claude Code plugin for this workspace. Use Wakeflow MCP tools for setup, status, state roots, delivery, review, archive, next-work scans, and verification. Do not call installed runtime scripts directly or infer their Node parameters; if a required Wakeflow MCP tool is unavailable, stop and report that the Wakeflow plugin surface must be reloaded or reinstalled.\n\n",
-    initializeApplyNextAction:
-      "Create the tmux-resident sessions in windowLaunchPlan, register each final session id, then perform the final retitle before dispatching work.",
-  },
+
+  // 启动偏好由 Claude lifecycle 消费；角色选择仍由调用方显式传入。
   launch: {
-    tabNames: {
-      controller: "Controller",
-      design: "Design",
-      test: "Test",
-    },
-    // Default reasoning effort per window role. The controller does the deep
-    // judgment (planning, independent validation, acceptance) and gets max; worker
-    // windows execute scoped tasks and run high. Overridable per workspace via
-    // hosts.claude-code.effortByRole, or per window with --claude-arg --effort.
     effortByRole: {
       controller: "max",
       design: "xhigh",
@@ -129,145 +93,48 @@ export const hostProfile = {
       product: "xhigh",
       default: "xhigh",
     },
-    planFlags: {
-      requiresHostCreateThread: true,
-      requiresHostTitleReset: true,
-    },
-    workflowSteps: (language) =>
-      language === "zh"
-        ? [
-            "先运行 host helper 预检：`node <plugin>/scripts/lib/wakeflow-claude-host.mjs preflight --root <workspace>`。缺 tmux 时征求用户同意一次后执行 `brew install tmux`（遇瞬时 bottle 错误重试一次），再继续。",
-            "为每个 launch entry 创建 tmux 常驻窗口：把 createThreadPrompt 写入临时文件，执行该 entry hostLaunch.launchArgv 给出的 helper launch-window 命令（--window、--title displayTitle、--cwd、--prompt-file）。helper 会创建运行 `claude --session-id` 的 tmux 窗口、注入入口同步 prompt、写入 window-host 绑定并返回生成的 session id。这些 prompt 只做初始化入口同步，不是任务投递。",
-            "对每个返回的最终 hostLaunch.sessionId 调用一次 wakeflow_register_window；不要登记临时句柄，也不要手写 runtime 文件。",
-            "登记完成后，用 helper retitle 将窗口最终复位为 displayTitle，修复初始化回合造成的自动标题漂移。",
-            "总控和子窗口可使用 Claude Code 子 agent（Task 工具）并行做代码搜索、日志归因、测试定位和输入汇总；子 agent 不拥有验收、派发、状态机写入或跨仓库边界。",
-          ]
-        : [
-            "Run the host helper preflight first: `node <plugin>/scripts/lib/wakeflow-claude-host.mjs preflight --root <workspace>`. When tmux is missing, ask the user once, run `brew install tmux` (retry once on a transient bottle error), then continue.",
-            "Create one tmux-resident window per launch entry: write createThreadPrompt to a temp file and run the helper launch-window command from the entry's hostLaunch.launchArgv (--window, --title displayTitle, --cwd, --prompt-file). The helper creates the tmux window running `claude --session-id`, pastes the entry-sync prompt, stores the window-host binding, and returns the generated session id. These prompts perform initialization entry sync only; they are not task deliveries.",
-            "Call wakeflow_register_window once for each final hostLaunch.sessionId; do not register temporary handles or hand-write runtime files.",
-            "After registration, use the helper retitle command to reset the window to displayTitle and repair initialization-turn auto-title drift.",
-            "Controller and child windows may use Claude Code subagents (the Task/Agent tool) for parallel code search, log triage, test localization, and input summarization. Subagents do not own acceptance, dispatch, state-machine writes, or cross-repository boundaries.",
-          ],
-    titleReset: (title) => ({
-      required: true,
-      hostTool: "wakeflow-claude-host retitle",
-      title,
-      phase: "after-registration",
-    }),
-    entryExtras: (entry) => ({
-      windowMode: "tmux-resident",
-      hostLaunch: {
-        helper: hostHelperPath,
-        preflightArgv: ["node", hostHelperPath, "preflight", "--root", "<workspace-root>"],
-        launchArgv: [
-          "node", hostHelperPath, "launch-window",
-          "--root", "<workspace-root>",
-          "--window", entry.windowName,
-          "--title", entry.displayTitle,
-          "--cwd", entry.cwd,
-          "--prompt-file", "<temp file containing createThreadPrompt>",
-        ],
-        sendArgv: [
-          "node", hostHelperPath, "send",
-          "--root", "<workspace-root>",
-          "--window", entry.windowName,
-          "--prompt-file", "<temp file containing the delivery envelope prompt>",
-          "--delivery-id", "<delivery envelope id>",
-        ],
-        attachCommands: {
-          defaultSocketArgv: ["tmux", "attach", "-t", "<configured tmux server>"],
-          configuredSocketArgv: ["tmux", "-L", "<configured tmux socket>", "attach", "-t", "<configured tmux server>"],
-        },
-        recovery: "For a dead baseline window, relaunch the SAME registered session with launch-window --root <workspace-root> --window <window> --cwd <recorded actual cwd> --resume --session-id <registered id> --replace [--server <configured server>]. A Pod uses the read-only wakeflow_pod_open mode=resume plan; verify or resume only the exact registered session at its immutable bound cwd, never repeat the creation HEAD gate, add --worktree, rebind, rediscover, or fall back to mainline.",
-      },
-    }),
   },
-  pod: {
-    entryExtras: (operation, { workspaceRoot = "<workspace-root>", stateRoot = null } = {}) => {
-      const hostWorktree = operation.environmentIntent === "host-worktree" || operation.role === "product";
-      const hostWorktreeName = hostWorktree ? podHostWorktreeName(operation) : null;
-      const cwd = hostWorktree
-        ? operation.repositoryRoot
-        : (operation.hostCwd || workspaceRoot);
-      const explicitStateAccess = stateRoot ? ["--add-dir", stateRoot] : [];
-      const stateRootRelative = operation.stateRootRelative
-        || (stateRoot ? path.relative(workspaceRoot, stateRoot).split(path.sep).join("/") : null);
-      const nativeArgvIntent = hostWorktree
-        ? [
-            "claude",
-            "--worktree", hostWorktreeName,
-            "--settings", JSON.stringify({ worktree: { baseRef: "head" } }),
-          ]
-        : ["claude", "--session-id", "<host-generated-session-id>"];
-      const launchArgv = [
-        "node", hostHelperPath, "launch-window",
-        "--root", workspaceRoot,
-        "--window", operation.windowName,
-        "--title", operation.displayTitle || operation.windowName,
-        "--cwd", cwd,
-        "--environment-intent", hostWorktree ? "host-worktree" : "host-local",
-        "--launch-correlation-id", operation.launchCorrelationId,
-        "--binding-id", operation.registrationBindingId,
-        "--pod-id", operation.podId,
-        ...(stateRootRelative ? ["--state-root-relative", stateRootRelative] : []),
-        "--prompt-file", "<temp file containing createPrompt>",
-        ...(hostWorktree
-          ? [
-              "--repository-root", operation.repositoryRoot,
-              "--host-worktree", hostWorktreeName,
-              "--expected-base-head", operation.expectedBaseHead,
-              ...explicitStateAccess,
-            ]
-          : []),
-      ];
-      return {
-        windowMode: "tmux-resident",
-        nativeEnvironmentIntent: hostWorktree ? "host-worktree" : "host-local",
-        hostCwd: cwd,
-        nativeBasePolicy: hostWorktree ? "head" : "local",
-        hostWorktreeName,
-        nativeArgvIntent,
-        addDirectories: hostWorktree && stateRoot ? [stateRoot] : [],
-        hostLaunch: {
-          helper: hostHelperPath,
-          launchArgv,
-          resumeArgv: [
-            "node", hostHelperPath, "launch-window",
-            "--root", workspaceRoot,
-            "--window", operation.windowName,
-            "--title", operation.displayTitle || operation.windowName,
-            "--cwd", "<actualCwd from verified host receipt>",
-            "--environment-intent", hostWorktree ? "host-worktree" : "host-local",
-            "--launch-correlation-id", operation.launchCorrelationId,
-            "--binding-id", operation.registrationBindingId,
-            "--pod-id", operation.podId,
-            ...(stateRootRelative ? ["--state-root-relative", stateRootRelative] : []),
-            "--resume",
-            "--session-id", "<registered final session id>",
-            ...(hostWorktree
-              ? [
-                  "--repository-root", operation.repositoryRoot,
-                  "--expected-base-head", operation.expectedBaseHead,
-                  ...explicitStateAccess,
-                ]
-              : []),
-          ],
-          receiptField: "hostReceipt",
-          receiptContract: {
-            handleRedacted: true,
-            bindingId: "hostReceipt.bindingId",
-            handleKind: "final",
-            stateRootRelative,
-          },
-          retryPolicy: "retry the same launchCorrelationId; never create a second session or worktree",
-        },
-      };
-    },
-  },
+
+  // artifact 只登记当前包装验证和宿主 adapter 装载所需的静态路径。
   artifact: {
     packageName: "claude-code-wakeflow",
-    marketplacePath: "../../.claude-plugin/marketplace.json",
-    packagedEntries: [".claude-plugin/", ".mcp.json", "README.zh-CN.md", "commands/", "mcp/", "skills/", "scripts/", "templates/"],
+    facadeHostFile: "scripts/lib/wakeflow-claude-host.mjs",
+    lifecycleHostFile: "scripts/lib/wakeflow-claude-lifecycle.mjs",
+    podMaterializationHostFile: "scripts/lib/wakeflow-claude-pod-host.mjs",
+    decommissionHostFile: "scripts/lib/wakeflow-claude-decommission.mjs",
+    migrationDecommissionHostFile: "scripts/lib/wakeflow-claude-migration-decommission.mjs",
+    migrationEffectHostFile: "scripts/lib/wakeflow-claude-migration-effect.mjs",
+    activationScopeHostFile: "scripts/lib/wakeflow-claude-activation-scope.mjs",
+    locatorHostFile: "scripts/lib/wakeflow-claude-locator.mjs",
+    locatorSchemaFile: "schemas/wakeflow-claude-host/window-locator.schema.json",
+    transportHostFile: "scripts/lib/wakeflow-claude-transport.mjs",
+    settingsAssetsHostFile: "scripts/lib/wakeflow-claude-settings.mjs",
+    activityHostFile: "scripts/lib/wakeflow-claude-activity.mjs",
+    activityProcessSchemaFile: "schemas/wakeflow-claude-host/activity-monitor-process.schema.json",
+    activityManagerLockSchemaFile: "schemas/wakeflow-claude-host/activity-monitor-manager-lock.schema.json",
+    locatorFrozenPublicFiles: [
+      "lib/wakeflow-mcp-tools.mjs",
+      "scripts/wakeflow-cli.mjs",
+      "scripts/wakeflow-setup.mjs",
+    ],
+    settingsAssetsFrozenPublicFiles: [
+      "lib/wakeflow-mcp-tools.mjs",
+      "scripts/wakeflow-cli.mjs",
+    ],
+    activityFrozenPublicFiles: [
+      "lib/wakeflow-mcp-tools.mjs",
+      "scripts/wakeflow-cli.mjs",
+    ],
+    packagedEntries: [
+      ".claude-plugin/",
+      ".mcp.json",
+      "README.zh-CN.md",
+      "commands/",
+      "mcp/",
+      "schemas/",
+      "skills/",
+      "scripts/",
+      "templates/",
+    ],
   },
-};
+});

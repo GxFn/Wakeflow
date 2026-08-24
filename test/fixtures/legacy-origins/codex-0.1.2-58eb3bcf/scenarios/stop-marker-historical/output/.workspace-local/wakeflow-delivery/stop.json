@@ -1,0 +1,11 @@
+{
+  "kind": "CodexAutomationLoopStop",
+  "version": 1,
+  "stoppedAt": "2026-08-10T02:47:43.360Z",
+  "reason": "fixture-terminal-stop",
+  "keepLive": {
+    "active": false,
+    "status": "stopped",
+    "stateFile": "keep-live/state.json"
+  }
+}

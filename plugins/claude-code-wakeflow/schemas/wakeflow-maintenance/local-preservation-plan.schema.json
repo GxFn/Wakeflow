@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:maintenance:local-preservation-plan:v1",
+  "title": "Wakeflow Local Preservation Maintenance Plan",
+  "$comment": "Owner codec for one explicit local audit preserve, migration retained-hold, or release operation. Runtime validation is mandatory for operation/producer admission, source and release gates, derived refs/digests, cleanup cardinality, and blocked/source-absent skeletons. T02 separately closes the generic physical step journal and recovery protocol.",
+  "type": "object",
+  "required": ["schemaId", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaId": { "const": "urn:wakeflow:internal:maintenance:local-preservation-plan:v1" },
+    "payload": { "$ref": "#/$defs/payload" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+    },
+    "ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)(?!.*[\\u0000-\\u001F\\u007F-\\u009F])[^/].*[^/]$|^[^/]$"
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "preservationId": {
+      "type": "string",
+      "pattern": "^preservation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "presentResource": {
+      "type": "object",
+      "required": ["ref", "type", "mode", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "$ref": "#/$defs/ref" },
+        "type": { "enum": ["file", "directory"] },
+        "mode": { "type": "string", "pattern": "^0[0-7]{3}$" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "absentResource": {
+      "type": "object",
+      "required": ["ref", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "$ref": "#/$defs/ref" },
+        "type": { "const": "absent" }
+      }
+    },
+    "resource": {
+      "oneOf": [
+        { "$ref": "#/$defs/presentResource" },
+        { "$ref": "#/$defs/absentResource" }
+      ]
+    },
+    "step": {
+      "type": "object",
+      "required": ["stepId", "ordinal", "stepKind", "source", "staging", "final"],
+      "additionalProperties": false,
+      "properties": {
+        "stepId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,127}$" },
+        "ordinal": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "stepKind": { "enum": ["audit-publish", "remove"] },
+        "source": { "$ref": "#/$defs/resource" },
+        "staging": { "$ref": "#/$defs/presentResource" },
+        "final": { "$ref": "#/$defs/resource" }
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "required": ["code", "scope"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,127}$" },
+        "scope": {
+          "enum": ["entry", "link", "manifest", "payload", "producer", "review", "source"]
+        }
+      }
+    },
+    "cleanupEntry": {
+      "type": "object",
+      "required": ["pathDigest", "type", "mode", "contentDigest", "bytes"],
+      "additionalProperties": false,
+      "properties": {
+        "pathDigest": { "$ref": "#/$defs/digest" },
+        "type": { "enum": ["directory", "file", "symlink"] },
+        "mode": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^0[0-7]{3}$" }
+          ]
+        },
+        "contentDigest": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/digest" }
+          ]
+        },
+        "bytes": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "artifactKind",
+        "operation",
+        "programId",
+        "preservationId",
+        "entryRef",
+        "manifest",
+        "manifestDigest",
+        "entryDigest",
+        "reviewedAt",
+        "decision",
+        "expectedTreeDigest",
+        "cleanupInventory",
+        "disposition",
+        "blockers",
+        "steps"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "artifactKind": { "const": "wakeflow-local-preservation-plan" },
+        "operation": { "enum": ["migration-hold", "preserve", "release"] },
+        "programId": { "$ref": "#/$defs/programId" },
+        "preservationId": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/preservationId" }
+          ]
+        },
+        "entryRef": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/ref" }
+          ]
+        },
+        "manifest": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "urn:wakeflow:internal:audit:local-preservation:v1" }
+          ]
+        },
+        "manifestDigest": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/digest" }
+          ]
+        },
+        "entryDigest": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/digest" }
+          ]
+        },
+        "reviewedAt": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/timestamp" }
+          ]
+        },
+        "decision": {
+          "oneOf": [
+            { "type": "null" },
+            { "const": "explicit-release" }
+          ]
+        },
+        "expectedTreeDigest": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/digest" }
+          ]
+        },
+        "cleanupInventory": {
+          "type": "array",
+          "maxItems": 20001,
+          "items": { "$ref": "#/$defs/cleanupEntry" }
+        },
+        "disposition": { "enum": ["blocked", "eligible", "source-absent"] },
+        "blockers": { "type": "array", "items": { "$ref": "#/$defs/blocker" } },
+        "steps": { "type": "array", "maxItems": 2, "items": { "$ref": "#/$defs/step" } },
+        "retainedSource": { "$ref": "#/$defs/presentResource" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "operation": { "const": "migration-hold" },
+              "disposition": { "const": "eligible" }
+            },
+            "required": ["operation", "disposition"]
+          },
+          "then": {
+            "required": ["retainedSource"],
+            "properties": {
+              "reviewedAt": { "type": "null" },
+              "decision": { "type": "null" },
+              "steps": { "minItems": 1, "maxItems": 1 }
+            }
+          },
+          "else": { "not": { "required": ["retainedSource"] } }
+        },
+        {
+          "if": { "properties": { "disposition": { "const": "eligible" } }, "required": ["disposition"] },
+          "then": {
+            "properties": {
+              "preservationId": { "$ref": "#/$defs/preservationId" },
+              "entryRef": { "$ref": "#/$defs/ref" },
+              "manifest": { "$ref": "urn:wakeflow:internal:audit:local-preservation:v1" },
+              "manifestDigest": { "$ref": "#/$defs/digest" },
+              "entryDigest": { "$ref": "#/$defs/digest" },
+              "cleanupInventory": { "minItems": 1 },
+              "blockers": { "maxItems": 0 },
+              "steps": { "minItems": 1 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "disposition": { "const": "blocked" } }, "required": ["disposition"] },
+          "then": {
+            "properties": {
+              "blockers": { "minItems": 1 },
+              "cleanupInventory": { "maxItems": 0 },
+              "steps": { "maxItems": 0 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "disposition": { "const": "source-absent" } }, "required": ["disposition"] },
+          "then": {
+            "properties": {
+              "blockers": { "maxItems": 0 },
+              "cleanupInventory": { "maxItems": 0 },
+              "steps": { "maxItems": 0 }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

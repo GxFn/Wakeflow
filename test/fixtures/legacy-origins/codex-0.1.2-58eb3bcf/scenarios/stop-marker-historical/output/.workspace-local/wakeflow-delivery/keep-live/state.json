@@ -1,0 +1,28 @@
+{
+  "kind": "AutomationKeepLiveState",
+  "version": 1,
+  "enabled": true,
+  "automationRunId": "",
+  "leases": {},
+  "activeAutomationRunIds": [],
+  "activeRunCount": 0,
+  "mechanism": "macos-caffeinate",
+  "strategy": "watcher",
+  "platform": "darwin",
+  "command": "caffeinate",
+  "args": [
+    "-dims"
+  ],
+  "token": "",
+  "pid": 0,
+  "workerPid": 0,
+  "childPid": 0,
+  "status": "stopped",
+  "stoppedAt": "2026-08-10T02:47:43.357Z",
+  "stopReason": "fixture-terminal-stop",
+  "lastCheckedAt": "2026-08-10T02:47:43.357Z",
+  "error": null,
+  "active": false,
+  "workerActive": false,
+  "childActive": false
+}

@@ -1,0 +1,27 @@
+{
+  "kind": "WakeflowHostPodBinding",
+  "version": 1,
+  "demandKey": "SCENARIO-POD",
+  "podId": "SCENARIO-POD",
+  "host": "codex",
+  "windowName": "Test__SCENARIO-POD",
+  "role": "test",
+  "launchCorrelationId": "pod-launch-fc427e2510da4fe1a5449002c19dc719",
+  "bindingId": "@wakeflow-scenario-binding-id-7321fe0b42",
+  "handleDigest": "@wakeflow-scenario-derived-digest-a897614806",
+  "receiptDigest": "@wakeflow-scenario-derived-digest-4a7495690f",
+  "receipt": {
+    "launchCorrelationId": "pod-launch-fc427e2510da4fe1a5449002c19dc719",
+    "windowName": "Test__SCENARIO-POD",
+    "host": "codex",
+    "bindingId": "@wakeflow-scenario-binding-id-7321fe0b42",
+    "handleRegistered": true,
+    "handleKind": "final",
+    "stateRootRelative": ".wakeflow-active/current/SCENARIO-POD",
+    "actualCwd": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+    "createdAt": "@wakeflow-scenario-time-a31af0d5f6"
+  },
+  "status": "active",
+  "createdAt": "@wakeflow-scenario-time-fb415c1b07",
+  "updatedAt": "@wakeflow-scenario-time-7748d4b3a2"
+}

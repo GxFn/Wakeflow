@@ -1,0 +1,29 @@
+{
+  "kind": "CodexSubwindowDispatchConfig",
+  "version": 1,
+  "windowName": "Test",
+  "repositoryPath": "Test",
+  "responsibility": "Internal test coordination workspace",
+  "dispatchable": false,
+  "threadRegistered": false,
+  "threadRegistryFile": "hosts/codex/thread-registry/Test.json",
+  "cwd": "@wakeflow-fixture-root/WakeflowFixture/Test",
+  "responsibilityRoot": "@wakeflow-fixture-root/WakeflowFixture/Test",
+  "deliveryRole": "test-target",
+  "delivery": {
+    "transport": "direct-thread",
+    "requireThread": true,
+    "missingThread": "fail-closed",
+    "readbackRequired": true
+  },
+  "automation": {
+    "mode": "manual-or-unattended",
+    "continuousWhenEnabled": true,
+    "keepLive": "required-when-automation-enabled"
+  },
+  "result": {
+    "returnRoute": "controller",
+    "resultEnvelopeRequired": true
+  },
+  "generatedAt": "@wakeflow-fixture-iso-time"
+}

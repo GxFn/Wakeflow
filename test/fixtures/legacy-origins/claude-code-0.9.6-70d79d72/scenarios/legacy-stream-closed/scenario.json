@@ -1,0 +1,109 @@
+{
+  "artifactKind": "wakeflow-legacy-lifecycle-scenario",
+  "beforeManifest": null,
+  "category": "stream-worktree",
+  "commandSequence": [
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/lib/wakeflow-claude-host.mjs",
+        "stream-open",
+        "--root",
+        "<workspace-root>",
+        "--repo",
+        "ProductWindow",
+        "--stream",
+        "scenario",
+        "--demand-key",
+        "SCENARIO-STREAM",
+        "--no-launch"
+      ],
+      "stepId": "stream-open-no-launch"
+    },
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/lib/wakeflow-claude-host.mjs",
+        "stream-close",
+        "--root",
+        "<workspace-root>",
+        "--window",
+        "ProductWindow__scenario"
+      ],
+      "stepId": "stream-close"
+    }
+  ],
+  "deltaEntries": [
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/worktrees"
+    },
+    {
+      "afterBytes": 381,
+      "afterDigest": "sha256:195d965b5c6bc22a4182b59ceddd7bea21e6338de6ea33654a6c4e043b858383",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/wakeflow-ledger/workspace/pending-merges.md"
+    }
+  ],
+  "host": "claude-code",
+  "materializationMode": "real-writer",
+  "normalizations": [
+    {
+      "kind": "text-token",
+      "ref": "WakeflowFixture/wakeflow-ledger/workspace/pending-merges.md",
+      "selector": "iso-8601-occurrences",
+      "token": "@wakeflow-scenario-time"
+    }
+  ],
+  "outputManifest": {
+    "artifactKind": "wakeflow-loaded-artifact-tree",
+    "fileCount": 1,
+    "files": [
+      {
+        "bytes": 381,
+        "digest": "sha256:195d965b5c6bc22a4182b59ceddd7bea21e6338de6ea33654a6c4e043b858383",
+        "executable": false,
+        "ref": "WakeflowFixture/wakeflow-ledger/workspace/pending-merges.md"
+      }
+    ],
+    "schemaVersion": 1,
+    "totalBytes": 381
+  },
+  "producer": {
+    "artifactDigest": "sha256:27bc8cc23a863c1e96ccc1631b5f78236471e13d5605ab69796d0089fc192e6f",
+    "sourceCommit": "70d79d720d65837a068993006f356e8de91215d4",
+    "sourceFiles": [
+      {
+        "bytes": 158298,
+        "digest": "sha256:f2c2d01310b4716d3d0252e03dd4f7f8b29c8fa8f07489ce654496c02c2d7e86",
+        "executable": false,
+        "ref": "scripts/lib/wakeflow-claude-host.mjs",
+        "role": "host-operation-writer"
+      },
+      {
+        "bytes": 18889,
+        "digest": "sha256:e1e8c16ed64817ef842529824a692a01085897ae3cb9a23e8cf3e6b648ee27db",
+        "executable": false,
+        "ref": "scripts/lib/wakeflow-stream-overlay.mjs",
+        "role": "stream-worktree-writer"
+      }
+    ]
+  },
+  "scenarioId": "legacy-stream-closed",
+  "schemaVersion": 1,
+  "scenarioDigest": "sha256:7c30e88e27ff5cef65218097fa88b03f01bf548d2d921f1bf8be86e56638c1c2"
+}

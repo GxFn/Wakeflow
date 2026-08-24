@@ -1,0 +1,69 @@
+{
+  "demandKey": "SCENARIO-POD",
+  "podId": "SCENARIO-POD",
+  "demandType": "requirement",
+  "designRequestId": "pod-design-request-e0d5b3d70f7b4838738b59b7f1f35921",
+  "designRequestRef": "pod-design-requests/e0d5b3d70f7b4838738b59b7f1f3592136653235049f9472517566ba0186748e.json",
+  "designRequestDigest": "@wakeflow-scenario-derived-digest-348936fd1e",
+  "requestType": "initial-design",
+  "preservesOriginalGoal": true,
+  "requirementAnchors": [
+    "goal-stage-confirmation.md#goal",
+    "goal-stage-confirmation.md#completion"
+  ],
+  "evidenceRefs": [
+    "evidence/repository-facts.json"
+  ],
+  "userConfirmationRefs": [
+    "controller-events.jsonl#evt-user-pod"
+  ],
+  "landingPlan": [
+    {
+      "repositoryWindow": "ProductWindow",
+      "responsibility": "Implement ProductWindow portion"
+    }
+  ],
+  "designIntent": "Preserve the confirmed goal and isolate the repository in its host worktree.",
+  "testDecision": "Run confirmed environment tests only after controller acceptance.",
+  "environmentSpec": {
+    "authority": "requirement-design",
+    "scope": "pod-bound-worktrees"
+  },
+  "demandAuthority": {
+    "schemaVersion": 1,
+    "artifactKind": "wakeflow-demand-authority",
+    "demandKey": "SCENARIO-POD",
+    "demandType": "requirement",
+    "entryMode": "pod-design",
+    "authorityRefs": [
+      {
+        "role": "original-plan",
+        "ref": "goal-stage-confirmation.md#goal"
+      },
+      {
+        "role": "requirement-design",
+        "ref": "goal-stage-confirmation.md#requirement-design"
+      },
+      {
+        "role": "code-facts",
+        "ref": "goal-stage-confirmation.md#code-facts"
+      },
+      {
+        "role": "landing-plan",
+        "ref": "goal-stage-confirmation.md#landing-plan"
+      },
+      {
+        "role": "non-goals",
+        "ref": "goal-stage-confirmation.md#non-goals"
+      },
+      {
+        "role": "user-confirmation",
+        "ref": "goal-stage-confirmation.md#user-confirmation"
+      }
+    ],
+    "testDecision": {
+      "mode": "controller-only",
+      "summary": "Controller verifies the accepted implementation before completion."
+    }
+  }
+}

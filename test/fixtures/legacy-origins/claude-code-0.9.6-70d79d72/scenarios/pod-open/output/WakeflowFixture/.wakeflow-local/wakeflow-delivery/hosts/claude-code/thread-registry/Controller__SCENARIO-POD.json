@@ -1,0 +1,9 @@
+{
+  "kind": "ClaudeWindowSessionRegistration",
+  "version": 3,
+  "windowName": "Controller__SCENARIO-POD",
+  "bindingId": "@wakeflow-scenario-binding-id-1d273b703b",
+  "threadId": "@wakeflow-scenario-thread-id-3b0924d83c",
+  "registeredAt": "@wakeflow-scenario-time-73dd47c91d",
+  "lastVerifiedAt": "@wakeflow-scenario-time-e31884d8d1"
+}

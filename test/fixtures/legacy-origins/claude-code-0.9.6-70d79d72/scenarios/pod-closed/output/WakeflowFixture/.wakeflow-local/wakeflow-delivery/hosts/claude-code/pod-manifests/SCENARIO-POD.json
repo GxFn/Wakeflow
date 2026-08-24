@@ -1,0 +1,27 @@
+{
+  "kind": "WakeflowHostManagedPodManifest",
+  "version": 1,
+  "demandKey": "SCENARIO-POD",
+  "podId": "SCENARIO-POD",
+  "host": "claude-code",
+  "stateRootRelative": ".wakeflow-active/current/SCENARIO-POD",
+  "requestDigest": "@wakeflow-scenario-derived-digest-7b941d8ad8",
+  "repositoryWindows": [
+    "ProductWindow"
+  ],
+  "operationIds": [
+    "pod-launch-d98cf465f58261c9e77c3225694f56bf",
+    "pod-launch-adc590324c503c5fc8f63dedd92d4859",
+    "pod-launch-f7a7afb72656ee9429750b2f3df67109",
+    "pod-launch-cd0713fa9ea616c0f2a7d607f68938fa"
+  ],
+  "lastKnownPhase": "closed",
+  "createdAt": "@wakeflow-scenario-time-830d83e236",
+  "updatedAt": "@wakeflow-scenario-time-7db7de7d03",
+  "closeOperationIds": [
+    "pod-close-8f06fc0cafe1e38074bc4e75317b98a2",
+    "pod-close-aafa017270a0b968384b5be8e502359e",
+    "pod-close-4b91a3b1c8c84b4fad763d0a48566425",
+    "pod-close-73a2ab32d33c64ed371f5a1acc528d03"
+  ]
+}

@@ -1,0 +1,682 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:maintenance:transaction:v1",
+  "title": "Wakeflow Internal Maintenance Transaction",
+  "$comment": "Operation-scoped forward-recovery journal for every maintenance apply with a physical step, or durable evidence for lock-only recovery. Runtime validation additionally enforces canonical bytes, 0600 mode, lock tuple equality, recovery-claim reference equality, declared plan-schema validation, planDigest equality, monotonic checkpoints, contiguous step order, exact filesystem observations, the three filesystem recovery matrices, migration-only owner-effect intent/result/outcome checkpoints, the closed null-staging directory-create/mode-repair variants, and terminal closure equality.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "operationId",
+    "purpose",
+    "action",
+    "operationKind",
+    "domainOwner",
+    "ownerToken",
+    "recoveryGeneration",
+    "processIdentity",
+    "ownerDisposition",
+    "recoveryClaim",
+    "phase",
+    "plan",
+    "planDigest",
+    "checkpoint",
+    "steps",
+    "terminalClosure"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "artifactKind": { "type": "string", "const": "wakeflow-maintenance-transaction" },
+    "operationId": { "$ref": "#/$defs/operationId" },
+    "purpose": {
+      "type": "string",
+      "enum": ["maintenance-apply", "lock-only-recovery"]
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "fresh-initialize",
+        "reconfigure",
+        "reconcile",
+        "explicit-migration",
+        "runtime-mutation-recovery"
+      ]
+    },
+    "operationKind": { "$ref": "#/$defs/boundedToken" },
+    "domainOwner": { "$ref": "#/$defs/boundedToken" },
+    "ownerToken": { "$ref": "#/$defs/ownerToken" },
+    "recoveryGeneration": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "processIdentity": { "$ref": "#/$defs/processIdentity" },
+    "ownerDisposition": {
+      "$comment": "Runtime permits relinquished only for a stable incomplete journal after the owning callback or effect has settled and immediately before exact gate release. Newly created and terminal journals are active. If a matching gate still exists during the relinquish-to-unlink transition, that gate remains active ownership authority until it is removed.",
+      "type": "string",
+      "enum": ["active", "relinquished"]
+    },
+    "recoveryClaim": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/recoveryClaimRef" }
+      ]
+    },
+    "phase": { "type": "string", "enum": ["incomplete", "terminal"] },
+    "plan": { "$ref": "#/$defs/plan" },
+    "planDigest": { "$ref": "#/$defs/digest" },
+    "checkpoint": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "steps": {
+      "type": "array",
+      "contains": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "enum": ["prepared", "effect-started", "effect-completed"]
+          }
+        }
+      },
+      "minContains": 0,
+      "maxContains": 1,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/createOrUpdateStep" },
+          { "$ref": "#/$defs/removeStep" },
+          { "$ref": "#/$defs/auditPublishStep" },
+          { "$ref": "#/$defs/ownerEffectStep" }
+        ]
+      }
+    },
+    "terminalClosure": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/terminalClosure" }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": { "purpose": { "const": "maintenance-apply" } },
+        "required": ["purpose"]
+      },
+      "then": {
+        "properties": {
+          "action": {
+            "enum": ["fresh-initialize", "reconfigure", "reconcile", "explicit-migration"]
+          },
+          "steps": { "minItems": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "purpose": { "const": "lock-only-recovery" } },
+        "required": ["purpose"]
+      },
+      "then": {
+        "properties": {
+          "action": {
+            "enum": ["runtime-mutation-recovery", "explicit-migration"]
+          },
+          "recoveryGeneration": { "type": "integer", "minimum": 1 },
+          "phase": { "const": "incomplete" },
+          "checkpoint": { "const": 0 },
+          "steps": { "maxItems": 0 },
+          "terminalClosure": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": { "enum": ["fresh-initialize", "reconfigure", "reconcile", "runtime-mutation-recovery"] }
+        },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "steps": {
+            "items": {
+              "properties": {
+                "stepKind": { "not": { "const": "owner-effect" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "action": { "const": "fresh-initialize" } },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "steps": {
+            "items": {
+              "if": {
+                "properties": { "staging": { "type": "null" } },
+                "required": ["staging"]
+              },
+              "then": {
+                "properties": { "source": { "$ref": "#/$defs/absentResource" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "action": { "enum": ["reconfigure", "reconcile"] } },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "steps": {
+            "items": {
+              "if": {
+                "properties": {
+                  "staging": { "type": "null" },
+                  "source": {
+                    "type": "object",
+                    "properties": { "type": { "const": "directory" } },
+                    "required": ["type"]
+                  }
+                },
+                "required": ["staging", "source"]
+              },
+              "then": {
+                "properties": {
+                  "source": {
+                    "properties": { "ref": { "not": { "const": ".wakeflow-local" } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "action": { "const": "explicit-migration" } },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "steps": {
+            "items": {
+              "if": {
+                "properties": {
+                  "staging": { "type": "null" },
+                  "source": {
+                    "type": "object",
+                    "properties": { "type": { "const": "directory" } },
+                    "required": ["type"]
+                  }
+                },
+                "required": ["staging", "source"]
+              },
+              "then": {
+                "properties": {
+                  "source": { "properties": { "ref": { "const": ".wakeflow-local" } } },
+                  "final": { "properties": { "ref": { "const": ".wakeflow-local" } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "recoveryGeneration": { "const": 0 } },
+        "required": ["recoveryGeneration"]
+      },
+      "then": {
+        "properties": { "recoveryClaim": { "type": "null" } }
+      },
+      "else": {
+        "properties": { "recoveryClaim": { "$ref": "#/$defs/recoveryClaimRef" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "phase": { "const": "incomplete" } },
+        "required": ["phase"]
+      },
+      "then": {
+        "properties": { "terminalClosure": { "type": "null" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "phase": { "const": "terminal" } },
+        "required": ["phase"]
+      },
+      "then": {
+        "properties": {
+          "terminalClosure": { "$ref": "#/$defs/terminalClosure" },
+          "ownerDisposition": { "const": "active" },
+          "steps": {
+            "items": {
+              "allOf": [
+                {
+                  "oneOf": [
+                    { "$ref": "#/$defs/createOrUpdateStep" },
+                    { "$ref": "#/$defs/removeStep" },
+                    { "$ref": "#/$defs/auditPublishStep" },
+                    { "$ref": "#/$defs/ownerEffectStep" }
+                  ]
+                },
+                { "properties": { "status": { "const": "committed" } } }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "ownerDisposition": { "const": "relinquished" } },
+        "required": ["ownerDisposition"]
+      },
+      "then": {
+        "properties": { "phase": { "const": "incomplete" } }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "operationId": {
+      "type": "string",
+      "pattern": "^workspace-mutation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "ownerToken": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "recoveryClaimRef": {
+      "type": "object",
+      "required": ["ref", "generation", "digest"],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^\\.wakeflow-local/runtime/maintenance/transactions/workspace-mutation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.recovery-[1-9][0-9]*\\.json$"
+        },
+        "generation": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "boundedToken": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "portableRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\s)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\/$)[^\\u0000-\\u001F\\u007F-\\u009F]*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "processIdentity": {
+      "type": "object",
+      "required": [
+        "platform",
+        "pid",
+        "startIdentity"
+      ],
+      "properties": {
+        "platform": { "type": "string", "enum": ["darwin", "linux"] },
+        "pid": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "startIdentity": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "plan": {
+      "type": "object",
+      "required": ["schemaId", "payload"],
+      "properties": {
+        "schemaId": {
+          "type": "string",
+          "pattern": "^urn:wakeflow:internal:[a-z0-9][a-z0-9:-]*:v[1-9][0-9]*$"
+        },
+        "payload": {
+          "$comment": "The maintenance-plan owner supplies and validates this structured payload against schemaId. T02 closes this wrapper and canonicalizes the complete payload without predefining the later M5 plan vocabulary.",
+          "type": "object",
+          "required": ["steps"],
+          "properties": {
+            "steps": { "type": "array" }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "absentResource": {
+      "type": "object",
+      "required": ["ref", "type"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/portableRef" },
+        "type": { "const": "absent" }
+      },
+      "additionalProperties": false
+    },
+    "sourcePresentResource": {
+      "type": "object",
+      "required": ["ref", "type", "mode", "digest"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/portableRef" },
+        "type": { "enum": ["file", "directory"] },
+        "mode": { "type": "string", "pattern": "^0[0-7]{3}$" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "targetPresentResource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["ref", "type", "mode", "digest"],
+          "properties": {
+            "ref": { "$ref": "#/$defs/portableRef" },
+            "type": { "const": "file" },
+            "mode": { "enum": ["0600", "0644"] },
+            "digest": { "$ref": "#/$defs/digest" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["ref", "type", "mode", "digest"],
+          "properties": {
+            "ref": { "$ref": "#/$defs/portableRef" },
+            "type": { "const": "directory" },
+            "mode": { "enum": ["0700", "0755"] },
+            "digest": { "$ref": "#/$defs/digest" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "sourceResourceSnapshot": {
+      "oneOf": [
+        { "$ref": "#/$defs/absentResource" },
+        { "$ref": "#/$defs/sourcePresentResource" }
+      ]
+    },
+    "targetResourceSnapshot": {
+      "oneOf": [
+        { "$ref": "#/$defs/absentResource" },
+        { "$ref": "#/$defs/targetPresentResource" }
+      ]
+    },
+    "stepBase": {
+      "type": "object",
+      "required": ["stepId", "ordinal", "stepKind", "status", "source", "staging", "final"],
+      "properties": {
+        "stepId": { "$ref": "#/$defs/boundedToken" },
+        "ordinal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "stepKind": {
+          "type": "string",
+          "enum": ["create-or-update", "remove", "audit-publish"]
+        },
+        "status": { "type": "string", "enum": ["planned", "prepared", "committed"] },
+        "source": { "$ref": "#/$defs/sourceResourceSnapshot" },
+        "staging": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/targetResourceSnapshot" }
+          ]
+        },
+        "final": { "$ref": "#/$defs/targetResourceSnapshot" }
+      },
+      "additionalProperties": false
+    },
+    "createOrUpdateStep": {
+      "allOf": [
+        { "$ref": "#/$defs/stepBase" },
+        { "properties": { "stepKind": { "const": "create-or-update" } } },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "staging": { "$ref": "#/$defs/targetPresentResource" },
+                "final": { "$ref": "#/$defs/targetPresentResource" }
+              }
+            },
+            {
+              "properties": {
+                "staging": { "type": "null" },
+                "source": { "$ref": "#/$defs/absentResource" },
+                "final": { "$ref": "#/$defs/targetDirectoryResource" }
+              }
+            },
+            {
+              "properties": {
+                "staging": { "type": "null" },
+                "source": { "$ref": "#/$defs/safeLegacyDirectoryResource" },
+                "final": { "$ref": "#/$defs/privateDirectoryResource" }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "removeStep": {
+      "allOf": [
+        { "$ref": "#/$defs/stepBase" },
+        {
+          "properties": {
+            "stepKind": { "const": "remove" },
+            "source": { "$ref": "#/$defs/sourcePresentResource" },
+            "staging": { "$ref": "#/$defs/targetPresentResource" },
+            "final": { "$ref": "#/$defs/absentResource" }
+          }
+        }
+      ]
+    },
+    "auditPublishStep": {
+      "allOf": [
+        { "$ref": "#/$defs/stepBase" },
+        {
+          "properties": {
+            "stepKind": { "const": "audit-publish" },
+            "source": { "$ref": "#/$defs/sourcePresentResource" },
+            "staging": { "$ref": "#/$defs/targetPresentResource" },
+            "final": { "$ref": "#/$defs/targetPresentResource" }
+          }
+        }
+      ]
+    },
+    "ownerEffectRecord": {
+      "type": "object",
+      "required": ["schemaId", "payload", "recordDigest"],
+      "properties": {
+        "schemaId": {
+          "type": "string",
+          "pattern": "^urn:wakeflow:internal:[a-z0-9][a-z0-9:-]*:v[1-9][0-9]*$"
+        },
+        "payload": { "type": "object" },
+        "recordDigest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "ownerEffectStep": {
+      "type": "object",
+      "required": [
+        "stepId",
+        "ordinal",
+        "stepKind",
+        "effectKind",
+        "intentDigest",
+        "checkpointSchemaId",
+        "resultSchemaId",
+        "outcomeSchemaId",
+        "status",
+        "effectCheckpoint",
+        "effectResult",
+        "effectOutcome"
+      ],
+      "properties": {
+        "stepId": { "$ref": "#/$defs/boundedToken" },
+        "ordinal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "stepKind": { "const": "owner-effect" },
+        "effectKind": { "$ref": "#/$defs/boundedToken" },
+        "intentDigest": { "$ref": "#/$defs/digest" },
+        "checkpointSchemaId": {
+          "type": "string",
+          "pattern": "^urn:wakeflow:internal:[a-z0-9][a-z0-9:-]*:v[1-9][0-9]*$"
+        },
+        "resultSchemaId": {
+          "type": "string",
+          "pattern": "^urn:wakeflow:internal:[a-z0-9][a-z0-9:-]*:v[1-9][0-9]*$"
+        },
+        "outcomeSchemaId": {
+          "type": "string",
+          "pattern": "^urn:wakeflow:internal:[a-z0-9][a-z0-9:-]*:v[1-9][0-9]*$"
+        },
+        "status": {
+          "enum": ["planned", "effect-started", "effect-completed", "committed"]
+        },
+        "effectCheckpoint": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/ownerEffectRecord" }]
+        },
+        "effectResult": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/ownerEffectRecord" }]
+        },
+        "effectOutcome": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/ownerEffectRecord" }]
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "status": { "const": "planned" },
+            "effectCheckpoint": { "type": "null" },
+            "effectResult": { "type": "null" },
+            "effectOutcome": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "status": { "const": "effect-started" },
+            "effectCheckpoint": { "$ref": "#/$defs/ownerEffectRecord" },
+            "effectResult": { "type": "null" },
+            "effectOutcome": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "status": { "const": "effect-completed" },
+            "effectCheckpoint": { "$ref": "#/$defs/ownerEffectRecord" },
+            "effectResult": { "$ref": "#/$defs/ownerEffectRecord" },
+            "effectOutcome": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "status": { "const": "committed" },
+            "effectCheckpoint": { "$ref": "#/$defs/ownerEffectRecord" },
+            "effectResult": { "$ref": "#/$defs/ownerEffectRecord" },
+            "effectOutcome": { "$ref": "#/$defs/ownerEffectRecord" }
+          }
+        }
+      ]
+    },
+    "legacyLocalDirectoryResource": {
+      "type": "object",
+      "required": ["ref", "type", "mode", "digest"],
+      "properties": {
+        "ref": { "const": ".wakeflow-local" },
+        "type": { "const": "directory" },
+        "mode": {
+          "enum": [
+            "0701", "0704", "0705", "0710", "0711", "0714", "0715",
+            "0740", "0741", "0744", "0745", "0750", "0751", "0754", "0755"
+          ]
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "safeLegacyDirectoryResource": {
+      "type": "object",
+      "required": ["ref", "type", "mode", "digest"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/portableRef" },
+        "type": { "const": "directory" },
+        "mode": {
+          "enum": [
+            "0701", "0704", "0705", "0710", "0711", "0714", "0715",
+            "0740", "0741", "0744", "0745", "0750", "0751", "0754", "0755"
+          ]
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "privateDirectoryResource": {
+      "type": "object",
+      "required": ["ref", "type", "mode", "digest"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/portableRef" },
+        "type": { "const": "directory" },
+        "mode": { "const": "0700" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "targetDirectoryResource": {
+      "type": "object",
+      "required": ["ref", "type", "mode", "digest"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/portableRef" },
+        "type": { "const": "directory" },
+        "mode": { "enum": ["0700", "0755"] },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "privateLocalDirectoryResource": {
+      "type": "object",
+      "required": ["ref", "type", "mode", "digest"],
+      "properties": {
+        "ref": { "const": ".wakeflow-local" },
+        "type": { "const": "directory" },
+        "mode": { "const": "0700" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "closureDigest": {
+      "type": "object",
+      "required": ["name", "digest"],
+      "properties": {
+        "name": { "$ref": "#/$defs/boundedToken" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "terminalClosure": {
+      "type": "object",
+      "required": ["planDigest", "closureDigests"],
+      "properties": {
+        "planDigest": { "$ref": "#/$defs/digest" },
+        "closureDigests": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1024,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/closureDigest" }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

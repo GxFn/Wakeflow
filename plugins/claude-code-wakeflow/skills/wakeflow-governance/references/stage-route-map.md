@@ -28,10 +28,13 @@ before demand/TODO mutation and routes to mainline repair; it never authorizes
 a Pod. If and only if the user explicitly authorizes a Pod, the controller may create
 its minimal canonical `state=intake` root, record
 `selection=explicit-user-pod` plus `authorizationRef`, run core
-`wakeflow_pod_open`, and ask the helper to create the three independent
-control sessions. Journal each launch correlation with
-`wakeflow_pod_record event=materialization`; the helper returns the final Claude
-session synchronously and has no Codex `clientThreadId` pending state.
+`wakeflow_pod_open operation=launch-preview/launch-apply`, and pass only those
+canonical operations to the current host facade's `pod-materialize` owner. Journal each launch
+correlation and observed result with
+`wakeflow_pod_record operation=record-materialization`; Claude returns the
+final session synchronously and has no Codex `clientThreadId` pending state.
+If the exact host effect or receipt is unavailable, stop with materialization
+pending; retired helper commands cannot create a substitute binding.
 `control-ready` requires verified Controller/Design/Test receipts. Exit gate:
 a one-sentence goal the user recognizes and, for a Pod, a `control-ready`
 state root.
@@ -56,37 +59,42 @@ current behavior).
    config values, accounts/credentials location (reference, never the secret),
    data fixtures, allowed operations, reset/cleanup steps. Confirmed with the
    user HERE, not after implementation.
-5. Delivery: mainline Design uses `wakeflow_deliver` (append-only TODO row;
-   one complete proportional `demandAuthority`; `autoClaim` changes claim
-   timing, not readiness). A Pod controller freezes the anchored request with
-   `wakeflow_pod_plan action=design-request`; Pod Design returns the matching
+5. Delivery: mainline Design uses `wakeflow_deliver` to append one exact
+   13-column TODO row under the current board digest. The row carries canonical
+   document links and an immutable Auto Claim choice; append validates shape and
+   board CAS, not document resolution or demand authority. A Pod controller freezes the anchored request with
+   `wakeflow_pod_plan operation=design-request`; Pod Design returns the matching
    `PodDesignHandoffEnvelope`, which the Pod controller records with
-   `wakeflow_pod_record event=design-handoff`. Neither step creates a second global
+   `wakeflow_pod_record operation=design-handoff`. Neither step creates a second global
    TODO for the same demand.
 
 ## S2 — Claim & Plan (owner: controller)
-`wakeflow_next_work` → `wakeflow_claim_next` / `wakeflow_create_demand`
-(taskPackages carry designIntent) → `wakeflow_view scope=progress`.
+`wakeflow_next_work` → `wakeflow_create_demand` (root-first publication plus
+exact linked TODO claim) → `wakeflow_add_task` (TaskPackages may carry
+`designIntent`) → `wakeflow_status operation=inspect`.
 **Entry check:** the controller verifies the proportional demand authority.
 Design is the default author for substantial new behavior; the controller may
 create bounded/already-documented work inline only by citing the same anchored
 inputs. Any missing item stays S1 and routes to Design/user — do not invent the
-gap. The first implementation package atomically freezes
-`demand-authority.json`. Mainline is the default: if another mainline
+gap. If any TaskPackage will be needed, the controller must resolve the
+submitted references and include `demand-authority.json` in the initial demand
+publication; public v3 cannot add it afterward. Mainline is the default: if another mainline
 demand is active, ordinary and Auto Claim work waits without creating state or
 host resources. A Pod is valid only with its existing explicit authorization.
-After Pod Design freezes repository coverage, the helper creates each product
-session from the exact repository with native `claude --worktree`; verified
-bindings advance the Pod to `execution-ready`. Exit gate: state root + task
-packages + wave plan.
+After Pod Design freezes repository coverage, the current host facade's
+`pod-materialize` owner may execute the exact pending/unbound product operation from its repository root
+with native `claude --worktree`; verified typed bindings advance the Pod to
+`execution-ready`. Exit gate: state root + task packages + wave plan.
 
 ## S3 — Dispatch & Execute (owners: controller dispatches, targets execute)
-`wakeflow_prepare_delivery` (author the objective; intent check against
-designIntent) → host `deliver` (lock, readback) → `wakeflow_record_delivery`
-→ target works in its repo/worktree → `wakeflow_record_target_result`.
-WITHIN one demand each repo runs exactly ONE window with ONE combined task
-package (the window self-sequences its items; never two simultaneous tasks to
-one window inside a demand). Pod product windows exist only inside an
+`wakeflow_prepare_delivery operation=target-preview` → exact
+`operation=target-apply` → immediate `operation=target-claim` → facade
+`target-delivery` effect with at most one bounded readback →
+`wakeflow_record_delivery operation=target-outcome` → target works in its
+repo/worktree → `wakeflow_record_target_result operation=import`.
+WITHIN one demand each repository has one active task lineage at a time and
+each target task binds one immutable TaskPackage; replacement or continuation
+creates the next lineage member only after its exact gate. Pod product windows exist only inside an
 explicitly authorized Pod and use Claude-created native worktrees. Dispatch is
 forbidden before `execution-ready`; Wakeflow never creates or deletes those
 worktrees.
@@ -108,9 +116,9 @@ may enter S5 after the controller establishes that current scope.
 
 ## S5 — Test (conditional; owner: Test window executes, controller composes)
 Runs only when S1's Test decision said yes AND S4's functional acceptance gate
-passed. For a Pod, first run `wakeflow_pod_plan action=test-access` from the
+passed. For a Pod, first run `wakeflow_pod_plan operation=test-access-plan` from the
 controller, execute that exact host-local probe from the independent Test
-session, and record it with `wakeflow_pod_record event=test-access`. Only validated
+session, and record it with `wakeflow_pod_record operation=test-access-receipt`. Only validated
 `direct-multi-root` coverage of every active product binding opens Test
 dispatch. Unsupported access stays blocked; no main-checkout/product-window
 fallback exists, and no per-repository executor is claimed as implemented.
@@ -127,16 +135,21 @@ resolves it from the Requirement Design or the user — never by guessing.
 The card also freezes the demand goal, approved Test plan, allowed Test skills,
 setup policy, and attempt bound. Test may elaborate only mapped operational
 steps; unmapped goals/gates/methods return blocked before execution. Results
-return to S4, where the controller compares the step-to-anchor map against the
-same contract before accepting evidence or authoring follow-up work.
+return to S4, where the controller compares the ordered `test-step` craft
+mappings against the same contract and independently validates the claimed
+meaning. If Test exposes a product defect after that repository lineage is
+already accepted, current public v3 cannot reopen it or add a same-demand fix
+before completion; S4 preserves the evidence and remains blocked rather than
+reworking Test or completing known-defective work.
 
 ## S6 — Integrate & Close (owner: controller)
-`wakeflow_complete_demand` (all accepted, zero blockers, evidence) →
-core `wakeflow_pod_plan action=close` for a Pod (generate a host-close plan) → helper
-closes sessions and reports worktree disposition → record every
-`wakeflow_pod_record event=close-receipt` → `wakeflow_archive` (redaction gate) →
-TODO rollup / `wakeflow_prune_runtime`. Logical binding close, tmux/session
-close, and Claude physical worktree cleanup remain separate facts.
+`wakeflow_complete_demand operation=preview/apply` (all accepted, zero
+blockers, evidence) → core `wakeflow_pod_plan operation=close-intent` for a Pod
+→ facade `decommission-execute` closes the exact session and performs the bounded absence probe →
+record `wakeflow_pod_record operation=close-observe/close-receipt` → close the
+exact typed binding → `wakeflow_archive operation=preview/apply` (portable
+whole-demand privacy gate) → `wakeflow_prune_runtime`. Logical binding close,
+tmux/session close, and Claude physical worktree cleanup remain separate facts.
 
 Before archive, a verified same-demand gap may return from S6 to S2 only through
 `wakeflow_continue_demand`: it records the bug/supplement/authorized-optimization
@@ -146,16 +159,16 @@ as a new demand.
 
 ## Capability-to-stage classification
 
-| Stage | MCP tools | Host commands | Skills/prose |
+| Stage | MCP tools | Host seam | Skills/prose |
 | --- | --- | --- | --- |
-| S0 | `wakeflow_status`, explicit-Pod `wakeflow_create_demand`, `wakeflow_pod_open`, `wakeflow_pod_record` (`event=materialization`), `wakeflow_pod_bind` | `check-workspace`, Pod control `pod-open` | CLAUDE.md posture |
-| S1 | mainline `wakeflow_deliver`; Pod `wakeflow_pod_plan` (`action=design-request`), `wakeflow_pod_record` (`event=design-handoff`) | Pod Design `deliver` | Design support surface docs |
-| S2 | `wakeflow_next_work`, `wakeflow_claim_next`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_view` (`scope=progress`), Pod `wakeflow_pod_record` (`event=materialization`), `wakeflow_pod_bind` | Pod product: `mode=create` materializes only canonical pending/unbound operations; `mode=resume` verifies or resumes the exact bound session/cwd and treats HEAD/dirty as observations | governance TODO intake |
-| S3 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result`, `wakeflow_release_window_lock` | `deliver`, `send` | controller dispatch + target skill |
-| S4 | `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_view` | `readback`, `wait-results` | controller acceptance practices |
-| S5 | `wakeflow_pod_plan` (`action=test-access`), `wakeflow_pod_record` (`event=test-access`), `wakeflow_intake_test_card` | exact Pod Test multi-root probe; dispatch = S3 transport | testing-validation reference |
-| S6 | `wakeflow_complete_demand`, `wakeflow_pod_plan` (`action=close`), `wakeflow_pod_record` (`event=close-receipt`), `wakeflow_archive`, `wakeflow_prune_runtime`, `wakeflow_adopt_demand_host` | `pod-close`, `arrange-windows` | ledger reference |
-| Cross | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_verify` | `preflight`, `seed-permissions`, `stamp-runtime`, `set-unattended` | this map |
+| S0 | `wakeflow_status operation=inspect`, explicit-Pod `wakeflow_create_demand`, `wakeflow_pod_open operation=launch-preview/launch-apply`, `wakeflow_pod_record operation=record-materialization`, `wakeflow_pod_bind` | facade `launch-window`/`pod-materialize` executes only exact canonical intents; missing host proof means blocked | CLAUDE.md posture |
+| S1 | mainline `wakeflow_deliver`; Pod `wakeflow_pod_plan operation=design-request`, `wakeflow_pod_record operation=design-handoff` | facade `target-delivery` only after typed preparation | Design support surface docs |
+| S2 | `wakeflow_next_work`, `wakeflow_claim_next`, `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_status operation=inspect`, Pod `wakeflow_pod_record operation=record-materialization`, `wakeflow_pod_bind` | facade `pod-materialize` handles only canonical pending/unbound operations; `inspect-materialization` observes only the exact bound session/cwd and treats HEAD/dirty as observations | governance TODO intake |
+| S3 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result`, `wakeflow_release_window_lock` | stable-window mutex covers validation → paste → one bounded readback | controller dispatch + target skill |
+| S4 | `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_view` | no polling or synchronous wait route | controller acceptance practices |
+| S5 | `wakeflow_pod_plan operation=test-access-plan`, `wakeflow_pod_record operation=test-access-receipt`, `wakeflow_intake_test_card` | exact Pod Test multi-root probe; dispatch = S3 transport | testing-validation reference |
+| S6 | `wakeflow_complete_demand`, `wakeflow_pod_plan operation=close-intent`, `wakeflow_pod_record operation=close-observe/close-receipt`, `wakeflow_archive`, `wakeflow_prune_runtime` | facade decommission owner requires exact close + bounded absence; physical worktree cleanup stays Claude/user-owned | ledger reference |
+| Cross | `wakeflow_maintain_workspace`, `wakeflow_replace_windows`, `wakeflow_verify` | facade settings/assets and activation-scope owners; unknown/host-wide coverage blocks unattended | this map |
 
 ## The three escalation lanes (a missing input is NEVER guessed)
 

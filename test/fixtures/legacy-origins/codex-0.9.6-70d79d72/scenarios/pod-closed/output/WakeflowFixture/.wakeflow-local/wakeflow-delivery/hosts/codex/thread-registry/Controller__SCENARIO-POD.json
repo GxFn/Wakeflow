@@ -1,0 +1,9 @@
+{
+  "kind": "CodexWindowThreadRegistration",
+  "version": 3,
+  "windowName": "Controller__SCENARIO-POD",
+  "bindingId": "@wakeflow-scenario-binding-id-571e578ca0",
+  "threadId": "@wakeflow-scenario-thread-id-27b5ee67bb",
+  "registeredAt": "@wakeflow-scenario-time-fcc9ed6f4f",
+  "lastVerifiedAt": "@wakeflow-scenario-time-72355ee115"
+}

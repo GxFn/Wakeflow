@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:window-identity:binding:v1",
+  "title": "Wakeflow Window Identity Binding",
+  "description": "Strict host-local authority binding one stable logical Wakeflow window to one real host handle.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "programId",
+    "hostId",
+    "windowId",
+    "bindingId",
+    "handle",
+    "registeredAt"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "wakeflow-window-binding"
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "hostId": {
+      "type": "string",
+      "enum": [
+        "codex",
+        "claude-code"
+      ]
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "bindingId": {
+      "type": "string",
+      "pattern": "^binding_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "handle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/handleKind"
+        },
+        "value": {
+          "$ref": "#/$defs/handleValue"
+        }
+      }
+    },
+    "registeredAt": {
+      "$ref": "#/$defs/strictUtcTimestamp"
+    },
+    "hostVerifiedAt": {
+      "$ref": "#/$defs/strictUtcTimestamp",
+      "description": "Optional real-host verification time. The record codec additionally requires it not to precede registeredAt."
+    }
+  },
+  "$defs": {
+    "opaqueToken": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)(?![\\s\\S]*[\\u0000-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$",
+      "description": "Non-empty, already-trimmed and control-free opaque protocol value."
+    },
+    "handleKind": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/opaqueToken"
+        }
+      ],
+      "maxLength": 64
+    },
+    "handleValue": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/opaqueToken"
+        }
+      ],
+      "maxLength": 512
+    },
+    "strictUtcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$",
+      "description": "Explicit UTC RFC 3339 timestamp; runtime validation also rejects impossible calendar dates."
+    }
+  }
+}

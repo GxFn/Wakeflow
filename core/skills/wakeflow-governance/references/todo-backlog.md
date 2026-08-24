@@ -40,12 +40,16 @@ run the required independent checks.
 
 ## Dispatch Use
 
-TODOs may be merged into a task package only when they share the same window,
-boundary, and validation path as the mainline work before the next real blocker.
-Do not fragment dispatch only to move TODO counters.
+Several authorized TODO rows may inform one coherent TaskPackage only when they
+share the same responsibility window, boundary, objective, and validation path
+before the next real blocker. The controller translates them into the package's
+typed context and expectations; the schema has no TODO `items` collection and
+the package does not become a second TODO ledger. Do not fragment dispatch only
+to move counters.
 
 ## Archive
 
-Completed TODO rows can be compacted with `wakeflow-archive-todo.mjs`. Active
-or observing rows remain on the current board. Long-term history belongs in the
-workspace ledger.
+Completed demand-owned TODO history is preserved through the typed
+`wakeflow_archive` preview/apply/inspect/recover flow. Active or observing rows
+remain under the TODO service's current authority. Long-term history belongs in
+the portable BusinessArchive and workspace ledger projections.

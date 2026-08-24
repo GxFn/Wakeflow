@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:business-archive:transaction:v1",
+  "title": "Wakeflow Candidate Business Archive Transaction",
+  "$comment": "Immutable forward-recovery intent. It freezes portable config placement, the pre-journal source inventory and the complete semantic archive plan without raw member bytes, absolute paths, PID, mutable phase or a second archive authority.",
+  "type": "object",
+  "required": ["schemaVersion", "artifactKind", "archiveId", "programId", "demandId", "config", "sourceTree", "plan", "planDigest"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "artifactKind": { "const": "wakeflow-business-archive-transaction" },
+    "archiveId": { "type": "string", "pattern": "^archive_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "programId": { "type": "string", "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "demandId": { "type": "string", "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "config": { "$ref": "#/$defs/config" },
+    "sourceTree": { "$ref": "#/$defs/sourceTree" },
+    "plan": { "$ref": "#/$defs/plan" },
+    "planDigest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "ref": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)[^\\u0000-\\u001F\\u007F-\\u009F]+$" },
+    "config": {
+      "type": "object",
+      "required": ["ref", "digest", "ledgerRootRef"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "const": "wakeflow.config.json" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "ledgerRootRef": { "$ref": "#/$defs/ref" }
+      }
+    },
+    "directory": {
+      "type": "object",
+      "required": ["ref", "mode"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "$ref": "#/$defs/ref" },
+        "mode": { "const": 448 }
+      }
+    },
+    "file": {
+      "type": "object",
+      "required": ["ref", "mode", "byteDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "$ref": "#/$defs/ref" },
+        "mode": { "const": 384 },
+        "byteDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "sourceTree": {
+      "type": "object",
+      "required": ["directories", "files", "treeDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "directories": { "type": "array", "items": { "$ref": "#/$defs/directory" } },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+        "treeDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "plan": {
+      "type": "object",
+      "required": ["schemaVersion", "artifactKind", "archiveEvent", "archivedState", "manifest", "businessSummary", "transportSummary", "todoHistory"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "artifactKind": { "const": "wakeflow-business-archive-plan" },
+        "archiveEvent": { "$ref": "urn:wakeflow:internal:demand-core:controller-event:v1" },
+        "archivedState": { "$ref": "urn:wakeflow:internal:demand-core:wakeflow-state:v1" },
+        "manifest": { "$ref": "urn:wakeflow:internal:ledger:archive-manifest:v1" },
+        "businessSummary": { "$ref": "urn:wakeflow:internal:business-archive:summary:v1" },
+        "transportSummary": { "$ref": "urn:wakeflow:internal:business-archive:transport-summary:v1" },
+        "todoHistory": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "urn:wakeflow:internal:business-archive:todo-history:v1" }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "kind": "DirectThreadDeliveryRun",
+  "version": 2,
+  "deliveryRunId": "run-controller-return-SCENARIO-GROUP__r1",
+  "deliveryId": "controller-return-SCENARIO-GROUP__r1",
+  "targetWindow": "WakeflowFixture",
+  "taskId": "SCENARIO-TASK",
+  "dispatchGroup": "SCENARIO-GROUP",
+  "triggerTarget": "ProductWindow",
+  "triggerTaskId": "SCENARIO-TASK",
+  "reviewScope": "group",
+  "transport": "direct-thread",
+  "transportStatus": "accepted",
+  "status": "sent",
+  "thread": {
+    "windowName": "WakeflowFixture",
+    "threadIdRedacted": true,
+    "threadRegistryFile": "hosts/codex/thread-registry/WakeflowFixture.json"
+  },
+  "hostAction": {
+    "method": "send_message_to_thread",
+    "mode": "new-turn"
+  },
+  "readback": {
+    "checked": true,
+    "ok": true,
+    "status": "confirmed",
+    "attempts": 1,
+    "evidence": "synthetic controller observed the exact return envelope"
+  },
+  "keepLive": {
+    "enabledForRun": false,
+    "stateFile": null
+  },
+  "wakeflowTrace": {
+    "kind": "WakeflowTrace",
+    "version": 1,
+    "artifactKind": "delivery-run",
+    "source": "wakeflow-delivery",
+    "command": "record-delivery-run",
+    "root": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+    "stateRoot": ".wakeflow-active/current/SCENARIO-TRANSPORT",
+    "stateRevision": 2,
+    "demandKey": "SCENARIO-TRANSPORT",
+    "targetTaskId": "SCENARIO-TASK",
+    "targetWindow": "WakeflowFixture",
+    "dispatchGroup": "SCENARIO-GROUP",
+    "deliveryId": "controller-return-SCENARIO-GROUP__r1",
+    "deliveryFile": ".wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__controller-return-SCENARIO-GROUP__r1.json",
+    "deliveryRunId": "run-controller-return-SCENARIO-GROUP__r1",
+    "createdAt": "@wakeflow-scenario-time-64b5e8136f"
+  },
+  "createdAt": "@wakeflow-scenario-time-59587c9b69",
+  "idempotency": {
+    "key": "delivery-run:controller-return-SCENARIO-GROUP__r1:run-controller-return-SCENARIO-GROUP__r1",
+    "duplicateBehavior": "return-existing-if-equivalent",
+    "safeRetry": "use-a-new-delivery-run-id-for-an-additional-send-attempt",
+    "unsafeRetry": "same-delivery-run-id-with-different-content"
+  }
+}

@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:ledger:archive-manifest:v1",
+  "title": "Wakeflow Archive Manifest",
+  "$comment": "This schema validates structural and lexical shape only. validateLedgerRecord() is the mandatory authoritative semantic validator for ordering, member-path uniqueness and prefix closure, and cross-field or member-digest relations.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "archiveId",
+    "programId",
+    "archiveKind",
+    "yearMonth",
+    "title",
+    "conclusion",
+    "source",
+    "transport",
+    "members"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "artifactKind": { "type": "string", "const": "wakeflow-archive-manifest" },
+    "archiveId": {
+      "type": "string",
+      "pattern": "^archive_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "archiveKind": {
+      "type": "string",
+      "enum": ["demand", "documents", "todo"]
+    },
+    "yearMonth": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])$"
+    },
+    "title": { "$ref": "#/$defs/trimmedNonEmptyString" },
+    "conclusion": { "$ref": "#/$defs/trimmedNonEmptyString" },
+    "source": {
+      "oneOf": [
+        { "$ref": "#/$defs/demandSource" },
+        { "$ref": "#/$defs/documentsSource" },
+        { "$ref": "#/$defs/todoSource" }
+      ]
+    },
+    "transport": {
+      "oneOf": [
+        { "$ref": "#/$defs/transportUnsupported" },
+        { "$ref": "#/$defs/transportArchived" }
+      ]
+    },
+    "members": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "$comment": "Runtime validation additionally requires unique, non-overlapping member paths.",
+      "items": { "$ref": "#/$defs/member" }
+    },
+    "legacyEvidenceSummaries": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "$comment": "Migration-only. Runtime validation additionally requires unique sourceKind/sourceDigest tuples in lexical order.",
+      "items": {
+        "$ref": "urn:wakeflow:internal:business-archive:legacy-evidence-summary:v1"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "archiveKind": { "const": "demand" } }, "required": ["archiveKind"] },
+      "then": {
+        "properties": {
+          "source": { "$ref": "#/$defs/demandSource" },
+          "transport": { "$ref": "#/$defs/transportArchived" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "archiveKind": { "const": "documents" } }, "required": ["archiveKind"] },
+      "then": {
+        "properties": {
+          "source": { "$ref": "#/$defs/documentsSource" },
+          "transport": { "$ref": "#/$defs/transportUnsupported" }
+        },
+        "not": { "required": ["legacyEvidenceSummaries"] }
+      }
+    },
+    {
+      "if": { "properties": { "archiveKind": { "const": "todo" } }, "required": ["archiveKind"] },
+      "then": {
+        "properties": {
+          "source": { "$ref": "#/$defs/todoSource" },
+          "transport": { "$ref": "#/$defs/transportUnsupported" }
+        },
+        "not": { "required": ["legacyEvidenceSummaries"] }
+      }
+    }
+  ],
+  "$defs": {
+    "trimmedNonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)(?:[\\r\\n]|[^\\u0000-\\u001F\\u007F-\\u009F])*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "transportMemberRef": {
+      "type": "object",
+      "required": ["ref", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "const": "transport-summary.json" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "transportUnsupported": {
+      "type": "object",
+      "required": ["status", "memberRefs"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "const": "unsupported" },
+        "memberRefs": { "type": "array", "maxItems": 0 }
+      }
+    },
+    "transportArchived": {
+      "type": "object",
+      "required": ["status", "inventoryDigest", "memberRefs"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "const": "archived" },
+        "inventoryDigest": { "$ref": "#/$defs/digest" },
+        "memberRefs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": { "$ref": "#/$defs/transportMemberRef" }
+        }
+      }
+    },
+    "memberPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!\\s)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)[^\\u0000-\\u001F\\u007F-\\u009F]*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "member": {
+      "type": "object",
+      "required": ["role", "path", "mediaType", "digest"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["payload", "summary", "todo-history", "transport-summary"]
+        },
+        "path": { "$ref": "#/$defs/memberPath" },
+        "mediaType": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "portableLineage": {
+      "type": "object",
+      "required": ["ref", "digest"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/memberPath" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "singleLineToken": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)[^\\u0000-\\u001F\\u007F-\\u009F]*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "demandSource": {
+      "type": "object",
+      "required": ["kind", "demandId", "demandRef", "demandDigest"],
+      "properties": {
+        "kind": { "type": "string", "const": "demand" },
+        "demandId": {
+          "type": "string",
+          "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "demandRef": { "$ref": "#/$defs/memberPath" },
+        "demandDigest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "documentsSource": {
+      "type": "object",
+      "required": ["kind", "documents"],
+      "properties": {
+        "kind": { "type": "string", "const": "documents" },
+        "documents": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "$comment": "Runtime validation additionally requires unique refs in lexical order.",
+          "items": { "$ref": "#/$defs/portableLineage" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "todoSource": {
+      "type": "object",
+      "required": ["kind", "todoRows"],
+      "properties": {
+        "kind": { "type": "string", "const": "todo" },
+        "todoRows": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "$comment": "Runtime validation additionally requires unique todoId values in lexical order.",
+          "items": {
+            "type": "object",
+            "required": ["todoId", "digest"],
+            "properties": {
+              "todoId": { "$ref": "#/$defs/singleLineToken" },
+              "digest": { "$ref": "#/$defs/digest" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

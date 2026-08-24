@@ -1,165 +1,30 @@
-#!/usr/bin/env node
-
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
-import os from "node:os";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-// Pins the local-storage clarity contract: the storage map classifies known
-// trees, flags legacy residue and unknown trees (never deletes them),
-// seed-readmes converges the in-place orientation files idempotently, and
-// preserve/prune-preserved implement the canonical audit-hold lifecycle.
+import * as observability from "../core/scripts/lib/wakeflow-observability-v3.mjs";
+import * as preservation from "../core/scripts/lib/wakeflow-preservation.mjs";
 
-const pluginRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
-const script = path.join(pluginRoot, "scripts/wakeflow-storage.mjs");
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-function run(args, options = {}) {
-  return spawnSync(process.execPath, [script, ...args, "--json"], { encoding: "utf8", shell: false, ...options });
-}
-
-function makeWorkspace() {
-  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-storage-"));
-  mkdirSync(path.join(root, ".wakeflow-active/current"), { recursive: true });
-  mkdirSync(path.join(root, ".wakeflow-local/wakeflow-delivery/hosts"), { recursive: true });
-  mkdirSync(path.join(root, "wakeflow-ledger/workspace"), { recursive: true });
-  writeFileSync(path.join(root, "wakeflow.config.json"), `${JSON.stringify({ projectLedgerRoot: "wakeflow-ledger" }, null, 2)}\n`);
-  return root;
-}
-
-test("map classifies known trees and flags legacy residue + unknown trees without touching them", () => {
-  const root = makeWorkspace();
-  mkdirSync(path.join(root, ".wakeflow-local/preserved-state-roots/old"), { recursive: true });
-  writeFileSync(path.join(root, ".wakeflow-local/preserved-state-roots/old/x.json"), "{}\n");
-  mkdirSync(path.join(root, ".wakeflow-local/pod-reservations"), { recursive: true });
-  mkdirSync(path.join(root, ".wakeflow-local/mystery"), { recursive: true });
-  writeFileSync(path.join(root, ".wakeflow-local/mystery/blob.bin"), "data\n");
-
-  const result = run(["map", "--root", root]);
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  const payload = JSON.parse(result.stdout);
-  assert.ok(payload.trees.length >= 10);
-  assert.equal(payload.configuration.sourceShape, "legacy-flat");
-  assert.equal(payload.configuration.durableInput.projectLedgerRoot, "wakeflow-ledger");
-  assert.equal(payload.configuration.effectiveLayout.storage.requirementDesignsDir, "wakeflow-ledger/requirement-designs");
-  assert.match(payload.configuration.migrationWarnings.join("\n"), /legacy flat Wakeflow config/);
-  assert.equal(payload.layout.requirement.path, "wakeflow-ledger/requirement-designs");
-  assert.equal(payload.layout.transport.path, ".wakeflow-local/wakeflow-delivery");
-  assert.equal(payload.layout.evidence.class, "evidence");
-  const ledger = payload.trees.find((t) => t.path === "wakeflow-ledger");
-  assert.equal(ledger.class, "authority");
-  assert.equal(ledger.category, "workspace-record");
-  const resultEvidence = payload.trees.find((t) => t.path.endsWith("/target-results"));
-  assert.equal(resultEvidence.category, "evidence");
-  assert.equal(resultEvidence.owner, payload.layout.evidence.owner);
-  const runtimeHandles = payload.trees.find((t) => t.path.endsWith("/handles"));
-  assert.equal(runtimeHandles.category, "runtime-handle");
-  assert.equal(runtimeHandles.class, "handles");
-  const hostState = payload.trees.find((t) => t.path.endsWith("/hosts"));
-  assert.equal(hostState.category, "host-state");
-  assert.equal(hostState.class, "handles");
-  const legacyWorktrees = payload.trees.find((t) => t.path === ".wakeflow-local/worktrees");
-  assert.equal(legacyWorktrees.class, "legacy");
-  assert.deepEqual(payload.legacy.map((l) => l.path), [
-    ".wakeflow-local/pod-reservations",
-    ".wakeflow-local/preserved-state-roots",
-  ]);
-  assert.deepEqual(payload.unknown.map((u) => u.path), [".wakeflow-local/mystery"]);
-  assert.match(payload.agentNext, /route to the user/);
-  assert.ok(payload.forbiddenConclusions.includes("legacy-or-unknown-trees-are-safe-to-auto-delete"));
-  // read-only: nothing moved or deleted
-  assert.equal(existsSync(path.join(root, ".wakeflow-local/mystery/blob.bin")), true);
-  assert.equal(existsSync(path.join(root, ".wakeflow-local/preserved-state-roots/old/x.json")), true);
+test("storage is a read-only projection plus explicit preservation owner", () => {
+  assert.equal(typeof observability.projectWakeflowStorageView, "function");
+  assert.equal(typeof preservation.inspectLocalPreservationInventory, "function");
+  assert.equal(typeof preservation.planLocalPreservation, "function");
+  assert.equal(typeof preservation.applyLocalPreservationPlan, "function");
 });
 
-test("seed-readmes converges in-place READMEs idempotently and honors the configured ledger path", () => {
-  const root = makeWorkspace();
-  const first = JSON.parse(run(["seed-readmes", "--root", root, "--write"]).stdout);
-  const created = first.results.filter((r) => r.status === "created").map((r) => r.file);
-  assert.ok(created.includes(".wakeflow-local/README.md"));
-  assert.ok(created.includes("wakeflow-ledger/README.md"), "ledger README lands at the CONFIGURED ledger root");
-  assert.match(readFileSync(path.join(root, ".wakeflow-local/README.md"), "utf8"), /never auto-delete/i);
-  assert.match(readFileSync(path.join(root, ".wakeflow-local/README.md"), "utf8"), /current Pod worktrees are host-created/i);
-  assert.doesNotMatch(readFileSync(path.join(root, ".wakeflow-local/README.md"), "utf8"), /isolation git worktrees \(cross-demand streams\)/i);
-  const ledgerReadme = readFileSync(path.join(root, "wakeflow-ledger/README.md"), "utf8");
-  assert.match(ledgerReadme, /canonical demand definitions/i);
-  assert.match(ledgerReadme, /never put a\s+demand definition there/i);
-
-  const second = JSON.parse(run(["seed-readmes", "--root", root, "--write"]).stdout);
-  assert.ok(second.results.every((r) => r.status === "current" || r.status === "skipped-missing-parent"), JSON.stringify(second.results));
-
-  // a missing tier is skipped, never invented
-  assert.ok(first.results.every((r) => r.status !== "created" || existsSync(path.join(root, r.file))));
-});
-
-test("preserve moves a tree into preserved/<date>-<reason>/ with a manifest; prune-preserved lists then deletes by cutoff", () => {
-  const root = makeWorkspace();
-  mkdirSync(path.join(root, ".wakeflow-local/runtime-quarantine"), { recursive: true });
-  writeFileSync(path.join(root, ".wakeflow-local/runtime-quarantine/q.json"), "{}\n");
-
-  const dry = JSON.parse(run(["preserve", "--root", root, "--source", ".wakeflow-local/runtime-quarantine", "--reason", "fold-legacy"]).stdout);
-  assert.equal(dry.wrote, false);
-  assert.equal(existsSync(path.join(root, ".wakeflow-local/runtime-quarantine")), true, "dry-run moves nothing");
-
-  const moved = JSON.parse(run(["preserve", "--root", root, "--source", ".wakeflow-local/runtime-quarantine", "--reason", "fold-legacy", "--write"]).stdout);
-  assert.equal(moved.ok, true);
-  const dest = path.join(root, moved.moved.to);
-  assert.equal(existsSync(path.join(dest, "q.json")), true);
-  const manifest = readFileSync(path.join(dest, "MANIFEST.md"), "utf8");
-  assert.match(manifest, /Source: \.wakeflow-local\/runtime-quarantine/);
-  assert.equal(existsSync(path.join(root, ".wakeflow-local/runtime-quarantine")), false);
-
-  // default retention (30d): fresh entry is NOT a candidate
-  const list = JSON.parse(run(["prune-preserved", "--root", root]).stdout);
-  assert.equal(list.candidates.length, 0);
-  // explicit future cutoff: candidate listed on dry-run, deleted on --apply
-  const listAll = JSON.parse(run(["prune-preserved", "--root", root, "--before", "2099-01-01"]).stdout);
-  assert.equal(listAll.candidates.length, 1);
-  assert.equal(existsSync(dest), true, "dry-run deletes nothing");
-  const pruned = JSON.parse(run(["prune-preserved", "--root", root, "--before", "2099-01-01", "--apply"]).stdout);
-  assert.deepEqual(pruned.deleted, [moved.moved.to]);
-  assert.equal(existsSync(dest), false);
-});
-
-test("preserve refuses a missing source and a source already inside preserved/", () => {
-  const root = makeWorkspace();
-  const missing = run(["preserve", "--root", root, "--source", ".wakeflow-local/nope", "--reason", "x", "--write"]);
-  assert.notEqual(missing.status, 0);
-  mkdirSync(path.join(root, ".wakeflow-local/preserved/2026-01-01-held"), { recursive: true });
-  const inside = run(["preserve", "--root", root, "--source", ".wakeflow-local/preserved/2026-01-01-held", "--reason", "x", "--write"]);
-  assert.notEqual(inside.status, 0);
-  assert.match(JSON.parse(inside.stdout).error, /already inside preserved/);
-});
-
-test("preserve is confined to real non-symlink .wakeflow-local content and supports files", () => {
-  const root = makeWorkspace();
-  const outside = mkdtempSync(path.join(os.tmpdir(), "wakeflow-storage-outside-"));
-  writeFileSync(path.join(outside, "outside.txt"), "outside\n");
-
-  const external = run([
-    "preserve", "--root", root, "--source", path.join(outside, "outside.txt"),
-    "--reason", "must-not-move", "--write",
-  ]);
-  assert.notEqual(external.status, 0);
-  assert.match(JSON.parse(external.stdout).error, /must stay below/);
-  assert.equal(existsSync(path.join(outside, "outside.txt")), true);
-
-  symlinkSync(path.join(outside, "outside.txt"), path.join(root, ".wakeflow-local/linked.txt"));
-  const linked = run([
-    "preserve", "--root", root, "--source", ".wakeflow-local/linked.txt",
-    "--reason", "must-not-follow", "--write",
-  ]);
-  assert.notEqual(linked.status, 0);
-  assert.match(JSON.parse(linked.stdout).error, /symbolic link|resolves outside/i);
-  assert.equal(readFileSync(path.join(outside, "outside.txt"), "utf8"), "outside\n");
-
-  writeFileSync(path.join(root, ".wakeflow-local/local.log"), "local\n");
-  const fileMove = JSON.parse(run([
-    "preserve", "--root", root, "--source", ".wakeflow-local/local.log",
-    "--reason", "single-file", "--write",
-  ]).stdout);
-  assert.equal(fileMove.moved.payload, "local.log");
-  assert.equal(existsSync(path.join(root, fileMove.moved.to, "local.log")), true);
-  assert.equal(existsSync(path.join(root, fileMove.moved.to, "MANIFEST.md")), true);
+test("storage README seeding and Markdown manifest writers are not shipped", () => {
+  const retired = [
+    "scripts/wakeflow-storage.mjs",
+    "scripts/lib/wakeflow-storage-map.mjs",
+    "templates/wakeflow-template-bundle.json",
+  ];
+  for (const root of ["core", "plugins/codex-wakeflow", "plugins/claude-code-wakeflow"]) {
+    for (const relativePath of retired) {
+      assert.equal(existsSync(path.join(repositoryRoot, root, relativePath)), false, `${root}/${relativePath}`);
+    }
+  }
 });

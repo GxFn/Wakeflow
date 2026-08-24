@@ -11,24 +11,39 @@ plugin-surface blocker instead of falling back to a script path.
 
 ## Boundaries
 
-- Workspace scripts are governance tools. They may read workspace docs, inspect
-  child repository git status, validate links, maintain the global TODO board,
-  maintain archive docs, and manage controller state roots.
-- Workspace scripts must not implement product features, write into child source
+- Packaged top-level scripts are bounded public, maintenance, migration,
+  validation, or smoke facades. Domain mutations remain owned by typed v3
+  services under `scripts/lib/`; a facade must not become a parallel owner.
+- Runtime facades must not implement product features, write into child source
   repositories, edit real test projects, require secrets, depend on network
   access by default, or hide a total-control decision behind automation.
-- Write-capable scripts must default to dry-run or explicit check mode, require
-  an explicit write/apply flag, and keep writes inside workspace-owned docs
-  unless the active controller state root explicitly authorizes more.
+- Write-capable public operations require their exact typed operation and
+  preview/apply authority. Explicit migration remains isolated behind the
+  unregistered bootstrap launcher and is never a normal fallback.
 - Keep user-facing docs scarce: the goal / stage confirmation document and the
   single developer progress document are the main reading surface. Generated
   indexes, inboxes, status mirrors, archive summaries, and script format notes
   should stay script-owned and concise.
 - State-machine surfaces must be script-driven. Control flows store machine
-  state in `wakeflow-state.json`, events in JSONL, task packages and target
-  results as JSON, and render only the `Unified Status` block inside
-  `developer-progress.md`. Do not hand-author explanatory status strings as the
-  source of truth.
+  state in `wakeflow-state.json`, events in JSONL, and task packages and target
+  results as JSON. The demand document owner regenerates the complete
+  `developer-progress.md` projection from those facts and the localized asset;
+  no hand-authored Markdown block is source of truth.
+
+## Canonical Asset Ownership
+
+- The two localized demand-progress projection assets are authored only in
+  `core/template-sources/`. Rebuild their generated
+  `templates/wakeflow-asset-bundle.json` copies through `npm run sync:core`,
+  then verify through `npm run check:core`; never edit an artifact bundle or
+  reverse-source core content from an installed copy.
+- Active index/current-status projections, global TODO content, ledger indexes,
+  and root/repository/Design/Test memory are not template-source assets. Their
+  domain owners — the workspace projector, TODO service, ledger projectors, and
+  rule model — generate and update them under their own state/evidence gates.
+- The retired `templates/wakeflow-template-bundle.json` is not a compatibility
+  surface. Do not recreate it or source content from it; the only install
+  carrier is the generated `templates/wakeflow-asset-bundle.json`.
 
 ## Installed Controller MCP Surface
 
@@ -36,71 +51,52 @@ Use these MCP tools for normal installed-workspace control:
 
 | Need | MCP tool |
 | --- | --- |
-| Setup and window registration | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
+| Workspace maintenance and window identity | `wakeflow_maintain_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
 | Demand/status lifecycle | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_cancel_demand` |
-| Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_bind`, `wakeflow_pod_plan` (design-request/test-access/close), `wakeflow_pod_record` (materialization/design-handoff/test-access/close-receipt) |
+| Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_bind`, `wakeflow_pod_plan` (design-request, test-access-plan/inspect, close-intent/inspect), `wakeflow_pod_record` (record-materialization, design-handoff, test-access-observe/receipt, close-observe/receipt) |
 | Delivery transport | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results, review, and completion | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| Archive, views, maintenance, verification | `wakeflow_archive` (including target=sanitize-demand), `wakeflow_view` (including progress/pods), `wakeflow_storage_preserve`, `wakeflow_prune_runtime`, `wakeflow_verify` |
-| Host ownership and target work leases | `wakeflow_adopt_demand_host`, `wakeflow_release_window_lock` |
+| Evidence, archive, views, storage, verification | `wakeflow_record_evidence`, `wakeflow_archive`, `wakeflow_view`, `wakeflow_storage_preserve`, `wakeflow_prune_runtime`, `wakeflow_verify` |
+| Exact target lease release | `wakeflow_release_window_lock` |
 
 ## Source Runtime Command Set
 
-The commands below are backend/source-maintenance examples for the Wakeflow
-repository. They are not the installed controller command surface.
+The commands below are backend/source-maintenance entrypoints for the Wakeflow
+repository. They are not substitutes for an installed controller's MCP surface.
 
-- Aggregated command surface:
-  `node scripts/wakeflow-cli.mjs status`
-  `node scripts/wakeflow-cli.mjs status --json`
-  `node scripts/wakeflow-cli.mjs verify`
-  `node scripts/wakeflow-cli.mjs sync --state-root <state-root> --write`
-  `node scripts/wakeflow-cli.mjs scripts --tests`
-  `node scripts/wakeflow-cli.mjs loop status --json`
-  `node scripts/wakeflow-cli.mjs next-work --after-completion --json`
-  `node scripts/wakeflow-cli.mjs next-work --id <design-key> --json`
-  `node scripts/wakeflow-cli.mjs intake test-card --state-root <state-root> --test-id <id> --target-window <window> ... --write --json`
-  `node scripts/wakeflow-cli.mjs loop build-delivery --write --json`
-  `node scripts/wakeflow-cli.mjs loop review-results --json`
-  `node scripts/wakeflow-state.mjs init --write --json`
-  `node scripts/wakeflow-state.mjs add-task-package --write --json`
-  `node scripts/wakeflow-state.mjs import-target-result --write --json`
-  `node scripts/wakeflow-state.mjs reduce-results --write --json`
-  `node scripts/wakeflow-state.mjs decide-review --write --json`
-  `node scripts/wakeflow-state.mjs complete-demand --write --json`
-  `node scripts/wakeflow-state.mjs archive-demand --redact --write --json`
-  `node scripts/wakeflow-state.mjs sanitize-archive --state-root <archived-root> --reason <text> --write --json`
-  `node scripts/wakeflow-delivery.mjs prepare-dispatch-from-state --write --json`
-  `node scripts/wakeflow-delivery.mjs review-pack --json`
-- General pre-acceptance:
-  `node scripts/wakeflow-verify.mjs`
-- Test state-root intake:
-  `node scripts/wakeflow-intake.mjs test-card --state-root <state-root> --test-id <id> --target-window <window> ... --write --json`
-- Runtime residue inspection:
-  `node scripts/wakeflow-check-runtime.mjs`
-  `node scripts/wakeflow-verify.mjs --with-runtime`
-- Script maintenance:
-  `node scripts/wakeflow-check-scripts.mjs`
-  `node scripts/wakeflow-verify.mjs --with-script-tests`
+- `wakeflow-cli.mjs` is the exact public 31-tool CLI mirror. It accepts only
+  `--request-stdin --json` and one bounded JSON object on stdin:
+  `{"tool":"wakeflow_verify","arguments":{"root":"<workspace>","operation":"inspect","request":{}}}`.
+- `wakeflow-setup.mjs` is the maintenance-only stdin backend for
+  `wakeflow_maintain_workspace`. It accepts the same exact flags and one
+  maintenance request; it has no legacy subcommands or discovery/reset aliases.
+- `bin/wakeflow-bootstrap` is an unregistered, zero-argv explicit-migration
+  launcher. Use it only from the exact installed artifact the user selected;
+  it reads one bounded request from stdin and is never a normal CLI/MCP route.
+- `wakeflow-validate.mjs` validates the exact public v3 exports, packaging,
+  schemas, Skills, and import fences. `wakeflow-smoke.mjs` executes a disposable
+  fresh-initialize preview/apply/reconcile plus observability smoke through the
+  final public backend.
+- Retired writer source is not shipped. Migration tests consume checked-in,
+  digest-verified historical output fixtures; production migration code only
+  parses and transforms classified legacy material through the bootstrap graph.
 
-## Script Selection
+## Route Selection
 
-| Need | Primary script | Notes |
+| Need | Primary route | Notes |
 | --- | --- | --- |
-| Choose a common Wakeflow workflow without memorizing script flags | `wakeflow-cli.mjs` | Aggregates existing scripts only; it does not replace total-control decisions or bypass write/apply gates. Use `--print` before unfamiliar flows. |
-| Know child repo branches, dirty state, and commits | `wakeflow-repo-status.mjs` | Read-only; useful before acceptance or cross-repo planning. |
-| Ensure workspace git tracks only workspace files | `wakeflow-check-boundary.mjs` | Read-only guard against accidentally tracking child repos or local noise. |
-| Validate workspace docs and links | `verify-workspace-docs.mjs` | Use `--all-workspace` through `wakeflow-verify`. |
-| Validate current docs stay under `.wakeflow-active/current/` and remain readable by downstream scripts | `wakeflow-check-layout.mjs` | Read-only layout and current-doc contract guard. |
-| Create a Test boundary card for an active demand | `wakeflow-intake.mjs test-card` | Writes `test-cards/*.json` under the state root. It requires the full pre-test boundary gate and does not dispatch Test or accept test evidence. |
-| Archive completed Wakeflow docs and shrink historical indexes | MCP: `wakeflow_archive` (target=docs / target=todo); backend scripts: `wakeflow-archive-docs.mjs`, `wakeflow-archive-todo.mjs`, `wakeflow-archive-summaries.mjs` | Use MCP for normal controller archive flows. Dry-run first; apply only after current status no longer points at the archived item. |
-| Keep script catalog and tests from drifting | `wakeflow-check-scripts.mjs` | Runs inside `wakeflow-verify`; add tests to `--with-script-tests`. |
-| Manage the controller state root | `wakeflow-state.mjs`, `wakeflow-render-progress.mjs` | Default route for execution surfaces. `wakeflow-state` owns machine state, review candidates, explicit review decisions, final completion, privacy-guarded demand archive, and the bounded `sanitize-archive` amendment for an existing archived root; `wakeflow-render-progress` updates only the generated Unified Status block. |
-| Manage Wakeflow Delivery Loop contracts | `wakeflow-delivery.mjs`, `wakeflow-cli.mjs loop ...` | Runtime files stay under ignored `.wakeflow-local/wakeflow-delivery/`; the script derives packets and envelopes from the state root, then writes dispatch packets, groups, envelopes, delivery runs, review packs, controller-return envelopes, stop markers, and thread registry files in the local delivery runtime. It never sends host thread messages, accepts results, selects TODOs, or writes product repositories. |
-| Scan next controller-ready demand after completion | `wakeflow-next-work.mjs`, `wakeflow-cli.mjs next-work ...` | Read-only by default. It ranks controller-ready rows on the global TODO board (including rows Design delivered via `wakeflow_deliver`) into a candidate list, but never creates a current plan, accepts a candidate, dispatches windows, or changes TODO board state. Use `--id <design-key>` when the user names a specific ready demand. |
-| Reduce repeated controller dispatch preparation | `wakeflow-delivery.mjs prepare-dispatch-from-state` | Use only after total control has chosen an eligible target task inside the controller state root. It writes a derived window config, dispatch packet, dispatch group, and delivery envelope in one step, then stops before host thread send. It fails closed for terminal / paused / blocked / review-ready demands and accepted / completed / blocked target tasks. |
-| Reduce repeated callback review setup | `wakeflow-delivery.mjs review-pack` | Read-only. It wraps `review-results` with target-authored claims, artifact pointers, structural gaps, delivery-run status, and controller-return status so total control can inspect review inputs without manually opening every local envelope first. It does not verify truth and is not an acceptance verdict. Empty state-root target lists return `no-target-tasks`, not review-ready. |
-| Manage direct-thread child-window config and delivery facts | `wakeflow-delivery.mjs register-thread`, `build-window-config`, `record-delivery-run`, `keep-live-state` | `register-thread` writes the host-local routing registry and refreshes its derived window config in one operation. Wakeflow does not classify host-thread initialization replies or maintain a separate ready state. Delivery-run facts and keep-live state stay under ignored local runtime. They describe sendability and transport observations only; total control still owns the state root, delivery decision, target-input inspection, independent validation, and acceptance verdict. |
+| Invoke one public tool outside MCP for source verification | `wakeflow-cli.mjs` | Exact bounded stdin mirror of the public 31-tool surface; no subcommand aliases or caller-supplied internal paths. |
+| Initialize, reconfigure, or reconcile a workspace | MCP: `wakeflow_maintain_workspace` | Routes through the maintenance-only backend; migration is rejected. |
+| Migrate one explicitly selected legacy workspace | `bin/wakeflow-bootstrap` | Zero argv, bounded stdin, preview/apply/recover only; never a package command or MCP route. |
+| Inspect workspace health | MCP: `wakeflow_verify operation=inspect` | Read-only strict verdict; it does not authorize repairs. |
+| Create a Test boundary card for an active demand | MCP: `wakeflow_intake_test_card operation=create` | Writes one exact authority-bound TestCard. It does not dispatch Test or accept test evidence. |
+| Archive one closed demand | MCP: `wakeflow_archive` (`preview/apply/inspect/recover`) | Creates one portable whole-demand BusinessArchive; no secondary docs/TODO archive writer exists. |
+| Manage demand state and review | MCP: `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_reduce_results`, `wakeflow_decide_review`, lifecycle/recovery tools | Each call routes to one typed v3 owner. Generic transitions cannot forge review/lifecycle changes, and lifecycle preview/apply/recover remains separate from archive. |
+| Manage Wakeflow Delivery Loop contracts | MCP: `wakeflow_prepare_delivery`, `wakeflow_record_delivery`, `wakeflow_record_target_result`, `wakeflow_review_pack` | Exact target preview/apply/claim/rearm and Controller preview/apply/pre-send are separate from the host effect. Current group/packet/envelope/run records live under `.wakeflow-local/runtime/shared/transport/demands/<demandId>/`; results stay in demand authority. |
+| Inspect and publish the next controller-ready demand | MCP: `wakeflow_next_work operation=inspect`, then `wakeflow_create_demand` | Inspection is read-only. The create owner publishes the root first and atomically claims an exact linked TODO row. Standalone `wakeflow_claim_next` is only a row CAS and is not a demand initializer. |
+| Inspect callback/review readiness | MCP: `wakeflow_review_pack operation=group/trace` | The group operation builds a strict deterministic review snapshot; trace is evidence-only. Neither verifies truth nor decides acceptance. |
+| Manage direct-thread identity and delivery facts | MCP: `wakeflow_register_window`, `wakeflow_replace_windows`, `wakeflow_record_delivery` | Typed binding is identity authority, window-runtime is a redacted projection, and the exact shared lease serializes target effects. Raw handles are never returned or copied into transport. |
 
 ## When To Extract A New Script
 
@@ -121,17 +117,19 @@ When adding, renaming, or deleting a script:
 1. Update `scripts/README.md`.
 2. Add, adjust, or delete focused `*.test.mjs` coverage when the script
    transforms docs, enforces safety, or protects a known workflow.
-3. Keep the test list in `wakeflow-verify.mjs --with-script-tests`
-   aligned with actual `*.test.mjs` files.
-4. Run `node scripts/wakeflow-check-scripts.mjs`.
-5. Run `node scripts/wakeflow-verify.mjs --with-script-tests` when the
-   change affects more than README text.
+3. Make shared changes in `core/`, then run `npm run sync:core` and `npm run
+   check:core`; do not maintain generated shared artifact copies independently.
+4. Run both artifact validators and the relevant smoke/focused tests.
+5. Run `npm test` before declaring the source tree release-ready.
 
 When adding or changing a document format:
 
 1. Update the script-readable format notes in `scripts/README.md` only when the
    script contract changes.
-2. Update the relevant template entry in `templates/wakeflow-template-bundle.json`.
-3. Run the focused state-root tests for the affected route.
-4. Run `node scripts/wakeflow-verify.mjs --with-script-tests` when the
-   active state root or dispatch boundary is affected.
+2. Update the canonical source under `core/template-sources/` when one of the
+   two localized demand-progress assets changes; other documents stay with their
+   domain owner rather than entering the asset bundle.
+3. Run `npm run sync:core` and `npm run check:core` so both generated asset
+   bundles and shared runtime copies are verified.
+4. Run the focused owner tests, both artifact validators/smokes, and the full
+   repository gate when the active-state or dispatch boundary is affected.

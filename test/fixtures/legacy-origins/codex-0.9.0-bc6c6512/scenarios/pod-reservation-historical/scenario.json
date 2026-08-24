@@ -1,0 +1,77 @@
+{
+  "artifactKind": "wakeflow-legacy-lifecycle-scenario",
+  "beforeManifest": null,
+  "category": "retired-material",
+  "commandSequence": [],
+  "deltaEntries": [
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": ".wakeflow-local"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": ".wakeflow-local/pod-reservations"
+    },
+    {
+      "afterBytes": 307,
+      "afterDigest": "sha256:6d51b19a92edadddaf80059d6c390969d58174b226a3d9028a5b5a69758466d1",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": ".wakeflow-local/pod-reservations/PREPARING-POD.json"
+    }
+  ],
+  "host": "codex",
+  "materializationMode": "historical-seed",
+  "normalizations": [],
+  "outputManifest": {
+    "artifactKind": "wakeflow-loaded-artifact-tree",
+    "fileCount": 1,
+    "files": [
+      {
+        "bytes": 307,
+        "digest": "sha256:6d51b19a92edadddaf80059d6c390969d58174b226a3d9028a5b5a69758466d1",
+        "executable": false,
+        "ref": ".wakeflow-local/pod-reservations/PREPARING-POD.json"
+      }
+    ],
+    "schemaVersion": 1,
+    "totalBytes": 307
+  },
+  "producer": {
+    "artifactDigest": null,
+    "sourceCommit": "bc6c6512c722d36469a9dcd0cff215d614b2109b",
+    "sourceFiles": [
+      {
+        "bytes": 3996,
+        "digest": "sha256:0dc99fec6ad779ce9bb2fa399ad31439218c00e437ebc41cf231df40e2798d9c",
+        "executable": false,
+        "ref": "scripts/lib/wakeflow-pod-reservations.mjs",
+        "role": "original-writer"
+      }
+    ]
+  },
+  "scenarioId": "pod-reservation-historical",
+  "schemaVersion": 1,
+  "scenarioDigest": "sha256:35f009b4dc502a1d6c149e1ab5f4d03f8b97926eaccdb0615e6be592ccfbeb76"
+}

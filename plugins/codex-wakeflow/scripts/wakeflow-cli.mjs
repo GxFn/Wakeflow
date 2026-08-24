@@ -1,392 +1,249 @@
 #!/usr/bin/env node
 
+/**
+ * Wakeflow 公开 CLI 的 JSON-stdin 镜像入口。
+ *
+ * 能力导航：
+ * - parseWakeflowCliArgv：只接纳固定的 stdin + JSON 启动形式。
+ * - parseWakeflowCliRequest：把一条请求收敛为已注册工具名和冻结参数。
+ * - runWakeflowCli：精确选择共享 MCP handler，不在本文件复制领域路由。
+ * - runWakeflowCliStdin：限制输入字节、编码公开结果并收敛错误。
+ *
+ * 本文件只拥有 CLI 传输合同；工具权限、状态转换和领域错误仍由原 handler owner 拥有。
+ */
 import path from "node:path";
-import { existsSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { runSync } from "../lib/wakeflow-process.mjs";
-import { loadWorkspaceConfig, workspaceConfigDiagnostics } from "./lib/wakeflow-config.mjs";
+import { pathToFileURL } from "node:url";
 
-const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
-const rawArgs = process.argv.slice(2);
-const wakeflowRoot = path.dirname(scriptsDir);
-const targetRoot = path.resolve(getValue(rawArgs, "--root") || wakeflowRoot);
-const printOnly = rawArgs.includes("--print");
-const args = rawArgs.filter((arg) => arg !== "--print");
-const command = args[0] ?? "help";
-const commandArgs = args.slice(1);
-const workspaceConfig = loadWorkspaceConfig({ workspaceRoot: targetRoot, args: rawArgs });
+import { handlers, tools } from "../lib/wakeflow-mcp-tools.mjs";
 
-const testScripts = listRepositoryTests();
+export const WAKEFLOW_CLI_STDIN_LIMIT = 8 * 1024 * 1024;
 
-const helpText = `
-${workspaceConfig.workspaceName} script aggregator
+const REQUIRED_FLAGS = Object.freeze(["--request-stdin", "--json"]);
+const PUBLIC_TOOLS = Object.freeze(tools.map((tool) => tool.name));
+const PUBLIC_MCP_ERROR_CODE_PATTERN = /^wakeflow-public-mcp-[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const STABLE_WAKEFLOW_CODE_PATTERN = /^wakeflow-[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 
-Usage:
-  node scripts/wakeflow-cli.mjs <command> [options]
-  node scripts/wakeflow-cli.mjs --print <command> [options]
-
-Commands:
-  status      Show repo status and closed-loop machine health.
-  verify      Run wakeflow-verify with common option aliases.
-  sync        Render a controller state-root progress document.
-  intake      Attach Test machine intake (boundary cards) to a controller state root.
-  runtime     Inspect runtime residue without mutating processes.
-  install     Discover sibling repos, configure scope, and write child AGENTS blocks.
-  scripts     Check script docs, optionally including script tests.
-  loop        Operate the new Wakeflow Delivery Loop contract surface.
-  next-work   Scan the global TODO board for the next controller-ready candidate.
-  help        Show this help.
-
-Common examples:
-  node scripts/wakeflow-cli.mjs status
-  node scripts/wakeflow-cli.mjs status --json
-  node scripts/wakeflow-cli.mjs status --root /path/to/Wakeflow --json
-  node scripts/wakeflow-cli.mjs verify --script-tests
-  node scripts/wakeflow-cli.mjs sync --state-root .wakeflow-active/current/<demand-key> --write
-  node scripts/wakeflow-cli.mjs install status --json
-  node scripts/wakeflow-cli.mjs loop status --json
-  node scripts/wakeflow-cli.mjs next-work --after-completion --json
-  node scripts/wakeflow-cli.mjs next-work --id example-demand-2026-06-03 --json
-
-Safety:
-  This script only orchestrates existing workspace scripts. Write-capable flows
-  still require explicit flags such as --write or --apply on the underlying
-  script. Use --print to inspect the exact commands before running them. See
-  skills/wakeflow-governance/references/script-pipeline.md for
-  the full command catalog.
-`.trim();
-
-class CliExit extends Error {}
-
-function fail(message) {
-  console.error(message);
-  process.exitCode = 1;
-  throw new CliExit(message);
-}
-
-function hasFlag(options, name) {
-  return options.includes(name);
-}
-
-function getValue(options, name) {
-  const eq = options.find((arg) => arg.startsWith(`${name}=`));
-  if (eq) {
-    return eq.slice(name.length + 1);
+export class WakeflowCliError extends Error {
+  constructor(code, message, { cause, details = {} } = {}) {
+    super(message, cause === undefined ? undefined : { cause });
+    this.name = "WakeflowCliError";
+    this.code = code;
+    this.details = deepFreeze({ ...details });
+    if (cause !== undefined && this.cause === undefined) this.cause = cause;
   }
-  const index = options.indexOf(name);
-  if (index >= 0 && options[index + 1] && !options[index + 1].startsWith("--")) {
-    return options[index + 1];
-  }
-  return null;
 }
 
-function assertKnownOptions(options, knownFlags, knownValues = []) {
-  const valueNames = new Set(knownValues);
-  const known = new Set([...knownFlags, ...knownValues]);
-  for (let index = 0; index < options.length; index += 1) {
-    const option = options[index];
-    if (!option.startsWith("--")) {
-      fail(`Unexpected positional argument: ${option}`);
-    }
-    const name = option.includes("=") ? option.slice(0, option.indexOf("=")) : option;
-    if (!known.has(name)) {
-      fail(`Unsupported option for ${command}: ${option}`);
-    }
-    if (valueNames.has(name) && !option.includes("=")) {
-      if (!options[index + 1] || options[index + 1].startsWith("--")) {
-        fail(`Missing value for ${name}.`);
-      }
-      index += 1;
+function fail(code, message, cause = undefined) {
+  throw new WakeflowCliError(code, message, { cause });
+}
+
+// 公共输入只接受普通对象；class instance 与自定义原型不能充当数据合同。
+function plainObject(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  return [Object.prototype, null].includes(Object.getPrototypeOf(value));
+}
+
+// clone 完成后递归冻结参数，避免 handler 之间通过调用方对象共享可变状态。
+function deepFreeze(value) {
+  if (!value || typeof value !== "object") return value;
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.isFrozen(value) ? value : Object.freeze(value);
+}
+
+// 同时检查字段集合与 data property，验证阶段不执行 accessor。
+function exactDataObject(value, allowed, required, label) {
+  if (!plainObject(value)) fail("wakeflow-cli-invalid-contract", `${label} must be one plain object`);
+  const keys = Reflect.ownKeys(value);
+  if (keys.some((key) => typeof key !== "string" || !allowed.includes(key))) {
+    fail("wakeflow-cli-invalid-contract", `${label} has an unknown field`);
+  }
+  for (const key of required) {
+    if (!Object.hasOwn(value, key)) fail("wakeflow-cli-invalid-contract", `${label} is missing ${key}`);
+  }
+  for (const key of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor?.enumerable || !Object.hasOwn(descriptor, "value")) {
+      fail("wakeflow-cli-invalid-contract", `${label}.${String(key)} must be an enumerable data property`);
     }
   }
+  return value;
 }
 
-function nodeScript(script, argsForScript = []) {
-  return {
-    command: process.execPath,
-    displayCommand: "node",
-    args: [`scripts/${script}`, ...argsForScript],
-  };
-}
-
-function shellDisplay(step) {
-  return [step.displayCommand ?? step.command, ...step.args].join(" ");
-}
-
-function verifyArgs(options) {
-  const out = [];
-  if (hasFlag(options, "--runtime") || hasFlag(options, "--with-runtime")) {
-    out.push("--with-runtime");
+// CLI 不保留旧子命令或别名，只允许精确的 stdin JSON 调用形式。
+export function parseWakeflowCliArgv(argv = []) {
+  if (!Array.isArray(argv) || argv.some((entry) => typeof entry !== "string")) {
+    fail("wakeflow-cli-invalid-argv", "public CLI argv must be an array of strings");
   }
-  if (hasFlag(options, "--strict-runtime")) {
-    out.push("--strict-runtime");
+  if (
+    argv.length !== REQUIRED_FLAGS.length
+    || REQUIRED_FLAGS.some((flag) => argv.filter((entry) => entry === flag).length !== 1)
+  ) {
+    fail(
+      "wakeflow-cli-invalid-argv",
+      "public CLI invocation requires exact --request-stdin and --json flags",
+    );
   }
-  if (hasFlag(options, "--script-tests") || hasFlag(options, "--with-script-tests")) {
-    out.push("--with-script-tests");
+  return Object.freeze({ requestStdin: true, json: true });
+}
+
+// 一次 stdin 只承载一个已注册工具请求；参数在进入 handler 前完成 clone 与 freeze。
+export function parseWakeflowCliRequest(raw) {
+  if (typeof raw !== "string") {
+    fail("wakeflow-cli-invalid-stdin", "public CLI stdin must be one UTF-8 JSON string");
   }
-  return [...new Set(out)];
-}
-
-function buildStatus(options) {
-  assertKnownOptions(options, ["--json", "--verbose"], ["--root"]);
-  const json = hasFlag(options, "--json");
-  const verbose = hasFlag(options, "--verbose");
-  const root = getValue(options, "--root");
-  return [
-    {
-      label: "repo status",
-      key: "repoStatus",
-      ...nodeScript("wakeflow-repo-status.mjs", [...optionalRoot(root), ...(json ? ["--json"] : [])]),
-    },
-    {
-      label: "closed-loop status",
-      key: "closedLoopStatus",
-      ...nodeScript("wakeflow-delivery.mjs", ["status", ...optionalRoot(root), ...(json ? ["--json"] : []), ...(verbose ? ["--verbose"] : [])]),
-    },
-  ];
-}
-
-function buildVerify(options) {
-  assertKnownOptions(options, [
-    "--json",
-    "--runtime",
-    "--with-runtime",
-    "--strict-runtime",
-    "--script-tests",
-    "--with-script-tests",
-  ], ["--root"]);
-  return [{
-    label: "Wakeflow verification",
-    ...nodeScript("wakeflow-verify.mjs", [...optionalRoot(getValue(options, "--root")), ...verifyArgs(options)]),
-  }];
-}
-
-function buildSync(options) {
-  assertKnownOptions(options, ["--write", "--json"], ["--state-root", "--root"]);
-  const stateRoot = getValue(options, "--state-root");
-  if (!stateRoot) {
-    fail("sync requires --state-root for the controller state-machine route.");
+  if (Buffer.byteLength(raw, "utf8") > WAKEFLOW_CLI_STDIN_LIMIT) {
+    fail("wakeflow-cli-stdin-too-large", "public CLI stdin exceeds its bounded size");
   }
-  const out = ["--state-root", stateRoot];
-  const root = getValue(options, "--root");
-  if (root) out.push("--root", root);
-  if (hasFlag(options, "--write")) out.push("--write");
-  if (hasFlag(options, "--json")) out.push("--json");
-  return [{ label: "render controller progress doc", key: "controllerProgressRender", ...nodeScript("wakeflow-render-progress.mjs", out) }];
-}
-
-function buildIntake(options) {
-  const subcommand = options[0] ?? "help";
-  const rest = options.slice(1);
-  return [{ label: "Test state-root intake", ...nodeScript("wakeflow-intake.mjs", [subcommand, ...rest]) }];
-}
-
-function buildRuntime(options) {
-  assertKnownOptions(options, ["--strict"]);
-  return [{ label: "runtime residue", ...nodeScript("wakeflow-check-runtime.mjs", hasFlag(options, "--strict") ? ["--strict"] : []) }];
-}
-
-function buildInstall(options) {
-  const subcommand = options[0] ?? "status";
-  const rest = options.slice(1);
-  assertKnownOptions(
-    rest,
-    [
-      "--json",
-      "--write",
-      "--all",
-      "--use-discovered",
-      "--internal-design",
-      "--internal-test",
-      "--include-unmanaged",
-      "--include-real-project",
-    ],
-    [
-      "--root",
-      "--parent",
-      "--config",
-      "--repo",
-      "--role",
-      "--window",
-      "--workspace-name",
-      "--controller-window",
-      "--design-window",
-      "--test-window",
-      "--real-project-window",
-      "--base-window",
-    ],
+  if (!raw.trim()) fail("wakeflow-cli-invalid-stdin", "public CLI stdin is empty");
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (cause) {
+    fail("wakeflow-cli-invalid-json", "public CLI stdin must contain exactly one JSON request", cause);
+  }
+  const request = exactDataObject(parsed, ["tool", "arguments"], ["tool", "arguments"], "CLI request");
+  if (typeof request.tool !== "string" || !PUBLIC_TOOLS.includes(request.tool)) {
+    fail("wakeflow-cli-unknown-tool", "CLI request.tool must name one public Wakeflow tool");
+  }
+  exactDataObject(
+    request.arguments,
+    Reflect.ownKeys(request.arguments).filter((key) => typeof key === "string"),
+    [],
+    "CLI request.arguments",
   );
-  return [{ label: "Wakeflow runtime install", ...nodeScript("wakeflow-setup.mjs", [subcommand, ...rest]) }];
+  let argumentsValue;
+  try {
+    argumentsValue = deepFreeze(structuredClone(request.arguments));
+  } catch (cause) {
+    fail("wakeflow-cli-invalid-contract", "CLI request.arguments must contain cloneable JSON-compatible data", cause);
+  }
+  return Object.freeze({ tool: request.tool, arguments: argumentsValue });
 }
 
-function buildScripts(options) {
-  assertKnownOptions(options, ["--tests"]);
-  const steps = [{ label: "script docs", ...nodeScript("wakeflow-check-scripts.mjs") }];
-  if (hasFlag(options, "--tests")) {
-    if (testScripts.length === 0) {
-      fail("No repository test directory is available from this Wakeflow installation.");
+// 先按原始字节执行上限检查，再用 fatal UTF-8 解码，禁止替换字符改变请求语义。
+async function readBoundedUtf8(stream) {
+  if (stream === null || typeof stream !== "object" || stream[Symbol.asyncIterator] === undefined) {
+    fail("wakeflow-cli-invalid-stdin", "public CLI stdin must be an async-readable stream");
+  }
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of stream) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk), "utf8");
+    total += bytes.length;
+    if (total > WAKEFLOW_CLI_STDIN_LIMIT) {
+      fail("wakeflow-cli-stdin-too-large", "public CLI stdin exceeds its bounded size");
     }
-    steps.push({
-      label: "workspace script tests",
-      command: process.execPath,
-      displayCommand: "node",
-      args: ["--test", ...testScripts],
-    });
+    chunks.push(bytes);
   }
-  return steps;
-}
-
-function listRepositoryTests() {
-  for (const candidate of [
-    path.join(wakeflowRoot, "test"),
-    path.resolve(wakeflowRoot, "../../test"),
-  ]) {
-    if (!existsSync(candidate)) continue;
-    return readdirSync(candidate)
-      .filter((name) => name.endsWith(".test.mjs"))
-      .sort()
-      .map((name) => path.relative(wakeflowRoot, path.join(candidate, name)).split(path.sep).join("/"));
-  }
-  return [];
-}
-
-function optionalRoot(root) {
-  return root ? ["--root", root] : [];
-}
-
-function buildLoop(options) {
-  const subcommand = options[0] ?? "status";
-  const rest = options.slice(1);
-  return [{ label: "Wakeflow delivery loop", ...nodeScript("wakeflow-delivery.mjs", [subcommand, ...rest]) }];
-}
-
-function buildNextWork(options) {
-  assertKnownOptions(options, ["--after-completion", "--write", "--json"], ["--id", "--source", "--limit", "--board", "--todo", "--status", "--out"]);
-  return [{ label: "next Wakeflow work candidate scan", ...nodeScript("wakeflow-next-work.mjs", options) }];
-}
-
-function buildSteps() {
-  switch (command) {
-    case "help":
-    case "--help":
-    case "-h":
-      console.log(helpText);
-      return [];
-    case "status":
-      return buildStatus(commandArgs);
-    case "verify":
-      return buildVerify(commandArgs);
-    case "sync":
-      return buildSync(commandArgs);
-    case "intake":
-      return buildIntake(commandArgs);
-    case "runtime":
-      return buildRuntime(commandArgs);
-    case "install":
-      return buildInstall(commandArgs);
-    case "scripts":
-      return buildScripts(commandArgs);
-    case "loop":
-      return buildLoop(commandArgs);
-    case "next-work":
-      return buildNextWork(commandArgs);
-    default:
-      fail(`Unknown wakeflow-cli command: ${command}\n\n${helpText}`);
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks, total));
+  } catch (cause) {
+    fail("wakeflow-cli-invalid-stdin", "public CLI stdin is not valid UTF-8", cause);
   }
 }
 
-function runStep(step) {
-  console.log(`\n## ${step.label}`);
-  console.log(`$ ${shellDisplay(step)}`);
-  const result = runSync(step.command, step.args, {
-    cwd: wakeflowRoot,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
+// 只有当前共享注册表中的真实 handler 才能把 MCP 领域错误提升为 CLI 公开错误。
+function trustedPublicToolError(error, tool, handler) {
+  if (
+    handler !== handlers[tool]
+    || error?.name !== "WakeflowPublicMcpError"
+    || !PUBLIC_MCP_ERROR_CODE_PATTERN.test(error.code)
+    || typeof error.message !== "string"
+  ) return null;
+  const causeCode = STABLE_WAKEFLOW_CODE_PATTERN.test(error?.details?.causeCode)
+    ? error.details.causeCode
+    : undefined;
+  return new WakeflowCliError(error.code, error.message, {
+    cause: error,
+    details: causeCode === undefined ? {} : { causeCode },
   });
-  if (result.stdout) {
-    process.stdout.write(result.stdout);
-  }
-  if (result.stderr) {
-    process.stderr.write(result.stderr);
-  }
-  return result.status ?? 1;
 }
 
-function runStatusJson(steps) {
-  const checks = [];
-  let ok = true;
-
-  for (const step of steps) {
-    const result = runSync(step.command, step.args, {
-      cwd: wakeflowRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    const status = result.status ?? 1;
-    let payload = null;
-    if (result.stdout) {
-      try {
-        payload = JSON.parse(result.stdout);
-      } catch {
-        ok = false;
-      }
-    }
-    if (status !== 0) {
-      ok = false;
-    }
-    checks.push({
-      key: step.key ?? step.label,
-      label: step.label,
-      command: shellDisplay(step),
-      status,
-      ok: status === 0 && payload !== null,
-      payload,
-      stderr: result.stderr || "",
+// 公开失败只保留本 facade 或受信 handler 产生的稳定字段，其他异常统一脱敏。
+function publicError(error) {
+  if (error instanceof WakeflowCliError) {
+    const causeCode = STABLE_WAKEFLOW_CODE_PATTERN.test(error?.details?.causeCode)
+      ? error.details.causeCode
+      : undefined;
+    return Object.freeze({
+      code: error.code,
+      message: error.message,
+      ...(causeCode === undefined ? {} : { causeCode }),
     });
   }
-
-  console.log(JSON.stringify({
-    ok,
-    command: "status",
-    configuration: workspaceConfigDiagnostics({
-      workspaceRoot: targetRoot,
-      args: rawArgs,
-      effectiveConfig: workspaceConfig,
-    }),
-    checks,
-  }, null, 2));
-  process.exitCode = ok ? 0 : 1;
+  return Object.freeze({
+    code: "wakeflow-cli-failed",
+    message: "public Wakeflow tool failed inside its bounded owner",
+  });
 }
 
-function main() {
-  const steps = buildSteps();
-
-  if (printOnly && steps.length > 0) {
-    console.log(`Wakeflow command plan: ${command}`);
-    for (const step of steps) {
-      console.log(`$ ${shellDisplay(step)}`);
-    }
-    return;
+// 这里仅完成工具选择；领域操作仍直接调用共享 MCP handler。
+export async function runWakeflowCli(value = {}) {
+  const input = exactDataObject(value, ["argv", "rawRequest", "toolHandlers"], [
+    "argv",
+    "rawRequest",
+    "toolHandlers",
+  ], "CLI execution");
+  parseWakeflowCliArgv(input.argv);
+  if (!plainObject(input.toolHandlers)) {
+    fail("wakeflow-cli-invalid-handlers", "public CLI handlers must be one exact map");
   }
-
-  if (command === "status" && hasFlag(commandArgs, "--json")) {
-    runStatusJson(steps);
-    return;
+  const request = parseWakeflowCliRequest(input.rawRequest);
+  const descriptor = Object.getOwnPropertyDescriptor(input.toolHandlers, request.tool);
+  if (
+    !descriptor?.enumerable
+    || !Object.hasOwn(descriptor, "value")
+    || typeof descriptor.value !== "function"
+  ) {
+    fail("wakeflow-cli-handler-missing", "selected public CLI tool has no handler");
   }
-
-  for (const step of steps) {
-    const status = runStep(step);
-    if (status !== 0) {
-      process.exitCode = status;
-      return;
-    }
+  const handler = descriptor.value;
+  try {
+    return await handler(request.arguments);
+  } catch (error) {
+    throw trustedPublicToolError(error, request.tool, handler) ?? error;
   }
 }
 
-try {
-  main();
-} catch (error) {
-  if (!(error instanceof CliExit)) {
-    throw error;
+// stdin 适配层保证每次调用只写一个 JSON envelope，并以 exitCode 表示传输结果。
+export async function runWakeflowCliStdin(value = {}) {
+  const input = exactDataObject(value, ["argv", "stdin", "stdout", "toolHandlers"], [
+    "argv",
+    "stdin",
+    "stdout",
+    "toolHandlers",
+  ], "CLI stdin execution");
+  if (input.stdout === null || typeof input.stdout?.write !== "function") {
+    fail("wakeflow-cli-invalid-stdout", "public CLI stdout must provide write()");
   }
+  try {
+    const rawRequest = await readBoundedUtf8(input.stdin);
+    const result = await runWakeflowCli({
+      argv: input.argv,
+      rawRequest,
+      toolHandlers: input.toolHandlers,
+    });
+    input.stdout.write(`${JSON.stringify({ ok: true, result }, null, 2)}\n`);
+    return Object.freeze({ exitCode: 0, result });
+  } catch (error) {
+    const serialized = publicError(error);
+    input.stdout.write(`${JSON.stringify({ ok: false, error: serialized }, null, 2)}\n`);
+    return Object.freeze({ exitCode: 1, error: serialized });
+  }
+}
+
+// import 本模块不会启动进程入口；只有精确脚本执行才连接真实共享 handlers。
+function isDirectExecution() {
+  return typeof process.argv[1] === "string"
+    && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+}
+
+if (isDirectExecution()) {
+  const completed = await runWakeflowCliStdin({
+    argv: process.argv.slice(2),
+    stdin: process.stdin,
+    stdout: process.stdout,
+    toolHandlers: handlers,
+  });
+  process.exitCode = completed.exitCode;
 }

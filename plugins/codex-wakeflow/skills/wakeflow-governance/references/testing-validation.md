@@ -92,10 +92,14 @@ Acceptance requires fresh review inputs plus independent controller validation:
 Backfill prose is input, not validation. The controller must inspect the actual
 artifacts and reproduce the relevant behavior before accepting, reworking,
 blocking, or dispatching the next package. Test output is reviewed as an
-environmental-risk input, never as a replacement for functional validation. If Test finds a real defect, the controller
-reopens the owning product task with the reproduced boundary and reviewable
-reproduction materials;
-if Test finds none, the controller closes only the stated environmental risk.
-The controller must also compare the returned step-to-anchor map with the same
+environmental-risk input, never as a replacement for functional validation. If
+Test finds a real product defect after the owning product lineage is already
+accepted, preserve the reproduced boundary and reviewable materials, then stop
+with an explicit remediation capability blocker: current public v3 cannot
+reopen that accepted lineage or create a same-demand product fix before demand
+completion. Do not pretend that reworking the Test task repairs the product or
+complete a known-defective demand merely to unlock continuation. If Test finds
+none, the controller closes only the stated environmental risk. The controller
+must also compare the returned ordered `test-step` craft mappings with the same
 Test alignment contract used at dispatch. Never adopt a Test-invented node or
-goal into the next rework merely because the target already spent time on it.
+goal into later work merely because the target already spent time on it.

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "taskPackageId": "SCENARIO-PACKAGE",
+  "demandKey": "SCENARIO-TRANSPORT",
+  "summary": "Execute the portable transport lifecycle fixture.",
+  "status": "pending",
+  "sourceRef": "scenario://transport-result-reviewed",
+  "createdAt": "@wakeflow-scenario-time-368cd5db73",
+  "targetTasks": [
+    {
+      "targetTaskId": "SCENARIO-TASK",
+      "taskPackageId": "SCENARIO-PACKAGE",
+      "targetWindow": "ProductWindow",
+      "summary": "Return one completed scenario result.",
+      "status": "pending",
+      "createdAt": "@wakeflow-scenario-time-d61dece395"
+    }
+  ]
+}

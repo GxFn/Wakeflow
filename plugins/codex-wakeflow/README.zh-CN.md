@@ -41,11 +41,12 @@ Wakeflow 提供缺失的控制层：
 - **一个需求一个 state root**：任务包、目标结果、review candidate、决策和进度投影都绑定到同一个需求。
 - **上下文完整的任务包**：每个新任务包一次性记录目标、带锚点的需求引用、边界、完成预期、依赖与仓库提交决定；派发再据此推导必须加载的执行 Skills。
 - **聚焦的子窗口**：每个仓库窗口只在配置好的责任边界内工作。
-- **先预览再投递**：总控先审阅解析后的仓库、任务简报、Skills 和最终 prompt，再用匹配预览摘要的 `apply=true` 写入 direct-thread envelope。
+- **先预览再投递**：总控先审阅解析后的仓库、任务简报、Skills 和最终 prompt，再用匹配计划的 `target-apply` 写入 direct-thread envelope，并以 `target-claim` 取得精确 lease。
 - **验收锚点驱动工艺**：每个新 implementation 任务包必须携带至少一个明确的
   claim/probe/expected 锚点，子窗口编码前先映射为 RED 检查；总控仍独立复验。
 - **先有审查输入，再做验收**：target backfill、日志、路径和测试摘要是输入，不是结论；Wakeflow 只检查结构和路径可定位性，总控仍要独立验证行为。
-- **本地优先运行时**：真实 thread id 只存在本地 thread registry；window config 是派生视图，active state 不进入源码。
+- **本地优先运行时**：raw thread id 只存在 typed 宿主本地 window binding；脱敏
+  window-runtime 文件只是投影，active state 不进入源码。
 
 Wakeflow 不是换了名字的命令启动器。它是一个可复用的工作流能力，用来让多窗口
 agent 工作保持可读、有边界、可恢复。
@@ -59,11 +60,11 @@ flowchart TD
   Controller <--> StateRoot["State root<br/>.wakeflow-active/..."]
   StateRoot --> Tasks["任务包"]
   Tasks --> Delivery["投递 envelope"]
-  LocalRuntime[".wakeflow-local<br/>thread registry + 派生 window config"] -. "lookup" .-> Delivery
+  LocalRuntime[".wakeflow-local/runtime<br/>binding + lease + transport"] -. "lookup" .-> Delivery
   Delivery --> Host["Codex host thread tools"]
   Host --> Targets["仓库 / Design / Test 窗口"]
   Targets --> Repos["责任根目录"]
-  Targets --> Results["TargetResultEnvelope<br/>包含目标声明的审查材料引用"]
+  Targets --> Results["严格 TargetResult<br/>包含 typed evidence locators"]
   Results --> Controller
   Controller --> Ledger["wakeflow-ledger<br/>长期项目记录"]
 ```
@@ -121,24 +122,24 @@ Codex 版通过 MCP 工具驱动(没有 slash 命令)。用自然语言告诉 Co
    ```text
    用 Wakeflow 初始化这个工作区,先预览计划,等我确认再写入。
    ```
-   Codex 调用 `wakeflow_initialize_workspace`(dry-run -> 确认 -> apply),再用宿主 `create_thread` 工具创建每个窗口并注册真实 thread id。已初始化过?重初始化会有意被拒——单个陈旧窗口用 `wakeflow_replace_windows` 重建,或做显式 reset。
+   Codex 调用 `wakeflow_maintain_workspace`，使用 `action: "fresh-initialize"`（preview -> 确认精确 plan/digest -> apply），再用宿主 `create_thread` 创建窗口并注册真实 thread id。已初始化工作区使用 `reconfigure` 做有意模型变更、`reconcile` 做受管修复，或用 `wakeflow_replace_windows` 替换单个过期 binding。
 2. **开始干活**——给总控一个需求,或让 Codex 派发下一个可领取任务。
 
 ### 工具速查表(意图 -> MCP 工具)
 
 | 你想... | 工具 |
 | --- | --- |
-| 搭建新工作区 | `wakeflow_initialize_workspace` |
+| 搭建或维护工作区 | `wakeflow_maintain_workspace`（`fresh-initialize`、`reconfigure`、`reconcile`） |
 | 重建陈旧窗口 | `wakeflow_replace_windows` |
 | 看需求 / 可领取工作 / 就绪度 | `wakeflow_status`、`wakeflow_next_work` |
 | 启动一个需求 | `wakeflow_create_demand` -> `wakeflow_add_task` |
-| 打开用户明确授权的 Pod | `wakeflow_pod_open` -> `wakeflow_pod_record event=materialization` / 宿主创建 -> `wakeflow_pod_bind` |
-| 把活交给窗口 | `wakeflow_prepare_delivery` 预览 -> 携带摘要 `apply=true` -> 宿主发送 -> `wakeflow_record_delivery` |
+| 打开用户明确授权的 Pod | `wakeflow_pod_open` launch preview/apply -> 记录 `creating` -> 单次宿主创建 -> finalize `wakeflow_pod_record operation=record-materialization` -> `wakeflow_pod_bind operation=creation-receipt` |
+| 把活交给窗口 | `wakeflow_prepare_delivery` target preview -> 精确 apply/claim -> 宿主发送 -> `wakeflow_record_delivery` |
 | 记录目标结果 | `wakeflow_record_target_result` |
 | 评审并决策 | `wakeflow_review_pack` -> `wakeflow_reduce_results` -> `wakeflow_decide_review` -> `wakeflow_complete_demand` |
-| 保全用户选定的本地材料 | `wakeflow_storage_preserve` dry-run -> `apply=true` |
-| 把需求移交另一宿主 | `wakeflow_adopt_demand_host` |
-| 体检 / 收敛运行时 | `wakeflow_verify` |
+| 保全用户选定的本地材料 | `wakeflow_storage_preserve` inspect/preview -> 精确 apply |
+| 导入受管证据 | `wakeflow_record_evidence` preview -> 精确 apply |
+| 只读 strict 体检 | `wakeflow_verify operation=inspect` |
 
 ## 初始化工作区
 
@@ -149,7 +150,7 @@ MyWorkspace/
   AGENTS.md
   wakeflow.config.json
   .wakeflow-active/          # ignored active controller state
-  .wakeflow-local/           # ignored thread registry and derived runtime
+  .wakeflow-local/           # ignored audit + shared/host runtime
   wakeflow-ledger/            # durable project coordination records
   ProductRepo/
   CoreRepo/
@@ -166,29 +167,30 @@ Preview the plan first and wait for my confirmation before writing.
 
 执行流程：
 
-1. Codex 调用 `wakeflow_initialize_workspace`，`apply: false`。
-2. Wakeflow 返回目录事实和 `agentSelectionProtocol`。
-3. Codex 根据目录事实和用户上下文判断工作区是 clean 还是 messy。
-4. 对 clean 工作区，Codex 再次调用工具，并显式传入目标 work windows 的 `repositories` 映射。
-5. 对 messy 工作区，Codex 先问用户哪些目录是受管窗口，不能直接广泛导入 discovered 目录。
-6. 对首次初始化的工作区，用户确认后，Codex 调用
-   `wakeflow_initialize_workspace`，`apply: true`。
-7. Codex 创建返回的线程，对每个真实 `create_thread.threadId` 调用
+1. Codex 构造按 `program`、`topology`、`storage`、`governance`、`hosts`
+   分区的显式 selection，并用请求内 `selectionKey` 关联实体；typed ID 由 Wakeflow 分配。
+2. Codex 调用 `wakeflow_maintain_workspace`，传入
+   `action: "fresh-initialize"`、`mode: "preview"` 和闭合 selection；preview 严格只读。
+3. Codex 审查 blockers、精确 `confirmedActionPlan`、返回的
+   `confirmedActionPlanDigest` 与 `launchIntents`。legacy 或归属不明内容保持阻断。
+4. 用户确认后，Codex 使用相同 root/action、`mode: "apply"`、精确确认计划和返回 digest 再次调用。
+5. Codex 只执行对应 preview 的 launch intents，对每个真实 `create_thread.threadId` 调用
    `wakeflow_register_window`，再把标题最终复位为 `displayTitle`，避免宿主自动
-   标题漂移。工具会更新本地路由 registry 和派生 window config，并隐藏 id。
+   标题漂移。raw handle 保持私有；宿主本地 binding 是身份权威，window runtime 是投影。
    Wakeflow 不判定初始化回复，也不维护独立的线程 ready 状态。
 
-已经初始化过的工作区里，`wakeflow_initialize_workspace` 不是通用“刷新”按钮。
-只有用户明确要求“重置初始化”时才能写入；apply 调用必须设置
-`resetInitialization: true`，显式传入 `repositories`，重新确认 Design/Test 模式，
-并且不能使用 `useDiscovered`。窗口上下文过重或过期时，使用替换窗口命令。
+已初始化的 v3 工作区不能通过重跑 fresh setup 来刷新。完整 desired model 的有意变更用
+`reconfigure`，按当前 v3 权威恢复受管 bytes/projections 用 `reconcile`；两者都必须
+preview 后再 apply。过期宿主 binding 使用窗口替换。legacy migration 仅进入精确
+artifact 未注册的 `bin/wakeflow-bootstrap`，不进入普通 MCP/CLI。
 
 三个高层入口的职责要分清：
 
 | 需求 | 命令 | 职责 |
 | --- | --- | --- |
-| 首次 setup | `wakeflow_initialize_workspace` | 发现、确认、写入 workspace config/docs/support surfaces，并返回完整 launch plan。 |
-| 明确重置 setup | `wakeflow_initialize_workspace` + `resetInitialization: true` | 重新确认工作目录，清理被移除窗口的受管 cards/runtime，并重写 setup surfaces。 |
+| 首次 setup | `wakeflow_maintain_workspace`，action `fresh-initialize` | preview 显式 selection，再原子应用精确确认的 owner plan。 |
+| 有意修改模型 | `wakeflow_maintain_workspace`，action `reconfigure` | preview 完整 desired v3 model，只应用已审查差异。 |
+| 按当前权威修复 | `wakeflow_maintain_workspace`，action `reconcile` | 不改变 desired model，只重建受管 bytes/projections。 |
 | 替换单个上下文过重/过期窗口 | `wakeflow_replace_windows`（传 `window`） | 只返回一个 replacement launch entry 和 `wakeflow_register_window` 调用模板，不刷新 workspace docs。 |
 | 替换多个上下文过重/过期窗口 | `wakeflow_replace_windows` | 只返回指定窗口的 replacement entries 和注册调用模板，不改无关窗口。 |
 
@@ -207,10 +209,10 @@ Wakeflow 支持本地化初始化。中文工作区传 `language: "zh"`，英文
 | --- | --- |
 | `AGENTS.md` | 父级总控 gate 和长期边界规则。 |
 | 子窗口 `AGENTS.md` access cards | 每个窗口的责任和读取路径。 |
-| `wakeflow.config.json` | 受管窗口、仓库路径、角色和默认语言。 |
-| `.wakeflow-active/` | active state roots、当前索引、progress docs、TODO 投影、intake 和 test cards。 |
-| `.wakeflow-local/` | thread registry、direct-thread runtime、宿主独立的 Pod operation/binding receipts、本地 overrides 和派生 window config。 |
-| `wakeflow-ledger/` | 长期项目协作记录和归档。 |
+| `wakeflow.config.json` | typed program identity，以及 topology、storage、governance、host policy。 |
+| `.wakeflow-active/` | 当前 demand/business 权威、immutable artifacts/events、TODO 权威和进度投影。 |
+| `.wakeflow-local/` | typed audit hold，加共享/宿主 runtime：binding、lease、transport、Pod evidence、keep-live、projection、mutation journal。 |
+| `wakeflow-ledger/` | 持久 program index 与可移植完整需求 BusinessArchive。 |
 | `Design/` | 未映射外部 Design 仓库时创建的内部需求设计工作区。 |
 | `Test/` | 未映射外部 Test 仓库时创建的内部测试协作工作区。 |
 
@@ -222,12 +224,17 @@ Wakeflow 也会同步 `.gitignore`，只把 `.wakeflow-active/` 和 `.wakeflow-l
 
 Wakeflow 的正常循环刻意保持小而清晰：
 
-1. 用户目标、Design handoff 或 controller intake 创建一个 demand。
+1. 用户目标、Design handoff 或 controller intake 创建一个 demand。只要后续需要任何
+   TaskPackage，总控就必须在首次 `wakeflow_create_demand` 发布时一并写入完整
+   `demand-authority.json`；公开 v3 没有事后补 authority 的操作。无 authority 的
+   demand 不能再通过公开接口获得 TaskPackage。
 2. 总控定义完成标准、边界、阶段顺序和第一个 blocker。
 3. state root 记录 demand 并创建可执行任务包。
 4. 总控为目标窗口准备轻量 delivery envelope。
-5. 目标窗口读取自己的规则，只执行分配给自己的任务包，并返回带审查输入的 target result envelope。
-6. 总控检查这些输入并独立验证相关行为，记录决策，然后创建下一批可执行任务、等待用户判断、标记 blocked，或完成 demand。
+5. 目标窗口读取自己的规则，只执行分配给自己的任务包，并返回带审查输入的 strict TargetResult。
+6. 总控检查这些输入并独立验证相关行为，记录决策，然后创建下一批可执行任务、等待用户判断、标记 blocked，或完成 demand。普通 rework 重派同一任务；主线 redesign
+   使用精确 `replacesTargetTask:{targetTaskId,taskPackageRef,taskPackageDigest}`
+   创建 replacement，接受后旧任务与包才变为 `superseded`。
 7. 长期结论进入 `wakeflow-ledger/`；本地运行时继续留在本地。
 
 Design 和 Test 是支持角色：
@@ -249,37 +256,39 @@ Design 和 Test 是支持角色：
 
 - 一个 Pod 有独立的 `Controller__<pod>`、`Design__<pod>`、
   `Test__<pod>`，以及每个选中仓库一个产品线程；需求内每仓仍一次只收一个组合包。
-- `wakeflow_pod_open mode=create` 只记录宿主中立 launch operations，不创建
+- `wakeflow_pod_open operation=launch-preview/launch-apply` 在严格创建门禁下记录宿主中立 launch intents，不创建
   Git branch/worktree、Codex thread 或动态仓库 overlay。已绑定 Pod 使用只读
-  `mode=resume`：验真 manifest/binding/registry/cwd/Git common-dir 身份，把当前
+  `operation=inspect-materialization`：验真 manifest/binding/cwd/Git common-dir 身份，把当前
   HEAD/dirty 作为观察返回，绝不创建或重绑资源。
 - Codex 把 Controller/Design/Test 建成三个独立 control-project local thread；
   产品线程必须使用精确 saved repository project +
   `environment.type=worktree`。找不到精确项目就 fail-closed，不回退父项目或
   `local`。
-- 每次调用 Codex 创建前，先用 `wakeflow_pod_record event=materialization` 记录
+- 每次调用 Codex 创建前，先用 `wakeflow_pod_record operation=record-materialization` 记录
   `creating`。如果 `create_thread` 返回临时 `clientThreadId`，记录
   `pending`，再调用有界 `list_threads(limit=50)`，在 `preview` 中精确匹配
   launch-correlation 标记；宿主支持时可用 `query` 优化，但不能依赖。零个或
   多个匹配都不能 finalized，也绝不重复 create。只有唯一匹配的最终
-  `threadId` 能进入 registry；临时 id 只保存摘要。
+  `threadId` 能进入 typed host-local binding；临时 id 只保存摘要。
 - 只登记最终真实 `threadId`，再用 `wakeflow_pod_bind` 验真 entry-sync 的 cwd、
   Git common dir、base HEAD 与 `mainCheckout=false`。三个 control 绑定形成
   `control-ready`；Pod Design handoff 加全部产品绑定形成 `execution-ready`。
 - Pod 唯一一代 Design 只在 `Controller__<pod>` 与 `Design__<pod>` 之间往返。
-  先用 `wakeflow_pod_plan action=design-request` 冻结总控请求，再用
-  `wakeflow_pod_record event=design-handoff` 记录精确
+  先用 `wakeflow_pod_plan operation=design-request` 冻结总控请求，再用
+  `wakeflow_pod_record operation=design-handoff` 记录精确
   `PodDesignHandoffEnvelope`；两步都不新建第二条全局 TODO。当前实现不持久化
   第二代 Pod Design，后续 supplement/redesign 必须作为能力 blocker 停止，
   不覆盖旧 handoff，也不回退主线 Design。
-- Pod Test 派发前，先运行 `wakeflow_pod_plan action=test-access`，再用
-  `wakeflow_pod_record event=test-access` 记录独立 Test 会话的精确探测结果。只有覆盖
+- Pod Test 派发前，先运行 `wakeflow_pod_plan operation=test-access-plan`，再用
+  `wakeflow_pod_record operation=test-access-receipt` 记录独立 Test 会话的精确探测结果。只有覆盖
   全部 active 产品绑定的 `validated` + `direct-multi-root` 才开放派发。宿主不支持
   时保持 blocked，不回退主检出、产品窗口或未经验证的 per-repository executor。
-- `wakeflow_pod_plan action=close` 只生成 host-close plan；每个
-  archive/Handoff 结果通过 `wakeflow_pod_record event=close-receipt` 记录。
-  逻辑关闭不声称 Codex 已物理删除 worktree；`wakeflow_view scope=pods`
-  只读取 canonical state 与宿主回执，不猜路径。
+- `wakeflow_pod_plan operation=close-intent` 只生成 host-close intent；精确的
+  archive/Handoff 结果只能交给 `wakeflow_pod_record operation=close-observe`。
+  Codex 归档始终是 `manual-host-gate`，不能生成 machine-verified
+  `close-receipt`、关闭逻辑 binding、归档需求或清理 transport。专用 Pod
+  inspect operations 只读取 canonical state 与宿主观察，不猜路径；物理
+  worktree 清理仍是独立宿主事实。
 
 ## 自动化语义
 
@@ -287,8 +296,8 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 
 核心规则：
 
-- 真实 thread id 只存在 `.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/`。
-- Window config 从 `wakeflow.config.json` 和 thread-registry presence 派生，不是第二份 thread-id 权威。
+- raw thread id 只存在 `.wakeflow-local/runtime/hosts/codex/identity/window-bindings/` 的 typed record。
+- `projections/window-runtime/` 是脱敏派生视图，不是 identity、handle 或 topology 权威。
 - Delivery prompts 保持轻量、可读。
 - Host 通过 Codex thread tools 发送 prompt；Wakeflow 记录发送和 readback 证据。
 - send 明确接受后只做一次有界 readback；新 turn 暂不可见时记录为
@@ -301,14 +310,10 @@ Wakeflow 自动化是 direct-thread 投递加显式结果返回。
 - 只有 `readbackStatus=confirmed` 才证明目标窗口已收到；`sent-unconfirmed`
   保留不重发语义，但不会被折叠成成功。
 - Keep-live 只是运行时辅助，不是任务逻辑、传输权威或验收证据。
-- 底层 `wakeflow-state init` 是宿主中立的，写入 `controllerHost: null`。
-  公共 `wakeflow_create_demand` 会立即把新 root 认领给调用宿主；独立导入的底层
-  raw root 则保持未认领，直到第一次驱动命令。
-- demand 归属于某个宿主后，另一个宿主的 controller 写操作和投递准备会 fail-closed；
-  只有显式 `--adopt-host` 才能转移控制权。
-- `activeDemands` 只用于观测，不计算数字 admission，也不授权 Pod 放置。
-- `wakeflow_status` 会在 `dualHost.demandOwnership` 暴露 active demand 的宿主归属，
-  让混合宿主总控在行动前先看清归属。
+- demand/business 权威保持宿主中立；宿主选择来自精确 current binding 与严格
+  group/packet/envelope chain，调用方不能 adopt demand 或覆盖内部路径。
+- 共享 typed window lease 跨宿主串行化 target effect；历史 envelope/result 不能释放 successor lease。
+- active demand 数量只用于观测，不计算数字 admission，也不授权 Pod 放置。
 
 自动化会在最终完成、硬 gate、用户停止、没有 eligible work、缺失审查输入、blocked state、
 或任何需要总控/用户判断的条件下停止。
@@ -323,20 +328,26 @@ Wakeflow 只把稳定的外层工作流合约暴露成 MCP tools。运行时脚�
 
 | 需求 | MCP tools |
 | --- | --- |
-| 设置与窗口注册 | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
+| 工作区维护与窗口身份 | `wakeflow_maintain_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
 | Demand 和任务状态 | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_cancel_demand` |
-| 候选扫描与显式 Pod 生命周期 | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_bind`, `wakeflow_pod_plan`（design-request/test-access/close）、`wakeflow_pod_record`（materialization/design-handoff/test-access/close-receipt） |
+| 候选扫描与显式 Pod 生命周期 | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_bind`, `wakeflow_pod_plan`（design-request、test-access-plan/inspect、close-intent/inspect）、`wakeflow_pod_record`（record-materialization、design-handoff、test-access-observe/receipt、close-observe/receipt）；materialized Codex close 保持 manual-host-gate |
 | 投递和返回 | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | 结果和 review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design 和 Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| 归档、视图、维护和验证 | `wakeflow_archive`（target demand/todo/docs/sanitize-demand）、`wakeflow_view`（task-ledger/window/focus/trace/storage/progress/pods）、`wakeflow_storage_preserve`、`wakeflow_prune_runtime`、`wakeflow_verify` |
-| 宿主归属与窗口锁 | `wakeflow_adopt_demand_host`、`wakeflow_release_window_lock` |
+| 证据、归档、视图、存储与验证 | `wakeflow_record_evidence`、`wakeflow_archive`、`wakeflow_view`、`wakeflow_storage_preserve`、`wakeflow_prune_runtime`、`wakeflow_verify` |
+| 精确释放 target lease | `wakeflow_release_window_lock` |
 
 公共 MCP tools 面向外层 agent 工作流。target closeout 被故意拆开：
 记录 target result、审查 readiness、在策略允许时准备 controller-return envelope、
 用 Codex host thread tool 发送，再记录 delivery facts。不要把这些步骤合并成一个 target-window MCP tool。
-`wakeflow_storage_preserve` 是现有本地材料保全后端的公共入口，默认只做 dry-run。
-归档脱敏遇到不透明文件时，除非用 `allowOpaque` 明确授权干净原始字节进入可移植归档，否则原始字节只留在本地 preserved 原件中，可移植归档写入安全占位清单。文件名或目录名包含真实 host id 时，最高层敏感文件/子树同样只保留在本地原件中，可移植归档以同一 `redacted-id-N` 别名保留一份路径占位和引用；别名路径碰撞时仍会安全拒绝。
+`wakeflow_archive` 只接受 `preview/apply/inspect/recover`，在所有闭合门禁通过后生成
+完整需求 `BusinessArchive`；旧 TODO/docs/sanitize 子路由不是 v3 兼容别名。
+`wakeflow_storage_preserve` 独立负责 typed 机器本地 audit hold，保留字节不成为业务状态权威。
+
+每个公共工具都有 MCP annotations：read-only/open-world 提示与公共边界一致，
+`destructiveHint` 则按工具可能执行的最强 operation 声明（maintenance、replacement、
+release、archive、preservation、Pod decommission 与 prune 都可能具有破坏性）。这些
+annotations 只是客户端提示，不授予写权限。
 
 ## 运行时与账本边界
 
@@ -346,9 +357,9 @@ Wakeflow 把源码、active runtime 和长期记录分开：
 | --- | --- |
 | `skills/` | 随插件安装的可复用操作说明。 |
 | `scripts/` | 插件打包的运行时实现和验证脚本。 |
-| `templates/wakeflow-template-bundle.json` | setup 时展开的 starter state、Design/Test 和 ledger skeletons bundle。 |
+| `templates/wakeflow-asset-bundle.json` | `core/template-sources/` 中 2 份 canonical 本地化 demand-progress asset 的生成运输物。 |
 | `.wakeflow-active/` | 目标工作区中的当前 active work；被 Git 忽略。 |
-| `.wakeflow-local/` | 机器本地 thread registry、Pod operation/binding receipts、派生 runtime views 和 local state；被 Git 忽略。 |
+| `.wakeflow-local/` | 机器本地 audit preservation，以及共享/宿主 runtime 权威与投影：binding、lease、transport、Pod evidence、keep-live state、maintenance journal；被 Git 忽略。 |
 | `wakeflow-ledger/` | 项目特定的长期记录，不属于可复用 Wakeflow 源码。 |
 
 Wakeflow 源仓库只跟踪可复用能力。产品代码、项目特定 active state、真实 thread id
@@ -356,22 +367,17 @@ Wakeflow 源仓库只跟踪可复用能力。产品代码、项目特定 active 
 
 ## 双宿主工作区
 
-同一个工作区可以同时运行 Codex 和 Claude Code 两个 Wakeflow 版本。共享业务状态
-（`.wakeflow-active/`、`wakeflow-ledger/`，以及 `.wakeflow-local/wakeflow-delivery/`
-下的 dispatch packets、dispatch groups、delivery envelopes、delivery runs、
-target results 和共享 `locks/`）保持宿主中立。共享锁会跨宿主强制每个窗口同一时间
-只有一个 in-flight 投递。
+同一个工作区可以同时运行 Codex 和 Claude Code 两个 Wakeflow 版本。共享业务状态位于
+`.wakeflow-active/` 与 `wakeflow-ledger/`；共享 coordination/transport 位于
+`.wakeflow-local/runtime/shared/{coordination,transport}/`。共享 typed lease 保证跨宿主
+target effect 不重叠。
 
-Codex 运行时仍位于宿主独立路径：
-`.wakeflow-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`。
-Claude Code 运行时位于：
-`.wakeflow-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`。
-旧位置 `.wakeflow-local/wakeflow-delivery/thread-registry/` 的记录仍会作为
-fallback 被读取；新注册写入宿主独立路径，`wakeflow_verify` 会报告迁移状态。
+宿主 runtime 分别位于
+`.wakeflow-local/runtime/hosts/<host>/{identity,projections,evidence,operations}/`；普通 v3
+读取不回退 legacy registry/delivery 路径。
 
-`AGENTS.md`（Codex）与 `CLAUDE.md`（Claude Code）可以在工作区根目录和子目录根
-共存。每个 demand 仍然只有一个 controller host：公共 create 立即认领调用宿主，
-底层 raw init 保持中立直到首次驱动；非归属宿主 fail-closed，`--adopt-host` 是显式转移机制。
+`AGENTS.md`（Codex）与 `CLAUDE.md`（Claude Code）可在工作区和子目录根共存。
+每个物理操作使用精确 current binding 与严格 transport ancestry，不存在 demand-host adoption alias。
 
 ## Marketplace 发布
 
@@ -417,7 +423,8 @@ npm test
 | `mcp/server.cjs` | 无 `node_modules` 依赖的 standalone MCP server entrypoint。 |
 | `scripts/` | 随插件发布的 setup、state、delivery、intake、archive、validation 和 CLI runtime。 |
 | `skills/` | 随插件发布的 controller、target protocol、target craft 与 governance 操作手册。 |
-| `templates/wakeflow-template-bundle.json` | 已安装工作区 starter documents 和 support surfaces 的 bundle，用于控制 marketplace scan 文件数。 |
+| `../../core/template-sources/` | 两项本地化 demand-progress 投影资产的 canonical authoring source。 |
+| `templates/wakeflow-asset-bundle.json` | 确定性生成的安装运输物，不可手工编辑。 |
 | `assets/` | Marketplace 和插件展示资源。 |
 | `../../test/` | 开发期回归测试，不进入 marketplace 扫描面。 |
 | `../../docs/` | 开发期规划和架构文档，不进入插件 artifact。 |
@@ -433,7 +440,7 @@ tools 与 skills，不把原始脚本当作操作入口。
    优先信息、本轮目标和读取顺序；任务包保存完整任务上下文，需求锚点保留原始背景。
 4. **仓库边界很重要**：每个窗口拥有自己的源码、测试、提交和审查输入。
 5. **自动化移动工作，不转移权威**：direct-thread delivery 只能证明 prompt 已发送，不能证明结果完成。
-6. **本地运行时留在本地**：真实 thread id 只留在本地 thread registry，active runtime state 不进入 tracked docs。
+6. **本地运行时留在本地**：raw thread id 只留在宿主本地 typed binding，active runtime state 不进入 tracked docs。
 7. **默认创建新的支持窗口**：Design 和 Test 默认作为清晰的 Wakeflow support surfaces 创建，除非用户明确映射既有目录。
 
 Wakeflow 的目标是让多窗口 agent 工作可以安全恢复、容易审查，并且难以跳过总控的独立验证。

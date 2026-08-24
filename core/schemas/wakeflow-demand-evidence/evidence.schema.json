@@ -1,0 +1,339 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:demand-evidence:evidence:v1",
+  "title": "Wakeflow Candidate Managed Evidence Manifest",
+  "$comment": "Structural and lexical contract for one immutable managed evidence root. Runtime validation additionally enforces canonical refs and bytes, exact demand/config/controller bindings, source containment and no-follow capture, privacy/content limits, payload tree closure, relation authority, create-only publication, and event/state transaction closure.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "programId",
+    "demandId",
+    "demandRef",
+    "demandDigest",
+    "evidenceId",
+    "kind",
+    "capturedAt",
+    "recordedBy",
+    "source",
+    "sensitivity",
+    "privacyScan",
+    "relations"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "artifactKind": { "type": "string", "const": "wakeflow-evidence" },
+    "programId": { "$ref": "#/$defs/programId" },
+    "demandId": { "$ref": "#/$defs/demandId" },
+    "demandRef": { "type": "string", "const": "demand.json" },
+    "demandDigest": { "$ref": "#/$defs/digest" },
+    "evidenceId": { "$ref": "#/$defs/evidenceId" },
+    "kind": { "$ref": "#/$defs/opaqueToken" },
+    "capturedAt": { "$ref": "#/$defs/timestamp" },
+    "recordedBy": { "$ref": "#/$defs/recordedBy" },
+    "source": {
+      "oneOf": [
+        { "$ref": "#/$defs/managedSource" },
+        { "$ref": "#/$defs/httpsSource" },
+        { "$ref": "#/$defs/gitCommitSource" }
+      ]
+    },
+    "sensitivity": {
+      "type": "string",
+      "enum": ["public", "internal"]
+    },
+    "privacyScan": { "$ref": "#/$defs/privacyScan" },
+    "controllerReviewedOpaque": { "type": "boolean", "const": true },
+    "relations": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/artifactRelation" },
+          { "$ref": "#/$defs/controllerEventRelation" }
+        ]
+      }
+    },
+    "payload": { "$ref": "#/$defs/payload" }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "properties": { "kind": { "const": "managed-path" } },
+            "required": ["kind"]
+          }
+        },
+        "required": ["source"]
+      },
+      "then": { "required": ["payload"] },
+      "else": {
+        "not": {
+          "anyOf": [
+            { "required": ["payload"] },
+            { "required": ["controllerReviewedOpaque"] }
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "uuidV4Suffix": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "evidenceId": {
+      "type": "string",
+      "pattern": "^evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "repositoryId": {
+      "type": "string",
+      "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "surfaceId": {
+      "type": "string",
+      "pattern": "^surface_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "opaqueToken": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^(?!\\s)[^\\u0000-\\u001F\\u007F-\\u009F]*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+    },
+    "portablePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?!/)(?!\\s)(?!.*\\s$)(?!.*:)(?!(?:[^/]+/){16})(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)(?!.*\\\\)(?!.*[\\u0000-\\u001F\\u007F-\\u009F])[^/]+(?:/[^/]+)*$"
+    },
+    "payloadPath": {
+      "type": "string",
+      "minLength": 7,
+      "maxLength": 520,
+      "pattern": "^payload(?!.*\\s$)(?:/(?!\\.\\.?(?:/|$))[^/:\\\\\\u0000-\\u001F\\u007F-\\u009F]+){0,16}$"
+    },
+    "recordedBy": {
+      "type": "object",
+      "required": ["windowId", "role", "configDigest"],
+      "properties": {
+        "windowId": { "$ref": "#/$defs/windowId" },
+        "role": { "type": "string", "const": "controller" },
+        "configDigest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "repositoryRoot": {
+      "type": "object",
+      "required": ["kind", "repositoryId"],
+      "properties": {
+        "kind": { "type": "string", "const": "repository" },
+        "repositoryId": { "$ref": "#/$defs/repositoryId" }
+      },
+      "additionalProperties": false
+    },
+    "supportSurfaceRoot": {
+      "type": "object",
+      "required": ["kind", "surfaceId"],
+      "properties": {
+        "kind": { "type": "string", "const": "support-surface" },
+        "surfaceId": { "$ref": "#/$defs/surfaceId" }
+      },
+      "additionalProperties": false
+    },
+    "managedSource": {
+      "type": "object",
+      "required": ["kind", "root", "path", "expectedType", "expectedDigest"],
+      "properties": {
+        "kind": { "type": "string", "const": "managed-path" },
+        "root": {
+          "oneOf": [
+            { "$ref": "#/$defs/repositoryRoot" },
+            { "$ref": "#/$defs/supportSurfaceRoot" }
+          ]
+        },
+        "path": { "$ref": "#/$defs/portablePath" },
+        "expectedType": {
+          "type": "string",
+          "enum": ["file", "tree"]
+        },
+        "expectedDigest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "verification": {
+      "type": "object",
+      "required": ["kind", "digest"],
+      "properties": {
+        "kind": { "type": "string", "const": "caller-supplied-digest" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "httpsSource": {
+      "type": "object",
+      "required": ["kind", "url", "verification"],
+      "properties": {
+        "kind": { "type": "string", "const": "https" },
+        "url": {
+          "type": "string",
+          "maxLength": 2048,
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "verification": { "$ref": "#/$defs/verification" }
+      },
+      "additionalProperties": false
+    },
+    "gitCommitSource": {
+      "type": "object",
+      "required": ["kind", "repositoryId", "commitOid", "verification"],
+      "properties": {
+        "kind": { "type": "string", "const": "git-commit" },
+        "repositoryId": { "$ref": "#/$defs/repositoryId" },
+        "commitOid": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+        },
+        "verification": { "$ref": "#/$defs/verification" }
+      },
+      "additionalProperties": false
+    },
+    "findingCount": {
+      "type": "object",
+      "required": ["code", "count"],
+      "properties": {
+        "code": { "$ref": "#/$defs/opaqueToken" },
+        "count": { "type": "integer", "minimum": 1, "maximum": 1000 }
+      },
+      "additionalProperties": false
+    },
+    "privacyScan": {
+      "type": "object",
+      "required": ["schemaVersion", "disposition", "findingCounts"],
+      "properties": {
+        "schemaVersion": { "type": "integer", "const": 1 },
+        "disposition": { "type": "string", "const": "passed" },
+        "findingCounts": {
+          "type": "array",
+          "maxItems": 0,
+          "items": { "$ref": "#/$defs/findingCount" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "payloadFile": {
+      "type": "object",
+      "required": ["path", "bytes", "digest", "contentClass"],
+      "properties": {
+        "path": {
+          "allOf": [
+            { "$ref": "#/$defs/payloadPath" },
+            { "pattern": "^payload/" }
+          ]
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777216
+        },
+        "digest": { "$ref": "#/$defs/digest" },
+        "contentClass": {
+          "type": "string",
+          "enum": [
+            "text/plain",
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "image/webp",
+            "application/pdf"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "payload": {
+      "type": "object",
+      "required": ["directories", "files", "totalBytes", "treeDigest"],
+      "properties": {
+        "directories": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 257,
+          "uniqueItems": true,
+          "contains": { "const": "payload" },
+          "minContains": 1,
+          "maxContains": 1,
+          "items": {
+            "$ref": "#/$defs/payloadPath"
+          }
+        },
+        "files": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/payloadFile" }
+        },
+        "totalBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 33554432
+        },
+        "treeDigest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "artifactRelation": {
+      "type": "object",
+      "required": ["kind", "artifactKind", "artifactId", "ref", "digest"],
+      "properties": {
+        "kind": { "type": "string", "const": "artifact" },
+        "artifactKind": {
+          "type": "string",
+          "enum": [
+            "wakeflow-task-package",
+            "wakeflow-target-result",
+            "wakeflow-review-candidate",
+            "wakeflow-test-card"
+          ]
+        },
+        "artifactId": { "$ref": "#/$defs/opaqueToken" },
+        "ref": { "$ref": "#/$defs/portablePath" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "controllerEventRelation": {
+      "type": "object",
+      "required": ["kind", "eventId", "digest"],
+      "properties": {
+        "kind": { "type": "string", "const": "controller-event" },
+        "eventId": { "$ref": "#/$defs/opaqueToken" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

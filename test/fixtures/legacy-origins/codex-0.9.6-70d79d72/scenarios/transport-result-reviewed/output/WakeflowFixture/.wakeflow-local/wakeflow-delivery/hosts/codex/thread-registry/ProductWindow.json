@@ -1,0 +1,9 @@
+{
+  "kind": "CodexWindowThreadRegistration",
+  "version": 3,
+  "windowName": "ProductWindow",
+  "bindingId": "@wakeflow-scenario-binding-id-45574ba56f",
+  "threadId": "@wakeflow-scenario-thread-id-f3ad674b2d",
+  "registeredAt": "@wakeflow-scenario-time-3e32badd01",
+  "lastVerifiedAt": "@wakeflow-scenario-time-57edd000ea"
+}

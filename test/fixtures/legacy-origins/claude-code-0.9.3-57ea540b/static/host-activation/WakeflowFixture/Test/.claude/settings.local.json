@@ -1,0 +1,6 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "node \"@wakeflow-fixture-root/WakeflowFixture/.wakeflow-local/wakeflow-statusline.mjs\""
+  }
+}

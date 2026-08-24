@@ -1,0 +1,50 @@
+{
+  "kind": "TargetResultEnvelope",
+  "version": 1,
+  "resultId": "target-result-ProductWindow__SCENARIO-TASK__SCENARIO-GROUP",
+  "targetWindow": "ProductWindow",
+  "taskId": "SCENARIO-TASK",
+  "dispatchGroup": "SCENARIO-GROUP",
+  "stateRef": {
+    "stateRoot": ".wakeflow-active/current/SCENARIO-TRANSPORT",
+    "demandKey": "SCENARIO-TRANSPORT",
+    "taskPackageId": "SCENARIO-PACKAGE",
+    "targetTaskId": "SCENARIO-TASK",
+    "stateRevision": 2
+  },
+  "status": "completed",
+  "summary": "Portable scenario target completed.",
+  "changedRepos": [],
+  "commits": [],
+  "evidenceRefs": [],
+  "verificationSummary": [
+    "synthetic focused verification passed"
+  ],
+  "riskSummary": [],
+  "resultMapping": {
+    "contract": "target-result-envelope-v1",
+    "compatibility": "legacy",
+    "status": "legacy-unenforced"
+  },
+  "wakeflowTrace": {
+    "kind": "WakeflowTrace",
+    "version": 1,
+    "artifactKind": "target-result",
+    "source": "wakeflow-delivery",
+    "command": "record-target-result",
+    "root": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+    "targetTaskId": "SCENARIO-TASK",
+    "targetWindow": "ProductWindow",
+    "dispatchGroup": "SCENARIO-GROUP",
+    "resultId": "target-result-ProductWindow__SCENARIO-TASK__SCENARIO-GROUP",
+    "createdAt": "@wakeflow-scenario-time-773b3753e8"
+  },
+  "reportedAt": "@wakeflow-scenario-time-b80cab9456",
+  "idempotency": {
+    "key": "target-result:SCENARIO-GROUP:ProductWindow:SCENARIO-TASK",
+    "duplicateBehavior": "return-existing-if-equivalent",
+    "supersedeBehavior": "requires-explicit-supersede-result",
+    "unsafeRetry": "same-target-result-key-with-different-content-without-supersede"
+  },
+  "resultRevision": 1
+}

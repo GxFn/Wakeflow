@@ -1,0 +1,15 @@
+# macOS / editor noise
+.DS_Store
+*.swp
+*.swo
+
+# Local drafts and generated scratch
+tmp/
+.tmp/
+.cache/
+*.log
+
+# Local-only configuration
+.env
+.env.*
+!.env.example

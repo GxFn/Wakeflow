@@ -1,0 +1,186 @@
+{
+  "kind": "ControllerReturnEnvelope",
+  "version": 3,
+  "deliveryId": "controller-return-SCENARIO-GROUP__r1",
+  "dispatchGroup": "SCENARIO-GROUP",
+  "controllerWindow": "WakeflowFixture",
+  "triggerTarget": "ProductWindow",
+  "triggerTaskId": "SCENARIO-TASK",
+  "returnPolicy": {
+    "mode": "group-ready"
+  },
+  "resultVersionKey": "ProductWindow\u0000SCENARIO-TASK\u0000r1",
+  "resultVersions": [
+    {
+      "targetWindow": "ProductWindow",
+      "taskId": "SCENARIO-TASK",
+      "resultRevision": 1
+    }
+  ],
+  "groupSnapshot": {
+    "groupId": "SCENARIO-GROUP",
+    "controllerWindow": "WakeflowFixture",
+    "returnPolicy": {
+      "mode": "group-ready"
+    },
+    "groupStatus": "ready",
+    "expected": [
+      {
+        "packetId": "SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+        "targetWindow": "ProductWindow",
+        "taskId": "SCENARIO-TASK",
+        "status": "completed",
+        "resultFile": ".wakeflow-local/wakeflow-delivery/target-results/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+        "resultRevision": 1,
+        "resultExpected": true,
+        "deliveryStatus": "sent",
+        "deliveryCount": 1
+      }
+    ],
+    "completed": [
+      {
+        "packetId": "SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+        "targetWindow": "ProductWindow",
+        "taskId": "SCENARIO-TASK",
+        "status": "completed",
+        "resultFile": ".wakeflow-local/wakeflow-delivery/target-results/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+        "resultRevision": 1,
+        "resultExpected": true,
+        "deliveryStatus": "sent",
+        "deliveryCount": 1
+      }
+    ],
+    "ready": [
+      {
+        "packetId": "SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+        "targetWindow": "ProductWindow",
+        "taskId": "SCENARIO-TASK",
+        "status": "completed",
+        "resultFile": ".wakeflow-local/wakeflow-delivery/target-results/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+        "resultRevision": 1,
+        "resultExpected": true,
+        "deliveryStatus": "sent",
+        "deliveryCount": 1
+      }
+    ],
+    "blocked": [],
+    "missing": [],
+    "pendingDispatch": [],
+    "needsReview": [],
+    "expectedTargets": [
+      "ProductWindow"
+    ],
+    "completedTargets": [
+      "ProductWindow"
+    ],
+    "readyTargets": [
+      "ProductWindow"
+    ],
+    "blockedTargets": [],
+    "missingTargets": [],
+    "pendingDispatchTargets": [],
+    "allResultsPresent": true,
+    "allSentResultsPresent": true,
+    "reconstructedFromPackets": false
+  },
+  "reviewScope": "group",
+  "humanContextRef": ".wakeflow-active/current/SCENARIO-TRANSPORT/developer-progress.md",
+  "stateRef": {
+    "stateRoot": ".wakeflow-active/current/SCENARIO-TRANSPORT",
+    "demandKey": "SCENARIO-TRANSPORT",
+    "stateRevision": 2
+  },
+  "prompt": "Continue controller review: ProductWindow backfill.\n\nReview context:\n- stateRoot: .wakeflow-active/current/SCENARIO-TRANSPORT\n- dispatchGroup: SCENARIO-GROUP\n- trigger: ProductWindow / SCENARIO-TASK\n\nRequired execution Skill:\n- skills/wakeflow-controller/SKILL.md",
+  "oneShot": true,
+  "targetThread": {
+    "windowName": "WakeflowFixture",
+    "threadIdRedacted": true,
+    "threadRegistryFile": "hosts/codex/thread-registry/WakeflowFixture.json"
+  },
+  "transport": {
+    "kind": "direct-thread",
+    "threadRegistryFile": "hosts/codex/thread-registry/WakeflowFixture.json",
+    "readbackRequired": true,
+    "missingThread": "fail-closed"
+  },
+  "automation": {
+    "enabled": false,
+    "continuousLoop": false,
+    "keepLive": false
+  },
+  "deliveryCompletion": {
+    "required": true,
+    "pendingUntil": "destination-readback-confirmed",
+    "completionProof": "DirectThreadDeliveryRun status=sent with transportStatus=accepted and readback.status=confirmed; accepted transport with pending/unavailable readback is sent-unconfirmed and must not be resent",
+    "blockedAction": "record-delivery-run status=blocked or failed, then stop for total-control judgment"
+  },
+  "loopGuard": {
+    "returnReason": "result-ready",
+    "reviewDecision": "needs-controller-review",
+    "groupStatus": "ready",
+    "controllerWindow": "WakeflowFixture",
+    "returnPolicy": {
+      "mode": "group-ready"
+    },
+    "reviewScope": "group",
+    "deliveryAllowedOnlyFor": [
+      "result-ready",
+      "blocked"
+    ],
+    "controllerReviewRequired": true,
+    "noEligibleTaskAction": "stop-without-next-delivery",
+    "resultVersionKey": "ProductWindow\u0000SCENARIO-TASK\u0000r1",
+    "repeatControllerReturnForbiddenForSameResultVersion": true,
+    "newerResultVersionRequiresNewControllerReturn": true,
+    "nextDispatchAllowedOnlyWhen": [
+      "current plan has eligible unfinished task",
+      "controller validation of target review inputs requires rework dispatch",
+      "user-approved unattended automation remains inside boundary"
+    ]
+  },
+  "windowConfig": {
+    "kind": "CodexSubwindowDispatchConfig",
+    "version": 1,
+    "windowName": "WakeflowFixture",
+    "dispatchable": true,
+    "threadRegistered": true,
+    "threadBindingId": "@wakeflow-scenario-binding-id-4b39dc60d4",
+    "threadRegistryFile": "hosts/codex/thread-registry/WakeflowFixture.json",
+    "cwd": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+    "responsibilityRoot": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+    "deliveryRole": "controller",
+    "delivery": {
+      "transport": "direct-thread",
+      "requireThread": true,
+      "missingThread": "fail-closed",
+      "readbackRequired": true
+    },
+    "automation": {
+      "mode": "manual-or-unattended",
+      "continuousWhenEnabled": true,
+      "keepLive": "required-when-automation-enabled"
+    },
+    "result": {
+      "returnRoute": "controller",
+      "resultEnvelopeRequired": true
+    },
+    "generatedAt": "@wakeflow-scenario-time-56306bb42f"
+  },
+  "wakeflowTrace": {
+    "kind": "WakeflowTrace",
+    "version": 1,
+    "artifactKind": "controller-return-envelope",
+    "source": "wakeflow-delivery",
+    "command": "build-controller-return",
+    "root": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+    "stateRoot": ".wakeflow-active/current/SCENARIO-TRANSPORT",
+    "stateRevision": 2,
+    "demandKey": "SCENARIO-TRANSPORT",
+    "targetTaskId": "SCENARIO-TASK",
+    "targetWindow": "ProductWindow",
+    "dispatchGroup": "SCENARIO-GROUP",
+    "deliveryId": "controller-return-SCENARIO-GROUP__r1",
+    "createdAt": "@wakeflow-scenario-time-b1137acecf"
+  },
+  "createdAt": "@wakeflow-scenario-time-08dc173dc6"
+}

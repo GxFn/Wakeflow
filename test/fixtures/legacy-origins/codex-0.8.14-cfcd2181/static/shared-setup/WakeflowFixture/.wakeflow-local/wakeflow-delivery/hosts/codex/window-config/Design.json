@@ -1,0 +1,29 @@
+{
+  "kind": "CodexSubwindowDispatchConfig",
+  "version": 1,
+  "windowName": "Design",
+  "repositoryPath": "Design",
+  "responsibility": "Internal requirement design workspace",
+  "dispatchable": false,
+  "threadRegistered": false,
+  "threadRegistryFile": "hosts/codex/thread-registry/Design.json",
+  "cwd": "@wakeflow-fixture-root/WakeflowFixture/Design",
+  "responsibilityRoot": "@wakeflow-fixture-root/WakeflowFixture/Design",
+  "deliveryRole": "design",
+  "delivery": {
+    "transport": "direct-thread",
+    "requireThread": true,
+    "missingThread": "fail-closed",
+    "readbackRequired": true
+  },
+  "automation": {
+    "mode": "manual-or-unattended",
+    "continuousWhenEnabled": true,
+    "keepLive": "required-when-automation-enabled"
+  },
+  "result": {
+    "returnRoute": "controller",
+    "resultEnvelopeRequired": true
+  },
+  "generatedAt": "@wakeflow-fixture-iso-time"
+}

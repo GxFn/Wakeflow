@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "demandKey": "SCENARIO-POD",
+  "title": "Scenario Pod",
+  "interfaceLanguage": "en",
+  "sourceRevision": 1,
+  "sourceEventId": "@wakeflow-scenario-state-event",
+  "progressDoc": "developer-progress.md",
+  "demandAuthority": {
+    "status": "draft-unfrozen",
+    "ref": null,
+    "digest": null
+  },
+  "unifiedStatus": {
+    "demand": "SCENARIO-POD - Scenario Pod",
+    "mainState": "intake",
+    "stage": "none",
+    "currentTaskPackages": "none",
+    "windows": "none",
+    "blockers": "none",
+    "nextAction": "Define stages and task packages by total-control judgment.",
+    "review": "none",
+    "automation": "disabled",
+    "userDecisionsNeeded": "Demand authority is not frozen; confirm and freeze the demand type, background anchors, and testing decision before the first implementation package.",
+    "lastUpdated": "@wakeflow-scenario-time-6496db8c79"
+  },
+  "slices": {
+    "windows": [],
+    "taskPackages": [],
+    "targetTasks": [],
+    "blockers": [],
+    "decisionsRequired": [
+      {
+        "id": "demand-authority-not-frozen",
+        "summary": "Demand authority is not frozen; confirm and freeze the demand type, background anchors, and testing decision before the first implementation package.",
+        "source": "projection"
+      }
+    ]
+  }
+}

@@ -1,0 +1,375 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:delivery:dispatch-packet:v1",
+  "title": "Wakeflow Controller Dispatch Packet",
+  "$comment": "Structural and lexical contract for one immutable per-target Controller authorization snapshot. Runtime validation additionally enforces canonical derived refs and digest equality, deterministic ordered sets, exact acceptance-anchor coverage, Test/non-Test contract discrimination, required Skill reading order, and exact dispatch-group membership. Logical Test attempt authority belongs to the later delivery workflow and is not a transport packet field.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "programId",
+    "demandId",
+    "groupId",
+    "groupRef",
+    "groupDigest",
+    "packetId",
+    "windowId",
+    "targetTaskId",
+    "taskPackageId",
+    "taskPackageRef",
+    "taskPackageDigest",
+    "objective",
+    "taskBriefing",
+    "boundaries",
+    "acceptanceAnchors",
+    "reviewInputContract",
+    "resultContract",
+    "contextPolicy",
+    "prompt",
+    "createdAt",
+    "packetDigest"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "artifactKind": { "type": "string", "const": "wakeflow-controller-dispatch-packet" },
+    "programId": { "$ref": "#/$defs/programId" },
+    "demandId": { "$ref": "#/$defs/demandId" },
+    "groupId": { "$ref": "#/$defs/groupId" },
+    "groupRef": { "$ref": "#/$defs/groupRef" },
+    "groupDigest": { "$ref": "#/$defs/digest" },
+    "packetId": { "$ref": "#/$defs/packetId" },
+    "windowId": { "$ref": "#/$defs/windowId" },
+    "targetTaskId": { "$ref": "#/$defs/targetTaskId" },
+    "taskPackageId": { "$ref": "#/$defs/taskPackageId" },
+    "taskPackageRef": { "$ref": "#/$defs/taskPackageRef" },
+    "taskPackageDigest": { "$ref": "#/$defs/digest" },
+    "objective": { "$ref": "#/$defs/trimmedText" },
+    "taskBriefing": { "$ref": "#/$defs/taskBriefing" },
+    "boundaries": { "$ref": "#/$defs/boundaries" },
+    "acceptanceAnchors": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/acceptanceAnchor" }
+    },
+    "designIntent": { "$ref": "#/$defs/trimmedText" },
+    "reviewInputContract": { "$ref": "#/$defs/reviewInputContract" },
+    "resultContract": { "$ref": "#/$defs/resultContract" },
+    "testContract": { "$ref": "#/$defs/testContract" },
+    "contextPolicy": {
+      "type": "string",
+      "enum": ["assumed-current", "force-refresh", "refresh-if-missing"]
+    },
+    "prompt": { "$ref": "#/$defs/trimmedText" },
+    "createdAt": { "$ref": "#/$defs/strictUtcTimestamp" },
+    "packetDigest": { "$ref": "#/$defs/digest" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "taskBriefing": {
+            "properties": { "workType": { "const": "test" } },
+            "required": ["workType"]
+          }
+        },
+        "required": ["taskBriefing"]
+      },
+      "then": {
+        "required": ["testContract"],
+        "properties": {
+          "acceptanceAnchors": { "maxItems": 0 },
+          "reviewInputContract": {
+            "properties": {
+              "requiredAcceptanceAnchorIds": { "maxItems": 0 }
+            }
+          }
+        }
+      },
+      "else": {
+        "not": { "required": ["testContract"] }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "taskBriefing": {
+            "properties": { "workType": { "const": "implementation" } },
+            "required": ["workType"]
+          }
+        },
+        "required": ["taskBriefing"]
+      },
+      "then": {
+        "properties": { "acceptanceAnchors": { "minItems": 1 } }
+      }
+    }
+  ],
+  "$defs": {
+    "uuidV4": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "groupId": {
+      "type": "string",
+      "pattern": "^dispatch-group_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "packetId": {
+      "type": "string",
+      "pattern": "^dispatch-packet_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetTaskId": {
+      "type": "string",
+      "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "taskPackageId": {
+      "type": "string",
+      "pattern": "^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "testCardId": {
+      "type": "string",
+      "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "strictUtcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+    },
+    "trimmedText": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)(?:[\\r\\n]|[^\\u0000-\\u001F\\u007F-\\u009F])*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "opaqueToken": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)[^\\u0000-\\u001F\\u007F-\\u009F]*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "groupRef": {
+      "type": "string",
+      "pattern": "^\\.wakeflow-local/runtime/shared/transport/demands/demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/groups/dispatch-group_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+    },
+    "taskPackageRef": {
+      "type": "string",
+      "pattern": "^task-packages/task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+    },
+    "testCardRef": {
+      "type": "string",
+      "pattern": "^test-cards/test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+    },
+    "skillRef": {
+      "type": "string",
+      "pattern": "^skills/[^/]+/SKILL\\.md$"
+    },
+    "taskBriefing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workType", "confirmedContext", "completionExpectations", "requiredSkills"],
+      "properties": {
+        "workType": {
+          "type": "string",
+          "enum": ["documentation", "implementation", "research", "test"]
+        },
+        "confirmedContext": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/trimmedText" }
+        },
+        "completionExpectations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/trimmedText" }
+        },
+        "requiredSkills": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "prefixItems": [
+            {
+              "type": "string",
+              "const": "skills/wakeflow-target/SKILL.md"
+            }
+          ],
+          "items": { "$ref": "#/$defs/skillRef" }
+        },
+        "commitExpectation": {
+          "type": "string",
+          "enum": ["commit", "leave-uncommitted"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "workType": { "const": "test" } },
+            "required": ["workType"]
+          },
+          "then": { "not": { "required": ["commitExpectation"] } },
+          "else": { "required": ["commitExpectation"] }
+        }
+      ]
+    },
+    "boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inScope", "outOfScope", "forbidden"],
+      "properties": {
+        "inScope": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/trimmedText" }
+        },
+        "outOfScope": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/trimmedText" }
+        },
+        "forbidden": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/trimmedText" }
+        }
+      }
+    },
+    "acceptanceAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["anchorId", "claim", "probe", "expected"],
+      "properties": {
+        "anchorId": { "$ref": "#/$defs/opaqueToken" },
+        "claim": { "$ref": "#/$defs/trimmedText" },
+        "probe": { "$ref": "#/$defs/trimmedText" },
+        "expected": { "$ref": "#/$defs/trimmedText" }
+      }
+    },
+    "reviewInputContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requiredKinds", "requiredAcceptanceAnchorIds"],
+      "properties": {
+        "requiredKinds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/opaqueToken" }
+        },
+        "requiredAcceptanceAnchorIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/opaqueToken" }
+        }
+      }
+    },
+    "resultContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifactKind", "schemaVersion"],
+      "properties": {
+        "artifactKind": { "type": "string", "const": "wakeflow-target-result" },
+        "schemaVersion": { "type": "integer", "const": 1 }
+      }
+    },
+    "testCardTuple": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["testCardId", "ref", "digest"],
+      "properties": {
+        "testCardId": { "$ref": "#/$defs/testCardId" },
+        "ref": { "$ref": "#/$defs/testCardRef" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "changeControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "testMayChangeApproach",
+        "testMayChangeGoal",
+        "testMayAddUnmappedSteps",
+        "testMayUseUnlistedSkills",
+        "route"
+      ],
+      "properties": {
+        "testMayChangeApproach": { "type": "boolean", "const": false },
+        "testMayChangeGoal": { "type": "boolean", "const": false },
+        "testMayAddUnmappedSteps": { "type": "boolean", "const": false },
+        "testMayUseUnlistedSkills": { "type": "boolean", "const": false },
+        "route": { "type": "string", "const": "return-blocked-to-controller" }
+      }
+    },
+    "testExecutionContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requirementGoal",
+        "approvedPlan",
+        "allowedSkills",
+        "setupPolicy",
+        "maxAttempts",
+        "restartConditions",
+        "changeControl"
+      ],
+      "properties": {
+        "requirementGoal": { "$ref": "#/$defs/trimmedText" },
+        "approvedPlan": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/trimmedText" }
+        },
+        "allowedSkills": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/opaqueToken" }
+        },
+        "setupPolicy": {
+          "type": "string",
+          "enum": ["fresh-once", "fresh-per-attempt", "reuse-existing"]
+        },
+        "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "restartConditions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/trimmedText" }
+        },
+        "changeControl": { "$ref": "#/$defs/changeControl" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "setupPolicy": { "const": "fresh-per-attempt" } },
+            "required": ["setupPolicy"]
+          },
+          "then": {
+            "properties": { "restartConditions": { "minItems": 1 } }
+          }
+        }
+      ]
+    },
+    "testContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["testCard", "executionContract"],
+      "properties": {
+        "testCard": { "$ref": "#/$defs/testCardTuple" },
+        "executionContract": { "$ref": "#/$defs/testExecutionContract" }
+      }
+    }
+  }
+}

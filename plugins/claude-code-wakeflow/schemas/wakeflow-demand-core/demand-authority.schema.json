@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:demand-core:demand-authority:v1",
+  "title": "Wakeflow Candidate Demand Authority",
+  "$comment": "This schema validates structural and lexical shape only. The candidate demand-core runtime validator is mandatory for demand digest equality, demand-type role completeness, unique authority refs, ledger member resolution, test-decision relations, and create-once freeze semantics.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "demandId",
+    "demandRef",
+    "demandDigest",
+    "entryMode",
+    "authorityRefs",
+    "testDecision"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "artifactKind": { "type": "string", "const": "wakeflow-demand-authority" },
+    "demandId": { "$ref": "#/$defs/demandId" },
+    "demandRef": { "type": "string", "const": "demand.json" },
+    "demandDigest": { "$ref": "#/$defs/digest" },
+    "entryMode": {
+      "type": "string",
+      "enum": ["design-delivery", "controller-inline", "pod-design"]
+    },
+    "authorityRefs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "$comment": "Runtime validation additionally requires unique exact member identities, lexical ordering, the demand-type-specific role set, exact ledger resolution, and same-demand binding for confirmation authority.",
+      "items": { "$ref": "#/$defs/ledgerMemberRef" }
+    },
+    "testDecision": { "$ref": "#/$defs/testDecision" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "requirementId": {
+      "type": "string",
+      "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "confirmationId": {
+      "type": "string",
+      "pattern": "^confirmation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "trimmedText": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)(?:[\\r\\n]|[^\\u0000-\\u001F\\u007F-\\u009F])*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "portableRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!\\s)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)[^\\u0000-\\u001F\\u007F-\\u009F]*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "requirementRole": {
+      "type": "string",
+      "enum": [
+        "original-plan",
+        "requirement-design",
+        "code-facts",
+        "landing-plan",
+        "non-goals",
+        "user-confirmation",
+        "reproduction",
+        "scope",
+        "requirement-delta",
+        "research-question",
+        "boundaries",
+        "test-environment"
+      ]
+    },
+    "requirementMemberRef": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "artifactKind",
+        "family",
+        "recordId",
+        "recordRef",
+        "recordDigest",
+        "memberRef",
+        "memberDigest",
+        "role"
+      ],
+      "properties": {
+        "schemaVersion": { "type": "integer", "const": 1 },
+        "artifactKind": { "type": "string", "const": "wakeflow-ledger-member-ref" },
+        "family": { "type": "string", "const": "requirement" },
+        "recordId": { "$ref": "#/$defs/requirementId" },
+        "recordRef": { "$ref": "#/$defs/portableRef" },
+        "recordDigest": { "$ref": "#/$defs/digest" },
+        "memberRef": { "$ref": "#/$defs/portableRef" },
+        "memberDigest": { "$ref": "#/$defs/digest" },
+        "role": { "$ref": "#/$defs/requirementRole" }
+      },
+      "additionalProperties": false
+    },
+    "confirmationRole": {
+      "type": "string",
+      "enum": [
+        "user-confirmation",
+        "requirement-delta"
+      ]
+    },
+    "confirmationMemberRef": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "artifactKind",
+        "family",
+        "recordId",
+        "recordRef",
+        "recordDigest",
+        "memberRef",
+        "memberDigest",
+        "role"
+      ],
+      "properties": {
+        "schemaVersion": { "type": "integer", "const": 1 },
+        "artifactKind": { "type": "string", "const": "wakeflow-ledger-member-ref" },
+        "family": { "type": "string", "const": "confirmation" },
+        "recordId": { "$ref": "#/$defs/confirmationId" },
+        "recordRef": { "$ref": "#/$defs/portableRef" },
+        "recordDigest": { "$ref": "#/$defs/digest" },
+        "memberRef": { "$ref": "#/$defs/portableRef" },
+        "memberDigest": { "$ref": "#/$defs/digest" },
+        "role": { "$ref": "#/$defs/confirmationRole" }
+      },
+      "additionalProperties": false
+    },
+    "ledgerMemberRef": {
+      "oneOf": [
+        { "$ref": "#/$defs/requirementMemberRef" },
+        { "$ref": "#/$defs/confirmationMemberRef" }
+      ]
+    },
+    "testDecision": {
+      "type": "object",
+      "required": ["mode", "summary"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["controller-only", "real-environment", "not-applicable"]
+        },
+        "summary": { "$ref": "#/$defs/trimmedText" },
+        "environmentSpecRef": { "$ref": "#/$defs/portableRef" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "mode": { "const": "real-environment" } },
+            "required": ["mode"]
+          },
+          "then": { "required": ["environmentSpecRef"] },
+          "else": { "not": { "required": ["environmentSpecRef"] } }
+        }
+      ]
+    }
+  }
+}

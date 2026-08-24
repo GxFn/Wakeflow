@@ -1,0 +1,349 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:migration:legacy-archive-transform-plan:v1",
+  "title": "Wakeflow Legacy Archive Transform Plan",
+  "$comment": "Migration-only confirmed owner plan for source-retained local holds followed by typed ledger wrapper publication. Runtime validation is mandatory because structural validation cannot close T04/T06 lineage, request coverage, digest derivation, privacy, phase ordering, or preservation references; validateWakeflowLegacyArchiveTransformPlan() owns those relations.",
+  "type": "object",
+  "required": ["schemaId", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaId": { "const": "urn:wakeflow:internal:migration:legacy-archive-transform-plan:v1" },
+    "payload": { "$ref": "#/$defs/payload" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "token": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,127}$" },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+    },
+    "ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)(?!.*[\\u0000-\\u001F\\u007F-\\u009F])[^/].*[^/]$|^[^/]$"
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "archiveId": {
+      "type": "string",
+      "pattern": "^archive_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "preservationId": {
+      "type": "string",
+      "pattern": "^preservation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "evidenceDisposition": {
+      "type": "object",
+      "required": ["sourceKind", "sourceDigest", "rawDisposition", "preservationId"],
+      "additionalProperties": false,
+      "properties": {
+        "sourceKind": { "enum": ["pod-close", "pod-materialization", "pod-test-access"] },
+        "sourceDigest": { "$ref": "#/$defs/digest" },
+        "rawDisposition": { "enum": ["preserved", "release-after-wrapper"] },
+        "preservationId": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/preservationId" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "rawDisposition": { "const": "preserved" } },
+            "required": ["rawDisposition"]
+          },
+          "then": { "properties": { "preservationId": { "$ref": "#/$defs/preservationId" } } },
+          "else": { "properties": { "preservationId": { "type": "null" } } }
+        }
+      ]
+    },
+    "archiveMapping": {
+      "type": "object",
+      "required": [
+        "archiveImportId",
+        "demandId",
+        "archiveId",
+        "yearMonth",
+        "rawPayloadDisposition",
+        "rawPayloadPreservationId",
+        "evidenceDispositions"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "archiveImportId": { "$ref": "#/$defs/digest" },
+        "demandId": { "$ref": "#/$defs/demandId" },
+        "archiveId": { "$ref": "#/$defs/archiveId" },
+        "yearMonth": { "type": "string", "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])$" },
+        "rawPayloadDisposition": { "enum": ["portable", "preserved"] },
+        "rawPayloadPreservationId": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/preservationId" }
+          ]
+        },
+        "evidenceDispositions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidenceDisposition" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "rawPayloadDisposition": { "const": "preserved" } },
+            "required": ["rawPayloadDisposition"]
+          },
+          "then": {
+            "properties": { "rawPayloadPreservationId": { "$ref": "#/$defs/preservationId" } }
+          },
+          "else": { "properties": { "rawPayloadPreservationId": { "type": "null" } } }
+        }
+      ]
+    },
+    "preservationMapping": {
+      "type": "object",
+      "required": ["sourceId", "preservationId", "reasonCode"],
+      "additionalProperties": false,
+      "properties": {
+        "sourceId": { "$ref": "#/$defs/digest" },
+        "preservationId": { "$ref": "#/$defs/preservationId" },
+        "reasonCode": { "$ref": "#/$defs/token" }
+      }
+    },
+    "request": {
+      "type": "object",
+      "required": ["migrationId", "createdAt", "archiveMappings", "preservationMappings"],
+      "additionalProperties": false,
+      "properties": {
+        "migrationId": { "$ref": "#/$defs/token" },
+        "createdAt": { "$ref": "#/$defs/timestamp" },
+        "archiveMappings": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/archiveMapping" }
+        },
+        "preservationMappings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/preservationMapping" }
+        }
+      }
+    },
+    "hold": {
+      "type": "object",
+      "required": ["sourceId", "sourceRefDigest", "sourceDigest", "plan", "planDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "sourceId": { "$ref": "#/$defs/digest" },
+        "sourceRefDigest": { "$ref": "#/$defs/digest" },
+        "sourceDigest": { "$ref": "#/$defs/digest" },
+        "plan": { "$ref": "urn:wakeflow:internal:maintenance:local-preservation-plan:v1" },
+        "planDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "archiveEvidence": {
+      "type": "object",
+      "required": [
+        "archiveEvidenceDigest",
+        "archiveSourceId",
+        "archiveTreeDigest",
+        "eventsDigest",
+        "manifestDigest",
+        "resultDigests",
+        "stateDigest"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "archiveEvidenceDigest": { "$ref": "#/$defs/digest" },
+        "archiveSourceId": { "$ref": "#/$defs/digest" },
+        "archiveTreeDigest": { "$ref": "#/$defs/digest" },
+        "eventsDigest": { "$ref": "#/$defs/digest" },
+        "manifestDigest": { "$ref": "#/$defs/digest" },
+        "resultDigests": { "type": "array", "items": { "$ref": "#/$defs/digest" } },
+        "stateDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "transportFact": {
+      "type": "object",
+      "required": [
+        "sourceStatus",
+        "sourceDigest",
+        "inventoryDigest",
+        "currentResultDigests",
+        "envelopeDigests",
+        "groupDigests",
+        "historicalResultDigests",
+        "packetDigests",
+        "runDigests"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "sourceStatus": { "enum": ["absent", "archived"] },
+        "sourceDigest": { "$ref": "#/$defs/digest" },
+        "inventoryDigest": { "$ref": "#/$defs/digest" },
+        "currentResultDigests": { "type": "array", "items": { "$ref": "#/$defs/digest" } },
+        "envelopeDigests": { "type": "array", "items": { "$ref": "#/$defs/digest" } },
+        "groupDigests": { "type": "array", "items": { "$ref": "#/$defs/digest" } },
+        "historicalResultDigests": { "type": "array", "items": { "$ref": "#/$defs/digest" } },
+        "packetDigests": { "type": "array", "items": { "$ref": "#/$defs/digest" } },
+        "runDigests": { "type": "array", "items": { "$ref": "#/$defs/digest" } }
+      }
+    },
+    "sourceAuthority": {
+      "type": "object",
+      "required": ["archiveImportId", "archive", "legacyEvidenceFacts", "sourceIds", "transport"],
+      "additionalProperties": false,
+      "properties": {
+        "archiveImportId": { "$ref": "#/$defs/digest" },
+        "archive": { "$ref": "#/$defs/archiveEvidence" },
+        "legacyEvidenceFacts": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "sourceIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/digest" }
+        },
+        "transport": { "$ref": "#/$defs/transportFact" }
+      }
+    },
+    "ownerEffectStep": {
+      "type": "object",
+      "required": [
+        "stepId",
+        "ordinal",
+        "stepKind",
+        "effectKind",
+        "intentDigest",
+        "checkpointSchemaId",
+        "resultSchemaId",
+        "outcomeSchemaId"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "stepId": { "$ref": "#/$defs/token" },
+        "ordinal": { "type": "integer", "minimum": 0 },
+        "stepKind": { "const": "owner-effect" },
+        "effectKind": { "const": "migration-legacy-archive-publish" },
+        "intentDigest": { "$ref": "#/$defs/digest" },
+        "checkpointSchemaId": { "const": "urn:wakeflow:internal:migration:legacy-archive-publish-checkpoint:v1" },
+        "resultSchemaId": { "const": "urn:wakeflow:internal:migration:legacy-archive-publish-result:v1" },
+        "outcomeSchemaId": { "const": "urn:wakeflow:internal:migration:legacy-archive-publish-outcome:v1" }
+      }
+    },
+    "archive": {
+      "type": "object",
+      "required": [
+        "archiveImportId",
+        "demandId",
+        "archiveId",
+        "sourceRef",
+        "sourceRefDigest",
+        "sourceAuthority",
+        "descriptor",
+        "descriptorDigest",
+        "transportSummary",
+        "transportSummaryDigest",
+        "sourceMembers",
+        "memberSetDigest",
+        "record",
+        "recordDigest",
+        "step"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "archiveImportId": { "$ref": "#/$defs/digest" },
+        "demandId": { "$ref": "#/$defs/demandId" },
+        "archiveId": { "$ref": "#/$defs/archiveId" },
+        "sourceRef": { "$ref": "#/$defs/ref" },
+        "sourceRefDigest": { "$ref": "#/$defs/digest" },
+        "sourceAuthority": { "$ref": "#/$defs/sourceAuthority" },
+        "descriptor": { "$ref": "urn:wakeflow:internal:business-archive:legacy-source-descriptor:v1" },
+        "descriptorDigest": { "$ref": "#/$defs/digest" },
+        "transportSummary": { "$ref": "urn:wakeflow:internal:business-archive:legacy-transport-summary:v1" },
+        "transportSummaryDigest": { "$ref": "#/$defs/digest" },
+        "sourceMembers": {
+          "type": "array",
+          "maxItems": 20000,
+          "items": {
+            "$ref": "urn:wakeflow:internal:business-archive:legacy-source-descriptor:v1#/$defs/member"
+          }
+        },
+        "memberSetDigest": { "$ref": "#/$defs/digest" },
+        "record": { "$ref": "urn:wakeflow:internal:ledger:archive-manifest:v1" },
+        "recordDigest": { "$ref": "#/$defs/digest" },
+        "step": { "$ref": "#/$defs/ownerEffectStep" }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "kind",
+        "schemaVersion",
+        "status",
+        "programId",
+        "configDigest",
+        "ledgerRootRef",
+        "preservedReviewAfterDays",
+        "request",
+        "legacyOwnerArtifactDigest",
+        "migrationInventoryDigest",
+        "ownerDrainAssessmentDigest",
+        "archiveImportInventoryDigest",
+        "holds",
+        "archives",
+        "steps"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "WakeflowLegacyArchiveTransformPlan" },
+        "schemaVersion": { "const": 1 },
+        "status": { "const": "ready" },
+        "programId": { "$ref": "#/$defs/programId" },
+        "configDigest": { "$ref": "#/$defs/digest" },
+        "ledgerRootRef": { "$ref": "#/$defs/ref" },
+        "preservedReviewAfterDays": { "type": "integer", "minimum": 1, "maximum": 36500 },
+        "request": { "$ref": "#/$defs/request" },
+        "legacyOwnerArtifactDigest": { "$ref": "#/$defs/digest" },
+        "migrationInventoryDigest": { "$ref": "#/$defs/digest" },
+        "ownerDrainAssessmentDigest": { "$ref": "#/$defs/digest" },
+        "archiveImportInventoryDigest": { "$ref": "#/$defs/digest" },
+        "holds": { "type": "array", "items": { "$ref": "#/$defs/hold" } },
+        "archives": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/archive" }
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/ownerEffectStep" },
+              {
+                "type": "object",
+                "required": ["stepId", "ordinal", "stepKind", "source", "staging", "final"],
+                "additionalProperties": false,
+                "properties": {
+                  "stepId": { "$ref": "#/$defs/token" },
+                  "ordinal": { "type": "integer", "minimum": 0 },
+                  "stepKind": { "const": "audit-publish" },
+                  "source": { "type": "object" },
+                  "staging": { "type": "object" },
+                  "final": { "type": "object" }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

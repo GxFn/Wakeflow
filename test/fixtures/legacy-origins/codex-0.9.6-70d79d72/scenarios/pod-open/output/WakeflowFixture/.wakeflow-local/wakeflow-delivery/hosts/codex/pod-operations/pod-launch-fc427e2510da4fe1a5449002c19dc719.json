@@ -1,0 +1,109 @@
+{
+  "kind": "WakeflowHostPodOperation",
+  "version": 1,
+  "operationType": "launch",
+  "operationId": "pod-launch-fc427e2510da4fe1a5449002c19dc719",
+  "demandKey": "SCENARIO-POD",
+  "podId": "SCENARIO-POD",
+  "host": "codex",
+  "windowName": "Test__SCENARIO-POD",
+  "role": "test",
+  "intentDigest": "@wakeflow-scenario-derived-digest-6629743089",
+  "intent": {
+    "demandKey": "SCENARIO-POD",
+    "podId": "SCENARIO-POD",
+    "windowName": "Test__SCENARIO-POD",
+    "role": "test",
+    "expectedControlRoot": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+    "host": "codex",
+    "environmentIntent": "host-local",
+    "startingStatePolicy": "default",
+    "displayTitle": "Test__SCENARIO-POD",
+    "createPrompt": "You are Test__SCENARIO-POD, the independent Test window for Pod SCENARIO-POD and demand SCENARIO-POD.\nWakeflow launch correlation: pod-launch-fc427e2510da4fe1a5449002c19dc719\nPerform entry sync only. Wait until the Pod Controller has completed functional acceptance and gives an anchored environment test card.\nDo not invent test goals, modify product code, or use a main checkout as a fallback.",
+    "launchCorrelationId": "pod-launch-fc427e2510da4fe1a5449002c19dc719",
+    "registrationBindingId": "pod-binding-09142117e13a149a13b8aaedfdd090f5",
+    "stateRootRelative": ".wakeflow-active/current/SCENARIO-POD",
+    "codexProjectResolution": {
+      "hostTool": "list_projects",
+      "exactPath": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+      "matchPolicy": "normalized-exact-path",
+      "onMissing": "project-not-registered",
+      "parentProjectFallback": false,
+      "localEnvironmentFallback": false
+    },
+    "hostCreateThread": {
+      "required": true,
+      "hostTool": "create_thread",
+      "promptField": "createPrompt",
+      "targetTemplate": {
+        "type": "project",
+        "projectId": "<exact-project-id>",
+        "environment": {
+          "type": "local"
+        }
+      },
+      "asynchronousHandlePolicy": {
+        "rejectClientThreadId": true,
+        "waitForFinalThreadId": true,
+        "registerOnlyFinalThreadId": true
+      },
+      "materializationProtocol": {
+        "recordTool": "wakeflow_pod_record",
+        "recordEvent": "materialization",
+        "beforeCreateStatus": "creating",
+        "asynchronousStatus": "pending",
+        "finalStatus": "finalized",
+        "hostRequestIdField": "create_thread.clientThreadId",
+        "recoveryTool": "list_threads",
+        "recoveryListArguments": {
+          "limit": 50
+        },
+        "recoveryMatch": {
+          "field": "preview",
+          "marker": "Wakeflow launch correlation: pod-launch-fc427e2510da4fe1a5449002c19dc719",
+          "cardinality": "exactly-one",
+          "zeroMatches": "wait-or-block-without-create",
+          "multipleMatches": "block-without-finalize"
+        },
+        "optionalQueryOptimization": {
+          "useOnlyWhenHostSchemaSupportsIt": true,
+          "required": false,
+          "query": "pod-launch-fc427e2510da4fe1a5449002c19dc719"
+        },
+        "searchBeforeCreate": true,
+        "noBlindRetry": true,
+        "temporaryHandleRegistrationForbidden": true
+      }
+    },
+    "localRegistration": {
+      "required": true,
+      "hostTool": "wakeflow_register_window",
+      "applyRequired": true,
+      "handleSource": "create_thread.threadId",
+      "callTemplate": {
+        "root": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+        "window": "Test__SCENARIO-POD",
+        "windowHandle": "<create_thread.threadId>",
+        "launchCorrelationId": "pod-launch-fc427e2510da4fe1a5449002c19dc719",
+        "bindingId": "@wakeflow-scenario-binding-id-7321fe0b42",
+        "stateRoot": ".wakeflow-active/current/SCENARIO-POD",
+        "apply": true
+      },
+      "finalHandleOnly": true
+    },
+    "entrySync": {
+      "purpose": "pod-control-session-identity",
+      "stateRootScope": "current-pod-only",
+      "taskDispatchAllowed": false
+    }
+  },
+  "status": "bound",
+  "createdAt": "@wakeflow-scenario-time-8d8fa3112d",
+  "updatedAt": "@wakeflow-scenario-time-4f3758c63b",
+  "materialization": {
+    "status": "finalized",
+    "observedAt": "@wakeflow-scenario-time-9086bfc50e"
+  },
+  "bindingId": "@wakeflow-scenario-binding-id-7321fe0b42",
+  "receiptDigest": "@wakeflow-scenario-derived-digest-4a7495690f"
+}

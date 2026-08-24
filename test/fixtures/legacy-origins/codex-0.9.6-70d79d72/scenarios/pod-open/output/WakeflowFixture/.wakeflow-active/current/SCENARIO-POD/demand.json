@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "demandKey": "SCENARIO-POD",
+  "title": "Scenario Pod",
+  "interfaceLanguage": "en",
+  "goal": "Exercise the Pod local lifecycle.",
+  "completionDefinition": "Pod local lifecycle is recorded.",
+  "createdAt": "@wakeflow-scenario-time-8e18b399e2",
+  "demandType": "requirement",
+  "source": {
+    "kind": "wakeflow-state-init",
+    "trackedTemplates": "templates/wakeflow-state-machine",
+    "generatedStateRoot": ".wakeflow-active/current/SCENARIO-POD"
+  },
+  "executionPlacement": {
+    "mode": "isolated",
+    "podId": "SCENARIO-POD",
+    "selection": "explicit-user-pod",
+    "authorizationRef": "scenario-authority#pod"
+  }
+}

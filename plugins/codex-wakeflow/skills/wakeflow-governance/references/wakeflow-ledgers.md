@@ -1,187 +1,113 @@
-# Wakeflow Ledgers Reference
+# Wakeflow Storage And Ledgers Reference
 
-## Storage Model (three tiers + one map)
+## One Storage View, Distinct Authorities
 
-Wakeflow repository tracks reusable capability assets only. Installed project
-state lives in three tiers, and ONE command explains all of it:
-`wakeflow_view scope=storage` — every known tree with its class, size, age,
-plus legacy residue, unknown trees, and aging audit holds.
+Use `wakeflow_view` with `operation: "storage"` for a read-only map. The view
+is diagnostic: it reports known managed trees, legacy residue, unknown entries,
+and preservation facts, but it never authorizes a write or deletion.
 
-- `.wakeflow-active/`: ignored ACTIVE business state. `index.md` is the single
-  controller entry; `current/` holds the status doc, global TODO board,
-  test-exchange, and one state root per active demand.
-- `.wakeflow-local/`: ignored machine-local runtime — real thread ids,
-  derived window config, delivery transport, host-scoped Pod operations and
-  binding receipts, host handles, and `preserved/` audit holds. Host-created
-  worktrees do not live here as Wakeflow-owned storage. Never committed.
-- `../Design/` and `../Test/`: sibling Design/Test working surfaces when the
-  user has not configured external Design/Test repositories.
-- `../wakeflow-ledger/` (location is `projectLedgerRoot` in
-  `wakeflow.config.json` — CHECK THE CONFIG before assuming the sibling
-  default): project-specific long-term plans, decisions, archives, and
-  evidence maps; version-controlled.
+Wakeflow v3 separates four responsibilities:
 
-Do not track product repositories, Design, Test, or real test projects inside
-the Wakeflow repository.
+- `wakeflow.config.json`: the only tracked program/topology/storage/governance/
+  host desired model. It uses typed IDs; titles are presentation only.
+- `.wakeflow-active/`: ignored current business authority and its human
+  projections, including demand state, immutable artifacts, events, results,
+  evidence, and the canonical TODO authority.
+- `.wakeflow-local/`: ignored machine-local identity, coordination, transport,
+  host operations/evidence, maintenance journals, and typed audit preservation.
+- the configured ledger root: durable requirement designs and portable
+  whole-demand BusinessArchives.
 
-## Storage Classes (descriptive, never gates)
+Product repositories and Design/Test support surfaces remain separate
+repositories or configured support directories; they are not nested as
+Wakeflow-owned local data.
 
-The storage map classifies every tree; the class answers "may I touch it":
+Wakeflow v3 does not seed explanatory README files into these trees. Installed
+behavior is defined by `AGENTS.md`, Skills, schemas, and the responsible
+program owner. A directory's presence is never authority by itself.
 
-| Class | Meaning | Touch rule |
+## `.wakeflow-local` Responsibilities
+
+The local tree is partitioned by responsibility:
+
+| Area | Responsibility | Important boundary |
 | --- | --- | --- |
-| authority | machine/human truth (state roots, host binding receipts, ledger) | never hand-delete while active |
-| projection | regenerable views (progress docs, window-config, focus docs) | safe to delete; a render rebuilds |
-| transport | replay-safe delivery artifacts | GC only via `wakeflow_prune_runtime` |
-| evidence | target results | never deleted by any GC |
-| handles | host session handles, locks, temp prompts | regenerable; real session ids live here |
-| preserved | canonical audit holds under `.wakeflow-local/preserved/` | review, then delete or prune after retention |
-| legacy | known residue from older runtimes | fold via `preserve` or delete — after user review |
-| unknown | anything else under `.wakeflow-local/` | route to the user; NEVER auto-delete |
+| `runtime/maintenance/transactions/` | one recoverable workspace-mutation journal | never bypass with a second maintenance state machine |
+| `runtime/shared/coordination/window-leases/` | exact current target-effect leases | historical delivery/result cannot release a successor lease |
+| `runtime/shared/transport/demands/<demandId>/` | immutable groups, packets, envelopes, and runs | no TargetResult duplicate store; no mtime/latest selection |
+| `runtime/hosts/codex/identity/window-bindings/` | typed binding and private raw thread handle | only binding owners write; never copy handle into transport/docs |
+| `runtime/hosts/codex/projections/window-runtime/` | redacted regenerable runtime view | projection is not identity or config authority |
+| `runtime/hosts/codex/evidence/` | typed Pod/host receipts | evidence does not decide business acceptance |
+| `runtime/hosts/codex/operations/` | host operation/locator/temporary effect material | host-scoped and non-portable |
+| `audit/preserved/<preservationId>/` | isolated, manifest-bound retained bytes | normal runtime never reads payload as authority |
 
-Initialization and `sync-templates` converge the same short in-place orientation
-READMEs at `.wakeflow-active/`, `.wakeflow-local/`, `wakeflow-delivery/`,
-`hosts/`, and the ledger root that `wakeflow-storage seed-readmes --write`
-maintains. Each answers "what is this / who writes it / may I touch it" next to
-the data, and workspace layout verification fails when one is missing or stale.
+Legacy `.wakeflow-local/wakeflow-delivery/**`, flat registry, local result,
+stop-marker, and old preservation layouts are explicit-migration inputs only.
+Normal v3 code does not fall back to them.
 
-## Demand Information Lifecycle (what lives where, when)
+## Demand Information Lifecycle
 
-Every kind of demand information has ONE home per lifecycle stage; the archive
-threads them into a single navigable spine:
+| Information | Active authority | Durable outcome |
+| --- | --- | --- |
+| requirement goal/design | configured ledger/support document refs pinned by the demand authority | referenced by the BusinessArchive without inventing another requirement copy |
+| task/Test authority | immutable TaskPackage and TestCard artifacts plus state selectors | exact artifacts included in the whole-demand archive |
+| transport | local strict group → packet → envelope → run chain | summarized by digest; eligible for whole-demand transport retention only after archive and lease closure |
+| target results | immutable results plus current/historical selectors in demand state | retained in BusinessArchive; never deleted by transport GC |
+| decisions/lifecycle | append-only controller events plus state snapshot | archived with exact conclusion and lineage |
+| imported evidence | managed evidence manifest/payload under the active demand | privacy-checked portable archive member or explicit local preservation reference |
 
-| Information | Intake | Active | Archived |
-| --- | --- | --- | --- |
-| Requirement design / original plan | `wakeflow-ledger/requirement-designs/<key>/` (Design writes; TODO row links them) | unchanged — the demand POINTS at it (`demand.json source.designKey/documents`) | unchanged; `archive-summary.md` + manifest link back |
-| Frozen demand authority | proportional refs are produced by Design delivery or controller inline intake | `demand-authority.json` is written once before implementation; state pins its SHA-256 digest and dispatch rechecks it | copied into the demand archive and summarized with the same digest |
-| Execution actions (dispatch/return) | — | transport artifacts in `.wakeflow-local/wakeflow-delivery/` (pruned later) + one human line each in the progress doc's execution timeline | timeline rides the archived `developer-progress.md`; transport is GC'd |
-| State transitions | — | `wakeflow-state.json` (snapshot) + `controller-events.jsonl` (audit truth) | both copied into `archive/<month>/<demand>/` |
-| Acceptance & conclusion | — | `decide-review` events + timeline lines; completion reason/evidence on the `completed` event | `archive-manifest.json conclusion` + Task Ledger table in `archive-summary.md` |
-| Test information | Test Environment Spec in the requirement design (S1) | `test-cards/` in the state root + results as TargetResultEnvelopes | cards ride the archive copy; summary lists them |
-| Un-redacted original | — | stays in the state root | `archive-demand --redact` moves it to `.wakeflow-local/preserved/<date>-archive-original-<demand>/`; historical `sanitize-archive` moves the polluted archive to `<date>-archive-sanitization-original-<demand>/` |
+Human progress/status documents are projections. They help navigation but do
+not override event, artifact, result, binding, transport, or config authority.
 
-The execution timeline is machine-appended (dispatch sent, target return,
-decision, completion, archive) into the progress doc's three append-only
-sections — projection for humans, never authority (events jsonl stays the
-audit truth); appends never fail the mutation they narrate. Reading order for
-an archived demand: `archive-summary.md` → `developer-progress.md` (timeline)
-→ `controller-events.jsonl` (audit) → linked requirement design.
+## Preservation
 
-## Rescue Convention And GC
+`wakeflow_storage_preserve` is the only normal rescue/release owner:
 
-- The ONE sanctioned installed-workspace rescue move is
-  `wakeflow_storage_preserve`: call it with `source` and `reason` as a dry-run,
-  then repeat with `apply: true`. It delegates to the storage backend and relocates the path into
-  `.wakeflow-local/preserved/<YYYY-MM-DD>-<reason>/` and writes the
-  `MANIFEST.md` (who/why/source/retention). Inventing any other holding
-  location recreates the unowned-residue problem this convention exists to
-  end.
-- `archive-demand --redact` machine-moves the un-redacted original into
-  `preserved/<date>-archive-original-<demand>/` after the ledger commit, so
-  `current/` stays clean without manual moves. Opaque files are omitted from
-  the portable archive and represented by safe placeholder manifests unless
-  clean opaque byte inclusion was explicitly authorized with `allowOpaque`.
-  A real id in a path similarly omits the highest sensitive
-  file/subtree once, aligns text references with its `redacted-id-N` portable
-  alias, and writes one digest/count placeholder. Collisions still fail closed;
-  original paths and bytes remain only in the preserved copy.
-- `wakeflow_archive target=sanitize-demand` is the only sanctioned amendment for an already
-  archived demand. It accepts only a state-root below the configured
-  `wakeflow-ledger/workspace/archive/`, requires `state=archived` plus
-  `archive-manifest.json`, appends `archive.sanitized`, and preserves the
-  original locally. It never reopens or re-accepts the demand.
-- GC: `wakeflow_prune_runtime` (transport, default) and
-  `wakeflow_prune_runtime target=preserved` (audit holds older than
-  `preservedRetentionDays`, default 30) — both dry-run first. Legacy and
-  unknown trees are never pruned by any tool; they are surfaced as reminders
-  and decided by the user.
+1. `operation=inspect` reads the typed inventory.
+2. `operation=preview` creates a zero-write preservation plan for an exact
+   caller-confirmed source.
+3. `operation=apply` accepts only that confirmed plan/digest and publishes an
+   opaque typed `preservationId` entry.
+4. Release starts with `operation=preview-release`; apply/recover use the exact
+   returned plan. Release is never inferred from age.
 
-## Current Workspace Documents
+Unknown local trees always route to the user. Do not auto-delete, invent a
+quarantine directory, or treat a copied payload as current authority. Preserved
+payload remains isolated until the explicit release owner succeeds.
 
-The installed workspace index is the single active controller entrypoint. It
-links current status, current state roots, TODO projections, Design/Test intake,
-and archive maps. Active runtime docs are local and usually not committed.
+## Archive And Retention
 
-## Long-Term Records
+`wakeflow_archive` owns one portable whole-demand BusinessArchive with exact
+`preview`, `apply`, `inspect`, and `recover` operations. It does not expose
+docs/TODO/sanitize targets and does not reopen or accept a demand. Privacy,
+typed IDs, current/historical results, event lineage, and local preservation
+references are revalidated by the owner before commit.
 
-Use the external workspace ledger for:
+An already-polluted legacy archive is migration input, not a public in-place
+sanitize operation. Never hand-edit it or move it back into current state.
 
-- requirement designs;
-- goal/stage confirmations;
-- archived plans;
-- completed TODO history;
-- test history;
-- cross-repository evidence maps;
-- per-window function/value records (see Per-Window Folders).
+`wakeflow_prune_runtime` owns only whole-demand transport retention through
+`preview`, `apply`, and `recover`. It requires the matching BusinessArchive and
+closed lease/result dependencies. Audit-preserved bytes are released only by
+`wakeflow_storage_preserve`; they are not a prune target.
 
-Wakeflow initialization creates starter ledger entries for:
+## Pod Host Evidence
 
-- `wakeflow-ledger/requirement-designs/README.md`;
-- `wakeflow-ledger/goal-stage-confirmation/README.md`;
-- `wakeflow-ledger/goal-stage-confirmation/process.md`;
-- `wakeflow-ledger/workspace/workspace-record-map.md`;
-- `wakeflow-ledger/workspace/requirement-to-wave-execution-flow.md`;
-- `wakeflow-ledger/workspace/todo-window-scheduling-policy.md`;
-- `wakeflow-ledger/workspace/workspace-doc-archive-policy.md`;
-- `wakeflow-ledger/workspace/archive/index.md`.
+Pod scope, launch intents/materialization events, creation receipts, Test-access
+plans/receipts, and close intents/receipts are typed facts below
+`runtime/hosts/codex/evidence/pods/<podId>/`. The current binding remains under
+the host identity tree. `control-ready` and `execution-ready` are derived from
+strict state plus exact receipts; a suffix, prompt, path, or archived task is
+not a binding or physical cleanup proof.
 
-Long-term documents must avoid user absolute paths, API keys, tokens, and other
-private information. Demand archive scans real host IDs plus workspace/home
-absolute paths, normalizes paths to `<workspace-root>` or `~`, and re-scans the
-staged tree before commit. Use lowercase kebab-case names and dates.
+Codex `clientThreadId` may be kept only as a digest for launch recovery. Only a
+unique final `threadId` can be registered. Logical close, task archival, and
+physical worktree/branch cleanup remain separate facts.
 
-## Per-Window Folders
+## Durable Documents
 
-Each managed window/repository gets its own folder under the ledger
-(`wakeflow-ledger/<window>/`). Keep these folders focused on the window's own
-function and value documentation — what the window does, its capabilities,
-interfaces, integration points, and the durable reference a contributor to that
-window needs. They do NOT hold requirement or process-flow documents: requirement
-designs, goal/stage confirmations, wave-execution flow, and TODO scheduling stay
-in the controller's shared ledger areas (`requirement-designs/`,
-`goal-stage-confirmation/`, `workspace/`). A window folder carries the window's
-value, not the controller's planning trail.
-
-## Design/Test Records
-
-Design drafts may live in an external Design repository or internal Design
-support surface. Mainline Design enters through controller TODO delivery via
-`wakeflow_deliver`. The Pod's single Design generation stays inside that Pod:
-`pod-design-requests/` freezes the controller-authored request and
-`pod-design-handoffs/` records the matching envelope in the same demand state
-root. Neither artifact creates another global TODO. The current implementation persists one
-Pod Design request/handoff generation whose request type may be
-`initial-design`, `supplement`, or `redesign`; a different second generation is
-a capability blocker, not permission to overwrite the ledgers or use mainline Design.
-
-Test plans and reports may live in an external Test repository or internal Test
-support surface. Wakeflow links to evidence instead of duplicating execution
-details in controller docs. A Pod Test record references only that Pod's
-verified product bindings; it must not infer mainline or another Pod's paths.
-
-## Pod Host Runtime
-
-Host-local Pod facts are split by purpose:
-
-- `hosts/<host>/thread-registry/`: final real handle only;
-- `hosts/<host>/pod-manifests/`: host-local materialization manifest;
-- `hosts/<host>/pod-operations/`: launch/close correlations and the
-  materialization journal. A Codex `clientThreadId` is retained only as a
-  digest while pending and never enters the registry;
-- `hosts/<host>/pod-bindings/<pod-id>/`: verified cwd/Git/session receipts.
-- `hosts/<host>/pod-test-access-plans/` and
-  `pod-test-access-receipts/`: private exact probe plans and host receipts; the
-  tracked state stores only redacted identity/digest summaries.
-
-Tracked state keeps logical role, phase, and audit events. `control-ready` and
-`execution-ready` are derived from canonical state plus verified bindings.
-Pod Test dispatch additionally requires a validated `direct-multi-root`
-receipt covering every active product binding. Unsupported access stays
-blocked; no fallback or per-repository executor is implied.
-Logical close removes no Git resource; physical worktree cleanup remains a
-separate host receipt.
-
-## Archive
-
-Archive scripts compact historical current-index rows, completed TODOs, and
-summary maps into the ledger. They do not make acceptance decisions.
+Keep requirement designs, user decisions, completion definitions, non-goals,
+and long-lived evidence maps in the configured ledger/support surfaces. Use
+workspace-relative anchors, typed IDs, and portable paths. Never store secrets,
+raw host handles, user-home/workspace absolute paths, or machine cache paths in
+durable documents or BusinessArchives.

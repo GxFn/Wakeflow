@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:business-archive:transport-summary:v1",
+  "title": "Wakeflow Portable Transport Archive Summary",
+  "$comment": "Portable redacted closure of one strict T06 demand inventory. Runtime validation additionally enforces canonical refs, lexical ordering, inventory digest equality, group/packet/envelope/run ancestry and omission of prompt, raw binding, locator and error-message fields.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "programId",
+    "demandId",
+    "sourceStatus",
+    "inventoryDigest",
+    "groups",
+    "packets",
+    "envelopes",
+    "runs"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "artifactKind": { "type": "string", "const": "wakeflow-business-archive-transport-summary" },
+    "programId": { "$ref": "#/$defs/programId" },
+    "demandId": { "$ref": "#/$defs/demandId" },
+    "sourceStatus": { "type": "string", "enum": ["missing", "empty", "current"] },
+    "inventoryDigest": { "$ref": "#/$defs/digest" },
+    "groups": { "type": "array", "items": { "$ref": "#/$defs/group" } },
+    "packets": { "type": "array", "items": { "$ref": "#/$defs/packet" } },
+    "envelopes": { "type": "array", "items": { "$ref": "#/$defs/envelope" } },
+    "runs": { "type": "array", "items": { "$ref": "#/$defs/run" } }
+  },
+  "$defs": {
+    "uuidV4": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "programId": { "type": "string", "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "demandId": { "type": "string", "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "groupId": { "type": "string", "pattern": "^dispatch-group_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "packetId": { "type": "string", "pattern": "^dispatch-packet_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "deliveryId": { "type": "string", "pattern": "^delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "runId": { "type": "string", "pattern": "^delivery-run_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "windowId": { "type": "string", "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "targetTaskId": { "type": "string", "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "taskPackageId": { "type": "string", "pattern": "^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "testCardId": { "type": "string", "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "leaseId": { "type": "string", "pattern": "^lease_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "timestamp": { "type": "string", "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$" },
+    "token": { "type": "string", "minLength": 1, "pattern": "^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$" },
+    "ref": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)[^\\u0000-\\u001F\\u007F-\\u009F]+$" },
+    "tuple": {
+      "type": "object",
+      "required": ["id", "ref", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "ref": { "$ref": "#/$defs/ref" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "groupMember": {
+      "type": "object",
+      "required": ["windowId", "targetTaskId", "packetId"],
+      "additionalProperties": false,
+      "properties": {
+        "windowId": { "$ref": "#/$defs/windowId" },
+        "targetTaskId": { "$ref": "#/$defs/targetTaskId" },
+        "packetId": { "$ref": "#/$defs/packetId" }
+      }
+    },
+    "group": {
+      "type": "object",
+      "required": ["groupId", "ref", "digest", "stateRevision", "controllerWindowId", "members", "returnPolicy", "createdAt"],
+      "additionalProperties": false,
+      "properties": {
+        "groupId": { "$ref": "#/$defs/groupId" },
+        "ref": { "$ref": "#/$defs/ref" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "stateRevision": { "type": "integer", "minimum": 1 },
+        "controllerWindowId": { "$ref": "#/$defs/windowId" },
+        "members": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/groupMember" } },
+        "returnPolicy": {
+          "type": "object",
+          "required": ["mode"],
+          "additionalProperties": false,
+          "properties": { "mode": { "type": "string", "enum": ["group-ready", "per-target"] } }
+        },
+        "createdAt": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "taskPackage": {
+      "type": "object",
+      "required": ["taskPackageId", "ref", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "taskPackageId": { "$ref": "#/$defs/taskPackageId" },
+        "ref": { "$ref": "#/$defs/ref" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "testCard": {
+      "type": "object",
+      "required": ["testCardId", "ref", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "testCardId": { "$ref": "#/$defs/testCardId" },
+        "ref": { "$ref": "#/$defs/ref" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "packet": {
+      "type": "object",
+      "required": ["packetId", "ref", "digest", "groupId", "groupRef", "groupDigest", "windowId", "targetTaskId", "taskPackage", "workType", "createdAt"],
+      "additionalProperties": false,
+      "properties": {
+        "packetId": { "$ref": "#/$defs/packetId" },
+        "ref": { "$ref": "#/$defs/ref" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "groupId": { "$ref": "#/$defs/groupId" },
+        "groupRef": { "$ref": "#/$defs/ref" },
+        "groupDigest": { "$ref": "#/$defs/digest" },
+        "windowId": { "$ref": "#/$defs/windowId" },
+        "targetTaskId": { "$ref": "#/$defs/targetTaskId" },
+        "taskPackage": { "$ref": "#/$defs/taskPackage" },
+        "workType": { "type": "string", "enum": ["documentation", "implementation", "research", "test"] },
+        "testCard": { "$ref": "#/$defs/testCard" },
+        "createdAt": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "envelope": {
+      "type": "object",
+      "required": ["artifactKind", "deliveryId", "ref", "digest", "group", "preparedByHostId", "windowId", "correlationId", "createdAt"],
+      "additionalProperties": false,
+      "properties": {
+        "artifactKind": { "type": "string", "enum": ["wakeflow-controller-return-envelope", "wakeflow-target-delivery-envelope"] },
+        "deliveryId": { "$ref": "#/$defs/deliveryId" },
+        "ref": { "$ref": "#/$defs/ref" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "group": { "$ref": "#/$defs/tuple" },
+        "packet": { "$ref": "#/$defs/tuple" },
+        "resultSetDigest": { "$ref": "#/$defs/digest" },
+        "reviewSnapshotDigest": { "$ref": "#/$defs/digest" },
+        "preparedByHostId": { "type": "string", "enum": ["codex", "claude-code"] },
+        "windowId": { "$ref": "#/$defs/windowId" },
+        "correlationId": { "$ref": "#/$defs/groupId" },
+        "createdAt": { "$ref": "#/$defs/timestamp" }
+      },
+      "oneOf": [
+        {
+          "properties": { "artifactKind": { "const": "wakeflow-target-delivery-envelope" } },
+          "required": ["packet"],
+          "not": { "anyOf": [{ "required": ["resultSetDigest"] }, { "required": ["reviewSnapshotDigest"] }] }
+        },
+        {
+          "properties": { "artifactKind": { "const": "wakeflow-controller-return-envelope" } },
+          "required": ["resultSetDigest", "reviewSnapshotDigest"],
+          "not": { "required": ["packet"] }
+        }
+      ]
+    },
+    "readbackEvidence": {
+      "type": "object",
+      "required": ["kind", "digest"],
+      "additionalProperties": false,
+      "properties": { "kind": { "$ref": "#/$defs/token" }, "digest": { "$ref": "#/$defs/digest" } }
+    },
+    "readback": {
+      "type": "object",
+      "required": ["status", "attempts", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string", "enum": ["confirmed", "pending", "unavailable"] },
+        "attempts": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "evidence": { "type": "array", "maxItems": 1, "items": { "$ref": "#/$defs/readbackEvidence" } }
+      }
+    },
+    "previousRun": {
+      "type": "object",
+      "required": ["runId", "ref", "digest"],
+      "additionalProperties": false,
+      "properties": { "runId": { "$ref": "#/$defs/runId" }, "ref": { "$ref": "#/$defs/ref" }, "digest": { "$ref": "#/$defs/digest" } }
+    },
+    "observedLease": {
+      "type": "object",
+      "required": ["leaseId", "leaseRef", "leaseDigest"],
+      "additionalProperties": false,
+      "properties": { "leaseId": { "$ref": "#/$defs/leaseId" }, "leaseRef": { "$ref": "#/$defs/ref" }, "leaseDigest": { "$ref": "#/$defs/digest" } }
+    },
+    "run": {
+      "type": "object",
+      "required": ["runId", "ref", "digest", "deliveryId", "envelopeRef", "envelopeDigest", "hostId", "windowId", "attemptOrdinal", "hostMethod", "hostMode", "transportStatus", "readback", "createdAt"],
+      "additionalProperties": false,
+      "properties": {
+        "runId": { "$ref": "#/$defs/runId" },
+        "ref": { "$ref": "#/$defs/ref" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "deliveryId": { "$ref": "#/$defs/deliveryId" },
+        "envelopeRef": { "$ref": "#/$defs/ref" },
+        "envelopeDigest": { "$ref": "#/$defs/digest" },
+        "hostId": { "type": "string", "enum": ["codex", "claude-code"] },
+        "windowId": { "$ref": "#/$defs/windowId" },
+        "attemptOrdinal": { "type": "integer", "minimum": 1 },
+        "previousRun": { "$ref": "#/$defs/previousRun" },
+        "hostMethod": { "$ref": "#/$defs/token" },
+        "hostMode": { "$ref": "#/$defs/token" },
+        "transportStatus": { "type": "string", "enum": ["accepted", "ambiguous", "rejected-before-send"] },
+        "readback": { "$ref": "#/$defs/readback" },
+        "observedLease": { "$ref": "#/$defs/observedLease" },
+        "errorCode": { "$ref": "#/$defs/token" },
+        "createdAt": { "$ref": "#/$defs/timestamp" }
+      }
+    }
+  }
+}

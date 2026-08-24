@@ -1,0 +1,28 @@
+{
+  "ok": false,
+  "scriptComplete": true,
+  "sourceMode": "all",
+  "afterCompletion": false,
+  "targetId": null,
+  "currentStatus": {
+    "path": ".workspace-active/workspace/current/workspace-current-status.md",
+    "status": null,
+    "primaryStatus": null,
+    "eligibleForAfterCompletion": false,
+    "issue": "current status file is missing"
+  },
+  "candidateCount": 0,
+  "candidates": [],
+  "recommended": null,
+  "autoClaimable": false,
+  "wrote": false,
+  "output": ".workspace-local/wakeflow-intake/wakeflow-next-work.json",
+  "issues": [
+    "current status file is missing"
+  ],
+  "warnings": [
+    "Design handoff board missing: .workspace-active/workspace/current/design-handoff-board.md",
+    "Global TODO board missing: .workspace-active/workspace/current/global-todo-board.md"
+  ],
+  "agentNext": "Resolve the blocking intake issues before claiming or dispatching the next requirement."
+}

@@ -1,0 +1,62 @@
+{
+  "kind": "DirectThreadDeliveryRun",
+  "version": 2,
+  "deliveryRunId": "run-delivery-SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+  "deliveryId": "delivery-SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+  "targetWindow": "ProductWindow",
+  "taskId": "SCENARIO-TASK",
+  "dispatchGroup": "SCENARIO-GROUP",
+  "transport": "direct-thread",
+  "transportStatus": "accepted",
+  "status": "sent",
+  "windowLease": {
+    "leaseId": "@wakeflow-scenario-lease-id-31f11fc7d9",
+    "deliveryId": "delivery-SCENARIO-GROUP__ProductWindow__SCENARIO-TASK"
+  },
+  "thread": {
+    "windowName": "ProductWindow",
+    "threadIdRedacted": true,
+    "threadRegistryFile": "hosts/claude-code/thread-registry/ProductWindow.json"
+  },
+  "hostAction": {
+    "method": "wakeflow-claude-host deliver",
+    "mode": "new-turn"
+  },
+  "readback": {
+    "checked": true,
+    "ok": true,
+    "status": "confirmed",
+    "attempts": 1,
+    "evidence": "synthetic host accepted the exact scenario envelope and confirmed readback"
+  },
+  "keepLive": {
+    "enabledForRun": false,
+    "stateFile": null
+  },
+  "wakeflowTrace": {
+    "kind": "WakeflowTrace",
+    "version": 1,
+    "artifactKind": "delivery-run",
+    "source": "wakeflow-delivery",
+    "command": "record-delivery-run",
+    "root": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+    "stateRoot": ".wakeflow-active/current/SCENARIO-TRANSPORT",
+    "stateRevision": 2,
+    "demandKey": "SCENARIO-TRANSPORT",
+    "taskPackageId": "SCENARIO-PACKAGE",
+    "targetTaskId": "SCENARIO-TASK",
+    "targetWindow": "ProductWindow",
+    "dispatchGroup": "SCENARIO-GROUP",
+    "deliveryId": "delivery-SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+    "deliveryFile": ".wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__delivery-SCENARIO-GROUP__ProductWindow__SCENARIO--d5353dd0843b.json",
+    "deliveryRunId": "run-delivery-SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+    "createdAt": "@wakeflow-scenario-time-c8859951aa"
+  },
+  "createdAt": "@wakeflow-scenario-time-ae03aac442",
+  "idempotency": {
+    "key": "delivery-run:delivery-SCENARIO-GROUP__ProductWindow__SCENARIO-TASK:run-delivery-SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+    "duplicateBehavior": "return-existing-if-equivalent",
+    "safeRetry": "use-a-new-delivery-run-id-for-an-additional-send-attempt",
+    "unsafeRetry": "same-delivery-run-id-with-different-content"
+  }
+}

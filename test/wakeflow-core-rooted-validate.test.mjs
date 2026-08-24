@@ -1,4 +1,4 @@
-import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
+import { spawnSync as runSync } from "node:child_process";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";

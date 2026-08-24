@@ -1,6 +1,6 @@
 ---
 name: wakeflow-controller
-description: Use when Wakeflow total control starts or resumes Wakeflow Delivery Loop in Claude Code, reviews target result envelopes, creates dispatch packets, builds delivery envelopes, sends deliveries to tmux-resident window sessions with the wakeflow-claude-host helper, decides acceptance / rework / block / next wave, or stops unattended automation.
+description: Use when Wakeflow total control starts or resumes Wakeflow Delivery Loop in Claude Code, reviews strict TargetResult records, prepares typed delivery transport, coordinates the v3 Claude host adapter, decides acceptance / rework / block / next wave, or stops unattended automation.
 ---
 
 # Wakeflow Controller
@@ -11,7 +11,7 @@ this skill owns the mechanical loop steps.
 ## Purpose
 
 Wakeflow Delivery Loop lets the controller fan out work to target window
-sessions, receive compact result envelopes, inspect target-authored review
+sessions, receive strict TargetResult records, inspect target-authored review
 inputs, run independent checks, and decide the next package. It does not
 replace planning, scope control, validation, or acceptance.
 
@@ -24,15 +24,21 @@ inspecting inputs, validating, deciding, planning next eligible packages, and
 dispatching until final completion, a hard gate, explicit user stop, missing review inputs that need
 human judgment, or no eligible TODO remains.
 
-After explicit helper acceptance, record `status=sent` with the actual
-`readback.status` and attempt count from its single bounded pane observation.
+After an explicit v3 host-adapter outcome, record the exact transport and
+readback fact through `wakeflow_record_delivery operation=target-outcome`.
 Pending/unavailable pane visibility is `sent-unconfirmed`; it never authorizes
 another pane read, resend, or lease release. The controller dispatch turn then
 stops without claiming destination reachability. Do not keep the
 turn open with `sleep`, repeated result review, repeated session reads, or
-manual polling. The target returns later through a `TargetResultEnvelope` and,
-if policy allows, a controller-return delivery sent to the controller's own
-tmux window. The activity monitor flips the tab to done when the result lands (lock released). Silence is never auto-judged: a long quiet spell may be a legitimate long tool call, so whether a window is stalled is the CONTROLLER'S judgment, made when it chooses to inspect (window-status, pane readback, the dispatch group). Do not arm per-dispatch watchers; `wait-results` exists only as an explicit synchronous wait for scripted flows (pure observation, no side effects).
+manual polling. The target returns later through one strict
+`wakeflow-target-result` TargetResult and, if policy allows, a
+controller-return delivery sent to the controller's own
+tmux window. Status, review, and trace must derive from strict state, transport,
+result, binding, and redacted host-projection facts. Silence is never
+auto-judged: a long quiet spell may be a legitimate long tool call, so whether
+a window is stalled remains the CONTROLLER'S judgment after an explicit
+inspection. Do not arm per-dispatch watchers, poll panes, or use a synchronous
+wait compatibility route.
 
 ## Source Practices For Acceptance
 
@@ -64,8 +70,8 @@ documented requirement directly when doing so avoids pointless handoff and it
 can cite the same proportional inputs Design would have supplied. This is
 flexibility, not a second requirement format.
 
-Both entry paths converge on one immutable `demand-authority.json` before the
-first implementation package:
+Whenever either entry path will need a TaskPackage, it publishes one immutable
+`demand-authority.json` with the initial demand creation:
 
 - `requirement`: Original Plan, Requirement Design, code facts, landing plan,
   non-goals, user-confirmation ledger, and Test decision;
@@ -77,14 +83,18 @@ first implementation package:
 Every reference is a workspace-relative Markdown anchor. A real-environment
 Test decision also names the exact `test-environment` anchor. `Auto Claim`
 authorizes unattended claiming only; it never supplies missing requirement
-authority. `wakeflow_create_demand` may create a typed draft without authority,
-but `wakeflow_add_task` must freeze the complete authority atomically with the
-first implementation package. Do not manufacture missing anchors to make the
-machine gate pass; route the gap to Design or the user.
+authority. Public v3 can publish a demand with `authority: null`, but no public
+operation can add authority afterward and `wakeflow_add_task` requires the
+exact frozen authority tuple for every TaskPackage. Therefore, whenever a
+TaskPackage will be needed, include the complete authority in the initial
+`wakeflow_create_demand` preview/apply publication. Do not manufacture missing
+anchors to make the machine gate pass; route the gap to Design or the user.
 
-**Red Flag — a third point-fix on the same task.** Two failed reworks on one task mean the next move
-is a *new* root-cause hypothesis or a non-bug-mismatch route to Design redesign — not another bounce
-between product windows.
+**Red Flag — a third point-fix on the same task.** Only when the retained event
+history actually proves two prior controller rework decisions should the next
+move require a new root-cause hypothesis or a non-bug-mismatch route to Design
+redesign. Current v3 state has no `reworkCount` or `recurringProblem` field, so
+never infer this brake from an absent counter.
 
 ## Controller Return Prompt Shape
 
@@ -118,20 +128,23 @@ Do not expose empty `blockedTargets`, `remainingTargets`, or
 3. State the safe operation, recovery boundary, and one-sentence plan before
    using tools, editing files, dispatching, accepting, archiving, or deleting.
    If a tool returns `state-transition-recovery-required`, stop the original
-   operation, run `wakeflow_recover_state_transition` as a dry-run and then
-   with `apply=true`, re-read state, and only then decide whether the original
-   operation is still needed. Never make another state writer recover it
-   implicitly.
+   operation and call `wakeflow_recover_state_transition` with the exact
+   `generic` or `lifecycle` operation and recovery tuple named by the failure.
+   Re-read state after recovery before deciding whether the original operation
+   is still needed. Never make another state writer recover it implicitly.
 4. If the demand is blocked, cancelled, archived, review-ready, or lacks
    required review inputs, stop instead of preparing another package. If it is completed,
    classify the new fact before acting: same-demand continuation, independent
    follow-up, or no work. Never call `wakeflow_add_task` against completed state.
 5. Create or select a task package only when it advances the confirmed goal.
    New packages must record the complete dispatch context once: `workType`,
-   one observable `objective`, a short ordered `contextSummary`, anchored
+   one observable `objective`, a short ordered `confirmedContext`, anchored
    `requirementRefs`, `boundaries` (`inScope`, `outOfScope`, `forbidden`),
-   `completionExpectations` ordered most important first, explicit `dependsOnTaskIds`, and
-   `commitExpectation`. The prompt is a compact briefing generated from this
+   `completionExpectations` ordered most important first, explicit
+   `dependsOnTargetTaskIds`, `acceptanceAnchors`, and `reviewInputContract`.
+   Every non-Test package also carries `repositoryId` and `commitExpectation`;
+   a Test package carries one exact `testCard` tuple and neither repository
+   field. The prompt is a compact briefing generated from this
    package: it surfaces the objective, at most the first two completion
    expectations, one highest-priority context fact, one critical boundary, up
    to four acceptance-anchor ids/claims, and the ordered document/Skill
@@ -142,11 +155,11 @@ Do not expose empty `blockedTargets`, `remainingTargets`, or
    only the first available boundary in `forbidden → outOfScope → inScope`
    order, so its first entry must be the one the target cannot safely miss.
    For implementation work, author a small `acceptanceAnchors` list from the
-   confirmed requirement: each entry names `{id, claim, probe, expected}` that
+   confirmed requirement: each entry names `{anchorId, claim, probe, expected}` that
    the target can turn into a RED check before coding. Do not invent anchors
    from implementation leftovers; if the required behavior cannot be stated as
-   a probe, the package is not ready. Doc-only and research packages may omit
-   anchors.
+   a probe, the package is not ready. Documentation and research packages keep
+   the required `acceptanceAnchors` field as an empty array.
 6. For a Test package, first confirm every active required non-Test target is
    `accepted` and `controllerSelfChecks` states what you already verified and
    why the real scenario remains necessary. A Test-only reproduction or
@@ -159,54 +172,36 @@ Do not expose empty `blockedTargets`, `remainingTargets`, or
    `capability=direct-multi-root`, and exact coverage of every active product
    binding. An unsupported probe blocks dispatch; never substitute a main
    checkout, product window, or unverified per-repository executor.
-7. Call `wakeflow_prepare_delivery` for the target without `apply`. Review its
-   `readiness`, `taskBriefing`, repository identity, requirement anchors,
-   dependency status, required Skills, and exact prompt. A preview writes no
-   packet, envelope, window config, or lock.
-8. If the preview is correct, call the same tool again with `apply=true`. This
-   freezes the validated packet and delivery envelope and reserves the target
-   window's shared work lease with that delivery id; pass
-   `previewDigest` back as `expectedPreviewDigest`. Do not
-   override the package objective or substitute another human-context
-   reference. The digest covers the package, state revision, resolved
-   repository, prompt, and transport configuration; any change requires a
-   fresh preview.
-9. Send the envelope prompt exactly as stored in the envelope with the tmux
-   host helper in ONE step:
-   `node <plugin>/scripts/lib/wakeflow-claude-host.mjs deliver --root <workspace>
-   --delivery-file <deliveryFile from the prepare payload>` — it reads the
-   envelope from disk, writes its own temp prompt file, sends, and returns
-   compact readback. (The lower-level `send --window --prompt-file
-   --delivery-id <id>` form is only for an explicitly identified custom target
-   prompt, never a controller-return.) The helper reuses/revalidates the shared
-   per-window target work lease reserved with the envelope
-   (`.wakeflow-local/wakeflow-delivery/locks/<window>.json`, one in-flight
-   delivery per window across hosts), pastes the prompt into the target's tmux
-   pane via a tmux buffer (multiline-safe), and returns pane readback evidence
-   (`readback.paneTail`). A different fresh delivery cannot queue behind an
-   active target lease; it fails closed. (Claude Code desktop windows are not
-   an automation transport.)
-10. Inspect the helper's explicit transport result and single pane observation,
-   then record every transport/readback field with `wakeflow_record_delivery`
-   (host method `wakeflow-claude-host deliver`). Do not infer acceptance from
-   process completion.
-11. End the dispatch turn. The controller-return delivery is the wake-up, and
-   the activity monitor only updates live/done tab indicators; it never judges
-   quiet windows as stalled or wakes anyone. Do not arm a per-dispatch watcher.
+7. Call `wakeflow_prepare_delivery operation=target-preview`. Review the
+   readiness, briefing, exact typed repository/window identity, anchors,
+   dependencies, prompt, plan, and digest. Preview is zero-write.
+8. If correct, call `operation=target-apply` with the exact confirmed plan and
+   digest. This creates the immutable group, packet, and envelope only; it does
+   not acquire the host-effect lease or send anything. Any drift requires a new
+   preview.
+9. Immediately before the host effect call
+   `wakeflow_prepare_delivery operation=target-claim` with the exact current
+   binding/envelope tuple. Do not send if claim fails or reports stale state.
+10. Route the effect through the packaged v3 Claude host facade's exact
+    `target-delivery` command. Its transport owner holds the stable-window
+    operation mutex across validation, physical paste, and at most one bounded
+    pane readback. Retired public-v2 `deliver`/registry commands are not
+    aliases. If exact host execution or its receipt is unavailable, stop with
+    an explicit host-operation blocker.
+11. Record the exact fact with `wakeflow_record_delivery
+    operation=target-outcome`, then end the dispatch turn. That recorder is not
+    the host-effect fence. Accepted/ambiguous/sent-unconfirmed transport is not
+    resent; only an explicit rejected-before-send rearm may open another
+    attempt.
 
-Creation and recovery are separate operations. For a dead baseline window,
-relaunch the same registered session with all required identity inputs:
-`launch-window --root <workspace> --window <window> --cwd <recorded actual cwd>
---resume --session-id <registered id> --replace [--server <configured server>]`.
-For a Pod window, request the read-only `wakeflow_pod_open mode=resume` plan.
-The helper may verify a live window or resume only the exact registered session
-at the bound cwd. It must not repeat the creation HEAD gate, create/discover a
-replacement worktree, pass `--worktree`, rebind core state, or fall back to
-mainline. Missing or ambiguous identity remains blocked.
+Creation and recovery are separate operations. Inspect an existing Pod binding
+with `wakeflow_pod_open operation=inspect-materialization`; it never creates,
+discovers, or rebinds a replacement or falls back to mainline. Missing or
+ambiguous identity remains blocked.
 
 ## Review Target Results
 
-1. Import or locate target result envelopes for the dispatch group.
+1. Import or locate strict TargetResult artifacts for the dispatch group.
 2. Run group review against the state root.
 3. Check for missing, blocked, or ready targets.
 4. Inspect the target-authored materials and plan fresh independent checks before deciding.
@@ -216,7 +211,7 @@ mainline. Missing or ambiguous identity remains blocked.
    - original user goal and completion definition;
    - current state root and task package;
    - dispatch group and target identity;
-   - target result envelope;
+   - current strict TargetResult artifact;
    - target-authored paths, commits, commands, reports, logs, screenshots,
      runtime JSON, probes, or Test materials;
    - product repository rules and relevant Design/Test artifacts;
@@ -246,22 +241,24 @@ mainline. Missing or ambiguous identity remains blocked.
 7. Decide explicitly, two-stage (spec compliance first, then quality):
    - **accept** the target result;
    - **rework** — a product-code defect: re-dispatch the same window
-     (`decide-review --decision rework`, reworkCount++);
+     (`wakeflow_decide_review operation=decide`, decision `rework`);
    - **redesign** — a non-bug mismatch, or a small requirement-level fix that is Design's
-     job and not a code defect: `decide-review --decision redesign` parks the task and
-     increments `redesignCount` instead of bouncing point-fixes between product windows.
-     Mainline may use its stateless Design delivery and then add a full-context replacement
-     with `replacesTargetTaskId=<parked task>`. A Pod must stay in its own Design lane;
+     job and not a code defect: `wakeflow_decide_review operation=decide` with
+     decision `redesign` parks the task as `needs-rework` without inventing a
+     redesign counter. Mainline may use its stateless Design delivery and then
+     add a full-context replacement whose exact `replacesTargetTask` tuple is
+     `{targetTaskId,taskPackageRef,taskPackageDigest}`. A Pod must stay in its own Design lane;
      because the current implementation supports only one frozen Pod Design request/handoff
      generation, a redesign may use that sole generation only before any
      request exists; a different second request remains blocked rather than
      falling back to mainline Design or overwriting the recorded handoff;
    - **blocked** — a hard blocker that needs a human;
    - wait for missing targets, complete the demand, or create the next eligible package.
-   - **Brake:** when the task-ledger shows `recurringProblem` (reworkCount ≥ 2) on a task,
-     do NOT plain-rework it again — give a *new* root-cause hypothesis or choose `redesign`.
-   - **Brake:** if a demand's `redesignCount` reaches 2 and the effect still misses, the
-     requirement is unclear at the *user* level — escalate to the user, not another redesign round.
+   - **History brake:** if exact controller events prove two prior rework
+     decisions for this task, do not plain-rework it again without a new
+     root-cause hypothesis; choose redesign when the mismatch is not a code
+     defect. Escalate repeated requirement-level uncertainty to the user based
+     on inspected history, never on fictional count fields.
 8. Record the decision in controller state before dispatching follow-up work.
 
 ## Acceptance Decision Format
@@ -304,33 +301,28 @@ TODO rollup are already stated.
 
 ## Target Craft Inputs At Acceptance
 
-When a task package carries an `evidenceContract`, the machinery has checked only
-the structural half at reduce (`craft-review-inputs-required`: required kinds present,
-declared artifacts resolve). It has not checked truth. Validation and judgment are yours:
+Every TaskPackage carries `reviewInputContract`. The machinery checks structural
+closure, not truth; validation and judgment remain yours:
 
-- The review pack echoes each result's `craftEvidence` and a `craftCheck` /
-  `advisoryCraftKinds` reminder. Entries with `verify: controller-rerun` mean
-  YOU re-run them at acceptance (tests/typecheck/lint within the controller
-  self-validation boundary) — the script never runs repo commands for you;
-  `artifact-present` means the artifact was existence-checked only;
-  `self-attested` is a claim on the audit trail, not proof.
-- Read the `self-review` note: stage-1 spec compliance against designIntent,
-  and — on a rework round — the point-by-point response to your previous
-  rework reason. A result that silently ignores a rework point is not ready.
-- `recurringProblem` (reworkCount >= 2, surfaced at prepare-dispatch and in the
-  task ledger): stop redispatching point fixes — expect a `root-cause-note`,
-  and prefer the root-cause re-derivation or the `redesign` route.
-- A package WITHOUT a contract is not a defect (doc-only work legitimately
-  skips it) — the create/add reminders exist so the omission is a decision,
-  never an accident.
-- For a full-context result, `resultMapping.status=complete` means every
-  authored acceptance anchor or approved Test step is represented exactly
-  once. It is only a review-readiness fact: independently inspect/rerun the
-  referenced materials and run the required independent checks before accepting.
-- Check `commitDisposition`, `commits`, and `changedRepos` against the task
-  package's `commitExpectation`. A `resultContractGap` blocks a verdict until
-  the target records a corrected result or an honest blocked/needs-review
-  result.
+- A completed TargetResult must provide an `evidenceLocators` entry for every
+  package `requiredKinds` value. Each locator is exactly `{kind,ref,digest}`.
+  Blocked or needs-review results may be partial, but must remain honest.
+- For a completed non-Test result, `craftMapping` contains exactly one
+  `{kind:"acceptance-anchor",anchorId,evidenceRefs:[{ref,digest}]}` per package
+  anchor. For a completed Test result, it contains each approved plan step once
+  and in order as `{kind:"test-step",planIndex,step,ref}`. Mapping completeness
+  is review readiness, not proof.
+- Independently inspect or rerun the referenced evidence. A locator proves only
+  which bytes the target cited; it does not prove the claim or run repository
+  commands for the controller.
+- A product result has exactly one `repositoryChanges` entry for its assigned
+  repository, with `{repositoryId,disposition,commits}` consistent with the
+  package's `commitExpectation`; a Test result has an empty array. The result
+  contract does not carry a changed-files list, so inspect the cited VCS diff
+  and evidence directly.
+- Read `verification`, `risks`, the summary, and exact prior review events. A
+  corrected result may use the strict `supersedes` tuple, but current v3 exposes
+  no rework/redesign counters or advisory craft taxonomy.
 
 ## Group Policies
 
@@ -343,12 +335,12 @@ declared artifacts resolve). It has not checked truth. Validation and judgment a
 
 ## One Window Per Repo Within A Demand
 
-- WITHIN one demand, each repository runs exactly ONE window and receives ONE
-  combined task package: list every work item for that repo in the package
-  (the state root holds the detail), and the window self-sequences priorities
-  and returns one evidenced result. A window is never dispatched two
-  simultaneous tasks inside the same demand — more work for that repo arrives
-  as the NEXT combined package after review, never as a parallel dispatch.
+- WITHIN one demand, each repository has one active task lineage at a time and
+  each target task binds one immutable TaskPackage. A package objective may
+  describe coherent ordered steps, but the schema has no `items` collection.
+  More work for the same repository arrives only through an exact replacement
+  or completed-lineage continuation after the current lineage closes, never as
+  a parallel target task.
 - Mainline work uses the configured mainline product window. A Pod product
   window (`<repo>__<pod>`) exists only after explicit user Pod authorization
   and a Claude-created worktree receipt. Wakeflow refuses a second active
@@ -373,13 +365,13 @@ declared artifacts resolve). It has not checked truth. Validation and judgment a
   `Test__<pod>`, and one product session per selected repository, all in the
   Pod's tmux container. Pods are mutually unaware and every controller-return
   uses that demand's stamped controller window.
-- Core `wakeflow_pod_open` is plan/reserve only. The helper materializes its
+- Core `wakeflow_pod_open` is plan/reserve only. The v3 host adapter materializes its
   launch operations: control roles use distinct Claude sessions; each product
   starts from the exact repository root with native `claude --worktree`.
   Never nest Claude's `--tmux`, run Git worktree commands as a substitute, or
   grant the entire workspace root with a default `--add-dir`.
-- Record `creating` through `wakeflow_pod_record event=materialization` immediately
-  before the helper call and `finalized` only after it returns the final
+- Record launch progress through `wakeflow_pod_record operation=record-materialization` immediately
+  before the host call and `finalized` only after it returns the final
   Claude session id. Claude has no Codex `clientThreadId` pending state; never
   invent one or put a temporary request id in the registry.
 - Register only the final Claude session id, collect pane cwd/Git identity,
@@ -388,16 +380,16 @@ declared artifacts resolve). It has not checked truth. Validation and judgment a
   `execution-ready` additionally requires the recorded Pod Design handoff and
   every planned product binding.
 - The Pod's single Design generation uses
-  `wakeflow_pod_plan action=design-request → PodDesignRequest →
-  PodDesignHandoffEnvelope → wakeflow_pod_record event=design-handoff`; the frozen
+  `wakeflow_pod_plan operation=design-request → PodDesignRequest →
+  PodDesignHandoffEnvelope → wakeflow_pod_record operation=design-handoff`; the frozen
   request supplies exact lineage and cannot be replaced by a different
   request. Wakeflow does not yet persist multiple Pod Design generations:
   if a later supplement or redesign needs a new request/handoff, stop with a
   capability blocker. Never overwrite the frozen request, route the Pod
   through the mainline Design window, or create a duplicate global TODO.
-- Before Pod Test dispatch, call `wakeflow_pod_plan action=test-access`, execute
+- Before Pod Test dispatch, call `wakeflow_pod_plan operation=test-access-plan`, execute
   that exact host-local probe from `Test__<pod>`, and record the redacted
-  receipt with `wakeflow_pod_record event=test-access`. Only validated
+  receipt with `wakeflow_pod_record operation=test-access-receipt`. Only validated
   `direct-multi-root` access across all active product bindings opens dispatch.
   Unsupported access stays blocked; a verifiable per-repository executor is
   not currently implemented.
@@ -405,14 +397,14 @@ declared artifacts resolve). It has not checked truth. Validation and judgment a
   per-pod: an exclusive environment (per the S1 Test Environment Spec) is a
   cross-pod serial resource — confirm no other pod is using it before
   dispatching the card.
-- Close is two-stage: core `wakeflow_pod_plan action=close` emits host-close operations;
-  the helper closes tmux/Claude sessions and returns a separate worktree
-  disposition for `wakeflow_pod_record event=close-receipt`. Only then does Wakeflow
+- Close is two-stage: core `wakeflow_pod_plan operation=close-intent` emits host-close intent;
+  the v3 host adapter closes the exact tmux/Claude session and returns a separate worktree
+  disposition for `wakeflow_pod_record operation=close-observe/close-receipt`. Only then does Wakeflow
   close the logical binding. Claude/user owns physical worktree cleanup.
-- Public MCP inventory uses `wakeflow_view scope=pods`; helper CLI `pod-list`
-  remains the host-local diagnostic over canonical state plus host-scoped
-  operations and bindings. Neither guesses identity from a worktree path or
-  dynamic overlay.
+- `wakeflow_pod_open operation=inspect-materialization` plus
+  `wakeflow_pod_plan operation=test-access-inspect/close-inspect` read the
+  relevant Pod facts. They never guess identity from a worktree path or
+  dynamic overlay. The legacy helper `pod-list` is not v3 authority.
 - Cancelling instead of finishing: `wakeflow_cancel_demand` stops an
   in-flight demand WITHOUT pretending completion — no acceptance, result
   history stays, open tasks keep their last honest status. A cancelled Pod still needs
@@ -424,56 +416,46 @@ declared artifacts resolve). It has not checked truth. Validation and judgment a
   a completed but unarchived demand later has a verified bug inside its
   original completion definition, a confirmed supplement to that definition,
   or an explicitly authorized optimization that the user says belongs to the
-  same demand, use `wakeflow_continue_demand`.
+  same demand, use `wakeflow_continue_demand operation=create`.
 - Read the original plan / Requirement Design, accepted result history, and
-  controller validation record first. Record `continuationType`, a reason that explains why this is still the
-  same demand, review-input or decision references, and the first concrete target
-  package in the SAME call. The operation preserves all accepted tasks and the
-  earlier `demand.completed` event, then returns the state to `planned`; it does
-  not dispatch or accept anything. The demand must pass normal review and
-  `wakeflow_complete_demand` again.
+  controller validation record first. Submit one complete new TaskPackage with
+  `continuation:{kind,previousTaskPackageId,ref,digest,reason}`, where `kind` is
+  exactly `verified-bug`, `requirement-supplement`, or `optimization`. It must
+  extend the exact accepted/closed lineage head for the same repository,
+  window, and work type; all prior tasks/packages must already be closed and
+  the predecessor cannot already have a continuation child. The operation
+  retains the earlier `demand.completed` event and returns state to `planned`;
+  it does not dispatch or accept anything. The demand must pass normal review
+  and `wakeflow_complete_demand` again.
 - Do not split the operation into a manual state edit followed by
   `wakeflow_add_task`, and do not create a temporary demand/pod to work around
   the terminal-state guard. If the operation fails, the completed state must
   remain unchanged.
-- Archived demand roots are immutable to workflow continuation. The only
-  sanctioned in-place amendment is `wakeflow_archive target=sanitize-demand`, which may
-  replace a polluted archived root with a re-scanned privacy-clean copy while
-  preserving the original locally; it never reopens tasks or changes
-  acceptance. Independently scoped optimization,
-  backlog work, or anything discovered after archive goes through the normal
-  TODO / `wakeflow_create_demand` path with an explicit reference to the prior
-  demand; never move or edit the archived root back into `current/`.
+- Archived demand roots are immutable to workflow continuation. Public v3 has
+  no sanitize or reopen target. A polluted legacy archive is explicit-migration
+  input and must not be hand-edited. Independently scoped optimization, backlog
+  work, or anything discovered after archive goes through the normal TODO /
+  `wakeflow_create_demand` path with an explicit reference to the prior demand;
+  never move or edit archived authority back into current state.
 
 ## Storage Hygiene (idle-moment habit)
 
-- Archive a completed/cancelled demand through `wakeflow_archive` dry-run
-  first. If it reports real-id or user/workspace absolute-path findings, review
-  the categories and re-run with `redact: true`; the committed staging copy
-  must pass the final scan and the original moves to `preserved/`. Opaque
-  evidence stays byte-for-byte in that local original; unless clean opaque byte
-  inclusion was explicitly authorized with `allowOpaque`, the portable archive
-  contains only its safe placeholder and manifest metadata. A real id
-  in a path preserves the highest sensitive file/subtree once, writes one
-  `redacted-id-N` path placeholder, and applies the same alias to text
-  references; a portable-path collision remains a blocker.
-- If a historical archived demand is already committed with those findings,
-  use `wakeflow_archive target=sanitize-demand` on that exact archived state root (dry-run
-  first). Never hand-edit it, move it back to `current/`, or use this repair as
-  a continuation path.
-- In a spare moment (no in-flight deliveries, no pending reviews), glance at
-  `wakeflow_view` scope `storage`: known trees with class/size/age, legacy
-  residue, unknown trees, aging `preserved/` entries. It is orientation, not
-  a work queue — nothing there authorizes deletion.
-- An `unknown-tree` under `.wakeflow-local/` always routes to the user. After
-  the user selects a keeper, call `wakeflow_storage_preserve` with `source`
-  and `reason` first as a dry-run, then repeat with `apply: true` (the ONE
-  sanctioned rescue move; writes the manifest). Never invent another holding
-  location and never auto-delete.
-- Aged audit holds: review each `MANIFEST.md`, then
-  `wakeflow_prune_runtime target=preserved` (dry-run first) or keep with an
-  updated manifest. Transport GC stays `wakeflow_prune_runtime` (default
-  target).
+- Archive one completed/cancelled demand with `wakeflow_archive
+  operation=preview`, review the portable whole-demand plan and privacy
+  blockers, then use `operation=apply` only with the exact confirmed plan and
+  digest. `inspect` is read-only and `recover` resumes only the named owner.
+- Public v3 has no docs/TODO/sanitize archive target. A polluted legacy archive
+  is explicit-migration input; never hand-edit it or move it back into current
+  authority.
+- In an idle moment, use `wakeflow_view operation=storage` for orientation.
+  Legacy/unknown/preserved entries never authorize cleanup by themselves.
+- An unknown local tree routes to the user. For an explicitly selected keeper,
+  use `wakeflow_storage_preserve operation=preview`, then apply only the exact
+  confirmed plan. Never invent another holding location or auto-delete.
+- Release a preservation only through `operation=preview-release` followed by
+  exact apply/recover. `wakeflow_prune_runtime` owns only whole-demand transport
+  retention through preview/apply/recover after BusinessArchive and lease
+  closure; audit preservation is not a prune target.
 - Context degradation runbook: when your context has been compacted to
   unreliability, stop and ask for a controller replacement — the controller
   is replaceable, the state roots are the memory.
@@ -549,17 +531,24 @@ Stop instead of dispatching when:
 - The result is only an empty interface, static mock, unused adapter, type-only
   contract, unreachable route, or documentation motion without a real consumer
   and validation path.
+- Test exposed a product defect after the owning repository lineage was already
+  accepted. Preserve the exact Test evidence and stop: current public v3 cannot
+  reopen that lineage or add its same-demand fix before completion. Do not
+  rework the Test task as a product repair or complete a known-defective demand
+  merely to unlock continuation.
 - Controller validation establishes a non-bug outcome mismatch, or a small requirement-level fix that is
-  Design's job and not a code defect: `decide-review --decision redesign` parks the demand
-  (needs-rework, redesignCount++) instead of bouncing point fixes between product windows.
+  Design's job and not a code defect: `wakeflow_decide_review operation=decide`
+  with decision `redesign` parks the affected task as `needs-rework` instead of
+  bouncing point fixes between product windows.
   For a mainline demand, surface the redesign to the stateless mainline Design window with
   `wakeflow_deliver`; after the corrected requirement returns, add a full-context replacement
-  package to the SAME demand with `replacesTargetTaskId` set to the parked product task. Do
+  package to the SAME demand with `replacesTargetTask` bound to the parked
+  target's exact task/package tuple. Do
   not create a new demand or re-dispatch the old task. For a Pod demand, do not use mainline
   Design: Wakeflow cannot create a second frozen Pod Design generation, so keep the
   demand blocked and report that capability gap rather than overwriting the recorded handoff.
-  Accepting a valid replacement marks the old task/package `superseded`; the parked demand's
-  history and counts carry over.
+  Accepting a valid replacement marks the old task/package `superseded`; the
+  parked demand's event history remains intact.
 - A completed result would leave TODO/backlog, archive state, or current status
   inconsistent.
 - The controller is about to poll/wait for targets after a send was recorded
@@ -573,12 +562,11 @@ Use the smallest verification that covers the changed surface. For Wakeflow
 total-control work in an installed workspace, use MCP tools instead of direct
 runtime scripts:
 
-- `wakeflow_verify` for overall Wakeflow verification. Use `scriptTests: true`
-  only when the change is Wakeflow source/plugin script maintenance.
-- `wakeflow_status` for repository, state-root, and delivery-loop orientation.
-- `wakeflow_next_work` for after-completion candidate scans.
-- `wakeflow_archive` (target=docs / target=todo) for archive
-  dry-runs or applies.
+- `wakeflow_verify operation=inspect` for the strict workspace verdict.
+- `wakeflow_status operation=inspect` for current v3 orientation.
+- `wakeflow_next_work operation=inspect` for TODO authority inspection.
+- `wakeflow_archive operation=preview/apply/inspect/recover` for one portable
+  whole-demand BusinessArchive.
 - `wakeflow_create_demand`, `wakeflow_add_task`, `wakeflow_complete_demand`,
   `wakeflow_continue_demand`,
   `wakeflow_prepare_delivery`, `wakeflow_record_delivery`,
@@ -594,18 +582,18 @@ report that the plugin must be reloaded or reinstalled.
 Only when the current repository is Wakeflow source and the user is maintaining
 Wakeflow scripts or automation, source-repo verification may use:
 
-- `node scripts/wakeflow-verify.mjs`
-- `node scripts/wakeflow-verify.mjs --with-script-tests`
-- `node scripts/wakeflow-check-scripts.mjs --json`
-- `node scripts/wakeflow-smoke.mjs`
+- `npm run validate`
+- `npm run validate:claude`
+- `npm run smoke`
+- `npm run smoke:claude`
+- `npm run check:core`
 - `npm test`
 
 Script output is a review input, not acceptance.
 
-- A proven helper rejection before paste is normally released automatically by
-  exact compare-and-delete during helper/recording cleanup. If that cleanup is
-  not recorded, use the manual fallback
-  `release-window-lock --window <name> --expected-delivery-id <id> --write`
-  (MCP `expectedDeliveryId`). Accepted, ambiguous, or readback-pending sends
-  retain the lease. Omitting the id remains deliberate manual stale/corrupt
-  recovery; dry-run first and never infer pre-send failure from old prose.
+- Use `wakeflow_release_window_lock operation=release` only when the owning
+  operation explicitly returns the exact current binding/lease/delivery CAS
+  tuple. Never release by semantic window name, omit identity, infer rejection
+  from prose, or delete a lease file. Accepted, ambiguous, and
+  sent-unconfirmed target effects retain their authority until the proper
+  result/rearm/lifecycle owner closes it.

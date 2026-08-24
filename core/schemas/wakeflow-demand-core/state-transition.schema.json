@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:demand-core:state-transition:v1",
+  "title": "Wakeflow Candidate State Transition Intent",
+  "$comment": "This schema validates structural and lexical shape only. The candidate demand-core runtime validator is mandatory for command and timestamp equality, previous-state CAS, next event/state digest equality, event-tail binding, exact artifact payload intent, and recovery-step conflict detection.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "demandId",
+    "command",
+    "createdAt",
+    "expectedPreviousRevision",
+    "expectedPreviousStateDigest",
+    "previousState",
+    "nextEvent",
+    "nextEventDigest",
+    "nextState",
+    "nextStateDigest",
+    "artifactWrites"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "artifactKind": { "type": "string", "const": "wakeflow-state-transition" },
+    "demandId": { "$ref": "#/$defs/demandId" },
+    "command": { "$ref": "#/$defs/opaqueToken" },
+    "createdAt": { "$ref": "#/$defs/timestamp" },
+    "expectedPreviousRevision": { "type": "integer", "minimum": 1 },
+    "expectedPreviousStateDigest": { "$ref": "#/$defs/digest" },
+    "nextEvent": { "$ref": "urn:wakeflow:internal:demand-core:controller-event:v1" },
+    "nextEventDigest": { "$ref": "#/$defs/digest" },
+    "previousState": { "$ref": "urn:wakeflow:internal:demand-core:wakeflow-state:v1" },
+    "nextState": { "$ref": "urn:wakeflow:internal:demand-core:wakeflow-state:v1" },
+    "nextStateDigest": { "$ref": "#/$defs/digest" },
+    "artifactWrites": {
+      "type": "array",
+      "maxItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/authorityWrite" },
+          { "$ref": "#/$defs/taskPackageWrite" },
+          { "$ref": "#/$defs/targetResultWrite" },
+          { "$ref": "#/$defs/reviewCandidateWrite" },
+          { "$ref": "#/$defs/testCardWrite" },
+          { "$ref": "#/$defs/podDesignRequestWrite" },
+          { "$ref": "#/$defs/podDesignHandoffWrite" },
+          { "$ref": "#/$defs/evidenceWrite" }
+        ]
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "opaqueToken": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)[^\\u0000-\\u001F\\u007F-\\u009F]*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+    },
+    "authorityWrite": {
+      "type": "object",
+      "required": ["artifactKind", "ref", "digest", "value"],
+      "properties": {
+        "artifactKind": { "type": "string", "const": "wakeflow-demand-authority" },
+        "ref": { "type": "string", "const": "demand-authority.json" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "value": { "$ref": "urn:wakeflow:internal:demand-core:demand-authority:v1" }
+      },
+      "additionalProperties": false
+    },
+    "taskPackageWrite": {
+      "type": "object",
+      "required": ["artifactKind", "artifactId", "ref", "digest", "value"],
+      "properties": {
+        "artifactKind": { "type": "string", "const": "wakeflow-task-package" },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^task-packages/task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" },
+        "value": { "$ref": "urn:wakeflow:internal:demand-artifacts:task-package:v1" }
+      },
+      "additionalProperties": false
+    },
+    "targetResultWrite": {
+      "type": "object",
+      "required": ["artifactKind", "artifactId", "ref", "digest", "value"],
+      "properties": {
+        "artifactKind": { "type": "string", "const": "wakeflow-target-result" },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^target-results/target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" },
+        "value": { "$ref": "urn:wakeflow:internal:demand-artifacts:target-result:v1" }
+      },
+      "additionalProperties": false
+    },
+    "reviewCandidateWrite": {
+      "type": "object",
+      "required": ["artifactKind", "artifactId", "ref", "digest", "value"],
+      "properties": {
+        "artifactKind": { "type": "string", "const": "wakeflow-review-candidate" },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^review-candidate_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^review-candidates/review-candidate_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" },
+        "value": { "$ref": "urn:wakeflow:internal:demand-artifacts:review-candidate:v1" }
+      },
+      "additionalProperties": false
+    },
+    "testCardWrite": {
+      "type": "object",
+      "required": ["artifactKind", "artifactId", "ref", "digest", "value"],
+      "properties": {
+        "artifactKind": { "type": "string", "const": "wakeflow-test-card" },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^test-cards/test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" },
+        "value": { "$ref": "urn:wakeflow:internal:demand-artifacts:test-card:v1" }
+      },
+      "additionalProperties": false
+    },
+    "podDesignRequestWrite": {
+      "type": "object",
+      "required": ["artifactKind", "artifactId", "ref", "digest", "value"],
+      "properties": {
+        "artifactKind": { "const": "wakeflow-pod-design-request" },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^pod-design-request_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^pod/design-requests/pod-design-request_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" },
+        "value": { "$ref": "urn:wakeflow:internal:demand-artifact:pod-design-request:v1" }
+      },
+      "additionalProperties": false
+    },
+    "podDesignHandoffWrite": {
+      "type": "object",
+      "required": ["artifactKind", "artifactId", "ref", "digest", "value"],
+      "properties": {
+        "artifactKind": { "const": "wakeflow-pod-design-handoff" },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^pod-design-handoff_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^pod/design-handoffs/pod-design-handoff_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" },
+        "value": { "$ref": "urn:wakeflow:internal:demand-artifact:pod-design-handoff:v1" }
+      },
+      "additionalProperties": false
+    },
+    "evidenceWrite": {
+      "type": "object",
+      "required": ["artifactKind", "artifactId", "ref", "digest", "value"],
+      "properties": {
+        "artifactKind": { "type": "string", "const": "wakeflow-evidence" },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^evidence/evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/evidence\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" },
+        "value": { "$ref": "urn:wakeflow:internal:demand-evidence:evidence:v1" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

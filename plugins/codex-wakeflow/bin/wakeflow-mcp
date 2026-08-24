@@ -1,13 +1,35 @@
 #!/bin/sh
 
+# Wakeflow MCP 的固定制品启动器。
+# 它只定位同一物理制品内的 MCP server、选择 Node.js 20+ 并保持原始
+# stdin/stdout；不解析 MCP 消息、不选择 workspace，也不接受后端替换参数。
+
 set -eu
 
+# 启动器错误保持稳定且不输出制品绝对路径，避免把本机安装位置写入宿主日志。
+mcp_error() {
+  code=$1
+  message=$2
+  printf '%s: %s\n' "$code" "$message" >&2
+}
+
+if [ "$#" -ne 0 ]; then
+  mcp_error "wakeflow-mcp-invalid-argv" "Wakeflow MCP accepts zero arguments; communicate with the server over stdin/stdout."
+  exit 64
+fi
+
+# 从 launcher 目录固定派生唯一 server，并拒绝用 symbolic link 替换最终后端。
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PLUGIN_ROOT=$(dirname -- "$SCRIPT_DIR")
 SERVER="$PLUGIN_ROOT/mcp/server.cjs"
 
+if [ -L "$SERVER" ]; then
+  mcp_error "wakeflow-mcp-server-invalid" "Wakeflow MCP server must be one exact regular artifact file."
+  exit 127
+fi
+
 if [ ! -f "$SERVER" ]; then
-  printf '%s\n' "Wakeflow MCP server is missing: $SERVER" >&2
+  mcp_error "wakeflow-mcp-server-missing" "Wakeflow MCP server is missing from the exact artifact."
   exit 127
 fi
 
@@ -17,7 +39,6 @@ node_major() {
 
 run_node_if_usable() {
   candidate=$1
-  shift
   [ -n "$candidate" ] || return 1
   [ -x "$candidate" ] || return 1
   major=$(node_major "$candidate") || return 1
@@ -25,18 +46,18 @@ run_node_if_usable() {
     ''|*[!0-9]*) return 1 ;;
   esac
   [ "$major" -ge 20 ] || return 1
-  exec "$candidate" "$SERVER" "$@"
+  exec "$candidate" "$SERVER"
 }
 
 if [ -n "${WAKEFLOW_NODE:-}" ]; then
-  if ! run_node_if_usable "$WAKEFLOW_NODE" "$@"; then
-    printf '%s\n' "WAKEFLOW_NODE must point to an executable Node.js 20+ binary." >&2
+  if ! run_node_if_usable "$WAKEFLOW_NODE"; then
+    mcp_error "wakeflow-mcp-node-invalid" "WAKEFLOW_NODE must identify an executable Node.js 20+ runtime."
     exit 127
   fi
 fi
 
 path_node=$(command -v node 2>/dev/null || true)
-if run_node_if_usable "$path_node" "$@"; then
+if run_node_if_usable "$path_node"; then
   exit 0
 fi
 
@@ -46,7 +67,7 @@ fi
 pnpm_path=$(command -v pnpm 2>/dev/null || true)
 if [ -n "$pnpm_path" ]; then
   pnpm_dir=$(CDPATH= cd -- "$(dirname -- "$pnpm_path")" && pwd)
-  if run_node_if_usable "$pnpm_dir/../../node/bin/node" "$@"; then
+  if run_node_if_usable "$pnpm_dir/../../node/bin/node"; then
     exit 0
   fi
 fi
@@ -59,7 +80,7 @@ if [ -n "${HOME:-}" ]; then
     "$HOME/.asdf/shims/node" \
     "$HOME"/.nvm/versions/node/*/bin/node
   do
-    if run_node_if_usable "$candidate" "$@"; then
+    if run_node_if_usable "$candidate"; then
       exit 0
     fi
   done
@@ -70,11 +91,10 @@ for candidate in \
   "/opt/homebrew/bin/node" \
   "/usr/local/bin/node"
 do
-  if run_node_if_usable "$candidate" "$@"; then
+  if run_node_if_usable "$candidate"; then
     exit 0
   fi
 done
 
-printf '%s\n' \
-  "Wakeflow MCP requires Node.js 20+. Install Node, expose it on PATH, or set WAKEFLOW_NODE to its absolute path." >&2
+mcp_error "wakeflow-mcp-node-missing" "Wakeflow MCP requires Node.js 20+."
 exit 127

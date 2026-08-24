@@ -1,0 +1,77 @@
+{
+  "artifactKind": "wakeflow-legacy-lifecycle-scenario",
+  "beforeManifest": null,
+  "category": "retired-material",
+  "commandSequence": [],
+  "deltaEntries": [
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": ".workspace-local"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": ".workspace-local/wakeflow-intake"
+    },
+    {
+      "afterBytes": 906,
+      "afterDigest": "sha256:236a496ae6ad8a45cb41817a304b4dd4a286e178b772352d2c9bdfa41e518c08",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": ".workspace-local/wakeflow-intake/wakeflow-next-work.json"
+    }
+  ],
+  "host": "codex",
+  "materializationMode": "historical-seed",
+  "normalizations": [],
+  "outputManifest": {
+    "artifactKind": "wakeflow-loaded-artifact-tree",
+    "fileCount": 1,
+    "files": [
+      {
+        "bytes": 906,
+        "digest": "sha256:236a496ae6ad8a45cb41817a304b4dd4a286e178b772352d2c9bdfa41e518c08",
+        "executable": false,
+        "ref": ".workspace-local/wakeflow-intake/wakeflow-next-work.json"
+      }
+    ],
+    "schemaVersion": 1,
+    "totalBytes": 906
+  },
+  "producer": {
+    "artifactDigest": null,
+    "sourceCommit": "19403f8454038ec2767e6a0e684a6d7cc1ec8fc7",
+    "sourceFiles": [
+      {
+        "bytes": 14579,
+        "digest": "sha256:42fd88a64a37e0d5d2273e8df90722fc549bb410101242c599c7aaf1dcaf37d4",
+        "executable": false,
+        "ref": "scripts/wakeflow-next-work.mjs",
+        "role": "original-writer"
+      }
+    ]
+  },
+  "scenarioId": "next-work-cache-historical",
+  "schemaVersion": 1,
+  "scenarioDigest": "sha256:2720e447ac76741986349930dbec52f1ac8569a9f68bcb041df317690927128f"
+}

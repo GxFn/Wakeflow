@@ -1,0 +1,158 @@
+{
+  "artifactKind": "wakeflow-legacy-lifecycle-scenario",
+  "beforeManifest": {
+    "artifactKind": "wakeflow-loaded-artifact-tree",
+    "fileCount": 1,
+    "files": [
+      {
+        "bytes": 83,
+        "digest": "sha256:fba96173a0a0a27fc6c6831c7fb5b8d6f7546009ccafa5e840fde6a6db684493",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/scenario-preservation-source/evidence.json"
+      }
+    ],
+    "schemaVersion": 1,
+    "totalBytes": 83
+  },
+  "category": "preservation",
+  "commandSequence": [
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/wakeflow-storage.mjs",
+        "preserve",
+        "--root",
+        "<workspace-root>",
+        "--source",
+        "<workspace-root>/.wakeflow-local/scenario-preservation-source",
+        "--reason",
+        "scenario-preservation",
+        "--note",
+        "portable lifecycle scenario",
+        "--write",
+        "--json"
+      ],
+      "stepId": "storage-preserve"
+    }
+  ],
+  "deltaEntries": [
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/preserved"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/preserved/@wakeflow-scenario-preserved-entry"
+    },
+    {
+      "afterBytes": 448,
+      "afterDigest": "sha256:87c78d3d0abe84f500357023674f955eecfe9044c16102dacf3857998f8edd70",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/preserved/@wakeflow-scenario-preserved-entry/MANIFEST.md"
+    },
+    {
+      "afterBytes": 83,
+      "afterDigest": "sha256:fba96173a0a0a27fc6c6831c7fb5b8d6f7546009ccafa5e840fde6a6db684493",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/preserved/@wakeflow-scenario-preserved-entry/evidence.json"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": null,
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": "directory",
+      "operation": "remove",
+      "path": "WakeflowFixture/.wakeflow-local/scenario-preservation-source"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": null,
+      "beforeBytes": 83,
+      "beforeDigest": "sha256:fba96173a0a0a27fc6c6831c7fb5b8d6f7546009ccafa5e840fde6a6db684493",
+      "beforeExecutable": false,
+      "beforeType": "file",
+      "operation": "remove",
+      "path": "WakeflowFixture/.wakeflow-local/scenario-preservation-source/evidence.json"
+    }
+  ],
+  "host": "claude-code",
+  "materializationMode": "real-writer",
+  "normalizations": [
+    {
+      "kind": "text-token",
+      "ref": "WakeflowFixture/.wakeflow-local/preserved/@wakeflow-scenario-preserved-entry/MANIFEST.md",
+      "selector": "iso-8601-occurrences",
+      "token": "@wakeflow-scenario-time"
+    }
+  ],
+  "outputManifest": {
+    "artifactKind": "wakeflow-loaded-artifact-tree",
+    "fileCount": 2,
+    "files": [
+      {
+        "bytes": 448,
+        "digest": "sha256:87c78d3d0abe84f500357023674f955eecfe9044c16102dacf3857998f8edd70",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/preserved/@wakeflow-scenario-preserved-entry/MANIFEST.md"
+      },
+      {
+        "bytes": 83,
+        "digest": "sha256:fba96173a0a0a27fc6c6831c7fb5b8d6f7546009ccafa5e840fde6a6db684493",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/preserved/@wakeflow-scenario-preserved-entry/evidence.json"
+      }
+    ],
+    "schemaVersion": 1,
+    "totalBytes": 531
+  },
+  "producer": {
+    "artifactDigest": "sha256:27bc8cc23a863c1e96ccc1631b5f78236471e13d5605ab69796d0089fc192e6f",
+    "sourceCommit": "70d79d720d65837a068993006f356e8de91215d4",
+    "sourceFiles": [
+      {
+        "bytes": 12307,
+        "digest": "sha256:951086a9f12f8aa1ade70fe1f1a5f118590fa822a79852d35bde6146fea1d18b",
+        "executable": false,
+        "ref": "scripts/wakeflow-storage.mjs",
+        "role": "preservation-writer"
+      }
+    ]
+  },
+  "scenarioId": "preservation-valid",
+  "schemaVersion": 1,
+  "scenarioDigest": "sha256:dfe595b23ae8dcad6e30b180ea0efc52e8c6a123670206db1329e7f416b5e735"
+}

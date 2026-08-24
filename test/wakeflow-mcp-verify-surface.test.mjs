@@ -2,217 +2,141 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { tools, handlers } from "../plugins/codex-wakeflow/lib/wakeflow-mcp-tools.mjs";
 
-// Guards W0-2 / RA7 (F17/F39): the runtime-residue gate must be reachable by an
-// installed MCP-only controller, so wakeflow_verify exposes withRuntime/strictRuntime
-// (the CLI already consumes --with-runtime/--strict-runtime; the handler forwards them).
+const routedOperations = Object.freeze({
+  wakeflow_status: ["inspect"],
+  wakeflow_replace_windows: ["inspect", "replace", "decommission"],
+  wakeflow_register_window: ["register"],
+  wakeflow_create_demand: ["preview", "apply", "recover"],
+  wakeflow_add_task: ["create"],
+  wakeflow_prepare_delivery: [
+    "target-preview",
+    "target-apply",
+    "target-claim",
+    "target-rearm",
+    "controller-preview",
+    "controller-apply",
+    "controller-pre-send",
+  ],
+  wakeflow_record_delivery: ["target-outcome", "controller-outcome"],
+  wakeflow_record_target_result: ["import"],
+  wakeflow_review_pack: ["group", "trace"],
+  wakeflow_reduce_results: ["create"],
+  wakeflow_decide_review: ["decide"],
+  wakeflow_complete_demand: ["preview", "apply", "recover"],
+  wakeflow_continue_demand: ["create"],
+  wakeflow_recover_state_transition: ["generic", "lifecycle"],
+  wakeflow_release_window_lock: ["release"],
+  wakeflow_view: ["config", "storage", "verification", "result-trace"],
+  wakeflow_storage_preserve: ["inspect", "preview", "preview-release", "apply", "recover"],
+  wakeflow_archive: ["preview", "apply", "inspect", "recover"],
+  wakeflow_intake_test_card: ["create"],
+  wakeflow_deliver: ["append"],
+  wakeflow_next_work: ["inspect"],
+  wakeflow_claim_next: ["inspect", "claim", "recover"],
+  wakeflow_cancel_demand: ["preview", "apply", "recover"],
+  wakeflow_pod_open: [
+    "inspect-materialization",
+    "plan-materialization",
+    "launch-preview",
+    "launch-apply",
+    "product-preview",
+    "product-apply",
+  ],
+  wakeflow_pod_record: [
+    "record-materialization",
+    "design-handoff",
+    "test-access-observe",
+    "test-access-receipt",
+    "close-observe",
+    "close-receipt",
+  ],
+  wakeflow_pod_bind: ["creation-receipt", "binding-decommission"],
+  wakeflow_pod_plan: [
+    "design-request",
+    "test-access-plan",
+    "test-access-inspect",
+    "close-intent",
+    "close-inspect",
+  ],
+  wakeflow_prune_runtime: ["preview", "apply", "recover"],
+  wakeflow_verify: ["inspect"],
+});
 
-test("wakeflow_verify MCP tool exposes the runtime-residue flags", () => {
-  const verify = tools.find((t) => t.name === "wakeflow_verify");
-  assert.ok(verify, "wakeflow_verify tool must be registered");
-  const props = verify.inputSchema?.properties ?? {};
-  for (const flag of ["scriptTests", "withRuntime", "strictRuntime"]) {
-    assert.equal(
-      props[flag]?.type,
-      "boolean",
-      `wakeflow_verify must expose a boolean '${flag}' input`,
-    );
+test("every routed public v3 tool exposes one closed owner envelope and exact operations", () => {
+  for (const [name, operations] of Object.entries(routedOperations)) {
+    const tool = tools.find((entry) => entry.name === name);
+    assert.ok(tool, `${name} must be registered`);
+    assert.deepEqual(tool.inputSchema.required, ["root", "operation", "request"], name);
+    assert.deepEqual(Object.keys(tool.inputSchema.properties), ["root", "demandId", "operation", "request"], name);
+    assert.deepEqual(tool.inputSchema.properties.operation.enum, operations, name);
+    assert.equal(tool.inputSchema.properties.request.type, "object", name);
+    assert.equal(tool.inputSchema.additionalProperties, false, name);
+    assert.equal(typeof handlers[name], "function", `${name} must have one handler`);
   }
 });
 
-// Guards RA2/RA4/RA5p3 (converged): the per-task rollup, per-window orientation card,
-// the focus-doc generator, and the evidence-spine trace are reachable through the unified
-// read/projection tool wakeflow_view, selected by scope.
-test("wakeflow_view MCP tool is registered with a handler and scope routing", () => {
-  const view = tools.find((t) => t.name === "wakeflow_view");
-  assert.ok(view, "wakeflow_view tool must be registered");
-  const props = view.inputSchema?.properties ?? {};
-  assert.deepEqual(view.inputSchema?.required, ["scope"]);
-  assert.deepEqual(
-    props.scope?.enum,
-    ["task-ledger", "window", "focus", "trace", "storage", "progress", "pods"],
-    "wakeflow_view scope must enumerate task-ledger|window|focus|trace|storage|progress|pods",
-  );
-  // Inputs fused from the former task_ledger / window_view / focus_doc / trace_spine tools.
-  for (const field of [
-    "stateRoot", "taskId", "targetWindow", "window", "phase", "apply", "dispatchGroup", "deliveryId",
-  ]) {
-    assert.ok(props[field], `wakeflow_view must expose '${field}'`);
-  }
-  assert.equal(typeof handlers.wakeflow_view, "function", "wakeflow_view must have a handler");
-  const progressBranch = view.inputSchema.oneOf.find(
-    (branch) => branch.properties?.scope?.const === "progress",
-  );
-  assert.deepEqual(progressBranch?.required, ["stateRoot"]);
-  assert.equal(
-    tools.some((tool) => tool.name === "wakeflow_render_progress"),
-    false,
-    "progress must be exposed only through wakeflow_view",
-  );
-  assert.equal(
-    tools.some((tool) => tool.name === "wakeflow_pod_list"),
-    false,
-    "Pod inventory must be exposed only through wakeflow_view",
-  );
-  assert.throws(
-    () => handlers.wakeflow_view({ scope: "progress" }),
-    /wakeflow_view scope=progress requires stateRoot/,
-  );
-});
-
-test("wakeflow_claim_next MCP tool is registered with a handler", () => {
-  const claim = tools.find((t) => t.name === "wakeflow_claim_next");
-  assert.ok(claim, "wakeflow_claim_next tool must be registered");
-  const props = claim.inputSchema?.properties ?? {};
-  assert.equal(props.designKey?.type, "string", "wakeflow_claim_next must expose a string 'designKey' input");
-  assert.equal(props.apply?.type, "boolean", "wakeflow_claim_next must expose a boolean 'apply' input");
-  assert.equal(typeof handlers.wakeflow_claim_next, "function", "wakeflow_claim_next must have a handler");
-});
-
-test("task-package MCP tools expose bounded acceptance anchors", () => {
-  const addTask = tools.find((tool) => tool.name === "wakeflow_add_task");
-  const createDemand = tools.find((tool) => tool.name === "wakeflow_create_demand");
-  const continueDemand = tools.find((tool) => tool.name === "wakeflow_continue_demand");
-  assert.equal(addTask.inputSchema.properties.acceptanceAnchors.type, "array");
-  assert.equal(
-    createDemand.inputSchema.properties.taskPackages.items.properties.acceptanceAnchors.type,
-    "array",
-  );
-  assert.equal(continueDemand.inputSchema.properties.acceptanceAnchors.type, "array");
-});
-
-test("demand creation surfaces share one typed proportional authority contract", () => {
-  const deliver = tools.find((tool) => tool.name === "wakeflow_deliver");
-  const createDemand = tools.find((tool) => tool.name === "wakeflow_create_demand");
-  const addTask = tools.find((tool) => tool.name === "wakeflow_add_task");
-  const podPlan = tools.find((tool) => tool.name === "wakeflow_pod_plan");
-  const podRecord = tools.find((tool) => tool.name === "wakeflow_pod_record");
-
-  assert.ok(deliver && createDemand && addTask && podPlan && podRecord);
-  assert.ok(deliver.inputSchema.required.includes("demandAuthority"));
-  assert.deepEqual(
-    createDemand.inputSchema.properties.demandType.enum,
-    ["requirement", "bug", "supplement", "research"],
-  );
-  assert.equal(createDemand.inputSchema.properties.demandAuthority.type, "object");
-  assert.equal(addTask.inputSchema.properties.demandAuthority.type, "object");
-  assert.ok(podPlan.inputSchema.properties.request.required.includes("demandType"));
-  assert.ok(podRecord.inputSchema.properties.handoff.required.includes("demandAuthority"));
-
-  for (const schema of [
-    deliver.inputSchema.properties.demandAuthority,
-    createDemand.inputSchema.properties.demandAuthority,
-    addTask.inputSchema.properties.demandAuthority,
-    podRecord.inputSchema.properties.handoff.properties.demandAuthority,
-  ]) {
-    assert.deepEqual(schema.required, [
-      "demandKey",
-      "demandType",
-      "entryMode",
-      "authorityRefs",
-      "testDecision",
-    ]);
-    assert.deepEqual(schema.properties.entryMode.enum, [
-      "design-delivery",
-      "controller-inline",
-      "pod-design",
-    ]);
-  }
-});
-
-test("wakeflow_record_delivery requires explicit transport and one observation", () => {
-  const recordDelivery = tools.find((tool) => tool.name === "wakeflow_record_delivery");
-  assert.ok(recordDelivery, "wakeflow_record_delivery tool must be registered");
-  assert.deepEqual(recordDelivery.inputSchema.required, [
-    "deliveryFile",
-    "status",
-    "transportStatus",
-    "readbackStatus",
-    "readbackAttempts",
+test("all public tools publish the exact read-only and destructive annotation matrix", () => {
+  const readOnly = new Set([
+    "wakeflow_status",
+    "wakeflow_review_pack",
+    "wakeflow_view",
+    "wakeflow_next_work",
+    "wakeflow_verify",
   ]);
-  assert.match(recordDelivery.description, /neither status defaults to success/);
-  assert.match(recordDelivery.description, /only readbackStatus=confirmed proves/);
-});
-
-test("wakeflow_prune_runtime MCP tool is registered with a handler", () => {
-  const prune = tools.find((t) => t.name === "wakeflow_prune_runtime");
-  assert.ok(prune, "wakeflow_prune_runtime tool must be registered");
-  const props = prune.inputSchema?.properties ?? {};
-  assert.equal(props.before?.type, "string", "wakeflow_prune_runtime must expose a string 'before' input");
-  assert.equal(props.apply?.type, "boolean", "wakeflow_prune_runtime must expose a boolean 'apply' input");
-  assert.equal(typeof handlers.wakeflow_prune_runtime, "function", "wakeflow_prune_runtime must have a handler");
-});
-
-test("wakeflow_storage_preserve exposes the sanctioned local evidence rescue path", () => {
-  const preserve = tools.find((tool) => tool.name === "wakeflow_storage_preserve");
-  assert.ok(preserve, "wakeflow_storage_preserve tool must be registered");
-  assert.deepEqual(preserve.inputSchema?.required, ["source", "reason"]);
-  const props = preserve.inputSchema?.properties ?? {};
-  assert.deepEqual(Object.keys(props).sort(), ["apply", "note", "reason", "root", "source"]);
-  assert.equal(props.apply?.type, "boolean");
-  assert.equal(typeof handlers.wakeflow_storage_preserve, "function");
-  assert.throws(
-    () => handlers.wakeflow_storage_preserve({ reason: "audit-hold" }),
-    /wakeflow_storage_preserve requires source/,
-  );
-  assert.throws(
-    () => handlers.wakeflow_storage_preserve({ source: ".wakeflow-local/evidence" }),
-    /wakeflow_storage_preserve requires reason/,
-  );
-});
-
-// Guards RA6 (converged): demand/todo/docs archival is reachable through the unified
-// wakeflow_archive tool selected by target; the demand redaction-guard inputs survive
-// the merge. Transport-runtime GC stays separate as wakeflow_prune_runtime (asserted above).
-test("wakeflow_archive MCP tool is registered with a handler and target routing", () => {
-  const archive = tools.find((t) => t.name === "wakeflow_archive");
-  assert.ok(archive, "wakeflow_archive tool must be registered");
-  const props = archive.inputSchema?.properties ?? {};
-  assert.deepEqual(archive.inputSchema?.required, ["target"]);
-  assert.deepEqual(
-    props.target?.enum,
-    ["demand", "todo", "docs", "sanitize-demand"],
-    "wakeflow_archive target must enumerate demand|todo|docs|sanitize-demand",
-  );
-  // demand redaction-guard inputs + todo/docs inputs fused into one tool.
-  assert.equal(props.redact?.type, "boolean", "wakeflow_archive must keep a boolean 'redact' input (target=demand)");
-  assert.equal(props.allowOpaque?.type, "boolean", "wakeflow_archive must expose explicit clean-opaque consent (target=demand)");
-  for (const field of ["stateRoot", "reason", "evidenceRefs", "month", "date", "files", "topic", "apply"]) {
-    assert.ok(props[field], `wakeflow_archive must expose '${field}'`);
+  const destructive = new Set([
+    "wakeflow_maintain_workspace",
+    "wakeflow_replace_windows",
+    "wakeflow_release_window_lock",
+    "wakeflow_storage_preserve",
+    "wakeflow_archive",
+    "wakeflow_pod_bind",
+    "wakeflow_prune_runtime",
+  ]);
+  for (const tool of tools) {
+    assert.equal(tool.annotations.readOnlyHint, readOnly.has(tool.name), tool.name);
+    assert.equal(tool.annotations.destructiveHint, destructive.has(tool.name), tool.name);
+    assert.equal(tool.annotations.idempotentHint, true, tool.name);
+    assert.equal(tool.annotations.openWorldHint, false, tool.name);
   }
-  assert.equal(typeof handlers.wakeflow_archive, "function", "wakeflow_archive must have a handler");
-  const sanitizeBranch = archive.inputSchema.oneOf.find(
-    (branch) => branch.properties?.target?.const === "sanitize-demand",
-  );
-  assert.deepEqual(sanitizeBranch?.required, ["stateRoot", "reason"]);
 });
 
-test("wakeflow_archive target=demand fails closed before runtime when required inputs are missing", async () => {
+test("wakeflow_status remains the only live status operation", async () => {
+  const view = tools.find((entry) => entry.name === "wakeflow_view");
+  assert.equal(view.inputSchema.properties.operation.enum.includes("status"), false);
+  assert.match(view.description, /live status remains owned by wakeflow_status/u);
   await assert.rejects(
-    handlers.wakeflow_archive({ target: "demand" }),
-    /wakeflow_archive target=demand requires stateRoot/,
-  );
-  await assert.rejects(
-    handlers.wakeflow_archive({ target: "demand", stateRoot: ".wakeflow-active/current/x" }),
-    /wakeflow_archive target=demand requires reason/,
+    handlers.wakeflow_view({
+      root: process.cwd(),
+      operation: "status",
+      request: { language: "zh" },
+    }),
+    (error) => error?.code === "wakeflow-public-mcp-domain"
+      && error?.details?.causeCode === "wakeflow-public-v3-operation",
   );
 });
 
-test("wakeflow_archive target=sanitize-demand owns the public bounded archive repair route", async () => {
-  assert.equal(
-    tools.some((tool) => tool.name === "wakeflow_sanitize_archive"),
-    false,
-    "the legacy sanitize tool must not remain public",
+test("public v3 keeps host effects and whole-demand archive ownership explicit", () => {
+  const prepare = tools.find((entry) => entry.name === "wakeflow_prepare_delivery");
+  const record = tools.find((entry) => entry.name === "wakeflow_record_delivery");
+  const archive = tools.find((entry) => entry.name === "wakeflow_archive");
+  const preserve = tools.find((entry) => entry.name === "wakeflow_storage_preserve");
+
+  assert.match(prepare.description, /without executing a host send/);
+  assert.match(record.description, /not the host-effect fence/);
+  assert.match(archive.description, /portable whole-demand BusinessArchive/);
+  assert.match(preserve.description, /typed local preservation mutation/);
+  assert.equal(tools.some((entry) => entry.name === "wakeflow_sanitize_archive"), false);
+  assert.equal(tools.some((entry) => entry.name === "wakeflow_render_progress"), false);
+  assert.equal(tools.some((entry) => entry.name === "wakeflow_pod_list"), false);
+});
+
+test("legacy flattened requests are rejected by the normal v3 handler boundary", async () => {
+  await assert.rejects(
+    handlers.wakeflow_view({ scope: "storage" }),
+    (error) => error?.code === "wakeflow-public-mcp-domain",
   );
-  assert.equal(typeof handlers.wakeflow_sanitize_archive, "function");
   await assert.rejects(
     handlers.wakeflow_archive({ target: "sanitize-demand" }),
-    /wakeflow_archive target=sanitize-demand requires stateRoot/,
-  );
-  await assert.rejects(
-    handlers.wakeflow_archive({
-      target: "sanitize-demand",
-      stateRoot: "wakeflow-ledger/workspace/archive/x",
-    }),
-    /wakeflow_archive target=sanitize-demand requires reason/,
+    (error) => error?.code === "wakeflow-public-mcp-domain",
   );
 });

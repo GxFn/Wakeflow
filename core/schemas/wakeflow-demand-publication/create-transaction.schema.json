@@ -1,0 +1,305 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:demand-publication:create-intent:v1",
+  "title": "Wakeflow Candidate Initial Demand Publication Intent",
+  "$comment": "This immutable envelope is written byte-for-byte to both the sibling intent and the demand-root recovery journal. planDigest covers only plan, so the digest is not self-referential. Runtime validation remains mandatory for canonical bytes, exact tree closure, file digests, core-record relations, ledger resolution, TODO CAS lineage, private-path admission, and recovery conflicts.",
+  "type": "object",
+  "required": ["schemaVersion", "artifactKind", "plan", "planDigest"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "artifactKind": { "type": "string", "const": "wakeflow-demand-create-intent" },
+    "plan": { "$ref": "#/$defs/plan" },
+    "planDigest": { "$ref": "#/$defs/digest" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "portableRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!\\s)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)[^\\u0000-\\u001F\\u007F-\\u009F]*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "todoId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "rowSnapshot": {
+      "type": "object",
+      "required": ["schemaVersion", "artifactKind", "todoId", "row", "rowDigest"],
+      "properties": {
+        "schemaVersion": { "type": "integer", "const": 1 },
+        "artifactKind": { "type": "string", "const": "wakeflow-todo-row-snapshot" },
+        "todoId": { "$ref": "#/$defs/todoId" },
+        "row": { "type": "string", "minLength": 1 },
+        "rowDigest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "mount": {
+      "type": "object",
+      "required": ["demandId", "stateRootRef", "identityDigest"],
+      "properties": {
+        "demandId": { "$ref": "#/$defs/demandId" },
+        "stateRootRef": { "$ref": "#/$defs/portableRef" },
+        "identityDigest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "todoClaim": {
+      "type": "object",
+      "required": ["boardRef", "todoId", "expectedRow", "claimedRow", "mount"],
+      "properties": {
+        "boardRef": {
+          "type": "string",
+          "const": ".wakeflow-active/current/global-todo-board.md"
+        },
+        "todoId": { "$ref": "#/$defs/todoId" },
+        "expectedRow": { "$ref": "#/$defs/rowSnapshot" },
+        "claimedRow": { "$ref": "#/$defs/rowSnapshot" },
+        "mount": { "$ref": "#/$defs/mount" }
+      },
+      "additionalProperties": false
+    },
+    "paths": {
+      "type": "object",
+      "required": ["stateRootRef", "stageRootRef", "sidecarRef", "journalRef"],
+      "properties": {
+        "stateRootRef": {
+          "type": "string",
+          "pattern": "^\\.wakeflow-active/current/demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "stageRootRef": {
+          "type": "string",
+          "pattern": "^\\.wakeflow-active/current/\\.wakeflow-create-stage-demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "sidecarRef": {
+          "type": "string",
+          "pattern": "^\\.wakeflow-active/current/demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.create-intent\\.json$"
+        },
+        "journalRef": { "type": "string", "const": "transactions/create.json" }
+      },
+      "additionalProperties": false
+    },
+    "file": {
+      "type": "object",
+      "required": ["kind", "mediaType", "mode", "content", "byteDigest"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["immutable-record", "current-state", "append-only-events", "generated-projection"]
+        },
+        "mediaType": {
+          "type": "string",
+          "enum": ["application/json", "application/x-ndjson", "text/markdown"]
+        },
+        "mode": { "type": "string", "const": "0600" },
+        "content": { "type": "string", "minLength": 1 },
+        "byteDigest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "immutableJsonFile": {
+      "allOf": [
+        { "$ref": "#/$defs/file" },
+        {
+          "properties": {
+            "kind": { "const": "immutable-record" },
+            "mediaType": { "const": "application/json" }
+          }
+        }
+      ]
+    },
+    "currentStateFile": {
+      "allOf": [
+        { "$ref": "#/$defs/file" },
+        {
+          "properties": {
+            "kind": { "const": "current-state" },
+            "mediaType": { "const": "application/json" }
+          }
+        }
+      ]
+    },
+    "eventHistoryFile": {
+      "allOf": [
+        { "$ref": "#/$defs/file" },
+        {
+          "properties": {
+            "kind": { "const": "append-only-events" },
+            "mediaType": { "const": "application/x-ndjson" }
+          }
+        }
+      ]
+    },
+    "projectionFile": {
+      "allOf": [
+        { "$ref": "#/$defs/file" },
+        {
+          "properties": {
+            "kind": { "const": "generated-projection" },
+            "mediaType": { "const": "text/markdown" }
+          }
+        }
+      ]
+    },
+    "mainDirectories": {
+      "type": "array",
+      "prefixItems": [
+        { "const": "evidence" },
+        { "const": "review-candidates" },
+        { "const": "target-results" },
+        { "const": "task-packages" },
+        { "const": "test-cards" },
+        { "const": "transactions" }
+      ],
+      "items": false,
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "isolatedDirectories": {
+      "type": "array",
+      "prefixItems": [
+        { "const": "evidence" },
+        { "const": "review-candidates" },
+        { "const": "target-results" },
+        { "const": "task-packages" },
+        { "const": "test-cards" },
+        { "const": "transactions" },
+        { "const": "pod" },
+        { "const": "pod/design-handoffs" },
+        { "const": "pod/design-requests" }
+      ],
+      "items": false,
+      "minItems": 9,
+      "maxItems": 9
+    },
+    "documentSource": {
+      "type": "object",
+      "required": [
+        "fingerprint",
+        "projectorSchemaVersion",
+        "demandDigest",
+        "authorityDigest",
+        "stateDigest",
+        "eventHistoryDigest",
+        "revision",
+        "eventId",
+        "eventDigest",
+        "progressTemplate"
+      ],
+      "properties": {
+        "fingerprint": { "$ref": "#/$defs/digest" },
+        "projectorSchemaVersion": { "type": "integer", "const": 1 },
+        "demandDigest": { "$ref": "#/$defs/digest" },
+        "authorityDigest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "stateDigest": { "$ref": "#/$defs/digest" },
+        "eventHistoryDigest": { "$ref": "#/$defs/digest" },
+        "revision": { "type": "integer", "const": 1 },
+        "eventId": { "type": "string", "minLength": 1 },
+        "eventDigest": { "$ref": "#/$defs/digest" },
+        "progressTemplate": {
+          "type": "object",
+          "required": ["assetId", "digest"],
+          "properties": {
+            "assetId": { "type": "string", "enum": ["progress.demand.en", "progress.demand.zh-CN"] },
+            "digest": { "$ref": "#/$defs/digest" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "plan": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "artifactKind",
+        "programId",
+        "demandId",
+        "language",
+        "bundleDigest",
+        "executionPlacementMode",
+        "paths",
+        "directories",
+        "files",
+        "documentSource",
+        "todoClaim"
+      ],
+      "properties": {
+        "schemaVersion": { "type": "integer", "const": 1 },
+        "artifactKind": { "type": "string", "const": "wakeflow-demand-create-plan" },
+        "programId": { "$ref": "#/$defs/programId" },
+        "demandId": { "$ref": "#/$defs/demandId" },
+        "language": { "type": "string", "enum": ["en", "zh"] },
+        "bundleDigest": { "$ref": "#/$defs/digest" },
+        "executionPlacementMode": { "type": "string", "enum": ["main", "isolated"] },
+        "paths": { "$ref": "#/$defs/paths" },
+        "directories": {
+          "oneOf": [
+            { "$ref": "#/$defs/mainDirectories" },
+            { "$ref": "#/$defs/isolatedDirectories" }
+          ]
+        },
+        "files": {
+          "type": "object",
+          "required": [
+            "demand.json",
+            "wakeflow-state.json",
+            "controller-events.jsonl",
+            "index.md",
+            "developer-progress.md"
+          ],
+          "properties": {
+            "demand.json": { "$ref": "#/$defs/immutableJsonFile" },
+            "demand-authority.json": { "$ref": "#/$defs/immutableJsonFile" },
+            "wakeflow-state.json": { "$ref": "#/$defs/currentStateFile" },
+            "controller-events.jsonl": { "$ref": "#/$defs/eventHistoryFile" },
+            "index.md": { "$ref": "#/$defs/projectionFile" },
+            "developer-progress.md": { "$ref": "#/$defs/projectionFile" }
+          },
+          "additionalProperties": false
+        },
+        "documentSource": { "$ref": "#/$defs/documentSource" },
+        "todoClaim": {
+          "oneOf": [
+            { "$ref": "#/$defs/todoClaim" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "executionPlacementMode": { "const": "main" } },
+            "required": ["executionPlacementMode"]
+          },
+          "then": { "properties": { "directories": { "$ref": "#/$defs/mainDirectories" } } }
+        },
+        {
+          "if": {
+            "properties": { "executionPlacementMode": { "const": "isolated" } },
+            "required": ["executionPlacementMode"]
+          },
+          "then": { "properties": { "directories": { "$ref": "#/$defs/isolatedDirectories" } } }
+        }
+      ]
+    }
+  }
+}

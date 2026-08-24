@@ -1,0 +1,43 @@
+{
+  "kind": "WakeflowHostPodBinding",
+  "version": 1,
+  "demandKey": "SCENARIO-POD",
+  "podId": "SCENARIO-POD",
+  "host": "codex",
+  "windowName": "ProductWindow__SCENARIO-POD",
+  "role": "product",
+  "repositoryWindow": "ProductWindow",
+  "launchCorrelationId": "pod-launch-312b794df767b87d7dc5f9a82ed566e4",
+  "bindingId": "@wakeflow-scenario-binding-id-c4dc370eb7",
+  "handleDigest": "@wakeflow-scenario-derived-digest-d54f0b52dc",
+  "receiptDigest": "@wakeflow-scenario-derived-digest-22c0e6dc3c",
+  "receipt": {
+    "launchCorrelationId": "pod-launch-312b794df767b87d7dc5f9a82ed566e4",
+    "windowName": "ProductWindow__SCENARIO-POD",
+    "host": "codex",
+    "bindingId": "@wakeflow-scenario-binding-id-c4dc370eb7",
+    "handleRegistered": true,
+    "handleKind": "final",
+    "stateRootRelative": ".wakeflow-active/current/SCENARIO-POD",
+    "actualCwd": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/.host-owned-worktrees/ProductWindow__SCENARIO-POD",
+    "gitTopLevel": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/.host-owned-worktrees/ProductWindow__SCENARIO-POD",
+    "gitCommonDir": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/ProductWorkspace/.git",
+    "head": "71a82439b2627a5d0da5fc2428a690cbb5c5321f",
+    "branch": null,
+    "detached": true,
+    "mainCheckout": false,
+    "createdAt": "@wakeflow-scenario-time-f14be754a0"
+  },
+  "status": "closed",
+  "createdAt": "@wakeflow-scenario-time-11f2bcd0dc",
+  "updatedAt": "@wakeflow-scenario-time-20172ad091",
+  "closeReceipt": {
+    "closeCorrelationId": "pod-close-706b32b19ec861efc583351c150af7b7",
+    "bindingId": "@wakeflow-scenario-binding-id-c4dc370eb7",
+    "windowName": "ProductWindow__SCENARIO-POD",
+    "host": "codex",
+    "sessionStatus": "archived",
+    "worktreeStatus": "retained",
+    "confirmedAt": "@wakeflow-scenario-time-2bbd1f138b"
+  }
+}

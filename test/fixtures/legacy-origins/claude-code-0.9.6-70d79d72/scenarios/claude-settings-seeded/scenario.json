@@ -1,0 +1,228 @@
+{
+  "artifactKind": "wakeflow-legacy-lifecycle-scenario",
+  "beforeManifest": null,
+  "category": "claude-settings",
+  "commandSequence": [
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/lib/wakeflow-claude-host.mjs",
+        "seed-permissions",
+        "--root",
+        "<workspace-root>",
+        "--write"
+      ],
+      "stepId": "seed-permissions"
+    }
+  ],
+  "deltaEntries": [
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.claude"
+    },
+    {
+      "afterBytes": 151,
+      "afterDigest": "sha256:0d11503aefdd112e223e8f44a1d3952434d118674e7941a8396127ac1a4e2705",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.claude/settings.json"
+    },
+    {
+      "afterBytes": 187,
+      "afterDigest": "sha256:a121c3941065d2748c612e0c9b3933e326d22ef09af34d13017978188c1549e4",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.claude/settings.local.json"
+    },
+    {
+      "afterBytes": 1803,
+      "afterDigest": "sha256:3fe56199ca2956dc4aa473c0df3ece29a1586559c76a5379e73133e96df85584",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-statusline.mjs"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/Design/.claude"
+    },
+    {
+      "afterBytes": 184,
+      "afterDigest": "sha256:075d60c0a5942c42a2270219326965ae34c2348efb6d28b2f824a84e2bd3f6ba",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/Design/.claude/settings.json"
+    },
+    {
+      "afterBytes": 187,
+      "afterDigest": "sha256:a121c3941065d2748c612e0c9b3933e326d22ef09af34d13017978188c1549e4",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/Design/.claude/settings.local.json"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/Test/.claude"
+    },
+    {
+      "afterBytes": 184,
+      "afterDigest": "sha256:075d60c0a5942c42a2270219326965ae34c2348efb6d28b2f824a84e2bd3f6ba",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/Test/.claude/settings.json"
+    },
+    {
+      "afterBytes": 187,
+      "afterDigest": "sha256:a121c3941065d2748c612e0c9b3933e326d22ef09af34d13017978188c1549e4",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/Test/.claude/settings.local.json"
+    }
+  ],
+  "host": "claude-code",
+  "materializationMode": "real-writer",
+  "normalizations": [
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.claude/settings.local.json",
+      "selector": "/statusLine/command",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/Design/.claude/settings.local.json",
+      "selector": "/statusLine/command",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/Test/.claude/settings.local.json",
+      "selector": "/statusLine/command",
+      "token": "@wakeflow-scenario-sandbox-root"
+    }
+  ],
+  "outputManifest": {
+    "artifactKind": "wakeflow-loaded-artifact-tree",
+    "fileCount": 7,
+    "files": [
+      {
+        "bytes": 151,
+        "digest": "sha256:0d11503aefdd112e223e8f44a1d3952434d118674e7941a8396127ac1a4e2705",
+        "executable": false,
+        "ref": "WakeflowFixture/.claude/settings.json"
+      },
+      {
+        "bytes": 187,
+        "digest": "sha256:a121c3941065d2748c612e0c9b3933e326d22ef09af34d13017978188c1549e4",
+        "executable": false,
+        "ref": "WakeflowFixture/.claude/settings.local.json"
+      },
+      {
+        "bytes": 1803,
+        "digest": "sha256:3fe56199ca2956dc4aa473c0df3ece29a1586559c76a5379e73133e96df85584",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-statusline.mjs"
+      },
+      {
+        "bytes": 184,
+        "digest": "sha256:075d60c0a5942c42a2270219326965ae34c2348efb6d28b2f824a84e2bd3f6ba",
+        "executable": false,
+        "ref": "WakeflowFixture/Design/.claude/settings.json"
+      },
+      {
+        "bytes": 187,
+        "digest": "sha256:a121c3941065d2748c612e0c9b3933e326d22ef09af34d13017978188c1549e4",
+        "executable": false,
+        "ref": "WakeflowFixture/Design/.claude/settings.local.json"
+      },
+      {
+        "bytes": 184,
+        "digest": "sha256:075d60c0a5942c42a2270219326965ae34c2348efb6d28b2f824a84e2bd3f6ba",
+        "executable": false,
+        "ref": "WakeflowFixture/Test/.claude/settings.json"
+      },
+      {
+        "bytes": 187,
+        "digest": "sha256:a121c3941065d2748c612e0c9b3933e326d22ef09af34d13017978188c1549e4",
+        "executable": false,
+        "ref": "WakeflowFixture/Test/.claude/settings.local.json"
+      }
+    ],
+    "schemaVersion": 1,
+    "totalBytes": 2883
+  },
+  "producer": {
+    "artifactDigest": "sha256:27bc8cc23a863c1e96ccc1631b5f78236471e13d5605ab69796d0089fc192e6f",
+    "sourceCommit": "70d79d720d65837a068993006f356e8de91215d4",
+    "sourceFiles": [
+      {
+        "bytes": 158298,
+        "digest": "sha256:f2c2d01310b4716d3d0252e03dd4f7f8b29c8fa8f07489ce654496c02c2d7e86",
+        "executable": false,
+        "ref": "scripts/lib/wakeflow-claude-host.mjs",
+        "role": "host-helper"
+      }
+    ]
+  },
+  "scenarioId": "claude-settings-seeded",
+  "schemaVersion": 1,
+  "scenarioDigest": "sha256:d73e09be5b32487bc9e84f435f45aef82133a8ec61f1078fde0cdb9bd5cbb87f"
+}

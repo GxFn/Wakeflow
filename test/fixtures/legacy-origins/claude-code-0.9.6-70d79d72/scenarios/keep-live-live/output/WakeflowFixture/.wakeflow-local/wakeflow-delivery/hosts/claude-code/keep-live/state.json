@@ -1,0 +1,30 @@
+{
+  "kind": "AutomationKeepLiveState",
+  "version": 1,
+  "enabled": true,
+  "automationRunId": "scenario-live-run",
+  "leases": {},
+  "activeAutomationRunIds": [],
+  "activeRunCount": 0,
+  "mechanism": "macos-caffeinate",
+  "strategy": "watcher",
+  "platform": "darwin",
+  "command": "caffeinate",
+  "args": [
+    "-dims"
+  ],
+  "token": "",
+  "pid": 0,
+  "workerPid": 0,
+  "childPid": 0,
+  "status": "stopped",
+  "startedAt": "@wakeflow-scenario-time-168befac2d",
+  "stoppedAt": "@wakeflow-scenario-time-78f8b7145f",
+  "stopReason": "scenario-lifecycle-complete",
+  "lastCheckedAt": "@wakeflow-scenario-time-7ef114e505",
+  "error": null,
+  "active": false,
+  "workerActive": false,
+  "childActive": false,
+  "releasedAutomationRunId": "scenario-live-run"
+}

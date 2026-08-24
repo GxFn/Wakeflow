@@ -1,0 +1,36 @@
+{
+  "kind": "WakeflowHostPodOperation",
+  "version": 1,
+  "operationType": "close",
+  "operationId": "pod-close-8ae05aba392d9dfe13ffde6eaf47ee84",
+  "demandKey": "SCENARIO-POD",
+  "podId": "SCENARIO-POD",
+  "host": "codex",
+  "windowName": "Controller__SCENARIO-POD",
+  "role": "controller",
+  "intentDigest": "@wakeflow-scenario-derived-digest-73343c2b53",
+  "intent": {
+    "demandKey": "SCENARIO-POD",
+    "podId": "SCENARIO-POD",
+    "host": "codex",
+    "launchCorrelationId": "pod-launch-55a3e4cda4e73e7599c0b28e30c74b45",
+    "bindingId": "@wakeflow-scenario-binding-id-571e578ca0",
+    "windowName": "Controller__SCENARIO-POD",
+    "role": "controller",
+    "sessionIntent": "archive-or-close",
+    "worktreeIntent": "not-applicable"
+  },
+  "status": "closed",
+  "createdAt": "@wakeflow-scenario-time-56ecc85885",
+  "updatedAt": "@wakeflow-scenario-time-22655485ab",
+  "receiptDigest": "@wakeflow-scenario-derived-digest-6340c0e902",
+  "receipt": {
+    "closeCorrelationId": "pod-close-8ae05aba392d9dfe13ffde6eaf47ee84",
+    "bindingId": "@wakeflow-scenario-binding-id-571e578ca0",
+    "windowName": "Controller__SCENARIO-POD",
+    "host": "codex",
+    "sessionStatus": "archived",
+    "worktreeStatus": "not-applicable",
+    "confirmedAt": "@wakeflow-scenario-time-bcd7c51ba6"
+  }
+}

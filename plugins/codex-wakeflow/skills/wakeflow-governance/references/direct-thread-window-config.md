@@ -1,100 +1,96 @@
-# Direct Thread Window Config Reference
+# Window Identity And Direct-Thread Reference
 
 ## Purpose
 
-Direct-thread delivery needs a local mapping from logical Wakeflow window names
-to real Codex thread ids. That mapping is local runtime state, not tracked
-project documentation.
+Direct-thread delivery needs one host-local mapping from a stable typed
+`windowId` to the real Codex thread handle. The mapping is runtime identity,
+not tracked project documentation and not part of the transport packet.
 
-## Storage
+## Identity Authority
 
-Store real thread ids only in the local thread registry under
-`.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/`. Wakeflow
-setup or host-controlled tooling should pass each real thread id to
-`wakeflow_register_window`; agents must not
-hand-write runtime files. Wakeflow records the host routing identity but does
-not classify the initialization reply or maintain a separate readiness state.
-The tool updates the host-local registry and derived window config together and
-redacts the real id from its output.
-Records in the legacy `.wakeflow-local/wakeflow-delivery/thread-registry/`
-location are still read as a fallback while new registrations write the
-host-scoped path, and the shared `.wakeflow-local/wakeflow-delivery/locks/`
-directory enforces one in-flight target delivery per window across hosts.
-Controller returns do not take that target work lease.
+`wakeflow_register_window` with `operation: "register"` is the only normal
+writer for a newly created Codex thread. It records the raw handle only in the
+typed binding under
+`.wakeflow-local/runtime/hosts/codex/identity/window-bindings/<windowId>.json`
+and returns a redacted result. Agents never hand-write that file.
 
-Never write real thread ids to:
+`wakeflow_replace_windows` owns inspection, replacement intent, and exact
+decommission through its `inspect`, `replace`, and `decommission` operations.
+Replacement does not mutate unrelated bindings. Codex decommission evidence
+always remains `manual-host-gate`: an archived task is not machine-verifiable
+proof that the Agent cannot run again or that its worktree/branch is gone.
 
-- tracked Markdown;
-- prompts;
-- GitHub;
-- target result text;
-- archive records;
-- examples;
-- fixtures.
+Never write a real thread handle to tracked Markdown, prompts, GitHub, target
+result text, archive records, examples, or fixtures. Never register a
+placeholder such as `current-thread`, `unknown`, or `<thread-id>`.
 
-Do not register placeholders such as `current-thread`, `unknown`, or
-`<thread-id>`.
+## Runtime Projection
 
-For a Pod launch, call `wakeflow_pod_record event=materialization` immediately
-before the one Codex create call. If Codex returns `clientThreadId`, record it
-as pending (the runtime persists only its digest), then call bounded
-`list_threads(limit=50)` and match the exact launch-correlation marker in
-`preview`. A host-supported `query` may narrow the list but is never required.
-Zero or multiple matches cannot finalize. Never register that temporary id or
-issue a blind second create; register only the uniquely matched final
-`threadId`.
+`.wakeflow-local/runtime/hosts/codex/projections/window-runtime/<windowId>.json`
+is a redacted, regenerable projection of strict config plus the current typed
+binding. It may describe role, repository responsibility, delivery eligibility,
+and binding status. It never contains the raw thread handle and never becomes a
+second identity or config authority.
 
-## Registry Record Shape
+## Coordination And Transport
 
-Thread-registry records should contain only:
+Target effects are serialized by the exact typed lease at
+`.wakeflow-local/runtime/shared/coordination/window-leases/<windowId>.json`.
+The lease is bound to the current binding, demand, task, and delivery tuple.
+Older deliveries and historical results cannot release a successor lease.
+Controller-return delivery takes no target work lease.
 
-- logical window name;
-- real thread id;
-- opaque binding id when the window belongs to a Pod;
-- registration / verification timestamps.
-
-Do not store window role, display title, cwd, responsibility root, dispatchable
-state, or delivery policy in the registry.
-
-Pod cwd/Git facts live separately under
-`hosts/codex/pod-bindings/<pod-id>/`, keyed by launch correlation and binding
-id. Product dispatch reads that verified receipt; derived `window-config` and
-the logical window suffix are never a Pod cwd authority. Pod Test dispatch
-also requires the matching validated `direct-multi-root` access receipt; a
-binding alone does not prove Test can read every product worktree.
-
-## Derived Window Config
-
-`window-config` files are derived runtime views. They are rebuilt from
-`wakeflow.config.json`, current launch / replacement inputs, and whether a
-thread-registry record exists. They may describe:
-
-- repository path and responsibility;
-- delivery role, such as controller, target, Design, or Test;
-- whether the window may receive delivery;
-- a local registry-file reference;
-- delivery/readback requirements.
-
-They must not contain real thread ids and must not become a second authority for
-window semantics.
+Current transport records live only under
+`.wakeflow-local/runtime/shared/transport/demands/<demandId>/`:
+`groups/`, `packets/`, `envelopes/`, and `runs/`. TargetResult authority remains
+in the active demand state, not in another local result store. Selection follows
+the exact current state/binding/envelope lineage; never choose by mtime or a
+semantic window name.
 
 ## Send Policy
 
-The host thread tool performs the real send; the accepted-transport/readback
-boundary and the "stop the controller turn once accepted transport plus the
-actual independent readback status are recorded" rule live in
-[references/wakeflow-delivery.md](wakeflow-delivery.md) (Send Boundary).
+Target delivery is a closed sequence:
 
-Transport-specific: if the target is busy or unavailable and no host-level queued
-send is supported, fail closed and return to controller judgment. Do not create a
-hidden schedule, heartbeat, or fallback delivery route.
+1. `wakeflow_prepare_delivery operation=target-preview` performs a zero-write
+   plan.
+2. `operation=target-apply` freezes the exact group, packet, and envelope.
+3. `operation=target-claim` acquires the exact current lease immediately before
+   the host effect.
+4. The Codex host tool sends under its operation fence and performs at most one
+   bounded readback.
+5. `wakeflow_record_delivery operation=target-outcome` records the observed
+   outcome; it is not the host-effect fence.
+
+Accepted or ambiguous sends and accepted sends with pending/unavailable
+readback are never resent automatically. Rejected-before-send needs explicit
+`operation=target-rearm`; no hidden schedule, heartbeat, or fallback route may
+invent another attempt.
+
+## Pod Identity
+
+Pod first materialization uses
+`wakeflow_pod_open operation=launch-preview/launch-apply` and records launch
+facts with `wakeflow_pod_record operation=record-materialization`. Register
+only the final real `threadId`; a temporary `clientThreadId` is digest-only
+recovery evidence and can never become a binding. Finish with
+`wakeflow_pod_bind operation=creation-receipt` using the exact cwd/Git receipt.
+
+Existing Pod materialization is inspected with
+`wakeflow_pod_open operation=inspect-materialization`. It never discovers or
+creates a replacement and never falls back to mainline. Pod Test additionally
+requires the exact validated `test-access-receipt` covering every active
+product binding.
 
 ## Controller Return
 
-Controller return uses the dispatch group's stored `controllerWindow`, not a
-global default controller. Mainline has its controller; each explicitly
-authorized Pod has an independent `Controller__<pod>` that is the sole
-acceptance authority for that demand. Returns are thread messages that become
-that controller's subsequent turns. The visible return prompt follows the
-controller-return prompt shape in
-[references/wakeflow-delivery.md](wakeflow-delivery.md) (Prompt Rules).
+Controller return uses the dispatch group's stamped `controllerWindowId` and
+current typed binding. Plan/apply/pre-send are the
+`controller-preview/controller-apply/controller-pre-send` operations; the
+host effect remains separate and its fact is recorded with
+`wakeflow_record_delivery operation=controller-outcome`. An accepted,
+ambiguous, or sent-unconfirmed current result set is deduplicated and must not
+be sent again.
+
+Legacy `.wakeflow-local/wakeflow-delivery/**` registry, window-config, lock,
+and result files are explicit-migration input only. Normal v3 agents neither
+read them as authority nor write them.

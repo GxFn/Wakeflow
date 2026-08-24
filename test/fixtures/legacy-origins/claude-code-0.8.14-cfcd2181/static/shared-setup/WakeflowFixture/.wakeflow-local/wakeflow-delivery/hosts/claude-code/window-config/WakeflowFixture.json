@@ -1,0 +1,29 @@
+{
+  "kind": "ClaudeSubwindowDispatchConfig",
+  "version": 1,
+  "windowName": "WakeflowFixture",
+  "repositoryPath": ".",
+  "responsibility": "Wakeflow runtime controller",
+  "dispatchable": true,
+  "threadRegistered": false,
+  "threadRegistryFile": "hosts/claude-code/thread-registry/WakeflowFixture.json",
+  "cwd": "@wakeflow-fixture-root/WakeflowFixture",
+  "responsibilityRoot": "@wakeflow-fixture-root/WakeflowFixture",
+  "deliveryRole": "controller",
+  "delivery": {
+    "transport": "direct-thread",
+    "requireThread": true,
+    "missingThread": "fail-closed",
+    "readbackRequired": true
+  },
+  "automation": {
+    "mode": "manual-or-unattended",
+    "continuousWhenEnabled": true,
+    "keepLive": "required-when-automation-enabled"
+  },
+  "result": {
+    "returnRoute": "controller",
+    "resultEnvelopeRequired": true
+  },
+  "generatedAt": "@wakeflow-fixture-iso-time"
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 2,
+  "artifactKind": "wakeflow-install-assets",
+  "source": "core/template-sources",
+  "sourceDigest": "sha256:c4bc07a23f811abb72a562eff1997ce0067964cb68fa87325ad3a8872fc58b2d",
+  "assets": {
+    "progress.demand.en": {
+      "kind": "projection-template",
+      "sha256": "sha256:235512389c9fe63f302cb305bd2a7359db462aa51feee80fe7e4b25de9d47c67",
+      "content": "# {{title}} Progress\n\n{{projectionMarker}}\n\n> Generated human orientation only. The linked JSON and JSONL records remain authoritative.\n\n## Projection Source\n\n{{source}}\n\n## Goal\n\n{{goal}}\n\n## Completion Definition\n\n{{completionDefinition}}\n\n## Demand Identity\n\n{{demand}}\n\n## Current State\n\n{{currentState}}\n\n## Execution Authority\n\n{{authority}}\n\n## Controller Events\n\n{{events}}\n"
+    },
+    "progress.demand.zh-CN": {
+      "kind": "projection-template",
+      "sha256": "sha256:06f76d3ad5056c3d1006011c463ca9f9f0e3889b18df76f286f9dcce7466d585",
+      "content": "# {{title}} 进度\n\n{{projectionMarker}}\n\n> 仅供人类定位；链接的 JSON 与 JSONL 记录仍是权威来源。\n\n## 投影来源\n\n{{source}}\n\n## 目标\n\n{{goal}}\n\n## 完成定义\n\n{{completionDefinition}}\n\n## 需求身份\n\n{{demand}}\n\n## 当前状态\n\n{{currentState}}\n\n## 执行授权\n\n{{authority}}\n\n## Controller 事件\n\n{{events}}\n"
+    }
+  },
+  "bundleDigest": "sha256:995da311fcc842967b79f9839fdbfef0d84db7752ec47223cfef7c7270e53d1f"
+}

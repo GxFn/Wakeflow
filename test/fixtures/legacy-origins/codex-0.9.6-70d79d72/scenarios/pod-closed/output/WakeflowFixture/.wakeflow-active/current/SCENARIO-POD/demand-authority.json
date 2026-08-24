@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "artifactKind": "wakeflow-demand-authority",
+  "demandKey": "SCENARIO-POD",
+  "demandType": "requirement",
+  "entryMode": "pod-design",
+  "authorityRefs": [
+    {
+      "role": "original-plan",
+      "ref": "goal-stage-confirmation.md#goal"
+    },
+    {
+      "role": "requirement-design",
+      "ref": "goal-stage-confirmation.md#requirement-design"
+    },
+    {
+      "role": "code-facts",
+      "ref": "goal-stage-confirmation.md#code-facts"
+    },
+    {
+      "role": "landing-plan",
+      "ref": "goal-stage-confirmation.md#landing-plan"
+    },
+    {
+      "role": "non-goals",
+      "ref": "goal-stage-confirmation.md#non-goals"
+    },
+    {
+      "role": "user-confirmation",
+      "ref": "goal-stage-confirmation.md#user-confirmation"
+    }
+  ],
+  "testDecision": {
+    "mode": "controller-only",
+    "summary": "Controller verifies the accepted implementation before completion."
+  }
+}

@@ -2,62 +2,80 @@
 
 ## Product Shape
 
-Wakeflow is both:
+Wakeflow is a host-neutral workflow authority plus Codex-specific host seams.
+It maintains configuration, current business state, local identity/
+coordination/transport, portable archives, and the Agent procedures that use
+them. It is not a product repository and never replaces controller judgment.
 
-- a reusable local workflow runtime with scripts, templates, schemas, skills,
-  state roots, delivery envelopes, result envelopes, ledgers, and verification;
-- a Codex plugin that exposes skills and MCP tools over that runtime.
-
-It is not a product source repository and not a replacement for controller
-judgment.
-
-## Layers
+## Layers And Owners
 
 | Layer | Responsibility |
 | --- | --- |
-| `AGENTS.md` | hard gates, controller identity, repository boundaries, confirmation gates, testing boundaries, acceptance floor |
-| skills | operation steps, commands, field templates, examples, troubleshooting |
-| MCP tools | stable outer capability interface for workspace setup, status, state roots, packages, Pod plan/materialization/bind/Design/Test-access/close receipts, delivery envelope preparation/recording, review packs, controller decisions, Design/Test intake, next-work scans, archive actions, and verification |
-| scripts | local implementation backend for file/state operations, result import/reduction, controller-return construction, archive internals, keep-live state, and backend checks |
-| templates | reusable starter surfaces for installed workspaces |
-| `.wakeflow-active/` | ignored active runtime state |
-| `.wakeflow-local/` | ignored local config, final real thread ids, and host-scoped Pod operation/materialization/binding/Test-access receipts |
-| `../wakeflow-ledger/` | project-specific long-term records |
+| `AGENTS.md` | hard role, repository, confirmation, validation, and acceptance boundaries |
+| Skills | agent procedure and routing; no hidden state authority |
+| exact 31-tool MCP surface | closed public v3 operations; one typed domain owner per mutation |
+| `wakeflow.config.json` | single strict tracked desired model with typed IDs |
+| `.wakeflow-active/` | current demand/TODO/artifact/event/result/evidence authority plus projections |
+| `.wakeflow-local/runtime/shared/` | cross-host coordination leases and per-demand transport |
+| `.wakeflow-local/runtime/hosts/codex/` | private typed bindings, redacted projections, host evidence, and host operations |
+| `.wakeflow-local/runtime/maintenance/` | unique recoverable workspace-mutation journal |
+| `.wakeflow-local/audit/preserved/` | isolated manifest-bound retained bytes, never normal authority |
+| configured ledger/support surfaces | requirement designs and portable whole-demand BusinessArchives |
+| two localized demand-progress assets | generated from `core/template-sources/`; no v2 starter-document bundle |
 
-## MCP Boundary
+Shared behavior is implemented in canonical `core/` source and synchronized to
+both artifacts. Codex-specific thread creation/send/readback/archival belongs at
+the host seam; shared code consumes a host profile and never branches on a
+guessed host name.
 
-MCP tools organize only the outer agent workflow. They do not directly
-manipulate real thread ids, fake host sends, expose every runtime script, or
-decide acceptance. Target closeout stays split into narrow actions: record the
-target result envelope, review readiness, prepare a controller-return envelope
-when policy allows, send with the Codex host thread tool, and record delivery
-evidence. Internal runtime scripts remain available to Wakeflow skills and tests
-without becoming public MCP tools.
+## Public Boundary
 
-In installed plugin workspaces, total-control agents must treat those scripts as
-backend implementation details. They use Wakeflow MCP tools for setup, status,
-state roots, delivery, archive, next-work scans, and verification. If the MCP
-surface is unavailable, they stop and report the plugin-surface blocker instead
-of constructing cache paths or guessing script parameters.
+Every routed public call has one closed envelope: workspace `root`, optional
+typed `demandId`, exact `operation`, and an owner-specific closed `request`.
+Workspace/state/config/ledger paths are derived. Public results redact raw
+handles, absolute private roots, locators, and internal mutation tokens.
+
+Maintenance exposes only `fresh-initialize`, `reconfigure`, and `reconcile`
+through `wakeflow_maintain_workspace`, each with preview/apply/recover.
+Explicit migration is intentionally absent from MCP/CLI/Skills and exists only
+behind the fixed unregistered `bin/wakeflow-bootstrap` stdin contract.
+
+MCP plans and records authority; it does not impersonate a host effect. Target
+delivery remains preview → apply → claim → host effect → outcome. TargetResult,
+group review, candidate, decision, and Controller return remain distinct.
+Controller-return never takes a target lease. BusinessArchive and transport
+retention are separate owners.
+
+## Identity And Dual Host
+
+The stable typed `windowId` and current host-local binding are routing
+authority. A semantic title, repository directory, prompt assertion, or
+window-runtime projection is not identity. One workspace may have both Codex
+and Claude bindings, while business state and transport remain shared.
+
+Each host owns only its subtree under `.wakeflow-local/runtime/hosts/<host>/`.
+The shared typed lease prevents concurrent target effects across hosts. Host
+selection follows the current binding plus strict transport lineage; there is
+no mutable `controllerHost`, adopt-host state machine, or global workspace
+registry.
 
 ## Installed Workspace Shape
 
 ```text
-ParentWorkspace/
+Workspace/
+  wakeflow.config.json
   AGENTS.md
-  ProductRepo/                  one or more configured responsibilities
-  wakeflow-ledger/
+  .wakeflow-active/
+  .wakeflow-local/
+  <configured product repositories and support surfaces>
+  <configured ledger root>
 ```
 
-Product repositories may be siblings or otherwise explicitly configured;
-Wakeflow source, Design, and Test repositories are not required installed
-workspace children. Active state and local runtime files are
-ignored. Long-term project records live outside the reusable Wakeflow repo.
+Fresh initialization uses a complete caller-confirmed selection and may create
+all managed surfaces at once. File count is not a design constraint; every
+file must have one owner, authority class, lifecycle, and recovery boundary.
 
-The initialized fleet is the default mainline. An additional Pod is created
-only from explicit user authority and contains independent Controller, Design,
-Test, and product threads. Codex creates each product worktree from the exact
-saved repository project; asynchronous creation is recovered by launch
-correlation and only the final thread id is registered. Wakeflow plans, binds
-verified receipts, gates Test on validated direct-multi-root access, routes,
-and logically closes the Pod.
+The baseline fleet is mainline. A Pod exists only with explicit user authority
+and owns independent Controller, Design, Test, and product bindings. Pod
+logical state, host evidence, worktree lifecycle, and acceptance remain
+separate responsibilities.

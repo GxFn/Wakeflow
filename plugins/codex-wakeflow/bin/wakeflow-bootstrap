@@ -1,0 +1,99 @@
+#!/bin/sh
+
+# Wakeflow 显式迁移的固定制品启动器。
+# 它只定位同一物理制品内的backend、选择Node.js 20+运行时并透传原始stdin/stdout；
+# 不解析迁移请求、不选择workspace、不注册normal命令，也不接受可替换的backend参数。
+
+set -eu
+
+# 所有launcher自身错误只返回稳定JSON，不暴露制品绝对路径或运行时探测细节。
+bootstrap_error() {
+  code=$1
+  message=$2
+  printf '{"ok":false,"error":{"code":"%s","message":"%s"}}\n' "$code" "$message"
+}
+
+if [ "$#" -ne 0 ]; then
+  bootstrap_error "wakeflow-bootstrap-invalid-argv" "Wakeflow bootstrap accepts zero arguments; provide one JSON request on stdin."
+  exit 64
+fi
+
+# 从launcher所在目录固定派生制品根和唯一backend，拒绝symbolic-link backend。
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+ARTIFACT_ROOT=$(dirname -- "$SCRIPT_DIR")
+BACKEND="$ARTIFACT_ROOT/scripts/wakeflow-bootstrap.mjs"
+
+if [ -L "$BACKEND" ]; then
+  bootstrap_error "wakeflow-bootstrap-backend-invalid" "Wakeflow bootstrap backend must be one exact regular artifact file."
+  exit 127
+fi
+
+if [ ! -f "$BACKEND" ]; then
+  bootstrap_error "wakeflow-bootstrap-backend-missing" "Wakeflow bootstrap backend is missing from the exact artifact."
+  exit 127
+fi
+
+node_major() {
+  "$1" -p 'process.versions.node.split(".")[0]' 2>/dev/null
+}
+
+# 每个候选都先验证可执行性和major version；成功后用exec保持同一stdin/stdout边界。
+run_node_if_usable() {
+  candidate=$1
+  [ -n "$candidate" ] || return 1
+  [ -x "$candidate" ] || return 1
+  major=$(node_major "$candidate") || return 1
+  case "$major" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$major" -ge 20 ] || return 1
+  WAKEFLOW_BOOTSTRAP_LAUNCHER_ROOT="$ARTIFACT_ROOT" exec "$candidate" "$BACKEND"
+}
+
+if [ -n "${WAKEFLOW_NODE:-}" ]; then
+  if ! run_node_if_usable "$WAKEFLOW_NODE"; then
+    bootstrap_error "wakeflow-bootstrap-node-invalid" "WAKEFLOW_NODE must identify an executable Node.js 20+ runtime."
+    exit 127
+  fi
+fi
+
+# 查找顺序先尊重显式WAKEFLOW_NODE，再使用PATH、包管理器和已知本机运行时位置。
+path_node=$(command -v node 2>/dev/null || true)
+if run_node_if_usable "$path_node"; then
+  exit 0
+fi
+
+pnpm_path=$(command -v pnpm 2>/dev/null || true)
+if [ -n "$pnpm_path" ]; then
+  pnpm_dir=$(CDPATH= cd -- "$(dirname -- "$pnpm_path")" && pwd)
+  if run_node_if_usable "$pnpm_dir/../../node/bin/node"; then
+    exit 0
+  fi
+fi
+
+if [ -n "${HOME:-}" ]; then
+  for candidate in \
+    "$HOME/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node" \
+    "$HOME/.volta/bin/node" \
+    "$HOME/.local/share/mise/shims/node" \
+    "$HOME/.asdf/shims/node" \
+    "$HOME"/.nvm/versions/node/*/bin/node
+  do
+    if run_node_if_usable "$candidate"; then
+      exit 0
+    fi
+  done
+fi
+
+for candidate in \
+  "/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node" \
+  "/opt/homebrew/bin/node" \
+  "/usr/local/bin/node"
+do
+  if run_node_if_usable "$candidate"; then
+    exit 0
+  fi
+done
+
+bootstrap_error "wakeflow-bootstrap-node-missing" "Wakeflow bootstrap requires Node.js 20+."
+exit 127

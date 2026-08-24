@@ -7,8 +7,10 @@
 - `DeliveryEnvelope`: the prompt and transport metadata for a target window.
 - `DirectThreadDeliveryRun`: evidence that the Codex host send/readback
   happened.
-- `TargetResultEnvelope`: the target's structured claims and review-input refs.
-- `ReviewPack`: controller-side aggregation of target results and structural gaps; it does not verify truth.
+- `TargetResult`: one strict `artifactKind:"wakeflow-target-result"` record with
+  transport-bound claims and review-input locators.
+- `DispatchGroupReviewSnapshot`: deterministic current-result classification;
+  it is a read model, not a file, candidate, or verdict.
 - `ControllerReturn`: a delivery envelope that wakes the originating controller
   when policy allows.
 
@@ -56,14 +58,14 @@ Identity (full boundaries are in the task package):
 - Current responsibility window: <window>
 - Only working repository: <absolute repository path>
 
-Before coding: map every package acceptanceAnchor to a RED test or probe; if an
+Before coding: map every package acceptance anchor to a RED test or probe; if an
 anchor is untestable, return needs-review instead of inventing a requirement.
 
 Return requirement:
-- Execute only this task package. Return a TargetResultEnvelope with reviewable
-  inputs and reproducible validation details. Wakeflow checks structure and
-  path locatability only; a target result is not controller acceptance.
-- Test execution contract: <package>#testExecution
+- Execute only this task package. Return one strict TargetResult with reviewable
+  locators and reproducible validation details. Wakeflow checks structural
+  closure and exact tuples, not truth; a target result is not controller acceptance.
+- Test execution contract: <dispatch packet>#testContract.executionContract
 
 Dispatch record (routing and trace only):
 - taskId: <taskId>
@@ -78,11 +80,13 @@ the objective, at most two completion expectations, one priority-context fact,
 one critical boundary, at most four anchor ids/claims, and one original
 requirement entry. Complete context, requirement anchors, boundary lists,
 commit policy, probes, Test policy, and completion criteria remain in the task
-package. Skills are derived during briefing from work type, evidence/anchor
-needs, and the Test contract. Target prepare previews this exact prompt without
-writing; `apply=true` freezes the packet/envelope only after controller review
-and requires the preview's `previewDigest` as `expectedPreviewDigest`. That
-digest covers the complete prepared dispatch, not only the task package.
+package, except the Test execution contract, which is frozen in the dispatch
+packet. Skills are derived during briefing from work type. `wakeflow_prepare_delivery
+operation=target-preview` previews this exact prompt without writing;
+`operation=target-apply` freezes only the exact group, packet, and envelope
+after controller review. `operation=target-claim` is a separate immediate
+pre-send lease step. Every later operation must carry the exact plan/current
+tuple returned by its predecessor; stale authority fails closed.
 
 Controller-return prompts stay compact:
 
@@ -106,17 +110,20 @@ field exactly to the host send tool.
 
 ## Send Boundary
 
-Applied envelope preparation stores the envelope and reserves the shared
-per-window target work lease with that delivery id, covering the prepare-to-send
-gap. The Codex host tool performs the real send against that same lease;
-controller-return delivery takes no target work lease. If the send is accepted
-but the new turn is not visible yet, retry
-only readback within a bounded attempt/time budget; never resend while
-confirming that accepted send. Record accepted transport as `status=sent` with
-the actual independent readback status (`confirmed`, `pending`, or
-`unavailable`). Pending visibility is observation for Agent judgment, not a
-send failure or strict gate. Then stop the controller turn; do not poll for
-target completion.
+Applied preparation stores immutable transport only. Immediately before the
+real send, `operation=target-claim` acquires the exact typed current-window
+lease. The Codex host operation fence revalidates that lease and current
+binding, performs the send, and makes at most one bounded readback. Record the
+observed fact with `wakeflow_record_delivery operation=target-outcome`; that
+recording call is not the effect fence.
+
+Accepted or ambiguous transport, including accepted transport with
+pending/unavailable readback, closes the send turn and must not be resent.
+Rejected-before-send requires explicit `operation=target-rearm`; no automatic
+retry exists. Controller-return delivery takes no target work lease and uses
+the separate `controller-preview`, `controller-apply`, and
+`controller-pre-send` checks before its host effect. Then stop the controller
+turn; do not poll for target completion.
 
 ## Result Review
 
@@ -128,9 +135,9 @@ result is not group completion unless the group expected only that target.
 - Missing required review inputs blocks reduction. Acceptance additionally
   requires the controller's fresh independent validation.
 
-## Thread Id Boundary
+## Handle Boundary
 
-Real thread ids live only in `.wakeflow-local/`. They must not appear in
-tracked documents, prompts, GitHub, or backfill text. The full storage path and
-never-write-to list live in
-[references/direct-thread-window-config.md](direct-thread-window-config.md) (Storage).
+Real thread handles live only in `.wakeflow-local/`. They must not appear in
+tracked documents, prompts, GitHub, or backfill text. The identity/projection
+paths and never-write-to list live in
+[references/direct-thread-window-config.md](direct-thread-window-config.md).

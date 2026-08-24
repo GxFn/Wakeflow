@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:pod:materialization-event:v1",
+  "title": "Wakeflow Pod Materialization Event",
+  "$comment": "Append-only host observation. Runtime validation closes attempt transitions, previous-event digest lineage, retry authorization, and monotonic observation time.",
+  "type": "object",
+  "required": [
+    "kind",
+    "schemaVersion",
+    "programId",
+    "hostId",
+    "podId",
+    "windowId",
+    "launchOperationId",
+    "attemptId",
+    "eventId",
+    "previousEventDigest",
+    "status",
+    "observedAt"
+  ],
+  "properties": {
+    "kind": { "type": "string", "const": "WakeflowPodMaterializationEvent" },
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "programId": { "$ref": "#/$defs/programId" },
+    "hostId": { "$ref": "#/$defs/hostId" },
+    "podId": { "$ref": "#/$defs/podId" },
+    "windowId": { "$ref": "#/$defs/windowId" },
+    "launchOperationId": { "$ref": "#/$defs/launchOperationId" },
+    "attemptId": { "$ref": "#/$defs/attemptId" },
+    "eventId": { "$ref": "#/$defs/eventId" },
+    "previousEventDigest": { "oneOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+    "status": { "type": "string", "enum": ["creating", "pending", "finalized", "failed"] },
+    "hostRequestIdDigest": { "$ref": "#/$defs/digest" },
+    "failureCode": { "$ref": "#/$defs/boundedCode" },
+    "failureDetailDigest": { "$ref": "#/$defs/digest" },
+    "retryAuthorizationDigest": { "$ref": "#/$defs/digest" },
+    "observedAt": { "$ref": "#/$defs/timestamp" }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "pending" } }, "required": ["status"] },
+      "then": {
+        "required": ["hostRequestIdDigest"],
+        "not": { "anyOf": [
+          { "required": ["failureCode"] },
+          { "required": ["failureDetailDigest"] },
+          { "required": ["retryAuthorizationDigest"] }
+        ] }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
+      "then": {
+        "required": ["failureCode"],
+        "not": { "anyOf": [
+          { "required": ["hostRequestIdDigest"] },
+          { "required": ["retryAuthorizationDigest"] }
+        ] }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "creating" } }, "required": ["status"] },
+      "then": { "not": { "anyOf": [
+        { "required": ["hostRequestIdDigest"] },
+        { "required": ["failureCode"] },
+        { "required": ["failureDetailDigest"] }
+      ] } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "finalized" } }, "required": ["status"] },
+      "then": { "not": { "anyOf": [
+        { "required": ["hostRequestIdDigest"] },
+        { "required": ["failureCode"] },
+        { "required": ["failureDetailDigest"] },
+        { "required": ["retryAuthorizationDigest"] }
+      ] } }
+    }
+  ],
+  "$defs": {
+    "programId": { "type": "string", "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "hostId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+    "podId": { "type": "string", "pattern": "^pod_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "windowId": { "type": "string", "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "launchOperationId": { "type": "string", "pattern": "^pod-launch_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "attemptId": { "type": "string", "pattern": "^pod-materialization-attempt_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "eventId": { "type": "string", "pattern": "^pod-materialization-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "boundedCode": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+    "timestamp": { "type": "string", "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$" }
+  }
+}

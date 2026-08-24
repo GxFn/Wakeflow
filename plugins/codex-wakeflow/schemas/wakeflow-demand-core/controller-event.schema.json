@@ -1,0 +1,510 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:demand-core:controller-event:v1",
+  "title": "Wakeflow Candidate Controller Event",
+  "$comment": "This schema validates structural and lexical shape only. The candidate demand-core runtime validator is mandatory for event-ID uniqueness, contiguous revisions, from/to relations, changed-artifact digest equality, and exact state-tail binding; events are transition audit, not a standalone event-sourced authority.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "eventId",
+    "demandId",
+    "createdAt",
+    "actor",
+    "command",
+    "type",
+    "previousRevision",
+    "nextRevision",
+    "from",
+    "to",
+    "reason",
+    "decisionSummary",
+    "changedArtifacts"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "artifactKind": { "type": "string", "const": "wakeflow-controller-event" },
+    "eventId": { "$ref": "#/$defs/opaqueToken" },
+    "demandId": { "$ref": "#/$defs/demandId" },
+    "createdAt": { "$ref": "#/$defs/timestamp" },
+    "actor": { "$ref": "#/$defs/opaqueToken" },
+    "command": { "$ref": "#/$defs/opaqueToken" },
+    "type": { "$ref": "#/$defs/opaqueToken" },
+    "previousRevision": { "type": "integer", "minimum": 0 },
+    "nextRevision": { "type": "integer", "minimum": 1 },
+    "from": {
+      "oneOf": [
+        { "$ref": "#/$defs/demandState" },
+        { "type": "null" }
+      ]
+    },
+    "to": { "$ref": "#/$defs/demandState" },
+    "reason": { "$ref": "#/$defs/trimmedText" },
+    "decisionSummary": { "$ref": "#/$defs/trimmedText" },
+    "changedArtifacts": {
+      "type": "array",
+      "maxItems": 2,
+      "uniqueItems": true,
+      "$comment": "Events bind immutable core, T05 demand-artifact, or T06 evidence-manifest identities. The next state digest is intentionally external to the event to avoid a state/event digest cycle; runtime validation binds each artifact ID, canonical ref, digest, state summary, and write intent.",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/demandChange" },
+          { "$ref": "#/$defs/authorityChange" },
+          { "$ref": "#/$defs/taskPackageChange" },
+          { "$ref": "#/$defs/targetResultChange" },
+          { "$ref": "#/$defs/reviewCandidateChange" },
+          { "$ref": "#/$defs/testCardChange" },
+          { "$ref": "#/$defs/podDesignRequestChange" },
+          { "$ref": "#/$defs/podDesignHandoffChange" },
+          { "$ref": "#/$defs/evidenceChange" }
+        ]
+      }
+    },
+    "deliveryTransition": { "$ref": "#/$defs/deliveryTransition" },
+    "reviewDecision": { "$ref": "#/$defs/reviewDecision" },
+    "podTransition": { "$ref": "#/$defs/podTransition" },
+    "lifecycleTransition": { "$ref": "#/$defs/lifecycleTransition" }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": { "previousRevision": { "const": 0 } },
+        "required": ["previousRevision"]
+      },
+      "then": {
+        "properties": {
+          "changedArtifacts": {
+            "items": {
+              "oneOf": [
+                { "$ref": "#/$defs/demandChange" },
+                { "$ref": "#/$defs/authorityChange" }
+              ]
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": { "changedArtifacts": { "maxItems": 1 } }
+      }
+    },
+    {
+      "not": {
+        "anyOf": [
+          { "required": ["deliveryTransition", "reviewDecision"] },
+          { "required": ["deliveryTransition", "podTransition"] },
+          { "required": ["deliveryTransition", "lifecycleTransition"] },
+          { "required": ["reviewDecision", "podTransition"] },
+          { "required": ["reviewDecision", "lifecycleTransition"] },
+          { "required": ["podTransition", "lifecycleTransition"] }
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "targetTaskId": {
+      "type": "string",
+      "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "deliveryId": {
+      "type": "string",
+      "pattern": "^delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "testAttemptId": {
+      "type": "string",
+      "pattern": "^test-attempt_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "deliveryRunId": {
+      "type": "string",
+      "pattern": "^delivery-run_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "opaqueToken": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)[^\\u0000-\\u001F\\u007F-\\u009F]*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+    },
+    "trimmedText": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)(?:[\\r\\n]|[^\\u0000-\\u001F\\u007F-\\u009F])*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "demandState": {
+      "type": "string",
+      "enum": [
+        "intake",
+        "planned",
+        "dispatched",
+        "waiting-results",
+        "review-ready",
+        "needs-rework",
+        "blocked",
+        "cancelled",
+        "completed",
+        "archived"
+      ]
+    },
+    "deliveryPhase": {
+      "type": "string",
+      "enum": [
+        "prepared",
+        "send-claimed",
+        "accepted",
+        "rejected-before-send",
+        "ambiguous"
+      ]
+    },
+    "deliveryRunTuple": {
+      "type": "object",
+      "required": [
+        "runId",
+        "ref",
+        "digest",
+        "attemptOrdinal",
+        "transportStatus",
+        "readbackStatus"
+      ],
+      "properties": {
+        "runId": { "$ref": "#/$defs/deliveryRunId" },
+        "ref": {
+          "type": "string",
+          "pattern": "^\\.wakeflow-local/runtime/shared/transport/demands/demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/runs/delivery-run_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" },
+        "attemptOrdinal": { "type": "integer", "minimum": 1 },
+        "transportStatus": {
+          "type": "string",
+          "enum": ["accepted", "rejected-before-send", "ambiguous"]
+        },
+        "readbackStatus": {
+          "type": "string",
+          "enum": ["confirmed", "pending", "unavailable"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "deliveryTransition": {
+      "type": "object",
+      "required": [
+        "targetTaskId",
+        "deliveryId",
+        "envelopeDigest",
+        "sendGeneration",
+        "fromPhase",
+        "toPhase",
+        "previousSummaryDigest",
+        "nextSummaryDigest"
+      ],
+      "properties": {
+        "targetTaskId": { "$ref": "#/$defs/targetTaskId" },
+        "deliveryId": { "$ref": "#/$defs/deliveryId" },
+        "envelopeDigest": { "$ref": "#/$defs/digest" },
+        "sendGeneration": { "type": "integer", "minimum": 1 },
+        "fromPhase": {
+          "oneOf": [
+            { "$ref": "#/$defs/deliveryPhase" },
+            { "type": "null" }
+          ]
+        },
+        "toPhase": { "$ref": "#/$defs/deliveryPhase" },
+        "previousSummaryDigest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "nextSummaryDigest": { "$ref": "#/$defs/digest" },
+        "testAttemptId": { "$ref": "#/$defs/testAttemptId" },
+        "testLineageDigest": { "$ref": "#/$defs/digest" },
+        "run": { "$ref": "#/$defs/deliveryRunTuple" }
+      },
+      "additionalProperties": false
+    },
+    "reviewCandidateTuple": {
+      "type": "object",
+      "required": ["reviewCandidateId", "ref", "digest"],
+      "properties": {
+        "reviewCandidateId": {
+          "type": "string",
+          "pattern": "^review-candidate_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^review-candidates/review-candidate_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "reviewDispatchGroupTuple": {
+      "type": "object",
+      "required": ["groupId", "ref", "digest"],
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "pattern": "^dispatch-group_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^\\.wakeflow-local/runtime/shared/transport/demands/demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/groups/dispatch-group_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "reviewDecision": {
+      "type": "object",
+      "required": [
+        "candidate",
+        "group",
+        "resultSetDigest",
+        "decision",
+        "targetTaskIds",
+        "previousReviewDigest",
+        "nextReviewDigest"
+      ],
+      "properties": {
+        "candidate": { "$ref": "#/$defs/reviewCandidateTuple" },
+        "group": { "$ref": "#/$defs/reviewDispatchGroupTuple" },
+        "resultSetDigest": { "$ref": "#/$defs/digest" },
+        "decision": {
+          "type": "string",
+          "enum": ["accept", "blocked", "redesign", "rework"]
+        },
+        "targetTaskIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/targetTaskId" }
+        },
+        "previousReviewDigest": { "$ref": "#/$defs/digest" },
+        "nextReviewDigest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "lifecycleTransition": {
+      "type": "object",
+      "$comment": "Runtime validation fixes the controller command, event type, terminal state edge, review clearing, and the exact task/package/TestCard lifecycle delta. This field delegates no transport or host effect.",
+      "required": ["action"],
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["complete", "cancel"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "podTransition": {
+      "type": "object",
+      "$comment": "Runtime validation fixes command/type/action/selector combinations, exact previous/next Pod digest lineage, and the Pod-only state delta.",
+      "required": ["podId", "action", "previousPodDigest", "nextPodDigest"],
+      "properties": {
+        "podId": {
+          "type": "string",
+          "pattern": "^pod_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "action": {
+          "type": "string",
+          "enum": ["initialize", "add-members", "record-design-request", "record-design-handoff", "bind-window", "plan-test-access", "settle-test-access", "retry-test-access", "plan-close", "settle-close"]
+        },
+        "previousPodDigest": {
+          "oneOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }]
+        },
+        "nextPodDigest": { "$ref": "#/$defs/digest" },
+        "windowId": {
+          "type": "string",
+          "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "probeId": {
+          "type": "string",
+          "pattern": "^pod-test-probe_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "closeOperationId": {
+          "type": "string",
+          "pattern": "^pod-close_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "podDesignRequestId": {
+          "type": "string",
+          "pattern": "^pod-design-request_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "podDesignHandoffId": {
+          "type": "string",
+          "pattern": "^pod-design-handoff_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "action": { "const": "bind-window" } }, "required": ["action"] },
+          "then": { "required": ["windowId"] }
+        },
+        {
+          "if": { "properties": { "action": { "enum": ["plan-test-access", "settle-test-access", "retry-test-access"] } }, "required": ["action"] },
+          "then": { "required": ["probeId"] }
+        },
+        {
+          "if": { "properties": { "action": { "enum": ["plan-close", "settle-close"] } }, "required": ["action"] },
+          "then": { "required": ["windowId", "closeOperationId"] }
+        },
+        {
+          "if": { "properties": { "action": { "const": "record-design-request" } }, "required": ["action"] },
+          "then": { "required": ["podDesignRequestId"] }
+        },
+        {
+          "if": { "properties": { "action": { "const": "record-design-handoff" } }, "required": ["action"] },
+          "then": { "required": ["podDesignHandoffId"] }
+        }
+      ]
+    },
+    "demandChange": {
+      "type": "object",
+      "required": ["artifactKind", "ref", "digest"],
+      "properties": {
+        "artifactKind": { "type": "string", "const": "wakeflow-demand" },
+        "ref": { "type": "string", "const": "demand.json" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "authorityChange": {
+      "type": "object",
+      "required": ["artifactKind", "ref", "digest"],
+      "properties": {
+        "artifactKind": { "type": "string", "const": "wakeflow-demand-authority" },
+        "ref": { "type": "string", "const": "demand-authority.json" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "taskPackageChange": {
+      "type": "object",
+      "required": ["artifactKind", "artifactId", "ref", "digest"],
+      "properties": {
+        "artifactKind": { "type": "string", "const": "wakeflow-task-package" },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^task-packages/task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "targetResultChange": {
+      "type": "object",
+      "required": ["artifactKind", "artifactId", "ref", "digest"],
+      "properties": {
+        "artifactKind": { "type": "string", "const": "wakeflow-target-result" },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^target-results/target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "reviewCandidateChange": {
+      "type": "object",
+      "required": ["artifactKind", "artifactId", "ref", "digest"],
+      "properties": {
+        "artifactKind": { "type": "string", "const": "wakeflow-review-candidate" },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^review-candidate_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^review-candidates/review-candidate_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "testCardChange": {
+      "type": "object",
+      "required": ["artifactKind", "artifactId", "ref", "digest"],
+      "properties": {
+        "artifactKind": { "type": "string", "const": "wakeflow-test-card" },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^test-cards/test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "podDesignRequestChange": {
+      "type": "object",
+      "required": ["artifactKind", "artifactId", "ref", "digest"],
+      "properties": {
+        "artifactKind": { "const": "wakeflow-pod-design-request" },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^pod-design-request_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^pod/design-requests/pod-design-request_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "podDesignHandoffChange": {
+      "type": "object",
+      "required": ["artifactKind", "artifactId", "ref", "digest"],
+      "properties": {
+        "artifactKind": { "const": "wakeflow-pod-design-handoff" },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^pod-design-handoff_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^pod/design-handoffs/pod-design-handoff_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "evidenceChange": {
+      "type": "object",
+      "required": ["artifactKind", "artifactId", "ref", "digest"],
+      "properties": {
+        "artifactKind": { "type": "string", "const": "wakeflow-evidence" },
+        "artifactId": {
+          "type": "string",
+          "pattern": "^evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^evidence/evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/evidence\\.json$"
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

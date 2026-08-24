@@ -1,0 +1,10 @@
+{
+  "kind": "WakeflowWindowDeliveryLock",
+  "version": 2,
+  "leaseId": "@wakeflow-scenario-lease-id-98e49d96b4",
+  "windowName": "ProductWindow",
+  "host": "claude-code",
+  "deliveryId": "SCENARIO-CLAUDE-DELIVERY",
+  "createdAt": "@wakeflow-scenario-time-0c97081bcf",
+  "expiresAt": "@wakeflow-scenario-time-6d85630f21"
+}

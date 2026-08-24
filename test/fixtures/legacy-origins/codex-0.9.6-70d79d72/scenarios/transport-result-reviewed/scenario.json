@@ -1,0 +1,1310 @@
+{
+  "artifactKind": "wakeflow-legacy-lifecycle-scenario",
+  "beforeManifest": {
+    "artifactKind": "wakeflow-loaded-artifact-tree",
+    "fileCount": 4,
+    "files": [
+      {
+        "bytes": 1664,
+        "digest": "sha256:f972fda526e41116f0832633496fafbfc575e3ec4e6b3eaceac117401f07da3c",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-active/current/workspace-current-status.md"
+      },
+      {
+        "bytes": 2069,
+        "digest": "sha256:a92ba640bd092b2ad55f9db9b39fffd122b62111d1fc874beffe75eefc236d8c",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-active/index.md"
+      },
+      {
+        "bytes": 1005,
+        "digest": "sha256:be820c8be08bb3733dbed6c614d19e697c4f7cd38300933161166ce3b707b173",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/ProductWindow.json"
+      },
+      {
+        "bytes": 950,
+        "digest": "sha256:faa9acd2988b2a23206bbc433514bbb7493641cdc9e4d3ff0174bee0db015491",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/WakeflowFixture.json"
+      }
+    ],
+    "schemaVersion": 1,
+    "totalBytes": 5688
+  },
+  "category": "transport-result-review",
+  "commandSequence": [
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/wakeflow-state.mjs",
+        "init",
+        "<fixed-synthetic-demand>",
+        "--write",
+        "--root",
+        "<workspace-root>",
+        "--json"
+      ],
+      "stepId": "state-init"
+    },
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/wakeflow-state.mjs",
+        "add-task-package",
+        "<fixed-synthetic-task>",
+        "--write",
+        "--root",
+        "<workspace-root>",
+        "--json"
+      ],
+      "stepId": "state-add-task-package"
+    },
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/wakeflow-delivery.mjs",
+        "register-thread",
+        "<fixed-synthetic-bindings>",
+        "--write",
+        "--root",
+        "<workspace-root>",
+        "--json"
+      ],
+      "stepId": "register-thread"
+    },
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/wakeflow-delivery.mjs",
+        "prepare-dispatch-from-state",
+        "<fixed-synthetic-dispatch>",
+        "--write",
+        "--root",
+        "<workspace-root>",
+        "--json"
+      ],
+      "stepId": "prepare-dispatch-from-state"
+    },
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/wakeflow-delivery.mjs",
+        "record-delivery-run",
+        "<accepted-target-send>",
+        "--write",
+        "--root",
+        "<workspace-root>",
+        "--json"
+      ],
+      "stepId": "record-delivery-run"
+    },
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/wakeflow-delivery.mjs",
+        "record-target-result",
+        "<completed-result>",
+        "--write",
+        "--root",
+        "<workspace-root>",
+        "--json"
+      ],
+      "stepId": "record-target-result"
+    },
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/wakeflow-delivery.mjs",
+        "build-controller-return",
+        "<fixed-synthetic-return>",
+        "--write",
+        "--root",
+        "<workspace-root>",
+        "--json"
+      ],
+      "stepId": "build-controller-return"
+    },
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/wakeflow-delivery.mjs",
+        "record-delivery-run",
+        "<accepted-controller-return>",
+        "--write",
+        "--root",
+        "<workspace-root>",
+        "--json"
+      ],
+      "stepId": "record-controller-return-run"
+    },
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/wakeflow-state.mjs",
+        "import-target-result",
+        "<completed-result>",
+        "--write",
+        "--root",
+        "<workspace-root>",
+        "--json"
+      ],
+      "stepId": "import-target-result"
+    },
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/wakeflow-state.mjs",
+        "reduce-results",
+        "<fixed-synthetic-demand>",
+        "--write",
+        "--root",
+        "<workspace-root>",
+        "--json"
+      ],
+      "stepId": "reduce-results"
+    },
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/wakeflow-state.mjs",
+        "decide-review",
+        "<accepted-review>",
+        "--write",
+        "--root",
+        "<workspace-root>",
+        "--json"
+      ],
+      "stepId": "decide-review"
+    }
+  ],
+  "deltaEntries": [
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT"
+    },
+    {
+      "afterBytes": 4064,
+      "afterDigest": "sha256:9919d2712dc0c43e5ed68505c7c4ac8a96e4430e06d6ca714985abd9b04bdb2f",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl"
+    },
+    {
+      "afterBytes": 673,
+      "afterDigest": "sha256:a07fdae57d02c9e561b6d68c2491e36fd986e1a72653484059ac3a03cc6a5c72",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/demand.json"
+    },
+    {
+      "afterBytes": 1464,
+      "afterDigest": "sha256:e19a1cc004817fcd235df1ec9823403079375c83b82636ceea0ae4fc6ae55b0a",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/developer-progress.md"
+    },
+    {
+      "afterBytes": 1355,
+      "afterDigest": "sha256:17146a1c3654c7e9612614862a1c3ae44b9700e5aa69020b0dcde6d4dd8bf893",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/projection.json"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/target-results"
+    },
+    {
+      "afterBytes": 2490,
+      "afterDigest": "sha256:25f3731cd11bf8a788cbd1d1ad6111a80b8009614cf8e3c7c22ab4317c43f65e",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/target-results/SCENARIO-RESULT.json"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/task-packages"
+    },
+    {
+      "afterBytes": 596,
+      "afterDigest": "sha256:c931686d7e01d79a5022753ce5677b09872988724eae58a80970b757c0932c60",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/task-packages/SCENARIO-PACKAGE.json"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/transition-candidates"
+    },
+    {
+      "afterBytes": 1603,
+      "afterDigest": "sha256:0185c1d9aa5cc66bc7e57fb727c49765c4f94391d263bc9cae07e46a2025eae8",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/transition-candidates/@wakeflow-scenario-review-candidate.json"
+    },
+    {
+      "afterBytes": 3022,
+      "afterDigest": "sha256:deaf7f55e108d34e23786d94d887a345e6fb77ec6c42ea46627975d9ae4d58d9",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/wakeflow-state.json"
+    },
+    {
+      "afterBytes": 1626,
+      "afterDigest": "sha256:7e967f6d85ff415b01fb133025a547ede4d3d568fbd2556532b8aec4667b5bca",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": 1664,
+      "beforeDigest": "sha256:f972fda526e41116f0832633496fafbfc575e3ec4e6b3eaceac117401f07da3c",
+      "beforeExecutable": false,
+      "beforeType": "file",
+      "operation": "replace",
+      "path": "WakeflowFixture/.wakeflow-active/current/workspace-current-status.md"
+    },
+    {
+      "afterBytes": 1440,
+      "afterDigest": "sha256:5887e98836d26f56c797c75f74feaa5b30902a9b3aac6af9b58dff1b92d8b554",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": 2069,
+      "beforeDigest": "sha256:a92ba640bd092b2ad55f9db9b39fffd122b62111d1fc874beffe75eefc236d8c",
+      "beforeExecutable": false,
+      "beforeType": "file",
+      "operation": "replace",
+      "path": "WakeflowFixture/.wakeflow-active/index.md"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes"
+    },
+    {
+      "afterBytes": 6619,
+      "afterDigest": "sha256:26f5fa1346d88a291e0a3e3feeb54d6c8db76d398f04d4faef83b4f673d584c5",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__controller-return-SCENARIO-GROUP__r1.json"
+    },
+    {
+      "afterBytes": 4922,
+      "afterDigest": "sha256:be7859cc8c808277283ab25157bef90b8c19351989afb409e562505be2e68d79",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__delivery-SCENARIO-GROUP__ProductWindow__SCENARIO--d5353dd0843b.json"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-runs"
+    },
+    {
+      "afterBytes": 2167,
+      "afterDigest": "sha256:5dc65f46fad624d489bcd1ccf3f38df39471f8c4e9d8db813a53d37a29ccc667",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-runs/SCENARIO-TRANSPORT__run-controller-return-SCENARIO-GROUP__r1.json"
+    },
+    {
+      "afterBytes": 2404,
+      "afterDigest": "sha256:ffd0b79dc0ec72db8adcd004e497de8e48aaabb1cc6bf1b7346e628124a0dbfb",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-runs/SCENARIO-TRANSPORT__run-delivery-SCENARIO-GROUP__ProductWindow__SCEN--884ed2c7ad4f.json"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-groups"
+    },
+    {
+      "afterBytes": 1293,
+      "afterDigest": "sha256:e4be5f54ff85fd1f11f7e109a59f4dfa2d50a433f66edf342d62c76433797d28",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-groups/SCENARIO-TRANSPORT__SCENARIO-GROUP.json"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-packets"
+    },
+    {
+      "afterBytes": 5549,
+      "afterDigest": "sha256:5270c0ec84d529756cc358f8a9db7a992d30337ef8abf56b9e77f5507c241a4e",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-packets/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/keep-live"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry"
+    },
+    {
+      "afterBytes": 325,
+      "afterDigest": "sha256:799bbde52301bf51bad17fbe5790c865d1ee686cffbe360f5be583bb998b7ec1",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/ProductWindow.json"
+    },
+    {
+      "afterBytes": 327,
+      "afterDigest": "sha256:c243c28e552517805f1f3569166f335f2255a2f9693338dffd26cc50cb74f3f3",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/WakeflowFixture.json"
+    },
+    {
+      "afterBytes": 962,
+      "afterDigest": "sha256:04a816df81d21c9fb73a8899794081c3fe9427bb5a9f13be6c6f37f07dfb3cae",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": 1005,
+      "beforeDigest": "sha256:be820c8be08bb3733dbed6c614d19e697c4f7cd38300933161166ce3b707b173",
+      "beforeExecutable": false,
+      "beforeType": "file",
+      "operation": "replace",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/ProductWindow.json"
+    },
+    {
+      "afterBytes": 938,
+      "afterDigest": "sha256:a37858b9526f592716c418fed06aa50b3d78b2ba8334b11cf74e900816c35131",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": 950,
+      "beforeDigest": "sha256:faa9acd2988b2a23206bbc433514bbb7493641cdc9e4d3ff0174bee0db015491",
+      "beforeExecutable": false,
+      "beforeType": "file",
+      "operation": "replace",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/WakeflowFixture.json"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/locks"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/target-results"
+    },
+    {
+      "afterBytes": 1720,
+      "afterDigest": "sha256:55ea967ffe61290a9b08ed9ce544138a6cc2786f8677ce4badfbcbafc36aa401",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/target-results/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json"
+    }
+  ],
+  "host": "codex",
+  "materializationMode": "real-writer",
+  "normalizations": [
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl",
+      "selector": "/0/createdAt",
+      "token": "@wakeflow-scenario-time-c886780ab8"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl",
+      "selector": "/0/eventId",
+      "token": "@wakeflow-scenario-event-id-6cbaed248b"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl",
+      "selector": "/1/createdAt",
+      "token": "@wakeflow-scenario-time-e90a92b307"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl",
+      "selector": "/1/eventId",
+      "token": "@wakeflow-scenario-event-id-3da0afa914"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl",
+      "selector": "/2/createdAt",
+      "token": "@wakeflow-scenario-time-14eb84fadf"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl",
+      "selector": "/2/eventId",
+      "token": "@wakeflow-scenario-event-id-18575d2cb8"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl",
+      "selector": "/2/wakeflowTrace/createdAt",
+      "token": "@wakeflow-scenario-time-9e5123544e"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl",
+      "selector": "/2/wakeflowTrace/root",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl",
+      "selector": "/3/allowedWrites/2",
+      "token": "@wakeflow-scenario-review-candidate"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl",
+      "selector": "/3/createdAt",
+      "token": "@wakeflow-scenario-time-4b224920c2"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl",
+      "selector": "/3/eventId",
+      "token": "@wakeflow-scenario-event-id-a7e54ddc6f"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl",
+      "selector": "/3/wakeflowTrace/createdAt",
+      "token": "@wakeflow-scenario-time-681795031e"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl",
+      "selector": "/3/wakeflowTrace/root",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl",
+      "selector": "/4/createdAt",
+      "token": "@wakeflow-scenario-time-8bd0fa9e03"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl",
+      "selector": "/4/eventId",
+      "token": "@wakeflow-scenario-event-id-de7002edb2"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/demand.json",
+      "selector": "/createdAt",
+      "token": "@wakeflow-scenario-time-83a4fd6fbd"
+    },
+    {
+      "kind": "text-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/developer-progress.md",
+      "selector": "iso-8601-occurrences",
+      "token": "@wakeflow-scenario-time"
+    },
+    {
+      "kind": "text-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/developer-progress.md",
+      "selector": "rendered-display-time-occurrences",
+      "token": "@wakeflow-scenario-time"
+    },
+    {
+      "kind": "text-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/developer-progress.md",
+      "selector": "review-candidate-id-occurrences",
+      "token": "@wakeflow-scenario-review-candidate"
+    },
+    {
+      "kind": "text-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/developer-progress.md",
+      "selector": "state-event-id-occurrences",
+      "token": "@wakeflow-scenario-state-event"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/projection.json",
+      "selector": "/sourceEventId",
+      "token": "@wakeflow-scenario-state-event"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/projection.json",
+      "selector": "/unifiedStatus/lastUpdated",
+      "token": "@wakeflow-scenario-time-87fe9b0c77"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/target-results/SCENARIO-RESULT.json",
+      "selector": "/createdAt",
+      "token": "@wakeflow-scenario-time-e7a250a337"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/target-results/SCENARIO-RESULT.json",
+      "selector": "/wakeflowTrace/createdAt",
+      "token": "@wakeflow-scenario-time-70c8321b6f"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/target-results/SCENARIO-RESULT.json",
+      "selector": "/wakeflowTrace/root",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/task-packages/SCENARIO-PACKAGE.json",
+      "selector": "/createdAt",
+      "token": "@wakeflow-scenario-time-368cd5db73"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/task-packages/SCENARIO-PACKAGE.json",
+      "selector": "/targetTasks/0/createdAt",
+      "token": "@wakeflow-scenario-time-d61dece395"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/transition-candidates/@wakeflow-scenario-review-candidate.json",
+      "selector": "/candidateId",
+      "token": "@wakeflow-scenario-candidate-id-f8bc73ed4e"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/transition-candidates/@wakeflow-scenario-review-candidate.json",
+      "selector": "/wakeflowTrace/candidateId",
+      "token": "@wakeflow-scenario-candidate-id-f8bc73ed4e"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/transition-candidates/@wakeflow-scenario-review-candidate.json",
+      "selector": "/wakeflowTrace/createdAt",
+      "token": "@wakeflow-scenario-time-7c2e32f09d"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/transition-candidates/@wakeflow-scenario-review-candidate.json",
+      "selector": "/wakeflowTrace/root",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/wakeflow-state.json",
+      "selector": "/delivery/updatedAt",
+      "token": "@wakeflow-scenario-time-0ef9cf74b6"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/wakeflow-state.json",
+      "selector": "/projection/lastRenderedAt",
+      "token": "@wakeflow-scenario-time-0d8cd54b21"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/wakeflow-state.json",
+      "selector": "/targetTasks/0/createdAt",
+      "token": "@wakeflow-scenario-time-46f511145e"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/wakeflow-state.json",
+      "selector": "/targetTasks/0/delivery/sentAt",
+      "token": "@wakeflow-scenario-time-01b40fe193"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/wakeflow-state.json",
+      "selector": "/taskPackages/0/createdAt",
+      "token": "@wakeflow-scenario-time-a27749c251"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/wakeflow-state.json",
+      "selector": "/updatedAt",
+      "token": "@wakeflow-scenario-time-cbc13485dc"
+    },
+    {
+      "kind": "text-token",
+      "ref": "WakeflowFixture/.wakeflow-active/current/workspace-current-status.md",
+      "selector": "iso-8601-occurrences",
+      "token": "@wakeflow-scenario-time"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__controller-return-SCENARIO-GROUP__r1.json",
+      "selector": "/createdAt",
+      "token": "@wakeflow-scenario-time-08dc173dc6"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__controller-return-SCENARIO-GROUP__r1.json",
+      "selector": "/wakeflowTrace/createdAt",
+      "token": "@wakeflow-scenario-time-b1137acecf"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__controller-return-SCENARIO-GROUP__r1.json",
+      "selector": "/wakeflowTrace/root",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__controller-return-SCENARIO-GROUP__r1.json",
+      "selector": "/windowConfig/cwd",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__controller-return-SCENARIO-GROUP__r1.json",
+      "selector": "/windowConfig/generatedAt",
+      "token": "@wakeflow-scenario-time-56306bb42f"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__controller-return-SCENARIO-GROUP__r1.json",
+      "selector": "/windowConfig/responsibilityRoot",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__controller-return-SCENARIO-GROUP__r1.json",
+      "selector": "/windowConfig/threadBindingId",
+      "token": "@wakeflow-scenario-binding-id-4b39dc60d4"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__delivery-SCENARIO-GROUP__ProductWindow__SCENARIO--d5353dd0843b.json",
+      "selector": "/createdAt",
+      "token": "@wakeflow-scenario-time-67d0d1d326"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__delivery-SCENARIO-GROUP__ProductWindow__SCENARIO--d5353dd0843b.json",
+      "selector": "/preparationDigest",
+      "token": "@wakeflow-scenario-derived-digest-4b54c0a4ce"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__delivery-SCENARIO-GROUP__ProductWindow__SCENARIO--d5353dd0843b.json",
+      "selector": "/prompt",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__delivery-SCENARIO-GROUP__ProductWindow__SCENARIO--d5353dd0843b.json",
+      "selector": "/sourcePacketDigest",
+      "token": "@wakeflow-scenario-derived-digest-6adb7d49ff"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__delivery-SCENARIO-GROUP__ProductWindow__SCENARIO--d5353dd0843b.json",
+      "selector": "/targetThread/bindingId",
+      "token": "@wakeflow-scenario-binding-id-45574ba56f"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__delivery-SCENARIO-GROUP__ProductWindow__SCENARIO--d5353dd0843b.json",
+      "selector": "/wakeflowTrace/createdAt",
+      "token": "@wakeflow-scenario-time-593c2923f9"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__delivery-SCENARIO-GROUP__ProductWindow__SCENARIO--d5353dd0843b.json",
+      "selector": "/wakeflowTrace/root",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__delivery-SCENARIO-GROUP__ProductWindow__SCENARIO--d5353dd0843b.json",
+      "selector": "/windowConfig/generatedAt",
+      "token": "@wakeflow-scenario-time-e1011ce683"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__delivery-SCENARIO-GROUP__ProductWindow__SCENARIO--d5353dd0843b.json",
+      "selector": "/windowConfig/threadBindingId",
+      "token": "@wakeflow-scenario-binding-id-45574ba56f"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-runs/SCENARIO-TRANSPORT__run-controller-return-SCENARIO-GROUP__r1.json",
+      "selector": "/createdAt",
+      "token": "@wakeflow-scenario-time-59587c9b69"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-runs/SCENARIO-TRANSPORT__run-controller-return-SCENARIO-GROUP__r1.json",
+      "selector": "/wakeflowTrace/createdAt",
+      "token": "@wakeflow-scenario-time-64b5e8136f"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-runs/SCENARIO-TRANSPORT__run-controller-return-SCENARIO-GROUP__r1.json",
+      "selector": "/wakeflowTrace/root",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-runs/SCENARIO-TRANSPORT__run-delivery-SCENARIO-GROUP__ProductWindow__SCEN--884ed2c7ad4f.json",
+      "selector": "/createdAt",
+      "token": "@wakeflow-scenario-time-ae03aac442"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-runs/SCENARIO-TRANSPORT__run-delivery-SCENARIO-GROUP__ProductWindow__SCEN--884ed2c7ad4f.json",
+      "selector": "/wakeflowTrace/createdAt",
+      "token": "@wakeflow-scenario-time-c8859951aa"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-runs/SCENARIO-TRANSPORT__run-delivery-SCENARIO-GROUP__ProductWindow__SCEN--884ed2c7ad4f.json",
+      "selector": "/wakeflowTrace/root",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-runs/SCENARIO-TRANSPORT__run-delivery-SCENARIO-GROUP__ProductWindow__SCEN--884ed2c7ad4f.json",
+      "selector": "/windowLease/leaseId",
+      "token": "@wakeflow-scenario-lease-id-31f11fc7d9"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-groups/SCENARIO-TRANSPORT__SCENARIO-GROUP.json",
+      "selector": "/createdAt",
+      "token": "@wakeflow-scenario-time-2937c0cd52"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-groups/SCENARIO-TRANSPORT__SCENARIO-GROUP.json",
+      "selector": "/updatedAt",
+      "token": "@wakeflow-scenario-time-4f8f047653"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-groups/SCENARIO-TRANSPORT__SCENARIO-GROUP.json",
+      "selector": "/wakeflowTrace/createdAt",
+      "token": "@wakeflow-scenario-time-4187d54715"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-groups/SCENARIO-TRANSPORT__SCENARIO-GROUP.json",
+      "selector": "/wakeflowTrace/root",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-packets/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+      "selector": "/createdAt",
+      "token": "@wakeflow-scenario-time-b654e7dfd9"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-packets/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+      "selector": "/packetDigest",
+      "token": "@wakeflow-scenario-derived-digest-6adb7d49ff"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-packets/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+      "selector": "/prompt",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-packets/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+      "selector": "/taskBriefing/repositoryRoot",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-packets/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+      "selector": "/taskBriefing/stateRoot",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-packets/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+      "selector": "/taskBriefing/taskPackageDigest",
+      "token": "@wakeflow-scenario-derived-digest-439a569594"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-packets/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+      "selector": "/taskBriefing/taskPackageRef",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-packets/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+      "selector": "/taskBriefing/workspaceRoot",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-packets/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+      "selector": "/taskPackageDigest",
+      "token": "@wakeflow-scenario-derived-digest-439a569594"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-packets/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+      "selector": "/wakeflowTrace/createdAt",
+      "token": "@wakeflow-scenario-time-e7b93757a5"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-packets/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+      "selector": "/wakeflowTrace/root",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/ProductWindow.json",
+      "selector": "/bindingId",
+      "token": "@wakeflow-scenario-binding-id-45574ba56f"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/ProductWindow.json",
+      "selector": "/lastVerifiedAt",
+      "token": "@wakeflow-scenario-time-57edd000ea"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/ProductWindow.json",
+      "selector": "/registeredAt",
+      "token": "@wakeflow-scenario-time-3e32badd01"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/ProductWindow.json",
+      "selector": "/threadId",
+      "token": "@wakeflow-scenario-thread-id-f3ad674b2d"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/WakeflowFixture.json",
+      "selector": "/bindingId",
+      "token": "@wakeflow-scenario-binding-id-4b39dc60d4"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/WakeflowFixture.json",
+      "selector": "/lastVerifiedAt",
+      "token": "@wakeflow-scenario-time-6a6b2dc5c3"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/WakeflowFixture.json",
+      "selector": "/registeredAt",
+      "token": "@wakeflow-scenario-time-4a9a8da298"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/WakeflowFixture.json",
+      "selector": "/threadId",
+      "token": "@wakeflow-scenario-thread-id-bc0e400d7b"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/ProductWindow.json",
+      "selector": "/cwd",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/ProductWindow.json",
+      "selector": "/generatedAt",
+      "token": "@wakeflow-scenario-time-944fc0d096"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/ProductWindow.json",
+      "selector": "/responsibilityRoot",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/ProductWindow.json",
+      "selector": "/threadBindingId",
+      "token": "@wakeflow-scenario-binding-id-45574ba56f"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/WakeflowFixture.json",
+      "selector": "/cwd",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/WakeflowFixture.json",
+      "selector": "/generatedAt",
+      "token": "@wakeflow-scenario-time-4b8eaab1c2"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/WakeflowFixture.json",
+      "selector": "/responsibilityRoot",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/WakeflowFixture.json",
+      "selector": "/threadBindingId",
+      "token": "@wakeflow-scenario-binding-id-4b39dc60d4"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/target-results/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+      "selector": "/reportedAt",
+      "token": "@wakeflow-scenario-time-b80cab9456"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/target-results/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+      "selector": "/wakeflowTrace/createdAt",
+      "token": "@wakeflow-scenario-time-773b3753e8"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/target-results/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json",
+      "selector": "/wakeflowTrace/root",
+      "token": "@wakeflow-scenario-sandbox-root"
+    }
+  ],
+  "outputManifest": {
+    "artifactKind": "wakeflow-loaded-artifact-tree",
+    "fileCount": 21,
+    "files": [
+      {
+        "bytes": 4064,
+        "digest": "sha256:9919d2712dc0c43e5ed68505c7c4ac8a96e4430e06d6ca714985abd9b04bdb2f",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/controller-events.jsonl"
+      },
+      {
+        "bytes": 673,
+        "digest": "sha256:a07fdae57d02c9e561b6d68c2491e36fd986e1a72653484059ac3a03cc6a5c72",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/demand.json"
+      },
+      {
+        "bytes": 1464,
+        "digest": "sha256:e19a1cc004817fcd235df1ec9823403079375c83b82636ceea0ae4fc6ae55b0a",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/developer-progress.md"
+      },
+      {
+        "bytes": 1355,
+        "digest": "sha256:17146a1c3654c7e9612614862a1c3ae44b9700e5aa69020b0dcde6d4dd8bf893",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/projection.json"
+      },
+      {
+        "bytes": 2490,
+        "digest": "sha256:25f3731cd11bf8a788cbd1d1ad6111a80b8009614cf8e3c7c22ab4317c43f65e",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/target-results/SCENARIO-RESULT.json"
+      },
+      {
+        "bytes": 596,
+        "digest": "sha256:c931686d7e01d79a5022753ce5677b09872988724eae58a80970b757c0932c60",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/task-packages/SCENARIO-PACKAGE.json"
+      },
+      {
+        "bytes": 1603,
+        "digest": "sha256:0185c1d9aa5cc66bc7e57fb727c49765c4f94391d263bc9cae07e46a2025eae8",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/transition-candidates/@wakeflow-scenario-review-candidate.json"
+      },
+      {
+        "bytes": 3022,
+        "digest": "sha256:deaf7f55e108d34e23786d94d887a345e6fb77ec6c42ea46627975d9ae4d58d9",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/wakeflow-state.json"
+      },
+      {
+        "bytes": 1626,
+        "digest": "sha256:7e967f6d85ff415b01fb133025a547ede4d3d568fbd2556532b8aec4667b5bca",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-active/current/workspace-current-status.md"
+      },
+      {
+        "bytes": 1440,
+        "digest": "sha256:5887e98836d26f56c797c75f74feaa5b30902a9b3aac6af9b58dff1b92d8b554",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-active/index.md"
+      },
+      {
+        "bytes": 6619,
+        "digest": "sha256:26f5fa1346d88a291e0a3e3feeb54d6c8db76d398f04d4faef83b4f673d584c5",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__controller-return-SCENARIO-GROUP__r1.json"
+      },
+      {
+        "bytes": 4922,
+        "digest": "sha256:be7859cc8c808277283ab25157bef90b8c19351989afb409e562505be2e68d79",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__delivery-SCENARIO-GROUP__ProductWindow__SCENARIO--d5353dd0843b.json"
+      },
+      {
+        "bytes": 2167,
+        "digest": "sha256:5dc65f46fad624d489bcd1ccf3f38df39471f8c4e9d8db813a53d37a29ccc667",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-runs/SCENARIO-TRANSPORT__run-controller-return-SCENARIO-GROUP__r1.json"
+      },
+      {
+        "bytes": 2404,
+        "digest": "sha256:ffd0b79dc0ec72db8adcd004e497de8e48aaabb1cc6bf1b7346e628124a0dbfb",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-runs/SCENARIO-TRANSPORT__run-delivery-SCENARIO-GROUP__ProductWindow__SCEN--884ed2c7ad4f.json"
+      },
+      {
+        "bytes": 1293,
+        "digest": "sha256:e4be5f54ff85fd1f11f7e109a59f4dfa2d50a433f66edf342d62c76433797d28",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-groups/SCENARIO-TRANSPORT__SCENARIO-GROUP.json"
+      },
+      {
+        "bytes": 5549,
+        "digest": "sha256:5270c0ec84d529756cc358f8a9db7a992d30337ef8abf56b9e77f5507c241a4e",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-packets/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json"
+      },
+      {
+        "bytes": 325,
+        "digest": "sha256:799bbde52301bf51bad17fbe5790c865d1ee686cffbe360f5be583bb998b7ec1",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/ProductWindow.json"
+      },
+      {
+        "bytes": 327,
+        "digest": "sha256:c243c28e552517805f1f3569166f335f2255a2f9693338dffd26cc50cb74f3f3",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/WakeflowFixture.json"
+      },
+      {
+        "bytes": 962,
+        "digest": "sha256:04a816df81d21c9fb73a8899794081c3fe9427bb5a9f13be6c6f37f07dfb3cae",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/ProductWindow.json"
+      },
+      {
+        "bytes": 938,
+        "digest": "sha256:a37858b9526f592716c418fed06aa50b3d78b2ba8334b11cf74e900816c35131",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/WakeflowFixture.json"
+      },
+      {
+        "bytes": 1720,
+        "digest": "sha256:55ea967ffe61290a9b08ed9ce544138a6cc2786f8677ce4badfbcbafc36aa401",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/target-results/SCENARIO-TRANSPORT__SCENARIO-GROUP__ProductWindow__SCENARIO-TASK.json"
+      }
+    ],
+    "schemaVersion": 1,
+    "totalBytes": 45559
+  },
+  "producer": {
+    "artifactDigest": "sha256:e7e6cb6cd792147cfa94bf76d720d077c439809aed1805aefbafb0c2adc7b335",
+    "sourceCommit": "70d79d720d65837a068993006f356e8de91215d4",
+    "sourceFiles": [
+      {
+        "bytes": 41081,
+        "digest": "sha256:427a21c99e85bf3b6863cdf4d18d410ef0a16480414cc05322f3b15b84812a08",
+        "executable": false,
+        "ref": "scripts/wakeflow-delivery.mjs",
+        "role": "delivery-writer"
+      },
+      {
+        "bytes": 250410,
+        "digest": "sha256:fc0e3116fabafd403494b266cd6f01765455cdfe6827ca6f97cb9343d936a4a4",
+        "executable": false,
+        "ref": "scripts/wakeflow-state.mjs",
+        "role": "state-writer"
+      }
+    ]
+  },
+  "scenarioId": "transport-result-reviewed",
+  "schemaVersion": 1,
+  "scenarioDigest": "sha256:a824342cc98870ee0861306cd3228ced455a9634c40cf2e600c89b3b8a5ad041"
+}

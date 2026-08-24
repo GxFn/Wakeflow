@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "resultId": "SCENARIO-RESULT",
+  "demandKey": "SCENARIO-TRANSPORT",
+  "taskPackageId": "SCENARIO-PACKAGE",
+  "dispatchGroup": "SCENARIO-GROUP",
+  "stateRoot": ".wakeflow-active/current/SCENARIO-TRANSPORT",
+  "targetWindow": "ProductWindow",
+  "targetTaskId": "SCENARIO-TASK",
+  "status": "completed",
+  "summary": "Portable scenario target completed.",
+  "changedRepos": [],
+  "commits": [],
+  "evidenceRefs": [],
+  "verification": [
+    "synthetic focused verification passed"
+  ],
+  "risks": [],
+  "resultMapping": {
+    "contract": "target-result-envelope-v1",
+    "compatibility": "legacy",
+    "status": "legacy-unenforced"
+  },
+  "deliveryContext": {
+    "deliveryId": "delivery-SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+    "deliveryFile": ".wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__delivery-SCENARIO-GROUP__ProductWindow__SCENARIO--d5353dd0843b.json",
+    "deliveryRunId": "run-delivery-SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+    "dispatchGroup": "SCENARIO-GROUP",
+    "deliveryEnvelopeFile": ".wakeflow-local/wakeflow-delivery/delivery-envelopes/SCENARIO-TRANSPORT__delivery-SCENARIO-GROUP__ProductWindow__SCENARIO--d5353dd0843b.json",
+    "deliveryEnvelopeFound": true,
+    "resolution": "controller-return-required",
+    "returnRoute": "controller",
+    "returnPolicy": {
+      "mode": "group-ready"
+    },
+    "controllerWindow": "WakeflowFixture",
+    "controllerReturnRequired": true
+  },
+  "controllerActionRequired": true,
+  "wakeflowTrace": {
+    "kind": "WakeflowTrace",
+    "version": 1,
+    "artifactKind": "target-result",
+    "source": "wakeflow-state",
+    "command": "import-target-result",
+    "root": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+    "stateRoot": ".wakeflow-active/current/SCENARIO-TRANSPORT",
+    "stateRevision": 3,
+    "demandKey": "SCENARIO-TRANSPORT",
+    "taskPackageId": "SCENARIO-PACKAGE",
+    "targetTaskId": "SCENARIO-TASK",
+    "targetWindow": "ProductWindow",
+    "dispatchGroup": "SCENARIO-GROUP",
+    "resultId": "SCENARIO-RESULT",
+    "createdAt": "@wakeflow-scenario-time-70c8321b6f"
+  },
+  "createdAt": "@wakeflow-scenario-time-e7a250a337",
+  "stateRevisionObserved": 3,
+  "forbiddenConclusions": [
+    "target-result-is-controller-acceptance",
+    "target-result-closes-task-package",
+    "target-result-creates-next-dispatch",
+    "target-result-updates-progress-doc-status"
+  ],
+  "currentResult": true,
+  "resultRevision": 1
+}

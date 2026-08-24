@@ -21,6 +21,9 @@
     "test:wakeflow": "node --test test/*.test.mjs",
     "test": "npm run check:core && npm run validate && npm run validate:claude && npm run smoke && npm run smoke:claude && npm run test:wakeflow"
   },
+  "devDependencies": {
+    "ajv": "8.20.0"
+  },
   "engines": {
     "node": ">=20"
   }

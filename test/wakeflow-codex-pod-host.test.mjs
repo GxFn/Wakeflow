@@ -5,15 +5,59 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  codexPodEntryExtras,
+  codexPodCreationObservation,
+  codexPodMaterializationOperation,
   exactCodexRecoveryThread,
   exactCodexProject,
 } from "../plugins/codex-wakeflow/scripts/lib/wakeflow-codex-pod-host.mjs";
-import { hostProfile } from "../plugins/codex-wakeflow/scripts/lib/wakeflow-host-profile.mjs";
+import { canonicalJsonDigest } from "../core/scripts/lib/wakeflow-canonical-json.mjs";
 import {
   handlers as wakeflowHandlers,
   tools as wakeflowTools,
 } from "../core/lib/wakeflow-mcp-tools.mjs";
+
+function candidatePlan({ mode = "host-create", role = "product", root }) {
+  const canonicalRoot = realpathSync.native(root);
+  const launchOperationId = "pod-launch_77000000-0000-4000-8000-000000000001";
+  const unsigned = {
+    kind: "WakeflowPodWindowMaterializationPlan",
+    schemaVersion: 1,
+    mode,
+    programId: "program_11111111-1111-4111-8111-111111111111",
+    demandId: "demand_22000000-0000-4000-8000-000000000001",
+    hostId: "codex",
+    podId: "pod_33000000-0000-4000-8000-000000000001",
+    windowId: "window_55000000-0000-4000-8000-000000000001",
+    bindingId: "binding_66000000-0000-4000-8000-000000000001",
+    configDigest: `sha256:${"1".repeat(64)}`,
+    state: { revision: 2, digest: `sha256:${"2".repeat(64)}` },
+    launchIntent: {
+      ref: `.wakeflow-local/runtime/hosts/codex/evidence/pods/`
+        + `pod_33000000-0000-4000-8000-000000000001/launch-intents/${launchOperationId}.json`,
+      digest: `sha256:${"3".repeat(64)}`,
+    },
+    materialization: { status: mode === "host-recovery" ? "pending" : "creating" },
+    operation: {
+      role,
+      environmentIntent: role === "product" ? "host-worktree" : "host-local",
+      launchOperationId,
+      correlationId: launchOperationId,
+      stateRootRef: ".wakeflow-active/current/demand_22000000-0000-4000-8000-000000000001",
+      ...(role === "product"
+        ? {
+            repositoryId: "repository_22222222-2222-4222-8222-222222222222",
+            repositoryRoot: canonicalRoot,
+            repositorySourceDigest: `sha256:${"4".repeat(64)}`,
+            expectedBaseHead: "0123456789abcdef0123456789abcdef01234567",
+          }
+        : { controlRoot: canonicalRoot }),
+    },
+    requiresHostOperationFence: true,
+    hostCreateAllowed: mode === "host-create",
+    recoveryOnly: mode !== "host-create",
+  };
+  return { ...unsigned, planDigest: canonicalJsonDigest(unsigned) };
+}
 
 test("Codex Pod project resolution requires an exact saved-project root", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-codex-pod-project-"));
@@ -44,76 +88,6 @@ test("Codex Pod project resolution requires an exact saved-project root", () => 
   );
 });
 
-test("Codex Pod product launch uses the exact project and host worktree environment", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-codex-pod-product-"));
-  const repository = path.join(root, "RepoA");
-  mkdirSync(repository);
-
-  const operation = {
-    role: "product",
-    windowName: "RepoA__pod-a",
-    repositoryRoot: repository,
-    expectedBaseHead: "0123456789abcdef0123456789abcdef01234567",
-    environmentIntent: "host-worktree",
-    createPrompt: "Return identity only.",
-    launchCorrelationId: "pod-launch-product",
-    registrationBindingId: "pod-binding-product",
-  };
-  const stateRoot = path.join(root, ".wakeflow-active/current/pod-a");
-  const extras = codexPodEntryExtras(operation, { workspaceRoot: root, stateRoot });
-
-  assert.equal(extras.codexProjectResolution.exactPath, realpathSync.native(repository));
-  assert.equal(extras.codexProjectResolution.parentProjectFallback, false);
-  assert.equal(extras.codexProjectResolution.localEnvironmentFallback, false);
-  assert.deepEqual(extras.hostCreateThread.targetTemplate.environment, {
-    type: "worktree",
-    startingState: {
-      type: "branch",
-      branchName: operation.expectedBaseHead,
-    },
-  });
-  assert.equal(extras.hostCreateThread.asynchronousHandlePolicy.rejectClientThreadId, true);
-  assert.equal(extras.hostCreateThread.asynchronousHandlePolicy.registerOnlyFinalThreadId, true);
-  assert.deepEqual(extras.hostCreateThread.materializationProtocol, {
-    recordTool: "wakeflow_pod_record",
-    recordEvent: "materialization",
-    beforeCreateStatus: "creating",
-    asynchronousStatus: "pending",
-    finalStatus: "finalized",
-    hostRequestIdField: "create_thread.clientThreadId",
-    recoveryTool: "list_threads",
-    recoveryListArguments: {
-      limit: 50,
-    },
-    recoveryMatch: {
-      field: "preview",
-      marker: `Wakeflow launch correlation: ${operation.launchCorrelationId}`,
-      cardinality: "exactly-one",
-      zeroMatches: "wait-or-block-without-create",
-      multipleMatches: "block-without-finalize",
-    },
-    optionalQueryOptimization: {
-      useOnlyWhenHostSchemaSupportsIt: true,
-      required: false,
-      query: operation.launchCorrelationId,
-    },
-    searchBeforeCreate: true,
-    noBlindRetry: true,
-    temporaryHandleRegistrationForbidden: true,
-  });
-  assert.equal(extras.entrySync.taskDispatchAllowed, false);
-  assert.equal("cwd" in extras.hostCreateThread, false);
-  assert.deepEqual(extras.localRegistration.callTemplate, {
-    root,
-    window: operation.windowName,
-    windowHandle: "<create_thread.threadId>",
-    launchCorrelationId: operation.launchCorrelationId,
-    bindingId: operation.registrationBindingId,
-    stateRoot: ".wakeflow-active/current/pod-a",
-    apply: true,
-  });
-});
-
 test("Codex Pod recovery uses a bounded list preview and finalizes only one exact correlation match", () => {
   const launchCorrelationId = "pod-launch-exact";
   const exact = {
@@ -130,7 +104,7 @@ test("Codex Pod recovery uses a bounded list preview and finalizes only one exac
     ],
   };
 
-  assert.equal(exactCodexRecoveryThread(response, launchCorrelationId), exact);
+  assert.deepEqual(exactCodexRecoveryThread(response, launchCorrelationId), exact);
   for (const threads of [
     [],
     [exact, { ...exact, threadId: "33333333-3333-3333-3333-333333333333" }],
@@ -145,41 +119,151 @@ test("Codex Pod recovery uses a bounded list preview and finalizes only one exac
   }
 });
 
-test("Codex Pod control roles are separate local sessions in the control project", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-codex-pod-control-"));
-  const operations = ["controller", "design", "test"].map((role) => ({
-    role,
-    windowName: `${role}__pod-a`,
-    environmentIntent: "host-local",
-    createPrompt: `Initialize ${role}.`,
-    launchCorrelationId: `pod-launch-${role}`,
-    registrationBindingId: `pod-binding-${role}`,
-  }));
-
-  for (const operation of operations) {
-    const extras = hostProfile.pod.entryExtras(operation, { workspaceRoot: root });
-    assert.equal(extras.codexProjectResolution.exactPath, realpathSync.native(root));
-    assert.deepEqual(extras.hostCreateThread.targetTemplate.environment, { type: "local" });
-    assert.equal(extras.entrySync.stateRootScope, "current-pod-only");
-    assert.equal(extras.entrySync.taskDispatchAllowed, false);
-  }
-});
-
-test("Codex Pod product intents fail before host creation without a frozen base HEAD", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-codex-pod-head-"));
+test("Codex candidate materialization searches before create and consumes the exact v3 plan", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-codex-pod-candidate-"));
+  const repository = path.join(root, "RepoA");
+  mkdirSync(repository);
+  const plan = candidatePlan({ root: repository });
+  const projectResponse = {
+    projects: [{ projectId: "repo-project", projectKind: "local", path: repository }],
+  };
+  const create = codexPodMaterializationOperation(plan, {
+    projectResponse,
+    threadResponse: { threads: [] },
+  });
+  assert.equal(create.mode, "create");
+  assert.equal(create.searchBeforeCreate, true);
+  assert.deepEqual(create.createThread.target.environment, {
+    type: "worktree",
+    startingState: { type: "branch", branchName: plan.operation.expectedBaseHead },
+  });
+  assert.match(create.createThread.prompt, new RegExp(plan.operation.correlationId));
+  assert.equal(Object.isFrozen(create.createThread.target.environment), true);
   assert.throws(
-    () => codexPodEntryExtras({
-      role: "product",
-      windowName: "RepoA__pod-a",
-      repositoryRoot: root,
-      environmentIntent: "host-worktree",
-      registrationBindingId: "pod-binding-product",
-    }, { workspaceRoot: root }),
-    /missing expectedBaseHead/,
+    () => codexPodMaterializationOperation(plan, { projectResponse }),
+    (error) => error?.code === "search-before-create-required",
+  );
+
+  const existing = codexPodMaterializationOperation(plan, {
+    projectResponse,
+    threadResponse: {
+      threads: [{
+        threadId: "11111111-1111-4111-8111-111111111111",
+        preview: `Wakeflow launch correlation: ${plan.operation.correlationId}`,
+      }],
+    },
+  });
+  assert.equal(existing.mode, "observe-existing");
+  assert.equal(existing.createAllowed, false);
+  assert.equal("createThread" in existing, false);
+
+  const controlPlan = candidatePlan({ role: "controller", root });
+  const control = codexPodMaterializationOperation(controlPlan, {
+    projectResponse: {
+      projects: [{ projectId: "control-project", projectKind: "local", path: root }],
+    },
+    threadResponse: { threads: [] },
+  });
+  assert.deepEqual(control.createThread.target.environment, { type: "local" });
+
+  assert.throws(
+    () => codexPodMaterializationOperation({ ...plan, windowId: "tampered" }, {
+      projectResponse,
+      threadResponse: { threads: [] },
+    }),
+    (error) => error?.code === "invalid-materialization-plan",
+  );
+  const recovery = candidatePlan({ mode: "host-recovery", root: repository });
+  assert.throws(
+    () => codexPodMaterializationOperation(recovery, { threadResponse: { threads: [] } }),
+    (error) => error?.code === "recovery-not-found",
+  );
+
+  const { planDigest: _planDigest, ...missingHeadUnsigned } = plan;
+  missingHeadUnsigned.operation = { ...missingHeadUnsigned.operation };
+  delete missingHeadUnsigned.operation.expectedBaseHead;
+  const missingHead = {
+    ...missingHeadUnsigned,
+    planDigest: canonicalJsonDigest(missingHeadUnsigned),
+  };
+  assert.throws(
+    () => codexPodMaterializationOperation(missingHead, {
+      projectResponse,
+      threadResponse: { threads: [] },
+    }),
+    (error) => error?.code === "invalid-materialization-plan",
   );
 });
 
-test("the MCP surface exposes the two-stage Pod protocol and explicit placement inputs", () => {
+test("Codex candidate observation keeps clientThreadId transient and returns only final identity plus cwd", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-codex-pod-observation-"));
+  const plan = candidatePlan({ root });
+  const pending = codexPodCreationObservation(plan, {
+    clientThreadId: "temporary-client-thread-id",
+  });
+  assert.deepEqual(pending, {
+    status: "pending",
+    hostRequestId: "temporary-client-thread-id",
+  });
+  const finalized = codexPodCreationObservation(plan, {
+    clientThreadId: "must-not-survive-finalization",
+    threadId: "22222222-2222-4222-8222-222222222222",
+    actualCwd: root,
+    hostCreatedAt: "2026-08-09T03:00:00.000Z",
+  });
+  assert.deepEqual(finalized, {
+    status: "finalized",
+    handle: {
+      kind: "codex-thread",
+      value: "22222222-2222-4222-8222-222222222222",
+    },
+    observation: {
+      actualCwd: realpathSync.native(root),
+      hostCreatedAt: "2026-08-09T03:00:00.000Z",
+    },
+  });
+  assert.equal(JSON.stringify(finalized).includes("client-thread"), false);
+});
+
+test("Codex Pod host rejects behavioral plans and host observations without executing accessors", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "wakeflow-codex-pod-passive-"));
+  const plan = candidatePlan({ root });
+  let planKindReads = 0;
+  const behavioralPlan = { ...plan };
+  Object.defineProperty(behavioralPlan, "kind", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      planKindReads += 1;
+      return plan.kind;
+    },
+  });
+  assert.throws(
+    () => codexPodMaterializationOperation(behavioralPlan, { threadResponse: { threads: [] } }),
+    (error) => error?.code === "invalid-materialization-plan",
+  );
+  assert.equal(planKindReads, 0);
+
+  let threadIdReads = 0;
+  const thread = {
+    preview: `Wakeflow launch correlation: ${plan.operation.correlationId}`,
+  };
+  Object.defineProperty(thread, "threadId", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      threadIdReads += 1;
+      return "11111111-1111-4111-8111-111111111111";
+    },
+  });
+  assert.throws(
+    () => codexPodMaterializationOperation(plan, { threadResponse: { threads: [thread] } }),
+    (error) => error?.code === "invalid-host-observation",
+  );
+  assert.equal(threadIdReads, 0);
+});
+
+test("the public MCP surface exposes the state-first Pod operation families", () => {
   const toolsByName = new Map(wakeflowTools.map((tool) => [tool.name, tool]));
   for (const name of [
     "wakeflow_pod_open",
@@ -202,148 +286,71 @@ test("the MCP surface exposes the two-stage Pod protocol and explicit placement 
     assert.equal(toolsByName.has(retired), false, `${retired} is not public`);
   }
 
-  const createProperties = toolsByName.get("wakeflow_create_demand").inputSchema.properties;
-  assert.deepEqual(createProperties.placement.enum, ["main", "pod"]);
-  assert.ok(createProperties.authorizationRef);
-  assert.ok(createProperties.podId);
-
-  const open = toolsByName.get("wakeflow_pod_open");
-  assert.deepEqual(open.inputSchema.required, ["demandKey"]);
-  assert.deepEqual(
-    open.inputSchema.properties.repositories.items.required,
-    ["windowName", "expectedBaseHead"],
-  );
-  assert.equal(
-    /worktree.*thread|thread.*worktree/i.test(open.description)
-      && /never creates/i.test(open.description),
-    true,
-  );
-
-  const plan = toolsByName.get("wakeflow_pod_plan");
-  assert.deepEqual(plan.inputSchema.required, ["action"]);
-  assert.deepEqual(plan.inputSchema.properties.action.enum, [
-    "design-request",
-    "test-access",
-    "close",
-  ]);
-  for (const field of ["root", "action", "demandKey", "request", "apply"]) {
-    assert.ok(plan.inputSchema.properties[field], `wakeflow_pod_plan exposes ${field}`);
-  }
-  assert.deepEqual(plan.inputSchema.properties.request.required, [
-    "demandKey",
-    "podId",
-    "demandType",
-    "requestType",
-    "originalGoal",
-    "requirementAnchors",
-    "codeEvidenceRefs",
-    "pausedTargetIdentity",
-    "pausedReviewIdentity",
-    "nonGoals",
-    "decisionsRequired",
-  ]);
-  const planBranches = new Map(
-    plan.inputSchema.oneOf.map((branch) => [branch.properties.action.const, branch]),
-  );
-  assert.deepEqual(planBranches.get("design-request").required, ["request"]);
-  assert.deepEqual(planBranches.get("test-access").required, ["demandKey"]);
-  assert.deepEqual(planBranches.get("close").required, ["demandKey"]);
-
-  const record = toolsByName.get("wakeflow_pod_record");
-  assert.deepEqual(record.inputSchema.required, ["event"]);
-  assert.deepEqual(record.inputSchema.properties.event.enum, [
-    "materialization",
-    "design-handoff",
-    "test-access",
-    "close-receipt",
-  ]);
-  for (const field of ["root", "event", "attempt", "handoff", "receipt", "apply"]) {
-    assert.ok(record.inputSchema.properties[field], `wakeflow_pod_record exposes ${field}`);
-  }
-  assert.deepEqual(record.inputSchema.properties.attempt.required, [
-    "launchCorrelationId",
-    "host",
-    "status",
-    "observedAt",
-  ]);
-  const recordBranches = new Map(
-    record.inputSchema.oneOf.map((branch) => [branch.properties.event.const, branch]),
-  );
-  assert.deepEqual(recordBranches.get("materialization").required, ["attempt"]);
-  assert.deepEqual(recordBranches.get("design-handoff").required, ["handoff"]);
-  assert.deepEqual(recordBranches.get("test-access").required, ["receipt"]);
-  assert.deepEqual(recordBranches.get("close-receipt").required, ["receipt"]);
-  assert.deepEqual(
-    ["test-access", "close-receipt"].map(
-      (event) => recordBranches.get(event).properties.receipt.required,
-    ),
-    [
-      [
-        "probeId",
-        "demandKey",
-        "podId",
-        "host",
-        "testWindowName",
-        "testBindingId",
-        "status",
-        "capability",
-        "observedAt",
-      ],
-      [
-        "closeCorrelationId",
-        "bindingId",
-        "windowName",
-        "host",
-        "sessionStatus",
-        "worktreeStatus",
-        "confirmedAt",
-      ],
+  const operations = {
+    wakeflow_pod_open: [
+      "inspect-materialization",
+      "plan-materialization",
+      "launch-preview",
+      "launch-apply",
+      "product-preview",
+      "product-apply",
     ],
-  );
+    wakeflow_pod_record: [
+      "record-materialization",
+      "design-handoff",
+      "test-access-observe",
+      "test-access-receipt",
+      "close-observe",
+      "close-receipt",
+    ],
+    wakeflow_pod_bind: ["creation-receipt", "binding-decommission"],
+    wakeflow_pod_plan: [
+      "design-request",
+      "test-access-plan",
+      "test-access-inspect",
+      "close-intent",
+      "close-inspect",
+    ],
+  };
+  for (const [name, expectedOperations] of Object.entries(operations)) {
+    const tool = toolsByName.get(name);
+    assert.deepEqual(tool.inputSchema.required, ["root", "operation", "request"]);
+    assert.deepEqual(Object.keys(tool.inputSchema.properties), ["root", "demandId", "operation", "request"]);
+    assert.deepEqual(tool.inputSchema.properties.operation.enum, expectedOperations);
+    assert.equal(tool.inputSchema.additionalProperties, false);
+  }
+  assert.match(toolsByName.get("wakeflow_pod_open").description, /without performing a host effect/);
 });
 
-test("consolidated Pod routers reject payloads from another action or event", () => {
-  assert.throws(
+test("public Pod routers reject retired flattened action and event payloads", async () => {
+  const calls = [
     () => wakeflowHandlers.wakeflow_pod_plan({
       action: "design-request",
       request: {},
       demandKey: "wrong-branch",
     }),
-    /action=design-request does not accept demandKey/,
-  );
-  assert.throws(
     () => wakeflowHandlers.wakeflow_pod_plan({
       action: "test-access",
       request: {},
     }),
-    /action=test-access does not accept request/,
-  );
-  assert.throws(
     () => wakeflowHandlers.wakeflow_pod_record({
       event: "materialization",
       attempt: {},
       receipt: {},
     }),
-    /event=materialization does not accept receipt/,
-  );
-  assert.throws(
     () => wakeflowHandlers.wakeflow_pod_record({ event: "unknown" }),
-    /unknown event/,
-  );
-  assert.throws(
     () => wakeflowHandlers.wakeflow_pod_plan({
       action: "close",
       event: "close-receipt",
       demandKey: "pod-a",
     }),
-    /action=close does not accept event/,
-  );
-  assert.throws(
     () => wakeflowHandlers.wakeflow_pod_record({
       event: "close-receipt",
       action: "close",
       receipt: {},
     }),
-    /event=close-receipt does not accept action/,
-  );
+  ];
+  for (const call of calls) {
+    await assert.rejects(call(), (error) => error?.code === "wakeflow-public-mcp-domain");
+  }
 });

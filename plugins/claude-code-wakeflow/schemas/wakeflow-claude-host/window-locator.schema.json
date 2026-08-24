@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:claude-window-locator:v1",
+  "title": "Wakeflow Claude Window Locator",
+  "description": "Strict Claude-only current pointer from one stable Wakeflow window identity to one exact tmux window and pane generation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "programId",
+    "hostId",
+    "windowId",
+    "bindingId",
+    "locatorId",
+    "provider",
+    "tmux",
+    "locatedAt"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "WakeflowClaudeWindowLocator"
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "hostId": {
+      "type": "string",
+      "const": "claude-code"
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "bindingId": {
+      "type": "string",
+      "pattern": "^binding_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "locatorId": {
+      "type": "string",
+      "pattern": "^locator_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "provider": {
+      "type": "string",
+      "const": "tmux"
+    },
+    "tmux": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "socketName",
+        "sessionName",
+        "windowId",
+        "paneId"
+      ],
+      "properties": {
+        "socketName": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/socketName"
+            }
+          ]
+        },
+        "sessionName": {
+          "$ref": "#/$defs/sessionName"
+        },
+        "windowId": {
+          "type": "string",
+          "pattern": "^@[0-9]+$"
+        },
+        "paneId": {
+          "type": "string",
+          "pattern": "^%[0-9]+$"
+        }
+      }
+    },
+    "locatedAt": {
+      "$ref": "#/$defs/strictUtcTimestamp"
+    }
+  },
+  "$defs": {
+    "socketName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^(?!\\.\\.?$)(?![\\s\\S]*[\\/\\\\\\u0000-\\u001f\\u007f-\\u009f])[A-Za-z0-9._-]+$"
+    },
+    "sessionName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^(?!\\s)(?![\\s\\S]*[\\u0000-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$"
+    },
+    "strictUtcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+    }
+  }
+}

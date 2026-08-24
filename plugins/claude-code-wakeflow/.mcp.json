@@ -2,10 +2,7 @@
   "mcpServers": {
     "wakeflow": {
       "command": "${CLAUDE_PLUGIN_ROOT}/bin/wakeflow-mcp",
-      "args": [],
-      "env": {
-        "WAKEFLOW_DEFAULT_ROOT": "${CLAUDE_PROJECT_DIR}"
-      }
+      "args": []
     }
   }
 }

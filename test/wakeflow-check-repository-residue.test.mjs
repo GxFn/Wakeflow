@@ -1,79 +1,109 @@
-#!/usr/bin/env node
-
 import assert from "node:assert/strict";
-import { runSync } from "../plugins/codex-wakeflow/lib/wakeflow-process.mjs";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import os from "node:os";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-const workspaceRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../plugins/codex-wakeflow");
-const checkScript = path.join(workspaceRoot, "scripts/wakeflow-check-repository-residue.mjs");
+import { WAKEFLOW_RETIRED_NORMAL_RUNTIME_PATHS } from "./support/wakeflow-m7a-boundary.mjs";
 
-function writeFile(file, content) {
-  mkdirSync(path.dirname(file), { recursive: true });
-  writeFileSync(file, `${content.trimEnd()}\n`);
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+const liveDocumentationRoots = Object.freeze([
+  "README.md",
+  "README.zh-CN.md",
+  "core/skills",
+  "plugins/codex-wakeflow/AGENTS.md",
+  "plugins/codex-wakeflow/README.md",
+  "plugins/codex-wakeflow/README.zh-CN.md",
+  "plugins/codex-wakeflow/scripts/README.md",
+  "plugins/codex-wakeflow/skills",
+  "plugins/claude-code-wakeflow/CLAUDE.md",
+  "plugins/claude-code-wakeflow/README.md",
+  "plugins/claude-code-wakeflow/README.zh-CN.md",
+  "plugins/claude-code-wakeflow/commands",
+  "plugins/claude-code-wakeflow/scripts/README.md",
+  "plugins/claude-code-wakeflow/skills",
+]);
+
+function slash(value) {
+  return value.split(path.sep).join("/");
 }
 
-function makeFixture() {
-  const root = mkdtempSync(path.join(os.tmpdir(), "repository-residue-"));
-  writeFile(
-    path.join(root, "wakeflow.config.json"),
-    JSON.stringify(
-      {
-        repositories: [
-          { windowName: "AppWindow", path: "../App", role: "App" },
-          { windowName: "PluginWindow", path: "../Plugin", role: "Plugin" },
-          { windowName: "RealProject", path: "../RealProject", role: "Real project" },
-        ],
-      },
-      null,
-      2
-    )
-  );
-
-  const parent = path.dirname(root);
-  writeFile(path.join(parent, "App/.asd/logs/combined.log"), "");
-  writeFile(path.join(parent, "App/.cursor/skills/demo/SKILL.md"), "# Demo");
-  writeFile(path.join(parent, "Plugin/.agents/plugins/marketplace.json"), "{}");
-  writeFile(path.join(parent, "RealProject/.agents/skills/demo/SKILL.md"), "# Demo");
-  writeFile(path.join(parent, "RealProject/.agents/.DS_Store"), "noise");
-  return root;
+function collectMarkdownFiles(target, files = []) {
+  if (!existsSync(target)) return files;
+  const stats = statSync(target);
+  if (stats.isFile()) {
+    if (target.endsWith(".md")) files.push(target);
+    return files;
+  }
+  for (const entry of readdirSync(target, { withFileTypes: true })) {
+    const child = path.join(target, entry.name);
+    if (entry.isDirectory()) collectMarkdownFiles(child, files);
+    else if (entry.isFile() && entry.name.endsWith(".md")) files.push(child);
+  }
+  return files;
 }
 
-function run(root, extraArgs = []) {
-  return runSync(process.execPath, [checkScript, "--root", root, "--json", ...extraArgs], {
-    encoding: "utf8",
-  });
+function collectCurrentSourceBasenames(target, basenames = new Set()) {
+  if (!existsSync(target)) return basenames;
+  for (const entry of readdirSync(target, { withFileTypes: true })) {
+    const child = path.join(target, entry.name);
+    if (entry.isDirectory()) collectCurrentSourceBasenames(child, basenames);
+    else if (entry.isFile() && /\.(?:cjs|js|mjs)$/u.test(entry.name)) basenames.add(entry.name);
+  }
+  return basenames;
 }
 
-test("detects source repository runtime residue without flagging marketplace metadata", () => {
-  const root = makeFixture();
-  const result = run(root);
-  assert.notEqual(result.status, 0);
-  const parsed = JSON.parse(result.stdout);
-  assert.equal(parsed.ok, false);
-  assert.deepEqual(
-    parsed.residue.map((entry) => `${entry.windowName}:${entry.relPath}`).sort(),
-    [
-      "AppWindow:.asd",
-      "AppWindow:.cursor/skills",
-      "RealProject:.agents/.DS_Store",
-      "RealProject:.agents/skills",
-    ]
-  );
+test("live Wakeflow documentation does not advertise a retired normal-runtime entrypoint", () => {
+  const liveFiles = liveDocumentationRoots
+    .flatMap((relativePath) => collectMarkdownFiles(path.join(repositoryRoot, relativePath)))
+    .map((file) => path.resolve(file))
+    .filter((file, index, files) => files.indexOf(file) === index)
+    .sort();
+  assert.ok(liveFiles.length > 0);
+
+  const currentSourceBasenames = collectCurrentSourceBasenames(path.join(repositoryRoot, "core"));
+  collectCurrentSourceBasenames(path.join(repositoryRoot, "plugins/codex-wakeflow"), currentSourceBasenames);
+  collectCurrentSourceBasenames(path.join(repositoryRoot, "plugins/claude-code-wakeflow"), currentSourceBasenames);
+
+  const unambiguousRetiredBasenames = [...new Set(
+    WAKEFLOW_RETIRED_NORMAL_RUNTIME_PATHS.map((relativePath) => path.posix.basename(relativePath)),
+  )]
+    .filter((basename) => !currentSourceBasenames.has(basename))
+    .sort();
+  const issues = [];
+
+  for (const file of liveFiles) {
+    const source = readFileSync(file, "utf8");
+    const relativeFile = slash(path.relative(repositoryRoot, file));
+    for (const retiredPath of WAKEFLOW_RETIRED_NORMAL_RUNTIME_PATHS) {
+      if (source.includes(retiredPath)) issues.push(`${relativeFile}: exact retired path ${retiredPath}`);
+    }
+    for (const basename of unambiguousRetiredBasenames) {
+      if (source.includes(basename)) issues.push(`${relativeFile}: retired entrypoint ${basename}`);
+    }
+  }
+
+  assert.deepEqual(issues, []);
 });
 
-test("--fix removes untracked residue and empty parents", () => {
-  const root = makeFixture();
-  const parent = path.dirname(root);
-  const result = run(root, ["--fix"]);
-  assert.equal(result.status, 0, result.stdout);
-  const parsed = JSON.parse(result.stdout);
-  assert.equal(parsed.ok, true);
-  assert.equal(parsed.fixed.length, 6);
-  assert.equal(existsSync(path.join(parent, "App/.asd")), false);
-  assert.equal(existsSync(path.join(parent, "App/.cursor")), false);
-  assert.equal(existsSync(path.join(parent, "RealProject/.agents")), false);
-  assert.equal(existsSync(path.join(parent, "Plugin/.agents/plugins/marketplace.json")), true);
+test("packaged script catalogs enumerate only the current bounded top-level files", () => {
+  const expected = Object.freeze([
+    "wakeflow-bootstrap.mjs",
+    "wakeflow-cli.mjs",
+    "wakeflow-core-manifest.json",
+    "wakeflow-setup.mjs",
+    "wakeflow-smoke.mjs",
+    "wakeflow-validate.mjs",
+  ]);
+
+  for (const edition of ["codex-wakeflow", "claude-code-wakeflow"]) {
+    const scriptsRoot = path.join(repositoryRoot, "plugins", edition, "scripts");
+    const actual = readdirSync(scriptsRoot)
+      .filter((name) => /\.(?:json|mjs)$/u.test(name))
+      .sort();
+    assert.deepEqual(actual, expected, edition);
+    const readme = readFileSync(path.join(scriptsRoot, "README.md"), "utf8");
+    for (const name of expected) assert.match(readme, new RegExp(`\\b${name.replaceAll(".", "\\.")}\\b`, "u"));
+  }
 });

@@ -1,0 +1,223 @@
+{
+  "artifactKind": "wakeflow-legacy-lifecycle-scenario",
+  "beforeManifest": null,
+  "category": "claude-window-operation",
+  "commandSequence": [
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/lib/wakeflow-claude-host.mjs",
+        "launch-window",
+        "--root",
+        "<workspace-root>",
+        "--server",
+        "<isolated-tmux-session>",
+        "--window",
+        "ProductWindow",
+        "--cwd",
+        "<product-root>",
+        "--prompt-file",
+        "<entry-prompt-file>"
+      ],
+      "stepId": "launch-window"
+    },
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/lib/wakeflow-claude-host.mjs",
+        "deliver",
+        "--root",
+        "<workspace-root>",
+        "--delivery-file",
+        "<delivery-envelope-file>"
+      ],
+      "stepId": "deliver"
+    },
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/lib/wakeflow-claude-host.mjs",
+        "readback",
+        "--root",
+        "<workspace-root>",
+        "--window",
+        "ProductWindow"
+      ],
+      "stepId": "readback"
+    }
+  ],
+  "deltaEntries": [
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host"
+    },
+    {
+      "afterBytes": 1564,
+      "afterDigest": "sha256:0ff6c11da93e22eaaa13562d84274316dc9beab32bb87af51b1ea4dfd2d43631",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/ProductWindow.json"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/locks"
+    },
+    {
+      "afterBytes": 322,
+      "afterDigest": "sha256:df2c964b04991f195ff035248bc03facf90c107239d7e704fc10544ef5b87d4b",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/locks/ProductWindow.json"
+    }
+  ],
+  "host": "claude-code",
+  "materializationMode": "real-writer",
+  "normalizations": [
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/ProductWindow.json",
+      "selector": "/bindingId",
+      "token": "@wakeflow-scenario-binding-id-710ab3c112"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/ProductWindow.json",
+      "selector": "/createdAt",
+      "token": "@wakeflow-scenario-time-145ca0cbe9"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/ProductWindow.json",
+      "selector": "/cwd",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/ProductWindow.json",
+      "selector": "/hostReceipt/actualCwd",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/ProductWindow.json",
+      "selector": "/hostReceipt/bindingId",
+      "token": "@wakeflow-scenario-binding-id-710ab3c112"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/ProductWindow.json",
+      "selector": "/hostReceipt/createdAt",
+      "token": "@wakeflow-scenario-time-1ad6315598"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/ProductWindow.json",
+      "selector": "/hostReceipt/observedAt",
+      "token": "@wakeflow-scenario-time-204d52eed2"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/ProductWindow.json",
+      "selector": "/observedAt",
+      "token": "@wakeflow-scenario-time-73f9d6f2de"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/ProductWindow.json",
+      "selector": "/threadId",
+      "token": "@wakeflow-scenario-thread-id-c72d387fec"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/ProductWindow.json",
+      "selector": "/tmux/session",
+      "token": "@wakeflow-scenario-session-e587a01a3e"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/ProductWindow.json",
+      "selector": "/tmux/windowId",
+      "token": "@wakeflow-scenario-window-id-eefe7c34ad"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/locks/ProductWindow.json",
+      "selector": "/createdAt",
+      "token": "@wakeflow-scenario-time-0c97081bcf"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/locks/ProductWindow.json",
+      "selector": "/expiresAt",
+      "token": "@wakeflow-scenario-time-6d85630f21"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/locks/ProductWindow.json",
+      "selector": "/leaseId",
+      "token": "@wakeflow-scenario-lease-id-98e49d96b4"
+    }
+  ],
+  "outputManifest": {
+    "artifactKind": "wakeflow-loaded-artifact-tree",
+    "fileCount": 2,
+    "files": [
+      {
+        "bytes": 1564,
+        "digest": "sha256:0ff6c11da93e22eaaa13562d84274316dc9beab32bb87af51b1ea4dfd2d43631",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/ProductWindow.json"
+      },
+      {
+        "bytes": 322,
+        "digest": "sha256:df2c964b04991f195ff035248bc03facf90c107239d7e704fc10544ef5b87d4b",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/locks/ProductWindow.json"
+      }
+    ],
+    "schemaVersion": 1,
+    "totalBytes": 1886
+  },
+  "producer": {
+    "artifactDigest": "sha256:27bc8cc23a863c1e96ccc1631b5f78236471e13d5605ab69796d0089fc192e6f",
+    "sourceCommit": "70d79d720d65837a068993006f356e8de91215d4",
+    "sourceFiles": [
+      {
+        "bytes": 158298,
+        "digest": "sha256:f2c2d01310b4716d3d0252e03dd4f7f8b29c8fa8f07489ce654496c02c2d7e86",
+        "executable": false,
+        "ref": "scripts/lib/wakeflow-claude-host.mjs",
+        "role": "host-operation-writer"
+      }
+    ]
+  },
+  "scenarioId": "claude-window-operation",
+  "schemaVersion": 1,
+  "scenarioDigest": "sha256:3967dfa2baa648eb4ee39a13d8a9d424745fc17c50b94b95c4e3e0fdc0146115"
+}

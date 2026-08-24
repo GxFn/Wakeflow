@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:coordination:window-lease:v1",
+  "title": "Wakeflow Window Coordination Lease",
+  "description": "Strict shared lease binding one stable Wakeflow window and, for product work, its derived main-checkout claim to one exact delivery and identity generation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "programId",
+    "hostId",
+    "windowId",
+    "leaseId",
+    "demandId",
+    "targetTaskId",
+    "groupId",
+    "groupRef",
+    "groupDigest",
+    "deliveryId",
+    "envelopeRef",
+    "envelopeDigest",
+    "identityRef",
+    "bindingId",
+    "identityBindingDigest",
+    "acquiredAt",
+    "expiresAt",
+    "leaseDigest"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "wakeflow-window-coordination-lease"
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "programId": {
+      "$ref": "#/$defs/programId"
+    },
+    "hostId": {
+      "type": "string",
+      "enum": [
+        "codex",
+        "claude-code"
+      ]
+    },
+    "windowId": {
+      "$ref": "#/$defs/windowId"
+    },
+    "leaseId": {
+      "$ref": "#/$defs/leaseId"
+    },
+    "demandId": {
+      "$ref": "#/$defs/demandId"
+    },
+    "targetTaskId": {
+      "$ref": "#/$defs/targetTaskId"
+    },
+    "groupId": {
+      "$ref": "#/$defs/groupId"
+    },
+    "groupRef": {
+      "type": "string",
+      "pattern": "^\\.wakeflow-local/runtime/shared/transport/demands/demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/groups/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.json$"
+    },
+    "groupDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "deliveryId": {
+      "$ref": "#/$defs/deliveryId"
+    },
+    "envelopeRef": {
+      "type": "string",
+      "pattern": "^\\.wakeflow-local/runtime/shared/transport/demands/demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/envelopes/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.json$"
+    },
+    "envelopeDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "identityRef": {
+      "type": "string",
+      "pattern": "^\\.wakeflow-local/runtime/hosts/(?:codex|claude-code)/identity/window-bindings/window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+    },
+    "bindingId": {
+      "$ref": "#/$defs/bindingId"
+    },
+    "identityBindingDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "repositoryId": {
+      "$ref": "#/$defs/repositoryId"
+    },
+    "checkoutResourceKey": {
+      "type": "string",
+      "pattern": "^main:repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "acquiredAt": {
+      "$ref": "#/$defs/strictUtcTimestamp"
+    },
+    "expiresAt": {
+      "$ref": "#/$defs/strictUtcTimestamp"
+    },
+    "leaseDigest": {
+      "$ref": "#/$defs/digest"
+    }
+  },
+  "dependentRequired": {
+    "repositoryId": [
+      "checkoutResourceKey"
+    ],
+    "checkoutResourceKey": [
+      "repositoryId"
+    ]
+  },
+  "$defs": {
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetTaskId": {
+      "type": "string",
+      "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "leaseId": {
+      "type": "string",
+      "pattern": "^lease_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "bindingId": {
+      "type": "string",
+      "pattern": "^binding_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "groupId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "deliveryId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "repositoryId": {
+      "type": "string",
+      "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "strictUtcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$",
+      "description": "Explicit UTC RFC 3339 timestamp; runtime validation also rejects impossible calendar dates and non-increasing lease bounds."
+    }
+  }
+}

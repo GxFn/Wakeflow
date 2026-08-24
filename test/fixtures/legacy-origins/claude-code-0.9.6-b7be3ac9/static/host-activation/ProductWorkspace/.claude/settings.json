@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(node *)",
+      "Bash(tmux *)",
+      "mcp__plugin_wakeflow_wakeflow"
+    ],
+    "additionalDirectories": []
+  }
+}

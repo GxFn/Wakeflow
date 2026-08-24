@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "demandKey": "SCENARIO-POD",
+  "title": "Scenario Pod",
+  "interfaceLanguage": "en",
+  "controllerHost": "claude-code",
+  "controllerWindow": "Controller__SCENARIO-POD",
+  "demandType": "requirement",
+  "testDecision": "No real project test; local fixture only.",
+  "state": "planned",
+  "stateReason": "pod-provisioning-execution-ready",
+  "revision": 9,
+  "activeStageId": null,
+  "updatedAt": "@wakeflow-scenario-time-b6c6fb69e4",
+  "allowedActions": [],
+  "blockers": [],
+  "decisionsRequired": [],
+  "stages": [],
+  "taskPackages": [],
+  "targetTasks": [],
+  "windows": [],
+  "review": {
+    "status": "none",
+    "readyResultIds": [],
+    "blockedResultIds": [],
+    "missingResultIds": []
+  },
+  "automation": {
+    "enabled": false,
+    "activeRunIds": [],
+    "lastReviewPack": null
+  },
+  "projection": {
+    "status": "stale",
+    "lastRenderedAt": "@wakeflow-scenario-time-2d6aa87c3a",
+    "interfaceLanguage": "en",
+    "progressDoc": "developer-progress.md"
+  },
+  "executionPlacement": {
+    "mode": "isolated",
+    "podId": "SCENARIO-POD",
+    "selection": "explicit-user-pod",
+    "authorizationRef": "scenario-authority#pod"
+  },
+  "podProvisioning": {
+    "phase": "execution-ready",
+    "podId": "SCENARIO-POD",
+    "host": "claude-code",
+    "authorizationRef": "scenario-authority#pod",
+    "windows": [
+      {
+        "windowName": "Controller__SCENARIO-POD",
+        "role": "controller",
+        "launchCorrelationId": "pod-launch-d98cf465f58261c9e77c3225694f56bf",
+        "status": "bound"
+      },
+      {
+        "windowName": "Design__SCENARIO-POD",
+        "role": "design",
+        "launchCorrelationId": "pod-launch-adc590324c503c5fc8f63dedd92d4859",
+        "status": "bound"
+      },
+      {
+        "windowName": "Test__SCENARIO-POD",
+        "role": "test",
+        "launchCorrelationId": "pod-launch-f7a7afb72656ee9429750b2f3df67109",
+        "status": "bound"
+      },
+      {
+        "windowName": "ProductWindow__SCENARIO-POD",
+        "role": "product",
+        "repositoryWindow": "ProductWindow",
+        "launchCorrelationId": "pod-launch-cd0713fa9ea616c0f2a7d607f68938fa",
+        "status": "bound"
+      }
+    ],
+    "designRequestId": "pod-design-request-e0d5b3d70f7b4838738b59b7f1f35921",
+    "designRequestRef": "pod-design-requests/e0d5b3d70f7b4838738b59b7f1f3592136653235049f9472517566ba0186748e.json",
+    "designHandoffRef": "pod-design-handoffs/5676b761513a1ac8506d34be23079bf04e19793a473d1c99f113ef1b53aa2994.json",
+    "updatedAt": "@wakeflow-scenario-time-041bc90a65"
+  },
+  "demandAuthorityRef": "demand-authority.json",
+  "demandAuthorityDigest": "@wakeflow-scenario-derived-digest-cd23b22ca3"
+}

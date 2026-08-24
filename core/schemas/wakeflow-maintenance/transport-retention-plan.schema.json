@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:maintenance:transport-retention-plan:v1",
+  "title": "Wakeflow Transport Retention Maintenance Plan",
+  "$comment": "Portable owner codec for one archive-gated whole-demand transport release. The workspace mutation manager separately validates the generic remove-step contract and journals physical progress.",
+  "type": "object",
+  "required": ["schemaId", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaId": { "const": "urn:wakeflow:internal:maintenance:transport-retention-plan:v1" },
+    "payload": { "$ref": "#/$defs/payload" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "ref": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)[^\\u0000-\\u001F\\u007F-\\u009F]+$" },
+    "programId": { "type": "string", "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "demandId": { "type": "string", "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "archiveId": { "type": "string", "pattern": "^archive_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "resource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["ref", "type"],
+          "additionalProperties": false,
+          "properties": { "ref": { "$ref": "#/$defs/ref" }, "type": { "const": "absent" } }
+        },
+        {
+          "type": "object",
+          "required": ["ref", "type", "mode", "digest"],
+          "additionalProperties": false,
+          "properties": {
+            "ref": { "$ref": "#/$defs/ref" },
+            "type": { "const": "directory" },
+            "mode": { "const": "0700" },
+            "digest": { "$ref": "#/$defs/digest" }
+          }
+        }
+      ]
+    },
+    "step": {
+      "type": "object",
+      "required": ["stepId", "ordinal", "stepKind", "source", "staging", "final"],
+      "additionalProperties": false,
+      "properties": {
+        "stepId": { "const": "release-archived-transport-demand" },
+        "ordinal": { "const": 0 },
+        "stepKind": { "const": "remove" },
+        "source": { "$ref": "#/$defs/resource" },
+        "staging": { "$ref": "#/$defs/resource" },
+        "final": { "$ref": "#/$defs/resource" }
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "required": ["code", "scope"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,127}$" },
+        "scope": { "type": "string", "enum": ["archive", "lease", "transport", "member"] }
+      }
+    },
+    "archiveVerified": {
+      "type": "object",
+      "required": ["status", "archiveId", "manifestRef", "manifestDigest", "transportSummary"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "const": "verified" },
+        "archiveId": { "$ref": "#/$defs/archiveId" },
+        "manifestRef": { "$ref": "#/$defs/ref" },
+        "manifestDigest": { "$ref": "#/$defs/digest" },
+        "transportSummary": {
+          "type": "object",
+          "required": ["memberRef", "memberDigest", "sourceStatus", "inventoryDigest"],
+          "additionalProperties": false,
+          "properties": {
+            "memberRef": { "$ref": "#/$defs/ref" },
+            "memberDigest": { "$ref": "#/$defs/digest" },
+            "sourceStatus": { "type": "string", "enum": ["missing", "empty", "current"] },
+            "inventoryDigest": { "$ref": "#/$defs/digest" }
+          }
+        }
+      }
+    },
+    "archiveUnavailable": {
+      "type": "object",
+      "required": ["status", "archiveId"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "const": "unavailable" },
+        "archiveId": { "$ref": "#/$defs/archiveId" }
+      }
+    },
+    "archive": {
+      "oneOf": [
+        { "$ref": "#/$defs/archiveVerified" },
+        { "$ref": "#/$defs/archiveUnavailable" }
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "required": ["schemaVersion", "artifactKind", "programId", "demandId", "archive", "disposition", "blockers", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "artifactKind": { "const": "wakeflow-transport-retention-plan" },
+        "programId": { "$ref": "#/$defs/programId" },
+        "demandId": { "$ref": "#/$defs/demandId" },
+        "archive": { "$ref": "#/$defs/archive" },
+        "disposition": { "type": "string", "enum": ["blocked", "eligible", "source-absent"] },
+        "blockers": { "type": "array", "items": { "$ref": "#/$defs/blocker" } },
+        "steps": { "type": "array", "maxItems": 1, "items": { "$ref": "#/$defs/step" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "disposition": { "const": "eligible" } }, "required": ["disposition"] },
+          "then": { "properties": { "blockers": { "maxItems": 0 }, "steps": { "minItems": 1, "maxItems": 1 } } }
+        },
+        {
+          "if": { "properties": { "disposition": { "const": "blocked" } }, "required": ["disposition"] },
+          "then": { "properties": { "blockers": { "minItems": 1 }, "steps": { "maxItems": 0 } } }
+        },
+        {
+          "if": { "properties": { "disposition": { "const": "source-absent" } }, "required": ["disposition"] },
+          "then": { "properties": { "blockers": { "maxItems": 0 }, "steps": { "maxItems": 0 } } }
+        }
+      ]
+    }
+  }
+}

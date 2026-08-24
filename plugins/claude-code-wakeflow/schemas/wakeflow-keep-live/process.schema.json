@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:keep-live:process:v1",
+  "title": "Wakeflow Keep-Live Process Generation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "programId",
+    "hostId",
+    "generationId",
+    "capability",
+    "mechanism",
+    "status",
+    "worker",
+    "child",
+    "controlRequestId",
+    "controlRevision",
+    "createdAt",
+    "startedAt",
+    "observedAt",
+    "stopRequestedAt",
+    "errorCode",
+    "processDigest"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "artifactKind": { "const": "wakeflow-keep-live-process" },
+    "programId": { "$ref": "#/$defs/programId" },
+    "hostId": { "$ref": "#/$defs/hostId" },
+    "generationId": { "$ref": "#/$defs/generationId" },
+    "capability": { "const": "macos-caffeinate" },
+    "mechanism": { "const": "worker-caffeinate" },
+    "status": { "enum": ["starting", "running", "stopping", "failed"] },
+    "worker": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/processSubject" }
+      ]
+    },
+    "child": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/processSubject" }
+      ]
+    },
+    "controlRequestId": { "$ref": "#/$defs/requestId" },
+    "controlRevision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "createdAt": { "$ref": "#/$defs/timestamp" },
+    "startedAt": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/timestamp" }
+      ]
+    },
+    "observedAt": { "$ref": "#/$defs/timestamp" },
+    "stopRequestedAt": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/timestamp" }
+      ]
+    },
+    "errorCode": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/code" }
+      ]
+    },
+    "processDigest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "hostId": {
+      "type": "string",
+      "enum": ["codex", "claude-code"]
+    },
+    "generationId": {
+      "type": "string",
+      "pattern": "^keep-live-generation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^keep-live-request_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "processIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "pid", "startIdentity"],
+      "properties": {
+        "platform": { "enum": ["darwin", "linux"] },
+        "pid": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "startIdentity": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "processSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "parentPid", "executableDigest", "argvDigest"],
+      "properties": {
+        "identity": { "$ref": "#/$defs/processIdentity" },
+        "parentPid": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "executableDigest": { "$ref": "#/$defs/digest" },
+        "argvDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+    },
+    "code": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

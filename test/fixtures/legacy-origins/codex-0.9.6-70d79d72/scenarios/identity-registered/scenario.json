@@ -1,0 +1,246 @@
+{
+  "artifactKind": "wakeflow-legacy-lifecycle-scenario",
+  "beforeManifest": {
+    "artifactKind": "wakeflow-loaded-artifact-tree",
+    "fileCount": 1,
+    "files": [
+      {
+        "bytes": 1005,
+        "digest": "sha256:be820c8be08bb3733dbed6c614d19e697c4f7cd38300933161166ce3b707b173",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/ProductWindow.json"
+      }
+    ],
+    "schemaVersion": 1,
+    "totalBytes": 1005
+  },
+  "category": "identity",
+  "commandSequence": [
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/wakeflow-delivery.mjs",
+        "register-thread",
+        "--root",
+        "<workspace-root>",
+        "--window",
+        "ProductWindow",
+        "--thread-id",
+        "<synthetic-thread-id>",
+        "--write",
+        "--json"
+      ],
+      "stepId": "register-thread"
+    }
+  ],
+  "deltaEntries": [
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-envelopes"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/delivery-runs"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-groups"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/dispatch-packets"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/keep-live"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry"
+    },
+    {
+      "afterBytes": 325,
+      "afterDigest": "sha256:c669cbb41975a62b2370a77d5031592c895e7a5fb1e2210b0aab4b9bac07f78e",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/ProductWindow.json"
+    },
+    {
+      "afterBytes": 962,
+      "afterDigest": "sha256:354cae1e97e2b7a490c18539c67ed57e6e314c75b6b04ebfea6903c7673756a8",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": 1005,
+      "beforeDigest": "sha256:be820c8be08bb3733dbed6c614d19e697c4f7cd38300933161166ce3b707b173",
+      "beforeExecutable": false,
+      "beforeType": "file",
+      "operation": "replace",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/ProductWindow.json"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/locks"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/target-results"
+    }
+  ],
+  "host": "codex",
+  "materializationMode": "real-writer",
+  "normalizations": [
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/ProductWindow.json",
+      "selector": "/bindingId",
+      "token": "@wakeflow-scenario-binding-id-eab2043def"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/ProductWindow.json",
+      "selector": "/lastVerifiedAt",
+      "token": "@wakeflow-scenario-time-57edd000ea"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/ProductWindow.json",
+      "selector": "/registeredAt",
+      "token": "@wakeflow-scenario-time-3e32badd01"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/ProductWindow.json",
+      "selector": "/threadId",
+      "token": "@wakeflow-scenario-thread-id-f3ad674b2d"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/ProductWindow.json",
+      "selector": "/cwd",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/ProductWindow.json",
+      "selector": "/generatedAt",
+      "token": "@wakeflow-scenario-time-944fc0d096"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/ProductWindow.json",
+      "selector": "/responsibilityRoot",
+      "token": "@wakeflow-scenario-sandbox-root"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/ProductWindow.json",
+      "selector": "/threadBindingId",
+      "token": "@wakeflow-scenario-binding-id-eab2043def"
+    }
+  ],
+  "outputManifest": {
+    "artifactKind": "wakeflow-loaded-artifact-tree",
+    "fileCount": 2,
+    "files": [
+      {
+        "bytes": 325,
+        "digest": "sha256:c669cbb41975a62b2370a77d5031592c895e7a5fb1e2210b0aab4b9bac07f78e",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/ProductWindow.json"
+      },
+      {
+        "bytes": 962,
+        "digest": "sha256:354cae1e97e2b7a490c18539c67ed57e6e314c75b6b04ebfea6903c7673756a8",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/ProductWindow.json"
+      }
+    ],
+    "schemaVersion": 1,
+    "totalBytes": 1287
+  },
+  "producer": {
+    "artifactDigest": "sha256:e7e6cb6cd792147cfa94bf76d720d077c439809aed1805aefbafb0c2adc7b335",
+    "sourceCommit": "70d79d720d65837a068993006f356e8de91215d4",
+    "sourceFiles": [
+      {
+        "bytes": 41081,
+        "digest": "sha256:427a21c99e85bf3b6863cdf4d18d410ef0a16480414cc05322f3b15b84812a08",
+        "executable": false,
+        "ref": "scripts/wakeflow-delivery.mjs",
+        "role": "delivery-writer"
+      }
+    ]
+  },
+  "scenarioId": "identity-registered",
+  "schemaVersion": 1,
+  "scenarioDigest": "sha256:5b2e40bce6569f71b4f5634ec163bf89f97da796e232b850754f57f17506dc28"
+}

@@ -1,0 +1,37 @@
+{
+  "kind": "CodexSubwindowDispatchConfig",
+  "version": 1,
+  "windowName": "ProductWindow__SCENARIO-POD",
+  "repositoryPath": "../ProductWorkspace",
+  "responsibility": "Project repository; confirm scope and responsibility before enabling.",
+  "dispatchable": false,
+  "threadRegistered": true,
+  "threadBindingId": "@wakeflow-scenario-binding-id-c4dc370eb7",
+  "threadRegistryFile": "hosts/codex/thread-registry/ProductWindow__SCENARIO-POD.json",
+  "cwd": null,
+  "responsibilityRoot": null,
+  "deliveryRole": "target",
+  "delivery": {
+    "transport": "direct-thread",
+    "requireThread": true,
+    "missingThread": "fail-closed",
+    "readbackRequired": true
+  },
+  "automation": {
+    "mode": "manual-or-unattended",
+    "continuousWhenEnabled": true,
+    "keepLive": "required-when-automation-enabled"
+  },
+  "result": {
+    "returnRoute": "controller",
+    "resultEnvelopeRequired": true
+  },
+  "generatedAt": "@wakeflow-scenario-time-9b1550dfcf",
+  "pod": {
+    "bindingVerified": false,
+    "phase": "creating-products",
+    "demandKey": null,
+    "podId": null,
+    "dispatchGate": "blocked"
+  }
+}

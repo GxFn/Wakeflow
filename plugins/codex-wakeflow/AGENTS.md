@@ -2,9 +2,10 @@
 
 Wakeflow is a reusable controller capability for multi-window agent work. It is
 not the parent workspace, not a product source repository, and not a sandbox for
-managed projects. Product scope and window roles come from `wakeflow.config.json`
-and local runtime config. `.wakeflow-local/wakeflow.config.json` may override
-local installation details and must not be committed.
+managed projects. `wakeflow.config.json` is the only program configuration and
+owns product scope, stable identities, topology, storage, governance, and host
+policy. `.wakeflow-local/` contains machine-local runtime and audit facts only;
+it is never a configuration override and must not be committed or hand-edited.
 
 ## Controller Posture
 
@@ -41,11 +42,12 @@ definition, local code, docs, tests, and release path before decomposing work.
   confirmed real environments for boundary problems and hidden bugs that the
   controller or product repository cannot safely reproduce alone. Test does
   not own functional correctness, completion, or product fixes.
-- Product windows are repositories listed in `wakeflow.config.json` or local
-  override. Each owns its source, tests, commits, evidence, and backfill.
+- Product windows are repositories and responsibility windows listed in
+  `wakeflow.config.json`. Each repository owns its source, tests, commits,
+  evidence, and backfill.
 - Wakeflow owns reusable controller runtime, plugin packaging, AGENTS
-  installation, MCP capability surface, state roots, delivery envelopes, result
-  envelopes, reducers, archive tools, templates, skills, and verification
+  installation, MCP capability surface, state roots, delivery envelopes, strict
+  TargetResult artifacts, reducers, archive tools, templates, skills, and verification
   scripts.
 - `host agent` means the external host capability, currently Codex. Do not
   confuse it with any managed product's internal agent.
@@ -73,13 +75,19 @@ implementation churn until Design returns a complete adjustment plan.
 
 ## Auto-Claim Boundary
 
-The controller may auto-claim (init) a demand without a fresh user prompt ONLY from a
-global TODO row that Design delivered with Auto Claim = yes, via `wakeflow_claim_next`:
-that immutable delivery property is set once at `wakeflow_deliver` time. Every
-delivered type must already carry its complete proportional `demandAuthority`;
-Auto Claim does not reduce that readiness contract. It is init-only — dispatch and
-acceptance still require their own evidence and confirmation. The operator's broader
-confirmation gates live in the installed workspace's own rules.
+The controller may auto-select and initialize a demand without a fresh user
+prompt ONLY from a global TODO row that Design delivered with Auto Claim = yes;
+that immutable row property is set once at `wakeflow_deliver` time. TODO delivery
+validates row shape and board CAS; it does not resolve Documents or create
+`demandAuthority`. Before publication the controller must resolve proportional
+authority and, whenever a TaskPackage will be needed, include it in the initial
+`wakeflow_create_demand` call because public v3 has no later authority-promotion
+operation. The create owner publishes the root first and atomically claims the
+exact linked TODO row. Do not use standalone `wakeflow_claim_next operation=claim`
+as demand initialization or before publication; it only mutates the TODO row.
+Auto Claim changes selection timing only — dispatch and acceptance still
+require their own evidence and confirmation. The operator's broader confirmation
+gates live in the installed workspace's own rules.
 Auto Claim is mainline-only: while mainline is busy or unavailable it waits
 without creating a demand, Pod, thread, or worktree.
 
@@ -106,7 +114,8 @@ without creating a demand, Pod, thread, or worktree.
   meaning, invalid conclusions, and stop conditions.
 - **The confirmed requirement goal and requirement-stage Test plan remain the
   controller's alignment anchors at card intake, dispatch, and review.** A Test
-  package must carry `testExecution`; Test may elaborate commands only with a
+  package must bind one exact `testCard`, and its dispatch packet must carry
+  `testContract.executionContract`; Test may elaborate commands only with a
   step-to-anchor map, may use only listed Test skills, and must return an
   unmapped goal/gate/method as a change request before execution. The controller
   rejects materials produced for a Test-invented target instead of adopting that
@@ -131,8 +140,12 @@ without creating a demand, Pod, thread, or worktree.
   roll TODO/Backlog: close solved items with evidence, keep valid remaining
   items, add newly found items, and explain items that should not enter TODO.
 - A Test pass closes only the stated environmental risk. A Test failure is a
-  defect signal for the controller to classify against the accepted goal and
-  route back to the owning repository; it does not let Test redefine the plan.
+  defect signal for the controller to classify against the accepted goal; it
+  does not let Test redefine the plan. When it exposes a product defect after
+  that repository lineage is already accepted, current public v3 cannot reopen
+  the lineage or create a same-demand fix before completion, so retain the
+  evidence and stop on that capability blocker instead of reworking Test or
+  completing a known-defective demand.
 - Product repository commits are handled by the owning repository window.
   Wakeflow documentation commits are made only by the controller after review.
 
@@ -171,8 +184,8 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   support only, not task logic, transport, or acceptance evidence.
 - Real thread ids live only in `.wakeflow-local/`; never write them to tracked
   docs, GitHub, prompts, or backfill, and never register placeholders.
-- Target windows execute only their assigned packet and return a
-  `TargetResultEnvelope`; they do not claim another target/controller role or
+- Target windows execute only their assigned packet and return a strict
+  `wakeflow-target-result` TargetResult; they do not claim another target/controller role or
   create target-to-target next-hop delivery (a controller return needs
   `returnRoute=controller` plus a permitting dispatch-group policy). Test
   delivery is controller-started unless the plan and envelope authorize an
@@ -180,15 +193,18 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   retired.
 - Every newly authored full-context implementation task package must carry at
   least one controller-authored `acceptanceAnchor` derived from confirmed
-  requirement authority. Research/documentation packages may omit anchors;
-  legacy packages remain read-only compatibility input. Before
-  coding, the target maps every `{id,claim,probe,expected}` anchor to a RED
+  requirement authority. Research/documentation packages still carry the
+  required `acceptanceAnchors` field as an empty array; legacy packages remain
+  read-only compatibility input. Before
+  coding, the target maps every `{anchorId,claim,probe,expected}` anchor to a RED
   test/probe; an untestable or conflicting anchor returns `needs-review`.
   Neither the controller nor target invents missing requirement scope through
   an anchor.
-- Within one demand each repository runs exactly ONE window with ONE combined
-  task package (the window self-sequences its items); a window is never
-  dispatched two simultaneous tasks inside the same demand. Host-created Pod
+- Within one demand each repository has one active task lineage at a time and
+  each target task owns one immutable TaskPackage. A package objective may
+  contain coherent ordered steps, but there is no separate package `items`
+  collection and a repository is never dispatched concurrent target tasks in
+  the same demand. Host-created Pod
   product windows (`<repo>__<pod>`) exist only for explicitly authorized
   cross-demand isolation. Their integration disposition is human-reviewed; no
   controller merges or removes their worktrees.
@@ -199,7 +215,9 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
 - A demand pod exists only after an explicit user-authority anchor selects it.
   Wakeflow sets no numeric pod admission limit. Each pod owns independent
   `Controller__<pod>`, `Design__<pod>`, `Test__<pod>`, and product sessions.
-  Wakeflow plans, binds, verifies, and logically closes them. The current
+  Wakeflow plans, binds, and verifies them. For a materialized Codex member,
+  archive/handoff remains `manual-host-gate` and cannot by itself authorize
+  logical close. The current
   public Pod lifecycle never creates, removes, or adopts a Git worktree or
   branch; those actions belong to the Codex host.
 - Codex creates every pod product thread from the exact saved repository
@@ -207,7 +225,7 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   local control-project threads. Journal each create by launch correlation; a
   temporary `clientThreadId` is pending search/recovery evidence only and can
   never enter the registry. Freeze Pod Design with
-  `wakeflow_pod_plan action=design-request`. The current implementation freezes exactly one Pod
+  `wakeflow_pod_plan operation=design-request`. The current implementation freezes exactly one Pod
   Design request/handoff generation; that sole request may be `initial-design`,
   `supplement`, or `redesign`. A different second generation must stop as an
   unsupported capability rather than overwrite it or fall back to mainline Design. A pod reaches `control-ready` only
@@ -215,7 +233,8 @@ Details live in `skills/wakeflow-governance/references/testing-validation.md`.
   matching Design handoff and every required product receipt bind. Pod Test
   dispatch additionally requires validated `direct-multi-root` access to every
   active product binding; unsupported access stays blocked without fallback.
-  Logical close and Codex physical worktree cleanup are separate facts.
+  A future authorized logical-close proof and Codex physical worktree cleanup
+  remain separate facts.
 
 Delivery-envelope fields, host-thread send mechanics, keep-live, and review flow
 live in `skills/wakeflow-governance/references/wakeflow-delivery.md`,
@@ -230,14 +249,16 @@ live in `skills/wakeflow-governance/references/wakeflow-delivery.md`,
   `../wakeflow-ledger/`. Product source/tests/docs commit in their own repos.
 - Long-term documents must not contain user absolute paths, API keys, tokens, or
   private information. Use lowercase kebab-case names and execution dates.
-- `wakeflow_view` (scope `storage`) is the local-storage map — every tree with
-  class/size/age plus legacy, unknown, and aging preserved entries; in-place
-  READMEs (seeded by `wakeflow-storage seed-readmes`) explain each tier next
-  to the data. The only sanctioned installed-workspace rescue move is
-  `wakeflow_storage_preserve` (dry-run first, then `apply: true`); unknown
+- `wakeflow_view` with `operation: "storage"` is the local-storage map — every tree with
+  class/size/age plus legacy, unknown, and aging preserved entries. Generated
+  runtime directories do not carry in-place README authority. The only
+  sanctioned installed-workspace rescue move is
+  `wakeflow_storage_preserve` (`preview` first, then exact `apply`); unknown
   trees route to the user and are never auto-deleted.
-- First installation runs discovery and waits for user confirmation before
-  writing scope. Placement, index, and archive detail live in
+- First installation uses `wakeflow_maintain_workspace` with
+  `action: "fresh-initialize"` and `mode: "preview"`, then waits for user
+  confirmation of the exact selection and confirmed plan before `apply`.
+  There is no discovery/reset alias. Placement, index, and archive detail live in
   `skills/wakeflow-governance/references/wakeflow-ledgers.md`.
 
 ## Requirement-To-Wave Flow
@@ -272,13 +293,16 @@ live in `skills/wakeflow-governance/references/wakeflow-delivery.md`,
 
 ## Scripts And Verification
 
-- `node scripts/wakeflow-verify.mjs` is the default verification orchestrator.
-- Writing scripts default to dry-run or explicit check; use `--write`/`--apply`
-  only when the user goal or state root authorizes writes.
-- `scripts/README.md` is the script index; after adding/renaming/deleting
-  `scripts/*.mjs`, update it and run `node scripts/wakeflow-check-scripts.mjs`.
-  State roots, boards, intake, cards, archives, and templates must keep
-  script-readable formats. Pipeline and maintenance detail live in
+- In an installed workspace, use `wakeflow_verify operation=inspect` for the
+  strict machine verdict. Writing operations remain separate and require their
+  exact preview/apply authority; verification never grants mutation authority.
+- `scripts/README.md` catalogs the packaged v3 entrypoints and the explicit
+  normal-runtime/migration boundary. Internal modules are not an alternate
+  command surface.
+- When maintaining Wakeflow source, use the repository gates (`npm run
+  validate`, `npm run smoke`, `npm run check:core`, focused tests, and `npm
+  test`) rather than invoking removed workspace utilities. Pipeline and
+  maintenance detail live in
   `skills/wakeflow-governance/references/script-pipeline.md`.
 
 ## Standard Dispatch Prompt
@@ -322,17 +346,17 @@ Reference map:
 - `skills/wakeflow-governance/references/wakeflow-ledgers.md`: document
   placement, indexes, archives, templates, and skill asset ledgers.
 - `skills/wakeflow-governance/references/wakeflow-delivery.md`: dispatch
-  packets, delivery envelopes, target result envelopes, controller review, and
-  automation return.
+  packets, delivery envelopes, strict TargetResult records, controller review,
+  and automation return.
 - `skills/wakeflow-governance/references/phased-migration.md`: cross-repo
   migration, extraction, deletion, and release closure.
-- `skills/wakeflow-target/`: target-window execution and
-  `TargetResultEnvelope` backfill.
+- `skills/wakeflow-target/`: target-window execution and strict TargetResult
+  recording.
 - `skills/wakeflow-controller/`: controller start, return, result review, and
   next-wave decisions.
-- `templates/wakeflow-template-bundle.json`: bundled starter workspace,
-  Design/Test support surfaces, and Test-window progressive chain validation
-  assets that Wakeflow expands during setup.
+- `templates/wakeflow-asset-bundle.json`: generated install carrier for the two
+  localized demand-progress projection assets whose canonical sources live under
+  `core/template-sources/`; the bundle is never an editable workspace scaffold.
 
 The controller uses ONLY `wakeflow-controller` and `wakeflow-governance`; it does NOT use the
 Design/Test window skills or the development window's `wakeflow-target-craft`. The controller is
@@ -368,17 +392,19 @@ Hard boundaries stay here. Operational details live in skills.
   Follow the stricter rule when root and target rules both apply.
 - Use the target repository's existing stack, scripts, imports, aliases, tests,
   formatting, package exports, and module boundaries.
-- Comments should be concise English comments that explain real business
-  meaning, migration boundaries, state machines, branches, fallback reasons,
-  compatibility paths, persistence impact, or verification.
+- Comments follow the target repository's language and style rules. Add them
+  where they clarify real business meaning, migration boundaries, state
+  machines, branches, fallback reasons, compatibility paths, persistence
+  impact, or verification; do not restate syntax.
 - Runtime branches, fallback, downgrade, compatibility translation, skip,
   short-circuit, retry, cancellation, and error classification need clear logs
   or diagnostic events.
 - Preserve data structures, sorting, budgets, state-machine meaning, error
   semantics, persistence behavior, and user-visible APIs.
-- After creating or activating a phase confirmation or execution wave, run
-  `node scripts/wakeflow-verify.mjs`.
-- If scripts, script README, or script skills change, run
-  `node scripts/wakeflow-verify.mjs --with-script-tests`.
-- If only long-term docs changed, run workspace docs verification and
-  `git diff --check` at minimum.
+- In an installed workspace, inspect the result with `wakeflow_verify`; do not
+  infer validation from internal script output.
+- When maintaining Wakeflow source, run the focused owner tests, `npm run
+  sync:core`, `npm run check:core`, both artifact validators and smokes, and
+  `npm test` before a release-ready handoff.
+- If only long-term source documentation changed, run its focused contract test
+  and `git diff --check` at minimum.

@@ -1,0 +1,133 @@
+{
+  "artifactKind": "wakeflow-legacy-lifecycle-scenario",
+  "beforeManifest": null,
+  "category": "stream-worktree",
+  "commandSequence": [
+    {
+      "argv": [
+        "node",
+        "<artifact-root>/scripts/lib/wakeflow-claude-host.mjs",
+        "stream-open",
+        "--root",
+        "<workspace-root>",
+        "--repo",
+        "ProductWindow",
+        "--stream",
+        "scenario",
+        "--demand-key",
+        "SCENARIO-STREAM",
+        "--no-launch"
+      ],
+      "stepId": "stream-open-no-launch"
+    }
+  ],
+  "deltaEntries": [
+    {
+      "afterBytes": 2180,
+      "afterDigest": "sha256:dd84d0963dacaa76ffab8d2e93d6cce0991169737b60f845371bba1ea96e4cc9",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/wakeflow.config.json"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/worktrees"
+    },
+    {
+      "afterBytes": null,
+      "afterDigest": null,
+      "afterExecutable": null,
+      "afterType": "directory",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/worktrees/ProductWindow__scenario"
+    },
+    {
+      "afterBytes": 39,
+      "afterDigest": "sha256:63bb656e035c544ba26c46705786d7172a08206353bc520ef4028d1cb73a4c0b",
+      "afterExecutable": false,
+      "afterType": "file",
+      "beforeBytes": null,
+      "beforeDigest": null,
+      "beforeExecutable": null,
+      "beforeType": null,
+      "operation": "create",
+      "path": "WakeflowFixture/.wakeflow-local/worktrees/ProductWindow__scenario/README.md"
+    }
+  ],
+  "host": "claude-code",
+  "materializationMode": "real-writer",
+  "normalizations": [
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow.config.json",
+      "selector": "/derived/generatedAt",
+      "token": "@wakeflow-scenario-time-d3365eb624"
+    },
+    {
+      "kind": "json-pointer-token",
+      "ref": "WakeflowFixture/.wakeflow-local/wakeflow.config.json",
+      "selector": "/repositories/3/stream/openedAt",
+      "token": "@wakeflow-scenario-time-48b71be6d2"
+    }
+  ],
+  "outputManifest": {
+    "artifactKind": "wakeflow-loaded-artifact-tree",
+    "fileCount": 2,
+    "files": [
+      {
+        "bytes": 2180,
+        "digest": "sha256:dd84d0963dacaa76ffab8d2e93d6cce0991169737b60f845371bba1ea96e4cc9",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/wakeflow.config.json"
+      },
+      {
+        "bytes": 39,
+        "digest": "sha256:63bb656e035c544ba26c46705786d7172a08206353bc520ef4028d1cb73a4c0b",
+        "executable": false,
+        "ref": "WakeflowFixture/.wakeflow-local/worktrees/ProductWindow__scenario/README.md"
+      }
+    ],
+    "schemaVersion": 1,
+    "totalBytes": 2219
+  },
+  "producer": {
+    "artifactDigest": "sha256:27bc8cc23a863c1e96ccc1631b5f78236471e13d5605ab69796d0089fc192e6f",
+    "sourceCommit": "70d79d720d65837a068993006f356e8de91215d4",
+    "sourceFiles": [
+      {
+        "bytes": 158298,
+        "digest": "sha256:f2c2d01310b4716d3d0252e03dd4f7f8b29c8fa8f07489ce654496c02c2d7e86",
+        "executable": false,
+        "ref": "scripts/lib/wakeflow-claude-host.mjs",
+        "role": "host-operation-writer"
+      },
+      {
+        "bytes": 18889,
+        "digest": "sha256:e1e8c16ed64817ef842529824a692a01085897ae3cb9a23e8cf3e6b648ee27db",
+        "executable": false,
+        "ref": "scripts/lib/wakeflow-stream-overlay.mjs",
+        "role": "stream-worktree-writer"
+      }
+    ]
+  },
+  "scenarioId": "legacy-stream-open",
+  "schemaVersion": 1,
+  "scenarioDigest": "sha256:94e1be48b13e41eb58b7801d72696e12e0d970e9dd05e3c32703f4c7b4d22cb3"
+}

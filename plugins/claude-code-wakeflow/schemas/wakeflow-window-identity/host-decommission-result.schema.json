@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:window-identity:host-decommission-result:v1",
+  "title": "Wakeflow Host Decommission Result",
+  "$comment": "Transient proof-classified host outcome. It never revokes routing identity by itself and never stores a raw host handle.",
+  "type": "object",
+  "required": [
+    "kind",
+    "schemaVersion",
+    "programId",
+    "hostId",
+    "windowId",
+    "binding",
+    "subjectDigest",
+    "status",
+    "hostAction",
+    "session",
+    "locator",
+    "routingRevocation",
+    "locatorDisposition",
+    "manualAction",
+    "reasonCode",
+    "observedAt"
+  ],
+  "properties": {
+    "kind": { "type": "string", "const": "WakeflowHostDecommissionResult" },
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "programId": { "$ref": "#/$defs/programId" },
+    "hostId": { "type": "string", "enum": ["codex", "claude-code"] },
+    "windowId": { "$ref": "#/$defs/windowId" },
+    "binding": { "$ref": "#/$defs/binding" },
+    "subjectDigest": { "$ref": "#/$defs/digest" },
+    "status": { "type": "string", "enum": ["machine-verified", "manual-host-gate", "blocked"] },
+    "hostAction": { "$ref": "#/$defs/hostAction" },
+    "session": { "$ref": "#/$defs/session" },
+    "locator": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/locator" }
+      ]
+    },
+    "routingRevocation": { "type": "string", "const": "pending-state-acknowledgement" },
+    "locatorDisposition": { "type": "string", "enum": ["retained-for-acknowledgement", "not-applicable"] },
+    "manualAction": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/manualAction" }
+      ]
+    },
+    "reasonCode": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "string",
+          "enum": [
+            "codex-archive-observed-not-termination-proof",
+            "codex-manual-stop-or-archive-required",
+            "codex-archive-unavailable",
+            "codex-archive-failed",
+            "claude-preclose-not-live",
+            "claude-close-failed",
+            "claude-postclose-still-present",
+            "claude-close-outcome-unrecoverable"
+          ]
+        }
+      ]
+    },
+    "observedAt": { "$ref": "#/$defs/timestamp" }
+  },
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "properties": {
+        "hostId": { "const": "claude-code" },
+        "status": { "const": "machine-verified" },
+        "hostAction": {
+          "properties": {
+            "kind": { "const": "close" },
+            "status": { "const": "succeeded" }
+          }
+        },
+        "session": {
+          "properties": {
+            "status": { "const": "closed" },
+            "proof": { "const": "exact-post-close-absence" },
+            "postCloseAttempts": { "minimum": 1 }
+          }
+        },
+        "locator": { "$ref": "#/$defs/locator" },
+        "locatorDisposition": { "const": "retained-for-acknowledgement" },
+        "manualAction": { "type": "null" },
+        "reasonCode": { "type": "null" }
+      }
+    },
+    {
+      "properties": {
+        "hostId": { "const": "codex" },
+        "status": { "const": "manual-host-gate" },
+        "hostAction": {
+          "properties": { "kind": { "const": "archive" } }
+        },
+        "session": {
+          "properties": { "postCloseAttempts": { "const": 0 } },
+          "oneOf": [
+            {
+              "properties": {
+                "status": { "const": "archived" },
+                "proof": { "const": "archive-observed" }
+              }
+            },
+            {
+              "properties": {
+                "status": { "const": "unknown" },
+                "proof": { "const": "none" }
+              }
+            }
+          ]
+        },
+        "locator": { "type": "null" },
+        "locatorDisposition": { "const": "not-applicable" },
+        "manualAction": { "$ref": "#/$defs/manualAction" },
+        "reasonCode": {
+          "enum": [
+            "codex-archive-observed-not-termination-proof",
+            "codex-manual-stop-or-archive-required",
+            "codex-archive-unavailable",
+            "codex-archive-failed"
+          ]
+        }
+      },
+      "oneOf": [
+          {
+            "properties": {
+              "reasonCode": { "const": "codex-archive-observed-not-termination-proof" },
+              "hostAction": { "properties": { "status": { "const": "succeeded" } } },
+              "session": {
+                "properties": {
+                  "status": { "const": "archived" },
+                  "proof": { "const": "archive-observed" }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "reasonCode": { "const": "codex-manual-stop-or-archive-required" },
+              "hostAction": { "properties": { "status": { "const": "not-attempted" } } },
+              "session": {
+                "properties": {
+                  "status": { "const": "unknown" },
+                  "proof": { "const": "none" }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "reasonCode": { "const": "codex-archive-unavailable" },
+              "hostAction": { "properties": { "status": { "const": "unavailable" } } },
+              "session": {
+                "properties": {
+                  "status": { "const": "unknown" },
+                  "proof": { "const": "none" }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "reasonCode": { "const": "codex-archive-failed" },
+              "hostAction": { "properties": { "status": { "const": "failed" } } },
+              "session": {
+                "properties": {
+                  "status": { "const": "unknown" },
+                  "proof": { "const": "none" }
+                }
+              }
+            }
+          }
+      ]
+    },
+    {
+      "properties": {
+        "hostId": { "const": "claude-code" },
+        "status": { "const": "blocked" },
+        "session": {
+          "properties": { "proof": { "const": "none" } }
+        },
+        "locator": { "$ref": "#/$defs/locator" },
+        "locatorDisposition": { "const": "retained-for-acknowledgement" },
+        "manualAction": { "type": "null" },
+        "reasonCode": {
+          "enum": [
+            "claude-preclose-not-live",
+            "claude-close-failed",
+            "claude-postclose-still-present",
+            "claude-close-outcome-unrecoverable"
+          ]
+        }
+      },
+      "oneOf": [
+          {
+            "properties": {
+              "reasonCode": { "const": "claude-preclose-not-live" },
+              "hostAction": {
+                "properties": {
+                  "kind": { "const": "none" },
+                  "status": { "const": "not-attempted" }
+                }
+              },
+              "session": {
+                "properties": {
+                  "status": { "const": "unknown" },
+                  "postCloseAttempts": { "const": 0 }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "reasonCode": { "const": "claude-close-failed" },
+              "hostAction": {
+                "properties": {
+                  "kind": { "const": "close" },
+                  "status": { "const": "failed" }
+                }
+              },
+              "session": {
+                "properties": {
+                  "status": { "enum": ["unknown", "still-live"] },
+                  "postCloseAttempts": { "minimum": 1 }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "reasonCode": { "const": "claude-postclose-still-present" },
+              "hostAction": {
+                "properties": {
+                  "kind": { "const": "close" },
+                  "status": { "const": "succeeded" }
+                }
+              },
+              "session": {
+                "properties": {
+                  "status": { "enum": ["unknown", "still-live"] },
+                  "postCloseAttempts": { "minimum": 1 }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "reasonCode": { "const": "claude-close-outcome-unrecoverable" },
+              "hostAction": {
+                "properties": {
+                  "kind": { "const": "close" },
+                  "status": { "const": "unavailable" }
+                }
+              },
+              "session": {
+                "properties": {
+                  "status": { "enum": ["unknown", "still-live"] },
+                  "postCloseAttempts": { "minimum": 1 }
+                }
+              }
+            }
+          }
+      ]
+    }
+  ],
+  "$defs": {
+    "programId": { "type": "string", "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "windowId": { "type": "string", "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "bindingId": { "type": "string", "pattern": "^binding_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "locatorId": { "type": "string", "pattern": "^locator_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "timestamp": { "type": "string", "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$" },
+    "binding": {
+      "type": "object",
+      "required": ["bindingId", "digest"],
+      "properties": {
+        "bindingId": { "$ref": "#/$defs/bindingId" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "locator": {
+      "type": "object",
+      "required": ["locatorId", "digest"],
+      "properties": {
+        "locatorId": { "$ref": "#/$defs/locatorId" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "hostAction": {
+      "type": "object",
+      "required": ["kind", "status"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["close", "archive", "none"] },
+        "status": { "type": "string", "enum": ["succeeded", "failed", "unavailable", "not-attempted"] }
+      },
+      "additionalProperties": false
+    },
+    "session": {
+      "type": "object",
+      "required": ["status", "proof", "postCloseAttempts"],
+      "properties": {
+        "status": { "type": "string", "enum": ["closed", "archived", "unknown", "still-live"] },
+        "proof": { "type": "string", "enum": ["exact-post-close-absence", "archive-observed", "none"] },
+        "postCloseAttempts": { "type": "integer", "minimum": 0, "maximum": 8 }
+      },
+      "additionalProperties": false
+    },
+    "manualAction": {
+      "type": "object",
+      "required": ["required", "action", "acknowledgement"],
+      "properties": {
+        "required": { "type": "boolean", "const": true },
+        "action": { "type": "string", "const": "stop-or-archive-window-and-confirm" },
+        "acknowledgement": { "type": "string", "const": "machine-cannot-prove-future-inactivity" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

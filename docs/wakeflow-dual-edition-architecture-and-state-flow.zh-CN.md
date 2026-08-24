@@ -6,6 +6,15 @@
 > 取代。保留它们作为实现历史，不得再用来操作或扩展当前 Pod 路径。文中的
 > prompt 形状、MCP 工具数、文件数、命令和行号同样只是当时快照，不代表 0.9.3。
 
+> **2026-08-24 当前源码补记（R67）。** 现行 v3 源码已经退役并删除
+> `lib/wakeflow-runtime.mjs` 与 `lib/wakeflow-trace.mjs`。`mcp/server.cjs`
+> 直接装载包含31项工具的`wakeflow-mcp-tools.mjs` facade，并在进程内调用其
+> v3 handler；normal runtime不存在通用子进程dispatcher，也不存在旧的
+> trace/status/error包装facade。`wakeflow-process.mjs`现只服务六种精确Git只读
+> 观察和Darwin四类PID身份字段；Git观察要求normalized absolute `-C` root，
+> 并在清除继承的`GIT_*`重定向/配置变量后执行。下文旧dispatcher图和说明继续作为v0.7.8
+> 实现证据保留，不是现行运行事实或操作说明。
+
 > 于 2026-06-19 从 commit HEAD 处源码生成；**2026-07-02 对照 v0.7.8 修订**（state-root 文件锁、多活跃需求容量、意图对齐、隔离 worktree、需求舱、统一 create/claim/deliver、wakeflow.config.json 命名）。以代码为准。
 
 本文档综合了对 Wakeflow 源码的七路并行子系统阅读结果。凡阅读者标记出不确定之处，均以 **待核实 / 存疑** 注记的形式呈现，而非凭猜测填充。文件引用采用 `path:line` 形式。
@@ -140,7 +149,7 @@ flowchart TB
 
 MCP 面是一个 **手写的、无 SDK 依赖的 stdio JSON-RPC 2.0 server**：
 
-- **注册 / 引导入口。** 两个版本的 `.mcp.json` 都将 server **直接**注册为 `node <pluginRoot>/mcp/server.cjs`——Claude 版本使用 `${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs`，并带 `env WAKEFLOW_DEFAULT_ROOT=${CLAUDE_PROJECT_DIR}`；Codex 版本使用 `./mcp/server.cjs`，带 `cwd:'.'`。各自的 `plugin.json` 把 `mcpServers` 指向 `./.mcp.json`（`claude .claude-plugin/plugin.json:20`，`codex .codex-plugin/plugin.json:22`）。Claude 注入的 `WAKEFLOW_DEFAULT_ROOT` 正是给 §3.3 中 `defaultWorkspaceRoot` 回退链兜底的来源。
+- **注册 / 引导入口。** 两个版本的 `.mcp.json` 都将 server **直接**注册为 `node <pluginRoot>/mcp/server.cjs`——Claude 版本使用 `${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs` 且不设置 `cwd`；Codex 版本使用 `./mcp/server.cjs` 并设置 `cwd:'.'`。两个版本都不注入默认工作区；每个公共请求必须显式携带规范化绝对 `root`，各自的 `plugin.json` 则把 `mcpServers` 指向 `./.mcp.json`。
 - 先前的 `core/bin/wakeflow-mcp.mjs` shim 已被移除（死能力清理）；`mcp/server.cjs` 是唯一的 MCP 入口，与 `.mcp.json` 文件所注册的完全一致。
 - `core/mcp/server.cjs` 实现了完整的成帧传输（换行分隔 JSON **以及** Content-Length 成帧，外加 JSON-RPC 批量数组）、协议协商（最新 `2025-11-25`、默认 `2025-03-26`、5 个受支持版本），以及 `initialize`/`notifications/initialized`/`ping`/`tools/list`/`tools/call` 方法。
 - 引导时，`main()` 动态导入 `pluginRoot/lib/wakeflow-mcp-tools.mjs` 以获取 `{tools, handlers}`，然后在 stdin/stdout 上启动 `LineJsonRpcTransport`。
@@ -157,7 +166,7 @@ MCP 面是一个 **手写的、无 SDK 依赖的 stdio JSON-RPC 2.0 server**：
 ```mermaid
 flowchart TB
   STDIN["stdin (JSON-RPC: NDJSON or Content-Length framed)"]
-  REG[".mcp.json registers: node &lt;pluginRoot&gt;/mcp/server.cjs<br/>(claude: env WAKEFLOW_DEFAULT_ROOT=CLAUDE_PROJECT_DIR)"]
+  REG[".mcp.json registers: node &lt;pluginRoot&gt;/mcp/server.cjs<br/>(每个请求显式携带 root)"]
   STDIN --> REG
   REG -->|host launches| SRV["core/mcp/server.cjs"]
   SRV -->|"main(): dynamic import"| TOOLS["core/lib/wakeflow-mcp-tools.mjs {tools, handlers}"]
@@ -206,7 +215,7 @@ flowchart TB
 | `wakeflow_sanitize_archive` | `wakeflow-state` | `sanitize-archive` —— 只接受 configured `workspace/archive/` 下已有的 state root，要求 `state=archived` 和 `archive-manifest.json`；dry-run 分类报告真实 ID／工作区绝对路径／home 绝对路径；apply 用复扫通过的可移植副本原位替换，追加 `archive.sanitized`，并把原件移到本地 `preserved/`；绝不重开需求 |
 | `wakeflow_verify` | `wakeflow-cli` | `verify --root <root> [--script-tests] [--with-runtime | --strict-runtime] --json`；带 script-tests/with-runtime/strict-runtime 任意其一时超时 180000ms，否则 120000ms |
 
-参数→标志的翻译由四个 helper 机械完成（`wakeflow-mcp-tools.mjs:1061-1117`）：`optionalValue(flag,value)`（对 `undefined`/`null`/`''` 返回空）、`repeatValues`（重复标志）、裸布尔内联，以及 `rootArgs` = `optionalValue('--root', args.root ?? defaultWorkspaceRoot())`。`defaultWorkspaceRoot` 回退到 `WAKEFLOW_DEFAULT_ROOT` / `CLAUDE_PROJECT_DIR` 中第一个存在的绝对路径，随后向上行走（≤64 层）到最近一个携带 `wakeflow.config.json` 的祖先目录——因此非控制器窗口的 MCP server 解析到的是工作区本身，而非它自己的仓库目录（仅在 init 之前才原样保留注入的目录）。
+当前 public-v3 的 maintenance、evidence 与普通领域工具 schema 都要求显式 `root`。组合层会在读取配置前拒绝缺失、相对、带首尾空白或未规范化的路径，再从 strict v3 snapshot 派生 state/config/ledger 路径；MCP 进程不存在 ambient workspace fallback，也不接受宿主注入的工作区 authority。
 
 ### 3.4 紧凑 vs 详细
 
@@ -785,8 +794,8 @@ flowchart LR
 | `tools/sync-core.mjs` | 同步引擎：将 `core/` 与两个插件目标做字节比较（`Buffer.equals`），`--check` 报告漂移、默认复制；断言 14 个 host-contract 文件存在 |
 | `core/mcp/server.cjs` | 手写 JSON-RPC 2.0 stdio server：成帧传输、协议协商、`initialize`/`tools/list`/`tools/call`/`ping` |
 | `core/lib/wakeflow-mcp-tools.mjs` | 工具目录（23 个 handler，create_demand/claim_next/deliver 时代）——工具 → 脚本 → 子命令 → 参数 的翻译表；compact/verbose；host-visible 优先排序 |
-| `core/lib/wakeflow-runtime.mjs` | 运行时分发器：白名单脚本 Map，派生 node 子进程，解析最后一个 JSON，构建 trace/status/error/health 信封 |
-| `core/lib/wakeflow-process.mjs` | 中心化 OS 进程边界：拒绝 shell 模式；将命令限制为 node/git/ps/caffeinate |
+| `core/lib/wakeflow-runtime.mjs` | v0.7.8历史runtime dispatcher；生产caller归零后已在R67从现行源码删除 |
+| `core/lib/wakeflow-process.mjs` | 现行有界观察边界：六种精确Git只读查询与Darwin PID身份字段；不拥有Node/MCP/Git mutation/caffeinate权限 |
 | `core/scripts/wakeflow-state.mjs` | 核心：8 个需求 reducer（init … complete-demand、archive-demand 带 P1-0 脱敏 + 拒绝未关闭的隔离窗口）+ host-ownership 守卫 + window-view/focus-doc 只读投影；每个 reducer 由同级的 `<stateRoot>.state-lock` O_EXCL 互斥锁串行化，init 额外处于工作区 `current.capacity-lock`（maxActiveDemands 门）之下；decide-review 决策：accept/rework/blocked/redesign |
 | `core/scripts/lib/wakeflow-review-scope.mjs` | blocked 楔块恢复：只有 `accepted`/`reviewDecision=accept` 才算终结；保持 blocked-但-未-accepted 的任务可评审 |
 | `core/scripts/lib/wakeflow-state-lock.mjs` | 跨进程互斥层：O_EXCL 的 `withFileLock`/`withStateRootLock`，陈旧即破 + 对存活 pid 的 4× 耐心——支撑 `<stateRoot>.state-lock`、`current.capacity-lock`、TODO 板锁、粘贴互斥锁与 `stream-overlay.lock` |

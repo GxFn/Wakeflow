@@ -1,0 +1,9 @@
+{
+  "kind": "ClaudeWindowSessionRegistration",
+  "version": 3,
+  "windowName": "WakeflowFixture",
+  "bindingId": "@wakeflow-scenario-binding-id-4b39dc60d4",
+  "threadId": "@wakeflow-scenario-thread-id-16a51ba682",
+  "registeredAt": "@wakeflow-scenario-time-c5e9376be9",
+  "lastVerifiedAt": "@wakeflow-scenario-time-477a08b96f"
+}

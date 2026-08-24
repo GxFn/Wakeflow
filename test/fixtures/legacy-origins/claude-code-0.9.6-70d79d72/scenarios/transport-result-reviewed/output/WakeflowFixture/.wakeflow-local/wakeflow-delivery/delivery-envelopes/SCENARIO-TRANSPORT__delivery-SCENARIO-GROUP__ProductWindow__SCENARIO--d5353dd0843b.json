@@ -1,0 +1,92 @@
+{
+  "kind": "DeliveryEnvelope",
+  "version": 3,
+  "deliveryId": "delivery-SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+  "sourcePacketId": "SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+  "sourcePacketDigest": "@wakeflow-scenario-derived-digest-6adb7d49ff",
+  "targetWindow": "ProductWindow",
+  "taskId": "SCENARIO-TASK",
+  "dispatchGroup": "SCENARIO-GROUP",
+  "controllerWindow": "WakeflowFixture",
+  "humanContextRef": ".wakeflow-active/current/SCENARIO-TRANSPORT/developer-progress.md",
+  "stateRef": {
+    "stateRoot": ".wakeflow-active/current/SCENARIO-TRANSPORT",
+    "demandKey": "SCENARIO-TRANSPORT",
+    "taskPackageId": "SCENARIO-PACKAGE",
+    "targetTaskId": "SCENARIO-TASK",
+    "stateRevision": 2
+  },
+  "prompt": "Continue current window task: ProductWindow / SCENARIO-TASK.\n\nCurrent objective (the task package is authoritative):\n- Return one completed scenario result.\n\n- Critical boundary [inScope]: Return one completed scenario result.\nRead before execution, in order:\n- Task package (complete task context): @wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT/task-packages/SCENARIO-PACKAGE.json\n- Requirement background entry (full anchors are in the task package) [evidence]: scenario://transport-result-reviewed\n- Workspace instructions: @wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture/CLAUDE.md\n- Repository instructions: @wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/ProductWorkspace/CLAUDE.md\n- Current state root: @wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture/.wakeflow-active/current/SCENARIO-TRANSPORT\n\nRequired execution Skills (execution-process authority):\n- skills/wakeflow-target/SKILL.md\n\nIdentity (full boundaries are in the task package):\n- Current responsibility window: ProductWindow\n- Only working repository: @wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/ProductWorkspace\n\nReturn requirement:\n- Execute only this task package. Return a TargetResultEnvelope with reviewable inputs and reproducible validation details through the wakeflow-target skill. A target result is not controller acceptance.\n\nDispatch record (routing and trace only):\n- taskId: SCENARIO-TASK\n- taskPackageId: SCENARIO-PACKAGE\n- stateRoot: .wakeflow-active/current/SCENARIO-TRANSPORT\n- stateRevision: 2\n- dispatchGroup: SCENARIO-GROUP",
+  "returnPolicy": {
+    "mode": "group-ready"
+  },
+  "returnRoute": "controller",
+  "oneShot": true,
+  "correlationId": "SCENARIO-GROUP",
+  "targetThread": {
+    "windowName": "ProductWindow",
+    "bindingId": "@wakeflow-scenario-binding-id-45574ba56f",
+    "threadIdRedacted": true,
+    "threadRegistryFile": "hosts/claude-code/thread-registry/ProductWindow.json"
+  },
+  "transport": {
+    "kind": "direct-thread",
+    "threadRegistryFile": "hosts/claude-code/thread-registry/ProductWindow.json",
+    "readbackRequired": true,
+    "missingThread": "fail-closed"
+  },
+  "automation": {
+    "enabled": false,
+    "continuousLoop": false,
+    "keepLive": false
+  },
+  "windowConfig": {
+    "kind": "ClaudeSubwindowDispatchConfig",
+    "version": 1,
+    "windowName": "ProductWindow",
+    "repositoryPath": "../ProductWorkspace",
+    "responsibility": "Project repository; confirm scope and responsibility before enabling.",
+    "dispatchable": true,
+    "threadRegistered": true,
+    "threadBindingId": "@wakeflow-scenario-binding-id-45574ba56f",
+    "threadRegistryFile": "hosts/claude-code/thread-registry/ProductWindow.json",
+    "cwd": "../ProductWorkspace",
+    "responsibilityRoot": "../ProductWorkspace",
+    "deliveryRole": "target",
+    "delivery": {
+      "transport": "direct-thread",
+      "requireThread": true,
+      "missingThread": "fail-closed",
+      "readbackRequired": true
+    },
+    "automation": {
+      "mode": "manual-or-unattended",
+      "continuousWhenEnabled": true,
+      "keepLive": "required-when-automation-enabled"
+    },
+    "result": {
+      "returnRoute": "controller",
+      "resultEnvelopeRequired": true
+    },
+    "generatedAt": "@wakeflow-scenario-time-e1011ce683"
+  },
+  "wakeflowTrace": {
+    "kind": "WakeflowTrace",
+    "version": 1,
+    "artifactKind": "delivery-envelope",
+    "source": "wakeflow-delivery",
+    "command": "prepare-dispatch-from-state",
+    "root": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+    "stateRoot": ".wakeflow-active/current/SCENARIO-TRANSPORT",
+    "stateRevision": 2,
+    "demandKey": "SCENARIO-TRANSPORT",
+    "taskPackageId": "SCENARIO-PACKAGE",
+    "targetTaskId": "SCENARIO-TASK",
+    "targetWindow": "ProductWindow",
+    "dispatchGroup": "SCENARIO-GROUP",
+    "deliveryId": "delivery-SCENARIO-GROUP__ProductWindow__SCENARIO-TASK",
+    "createdAt": "@wakeflow-scenario-time-593c2923f9"
+  },
+  "createdAt": "@wakeflow-scenario-time-67d0d1d326",
+  "preparationDigest": "@wakeflow-scenario-derived-digest-4b54c0a4ce"
+}

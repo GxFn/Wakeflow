@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "action": "stop",
+  "token": "@wakeflow-scenario-token-0e005c2fbb",
+  "automationRunId": "scenario-live-run",
+  "requestedAt": "@wakeflow-scenario-time-1dc7371e7a",
+  "reason": "scenario-lifecycle-complete",
+  "workerPid": "@wakeflow-scenario-worker-pid-4115bd2223",
+  "childPid": "@wakeflow-scenario-child-pid-8c0a403012"
+}

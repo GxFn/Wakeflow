@@ -1,0 +1,22 @@
+# macOS / editor noise
+.DS_Store
+*.swp
+*.swo
+
+# Node / package-manager noise
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local runtime and raw test output
+tmp/
+.tmp/
+.cache/
+*.log
+
+# Secrets and machine-specific overrides
+.env
+.env.*
+!.env.example

@@ -1,0 +1,13 @@
+{
+  "kind": "WakeflowPodReservation",
+  "version": 1,
+  "demandKey": "PREPARING-POD",
+  "podId": "PREPARING-POD",
+  "repositories": [
+    "RepoA"
+  ],
+  "status": "prepared",
+  "reservedAt": "2026-07-30T00:00:00.000Z",
+  "preparedAt": "2026-07-30T00:00:01.000Z",
+  "updatedAt": "2026-07-30T00:00:01.000Z"
+}

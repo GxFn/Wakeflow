@@ -1,0 +1,40 @@
+{
+  "kind": "DispatchGroup",
+  "version": 1,
+  "groupId": "SCENARIO-GROUP",
+  "humanContextRef": ".wakeflow-active/current/SCENARIO-TRANSPORT/developer-progress.md",
+  "stateRef": {
+    "stateRoot": ".wakeflow-active/current/SCENARIO-TRANSPORT",
+    "demandKey": "SCENARIO-TRANSPORT",
+    "stateRevision": 2
+  },
+  "controllerWindow": "WakeflowFixture",
+  "expectedTargets": [
+    {
+      "targetWindow": "ProductWindow",
+      "taskId": "SCENARIO-TASK",
+      "packetId": "SCENARIO-GROUP__ProductWindow__SCENARIO-TASK"
+    }
+  ],
+  "membershipFinalized": true,
+  "returnPolicy": {
+    "mode": "group-ready"
+  },
+  "wakeflowTrace": {
+    "kind": "WakeflowTrace",
+    "version": 1,
+    "artifactKind": "dispatch-group",
+    "source": "wakeflow-delivery",
+    "command": "prepare-dispatch-from-state",
+    "root": "@wakeflow-scenario-sandbox-root/wakeflow-fixture-parent/WakeflowFixture",
+    "stateRoot": ".wakeflow-active/current/SCENARIO-TRANSPORT",
+    "stateRevision": 2,
+    "demandKey": "SCENARIO-TRANSPORT",
+    "targetTaskId": "SCENARIO-TASK",
+    "targetWindow": "ProductWindow",
+    "dispatchGroup": "SCENARIO-GROUP",
+    "createdAt": "@wakeflow-scenario-time-4187d54715"
+  },
+  "createdAt": "@wakeflow-scenario-time-2937c0cd52",
+  "updatedAt": "@wakeflow-scenario-time-4f8f047653"
+}

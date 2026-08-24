@@ -1,0 +1,9 @@
+{
+  "kind": "CodexWindowThreadRegistration",
+  "version": 3,
+  "windowName": "WakeflowFixture",
+  "bindingId": "@wakeflow-scenario-binding-id-4b39dc60d4",
+  "threadId": "@wakeflow-scenario-thread-id-bc0e400d7b",
+  "registeredAt": "@wakeflow-scenario-time-4a9a8da298",
+  "lastVerifiedAt": "@wakeflow-scenario-time-6a6b2dc5c3"
+}

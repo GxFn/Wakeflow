@@ -8,6 +8,17 @@
 > the current Pod path. Prompt shape, MCP tool counts, file counts, commands,
 > and line references are also period snapshots, not 0.9.3 operating facts.
 
+> **2026-08-24 current-source addendum (R67).** The current v3 source has
+> retired and removed `lib/wakeflow-runtime.mjs` and `lib/wakeflow-trace.mjs`.
+> `mcp/server.cjs` loads the 31-tool `wakeflow-mcp-tools.mjs` facade and invokes
+> its in-process v3 handlers directly; there is no normal subprocess dispatcher
+> or trace/status/error wrapper facade. `wakeflow-process.mjs` now serves only
+> six exact read-only Git observations and four Darwin PID identity fields. Git
+> observations require a normalized absolute `-C` root and run after inherited
+> `GIT_*` redirection/configuration variables have been removed.
+> The dispatcher diagrams and descriptions below remain evidence of the v0.7.8
+> implementation, not instructions or current runtime facts.
+
 > Generated 2026-06-19 from source at commit HEAD; **revised 2026-07-02 against v0.7.8** (state-root locks, multi-demand capacity, intent alignment, isolation worktrees, demand pods, unified create/claim/deliver, wakeflow.config.json naming). Code is the source of truth.
 
 This document synthesizes seven parallel subsystem reads of the Wakeflow source.
@@ -227,12 +238,10 @@ dependency**:
 
 - **Registration / boot entrypoint.** Both editions' `.mcp.json` register the
   server **directly** as `node <pluginRoot>/mcp/server.cjs` — the Claude edition
-  uses `${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs` with `env
-  WAKEFLOW_DEFAULT_ROOT=${CLAUDE_PROJECT_DIR}`; the Codex edition uses
-  `./mcp/server.cjs` with `cwd:'.'`. Each `plugin.json` points
-  `mcpServers` at `./.mcp.json` (`claude .claude-plugin/plugin.json:20`,
-  `codex .codex-plugin/plugin.json:22`). The Claude `WAKEFLOW_DEFAULT_ROOT`
-  injection is what grounds the `defaultWorkspaceRoot` fallback chain in §3.3.
+  uses `${CLAUDE_PLUGIN_ROOT}/mcp/server.cjs` without a `cwd`; the Codex edition
+  uses `./mcp/server.cjs` with `cwd:'.'`. Neither edition injects a default
+  workspace root. Each public request carries one normalized absolute `root`,
+  and each `plugin.json` points `mcpServers` at `./.mcp.json`.
 - The former `core/bin/wakeflow-mcp.mjs` shim was removed (dead-capability
   cleanup); `mcp/server.cjs` is the only MCP entrypoint, exactly as the
   `.mcp.json` files register it.
@@ -274,7 +283,7 @@ prefix of MCP tools — ordering only, not availability.
 ```mermaid
 flowchart TB
   STDIN["stdin (JSON-RPC: NDJSON or Content-Length framed)"]
-  REG[".mcp.json registers: node &lt;pluginRoot&gt;/mcp/server.cjs<br/>(claude: env WAKEFLOW_DEFAULT_ROOT=CLAUDE_PROJECT_DIR)"]
+  REG[".mcp.json registers: node &lt;pluginRoot&gt;/mcp/server.cjs<br/>(every request carries an explicit root)"]
   STDIN --> REG
   REG -->|host launches| SRV["core/mcp/server.cjs"]
   SRV -->|"main(): dynamic import"| TOOLS["core/lib/wakeflow-mcp-tools.mjs {tools, handlers}"]
@@ -330,14 +339,11 @@ to `--compact` (see §3.4).
 | `wakeflow_sanitize_archive` | `wakeflow-state` | `sanitize-archive` — requires one existing state-root below the configured `workspace/archive/`, `state=archived`, and `archive-manifest.json`; dry-run reports categorized real-ID/workspace-path/home-path findings; apply replaces it with a re-scanned portable copy, appends `archive.sanitized`, and moves the original to local `preserved/`; never reopens the demand |
 | `wakeflow_verify` | `wakeflow-cli` | `verify --root <root> [--script-tests] [--with-runtime | --strict-runtime] --json`; timeout 180000ms with any of script-tests/with-runtime/strict-runtime, else 120000ms |
 
-Arg→flag translation is mechanical via four helpers (`wakeflow-mcp-tools.mjs:1061-1117`):
-`optionalValue(flag,value)` (empty for `undefined`/`null`/`''`), `repeatValues`
-(repeated flags), bare booleans inline, and `rootArgs` = `optionalValue('--root', args.root ?? defaultWorkspaceRoot())`. `defaultWorkspaceRoot` falls back to the
-first existing absolute path among `WAKEFLOW_DEFAULT_ROOT` /
-`CLAUDE_PROJECT_DIR`, then walks up (≤64 levels) to the nearest ancestor
-carrying `wakeflow.config.json` — so a non-controller window's MCP server
-resolves the WORKSPACE, not its own repo dir (the injected dir is kept as-is
-only pre-init).
+The current public-v3 tool schemas require `root` on every maintenance,
+evidence, and routed-domain request. The composition layer rejects a missing,
+relative, trimmed, or non-normalized root before it loads config, then derives
+state/config/ledger paths from the strict v3 snapshot. There is no ambient
+workspace fallback in the MCP process and no host-injected workspace authority.
 
 ### 3.4 Compact vs verbose
 
@@ -1281,8 +1287,8 @@ flowchart LR
 | `tools/sync-core.mjs` | The sync engine: byte-compares `core/` against both plugin targets (`Buffer.equals`), `--check` reports drift, default copies; asserts 14 host-contract files exist |
 | `core/mcp/server.cjs` | Hand-rolled JSON-RPC 2.0 stdio server: framing transport, protocol negotiation, `initialize`/`tools/list`/`tools/call`/`ping` |
 | `core/lib/wakeflow-mcp-tools.mjs` | Tool catalog (23 handlers, create_demand/claim_next/deliver era) — the tool → script → subcommand → args translation table; compact/verbose; host-visible prioritization |
-| `core/lib/wakeflow-runtime.mjs` | Runtime dispatcher: allow-listed script Map, spawns node child, parses last JSON, builds trace/status/error/health envelope |
-| `core/lib/wakeflow-process.mjs` | Central OS-process boundary: rejects shell mode; restricts commands to node/git/ps/caffeinate |
+| `core/lib/wakeflow-runtime.mjs` | Historical v0.7.8 runtime dispatcher; removed from current source in R67 after its production caller graph became empty |
+| `core/lib/wakeflow-process.mjs` | Current bounded observation boundary: six exact read-only Git queries plus Darwin PID identity fields; no Node/MCP/Git-mutation/caffeinate authority |
 | `core/scripts/wakeflow-state.mjs` | The heart: 8 demand reducers (init … complete-demand, archive-demand w/ P1-0 redaction + open-isolation-window refusal) + host-ownership guard + window-view/focus-doc read projections; every reducer serialized by a sibling `<stateRoot>.state-lock` O_EXCL mutex, init additionally under the workspace `current.capacity-lock` (maxActiveDemands gate); decide-review decisions: accept/rework/blocked/redesign |
 | `core/scripts/lib/wakeflow-review-scope.mjs` | Blocked-wedge recovery: only `accepted`/`reviewDecision=accept` is final; keeps blocked-but-not-accepted tasks reviewable |
 | `core/scripts/lib/wakeflow-state-lock.mjs` | Cross-process mutex layer: O_EXCL `withFileLock`/`withStateRootLock` with stale-break + live-pid 4× patience — backs `<stateRoot>.state-lock`, `current.capacity-lock`, the TODO board lock, paste mutexes, and `stream-overlay.lock` |

@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:demand-artifacts:test-card:v1",
+  "title": "Wakeflow Candidate Test Card",
+  "$comment": "Structural and lexical contract for one immutable Controller-authored Test execution contract. Runtime validation additionally enforces same-demand authority, topology assignment, exact strategy source and observed state, attempt relations, and create-only storage. Lifecycle, reports, results, and Test verdicts are external to this record.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "programId",
+    "demandId",
+    "demandRef",
+    "demandDigest",
+    "createdAt",
+    "testCardId",
+    "targetTaskId",
+    "windowId",
+    "demandAuthorityRef",
+    "demandAuthorityDigest",
+    "strategySource",
+    "observedState",
+    "executionContract",
+    "boundaryGate",
+    "evidenceRequired",
+    "allowedOperations",
+    "forbiddenOperations"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "artifactKind": { "type": "string", "const": "wakeflow-test-card" },
+    "programId": { "$ref": "#/$defs/programId" },
+    "demandId": { "$ref": "#/$defs/demandId" },
+    "demandRef": { "type": "string", "const": "demand.json" },
+    "demandDigest": { "$ref": "#/$defs/digest" },
+    "createdAt": { "$ref": "#/$defs/timestamp" },
+    "testCardId": { "$ref": "#/$defs/testCardId" },
+    "targetTaskId": { "$ref": "#/$defs/targetTaskId" },
+    "windowId": { "$ref": "#/$defs/windowId" },
+    "demandAuthorityRef": { "type": "string", "const": "demand-authority.json" },
+    "demandAuthorityDigest": { "$ref": "#/$defs/digest" },
+    "strategySource": { "$ref": "#/$defs/exactPortableRef" },
+    "observedState": { "$ref": "#/$defs/observedState" },
+    "executionContract": { "$ref": "#/$defs/executionContract" },
+    "boundaryGate": { "$ref": "#/$defs/boundaryGate" },
+    "evidenceRequired": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/trimmedText" }
+    },
+    "allowedOperations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/trimmedText" }
+    },
+    "forbiddenOperations": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/trimmedText" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetTaskId": {
+      "type": "string",
+      "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "testCardId": {
+      "type": "string",
+      "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+    },
+    "trimmedText": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)(?:[\\r\\n]|[^\\u0000-\\u001F\\u007F-\\u009F])*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "opaqueToken": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\s)[^\\u0000-\\u001F\\u007F-\\u009F]*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "portableRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\s)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\/$)[^\\u0000-\\u001F\\u007F-\\u009F]*[^\\s\\u0000-\\u001F\\u007F-\\u009F]$"
+    },
+    "exactPortableRef": {
+      "type": "object",
+      "required": ["ref", "digest"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/portableRef" },
+        "digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "observedState": {
+      "type": "object",
+      "required": ["revision", "eventId", "eventDigest"],
+      "properties": {
+        "revision": { "type": "integer", "minimum": 1 },
+        "eventId": { "$ref": "#/$defs/opaqueToken" },
+        "eventDigest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    "changeControl": {
+      "type": "object",
+      "required": [
+        "testMayChangeApproach",
+        "testMayChangeGoal",
+        "testMayAddUnmappedSteps",
+        "testMayUseUnlistedSkills",
+        "route"
+      ],
+      "properties": {
+        "testMayChangeApproach": { "type": "boolean", "const": false },
+        "testMayChangeGoal": { "type": "boolean", "const": false },
+        "testMayAddUnmappedSteps": { "type": "boolean", "const": false },
+        "testMayUseUnlistedSkills": { "type": "boolean", "const": false },
+        "route": { "type": "string", "const": "return-blocked-to-controller" }
+      },
+      "additionalProperties": false
+    },
+    "executionContract": {
+      "type": "object",
+      "required": [
+        "requirementGoal",
+        "approvedPlan",
+        "allowedSkills",
+        "setupPolicy",
+        "maxAttempts",
+        "restartConditions",
+        "changeControl"
+      ],
+      "properties": {
+        "requirementGoal": { "$ref": "#/$defs/trimmedText" },
+        "approvedPlan": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/trimmedText" }
+        },
+        "allowedSkills": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/opaqueToken" }
+        },
+        "setupPolicy": {
+          "type": "string",
+          "enum": ["reuse-existing", "fresh-once", "fresh-per-attempt"]
+        },
+        "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "restartConditions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/trimmedText" }
+        },
+        "changeControl": { "$ref": "#/$defs/changeControl" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "setupPolicy": { "const": "fresh-per-attempt" } },
+            "required": ["setupPolicy"]
+          },
+          "then": {
+            "properties": { "restartConditions": { "minItems": 1 } }
+          }
+        }
+      ]
+    },
+    "boundaryGate": {
+      "type": "object",
+      "required": [
+        "question",
+        "objectBoundary",
+        "controllerSelfChecks",
+        "realScenarioConditions",
+        "successMeans",
+        "failureMeans",
+        "cannotConclude",
+        "stopConditions"
+      ],
+      "properties": {
+        "question": { "$ref": "#/$defs/trimmedText" },
+        "objectBoundary": { "$ref": "#/$defs/trimmedText" },
+        "controllerSelfChecks": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/trimmedText" }
+        },
+        "realScenarioConditions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/trimmedText" }
+        },
+        "successMeans": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/trimmedText" }
+        },
+        "failureMeans": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/trimmedText" }
+        },
+        "cannotConclude": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/trimmedText" }
+        },
+        "stopConditions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/trimmedText" }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

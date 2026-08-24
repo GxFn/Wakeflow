@@ -59,9 +59,9 @@ Wakeflow provides the missing control layer:
 - **Review inputs before acceptance**: target backfill, logs, paths, and test
   summaries are inputs, not conclusions. Wakeflow checks structure and path
   locatability; the controller independently validates behavior before completing work.
-- **Local-first runtime**: real session ids live only in the local thread
-  registry; window config is a derived sendability view, and active state stays
-  out of tracked source.
+- **Local-first runtime**: raw session ids live only in typed host-local window
+  bindings; redacted window-runtime files are projections, and active state
+  stays out of tracked source.
 
 Wakeflow is not a command launcher with nicer names. It is a reusable workflow
 capability for keeping multi-window agent work legible, bounded, and resumable.
@@ -89,7 +89,7 @@ bar tells you who is doing what at a glance:
 | --- | --- |
 | green `>>` block | the window is executing a turn right now (live activity monitor) |
 | green `+` | a result arrived and is ready for controller review |
-| no badge | idle, or a delivery quietly in flight (the fleet's normal state; `window-status` reports the machine states when needed) |
+| no badge | idle, or a delivery quietly in flight (strict status and typed host projections report machine facts when needed) |
 
 | Window | Role | Default reasoning effort |
 | --- | --- | --- |
@@ -100,10 +100,12 @@ bar tells you who is doing what at a glance:
 
 Inside every pane a seeded statusline shows the live serving model and the
 window identity in plain text. tmux windows do not survive a machine reboot.
-`launch-all` and direct `launch-window --resume` apply only to the configured
-baseline fleet. Pod recovery is separate: `mode=resume` verifies or resumes
-only the exact bound session at its recorded cwd, while current product/main
-HEAD and dirty state remain observations rather than recovery gates.
+Fresh and replacement setup return host-neutral launch intents; only the v3
+Claude activation owner may materialize them and register the resulting exact
+session handle. Pod inspection is separate:
+`operation=inspect-materialization` observes only an existing exact binding at
+its recorded cwd, while current product/main HEAD and dirty state remain
+observations rather than recovery gates.
 
 ### Layer 2 — the loop (how work moves)
 
@@ -111,12 +113,12 @@ Work is organized into demands: one demand = one goal = one state root on
 disk. Every demand moves through the same closed loop:
 
 ```text
- 1 init       raw state init creates the demand root               (unclaimed)
- 2 claim      public create, or first raw-state drive, binds host  (codex | claude)
+ 1 create     public create publishes the demand root + authority  (unclaimed)
+ 2 claim      exact TODO claim or explicit create binds controller (codex | claude)
  3 add task   a task package freezes target context and requirement anchors
  4 dispatch   preview -> digest-matched apply -> LOCK -> prompt pasted
  5 work       the target window executes inside its repository boundary
- 6 result     TargetResultEnvelope lands with declared review-input refs -> lock released
+ 6 result     strict TargetResult lands with typed evidence locators -> lock released
  7 review     controller inspects inputs + independently validates, then decides
  8 complete   active required tasks accepted, replacement lineage valid, no blocker
 ```
@@ -126,9 +128,11 @@ These rules keep the loop honest:
 - **One demand authority, regardless of who creates it.** Design is the default
   author for substantial new product behavior; the controller may create
   bounded or already-documented work directly only with the same proportional
-  anchored inputs. The first implementation package freezes them once as
-  `demand-authority.json`. A typed draft may precede that freeze; `Auto Claim`
-  changes claim timing only.
+  anchored inputs. Whenever any TaskPackage will be needed, the initial
+  `wakeflow_create_demand` publication includes them as
+  `demand-authority.json`; public v3 cannot add authority later. A no-authority
+  demand therefore cannot later acquire a TaskPackage. `Auto Claim` changes
+  claim timing only.
 - **Prompts brief, packages contextualize, Skills execute.** The bounded prompt
   carries objective, priority completion/context/boundary cues, reading order,
   identity, and trace. The package owns complete task context, requirement
@@ -141,7 +145,8 @@ These rules keep the loop honest:
 - **Replacement is explicit.** Ordinary rework redispatches the same task.
   Mainline redesign preserves the rejected task, then the controller creates a new
   full-context implementation task in the product responsibility window with
-  `replacesTargetTaskId` after the Design handoff. Accepting that replacement
+  exact `replacesTargetTask` task/package tuple after the Design handoff.
+  Accepting that replacement
   supersedes the old task and package.
   The current implementation freezes exactly one Design request/handoff generation per Pod;
   that sole request may be `initial-design`, `supplement`, or `redesign`. A
@@ -157,14 +162,13 @@ These rules keep the loop honest:
   .claude/settings.json          portable allow rules, relative refs committed
   .claude/settings.local.json    machine-local statusline command    never committed
   wakeflow-ledger/               durable designs, records, archives  committed
-  .wakeflow-active/             demand state roots (layer 2 lives here)   local
-  .wakeflow-local/wakeflow-delivery/                                      local
-    dispatch-packets/  delivery-envelopes/  delivery-runs/   transport records
-    target-results/                                          target-authored result envelopes
-    locks/                       one in-flight target delivery per window, cross-host
-    hosts/codex/                 codex session registry (host-scoped)
-    hosts/claude-code/           claude session registry + tmux bindings
-    hosts/<host>/pod-*           pod plans, operations, bindings, access receipts
+  .wakeflow-active/current/<demandId>/                                   local
+    demand/state/events/task-packages/results/review/evidence       active authority
+  .wakeflow-local/                                                     local
+    audit/preserved/<preservationId>/                              typed audit holds
+    runtime/maintenance/transactions/                              mutation journals
+    runtime/shared/{coordination,transport}/                       leases + transport
+    runtime/hosts/<host>/{identity,projections,evidence,operations}/ host runtime
 ```
 
 Rule of thumb: **business truth is host-neutral and shared; transport handles
@@ -190,20 +194,18 @@ appear in tracked files, prompts, or backfill text.
 
 ### Dual-host coexistence
 
-The same workspace can run the Codex edition and the Claude Code edition side
-by side. Demands bind to one platform at claim time (machine-enforced on every
-driving command), the shared per-window work lease serializes target
-deliveries across hosts (controller returns use a separate paste mutex), and
-ownership moves only through an explicit, audited
-`adopt-demand-host` transfer.
+The same workspace can run both editions side by side. Demand/business
+authority stays host-neutral; the exact current binding and transport lineage
+select the host for each operation, while shared typed leases serialize target
+delivery. There is no public demand-host transfer state machine. Unknown or
+host-wide activation coverage remains behind a manual host gate.
 
 ## Install Wakeflow
 
-> Platform support: macOS-first. The tmux fleet and `brew` preflight are
-> exercised daily on macOS; the tmux core should work on Linux but is not yet
-> verified there. Enter the fleet from a new terminal with `tmux attach -t
-> <session>` when `tmuxSocket` is unset, or `tmux -L <tmuxSocket> attach -t
-> <session>` when the dedicated socket is configured.
+> Platform support: the Claude host seam is macOS-first and tmux-backed. A
+> terminal attachment is an operator observation only; it is never binding,
+> delivery, close, or recovery authority. Legacy helper preflight and socket
+> fields are not public-v3 configuration or execution contracts.
 
 
 The repository root is the development workspace, and the installable Claude
@@ -229,55 +231,58 @@ The plugin ships four coordinated surfaces:
 | MCP server | `.mcp.json` starts `${CLAUDE_PLUGIN_ROOT}/bin/wakeflow-mcp`; the launcher selects Node.js 20+ and starts the standalone `mcp/server.cjs` with no `node_modules` dependency. |
 | Skills | `wakeflow-controller`, `wakeflow-target`, `wakeflow-target-craft`, and `wakeflow-governance` operating manuals. |
 | Slash commands | `/wakeflow:init`, `/wakeflow:check`, `/wakeflow:windows`, `/wakeflow:status`, `/wakeflow:dispatch`, `/wakeflow:review`, and `/wakeflow:unattended`. |
-| Host transport helper | `scripts/lib/wakeflow-claude-host.mjs`. Fleet: `preflight`, `ensure-server`, `launch-window`, `launch-all`, `replace-all`, `retitle`, `arrange-windows`, `window-status`, `check-workspace`. Delivery: `deliver` (primary), `send`, `readback`, `wait-results`, `activity-monitor`. Policy: `seed-permissions`, `set-unattended`, `stamp-runtime`. Explicit Pod host lifecycle: `pod-open`, `pod-close`, `pod-list` (native `claude --worktree` for products). `stream-open/close/list` is legacy recovery only, not the new Pod path. |
-
-The helper requires tmux. `preflight` only reports availability and the
-recommended install command. When tmux is missing, the initialization command
-asks once for explicit user consent; Claude Code then runs `brew install tmux`
-and may retry once on a transient bottle error.
+| Claude host seam | `scripts/lib/wakeflow-claude-host.mjs` is the current closed v3 facade. Its exact commands delegate lifecycle, transport, settings/activity, Pod, activation-scope, and decommission to typed owners; it owns no second registry or transport state. |
 
 ## Quick Start
 
-Three steps from install to a running fleet, then a command cheat sheet.
+Three steps to initialize and inspect the strict v3 core. Host activation is a
+separate seam and must never be simulated with legacy runtime files.
 
 1. **Initialize** (once per workspace) — in Claude Code, from the workspace directory:
    ```text
    /wakeflow:init
    ```
-   Preview the plan, confirm, and Wakeflow writes the config + access cards, launches every window, and registers it. Already initialized? `init` stops on purpose — use `/wakeflow:windows <name> --replace` for a stale window, or re-run only on an explicit reset.
-2. **Enter the workspace** — open a NEW terminal window or tab, `cd` into the workspace, and run (substitute your `hosts.claude-code.tmuxSession`; add `-L <tmuxSocket>` before `attach` when configured):
-   ```text
-   tmux attach -t wakeflow
-   ```
-3. **Start work** — give the controller window a demand, or run `/wakeflow:dispatch`.
+   Preview the complete explicit selection, confirm the exact plan/digest, and
+   apply. There is no discovery/reset alias. Existing v3 workspaces use
+   reconfigure or reconcile; legacy workspaces use the separately authorized
+   unregistered bootstrap.
+2. **Inspect** — run `/wakeflow:check` and `/wakeflow:status`; both are
+   read-only projections from strict v3 authority.
+3. **Activate only through the v3 host seam** — initialization returns
+   host-neutral `launchIntents`. Route each through the facade's exact
+   `launch-window` command and register only its final session handle. If the
+   host effect or receipt is unavailable, report the intent and stop; retired
+   public-v2 commands are not aliases.
 
 ### Command cheat sheet
 
 | Command | What it does | When |
 | --- | --- | --- |
-| `/wakeflow:init` | Scaffold the workspace, then launch + register every window (first time only) | A brand-new workspace |
-| `/wakeflow:windows` | Read-only status table of every window (registered? alive? mode?) | "What is the fleet doing?" |
-| `/wakeflow:windows all` | Resume/relaunch every configured window with the SAME session ids (context intact) | After a reboot or a plugin upgrade |
-| `/wakeflow:windows <name>` | Resume one window | One window died |
-| `/wakeflow:windows <name> --replace` | Rebuild one window with a fresh session | A window is stale / context-heavy |
+| `/wakeflow:init` | Preview/confirm/apply fresh v3 initialization | A brand-new workspace |
+| `/wakeflow:windows` | Inspect typed bindings and redacted runtime projections | Identity/runtime orientation |
+| `/wakeflow:windows <window-id> replace` | Plan one exact replacement; host effect remains separate | A stale responsibility window |
+| `/wakeflow:windows <window-id> decommission` | Apply only after exact close + absence evidence | Verified Claude closure |
 | `/wakeflow:status` | Demands, eligible work, deliveries, window readiness | Before dispatching |
-| `/wakeflow:dispatch` | Prepare and send one delivery to a target window | Hand work to a window |
-| `/wakeflow:review` | Inspect target inputs, independently validate, then record accept / rework / blocked | A result came back |
-| `/wakeflow:unattended on|off` | Toggle the work windows' permission mode | Switch hands-off ↔ prompted |
-| `/wakeflow:check` | Health-check an existing workspace, converge stale or missing surfaces | After an upgrade |
-
-Mnemonic: **`init` builds it, `windows all` powers it on, `windows` just takes a look.**
+| `/wakeflow:dispatch` | Preview/apply/claim, then require the fenced v3 host adapter and record outcome | Hand work to a bound window |
+| `/wakeflow:review` | Inspect strict current results, independently validate, then create/decide one candidate | A result came back |
+| `/wakeflow:unattended on|off` | Preview a desired-model policy change; unknown/host-wide activation blocks `on` | Switch hands-off ↔ prompted |
+| `/wakeflow:check` | Read-only strict v3 verification | After a change or upgrade |
 
 ## Security & System Impact
 
 Wakeflow is a powerful local automation plugin. Before installing, understand exactly what it does on your machine — none of it is hidden:
 
 - **Runs a local MCP server** (`bin/wakeflow-mcp`): the dependency-free launcher selects Node.js 20+ and starts `mcp/server.cjs`. The server reads/writes workspace state files; it makes no network calls of its own.
-- **Spawns tmux sessions and interactive `claude` windows**: the baseline fleet uses the configured tmux session; each demand pod uses another session. Wakeflow creates, resumes, replaces, and arranges these real `claude` CLI sessions via the bundled host helper.
-- **Runs these shell commands**: `node`, `tmux`, `git`, and `brew` — the last only to `brew install tmux` once, after a single explicit consent, when tmux is missing.
-- **Permission model — safe by default**: work windows ship with `acceptEdits` (Claude Code still prompts before risky actions). Fully unattended `bypassPermissions` (no prompts) is **opt-in only**: a workspace enables it explicitly via `/wakeflow:unattended on`, that choice is recorded in `wakeflow.config.json`, and only that recorded consent lets the helper auto-confirm the boot dialog. The safety boundary in unattended mode is the repository worktree, the `CLAUDE.md` gates, and the Wakeflow state machine.
-- **Local-first, no telemetry**: real session/thread ids live only under `.wakeflow-local/` and are never written to tracked files, prompts, or sent anywhere. Demands, result inputs, and ledgers stay in your workspace.
-- **Platform**: macOS-first (tmux; Homebrew is only the documented install path when tmux is missing). The tmux core should work on Linux but is not yet verified there.
+- **Host effects are separate**: the public core plans and records typed facts;
+  it does not claim to launch/paste/close a Claude session. The packaged v3
+  facade delegates those effects to host owners with exact mutex/receipt
+  contracts.
+- **Permission model**: unattended mode is opt-in and additionally gated by
+  activation coverage. `unknown` or `host-wide` coverage blocks unattended
+  activation; Wakeflow does not add a machine-global workspace registry.
+- **Local-first, no telemetry**: raw session handles and locators stay only in
+  the host-local typed binding/operation tree. They are never written to
+  tracked files, prompts, transport, or portable archives.
 
 You remain in control: scripts and MCP tools create, validate, and record
 machine data; they never choose acceptance, widen scope, or decide product
@@ -286,82 +291,36 @@ controller is the acceptance authority, and product decisions are yours.
 
 ## Window Model
 
-Window transport is the key Claude Code difference, and the Claude Code
-edition is terminal-only. Every Wakeflow window (controller included) is a
-tmux-resident interactive `claude` session. The default fleet lives in one
-tmux server session named `wakeflow`; each demand pod (below) adds its own
-`wakeflow-<pod>` session beside it. The session name is configurable in
-`wakeflow.config.json`:
+Claude identity is a typed host-local binding keyed by stable `windowId`. The
+raw session handle is private; the public window-runtime projection is
+redacted and regenerable. A semantic title, tmux pane, cwd, or legacy
+thread-registry/window-host file is not identity authority.
 
-```json
-{
-  "hosts": {
-    "claude-code": {
-      "tmuxSession": "wakeflow"
-    }
-  }
-}
-```
+**Launch.** Fresh initialization and replacement produce host-neutral intents.
+The facade's `launch-window` owner performs the physical session effect and
+`wakeflow_register_window operation=register` records the final handle. If the
+effect or receipt cannot be established, the intent remains blocked; retired
+public-v2 files must not be written as a substitute binding.
 
-A Wakeflow thread id is the window's Claude Code session id, which stays
-stable across resumes. Desktop windows are not an automation transport. The
-envelope, target-result, and review contracts are unchanged from the shared
-Wakeflow model.
+**Dispatch.** Target delivery is
+`target-preview → target-apply → target-claim → fenced host effect →
+target-outcome`. The shared typed lease is acquired by claim, not by apply.
+The v3 adapter holds a stable-window mutex across validation, paste, and at
+most one bounded readback. Accepted, ambiguous, or sent-unconfirmed transport
+is not resent. Controller return uses
+`controller-preview/controller-apply/controller-pre-send`, takes no target
+lease, and records a separate outcome.
 
-**Launch.** Initialization runs the helper's `preflight` (tmux install with
-consent when missing), then `launch-window` for each planned window: the
-helper creates a tmux window running `claude --session-id`, pastes the
-entry-sync prompt, sets the `displayTitle` as the tmux window name, and
-returns the session id, which is registered once in the local thread
-registry.
+**Recovery and close.** Creation, inspection, replacement, and decommission
+are separate owner operations. Pod inspection uses
+`wakeflow_pod_open operation=inspect-materialization` and never recreates or
+discovers a worktree. Claude closure is machine-verifiable only after exact
+close and an absence probe both succeed.
 
-**Dispatch.** The primary transport is one step: `deliver --delivery-file
-<envelope.json>` reads the prepared envelope, renders the prompt, resolves the
-target window itself, reuses/revalidates the work lease reserved by applied
-envelope preparation, pastes through a tmux buffer, and returns pane readback evidence; the agent records
-it with `wakeflow_record_delivery`. (`send --window <target> --prompt-file
-<file> --delivery-id <id>` remains the low-level path for an explicitly
-identified custom target prompt, never a controller-return.) Target windows
-controller-return the same way toward the controller window — for pod demands
-the envelope's stamped `controllerWindow` routes the return to the pod's own
-controller without taking a target work lease. If a send is accepted before
-the new pane turn is visible, only bounded readback is retried; the prompt is
-never sent twice. Accepted transport is recorded as `sent`; readback is an
-independent `confirmed` / `pending` / `unavailable` observation for Agent
-judgment, not a send gate. A matching target result normally releases a target
-work lease. For send-failure recovery, only a proven pre-send rejection may
-release the exact matching lease; ambiguous outcomes preserve it. `wait-results --group
-<id>` is available only for explicit
-synchronous waits in scripted flows; normal dispatch does not arm it.
-
-**Recovery.** Creation and recovery are separate. When a tmux window dies or
-the machine reboots, the registered
-session id remains the thread id. Relaunch a baseline conversation with
-`launch-window --root <workspace> --window <window> --cwd <recorded actual cwd>
---resume --session-id <registered id> --replace [--server <configured server>]`;
-use `launch-all` only for the registered baseline fleet. A Pod uses the
-read-only `wakeflow_pod_open mode=resume` plan. The helper verifies a live
-window or resumes only the exact registered session at the immutable bound
-cwd; it never repeats the creation HEAD gate, adds `--worktree`, discovers or
-creates a replacement, rebinds core state, or falls back to mainline. Missing
-or ambiguous identity remains blocked. A baseline-only
-`headless-recovery` send adapter exists as a last resort when interactive
-relaunch is impossible; it is not the normal fleet path, records one bounded
-readback observation without requiring confirmed visibility, and must never
-recover a Pod window.
-
-**Watching.** Open a new terminal window/tab and run `tmux attach -t
-<session>` (default `wakeflow`) without a dedicated socket, or `tmux -L
-<tmuxSocket> attach -t <session>` when configured. There is no programmatic
-tab-opening path.
-
-**Unattended permissions.** Work windows ship with `acceptEdits`; the
-fleet-wide mode lives in `hosts.claude-code.permissionMode` and changes only
-through an explicit, recorded decision (`/wakeflow:unattended on|off`, or the
-helper's `set-unattended`). Only that recorded `bypassPermissions` consent lets
-the helper auto-confirm the boot dialog. Per-repository
-`.claude/settings.json` allowlists still compose with whichever mode is
-recorded.
+**Unattended activation.** The desired permission mode is tracked in strict
+config, but applying a config change is not host activation. Only exact
+per-workspace activation coverage may proceed unattended. Unknown or host-wide
+coverage stays blocked; no machine-global workspace registry is created.
 
 ## Demand Pods (multi-demand parallelism)
 
@@ -376,16 +335,16 @@ per-repository limit.
   `Test__<pod>`, and one product session per selected repository, in its own
   tmux container. Within the demand, each repository still receives one
   combined package at a time.
-- Core `wakeflow_pod_open mode=create` records host-neutral first-
-  materialization operations. The helper materializes them: three distinct
-  control sessions and native
-  `claude --worktree` product sessions from exact repository roots. It never
-  nests Claude's `--tmux` or grants the whole workspace with a default
-  `--add-dir`.
-- `wakeflow_pod_record event=materialization` can journal the exact launch
-  correlation around the helper call. Claude returns a final session id
-  synchronously; it has no Codex `clientThreadId` pending state, and no
-  temporary request id belongs in the registry.
+- Core `wakeflow_pod_open operation=launch-preview/launch-apply` freezes
+  host-neutral first-materialization operations. The v3 Claude Pod adapter may
+  execute only those canonical pending/unbound operations: three distinct
+  control sessions and native `claude --worktree` product sessions from exact
+  repository roots. It never nests Claude's `--tmux` or grants the whole
+  workspace with a default `--add-dir`.
+- `wakeflow_pod_record operation=record-materialization` journals the exact
+  launch correlation and observed host result. Claude returns a final session
+  id synchronously; it has no Codex `clientThreadId` pending state, and no
+  temporary request id belongs in typed identity.
 - Register only the final Claude session id, then verify pane cwd, Git common
   dir, base HEAD, and `mainCheckout=false` with `wakeflow_pod_bind`. All three
   control bindings produce `control-ready`; the Pod Design handoff plus all
@@ -393,30 +352,32 @@ per-repository limit.
 - The Pod's single Design generation stays between `Controller__<pod>` and
   `Design__<pod>`.
   Freeze the controller request with
-  `wakeflow_pod_plan action=design-request`, then record its exact
-  `PodDesignHandoffEnvelope` with `wakeflow_pod_record event=design-handoff`; neither
+  `wakeflow_pod_plan operation=design-request`, then record its exact
+  `PodDesignHandoffEnvelope` with `wakeflow_pod_record operation=design-handoff`; neither
   step creates a second global TODO. The current implementation does not persist a second
   Pod Design generation, so later supplement/redesign is an explicit
   capability blocker.
-- Before Pod Test dispatch, run `wakeflow_pod_plan action=test-access` and record
+- Before Pod Test dispatch, run `wakeflow_pod_plan operation=test-access-plan` and record
   the independent Test session's exact probe through
-  `wakeflow_pod_record event=test-access`. Only `validated` +
+  `wakeflow_pod_record operation=test-access-receipt`. Only `validated` +
   `direct-multi-root` coverage of every active product binding opens dispatch.
   Unsupported multi-root access remains blocked; no main-checkout, product-
   window, or unverified per-repository-executor fallback is implemented.
-- Re-running `mode=create` may materialize only canonical operations that are
-  still pending and unbound. `mode=resume` contains only already-bound
+- A repeated launch apply may materialize only canonical operations that are
+  still pending and unbound. `operation=inspect-materialization` contains only already-bound
   operations: it verifies or resumes the exact session at the recorded actual
   cwd, and never creates a missing session, passes `--worktree`, or rebinds it.
-- Core `wakeflow_pod_plan action=close` emits a host-close plan. Helper `pod-close` closes
-  tmux/Claude sessions and reports worktree disposition; record each result
-  with `wakeflow_pod_record event=close-receipt`. Wakeflow never runs Git worktree
-  cleanup for the new Pod path.
+- Core `wakeflow_pod_plan operation=close-intent` emits a host-close intent.
+  The v3 adapter closes the exact tmux/Claude session, performs the bounded
+  absence probe, and reports worktree disposition; record the observation and
+  receipt with `wakeflow_pod_record operation=close-observe/close-receipt`.
+  Logical binding close, session close, and Claude/user-owned physical worktree
+  cleanup remain separate facts.
 
 ## One Vocabulary Across Hosts
 
 Wakeflow keeps one machine vocabulary across host editions. A "thread id" in
-registries, payload fields, and CLI flags is the Claude Code session id,
+typed binding records, payload fields, and CLI flags is the Claude Code session id,
 stable across resumes; no field is renamed per host. The per-window rules file is `CLAUDE.md`, which
 Claude Code auto-loads when the session starts, so each window reads its own
 gates and access card without extra prompting.
@@ -431,7 +392,7 @@ MyWorkspace/
   CLAUDE.md
   wakeflow.config.json
   .wakeflow-active/          # ignored active controller state
-  .wakeflow-local/           # ignored thread registry and derived runtime
+  .wakeflow-local/           # ignored audit + shared/host runtime
   wakeflow-ledger/            # durable project coordination records
   ProductRepo/
   CoreRepo/
@@ -448,40 +409,39 @@ Preview the plan first and wait for my confirmation before writing.
 
 The operating flow is:
 
-1. Claude Code calls `wakeflow_initialize_workspace` with `apply: false`.
-2. Wakeflow returns directory facts and an `agentSelectionProtocol`.
-3. Claude Code judges whether the workspace is clean or messy from those facts
-   and user context.
-4. For a clean workspace, Claude Code calls the tool again with explicit
-   `repositories` mappings for the intended work windows.
-5. For a messy workspace, Claude Code asks which directories are managed
-   windows before writing. It must not use a broad discovered-directory
-   import.
-6. After user confirmation for a fresh workspace, Claude Code calls
-   `wakeflow_initialize_workspace` with `apply: true`.
-7. Claude Code runs the host helper: `preflight` first, then `launch-window`
-   for each window in the returned launch plan. Each launch creates a tmux
-   window running `claude --session-id`, pastes the entry-sync prompt, sets
-   the `displayTitle` as the tmux window name, and returns the session id.
-   Claude Code registers each returned final session id, then runs helper
-   `retitle` as the final title reset. The tool updates the local routing
-   registry and derived window config without exposing the id. Wakeflow does
-   not classify initialization readback or maintain a separate session-ready
-   state.
+1. Claude Code builds one explicit selection split into `program`, `topology`,
+   `storage`, `governance`, and `hosts`, with request-local `selectionKey`
+   links. Wakeflow allocates the durable typed IDs.
+2. Claude Code calls `wakeflow_maintain_workspace` with
+   `action: "fresh-initialize"`, `mode: "preview"`, and that closed selection.
+   Preview is read-only.
+3. Claude Code reviews the blockers, exact `confirmedActionPlan`, returned
+   `confirmedActionPlanDigest`, and `launchIntents`. Legacy or unclear ownership
+   stays blocked instead of being broadly imported.
+4. After user confirmation, Claude Code calls the same tool with
+   `mode: "apply"`, the exact confirmed plan, and its returned digest.
+5. The facade's `launch-window` owner may execute only those exact retained
+   `launchIntents`. It keeps the raw session handle private, registers the final
+   handle with `wakeflow_register_window operation=register`, and refreshes the
+   redacted runtime projection. If the exact host effect or receipt is
+   unavailable, activation stops with the intents still pending; retired
+   public-v2 files must not be written as substitute runtime facts. Unknown or
+   host-wide activation coverage also remains behind the manual host gate.
 
-For an already initialized workspace, `wakeflow_initialize_workspace` is not a
-general refresh button. It may write only after the user explicitly requests a
-reset initialization; the apply call must set `resetInitialization: true`, pass
-explicit `repositories`, reconfirm Design/Test mode, and must not use
-`useDiscovered`. Heavy or stale tmux windows use the replacement commands
-instead.
+An initialized v3 workspace is never refreshed by replaying fresh setup. Use
+`action: "reconfigure"` for an intentional complete desired-model change and
+`action: "reconcile"` to restore managed bytes or projections from current v3
+authority; both are preview-before-apply. Heavy or stale tmux windows use the
+replacement command. Explicit legacy migration is available only through the
+exact artifact's unregistered `bin/wakeflow-bootstrap`, never normal MCP/CLI.
 
 Command responsibilities stay separate:
 
 | Need | Command | Responsibility |
 | --- | --- | --- |
-| First-time setup | `wakeflow_initialize_workspace` | Discover, confirm, write workspace config/docs/support surfaces, and return the full launch plan. |
-| Explicit reset setup | `wakeflow_initialize_workspace` with `resetInitialization: true` | Reconfirm work directories, clean stale managed window cards/runtime for removed windows, and rewrite setup surfaces. |
+| First-time setup | `wakeflow_maintain_workspace`, action `fresh-initialize` | Preview one explicit selection, then atomically apply the exact confirmed owner plan. |
+| Intentional model change | `wakeflow_maintain_workspace`, action `reconfigure` | Preview a complete desired v3 model and apply only the reviewed delta. |
+| Repair from current authority | `wakeflow_maintain_workspace`, action `reconcile` | Rebuild managed bytes/projections without changing the desired model. |
 | One heavy/stale window | `wakeflow_replace_windows` (pass `window`) | Return one replacement launch entry with a `wakeflow_register_window` call template; no workspace docs refresh. |
 | Several heavy/stale windows | `wakeflow_replace_windows` | Return only the requested replacement entries and registration call templates; no unrelated window rewrites. |
 
@@ -493,8 +453,8 @@ Wakeflow supports localized initialization. Pass `language: "zh"` for Chinese
 workspaces, `language: "en"` for English workspaces, or `language: "auto"`
 when there is no clear preference. Generated session titles keep the window
 name at the front so the important repository name remains visible in narrow
-sidebars. New state-root progress documents and subsequent Unified Status
-renders also use the selected interface language.
+sidebars. New and regenerated demand-progress projections also use the selected
+interface language.
 
 Controller and child windows can use Claude Code subagents to speed up bounded
 code search, log triage, test localization, and input summaries. Subagent
@@ -510,10 +470,10 @@ boundary:
 | --- | --- |
 | `CLAUDE.md` | Parent controller gates and durable boundaries. |
 | Child `CLAUDE.md` access cards | Per-window responsibility and read paths. |
-| `wakeflow.config.json` | Managed windows, repository paths, roles, host transport settings such as the tmux session name, and default language. |
-| `.wakeflow-active/` | Active state roots, current indexes, progress docs, TODO projections, intake, and test cards. |
-| `.wakeflow-local/` | Thread registry, delivery runtime, host-scoped Pod operation/binding receipts, local overrides, and derived window config. |
-| `wakeflow-ledger/` | Long-term project coordination records and archives. |
+| `wakeflow.config.json` | Typed program identity plus topology, storage, governance, and host policy. |
+| `.wakeflow-active/` | Current demand/business authority, immutable artifacts/events, TODO authority, and progress projections. |
+| `.wakeflow-local/` | Typed audit holds plus shared/host runtime: bindings, leases, transport, Pod evidence, keep-live data, projections, and mutation journals. |
+| `wakeflow-ledger/` | Durable program indexes and portable whole-demand BusinessArchives. |
 | `Design/` | Internal requirement-design workspace when no external Design repository is mapped. |
 | `Test/` | Internal test coordination workspace when no external Test repository is mapped. |
 
@@ -528,26 +488,28 @@ Wakeflow automation is direct session delivery plus explicit result return.
 
 Core rules:
 
-- Real session ids live only in
-  `.wakeflow-local/wakeflow-delivery/hosts/claude-code/thread-registry/`.
-- Window config is derived from `wakeflow.config.json` plus thread-registry
-  presence; it is not a second session-id or window-semantics authority.
+- Raw session ids live only in typed records under
+  `.wakeflow-local/runtime/hosts/claude-code/identity/window-bindings/`.
+- Window-runtime files under `projections/` are redacted derived views; they
+  are not identity, handle, or topology authority.
 - Delivery prompts remain compact and human-readable.
-- The controller sends a prepared envelope in one step with the host helper
-  (`deliver --delivery-file <envelope.json>`; `send --window --prompt-file
-  --delivery-id <id>` is the low-level custom-target-prompt path, never a
-  controller-return); applied preparation reserves the shared per-window work
-  lease, and target delivery reuses/revalidates it, pastes through a tmux buffer, and returns pane readback
-  evidence that the agent records with `wakeflow_record_delivery`.
-- Targets controller-return with envelope-aware `deliver --delivery-file`
-  toward the stamped controller window without taking a target work lease;
-  `wait-results --group <id>` is available only for explicit
-  synchronous waits in scripted flows.
+- Target delivery is
+  `target-preview → target-apply → target-claim → fenced host effect →
+  target-outcome`. Apply writes only immutable transport; claim acquires the
+  shared exact-window lease immediately before the physical effect. The v3
+  Claude adapter holds the stable-window mutex across revalidation, paste, and
+  at most one bounded readback. The agent records the observation with
+  `wakeflow_record_delivery operation=target-outcome`; that recorder is not the
+  effect fence.
+- Controller return uses `controller-preview`, `controller-apply`, and
+  `controller-pre-send`, then the fenced host effect and
+  `operation=controller-outcome`. It takes no target work lease and has no
+  polling or synchronous-wait compatibility route.
 - `group-ready` waits for the expected target results before a controller
   return.
 - `per-target` can wake the controller once per target while still preserving
   a group snapshot.
-- The helper makes one bounded pane observation. Only `confirmed` proves the
+- The adapter makes one bounded pane observation. Only `confirmed` proves the
   destination was reached; accepted transport with `pending`/`unavailable`
   readback is exposed as `sent-unconfirmed`. The turn stops without another
   pane read or automatic resend.
@@ -564,54 +526,50 @@ Wakeflow exposes only stable outer workflow contracts as MCP tools, and the
 tool names are identical to the Codex edition. Runtime scripts remain the
 internal implementation and test surface; they are not public tools just
 because they exist. A target closeout uses the same delivery model as
-controller dispatch: prepare an envelope, send the prompt through the tmux
-host helper, then record the delivery run.
+controller dispatch: prepare the exact envelope, execute the fenced v3 host
+effect, then record the delivery run.
 
 Primary tool groups:
 
 | Need | MCP tools |
 | --- | --- |
-| Setup and window registration | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
+| Workspace maintenance and window identity | `wakeflow_maintain_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
 | Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_cancel_demand` |
-| Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_bind`, `wakeflow_pod_plan` (action design-request/test-access/close), `wakeflow_pod_record` (event materialization/design-handoff/test-access/close-receipt) |
+| Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_bind`, `wakeflow_pod_plan` (design-request, test-access-plan/inspect, close-intent/inspect), `wakeflow_pod_record` (record-materialization, design-handoff, test-access-observe/receipt, close-observe/receipt) |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| Archive, views, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs/sanitize-demand), `wakeflow_view` (task-ledger/window/focus/trace/storage/progress/pods), `wakeflow_storage_preserve`, `wakeflow_prune_runtime`, `wakeflow_verify` |
-| Host ownership and locks | `wakeflow_adopt_demand_host`, `wakeflow_release_window_lock` |
+| Evidence, archive, views, storage, and verification | `wakeflow_record_evidence`, `wakeflow_archive`, `wakeflow_view`, `wakeflow_storage_preserve`, `wakeflow_prune_runtime`, `wakeflow_verify` |
+| Exact target lease release | `wakeflow_release_window_lock` |
 
 Public MCP tools are for outer agent workflows. Target closeout is
 deliberately split: record a target result, review readiness, prepare a
-controller-return envelope when policy allows, send through the tmux host
-helper, and record delivery facts. Controller review stays split as review
+controller-return envelope when policy allows, execute the fenced v3 host
+effect, and record delivery facts. Controller review stays split as review
 pack, result reduction, and explicit decision; result reduction only creates a
 review candidate and is not acceptance. Do not collapse those steps into a
-single target-window MCP tool. Internal steps such as archive summary refresh
-internals, keep-live state, and script backend execution stay inside Wakeflow
-runtime scripts and skills. Public archive MCP tools wrap controller-approved
-demand, TODO, and workspace-document archive flows. `wakeflow_archive`
-with `target=sanitize-demand` only replaces an already archived demand with a privacy-clean copy and preserves
-the original locally. `wakeflow_storage_preserve` is the dry-run-first public
-route to the existing local artifact-preservation backend. With archive
-redaction, opaque artifacts remain byte-for-byte in the local preserved
-original while the portable archive carries a safe placeholder manifest,
-unless clean opaque byte inclusion was explicitly authorized with
-`allowOpaque`. A real host id inside a filename or directory name preserves that
-highest sensitive file/subtree locally and represents it once at a
-`redacted-id-N` portable path; matching text references use the same alias, and
-path collisions still fail closed. None of these tools makes acceptance
-decisions or sends host messages.
+single target-window MCP tool. Internal keep-live state and backend execution
+stay inside Wakeflow runtime owners and skills. `wakeflow_archive` has only
+`preview/apply/inspect/recover`: it creates one portable whole-demand
+`BusinessArchive` after lifecycle, Pod-close, transport, and privacy gates
+close. The old TODO/docs/sanitize subroutes are not public v3 compatibility
+aliases. `wakeflow_storage_preserve` separately owns typed machine-local audit
+holds through inspect/preview/apply/recover; preserved bytes never become
+business-state authority. None of these tools makes acceptance decisions or
+sends host messages.
 
-Migration note: pre-consolidation Pod stage calls now use
-`wakeflow_pod_plan` for planning and `wakeflow_pod_record` for
-receipts/handoffs. Progress projection uses `wakeflow_view scope=progress`,
-public Pod inventory uses `wakeflow_view scope=pods`, and historical archive
-repair uses `wakeflow_archive target=sanitize-demand`. The Claude helper CLI
-commands `pod-open`, `pod-close`, and `pod-list` are unchanged.
+All routed v3 tools use the same closed envelope: `root`, an optional typed
+`demandId`, an exact `operation`, and an operation-specific `request`.
+Workspace/state/config/ledger paths are derived and cannot be overridden by the
+caller. Host effects belong to typed owners reached through the closed v3
+Claude facade; retired public-v2 commands are neither MCP aliases nor v3
+effect seams.
 
-Wakeflow declares MCP tool annotations for every public tool: read-only tools
-are marked read-only, write tools are local, non-destructive, and
-closed-world. Tool approval is still controlled by the user's Claude Code
+Wakeflow declares MCP tool annotations for every public tool. Read-only and
+open-world hints match the public boundary, while `destructiveHint` follows the
+strongest operation a tool can perform (maintenance, replacement, release,
+archive, preservation, Pod decommission, and prune are destructive-capable).
+Annotations are client hints, not authorization. Tool approval is still controlled by the user's Claude Code
 permission settings; a trusted local installation can allowlist the
 `wakeflow` MCP server in `.claude/settings.json`.
 
@@ -623,9 +581,9 @@ Wakeflow keeps source, active runtime, and durable records separate:
 | --- | --- |
 | `skills/` | Reusable operating instructions installed with the plugin. |
 | `scripts/` | Runtime implementation and validation scripts packaged by the plugin. |
-| `templates/wakeflow-template-bundle.json` | Bundled starter state, Design/Test, and ledger skeletons expanded during setup. |
+| `templates/wakeflow-asset-bundle.json` | Generated carrier for the two canonical localized demand-progress assets authored under `core/template-sources/`. |
 | `.wakeflow-active/` | Current active work in a target workspace; ignored by Git. |
-| `.wakeflow-local/` | Machine-local thread registry, Pod operation/binding receipts, derived runtime views, and local state; ignored by Git. |
+| `.wakeflow-local/` | Machine-local audit preservation plus shared/host runtime authority and projections: bindings, leases, transport, Pod evidence, keep-live state, and maintenance journals; ignored by Git. |
 | `wakeflow-ledger/` | Project-specific durable records outside reusable Wakeflow source. |
 
 The source repository tracks reusable Wakeflow capability. Product code,
@@ -635,25 +593,19 @@ artifacts do not belong in Wakeflow source.
 ## Dual-Host Workspaces
 
 One workspace may run the Codex and Claude Code Wakeflow editions side by
-side. Shared business state stays host-neutral: `.wakeflow-active/`,
-`wakeflow-ledger/`, and the delivery state under
-`.wakeflow-local/wakeflow-delivery/` (`dispatch-packets/`,
-`dispatch-groups/`, `delivery-envelopes/`, `delivery-runs/`,
-`target-results/`), plus the shared `locks/` directory that enforces one
-in-flight delivery per window across hosts.
+side. Shared business state stays host-neutral in `.wakeflow-active/` and
+`wakeflow-ledger/`; shared coordination and transport live under
+`.wakeflow-local/runtime/shared/{coordination,transport}/`.
 
 Host-scoped runtime is separated per host:
 
-- `.wakeflow-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`
-- `.wakeflow-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`
+- `.wakeflow-local/runtime/hosts/codex/{identity,projections,evidence,operations}/`
+- `.wakeflow-local/runtime/hosts/claude-code/{identity,projections,evidence,operations}/`
 
-`AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code) coexist at the workspace
-and child roots, and each demand has exactly one controller across hosts. The
-public `wakeflow_create_demand` adopts the calling host; only raw state init
-starts with `controllerHost: null` and waits for a first drive. Non-owning hosts
-fail closed on controller mutations and dispatch preparation; `--adopt-host`
-is the explicit transfer mechanism. `wakeflow_status` exposes
-the current mapping under `dualHost.demandOwnership`.
+`AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code) coexist at workspace and
+child roots. Each physical operation uses the exact current binding and strict
+transport ancestry; shared leases prevent cross-host target overlap, and there
+is no demand-host adoption alias.
 
 ## Working In This Repository
 
@@ -678,7 +630,8 @@ Common source areas inside this plugin artifact:
 | `scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime shipped with the plugin. |
 | `skills/` | Controller, target protocol, target craft, and governance manuals shipped with the plugin. |
 | `commands/` | Slash command definitions for `/wakeflow:*`. |
-| `templates/wakeflow-template-bundle.json` | Installed workspace starter documents and support surfaces, bundled for marketplace scan size. |
+| `../../core/template-sources/` | Canonical authoring source for the two localized demand-progress projection assets. |
+| `templates/wakeflow-asset-bundle.json` | Deterministically generated install carrier for those templates; never hand-edited. |
 | `assets/` | Marketplace and plugin presentation assets. |
 
 The repository root README explains the shared architecture; this README is
@@ -698,8 +651,8 @@ the Claude Code edition manual.
    commits, and review inputs.
 5. **Automation moves work, not authority**: delivery proves that a prompt was
    sent, not that the result is complete.
-6. **Local runtime stays local**: real session ids stay only in the local
-   thread registry, and active runtime state never enters tracked
+6. **Local runtime stays local**: raw session ids stay only in host-local
+   typed bindings, and active runtime state never enters tracked
    documentation.
 7. **Fresh support windows by default**: Design and Test are created as clear
    Wakeflow support surfaces unless the user explicitly maps existing ones.

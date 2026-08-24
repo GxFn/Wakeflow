@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:business-archive:legacy-evidence-summary:v1",
+  "title": "Wakeflow Legacy Evidence Summary",
+  "$comment": "Migration-only portable summary for one strictly validated closed legacy Pod evidence set. Runtime validation is mandatory for lexical ordering, source-specific coverage, count closure, timestamp reality, disposition/preservation equality, and privacy boundaries.",
+  "type": "object",
+  "required": [
+    "summarySchemaVersion",
+    "sourceKind",
+    "sourceDigest",
+    "outcome",
+    "coverage",
+    "artifactCount",
+    "details",
+    "rawDisposition"
+  ],
+  "properties": {
+    "summarySchemaVersion": { "type": "integer", "const": 1 },
+    "sourceKind": {
+      "type": "string",
+      "enum": ["pod-close", "pod-materialization", "pod-test-access"]
+    },
+    "sourceDigest": { "$ref": "#/$defs/digest" },
+    "outcome": { "type": "string", "const": "verified-closed-archived" },
+    "coverage": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "$comment": "Runtime validation requires lexical order and the exact source-specific minimum set.",
+      "items": {
+        "type": "string",
+        "enum": [
+          "binding-correlation",
+          "close-chain",
+          "host-resource-closure",
+          "launch-chain",
+          "observed-time",
+          "plan-receipt-pair",
+          "recorded-time",
+          "state-membership"
+        ]
+      }
+    },
+    "artifactCount": { "type": "integer", "minimum": 1 },
+    "details": {
+      "oneOf": [
+        { "$ref": "#/$defs/podCloseDetails" },
+        { "$ref": "#/$defs/podMaterializationDetails" },
+        { "$ref": "#/$defs/podTestAccessDetails" }
+      ]
+    },
+    "rawDisposition": {
+      "type": "string",
+      "enum": ["preserved", "release-after-wrapper"]
+    },
+    "preservation": { "$ref": "#/$defs/preservation" }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "sourceKind": { "const": "pod-close" } }, "required": ["sourceKind"] },
+      "then": { "properties": { "details": { "$ref": "#/$defs/podCloseDetails" } } }
+    },
+    {
+      "if": { "properties": { "sourceKind": { "const": "pod-materialization" } }, "required": ["sourceKind"] },
+      "then": { "properties": { "details": { "$ref": "#/$defs/podMaterializationDetails" } } }
+    },
+    {
+      "if": { "properties": { "sourceKind": { "const": "pod-test-access" } }, "required": ["sourceKind"] },
+      "then": { "properties": { "details": { "$ref": "#/$defs/podTestAccessDetails" } } }
+    },
+    {
+      "if": { "properties": { "rawDisposition": { "const": "preserved" } }, "required": ["rawDisposition"] },
+      "then": { "required": ["preservation"] },
+      "else": { "not": { "required": ["preservation"] } }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+    },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "podCloseDetails": {
+      "type": "object",
+      "required": [
+        "kind",
+        "podCount",
+        "manifestCount",
+        "closeOperationCount",
+        "closedBindingCount",
+        "resourceCoverage"
+      ],
+      "properties": {
+        "kind": { "type": "string", "const": "pod-close" },
+        "podCount": { "$ref": "#/$defs/positiveInteger" },
+        "manifestCount": { "$ref": "#/$defs/positiveInteger" },
+        "closeOperationCount": { "$ref": "#/$defs/positiveInteger" },
+        "closedBindingCount": { "$ref": "#/$defs/positiveInteger" },
+        "resourceCoverage": { "type": "string", "enum": ["complete", "host-followup"] }
+      },
+      "additionalProperties": false
+    },
+    "podMaterializationDetails": {
+      "type": "object",
+      "required": [
+        "kind",
+        "podCount",
+        "manifestCount",
+        "launchOperationCount",
+        "boundWindowCount",
+        "latestPhase",
+        "historyComplete"
+      ],
+      "properties": {
+        "kind": { "type": "string", "const": "pod-materialization" },
+        "podCount": { "$ref": "#/$defs/positiveInteger" },
+        "manifestCount": { "$ref": "#/$defs/positiveInteger" },
+        "launchOperationCount": { "$ref": "#/$defs/positiveInteger" },
+        "boundWindowCount": { "$ref": "#/$defs/positiveInteger" },
+        "latestPhase": { "type": "string", "const": "closed" },
+        "historyComplete": { "type": "boolean", "const": false }
+      },
+      "additionalProperties": false
+    },
+    "podTestAccessDetails": {
+      "type": "object",
+      "required": [
+        "kind",
+        "probeType",
+        "probeOutcome",
+        "targetCount",
+        "planDigest",
+        "receiptDigest",
+        "legacyIdentityCoverage",
+        "observedAt",
+        "recordedAt"
+      ],
+      "properties": {
+        "kind": { "type": "string", "const": "pod-test-access" },
+        "probeType": { "type": "string", "const": "direct-multi-root" },
+        "probeOutcome": { "type": "string", "enum": ["validated", "blocked"] },
+        "reasonCode": {
+          "type": "string",
+          "enum": [
+            "access-probe-failed",
+            "direct-multi-root-unsupported",
+            "per-repo-executor-unavailable"
+          ]
+        },
+        "targetCount": { "$ref": "#/$defs/positiveInteger" },
+        "planDigest": { "$ref": "#/$defs/digest" },
+        "receiptDigest": { "$ref": "#/$defs/digest" },
+        "legacyIdentityCoverage": { "type": "string", "enum": ["partial", "full"] },
+        "observedAt": { "$ref": "#/$defs/timestamp" },
+        "recordedAt": {
+          "oneOf": [
+            { "$ref": "#/$defs/timestamp" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "probeOutcome": { "const": "blocked" } }, "required": ["probeOutcome"] },
+          "then": { "required": ["reasonCode"] },
+          "else": { "not": { "required": ["reasonCode"] } }
+        }
+      ]
+    },
+    "preservation": {
+      "type": "object",
+      "required": ["preservationId", "payloadTreeDigest", "retentionClass"],
+      "properties": {
+        "preservationId": {
+          "type": "string",
+          "pattern": "^preservation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "payloadTreeDigest": {
+          "type": "object",
+          "required": ["algorithm", "value", "entries"],
+          "properties": {
+            "algorithm": { "type": "string", "const": "sha256" },
+            "value": { "$ref": "#/$defs/digest" },
+            "entries": { "$ref": "#/$defs/positiveInteger" }
+          },
+          "additionalProperties": false
+        },
+        "retentionClass": { "type": "string", "const": "reviewable-local-audit" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "workspaceName": "WakeflowFixture",
+  "runtimeMode": "plugin",
+  "interfaceLanguage": "en",
+  "controllerWindow": "WakeflowFixture",
+  "designWindow": "Design",
+  "testWindow": "Test",
+  "realProjectWindow": "",
+  "baseWindow": "",
+  "workspaceRoot": "..",
+  "wakeflowRepoDir": "",
+  "activeLedgerRoot": ".wakeflow-active",
+  "projectLedgerRoot": "wakeflow-ledger",
+  "windowLedgerRoot": "wakeflow-ledger",
+  "windowLedgerDirs": {},
+  "workspaceDocsDir": ".wakeflow-active",
+  "workspaceCurrentDir": ".wakeflow-active/current",
+  "workspaceArchiveDir": "wakeflow-ledger/workspace/archive",
+  "workspaceIndexPath": ".wakeflow-active/index.md",
+  "workspaceCurrentIndexPath": ".wakeflow-active/current/index.md",
+  "workspaceCurrentStatusPath": ".wakeflow-active/current/workspace-current-status.md",
+  "workspaceRecordMapPath": "wakeflow-ledger/workspace/workspace-record-map.md",
+  "globalTodoPath": ".wakeflow-active/current/global-todo-board.md",
+  "requirementDesignsDir": "wakeflow-ledger/requirement-designs",
+  "goalStageConfirmationDir": "wakeflow-ledger/goal-stage-confirmation",
+  "internalDesignPath": "Design",
+  "internalTestPath": "Test",
+  "testExchangePath": ".wakeflow-active/current/test-exchange.md",
+  "protectedWorkspacePrefixes": [],
+  "repositories": [
+    {
+      "windowName": "ProductWindow",
+      "path": "../ProductWorkspace",
+      "mode": "external",
+      "role": "Project repository; confirm scope and responsibility before enabling.",
+      "managedAgents": true
+    },
+    {
+      "windowName": "Design",
+      "path": "Design",
+      "mode": "internal",
+      "role": "Internal requirement design workspace",
+      "managedAgents": false
+    },
+    {
+      "windowName": "Test",
+      "path": "Test",
+      "mode": "internal",
+      "role": "Internal test coordination workspace",
+      "managedAgents": false
+    }
+  ]
+}

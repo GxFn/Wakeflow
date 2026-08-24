@@ -1,0 +1,2263 @@
+{
+  "artifactKind": "wakeflow-legacy-origin-fixture",
+  "eligibility": "conditional-auto",
+  "generation": {
+    "commandTemplate": [
+      "node",
+      "<artifact-root>/scripts/wakeflow-setup.mjs",
+      "initialize",
+      "--root",
+      "<workspace-root>",
+      "--parent",
+      "<parent-root>",
+      "--repo",
+      "ProductWindow=../ProductWorkspace",
+      "--internal-design",
+      "--internal-test",
+      "--language",
+      "en",
+      "--write",
+      "--json"
+    ],
+    "digest": "sha256:253fe5b823144cea1705d3c85871cabe883bb414777f838116291974593a9758",
+    "entrypoints": [
+      {
+        "bytes": 121780,
+        "digest": "sha256:1a1cec757640c9398f5c6f015bdd0ab377fcbe80dedf8a21cbb429b2bd1586e5",
+        "executable": false,
+        "ref": "scripts/wakeflow-setup.mjs",
+        "role": "setup"
+      },
+      {
+        "bytes": 204537,
+        "digest": "sha256:fb3eb3c48925557dadf94f26b0dceb022be6276e83a372047406b48cf2322a6d",
+        "executable": false,
+        "ref": "templates/wakeflow-template-bundle.json",
+        "role": "template-bundle"
+      }
+    ],
+    "topology": {
+      "design": {
+        "mode": "internal",
+        "path": "WakeflowFixture/Design",
+        "windowName": "Design"
+      },
+      "interfaceLanguage": "en",
+      "parentDirectory": "wakeflow-fixture-parent",
+      "product": {
+        "mode": "external",
+        "path": "ProductWorkspace",
+        "windowName": "ProductWindow"
+      },
+      "test": {
+        "mode": "internal",
+        "path": "WakeflowFixture/Test",
+        "windowName": "Test"
+      },
+      "topologyId": "single-product-internal-design-internal-test-v1",
+      "workspaceDirectory": "WakeflowFixture"
+    }
+  },
+  "originId": "codex-0.9.0-bc6c6512",
+  "rootFamily": "current-root-flat-canonical-name",
+  "scenarios": [
+    "pod-reservation-historical/scenario.json"
+  ],
+  "schemaVersion": 1,
+  "source": {
+    "artifactDigest": "sha256:abfd8f3d6e78dad6602d3e0a9dfb021d122dd92e2a1c7d34139c36242e97dec8",
+    "artifactManifest": {
+      "artifactKind": "wakeflow-loaded-artifact-tree",
+      "fileCount": 112,
+      "files": [
+        {
+          "bytes": 2082,
+          "digest": "sha256:60b9bc8905b808869bb4c9f7e4d03179d0299397c39a12bd8828f30a5a2275df",
+          "executable": false,
+          "ref": ".codex-plugin/plugin.json"
+        },
+        {
+          "bytes": 124,
+          "digest": "sha256:e4acac85553d96aa3e7e7358ec8030d06a4ff3a770533114ce7976eab3c86eed",
+          "executable": false,
+          "ref": ".mcp.json"
+        },
+        {
+          "bytes": 22669,
+          "digest": "sha256:ef050659b4e53c34e20497495481f382af9d1726e8a850549c55dd1a69c469d7",
+          "executable": false,
+          "ref": "AGENTS.md"
+        },
+        {
+          "bytes": 1061,
+          "digest": "sha256:9008eb9013cee490581759aaf1436bf157e0cc5598eb0f7cddefc26467f19cb4",
+          "executable": false,
+          "ref": "LICENSE"
+        },
+        {
+          "bytes": 28529,
+          "digest": "sha256:90c0541356763721deea5951d24fe9a02b5265f9535f170af07f805421e0e400",
+          "executable": false,
+          "ref": "README.md"
+        },
+        {
+          "bytes": 24824,
+          "digest": "sha256:090e42d8f5fa98d026ce6aa48350851a1a863c1e37f9b347b84bb5d80a754bf5",
+          "executable": false,
+          "ref": "README.zh-CN.md"
+        },
+        {
+          "bytes": 559,
+          "digest": "sha256:bf1e6c2fe7aa2935514a2367b0c6e9918b410d3328f16518cb53df4540912392",
+          "executable": false,
+          "ref": "assets/wakeflow-logo.svg"
+        },
+        {
+          "bytes": 540,
+          "digest": "sha256:95556bf612aae0fff36a489d77efafa93a5f1d3da54e6575c70dc80f9d7a8e0b",
+          "executable": false,
+          "ref": "assets/wakeflow-mark.svg"
+        },
+        {
+          "bytes": 2086,
+          "digest": "sha256:10dc170785a1d87d3189b3ea3fc4914574c3ee67fe81b8510e8ad367e9ceb508",
+          "executable": true,
+          "ref": "bin/wakeflow-mcp"
+        },
+        {
+          "bytes": 100893,
+          "digest": "sha256:ff0aafed72929e8923cc5b7d0a767385c68c6318fa66f29a23c76b2a864d10ab",
+          "executable": false,
+          "ref": "lib/wakeflow-mcp-tools.mjs"
+        },
+        {
+          "bytes": 5153,
+          "digest": "sha256:94283707d5afd5e349f9d35bf447ca2d8e5fad42d4e52de3c5a68fd0021fe52f",
+          "executable": false,
+          "ref": "lib/wakeflow-process.mjs"
+        },
+        {
+          "bytes": 14151,
+          "digest": "sha256:3244f30145addcf704aab8e1a1b7caaefb6d91d72850359e73b3285cf6e6b568",
+          "executable": false,
+          "ref": "lib/wakeflow-runtime.mjs"
+        },
+        {
+          "bytes": 3659,
+          "digest": "sha256:8b8a842ab1a8e60a3cfb035ca9f3f81291221b95d94d1294921c8ae6619f3722",
+          "executable": false,
+          "ref": "lib/wakeflow-trace.mjs"
+        },
+        {
+          "bytes": 8436,
+          "digest": "sha256:368d949ad68cb1bc9f700b0d84b1b227157435021716562f5743364814a2f514",
+          "executable": false,
+          "ref": "mcp/server.cjs"
+        },
+        {
+          "bytes": 1099,
+          "digest": "sha256:b6328634e8e1c64980871f2d2def0e5a4cc15d0923fc78b631f9579db14baa8b",
+          "executable": false,
+          "ref": "package.json"
+        },
+        {
+          "bytes": 1086,
+          "digest": "sha256:21c1219e3ecc3ce4df5cd23356b90eaae524d095613fbd91a2597a99ae87840d",
+          "executable": false,
+          "ref": "schemas/wakeflow-state-machine/automation-dispatch.schema.json"
+        },
+        {
+          "bytes": 1390,
+          "digest": "sha256:9e40221168877101e564b03fbc3a07a00bff54e0b0f942400f78111e8aca9278",
+          "executable": false,
+          "ref": "schemas/wakeflow-state-machine/controller-event.schema.json"
+        },
+        {
+          "bytes": 860,
+          "digest": "sha256:964bc239d58c22ed32c7b8a47dec37a82007c6046f92838d66123b70ad2cc814",
+          "executable": false,
+          "ref": "schemas/wakeflow-state-machine/projection.schema.json"
+        },
+        {
+          "bytes": 3584,
+          "digest": "sha256:a3237bcbfa8ecfa18cb16c2bcff8b4e4dbf26b8d361ac0ce27354e8cb64a3349",
+          "executable": false,
+          "ref": "schemas/wakeflow-state-machine/target-result.schema.json"
+        },
+        {
+          "bytes": 5869,
+          "digest": "sha256:582f22cb699a883f0c5a87c5d840dd9e456c9afdf3a23cbcebc8a52c41f27677",
+          "executable": false,
+          "ref": "schemas/wakeflow-state-machine/task-package.schema.json"
+        },
+        {
+          "bytes": 2028,
+          "digest": "sha256:853d3c222d6fc8906f7e7c15d3b3db9fdaf542e3f0133580a037c2be060f5c31",
+          "executable": false,
+          "ref": "schemas/wakeflow-state-machine/transition-candidate.schema.json"
+        },
+        {
+          "bytes": 7420,
+          "digest": "sha256:bb3c8a7f2e059a47ca6d4f5b4823873ed10731855f29bfb9af8fcf9a23277089",
+          "executable": false,
+          "ref": "schemas/wakeflow-state-machine/wakeflow-state.schema.json"
+        },
+        {
+          "bytes": 17499,
+          "digest": "sha256:1ccdf4eb56d2a465de965033993fe8dfb64109b79320a8d760ed5493c50bb037",
+          "executable": false,
+          "ref": "scripts/README.md"
+        },
+        {
+          "bytes": 15573,
+          "digest": "sha256:40cd0ef9ed09c8345b440b01659771208674563862737c58aff98e5107fbfea9",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-active-demands.mjs"
+        },
+        {
+          "bytes": 1452,
+          "digest": "sha256:b48223f3ed422275e8bf8373278461c4c0a1ffdd04a488a71557c40bef466a31",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-artifact-identity.mjs"
+        },
+        {
+          "bytes": 6359,
+          "digest": "sha256:95050065f84bc5313d9949d0de38260c2c6e182bbf70a6ecd56949dc95ffa2af",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-codex-pod-host.mjs"
+        },
+        {
+          "bytes": 16356,
+          "digest": "sha256:727f926c39686ba4c0558c50011afa559bbcdbad4bfc6f76dcf02226806b63bb",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-config.mjs"
+        },
+        {
+          "bytes": 5007,
+          "digest": "sha256:ccbcaf03faaaf59932309054934a73d246fa31b57b4f39fed91ade7a967294c1",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-controller-events.mjs"
+        },
+        {
+          "bytes": 5022,
+          "digest": "sha256:c2358dd3653824c319476ba50d6386f1381bc5e4f4f395bf9638cd8d8167bfaf",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-controller-return.mjs"
+        },
+        {
+          "bytes": 6896,
+          "digest": "sha256:d6ce6b0aa1a94b33c63211eafb2f1aa11a030fab18d464771b2ca3de835122cb",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-delivery-evidence.mjs"
+        },
+        {
+          "bytes": 40677,
+          "digest": "sha256:6d3f9eb0503065de98191f77cc3c19fa4ace99fe60ffdf2bd4b6253f60efce21",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-delivery-status-command.mjs"
+        },
+        {
+          "bytes": 18720,
+          "digest": "sha256:fa5925a421434d58e62e2d4b609e3ed531ba0143847555860405797cb4da033b",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-delivery-store.mjs"
+        },
+        {
+          "bytes": 47711,
+          "digest": "sha256:c2f1684a293037434c615964b3f355fa6e1c64dbfb68bd3e8d913d2cad25d734",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-dispatch-commands.mjs"
+        },
+        {
+          "bytes": 5770,
+          "digest": "sha256:71beb6e4c82bb36262c3854716d4986b3367e7a73f82febad9778b3a366fb438",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-dispatch-group-review.mjs"
+        },
+        {
+          "bytes": 2118,
+          "digest": "sha256:ac3261fa1e74c3ee3a169c48c732a300b7a72b2338fbf2139f1b04ffda051f10",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-fs-safety.mjs"
+        },
+        {
+          "bytes": 4723,
+          "digest": "sha256:fdbec188ea4f40bba17932dfb2083c45e74a5e5051f74fdec2fe8f9f50d4320b",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-host-artifact-checks.mjs"
+        },
+        {
+          "bytes": 10361,
+          "digest": "sha256:bec7d60cb62a879fc553c021589f6c8b2344d2ce6807bd080977302e057805ff",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-host-profile.mjs"
+        },
+        {
+          "bytes": 2456,
+          "digest": "sha256:41368cf36eb803d684f00c477ef7b63126bd516fb2452d8eb91ef6c6bde2e2e6",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-host-send-adapter.mjs"
+        },
+        {
+          "bytes": 9454,
+          "digest": "sha256:3264b4ac5dd9a5faf2c05ea464b142737b02f32a72bc40558251ce3e362c66ab",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-idempotency.mjs"
+        },
+        {
+          "bytes": 21204,
+          "digest": "sha256:926965dd0dd4fce27ed45942731d41810725d9d37df5a90cdeafb68ec2827244",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-keep-live.mjs"
+        },
+        {
+          "bytes": 2236,
+          "digest": "sha256:f10a5250e8265764a1bbb7ca7fe318ff67ecc46849311f31b7a43e87df7be467",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-language.mjs"
+        },
+        {
+          "bytes": 15612,
+          "digest": "sha256:739358411429a88d279a320277c7e44d9989f9852dc50c7f45ac3c1007fbe47c",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-mainline-health.mjs"
+        },
+        {
+          "bytes": 3996,
+          "digest": "sha256:0dc99fec6ad779ce9bb2fa399ad31439218c00e437ebc41cf231df40e2798d9c",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-pod-reservations.mjs"
+        },
+        {
+          "bytes": 16151,
+          "digest": "sha256:715fb924830db07040fe43bb1c76706e0c3229a39d5e3a3dc5ccb47b2b153fe0",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-pod-runtime.mjs"
+        },
+        {
+          "bytes": 2734,
+          "digest": "sha256:3f899285756c37640884366350b73ae30955d9fc0649420c04d4a5bacd7faca2",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-progress-appends.mjs"
+        },
+        {
+          "bytes": 14224,
+          "digest": "sha256:759bfb3e418ea5752a4c0eeb4a378b4a1410e74118013ab75aa8c8b067119488",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-redaction.mjs"
+        },
+        {
+          "bytes": 7857,
+          "digest": "sha256:616433c6b7881a2e0356567c3fa3f4d6ca3b5a48f165aee6e5c23b8f670e30d2",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-result-contract.mjs"
+        },
+        {
+          "bytes": 41288,
+          "digest": "sha256:8974a0d54b3568b35f84bac78d2f66b4e77b20190562a06e33c4db357e13b54f",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-result-recording-commands.mjs"
+        },
+        {
+          "bytes": 10160,
+          "digest": "sha256:7b2af4628333ad9582660b9690ddd24f0432c58c45d9665f0e0d750abc57bd0b",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-return-policy.mjs"
+        },
+        {
+          "bytes": 48441,
+          "digest": "sha256:bc7217e35a6c35ec7c263ddfc575bf3ab0c0b08c4c810eb314edda33d47a5828",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-review-commands.mjs"
+        },
+        {
+          "bytes": 8011,
+          "digest": "sha256:d91a6bb09d759a142658cec4453aaa58ca5a54f70c205cb6e512479db088761e",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-review-pack.mjs"
+        },
+        {
+          "bytes": 3483,
+          "digest": "sha256:5877ebe685623dd95a6923df361948a9b8799fd509be9c0ac05c2819f54318bc",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-review-scope.mjs"
+        },
+        {
+          "bytes": 15823,
+          "digest": "sha256:2a4471bc7f7d136f510c7e8b707a64b28389164f5b2a3f39d4b261214e74973d",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-runtime-summary.mjs"
+        },
+        {
+          "bytes": 6738,
+          "digest": "sha256:3a2f5434cffc515eac44fb6cdaf9b473e1944e10f3d5feb8d84549627d4fdc86",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-state-lock.mjs"
+        },
+        {
+          "bytes": 9905,
+          "digest": "sha256:68bbdb5826ed1314995a9644013a660730721f8f2b6d776e3069f328f3aa9f66",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-state-paths.mjs"
+        },
+        {
+          "bytes": 2798,
+          "digest": "sha256:ea46385264d0a1ae6d437167e185b539ca41e01e524270ea7eb3a25f54b4d170",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-state-results.mjs"
+        },
+        {
+          "bytes": 15986,
+          "digest": "sha256:43bb1bca35f50b958a9e0cc8b77f240b6e44ca1805ad3c36a43715a4b6ee9899",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-state-transition.mjs"
+        },
+        {
+          "bytes": 5338,
+          "digest": "sha256:67961381a6587785658cc3ce9c2efed793f859b68105c340778db09aebc9ce6c",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-status-machine.mjs"
+        },
+        {
+          "bytes": 14642,
+          "digest": "sha256:fad2efdbc2e4b71df2cc4f4cf4ae02bef4f68416de080c879babf4c9170f499c",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-storage-map.mjs"
+        },
+        {
+          "bytes": 18889,
+          "digest": "sha256:e1e8c16ed64817ef842529824a692a01085897ae3cb9a23e8cf3e6b648ee27db",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-stream-overlay.mjs"
+        },
+        {
+          "bytes": 14447,
+          "digest": "sha256:3a1c764c85f0f61b9d160da510e1aed3d2595f4cbbe2df61d353b5d718937468",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-task-package.mjs"
+        },
+        {
+          "bytes": 2895,
+          "digest": "sha256:daa7484feaeca5a03d7a229aa3362b5095cba15c3b67e81247614b29e55c7a36",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-thread-registry.mjs"
+        },
+        {
+          "bytes": 4968,
+          "digest": "sha256:e08ca6ed2096558d1420471044bd0bb855680ce73d2c0db0e93c3dc942c802b2",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-todo-table.mjs"
+        },
+        {
+          "bytes": 17869,
+          "digest": "sha256:f7ab801df5800915233e6fbc82f6a80fb5933fc7ca6d7d2228a5b1c864e233b0",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-trace-spine-command.mjs"
+        },
+        {
+          "bytes": 27081,
+          "digest": "sha256:77c1b9228054c1f1b960126b8069e34c684f24ad62c1b2a8ea37637c0a0d2ef7",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-window-runtime.mjs"
+        },
+        {
+          "bytes": 16465,
+          "digest": "sha256:0ca6208a9e33f2e70999e3bc60cf87f900ae275c1344561fce2b0d86a329c1f2",
+          "executable": false,
+          "ref": "scripts/lib/wakeflow-workspace-projection.mjs"
+        },
+        {
+          "bytes": 9697,
+          "digest": "sha256:4bcaa6ef1693fc9688913286da338d0032d79adcd148066935cbced23790aeb5",
+          "executable": false,
+          "ref": "scripts/verify-workspace-docs.mjs"
+        },
+        {
+          "bytes": 17062,
+          "digest": "sha256:fcf8c07c472b22c135ce7706c29c085e4382576272b731cac7d35cc0508f04cd",
+          "executable": false,
+          "ref": "scripts/wakeflow-archive-docs.mjs"
+        },
+        {
+          "bytes": 8925,
+          "digest": "sha256:b164de1e19a34c2ce5188e03c535fa1e0f9d3ef8d46db963a4697e5c3b4c68c0",
+          "executable": false,
+          "ref": "scripts/wakeflow-archive-summaries.mjs"
+        },
+        {
+          "bytes": 10954,
+          "digest": "sha256:d4c82e1763901c7c9c6ddf6e84a98ff2add7a1be867a268ef4827f7705f93386",
+          "executable": false,
+          "ref": "scripts/wakeflow-archive-todo.mjs"
+        },
+        {
+          "bytes": 1944,
+          "digest": "sha256:b0041ba34f22b33f23acf3e89d150cd1877641100a5ffcc266d6b0e17a0cd21d",
+          "executable": false,
+          "ref": "scripts/wakeflow-check-boundary.mjs"
+        },
+        {
+          "bytes": 8410,
+          "digest": "sha256:a409ff67a52d03c1422c493cbffcbb18362b83e062abf93524dcb9d5d2d2a271",
+          "executable": false,
+          "ref": "scripts/wakeflow-check-layout.mjs"
+        },
+        {
+          "bytes": 5646,
+          "digest": "sha256:eb65d236f1de70304a5d470a2cf04ea9f805babb25879c183bdd4dc837313e9a",
+          "executable": false,
+          "ref": "scripts/wakeflow-check-repository-residue.mjs"
+        },
+        {
+          "bytes": 2950,
+          "digest": "sha256:0ea7d97d1e7ddc2657fff15f84e84f3c2b72ec5b217fd7a625aadc26a71b5670",
+          "executable": false,
+          "ref": "scripts/wakeflow-check-runtime.mjs"
+        },
+        {
+          "bytes": 8343,
+          "digest": "sha256:346b0cdedbbf360cd191b3ca57f43f4fe38912decb907ca2656db326a73d2843",
+          "executable": false,
+          "ref": "scripts/wakeflow-check-scripts.mjs"
+        },
+        {
+          "bytes": 11573,
+          "digest": "sha256:e3810bcb4b02d9fda44b4f7e5e415cd260a36d58eaf4b656c468904792727314",
+          "executable": false,
+          "ref": "scripts/wakeflow-cli.mjs"
+        },
+        {
+          "bytes": 4045,
+          "digest": "sha256:77cfce0a33985a10f4930b1bcc1f01e626d21c59d7f823d075eca6dfee4b14f3",
+          "executable": false,
+          "ref": "scripts/wakeflow-core-manifest.json"
+        },
+        {
+          "bytes": 37485,
+          "digest": "sha256:f173a6b56078e55b4db3e2548aecc879e47e1bcd2a152db59f170c498f661b96",
+          "executable": false,
+          "ref": "scripts/wakeflow-delivery.mjs"
+        },
+        {
+          "bytes": 58526,
+          "digest": "sha256:db276e8ef0da7108e5a8650e6dec1336ae653ab5ff31a6a639a12efc0f1364f7",
+          "executable": false,
+          "ref": "scripts/wakeflow-demand-sequence.mjs"
+        },
+        {
+          "bytes": 11958,
+          "digest": "sha256:733a6ff5f4400b9e0dc107f794a5eea3b0387b07f3b4564cc338e60f241ef152",
+          "executable": false,
+          "ref": "scripts/wakeflow-intake.mjs"
+        },
+        {
+          "bytes": 14551,
+          "digest": "sha256:8b5a7f5d4bfb7357b21e6c9d45713a1a3498c36c3eff8264b649fd72b369150a",
+          "executable": false,
+          "ref": "scripts/wakeflow-next-work.mjs"
+        },
+        {
+          "bytes": 111078,
+          "digest": "sha256:b7fa42895baf01286b8f4263fab02205fff23aa8766e068d2bde62baf326c6ff",
+          "executable": false,
+          "ref": "scripts/wakeflow-pod.mjs"
+        },
+        {
+          "bytes": 23267,
+          "digest": "sha256:cdd3caf10fe5a129481126ff915b8b87e53dbbc1176ec8672856d56a6cbfcc02",
+          "executable": false,
+          "ref": "scripts/wakeflow-render-progress.mjs"
+        },
+        {
+          "bytes": 4768,
+          "digest": "sha256:490762995db3b86e27572e29e7084132608b95985c08fc149380028436404111",
+          "executable": false,
+          "ref": "scripts/wakeflow-repo-status.mjs"
+        },
+        {
+          "bytes": 1487,
+          "digest": "sha256:8be49b92818f65129002dd03ea014b0dca22235eff3fcadcf6d782e52601879b",
+          "executable": false,
+          "ref": "scripts/wakeflow-runtime.mjs"
+        },
+        {
+          "bytes": 121780,
+          "digest": "sha256:1a1cec757640c9398f5c6f015bdd0ab377fcbe80dedf8a21cbb429b2bd1586e5",
+          "executable": false,
+          "ref": "scripts/wakeflow-setup.mjs"
+        },
+        {
+          "bytes": 24795,
+          "digest": "sha256:4a33ce7dbc8ccecef931f815a3f000751058acbbffaa2afee1ff22adc0c2b489",
+          "executable": false,
+          "ref": "scripts/wakeflow-smoke.mjs"
+        },
+        {
+          "bytes": 231860,
+          "digest": "sha256:623c55977c3db85c4d6dd7f3c6c69107cd9348c1997847a0f7a94d11fa308b5d",
+          "executable": false,
+          "ref": "scripts/wakeflow-state.mjs"
+        },
+        {
+          "bytes": 11832,
+          "digest": "sha256:80d6d1646e2bdf8f654b3905e4fcadf3cabbcfec484ac1ca95df271a2420635d",
+          "executable": false,
+          "ref": "scripts/wakeflow-storage.mjs"
+        },
+        {
+          "bytes": 9065,
+          "digest": "sha256:52c1e6d212ef609abd261e795035d68d9c9cbe4a765098e18bdc3291fdafe98f",
+          "executable": false,
+          "ref": "scripts/wakeflow-todo.mjs"
+        },
+        {
+          "bytes": 19503,
+          "digest": "sha256:a74cfc46689894ff5a16d1eba37dc64cd802558789f2bfe22c04f50e835fb2e9",
+          "executable": false,
+          "ref": "scripts/wakeflow-validate.mjs"
+        },
+        {
+          "bytes": 4878,
+          "digest": "sha256:51fbf63e79cd494222ef7479fb74af71c1a3044a7ede53f2e873ac4cabb19360",
+          "executable": false,
+          "ref": "scripts/wakeflow-verify.mjs"
+        },
+        {
+          "bytes": 29687,
+          "digest": "sha256:e505b28e8f32961e837782f5d7f6cab9f9b6447d6d7504ed8dc86a9649a78cb2",
+          "executable": false,
+          "ref": "skills/wakeflow-controller/SKILL.md"
+        },
+        {
+          "bytes": 14429,
+          "digest": "sha256:375bd74632c90019441003ff362b8b6b51898a7b83f05fac2912dc2082b683c4",
+          "executable": false,
+          "ref": "skills/wakeflow-governance/SKILL.md"
+        },
+        {
+          "bytes": 9977,
+          "digest": "sha256:1d15af1384419841b6f44e27791d9b30013cf1510c296d7ce7724bbd0e4022ae",
+          "executable": false,
+          "ref": "skills/wakeflow-governance/references/agents-rule-map.md"
+        },
+        {
+          "bytes": 25182,
+          "digest": "sha256:e7a862f910970abc9e198fabe64683658a507c5605e626ffe92175f9a1b33fd5",
+          "executable": false,
+          "ref": "skills/wakeflow-governance/references/design-test-skill-realization-source-map.md"
+        },
+        {
+          "bytes": 3943,
+          "digest": "sha256:416e2eb576d3c4ba65af4711d32feb1fa4e4f897aa1be49f2f8d252a7f1d1d19",
+          "executable": false,
+          "ref": "skills/wakeflow-governance/references/direct-thread-window-config.md"
+        },
+        {
+          "bytes": 1338,
+          "digest": "sha256:3486814f646ef5d2118171e1cd76fab2dd1284c3f8c2a47eeb2709c9548cd6b2",
+          "executable": false,
+          "ref": "skills/wakeflow-governance/references/phased-migration.md"
+        },
+        {
+          "bytes": 11738,
+          "digest": "sha256:efa317c9adcef814d40d630a512930b37b2ca214fdbe4d50067c987730e30d84",
+          "executable": false,
+          "ref": "skills/wakeflow-governance/references/script-pipeline.md"
+        },
+        {
+          "bytes": 3752,
+          "digest": "sha256:8929c84219b50ff95f56675d92fd375085d32b415b25d92de6fc1db6eefce2f9",
+          "executable": false,
+          "ref": "skills/wakeflow-governance/references/skill-writing-style.md"
+        },
+        {
+          "bytes": 11985,
+          "digest": "sha256:e37c327e4b2ce4751370edde04d25fdf59eb4f8a338499738b3ecb6745715b98",
+          "executable": false,
+          "ref": "skills/wakeflow-governance/references/stage-route-map.md"
+        },
+        {
+          "bytes": 4225,
+          "digest": "sha256:7101f110f895af64c3a93ee13259f19a7e7f0ab370fd4ba3ae6807a1ab005149",
+          "executable": false,
+          "ref": "skills/wakeflow-governance/references/testing-validation.md"
+        },
+        {
+          "bytes": 1726,
+          "digest": "sha256:d730c9795c866a2532cb6b9f6b7d0d47ccea66fa51907b5687aa3b01e904cae3",
+          "executable": false,
+          "ref": "skills/wakeflow-governance/references/todo-backlog.md"
+        },
+        {
+          "bytes": 3166,
+          "digest": "sha256:63959c80f018825d1330810f558be7c6d1d6f75b84a4def445b27df266ceea2f",
+          "executable": false,
+          "ref": "skills/wakeflow-governance/references/wakeflow-architecture.md"
+        },
+        {
+          "bytes": 4198,
+          "digest": "sha256:a4ecd11c6fa110456d2031f3d1b34995de7bb8fc5e9d561fa3062c066f82bc09",
+          "executable": false,
+          "ref": "skills/wakeflow-governance/references/wakeflow-delivery.md"
+        },
+        {
+          "bytes": 9957,
+          "digest": "sha256:c96ee835a075fc4836297ac7f1036ddcf2daef5f1dbd2b1419af0597b04060f3",
+          "executable": false,
+          "ref": "skills/wakeflow-governance/references/wakeflow-ledgers.md"
+        },
+        {
+          "bytes": 9214,
+          "digest": "sha256:bf3c57a42d2c44566f075b04ddd2a258d420d6762cf22396668944c4abc00795",
+          "executable": false,
+          "ref": "skills/wakeflow-governance/references/window-dispatch.md"
+        },
+        {
+          "bytes": 12000,
+          "digest": "sha256:c0718ac2de0d56c168e0fe695e32f31e911964e5c41ab8e7d68ef505245b1326",
+          "executable": false,
+          "ref": "skills/wakeflow-target-craft/SKILL.md"
+        },
+        {
+          "bytes": 11536,
+          "digest": "sha256:cc1eab5202e6d4236b76190c80f4d804e5d76db9cb6191c708853ac3a92fdf91",
+          "executable": false,
+          "ref": "skills/wakeflow-target/SKILL.md"
+        },
+        {
+          "bytes": 204537,
+          "digest": "sha256:fb3eb3c48925557dadf94f26b0dceb022be6276e83a372047406b48cf2322a6d",
+          "executable": false,
+          "ref": "templates/wakeflow-template-bundle.json"
+        },
+        {
+          "bytes": 1254,
+          "digest": "sha256:453ea885c42aa8468f1d8ee93e5e87d7e7fa0efd75aecf08b1efc578a39f25e4",
+          "executable": false,
+          "ref": "wakeflow.config.example.json"
+        },
+        {
+          "bytes": 1681,
+          "digest": "sha256:ebcc969a7edfedad49f428b30a65ddfe515827138e2701a0479d4158eb0aac48",
+          "executable": false,
+          "ref": "wakeflow.config.json"
+        }
+      ],
+      "schemaVersion": 1,
+      "totalBytes": 1975404
+    },
+    "artifactVersion": "0.9.0",
+    "commit": "bc6c6512c722d36469a9dcd0cff215d614b2109b",
+    "host": "codex",
+    "packageIntegrity": null,
+    "sourceManifest": {
+      "closurePolicy": "complete-artifact-tree-conservative",
+      "digest": "sha256:abfd8f3d6e78dad6602d3e0a9dfb021d122dd92e2a1c7d34139c36242e97dec8",
+      "fileCount": 112,
+      "totalBytes": 1975404
+    }
+  },
+  "staticLayers": [
+    {
+      "directoryCount": 37,
+      "expectedEntries": [
+        {
+          "afterBytes": 24316,
+          "afterDigest": "sha256:47e6ae0bf5a3ba50d0eec1fc947ad8f7505bcac8e6987627f5a24576da243de0",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "AGENTS.md"
+        },
+        {
+          "afterBytes": 6506,
+          "afterDigest": "sha256:3b64ef2cb7dcabadc1153517e44b4feb144a322ea1c43e923f7713b95d22da9a",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "ProductWorkspace/AGENTS.md"
+        },
+        {
+          "afterBytes": 60,
+          "afterDigest": "sha256:f19bccb2caaed51ab68d7db78af83523c00f42d27d0b60e83dd8c5e255ffa298",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.gitignore"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-active"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-active/current"
+        },
+        {
+          "afterBytes": 635,
+          "afterDigest": "sha256:73d7f4845d853e51c76ebd023a1fe96b0ec44d50020afe489606e48d4fd94c5f",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-active/current/global-todo-board.md"
+        },
+        {
+          "afterBytes": 420,
+          "afterDigest": "sha256:8b19492a65f8ff648ecf3984b66d71825a9bca0e73faeb17d6d1142117068c7e",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-active/current/index.md"
+        },
+        {
+          "afterBytes": 222,
+          "afterDigest": "sha256:f862d4e57b5a7829c3992edc889a728dd834cc803cf221f20d8c7d793812f43e",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-active/current/test-exchange.md"
+        },
+        {
+          "afterBytes": 1486,
+          "afterDigest": "sha256:c113ba06532a6ea03b736da7e80f73e22923638a2336544223f416c343c11b9e",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-active/current/workspace-current-status.md"
+        },
+        {
+          "afterBytes": 1979,
+          "afterDigest": "sha256:2a51c9c4f30cfa1dbc5c3640ea428608ec87724f1cd3ea48572cf98bd7b4a4d4",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-active/index.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-local"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config"
+        },
+        {
+          "afterBytes": 884,
+          "afterDigest": "sha256:d4dcd70413429104ab1c8add501d70acf0afa69fcaaf7e4670a6869bed3145ad",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [
+            {
+              "kind": "json-root-path",
+              "pointer": "$/cwd",
+              "token": "fixture-workspace-root"
+            },
+            {
+              "kind": "json-iso-time",
+              "pointer": "$/generatedAt",
+              "token": "fixture-iso-time"
+            },
+            {
+              "kind": "json-root-path",
+              "pointer": "$/responsibilityRoot",
+              "token": "fixture-workspace-root"
+            }
+          ],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/Design.json"
+        },
+        {
+          "afterBytes": 931,
+          "afterDigest": "sha256:72665c1103978cf61bc7560ce5166cde15ee5f58f308089aed6224dfc2107626",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [
+            {
+              "kind": "json-root-path",
+              "pointer": "$/cwd",
+              "token": "fixture-workspace-root"
+            },
+            {
+              "kind": "json-iso-time",
+              "pointer": "$/generatedAt",
+              "token": "fixture-iso-time"
+            },
+            {
+              "kind": "json-root-path",
+              "pointer": "$/responsibilityRoot",
+              "token": "fixture-workspace-root"
+            }
+          ],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/ProductWindow.json"
+        },
+        {
+          "afterBytes": 878,
+          "afterDigest": "sha256:1756063d0ecfe7452a77a39a5778bc3691e7a43e38b9cd710d4a81218b6b55a7",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [
+            {
+              "kind": "json-root-path",
+              "pointer": "$/cwd",
+              "token": "fixture-workspace-root"
+            },
+            {
+              "kind": "json-iso-time",
+              "pointer": "$/generatedAt",
+              "token": "fixture-iso-time"
+            },
+            {
+              "kind": "json-root-path",
+              "pointer": "$/responsibilityRoot",
+              "token": "fixture-workspace-root"
+            }
+          ],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/Test.json"
+        },
+        {
+          "afterBytes": 876,
+          "afterDigest": "sha256:6151484aeb2a0ff51323ef4f765f99992ab591c07b62a39394f02cf18937c723",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [
+            {
+              "kind": "json-root-path",
+              "pointer": "$/cwd",
+              "token": "fixture-workspace-root"
+            },
+            {
+              "kind": "json-iso-time",
+              "pointer": "$/generatedAt",
+              "token": "fixture-iso-time"
+            },
+            {
+              "kind": "json-root-path",
+              "pointer": "$/responsibilityRoot",
+              "token": "fixture-workspace-root"
+            }
+          ],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/.wakeflow-local/wakeflow-delivery/hosts/codex/window-config/WakeflowFixture.json"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design"
+        },
+        {
+          "afterBytes": 162,
+          "afterDigest": "sha256:334d1a2092533b411e91ace6226861afca55ff69c03c540dabb518d09595c5e0",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/.gitignore"
+        },
+        {
+          "afterBytes": 8486,
+          "afterDigest": "sha256:06f98f376912377b964bc755167dee10c09df03c33c3c24e1e93f4b0152ec640",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/AGENTS.md"
+        },
+        {
+          "afterBytes": 954,
+          "afterDigest": "sha256:39b5bb5a09a58c50d593c709c1427e667f4b3d9fd9af7154186dc405a9126049",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/README.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/docs"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/docs/current"
+        },
+        {
+          "afterBytes": 579,
+          "afterDigest": "sha256:c562d1224f6279fb8cb39170530631ed1a28f2b5b812f4cc678800f914aab536",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/docs/current/README.md"
+        },
+        {
+          "afterBytes": 4258,
+          "afterDigest": "sha256:331fa1aa098b5b0f478762cc33623a22299ae90897caedcacd4852cba024a099",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/docs/design-window-operating-policy.md"
+        },
+        {
+          "afterBytes": 1390,
+          "afterDigest": "sha256:fa849c6e7ae7d29f09df404d5512acf7150433e37cdd6d9889dd37f86e7dbc3e",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/docs/index.md"
+        },
+        {
+          "afterBytes": 2335,
+          "afterDigest": "sha256:4fd63e86f9593782b595b1237efc50bf22e9d0da8c8b172e2baa97d593b69590",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/docs/workspace-alignment-checklist.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/skills"
+        },
+        {
+          "afterBytes": 4371,
+          "afterDigest": "sha256:a1f873aa1b6cb301bfb940c4dcdf3a9c875efbd504d5b952a6b1fc3166df17b4",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/skills/README.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/skills/design-handoff"
+        },
+        {
+          "afterBytes": 5391,
+          "afterDigest": "sha256:6c148645a28b979f1e23e31682a49c6395f072b8dcc5c33079b420c5f49c49a8",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/skills/design-handoff/SKILL.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/skills/option-planning"
+        },
+        {
+          "afterBytes": 4813,
+          "afterDigest": "sha256:a2b214bca11f7894655364f49c712475a3d51ada1c484151e4cce4c7bb1df7fe",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/skills/option-planning/SKILL.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/skills/requirement-clarification"
+        },
+        {
+          "afterBytes": 6540,
+          "afterDigest": "sha256:da58885321a3bb280b9d7a76f8cca999087ac8027bc9cffa43821e8bfb7c0e06",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/skills/requirement-clarification/SKILL.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/skills/requirement-design"
+        },
+        {
+          "afterBytes": 6460,
+          "afterDigest": "sha256:00cb2123b23fe8737d19a41b43e0353d4b959eef8b09f72a54978e9ddc724418",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/skills/requirement-design/SKILL.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/skills/work-slicing"
+        },
+        {
+          "afterBytes": 4076,
+          "afterDigest": "sha256:c1950707b9541e023be8467027567c0fba7262d9a8614429d0cedb8dff03ae75",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/skills/work-slicing/SKILL.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/templates"
+        },
+        {
+          "afterBytes": 1862,
+          "afterDigest": "sha256:ad0c464abd495fddc965f55b8883c4d658d6cf48b3f3e0277ee10bedecba98e0",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/templates/original-plan-template.md"
+        },
+        {
+          "afterBytes": 3970,
+          "afterDigest": "sha256:f75ba263188d6f392269228a00758a840f152789626a8503dbb8531ed514aced",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/templates/requirement-design-template.md"
+        },
+        {
+          "afterBytes": 2723,
+          "afterDigest": "sha256:9356d1d9c52b9d30b592926322bad0dd61bce750314f41d5a6a182132fd355e7",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/templates/workspace-handoff-template.md"
+        },
+        {
+          "afterBytes": 1599,
+          "afterDigest": "sha256:fcc7365ccb9040998bc7dd703a7cf138d9d5ae8c5ff0f3d3b8a0b1c2467f5853",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Design/templates/workspace-signal-template.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test"
+        },
+        {
+          "afterBytes": 284,
+          "afterDigest": "sha256:0fbc61720f6b22f2992fce5e8486d2bc138f7140c3c77af615696813f06b4abf",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/.gitignore"
+        },
+        {
+          "afterBytes": 4981,
+          "afterDigest": "sha256:d0045be7e1923a0c964300965a790f67324a6302711c9df5635a0a18038cab32",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/AGENTS.md"
+        },
+        {
+          "afterBytes": 902,
+          "afterDigest": "sha256:eeb1ae4d7eb64f57f91473a1039b3beba2e6bb81d8981a2b8a41b07b3887ecbd",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/README.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/config"
+        },
+        {
+          "afterBytes": 396,
+          "afterDigest": "sha256:11025cc870448899166be22d6e00f8a8ee47461c60555eda1266ffa6855b352c",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/config/README.md"
+        },
+        {
+          "afterBytes": 65,
+          "afterDigest": "sha256:6963b59395ded8b0429065231261e9944b6a67897e0f684bf8959cec37d07024",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/config/defaults.json"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/docs"
+        },
+        {
+          "afterBytes": 931,
+          "afterDigest": "sha256:943c3fb741c0111e907bc83f9657d3d304b62528fdf7c9b3c5832d848ef1b2df",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/docs/README.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/docs/current"
+        },
+        {
+          "afterBytes": 481,
+          "afterDigest": "sha256:8035564d75de2ce4ccd74479ff4ba4df6575c05317a523066ca0a3f8374a6b58",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/docs/current/README.md"
+        },
+        {
+          "afterBytes": 520,
+          "afterDigest": "sha256:dc16daab602ede0dac31248d6c9c002a2b0fc0541bad22e424e6883b05a40317",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/docs/current/test-window-alignment.md"
+        },
+        {
+          "afterBytes": 1899,
+          "afterDigest": "sha256:990804c8c5e9744f8afd352f474cd048229958de15e143d57952338935b31e09",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/docs/testing-operation-policy.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/scripts"
+        },
+        {
+          "afterBytes": 833,
+          "afterDigest": "sha256:6cf1ca8dbf7a103867669c8d9a69d10c2b4fb9b9703540ecc820a2fcd466db73",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/scripts/README.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills"
+        },
+        {
+          "afterBytes": 3561,
+          "afterDigest": "sha256:be96a7577da688760fc5a2e589d687c3f268c663350497e298de649446a77add",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/README.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/debugging-and-triage"
+        },
+        {
+          "afterBytes": 3899,
+          "afterDigest": "sha256:22cdb31754c93a982ac78811e3ac375bf610c3644ec78856c4f6de60329306cd",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/debugging-and-triage/SKILL.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/evidence-review"
+        },
+        {
+          "afterBytes": 3321,
+          "afterDigest": "sha256:c7bfd830f28d2224511b3712f6c4c1cf456c4559e8abf20d8d84855c285468eb",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/evidence-review/SKILL.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/progressive-chain-validation"
+        },
+        {
+          "afterBytes": 9732,
+          "afterDigest": "sha256:0f95d95150c7e4db2b7670d6621208dc834ae4b45135debd43c421d4cb9d1ef5",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/progressive-chain-validation/SKILL.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/progressive-chain-validation/references"
+        },
+        {
+          "afterBytes": 2043,
+          "afterDigest": "sha256:039b96522147d378d203eb7b015c8f3f5a10b94909ec4b30c82c1ec4041b517f",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/progressive-chain-validation/references/artifact-layout.md"
+        },
+        {
+          "afterBytes": 14282,
+          "afterDigest": "sha256:6c67288122fe91fa1180abc324212d60e572d4a5cf49a529bd03084d9fd5582d",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/progressive-chain-validation/references/chain-plan-generation.md"
+        },
+        {
+          "afterBytes": 4412,
+          "afterDigest": "sha256:a33483c35fd4e932aa99fc95415f30c35c0d0c098db61c450780e0e1be727eac",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/progressive-chain-validation/references/data-location-preflight.md"
+        },
+        {
+          "afterBytes": 3180,
+          "afterDigest": "sha256:75a457495bc419bc9de35f970b176cd414e015f6120e63743c3b282ae1ad236f",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/progressive-chain-validation/references/local-chain-optimization.md"
+        },
+        {
+          "afterBytes": 6293,
+          "afterDigest": "sha256:b9f981143dc5fcec0f399971555e37fb176ba1a911b9d8f04e093738e8513e84",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/progressive-chain-validation/references/metrics-contract.md"
+        },
+        {
+          "afterBytes": 14575,
+          "afterDigest": "sha256:f0f8165010afa8bdcd515f12db42dd72e245723585b930a7dd0aaa742c022bde",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/progressive-chain-validation/references/plan-quality-standard.md"
+        },
+        {
+          "afterBytes": 4327,
+          "afterDigest": "sha256:5c41a94c5119a0e1d5256ffffec9ac7b705885f2aed7d2c11723b96028540604",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/progressive-chain-validation/references/round-model.md"
+        },
+        {
+          "afterBytes": 4460,
+          "afterDigest": "sha256:2672b9ea06f753f46243823e51e73c9f59db6fda4014250586d7d642a5728b0a",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/progressive-chain-validation/references/safety-boundaries.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/progressive-chain-validation/templates"
+        },
+        {
+          "afterBytes": 20798,
+          "afterDigest": "sha256:7b89f8123d01e4283bef480ab7cc96f4281362810f0d8056113bbe215eaa9f37",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/progressive-chain-validation/templates/plan.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/regression-design"
+        },
+        {
+          "afterBytes": 3646,
+          "afterDigest": "sha256:3b8100320e994d190939d8255f89018fafeed0db2805637f3c27714db8abf4f3",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/regression-design/SKILL.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/test-strategy"
+        },
+        {
+          "afterBytes": 4233,
+          "afterDigest": "sha256:0c83f74e50c3e1c3e7a819cf07b6b184d3b9e0b5951bdf861de500370bdb3c55",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/skills/test-strategy/SKILL.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/templates"
+        },
+        {
+          "afterBytes": 983,
+          "afterDigest": "sha256:5aba9f1a313094294506b3d6f232e9e0ed4de4f038b9df0497f589c4dbc72eb8",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/Test/templates/test-handoff-template.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow-ledger"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow-ledger/ProductWindow"
+        },
+        {
+          "afterBytes": 384,
+          "afterDigest": "sha256:235c05c8f710d99be37cc1754044e83fba114f40b622004feff41a89534a674a",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow-ledger/ProductWindow/README.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow-ledger/goal-stage-confirmation"
+        },
+        {
+          "afterBytes": 705,
+          "afterDigest": "sha256:e68d0b6466e8dc15e415f029ae96904317b6723d4166f58aa61c1ee478a04c35",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow-ledger/goal-stage-confirmation/README.md"
+        },
+        {
+          "afterBytes": 2179,
+          "afterDigest": "sha256:f7d7418a79d5cd66925e6ab6778a94be2dfa665464641673503c51b4e4022c0c",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow-ledger/goal-stage-confirmation/process.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow-ledger/requirement-designs"
+        },
+        {
+          "afterBytes": 1439,
+          "afterDigest": "sha256:9ea4bc2cf1b2aab4f6fccf1faad9d91d19b3ee59e5f42a26f7b4a5da5339b008",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow-ledger/requirement-designs/README.md"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow-ledger/workspace"
+        },
+        {
+          "afterBytes": null,
+          "afterDigest": null,
+          "afterExecutable": null,
+          "afterType": "directory",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow-ledger/workspace/archive"
+        },
+        {
+          "afterBytes": 402,
+          "afterDigest": "sha256:5583d1a678a67331d5f894499b440b565399f081001957c1431cc5fd25470e18",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow-ledger/workspace/archive/index.md"
+        },
+        {
+          "afterBytes": 2089,
+          "afterDigest": "sha256:2cec357dcb612ee5500685a366fa2aa0654667400df89703c38b31c97eefed1d",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow-ledger/workspace/requirement-to-wave-execution-flow.md"
+        },
+        {
+          "afterBytes": 2158,
+          "afterDigest": "sha256:dea03b52a0086799771aec47f196c1f04951a4862ac96d2b890dc814b69921b0",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow-ledger/workspace/todo-window-scheduling-policy.md"
+        },
+        {
+          "afterBytes": 1236,
+          "afterDigest": "sha256:a448aef08fa6ad2d264cfbd64245b2d7e3cd58b2da6107e021aaad7df2dae6dc",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow-ledger/workspace/workspace-doc-archive-policy.md"
+        },
+        {
+          "afterBytes": 1586,
+          "afterDigest": "sha256:6457b76289c0bbe7f25cbcbb3daa92fc7f4cafe52e2727f94b7cf7d8a59ac845",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow-ledger/workspace/workspace-record-map.md"
+        },
+        {
+          "afterBytes": 1861,
+          "afterDigest": "sha256:6cb63cb071c44854cc2c0b52733739da38b90eb625aede6e2956d2b8ce4a04e2",
+          "afterExecutable": false,
+          "afterType": "file",
+          "beforeBytes": null,
+          "beforeDigest": null,
+          "beforeExecutable": null,
+          "beforeType": null,
+          "normalizations": [],
+          "operation": "create",
+          "owner": "shared-setup",
+          "path": "WakeflowFixture/wakeflow.config.json"
+        }
+      ],
+      "fileCount": 65,
+      "layerDigest": "sha256:db1f8c8da4142da05d9a3ba13a44655bc72d4ba7b3c5d25ea86e9c5dc897cd2e",
+      "layerId": "shared-setup",
+      "owner": "shared-setup"
+    }
+  ]
+}

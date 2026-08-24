@@ -1,0 +1,532 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:workspace-maintenance-plan:v1",
+  "title": "Wakeflow Workspace Maintenance Plan",
+  "description": "Closed internal M5 plan that binds user-reviewable workspace actions to the M3 maintenance transaction steps without carrying machine-private owner execution payloads.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaId", "payload"],
+  "properties": {
+    "schemaId": { "const": "urn:wakeflow:internal:workspace-maintenance-plan:v1" },
+    "payload": { "$ref": "#/$defs/payload" }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "token": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,127}$"
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "repositoryId": {
+      "type": "string",
+      "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "surfaceId": {
+      "type": "string",
+      "pattern": "^surface_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "rootRelativeRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)(?!.*[\\u0000-\\u001f\\u007f-\\u009f]).+$"
+    },
+    "presentNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "mode", "digest"],
+      "properties": {
+        "type": { "enum": ["file", "directory"] },
+        "mode": { "type": "string", "pattern": "^0[0-7]{3}$" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "targetPresentNode": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "mode", "digest"],
+          "properties": {
+            "type": { "const": "file" },
+            "mode": { "enum": ["0600", "0644"] },
+            "digest": { "$ref": "#/$defs/digest" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "mode", "digest"],
+          "properties": {
+            "type": { "const": "directory" },
+            "mode": { "enum": ["0700", "0755"] },
+            "digest": { "$ref": "#/$defs/digest" }
+          }
+        }
+      ]
+    },
+    "absentNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": { "type": { "const": "absent" } }
+    },
+    "sourceNode": {
+      "oneOf": [
+        { "$ref": "#/$defs/absentNode" },
+        { "$ref": "#/$defs/presentNode" }
+      ]
+    },
+    "targetNode": {
+      "oneOf": [
+        { "$ref": "#/$defs/absentNode" },
+        { "$ref": "#/$defs/targetPresentNode" }
+      ]
+    },
+    "sourceAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["programId", "modelDigest"],
+      "properties": {
+        "programId": { "$ref": "#/$defs/programId" },
+        "modelDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "disposition",
+        "source",
+        "sourceAuthority",
+        "target",
+        "desiredModel",
+        "desiredModelDigest"
+      ],
+      "properties": {
+        "disposition": { "enum": ["create", "current", "update"] },
+        "source": { "$ref": "#/$defs/sourceNode" },
+        "sourceAuthority": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/sourceAuthority" }
+          ]
+        },
+        "target": { "$ref": "#/$defs/targetPresentNode" },
+        "desiredModel": { "$ref": "https://raw.githubusercontent.com/GxFn/Wakeflow/main/core/schemas/wakeflow-config.schema.json" },
+        "desiredModelDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hostId", "profileDigest"],
+      "properties": {
+        "hostId": { "enum": ["codex", "claude-code"] },
+        "profileDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "topologyDiff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entityType",
+        "entityId",
+        "change",
+        "sourceDigest",
+        "targetDigest",
+        "sourcePlacement",
+        "targetPlacement"
+      ],
+      "properties": {
+        "entityType": { "enum": ["repository", "surface", "window"] },
+        "entityId": {
+          "oneOf": [
+            { "$ref": "#/$defs/repositoryId" },
+            { "$ref": "#/$defs/surfaceId" },
+            { "$ref": "#/$defs/windowId" }
+          ]
+        },
+        "change": {
+          "enum": ["unchanged", "metadata-changed", "added", "removed", "root-changed", "role-reassigned"]
+        },
+        "sourceDigest": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/digest" }]
+        },
+        "targetDigest": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/digest" }]
+        },
+        "sourcePlacement": {
+          "oneOf": [{ "type": "null" }, { "type": "string", "minLength": 1, "maxLength": 1024 }]
+        },
+        "targetPlacement": {
+          "oneOf": [{ "type": "null" }, { "type": "string", "minLength": 1, "maxLength": 1024 }]
+        }
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["componentId", "owner", "ownerPlanDigest"],
+      "properties": {
+        "componentId": { "$ref": "#/$defs/token" },
+        "owner": { "$ref": "#/$defs/token" },
+        "ownerPlanDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "root": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "rootId", "basis", "configuredPath"],
+      "properties": {
+        "kind": { "enum": ["program", "ledger", "repository", "support-surface"] },
+        "rootId": {
+          "oneOf": [
+            { "$ref": "#/$defs/programId" },
+            { "$ref": "#/$defs/repositoryId" },
+            { "$ref": "#/$defs/surfaceId" }
+          ]
+        },
+        "basis": { "enum": ["source", "target"] },
+        "configuredPath": { "type": "string", "minLength": 1, "maxLength": 1024 }
+      }
+    },
+    "authorization": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "enum": ["none", "wakeflow-owned", "configured-managed-component", "owner-lifecycle"]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "repositoryId"],
+          "properties": {
+            "kind": { "const": "explicit-repository" },
+            "repositoryId": { "$ref": "#/$defs/repositoryId" }
+          }
+        }
+      ]
+    },
+    "filesystemAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actionId",
+        "componentId",
+        "owner",
+        "root",
+        "ref",
+        "resourceRef",
+        "classification",
+        "source",
+        "target",
+        "action",
+        "authorization",
+        "reasonCode",
+        "stepId",
+        "commitOrder"
+      ],
+      "properties": {
+        "actionId": { "$ref": "#/$defs/token" },
+        "componentId": { "$ref": "#/$defs/token" },
+        "owner": { "$ref": "#/$defs/token" },
+        "root": { "$ref": "#/$defs/root" },
+        "ref": { "$ref": "#/$defs/rootRelativeRef" },
+        "resourceRef": { "$ref": "#/$defs/rootRelativeRef" },
+        "classification": {
+          "enum": [
+            "managed-missing",
+            "managed-current",
+            "managed-stale-known",
+            "managed-modified",
+            "user-owned",
+            "legacy-generated-exact",
+            "legacy-generated-modified",
+            "derived-projection",
+            "runtime-fact",
+            "unknown-nonconflicting",
+            "conflict"
+          ]
+        },
+        "source": { "$ref": "#/$defs/sourceNode" },
+        "target": { "$ref": "#/$defs/targetNode" },
+        "action": {
+          "enum": [
+            "current",
+            "create-managed",
+            "update-managed",
+            "remove-managed-block",
+            "remove-empty-static-dir",
+            "preserve",
+            "defer",
+            "blocked"
+          ]
+        },
+        "authorization": { "$ref": "#/$defs/authorization" },
+        "reasonCode": { "$ref": "#/$defs/token" },
+        "stepId": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/token" }]
+        },
+        "commitOrder": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+          ]
+        }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": { "enum": ["program", "repository", "surface", "window", "host", "resource"] },
+        "value": { "type": "string", "minLength": 1, "maxLength": 1024 }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ref", "digest"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/token" },
+        "ref": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/rootRelativeRef" }]
+        },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkId", "componentId", "owner", "subject", "status", "code", "evidence"],
+      "properties": {
+        "checkId": { "$ref": "#/$defs/token" },
+        "componentId": { "$ref": "#/$defs/token" },
+        "owner": { "$ref": "#/$defs/token" },
+        "subject": { "$ref": "#/$defs/subject" },
+        "status": { "enum": ["satisfied", "blocked", "deferred", "not-applicable"] },
+        "code": { "$ref": "#/$defs/token" },
+        "evidence": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      }
+    },
+    "preserved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actionId", "reasonCode"],
+      "properties": {
+        "actionId": { "$ref": "#/$defs/token" },
+        "reasonCode": { "$ref": "#/$defs/token" }
+      }
+    },
+    "deferred": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deferredId",
+        "componentId",
+        "owner",
+        "action",
+        "subject",
+        "prerequisiteCheckIds",
+        "reasonCode"
+      ],
+      "properties": {
+        "deferredId": { "$ref": "#/$defs/token" },
+        "componentId": { "$ref": "#/$defs/token" },
+        "owner": { "$ref": "#/$defs/token" },
+        "action": { "$ref": "#/$defs/token" },
+        "subject": { "$ref": "#/$defs/subject" },
+        "prerequisiteCheckIds": {
+          "type": "array",
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/token" }
+        },
+        "reasonCode": { "$ref": "#/$defs/token" }
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["blockerId", "componentId", "owner", "subject", "code", "dependencyCheckId"],
+      "properties": {
+        "blockerId": { "$ref": "#/$defs/token" },
+        "componentId": { "$ref": "#/$defs/token" },
+        "owner": { "$ref": "#/$defs/token" },
+        "subject": { "$ref": "#/$defs/subject" },
+        "code": { "$ref": "#/$defs/token" },
+        "dependencyCheckId": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/token" }]
+        }
+      }
+    },
+    "stepPresentResource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "type", "mode", "digest"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/rootRelativeRef" },
+        "type": { "enum": ["file", "directory"] },
+        "mode": { "type": "string", "pattern": "^0[0-7]{3}$" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "stepTargetPresentResource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ref", "type", "mode", "digest"],
+          "properties": {
+            "ref": { "$ref": "#/$defs/rootRelativeRef" },
+            "type": { "const": "file" },
+            "mode": { "enum": ["0600", "0644"] },
+            "digest": { "$ref": "#/$defs/digest" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ref", "type", "mode", "digest"],
+          "properties": {
+            "ref": { "$ref": "#/$defs/rootRelativeRef" },
+            "type": { "const": "directory" },
+            "mode": { "enum": ["0700", "0755"] },
+            "digest": { "$ref": "#/$defs/digest" }
+          }
+        }
+      ]
+    },
+    "stepAbsentResource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "type"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/rootRelativeRef" },
+        "type": { "const": "absent" }
+      }
+    },
+    "stepSourceResource": {
+      "oneOf": [
+        { "$ref": "#/$defs/stepAbsentResource" },
+        { "$ref": "#/$defs/stepPresentResource" }
+      ]
+    },
+    "stepTargetResource": {
+      "oneOf": [
+        { "$ref": "#/$defs/stepAbsentResource" },
+        { "$ref": "#/$defs/stepTargetPresentResource" }
+      ]
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stepId", "ordinal", "stepKind", "source", "staging", "final"],
+      "properties": {
+        "stepId": { "$ref": "#/$defs/token" },
+        "ordinal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "stepKind": { "enum": ["create-or-update", "remove"] },
+        "source": { "$ref": "#/$defs/stepSourceResource" },
+        "staging": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/stepTargetPresentResource" }]
+        },
+        "final": { "$ref": "#/$defs/stepTargetResource" }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schemaVersion",
+        "action",
+        "status",
+        "programId",
+        "host",
+        "config",
+        "layoutDigest",
+        "topologyDiff",
+        "components",
+        "filesystemActions",
+        "dependencyChecks",
+        "preserved",
+        "deferredOwnerActions",
+        "blockers",
+        "steps"
+      ],
+      "properties": {
+        "kind": { "const": "WakeflowWorkspaceMaintenancePlan" },
+        "schemaVersion": { "const": 1 },
+        "action": { "enum": ["fresh-initialize", "reconfigure", "reconcile"] },
+        "status": { "enum": ["ready", "blocked"] },
+        "programId": { "$ref": "#/$defs/programId" },
+        "host": { "$ref": "#/$defs/host" },
+        "config": { "$ref": "#/$defs/config" },
+        "layoutDigest": { "$ref": "#/$defs/digest" },
+        "topologyDiff": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/topologyDiff" }
+        },
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/component" }
+        },
+        "filesystemActions": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/filesystemAction" }
+        },
+        "dependencyChecks": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/dependency" }
+        },
+        "preserved": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/preserved" }
+        },
+        "deferredOwnerActions": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/deferred" }
+        },
+        "blockers": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/blocker" }
+        },
+        "steps": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/step" }
+        }
+      }
+    }
+  }
+}

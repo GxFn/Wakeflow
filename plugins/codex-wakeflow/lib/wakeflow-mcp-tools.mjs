@@ -1,1181 +1,922 @@
-import { existsSync } from "node:fs";
+/**
+ * Wakeflow 公共 MCP 工具的共享组合层。
+ *
+ * 能力导航：
+ * - 公共合同与脱敏错误：WakeflowPublicMcpError、exactKeys、portableResult。
+ * - 普通领域路由：domainHandlers、domainHandler，把闭合公共请求交给 public-v3 owner。
+ * - 工作区维护路由：maintenanceCoordinator、runMaintenance，保持 fresh/reconfigure/reconcile 的独立权限面。
+ * - 托管证据路由：evidenceRuntimeContext、normalizeEvidenceRequest、runEvidence，按需求派生 Controller 上下文。
+ * - 工具声明与注册：writeAnnotations、routedTool、PUBLIC_TOOL_ORDER、tools、handlers。
+ *
+ * 本文件只拥有公共工具合同、组合路由和输出脱敏，不拥有领域状态转换、宿主 effect 或验收决定。
+ */
 import path from "node:path";
-import { runWakeflowRuntime } from "./wakeflow-runtime.mjs";
+import { fileURLToPath } from "node:url";
+
+import {
+  canonicalJson,
+  canonicalJsonDigest,
+} from "../scripts/lib/wakeflow-canonical-json.mjs";
+import {
+  loadWakeflowConfigV3Snapshot,
+} from "../scripts/lib/wakeflow-config-v3-snapshot.mjs";
+import {
+  applyManagedEvidenceImport,
+  planManagedEvidenceImport,
+  recoverManagedEvidenceImport,
+} from "../scripts/lib/wakeflow-evidence-importer.mjs";
 import { hostProfile } from "../scripts/lib/wakeflow-host-profile.mjs";
 import {
-  TASK_CONTEXT_VERSION,
-  normalizeTaskPackageContext,
-} from "../scripts/lib/wakeflow-task-package.mjs";
+  assertWakeflowId,
+} from "../scripts/lib/wakeflow-identifiers.mjs";
+import {
+  loadWakeflowMaintenanceActionHandlers,
+} from "../scripts/lib/wakeflow-maintenance-action-runtime.mjs";
+import {
+  createWakeflowMaintenanceCoordinator,
+} from "../scripts/lib/wakeflow-maintenance-coordinator.mjs";
+import {
+  createWakeflowPublicV3DomainHandlers,
+  refreshWakeflowActiveProjectionAfterPublicMutation,
+} from "../scripts/lib/wakeflow-public-v3-runtime.mjs";
+import { loadWakeflowAssetBundle } from "../scripts/lib/wakeflow-template-renderer.mjs";
 
-function readOnlyTool(title) {
-  return {
-    title,
-    readOnlyHint: true,
-    destructiveHint: false,
-    idempotentHint: true,
-    openWorldHint: false,
+const MAINTENANCE_TOOL = "wakeflow_maintain_workspace";
+const EVIDENCE_TOOL = "wakeflow_record_evidence";
+const MODES = new Set(["preview", "apply", "recover"]);
+const wakeflowRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+let maintenanceCoordinatorPromise = null;
+let domainHandlersPromise = null;
+let evidenceProjectionBundle = null;
+
+// 公共合同、错误与可移植输出
+
+class WakeflowPublicMcpError extends Error {
+  constructor(code, message, { details = {} } = {}) {
+    super(message);
+    this.name = "WakeflowPublicMcpError";
+    this.code = code;
+    this.details = deepFreeze({ ...details });
+  }
+}
+
+// 所有公开失败都先收敛为稳定 code/message，内部原因只保留稳定 causeCode。
+function fail(code, message, details = {}) {
+  throw new WakeflowPublicMcpError(code, message, { details });
+}
+
+// 只接纳普通对象，避免数组、class instance 或异常原型混入公共合同。
+function plainObject(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+// 校验闭合字段集合及可枚举 data property，防止 accessor 在验证阶段执行隐式逻辑。
+function exactKeys(value, allowed, required, label) {
+  if (!plainObject(value)) fail("wakeflow-public-mcp-contract", `${label} must be one plain object`);
+  const actual = Reflect.ownKeys(value);
+  if (actual.some((key) => typeof key !== "string" || !allowed.includes(key))) {
+    fail("wakeflow-public-mcp-contract", `${label} has an unknown field`);
+  }
+  for (const key of required) {
+    if (!Object.hasOwn(value, key)) {
+      fail("wakeflow-public-mcp-contract", `${label} is missing ${key}`);
+    }
+  }
+  for (const key of actual) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor?.enumerable || !Object.hasOwn(descriptor, "value")) {
+      fail("wakeflow-public-mcp-contract", `${label}.${String(key)} must be an enumerable data property`);
+    }
+  }
+  return value;
+}
+
+function deepFreeze(value) {
+  if (!value || typeof value !== "object") return value;
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.isFrozen(value) ? value : Object.freeze(value);
+}
+
+function normalizedRoot(value) {
+  if (
+    typeof value !== "string"
+    || !value
+    || value !== value.trim()
+    || !path.isAbsolute(value)
+    || path.resolve(value) !== value
+  ) fail("wakeflow-public-mcp-root", "root must be one normalized absolute workspace path");
+  return value;
+}
+
+function mode(value) {
+  if (!MODES.has(value)) fail("wakeflow-public-mcp-mode", "mode must be preview, apply, or recover");
+  return value;
+}
+
+// 将 owner 结果复制为 canonical plain data，并拒绝把工作区绝对路径带回公共响应。
+function portableResult({
+  tool,
+  selectedMode,
+  result,
+  root,
+  action = undefined,
+  activeProjection = null,
+}) {
+  let snapshot;
+  try {
+    snapshot = JSON.parse(canonicalJson({
+      schemaVersion: 1,
+      tool,
+      ...(action === undefined ? {} : { action }),
+      mode: selectedMode,
+      result,
+      ...(activeProjection === null ? {} : { activeProjection }),
+    }));
+  } catch {
+    fail("wakeflow-public-mcp-result", `${tool} returned non-canonical data`);
+  }
+  if (canonicalJson(snapshot).includes(root)) {
+    fail("wakeflow-public-mcp-private-output", `${tool} returned private workspace location data`);
+  }
+  return deepFreeze(snapshot);
+}
+
+// 普通领域工具路由
+
+/**
+ * 惰性构造共享 public-v3 handler 集合。
+ * 缓存的是安装产物的静态组合，不缓存 workspace、config 或 demand authority。
+ */
+async function domainHandlers() {
+  if (domainHandlersPromise === null) {
+    domainHandlersPromise = Promise.resolve().then(() => createWakeflowPublicV3DomainHandlers({
+      wakeflowRoot,
+      hostProfile,
+    }));
+  }
+  try {
+    return await domainHandlersPromise;
+  } catch (error) {
+    domainHandlersPromise = null;
+    fail("wakeflow-public-mcp-runtime-unavailable", "the installed v3 domain runtime is unavailable", {
+      causeCode: typeof error?.code === "string" ? error.code : null,
+    });
+  }
+  return null;
+}
+
+/**
+ * 为单个公共工具创建薄路由。
+ * 领域 owner 继续负责 operation、authority 和 mutation；这里仅统一脱敏公开错误。
+ */
+function domainHandler(tool) {
+  return async (args) => {
+    try {
+      const available = await domainHandlers();
+      return await available[tool](args);
+    } catch (error) {
+      if (error instanceof WakeflowPublicMcpError) throw error;
+      fail("wakeflow-public-mcp-domain", `${tool} failed closed inside its v3 owner`, {
+        causeCode: typeof error?.code === "string" ? error.code : null,
+      });
+    }
   };
 }
 
-function localWriteTool(title, idempotentHint = false) {
-  return {
+// 工作区维护路由
+
+/**
+ * 惰性装配 maintenance coordinator 与宿主 action handlers。
+ * 该对象只持有静态实现引用，每次 workspace authority 仍由具体维护调用重新读取和栅栏化。
+ */
+async function maintenanceCoordinator() {
+  if (maintenanceCoordinatorPromise === null) {
+    maintenanceCoordinatorPromise = loadWakeflowMaintenanceActionHandlers({
+      wakeflowRoot,
+      hostProfile,
+    }).then((actionHandlers) => createWakeflowMaintenanceCoordinator({ actionHandlers }));
+  }
+  try {
+    return await maintenanceCoordinatorPromise;
+  } catch (error) {
+    maintenanceCoordinatorPromise = null;
+    fail(
+      "wakeflow-public-mcp-runtime-unavailable",
+      "the installed Wakeflow artifact cannot load its maintenance runtime",
+      { causeCode: typeof error?.code === "string" ? error.code : null },
+    );
+  }
+  return null;
+}
+
+/**
+ * 执行 fresh-initialize、reconfigure 或 reconcile 的已闭合请求。
+ * preview 返回可复核计划摘要；任何结果都不得泄露调用方传入的工作区绝对路径。
+ */
+async function runMaintenance(args) {
+  const root = normalizedRoot(args?.root);
+  const coordinator = await maintenanceCoordinator();
+  let result;
+  try {
+    result = await coordinator.execute(args);
+  } catch (error) {
+    fail(
+      "wakeflow-public-mcp-maintenance",
+      "public maintenance failed closed",
+      { causeCode: typeof error?.code === "string" ? error.code : null },
+    );
+  }
+  if (canonicalJson(result).includes(root)) {
+    fail("wakeflow-public-mcp-private-output", "public maintenance returned private workspace location data");
+  }
+  if (result.mode === "preview" && result.result?.confirmedActionPlan) {
+    return deepFreeze({
+      ...result,
+      result: {
+        ...result.result,
+        confirmedActionPlanDigest: canonicalJsonDigest(result.result.confirmedActionPlan),
+      },
+    });
+  }
+  return result;
+}
+
+// 托管证据路由
+
+/**
+ * 从 strict v3 config 为一次 evidence 调用派生需求路径、Controller 身份和 programId。
+ * 返回值不是可跨调用复用的“当前工作区”上下文，也不能替代 importer 内部的提交前重验。
+ */
+function evidenceRuntimeContext(root, demandId) {
+  const workspaceRoot = normalizedRoot(root);
+  let typedDemandId;
+  try {
+    typedDemandId = assertWakeflowId(demandId, "demand", "$/demandId");
+  } catch {
+    fail("wakeflow-public-mcp-demand", "demandId must be one typed Wakeflow demand ID");
+  }
+  let snapshot;
+  try {
+    snapshot = loadWakeflowConfigV3Snapshot({ workspaceRoot });
+  } catch (error) {
+    fail("wakeflow-public-mcp-config", "root does not contain one strict current v3 config", {
+      causeCode: typeof error?.code === "string" ? error.code : null,
+    });
+  }
+  return Object.freeze({
+    root: workspaceRoot,
+    stateRoot: path.join(workspaceRoot, ".wakeflow-active", "current", typedDemandId),
+    configPath: path.join(workspaceRoot, "wakeflow.config.json"),
+    controllerWindowId: snapshot.indexes.controllerWindow.windowId,
+    expectedProgramId: snapshot.model.program.programId,
+    interfaceLanguage: snapshot.model.program.interfaceLanguage,
+  });
+}
+
+// evidence 不复用普通 handler 的 workspace context；这里只共享安装包静态 bundle，不缓存配置或需求状态。
+function loadEvidenceProjectionBundle() {
+  if (evidenceProjectionBundle !== null) return evidenceProjectionBundle;
+  try {
+    evidenceProjectionBundle = loadWakeflowAssetBundle({ wakeflowRoot });
+    return evidenceProjectionBundle;
+  } catch {
+    evidenceProjectionBundle = null;
+    return null;
+  }
+}
+
+// apply/recover 已成功关闭 evidence authority 后才刷新；preview 严格保持零写入。
+function refreshEvidenceActiveProjection(selectedMode, runtime) {
+  if (selectedMode === "preview") return null;
+  const language = ["en", "zh"].includes(runtime.interfaceLanguage)
+    ? runtime.interfaceLanguage
+    : null;
+  return refreshWakeflowActiveProjectionAfterPublicMutation({
+    workspaceRoot: runtime.root,
+    bundle: language === null ? null : loadEvidenceProjectionBundle(),
+    language,
+  });
+}
+
+// 根据 preview/apply/recover 分支校验 evidence 请求的精确字段集合。
+function normalizeEvidenceRequest(args) {
+  if (!plainObject(args)) fail("wakeflow-public-mcp-contract", "evidence request must be one plain object");
+  const selectedMode = mode(args.mode);
+  if (selectedMode === "preview") {
+    exactKeys(
+      args,
+      [
+        "root",
+        "demandId",
+        "mode",
+        "kind",
+        "source",
+        "relations",
+        "sensitivity",
+        "controllerReviewedOpaque",
+      ],
+      ["root", "demandId", "mode", "kind", "source"],
+      "evidence preview request",
+    );
+  } else if (selectedMode === "apply") {
+    exactKeys(
+      args,
+      ["root", "demandId", "mode", "plan", "planDigest"],
+      ["root", "demandId", "mode", "plan", "planDigest"],
+      "evidence apply request",
+    );
+  } else {
+    exactKeys(
+      args,
+      ["root", "demandId", "mode"],
+      ["root", "demandId", "mode"],
+      "evidence recovery request",
+    );
+  }
+  return selectedMode;
+}
+
+/**
+ * 把一次托管证据请求交给 importer 的 plan/apply/recover owner。
+ * evidence 只记录可审查输入，不在此处判断事实真伪或需求是否通过。
+ */
+async function runEvidence(args) {
+  const selectedMode = normalizeEvidenceRequest(args);
+  const runtime = evidenceRuntimeContext(args.root, args.demandId);
+  let result;
+  try {
+    if (selectedMode === "preview") {
+      result = planManagedEvidenceImport({
+        stateRoot: runtime.stateRoot,
+        configPath: runtime.configPath,
+        controllerWindowId: runtime.controllerWindowId,
+        kind: args.kind,
+        source: args.source,
+        relations: args.relations ?? [],
+        sensitivity: args.sensitivity ?? "internal",
+        controllerReviewedOpaque: args.controllerReviewedOpaque ?? false,
+      });
+    } else if (selectedMode === "apply") {
+      result = applyManagedEvidenceImport({
+        plan: args.plan,
+        planDigest: args.planDigest,
+        runtimeContext: {
+          stateRoot: runtime.stateRoot,
+          configPath: runtime.configPath,
+          expectedProgramId: runtime.expectedProgramId,
+        },
+      });
+    } else {
+      result = recoverManagedEvidenceImport({
+        stateRoot: runtime.stateRoot,
+        configPath: runtime.configPath,
+        expectedProgramId: runtime.expectedProgramId,
+      });
+    }
+  } catch (error) {
+    fail(
+      "wakeflow-public-mcp-evidence",
+      "public evidence import failed closed",
+      { causeCode: typeof error?.code === "string" ? error.code : null },
+    );
+  }
+  return portableResult({
+    tool: EVIDENCE_TOOL,
+    selectedMode,
+    result,
+    root: runtime.root,
+    activeProjection: refreshEvidenceActiveProjection(selectedMode, runtime),
+  });
+}
+
+// 工具声明、schema 与 annotation
+
+/**
+ * 构造 MCP 客户端提示信息。
+ * destructiveHint 按工具可能执行的最强 operation 声明；它只是提示，不授予写入权限。
+ */
+function writeAnnotations(title, idempotentHint, { readOnly = false, destructive = false } = {}) {
+  return Object.freeze({
     title,
-    readOnlyHint: false,
-    destructiveHint: false,
+    readOnlyHint: readOnly,
+    destructiveHint: destructive,
     idempotentHint,
     openWorldHint: false,
-  };
+  });
 }
 
-const taskPackageContextRequired = [
-  "workType",
-  "objective",
-  "contextSummary",
-  "requirementRefs",
-  "boundaries",
-  "completionExpectations",
-  "commitExpectation",
-];
+const repositoryIdSchema = Object.freeze({
+  type: "string",
+  pattern: "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+});
+const digestSchema = Object.freeze({
+  type: "string",
+  pattern: "^sha256:[0-9a-f]{64}$",
+});
+const authorizedRepositoryIdsSchema = Object.freeze({
+  type: "array",
+  uniqueItems: true,
+  items: repositoryIdSchema,
+});
 
-const taskPackageContextProperties = {
-  workType: {
-    type: "string",
-    enum: ["implementation", "research", "documentation", "test"],
-    description: "Classifies the package so pre-dispatch readiness can apply the right execution gate.",
-  },
-  objective: {
-    type: "string",
-    description: "The one observable outcome this target must deliver. Stored on the task package; target dispatch cannot replace it.",
-  },
-  contextSummary: {
-    type: "array",
-    minItems: 1,
-    items: { type: "string" },
-    description: "Small ordered set of confirmed facts the target needs before execution. Background detail stays in requirementRefs.",
-  },
-  requirementRefs: {
-    type: "array",
-    minItems: 1,
-    description: "Workspace-relative requirement/background references. At least one entry must have role=goal; non-evidence roles must include an exact Markdown #anchor.",
-    contains: {
-      type: "object",
-      required: ["role"],
-      properties: { role: { const: "goal" } },
-    },
-    minContains: 1,
-    items: {
-      type: "object",
-      required: ["ref", "role"],
-      properties: {
-        ref: { type: "string" },
-        role: { type: "string", enum: ["goal", "completion", "constraint", "validation", "design", "evidence"] },
-        label: { type: "string" },
-      },
-    },
-  },
-  boundaries: {
-    type: "object",
-    required: ["inScope", "outOfScope", "forbidden"],
-    properties: {
-      inScope: { type: "array", minItems: 1, items: { type: "string" } },
-      outOfScope: { type: "array", items: { type: "string" } },
-      forbidden: { type: "array", items: { type: "string" } },
-    },
-  },
-  completionExpectations: {
-    type: "array",
-    minItems: 1,
-    items: { type: "string" },
-    description: "Ordered concrete results that must be present before the target can return completed, most important first. The prompt surfaces the first two; the task package retains the full list.",
-  },
-  dependsOnTaskIds: {
-    type: "array",
-    items: { type: "string" },
-    description: "Explicit upstream target task ids. Dispatch is blocked until every dependency is controller-accepted.",
-  },
-  commitExpectation: {
-    type: "string",
-    enum: ["commit", "leave-uncommitted"],
-    description: "Whether the owning repository window must commit its scoped work before returning.",
-  },
-};
-
-const demandAuthoritySchema = {
+const freshSelectionSchema = Object.freeze({
   type: "object",
-  required: ["demandKey", "demandType", "entryMode", "authorityRefs", "testDecision"],
+  required: ["program", "topology", "storage", "governance", "hosts"],
   properties: {
-    schemaVersion: { type: "integer", enum: [1] },
-    artifactKind: { type: "string", enum: ["wakeflow-demand-authority"] },
-    demandKey: { type: "string" },
-    demandType: { type: "string", enum: ["requirement", "bug", "supplement", "research"] },
-    entryMode: { type: "string", enum: ["design-delivery", "controller-inline", "pod-design"] },
-    authorityRefs: {
-      type: "array",
-      minItems: 1,
-      items: {
-        type: "object",
-        required: ["role", "ref"],
-        properties: {
-          role: {
-            type: "string",
-            enum: ["original-plan", "requirement-design", "code-facts", "landing-plan", "non-goals", "user-confirmation", "reproduction", "scope", "requirement-delta", "research-question", "boundaries", "test-environment"],
-          },
-          ref: { type: "string", description: "Workspace-relative Markdown anchor such as docs/design.md#goal." },
-        },
-        additionalProperties: false,
-      },
-    },
-    testDecision: {
+    program: {
       type: "object",
-      required: ["mode", "summary"],
+      required: ["displayName", "interfaceLanguage"],
       properties: {
-        mode: { type: "string", enum: ["controller-only", "real-environment", "not-applicable"] },
-        summary: { type: "string" },
-        environmentSpecRef: { type: "string" },
+        displayName: { type: "string" },
+        description: { type: "string" },
+        interfaceLanguage: { type: "string", enum: ["auto", "en", "zh"] },
       },
       additionalProperties: false,
     },
+    topology: {
+      type: "object",
+      required: ["repositories", "supportSurfaces", "windows"],
+      properties: {
+        repositories: { type: "array", minItems: 1, items: { type: "object" } },
+        supportSurfaces: { type: "array", minItems: 2, items: { type: "object" } },
+        windows: { type: "array", minItems: 4, items: { type: "object" } },
+      },
+      additionalProperties: false,
+    },
+    storage: {
+      type: "object",
+      required: ["ledgerRoot"],
+      properties: { ledgerRoot: { type: "string" } },
+      additionalProperties: false,
+    },
+    governance: { type: "object" },
+    hosts: { type: "object" },
   },
   additionalProperties: false,
+});
+
+function closedObject(required, properties) {
+  return Object.freeze({
+    type: "object",
+    required,
+    properties,
+    additionalProperties: false,
+  });
+}
+
+const maintenanceBranches = Object.freeze([
+  closedObject(["root", "action", "mode", "request"], {
+    root: { type: "string" },
+    action: { const: "fresh-initialize" },
+    mode: { const: "preview" },
+    request: closedObject(["selection", "language"], {
+      selection: freshSelectionSchema,
+      language: { type: "string", enum: ["en", "zh"] },
+    }),
+  }),
+  closedObject(["root", "action", "mode", "request"], {
+    root: { type: "string" },
+    action: { const: "reconfigure" },
+    mode: { const: "preview" },
+    request: closedObject(["desiredModel", "language", "authorizedRepositoryIds"], {
+      desiredModel: { type: "object" },
+      language: { type: "string", enum: ["en", "zh"] },
+      authorizedRepositoryIds: authorizedRepositoryIdsSchema,
+    }),
+  }),
+  closedObject(["root", "action", "mode", "request"], {
+    root: { type: "string" },
+    action: { const: "reconcile" },
+    mode: { const: "preview" },
+    request: closedObject(["language", "authorizedRepositoryIds"], {
+      language: { type: "string", enum: ["en", "zh"] },
+      authorizedRepositoryIds: authorizedRepositoryIdsSchema,
+    }),
+  }),
+  closedObject(["root", "action", "mode", "confirmedPlan", "planDigest"], {
+    root: { type: "string" },
+    action: { type: "string", enum: ["fresh-initialize", "reconfigure", "reconcile"] },
+    mode: { const: "apply" },
+    confirmedPlan: { type: "object" },
+    planDigest: digestSchema,
+  }),
+  closedObject(["root", "action", "mode", "operationId", "confirmedPlan", "planDigest"], {
+    root: { type: "string" },
+    action: { type: "string", enum: ["fresh-initialize", "reconfigure", "reconcile"] },
+    mode: { const: "recover" },
+    operationId: {
+      type: "string",
+      pattern: "^workspace-mutation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    },
+    confirmedPlan: { type: "object" },
+    planDigest: digestSchema,
+  }),
+]);
+
+const evidenceSourceSchema = Object.freeze({
+  oneOf: [{
+    type: "object",
+    required: ["kind", "root", "path", "expectedType", "expectedDigest"],
+    properties: {
+      kind: { const: "managed-path" },
+      root: {
+        oneOf: [
+          closedObject(["kind", "repositoryId"], {
+            kind: { const: "repository" },
+            repositoryId: repositoryIdSchema,
+          }),
+          closedObject(["kind", "surfaceId"], {
+            kind: { const: "support-surface" },
+            surfaceId: {
+              type: "string",
+              pattern: "^surface_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+            },
+          }),
+        ],
+      },
+      path: { type: "string" },
+      expectedType: { type: "string", enum: ["file", "tree"] },
+      expectedDigest: digestSchema,
+    },
+    additionalProperties: false,
+  }, {
+    type: "object",
+    required: ["kind", "url", "verification"],
+    properties: {
+      kind: { const: "https" },
+      url: { type: "string", pattern: "^https://" },
+      verification: closedObject(["kind", "digest"], {
+        kind: { const: "caller-supplied-digest" },
+        digest: digestSchema,
+      }),
+    },
+    additionalProperties: false,
+  }, {
+    type: "object",
+    required: ["kind", "repositoryId", "commitOid", "verification"],
+    properties: {
+      kind: { const: "git-commit" },
+      repositoryId: repositoryIdSchema,
+      commitOid: { type: "string", pattern: "^(?:[0-9a-f]{40}|[0-9a-f]{64})$" },
+      verification: closedObject(["kind", "digest"], {
+        kind: { const: "caller-supplied-digest" },
+        digest: digestSchema,
+      }),
+    },
+    additionalProperties: false,
+  }],
+});
+
+const relationSchema = Object.freeze({
+  oneOf: [{
+    type: "object",
+    required: ["kind", "artifactKind", "artifactId", "ref", "digest"],
+    properties: {
+      kind: { const: "artifact" },
+      artifactKind: {
+        type: "string",
+        enum: ["wakeflow-task-package", "wakeflow-target-result", "wakeflow-review-candidate", "wakeflow-test-card"],
+      },
+      artifactId: { type: "string" },
+      ref: { type: "string" },
+      digest: digestSchema,
+    },
+    additionalProperties: false,
+  }, {
+    type: "object",
+    required: ["kind", "eventId", "digest"],
+    properties: {
+      kind: { const: "controller-event" },
+      eventId: { type: "string" },
+      digest: digestSchema,
+    },
+    additionalProperties: false,
+  }],
+});
+
+const evidenceBranches = Object.freeze([
+  closedObject(["root", "demandId", "mode", "kind", "source"], {
+    root: { type: "string" },
+    demandId: {
+      type: "string",
+      pattern: "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    },
+    mode: { const: "preview" },
+    kind: { type: "string", minLength: 1, maxLength: 128 },
+    source: evidenceSourceSchema,
+    relations: { type: "array", maxItems: 256, uniqueItems: true, items: relationSchema },
+    sensitivity: { type: "string", enum: ["public", "internal"] },
+    controllerReviewedOpaque: { type: "boolean" },
+  }),
+  closedObject(["root", "demandId", "mode", "plan", "planDigest"], {
+    root: { type: "string" },
+    demandId: {
+      type: "string",
+      pattern: "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    },
+    mode: { const: "apply" },
+    plan: { type: "object" },
+    planDigest: digestSchema,
+  }),
+  closedObject(["root", "demandId", "mode"], {
+    root: { type: "string" },
+    demandId: {
+      type: "string",
+      pattern: "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    },
+    mode: { const: "recover" },
+  }),
+]);
+
+const maintenanceTool = {
+  name: MAINTENANCE_TOOL,
+  description: "Preview, apply, or explicitly recover the public v3 Wakeflow workspace maintenance plan. The admitted actions are fresh-initialize, reconfigure, and reconcile. Apply consumes the complete reviewed confirmedPlan and digest, then re-derives it under the workspace mutation fence; the digest is not an authorization token.",
+  annotations: writeAnnotations("Maintain Wakeflow Workspace", true, { destructive: true }),
+  inputSchema: {
+    type: "object",
+    oneOf: maintenanceBranches,
+    properties: {
+      root: { type: "string" },
+      action: { type: "string" },
+      mode: { type: "string" },
+      request: { type: "object" },
+      confirmedPlan: { type: "object" },
+      planDigest: digestSchema,
+      operationId: { type: "string" },
+    },
+    additionalProperties: false,
+  },
 };
 
-const podMaterializationAttemptSchema = {
-  type: "object",
-  required: ["launchCorrelationId", "host", "status", "observedAt"],
-  properties: {
-    launchCorrelationId: { type: "string" },
-    host: { type: "string", enum: ["codex", "claude-code"] },
-    status: { type: "string", enum: ["creating", "pending", "finalized", "failed"] },
-    observedAt: { type: "string" },
-    hostRequestId: { type: "string", description: "Host temporary async request id; accepted only for pending and persisted only as a digest." },
-    terminalFailure: { type: "boolean", const: true },
-    failureReason: { type: "string" },
-    retryAuthorizationRef: { type: "string" },
+const evidenceTool = {
+  name: EVIDENCE_TOOL,
+  description: "Controller-owned capability to preview, apply, or recover one immutable managed evidence import for an exact typed demand. The handler derives the configured Controller identity and canonical state root; tool visibility is not authentication, and caller-supplied role or confirmation fields are never accepted. Evidence records review input, not truth or acceptance.",
+  annotations: writeAnnotations("Record Wakeflow Managed Evidence", true),
+  inputSchema: {
+    type: "object",
+    oneOf: evidenceBranches,
+    properties: {
+      root: { type: "string" },
+      demandId: { type: "string" },
+      mode: { type: "string" },
+      kind: { type: "string" },
+      source: evidenceSourceSchema,
+      relations: { type: "array" },
+      sensitivity: { type: "string" },
+      controllerReviewedOpaque: { type: "boolean" },
+      plan: { type: "object" },
+      planDigest: digestSchema,
+    },
+    additionalProperties: false,
   },
 };
 
-const podDesignRequestSchema = {
-  type: "object",
-  required: [
-    "demandKey",
-    "podId",
-    "demandType",
-    "requestType",
-    "originalGoal",
-    "requirementAnchors",
-    "codeEvidenceRefs",
-    "pausedTargetIdentity",
-    "pausedReviewIdentity",
-    "nonGoals",
-    "decisionsRequired",
-  ],
-  properties: {
-    demandKey: { type: "string" },
-    podId: { type: "string" },
-    demandType: { type: "string", enum: ["requirement", "bug", "supplement", "research"] },
-    requestType: { type: "string", enum: ["initial-design", "supplement", "redesign"] },
-    originalGoal: { type: "string" },
-    requirementAnchors: { type: "array", minItems: 1, items: { type: "string" } },
-    codeEvidenceRefs: { type: "array", minItems: 1, items: { type: "string" } },
-    pausedTargetIdentity: { type: ["object", "null"] },
-    pausedReviewIdentity: { type: ["object", "null"] },
-    nonGoals: { type: "array", items: { type: "string" } },
-    decisionsRequired: { type: "array", items: { type: "string" } },
-  },
-};
+const demandIdSchema = Object.freeze({
+  type: "string",
+  pattern: "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+});
 
-const podDesignHandoffSchema = {
-  type: "object",
-  required: [
-    "demandKey",
-    "podId",
-    "demandType",
-    "designRequestId",
-    "designRequestRef",
-    "designRequestDigest",
-    "requestType",
-    "preservesOriginalGoal",
-    "requirementAnchors",
-    "evidenceRefs",
-    "userConfirmationRefs",
-    "landingPlan",
-    "designIntent",
-    "testDecision",
-    "environmentSpec",
-    "demandAuthority",
-  ],
-  properties: {
-    demandKey: { type: "string" },
-    podId: { type: "string" },
-    demandType: { type: "string", enum: ["requirement", "bug", "supplement", "research"] },
-    designRequestId: { type: "string" },
-    designRequestRef: { type: "string" },
-    designRequestDigest: { type: "string" },
-    requestType: { type: "string", enum: ["initial-design", "supplement", "redesign"] },
-    preservesOriginalGoal: { type: "boolean", const: true },
-    requirementAnchors: { type: "array", minItems: 1, items: { type: "string" } },
-    evidenceRefs: { type: "array", items: { type: "string" } },
-    userConfirmationRefs: { type: "array", items: { type: "string" } },
-    landingPlan: {
-      type: "array",
-      minItems: 1,
-      items: {
-        type: "object",
-        required: ["repositoryWindow"],
-        properties: {
-          repositoryWindow: { type: "string" },
-          objective: { type: "string" },
-          boundaries: { type: "array", items: { type: "string" } },
-        },
-      },
-    },
-    designIntent: { type: "string" },
-    testDecision: { type: "string" },
-    environmentSpec: { type: "object" },
-    demandAuthority: { ...demandAuthoritySchema, description: "Immutable proportional demand contract produced by Pod Design. Must use entryMode=pod-design." },
-    replacementLineage: { type: "object" },
-  },
-};
-
-const podTestAccessReceiptSchema = {
-  type: "object",
-  required: [
-    "probeId",
-    "demandKey",
-    "podId",
-    "host",
-    "testWindowName",
-    "testBindingId",
-    "status",
-    "capability",
-    "observedAt",
-  ],
-  properties: {
-    probeId: { type: "string" },
-    demandKey: { type: "string" },
-    podId: { type: "string" },
-    host: { type: "string", enum: ["codex", "claude-code"] },
-    testWindowName: { type: "string" },
-    testBindingId: { type: "string", description: "Opaque Test registry/binding correlation, never the host thread/session handle." },
-    status: { type: "string", enum: ["validated", "blocked"] },
-    capability: { type: "string", enum: ["direct-multi-root", "unsupported", "per-repo-executor-unavailable"] },
-    productAccess: {
-      type: "array",
-      description: "Required for validated direct-multi-root. One redacted identity observation per planned product binding; contains digests and Git HEAD, never cwd or host handles.",
-      items: {
-        type: "object",
-        required: ["windowName", "repositoryWindow", "bindingId", "rootDigest", "gitTopLevelDigest", "head", "readable", "gitIdentityVerified"],
-        properties: {
-          windowName: { type: "string" },
-          repositoryWindow: { type: "string" },
-          bindingId: { type: "string" },
-          rootDigest: { type: "string" },
-          gitTopLevelDigest: { type: "string" },
-          head: { type: "string" },
-          readable: { type: "boolean" },
-          gitIdentityVerified: { type: "boolean" },
-        },
-      },
-    },
-    reasonCode: { type: "string", enum: ["direct-multi-root-unsupported", "access-probe-failed", "per-repo-executor-unavailable"] },
-    observedAt: { type: "string" },
-  },
-};
-
-const podCloseReceiptSchema = {
-  type: "object",
-  required: ["closeCorrelationId", "bindingId", "windowName", "host", "sessionStatus", "worktreeStatus", "confirmedAt"],
-  properties: {
-    closeCorrelationId: { type: "string" },
-    bindingId: { type: ["string", "null"] },
-    windowName: { type: "string" },
-    host: { type: "string" },
-    sessionStatus: { type: "string", enum: ["archived", "closed", "handed-off", "not-found"] },
-    worktreeStatus: { type: "string", enum: ["removed", "retained", "not-applicable", "unknown"] },
-    confirmedAt: { type: "string" },
-    error: { type: "string" },
-  },
-};
-
-const toolDefinitions = [
-  {
-    name: "wakeflow_initialize_workspace",
-    description: `Initialize a Wakeflow runtime: discover siblings, generate/apply workspace config, install ${hostProfile.memoryFileLabel} blocks, create sibling Design/Test surfaces, and record derived local window configuration. Dry-run unless apply is true. On an already initialized workspace, apply is allowed only when the user explicitly asks for reset initialization and resetInitialization is true with explicit repositories; never use useDiscovered for reset. Heavy or stale existing windows should use wakeflow_replace_windows instead of initialization. Launch plans include host-profile create-window settings such as reasoning effort/model when supported. After the host creates each real window, register its handle through wakeflow_register_window; the handle is written only to the local registry and is redacted from tool output.`,
-    annotations: localWriteTool("Initialize Wakeflow Workspace", true),
+/**
+ * 生成普通 public-v3 工具的闭合 envelope 声明。
+ * schema 只声明公共字段；operation-specific request 仍由真实领域 owner 二次精确校验。
+ */
+function routedTool({ name, title, description, operations, readOnly = false, destructive = false }) {
+  return Object.freeze({
+    name,
+    description: `${description} Inputs use one closed public envelope: root, optional typed demandId, operation, and the exact owner request. Workspace/state/config/ledger paths are derived and cannot be caller-overridden.`,
+    annotations: writeAnnotations(title, true, { readOnly, destructive }),
     inputSchema: {
       type: "object",
+      required: ["root", "operation", "request"],
       properties: {
-        root: { type: "string" },
-        parent: { type: "string" },
-        workspaceName: { type: "string" },
-        controllerWindow: { type: "string" },
-        designWindow: {
-          type: "string",
-          description: "Only set this when the user explicitly names an existing or custom Design window. Otherwise Wakeflow creates/uses a fresh Design support surface.",
-        },
-        testWindow: {
-          type: "string",
-          description: "Only set this when the user explicitly names an existing or custom Test window. Otherwise Wakeflow creates/uses a fresh Test support surface.",
-        },
-        language: {
-          type: "string",
-          enum: ["auto", "zh", "en"],
-          description: "Prompt/title language for window launch plans. Use zh for Chinese users, en for English users, or auto when unknown.",
-        },
-        useDiscovered: {
-          type: "boolean",
-          description: "Force every discovered directory into managed repositories. Use only after the agent/user has confirmed all discovered directories are intended work windows; prefer explicit repositories for messy workspaces.",
-        },
-        apply: { type: "boolean" },
-        resetInitialization: {
-          type: "boolean",
-          description: "Required with apply:true only when the user explicitly requests resetting an already initialized Wakeflow workspace. Reset requires explicit repositories and refuses useDiscovered.",
-        },
-        internalDesign: { type: "boolean" },
-        internalTest: { type: "boolean" },
-        includeRealProject: { type: "boolean" },
-        excludeWindows: { type: "array", items: { type: "string" } },
-        repositories: {
-          type: "array",
-          description: `Agent/user-confirmed work-window mappings. In clean workspaces ${hostProfile.hostName} should pass these explicitly after discovery instead of relying on hidden heuristics.`,
-          items: {
-            type: "object",
-            required: ["windowName", "path"],
-            properties: {
-              windowName: { type: "string" },
-              path: { type: "string" },
-              role: { type: "string" },
-            },
-          },
-        },
-      },
-    },
-  },
-  {
-    name: "wakeflow_replace_windows",
-    description: `Regenerate a scoped ${hostProfile.hostTools.createWindow} launch plan for one or more existing Wakeflow windows without reinitializing workspace docs. Pass window for the high-frequency single-window path (a responsibility window that is too context-heavy, stale, or needs rebinding) or windows for a batch. The tool reads the current workspace config and returns only the requested replacement entries. After ${hostProfile.hostTools.createWindow} succeeds, use each entry's wakeflow_register_window call template to replace only that window's local handle registration.`,
-    annotations: readOnlyTool("Plan Wakeflow Replacement Windows"),
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        parent: { type: "string" },
-        language: {
-          type: "string",
-          enum: ["auto", "zh", "en"],
-          description: "Prompt/title language for replacement window launch plans. Use zh for Chinese users, en for English users, or auto when unknown.",
-        },
-        includeRealProject: {
-          type: "boolean",
-          description: "Allow replacing the configured real-project window when that window is intentionally managed.",
-        },
-        window: {
-          type: "string",
-          description: "Recreate exactly ONE existing Wakeflow logical window (high-frequency path). Provide window or windows, not both.",
-        },
-        windows: {
-          type: "array",
-          minItems: 1,
-          items: { type: "string" },
-          description: "Existing Wakeflow logical window names to recreate as a batch. Provide window or windows, not both.",
-        },
-      },
-    },
-  },
-  {
-    name: "wakeflow_register_window",
-    description: `Register one host-created Wakeflow window using ${hostProfile.handleId.realIdRequirement}. Mainline windows must be configured. Pod windows additionally require the exact launchCorrelationId, bindingId, and canonical stateRoot from wakeflow_pod_open; a __ suffix alone never authorizes registration. The handle is stored only in the host-scoped local registry and redacted from all output. Registration does not make a Pod product dispatchable until wakeflow_pod_bind verifies its receipt. Dry-run unless apply is true.`,
-    annotations: localWriteTool("Register Wakeflow Window", true),
-    inputSchema: {
-      type: "object",
-      required: ["window", "windowHandle"],
-      properties: {
-        root: { type: "string" },
-        window: { type: "string", description: "Configured Wakeflow logical window name." },
-        windowHandle: { type: "string", description: `The ${hostProfile.handleId.realIdRequirement} returned by the host launch tool. It is never echoed.` },
-        launchCorrelationId: { type: "string", description: "Required only for a Pod window; must match its canonical host-local launch operation." },
-        bindingId: { type: "string", description: "Required only for a Pod window; opaque registry/binding correlation, not the real host handle." },
-        stateRoot: { type: "string", description: "Required only for a Pod window; canonical demand state root authorized by the launch manifest." },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_adopt_demand_host",
-    description: "Explicitly transfer (or claim) demand controller-host ownership to THIS host, with an audit event and a revision bump — no other state changes. The sanctioned cross-host handoff; existing transition candidates become stale and must be re-reduced on the new host. Dry-run unless apply is true.",
-    annotations: localWriteTool("Adopt Wakeflow Demand Ownership"),
-    inputSchema: {
-      type: "object",
-      required: ["stateRoot"],
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string" },
-        reason: { type: "string" },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_recover_state_transition",
-    description: "Inspect or explicitly recover the pending state/event transition journal for one demand state root. Dry-run unless apply is true. This is the sanctioned recovery path for a consistent wakeflow-state.pending-transition.json; it never guesses through malformed or conflicting authority artifacts.",
-    annotations: localWriteTool("Recover Wakeflow State Transition", true),
-    inputSchema: {
-      type: "object",
-      required: ["stateRoot"],
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string" },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_release_window_lock",
-    description: "Release the shared cross-host target work lease for one target window. expectedDeliveryId makes this a compare-and-delete recovery for one proven pre-send failure; omit it only for deliberate manual stale/corrupt recovery. Accepted, ambiguous, or readback-pending sends must retain the lease. Dry-run unless apply is true.",
-    annotations: localWriteTool("Release Wakeflow Window Lock"),
-    inputSchema: {
-      type: "object",
-      required: ["window"],
-      properties: {
-        root: { type: "string" },
-        window: { type: "string" },
-        expectedDeliveryId: { type: "string", description: "Optional exact delivery id. When supplied, a different or unreadable current lease is preserved." },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_status",
-    description: "Inspect Wakeflow repository and closed-loop runtime status, including host-send, callbackPlan, delivery failure, replay, and resume-plan diagnostics. Does not send messages.",
-    annotations: readOnlyTool("Inspect Wakeflow Status"),
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_add_task",
-    description: "Add a full runtime task package and optional target task to a Wakeflow demand state root. The first implementation package must also freeze a complete demandAuthority when the demand does not already have one. Plans the next work; it does not dispatch, send, or accept.",
-    annotations: localWriteTool("Add Wakeflow Task Package"),
-    inputSchema: {
-      type: "object",
-      required: ["stateRoot", "taskId", "targetWindow", "summary", ...taskPackageContextRequired],
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string" },
-        taskId: { type: "string" },
-        targetWindow: { type: "string" },
-        summary: { type: "string" },
-        packageId: { type: "string" },
-        sourceRef: { type: "string" },
-        targetSummary: { type: "string" },
-        replacesTargetTaskId: { type: "string", description: "For controller-decided redesign only: the exact prior targetTaskId this new full-context implementation task replaces. The prior task must be parked by reviewDecision=redesign and the replacement must target a product responsibility window. Ordinary rework must re-dispatch the original task instead." },
-        demandAuthority: { ...demandAuthoritySchema, description: "Immutable proportional demand contract. Required with the first implementation package when the demand was created as a draft without one." },
-        ...taskPackageContextProperties,
-        designIntent: { type: "string", description: "Design's one-line implementation intent ('roughly how'). Optional and advisory: surfaced side-by-side with the controller's objective at dispatch and review for the agent's own alignment check — never a gate or score." },
-        acceptanceAnchors: {
-          type: "array",
-          description: "Optional controller-authored acceptance probes for implementation work. Each {id,claim,probe,expected} entry must come from the confirmed requirement and tells the target which behavior to pin as RED before coding; targets must not invent missing anchors.",
-          items: {
-            type: "object",
-            required: ["id", "claim", "probe", "expected"],
-            properties: {
-              id: { type: "string" },
-              claim: { type: "string" },
-              probe: { type: "string" },
-              expected: { type: "string" },
-            },
-          },
-        },
-        evidenceContract: { type: "object", description: "Design-authored execution-craft review-input contract (persistent compatibility name): { version, required:[{kind,verify}], advisory:[{kind}] }. Reduce-results checks required-kind coverage and declared path locatability only; advisory kinds surface as reminders. Optional; absent = no craft-input gate." },
-        testCardId: { type: "string", description: "Required when targetWindow is the configured Test window. Links this task to the authoritative Test boundary/execution card." },
-        testContinuationOf: { type: "string", description: "For a later Test attempt, the immediately preceding targetTaskId in the same Test-card lineage." },
-        restartTest: { type: "boolean", description: "Declare that this continuation restarts environment/setup instead of resuming prior evidence. Allowed only by the Test card contract." },
-        testRestartReason: { type: "string", description: "Required with restartTest. Records the controller's explicit reason; Test cannot decide this itself." },
-        adoptHost: { type: "boolean", description: "Explicitly transfer demand controller-host ownership to this host; without it, acting on a demand owned by the other host fails closed." },
-      },
-    },
-  },
-  {
-    name: "wakeflow_prepare_delivery",
-    description: "Prepare one direct-thread delivery envelope. Use direction=target for controller-to-window dispatch, or direction=controller-return for target-to-controller return. This never sends the host thread message.",
-    annotations: localWriteTool("Prepare Wakeflow Delivery Envelope"),
-    inputSchema: {
-      type: "object",
-      required: ["direction"],
-      properties: {
-        root: { type: "string" },
-        verbose: { type: "boolean", description: "Return the full structured payload (envelope/packet/run echoes). Default is a compact summary; the artifacts are on disk at the reported file paths." },
-        direction: { type: "string", enum: ["target", "controller-return"] },
-        stateRoot: { type: "string" },
-        taskId: { type: "string" },
-        groupTaskIds: { type: "array", items: { type: "string" }, description: "direction=target: complete targetTaskId membership for a multi-target dispatch group. Supply it on the first prepare; later prepares must match the finalized set." },
-        dispatchGroup: { type: "string" },
-        controllerWindow: { type: "string", description: "Return-route override. Default chain: this flag > the state root's stamped controllerWindow (pod demands) > wakeflow.config.json controllerWindow — normally omit and let the stamp route." },
-        taskPackageId: { type: "string" },
-        humanContextRef: { type: "string", description: "direction=controller-return only. Target dispatch derives its task context from the authoritative task package." },
-        returnPolicy: { type: "string", enum: ["group-ready", "per-target"] },
-        triggerTarget: { type: "string" },
-        triggerTaskId: { type: "string" },
-        returnReason: { type: "string", enum: ["result-ready", "blocked"] },
-        automationEnabled: { type: "boolean" },
-        apply: { type: "boolean", description: "direction=target: false/omitted previews the exact dispatch briefing without writing transport files; true writes the validated packet/envelope." },
-        expectedPreviewDigest: { type: "string", description: "direction=target with apply=true: required digest copied from the reviewed preview previewDigest. Apply fails if task context, state revision, resolved repository, prompt, or transport config changed." },
-      },
-    },
-  },
-  {
-    name: "wakeflow_record_delivery",
-    description: "Record explicit external host-send facts after the host tool runs. The caller must classify the actual host result and one bounded readback observation; neither status defaults to success. status=sent + transportStatus=accepted prevents resend, but only readbackStatus=confirmed proves the destination observed the message. This does not send the message or accept the result.",
-    annotations: localWriteTool("Record Wakeflow Delivery Facts"),
-    inputSchema: {
-      type: "object",
-      required: ["deliveryFile", "status", "transportStatus", "readbackStatus", "readbackAttempts"],
-      properties: {
-        root: { type: "string" },
-        verbose: { type: "boolean", description: "Return the full structured payload (envelope/packet/run echoes). Default is a compact summary; the artifacts are on disk at the reported file paths." },
-        deliveryFile: { type: "string" },
-        status: { type: "string", enum: ["sent", "blocked", "failed"] },
-        transportStatus: { type: "string", enum: ["accepted", "rejected-before-send", "ambiguous"], description: "Host send fact. accepted must use status=sent; rejected-before-send is the only lease-releasable failure; ambiguous always preserves the lease." },
-        readbackStatus: { type: "string", enum: ["confirmed", "pending", "unavailable"], description: "Independent bounded observation after the send. pending/unavailable is not permission to resend." },
-        readbackAttempts: { type: "integer", minimum: 0 },
-        evidence: { type: "string", description: "Compatibility field for the host's transport observation; it is not product-result evidence." },
-        deliveryRunId: { type: "string", description: "Distinct run id for retrying the same delivery after a failed attempt (defaults to run-<deliveryId>, which cannot be re-recorded with different content)." },
-        error: { type: "string" },
-        readbackOk: { type: "boolean" },
-        hostMethod: { type: "string" },
-        hostMode: { type: "string", enum: ["new-turn", "unknown"] },
-      },
-    },
-  },
-  {
-    name: "wakeflow_record_target_result",
-    description: "Record one target-window TargetResultEnvelope into a demand state root. This stores target-authored closeout claims and review inputs; it does not verify truth, grant controller acceptance, or create the next dispatch. When returnRoute=controller applies, follow with review pack, controller-return delivery, host send, and delivery-run recording.",
-    annotations: localWriteTool("Record Wakeflow Target Result"),
-    inputSchema: {
-      type: "object",
-      required: ["stateRoot", "targetWindow", "taskId", "status"],
-      properties: {
-        root: { type: "string" },
-        verbose: { type: "boolean", description: "Return the full structured payload (envelope/packet/run echoes). Default is a compact summary; the artifacts are on disk at the reported file paths." },
-        stateRoot: { type: "string" },
-        targetWindow: { type: "string" },
-        taskId: { type: "string" },
-        status: { type: "string", enum: ["completed", "blocked", "needs-review"] },
-        resultId: { type: "string" },
-        dispatchGroup: { type: "string", description: "The exact dispatch group this result answers. Required whenever the target task has been delivered; state-only tasks without delivery metadata may omit it. Explicit old groups are retained as history and never become the current round." },
-        supersedeResult: { type: "boolean", description: "Explicitly replace a changed result for the same current dispatch round, or append a corrected revision to late-result history. The prior result remains in target-results/history/." },
-        summary: { type: "string" },
-        changedRepos: { type: "array", items: { type: "string" }, description: "Repositories whose working or committed content changed for this result." },
-        commits: { type: "array", items: { type: "string" }, description: "Commit ids created for this result." },
-        commitDisposition: { type: "string", enum: ["committed", "left-uncommitted", "no-changes"], description: "How this result honored the task package commit expectation." },
-        evidenceRefs: { type: "array", items: { type: "string" }, description: "Target-authored artifact locators for controller inspection. Wakeflow may check path existence; it does not verify the artifact's truth." },
-        verification: { type: "array", items: { type: "string" }, description: "Target-authored validation summaries. These are review inputs, not independent verification or acceptance." },
-        risks: { type: "array", items: { type: "string" } },
-        craftEvidence: {
-          type: "array",
-          items: {
-            type: "object",
-            required: ["kind"],
-            properties: {
-              kind: { type: "string", minLength: 1 },
-              ref: { type: "string", minLength: 1 },
-              value: { type: "string", minLength: 1 },
-              commit: { type: "string", minLength: 1 },
-              verify: { type: "string", minLength: 1 },
-              anchorId: { type: "string", minLength: 1 },
-              red: { type: "string", minLength: 1 },
-              green: { type: "string", minLength: 1 },
-              planIndex: { type: "integer", minimum: 0 },
-              step: { type: "string", minLength: 1 },
-            },
-            anyOf: [
-              { required: ["ref"] },
-              { required: ["value"] },
-              { required: ["commit"] },
-            ],
-          },
-          description: "Target-authored typed review inputs. Generic entries use {kind, ref|value|commit, verify}; implementation completion maps each acceptance anchor with {kind:'acceptance-anchor', anchorId, red, green, ref}; Test completion maps each approved step with {kind:'test-step', planIndex, step, ref}. Wakeflow checks required kinds, mapping completeness, and declared path locatability only; it does not establish truth or acceptance.",
-        },
-      },
-    },
-  },
-  {
-    name: "wakeflow_review_pack",
-    description: "Build a controller review-input pack for a state root, dispatch group, or task id, including callbackPlan when direct-thread controller return is applicable. It aggregates target claims, artifact locators, mapping completeness, and structural gaps; it does not verify truth. Read-only, two sanctioned uses: (1) controller review preparation; (2) a TARGET window confirming its OWN dispatch group's return readiness before building a controller-return. Targets must scope it to their own group; review decisions (accept/rework/blocked) stay controller-only.",
-    annotations: readOnlyTool("Build Wakeflow Review Pack"),
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string" },
-        dispatchGroup: { type: "string" },
-        taskId: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_view",
-    description: "Read-only (mostly) projections for a demand state root; scope selects which. task-ledger: unified per-task rollup for EVERY target task (accepted history preserved) — execution status, acceptance decision, latest result, test-card status, and handling counts (dispatchCount/reworkCount/redesignCount persisted; retestCount derived as rounds dispatched to a Test window — an informational hint, not a gate) plus a recurringProblem flag (reworkCount >= 2). window: per-window orientation card — the tasks that belong to a window (with the same handling counts and recurringProblem flag), its task packages, its rollup, and the file areas where its state-root/transport files live. focus: generate a focused, regenerable sub-document for one window (or best-effort one phase) under focus/ — dry-run by default, apply:true writes under the owning-host gate (focus docs are never state authority). trace: trace the evidence spine for a state root, dispatch group, delivery, target, or target result. storage: the local-storage map — every known tree under .wakeflow-active/.wakeflow-local/ledger with class (authority/projection/transport/evidence/handles/preserved), size, and age, plus legacy residue, unknown trees, and aging preserved/ entries; classification is descriptive guidance, never a deletion authorization. progress: re-render the developer progress projection for one state root, dry-run unless apply=true. pods: read-only Pod inventory from canonical demand state plus host-local launch operations and bindings. Evidence, not acceptance, and never a host send.",
-    annotations: localWriteTool("Wakeflow View Projection"),
-    inputSchema: {
-      type: "object",
-      required: ["scope"],
-      oneOf: [
-        { properties: { scope: { const: "task-ledger" } } },
-        { properties: { scope: { const: "window" } } },
-        { properties: { scope: { const: "focus" } } },
-        { properties: { scope: { const: "trace" } } },
-        { properties: { scope: { const: "storage" } } },
-        { required: ["stateRoot"], properties: { scope: { const: "progress" } } },
-        { properties: { scope: { const: "pods" } } },
-      ],
-      properties: {
-        root: { type: "string" },
-        scope: {
-          type: "string",
-          enum: ["task-ledger", "window", "focus", "trace", "storage", "progress", "pods"],
-          description: "Which projection to return: task-ledger | window | focus | trace | storage | progress | pods.",
-        },
-        stateRoot: { type: "string" },
-        window: { type: "string", description: "Window name for scope=window or scope=focus." },
-        phase: { type: "string", description: "Best-effort phase for scope=focus." },
-        apply: { type: "boolean", description: "scope=focus: write the focus doc; scope=progress: write the refreshed progress projection. Both default to dry-run." },
-        taskId: { type: "string", description: "Task id for scope=task-ledger or scope=trace." },
-        targetWindow: { type: "string", description: "Target window for scope=task-ledger or scope=trace." },
-        dispatchGroup: { type: "string", description: "Dispatch group for scope=trace." },
-        resultFile: { type: "string", description: "Result file for scope=trace." },
-        resultId: { type: "string", description: "Result id for scope=trace." },
-        deliveryFile: { type: "string", description: "Delivery file for scope=trace." },
-        deliveryId: { type: "string", description: "Delivery id for scope=trace." },
-      },
-    },
-  },
-  {
-    name: "wakeflow_storage_preserve",
-    description: "Relocate one explicitly selected file or directory already under .wakeflow-local/ into the canonical preserved audit-hold tier and write its MANIFEST.md. This is the sanctioned rescue path for local runtime evidence that must be retained without entering tracked archives. Dry-run unless apply is true; the existing storage backend enforces path containment and refuses sources already under preserved/.",
-    annotations: localWriteTool("Preserve Wakeflow Local Evidence"),
-    inputSchema: {
-      type: "object",
-      required: ["source", "reason"],
-      properties: {
-        root: { type: "string" },
-        source: { type: "string", description: "Workspace-relative or absolute path to a file/directory inside .wakeflow-local/." },
-        reason: { type: "string", description: "Short reason slug used in the preserved entry name." },
-        note: { type: "string", description: "Optional human-readable reason recorded in MANIFEST.md." },
-        apply: { type: "boolean", description: "Move the source only when true; default is dry-run." },
-      },
-    },
-  },
-  {
-    name: "wakeflow_reduce_results",
-    description: "Reduce imported target results into a controller review candidate. This creates the transition candidate needed by wakeflow_decide_review, but it is not acceptance, completion, or dispatch. Dry-run unless apply is true.",
-    annotations: localWriteTool("Reduce Wakeflow Target Results"),
-    inputSchema: {
-      type: "object",
-      required: ["stateRoot"],
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string" },
-        apply: { type: "boolean" },
-        adoptHost: { type: "boolean", description: "Explicitly transfer demand controller-host ownership to this host; without it, acting on a demand owned by the other host fails closed." },
-      },
-    },
-  },
-  {
-    name: "wakeflow_decide_review",
-    description: "Record an explicit controller judgment for a review candidate created by wakeflow_reduce_results. Wakeflow does not verify target truth before this call; the controller must independently inspect and validate the relevant behavior. decision=redesign parks the old task (needs-rework), routes the requirement back to Design (redesignCount++), and requires the later corrected product task to declare replacesTargetTaskId; the old task cannot be re-dispatched or accepted as the correction. Use redesign for a non-bug mismatch or a small requirement-level fix. Dry-run unless apply is true.",
-    annotations: localWriteTool("Record Wakeflow Review Decision"),
-    inputSchema: {
-      type: "object",
-      required: ["stateRoot", "candidateId", "decision", "reason"],
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string" },
-        candidateId: { type: "string" },
-        decision: { type: "string", enum: ["accept", "rework", "blocked", "redesign"] },
-        reason: { type: "string" },
-        evidenceRefs: { type: "array", items: { type: "string" }, description: "Controller-inspected material or independent-check references recorded under the compatibility field evidenceRefs; Wakeflow does not validate their truth." },
-        acceptBlocked: {
-          type: "boolean",
-          description: "Explicitly accept a candidate that contains blocked target results. Without this, accept fails when blocked results are present.",
-        },
-        apply: { type: "boolean" },
-        adoptHost: { type: "boolean", description: "Explicitly transfer demand controller-host ownership to this host; without it, acting on a demand owned by the other host fails closed." },
-      },
-    },
-  },
-  {
-    name: "wakeflow_complete_demand",
-    description: "Complete a demand after explicit controller decisions have accepted all task packages and target tasks. This records completion; it does not perform or infer validation. Dry-run unless apply is true.",
-    annotations: localWriteTool("Complete Wakeflow Demand"),
-    inputSchema: {
-      type: "object",
-      required: ["stateRoot", "reason", "evidenceRefs"],
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string" },
-        reason: { type: "string" },
-        evidenceRefs: { type: "array", items: { type: "string" }, description: "Controller validation or decision references recorded under the compatibility field evidenceRefs; the tool does not verify them." },
-        apply: { type: "boolean" },
-        adoptHost: { type: "boolean", description: "Explicitly transfer demand controller-host ownership to this host; without it, acting on a demand owned by the other host fails closed." },
-      },
-    },
-  },
-  {
-    name: "wakeflow_continue_demand",
-    description: "Continue a completed but not yet archived demand when a controller-verified bug, confirmed requirement supplement, or explicitly authorized optimization still belongs to the same demand. This is one locked operation: it preserves the prior completion, accepted result history, and decisions; records the continuation authority; changes the demand back to planned; and adds the first concrete task package. It refuses active, cancelled, or archived demands and never dispatches. Use a new demand for archived history or independently scoped follow-up work. Dry-run unless apply is true.",
-    annotations: localWriteTool("Continue Completed Wakeflow Demand"),
-    inputSchema: {
-      type: "object",
-      required: ["stateRoot", "continuationType", "reason", "evidenceRefs", "taskId", "targetWindow", "summary", ...taskPackageContextRequired],
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string", description: "The completed, unarchived demand state root." },
-        continuationType: { type: "string", enum: ["verified-bug", "requirement-supplement", "optimization"] },
-        reason: { type: "string", description: "Why this work remains part of the same demand rather than a new demand." },
-        evidenceRefs: { type: "array", minItems: 1, items: { type: "string" }, description: "References to controller validation of the defect or to explicit requirement/scope decisions. Wakeflow records but does not verify them." },
-        taskId: { type: "string", description: "The first target task id for the continuation." },
-        targetWindow: { type: "string" },
-        summary: { type: "string" },
-        packageId: { type: "string", description: "Defaults to taskId when omitted." },
-        demandAuthority: { ...demandAuthoritySchema, description: "Required when a typed completed draft has no frozen authority; optional as an explicit migration for a truly legacy untyped demand. Once supplied it is frozen atomically with this package." },
-        sourceRef: { type: "string" },
-        targetSummary: { type: "string" },
-        ...taskPackageContextProperties,
-        designIntent: { type: "string", description: "Optional advisory implementation intent; never a gate." },
-        acceptanceAnchors: {
-          type: "array",
-          description: "Optional controller-authored {id,claim,probe,expected} probes for the continuation's first implementation package.",
-          items: {
-            type: "object",
-            required: ["id", "claim", "probe", "expected"],
-            properties: {
-              id: { type: "string" },
-              claim: { type: "string" },
-              probe: { type: "string" },
-              expected: { type: "string" },
-            },
-          },
-        },
-        evidenceContract: { type: "object", description: "Optional execution-craft review-input contract for the first package (persistent compatibility name); checks structure and declared path locatability, not truth." },
-        testCardId: { type: "string", description: "Required when the first target is the configured Test window." },
-        testContinuationOf: { type: "string" },
-        restartTest: { type: "boolean" },
-        testRestartReason: { type: "string" },
-        apply: { type: "boolean" },
-        adoptHost: { type: "boolean", description: "Explicitly transfer demand controller-host ownership to this host." },
-      },
-    },
-  },
-  {
-    name: "wakeflow_archive",
-    description: "Archive or sanitize Wakeflow ledger content; target selects which. demand: relocate a completed demand state root into the ledger — the archive privacy guard refuses real-id-shaped strings and user/workspace absolute paths unless redact relocates a portable cleaned copy (original preserved for audit); opaque evidence stays in that local original and becomes a safe placeholder unless clean opaque byte inclusion is explicitly authorized with allowOpaque. The staged copy is re-scanned before commit. todo: completed TODO rows + historical sync records into the workspace ledger. docs: explicit completed workspace documents into a ledger topic, or prune active index rows that already point at archive topics (never archives the active index/current plan by inference). sanitize-demand: replace one EXISTING archived demand carrying archive-manifest.json with a fully re-scanned portable copy, append archive.sanitized audit history, and preserve the original bytes locally; never reopens the demand or touches active state. Dry-run unless apply is true. Records archive facts only — never accepts work, selects next work, or sends host messages. (Transport-runtime GC is the separate wakeflow_prune_runtime.)",
-    annotations: localWriteTool("Archive Wakeflow Content"),
-    inputSchema: {
-      type: "object",
-      required: ["target"],
-      oneOf: [
-        { required: ["stateRoot", "reason"], properties: { target: { const: "demand" } } },
-        { properties: { target: { const: "todo" } } },
-        { properties: { target: { const: "docs" } } },
-        { required: ["stateRoot", "reason"], properties: { target: { const: "sanitize-demand" } } },
-      ],
-      properties: {
-        root: { type: "string" },
-        target: {
-          type: "string",
-          enum: ["demand", "todo", "docs", "sanitize-demand"],
-          description: "What to process: demand | todo | docs | sanitize-demand (an existing archived demand).",
-        },
-        stateRoot: { type: "string", description: "target=demand: completed demand root; target=sanitize-demand: existing archived demand root." },
-        reason: { type: "string", description: "Required for target=demand and target=sanitize-demand." },
-        redact: { type: "boolean", description: "target=demand: relocate a portable copy when real ids, user/workspace absolute paths, or opaque evidence are present; preserve the original locally and use placeholders where bytes or paths are omitted." },
-        allowOpaque: { type: "boolean", description: "target=demand: explicitly allow clean opaque artifacts to remain byte-for-byte in the portable archive; hashes are recorded. Without this consent, redact preserves clean opaque bytes only in the local original and writes placeholders. Sensitive opaque artifacts under redact are always omitted into a placeholder." },
-        evidenceRefs: { type: "array", items: { type: "string" }, description: "target=demand: review-input or decision references to record under the compatibility field evidenceRefs." },
-        month: { type: "string", description: "target=todo/docs: archive month YYYY-MM (backend policy default when omitted)." },
-        date: { type: "string", description: "target=todo: archive date YYYY-MM-DD (today when omitted)." },
-        keepCompleted: { type: "number", description: "target=todo: completed TODO rows to keep on the active board." },
-        keepSync: { type: "number", description: "target=todo: historical sync records to keep on the active board." },
-        topic: { type: "string", description: "target=docs: archive topic folder (required when files are supplied; normalized to a safe kebab-case segment)." },
-        files: { type: "array", items: { type: "string" }, description: "target=docs: workspace Markdown documents to archive (omit only when pruneIndexOnly is true)." },
-        keepIndexRows: { type: "boolean", description: "target=docs: keep source index rows instead of trimming archived rows." },
-        pruneIndexOnly: { type: "boolean", description: "target=docs: only prune index rows for already-archived docs; do not move files." },
-        refreshSummaries: { type: "boolean", description: "target=todo/docs: refresh archive summary indexes after a successful run." },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_intake_test_card",
-    description: "Create a Test boundary card under a demand state root. Dry-run unless apply is true.",
-    annotations: localWriteTool("Create Wakeflow Test Card"),
-    inputSchema: {
-      type: "object",
-      required: [
-        "stateRoot",
-        "testId",
-        "targetWindow",
-        "strategySource",
-        "approvedTestPlan",
-        "allowedTestSkills",
-        "setupPolicy",
-        "maxAttempts",
-        "question",
-        "objectBoundary",
-        "controllerSelfChecks",
-        "realScenarioConditions",
-        "successMeans",
-        "failureMeans",
-        "cannotConclude",
-        "stopConditions"
-      ],
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string" },
-        testId: { type: "string" },
-        targetWindow: { type: "string" },
-        question: { type: "string" },
-        objectBoundary: { type: "string" },
-        controllerSelfChecks: { type: "array", items: { type: "string" } },
-        realScenarioConditions: { type: "array", items: { type: "string" } },
-        successMeans: { type: "array", items: { type: "string" } },
-        failureMeans: { type: "array", items: { type: "string" } },
-        cannotConclude: { type: "array", items: { type: "string" } },
-        stopConditions: { type: "array", items: { type: "string" } },
-        sourceRef: { type: "string" },
-        strategySource: { type: "string", description: "Required authority for the exact Test approach (normally the confirmed Design-stage testing decision)." },
-        approvedTestPlan: { type: "array", minItems: 1, items: { type: "string" }, description: "Requirement-stage confirmed Test plan items. Test may add operational command detail only when every detail maps to one of these items; it may not add new test targets or gates." },
-        allowedTestSkills: { type: "array", items: { type: "string" }, description: "Exact Test-local skill ids authorized for this card. Pass [] when none are authorized; progressive-chain-validation must be named explicitly to be usable." },
-        setupPolicy: { type: "string", enum: ["reuse-existing", "fresh-once", "fresh-per-attempt"], description: "Controls whether Test may create a new environment." },
-        maxAttempts: { type: "integer", minimum: 1, maximum: 10, description: "Maximum target-task attempts in this Test-card lineage, even when later attempts use new task ids." },
-        restartConditions: { type: "array", items: { type: "string" }, description: "Controller-approved reasons that can justify a full restart. Required non-empty when setupPolicy=fresh-per-attempt." },
-        evidenceRequired: { type: "array", items: { type: "string" } },
-        allowedOperations: { type: "array", items: { type: "string" } },
-        forbiddenOperations: { type: "array", items: { type: "string" } },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_deliver",
-    description: "Design-side append-only delivery: validate one proportional demandAuthority and append the ready requirement|bug|supplement|research item to the global TODO board. Auto Claim controls unattended claiming only; it never weakens demand readiness. Documents and Testing Decision are human-readable projections of the same authority object. Append-only and dry-run unless apply is true.",
-    annotations: localWriteTool("Deliver Item To Controller TODO"),
-    inputSchema: {
-      type: "object",
-      required: ["type", "designKey", "title", "demandAuthority"],
-      properties: {
-        root: { type: "string" },
-        type: { type: "string", enum: ["requirement", "bug", "supplement", "research"] },
-        designKey: { type: "string", description: "<topic>-YYYY-MM-DD; becomes the TODO ID and, on claim, the demandKey." },
-        title: { type: "string" },
-        item: { type: "string", description: "TODO Item / Goal text; defaults to title." },
-        autoClaim: { type: "boolean", description: "true authorizes unattended controller claiming; false requires controller confirmation. Demand readiness is identical in both modes." },
-        priority: { type: "string", description: "P0..P3; defaults to P2." },
-        originalPlan: { type: "string", description: "Deprecated compatibility assertion. When supplied, it must equal demandAuthority role=original-plan." },
-        requirementDesign: { type: "string", description: "Deprecated compatibility assertion. When supplied, it must equal demandAuthority role=requirement-design." },
-        demandAuthority: { ...demandAuthoritySchema, description: "Complete Design delivery contract. entryMode must be design-delivery and demandKey/type must match the row." },
-        dependency: { type: "string" },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_next_work",
-    description: "Scan the global TODO board for the next controller-ready candidate and report active demand facts. Mainline is the default execution surface: when another mainline demand is active, ordinary and unattended candidates remain visible but wait instead of silently becoming Pods. Explicit Pods are created only through a user-authorized claim/create call.",
-    annotations: localWriteTool("Select Wakeflow Next Work"),
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        id: { type: "string" },
-        source: { type: "string", enum: ["all", "todo"] },
-        limit: { type: "number" },
-        afterCompletion: { type: "boolean" },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_claim_next",
-    description: "Unified controller claim from the global TODO board. Omit designKey for unattended Auto Claim, which is mainline-only and waits while mainline is busy. With a user-confirmed designKey, placement=pod is accepted only with an authorizationRef; otherwise the claim uses mainline. A waiting or rejected claim consumes no TODO row and creates no state or host resource. Dry-run unless apply is true.",
-    annotations: localWriteTool("Claim Next Controller Demand"),
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        designKey: { type: "string" },
-        controllerWindow: { type: "string", description: "The claiming controller's own window (demand pods: Controller__<pod>). Stamped into the new state root so controller-returns route back to the claimer; omit in the default controller." },
-        placement: { type: "string", enum: ["main", "pod"], description: "Execution surface. Omit for mainline. pod is valid only for an explicitly user-confirmed designKey and requires authorizationRef." },
-        authorizationRef: { type: "string", description: "Auditable requirement/controller anchor proving the user explicitly requested this Pod. Required for placement=pod; forbidden for main." },
-        podId: { type: "string", description: "Stable logical Pod id. Optional for placement=pod (defaults from demand identity); forbidden for main." },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_create_demand",
-    description: "Unified controller create: init a demand state root, preserve the delivered or controller-authored proportional demandAuthority, add any initial task packages, render progress, and consume an originating TODO row. TODO rows carry entryMode=design-delivery; inline controller creation uses entryMode=controller-inline. A draft/research root may omit authority only while it has no implementation package. Dry-run unless apply is true; never dispatches or accepts results.",
-    annotations: localWriteTool("Create Controller Demand"),
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        todoId: { type: "string", description: "ID of a delivered TODO row to claim; its title and linked Documents seed the demand, and the row is consumed (marked claimed, Current Mount = state root)." },
-        demandKey: { type: "string", description: "<topic>-YYYY-MM-DD; the demand key and state-root slug. Defaults to todoId when omitted; when todoId is present this must be omitted or exactly equal to todoId so one delivered row has one canonical demand identity." },
-        title: { type: "string", description: "Demand title; taken from the TODO row when todoId is given." },
-        demandType: { type: "string", enum: ["requirement", "bug", "supplement", "research"] },
-        demandAuthority: { ...demandAuthoritySchema, description: "Inline controller demand contract. Omit when claiming a TODO row because the row provides it. Required before any initial implementation package." },
-        controllerWindow: { type: "string", description: "The demand's OWN controller window (demand pods: Controller__<pod>). Stamped into the state root so every dispatch's controller-return routes home by default; omit to use the workspace controllerWindow." },
-        placement: { type: "string", enum: ["main", "pod"], description: "Execution surface. Omit for mainline; pod requires authorizationRef and creates only the canonical Pod provisioning state, never host resources." },
-        authorizationRef: { type: "string", description: "Auditable requirement/controller anchor proving the user explicitly requested this Pod. Required for placement=pod; forbidden for main." },
-        podId: { type: "string", description: "Stable logical Pod id. Optional for placement=pod (defaults from demand identity); forbidden for main." },
-        goal: { type: "string", description: "Demand goal; synthesized from the delivered docs when todoId is given and goal is omitted." },
-        completionDefinition: { type: "string" },
-        testDecision: { type: "string", description: "Legacy display summary only. New demand readiness comes from demandAuthority.testDecision." },
-        stagePlan: { type: "string" },
-        taskPackages: {
-          type: "array",
-          description: "Optional initial task packages to add right after init.",
-          items: {
-            type: "object",
-            required: ["summary", "targetWindow", ...taskPackageContextRequired],
-            properties: {
-              taskPackageId: { type: "string" },
-              summary: { type: "string" },
-              targetWindow: { type: "string" },
-              targetTaskId: { type: "string" },
-              sourceRef: { type: "string" },
-              ...taskPackageContextProperties,
-              designIntent: { type: "string", description: "Design's one-line implementation intent for this package; optional, advisory, never a gate." },
-              acceptanceAnchors: {
-                type: "array",
-                description: "Optional controller-authored {id,claim,probe,expected} probes for this implementation package.",
-                items: {
-                  type: "object",
-                  required: ["id", "claim", "probe", "expected"],
-                  properties: {
-                    id: { type: "string" },
-                    claim: { type: "string" },
-                    probe: { type: "string" },
-                    expected: { type: "string" },
-                  },
-                },
-              },
-              evidenceContract: { type: "object", description: "Design-authored execution-craft review-input contract for this package (persistent compatibility name); optional, structurally enforced at reduce-results without verifying truth." },
-            },
-          },
-        },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_cancel_demand",
-    description: "Cancel an in-flight demand without pretending completion: no acceptance, no review-input gate, open tasks keep their last honest status, and recorded result history stays untouched. Refused on completed/archived/already-cancelled demands. A cancelled Pod still needs logical Pod close receipts before archive. Dry-run unless apply is true.",
-    annotations: localWriteTool("Cancel Wakeflow Demand"),
-    inputSchema: {
-      type: "object",
-      required: ["stateRoot", "reason"],
-      properties: {
-        root: { type: "string" },
-        stateRoot: { type: "string", description: "The demand's state root directory." },
-        reason: { type: "string", description: "Why the flow is being cancelled; recorded on the state and the audit event." },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_pod_open",
-    description: "Create or resume an explicitly authorized Pod without Wakeflow creating host resources. mode=create (default) keeps the strict clean-main/expectedBaseHead creation gate and may append Design-frozen product operations; apply writes the reviewed plan. mode=resume is read-only: it validates only the already-bound manifest/binding/registry/cwd/Git common-dir identity, reports current HEAD/dirty as observations, and never creates or rebinds a thread/worktree. The host decides whether an exact registered session is live or must be resumed.",
-    annotations: localWriteTool("Open Demand Pod"),
-    inputSchema: {
-      type: "object",
-      required: ["demandKey"],
-      properties: {
-        root: { type: "string" },
-        mode: { type: "string", enum: ["create", "resume"], description: "create plans first materialization; resume verifies/reopens existing bound host resources without re-running creation baselines." },
-        demandKey: { type: "string", description: "The canonical demand whose executionPlacement is an explicitly authorized Pod." },
-        repositories: {
-          type: "array",
-          description: "Frozen product-window coverage and local base identity. Omit or pass [] while creating only the three control windows; after Design, pass the exact landingPlan repository set. Wakeflow resolves roots but never creates worktrees.",
-          items: {
-            type: "object",
-            required: ["windowName", "expectedBaseHead"],
-            properties: {
-              windowName: { type: "string" },
-              expectedBaseHead: { type: "string" },
-              basePolicy: { type: "string", enum: ["local-head"], description: "Only local-head is supported by the new Pod path." },
-            },
-          },
-        },
-        requestedAt: { type: "string" },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_pod_record",
-    description: "Record one host-confirmed Pod lifecycle event without combining host action and state mutation. event=materialization records one exact launch correlation; design-handoff records the immutable Design handoff; test-access records the redacted Test access receipt; close-receipt records one host close outcome. Each event accepts only its matching payload field and preserves the existing backend validation. Dry-run unless apply is true.",
-    annotations: localWriteTool("Record Pod Host Evidence", true),
-    inputSchema: {
-      type: "object",
-      required: ["event"],
-      not: { required: ["action"] },
-      oneOf: [
-        {
-          required: ["attempt"],
-          properties: { event: { const: "materialization" } },
-          not: { anyOf: [{ required: ["handoff"] }, { required: ["receipt"] }] },
-        },
-        {
-          required: ["handoff"],
-          properties: { event: { const: "design-handoff" } },
-          not: { anyOf: [{ required: ["attempt"] }, { required: ["receipt"] }] },
-        },
-        {
-          required: ["receipt"],
-          properties: {
-            event: { const: "test-access" },
-            receipt: podTestAccessReceiptSchema,
-          },
-          not: { anyOf: [{ required: ["attempt"] }, { required: ["handoff"] }] },
-        },
-        {
-          required: ["receipt"],
-          properties: {
-            event: { const: "close-receipt" },
-            receipt: podCloseReceiptSchema,
-          },
-          not: { anyOf: [{ required: ["attempt"] }, { required: ["handoff"] }] },
-        },
-      ],
-      properties: {
-        root: { type: "string" },
-        event: { type: "string", enum: ["materialization", "design-handoff", "test-access", "close-receipt"] },
-        attempt: podMaterializationAttemptSchema,
-        handoff: podDesignHandoffSchema,
-        receipt: { type: "object" },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
-    name: "wakeflow_pod_bind",
-    description: "Validate and bind one host-created Pod session from its provisioning receipt. Real handles remain in the host-local registry; this receipt carries only bindingId plus cwd/Git identity. Product bindings must match the exact repo/common-dir/base HEAD and must not be the main checkout. Control bindings must be distinct sessions scoped to this Pod. Conflicts fail closed and never overwrite an existing binding. Dry-run unless apply is true.",
-    annotations: localWriteTool("Bind Host-created Pod Window", true),
-    inputSchema: {
-      type: "object",
-      required: ["receipt"],
-      properties: {
-        root: { type: "string" },
-        receipt: {
+        root: { type: "string", description: "Normalized absolute Wakeflow workspace root; never returned." },
+        demandId: demandIdSchema,
+        operation: { type: "string", enum: operations },
+        request: {
           type: "object",
-          required: [
-            "launchCorrelationId",
-            "windowName",
-            "host",
-            "bindingId",
-            "handleRegistered",
-            "handleKind",
-            "stateRootRelative",
-            "actualCwd",
-            "createdAt",
-          ],
-          properties: {
-            launchCorrelationId: { type: "string" },
-            windowName: { type: "string" },
-            host: { type: "string" },
-            bindingId: { type: "string", description: "Opaque registry-to-binding correlation, not the real thread/session handle." },
-            handleRegistered: { type: "boolean", const: true },
-            handleKind: { type: "string", const: "final" },
-            stateRootRelative: { type: "string" },
-            actualCwd: { type: "string" },
-            gitTopLevel: { type: "string" },
-            gitCommonDir: { type: "string" },
-            head: { type: "string" },
-            branch: { type: ["string", "null"] },
-            detached: { type: "boolean" },
-            mainCheckout: { type: "boolean" },
-            createdAt: { type: "string" },
-          },
+          description: "Operation-specific closed request validated again by the owning v3 domain service.",
         },
-        apply: { type: "boolean" },
       },
+      additionalProperties: false,
     },
-  },
-  {
+  });
+}
+
+const routedToolDefinitions = [
+  routedTool({
+    name: "wakeflow_status",
+    title: "Inspect Wakeflow Status",
+    description: "Issue one read-only v3 observation and return its status projection.",
+    operations: ["inspect"],
+    readOnly: true,
+  }),
+  routedTool({
+    name: "wakeflow_replace_windows",
+    title: "Replace Wakeflow Window Binding",
+    description: "Inspect, replace, or decommission one typed host-local window binding; it never performs the host create/close effect.",
+    operations: ["inspect", "replace", "decommission"],
+    destructive: true,
+  }),
+  routedTool({
+    name: "wakeflow_register_window",
+    title: "Register Wakeflow Window Binding",
+    description: "Register one host-created window against its stable windowId while keeping the raw handle private.",
+    operations: ["register"],
+  }),
+  routedTool({
+    name: "wakeflow_create_demand",
+    title: "Create Wakeflow Demand",
+    description: "Preview, publish, or recover one exact initial demand authority stack.",
+    operations: ["preview", "apply", "recover"],
+  }),
+  routedTool({
+    name: "wakeflow_add_task",
+    title: "Add Wakeflow Task Package",
+    description: "Create one complete immutable TaskPackage and its exact state transition.",
+    operations: ["create"],
+  }),
+  routedTool({
+    name: "wakeflow_prepare_delivery",
+    title: "Prepare Wakeflow Delivery",
+    description: "Plan/apply/claim/rearm target delivery or plan/apply/preflight a Controller return without executing a host send.",
+    operations: [
+      "target-preview",
+      "target-apply",
+      "target-claim",
+      "target-rearm",
+      "controller-preview",
+      "controller-apply",
+      "controller-pre-send",
+    ],
+  }),
+  routedTool({
+    name: "wakeflow_record_delivery",
+    title: "Record Wakeflow Delivery Outcome",
+    description: "Record an already-observed target or Controller-return host outcome; this call is not the host-effect fence.",
+    operations: ["target-outcome", "controller-outcome"],
+  }),
+  routedTool({
+    name: "wakeflow_record_target_result",
+    title: "Record Wakeflow Target Result",
+    description: "Import one transport-bound TargetResult through the strict current-envelope authority.",
+    operations: ["import"],
+  }),
+  routedTool({
+    name: "wakeflow_review_pack",
+    title: "Inspect Wakeflow Review",
+    description: "Inspect one strict dispatch-group review snapshot or the demand result/review trace.",
+    operations: ["group", "trace"],
+    readOnly: true,
+  }),
+  routedTool({
+    name: "wakeflow_reduce_results",
+    title: "Create Wakeflow Review Candidate",
+    description: "Create one exact ReviewCandidate from a strict dispatch-group result snapshot.",
+    operations: ["create"],
+  }),
+  routedTool({
+    name: "wakeflow_decide_review",
+    title: "Decide Wakeflow Review",
+    description: "Commit one exact accept, rework, redesign, or blocked decision for the pending candidate.",
+    operations: ["decide"],
+  }),
+  routedTool({
+    name: "wakeflow_complete_demand",
+    title: "Complete Wakeflow Demand",
+    description: "Preview, apply, or recover the dedicated completion lifecycle owner.",
+    operations: ["preview", "apply", "recover"],
+  }),
+  routedTool({
+    name: "wakeflow_continue_demand",
+    title: "Continue Wakeflow Demand",
+    description: "Create an exact continuation TaskPackage after the retained demand.completed tail authorizes it.",
+    operations: ["create"],
+  }),
+  routedTool({
+    name: "wakeflow_recover_state_transition",
+    title: "Recover Wakeflow State Transition",
+    description: "Recover only an explicitly selected generic or lifecycle state-transition owner.",
+    operations: ["generic", "lifecycle"],
+  }),
+  routedTool({
+    name: "wakeflow_release_window_lock",
+    title: "Release Wakeflow Window Lease",
+    description: "Release one exact typed lease/binding/delivery tuple by compare-and-delete.",
+    operations: ["release"],
+    destructive: true,
+  }),
+  routedTool({
+    name: "wakeflow_view",
+    title: "View Wakeflow Authority",
+    description: "Return config, storage, verification, or strict result-trace read models; live status remains owned by wakeflow_status.",
+    operations: ["config", "storage", "verification", "result-trace"],
+    readOnly: true,
+  }),
+  routedTool({
+    name: "wakeflow_storage_preserve",
+    title: "Preserve Wakeflow Local Evidence",
+    description: "Inspect, plan, apply, release, or recover a typed local preservation mutation.",
+    operations: ["inspect", "preview", "preview-release", "apply", "recover"],
+    destructive: true,
+  }),
+  routedTool({
+    name: "wakeflow_archive",
+    title: "Archive Wakeflow Demand",
+    description: "Preview, commit, inspect, or recover one portable whole-demand BusinessArchive.",
+    operations: ["preview", "apply", "inspect", "recover"],
+    destructive: true,
+  }),
+  routedTool({
+    name: "wakeflow_intake_test_card",
+    title: "Create Wakeflow Test Card",
+    description: "Create one exact authority-bound TestCard before a Test TaskPackage.",
+    operations: ["create"],
+  }),
+  routedTool({
+    name: "wakeflow_deliver",
+    title: "Append Wakeflow TODO",
+    description: "Append one exact pending or parked row to the canonical global TODO authority.",
+    operations: ["append"],
+  }),
+  routedTool({
+    name: "wakeflow_next_work",
+    title: "Inspect Wakeflow TODO",
+    description: "Read the canonical TODO authority under its writer lock without creating a missing board.",
+    operations: ["inspect"],
+    readOnly: true,
+  }),
+  routedTool({
+    name: "wakeflow_claim_next",
+    title: "Claim Wakeflow TODO",
+    description: "Inspect, claim, or recover one exact TODO row CAS; it does not choose a row, initialize a demand, or replace root-first create-demand publication.",
+    operations: ["inspect", "claim", "recover"],
+  }),
+  routedTool({
+    name: "wakeflow_cancel_demand",
+    title: "Cancel Wakeflow Demand",
+    description: "Preview, apply, or recover the dedicated cancellation owner while preserving results and honest history.",
+    operations: ["preview", "apply", "recover"],
+  }),
+  routedTool({
+    name: "wakeflow_pod_open",
+    title: "Open Wakeflow Pod",
+    description: "Inspect/plan materialization or preview/apply Pod control/product membership without performing a host effect.",
+    operations: [
+      "inspect-materialization",
+      "plan-materialization",
+      "launch-preview",
+      "launch-apply",
+      "product-preview",
+      "product-apply",
+    ],
+  }),
+  routedTool({
+    name: "wakeflow_pod_record",
+    title: "Record Wakeflow Pod Evidence",
+    description: "Record or observe one typed Pod materialization, design, Test-access, or close fact.",
+    operations: [
+      "record-materialization",
+      "design-handoff",
+      "test-access-observe",
+      "test-access-receipt",
+      "close-observe",
+      "close-receipt",
+    ],
+  }),
+  routedTool({
+    name: "wakeflow_pod_bind",
+    title: "Bind Wakeflow Pod Window",
+    description: "Record one Pod creation receipt or decommission one exactly closed Pod binding.",
+    operations: ["creation-receipt", "binding-decommission"],
+    destructive: true,
+  }),
+  routedTool({
     name: "wakeflow_pod_plan",
-    description: "Prepare one Pod host-action plan while keeping the later host action and receipt recording separate. action=design-request freezes the controller-authored PodDesignRequest; test-access creates the host-local access probe plan; close creates the idempotent host close plan. Each action accepts only its matching input field and preserves the existing backend gate. Dry-run unless apply is true.",
-    annotations: localWriteTool("Prepare Pod Host Action", true),
-    inputSchema: {
-      type: "object",
-      required: ["action"],
-      not: { required: ["event"] },
-      oneOf: [
-        {
-          required: ["request"],
-          properties: { action: { const: "design-request" } },
-          not: { required: ["demandKey"] },
-        },
-        {
-          required: ["demandKey"],
-          properties: { action: { const: "test-access" } },
-          not: { required: ["request"] },
-        },
-        {
-          required: ["demandKey"],
-          properties: { action: { const: "close" } },
-          not: { required: ["request"] },
-        },
-      ],
-      properties: {
-        root: { type: "string" },
-        action: { type: "string", enum: ["design-request", "test-access", "close"] },
-        request: podDesignRequestSchema,
-        demandKey: { type: "string" },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
+    title: "Plan Wakeflow Pod Action",
+    description: "Record a Design request, issue/inspect Test access, or issue/inspect a close intent without combining the host effect.",
+    operations: ["design-request", "test-access-plan", "test-access-inspect", "close-intent", "close-inspect"],
+  }),
+  routedTool({
     name: "wakeflow_prune_runtime",
-    description: "Prune replay-safe local runtime; target selects which. transport (default): confirmed-send delivery-run transport files older than a cutoff — dry-run unless apply is true; apply requires before; durable target-result history is never deleted, and runs inside a surviving repeated-attempt chain are retained. preserved: audit holds under .wakeflow-local/preserved/ older than the retention (preservedRetentionDays, default 30) or an explicit before — dry-run lists candidates with their manifests; apply deletes them. Legacy/unknown trees are NEVER pruned by any target — they route to the user.",
-    annotations: localWriteTool("Prune Wakeflow Runtime Transport"),
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        target: { type: "string", enum: ["transport", "preserved"], description: "What to prune: transport (delivery-run files, default) or preserved (aged audit holds)." },
-        before: { type: "string" },
-        apply: { type: "boolean" },
-      },
-    },
-  },
-  {
+    title: "Prune Wakeflow Transport",
+    description: "Preview, apply, or recover whole-demand transport retention after archive and lease closure.",
+    operations: ["preview", "apply", "recover"],
+    destructive: true,
+  }),
+  routedTool({
     name: "wakeflow_verify",
-    description: "Run embedded Wakeflow runtime verification for an installed workspace or the Wakeflow source repository. Set withRuntime for the runtime-residue check (strictRuntime to fail on blocking residue); scriptTests to run the script test suite.",
-    annotations: readOnlyTool("Verify Wakeflow Runtime"),
-    inputSchema: {
-      type: "object",
-      properties: {
-        root: { type: "string" },
-        scriptTests: { type: "boolean" },
-        withRuntime: { type: "boolean" },
-        strictRuntime: { type: "boolean" },
-      },
-    },
-  },
+    title: "Verify Wakeflow Workspace",
+    description: "Issue one read-only v3 observation and return its verification projection.",
+    operations: ["inspect"],
+    readOnly: true,
+  }),
 ];
 
-// Some Codex hosts only surface an early prefix of MCP tools to the model.
-// Keep the controller closed-loop path inside that prefix so imported target
-// results can always be reviewed, reduced, decided, and completed through MCP.
-const HOST_VISIBLE_PRIORITY_TOOLS = [
+const PUBLIC_TOOL_ORDER = Object.freeze([
   "wakeflow_status",
-  "wakeflow_initialize_workspace",
+  MAINTENANCE_TOOL,
   "wakeflow_replace_windows",
   "wakeflow_register_window",
   "wakeflow_create_demand",
@@ -1188,946 +929,40 @@ const HOST_VISIBLE_PRIORITY_TOOLS = [
   "wakeflow_decide_review",
   "wakeflow_complete_demand",
   "wakeflow_continue_demand",
-];
+  EVIDENCE_TOOL,
+  "wakeflow_recover_state_transition",
+  "wakeflow_release_window_lock",
+  "wakeflow_view",
+  "wakeflow_storage_preserve",
+  "wakeflow_archive",
+  "wakeflow_intake_test_card",
+  "wakeflow_deliver",
+  "wakeflow_next_work",
+  "wakeflow_claim_next",
+  "wakeflow_cancel_demand",
+  "wakeflow_pod_open",
+  "wakeflow_pod_record",
+  "wakeflow_pod_bind",
+  "wakeflow_pod_plan",
+  "wakeflow_prune_runtime",
+  "wakeflow_verify",
+]);
 
-export const tools = prioritizeHostVisibleTools(toolDefinitions);
+const toolByName = new Map([
+  [MAINTENANCE_TOOL, maintenanceTool],
+  [EVIDENCE_TOOL, evidenceTool],
+  ...routedToolDefinitions.map((tool) => [tool.name, tool]),
+]);
 
-function prioritizeHostVisibleTools(definitions) {
-  const remaining = new Map(definitions.map((tool) => [tool.name, tool]));
-  const prioritized = [];
-  for (const name of HOST_VISIBLE_PRIORITY_TOOLS) {
-    const tool = remaining.get(name);
-    if (!tool) continue;
-    prioritized.push(tool);
-    remaining.delete(name);
-  }
-  return [
-    ...prioritized,
-    ...definitions.filter((tool) => remaining.has(tool.name)),
-  ];
-}
+// tools 与 handlers 必须按同一固定顺序导出，供 MCP、CLI、validator 和双宿主产物共同核对。
+export const tools = deepFreeze(PUBLIC_TOOL_ORDER.map((name) => toolByName.get(name)));
 
-export const handlers = {
-  wakeflow_initialize_workspace: (args) => runWakeflowRuntime({
-    script: "wakeflow-setup",
-    args: [
-      "initialize",
-      ...rootArgs(args),
-      ...optionalValue("--parent", args.parent),
-      ...optionalValue("--workspace-name", args.workspaceName),
-      ...optionalValue("--controller-window", args.controllerWindow),
-      ...optionalValue("--design-window", args.designWindow),
-      ...optionalValue("--test-window", args.testWindow),
-      ...optionalValue("--language", args.language),
-      ...(args.resetInitialization ? ["--reset-initialization"] : []),
-      ...(args.useDiscovered ? ["--use-discovered"] : []),
-      ...(args.internalDesign ? ["--internal-design"] : []),
-      ...(args.internalTest ? ["--internal-test"] : []),
-      ...(args.includeRealProject ? ["--include-real-project"] : []),
-      ...repositoryArgs(args.repositories),
-      ...repeatValues("--exclude-window", args.excludeWindows),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_replace_windows: (args) => runWakeflowRuntime({
-    script: "wakeflow-setup",
-    args: args.window
-      ? [
-          "replace-window",
-          ...rootArgs(args),
-          ...optionalValue("--parent", args.parent),
-          ...optionalValue("--language", args.language),
-          ...(args.includeRealProject ? ["--include-real-project"] : []),
-          ...optionalValue("--window", args.window),
-          "--json",
-        ]
-      : [
-          "replace-windows",
-          ...rootArgs(args),
-          ...optionalValue("--parent", args.parent),
-          ...optionalValue("--language", args.language),
-          ...(args.includeRealProject ? ["--include-real-project"] : []),
-          ...repeatValues("--window", args.windows),
-          "--json",
-        ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_register_window: (args) => runWakeflowRuntime({
-    script: "wakeflow-delivery",
-    args: [
-      "register-thread",
-      ...rootArgs(args),
-      ...optionalValue("--window", args.window),
-      ...optionalValue("--thread-id", args.windowHandle),
-      ...optionalValue("--launch-correlation-id", args.launchCorrelationId),
-      ...optionalValue("--binding-id", args.bindingId),
-      ...optionalValue("--state-root", args.stateRoot),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-    sensitiveValues: typeof args.windowHandle === "string" ? [args.windowHandle] : [],
-  }),
-  wakeflow_adopt_demand_host: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "adopt-demand-host",
-      "--state-root", args.stateRoot,
-      ...(args.reason ? ["--reason", args.reason] : []),
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_recover_state_transition: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "recover-state-transition",
-      "--state-root", requireValueForTool(args, "stateRoot", "wakeflow_recover_state_transition"),
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  // Hidden for one compatibility release. New clients use
-  // wakeflow_view(scope="progress").
-  wakeflow_render_progress: (args) => runProgressProjection(args),
-  wakeflow_release_window_lock: (args) => runWakeflowRuntime({
-    script: "wakeflow-delivery",
-    args: [
-      "release-window-lock",
-      "--window", args.window,
-      ...optionalValue("--expected-delivery-id", args.expectedDeliveryId),
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_status: (args) => runWakeflowRuntime({
-    script: "wakeflow-cli",
-    args: ["status", ...rootArgs(args), "--json"],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_add_task: (args) => {
-    validateMcpTaskPackageContext(args, "wakeflow_add_task");
-    return runWakeflowRuntime({
-      script: "wakeflow-state",
-      args: [
-        "add-task-package",
-        "--state-root", args.stateRoot,
-        "--task-package-id", args.packageId || args.taskId,
-        "--summary", args.summary,
-        "--target-window", args.targetWindow,
-        "--target-task-id", args.taskId,
-        ...optionalValue("--replaces-target-task-id", args.replacesTargetTaskId),
-        ...optionalValue("--target-summary", args.targetSummary),
-        ...optionalValue("--demand-authority", args.demandAuthority ? JSON.stringify(args.demandAuthority) : undefined),
-        ...optionalValue("--source-ref", args.sourceRef),
-        ...optionalValue("--work-type", args.workType),
-        ...optionalValue("--objective", args.objective),
-        ...optionalValue("--context-summary", args.contextSummary ? JSON.stringify(args.contextSummary) : undefined),
-        ...optionalValue("--requirement-refs", args.requirementRefs ? JSON.stringify(args.requirementRefs) : undefined),
-        ...optionalValue("--boundaries", args.boundaries ? JSON.stringify(args.boundaries) : undefined),
-        ...optionalValue("--completion-expectations", args.completionExpectations ? JSON.stringify(args.completionExpectations) : undefined),
-        ...optionalValue("--depends-on-task-ids", args.dependsOnTaskIds ? JSON.stringify(args.dependsOnTaskIds) : undefined),
-        ...optionalValue("--commit-expectation", args.commitExpectation),
-        ...optionalValue("--design-intent", args.designIntent),
-        ...optionalValue("--acceptance-anchors", args.acceptanceAnchors ? JSON.stringify(args.acceptanceAnchors) : undefined),
-        ...optionalValue("--evidence-contract", args.evidenceContract ? JSON.stringify(args.evidenceContract) : undefined),
-        ...optionalValue("--test-card-id", args.testCardId),
-        ...optionalValue("--test-continuation-of", args.testContinuationOf),
-        ...(args.restartTest ? ["--restart-test"] : []),
-        ...optionalValue("--test-restart-reason", args.testRestartReason),
-        ...rootArgs(args),
-        "--write",
-        ...(args.adoptHost ? ["--adopt-host"] : []),
-        "--json",
-      ],
-    });
-  },
-  wakeflow_prepare_delivery: (args) => {
-    const direction = args.direction || "target";
-    if (direction === "controller-return") {
-      const dispatchGroup = requireValueForTool(args, "dispatchGroup", "wakeflow_prepare_delivery direction=controller-return");
-      const triggerTarget = requireValueForTool(args, "triggerTarget", "wakeflow_prepare_delivery direction=controller-return");
-      const triggerTaskId = requireValueForTool(args, "triggerTaskId", "wakeflow_prepare_delivery direction=controller-return");
-      return runWakeflowRuntime({
-        script: "wakeflow-delivery",
-        args: [
-          "build-controller-return",
-          "--group", dispatchGroup,
-          "--trigger-target", triggerTarget,
-          "--trigger-task-id", triggerTaskId,
-          ...optionalValue("--state-root", args.stateRoot),
-          ...optionalValue("--controller-window", args.controllerWindow),
-          ...optionalValue("--human-context-ref", args.humanContextRef),
-          ...optionalValue("--return-reason", args.returnReason),
-          ...(args.automationEnabled ? ["--automation-enabled"] : []),
-          ...rootArgs(args),
-          "--write",
-          ...(args.verbose ? [] : ["--compact"]),
-      "--json",
-        ],
-      });
-    }
-    const stateRoot = requireValueForTool(args, "stateRoot", "wakeflow_prepare_delivery direction=target");
-    const taskId = requireValueForTool(args, "taskId", "wakeflow_prepare_delivery direction=target");
-    const expectedPreviewDigest = args.apply
-      ? requireValueForTool(args, "expectedPreviewDigest", "wakeflow_prepare_delivery direction=target with apply=true")
-      : args.expectedPreviewDigest;
-    return runWakeflowRuntime({
-      script: "wakeflow-delivery",
-      args: [
-        "prepare-dispatch-from-state",
-        "--state-root", stateRoot,
-        "--target-task-id", taskId,
-        ...repeatValues("--group-target-task-id", args.groupTaskIds),
-        ...optionalValue("--task-package-id", args.taskPackageId),
-        ...optionalValue("--controller-window", args.controllerWindow),
-        ...optionalValue("--group", args.dispatchGroup),
-        ...optionalValue("--return-policy", args.returnPolicy),
-        ...optionalValue("--expected-preview-digest", expectedPreviewDigest),
-        ...(args.automationEnabled ? ["--automation-enabled"] : []),
-        ...rootArgs(args),
-        ...(args.apply ? ["--write"] : []),
-        ...(args.verbose ? [] : ["--compact"]),
-      "--json",
-      ],
-    });
-  },
-  wakeflow_record_delivery: (args) => runWakeflowRuntime({
-    script: "wakeflow-delivery",
-    args: [
-      "record-delivery-run",
-      "--delivery-file", args.deliveryFile,
-      "--status", args.status,
-      ...optionalValue("--transport-status", args.transportStatus),
-      ...optionalValue("--readback-status", args.readbackStatus),
-      ...(Number.isInteger(args.readbackAttempts) ? ["--readback-attempts", String(args.readbackAttempts)] : []),
-      ...optionalValue("--evidence", args.evidence),
-      ...optionalValue("--error", args.error),
-      ...optionalValue("--host-method", args.hostMethod),
-      ...optionalValue("--host-mode", args.hostMode),
-      ...(typeof args.readbackOk === "boolean" ? ["--readback-ok", String(args.readbackOk)] : []),
-      ...rootArgs(args),
-      "--write",
-      ...(args.deliveryRunId ? ["--delivery-run-id", args.deliveryRunId] : []),
-      ...(args.verbose ? [] : ["--compact"]),
-      "--json",
-    ],
-  }),
-  wakeflow_record_target_result: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "import-target-result",
-      "--state-root", args.stateRoot,
-      "--target-task-id", args.taskId,
-      "--target-window", args.targetWindow,
-      "--status", args.status,
-      ...optionalValue("--result-id", args.resultId),
-      ...optionalValue("--dispatch-group", args.dispatchGroup),
-      ...(args.supersedeResult ? ["--supersede-result"] : []),
-      ...optionalValue("--summary", args.summary),
-      ...repeatValues("--changed-repo", args.changedRepos),
-      ...repeatValues("--commit", args.commits),
-      ...optionalValue("--commit-disposition", args.commitDisposition),
-      ...repeatValues("--evidence-ref", args.evidenceRefs),
-      ...repeatValues("--verification", args.verification),
-      ...repeatValues("--risk", args.risks),
-      ...optionalValue("--craft-evidence", args.craftEvidence && args.craftEvidence.length ? JSON.stringify(args.craftEvidence) : undefined),
-      ...rootArgs(args),
-      "--write",
-      ...(args.verbose ? [] : ["--compact"]),
-      "--json",
-    ],
-  }),
-  wakeflow_review_pack: (args) => runWakeflowRuntime({
-    script: "wakeflow-delivery",
-    args: [
-      "review-pack",
-      ...optionalValue("--state-root", args.stateRoot),
-      ...optionalValue("--group", args.dispatchGroup),
-      ...optionalValue("--task-id", args.taskId),
-      ...rootArgs(args),
-      "--json",
-    ],
-  }),
-  wakeflow_view: (args) => {
-    if (args.scope === "task-ledger") {
-      return runWakeflowRuntime({
-        script: "wakeflow-delivery",
-        args: [
-          "task-ledger",
-          ...optionalValue("--state-root", args.stateRoot),
-          ...optionalValue("--task-id", args.taskId),
-          ...optionalValue("--target-window", args.targetWindow),
-          ...rootArgs(args),
-          "--json",
-        ],
-      });
-    }
-    if (args.scope === "window") {
-      return runWakeflowRuntime({
-        script: "wakeflow-state",
-        args: [
-          "window-view",
-          ...optionalValue("--state-root", args.stateRoot),
-          ...optionalValue("--window", args.window),
-          ...rootArgs(args),
-          "--json",
-        ],
-      });
-    }
-    if (args.scope === "focus") {
-      return runWakeflowRuntime({
-        script: "wakeflow-state",
-        args: [
-          "focus-doc",
-          ...optionalValue("--state-root", args.stateRoot),
-          ...optionalValue("--window", args.window),
-          ...optionalValue("--phase", args.phase),
-          ...(args.apply ? ["--write"] : []),
-          ...rootArgs(args),
-          "--json",
-        ],
-      });
-    }
-    if (args.scope === "trace") {
-      return runWakeflowRuntime({
-        script: "wakeflow-delivery",
-        args: [
-          "trace-spine",
-          ...optionalValue("--state-root", args.stateRoot),
-          ...optionalValue("--group", args.dispatchGroup),
-          ...optionalValue("--target-window", args.targetWindow),
-          ...optionalValue("--task-id", args.taskId),
-          ...optionalValue("--result-file", args.resultFile),
-          ...optionalValue("--result-id", args.resultId),
-          ...optionalValue("--delivery-file", args.deliveryFile),
-          ...optionalValue("--delivery-id", args.deliveryId),
-          ...rootArgs(args),
-          "--json",
-        ],
-      });
-    }
-    if (args.scope === "storage") {
-      return runWakeflowRuntime({
-        script: "wakeflow-storage",
-        args: ["map", ...rootArgs(args), "--json"],
-        cwd: args.root || undefined,
-      });
-    }
-    if (args.scope === "progress") {
-      return runProgressProjection(args);
-    }
-    if (args.scope === "pods") {
-      return runPodInventory(args);
-    }
-    throw new Error(`wakeflow_view: unknown scope "${args.scope}" (expected task-ledger | window | focus | trace | storage | progress | pods)`);
-  },
-  wakeflow_storage_preserve: (args) => runWakeflowRuntime({
-    script: "wakeflow-storage",
-    args: [
-      "preserve",
-      "--source", requireValueForTool(args, "source", "wakeflow_storage_preserve"),
-      "--reason", requireValueForTool(args, "reason", "wakeflow_storage_preserve"),
-      ...optionalValue("--note", args.note),
-      ...(args.apply ? ["--write"] : []),
-      ...rootArgs(args),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_reduce_results: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "reduce-results",
-      "--state-root", args.stateRoot,
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      ...(args.adoptHost ? ["--adopt-host"] : []),
-      "--json",
-    ],
-  }),
-  wakeflow_decide_review: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "decide-review",
-      "--state-root", args.stateRoot,
-      "--candidate-id", args.candidateId,
-      "--decision", args.decision,
-      "--reason", args.reason,
-      ...repeatValues("--evidence-ref", args.evidenceRefs),
-      ...(args.acceptBlocked ? ["--accept-blocked"] : []),
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      ...(args.adoptHost ? ["--adopt-host"] : []),
-      "--json",
-    ],
-  }),
-  wakeflow_complete_demand: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "complete-demand",
-      "--state-root", args.stateRoot,
-      "--reason", args.reason,
-      ...repeatValues("--evidence-ref", args.evidenceRefs),
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      ...(args.adoptHost ? ["--adopt-host"] : []),
-      "--json",
-    ],
-  }),
-  wakeflow_continue_demand: (args) => {
-    validateMcpTaskPackageContext(args, "wakeflow_continue_demand");
-    return runWakeflowRuntime({
-      script: "wakeflow-state",
-      args: [
-        "continue-demand",
-        "--state-root", args.stateRoot,
-        "--continuation-type", args.continuationType,
-        "--reason", args.reason,
-        ...repeatValues("--evidence-ref", args.evidenceRefs),
-        "--task-package-id", args.packageId || args.taskId,
-        "--summary", args.summary,
-        "--target-window", args.targetWindow,
-        "--target-task-id", args.taskId,
-        ...optionalValue("--source-ref", args.sourceRef),
-        ...optionalValue("--target-summary", args.targetSummary),
-        ...optionalValue("--demand-authority", args.demandAuthority ? JSON.stringify(args.demandAuthority) : undefined),
-        ...optionalValue("--work-type", args.workType),
-        ...optionalValue("--objective", args.objective),
-        ...optionalValue("--context-summary", args.contextSummary ? JSON.stringify(args.contextSummary) : undefined),
-        ...optionalValue("--requirement-refs", args.requirementRefs ? JSON.stringify(args.requirementRefs) : undefined),
-        ...optionalValue("--boundaries", args.boundaries ? JSON.stringify(args.boundaries) : undefined),
-        ...optionalValue("--completion-expectations", args.completionExpectations ? JSON.stringify(args.completionExpectations) : undefined),
-        ...optionalValue("--depends-on-task-ids", args.dependsOnTaskIds ? JSON.stringify(args.dependsOnTaskIds) : undefined),
-        ...optionalValue("--commit-expectation", args.commitExpectation),
-        ...optionalValue("--design-intent", args.designIntent),
-        ...(args.acceptanceAnchors ? ["--acceptance-anchors", JSON.stringify(args.acceptanceAnchors)] : []),
-        ...(args.evidenceContract ? ["--evidence-contract", JSON.stringify(args.evidenceContract)] : []),
-        ...optionalValue("--test-card-id", args.testCardId),
-        ...optionalValue("--test-continuation-of", args.testContinuationOf),
-        ...(args.restartTest ? ["--restart-test"] : []),
-        ...optionalValue("--test-restart-reason", args.testRestartReason),
-        ...rootArgs(args),
-        ...(args.apply ? ["--write"] : []),
-        ...(args.adoptHost ? ["--adopt-host"] : []),
-        "--json",
-      ],
-    });
-  },
-  wakeflow_archive: async (args) => {
-    if (args.target === "demand") {
-      const stateRoot = requireValueForTool(args, "stateRoot", "wakeflow_archive target=demand");
-      const reason = requireValueForTool(args, "reason", "wakeflow_archive target=demand");
-      return runWakeflowRuntime({
-        script: "wakeflow-state",
-        args: [
-          "archive-demand",
-          "--state-root", stateRoot,
-          "--reason", reason,
-          ...(args.redact ? ["--redact"] : []),
-          ...(args.allowOpaque ? ["--allow-opaque"] : []),
-          ...repeatValues("--evidence-ref", args.evidenceRefs ?? []),
-          ...rootArgs(args),
-          ...(args.apply ? ["--write"] : []),
-          "--json",
-        ],
-      });
-    }
-    if (args.target === "todo") {
-      const archive = await runWakeflowRuntime({
-        script: "wakeflow-archive-todo",
-        args: [
-          ...rootArgs(args),
-          ...optionalValue("--month", args.month),
-          ...optionalValue("--date", args.date),
-          ...optionalValue("--keep-completed", args.keepCompleted),
-          ...optionalValue("--keep-sync", args.keepSync),
-          ...(args.apply ? ["--apply"] : []),
-          "--json",
-        ],
-        cwd: args.root || undefined,
-      });
-      return maybeRefreshArchiveSummaries(args, archive);
-    }
-    if (args.target === "docs") {
-      const files = asStringList(args.files);
-      if (files.length === 0 && !args.pruneIndexOnly) {
-        throw new Error("wakeflow_archive target=docs requires files unless pruneIndexOnly is true");
-      }
-      if (files.length > 0) {
-        requireValueForTool(args, "topic", "wakeflow_archive (target=docs)");
-      }
-      const archive = await runWakeflowRuntime({
-        script: "wakeflow-archive-docs",
-        args: [
-          ...rootArgs(args),
-          ...optionalValue("--topic", args.topic),
-          ...optionalValue("--month", args.month),
-          ...repeatValues("--file", files),
-          ...(args.keepIndexRows ? ["--keep-index-rows"] : []),
-          ...(args.pruneIndexOnly ? ["--prune-index-only"] : []),
-          ...(args.apply ? ["--apply"] : []),
-          "--json",
-        ],
-        cwd: args.root || undefined,
-      });
-      return maybeRefreshArchiveSummaries(args, archive);
-    }
-    if (args.target === "sanitize-demand") {
-      return runArchiveSanitize(args, "wakeflow_archive target=sanitize-demand");
-    }
-    throw new Error(`wakeflow_archive: unknown target "${args.target}" (expected demand | todo | docs | sanitize-demand)`);
-  },
-  // Hidden for one compatibility release. New clients use
-  // wakeflow_archive(target="sanitize-demand").
-  wakeflow_sanitize_archive: (args) => runArchiveSanitize(args, "wakeflow_sanitize_archive"),
-  wakeflow_intake_test_card: (args) => runWakeflowRuntime({
-    script: "wakeflow-intake",
-    args: [
-      "test-card",
-      "--state-root", args.stateRoot,
-      "--test-id", args.testId,
-      "--target-window", args.targetWindow,
-      "--question", args.question,
-      "--object-boundary", args.objectBoundary,
-      ...repeatValues("--controller-self-check", args.controllerSelfChecks),
-      ...repeatValues("--real-scenario-condition", args.realScenarioConditions),
-      ...repeatValues("--success-means", args.successMeans),
-      ...repeatValues("--failure-means", args.failureMeans),
-      ...repeatValues("--cannot-conclude", args.cannotConclude),
-      ...repeatValues("--stop-condition", args.stopConditions),
-      ...optionalValue("--source-ref", args.sourceRef),
-      ...optionalValue("--strategy-source", args.strategySource),
-      ...repeatValues("--approved-test-step", args.approvedTestPlan),
-      ...repeatValues("--allowed-test-skill", args.allowedTestSkills),
-      ...optionalValue("--setup-policy", args.setupPolicy),
-      ...optionalValue("--max-attempts", args.maxAttempts),
-      ...repeatValues("--restart-condition", args.restartConditions),
-      ...repeatValues("--evidence-required", args.evidenceRequired),
-      ...repeatValues("--allowed-operation", args.allowedOperations),
-      ...repeatValues("--forbidden-operation", args.forbiddenOperations),
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-  }),
-  wakeflow_deliver: (args) => runWakeflowRuntime({
-    script: "wakeflow-todo",
-    args: [
-      "deliver",
-      ...optionalValue("--type", args.type),
-      ...optionalValue("--design-key", args.designKey),
-      ...optionalValue("--title", args.title),
-      ...optionalValue("--item", args.item),
-      ...(args.autoClaim ? ["--auto-claim"] : []),
-      ...optionalValue("--priority", args.priority),
-      ...optionalValue("--original-plan", args.originalPlan),
-      ...optionalValue("--requirement-design", args.requirementDesign),
-      ...optionalValue("--demand-authority", args.demandAuthority ? JSON.stringify(args.demandAuthority) : undefined),
-      ...optionalValue("--dependency", args.dependency),
-      ...rootArgs(args),
-      ...(args.apply ? ["--apply"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_next_work: (args) => runWakeflowRuntime({
-    script: "wakeflow-next-work",
-    args: [
-      ...rootArgs(args),
-      ...optionalValue("--id", args.id),
-      ...optionalValue("--source", args.source),
-      ...optionalValue("--limit", args.limit),
-      ...(args.afterCompletion ? ["--after-completion"] : []),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_claim_next: (args) => runWakeflowRuntime({
-    script: "wakeflow-demand-sequence",
-    args: [
-      "claim-todo",
-      ...rootArgs(args),
-      ...optionalValue("--design-key", args.designKey),
-      ...optionalValue("--controller-window", args.controllerWindow),
-      ...optionalValue("--placement", args.placement),
-      ...optionalValue("--authorization-ref", args.authorizationRef),
-      ...optionalValue("--pod-id", args.podId),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_create_demand: (args) => {
-    if (args.taskPackages !== undefined) {
-      if (!Array.isArray(args.taskPackages)) {
-        throw new Error("wakeflow_create_demand taskPackages must be an array");
-      }
-      args.taskPackages.forEach((taskPackage, index) => {
-        validateMcpTaskPackageContext(taskPackage, `wakeflow_create_demand taskPackages[${index}]`);
-      });
-    }
-    return runWakeflowRuntime({
-      script: "wakeflow-demand-sequence",
-      args: [
-        "create-demand",
-        ...rootArgs(args),
-        ...optionalValue("--todo-id", args.todoId),
-        ...optionalValue("--demand-key", args.demandKey),
-        ...optionalValue("--title", args.title),
-        ...optionalValue("--demand-type", args.demandType),
-        ...optionalValue("--demand-authority", args.demandAuthority ? JSON.stringify(args.demandAuthority) : undefined),
-        ...optionalValue("--controller-window", args.controllerWindow),
-        ...optionalValue("--placement", args.placement),
-        ...optionalValue("--authorization-ref", args.authorizationRef),
-        ...optionalValue("--pod-id", args.podId),
-        ...optionalValue("--goal", args.goal),
-        ...optionalValue("--completion-definition", args.completionDefinition),
-        ...optionalValue("--test-decision", args.testDecision),
-        ...optionalValue("--stage-plan", args.stagePlan),
-        ...(args.taskPackages ? ["--task-packages", JSON.stringify(args.taskPackages)] : []),
-        ...(args.apply ? ["--write"] : []),
-        "--json",
-      ],
-      cwd: args.root || undefined,
-    });
-  },
-  wakeflow_cancel_demand: (args) => runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "cancel-demand",
-      ...optionalValue("--state-root", args.stateRoot),
-      ...optionalValue("--reason", args.reason),
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_pod_open: (args) => runWakeflowRuntime({
-    script: "wakeflow-pod",
-    args: [
-      "open",
-      "--mode", args.mode ?? "create",
-      ...rootArgs(args),
-      "--request-json",
-      JSON.stringify({
-        demandKey: args.demandKey,
-        host: hostProfile.hostId,
-        repositories: args.repositories ?? [],
-        ...(args.requestedAt ? { requestedAt: args.requestedAt } : {}),
-      }),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_pod_record: (args) => runPodRecord(args),
-  // Hidden compatibility aliases. They intentionally remain callable while
-  // no longer appearing in tools/list.
-  wakeflow_pod_record_materialization: (args) => runPodRecord({ ...args, event: "materialization" }),
-  wakeflow_pod_bind: (args) => runWakeflowRuntime({
-    script: "wakeflow-pod",
-    args: [
-      "bind",
-      ...rootArgs(args),
-      "--receipt-json",
-      JSON.stringify(args.receipt),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  }),
-  wakeflow_pod_plan: (args) => runPodPlan(args),
-  wakeflow_pod_prepare_design_request: (args) => runPodPlan({ ...args, action: "design-request" }),
-  wakeflow_pod_record_design_handoff: (args) => runPodRecord({ ...args, event: "design-handoff" }),
-  wakeflow_pod_prepare_test_access: (args) => runPodPlan({ ...args, action: "test-access" }),
-  wakeflow_pod_record_test_access: (args) => runPodRecord({ ...args, event: "test-access" }),
-  wakeflow_pod_close: (args) => runPodPlan({ ...args, action: "close" }),
-  wakeflow_pod_record_close_receipt: (args) => runPodRecord({ ...args, event: "close-receipt" }),
-  wakeflow_pod_list: (args) => runPodInventory(args),
-  wakeflow_prune_runtime: (args) => (args.target === "preserved"
-    ? runWakeflowRuntime({
-      script: "wakeflow-storage",
-      args: [
-        "prune-preserved",
-        ...rootArgs(args),
-        ...optionalValue("--before", args.before),
-        ...(args.apply ? ["--apply"] : []),
-        "--json",
-      ],
-      cwd: args.root || undefined,
-    })
-    : runWakeflowRuntime({
-      script: "wakeflow-delivery",
-      args: [
-        "prune-runtime",
-        ...rootArgs(args),
-        ...optionalValue("--before", args.before),
-        ...(args.apply ? ["--write"] : []),
-        "--json",
-      ],
-      cwd: args.root || undefined,
-    })),
-  wakeflow_verify: (args) => runWakeflowRuntime({
-    script: "wakeflow-cli",
-    args: [
-      "verify",
-      ...rootArgs(args),
-      ...(args.scriptTests ? ["--script-tests"] : []),
-      ...(args.strictRuntime ? ["--strict-runtime"] : args.withRuntime ? ["--with-runtime"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-    timeoutMs: args.scriptTests || args.withRuntime || args.strictRuntime ? 180000 : 120000,
-  }),
-};
+const handlerByName = Object.freeze({
+  [MAINTENANCE_TOOL]: runMaintenance,
+  [EVIDENCE_TOOL]: runEvidence,
+  ...Object.fromEntries(routedToolDefinitions.map((tool) => [tool.name, domainHandler(tool.name)])),
+});
 
-function runProgressProjection(args) {
-  return runWakeflowRuntime({
-    script: "wakeflow-render-progress",
-    args: [
-      "--state-root", requireValueForTool(args, "stateRoot", "wakeflow_view scope=progress"),
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  });
-}
-
-function runArchiveSanitize(args, context) {
-  return runWakeflowRuntime({
-    script: "wakeflow-state",
-    args: [
-      "sanitize-archive",
-      "--state-root", requireValueForTool(args, "stateRoot", context),
-      "--reason", requireValueForTool(args, "reason", context),
-      ...rootArgs(args),
-      ...(args.apply ? ["--write"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  });
-}
-
-function runPodInventory(args) {
-  return runWakeflowRuntime({
-    script: "wakeflow-pod",
-    args: ["list", ...rootArgs(args), "--json"],
-    cwd: args.root || undefined,
-  });
-}
-
-function runPodPlan(args) {
-  const action = requireValueForTool(args, "action", "wakeflow_pod_plan");
-  if (action === "design-request") {
-    rejectPodBranchFields(args, ["action", "request"], "wakeflow_pod_plan action=design-request");
-    const request = requireObjectForTool(args, "request", "wakeflow_pod_plan action=design-request");
-    return runWakeflowRuntime({
-      script: "wakeflow-pod",
-      args: [
-        "prepare-design-request",
-        ...rootArgs(args),
-        "--request-json", JSON.stringify(request),
-        ...(args.apply ? ["--write"] : []),
-        "--json",
-      ],
-      cwd: args.root || undefined,
-    });
-  }
-  if (action === "test-access" || action === "close") {
-    const context = `wakeflow_pod_plan action=${action}`;
-    rejectPodBranchFields(args, ["action", "demandKey"], context);
-    const demandKey = requireValueForTool(args, "demandKey", context);
-    return runWakeflowRuntime({
-      script: "wakeflow-pod",
-      args: [
-        action === "test-access" ? "prepare-test-access" : "close",
-        ...rootArgs(args),
-        "--demand-key", demandKey,
-        ...(args.apply ? ["--write"] : []),
-        "--json",
-      ],
-      cwd: args.root || undefined,
-    });
-  }
-  throw new Error(`wakeflow_pod_plan: unknown action "${action}" (expected design-request | test-access | close)`);
-}
-
-function runPodRecord(args) {
-  const event = requireValueForTool(args, "event", "wakeflow_pod_record");
-  if (event === "materialization") {
-    rejectPodBranchFields(args, ["event", "attempt"], "wakeflow_pod_record event=materialization");
-    const attempt = requireObjectForTool(args, "attempt", "wakeflow_pod_record event=materialization");
-    return runWakeflowRuntime({
-      script: "wakeflow-pod",
-      args: [
-        "record-materialization",
-        ...rootArgs(args),
-        "--attempt-json", JSON.stringify({ ...attempt, host: hostProfile.hostId }),
-        ...(args.apply ? ["--write"] : []),
-        "--json",
-      ],
-      cwd: args.root || undefined,
-    });
-  }
-  if (event === "design-handoff") {
-    rejectPodBranchFields(args, ["event", "handoff"], "wakeflow_pod_record event=design-handoff");
-    const handoff = requireObjectForTool(args, "handoff", "wakeflow_pod_record event=design-handoff");
-    return runWakeflowRuntime({
-      script: "wakeflow-pod",
-      args: [
-        "record-design-handoff",
-        ...rootArgs(args),
-        "--handoff-json", JSON.stringify(handoff),
-        ...(args.apply ? ["--write"] : []),
-        "--json",
-      ],
-      cwd: args.root || undefined,
-    });
-  }
-  if (event === "test-access" || event === "close-receipt") {
-    const context = `wakeflow_pod_record event=${event}`;
-    rejectPodBranchFields(args, ["event", "receipt"], context);
-    const receipt = requireObjectForTool(args, "receipt", context);
-    return runWakeflowRuntime({
-      script: "wakeflow-pod",
-      args: [
-        event === "test-access" ? "record-test-access" : "record-close-receipt",
-        ...rootArgs(args),
-        "--receipt-json", JSON.stringify(receipt),
-        ...(args.apply ? ["--write"] : []),
-        "--json",
-      ],
-      cwd: args.root || undefined,
-    });
-  }
-  throw new Error(`wakeflow_pod_record: unknown event "${event}" (expected materialization | design-handoff | test-access | close-receipt)`);
-}
-
-function requireObjectForTool(args, name, context) {
-  const value = args?.[name];
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${context} requires ${name} object`);
-  }
-  return value;
-}
-
-function rejectPodBranchFields(args, allowed, context) {
-  const branchFields = ["action", "event", "request", "demandKey", "attempt", "handoff", "receipt"];
-  const unexpected = branchFields.filter((name) => !allowed.includes(name) && args?.[name] !== undefined);
-  if (unexpected.length > 0) {
-    throw new Error(`${context} does not accept ${unexpected.join(", ")}`);
-  }
-}
-
-async function maybeRefreshArchiveSummaries(args, archiveResult) {
-  if (!args.refreshSummaries || !archiveResult?.ok) {
-    return archiveResult;
-  }
-  const summaries = await runWakeflowRuntime({
-    script: "wakeflow-archive-summaries",
-    args: [
-      ...rootArgs(args),
-      ...(args.apply ? ["--apply"] : []),
-      "--json",
-    ],
-    cwd: args.root || undefined,
-  });
-  return {
-    ok: Boolean(archiveResult.ok && summaries.ok),
-    archive: archiveResult,
-    summaries,
-  };
-}
-
-function optionalValue(flag, value) {
-  return value === undefined || value === null || value === "" ? [] : [flag, String(value)];
-}
-
-function validateMcpTaskPackageContext(args, context) {
-  if (!args || typeof args !== "object" || Array.isArray(args)) {
-    throw new Error(`${context} requires a task package object`);
-  }
-  try {
-    normalizeTaskPackageContext({
-      contextVersion: TASK_CONTEXT_VERSION,
-      workType: args.workType,
-      objective: args.objective,
-      contextSummary: args.contextSummary,
-      requirementRefs: args.requirementRefs,
-      boundaries: args.boundaries,
-      completionExpectations: args.completionExpectations,
-      dependsOnTaskIds: args.dependsOnTaskIds ?? [],
-      commitExpectation: args.commitExpectation,
-      acceptanceAnchors: args.acceptanceAnchors,
-    });
-  } catch (error) {
-    throw new Error(`${context} requires complete task context: ${error.message}`);
-  }
-}
-
-function requireValueForTool(args, name, context) {
-  const value = args[name];
-  if (value === undefined || value === null || value === "") {
-    throw new Error(`${context} requires ${name}`);
-  }
-  return String(value);
-}
-
-function asStringList(values) {
-  if (!values) return [];
-  return (Array.isArray(values) ? values : [values])
-    .map((value) => String(value ?? "").trim())
-    .filter(Boolean);
-}
-
-function repeatValues(flag, values) {
-  if (!values) return [];
-  const list = Array.isArray(values) ? values : [values];
-  return list.flatMap((value) => optionalValue(flag, value));
-}
-
-function repositoryArgs(repositories = []) {
-  return (repositories || []).flatMap((repo) => [
-    "--repo", `${repo.windowName}=${repo.path}`,
-    ...optionalValue("--role", repo.role ? `${repo.windowName}=${repo.role}` : ""),
-  ]);
-}
-
-function rootArgs(args) {
-  return optionalValue("--root", args.root ?? defaultWorkspaceRoot());
-}
-
-function defaultWorkspaceRoot() {
-  // The MCP server process may start with an arbitrary cwd (for plugin-managed
-  // servers it is not the user's workspace), so an explicit root from the
-  // caller wins; otherwise fall back to the host-injected workspace dir.
-  // CRITICAL: for every NON-controller window that dir is the window's OWN
-  // repo/support dir, not the workspace — walk up to the nearest ancestor
-  // carrying wakeflow.config.json (the workspace-root marker; legacy
-  // workspace.config.json still counts), or a target's
-  // first record/deliver/review call fails on a mislocated state root.
-  for (const candidate of [process.env.WAKEFLOW_DEFAULT_ROOT, process.env.CLAUDE_PROJECT_DIR]) {
-    if (!candidate || !path.isAbsolute(candidate) || !existsSync(candidate)) continue;
-    let dir = candidate;
-    for (let depth = 0; depth < 64; depth += 1) {
-      if (existsSync(path.join(dir, "wakeflow.config.json")) || existsSync(path.join(dir, "workspace.config.json"))) return dir;
-      const parent = path.dirname(dir);
-      if (parent === dir) break;
-      dir = parent;
-    }
-    return candidate; // pre-init / standalone: keep the injected dir
-  }
-  return undefined;
-}
+export const handlers = Object.freeze(Object.fromEntries(
+  PUBLIC_TOOL_ORDER.map((name) => [name, handlerByName[name]]),
+));

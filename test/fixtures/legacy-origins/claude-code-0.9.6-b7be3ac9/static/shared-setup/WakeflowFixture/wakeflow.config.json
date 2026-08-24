@@ -1,0 +1,54 @@
+{
+  "$schema": "https://raw.githubusercontent.com/GxFn/Wakeflow/main/core/schemas/wakeflow-config.schema.json",
+  "schemaVersion": 2,
+  "workspace": {
+    "name": "WakeflowFixture",
+    "language": "en",
+    "runtimeMode": "plugin",
+    "root": "..",
+    "wakeflowRepoDir": ""
+  },
+  "roles": {
+    "controller": "WakeflowFixture",
+    "design": "Design",
+    "test": "Test"
+  },
+  "storage": {
+    "activeRoot": ".wakeflow-active",
+    "localRoot": ".wakeflow-local",
+    "ledgerRoot": "wakeflow-ledger"
+  },
+  "policy": {
+    "allowMissingRepos": true,
+    "disallowedTrackedPaths": [
+      ".DS_Store"
+    ],
+    "allowedRepositoryResiduePaths": [],
+    "runtimeProcessMatchers": [],
+    "runtimeProcessLabel": "configured"
+  },
+  "repositories": [
+    {
+      "windowName": "ProductWindow",
+      "path": "../ProductWorkspace",
+      "mode": "external",
+      "role": "Project repository; confirm scope and responsibility before enabling.",
+      "managedAgents": true
+    },
+    {
+      "windowName": "Design",
+      "path": "Design",
+      "mode": "internal",
+      "role": "Internal requirement design workspace",
+      "managedAgents": false
+    },
+    {
+      "windowName": "Test",
+      "path": "Test",
+      "mode": "internal",
+      "role": "Internal test coordination workspace",
+      "managedAgents": false
+    }
+  ],
+  "hosts": {}
+}

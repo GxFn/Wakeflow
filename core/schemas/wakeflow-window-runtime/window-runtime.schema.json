@@ -1,0 +1,588 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:window-runtime:projection:v1",
+  "title": "Wakeflow Window Runtime Projection",
+  "description": "Strict deterministic host-local projection derived from durable topology, window identity, and a privacy-safe configured-root observation. It is not identity authority and contains no host handle or send result.",
+  "$comment": "Cross-field equality, exact blocking-reason ordering, identity/ref binding, source-fingerprint equality, and projectionDigest verification are enforced by wakeflow-window-runtime-records.mjs; schema acceptance alone is never owner validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "programId",
+    "hostId",
+    "windowId",
+    "role",
+    "rootRef",
+    "configuredRoot",
+    "resolvedRoot",
+    "identity",
+    "dispatchEligibility",
+    "preflightStatus",
+    "blockingReasons",
+    "hostAvailability",
+    "sourceFingerprints",
+    "projectionDigest"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "wakeflow-window-runtime-projection"
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "programId": {
+      "$ref": "#/$defs/programId"
+    },
+    "hostId": {
+      "type": "string",
+      "enum": [
+        "codex",
+        "claude-code"
+      ]
+    },
+    "windowId": {
+      "$ref": "#/$defs/windowId"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "controller",
+        "design",
+        "test",
+        "product"
+      ]
+    },
+    "rootRef": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/programRootRef"
+        },
+        {
+          "$ref": "#/$defs/surfaceRootRef"
+        },
+        {
+          "$ref": "#/$defs/repositoryRootRef"
+        }
+      ]
+    },
+    "configuredRoot": {
+      "$ref": "#/$defs/configuredRoot"
+    },
+    "resolvedRoot": {
+      "$ref": "#/$defs/resolvedRoot"
+    },
+    "identity": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/unregisteredIdentity"
+        },
+        {
+          "$ref": "#/$defs/validIdentity"
+        }
+      ]
+    },
+    "dispatchEligibility": {
+      "type": "string",
+      "enum": [
+        "eligible",
+        "ineligible"
+      ]
+    },
+    "preflightStatus": {
+      "type": "string",
+      "enum": [
+        "ready",
+        "blocked"
+      ]
+    },
+    "blockingReasons": {
+      "type": "array",
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/blockingReason"
+      }
+    },
+    "hostAvailability": {
+      "$ref": "#/$defs/unobservedHostAvailability"
+    },
+    "sourceFingerprints": {
+      "$ref": "#/$defs/sourceFingerprints"
+    },
+    "projectionDigest": {
+      "$ref": "#/$defs/digest"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "controller"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "rootRef": {
+            "$ref": "#/$defs/programRootRef"
+          },
+          "configuredRoot": {
+            "const": "."
+          },
+          "dispatchEligibility": {
+            "const": "eligible"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "status": {
+                "const": "unregistered"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          }
+        },
+        "required": [
+          "identity"
+        ]
+      },
+      "then": {
+        "properties": {
+          "resolvedRoot": {
+            "properties": {
+              "status": {
+                "const": "unobserved"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "resolvedRoot": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "available",
+                  "missing"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "enum": [
+              "design",
+              "test"
+            ]
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "rootRef": {
+            "$ref": "#/$defs/surfaceRootRef"
+          },
+          "configuredRoot": {
+            "not": {
+              "const": "."
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "design"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "dispatchEligibility": {
+            "const": "ineligible"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "enum": [
+              "test",
+              "product"
+            ]
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "dispatchEligibility": {
+            "const": "eligible"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "product"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "rootRef": {
+            "$ref": "#/$defs/repositoryRootRef"
+          },
+          "configuredRoot": {
+            "not": {
+              "const": "."
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "status": {
+                "const": "valid"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          }
+        },
+        "required": [
+          "identity"
+        ]
+      },
+      "then": {
+        "properties": {
+          "sourceFingerprints": {
+            "required": [
+              "identityBindingDigest"
+            ]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "sourceFingerprints": {
+            "not": {
+              "required": [
+                "identityBindingDigest"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "preflightStatus": {
+            "const": "ready"
+          }
+        },
+        "required": [
+          "preflightStatus"
+        ]
+      },
+      "then": {
+        "properties": {
+          "resolvedRoot": {
+            "properties": {
+              "status": {
+                "const": "available"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "identity": {
+            "$ref": "#/$defs/validIdentity"
+          },
+          "blockingReasons": {
+            "maxItems": 0
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "blockingReasons": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "repositoryId": {
+      "type": "string",
+      "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "surfaceId": {
+      "type": "string",
+      "pattern": "^surface_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "bindingId": {
+      "type": "string",
+      "pattern": "^binding_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "programRootRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "programId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "program"
+        },
+        "programId": {
+          "$ref": "#/$defs/programId"
+        }
+      }
+    },
+    "surfaceRootRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "surfaceId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "support-surface"
+        },
+        "surfaceId": {
+          "$ref": "#/$defs/surfaceId"
+        }
+      }
+    },
+    "repositoryRootRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "repositoryId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "repository"
+        },
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        }
+      }
+    },
+    "configuredRoot": {
+      "type": "string",
+      "minLength": 1,
+      "allOf": [
+        {
+          "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+        }
+      ],
+      "pattern": "^(?![A-Za-z]:)(?:\\.|(?:\\.\\./)*(?!\\.{1,2}(?:/|$))[^/\\\\\\u0000-\\u001f\\u007f-\\u009f]+(?:/(?!\\.{1,2}(?:/|$))[^/\\\\\\u0000-\\u001f\\u007f-\\u009f]+)*)$",
+      "description": "Canonical portable configured placement. The single dot is reserved for the program root; all other values are non-absolute normalized relative placements. Runtime validation additionally rejects leading/trailing whitespace and Windows drive forms."
+    },
+    "resolvedRoot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "observationDigest"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "unobserved",
+            "available",
+            "missing"
+          ]
+        },
+        "observationDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "unregisteredIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "const": "unregistered"
+        }
+      }
+    },
+    "validIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "identityRef",
+        "bindingId",
+        "identityBindingDigest"
+      ],
+      "properties": {
+        "status": {
+          "const": "valid"
+        },
+        "identityRef": {
+          "type": "string",
+          "pattern": "^\\.wakeflow-local/runtime/hosts/(?:codex|claude-code)/identity/window-bindings/window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json$"
+        },
+        "bindingId": {
+          "$ref": "#/$defs/bindingId"
+        },
+        "identityBindingDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "blockingReason": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code",
+            "source"
+          ],
+          "properties": {
+            "code": {
+              "const": "identity-unregistered"
+            },
+            "source": {
+              "const": "identity"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code",
+            "source"
+          ],
+          "properties": {
+            "code": {
+              "const": "root-unavailable"
+            },
+            "source": {
+              "const": "root"
+            }
+          }
+        }
+      ]
+    },
+    "unobservedHostAvailability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "const": "unobserved"
+        }
+      }
+    },
+    "sourceFingerprints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "configDigest",
+        "topologyDigest",
+        "windowDigest",
+        "rootObservationDigest",
+        "identityInventoryDigest"
+      ],
+      "properties": {
+        "configDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "topologyDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "windowDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "rootObservationDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "identityInventoryDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "identityBindingDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    }
+  }
+}

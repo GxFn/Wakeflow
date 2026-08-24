@@ -58,9 +58,9 @@ Wakeflow provides the missing control layer:
 - **Review inputs before acceptance**: target backfill, logs, paths, and test
   summaries are inputs, not conclusions. Wakeflow checks structure and path
   locatability; the controller independently validates behavior before completing work.
-- **Local-first runtime**: real thread ids live only in the local thread
-  registry; window config is a derived sendability view, and active state stays
-  out of tracked source.
+- **Local-first runtime**: raw thread ids live only in typed host-local window
+  bindings; redacted window-runtime files are projections, and active state
+  stays out of tracked source.
 
 Wakeflow is not a command launcher with nicer names. It is a reusable workflow
 capability for keeping multi-window agent work legible, bounded, and resumable.
@@ -74,11 +74,11 @@ flowchart TD
   Controller <--> StateRoot["State root<br/>.wakeflow-active/..."]
   StateRoot --> Tasks["Task packages"]
   Tasks --> Delivery["Delivery envelopes"]
-  LocalRuntime[".wakeflow-local<br/>thread registry + derived window config"] -. "lookup" .-> Delivery
+  LocalRuntime[".wakeflow-local/runtime<br/>bindings + leases + transport"] -. "lookup" .-> Delivery
   Delivery --> Host["Codex host thread tools"]
   Host --> Targets["Repository / Design / Test windows"]
   Targets --> Repos["Responsibility roots"]
-  Targets --> Results["TargetResultEnvelope<br/>with declared review-input refs"]
+  Targets --> Results["strict TargetResult<br/>with typed evidence locators"]
   Results --> Controller
   Controller --> Ledger["wakeflow-ledger<br/>durable project records"]
 ```
@@ -141,24 +141,24 @@ Wakeflow on Codex is driven through MCP tools (no slash commands). Tell Codex wh
    ```text
    Use Wakeflow to initialize this workspace. Preview the plan first and wait for my confirmation.
    ```
-   Codex calls `wakeflow_initialize_workspace` (dry-run -> confirm -> apply), then creates each window with the host `create_thread` tool and registers the real thread ids. Already initialized? Re-init is refused on purpose — rebuild one stale window with `wakeflow_replace_windows`, or do an explicit reset.
+   Codex calls `wakeflow_maintain_workspace` with `action: "fresh-initialize"` (preview -> confirm the exact plan and digest -> apply), then creates each window with the host `create_thread` tool and registers the real thread ids. Already initialized? Use `reconfigure` for an intentional model change, `reconcile` for managed repair, or `wakeflow_replace_windows` for one stale binding.
 2. **Start work** — give the controller a demand, or ask Codex to dispatch the next eligible task.
 
 ### Tool cheat sheet (intent -> MCP tool)
 
 | You want to... | Tool |
 | --- | --- |
-| Set up a new workspace | `wakeflow_initialize_workspace` |
+| Set up or maintain a workspace | `wakeflow_maintain_workspace` (`fresh-initialize`, `reconfigure`, or `reconcile`) |
 | Rebuild a stale window | `wakeflow_replace_windows` |
 | See demands / eligible work / readiness | `wakeflow_status`, `wakeflow_next_work` |
 | Start a demand | `wakeflow_create_demand` -> `wakeflow_add_task` |
-| Open an explicitly authorized Pod | `wakeflow_pod_open` -> `wakeflow_pod_record event=materialization` / host create -> `wakeflow_pod_bind` |
-| Hand work to a window | `wakeflow_prepare_delivery` preview -> digest-matched `apply=true` -> host send -> `wakeflow_record_delivery` |
+| Open an explicitly authorized Pod | `wakeflow_pod_open` launch preview/apply -> record `creating` -> one host create -> finalize `wakeflow_pod_record operation=record-materialization` -> `wakeflow_pod_bind operation=creation-receipt` |
+| Hand work to a window | `wakeflow_prepare_delivery` target preview -> exact apply/claim -> host send -> `wakeflow_record_delivery` |
 | Record a target's result | `wakeflow_record_target_result` |
 | Review and decide | `wakeflow_review_pack` -> `wakeflow_reduce_results` -> `wakeflow_decide_review` -> `wakeflow_complete_demand` |
-| Preserve selected local artifacts | `wakeflow_storage_preserve` dry-run -> `apply=true` |
-| Hand a demand to the other host | `wakeflow_adopt_demand_host` |
-| Health-check / converge runtime | `wakeflow_verify` |
+| Preserve selected local artifacts | `wakeflow_storage_preserve` inspect/preview -> exact apply |
+| Import managed evidence | `wakeflow_record_evidence` preview -> exact apply |
+| Read-only strict health check | `wakeflow_verify operation=inspect` |
 
 ## Initialize A Workspace
 
@@ -170,7 +170,7 @@ MyWorkspace/
   AGENTS.md
   wakeflow.config.json
   .wakeflow-active/          # ignored active controller state
-  .wakeflow-local/           # ignored thread registry and derived runtime
+  .wakeflow-local/           # ignored audit + shared/host runtime
   wakeflow-ledger/            # durable project coordination records
   ProductRepo/
   CoreRepo/
@@ -187,34 +187,38 @@ Preview the plan first and wait for my confirmation before writing.
 
 The operating flow is:
 
-1. Codex calls `wakeflow_initialize_workspace` with `apply: false`.
-2. Wakeflow returns directory facts and an `agentSelectionProtocol`.
-3. Codex judges whether the workspace is clean or messy from those facts and
-   user context.
-4. For a clean workspace, Codex calls the tool again with explicit
-   `repositories` mappings for the intended work windows.
-5. For a messy workspace, Codex asks which directories are managed windows
-   before writing. It must not use a broad discovered-directory import.
-6. After user confirmation for a fresh workspace, Codex calls
-   `wakeflow_initialize_workspace` with `apply: true`.
-7. Codex creates the returned threads and calls `wakeflow_register_window` for
+1. Codex builds one explicit selection split into `program`, `topology`,
+   `storage`, `governance`, and `hosts`, with request-local `selectionKey`
+   links. Wakeflow allocates the durable typed IDs.
+2. Codex calls `wakeflow_maintain_workspace` with
+   `action: "fresh-initialize"`, `mode: "preview"`, and that closed selection.
+   Preview is read-only.
+3. Codex reviews the blockers, exact `confirmedActionPlan`, returned
+   `confirmedActionPlanDigest`, and `launchIntents`. Legacy or unclear ownership
+   stays blocked instead of being broadly imported.
+4. After user confirmation, Codex calls the same tool with `mode: "apply"`,
+   the exact confirmed plan, and its returned digest.
+5. Codex executes only the retained launch intents and calls
+   `wakeflow_register_window` for
    each real thread id, then resets each title to `displayTitle` so host
-   auto-title cannot persist. The tool updates the local routing registry and
-   derived window config without exposing the id. Wakeflow does not classify
+   auto-title cannot persist. Registration writes the typed host-local binding
+   and refreshes its redacted window-runtime projection. Wakeflow does not classify
    initialization replies or maintain a separate thread-readiness state.
 
-For an already initialized workspace, `wakeflow_initialize_workspace` is not a
-general refresh button. It may write only after the user explicitly requests a
-reset initialization; the apply call must set `resetInitialization: true`, pass
-explicit `repositories`, reconfirm Design/Test mode, and must not use
-`useDiscovered`. Heavy or stale windows use the replacement commands instead.
+An initialized v3 workspace is never refreshed by replaying fresh setup. Use
+`action: "reconfigure"` for an intentional complete desired-model change and
+`action: "reconcile"` to restore managed bytes or projections from current v3
+authority; both are preview-before-apply. Heavy or stale windows use the
+replacement command. Explicit legacy migration is available only through the
+exact artifact's unregistered `bin/wakeflow-bootstrap`, never normal MCP/CLI.
 
 Command responsibilities stay separate:
 
 | Need | Command | Responsibility |
 | --- | --- | --- |
-| First-time setup | `wakeflow_initialize_workspace` | Discover, confirm, write workspace config/docs/support surfaces, and return the full launch plan. |
-| Explicit reset setup | `wakeflow_initialize_workspace` with `resetInitialization: true` | Reconfirm work directories, clean stale managed window cards/runtime for removed windows, and rewrite setup surfaces. |
+| First-time setup | `wakeflow_maintain_workspace`, action `fresh-initialize` | Preview one explicit selection, then atomically apply the exact confirmed owner plan. |
+| Intentional model change | `wakeflow_maintain_workspace`, action `reconfigure` | Preview a complete desired v3 model and apply only the reviewed delta. |
+| Repair from current authority | `wakeflow_maintain_workspace`, action `reconcile` | Rebuild managed bytes/projections without changing the desired model. |
 | One heavy/stale window | `wakeflow_replace_windows` (pass `window`) | Return one replacement launch entry with a `wakeflow_register_window` call template; no workspace docs refresh. |
 | Several heavy/stale windows | `wakeflow_replace_windows` | Return only the requested replacement entries and registration call templates; no unrelated window rewrites. |
 
@@ -226,8 +230,8 @@ Wakeflow supports localized initialization. Pass `language: "zh"` for Chinese
 workspaces, `language: "en"` for English workspaces, or `language: "auto"` when
 there is no clear preference. Generated thread titles keep the window name at
 the front so the important repository name remains visible in narrow sidebars.
-New state-root progress documents and subsequent Unified Status renders also
-use the selected interface language.
+New and regenerated demand-progress projections also use the selected
+interface language.
 
 Controller and child windows can use Codex subagents to speed up bounded code
 search, log triage, test localization, and input summaries. Subagent output
@@ -243,10 +247,10 @@ boundary:
 | --- | --- |
 | `AGENTS.md` | Parent controller gates and durable boundaries. |
 | Child `AGENTS.md` access cards | Per-window responsibility and read paths. |
-| `wakeflow.config.json` | Managed windows, repository paths, roles, and default language. |
-| `.wakeflow-active/` | Active state roots, current indexes, progress docs, TODO projections, intake, and test cards. |
-| `.wakeflow-local/` | Thread registry, direct-thread runtime, host-scoped Pod operation/binding receipts, local overrides, and derived window config. |
-| `wakeflow-ledger/` | Long-term project coordination records and archives. |
+| `wakeflow.config.json` | Typed program identity plus topology, storage, governance, and host policy. |
+| `.wakeflow-active/` | Current demand/business authority, immutable artifacts/events, TODO authority, and progress projections. |
+| `.wakeflow-local/` | Typed audit holds plus shared/host runtime: bindings, leases, transport, Pod evidence, keep-live data, projections, and mutation journals. |
+| `wakeflow-ledger/` | Durable program indexes and portable whole-demand BusinessArchives. |
 | `Design/` | Internal requirement-design workspace when no external Design repository is mapped. |
 | `Test/` | Internal test coordination workspace when no external Test repository is mapped. |
 
@@ -262,23 +266,26 @@ The normal Wakeflow loop is deliberately small:
 1. A user goal, Design handoff, or controller intake creates a demand.
    Design is the default author for substantial new product behavior, but the
    controller may create bounded or already-documented work directly. Both
-   routes use the same proportional `demandAuthority`; before implementation it
-   is frozen once as `demand-authority.json`. A typed draft may exist before
-   that point, but cannot carry an implementation package. `Auto Claim` only
-   controls unattended claiming and never substitutes for missing anchors.
+   routes use the same proportional `demandAuthority`. Whenever the demand will
+   need any TaskPackage, the controller includes it in the initial
+   `wakeflow_create_demand` publication as `demand-authority.json`; public v3
+   cannot add it later. A no-authority demand therefore cannot later acquire a
+   TaskPackage through the public surface. `Auto Claim` only controls unattended
+   claiming and never substitutes for missing anchors.
 2. The controller defines completion, boundaries, phase order, and the first
    blocker.
 3. A state root records the demand and creates eligible task packages.
 4. The controller prepares compact delivery envelopes for the target windows.
-5. Target windows read their own rules, execute only their assigned package, and
-   return target result envelopes with target-authored review inputs.
+5. Target windows read their own rules, execute only their assigned package,
+   and return strict TargetResult records with target-authored review inputs.
 6. The controller inspects those inputs, independently validates the relevant behavior, records a decision, and either creates
    the next eligible package, stops for user judgment, marks the demand blocked,
    or completes the demand.
    Ordinary rework redispatches the same task. Mainline redesign preserves the rejected
    task, then the controller creates a new full-context implementation task in
    the product responsibility window with
-   `replacesTargetTaskId` after the Design handoff; accepting the replacement
+   exact `replacesTargetTask` task/package tuple after the Design handoff;
+   accepting the replacement
    explicitly supersedes the old task and package.
    The current implementation freezes exactly one Design request/handoff generation per
    Pod; that sole request may be `initial-design`, `supplement`, or `redesign`.
@@ -314,23 +321,24 @@ per-repository limit.
 - One Pod owns independent `Controller__<pod>`, `Design__<pod>`,
   `Test__<pod>`, and one product thread per selected repository. Within the
   demand, each repository still receives one combined package at a time.
-- `wakeflow_pod_open mode=create` only records host-neutral launch operations.
+- `wakeflow_pod_open operation=launch-preview/launch-apply` records the
+  host-neutral initial launch intents under the strict creation gate.
   It creates no Git branch/worktree, Codex thread, or dynamic repository
-  overlay. For an already-bound Pod, `mode=resume` is read-only: it verifies
-  the manifest/binding/registry/cwd/Git common-dir identity, reports current
+  overlay. For an already-bound Pod, `operation=inspect-materialization` is read-only: it verifies
+  the manifest/binding/cwd/Git common-dir identity, reports current
   HEAD/dirty as observations, and never creates or rebinds a resource.
 - Codex creates Controller/Design/Test as three distinct local control-project
   threads. Each product uses the exact saved repository project with
   `environment.type=worktree`; missing project identity fails closed and never
   falls back to the parent workspace or `local`.
 - Before each Codex create call, record `creating` with
-  `wakeflow_pod_record event=materialization`. If `create_thread` returns a temporary
+  `wakeflow_pod_record operation=record-materialization`. If `create_thread` returns a temporary
   `clientThreadId`, record `pending`, then call bounded
   `list_threads(limit=50)` and match the exact launch-correlation marker in
   `preview`; host-supported `query` is optional, not required. Zero or multiple
   matches cannot finalize, and create must not be called again. Only the
-  uniquely matched final `threadId` may enter the registry; the temporary id is
-  retained only as a digest.
+  uniquely matched final `threadId` may enter the typed host-local binding; the
+  temporary id is retained only as a digest.
 - Register only the final real `threadId`, then verify the entry-sync cwd,
   Git common dir, base HEAD, and `mainCheckout=false` receipt with
   `wakeflow_pod_bind`. All three control bindings produce `control-ready`; the
@@ -338,22 +346,24 @@ per-repository limit.
 - The Pod's single Design generation stays between `Controller__<pod>` and
   `Design__<pod>`.
   Freeze the controller request with
-  `wakeflow_pod_plan action=design-request`, then record its exact
-  `PodDesignHandoffEnvelope` with `wakeflow_pod_record event=design-handoff`; neither
+  `wakeflow_pod_plan operation=design-request`, then record its exact
+  `PodDesignHandoffEnvelope` with `wakeflow_pod_record operation=design-handoff`; neither
   step creates a second global TODO. The current implementation does not persist a second
   Pod Design generation, so later supplement/redesign is an explicit
   capability blocker.
-- Before Pod Test dispatch, run `wakeflow_pod_plan action=test-access` and
+- Before Pod Test dispatch, run `wakeflow_pod_plan operation=test-access-plan` and
   record the independent Test session's exact probe through
-  `wakeflow_pod_record event=test-access`. Only `validated` +
+  `wakeflow_pod_record operation=test-access-receipt`. Only `validated` +
   `direct-multi-root` coverage of every active product binding opens dispatch.
   An unsupported host remains blocked: there is no main-checkout, product-
   window, or unverified per-repository-executor fallback.
-- `wakeflow_pod_plan action=close` emits a host-close plan. Record each
-  archive/Handoff result with `wakeflow_pod_record event=close-receipt`;
-  logical close never claims that Codex physically removed a worktree.
-  `wakeflow_view scope=pods` reads canonical state and host-scoped receipts,
-  never guessed paths.
+- `wakeflow_pod_plan operation=close-intent` emits a host-close intent. Pass an
+  exact archive/handoff result to `wakeflow_pod_record operation=close-observe`.
+  Codex archival remains `manual-host-gate`, so it cannot create the
+  machine-verified `close-receipt`, close the logical binding, archive the
+  demand, or prune transport. Dedicated Pod inspect operations read canonical
+  state and host-scoped observations, never guessed paths; physical worktree
+  cleanup remains a separate host fact.
 
 ## Automation Semantics
 
@@ -361,10 +371,10 @@ Wakeflow automation is direct-thread delivery plus explicit result return.
 
 Core rules:
 
-- Real thread ids live only in
-  `.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/`.
-- Window config is derived from `wakeflow.config.json` plus thread-registry
-  presence; it is not a second thread-id or window-semantics authority.
+- Raw thread ids live only in typed records under
+  `.wakeflow-local/runtime/hosts/codex/identity/window-bindings/`.
+- Window-runtime files under `projections/` are redacted derived views; they
+  are not identity, handle, or topology authority.
 - Delivery prompts remain compact and human-readable.
 - The host sends prompts with Codex thread tools; Wakeflow records the send and
   readback evidence.
@@ -385,18 +395,13 @@ Core rules:
   the turn stops without polling or automatic resend.
 - Keep-live support is runtime assistance only. It is not task logic, transport
   authority, or acceptance evidence.
-- Raw `wakeflow-state init` is host-neutral and writes `controllerHost: null`.
-  The public `wakeflow_create_demand` wrapper immediately adopts the new root
-  for the calling host; an independently imported raw root remains unclaimed
-  until its first driving command.
-- After a demand is owned by one host, the other host fails closed on
-  controller mutations and dispatch preparation unless ownership is explicitly
-  transferred with `--adopt-host`.
-- `activeDemands` is observation only. It does not calculate a numeric
+- Demand/business authority is host-neutral. The exact current binding and
+  strict group/packet/envelope chain choose the host; callers cannot adopt a
+  demand or override internal paths.
+- Shared typed window leases serialize target effects across hosts, and
+  historical envelopes/results cannot release a successor lease.
+- Active-demand counts are observation only. They do not calculate a numeric
   admission ceiling or authorize Pod placement.
-- `wakeflow_status` exposes demand ownership under `dualHost.demandOwnership`
-  so mixed-host controllers can see which platform owns active work before
-  acting.
 
 Automation stops on final completion, hard gates, user stop, no eligible work,
 missing review inputs, blocked state, or any condition that requires controller or
@@ -414,14 +419,14 @@ Primary tool groups:
 
 | Need | MCP tools |
 | --- | --- |
-| Setup and window registration | `wakeflow_initialize_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
+| Workspace maintenance and window identity | `wakeflow_maintain_workspace`, `wakeflow_replace_windows`, `wakeflow_register_window` |
 | Demand and task state | `wakeflow_status`, `wakeflow_create_demand`, `wakeflow_claim_next`, `wakeflow_add_task`, `wakeflow_continue_demand`, `wakeflow_recover_state_transition`, `wakeflow_cancel_demand` |
-| Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_bind`, `wakeflow_pod_plan` (design-request/test-access/close), `wakeflow_pod_record` (materialization/design-handoff/test-access/close-receipt) |
+| Candidate scan and explicit Pod lifecycle | `wakeflow_next_work`, `wakeflow_pod_open`, `wakeflow_pod_bind`, `wakeflow_pod_plan` (design-request, test-access-plan/inspect, close-intent/inspect), `wakeflow_pod_record` (record-materialization, design-handoff, test-access-observe/receipt, close-observe/receipt); materialized Codex close remains manual-host-gated |
 | Delivery and returns | `wakeflow_prepare_delivery`, `wakeflow_record_delivery` |
 | Results and review | `wakeflow_record_target_result`, `wakeflow_review_pack`, `wakeflow_reduce_results`, `wakeflow_decide_review`, `wakeflow_complete_demand` |
 | Design and Test intake | `wakeflow_deliver`, `wakeflow_intake_test_card` |
-| Archive, views, maintenance, and verification | `wakeflow_archive` (target demand/todo/docs/sanitize-demand), `wakeflow_view` (task-ledger/window/focus/trace/storage/progress/pods), `wakeflow_storage_preserve`, `wakeflow_prune_runtime`, `wakeflow_verify` |
-| Host ownership and locks | `wakeflow_adopt_demand_host`, `wakeflow_release_window_lock` |
+| Evidence, archive, views, storage, and verification | `wakeflow_record_evidence`, `wakeflow_archive`, `wakeflow_view`, `wakeflow_storage_preserve`, `wakeflow_prune_runtime`, `wakeflow_verify` |
+| Exact target lease release | `wakeflow_release_window_lock` |
 
 Public MCP tools are for outer agent workflows. Target closeout is deliberately
 split: record a target result, review readiness, prepare a controller-return
@@ -429,25 +434,22 @@ envelope when policy allows, send with the Codex host thread tool, and record
 delivery facts. Controller review stays split as review pack, result
 reduction, and explicit decision; result reduction only creates a review
 candidate and is not acceptance. Do not collapse those steps into a single
-target-window MCP tool. Internal steps such as archive summary refresh internals,
-keep-live state, and script backend execution stay inside Wakeflow JS/runtime
-scripts and skills. Public archive MCP tools wrap controller-approved demand,
-TODO, and workspace-document archive flows. `wakeflow_archive`
-`target=sanitize-demand` only replaces an already archived demand with a
-privacy-clean copy and preserves the original locally.
-`wakeflow_storage_preserve` is the dry-run-first public route
-to the existing local artifact-preservation backend. With archive redaction,
-opaque artifacts remain byte-for-byte in the local preserved original while the
-portable archive carries a safe placeholder manifest, unless clean opaque byte
-inclusion was explicitly authorized with `allowOpaque`. A real host id
-inside a filename or directory name preserves that highest sensitive
-file/subtree locally and represents it once at a `redacted-id-N` portable path;
-matching text references use the same alias, and path collisions still fail
-closed. None of these tools makes acceptance decisions or sends host messages.
+target-window MCP tool. Internal keep-live state and backend execution stay
+inside Wakeflow runtime owners and skills. `wakeflow_archive` has only
+`preview/apply/inspect/recover`: it creates one portable whole-demand
+`BusinessArchive` after lifecycle, Pod-close, transport, and privacy gates
+close. The old TODO/docs/sanitize subroutes are not public v3 compatibility
+aliases. `wakeflow_storage_preserve` separately owns typed machine-local audit
+holds through inspect/preview/apply/recover; preserved bytes never become
+business-state authority. None of these tools makes acceptance decisions or
+sends host messages.
 
-Wakeflow declares MCP tool annotations for every public tool: read-only tools
-are marked read-only, write tools are local, non-destructive, and closed-world.
-Codex approval policy is still controlled by the user's Codex config. For a
+Wakeflow declares MCP tool annotations for every public tool. Read-only and
+open-world hints match the public boundary, while `destructiveHint` follows the
+strongest operation a tool can perform (maintenance, replacement, release,
+archive, preservation, Pod decommission, and prune are destructive-capable).
+Annotations are client hints, not authorization. Codex approval policy is
+still controlled by the user's Codex config. For a
 trusted local Wakeflow installation, the matching Codex server policy is:
 
 ```toml
@@ -463,9 +465,9 @@ Wakeflow keeps source, active runtime, and durable records separate:
 | --- | --- |
 | `skills/` | Reusable operating instructions installed with the plugin. |
 | `scripts/` | Runtime implementation and validation scripts packaged by the plugin. |
-| `templates/wakeflow-template-bundle.json` | Bundled starter state, Design/Test, and ledger skeletons expanded during setup. |
+| `templates/wakeflow-asset-bundle.json` | Generated carrier for the two canonical localized demand-progress assets authored under `core/template-sources/`. |
 | `.wakeflow-active/` | Current active work in a target workspace; ignored by Git. |
-| `.wakeflow-local/` | Machine-local thread registry, Pod operation/binding receipts, derived runtime views, and local state; ignored by Git. |
+| `.wakeflow-local/` | Machine-local audit preservation plus shared/host runtime authority and projections: bindings, leases, transport, Pod evidence, keep-live state, and maintenance journals; ignored by Git. |
 | `wakeflow-ledger/` | Project-specific durable records outside reusable Wakeflow source. |
 
 The source repository tracks reusable Wakeflow capability. Product code,
@@ -475,28 +477,18 @@ artifacts do not belong in Wakeflow source.
 ## Dual-Host Workspaces
 
 A workspace may run the Codex and Claude Code Wakeflow editions side by side.
-Shared business state (`.wakeflow-active/`, `wakeflow-ledger/`, and the
-dispatch packets, dispatch groups, delivery envelopes, delivery runs, target
-results, and shared `locks/` under `.wakeflow-local/wakeflow-delivery/`)
-stays host-neutral. Shared work leases enforce one in-flight target delivery
-per window across hosts; controller-return paste/readback is serialized
-without taking that target work lease.
+Shared business state stays host-neutral in `.wakeflow-active/` and
+`wakeflow-ledger/`; shared coordination and transport live under
+`.wakeflow-local/runtime/shared/{coordination,transport}/`. Shared typed leases
+serialize target delivery across hosts.
 
-Codex runtime remains host-scoped under
-`.wakeflow-local/wakeflow-delivery/hosts/codex/{thread-registry,window-config,keep-live}/`.
-Claude Code stores its own runtime under
-`.wakeflow-local/wakeflow-delivery/hosts/claude-code/{thread-registry,window-config,window-host,keep-live}/`.
-Pod manifests, operations, bindings, Test-access plans/receipts, and close
-receipts live under the corresponding host-scoped runtime.
-Records in the legacy `.wakeflow-local/wakeflow-delivery/thread-registry/`
-location are still read as a fallback; new registrations write the host-scoped
-path and `wakeflow_verify` reports the migration state.
+Host runtime remains separated under
+`.wakeflow-local/runtime/hosts/<host>/{identity,projections,evidence,operations}/`.
+Normal v3 reads do not fall back to legacy registry or delivery paths.
 
-`AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code) may coexist at the
-workspace and child roots. Each demand still has exactly one controller host:
-public creation adopts the calling host, raw state init remains neutral until
-first drive, non-owning hosts fail closed, and `--adopt-host` is the explicit
-transfer mechanism.
+`AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code) may coexist at workspace and
+child roots. Each physical operation uses the exact current binding and strict
+transport ancestry; there is no demand-host adoption alias.
 
 ## Marketplace Release
 
@@ -548,7 +540,8 @@ Common source areas:
 | `mcp/server.cjs` | Standalone MCP server entrypoint with no `node_modules` dependency. |
 | `scripts/` | Setup, state, delivery, intake, archive, validation, and CLI runtime shipped with the plugin. |
 | `skills/` | Controller, target protocol, target craft, and governance manuals shipped with the plugin. |
-| `templates/wakeflow-template-bundle.json` | Installed workspace starter documents and support surfaces, bundled for marketplace scan size. |
+| `../../core/template-sources/` | Canonical authoring source for the two localized demand-progress projection assets. |
+| `templates/wakeflow-asset-bundle.json` | Deterministically generated install carrier for those templates; never hand-edited. |
 | `assets/` | Marketplace and plugin presentation assets. |
 | `../../test/` | Development-only regression tests kept outside the marketplace scan surface. |
 | `../../docs/` | Development planning and architecture notes kept outside the plugin artifact. |
@@ -571,8 +564,8 @@ skills rather than treating raw scripts as their operator interface.
    commits, and review inputs.
 5. **Automation moves work, not authority**: direct-thread delivery proves that
    a prompt was sent, not that the result is complete.
-6. **Local runtime stays local**: real thread ids stay only in the local thread
-   registry, and active runtime state never enters tracked documentation.
+6. **Local runtime stays local**: real thread ids stay only in typed host-local
+   bindings, and active runtime state never enters tracked documentation.
 7. **Fresh support windows by default**: Design and Test are created as clear
    Wakeflow support surfaces unless the user explicitly maps existing ones.
 

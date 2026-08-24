@@ -1,106 +1,105 @@
-# Direct Thread Window Config Reference
+# Window Identity And Direct-Session Reference
 
 ## Purpose
 
-Direct-thread delivery needs a local mapping from logical Wakeflow window names
-to real thread ids (each thread id is a Claude Code session id). That mapping is
-local runtime state, not tracked project documentation.
+Claude transport needs one host-local mapping from a stable typed `windowId`
+to the real Claude Code session handle and its verified host locator. The
+mapping is runtime identity, not tracked project documentation and not part of
+the transport packet.
 
-## Storage
+## Identity Authority
 
-Store real thread ids only in the host-scoped local thread registry under
-`.wakeflow-local/wakeflow-delivery/hosts/claude-code/thread-registry/` (the
-Codex plugin keeps its twin under
-`.wakeflow-local/wakeflow-delivery/hosts/codex/thread-registry/`). Wakeflow
-setup or host-controlled tooling should pass each final real session id to
-`wakeflow_register_window`; agents must not hand-write runtime files. Wakeflow
-records the host routing identity but does not classify initialization readback
-or maintain a separate readiness state. The tool updates the host-local
-registry and derived window config together and
-redacts the real id from its output. A
-thread id is the window's Claude Code session id, generated at launch and
-stable across resumes; it is registered once.
+`wakeflow_register_window` with `operation: "register"` is the only normal
+writer after a v3 Claude host owner has created a session. It records the raw
+handle only in the typed binding under
+`.wakeflow-local/runtime/hosts/claude-code/identity/window-bindings/<windowId>.json`
+and returns a redacted result. Agents and legacy helpers never hand-write that
+file.
 
-The host helper `launch-window` also stores a window-host binding at
-`.wakeflow-local/wakeflow-delivery/hosts/claude-code/window-host/<window>.json`
-(the tmux window mapping for that Wakeflow window). The binding is host
-transport runtime only; it is not a thread-id authority and not a second
-window-semantics store.
+`wakeflow_replace_windows` owns inspection, replacement intent, and exact
+decommission through its `inspect`, `replace`, and `decommission` operations.
+Replacement does not mutate unrelated bindings. Claude closure becomes
+machine-verifiable only after the exact close operation and an absence probe
+both succeed; unknown evidence stays blocked.
 
-Never write real thread ids to:
+Never write a real session handle or locator to tracked Markdown, prompts,
+target result text, archive records, examples, or fixtures. Never register a
+placeholder such as `current-session`, `unknown`, or `<session-id>`.
 
-- tracked Markdown;
-- prompts;
-- GitHub;
-- target result text;
-- archive records;
-- examples;
-- fixtures.
+## Runtime Projection And Locator
 
-Do not register placeholders such as `current-thread`, `unknown`, or
-`<thread-id>`.
+`.wakeflow-local/runtime/hosts/claude-code/projections/window-runtime/<windowId>.json`
+is a redacted, regenerable projection of strict config plus the current typed
+binding. It may describe role, repository responsibility, delivery eligibility,
+and binding status. It never contains the raw session handle and never becomes
+a second identity or config authority.
 
-For a Pod launch, journal the exact launch correlation with
-`wakeflow_pod_record event=materialization`. The Claude helper returns the final
-session id synchronously; it has no Codex `clientThreadId` pending state and no
-temporary request id belongs in the registry.
+Live tmux/session facts belong to the Claude host locator/operation owner under
+`.wakeflow-local/runtime/hosts/claude-code/operations/`. A locator is evidence
+for a host effect, not an alternative binding. Route launch through the current
+v3 host facade's exact `launch-window` command. If the host effect or receipt
+cannot be established, report the host-neutral intent and stop; never write a
+retired `window-host` record to simulate activation.
 
-## Registry Record Shape
+## Coordination And Transport
 
-Thread-registry records should contain only:
+Target effects are serialized by the exact typed lease at
+`.wakeflow-local/runtime/shared/coordination/window-leases/<windowId>.json`.
+The lease is bound to the current binding, demand, task, and delivery tuple.
+Older deliveries and historical results cannot release a successor lease.
+Controller-return delivery takes no target work lease.
 
-- logical window name;
-- real thread id;
-- opaque binding id when the window belongs to a Pod;
-- registration / verification timestamps.
-
-Do not store window role, display title, cwd, responsibility root, dispatchable
-state, or delivery policy in the registry.
-
-Pod cwd/Git facts live separately under
-`hosts/claude-code/pod-bindings/<pod-id>/`, keyed by launch correlation and
-binding id. Product dispatch reads that verified receipt; derived
-`window-config`, `window-host`, and the logical window suffix are never a Pod
-cwd authority. Pod Test dispatch also requires the matching validated
-`direct-multi-root` access receipt; a binding alone does not prove Test can
-read every product worktree.
-
-## Derived Window Config
-
-`window-config` files are derived runtime views. They are rebuilt from
-`wakeflow.config.json`, current launch / replacement inputs, and whether a
-thread-registry record exists. They may describe:
-
-- repository path and responsibility;
-- delivery role, such as controller, target, Design, or Test;
-- whether the window may receive delivery;
-- a local registry-file reference;
-- delivery/readback requirements.
-
-They must not contain real thread ids and must not become a second authority for
-window semantics.
+Current transport records live only under
+`.wakeflow-local/runtime/shared/transport/demands/<demandId>/`:
+`groups/`, `packets/`, `envelopes/`, and `runs/`. TargetResult authority remains
+in the active demand state, not in another local result store. Selection follows
+the exact current state/binding/envelope lineage; never choose by mtime or a
+semantic window name.
 
 ## Send Policy
 
-The delivery envelope stores `targetWindow`, `stateRoot`, `dispatchGroup`, and
-the compact prompt. The agent performs the real send with the tmux host helper and
-records it with the public MCP tool `wakeflow_record_delivery` — see
-[references/wakeflow-delivery.md](wakeflow-delivery.md) (Send Boundary) for the helper
-command, the cross-host target work lease, fail-closed concurrent target
-delivery, and recovery/relaunch.
+Target delivery is a closed sequence:
 
-Transport-specific: if the lock is held or the window-host binding is missing, fail
-closed and return to controller judgment. Do not create a hidden schedule, heartbeat,
-or fallback delivery route.
+1. `wakeflow_prepare_delivery operation=target-preview` performs a zero-write
+   plan.
+2. `operation=target-apply` freezes the exact group, packet, and envelope.
+3. `operation=target-claim` acquires the exact current lease immediately before
+   the host effect.
+4. The v3 Claude transport adapter holds its stable-window operation mutex
+   across preflight, physical paste, and bounded readback.
+5. `wakeflow_record_delivery operation=target-outcome` records the observed
+   outcome; it is not the host-effect fence.
+
+Accepted or ambiguous sends and accepted sends with pending/unavailable
+readback are never resent automatically. Rejected-before-send needs explicit
+`operation=target-rearm`; no hidden schedule, heartbeat, or fallback route may
+invent another attempt.
+
+## Pod Identity
+
+Pod first materialization uses
+`wakeflow_pod_open operation=launch-preview/launch-apply` and records launch
+facts with `wakeflow_pod_record operation=record-materialization`. Register
+only the final real session handle, then finish with
+`wakeflow_pod_bind operation=creation-receipt` using the exact cwd/Git receipt.
+
+Existing Pod materialization is inspected with
+`wakeflow_pod_open operation=inspect-materialization`. It never discovers or
+creates a replacement and never falls back to mainline. Pod Test additionally
+requires the exact validated `test-access-receipt` covering every active
+product binding.
 
 ## Controller Return
 
-Controller return uses the dispatch group's stored `controllerWindow`, not a
-global default controller. Mainline has its controller; each explicitly
-authorized Pod has an independent `Controller__<pod>` that is the sole
-acceptance authority for that demand. The controller is itself a tmux-resident
-window, so the return uses envelope-aware `deliver --delivery-file`; the controller window takes
-NO target work lease (returns queue naturally in its input box, and concurrent
-pastes are serialized by the controller paste mutex). The visible return
-prompt follows the controller-return prompt shape in
-[references/wakeflow-delivery.md](wakeflow-delivery.md) (Prompt Rules).
+Controller return uses the dispatch group's stamped `controllerWindowId` and
+current typed binding. Plan/apply/pre-send are the
+`controller-preview/controller-apply/controller-pre-send` operations; the
+host effect remains separate and its fact is recorded with
+`wakeflow_record_delivery operation=controller-outcome`. An accepted,
+ambiguous, or sent-unconfirmed current result set is deduplicated and must not
+be sent again.
+
+Legacy `.wakeflow-local/wakeflow-delivery/**` thread-registry, window-config,
+window-host, lock, and result files are explicit-migration input only. Normal
+v3 agents and the v3 host adapter neither read them as authority nor write
+them.

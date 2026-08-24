@@ -1,184 +1,76 @@
-import { codexPodEntryExtras } from "./wakeflow-codex-pod-host.mjs";
-
 /**
- * Wakeflow host profile: the single host-coupling surface for this plugin artifact.
+ * Codex 插件的宿主画像。
  *
- * Every Wakeflow plugin artifact (Codex, Claude Code, ...) ships its own copy of
- * this module with the same exported shape. Core runtime files are host-neutral:
- * they keep Wakeflow's internal machine vocabulary ("thread" = a registered
- * window conversation handle, on-disk field names, registry paths) identical
- * across hosts, and read everything host-visible from this profile instead:
+ * 职责导航：
+ * 1. 向共享核心声明 Codex 的协议身份、运行目录与能力现状。
+ * 2. 登记共享初始化所需的原生建窗工具和窗口句柄合同。
+ * 3. 登记验证器与宿主 adapter loader 消费的插件产物路径。
+ * 4. 不实现宿主动作，也不保存 workspace、窗口或迁移运行状态。
  *
- * - hostId / hostName / decisionOwner: host identity used in payloads and text.
- * - memoryFile / memoryFileLabel: per-window operating rules file (AGENTS.md / CLAUDE.md).
- * - pluginManifestDir / pluginManifestPath: installed plugin manifest location.
- * - kinds: host-branded on-disk record kinds (existing workspaces depend on these).
- * - closedLoopContractName: contract label used in script help text.
- * - hostTools: host-side window tools referenced by launch plans and delivery guidance.
- * - handleId: placeholder rejection set and human description for real window ids.
- * - keepLiveEnv: environment variable names for keep-live runtime assistance.
- * - workspaceResidueChecks: host-specific residue checks for target workspaces.
- * - texts: human-facing strings embedded in generated documents and prompts.
- * - launch: window launch plan flags, host workflow steps, and title-reset shape.
- * - artifact: plugin artifact layout facts consumed by wakeflow-validate.
- *
- * Contract rule: core files may interpolate these values but must not branch on
- * hostId. Anything that needs structurally different behavior per host belongs
- * in this module (or in wakeflow-host-send-adapter.mjs for delivery transport).
+ * 共享核心可以读取这些值，但不得通过 hostId 分支重建宿主行为。
  */
 
-export const hostProfile = {
+// 画像是进程级静态事实；递归冻结阻止调用者改写嵌套能力或产物路径。
+function deepFreeze(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
+}
+
+export const hostProfile = deepFreeze({
+  // 协议身份与运行目录分别声明，避免共享代码隐式耦合两套词汇。
   hostId: "codex",
   hostName: "Codex",
-  decisionOwner: "codex-agent",
   runtime: {
     hostDirName: "codex",
-    legacyRegistryFallback: true,
   },
-  fleet: {
-    // Codex has no session helper: wakeflow-pod does the host-neutral work
-    // (worktrees, overlay, ledger, registry hygiene) and the agent realizes
-    // the window plan itself — one thread per entry, cwd = the entry worktree.
-    transport: "agent-tools",
+  fleet: { transport: "agent-tools" },
+
+  // capability 是宿主中立的适用性合同；物理实现继续留在 Codex owner 中。
+  capabilities: {
+    identity: { applicable: true, realization: "current" },
+    pod: { applicable: true, realization: "current" },
+    keepLive: { applicable: true, realization: "runtime-probed" },
+    locator: { applicable: false, realization: "not-applicable" },
+    settings: {
+      applicable: false,
+      realization: "not-applicable",
+      paths: { portable: null, local: null },
+    },
+    assets: {
+      applicable: false,
+      realization: "not-applicable",
+      statuslineFileName: null,
+    },
+    activity: { applicable: false, realization: "not-applicable" },
+    temp: { applicable: false, realization: "not-applicable" },
+    close: { applicable: true, realization: "manual-gate" },
+    revoke: { applicable: true, realization: "manual-gate" },
+    activation: { applicable: true, realization: "runtime-probed" },
   },
+
+  // 共享初始化当前只消费 createWindow；其他宿主动作不通过画像间接调度。
   memoryFile: "AGENTS.md",
-  memoryFileLabel: "AGENTS",
-  pluginManifestDir: ".codex-plugin",
   pluginManifestPath: ".codex-plugin/plugin.json",
-  closedLoopContractName: "CodexAutomationClosedLoop",
-  kinds: {
-    windowRegistration: "CodexWindowThreadRegistration",
-    windowDispatchConfig: "CodexSubwindowDispatchConfig",
-    automationLoopStop: "CodexAutomationLoopStop",
-  },
   hostTools: {
     createWindow: "create_thread",
-    retitleWindow: "set_thread_title",
-    sendToWindow: "send_message_to_thread",
   },
+
+  // handleId 为窗口绑定提供确定性拒绝和形状校验，不保存任何真实 thread ID。
   handleId: {
+    kind: "codex-thread",
     placeholders: ["current-codex-thread", "current thread", "<thread id>", "unknown", ""],
-    realIdRequirement: "a real Codex thread id",
-    launchResultField: "create_thread.threadId",
-    launchResultPlaceholder: "<create_thread.threadId>",
-    // P1-0 redaction guard: real Codex thread ids are UUID-shaped. Declared per edition
-    // because host-profile is host-local and not byte-synced (check:core cannot cross-check).
     idShape: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
   },
-  keepLiveEnv: {
-    command: "CODEX_AUTOMATION_KEEP_LIVE_COMMAND",
-    argsJson: "CODEX_AUTOMATION_KEEP_LIVE_ARGS_JSON",
-    disable: "CODEX_AUTOMATION_KEEP_LIVE",
-  },
-  workspaceResidueChecks: [
-    {
-      relPath: ".agents/skills",
-      kind: "codex-project-skill-projection",
-      message: "Codex project skill projections require explicit current-plan authorization.",
-    },
-  ],
-  texts: {
-    registeredHandle: (windowName) => `Registered Codex thread for ${windowName}.`,
-    subagentAssist: {
-      zh: "可把代码搜索、日志归因、测试定位、输入汇总等窄任务交给 Codex 子 agent 并行辅助；子 agent 只提供审查输入和建议，不改变窗口职责、验收、派发或状态机写入边界。",
-      en: "Use Codex subagents for narrow parallel assistance such as code search, log triage, test localization, or input summarization when useful. Subagents only provide review inputs and recommendations; they do not change window responsibility, acceptance, dispatch, or state-machine write boundaries.",
-    },
-    skillAssistanceLine:
-      "- Codex subagents are recommended for bounded parallel assistance such as code search, log triage, test localization, and input summarization. Treat subagent output as review input or advice only; it must not accept work, dispatch another window, write controller state, or expand repository boundaries.",
-    rootGeneratedFromBanner: (wakeflowRel) =>
-      `> This file is generated from \`${wakeflowRel}/AGENTS.md\` and is the parent workspace Codex entrypoint. Do not maintain it by hand long term. After changing the source file, run \`cd ${wakeflowRel} && node scripts/wakeflow-setup.mjs sync-root-agents --write\` to refresh it. Script commands default to \`${wakeflowRel}/\` before execution.`,
-    rootPluginGeneratedBanner:
-      "> This file is generated by the installed Wakeflow plugin and is the parent workspace Codex entrypoint. Do not maintain it by hand long term. Refresh it with the Wakeflow MCP sync/initialize tools after changing plugin source rules.",
-    rootPluginUsageBanner:
-      "> Wakeflow is installed as a Codex plugin for this workspace. Use Wakeflow MCP tools for setup, status, state roots, delivery, review, archive, next-work scans, and verification. Do not call installed runtime scripts directly or infer their Node parameters; if a required Wakeflow MCP tool is unavailable, stop and report that the Wakeflow plugin surface must be reloaded or reinstalled. After a local reinstall or update, fully restart the Codex App before resuming; creating another task in the same App process may still inherit the stale or missing MCP surface.\n\n",
-    initializeApplyNextAction:
-      "Create the Codex windows in windowLaunchPlan, register each real threadId, then perform the final set_thread_title reset before dispatching work.",
-  },
-  launch: {
-    // Default Codex reasoning effort for newly created Wakeflow windows. The
-    // host create_thread tool can receive this as `thinking`; model is not
-    // pinned by default so it can inherit the user's current Codex model unless
-    // wakeflow.config.json hosts.codex.modelByRole sets an explicit pin.
-    thinkingByRole: {
-      controller: "xhigh",
-      design: "xhigh",
-      test: "xhigh",
-      product: "xhigh",
-      default: "xhigh",
-    },
-    planFlags: {
-      requiresHostCreateThread: true,
-      requiresHostTitleReset: true,
-      includesHostCreateThreadSettings: true,
-    },
-    workflowSteps: (language) => [
-      "Call create_thread for each launch entry with the entry cwd, createThreadPrompt, and hostCreateThread settings. These prompts perform initialization entry sync only; they are not task deliveries.",
-      "Call wakeflow_register_window once per returned create_thread.threadId using localRegistration.callTemplate. The tool stores the id only in thread-registry and refreshes derived window-config status; do not hand-write runtime files.",
-      "After registration, call set_thread_title for the returned thread id using the entry displayTitle. This final reset repairs host auto-title changes caused by the initialization turn.",
-      language === "zh"
-        ? "总控和子窗口可使用 Codex 子 agent 并行做代码搜索、日志归因、测试定位和输入汇总；子 agent 不拥有验收、派发、状态机写入或跨仓库边界。"
-        : "Controller and child windows may use Codex subagents for parallel code search, log triage, test localization, and input summarization. Subagents do not own acceptance, dispatch, state-machine writes, or cross-repository boundaries.",
-    ],
-    titleReset: (title) => ({
-      required: true,
-      hostTool: "set_thread_title",
-      title,
-      phase: "after-registration",
-    }),
-    entryExtras: (entry, context) => codexEntryExtras(entry, context),
-  },
-  pod: {
-    entryExtras: (operation, context) => codexPodEntryExtras(operation, context),
-  },
+
+  // artifact 是静态包装与宿主接缝清单，不是全局插件注册表。
   artifact: {
     packageName: "wakeflow",
-    marketplacePath: ".agents/plugins/marketplace.json",
-    packagedEntries: [".codex-plugin/", ".mcp.json", "README.zh-CN.md", "mcp/", "skills/", "scripts/", "templates/"],
+    podMaterializationHostFile: "scripts/lib/wakeflow-codex-pod-host.mjs",
+    decommissionHostFile: "scripts/lib/wakeflow-codex-decommission.mjs",
+    migrationDecommissionHostFile: "scripts/lib/wakeflow-codex-migration-decommission.mjs",
+    migrationEffectHostFile: "scripts/lib/wakeflow-codex-migration-effect.mjs",
+    activationScopeHostFile: "scripts/lib/wakeflow-codex-activation-scope.mjs",
+    packagedEntries: [".codex-plugin/", ".mcp.json", "README.zh-CN.md", "mcp/", "schemas/", "skills/", "scripts/", "templates/"],
   },
-};
-
-function codexEntryExtras(entry, context) {
-  const role = launchRoleForEntry(entry);
-  const hostConfig = context?.config?.hosts?.codex && typeof context.config.hosts.codex === "object"
-    ? context.config.hosts.codex
-    : {};
-  const thinking = resolveRoleValue({
-    configMap: hostConfig.thinkingByRole,
-    profileMap: hostProfile.launch.thinkingByRole,
-    role,
-  });
-  const model = resolveRoleValue({
-    configMap: hostConfig.modelByRole,
-    profileMap: hostProfile.launch.modelByRole,
-    role,
-  });
-  return {
-    hostCreateThread: {
-      required: true,
-      hostTool: "create_thread",
-      promptField: "createThreadPrompt",
-      targetPolicy: "Use the saved Codex project for this cwd with environment { type: \"local\" }; never add a Codex-side worktree layer — when the cwd IS a Wakeflow isolation worktree (demand pods), the thread binds it directly.",
-      cwd: entry.cwd,
-      title: entry.displayTitle,
-      thinking,
-      thinkingSource: "wakeflow.config.json hosts.codex.thinkingByRole, falling back to the Wakeflow Codex profile",
-      ...(model ? { model, modelSource: "wakeflow.config.json hosts.codex.modelByRole" } : {
-        model: null,
-        modelPolicy: "inherit the current Codex model; omit create_thread.model unless workspace config pins hosts.codex.modelByRole",
-      }),
-    },
-  };
-}
-
-function launchRoleForEntry(entry) {
-  if (entry.deliveryRole === "controller") return "controller";
-  if (entry.deliveryRole === "design") return "design";
-  if (entry.deliveryRole === "test-target") return "test";
-  return "product";
-}
-
-function resolveRoleValue({ configMap, profileMap, role }) {
-  const safeConfig = configMap && typeof configMap === "object" && !Array.isArray(configMap) ? configMap : {};
-  const safeProfile = profileMap && typeof profileMap === "object" && !Array.isArray(profileMap) ? profileMap : {};
-  return safeConfig[role] ?? safeConfig.default ?? safeProfile[role] ?? safeProfile.default ?? null;
-}
+});

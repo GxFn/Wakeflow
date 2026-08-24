@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:delivery:dispatch-group:v1",
+  "title": "Wakeflow Dispatch Group",
+  "$comment": "Structural and lexical contract for one immutable dispatch-round manifest. Runtime validation additionally enforces real UTC calendar instants, deterministic member ordering and identity uniqueness, canonical digest equality, and create-once storage. The record names the frozen state revision but never points back to the mutable current-state file.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "programId",
+    "demandId",
+    "groupId",
+    "stateRevision",
+    "controllerWindowId",
+    "members",
+    "returnPolicy",
+    "createdAt",
+    "groupDigest"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "artifactKind": {
+      "type": "string",
+      "const": "wakeflow-dispatch-group"
+    },
+    "programId": {
+      "$ref": "#/$defs/programId"
+    },
+    "demandId": {
+      "$ref": "#/$defs/demandId"
+    },
+    "groupId": {
+      "$ref": "#/$defs/groupId"
+    },
+    "stateRevision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "controllerWindowId": {
+      "$ref": "#/$defs/windowId"
+    },
+    "members": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/member"
+      }
+    },
+    "returnPolicy": {
+      "$ref": "#/$defs/returnPolicy"
+    },
+    "createdAt": {
+      "$ref": "#/$defs/strictUtcTimestamp"
+    },
+    "groupDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "groupId": {
+      "type": "string",
+      "pattern": "^dispatch-group_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetTaskId": {
+      "type": "string",
+      "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "packetId": {
+      "type": "string",
+      "pattern": "^dispatch-packet_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windowId",
+        "targetTaskId",
+        "packetId"
+      ],
+      "properties": {
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        },
+        "targetTaskId": {
+          "$ref": "#/$defs/targetTaskId"
+        },
+        "packetId": {
+          "$ref": "#/$defs/packetId"
+        }
+      }
+    },
+    "returnPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "group-ready",
+            "per-target"
+          ]
+        }
+      }
+    },
+    "strictUtcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$",
+      "description": "Explicit UTC RFC 3339 timestamp; runtime validation also rejects impossible calendar dates."
+    }
+  }
+}

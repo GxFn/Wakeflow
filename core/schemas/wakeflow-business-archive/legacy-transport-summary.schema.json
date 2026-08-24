@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:business-archive:legacy-transport-summary:v1",
+  "title": "Wakeflow Legacy Archive Transport Summary",
+  "$comment": "Migration-only redacted transport inventory. It contains only caller-supplied typed wrapper identities and lexically sorted content digests. Runtime validation is mandatory for digest-set ordering, derived inventory/source digests, status cardinality, and privacy boundaries.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "programId",
+    "demandId",
+    "sourceStatus",
+    "ownerDrainAssessmentDigest",
+    "sourceDigest",
+    "inventoryDigest",
+    "currentResultDigests",
+    "envelopeDigests",
+    "groupDigests",
+    "historicalResultDigests",
+    "packetDigests",
+    "runDigests"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "artifactKind": { "type": "string", "const": "wakeflow-legacy-archive-transport-summary" },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "sourceStatus": { "type": "string", "enum": ["absent", "archived"] },
+    "ownerDrainAssessmentDigest": { "$ref": "#/$defs/digest" },
+    "sourceDigest": { "$ref": "#/$defs/digest" },
+    "inventoryDigest": { "$ref": "#/$defs/digest" },
+    "currentResultDigests": { "$ref": "#/$defs/digestArray" },
+    "envelopeDigests": { "$ref": "#/$defs/digestArray" },
+    "groupDigests": { "$ref": "#/$defs/digestArray" },
+    "historicalResultDigests": { "$ref": "#/$defs/digestArray" },
+    "packetDigests": { "$ref": "#/$defs/digestArray" },
+    "runDigests": { "$ref": "#/$defs/digestArray" }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "sourceStatus": { "const": "absent" } }, "required": ["sourceStatus"] },
+      "then": {
+        "properties": {
+          "currentResultDigests": { "maxItems": 0 },
+          "envelopeDigests": { "maxItems": 0 },
+          "groupDigests": { "maxItems": 0 },
+          "historicalResultDigests": { "maxItems": 0 },
+          "packetDigests": { "maxItems": 0 },
+          "runDigests": { "maxItems": 0 }
+        }
+      },
+      "else": {
+        "anyOf": [
+          { "properties": { "currentResultDigests": { "minItems": 1 } } },
+          { "properties": { "envelopeDigests": { "minItems": 1 } } },
+          { "properties": { "groupDigests": { "minItems": 1 } } },
+          { "properties": { "historicalResultDigests": { "minItems": 1 } } },
+          { "properties": { "packetDigests": { "minItems": 1 } } },
+          { "properties": { "runDigests": { "minItems": 1 } } }
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "digestArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "$comment": "Runtime validation additionally requires lexical order.",
+      "items": { "$ref": "#/$defs/digest" }
+    }
+  }
+}

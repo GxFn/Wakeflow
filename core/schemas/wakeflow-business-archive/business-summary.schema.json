@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:internal:business-archive:summary:v1",
+  "title": "Wakeflow Candidate Business Archive Summary",
+  "$comment": "Strict structural contract for the declared summary member of one T01 demand archive manifest. Runtime validation additionally closes all canonical/raw digests, member sets, terminal lifecycle facts, result authority and optional TODO lineage.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactKind",
+    "archiveId",
+    "programId",
+    "demandId",
+    "archivedAt",
+    "conclusion",
+    "terminalAdmission",
+    "archiveTransition",
+    "core",
+    "artifacts",
+    "evidence",
+    "resultAuthority",
+    "transport",
+    "todo"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "artifactKind": { "const": "wakeflow-business-archive-summary" },
+    "archiveId": { "$ref": "#/$defs/archiveId" },
+    "programId": { "$ref": "#/$defs/programId" },
+    "demandId": { "$ref": "#/$defs/demandId" },
+    "archivedAt": { "$ref": "#/$defs/timestamp" },
+    "conclusion": { "$ref": "#/$defs/humanText" },
+    "terminalAdmission": { "$ref": "#/$defs/terminalAdmission" },
+    "archiveTransition": { "$ref": "#/$defs/archiveTransition" },
+    "core": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 4,
+      "items": { "$ref": "#/$defs/coreMember" }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifactMember" }
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evidenceMember" }
+    },
+    "resultAuthority": { "$ref": "#/$defs/resultAuthority" },
+    "transport": { "$ref": "#/$defs/transport" },
+    "todo": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/todoSummary" }
+      ]
+    }
+  },
+  "$defs": {
+    "archiveId": { "type": "string", "pattern": "^archive_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "programId": { "type": "string", "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "demandId": { "type": "string", "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "targetTaskId": { "type": "string", "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "targetResultId": { "type": "string", "pattern": "^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "timestamp": { "type": "string", "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$" },
+    "ref": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)[^\\u0000-\\u001F\\u007F-\\u009F]+$" },
+    "token": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$" },
+    "humanText": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F-\\u009F]+$" },
+    "todoLineageRef": {
+      "type": "object",
+      "required": ["schemaVersion", "artifactKind", "boardRef", "todoId", "intakeRowDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "artifactKind": { "const": "wakeflow-todo-lineage-ref" },
+        "boardRef": { "const": ".wakeflow-active/current/global-todo-board.md" },
+        "todoId": { "$ref": "#/$defs/token" },
+        "intakeRowDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "terminalAdmission": {
+      "type": "object",
+      "required": ["state", "revision", "stateDigest", "eventId", "eventDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "state": { "enum": ["completed", "cancelled"] },
+        "revision": { "type": "integer", "minimum": 1 },
+        "stateDigest": { "$ref": "#/$defs/digest" },
+        "eventId": { "$ref": "#/$defs/token" },
+        "eventDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "archiveTransition": {
+      "type": "object",
+      "required": ["eventId", "eventDigest", "previousRevision", "nextRevision", "from", "to", "createdAt", "reason", "stateDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "eventId": { "$ref": "#/$defs/token" },
+        "eventDigest": { "$ref": "#/$defs/digest" },
+        "previousRevision": { "type": "integer", "minimum": 1 },
+        "nextRevision": { "type": "integer", "minimum": 2 },
+        "from": { "enum": ["completed", "cancelled"] },
+        "to": { "const": "archived" },
+        "createdAt": { "$ref": "#/$defs/timestamp" },
+        "reason": { "$ref": "#/$defs/humanText" },
+        "stateDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "coreMember": {
+      "type": "object",
+      "required": ["role", "sourceRef", "sourceDigest", "sourceByteDigest", "memberRef", "memberDigest", "mediaType"],
+      "additionalProperties": false,
+      "properties": {
+        "role": { "enum": ["demand", "authority", "state", "events"] },
+        "sourceRef": { "$ref": "#/$defs/ref" },
+        "sourceDigest": { "$ref": "#/$defs/digest" },
+        "sourceByteDigest": { "$ref": "#/$defs/digest" },
+        "memberRef": { "$ref": "#/$defs/ref" },
+        "memberDigest": { "$ref": "#/$defs/digest" },
+        "mediaType": { "type": "string", "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$" }
+      }
+    },
+    "artifactMember": {
+      "type": "object",
+      "required": ["artifactKind", "artifactId", "ref", "digest", "memberRef", "memberDigest", "lifecycleStatus"],
+      "additionalProperties": false,
+      "properties": {
+        "artifactKind": { "enum": ["wakeflow-pod-design-handoff", "wakeflow-pod-design-request", "wakeflow-review-candidate", "wakeflow-target-result", "wakeflow-task-package", "wakeflow-test-card"] },
+        "artifactId": { "$ref": "#/$defs/token" },
+        "ref": { "$ref": "#/$defs/ref" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "memberRef": { "$ref": "#/$defs/ref" },
+        "memberDigest": { "$ref": "#/$defs/digest" },
+        "lifecycleStatus": { "$ref": "#/$defs/token" }
+      }
+    },
+    "memberRef": {
+      "type": "object",
+      "required": ["ref", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "$ref": "#/$defs/ref" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "evidenceMember": {
+      "type": "object",
+      "required": ["evidenceId", "ref", "digest", "memberRefs"],
+      "additionalProperties": false,
+      "properties": {
+        "evidenceId": { "type": "string", "pattern": "^evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "ref": { "$ref": "#/$defs/ref" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "memberRefs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/memberRef" } }
+      }
+    },
+    "selectedResult": {
+      "type": "object",
+      "required": ["targetTaskId", "targetResultId", "ref", "digest", "outcome"],
+      "additionalProperties": false,
+      "properties": {
+        "targetTaskId": { "$ref": "#/$defs/targetTaskId" },
+        "targetResultId": { "$ref": "#/$defs/targetResultId" },
+        "ref": { "$ref": "#/$defs/ref" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "outcome": { "$ref": "#/$defs/token" }
+      }
+    },
+    "resultAuthority": {
+      "type": "object",
+      "required": ["stateRevision", "stateDigest", "eventId", "eventDigest", "currentResultSetDigest", "selectedResults"],
+      "additionalProperties": false,
+      "properties": {
+        "stateRevision": { "type": "integer", "minimum": 1 },
+        "stateDigest": { "$ref": "#/$defs/digest" },
+        "eventId": { "$ref": "#/$defs/token" },
+        "eventDigest": { "$ref": "#/$defs/digest" },
+        "currentResultSetDigest": { "$ref": "#/$defs/digest" },
+        "selectedResults": { "type": "array", "items": { "$ref": "#/$defs/selectedResult" } }
+      }
+    },
+    "transport": {
+      "type": "object",
+      "required": ["status", "inventoryDigest", "memberRefs"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "const": "archived" },
+        "inventoryDigest": { "$ref": "#/$defs/digest" },
+        "memberRefs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["ref", "digest"],
+            "additionalProperties": false,
+            "properties": {
+              "ref": { "const": "transport-summary.json" },
+              "digest": { "$ref": "#/$defs/digest" }
+            }
+          }
+        }
+      }
+    },
+    "todoSummary": {
+      "type": "object",
+      "required": ["todoId", "lineageRef", "intakeRowDigest", "claimedRowDigest", "memberRef"],
+      "additionalProperties": false,
+      "properties": {
+        "todoId": { "$ref": "#/$defs/token" },
+        "lineageRef": { "$ref": "#/$defs/todoLineageRef" },
+        "intakeRowDigest": { "$ref": "#/$defs/digest" },
+        "claimedRowDigest": { "$ref": "#/$defs/digest" },
+        "memberRef": { "$ref": "#/$defs/ref" }
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "kind": "ClaudeSubwindowDispatchConfig",
+  "version": 1,
+  "windowName": "Design__SCENARIO-POD",
+  "repositoryPath": "Design",
+  "responsibility": "Internal requirement design workspace",
+  "dispatchable": false,
+  "threadRegistered": true,
+  "threadBindingId": "@wakeflow-scenario-binding-id-d8e4005e30",
+  "threadRegistryFile": "hosts/claude-code/thread-registry/Design__SCENARIO-POD.json",
+  "cwd": null,
+  "responsibilityRoot": null,
+  "deliveryRole": "design",
+  "delivery": {
+    "transport": "direct-thread",
+    "requireThread": true,
+    "missingThread": "fail-closed",
+    "readbackRequired": true
+  },
+  "automation": {
+    "mode": "manual-or-unattended",
+    "continuousWhenEnabled": true,
+    "keepLive": "required-when-automation-enabled"
+  },
+  "result": {
+    "returnRoute": "controller",
+    "resultEnvelopeRequired": true
+  },
+  "generatedAt": "@wakeflow-scenario-time-1beb82878f",
+  "pod": {
+    "bindingVerified": false,
+    "phase": "creating-control",
+    "demandKey": null,
+    "podId": null,
+    "dispatchGate": "blocked"
+  }
+}

@@ -2,7 +2,7 @@
 
 > 创建日期：2026-08-06
 > 状态：`M1A`至`M7A`功能实现均已完成；`M7B`按I4保持`deferred`。M7A历史完成点闭合current-writer fixture退役、Claude facade/profile分责、61个shared normal legacy文件与双host旧send adapter删除、normal/migrator import firewall及live reference closure；2026-08-24的R67完成性审计又删除2个零production-consumer shared facade，当前exact retired shared path为63个。
-> 当前结论：v3实现与运行门已经闭合，但R67发现`test/fixtures/legacy-origins/`仍有1346个被Git ignore隐藏的未跟踪物理文件；在这些fixture获得显式source-closure处置前，当前工作树不能表述为严格的commit/release候选。尚未stage、commit、version bump、tag、push、publish或刷新插件缓存；这些仍是相互独立的用户授权动作。`I3`继续固定Claude exact close+bounded absence、Codex `manual-host-gate`以及unknown/host-wide coverage禁止无人值守激活，且不新增全局workspace registry。
+> 当前结论：v3实现与运行门已经闭合；R67发现的1346个Git ignore隐藏fixture已在用户明确授权的检查点`12503b6`中全部显式纳入，提交后release consistency报告source closure为0、shared core一致且双宿主pack通过。该提交不等于版本更新、tag、发布或插件缓存刷新授权；`M7B`继续等待I4支持窗口，`I3`继续固定Claude exact close+bounded absence、Codex `manual-host-gate`以及unknown/host-wide coverage禁止无人值守激活，且不新增全局workspace registry。
 > 未执行边界：已只在用户指定的可丢弃`WakeWorkspace`执行public fresh及self-contained legacy migration lab；未执行真实Codex/Claude host或Git/worktree effect、release操作，整个开发阶段未读取、扫描、运行或写入`AlembicWorkspace`。
 > 需求权威：[《Wakeflow 初始化新增本地目录与文件梳理需求与实施基线》](./wakeflow-initialization-generated-files-requirement-2026-08-05.md)
 > 实施权威：本文唯一维护阶段拆分、代码落点、依赖、进度与验收证据；不得反向修改需求文档已经确认的D1-D41目标
@@ -3690,6 +3690,13 @@ M6已经把public schema、normal dispatcher和双artifact正式切到v3，并�
 
 **最终验证与环境。** `sync:core`/`check:core`确认`181`个shared-core文件在两artifact逐字节一致；Codex/Claude validator分别通过`157`与`166`个required files、`4`个public runtime scripts和`6`个Skills，两宿主smoke各通过`15`项门。最终正式`npm test`退出0：`1821 tests / 1820 pass / 0 fail / 1 Windows-only skip`。在最终通过前，同一候选曾有一次完整运行返回`1819 pass / 1 fail / 1 skip`，工具截断没有保留失败identity；未修改代码的精确Node矩阵随即`1820/0/1`通过，之后完整`npm test`也再次通过。该失败未复现，继续作为测试波动残余风险保留，不能反写成“从未失败”。所有新增行为验证只使用Wakeflow源码、checked-in/物理fixture与系统临时目录；R67未读取、扫描、preview或写入`WakeWorkspace`和`AlembicWorkspace`，没有真实host、Git worktree、release、cache或版本操作。
 
+<a id="dev-r67-source-closure-checkpoint"></a>
+#### R67 review后源码检查点（2026-08-24）
+
+**授权与提交事实。** R67审计完成后，用户单独授权提交当前Wakeflow实现。暂存过程使用普通仓库闭包加固定`test/fixtures/legacy-origins/`精确force-add，只纳入已经审查的1346个ignored历史fixture；根级`.DS_Store`、`.wakeflow-active`、`.claude`、`node_modules`及其他本机运行残留均未进入索引。提交`12503b61dceeab059b9a9b12a50fadca83014b83`使用消息`feat: finalize Wakeflow v3 initialization`，记录`8070 files changed / 1353265 insertions / 153251 deletions`。本记录只说明源码检查点，不能替代版本、tag、发布或插件缓存刷新授权。
+
+**提交后闭包。** `git diff --check HEAD^ HEAD`通过；固定fixture root的ignored-untracked计数为0。提交后非strict release consistency再次返回`ok=true`、`clean=true`、版本五源仍为`0.9.6`、shared core通过，Codex/Claude pack分别为`208/224`项且零issue。文档回填时本地`HEAD`与本地`origin/main`引用均指向该提交；该观察不推断真实host、远端发布、tag或缓存状态。此前正式`npm test`的`1820 pass / 0 fail / 1 skip`与一次未复现波动继续按R67原记录解释，没有因提交动作被改写。
+
 #### 必须在M2-M7A对应切换点翻转的旧测试
 
 - `wakeflow-config-name.test.mjs`：M6从“自动legacy fallback可用”翻转为normal runtime `migration-required`和explicit migrator-only；M7A证明旧normal implementation已删除。
@@ -3999,7 +4006,7 @@ Claude真实账号/session不可用时，只能如实记录未执行的real-host
 | M4 | `complete + admitted` | `complete` | T01-T13全部完成；最终交付state-first Pod、分责的Claude运行面、proof-aware双宿主decommission与transient activation-scope observation，public v2保持冻结 | 作为M5 host/domain依赖保持冻结；不得反向恢复legacy aggregate、scope自报或全局registry |
 | M5 | `complete + admitted`（[`M5-R0`](#dev-m5-r0)） | [`M5-T01`](#dev-m5-t01)至[`M5-T11`](#dev-m5-t11)全部complete；各task-level R0与Claude组合修正见对应完成记录 | 完整candidate action/runtime/owner/observability、双宿主静态门及WakeWorkspace八步真实闭环均已闭合；public-v2保持冻结，未迁移legacy workspace | M6-R0与I2确认已完成；M5成果作为M6 fresh target与domain owner基线保持冻结 |
 | M6 | `complete`（[`M6-R0`](#dev-m6-r0)及各task-level R0均complete + admitted） | `M6-T00`至[`M6-T12`](#dev-m6-t12)全部complete | fixture/classifier/inventory/plan、旧owner退役、唯一journal migration、strict archive import、public v3 cutover与activation gate全部闭合；WakeWorkspace public fresh及flat/v2/manual/mixed/stale/recovery/privacy真实矩阵通过，unknown activation保持blocked，AlembicWorkspace全程零操作 | 执行`M7A-R0`只读核验；不得因M6通过而自动删除normal legacy残留、结束I4 parser窗口或执行release |
-| M7A | `complete + admitted`（[`M7A-R0`](#dev-m7a-r0)） | `M7A-T00`至[`M7A-T09`](#dev-m7a-complete)全部complete；[`R67完成性审计`](#dev-r67-completion-audit) complete | current-writer fixture退役、Claude facade/profile分责、M7A历史61个shared normal legacy文件与双host旧send adapter删除、R67再删除2个死facade，当前63-path absence、import firewall、物理文件审计、双artifact/full gates及WakeWorkspace既有真实门均闭合；Git ignored-untracked fixture source closure已被准确识别但未获stage授权 | 保持未提交供用户审查；任何commit/release前先显式处置1346个fixture source-closure文件，version/tag/push/publish/cache refresh分别等待授权，M7B继续deferred |
+| M7A | `complete + admitted`（[`M7A-R0`](#dev-m7a-r0)） | `M7A-T00`至[`M7A-T09`](#dev-m7a-complete)全部complete；[`R67完成性审计`](#dev-r67-completion-audit)及[`review后源码检查点`](#dev-r67-source-closure-checkpoint) complete | current-writer fixture退役、Claude facade/profile分责、M7A历史61个shared normal legacy文件与双host旧send adapter删除、R67再删除2个死facade，当前63-path absence、import firewall、物理文件审计、双artifact/full gates及WakeWorkspace既有真实门均闭合；此前被ignore隐藏的1346个fixture已在`12503b6`显式进入Git，source closure为0 | 初始化v3的M7A源码检查点已形成；version/tag/publish/cache refresh继续分别等待授权，M7B保持deferred。基础服务工作转入独立需求文档的G1，不借本阶段恢复legacy或提前实施基础抽取 |
 | M7B | `deferred` | `deferred` | 仅负责I4支持窗口后的parser sunset，不阻塞首个release-ready | 首个v3实际发布并走完I4窗口，且用户另行授权后解除deferred并执行`M7B-R0` |
 
 <a id="dev-realization-audit-record"></a>

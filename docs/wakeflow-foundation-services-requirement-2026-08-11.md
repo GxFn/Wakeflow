@@ -1,7 +1,7 @@
 # Wakeflow 全局基础服务与统一抽象需求
 
 > 创建日期：2026-08-11
-> 当前状态：`g0-complete / g1-pending`；R1–R67 全量代码 review、物理源码闭包审计与仓库级验证已经闭合，基础服务清单、API 和迁移计划仍待独立 G1–G3 确认
+> 当前状态：`g0-complete / g1-in-progress`；R1–R67 全量代码 review、物理源码闭包审计与仓库级验证已经闭合，review 后源码及历史 fixture 已在检查点 `12503b6` 形成 Git source closure；BFS-01 已形成待用户确认的 G1 拆分建议，其余候选、最终 API 和迁移计划仍待独立 G1–G3 确认
 > 适用范围：Wakeflow 整体架构，包括 `core/` 共享实现、Codex/Claude Code 宿主接缝、公共运行时、维护/迁移面、schema、测试与打包验证
 > 关联需求：[初始化生成文件需求](./wakeflow-initialization-generated-files-requirement-2026-08-05.md#req-background)、[D13 v3 配置合同](./wakeflow-initialization-generated-files-requirement-2026-08-05.md#req-d13-config-v3)、[D38 全局职责闭环](./wakeflow-initialization-generated-files-requirement-2026-08-05.md#req-d38-global-contract)、[D41 开发环境边界](./wakeflow-initialization-generated-files-requirement-2026-08-05.md#req-d41-dev-boundaries)、[初始化 v3 开发实施基线](./wakeflow-initialization-v3-development-plan-2026-08-06.md#dev-progress)
 > 授权边界：本文负责需求发现与统一设计，不单独授权基础服务抽取、批量 consumer 迁移、真实 workspace 迁移、commit、版本更新、tag、push、publish 或插件缓存刷新；`AlembicWorkspace`继续完全退出开发与验证范围
@@ -207,7 +207,7 @@ Wakeflow v3 已经形成配置、布局、状态、artifact、transport、identi
 
 | ID | 候选抽象 | 当前事实来源 | 可能统一的机制 | 必须保留的差异 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| BFS-01 | Strict Data Contract | config、public runtime、records、canonical JSON | plain object/data property、dense array、deep freeze、JSON pointer | schema字段、domain error、cycle允许性 | `g1-pending` |
+| BFS-01 | Strict Data Contract | config、public runtime、records、canonical JSON | canonical纯数据快照、own-data被动结构读取、稠密数组快照、已验证结果冻结 | schema字段、domain error、prototype/容量政策、callable/facade、Buffer/typed-array | `g1-proposed-split / user-confirmation-pending` |
 | BFS-02 | Workspace Authority Context | config snapshot、public runtime、MCP evidence与各service | root/config/index/program/ledger/demand path的单次构造 | lock内重载、domain-specific loaded state、host observation | `g1-pending` |
 | BFS-03 | Root与Portable Path Vocabulary | layout、fs-safety、各owner normalizeRoot | normalized absolute root、portable ref解析、path token基础词汇 | realpath、existing/future、owner scope和error | `g1-pending` |
 | BFS-04 | Filesystem Admission Primitives | fs-safety、atomic-write、records/services | no-follow、identity、mode、containment的底层事实 | domain CAS、multi-file journal、recovery | `g1-pending` |
@@ -440,7 +440,7 @@ Wakeflow v3 已经形成配置、布局、状态、artifact、transport、identi
 | FF-210 | R66把`wakeflow_claim_next` public route、TODO CAS owner、initial demand publication与安装说明交叉后确认：`wakeflow_claim_next operation=claim`只写TODO行，不创建demand、create journal或authority；T03则有意采用root-first并在final root不存在时拒绝已claimed TODO。现有memory与stage route却把独立claim放在`wakeflow_create_demand`之前并称为“init”，该序列会制造publication明确拒绝的orphan claim，而create owner本身已经能在同一恢复事务中原子认领精确关联行 | BFS-01/BFS-02/BFS-06/BFS-07/BFS-08/BFS-09/BFS-10/BFS-11 | 本轮修正当前根README、双宿主memory与route说明：正常流程由`wakeflow_create_demand`完成root-first发布与关联TODO claim；`wakeflow_claim_next`只能如实描述为standalone row CAS，不能冒充initializer或在publication前执行。产品层仍需决定该独立mutating public operation是否退役、收敛为只读/恢复，或获得一个不破坏root-first的合法组合owner；验收必须覆盖零root、pending journal、clean root、重复claim、并发create与crash recovery。不得用claim-first兼容分支、孤立mount、自签journal或第二TODO状态机修补 |
 | FF-211 | R66仓库维护面复核发现`wakeflow-mcp` launcher、`sync-core`、release checker、asset/catalog/origin fixture builder都会独立实现“固定根→真实目录链→nofollow/single-link有界读取→读取前后身份→same-parent原子发布→稳定脱敏错误”骨架；此前各自存在参数宽松、符号/硬链接、无界读取、mode漂移、poisoned manifest删除或失败Git状态被误判等不同缺口。它们与目标workspace运行时的M3/T02事务共享filesystem机制，但不共享authority、错误码、允许的删除集合或恢复状态机 | BFS-03/BFS-04/BFS-07/BFS-09/BFS-11 | 本轮只在各source-maintenance owner内关闭真实反例并补focused测试，不把仓库工具接入workspace mutation，也不提前抽取新模块。G1应把这组重复实现作为`BFS-11/source-maintenance filesystem primitive`候选，比较固定根准入、bounded stable read、atomic create/replace与public error映射；若统一，必须参数化容量/mode/known-managed deletion并保持release、sync、fixture各自决定语义，不能形成万能文件管理器或让source tooling读取目标workspace |
 | FF-212 | R66测试证据层复核发现literal module graph会跟随`../`或symlink越出artifact root，使“normal runtime无法触达migrator”的测试可能读取根外源码却仍通过；退役archive materializer又只凭任意绝对`workspaceRoot`递归删除active状态，legacy scenario helper虽入口总是拒绝，内部仍保留约千行可执行旧writer/spawn序列。三者都不会直接进入安装artifact，却会削弱测试证据的隔离性与“旧writer已退役”结论 | BFS-01/BFS-04/BFS-06/BFS-09/BFS-10/BFS-11 | module graph现只遍历artifact内真实single-link有界源码并显式报告boundary violation；退役输出只允许显式系统临时Wakeflow沙箱；scenario helper删除全部不可达writer实现，保留manifest provenance、historical-seed字节复制和create-once attach，并以源码回归禁止`child_process/spawn/exec`回流。G1可统一“historical evidence is data, executable reproduction is a separate explicit authority”及disposable-test-root准入，但不得把fixture变成normal legacy runtime、自动访问Git/cache/network或把测试沙箱登记成全局workspace registry |
-| FF-213 | R67物理源码闭包审计发现`test/fixtures/legacy-origins/`中有`1346`个测试会从文件系统正常读取、但同时被嵌套或用户全局Git ignore规则隐藏的未跟踪文件；此前普通`git status`和默认`git add`都可能遗漏这些字节，而测试通过只能证明本机物理文件存在，不能证明未来提交、clone或发布候选包含完整fixture | BFS-04/BFS-09/BFS-10/BFS-11 | release consistency checker现用NUL分隔的`git ls-files --others --ignored --exclude-standard`精确审计该固定fixture root：非strict检查保留可见warning，要求clean/release-ready时直接失败并返回结构化source-closure证据。现有文件没有被自动stage、commit或改写；未来提交必须显式纳入已确认的fixture bytes。G1可统一source-maintenance的Git source-closure机制，但不能把物理测试通过冒充版本控制完整性、自动修改用户ignore或让release checker代替Git staging决定 |
+| FF-213 | R67物理源码闭包审计发现`test/fixtures/legacy-origins/`中有`1346`个测试会从文件系统正常读取、但同时被嵌套或用户全局Git ignore规则隐藏的未跟踪文件；此前普通`git status`和默认`git add`都可能遗漏这些字节，而测试通过只能证明本机物理文件存在，不能证明未来提交、clone或发布候选包含完整fixture | BFS-04/BFS-09/BFS-10/BFS-11 | release consistency checker现用NUL分隔的`git ls-files --others --ignored --exclude-standard`精确审计该固定fixture root：非strict检查保留可见warning，要求clean/release-ready时直接失败并返回结构化source-closure证据。R67审计当轮没有自动stage、commit或改写这些文件；随后在用户明确授权的检查点`12503b6`中，全部1346项经固定root精确纳入，提交后`ignoredUntrackedFixtureFiles=0`。G1可统一source-maintenance的Git source-closure机制，但不能把物理测试通过冒充版本控制完整性、自动修改用户ignore或让release checker代替Git staging决定 |
 | FF-214 | R67从MCP server、31项tool handler、脚本manifest和测试反向追踪确认，`wakeflow-runtime.mjs`没有任何production caller，`wakeflow-trace.mjs`又只被这个死facade调用；与此同时`wakeflow-process.mjs`仍保留Node/MCP启动、Git mutation、进程枚举和`caffeinate`等零production-consumer宽权限，并会执行args/options/env accessor；Git虽传`-C`，继承的`GIT_DIR/GIT_WORK_TREE/GIT_CONFIG_*`仍可重定向真实目标 | BFS-01/BFS-04/BFS-09/BFS-10/BFS-11 | 删除两份零consumer facade并将双artifact、manifest、validator和absence contract同步收敛到当前in-process v3 handler，现行retired exact path由61增至63。process boundary先被动快照命令、稠密参数、closed options和环境，只保留六个固定Git只读查询及Darwin单PID、单字段`ps`观察；Git要求normalized absolute root、清除全部继承`GIT_*`并仅注入禁system/global config、禁optional lock与terminal prompt的固定值。shell、Node/MCP启动、Git mutation、全进程枚举和`caffeinate`均稳定拒绝。G1可统一exact subprocess capability与调用证据登记，但不得恢复万能process runner、把测试helper当产品consumer或让process层解释领域状态 |
 | FF-215 | R67发布打包纯评估器复核发现，外层request、npm pack report及file-entry路径若是accessor，旧逻辑会在生成发布证据时执行调用方getter；即使getter关闭，非字符串host/version/name/path仍可能经错误文案隐式调用`toString/valueOf`，prototype-key host可能命中继承属性，且包名、`entryCount`与非canonical package path没有闭合 | BFS-01/BFS-05/BFS-06/BFS-09/BFS-11 | `evaluateWakeflowPackageReport()`现以descriptor-first方式准入request/report/file entry，只接受own exact host、primitive scalar、标准稠密且最多100000项的files数组及canonical relative package path；包名、版本、`entryCount`与真实files逐项核对，未知/prototype host稳定拒绝。回归证明恶意getter和scalar coercion执行次数严格为零，真实Codex/Claude `npm pack --dry-run`分别以208/224项通过。该模块仍不拥有Git/npm进程权限、fixture source closure或发布动作。G1可与其他source-maintenance输入快照合并比较，但不能把纯report evaluator扩张成release orchestrator或自动发布服务 |
 
@@ -474,6 +474,103 @@ Wakeflow v3 已经形成配置、布局、状态、artifact、transport、identi
 | “class更统一” | 没有生命周期的class只是语法包装 |
 | “先抽出来以后再接” | 会产生无consumer抽象和新旧双合同 |
 | “先保留兼容wrapper” | normal runtime可能永久背负过渡层 |
+
+<a id="foundation-g1-bfs-01"></a>
+### 12.1 BFS-01 Strict Data Contract：G1 语义交叉审查
+
+**审查状态：**`g1-proposed-split / user-confirmation-pending`。本节只记录真实代码结论和建议处置，不冻结文件名、export 签名或 consumer 迁移批次，也不授权创建基础模块。
+
+#### 12.1.1 审查范围与计数口径
+
+本轮从当前 `core/` 正典共享源、`tools/` 源码以及真实 host-specific facade/adapter 反向审查定义和 production consumer；Codex/Claude Code 中由 `sync-core` 生成的共享副本只作为 parity 与打包证据，不重复计作独立设计来源。测试用于证明既有安全合同，不以测试 helper 冒充 production consumer。
+
+按当前 `core/ + tools/` 精确源码搜索，排除双宿主生成副本后可见：
+
+- `80` 个文件本地定义 `deepFreeze`；
+- `69` 个文件本地定义 `plainObject`、`isPlainObject` 或 `assertPlainObject`；
+- `13` 个文件定义命名明确的 dense/passive array snapshot helper；
+- `46` 个文件直接使用 `JSON.parse(canonicalJson(...))` 构造独立纯数据副本。
+
+这些数字只证明存在广泛机制重复。逐个读取 `wakeflow-canonical-json.mjs`、config owner、result review、process、ledger、tracked materialization、release packaging、Claude host facade 和代表性 records/service 后，真实输入域至少分成以下六类，不能按函数名直接合并。
+
+| 合同族 | 当前真实用途 | 不能丢失的差异 |
+| --- | --- | --- |
+| canonical JSON 数据树 | record/plan/result 的无行为副本、稳定字节与摘要 | 只接受 JSON 值；标准数组；plain/null prototype；拒绝 accessor、隐藏字段、Symbol、额外/稀疏数组字段、外来原型、循环、非有限数和超过 128 层结构 |
+| closed shallow request | process options、owner request、operation input 等当前调用边界 | 只被动读取 own enumerable data property；字段集合、必填项、标准 prototype 要求、容量和类型由当前 owner 决定；值可以包含 callback、Buffer 或 facade，不能强制 JSON 化 |
+| projected extensible facade | host profile、adapter、participant、callback arguments 等允许上游扩展的对象 | 只投影当前 consumer 真正使用的字段；未知字段可能合法，不能套用 closed-record 规则，也不能递归冻结调用方持有的完整 facade |
+| callable registry | MCP handler、maintenance handler、host adapter map 等数据驱动函数表 | 必须固定 own data-property 函数引用并防止 await 后替换；领域路由表、函数签名、调用顺序和 verdict 仍归 composition/owner |
+| dense data array | argv、环境/报告列表、host observation、private Buffer operation 等 | standard prototype、最大长度、错误还是 diagnostic issue、是否允许非 JSON 元素及返回是否冻结并不一致 |
+| domain record codec | demand、transport、window、Pod、ledger、archive 等 portable record | 字段语法、跨字段关系、typed ID/ref、集合闭包、稳定错误码、redaction 与 state authority 都是领域合同，不是通用 data helper 的职责 |
+
+`result-review-orchestration` 中较宽的 `isPlainObject()` 也不是反例：所有公共输入先经过 `canonicalReviewInput()`，后续 helper 消费的是已规范化快照。相反，`wakeflow-process`、tracked materialization 和 Claude host facade 必须保留函数、Buffer 或只读 facade，因此不能先走 canonical JSON。该前置条件差异证明“同名 helper”并不代表相同输入合同。
+
+#### 12.1.2 建议拆分处置
+
+| 子项 | G1 建议 | 统一职责 | 明确保留/拒绝 |
+| --- | --- | --- | --- |
+| BFS-01A canonical data snapshot | `extend-existing` | 扩展现有 canonical JSON 能力，使调用方可从同一验证过程取得独立 canonical plain-data snapshot；可进一步组合为冻结 snapshot | 现有 canonical bytes/digest 和 golden digest 不变；调用方继续映射领域错误、执行字段与关系校验、决定容量和授权 |
+| BFS-01B passive own-data structure | `new-foundation` | 提供浅层、descriptor-first 的 own enumerable data-property 读取，以及 standard dense own-data array 的中立快照事实；验证过程不读取字段值 getter，不忽略 Symbol/隐藏/扩展槽位 | 不递归解释字段值，不决定 allowed/required schema、prototype政策、最大长度、callable签名、host身份或业务 verdict；G2 再决定是返回中立 snapshot 还是 descriptor facts |
+| BFS-01C immutable validated result | `merge-call-pattern` | 对 BFS-01A 产出的 canonical tree 或模块自己刚构造的已验证无行为结果，复用确定的冻结组合 | 不导出“递归冻结任意外部对象”的万能 helper；含 Buffer、typed-array、Error、callback、facade 或特殊生命周期的结果继续由领域 owner 明确处理 |
+| BFS-01D domain codec/facade/registry | `keep-domain-local + reuse-foundation` | owner 可复用 01A/01B 的机械事实，再执行自己的 schema、关系、错误与回调合同 | 不把 record parser、host adapter、MCP dispatcher、maintenance composition 或 error mapping 合并成全局 StrictData service |
+| BFS-01E generic validator/manager | `reject-abstraction` | 无 | 拒绝带 current workspace/host/domain registry 的 class、service locator、可配置递归“snapshot anything”、全局 error manager和第二 schema 系统 |
+| JSON Pointer 单独导出 | `keep-local` | canonical JSON 继续私有转义自己的错误路径；validator/fixture 各自保留真实局部用途 | 当前只有少量、方向不同的 encode/decode consumer，尚无必须公开共享的不变量；不为两行重复增加公共 API |
+
+BFS-01A 与 BFS-01B 是两个不同层级：01A 负责完整 JSON 数据树的规范化与复制，01B 负责不能 JSON 化或只应浅投影的运行时边界。两者都应是无状态纯函数，不需要 class、实例缓存、dispose、资源生命周期或继承体系。
+
+#### 12.1.3 权威、错误与依赖边界
+
+基础层只能拥有以下事实：
+
+- 某属性是否为 own、enumerable、data property；
+- 某数组是否为标准、稠密且没有额外 own authority；
+- 某完整值是否属于现有 canonical JSON 数据域；
+- 从已准入输入产生的副本是否与调用方对象解除可变别名；
+- 中立结构错误的精确路径与原因。
+
+调用方必须继续拥有：
+
+- 标准 `Object.prototype` 与 null prototype 的选择；
+- allowed/required 字段、字段类型、最大项数/字节数和跨字段关系；
+- domain error code、公共错误文案、cause 脱敏和 diagnostic issue 降级；
+- callback/facade 的函数签名、引用冻结时点和 await 后 fence；
+- Buffer/typed-array 的防御复制与生命周期；
+- config/state/evidence/host observation 的 authority、lock 内重验和 acceptance 决定。
+
+依赖方向必须保持为“中立 data primitive → canonical JSON 或 domain consumer”。基础模块不得反向 import config、record、public runtime、host profile、schema registry 或 workspace mutation。若 G2 选择让 canonical JSON 复用 01B 的底层 descriptor primitive，必须先证明不会形成循环依赖；否则两者保持同层独立即可。
+
+基础错误可以携带稳定的结构原因和无敏感值路径，但不得直接成为所有公共面共享的用户错误。每个 owner 继续把 cause 映射为自己的稳定 code/details，release packaging 这类纯评估器也继续有权把报告内部畸形表示为 `issues` 而非抛出异常。
+
+#### 12.1.4 G2 设计与迁移门
+
+若用户确认上述拆分，G2 只需冻结以下尚未决定的设计点：
+
+1. 01A 是只增加 canonical snapshot，还是同时提供冻结 snapshot；不得改变现有 JSON 文本、bytes、digest 或错误路径。
+2. 01B 返回冻结浅副本、entries 还是 descriptor facts；closed record 与 projected facade 必须是明确不同的调用模式，不能靠含糊布尔参数切换业务语义。
+3. standard dense array primitive 如何接收调用方给出的最大长度；“最大值是多少”继续由 domain owner 决定。
+4. 中立结构错误的最小 shape，以及 domain wrapper 如何保留原有 code/path/details/cause。
+5. 哪些现有 local helper 语义完全等价可迁移，哪些因 null prototype、Buffer、issue 降级、host facade 或 callback fence 继续保留。
+
+后续 G4 迁移应按语义簇原子进行，而不是按文件名批量替换：
+
+1. 先为 canonical snapshot/frozen snapshot 增加 RED 与 golden 回归，再迁移语义完全等价的 `JSON.parse(canonicalJson(...))` wrapper；
+2. 再迁移 closed shallow request、projected facade/callback snapshot 与 callable registry 的被动读取骨架，同时保留每个 owner 的字段和错误测试；
+3. 再迁移 standard dense array consumer，并明确跳过允许特殊元素、特殊 prototype 或 diagnostic 降级的调用点；
+4. 最后只删除已被 01A/01B 覆盖的 deep-freeze/shape helper，保留有 Buffer、typed-array、Error、facade 或已证明不同前提的实现；
+5. 每个迁移簇在同一改动中接通全部目标 consumer、删除等价旧 helper，不保留永久 compatibility wrapper；共享源变更统一从 `core/` 同步到双宿主 artifact。
+
+#### 12.1.5 验收证据要求
+
+G4 实施至少必须证明：
+
+- canonical JSON 现有 key 排序、数组顺序和 golden digest 字节完全不变；
+- accessor、继承 `toJSON`、隐藏字段、Symbol、外来原型、稀疏/扩张数组、循环和过深结构继续 fail closed，且行为代码执行次数为零；
+- closed record 不误接纳未知 own authority，projected facade 不因上游合法扩展被误拒绝；
+- callback/handler 引用在首次异步边界前完成快照，不因统一 helper 恢复 TOCTOU；
+- Buffer/typed-array/private operation 不被 canonical JSON 误处理，也不因 generic freeze 在 Node.js 中抛出新异常；
+- config、records、process、release packaging、maintenance、MCP/CLI 和 Claude host consumer 保留各自原有稳定错误与结果语义；
+- focused、相邻领域、双宿主 parity/validator/smoke、packaging、`npm test` 与 `git diff --check` 全部通过。
+
+**待用户确认的 G1 决定：**接受“01A 扩展 canonical snapshot + 01B 新建浅层 passive structure primitive + 01C 仅合并已验证结果冻结调用模式”的拆分，并明确拒绝全局 StrictData class/manager。确认前 BFS-01 仍不是 G2 已冻结设计。
 
 <a id="foundation-finding-template"></a>
 ## 13. 全局基础能力发现记录模板
@@ -581,6 +678,7 @@ G2确认后必须另建开发实施文档，不能直接把本文候选表当任
 
 | 日期 | 更新 |
 | --- | --- |
+| 2026-08-24 | BFS-01 完成第一轮 G1 语义交叉审查：以正典 shared source、tooling 和真实 host-specific facade 为口径，区分 canonical JSON 数据树、closed shallow request、projected facade、callable registry、dense array 与 domain codec 六类合同；建议拆为“扩展 canonical snapshot + 新建浅层 passive own-data primitive + 合并已验证结果冻结调用模式”，领域 schema/error/capacity/authority、Buffer/typed-array 与 host callback 继续本域，并明确拒绝全局 StrictData class/manager。状态为`g1-proposed-split / user-confirmation-pending`，不冻结 API、不授权代码实施 |
 | 2026-08-11 | 创建Wakeflow全局基础服务需求；冻结“全局发现→统一设计→独立实施计划→统一实现”顺序，登记11类候选与初始全局事实，并明确注释/小bug属于逐文件局部维护而非本文需求 |
 | 2026-08-11 | R1 config review补充FF-009：typed ID index统一拒绝跨类型UUID主体碰撞；局部parser/test修正不提前扩展为基础服务迁移 |
 | 2026-08-11 | R1 `storage + governance + hosts`交叉review补充FF-010至FF-014：登记ledger placement重复派生、runtimeResidue缺consumer、双host launch偏好接线不对称、Claude tmux reconfigure context缺口及public MCP selection schema漂移风险；继续保持“先发现、后统一设计”的实施边界 |
@@ -655,3 +753,4 @@ G2确认后必须另建开发实施文档，不能直接把本文候选表当任
 | 2026-08-24 | R66双宿主根memory、Controller/Target Skill、Governance references、commands、README、仓库维护工具与测试支撑层交叉review补充FF-208至FF-212：以public-v3 operation矩阵、demand authority、TaskPackage/TargetResult codec、repository lineage、Test准入与TODO/create事务为事实源，修正本地配置覆盖、旧结果封套、虚构任务items/rework计数、旧packet字段、过时preview/apply教法及不可执行的claim-before-create序列；确认会产生TaskPackage的authority只能随首次需求发布，Test在产品accepted后发现缺陷时没有合法产品修复前沿，且正常TODO-backed创建必须由create owner执行root-first原子claim。工具侧局部闭合固定根、stable bounded read、链接/mode、原子发布和失败证据，测试侧禁止module graph越界、任意workspace递归删除及退役writer执行实现回流；只登记source-maintenance filesystem与historical evidence候选，不暴露内部freeze、不放宽lineage、不新增全局registry、万能文件管理器或第二状态机 |
 | 2026-08-24 | R67完成性与物理源码闭包审计补充FF-213至FF-215：从真实server/handler/manifest反向证明旧runtime与trace facade零production consumer并删除，两宿主absence contract由61个历史shared normal legacy路径扩展为当前63个exact retired path；process层收敛为被动输入、normalized absolute Git root、清除继承`GIT_*`后的六项固定只读查询和Darwin单PID观察。发布面补Git ignored-untracked fixture source-closure门及被动package report评估，明确测试能读取物理fixture不等于Git会纳入未来提交。没有stage、commit、发布或访问外部workspace |
 | 2026-08-24 | G0全量review收口：R1–R67、`7910`个物理文件（`774`个当前源码/证据、`7136`个测试夹具）、`482`份MJS/CJS语法、`1469`份JSON、`6`份JSONL共`58`条记录、`6`个shell launcher、零symlink、shared-core parity、双宿主validator/smoke和最终仓库级`1821`项测试均闭合（`1820`通过、`0`失败、`1`个Windows-only跳过）。最终通过前有一次同候选全量运行出现未保留identity且未复现的单项失败，后续无代码改动的Node矩阵与完整门均通过；该波动作为残余测试风险保留。11个BFS候选转为`g1-pending`；该状态只确认发现面和证据完整，不冻结API、不授权基础服务抽取，也不触及AlembicWorkspace、WakeWorkspace、release或插件缓存 |
+| 2026-08-24 | 在用户明确授权后形成review后源码检查点`12503b6`（`feat: finalize Wakeflow v3 initialization`）：1346个此前被ignore隐藏的历史fixture全部显式进入Git，提交后release consistency复查报告`ignoredUntrackedFixtureFiles=0`、shared core一致且Codex/Claude pack分别为208/224项。该检查点只闭合源码与证据版本控制边界，不改变11个候选的`g1-pending`状态，也不授权基础服务实现、版本/tag/发布、插件缓存刷新或AlembicWorkspace操作 |

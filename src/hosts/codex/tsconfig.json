@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../../.build/hosts/codex",
+    "tsBuildInfoFile": "../../../.build/cache/hosts-codex.tsbuildinfo"
+  },
+  "files": [],
+  "references": [
+    { "path": "../../tsconfig.runtime.json" }
+  ]
+}

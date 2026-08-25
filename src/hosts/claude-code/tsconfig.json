@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../../.build/hosts/claude-code",
+    "tsBuildInfoFile": "../../../.build/cache/hosts-claude-code.tsbuildinfo"
+  },
+  "files": [],
+  "references": [
+    { "path": "../../tsconfig.runtime.json" }
+  ]
+}

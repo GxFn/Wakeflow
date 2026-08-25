@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../.build/entrypoints",
+    "tsBuildInfoFile": "../../.build/cache/entrypoints.tsbuildinfo"
+  },
+  "files": [],
+  "references": [
+    { "path": "../tsconfig.runtime.json" },
+    { "path": "../hosts/codex/tsconfig.json" },
+    { "path": "../hosts/claude-code/tsconfig.json" }
+  ]
+}

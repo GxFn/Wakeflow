@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../.build/tests",
+    "tsBuildInfoFile": "../.build/cache/tests.tsbuildinfo"
+  },
+  "include": ["**/*.test.ts"],
+  "references": [
+    { "path": "../src/tsconfig.runtime.json" },
+    { "path": "../tooling/tsconfig.json" }
+  ]
+}

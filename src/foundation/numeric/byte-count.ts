@@ -1,0 +1,145 @@
+/**
+ * Wakeflow Foundation / Numeric：可安全参与文件 I/O 的字节数量。
+ *
+ * 本文件只表示 `0` 至 `Number.MAX_SAFE_INTEGER` 范围内的整数 byte count，
+ * 并提供从 number/BigInt 准入及不会静默越界的加减运算。它不拥有任一文件、
+ * 目录树或协议的容量上限，也不把 byte count 解释为 offset、索引或权限。
+ *
+ * Node.js bigint Stats 必须先通过 byteCountFromBigInt，才能进入 Buffer 分配、
+ * 循环计数或 Number-based API；领域 owner 仍须在转换前后施加自己的更小预算。
+ */
+
+declare const BYTE_COUNT_BRAND: unique symbol;
+
+/** 已验证为非负安全整数的字节数量。 */
+export type ByteCount = number & {
+  readonly [BYTE_COUNT_BRAND]: "ByteCount";
+};
+
+/** ByteCount 可表达的最大值；这不是 Wakeflow 的领域容量默认值。 */
+export const MAX_SAFE_BYTE_COUNT = Number.MAX_SAFE_INTEGER as ByteCount;
+
+/** byte count 准入或运算失败的稳定分类。 */
+export type ByteCountErrorReason =
+  | "number-range"
+  | "bigint-range"
+  | "addition-overflow"
+  | "subtraction-underflow";
+
+const ERROR_MESSAGES = {
+  "number-range": "Byte count must be a non-negative safe integer number.",
+  "bigint-range": "BigInt byte count must fit a non-negative safe integer number.",
+  "addition-overflow": "Byte count addition exceeds the safe integer range.",
+  "subtraction-underflow": "Byte count subtraction would produce a negative result.",
+} as const satisfies Readonly<Record<ByteCountErrorReason, string>>;
+
+/**
+ * byte count 失败的稳定错误。
+ *
+ * 错误只暴露能力代码、失败分类和调用方路径，不回显输入数量、文件大小、累计值
+ * 或领域容量，避免诊断文本意外携带敏感结构信息。
+ */
+export class ByteCountError extends Error {
+  override readonly name = "ByteCountError";
+  readonly code = "wakeflow-byte-count" as const;
+  readonly reason: ByteCountErrorReason;
+  readonly path: string;
+
+  constructor(reason: ByteCountErrorReason, path: string) {
+    super(ERROR_MESSAGES[reason]);
+    this.reason = reason;
+    this.path = path;
+  }
+}
+
+function normalizeErrorPath(path: unknown): string {
+  return typeof path === "string" && path.length > 0 ? path : "$";
+}
+
+function memberPath(basePath: string, member: string): string {
+  return basePath === "$" ? `$${member}` : `${basePath}.${member}`;
+}
+
+function fail(reason: ByteCountErrorReason, path: string): never {
+  throw new ByteCountError(reason, path);
+}
+
+function parseNumberByteCount(value: unknown, path: string): ByteCount {
+  if (
+    typeof value !== "number"
+    || !Number.isSafeInteger(value)
+    || value < 0
+  ) {
+    fail("number-range", path);
+  }
+  return value as ByteCount;
+}
+
+/**
+ * 从 unknown 严格解析 byte count，不接受 BigInt、字符串或数值强制转换。
+ *
+ * `Number.MAX_SAFE_INTEGER` 合法；具体文件或树通常应由领域 owner 使用更小上限。
+ */
+export function parseByteCount(
+  value: unknown,
+  errorPath?: string,
+): ByteCount {
+  return parseNumberByteCount(value, normalizeErrorPath(errorPath));
+}
+
+/**
+ * 把 Node.js bigint Stats 等来源转换为可安全使用的 number byte count。
+ *
+ * 只有非负且不超过 `Number.MAX_SAFE_INTEGER` 的 BigInt 才会转换；因此转换不会
+ * 丢失整数精度。number 输入必须显式改用 parseByteCount，避免混合来源。
+ */
+export function byteCountFromBigInt(
+  value: bigint,
+  errorPath?: string,
+): ByteCount {
+  const path = normalizeErrorPath(errorPath);
+  if (
+    typeof value !== "bigint"
+    || value < 0n
+    || value > BigInt(Number.MAX_SAFE_INTEGER)
+  ) {
+    fail("bigint-range", path);
+  }
+  return Number(value) as ByteCount;
+}
+
+/**
+ * 准确相加两个 byte count；任何伪造品牌输入都会先重新准入。
+ *
+ * 溢出在执行加法前判断，不允许超过安全整数范围的近似 Number 进入结果。
+ */
+export function addByteCounts(
+  left: ByteCount,
+  right: ByteCount,
+  errorPath?: string,
+): ByteCount {
+  const path = normalizeErrorPath(errorPath);
+  const admittedLeft = parseNumberByteCount(left, memberPath(path, "left"));
+  const admittedRight = parseNumberByteCount(right, memberPath(path, "right"));
+  if (admittedRight > MAX_SAFE_BYTE_COUNT - admittedLeft) {
+    fail("addition-overflow", path);
+  }
+  return (admittedLeft + admittedRight) as ByteCount;
+}
+
+/**
+ * 从 total 中准确扣除 part；结果不得为负数。
+ *
+ * 本函数适合计算剩余读取预算或未消费字节，不赋予 part “属于 total”的领域语义。
+ */
+export function subtractByteCounts(
+  total: ByteCount,
+  part: ByteCount,
+  errorPath?: string,
+): ByteCount {
+  const path = normalizeErrorPath(errorPath);
+  const admittedTotal = parseNumberByteCount(total, memberPath(path, "total"));
+  const admittedPart = parseNumberByteCount(part, memberPath(path, "part"));
+  if (admittedPart > admittedTotal) fail("subtraction-underflow", path);
+  return (admittedTotal - admittedPart) as ByteCount;
+}

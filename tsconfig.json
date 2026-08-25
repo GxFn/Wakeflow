@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./src/tsconfig.runtime.json" },
+    { "path": "./src/hosts/codex/tsconfig.json" },
+    { "path": "./src/hosts/claude-code/tsconfig.json" },
+    { "path": "./src/entrypoints/tsconfig.json" },
+    { "path": "./tooling/tsconfig.json" },
+    { "path": "./tests/tsconfig.json" }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../.build/src",
+    "tsBuildInfoFile": "../.build/cache/runtime.tsbuildinfo"
+  },
+  "include": [
+    "contracts/generated/**/*.ts",
+    "foundation/**/*.ts"
+  ]
+}

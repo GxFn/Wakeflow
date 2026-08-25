@@ -2,6 +2,7 @@
   "name": "wakeflow-repo",
   "version": "0.0.0",
   "private": true,
+  "packageManager": "npm@11.17.0",
   "description": "Development workspace for the Wakeflow Codex and Claude Code plugin artifacts.",
   "type": "module",
   "workspaces": [
@@ -9,6 +10,12 @@
     "plugins/claude-code-wakeflow"
   ],
   "scripts": {
+    "typecheck": "tsc -b --pretty false",
+    "test:tooling": "node --test .build/tests/codegen/schema-types.test.js",
+    "test:typescript": "node --test \".build/tests/**/*.test.js\"",
+    "schema:build": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/codegen/schema-types.js build --repo-root .",
+    "schema:check": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/codegen/schema-types.js check --repo-root .",
+    "check:typescript": "npm run typecheck && npm run test:typescript && npm run schema:check",
     "sync:core": "node tools/sync-core.mjs",
     "check:core": "node tools/sync-core.mjs --check",
     "validate": "npm --workspace wakeflow run validate",
@@ -19,12 +26,18 @@
     "mcp": "npm --workspace wakeflow run mcp",
     "mcp:claude": "npm --workspace claude-code-wakeflow run mcp",
     "test:wakeflow": "node --test test/*.test.mjs",
-    "test": "npm run check:core && npm run validate && npm run validate:claude && npm run smoke && npm run smoke:claude && npm run test:wakeflow"
+    "test": "npm run check:typescript && npm run check:core && npm run validate && npm run validate:claude && npm run smoke && npm run smoke:claude && npm run test:wakeflow"
   },
   "devDependencies": {
-    "ajv": "8.20.0"
+    "@types/node": "24.13.3",
+    "ajv": "8.20.0",
+    "json-schema-to-typescript": "15.0.4",
+    "typescript": "7.0.2"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24.19.0 <25"
+  },
+  "dependencies": {
+    "canonicalize": "4.0.0"
   }
 }

@@ -2,6 +2,7 @@
 .wakeflow-active/
 .wakeflow-local/
 node_modules/
+.build/
 coverage/
 dist/
 *.log

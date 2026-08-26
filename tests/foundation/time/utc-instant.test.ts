@@ -1,6 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -191,23 +189,4 @@ test("parsing is non-coercive and errors do not disclose rejected text", () => {
   equal(conversionCalls, 0);
   equal(error.message.includes(rejected), false);
   equal("cause" in error, false);
-});
-
-test("utc-instant is Schema-driven and owns no clock, timezone, or date library", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "src/foundation/time/utc-instant.ts"),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, [
-    "../../contracts/generated/foundation/utc-instant.generated.js",
-  ]);
-  equal(source.includes("Date.parse"), false);
-  equal(source.includes("Date.now"), false);
-  equal(source.includes("toISOString"), false);
-  equal(source.includes("Temporal"), false);
-  equal(source.includes("js-joda"), false);
-  equal(source.includes("BigInt"), true);
 });

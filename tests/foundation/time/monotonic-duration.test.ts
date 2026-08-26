@@ -1,6 +1,4 @@
-import { deepEqual, equal, throws } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -154,20 +152,4 @@ test("MonotonicDuration is distinct from raw bigint and MonotonicMoment", () => 
 test("monotonic durations remain outside JSON and wire contracts", () => {
   const duration = monotonicDurationFromMilliseconds(1);
   throws(() => JSON.stringify({ duration }), TypeError);
-});
-
-test("monotonic-duration is pure and depends only on the moment type", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "src/foundation/time/monotonic-duration.ts"),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, ["./monotonic-clock.js"]);
-  equal(source.includes("Date.now"), false);
-  equal(source.includes("new Date"), false);
-  equal(source.includes("hrtime"), false);
-  equal(source.includes("readMonotonicClock"), false);
-  equal(source.includes("setTimeout"), false);
 });

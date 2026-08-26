@@ -1,0 +1,177 @@
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import type { JsonValue } from "../../foundation/data/json-value.js";
+import {
+  parseDenseArray,
+  parsePlainRecord,
+  PassiveOwnDataError,
+} from "../../foundation/data/passive-own-data.js";
+import { compareUtcInstants } from "../../foundation/time/utc-instant.js";
+import {
+  computeTodoIntakeDigest,
+  parseTodoIntake,
+  type TodoIntake,
+} from "./todo-intake.js";
+import type { TodoItemId } from "./todo-item-id.js";
+import { todoItemStorageKey, type TodoItemStorageKey } from "./todo-paths.js";
+import {
+  computeTodoStateDigest,
+  parseTodoState,
+  type TodoState,
+  type TodoStatus,
+} from "./todo-state.js";
+
+/**
+ * Wakeflow Governance / TODO：完整 item inventory 的确定性 collection snapshot。
+ *
+ * 每个 item 由 immutable intake 与唯一 current state 组成；本文件关闭 ID 关联、storage
+ * key、重复 item、确定排序和 collection digest。它不枚举文件系统、不持有 collection
+ * lock，也不把 Markdown projection 当作 snapshot 输入。
+ */
+
+export const TODO_COLLECTION_SNAPSHOT_KIND =
+  "wakeflow-todo-collection-snapshot" as const;
+export const TODO_COLLECTION_SNAPSHOT_VERSION = 1 as const;
+export const TODO_COLLECTION_MAXIMUM_ITEMS = 65_536;
+
+export interface TodoCollectionItem {
+  readonly todoId: TodoItemId;
+  readonly storageKey: TodoItemStorageKey;
+  readonly intake: Readonly<TodoIntake>;
+  readonly state: Readonly<TodoState>;
+  readonly intakeDigest: Sha256Digest;
+  readonly stateDigest: Sha256Digest;
+  readonly status: TodoStatus;
+}
+
+export interface TodoCollectionSnapshot {
+  readonly artifactKind: typeof TODO_COLLECTION_SNAPSHOT_KIND;
+  readonly schemaVersion: typeof TODO_COLLECTION_SNAPSHOT_VERSION;
+  readonly itemCount: number;
+  readonly activeItemCount: number;
+  readonly items: readonly Readonly<TodoCollectionItem>[];
+  readonly collectionDigest: Sha256Digest;
+}
+
+export type TodoCollectionErrorReason =
+  | "input"
+  | "too-many-items"
+  | "item-shape"
+  | "item-identity"
+  | "duplicate";
+
+const ERROR_MESSAGES = {
+  "input": "TODO collection input is invalid.",
+  "too-many-items": "TODO collection exceeds its item budget.",
+  "item-shape": "TODO collection item shape is invalid.",
+  "item-identity": "TODO collection intake and state identities differ.",
+  "duplicate": "TODO collection contains a duplicate TODO item.",
+} as const satisfies Readonly<Record<TodoCollectionErrorReason, string>>;
+
+/** TODO collection 归约失败的稳定、脱敏错误。 */
+export class TodoCollectionError extends Error {
+  override readonly name = "TodoCollectionError";
+  readonly code = "wakeflow-todo-collection" as const;
+  readonly reason: TodoCollectionErrorReason;
+  readonly path: string;
+
+  constructor(reason: TodoCollectionErrorReason, path: string) {
+    super(ERROR_MESSAGES[reason]);
+    this.reason = reason;
+    this.path = path;
+  }
+}
+
+function fail(reason: TodoCollectionErrorReason, path: string): never {
+  throw new TodoCollectionError(reason, path);
+}
+
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function compareItems(
+  left: Readonly<TodoCollectionItem>,
+  right: Readonly<TodoCollectionItem>,
+): number {
+  const time = compareUtcInstants(left.intake.createdAt, right.intake.createdAt);
+  return time === 0 ? compareText(left.todoId, right.todoId) : time;
+}
+
+function normalizeItem(value: unknown, index: number): Readonly<TodoCollectionItem> {
+  const path = `$items/${index}`;
+  let record: Readonly<Record<string, unknown>>;
+  try {
+    record = parsePlainRecord(value, path);
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("item-shape", path);
+    throw error;
+  }
+  const keys = Object.keys(record).sort();
+  if (keys.length !== 2 || keys[0] !== "intake" || keys[1] !== "state") {
+    fail("item-shape", path);
+  }
+  const intake = parseTodoIntake(record.intake);
+  const state = parseTodoState(record.state);
+  if (intake.todoId !== state.todoId) fail("item-identity", path);
+  return Object.freeze({
+    todoId: intake.todoId,
+    storageKey: todoItemStorageKey(intake.todoId),
+    intake,
+    state,
+    intakeDigest: computeTodoIntakeDigest(intake),
+    stateDigest: computeTodoStateDigest(state),
+    status: state.status,
+  });
+}
+
+function digestBasis(items: readonly Readonly<TodoCollectionItem>[]): JsonValue {
+  return {
+    artifactKind: TODO_COLLECTION_SNAPSHOT_KIND,
+    schemaVersion: TODO_COLLECTION_SNAPSHOT_VERSION,
+    items: items.map((item) => ({
+      todoId: item.todoId,
+      storageKey: item.storageKey,
+      intakeDigest: item.intakeDigest,
+      stateDigest: item.stateDigest,
+      status: item.status,
+    })),
+  } as JsonValue;
+}
+
+/** 从一组 intake/state pair 生成完整、排序、冻结 collection snapshot。 */
+export function createTodoCollectionSnapshot(
+  value: unknown,
+): Readonly<TodoCollectionSnapshot> {
+  let entries: readonly unknown[];
+  try {
+    entries = parseDenseArray(value, TODO_COLLECTION_MAXIMUM_ITEMS, "$items");
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) {
+      if (error.reason === "array-length") {
+        fail("too-many-items", "$items");
+      }
+      fail("input", "$items");
+    }
+    throw error;
+  }
+  const items = entries.map(normalizeItem).sort(compareItems);
+  const ids = new Set<string>();
+  const storageKeys = new Set<string>();
+  for (const [index, item] of items.entries()) {
+    if (ids.has(item.todoId) || storageKeys.has(item.storageKey)) {
+      fail("duplicate", `$items/${index}`);
+    }
+    ids.add(item.todoId);
+    storageKeys.add(item.storageKey);
+  }
+  const frozenItems = Object.freeze(items);
+  return Object.freeze({
+    artifactKind: TODO_COLLECTION_SNAPSHOT_KIND,
+    schemaVersion: TODO_COLLECTION_SNAPSHOT_VERSION,
+    itemCount: frozenItems.length,
+    activeItemCount: frozenItems.filter((item) => item.status !== "archived").length,
+    items: frozenItems,
+    collectionDigest: computeCanonicalJsonSha256Digest(digestBasis(frozenItems)),
+  });
+}

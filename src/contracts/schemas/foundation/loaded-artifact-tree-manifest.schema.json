@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:foundation:artifact:loaded-artifact-tree-manifest:v1",
+  "title": "LoadedArtifactTreeManifest",
+  "description": "Wakeflow 已加载制品树的位置无关内容身份：按 portable ref 排序的 regular-file 摘要、字节数与 executable bit。",
+  "$comment": "本 Schema 只闭合 portable manifest shape。ref 的 UTF-8 字节上限、NFC/case collision、fileCount/totalBytes 派生相等、物理 no-follow 观察与两遍树稳定性由 foundation/artifact/loaded-artifact-tree-identity 运行时能力负责。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactKind",
+    "fileCount",
+    "files",
+    "schemaVersion",
+    "totalBytes"
+  ],
+  "properties": {
+    "artifactKind": {
+      "const": "wakeflow-loaded-artifact-tree"
+    },
+    "fileCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4096
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "items": {
+        "$ref": "#/$defs/loadedArtifactTreeFile"
+      }
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "totalBytes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 268435456
+    }
+  },
+  "$defs": {
+    "loadedArtifactTreeFile": {
+      "title": "LoadedArtifactTreeFile",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bytes",
+        "digest",
+        "executable",
+        "ref"
+      ],
+      "properties": {
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 33554432
+        },
+        "digest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "executable": {
+          "type": "boolean"
+        },
+        "ref": {
+          "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+        }
+      }
+    }
+  }
+}

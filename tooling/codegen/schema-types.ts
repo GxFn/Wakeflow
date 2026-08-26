@@ -58,6 +58,19 @@ const PORTABLE_RESOURCE_PATH_SCHEMA_TITLE =
 const PORTABLE_RESOURCE_PATH_PATTERN_EXPORT =
   "PORTABLE_RESOURCE_PATH_PATTERN_SOURCE";
 
+const SHA256_DIGEST_SCHEMA_ID =
+  "urn:wakeflow:foundation:crypto:sha256-digest:v1";
+const SHA256_DIGEST_SCHEMA_TITLE = "WakeflowSha256DigestText";
+const SHA256_DIGEST_PATTERN_EXPORT = "SHA256_DIGEST_PATTERN_SOURCE";
+
+const TODO_ITEM_ID_SCHEMA_ID =
+  "urn:wakeflow:governance:todo:item-id:v1";
+const TODO_ITEM_ID_SCHEMA_TITLE = "WakeflowTodoItemIdText";
+const TODO_ITEM_ID_PATTERN_EXPORT = "TODO_ITEM_ID_PATTERN_SOURCE";
+
+const RUNTIME_SCHEMA_EXPORT_KEY = "x-wakeflow-runtime-export";
+const RUNTIME_SCHEMA_EXPORT_PATTERN = /^[A-Z][A-Z0-9_]*_SCHEMA$/u;
+
 /** JSON.parse 后仅供 catalog 和第三方生成器消费的普通对象。 */
 type JsonObject = Record<string, unknown>;
 
@@ -254,6 +267,23 @@ function validateSchemaCatalog(records: readonly SchemaCatalogRecord[]): void {
     allErrors: true,
     strict: true,
     validateSchema: true,
+  });
+  ajv.addFormat("regex", {
+    type: "string",
+    validate(value: string): boolean {
+      try {
+        new RegExp(value, "u");
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  });
+  ajv.addKeyword({
+    keyword: RUNTIME_SCHEMA_EXPORT_KEY,
+    schemaType: "string",
+    valid: true,
+    errors: false,
   });
   try {
     for (const record of records) ajv.addSchema(record.schema, record.id);
@@ -509,6 +539,48 @@ function parseDurableIdKinds(record: SchemaCatalogRecord): readonly string[] {
   return Object.freeze(result);
 }
 
+/** 读取并验证可选 runtime Schema export 元数据。 */
+function runtimeSchemaExportName(
+  record: SchemaCatalogRecord,
+): string | null {
+  const value = record.schema[RUNTIME_SCHEMA_EXPORT_KEY];
+  if (value === undefined) return null;
+  if (
+    typeof value !== "string"
+    || !RUNTIME_SCHEMA_EXPORT_PATTERN.test(value)
+  ) {
+    fail(
+      "wakeflow-schema-runtime-export",
+      `${record.relativePath} contains an invalid ${RUNTIME_SCHEMA_EXPORT_KEY}`,
+    );
+  }
+  return value;
+}
+
+/** 为已登记 runtime consumer 的 Schema 生成递归冻结常量。 */
+function runtimeSchemaModuleLines(
+  record: SchemaCatalogRecord,
+): readonly string[] {
+  const exportName = runtimeSchemaExportName(record);
+  if (exportName === null) return [];
+  const runtimeSchema = JSON.stringify(record.schema, null, 2);
+  return [
+    "",
+    "/** 递归冻结生成的 Schema，阻止 validator 首次消费前发生嵌套漂移。 */",
+    "function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {",
+    "  if (value !== null && typeof value === \"object\" && !Object.isFrozen(value)) {",
+    "    for (const child of Object.values(value)) freezeGeneratedSchema(child);",
+    "    Object.freeze(value);",
+    "  }",
+    "  return value;",
+    "}",
+    "",
+    "/** Ajv strict validator 使用的 Schema 派生运行时权威；不得手工修改。 */",
+    `export const ${exportName} = freezeGeneratedSchema(${runtimeSchema} as const);`,
+    "",
+  ];
+}
+
 /** 为 durable kind 同时生成冻结运行时 tuple 和由 tuple 派生的联合类型。 */
 function generateDurableIdKindVocabulary(
   record: SchemaCatalogRecord,
@@ -571,7 +643,7 @@ function generateUtcInstantContract(
     "",
     "/** Schema 层的 UTC instant 文本；运行时解析后再授予品牌类型。 */",
     "export type WakeflowUtcInstantText = string;",
-    "",
+    ...runtimeSchemaModuleLines(record),
   ].join("\n");
 }
 
@@ -619,7 +691,81 @@ function generatePortableResourcePathContract(
     "",
     "/** Schema 层的 portable resource path 文本；运行时解析后再授予品牌类型。 */",
     "export type WakeflowPortableResourcePathText = string;",
+    ...runtimeSchemaModuleLines(record),
+  ].join("\n");
+}
+
+/** SHA-256 digest 的 prefix/长度/lowercase 词法由 Schema 单向投影。 */
+function generateSha256DigestContract(
+  record: SchemaCatalogRecord,
+  bannerComment: string,
+): string {
+  const pattern: unknown = record.schema.pattern;
+  if (
+    record.schema.title !== SHA256_DIGEST_SCHEMA_TITLE
+    || record.schema.type !== "string"
+    || typeof pattern !== "string"
+    || pattern.length === 0
+  ) {
+    fail(
+      "wakeflow-schema-runtime-pattern",
+      `${record.relativePath} is not the expected SHA-256 digest Schema`,
+    );
+  }
+  try {
+    new RegExp(pattern, "u");
+  } catch {
+    fail(
+      "wakeflow-schema-runtime-pattern",
+      `${record.relativePath} contains an invalid SHA-256 digest pattern`,
+    );
+  }
+  return [
+    bannerComment,
     "",
+    "/** Wakeflow SHA-256 digest 的 Schema 派生正则源。 */",
+    `export const ${SHA256_DIGEST_PATTERN_EXPORT} = ${JSON.stringify(pattern)} as const;`,
+    "",
+    "/** Schema 层的完整 SHA-256 digest 文本；运行时解析后再授予品牌类型。 */",
+    "export type WakeflowSha256DigestText = string;",
+    ...runtimeSchemaModuleLines(record),
+  ].join("\n");
+}
+
+/** TODO opaque item ID 的唯一运行时词法投影。 */
+function generateTodoItemIdContract(
+  record: SchemaCatalogRecord,
+  bannerComment: string,
+): string {
+  const pattern: unknown = record.schema.pattern;
+  if (
+    record.schema.title !== TODO_ITEM_ID_SCHEMA_TITLE
+    || record.schema.type !== "string"
+    || typeof pattern !== "string"
+    || pattern.length === 0
+  ) {
+    fail(
+      "wakeflow-schema-runtime-pattern",
+      `${record.relativePath} is not the expected TODO item ID Schema`,
+    );
+  }
+  try {
+    new RegExp(pattern, "u");
+  } catch {
+    fail(
+      "wakeflow-schema-runtime-pattern",
+      `${record.relativePath} contains an invalid TODO item ID pattern`,
+    );
+  }
+  return [
+    bannerComment,
+    "",
+    "/** TODO item ID 的 Schema 派生正则源。 */",
+    `export const ${TODO_ITEM_ID_PATTERN_EXPORT} = ${JSON.stringify(pattern)} as const;`,
+    "",
+    "/** Schema 层的 TODO item ID；运行时解析后再授予品牌类型。 */",
+    "export type WakeflowTodoItemIdText = string;",
+    ...runtimeSchemaModuleLines(record),
   ].join("\n");
 }
 
@@ -642,6 +788,12 @@ async function generateSchemaModule(
   }
   if (record.id === PORTABLE_RESOURCE_PATH_SCHEMA_ID) {
     return generatePortableResourcePathContract(record, bannerComment);
+  }
+  if (record.id === SHA256_DIGEST_SCHEMA_ID) {
+    return generateSha256DigestContract(record, bannerComment);
+  }
+  if (record.id === TODO_ITEM_ID_SCHEMA_ID) {
+    return generateTodoItemIdContract(record, bannerComment);
   }
 
   const generated = await compileFromFile(sourcePath, {
@@ -670,7 +822,19 @@ async function generateSchemaModule(
       },
     },
   });
-  return `${generated.trimEnd()}\n`;
+  const normalizedGenerated = generated
+    .split(/\r?\n/u)
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .trimEnd();
+  const runtimeLines = runtimeSchemaModuleLines(record);
+  if (runtimeLines.length > 0) {
+    return `${[
+      normalizedGenerated,
+      ...runtimeLines,
+    ].join("\n").trimEnd()}\n`;
+  }
+  return `${normalizedGenerated}\n`;
 }
 
 /**

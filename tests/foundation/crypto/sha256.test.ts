@@ -1,6 +1,4 @@
 import { deepEqual, equal } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -155,17 +153,4 @@ test("hashing rejects non-Uint8Array inputs without invoking proxy traps", () =>
     "$.bytes",
   );
   equal(trapCalls, 0);
-});
-
-test("sha256 is a byte-only primitive with one Node.js dependency", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "src/foundation/crypto/sha256.ts"),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, ["node:crypto"]);
-  equal(source.includes("createHash(\"sha256\")"), true);
-  equal(source.includes("canonical-json"), false);
 });

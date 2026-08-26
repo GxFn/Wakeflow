@@ -1,6 +1,4 @@
-import { deepEqual, equal, match } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { equal, match } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -137,21 +135,4 @@ test("UtcWallClock requires branded results at compile time", () => {
   // @ts-expect-error 普通 string 结果不能充当 UtcWallClock 合同。
   const unchecked: UtcWallClock = () => "2026-08-25T10:20:30.000Z";
   equal(typeof unchecked, "function");
-});
-
-test("wall-clock depends only on utc-instant and owns no monotonic behavior", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "src/foundation/time/wall-clock.ts"),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, ["./utc-instant.js"]);
-  equal(source.includes("new Date().toISOString()"), true);
-  equal(source.includes("Date.now"), false);
-  equal(source.includes("performance.now"), false);
-  equal(source.includes("hrtime"), false);
-  equal(source.includes("setTimeout"), false);
-  equal(source.includes("compareUtcInstants"), false);
 });

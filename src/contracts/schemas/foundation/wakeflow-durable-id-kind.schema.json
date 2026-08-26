@@ -9,6 +9,8 @@
     "archive",
     "confirmation",
     "demand",
+    "demand-event",
+    "demand-event-commit",
     "delivery",
     "delivery-run",
     "dispatch-group",

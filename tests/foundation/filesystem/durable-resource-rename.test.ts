@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { equal } from "node:assert/strict";
 import {
   mkdirSync,
   mkdtempSync,
@@ -343,51 +343,4 @@ test("options, paths, and AbortSignal are closed and passively admitted", async 
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
   }
-});
-
-test("durable-resource-rename performs one rename and no copy/delete fallback", () => {
-  const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/filesystem/durable-resource-rename.ts",
-    ),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-  deepEqual(imports, [
-    "node:fs/promises",
-    "node:util",
-    "../data/passive-own-data.js",
-    "../node/node-system-error.js",
-    "./file-node-snapshot.js",
-    "./portable-resource-path.js",
-    "./rooted-directory.js",
-    "./rooted-exact-resource-handle.js",
-    "./rooted-resource-parent-handle.js",
-  ]);
-  equal(source.match(/await rename\(/gu)?.length, 1);
-  equal(source.includes("await parent.sync()"), true);
-  equal(source.includes("RootedExactResourceHandle.openFileOrDirectory"), true);
-  equal(source.includes("await source.inspectOpenedNode()"), true);
-  equal(source.includes("await source.assertPathCurrent()"), true);
-  equal(source.includes("RootedResourceParentHandle.open"), true);
-  equal(source.match(/await openResourceParent\(/gu)?.length, 2);
-  equal(source.includes("destinationParent.initialParentSnapshot"), true);
-  equal(source.includes("destinationParent.parentResourcePath"), true);
-  equal(source.includes("...sourceParent"), false);
-  equal(source.includes("interface OpenedParent"), false);
-  equal(source.includes("interface OpenedSource"), false);
-  equal(source.includes("function parseAddress"), false);
-  equal(source.includes("function inspectInitialParent"), false);
-  equal(source.includes("function inspectInitialSource"), false);
-  equal(source.includes("function requiredSourceOpenFlags"), false);
-  equal(source.includes("function snapshotHandle"), false);
-  equal(source.includes("source.handle"), false);
-  equal(source.includes("parent.handle"), false);
-  equal(source.includes("copyFile"), false);
-  equal(source.includes("cp("), false);
-  equal(source.includes("unlink("), false);
-  equal(source.includes("rm("), false);
-  equal(source.includes("RENAME_NOREPLACE"), true);
 });

@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+import { SHA256_DIGEST_PATTERN_SOURCE } from "../../contracts/generated/foundation/sha256-digest.generated.js";
+
 /**
  * Wakeflow Foundation / Crypto：SHA-256 字节摘要与词法合同。
  *
@@ -22,7 +24,7 @@ const SHA256_HEX_PATTERN = new RegExp(
   "u",
 );
 const SHA256_DIGEST_PATTERN = new RegExp(
-  `^${SHA256_DIGEST_PREFIX}[0-9a-f]{${SHA256_HEX_LENGTH}}$`,
+  SHA256_DIGEST_PATTERN_SOURCE,
   "u",
 );
 

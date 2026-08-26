@@ -1,6 +1,4 @@
 import { deepEqual, equal } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -165,26 +163,4 @@ test("PortableResourcePath is distinct from an unchecked string", () => {
 
   const checked: PortableResourcePath = parsePortableResourcePath(raw);
   equal(checked, raw);
-});
-
-test("runtime structure comes only from the generated Schema pattern", () => {
-  const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/filesystem/portable-resource-path.ts",
-    ),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, [
-    "../../contracts/generated/foundation/portable-resource-path.generated.js",
-  ]);
-  equal(source.includes("PORTABLE_RESOURCE_PATH_PATTERN_SOURCE"), true);
-  equal(source.includes("node:path"), false);
-  equal(source.includes("path.resolve"), false);
-  equal(source.includes("localeCompare"), false);
-  equal(source.includes(".normalize(\"NFC\")"), true);
-  equal(source.includes(".isWellFormed()"), true);
 });

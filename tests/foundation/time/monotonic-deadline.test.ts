@@ -1,6 +1,4 @@
-import { deepEqual, equal, throws } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -184,23 +182,4 @@ test("deadline is a distinct non-serializable bigint brand", () => {
   equal(uncheckedMoment, moment);
   equal(uncheckedDuration, duration);
   throws(() => JSON.stringify({ deadline }), TypeError);
-});
-
-test("monotonic-deadline is pure and performs no hidden clock read", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "src/foundation/time/monotonic-deadline.ts"),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, [
-    "./monotonic-clock.js",
-    "./monotonic-duration.js",
-  ]);
-  equal(source.includes("readMonotonicClock"), false);
-  equal(source.includes("systemMonotonicClock"), false);
-  equal(source.includes("hrtime"), false);
-  equal(source.includes("Date"), false);
-  equal(source.includes("setTimeout"), false);
 });

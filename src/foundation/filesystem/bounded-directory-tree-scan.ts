@@ -4,10 +4,7 @@ import {
   parsePlainRecord,
   PassiveOwnDataError,
 } from "../data/passive-own-data.js";
-import {
-  sameFileNodeSnapshot,
-  type FileNodeSnapshot,
-} from "./file-node-snapshot.js";
+import type { FileNodeSnapshot } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import {
@@ -38,6 +35,8 @@ export interface BoundedDirectoryTreeScanOptions {
   readonly maximumEntries: number;
   /** 起始目录深度为 0；直属项深度为 1。 */
   readonly maximumDepth: number;
+  /** 可选的起始目录物理 expectation；由首层稳定目录读取负责严格准入。 */
+  readonly expectedNode?: Readonly<FileNodeSnapshot>;
   readonly signal?: AbortSignal;
 }
 
@@ -122,6 +121,7 @@ export class BoundedDirectoryTreeScanError extends Error {
 interface ParsedBoundedDirectoryTreeScanOptions {
   readonly maximumEntries: number;
   readonly maximumDepth: number;
+  readonly expectedNode: Readonly<FileNodeSnapshot> | undefined;
   readonly signal: AbortSignal | undefined;
 }
 
@@ -133,14 +133,14 @@ interface PendingDirectory {
 
 const LOWER_REASON_MAP = {
   "input": "input",
+  "unsupported-platform": "root-scope",
   "root-scope": "root-scope",
   "not-found": "not-found",
   "symlink": "symlink",
   "not-directory": "not-directory",
+  "expectation-changed": "source-changed",
   "entry-path": "entry-path",
-  "open-failure": "open-failure",
-  "enumeration-failure": "enumeration-failure",
-  "inspection-failure": "inspection-failure",
+  "io-failure": "inspection-failure",
   "source-changed": "source-changed",
   "aborted": "aborted",
   "close-failure": "close-failure",
@@ -191,7 +191,7 @@ function parseOptions(
   }
 
   const required = ["maximumDepth", "maximumEntries"] as const;
-  const allowed = new Set([...required, "signal"]);
+  const allowed = new Set([...required, "expectedNode", "signal"]);
   if (
     required.some((field) => !Object.hasOwn(record, field))
     || Object.keys(record).some((key) => !allowed.has(key))
@@ -212,6 +212,9 @@ function parseOptions(
   return Object.freeze({
     maximumEntries,
     maximumDepth,
+    expectedNode: record.expectedNode as
+      | Readonly<FileNodeSnapshot>
+      | undefined,
     signal: record.signal,
   });
 }
@@ -249,25 +252,30 @@ function mapDirectoryReadError(
 
 function directoryReadOptions(
   maximumEntries: number,
+  expectedNode: Readonly<FileNodeSnapshot> | null,
   signal: AbortSignal | undefined,
 ): {
   readonly maximumEntries: number;
+  readonly expectedNode?: Readonly<FileNodeSnapshot>;
   readonly signal?: AbortSignal;
 } {
-  return signal === undefined
-    ? { maximumEntries }
-    : { maximumEntries, signal };
+  return {
+    maximumEntries,
+    ...(expectedNode === null ? {} : { expectedNode }),
+    ...(signal === undefined ? {} : { signal }),
+  };
 }
 
 async function readOneDirectory(
   root: RootedDirectory,
   resourcePath: PortableResourcePath | null,
   maximumEntries: number,
+  expectedNode: Readonly<FileNodeSnapshot> | null,
   signal: AbortSignal | undefined,
   limitReason: "entry-limit" | "depth-limit",
 ): Promise<Readonly<StableDirectoryReadResult>> {
   try {
-    const options = directoryReadOptions(maximumEntries, signal);
+    const options = directoryReadOptions(maximumEntries, expectedNode, signal);
     return resourcePath === null
       ? await readStableRootDirectory(root, options)
       : await readStableResourceDirectory(root, resourcePath, options);
@@ -302,7 +310,7 @@ async function scanTree<
   const pendingDirectories: PendingDirectory[] = [{
     resourcePath: treeRootResourcePath,
     depth: 0,
-    expectedNode: null,
+    expectedNode: options.expectedNode ?? null,
   }];
   const entries: Readonly<BoundedDirectoryTreeEntry>[] = [];
   let treeRootNode: Readonly<FileNodeSnapshot> | undefined;
@@ -321,16 +329,11 @@ async function scanTree<
       root,
       pending.resourcePath,
       atDepthLimit ? 0 : remainingEntries,
+      pending.expectedNode,
       options.signal,
       atDepthLimit ? "depth-limit" : "entry-limit",
     );
 
-    if (
-      pending.expectedNode !== null
-      && !sameFileNodeSnapshot(pending.expectedNode, directory.directoryNode)
-    ) {
-      fail("source-changed", "$tree");
-    }
     if (pending.depth === 0) treeRootNode = directory.directoryNode;
     if (atDepthLimit) continue;
 

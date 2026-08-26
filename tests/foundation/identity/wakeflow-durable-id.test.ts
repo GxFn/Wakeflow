@@ -66,7 +66,8 @@ test("durable kind vocabulary is exact, derived, and runtime frozen", () => {
   }
 
   deepEqual(WAKEFLOW_DURABLE_ID_KINDS, schema.enum);
-  equal(WAKEFLOW_DURABLE_ID_KINDS.length, 23);
+  equal(WAKEFLOW_DURABLE_ID_KINDS.length, 25);
+  equal(WAKEFLOW_DURABLE_ID_KINDS.includes("demand-event-commit"), true);
   equal(Object.isFrozen(WAKEFLOW_DURABLE_ID_KINDS), true);
   throws(
     () => (WAKEFLOW_DURABLE_ID_KINDS as unknown as string[]).push("lease"),
@@ -220,26 +221,4 @@ test("errors normalize paths and do not disclose rejected identity material", ()
   equal(error.message.includes("private-kind"), false);
   equal(error.message.includes("private-uuid"), false);
   equal("cause" in error, false);
-});
-
-test("durable identity depends only on UUIDv4 and excludes other identity classes", () => {
-  const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/identity/wakeflow-durable-id.ts",
-    ),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, [
-    "../../contracts/generated/foundation/wakeflow-durable-id-kind.generated.js",
-    "./uuid-v4.js",
-  ]);
-  equal(source.includes("node:crypto"), false);
-  equal(source.includes('"archive"'), false);
-  equal(source.includes("UuidV4Factory"), false);
-  equal(source.includes("createWakeflowDurableIdIndex"), false);
-  equal(source.includes("canonical-json"), false);
 });

@@ -2,7 +2,6 @@ import { deepEqual, equal } from "node:assert/strict";
 import {
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   renameSync,
   rmSync,
   symlinkSync,
@@ -347,38 +346,4 @@ test("close is idempotent and all later I/O methods reject", async () => {
   }
   await root.close();
   rmSync(rootPath, { recursive: true, force: true });
-});
-
-test("rooted-exact-resource-handle owns source lifecycle but no mutation", () => {
-  const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/filesystem/rooted-exact-resource-handle.ts",
-    ),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-  deepEqual(imports, [
-    "node:fs",
-    "node:fs/promises",
-    "node:util",
-    "../node/node-system-error.js",
-    "./file-node-snapshot.js",
-    "./portable-resource-path.js",
-    "./rooted-directory.js",
-  ]);
-  equal(source.includes("class RootedExactResourceHandle"), true);
-  equal(source.includes("static async openRegularFile"), true);
-  equal(source.includes("static async openFileOrDirectory"), true);
-  equal(source.includes("async assertPathCurrent"), true);
-  equal(source.includes("async inspectOpenedNode"), true);
-  equal(source.includes("async syncOpenedNode"), true);
-  equal(source.includes("O_NOFOLLOW"), true);
-  equal(source.includes("O_NONBLOCK"), true);
-  equal(source.includes("O_DIRECTORY"), true);
-  equal(source.includes("get fileHandle"), false);
-  equal(source.includes("get handle"), false);
-  equal(/\b(?:link|rename|unlink|mkdir|rm)\s*\(/u.test(source), false);
-  equal(/this\.#handle\.(?:read|write|chmod|truncate)\s*\(/u.test(source), false);
 });

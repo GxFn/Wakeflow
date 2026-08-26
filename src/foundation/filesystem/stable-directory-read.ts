@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises";
 import nodePath from "node:path";
 import { types } from "node:util";
+import pLimit from "p-limit";
 
 import {
   parsePlainRecord,
@@ -48,6 +49,7 @@ import {
 export interface StableDirectoryReadOptions {
   /** 当前一层允许返回的最大目录项数；零只允许空目录。 */
   readonly maximumEntries: number;
+  readonly expectedNode?: Readonly<FileNodeSnapshot>;
   readonly signal?: AbortSignal;
 }
 
@@ -76,30 +78,30 @@ export interface StableDirectoryReadResult<
 /** 稳定目录读取失败的稳定分类。 */
 export type StableDirectoryReadErrorReason =
   | "input"
+  | "unsupported-platform"
   | "root-scope"
   | "not-found"
   | "symlink"
   | "not-directory"
+  | "expectation-changed"
   | "too-many-entries"
   | "entry-path"
-  | "open-failure"
-  | "enumeration-failure"
-  | "inspection-failure"
+  | "io-failure"
   | "source-changed"
   | "aborted"
   | "close-failure";
 
 const ERROR_MESSAGES = {
   "input": "Stable directory read input is invalid.",
+  "unsupported-platform": "Stable directory read requires Node no-follow directory handles.",
   "root-scope": "Stable directory read could not establish its rooted scope.",
   "not-found": "Stable directory read target does not exist.",
   "symlink": "Stable directory read target cannot be a symbolic link.",
   "not-directory": "Stable directory read target must be a directory.",
+  "expectation-changed": "Stable directory read target no longer matches its expected node.",
   "too-many-entries": "Directory contains more entries than the caller limit.",
   "entry-path": "Directory entry cannot form a portable rooted resource path.",
-  "open-failure": "Directory target could not be opened safely.",
-  "enumeration-failure": "Directory entries could not be enumerated safely.",
-  "inspection-failure": "Directory entry facts could not be inspected safely.",
+  "io-failure": "Directory target and entry facts could not be observed safely.",
   "source-changed": "Directory or one of its entries changed during the read.",
   "aborted": "Stable directory read was aborted.",
   "close-failure": "A directory read handle could not be closed safely.",
@@ -128,6 +130,7 @@ export class StableDirectoryReadError extends Error {
 
 interface ParsedStableDirectoryReadOptions {
   readonly maximumEntries: number;
+  readonly expectedNode: Readonly<FileNodeSnapshot> | undefined;
   readonly signal: AbortSignal | undefined;
 }
 
@@ -139,6 +142,9 @@ interface DirectoryTarget<
   readonly node: Readonly<FileNodeSnapshot>;
   readonly errorPath: "$root" | "$resourcePath";
 }
+
+/** 单次目录 entry lstat 的内部固定并发上限，不属于公共 API。 */
+const STABLE_DIRECTORY_LSTAT_CONCURRENCY = 8;
 
 function fail(
   reason: StableDirectoryReadErrorReason,
@@ -156,6 +162,34 @@ function isAbortSignal(value: unknown): value is AbortSignal {
   );
 }
 
+function parseExpectedNode(
+  value: unknown,
+): Readonly<FileNodeSnapshot> | undefined {
+  if (value === undefined) return undefined;
+  if (
+    typeof value !== "object"
+    || value === null
+    || types.isProxy(value)
+    || !Object.isFrozen(value)
+  ) {
+    fail("input", "$options.expectedNode");
+  }
+  try {
+    if (!sameFileNodeSnapshot(
+      value as FileNodeSnapshot,
+      value as FileNodeSnapshot,
+    )) {
+      fail("input", "$options.expectedNode");
+    }
+  } catch (error: unknown) {
+    if (error instanceof FileNodeSnapshotError) {
+      fail("input", "$options.expectedNode");
+    }
+    throw error;
+  }
+  return value as Readonly<FileNodeSnapshot>;
+}
+
 function parseOptions(value: unknown): ParsedStableDirectoryReadOptions {
   let record: Readonly<Record<string, unknown>>;
   try {
@@ -165,7 +199,7 @@ function parseOptions(value: unknown): ParsedStableDirectoryReadOptions {
     throw error;
   }
 
-  const allowed = new Set(["maximumEntries", "signal"]);
+  const allowed = new Set(["expectedNode", "maximumEntries", "signal"]);
   if (
     !Object.hasOwn(record, "maximumEntries")
     || Object.keys(record).some((key) => !allowed.has(key))
@@ -184,6 +218,7 @@ function parseOptions(value: unknown): ParsedStableDirectoryReadOptions {
   }
   return Object.freeze({
     maximumEntries: record.maximumEntries,
+    expectedNode: parseExpectedNode(record.expectedNode),
     signal: record.signal,
   });
 }
@@ -214,11 +249,20 @@ function sameNames(left: readonly string[], right: readonly string[]): boolean {
   );
 }
 
+function assertExpectedNode(
+  actual: Readonly<FileNodeSnapshot>,
+  expected: Readonly<FileNodeSnapshot> | undefined,
+): void {
+  if (expected !== undefined && !sameFileNodeSnapshot(actual, expected)) {
+    fail("expectation-changed", "$options.expectedNode");
+  }
+}
+
 function requiredOpenFlags(): number {
   const directory: unknown = fileSystemConstants.O_DIRECTORY;
   const noFollow: unknown = fileSystemConstants.O_NOFOLLOW;
   if (typeof directory !== "number" || typeof noFollow !== "number") {
-    fail("root-scope", "$root");
+    fail("unsupported-platform", "$root");
   }
   const nonBlocking = typeof fileSystemConstants.O_NONBLOCK === "number"
     ? fileSystemConstants.O_NONBLOCK
@@ -233,7 +277,12 @@ async function inspectInitialRoot(
   try {
     node = await root.assertCurrent("$root");
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
+    if (error instanceof RootedDirectoryError) {
+      if (error.reason === "unsupported-platform") {
+        fail("unsupported-platform", "$root");
+      }
+      fail("root-scope", "$root");
+    }
     throw error;
   }
   if (node.kind !== "directory") fail("root-scope", "$root");
@@ -261,6 +310,9 @@ async function inspectInitialResource(
         fail("not-found", "$resourcePath");
       }
       if (error.reason === "resource-path") fail("input", "$resourcePath");
+      if (error.reason === "unsupported-platform") {
+        fail("unsupported-platform", "$resourcePath");
+      }
       fail("root-scope", "$resourcePath");
     }
     throw error;
@@ -315,7 +367,7 @@ async function openStableDirectory<
     if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
       fail("source-changed", target.errorPath);
     }
-    fail("open-failure", target.errorPath);
+    fail("io-failure", target.errorPath);
   }
 }
 
@@ -352,7 +404,7 @@ async function enumerateNames(
     if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
       fail("source-changed", "$entries");
     }
-    fail("enumeration-failure", "$entries");
+    fail("io-failure", "$entries");
   }
 
   const names: string[] = [];
@@ -369,7 +421,7 @@ async function enumerateNames(
         if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
           fail("source-changed", "$entries");
         }
-        fail("enumeration-failure", "$entries");
+        fail("io-failure", "$entries");
       }
       if (entry === null) break;
       if (typeof entry.name !== "string") fail("entry-path", "$entries");
@@ -415,38 +467,58 @@ function entryResourcePath(
   }
 }
 
+async function inspectEntry(
+  target: Readonly<DirectoryTarget<PortableResourcePath | null>>,
+  name: string,
+  index: number,
+  signal: AbortSignal | undefined,
+  verification: boolean,
+): Promise<Readonly<StableDirectoryEntry>> {
+  assertNotAborted(signal);
+  const resourcePath = entryResourcePath(
+    target.directoryResourcePath,
+    name,
+    index,
+  );
+  let node: Readonly<FileNodeSnapshot>;
+  try {
+    const stats = await lstat(
+      nodePath.join(target.physicalPath, name),
+      { bigint: true },
+    );
+    node = createFileNodeSnapshot(stats, `$entries/${index}.node`);
+  } catch (error: unknown) {
+    if (verification) fail("source-changed", `$entries/${index}`);
+    if (readNodeSystemErrorCode(error) === "ENOENT") {
+      fail("source-changed", `$entries/${index}`);
+    }
+    if (error instanceof FileNodeSnapshotError) {
+      fail("io-failure", `$entries/${index}`);
+    }
+    fail("io-failure", `$entries/${index}`);
+  }
+  return Object.freeze({ name, resourcePath, node });
+}
+
 async function inspectEntries(
   target: Readonly<DirectoryTarget<PortableResourcePath | null>>,
   names: readonly string[],
   signal: AbortSignal | undefined,
   verification: boolean,
 ): Promise<readonly Readonly<StableDirectoryEntry>[]> {
+  const limit = pLimit(STABLE_DIRECTORY_LSTAT_CONCURRENCY);
+  const tasks = names.map((name, index) => limit(() => inspectEntry(
+    target,
+    name,
+    index,
+    signal,
+    verification,
+  )));
+  const settled = await Promise.allSettled(tasks);
   const entries: Readonly<StableDirectoryEntry>[] = [];
-  for (const [index, name] of names.entries()) {
-    assertNotAborted(signal);
-    const resourcePath = entryResourcePath(
-      target.directoryResourcePath,
-      name,
-      index,
-    );
-    let node: Readonly<FileNodeSnapshot>;
-    try {
-      const stats = await lstat(
-        nodePath.join(target.physicalPath, name),
-        { bigint: true },
-      );
-      node = createFileNodeSnapshot(stats, `$entries/${index}.node`);
-    } catch (error: unknown) {
-      if (verification) fail("source-changed", `$entries/${index}`);
-      if (readNodeSystemErrorCode(error) === "ENOENT") {
-        fail("source-changed", `$entries/${index}`);
-      }
-      if (error instanceof FileNodeSnapshotError) {
-        fail("inspection-failure", `$entries/${index}`);
-      }
-      fail("inspection-failure", `$entries/${index}`);
-    }
-    entries.push(Object.freeze({ name, resourcePath, node }));
+  for (const result of settled) {
+    if (result.status === "rejected") throw result.reason;
+    entries.push(result.value);
   }
   return Object.freeze(entries);
 }
@@ -544,7 +616,7 @@ async function readStableDirectory<
     if (primaryError === undefined) fail("close-failure", target.errorPath);
   }
   if (primaryError !== undefined) throw primaryError;
-  if (result === undefined) fail("inspection-failure", target.errorPath);
+  if (result === undefined) fail("io-failure", target.errorPath);
   return result;
 }
 
@@ -557,6 +629,7 @@ export async function readStableRootDirectory(
   const parsed = parseOptions(options);
   assertNotAborted(parsed.signal);
   const target = await inspectInitialRoot(root);
+  assertExpectedNode(target.node, parsed.expectedNode);
   assertNotAborted(parsed.signal);
   return readStableDirectory(root, target, parsed);
 }
@@ -571,6 +644,7 @@ export async function readStableResourceDirectory(
   const parsed = parseOptions(options);
   assertNotAborted(parsed.signal);
   const target = await inspectInitialResource(root, resourcePath);
+  assertExpectedNode(target.node, parsed.expectedNode);
   assertNotAborted(parsed.signal);
   return readStableDirectory(root, target, parsed);
 }

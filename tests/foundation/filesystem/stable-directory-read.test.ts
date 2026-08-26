@@ -3,7 +3,6 @@ import {
   linkSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -169,6 +168,52 @@ test("maximumEntries is exact and zero admits only an empty directory", async ()
   }
 });
 
+test("expectedNode binds a directory read to one exact observed version", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-dir-expected-"));
+  const directoryPath = path.join(rootPath, "records");
+  mkdirSync(directoryPath);
+  writeFileSync(path.join(directoryPath, "before"), "before");
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    const resourcePath = parsePortableResourcePath("records");
+    const observed = await readStableResourceDirectory(root, resourcePath, {
+      maximumEntries: 1,
+    });
+    writeFileSync(path.join(directoryPath, "after"), "after");
+
+    await expectStableDirectoryReadError(
+      () => readStableResourceDirectory(root, resourcePath, {
+        maximumEntries: 2,
+        expectedNode: observed.directoryNode,
+      }),
+      "expectation-changed",
+      "$options.expectedNode",
+    );
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("bounded parallel entry inspection preserves deterministic order", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-dir-many-"));
+  const names = Array.from({ length: 64 }, (_, index) => (
+    `entry-${String(63 - index).padStart(2, "0")}`
+  ));
+  for (const name of names) writeFileSync(path.join(rootPath, name), name);
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    const result = await readStableRootDirectory(root, { maximumEntries: 64 });
+    deepEqual(
+      result.entries.map((entry) => entry.name),
+      [...names].sort(),
+    );
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
 test("missing, file, symlink, and forged directory targets fail distinctly", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-target-"));
   mkdirSync(path.join(rootPath, "target"));
@@ -250,6 +295,7 @@ test("options are closed, passive, and support pre-aborted reads", async () => {
       [{ maximumEntries: 1.5 }, "$options.maximumEntries"],
       [{ maximumEntries: Number.MAX_SAFE_INTEGER + 1 }, "$options.maximumEntries"],
       [{ maximumEntries: 1, signal: {} }, "$options.signal"],
+      [{ maximumEntries: 1, expectedNode: {} }, "$options.expectedNode"],
     ];
     for (const [options, expectedPath] of invalid) {
       await expectStableDirectoryReadError(
@@ -290,39 +336,4 @@ test("options are closed, passive, and support pre-aborted reads", async () => {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
   }
-});
-
-test("stable-directory-read composes Node streams and rooted facts only", () => {
-  const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/filesystem/stable-directory-read.ts",
-    ),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, [
-    "node:fs",
-    "node:fs/promises",
-    "node:path",
-    "node:util",
-    "../data/passive-own-data.js",
-    "../node/node-system-error.js",
-    "./file-node-snapshot.js",
-    "./portable-resource-path.js",
-    "./rooted-directory.js",
-  ]);
-  equal(source.includes("opendir"), true);
-  equal(source.includes("recursive: false"), true);
-  equal(source.includes("sameFileNodeSnapshot"), true);
-  equal(source.match(/await enumerateNames\(/gu)?.length, 2);
-  equal(source.match(/await inspectEntries\(/gu)?.length, 2);
-  equal(source.includes("O_NOFOLLOW"), true);
-  equal(source.includes("Dirent.is"), false);
-  equal(source.includes("readdir"), false);
-  equal(source.includes("glob"), false);
-  equal(source.includes("readFile"), false);
-  equal(source.includes("writeFile"), false);
 });

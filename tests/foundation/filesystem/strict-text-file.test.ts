@@ -1,7 +1,6 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { equal } from "node:assert/strict";
 import {
   mkdtempSync,
-  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -10,56 +9,66 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
-import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import {
+  StableFileReadError,
+  type StableFileReadErrorReason,
+} from "../../../src/foundation/filesystem/stable-file-read.js";
 import {
   readStrictTextFile,
   StrictTextFileError,
   type StrictTextFileErrorReason,
   type StrictTextFileOptions,
 } from "../../../src/foundation/filesystem/strict-text-file.js";
+import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
+
+const DEFAULT_OPTIONS = Object.freeze({
+  maximumBytes: parseByteCount(1024),
+});
 
 async function expectStrictTextFileError(
   action: () => unknown | Promise<unknown>,
   reason: StrictTextFileErrorReason,
-  expectedPath: string,
-): Promise<StrictTextFileError> {
+  expectedPath = "$text",
+): Promise<void> {
   let caught: unknown;
   try {
     await action();
   } catch (error: unknown) {
     caught = error;
   }
-
   if (!(caught instanceof StrictTextFileError)) {
     throw new Error("Expected StrictTextFileError.");
   }
-  equal(caught.name, "StrictTextFileError");
   equal(caught.code, "wakeflow-strict-text-file");
   equal(caught.reason, reason);
   equal(caught.path, expectedPath);
-  return caught;
 }
 
-function strictOptions(
-  overrides: Partial<StrictTextFileOptions> = {},
-): StrictTextFileOptions {
-  return {
-    maximumBytes: parseByteCount(1024),
-    bom: "reject",
-    lineEndings: "lf",
-    finalNewline: "required",
-    empty: "forbid",
-    ...overrides,
-  };
+async function expectStableFileReadError(
+  action: () => unknown | Promise<unknown>,
+  reason: StableFileReadErrorReason,
+  expectedPath: string,
+): Promise<void> {
+  let caught: unknown;
+  try {
+    await action();
+  } catch (error: unknown) {
+    caught = error;
+  }
+  if (!(caught instanceof StableFileReadError)) {
+    throw new Error("Expected StableFileReadError.");
+  }
+  equal(caught.reason, reason);
+  equal(caught.path, expectedPath);
 }
 
 function asOptions(value: unknown): StrictTextFileOptions {
   return value as StrictTextFileOptions;
 }
 
-test("explicit LF profile returns exact text and stable source facts", async () => {
+test("strict UTF-8 text returns exact NFC/LF bytes and stable source facts", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-strict-text-"));
   const bytes = Buffer.from("第一行\nsecond line\n", "utf8");
   writeFileSync(path.join(rootPath, "document.txt"), bytes);
@@ -68,15 +77,13 @@ test("explicit LF profile returns exact text and stable source facts", async () 
     const result = await readStrictTextFile(
       root,
       parsePortableResourcePath("document.txt"),
-      strictOptions(),
+      DEFAULT_OPTIONS,
     );
-
     equal(result.text, bytes.toString("utf8"));
     equal(result.byteCount, bytes.byteLength);
     equal(result.digest, computeSha256Digest(bytes));
-    equal(result.bom, "absent");
-    equal(result.lineEndings, "lf");
-    equal(result.hasFinalNewline, true);
+    equal(result.node.kind, "file");
+    equal(Object.keys(result).sort().join(","), "byteCount,digest,node,resourcePath,text");
     equal(Object.isFrozen(result), true);
   } finally {
     await root.close();
@@ -90,16 +97,8 @@ test("invalid UTF-8 is rejected without replacement text", async () => {
   const root = await RootedDirectory.open(rootPath);
   try {
     await expectStrictTextFileError(
-      () => readStrictTextFile(
-        root,
-        parsePortableResourcePath("invalid"),
-        strictOptions({
-          lineEndings: "preserve",
-          finalNewline: "optional",
-        }),
-      ),
+      () => readStrictTextFile(root, parsePortableResourcePath("invalid"), DEFAULT_OPTIONS),
       "utf8",
-      "$text",
     );
   } finally {
     await root.close();
@@ -107,203 +106,148 @@ test("invalid UTF-8 is rejected without replacement text", async () => {
   }
 });
 
-test("BOM policy rejects, preserves, or strips exactly one initial BOM", async () => {
+test("an initial UTF-8 BOM is always rejected", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-strict-bom-"));
-  const bytes = Buffer.from("\ufeffvalue\n", "utf8");
-  writeFileSync(path.join(rootPath, "bom.txt"), bytes);
+  writeFileSync(path.join(rootPath, "bom.txt"), Buffer.from("\ufeffvalue\n", "utf8"));
   const root = await RootedDirectory.open(rootPath);
   try {
-    const resourcePath = parsePortableResourcePath("bom.txt");
     await expectStrictTextFileError(
-      () => readStrictTextFile(root, resourcePath, strictOptions()),
+      () => readStrictTextFile(root, parsePortableResourcePath("bom.txt"), DEFAULT_OPTIONS),
       "bom",
-      "$text",
     );
-
-    const preserved = await readStrictTextFile(
-      root,
-      resourcePath,
-      strictOptions({ bom: "preserve" }),
-    );
-    const stripped = await readStrictTextFile(
-      root,
-      resourcePath,
-      strictOptions({ bom: "strip" }),
-    );
-    equal(preserved.text, "\ufeffvalue\n");
-    equal(stripped.text, "value\n");
-    equal(preserved.bom, "present");
-    equal(stripped.bom, "present");
-    equal(preserved.digest, stripped.digest);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
   }
 });
 
-test("line-ending policies distinguish LF, CRLF, mixed, and no newline", async () => {
+test("CRLF, mixed endings, and lone CR are rejected", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-strict-lines-"));
-  const files = {
-    lf: "a\nb\n",
+  const cases = {
     crlf: "a\r\nb\r\n",
-    mixed: "a\r\nb\nc\r",
-    none: "abc",
+    mixed: "a\nb\r\n",
+    lone: "a\rb\n",
   } as const;
-  for (const [name, text] of Object.entries(files)) {
+  for (const [name, text] of Object.entries(cases)) {
     writeFileSync(path.join(rootPath, name), text);
   }
   const root = await RootedDirectory.open(rootPath);
   try {
-    const preserved = await Promise.all(
-      Object.keys(files).map(async (name) => readStrictTextFile(
-        root,
-        parsePortableResourcePath(name),
-        strictOptions({
-          lineEndings: "preserve",
-          finalNewline: "optional",
-        }),
-      )),
-    );
-    deepEqual(
-      preserved.map((result) => result.lineEndings),
-      ["lf", "crlf", "mixed", "none"],
-    );
-
-    await expectStrictTextFileError(
-      () => readStrictTextFile(
-        root,
-        parsePortableResourcePath("crlf"),
-        strictOptions({ lineEndings: "lf" }),
-      ),
-      "line-endings",
-      "$text",
-    );
-    await expectStrictTextFileError(
-      () => readStrictTextFile(
-        root,
-        parsePortableResourcePath("lf"),
-        strictOptions({ lineEndings: "crlf" }),
-      ),
-      "line-endings",
-      "$text",
-    );
-  } finally {
-    await root.close();
-    rmSync(rootPath, { recursive: true, force: true });
-  }
-});
-
-test("final-newline policy is independent from line-ending style", async () => {
-  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-strict-final-"));
-  writeFileSync(path.join(rootPath, "with"), "value\n");
-  writeFileSync(path.join(rootPath, "without"), "value");
-  const root = await RootedDirectory.open(rootPath);
-  try {
-    await expectStrictTextFileError(
-      () => readStrictTextFile(
-        root,
-        parsePortableResourcePath("without"),
-        strictOptions({ finalNewline: "required" }),
-      ),
-      "final-newline",
-      "$text",
-    );
-    await expectStrictTextFileError(
-      () => readStrictTextFile(
-        root,
-        parsePortableResourcePath("with"),
-        strictOptions({ finalNewline: "forbidden" }),
-      ),
-      "final-newline",
-      "$text",
-    );
-    const optional = await readStrictTextFile(
-      root,
-      parsePortableResourcePath("without"),
-      strictOptions({ finalNewline: "optional" }),
-    );
-    equal(optional.hasFinalNewline, false);
-  } finally {
-    await root.close();
-    rmSync(rootPath, { recursive: true, force: true });
-  }
-});
-
-test("empty policy treats a BOM-only file as logically empty", async () => {
-  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-strict-empty-"));
-  writeFileSync(path.join(rootPath, "empty"), Buffer.alloc(0));
-  writeFileSync(path.join(rootPath, "bom-only"), Buffer.from("\ufeff", "utf8"));
-  const root = await RootedDirectory.open(rootPath);
-  try {
-    for (const name of ["empty", "bom-only"] as const) {
+    for (const name of Object.keys(cases)) {
       await expectStrictTextFileError(
-        () => readStrictTextFile(
-          root,
-          parsePortableResourcePath(name),
-          strictOptions({
-            bom: "strip",
-            lineEndings: "preserve",
-            finalNewline: "optional",
-            empty: "forbid",
-          }),
-        ),
-        "empty",
-        "$text",
+        () => readStrictTextFile(root, parsePortableResourcePath(name), DEFAULT_OPTIONS),
+        "line-endings",
       );
     }
-
-    const allowed = await readStrictTextFile(
-      root,
-      parsePortableResourcePath("empty"),
-      strictOptions({
-        lineEndings: "preserve",
-        finalNewline: "optional",
-        empty: "allow",
-      }),
-    );
-    equal(allowed.text, "");
-    equal(allowed.lineEndings, "none");
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
   }
 });
 
-test("all profile fields are explicit and passively admitted", async () => {
+test("text must end with exactly one LF", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-strict-final-"));
+  writeFileSync(path.join(rootPath, "missing"), "value");
+  writeFileSync(path.join(rootPath, "extra"), "value\n\n");
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    for (const name of ["missing", "extra"] as const) {
+      await expectStrictTextFileError(
+        () => readStrictTextFile(root, parsePortableResourcePath(name), DEFAULT_OPTIONS),
+        "final-newline",
+      );
+    }
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("zero bytes and a lone final LF are logically empty", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-strict-empty-"));
+  writeFileSync(path.join(rootPath, "zero"), Buffer.alloc(0));
+  writeFileSync(path.join(rootPath, "newline"), "\n");
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    for (const name of ["zero", "newline"] as const) {
+      await expectStrictTextFileError(
+        () => readStrictTextFile(root, parsePortableResourcePath(name), DEFAULT_OPTIONS),
+        "empty",
+      );
+    }
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("decoded source text must already use Unicode NFC", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-strict-nfc-"));
+  writeFileSync(path.join(rootPath, "nfd"), "Cafe\u0301\n");
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    await expectStrictTextFileError(
+      () => readStrictTextFile(root, parsePortableResourcePath("nfd"), DEFAULT_OPTIONS),
+      "unicode-normalization",
+    );
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("expectedNode is delegated to the stable file version boundary", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-strict-expected-"));
+  const physicalPath = path.join(rootPath, "record.txt");
+  writeFileSync(physicalPath, "before\n");
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    const resourcePath = parsePortableResourcePath("record.txt");
+    const observed = await readStrictTextFile(root, resourcePath, DEFAULT_OPTIONS);
+    const repeated = await readStrictTextFile(root, resourcePath, {
+      ...DEFAULT_OPTIONS,
+      expectedNode: observed.node,
+    });
+    equal(repeated.digest, observed.digest);
+
+    writeFileSync(physicalPath, "after-version\n");
+    await expectStableFileReadError(
+      () => readStrictTextFile(root, resourcePath, {
+        ...DEFAULT_OPTIONS,
+        expectedNode: observed.node,
+      }),
+      "expectation-changed",
+      "$options.expectedNode",
+    );
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("options are closed passive data while field values remain lower-layer owned", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-strict-options-"));
   writeFileSync(path.join(rootPath, "file"), "value\n");
   const root = await RootedDirectory.open(rootPath);
   try {
-    const invalid: readonly [unknown, string][] = [
-      [{}, "$options"],
-      [{ ...strictOptions(), extra: true }, "$options"],
-      [{ ...strictOptions(), bom: "auto" }, "$options.bom"],
-      [{ ...strictOptions(), lineEndings: "auto" }, "$options.lineEndings"],
-      [{ ...strictOptions(), finalNewline: "auto" }, "$options.finalNewline"],
-      [{ ...strictOptions(), empty: "auto" }, "$options.empty"],
-      [{ ...strictOptions(), maximumBytes: -1 }, "$options.maximumBytes"],
-      [{ ...strictOptions(), signal: {} }, "$options.signal"],
-    ];
-    for (const [options, expectedPath] of invalid) {
-      await expectStrictTextFileError(
-        () => readStrictTextFile(
-          root,
-          parsePortableResourcePath("file"),
-          asOptions(options),
-        ),
-        "input",
-        expectedPath,
-      );
-    }
+    await expectStrictTextFileError(
+      () => readStrictTextFile(
+        root,
+        parsePortableResourcePath("file"),
+        asOptions({ maximumBytes: parseByteCount(1024), extra: true }),
+      ),
+      "input",
+      "$options",
+    );
 
     let getterCalls = 0;
-    const accessor = strictOptions() as unknown as Record<string, unknown>;
-    Object.defineProperty(accessor, "bom", {
-      get: () => {
-        getterCalls += 1;
-        return "reject";
-      },
+    const accessor = Object.create(null) as Record<string, unknown>;
+    Object.defineProperty(accessor, "maximumBytes", {
       enumerable: true,
+      get() {
+        getterCalls += 1;
+        return 1024;
+      },
     });
     await expectStrictTextFileError(
       () => readStrictTextFile(
@@ -315,38 +259,18 @@ test("all profile fields are explicit and passively admitted", async () => {
       "$options",
     );
     equal(getterCalls, 0);
+
+    await expectStableFileReadError(
+      () => readStrictTextFile(
+        root,
+        parsePortableResourcePath("file"),
+        asOptions({ maximumBytes: -1 }),
+      ),
+      "input",
+      "$options.maximumBytes",
+    );
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
   }
-});
-
-test("strict-text-file composes existing byte and UTF-8 foundations only", () => {
-  const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/filesystem/strict-text-file.ts",
-    ),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, [
-    "node:util",
-    "../data/passive-own-data.js",
-    "../numeric/byte-count.js",
-    "../text/utf8.js",
-    "../crypto/sha256.js",
-    "./file-node-snapshot.js",
-    "./portable-resource-path.js",
-    "./rooted-directory.js",
-    "./stable-file-read.js",
-  ]);
-  equal(source.includes("node:fs"), false);
-  equal(source.includes("TextDecoder"), false);
-  equal(source.includes("JSON.parse"), false);
-  equal(source.includes("replace(/\\r"), false);
-  equal(source.includes("decodeUtf8"), true);
-  equal(source.includes("readStableFile"), true);
 });

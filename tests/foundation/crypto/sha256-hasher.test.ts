@@ -1,6 +1,4 @@
 import { deepEqual, equal } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -183,24 +181,4 @@ test("large deterministic input hashes without a combined string conversion", ()
 
   equal(result.byteCount, expected.byteLength);
   equal(result.digest, computeSha256Digest(expected));
-});
-
-test("sha256-hasher depends only on crypto, ByteCount, and SHA-256 lexicals", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "src/foundation/crypto/sha256-hasher.ts"),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, [
-    "node:crypto",
-    "../numeric/byte-count.js",
-    "./sha256.js",
-  ]);
-  equal(source.includes("node:fs"), false);
-  equal(source.includes("TextEncoder"), false);
-  equal(source.includes("TextDecoder"), false);
-  equal(source.includes("createReadStream"), false);
-  equal(source.includes("createHash(\"sha256\")"), true);
 });

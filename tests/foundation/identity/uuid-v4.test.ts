@@ -1,6 +1,4 @@
-import { deepEqual, equal, notEqual } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { equal, notEqual } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -162,18 +160,4 @@ test("errors normalize empty paths and do not disclose rejected values", () => {
 
   equal(error.message.includes(rejected), false);
   equal("cause" in error, false);
-});
-
-test("uuid-v4 has one official runtime dependency and no domain coupling", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "src/foundation/identity/uuid-v4.ts"),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, ["node:crypto"]);
-  equal(source.includes("randomUUID"), true);
-  equal(source.includes("canonical-json"), false);
-  equal(source.includes("WakeflowId"), false);
 });

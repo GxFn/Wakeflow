@@ -1,6 +1,4 @@
-import { deepEqual, equal, throws } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -140,21 +138,4 @@ test("MonotonicMoment cannot be obtained from an unchecked bigint", () => {
 test("monotonic moments are not JSON-serializable wall timestamps", () => {
   const moment = readMonotonicClock(() => 42n);
   throws(() => JSON.stringify({ moment }), TypeError);
-});
-
-test("monotonic-clock has one Node dependency and no wall-time coupling", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "src/foundation/time/monotonic-clock.ts"),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, ["node:process"]);
-  equal(source.includes("hrtime.bigint()"), true);
-  equal(source.includes("Date.now"), false);
-  equal(source.includes("new Date"), false);
-  equal(source.includes("performance"), false);
-  equal(source.includes('from "./utc-instant'), false);
-  equal(source.includes("setTimeout"), false);
 });

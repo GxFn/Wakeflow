@@ -1,6 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -190,19 +188,4 @@ test("ByteCount is distinct from an unchecked number", () => {
 
   const checked: ByteCount = parseByteCount(raw);
   equal(checked, raw);
-});
-
-test("byte-count is a pure numeric primitive without runtime dependencies", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "src/foundation/numeric/byte-count.ts"),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, []);
-  equal(source.includes("node:"), false);
-  equal(source.includes("Buffer."), false);
-  equal(source.includes("statSync"), false);
-  equal(source.includes("MAX_SAFE_BYTE_COUNT"), true);
 });

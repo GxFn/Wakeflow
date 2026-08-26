@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:todo:transaction:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TODO_TRANSACTION_SCHEMA",
+  "title": "WakeflowTodoTransaction",
+  "description": "一个 TODO item append、claim 或 archive 的 immutable recovery plan；expected 与 target digest 允许 owner 判断前向恢复、幂等重放或冲突。",
+  "$comment": "Journal 不保存可变 phase。磁盘 effect 顺序、lock、projection publish 和 exact journal retirement 由 TODO collection owner 执行。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactKind",
+    "schemaVersion",
+    "todoId",
+    "operation",
+    "createdAt",
+    "expectedCollectionDigest",
+    "expectedIntakeDigest",
+    "expectedStateDigest",
+    "targetIntake",
+    "targetState",
+    "targetIntakeDigest",
+    "targetStateDigest",
+    "targetCollectionDigest"
+  ],
+  "properties": {
+    "artifactKind": {
+      "const": "wakeflow-todo-transaction"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "todoId": {
+      "$ref": "urn:wakeflow:governance:todo:item-id:v1"
+    },
+    "operation": {
+      "enum": [
+        "append",
+        "claim",
+        "archive"
+      ]
+    },
+    "createdAt": {
+      "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+    },
+    "expectedCollectionDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    },
+    "expectedIntakeDigest": {
+      "$ref": "#/$defs/nullableDigest"
+    },
+    "expectedStateDigest": {
+      "$ref": "#/$defs/nullableDigest"
+    },
+    "targetIntake": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "urn:wakeflow:governance:todo:intake:v1"
+        }
+      ]
+    },
+    "targetState": {
+      "$ref": "urn:wakeflow:governance:todo:state:v1"
+    },
+    "targetIntakeDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    },
+    "targetStateDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    },
+    "targetCollectionDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    }
+  },
+  "$defs": {
+    "nullableDigest": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      ]
+    }
+  }
+}

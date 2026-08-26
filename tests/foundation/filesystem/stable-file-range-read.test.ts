@@ -27,7 +27,7 @@ import {
   type StableFileRangeReadErrorReason,
   type StableFileRangeReadOptions,
 } from "../../../src/foundation/filesystem/stable-file-range-read.js";
-import { readStableFile } from "../../../src/foundation/filesystem/stable-file-read.js";
+import { readStableFileDigest } from "../../../src/foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 
 async function expectRangeReadError(
@@ -170,9 +170,8 @@ test("expectedNode binds an indexed range to one exact file version", async () =
   const root = await RootedDirectory.open(rootPath);
   try {
     const resourcePath = parsePortableResourcePath("file");
-    const version = await readStableFile(root, resourcePath, {
+    const version = await readStableFileDigest(root, resourcePath, {
       maximumBytes: parseByteCount(1024),
-      capture: "digest-only",
     });
     const range = parseFileByteRange({ offset: 0, length: 7 });
     const current = await readStableFileRange(root, resourcePath, range, {
@@ -316,36 +315,4 @@ test("returned range byte arrays are independent caller-owned copies", async () 
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
   }
-});
-
-test("stable-file-range-read uses positioned I/O and no text or marker logic", () => {
-  const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/filesystem/stable-file-range-read.ts",
-    ),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-  deepEqual(imports, [
-    "node:buffer",
-    "node:fs",
-    "node:fs/promises",
-    "node:util",
-    "../crypto/sha256.js",
-    "../data/passive-own-data.js",
-    "../numeric/byte-count.js",
-    "../node/node-system-error.js",
-    "./file-node-snapshot.js",
-    "./file-byte-range.js",
-    "./portable-resource-path.js",
-    "./rooted-directory.js",
-  ]);
-  equal(source.includes("range.offset + captured"), true);
-  equal(source.includes("readFile("), false);
-  equal(source.includes("TextDecoder"), false);
-  equal(source.includes("marker"), true);
-  equal(source.includes("write("), false);
-  equal(source.includes("rangeDigest"), true);
 });

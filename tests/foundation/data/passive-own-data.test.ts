@@ -1,6 +1,4 @@
-import { deepEqual, equal, ok } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -385,15 +383,4 @@ test("record parsing is shallow and does not freeze nested values", () => {
   equal(Object.isFrozen(nested), false);
   nested.count = 2;
   equal((snapshot.nested as { count: number }).count, 2);
-});
-
-test("the foundation primitive depends only on the Node.js proxy detector", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "src/foundation/data/passive-own-data.ts"),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((match) => match[1]);
-
-  deepEqual(imports, ["node:util"]);
 });

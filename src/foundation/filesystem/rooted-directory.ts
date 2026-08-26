@@ -373,7 +373,8 @@ export class RootedDirectory {
    * 逐段检查一个已存在 resource，不跟随最终 symlink。
    *
    * 所有中间段必须保持真实目录；最终段可为任意节点类型，供后续 stable reader、
-   * tree scanner 或 migration owner 再施加自己的节点策略。
+   * tree scanner 或 migration owner 再施加自己的节点策略。最终节点是目录时只复验
+   * kind 与 dev/inode：合法 sibling 变化会改变目录 mtime/ctime，但不代表目录被替换。
    */
   async inspectExistingResource(
     resourcePath: PortableResourcePath,
@@ -447,7 +448,10 @@ export class RootedDirectory {
         );
       }
       if (entry.isFinal) {
-        if (!sameFileNodeSnapshot(entry.node, currentNode)) {
+        const finalUnchanged = currentNode.kind === "directory"
+          ? sameFileNodeIdentity(entry.node, currentNode)
+          : sameFileNodeSnapshot(entry.node, currentNode);
+        if (!finalUnchanged) {
           fail("resource-changed", path);
         }
         finalNode = currentNode;

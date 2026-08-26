@@ -1,8 +1,7 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { equal } from "node:assert/strict";
 import {
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   renameSync,
   rmSync,
   symlinkSync,
@@ -221,34 +220,4 @@ test("close is idempotent and all later I/O methods reject", async () => {
   }
   await root.close();
   rmSync(rootPath, { recursive: true, force: true });
-});
-
-test("rooted-resource-parent-handle owns no mutation operation", () => {
-  const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/filesystem/rooted-resource-parent-handle.ts",
-    ),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-  deepEqual(imports, [
-    "node:fs",
-    "node:fs/promises",
-    "node:path",
-    "node:util",
-    "../node/node-system-error.js",
-    "./file-node-snapshot.js",
-    "./portable-resource-path.js",
-    "./rooted-directory.js",
-  ]);
-  equal(source.includes("class RootedResourceParentHandle"), true);
-  equal(source.includes("O_DIRECTORY"), true);
-  equal(source.includes("O_NOFOLLOW"), true);
-  equal(/\bwriteFile\s*\(/u.test(source), false);
-  equal(/\bmkdir\s*\(/u.test(source), false);
-  equal(/\brename\s*\(/u.test(source), false);
-  equal(/\bunlink\s*\(/u.test(source), false);
-  equal(/\brm\s*\(/u.test(source), false);
 });

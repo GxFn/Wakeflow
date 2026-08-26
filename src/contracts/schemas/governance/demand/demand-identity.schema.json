@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:identity:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_IDENTITY_SCHEMA",
+  "title": "WakeflowDemandIdentity",
+  "description": "Demand Event Sourcing Aggregate 创建后不可变的 identity authority。",
+  "$comment": "TODO lineage、isolated placement authorization 和 typed identity 的跨记录解析由 Demand identity codec 继续校验。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactKind",
+    "schemaVersion",
+    "programId",
+    "demandId",
+    "createdAt",
+    "title",
+    "goal",
+    "completionDefinition",
+    "demandType",
+    "source",
+    "executionPlacement"
+  ],
+  "properties": {
+    "artifactKind": {
+      "const": "wakeflow-demand-identity"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "programId": {
+      "$ref": "#/$defs/programId"
+    },
+    "demandId": {
+      "$ref": "#/$defs/demandId"
+    },
+    "createdAt": {
+      "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+    },
+    "title": {
+      "$ref": "#/$defs/nonEmptyText"
+    },
+    "goal": {
+      "$ref": "#/$defs/nonEmptyText"
+    },
+    "completionDefinition": {
+      "$ref": "#/$defs/nonEmptyText"
+    },
+    "demandType": {
+      "enum": [
+        "requirement",
+        "bug",
+        "supplement",
+        "research"
+      ]
+    },
+    "source": {
+      "$ref": "urn:wakeflow:governance:todo:intake-lineage:v1"
+    },
+    "executionPlacement": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/mainPlacement"
+        },
+        {
+          "$ref": "#/$defs/isolatedPlacement"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "nonEmptyText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16384,
+      "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+    },
+    "mainPlacement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "const": "main"
+        }
+      }
+    },
+    "isolatedPlacement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "authorizationRef"
+      ],
+      "properties": {
+        "mode": {
+          "const": "isolated"
+        },
+        "authorizationRef": {
+          "$ref": "urn:wakeflow:governance:ledger:authority-member-reference:v1"
+        }
+      }
+    }
+  }
+}

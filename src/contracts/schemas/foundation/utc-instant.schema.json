@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:wakeflow:foundation:time:utc-instant:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_UTC_INSTANT_SCHEMA",
   "title": "WakeflowUtcInstantText",
   "description": "Wakeflow 持久记录与事件使用的严格 UTC instant 文本：四位年份、大写 T/Z，并允许省略小数秒或保留 1 至 9 位小数秒。",
   "$comment": "本 Schema 只拥有可移植词法。真实 Gregorian 日历、原文本保留和 epoch nanoseconds 转换由 foundation/time/utc-instant 复验；wall clock、monotonic timeout、时间顺序及领域有效期不属于本 Schema。",

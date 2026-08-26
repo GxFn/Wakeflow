@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:todo:intake-lineage:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TODO_INTAKE_LINEAGE_SCHEMA",
+  "title": "WakeflowTodoIntakeLineageReference",
+  "description": "跨 Aggregate 绑定一份 immutable TODO intake 的 portable ref/digest。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactKind",
+    "schemaVersion",
+    "todoId",
+    "intakeRef",
+    "intakeDigest"
+  ],
+  "properties": {
+    "artifactKind": {
+      "const": "wakeflow-todo-intake-lineage"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "todoId": {
+      "$ref": "urn:wakeflow:governance:todo:item-id:v1"
+    },
+    "intakeRef": {
+      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+    },
+    "intakeDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    }
+  }
+}

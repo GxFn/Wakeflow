@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:aggregate-state:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA",
+  "title": "WakeflowDemandAggregateState",
+  "description": "由 Demand domain event reducer 唯一生成的纯业务 Aggregate state。",
+  "$comment": "stream revision、event tail 与 snapshot metadata 不进入本状态；RH-2 只允许零业务成员，后续 Owner 垂直切片再扩展对应关闭 section。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactKind",
+    "schemaVersion",
+    "demandId",
+    "lifecycle",
+    "tasking",
+    "delivery",
+    "result",
+    "testing",
+    "review",
+    "evidence",
+    "pod"
+  ],
+  "properties": {
+    "artifactKind": {
+      "const": "wakeflow-demand-aggregate-state"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "demandId": {
+      "$ref": "#/$defs/demandId"
+    },
+    "lifecycle": {
+      "enum": [
+        "active",
+        "completed",
+        "cancelled"
+      ]
+    },
+    "tasking": {
+      "$ref": "#/$defs/tasking"
+    },
+    "delivery": {
+      "$ref": "#/$defs/delivery"
+    },
+    "result": {
+      "$ref": "#/$defs/result"
+    },
+    "testing": {
+      "$ref": "#/$defs/testing"
+    },
+    "review": {
+      "$ref": "#/$defs/review"
+    },
+    "evidence": {
+      "$ref": "#/$defs/evidence"
+    },
+    "pod": {
+      "type": "null"
+    }
+  },
+  "$defs": {
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "emptyFacts": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "tasking": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taskPackages",
+        "targetTasks"
+      ],
+      "properties": {
+        "taskPackages": {
+          "$ref": "#/$defs/emptyFacts"
+        },
+        "targetTasks": {
+          "$ref": "#/$defs/emptyFacts"
+        }
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "currentDeliveries"
+      ],
+      "properties": {
+        "currentDeliveries": {
+          "$ref": "#/$defs/emptyFacts"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "currentResults"
+      ],
+      "properties": {
+        "currentResults": {
+          "$ref": "#/$defs/emptyFacts"
+        }
+      }
+    },
+    "testing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "testCards",
+        "testAttempts"
+      ],
+      "properties": {
+        "testCards": {
+          "$ref": "#/$defs/emptyFacts"
+        },
+        "testAttempts": {
+          "$ref": "#/$defs/emptyFacts"
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pendingCandidate"
+      ],
+      "properties": {
+        "pendingCandidate": {
+          "type": "null"
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items"
+      ],
+      "properties": {
+        "items": {
+          "$ref": "#/$defs/emptyFacts"
+        }
+      }
+    }
+  }
+}

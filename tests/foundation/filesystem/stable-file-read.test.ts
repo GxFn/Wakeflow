@@ -3,7 +3,6 @@ import {
   linkSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -23,7 +22,7 @@ import {
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
   readStableFile,
-  STABLE_FILE_READ_CHUNK_BYTES,
+  readStableFileDigest,
   StableFileReadError,
   type StableFileReadErrorReason,
   type StableFileReadOptions,
@@ -59,7 +58,7 @@ function asPortableResourcePath(value: unknown): PortableResourcePath {
   return value as PortableResourcePath;
 }
 
-test("bounded byte capture returns exact bytes, digest, and final node facts", async () => {
+test("bounded byte read returns exact bytes, digest, and final node facts", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-read-"));
   const file = path.join(rootPath, "records", "state.json");
   mkdirSync(path.dirname(file));
@@ -71,10 +70,8 @@ test("bounded byte capture returns exact bytes, digest, and final node facts", a
     const resourcePath = parsePortableResourcePath("records/state.json");
     const result = await readStableFile(root, resourcePath, {
       maximumBytes: parseByteCount(1024),
-      capture: "bytes",
     });
 
-    equal(result.capture, "bytes");
     deepEqual(result.bytes, expected);
     equal(result.byteCount, expected.byteLength);
     equal(result.digest, computeSha256Digest(expected));
@@ -87,10 +84,10 @@ test("bounded byte capture returns exact bytes, digest, and final node facts", a
   }
 });
 
-test("digest-only mode streams multiple chunks without returning file bytes", async () => {
+test("digest-only mode hashes a large file without returning file bytes", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-hash-"));
   const file = path.join(rootPath, "large.bin");
-  const expected = Buffer.alloc(STABLE_FILE_READ_CHUNK_BYTES * 3 + 17);
+  const expected = Buffer.alloc(1024 * 1024 + 17);
   for (let index = 0; index < expected.length; index += 1) {
     expected[index] = index % 251;
   }
@@ -98,17 +95,15 @@ test("digest-only mode streams multiple chunks without returning file bytes", as
 
   const root = await RootedDirectory.open(rootPath);
   try {
-    const result = await readStableFile(
+    const result = await readStableFileDigest(
       root,
       parsePortableResourcePath("large.bin"),
       {
         maximumBytes: parseByteCount(expected.byteLength),
-        capture: "digest-only",
       },
     );
 
-    equal(result.capture, "digest-only");
-    equal(result.bytes, null);
+    equal(Object.hasOwn(result, "bytes"), false);
     equal(result.byteCount, expected.byteLength);
     equal(result.digest, computeSha256Digest(expected));
   } finally {
@@ -117,7 +112,7 @@ test("digest-only mode streams multiple chunks without returning file bytes", as
   }
 });
 
-test("empty files are valid in both capture modes", async () => {
+test("empty files are valid for both bytes and digest APIs", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-empty-"));
   writeFileSync(path.join(rootPath, "empty"), Buffer.alloc(0));
   const root = await RootedDirectory.open(rootPath);
@@ -126,14 +121,12 @@ test("empty files are valid in both capture modes", async () => {
     const bytes = await readStableFile(root, resourcePath, {
       maximumBytes: parseByteCount(0),
     });
-    const digest = await readStableFile(root, resourcePath, {
+    const digest = await readStableFileDigest(root, resourcePath, {
       maximumBytes: parseByteCount(0),
-      capture: "digest-only",
     });
 
-    equal(bytes.capture, "bytes");
     equal(bytes.bytes.byteLength, 0);
-    equal(digest.bytes, null);
+    equal(Object.hasOwn(digest, "bytes"), false);
     equal(bytes.digest, digest.digest);
     equal(bytes.byteCount, 0);
   } finally {
@@ -153,6 +146,32 @@ test("caller maximum is enforced before content allocation or hashing", async ()
       }),
       "too-large",
       "$resourcePath",
+    );
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("expectedNode binds the read to one exact previously observed version", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-expected-"));
+  const physicalPath = path.join(rootPath, "state.json");
+  writeFileSync(physicalPath, "old\n");
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    const resourcePath = parsePortableResourcePath("state.json");
+    const observed = await readStableFileDigest(root, resourcePath, {
+      maximumBytes: parseByteCount(1024),
+    });
+    writeFileSync(physicalPath, "new-version\n");
+
+    await expectStableFileReadError(
+      () => readStableFileDigest(root, resourcePath, {
+        maximumBytes: parseByteCount(1024),
+        expectedNode: observed.node,
+      }),
+      "expectation-changed",
+      "$options.expectedNode",
     );
   } finally {
     await root.close();
@@ -223,9 +242,6 @@ test("hard links remain observable facts rather than a foundation rejection", as
       parsePortableResourcePath("source"),
       { maximumBytes: parseByteCount(1024) },
     );
-    if (result.capture !== "bytes") {
-      throw new Error("Expected captured stable file bytes.");
-    }
     equal(result.node.linkCount, 2n);
     equal(Buffer.from(result.bytes).toString("utf8"), "shared");
   } finally {
@@ -284,8 +300,8 @@ test("closed options reject accessors, unknown fields, and forged values", async
     for (const options of [
       { maximumBytes: 1024, extra: true },
       { maximumBytes: -1 },
-      { maximumBytes: 1024, capture: "partial" },
       { maximumBytes: 1024, signal: {} },
+      { maximumBytes: 1024, expectedNode: {} },
     ] as const) {
       await expectStableFileReadError(
         () => readStableFile(
@@ -296,10 +312,10 @@ test("closed options reject accessors, unknown fields, and forged values", async
         "input",
         options.maximumBytes === -1
           ? "$options.maximumBytes"
-          : "capture" in options
-            ? "$options.capture"
-            : "signal" in options
-              ? "$options.signal"
+          : "signal" in options
+            ? "$options.signal"
+            : "expectedNode" in options
+              ? "$options.expectedNode"
               : "$options",
       );
     }
@@ -307,37 +323,4 @@ test("closed options reject accessors, unknown fields, and forged values", async
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
   }
-});
-
-test("stable-file-read does not use convenience whole-file APIs", () => {
-  const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/filesystem/stable-file-read.ts",
-    ),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, [
-    "node:buffer",
-    "node:fs",
-    "node:fs/promises",
-    "node:util",
-    "../crypto/sha256-hasher.js",
-    "../crypto/sha256.js",
-    "../data/passive-own-data.js",
-    "../numeric/byte-count.js",
-    "../node/node-system-error.js",
-    "./file-node-snapshot.js",
-    "./portable-resource-path.js",
-    "./rooted-directory.js",
-  ]);
-  equal(source.includes("readFile("), false);
-  equal(source.includes("readFileSync("), false);
-  equal(source.includes("createReadStream("), false);
-  equal(source.includes("O_NOFOLLOW"), true);
-  equal(source.includes("O_NONBLOCK"), true);
-  equal(source.includes("Sha256Hasher"), true);
 });

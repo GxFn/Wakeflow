@@ -1,5 +1,6 @@
 import { deepEqual, equal } from "node:assert/strict";
 import {
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -15,6 +16,11 @@ import { test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
+  durableAtomicFileStageRef,
+  issueDurableAtomicFileStageAddress,
+  releaseDurableAtomicFileStageAddress,
+} from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import {
   createFileAtomically,
   DurableAtomicFileWriteError,
   replaceFileAtomically,
@@ -23,11 +29,17 @@ import {
   type DurableAtomicFileWriteErrorReason,
 } from "../../../src/foundation/filesystem/durable-atomic-file-write.js";
 import {
+  createFileCandidateDurably,
+} from "../../../src/foundation/filesystem/durable-file-candidate.js";
+import {
   parsePortableResourcePath,
   type PortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { readStableFile } from "../../../src/foundation/filesystem/stable-file-read.js";
+import {
+  RootedResourceParentHandle,
+} from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
+import { readStableFileDigest } from "../../../src/foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 
 async function expectAtomicWriteError(
@@ -54,7 +66,7 @@ async function expectAtomicWriteError(
 function directoryNames(directory: string): readonly string[] {
   return Object.freeze(
     readdirSync(directory).filter((name) => (
-      name.startsWith(".wakeflow-stage-")
+      name.startsWith(".wakeflow-atomic-")
     )),
   );
 }
@@ -93,6 +105,34 @@ test("atomic create publishes exact bytes, mode, digest, and no stage residue", 
     equal(Object.isFrozen(result), true);
     deepEqual(directoryNames(path.join(rootPath, "records")), []);
   } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("atomic create 在 stage cleanup 前后分别同步 target parent", {
+  concurrency: false,
+}, async () => {
+  const rootPath = mkdtempSync(path.join(
+    os.tmpdir(),
+    "wakeflow-atomic-create-sync-order-",
+  ));
+  const root = await RootedDirectory.open(rootPath);
+  const resourcePath = parsePortableResourcePath("state");
+  const originalSync = RootedResourceParentHandle.prototype.sync;
+  let targetParentSyncCount = 0;
+  RootedResourceParentHandle.prototype.sync = async function patchedSync() {
+    if (this.resourcePath === resourcePath) targetParentSyncCount += 1;
+    return originalSync.call(this);
+  };
+  try {
+    await createFileAtomically(root, resourcePath, Buffer.from("state"), {
+      mode: 0o600,
+    });
+    equal(targetParentSyncCount, 2);
+    deepEqual(directoryNames(rootPath), []);
+  } finally {
+    RootedResourceParentHandle.prototype.sync = originalSync;
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
   }
@@ -173,6 +213,84 @@ test("concurrent creates use OS no-replace publication", async () => {
   }
 });
 
+test("atomic create 自动恢复 inactive partial 与 two-link stage", async () => {
+  const rootPath = mkdtempSync(path.join(
+    os.tmpdir(),
+    "wakeflow-atomic-recovery-",
+  ));
+  mkdirSync(path.join(rootPath, "records"), { mode: 0o700 });
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    const partialTarget = parsePortableResourcePath("records/partial.json");
+    const partialBytes = Buffer.from("complete-partial-target");
+    const partialAddress = issueDurableAtomicFileStageAddress(
+      "create",
+      partialTarget,
+      computeSha256Digest(partialBytes),
+      0o640,
+    );
+    const partialStage = durableAtomicFileStageRef(
+      partialTarget,
+      partialAddress,
+    );
+    try {
+      await createFileCandidateDurably(
+        root,
+        partialStage,
+        Buffer.from("partial"),
+        { mode: 0o600 },
+      );
+    } finally {
+      releaseDurableAtomicFileStageAddress(partialAddress);
+    }
+
+    await createFileAtomically(root, partialTarget, partialBytes, {
+      mode: 0o640,
+    });
+    equal(
+      readFileSync(
+        path.join(rootPath, ...partialTarget.split("/")),
+        "utf8",
+      ),
+      "complete-partial-target",
+    );
+
+    const linkedTarget = parsePortableResourcePath("records/linked.json");
+    const linkedBytes = Buffer.from("complete-linked-target");
+    const linkedAddress = issueDurableAtomicFileStageAddress(
+      "create",
+      linkedTarget,
+      computeSha256Digest(linkedBytes),
+      0o600,
+    );
+    const linkedStage = durableAtomicFileStageRef(linkedTarget, linkedAddress);
+    try {
+      await createFileCandidateDurably(root, linkedStage, linkedBytes, {
+        mode: 0o600,
+      });
+      linkSync(
+        path.join(rootPath, ...linkedStage.split("/")),
+        path.join(rootPath, ...linkedTarget.split("/")),
+      );
+    } finally {
+      releaseDurableAtomicFileStageAddress(linkedAddress);
+    }
+
+    await expectAtomicWriteError(
+      () => createFileAtomically(root, linkedTarget, linkedBytes, {
+        mode: 0o600,
+      }),
+      "target-exists",
+      "$resourcePath",
+    );
+    equal(statSync(path.join(rootPath, ...linkedTarget.split("/"))).nlink, 1);
+    deepEqual(directoryNames(path.join(rootPath, "records")), []);
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
 test("atomic replace requires and preserves an exact stable-read expectation", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-atomic-replace-"));
   const target = path.join(rootPath, "state");
@@ -180,17 +298,18 @@ test("atomic replace requires and preserves an exact stable-read expectation", a
   const root = await RootedDirectory.open(rootPath);
   try {
     const resourcePath = parsePortableResourcePath("state");
-    const before = await readStableFile(root, resourcePath, {
+    const before = await readStableFileDigest(root, resourcePath, {
       maximumBytes: parseByteCount(1024),
-      capture: "digest-only",
     });
     const bytes = Buffer.from("after-state");
     const result = await replaceFileAtomically(root, resourcePath, bytes, {
       mode: 0o644,
-      expected: { node: before.node, digest: before.digest },
+      expected: before,
     });
 
     equal(result.publication, "replaced");
+    deepEqual(result.previous, before);
+    equal(Object.isFrozen(result.previous), true);
     deepEqual(readFileSync(target), bytes);
     equal(statSync(target).mode & 0o777, 0o644);
     equal(result.digest, computeSha256Digest(bytes));
@@ -209,9 +328,8 @@ test("stale replace expectation leaves the newer target untouched", async () => 
   const root = await RootedDirectory.open(rootPath);
   try {
     const resourcePath = parsePortableResourcePath("state");
-    const before = await readStableFile(root, resourcePath, {
+    const before = await readStableFileDigest(root, resourcePath, {
       maximumBytes: parseByteCount(1024),
-      capture: "digest-only",
     });
     writeFileSync(target, "external-change");
 
@@ -222,7 +340,7 @@ test("stale replace expectation leaves the newer target untouched", async () => 
         Buffer.from("ours"),
         {
           mode: 0o600,
-          expected: { node: before.node, digest: before.digest },
+          expected: before,
         },
       ),
       "expectation-changed",
@@ -370,10 +488,10 @@ test("options, bytes, expectation, and AbortSignal are passively admitted", asyn
     );
     equal(aborted.message.includes("private-abort"), false);
 
-    const stable = await readStableFile(
+    const stable = await readStableFileDigest(
       root,
       parsePortableResourcePath("state"),
-      { maximumBytes: parseByteCount(1024), capture: "digest-only" },
+      { maximumBytes: parseByteCount(1024) },
     );
     await expectAtomicWriteError(
       () => replaceFileAtomically(
@@ -382,60 +500,43 @@ test("options, bytes, expectation, and AbortSignal are passively admitted", asyn
         Buffer.from("after"),
         asReplaceOptions({
           mode: 0o600,
-          expected: { node: { ...stable.node }, digest: stable.digest },
+          expected: { ...stable, node: { ...stable.node } },
         }),
       ),
       "input",
       "$options.expected.node",
     );
+    await expectAtomicWriteError(
+      () => replaceFileAtomically(
+        root,
+        parsePortableResourcePath("state"),
+        Buffer.from("after"),
+        {
+          mode: 0o600,
+          expected: {
+            ...stable,
+            resourcePath: parsePortableResourcePath("different"),
+          },
+        },
+      ),
+      "input",
+      "$options.expected.resourcePath",
+    );
+    await expectAtomicWriteError(
+      () => replaceFileAtomically(
+        root,
+        parsePortableResourcePath("state"),
+        Buffer.from("after"),
+        asReplaceOptions({
+          mode: 0o600,
+          expected: { ...stable, byteCount: stable.byteCount + 1 },
+        }),
+      ),
+      "input",
+      "$options.expected.byteCount",
+    );
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
   }
-});
-
-test("durable atomic writer owns bytes and publication but no domain policy", () => {
-  const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/filesystem/durable-atomic-file-write.ts",
-    ),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, [
-    "node:fs",
-    "node:fs/promises",
-    "node:path",
-    "node:util",
-    "../crypto/sha256.js",
-    "../data/passive-own-data.js",
-    "../identity/uuid-v4.js",
-    "../node/node-system-error.js",
-    "../numeric/byte-count.js",
-    "./file-node-snapshot.js",
-    "./portable-resource-path.js",
-    "./rooted-directory.js",
-    "./rooted-resource-parent-handle.js",
-    "./stable-file-read.js",
-  ]);
-  equal(source.includes("await link("), true);
-  equal(source.includes("await rename("), true);
-  equal(source.includes("await exclusive.handle.sync()"), true);
-  equal(source.includes("await parent.sync()"), true);
-  equal(source.includes("O_RDWR"), true);
-  equal(source.match(/await verifyHandleBytes\(/gu)?.length, 2);
-  equal(source.includes("RootedResourceParentHandle.open"), true);
-  equal(source.includes("parent.parentAbsolutePath"), true);
-  equal(source.includes("interface OpenedParent"), false);
-  equal(source.includes("function parseTargetAddress"), false);
-  equal(source.includes("function inspectInitialParent"), false);
-  equal(source.includes("parent.handle"), false);
-  equal(source.includes("mkdir"), false);
-  equal(source.includes("JSON"), false);
-  equal(source.includes("mixedOwned"), false);
-  equal(source.includes("journal"), true);
-  equal(source.includes("lock"), true);
 });

@@ -11,11 +11,12 @@
   ],
   "scripts": {
     "typecheck": "tsc -b --pretty false",
+    "check:architecture": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/architecture/check-dependencies.js",
     "test:tooling": "node --test .build/tests/codegen/schema-types.test.js",
-    "test:typescript": "node --test \".build/tests/**/*.test.js\"",
+    "test:typescript": "tsc -b tooling/tsconfig.json tests/tsconfig.json --pretty false && node .build/tooling/testing/run-typescript-tests.js",
     "schema:build": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/codegen/schema-types.js build --repo-root .",
     "schema:check": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/codegen/schema-types.js check --repo-root .",
-    "check:typescript": "npm run typecheck && npm run test:typescript && npm run schema:check",
+    "check:typescript": "npm run typecheck && npm run check:architecture && npm run test:typescript && npm run schema:check",
     "sync:core": "node tools/sync-core.mjs",
     "check:core": "node tools/sync-core.mjs --check",
     "validate": "npm --workspace wakeflow run validate",
@@ -29,8 +30,9 @@
     "test": "npm run check:typescript && npm run check:core && npm run validate && npm run validate:claude && npm run smoke && npm run smoke:claude && npm run test:wakeflow"
   },
   "devDependencies": {
+    "@swc/core": "1.16.1",
     "@types/node": "24.13.3",
-    "ajv": "8.20.0",
+    "dependency-cruiser": "18.2.0",
     "json-schema-to-typescript": "15.0.4",
     "typescript": "7.0.2"
   },
@@ -38,6 +40,8 @@
     "node": ">=24.19.0 <25"
   },
   "dependencies": {
-    "canonicalize": "4.0.0"
+    "ajv": "8.20.0",
+    "canonicalize": "4.0.0",
+    "p-limit": "7.3.1"
   }
 }

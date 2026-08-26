@@ -1,10 +1,11 @@
 # Wakeflow TypeScript 全新项目能力重构开发计划
 
 > 创建日期：2026-08-25
-> 当前状态：`engineering-foundation-in-progress / capability-model-pending / implementation-paused`
+> 当前状态：`engineering-foundation-complete / capability-model-in-progress / vertical-slices-in-progress`
 > 需求权威：[TypeScript 单一源码、双宿主制品与轻量测试需求](./wakeflow-typescript-dual-artifact-build-requirement-2026-08-24.md#ts-document-role)
 > 产品行为基线：[初始化生成文件需求 D1-D41](./wakeflow-initialization-generated-files-requirement-2026-08-05.md#req-decision-register)、[D38 全局职责闭环](./wakeflow-initialization-generated-files-requirement-2026-08-05.md#req-d38-global-contract)、[初始化 v3 当前实现](./wakeflow-initialization-v3-development-plan-2026-08-06.md#dev-progress)
 > 基础服务边界：[全局基础服务需求](./wakeflow-foundation-services-requirement-2026-08-11.md#foundation-document-role)、[review 与实施分界](./wakeflow-foundation-services-requirement-2026-08-11.md#foundation-review-implementation-separation)
+> 资源处理标准：[TypeScript 资源处理归一标准与收敛矩阵](./wakeflow-typescript-resource-handling-standard-2026-08-26.md)
 > 环境边界：源码只修改 Wakeflow 仓库；真实初始化验收只使用用户指定的可丢弃 `WakeWorkspace`；`AlembicWorkspace` 完全排除
 > 授权边界：本文是开发上下文和阶段门，不因创建本文自动授权真实工作区操作、commit、version、tag、push、publish 或插件缓存刷新
 
@@ -140,7 +141,9 @@ tsconfig*.json        # project references 与共享编译约束
 
 ### 7.1 当前状态
 
-本阶段尚未确认，后续开发在此暂停。下一轮讨论需要先回答“Wakeflow 由哪些能力区块组成、每个区块提供什么等级的能力、依赖哪些低层合同”，然后才能继续写领域代码。
+本阶段正在按 consumer-driven 垂直切片建立。Data、Identity/Time/Crypto、Rooted Filesystem 的主要低层合同已经实现；Artifact Tree Identity、Config Authority Snapshot、RH-1 TODO Intake Aggregate 与 RH-2 Demand Core Aggregate 已成为真实 consumer。RH-2 经实现后审查已按标准 Event Sourcing 根本重构：pure Decider/Command Handler、一次 append 一个 immutable commit batch、fixed commitSequence optimistic CAS、snapshot + tail 正常加载、full audit、显式 upcaster、具名 candidate recovery 与 TODO-backed publication 已闭合；不再保留 stream lock、pure append journal、调用方构造 stored event 或 load-time snapshot write。下一切片必须继续从真实 consumer 与当前代码事实决定，不能把早期 RH-3 顺序当作绝对命令。
+
+E1 全局退出门继续约束 public、host、artifact 和 cutover；但一个 bounded E2 垂直切片在自己的能力上下文、真实 consumer、依赖方向、authority 边界和验收证据已逐项确认后可以先行实施。该局部准入不能被解释为其余 D1–D41 或 31-tool 能力已经完成设计。
 
 ### 7.2 每个能力区块必须形成的上下文
 
@@ -271,9 +274,9 @@ tsconfig*.json        # project references 与共享编译约束
 
 | 阶段 | 状态 | 当前事实 |
 | --- | --- | --- |
-| E0 工程底座 | `in-progress / uncommitted` | Node 24 声明、TS project references、独立目录骨架和 Schema 类型生成最小能力已建立；待清理后复验 |
-| E1 能力地图与等级 | `discussion-pending` | 尚未确认；不得开始领域实现 |
-| E2 能力重新实现 | `paused` | 未开始 |
+| E0 工程底座 | `complete` | Node 24、TS project references、Schema codegen、架构门和轻量 TS 测试门已建立 |
+| E1 能力地图与等级 | `in-progress` | BFS-01～BFS-11 已重新映射；资源处理归一标准已确认，其他 public/host/packaging 能力继续按真实 consumer 补齐 |
+| E2 能力重新实现 | `in-progress` | 已完成 Artifact Tree Identity、Config Authority Snapshot、RH-1 TODO Intake Aggregate 与经根本审查重构的 RH-2 Demand Core Aggregate；Demand 已收敛为 immutable Identity/Authority + append-commit Event Stream + immutable derived snapshots，不保留 JSONL、state/event 双 authority、stream lock 或 pure append journal |
 | E3 整体新旧对比 | `pending` | 旧实现和旧测试保持完整基线 |
 | E4 制品切换与清理 | `pending` | 未授权、未开始 |
 
@@ -302,3 +305,6 @@ tsconfig*.json        # project references 与共享编译约束
 
 - 2026-08-25：创建开发计划，确认 Node 24、全新 `src/`/`tooling/`/`tests/`、TypeScript 单一手写源码、双宿主生成制品与轻量证据目标。
 - 2026-08-25：修正为能力重构路线。旧源码、旧测试和旧制品作为完整可执行基线保留至新项目全部完成；废止逐文件迁移登记、`legacy-copy` source manifest、shadow-copy 装配、中途 artifact 切换和同批删除方案；E1 能力地图与能力等级确认前暂停领域实现。
+- 2026-08-26：确认新 TS 项目的资源处理归一标准。当前 JavaScript 文件形态不再作为新物理合同；standalone JSON 统一 deterministic pretty bytes，TODO 改为 JSON intake/state authority + Markdown projection，Demand event 初始确定为 immutable JSON record collection，随后经 RH-2 根本审查进一步收敛为 atomic append-commit collection；不引入 FileManager、全资源 storage backend abstraction、JSONL authority 或 normal compatibility 双写。
+- 2026-08-26：完成 RH-1 TODO Intake Aggregate。实现 immutable intake、revision state、collection digest、完整 BusinessArchive 授权回执、单向 Markdown projection、collection lock、immutable journal、append/claim/archive CAS 与 dead-owner recovery；删除新 TS Markdown authority 候选和反向 row parser，并在任何物理 effect 前执行 projection/record 容量检查。
+- 2026-08-26：完成 RH-2 Demand Core Aggregate 的标准化重构。基于 Ledger/TODO closure，实现 pure Decider 与 Command Handler、typed/versioned stored event/upcaster、一次 append 一个 immutable commit batch、fixed commitSequence no-replace CAS、immutable snapshot + tail、full audit、inactive candidate recovery、revision-1 publication 及跨资源 sidecar/in-root marker/durable rename/exact TODO claim；Ledger journal 同步改为 bounded self-contained record/member bytes，并由批量 canonical resolver 统一 Demand member resolution；删除早期单事件文件、stream lock、pure append journal、全量 load 后改写 snapshot 和 raw materialize/append API；Event Sourcing 仍只用于 Demand Aggregate。

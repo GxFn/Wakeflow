@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { equal } from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import os from "node:os";
@@ -171,23 +171,4 @@ test("NodeSystemError is distinct from an unchecked Error", () => {
   // @ts-expect-error 普通 Error 未经 code 分类，不能直接获得 NodeSystemError 类型。
   const unchecked: NodeSystemError = raw;
   equal(unchecked, raw);
-});
-
-test("node-system-error performs only passive code classification", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "src/foundation/node/node-system-error.ts"),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, ["node:util"]);
-  equal(source.includes(".message"), false);
-  equal(source.includes(".path"), false);
-  equal(source.includes(".syscall"), false);
-  equal(source.includes(".errno"), false);
-  equal(source.includes(".cause"), false);
-  equal(source.includes("String(value)"), false);
-  equal(source.includes("types.isProxy(value)"), true);
-  equal(source.includes("Object.getOwnPropertyDescriptor(value, \"code\")"), true);
 });

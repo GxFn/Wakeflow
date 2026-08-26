@@ -1,6 +1,4 @@
 import { deepEqual, equal } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -14,7 +12,6 @@ import {
   type FileByteRangeErrorReason,
 } from "../../../src/foundation/filesystem/file-byte-range.js";
 import {
-  MAX_SAFE_BYTE_COUNT,
   parseByteCount,
   type ByteCount,
 } from "../../../src/foundation/numeric/byte-count.js";
@@ -201,26 +198,4 @@ test("bounds assertion revalidates forged range and file-size brands", () => {
     "file-size",
     "$fileByteCount",
   );
-});
-
-test("file-byte-range is a pure passive numeric composition", () => {
-  const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/filesystem/file-byte-range.ts",
-    ),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-  deepEqual(imports, [
-    "../data/passive-own-data.js",
-    "../numeric/byte-count.js",
-  ]);
-  equal(source.includes("node:fs"), false);
-  equal(source.includes("class "), true);
-  equal(source.includes("Buffer"), false);
-  equal(source.includes("TextDecoder"), false);
-  equal(source.includes("BigInt"), false);
-  equal(MAX_SAFE_BYTE_COUNT, Number.MAX_SAFE_INTEGER);
 });

@@ -1,6 +1,4 @@
 import { deepEqual, equal, notEqual } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -332,15 +330,4 @@ test("special keys remain data and nested paths use JSON Pointer escaping", () =
     "unsupported-type",
     "$/a~1b~0c",
   );
-});
-
-test("json-value depends only on the passive own-data primitive", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "src/foundation/data/json-value.ts"),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((match) => match[1]);
-
-  deepEqual(imports, ["./passive-own-data.js"]);
 });

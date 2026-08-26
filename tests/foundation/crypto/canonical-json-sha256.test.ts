@@ -1,6 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -102,18 +100,4 @@ test("canonical input errors propagate with their original owner, reason, and pa
   equal(caught.reason, "proxy");
   equal(caught.path, "$.payload/nested");
   equal(trapCalls, 0);
-});
-
-test("the composition module depends only on its two public foundation inputs", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "src/foundation/crypto/canonical-json-sha256.ts"),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, ["../data/canonical-json.js", "./sha256.js"]);
-  equal(source.includes("node:crypto"), false);
-  equal(source.includes('from "canonicalize"'), false);
-  equal(source.includes("class "), false);
 });

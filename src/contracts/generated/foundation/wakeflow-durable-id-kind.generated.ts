@@ -8,6 +8,8 @@ export const WAKEFLOW_DURABLE_ID_KINDS = Object.freeze([
   "archive",
   "confirmation",
   "demand",
+  "demand-event",
+  "demand-event-commit",
   "delivery",
   "delivery-run",
   "dispatch-group",

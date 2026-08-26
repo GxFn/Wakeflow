@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing-publication-transaction:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA",
+  "title": "WakeflowDemandEventSourcingPublicationTransaction",
+  "description": "TODO-backed Demand Event Sourcing root publication 的自包含 immutable recovery plan。",
+  "$comment": "Plan 保存 initial command 与由纯 Decider/evolve 得到的 exact commit；snapshot 是 derived cache，不进入跨资源 transaction authority。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactKind",
+    "schemaVersion",
+    "demandId",
+    "todoId",
+    "expectedTodoCollectionDigest",
+    "expectedTodoStateDigest",
+    "stageRef",
+    "finalRootRef",
+    "identity",
+    "identityDigest",
+    "authority",
+    "authorityDigest",
+    "initialCommand",
+    "initialCommandDigest",
+    "initialCommit",
+    "initialCommitDigest"
+  ],
+  "properties": {
+    "artifactKind": {
+      "const": "wakeflow-demand-event-sourcing-publication-transaction"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "demandId": {
+      "$ref": "#/$defs/demandId"
+    },
+    "todoId": {
+      "$ref": "urn:wakeflow:governance:todo:item-id:v1"
+    },
+    "expectedTodoCollectionDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    },
+    "expectedTodoStateDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    },
+    "stageRef": {
+      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+    },
+    "finalRootRef": {
+      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+    },
+    "identity": {
+      "$ref": "urn:wakeflow:governance:demand:identity:v1"
+    },
+    "identityDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    },
+    "authority": {
+      "$ref": "urn:wakeflow:governance:demand:authority:v1"
+    },
+    "authorityDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    },
+    "initialCommand": {
+      "$ref": "#/$defs/initialCommand"
+    },
+    "initialCommandDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    },
+    "initialCommit": {
+      "$ref": "urn:wakeflow:governance:demand:event-stream-commit:v1"
+    },
+    "initialCommitDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    }
+  },
+  "$defs": {
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "eventId": {
+      "type": "string",
+      "pattern": "^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "initialCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commandType",
+        "commandVersion",
+        "demandId",
+        "eventId",
+        "recordedAt",
+        "identityDigest",
+        "authorityDigest"
+      ],
+      "properties": {
+        "commandType": {
+          "const": "publication.publish-demand"
+        },
+        "commandVersion": {
+          "const": 1
+        },
+        "demandId": {
+          "$ref": "#/$defs/demandId"
+        },
+        "eventId": {
+          "$ref": "#/$defs/eventId"
+        },
+        "recordedAt": {
+          "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+        },
+        "identityDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "authorityDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    }
+  }
+}

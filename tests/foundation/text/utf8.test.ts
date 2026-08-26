@@ -1,6 +1,4 @@
 import { deepEqual, equal, notEqual } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -182,22 +180,4 @@ test("UTF-8 errors normalize paths and disclose no rejected material", () => {
   equal(textError.message.includes("private"), false);
   equal("cause" in error, false);
   equal("cause" in textError, false);
-});
-
-test("utf8 has one standards dependency and owns no file or domain policy", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "src/foundation/text/utf8.ts"),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, ["node:util"]);
-  equal(source.includes('fatal: true'), true);
-  equal(source.includes('ignoreBOM: true'), true);
-  equal(source.includes("isWellFormed()"), true);
-  equal(source.includes("node:fs"), false);
-  equal(source.includes("JSON.parse"), false);
-  equal(source.includes("maximumBytes"), false);
-  equal(source.includes("canonical-json"), false);
 });

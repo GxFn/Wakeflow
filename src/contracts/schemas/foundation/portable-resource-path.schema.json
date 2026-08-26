@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA",
   "title": "WakeflowPortableResourcePathText",
   "description": "Wakeflow 持久协议使用的根内逻辑资源路径：以正斜杠分段、非空、相对且已经处于唯一结构形式。",
   "$comment": "本 Schema 只拥有 portable wire 结构。well-formed Unicode、NFC 和品牌类型由 foundation/filesystem/portable-resource-path 复验；容量、OS 保留文件名、case collision、物理根、symlink、存在性、URL、文档 anchor 与允许父级的配置 placement 不属于本合同。",

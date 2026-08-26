@@ -1,7 +1,5 @@
-import { deepEqual, equal, match } from "node:assert/strict";
+import { equal } from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -169,39 +167,4 @@ test("unexpected dependency failures are sanitized and retain only the caller pa
     if (previous === undefined) delete (Array.prototype as { toJSON?: unknown }).toJSON;
     else Object.defineProperty(Array.prototype, "toJSON", previous);
   }
-});
-
-test("canonicalize is an exact production dependency and the adapter surface stays narrow", () => {
-  const packageJson = JSON.parse(readFileSync(
-    path.join(process.cwd(), "package.json"),
-    "utf8",
-  )) as { dependencies?: Record<string, string> };
-  const packageLock = JSON.parse(readFileSync(
-    path.join(process.cwd(), "package-lock.json"),
-    "utf8",
-  )) as {
-    packages?: Record<string, { integrity?: string; version?: string }>;
-  };
-
-  equal(packageJson.dependencies?.canonicalize, "4.0.0");
-  equal(packageLock.packages?.["node_modules/canonicalize"]?.version, "4.0.0");
-  match(
-    packageLock.packages?.["node_modules/canonicalize"]?.integrity ?? "",
-    /^sha512-/u,
-  );
-
-  const source = readFileSync(
-    path.join(process.cwd(), "src/foundation/data/canonical-json.ts"),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-  deepEqual(imports, [
-    "canonicalize",
-    "../text/utf8.js",
-    "./json-value.js",
-  ]);
-  equal(source.includes("canonicalizeEx"), false);
-  equal(source.includes("new TextEncoder"), false);
-  equal(source.includes("encodeUtf8"), true);
 });

@@ -3,7 +3,6 @@ import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -327,44 +326,3 @@ test("options and AbortSignal are closed and passively admitted", async () => {
     rmSync(rootPath, { recursive: true, force: true });
   }
 });
-
-test("directory materialization uses explicit single-level mkdir only", () => {
-  const source = requireSource();
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-  deepEqual(imports, [
-    "node:fs",
-    "node:fs/promises",
-    "node:util",
-    "../data/passive-own-data.js",
-    "../node/node-system-error.js",
-    "./file-node-snapshot.js",
-    "./portable-resource-path.js",
-    "./rooted-directory.js",
-    "./rooted-resource-parent-handle.js",
-  ]);
-  equal(source.includes("recursive: false"), true);
-  equal(source.includes("recursive: true"), false);
-  equal(source.includes("await targetHandle.sync()"), true);
-  equal(source.includes("await parent.sync()"), true);
-  equal(source.includes("chmod(options.mode)"), true);
-  equal(source.includes("RootedResourceParentHandle.open"), true);
-  equal(source.includes("interface OpenedParent"), false);
-  equal(source.includes("function parseTargetAddress"), false);
-  equal(source.includes("function inspectInitialParent"), false);
-  equal(source.includes("parent.handle"), false);
-  equal(/\brmdir\s*\(/u.test(source), false);
-  equal(/\brm\s*\(/u.test(source), false);
-  equal(/\bunlink\s*\(/u.test(source), false);
-  equal(/\bwriteFile\s*\(/u.test(source), false);
-});
-
-function requireSource(): string {
-  return readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/filesystem/durable-directory-materialization.ts",
-    ),
-    "utf8",
-  );
-}

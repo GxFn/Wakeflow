@@ -3,7 +3,6 @@ import {
   constants as fileSystemConstants,
   lstatSync,
   mkdtempSync,
-  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -253,28 +252,4 @@ test("comparison revalidates forged snapshot fields", () => {
     "snapshot-shape",
     "$left",
   );
-});
-
-test("file-node-snapshot is passive and performs no filesystem I/O", () => {
-  const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/filesystem/file-node-snapshot.ts",
-    ),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, [
-    "node:fs",
-    "../data/passive-own-data.js",
-    "../numeric/byte-count.js",
-  ]);
-  equal(source.includes("lstatSync("), false);
-  equal(source.includes("fstatSync("), false);
-  equal(source.includes("openSync("), false);
-  equal(source.includes(".isFile("), false);
-  equal(source.includes(".isDirectory("), false);
-  equal(source.includes("pickOwnDataProperties"), true);
 });

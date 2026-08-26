@@ -37,6 +37,10 @@ const portableResourcePathSchemaRelativePath =
   "foundation/portable-resource-path.schema.json";
 const portableResourcePathGeneratedRelativePath =
   "foundation/portable-resource-path.generated.ts";
+const artifactSchemaRelativePath =
+  "foundation/loaded-artifact-tree-manifest.schema.json";
+const configSchemaRelativePath =
+  "configuration/wakeflow-config-v3.schema.json";
 
 function generatedFiles(root: string): readonly string[] {
   const files: string[] = [];
@@ -69,12 +73,18 @@ function copyIdentitySchema(fixtureRoot: string): void {
 test("new-project Schema catalog closes the current foundation contracts", () => {
   const catalog = loadSchemaCatalog(repoRoot);
 
-  equal(catalog.length, 3);
-  deepEqual(catalog.map((record) => record.relativePath), [
+  equal(catalog.length > 0, true);
+  const paths = catalog.map((record) => record.relativePath);
+  deepEqual(paths, [...paths].sort());
+  for (const required of [
+    configSchemaRelativePath,
+    artifactSchemaRelativePath,
     portableResourcePathSchemaRelativePath,
     utcInstantSchemaRelativePath,
     identitySchemaRelativePath,
-  ]);
+  ]) {
+    equal(paths.includes(required), true, required);
+  }
   const identity = catalog.find(
     (record) => record.relativePath === identitySchemaRelativePath,
   );
@@ -96,10 +106,12 @@ test("new-project Schema catalog closes the current foundation contracts", () =>
     portableResourcePath?.id,
     "urn:wakeflow:foundation:filesystem:portable-resource-path:v1",
   );
-  equal(catalog.reduce(
-    (sum, record) => sum + record.externalRefs.length,
-    0,
-  ), 0);
+  equal(
+    catalog.every((record) => record.externalRefs.every((reference) => (
+      catalog.some((candidate) => reference.startsWith(candidate.id))
+    ))),
+    true,
+  );
 });
 
 test("Schema generation emits portable runtime contracts under .build", async () => {
@@ -107,21 +119,23 @@ test("Schema generation emits portable runtime contracts under .build", async ()
   const absolute = path.join(repoRoot, output);
   rmSync(absolute, { recursive: true, force: true });
   try {
+    const catalog = loadSchemaCatalog(repoRoot);
     const result = await buildSchemaTypes(repoRoot, output);
-    equal(result.schemaCount, 3);
-    equal(result.externalRefEdges, 0);
+    equal(result.schemaCount, catalog.length);
+    equal(
+      result.externalRefEdges,
+      catalog.reduce((sum, record) => sum + record.externalRefs.length, 0),
+    );
     match(result.digest, /^sha256:[0-9a-f]{64}$/u);
 
     const files = generatedFiles(absolute);
-    equal(files.length, 3);
+    equal(files.length, catalog.length);
     const relativeFiles = files.map((file) => (
       path.relative(absolute, file).split(path.sep).join("/")
     ));
-    deepEqual(relativeFiles, [
-      portableResourcePathGeneratedRelativePath,
-      utcInstantGeneratedRelativePath,
-      identityGeneratedRelativePath,
-    ]);
+    deepEqual(relativeFiles, catalog.map((record) => (
+      record.relativePath.replace(/\.schema\.json$/u, ".generated.ts")
+    )));
 
     const identityGenerated = readFileSync(
       path.join(absolute, identityGeneratedRelativePath),
@@ -178,14 +192,19 @@ test("Schema generation emits portable runtime contracts under .build", async ()
       true,
     );
 
-    const combined = [
-      identityGenerated,
-      utcInstantGenerated,
-      portableResourcePathGenerated,
-    ].join("\n");
+    const configGenerated = readFileSync(
+      path.join(
+        absolute,
+        configSchemaRelativePath.replace(/\.schema\.json$/u, ".generated.ts"),
+      ),
+      "utf8",
+    );
+    match(configGenerated, /export const WAKEFLOW_CONFIG_V3_SCHEMA/u);
+    match(configGenerated, /export interface WakeflowConfigV3/u);
+
+    const combined = files.map((file) => readFileSync(file, "utf8")).join("\n");
     match(combined, /此文件由 Wakeflow JSON Schema 生成，禁止手工修改/u);
     equal(combined.includes(repoRoot), false);
-    equal(combined.includes("core/schemas"), false);
   } finally {
     rmSync(absolute, { recursive: true, force: true });
   }
@@ -196,9 +215,10 @@ test("Schema check is deterministic and matches committed generated output", asy
   const absolute = path.join(repoRoot, output);
   rmSync(absolute, { recursive: true, force: true });
   try {
+    const catalog = loadSchemaCatalog(repoRoot);
     const result = await checkSchemaTypes(repoRoot, output);
     equal(result.mode, "check");
-    equal(result.schemaCount, 3);
+    equal(result.schemaCount, catalog.length);
     equal(result.outputRoot, "src/contracts/generated");
   } finally {
     rmSync(absolute, { recursive: true, force: true });

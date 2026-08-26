@@ -3,7 +3,6 @@ import {
   linkSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -161,6 +160,39 @@ test("resource tree scan stays below its explicit starting directory", async () 
   }
 });
 
+test("starting-directory expectation is revalidated by the first stable read", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-tree-expected-"));
+  const recordsPath = path.join(rootPath, "records");
+  mkdirSync(recordsPath);
+  writeFileSync(path.join(recordsPath, "before"), "before");
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    const resourcePath = parsePortableResourcePath("records");
+    const observed = await scanBoundedResourceDirectoryTree(
+      root,
+      resourcePath,
+      treeOptions({ maximumEntries: 1 }),
+    );
+    writeFileSync(path.join(recordsPath, "after"), "after");
+
+    await expectTreeScanError(
+      () => scanBoundedResourceDirectoryTree(
+        root,
+        resourcePath,
+        treeOptions({
+          expectedNode: observed.treeRootNode,
+          maximumEntries: 2,
+        }),
+      ),
+      "source-changed",
+      "$options.expectedNode",
+    );
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
 test("maximumEntries is a total descendant bound and never returns a prefix", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-tree-entries-"));
   mkdirSync(path.join(rootPath, "directory"));
@@ -279,6 +311,7 @@ test("options are explicit, passive, and AbortSignal remains cooperative", async
       [{ maximumEntries: -1, maximumDepth: 1 }, "$options.maximumEntries"],
       [{ maximumEntries: 1, maximumDepth: 1.5 }, "$options.maximumDepth"],
       [{ maximumEntries: 1, maximumDepth: 1, signal: {} }, "$options.signal"],
+      [{ maximumEntries: 1, maximumDepth: 1, expectedNode: {} }, "$options.expectedNode"],
     ];
     for (const [options, expectedPath] of invalid) {
       await expectTreeScanError(
@@ -319,36 +352,4 @@ test("options are explicit, passive, and AbortSignal remains cooperative", async
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
   }
-});
-
-test("bounded tree scan remains a general composition over stable directories", () => {
-  const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/filesystem/bounded-directory-tree-scan.ts",
-    ),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, [
-    "node:util",
-    "../data/passive-own-data.js",
-    "./file-node-snapshot.js",
-    "./portable-resource-path.js",
-    "./rooted-directory.js",
-    "./stable-directory-read.js",
-  ]);
-  equal(source.includes("node:fs"), false);
-  equal(source.includes("readStableRootDirectory"), true);
-  equal(source.includes("readStableResourceDirectory"), true);
-  equal(source.includes("pendingDirectories"), true);
-  equal(source.includes("function visit("), false);
-  equal(source.includes("readStableFile"), false);
-  equal(source.includes("canonicalize"), false);
-  equal(source.includes("digest"), false);
-  equal(source.includes("filter"), false);
-  equal(source.includes("followLinks"), false);
-  equal(source.includes('treeEntry.node.kind === "directory"'), true);
 });

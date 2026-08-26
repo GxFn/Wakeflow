@@ -27,9 +27,10 @@ import {
  * Wakeflow Foundation / Filesystem：exact regular-file pathname 的持久化 unlink。
  *
  * 本文件要求冻结的 expected node，持有 no-follow source 与 parent handles，并在
- * commit 前确认 pathname/handle/expectation 完全一致。unlink 后 pathname 必须 absent，
- * 打开的 handle 仍须指向原 inode，且 linkCount 精确减少 1；随后同步 inode 与 parent
- * 并完成最终复验。
+ * commit 前确认 pathname/handle/expectation 完全一致。默认 settlement 要求 unlink 后
+ * pathname 持续 absent；协调锁可以显式允许不同 dev/ino 的 successor 立即取得原名。
+ * 两种模式都要求打开的 handle 仍指向原 inode、linkCount 精确减少 1，再同步 inode
+ * 与 parent 并完成最终复验。
  *
  * missing 不被当作幂等成功，symlink/directory/special node 均拒绝。unlink 后失败不会
  * 尝试恢复 pathname，也不会删除占据原名的 successor。本 primitive 必须在领域
@@ -40,6 +41,8 @@ import {
 
 export interface ExactRegularFileUnlinkOptions {
   readonly expectedNode: Readonly<FileNodeSnapshot>;
+  /** 普通资源要求持续 absent；协调锁允许 successor 立即取得同一 pathname。 */
+  readonly settlement?: "absent" | "replacement-allowed";
   readonly signal?: AbortSignal;
 }
 
@@ -50,6 +53,7 @@ export interface ExactRegularFileUnlinkReceipt {
   readonly nodeAfterUnlink: Readonly<FileNodeSnapshot>;
   readonly previousLinkCount: bigint;
   readonly remainingLinkCount: bigint;
+  readonly replacementObserved: boolean;
 }
 
 /** exact regular-file unlink 失败分类。 */
@@ -116,6 +120,7 @@ export class ExactRegularFileUnlinkError extends Error {
 
 interface ParsedOptions {
   readonly expectedNode: Readonly<FileNodeSnapshot>;
+  readonly settlement: "absent" | "replacement-allowed";
   readonly signal: AbortSignal | undefined;
 }
 
@@ -180,7 +185,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     if (error instanceof PassiveOwnDataError) fail("input", "$options");
     throw error;
   }
-  const allowed = new Set(["expectedNode", "signal"]);
+  const allowed = new Set(["expectedNode", "settlement", "signal"]);
   if (
     !Object.hasOwn(record, "expectedNode")
     || Object.keys(record).some((key) => !allowed.has(key))
@@ -195,7 +200,11 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   if (signal !== undefined && !isAbortSignal(signal)) {
     fail("input", "$options.signal");
   }
-  return Object.freeze({ expectedNode, signal });
+  const settlement = record.settlement ?? "absent";
+  if (settlement !== "absent" && settlement !== "replacement-allowed") {
+    fail("input", "$options.settlement");
+  }
+  return Object.freeze({ expectedNode, settlement, signal });
 }
 
 function mapParentHandleError(
@@ -406,12 +415,21 @@ async function closeSource(
   }
 }
 
-async function assertPathAbsent(
+async function observeSettlement(
   parent: RootedResourceParentHandle,
-): Promise<void> {
-  if (await inspectParentTarget(parent) !== null) {
+  retiredNode: Readonly<FileNodeSnapshot>,
+  settlement: "absent" | "replacement-allowed",
+): Promise<boolean> {
+  const current = await inspectParentTarget(parent);
+  if (current === null) return false;
+  if (
+    settlement === "absent"
+    || sameFileNodeIdentity(current, retiredNode)
+  ) {
     fail("commit-uncertain", "$resourcePath");
   }
+  // replacement-allowed 只接纳不同 dev/ino 的 successor；它不证明 successor 内容。
+  return true;
 }
 
 function sameUnlinkedNode(
@@ -437,8 +455,9 @@ function sameUnlinkedNode(
 /**
  * 持久化删除一个仍匹配 exact frozen node 的 regular-file pathname。
  *
- * 成功 receipt 证明 pathname absent 与原 inode linkCount-1；调用方仍须用领域 lock
- * 排除最终 pathname check 与 unlink 之间的非协作 replacement。
+ * 成功 receipt 始终证明原 inode linkCount-1。默认 settlement 还证明 pathname
+ * absent；replacement-allowed 则只证明若原名已有 successor，它与原 inode 身份不同。
+ * 调用方仍须用领域 lock/journal 解释 successor，不能把它当作普通资源的通用宽松删除。
  */
 export async function unlinkRegularFileExactly(
   root: RootedDirectory,
@@ -480,14 +499,20 @@ export async function unlinkRegularFileExactly(
 
     const nodeBefore = source.initialNodeSnapshot;
     const remainingLinkCount = nodeBefore.linkCount - 1n;
-    await assertPathAbsent(parent);
+    let replacementObserved = await observeSettlement(
+      parent,
+      nodeBefore,
+      parsed.settlement,
+    );
     const afterUnlink = await inspectCommittedSource(source);
     if (!sameUnlinkedNode(nodeBefore, afterUnlink, remainingLinkCount)) {
       fail("commit-uncertain", "$resourcePath");
     }
     await syncCommittedSource(source);
     await syncParent(parent);
-    await assertPathAbsent(parent);
+    replacementObserved = (
+      await observeSettlement(parent, nodeBefore, parsed.settlement)
+    ) || replacementObserved;
     const settled = await inspectCommittedSource(source);
     if (!sameFileNodeSnapshot(afterUnlink, settled)) {
       fail("commit-uncertain", "$resourcePath");
@@ -498,6 +523,7 @@ export async function unlinkRegularFileExactly(
       nodeAfterUnlink: settled,
       previousLinkCount: nodeBefore.linkCount,
       remainingLinkCount,
+      replacementObserved,
     });
   } catch (error: unknown) {
     primaryError = error;

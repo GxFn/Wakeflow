@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { equal } from "node:assert/strict";
 import {
   linkSync,
   mkdirSync,
@@ -70,6 +70,7 @@ test("linked-pair cleanup proves the exact 2 to 1 transition", async () => {
 
     equal(receipt.previousLinkCount, 2n);
     equal(receipt.remainingLinkCount, 1n);
+    equal(receipt.replacementObserved, false);
     equal(receipt.nodeBefore.inodeId, receipt.nodeAfterUnlink.inodeId);
     equal(receipt.nodeAfterUnlink.linkCount, 1n);
     equal(statSync(sourcePath, { throwIfNoEntry: false }), undefined);
@@ -95,6 +96,7 @@ test("last pathname removal proves the exact 1 to 0 transition", async () => {
     });
     equal(receipt.previousLinkCount, 1n);
     equal(receipt.remainingLinkCount, 0n);
+    equal(receipt.replacementObserved, false);
     equal(receipt.nodeAfterUnlink.linkCount, 0n);
     equal(receipt.nodeAfterUnlink.byteCount, Buffer.byteLength("last-link"));
     equal(statSync(target, { throwIfNoEntry: false }), undefined);
@@ -215,6 +217,7 @@ test("options, path, and AbortSignal are closed and passively admitted", async (
       [{}, "$options"],
       [{ expectedNode: expected.node, extra: true }, "$options"],
       [{ expectedNode: { ...expected.node } }, "$options.expectedNode"],
+      [{ expectedNode: expected.node, settlement: "eventually-absent" }, "$options.settlement"],
       [{ expectedNode: expected.node, signal: {} }, "$options.signal"],
     ];
     for (const [options, expectedPath] of invalid) {
@@ -271,48 +274,4 @@ test("options, path, and AbortSignal are closed and passively admitted", async (
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
   }
-});
-
-test("exact unlink contains one unlink and no broad deletion primitive", () => {
-  const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/filesystem/exact-regular-file-unlink.ts",
-    ),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-  deepEqual(imports, [
-    "node:fs/promises",
-    "node:util",
-    "../data/passive-own-data.js",
-    "../node/node-system-error.js",
-    "./file-node-snapshot.js",
-    "./portable-resource-path.js",
-    "./rooted-directory.js",
-    "./rooted-exact-resource-handle.js",
-    "./rooted-resource-parent-handle.js",
-  ]);
-  equal(source.includes("RootedResourceParentHandle.open"), true);
-  equal(source.includes("RootedExactResourceHandle.openRegularFile"), true);
-  equal(source.includes("interface OpenedParent"), false);
-  equal(source.includes("interface OpenedSource"), false);
-  equal(source.includes("function parseAddress"), false);
-  equal(source.includes("function inspectInitialParent"), false);
-  equal(source.includes("function inspectInitialSource"), false);
-  equal(source.includes("function requiredSourceOpenFlags"), false);
-  equal(source.includes("function snapshotHandle"), false);
-  equal(source.match(/await unlink\(/gu)?.length, 1);
-  equal(source.includes("await source.syncOpenedNode()"), true);
-  equal(source.includes("await source.inspectOpenedNode()"), true);
-  equal(source.includes("await source.assertPathCurrent()"), true);
-  equal(source.includes("await parent.sync()"), true);
-  equal(source.includes("await parent.inspectTarget()"), true);
-  equal(source.includes("source.handle"), false);
-  equal(source.includes("parent.handle"), false);
-  equal(/\brmdir\s*\(/u.test(source), false);
-  equal(/\brm\s*\(/u.test(source), false);
-  equal(/\brename\s*\(/u.test(source), false);
-  equal(source.includes("remainingLinkCount"), true);
 });

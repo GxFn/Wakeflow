@@ -1,8 +1,7 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { equal } from "node:assert/strict";
 import {
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -142,6 +141,26 @@ test("existing nested resources are inspected without reading contents", async (
   }
 });
 
+test("directory identity survives sibling entry mutations", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-root-directory-identity-"));
+  const nested = path.join(rootPath, "records");
+  mkdirSync(nested);
+  const rooted = await RootedDirectory.open(rootPath);
+  try {
+    const resourcePath = parsePortableResourcePath("records");
+    const before = await rooted.inspectExistingResource(resourcePath);
+    writeFileSync(path.join(nested, "new-record"), "value");
+    const after = await rooted.inspectExistingResource(resourcePath);
+
+    equal(after.node.kind, "directory");
+    equal(after.node.deviceId, before.node.deviceId);
+    equal(after.node.inodeId, before.node.inodeId);
+  } finally {
+    await rooted.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
 test("intermediate symlinks and non-directory ancestors fail closed", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-root-ancestor-"));
   const outside = mkdtempSync(path.join(os.tmpdir(), "wakeflow-root-outside-"));
@@ -255,32 +274,4 @@ test("close is idempotent and all later I/O is rejected", async () => {
     "$resourcePath",
   );
   rmSync(rootPath, { recursive: true, force: true });
-});
-
-test("rooted-directory depends only on Node filesystem and prior facts", () => {
-  const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "src/foundation/filesystem/rooted-directory.ts",
-    ),
-    "utf8",
-  );
-  const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)]
-    .map((entry) => entry[1]);
-
-  deepEqual(imports, [
-    "node:fs",
-    "node:fs/promises",
-    "node:path",
-    "./file-node-snapshot.js",
-    "./portable-resource-path.js",
-    "../node/node-system-error.js",
-  ]);
-  equal(source.includes("readFile("), false);
-  equal(source.includes("writeFile("), false);
-  equal(source.includes("mkdir("), false);
-  equal(source.includes("rename("), false);
-  equal(source.includes("unlink("), false);
-  equal(source.includes("O_NOFOLLOW"), true);
-  equal(source.includes("O_DIRECTORY"), true);
 });

@@ -12,15 +12,15 @@ import {
 /**
  * Wakeflow Foundation / Identity：持久类型化身份。
  *
- * 本文件消费 JSON Schema 单向生成的 durable kind 词汇，并拥有
- * `<kind>_<lowercase UUIDv4>` 的生成、解析和 TypeScript 品牌合同。它只返回词法
- * 事实，不查找实体、状态或文件，也不判断引用权限和集合级完整 ID 唯一性。
+ * 本模块使用 JSON Schema 单向生成的持久标识类别词汇，并负责生成、解析
+ * `<kind>_<lowercase UUIDv4>` 以及授予 TypeScript 品牌类型。它只返回词法事实，
+ * 不查找实体、状态或文件，也不判断引用权限或集合范围内的标识唯一性。
  *
- * binding、lease、locator、Pod operation、workspace mutation 与临时身份具有
- * 不同生命周期和 owner，不会为了共享字符串外形被并入本 durable 词汇。
+ * Binding、Lease、Locator、Pod 操作、Workspace 变更和临时身份具有不同生命周期
+ * 和职责所有者，不会仅因字符串外形相似而并入持久标识词汇。
  */
 
-/** 对外转交 Schema 派生词汇；本模块不保存第二份 kind 清单。 */
+/** 对外转交 Schema 派生词汇；本模块不保存第二份类别清单。 */
 export { WAKEFLOW_DURABLE_ID_KINDS };
 export type { WakeflowDurableIdKind };
 
@@ -32,8 +32,8 @@ declare const WAKEFLOW_DURABLE_ID_BRAND: unique symbol;
 /**
  * 已生成或严格解析的 Wakeflow 持久身份。
  *
- * 泛型参数保留 kind；例如 program ID 不能赋给 window ID。模板字符串类型让
- * 编辑器同时保留可读的 `<kind>_<uuid>` 外形，品牌阻止普通 string 绕过解析。
+ * 泛型参数保留标识类别；例如 Program ID 不能赋给 Window ID。模板字符串类型让
+ * 编辑器保留可读的 `<kind>_<uuid>` 外形，品牌类型阻止普通字符串绕过解析。
  */
 export type WakeflowDurableId<
   K extends WakeflowDurableIdKind = WakeflowDurableIdKind,
@@ -44,7 +44,7 @@ export type WakeflowDurableId<
 /**
  * 一个持久身份的冻结词法事实。
  *
- * 条件类型让 kind 联合分配为判别联合；检查 `kind` 后，`value` 会同步收窄为
+ * 条件类型把类别联合分配为判别联合；检查 `kind` 后，`value` 会同步收窄为
  * 对应的 WakeflowDurableId，而 uuid 始终保留底层 UuidV4 品牌。
  */
 export type ParsedWakeflowDurableId<
@@ -74,7 +74,7 @@ const ERROR_MESSAGES = {
 /**
  * Wakeflow 持久身份词法失败的稳定错误。
  *
- * 错误不回显 ID、UUID 或未知 kind。底层随机源失败仍保持 UuidV4Error，不会被
+ * 错误不回显 ID、UUID 或未知类别。底层随机源失败仍保持 `UuidV4Error`，不会被
  * 伪装成本层的格式错误。
  */
 export class WakeflowDurableIdError extends Error {
@@ -146,7 +146,7 @@ function parseDurableId(
   const uuid = parseUuidComponent(value.slice(separatorIndex + 1), path);
   const typedValue = value as WakeflowDurableId<typeof kind>;
 
-  // 记录只携带已验证的字符串事实；冻结避免调用方改写 kind/value 的关联。
+  // 记录只携带已验证的字符串事实；冻结后调用方无法改写 kind 与 value 的关联。
   return Object.freeze({
     kind,
     uuid,
@@ -155,11 +155,11 @@ function parseDurableId(
 }
 
 /**
- * 创建指定 kind 的 Wakeflow 持久身份。
+ * 创建指定类别的 Wakeflow 持久标识。
  *
- * kind 会在生成随机数前完成运行时复验。省略 uuid 时使用 uuid-v4 的 Node.js
- * 随机源；确定性调用应显式传入已经由 createUuidV4 或 parseUuidV4 授予品牌的
- * UuidV4，不在本层重复暴露 uuidFactory。
+ * 函数在生成随机数前复验标识类别。省略 `uuid` 时使用 `uuid-v4` 的 Node.js 随机源；
+ * 确定性调用应显式传入已经由 `createUuidV4` 或 `parseUuidV4` 授予品牌类型的
+ * `UuidV4`，本层不重复暴露 UUID 工厂。
  */
 export function createWakeflowDurableId<
   K extends WakeflowDurableIdKind,
@@ -176,10 +176,10 @@ export function createWakeflowDurableId<
 }
 
 /**
- * 解析任意已知 kind 的 Wakeflow 持久身份，返回冻结的判别词法事实。
+ * 解析任意已知类别的 Wakeflow 持久标识，返回冻结的判别词法事实。
  *
- * 本函数不执行字符串强制转换，也不会把 binding、lease 或 operation ID 当作
- * 未知 durable kind 的兼容别名。
+ * 本函数不执行字符串强制转换，也不会把绑定、租约或操作 ID 当作
+ * 未知持久标识类别的兼容别名。
  */
 export function parseWakeflowDurableId(
   value: unknown,
@@ -189,9 +189,9 @@ export function parseWakeflowDurableId(
 }
 
 /**
- * 解析并收窄为调用方要求的唯一 kind，直接返回对应品牌字符串。
+ * 解析并收窄为调用方要求的唯一类别，直接返回对应的品牌字符串。
  *
- * 这是 record parser 最常用的入口；kind 不一致时不会返回宽泛 ID，也不查找
+ * 这是记录解析器最常用的入口；`kind` 不一致时不会返回宽泛 ID，也不查找
  * 目标实体是否存在。
  */
 export function parseWakeflowDurableIdOfKind<

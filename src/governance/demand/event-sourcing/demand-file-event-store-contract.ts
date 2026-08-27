@@ -14,7 +14,7 @@ import {
 } from "./demand-event-stream-commit.js";
 import type { DemandEventCommitSequence } from "./demand-event-sourcing-aggregate.js";
 
-/** Demand File Event Store 的容量、receipt 与稳定错误合同。 */
+/** Demand 文件事件存储的容量、回执和稳定错误合同。 */
 
 export const DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE = 0o700;
 export const DEMAND_FILE_EVENT_STORE_FILE_MODE = 0o600;

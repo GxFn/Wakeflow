@@ -73,7 +73,7 @@ role: ("original-plan" | "requirement-design" | "code-facts" | "landing-plan" | 
 mediaType: string
 }
 
-/** 递归冻结生成的 Schema，阻止 validator 首次消费前发生嵌套漂移。 */
+/** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
 function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
   if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
     for (const child of Object.values(value)) freezeGeneratedSchema(child);
@@ -82,7 +82,7 @@ function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
   return value;
 }
 
-/** Ajv strict validator 使用的 Schema 派生运行时权威；不得手工修改。 */
+/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
 export const WAKEFLOW_DEMAND_IDENTITY_SCHEMA = freezeGeneratedSchema({
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:wakeflow:governance:demand:identity:v1",

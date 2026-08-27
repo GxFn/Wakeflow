@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:ledger:record-publication-intent:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA",
+  "title": "WakeflowLedgerRecordPublicationIntent",
+  "description": "Ledger immutable record tree 整体发布的短期元数据意图。",
+  "$comment": "Intent 保存 exact record 与关闭树摘要，但不复制 member payload；完整 stage 是待发布数据，final directory rename 是 authority commit point。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactKind",
+    "schemaVersion",
+    "family",
+    "recordId",
+    "record",
+    "finalRootRef",
+    "intentRef",
+    "lockRef",
+    "stageRef",
+    "treePlan"
+  ],
+  "properties": {
+    "artifactKind": {
+      "const": "wakeflow-ledger-record-publication-intent"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "family": {
+      "enum": [
+        "requirement",
+        "confirmation"
+      ]
+    },
+    "recordId": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        {
+          "type": "string",
+          "pattern": "^confirmation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      ]
+    },
+    "record": {
+      "oneOf": [
+        {
+          "$ref": "urn:wakeflow:governance:ledger:requirement-record:v1"
+        },
+        {
+          "$ref": "urn:wakeflow:governance:ledger:confirmation-record:v1"
+        }
+      ]
+    },
+    "finalRootRef": {
+      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+    },
+    "intentRef": {
+      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+    },
+    "lockRef": {
+      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+    },
+    "stageRef": {
+      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+    },
+    "treePlan": {
+      "$ref": "urn:wakeflow:foundation:filesystem:directory-tree-candidate-plan:v1"
+    }
+  }
+}

@@ -62,13 +62,13 @@ import {
 /**
  * Wakeflow Governance / Ledger：Requirement 与 Confirmation 的不可变权威记录。
  *
- * 这两类记录是 Demand Event Sourcing publication 的上游事实，而不是 Demand
- * event 或 mutable snapshot。记录只声明 Wakeflow 写入时间 `recordedAt`，不虚构
- * 已认证的人类 actor；`status=confirmed` 与 requirement 的反向 demand 索引已删除，
- * 因为记录存在本身就是确认事实，Demand 关系由下游 Authority 引用派生。
+ * 这两类记录是 Demand 事件溯源发布流程的上游事实，不是 Demand 事件或可变快照。
+ * 记录只声明 Wakeflow 的写入时间 `recordedAt`，不虚构已经认证的人类操作者身份。
+ * `status=confirmed` 和 Requirement 到 Demand 的反向索引已经删除：记录存在本身
+ * 就表示确认事实，Demand 关系由下游 Authority 引用派生。
  *
- * 本文件只拥有 JSON codec、typed identity、document member 关系与语义摘要；成员
- * 字节、不可变发布、重载和引用解析由 LedgerAuthorityStore 拥有。
+ * 本模块只负责 JSON 编解码、类型化标识、文档成员关系和语义摘要。成员字节、
+ * 不可变发布、重新加载和引用解析由 `LedgerAuthorityStore` 负责。
  */
 
 export const REQUIREMENT_RECORD_ARTIFACT_KIND =
@@ -151,7 +151,7 @@ const ERROR_MESSAGES = {
   string
 >>;
 
-/** Ledger authority record 准入或 representation 失败的稳定、脱敏错误。 */
+/** Ledger 权威记录准入或持久化表示验证失败时返回的稳定、脱敏错误。 */
 export class LedgerAuthorityRecordError extends Error {
   override readonly name = "LedgerAuthorityRecordError";
   readonly code = "wakeflow-ledger-authority-record" as const;
@@ -260,7 +260,12 @@ function parseDocument<Role extends LedgerAuthorityDocumentRole>(
     }
     throw error;
   }
-  if (memberPath === "record.json") fail("document", `${path}/path`);
+  if (
+    memberPath === "record.json"
+    || memberPath.startsWith("record.json/")
+  ) {
+    fail("document", `${path}/path`);
+  }
   let digest: Sha256Digest;
   try {
     digest = parseSha256Digest(wire.digest, `${path}/digest`);
@@ -350,7 +355,7 @@ function normalizeConfirmation(
   });
 }
 
-/** 解析任意 JSON 值为 Requirement 或 Confirmation 的关闭判别联合。 */
+/** 将任意 JSON 值解析为字段集合严格受限的 `Requirement` 或 `Confirmation` 判别联合。 */
 export function parseLedgerAuthorityRecord(
   value: unknown,
 ): Readonly<LedgerAuthorityRecord> {
@@ -424,7 +429,7 @@ function recordTime(options: CreateLedgerAuthorityRecordOptions): UtcInstant {
   }
 }
 
-/** 从不含协议头和时间的被动 draft 创建 Requirement authority。 */
+/** 从不含协议头和写入时间的纯数据草稿创建 `Requirement` 权威记录。 */
 export function createRequirementRecord(
   draft: unknown,
   options: CreateLedgerAuthorityRecordOptions = {},
@@ -441,7 +446,7 @@ export function createRequirementRecord(
   }) as Readonly<RequirementRecord>;
 }
 
-/** 从不含协议头和时间的被动 draft 创建 Confirmation authority。 */
+/** 从不含协议头和写入时间的纯数据草稿创建 `Confirmation` 权威记录。 */
 export function createConfirmationRecord(
   draft: unknown,
   options: CreateLedgerAuthorityRecordOptions = {},
@@ -459,7 +464,7 @@ export function createConfirmationRecord(
   }) as Readonly<ConfirmationRecord>;
 }
 
-/** 渲染唯一字段顺序与 deterministic pretty JSON。 */
+/** 按唯一字段顺序渲染确定性格式化 JSON 文档。 */
 export function renderLedgerAuthorityRecord(value: unknown): string {
   return renderDeterministicJsonDocument(
     parseLedgerAuthorityRecord(value) as unknown as JsonValue,
@@ -467,7 +472,7 @@ export function renderLedgerAuthorityRecord(value: unknown): string {
   );
 }
 
-/** 解析磁盘文档并拒绝 pretty 或领域字段顺序漂移。 */
+/** 解析磁盘文档，并拒绝格式化方式或领域字段顺序发生漂移。 */
 export function parseLedgerAuthorityRecordDocument(
   text: unknown,
 ): Readonly<LedgerAuthorityRecord> {
@@ -487,7 +492,7 @@ export function parseLedgerAuthorityRecordDocument(
   return record;
 }
 
-/** 计算与 JSON 字段顺序无关的 Ledger authority 语义摘要。 */
+/** 计算与 JSON 字段顺序无关的 Ledger 权威记录语义摘要。 */
 export function computeLedgerAuthorityRecordDigest(
   value: unknown,
 ): Sha256Digest {

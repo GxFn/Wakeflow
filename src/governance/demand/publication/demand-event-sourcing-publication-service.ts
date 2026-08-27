@@ -65,11 +65,11 @@ import {
 } from "./demand-publication-paths.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing Publication：跨资源 process orchestration。
+ * Wakeflow Governance / Demand Event Sourcing Publication：跨资源发布流程编排。
  *
- * 本文件只保留 sidecar/root/TODO 的顺序、process lock 与 public entrypoints。Rooted
- * storage、TODO closure、stage materialization 分别由相邻模块拥有；pure event append
- * 不使用本 process lock 或 transaction。
+ * 本模块只负责同级发布意图文件、Demand 根目录和 TODO 的提交顺序，以及流程锁和公开
+ * 入口。根作用域存储、TODO 关系验证和暂存根目录构建分别由相邻模块负责；纯事件追加
+ * 不使用该流程锁或发布事务。
  */
 
 const PUBLISH_FIELDS = Object.freeze([
@@ -142,7 +142,7 @@ function exactInput(value: unknown): Readonly<Record<string, unknown>> {
   return record;
 }
 
-/** 幂等创建 workspace-level publication process directories。 */
+/** 幂等创建 Workspace 级发布流程目录。 */
 export async function initializeDemandEventSourcingPublication(
   root: RootedDirectory,
   options?: { readonly signal?: AbortSignal },
@@ -323,7 +323,7 @@ async function loadIdempotentResult(
   });
 }
 
-/** 从 confirmed Identity/Authority 与 exact pending TODO 发布 revision-1 Demand。 */
+/** 根据已确认的身份/权威关系记录和指定待处理 TODO，发布修订号 1 的 Demand。 */
 export async function publishDemandFromTodo(
   root: RootedDirectory,
   ledgerStore: LedgerAuthorityStore,
@@ -359,7 +359,7 @@ export async function publishDemandFromTodo(
     }
     throw error;
   }
-  // Authority/TODO 准入前不创建 publication infrastructure。
+  // Authority 和 TODO 准入完成前，不创建任何发布基础目录或文件。
   const initialTodo = await inspectTodoForDemandPublication(
     root,
     transaction.todoId,
@@ -416,7 +416,7 @@ async function prepareLockRecovery(
   root: RootedDirectory,
   stored: Readonly<StoredDemandEventSourcingPublicationTransaction>,
 ): Promise<void> {
-  // exact sidecar source + transaction-derived Demand/path 才授权退休 crash lock。
+  // 只有指定的同级意图源文件，以及由事务派生的 Demand 和路径，才能授权退休崩溃锁。
   const current = await readPublicationTransactionAt(
     root,
     stored.source.resourcePath,
@@ -449,7 +449,7 @@ async function prepareLockRecovery(
   }
 }
 
-/** 从 self-contained sidecar 前向完成一个已开始的 publication。 */
+/** 根据自包含的同级发布意图文件，前向完成已经开始的发布流程。 */
 export async function recoverDemandPublication(
   root: RootedDirectory,
   ledgerStore: LedgerAuthorityStore,
@@ -497,5 +497,5 @@ export {
   type DemandEventSourcingPublicationTodoResult,
 } from "./demand-event-sourcing-publication-contract.js";
 
-/** 当前标准仍要求 final Demand 位于 active/current。 */
+/** 当前标准仍要求最终 Demand 位于 `active/current`。 */
 export { WAKEFLOW_ACTIVE_CURRENT_ROOT_REF };

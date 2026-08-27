@@ -9,11 +9,11 @@ import {
 } from "./wakeflow-config-v3.js";
 
 /**
- * Wakeflow Configuration：公开 v3 配置的唯一 deterministic pretty JSON 表示。
+ * Wakeflow Configuration：公开 v3 配置的唯一确定性格式化 JSON 表示。
  *
- * 本文件只重建领域字段顺序并渲染文本；Schema、typed refs 与跨实体关系继续由
- * wakeflow-config-v3 拥有，物理读取与 source facts 由 config authority snapshot
- * 组合。字段顺序在此显式维护，不从 JSON Schema properties 或输入文本推断。
+ * 本模块只重建领域字段顺序并渲染文本。Schema、类型化引用和跨实体关系继续由
+ * `wakeflow-config-v3` 负责，物理读取和源资源事实由 Config 权威快照组合。字段顺序
+ * 在此显式维护，不从 JSON Schema 的 `properties` 或输入文本推断。
  */
 
 function optionalField(

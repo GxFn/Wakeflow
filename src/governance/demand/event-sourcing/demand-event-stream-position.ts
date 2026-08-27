@@ -1,8 +1,8 @@
 /**
- * Wakeflow Governance / Demand Event Sourcing：逻辑 stream revision 词汇。
+ * Wakeflow Governance / Demand Event Sourcing：逻辑事件流修订号词汇。
  *
- * revision 一基且连续；revision 0 只作为 append 的 expected-empty-stream 值，不会
- * 出现在 stored event。物理 commitSequence 由 Aggregate 模块单独品牌化。
+ * 修订号从 1 开始且必须连续；修订号 0 只表示追加操作预期事件流为空，不会出现在
+ * 持久化事件中。物理 `commitSequence` 由聚合模块使用独立品牌类型表示。
  */
 
 declare const DEMAND_EVENT_STREAM_REVISION_BRAND: unique symbol;

@@ -1,10 +1,10 @@
 import { TODO_ITEM_ID_PATTERN_SOURCE } from "../../contracts/generated/governance/todo/todo-item-id.generated.js";
 
 /**
- * Wakeflow Governance / TODO：稳定、用户可读的 TODO item ID。
+ * Wakeflow Governance / TODO：稳定、用户可读的 TODO 条目 ID。
  *
- * TODO ID 保留现有公开入口的 opaque token 语义，不强制迁移成 UUID durable kind；
- * 它只在创建时授予品牌，不从标题、路径、时间或数组位置推导，也不判断 item 是否存在。
+ * TODO ID 保留现有公开入口的不透明令牌语义，不强制迁移为 UUID 持久标识类别。它只在
+ * 创建时授予品牌类型，不从标题、路径、时间或数组位置推导，也不判断条目是否存在。
  */
 
 declare const TODO_ITEM_ID_BRAND: unique symbol;

@@ -14,15 +14,17 @@ import {
 } from "./strict-text-file.js";
 
 /**
- * Wakeflow Foundation / Filesystem：确定性 pretty JSON 文件读取。
+ * Wakeflow Foundation / Filesystem：确定性格式化 JSON 文件读取。
  *
- * 本文件把 StrictTextFile 与 DeterministicJsonDocument 组合为统一磁盘表示：
- * 2 空格缩进、LF-only、恰好一个末尾 LF，并返回完整 bytes source digest 与 RFC 8785
- * semantic digest。成功 value 是解除别名、递归冻结的 JsonValue。
+ * 本模块组合 `StrictTextFile` 与 `DeterministicJsonDocument`，形成统一的磁盘表示：
+ * 使用 2 个空格缩进、只含 LF 换行符，并恰好保留一个末尾 LF。读取结果同时包含
+ * 完整源字节摘要和 RFC 8785 语义摘要；成功值是与输入容器解除引用关系并递归冻结的
+ * `JsonValue`。
  *
- * 对象字段的领域顺序不属于本层。Config、TODO、Demand 等 owner 必须从 value 重建
- * 自己的规范模型，再把领域 renderer 与 text 比较。本文件不执行 Schema、typed ref、
- * node policy、写入、CAS 或 authority 判断，也不新增第四套文件错误类型。
+ * 对象字段的领域顺序不属于本层。Config、TODO、Demand 等职责所有者必须从读取值
+ * 重建自己的规范模型，再比较领域渲染结果与磁盘文本。本模块不执行 Schema 校验、
+ * 类型化引用校验、文件系统节点策略、写入、比较并交换（CAS）或权威事实判断，也不
+ * 新增另一套文件错误类型。
  */
 
 export interface DeterministicJsonFileOptions {

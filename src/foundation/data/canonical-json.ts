@@ -14,24 +14,24 @@ import {
 /**
  * Wakeflow Foundation / Data：RFC 8785 JSON 规范化适配层。
  *
- * 本文件先通过 json-value 把任意进程内输入收敛为独立、递归冻结的 JSON 树，
- * 再把该可信值交给成熟 canonicalize 依赖。第三方库只拥有 JCS 排序与原始类型
- * 序列化；Wakeflow 继续拥有输入准入、稳定错误和 UTF-8 输出合同。
+ * 本模块先通过 `json-value` 把任意进程内输入转换为独立、递归冻结的 JSON 树，
+ * 再把可信值交给成熟的 `canonicalize` 依赖。第三方库只负责 JCS 排序和原始类型
+ * 序列化；Wakeflow 继续负责输入准入、稳定错误和 UTF-8 输出合同。
  *
  * 这里不提供第三方选项或跳过准入的快速入口，也不拥有 SHA-256、换行格式、
  * 领域字段关系、持久记录版本或摘要前缀。
  */
 
-/** canonical JSON 失败分类；JSON 值原因保持原精度。 */
+/** Canonical JSON 失败分类；JSON 值错误仍保留原有精度。 */
 export type CanonicalJsonErrorReason =
   | JsonValueErrorReason
   | "canonicalizer-failure";
 
 /**
- * canonical JSON 适配层的稳定错误。
+ * Canonical JSON 适配层失败时返回的稳定错误。
  *
- * 输入错误保留 json-value 的中立 reason/path；第三方异常统一收敛，不暴露依赖
- * message、stack、cause 或成员值。
+ * 输入错误保留 `json-value` 的中立原因和路径；第三方异常统一映射，不暴露依赖的
+ * 消息、调用栈、原因链或成员值。
  */
 export class CanonicalJsonError extends Error {
   override readonly name = "CanonicalJsonError";
@@ -79,8 +79,8 @@ function canonicalizeAdmittedValue(value: JsonValue, path: string): string {
 }
 
 /**
- * admitted JSON 与 RFC 8785 canonicalizer 都不应产生 ill-formed Unicode；若该
- * 内部不变量被破坏，仍收敛为本适配层失败，不把 Utf8Error 泄漏给调用方。
+ * 已准入的 JSON 和 RFC 8785 规范化器都不应产生不完整的 Unicode。即使内部不变量
+ * 被破坏，函数仍将错误映射为本适配层失败，不向调用方泄漏 `Utf8Error`。
  */
 function encodeCanonicalText(text: string, path: string): Uint8Array {
   try {
@@ -109,7 +109,7 @@ export function canonicalizeJson(
  * 将任意输入规范化为 RFC 8785 要求的 UTF-8 字节。
  *
  * 每次调用返回新的 Uint8Array；调用方可以持有或修改自己的字节副本。摘要、
- * 换行和文件编码继续由后续基础能力或领域 codec 显式组合。
+ * 换行和文件编码继续由后续基础能力或领域编解码器显式组合。
  */
 export function encodeCanonicalJson(
   value: unknown,

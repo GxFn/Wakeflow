@@ -47,10 +47,10 @@ import {
 } from "./demand-event-stream-position.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：跨事件版本稳定的 persisted envelope。
+ * Wakeflow Governance / Demand Event Sourcing：跨事件版本稳定的持久化事件封装。
  *
- * 本层只解析 identity、position、type/version 路由、原始 JSON data 与历史 state-digest
- * metadata；它不决定 eventType 是否受支持，也不把 data 解释成 current domain event。
+ * 本层只解析事件标识、位置、类型与版本路由、原始 JSON 数据和历史状态摘要元数据。
+ * 它不决定 `eventType` 是否受支持，也不把数据解释为当前版本的领域事件。
  */
 
 export const DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND =

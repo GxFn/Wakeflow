@@ -10,16 +10,16 @@ import {
 } from "./file-node-snapshot.js";
 
 /**
- * Wakeflow Foundation / Filesystem：一个规范绝对目录 placement 的只读物理观察。
+ * Wakeflow Foundation / Filesystem：规范绝对目录位置的只读物理观察。
  *
- * 本能力从平台文件系统根逐段 lstat 调用方给出的规范绝对路径；遇到缺失段立即返回
- * missing，遇到 symlink 或非目录立即失败，完整存在时返回 realpath 与最终目录节点
- * 快照。它不创建目录、不解析配置相对路径、不判断多个根是否重叠，也不授予后续
- * 文件 I/O 权限。
+ * 本能力从平台文件系统根开始，逐段对调用方提供的规范绝对路径执行 `lstat`。遇到
+ * 缺失段时立即返回“缺失”，遇到符号链接或非目录节点时立即失败；完整路径存在时，
+ * 返回真实路径和最终目录节点快照。它不创建目录、不解析配置相对路径、不判断多个
+ * 根目录是否重叠，也不授予后续文件 I/O 权限。
  *
- * RootedDirectory 用于一个已打开根内的资源操作；本文件则服务于“尚未物化或可能
- * 位于 workspace 兄弟位置”的布局 admission。Node 未暴露 openat，因此该逐段检查
- * 仍是 pathname-based best effort，不构成抵抗同权限恶意进程的 OS sandbox。
+ * `RootedDirectory` 用于已经打开的根目录内的资源操作；本模块用于准入尚未创建，
+ * 或可能位于 Workspace 同级位置的目录布局。Node.js 未暴露 `openat`，因此逐段检查
+ * 仍是基于路径名的尽力验证，不能充当抵抗同权限恶意进程的操作系统沙箱。
  */
 
 export interface AbsoluteDirectoryPlacementObservation {
@@ -46,7 +46,7 @@ const ERROR_MESSAGES = {
   string
 >>;
 
-/** 绝对目录 placement 观察失败的稳定、脱敏错误。 */
+/** 绝对目录位置观察失败时返回的稳定、脱敏错误。 */
 export class AbsoluteDirectoryPlacementError extends Error {
   override readonly name = "AbsoluteDirectoryPlacementError";
   readonly code = "wakeflow-absolute-directory-placement" as const;
@@ -122,10 +122,11 @@ async function inspectOnePath(
 }
 
 /**
- * 观察一个规范绝对目录 placement。
+ * 观察一个规范绝对目录位置。
  *
- * `missing` 表示首个不存在段之后的整个目标尚未物化；它不是错误。present 时
- * `spellingIsCanonical` 明确告诉领域层，调用 spelling 是否等于文件系统 realpath。
+ * `missing` 表示首个不存在路径段之后的整个目标尚未创建；它不是错误。结果为
+ * `present` 时，`spellingIsCanonical` 明确告诉领域层，调用方给出的路径拼写是否等于
+ * 文件系统真实路径。
  */
 export async function inspectAbsoluteDirectoryPlacement(
   value: unknown,

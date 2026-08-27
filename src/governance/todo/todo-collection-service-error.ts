@@ -1,4 +1,4 @@
-/** TODO collection 公共 operation 的稳定失败词汇。 */
+/** TODO 集合公共操作使用的稳定失败词汇。 */
 export type TodoCollectionServiceErrorReason =
   | "input"
   | "not-initialized"
@@ -36,7 +36,7 @@ const ERROR_MESSAGES = {
   "operation-failure": "TODO collection operation failed closed.",
 } as const satisfies Readonly<Record<TodoCollectionServiceErrorReason, string>>;
 
-/** TODO collection mutation/recovery 失败的稳定、脱敏错误。 */
+/** TODO 集合变更或恢复失败时返回的稳定、脱敏错误。 */
 export class TodoCollectionServiceError extends Error {
   override readonly name = "TodoCollectionServiceError";
   readonly code = "wakeflow-todo-collection-service" as const;

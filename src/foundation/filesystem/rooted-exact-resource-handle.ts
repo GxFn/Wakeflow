@@ -21,26 +21,25 @@ import {
 } from "./rooted-directory.js";
 
 /**
- * Wakeflow Foundation / Filesystem：根内 exact 既有资源的已打开 inode capability。
+ * Wakeflow Foundation / Filesystem：根目录内指定已有资源的已打开 inode 能力。
  *
- * static factory 先通过 RootedDirectory 观察真实 resource，再以 O_NOFOLLOW 打开
- * FileHandle，并证明 expected node、pathname 与 handle 是同一份完整快照。成功实例
- * 因此适合作为 link、rename、unlink 等 mutation 的 source 准入能力。
+ * 静态工厂先通过 `RootedDirectory` 观察真实资源，再使用 `O_NOFOLLOW` 打开
+ * `FileHandle`，并证明预期节点、路径名和句柄对应同一份完整快照。成功实例适合作为
+ * 链接、重命名、删除等变更操作的源资源准入能力。
  *
- * assertPathCurrent 只用于 commit 前，要求 pathname、打开 handle 与初始快照仍完全
- * 一致。inspectOpenedNode 在 commit 后仍可观察已经 rename 或 unlink 的原 inode，只
- * 保证 kind 与 dev/inode identity 未变，不把合法的 linkCount 或 metadata transition
- * 误判成 source replacement。
+ * `assertPathCurrent` 只用于提交前，要求路径名、已打开句柄和初始快照仍完全一致。
+ * `inspectOpenedNode` 在提交后仍可观察已经重命名或删除的原 inode；它只保证节点类型、
+ * 设备号和 inode 身份未变，不会把合法的链接数或元数据变化误判为源资源被替换。
  *
- * 本 class 不暴露原始 FileHandle，不读取或写入字节，不 chmod，也不执行 link、rename、
- * unlink 或领域恢复。Node 未暴露 openat，因此 pathname 竞态边界与 RootedDirectory
+ * 本类不暴露原始 `FileHandle`，不读取或写入字节，不修改权限，也不执行链接、重命名、
+ * 删除或领域恢复。Node.js 未暴露 `openat`，因此路径名竞态边界与 `RootedDirectory`
  * 保持一致。
  */
 
-/** exact resource handle 可以准入的真实节点类型。 */
+/** 指定资源句柄可以准入的真实节点类型。 */
 export type RootedExactResourceKind = "file" | "directory";
 
-/** exact resource handle 打开、复验、同步或关闭失败分类。 */
+/** 指定资源句柄打开、复验、同步或关闭失败的分类。 */
 export type RootedExactResourceHandleErrorReason =
   | "input"
   | "root-scope"
@@ -72,7 +71,7 @@ const ERROR_MESSAGES = {
 /**
  * RootedExactResourceHandle 的稳定错误。
  *
- * 错误不回显 root、resource、absolute path、expected node、当前节点、系统调用或 cause。
+ * 错误不回显根目录、资源、绝对路径、预期节点、当前节点、系统调用或原因链。
  */
 export class RootedExactResourceHandleError extends Error {
   override readonly name = "RootedExactResourceHandleError";
@@ -222,7 +221,7 @@ async function inspectInitialResource(
 }
 
 /**
- * 已打开 exact resource 的进程内 capability。
+ * 已打开指定资源的进程内能力。
  *
  * static factory 是唯一构造入口。实例拥有 FileHandle，调用方必须显式 close；
  * `await using` 只适用于不需要自定义首错权威的简单作用域。
@@ -253,7 +252,7 @@ export class RootedExactResourceHandle {
     this.#errorPath = errorPath;
   }
 
-  /** 打开一个仍匹配 exact expectation 的真实 regular file。 */
+  /** 打开仍与指定预期一致的真实普通文件。 */
   static async openRegularFile(
     root: RootedDirectory,
     resourcePath: PortableResourcePath,
@@ -269,7 +268,7 @@ export class RootedExactResourceHandle {
     );
   }
 
-  /** 打开一个仍匹配 exact expectation 的真实 regular file 或 directory。 */
+  /** 打开仍与指定预期一致的真实普通文件或目录。 */
   static async openFileOrDirectory(
     root: RootedDirectory,
     resourcePath: PortableResourcePath,
@@ -342,7 +341,7 @@ export class RootedExactResourceHandle {
       try {
         await handle.close();
       } catch {
-        // 未签发 handle 的首个准入错误保持权威。
+        // 未签发句柄时保留首个准入错误，不再生成第二个公共错误。
       }
       throw error;
     }
@@ -357,7 +356,7 @@ export class RootedExactResourceHandle {
     return this.#resourceAbsolutePath;
   }
 
-  /** exact 准入时的完整节点基准，不是当前 metadata 缓存。 */
+  /** 精确准入时的完整节点基准，不是当前元数据缓存。 */
   get initialNodeSnapshot(): Readonly<FileNodeSnapshot> {
     return this.#initialNodeSnapshot;
   }
@@ -377,7 +376,7 @@ export class RootedExactResourceHandle {
   /**
    * 观察当前打开的 inode；pathname 已 rename/unlink 后仍可使用。
    *
-   * 本方法只固定 kind 与 dev/inode，不拥有 linkCount、mode、size 或时间变化策略。
+   * 本方法只固定节点类型、设备号和 inode，不定义链接数、权限位、大小或时间变化策略。
    */
   async inspectOpenedNode(): Promise<Readonly<FileNodeSnapshot>> {
     this.#assertOpen();
@@ -400,7 +399,7 @@ export class RootedExactResourceHandle {
     return opened;
   }
 
-  /** 证明 commit 前 pathname、handle 与 exact 初始快照仍完全一致。 */
+  /** 证明提交前路径名、句柄和指定初始快照仍完全一致。 */
   async assertPathCurrent(): Promise<Readonly<FileNodeSnapshot>> {
     this.#assertOpen();
     const opened = await this.inspectOpenedNode();
@@ -426,7 +425,7 @@ export class RootedExactResourceHandle {
     return pathResource.node;
   }
 
-  /** 同步打开的 inode，并返回同步后的 handle 快照；不要求原 pathname 仍存在。 */
+  /** 同步已打开的 inode，并返回同步后的句柄快照；不要求原路径名仍然存在。 */
   async syncOpenedNode(): Promise<Readonly<FileNodeSnapshot>> {
     this.#assertOpen();
     await this.inspectOpenedNode();
@@ -438,7 +437,7 @@ export class RootedExactResourceHandle {
     return this.inspectOpenedNode();
   }
 
-  /** 幂等关闭 exact resource handle；关闭后所有 I/O 方法稳定拒绝。 */
+  /** 幂等关闭指定资源句柄；关闭后所有 I/O 方法都会稳定拒绝调用。 */
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;

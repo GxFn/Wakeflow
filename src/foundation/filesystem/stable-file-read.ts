@@ -35,15 +35,16 @@ import {
 } from "./rooted-directory.js";
 
 /**
- * Wakeflow Foundation / Filesystem：根作用域内的稳定、有界 regular-file 读取。
+ * Wakeflow Foundation / Filesystem：根作用域内稳定、有界的普通文件读取。
  *
- * 本文件在 RootedDirectory 下完成 inspect→expected-node check→no-follow open→
- * positioned chunk read + SHA-256→EOF probe→handle/path/root 复验。调用方必须显式
- * 提供最大字节数；需要完整内容时调用 readStableFile，只需内容身份时调用
- * readStableFileDigest。两者共享同一套读取内核且都只读取一个打开的 FileHandle。
+ * 本模块在 `RootedDirectory` 下依次完成观察、预期节点检查、不跟随符号链接地打开、
+ * 按位置分块读取并计算 SHA-256、文件末尾探测，以及句柄、路径和根目录复验。调用方
+ * 必须显式提供最大字节数；需要完整内容时调用 `readStableFile`，只需要内容身份时
+ * 调用 `readStableFileDigest`。两者共享同一读取内核，并且都只读取一个已打开的
+ * `FileHandle`。
  *
- * 本层不解码文本、不解析 JSON、不判断 owner/mode/hardlink policy，也不把成功读取
- * 解释为文件之后不可变或领域 authority 已成立。
+ * 本层不解码文本、不解析 JSON、不判断所有者、权限位或硬链接策略，也不把成功读取
+ * 解释为文件此后不可变或领域权威事实已经成立。
  */
 
 /** regular-file positioned read 的内部性能参数，不属于公共容量合同。 */
@@ -55,7 +56,7 @@ export interface StableFileReadOptions {
   readonly signal?: AbortSignal;
 }
 
-/** 一次稳定读取签发的物理 source 事实。 */
+/** 一次稳定读取签发的物理源资源事实。 */
 export interface StableFileSource {
   readonly resourcePath: PortableResourcePath;
   readonly node: Readonly<FileNodeSnapshot>;
@@ -101,7 +102,7 @@ const ERROR_MESSAGES = {
 /**
  * 稳定文件读取的公共、脱敏错误。
  *
- * 错误不回显物理路径、resource ref、文件字节、容量、摘要、Abort reason 或底层 cause。
+ * 错误不回显物理路径、资源引用、文件字节、容量、摘要、取消原因或底层原因链。
  */
 export class StableFileReadError extends Error {
   override readonly name = "StableFileReadError";
@@ -475,7 +476,7 @@ async function readStableFileVersion(
   return result;
 }
 
-/** 稳定读取完整 regular-file bytes，并同时返回 source digest 与最终节点事实。 */
+/** 稳定读取普通文件的完整字节，并同时返回源摘要和最终节点事实。 */
 export async function readStableFile(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
@@ -492,7 +493,7 @@ export async function readStableFile(
   });
 }
 
-/** 流式读取并散列 regular file，不分配与完整文件等大的连续 Buffer。 */
+/** 流式读取并散列普通文件，不分配与完整文件等大的连续 Buffer。 */
 export async function readStableFileDigest(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,

@@ -9,6 +9,7 @@
     "contracts/generated/**/*.ts",
     "foundation/**/*.ts",
     "configuration/**/*.ts",
+    "workspace/**/*.ts",
     "governance/**/*.ts"
   ]
 }

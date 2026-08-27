@@ -100,6 +100,16 @@ test("requirement authority removes legacy status and reverse demand indexes", (
       LedgerAuthorityRecordError,
     );
   }
+  throws(
+    () => createRequirementRecord({
+      ...requirementInput(),
+      documents: [{
+        ...requirementInput().documents[0],
+        path: "record.json/nested.md",
+      }],
+    }, { clock: () => RECORDED_AT }),
+    LedgerAuthorityRecordError,
+  );
 });
 
 test("confirmation authority binds one pre-minted Demand without claiming an actor", () => {

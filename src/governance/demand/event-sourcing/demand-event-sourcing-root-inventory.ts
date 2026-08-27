@@ -27,11 +27,11 @@ import {
 } from "./demand-file-event-store.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：健康 Demand root 的负向 inventory。
+ * Wakeflow Governance / Demand Event Sourcing：健康 Demand 根目录的排他资源清单。
  *
- * 本能力不仅验证必需资源存在，还证明 root 与 Event Sourcing 子树不存在未知项。
- * commits/snapshots 的内容由各自 Store 验证；这里拥有目录层级、node kind、private
- * mode、健康 candidate/transaction emptiness 与当前 RH-2 空 artifacts 边界。
+ * 本能力不仅验证必需资源存在，还证明根目录和事件溯源子树中不存在未知项。提交记录
+ * 和快照内容由各自存储验证；本模块负责目录层级、文件系统节点类型、私有权限位、
+ * 健康状态下候选目录与事务目录为空，以及当前 RH-2 的空 Artifacts 边界。
  */
 
 export interface DemandEventSourcingRootInventory {

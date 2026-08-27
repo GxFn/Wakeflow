@@ -14,12 +14,13 @@ import {
 /**
  * Wakeflow Foundation / Schema：受信任本地 JSON Schema 的一次编译、多次验证入口。
  *
- * Schema 常量及其外部依赖先经过 JsonValue 被动快照，再交给 Ajv 2020 strict 模式
- * 编译。返回的 validator 每次只消费已经由调用方完成 JsonValue admission 的数据，
- * 并立即把 Ajv 的可变 errors 投影为冻结的 success/failure 结果。
+ * Schema 常量及其外部依赖先转换为 `JsonValue` 快照，再交给 Ajv 2020 严格模式
+ * 编译。返回的校验器只接收已经由调用方准入为 `JsonValue` 的数据，并立即把 Ajv
+ * 的可变错误列表转换为冻结的成功或失败结果。
  *
- * 本层不加载网络 Schema、不选择领域 Schema、不解释 validation keyword、不移除字段、
- * 不应用 default/coercion，也不把 Schema 通过升级为领域关系、authority 或写入授权。
+ * 本层不加载网络 Schema、不选择领域 Schema、不解释校验关键字、不移除字段，也不
+ * 应用默认值或类型强制转换。Schema 校验通过不等同于领域关系成立、权威事实成立
+ * 或获得写入授权。
  */
 
 export interface RuntimeJsonSchemaValidationSuccess<Value> {
@@ -54,7 +55,7 @@ const ERROR_MESSAGES = {
   string
 >>;
 
-/** runtime Schema catalog 或编译失败的稳定、脱敏错误。 */
+/** 运行时 Schema 目录构建或编译失败时返回的稳定、脱敏错误。 */
 export class RuntimeJsonSchemaError extends Error {
   override readonly name = "RuntimeJsonSchemaError";
   readonly code = "wakeflow-runtime-json-schema" as const;
@@ -87,7 +88,7 @@ function schemaObject(
   if (admitted === null || Array.isArray(admitted) || typeof admitted !== "object") {
     fail(reason, path);
   }
-  // 上述准入已排除 primitive 与 JsonArray；恢复 TypeScript 无法完成的 readonly narrowing。
+  // 上述准入已经排除原始值和 JsonArray；此处恢复 TypeScript 无法保留的只读类型收窄。
   return admitted as JsonObject;
 }
 
@@ -121,10 +122,10 @@ function validationPath(instancePath: string): string {
 }
 
 /**
- * 编译一个关闭网络的本地 Schema catalog，并返回可复用 validator。
+ * 编译不访问网络的本地 Schema 目录，并返回可复用的校验器。
  *
- * 每次调用创建独立 Ajv 实例，避免不同领域 Schema catalog 的 `$id`、format 或 errors
- * 状态相互污染；调用方应在模块初始化时创建一次 validator，不在每次请求中编译。
+ * 每次调用都创建独立的 Ajv 实例，避免不同领域 Schema 目录的 `$id`、格式或错误
+ * 状态相互污染。调用方应在模块初始化时创建一次校验器，而不是为每次请求重新编译。
  */
 export function createRuntimeJsonSchemaValidator<Value>(
   rootSchema: unknown,

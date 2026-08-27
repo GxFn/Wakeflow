@@ -13,15 +13,15 @@ import {
 } from "../numeric/byte-count.js";
 
 /**
- * Wakeflow Foundation / Filesystem：Node 文件系统节点的物理快照。
+ * Wakeflow Foundation / Filesystem：Node.js 文件系统节点的物理快照。
  *
- * 本文件把一次 bigint Stats 观察转换为冻结、无行为的节点事实，并分别提供
- * “同一 dev/ino 节点”和“完整观察未变化”比较。它不执行 stat/lstat/open，
- * 不证明输入确实来自 Node，也不判断路径、owner、mode、link 或节点类型是否
- * 满足某个领域策略。
+ * 本模块把一次 `bigint` Stats 观察转换为冻结、无行为的节点事实，并分别提供
+ * “同一设备号和 inode”与“完整观察未变化”两种比较。它不执行 `stat`、`lstat`
+ * 或 `open`，不证明输入确实来自 Node.js，也不判断路径、所有者、权限位、链接数
+ * 或节点类型是否满足某个领域策略。
  *
- * atime 会因读取而变化，birthtime 的跨平台语义也不适合作为 Wakeflow 稳定性
- * 边界，因此二者不进入快照；mtimeNs 与 ctimeNs 继续保留准确 bigint。
+ * 访问时间会因读取而变化，创建时间的跨平台语义也不适合作为 Wakeflow 稳定性边界，
+ * 因此二者不进入快照；`mtimeNs` 与 `ctimeNs` 继续保留精确的 `bigint` 值。
  */
 
 /** Wakeflow 需要显式观察的本地文件系统节点类型。 */
@@ -70,7 +70,7 @@ const ERROR_MESSAGES = {
 /**
  * 节点 Stats 准入或快照复验失败的稳定错误。
  *
- * 错误不回显设备号、inode、owner、mode、大小或时间值。
+ * 错误不回显设备号、inode、所有者、权限位、大小或时间值。
  */
 export class FileNodeSnapshotError extends Error {
   override readonly name = "FileNodeSnapshotError";
@@ -339,9 +339,9 @@ function parseFileNodeSnapshot(
 }
 
 /**
- * 判断两个快照是否仍指向同一物理节点，仅比较 deviceId 与 inodeId。
+ * 判断两个快照是否仍指向同一物理节点，仅比较 `deviceId` 与 `inodeId`。
  *
- * 相同结果不证明内容、mode 或时间未变化，也无法排除节点删除后的 inode reuse。
+ * 相同结果不证明内容、权限位或时间未变化，也无法排除节点删除后的 inode 复用。
  */
 export function sameFileNodeIdentity(
   left: FileNodeSnapshot,

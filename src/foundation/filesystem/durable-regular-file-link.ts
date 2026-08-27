@@ -24,20 +24,20 @@ import {
 } from "./rooted-resource-parent-handle.js";
 
 /**
- * Wakeflow Foundation / Filesystem：regular file 的持久化 no-replace hard link。
+ * Wakeflow Foundation / Filesystem：普通文件的不替换目标持久化硬链接。
  *
- * 本文件要求 exact frozen source node，打开并复验 source/destination parents 与
- * no-follow source handle，然后只跨一次 link commit 边界。link 成功后 source 与
- * destination 必须是同一 inode 的 exact linked pair，linkCount 从 previous 增加 1；
- * 随后同步 source inode 与 destination parent 并完成最终复验。
+ * 调用方必须提供冻结且完全一致的源节点预期。本模块打开并复验源、目标父目录和
+ * 不跟随符号链接的源句柄，然后只跨越一次硬链接提交点。链接成功后，源路径与目标
+ * 路径必须构成指向同一 inode 的精确链接对，链接数在原值上增加 1；随后同步源 inode
+ * 和目标父目录，并完成最终复验。
  *
- * 成功返回有意保留两个 pathname。本能力不 unlink/rename source，不把 linked pair
- * 冒充 move terminal state；后续 detach-stage 与 exact unlink 必须由 journal 分步
- * 组合。link 后失败也不会猜测删除 destination。
+ * 成功结果会有意保留两个路径名。本能力不删除或重命名源路径，也不把链接对描述为
+ * 资源已经移动完成。后续暂存文件分离和精确删除必须由领域恢复意图分步编排；链接
+ * 调用后的失败也不会猜测删除目标路径。
  *
- * 本层不接受 directory、symlink 或 special node，不复制 EXDEV source、不创建 parent、
- * 不持有业务 lock，也不拥有完整 move/recovery 状态机。Node 缺少 linkat(fd-relative)，
- * pathname 竞态边界与 RootedDirectory 保持一致。
+ * 本层不接受目录、符号链接或特殊节点，不复制跨设备源资源、不创建父目录、不持有
+ * 业务锁，也不拥有完整的移动或恢复状态机。Node.js 缺少基于文件描述符的 `linkat`，
+ * 因此路径名竞态边界与 `RootedDirectory` 保持一致。
  */
 
 export interface DurableRegularFileLinkOptions {
@@ -45,7 +45,7 @@ export interface DurableRegularFileLinkOptions {
   readonly signal?: AbortSignal;
 }
 
-/** 成功返回描述完成 inode 与 destination-parent sync 的 exact linked pair。 */
+/** 成功结果描述已经完成 inode 与目标父目录同步的精确链接对。 */
 export interface DurableRegularFileLinkResult {
   readonly sourceResourcePath: PortableResourcePath;
   readonly destinationResourcePath: PortableResourcePath;
@@ -55,7 +55,7 @@ export interface DurableRegularFileLinkResult {
   readonly linkedPairLinkCount: bigint;
 }
 
-/** durable regular-file link 失败分类。 */
+/** 普通文件持久化链接失败的分类。 */
 export type DurableRegularFileLinkErrorReason =
   | "input"
   | "root-scope"
@@ -102,10 +102,10 @@ const ERROR_MESSAGES = {
 } as const satisfies Readonly<Record<DurableRegularFileLinkErrorReason, string>>;
 
 /**
- * durable regular-file link 的稳定错误。
+ * 普通文件持久化链接失败时返回的稳定错误。
  *
- * 错误不回显物理路径、resource ref、节点元数据、link count、Abort reason、系统调用
- * 或 cause。link 调用后的错误不得被解释为 destination 一定不存在。
+ * 错误不回显物理路径、资源引用、节点元数据、链接数、取消原因、系统调用或底层原因。
+ * `link` 调用后的错误不得被解释为目标路径一定不存在。
  */
 export class DurableRegularFileLinkError extends Error {
   override readonly name = "DurableRegularFileLinkError";
@@ -486,9 +486,9 @@ async function inspectLinkedPair(
 }
 
 /**
- * 为 exact source regular file 持久发布一个 no-replace destination hard link。
+ * 为指定的源普通文件持久发布一个不替换目标的硬链接。
  *
- * 成功结果是可由 journal 观察的 linked pair；调用方不得把它当成 source 已移动。
+ * 成功结果是可由恢复意图观察的链接对；调用方不得把它当成源资源已经移动。
  */
 export async function linkRegularFileWithoutReplacement(
   root: RootedDirectory,

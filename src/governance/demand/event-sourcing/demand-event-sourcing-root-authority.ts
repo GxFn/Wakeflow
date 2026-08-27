@@ -54,11 +54,11 @@ import {
 } from "../../ledger/ledger-authority-store.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：健康 Demand root 的组合 authority load。
+ * Wakeflow Governance / Demand Event Sourcing：健康 Demand 根目录的组合权威加载。
  *
- * 本边界组合完整 root inventory、immutable Identity/Authority、Ledger exact resolution、
- * repository rehydration 与 revision-1 publication closure。Event Store 和 Repository
- * 自身仍不依赖 Ledger；只有需要完整 Demand authority 的上层调用本函数。
+ * 本边界组合完整根目录资源清单、不可变身份/权威关系记录、Ledger 精确引用解析、
+ * 聚合仓储重建和修订 1 发布关系验证。事件存储和聚合仓储本身仍不依赖 Ledger；
+ * 只有需要完整 Demand 权威事实的上层才调用本函数。
  */
 
 const IDENTITY_MAXIMUM_BYTES = parseByteCount(512 * 1024);
@@ -188,7 +188,7 @@ async function readRecord(
   }
 }
 
-/** 加载健康 root；`audit:true` 明确要求从 commit 1 完整 replay。 */
+/** 加载健康根目录；`audit: true` 明确要求从提交 1 开始完整重放。 */
 export async function loadDemandEventSourcingRootAuthority(
   root: RootedDirectory,
   ledgerStore: LedgerAuthorityStore,

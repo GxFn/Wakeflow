@@ -5,7 +5,7 @@ import type { StoredTodoCollectionItem, TodoCollectionAuthoritySnapshot } from "
 import type { TodoIntakeLineageReference } from "../../todo/todo-intake-lineage.js";
 import type { DemandEventSourcingPublicationTransaction } from "./demand-event-sourcing-publication-transaction.js";
 
-/** Demand Event Sourcing publication process 的稳定公共合同与错误词汇。 */
+/** Demand 事件溯源发布流程的稳定公共合同和错误词汇。 */
 
 export const DEMAND_EVENT_SOURCING_PUBLICATION_DIRECTORY_MODE = 0o700;
 export const DEMAND_EVENT_SOURCING_PUBLICATION_FILE_MODE = 0o600;

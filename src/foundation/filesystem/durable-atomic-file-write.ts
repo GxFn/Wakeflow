@@ -48,15 +48,15 @@ import type { PortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 
 /**
- * Wakeflow Foundation / Filesystem：单个完整字节文件的持久化原子发布 facade。
+ * Wakeflow Foundation / Filesystem：单个完整字节文件的持久化原子发布门面。
  *
- * 本文件独占 create hard-link 与 replace rename 的 commit point，并编排相邻的合同、
- * self-describing stage I/O、target expectation 与 parent durability。子模块不公开第二套
- * writer；调用方仍只使用本文件的 create/replace API。
+ * 本模块独占“创建时建立硬链接”和“替换时执行重命名”两个提交点，并编排相邻合同、
+ * 自描述暂存文件 I/O、目标预期和父目录持久性。子模块不公开第二套写入器；调用方
+ * 仍只使用本模块的创建和替换 API。
  *
- * Create 在 two-link 状态先同步 target parent，再退休 stage 并第二次同步；Replace 在
- * exact expectation 下 rename 后同步 file 与 parent。本层不创建父目录、不解释业务
- * authority，也不替代领域 lock/journal。
+ * 创建操作在双链接状态下先同步目标父目录，再退休暂存文件并进行第二次同步。替换
+ * 操作在源资源预期完全一致时执行重命名，随后同步文件和父目录。本层不创建父目录、
+ * 不解释业务权威事实，也不替代领域互斥锁或恢复意图记录。
  */
 
 async function performWrite<
@@ -165,7 +165,7 @@ async function performWrite<
       if (!sameFileNodeSnapshot(linkedNode, verifiedLinkedNode)) {
         fail("commit-uncertain", "$resourcePath");
       }
-      // two-link pair 先 durable；后续 cleanup 中断时仍可由 stage recovery 前向结算。
+      // 先保证双链接对具备崩溃持久性；后续清理中断时，暂存文件恢复仍可前向结算。
       await syncDurableAtomicFileTargetParent(parent);
       await assertDurableAtomicFileTargetParentCurrent(parent);
       const durableLinkedNode = await inspectCommittedDurableAtomicFileTarget(

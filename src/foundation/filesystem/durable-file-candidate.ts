@@ -34,16 +34,16 @@ import {
 } from "./rooted-resource-parent-handle.js";
 
 /**
- * Wakeflow Foundation / Filesystem：具名、可恢复的非权威 file candidate。
+ * Wakeflow Foundation / Filesystem：具名、可恢复的非权威文件候选资源。
  *
- * Candidate 直接以 O_CREAT|O_EXCL|O_NOFOLLOW 创建在调用方拥有的明确 pathname，
- * 完整写入、设置最终 mode、复验字节、fsync file 与 parent 后才返回。它不使用第二个
- * anonymous stage，因此进程崩溃只会留下调用方可按自身命名协议识别的 partial/complete
- * candidate。Candidate 本身不是 authority；调用方必须另用 no-replace link/rename
- * 建立业务 commit point，并负责 crash residue 的 owner/liveness 与清理判断。
+ * 本能力直接使用 `O_CREAT|O_EXCL|O_NOFOLLOW`，在调用方拥有的明确路径创建候选文件。
+ * 完整写入、设置最终权限位、复验字节并同步文件和父目录后才返回。它不再创建匿名
+ * 暂存文件，因此进程崩溃只会留下调用方能够按自身命名协议识别的部分或完整候选。
+ * 候选文件本身不是权威事实；调用方必须另用不替换目标的链接或重命名建立业务提交点，
+ * 并负责判断崩溃残留的职责所有者、活动状态和清理条件。
  *
- * 本能力不覆盖既有文件、不发布最终 target、不自动收养 crash residue，也不解释领域
- * bytes。Node 未暴露 openat，pathname 竞态边界与 RootedDirectory 保持一致。
+ * 本能力不覆盖已有文件、不发布最终目标、不自动接管崩溃残留，也不解释领域字节。
+ * Node.js 未暴露 `openat`，因此路径名竞态边界与 `RootedDirectory` 保持一致。
  */
 
 export interface DurableFileCandidateOptions {
@@ -277,7 +277,7 @@ async function closeParent(
   }
 }
 
-/** 直接创建并同步一个具名、非权威 file candidate。 */
+/** 直接创建并同步一个具名、非权威文件候选资源。 */
 export async function createFileCandidateDurably(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,

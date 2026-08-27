@@ -22,11 +22,11 @@ import {
 } from "./portable-resource-path.js";
 
 /**
- * Wakeflow Foundation / Filesystem：durable atomic file stage 的自描述地址。
+ * Wakeflow Foundation / Filesystem：持久化原子文件暂存资源的自描述地址。
  *
- * Stage 名只携带 operation、target resource-path digest、input digest、最终 mode 与
- * process/thread/attempt owner，不泄漏 target path 或文件字节。它为 crash recovery 提供
- * 可验证路由事实；stage 本身始终是非权威资源，名称也不证明内容正确或允许删除。
+ * 暂存文件名只携带操作类型、目标资源路径摘要、输入摘要、最终权限位，以及进程、
+ * 线程和尝试标识，不泄漏目标路径或文件字节。该名称为崩溃恢复提供可验证的路由事实；
+ * 暂存资源本身始终不是权威事实，名称也不能证明内容正确或允许删除。
  */
 
 export type DurableAtomicFileStageOperation = "create" | "replace";
@@ -139,7 +139,7 @@ function parseOwnerInteger(
   return parsed;
 }
 
-/** 计算 target portable ref 的脱敏、稳定 stage 路由摘要。 */
+/** 计算目标可移植引用的脱敏、稳定暂存路由摘要。 */
 export function computeDurableAtomicFileStageTargetDigest(
   value: unknown,
 ): Sha256Digest {
@@ -162,12 +162,12 @@ export function computeDurableAtomicFileStageTargetDigest(
   return computeSha256Digest(encodeUtf8(resourcePath, "$resourcePath"));
 }
 
-/** 名称是否占用 Wakeflow atomic stage 保留前缀；不代表格式已经有效。 */
+/** 判断名称是否占用 Wakeflow 原子暂存文件保留前缀；该结果不代表格式已经有效。 */
 export function hasDurableAtomicFileStagePrefix(value: unknown): boolean {
   return typeof value === "string" && value.startsWith(STAGE_PREFIX);
 }
 
-/** 解析一份自描述 atomic stage 文件名；不签发 cleanup authority。 */
+/** 解析自描述原子暂存文件名；不授予清理权限。 */
 export function parseDurableAtomicFileStageFileName(
   value: unknown,
 ): Readonly<DurableAtomicFileStageAddress> {
@@ -202,7 +202,7 @@ export function parseDurableAtomicFileStageFileName(
   });
 }
 
-/** 把 stage address 放入 target 的同一 parent；不会创建或观察文件。 */
+/** 把暂存地址放入目标的同一父目录；本函数不会创建或观察文件。 */
 export function durableAtomicFileStageRef(
   targetResourcePathValue: unknown,
   addressValue: Readonly<DurableAtomicFileStageAddress>,
@@ -227,7 +227,7 @@ export function durableAtomicFileStageRef(
   );
 }
 
-/** 为一次 atomic write 签发并登记进程内 active stage address。 */
+/** 为一次原子写入签发并登记进程内活动暂存地址。 */
 export function issueDurableAtomicFileStageAddress(
   operationValue: unknown,
   resourcePathValue: unknown,
@@ -262,7 +262,7 @@ export function issueDurableAtomicFileStageAddress(
   return address;
 }
 
-/** 结束本进程签发的 stage owner 生命周期；不会操作任何文件。 */
+/** 结束本进程签发的暂存地址所有者生命周期；不会操作任何文件。 */
 export function releaseDurableAtomicFileStageAddress(
   value: Readonly<DurableAtomicFileStageAddress>,
 ): void {
@@ -279,7 +279,7 @@ export function releaseDurableAtomicFileStageAddress(
   ISSUED_STAGE_ADDRESSES.delete(value);
 }
 
-/** 保守判断 stage owner；unknown 与 active 都不得被 recovery 删除。 */
+/** 保守判断暂存资源所有者状态；未知或仍在活动时，恢复流程都不得删除资源。 */
 export function readDurableAtomicFileStageOwnerState(
   value: Readonly<DurableAtomicFileStageAddress>,
 ): DurableAtomicFileStageOwnerState {

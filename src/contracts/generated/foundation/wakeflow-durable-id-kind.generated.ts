@@ -32,6 +32,6 @@ export const WAKEFLOW_DURABLE_ID_KINDS = Object.freeze([
   "window"
 ] as const);
 
-/** 从同一 Schema enum 派生的持久身份 kind 联合类型。 */
+/** 从同一 Schema 枚举派生的持久标识类别联合类型。 */
 export type WakeflowDurableIdKind =
   (typeof WAKEFLOW_DURABLE_ID_KINDS)[number];

@@ -3,13 +3,13 @@
  * Source: src/contracts/schemas/foundation/portable-resource-path.schema.json
  */
 
-/** Wakeflow portable resource path 的 Schema 派生正则源。 */
+/** Wakeflow 可移植资源路径的 Schema 派生正则源。 */
 export const PORTABLE_RESOURCE_PATH_PATTERN_SOURCE = "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)(?!\\s)(?!.*\\s$)(?!.*\\/\\s)(?!.*\\s\\/)(?!.*[\\u0000-\\u001F\\u007F-\\u009F]).+$" as const;
 
-/** Schema 层的 portable resource path 文本；运行时解析后再授予品牌类型。 */
+/** Schema 层的可移植资源路径文本；运行时解析后再授予品牌类型。 */
 export type WakeflowPortableResourcePathText = string;
 
-/** 递归冻结生成的 Schema，阻止 validator 首次消费前发生嵌套漂移。 */
+/** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
 function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
   if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
     for (const child of Object.values(value)) freezeGeneratedSchema(child);
@@ -18,7 +18,7 @@ function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
   return value;
 }
 
-/** Ajv strict validator 使用的 Schema 派生运行时权威；不得手工修改。 */
+/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
 export const WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA = freezeGeneratedSchema({
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1",

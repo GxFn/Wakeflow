@@ -72,12 +72,11 @@ export {
 export { TODO_TRANSACTION_MAXIMUM_BYTES } from "./todo-collection-transaction-storage.js";
 
 /**
- * Wakeflow Governance / TODO：JSON intake/state collection 的唯一公共 owner。
+ * Wakeflow Governance / TODO：JSON Intake/State 集合的唯一公共职责所有者。
  *
- * Service 负责公共输入、领域 transition、collection lock 与返回结果；领域专属
- * transaction storage 负责 journal、stage、exact-source replace 与 projection 的
- * 物理 effect。两者都只使用固定 TODO authority refs，不提供通用 repository、
- * FileManager 或 storage adapter。
+ * Service 负责公共输入、领域状态转换、集合锁和返回结果；领域专属事务存储负责恢复
+ * 意图、暂存资源、基于精确源预期的替换和投影发布等物理副作用。两者都只使用固定的
+ * TODO 权威引用，不提供通用仓储、`FileManager` 或存储适配器。
  */
 
 export const TODO_COLLECTION_LOCK_TIMEOUT_MILLISECONDS = 10_000;
@@ -378,7 +377,7 @@ function itemResult(
   });
 }
 
-/** fresh-workspace owner 使用的 idempotent static root 与空 projection 初始化。 */
+/** 为新 Workspace 幂等初始化静态根目录和空投影。 */
 export async function initializeTodoCollection(
   root: RootedDirectory,
   options: InitializeTodoCollectionOptions,
@@ -419,7 +418,7 @@ export async function initializeTodoCollection(
   }
 }
 
-/** 创建全新 immutable intake + revision-1 state，并发布 projection。 */
+/** 创建全新的不可变 Intake 和修订 1 State，并发布投影。 */
 export async function appendTodoItem(
   root: RootedDirectory,
   draft: unknown,
@@ -446,7 +445,7 @@ export async function appendTodoItem(
   });
 }
 
-/** 从 exact intake/state expectation 前向提交 claim。 */
+/** 根据精确的接收记录/状态预期前向提交领取操作。 */
 export async function claimTodoItem(
   root: RootedDirectory,
   input: unknown,
@@ -478,7 +477,7 @@ export async function claimTodoItem(
   });
 }
 
-/** 从 exact claimed state 和完整 BusinessArchive receipt 提交 archived 终态。 */
+/** 根据指定的已申领 State 和完整 BusinessArchive 回执提交归档终态。 */
 export async function archiveTodoItem(
   root: RootedDirectory,
   input: unknown,
@@ -520,7 +519,7 @@ export async function archiveTodoItem(
   });
 }
 
-/** 读取 immutable journal，并幂等前向完成 authority/projection/cleanup。 */
+/** 读取不可变恢复意图记录，并幂等前向完成权威写入、投影发布和清理。 */
 export async function recoverTodoItemTransaction(
   root: RootedDirectory,
   todoIdValue: unknown,

@@ -24,29 +24,28 @@ import {
 } from "./rooted-resource-parent-handle.js";
 
 /**
- * Wakeflow Foundation / Filesystem：exact regular-file pathname 的持久化 unlink。
+ * Wakeflow Foundation / Filesystem：指定普通文件路径名的持久化删除。
  *
- * 本文件要求冻结的 expected node，持有 no-follow source 与 parent handles，并在
- * commit 前确认 pathname/handle/expectation 完全一致。默认 settlement 要求 unlink 后
- * pathname 持续 absent；协调锁可以显式允许不同 dev/ino 的 successor 立即取得原名。
- * 两种模式都要求打开的 handle 仍指向原 inode、linkCount 精确减少 1，再同步 inode
- * 与 parent 并完成最终复验。
+ * 调用方必须提供冻结的预期节点。本模块持有不跟随符号链接的源句柄和父目录句柄，
+ * 并在提交前确认路径名、句柄和预期完全一致。默认结算策略要求删除后路径持续不存在；
+ * 协调锁可以显式允许设备号或 inode 不同的后继资源立即取得原名。两种策略都要求
+ * 已打开句柄仍指向原 inode、链接数精确减少 1，再同步 inode 和父目录并完成最终复验。
  *
- * missing 不被当作幂等成功，symlink/directory/special node 均拒绝。unlink 后失败不会
- * 尝试恢复 pathname，也不会删除占据原名的 successor。本 primitive 必须在领域
- * lock/journal 下使用；Node 没有按 expected inode 条件执行的 unlinkat CAS。
+ * 目标缺失不视为幂等成功，符号链接、目录和特殊节点都会被拒绝。删除调用后的失败
+ * 不会尝试恢复路径名，也不会删除占据原名的后继资源。本基础操作必须在领域锁和恢复
+ * 意图约束下使用；Node.js 没有暴露按预期 inode 条件执行的 `unlinkat` CAS。
  *
- * 本层不 rmdir、不递归删除、不读取内容、不解释业务 authority，也不拥有 tree cleanup。
+ * 本层不删除目录、不递归删除、不读取内容、不解释业务权威事实，也不负责目录树清理。
  */
 
 export interface ExactRegularFileUnlinkOptions {
   readonly expectedNode: Readonly<FileNodeSnapshot>;
-  /** 普通资源要求持续 absent；协调锁允许 successor 立即取得同一 pathname。 */
+  /** 普通资源要求路径持续不存在；协调锁允许后继持有者立即取得同一路径名。 */
   readonly settlement?: "absent" | "replacement-allowed";
   readonly signal?: AbortSignal;
 }
 
-/** unlink 成功后签发的进程内节点证明；不得持久化为 wire record。 */
+/** `unlink` 成功后签发的进程内节点证明；不得持久化为线上协议记录。 */
 export interface ExactRegularFileUnlinkReceipt {
   readonly resourcePath: PortableResourcePath;
   readonly nodeBefore: Readonly<FileNodeSnapshot>;
@@ -56,7 +55,7 @@ export interface ExactRegularFileUnlinkReceipt {
   readonly replacementObserved: boolean;
 }
 
-/** exact regular-file unlink 失败分类。 */
+/** 指定普通文件删除失败的分类。 */
 export type ExactRegularFileUnlinkErrorReason =
   | "input"
   | "root-scope"
@@ -100,10 +99,10 @@ const ERROR_MESSAGES = {
 >>;
 
 /**
- * exact regular-file unlink 的稳定错误。
+ * 指定普通文件删除失败时返回的稳定错误。
  *
- * 错误不回显物理路径、resource ref、节点元数据、link count、Abort reason、系统调用
- * 或 cause。unlink 调用后的错误不得被解释为 pathname 一定仍存在。
+ * 错误不回显物理路径、资源引用、节点元数据、链接数、取消原因、系统调用或底层原因。
+ * `unlink` 调用后的错误不得被解释为路径名一定仍然存在。
  */
 export class ExactRegularFileUnlinkError extends Error {
   override readonly name = "ExactRegularFileUnlinkError";
@@ -453,11 +452,11 @@ function sameUnlinkedNode(
 }
 
 /**
- * 持久化删除一个仍匹配 exact frozen node 的 regular-file pathname。
+ * 持久化删除仍与指定冻结节点一致的普通文件路径名。
  *
  * 成功 receipt 始终证明原 inode linkCount-1。默认 settlement 还证明 pathname
  * absent；replacement-allowed 则只证明若原名已有 successor，它与原 inode 身份不同。
- * 调用方仍须用领域 lock/journal 解释 successor，不能把它当作普通资源的通用宽松删除。
+ * 调用方仍须使用领域锁和恢复意图解释后继资源，不能把该策略当作普通资源的通用宽松删除。
  */
 export async function unlinkRegularFileExactly(
   root: RootedDirectory,

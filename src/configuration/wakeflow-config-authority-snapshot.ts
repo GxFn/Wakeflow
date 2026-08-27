@@ -39,15 +39,15 @@ import {
 import { renderWakeflowConfigV3 } from "./wakeflow-config-v3-document.js";
 
 /**
- * Wakeflow Configuration：一次操作范围内的 v3 配置 authority 快照。
+ * Wakeflow Configuration：单次操作范围内的 v3 配置权威快照。
  *
  * 本文件从调用方已经打开的 RootedDirectory 固定读取 `wakeflow.config.json`，绑定
- * 同一次稳定读取的节点、字节数和 source digest，再完成严格 UTF-8/JSON、公开
- * Schema、typed reference、根 placement 与常用索引。source digest 证明文件表达
- * 字节，config digest 证明规范化 JSON 语义；两者不能互相替代。
+ * 同一次稳定读取的节点、字节数和源摘要，再完成严格 UTF-8/JSON、公开 Schema、
+ * 类型化引用、根目录位置和常用索引校验。源摘要证明文件表示字节，配置摘要证明
+ * 规范化 JSON 语义；两者不能互相替代。
  *
- * 快照不缓存“当前 workspace”，也不保证返回后文件继续不变。任何写入型 owner
- * 必须在自己的 lock/CAS 边界重新加载并核对 source snapshot/config digest。
+ * 快照不缓存“当前 Workspace”，也不保证返回后文件继续不变。任何写入职责所有者
+ * 必须在自己的互斥锁或比较并交换边界内重新加载，并核对源快照和配置摘要。
  */
 
 export const WAKEFLOW_CONFIG_AUTHORITY_SNAPSHOT_VERSION = 1 as const;
@@ -113,7 +113,7 @@ const ERROR_MESSAGES = {
   string
 >>;
 
-/** 配置 authority 快照失败的稳定、脱敏错误。 */
+/** 配置权威快照失败时返回的稳定、脱敏错误。 */
 export class WakeflowConfigAuthoritySnapshotError extends Error {
   override readonly name = "WakeflowConfigAuthoritySnapshotError";
   readonly code = "wakeflow-config-authority-snapshot" as const;
@@ -284,7 +284,7 @@ async function loadSnapshot(
   });
 }
 
-/** 从一个已打开 workspace 根读取并构造完整 v3 配置 authority 快照。 */
+/** 从已经打开的 Workspace 根目录读取并构造完整的 v3 配置权威快照。 */
 export async function readWakeflowConfigAuthoritySnapshot(
   root: RootedDirectory,
   options?: WakeflowConfigAuthoritySnapshotOptions,

@@ -42,7 +42,7 @@ import {
 } from "./demand-event-sourcing-publication-storage.js";
 import { DEMAND_PUBLICATION_MARKER_REF } from "./demand-publication-paths.js";
 
-/** Demand Event Sourcing root 的 stage materialization、rename 与 final load。 */
+/** Demand 事件溯源根目录的暂存构建、整体重命名和最终加载。 */
 
 export async function materializeDemandPublicationStage(
   workspaceRoot: RootedDirectory,

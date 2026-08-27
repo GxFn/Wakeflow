@@ -12,11 +12,11 @@ import {
 } from "../data/passive-own-data.js";
 
 /**
- * Wakeflow Foundation / Event Sourcing：持久化事件数据的逐版本纯内存演进 Registry。
+ * Wakeflow Foundation / Event Sourcing：持久化事件数据的逐版本内存演进注册表。
  *
- * Registry 持有一个事件家族的版本 codec 与连续 vN→vN+1 steps。每一级输入输出都
- * 重新收敛为 frozen JsonValue，并由目标版本 codec 复验；它不读取文件、时间、配置，
- * 不修改 persisted bytes，也不解释 event identity、stream position 或领域状态。
+ * 注册表保存一个事件家族的版本编解码器和连续的 `vN → vN+1` 转换步骤。每一级输入
+ * 和输出都会重新转换为冻结的 `JsonValue`，并由目标版本编解码器复验。本模块不读取
+ * 文件、时间或配置，不修改持久化字节，也不解释事件标识、事件流位置或领域状态。
  */
 
 export interface EventSourcingVersionCodec {
@@ -202,7 +202,7 @@ function snapshotJson(value: unknown, path: string): Readonly<JsonValue> {
   }
 }
 
-/** 一个事件家族的 immutable、可复用版本演进计划。 */
+/** 一个事件家族的不可变、可复用版本演进计划。 */
 export class EventSourcingVersionEvolutionRegistry {
   readonly #currentVersion: number;
   readonly #supportedVersions: readonly number[];
@@ -254,7 +254,7 @@ export class EventSourcingVersionEvolutionRegistry {
     return this.#supportedVersions;
   }
 
-  /** 从任一受支持 persisted version 确定性演进到 current version。 */
+  /** 从任一受支持的持久化版本确定性演进到当前版本。 */
   evolve(
     sourceVersionValue: unknown,
     sourceDataValue: unknown,

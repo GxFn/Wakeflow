@@ -4,14 +4,14 @@ import {
 } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 
 /**
- * Wakeflow Foundation / Filesystem：根内 portable resource path 词法。
+ * Wakeflow Foundation / Filesystem：根目录内可移植资源路径的词法合同。
  *
- * 本文件消费 JSON Schema 派生的结构 pattern，并复验 well-formed Unicode、NFC
- * 与非空规范分段。路径只是一段可持久化的逻辑引用；它不解析物理根、不访问
- * filesystem，也不判断 symlink、存在性、权限、case collision 或领域容量。
+ * 本模块使用 JSON Schema 派生的结构模式，并复验 Unicode 结构完整性、NFC 和非空
+ * 规范分段。路径只是一段可持久化的逻辑引用；它不解析物理根目录、不访问文件系统，
+ * 也不判断符号链接、存在性、权限、大小写冲突或领域容量。
  *
- * URL、文档 anchor、允许 `../` 的配置 placement 和本机绝对路径具有不同语义，
- * 不会为了共享 string 外形被本 parser 接受或规范化。
+ * URL、文档锚点、允许 `../` 的配置位置和本机绝对路径具有不同语义，不会仅因都是
+ * 字符串而被本解析器接受或规范化。
  */
 
 const PORTABLE_RESOURCE_PATH_PATTERN = new RegExp(
@@ -21,15 +21,15 @@ const PORTABLE_RESOURCE_PATH_PATTERN = new RegExp(
 
 declare const PORTABLE_RESOURCE_PATH_BRAND: unique symbol;
 
-/** 已严格解析的根内 portable resource path。 */
+/** 已严格解析的根目录内可移植资源路径。 */
 export type PortableResourcePath = WakeflowPortableResourcePathText & {
   readonly [PORTABLE_RESOURCE_PATH_BRAND]: "PortableResourcePath";
 };
 
-/** 至少包含一个成员的冻结 resource path 分段。 */
+/** 至少包含一个成员的冻结资源路径分段。 */
 export type PortableResourcePathSegments = readonly [string, ...string[]];
 
-/** portable resource path 失败的稳定分类。 */
+/** 可移植资源路径解析失败的稳定分类。 */
 export type PortableResourcePathErrorReason =
   | "format"
   | "unicode-well-formed"
@@ -49,7 +49,7 @@ const ERROR_MESSAGES = {
 } as const satisfies Readonly<Record<PortableResourcePathErrorReason, string>>;
 
 /**
- * portable resource path 词法失败的稳定错误。
+ * 可移植资源路径词法验证失败时返回的稳定错误。
  *
  * 错误只暴露能力代码、分类和调用方路径，不回显候选路径、分段或 Unicode 文本。
  */
@@ -113,7 +113,7 @@ function parsePath(
 }
 
 /**
- * 严格解析 portable resource path，不执行 trim、slash 转换或 Unicode normalization。
+ * 严格解析可移植资源路径，不执行裁剪、斜杠转换或 Unicode 规范化。
  */
 export function parsePortableResourcePath(
   value: unknown,
@@ -125,7 +125,7 @@ export function parsePortableResourcePath(
 /**
  * 重新验证品牌输入并返回新的冻结分段数组。
  *
- * 分段保持原始大小写和文本，不执行 basename、parent、URL decode 或 OS 本地化。
+ * 分段保留原始大小写和文本，不提取基本名称或父路径，不执行 URL 解码或操作系统本地化。
  */
 export function splitPortableResourcePath(
   value: PortableResourcePath,

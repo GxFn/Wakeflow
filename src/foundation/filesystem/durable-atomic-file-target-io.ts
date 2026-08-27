@@ -24,7 +24,7 @@ import {
   StableFileReadError,
 } from "./stable-file-read.js";
 
-/** Durable atomic write 的 exact target/parent I/O 与 replace expectation 复验。 */
+/** 持久化原子写入中，目标及父目录 I/O 与替换预期的精确复验。 */
 
 function mapParentHandleError(
   error: RootedResourceParentHandleError,

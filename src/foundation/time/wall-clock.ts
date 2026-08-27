@@ -5,17 +5,17 @@ import {
 } from "./utc-instant.js";
 
 /**
- * Wakeflow Foundation / Time：可持久化 UTC wall clock 来源。
+ * Wakeflow Foundation / Time：可持久化的 UTC 墙上时钟来源。
  *
- * 本文件只回答“此刻的系统 wall time 应记录成哪个 UtcInstant”，并提供明确的
- * 同步测试注入 seam。系统来源保持 JavaScript Date 的毫秒精度；注入来源可以
- * 返回 utc-instant 已接纳的其他精度，但每次结果仍会重新完成运行时验证。
+ * 本模块只回答“当前系统时间应记录为哪个 `UtcInstant`”，并提供明确的同步测试
+ * 注入点。系统来源保持 JavaScript `Date` 的毫秒精度；注入来源可以返回
+ * `utc-instant` 已接纳的其他精度，但每次结果仍会重新接受运行时验证。
  *
- * wall clock 可能重复、回拨或被操作系统校时。本能力不制造严格递增时间，不
- * 计算 elapsed duration，也不拥有 timeout、lease expiry 或事件顺序策略。
+ * 墙上时钟可能重复、回拨或被操作系统校时。本能力不制造严格递增时间、不计算经过
+ * 时长，也不负责超时、租约过期或事件顺序策略。
  */
 
-/** 返回一个已经通过基础时间合同的当前 UTC instant。 */
+/** 返回已经通过基础时间合同验证的当前 UTC 时刻。 */
 export type UtcWallClock = () => UtcInstant;
 
 /** UTC wall clock 来源失败的稳定分类。 */
@@ -33,8 +33,8 @@ const ERROR_MESSAGES = {
 /**
  * UTC wall clock 来源或结果失败的稳定错误。
  *
- * 错误不会透传注入函数的 message、stack、cause 或返回值；领域 owner 可以按
- * reason 把失败映射到自己的 record/public 错误。
+ * 错误不会透传注入函数的消息、调用栈、原因链或返回值。领域职责所有者可以根据
+ * 失败分类把错误映射为自己的记录或公共错误。
  */
 export class UtcWallClockError extends Error {
   override readonly name = "UtcWallClockError";
@@ -54,20 +54,20 @@ function fail(reason: UtcWallClockErrorReason, path: string): never {
 }
 
 /**
- * Node.js 系统 wall clock 的默认来源。
+ * Node.js 系统墙上时钟的默认来源。
  *
- * Date 只生成当前 UTC 毫秒文本，最终仍交给 utc-instant 授予品牌。函数不缓存
- * Date 或上一次结果，因此每次调用都是一次新的系统 wall-time 观察。
+ * `Date` 只生成当前 UTC 毫秒文本，最终仍交给 `utc-instant` 授予品牌类型。函数不
+ * 缓存 `Date` 或上一次结果，因此每次调用都是一次新的系统时间观察。
  */
 export const systemUtcWallClock: UtcWallClock = () => (
   parseUtcInstant(new Date().toISOString(), "$systemUtcWallClock")
 );
 
 /**
- * 读取一次 UTC wall clock，并对可注入来源实行稳定失败和结果复验。
+ * 读取一次 UTC 墙上时钟，并对可注入来源实行稳定错误映射和结果复验。
  *
  * 注入函数是明确允许执行的依赖；本函数恰好调用一次。有效但早于前次调用的
- * 结果会原样返回，严格递增策略必须由了解领域历史的 owner 另行决定。
+ * 结果会原样返回，严格递增策略必须由了解领域历史的职责所有者另行决定。
  */
 export function readUtcWallClock(
   clock: UtcWallClock = systemUtcWallClock,

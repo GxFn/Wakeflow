@@ -24,17 +24,16 @@ import {
 } from "./rooted-resource-parent-handle.js";
 
 /**
- * Wakeflow Foundation / Filesystem：根作用域内 real file/directory 的持久 rename。
+ * Wakeflow Foundation / Filesystem：根作用域内真实文件或目录的持久化重命名。
  *
- * 本文件要求调用方提供冻结的 exact source node，并在 source/destination parents
- * 已打开、destination 仍 absent、source 仍匹配后只跨一次 rename commit 边界。
- * commit 后复验 source absent、destination 与打开的 source handle 是同一 inode，
- * 再同步两侧 parent directory 并完成最终复验。
+ * 调用方必须提供冻结且完全一致的源节点预期。本模块打开源、目标父目录，确认目标
+ * 仍不存在且源节点仍匹配后，只跨越一次重命名提交点。提交后，它复验源路径已经
+ * 不存在、目标路径与打开的源句柄仍指向同一 inode，再同步两侧父目录并完成最终复验。
  *
- * 普通 rename 会替换晚到的 destination；Node 未暴露 renameat2(RENAME_NOREPLACE)。
- * 因此 destination absent 只是协作 writer lock 下的 commit precondition，不是跨进程
- * CAS。本能力不创建 parent、不复制 EXDEV source、不删除 destination、不移动 symlink
- * 或 special node，也不 fsync file content、持有业务 lock 或拥有 recovery journal。
+ * 普通重命名会替换晚到的目标；Node.js 未暴露 `renameat2(RENAME_NOREPLACE)`。因此，
+ * “目标不存在”只是协作写入者持锁时的提交前置条件，不是跨进程比较并交换（CAS）。
+ * 本能力不创建父目录、不复制跨设备源资源、不删除目标、不移动符号链接或特殊节点，
+ * 也不同步普通文件内容、不持有业务锁或拥有恢复意图记录。
  */
 
 export interface DurableResourceRenameOptions {
@@ -44,7 +43,7 @@ export interface DurableResourceRenameOptions {
 
 export type DurableRenamedResourceKind = "file" | "directory";
 
-/** 成功返回描述已完成 parent sync 的 destination 节点。 */
+/** 成功结果描述已经完成父目录同步的目标节点。 */
 export interface DurableResourceRenameResult {
   readonly sourceResourcePath: PortableResourcePath;
   readonly destinationResourcePath: PortableResourcePath;
@@ -52,7 +51,7 @@ export interface DurableResourceRenameResult {
   readonly node: Readonly<FileNodeSnapshot>;
 }
 
-/** durable resource rename 失败分类。 */
+/** 持久化资源重命名失败的分类。 */
 export type DurableResourceRenameErrorReason =
   | "input"
   | "root-scope"
@@ -99,10 +98,10 @@ const ERROR_MESSAGES = {
 } as const satisfies Readonly<Record<DurableResourceRenameErrorReason, string>>;
 
 /**
- * durable resource rename 的稳定错误。
+ * 持久化资源重命名失败时返回的稳定错误。
  *
- * 错误不回显物理路径、resource ref、节点元数据、Abort reason、系统调用或 cause。
- * rename 调用后的错误不得被解释为 source 一定仍在原路径。
+ * 错误不回显物理路径、资源引用、节点元数据、取消原因、系统调用或原因链。
+ * 重命名调用后的错误不得被解释为源资源一定仍在原路径。
  */
 export class DurableResourceRenameError extends Error {
   override readonly name = "DurableResourceRenameError";
@@ -475,10 +474,10 @@ function destinationInsideSource(
 }
 
 /**
- * 在同一 RootedDirectory 内持久 rename 一个 exact real file 或 directory。
+ * 在同一 `RootedDirectory` 内持久化重命名一个指定的真实文件或目录。
  *
  * 成功返回只证明目录项 move 和节点身份；regular-file 内容本身的持久性必须由其
- * writer 在 rename 前建立。调用方必须持有覆盖 source/destination 的领域锁。
+ * 写入者在重命名前建立。调用方必须持有覆盖源路径和目标路径的领域锁。
  */
 export async function renameResourceDurably(
   root: RootedDirectory,

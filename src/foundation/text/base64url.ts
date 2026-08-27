@@ -1,11 +1,11 @@
 import { types } from "node:util";
 
 /**
- * Wakeflow Foundation / Text：canonical、无 padding 的 RFC 4648 base64url。
+ * Wakeflow Foundation / Text：符合 RFC 4648 的规范无填充 base64url。
  *
- * 编码只消费 exact Uint8Array view；解码拒绝 padding、标准 base64 alphabet、空白、
- * 非 canonical 长度以及 Node Buffer 宽松接受的别名，并以 decode→encode round-trip
- * 证明唯一 spelling。本层不解释媒体类型、容量或领域 bytes。
+ * 编码只接收指定的 `Uint8Array` 可见区间。解码拒绝填充字符、标准 base64 字母表、
+ * 空白、非规范长度以及 Node.js `Buffer` 宽松接受的别名，并通过“解码后重新编码”
+ * 证明文本表示唯一。本层不解释媒体类型、容量或领域字节含义。
  */
 
 export type Base64UrlErrorReason = "bytes" | "text" | "format" | "decode";

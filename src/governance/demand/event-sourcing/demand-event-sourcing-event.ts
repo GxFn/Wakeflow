@@ -19,11 +19,11 @@ import {
 } from "../../../foundation/time/utc-instant.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：尚未进入 Event Store 的领域事件。
+ * Wakeflow Governance / Demand Event Sourcing：尚未进入事件存储的领域事件。
  *
- * current/uncommitted event 只描述已经发生的业务事实及其稳定身份、记录时间；它不
- * 携带 persisted eventVersion、stream revision、commit sequence、predecessor 或
- * resulting-state digest。版本 codec 负责 current model 与磁盘版本之间的转换。
+ * 当前未提交事件只描述已经发生的业务事实、稳定身份和记录时间。它不携带持久化
+ * `eventVersion`、事件流修订号、提交序号、前序提交或结果状态摘要。版本编解码器
+ * 负责当前内存模型与磁盘版本之间的转换。
  */
 
 export interface DemandPublishedUncommittedEvent {
@@ -178,7 +178,7 @@ function parseCanonicalReason(value: unknown): string {
   return value;
 }
 
-/** 解析一个不含任何持久化位置字段的关闭型 uncommitted event。 */
+/** 解析字段集合严格受限，且不含任何持久化位置字段的未提交事件。 */
 export function parseDemandUncommittedEvent(
   value: unknown,
 ): Readonly<DemandUncommittedEvent> {

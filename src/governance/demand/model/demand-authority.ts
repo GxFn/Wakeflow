@@ -60,13 +60,11 @@ import {
 } from "./demand-identity.js";
 
 /**
- * Wakeflow Governance / Demand Model：Event Sourced Aggregate publication 的
- * mandatory Authority closure。
+ * Wakeflow Governance / Demand Model：事件溯源聚合发布所需的必需权威关系验证。
  *
- * Authority 只保存可解析的 Ledger member references、identity semantic digest 与
- * testing decision；旧 `entryMode` 被删除，Pod/isolated placement 必须由真正的
- * confirmation reference、same-demand 关系和 placement authorization 证明。
- * 本文件不写 Ledger/Demand 文件，也不执行 Event Sourcing append。
+ * 权威关系记录只保存可解析的 Ledger 成员引用、身份语义摘要和测试决定。旧
+ * `entryMode` 已删除；Pod 或隔离执行位置必须由真实 Confirmation 引用、同一 Demand
+ * 关系和位置授权共同证明。本模块不写入 Ledger 或 Demand 文件，也不追加事件流。
  */
 
 export const DEMAND_AUTHORITY_ARTIFACT_KIND =
@@ -313,7 +311,7 @@ function assertIdentityRelations(
   }
 }
 
-/** 解析 Demand authority，并在提供 Identity 时闭合 digest/role/testing/placement。 */
+/** 解析 Demand Authority；提供 Identity 时，同时验证摘要、角色、测试和位置关系。 */
 export function parseDemandAuthority(
   value: unknown,
   identityValue?: unknown,
@@ -363,7 +361,7 @@ export function parseDemandAuthority(
   return authority;
 }
 
-/** 从 Identity 与关闭 draft 创建 mandatory Authority，并规范化引用顺序。 */
+/** 从 Identity 和字段集合严格受限的草稿创建强制 Authority，并规范化引用顺序。 */
 export function createDemandAuthority(
   identityValue: unknown,
   draft: unknown,
@@ -410,8 +408,8 @@ export function createDemandAuthority(
 }
 
 /**
- * 通过 LedgerAuthorityStore 解析每个 member，并证明 program、same-demand
- * confirmation、testing 与 isolated placement authority 全部闭合。
+ * 通过 `LedgerAuthorityStore` 解析每个成员，并证明 Program、同一 Demand 的
+ * Confirmation、测试决定和隔离执行位置授权关系全部成立。
  */
 export async function admitDemandAuthority(
   identityValue: unknown,

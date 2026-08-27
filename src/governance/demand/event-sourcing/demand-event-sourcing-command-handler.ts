@@ -32,11 +32,11 @@ import {
 } from "./demand-file-event-store.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：标准 command execution pipeline。
+ * Wakeflow Governance / Demand Event Sourcing：标准命令执行管线。
  *
- * 固定顺序为 load → decide → evolve/prepare → expected-cursor append。command digest
- * 只能从已准入 command 计算；相同 commitId 的 retry 在再次执行领域 transition 前先
- * 解析既有 commit。Handler 不接受 stored event，不写 snapshot，也不执行外部 effect。
+ * 固定顺序为“加载 → 决策 → 演进并准备 → 按预期游标追加”。命令摘要只能从已准入
+ * 命令计算；使用相同 `commitId` 重试时，处理程序会在再次执行领域转换前先解析已有
+ * 提交记录。命令处理程序不接受持久化事件、不写入快照，也不执行外部副作用。
  */
 
 export interface ExecuteDemandEventSourcingCommandOptions {
@@ -185,7 +185,7 @@ function mapRepositoryError(error: unknown): never {
   throw error;
 }
 
-/** 执行一个 Demand command；所有领域转换在任何文件 effect 前完成。 */
+/** 执行一条 Demand 命令；所有领域转换都在任何文件副作用之前完成。 */
 export async function executeDemandEventSourcingCommand(
   repository: DemandEventSourcingRepository,
   commandValue: unknown,
@@ -218,8 +218,8 @@ export async function executeDemandEventSourcingCommand(
     options.expectedStreamRevision !== undefined
     && options.expectedStreamRevision !== currentRevision
   ) {
-    // 正常新 command 不扫描 immutable prefix；只有 stale expectation 可能是 retry，
-    // 此时才按 commitId 执行 bounded historical lookup。
+    // 正常新命令不扫描不可变前缀；只有过期预期可能表示重试，
+    // 此时才按 `commitId` 执行有界历史查找。
     let existing: Readonly<DemandEventStreamCommit> | null;
     try {
       existing = await repository.findCommitById(

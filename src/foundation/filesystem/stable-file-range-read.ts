@@ -41,18 +41,18 @@ import {
 } from "./rooted-directory.js";
 
 /**
- * Wakeflow Foundation / Filesystem：稳定文件版本上的有界 positioned range read。
+ * Wakeflow Foundation / Filesystem：稳定文件版本上的有界定位区间读取。
  *
- * 本文件在 RootedDirectory 下执行 inspect→no-follow open→范围复验→显式 position
- * 分块读取→handle/path/root 复验。可选 expectedNode 把来自自有 index/page/cursor 的
- * FileByteRange 绑定到前一次稳定读取的准确物理版本；缺省时读取本次观察到的版本。
+ * 本模块在 `RootedDirectory` 下依次执行观察、不跟随符号链接地打开、区间复验、按
+ * 显式位置分块读取，以及句柄、路径和根目录复验。可选的 `expectedNode` 把来自自有
+ * 索引、分页或游标的 `FileByteRange` 绑定到前一次稳定读取的指定物理版本；省略时
+ * 读取本次观察到的版本。
  *
- * 返回 digest 只覆盖 range bytes，不是完整文件 digest。基础层不解码文本、不查找
- * marker、不修改 cursor、不执行 partial write，也不把 node expectation 解释为锁或
- * 跨进程 snapshot isolation。
+ * 返回摘要只覆盖区间字节，不是完整文件摘要。基础层不解码文本、不查找标记、不修改
+ * 游标、不执行局部写入，也不把节点预期解释为锁或跨进程快照隔离。
  */
 
-/** positioned read 的实现 chunk；不是任一领域 range 上限。 */
+/** 定位读取使用的分块大小；不是任何领域字节区间的上限。 */
 export const STABLE_FILE_RANGE_READ_CHUNK_BYTES = parseByteCount(64 * 1024);
 
 export interface StableFileRangeReadOptions {
@@ -60,7 +60,7 @@ export interface StableFileRangeReadOptions {
   readonly signal?: AbortSignal;
 }
 
-/** 一次稳定 range read 的冻结结果；bytes 是调用方拥有的可变副本。 */
+/** 一次稳定区间读取的冻结结果；`bytes` 是调用方拥有的可变副本。 */
 export interface StableFileRangeReadResult {
   readonly resourcePath: PortableResourcePath;
   readonly fileNode: Readonly<FileNodeSnapshot>;
@@ -70,7 +70,7 @@ export interface StableFileRangeReadResult {
   readonly rangeDigest: Sha256Digest;
 }
 
-/** 稳定文件 range read 失败分类。 */
+/** 稳定文件区间读取失败分类。 */
 export type StableFileRangeReadErrorReason =
   | "input"
   | "root-scope"
@@ -108,10 +108,10 @@ const ERROR_MESSAGES = {
 >>;
 
 /**
- * stable file range read 的公共错误。
+ * 稳定文件区间读取的公开错误。
  *
- * 错误不回显物理路径、resource ref、range 数字、文件大小、字节、摘要、节点事实、
- * Abort reason 或 Node/lower-layer cause。
+ * 错误不回显物理路径、资源引用、区间数值、文件大小、字节、摘要、节点事实、
+ * 取消原因或 Node.js/底层原因。
  */
 export class StableFileRangeReadError extends Error {
   override readonly name = "StableFileRangeReadError";
@@ -377,10 +377,10 @@ function rangeDigest(bytes: Uint8Array): Sha256Digest {
 }
 
 /**
- * 从一个稳定 regular file 版本读取准确的半开 byte range。
+ * 从一个稳定的普通文件版本读取指定的半开字节区间。
  *
- * 返回 bytes 是新分配的调用方副本；fileNode/fileByteCount 描述读取后已复验的文件，
- * rangeDigest 仅描述 bytes。函数返回后文件仍可由另一个 actor 修改。
+ * 返回的 `bytes` 是新分配的调用方副本；`fileNode` 与 `fileByteCount` 描述读取后已复验的文件，
+ * `rangeDigest` 仅描述本次读取的字节。函数返回后，其他写入者仍可修改文件。
  */
 export async function readStableFileRange(
   root: RootedDirectory,

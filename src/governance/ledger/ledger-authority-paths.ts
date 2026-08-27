@@ -13,11 +13,11 @@ import type {
 } from "./ledger-authority-record.js";
 
 /**
- * Wakeflow Governance / Ledger：Requirement、Confirmation 与 publication journal
- * 的固定 portable path vocabulary。
+ * Wakeflow Governance / Ledger：`Requirement`、`Confirmation` 和精简发布意图记录的
+ * 固定可移植路径词汇。
  *
- * 路径只从已验证 typed ID 和 member path 派生；本模块不探测文件、不创建目录，也
- * 不把 physical path 当作业务身份。
+ * 所有路径只从已经验证的类型化标识和成员路径派生。本模块不探测文件、不创建目录，
+ * 也不把物理路径当作业务身份。
  */
 
 export const LEDGER_REQUIREMENTS_ROOT_REF = parsePortableResourcePath(
@@ -29,11 +29,10 @@ export const LEDGER_CONFIRMATIONS_ROOT_REF = parsePortableResourcePath(
 export const LEDGER_TRANSACTIONS_ROOT_REF = parsePortableResourcePath(
   "transactions",
 );
-export const LEDGER_AUTHORITY_LOCK_REF = parsePortableResourcePath(
-  "ledger-authority.lock",
-);
-
 export type LedgerAuthorityFamily = "requirement" | "confirmation";
+export type LedgerAuthorityRecordId =
+  | WakeflowDurableId<"requirement">
+  | WakeflowDurableId<"confirmation">;
 
 export function ledgerAuthorityFamily(
   record: Readonly<LedgerAuthorityRecord>,
@@ -51,10 +50,10 @@ export function ledgerAuthorityRecordId(
 ): WakeflowDurableId<"confirmation">;
 export function ledgerAuthorityRecordId(
   record: Readonly<LedgerAuthorityRecord>,
-): WakeflowDurableId<"requirement"> | WakeflowDurableId<"confirmation">;
+): LedgerAuthorityRecordId;
 export function ledgerAuthorityRecordId(
   record: Readonly<LedgerAuthorityRecord>,
-): WakeflowDurableId<"requirement"> | WakeflowDurableId<"confirmation"> {
+): LedgerAuthorityRecordId {
   return record.artifactKind === "wakeflow-requirement-record"
     ? record.requirementId
     : record.confirmationId;
@@ -105,10 +104,58 @@ export function ledgerAuthorityMemberRef(
   );
 }
 
-export function ledgerRecordPublicationRef(
+function publicationRecordId(
+  family: LedgerAuthorityFamily,
+  recordId: unknown,
+): LedgerAuthorityRecordId {
+  return family === "requirement"
+    ? parseWakeflowDurableIdOfKind(recordId, "requirement", "$recordId")
+    : parseWakeflowDurableIdOfKind(recordId, "confirmation", "$recordId");
+}
+
+export function ledgerRecordPublicationIntentRefForIdentity(
+  family: LedgerAuthorityFamily,
+  recordIdValue: unknown,
+): PortableResourcePath {
+  const recordId = publicationRecordId(family, recordIdValue);
+  return parsePortableResourcePath(
+    `${LEDGER_TRANSACTIONS_ROOT_REF}/${family}-${recordId}.intent.json`,
+  );
+}
+
+export function ledgerRecordPublicationLockRefForIdentity(
+  family: LedgerAuthorityFamily,
+  recordIdValue: unknown,
+): PortableResourcePath {
+  const recordId = publicationRecordId(family, recordIdValue);
+  return parsePortableResourcePath(
+    `${LEDGER_TRANSACTIONS_ROOT_REF}/${family}-${recordId}.lock`,
+  );
+}
+
+export function ledgerRecordPublicationIntentRef(
+  record: Readonly<LedgerAuthorityRecord>,
+): PortableResourcePath {
+  return ledgerRecordPublicationIntentRefForIdentity(
+    ledgerAuthorityFamily(record),
+    ledgerAuthorityRecordId(record),
+  );
+}
+
+export function ledgerRecordPublicationLockRef(
+  record: Readonly<LedgerAuthorityRecord>,
+): PortableResourcePath {
+  return ledgerRecordPublicationLockRefForIdentity(
+    ledgerAuthorityFamily(record),
+    ledgerAuthorityRecordId(record),
+  );
+}
+
+/** 每个类型化记录标识只对应一个私有暂存路径；发布意图记录负责绑定目录树摘要。 */
+export function ledgerRecordPublicationStageRef(
   record: Readonly<LedgerAuthorityRecord>,
 ): PortableResourcePath {
   return parsePortableResourcePath(
-    `${LEDGER_TRANSACTIONS_ROOT_REF}/${ledgerAuthorityFamily(record)}-${ledgerAuthorityRecordId(record)}.json`,
+    `${LEDGER_TRANSACTIONS_ROOT_REF}/.${ledgerAuthorityFamily(record)}-${ledgerAuthorityRecordId(record)}.stage`,
   );
 }

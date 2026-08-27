@@ -7,10 +7,10 @@ import {
 import { TODO_BOARD_PROJECTION_REF } from "./todo-paths.js";
 
 /**
- * Wakeflow Governance / TODO：JSON authority collection 的 Markdown projection。
+ * Wakeflow Governance / TODO：JSON 权威集合的 Markdown 投影。
  *
- * Projection 只消费已验证 intake/state snapshot；archived item 不展示。文件内容携带
- * collection basis digest，缺失或损坏时可以重建，绝不能被 claim/archive 反向读取。
+ * 投影只使用已经验证的 Intake 和 State 快照，不展示已归档条目。文件内容携带集合
+ * 基准摘要，缺失或损坏时可以重建；Claim 和 Archive 操作绝不能反向读取投影作为状态。
  */
 
 export const TODO_BOARD_PROJECTION_KIND =
@@ -106,7 +106,7 @@ function renderProjectionRow(row: TodoProjectionRow): string {
   )).join(" | ")} |`;
 }
 
-/** 从完整 JSON authority collection 纯渲染 Markdown board projection。 */
+/** 从完整 JSON 权威集合纯渲染 Markdown 看板投影。 */
 export function renderTodoBoardProjection(
   items: unknown,
 ): Readonly<TodoBoardProjection> {

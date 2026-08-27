@@ -35,22 +35,22 @@ import {
 } from "./rooted-resource-parent-handle.js";
 
 /**
- * Wakeflow Foundation / Filesystem：根作用域目录的持久化创建与路径物化。
+ * Wakeflow Foundation / Filesystem：根作用域目录的持久化创建与逐级建立。
  *
- * createDirectoryAtomically 只跨一次 absent→directory 的 exclusive mkdir 边界，
- * 随后用 no-follow handle 设置最终 mode、同步新目录与 parent，并复验 pathname、
- * handle 和 RootedDirectory 仍指向同一节点。
+ * `createDirectoryAtomically` 只跨越一次“目标不存在 → 目录存在”的独占 `mkdir`
+ * 边界，随后通过不跟随符号链接的句柄设置最终权限位、同步新目录与父目录，并复验
+ * 路径名、句柄和 `RootedDirectory` 仍指向同一文件系统节点。
  *
- * materializeDirectoryPath 按 portable segments 逐层组合该 primitive：真实既有目录
- * 只观察、不 chmod；缺失段逐一持久创建。整条路径不是原子事务，中途失败时此前
- * 已同步的安全前缀保留，供调用方幂等重试或由领域 recovery 解释。
+ * `materializeDirectoryPath` 按可移植路径分段逐级组合该基础操作：已经存在的真实
+ * 目录只观察而不修改权限，缺失段逐一持久创建。整条路径不是原子事务；中途失败时，
+ * 已同步的安全前缀会保留，供调用方幂等重试或由领域恢复流程解释。
  *
- * 本层不创建文件、不删除或回滚目录、不修复既有 mode，也不判断 owner、允许
- * mode、目录为空、布局 authority、journal 或多目录事务。Node 没有 mkdirat，
- * pathname 竞态边界与 RootedDirectory 保持一致。
+ * 本层不创建文件、不删除或回滚目录、不修复已有权限位，也不判断职责所有者、允许
+ * 的权限、目录是否为空、布局权威、恢复意图或多目录事务。Node.js 没有暴露
+ * `mkdirat`，因此路径名竞态边界与 `RootedDirectory` 保持一致。
  */
 
-/** 新目录在最终 mode 设置前只允许当前 owner 进入。 */
+/** 新目录在设置最终权限位前只允许当前用户进入。 */
 const PRIVATE_DIRECTORY_MODE = 0o700;
 
 export interface DurableDirectoryOptions {
@@ -125,8 +125,8 @@ const ERROR_MESSAGES = {
 /**
  * 根作用域目录创建与物化的稳定错误。
  *
- * 错误不回显物理根、resource ref、目录名称、mode、节点元数据、Abort reason、
- * 系统调用或 lower-layer cause。mkdir 后错误不得被解释为 target 一定不存在。
+ * 错误不回显物理根目录、资源引用、目录名称、权限位、节点元数据、取消原因、
+ * 系统调用或底层原因链。`mkdir` 调用后的错误不得被解释为目标一定不存在。
  */
 export class DurableDirectoryMaterializationError extends Error {
   override readonly name = "DurableDirectoryMaterializationError";
@@ -566,8 +566,8 @@ function publicOptions(
 /**
  * 原子且持久地创建一个父目录已经存在的根内目录。
  *
- * target 已存在时始终失败；本函数不会把同名目录解释为幂等成功，也不会在 mkdir
- * 后失败时盲目 rmdir，因为其他 actor 可能已经在已发布目录中建立事实。
+ * 目标已经存在时始终失败；本函数不会把同名目录解释为幂等成功，也不会在 `mkdir`
+ * 后失败时盲目执行 `rmdir`，因为其他写入者可能已经在已发布目录中建立事实。
  */
 export async function createDirectoryAtomically(
   root: RootedDirectory,
@@ -583,7 +583,7 @@ export async function createDirectoryAtomically(
 /**
  * 按顺序幂等物化一个根内目录路径。
  *
- * 既有真实目录不修改 mode；缺失段使用 createDirectoryAtomically。最终再次逐段
+ * 已有真实目录不修改权限位；缺失段使用 `createDirectoryAtomically`。最终再次逐段
  * 检查 identity，返回反映物化结束时的节点事实。失败不回滚已持久创建的前缀。
  */
 export async function materializeDirectoryPath(

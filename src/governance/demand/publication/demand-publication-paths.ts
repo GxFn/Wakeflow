@@ -8,8 +8,8 @@ import {
 } from "../../../foundation/identity/wakeflow-durable-id.js";
 
 /**
- * Wakeflow Governance / Demand Publication：workspace 内 create transaction、stage、
- * per-demand lock 与 final Demand root 的 portable path vocabulary。
+ * Wakeflow Governance / Demand Publication：Workspace 内创建事务、暂存目录、逐 Demand
+ * 锁和最终 Demand 根目录的可移植路径词汇。
  */
 
 export const WAKEFLOW_ACTIVE_CURRENT_ROOT_REF = parsePortableResourcePath(
@@ -59,7 +59,7 @@ export function demandPublicationLockRef(value: unknown): PortableResourcePath {
   );
 }
 
-/** Demand root 内阻断 normal Event Sourcing load 的 publication marker。 */
+/** Demand 根目录内用于阻断正常事件溯源加载的发布标记。 */
 export const DEMAND_PUBLICATION_MARKER_REF = parsePortableResourcePath(
   "transactions/publication.json",
 );

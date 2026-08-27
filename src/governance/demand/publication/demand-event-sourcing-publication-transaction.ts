@@ -87,9 +87,9 @@ import {
 /**
  * Wakeflow Governance / Demand Event Sourcing Publication：跨资源恢复计划。
  *
- * Transaction 保存完整 immutable Identity/Authority、TODO expectations、initial
- * command 与由同一 Decider/evolve 得到的 exact commit。Snapshot 是 derived cache，
- * 不进入 transaction authority；恢复必须重新计算 command/commit closure 后才执行 effect。
+ * 事务记录保存完整、不可变的身份/权威关系记录、TODO 预期、初始命令，以及由同一
+ * 决策器和状态演进逻辑得到的精确提交记录。快照是可重建缓存，不进入事务权威事实；
+ * 恢复流程必须重新计算并验证命令与提交关系后，才能执行副作用。
  */
 
 export const DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_ARTIFACT_KIND =
@@ -370,7 +370,7 @@ export function parseDemandEventSourcingPublicationTransaction(
   });
 }
 
-/** 从 confirmed publication input 生成不含 mutable phase 的完整恢复计划。 */
+/** 从已经确认的发布输入生成不含可变阶段的完整恢复计划。 */
 export function createDemandEventSourcingPublicationTransaction(
   value: unknown,
 ): Readonly<DemandEventSourcingPublicationTransaction> {

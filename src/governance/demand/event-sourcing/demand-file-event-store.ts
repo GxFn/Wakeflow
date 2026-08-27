@@ -73,11 +73,11 @@ import {
 } from "./demand-file-event-store-reader.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：rooted local-file Event Store。
+ * Wakeflow Governance / Demand Event Sourcing：受根作用域约束的本地文件事件存储。
  *
- * Class 只持有一个 Demand root，并协调 initialize、candidate→no-replace commit 与
- * candidate recovery。Commit inventory/read 及公共合同由相邻模块拥有；Store 不执行
- * decide/evolve、Ledger/TODO resolution 或 Demand root publication。
+ * 本类只持有一个 Demand 根目录，并协调初始化、候选资源到不替换目标提交，以及候选
+ * 资源恢复。提交清单、读取逻辑和公共合同由相邻模块负责；事件存储不执行领域决策或
+ * 状态演进，不解析 Ledger/TODO 引用，也不发布 Demand 根目录。
  */
 
 const ACTIVE_APPEND_CANDIDATE_TOKENS = new Set<string>();
@@ -115,7 +115,7 @@ export class DemandFileEventStore {
     this.#root = root;
   }
 
-  /** 幂等创建 Event Store 自己拥有的三个 private directory。 */
+  /** 幂等创建文件事件存储自身拥有的三个私有目录。 */
   async initialize(options?: { readonly signal?: AbortSignal }): Promise<void> {
     const { signal } = parseDemandFileEventStoreOptions(options);
     for (const ref of [
@@ -201,7 +201,7 @@ export class DemandFileEventStore {
     }
   }
 
-  /** 显式清理 inactive candidate-only、linked residue 或并发 loser。 */
+  /** 显式清理非活动的孤立候选、已链接残留或并发失败方。 */
   async recoverAppendCandidates(
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DemandFileEventStoreCandidateRecoveryReceipt>> {
@@ -308,7 +308,7 @@ export class DemandFileEventStore {
     });
   }
 
-  /** 在固定 commitSequence 槽位持久 append 一个已语义验证的 commit。 */
+  /** 在固定 `commitSequence` 槽位持久追加一条已经通过语义验证的提交记录。 */
   async append(
     preparedValue: Readonly<PreparedDemandEventStreamCommit>,
     options?: { readonly signal?: AbortSignal },

@@ -35,11 +35,11 @@ import {
 } from "./demand-event-sourcing-event.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：Demand Aggregate 的纯 Decider。
+ * Wakeflow Governance / Demand Event Sourcing：Demand 聚合的纯决策器。
  *
- * `decide` 只从已验证 command 与当前 state 产生零个或多个 uncommitted event；
- * `evolve` 只把一个 event 确定性应用到 state。两者都不读取文件、Ledger、时间或
- * 网络，也不分配 stream revision、commit sequence 或 snapshot。
+ * `decide` 只根据已验证命令和当前状态产生零个或多个未提交事件；`evolve` 只把一个
+ * 事件确定性应用到状态。两者都不读取文件、Ledger、时间或网络，也不分配事件流
+ * 修订号、提交序号或快照。
  */
 
 export interface PublishDemandCommand {
@@ -238,7 +238,7 @@ export function parseDemandEventSourcingCommand(
   fail("input", "$/commandType");
 }
 
-/** 计算已准入 command 的稳定幂等摘要；Store 不接受调用方自报 digest。 */
+/** 计算已准入命令的稳定幂等摘要；事件存储不接受调用方自行声明的摘要。 */
 export function computeDemandEventSourcingCommandDigest(
   value: unknown,
 ): Sha256Digest {
@@ -259,7 +259,7 @@ function parseState(
   }
 }
 
-/** 根据当前 state 对一个业务 command 作出纯事件决策。 */
+/** 根据当前状态对一条业务命令作出纯事件决策。 */
 export function decideDemandEventSourcingCommand(
   stateValue: unknown,
   commandValue: unknown,
@@ -295,7 +295,7 @@ export function decideDemandEventSourcingCommand(
   })]) as readonly [Readonly<DemandUncommittedEvent>];
 }
 
-/** 将一个已决定但尚未持久化的事件确定性应用到 state。 */
+/** 将一个已决定但尚未持久化的事件确定性应用到状态。 */
 export function evolveDemandEventSourcingState(
   stateValue: unknown,
   eventValue: unknown,

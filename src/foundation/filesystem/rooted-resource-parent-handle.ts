@@ -27,23 +27,23 @@ import {
 } from "./rooted-directory.js";
 
 /**
- * Wakeflow Foundation / Filesystem：一个根内 resource 的已打开 parent handle。
+ * Wakeflow Foundation / Filesystem：根目录内资源的已打开父目录句柄。
  *
- * 本 class 把重复的 resource address 解析、root-or-resource parent 定位、
- * O_DIRECTORY/O_NOFOLLOW 打开、parent identity 复验、target no-follow lstat、目录
- * fsync 与 close 生命周期收敛为一个进程内 I/O seam。
+ * 本类把资源地址解析、根级或嵌套父目录定位、使用 `O_DIRECTORY/O_NOFOLLOW` 打开、
+ * 父目录身份复验、对目标执行不跟随符号链接的 `lstat`、目录同步和关闭生命周期，
+ * 收敛为一个进程内 I/O 边界。
  *
- * parent 内容变化可以改变 mtime/ctime/link count，因此 assertCurrent 只比较
- * directory kind 与 dev/inode identity；它不会把合法 sibling mutation 误判为 parent
- * replacement。inspectTarget 只返回最终节点事实或 null，不拥有允许类型、absent/existing
- * expectation、mode/owner/hardlink policy 或任何 mutation。
+ * 父目录内容变化可能改变修改时间、状态变更时间和链接数，因此 `assertCurrent` 只比较
+ * 目录类型、设备号和 inode 身份，不会把合法的同级资源变更误判为父目录被替换。
+ * `inspectTarget` 只返回最终节点事实或 `null`，不负责允许的节点类型、存在性预期、
+ * 权限位、所有者、硬链接策略或任何变更操作。
  *
- * parentAbsolutePath/resourceAbsolutePath 只供 foundation I/O 组合，禁止写入 portable
- * record、错误或日志。Node 未暴露 openat，target pathname 竞态边界与 RootedDirectory
- * 保持一致。
+ * `parentAbsolutePath` 和 `resourceAbsolutePath` 只供 Foundation I/O 组合使用，禁止
+ * 写入可移植记录、错误或日志。Node.js 未暴露 `openat`，因此目标路径名竞态边界与
+ * `RootedDirectory` 保持一致。
  */
 
-/** parent handle 打开、复验、target 观察、同步或关闭失败分类。 */
+/** 父目录句柄打开、复验、目标观察、同步或关闭失败的分类。 */
 export type RootedResourceParentHandleErrorReason =
   | "input"
   | "root-scope"
@@ -77,7 +77,7 @@ const ERROR_MESSAGES = {
 /**
  * RootedResourceParentHandle 的稳定错误。
  *
- * 错误不回显 root、resource、parent、target absolute path、节点元数据、系统调用或 cause。
+ * 错误不回显根目录、资源、父目录、目标绝对路径、节点元数据、系统调用或原因链。
  */
 export class RootedResourceParentHandleError extends Error {
   override readonly name = "RootedResourceParentHandleError";
@@ -226,7 +226,7 @@ async function inspectInitialParent(
 }
 
 /**
- * 已打开 parent directory 的 resource-address capability。
+ * 已打开父目录的资源地址能力。
  *
  * static open 是唯一构造入口。实例拥有 FileHandle，调用方必须 close 或使用
  * `await using`；关闭后所有 I/O 方法稳定失败。
@@ -265,7 +265,7 @@ export class RootedResourceParentHandle {
     this.#errorPath = errorPath;
   }
 
-  /** 打开 resource 的 root-level 或 nested real parent directory。 */
+  /** 打开资源在根级或嵌套层级中的真实父目录。 */
   static async open(
     root: RootedDirectory,
     resourcePath: PortableResourcePath,
@@ -313,7 +313,7 @@ export class RootedResourceParentHandle {
       try {
         await handle.close();
       } catch {
-        // 未签发 handle 的首个准入错误保持权威。
+        // 未签发句柄时保留首个准入错误，不再生成第二个公共错误。
       }
       throw error;
     }
@@ -323,7 +323,7 @@ export class RootedResourceParentHandle {
     return this.#resourcePath;
   }
 
-  /** null 明确表示 RootedDirectory 自身是 parent。 */
+  /** `null` 明确表示 `RootedDirectory` 自身就是父目录。 */
   get parentResourcePath(): PortableResourcePath | null {
     return this.#parentResourcePath;
   }
@@ -337,12 +337,12 @@ export class RootedResourceParentHandle {
     return this.#parentAbsolutePath;
   }
 
-  /** 仅供进程内 foundation I/O；target 可以尚不存在。 */
+  /** 仅供进程内 Foundation I/O 使用；目标可以尚不存在。 */
   get resourceAbsolutePath(): string {
     return this.#resourceAbsolutePath;
   }
 
-  /** 打开时的 parent identity 基准；不是当前 metadata 缓存。 */
+  /** 打开时记录的父目录身份基准；不是当前元数据缓存。 */
   get initialParentSnapshot(): Readonly<FileNodeSnapshot> {
     return this.#initialParentSnapshot;
   }
@@ -372,7 +372,7 @@ export class RootedResourceParentHandle {
     }
   }
 
-  /** 证明 parent pathname、打开 handle 与初始 parent 仍为同一 directory inode。 */
+  /** 证明父目录路径名、已打开句柄和初始父目录仍指向同一目录 inode。 */
   async assertCurrent(): Promise<Readonly<FileNodeSnapshot>> {
     this.#assertOpen();
     const pathNode = await this.#inspectParentPath();
@@ -399,9 +399,9 @@ export class RootedResourceParentHandle {
   }
 
   /**
-   * no-follow 观察当前 target；absent 返回 null。
+   * 不跟随符号链接地观察当前目标；目标不存在时返回 `null`。
    *
-   * parent 在 lstat 前后都会复验；target 自身的允许类型继续由 consumer 判断。
+   * 在 `lstat` 前后都会复验父目录；目标允许的节点类型继续由调用方判断。
    */
   async inspectTarget(): Promise<Readonly<FileNodeSnapshot> | null> {
     this.#assertOpen();
@@ -422,7 +422,7 @@ export class RootedResourceParentHandle {
     return target;
   }
 
-  /** 同步 parent directory entry metadata，并在 sync 前后复验 parent identity。 */
+  /** 同步父目录项元数据，并在同步前后复验父目录身份。 */
   async sync(): Promise<Readonly<FileNodeSnapshot>> {
     this.#assertOpen();
     await this.assertCurrent();
@@ -434,7 +434,7 @@ export class RootedResourceParentHandle {
     return this.assertCurrent();
   }
 
-  /** 幂等关闭 parent handle；关闭后 I/O 方法稳定拒绝。 */
+  /** 幂等关闭父目录句柄；关闭后 I/O 方法都会稳定拒绝调用。 */
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;

@@ -18,16 +18,17 @@ import {
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的有界、确定性目录树遍历。
  *
- * 本文件使用 StableDirectoryRead 逐层发现后代；总节点数和相对深度必须由调用方
- * 显式限制。结果包含全部观察到的节点类型并按完整 resource path 确定排序；目录
- * 项只有 kind === directory 时才继续入栈，symlink 永远不会被跟随。
+ * 本模块使用 `StableDirectoryRead` 逐层发现后代节点；调用方必须显式限制节点总数
+ * 和相对深度。结果包含观察到的全部节点类型，并按完整资源路径确定性排序。只有
+ * `kind === "directory"` 的目录项才会继续入栈，符号链接永远不会被跟随。
  *
  * 每个目录自身稳定、父目录观察到的子目录快照也会在进入该目录时复验，但整棵树
  * 不是操作系统原子快照：已经完成的早期分支仍可能在函数返回前再次变化。需要
- * authority 的 artifact/evidence owner 应在读取字节与领域策略后执行整体复验。
+ * 权威事实的 Artifact 或 Evidence 职责所有者应在读取字节并应用领域策略后执行
+ * 整体复验。
  *
- * 本层不读取文件、不计算摘要、不使用回调过滤、不判断 mode/owner/hardlink、
- * case collision、允许节点类型或任一领域目录布局。
+ * 本层不读取文件、不计算摘要、不使用回调过滤，也不判断权限位、所有者、硬链接、
+ * 大小写冲突、允许的节点类型或任何领域目录布局。
  */
 
 export interface BoundedDirectoryTreeScanOptions {
@@ -52,7 +53,7 @@ export interface BoundedDirectoryTreeEntry {
 /**
  * 一次有界树遍历的冻结完整结果。
  *
- * `treeRootResourcePath === null` 只表示 RootedDirectory 自身，不是 wire path。
+ * `treeRootResourcePath === null` 只表示 `RootedDirectory` 自身，不是持久化路径。
  */
 export interface BoundedDirectoryTreeScanResult<
   TreeRootResourcePath extends PortableResourcePath | null =
@@ -100,10 +101,10 @@ const ERROR_MESSAGES = {
 >;
 
 /**
- * 通用 tree scan 的稳定错误。
+ * 通用目录树扫描的稳定错误。
  *
- * 错误不回显物理根、resource ref、目录项名称、节点元数据、限制值、Abort reason
- * 或 Node/lower-layer cause。
+ * 错误不回显物理根目录、资源引用、目录项名称、节点元数据、限制值、取消原因
+ * 或 Node.js/底层原因。
  */
 export class BoundedDirectoryTreeScanError extends Error {
   override readonly name = "BoundedDirectoryTreeScanError";
@@ -384,7 +385,7 @@ export async function scanBoundedRootDirectoryTree(
   return scanTree(root, null, parsed);
 }
 
-/** 有界扫描 RootedDirectory 内一个 resource directory 的完整后代树。 */
+/** 有界扫描 `RootedDirectory` 内一个资源目录的完整后代树。 */
 export async function scanBoundedResourceDirectoryTree(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,

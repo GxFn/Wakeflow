@@ -6,15 +6,16 @@ import {
 } from "./json-value.js";
 
 /**
- * Wakeflow Foundation / Data：确定性 pretty JSON 文档表示。
+ * Wakeflow Foundation / Data：确定性格式化 JSON 文档表示。
  *
- * 本文件把已经按调用方领域顺序构造的 JSON 数据树渲染为 2 空格缩进、LF-only、
- * 恰好一个末尾 LF 的文本，并可反向拒绝重复键、空白、缩进、换行或数字表示漂移。
- * 输入会先经过 JsonValue 被动快照，因此不会执行 getter、toJSON 或 Proxy 行为。
+ * 本模块把已经按领域顺序构造的 JSON 数据树渲染为使用 2 个空格缩进、只含 LF
+ * 换行符且末尾恰好保留一个 LF 的文本。反向解析会拒绝重复键，以及空白、缩进、
+ * 换行符或数字表示发生漂移。输入先转换为 `JsonValue` 快照，因此不会执行访问器、
+ * `toJSON` 或代理陷阱。
  *
- * 对象字段的领域顺序不属于本层：parser 只能证明文本对“当前键顺序”是确定表示；
- * Config、TODO、Demand 等 owner 必须把 value 重建为自己的规范化模型，再把本文本
- * 与该模型的 render 结果比较。RFC 8785 canonical JSON 继续独立拥有 semantic digest。
+ * 对象字段的领域顺序不属于本层：解析器只能证明文本对于当前键顺序具有唯一表示。
+ * Config、TODO、Demand 等职责所有者必须先把数据重建为各自的规范化模型，再比较
+ * 磁盘文本与模型渲染结果。RFC 8785 Canonical JSON 继续独立负责语义摘要。
  */
 
 export type DeterministicJsonDocumentErrorReason =
@@ -49,7 +50,7 @@ const ERROR_MESSAGES = {
   string
 >>;
 
-/** 确定性 pretty JSON 准入或渲染失败的稳定、脱敏错误。 */
+/** 确定性格式化 JSON 准入或渲染失败时返回的稳定、脱敏错误。 */
 export class DeterministicJsonDocumentError extends Error {
   override readonly name = "DeterministicJsonDocumentError";
   readonly code = "wakeflow-deterministic-json-document" as const;
@@ -95,10 +96,10 @@ function renderAdmitted(value: JsonValue, path: string): string {
 }
 
 /**
- * 将任意被动 JSON 数据值渲染为确定性 pretty 文本。
+ * 将任意无副作用 JSON 数据值渲染为确定性格式化文本。
  *
- * 调用方若要求领域字段顺序，必须先传入已经按该顺序重建的 model；本函数不会按
- * 字典序、Schema properties 或历史输入顺序替调用方决定领域 representation。
+ * 调用方如果要求特定领域字段顺序，必须先传入按该顺序重建的模型。本函数不会根据
+ * 字典序、Schema 的 `properties` 或历史输入顺序替调用方决定领域表示。
  */
 export function renderDeterministicJsonDocument(
   value: unknown,
@@ -109,10 +110,10 @@ export function renderDeterministicJsonDocument(
 }
 
 /**
- * 解析并验证一个确定性 pretty JSON 文本。
+ * 解析并验证确定性格式化 JSON 文本。
  *
- * 成功结果是解除输入别名、递归冻结的 JsonValue。重复键会在重新渲染时消失，因此
- * 和其他 representation 漂移一样被拒绝；函数不执行自动格式化或兼容修复。
+ * 成功结果是与输入容器解除引用关系、递归冻结的 `JsonValue`。重复键会在重新渲染
+ * 时消失，因此与其他表示漂移一样被拒绝；本函数不执行自动格式化或兼容修复。
  */
 export function parseDeterministicJsonDocument(
   text: unknown,

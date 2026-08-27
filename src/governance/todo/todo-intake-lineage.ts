@@ -32,11 +32,11 @@ import {
 } from "./todo-item-id.js";
 
 /**
- * Wakeflow Governance / TODO：跨 Aggregate 使用的 immutable intake lineage。
+ * Wakeflow Governance / TODO：供跨聚合使用的不可变 Intake 来源引用。
  *
- * 本引用只绑定 TODO ID、intake portable ref 和 semantic digest；它不引用 Markdown
- * board、row 文本或当前 TODO state。Demand publication 必须重新解析该引用并由
- * TODO owner 验证当前 exact intake/state claim expectation。
+ * 本引用只绑定 TODO ID、接收记录的可移植引用和语义摘要；它不引用 Markdown 看板、行文本
+ * 或当前 TODO 状态。Demand 发布流程必须重新解析该引用，并由 TODO 职责所有者验证
+ * 当前接收记录、状态和领取操作的精确预期。
  */
 
 export const TODO_INTAKE_LINEAGE_ARTIFACT_KIND =
@@ -92,7 +92,7 @@ function fail(reason: TodoIntakeLineageErrorReason, path: string): never {
   throw new TodoIntakeLineageError(reason, path);
 }
 
-/** 解析一个不含 Markdown row 语义的关闭 lineage reference。 */
+/** 解析字段关系严格受限，且不含 Markdown 行语义的来源引用。 */
 export function parseTodoIntakeLineageReference(
   value: unknown,
 ): Readonly<TodoIntakeLineageReference> {

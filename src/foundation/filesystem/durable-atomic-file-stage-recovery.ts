@@ -48,12 +48,12 @@ import {
 } from "./durable-atomic-file-write-contract.js";
 
 /**
- * Wakeflow Foundation / Filesystem：自描述 atomic stage 的 bounded crash recovery。
+ * Wakeflow Foundation / Filesystem：自描述原子暂存文件的有界崩溃恢复。
  *
- * Recovery 只退休 owner 已确认 inactive 的 reserved stage。single-link stage 永远是
- * 非权威 candidate，可 exact rollback；create two-link stage 必须与名称绑定的 sibling
- * target 形成同 inode、同 snapshot、同 digest/mode 的完整 publication，先结算 target
- * durability，再退休 stage。active/unknown owner 只报告、不删除。
+ * 恢复流程只退休职责所有者已经确认不再活动的保留暂存文件。单链接暂存文件始终是
+ * 非权威候选资源，可以精确回滚；创建操作留下的双链接暂存文件必须与名称绑定的同级
+ * 目标构成同一 inode、同一快照、同一摘要和权限位的完整发布结果。恢复流程先确认
+ * 目标持久性，再退休暂存文件。职责所有者仍在活动或状态未知时，只报告而不删除。
  */
 
 export const DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_ENTRIES = 100_000;
@@ -347,7 +347,7 @@ async function retireStage(
   }
 }
 
-/** 清理一个明确 parent 目录内所有安全、inactive 的自描述 atomic stages。 */
+/** 清理指定父目录内所有安全且不再活动的自描述原子暂存文件。 */
 export async function recoverDurableAtomicFileStagesInDirectory(
   root: RootedDirectory,
   directoryResourcePathValue: PortableResourcePath | null,
@@ -391,7 +391,7 @@ export async function recoverDurableAtomicFileStagesInDirectory(
   });
 }
 
-/** 从 target portable ref 派生同 parent recovery scope。 */
+/** 从目标可移植引用派生同一父目录恢复作用域。 */
 export async function recoverDurableAtomicFileStagesInTargetParent(
   root: RootedDirectory,
   targetResourcePathValue: unknown,

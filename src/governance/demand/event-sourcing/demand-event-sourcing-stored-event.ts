@@ -38,10 +38,11 @@ import {
 } from "./demand-event-sourcing-upcaster.js";
 
 /**
- * Demand Event Sourcing persisted event 的兼容 facade 与 current writer。
+ * Demand 事件溯源持久化事件的兼容门面和当前版本写入器。
  *
- * Envelope admission、版本 codec/upcaster 与 current event 分属相邻模块；本文件保留
- * Store/Commit 使用的稳定名称，并保证 writer 只产生各事件家族 latest version。
+ * 事件封装准入、版本编解码器、事件升版转换器和当前事件模型分别属于相邻模块。
+ * 本模块保留 Event Store 与 Commit 使用的稳定名称，并保证写入器只产生各事件家族
+ * 的最新版本。
  */
 
 export const DEMAND_EVENT_SOURCING_STORED_EVENT_ARTIFACT_KIND =
@@ -107,7 +108,7 @@ function mapEnvelopeError(
   fail("schema", error.path);
 }
 
-/** 只解析跨版本稳定 envelope；payload 由 upcaster Registry 延迟解释。 */
+/** 只解析跨版本稳定的事件封装；载荷由事件升版注册表延迟解释。 */
 export function parseDemandEventSourcingStoredEvent(
   value: unknown,
 ): Readonly<DemandEventSourcingStoredEvent> {
@@ -121,7 +122,7 @@ export function parseDemandEventSourcingStoredEvent(
   }
 }
 
-/** 从 current event 与已 evolve state 编码 latest persisted envelope。 */
+/** 根据当前事件和已经演进的状态编码最新持久化事件封装。 */
 export function createDemandEventSourcingStoredEvent(
   eventValue: unknown,
   streamRevisionValue: unknown,
@@ -165,7 +166,7 @@ export function createDemandEventSourcingStoredEvent(
   });
 }
 
-/** 从 persisted envelope 取得 reducer 接受的 current event。 */
+/** 从持久化事件封装取得归约器接受的当前事件。 */
 export function toDemandUncommittedEvent(
   value: unknown,
 ): Readonly<DemandUncommittedEvent> {
@@ -201,7 +202,7 @@ export function parseDemandEventSourcingStoredEventDocument(
 export function computeDemandEventSourcingStoredEventDigest(
   value: unknown,
 ): Sha256Digest {
-  // Facade 先维持自己的稳定错误面，再委托 envelope digest。
+  // 门面先维持自己的稳定错误合同，再委托事件封装摘要计算。
   const event = parseDemandEventSourcingStoredEvent(value);
   return computeDemandEventSourcingPersistedEventEnvelopeDigest(event);
 }

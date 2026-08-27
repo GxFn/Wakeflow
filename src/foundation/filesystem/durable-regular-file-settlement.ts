@@ -21,16 +21,15 @@ import {
 } from "./rooted-resource-parent-handle.js";
 
 /**
- * Wakeflow Foundation / Filesystem：exact existing regular file 的持久化结算。
+ * Wakeflow Foundation / Filesystem：指定已有普通文件的持久性结算。
  *
- * 本能力用于 namespace publication 已经可以观察到，但原发布调用没有签发完整
- * durability receipt 的恢复边界。它以 frozen expected node 打开 no-follow file 与
- * parent handles，先证明 pathname/handle/expectation 一致，再同步 file inode 与 parent
- * directory，最后重新证明 exact target 没有漂移。
+ * 本能力用于目录项发布已经可见、但原发布调用尚未签发完整持久性回执的恢复边界。
+ * 它根据冻结的预期节点打开不跟随符号链接的文件句柄和父目录句柄，先证明路径名、
+ * 句柄和预期一致，再同步文件 inode 与父目录，最后重新证明指定目标没有漂移。
  *
- * 本函数不创建、写入、link、rename、unlink 或替换资源，也不推断目标由哪次操作创建。
- * 调用方必须先用自己的 journal/content/identity 规则证明该 target 可以被结算；成功
- * 只证明当前 exact file 与其 directory entry 已完成本次同步。
+ * 本函数不创建、写入、链接、重命名、删除或替换资源，也不推断目标由哪次操作创建。
+ * 调用方必须先用自己的意图记录、内容和身份规则证明目标可以结算。成功结果只证明
+ * 当前指定文件及其目录项已经完成本次同步。
  */
 
 export interface DurableRegularFileSettlementOptions {
@@ -38,7 +37,7 @@ export interface DurableRegularFileSettlementOptions {
   readonly signal?: AbortSignal;
 }
 
-/** 成功结果描述完成 file 与 parent sync 后仍匹配 expectation 的 exact target。 */
+/** 成功结果描述文件和父目录同步后仍与预期一致的指定目标。 */
 export interface DurableRegularFileSettlementResult {
   readonly resourcePath: PortableResourcePath;
   readonly node: Readonly<FileNodeSnapshot>;
@@ -85,7 +84,7 @@ const ERROR_MESSAGES = {
   string
 >>;
 
-/** exact regular-file durability settlement 的稳定、脱敏错误。 */
+/** 指定普通文件持久性结算失败时返回的稳定、脱敏错误。 */
 export class DurableRegularFileSettlementError extends Error {
   override readonly name = "DurableRegularFileSettlementError";
   readonly code = "wakeflow-durable-regular-file-settlement" as const;
@@ -367,10 +366,10 @@ async function closeResource(
 }
 
 /**
- * 为一个已经存在且仍匹配 exact expectation 的 regular file 补做 durability settlement。
+ * 为已经存在且仍与指定预期一致的普通文件补做持久性结算。
  *
- * Abort 只在任何同步前生效；一旦开始 file sync，本函数会继续完成 parent sync 与最终
- * 复验，避免向调用方返回“只同步了 inode、未同步 directory entry”的半份成功。
+ * 取消只在任何同步开始前生效；一旦开始同步文件，本函数会继续完成父目录同步与最终
+ * 复验，避免向调用方返回“只同步了 inode、未同步目录项”的不完整成功结果。
  */
 export async function settleRegularFileDurability(
   root: RootedDirectory,

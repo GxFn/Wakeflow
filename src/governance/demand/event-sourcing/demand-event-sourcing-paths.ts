@@ -17,10 +17,10 @@ import {
 } from "./demand-event-sourcing-aggregate.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：本地文件 Event Store 的路径词汇。
+ * Wakeflow Governance / Demand Event Sourcing：本地文件事件存储的路径词汇。
  *
- * `commits/` 只保存固定 commitSequence 的 immutable authority；`snapshots/` 只保存
- * 可删除 checkpoint；`append-candidates/` 只保存尚未成为 authority 的发布 source。
+ * `commits/` 只保存提交序号固定的不可变权威提交记录；`snapshots/` 只保存可删除的
+ * 检查点；`append-candidates/` 只保存尚未成为权威事实的追加候选资源。
  */
 
 export const DEMAND_EVENT_SOURCING_ROOT_REF = parsePortableResourcePath(
@@ -56,7 +56,7 @@ export interface DemandEventAppendCandidateAddress {
   readonly fileName: string;
 }
 
-/** 固定 commitSequence 唯一对应一个 no-replace authority ref。 */
+/** 固定 `commitSequence` 唯一对应一个不替换目标的权威引用。 */
 export function demandEventStreamCommitRef(
   sequence: DemandEventCommitSequence,
 ): PortableResourcePath {
@@ -67,7 +67,7 @@ export function demandEventStreamCommitRef(
   );
 }
 
-/** 一个 append 尝试的私有、非权威 candidate ref。 */
+/** 一次追加尝试所使用的私有、非权威候选资源引用。 */
 export function demandEventAppendCandidateRef(
   sequence: DemandEventCommitSequence,
   commitId: WakeflowDurableId<"demand-event-commit">,
@@ -84,7 +84,7 @@ export function demandEventAppendCandidateRef(
   );
 }
 
-/** 解析 candidate 名称中的 stream slot 与保守 process-owner identity。 */
+/** 解析候选资源名称中的事件流槽位和保守进程持有者身份。 */
 export function parseDemandEventAppendCandidateFileName(
   value: unknown,
 ): Readonly<DemandEventAppendCandidateAddress> {
@@ -132,7 +132,7 @@ export function parseDemandEventAppendCandidateFileName(
   });
 }
 
-/** immutable snapshot 只按其 anchor commitSequence 命名。 */
+/** 不可变快照只按其锚定提交的 `commitSequence` 命名。 */
 export function demandEventSourcingSnapshotRef(
   sequence: DemandEventCommitSequence,
 ): PortableResourcePath {

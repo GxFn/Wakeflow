@@ -31,14 +31,14 @@ import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-j
 /**
  * Wakeflow Configuration：公开 v3 配置的 Schema 准入与跨字段领域模型。
  *
- * JSON Schema 2020-12 与 Ajv strict validator 负责封闭字段、值域、基数和词法；
- * 本文件只补充 Schema 无法表达的 typed ID 全局冲突、实体引用、能力匹配、每个
- * repository 的 Product owner 和重复 residue path。输入先转换为被动、解除别名、
- * 递归冻结的 JSON tree，validator 因此不会执行 getter、Proxy 或自定义行为。
+ * JSON Schema 2020-12 与 Ajv 严格校验器负责限制字段集合、值域、基数和词法。本模块
+ * 只补充 Schema 无法表达的类型化标识全局冲突、实体引用、能力匹配、每个 Repository
+ * 的 Product 职责所有者和重复残留路径。输入先转换为无副作用、与源容器解除引用关系
+ * 并递归冻结的 JSON 树，因此校验器不会执行访问器、代理陷阱或自定义行为。
  *
- * 本层不读取文件、不解析 workspace placement 的物理状态、不缓存当前配置，也不
- * 注入宿主默认值。配置文件字节与物理根 authority 由 Config Authority Snapshot
- * 组合，写入和 CAS 仍属于后续 config owner。
+ * 本层不读取文件、不解析工作区位置的物理状态、不缓存当前配置，也不注入宿主
+ * 默认值。Config 权威快照负责组合配置文件字节和物理根目录权威事实；
+ * 写入和比较并交换仍属于后续 Config 职责所有者。
  */
 
 export const WAKEFLOW_CONFIG_V3_SCHEMA_ID =
@@ -50,7 +50,7 @@ export const WAKEFLOW_LOCAL_ROOT = ".wakeflow-local" as const;
 
 declare const CONFIG_PLACEMENT_BRAND: unique symbol;
 
-/** 已通过配置 placement 词法与 Unicode 约束的相对路径。 */
+/** 已通过配置位置词法和 Unicode 约束的相对路径。 */
 export type WakeflowConfigPlacement = string & {
   readonly [CONFIG_PLACEMENT_BRAND]: "WakeflowConfigPlacement";
 };
@@ -143,7 +143,7 @@ export type WakeflowConfigStorage = DeepReadonly<
   }
 >;
 
-/** Schema、typed refs 与跨实体关系均已验证的递归冻结配置模型。 */
+/** Schema、类型化引用与跨实体关系均已验证的递归冻结配置模型。 */
 export type WakeflowConfigV3Model = DeepReadonly<
   Omit<
     WakeflowConfigV3Wire,
@@ -402,11 +402,11 @@ export function parseWakeflowConfigV3(value: unknown): WakeflowConfigV3Model {
   validatePlacements(result.value);
   validateTopology(result.value);
 
-  // Ajv、placement 与 typed-ref 校验已恢复 Schema 无法表达的领域类型品牌。
+  // Ajv、位置和类型化引用校验已经恢复 Schema 无法表达的领域类型品牌。
   return result.value as unknown as WakeflowConfigV3Model;
 }
 
-/** 基于规范化 JSON 语义计算配置 freshness 摘要，不绑定空白或键顺序。 */
+/** 基于规范化 JSON 语义计算配置时效性摘要，不绑定空白或键顺序。 */
 export function computeWakeflowConfigV3Digest(
   model: WakeflowConfigV3Model,
 ): Sha256Digest {
@@ -419,7 +419,7 @@ function frozenRecord<Value>(
   return Object.freeze(Object.fromEntries(entries)) as Readonly<Record<string, Value>>;
 }
 
-/** 为已验证模型建立一次冻结的常用实体索引；索引不反向成为配置 authority。 */
+/** 为已验证模型建立冻结的常用实体索引；索引不会反向成为配置权威事实。 */
 export function buildWakeflowConfigV3Indexes(
   model: WakeflowConfigV3Model,
 ): Readonly<WakeflowConfigV3Indexes> {

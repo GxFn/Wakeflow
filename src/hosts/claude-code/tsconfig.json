@@ -2,10 +2,10 @@
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "../../../.build/hosts/claude-code",
+    "outDir": "../../../.build/src/hosts/claude-code",
     "tsBuildInfoFile": "../../../.build/cache/hosts-claude-code.tsbuildinfo"
   },
-  "files": [],
+  "files": ["wakeflow-workspace-host-resource-profile.ts"],
   "references": [
     { "path": "../../tsconfig.runtime.json" }
   ]

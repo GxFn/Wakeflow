@@ -18,16 +18,16 @@ import {
 } from "./wakeflow-config-v3.js";
 
 /**
- * Wakeflow Configuration：v3 配置声明根的词法与物理 placement admission。
+ * Wakeflow Configuration：v3 配置声明根目录的词法与物理位置准入。
  *
- * 本文件把固定 active/local 根与配置中的 ledger、support、repository 根编译成
- * 一组绝对路径，先确定性拒绝词法重叠，再复用 AbsoluteDirectoryPlacement 逐项
- * 检查 symlink、目录类型、canonical spelling，最后拒绝现存根的 realpath 重叠。
- * 缺失根作为未来 placement 被明确记录，但本层绝不创建它们。
+ * 本模块把固定的 Active、Local 根目录与配置中的 Ledger、Support、Repository 根目录
+ * 编译成一组绝对路径。它先确定性拒绝词法重叠，再复用 `AbsoluteDirectoryPlacement`
+ * 逐项检查符号链接、目录类型和规范路径拼写，最后拒绝已有根目录的真实路径重叠。
+ * 缺失根目录会作为未来位置明确记录，但本层绝不创建它们。
  *
- * 这只是配置快照的布局准入，不是完整 layout descriptor，也不授予任何 root 的
- * writer authority。每个领域 owner 仍需在自己的 RootedDirectory/lock/CAS 边界内
- * 打开并重验实际目标。
+ * 这只是配置快照的布局准入，不是完整的布局描述符，也不授予任何根目录写入权限。
+ * 每个领域职责所有者仍需在自己的 `RootedDirectory`、互斥锁或比较并交换边界内打开
+ * 并复验实际目标。
  */
 
 export interface WakeflowConfigRootPlacementEntry {
@@ -68,7 +68,7 @@ const ERROR_MESSAGES = {
   string
 >>;
 
-/** 配置根 placement 准入失败的稳定、脱敏错误。 */
+/** 配置根目录位置准入失败时返回的稳定、脱敏错误。 */
 export class WakeflowConfigRootPlacementError extends Error {
   override readonly name = "WakeflowConfigRootPlacementError";
   readonly code = "wakeflow-config-root-placement" as const;
@@ -217,7 +217,7 @@ async function assertCurrentRoot(root: RootedDirectory): Promise<void> {
   }
 }
 
-/** 验证配置声明根的确定性词法拓扑和当前物理 placement。 */
+/** 验证配置声明根目录的确定性词法拓扑和当前物理位置。 */
 export async function validateWakeflowConfigRootPlacements(
   root: RootedDirectory,
   model: WakeflowConfigV3Model,

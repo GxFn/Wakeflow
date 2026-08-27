@@ -3,12 +3,12 @@ import { randomUUID } from "node:crypto";
 /**
  * Wakeflow Foundation / Identity：规范化 UUIDv4 词法与生成。
  *
- * 本文件只拥有 RFC 9562 UUID version 4 的基础身份能力：接受唯一的 lowercase
- * 文本表示、授予 TypeScript 品牌类型，并通过 Node.js 密码学随机源创建新值。
+ * 本模块只负责 RFC 9562 UUID 版本 4 的基础标识能力：接受唯一的小写文本表示、
+ * 授予 TypeScript 品牌类型，并通过 Node.js 密码学随机源创建新值。
  * 它不添加 Wakeflow 类型前缀、不判断集合唯一性，也不决定实体生命周期、引用
  * 存在性或业务权限。
  *
- * RFC 允许解析器接受大小写差异；Wakeflow 在持久协议中主动收窄为 lowercase，
+ * RFC 允许解析器接受大小写差异；Wakeflow 在持久化协议中主动收窄为小写形式，
  * 避免同一 UUID 出现多个文本别名。
  */
 
@@ -18,7 +18,7 @@ const UUID_V4_PATTERN =
 
 declare const UUID_V4_BRAND: unique symbol;
 
-/** 已生成或严格解析的规范化 lowercase UUIDv4。 */
+/** 已生成或严格解析的规范化小写 UUIDv4。 */
 export type UuidV4 = string & {
   readonly [UUID_V4_BRAND]: "UuidV4";
 };
@@ -49,7 +49,7 @@ const ERROR_MESSAGES = {
  * UUIDv4 词法与生成失败的稳定错误。
  *
  * 错误只暴露能力代码、失败分类和调用方结构路径；不会回显候选 UUID、生成源
- * 异常、stack 或 cause。
+ * 异常、调用栈或原因链。
  */
 export class UuidV4Error extends Error {
   override readonly name = "UuidV4Error";
@@ -81,10 +81,10 @@ function isCanonicalUuidV4(value: unknown): value is string {
 }
 
 /**
- * 严格解析规范化 lowercase UUIDv4，不执行字符串强制转换。
+ * 严格解析规范化小写 UUIDv4，不执行字符串强制转换。
  *
- * version nibble 必须为 `4`，variant 高位必须为 RFC `10xx`；大写、空白、URN、
- * 花括号、其他 UUID version、NIL 和 MAX 都不会被当作等价别名接受。
+ * 版本半字节必须为 `4`，变体高位必须为 RFC `10xx`。大写、空白、URN、花括号、
+ * 其他 UUID 版本、NIL 和 MAX 都不会作为等价别名被接受。
  */
 export function parseUuidV4(
   value: unknown,
@@ -93,15 +93,15 @@ export function parseUuidV4(
   const path = normalizeErrorPath(errorPath);
   if (!isCanonicalUuidV4(value)) fail("format", path);
 
-  // 字符串已经通过完整词法、version 与 variant 校验，此处恢复该事实的类型品牌。
+  // 字符串已经通过完整词法、版本与变体校验；此处只恢复该事实的类型品牌。
   return value as UuidV4;
 }
 
 /**
  * 创建一个新的规范化 UUIDv4。
  *
- * 默认生成源是 Node.js `crypto.randomUUID()`。可注入生成源是明确的可执行依赖
- * seam：调用恰好一次，其异常统一收敛，返回值仍必须重新满足完整 UUIDv4 合同。
+ * 默认生成源是 Node.js `crypto.randomUUID()`。可注入生成源是明确的依赖注入点：
+ * 函数恰好调用一次，异常统一映射，返回值仍须重新满足完整 UUIDv4 合同。
  */
 export function createUuidV4(
   uuidFactory: UuidV4Factory = randomUUID,

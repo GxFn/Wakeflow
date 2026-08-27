@@ -58,18 +58,18 @@ import { StableFileReadError } from "./stable-file-read.js";
 import { StrictTextFileError } from "./strict-text-file.js";
 
 /**
- * Wakeflow Foundation / Filesystem：根作用域内的短生命周期 exclusive file lock。
+ * Wakeflow Foundation / Filesystem：根作用域内的短生命周期独占文件锁。
  *
- * lock record 通过 DurableAtomicFileCreate 的 OS no-replace 边界完整发布；竞争者只
- * 等待并复验现存 target 为单链接 0600 regular file，持有者可以跨 await 执行一个
- * 有界 critical section，最终按创建 receipt 的 exact inode 删除并同步 parent。
+ * 锁记录通过 `DurableAtomicFileCreate` 的操作系统不替换边界完整发布。竞争者只等待
+ * 并复验已有目标是权限位 `0600` 的单链接普通文件；持有者可以跨 `await` 执行有界
+ * 临界区，最后根据创建回执绑定的指定 inode 删除锁文件并同步父目录。
  *
- * 本层故意不自动打破 stale lock。Node 没有 unlinkat/renameat2 compare-and-delete，
- * 根据 mtime/pid 猜测后删除 pathname 可能在旧 owner 释放、新 owner 创建的窗口误删
- * 新锁。crash residue 必须由了解业务 journal 和进程事实的显式恢复 owner 处理。
- * 本锁也不是分布式锁，不适用于不可靠共享网络文件系统。
- * 同一 Node process/thread 的 owner 状态由内存 active token 精确判断；其他线程或
- * 进程只用 process existence 做保守判断，不能据此自动夺锁。
+ * 本层故意不自动打破失效锁。Node.js 没有暴露支持比较后删除的 `unlinkat` 或
+ * `renameat2`；根据修改时间或进程号猜测后删除路径，可能在旧职责所有者释放锁、
+ * 新职责所有者创建锁的窗口中误删新锁。崩溃残留必须由了解业务意图记录和进程事实的
+ * 显式恢复职责所有者处理。本锁也不是分布式锁，不适用于不可靠的共享网络文件系统。
+ * 同一 Node.js 进程和线程的职责所有者状态由内存活动令牌精确判断；其他线程或进程
+ * 只能根据进程是否存在作保守判断，不能据此自动夺锁。
  */
 
 export const ROOTED_EXCLUSIVE_LOCK_DEFAULT_TIMEOUT_MILLISECONDS = 2_000;
@@ -373,7 +373,7 @@ function parseLockRecord(value: unknown): Readonly<RootedExclusiveFileLockRecord
   });
 }
 
-/** 稳定观察 lock record；record/token 只供进程内 recovery，不得进入公共结果。 */
+/** 稳定观察锁记录；记录内容和令牌只供进程内恢复使用，不得进入公共结果。 */
 export async function inspectRootedExclusiveFileLock(
   root: RootedDirectory,
   lockPath: PortableResourcePath,
@@ -415,8 +415,8 @@ export async function inspectRootedExclusiveFileLock(
         fail("root-scope", "$root");
       }
       if (error.reason === "aborted") fail("aborted", "$signal");
-      // open/read/close 与 hash 失败可能发生在 owner release/new-acquire 的短窗口；
-      // contender 只重试并受 acquisition deadline 限制，绝不据此删除 pathname。
+      // 打开、读取、关闭或摘要计算失败可能发生在旧持有者释放、新持有者获取的短窗口；
+      // 锁竞争方只重试并受获取截止时间限制，绝不据此删除路径名。
       fail("residue-changed", "$lock");
     }
     if (error instanceof StrictTextFileError) {
@@ -451,10 +451,10 @@ export async function inspectRootedExclusiveFileLock(
 }
 
 /**
- * 显式退休一个已证明 owner inactive 且仍匹配 exact observation 的 lock residue。
+ * 显式退休已经证明持有者不再活动，且仍与指定观察结果一致的锁残留。
  *
- * 调用方必须先持有自己的 domain recovery evidence；本函数不读取 journal、不根据
- * mtime 猜测 stale，也不接受自造 observation。
+ * 调用方必须先持有自己的领域恢复证据；本函数不读取恢复意图记录，不根据
+ * `mtime` 猜测锁是否过期，也不接受自行构造的观察结果。
  */
 export async function retireRootedExclusiveFileLockResidue(
   root: RootedDirectory,
@@ -540,7 +540,7 @@ async function lockTargetExists(
     if (error instanceof RootedDirectoryError) {
       if (error.reason === "resource-not-found") return false;
       if (error.reason === "resource-changed") return true;
-      // 首次 lstat 后 lock 被并发删除时，realpath seam 只能报告 inspection-failure；
+      // 首次 lstat 后锁文件被并发删除时，真实路径检查只能报告观察失败；
       // 返回 contended 后 assertSafeExistingLock 会立即重新执行完整安全检查。
       if (error.reason === "inspection-failure") return true;
       if (error.reason === "resource-path") fail("input", "$lockPath");
@@ -561,7 +561,7 @@ async function tryAcquire(
   lockPath: PortableResourcePath,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<AcquiredLock> | null> {
-  // Contended hot path 先做一次 no-follow target observation，避免每轮重试扫描 parent。
+  // 竞争热点路径先执行一次不跟随符号链接的目标观察，避免每轮重试都扫描父目录。
   if (await lockTargetExists(root, lockPath)) return null;
   const candidate = createLockCandidate();
   ACTIVE_LOCK_TOKENS.add(candidate.record.token);
@@ -702,7 +702,7 @@ async function release(
   }
 }
 
-/** 在一个 exact rooted lock record 存续期间执行 async critical section。 */
+/** 在指定根作用域锁记录存续期间执行异步临界区。 */
 export async function withRootedExclusiveFileLock<Result>(
   root: RootedDirectory,
   lockPath: PortableResourcePath,

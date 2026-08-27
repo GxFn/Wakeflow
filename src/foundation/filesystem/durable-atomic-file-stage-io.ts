@@ -38,7 +38,7 @@ import type { PortableResourcePath } from "./portable-resource-path.js";
 import type { RootedDirectory } from "./rooted-directory.js";
 import type { RootedResourceParentHandle } from "./rooted-resource-parent-handle.js";
 
-/** Durable atomic write 的 self-describing stage I/O 生命周期。 */
+/** 持久化原子写入中，自描述暂存文件的 I/O 生命周期。 */
 
 const PRIVATE_STAGE_MODE = 0o600;
 const STAGE_CREATE_ATTEMPTS = 4;
@@ -140,7 +140,7 @@ export async function recoverDurableAtomicFileStagesBeforeWrite(
       if (error.reason === "aborted") fail("aborted", "$signal");
       if (error.reason === "input") fail("input", "$resourcePath");
       if (error.reason === "root-scope") fail("root-scope", "$root");
-      // concurrent active stage 写入可能使稳定枚举暂时失败；no-replace commit 仍是安全边界。
+      // 并发写入活动暂存文件可能使稳定枚举暂时失败；不替换目标的提交点仍是安全边界。
       if (error.reason === "busy") return;
       fail("stage-recovery-required", "$stage");
     }

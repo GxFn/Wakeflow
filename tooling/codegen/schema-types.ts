@@ -1,14 +1,14 @@
 /**
  * Wakeflow Tooling / Schema Codegen：新 TypeScript 项目的合同生成器。
  *
- * 本文件只读取 `src/contracts/schemas` 中的 JSON Schema 2020-12 权威，建立关闭
- * 网络的 `$id/$ref` catalog，并生成 `src/contracts/generated` 中可提交的类型与
- * 少量明确登记的运行时词汇。普通 Schema 的类型转换委托给成熟依赖，Wakeflow
- * 只拥有本地引用解析、输入/输出边界、确定性摘要和提交结果漂移检查。
+ * 本模块只读取 `src/contracts/schemas` 中的 JSON Schema 2020-12 权威定义，建立
+ * 不访问网络的 `$id`/`$ref` 目录，并在 `src/contracts/generated` 中生成可提交类型和
+ * 少量明确登记的运行时词汇。普通 Schema 的类型转换委托给成熟依赖；Wakeflow 只
+ * 负责本地引用解析、输入输出边界、确定性摘要和已提交生成结果的漂移检查。
  *
- * build 可以更新唯一提交型生成目录；check 只能写 `.build`，会独立生成两次并
- * 与提交结果逐字节比较。它不读取旧 `core/schemas`，不生成领域状态，不决定
- * validator 的业务错误映射，也不写入插件制品。
+ * `build` 可以更新唯一的提交型生成目录；`check` 只能写入 `.build`，会独立生成两次
+ * 并与已提交结果逐字节比较。它不读取旧 `core/schemas`、不生成领域状态、不决定
+ * 校验器的业务错误映射，也不写入插件制品。
  */
 
 import { createHash, randomUUID } from "node:crypto";
@@ -28,19 +28,19 @@ import { fileURLToPath } from "node:url";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { compileFromFile } from "json-schema-to-typescript";
 
-/** 唯一手写 Schema 权威与唯一提交型派生目录。 */
+/** 唯一手写 Schema 权威目录和唯一提交型生成目录。 */
 const SCHEMA_ROOT = "src/contracts/schemas";
 const GENERATED_ROOT = "src/contracts/generated";
 
-/** check 的默认临时输出；任何检查都不得把提交型目录当作 scratch。 */
+/** `check` 的默认临时输出；任何检查都不得把提交型目录当作临时工作区。 */
 const DEFAULT_CHECK_ROOT = ".build/schema-types";
 
-/** catalog 与单文件容量是构建资源边界，不代表领域集合容量。 */
+/** Schema 目录和单文件容量是构建资源边界，不代表领域集合容量。 */
 const MAX_SCHEMA_FILES = 256;
 const MAX_SCHEMA_BYTES = 2 * 1024 * 1024;
 const MAX_GENERATED_BYTES = 4 * 1024 * 1024;
 
-/** 需要同时生成类型和运行时常量的明确基础 Schema。 */
+/** 需要同时生成类型和运行时常量的基础 Schema 白名单。 */
 const DURABLE_ID_KIND_SCHEMA_ID =
   "urn:wakeflow:foundation:identity:durable-id-kind:v1";
 const DURABLE_ID_KIND_SCHEMA_TITLE = "WakeflowDurableIdKind";
@@ -71,10 +71,10 @@ const TODO_ITEM_ID_PATTERN_EXPORT = "TODO_ITEM_ID_PATTERN_SOURCE";
 const RUNTIME_SCHEMA_EXPORT_KEY = "x-wakeflow-runtime-export";
 const RUNTIME_SCHEMA_EXPORT_PATTERN = /^[A-Z][A-Z0-9_]*_SCHEMA$/u;
 
-/** JSON.parse 后仅供 catalog 和第三方生成器消费的普通对象。 */
+/** `JSON.parse` 后仅供 Schema 目录和第三方生成器使用的普通对象。 */
 type JsonObject = Record<string, unknown>;
 
-/** catalog 中一份 Schema 的稳定、仓库相对事实。 */
+/** Schema 目录中单份 Schema 的稳定仓库相对事实。 */
 export interface SchemaCatalogRecord {
   readonly relativePath: string;
   readonly id: string;
@@ -82,7 +82,7 @@ export interface SchemaCatalogRecord {
   readonly schema: JsonObject;
 }
 
-/** build/check 对调用方公开的最小确定性证据。 */
+/** `build` 和 `check` 向调用方公开的最小确定性证据。 */
 export interface SchemaTypeBuildResult {
   readonly mode: "build" | "check";
   readonly schemaCount: number;
@@ -97,13 +97,13 @@ interface PreparedOutput {
   readonly relative: string;
 }
 
-/** 一个封闭生成目录的文件清单摘要。 */
+/** 一个清单闭合生成目录的文件摘要。 */
 interface GeneratedOutputSnapshot {
   readonly paths: readonly string[];
   readonly digest: string;
 }
 
-/** Schema catalog、生成或漂移检查失败的稳定 tooling 错误。 */
+/** Schema 目录构建、生成或漂移检查失败时返回的稳定工具错误。 */
 export class SchemaCodegenError extends Error {
   override readonly name = "SchemaCodegenError";
   readonly code: string;
@@ -126,7 +126,7 @@ function isPlainObject(value: unknown): value is JsonObject {
   return prototype === Object.prototype || prototype === null;
 }
 
-/** 只把不存在收敛为 null；权限、类型和其他文件系统错误保持失败。 */
+/** 只把目标不存在映射为 `null`；权限、类型和其他文件系统错误仍然失败。 */
 function lstatOrNull(file: string): Stats | null {
   try {
     return lstatSync(file);
@@ -150,7 +150,7 @@ function repositoryRelative(repoRoot: string, absolute: string): string {
   return path.relative(repoRoot, absolute).split(path.sep).join("/") || ".";
 }
 
-/** 所有写入目录逐层创建并复验，避免 recursive mkdir 跟随已有符号链接。 */
+/** 所有写入目录都逐层创建并复验，避免递归 `mkdir` 跟随已有符号链接。 */
 function ensureRealDirectoryPath(root: string, directory: string): void {
   const relative = path.relative(root, directory);
   if (relative === "") return;
@@ -180,8 +180,8 @@ function ensureRealDirectoryPath(root: string, directory: string): void {
 }
 
 /**
- * 对 Schema 权威树做有限、确定排序的封闭枚举。
- * 普通文件只有 `.schema.json` 后缀可进入 catalog，未知残留直接失败。
+ * 对 Schema 权威目录树执行有界、确定性排序和清单闭合枚举。
+ * 普通文件只有使用 `.schema.json` 后缀才能进入目录；遇到未知残留时直接失败。
  */
 function collectSchemaFiles(schemaRoot: string): readonly string[] {
   assertRealDirectory(schemaRoot, SCHEMA_ROOT);
@@ -237,7 +237,7 @@ function collectSchemaFiles(schemaRoot: string): readonly string[] {
   return Object.freeze(files.sort());
 }
 
-/** 递归收集外部 `$ref` 文档 ID；fragment 内引用仍由其所属 Schema 自行解析。 */
+/** 递归收集外部 `$ref` 文档 ID；片段内引用仍由所属 Schema 自行解析。 */
 function collectRefs(value: unknown, refs: Set<string>): void {
   if (Array.isArray(value)) {
     for (const entry of value) collectRefs(entry, refs);
@@ -252,15 +252,15 @@ function collectRefs(value: unknown, refs: Set<string>): void {
   }
 }
 
-/** 从带 fragment 的引用中取得 catalog 使用的文档身份。 */
+/** 从带片段的引用中取得 Schema 目录使用的文档身份。 */
 function referenceDocumentId(reference: string): string {
   const hash = reference.indexOf("#");
   return hash === -1 ? reference : reference.slice(0, hash);
 }
 
 /**
- * Ajv 负责 JSON Schema 2020-12 与 strict 编译语义；本层只收敛稳定 tooling 错误，
- * 不把 Ajv 的内部异常结构发布为 Wakeflow 合同。
+ * Ajv 负责 JSON Schema 2020-12 和严格编译语义；本层只提供稳定的工具错误映射，
+ * 不把 Ajv 内部异常结构发布为 Wakeflow 合同。
  */
 function validateSchemaCatalog(records: readonly SchemaCatalogRecord[]): void {
   const ajv = new Ajv2020({
@@ -304,7 +304,7 @@ function validateSchemaCatalog(records: readonly SchemaCatalogRecord[]): void {
   }
 }
 
-/** 建立关闭网络、`$id` 唯一且全部 `$ref` 可在新合同树内解析的 Schema catalog。 */
+/** 建立不访问网络、`$id` 唯一且全部 `$ref` 可在新合同树内解析的 Schema 目录。 */
 export function loadSchemaCatalog(
   repoRootInput: string,
 ): readonly SchemaCatalogRecord[] {
@@ -390,7 +390,7 @@ function generatedRelativePath(schemaRelativePath: string): string {
 }
 
 /**
- * 只准许唯一提交型目录或 `.build` 严格子目录，先解析再比较以关闭 `..` 别名。
+ * 只允许唯一提交型目录或 `.build` 的严格子目录；先解析再比较，拒绝 `..` 路径别名。
  */
 function prepareOutput(repoRoot: string, outputRoot: string): PreparedOutput {
   assertRealDirectory(repoRoot, "repository root");
@@ -418,7 +418,7 @@ function prepareOutput(repoRoot: string, outputRoot: string): PreparedOutput {
   });
 }
 
-/** 删除前先确认目标仍是实际目录；调用方只能传入 prepareOutput 或内部 stage。 */
+/** 删除前确认目标仍为真实目录；调用方只能传入已准备输出目录或内部暂存目录。 */
 function removeOutput(output: string): void {
   const stat = lstatOrNull(output);
   if (stat === null) return;
@@ -432,7 +432,7 @@ function removeOutput(output: string): void {
 }
 
 /**
- * 生成目录是 closed output：只允许有限、单链接、定长的 `.generated.ts` 文件。
+ * 生成目录采用清单闭合输出：只允许有限、单链接、大小受限的 `.generated.ts` 文件。
  */
 function collectGeneratedFiles(output: string): readonly string[] {
   assertRealDirectory(output, "generated Schema output");
@@ -484,7 +484,7 @@ function collectGeneratedFiles(output: string): readonly string[] {
   return Object.freeze(paths.sort());
 }
 
-/** 文件路径、NUL 分隔符与准确字节共同进入摘要，关闭拼接和清单歧义。 */
+/** 文件路径、NUL 分隔符和精确字节共同进入摘要，消除拼接与清单歧义。 */
 function outputDigest(output: string, relativePaths: readonly string[]): string {
   const hash = createHash("sha256");
   for (const relative of relativePaths) {
@@ -497,7 +497,7 @@ function outputDigest(output: string, relativePaths: readonly string[]): string 
   return `sha256:${hash.digest("hex")}`;
 }
 
-/** 从已经封闭的生成目录取得可与独立 build 比较的快照。 */
+/** 从清单已经闭合的生成目录取得可与独立构建结果比较的快照。 */
 function inspectGeneratedOutput(output: string): GeneratedOutputSnapshot {
   const paths = collectGeneratedFiles(output);
   return Object.freeze({
@@ -507,7 +507,7 @@ function inspectGeneratedOutput(output: string): GeneratedOutputSnapshot {
 }
 
 /**
- * durable kind 是首个显式 runtime vocabulary；这里只投影标准 string enum，
+ * 持久标识类别是首个显式运行时词汇；这里只投影标准字符串枚举，
  * 不从其他 Schema 的 pattern 反向猜测身份分类。
  */
 function parseDurableIdKinds(record: SchemaCatalogRecord): readonly string[] {
@@ -539,7 +539,7 @@ function parseDurableIdKinds(record: SchemaCatalogRecord): readonly string[] {
   return Object.freeze(result);
 }
 
-/** 读取并验证可选 runtime Schema export 元数据。 */
+/** 读取并验证可选的运行时 Schema 导出元数据。 */
 function runtimeSchemaExportName(
   record: SchemaCatalogRecord,
 ): string | null {
@@ -557,7 +557,7 @@ function runtimeSchemaExportName(
   return value;
 }
 
-/** 为已登记 runtime consumer 的 Schema 生成递归冻结常量。 */
+/** 为已经登记运行时使用者的 Schema 生成递归冻结常量。 */
 function runtimeSchemaModuleLines(
   record: SchemaCatalogRecord,
 ): readonly string[] {
@@ -566,7 +566,7 @@ function runtimeSchemaModuleLines(
   const runtimeSchema = JSON.stringify(record.schema, null, 2);
   return [
     "",
-    "/** 递归冻结生成的 Schema，阻止 validator 首次消费前发生嵌套漂移。 */",
+    "/** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */",
     "function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {",
     "  if (value !== null && typeof value === \"object\" && !Object.isFrozen(value)) {",
     "    for (const child of Object.values(value)) freezeGeneratedSchema(child);",
@@ -575,13 +575,13 @@ function runtimeSchemaModuleLines(
     "  return value;",
     "}",
     "",
-    "/** Ajv strict validator 使用的 Schema 派生运行时权威；不得手工修改。 */",
+    "/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */",
     `export const ${exportName} = freezeGeneratedSchema(${runtimeSchema} as const);`,
     "",
   ];
 }
 
-/** 为 durable kind 同时生成冻结运行时 tuple 和由 tuple 派生的联合类型。 */
+/** 为持久标识类别同时生成冻结运行时元组和由该元组派生的联合类型。 */
 function generateDurableIdKindVocabulary(
   record: SchemaCatalogRecord,
   bannerComment: string,
@@ -594,7 +594,7 @@ function generateDurableIdKindVocabulary(
     "/** Wakeflow 持久类型化身份的 Schema 派生运行时词汇。 */",
     `export const ${DURABLE_ID_KINDS_EXPORT} = Object.freeze(${values} as const);`,
     "",
-    "/** 从同一 Schema enum 派生的持久身份 kind 联合类型。 */",
+    "/** 从同一 Schema 枚举派生的持久标识类别联合类型。 */",
     "export type WakeflowDurableIdKind =",
     `  (typeof ${DURABLE_ID_KINDS_EXPORT})[number];`,
     "",
@@ -602,8 +602,8 @@ function generateDurableIdKindVocabulary(
 }
 
 /**
- * UTC instant 的 pattern 是 portable wire 权威；生成器只验证其可编译并逐字投影，
- * 不在 tooling 中解释日期、时区或纳秒语义。
+ * UTC 时刻的词法模式是可移植持久化表示权威；生成器只验证模式可编译并逐字投影，
+ * 不在工具层解释日期、时区或纳秒语义。
  */
 function parseUtcInstantPattern(record: SchemaCatalogRecord): string {
   const pattern: unknown = record.schema.pattern;
@@ -629,7 +629,7 @@ function parseUtcInstantPattern(record: SchemaCatalogRecord): string {
   return pattern;
 }
 
-/** 为 UTC instant 生成运行时 pattern source 和对应的 wire string 类型。 */
+/** 为 UTC 时刻生成运行时正则源和对应的持久化字符串类型。 */
 function generateUtcInstantContract(
   record: SchemaCatalogRecord,
   bannerComment: string,
@@ -641,15 +641,15 @@ function generateUtcInstantContract(
     "/** Wakeflow strict UTC instant profile 的 Schema 派生正则源。 */",
     `export const ${UTC_INSTANT_PATTERN_EXPORT} = ${JSON.stringify(pattern)} as const;`,
     "",
-    "/** Schema 层的 UTC instant 文本；运行时解析后再授予品牌类型。 */",
+    "/** Schema 层的 UTC 时刻文本；运行时解析后再授予品牌类型。 */",
     "export type WakeflowUtcInstantText = string;",
     ...runtimeSchemaModuleLines(record),
   ].join("\n");
 }
 
 /**
- * portable resource path 的 pattern 是 wire 结构权威；NFC、well-formed Unicode
- * 与品牌准入仍由 runtime parser 拥有，tooling 不解释 filesystem 语义。
+ * 可移植资源路径的词法模式是持久化结构权威；NFC、Unicode 结构完整性和品牌准入
+ * 仍由运行时解析器负责，工具层不解释文件系统语义。
  */
 function parsePortableResourcePathPattern(
   record: SchemaCatalogRecord,
@@ -677,7 +677,7 @@ function parsePortableResourcePathPattern(
   return pattern;
 }
 
-/** 为 portable resource path 生成运行时 pattern source 与 wire string 类型。 */
+/** 为可移植资源路径生成运行时正则源和持久化字符串类型。 */
 function generatePortableResourcePathContract(
   record: SchemaCatalogRecord,
   bannerComment: string,
@@ -686,16 +686,16 @@ function generatePortableResourcePathContract(
   return [
     bannerComment,
     "",
-    "/** Wakeflow portable resource path 的 Schema 派生正则源。 */",
+    "/** Wakeflow 可移植资源路径的 Schema 派生正则源。 */",
     `export const ${PORTABLE_RESOURCE_PATH_PATTERN_EXPORT} = ${JSON.stringify(pattern)} as const;`,
     "",
-    "/** Schema 层的 portable resource path 文本；运行时解析后再授予品牌类型。 */",
+    "/** Schema 层的可移植资源路径文本；运行时解析后再授予品牌类型。 */",
     "export type WakeflowPortableResourcePathText = string;",
     ...runtimeSchemaModuleLines(record),
   ].join("\n");
 }
 
-/** SHA-256 digest 的 prefix/长度/lowercase 词法由 Schema 单向投影。 */
+/** SHA-256 摘要的前缀、长度和小写词法由 Schema 单向投影。 */
 function generateSha256DigestContract(
   record: SchemaCatalogRecord,
   bannerComment: string,
@@ -723,16 +723,16 @@ function generateSha256DigestContract(
   return [
     bannerComment,
     "",
-    "/** Wakeflow SHA-256 digest 的 Schema 派生正则源。 */",
+    "/** Wakeflow SHA-256 摘要的 Schema 派生正则源。 */",
     `export const ${SHA256_DIGEST_PATTERN_EXPORT} = ${JSON.stringify(pattern)} as const;`,
     "",
-    "/** Schema 层的完整 SHA-256 digest 文本；运行时解析后再授予品牌类型。 */",
+    "/** Schema 层的完整 SHA-256 摘要文本；运行时解析后再授予品牌类型。 */",
     "export type WakeflowSha256DigestText = string;",
     ...runtimeSchemaModuleLines(record),
   ].join("\n");
 }
 
-/** TODO opaque item ID 的唯一运行时词法投影。 */
+/** TODO 不透明条目 ID 的唯一运行时词法投影。 */
 function generateTodoItemIdContract(
   record: SchemaCatalogRecord,
   bannerComment: string,
@@ -770,8 +770,8 @@ function generateTodoItemIdContract(
 }
 
 /**
- * 已登记 runtime vocabulary/lexical constant 使用窄投影；其余结构类型完整委托
- * json-schema-to-typescript，并通过本地 catalog 关闭网络引用。
+ * 已登记的运行时词汇和词法常量使用窄投影；其余结构类型完整委托给
+ * `json-schema-to-typescript`，并通过本地 Schema 目录阻止网络引用。
  */
 async function generateSchemaModule(
   record: SchemaCatalogRecord,
@@ -838,8 +838,8 @@ async function generateSchemaModule(
 }
 
 /**
- * 单次生成先完整写入同父目录 stage；所有 Schema 成功后才替换目标目录。
- * 生成失败只清理本次随机 stage，原提交型目录在替换点之前保持不变。
+ * 单次生成先完整写入同父目录暂存区；所有 Schema 都成功后才替换目标目录。
+ * 生成失败时只清理本次随机暂存区，原提交型目录在替换点之前保持不变。
  */
 async function generateOnce(
   repoRoot: string,
@@ -923,7 +923,7 @@ export async function buildSchemaTypes(
 }
 
 /**
- * 在 .build 独立生成两次，并与提交的 src/contracts/generated 逐字节比较。
+ * 在 `.build` 中独立生成两次，并与已提交的 `src/contracts/generated` 逐字节比较。
  * 本操作不会修改提交型生成目录。
  */
 export async function checkSchemaTypes(
@@ -985,7 +985,7 @@ interface CliOptions {
   readonly outputRoot: string;
 }
 
-/** CLI 只接受 build/check、仓库根和可选输出根，不读取 cwd 隐式选择目标项目。 */
+/** CLI 只接受 `build`、`check`、仓库根目录和可选输出根目录，不根据当前目录隐式选择项目。 */
 function parseCli(args: readonly string[]): CliOptions {
   const mode = args[0];
   if (mode !== "build" && mode !== "check") {
@@ -1041,7 +1041,7 @@ function parseCli(args: readonly string[]): CliOptions {
   });
 }
 
-/** CLI 始终输出一份结构化结果，并把未分类异常收敛为 tooling 错误码。 */
+/** CLI 始终输出结构化结果，并把未分类异常映射为工具错误码。 */
 async function main(): Promise<void> {
   try {
     const cli = parseCli(process.argv.slice(2));
@@ -1062,7 +1062,7 @@ async function main(): Promise<void> {
 const invoked = process.argv[1] === undefined
   ? null
   : path.resolve(process.argv[1]);
-// 被 import 时只提供纯 API；只有准确执行本编译入口才运行 CLI。
+// 被导入时只提供纯 API；只有直接执行本编译入口时才运行 CLI。
 if (invoked !== null && invoked === fileURLToPath(import.meta.url)) {
   await main();
 }

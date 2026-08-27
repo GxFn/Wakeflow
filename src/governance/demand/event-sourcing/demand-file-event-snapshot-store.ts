@@ -53,11 +53,11 @@ import {
 } from "./demand-file-event-store.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：immutable snapshot 文件存储。
+ * Wakeflow Governance / Demand Event Sourcing：不可变快照文件存储。
  *
- * Snapshot Store 只观察、读取和 no-replace 发布按 commitSequence 命名的 checkpoint。
- * 损坏 snapshot 是可回退 observation，不会修改 commit stream；unknown/symlink/wrong-mode
- * 资源仍 fail closed。普通读取不修复、不覆盖或删除 snapshot。
+ * 快照存储只观察、读取和不替换目标地发布按 `commitSequence` 命名的检查点。损坏快照
+ * 是可以回退的观察结果，不会修改提交事件流；遇到未知资源、符号链接或错误权限位时，
+ * 存储会保守拒绝。正常读取不修复、不覆盖或删除快照。
  */
 
 export const DEMAND_FILE_EVENT_SNAPSHOT_MAXIMUM_FILES = 10_000;
@@ -282,7 +282,7 @@ async function readSnapshotAt(
     ) {
       throw error;
     }
-    // derived snapshot 的容量、编码、文本或 JSON 损坏允许 repository 回退。
+    // 可重建快照的容量、编码、文本或 JSON 损坏时，聚合仓储可以回退。
     return Object.freeze({
       status: "invalid",
       commitSequence: sequence,
@@ -300,7 +300,7 @@ export class DemandFileEventSnapshotStore {
     this.#root = root;
   }
 
-  /** 稳定读取所有 snapshot observations，按 commitSequence 升序返回。 */
+  /** 稳定读取所有快照观察结果，并按 `commitSequence` 升序返回。 */
   async readSnapshots(
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DemandFileEventSnapshotReadResult>> {
@@ -356,7 +356,7 @@ export class DemandFileEventSnapshotStore {
     });
   }
 
-  /** 显式恢复 snapshots parent 内 inactive atomic publication stages。 */
+  /** 显式恢复快照父目录中不再活动的原子发布暂存文件。 */
   async recoverPublicationStages(
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
@@ -395,7 +395,7 @@ export class DemandFileEventSnapshotStore {
     }
   }
 
-  /** 以 commitSequence no-replace 发布一个 derived snapshot。 */
+  /** 按 `commitSequence` 不替换目标地发布一个可重建快照。 */
   async publish(
     snapshotValue: unknown,
     options?: { readonly signal?: AbortSignal },

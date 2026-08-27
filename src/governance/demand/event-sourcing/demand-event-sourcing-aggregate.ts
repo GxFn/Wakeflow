@@ -38,10 +38,10 @@ import {
 } from "./demand-event-sourcing-state-version.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：一次 aggregate rehydration 结果。
+ * Wakeflow Governance / Demand Event Sourcing：一次聚合重建结果。
  *
- * Aggregate 只保存当前 state、stream cursor 与 tail 证明，不携带完整历史事件数组。
- * 完整历史属于 Event Store；full audit 通过流式 replay 独立完成。
+ * 聚合只保存当前状态、事件流游标和尾部证明，不携带完整历史事件数组。完整历史属于
+ * 事件存储；完整审计通过流式重放独立完成。
  */
 
 declare const DEMAND_EVENT_COMMIT_SEQUENCE_BRAND: unique symbol;
@@ -134,7 +134,7 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   }
 }
 
-/** 对进程内 aggregate cursor/state fact 做完整防御性复验。 */
+/** 对进程内聚合游标和状态事实执行完整的防御性复验。 */
 export function parseDemandEventSourcingAggregate(
   value: unknown,
 ): Readonly<DemandEventSourcingAggregate> {

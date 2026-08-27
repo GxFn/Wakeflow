@@ -72,12 +72,12 @@ import {
 } from "./todo-state.js";
 
 /**
- * Wakeflow Governance / TODO：TODO JSON aggregate 的只读物理 authority snapshot。
+ * Wakeflow Governance / TODO：TODO JSON 聚合的只读物理权威快照。
  *
- * 本文件有界扫描 `items/`，要求每个 storage-key directory 只包含 single-link 0600
- * `intake.json` 和 `state.json`，稳定读取并在第二次完整扫描中复验整棵 item tree。
- * `transactions/` 非空会阻断 normal authority；Markdown projection 仅返回
- * current/missing/stale 诊断，不参与 collection digest 或业务准入。
+ * 本模块有界扫描 `items/`，要求每个存储键目录只包含权限位 `0600` 的单链接
+ * `intake.json` 和 `state.json`。模块稳定读取这些文件，并通过第二次完整扫描复验整棵
+ * 条目目录树。`transactions/` 非空时会阻断正常权威读取；Markdown 投影只返回
+ * 当前、缺失或过期诊断，不参与集合摘要或业务准入。
  */
 
 export const TODO_AUTHORITY_FILE_MODE = 0o600;
@@ -579,7 +579,7 @@ async function inspectAuthority(
   }));
   const projection = await observeProjection(root, ordered, parsed.signal);
   if (requireCleanTransactions) {
-    // normal snapshot 在返回前再次确认检查期间没有留下 crash journal。
+    // 正常快照返回前再次确认检查期间没有留下崩溃恢复意图记录。
     await assertTransactionsEmpty(root, parsed.signal);
   }
   return Object.freeze({
@@ -589,7 +589,7 @@ async function inspectAuthority(
   });
 }
 
-/** 读取无 pending transaction 的严格 TODO collection authority。 */
+/** 读取不存在待处理事务的严格 TODO 集合权威快照。 */
 export async function inspectTodoCollectionAuthority(
   root: RootedDirectory,
   options?: InspectTodoCollectionAuthorityOptions,
@@ -598,10 +598,10 @@ export async function inspectTodoCollectionAuthority(
 }
 
 /**
- * 只供持有 collection lock 的 transaction recovery 使用。
+ * 只供已经持有集合锁的事务恢复流程使用。
  *
- * 本入口仍严格读取完整 item authority，但允许 `transactions/` 中存在由 recovery
- * 另行精确准入的 journal/stage；普通 inspect/append/claim/archive 不得调用。
+ * 本入口仍严格读取完整条目权威事实，但允许 `transactions/` 中存在由恢复流程另行
+ * 精确准入的意图记录和暂存资源；普通检查、追加、领取或归档操作不得调用。
  */
 export async function inspectTodoCollectionAuthorityForRecovery(
   root: RootedDirectory,

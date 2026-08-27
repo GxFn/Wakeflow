@@ -3,14 +3,14 @@ import {
 } from "../../contracts/generated/foundation/utc-instant.generated.js";
 
 /**
- * Wakeflow Foundation / Time：严格 UTC instant 文本与纳秒时间线。
+ * Wakeflow Foundation / Time：严格 UTC 时刻文本与纳秒时间线。
  *
- * 本文件消费 JSON Schema 派生的词法 pattern，复验真实 Gregorian 日历，并把
- * 已接纳文本转换为 Unix epoch nanoseconds。它保留调用方原始的无小数或
- * 1–9 位小数表示，不把同一 instant 的不同精度别名强制改写为另一段文本。
+ * 本模块使用 JSON Schema 派生的词法模式，复验真实公历日期，并把已接纳文本转换为
+ * Unix 纪元纳秒。它保留调用方提供的无小数或 1–9 位小数表示，不会把同一时刻的
+ * 不同精度文本强制改写为另一种形式。
  *
- * 这里不读取当前时间、不执行日期算术、不拥有 timeout/lease 语义，也不把
- * wall clock 与 monotonic clock 混为一个来源。
+ * 本模块不读取当前时间、不执行日期算术、不定义超时或租约语义，也不会混淆墙上
+ * 时钟与单调时钟。
  */
 
 const UTC_INSTANT_PATTERN = new RegExp(UTC_INSTANT_PATTERN_SOURCE, "u");
@@ -18,7 +18,7 @@ const NANOSECONDS_PER_MILLISECOND = 1_000_000n;
 
 declare const UTC_INSTANT_BRAND: unique symbol;
 
-/** 已严格解析、保持原文本精度的 Wakeflow UTC instant。 */
+/** 已严格解析并保留原始文本精度的 Wakeflow UTC 时刻。 */
 export type UtcInstant = string & {
   readonly [UTC_INSTANT_BRAND]: "UtcInstant";
 };
@@ -32,10 +32,10 @@ const ERROR_MESSAGES = {
 } as const satisfies Readonly<Record<UtcInstantErrorReason, string>>;
 
 /**
- * UTC instant 词法或日历失败的稳定错误。
+ * UTC 时刻词法或日历验证失败时返回的稳定错误。
  *
  * 错误只暴露能力代码、失败分类和调用方路径，不回显时间文本、Date 内部异常或
- * cause。领域 owner 可以据此映射自己的稳定 record/public 错误。
+ * 原因链。领域职责所有者可以据此映射自己的稳定记录或公共错误。
  */
 export class UtcInstantError extends Error {
   override readonly name = "UtcInstantError";
@@ -64,8 +64,8 @@ function fail(reason: UtcInstantErrorReason, path: string): never {
 }
 
 /**
- * Schema pattern 已固定分隔符位置，因此组件读取无需维护第二份完整正则。
- * Date 只验证整秒 Gregorian 日历；小数秒由 BigInt 独立保留到纳秒。
+ * Schema 词法模式已经固定分隔符位置，因此组件读取无需维护第二份完整正则。
+ * `Date` 只验证整秒公历日期；小数秒由 `bigint` 独立保留到纳秒。
  */
 function parseUtcInstantParts(
   input: unknown,
@@ -83,7 +83,7 @@ function parseUtcInstantParts(
   const second = Number(input.slice(17, 19));
   const fraction = input[19] === "." ? input.slice(20, -1) : "";
 
-  // 从 epoch Date 再显式设置 full year，避免 Date.UTC 对 0–99 年的 1900 偏移规则。
+  // 从纪元 Date 再显式设置完整年份，避免 Date.UTC 对 0–99 年应用 1900 年偏移规则。
   const calendar = new Date(0);
   calendar.setUTCFullYear(year, month - 1, day);
   calendar.setUTCHours(hour, minute, second, 0);
@@ -110,9 +110,9 @@ function parseUtcInstantParts(
 }
 
 /**
- * 严格解析 Wakeflow UTC instant，保留调用方提供的准确文本与小数位数。
+ * 严格解析 Wakeflow UTC 时刻，保留调用方提供的精确文本和小数位数。
  *
- * 本函数不接受 offset、lowercase t/z、空白、闰秒或 Date 可自动进位的日期。
+ * 本函数不接受时区偏移、小写 `t`/`z`、空白、闰秒或 `Date` 可自动进位的日期。
  */
 export function parseUtcInstant(
   value: unknown,
@@ -122,9 +122,9 @@ export function parseUtcInstant(
 }
 
 /**
- * 把 UTC instant 转为 Unix epoch nanoseconds，并在运行时重新验证品牌输入。
+ * 把 UTC 时刻转换为 Unix 纪元纳秒，并在运行时重新验证品牌类型输入。
  *
- * 结果可以为负数；例如 epoch 前 1 纳秒表示为 `-1n`。本转换不修改原文本。
+ * 结果可以为负数；例如纪元前 1 纳秒表示为 `-1n`。本转换不修改原文本。
  */
 export function utcInstantToEpochNanoseconds(
   value: UtcInstant,
@@ -137,7 +137,7 @@ export function utcInstantToEpochNanoseconds(
 }
 
 /**
- * 按真实纳秒时间线比较两个 UTC instant；不同精度文本可比较为相等。
+ * 按真实纳秒时间线比较两个 UTC 时刻；不同精度的文本可以表示相同时刻。
  *
  * 参数虽然带品牌，仍分别以 `$left` 和 `$right` 重新完成运行时复验。
  */

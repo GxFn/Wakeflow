@@ -45,11 +45,11 @@ import {
 } from "./todo-state.js";
 
 /**
- * Wakeflow Governance / TODO：append、claim、archive 的 immutable recovery plan codec。
+ * Wakeflow Governance / TODO：追加、领取与归档操作的不可变恢复计划编解码器。
  *
- * Journal 同时绑定 expected/target collection、intake 和 state semantic digest，并保存
- * 完整 target state；append 额外保存 immutable target intake。它不保存可变 phase，
- * 不执行文件系统 effect，也不决定 journal 何时可退休。
+ * 恢复意图同时绑定预期集合、目标集合、接收记录和状态语义摘要，并保存完整的目标
+ * 状态；追加操作还会保存不可变的目标接收记录。它不保存可变阶段、不执行文件系统
+ * 副作用，也不决定恢复意图何时可以退休。
  */
 
 export const TODO_TRANSACTION_ARTIFACT_KIND =
@@ -95,7 +95,7 @@ const ERROR_MESSAGES = {
   "representation": "TODO transaction bytes are not its deterministic domain representation.",
 } as const satisfies Readonly<Record<TodoTransactionErrorReason, string>>;
 
-/** TODO transaction plan 准入或关系失败的稳定、脱敏错误。 */
+/** TODO 事务计划准入或关系验证失败时返回的稳定、脱敏错误。 */
 export class TodoTransactionError extends Error {
   override readonly name = "TodoTransactionError";
   readonly code = "wakeflow-todo-transaction" as const;
@@ -242,7 +242,7 @@ function normalizeWire(
   return transaction;
 }
 
-/** 解析任意内存值为 immutable TODO transaction plan。 */
+/** 把任意内存值解析为不可变 TODO 事务计划。 */
 export function parseTodoTransaction(value: unknown): Readonly<TodoTransaction> {
   let json: JsonValue;
   try {

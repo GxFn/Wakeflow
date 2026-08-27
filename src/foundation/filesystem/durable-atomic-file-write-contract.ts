@@ -28,7 +28,7 @@ import {
 import { RootedDirectory } from "./rooted-directory.js";
 import type { StableFileSource } from "./stable-file-read.js";
 
-/** Durable atomic file write 的公开合同、输入快照与稳定错误。 */
+/** 持久化原子文件写入的公共合同、输入快照和稳定错误。 */
 
 export const DURABLE_ATOMIC_FILE_MAXIMUM_BYTES = parseByteCount(
   64 * 1024 * 1024,
@@ -40,7 +40,7 @@ export interface DurableAtomicFileCreateOptions {
   readonly signal?: AbortSignal;
 }
 
-/** replace 所需、与目标 resource path 绑定的完整前序稳定读取事实。 */
+/** 替换操作所需、与目标资源路径绑定的完整前序稳定读取事实。 */
 export type DurableAtomicFileExpectation = Readonly<StableFileSource>;
 
 export interface DurableAtomicFileReplaceOptions {
@@ -51,7 +51,7 @@ export interface DurableAtomicFileReplaceOptions {
 
 export type DurableAtomicFilePublication = "created" | "replaced";
 
-/** 成功返回只描述已经复验并完成 parent sync 的最终 target。 */
+/** 成功结果只描述已经复验并完成父目录同步的最终目标。 */
 export interface DurableAtomicFileWriteResult<
   Publication extends DurableAtomicFilePublication =
     DurableAtomicFilePublication,
@@ -63,7 +63,7 @@ export interface DurableAtomicFileWriteResult<
   readonly digest: Sha256Digest;
 }
 
-/** replace 成功后同时签发已核验的完整前序 source。 */
+/** 替换成功后，同时签发已经核验的完整前序源资源。 */
 export interface DurableAtomicFileReplaceResult
   extends DurableAtomicFileWriteResult<"replaced"> {
   readonly previous: Readonly<DurableAtomicFileExpectation>;

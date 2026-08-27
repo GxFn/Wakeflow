@@ -33,12 +33,12 @@ import {
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的稳定、有界资源树内容观察。
  *
- * 本文件组合两次 BoundedDirectoryTreeScan 和中间的 regular-file 稳定摘要读取：
- * 先冻结结构与节点 expectation，再以固定并发读取每个文件，最后复验完整结构。
+ * 本模块组合两次 `BoundedDirectoryTreeScan` 和中间的普通文件稳定摘要读取：先冻结
+ * 结构与节点预期，再以固定并发读取每个文件，最后复验完整结构。
  * 返回结果因此把同一次观察窗口内的路径、节点、文件字节数和 SHA-256 绑定起来。
  *
- * 本层不保留文件 bytes，不解析文本或 JSON，不跟随 symlink，也不决定 special
- * node、空树、权限、owner、hardlink、portable collision 或领域目录布局是否合法。
+ * 本层不保留文件字节、不解析文本或 JSON、不跟随符号链接，也不决定特殊节点、
+ * 空目录树、权限、所有者、硬链接、可移植路径冲突或领域目录布局是否合法。
  * Node 没有提供整树原子快照；本合同证明的是前后快照一致且每个文件在窗口内稳定。
  */
 
@@ -50,18 +50,18 @@ export interface StableResourceTreeReadOptions {
   readonly maximumEntries: number;
   /** 起始目录深度为 0；直属项深度为 1。 */
   readonly maximumDepth: number;
-  /** regular file 数量上限。 */
+  /** 普通文件数量上限。 */
   readonly maximumFiles: number;
-  /** 任一 regular file 的字节上限。 */
+  /** 任一普通文件的字节上限。 */
   readonly maximumFileBytes: ByteCount;
-  /** 全部 regular file 的累计字节上限。 */
+  /** 全部普通文件的累计字节上限。 */
   readonly maximumTotalBytes: ByteCount;
-  /** 可选的起始目录物理 expectation。 */
+  /** 可选的起始目录物理节点预期。 */
   readonly expectedNode?: Readonly<FileNodeSnapshot>;
   readonly signal?: AbortSignal;
 }
 
-/** 一次整树观察中与结构节点绑定的 regular-file 内容事实。 */
+/** 一次整树观察中与结构节点绑定的普通文件内容事实。 */
 export interface StableResourceTreeFile extends StableFileSource {
   readonly name: string;
   readonly parentResourcePath: PortableResourcePath | null;
@@ -71,8 +71,8 @@ export interface StableResourceTreeFile extends StableFileSource {
 /**
  * 一次完整、冻结的资源树内容观察。
  *
- * `entries` 保留目录、symlink 和 special node 等全部结构事实；`files` 只包含已完成
- * 稳定摘要读取的 regular file，并沿用相同的 resource-path 确定顺序。
+ * `entries` 保留目录、符号链接和特殊节点等全部结构事实；`files` 只包含已经完成
+ * 稳定摘要读取的普通文件，并沿用相同的资源路径确定顺序。
  */
 export interface StableResourceTreeReadResult<
   TreeRootResourcePath extends PortableResourcePath | null =
@@ -124,8 +124,7 @@ const ERROR_MESSAGES = {
 /**
  * 稳定资源树读取的公共、脱敏错误。
  *
- * 错误不回显物理路径、resource ref、节点元数据、容量、摘要、Abort reason 或
- * lower-layer cause。
+ * 错误不回显物理路径、资源引用、节点元数据、容量、摘要、取消原因或底层原因。
  */
 export class StableResourceTreeReadError extends Error {
   override readonly name = "StableResourceTreeReadError";
@@ -505,7 +504,7 @@ export async function readStableRootResourceTree(
   return readTree(root, null, parsed);
 }
 
-/** 稳定读取 RootedDirectory 内一个 resource directory 的完整资源树内容事实。 */
+/** 稳定读取 `RootedDirectory` 内一个资源目录的完整目录树内容事实。 */
 export async function readStableResourceTree(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,

@@ -51,7 +51,7 @@ import {
   DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
 } from "./demand-publication-paths.js";
 
-/** Demand Event Sourcing publication 的 rooted file storage seam。 */
+/** Demand 事件溯源发布流程的根作用域文件存储边界。 */
 
 const TRANSACTION_MAXIMUM_BYTES = parseByteCount(24 * 1024 * 1024);
 
@@ -275,7 +275,7 @@ export async function initializePublicationStorage(
   }
 }
 
-/** 显式恢复 workspace publication transactions 内的 inactive atomic stages。 */
+/** 显式恢复 Workspace 发布事务中不再活动的原子暂存文件。 */
 export async function recoverPublicationTransactionStages(
   root: RootedDirectory,
   signal: AbortSignal | undefined,

@@ -8,12 +8,13 @@ import {
 /**
  * Wakeflow Foundation / Data：递归 JSON 值准入。
  *
- * 本文件把任意进程内输入转换为解除容器别名、递归冻结的 JSON 数据树。它复用
- * passive-own-data 检查每一层自有结构，再解释 JSON 原始类型、Unicode、循环和
- * 深度；不负责 RFC 8785 排序、UTF-8 编码、摘要或任何领域字段关系。
+ * 本模块把任意进程内输入转换为与源容器解除引用关系、递归冻结的 JSON 数据树。
+ * 它通过 `passive-own-data` 无副作用地检查每一层自有属性，再验证 JSON 原始类型、
+ * Unicode、循环引用和嵌套深度。RFC 8785 排序、UTF-8 编码、摘要和领域字段关系
+ * 不属于本模块职责。
  *
- * 该快照既是后续 canonicalize 依赖的可信输入，也是领域 owner 需要独立 JSON
- * 副本时的统一入口。对象使用 null 原型，数组保持标准 Array 原型。
+ * 该快照既是后续 `canonicalize` 依赖的可信输入，也是领域职责所有者创建独立
+ * JSON 副本的统一入口。对象使用 `null` 原型，数组保持标准 `Array` 原型。
  */
 
 /** 根值深度为 0；深度 128 的成员仍被接受。 */
@@ -91,7 +92,7 @@ const PASSIVE_REASON_MAP = {
  * JSON 值准入的稳定错误。
  *
  * 错误只暴露能力代码、失败分类和结构路径；原始成员值与下层异常消息不会进入
- * 公共字段，领域 owner 可据此映射自己的错误合同。
+ * 公共字段，领域职责所有者可据此映射自己的错误合同。
  */
 export class JsonValueError extends Error {
   override readonly name = "JsonValueError";
@@ -239,7 +240,7 @@ function parseValue(
   try {
     isArray = Array.isArray(value);
   } catch {
-    // Array.isArray 只会在这里因已撤销的 Proxy 失败；不要读取其异常或目标。
+    // 这里只可能因为已经撤销的 Proxy 而失败；不得读取代理目标或向外暴露原始异常。
     fail("proxy", path);
   }
 
@@ -253,7 +254,7 @@ function parseValue(
  * 将任意输入解析为独立、递归冻结的 JSON 值。
  *
  * 本函数不做字符串、数字或字段语义的隐式转换。共享引用按 JSON 值语义分别
- * 复制，循环引用失败；调用方提供的 errorPath 只作为安全结构路径前缀。
+ * 复制，循环引用会失败；调用方提供的 `errorPath` 只作为安全的结构路径前缀。
  */
 export function parseJsonValue(
   value: unknown,

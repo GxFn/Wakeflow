@@ -27,16 +27,16 @@ import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 /**
  * Wakeflow Foundation / Filesystem：一次操作范围内的物理目录根。
  *
- * RootedDirectory 持有已经打开的目录 FileHandle、canonical 绝对路径和初始节点快照。
- * 它把 PortableResourcePath 逐段映射到该根下，拒绝中间 symlink、错误祖先类型、
- * realpath alias 和根替换，并返回最终节点的一次稳定物理观察。
+ * `RootedDirectory` 持有已经打开的目录 `FileHandle`、规范绝对路径和初始节点快照。
+ * 它把 `PortableResourcePath` 逐段映射到根目录下，拒绝路径中间的符号链接、错误祖先
+ * 类型、真实路径别名和根目录替换，并返回最终节点的一次稳定物理观察。
  *
- * Node.js 未暴露 openat/openat2，因此子节点检查仍是 pathname-based best effort；
- * 本能力用于受信任单用户工作区中的意外路径、并发 Wakeflow writer 和 symlink
- * 防护，不是抵抗同权限恶意进程持续交换目录项的 OS sandbox。
+ * Node.js 未暴露 `openat` 或 `openat2`，因此子节点检查仍是基于路径名的尽力验证。
+ * 本能力用于防范受信任单用户工作区中的意外路径、并发 Wakeflow 写入和符号链接，
+ * 不能充当抵抗同权限恶意进程持续交换目录项的操作系统沙箱。
  */
 
-/** 根内一个已存在资源的运行时物理观察；不得进入 portable record。 */
+/** 根目录内一个已有资源的运行时物理观察；不得写入可移植记录。 */
 export interface RootedResourceSnapshot {
   readonly resourcePath: PortableResourcePath;
   readonly physicalPath: string;
@@ -86,8 +86,8 @@ const ERROR_MESSAGES = {
 /**
  * 根作用域文件系统失败的稳定错误。
  *
- * 错误只暴露能力代码、分类和调用方结构路径，不回显物理根、资源路径、syscall、
- * Node message 或 cause。
+ * 错误只暴露能力代码、分类和调用方结构路径，不回显物理根目录、资源路径、系统调用、
+ * Node.js 错误消息或底层原因。
  */
 export class RootedDirectoryError extends Error {
   override readonly name = "RootedDirectoryError";
@@ -218,10 +218,10 @@ function resourcePhysicalPath(
 }
 
 /**
- * 已打开、可显式关闭的根目录能力。
+ * 已打开且可显式关闭的根目录能力。
  *
  * static open() 是唯一构造入口；实例保存 FileHandle 以检测根 pathname 被 rename
- * 或替换。absolutePath 与物理 resource result 只供进程内 I/O 组合，不是 wire。
+ * 或替换。`absolutePath` 与物理资源结果只供进程内 I/O 组合，不属于持久化表示。
  */
 export class RootedDirectory {
   readonly #absolutePath: string;
@@ -240,11 +240,10 @@ export class RootedDirectory {
   }
 
   /**
-   * 打开一个规范绝对 spelling 指向的真实目录根。
+   * 打开由规范绝对路径拼写指向的真实目录根。
    *
-   * 根节点本身不能是 symlink；受信任 spelling 中的祖先 alias 会先固定为
-   * canonical realpath。成功前同时核对原 spelling、canonical pathname、
-   * FileHandle 与再次观察到的节点身份。
+   * 根节点本身不能是符号链接；受信任路径拼写中的祖先别名会先固定为规范真实路径。
+   * 成功前同时核对原始路径拼写、规范路径名、`FileHandle` 与再次观察到的节点身份。
    */
   static async open(
     value: unknown,
@@ -308,13 +307,13 @@ export class RootedDirectory {
       try {
         await handle.close();
       } catch {
-        // 首个准入失败保持为权威；未签发的 handle 不产生另一个公共错误。
+        // 保留首个准入错误；未签发的句柄不再生成第二个公共错误。
       }
       throw error;
     }
   }
 
-  /** 进程内 canonical 绝对根；调用方不得写入 portable 数据。 */
+  /** 进程内规范绝对根目录；调用方不得把它写入可移植数据。 */
   get absolutePath(): string {
     return this.#absolutePath;
   }
@@ -333,9 +332,9 @@ export class RootedDirectory {
   }
 
   /**
-   * 证明当前 pathname、打开的目录 handle 与初始根仍指向同一 dev/ino 节点。
+   * 证明当前路径名、已打开目录句柄和初始根目录仍指向同一设备号和 inode。
    *
-   * 返回最新节点快照；目录内容变化引起的 mtime/link count 漂移不会被误判为根替换。
+   * 返回最新节点快照；目录内容变化引起的 `mtime` 或链接数漂移不会被误判为根目录替换。
    */
   async assertCurrent(
     errorPath?: string,
@@ -370,11 +369,12 @@ export class RootedDirectory {
   }
 
   /**
-   * 逐段检查一个已存在 resource，不跟随最终 symlink。
+   * 逐段检查一个已存在资源，不跟随最终符号链接。
    *
-   * 所有中间段必须保持真实目录；最终段可为任意节点类型，供后续 stable reader、
-   * tree scanner 或 migration owner 再施加自己的节点策略。最终节点是目录时只复验
-   * kind 与 dev/inode：合法 sibling 变化会改变目录 mtime/ctime，但不代表目录被替换。
+   * 所有中间段必须保持真实目录；最终段可为任意节点类型，供后续稳定读取方、
+   * 目录树扫描器或迁移职责所有者再施加自己的节点策略。最终节点是目录时只复验
+   * 节点类型、设备号和 inode：合法的同级变更会改变目录修改时间和状态变更时间，
+   * 但不表示目录已经被替换。
    */
   async inspectExistingResource(
     resourcePath: PortableResourcePath,
@@ -466,7 +466,7 @@ export class RootedDirectory {
     });
   }
 
-  /** 幂等关闭根 handle；关闭后所有 filesystem 操作稳定拒绝。 */
+  /** 幂等关闭根目录句柄；关闭后所有文件系统操作都会稳定拒绝。 */
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;

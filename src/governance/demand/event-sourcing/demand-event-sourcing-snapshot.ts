@@ -65,11 +65,11 @@ import {
 } from "./demand-event-sourcing-version-compatibility.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：immutable、versioned snapshot。
+ * Wakeflow Governance / Demand Event Sourcing：不可变、带版本的快照。
  *
- * Snapshot 只在完整 commit boundary 创建，并绑定 commit digest、event tail 与 state。
- * 它是可删除优化，不是事件 authority；不兼容或损坏时由 repository 选择更早 snapshot
- * 或从 commit 1 完整 replay，普通 load 不在读取路径中改写 snapshot。
+ * 快照只在完整提交边界创建，并绑定提交摘要、事件流尾部和聚合状态。它是可以删除、
+ * 可以重建的优化，不是事件权威事实。快照不兼容或损坏时，仓储会选择更早的快照，
+ * 或从提交 1 完整重放；正常加载不会在读取路径中改写快照。
  */
 
 export const DEMAND_EVENT_SOURCING_SNAPSHOT_ARTIFACT_KIND =
@@ -157,7 +157,7 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   }
 }
 
-/** snapshot 文件名使用其 anchor commitSequence。 */
+/** 快照文件名使用其锚定提交的 `commitSequence`。 */
 export function formatDemandEventSourcingSnapshotFileName(
   value: unknown,
 ): string {
@@ -270,7 +270,7 @@ export function createDemandEventSourcingSnapshot(
   });
 }
 
-/** 从 snapshot 与其 exact anchor commit 恢复轻量 aggregate cursor/state。 */
+/** 从快照及其指定锚定提交恢复轻量聚合游标和状态。 */
 export function restoreDemandEventSourcingSnapshot(
   snapshotValue: unknown,
   anchorCommitValue: unknown,
@@ -342,7 +342,7 @@ export function parseDemandEventSourcingSnapshotDocument(
   return snapshot;
 }
 
-/** Snapshot 自身的 semantic digest；与其中的 Aggregate stateDigest 明确不同。 */
+/** 快照自身的语义摘要；它与快照中的聚合 `stateDigest` 明确不同。 */
 export function computeDemandEventSourcingSnapshotDigest(
   value: unknown,
 ): Sha256Digest {

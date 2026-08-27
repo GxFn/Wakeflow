@@ -1,7 +1,7 @@
 # Wakeflow TypeScript 资源处理归一标准与收敛矩阵
 
 > 创建日期：2026-08-26
-> 当前状态：`confirmed-direction / RH-1-implemented / RH-2-implemented`
+> 当前状态：`confirmed-direction / RH-1-implemented / RH-2-implemented / RH-3-ledger-publication-and-catalog-implemented`
 > 上位计划：[Wakeflow TypeScript 全新项目能力重构开发计划](./wakeflow-typescript-capability-reimplementation-development-plan-2026-08-25.md)
 > 基础服务边界：[Wakeflow 全局基础服务需求](./wakeflow-foundation-services-requirement-2026-08-11.md)
 > 用户决定：新 TypeScript 项目不把当前 JavaScript 文件形态视为标准；允许在保持产品能力与 authority 语义的前提下，收敛非必要的 Markdown authority、JSONL authority、重复 writer 和历史文件操作形态
@@ -14,7 +14,7 @@
 
 确认目标是：
 
-1. 让每个本地资源都能唯一回答其 owner、authority role、representation、mutation recipe、coordination、recovery、mode 与 tracking；
+1. 让每个本地资源都能唯一回答其 owner、authority role、representation、闭合的 allowed mutation recipes、coordination、recovery、mode 与 tracking；每次具体 operation 只能从中选择一项 recipe；
 2. 让全部领域 writer 复用有限的文件系统 primitive，而不是继续局部实现 `lstat/open/read/hash/write/rename/fsync`；
 3. 取消不必要的 Markdown durable authority、JSONL durable authority和同类 standalone JSON 多种磁盘格式；
 4. 保留 Config、Projection、Managed Integration Text 和 Manifested Tree 中确有产品价值的差异；
@@ -76,6 +76,12 @@ Wakeflow 自有文本资源统一满足：
 3. physical admission：逐段 no-follow、node identity、realpath、mode、owner 和容量；
 4. write effect：在已准入 root/parent 下执行 exact mutation。
 
+Workspace resource declaration只保存逻辑root selector与root内portable relative path：
+`workspace`、`ledger`、typed `support-surface`或typed `repository`。它不复制Config中允许
+`../`的configured placement，不解析绝对路径；后续matrix compiler才能在已验证Config
+Snapshot范围内解析逻辑根。representation与codec ID仍由domain catalog所有，不进入
+这一机械声明层。
+
 <a id="resource-standard-json"></a>
 ## 5. 唯一 standalone JSON 磁盘标准
 
@@ -110,19 +116,30 @@ domain-validated model
 | --- | --- | --- | --- | --- |
 | `external-reference` | 外部 owner；Wakeflow 零写入 | 外部原格式 | `no-write` | 只报告 unsafe/missing，不修复 |
 | `immutable-fact` | Wakeflow/domain whole-resource immutable authority | deterministic JSON；或显式 opaque document | `exclusive-create` | duplicate exact fact 幂等；冲突 fail closed |
-| `mutable-snapshot` | 当前状态或可更新 singleton authority | deterministic JSON | `lock + exact-source-replace` | domain journal/reload 决定前向恢复 |
+| `mutable-snapshot` | 当前状态或可更新 singleton authority | deterministic JSON | `exclusive-create / exact-source-replace`；lock是coordination wrapper | domain journal/reload 决定前向恢复 |
 | `derived-projection` | 非 authority、可重建 view | Markdown 或 deterministic JSON | `deterministic-rewrite` | 从 authority 重建，不反向读取为状态 |
 | `managed-integration-text` | external/mixed owner 或 host integration seam | strict managed text | `inspect-envelope + exact-source-recompose` | 只恢复 exact owned block/whole-file；保留 outside bytes |
-| `manifested-tree` | manifest 绑定的完整文件树 | deterministic manifest JSON + opaque payload tree | `stage + verify + tree-publish/move` | manifest、inventory 与 source/target receipt 共同决定 |
-| `transaction-artifact` | 某个 transaction owner 的 lock、journal、intent、stage、claim、tombstone | deterministic JSON、private stage 或 directory | `exclusive-create / exact-update / exact-retire` | 仅 owner 按 phase、node、digest 和 side-effect closure 恢复 |
+| `manifested-tree` | manifest 绑定的完整文件树 | deterministic manifest JSON + opaque payload tree | `tree-publish-or-move` | manifest、inventory 与 source/target receipt 共同决定 |
+| `transaction-artifact` | 某个 transaction owner 的 lock、journal、intent、stage、claim、tombstone | deterministic JSON、private stage 或 directory | 按具体artifact闭合`exclusive-create / exact-source-replace / tree-publish-or-move / exact-retire`的子集 | 仅 owner 按 phase、node、digest 和 side-effect closure 恢复 |
 
-目录本身不是第八种 authority role。目录是结构容器，统一使用 `materialize-directory`：
+上表的recipe是角色允许的机械语义，不表示一个资源终身只能有一种操作。
+真实 resource declaration必须显式列出该资源的闭合allowed recipe set；每个
+operation plan必须且只能选择其中一项。例如Config mutable snapshot同时允许
+absent-only `exclusive-create`和`exact-source-replace`，但一次operation不能同时执行两种。
+Matrix只负责拒绝越界recipe，不代替domain owner选择或执行effect。
 
-- 只创建缺失段；
-- existing directory 只观察，不擅自 chmod；
-- file/symlink/special collision fail closed；
-- 创建后同步 parent；
-- 子资源各自声明上述七种 role。
+目录本身不是第八种 authority role。目录是结构容器，子资源仍各自声明上述
+七种role。目录container可使用两种互斥建立策略：
+
+- `materialize-directory`：只创建缺失段；existing directory只观察不chmod；
+  file/symlink/special collision fail closed；创建后同步parent。
+- `exact-directory-publish`：domain owner先关闭并验证同一RootedDirectory内的私有
+  stage，再以exact stage node整体durable rename到final container；existing target只能由
+  owner基于authority验证为幂等，其他target冲突fail closed。
+
+`exact-directory-publish`不要求manifest，不支持跨文件系统copy fallback，也不授权通用
+stage cleanup。TODO item root和Demand root是已证明的首批consumer；manifested evidence/archive
+继续使用独立的`tree-publish-or-move`。
 
 <a id="resource-standard-mutation"></a>
 ## 7. 有限 Mutation Recipe
@@ -134,7 +151,8 @@ domain-validated model
 | `exact-source-replace` | stable old resource path + node + byte count + source digest + domain lock | private stage → rename | complete old source、new node/digest、parent sync |
 | `deterministic-rewrite` | validated authority snapshot + pure renderer | exact source replace | projection digest + authority basis digest |
 | `exact-source-recompose` | stable complete old bytes + exact owned envelope | preserve outside → render owned component → exact source replace | outside digest + owned digest + final digest |
-| `tree-publish/move` | bounded complete inventory + manifest + target admission | same-filesystem rename；跨设备显式 copy/verify/cleanup | source/target inventory、manifest、目录同步、残留结论 |
+| `exact-directory-publish` | same-root private stage + bounded closed inventory + exact stage node + owner target admission | durable rename to absent/exact-idempotent final container | source/final node、closed inventory、parent sync、residue conclusion |
+| `tree-publish-or-move` | bounded complete inventory + manifest + target admission | same-filesystem rename；跨设备显式 copy/verify/cleanup | source/target inventory、manifest、目录同步、残留结论 |
 | `exact-retire` | exact owner receipt + expected node/digest/phase | unlink/rename exact target | pathname absent/detached、remaining link facts、parent sync |
 
 `lock` 与 `journal` 是 recipe 的 coordination wrapper，不是另一种数据存储方式。Node 不提供 portable compare-and-unlink/renameat2/openat，任何 pathname-based 最终 effect 都不得被描述为恶意同权限进程下的 OS sandbox。
@@ -303,10 +321,21 @@ extension bag、patch 或 callback registry。
 完整性规则：
 
 - 每个 layout key 必须命中且只命中一个 family；
-- 每个 concrete file/tree 必须声明且只声明一个 resource role 和 mutation recipe；
+- 每个 concrete file/tree 必须声明且只声明一个 resource role、一个闭合 allowed recipe set 和 recovery strategy；
+- 每个 concrete operation 必须且只能从该资源的 allowed set 选择一个 mutation recipe；
 - directory container 必须声明 child ownership，不得因 Wakeflow 创建目录就取得 descendants authority；
 - host-neutral family 不得从 host-only key 或 path 反推宿主；
 - unknown、multi-match 或 role/recipe 不相容均为 build-time error。
+
+Host Resource Profile只登记会改变matrix形状的静态surface：window identity、
+Pod evidence、keep-live、window locator、settings integration、statusline asset、
+activity monitor和temporary prompts。`realization`、readiness、close/revoke/activation、
+adapter、handle与live probe不进入本profile。共享parser只验证通用关系，不按
+`hostId`硬编码capability组合。
+
+当前Claude statusline asset由`node "<path>/statusline.mjs"`调用，是`0600`普通文件，
+不依赖POSIX executable bit。Host Resource Profile因此只声明该asset文件名；后续
+Claude catalog必须将其node policy明确为非可执行private file。
 
 <a id="resource-standard-convergence"></a>
 ## 13. 当前形态的收敛处置
@@ -364,7 +393,7 @@ extension bag、patch 或 callback registry。
 状态：`implemented`（尚未进入插件 cutover）。
 
 - 新 Ledger Requirement/Confirmation authority Store 闭合 immutable publish、reload、member reference 与 exact resolution；
-- Ledger publication journal 使用 canonical base64url 保存 bounded exact record/member bytes，可在没有原调用方输入时自主恢复；Demand Authority 只消费 Ledger 批量 canonical resolver，不重复实现 member closure；
+- Ledger publication 使用 per-record lock、compact metadata intent、private closed stage 与同设备 durable directory rename；intent 不复制 member payload，complete stage 可自主前向恢复，partial stage 由同一 exact publish 输入补齐；Demand Authority 只消费 Ledger 批量 canonical resolver，不重复实现 member closure；
 - Demand identity 绑定 JSON TODO intake lineage；mandatory authority 解析完整 Ledger role/testing/placement closure，删除旧 `entryMode`；
 - immutable append-commit collection 替代 JSONL，使用 typed `demand-event-commit` ID、连续 commitSequence、事件 revision 与 commit digest chain；
 - pure Decider/evolve 生成 uncommitted events 与 `DemandAggregateState`；stored envelope 位置字段只由 Command Handler/Store 分配；
@@ -407,7 +436,7 @@ extension bag、patch 或 callback registry。
 
 1. 新 TS runtime 不存在 Markdown 或 JSONL durable authority；
 2. 全部 standalone JSON 使用同一 deterministic pretty profile；
-3. 每个 concrete resource 恰好一个 family、role、representation、recipe、owner 和 recovery policy；
+3. 每个 concrete resource 恰好一个 family、role、representation、闭合 allowed recipe set、owner 和 recovery policy；每个 concrete operation 恰好选择一个被允许的 recipe；
 4. 所有 write-capable domain 只通过 foundation primitives effect 文件系统；
 5. projection、managed integration、manifested tree 与 external reference 的差异明确且不能互相冒充；
 6. TODO、Demand、Transport、Window、Pod、Ledger、Evidence、Archive、Host Runtime 和 Tooling 全部进入矩阵；
@@ -429,6 +458,15 @@ extension bag、patch 或 callback registry。
 | RHS-08 | Demand Core 采用有界完整 Event Sourcing；event stream 是可变状态唯一 authority，snapshot 是 derived checkpoint | `confirmed / RH-2-implemented` |
 | RHS-09 | Event Sourcing 仅用于 Demand Aggregate；其内部 Owner 共用一条 stream，其他资源按各自 role 处理 | `confirmed / RH-2-implemented` |
 | RHS-10 | snapshot 是按 commitSequence 的 immutable optimization；load 使用 snapshot + tail 且零写入，显式 maintenance 发布，audit 完整 replay | `confirmed / revised-after-review / RH-2-implemented` |
+| RHS-11 | resource declaration声明闭合allowed recipe set；每个operation只能选择一项；Matrix只做准入不执行effect | `confirmed / RH-3-processing-contract-implemented` |
+| RHS-12 | Workspace resource declaration使用逻辑root + portable relative path，显式声明family/owner/scope/tracking/privacy/node policy；零绝对路径、零filesystem effect；representation仍属于domain catalog | `confirmed / RH-3-declaration-contract-implemented` |
+| RHS-13 | Host Resource Profile只投影8类matrix-shaping surface；不包含realization/readiness或host effect，不按hostId硬编码capability；statusline asset不声明executable bit | `confirmed / RH-3-host-resource-profile-contract-implemented` |
+| RHS-14 | Codex宿主值由`src/hosts/codex`独立提供并经共享parser签发；identity/Pod/keep-live为适用资源表面，locator/settings/statusline/activity/temp不适用；不声明realization | `confirmed / RH-3-codex-profile-implemented` |
+| RHS-15 | Claude Code宿主值由`src/hosts/claude-code`独立提供并经共享parser签发；8类resource surface全部适用，settings与statusline只声明portable路径/文件名；不导入observer或effect | `confirmed / RH-3-claude-code-profile-implemented` |
+| RHS-16 | Config catalog只登记稳定可寻址的Config authority与Config专属lock；Foundation atomic stage由具体recipe产生并以target/input digest证明归属，不复制为全局path pattern | `confirmed / RH-3-config-catalog-implemented` |
+| RHS-17 | directory container区分静态`materialize-directory`与同根关闭stage的`exact-directory-publish`；后者不声明manifest或跨文件系统能力，existing target与recovery仍由domain owner证明 | `confirmed / RH-3-exact-directory-publish-contract-implemented` |
+| RHS-18 | TODO catalog分为5项稳定collection资源与按todoId生成的4项concrete item资源；item root使用`exact-directory-publish`，intake/state/journal保持独立role；domain/Foundation stages不进入catalog | `confirmed / RH-3-todo-catalog-implemented` |
+| RHS-19 | Ledger record以per-record lock + compact intent + private closed stage + same-device durable directory rename发布；durable authority使用0755/0644，transaction使用0700/0600；reader不被无关residue阻断，full-payload journal与旧测试已删除 | `confirmed / RH-3-ledger-publication-implemented` |
 
 <a id="resource-standard-sources"></a>
 ## 19. 主要事实来源
@@ -439,7 +477,16 @@ extension bag、patch 或 callback registry。
 - [当前 Demand records](../core/scripts/lib/wakeflow-demand-core-records.mjs) 与 [state transaction owner](../core/scripts/lib/wakeflow-demand-state-service.mjs)：JSONL validation、event/state relation、journal 顺序和整文件 event-log CAS 的旧行为基线。
 - [当前 managed content owner](../core/scripts/lib/wakeflow-managed-content.mjs)：marker、outside bytes、managed block、whole-file、stage 与 recovery 不可被 generic text region 取代的证据。
 - [新 Rooted filesystem](../src/foundation/filesystem/rooted-directory.ts)、[atomic file write](../src/foundation/filesystem/durable-atomic-file-write.ts) 与 [exclusive lock](../src/foundation/filesystem/rooted-exclusive-file-lock.ts)：已实现的底层 mechanical effect。
+- [关闭目录树候选](../src/foundation/filesystem/durable-directory-tree-candidate.ts) 与 [整体发布](../src/foundation/filesystem/durable-directory-tree-publication.ts)：same-root final-mode stage 的关闭计划、partial exact retry、稳定复验与单次 durable rename commit point。
+- [新 Resource Processing Contract](../src/foundation/resource/resource-processing-contract.ts)：七种resource role、闭合allowed recipe set、recovery strategy、directory container与单operation admission的Foundation合同。
+- [新 Workspace Resource Declaration](../src/workspace/workspace-resource-declaration.ts)：family、owner、scope、逻辑root placement、tracking/privacy、node policy与processing compatibility的纯数据合同。
+- [新 Host Resource Profile Contract](../src/workspace/workspace-host-resource-profile.ts)：仅对matrix形状有影响的宿主静态数据、portable path/component和通用关系合同。
+- [Codex Host Resource Profile](../src/hosts/codex/wakeflow-workspace-host-resource-profile.ts)：Codex宿主拥有的窄资源表面值，不含host effect或live capability结论。
+- [Claude Code Host Resource Profile](../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.ts)：Claude Code宿主的8类matrix-shaping resource surface静态值，不导入settings/lifecycle/observer实现。
+- [Config Resource Catalog](../src/configuration/wakeflow-config-resource-catalog.ts)：Config authority与领域短锁的稳定声明，直接复用已有Config path vocabulary。
+- [TODO Resource Catalog](../src/governance/todo/todo-resource-catalog.ts)：TODO collection稳定资源与per-item aggregate具体资源的冻结目录，复用TODO ID/storage-key/path owner。
+- [Ledger Resource Catalog](../src/governance/ledger/ledger-resource-catalog.ts)：长期Requirement/Confirmation roots、per-record aggregate/facts与private intent/lock的冻结目录；stage保持operation-scoped residue。
 - [新 Config Authority Snapshot](../src/configuration/wakeflow-config-authority-snapshot.ts)、[Artifact Tree Identity](../src/foundation/artifact/loaded-artifact-tree-identity.ts)、[TODO authority reader](../src/governance/todo/todo-collection-authority.ts) 与 [TODO collection service](../src/governance/todo/todo-collection-service.ts)：首批真实 consumer。
 - [Demand Decider](../src/governance/demand/event-sourcing/demand-event-sourcing-decider.ts)、[append commit](../src/governance/demand/event-sourcing/demand-event-stream-commit.ts)、[File Event Store](../src/governance/demand/event-sourcing/demand-file-event-store.ts)、[Repository](../src/governance/demand/event-sourcing/demand-event-sourcing-repository.ts) 与 [Publication process](../src/governance/demand/publication/demand-event-sourcing-publication-service.ts)：RH-2 command、event authority、snapshot-tail/full-audit、candidate recovery 和 TODO-backed publication 的实现。
 - [Microsoft Event Sourcing pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)、[Kurrent stream/append semantics](https://docs.kurrent.io/getting-started/concepts)、[Axon snapshotting](https://docs.axoniq.io/axon-framework-reference/development/snapshotting/) 与 [Git immutable object/ref CAS](https://git-scm.com/docs/gitdatamodel.html)：本轮根本重设计的外部标准依据。
-- [新 Ledger Authority Store](../src/governance/ledger/ledger-authority-store.ts) 与 [self-contained publication](../src/governance/ledger/ledger-record-publication.ts)：Demand mandatory Authority 的 Requirement/Confirmation immutable producer、批量 member resolver 与无调用方字节恢复。
+- [新 Ledger Authority Store](../src/governance/ledger/ledger-authority-store.ts)、[compact publication intent](../src/governance/ledger/ledger-record-publication-intent.ts) 与 [staged publisher](../src/governance/ledger/ledger-record-publisher.ts)：Demand mandatory Authority 的 Requirement/Confirmation immutable producer、批量 member resolver、per-record 隔离与关闭目录树整体发布。

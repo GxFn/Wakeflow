@@ -23,12 +23,12 @@ import {
 } from "../../../foundation/schema/runtime-json-schema.js";
 
 /**
- * Wakeflow Governance / Demand Model：Domain Event reducer 生成的纯 Aggregate state。
+ * Wakeflow Governance / Demand Model：领域事件归约器生成的纯聚合状态。
  *
- * 本状态不保存 stream revision、event tail、identity/authority digest 或更新时间；
- * 这些属于 Event Sourcing envelope/snapshot。RH-2 的业务 section 真实地表示“尚无
- * Tasking/Delivery/Result/Test/Review/Evidence/Pod 事实”，后续只由对应 Owner 事件
- * 和 reducer 扩展，不允许 generic patch。
+ * 本状态不保存事件流修订号、事件尾部、身份/权威关系摘要或更新时间；这些事实
+ * 属于事件溯源的持久化封装或快照。RH-2 的业务区段如实表示“尚无 Tasking、Delivery、
+ * Result、Test、Review、Evidence 或 Pod 事实”。后续只能由相应职责所有者的事件和
+ * 归约器扩展，不允许使用通用补丁修改。
  */
 
 export const DEMAND_AGGREGATE_STATE_ARTIFACT_KIND =
@@ -159,7 +159,7 @@ export function parseDemandAggregateState(
   return freezeState(result.value, demandId);
 }
 
-/** publication.demand-published.v1 唯一允许创建的初始业务状态。 */
+/** `publication.demand-published.v1` 唯一允许创建的初始业务状态。 */
 export function createInitialDemandAggregateState(
   demandIdValue: unknown,
 ): Readonly<DemandAggregateState> {

@@ -16,7 +16,7 @@ import {
   type DemandEventSourcingPublicationTodoResult,
 } from "./demand-event-sourcing-publication-contract.js";
 
-/** Demand publication 与 TODO authority 的 exact predecessor/mount closure。 */
+/** Demand 发布与 TODO 权威事实之间的精确前序状态和挂载关系验证。 */
 
 export async function inspectTodoForDemandPublication(
   root: RootedDirectory,

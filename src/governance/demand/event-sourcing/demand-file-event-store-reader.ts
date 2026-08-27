@@ -59,7 +59,7 @@ import {
   type DemandFileEventStoreTailReadResult,
 } from "./demand-file-event-store-contract.js";
 
-/** Demand File Event Store 的稳定 commit inventory/read seam。 */
+/** Demand 文件事件存储的稳定提交清单与读取边界。 */
 
 const COMMIT_READ_CONCURRENCY = 8;
 
@@ -429,12 +429,12 @@ export async function readDemandFileEventCommitAt(
 }
 
 /**
- * 在任何 candidate effect 前验证完整 bounded prefix 与下一 append 的准入关系。
+ * 在候选资源产生任何副作用前，验证完整有界前缀与下一次追加的准入关系。
  *
- * commitId/eventId 是 immutable stream identity，sourceExpectation 则把进程内 state
- * 绑定到 persisted tail；两者都不能只留给事后 audit。当前 stream 总量硬上限为
- * 64 MiB，因此先以完整 prefix 验证换取正确性；未来若增加派生 identity index，它仍
- * 必须由同一 commit authority 重建并保持此函数的 fail-closed 语义。
+ * `commitId`、`eventId` 是不可变事件流身份，`sourceExpectation` 则把进程内状态绑定到
+ * 持久化尾部；两者都不能只留给事后审计。当前事件流总量硬上限为
+ * 64 MiB，因此当前通过验证完整前缀保证正确性；未来若增加派生身份索引，它仍
+ * 必须由同一提交权威重建，并保持本函数遇到不确定状态时保守拒绝的语义。
  */
 export async function assertDemandFileEventAppendAdmission(
   root: RootedDirectory,

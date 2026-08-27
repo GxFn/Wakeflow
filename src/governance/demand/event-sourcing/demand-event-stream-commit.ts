@@ -78,10 +78,10 @@ import {
 } from "./demand-event-stream-position.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：一次原子 append 的 immutable commit。
+ * Wakeflow Governance / Demand Event Sourcing：一次原子追加产生的不可变提交记录。
  *
- * commitSequence 是物理 no-replace 槽位；stream revision 是其中事件的逻辑位置。
- * commit 可以承载一个 command 产生的多个事件，并以 previousCommitDigest 串联历史。
+ * `commitSequence` 是不替换目标的物理槽位；事件流修订号是提交中事件的逻辑位置。
+ * 一条提交记录可以承载一个命令产生的多个事件，并通过 `previousCommitDigest` 串联历史。
  */
 
 export const DEMAND_EVENT_STREAM_COMMIT_ARTIFACT_KIND =
@@ -106,7 +106,7 @@ export interface DemandEventStreamCommit {
   ];
 }
 
-/** prepared append 对 exact physical prefix 的进程内、非持久化来源 expectation。 */
+/** 已准备追加操作对指定物理前缀的进程内、非持久化源资源预期。 */
 export interface DemandEventStreamAppendSourceExpectation {
   readonly lastEventDigest: Sha256Digest | null;
   readonly stateDigest: Sha256Digest | null;
@@ -235,7 +235,7 @@ function parseDemandId(
   }
 }
 
-/** commitSequence 的固定宽度文件名；文件名不再包含 eventId。 */
+/** `commitSequence` 对应的固定宽度文件名；文件名不再包含 `eventId`。 */
 export function formatDemandEventStreamCommitFileName(value: unknown): string {
   const sequence = parseDemandEventCommitSequence(value);
   return `${String(sequence).padStart(16, "0")}.json`;
@@ -257,7 +257,7 @@ Readonly<{ readonly commitSequence: DemandEventCommitSequence; readonly fileName
   return Object.freeze({ commitSequence, fileName: value });
 }
 
-/** 只验证 commit 自身结构与序列关系，不替代 reducer 语义验证。 */
+/** 只验证提交记录自身的结构和序列关系，不替代归约器语义验证。 */
 export function parseDemandEventStreamCommit(
   value: unknown,
 ): Readonly<DemandEventStreamCommit> {
@@ -422,10 +422,10 @@ function parsePrepareInput(
 }
 
 /**
- * 把 commit 确定性应用到 exact current aggregate。
+ * 把提交记录确定性应用到指定的当前聚合。
  *
- * 本函数在任何文件 effect 前执行，也用于磁盘读取和 full audit；因此语义非法的
- * candidate 不能先成为 immutable commit 再由后置 replay 发现。
+ * 本函数在任何文件副作用前执行，也用于磁盘读取和完整审计；因此语义非法的
+ * 候选资源不能先成为不可变提交记录，再由后置重放发现错误。
  */
 export function applyDemandEventStreamCommit(
   currentValue: unknown,
@@ -516,11 +516,11 @@ export function applyDemandEventStreamCommit(
 }
 
 /**
- * 只接纳本进程经过完整 evolve 签发的 prepared capability。
+ * 只接纳本进程经过完整状态演进后签发的预备提交能力。
  *
- * 磁盘 commit、journal JSON 或调用方自造 prepared record 不能直接获得 append
- * authority。签发结果还携带 sourceExpectation，供 Store 绑定 exact physical tail；
- * 进程重启后的 recovery 必须重新执行 command/decider preparation。
+ * 磁盘提交记录、恢复意图 JSON 或调用方自行构造的准备记录不能直接获得追加权限。
+ * 签发结果还携带 `sourceExpectation`，供事件存储绑定指定物理尾部；进程重启后的
+ * 恢复流程必须重新执行命令和决策准备。
  */
 export function assertPreparedDemandEventStreamCommit(
   value: unknown,
@@ -536,7 +536,7 @@ export function assertPreparedDemandEventStreamCommit(
   }
 }
 
-/** 从当前 aggregate 与一个 command 的全部 uncommitted events 准备完整 commit。 */
+/** 根据当前聚合和一条命令产生的全部未提交事件准备完整提交记录。 */
 export function prepareDemandEventStreamCommit(
   currentValue: unknown,
   inputValue: unknown,

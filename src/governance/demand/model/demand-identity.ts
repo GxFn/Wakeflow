@@ -57,11 +57,11 @@ import {
 } from "../../todo/todo-intake-lineage.js";
 
 /**
- * Wakeflow Governance / Demand Model：Event Sourced Aggregate 的不可变 Identity。
+ * Wakeflow Governance / Demand Model：事件溯源聚合的不可变身份记录。
  *
- * Identity 固定 Demand 的目标、类型、TODO intake lineage 与 execution placement；
- * 它不是 event、snapshot 或 mutable state。所有正常 Demand 必须在 publication 时与
- * mandatory Authority 一起创建，之后不能被 Event Sourcing Store 替换。
+ * 身份记录固定 Demand 的目标、类型、TODO 接收来源引用和执行位置；它不是事件、
+ * 快照或可变状态。所有正常 Demand 必须在发布时与必需的权威关系记录一起创建，之后
+ * 不能被事件存储替换。
  */
 
 export const DEMAND_IDENTITY_ARTIFACT_KIND =
@@ -233,7 +233,7 @@ function normalizeWire(
   });
 }
 
-/** 解析任意内存值为 immutable Demand identity。 */
+/** 把任意内存值解析为不可变 `DemandIdentity`。 */
 export function parseDemandIdentity(value: unknown): Readonly<DemandIdentity> {
   let json: JsonValue;
   try {
@@ -266,7 +266,7 @@ function readCreationTime(options: CreateDemandIdentityOptions): UtcInstant {
   }
 }
 
-/** 从不含协议头和时间的关闭 draft 创建 Demand identity。 */
+/** 从不含协议头和时间、字段集合严格受限的草稿创建 `DemandIdentity`。 */
 export function createDemandIdentity(
   draft: unknown,
   options: CreateDemandIdentityOptions = {},

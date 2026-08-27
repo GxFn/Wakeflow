@@ -22,11 +22,11 @@ import {
 } from "./todo-state.js";
 
 /**
- * Wakeflow Governance / TODO：完整 item inventory 的确定性 collection snapshot。
+ * Wakeflow Governance / TODO：完整条目清单的确定性集合快照。
  *
- * 每个 item 由 immutable intake 与唯一 current state 组成；本文件关闭 ID 关联、storage
- * key、重复 item、确定排序和 collection digest。它不枚举文件系统、不持有 collection
- * lock，也不把 Markdown projection 当作 snapshot 输入。
+ * 每个条目由不可变 Intake 和唯一当前 State 组成。本模块验证 ID 关联、存储键、重复
+ * 条目、确定性排序和集合摘要。它不枚举文件系统、不持有集合锁，也不把 Markdown
+ * 投影作为快照输入。
  */
 
 export const TODO_COLLECTION_SNAPSHOT_KIND =
@@ -139,7 +139,7 @@ function digestBasis(items: readonly Readonly<TodoCollectionItem>[]): JsonValue 
   } as JsonValue;
 }
 
-/** 从一组 intake/state pair 生成完整、排序、冻结 collection snapshot。 */
+/** 从一组 Intake/State 配对生成完整、排序且冻结的集合快照。 */
 export function createTodoCollectionSnapshot(
   value: unknown,
 ): Readonly<TodoCollectionSnapshot> {

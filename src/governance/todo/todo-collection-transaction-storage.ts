@@ -97,12 +97,12 @@ import {
 } from "./todo-transaction.js";
 
 /**
- * Wakeflow Governance / TODO：collection transaction 的领域专属物理执行层。
+ * Wakeflow Governance / TODO：集合事务的领域专属物理执行层。
  *
- * 本文件只消费已验证 TODO intake/state/transaction 与固定 TODO refs，执行 journal、
- * stage、exact-source replace、projection publish 和恢复。公共输入、状态选择、
- * collection lock critical section 与结果语义仍只由 `todo-collection-service` 拥有；
- * 本模块不是通用 repository、storage backend 或第二个 authority owner。
+ * 本模块只使用已经验证的 TODO 接收记录、状态、事务记录和固定 TODO 引用，执行
+ * 恢复意图持久化、暂存、基于精确源预期的替换、投影发布和恢复。公共输入、状态选择、
+ * 集合锁临界区和结果语义仍只由 `todo-collection-service` 负责；本模块不是通用
+ * 通用仓储、存储后端或第二个权威职责所有者。
  */
 
 export const TODO_TRANSACTION_MAXIMUM_BYTES = parseByteCount(1024 * 1024);
@@ -626,7 +626,7 @@ async function ensureStateTarget(
   return true;
 }
 
-/** 从完整 authority snapshot 幂等发布当前 Markdown projection。 */
+/** 从完整权威快照幂等发布当前 Markdown 投影。 */
 export async function publishTodoBoardProjection(
   root: RootedDirectory,
   snapshot: Readonly<TodoCollectionAuthoritySnapshot>,
@@ -722,7 +722,7 @@ async function applyTransaction(
   return Object.freeze({ snapshot: settled, wroteAuthority, wroteProjection });
 }
 
-/** 在已持有 collection lock 时创建 journal 并前向应用一次领域 transaction。 */
+/** 在已经持有集合锁时创建恢复意图记录，并前向应用一次领域事务。 */
 export async function commitTodoCollectionTransaction(
   root: RootedDirectory,
   operation: TodoTransactionOperation,
@@ -746,8 +746,8 @@ export async function commitTodoCollectionTransaction(
 }
 
 /**
- * immutable journal 可稳定解析后，才允许显式退休同一 collection 的 inactive-owner
- * lock。普通 mutation 不调用本 seam，也不会根据 age/PID 自动删除 lock。
+ * 只有不可变恢复意图记录可以稳定解析后，才允许显式退休同一集合中持有者已经失活的
+ * 锁文件。普通变更操作不调用本入口，也不会根据存在时长或进程号自动删除锁文件。
  */
 export async function prepareTodoCollectionTransactionRecovery(
   root: RootedDirectory,
@@ -804,7 +804,7 @@ export async function prepareTodoCollectionTransactionRecovery(
   }
 }
 
-/** 在已重新取得 collection lock 后，幂等完成一个已存在的 journal。 */
+/** 重新取得集合锁后，幂等完成已有恢复意图记录描述的事务。 */
 export async function recoverTodoCollectionTransactionUnderLock(
   root: RootedDirectory,
   todoId: TodoItemId,

@@ -37,13 +37,13 @@ import {
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的一层稳定目录读取。
  *
- * 本文件对根目录或一个根内 resource directory 执行 no-follow handle 复验、
- * 两次有界流式枚举、两次子节点 lstat 和最终目录/root 复验。返回项使用确定的
- * code-unit 次序，并携带可继续交给根作用域能力使用的 PortableResourcePath。
+ * 本模块对根目录或根目录内的资源目录执行不跟随符号链接的句柄复验、两次有界流式
+ * 枚举、两次子节点 `lstat`，以及最终目录和根目录复验。返回项按确定的 UTF-16
+ * 代码单元顺序排列，并携带可继续交给根作用域能力使用的 `PortableResourcePath`。
  *
- * 本层不递归、不读取文件内容、不相信 Dirent 类型、不跟随子 symlink，也不决定
- * special node、mode、owner、hardlink、case collision、过滤或领域目录结构策略。
- * Node 没有暴露 openat/openat2；pathname 竞态边界与 RootedDirectory 相同。
+ * 本层不递归、不读取文件内容、不信任 `Dirent` 类型、不跟随子符号链接，也不决定
+ * 特殊节点、权限位、所有者、硬链接、大小写冲突、过滤或领域目录结构策略。
+ * Node.js 未暴露 `openat` 或 `openat2`；路径名竞态边界与 `RootedDirectory` 相同。
  */
 
 export interface StableDirectoryReadOptions {
@@ -64,7 +64,7 @@ export interface StableDirectoryEntry {
  * 一次稳定目录读取的冻结结果。
  *
  * `directoryResourcePath === null` 明确表示 RootedDirectory 自身；它不是可持久化
- * wire path，也不会用空字符串或 `.` 冒充 PortableResourcePath。
+ * 持久化路径，也不会用空字符串或 `.` 冒充 `PortableResourcePath`。
  */
 export interface StableDirectoryReadResult<
   DirectoryResourcePath extends PortableResourcePath | null =
@@ -112,8 +112,8 @@ const ERROR_MESSAGES = {
 /**
  * 稳定目录读取的公共错误。
  *
- * 错误不回显物理路径、resource ref、目录项名称、节点元数据、限制值、系统调用、
- * Abort reason 或 Node cause。
+ * 错误不回显物理路径、资源引用、目录项名称、节点元数据、限制值、系统调用、
+ * 取消原因或 Node.js 底层原因。
  */
 export class StableDirectoryReadError extends Error {
   override readonly name = "StableDirectoryReadError";
@@ -143,7 +143,7 @@ interface DirectoryTarget<
   readonly errorPath: "$root" | "$resourcePath";
 }
 
-/** 单次目录 entry lstat 的内部固定并发上限，不属于公共 API。 */
+/** 单次目录项 `lstat` 使用的内部固定并发上限，不属于公开 API。 */
 const STABLE_DIRECTORY_LSTAT_CONCURRENCY = 8;
 
 function fail(
@@ -634,7 +634,7 @@ export async function readStableRootDirectory(
   return readStableDirectory(root, target, parsed);
 }
 
-/** 稳定读取 RootedDirectory 内一个已存在 resource directory 的直属目录项。 */
+/** 稳定读取 `RootedDirectory` 内一个已有资源目录的直属目录项。 */
 export async function readStableResourceDirectory(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,

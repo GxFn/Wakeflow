@@ -29,7 +29,7 @@ import type {
   DemandEventSourcingPersistedEventEnvelope,
 } from "./demand-event-sourcing-persisted-event-envelope.js";
 
-/** Demand Event Sourcing 各事件家族的 persisted-version codec 与 current writer。 */
+/** Demand 事件溯源各事件家族的持久化版本编解码器和当前版本写入器。 */
 
 export const DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS = Object.freeze({
   "publication.demand-published": 1,
@@ -95,7 +95,7 @@ export function isDemandEventSourcingCurrentEventType(
     && Object.hasOwn(DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS, value);
 }
 
-/** 把 persisted envelope 的 data 演进并投影成 reducer 接受的 current event。 */
+/** 把持久化事件封装中的数据演进并投影为归约器接受的当前事件。 */
 export function decodeDemandEventSourcingPersistedEvent(
   envelope: Readonly<DemandEventSourcingPersistedEventEnvelope>,
 ): Readonly<DemandUncommittedEvent> {
@@ -118,7 +118,7 @@ export function decodeDemandEventSourcingPersistedEvent(
   });
 }
 
-/** Current writer 永远只编码事件家族登记的 latest persisted version。 */
+/** 当前版本写入器永远只编码事件家族登记的最新持久化版本。 */
 export function encodeCurrentDemandEventVersion(
   value: unknown,
 ): Readonly<EncodedCurrentDemandEventVersion> {

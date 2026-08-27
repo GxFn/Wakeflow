@@ -6,9 +6,10 @@ import nodePath from "node:path";
 /**
  * Wakeflow Tooling / Testing：由当前 `.test.ts` 源清单启动编译后测试。
  *
- * TypeScript incremental build 不会自动删除已经移除源文件的旧 `.build/tests/*.js`；
- * 因此测试门不能 glob 编译目录。本入口只枚举当前 tests source、映射 exact output、
- * 复验普通文件并把清单交给 Node test runner，旧输出不会被误执行或维持假覆盖。
+ * TypeScript 增量构建不会自动删除源文件移除后遗留的 `.build/tests/*.js`，因此测试门
+ * 不能使用 glob 枚举编译目录。本入口只枚举当前测试源文件、映射对应的编译输出、
+ * 复验普通文件并把清单交给 Node.js 测试运行器。旧输出不会被误执行，也不会维持
+ * 虚假的测试覆盖。
  */
 
 const MAXIMUM_TEST_FILES = 512;

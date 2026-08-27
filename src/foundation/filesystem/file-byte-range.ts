@@ -10,31 +10,31 @@ import {
 } from "../numeric/byte-count.js";
 
 /**
- * Wakeflow Foundation / Filesystem：文件内 byte offset 与半开 byte range。
+ * Wakeflow Foundation / Filesystem：文件字节偏移量与半开字节区间。
  *
- * 本文件把非负安全整数位置与 ByteCount 长度组合为 `[offset, endExclusive)`。
- * FileByteOffset 使用独立品牌，防止 TypeScript 把“字节数量”误当成“文件位置”；
+ * 本模块把非负安全整数位置与 `ByteCount` 长度组合为 `[offset, endExclusive)`。
+ * `FileByteOffset` 使用独立品牌类型，防止 TypeScript 把“字节数量”误当成“文件位置”；
  * 所有公开操作仍会重新执行运行时准入，品牌不能绕过范围或一致性检查。
  *
- * 本层不打开文件、不分配 range bytes、不解释 UTF-8/行/marker，也不把一个 range
- * 绑定到某个文件版本。文件大小边界只由显式 assert 函数检查。
+ * 本层不打开文件、不分配区间字节、不解释 UTF-8、行或标记，也不把区间绑定到某个
+ * 文件版本。文件大小边界只由显式断言函数检查。
  */
 
 declare const FILE_BYTE_OFFSET_BRAND: unique symbol;
 
-/** 已验证为非负安全整数的文件绝对 byte offset。 */
+/** 已验证为非负安全整数的文件绝对字节偏移量。 */
 export type FileByteOffset = number & {
   readonly [FILE_BYTE_OFFSET_BRAND]: "FileByteOffset";
 };
 
-/** 冻结、内部一致的半开文件 byte range。 */
+/** 冻结且内部一致的半开文件字节区间。 */
 export interface FileByteRange {
   readonly offset: FileByteOffset;
   readonly length: ByteCount;
   readonly endExclusive: FileByteOffset;
 }
 
-/** file byte range 准入、算术或文件边界失败分类。 */
+/** 文件字节区间准入、算术或文件边界失败分类。 */
 export type FileByteRangeErrorReason =
   | "offset-range"
   | "length-range"
@@ -55,9 +55,9 @@ const ERROR_MESSAGES = {
 } as const satisfies Readonly<Record<FileByteRangeErrorReason, string>>;
 
 /**
- * file byte range 的稳定错误。
+ * 文件字节区间的稳定错误。
  *
- * 错误只暴露分类与结构路径，不回显 offset、length、end 或文件大小。
+ * 错误只暴露分类与结构路径，不回显偏移量、长度、结束位置或文件大小。
  */
 export class FileByteRangeError extends Error {
   override readonly name = "FileByteRangeError";
@@ -157,7 +157,7 @@ function parseCompleteRange(
   return created;
 }
 
-/** 严格解析一个文件 absolute byte offset。 */
+/** 严格解析文件绝对字节偏移量。 */
 export function parseFileByteOffset(
   value: unknown,
   errorPath?: string,
@@ -169,7 +169,7 @@ export function parseFileByteOffset(
 }
 
 /**
- * 从已声明语义的 offset 与 length 创建半开 range，并重新验证两个品牌输入。
+ * 从已声明语义的偏移量与长度创建半开区间，并重新验证两个品牌输入。
  */
 export function createFileByteRange(
   offset: FileByteOffset,
@@ -184,7 +184,7 @@ export function createFileByteRange(
 }
 
 /**
- * 从 exact `{ offset, length }` 被动数据记录解析 range。
+ * 从字段集合严格受限的 `{ offset, length }` 纯数据记录解析字节区间。
  *
  * 调用方不能提供 endExclusive；它始终由已验证算术唯一派生。
  */
@@ -208,9 +208,9 @@ export function parseFileByteRange(
 }
 
 /**
- * 重新验证 range 与 fileByteCount，并断言整个半开区间位于文件内。
+ * 重新验证字节区间与 `fileByteCount`，并断言整个半开区间位于文件内。
  *
- * 零长度 range 可位于 EOF；offset 大于 EOF 即使长度为零也会失败。
+ * 零长度区间可以位于 EOF；偏移量大于 EOF 时，即使长度为零也会失败。
  */
 export function assertFileByteRangeWithin(
   range: FileByteRange,

@@ -41,20 +41,20 @@ import {
 /**
  * Wakeflow Foundation / Artifact：已加载制品目录树的位置无关内容身份。
  *
- * 本文件把 StableResourceTreeRead 提供的物理内容事实转换为与当前 v1 协议兼容的
- * manifest 和 tree digest。物理 inode、owner、mtime/ctime 只参与整树观察复验，
- * 不进入位置无关内容身份；manifest 只包含 ref、字节数、摘要和 executable bit。
+ * 本模块把 `StableResourceTreeRead` 提供的物理内容事实转换为与当前 v1 协议兼容的
+ * 清单和目录树摘要。物理 inode、所有者、修改时间和状态变更时间只参与整树复验，
+ * 不进入位置无关的内容身份；清单只包含引用、字节数、摘要和可执行权限事实。
  *
- * symlink、special node、非 NFC ref 和 portable case collision 全部 fail closed。
- * 结构预算、文件预算和观察期间的来源漂移由底层稳定资源树能力证明；本结果仍不
- * 替代 release provenance、宿主激活或迁移 authority。
+ * 遇到符号链接、特殊节点、非 NFC 引用或跨平台大小写冲突时，模块会保守拒绝。
+ * 底层稳定目录树能力负责证明结构预算、文件预算和观察期间的来源未漂移。本结果
+ * 不能替代发布来源证明、宿主激活证明或迁移授权。
  */
 
 export const LOADED_ARTIFACT_TREE_MANIFEST_VERSION = 1 as const;
 export const LOADED_ARTIFACT_TREE_MANIFEST_KIND =
   "wakeflow-loaded-artifact-tree" as const;
 
-/** 与当前受支持 manifest v1 保持一致的不可放宽安全预算。 */
+/** 与当前支持的清单 v1 保持一致、不得放宽的安全预算。 */
 export const LOADED_ARTIFACT_TREE_IDENTITY_LIMITS = Object.freeze({
   maxDepth: 64,
   maxEntries: 8192,

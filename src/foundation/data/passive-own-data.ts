@@ -1,17 +1,16 @@
 import { types } from "node:util";
 
 /**
- * Wakeflow Foundation / Data：被动自有数据读取。
+ * Wakeflow Foundation / Data：无副作用地读取自有数据属性。
  *
- * 本文件为后续规范化、摘要和协议解析提供最底层的结构准入能力：只通过
- * Proxy 检测、原型检查和属性描述符读取数据，绝不执行对象上的 getter、
- * setter、toJSON 或其他用户代码。
+ * 本模块为后续规范化、摘要和协议解析提供最底层的结构准入能力。它只通过代理检测、
+ * 原型检查和属性描述符读取数据，绝不执行对象上的访问器、`toJSON` 或其他用户代码。
  *
  * 这里负责验证并复制容器的第一层结构；不负责递归验证、业务字段必填性、
  * JSON 兼容性、规范化排序或深冻结。上层能力必须继续验证这里返回的成员值。
  */
 
-/** 被动读取失败的稳定分类，供上层把结构错误映射到自己的协议错误。 */
+/** 无副作用属性读取失败的稳定分类，供上层映射为自己的协议错误。 */
 export type PassiveOwnDataErrorReason =
   | "proxy"
   | "value-type"
@@ -40,7 +39,7 @@ const ERROR_MESSAGES = {
 } as const satisfies Readonly<Record<PassiveOwnDataErrorReason, string>>;
 
 /**
- * 被动自有数据读取的稳定错误。
+ * 自有数据属性读取失败时返回的稳定错误。
  *
  * 错误只暴露能力代码、失败分类和结构路径，不把成员值写入消息，避免错误日志
  * 意外携带令牌、提示词或其他业务数据。
@@ -79,8 +78,8 @@ function isObjectOrFunction(value: unknown): value is object {
 }
 
 /**
- * Proxy 必须在任何反射操作之前拒绝；Node.js 的原生检测不会触发代理陷阱。
- * 选择器把代理归入选择器错误，普通输入则保留独立的 proxy 分类。
+ * 必须在任何反射操作之前拒绝 Proxy；Node.js 的原生检测不会触发代理陷阱。
+ * 选择器把代理输入归为选择器错误，普通输入则保留独立的 `proxy` 分类。
  */
 function rejectProxy(
   value: unknown,
@@ -246,7 +245,7 @@ export function pickOwnDataProperties<const Keys extends readonly string[]>(
     const member = readEnumerableDataValue(descriptor, ownPath);
     defineSnapshotProperty(snapshot, key, member);
   }
-  // selection 已验证为 Keys 的稠密字符串成员；此处只恢复编译器无法保留的键映射。
+  // selection 已经验证为 Keys 的稠密字符串成员；此处只恢复编译器无法保留的键映射。
   return Object.freeze(snapshot) as Readonly<
     Partial<Record<Keys[number], unknown>>
   >;

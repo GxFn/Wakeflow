@@ -49,12 +49,12 @@ import {
 } from "./todo-item-id.js";
 
 /**
- * Wakeflow Governance / TODO：创建后不可变的 TODO intake authority codec。
+ * Wakeflow Governance / TODO：创建后不可变的 TODO Intake 权威记录编解码器。
  *
- * Intake 保存来源意图、职责、测试决定和文档引用；当前 status、demand mount、revision
- * 与 archive receipt 明确属于 TodoState。Schema 关闭 portable shape，本文件补充 typed
- * window ID、Unicode、testing mode/type 关系、documents 唯一性、固定字段顺序、确定性
- * pretty bytes 和 canonical semantic digest。
+ * 接收记录保存来源意图、职责、测试决定和文档引用；当前状态、Demand 挂载、修订号和
+ * 归档回执明确属于 `TodoState`。Schema 限制可移植结构，本模块补充类型化窗口 ID、
+ * Unicode、测试模式与类型关系、文档唯一性、固定字段顺序、确定性格式化字节和
+ * Canonical JSON 语义摘要。
  */
 
 export const TODO_INTAKE_ARTIFACT_KIND = "wakeflow-todo-intake" as const;
@@ -127,7 +127,7 @@ const ERROR_MESSAGES = {
   "representation": "TODO intake bytes are not its deterministic domain representation.",
 } as const satisfies Readonly<Record<TodoIntakeErrorReason, string>>;
 
-/** TODO intake 准入、关系或 representation 失败的稳定、脱敏错误。 */
+/** TODO Intake 准入、关系或持久化表示验证失败时返回的稳定、脱敏错误。 */
 export class TodoIntakeError extends Error {
   override readonly name = "TodoIntakeError";
   readonly code = "wakeflow-todo-intake" as const;
@@ -300,7 +300,7 @@ export function parseTodoIntake(value: unknown): Readonly<TodoIntake> {
   return normalizeWire(result.value);
 }
 
-/** 从不含时间/协议头的被动 draft 创建一个规范化 intake。 */
+/** 从不含时间和协议头的纯数据草稿创建规范化接收记录。 */
 export function createTodoIntake(
   draft: unknown,
   options: CreateTodoIntakeOptions = {},
@@ -349,12 +349,12 @@ export function createTodoIntake(
   });
 }
 
-/** 渲染唯一字段顺序和 deterministic pretty bytes。 */
+/** 渲染具有唯一字段顺序的确定性美化 JSON 字节。 */
 export function renderTodoIntake(intake: unknown): string {
   return renderDeterministicJsonDocument(parseTodoIntake(intake), "$intake");
 }
 
-/** 解析磁盘文档并拒绝领域字段顺序或 pretty representation 漂移。 */
+/** 解析磁盘文档，并拒绝领域字段顺序或格式化表示发生漂移。 */
 export function parseTodoIntakeDocument(text: unknown): Readonly<TodoIntake> {
   let json: JsonValue;
   try {
@@ -370,7 +370,7 @@ export function parseTodoIntakeDocument(text: unknown): Readonly<TodoIntake> {
   return intake;
 }
 
-/** 计算 intake 的 canonical semantic digest，不绑定 pretty bytes。 */
+/** 计算 Intake 的 Canonical JSON 语义摘要，不绑定格式化字节。 */
 export function computeTodoIntakeDigest(intake: unknown): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
     parseTodoIntake(intake) as unknown as JsonValue,

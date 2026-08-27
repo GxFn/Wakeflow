@@ -56,12 +56,11 @@ import {
 } from "./todo-item-id.js";
 
 /**
- * Wakeflow Governance / TODO：TODO item 的唯一可变状态快照与前向转换。
+ * Wakeflow Governance / TODO：TODO 条目的唯一可变状态快照与前向转换。
  *
- * revision 1 从 immutable intake 创建；后续状态保存 previousStateDigest。Claim 绑定
- * demand mount，Archive 只从 exact claimed state 创建 `archived` 终态并写入业务归档
- * receipt。领域 transaction 负责锁、journal、磁盘 exact-source replace 和 projection，
- * 本文件保持纯函数。
+ * 修订 1 从不可变接收记录创建；后续状态保存 `previousStateDigest`。领取操作绑定 Demand
+ * 挂载；Archive 只能从指定的已申领状态创建 `archived` 终态，并写入业务归档回执。
+ * 领域事务负责互斥锁、恢复意图、磁盘条件替换和投影发布，本模块保持为纯函数。
  */
 
 export const TODO_STATE_ARTIFACT_KIND = "wakeflow-todo-state" as const;
@@ -95,7 +94,7 @@ export interface TodoArchiveReceipt {
   readonly archivedAt: UtcInstant;
 }
 
-/** BusinessArchive owner 交给 TODO owner 的完整归档授权。 */
+/** BusinessArchive 职责所有者交给 TODO 职责所有者的完整归档授权。 */
 export type TodoArchiveAuthorizationReceipt = Readonly<
   Omit<TodoArchiveReceipt, "archivedAt">
 >;
@@ -143,7 +142,7 @@ const ERROR_MESSAGES = {
   "representation": "TODO state bytes are not its deterministic domain representation.",
 } as const satisfies Readonly<Record<TodoStateErrorReason, string>>;
 
-/** TODO state 准入、关系、转换或 representation 失败的稳定错误。 */
+/** TODO State 准入、关系、转换或持久化表示验证失败时返回的稳定错误。 */
 export class TodoStateError extends Error {
   override readonly name = "TodoStateError";
   readonly code = "wakeflow-todo-state" as const;
@@ -332,7 +331,7 @@ function parseTodoId(value: unknown, path: string): TodoItemId {
   }
 }
 
-/** 解析任意内存值为规范化 TODO state。 */
+/** 把任意内存值解析为规范化 TODO 状态。 */
 export function parseTodoState(value: unknown): Readonly<TodoState> {
   let json: JsonValue;
   try {
@@ -346,7 +345,7 @@ export function parseTodoState(value: unknown): Readonly<TodoState> {
   return normalizeWireState(result.value);
 }
 
-/** 解析 public/domain claim 使用的精确 demand mount。 */
+/** 解析公开接口与领域领取流程使用的精确 Demand 挂载关系。 */
 export function parseTodoDemandMount(value: unknown): Readonly<TodoDemandMount> {
   let record: Readonly<Record<string, unknown>>;
   try {
@@ -400,7 +399,7 @@ function readTransitionClock(options: TodoStateTransitionOptions): UtcInstant {
   return readUtcWallClock(record.clock as UtcWallClock | undefined);
 }
 
-/** 从 exact pending-claim state 纯计算 claimed state。 */
+/** 从指定的待领取状态纯计算已领取状态。 */
 export function claimTodoState(
   currentValue: unknown,
   mountValue: unknown,
@@ -424,7 +423,7 @@ export function claimTodoState(
   });
 }
 
-/** 从 exact claimed state 和 BusinessArchive receipt 纯计算 archived state。 */
+/** 从指定的已领取状态和 Business Archive 回执纯计算已归档状态。 */
 export function archiveTodoState(
   currentValue: unknown,
   receiptValue: unknown,
@@ -503,7 +502,7 @@ export function renderTodoState(state: unknown): string {
   return renderDeterministicJsonDocument(parseTodoState(state), "$state");
 }
 
-/** 解析磁盘 state 文档并拒绝领域顺序或 representation 漂移。 */
+/** 解析磁盘 State 文档，并拒绝领域顺序或持久化表示发生漂移。 */
 export function parseTodoStateDocument(text: unknown): Readonly<TodoState> {
   let json: JsonValue;
   try {
@@ -519,7 +518,7 @@ export function parseTodoStateDocument(text: unknown): Readonly<TodoState> {
   return state;
 }
 
-/** 计算 state canonical semantic digest。 */
+/** 计算 State 的 Canonical JSON 语义摘要。 */
 export function computeTodoStateDigest(state: unknown): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
     parseTodoState(state) as unknown as JsonValue,

@@ -14,11 +14,11 @@ import {
 } from "./demand-event-sourcing-persisted-event-envelope.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：persisted event version evolution。
+ * Wakeflow Governance / Demand Event Sourcing：持久化事件的版本演进与升版转换。
  *
- * Envelope admission、事件家族 codec、逐级 Registry 与 current event projection 依次
- * 执行。未知 type/version 在 reducer 前失败；本模块不修改 persisted bytes/digest，
- * 不读取文件或 Snapshot，也不承担 state-model version 的历史摘要验证。
+ * 处理顺序依次为事件封装准入、事件家族编解码、逐级版本注册表转换和当前事件模型
+ * 投影。未知类型或版本会在归约器执行前失败。本模块不修改持久化字节或摘要、不读取
+ * 文件或快照，也不承担状态模型版本的历史摘要验证。
  */
 
 export type DemandEventSourcingUpcasterErrorReason =
@@ -58,7 +58,7 @@ function fail(reason: DemandEventSourcingUpcasterErrorReason, path: string): nev
   throw new DemandEventSourcingUpcasterError(reason, path);
 }
 
-/** 把任一受支持 persisted version 转换成当前 reducer event。 */
+/** 把任一受支持的持久化版本转换为当前归约器事件。 */
 export function upcastDemandEventSourcingStoredEvent(
   value: unknown,
 ): Readonly<DemandUncommittedEvent> {

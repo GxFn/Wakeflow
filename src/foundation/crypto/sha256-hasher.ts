@@ -18,11 +18,11 @@ import {
 /**
  * Wakeflow Foundation / Crypto：增量 SHA-256 字节摘要。
  *
- * 本文件为稳定文件读取、树扫描和流式重写提供有状态 SHA-256 accumulator：每个
- * Uint8Array chunk 只处理其可见字节，同时以 ByteCount 累加总量，最终一次性返回
- * lowercase hex、`sha256:<hex>` 和准确字节数。
+ * 本模块为稳定文件读取、目录树扫描和流式重写提供有状态 SHA-256 累加器。每个
+ * `Uint8Array` 分块只处理其可见字节，并以 `ByteCount` 累加总量，最终一次性返回
+ * 小写十六进制摘要、`sha256:<hex>` 和精确字节数。
  *
- * 它不读取 Stream 或文件、不隐式编码字符串、不设置 I/O chunk 大小，也不把摘要
+ * 它不读取流或文件、不隐式编码字符串、不设置 I/O 分块大小，也不把摘要
  * 解释为签名、授权或文件身份。并发调用同一个实例不受支持；上层应为每次顺序
  * 读取创建独立实例。
  */
@@ -57,7 +57,7 @@ const ERROR_MESSAGES = {
 /**
  * 增量 SHA-256 生命周期失败的稳定错误。
  *
- * 错误不回显 chunk、累计数量、摘要、Node/OpenSSL message、stack 或 cause。
+ * 错误不回显数据分块、累计数量、摘要、Node.js/OpenSSL 消息、调用栈或原因链。
  */
 export class Sha256HasherError extends Error {
   override readonly name = "Sha256HasherError";
@@ -90,10 +90,10 @@ function isUint8Array(value: unknown): value is Uint8Array {
 }
 
 /**
- * 顺序消费字节 chunk 的单次 SHA-256 accumulator。
+ * 按顺序消费字节分块的单次 SHA-256 累加器。
  *
- * class 用于封装 Node Hash 与不可逆生命周期；调用方只能读取累计 byteCount，不能
- * 取得或改写底层 Hash。digest() 成功或失败后均不可再次 update/finalize。
+ * 本类封装 Node.js `Hash` 及其不可逆生命周期。调用方只能读取累计字节数，不能取得
+ * 或改写底层哈希器。`digest()` 成功或失败后都不能再次更新或完成该实例。
  */
 export class Sha256Hasher {
   readonly #hash: Hash;
@@ -108,16 +108,16 @@ export class Sha256Hasher {
     }
   }
 
-  /** 当前已经成功提交给 Hash 的准确字节数。 */
+  /** 当前已经成功提交给哈希器的精确字节数。 */
   get byteCount(): ByteCount {
     return this.#byteCount;
   }
 
   /**
-   * 消费一个准确的 Uint8Array 可见区间并返回当前实例，支持顺序链式调用。
+   * 消费一个 `Uint8Array` 的精确可见区间，并返回当前实例以支持顺序链式调用。
    *
-   * 输入类型失败发生在任何状态改变之前；Node update 或累计溢出则把实例永久
-   * 标记为 failed，避免调用方把不确定的部分摘要继续当作有效状态。
+   * 输入类型错误发生在任何状态改变之前。Node.js 更新失败或累计溢出会把实例永久
+   * 标记为失败，避免调用方继续使用结果不确定的部分摘要。
    */
   update(
     bytes: Uint8Array,
@@ -156,7 +156,8 @@ export class Sha256Hasher {
   /**
    * 完成增量 SHA-256，并返回同一摘要的两种完整词法与累计字节数。
    *
-   * 空输入合法。调用恰好一次；Node digest 或词法复验失败都会永久关闭实例。
+   * 空输入合法。完成操作只能调用一次；Node.js 摘要计算或词法复验失败都会让实例
+   * 永久进入不可用状态。
    */
   digest(): Readonly<Sha256HashResult> {
     if (this.#state === "finalized") fail("already-finalized", "$hasher");

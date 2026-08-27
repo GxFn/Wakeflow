@@ -13,10 +13,10 @@ import {
 } from "./demand-event-sourcing-state-version.js";
 
 /**
- * Snapshot 与当前 Event/State version support matrix 的稳定兼容摘要。
+ * 快照与当前事件、状态版本支持矩阵的稳定兼容摘要。
  *
- * 新增或移除任一受支持历史版本、改变 current writer version 或 state-model support
- * 都会改变该摘要，使旧 Snapshot 回退 full replay；摘要不是事件 authority。
+ * 新增或移除任何受支持的历史版本、改变当前写入版本或状态模型支持范围，都会改变
+ * 该摘要，使旧快照回退到完整重放。该摘要不是事件权威事实。
  */
 export function computeDemandEventSourcingVersionCompatibilityDigest(): Sha256Digest {
   return computeCanonicalJsonSha256Digest({

@@ -1,9 +1,9 @@
 /**
- * Wakeflow Governance / Demand Event Sourcing：reducer state model 与历史摘要版本。
+ * Wakeflow Governance / Demand Event Sourcing：归约器状态模型与历史摘要版本。
  *
- * Persisted event 的 resultingStateDigest 必须同时声明生成它的 state-model version。
- * 当前只有 v1；未来新增状态模型时必须登记历史 verifier/migrator，不能让 Event
- * Upcaster 用当前 reducer 冒充旧摘要验证。
+ * 持久化事件的 `resultingStateDigest` 必须同时声明生成该摘要的状态模型版本。当前
+ * 只有 v1；未来新增状态模型时必须登记历史校验器或迁移器，不能让事件升版转换器
+ * 使用当前归约器冒充旧版本摘要校验逻辑。
  */
 
 export const DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION = 1 as const;

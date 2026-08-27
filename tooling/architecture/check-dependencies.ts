@@ -2,11 +2,11 @@ import { spawnSync } from "node:child_process";
 import nodePath from "node:path";
 
 /**
- * 执行 Wakeflow 新项目的 dependency-cruiser 结构门。
+ * 执行 Wakeflow 新项目的 `dependency-cruiser` 架构边界检查。
  *
- * TypeScript 7.0 尚未公开 compiler API，dependency-cruiser 因此显式使用 SWC
- * parser。本入口不仅检查规则违例，还要求实际扫描到非零 TS 模块和依赖，防止
- * 缺少兼容 parser 时把“0 modules”误报为成功。
+ * TypeScript 7.0 尚未公开编译器 API，因此 `dependency-cruiser` 显式使用 SWC 解析器。
+ * 本入口不仅检查规则违例，还要求实际扫描到非零 TypeScript 模块和依赖，防止缺少
+ * 兼容解析器时把“0 个模块”误报为成功。
  */
 
 interface DependencyCruiseSummary {

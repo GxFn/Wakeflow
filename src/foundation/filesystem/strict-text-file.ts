@@ -18,13 +18,13 @@ import {
 /**
  * Wakeflow Foundation / Filesystem：Wakeflow 自有严格 UTF-8 文本文件读取。
  *
- * 本文件组合 StableFileRead 与 fatal UTF-8 解码，并固定执行一个磁盘文本合同：
- * 无 BOM、NFC、LF-only、恰好一个末尾 LF、且末尾 LF 前存在非空正文。它不提供
- * preserve/strip/normalize 等转换选项，也不解析 JSON、Markdown 或领域 marker。
+ * 本模块组合 `StableFileRead` 与严格 UTF-8 解码，并执行固定的磁盘文本合同：不含
+ * BOM、采用 NFC、只含 LF 换行符、恰好保留一个末尾 LF，并且末尾 LF 之前存在非空
+ * 正文。它不提供保留、剥离或规范化等转换选项，也不解析 JSON、Markdown 或领域标记。
  *
- * 外部或 mixed-owned 文本必须由后续 managed-text owner 从稳定 bytes 解释并保留
- * outside representation；不能为了兼容外部格式放宽本入口。路径、容量、expected
- * node、竞态、Abort 与节点类型失败继续保持 StableFileReadError。
+ * 外部文本或混合所有权文本必须由后续受管文本职责所有者从稳定字节中解释，并保留
+ * 非受管部分的原始表示；不能为了兼容外部格式而放宽本入口。路径、容量、预期节点、
+ * 竞态、取消和节点类型错误继续使用 `StableFileReadError`。
  */
 
 export interface StrictTextFileOptions {
@@ -63,7 +63,7 @@ const ERROR_MESSAGES = {
   "unicode-normalization": "Strict text file source must use Unicode NFC.",
 } as const satisfies Readonly<Record<StrictTextFileErrorReason, string>>;
 
-/** strict text options、编码或固定文本形态失败的稳定、脱敏错误。 */
+/** 严格文本选项、编码或固定文本形态失败时返回的稳定、脱敏错误。 */
 export class StrictTextFileError extends Error {
   override readonly name = "StrictTextFileError";
   readonly code = "wakeflow-strict-text-file" as const;
@@ -125,7 +125,7 @@ function assertStrictText(text: string): void {
   }
 }
 
-/** 稳定读取并验证一个固定 Wakeflow 文本 profile。 */
+/** 稳定读取并验证一种固定的 Wakeflow 文本格式。 */
 export async function readStrictTextFile(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,

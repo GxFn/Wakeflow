@@ -29,11 +29,11 @@ import {
 } from "./demand-file-event-snapshot-store.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：Aggregate Repository。
+ * Wakeflow Governance / Demand Event Sourcing：聚合仓储。
  *
- * 正常 load 选择最新可用 immutable snapshot，只打开其 anchor commit 与后续 tail；
- * audit 始终从 commit 1 完整 replay。Repository 不在 load 中写 snapshot，不决定
- * command、不访问 Ledger/TODO，也不执行 Demand root publication。
+ * 正常加载选择最新可用的不可变快照，只打开它的锚定提交和后续事件流尾部；审计始终
+ * 从提交 1 完整重放。仓储不会在加载过程中写入快照、不决定命令、不访问 Ledger 或
+ * TODO，也不执行 Demand 根目录发布。
  */
 
 export interface LoadedDemandEventSourcingAggregate {
@@ -170,7 +170,7 @@ export class DemandEventSourcingRepository {
     this.#snapshotStore = snapshotStore;
   }
 
-  /** 正常读取；无 stream 时返回 null，读取过程中绝不创建或修复 snapshot。 */
+  /** 正常读取；不存在事件流时返回 `null`，读取过程中绝不创建或修复快照。 */
   async load(
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<LoadedDemandEventSourcingAggregate> | null> {
@@ -247,7 +247,7 @@ export class DemandEventSourcingRepository {
     });
   }
 
-  /** 从 commit 1 完整验证 digest chain、event transitions 与 resulting states。 */
+  /** 从提交 1 开始完整验证摘要链、事件转换和每一步结果状态。 */
   async audit(
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<AuditedDemandEventSourcingAggregate>> {
@@ -267,7 +267,7 @@ export class DemandEventSourcingRepository {
     });
   }
 
-  /** 仅为 command retry 解析 commitId；普通 load 不因此扫描历史。 */
+  /** 仅为命令重试解析 `commitId`；普通加载不会因此扫描历史。 */
   async findCommitById(
     commitId: WakeflowDurableId<"demand-event-commit">,
     options?: { readonly signal?: AbortSignal },
@@ -284,7 +284,7 @@ export class DemandEventSourcingRepository {
     return stream.commits.find((commit) => commit.commitId === commitId) ?? null;
   }
 
-  /** 持久 append 一个已由 Decider/evolve 完整准备的 immutable commit。 */
+  /** 持久追加一条已经由决策器和状态演进逻辑完整准备的不可变提交记录。 */
   async appendPreparedCommit(
     prepared: Readonly<PreparedDemandEventStreamCommit>,
     options?: { readonly signal?: AbortSignal },
@@ -301,7 +301,7 @@ export class DemandEventSourcingRepository {
     }
   }
 
-  /** 显式发布当前 aggregate 的 immutable checkpoint；不属于 load 副作用。 */
+  /** 显式发布当前聚合的不可变检查点；该操作不属于加载副作用。 */
   async publishSnapshot(
     aggregateValue: unknown,
     options?: { readonly signal?: AbortSignal },

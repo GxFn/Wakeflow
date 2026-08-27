@@ -3,11 +3,11 @@
  * Source: src/contracts/schemas/governance/demand/demand-event-sourcing-snapshot.schema.json
  */
 
-export type DemandId = string
 /**
  * Wakeflow portable records 使用的完整 lowercase SHA-256 digest 文本；算法前缀和 256-bit hexadecimal payload 都属于词法合同。
  */
 export type WakeflowSha256DigestText = string
+export type DemandId = string
 export type EventId = string
 /**
  * @maxItems 0
@@ -21,6 +21,7 @@ export interface WakeflowDemandEventSourcingSnapshot {
 artifactKind: "wakeflow-demand-event-sourcing-snapshot"
 schemaVersion: 1
 aggregateVersion: 1
+versionCompatibilityDigest: WakeflowSha256DigestText
 demandId: DemandId
 commitSequence: number
 streamRevision: number
@@ -90,6 +91,7 @@ export const WAKEFLOW_DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA = freezeGeneratedSch
     "artifactKind",
     "schemaVersion",
     "aggregateVersion",
+    "versionCompatibilityDigest",
     "demandId",
     "commitSequence",
     "streamRevision",
@@ -108,6 +110,9 @@ export const WAKEFLOW_DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA = freezeGeneratedSch
     },
     "aggregateVersion": {
       "const": 1
+    },
+    "versionCompatibilityDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
     },
     "demandId": {
       "$ref": "#/$defs/demandId"

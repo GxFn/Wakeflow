@@ -540,6 +540,9 @@ async function lockTargetExists(
     if (error instanceof RootedDirectoryError) {
       if (error.reason === "resource-not-found") return false;
       if (error.reason === "resource-changed") return true;
+      // 首次 lstat 后 lock 被并发删除时，realpath seam 只能报告 inspection-failure；
+      // 返回 contended 后 assertSafeExistingLock 会立即重新执行完整安全检查。
+      if (error.reason === "inspection-failure") return true;
       if (error.reason === "resource-path") fail("input", "$lockPath");
       if (
         error.reason === "ancestor-symlink"

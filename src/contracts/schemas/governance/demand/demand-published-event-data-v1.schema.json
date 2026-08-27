@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:demand-published-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_PUBLISHED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowDemandPublishedEventDataV1",
+  "description": "publication.demand-published persisted event v1 的严格 payload。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "identityRef",
+    "identityDigest",
+    "authorityRef",
+    "authorityDigest"
+  ],
+  "properties": {
+    "identityRef": {
+      "const": "identity.json"
+    },
+    "identityDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    },
+    "authorityRef": {
+      "const": "authority.json"
+    },
+    "authorityDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    }
+  }
+}

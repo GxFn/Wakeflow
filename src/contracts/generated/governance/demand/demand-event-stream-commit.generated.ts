@@ -35,7 +35,7 @@ previousCommitDigest: (null | WakeflowSha256DigestText)
 events: [WakeflowDemandEventSourcingStoredEvent, ...(WakeflowDemandEventSourcingStoredEvent)[]]
 }
 /**
- * Demand Event Store 已分配 stream revision 并记录 resulting-state digest 的不可变领域事件。
+ * Demand Event Store 中稳定的 persisted event envelope；eventType 与 eventVersion 由版本 Registry 路由到严格 payload codec。
  */
 export interface WakeflowDemandEventSourcingStoredEvent {
 artifactKind: "wakeflow-demand-event-sourcing-event"
@@ -44,19 +44,13 @@ eventId: string
 demandId: string
 streamRevision: number
 recordedAt: WakeflowUtcInstantText
-eventType: ("publication.demand-published" | "lifecycle.demand-cancelled")
-eventVersion: 1
-data: (DemandPublishedData | DemandCancelledData)
+eventType: string
+eventVersion: number
+data: {
+[k: string]: unknown | undefined
+}
+resultingStateModelVersion: number
 resultingStateDigest: WakeflowSha256DigestText
-}
-export interface DemandPublishedData {
-identityRef: "identity.json"
-identityDigest: WakeflowSha256DigestText
-authorityRef: "authority.json"
-authorityDigest: WakeflowSha256DigestText
-}
-export interface DemandCancelledData {
-reason: string
 }
 
 /** 递归冻结生成的 Schema，阻止 validator 首次消费前发生嵌套漂移。 */

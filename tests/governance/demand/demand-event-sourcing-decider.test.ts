@@ -43,6 +43,7 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
   });
 
   equal(published?.eventType, "publication.demand-published");
+  equal(Object.hasOwn(published ?? {}, "eventVersion"), false);
   equal(Object.hasOwn(published ?? {}, "streamRevision"), false);
   equal(Object.hasOwn(published ?? {}, "previousEvent"), false);
   equal(Object.hasOwn(published ?? {}, "resultingStateDigest"), false);

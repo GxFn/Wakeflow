@@ -33,6 +33,7 @@ const EVENT = Object.freeze({
     authorityRef: "authority.json" as const,
     authorityDigest: parseSha256Digest(`sha256:${"b".repeat(64)}`),
   }),
+  resultingStateModelVersion: 1,
   resultingStateDigest: parseSha256Digest(`sha256:${"c".repeat(64)}`),
 });
 
@@ -40,12 +41,43 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
   const current = upcastDemandEventSourcingStoredEvent(EVENT);
   equal(current.eventType, "publication.demand-published");
   equal(Object.hasOwn(current, "streamRevision"), false);
+  equal(Object.hasOwn(current, "eventVersion"), false);
+
+  const cancelled = upcastDemandEventSourcingStoredEvent({
+    ...EVENT,
+    eventType: "lifecycle.demand-cancelled",
+    data: { reason: "用户终止该 Demand" },
+  });
+  equal(cancelled.eventType, "lifecycle.demand-cancelled");
+  if (cancelled.eventType === "lifecycle.demand-cancelled") {
+    equal(cancelled.data.reason, "用户终止该 Demand");
+  }
 
   throws(
     () => upcastDemandEventSourcingStoredEvent({ ...EVENT, eventVersion: 2 }),
     (error: unknown) => (
       error instanceof DemandEventSourcingUpcasterError
       && error.reason === "unsupported-version"
+    ),
+  );
+  throws(
+    () => upcastDemandEventSourcingStoredEvent({
+      ...EVENT,
+      eventType: "future.demand-reopened",
+    }),
+    (error: unknown) => (
+      error instanceof DemandEventSourcingUpcasterError
+      && error.reason === "unsupported-event-type"
+    ),
+  );
+  throws(
+    () => upcastDemandEventSourcingStoredEvent({
+      ...EVENT,
+      data: { ...EVENT.data, extra: true },
+    }),
+    (error: unknown) => (
+      error instanceof DemandEventSourcingUpcasterError
+      && error.reason === "codec"
     ),
   );
 });

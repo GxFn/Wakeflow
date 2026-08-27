@@ -69,6 +69,10 @@ import {
   DemandEventSourcingUpcasterError,
 } from "./demand-event-sourcing-upcaster.js";
 import {
+  assertSupportedDemandEventSourcingStateModelVersion,
+  DemandEventSourcingStateVersionError,
+} from "./demand-event-sourcing-state-version.js";
+import {
   parseDemandEventStreamRevision,
   type DemandEventStreamRevision,
 } from "./demand-event-stream-position.js";
@@ -134,6 +138,8 @@ export type DemandEventStreamCommitErrorReason =
   | "event"
   | "aggregate"
   | "relation"
+  | "event-version"
+  | "state-version"
   | "transition"
   | "representation";
 
@@ -147,6 +153,8 @@ const ERROR_MESSAGES = {
   "event": "Demand Event Stream commit contains an invalid event.",
   "aggregate": "Demand Event Stream commit requires a valid current aggregate.",
   "relation": "Demand Event Stream commit fields do not form one append batch.",
+  "event-version": "Demand Event Stream commit contains an unsupported event version.",
+  "state-version": "Demand Event Stream commit contains an unsupported state-model version.",
   "transition": "Demand Event Stream commit cannot be evolved from the current state.",
   "representation": "Demand Event Stream commit bytes are not deterministic.",
 } as const satisfies Readonly<Record<
@@ -454,17 +462,31 @@ export function applyDemandEventStreamCommit(
   let state: Readonly<DemandAggregateState> | null = current?.state ?? null;
   let lastEvent: Readonly<DemandEventSourcingStoredEvent> | undefined;
   for (const [index, storedEvent] of commit.events.entries()) {
-    let next: Readonly<DemandAggregateState>;
     try {
-      next = evolveDemandEventSourcingState(
-        state,
-        upcastDemandEventSourcingStoredEvent(storedEvent),
+      assertSupportedDemandEventSourcingStateModelVersion(
+        storedEvent.resultingStateModelVersion,
+        `$/events/${index}/resultingStateModelVersion`,
       );
     } catch (error: unknown) {
-      if (
-        error instanceof DemandEventSourcingDecisionError
-        || error instanceof DemandEventSourcingUpcasterError
-      ) {
+      if (error instanceof DemandEventSourcingStateVersionError) {
+        fail("state-version", `$/events/${index}/resultingStateModelVersion`);
+      }
+      throw error;
+    }
+    let currentEvent: Readonly<DemandUncommittedEvent>;
+    try {
+      currentEvent = upcastDemandEventSourcingStoredEvent(storedEvent);
+    } catch (error: unknown) {
+      if (error instanceof DemandEventSourcingUpcasterError) {
+        fail("event-version", `$/events/${index}/eventVersion`);
+      }
+      throw error;
+    }
+    let next: Readonly<DemandAggregateState>;
+    try {
+      next = evolveDemandEventSourcingState(state, currentEvent);
+    } catch (error: unknown) {
+      if (error instanceof DemandEventSourcingDecisionError) {
         fail("transition", `$/events/${index}`);
       }
       throw error;

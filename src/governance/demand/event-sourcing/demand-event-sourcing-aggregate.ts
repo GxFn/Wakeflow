@@ -28,6 +28,14 @@ import {
   parseDemandEventStreamRevision,
   type DemandEventStreamRevision,
 } from "./demand-event-stream-position.js";
+import {
+  upcastDemandEventSourcingStoredEvent,
+  DemandEventSourcingUpcasterError,
+} from "./demand-event-sourcing-upcaster.js";
+import {
+  assertSupportedDemandEventSourcingStateModelVersion,
+  DemandEventSourcingStateVersionError,
+} from "./demand-event-sourcing-state-version.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：一次 aggregate rehydration 结果。
@@ -58,6 +66,7 @@ export type DemandEventSourcingAggregateErrorReason =
   | "position"
   | "digest"
   | "event"
+  | "version"
   | "state"
   | "relation";
 
@@ -67,6 +76,7 @@ const ERROR_MESSAGES = {
   "position": "Demand Event Sourcing aggregate contains an invalid cursor.",
   "digest": "Demand Event Sourcing aggregate contains an invalid digest.",
   "event": "Demand Event Sourcing aggregate contains an invalid tail event.",
+  "version": "Demand Event Sourcing aggregate tail version is unsupported.",
   "state": "Demand Event Sourcing aggregate contains an invalid state.",
   "relation": "Demand Event Sourcing aggregate cursor, tail and state do not close.",
 } as const satisfies Readonly<Record<
@@ -161,6 +171,21 @@ export function parseDemandEventSourcingAggregate(
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingStoredEventError) {
       fail("event", "$/lastEvent");
+    }
+    throw error;
+  }
+  try {
+    assertSupportedDemandEventSourcingStateModelVersion(
+      lastEvent.resultingStateModelVersion,
+      "$/lastEvent/resultingStateModelVersion",
+    );
+    upcastDemandEventSourcingStoredEvent(lastEvent);
+  } catch (error: unknown) {
+    if (
+      error instanceof DemandEventSourcingStateVersionError
+      || error instanceof DemandEventSourcingUpcasterError
+    ) {
+      fail("version", "$/lastEvent");
     }
     throw error;
   }

@@ -274,7 +274,6 @@ export function decideDemandEventSourcingCommand(
       demandId: command.demandId,
       recordedAt: command.recordedAt,
       eventType: "publication.demand-published",
-      eventVersion: 1,
       data: {
         identityRef: "identity.json",
         identityDigest: command.identityDigest,
@@ -292,7 +291,6 @@ export function decideDemandEventSourcingCommand(
     demandId: command.demandId,
     recordedAt: command.recordedAt,
     eventType: "lifecycle.demand-cancelled",
-    eventVersion: 1,
     data: { reason: command.reason },
   })]) as readonly [Readonly<DemandUncommittedEvent>];
 }

@@ -169,12 +169,24 @@ test("Demand Event Sourcing Repository 正常 load 使用 snapshot + tail，audi
       "snapshots",
       "0000000000000001.json",
     );
-    writeFileSync(snapshotPath, "{}\n", { mode: 0o600 });
+    const persistedSnapshot = JSON.parse(
+      readFileSync(snapshotPath, "utf8"),
+    ) as Record<string, unknown>;
+    const incompatibleSnapshot = {
+      ...persistedSnapshot,
+      versionCompatibilityDigest: IDENTITY_DIGEST,
+    };
+    const incompatibleSnapshotText = `${JSON.stringify(
+      incompatibleSnapshot,
+      null,
+      2,
+    )}\n`;
+    writeFileSync(snapshotPath, incompatibleSnapshotText, { mode: 0o600 });
     const fallback = await repository.load();
     equal(fallback?.snapshotStatus, "invalid");
     equal(fallback?.replayedCommitCount, 2);
     equal(fallback?.aggregate.state.lifecycle, "cancelled");
-    equal(readFileSync(snapshotPath, "utf8"), "{}\n");
+    equal(readFileSync(snapshotPath, "utf8"), incompatibleSnapshotText);
 
     await repository.publishSnapshot(second.aggregate);
     writeFileSync(path.join(

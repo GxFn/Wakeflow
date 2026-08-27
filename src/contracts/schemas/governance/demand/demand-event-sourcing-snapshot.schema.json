@@ -11,6 +11,7 @@
     "artifactKind",
     "schemaVersion",
     "aggregateVersion",
+    "versionCompatibilityDigest",
     "demandId",
     "commitSequence",
     "streamRevision",
@@ -29,6 +30,9 @@
     },
     "aggregateVersion": {
       "const": 1
+    },
+    "versionCompatibilityDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
     },
     "demandId": {
       "$ref": "#/$defs/demandId"

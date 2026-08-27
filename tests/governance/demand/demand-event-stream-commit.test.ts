@@ -12,6 +12,7 @@ import {
   decideDemandEventSourcingCommand,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
+  applyDemandEventStreamCommit,
   computeDemandEventStreamCommitDigest,
   formatDemandEventStreamCommitFileName,
   parseDemandEventStreamCommitDocument,
@@ -70,11 +71,28 @@ test("一次 Demand Event Sourcing append 形成一个固定 commitSequence 的 
   equal(first.commit.lastStreamRevision, 1);
   equal(first.commit.previousCommitDigest, null);
   equal(first.commit.events[0]?.streamRevision, 1);
+  equal(first.commit.events[0]?.eventVersion, 1);
+  equal(first.commit.events[0]?.resultingStateModelVersion, 1);
   equal(Object.hasOwn(first.commit.events[0] ?? {}, "previousEvent"), false);
   equal(first.aggregate.state.lifecycle, "active");
   equal(first.sourceExpectation.lastEventDigest, null);
   equal(first.sourceExpectation.stateDigest, null);
   equal(Object.isFrozen(first.sourceExpectation), true);
+  for (const [field, reason] of [
+    ["eventVersion", "event-version"],
+    ["resultingStateModelVersion", "state-version"],
+  ] as const) {
+    throws(
+      () => applyDemandEventStreamCommit(null, {
+        ...first.commit,
+        events: [{ ...first.commit.events[0], [field]: 2 }],
+      }),
+      (error: unknown) => (
+        error instanceof DemandEventStreamCommitError
+        && error.reason === reason
+      ),
+    );
+  }
 
   const cancelled = decideDemandEventSourcingCommand(first.aggregate.state, {
     commandType: "lifecycle.cancel-demand",

@@ -21,9 +21,9 @@ import {
 /**
  * Wakeflow Governance / Demand Event Sourcing：尚未进入 Event Store 的领域事件。
  *
- * uncommitted event 只描述已经发生的业务事实及其稳定身份、记录时间；它不携带
- * stream revision、commit sequence、predecessor 或 resulting-state digest。这些
- * 持久化事实只能由 command handler 在已观察的 stream cursor 上计算并交给 Store。
+ * current/uncommitted event 只描述已经发生的业务事实及其稳定身份、记录时间；它不
+ * 携带 persisted eventVersion、stream revision、commit sequence、predecessor 或
+ * resulting-state digest。版本 codec 负责 current model 与磁盘版本之间的转换。
  */
 
 export interface DemandPublishedUncommittedEvent {
@@ -31,7 +31,6 @@ export interface DemandPublishedUncommittedEvent {
   readonly demandId: WakeflowDurableId<"demand">;
   readonly recordedAt: UtcInstant;
   readonly eventType: "publication.demand-published";
-  readonly eventVersion: 1;
   readonly data: Readonly<{
     readonly identityRef: "identity.json";
     readonly identityDigest: Sha256Digest;
@@ -45,7 +44,6 @@ export interface DemandCancelledUncommittedEvent {
   readonly demandId: WakeflowDurableId<"demand">;
   readonly recordedAt: UtcInstant;
   readonly eventType: "lifecycle.demand-cancelled";
-  readonly eventVersion: 1;
   readonly data: Readonly<{
     readonly reason: string;
   }>;
@@ -93,7 +91,6 @@ const BASE_FIELDS = Object.freeze([
   "demandId",
   "eventId",
   "eventType",
-  "eventVersion",
   "recordedAt",
 ] as const);
 const PUBLISHED_DATA_FIELDS = Object.freeze([
@@ -186,7 +183,6 @@ export function parseDemandUncommittedEvent(
   value: unknown,
 ): Readonly<DemandUncommittedEvent> {
   const record = exactRecord(value, BASE_FIELDS, "$event");
-  if (record.eventVersion !== 1) fail("event-type", "$/eventVersion");
   const eventId = parseId(record.eventId, "demand-event", "$/eventId");
   const demandId = parseId(record.demandId, "demand", "$/demandId");
   const recordedAt = parseTime(record.recordedAt);
@@ -204,7 +200,6 @@ export function parseDemandUncommittedEvent(
       demandId,
       recordedAt,
       eventType: "publication.demand-published",
-      eventVersion: 1,
       data: Object.freeze({
         identityRef: "identity.json",
         identityDigest: parseDigest(data.identityDigest, "$/data/identityDigest"),
@@ -221,7 +216,6 @@ export function parseDemandUncommittedEvent(
       demandId,
       recordedAt,
       eventType: "lifecycle.demand-cancelled",
-      eventVersion: 1,
       data: Object.freeze({ reason: parseCanonicalReason(data.reason) }),
     });
   }

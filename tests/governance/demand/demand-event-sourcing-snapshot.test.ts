@@ -17,11 +17,15 @@ import {
 import {
   createDemandEventSourcingSnapshot,
   formatDemandEventSourcingSnapshotFileName,
+  parseDemandEventSourcingSnapshot,
   parseDemandEventSourcingSnapshotDocument,
   renderDemandEventSourcingSnapshot,
   restoreDemandEventSourcingSnapshot,
   DemandEventSourcingSnapshotError,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-snapshot.js";
+import {
+  computeDemandEventSourcingVersionCompatibilityDigest,
+} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-version-compatibility.js";
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_11111111-1111-4111-8111-111111111111",
@@ -66,6 +70,10 @@ test("Demand Event Sourcing snapshot 是按 commitSequence 定位的 immutable c
   equal(snapshot.commitSequence, 1);
   equal(snapshot.streamRevision, 1);
   equal(snapshot.lastCommitDigest, current.aggregate.lastCommitDigest);
+  equal(
+    snapshot.versionCompatibilityDigest,
+    computeDemandEventSourcingVersionCompatibilityDigest(),
+  );
   equal(formatDemandEventSourcingSnapshotFileName(1), "0000000000000001.json");
 
   const restored = restoreDemandEventSourcingSnapshot(
@@ -76,6 +84,20 @@ test("Demand Event Sourcing snapshot 是按 commitSequence 定位的 immutable c
 
   const text = renderDemandEventSourcingSnapshot(snapshot);
   deepEqual(parseDemandEventSourcingSnapshotDocument(text), snapshot);
+  throws(
+    () => parseDemandEventSourcingSnapshot({
+      ...snapshot,
+      aggregateVersion: 2,
+    }),
+    DemandEventSourcingSnapshotError,
+  );
+  throws(
+    () => parseDemandEventSourcingSnapshot({
+      ...snapshot,
+      versionCompatibilityDigest: IDENTITY_DIGEST,
+    }),
+    DemandEventSourcingSnapshotError,
+  );
   throws(
     () => restoreDemandEventSourcingSnapshot(
       { ...snapshot, lastCommitDigest: IDENTITY_DIGEST },

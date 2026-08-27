@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:demand-cancelled-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_CANCELLED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowDemandCancelledEventDataV1",
+  "description": "lifecycle.demand-cancelled persisted event v1 的严格 payload。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "reason"
+  ],
+  "properties": {
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192,
+      "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+    }
+  }
+}

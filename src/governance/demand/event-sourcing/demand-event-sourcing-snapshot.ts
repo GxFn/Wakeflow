@@ -57,6 +57,12 @@ import {
   parseDemandEventStreamRevision,
   type DemandEventStreamRevision,
 } from "./demand-event-stream-position.js";
+import {
+  DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION,
+} from "./demand-event-sourcing-state-version.js";
+import {
+  computeDemandEventSourcingVersionCompatibilityDigest,
+} from "./demand-event-sourcing-version-compatibility.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：immutable、versioned snapshot。
@@ -69,12 +75,14 @@ import {
 export const DEMAND_EVENT_SOURCING_SNAPSHOT_ARTIFACT_KIND =
   "wakeflow-demand-event-sourcing-snapshot" as const;
 export const DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA_VERSION = 1 as const;
-export const DEMAND_EVENT_SOURCING_AGGREGATE_VERSION = 1 as const;
+export const DEMAND_EVENT_SOURCING_AGGREGATE_VERSION =
+  DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION;
 
 export interface DemandEventSourcingSnapshot {
   readonly artifactKind: typeof DEMAND_EVENT_SOURCING_SNAPSHOT_ARTIFACT_KIND;
   readonly schemaVersion: typeof DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA_VERSION;
   readonly aggregateVersion: typeof DEMAND_EVENT_SOURCING_AGGREGATE_VERSION;
+  readonly versionCompatibilityDigest: Sha256Digest;
   readonly demandId: WakeflowDurableId<"demand">;
   readonly commitSequence: DemandEventCommitSequence;
   readonly streamRevision: DemandEventStreamRevision;
@@ -196,9 +204,15 @@ export function parseDemandEventSourcingSnapshot(
     throw error;
   }
   const stateDigest = parseDigest(wire.stateDigest, "$/stateDigest");
+  const versionCompatibilityDigest = parseDigest(
+    wire.versionCompatibilityDigest,
+    "$/versionCompatibilityDigest",
+  );
   if (
     state.demandId !== demandId
     || computeDemandAggregateStateDigest(state) !== stateDigest
+    || versionCompatibilityDigest
+      !== computeDemandEventSourcingVersionCompatibilityDigest()
   ) {
     fail("mismatch", "$snapshot");
   }
@@ -206,6 +220,7 @@ export function parseDemandEventSourcingSnapshot(
     artifactKind: DEMAND_EVENT_SOURCING_SNAPSHOT_ARTIFACT_KIND,
     schemaVersion: DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA_VERSION,
     aggregateVersion: DEMAND_EVENT_SOURCING_AGGREGATE_VERSION,
+    versionCompatibilityDigest,
     demandId,
     commitSequence: parseDemandEventCommitSequence(
       wire.commitSequence,
@@ -242,6 +257,8 @@ export function createDemandEventSourcingSnapshot(
     artifactKind: DEMAND_EVENT_SOURCING_SNAPSHOT_ARTIFACT_KIND,
     schemaVersion: DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA_VERSION,
     aggregateVersion: DEMAND_EVENT_SOURCING_AGGREGATE_VERSION,
+    versionCompatibilityDigest:
+      computeDemandEventSourcingVersionCompatibilityDigest(),
     demandId: aggregate.demandId,
     commitSequence: aggregate.commitSequence,
     streamRevision: aggregate.streamRevision,

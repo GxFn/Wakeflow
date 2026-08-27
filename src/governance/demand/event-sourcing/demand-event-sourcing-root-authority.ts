@@ -45,6 +45,10 @@ import {
 import type { DemandEventStreamCommit } from "./demand-event-stream-commit.js";
 import { DemandFileEventSnapshotStore } from "./demand-file-event-snapshot-store.js";
 import {
+  upcastDemandEventSourcingStoredEvent,
+  DemandEventSourcingUpcasterError,
+} from "./demand-event-sourcing-upcaster.js";
+import {
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,
 } from "../../ledger/ledger-authority-store.js";
@@ -320,7 +324,18 @@ export async function loadDemandEventSourcingRootAuthority(
     if (error instanceof DemandFileEventStoreError) fail("stream", "$commits/0");
     throw error;
   }
-  const firstEvent = firstCommit?.events[0];
+  const firstPersistedEvent = firstCommit?.events[0];
+  let firstEvent;
+  try {
+    firstEvent = firstPersistedEvent === undefined
+      ? undefined
+      : upcastDemandEventSourcingStoredEvent(firstPersistedEvent);
+  } catch (error: unknown) {
+    if (error instanceof DemandEventSourcingUpcasterError) {
+      fail("stream", "$commits/0/events/0");
+    }
+    throw error;
+  }
   const identityDigest = computeDemandIdentityDigest(identity);
   const authorityDigest = computeDemandAuthorityDigest(authority);
   if (

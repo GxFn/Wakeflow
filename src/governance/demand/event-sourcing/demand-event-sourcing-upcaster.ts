@@ -1,36 +1,41 @@
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../../../foundation/data/passive-own-data.js";
-import type { DemandUncommittedEvent } from "./demand-event-sourcing-event.js";
+  EventSourcingVersionEvolutionError,
+} from "../../../foundation/event-sourcing/event-sourcing-version-evolution.js";
 import {
-  parseDemandEventSourcingStoredEvent,
-  toDemandUncommittedEvent,
-  DemandEventSourcingStoredEventError,
-} from "./demand-event-sourcing-stored-event.js";
+  DemandEventSourcingEventError,
+  type DemandUncommittedEvent,
+} from "./demand-event-sourcing-event.js";
+import {
+  decodeDemandEventSourcingPersistedEvent,
+} from "./demand-event-sourcing-event-version-codec.js";
+import {
+  parseDemandEventSourcingPersistedEventEnvelope,
+  DemandEventSourcingPersistedEventEnvelopeError,
+} from "./demand-event-sourcing-persisted-event-envelope.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：历史 event upcaster registry。
+ * Wakeflow Governance / Demand Event Sourcing：persisted event version evolution。
  *
- * persisted `eventType` 不绑定 TypeScript class 名；`eventType + eventVersion` 先通过
- * 本 registry 路由，再转换成当前 reducer 接受的 uncommitted event。当前只有 v1，
- * 但版本分派已经是显式代码路径，未来版本不得通过修改历史 bytes 实现。
+ * Envelope admission、事件家族 codec、逐级 Registry 与 current event projection 依次
+ * 执行。未知 type/version 在 reducer 前失败；本模块不修改 persisted bytes/digest，
+ * 不读取文件或 Snapshot，也不承担 state-model version 的历史摘要验证。
  */
-
-export const DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS = Object.freeze({
-  "publication.demand-published": 1,
-  "lifecycle.demand-cancelled": 1,
-} as const);
 
 export type DemandEventSourcingUpcasterErrorReason =
   | "input"
+  | "unsupported-event-type"
   | "unsupported-version"
+  | "codec"
+  | "upcast"
   | "event";
 
 const ERROR_MESSAGES = {
   "input": "Demand Event Sourcing upcaster input is invalid.",
+  "unsupported-event-type": "Demand Event Sourcing event type is unsupported.",
   "unsupported-version": "Demand Event Sourcing event version is unsupported.",
-  "event": "Demand Event Sourcing stored event cannot be upcast.",
+  "codec": "Demand Event Sourcing persisted event payload is invalid.",
+  "upcast": "Demand Event Sourcing event version evolution failed.",
+  "event": "Demand Event Sourcing persisted event cannot become a current event.",
 } as const satisfies Readonly<Record<
   DemandEventSourcingUpcasterErrorReason,
   string
@@ -57,41 +62,35 @@ function fail(reason: DemandEventSourcingUpcasterErrorReason, path: string): nev
 export function upcastDemandEventSourcingStoredEvent(
   value: unknown,
 ): Readonly<DemandUncommittedEvent> {
-  let record: Readonly<Record<string, unknown>>;
+  let envelope;
   try {
-    record = parsePlainRecord(value, "$event");
+    envelope = parseDemandEventSourcingPersistedEventEnvelope(value);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$event");
+    if (error instanceof DemandEventSourcingPersistedEventEnvelopeError) {
+      fail("input", error.path);
+    }
     throw error;
   }
-  const eventType = record.eventType;
-  const eventVersion = record.eventVersion;
-  if (
-    typeof eventType !== "string"
-    || typeof eventVersion !== "number"
-    || !Number.isSafeInteger(eventVersion)
-  ) {
-    fail("input", "$event");
-  }
-  const currentVersion = Object.hasOwn(
-    DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS,
-    eventType,
-  )
-    ? DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS[
-        eventType as keyof typeof DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS
-      ]
-    : undefined;
-  if (currentVersion === undefined || eventVersion !== currentVersion) {
-    fail("unsupported-version", "$/eventVersion");
-  }
   try {
-    return toDemandUncommittedEvent(
-      parseDemandEventSourcingStoredEvent(record),
-    );
+    return decodeDemandEventSourcingPersistedEvent(envelope);
   } catch (error: unknown) {
-    if (error instanceof DemandEventSourcingStoredEventError) {
+    if (error instanceof EventSourcingVersionEvolutionError) {
+      if (error.path === "$/eventType") {
+        fail("unsupported-event-type", "$/eventType");
+      }
+      if (error.reason === "unsupported-version") {
+        fail("unsupported-version", "$/eventVersion");
+      }
+      if (error.reason === "codec") fail("codec", "$/data");
+      fail("upcast", "$/data");
+    }
+    if (error instanceof DemandEventSourcingEventError) {
       fail("event", "$event");
     }
     throw error;
   }
 }
+
+export {
+  DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS,
+} from "./demand-event-sourcing-event-version-codec.js";

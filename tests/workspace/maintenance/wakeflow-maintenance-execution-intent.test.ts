@@ -20,9 +20,8 @@ import {
   createWakeflowMaintenanceIntentResourceDeclaration,
   parseWakeflowMaintenanceExecutionIntent,
   parseWakeflowMaintenanceExecutionIntentDocument,
+  reconstructWakeflowMaintenanceExecutionFromIntent,
   renderWakeflowMaintenanceExecutionIntent,
-  wakeflowMaintenanceExecutionPlanFromIntent,
-  wakeflowMaintenanceExecutionRequestFromIntent,
   WakeflowMaintenanceExecutionIntentError,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
 import {
@@ -108,11 +107,14 @@ test("compact intent reconstructs the exact plan and request after restart", () 
     "codex",
   ]);
   equal(intent.planDigest, value.plan.planDigest);
+  const reconstructed = reconstructWakeflowMaintenanceExecutionFromIntent(
+    intent,
+  );
   equal(
-    wakeflowMaintenanceExecutionPlanFromIntent(intent).planDigest,
+    reconstructed.plan.planDigest,
     value.plan.planDigest,
   );
-  const recoveredRequest = wakeflowMaintenanceExecutionRequestFromIntent(intent);
+  const recoveredRequest = reconstructed.request;
   equal(recoveredRequest.action, "fresh-initialize");
   equal(
     computeWakeflowConfigV3Digest(
@@ -196,7 +198,6 @@ test("intent persistence budget rejects an oversized host payload", () => {
     hostId: "codex",
     capabilityId: "codex-maintenance",
     status: "ready",
-    sourcePlanDigest: value.plan.sharedPreview.planDigest,
     blockerCodes: [],
     operations: [{
       operationId: "example-operation:program",

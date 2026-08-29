@@ -263,7 +263,7 @@ export function createWakeflowGitignoreBodyAuthority(
       }
       rules.add(rootRule(
         relativePath,
-        declaration.nodePolicy.kind === "directory",
+        declaration.nodePolicy.kind !== "file",
       ));
     }
   }

@@ -2,6 +2,7 @@ import {
   equal,
   ok,
   rejects,
+  throws,
 } from "node:assert/strict";
 import {
   mkdtempSync,
@@ -19,15 +20,15 @@ import {
   parseSha256Digest,
 } from "../../../src/foundation/crypto/sha256.js";
 import {
-  durableAtomicFileStageRef,
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 import {
   createFileCandidateDurably,
 } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/foundation/identity/wakeflow-durable-id.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   decideDemandEventSourcingCommand,
@@ -47,6 +48,7 @@ import {
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import {
   DemandEventSourcingRepository,
+  DemandEventSourcingRepositoryError,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
@@ -82,7 +84,14 @@ test("Demand Event Sourcing Repository 正常 load 使用 snapshot + tail，audi
   try {
     const eventStore = new DemandFileEventStore(root);
     const snapshotStore = new DemandFileEventSnapshotStore(root);
-    const repository = new DemandEventSourcingRepository(eventStore, snapshotStore);
+    const repository = new DemandEventSourcingRepository(root);
+    throws(
+      () => new DemandEventSourcingRepository(eventStore as never),
+      (error: unknown) => (
+        error instanceof DemandEventSourcingRepositoryError
+        && error.reason === "input"
+      ),
+    );
     await eventStore.initialize();
 
     const firstEvents = decideDemandEventSourcingCommand(null, {
@@ -111,7 +120,7 @@ test("Demand Event Sourcing Repository 正常 load 使用 snapshot + tail，audi
       computeSha256Digest(intendedSnapshotBytes),
       0o600,
     );
-    const stageRef = durableAtomicFileStageRef(snapshotRef, stageAddress);
+    const stageRef = durableAtomicFileStageRefForTest(snapshotRef, stageAddress);
     try {
       await createFileCandidateDurably(
         root,

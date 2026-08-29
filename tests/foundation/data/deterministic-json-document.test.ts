@@ -28,7 +28,7 @@ function expectDocumentError(
   equal(caught.path, path);
 }
 
-test("domain insertion order renders as 2-space JSON with exactly one LF", () => {
+test("ECMAScript own-key order renders as 2-space JSON with exactly one LF", () => {
   const value = {
     artifactKind: "wakeflow-example",
     schemaVersion: 1,
@@ -120,4 +120,27 @@ test("rendering rejects behavior-bearing values without executing them", () => {
     "$.record/secret",
   );
   equal(getterCalls, 0);
+
+  for (const prototype of [Object.prototype, Array.prototype]) {
+    const previous = Object.getOwnPropertyDescriptor(prototype, "toJSON");
+    let hookCalls = 0;
+    try {
+      Object.defineProperty(prototype, "toJSON", {
+        configurable: true,
+        value: () => {
+          hookCalls += 1;
+          return "forged";
+        },
+      });
+      expectDocumentError(
+        () => renderDeterministicJsonDocument([true], "$.record"),
+        "render-failure",
+        "$.record",
+      );
+      equal(hookCalls, 0);
+    } finally {
+      if (previous === undefined) Reflect.deleteProperty(prototype, "toJSON");
+      else Object.defineProperty(prototype, "toJSON", previous);
+    }
+  }
 });

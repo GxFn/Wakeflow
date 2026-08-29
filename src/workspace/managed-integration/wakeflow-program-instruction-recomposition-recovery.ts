@@ -93,6 +93,7 @@ async function assertRecoverableCurrent(
         fail("unsupported-platform", "$root");
       }
       if (error.reason === "target-capacity") fail("capacity", "$target");
+      if (error.reason === "source-capacity") fail("capacity", "$source");
       if (
         error.reason === "input"
         || error.reason === "context"
@@ -113,12 +114,12 @@ export async function recoverWakeflowProgramInstructionRecomposition(
   optionsValue?: WakeflowProgramInstructionRecompositionRecoveryOptions,
 ): Promise<Readonly<WakeflowProgramInstructionRecompositionRecoveryReceipt>> {
   assertWakeflowProgramInstructionRecompositionRoot(rootValue);
-  const request = parseWakeflowProgramInstructionRecompositionRequest(
-    requestValue,
-  );
   const options =
     parseWakeflowProgramInstructionRecompositionRecoveryOptions(optionsValue);
   assertWakeflowProgramInstructionRecompositionNotAborted(options.signal);
+  const request = parseWakeflowProgramInstructionRecompositionRequest(
+    requestValue,
+  );
   admitWakeflowProgramInstructionLockOperations(request);
   const expectedUserId =
     currentWakeflowProgramInstructionRecompositionUserId();

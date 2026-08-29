@@ -5,6 +5,7 @@ import {
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { WakeflowConfigV3Model } from "../../configuration/wakeflow-config-v3.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   RootedDirectory,
 } from "../../foundation/filesystem/rooted-directory.js";
@@ -22,11 +23,15 @@ import {
   createWakeflowMaintenanceExecutionPlan,
   type WakeflowMaintenanceExecutionPlan,
 } from "./wakeflow-maintenance-execution-plan.js";
+import type {
+  WakeflowMaintenanceGateContext,
+} from "./wakeflow-maintenance-gate.js";
 import {
   previewWakeflowStaticMaterialization,
 } from "./wakeflow-static-materialization-preview.js";
 import {
   parseWakeflowStaticMaterializationPreviewRequest,
+  WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationPreviewRequest,
 } from "./wakeflow-static-materialization-preview-contract.js";
 
@@ -39,15 +44,19 @@ import {
 
 export type WakeflowMaintenanceExecutionPreviewErrorReason =
   | "input"
+  | "shared-preview"
   | "source-config"
   | "capability"
-  | "contribution";
+  | "contribution"
+  | "aborted";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow maintenance execution preview input is invalid.",
+  "shared-preview": "Wakeflow maintenance shared preview is unavailable.",
   "source-config": "Wakeflow maintenance execution preview source Config is unavailable.",
   capability: "Wakeflow maintenance execution preview host capability is invalid.",
   contribution: "Wakeflow maintenance execution preview host contribution is invalid.",
+  aborted: "Wakeflow maintenance execution preview was aborted.",
 } as const satisfies Readonly<Record<
   WakeflowMaintenanceExecutionPreviewErrorReason,
   string
@@ -77,12 +86,17 @@ function fail(
   throw new WakeflowMaintenanceExecutionPreviewError(reason, path);
 }
 
+function assertNotAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true) fail("aborted", "$signal");
+}
+
 async function resolveDesiredConfig(
   root: RootedDirectory,
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
-  expectedDigest: string | null,
+  expectedDigest: Sha256Digest | null,
 ): Promise<WakeflowConfigV3Model | null> {
   if (request.desiredConfig !== null) return request.desiredConfig;
+  assertNotAborted(request.signal);
   let snapshot;
   try {
     snapshot = await readWakeflowConfigAuthoritySnapshot(
@@ -90,9 +104,14 @@ async function resolveDesiredConfig(
       request.signal === undefined ? undefined : { signal: request.signal },
     );
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigAuthoritySnapshotError) return null;
+    if (error instanceof WakeflowConfigAuthoritySnapshotError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (expectedDigest !== null) fail("source-config", "$config");
+      return null;
+    }
     throw error;
   }
+  assertNotAborted(request.signal);
   if (snapshot.configDigest !== expectedDigest) {
     fail("source-config", "$config");
   }
@@ -104,6 +123,7 @@ export async function previewWakeflowMaintenanceExecution(
   rootValue: RootedDirectory,
   requestValue: WakeflowStaticMaterializationPreviewRequest,
   capabilityValue?: Readonly<WakeflowHostMaintenanceCapability>,
+  gateContextValue?: Readonly<WakeflowMaintenanceGateContext>,
 ): Promise<Readonly<WakeflowMaintenanceExecutionPlan>> {
   if (
     typeof rootValue !== "object"
@@ -113,7 +133,16 @@ export async function previewWakeflowMaintenanceExecution(
   ) {
     fail("input", "$root");
   }
-  const request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
+  let request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>;
+  try {
+    request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowStaticMaterializationPreviewError) {
+      fail("input", error.path);
+    }
+    throw error;
+  }
+  assertNotAborted(request.signal);
   let capability: Readonly<WakeflowHostMaintenanceCapability> | undefined;
   if (capabilityValue !== undefined) {
     try {
@@ -129,17 +158,36 @@ export async function previewWakeflowMaintenanceExecution(
       throw error;
     }
   }
-  const sharedPreview = await previewWakeflowStaticMaterialization(
-    rootValue,
-    requestValue,
-  );
-  const desiredConfig = await resolveDesiredConfig(
-    rootValue,
-    request,
-    sharedPreview.desiredConfigDigest,
-  );
+  let sharedPreview: Awaited<ReturnType<
+    typeof previewWakeflowStaticMaterialization
+  >>;
+  try {
+    sharedPreview = await previewWakeflowStaticMaterialization(
+      rootValue,
+      requestValue,
+      gateContextValue === undefined
+        ? {}
+        : { gateContext: gateContextValue },
+    );
+  } catch (error: unknown) {
+    if (error instanceof WakeflowStaticMaterializationPreviewError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      fail("shared-preview", error.path);
+    }
+    throw error;
+  }
+  let desiredConfig = request.desiredConfig;
+  if (capability !== undefined) {
+    desiredConfig = await resolveDesiredConfig(
+      rootValue,
+      request,
+      sharedPreview.desiredConfigDigest,
+    );
+  }
   let contribution = null;
-  if (capability !== undefined && desiredConfig !== null) {
+  if (capability !== undefined && desiredConfig === null) {
+    if (sharedPreview.status === "ready") fail("source-config", "$config");
+  } else if (capability !== undefined && desiredConfig !== null) {
     try {
       contribution = parseWakeflowHostMaintenanceContribution(
         await capability.planContribution(rootValue, {
@@ -154,6 +202,7 @@ export async function previewWakeflowMaintenanceExecution(
         contribution,
       );
     } catch (error: unknown) {
+      assertNotAborted(request.signal);
       if (
         error instanceof WakeflowHostMaintenanceContributionError
         || error instanceof WakeflowHostMaintenanceCapabilityError
@@ -163,6 +212,7 @@ export async function previewWakeflowMaintenanceExecution(
       throw error;
     }
   }
+  assertNotAborted(request.signal);
   return createWakeflowMaintenanceExecutionPlan(
     sharedPreview,
     request.currentHostProfile,

@@ -24,7 +24,7 @@ import {
 } from "./rooted-resource-parent-handle.js";
 
 /**
- * Wakeflow Foundation / Filesystem：指定普通文件路径名的持久化删除。
+ * Wakeflow Foundation / Filesystem：指定普通文件路径名的耐久删除。
  *
  * 调用方必须提供冻结的预期节点。本模块持有不跟随符号链接的源句柄和父目录句柄，
  * 并在提交前确认路径名、句柄和预期完全一致。默认结算策略要求删除后路径持续不存在；
@@ -50,8 +50,6 @@ export interface ExactRegularFileUnlinkReceipt {
   readonly resourcePath: PortableResourcePath;
   readonly nodeBefore: Readonly<FileNodeSnapshot>;
   readonly nodeAfterUnlink: Readonly<FileNodeSnapshot>;
-  readonly previousLinkCount: bigint;
-  readonly remainingLinkCount: bigint;
   readonly replacementObserved: boolean;
 }
 
@@ -199,7 +197,9 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   if (signal !== undefined && !isAbortSignal(signal)) {
     fail("input", "$options.signal");
   }
-  const settlement = record.settlement ?? "absent";
+  const settlement = record.settlement === undefined
+    ? "absent"
+    : record.settlement;
   if (settlement !== "absent" && settlement !== "replacement-allowed") {
     fail("input", "$options.settlement");
   }
@@ -452,7 +452,7 @@ function sameUnlinkedNode(
 }
 
 /**
- * 持久化删除仍与指定冻结节点一致的普通文件路径名。
+ * 耐久删除仍与指定冻结节点一致的普通文件路径名。
  *
  * 成功 receipt 始终证明原 inode linkCount-1。默认 settlement 还证明 pathname
  * absent；replacement-allowed 则只证明若原名已有 successor，它与原 inode 身份不同。
@@ -520,8 +520,6 @@ export async function unlinkRegularFileExactly(
       resourcePath,
       nodeBefore,
       nodeAfterUnlink: settled,
-      previousLinkCount: nodeBefore.linkCount,
-      remainingLinkCount,
       replacementObserved,
     });
   } catch (error: unknown) {

@@ -106,7 +106,6 @@ test("durable file copy streams exact bytes across rooted directories", async (t
     },
   );
 
-  equal(result.kind, "DurableFileCopyCandidate");
   equal(result.source.resourcePath, sourceRef);
   equal(result.candidate.resourcePath, candidateRef);
   equal(result.source.digest, result.candidate.digest);

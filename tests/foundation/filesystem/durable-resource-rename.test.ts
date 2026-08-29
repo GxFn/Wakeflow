@@ -224,6 +224,16 @@ test("missing, symlink, and descendant source shapes fail closed", async () => {
       "input",
       "$destinationResourcePath",
     );
+    await expectRenameError(
+      () => renameResourceDurably(
+        root,
+        parsePortableResourcePath("directory"),
+        asPortableResourcePath(null),
+        { expectedSourceNode: directory.node },
+      ),
+      "input",
+      "$destinationResourcePath",
+    );
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

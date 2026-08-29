@@ -46,7 +46,6 @@ export interface WakeflowHostMaintenanceContribution {
   readonly hostId: WakeflowWorkspaceHostId;
   readonly capabilityId: string;
   readonly status: "ready" | "blocked";
-  readonly sourcePlanDigest: Sha256Digest;
   readonly blockerCodes: readonly string[];
   readonly operations:
     readonly Readonly<WakeflowHostMaintenanceOperation>[];
@@ -67,7 +66,6 @@ export interface CreateWakeflowHostMaintenanceContributionRequest {
   readonly hostId: WakeflowWorkspaceHostId;
   readonly capabilityId: string;
   readonly status: "ready" | "blocked";
-  readonly sourcePlanDigest: Sha256Digest;
   readonly blockerCodes: readonly string[];
   readonly operations: readonly WakeflowHostMaintenanceOperationInput[];
 }
@@ -115,6 +113,7 @@ const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 const COMPONENT_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const OPERATION_ID_PATTERN = /^[a-z][a-z0-9-]*(?::[a-z0-9_][a-z0-9_-]*)+$/u;
 const BLOCKER_CODE_PATTERN = /^[a-z][a-z0-9_-]*(?::[a-z0-9_][a-z0-9_-]*)*$/u;
+const TARGET_KEY_PATTERN = /^[a-z0-9][a-z0-9_.:-]{0,255}$/u;
 const MAXIMUM_OPERATIONS = 128;
 const MAXIMUM_BLOCKERS = 128;
 const MAXIMUM_IDENTITY_LENGTH = 256;
@@ -159,10 +158,8 @@ function parseIdentity(
 function parseTargetKey(value: unknown, path: string): string {
   if (
     typeof value !== "string"
-    || value.length === 0
-    || value.length > MAXIMUM_IDENTITY_LENGTH
     || !value.isWellFormed()
-    || /[\u0000-\u001f\u007f-\u009f]/u.test(value)
+    || !TARGET_KEY_PATTERN.test(value)
   ) {
     fail("identity", path);
   }
@@ -254,6 +251,7 @@ export function computeWakeflowHostMaintenanceContributionDigest(
 function assertOrderedOperations(
   operations: readonly Readonly<WakeflowHostMaintenanceOperation>[],
 ): void {
+  const targets = new Set<string>();
   for (let index = 0; index < operations.length; index += 1) {
     const current = operations[index];
     const previous = operations[index - 1];
@@ -266,6 +264,11 @@ function assertOrderedOperations(
     ) {
       fail("order", `$contribution.operations/${index}.operationId`);
     }
+    const target = `${current.ownerId}\u0000${current.targetKey}`;
+    if (targets.has(target)) {
+      fail("order", `$contribution.operations/${index}.targetKey`);
+    }
+    targets.add(target);
   }
 }
 
@@ -277,6 +280,7 @@ function assertOrderedBlockers(blockerCodes: readonly string[]): void {
       current === undefined
       || !BLOCKER_CODE_PATTERN.test(current)
       || current.length > MAXIMUM_IDENTITY_LENGTH
+      || !current.isWellFormed()
       || (previous !== undefined && previous >= current)
     ) {
       fail("order", `$contribution.blockerCodes/${index}`);
@@ -313,7 +317,7 @@ export function createWakeflowHostMaintenanceContribution(
   }
   if (
     Object.keys(record).sort().join("\u0000")
-      !== "blockerCodes\u0000capabilityId\u0000hostId\u0000operations\u0000sourcePlanDigest\u0000status"
+      !== "blockerCodes\u0000capabilityId\u0000hostId\u0000operations\u0000status"
     || typeof record.hostId !== "string"
     || !HOST_ID_SET.has(record.hostId)
     || (record.status !== "ready" && record.status !== "blocked")
@@ -358,10 +362,6 @@ export function createWakeflowHostMaintenanceContribution(
         COMPONENT_ID_PATTERN,
       ),
       status: record.status,
-      sourcePlanDigest: digest(
-        record.sourcePlanDigest,
-        "$request.sourcePlanDigest",
-      ),
       blockerCodes,
       operations,
     });
@@ -396,7 +396,7 @@ export function parseWakeflowHostMaintenanceContribution(
   }
   if (
     Object.keys(record).sort().join("\u0000")
-      !== "blockerCodes\u0000capabilityId\u0000contributionDigest\u0000hostId\u0000kind\u0000operations\u0000schemaVersion\u0000sourcePlanDigest\u0000status"
+      !== "blockerCodes\u0000capabilityId\u0000contributionDigest\u0000hostId\u0000kind\u0000operations\u0000schemaVersion\u0000status"
     || record.kind !== "WakeflowHostMaintenanceContribution"
     || record.schemaVersion !== 1
     || typeof record.hostId !== "string"
@@ -430,10 +430,6 @@ export function parseWakeflowHostMaintenanceContribution(
         COMPONENT_ID_PATTERN,
       ),
       status: record.status,
-      sourcePlanDigest: digest(
-        record.sourcePlanDigest,
-        "$contribution.sourcePlanDigest",
-      ),
       blockerCodes,
       operations,
     });

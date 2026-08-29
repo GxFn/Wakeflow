@@ -37,7 +37,7 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../../foundation/identity/wakeflow-durable-id.js";
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
@@ -46,6 +46,7 @@ import {
 } from "../../foundation/time/utc-instant.js";
 import {
   readUtcWallClock,
+  UtcWallClockError,
   type UtcWallClock,
 } from "../../foundation/time/wall-clock.js";
 import type { TodoIntake } from "./todo-intake.js";
@@ -58,22 +59,19 @@ import {
 /**
  * Wakeflow Governance / TODO：TODO 条目的唯一可变状态快照与前向转换。
  *
- * 修订 1 从不可变接收记录创建；后续状态保存 `previousStateDigest`。领取操作绑定 Demand
- * 挂载；Archive 只能从指定的已申领状态创建 `archived` 终态，并写入业务归档回执。
+ * 修订 1 从不可变接收记录创建为待领取或等待依赖；领取操作绑定 Demand 挂载；Archive
+ * 只能从指定的已申领状态创建 `archived` 终态，并写入业务归档回执。Demand/Task 的
+ * blocked、observing、completed 与 cancelled 生命周期不在 TODO 状态中重复保存。
  * 领域事务负责互斥锁、恢复意图、磁盘条件替换和投影发布，本模块保持为纯函数。
  */
 
-export const TODO_STATE_ARTIFACT_KIND = "wakeflow-todo-state" as const;
-export const TODO_STATE_SCHEMA_VERSION = 1 as const;
+const TODO_STATE_ARTIFACT_KIND = "wakeflow-todo-state" as const;
+const TODO_STATE_SCHEMA_VERSION = 1 as const;
 
 export type TodoStatus =
   | "pending-claim"
   | "parked"
   | "claimed"
-  | "blocked"
-  | "observing"
-  | "completed"
-  | "cancelled"
   | "archived";
 
 export interface TodoDemandMount {
@@ -93,11 +91,6 @@ export interface TodoArchiveReceipt {
   readonly manifestDigest: Sha256Digest;
   readonly archivedAt: UtcInstant;
 }
-
-/** BusinessArchive 职责所有者交给 TODO 职责所有者的完整归档授权。 */
-export type TodoArchiveAuthorizationReceipt = Readonly<
-  Omit<TodoArchiveReceipt, "archivedAt">
->;
 
 export interface TodoState {
   readonly artifactKind: typeof TODO_STATE_ARTIFACT_KIND;
@@ -274,8 +267,6 @@ function assertStateRelations(state: Readonly<TodoState>): void {
   }
   const mounted = state.mount !== null;
   const requiresMount = state.status === "claimed"
-    || state.status === "completed"
-    || state.status === "cancelled"
     || state.status === "archived";
   if (mounted !== requiresMount) fail("status", "$/mount");
 
@@ -396,7 +387,19 @@ function readTransitionClock(options: TodoStateTransitionOptions): UtcInstant {
   if (Object.keys(record).some((key) => key !== "clock")) {
     fail("input", "$options");
   }
-  return readUtcWallClock(record.clock as UtcWallClock | undefined);
+  try {
+    return readUtcWallClock(record.clock as UtcWallClock | undefined);
+  } catch (error: unknown) {
+    if (error instanceof UtcWallClockError) fail("time", "$options.clock");
+    throw error;
+  }
+}
+
+function nextRevision(current: Readonly<TodoState>): number {
+  if (current.revision >= Number.MAX_SAFE_INTEGER) {
+    fail("revision", "$/revision");
+  }
+  return current.revision + 1;
 }
 
 /** 从指定的待领取状态纯计算已领取状态。 */
@@ -410,14 +413,17 @@ export function claimTodoState(
     fail("status", "$/status");
   }
   const mount = parseTodoDemandMount(mountValue);
+  const revision = nextRevision(current);
+  const previousStateDigest = computeTodoStateDigest(current);
+  const updatedAt = readTransitionClock(options);
   return parseTodoState({
     artifactKind: TODO_STATE_ARTIFACT_KIND,
     schemaVersion: TODO_STATE_SCHEMA_VERSION,
     todoId: current.todoId,
-    revision: current.revision + 1,
-    previousStateDigest: computeTodoStateDigest(current),
+    revision,
+    previousStateDigest,
     status: "claimed",
-    updatedAt: readTransitionClock(options),
+    updatedAt,
     mount,
     archive: null,
   });
@@ -461,21 +467,34 @@ export function archiveTodoState(
     "$/archive/demandId",
   );
   if (demandId !== current.mount.demandId) fail("archive", "$/archive/demandId");
-  const archivedAt = readTransitionClock(options);
   const claimedStateDigest = computeTodoStateDigest(current);
-  if (
-    parseDigest(
-      receipt.claimedStateDigest,
-      "$/archive/claimedStateDigest",
-    ) !== claimedStateDigest
-  ) {
+  const admittedClaimedStateDigest = parseDigest(
+    receipt.claimedStateDigest,
+    "$/archive/claimedStateDigest",
+  );
+  if (admittedClaimedStateDigest !== claimedStateDigest) {
     fail("archive", "$/archive/claimedStateDigest");
   }
+  const archiveId = parseDurableId(
+    receipt.archiveId,
+    "archive",
+    "$/archive/archiveId",
+  );
+  const intakeDigest = parseDigest(
+    receipt.intakeDigest,
+    "$/archive/intakeDigest",
+  );
+  const manifestDigest = parseDigest(
+    receipt.manifestDigest,
+    "$/archive/manifestDigest",
+  );
+  const revision = nextRevision(current);
+  const archivedAt = readTransitionClock(options);
   return parseTodoState({
     artifactKind: TODO_STATE_ARTIFACT_KIND,
     schemaVersion: TODO_STATE_SCHEMA_VERSION,
     todoId: current.todoId,
-    revision: current.revision + 1,
+    revision,
     previousStateDigest: claimedStateDigest,
     status: "archived",
     updatedAt: archivedAt,
@@ -483,15 +502,12 @@ export function archiveTodoState(
     archive: {
       artifactKind: "wakeflow-business-archive-receipt",
       schemaVersion: 1,
-      archiveId: receipt.archiveId,
+      archiveId,
       demandId,
       todoId,
-      intakeDigest: parseDigest(
-        receipt.intakeDigest,
-        "$/archive/intakeDigest",
-      ),
+      intakeDigest,
       claimedStateDigest,
-      manifestDigest: receipt.manifestDigest,
+      manifestDigest,
       archivedAt,
     },
   });
@@ -521,6 +537,6 @@ export function parseTodoStateDocument(text: unknown): Readonly<TodoState> {
 /** 计算 State 的 Canonical JSON 语义摘要。 */
 export function computeTodoStateDigest(state: unknown): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
-    parseTodoState(state) as unknown as JsonValue,
+    parseTodoState(state),
   );
 }

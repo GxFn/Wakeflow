@@ -12,7 +12,11 @@ import {
   sameFileNodeSnapshot,
   type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
-import type { PortableResourcePath } from "./portable-resource-path.js";
+import {
+  parsePortableResourcePath,
+  PortableResourcePathError,
+  type PortableResourcePath,
+} from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import {
   RootedExactResourceHandle,
@@ -46,13 +50,11 @@ export interface DurableRegularFileLinkOptions {
 }
 
 /** 成功结果描述已经完成 inode 与目标父目录同步的精确链接对。 */
-export interface DurableRegularFileLinkResult {
+interface DurableRegularFileLinkResult {
   readonly sourceResourcePath: PortableResourcePath;
   readonly destinationResourcePath: PortableResourcePath;
   readonly sourceNode: Readonly<FileNodeSnapshot>;
   readonly destinationNode: Readonly<FileNodeSnapshot>;
-  readonly previousLinkCount: bigint;
-  readonly linkedPairLinkCount: bigint;
 }
 
 /** 普通文件持久化链接失败的分类。 */
@@ -129,6 +131,18 @@ type ResourceErrorPath = "$sourceResourcePath" | "$destinationResourcePath";
 
 function fail(reason: DurableRegularFileLinkErrorReason, path: string): never {
   throw new DurableRegularFileLinkError(reason, path);
+}
+
+function parseResourcePath(
+  value: unknown,
+  path: ResourceErrorPath,
+): PortableResourcePath {
+  try {
+    return parsePortableResourcePath(value, path);
+  } catch (error: unknown) {
+    if (error instanceof PortableResourcePathError) fail("input", path);
+    throw error;
+  }
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
@@ -261,11 +275,13 @@ async function openResourceParent(
 async function assertParentCurrent(
   parent: RootedResourceParentHandle,
   errorPath: ResourceErrorPath,
+  afterCommit = false,
 ): Promise<void> {
   try {
     await parent.assertCurrent();
   } catch (error: unknown) {
     if (error instanceof RootedResourceParentHandleError) {
+      if (afterCommit) fail("commit-uncertain", errorPath);
       mapParentHandleError(error, "current", errorPath);
     }
     throw error;
@@ -303,6 +319,7 @@ async function syncParent(
 
 async function closeParent(
   parent: RootedResourceParentHandle,
+  errorPath: ResourceErrorPath,
 ): Promise<DurableRegularFileLinkError | undefined> {
   try {
     await parent.close();
@@ -311,7 +328,7 @@ async function closeParent(
     if (error instanceof RootedResourceParentHandleError) {
       return new DurableRegularFileLinkError(
         error.reason === "close-failure" ? "close-failure" : "parent-changed",
-        "$resourcePath",
+        errorPath,
       );
     }
     throw error;
@@ -416,7 +433,10 @@ async function closeSource(
     return undefined;
   } catch (error: unknown) {
     if (error instanceof RootedExactResourceHandleError) {
-      return new DurableRegularFileLinkError("close-failure", "$resourcePath");
+      return new DurableRegularFileLinkError(
+        "close-failure",
+        "$sourceResourcePath",
+      );
     }
     throw error;
   }
@@ -498,32 +518,39 @@ export async function linkRegularFileWithoutReplacement(
 ): Promise<Readonly<DurableRegularFileLinkResult>> {
   assertRoot(root);
   const parsed = parseOptions(options);
-  if (sourceResourcePath === destinationResourcePath) {
+  const sourcePath = parseResourcePath(
+    sourceResourcePath,
+    "$sourceResourcePath",
+  );
+  const destinationPath = parseResourcePath(
+    destinationResourcePath,
+    "$destinationResourcePath",
+  );
+  if (sourcePath === destinationPath) {
     fail("input", "$destinationResourcePath");
   }
   assertNotAborted(parsed.signal);
 
   const sourceParent = await openResourceParent(
     root,
-    sourceResourcePath,
+    sourcePath,
     "$sourceResourcePath",
   );
   let destinationParent: RootedResourceParentHandle | undefined;
   let source: RootedExactResourceHandle | undefined;
-  let committed = false;
   let primaryError: unknown;
   let result: Readonly<DurableRegularFileLinkResult> | undefined;
 
   try {
     destinationParent = await openResourceParent(
       root,
-      destinationResourcePath,
+      destinationPath,
       "$destinationResourcePath",
     );
 
     source = await openExactSource(
       root,
-      sourceResourcePath,
+      sourcePath,
       parsed.expectedSourceNode,
     );
     if (source.resourceAbsolutePath !== sourceParent.resourceAbsolutePath) {
@@ -531,7 +558,7 @@ export async function linkRegularFileWithoutReplacement(
     }
     if (
       source.initialNodeSnapshot.deviceId
-      !== destinationParent.initialParentSnapshot.deviceId
+      !== destinationParent.parentDeviceId
     ) {
       fail("cross-device", "$destinationResourcePath");
     }
@@ -570,8 +597,6 @@ export async function linkRegularFileWithoutReplacement(
       if (code === "EXDEV") fail("cross-device", "$destinationResourcePath");
       fail("link-failure", "$destinationResourcePath");
     }
-    committed = true;
-
     const nodeBefore = source.initialNodeSnapshot;
     const linkedPairLinkCount = nodeBefore.linkCount + 1n;
     const linked = await inspectLinkedPair(
@@ -582,8 +607,16 @@ export async function linkRegularFileWithoutReplacement(
     );
     await syncCommittedSource(source);
     await syncParent(destinationParent, "$destinationResourcePath");
-    await assertParentCurrent(sourceParent, "$sourceResourcePath");
-    await assertParentCurrent(destinationParent, "$destinationResourcePath");
+    await assertParentCurrent(
+      sourceParent,
+      "$sourceResourcePath",
+      true,
+    );
+    await assertParentCurrent(
+      destinationParent,
+      "$destinationResourcePath",
+      true,
+    );
     const final = await inspectLinkedPair(
       source,
       sourceParent,
@@ -600,12 +633,10 @@ export async function linkRegularFileWithoutReplacement(
       fail("commit-uncertain", "$destinationResourcePath");
     }
     result = Object.freeze({
-      sourceResourcePath,
-      destinationResourcePath,
+      sourceResourcePath: sourcePath,
+      destinationResourcePath: destinationPath,
       sourceNode: final.sourceNode,
       destinationNode: final.destinationNode,
-      previousLinkCount: nodeBefore.linkCount,
-      linkedPairLinkCount,
     });
   } catch (error: unknown) {
     primaryError = error;
@@ -618,18 +649,24 @@ export async function linkRegularFileWithoutReplacement(
     }
   }
   if (destinationParent !== undefined) {
-    const closeError = await closeParent(destinationParent);
+    const closeError = await closeParent(
+      destinationParent,
+      "$destinationResourcePath",
+    );
     if (primaryError === undefined && closeError !== undefined) {
       primaryError = closeError;
     }
   }
-  const sourceParentCloseError = await closeParent(sourceParent);
+  const sourceParentCloseError = await closeParent(
+    sourceParent,
+    "$sourceResourcePath",
+  );
   if (primaryError === undefined && sourceParentCloseError !== undefined) {
     primaryError = sourceParentCloseError;
   }
 
   if (primaryError !== undefined) throw primaryError;
-  if (committed !== true || result === undefined) {
+  if (result === undefined) {
     fail("commit-uncertain", "$destinationResourcePath");
   }
   return result;

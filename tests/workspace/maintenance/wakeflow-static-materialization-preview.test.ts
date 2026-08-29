@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -44,6 +44,7 @@ import {
 } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 import {
   previewWakeflowStaticMaterialization,
+  WakeflowStaticMaterializationPreviewError,
 } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
 import {
   publishWakeflowActiveWorkspaceProjection,
@@ -257,6 +258,25 @@ test("fresh static preview is deterministic, ordered and strictly read-only", as
   );
   deepEqual(readdirSync(workspace.absolutePath).sort(), before);
   equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), false);
+});
+
+test("static preview preserves cancellation as an operation outcome", async (t) => {
+  const workspace = await fixture(t);
+  const controller = new AbortController();
+  controller.abort();
+  await rejects(
+    previewWakeflowStaticMaterialization(
+      workspace.root,
+      {
+        ...request("fresh-initialize", desiredConfig()),
+        signal: controller.signal,
+      },
+    ),
+    (error: unknown) => (
+      error instanceof WakeflowStaticMaterializationPreviewError
+      && error.reason === "aborted"
+    ),
+  );
 });
 
 test("fresh static preview blocks even an empty pre-existing managed Support root", async (t) => {

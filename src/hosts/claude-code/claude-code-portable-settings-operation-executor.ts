@@ -26,7 +26,7 @@ import {
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
-} from "../../foundation/identity/wakeflow-durable-id.js";
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   WakeflowWorkspaceHostResourceProfileError,

@@ -22,11 +22,12 @@ import {
 } from "./portable-resource-path.js";
 
 /**
- * Wakeflow Foundation / Filesystem：持久化原子文件暂存资源的自描述地址。
+ * Wakeflow Foundation / Filesystem：耐久原子文件发布的自描述暂存地址。
  *
  * 暂存文件名只携带操作类型、目标资源路径摘要、输入摘要、最终权限位，以及进程、
- * 线程和尝试标识，不泄漏目标路径或文件字节。该名称为崩溃恢复提供可验证的路由事实；
- * 暂存资源本身始终不是权威事实，名称也不能证明内容正确或允许删除。
+ * 线程和尝试标识，不直接写入目标路径或文件字节。摘要只能用于路由和相等性检查，
+ * 不提供保密性。该名称为崩溃恢复提供可验证的路由事实；暂存资源本身始终不是权威
+ * 事实，名称也不能证明内容正确或允许删除。
  */
 
 export type DurableAtomicFileStageOperation = "create" | "replace";
@@ -79,7 +80,9 @@ export class DurableAtomicFileStageAddressError extends Error {
 }
 
 const STAGE_PREFIX = ".wakeflow-atomic-";
-const STAGE_PATTERN = /^(?:\.wakeflow-atomic-)(?<operation>create|replace)-(?<target>[0-9a-f]{64})-(?<input>[0-9a-f]{64})-m(?<mode>[0-7]{3})__(?<pid>[1-9][0-9]*)-(?<threadId>0|[1-9][0-9]*)-(?<attempt>[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.tmp$/u;
+const STAGE_FORMAT_VERSION = "v1";
+const MAXIMUM_STAGE_FILE_NAME_LENGTH = 238;
+const STAGE_PATTERN = /^(?:\.wakeflow-atomic-v1-)(?<operation>create|replace)-(?<target>[0-9a-f]{64})-(?<input>[0-9a-f]{64})-m(?<mode>[0-7]{3})__(?<pid>[1-9][0-9]*)-(?<threadId>0|[1-9][0-9]*)-(?<attempt>[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.tmp$/u;
 const ACTIVE_STAGE_TOKENS = new Set<string>();
 const ISSUED_STAGE_ADDRESSES = new WeakSet<object>();
 
@@ -139,6 +142,30 @@ function parseOwnerInteger(
   return parsed;
 }
 
+function readAddressFileName(value: unknown): string {
+  if (
+    typeof value !== "object"
+    || value === null
+    || types.isProxy(value)
+  ) {
+    fail("input", "$address");
+  }
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(value, "fileName");
+  } catch {
+    fail("input", "$address");
+  }
+  if (
+    descriptor === undefined
+    || !Object.hasOwn(descriptor, "value")
+    || typeof descriptor.value !== "string"
+  ) {
+    fail("input", "$address");
+  }
+  return descriptor.value;
+}
+
 /** 计算目标可移植引用的脱敏、稳定暂存路由摘要。 */
 export function computeDurableAtomicFileStageTargetDigest(
   value: unknown,
@@ -171,7 +198,12 @@ export function hasDurableAtomicFileStagePrefix(value: unknown): boolean {
 export function parseDurableAtomicFileStageFileName(
   value: unknown,
 ): Readonly<DurableAtomicFileStageAddress> {
-  if (typeof value !== "string") fail("input", "$fileName");
+  if (
+    typeof value !== "string"
+    || value.length > MAXIMUM_STAGE_FILE_NAME_LENGTH
+  ) {
+    fail("input", "$fileName");
+  }
   const groups = STAGE_PATTERN.exec(value)?.groups;
   if (groups === undefined) fail("input", "$fileName");
   const operation = parseOperation(groups.operation);
@@ -202,31 +234,6 @@ export function parseDurableAtomicFileStageFileName(
   });
 }
 
-/** 把暂存地址放入目标的同一父目录；本函数不会创建或观察文件。 */
-export function durableAtomicFileStageRef(
-  targetResourcePathValue: unknown,
-  addressValue: Readonly<DurableAtomicFileStageAddress>,
-): PortableResourcePath {
-  let targetResourcePath: PortableResourcePath;
-  try {
-    targetResourcePath = parsePortableResourcePath(
-      targetResourcePathValue,
-      "$resourcePath",
-    );
-  } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) {
-      fail("input", "$resourcePath");
-    }
-    throw error;
-  }
-  const address = parseDurableAtomicFileStageFileName(addressValue.fileName);
-  const segments = splitPortableResourcePath(targetResourcePath);
-  return parsePortableResourcePath(
-    [...segments.slice(0, -1), address.fileName].join("/"),
-    "$stageResourcePath",
-  );
-}
-
 /** 为一次原子写入签发并登记进程内活动暂存地址。 */
 export function issueDurableAtomicFileStageAddress(
   operationValue: unknown,
@@ -253,7 +260,7 @@ export function issueDurableAtomicFileStageAddress(
     throw error;
   }
   const token = `${process.pid}-${threadId}-${attempt}`;
-  const fileName = `${STAGE_PREFIX}${operation}-${digestHex(
+  const fileName = `${STAGE_PREFIX}${STAGE_FORMAT_VERSION}-${operation}-${digestHex(
     targetResourcePathDigest,
   )}-${digestHex(inputDigest)}-m${mode.toString(8).padStart(3, "0")}__${token}.tmp`;
   const address = parseDurableAtomicFileStageFileName(fileName);
@@ -283,7 +290,9 @@ export function releaseDurableAtomicFileStageAddress(
 export function readDurableAtomicFileStageOwnerState(
   value: Readonly<DurableAtomicFileStageAddress>,
 ): DurableAtomicFileStageOwnerState {
-  const address = parseDurableAtomicFileStageFileName(value.fileName);
+  const address = parseDurableAtomicFileStageFileName(
+    readAddressFileName(value),
+  );
   if (address.pid === process.pid) {
     if (address.threadId !== threadId) return "unknown";
     return ACTIVE_STAGE_TOKENS.has(address.token) ? "active" : "inactive";

@@ -165,6 +165,18 @@ test("loaded artifact transfer plan rejects modes that erase executable semantic
     directoryMode: 0o755,
     executableFileMode: 0o755,
     regularFileMode: 0o744,
+  }, {
+    directoryMode: 0o500,
+    executableFileMode: 0o755,
+    regularFileMode: 0o644,
+  }, {
+    directoryMode: 0o755,
+    executableFileMode: 0o100,
+    regularFileMode: 0o644,
+  }, {
+    directoryMode: 0o755,
+    executableFileMode: 0o755,
+    regularFileMode: 0o200,
   }]) {
     expectPlanError(
       () => planLoadedArtifactTreeTransfer(

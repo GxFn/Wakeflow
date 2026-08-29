@@ -7,8 +7,11 @@ import { test } from "node:test";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   planDirectoryTreeCandidate,
+  planDirectoryTreeCandidateFromFileDescriptors,
 } from "../../../src/foundation/filesystem/durable-directory-tree-candidate.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/foundation/identity/wakeflow-durable-id.js";
+import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
+import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
@@ -69,10 +72,17 @@ test("Ledger publication intent stores metadata without duplicating member paylo
   });
 
   const intent = createLedgerRecordPublicationIntent(record, plan);
-  equal(intent.recordId, REQUIREMENT_ID);
+  equal(intent.record.artifactKind, "wakeflow-requirement-record");
+  if (intent.record.artifactKind !== "wakeflow-requirement-record") {
+    throw new Error("Expected requirement publication intent.");
+  }
+  equal(intent.record.requirementId, REQUIREMENT_ID);
+  equal(Object.hasOwn(intent, "family"), false);
+  equal(Object.hasOwn(intent, "recordId"), false);
   equal(intent.finalRootRef, `requirements/${REQUIREMENT_ID}`);
-  equal(intent.intentRef, `transactions/requirement-${REQUIREMENT_ID}.intent.json`);
-  equal(intent.lockRef, `transactions/requirement-${REQUIREMENT_ID}.lock`);
+  equal(intent.intentRef, `transactions/${REQUIREMENT_ID}.intent.json`);
+  equal(intent.lockRef, `transactions/${REQUIREMENT_ID}.lock`);
+  equal(intent.stageRef, `transactions/.${REQUIREMENT_ID}.stage`);
   equal(intent.stageRef, ledgerRecordPublicationStageRef(record));
   equal(intent.intentRef, ledgerRecordPublicationIntentRef(record));
   equal(intent.lockRef, ledgerRecordPublicationLockRef(record));
@@ -125,4 +135,48 @@ test("Ledger publication intent rejects a forged stage relation", () => {
     caught = error;
   }
   equal(caught instanceof LedgerRecordPublicationIntentError, true);
+});
+
+test("Ledger publication intent reapplies its owner byte budget", () => {
+  const record = createRequirementRecord({
+    requirementId: REQUIREMENT_ID,
+    programId: PROGRAM_ID,
+    title: "Ledger staged publication",
+    documents: [{
+      role: "requirement-design",
+      path: "design/requirement.md",
+      mediaType: "text/markdown",
+      digest: computeSha256Digest(MEMBER_BYTES),
+    }],
+  }, { clock: () => RECORDED_AT });
+  const recordBytes = encodeUtf8(renderLedgerAuthorityRecord(record));
+  const plan = planDirectoryTreeCandidateFromFileDescriptors([{
+    path: parsePortableResourcePath("design/requirement.md"),
+    byteCount: parseByteCount(4 * 1024 * 1024 + 1),
+    digest: computeSha256Digest(MEMBER_BYTES),
+    mode: 0o644,
+  }, {
+    path: parsePortableResourcePath("record.json"),
+    byteCount: parseByteCount(recordBytes.byteLength),
+    digest: computeSha256Digest(recordBytes),
+    mode: 0o644,
+  }], {
+    directoryMode: 0o755,
+    maximumDepth: 64,
+    maximumEntries: 8192,
+    maximumFileBytes: 32 * 1024 * 1024,
+    maximumFiles: 4096,
+    maximumTotalBytes: 256 * 1024 * 1024,
+  });
+
+  let caught: unknown;
+  try {
+    createLedgerRecordPublicationIntent(record, plan);
+  } catch (error: unknown) {
+    caught = error;
+  }
+  equal(caught instanceof LedgerRecordPublicationIntentError, true);
+  if (caught instanceof LedgerRecordPublicationIntentError) {
+    equal(caught.reason, "tree-plan");
+  }
 });

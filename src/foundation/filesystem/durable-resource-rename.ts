@@ -12,7 +12,11 @@ import {
   sameFileNodeSnapshot,
   type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
-import type { PortableResourcePath } from "./portable-resource-path.js";
+import {
+  parsePortableResourcePath,
+  PortableResourcePathError,
+  type PortableResourcePath,
+} from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import {
   RootedExactResourceHandle,
@@ -41,10 +45,10 @@ export interface DurableResourceRenameOptions {
   readonly signal?: AbortSignal;
 }
 
-export type DurableRenamedResourceKind = "file" | "directory";
+type DurableRenamedResourceKind = "file" | "directory";
 
 /** 成功结果描述已经完成父目录同步的目标节点。 */
-export interface DurableResourceRenameResult {
+interface DurableResourceRenameResult {
   readonly sourceResourcePath: PortableResourcePath;
   readonly destinationResourcePath: PortableResourcePath;
   readonly kind: DurableRenamedResourceKind;
@@ -125,6 +129,18 @@ type ResourceErrorPath = "$sourceResourcePath" | "$destinationResourcePath";
 
 function fail(reason: DurableResourceRenameErrorReason, path: string): never {
   throw new DurableResourceRenameError(reason, path);
+}
+
+function parseResourcePath(
+  value: unknown,
+  path: ResourceErrorPath,
+): PortableResourcePath {
+  try {
+    return parsePortableResourcePath(value, path);
+  } catch (error: unknown) {
+    if (error instanceof PortableResourcePathError) fail("input", path);
+    throw error;
+  }
 }
 
 function isAbortSignal(value: unknown): value is AbortSignal {
@@ -257,11 +273,13 @@ async function openResourceParent(
 async function assertParentCurrent(
   parent: RootedResourceParentHandle,
   errorPath: ResourceErrorPath,
+  afterCommit = false,
 ): Promise<void> {
   try {
     await parent.assertCurrent();
   } catch (error: unknown) {
     if (error instanceof RootedResourceParentHandleError) {
+      if (afterCommit) fail("commit-uncertain", errorPath);
       mapParentHandleError(error, "current", errorPath);
     }
     throw error;
@@ -299,6 +317,7 @@ async function syncParent(
 
 async function closeParent(
   parent: RootedResourceParentHandle,
+  errorPath: ResourceErrorPath,
 ): Promise<DurableResourceRenameError | undefined> {
   try {
     await parent.close();
@@ -307,7 +326,7 @@ async function closeParent(
     if (error instanceof RootedResourceParentHandleError) {
       return new DurableResourceRenameError(
         error.reason === "close-failure" ? "close-failure" : "parent-changed",
-        "$resourcePath",
+        errorPath,
       );
     }
     throw error;
@@ -393,7 +412,10 @@ async function closeSource(
     return undefined;
   } catch (error: unknown) {
     if (error instanceof RootedExactResourceHandleError) {
-      return new DurableResourceRenameError("close-failure", "$resourcePath");
+      return new DurableResourceRenameError(
+        "close-failure",
+        "$sourceResourcePath",
+      );
     }
     throw error;
   }
@@ -487,11 +509,19 @@ export async function renameResourceDurably(
 ): Promise<Readonly<DurableResourceRenameResult>> {
   assertRoot(root);
   const parsed = parseOptions(options);
+  const sourcePath = parseResourcePath(
+    sourceResourcePath,
+    "$sourceResourcePath",
+  );
+  const destinationPath = parseResourcePath(
+    destinationResourcePath,
+    "$destinationResourcePath",
+  );
   if (
-    sourceResourcePath === destinationResourcePath
+    sourcePath === destinationPath
     || (
       parsed.expectedSourceNode.kind === "directory"
-      && destinationInsideSource(sourceResourcePath, destinationResourcePath)
+      && destinationInsideSource(sourcePath, destinationPath)
     )
   ) {
     fail("input", "$destinationResourcePath");
@@ -500,25 +530,24 @@ export async function renameResourceDurably(
 
   const sourceParent = await openResourceParent(
     root,
-    sourceResourcePath,
+    sourcePath,
     "$sourceResourcePath",
   );
   let destinationParent: RootedResourceParentHandle | undefined;
   let source: RootedExactResourceHandle | undefined;
-  let committed = false;
   let primaryError: unknown;
   let result: Readonly<DurableResourceRenameResult> | undefined;
 
   try {
     destinationParent = await openResourceParent(
       root,
-      destinationResourcePath,
+      destinationPath,
       "$destinationResourcePath",
     );
 
     source = await openExactSource(
       root,
-      sourceResourcePath,
+      sourcePath,
       parsed.expectedSourceNode,
     );
     if (source.resourceAbsolutePath !== sourceParent.resourceAbsolutePath) {
@@ -526,7 +555,7 @@ export async function renameResourceDurably(
     }
     if (
       source.initialNodeSnapshot.deviceId
-      !== destinationParent.initialParentSnapshot.deviceId
+      !== destinationParent.parentDeviceId
     ) {
       fail("cross-device", "$destinationResourcePath");
     }
@@ -565,21 +594,27 @@ export async function renameResourceDurably(
       }
       fail("rename-failure", "$destinationResourcePath");
     }
-    committed = true;
-
     await assertSourceAbsent(sourceParent);
     const movedNode = await inspectMovedDestination(destinationParent, source);
     await syncParents(sourceParent, destinationParent);
-    await assertParentCurrent(sourceParent, "$sourceResourcePath");
-    await assertParentCurrent(destinationParent, "$destinationResourcePath");
+    await assertParentCurrent(
+      sourceParent,
+      "$sourceResourcePath",
+      true,
+    );
+    await assertParentCurrent(
+      destinationParent,
+      "$destinationResourcePath",
+      true,
+    );
     await assertSourceAbsent(sourceParent);
     const finalNode = await inspectMovedDestination(destinationParent, source);
     if (!sameFileNodeSnapshot(movedNode, finalNode)) {
       fail("commit-uncertain", "$destinationResourcePath");
     }
     result = Object.freeze({
-      sourceResourcePath,
-      destinationResourcePath,
+      sourceResourcePath: sourcePath,
+      destinationResourcePath: destinationPath,
       kind: source.kind,
       node: finalNode,
     });
@@ -594,18 +629,24 @@ export async function renameResourceDurably(
     }
   }
   if (destinationParent !== undefined) {
-    const closeError = await closeParent(destinationParent);
+    const closeError = await closeParent(
+      destinationParent,
+      "$destinationResourcePath",
+    );
     if (primaryError === undefined && closeError !== undefined) {
       primaryError = closeError;
     }
   }
-  const sourceParentCloseError = await closeParent(sourceParent);
+  const sourceParentCloseError = await closeParent(
+    sourceParent,
+    "$sourceResourcePath",
+  );
   if (primaryError === undefined && sourceParentCloseError !== undefined) {
     primaryError = sourceParentCloseError;
   }
 
   if (primaryError !== undefined) throw primaryError;
-  if (committed !== true || result === undefined) {
+  if (result === undefined) {
     fail("commit-uncertain", "$destinationResourcePath");
   }
   return result;

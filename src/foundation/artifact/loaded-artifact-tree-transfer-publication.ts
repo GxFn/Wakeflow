@@ -25,8 +25,6 @@ import {
   RootedDirectoryError,
 } from "../filesystem/rooted-directory.js";
 import {
-  inspectLoadedArtifactTree,
-  LoadedArtifactTreeIdentityError,
   type LoadedArtifactTreeIdentity,
 } from "./loaded-artifact-tree-identity.js";
 import {
@@ -40,19 +38,19 @@ import {
  *
  * 最终路径已存在时，本 owner 只接受目录计划与 artifact identity 都完全一致、且 candidate
  * 路径已经不存在的幂等 current 状态。最终路径不存在时，它先验证 candidate 整树闭合，
- * 再复用 Foundation durable rename 跨越唯一提交点；提交后重新验证最终目录计划，并把
- * 最终目录作为独立 `RootedDirectory` 再次计算 artifact identity。
+ * 再复用 Foundation durable rename 跨越唯一提交点。Directory Plan与Artifact Manifest
+ * 的严格关系已经由Transfer Plan parser证明，因此一次exact最终树验证即可同时证明
+ * artifact identity，不重复读取并散列全部文件。
  *
  * 本模块不取得领域锁、不跨设备复制、不删除来源或冲突 candidate，也不在 current 状态
  * 自动清理残留。调用方必须持有同时覆盖 candidate 与 final 的领域协调边界。
  */
 
-export interface LoadedArtifactTreeTransferPublicationOptions {
+interface LoadedArtifactTreeTransferPublicationOptions {
   readonly signal?: AbortSignal;
 }
 
-export interface LoadedArtifactTreeTransferPublicationResult {
-  readonly kind: "LoadedArtifactTreeTransferPublication";
+interface LoadedArtifactTreeTransferPublicationResult {
   readonly disposition: "current" | "published";
   readonly plan: Readonly<LoadedArtifactTreeTransferPlan>;
   readonly publication:
@@ -203,23 +201,30 @@ async function inspectResourceOrNull(
 
 function mapTreeInspectionError(
   error: DurableDirectoryTreeCandidateError,
-  afterCommit: boolean,
 ): never {
-  if (afterCommit) fail("commit-uncertain", "$destinationResourcePath");
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "input") fail("input", error.path);
   fail("destination-conflict", "$destinationResourcePath");
 }
 
-async function inspectFinalTree(
+function artifactIdentityFromPlan(
+  plan: Readonly<LoadedArtifactTreeTransferPlan>,
+): Readonly<LoadedArtifactTreeIdentity> {
+  return Object.freeze({
+    artifactDigest: plan.artifactDigest,
+    manifest: plan.manifest,
+  });
+}
+
+async function readCurrentFinal(
   root: RootedDirectory,
   destinationResourcePath: PortableResourcePath,
   plan: Readonly<LoadedArtifactTreeTransferPlan>,
   signal: AbortSignal | undefined,
-  afterCommit: boolean,
-): Promise<Readonly<DirectoryTreeCandidateResult>> {
+): Promise<Readonly<FinalReadback>> {
+  let tree: Readonly<DirectoryTreeCandidateResult>;
   try {
-    return await inspectDirectoryTreeCandidate(
+    tree = await inspectDirectoryTreeCandidate(
       root,
       destinationResourcePath,
       plan.directoryPlan,
@@ -227,125 +232,36 @@ async function inspectFinalTree(
     );
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
-      mapTreeInspectionError(error, afterCommit);
+      mapTreeInspectionError(error);
     }
-    fail(
-      afterCommit ? "commit-uncertain" : "destination-conflict",
-      "$destinationResourcePath",
-    );
+    fail("destination-conflict", "$destinationResourcePath");
   }
+  return Object.freeze({
+    tree,
+    identity: artifactIdentityFromPlan(plan),
+  });
 }
 
-async function inspectFinalArtifact(
-  root: RootedDirectory,
+function readPublishedFinal(
+  publication: Readonly<DurableDirectoryTreePublicationResult>,
   destinationResourcePath: PortableResourcePath,
   plan: Readonly<LoadedArtifactTreeTransferPlan>,
-  signal: AbortSignal | undefined,
-  afterCommit: boolean,
-): Promise<Readonly<LoadedArtifactTreeIdentity>> {
-  let physicalPath: string;
-  try {
-    const resource = await root.inspectExistingResource(
-      destinationResourcePath,
-      "$destinationResourcePath",
-    );
-    if (resource.node.kind !== "directory") {
-      fail(
-        afterCommit ? "commit-uncertain" : "destination-conflict",
-        "$destinationResourcePath",
-      );
-    }
-    physicalPath = resource.physicalPath;
-  } catch (error: unknown) {
-    if (error instanceof LoadedArtifactTreeTransferPublicationError) {
-      throw error;
-    }
-    fail(
-      afterCommit ? "commit-uncertain" : "destination-conflict",
-      "$destinationResourcePath",
-    );
+): Readonly<FinalReadback> {
+  if (
+    publication.destinationResourcePath !== destinationResourcePath
+    || publication.plan.treeDigest !== plan.directoryPlan.treeDigest
+    || publication.rootNode.kind !== "directory"
+  ) {
+    fail("commit-uncertain", "$destinationResourcePath");
   }
-  let finalRoot: RootedDirectory;
-  try {
-    finalRoot = await RootedDirectory.open(physicalPath, "$finalRoot");
-  } catch {
-    fail(
-      afterCommit ? "commit-uncertain" : "destination-conflict",
-      "$destinationResourcePath",
-    );
-  }
-  let identity: Readonly<LoadedArtifactTreeIdentity> | undefined;
-  let primaryError: unknown;
-  try {
-    identity = await inspectLoadedArtifactTree(
-      finalRoot,
-      signal === undefined ? undefined : { signal },
-    );
-    if (identity.artifactDigest !== plan.artifactDigest) {
-      fail(
-        afterCommit ? "commit-uncertain" : "destination-conflict",
-        "$destinationResourcePath",
-      );
-    }
-  } catch (error: unknown) {
-    if (error instanceof LoadedArtifactTreeTransferPublicationError) {
-      primaryError = error;
-    } else if (
-      error instanceof LoadedArtifactTreeIdentityError
-      && error.reason === "aborted"
-      && !afterCommit
-    ) {
-      primaryError = new LoadedArtifactTreeTransferPublicationError(
-        "aborted",
-        "$signal",
-      );
-    } else {
-      primaryError = new LoadedArtifactTreeTransferPublicationError(
-        afterCommit ? "commit-uncertain" : "destination-conflict",
-        "$destinationResourcePath",
-      );
-    }
-  }
-  try {
-    await finalRoot.close();
-  } catch {
-    primaryError = new LoadedArtifactTreeTransferPublicationError(
-      afterCommit ? "commit-uncertain" : "destination-conflict",
-      "$destinationResourcePath",
-    );
-  }
-  if (primaryError !== undefined) throw primaryError;
-  if (identity === undefined) {
-    fail(
-      afterCommit ? "commit-uncertain" : "destination-conflict",
-      "$destinationResourcePath",
-    );
-  }
-  return identity;
-}
-
-async function readBackFinal(
-  root: RootedDirectory,
-  destinationResourcePath: PortableResourcePath,
-  plan: Readonly<LoadedArtifactTreeTransferPlan>,
-  signal: AbortSignal | undefined,
-  afterCommit: boolean,
-): Promise<Readonly<FinalReadback>> {
-  const tree = await inspectFinalTree(
-    root,
-    destinationResourcePath,
-    plan,
-    signal,
-    afterCommit,
-  );
-  const identity = await inspectFinalArtifact(
-    root,
-    destinationResourcePath,
-    plan,
-    signal,
-    afterCommit,
-  );
-  return Object.freeze({ tree, identity });
+  return Object.freeze({
+    tree: Object.freeze({
+      candidateRootPath: destinationResourcePath,
+      plan: plan.directoryPlan,
+      rootNode: publication.rootNode,
+    }),
+    identity: artifactIdentityFromPlan(plan),
+  });
 }
 
 function mapPublicationError(
@@ -384,12 +300,12 @@ export async function publishLoadedArtifactTreeTransferCandidate(
   optionsValue?: LoadedArtifactTreeTransferPublicationOptions,
 ): Promise<Readonly<LoadedArtifactTreeTransferPublicationResult>> {
   assertRoot(destinationRootValue);
+  const options = parseOptions(optionsValue);
+  assertNotAborted(options.signal);
   const plan = parsePlan(planValue);
   const destinationResourcePath = parseDestinationPath(
     destinationResourcePathValue,
   );
-  const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
 
   const existingDestination = await inspectResourceOrNull(
     destinationRootValue,
@@ -404,15 +320,13 @@ export async function publishLoadedArtifactTreeTransferCandidate(
     ) {
       fail("candidate-residue", "$candidate");
     }
-    const final = await readBackFinal(
+    const final = await readCurrentFinal(
       destinationRootValue,
       destinationResourcePath,
       plan,
       options.signal,
-      false,
     );
     return Object.freeze({
-      kind: "LoadedArtifactTreeTransferPublication",
       disposition: "current",
       plan,
       publication: null,
@@ -451,15 +365,12 @@ export async function publishLoadedArtifactTreeTransferCandidate(
     }
     fail("operation-failure", "$destinationResourcePath");
   }
-  const final = await readBackFinal(
-    destinationRootValue,
+  const final = readPublishedFinal(
+    publication,
     destinationResourcePath,
     plan,
-    options.signal,
-    true,
   );
   return Object.freeze({
-    kind: "LoadedArtifactTreeTransferPublication",
     disposition: "published",
     plan,
     publication,

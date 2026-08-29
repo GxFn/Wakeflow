@@ -32,15 +32,16 @@ import { decodeUtf8, Utf8Error } from "../text/utf8.js";
  * 才从具体能力中提取共享 runner，避免形成可执行任意 argv 的通用 `GitClient`。
  */
 
-export const GIT_IGNORE_OBSERVATION_LIMITS = Object.freeze({
+const GIT_IGNORE_OBSERVATION_LIMITS = Object.freeze({
   maximumProbePaths: 512,
   maximumInputBytes: 256 * 1024,
   maximumOutputBytes: 1024 * 1024,
+  maximumOutputChunks: 2048,
   timeoutMilliseconds: 5_000,
 } as const);
 
 /** Git 为一个路径选出的最终 ignore 模式；negated 表示该模式把路径重新纳入。 */
-export interface GitIgnorePatternDecision {
+interface GitIgnorePatternDecision {
   /** Git 原始来源；可能是本机绝对路径，只供当前进程判断，不得进入可移植记录。 */
   readonly source: string;
   readonly lineNumber: number;
@@ -56,8 +57,7 @@ export interface GitIgnorePathObservation {
 }
 
 /** 与一次批量 Git 调用绑定、保持输入顺序的冻结观察。 */
-export interface GitIgnoreObservation {
-  readonly kind: "GitIgnoreObservation";
+interface GitIgnoreObservation {
   readonly paths: readonly Readonly<GitIgnorePathObservation>[];
 }
 
@@ -271,7 +271,15 @@ function runGitCheckIgnore(
   probePaths: readonly PortableResourcePath[],
   signal: AbortSignal | undefined,
 ): Promise<Readonly<GitCheckIgnoreResult>> {
-  const input = Buffer.from(`${probePaths.join("\u0000")}\u0000`, "utf8");
+  let input: Buffer;
+  try {
+    input = Buffer.from(`${probePaths.join("\u0000")}\u0000`, "utf8");
+  } catch {
+    return Promise.reject(new GitIgnoreObservationError(
+      "query-failure",
+      "$git",
+    ));
+  }
   return new Promise((resolve, reject) => {
     let settled = false;
     let aborted = false;
@@ -311,13 +319,15 @@ function runGitCheckIgnore(
       outputByteCount += chunk.byteLength;
       if (
         outputByteCount
-        > GIT_IGNORE_OBSERVATION_LIMITS.maximumOutputBytes
+          > GIT_IGNORE_OBSERVATION_LIMITS.maximumOutputBytes
+        || outputChunks.length
+          >= GIT_IGNORE_OBSERVATION_LIMITS.maximumOutputChunks
       ) {
         outputExceeded = true;
         terminate();
         return;
       }
-      outputChunks.push(Buffer.from(chunk));
+      outputChunks.push(chunk);
     });
     child.stdout.once("error", () => {
       terminate();
@@ -369,10 +379,17 @@ function runGitCheckIgnore(
           reject(new GitIgnoreObservationError("query-failure", "$git"));
           return;
         }
-        resolve(Object.freeze({
-          exitCode: code,
-          stdout: Buffer.concat(outputChunks, outputByteCount),
-        }));
+        let stdout: Buffer;
+        try {
+          stdout = Buffer.concat(outputChunks, outputByteCount);
+        } catch {
+          reject(new GitIgnoreObservationError(
+            "output-limit",
+            "$git.stdout",
+          ));
+          return;
+        }
+        resolve(Object.freeze({ exitCode: code, stdout }));
       });
     });
 
@@ -464,7 +481,6 @@ function parseOutput(
     fail("protocol", "$git.stdout");
   }
   return Object.freeze({
-    kind: "GitIgnoreObservation",
     paths: Object.freeze(paths),
   });
 }
@@ -497,9 +513,9 @@ async function observeGitIgnorePathsInWorkTreeInternal(
 ): Promise<Readonly<GitIgnoreObservation>> {
   assertRoot(repositoryRootValue, repositoryRootPath);
   assertRoot(workTreeRootValue, workTreeRootPath);
-  const probePaths = parseProbePaths(probePathValues);
   const options = parseOptions(optionsValue);
   assertNotAborted(options.signal);
+  const probePaths = parseProbePaths(probePathValues);
   await assertRootCurrent(repositoryRootValue, repositoryRootPath);
   if (workTreeRootValue !== repositoryRootValue) {
     await assertRootCurrent(workTreeRootValue, workTreeRootPath);

@@ -28,12 +28,15 @@ import {
   JsonValueError,
   type JsonValue,
 } from "../../foundation/data/json-value.js";
-import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import {
+  parsePortableResourcePath,
+  type PortableResourcePath,
+} from "../../foundation/filesystem/portable-resource-path.js";
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../../foundation/identity/wakeflow-durable-id.js";
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   createRuntimeJsonSchemaValidator,
 } from "../../foundation/schema/runtime-json-schema.js";
@@ -41,33 +44,31 @@ import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import type { WakeflowWorkspaceHostId } from "../workspace-host-resource-profile.js";
 import {
   compileWakeflowWindowRuntimeDesiredTopology,
+  WakeflowWindowRuntimeDesiredTopologyError,
   type WakeflowWindowRuntimeDesiredWindow,
   type WakeflowWindowRuntimeLogicalRoot,
 } from "./wakeflow-window-runtime-desired-topology.js";
 import {
-  wakeflowWindowRuntimeProjectionRef,
   wakeflowWindowRuntimeProjectionRootRef,
 } from "./wakeflow-window-runtime-paths.js";
-import {
-  compileWakeflowWindowRuntimeUnregisteredIdentitySource,
-} from "./wakeflow-window-runtime-unregistered-identity-source.js";
 
 /**
  * Wakeflow Workspace / Window Runtime：Fresh 初始化的未注册窗口投影集合。
  *
- * 每条记录只连接 desired topology 与 exact-empty identity source，固定表达
+ * 每条记录只连接 desired topology 与当前未注册状态，固定表达
  * `identity=unregistered`、`rootObservation=unobserved` 和 identity preflight blocker。
- * 它不探测目录、不生成 Binding、不判断 dispatch policy/host availability，也不保存
- * display title、raw handle、绝对路径或时间字段。
+ * 它不声明 Binding 目录为空；该物理事实只由 Fresh Publication 在文件系统边界证明。
+ * 本模块也不生成 Binding、不判断 dispatch policy/host availability，不保存 display
+ * title、raw handle、绝对路径或时间字段。
  */
 
 export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_KIND =
   "WakeflowWindowRuntimeProjection" as const;
 export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_VERSION = 1 as const;
-export const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_SET_KIND =
+const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_SET_KIND =
   "WakeflowWindowRuntimeProjectionSet" as const;
 
-export type WakeflowWindowRuntimeUnregisteredProjectionErrorReason =
+type WakeflowWindowRuntimeUnregisteredProjectionErrorReason =
   | "input"
   | "schema"
   | "identity"
@@ -133,7 +134,6 @@ export interface WakeflowWindowRuntimeUnregisteredProjection {
   readonly sourceFingerprints: Readonly<{
     readonly desiredTopologyDigest: Sha256Digest;
     readonly windowTopologyDigest: Sha256Digest;
-    readonly identitySourceDigest: Sha256Digest;
     readonly rootObservationDigest: Sha256Digest;
   }>;
   readonly projectionDigest: Sha256Digest;
@@ -154,7 +154,6 @@ export interface WakeflowWindowRuntimeUnregisteredProjectionSet {
   readonly hostId: WakeflowWorkspaceHostId;
   readonly projectionRootRef: PortableResourcePath;
   readonly desiredTopologyDigest: Sha256Digest;
-  readonly identitySourceDigest: Sha256Digest;
   readonly entries:
     readonly Readonly<WakeflowWindowRuntimeUnregisteredProjectionEntry>[];
   readonly projectionSetDigest: Sha256Digest;
@@ -164,11 +163,12 @@ export interface WakeflowWindowRuntimeUnregisteredProjectionSet {
 export class WakeflowWindowRuntimeUnregisteredProjectionError extends Error {
   override readonly name = "WakeflowWindowRuntimeUnregisteredProjectionError";
   readonly code = "wakeflow-window-runtime-unregistered-projection" as const;
-  readonly reason = "source-inconsistency" as const;
-  readonly path = "$sources" as const;
+  readonly reason = "source" as const;
+  readonly path: string;
 
-  constructor() {
-    super("Window Runtime unregistered projection sources are inconsistent.");
+  constructor(path: string) {
+    super("Window Runtime unregistered projection source is invalid.");
+    this.path = path;
   }
 }
 
@@ -292,7 +292,7 @@ function rootObservation(
   return Object.freeze({
     status: "unobserved" as const,
     observationDigest: computeCanonicalJsonSha256Digest(
-      basis as unknown as JsonValue,
+      basis,
     ),
   });
 }
@@ -348,10 +348,6 @@ export function parseWakeflowWindowRuntimeUnregisteredProjection(
       wire.sourceFingerprints.windowTopologyDigest,
       "$/sourceFingerprints/windowTopologyDigest",
     ),
-    identitySourceDigest: digest(
-      wire.sourceFingerprints.identitySourceDigest,
-      "$/sourceFingerprints/identitySourceDigest",
-    ),
     rootObservationDigest: digest(
       wire.sourceFingerprints.rootObservationDigest,
       "$/sourceFingerprints/rootObservationDigest",
@@ -362,7 +358,7 @@ export function parseWakeflowWindowRuntimeUnregisteredProjection(
     role: wire.role,
     logicalRoot: root,
     configuredPlacement: placement,
-  } as unknown as JsonValue);
+  });
   if (
     actualObservationDigest !== expectedObservation.observationDigest
     || sourceFingerprints.rootObservationDigest
@@ -393,7 +389,7 @@ export function parseWakeflowWindowRuntimeUnregisteredProjection(
     "$/projectionDigest",
   );
   const expectedProjectionDigest = computeCanonicalJsonSha256Digest(
-    projectionBasis(normalized) as unknown as JsonValue,
+    projectionBasis(normalized),
   );
   if (suppliedProjectionDigest !== expectedProjectionDigest) {
     failRecord("digest", "$/projectionDigest");
@@ -402,16 +398,6 @@ export function parseWakeflowWindowRuntimeUnregisteredProjection(
     ...projectionBasis(normalized),
     projectionDigest: expectedProjectionDigest,
   });
-}
-
-/** 渲染经完整准入的确定性 JSON 文档。 */
-export function renderWakeflowWindowRuntimeUnregisteredProjection(
-  value: unknown,
-): string {
-  return renderDeterministicJsonDocument(
-    parseWakeflowWindowRuntimeUnregisteredProjection(value),
-    "$windowRuntimeProjection",
-  );
 }
 
 /** 解析确定性 JSON 文档并重验领域关系和自身摘要。 */
@@ -444,7 +430,6 @@ function projectionFor(
   programId: WakeflowDurableId<"program">,
   hostId: WakeflowWorkspaceHostId,
   desiredTopologyDigest: Sha256Digest,
-  identitySourceDigest: Sha256Digest,
   window: Readonly<WakeflowWindowRuntimeDesiredWindow>,
 ): Readonly<WakeflowWindowRuntimeUnregisteredProjection> {
   const observation = rootObservation(
@@ -466,31 +451,29 @@ function projectionFor(
     sourceFingerprints: Object.freeze({
       desiredTopologyDigest,
       windowTopologyDigest: window.windowTopologyDigest,
-      identitySourceDigest,
       rootObservationDigest: observation.observationDigest,
     }),
   };
   return parseWakeflowWindowRuntimeUnregisteredProjection({
     ...projectionBasis(basis),
     projectionDigest: computeCanonicalJsonSha256Digest(
-      projectionBasis(basis) as unknown as JsonValue,
+      projectionBasis(basis),
     ),
   });
 }
 
 function entryFor(
-  profileValue: unknown,
+  projectionRootRef: PortableResourcePath,
   projection: Readonly<WakeflowWindowRuntimeUnregisteredProjection>,
 ): Readonly<WakeflowWindowRuntimeUnregisteredProjectionEntry> {
   const document = renderDeterministicJsonDocument(
-    parseWakeflowWindowRuntimeUnregisteredProjection(projection),
+    projection,
     "$windowRuntimeProjection",
   );
   return Object.freeze({
     windowId: projection.windowId,
-    resourceRef: wakeflowWindowRuntimeProjectionRef(
-      profileValue,
-      projection.windowId,
+    resourceRef: parsePortableResourcePath(
+      `${projectionRootRef}/${projection.windowId}.json`,
     ),
     projection,
     document,
@@ -505,35 +488,25 @@ export function compileWakeflowWindowRuntimeUnregisteredProjectionSet(
   configValue: unknown,
   profileValue: unknown,
 ): Readonly<WakeflowWindowRuntimeUnregisteredProjectionSet> {
-  const desired = compileWakeflowWindowRuntimeDesiredTopology(
-    configValue,
-    profileValue,
-  );
-  const identity = compileWakeflowWindowRuntimeUnregisteredIdentitySource(
-    configValue,
-    profileValue,
-  );
-  const identityByWindowId = new Map(identity.entries.map((entry) => (
-    [entry.windowId, entry] as const
-  )));
-  if (
-    identity.programId !== desired.programId
-    || identity.hostId !== desired.hostId
-    || identity.desiredTopologyDigest !== desired.desiredTopologyDigest
-    || identity.entries.length !== desired.windows.length
-    || desired.windows.some((window) => (
-      identityByWindowId.get(window.windowId)?.status !== "unregistered"
-    ))
-  ) {
-    throw new WakeflowWindowRuntimeUnregisteredProjectionError();
+  let desired;
+  try {
+    desired = compileWakeflowWindowRuntimeDesiredTopology(
+      configValue,
+      profileValue,
+    );
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWindowRuntimeDesiredTopologyError) {
+      throw new WakeflowWindowRuntimeUnregisteredProjectionError(error.path);
+    }
+    throw error;
   }
+  const projectionRootRef = wakeflowWindowRuntimeProjectionRootRef(profileValue);
   const entries = Object.freeze(desired.windows.map((window) => entryFor(
-    profileValue,
+    projectionRootRef,
     projectionFor(
       desired.programId,
       desired.hostId,
       desired.desiredTopologyDigest,
-      identity.identitySourceDigest,
       window,
     ),
   )));
@@ -542,9 +515,8 @@ export function compileWakeflowWindowRuntimeUnregisteredProjectionSet(
     schemaVersion: 1 as const,
     programId: desired.programId,
     hostId: desired.hostId,
-    projectionRootRef: wakeflowWindowRuntimeProjectionRootRef(profileValue),
+    projectionRootRef,
     desiredTopologyDigest: desired.desiredTopologyDigest,
-    identitySourceDigest: identity.identitySourceDigest,
     entries: entries.map((entry) => ({
       windowId: entry.windowId,
       resourceRef: entry.resourceRef,
@@ -556,7 +528,7 @@ export function compileWakeflowWindowRuntimeUnregisteredProjectionSet(
     ...basis,
     entries,
     projectionSetDigest: computeCanonicalJsonSha256Digest(
-      basis as unknown as JsonValue,
+      basis,
     ),
   });
 }

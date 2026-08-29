@@ -1,7 +1,4 @@
-import {
-  constants as fileSystemConstants,
-  type Dirent,
-} from "node:fs";
+import { constants as fileSystemConstants } from "node:fs";
 import {
   lstat,
   open as openFileHandle,
@@ -17,6 +14,10 @@ import {
   PassiveOwnDataError,
 } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
+import {
+  decodeUtf8,
+  Utf8Error,
+} from "../text/utf8.js";
 import {
   createFileNodeSnapshot,
   FileNodeSnapshotError,
@@ -63,8 +64,8 @@ export interface StableDirectoryEntry {
 /**
  * 一次稳定目录读取的冻结结果。
  *
- * `directoryResourcePath === null` 明确表示 RootedDirectory 自身；它不是可持久化
- * 持久化路径，也不会用空字符串或 `.` 冒充 `PortableResourcePath`。
+ * `directoryResourcePath === null` 明确表示 RootedDirectory 自身；它不是持久化
+ * 路径，也不会用空字符串或 `.` 冒充 `PortableResourcePath`。
  */
 export interface StableDirectoryReadResult<
   DirectoryResourcePath extends PortableResourcePath | null =
@@ -142,6 +143,25 @@ interface DirectoryTarget<
   readonly node: Readonly<FileNodeSnapshot>;
   readonly errorPath: "$root" | "$resourcePath";
 }
+
+interface RawNameDirectoryEntry {
+  readonly name: Buffer;
+}
+
+interface RawNameDirectory {
+  read(): Promise<Readonly<RawNameDirectoryEntry> | null>;
+  close(): Promise<void>;
+}
+
+/**
+ * Node 24 支持以 `buffer` 编码返回原始目录项名称；当前 Node 类型声明仍把
+ * `opendir` 收窄为字符编码。类型桥只保留实际使用的 read/close 表面，读取时还会
+ * 复验名称确实是 Buffer，避免把有损字符串当成物理名称字节。
+ */
+const openRawNameDirectory = opendir as unknown as (
+  physicalPath: string,
+  options: Readonly<{ encoding: "buffer"; recursive: false }>,
+) => Promise<RawNameDirectory>;
 
 /** 单次目录项 `lstat` 使用的内部固定并发上限，不属于公开 API。 */
 const STABLE_DIRECTORY_LSTAT_CONCURRENCY = 8;
@@ -264,10 +284,7 @@ function requiredOpenFlags(): number {
   if (typeof directory !== "number" || typeof noFollow !== "number") {
     fail("unsupported-platform", "$root");
   }
-  const nonBlocking = typeof fileSystemConstants.O_NONBLOCK === "number"
-    ? fileSystemConstants.O_NONBLOCK
-    : 0;
-  return fileSystemConstants.O_RDONLY | directory | noFollow | nonBlocking;
+  return fileSystemConstants.O_RDONLY | directory | noFollow;
 }
 
 async function inspectInitialRoot(
@@ -310,6 +327,12 @@ async function inspectInitialResource(
         fail("not-found", "$resourcePath");
       }
       if (error.reason === "resource-path") fail("input", "$resourcePath");
+      if (
+        error.reason === "resource-changed"
+        || error.reason === "resource-alias"
+      ) {
+        fail("source-changed", "$resourcePath");
+      }
       if (error.reason === "unsupported-platform") {
         fail("unsupported-platform", "$resourcePath");
       }
@@ -380,11 +403,17 @@ async function snapshotOpenedDirectory(
       await handle.stat({ bigint: true }),
       errorPath,
     );
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) {
-      fail("source-changed", errorPath);
-    }
+  } catch {
     fail("source-changed", errorPath);
+  }
+}
+
+function decodeDirectoryEntryName(value: Buffer): string {
+  try {
+    return decodeUtf8(value, "$entries");
+  } catch (error: unknown) {
+    if (error instanceof Utf8Error) fail("entry-path", "$entries");
+    throw error;
   }
 }
 
@@ -393,10 +422,10 @@ async function enumerateNames(
   maximumEntries: number,
   signal: AbortSignal | undefined,
 ): Promise<readonly string[]> {
-  let directory;
+  let directory: RawNameDirectory;
   try {
-    directory = await opendir(physicalPath, {
-      encoding: "utf8",
+    directory = await openRawNameDirectory(physicalPath, {
+      encoding: "buffer",
       recursive: false,
     });
   } catch (error: unknown) {
@@ -412,7 +441,7 @@ async function enumerateNames(
   try {
     while (true) {
       assertNotAborted(signal);
-      let entry: Dirent | null;
+      let entry: Readonly<RawNameDirectoryEntry> | null;
       try {
         entry = await directory.read();
       } catch (error: unknown) {
@@ -424,11 +453,12 @@ async function enumerateNames(
         fail("io-failure", "$entries");
       }
       if (entry === null) break;
-      if (typeof entry.name !== "string") fail("entry-path", "$entries");
+      const rawName: unknown = entry.name;
+      if (!Buffer.isBuffer(rawName)) fail("io-failure", "$entries");
       if (names.length >= maximumEntries) {
         fail("too-many-entries", "$entries");
       }
-      names.push(entry.name);
+      names.push(decodeDirectoryEntryName(rawName));
     }
   } catch (error: unknown) {
     primaryError = error;
@@ -492,9 +522,6 @@ async function inspectEntry(
     if (readNodeSystemErrorCode(error) === "ENOENT") {
       fail("source-changed", `$entries/${index}`);
     }
-    if (error instanceof FileNodeSnapshotError) {
-      fail("io-failure", `$entries/${index}`);
-    }
     fail("io-failure", `$entries/${index}`);
   }
   return Object.freeze({ name, resourcePath, node });
@@ -507,13 +534,14 @@ async function inspectEntries(
   verification: boolean,
 ): Promise<readonly Readonly<StableDirectoryEntry>[]> {
   const limit = pLimit(STABLE_DIRECTORY_LSTAT_CONCURRENCY);
-  const tasks = names.map((name, index) => limit(() => inspectEntry(
+  const tasks = names.map((name, index) => limit(
+    inspectEntry,
     target,
     name,
     index,
     signal,
     verification,
-  )));
+  ));
   const settled = await Promise.allSettled(tasks);
   const entries: Readonly<StableDirectoryEntry>[] = [];
   for (const result of settled) {

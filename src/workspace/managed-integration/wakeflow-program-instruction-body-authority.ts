@@ -30,7 +30,7 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../../foundation/identity/wakeflow-durable-id.js";
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import { encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import {
   MarkdownJsonStringLiteralError,

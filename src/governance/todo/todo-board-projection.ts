@@ -13,9 +13,9 @@ import { TODO_BOARD_PROJECTION_REF } from "./todo-paths.js";
  * 基准摘要，缺失或损坏时可以重建；Claim 和 Archive 操作绝不能反向读取投影作为状态。
  */
 
-export const TODO_BOARD_PROJECTION_KIND =
+const TODO_BOARD_PROJECTION_KIND =
   "wakeflow-todo-board-projection" as const;
-export const TODO_BOARD_PROJECTION_VERSION = 1 as const;
+const TODO_BOARD_PROJECTION_VERSION = 1 as const;
 
 export interface TodoBoardProjection {
   readonly artifactKind: typeof TODO_BOARD_PROJECTION_KIND;
@@ -45,6 +45,11 @@ const TODO_PROJECTION_COLUMNS = Object.freeze([
 
 type TodoProjectionColumn = (typeof TODO_PROJECTION_COLUMNS)[number];
 type TodoProjectionRow = Readonly<Record<TodoProjectionColumn, string>>;
+const ESCAPED_TEXT_COLUMNS = new Set<TodoProjectionColumn>([
+  "Item / Goal",
+  "Dependency / Trigger",
+  "Testing Decision",
+]);
 
 const TODO_PROJECTION_HEADER =
   `| ${TODO_PROJECTION_COLUMNS.join(" | ")} |`;
@@ -66,10 +71,22 @@ function documentLinks(
   documents: Readonly<TodoCollectionSnapshot["items"][number]["intake"]["documents"]>,
 ): string {
   return documents.map((document) => (
-    `[${document.label}](${document.ref}${
-      document.anchor === null ? "" : `#${document.anchor}`
+    `[${document.label}](${encodeMarkdownLinkDestination(document.ref)}${
+      document.anchor === null
+        ? ""
+        : `#${encodeMarkdownLinkComponent(document.anchor)}`
     })`
   )).join(" ");
+}
+
+function encodeMarkdownLinkComponent(value: string): string {
+  return encodeURIComponent(value).replace(/[!'()*]/gu, (character) => (
+    `%${character.charCodeAt(0).toString(16).toUpperCase()}`
+  ));
+}
+
+function encodeMarkdownLinkDestination(value: string): string {
+  return value.split("/").map(encodeMarkdownLinkComponent).join("/");
 }
 
 function rowFor(
@@ -95,14 +112,28 @@ function rowFor(
 /** Markdown 是单向投影；只转义显示保留符，不提供反向领域解析。 */
 function encodeMarkdownCell(value: string): string {
   return value
-    .replaceAll("\\", "\\\\")
-    .replaceAll("|", "\\|")
+    .replace(/[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, (character) => (
+      `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`
+    ))
+    .replaceAll("&", "&amp;")
+    .replaceAll("\\", "&#92;")
+    .replaceAll("|", "&#124;")
+    .replaceAll("`", "&#96;")
+    .replaceAll("*", "&#42;")
+    .replaceAll("_", "&#95;")
+    .replaceAll("~", "&#126;")
+    .replaceAll("[", "&#91;")
+    .replaceAll("]", "&#93;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
     .replace(/\r\n?|\n/gu, "<br>");
 }
 
 function renderProjectionRow(row: TodoProjectionRow): string {
   return `| ${TODO_PROJECTION_COLUMNS.map((column) => (
-    encodeMarkdownCell(row[column])
+    ESCAPED_TEXT_COLUMNS.has(column)
+      ? encodeMarkdownCell(row[column])
+      : row[column]
   )).join(" | ")} |`;
 }
 
@@ -112,7 +143,7 @@ export function renderTodoBoardProjection(
 ): Readonly<TodoBoardProjection> {
   const collection = createTodoCollectionSnapshot(items);
   const rows = collection.items
-    .filter((item) => item.status !== "archived")
+    .filter((item) => item.state.status !== "archived")
     .map((item) => renderProjectionRow(rowFor(item)));
   const content = `${PREFIX_LINES.join("\n")}\n${
     rows.length === 0 ? "" : `${rows.join("\n")}\n`

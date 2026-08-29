@@ -5,12 +5,10 @@ import {
 import {
   parseWakeflowDurableIdOfKind,
   type WakeflowDurableId,
-} from "../../../foundation/identity/wakeflow-durable-id.js";
+} from "../../../contracts/identity/wakeflow-durable-id.js";
 import {
   WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
 } from "../../../workspace/active/wakeflow-active-paths.js";
-
-export { WAKEFLOW_ACTIVE_CURRENT_ROOT_REF };
 
 /**
  * Wakeflow Governance / Demand Publication：Workspace 内创建事务、暂存目录、逐 Demand
@@ -71,13 +69,5 @@ export function demandFinalPublicationMarkerRef(
 ): PortableResourcePath {
   return parsePortableResourcePath(
     `${demandFinalRootRef(value)}/${DEMAND_PUBLICATION_MARKER_REF}`,
-  );
-}
-
-export function demandStagePublicationMarkerRef(
-  value: unknown,
-): PortableResourcePath {
-  return parsePortableResourcePath(
-    `${demandPublicationStageRef(value)}/${DEMAND_PUBLICATION_MARKER_REF}`,
   );
 }

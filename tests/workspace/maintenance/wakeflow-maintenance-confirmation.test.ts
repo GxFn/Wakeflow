@@ -81,7 +81,17 @@ function readyPlan(
     matrixDigest,
     coreLayoutInspectionDigest: OBSERVATION_DIGEST,
     blockerCodes: Object.freeze([]),
-    steps: Object.freeze([]),
+    steps: Object.freeze(action === "fresh-initialize"
+      ? [Object.freeze({
+          stepId: "authority:config",
+          kind: "publish-config" as const,
+          ownerId: "config-authority",
+          targetKey: "workspace.config-authority",
+          sourceDigest: null,
+          targetDigest: desiredConfigDigest,
+          dependsOn: Object.freeze([]),
+        })]
+      : []),
   });
   const preview = parseWakeflowStaticMaterializationPreview({
     ...basis,

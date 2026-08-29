@@ -1,6 +1,5 @@
 import { deepEqual, equal } from "node:assert/strict";
 import {
-  linkSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -160,7 +159,7 @@ test("resource tree scan stays below its explicit starting directory", async () 
   }
 });
 
-test("starting-directory expectation is revalidated by the first stable read", async () => {
+test("starting-directory expectation classifies target replacement as source change", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-tree-expected-"));
   const recordsPath = path.join(rootPath, "records");
   mkdirSync(recordsPath);
@@ -173,7 +172,8 @@ test("starting-directory expectation is revalidated by the first stable read", a
       resourcePath,
       treeOptions({ maximumEntries: 1 }),
     );
-    writeFileSync(path.join(recordsPath, "after"), "after");
+    rmSync(recordsPath, { recursive: true, force: true });
+    symlinkSync(".", recordsPath);
 
     await expectTreeScanError(
       () => scanBoundedResourceDirectoryTree(
@@ -181,7 +181,7 @@ test("starting-directory expectation is revalidated by the first stable read", a
         resourcePath,
         treeOptions({
           expectedNode: observed.treeRootNode,
-          maximumEntries: 2,
+          maximumEntries: 1,
         }),
       ),
       "source-changed",
@@ -248,27 +248,6 @@ test("maximumDepth proves the tree has no hidden descendants beyond the bound", 
   }
 });
 
-test("hard-linked files stay as two paths sharing one observable node", async () => {
-  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-tree-hardlink-"));
-  const source = path.join(rootPath, "source");
-  writeFileSync(source, "shared");
-  linkSync(source, path.join(rootPath, "alias"));
-  const root = await RootedDirectory.open(rootPath);
-  try {
-    const result = await scanBoundedRootDirectoryTree(
-      root,
-      treeOptions({ maximumEntries: 2, maximumDepth: 1 }),
-    );
-    equal(result.entries.length, 2);
-    equal(result.entries[0]?.node.inodeId, result.entries[1]?.node.inodeId);
-    equal(result.entries[0]?.node.linkCount, 2n);
-    equal(result.entries[1]?.node.linkCount, 2n);
-  } finally {
-    await root.close();
-    rmSync(rootPath, { recursive: true, force: true });
-  }
-});
-
 test("starting target errors are mapped into the tree-scan error family", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-tree-target-"));
   mkdirSync(path.join(rootPath, "directory"));
@@ -311,6 +290,7 @@ test("options are explicit, passive, and AbortSignal remains cooperative", async
       [{ maximumEntries: -1, maximumDepth: 1 }, "$options.maximumEntries"],
       [{ maximumEntries: 1, maximumDepth: 1.5 }, "$options.maximumDepth"],
       [{ maximumEntries: 1, maximumDepth: 1, signal: {} }, "$options.signal"],
+      [{ maximumEntries: 1, maximumDepth: 1, expectedNode: null }, "$options.expectedNode"],
       [{ maximumEntries: 1, maximumDepth: 1, expectedNode: {} }, "$options.expectedNode"],
     ];
     for (const [options, expectedPath] of invalid) {

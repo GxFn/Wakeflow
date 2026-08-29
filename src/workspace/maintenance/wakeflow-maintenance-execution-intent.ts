@@ -38,12 +38,12 @@ import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
 } from "../workspace-resource-declaration.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostResourceProfile,
+import type {
+  WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
 import {
   parseWakeflowHostMaintenanceContribution,
+  WakeflowHostMaintenanceContributionError,
   type WakeflowHostMaintenanceContribution,
 } from "./wakeflow-host-maintenance-contribution.js";
 import {
@@ -54,6 +54,7 @@ import {
 } from "./wakeflow-maintenance-execution-plan.js";
 import {
   parseWakeflowMaintenanceOperationId,
+  WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceIntentRef,
   type WakeflowMaintenanceOperationId,
 } from "./wakeflow-maintenance-operation-id.js";
@@ -164,8 +165,11 @@ function normalizeConfig(value: unknown): WakeflowConfigV3Model {
 function normalizeOperationId(value: unknown): WakeflowMaintenanceOperationId {
   try {
     return parseWakeflowMaintenanceOperationId(value, "$/operationId");
-  } catch {
-    fail("operation", "$/operationId");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceOperationIdError) {
+      fail("operation", "$/operationId");
+    }
+    throw error;
   }
 }
 
@@ -188,8 +192,11 @@ function normalizeContribution(
   if (value === null) return null;
   try {
     return parseWakeflowHostMaintenanceContribution(value);
-  } catch {
-    fail("plan", "$/hostContribution");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowHostMaintenanceContributionError) {
+      fail("plan", "$/hostContribution");
+    }
+    throw error;
   }
 }
 
@@ -206,8 +213,11 @@ function normalizedRequest(
       currentHostProfile: currentHostProfileValue,
       hostProfiles: hostProfileValues,
     });
-  } catch {
-    fail("request", "$/hostProfiles");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowStaticMaterializationPreviewError) {
+      fail("request", "$/hostProfiles");
+    }
+    throw error;
   }
 }
 
@@ -217,6 +227,7 @@ function sortedProfiles(
   Readonly<WakeflowWorkspaceHostResourceProfile>,
   Readonly<WakeflowWorkspaceHostResourceProfile>,
 ] {
+  // Intent v1把当时完整的两宿主集合写入恢复格式；扩展集合必须新建版本并迁移。
   const sorted = [...values].sort((left, right) => (
     left.hostId < right.hostId ? -1 : left.hostId > right.hostId ? 1 : 0
   ));
@@ -226,9 +237,14 @@ function sortedProfiles(
   return Object.freeze([sorted[0], sorted[1]]);
 }
 
+interface NormalizedWakeflowMaintenanceExecutionIntent {
+  readonly intent: Readonly<WakeflowMaintenanceExecutionIntent>;
+  readonly plan: Readonly<WakeflowMaintenanceExecutionPlan>;
+}
+
 function normalize(
   wire: Readonly<WakeflowMaintenanceExecutionIntentWire>,
-): Readonly<WakeflowMaintenanceExecutionIntent> {
+): Readonly<NormalizedWakeflowMaintenanceExecutionIntent> {
   const operationId = normalizeOperationId(wire.operationId);
   const desiredConfig = normalizeConfig(wire.desiredConfig);
   const sharedPreview = normalizePreview(wire.sharedPreview);
@@ -240,9 +256,7 @@ function normalize(
     wire.hostProfiles,
   );
   const hostProfiles = sortedProfiles(request.hostProfiles);
-  const currentHostProfile = parseWakeflowWorkspaceHostResourceProfile(
-    request.currentHostProfile,
-  );
+  const currentHostProfile = request.currentHostProfile;
   let plan: Readonly<WakeflowMaintenanceExecutionPlan>;
   try {
     plan = createWakeflowMaintenanceExecutionPlan(
@@ -265,7 +279,7 @@ function normalize(
   ) {
     fail("relation", "$intent");
   }
-  return Object.freeze({
+  const intent = Object.freeze({
     artifactKind: WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_ARTIFACT_KIND,
     schemaVersion: WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA_VERSION,
     operationId,
@@ -276,6 +290,7 @@ function normalize(
     hostContribution,
     planDigest: plan.planDigest,
   });
+  return Object.freeze({ intent, plan });
 }
 
 function intentRepresentation(
@@ -294,10 +309,9 @@ function intentRepresentation(
   }, "$intent");
 }
 
-/** 将任意 JSON 值准入为字段关系已经闭合的 immutable execution intent。 */
-export function parseWakeflowMaintenanceExecutionIntent(
+function parseWakeflowMaintenanceExecutionIntentWithPlan(
   value: unknown,
-): Readonly<WakeflowMaintenanceExecutionIntent> {
+): Readonly<NormalizedWakeflowMaintenanceExecutionIntent> {
   let json: JsonValue;
   try {
     json = parseJsonValue(value, "$intent");
@@ -308,6 +322,13 @@ export function parseWakeflowMaintenanceExecutionIntent(
   const validated = validateWire(json);
   if (!validated.ok) fail("schema", validated.path);
   return normalize(validated.value);
+}
+
+/** 将任意 JSON 值准入为字段关系已经闭合的 immutable execution intent。 */
+export function parseWakeflowMaintenanceExecutionIntent(
+  value: unknown,
+): Readonly<WakeflowMaintenanceExecutionIntent> {
+  return parseWakeflowMaintenanceExecutionIntentWithPlan(value).intent;
 }
 
 /**
@@ -331,8 +352,11 @@ export function createWakeflowMaintenanceExecutionIntent(
   let request;
   try {
     request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
-  } catch {
-    fail("request", "$request");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowStaticMaterializationPreviewError) {
+      fail("request", "$request");
+    }
+    throw error;
   }
   const desiredConfig = normalizeConfig(desiredConfigValue);
   if (
@@ -360,30 +384,25 @@ export function createWakeflowMaintenanceExecutionIntent(
   });
 }
 
-/** 从intent重新推导唯一聚合执行计划。 */
-export function wakeflowMaintenanceExecutionPlanFromIntent(
+/** 一次准入并重建恢复执行所需的exact plan与无signal request。 */
+export function reconstructWakeflowMaintenanceExecutionFromIntent(
   value: unknown,
-): Readonly<WakeflowMaintenanceExecutionPlan> {
-  const intent = parseWakeflowMaintenanceExecutionIntent(value);
-  return createWakeflowMaintenanceExecutionPlan(
-    intent.sharedPreview,
-    intent.currentHostProfile,
-    intent.hostContribution,
-  );
-}
-
-/** 从intent重建执行器需要的无signal preview request。 */
-export function wakeflowMaintenanceExecutionRequestFromIntent(
-  value: unknown,
-): Readonly<WakeflowStaticMaterializationPreviewRequest> {
-  const intent = parseWakeflowMaintenanceExecutionIntent(value);
+): Readonly<{
+  readonly plan: Readonly<WakeflowMaintenanceExecutionPlan>;
+  readonly request: Readonly<WakeflowStaticMaterializationPreviewRequest>;
+}> {
+  const normalized = parseWakeflowMaintenanceExecutionIntentWithPlan(value);
+  const intent = normalized.intent;
   return Object.freeze({
-    action: intent.sharedPreview.action,
-    desiredConfig: intent.sharedPreview.action === "reconcile"
-      ? null
-      : intent.desiredConfig,
-    currentHostProfile: intent.currentHostProfile,
-    hostProfiles: intent.hostProfiles,
+    plan: normalized.plan,
+    request: Object.freeze({
+      action: intent.sharedPreview.action,
+      desiredConfig: intent.sharedPreview.action === "reconcile"
+        ? null
+        : intent.desiredConfig,
+      currentHostProfile: intent.currentHostProfile,
+      hostProfiles: intent.hostProfiles,
+    }),
   });
 }
 

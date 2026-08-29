@@ -5,7 +5,7 @@ import {
 import { test } from "node:test";
 
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/foundation/identity/wakeflow-durable-id.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   upcastDemandEventSourcingStoredEvent,
@@ -58,6 +58,13 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
     (error: unknown) => (
       error instanceof DemandEventSourcingUpcasterError
       && error.reason === "unsupported-version"
+    ),
+  );
+  throws(
+    () => upcastDemandEventSourcingStoredEvent({ ...EVENT, streamRevision: 0 }),
+    (error: unknown) => (
+      error instanceof DemandEventSourcingUpcasterError
+      && error.reason === "input"
     ),
   );
   throws(

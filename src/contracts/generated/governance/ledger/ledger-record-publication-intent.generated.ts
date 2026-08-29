@@ -22,8 +22,6 @@ export type WakeflowSha256DigestText = string
 export interface WakeflowLedgerRecordPublicationIntent {
 artifactKind: "wakeflow-ledger-record-publication-intent"
 schemaVersion: 1
-family: ("requirement" | "confirmation")
-recordId: string
 record: (WakeflowRequirementRecord | WakeflowConfirmationRecord)
 finalRootRef: WakeflowPortableResourcePathText
 intentRef: WakeflowPortableResourcePathText
@@ -111,77 +109,16 @@ function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
   return value;
 }
 
-/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA = freezeGeneratedSchema({
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:wakeflow:governance:ledger:record-publication-intent:v1",
-  "x-wakeflow-runtime-export": "WAKEFLOW_LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA",
-  "title": "WakeflowLedgerRecordPublicationIntent",
-  "description": "Ledger immutable record tree 整体发布的短期元数据意图。",
-  "$comment": "Intent 保存 exact record 与关闭树摘要，但不复制 member payload；完整 stage 是待发布数据，final directory rename 是 authority commit point。",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "artifactKind",
-    "schemaVersion",
-    "family",
-    "recordId",
-    "record",
-    "finalRootRef",
-    "intentRef",
-    "lockRef",
-    "stageRef",
-    "treePlan"
-  ],
-  "properties": {
-    "artifactKind": {
-      "const": "wakeflow-ledger-record-publication-intent"
-    },
-    "schemaVersion": {
-      "const": 1
-    },
-    "family": {
-      "enum": [
-        "requirement",
-        "confirmation"
-      ]
-    },
-    "recordId": {
-      "oneOf": [
-        {
-          "type": "string",
-          "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-        },
-        {
-          "type": "string",
-          "pattern": "^confirmation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-        }
-      ]
-    },
-    "record": {
-      "oneOf": [
-        {
-          "$ref": "urn:wakeflow:governance:ledger:requirement-record:v1"
-        },
-        {
-          "$ref": "urn:wakeflow:governance:ledger:confirmation-record:v1"
-        }
-      ]
-    },
-    "finalRootRef": {
-      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
-    },
-    "intentRef": {
-      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
-    },
-    "lockRef": {
-      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
-    },
-    "stageRef": {
-      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
-    },
-    "treePlan": {
-      "$ref": "urn:wakeflow:foundation:filesystem:directory-tree-candidate-plan:v1"
-    }
+/** 从 JSON 文本恢复 Schema，保留 `__proto__` 等普通 JSON 自有键。 */
+function restoreGeneratedSchema(
+  serialized: string,
+): Readonly<Record<string, unknown>> {
+  const value: unknown = JSON.parse(serialized);
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    throw new TypeError("Generated Schema must be an object.");
   }
-} as const);
+  return freezeGeneratedSchema(value as Record<string, unknown>);
+}
+
+/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
+export const WAKEFLOW_LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:ledger:record-publication-intent:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA\",\"title\":\"WakeflowLedgerRecordPublicationIntent\",\"description\":\"Ledger immutable record tree 整体发布的短期元数据意图。\",\"$comment\":\"Intent 保存 exact record、物理 refs 与关闭树摘要，但不重复保存可由 record 推导的 family/recordId，也不复制 member payload；完整 stage 是待发布数据，final directory rename 是 authority commit point。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"record\",\"finalRootRef\",\"intentRef\",\"lockRef\",\"stageRef\",\"treePlan\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-ledger-record-publication-intent\"},\"schemaVersion\":{\"const\":1},\"record\":{\"oneOf\":[{\"$ref\":\"urn:wakeflow:governance:ledger:requirement-record:v1\"},{\"$ref\":\"urn:wakeflow:governance:ledger:confirmation-record:v1\"}]},\"finalRootRef\":{\"$ref\":\"urn:wakeflow:foundation:filesystem:portable-resource-path:v1\"},\"intentRef\":{\"$ref\":\"urn:wakeflow:foundation:filesystem:portable-resource-path:v1\"},\"lockRef\":{\"$ref\":\"urn:wakeflow:foundation:filesystem:portable-resource-path:v1\"},\"stageRef\":{\"$ref\":\"urn:wakeflow:foundation:filesystem:portable-resource-path:v1\"},\"treePlan\":{\"$ref\":\"urn:wakeflow:foundation:filesystem:directory-tree-candidate-plan:v1\"}}}");

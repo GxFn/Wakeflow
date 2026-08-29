@@ -1,8 +1,4 @@
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
-import {
   ByteCountError,
   MAX_SAFE_BYTE_COUNT,
   parseByteCount,
@@ -17,7 +13,7 @@ import {
  * 所有公开操作仍会重新执行运行时准入，品牌不能绕过范围或一致性检查。
  *
  * 本层不打开文件、不分配区间字节、不解释 UTF-8、行或标记，也不把区间绑定到某个
- * 文件版本。文件大小边界只由显式断言函数检查。
+ * 文件版本或判断它是否位于具体文件大小内。
  */
 
 declare const FILE_BYTE_OFFSET_BRAND: unique symbol;
@@ -34,30 +30,22 @@ export interface FileByteRange {
   readonly endExclusive: FileByteOffset;
 }
 
-/** 文件字节区间准入、算术或文件边界失败分类。 */
+/** 文件字节区间准入或算术失败分类。 */
 export type FileByteRangeErrorReason =
   | "offset-range"
   | "length-range"
-  | "end-overflow"
-  | "range-shape"
-  | "range-field"
-  | "file-size"
-  | "out-of-bounds";
+  | "end-overflow";
 
 const ERROR_MESSAGES = {
   "offset-range": "File byte offset must be a non-negative safe integer.",
   "length-range": "File byte range length must be a valid byte count.",
   "end-overflow": "File byte range end exceeds the safe integer range.",
-  "range-shape": "File byte range must match its closed passive data shape.",
-  "range-field": "File byte range fields are internally inconsistent.",
-  "file-size": "File byte count is invalid for range validation.",
-  "out-of-bounds": "File byte range lies outside the file byte boundary.",
 } as const satisfies Readonly<Record<FileByteRangeErrorReason, string>>;
 
 /**
  * 文件字节区间的稳定错误。
  *
- * 错误只暴露分类与结构路径，不回显偏移量、长度、结束位置或文件大小。
+ * 错误只暴露分类与结构路径，不回显偏移量、长度或结束位置。
  */
 export class FileByteRangeError extends Error {
   override readonly name = "FileByteRangeError";
@@ -126,37 +114,6 @@ function createRange(
   return Object.freeze({ offset, length, endExclusive });
 }
 
-function parseCompleteRange(
-  value: unknown,
-  path: string,
-): Readonly<FileByteRange> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, path);
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("range-shape", path);
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== 3
-    || keys[0] !== "endExclusive"
-    || keys[1] !== "length"
-    || keys[2] !== "offset"
-  ) {
-    fail("range-shape", path);
-  }
-  const created = createRange(record.offset, record.length, path);
-  const endExclusive = parseOffset(
-    record.endExclusive,
-    fieldPath(path, "endExclusive"),
-  );
-  if (created.endExclusive !== endExclusive) {
-    fail("range-field", fieldPath(path, "endExclusive"));
-  }
-  return created;
-}
-
 /** 严格解析文件绝对字节偏移量。 */
 export function parseFileByteOffset(
   value: unknown,
@@ -181,55 +138,4 @@ export function createFileByteRange(
     length,
     normalizeErrorPath(errorPath, "$range"),
   );
-}
-
-/**
- * 从字段集合严格受限的 `{ offset, length }` 纯数据记录解析字节区间。
- *
- * 调用方不能提供 endExclusive；它始终由已验证算术唯一派生。
- */
-export function parseFileByteRange(
-  value: unknown,
-  errorPath?: string,
-): Readonly<FileByteRange> {
-  const path = normalizeErrorPath(errorPath, "$range");
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, path);
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("range-shape", path);
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  if (keys.length !== 2 || keys[0] !== "length" || keys[1] !== "offset") {
-    fail("range-shape", path);
-  }
-  return createRange(record.offset, record.length, path);
-}
-
-/**
- * 重新验证字节区间与 `fileByteCount`，并断言整个半开区间位于文件内。
- *
- * 零长度区间可以位于 EOF；偏移量大于 EOF 时，即使长度为零也会失败。
- */
-export function assertFileByteRangeWithin(
-  range: FileByteRange,
-  fileByteCount: ByteCount,
-  errorPath?: string,
-): void {
-  const path = normalizeErrorPath(errorPath, "$range");
-  const admittedRange = parseCompleteRange(range, path);
-  let admittedFileByteCount: ByteCount;
-  try {
-    admittedFileByteCount = parseByteCount(fileByteCount, "$fileByteCount");
-  } catch (error: unknown) {
-    if (error instanceof ByteCountError) fail("file-size", "$fileByteCount");
-    throw error;
-  }
-  if (
-    admittedRange.offset > admittedFileByteCount
-    || admittedRange.endExclusive > admittedFileByteCount
-  ) {
-    fail("out-of-bounds", path);
-  }
 }

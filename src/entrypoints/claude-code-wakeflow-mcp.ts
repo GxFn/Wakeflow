@@ -15,10 +15,10 @@ import {
 } from "./wakeflow-mcp-stdio.js";
 
 /** Claude Code 制品内固定的 MCP server identity；版本由制品装配入口注入。 */
-export const CLAUDE_CODE_WAKEFLOW_MCP_SERVER_NAME =
+const CLAUDE_CODE_WAKEFLOW_MCP_SERVER_NAME =
   "wakeflow-claude-code" as const;
 
-/** 创建固定组合 Claude Code Maintenance 能力的 MCP server。 */
+/** 创建固定组合Claude Code Maintenance与Window Binding能力的MCP server。 */
 export function createClaudeCodeWakeflowMcpServer(
   serverVersion: string,
 ): McpServer {

@@ -12,6 +12,7 @@ import {
   readStableRootDirectory,
   StableDirectoryReadError,
   type StableDirectoryReadErrorReason,
+  type StableDirectoryReadOptions,
   type StableDirectoryReadResult,
 } from "./stable-directory-read.js";
 
@@ -74,8 +75,6 @@ export type BoundedDirectoryTreeScanErrorReason =
   | "entry-limit"
   | "depth-limit"
   | "entry-path"
-  | "open-failure"
-  | "enumeration-failure"
   | "inspection-failure"
   | "source-changed"
   | "aborted"
@@ -90,8 +89,6 @@ const ERROR_MESSAGES = {
   "entry-limit": "Directory tree exceeds the caller total-entry limit.",
   "depth-limit": "Directory tree exceeds the caller relative-depth limit.",
   "entry-path": "Directory tree contains a non-portable resource path.",
-  "open-failure": "A directory tree member could not be opened safely.",
-  "enumeration-failure": "Directory tree members could not be enumerated safely.",
   "inspection-failure": "Directory tree node facts could not be inspected safely.",
   "source-changed": "Directory tree changed while it was being traversed.",
   "aborted": "Bounded directory tree scan was aborted.",
@@ -129,7 +126,7 @@ interface ParsedBoundedDirectoryTreeScanOptions {
 interface PendingDirectory {
   readonly resourcePath: PortableResourcePath | null;
   readonly depth: number;
-  readonly expectedNode: Readonly<FileNodeSnapshot> | null;
+  readonly expectedNode: Readonly<FileNodeSnapshot> | undefined;
 }
 
 const LOWER_REASON_MAP = {
@@ -253,16 +250,12 @@ function mapDirectoryReadError(
 
 function directoryReadOptions(
   maximumEntries: number,
-  expectedNode: Readonly<FileNodeSnapshot> | null,
+  expectedNode: Readonly<FileNodeSnapshot> | undefined,
   signal: AbortSignal | undefined,
-): {
-  readonly maximumEntries: number;
-  readonly expectedNode?: Readonly<FileNodeSnapshot>;
-  readonly signal?: AbortSignal;
-} {
+): StableDirectoryReadOptions {
   return {
     maximumEntries,
-    ...(expectedNode === null ? {} : { expectedNode }),
+    ...(expectedNode === undefined ? {} : { expectedNode }),
     ...(signal === undefined ? {} : { signal }),
   };
 }
@@ -271,7 +264,7 @@ async function readOneDirectory(
   root: RootedDirectory,
   resourcePath: PortableResourcePath | null,
   maximumEntries: number,
-  expectedNode: Readonly<FileNodeSnapshot> | null,
+  expectedNode: Readonly<FileNodeSnapshot> | undefined,
   signal: AbortSignal | undefined,
   limitReason: "entry-limit" | "depth-limit",
 ): Promise<Readonly<StableDirectoryReadResult>> {
@@ -282,6 +275,16 @@ async function readOneDirectory(
       : await readStableResourceDirectory(root, resourcePath, options);
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
+      if (
+        expectedNode !== undefined
+        && (
+          error.reason === "not-found"
+          || error.reason === "symlink"
+          || error.reason === "not-directory"
+        )
+      ) {
+        fail("source-changed", "$options.expectedNode");
+      }
       mapDirectoryReadError(error, limitReason);
     }
     throw error;
@@ -311,7 +314,7 @@ async function scanTree<
   const pendingDirectories: PendingDirectory[] = [{
     resourcePath: treeRootResourcePath,
     depth: 0,
-    expectedNode: options.expectedNode ?? null,
+    expectedNode: options.expectedNode,
   }];
   const entries: Readonly<BoundedDirectoryTreeEntry>[] = [];
   let treeRootNode: Readonly<FileNodeSnapshot> | undefined;
@@ -320,9 +323,6 @@ async function scanTree<
     assertNotAborted(options.signal);
     const pending = pendingDirectories.pop();
     if (pending === undefined) fail("inspection-failure", "$tree");
-    if (pending.depth > options.maximumDepth) {
-      fail("depth-limit", "$tree.depth");
-    }
 
     const atDepthLimit = pending.depth === options.maximumDepth;
     const remainingEntries = options.maximumEntries - entries.length;
@@ -361,11 +361,6 @@ async function scanTree<
     left.resourcePath,
     right.resourcePath,
   ));
-  for (let index = 1; index < entries.length; index += 1) {
-    if (entries[index - 1]?.resourcePath === entries[index]?.resourcePath) {
-      fail("source-changed", "$tree.entries");
-    }
-  }
   assertNotAborted(options.signal);
   return Object.freeze({
     treeRootResourcePath,

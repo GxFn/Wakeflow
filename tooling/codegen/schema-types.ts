@@ -26,7 +26,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Ajv2020 } from "ajv/dist/2020.js";
-import { compileFromFile } from "json-schema-to-typescript";
+import {
+  parseTree,
+  type Node as JsonNode,
+  type ParseError,
+} from "jsonc-parser";
+import { compile } from "json-schema-to-typescript";
 
 /** 唯一手写 Schema 权威目录和唯一提交型生成目录。 */
 const SCHEMA_ROOT = "src/contracts/schemas";
@@ -40,9 +45,14 @@ const MAX_SCHEMA_FILES = 256;
 const MAX_SCHEMA_BYTES = 2 * 1024 * 1024;
 const MAX_GENERATED_BYTES = 4 * 1024 * 1024;
 
-/** 需要同时生成类型和运行时常量的基础 Schema 白名单。 */
+const STRICT_JSON_PARSE_OPTIONS = Object.freeze({
+  allowTrailingComma: false,
+  disallowComments: true,
+});
+
+/** 需要同时生成类型和运行时常量的封闭 Schema 白名单。 */
 const DURABLE_ID_KIND_SCHEMA_ID =
-  "urn:wakeflow:foundation:identity:durable-id-kind:v1";
+  "urn:wakeflow:identity:durable-id-kind:v1";
 const DURABLE_ID_KIND_SCHEMA_TITLE = "WakeflowDurableIdKind";
 const DURABLE_ID_KINDS_EXPORT = "WAKEFLOW_DURABLE_ID_KINDS";
 
@@ -126,6 +136,37 @@ function isPlainObject(value: unknown): value is JsonObject {
   return prototype === Object.prototype || prototype === null;
 }
 
+/** 生成清单统一使用与 locale 无关的 UTF-16 code-unit 顺序。 */
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/** 严格 JSON source 中任何层级的重复对象键都会使合同产生歧义。 */
+function duplicateObjectKeyExists(node: JsonNode): boolean {
+  if (node.type === "object") {
+    const seen = new Set<string>();
+    for (const property of node.children ?? []) {
+      const keyNode = property.children?.[0];
+      const valueNode = property.children?.[1];
+      if (
+        keyNode?.type !== "string"
+        || typeof keyNode.value !== "string"
+        || valueNode === undefined
+      ) {
+        return true;
+      }
+      if (seen.has(keyNode.value)) return true;
+      seen.add(keyNode.value);
+      if (duplicateObjectKeyExists(valueNode)) return true;
+    }
+    return false;
+  }
+  if (node.type === "array") {
+    return (node.children ?? []).some(duplicateObjectKeyExists);
+  }
+  return false;
+}
+
 /** 只把目标不存在映射为 `null`；权限、类型和其他文件系统错误仍然失败。 */
 function lstatOrNull(file: string): Stats | null {
   try {
@@ -205,7 +246,7 @@ function collectSchemaFiles(schemaRoot: string): readonly string[] {
       handle.closeSync();
     }
 
-    children.sort((left, right) => left.name.localeCompare(right.name));
+    children.sort((left, right) => compareCodeUnits(left.name, right.name));
     for (const child of children) {
       const absolute = path.join(directory, child.name);
       if (child.isSymbolicLink()) {
@@ -234,7 +275,7 @@ function collectSchemaFiles(schemaRoot: string): readonly string[] {
   if (files.length === 0) {
     fail("wakeflow-schema-count", `${SCHEMA_ROOT} must contain at least one schema`);
   }
-  return Object.freeze(files.sort());
+  return Object.freeze(files.sort(compareCodeUnits));
 }
 
 /** 递归收集外部 `$ref` 文档 ID；片段内引用仍由所属 Schema 自行解析。 */
@@ -327,9 +368,37 @@ export function loadSchemaCatalog(
       );
     }
 
+    const sourceText = readFileSync(file, "utf8");
+    const parseErrors: ParseError[] = [];
+    let syntaxTree: JsonNode | undefined;
+    try {
+      syntaxTree = parseTree(
+        sourceText,
+        parseErrors,
+        STRICT_JSON_PARSE_OPTIONS,
+      );
+    } catch {
+      fail(
+        "wakeflow-schema-json",
+        `${SCHEMA_ROOT}/${relativePath} is not valid JSON`,
+      );
+    }
+    if (syntaxTree === undefined || parseErrors.length > 0) {
+      fail(
+        "wakeflow-schema-json",
+        `${SCHEMA_ROOT}/${relativePath} is not valid strict JSON`,
+      );
+    }
+    if (duplicateObjectKeyExists(syntaxTree)) {
+      fail(
+        "wakeflow-schema-json-duplicate-key",
+        `${SCHEMA_ROOT}/${relativePath} contains a duplicate object key`,
+      );
+    }
+
     let parsed: unknown;
     try {
-      parsed = JSON.parse(readFileSync(file, "utf8"));
+      parsed = JSON.parse(sourceText);
     } catch {
       fail(
         "wakeflow-schema-json",
@@ -361,7 +430,7 @@ export function loadSchemaCatalog(
     records.push(Object.freeze({
       relativePath,
       id: parsed.$id,
-      externalRefs: Object.freeze([...refs].sort()),
+      externalRefs: Object.freeze([...refs].sort(compareCodeUnits)),
       schema: structuredClone(parsed),
     }));
   }
@@ -379,7 +448,10 @@ export function loadSchemaCatalog(
   }
 
   const catalog = Object.freeze(
-    records.sort((left, right) => left.relativePath.localeCompare(right.relativePath)),
+    records.sort((left, right) => compareCodeUnits(
+      left.relativePath,
+      right.relativePath,
+    )),
   );
   validateSchemaCatalog(catalog);
   return catalog;
@@ -451,7 +523,7 @@ function collectGeneratedFiles(output: string): readonly string[] {
       handle.closeSync();
     }
 
-    children.sort((left, right) => left.name.localeCompare(right.name));
+    children.sort((left, right) => compareCodeUnits(left.name, right.name));
     for (const child of children) {
       const absolute = path.join(directory, child.name);
       if (child.isSymbolicLink()) {
@@ -481,7 +553,7 @@ function collectGeneratedFiles(output: string): readonly string[] {
   }
 
   visit(output);
-  return Object.freeze(paths.sort());
+  return Object.freeze(paths.sort(compareCodeUnits));
 }
 
 /** 文件路径、NUL 分隔符和精确字节共同进入摘要，消除拼接与清单歧义。 */
@@ -563,7 +635,14 @@ function runtimeSchemaModuleLines(
 ): readonly string[] {
   const exportName = runtimeSchemaExportName(record);
   if (exportName === null) return [];
-  const runtimeSchema = JSON.stringify(record.schema, null, 2);
+  const runtimeSchemaJson = JSON.stringify(record.schema);
+  if (runtimeSchemaJson === undefined) {
+    fail(
+      "wakeflow-schema-runtime-export",
+      `${record.relativePath} could not be serialized as runtime JSON Schema`,
+    );
+  }
+  const serializedSchema = JSON.stringify(runtimeSchemaJson);
   return [
     "",
     "/** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */",
@@ -575,8 +654,19 @@ function runtimeSchemaModuleLines(
     "  return value;",
     "}",
     "",
+    "/** 从 JSON 文本恢复 Schema，保留 `__proto__` 等普通 JSON 自有键。 */",
+    "function restoreGeneratedSchema(",
+    "  serialized: string,",
+    "): Readonly<Record<string, unknown>> {",
+    "  const value: unknown = JSON.parse(serialized);",
+    "  if (value === null || Array.isArray(value) || typeof value !== \"object\") {",
+    "    throw new TypeError(\"Generated Schema must be an object.\");",
+    "  }",
+    "  return freezeGeneratedSchema(value as Record<string, unknown>);",
+    "}",
+    "",
     "/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */",
-    `export const ${exportName} = freezeGeneratedSchema(${runtimeSchema} as const);`,
+    `export const ${exportName} = restoreGeneratedSchema(${serializedSchema});`,
     "",
   ];
 }
@@ -775,7 +865,6 @@ function generateTodoItemIdContract(
  */
 async function generateSchemaModule(
   record: SchemaCatalogRecord,
-  sourcePath: string,
   schemaRoot: string,
   byId: ReadonlyMap<string, JsonObject>,
   bannerComment: string,
@@ -796,32 +885,44 @@ async function generateSchemaModule(
     return generateTodoItemIdContract(record, bannerComment);
   }
 
-  const generated = await compileFromFile(sourcePath, {
-    cwd: schemaRoot,
-    bannerComment,
-    format: false,
-    strictIndexSignatures: true,
-    unknownAny: true,
-    $refOptions: {
-      resolve: {
-        http: false,
-        wakeflowCatalog: {
-          order: 1,
-          canRead: ({ url }: { readonly url: string }): boolean => byId.has(url),
-          read: ({ url }: { readonly url: string }): JsonObject => {
-            const schema = byId.get(url);
-            if (schema === undefined) {
-              fail(
-                "wakeflow-schema-resolver",
-                `unknown Wakeflow schema reference ${url}`,
-              );
-            }
-            return structuredClone(schema);
+  const fallbackName = path.basename(
+    record.relativePath,
+    ".schema.json",
+  );
+  const generated = await compile(
+    structuredClone(record.schema) as Parameters<typeof compile>[0],
+    typeof record.schema.title === "string" && record.schema.title.length > 0
+      ? record.schema.title
+      : fallbackName,
+    {
+      cwd: schemaRoot,
+      bannerComment,
+      format: false,
+      strictIndexSignatures: true,
+      unknownAny: true,
+      $refOptions: {
+        resolve: {
+          http: false,
+          wakeflowCatalog: {
+            order: 1,
+            canRead: ({ url }: { readonly url: string }): boolean => (
+              byId.has(url)
+            ),
+            read: ({ url }: { readonly url: string }): JsonObject => {
+              const schema = byId.get(url);
+              if (schema === undefined) {
+                fail(
+                  "wakeflow-schema-resolver",
+                  `unknown Wakeflow schema reference ${url}`,
+                );
+              }
+              return structuredClone(schema);
+            },
           },
         },
       },
     },
-  });
+  );
   const normalizedGenerated = generated
     .split(/\r?\n/u)
     .map((line) => line.trimEnd())
@@ -863,7 +964,6 @@ async function generateOnce(
   const generatedPaths: string[] = [];
   try {
     for (const record of catalog) {
-      const sourcePath = path.join(schemaRoot, record.relativePath);
       const outputPath = generatedRelativePath(record.relativePath);
       const bannerComment = [
         "/**",
@@ -873,7 +973,6 @@ async function generateOnce(
       ].join("\n");
       const generated = await generateSchemaModule(
         record,
-        sourcePath,
         schemaRoot,
         byId,
         bannerComment,

@@ -107,7 +107,7 @@ test("closed dispatcher executes the fresh preview in Config-last order", async 
       return values;
     },
   );
-    equal(receipts.length, 14);
+  equal(receipts.length, 14);
   equal(receipts.at(-1)?.stepId, "authority:config");
   equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
   equal(existsSync(path.join(workspace.absolutePath, ".wakeflow-active")), true);
@@ -201,7 +201,10 @@ test("whole-owned root accepts existing only while replaying an affected step", 
       } catch (error: unknown) {
         normalError = error;
       }
-      equal(normalError instanceof WakeflowStaticMaterializationStepExecutionError, true);
+      equal(
+        normalError instanceof WakeflowStaticMaterializationStepExecutionError,
+        true,
+      );
       if (normalError instanceof WakeflowStaticMaterializationStepExecutionError) {
         equal(normalError.reason, "strict-absent");
       }
@@ -215,6 +218,47 @@ test("whole-owned root accepts existing only while replaying an affected step", 
         { sourceConfig: null, recoveringAffectedStep: true },
       );
       equal(recovered.disposition, "current");
+    },
+  );
+});
+
+test("step executor observes cancellation before decoding plan payloads", async (t) => {
+  const workspace = await fixture(t);
+  const desired = desiredConfig();
+  const core = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
+  await withWakeflowMaintenanceGate(
+    workspace.root,
+    {
+      expectedCoreLayoutInspectionDigest: core.inspectionDigest,
+      uuidFactory: () => UUID,
+    },
+    async (context) => {
+      const controller = new AbortController();
+      controller.abort();
+      let caught: unknown;
+      try {
+        await executeWakeflowStaticMaterializationStep(
+          workspace.root,
+          context,
+          { invalid: true },
+          request(desired),
+          "invalid:step",
+          {
+            sourceConfig: null,
+            recoveringAffectedStep: false,
+            signal: controller.signal,
+          },
+        );
+      } catch (error: unknown) {
+        caught = error;
+      }
+      equal(
+        caught instanceof WakeflowStaticMaterializationStepExecutionError,
+        true,
+      );
+      if (caught instanceof WakeflowStaticMaterializationStepExecutionError) {
+        equal(caught.reason, "aborted");
+      }
     },
   );
 });

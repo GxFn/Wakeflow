@@ -13,7 +13,6 @@ import {
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   createFileNodeSnapshot,
-  FileNodeSnapshotError,
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
   type FileNodeSnapshot,
@@ -58,7 +57,7 @@ export interface DurableDirectoryOptions {
   readonly signal?: AbortSignal;
 }
 
-export interface DurableDirectoryCreateResult {
+interface DurableDirectoryCreateResult {
   readonly resourcePath: PortableResourcePath;
   readonly disposition: "created";
   readonly node: Readonly<FileNodeSnapshot>;
@@ -67,13 +66,13 @@ export interface DurableDirectoryCreateResult {
 export type DirectoryMaterializationDisposition = "existing" | "created";
 
 /** 路径物化中一个根内目录段的最终冻结事实。 */
-export interface DirectoryMaterializationEntry {
+interface DirectoryMaterializationEntry {
   readonly resourcePath: PortableResourcePath;
   readonly disposition: DirectoryMaterializationDisposition;
   readonly node: Readonly<FileNodeSnapshot>;
 }
 
-export interface DirectoryMaterializationResult {
+interface DirectoryMaterializationResult {
   readonly resourcePath: PortableResourcePath;
   readonly node: Readonly<FileNodeSnapshot>;
   readonly segments: readonly Readonly<DirectoryMaterializationEntry>[];
@@ -233,8 +232,7 @@ async function snapshotHandle(
       await handle.stat({ bigint: true }),
       path,
     );
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) fail(reason, path);
+  } catch {
     fail(reason, path);
   }
 }
@@ -368,7 +366,6 @@ async function performAtomicCreate(
 ): Promise<Readonly<DurableDirectoryCreateResult>> {
   const parent = await openResourceParent(root, resourcePath);
   let targetHandle: FileHandle | undefined;
-  let committed = false;
   let primaryError: unknown;
   let result: Readonly<DurableDirectoryCreateResult> | undefined;
 
@@ -398,8 +395,6 @@ async function performAtomicCreate(
       }
       fail("create-failure", "$resourcePath");
     }
-    committed = true;
-
     try {
       targetHandle = await openFileHandle(
         parent.resourceAbsolutePath,
@@ -487,7 +482,7 @@ async function performAtomicCreate(
     primaryError = parentCloseError;
   }
   if (primaryError !== undefined) throw primaryError;
-  if (committed !== true || result === undefined) {
+  if (result === undefined) {
     fail("commit-uncertain", "$resourcePath");
   }
   return result;
@@ -539,10 +534,14 @@ function prefixPaths(
     throw error;
   }
   const prefixes: PortableResourcePath[] = [];
+  let current = "";
   for (let index = 1; index <= segments.length; index += 1) {
+    const segment = segments[index - 1];
+    if (segment === undefined) fail("input", "$resourcePath");
+    current = current.length === 0 ? segment : `${current}/${segment}`;
     try {
       prefixes.push(parsePortableResourcePath(
-        segments.slice(0, index).join("/"),
+        current,
         "$resourcePath",
       ));
     } catch (error: unknown) {
@@ -553,14 +552,6 @@ function prefixPaths(
     }
   }
   return Object.freeze(prefixes);
-}
-
-function publicOptions(
-  options: Readonly<ParsedOptions>,
-): DurableDirectoryOptions {
-  return options.signal === undefined
-    ? { mode: options.mode }
-    : { mode: options.mode, signal: options.signal };
 }
 
 /**
@@ -610,10 +601,10 @@ export async function materializeDirectoryPath(
     }
 
     try {
-      const created = await createDirectoryAtomically(
+      const created = await performAtomicCreate(
         root,
         prefix,
-        publicOptions(parsed),
+        parsed,
       );
       observations.push(Object.freeze({
         resourcePath: prefix,

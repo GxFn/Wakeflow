@@ -93,7 +93,6 @@ export class RootedResourceParentHandleError extends Error {
 }
 
 interface ResourceAddress {
-  readonly resourcePath: PortableResourcePath;
   readonly parentResourcePath: PortableResourcePath | null;
   readonly resourceName: string;
 }
@@ -152,7 +151,7 @@ function parseAddress(
       throw error;
     }
   }
-  return Object.freeze({ resourcePath, parentResourcePath, resourceName });
+  return Object.freeze({ parentResourcePath, resourceName });
 }
 
 function requiredOpenFlags(): number {
@@ -211,6 +210,12 @@ async function inspectInitialParent(
       if (error.reason === "ancestor-type") {
         fail("parent-not-directory", errorPath);
       }
+      if (
+        error.reason === "resource-changed"
+        || error.reason === "resource-alias"
+      ) {
+        fail("parent-changed", errorPath);
+      }
       if (error.reason === "resource-path") fail("input", errorPath);
       fail("root-scope", errorPath);
     }
@@ -233,9 +238,7 @@ async function inspectInitialParent(
  */
 export class RootedResourceParentHandle {
   readonly #root: RootedDirectory;
-  readonly #resourcePath: PortableResourcePath;
   readonly #parentResourcePath: PortableResourcePath | null;
-  readonly #resourceName: string;
   readonly #parentAbsolutePath: string;
   readonly #resourceAbsolutePath: string;
   readonly #initialParentSnapshot: Readonly<FileNodeSnapshot>;
@@ -252,9 +255,7 @@ export class RootedResourceParentHandle {
     errorPath: string,
   ) {
     this.#root = root;
-    this.#resourcePath = address.resourcePath;
     this.#parentResourcePath = address.parentResourcePath;
-    this.#resourceName = address.resourceName;
     this.#parentAbsolutePath = parent.absolutePath;
     this.#resourceAbsolutePath = nodePath.join(
       parent.absolutePath,
@@ -319,17 +320,9 @@ export class RootedResourceParentHandle {
     }
   }
 
-  get resourcePath(): PortableResourcePath {
-    return this.#resourcePath;
-  }
-
   /** `null` 明确表示 `RootedDirectory` 自身就是父目录。 */
   get parentResourcePath(): PortableResourcePath | null {
     return this.#parentResourcePath;
-  }
-
-  get resourceName(): string {
-    return this.#resourceName;
   }
 
   /** 仅供进程内 foundation I/O；禁止持久化或诊断输出。 */
@@ -342,13 +335,9 @@ export class RootedResourceParentHandle {
     return this.#resourceAbsolutePath;
   }
 
-  /** 打开时记录的父目录身份基准；不是当前元数据缓存。 */
-  get initialParentSnapshot(): Readonly<FileNodeSnapshot> {
-    return this.#initialParentSnapshot;
-  }
-
-  get isClosed(): boolean {
-    return this.#closed;
+  /** 打开时观察到的父目录设备号，只用于同文件系统操作预检。 */
+  get parentDeviceId(): bigint {
+    return this.#initialParentSnapshot.deviceId;
   }
 
   #assertOpen(): void {

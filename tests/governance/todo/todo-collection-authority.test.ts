@@ -180,7 +180,7 @@ test("pending transaction blocks normal authority inspection", async () => {
   }
 });
 
-test("incomplete, misplaced, linked, and extra item resources fail closed", async () => {
+test("incomplete, misplaced, linked, and extra layout resources fail closed", async () => {
   const scenarios: Array<(target: Fixture) => void> = [
     (target) => {
       const key = todoItemStorageKey("TODO-INCOMPLETE");
@@ -200,6 +200,13 @@ test("incomplete, misplaced, linked, and extra item resources fail closed", asyn
       const item = writeItem(target, "TODO-EXTRA");
       const itemRoot = path.join(target.itemsRoot, todoItemStorageKey(item.intake.todoId));
       writeFileSync(path.join(itemRoot, "extra.json"), "{}\n", { mode: 0o600 });
+    },
+    (target) => {
+      writeFileSync(
+        path.join(target.todoRoot, "foreign.json"),
+        "{}\n",
+        { mode: 0o600 },
+      );
     },
   ];
   for (const prepare of scenarios) {

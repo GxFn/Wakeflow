@@ -52,8 +52,17 @@ module.exports = {
     {
       name: "foundation-does-not-depend-on-product-domains",
       severity: "error",
-      comment: "foundation 只能向更低 foundation/contracts 依赖。",
+      comment: "foundation 只能向更低 foundation 或 foundation contracts 依赖。",
       from: { path: "^src/foundation/" },
+      to: {
+        path: "^src/(?:contracts/(?:identity|generated/identity)|configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability|hosts|entrypoints)/",
+      },
+    },
+    {
+      name: "application-identity-contract-does-not-depend-on-domains",
+      severity: "error",
+      comment: "应用级身份合同只能依赖生成合同与 Foundation，不能反向取得领域状态。",
+      from: { path: "^src/contracts/identity/" },
       to: {
         path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability|hosts|entrypoints)/",
       },
@@ -84,6 +93,27 @@ module.exports = {
         path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability)/",
       },
       to: { path: "^src/hosts/" },
+    },
+    {
+      name: "runtime-does-not-depend-on-entrypoints",
+      severity: "error",
+      comment: "composition root只能位于entrypoints，普通运行时不得反向取得入口能力。",
+      from: { path: "^src/(?!entrypoints/)" },
+      to: { path: "^src/entrypoints/" },
+    },
+    {
+      name: "codex-host-does-not-import-claude-code-host",
+      severity: "error",
+      comment: "Codex宿主实现不得取得Claude Code宿主能力。",
+      from: { path: "^src/hosts/codex/" },
+      to: { path: "^src/hosts/claude-code/" },
+    },
+    {
+      name: "claude-code-host-does-not-import-codex-host",
+      severity: "error",
+      comment: "Claude Code宿主实现不得取得Codex宿主能力。",
+      from: { path: "^src/hosts/claude-code/" },
+      to: { path: "^src/hosts/codex/" },
     },
   ],
   options: {

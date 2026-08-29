@@ -81,5 +81,72 @@
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "family": {
+            "const": "requirement"
+          }
+        },
+        "required": [
+          "family"
+        ]
+      },
+      "then": {
+        "properties": {
+          "recordId": {
+            "type": "string",
+            "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "role": {
+            "enum": [
+              "original-plan",
+              "requirement-design",
+              "code-facts",
+              "landing-plan",
+              "non-goals",
+              "user-confirmation",
+              "reproduction",
+              "scope",
+              "requirement-delta",
+              "research-question",
+              "boundaries",
+              "test-environment",
+              "supporting-evidence"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "family": {
+            "const": "confirmation"
+          }
+        },
+        "required": [
+          "family"
+        ]
+      },
+      "then": {
+        "properties": {
+          "recordId": {
+            "type": "string",
+            "pattern": "^confirmation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "role": {
+            "enum": [
+              "goal-stage-decision",
+              "user-confirmation",
+              "requirement-delta",
+              "supporting-evidence"
+            ]
+          }
+        }
+      }
+    }
+  ]
 }

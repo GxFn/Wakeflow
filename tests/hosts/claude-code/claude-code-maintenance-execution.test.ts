@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -44,14 +44,14 @@ import {
   publishPreparedWakeflowMaintenanceJournal,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-journal-store.js";
 import {
+  WakeflowMaintenanceExecutionPreviewError,
+} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-preview.js";
+import {
   createWakeflowMaintenanceExecutionIntent,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
 import {
   publishWakeflowMaintenanceExecutionIntent,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
-import {
-  hostOperationForWakeflowMaintenanceStep,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
 import {
   WakeflowMaintenanceExecutionTransactionError,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
@@ -116,6 +116,22 @@ function settingsPermission(absoluteRoot: string): readonly string[] {
   )) as { permissions: { allow: string[] } };
   return value.permissions.allow;
 }
+
+test("Claude aggregate preview preserves cancellation as an operation outcome", async (t) => {
+  const workspace = await fixture(t);
+  const controller = new AbortController();
+  controller.abort();
+  await rejects(
+    previewClaudeCodeMaintenanceExecution(workspace.root, {
+      ...request(desiredConfig()),
+      signal: controller.signal,
+    }),
+    (error: unknown) => (
+      error instanceof WakeflowMaintenanceExecutionPreviewError
+      && error.reason === "aborted"
+    ),
+  );
+});
 
 test("Claude aggregate transaction publishes three portable settings before Config", async (t) => {
   const workspace = await fixture(t);
@@ -200,25 +216,25 @@ test("recovery replays only the affected Claude operation from the exact journal
           input,
           desired,
         );
-        const intentSource = (await publishWakeflowMaintenanceExecutionIntent(
+        const intentSource = await publishWakeflowMaintenanceExecutionIntent(
           workspace.root,
           context,
           intent,
-        )).source;
-        let source = (await publishPreparedWakeflowMaintenanceJournal(
+        );
+        let source = await publishPreparedWakeflowMaintenanceJournal(
           workspace.root,
           context,
           intentSource,
           plan,
-        )).source;
+        );
         for (const step of plan.steps) {
-          source = (await checkpointWakeflowMaintenanceJournal(
+          source = await checkpointWakeflowMaintenanceJournal(
             workspace.root,
             context,
             intentSource,
             source,
             beginWakeflowMaintenanceJournalStep(source.journal),
-          )).source;
+          );
           if (step.boundary === "shared-static") {
             await executeWakeflowStaticMaterializationStep(
               workspace.root,
@@ -229,11 +245,12 @@ test("recovery replays only the affected Claude operation from the exact journal
               { sourceConfig: null, recoveringAffectedStep: false },
             );
           } else {
-            const operation = hostOperationForWakeflowMaintenanceStep(
-              plan,
-              step.stepId,
-            );
-            if (operation === null) throw new Error("Missing host operation.");
+            const operation = plan.hostContribution?.operations.find((entry) => (
+              entry.operationId === step.operationId
+            ));
+            if (operation === undefined) {
+              throw new Error("Missing host operation.");
+            }
             await claudeCodeMaintenanceCapability.executeOperation(
               workspace.root,
               context,
@@ -246,13 +263,13 @@ test("recovery replays only the affected Claude operation from the exact journal
             );
             throw privateError;
           }
-          source = (await checkpointWakeflowMaintenanceJournal(
+          source = await checkpointWakeflowMaintenanceJournal(
             workspace.root,
             context,
             intentSource,
             source,
             completeWakeflowMaintenanceJournalStep(source.journal),
-          )).source;
+          );
         }
         throw new Error("Expected a Claude host operation.");
       },

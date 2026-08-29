@@ -48,7 +48,7 @@ import type { PortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 
 /**
- * Wakeflow Foundation / Filesystem：单个完整字节文件的持久化原子发布门面。
+ * Wakeflow Foundation / Filesystem：单个完整字节文件的耐久原子发布门面。
  *
  * 本模块独占“创建时建立硬链接”和“替换时执行重命名”两个提交点，并编排相邻合同、
  * 自描述暂存文件 I/O、目标预期和父目录持久性。子模块不公开第二套写入器；调用方
@@ -287,7 +287,7 @@ async function performWrite<
   return result;
 }
 
-/** 持久化创建一个此前不存在的完整字节文件。 */
+/** 耐久创建一个此前不存在的完整字节文件。 */
 export async function createFileAtomically(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
@@ -309,7 +309,7 @@ export async function createFileAtomically(
   );
 }
 
-/** 持久化替换一个仍匹配完整前序 StableFileSource 的完整字节文件。 */
+/** 耐久替换一个仍匹配完整前序 StableFileSource 的完整字节文件。 */
 export async function replaceFileAtomically(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,

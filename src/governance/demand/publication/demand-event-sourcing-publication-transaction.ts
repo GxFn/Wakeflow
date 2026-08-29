@@ -45,7 +45,7 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../../../foundation/identity/wakeflow-durable-id.js";
+} from "../../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import {
   computeDemandEventSourcingCommandDigest,
@@ -57,7 +57,7 @@ import {
 import {
   computeDemandEventStreamCommitDigest,
   parseDemandEventStreamCommit,
-  prepareDemandEventStreamCommit,
+  planDemandEventStreamCommit,
   renderDemandEventStreamCommit,
   DemandEventStreamCommitError,
   type DemandEventStreamCommit,
@@ -92,9 +92,9 @@ import {
  * 恢复流程必须重新计算并验证命令与提交关系后，才能执行副作用。
  */
 
-export const DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_ARTIFACT_KIND =
+const DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_ARTIFACT_KIND =
   "wakeflow-demand-event-sourcing-publication-transaction" as const;
-export const DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA_VERSION =
+const DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA_VERSION =
   1 as const;
 
 export interface DemandEventSourcingPublicationTransaction {
@@ -316,7 +316,7 @@ export function parseDemandEventSourcingPublicationTransaction(
   const finalRootRef = parsePath(wire.finalRootRef, "$/finalRootRef");
   let recomputed;
   try {
-    recomputed = prepareDemandEventStreamCommit(null, {
+    recomputed = planDemandEventStreamCommit(null, {
       commitId: initialCommit.commitId,
       commandDigest: initialCommandDigest,
       events: decideDemandEventSourcingCommand(null, initialCommand),
@@ -346,7 +346,7 @@ export function parseDemandEventSourcingPublicationTransaction(
     || initialCommit.commitSequence !== 1
     || initialCommit.expectedStreamRevision !== 0
     || initialCommitDigest !== computeDemandEventStreamCommitDigest(initialCommit)
-    || !sameCommit(initialCommit, recomputed.commit)
+    || !sameCommit(initialCommit, recomputed)
   ) {
     fail("relation", "$transaction");
   }
@@ -411,6 +411,14 @@ export function createDemandEventSourcingPublicationTransaction(
   }
   const identityDigest = computeDemandIdentityDigest(identity);
   const authorityDigest = computeDemandAuthorityDigest(authority);
+  const expectedTodoCollectionDigest = parseDigest(
+    input.expectedTodoCollectionDigest,
+    "$/expectedTodoCollectionDigest",
+  );
+  const expectedTodoStateDigest = parseDigest(
+    input.expectedTodoStateDigest,
+    "$/expectedTodoStateDigest",
+  );
   let initialCommand: Readonly<PublishDemandCommand>;
   try {
     const parsed = parseDemandEventSourcingCommand({
@@ -437,11 +445,11 @@ export function createDemandEventSourcingPublicationTransaction(
   );
   let initialCommit: Readonly<DemandEventStreamCommit>;
   try {
-    initialCommit = prepareDemandEventStreamCommit(null, {
+    initialCommit = planDemandEventStreamCommit(null, {
       commitId,
       commandDigest: initialCommandDigest,
       events: decideDemandEventSourcingCommand(null, initialCommand),
-    }).commit;
+    });
   } catch (error: unknown) {
     if (
       error instanceof DemandEventSourcingDecisionError
@@ -456,14 +464,8 @@ export function createDemandEventSourcingPublicationTransaction(
     schemaVersion: DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA_VERSION,
     demandId: identity.demandId,
     todoId: identity.source.todoId,
-    expectedTodoCollectionDigest: parseDigest(
-      input.expectedTodoCollectionDigest,
-      "$/expectedTodoCollectionDigest",
-    ),
-    expectedTodoStateDigest: parseDigest(
-      input.expectedTodoStateDigest,
-      "$/expectedTodoStateDigest",
-    ),
+    expectedTodoCollectionDigest,
+    expectedTodoStateDigest,
     stageRef: demandPublicationStageRef(identity.demandId),
     finalRootRef: demandFinalRootRef(identity.demandId),
     identity,
@@ -481,7 +483,7 @@ export function renderDemandEventSourcingPublicationTransaction(
   value: unknown,
 ): string {
   return renderDeterministicJsonDocument(
-    parseDemandEventSourcingPublicationTransaction(value) as unknown as JsonValue,
+    parseDemandEventSourcingPublicationTransaction(value),
     "$transaction",
   );
 }
@@ -509,6 +511,6 @@ export function computeDemandEventSourcingPublicationTransactionDigest(
   value: unknown,
 ): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
-    parseDemandEventSourcingPublicationTransaction(value) as unknown as JsonValue,
+    parseDemandEventSourcingPublicationTransaction(value),
   );
 }

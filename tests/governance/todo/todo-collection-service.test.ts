@@ -16,10 +16,11 @@ import { test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
-  durableAtomicFileStageRef,
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import {
   createFileCandidateDurably,
 } from "../../../src/foundation/filesystem/durable-file-candidate.js";
@@ -27,6 +28,7 @@ import {
   parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { withRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import {
   appendTodoItem,
@@ -38,7 +40,10 @@ import {
   TodoCollectionServiceError,
   type TodoCollectionServiceErrorReason,
 } from "../../../src/governance/todo/todo-collection-service.js";
-import { todoItemStorageKey } from "../../../src/governance/todo/todo-paths.js";
+import {
+  TODO_COLLECTION_LOCK_REF,
+  todoItemStorageKey,
+} from "../../../src/governance/todo/todo-paths.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   materializeWakeflowActiveLayout,
@@ -145,6 +150,32 @@ test("fresh initialization creates private roots and an empty projection", async
       )).mode & 0o777,
       0o600,
     );
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("initialization serializes projection repair with collection mutations", async () => {
+  const { rootPath, root } = await openedFixture();
+  let initialization!: ReturnType<typeof initializeTodoCollection>;
+  let settled = false;
+  try {
+    await withRootedExclusiveFileLock(
+      root,
+      TODO_COLLECTION_LOCK_REF,
+      async () => {
+        initialization = initializeTodoCollection(root, { freshWorkspace: true });
+        void initialization.then(
+          () => { settled = true; },
+          () => { settled = true; },
+        );
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        equal(settled, false);
+      },
+    );
+    const snapshot = await initialization;
+    equal(snapshot.projection.status, "current");
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -327,7 +358,7 @@ test("TODO recovery 回滚 canonical journal 之前的 inactive partial stage", 
     computeSha256Digest(intendedBytes),
     0o600,
   );
-  const stageRef = durableAtomicFileStageRef(targetRef, address);
+  const stageRef = durableAtomicFileStageRefForTest(targetRef, address);
   try {
     try {
       await createFileCandidateDurably(root, stageRef, encodeUtf8("partial"), {
@@ -404,14 +435,9 @@ test("append recovery completes authority after projection failure", async () =>
       rootPath,
       ".wakeflow-active/current/todo/collection.lock",
     );
-    writeFileSync(lockPath, `${JSON.stringify({
-      createdAt: "2026-08-26T09:00:00.000Z",
-      kind: "WakeflowExclusiveFileLock",
-      pid: 2_147_483_647,
-      threadId: 0,
-      token: "2147483647-0-11111111-1111-4111-8111-111111111111",
-      version: 1,
-    }, null, 2)}\n`, { mode: 0o600 });
+    writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: "11111111-1111-4111-8111-111111111111",
+    }), { mode: 0o600 });
     const recovered = await recoverTodoItemTransaction(root, "TODO-RH1-RECOVER");
     equal(recovered.operation, "append");
     equal(recovered.wroteAuthority, false);
@@ -533,6 +559,26 @@ test("invalid initialization, operation inputs, and cancellation fail closed", a
     );
     const snapshot = await inspectTodoItems(root);
     equal(snapshot.collection.itemCount, 1);
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("authority byte-budget failure remains a capacity error at the service boundary", async () => {
+  const { rootPath, root } = await openedFixture();
+  try {
+    const appended = await appendTodoItem(root, draft("TODO-RH1-CAPACITY"), {
+      clock: () => CREATED_AT,
+    });
+    const statePath = path.join(
+      rootPath,
+      ".wakeflow-active/current/todo/items",
+      todoItemStorageKey(appended.item.todoId),
+      "state.json",
+    );
+    writeFileSync(statePath, "x".repeat(128 * 1024 + 1));
+    await expectServiceError(() => inspectTodoItems(root), "capacity");
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

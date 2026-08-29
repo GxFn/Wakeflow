@@ -13,7 +13,7 @@ import {
 } from "../../../src/foundation/crypto/sha256.js";
 import {
   parseWakeflowDurableIdOfKind,
-} from "../../../src/foundation/identity/wakeflow-durable-id.js";
+} from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import {
   parseUtcInstant,
 } from "../../../src/foundation/time/utc-instant.js";
@@ -110,6 +110,21 @@ test("requirement authority removes legacy status and reverse demand indexes", (
     }, { clock: () => RECORDED_AT }),
     LedgerAuthorityRecordError,
   );
+  for (const path of [
+    "Record.json",
+    "RECORD.JSON/nested.md",
+  ]) {
+    throws(
+      () => createRequirementRecord({
+        ...requirementInput(),
+        documents: [{
+          ...requirementInput().documents[0],
+          path,
+        }],
+      }, { clock: () => RECORDED_AT }),
+      LedgerAuthorityRecordError,
+    );
+  }
 });
 
 test("confirmation authority binds one pre-minted Demand without claiming an actor", () => {
@@ -136,5 +151,48 @@ test("confirmation authority binds one pre-minted Demand without claiming an act
       renderLedgerAuthorityRecord(confirmation),
     )),
     confirmation,
+  );
+});
+
+test("record drafts close document relations before reading the wall clock", () => {
+  let clockCalls = 0;
+  throws(
+    () => createRequirementRecord({
+      ...requirementInput(),
+      documents: [{
+        ...requirementInput().documents[0],
+        path: "Design/requirement.md",
+      }, {
+        ...requirementInput().documents[0],
+        path: "design/evidence.md",
+      }],
+    }, {
+      clock: () => {
+        clockCalls += 1;
+        return RECORDED_AT;
+      },
+    }),
+    LedgerAuthorityRecordError,
+  );
+  equal(clockCalls, 0);
+
+  throws(
+    () => createConfirmationRecord({
+      confirmationId: CONFIRMATION_ID,
+      programId: PROGRAM_ID,
+      demandId: DEMAND_ID,
+      title: "确认失败时间源",
+      documents: [{
+        role: "user-confirmation",
+        path: "decisions/confirmation.md",
+        mediaType: "text/markdown",
+        digest: DOCUMENT_DIGEST,
+      }],
+    }, {
+      clock: () => {
+        throw new Error("private clock failure");
+      },
+    }),
+    LedgerAuthorityRecordError,
   );
 });

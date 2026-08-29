@@ -160,7 +160,11 @@ function snapshotNode(
 async function inspectPathNode(
   physicalPath: string,
   errorPath: string,
-  missingReason: "root-not-found" | "resource-not-found",
+  missingReason:
+    | "root-not-found"
+    | "root-changed"
+    | "resource-not-found"
+    | "resource-changed",
 ): Promise<Readonly<FileNodeSnapshot>> {
   let stats: BigIntStats;
   try {
@@ -178,11 +182,15 @@ async function inspectCanonicalPath(
   physicalPath: string,
   errorPath: string,
   aliasReason: "root-alias" | "resource-alias",
+  changedReason: "root-changed" | "resource-changed",
 ): Promise<void> {
   let canonical: string;
   try {
     canonical = await realpath(physicalPath);
-  } catch {
+  } catch (error: unknown) {
+    if (readNodeSystemErrorCode(error) === "ENOENT") {
+      fail(changedReason, errorPath);
+    }
     fail("inspection-failure", errorPath);
   }
   if (canonical !== physicalPath) fail(aliasReason, errorPath);
@@ -194,7 +202,10 @@ async function resolveCanonicalRootPath(
 ): Promise<string> {
   try {
     return await realpath(physicalPath);
-  } catch {
+  } catch (error: unknown) {
+    if (readNodeSystemErrorCode(error) === "ENOENT") {
+      fail("root-changed", errorPath);
+    }
     fail("inspection-failure", errorPath);
   }
 }
@@ -261,7 +272,7 @@ export class RootedDirectory {
     const canonicalBefore = await inspectPathNode(
       canonicalRootPath,
       path,
-      "root-not-found",
+      "root-changed",
     );
     if (
       canonicalBefore.kind !== "directory"
@@ -279,7 +290,7 @@ export class RootedDirectory {
     } catch (error: unknown) {
       const code = readNodeSystemErrorCode(error);
       if (code === "ELOOP") fail("root-symlink", path);
-      if (code === "ENOENT") fail("root-not-found", path);
+      if (code === "ENOENT") fail("root-changed", path);
       fail("root-open-failure", path);
     }
 
@@ -291,9 +302,14 @@ export class RootedDirectory {
       const after = await inspectPathNode(
         canonicalRootPath,
         path,
-        "root-not-found",
+        "root-changed",
       );
-      await inspectCanonicalPath(canonicalRootPath, path, "root-alias");
+      await inspectCanonicalPath(
+        canonicalRootPath,
+        path,
+        "root-alias",
+        "root-changed",
+      );
       if (
         opened.kind !== "directory"
         || after.kind !== "directory"
@@ -316,15 +332,6 @@ export class RootedDirectory {
   /** 进程内规范绝对根目录；调用方不得把它写入可移植数据。 */
   get absolutePath(): string {
     return this.#absolutePath;
-  }
-
-  /** 打开根时的冻结物理快照；它不是当前状态缓存。 */
-  get initialSnapshot(): Readonly<FileNodeSnapshot> {
-    return this.#initialSnapshot;
-  }
-
-  get isClosed(): boolean {
-    return this.#closed;
   }
 
   #assertOpen(errorPath: string): void {
@@ -352,13 +359,18 @@ export class RootedDirectory {
     const current = await inspectPathNode(
       this.#absolutePath,
       path,
-      "root-not-found",
+      "root-changed",
     );
     if (current.kind === "symbolic-link") fail("root-changed", path);
     if (current.kind !== "directory" || opened.kind !== "directory") {
       fail("root-changed", path);
     }
-    await inspectCanonicalPath(this.#absolutePath, path, "root-alias");
+    await inspectCanonicalPath(
+      this.#absolutePath,
+      path,
+      "root-alias",
+      "root-changed",
+    );
     if (
       !sameFileNodeIdentity(this.#initialSnapshot, opened)
       || !sameFileNodeIdentity(opened, current)
@@ -414,7 +426,12 @@ export class RootedDirectory {
         fail("ancestor-type", path);
       }
       if (node.kind !== "symbolic-link") {
-        await inspectCanonicalPath(current, path, "resource-alias");
+        await inspectCanonicalPath(
+          current,
+          path,
+          "resource-alias",
+          "resource-changed",
+        );
       }
       entries.push(Object.freeze({
         physicalPath: current,
@@ -429,7 +446,7 @@ export class RootedDirectory {
       const currentNode = await inspectPathNode(
         entry.physicalPath,
         path,
-        "resource-not-found",
+        "resource-changed",
       );
       if (
         currentNode.kind !== entry.node.kind
@@ -445,6 +462,7 @@ export class RootedDirectory {
           entry.physicalPath,
           path,
           "resource-alias",
+          "resource-changed",
         );
       }
       if (entry.isFinal) {

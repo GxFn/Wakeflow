@@ -179,7 +179,6 @@
       "required": [
         "desiredTopologyDigest",
         "windowTopologyDigest",
-        "identitySourceDigest",
         "rootObservationDigest"
       ],
       "properties": {
@@ -187,9 +186,6 @@
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         },
         "windowTopologyDigest": {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-        },
-        "identitySourceDigest": {
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         },
         "rootObservationDigest": {
@@ -200,5 +196,104 @@
     "projectionDigest": {
       "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "controller"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "logicalRoot": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "program"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "configuredPlacement": {
+            "const": "."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "enum": [
+              "design",
+              "test"
+            ]
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "logicalRoot": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "support-surface"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "configuredPlacement": {
+            "not": {
+              "const": "."
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "product"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "then": {
+        "properties": {
+          "logicalRoot": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "repository"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "configuredPlacement": {
+            "not": {
+              "const": "."
+            }
+          }
+        }
+      }
+    }
+  ]
 }

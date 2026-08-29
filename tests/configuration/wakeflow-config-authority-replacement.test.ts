@@ -41,10 +41,11 @@ import {
   createFileCandidateDurably,
 } from "../../src/foundation/filesystem/durable-file-candidate.js";
 import {
-  durableAtomicFileStageRef,
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { durableAtomicFileStageRefForTest } from "../foundation/filesystem/durable-atomic-file-test-support.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { withRootedExclusiveFileLock } from "../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import { encodeUtf8 } from "../../src/foundation/text/utf8.js";
@@ -98,14 +99,9 @@ async function expectReplacementError(
 }
 
 function writeInactiveLock(lockPath: string): void {
-  writeFileSync(lockPath, `${JSON.stringify({
-    createdAt: "2026-08-27T10:00:00.000Z",
-    kind: "WakeflowExclusiveFileLock",
-    pid: 2_147_483_647,
-    threadId: 0,
-    token: "2147483647-0-11111111-1111-4111-8111-111111111111",
-    version: 1,
-  }, null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
+    tokenUuid: "11111111-1111-4111-8111-111111111111",
+  }), { mode: 0o600 });
 }
 
 test("Config authority replacement 在exact source下替换并支持旧请求幂等重试", async () => {
@@ -302,7 +298,7 @@ test("Config replacement recovery 只接纳同一desired stage并前向完成", 
       computeSha256Digest(desiredBytes),
       0o644,
     );
-    const stageRef = durableAtomicFileStageRef(
+    const stageRef = durableAtomicFileStageRefForTest(
       WAKEFLOW_CONFIG_FILE_REF,
       address,
     );
@@ -320,15 +316,14 @@ test("Config replacement recovery 只接纳同一desired stage并前向完成", 
       desired,
       source.authority,
     );
-    equal(recovered.disposition, "recovered");
-    equal(recovered.replacement.disposition, "replaced");
+    equal(recovered.disposition, "replaced");
     equal(existsSync(fixture.lockPath), false);
     equal(
       existsSync(path.join(fixture.workspaceRoot, ...stageRef.split("/"))),
       false,
     );
     equal(
-      recovered.replacement.authority.configDigest,
+      recovered.authority.configDigest,
       computeWakeflowConfigV3Digest(parseWakeflowConfigV3(desired)),
     );
   } finally {
@@ -355,7 +350,7 @@ test("Config replacement recovery 保留不同desired的lock与stage现场", asy
       computeSha256Digest(otherBytes),
       0o644,
     );
-    const stageRef = durableAtomicFileStageRef(
+    const stageRef = durableAtomicFileStageRefForTest(
       WAKEFLOW_CONFIG_FILE_REF,
       address,
     );

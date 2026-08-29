@@ -24,7 +24,7 @@ import {
   StableFileReadError,
 } from "./stable-file-read.js";
 
-/** 持久化原子写入中，目标及父目录 I/O 与替换预期的精确复验。 */
+/** 耐久原子写入中，目标及父目录 I/O 与替换预期的精确复验。 */
 
 function mapParentHandleError(
   error: RootedResourceParentHandleError,
@@ -176,7 +176,6 @@ export async function assertExpectedDurableAtomicFileTarget(
         || error.reason === "symlink"
         || error.reason === "not-file"
         || error.reason === "expectation-changed"
-        || error.reason === "too-large"
         || error.reason === "source-changed"
       ) {
         fail("expectation-changed", "$resourcePath");
@@ -218,6 +217,7 @@ export async function inspectCommittedDurableAtomicFileTarget(
     || opened.linkCount !== expectedLinkCount
     || !sameFileNodeIdentity(stage.node, opened)
     || !sameFileNodeIdentity(opened, target)
+    || !sameFileNodeSnapshot(opened, target)
   ) {
     fail("commit-uncertain", "$resourcePath");
   }

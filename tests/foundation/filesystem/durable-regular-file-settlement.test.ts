@@ -67,21 +67,20 @@ test("exact linked target settlement 同步 file 与 destination parent", async 
   try {
     const ref = parsePortableResourcePath("commits/commit.json");
     const expected = await root.inspectExistingResource(ref);
-    const result = await settleRegularFileDurability(root, ref, {
+    await settleRegularFileDurability(root, ref, {
       expectedNode: expected.node,
     });
 
-    equal(result.resourcePath, ref);
-    equal(result.node.linkCount, 2n);
-    equal(sameFileNodeSnapshot(result.node, expected.node), true);
-    equal(result.parentNode.kind, "directory");
-    equal(Object.isFrozen(result), true);
+    const settled = await root.inspectExistingResource(ref);
+    equal(settled.node.linkCount, 2n);
+    equal(sameFileNodeSnapshot(settled.node, expected.node), true);
 
     rmSync(candidatePath);
     const singleLink = await root.inspectExistingResource(ref);
-    const settledSingleLink = await settleRegularFileDurability(root, ref, {
+    await settleRegularFileDurability(root, ref, {
       expectedNode: singleLink.node,
     });
+    const settledSingleLink = await root.inspectExistingResource(ref);
     equal(settledSingleLink.node.linkCount, 1n);
     equal(sameFileNodeSnapshot(settledSingleLink.node, singleLink.node), true);
   } finally {

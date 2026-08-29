@@ -8,7 +8,6 @@ import {
 } from "../../../src/foundation/crypto/sha256-hasher.js";
 import {
   computeSha256Digest,
-  computeSha256Hex,
 } from "../../../src/foundation/crypto/sha256.js";
 
 const encoder = new TextEncoder();
@@ -52,7 +51,6 @@ test("incremental chunks match the existing one-shot SHA-256 contract", () => {
 
   const result = hasher.digest();
   equal(result.byteCount, bytes.byteLength);
-  equal(result.hex, computeSha256Hex(bytes));
   equal(result.digest, computeSha256Digest(bytes));
   equal(Object.isFrozen(result), true);
 });
@@ -62,10 +60,9 @@ test("an untouched hasher produces the standard empty SHA-256 digest", () => {
 
   equal(result.byteCount, 0);
   equal(
-    result.hex,
-    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    result.digest,
+    "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   );
-  equal(result.digest, `sha256:${result.hex}`);
 });
 
 test("Buffer and offset views contribute only their exact visible bytes", () => {
@@ -79,7 +76,7 @@ test("Buffer and offset views contribute only their exact visible bytes", () => 
   const result = hasher.digest();
 
   equal(result.byteCount, 3);
-  equal(result.hex, computeSha256Hex(encoder.encode("abc")));
+  equal(result.digest, computeSha256Digest(encoder.encode("abc")));
   deepEqual([...storage], before);
 });
 
@@ -95,10 +92,10 @@ test("byte counts accumulate exactly across many chunks", () => {
   for (const chunk of chunks) {
     hasher.update(chunk);
     expectedCount += chunk.byteLength;
-    equal(hasher.byteCount, expectedCount);
   }
 
   const result = hasher.digest();
+  equal(result.byteCount, expectedCount);
   equal(result.byteCount, expectedBytes.byteLength);
   equal(result.digest, computeSha256Digest(expectedBytes));
 });
@@ -119,11 +116,12 @@ test("invalid inputs are rejected before mutating an active hasher", () => {
       "input-type",
       "$.chunk",
     );
-    equal(hasher.byteCount, 0);
   }
 
   hasher.update(encoder.encode("abc"));
-  equal(hasher.digest().hex, computeSha256Hex(encoder.encode("abc")));
+  const result = hasher.digest();
+  equal(result.byteCount, 3);
+  equal(result.digest, computeSha256Digest(encoder.encode("abc")));
 });
 
 test("Proxy byte views are rejected without invoking traps", () => {
@@ -142,13 +140,16 @@ test("Proxy byte views are rejected without invoking traps", () => {
     "$.chunk",
   );
   equal(trapCalls, 0);
-  equal(hasher.byteCount, 0);
+  hasher.update(encoder.encode("a"));
+  const result = hasher.digest();
+  equal(result.byteCount, 1);
+  equal(result.digest, computeSha256Digest(encoder.encode("a")));
 });
 
 test("digest and update cannot be repeated after finalization", () => {
   const hasher = new Sha256Hasher();
   hasher.update(encoder.encode("abc"));
-  hasher.digest();
+  const result = hasher.digest();
 
   const updateError = expectSha256HasherError(
     () => hasher.update(encoder.encode("def")),
@@ -162,7 +163,7 @@ test("digest and update cannot be repeated after finalization", () => {
     "already-finalized",
     "$hasher",
   );
-  equal(hasher.byteCount, 3);
+  equal(result.byteCount, 3);
 });
 
 test("large deterministic input hashes without a combined string conversion", () => {

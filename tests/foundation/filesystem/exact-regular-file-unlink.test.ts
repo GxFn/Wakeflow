@@ -68,9 +68,8 @@ test("linked-pair cleanup proves the exact 2 to 1 transition", async () => {
       expectedNode: expected.node,
     });
 
-    equal(receipt.previousLinkCount, 2n);
-    equal(receipt.remainingLinkCount, 1n);
     equal(receipt.replacementObserved, false);
+    equal(receipt.nodeBefore.linkCount, 2n);
     equal(receipt.nodeBefore.inodeId, receipt.nodeAfterUnlink.inodeId);
     equal(receipt.nodeAfterUnlink.linkCount, 1n);
     equal(statSync(sourcePath, { throwIfNoEntry: false }), undefined);
@@ -94,9 +93,8 @@ test("last pathname removal proves the exact 1 to 0 transition", async () => {
     const receipt = await unlinkRegularFileExactly(root, resourcePath, {
       expectedNode: expected.node,
     });
-    equal(receipt.previousLinkCount, 1n);
-    equal(receipt.remainingLinkCount, 0n);
     equal(receipt.replacementObserved, false);
+    equal(receipt.nodeBefore.linkCount, 1n);
     equal(receipt.nodeAfterUnlink.linkCount, 0n);
     equal(receipt.nodeAfterUnlink.byteCount, Buffer.byteLength("last-link"));
     equal(statSync(target, { throwIfNoEntry: false }), undefined);
@@ -217,6 +215,7 @@ test("options, path, and AbortSignal are closed and passively admitted", async (
       [{}, "$options"],
       [{ expectedNode: expected.node, extra: true }, "$options"],
       [{ expectedNode: { ...expected.node } }, "$options.expectedNode"],
+      [{ expectedNode: expected.node, settlement: null }, "$options.settlement"],
       [{ expectedNode: expected.node, settlement: "eventually-absent" }, "$options.settlement"],
       [{ expectedNode: expected.node, signal: {} }, "$options.signal"],
     ];

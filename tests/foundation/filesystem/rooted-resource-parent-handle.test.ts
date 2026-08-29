@@ -53,13 +53,10 @@ test("root-level target uses the opened RootedDirectory as parent", async () => 
   const resourcePath = parsePortableResourcePath("target");
   const parent = await RootedResourceParentHandle.open(root, resourcePath);
   try {
-    equal(parent.resourcePath, resourcePath);
     equal(parent.parentResourcePath, null);
-    equal(parent.resourceName, "target");
     equal(parent.parentAbsolutePath, root.absolutePath);
     equal(parent.resourceAbsolutePath, path.join(root.absolutePath, "target"));
-    equal(parent.initialParentSnapshot.kind, "directory");
-    equal(parent.isClosed, false);
+    equal(parent.parentDeviceId, (await parent.assertCurrent()).deviceId);
     equal(await parent.inspectTarget(), null);
 
     writeFileSync(path.join(rootPath, "target"), "value");
@@ -88,7 +85,6 @@ test("nested target exposes one stable real parent and observes symlink itself",
   );
   try {
     equal(target.parentResourcePath, "records/nested");
-    equal(target.resourceName, "target");
     equal((await target.inspectTarget())?.kind, "file");
     equal((await link.inspectTarget())?.kind, "symbolic-link");
   } finally {
@@ -187,6 +183,12 @@ test("parent identity survives sibling mutations but detects pathname replacemen
       path.join(rootPath, "parent"),
       path.join(rootPath, "original-parent"),
     );
+    await expectParentHandleError(
+      () => handle.assertCurrent(),
+      "parent-changed",
+      "$resourcePath",
+    );
+
     mkdirSync(path.join(rootPath, "parent"));
     await expectParentHandleError(
       () => handle.assertCurrent(),
@@ -210,7 +212,6 @@ test("close is idempotent and all later I/O methods reject", async () => {
   );
   await handle.close();
   await handle.close();
-  equal(handle.isClosed, true);
   for (const operation of [
     () => handle.assertCurrent(),
     () => handle.inspectTarget(),

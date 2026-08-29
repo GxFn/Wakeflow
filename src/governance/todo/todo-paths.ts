@@ -36,13 +36,17 @@ export const TODO_BOARD_PROJECTION_REF = parsePortableResourcePath(
   `${TODO_COLLECTION_ROOT_REF}/global-todo-board.md`,
 );
 
-export type TodoItemStorageKey = `item-${string}`;
+declare const TODO_ITEM_STORAGE_KEY_BRAND: unique symbol;
+
+export type TodoItemStorageKey = `item-${string}` & {
+  readonly [TODO_ITEM_STORAGE_KEY_BRAND]: "TodoItemStorageKey";
+};
 
 /** 从真实 TODO ID 计算跨平台、固定长度且不泄露原文的存储键。 */
 export function todoItemStorageKey(value: unknown): TodoItemStorageKey {
   const todoId = parseTodoItemId(value, "$todoId");
   const digest = computeSha256Hex(encodeUtf8(todoId, "$todoId"), "$todoId");
-  return `item-${digest}`;
+  return `item-${digest}` as TodoItemStorageKey;
 }
 
 function itemRef(

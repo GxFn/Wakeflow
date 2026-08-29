@@ -152,3 +152,33 @@ test("publication preserves a candidate when final exists or source drifted", as
     rmSync(rootPath, { recursive: true, force: true });
   }
 });
+
+test("publication cancellation before commit preserves the complete candidate", async () => {
+  const { rootPath, root } = await fixture();
+  try {
+    const sourceRef = "transactions/.cancelled.stage";
+    const finalRef = "requirements/requirement_44444444-4444-4444-8444-444444444444";
+    const candidate = await createDirectoryTreeCandidateDurably(
+      root,
+      sourceRef,
+      FILES,
+      OPTIONS,
+    );
+    const controller = new AbortController();
+    controller.abort();
+    await expectPublicationError(
+      () => publishDirectoryTreeCandidateDurably(
+        root,
+        candidate,
+        finalRef,
+        { signal: controller.signal },
+      ),
+      "aborted",
+    );
+    equal(existsSync(path.join(rootPath, ...sourceRef.split("/"))), true);
+    equal(existsSync(path.join(rootPath, ...finalRef.split("/"))), false);
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});

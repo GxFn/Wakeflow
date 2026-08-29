@@ -1,3 +1,5 @@
+import { types } from "node:util";
+
 import {
   fromJsonSchema,
   McpServer,
@@ -24,6 +26,10 @@ import {
   canonicalizeJson,
 } from "../foundation/data/canonical-json.js";
 import {
+  parsePlainRecord,
+  PassiveOwnDataError,
+} from "../foundation/data/passive-own-data.js";
+import {
   WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
   WakeflowMaintenancePublicContractError,
 } from "../workspace/maintenance/wakeflow-maintenance-public-contract.js";
@@ -49,28 +55,30 @@ import {
  * 不注册未来业务占位工具，也不执行窗口创建、消息发送、Git worktree 或其他宿主效果。
  */
 
-export type WakeflowMaintenanceMcpExecutor = (
+type WakeflowMaintenanceMcpExecutor = (
   value: unknown,
 ) => Promise<Readonly<WakeflowMaintenancePublicResult>>;
 
-export type WakeflowWindowHostBindingMcpExecutor = (
+type WakeflowWindowHostBindingMcpExecutor = (
   value: unknown,
 ) => Promise<Readonly<WakeflowWindowHostBindingPublicResult>>;
 
-export interface CreateWakeflowPublicMcpServerOptions {
+interface CreateWakeflowPublicMcpServerOptions {
   readonly serverName: string;
   readonly serverVersion: string;
   readonly executeMaintenance: WakeflowMaintenanceMcpExecutor;
   readonly registerWindowHostBinding: WakeflowWindowHostBindingMcpExecutor;
 }
 
-export type WakeflowPublicMcpServerConfigurationErrorReason =
+type WakeflowPublicMcpServerConfigurationErrorReason =
+  | "options"
   | "server-name"
   | "server-version"
   | "maintenance-executor"
   | "window-host-binding-executor";
 
 const CONFIGURATION_ERROR_MESSAGES = {
+  options: "Wakeflow MCP server options are invalid.",
   "server-name": "Wakeflow MCP server name is invalid.",
   "server-version": "Wakeflow MCP server version is invalid.",
   "maintenance-executor": "Wakeflow MCP Maintenance executor is invalid.",
@@ -119,12 +127,62 @@ function nonEmptyText(value: unknown, reason: "server-name" | "server-version") 
   if (
     typeof value !== "string"
     || value.length === 0
+    || value.length > 128
     || value.trim() !== value
+    || !value.isWellFormed()
+    || value.normalize("NFC") !== value
     || /[\u0000-\u001f\u007f-\u009f]/u.test(value)
   ) {
     failConfiguration(reason);
   }
   return value;
+}
+
+function parseServerOptions(
+  value: unknown,
+): Readonly<CreateWakeflowPublicMcpServerOptions> {
+  let record: Readonly<Record<string, unknown>>;
+  try {
+    record = parsePlainRecord(value, "$options");
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) failConfiguration("options");
+    throw error;
+  }
+  const fields = Object.freeze([
+    "executeMaintenance",
+    "registerWindowHostBinding",
+    "serverName",
+    "serverVersion",
+  ] as const);
+  const keys = Object.keys(record).sort();
+  if (
+    keys.length !== fields.length
+    || keys.some((key, index) => key !== fields[index])
+  ) {
+    failConfiguration("options");
+  }
+  const serverName = nonEmptyText(record.serverName, "server-name");
+  const serverVersion = nonEmptyText(record.serverVersion, "server-version");
+  if (
+    typeof record.executeMaintenance !== "function"
+    || types.isProxy(record.executeMaintenance)
+  ) {
+    failConfiguration("maintenance-executor");
+  }
+  if (
+    typeof record.registerWindowHostBinding !== "function"
+    || types.isProxy(record.registerWindowHostBinding)
+  ) {
+    failConfiguration("window-host-binding-executor");
+  }
+  return Object.freeze({
+    serverName,
+    serverVersion,
+    executeMaintenance:
+      record.executeMaintenance as WakeflowMaintenanceMcpExecutor,
+    registerWindowHostBinding:
+      record.registerWindowHostBinding as WakeflowWindowHostBindingMcpExecutor,
+  });
 }
 
 function maintenanceError(error: unknown) {
@@ -199,24 +257,17 @@ function failedToolResult(tool: string, error: unknown): CallToolResult {
 export function createWakeflowPublicMcpServer(
   options: Readonly<CreateWakeflowPublicMcpServerOptions>,
 ): McpServer {
-  const serverName = nonEmptyText(options.serverName, "server-name");
-  const serverVersion = nonEmptyText(options.serverVersion, "server-version");
-  if (typeof options.executeMaintenance !== "function") {
-    failConfiguration("maintenance-executor");
-  }
-  if (typeof options.registerWindowHostBinding !== "function") {
-    failConfiguration("window-host-binding-executor");
-  }
+  const admitted = parseServerOptions(options);
 
   const server = new McpServer({
-    name: serverName,
-    version: serverVersion,
+    name: admitted.serverName,
+    version: admitted.serverVersion,
   }, {
     instructions: [
-      "Call wakeflow_maintain_workspace in preview mode before apply.",
+      `Call ${WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME} in preview mode before apply.`,
       "Apply must return the exact confirmation and digest produced by that preview.",
       "Wakeflow never performs host effects: the Agent executes each returned window launch intent with host capabilities.",
-      "After a host window is created, pass its exact opaque result to wakeflow_register_window_binding.",
+      `After a host window is created, pass its exact opaque result to ${WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME}.`,
     ].join(" "),
   });
 
@@ -244,7 +295,7 @@ export function createWakeflowPublicMcpServer(
     },
     async (request) => {
       try {
-        const result = await options.executeMaintenance(request);
+        const result = await admitted.executeMaintenance(request);
         return {
           content: [{
             type: "text" as const,
@@ -284,7 +335,7 @@ export function createWakeflowPublicMcpServer(
     },
     async (request) => {
       try {
-        const result = await options.registerWindowHostBinding(request);
+        const result = await admitted.registerWindowHostBinding(request);
         return {
           content: [{
             type: "text" as const,

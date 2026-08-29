@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { types } from "node:util";
 
 import {
@@ -37,7 +38,10 @@ import {
 /** Wakeflow Foundation / Filesystem：目录树候选的稳定进度检查与清单闭合验证。 */
 
 function inspectionLimits(plan: Readonly<DirectoryTreeCandidatePlan>) {
-  const largestFile = Math.max(0, ...plan.files.map((file) => file.byteCount));
+  let largestFile = 0;
+  for (const file of plan.files) {
+    largestFile = Math.max(largestFile, file.byteCount);
+  }
   return Object.freeze({
     maximumEntries: plan.directories.length + plan.files.length,
     maximumDepth: directoryTreeCandidateMaximumPathDepth(
@@ -48,6 +52,19 @@ function inspectionLimits(plan: Readonly<DirectoryTreeCandidatePlan>) {
     maximumFileBytes: parseByteCount(largestFile, "$plan/maximumFileBytes"),
     maximumTotalBytes: plan.totalBytes,
   });
+}
+
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false;
+  return Buffer.from(
+    left.buffer,
+    left.byteOffset,
+    left.byteLength,
+  ).equals(Buffer.from(
+    right.buffer,
+    right.byteOffset,
+    right.byteLength,
+  ));
 }
 
 function relativeFromCandidate(
@@ -160,8 +177,10 @@ export async function inspectDirectoryTreeCandidateProgress(
   ) {
     fail("tree-conflict", "$candidate");
   }
-  const expectedDirectories = new Map(plan.directories.map((path) => [path, true]));
+  const expectedDirectories = new Set(plan.directories);
   const expectedFiles = new Map(plan.files.map((file) => [file.path, file]));
+  const observedDirectories = new Set<PortableResourcePath>();
+  const observedFiles = new Set<PortableResourcePath>();
   for (const entry of tree.entries) {
     const relative = relativeFromCandidate(candidateRootPath, entry.resourcePath);
     if (entry.node.kind === "directory") {
@@ -171,6 +190,7 @@ export async function inspectDirectoryTreeCandidateProgress(
       ) {
         fail("tree-conflict", "$candidate");
       }
+      observedDirectories.add(relative);
       continue;
     }
     const expected = expectedFiles.get(relative);
@@ -182,6 +202,7 @@ export async function inspectDirectoryTreeCandidateProgress(
     ) {
       fail("tree-conflict", "$candidate");
     }
+    observedFiles.add(relative);
   }
   for (const file of tree.files) {
     const relative = relativeFromCandidate(candidateRootPath, file.resourcePath);
@@ -196,12 +217,6 @@ export async function inspectDirectoryTreeCandidateProgress(
       fail("tree-conflict", "$candidate");
     }
   }
-  const observedDirectories = new Set(tree.entries
-    .filter((entry) => entry.node.kind === "directory")
-    .map((entry) => relativeFromCandidate(candidateRootPath, entry.resourcePath)));
-  const observedFiles = new Set(tree.files.map((file) => (
-    relativeFromCandidate(candidateRootPath, file.resourcePath)
-  )));
   const missingDirectories = Object.freeze(plan.directories.filter(
     (directory) => !observedDirectories.has(directory),
   ));
@@ -268,11 +283,13 @@ export async function inspectPartialDirectoryTreeCandidate(
       ? undefined
       : { signal: prepared.options.signal },
   );
+  const missingDirectories = new Set(progress.missingDirectories);
+  const missingFiles = new Set(progress.missingFiles);
   const existingDirectories = new Set(prepared.plan.directories.filter(
-    (directory) => !progress.missingDirectories.includes(directory),
+    (directory) => !missingDirectories.has(directory),
   ));
   const existingFiles = new Set(prepared.plan.files
-    .filter((file) => !progress.missingFiles.includes(file.path))
+    .filter((file) => !missingFiles.has(file.path))
     .map((file) => file.path));
   const expectedFiles = new Map(prepared.files.map((file) => [file.path, file]));
   for (const filePath of existingFiles) {
@@ -305,8 +322,7 @@ export async function inspectPartialDirectoryTreeCandidate(
     }
     if (
       read.digest !== expected.digest
-      || read.bytes.length !== expected.bytes.length
-      || read.bytes.some((byte, index) => byte !== expected.bytes[index])
+      || !sameBytes(read.bytes, expected.bytes)
     ) {
       fail("tree-conflict", "$candidate");
     }

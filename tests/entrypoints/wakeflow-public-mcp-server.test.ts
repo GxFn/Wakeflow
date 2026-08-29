@@ -1,4 +1,4 @@
-import { deepEqual, equal, match } from "node:assert/strict";
+import { deepEqual, equal, match, throws } from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 
 import {
@@ -7,10 +7,11 @@ import {
   type CallToolResult,
 } from "@modelcontextprotocol/client";
 
+import { parseSha256Digest } from "../../src/foundation/crypto/sha256.js";
+
 import {
   createWakeflowPublicMcpServer,
-  type WakeflowMaintenanceMcpExecutor,
-  type WakeflowWindowHostBindingMcpExecutor,
+  WakeflowPublicMcpServerConfigurationError,
 } from "../../src/entrypoints/wakeflow-public-mcp-server.js";
 import {
   WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
@@ -30,10 +31,18 @@ import {
 } from "../../src/workspace/window-runtime/wakeflow-window-host-binding-public-coordinator.js";
 
 /** 两个工具聚焦测试共用的合法占位摘要。 */
-const ZERO_DIGEST = `sha256:${"0".repeat(64)}`;
+const ZERO_DIGEST = parseSha256Digest(`sha256:${"0".repeat(64)}`);
 const WINDOW_ID = "window_11111111-1111-4111-8111-111111111111";
 const BINDING_ID =
   "window_binding_22222222-2222-4222-8222-222222222222";
+
+type PublicServerOptions = Parameters<
+  typeof createWakeflowPublicMcpServer
+>[0];
+type WakeflowMaintenanceMcpExecutor =
+  PublicServerOptions["executeMaintenance"];
+type WakeflowWindowHostBindingMcpExecutor =
+  PublicServerOptions["registerWindowHostBinding"];
 
 function previewResult(): Readonly<WakeflowMaintenancePublicResult> {
   return Object.freeze({
@@ -43,11 +52,29 @@ function previewResult(): Readonly<WakeflowMaintenancePublicResult> {
     hostId: "codex",
     mode: "preview",
     action: "reconcile",
-    status: "ready",
-    blockerCodes: Object.freeze([]),
+    status: "blocked",
+    blockerCodes: Object.freeze(["example-blocker"]),
     confirmation: null,
     confirmationDigest: null,
     freshConfigCompilation: null,
+    launchIntents: [] as const,
+    launchSetDigest: null,
+  });
+}
+
+function mutationResult(): Readonly<WakeflowMaintenancePublicResult> {
+  return Object.freeze({
+    kind: "WakeflowMaintenancePublicMutationResult",
+    schemaVersion: 1,
+    tool: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+    hostId: "codex",
+    mode: "apply",
+    action: "reconcile",
+    status: "no-op",
+    operationId: null,
+    planDigest: ZERO_DIGEST,
+    stepReceipts: Object.freeze([]),
+    confirmationDigest: ZERO_DIGEST,
     launchIntents: Object.freeze([]),
     launchSetDigest: null,
   });
@@ -65,7 +92,6 @@ function bindingResult(): Readonly<WakeflowWindowHostBindingPublicResult> {
       bindingId: BINDING_ID as WakeflowWindowHostBindingPublicResult["binding"]["bindingId"],
       bindingRef:
         `.wakeflow-local/runtime/hosts/codex/identity/window-bindings/${WINDOW_ID}.json` as WakeflowWindowHostBindingPublicResult["binding"]["bindingRef"],
-      bindingDigest: ZERO_DIGEST as WakeflowWindowHostBindingPublicResult["binding"]["bindingDigest"],
       registeredAt: "2026-08-28T10:00:01.000Z" as WakeflowWindowHostBindingPublicResult["binding"]["registeredAt"],
       source: Object.freeze({
         kind: "agent-host-create-result" as const,
@@ -116,6 +142,39 @@ function textContent(result: CallToolResult): string {
   return first.text;
 }
 
+test("MCP composition拒绝Proxy executor与额外配置字段", () => {
+  const executeMaintenance = async () => previewResult();
+  const registerWindowHostBinding = async () => bindingResult();
+  throws(
+    () => createWakeflowPublicMcpServer({
+      serverName: "wakeflow-test",
+      serverVersion: "1.0.0-test",
+      executeMaintenance,
+      registerWindowHostBinding: new Proxy(
+        registerWindowHostBinding,
+        {},
+      ),
+    }),
+    (error: unknown) => (
+      error instanceof WakeflowPublicMcpServerConfigurationError
+      && error.reason === "window-host-binding-executor"
+    ),
+  );
+  throws(
+    () => createWakeflowPublicMcpServer({
+      serverName: "wakeflow-test",
+      serverVersion: "1.0.0-test",
+      executeMaintenance,
+      registerWindowHostBinding,
+      extra: true,
+    } as never),
+    (error: unknown) => (
+      error instanceof WakeflowPublicMcpServerConfigurationError
+      && error.reason === "options"
+    ),
+  );
+});
+
 test("官方 MCP server 只发布两个已有真实 owner 的 Schema 工具", async (t) => {
   const calls: unknown[] = [];
   const expected = previewResult();
@@ -151,6 +210,48 @@ test("官方 MCP server 只发布两个已有真实 owner 的 Schema 工具", as
   deepEqual(calls, [request]);
 });
 
+test("Maintenance MCP Schema接受领域统一的算法前缀摘要", async (t) => {
+  const calls: unknown[] = [];
+  const expected = mutationResult();
+  const client = await connect(t, async (request) => {
+    calls.push(request);
+    return expected;
+  });
+  const request = {
+    root: "/workspace",
+    mode: "apply",
+    confirmation: { kind: "ExampleConfirmation" },
+    confirmationDigest: ZERO_DIGEST,
+  } as const;
+  const result = await client.callTool({
+    name: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+    arguments: request,
+  });
+  equal(result.isError, undefined);
+  deepEqual(result.structuredContent, expected);
+  deepEqual(calls, [request]);
+});
+
+test("Maintenance MCP输出Schema拒绝不可能的preview字段关系", async (t) => {
+  const invalid = {
+    ...previewResult(),
+    status: "ready",
+    blockerCodes: [],
+  } as unknown as WakeflowMaintenancePublicResult;
+  const client = await connect(t, async () => invalid);
+  const result = await client.callTool({
+    name: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+    arguments: {
+      root: "/workspace",
+      action: "reconcile",
+      mode: "preview",
+      request: {},
+    },
+  });
+  equal(result.isError, true);
+  match(textContent(result), /Output validation error/u);
+});
+
 test("Window Host Binding 工具保持 Agent effect 与私有 handle 边界", async (t) => {
   const observations: unknown[] = [];
   const expected = bindingResult();
@@ -169,6 +270,10 @@ test("Window Host Binding 工具保持 Agent effect 与私有 handle 边界", as
   equal(
     tool?.inputSchema.$id,
     "urn:wakeflow:entrypoints:window-host-binding-registration-request:v1",
+  );
+  equal(
+    JSON.stringify(tool?.outputSchema).includes('"$ref":"urn:'),
+    false,
   );
   equal(tool?.annotations?.idempotentHint, true);
 
@@ -196,6 +301,40 @@ test("Window Host Binding 工具保持 Agent effect 与私有 handle 边界", as
   deepEqual(result.structuredContent, expected);
   equal(textContent(result).includes("opaque-host-thread-id"), false);
   deepEqual(observations, [request]);
+});
+
+test("Window Host Binding输出Schema拒绝越界资源引用", async (t) => {
+  const baseline = bindingResult();
+  const invalid = {
+    ...baseline,
+    binding: {
+      ...baseline.binding,
+      bindingRef: "../outside.json",
+    },
+  } as unknown as WakeflowWindowHostBindingPublicResult;
+  const client = await connect(
+    t,
+    async () => previewResult(),
+    async () => invalid,
+  );
+  const result = await client.callTool({
+    name: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
+    arguments: {
+      root: "/workspace",
+      observation: {
+        kind: "WakeflowAgentHostWindowCreationObservation",
+        schemaVersion: 1,
+        source: "agent-host-create-result",
+        hostId: "codex",
+        windowId: WINDOW_ID,
+        launchIntentDigest: ZERO_DIGEST,
+        handle: { kind: "codex-thread", value: "opaque-host-thread-id" },
+        observedAt: "2026-08-28T10:00:00.000Z",
+      },
+    },
+  });
+  equal(result.isError, true);
+  match(textContent(result), /Output validation error/u);
 });
 
 test("官方 SDK 在进入 Maintenance owner 前拒绝额外字段", async (t) => {

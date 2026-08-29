@@ -9,7 +9,7 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../../../foundation/identity/wakeflow-durable-id.js";
+} from "../../../contracts/identity/wakeflow-durable-id.js";
 import {
   computeDemandEventSourcingCommandDigest,
   decideDemandEventSourcingCommand,
@@ -41,7 +41,7 @@ import {
 
 export interface ExecuteDemandEventSourcingCommandOptions {
   readonly commitId: WakeflowDurableId<"demand-event-commit">;
-  readonly expectedStreamRevision?: number;
+  readonly expectedStreamRevision: number;
   readonly signal?: AbortSignal;
 }
 
@@ -59,8 +59,7 @@ export type DemandEventSourcingCommandHandlerErrorReason =
   | "concurrency-conflict"
   | "decision-rejected"
   | "stream"
-  | "aborted"
-  | "operation-failure";
+  | "aborted";
 
 const ERROR_MESSAGES = {
   "input": "Demand Event Sourcing Command Handler input is invalid.",
@@ -69,7 +68,6 @@ const ERROR_MESSAGES = {
   "decision-rejected": "Demand Event Sourcing command is not admitted from current state.",
   "stream": "Demand Event Sourcing command cannot load or append its stream.",
   "aborted": "Demand Event Sourcing command was aborted before its next commit point.",
-  "operation-failure": "Demand Event Sourcing command execution failed.",
 } as const satisfies Readonly<Record<
   DemandEventSourcingCommandHandlerErrorReason,
   string
@@ -129,6 +127,7 @@ function parseOptions(
   }
   if (
     !Object.hasOwn(record, "commitId")
+    || !Object.hasOwn(record, "expectedStreamRevision")
     || Object.keys(record).some((key) => !OPTION_FIELDS.has(key))
   ) {
     fail("input", "$options");
@@ -146,20 +145,21 @@ function parseOptions(
   }
   const expected = record.expectedStreamRevision;
   if (
-    expected !== undefined
-    && (!Number.isSafeInteger(expected) || (expected as number) < 0)
+    !Number.isSafeInteger(expected)
+    || (expected as number) < 0
   ) {
     fail("input", "$/expectedStreamRevision");
   }
   const signal = record.signal;
-  if (signal !== undefined && !(signal instanceof AbortSignal)) {
+  if (
+    signal !== undefined
+    && (types.isProxy(signal) || !(signal instanceof AbortSignal))
+  ) {
     fail("input", "$/signal");
   }
   return Object.freeze({
     commitId,
-    ...(expected === undefined
-      ? {}
-      : { expectedStreamRevision: expected as number }),
+    expectedStreamRevision: expected as number,
     ...(signal === undefined ? {} : { signal }),
   });
 }
@@ -203,6 +203,7 @@ export async function executeDemandEventSourcingCommand(
     throw error;
   }
   const commandDigest = computeDemandEventSourcingCommandDigest(command);
+  if (options.signal?.aborted === true) fail("aborted", "$signal");
 
   let loaded;
   try {
@@ -215,8 +216,7 @@ export async function executeDemandEventSourcingCommand(
   const current = loaded?.aggregate ?? null;
   const currentRevision = current?.streamRevision ?? 0;
   if (
-    options.expectedStreamRevision !== undefined
-    && options.expectedStreamRevision !== currentRevision
+    options.expectedStreamRevision !== currentRevision
   ) {
     // 正常新命令不扫描不可变前缀；只有过期预期可能表示重试，
     // 此时才按 `commitId` 执行有界历史查找。

@@ -37,13 +37,6 @@ export interface DurableRegularFileSettlementOptions {
   readonly signal?: AbortSignal;
 }
 
-/** 成功结果描述文件和父目录同步后仍与预期一致的指定目标。 */
-export interface DurableRegularFileSettlementResult {
-  readonly resourcePath: PortableResourcePath;
-  readonly node: Readonly<FileNodeSnapshot>;
-  readonly parentNode: Readonly<FileNodeSnapshot>;
-}
-
 export type DurableRegularFileSettlementErrorReason =
   | "input"
   | "root-scope"
@@ -243,11 +236,9 @@ async function assertParentCurrent(
   }
 }
 
-async function syncParent(
-  parent: RootedResourceParentHandle,
-): Promise<Readonly<FileNodeSnapshot>> {
+async function syncParent(parent: RootedResourceParentHandle): Promise<void> {
   try {
-    return await parent.sync();
+    await parent.sync();
   } catch (error: unknown) {
     if (error instanceof RootedResourceParentHandleError) {
       mapParentError(error, "sync");
@@ -375,15 +366,15 @@ export async function settleRegularFileDurability(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
   options: DurableRegularFileSettlementOptions,
-): Promise<Readonly<DurableRegularFileSettlementResult>> {
+): Promise<void> {
   assertRoot(root);
   const parsed = parseOptions(options);
   assertNotAborted(parsed.signal);
 
   const parent = await openParent(root, resourcePath);
   let resource: RootedExactResourceHandle | undefined;
+  let settled = false;
   let primaryError: unknown;
-  let result: Readonly<DurableRegularFileSettlementResult> | undefined;
 
   try {
     resource = await openResource(root, resourcePath, parsed.expectedNode);
@@ -398,7 +389,7 @@ export async function settleRegularFileDurability(
     if (!sameFileNodeSnapshot(parsed.expectedNode, syncedNode)) {
       fail("commit-uncertain", "$resourcePath");
     }
-    const parentNode = await syncParent(parent);
+    await syncParent(parent);
     await assertParentCurrent(parent);
     const finalNode = await assertResourceCurrent(resource, "settled");
     if (
@@ -407,7 +398,7 @@ export async function settleRegularFileDurability(
     ) {
       fail("commit-uncertain", "$resourcePath");
     }
-    result = Object.freeze({ resourcePath, node: finalNode, parentNode });
+    settled = true;
   } catch (error: unknown) {
     primaryError = error;
   }
@@ -424,6 +415,5 @@ export async function settleRegularFileDurability(
   }
 
   if (primaryError !== undefined) throw primaryError;
-  if (result === undefined) fail("commit-uncertain", "$resourcePath");
-  return result;
+  if (!settled) fail("commit-uncertain", "$resourcePath");
 }

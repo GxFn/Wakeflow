@@ -123,3 +123,45 @@ test("Event Sourcing version registry 拒绝未知版本与不闭合定义", () 
     ),
   );
 });
+
+test("Event Sourcing version registry 区分 codec 与 upcast 失败", () => {
+  const invalidUpcast = new EventSourcingVersionEvolutionRegistry({
+    currentVersion: 2,
+    codecs: [
+      { version: 1, parse: (value) => value },
+      { version: 2, parse: (value) => value },
+    ],
+    steps: [{
+      fromVersion: 1,
+      toVersion: 2,
+      upcast: () => undefined,
+    }],
+  });
+  throws(
+    () => invalidUpcast.evolve(1, {}),
+    (error: unknown) => (
+      error instanceof EventSourcingVersionEvolutionError
+      && error.reason === "upcast"
+      && error.path === "$/steps/1"
+    ),
+  );
+
+  const spoofingCodec = new EventSourcingVersionEvolutionRegistry({
+    currentVersion: 1,
+    codecs: [{
+      version: 1,
+      parse: () => {
+        throw new EventSourcingVersionEvolutionError("upcast", "$spoof");
+      },
+    }],
+    steps: [],
+  });
+  throws(
+    () => spoofingCodec.evolve(1, {}),
+    (error: unknown) => (
+      error instanceof EventSourcingVersionEvolutionError
+      && error.reason === "codec"
+      && error.path === "$data"
+    ),
+  );
+});

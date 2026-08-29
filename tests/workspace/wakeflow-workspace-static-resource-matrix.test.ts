@@ -172,6 +172,40 @@ test("Static Resource Matrix rejects a duplicate logical placement", () => {
     equal(caught.path, "$/declarations");
   }
 
+  const unsafeProfiles = [
+    parseWakeflowWorkspaceHostResourceProfile({
+      ...collidingProfile,
+      instructionFileName: "WAKEFLOW.CONFIG.JSON",
+    }),
+    parseWakeflowWorkspaceHostResourceProfile({
+      ...collidingProfile,
+      instructionFileName: ".wakeflow-local",
+    }),
+    parseWakeflowWorkspaceHostResourceProfile({
+      ...collidingProfile,
+      instructionFileName: "CUSTOM.md",
+      surfaces: {
+        ...collidingProfile.surfaces,
+        settingsIntegration: {
+          portablePath: ".Tool/settings.json",
+          localPath: ".tool/settings.local.json",
+        },
+      },
+    }),
+  ];
+  for (const profile of unsafeProfiles) {
+    caught = undefined;
+    try {
+      createWakeflowWorkspaceStaticResourceMatrix(profile);
+    } catch (error: unknown) {
+      caught = error;
+    }
+    equal(caught instanceof WakeflowWorkspaceStaticResourceMatrixError, true);
+    if (caught instanceof WakeflowWorkspaceStaticResourceMatrixError) {
+      equal(caught.reason, "placement-collision");
+    }
+  }
+
   const valid = createWakeflowWorkspaceStaticResourceMatrix(
     codexWorkspaceHostResourceProfile,
   );

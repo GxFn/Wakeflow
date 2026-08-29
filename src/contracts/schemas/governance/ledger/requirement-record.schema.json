@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_REQUIREMENT_RECORD_SCHEMA",
   "title": "WakeflowRequirementRecord",
   "description": "Wakeflow Ledger 中一次确认后不可变的 requirement authority record。",
-  "$comment": "Schema 负责 portable structure；document role、顺序、路径前缀冲突和领域 representation 由 Ledger codec 继续校验。",
+  "$comment": "Schema 负责 portable structure；document role、顺序、路径前缀与大小写碰撞以及领域 representation 由 Ledger codec 继续校验。",
   "type": "object",
   "additionalProperties": false,
   "required": [

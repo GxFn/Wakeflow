@@ -13,7 +13,7 @@ import {
  * 重放继续返回已经提交的 bindingId，不重新分配。
  */
 
-export const WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX =
+const WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX =
   "window_binding_" as const;
 
 declare const WINDOW_HOST_BINDING_ID_BRAND: unique symbol;
@@ -22,7 +22,7 @@ export type WakeflowWindowHostBindingId = string & {
   readonly [WINDOW_HOST_BINDING_ID_BRAND]: "WakeflowWindowHostBindingId";
 };
 
-export type WakeflowWindowHostBindingIdErrorReason = "format" | "factory";
+type WakeflowWindowHostBindingIdErrorReason = "format" | "factory";
 
 const ERROR_MESSAGES = {
   format: "Wakeflow Window Host Binding ID is invalid.",

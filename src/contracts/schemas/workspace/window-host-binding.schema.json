@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:workspace:window-runtime:host-binding:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA",
   "title": "WakeflowWindowHostBinding",
-  "description": "Private current-host authority binding one durable logical window to one opaque host identifier observed from an Agent-executed host create result.",
+  "description": "Portable shape of one private current-host binding. The TypeScript owner additionally validates hostId and the opaque handle against the supplied Host Identity Profile.",
   "type": "object",
   "additionalProperties": false,
   "required": [

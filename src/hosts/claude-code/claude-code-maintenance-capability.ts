@@ -1,6 +1,7 @@
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   assertWakeflowMaintenanceGateContext,
+  WakeflowMaintenanceGateError,
   type WakeflowMaintenanceGateContext,
 } from "../../workspace/maintenance/wakeflow-maintenance-gate.js";
 import {
@@ -83,7 +84,6 @@ async function planContribution(
     hostId: "claude-code",
     capabilityId: CLAUDE_CODE_MAINTENANCE_CAPABILITY_ID,
     status: composition.status,
-    sourcePlanDigest: composition.planDigest,
     blockerCodes: composition.blockerCodes,
     operations: composition.operations.map((operation) => ({
       operationId: operation.operationId,
@@ -105,8 +105,11 @@ async function executeOperation(
 ): Promise<Readonly<WakeflowHostMaintenanceOperationReceipt>> {
   try {
     assertWakeflowMaintenanceGateContext(context, root);
-  } catch {
-    fail("gate", "$context");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceGateError) {
+      fail("gate", "$context");
+    }
+    throw error;
   }
   if (
     request.profile.hostId !== "claude-code"
@@ -137,7 +140,6 @@ async function executeOperation(
     fail("owner", "$operation");
   }
   return Object.freeze({
-    kind: "WakeflowHostMaintenanceOperationReceipt",
     operationId: executed.operationId,
     disposition: executed.disposition,
     observationDigest: executed.targetDigest,

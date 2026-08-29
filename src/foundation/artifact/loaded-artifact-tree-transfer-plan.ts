@@ -46,13 +46,13 @@ export const LOADED_ARTIFACT_TREE_TRANSFER_PLAN_KIND =
   "wakeflow-loaded-artifact-tree-transfer-plan" as const;
 export const LOADED_ARTIFACT_TREE_TRANSFER_PLAN_SCHEMA_VERSION = 1 as const;
 
-export interface LoadedArtifactTreeTransferPlanOptions {
+interface LoadedArtifactTreeTransferPlanOptions {
   readonly directoryMode: number;
   readonly executableFileMode: number;
   readonly regularFileMode: number;
 }
 
-export interface LoadedArtifactTreeTransferCopy {
+interface LoadedArtifactTreeTransferCopy {
   readonly sourceResourcePath: PortableResourcePath;
   readonly candidateResourcePath: PortableResourcePath;
 }
@@ -155,8 +155,10 @@ function parseModes(value: unknown): Readonly<ParsedModes> {
     ),
   });
   if (
-    (modes.regularFileMode & 0o111) !== 0
-    || (modes.executableFileMode & 0o111) === 0
+    (modes.directoryMode & 0o700) !== 0o700
+    || (modes.regularFileMode & 0o400) !== 0o400
+    || (modes.executableFileMode & 0o500) !== 0o500
+    || (modes.regularFileMode & 0o111) !== 0
   ) {
     fail("mode", "$options");
   }
@@ -260,7 +262,13 @@ function parseDirectoryPlan(
   value: unknown,
 ): Readonly<DirectoryTreeCandidatePlan> {
   try {
-    return parseDirectoryTreeCandidatePlan(value);
+    return parseDirectoryTreeCandidatePlan(value, {
+      maximumDepth: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxDepth,
+      maximumEntries: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxEntries,
+      maximumFileBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxFileBytes,
+      maximumFiles: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxFiles,
+      maximumTotalBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxTotalBytes,
+    });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
       if (error.reason === "capacity") fail("capacity", "$plan.directoryPlan");
@@ -379,8 +387,11 @@ export function parseLoadedArtifactTreeTransferPlan(
       || plannedFile.digest !== manifestFile.digest
       || (
         manifestFile.executable
-          ? (plannedFile.mode & 0o111) === 0
-          : (plannedFile.mode & 0o111) !== 0
+          ? (plannedFile.mode & 0o500) !== 0o500
+          : (
+            (plannedFile.mode & 0o400) !== 0o400
+            || (plannedFile.mode & 0o111) !== 0
+          )
       )
       || copy.sourceResourcePath !== manifestFile.ref
       || copy.candidateResourcePath !== joinDirectoryTreeCandidatePath(

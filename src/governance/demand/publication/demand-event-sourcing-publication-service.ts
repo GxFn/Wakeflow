@@ -14,7 +14,7 @@ import {
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
-} from "../../../foundation/identity/wakeflow-durable-id.js";
+} from "../../../contracts/identity/wakeflow-durable-id.js";
 import {
   admitDemandAuthority,
   DemandAuthorityError,
@@ -51,6 +51,7 @@ import {
   demandPublicationTodoResult,
   exactClaimedTodoItem,
   inspectTodoForDemandPublication,
+  recoverTodoForDemandPublication,
 } from "./demand-event-sourcing-publication-todo.js";
 import {
   loadFinalDemandPublication,
@@ -61,7 +62,7 @@ import {
   demandFinalPublicationMarkerRef,
   demandPublicationLockRef,
   demandPublicationTransactionRef,
-  WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
+  DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
 } from "./demand-publication-paths.js";
 
 /**
@@ -117,7 +118,10 @@ function parseSignal(value: unknown): AbortSignal | undefined {
   }
   if (
     Object.keys(record).some((key) => key !== "signal")
-    || (record.signal !== undefined && !(record.signal instanceof AbortSignal))
+    || (
+      record.signal !== undefined
+      && (types.isProxy(record.signal) || !(record.signal instanceof AbortSignal))
+    )
   ) {
     fail("input", "$options");
   }
@@ -142,6 +146,10 @@ function exactInput(value: unknown): Readonly<Record<string, unknown>> {
   return record;
 }
 
+function assertNotAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true) fail("aborted", "$signal");
+}
+
 /** 幂等创建 Workspace 级发布流程目录。 */
 export async function initializeDemandEventSourcingPublication(
   root: RootedDirectory,
@@ -158,7 +166,7 @@ async function applyPublication(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DemandEventSourcingPublicationResult>> {
   const transaction = storedSidecar.transaction;
-  let todoSnapshot = await inspectTodoForDemandPublication(
+  let todoSnapshot = await recoverTodoForDemandPublication(
     root,
     transaction.todoId,
     signal,
@@ -168,10 +176,12 @@ async function applyPublication(
 
   let finalNode = await publicationNodeOrNull(root, transaction.finalRootRef);
   let stageNode = await publicationNodeOrNull(root, transaction.stageRef);
+  let wroteDemandRoot = false;
   if (finalNode !== null && stageNode !== null) fail("conflict", "$publication");
   if (finalNode === null) {
     await materializeDemandPublicationStage(root, transaction, signal);
     await publishDemandStage(root, transaction, signal);
+    wroteDemandRoot = true;
     finalNode = await publicationNodeOrNull(root, transaction.finalRootRef);
     stageNode = await publicationNodeOrNull(root, transaction.stageRef);
     if (finalNode === null || stageNode !== null) fail("conflict", "$publication");
@@ -206,7 +216,13 @@ async function applyPublication(
     if (!samePublicationTransaction(marker.transaction, transaction)) {
       fail("conflict", "$demandRoot/transactions/publication.json");
     }
-    await retirePublicationFile(root, markerRef, marker.source.node, signal);
+    await retirePublicationFile(
+      root,
+      transaction,
+      markerRef,
+      marker.source.node,
+      signal,
+    );
   }
   const loaded = await loadFinalDemandPublication(
     root,
@@ -216,7 +232,6 @@ async function applyPublication(
   );
   todoSnapshot = await inspectTodoForDemandPublication(
     root,
-    transaction.todoId,
     signal,
   );
   const finalItem = exactClaimedTodoItem(todoSnapshot, transaction);
@@ -234,9 +249,15 @@ async function applyPublication(
   if (!samePublicationTransaction(freshSidecar.transaction, transaction)) {
     fail("conflict", "$transaction");
   }
-  await retirePublicationFile(root, sidecarRef, freshSidecar.source.node, signal);
+  await retirePublicationFile(
+    root,
+    transaction,
+    sidecarRef,
+    freshSidecar.source.node,
+    signal,
+  );
   return Object.freeze({
-    created: true,
+    wroteDemandRoot,
     demandId: transaction.demandId,
     rootRef: transaction.finalRootRef,
     todo: Object.freeze({
@@ -304,13 +325,12 @@ async function loadIdempotentResult(
   }
   const snapshot = await inspectTodoForDemandPublication(
     root,
-    transaction.todoId,
     signal,
   );
   const item = exactClaimedTodoItem(snapshot, transaction);
   if (item === null) return null;
   return Object.freeze({
-    created: false,
+    wroteDemandRoot: false,
     demandId: transaction.demandId,
     rootRef: transaction.finalRootRef,
     todo: demandPublicationTodoResult(snapshot, item),
@@ -349,12 +369,19 @@ export async function publishDemandFromTodo(
       transaction.identity,
       transaction.authority,
       ledgerStore,
+      signal === undefined ? undefined : { signal },
     );
   } catch (error: unknown) {
     if (
       error instanceof DemandAuthorityError
       || error instanceof LedgerAuthorityStoreError
     ) {
+      if (
+        (error instanceof DemandAuthorityError && error.reason === "aborted")
+        || (error instanceof LedgerAuthorityStoreError && error.reason === "aborted")
+      ) {
+        fail("aborted", "$signal");
+      }
       fail("authority", "$authority");
     }
     throw error;
@@ -362,7 +389,6 @@ export async function publishDemandFromTodo(
   // Authority 和 TODO 准入完成前，不创建任何发布基础目录或文件。
   const initialTodo = await inspectTodoForDemandPublication(
     root,
-    transaction.todoId,
     signal,
   );
   if (exactClaimedTodoItem(initialTodo, transaction) === null) {
@@ -387,7 +413,6 @@ export async function publishDemandFromTodo(
       if (idempotent !== null) return idempotent;
       const currentTodo = await inspectTodoForDemandPublication(
         root,
-        transaction.todoId,
         signal,
       );
       if (
@@ -415,13 +440,15 @@ export async function publishDemandFromTodo(
 async function prepareLockRecovery(
   root: RootedDirectory,
   stored: Readonly<StoredDemandEventSourcingPublicationTransaction>,
+  signal: AbortSignal | undefined,
 ): Promise<void> {
+  assertNotAborted(signal);
   // 只有指定的同级意图源文件，以及由事务派生的 Demand 和路径，才能授权退休崩溃锁。
   const current = await readPublicationTransactionAt(
     root,
     stored.source.resourcePath,
     stored.source.node,
-    undefined,
+    signal,
   );
   if (!samePublicationTransaction(current.transaction, stored.transaction)) {
     fail("conflict", "$transaction");
@@ -439,6 +466,7 @@ async function prepareLockRecovery(
   if (observation.status !== "held" || observation.ownerState !== "inactive") {
     return;
   }
+  assertNotAborted(signal);
   try {
     await retireRootedExclusiveFileLockResidue(root, lockRef, observation);
   } catch (error: unknown) {
@@ -470,16 +498,26 @@ export async function recoverDemandPublication(
     if (error instanceof WakeflowDurableIdError) fail("input", "$demandId");
     throw error;
   }
-  await initializePublicationStorage(root, signal);
-  await recoverPublicationTransactionStages(root, signal);
   const ref = demandPublicationTransactionRef(demandId);
+  const transactionsRootNode = await publicationNodeOrNull(
+    root,
+    DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
+  );
+  if (transactionsRootNode === null) fail("not-found", "$transaction");
+  assertPrivatePublicationNode(
+    transactionsRootNode,
+    "directory",
+    "$transactions",
+  );
+  await recoverPublicationTransactionStages(root, ref, signal);
   const node = await publicationNodeOrNull(root, ref);
   if (node === null) fail("not-found", "$transaction");
   const stored = await readPublicationTransactionAt(root, ref, node, signal);
   if (stored.transaction.demandId !== demandId) {
     fail("conflict", "$transaction/demandId");
   }
-  await prepareLockRecovery(root, stored);
+  await initializePublicationStorage(root, signal);
+  await prepareLockRecovery(root, stored, signal);
   return runLocked(root, stored.transaction, signal, async () => {
     const freshNode = await publicationNodeOrNull(root, ref);
     if (freshNode === null) fail("not-found", "$transaction");
@@ -496,6 +534,3 @@ export {
   type DemandEventSourcingPublicationResult,
   type DemandEventSourcingPublicationTodoResult,
 } from "./demand-event-sourcing-publication-contract.js";
-
-/** 当前标准仍要求最终 Demand 位于 `active/current`。 */
-export { WAKEFLOW_ACTIVE_CURRENT_ROOT_REF };

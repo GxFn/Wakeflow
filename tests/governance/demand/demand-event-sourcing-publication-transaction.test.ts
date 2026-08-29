@@ -5,7 +5,7 @@ import {
 import { test } from "node:test";
 
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/foundation/identity/wakeflow-durable-id.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   createDemandAuthority,
@@ -20,6 +20,8 @@ import {
 } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-transaction.js";
 import { parseLedgerAuthorityMemberReference } from "../../../src/governance/ledger/ledger-authority-store.js";
 import { parseTodoIntakeLineageReference } from "../../../src/governance/todo/todo-intake-lineage.js";
+import { parseTodoItemId } from "../../../src/governance/todo/todo-item-id.js";
+import { todoIntakeRef } from "../../../src/governance/todo/todo-paths.js";
 
 const PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",
@@ -45,6 +47,7 @@ const CREATED_AT = parseUtcInstant("2026-08-26T10:00:00.000Z");
 const DIGEST = parseSha256Digest(`sha256:${"a".repeat(64)}`);
 const COLLECTION_DIGEST = parseSha256Digest(`sha256:${"b".repeat(64)}`);
 const STATE_DIGEST = parseSha256Digest(`sha256:${"c".repeat(64)}`);
+const TODO_ID = parseTodoItemId("TODO-RH2-PUBLICATION");
 const REQUIRED_ROLES = [
   "code-facts",
   "landing-plan",
@@ -81,8 +84,8 @@ test("Demand Event Sourcing publication transaction 自包含 initial command �
     source: parseTodoIntakeLineageReference({
       artifactKind: "wakeflow-todo-intake-lineage",
       schemaVersion: 1,
-      todoId: "TODO-RH2-PUBLICATION",
-      intakeRef: ".wakeflow-active/current/todo/items/item-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/intake.json",
+      todoId: TODO_ID,
+      intakeRef: todoIntakeRef(TODO_ID),
       intakeDigest: DIGEST,
     }),
     executionPlacement: { mode: "main" },

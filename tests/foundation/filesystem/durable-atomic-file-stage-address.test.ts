@@ -34,6 +34,7 @@ test("atomic stage address 绑定 operation、target、input、mode 与 process 
     equal(parsed.mode, 0o600);
     equal(parsed.pid, process.pid);
     equal(parsed.token, issued.token);
+    equal(issued.fileName.startsWith(".wakeflow-atomic-v1-create-"), true);
     equal(readDurableAtomicFileStageOwnerState(parsed), "active");
     equal(issued.fileName.includes("records"), false);
     equal(Object.isFrozen(issued), true);
@@ -48,6 +49,7 @@ test("atomic stage address 拒绝伪造格式与非签发 release", () => {
     ".wakeflow-stage-deadbeef.tmp",
     ".wakeflow-atomic-create-stage.tmp",
     ".wakeflow-atomic-create-zz-m600__1-0-token.tmp",
+    "x".repeat(1_024),
   ]) {
     throws(
       () => parseDurableAtomicFileStageFileName(value),
@@ -60,4 +62,19 @@ test("atomic stage address 拒绝伪造格式与非签发 release", () => {
     ),
     DurableAtomicFileStageAddressError,
   );
+
+  let getterCalls = 0;
+  const accessor = {};
+  Object.defineProperty(accessor, "fileName", {
+    enumerable: true,
+    get() {
+      getterCalls += 1;
+      return "forged";
+    },
+  });
+  throws(
+    () => readDurableAtomicFileStageOwnerState(accessor as never),
+    DurableAtomicFileStageAddressError,
+  );
+  equal(getterCalls, 0);
 });

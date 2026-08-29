@@ -237,6 +237,12 @@ async function inspectInitialResource(
       if (error.reason === "resource-path") {
         fail("input", "$resourcePath");
       }
+      if (
+        error.reason === "resource-changed"
+        || error.reason === "resource-alias"
+      ) {
+        fail("source-changed", "$resourcePath");
+      }
       if (error.reason === "unsupported-platform") {
         fail("unsupported-platform", "$resourcePath");
       }
@@ -325,6 +331,15 @@ async function openStableFile(
   }
 }
 
+/** 所有读取缓冲区分配失败都映射为稳定的运行时容量错误。 */
+function allocateReadBuffer(byteLength: number): Buffer {
+  try {
+    return Buffer.allocUnsafe(byteLength);
+  } catch {
+    fail("too-large", "$resourcePath");
+  }
+}
+
 function createCapture(
   mode: StableFileReadMode,
   byteCount: ByteCount,
@@ -333,11 +348,7 @@ function createCapture(
   if (byteCount > bufferConstants.MAX_LENGTH) {
     fail("too-large", "$resourcePath");
   }
-  try {
-    return Buffer.allocUnsafe(byteCount);
-  } catch {
-    fail("too-large", "$resourcePath");
-  }
+  return allocateReadBuffer(byteCount);
 }
 
 async function readExactFile(
@@ -351,7 +362,9 @@ async function readExactFile(
 }>> {
   const hasher = new Sha256Hasher();
   const scratch = capture === null
-    ? Buffer.allocUnsafe(Math.min(STABLE_FILE_READ_CHUNK_BYTES, byteCount || 1))
+    ? allocateReadBuffer(
+      Math.min(STABLE_FILE_READ_CHUNK_BYTES, byteCount || 1),
+    )
     : null;
   let position = 0;
 
@@ -385,7 +398,7 @@ async function readExactFile(
   }
 
   assertNotAborted(signal);
-  const growthProbe = Buffer.allocUnsafe(1);
+  const growthProbe = allocateReadBuffer(1);
   try {
     const probe = await handle.read(growthProbe, 0, 1, byteCount);
     if (probe.bytesRead !== 0) fail("source-changed", "$resourcePath");

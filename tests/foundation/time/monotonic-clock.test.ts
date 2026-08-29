@@ -3,7 +3,6 @@ import { test } from "node:test";
 
 import {
   readMonotonicClock,
-  systemMonotonicClock,
   MonotonicClockError,
   type MonotonicClock,
   type MonotonicClockErrorReason,
@@ -37,12 +36,9 @@ function asMonotonicClock(value: unknown): MonotonicClock {
 }
 
 test("system monotonic clock returns non-negative branded bigint moments", () => {
-  const direct = systemMonotonicClock();
   const first: MonotonicMoment = readMonotonicClock();
   const second: MonotonicMoment = readMonotonicClock();
 
-  equal(typeof direct, "bigint");
-  equal(direct >= 0n, true);
   equal(first >= 0n, true);
   equal(second >= first, true);
 });

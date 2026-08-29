@@ -41,6 +41,10 @@ interface CandidateManifest {
   readonly files: readonly ManifestFile[];
 }
 
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function parseJsonFile<Value>(file: string): Value {
   return JSON.parse(readFileSync(file, "utf8")) as Value;
 }
@@ -59,7 +63,7 @@ function collectFiles(root: string): readonly string[] {
     } finally {
       handle.closeSync();
     }
-    entries.sort((left, right) => left.name.localeCompare(right.name));
+    entries.sort((left, right) => compareCodeUnits(left.name, right.name));
     for (const entry of entries) {
       const absolute = path.join(directory, entry.name);
       if (entry.isSymbolicLink()) {
@@ -125,6 +129,10 @@ test("双宿主候选制品由确定性的闭合可达文件清单生成", (t) =
       const absolute = path.join(artifactRoot, file.path);
       equal(readFileSync(absolute).byteLength, file.bytes);
       equal(digest(absolute), file.sha256);
+      equal(
+        lstatSync(absolute).mode & 0o777,
+        file.mode === "0755" ? 0o755 : 0o644,
+      );
       equal(/\.(?:ts|cts|mts|map)$/u.test(file.path), false);
     }
 

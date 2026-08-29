@@ -1,7 +1,10 @@
 import { equal, match, notEqual } from "node:assert/strict";
 import { test } from "node:test";
 
-import { parseTodoItemId } from "../../../src/governance/todo/todo-item-id.js";
+import {
+  parseTodoItemId,
+  TodoItemIdError,
+} from "../../../src/governance/todo/todo-item-id.js";
 import {
   TODO_BOARD_PROJECTION_REF,
   TODO_COLLECTION_LOCK_REF,
@@ -43,4 +46,26 @@ test("all aggregate refs stay under the fixed TODO root", () => {
   equal(todoStateRef(id).endsWith("/state.json"), true);
   equal(todoTransactionRef(id).endsWith(".json"), true);
   equal(todoAppendStageRef(id).endsWith(".stage"), true);
+});
+
+test("TODO item ID keeps one bounded case-sensitive opaque vocabulary", () => {
+  equal(parseTodoItemId("A"), "A");
+  equal(parseTodoItemId("A".repeat(128)), "A".repeat(128));
+  for (const value of [
+    "A".repeat(129),
+    "-leading",
+    "contains/slash",
+    "contains space",
+    "contains\ud800surrogate",
+  ]) {
+    let caught: unknown;
+    try {
+      parseTodoItemId(value, "$candidate");
+    } catch (error: unknown) {
+      caught = error;
+    }
+    equal(caught instanceof TodoItemIdError, true);
+    if (caught instanceof TodoItemIdError) equal(caught.path, "$candidate");
+  }
+  notEqual(todoItemStorageKey("TODO-A"), todoItemStorageKey("todo-a"));
 });

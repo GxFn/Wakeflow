@@ -5,6 +5,7 @@ import {
   RootedExclusiveFileLockError,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import {
+  parseWakeflowExistingMaintenanceGateOptions,
   withExistingWakeflowMaintenanceGate,
   WakeflowMaintenanceGateError,
   type WakeflowExistingMaintenanceGateOptions,
@@ -19,7 +20,7 @@ import {
   type WakeflowPreparedMaintenanceJournalRetirementReceipt,
 } from "./wakeflow-maintenance-journal-store.js";
 import {
-  wakeflowMaintenanceExecutionPlanFromIntent,
+  reconstructWakeflowMaintenanceExecutionFromIntent,
 } from "./wakeflow-maintenance-execution-intent.js";
 import {
   assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction,
@@ -32,6 +33,7 @@ import {
 } from "./wakeflow-maintenance-execution-intent-store.js";
 import {
   parseWakeflowMaintenanceOperationId,
+  WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceOperationUuid,
   type WakeflowMaintenanceOperationId,
 } from "./wakeflow-maintenance-operation-id.js";
@@ -52,7 +54,6 @@ import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
  */
 
 export interface WakeflowPreparedMaintenanceRecoveryReceipt {
-  readonly kind: "WakeflowPreparedMaintenanceRecoveryReceipt";
   readonly operationId: WakeflowMaintenanceOperationId;
   readonly retiredPreviousGateDigest: Sha256Digest | null;
   readonly intentRetirement:
@@ -71,6 +72,7 @@ export type WakeflowPreparedMaintenanceRecoveryErrorReason =
   | "owner-active-or-unknown"
   | "gate"
   | "journal"
+  | "aborted"
   | "recovery-required";
 
 const ERROR_MESSAGES = {
@@ -83,6 +85,7 @@ const ERROR_MESSAGES = {
     "Wakeflow prepared gate owner is active or cannot be proven inactive.",
   gate: "Wakeflow prepared recovery could not acquire its gate.",
   journal: "Wakeflow prepared journal is unavailable or unsafe.",
+  aborted: "Wakeflow prepared maintenance cancellation was aborted.",
   "recovery-required": "Wakeflow prepared maintenance recovery remains incomplete.",
 } as const satisfies Readonly<Record<
   WakeflowPreparedMaintenanceRecoveryErrorReason,
@@ -113,23 +116,69 @@ function fail(
   throw new WakeflowPreparedMaintenanceRecoveryError(reason, path);
 }
 
+function assertNotAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true) fail("aborted", "$signal");
+}
+
+function mapIntentStoreError(
+  error: WakeflowMaintenanceExecutionIntentStoreError,
+): never {
+  if (error.reason === "transactions-shape") {
+    fail("transaction", "$transactions");
+  }
+  if (
+    error.reason === "commit-uncertain"
+    || error.reason === "recovery-required"
+  ) {
+    fail("recovery-required", "$intent");
+  }
+  fail("intent", "$intent");
+}
+
+function mapJournalStoreError(
+  error: WakeflowMaintenanceJournalStoreError,
+): never {
+  if (error.reason === "transactions-shape") {
+    fail("transaction", "$transactions");
+  }
+  if (
+    error.reason === "commit-uncertain"
+    || error.reason === "recovery-required"
+  ) {
+    fail("recovery-required", "$journal");
+  }
+  fail("journal", "$journal");
+}
+
 /** 取消一笔尚未尝试任何 step 的 prepared maintenance transaction。 */
 export async function recoverPreparedWakeflowMaintenanceTransaction(
   root: RootedDirectory,
   operationIdValue: unknown,
   options: WakeflowExistingMaintenanceGateOptions = {},
 ): Promise<Readonly<WakeflowPreparedMaintenanceRecoveryReceipt>> {
+  let parsedOptions: Readonly<WakeflowExistingMaintenanceGateOptions>;
+  try {
+    parsedOptions = parseWakeflowExistingMaintenanceGateOptions(options);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceGateError) fail("input", "$options");
+    throw error;
+  }
   let operationId: WakeflowMaintenanceOperationId;
   try {
     operationId = parseWakeflowMaintenanceOperationId(operationIdValue);
-  } catch {
-    fail("input", "$operationId");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceOperationIdError) {
+      fail("input", "$operationId");
+    }
+    throw error;
   }
+  assertNotAborted(parsedOptions.signal);
   let intentSource;
   let source;
   try {
     await recoverWakeflowMaintenanceExecutionIntentStages(root, operationId);
     await recoverWakeflowMaintenanceJournalStages(root, operationId);
+    assertNotAborted(parsedOptions.signal);
     intentSource = await readWakeflowMaintenanceExecutionIntentOrNull(
       root,
       operationId,
@@ -137,23 +186,19 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
     source = await readWakeflowMaintenanceJournalOrNull(root, operationId);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionIntentStoreError) {
-      fail(
-        error.reason === "transactions-shape" ? "transaction" : "intent",
-        error.reason === "transactions-shape" ? "$transactions" : "$intent",
-      );
+      mapIntentStoreError(error);
     }
     if (error instanceof WakeflowMaintenanceJournalStoreError) {
-      fail(
-        error.reason === "transactions-shape" ? "transaction" : "journal",
-        error.reason === "transactions-shape" ? "$transactions" : "$journal",
-      );
+      mapJournalStoreError(error);
     }
     throw error;
   }
+  assertNotAborted(parsedOptions.signal);
   if (intentSource === null && source === null) fail("journal", "$journal");
-  const plan = intentSource === null
+  const reconstructed = intentSource === null
     ? null
-    : wakeflowMaintenanceExecutionPlanFromIntent(intentSource.intent);
+    : reconstructWakeflowMaintenanceExecutionFromIntent(intentSource.intent);
+  const plan = reconstructed?.plan ?? null;
   if (source !== null && intentSource !== null) {
     if (plan === null) fail("plan-mismatch", "$intent");
     if (
@@ -189,19 +234,14 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
     }
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionIntentStoreError) {
-      fail(
-        error.reason === "transactions-shape" ? "transaction" : "intent",
-        error.reason === "transactions-shape" ? "$transactions" : "$intent",
-      );
+      mapIntentStoreError(error);
     }
     if (error instanceof WakeflowMaintenanceJournalStoreError) {
-      fail(
-        error.reason === "transactions-shape" ? "transaction" : "journal",
-        error.reason === "transactions-shape" ? "$transactions" : "$journal",
-      );
+      mapJournalStoreError(error);
     }
     throw error;
   }
+  assertNotAborted(parsedOptions.signal);
   let oldGate;
   try {
     oldGate = await inspectRootedExclusiveFileLock(
@@ -271,12 +311,12 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
           if (currentIntent === null || plan === null) {
             fail("journal", "$journal");
           }
-          current = (await publishPreparedWakeflowMaintenanceJournal(
+          current = await publishPreparedWakeflowMaintenanceJournal(
             root,
             context,
             currentIntent,
             plan,
-          )).source;
+          );
         } else if (
           source !== null
           && (
@@ -308,22 +348,22 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
           current,
         );
       },
-      options,
+      parsedOptions,
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowPreparedMaintenanceRecoveryError) throw error;
-    if (error instanceof WakeflowMaintenanceGateError) fail("gate", "$gate");
+    if (error instanceof WakeflowMaintenanceGateError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "recovery-required") {
+        fail("recovery-required", "$gate");
+      }
+      fail("gate", "$gate");
+    }
     if (error instanceof WakeflowMaintenanceExecutionIntentStoreError) {
-      fail(
-        error.reason === "transactions-shape" ? "transaction" : "intent",
-        error.reason === "transactions-shape" ? "$transactions" : "$intent",
-      );
+      mapIntentStoreError(error);
     }
     if (error instanceof WakeflowMaintenanceJournalStoreError) {
-      fail(
-        error.reason === "transactions-shape" ? "transaction" : "journal",
-        error.reason === "transactions-shape" ? "$transactions" : "$journal",
-      );
+      mapJournalStoreError(error);
     }
     throw error;
   }
@@ -332,7 +372,6 @@ export async function recoverPreparedWakeflowMaintenanceTransaction(
     fail("recovery-required", "$coreLayout");
   }
   return Object.freeze({
-    kind: "WakeflowPreparedMaintenanceRecoveryReceipt",
     operationId,
     retiredPreviousGateDigest,
     intentRetirement,

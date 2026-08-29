@@ -12,6 +12,7 @@ import { parseTodoIntakeLineageReference } from "../../todo/todo-intake-lineage.
 import type { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import type { DemandEventSourcingPublicationTransaction } from "./demand-event-sourcing-publication-transaction.js";
 import {
+  DemandEventSourcingPublicationServiceError,
   failDemandEventSourcingPublication as fail,
   type DemandEventSourcingPublicationTodoResult,
 } from "./demand-event-sourcing-publication-contract.js";
@@ -20,29 +21,48 @@ import {
 
 export async function inspectTodoForDemandPublication(
   root: RootedDirectory,
-  todoId: string,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<TodoCollectionAuthoritySnapshot>> {
   try {
     return await inspectTodoItems(root, signal);
   } catch (error: unknown) {
-    if (
-      error instanceof TodoCollectionServiceError
-      && error.reason === "recovery-required"
-    ) {
-      try {
-        return (await recoverTodoItemTransaction(
-          root,
-          todoId,
-          signal === undefined ? undefined : { signal },
-        )).snapshot;
-      } catch {
-        fail("recovery-required", "$todo/transaction");
-      }
-    }
     if (error instanceof TodoCollectionServiceError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "recovery-required") {
+        fail("recovery-required", "$todo/transaction");
+      }
       fail("conflict", "$todo");
+    }
+    throw error;
+  }
+}
+
+/** 只在Demand Publication sidecar已经存在时，前向恢复同一TODO事务。 */
+export async function recoverTodoForDemandPublication(
+  root: RootedDirectory,
+  todoId: string,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<TodoCollectionAuthoritySnapshot>> {
+  try {
+    return await inspectTodoForDemandPublication(root, signal);
+  } catch (error: unknown) {
+    if (
+      !(error instanceof DemandEventSourcingPublicationServiceError)
+      || error.reason !== "recovery-required"
+    ) {
+      throw error;
+    }
+  }
+  try {
+    return (await recoverTodoItemTransaction(
+      root,
+      todoId,
+      signal === undefined ? undefined : { signal },
+    )).snapshot;
+  } catch (error: unknown) {
+    if (error instanceof TodoCollectionServiceError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      fail("recovery-required", "$todo/transaction");
     }
     throw error;
   }
@@ -113,7 +133,6 @@ export async function claimTodoForDemandPublication(
 ): Promise<Readonly<DemandEventSourcingPublicationTodoResult>> {
   const before = await inspectTodoForDemandPublication(
     root,
-    transaction.todoId,
     signal,
   );
   const claimed = exactClaimedTodoItem(before, transaction);
@@ -143,6 +162,9 @@ export async function claimTodoForDemandPublication(
       if (error.reason === "aborted") fail("aborted", "$signal");
       if (error.reason === "lock-timeout") fail("lock-timeout", "$todo/lock");
       if (error.reason === "cas-mismatch") fail("cas-mismatch", "$todo");
+      if (error.reason === "recovery-required") {
+        fail("recovery-required", "$todo/transaction");
+      }
       fail("conflict", "$todo");
     }
     throw error;

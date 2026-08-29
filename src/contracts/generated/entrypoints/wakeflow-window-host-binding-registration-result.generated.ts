@@ -3,8 +3,9 @@
  * Source: src/contracts/schemas/entrypoints/wakeflow-window-host-binding-registration-result.schema.json
  */
 
-export type Sha256Digest = string
+export type PortableResourcePath = string
 export type UtcInstant = string
+export type Sha256Digest = string
 
 /**
  * Redacted successful result of registering one Agent-observed current-host window identity and rebuilding its runtime projection.
@@ -18,8 +19,7 @@ windowId: string
 disposition: ("registered" | "replayed")
 binding: {
 bindingId: string
-bindingRef: string
-bindingDigest: Sha256Digest
+bindingRef: PortableResourcePath
 registeredAt: UtcInstant
 source: {
 kind: "agent-host-create-result"
@@ -28,7 +28,7 @@ observedAt: UtcInstant
 }
 }
 projection: {
-resourceRef: string
+resourceRef: PortableResourcePath
 projectionDigest: Sha256Digest
 documentDigest: Sha256Digest
 }
@@ -43,132 +43,16 @@ function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
   return value;
 }
 
-/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA = freezeGeneratedSchema({
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:wakeflow:entrypoints:window-host-binding-registration-result:v1",
-  "x-wakeflow-runtime-export": "WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA",
-  "title": "WakeflowWindowHostBindingRegistrationResultV1",
-  "description": "Redacted successful result of registering one Agent-observed current-host window identity and rebuilding its runtime projection.",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "kind",
-    "schemaVersion",
-    "tool",
-    "hostId",
-    "windowId",
-    "disposition",
-    "binding",
-    "projection"
-  ],
-  "properties": {
-    "kind": {
-      "const": "WakeflowWindowHostBindingRegistrationResult"
-    },
-    "schemaVersion": {
-      "const": 1
-    },
-    "tool": {
-      "const": "wakeflow_register_window_binding"
-    },
-    "hostId": {
-      "enum": [
-        "codex",
-        "claude-code"
-      ]
-    },
-    "windowId": {
-      "type": "string",
-      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "disposition": {
-      "enum": [
-        "registered",
-        "replayed"
-      ]
-    },
-    "binding": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "bindingId",
-        "bindingRef",
-        "bindingDigest",
-        "registeredAt",
-        "source"
-      ],
-      "properties": {
-        "bindingId": {
-          "type": "string",
-          "pattern": "^window_binding_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-        },
-        "bindingRef": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4096
-        },
-        "bindingDigest": {
-          "$ref": "#/$defs/sha256Digest"
-        },
-        "registeredAt": {
-          "$ref": "#/$defs/utcInstant"
-        },
-        "source": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "kind",
-            "launchIntentDigest",
-            "observedAt"
-          ],
-          "properties": {
-            "kind": {
-              "const": "agent-host-create-result"
-            },
-            "launchIntentDigest": {
-              "$ref": "#/$defs/sha256Digest"
-            },
-            "observedAt": {
-              "$ref": "#/$defs/utcInstant"
-            }
-          }
-        }
-      }
-    },
-    "projection": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "resourceRef",
-        "projectionDigest",
-        "documentDigest"
-      ],
-      "properties": {
-        "resourceRef": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4096
-        },
-        "projectionDigest": {
-          "$ref": "#/$defs/sha256Digest"
-        },
-        "documentDigest": {
-          "$ref": "#/$defs/sha256Digest"
-        }
-      }
-    }
-  },
-  "$defs": {
-    "sha256Digest": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
-    },
-    "utcInstant": {
-      "type": "string",
-      "minLength": 20,
-      "maxLength": 30,
-      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
-    }
+/** 从 JSON 文本恢复 Schema，保留 `__proto__` 等普通 JSON 自有键。 */
+function restoreGeneratedSchema(
+  serialized: string,
+): Readonly<Record<string, unknown>> {
+  const value: unknown = JSON.parse(serialized);
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    throw new TypeError("Generated Schema must be an object.");
   }
-} as const);
+  return freezeGeneratedSchema(value as Record<string, unknown>);
+}
+
+/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
+export const WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:window-host-binding-registration-result:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA\",\"title\":\"WakeflowWindowHostBindingRegistrationResultV1\",\"description\":\"Redacted successful result of registering one Agent-observed current-host window identity and rebuilding its runtime projection.\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"hostId\",\"windowId\",\"disposition\",\"binding\",\"projection\"],\"properties\":{\"kind\":{\"const\":\"WakeflowWindowHostBindingRegistrationResult\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_register_window_binding\"},\"hostId\":{\"enum\":[\"codex\",\"claude-code\"]},\"windowId\":{\"type\":\"string\",\"pattern\":\"^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"disposition\":{\"enum\":[\"registered\",\"replayed\"]},\"binding\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"bindingId\",\"bindingRef\",\"registeredAt\",\"source\"],\"properties\":{\"bindingId\":{\"type\":\"string\",\"pattern\":\"^window_binding_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"bindingRef\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"registeredAt\":{\"$ref\":\"#/$defs/utcInstant\"},\"source\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"launchIntentDigest\",\"observedAt\"],\"properties\":{\"kind\":{\"const\":\"agent-host-create-result\"},\"launchIntentDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"observedAt\":{\"$ref\":\"#/$defs/utcInstant\"}}}}},\"projection\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"resourceRef\",\"projectionDigest\",\"documentDigest\"],\"properties\":{\"resourceRef\":{\"$ref\":\"#/$defs/portableResourcePath\"},\"projectionDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"documentDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}}},\"$defs\":{\"portableResourcePath\":{\"type\":\"string\",\"minLength\":1,\"pattern\":\"^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\\\.{1,2}(?:/|$))(?!.*\\\\/\\\\.{1,2}(?:/|$))(?!.*\\\\\\\\)(?!.*//)(?!.*\\\\/$)(?!\\\\s)(?!.*\\\\s$)(?!.*\\\\/\\\\s)(?!.*\\\\s\\\\/)(?!.*[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F]).+$\"},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"utcInstant\":{\"type\":\"string\",\"minLength\":20,\"maxLength\":30,\"pattern\":\"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\\\.[0-9]{1,9})?Z$\"}}}");

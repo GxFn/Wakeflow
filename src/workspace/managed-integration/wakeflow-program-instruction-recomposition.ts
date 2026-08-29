@@ -64,7 +64,10 @@ async function inspectCurrent(
   try {
     return await inspectWakeflowProgramInstruction(
       root,
-      wakeflowProgramInstructionInspectionRequest(request, signal),
+      wakeflowProgramInstructionInspectionRequest(
+        request,
+        afterCommit ? undefined : signal,
+      ),
     );
   } catch (error: unknown) {
     if (afterCommit) fail("commit-uncertain", "$resourcePath");
@@ -74,6 +77,7 @@ async function inspectCurrent(
         fail("unsupported-platform", "$root");
       }
       if (error.reason === "target-capacity") fail("capacity", "$target");
+      if (error.reason === "source-capacity") fail("capacity", "$source");
       if (
         error.reason === "input"
         || error.reason === "context"
@@ -245,13 +249,13 @@ export async function recomposeWakeflowProgramInstruction(
   optionsValue?: WakeflowProgramInstructionRecompositionOptions,
 ): Promise<Readonly<WakeflowProgramInstructionRecompositionReceipt>> {
   assertWakeflowProgramInstructionRecompositionRoot(rootValue);
-  const request = parseWakeflowProgramInstructionRecompositionRequest(
-    requestValue,
-  );
   const options = parseWakeflowProgramInstructionRecompositionOptions(
     optionsValue,
   );
   assertWakeflowProgramInstructionRecompositionNotAborted(options.signal);
+  const request = parseWakeflowProgramInstructionRecompositionRequest(
+    requestValue,
+  );
   admitWakeflowProgramInstructionLockOperations(request);
   const expectedUserId =
     currentWakeflowProgramInstructionRecompositionUserId();

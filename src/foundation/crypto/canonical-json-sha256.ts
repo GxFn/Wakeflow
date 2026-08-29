@@ -1,9 +1,7 @@
 import { encodeCanonicalJson } from "../data/canonical-json.js";
 import {
   computeSha256Digest,
-  computeSha256Hex,
   type Sha256Digest,
-  type Sha256Hex,
 } from "./sha256.js";
 
 /**
@@ -13,17 +11,6 @@ import {
  * Canonical JSON 序列化、字节编码、摘要计算和错误合同仍分别归原模块负责；这里不
  * 增加第三种错误、不添加换行或领域分隔符，也不解释摘要的业务含义。
  */
-
-/** 对任意输入计算 Canonical JSON UTF-8 字节的完整 SHA-256 十六进制摘要。 */
-export function computeCanonicalJsonSha256Hex(
-  value: unknown,
-  errorPath?: string,
-): Sha256Hex {
-  return computeSha256Hex(
-    encodeCanonicalJson(value, errorPath),
-    errorPath,
-  );
-}
 
 /** 对任意输入计算 Canonical JSON UTF-8 字节的 `sha256:<hex>` 摘要。 */
 export function computeCanonicalJsonSha256Digest(

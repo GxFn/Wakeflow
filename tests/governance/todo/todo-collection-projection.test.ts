@@ -113,9 +113,34 @@ test("projection escapes Markdown cells without defining a reverse input format"
   const projection = renderTodoBoardProjection([source]);
 
   equal(
-    projection.content.includes("Line 1 \\\\ path \\| pipe<br>Line 2"),
+    projection.content.includes(
+      "Line 1 &#92; path &#124; pipe<br>Line 2",
+    ),
     true,
   );
+});
+
+test("projection neutralizes HTML, bidi controls, and unsafe link destinations", () => {
+  const source = item(
+    "TODO-PROJECTION-SAFE",
+    BASE_TIME,
+    "<script>`move`\u202e",
+  );
+  const projected = {
+    intake: {
+      ...source.intake,
+      documents: [{
+        label: "original-plan",
+        ref: "docs/plan).md",
+        anchor: null,
+      }],
+    },
+    state: source.state,
+  };
+  const content = renderTodoBoardProjection([projected]).content;
+  equal(content.includes("<script>"), false);
+  equal(content.includes("&lt;script&gt;&#96;move&#96;&#92;u202e"), true);
+  equal(content.includes("[original-plan](docs/plan%29.md)"), true);
 });
 
 test("archived items remain in authority digest but disappear from projection", () => {

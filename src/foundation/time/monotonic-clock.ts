@@ -60,7 +60,7 @@ function fail(reason: MonotonicClockErrorReason, path: string): never {
  * Node.js 默认单调时钟来源，其精度和原点由 `process.hrtime.bigint()` 决定。
  * 本函数不缓存或转换读数。
  */
-export const systemMonotonicClock: MonotonicClock = () => hrtime.bigint();
+const systemMonotonicClock: MonotonicClock = () => hrtime.bigint();
 
 /**
  * 读取一次单调时钟，并把非负 `bigint` 授予 `MonotonicMoment` 品牌类型。

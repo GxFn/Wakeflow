@@ -49,6 +49,20 @@ test("Demand Event Sourcing root inventory 同时证明允许项与未知项不�
         && error.reason === "tree-shape"
       ),
     );
+    rmSync(path.join(fixtureRoot, "unknown.txt"));
+    writeFileSync(path.join(
+      fixtureRoot,
+      "event-sourcing",
+      "append-candidates",
+      "residue.json",
+    ), "residue\n", { mode: 0o600 });
+    await rejects(
+      inspectDemandEventSourcingRootInventory(root),
+      (error: unknown) => (
+        error instanceof DemandEventSourcingRootInventoryError
+        && error.reason === "tree-shape"
+      ),
+    );
   } finally {
     await root.close();
     rmSync(fixtureRoot, { recursive: true, force: true });

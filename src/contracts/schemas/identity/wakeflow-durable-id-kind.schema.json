@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:identity:durable-id-kind:v1",
+  "title": "WakeflowDurableIdKind",
+  "description": "Wakeflow 应用当前持久类型化身份使用的封闭活动 kind 词汇；该 enum 是运行时常量和 TypeScript 联合类型的唯一手写权威。",
+  "$comment": "这里只登记已有真实持久字段及 producer/consumer 的应用身份。未来业务 kind、binding、lease、locator、Pod operation、workspace mutation 和临时身份不得作为占位进入本词汇。",
+  "type": "string",
+  "enum": [
+    "archive",
+    "confirmation",
+    "demand",
+    "demand-event",
+    "demand-event-commit",
+    "program",
+    "repository",
+    "requirement",
+    "surface",
+    "window"
+  ],
+  "examples": [
+    "program",
+    "requirement",
+    "window"
+  ]
+}

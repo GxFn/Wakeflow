@@ -14,7 +14,7 @@ import { SHA256_DIGEST_PATTERN_SOURCE } from "../../contracts/generated/foundati
  */
 
 /** SHA-256 小写十六进制载荷的固定字符数。 */
-export const SHA256_HEX_LENGTH = 64;
+const SHA256_HEX_LENGTH = 64;
 
 /** Wakeflow 持久摘要使用的算法前缀。 */
 export const SHA256_DIGEST_PREFIX = "sha256:" as const;

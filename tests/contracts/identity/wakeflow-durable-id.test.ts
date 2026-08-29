@@ -1,6 +1,4 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -13,7 +11,7 @@ import {
   type WakeflowDurableId,
   type WakeflowDurableIdErrorReason,
   type WakeflowDurableIdKind,
-} from "../../../src/foundation/identity/wakeflow-durable-id.js";
+} from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import {
   createUuidV4,
   parseUuidV4,
@@ -22,6 +20,23 @@ import {
 
 const FIXED_UUID_TEXT = "12345678-90ab-4cde-8fab-1234567890ab";
 const FIXED_UUID = parseUuidV4(FIXED_UUID_TEXT);
+const RETIRED_DURABLE_ID_KINDS = [
+  "evidence",
+  "delivery",
+  "delivery-run",
+  "dispatch-group",
+  "dispatch-packet",
+  "pod",
+  "pod-design-handoff",
+  "pod-design-request",
+  "preservation",
+  "review-candidate",
+  "target-result",
+  "target-task",
+  "task-package",
+  "test-attempt",
+  "test-card",
+] as const;
 
 function expectWakeflowDurableIdError(
   action: () => unknown,
@@ -53,26 +68,21 @@ function asUuidV4(value: unknown): UuidV4 {
   return value as UuidV4;
 }
 
-test("durable kind vocabulary is exact, derived, and runtime frozen", () => {
-  const schema = JSON.parse(readFileSync(
-    path.join(
-      process.cwd(),
-      "src/contracts/schemas/foundation/wakeflow-durable-id-kind.schema.json",
-    ),
-    "utf8",
-  )) as { readonly enum?: unknown };
-  if (!Array.isArray(schema.enum)) {
-    throw new Error("Expected durable ID kind enum Schema.");
-  }
-
-  deepEqual(WAKEFLOW_DURABLE_ID_KINDS, schema.enum);
-  equal(WAKEFLOW_DURABLE_ID_KINDS.length, 25);
-  equal(WAKEFLOW_DURABLE_ID_KINDS.includes("demand-event-commit"), true);
+test("durable kind vocabulary is runtime frozen and parser-compatible", () => {
   equal(Object.isFrozen(WAKEFLOW_DURABLE_ID_KINDS), true);
   throws(
     () => (WAKEFLOW_DURABLE_ID_KINDS as unknown as string[]).push("lease"),
     TypeError,
   );
+
+  for (const kind of WAKEFLOW_DURABLE_ID_KINDS) {
+    const value = createWakeflowDurableId(kind, FIXED_UUID);
+    const parsed = parseWakeflowDurableId(value);
+    equal(parsed.kind, kind);
+    equal(parsed.uuid, FIXED_UUID);
+    equal(parsed.value, value);
+    equal(parseWakeflowDurableIdOfKind(value, kind), value);
+  }
 });
 
 test("creation preserves the exact kind in the branded return type", () => {
@@ -114,15 +124,15 @@ test("untyped parsing returns frozen discriminated lexical facts", () => {
 });
 
 test("kind-specific parsing returns the requested branded scalar", () => {
-  const value = `task-package_${FIXED_UUID_TEXT}`;
-  const taskPackageId: WakeflowDurableId<"task-package"> =
-    parseWakeflowDurableIdOfKind(value, "task-package", "$.taskPackageId");
+  const value = `requirement_${FIXED_UUID_TEXT}`;
+  const requirementId: WakeflowDurableId<"requirement"> =
+    parseWakeflowDurableIdOfKind(value, "requirement", "$.requirementId");
 
-  equal(taskPackageId, value);
+  equal(requirementId, value);
   expectWakeflowDurableIdError(
-    () => parseWakeflowDurableIdOfKind(value, "target-task", "$.targetTaskId"),
+    () => parseWakeflowDurableIdOfKind(value, "confirmation", "$.confirmationId"),
     "kind-mismatch",
-    "$.targetTaskId",
+    "$.confirmationId",
   );
 });
 
@@ -139,6 +149,10 @@ test("parsing rejects malformed, unknown, non-durable, and invalid UUID values",
     { value: `PROGRAM_${FIXED_UUID_TEXT}`, reason: "kind-unknown" },
     { value: `binding_${FIXED_UUID_TEXT}`, reason: "kind-unknown" },
     { value: `lease_${FIXED_UUID_TEXT}`, reason: "kind-unknown" },
+    ...RETIRED_DURABLE_ID_KINDS.map((kind) => ({
+      value: `${kind}_${FIXED_UUID_TEXT}`,
+      reason: "kind-unknown" as const,
+    })),
     {
       value: "program_12345678-90ab-7cde-8fab-1234567890ab",
       reason: "uuid-format",
@@ -205,8 +219,8 @@ test("default creation composes the official UUIDv4 source", () => {
 
   const injectedUuid = createUuidV4(() => FIXED_UUID_TEXT);
   equal(
-    createWakeflowDurableId("evidence", injectedUuid),
-    `evidence_${FIXED_UUID_TEXT}`,
+    createWakeflowDurableId("archive", injectedUuid),
+    `archive_${FIXED_UUID_TEXT}`,
   );
 });
 

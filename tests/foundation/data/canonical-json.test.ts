@@ -148,23 +148,28 @@ test("invalid input is mapped to one canonical error family without executing be
   equal(canonicalizeJson({ toJSON: "ordinary-data" }), "{\"toJSON\":\"ordinary-data\"}");
 });
 
-test("unexpected dependency failures are sanitized and retain only the caller path", () => {
-  const previous = Object.getOwnPropertyDescriptor(Array.prototype, "toJSON");
-  try {
-    Object.defineProperty(Array.prototype, "toJSON", {
-      configurable: true,
-      value: () => {
-        throw new Error("private-dependency-detail");
-      },
-    });
-    const error = expectCanonicalJsonError(
-      () => canonicalizeJson([true], "$.payload"),
-      "canonicalizer-failure",
-      "$.payload",
-    );
-    equal(error.message.includes("private-dependency-detail"), false);
-  } finally {
-    if (previous === undefined) delete (Array.prototype as { toJSON?: unknown }).toJSON;
-    else Object.defineProperty(Array.prototype, "toJSON", previous);
+test("inherited toJSON hooks are rejected without execution", () => {
+  for (const prototype of [Object.prototype, Array.prototype]) {
+    const previous = Object.getOwnPropertyDescriptor(prototype, "toJSON");
+    let hookCalls = 0;
+    try {
+      Object.defineProperty(prototype, "toJSON", {
+        configurable: true,
+        value: () => {
+          hookCalls += 1;
+          return "forged";
+        },
+      });
+      const error = expectCanonicalJsonError(
+        () => canonicalizeJson([true], "$.payload"),
+        "canonicalizer-failure",
+        "$.payload",
+      );
+      equal(error.message.includes("forged"), false);
+      equal(hookCalls, 0);
+    } finally {
+      if (previous === undefined) Reflect.deleteProperty(prototype, "toJSON");
+      else Object.defineProperty(prototype, "toJSON", previous);
+    }
   }
 });

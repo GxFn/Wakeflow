@@ -51,106 +51,16 @@ function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
   return value;
 }
 
-/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_REQUIREMENT_RECORD_SCHEMA = freezeGeneratedSchema({
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:wakeflow:governance:ledger:requirement-record:v1",
-  "x-wakeflow-runtime-export": "WAKEFLOW_REQUIREMENT_RECORD_SCHEMA",
-  "title": "WakeflowRequirementRecord",
-  "description": "Wakeflow Ledger 中一次确认后不可变的 requirement authority record。",
-  "$comment": "Schema 负责 portable structure；document role、顺序、路径前缀冲突和领域 representation 由 Ledger codec 继续校验。",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "artifactKind",
-    "schemaVersion",
-    "requirementId",
-    "programId",
-    "recordedAt",
-    "title",
-    "documents"
-  ],
-  "properties": {
-    "artifactKind": {
-      "const": "wakeflow-requirement-record"
-    },
-    "schemaVersion": {
-      "const": 1
-    },
-    "requirementId": {
-      "$ref": "#/$defs/requirementId"
-    },
-    "programId": {
-      "$ref": "#/$defs/programId"
-    },
-    "recordedAt": {
-      "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
-    },
-    "title": {
-      "$ref": "#/$defs/nonEmptyText"
-    },
-    "documents": {
-      "type": "array",
-      "minItems": 1,
-      "maxItems": 32,
-      "items": {
-        "$ref": "#/$defs/document"
-      }
-    }
-  },
-  "$defs": {
-    "requirementId": {
-      "type": "string",
-      "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "programId": {
-      "type": "string",
-      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "nonEmptyText": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 8192,
-      "pattern": "^(?!\\s)[\\s\\S]*\\S$"
-    },
-    "document": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "role",
-        "path",
-        "mediaType",
-        "digest"
-      ],
-      "properties": {
-        "role": {
-          "enum": [
-            "original-plan",
-            "requirement-design",
-            "code-facts",
-            "landing-plan",
-            "non-goals",
-            "user-confirmation",
-            "reproduction",
-            "scope",
-            "requirement-delta",
-            "research-question",
-            "boundaries",
-            "test-environment",
-            "supporting-evidence"
-          ]
-        },
-        "path": {
-          "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
-        },
-        "mediaType": {
-          "type": "string",
-          "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
-        },
-        "digest": {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-        }
-      }
-    }
+/** 从 JSON 文本恢复 Schema，保留 `__proto__` 等普通 JSON 自有键。 */
+function restoreGeneratedSchema(
+  serialized: string,
+): Readonly<Record<string, unknown>> {
+  const value: unknown = JSON.parse(serialized);
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    throw new TypeError("Generated Schema must be an object.");
   }
-} as const);
+  return freezeGeneratedSchema(value as Record<string, unknown>);
+}
+
+/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
+export const WAKEFLOW_REQUIREMENT_RECORD_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:ledger:requirement-record:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_REQUIREMENT_RECORD_SCHEMA\",\"title\":\"WakeflowRequirementRecord\",\"description\":\"Wakeflow Ledger 中一次确认后不可变的 requirement authority record。\",\"$comment\":\"Schema 负责 portable structure；document role、顺序、路径前缀与大小写碰撞以及领域 representation 由 Ledger codec 继续校验。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"requirementId\",\"programId\",\"recordedAt\",\"title\",\"documents\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-requirement-record\"},\"schemaVersion\":{\"const\":1},\"requirementId\":{\"$ref\":\"#/$defs/requirementId\"},\"programId\":{\"$ref\":\"#/$defs/programId\"},\"recordedAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"},\"title\":{\"$ref\":\"#/$defs/nonEmptyText\"},\"documents\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":32,\"items\":{\"$ref\":\"#/$defs/document\"}}},\"$defs\":{\"requirementId\":{\"type\":\"string\",\"pattern\":\"^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"programId\":{\"type\":\"string\",\"pattern\":\"^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"nonEmptyText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":8192,\"pattern\":\"^(?!\\\\s)[\\\\s\\\\S]*\\\\S$\"},\"document\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"role\",\"path\",\"mediaType\",\"digest\"],\"properties\":{\"role\":{\"enum\":[\"original-plan\",\"requirement-design\",\"code-facts\",\"landing-plan\",\"non-goals\",\"user-confirmation\",\"reproduction\",\"scope\",\"requirement-delta\",\"research-question\",\"boundaries\",\"test-environment\",\"supporting-evidence\"]},\"path\":{\"$ref\":\"urn:wakeflow:foundation:filesystem:portable-resource-path:v1\"},\"mediaType\":{\"type\":\"string\",\"pattern\":\"^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$\"},\"digest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}}}}}");

@@ -32,10 +32,8 @@ import {
 } from "./demand-event-sourcing-state-version.js";
 import {
   parseDemandEventStreamRevision,
+  DemandEventStreamPositionError,
 } from "./demand-event-stream-position.js";
-import {
-  upcastDemandEventSourcingStoredEvent,
-} from "./demand-event-sourcing-upcaster.js";
 
 /**
  * Demand 事件溯源持久化事件的兼容门面和当前版本写入器。
@@ -45,9 +43,9 @@ import {
  * 的最新版本。
  */
 
-export const DEMAND_EVENT_SOURCING_STORED_EVENT_ARTIFACT_KIND =
+const DEMAND_EVENT_SOURCING_STORED_EVENT_ARTIFACT_KIND =
   DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND;
-export const DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA_VERSION =
+const DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA_VERSION =
   DEMAND_EVENT_SOURCING_PERSISTED_EVENT_SCHEMA_VERSION;
 
 export type DemandEventSourcingStoredEvent =
@@ -147,8 +145,11 @@ export function createDemandEventSourcingStoredEvent(
   let streamRevision;
   try {
     streamRevision = parseDemandEventStreamRevision(streamRevisionValue);
-  } catch {
-    fail("revision", "$streamRevision");
+  } catch (error: unknown) {
+    if (error instanceof DemandEventStreamPositionError) {
+      fail("revision", "$streamRevision");
+    }
+    throw error;
   }
   return parseDemandEventSourcingStoredEvent({
     artifactKind: DEMAND_EVENT_SOURCING_STORED_EVENT_ARTIFACT_KIND,
@@ -166,16 +167,9 @@ export function createDemandEventSourcingStoredEvent(
   });
 }
 
-/** 从持久化事件封装取得归约器接受的当前事件。 */
-export function toDemandUncommittedEvent(
-  value: unknown,
-): Readonly<DemandUncommittedEvent> {
-  return upcastDemandEventSourcingStoredEvent(value);
-}
-
 export function renderDemandEventSourcingStoredEvent(value: unknown): string {
   return renderDeterministicJsonDocument(
-    parseDemandEventSourcingStoredEvent(value) as unknown as JsonValue,
+    parseDemandEventSourcingStoredEvent(value),
     "$event",
   );
 }

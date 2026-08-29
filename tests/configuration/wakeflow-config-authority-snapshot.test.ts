@@ -40,7 +40,7 @@ function createWorkspace(value: unknown = createMinimalWakeflowConfigV3()): Work
   mkdirSync(path.join(temporaryRoot, "wakeflow-ledger"));
   const configPath = path.join(workspaceRoot, "wakeflow.config.json");
   writeFileSync(configPath, serializeWakeflowConfigV3Fixture(value), {
-    mode: 0o600,
+    mode: 0o644,
   });
   return { temporaryRoot, workspaceRoot, configPath };
 }
@@ -67,8 +67,6 @@ test("snapshot binds the current source/config digests to one stable workspace r
   const root = await RootedDirectory.open(fixture.workspaceRoot);
   try {
     const snapshot = await readWakeflowConfigAuthoritySnapshot(root);
-    equal(snapshot.kind, "WakeflowConfigAuthoritySnapshot");
-    equal(snapshot.schemaVersion, 1);
     equal(snapshot.workspaceRoot, fixture.workspaceRoot);
     equal(snapshot.source.resourcePath, "wakeflow.config.json");
     equal(snapshot.source.byteCount, 2205);
@@ -145,6 +143,10 @@ test("encoding, JSON, Schema and source node policy remain distinct failures", a
     {
       reason: "source-policy",
       prepare: (fixture) => chmodSync(fixture.configPath, 0o700),
+    },
+    {
+      reason: "source-policy",
+      prepare: (fixture) => chmodSync(fixture.configPath, 0o600),
     },
   ];
   for (const scenario of scenarios) {

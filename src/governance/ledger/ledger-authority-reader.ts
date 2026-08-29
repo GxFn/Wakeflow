@@ -25,6 +25,7 @@ import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-sna
 import {
   parsePortableResourcePath,
   PortableResourcePathError,
+  splitPortableResourcePath,
   type PortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
@@ -41,8 +42,7 @@ import { StrictTextFileError } from "../../foundation/filesystem/strict-text-fil
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
-  type WakeflowDurableId,
-} from "../../foundation/identity/wakeflow-durable-id.js";
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   computeLedgerAuthorityRecordDigest,
@@ -115,7 +115,7 @@ function expectedResourcePaths(
   const expected = new Map<PortableResourcePath, "file" | "directory">();
   expected.set(ledgerAuthorityRecordRef(record), "file");
   for (const document of record.documents) {
-    const segments = document.path.split("/");
+    const segments = splitPortableResourcePath(document.path);
     for (let index = 1; index < segments.length; index += 1) {
       expected.set(
         parsePortableResourcePath(
@@ -296,41 +296,70 @@ export function parseLedgerAuthorityMemberReference(
   }
   const result = validateMemberReference(json);
   if (!result.ok) fail("input", result.path);
-  let recordId:
-    | WakeflowDurableId<"requirement">
-    | WakeflowDurableId<"confirmation">;
+  const recordRef = parseReferencePath(result.value.recordRef, "$/recordRef");
+  const recordDigest = parseReferenceDigest(
+    result.value.recordDigest,
+    "$/recordDigest",
+  );
+  const memberPath = parseReferencePath(
+    result.value.memberPath,
+    "$/memberPath",
+  );
+  if (
+    memberPath.toLowerCase() === "record.json"
+    || memberPath.toLowerCase().startsWith("record.json/")
+  ) {
+    fail("input", "$/memberPath");
+  }
+  const memberRef = parseReferencePath(result.value.memberRef, "$/memberRef");
+  const memberDigest = parseReferenceDigest(
+    result.value.memberDigest,
+    "$/memberDigest",
+  );
+  let reference: Readonly<LedgerAuthorityMemberReference>;
   try {
-    recordId = result.value.family === "requirement"
-      ? parseWakeflowDurableIdOfKind(
-        result.value.recordId,
-        "requirement",
-        "$/recordId",
-      )
-      : parseWakeflowDurableIdOfKind(
-        result.value.recordId,
-        "confirmation",
-        "$/recordId",
-      );
+    reference = result.value.family === "requirement"
+      ? Object.freeze({
+        artifactKind: MEMBER_REFERENCE_ARTIFACT_KIND,
+        schemaVersion: MEMBER_REFERENCE_SCHEMA_VERSION,
+        family: "requirement" as const,
+        recordId: parseWakeflowDurableIdOfKind(
+          result.value.recordId,
+          "requirement",
+          "$/recordId",
+        ),
+        recordRef,
+        recordDigest,
+        memberPath,
+        memberRef,
+        memberDigest,
+        role: result.value.role,
+        mediaType: result.value.mediaType,
+      })
+      : Object.freeze({
+        artifactKind: MEMBER_REFERENCE_ARTIFACT_KIND,
+        schemaVersion: MEMBER_REFERENCE_SCHEMA_VERSION,
+        family: "confirmation" as const,
+        recordId: parseWakeflowDurableIdOfKind(
+          result.value.recordId,
+          "confirmation",
+          "$/recordId",
+        ),
+        recordRef,
+        recordDigest,
+        memberPath,
+        memberRef,
+        memberDigest,
+        role: result.value.role,
+        mediaType: result.value.mediaType,
+      });
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) fail("input", "$/recordId");
     throw error;
   }
-  const reference = Object.freeze({
-    artifactKind: MEMBER_REFERENCE_ARTIFACT_KIND,
-    schemaVersion: MEMBER_REFERENCE_SCHEMA_VERSION,
-    family: result.value.family,
-    recordId,
-    recordRef: parseReferencePath(result.value.recordRef, "$/recordRef"),
-    recordDigest: parseReferenceDigest(result.value.recordDigest, "$/recordDigest"),
-    memberPath: parseReferencePath(result.value.memberPath, "$/memberPath"),
-    memberRef: parseReferencePath(result.value.memberRef, "$/memberRef"),
-    memberDigest: parseReferenceDigest(result.value.memberDigest, "$/memberDigest"),
-    role: result.value.role,
-    mediaType: result.value.mediaType,
-  });
   const expectedRoot = reference.family === "requirement"
-    ? requirementRootRef(reference.recordId as WakeflowDurableId<"requirement">)
-    : confirmationRootRef(reference.recordId as WakeflowDurableId<"confirmation">);
+    ? requirementRootRef(reference.recordId)
+    : confirmationRootRef(reference.recordId);
   if (
     reference.recordRef !== `${expectedRoot}/record.json`
     || reference.memberRef !== `${expectedRoot}/${reference.memberPath}`

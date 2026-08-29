@@ -2,7 +2,6 @@ import {
   computeCanonicalJsonSha256Digest,
 } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import type { JsonValue } from "../../foundation/data/json-value.js";
 import {
   createWakeflowWorkspaceHostResourceCatalog,
 } from "../workspace-host-resource-catalog.js";
@@ -19,6 +18,7 @@ import {
 } from "./wakeflow-window-runtime-resource-catalog.js";
 import {
   compileWakeflowWindowRuntimeUnregisteredProjectionSet,
+  WakeflowWindowRuntimeUnregisteredProjectionError,
   type WakeflowWindowRuntimeUnregisteredProjectionSet,
 } from "./wakeflow-window-runtime-unregistered-projection.js";
 
@@ -41,12 +41,14 @@ export interface WakeflowFreshWindowRuntimeAuthority {
   readonly authorityDigest: Sha256Digest;
 }
 
-export type WakeflowFreshWindowRuntimeAuthorityErrorReason =
+type WakeflowFreshWindowRuntimeAuthorityErrorReason =
   | "profile"
+  | "projection"
   | "catalog";
 
 const ERROR_MESSAGES = {
   profile: "Fresh Window Runtime requires a host with window identity support.",
+  projection: "Fresh Window Runtime projection authority is invalid.",
   catalog: "Fresh Window Runtime resource catalog is incomplete.",
 } as const satisfies Readonly<Record<
   WakeflowFreshWindowRuntimeAuthorityErrorReason,
@@ -111,13 +113,32 @@ export function compileWakeflowFreshWindowRuntimeAuthority(
     WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_RESOURCE_DECLARATION,
     ...hostDeclarations,
   ]);
-  const projectionSet = compileWakeflowWindowRuntimeUnregisteredProjectionSet(
-    configValue,
-    profile,
-  );
-  const projectionDeclarations =
-    createWakeflowWindowRuntimeProjectionResourceCatalog(configValue, profile);
-  if (projectionDeclarations.length !== projectionSet.entries.length) {
+  let projectionSet: Readonly<WakeflowWindowRuntimeUnregisteredProjectionSet>;
+  let projectionDeclarations:
+    readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
+  try {
+    projectionSet = compileWakeflowWindowRuntimeUnregisteredProjectionSet(
+      configValue,
+      profile,
+    );
+    projectionDeclarations =
+      createWakeflowWindowRuntimeProjectionResourceCatalog(configValue, profile);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWindowRuntimeUnregisteredProjectionError) {
+      fail("projection", error.path);
+    }
+    throw error;
+  }
+  if (
+    projectionDeclarations.length !== projectionSet.entries.length
+    || projectionDeclarations.some((declaration, index) => {
+      const entry = projectionSet.entries[index];
+      return entry === undefined
+        || declaration.declarationId
+          !== `host-runtime.${projectionSet.hostId}.window-runtime.${entry.windowId}`
+        || declaration.placement.relativePath !== entry.resourceRef;
+    })
+  ) {
     fail("catalog", "$projectionDeclarations");
   }
   const basis = {
@@ -133,8 +154,6 @@ export function compileWakeflowFreshWindowRuntimeAuthority(
     layoutDeclarations,
     projectionDeclarations,
     projectionSet,
-    authorityDigest: computeCanonicalJsonSha256Digest(
-      basis as unknown as JsonValue,
-    ),
+    authorityDigest: computeCanonicalJsonSha256Digest(basis),
   });
 }

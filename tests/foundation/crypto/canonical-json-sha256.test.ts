@@ -7,13 +7,10 @@ import {
 } from "../../../src/foundation/data/canonical-json.js";
 import {
   computeCanonicalJsonSha256Digest,
-  computeCanonicalJsonSha256Hex,
 } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import {
   computeSha256Digest,
-  computeSha256Hex,
   type Sha256Digest,
-  type Sha256Hex,
 } from "../../../src/foundation/crypto/sha256.js";
 
 test("existing Wakeflow canonical JSON SHA-256 golden values stay unchanged", () => {
@@ -24,10 +21,8 @@ test("existing Wakeflow canonical JSON SHA-256 golden values stay unchanged", ()
   };
   const expectedHex = "04c388804319fd9e79ca995acf88a5be8f47a2e04634aa2dcae809c3514509cc";
   const expectedDigest = `sha256:${expectedHex}`;
-  const hex: Sha256Hex = computeCanonicalJsonSha256Hex(value);
   const digest: Sha256Digest = computeCanonicalJsonSha256Digest(value);
 
-  equal(hex, expectedHex);
   equal(digest, expectedDigest);
 });
 
@@ -63,7 +58,6 @@ test("composition is exactly canonical UTF-8 bytes followed by SHA-256", () => {
   const value = { text: "e\u0301", values: [null, true, 1e30] };
   const bytes = encodeCanonicalJson(value);
 
-  equal(computeCanonicalJsonSha256Hex(value), computeSha256Hex(bytes));
   equal(computeCanonicalJsonSha256Digest(value), computeSha256Digest(bytes));
 });
 

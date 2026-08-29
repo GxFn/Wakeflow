@@ -1,16 +1,17 @@
 import {
+  buildWakeflowConfigV3Indexes,
   parseWakeflowConfigV3,
   WakeflowConfigV3Error,
   type WakeflowConfigPlacement,
   type WakeflowConfigV3Model,
+  type WakeflowConfigV3Indexes,
   type WakeflowConfigWindow,
 } from "../../configuration/wakeflow-config-v3.js";
 import {
   computeCanonicalJsonSha256Digest,
 } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import type { JsonValue } from "../../foundation/data/json-value.js";
-import type { WakeflowDurableId } from "../../foundation/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   WakeflowWorkspaceHostResourceProfileError,
@@ -26,9 +27,9 @@ import {
  * root observation 均不属于这一层。
  */
 
-export const WAKEFLOW_WINDOW_RUNTIME_DESIRED_TOPOLOGY_KIND =
+const WAKEFLOW_WINDOW_RUNTIME_DESIRED_TOPOLOGY_KIND =
   "WakeflowWindowRuntimeDesiredTopology" as const;
-export const WAKEFLOW_WINDOW_RUNTIME_DESIRED_TOPOLOGY_VERSION = 1 as const;
+const WAKEFLOW_WINDOW_RUNTIME_DESIRED_TOPOLOGY_VERSION = 1 as const;
 export const WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS = 1_024;
 
 export type WakeflowWindowRuntimeLogicalRoot =
@@ -63,7 +64,7 @@ export interface WakeflowWindowRuntimeDesiredTopology {
   readonly desiredTopologyDigest: Sha256Digest;
 }
 
-export type WakeflowWindowRuntimeDesiredTopologyErrorReason =
+type WakeflowWindowRuntimeDesiredTopologyErrorReason =
   | "config"
   | "profile"
   | "capacity"
@@ -116,6 +117,7 @@ function compareWindowId(
 
 function desiredWindow(
   model: WakeflowConfigV3Model,
+  indexes: Readonly<WakeflowConfigV3Indexes>,
   window: Readonly<WakeflowConfigWindow>,
 ): Readonly<WakeflowWindowRuntimeDesiredWindow> {
   let logicalRoot: WakeflowWindowRuntimeLogicalRoot;
@@ -128,9 +130,7 @@ function desiredWindow(
     configuredPlacement = ".";
   } else if (window.root.kind === "support-surface") {
     const surfaceId = window.root.surfaceId;
-    const surface = model.topology.supportSurfaces.find((entry) => (
-      entry.surfaceId === surfaceId
-    ));
+    const surface = indexes.surfaceById[surfaceId];
     if (surface === undefined) fail("reference", "$window/root/surfaceId");
     logicalRoot = Object.freeze({
       kind: "support-surface",
@@ -139,9 +139,7 @@ function desiredWindow(
     configuredPlacement = surface.path;
   } else {
     const repositoryId = window.root.repositoryId;
-    const repository = model.topology.repositories.find((entry) => (
-      entry.repositoryId === repositoryId
-    ));
+    const repository = indexes.repositoryById[repositoryId];
     if (repository === undefined) {
       fail("reference", "$window/root/repositoryId");
     }
@@ -159,9 +157,7 @@ function desiredWindow(
   };
   return Object.freeze({
     ...basis,
-    windowTopologyDigest: computeCanonicalJsonSha256Digest(
-      basis as unknown as JsonValue,
-    ),
+    windowTopologyDigest: computeCanonicalJsonSha256Digest(basis),
   });
 }
 
@@ -194,10 +190,11 @@ export function compileWakeflowWindowRuntimeDesiredTopology(
   ) {
     fail("capacity", "$/topology/windows");
   }
+  const indexes = buildWakeflowConfigV3Indexes(model);
   const windows = Object.freeze(
     [...model.topology.windows]
       .sort(compareWindowId)
-      .map((window) => desiredWindow(model, window)),
+      .map((window) => desiredWindow(model, indexes, window)),
   );
   const basis = {
     kind: WAKEFLOW_WINDOW_RUNTIME_DESIRED_TOPOLOGY_KIND,
@@ -208,8 +205,6 @@ export function compileWakeflowWindowRuntimeDesiredTopology(
   };
   return Object.freeze({
     ...basis,
-    desiredTopologyDigest: computeCanonicalJsonSha256Digest(
-      basis as unknown as JsonValue,
-    ),
+    desiredTopologyDigest: computeCanonicalJsonSha256Digest(basis),
   });
 }

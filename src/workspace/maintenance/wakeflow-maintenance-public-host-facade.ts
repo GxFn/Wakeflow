@@ -26,10 +26,8 @@ export interface WakeflowMaintenancePublicHostFacade {
   readonly hostId: WakeflowWorkspaceHostId;
   readonly currentHostProfile:
     Readonly<WakeflowWorkspaceHostResourceProfile>;
-  readonly hostProfiles: readonly [
-    Readonly<WakeflowWorkspaceHostResourceProfile>,
-    Readonly<WakeflowWorkspaceHostResourceProfile>,
-  ];
+  readonly hostProfiles:
+    readonly Readonly<WakeflowWorkspaceHostResourceProfile>[];
   readonly preview: (
     root: RootedDirectory,
     request: WakeflowStaticMaterializationPreviewRequest,

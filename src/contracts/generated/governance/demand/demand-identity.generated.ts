@@ -22,6 +22,24 @@ export type WakeflowPortableResourcePathText = string
  * Wakeflow portable records 使用的完整 lowercase SHA-256 digest 文本；算法前缀和 256-bit hexadecimal payload 都属于词法合同。
  */
 export type WakeflowSha256DigestText = string
+/**
+ * 跨领域只读消费一份已验证 Ledger authority member 的完整 ref/digest 关系。
+ */
+export type WakeflowLedgerAuthorityMemberReference = ({
+[k: string]: unknown | undefined
+} & {
+artifactKind: "wakeflow-ledger-authority-member-reference"
+schemaVersion: 1
+family: ("requirement" | "confirmation")
+recordId: string
+recordRef: WakeflowPortableResourcePathText
+recordDigest: WakeflowSha256DigestText
+memberPath: WakeflowPortableResourcePathText
+memberRef: WakeflowPortableResourcePathText
+memberDigest: WakeflowSha256DigestText
+role: ("original-plan" | "requirement-design" | "code-facts" | "landing-plan" | "non-goals" | "user-confirmation" | "reproduction" | "scope" | "requirement-delta" | "research-question" | "boundaries" | "test-environment" | "supporting-evidence" | "goal-stage-decision")
+mediaType: string
+})
 
 /**
  * Demand Event Sourcing Aggregate 创建后不可变的 identity authority。
@@ -56,22 +74,6 @@ export interface IsolatedPlacement {
 mode: "isolated"
 authorizationRef: WakeflowLedgerAuthorityMemberReference
 }
-/**
- * 跨领域只读消费一份已验证 Ledger authority member 的完整 ref/digest 关系。
- */
-export interface WakeflowLedgerAuthorityMemberReference {
-artifactKind: "wakeflow-ledger-authority-member-reference"
-schemaVersion: 1
-family: ("requirement" | "confirmation")
-recordId: string
-recordRef: WakeflowPortableResourcePathText
-recordDigest: WakeflowSha256DigestText
-memberPath: WakeflowPortableResourcePathText
-memberRef: WakeflowPortableResourcePathText
-memberDigest: WakeflowSha256DigestText
-role: ("original-plan" | "requirement-design" | "code-facts" | "landing-plan" | "non-goals" | "user-confirmation" | "reproduction" | "scope" | "requirement-delta" | "research-question" | "boundaries" | "test-environment" | "supporting-evidence" | "goal-stage-decision")
-mediaType: string
-}
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
 function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
@@ -82,118 +84,16 @@ function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
   return value;
 }
 
-/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_DEMAND_IDENTITY_SCHEMA = freezeGeneratedSchema({
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:wakeflow:governance:demand:identity:v1",
-  "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_IDENTITY_SCHEMA",
-  "title": "WakeflowDemandIdentity",
-  "description": "Demand Event Sourcing Aggregate 创建后不可变的 identity authority。",
-  "$comment": "TODO lineage、isolated placement authorization 和 typed identity 的跨记录解析由 Demand identity codec 继续校验。",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "artifactKind",
-    "schemaVersion",
-    "programId",
-    "demandId",
-    "createdAt",
-    "title",
-    "goal",
-    "completionDefinition",
-    "demandType",
-    "source",
-    "executionPlacement"
-  ],
-  "properties": {
-    "artifactKind": {
-      "const": "wakeflow-demand-identity"
-    },
-    "schemaVersion": {
-      "const": 1
-    },
-    "programId": {
-      "$ref": "#/$defs/programId"
-    },
-    "demandId": {
-      "$ref": "#/$defs/demandId"
-    },
-    "createdAt": {
-      "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
-    },
-    "title": {
-      "$ref": "#/$defs/nonEmptyText"
-    },
-    "goal": {
-      "$ref": "#/$defs/nonEmptyText"
-    },
-    "completionDefinition": {
-      "$ref": "#/$defs/nonEmptyText"
-    },
-    "demandType": {
-      "enum": [
-        "requirement",
-        "bug",
-        "supplement",
-        "research"
-      ]
-    },
-    "source": {
-      "$ref": "urn:wakeflow:governance:todo:intake-lineage:v1"
-    },
-    "executionPlacement": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/mainPlacement"
-        },
-        {
-          "$ref": "#/$defs/isolatedPlacement"
-        }
-      ]
-    }
-  },
-  "$defs": {
-    "programId": {
-      "type": "string",
-      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "demandId": {
-      "type": "string",
-      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "nonEmptyText": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 16384,
-      "pattern": "^(?!\\s)[\\s\\S]*\\S$"
-    },
-    "mainPlacement": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "mode"
-      ],
-      "properties": {
-        "mode": {
-          "const": "main"
-        }
-      }
-    },
-    "isolatedPlacement": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "mode",
-        "authorizationRef"
-      ],
-      "properties": {
-        "mode": {
-          "const": "isolated"
-        },
-        "authorizationRef": {
-          "$ref": "urn:wakeflow:governance:ledger:authority-member-reference:v1"
-        }
-      }
-    }
+/** 从 JSON 文本恢复 Schema，保留 `__proto__` 等普通 JSON 自有键。 */
+function restoreGeneratedSchema(
+  serialized: string,
+): Readonly<Record<string, unknown>> {
+  const value: unknown = JSON.parse(serialized);
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    throw new TypeError("Generated Schema must be an object.");
   }
-} as const);
+  return freezeGeneratedSchema(value as Record<string, unknown>);
+}
+
+/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
+export const WAKEFLOW_DEMAND_IDENTITY_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:demand:identity:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_DEMAND_IDENTITY_SCHEMA\",\"title\":\"WakeflowDemandIdentity\",\"description\":\"Demand Event Sourcing Aggregate 创建后不可变的 identity authority。\",\"$comment\":\"TODO lineage、isolated placement authorization 和 typed identity 的跨记录解析由 Demand identity codec 继续校验。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"programId\",\"demandId\",\"createdAt\",\"title\",\"goal\",\"completionDefinition\",\"demandType\",\"source\",\"executionPlacement\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-demand-identity\"},\"schemaVersion\":{\"const\":1},\"programId\":{\"$ref\":\"#/$defs/programId\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"createdAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"},\"title\":{\"$ref\":\"#/$defs/nonEmptyText\"},\"goal\":{\"$ref\":\"#/$defs/nonEmptyText\"},\"completionDefinition\":{\"$ref\":\"#/$defs/nonEmptyText\"},\"demandType\":{\"enum\":[\"requirement\",\"bug\",\"supplement\",\"research\"]},\"source\":{\"$ref\":\"urn:wakeflow:governance:todo:intake-lineage:v1\"},\"executionPlacement\":{\"oneOf\":[{\"$ref\":\"#/$defs/mainPlacement\"},{\"$ref\":\"#/$defs/isolatedPlacement\"}]}},\"$defs\":{\"programId\":{\"type\":\"string\",\"pattern\":\"^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"nonEmptyText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":16384,\"pattern\":\"^(?!\\\\s)[\\\\s\\\\S]*\\\\S$\"},\"mainPlacement\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"mode\"],\"properties\":{\"mode\":{\"const\":\"main\"}}},\"isolatedPlacement\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"mode\",\"authorizationRef\"],\"properties\":{\"mode\":{\"const\":\"isolated\"},\"authorizationRef\":{\"$ref\":\"urn:wakeflow:governance:ledger:authority-member-reference:v1\"}}}}}");

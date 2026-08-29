@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { types } from "node:util";
 
 import { computeCanonicalJsonSha256Digest } from "../crypto/canonical-json-sha256.js";
@@ -33,6 +34,15 @@ export const DIRECTORY_TREE_CANDIDATE_PLAN_ARTIFACT_KIND =
 export const DIRECTORY_TREE_CANDIDATE_PLAN_SCHEMA_VERSION = 1 as const;
 const DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_FILES = 4096;
 const DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_DIRECTORIES = 8192;
+/** v1任何owner都不能放宽的资源消耗上限；具体业务只能提供更小预算。 */
+const DIRECTORY_TREE_CANDIDATE_V1_HARD_LIMITS = Object.freeze({
+  maximumDepth: 64,
+  maximumEntries: 8192,
+  maximumFileBytes: 32 * 1024 * 1024,
+  maximumFiles: DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_FILES,
+  maximumPathBytes: 1024,
+  maximumTotalBytes: 256 * 1024 * 1024,
+} as const);
 
 export interface DirectoryTreeCandidateFileInput {
   readonly path: string;
@@ -40,13 +50,18 @@ export interface DirectoryTreeCandidateFileInput {
   readonly mode: number;
 }
 
-export interface DirectoryTreeCandidateOptions {
-  readonly directoryMode: number;
+/** 业务owner在Foundation硬上限内可进一步收紧的目录树容量。 */
+export interface DirectoryTreeCandidateCapacity {
   readonly maximumDepth: number;
   readonly maximumEntries: number;
   readonly maximumFileBytes: number;
   readonly maximumFiles: number;
   readonly maximumTotalBytes: number;
+}
+
+export interface DirectoryTreeCandidateOptions
+  extends DirectoryTreeCandidateCapacity {
+  readonly directoryMode: number;
   readonly signal?: AbortSignal;
 }
 
@@ -126,7 +141,7 @@ export class DurableDirectoryTreeCandidateError extends Error {
   }
 }
 
-export interface ParsedDirectoryTreeCandidateOptions {
+interface ParsedDirectoryTreeCandidateOptions {
   readonly directoryMode: number;
   readonly maximumDepth: number;
   readonly maximumEntries: number;
@@ -155,6 +170,13 @@ const OPTION_FIELDS = Object.freeze([
   "maximumFiles",
   "maximumTotalBytes",
   "signal",
+] as const);
+const CAPACITY_FIELDS = Object.freeze([
+  "maximumDepth",
+  "maximumEntries",
+  "maximumFileBytes",
+  "maximumFiles",
+  "maximumTotalBytes",
 ] as const);
 const PLAN_FIELDS = Object.freeze([
   "artifactKind",
@@ -226,7 +248,10 @@ function denseArray(
   try {
     return parseDenseArray(value, maximumLength, path);
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", path);
+    if (error instanceof PassiveOwnDataError) {
+      if (error.reason === "array-length") fail("capacity", path);
+      fail("input", path);
+    }
     throw error;
   }
 }
@@ -241,6 +266,18 @@ function parseMode(value: unknown, path: string): number {
     fail("input", path);
   }
   return value;
+}
+
+function parseCandidateDirectoryMode(value: unknown, path: string): number {
+  const mode = parseMode(value, path);
+  if ((mode & 0o700) !== 0o700) fail("input", path);
+  return mode;
+}
+
+function parseCandidateFileMode(value: unknown, path: string): number {
+  const mode = parseMode(value, path);
+  if ((mode & 0o400) !== 0o400) fail("input", path);
+  return mode;
 }
 
 function parsePositiveCount(value: unknown, path: string): number {
@@ -272,6 +309,67 @@ export function isDirectoryTreeCandidateAbortSignal(
     && value instanceof AbortSignal;
 }
 
+type ParsedDirectoryTreeCandidateCapacity = Readonly<{
+  readonly maximumDepth: number;
+  readonly maximumEntries: number;
+  readonly maximumFileBytes: ByteCount;
+  readonly maximumFiles: number;
+  readonly maximumTotalBytes: ByteCount;
+}>;
+
+function parseCapacityFields(
+  record: Readonly<Record<string, unknown>>,
+  path: string,
+): ParsedDirectoryTreeCandidateCapacity {
+  const capacity = Object.freeze({
+    maximumDepth: parsePositiveCount(
+      record.maximumDepth,
+      `${path}/maximumDepth`,
+    ),
+    maximumEntries: parsePositiveCount(
+      record.maximumEntries,
+      `${path}/maximumEntries`,
+    ),
+    maximumFileBytes: byteCount(
+      record.maximumFileBytes,
+      `${path}/maximumFileBytes`,
+    ),
+    maximumFiles: parsePositiveCount(
+      record.maximumFiles,
+      `${path}/maximumFiles`,
+    ),
+    maximumTotalBytes: byteCount(
+      record.maximumTotalBytes,
+      `${path}/maximumTotalBytes`,
+    ),
+  });
+  const ceilings = DIRECTORY_TREE_CANDIDATE_V1_HARD_LIMITS;
+  if (capacity.maximumDepth > ceilings.maximumDepth) {
+    fail("input", `${path}/maximumDepth`);
+  }
+  if (capacity.maximumEntries > ceilings.maximumEntries) {
+    fail("input", `${path}/maximumEntries`);
+  }
+  if (capacity.maximumFileBytes > ceilings.maximumFileBytes) {
+    fail("input", `${path}/maximumFileBytes`);
+  }
+  if (capacity.maximumFiles > ceilings.maximumFiles) {
+    fail("input", `${path}/maximumFiles`);
+  }
+  if (capacity.maximumTotalBytes > ceilings.maximumTotalBytes) {
+    fail("input", `${path}/maximumTotalBytes`);
+  }
+  return capacity;
+}
+
+function parseCapacity(
+  value: unknown,
+): ParsedDirectoryTreeCandidateCapacity {
+  const record = plainRecord(value, "$capacity");
+  exactFields(record, CAPACITY_FIELDS, "$capacity");
+  return parseCapacityFields(record, "$capacity");
+}
+
 function parseOptions(value: unknown): Readonly<ParsedDirectoryTreeCandidateOptions> {
   const record = plainRecord(value, "$options");
   const allowed = new Set<string>(OPTION_FIELDS);
@@ -286,13 +384,13 @@ function parseOptions(value: unknown): Readonly<ParsedDirectoryTreeCandidateOpti
   if (signal !== undefined && !isDirectoryTreeCandidateAbortSignal(signal)) {
     fail("input", "$options/signal");
   }
+  const capacity = parseCapacityFields(record, "$options");
   return Object.freeze({
-    directoryMode: parseMode(record.directoryMode, "$options/directoryMode"),
-    maximumDepth: parsePositiveCount(record.maximumDepth, "$options/maximumDepth"),
-    maximumEntries: parsePositiveCount(record.maximumEntries, "$options/maximumEntries"),
-    maximumFileBytes: byteCount(record.maximumFileBytes, "$options/maximumFileBytes"),
-    maximumFiles: parsePositiveCount(record.maximumFiles, "$options/maximumFiles"),
-    maximumTotalBytes: byteCount(record.maximumTotalBytes, "$options/maximumTotalBytes"),
+    ...capacity,
+    directoryMode: parseCandidateDirectoryMode(
+      record.directoryMode,
+      "$options/directoryMode",
+    ),
     signal,
   });
 }
@@ -318,47 +416,104 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
   }
 }
 
-function parentDirectories(path: PortableResourcePath): readonly PortableResourcePath[] {
-  const segments = path.split("/");
-  return Object.freeze(segments.slice(0, -1).map((_, index) => (
-    parsePortableResourcePath(segments.slice(0, index + 1).join("/"))
-  )));
+function portablePathDepth(path: PortableResourcePath): number {
+  let depth = 1;
+  for (let index = 0; index < path.length; index += 1) {
+    if (path.charCodeAt(index) === 0x2f) depth += 1;
+  }
+  return depth;
+}
+
+function assertPlanPathHardCapacity(
+  pathValue: PortableResourcePath,
+  path: string,
+): void {
+  if (
+    Buffer.byteLength(pathValue, "utf8")
+      > DIRECTORY_TREE_CANDIDATE_V1_HARD_LIMITS.maximumPathBytes
+    || portablePathDepth(pathValue)
+      > DIRECTORY_TREE_CANDIDATE_V1_HARD_LIMITS.maximumDepth
+  ) {
+    fail("capacity", path);
+  }
+}
+
+function parsePlanPath(value: unknown, path: string): PortableResourcePath {
+  const parsed = parseDirectoryTreeCandidatePath(value, path);
+  assertPlanPathHardCapacity(parsed, path);
+  return parsed;
+}
+
+function addParentDirectories(
+  filePath: PortableResourcePath,
+  filePaths: ReadonlySet<PortableResourcePath>,
+  directories: Set<PortableResourcePath>,
+  fileCount: number,
+): void {
+  const segments = filePath.split("/");
+  let current = "";
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const segment = segments[index];
+    if (segment === undefined) fail("path-conflict", "$/files");
+    current = current.length === 0 ? segment : `${current}/${segment}`;
+    const directory = parsePortableResourcePath(current);
+    if (filePaths.has(directory)) fail("path-conflict", "$/files");
+    directories.add(directory);
+    if (
+      directories.size + fileCount
+        > DIRECTORY_TREE_CANDIDATE_V1_HARD_LIMITS.maximumEntries
+    ) {
+      fail("capacity", "$/files");
+    }
+  }
+}
+
+function assertNoPortableCaseCollision(
+  directories: readonly PortableResourcePath[],
+  files: readonly Readonly<DirectoryTreeCandidatePlanFile>[],
+): void {
+  const collisionKeys = new Set<string>();
+  for (const path of directories) {
+    const key = path.toLowerCase();
+    if (collisionKeys.has(key)) fail("path-conflict", "$/files");
+    collisionKeys.add(key);
+  }
+  for (const file of files) {
+    const key = file.path.toLowerCase();
+    if (collisionKeys.has(key)) fail("path-conflict", "$/files");
+    collisionKeys.add(key);
+  }
 }
 
 export function directoryTreeCandidateMaximumPathDepth(
   directories: readonly PortableResourcePath[],
   files: readonly Readonly<DirectoryTreeCandidatePlanFile>[],
 ): number {
-  return Math.max(
-    0,
-    ...directories.map((entry) => entry.split("/").length),
-    ...files.map((entry) => entry.path.split("/").length),
-  );
+  let maximum = 0;
+  for (const directory of directories) {
+    maximum = Math.max(maximum, portablePathDepth(directory));
+  }
+  for (const file of files) {
+    maximum = Math.max(maximum, portablePathDepth(file.path));
+  }
+  return maximum;
 }
 
 function assertPathClosure(
   files: readonly Readonly<DirectoryTreeCandidatePlanFile>[],
 ): readonly PortableResourcePath[] {
+  const filePaths = new Set(files.map((file) => file.path));
   const directories = new Set<PortableResourcePath>();
   for (const [index, file] of files.entries()) {
     const previous = files[index - 1];
     if (previous !== undefined && compareText(previous.path, file.path) >= 0) {
       fail("file-order", `$/files/${index}/path`);
     }
-    for (const other of files) {
-      if (
-        other !== file
-        && (
-          file.path.startsWith(`${other.path}/`)
-          || other.path.startsWith(`${file.path}/`)
-        )
-      ) {
-        fail("path-conflict", "$/files");
-      }
-    }
-    for (const directory of parentDirectories(file.path)) directories.add(directory);
+    addParentDirectories(file.path, filePaths, directories, files.length);
   }
-  return Object.freeze([...directories].sort(compareText));
+  const orderedDirectories = Object.freeze([...directories].sort(compareText));
+  assertNoPortableCaseCollision(orderedDirectories, files);
+  return orderedDirectories;
 }
 
 function planDigestValue(
@@ -397,6 +552,13 @@ function buildPlan(
       throw error;
     }
   }
+  assertPlanComponentsCapacity(
+    directories,
+    files,
+    totalBytes,
+    DIRECTORY_TREE_CANDIDATE_V1_HARD_LIMITS,
+    "$/files",
+  );
   return Object.freeze({
     artifactKind: DIRECTORY_TREE_CANDIDATE_PLAN_ARTIFACT_KIND,
     schemaVersion: DIRECTORY_TREE_CANDIDATE_PLAN_SCHEMA_VERSION,
@@ -408,22 +570,38 @@ function buildPlan(
   });
 }
 
-function assertPlanCapacity(
-  plan: Readonly<DirectoryTreeCandidatePlan>,
-  options: Readonly<ParsedDirectoryTreeCandidateOptions>,
+function assertPlanComponentsCapacity(
+  directories: readonly PortableResourcePath[],
+  files: readonly Readonly<DirectoryTreeCandidatePlanFile>[],
+  totalBytes: ByteCount,
+  capacity: Readonly<DirectoryTreeCandidateCapacity>,
   path: string,
 ): void {
   if (
-    plan.files.length > options.maximumFiles
-    || plan.directories.length > DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_DIRECTORIES
-    || plan.directories.length + plan.files.length > options.maximumEntries
-    || plan.files.some((file) => file.byteCount > options.maximumFileBytes)
-    || plan.totalBytes > options.maximumTotalBytes
-    || directoryTreeCandidateMaximumPathDepth(plan.directories, plan.files)
-      > options.maximumDepth
+    files.length > capacity.maximumFiles
+    || directories.length > DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_DIRECTORIES
+    || directories.length + files.length > capacity.maximumEntries
+    || files.some((file) => file.byteCount > capacity.maximumFileBytes)
+    || totalBytes > capacity.maximumTotalBytes
+    || directoryTreeCandidateMaximumPathDepth(directories, files)
+      > capacity.maximumDepth
   ) {
     fail("capacity", path);
   }
+}
+
+function assertPlanCapacity(
+  plan: Readonly<DirectoryTreeCandidatePlan>,
+  capacity: Readonly<DirectoryTreeCandidateCapacity>,
+  path: string,
+): void {
+  assertPlanComponentsCapacity(
+    plan.directories,
+    plan.files,
+    plan.totalBytes,
+    capacity,
+    path,
+  );
 }
 
 export function prepareDirectoryTreeCandidate(
@@ -431,14 +609,7 @@ export function prepareDirectoryTreeCandidate(
   optionsValue: unknown,
 ): Readonly<PreparedDirectoryTreeCandidate> {
   const options = parseOptions(optionsValue);
-  if (
-    options.maximumFiles > DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_FILES
-    || options.maximumEntries
-      > DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_FILES
-        + DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_DIRECTORIES
-  ) {
-    fail("input", "$options");
-  }
+  assertDirectoryTreeCandidateNotAborted(options.signal);
   const values = denseArray(filesValue, options.maximumFiles, "$files");
   if (values.length === 0) fail("input", "$files");
   const files = values.map((value, index): Readonly<PreparedDirectoryTreeCandidateFile> => {
@@ -449,19 +620,25 @@ export function prepareDirectoryTreeCandidate(
       !ArrayBuffer.isView(inputBytes)
       || !(inputBytes instanceof Uint8Array)
       || types.isProxy(inputBytes)
+      || inputBytes.buffer instanceof SharedArrayBuffer
     ) {
       fail("input", `$files/${index}/bytes`);
     }
-    const bytes = new Uint8Array(inputBytes);
-    if (bytes.byteLength > options.maximumFileBytes) {
+    if (inputBytes.byteLength > options.maximumFileBytes) {
+      fail("capacity", `$files/${index}/bytes`);
+    }
+    let bytes: Uint8Array;
+    try {
+      bytes = new Uint8Array(inputBytes);
+    } catch {
       fail("capacity", `$files/${index}/bytes`);
     }
     return Object.freeze({
-      path: parseDirectoryTreeCandidatePath(input.path, `$files/${index}/path`),
+      path: parsePlanPath(input.path, `$files/${index}/path`),
       bytes,
       byteCount: parseByteCount(bytes.byteLength, `$files/${index}/bytes`),
       digest: computeSha256Digest(bytes, `$files/${index}/bytes`),
-      mode: parseMode(input.mode, `$files/${index}/mode`),
+      mode: parseCandidateFileMode(input.mode, `$files/${index}/mode`),
     });
   });
   const planFiles = Object.freeze(files.map((file) => Object.freeze({
@@ -490,10 +667,10 @@ function parsePlanFile(
   const record = plainRecord(value, path);
   exactFields(record, PLAN_FILE_FIELDS, path);
   return Object.freeze({
-    path: parseDirectoryTreeCandidatePath(record.path, `${path}/path`),
+    path: parsePlanPath(record.path, `${path}/path`),
     byteCount: byteCount(record.byteCount, `${path}/byteCount`),
     digest: parseDigest(record.digest, `${path}/digest`),
-    mode: parseMode(record.mode, `${path}/mode`),
+    mode: parseCandidateFileMode(record.mode, `${path}/mode`),
   });
 }
 
@@ -509,14 +686,6 @@ export function planDirectoryTreeCandidateFromFileDescriptors(
 ): Readonly<DirectoryTreeCandidatePlan> {
   const options = parseOptions(optionsValue);
   assertDirectoryTreeCandidateNotAborted(options.signal);
-  if (
-    options.maximumFiles > DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_FILES
-    || options.maximumEntries
-      > DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_FILES
-        + DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_DIRECTORIES
-  ) {
-    fail("input", "$options");
-  }
   const values = denseArray(filesValue, options.maximumFiles, "$files");
   if (values.length === 0) fail("input", "$files");
   const files = Object.freeze(values.map(parsePlanFile));
@@ -525,9 +694,19 @@ export function planDirectoryTreeCandidateFromFileDescriptors(
   return plan;
 }
 
+/**
+ * 重建并验证一份持久目录树计划。
+ *
+ * v1始终执行Foundation硬上限；owner可提供更小容量，但不能借此放宽硬上限。容量
+ * 不进入持久计划或tree digest，同一内容的身份不会因调用方准入政策而改变。
+ */
 export function parseDirectoryTreeCandidatePlan(
   value: unknown,
+  capacityValue?: DirectoryTreeCandidateCapacity,
 ): Readonly<DirectoryTreeCandidatePlan> {
+  const capacity = capacityValue === undefined
+    ? undefined
+    : parseCapacity(capacityValue);
   const record = plainRecord(value, "$plan");
   exactFields(record, PLAN_FIELDS, "$plan");
   if (
@@ -543,13 +722,16 @@ export function parseDirectoryTreeCandidatePlan(
       "$/files",
     ).map(parsePlanFile),
   );
-  const rebuilt = buildPlan(parseMode(record.directoryMode, "$/directoryMode"), files);
+  const rebuilt = buildPlan(
+    parseCandidateDirectoryMode(record.directoryMode, "$/directoryMode"),
+    files,
+  );
   const rawDirectories = denseArray(
     record.directories,
     DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_DIRECTORIES,
     "$/directories",
   )
-    .map((entry, index) => parseDirectoryTreeCandidatePath(
+    .map((entry, index) => parsePlanPath(
       entry,
       `$/directories/${index}`,
     ));
@@ -562,6 +744,9 @@ export function parseDirectoryTreeCandidatePlan(
     || treeDigest !== rebuilt.treeDigest
   ) {
     fail("path-conflict", "$plan");
+  }
+  if (capacity !== undefined) {
+    assertPlanCapacity(rebuilt, capacity, "$plan");
   }
   return rebuilt;
 }

@@ -4,7 +4,7 @@ import {
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   parseWakeflowDurableIdOfKind,
-} from "../../foundation/identity/wakeflow-durable-id.js";
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   wakeflowHostIdentityRootRef,
   wakeflowHostProjectionsRootRef,
@@ -17,7 +17,7 @@ import {
  * 或文件系统，也不接受 display name、绝对路径或任意文件名。
  */
 
-export function wakeflowWindowBindingRootRef(
+export function wakeflowWindowHostBindingRootRef(
   profileValue: unknown,
 ): PortableResourcePath {
   return parsePortableResourcePath(
@@ -25,7 +25,7 @@ export function wakeflowWindowBindingRootRef(
   );
 }
 
-export function wakeflowWindowBindingRef(
+export function wakeflowWindowHostBindingRef(
   profileValue: unknown,
   windowIdValue: unknown,
 ): PortableResourcePath {
@@ -35,7 +35,7 @@ export function wakeflowWindowBindingRef(
     "$windowId",
   );
   return parsePortableResourcePath(
-    `${wakeflowWindowBindingRootRef(profileValue)}/${windowId}.json`,
+    `${wakeflowWindowHostBindingRootRef(profileValue)}/${windowId}.json`,
   );
 }
 
@@ -44,7 +44,7 @@ export function wakeflowWindowHostBindingMutationLockRef(
   profileValue: unknown,
 ): PortableResourcePath {
   return parsePortableResourcePath(
-    `${wakeflowWindowBindingRootRef(profileValue)}/.registration.lock`,
+    `${wakeflowWindowHostBindingRootRef(profileValue)}/.registration.lock`,
   );
 }
 

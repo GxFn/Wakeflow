@@ -21,6 +21,7 @@ import { encodeUtf8, Utf8Error } from "../foundation/text/utf8.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
+  WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE,
   WAKEFLOW_CONFIG_FILE_REF,
   WAKEFLOW_CONFIG_MAXIMUM_BYTES,
   type WakeflowConfigAuthoritySnapshot,
@@ -50,14 +51,11 @@ import { renderWakeflowConfigV3 } from "./wakeflow-config-v3-document.js";
  * 提交后的回读校验失败都返回“提交结果不确定”。
  */
 
-export const WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE = 0o644;
-
-export interface WakeflowConfigAuthorityPublicationOptions {
+interface WakeflowConfigAuthorityPublicationOptions {
   readonly signal?: AbortSignal;
 }
 
-export interface WakeflowConfigAuthorityPublicationReceipt {
-  readonly disposition: "published";
+interface WakeflowConfigAuthorityPublicationReceipt {
   readonly publication: Readonly<DurableAtomicFileWriteResult<"created">>;
   readonly authority: Readonly<WakeflowConfigAuthoritySnapshot>;
 }
@@ -278,13 +276,9 @@ async function publishBytes(
 
 async function readBackCommittedAuthority(
   root: RootedDirectory,
-  signal: AbortSignal | undefined,
 ): Promise<Readonly<WakeflowConfigAuthoritySnapshot>> {
   try {
-    return await readWakeflowConfigAuthoritySnapshot(
-      root,
-      signal === undefined ? undefined : { signal },
-    );
+    return await readWakeflowConfigAuthoritySnapshot(root);
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
       fail("commit-uncertain", "$resourcePath");
@@ -343,7 +337,7 @@ export async function publishWakeflowConfigAuthority(
 
   const publication = await publishBytes(root, bytes, parsed.signal);
   // 发布已经跨过不替换目标的提交点；此后的失败不能再表述为“提交前已取消”。
-  const authority = await readBackCommittedAuthority(root, parsed.signal);
+  const authority = await readBackCommittedAuthority(root);
   assertReadback(
     publication,
     authority,
@@ -351,7 +345,6 @@ export async function publishWakeflowConfigAuthority(
     expectedUserId,
   );
   return Object.freeze({
-    disposition: "published" as const,
     publication,
     authority,
   });

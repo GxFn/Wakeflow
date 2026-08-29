@@ -154,7 +154,7 @@ function fail(
   throw new WakeflowWorkspaceStaticResourceMatrixError(reason, path);
 }
 
-function placementKey(
+function logicalRootKey(
   placement: Readonly<WakeflowWorkspaceResourcePlacement>,
 ): string {
   const root = placement.root;
@@ -163,7 +163,98 @@ function placementKey(
     : root.kind === "repository"
       ? root.repositoryId
       : "";
-  return `${root.kind}\u0000${rootIdentity}\u0000${placement.relativePath ?? ""}`;
+  return `${root.kind}\u0000${rootIdentity}`;
+}
+
+function assertPlacementTopology(
+  declarations: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[],
+): void {
+  const groups = new Map<string, {
+    readonly declarationByPath: Map<
+      string,
+      Readonly<WakeflowWorkspaceResourceDeclaration>
+    >;
+    readonly spellingByPrefix: Map<string, string>;
+  }>();
+  for (const declaration of declarations) {
+    const rootKey = logicalRootKey(declaration.placement);
+    let group = groups.get(rootKey);
+    if (group === undefined) {
+      group = {
+        declarationByPath: new Map(),
+        spellingByPrefix: new Map(),
+      };
+      groups.set(rootKey, group);
+    }
+    const path = declaration.placement.relativePath ?? "";
+    const segments = path.length === 0 ? [] : path.split("/");
+    let prefix = "";
+    for (const segment of segments) {
+      prefix = prefix.length === 0 ? segment : `${prefix}/${segment}`;
+      const folded = prefix.toLowerCase();
+      const existingSpelling = group.spellingByPrefix.get(folded);
+      if (existingSpelling !== undefined && existingSpelling !== prefix) {
+        fail("placement-collision", "$/declarations");
+      }
+      group.spellingByPrefix.set(folded, prefix);
+    }
+    const foldedPath = path.toLowerCase();
+    if (group.declarationByPath.has(foldedPath)) {
+      fail("placement-collision", "$/declarations");
+    }
+    group.declarationByPath.set(foldedPath, declaration);
+  }
+
+  for (const group of groups.values()) {
+    for (const path of group.declarationByPath.keys()) {
+      const segments = path.length === 0 ? [] : path.split("/");
+      const ancestorPaths = [""];
+      let ancestorPath = "";
+      for (let index = 0; index < segments.length - 1; index += 1) {
+        const segment = segments[index];
+        if (segment === undefined) {
+          fail("placement-collision", "$/declarations");
+        }
+        ancestorPath = ancestorPath.length === 0
+          ? segment
+          : `${ancestorPath}/${segment}`;
+        ancestorPaths.push(ancestorPath);
+      }
+      for (const ancestorPath of ancestorPaths) {
+        if (ancestorPath === path) continue;
+        const ancestor = group.declarationByPath.get(ancestorPath);
+        if (ancestor === undefined) continue;
+        if (
+          ancestor.nodePolicy.kind !== "directory"
+          || ancestor.processing.kind !== "directory-container"
+        ) {
+          fail("placement-collision", "$/declarations");
+        }
+      }
+    }
+  }
+}
+
+function admitParsedDeclarations(
+  shared: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[],
+  host: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[],
+): Readonly<{
+  readonly shared: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
+  readonly all: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
+}> {
+  const all = [...shared, ...host];
+  const declarationIds = new Set<string>();
+  for (const declaration of all) {
+    if (declarationIds.has(declaration.declarationId)) {
+      fail("declaration-id-collision", "$/declarations");
+    }
+    declarationIds.add(declaration.declarationId);
+  }
+  assertPlacementTopology(all);
+  return Object.freeze({
+    shared: sortedDeclarations(shared),
+    all: sortedDeclarations(all),
+  });
 }
 
 function admitDeclarations(
@@ -187,24 +278,7 @@ function admitDeclarations(
     }
     return declaration;
   });
-  const all = [...shared, ...host];
-  const declarationIds = new Set<string>();
-  const placements = new Set<string>();
-  for (const declaration of all) {
-    if (declarationIds.has(declaration.declarationId)) {
-      fail("declaration-id-collision", "$/declarations");
-    }
-    declarationIds.add(declaration.declarationId);
-    const key = placementKey(declaration.placement);
-    if (placements.has(key)) {
-      fail("placement-collision", "$/declarations");
-    }
-    placements.add(key);
-  }
-  return Object.freeze({
-    shared: sortedDeclarations(shared),
-    all: sortedDeclarations(all),
-  });
+  return admitParsedDeclarations(shared, host);
 }
 
 function sharedDigest(
@@ -310,7 +384,7 @@ export function parseWakeflowWorkspaceStaticResourceMatrix(
       throw error;
     }
   });
-  const admitted = admitDeclarations(
+  const admitted = admitParsedDeclarations(
     parsedDeclarations.filter((entry) => entry.scope === "host-neutral"),
     parsedDeclarations.filter((entry) => entry.scope === "current-host"),
   );

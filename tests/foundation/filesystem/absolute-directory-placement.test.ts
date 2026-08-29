@@ -49,6 +49,7 @@ test("present and missing directory placements return bounded physical facts", a
     equal(observed.realPath, present);
     equal(observed.spellingIsCanonical, true);
     equal(observed.node?.kind, "directory");
+    equal(observed.nearestExistingAncestor, null);
     equal(Object.isFrozen(observed), true);
 
     const missing = await inspectAbsoluteDirectoryPlacement(
@@ -58,6 +59,10 @@ test("present and missing directory placements return bounded physical facts", a
     equal(missing.state, "missing");
     equal(missing.realPath, null);
     equal(missing.node, null);
+    equal(missing.nearestExistingAncestor?.absolutePath, rootPath);
+    equal(missing.nearestExistingAncestor?.realPath, rootPath);
+    equal(missing.nearestExistingAncestor?.spellingIsCanonical, true);
+    equal(missing.nearestExistingAncestor?.node.kind, "directory");
   } finally {
     rmSync(rootPath, { recursive: true, force: true });
   }

@@ -29,7 +29,14 @@ import type { PortableResourcePath } from "../../../foundation/filesystem/portab
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { createUuidV4 } from "../../../foundation/identity/uuid-v4.js";
 import { readNodeSystemErrorCode } from "../../../foundation/node/node-system-error.js";
+import {
+  admitWakeflowResourceOperation,
+  WakeflowResourceProcessingContractError,
+} from "../../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../../foundation/text/utf8.js";
+import {
+  createDemandEventStreamCommitResourceDeclaration,
+} from "../demand-resource-catalog.js";
 import {
   computeDemandEventStreamCommitDigest,
   assertPreparedDemandEventStreamCommit,
@@ -43,6 +50,7 @@ import {
   demandEventAppendCandidateRef,
   demandEventStreamCommitRef,
   parseDemandEventAppendCandidateFileName,
+  DemandEventSourcingPathError,
   DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF,
   DEMAND_EVENT_SOURCING_ROOT_REF,
   DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF,
@@ -82,6 +90,26 @@ import {
 
 const ACTIVE_APPEND_CANDIDATE_TOKENS = new Set<string>();
 
+function admitCommitPublication(
+  commit: Readonly<DemandEventStreamCommit>,
+): void {
+  const declaration = createDemandEventStreamCommitResourceDeclaration(
+    commit.demandId,
+    commit.commitSequence,
+  );
+  try {
+    admitWakeflowResourceOperation(
+      declaration.processing,
+      "exclusive-create",
+    );
+  } catch (error: unknown) {
+    if (error instanceof WakeflowResourceProcessingContractError) {
+      fail("operation-failure", "$catalog");
+    }
+    throw error;
+  }
+}
+
 function candidateOwnerState(
   address: ReturnType<typeof parseDemandEventAppendCandidateFileName>,
 ): "active" | "inactive" | "unknown" {
@@ -115,7 +143,7 @@ export class DemandFileEventStore {
     this.#root = root;
   }
 
-  /** 幂等创建文件事件存储自身拥有的三个私有目录。 */
+  /** 幂等创建文件事件存储自身拥有的四个私有目录。 */
   async initialize(options?: { readonly signal?: AbortSignal }): Promise<void> {
     const { signal } = parseDemandFileEventStoreOptions(options);
     for (const ref of [
@@ -176,6 +204,7 @@ export class DemandFileEventStore {
       });
     } catch (error: unknown) {
       if (error instanceof ExactRegularFileUnlinkError) {
+        if (error.reason === "aborted") fail("aborted", "$signal");
         fail("cleanup-required", "$candidate");
       }
       throw error;
@@ -216,8 +245,11 @@ export class DemandFileEventStore {
       let address;
       try {
         address = parseDemandEventAppendCandidateFileName(entry.name);
-      } catch {
-        fail("candidate-conflict", `$candidates/${index}`);
+      } catch (error: unknown) {
+        if (error instanceof DemandEventSourcingPathError) {
+          fail("candidate-conflict", `$candidates/${index}`);
+        }
+        throw error;
       }
       assertDemandFileEventStoreFile(
         entry.node,
@@ -321,6 +353,7 @@ export class DemandFileEventStore {
       throw error;
     }
     const commit = parseDemandEventStreamCommit(preparedValue.commit);
+    admitCommitPublication(commit);
     const commitRef = demandEventStreamCommitRef(commit.commitSequence);
     const existing = await readDemandFileEventCommitOrNull(
       this.#root,
@@ -336,7 +369,6 @@ export class DemandFileEventStore {
         commitSequence: commit.commitSequence,
         streamRevision: commit.lastStreamRevision,
         commitDigest: computeDemandEventStreamCommitDigest(commit),
-        candidateStatus: "retired",
       });
     }
     await assertDemandFileEventAppendAdmission(
@@ -440,7 +472,6 @@ export class DemandFileEventStore {
         commitSequence: commit.commitSequence,
         streamRevision: commit.lastStreamRevision,
         commitDigest: computeDemandEventStreamCommitDigest(commit),
-        candidateStatus: "retired",
       });
     } finally {
       ACTIVE_APPEND_CANDIDATE_TOKENS.delete(ownerToken);

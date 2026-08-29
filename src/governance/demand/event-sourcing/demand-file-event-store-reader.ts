@@ -22,6 +22,7 @@ import {
 import {
   readStableResourceDirectory,
   StableDirectoryReadError,
+  type StableDirectoryEntry,
   type StableDirectoryReadResult,
 } from "../../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
@@ -29,7 +30,6 @@ import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-
 import {
   computeDemandEventStreamCommitDigest,
   parseDemandEventStreamCommitDocument,
-  parseDemandEventStreamCommitFileName,
   DemandEventStreamCommitError,
   type DemandEventStreamCommit,
   type PreparedDemandEventStreamCommit,
@@ -41,9 +41,13 @@ import {
 import { encodeUtf8 } from "../../../foundation/text/utf8.js";
 import {
   parseDemandEventCommitSequence,
-} from "./demand-event-sourcing-aggregate.js";
+  parseDemandEventStreamRevision,
+  DemandEventStreamPositionError,
+} from "./demand-event-stream-position.js";
 import {
   demandEventStreamCommitRef,
+  parseDemandEventStreamCommitFileName,
+  DemandEventSourcingPathError,
   DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
 } from "./demand-event-sourcing-paths.js";
 import {
@@ -235,8 +239,6 @@ function parseCursor(value: unknown): Readonly<DemandFileEventStoreCursor> {
     || keys[0] !== "commitSequence"
     || keys[1] !== "lastCommitDigest"
     || keys[2] !== "streamRevision"
-    || !Number.isSafeInteger(record.streamRevision)
-    || (record.streamRevision as number) < 1
   ) {
     fail("input", "$cursor");
   }
@@ -250,14 +252,48 @@ function parseCursor(value: unknown): Readonly<DemandFileEventStoreCursor> {
     if (error instanceof Sha256Error) fail("input", "$/lastCommitDigest");
     throw error;
   }
-  return Object.freeze({
-    commitSequence: parseDemandEventCommitSequence(
-      record.commitSequence,
-      "$/commitSequence",
-    ),
-    streamRevision: record.streamRevision as number,
-    lastCommitDigest,
-  });
+  try {
+    return Object.freeze({
+      commitSequence: parseDemandEventCommitSequence(
+        record.commitSequence,
+        "$/commitSequence",
+      ),
+      streamRevision: parseDemandEventStreamRevision(
+        record.streamRevision,
+        "$/streamRevision",
+      ),
+      lastCommitDigest,
+    });
+  } catch (error: unknown) {
+    if (error instanceof DemandEventStreamPositionError) {
+      fail("input", error.path);
+    }
+    throw error;
+  }
+}
+
+async function readCommitEntries(
+  root: RootedDirectory,
+  entries: readonly Readonly<StableDirectoryEntry>[],
+  indexOffset: number,
+  signal: AbortSignal | undefined,
+): Promise<readonly Readonly<LoadedDemandFileEventCommit>[]> {
+  const limit = pLimit(COMMIT_READ_CONCURRENCY);
+  const settled = await Promise.allSettled(entries.map((entry, index) => (
+    limit(() => readDemandFileEventCommit(
+      root,
+      entry.resourcePath,
+      entry.node,
+      signal,
+      `$commits/${indexOffset + index}`,
+    ))
+  )));
+  const loaded: Readonly<LoadedDemandFileEventCommit>[] = [];
+  for (const result of settled) {
+    if (result.status === "rejected") throw result.reason;
+    loaded.push(result.value);
+  }
+  return Object.freeze(loaded);
 }
 
 function assertInventoryNames(
@@ -265,7 +301,15 @@ function assertInventoryNames(
 ): void {
   let totalBytes = 0;
   read.entries.forEach((entry, index) => {
-    const parsed = parseDemandEventStreamCommitFileName(entry.name);
+    let parsed;
+    try {
+      parsed = parseDemandEventStreamCommitFileName(entry.name);
+    } catch (error: unknown) {
+      if (error instanceof DemandEventSourcingPathError) {
+        fail("stream-invalid", `$commits/${index}`);
+      }
+      throw error;
+    }
     assertDemandFileEventStoreFile(entry.node, `$commits/${index}`);
     if (parsed.commitSequence !== index + 1) {
       fail("stream-invalid", `$commits/${index}`);
@@ -291,16 +335,7 @@ export async function readAllDemandFileEventCommits(
     signal,
   );
   assertInventoryNames(before);
-  const limit = pLimit(COMMIT_READ_CONCURRENCY);
-  const loaded = await Promise.all(before.entries.map((entry, index) => (
-    limit(() => readDemandFileEventCommit(
-      root,
-      entry.resourcePath,
-      entry.node,
-      signal,
-      `$commits/${index}`,
-    ))
-  )));
+  const loaded = await readCommitEntries(root, before.entries, 0, signal);
   const after = await readDemandFileEventDirectory(
     root,
     DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
@@ -331,16 +366,12 @@ export async function readDemandFileEventCommitsAfter(
   }
   assertInventoryNames(before);
   const selected = before.entries.slice(cursor.commitSequence - 1);
-  const limit = pLimit(COMMIT_READ_CONCURRENCY);
-  const loaded = await Promise.all(selected.map((entry, index) => (
-    limit(() => readDemandFileEventCommit(
-      root,
-      entry.resourcePath,
-      entry.node,
-      signal,
-      `$commits/${cursor.commitSequence - 1 + index}`,
-    ))
-  )));
+  const loaded = await readCommitEntries(
+    root,
+    selected,
+    cursor.commitSequence - 1,
+    signal,
+  );
   const after = await readDemandFileEventDirectory(
     root,
     DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
@@ -415,7 +446,15 @@ export async function readDemandFileEventCommitAt(
   sequenceValue: unknown,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DemandEventStreamCommit> | null> {
-  const sequence = parseDemandEventCommitSequence(sequenceValue);
+  let sequence;
+  try {
+    sequence = parseDemandEventCommitSequence(sequenceValue);
+  } catch (error: unknown) {
+    if (error instanceof DemandEventStreamPositionError) {
+      fail("input", "$sequence");
+    }
+    throw error;
+  }
   const loaded = await readDemandFileEventCommitOrNull(
     root,
     demandEventStreamCommitRef(sequence),

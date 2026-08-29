@@ -6,6 +6,7 @@ import { types } from "node:util";
 
 import {
   computeSha256Digest,
+  Sha256Error,
   type Sha256Digest,
 } from "../crypto/sha256.js";
 import {
@@ -46,7 +47,7 @@ import {
  * 业务权威，也不决定候选能否发布。临时目录只是进程内验证介质，不是可恢复 stage。
  */
 
-export const GIT_IGNORE_CANDIDATE_MAXIMUM_BYTES = parseByteCount(
+const GIT_IGNORE_CANDIDATE_MAXIMUM_BYTES = parseByteCount(
   2 * 1024 * 1024,
   "$candidateBytes",
 );
@@ -54,8 +55,7 @@ export const GIT_IGNORE_CANDIDATE_MAXIMUM_BYTES = parseByteCount(
 const GITIGNORE_RESOURCE_PATH = parsePortableResourcePath(".gitignore");
 const TEMPORARY_WORK_TREE_PREFIX = "wakeflow-git-ignore-candidate-";
 
-export interface GitIgnoreCandidateObservation {
-  readonly kind: "GitIgnoreCandidateObservation";
+interface GitIgnoreCandidateObservation {
   readonly candidateByteCount: ByteCount;
   readonly candidateDigest: Sha256Digest;
   readonly paths: readonly Readonly<GitIgnorePathObservation>[];
@@ -64,6 +64,7 @@ export interface GitIgnoreCandidateObservation {
 export type GitIgnoreCandidateObservationErrorReason =
   | "input"
   | "capacity"
+  | "hash-failure"
   | "root-scope"
   | "isolation-failure"
   | "observation-failure"
@@ -73,6 +74,7 @@ export type GitIgnoreCandidateObservationErrorReason =
 const ERROR_MESSAGES = {
   input: "Git ignore candidate observation input is invalid.",
   capacity: "Git ignore candidate exceeds its byte budget.",
+  "hash-failure": "Git ignore candidate bytes could not be hashed.",
   "root-scope": "Git ignore candidate lost its repository root scope.",
   "isolation-failure": "Git ignore candidate worktree could not be isolated.",
   "observation-failure": "Git ignore candidate semantics could not be observed.",
@@ -165,20 +167,27 @@ function snapshotCandidate(value: unknown): Readonly<CandidateInput> {
   ) {
     fail("input", "$candidateBytes");
   }
+  const byteCount = parseByteCount(value.byteLength, "$candidateBytes");
+  if (byteCount > GIT_IGNORE_CANDIDATE_MAXIMUM_BYTES) {
+    fail("capacity", "$candidateBytes");
+  }
   let bytes: Buffer;
   try {
     bytes = Buffer.from(value);
   } catch {
-    fail("input", "$candidateBytes");
-  }
-  const byteCount = parseByteCount(bytes.byteLength, "$candidateBytes");
-  if (byteCount > GIT_IGNORE_CANDIDATE_MAXIMUM_BYTES) {
     fail("capacity", "$candidateBytes");
+  }
+  let digest: Sha256Digest;
+  try {
+    digest = computeSha256Digest(bytes, "$candidateBytes");
+  } catch (error: unknown) {
+    if (error instanceof Sha256Error) fail("hash-failure", "$candidateBytes");
+    throw error;
   }
   return Object.freeze({
     bytes,
     byteCount,
-    digest: computeSha256Digest(bytes, "$candidateBytes"),
+    digest,
   });
 }
 
@@ -292,9 +301,9 @@ export async function observeGitIgnoreCandidate(
   optionsValue?: GitIgnoreObservationOptions,
 ): Promise<Readonly<GitIgnoreCandidateObservation>> {
   assertRoot(repositoryRootValue);
-  const candidate = snapshotCandidate(candidateBytesValue);
   const options = parseOptions(optionsValue);
   assertNotAborted(options.signal);
+  const candidate = snapshotCandidate(candidateBytesValue);
   await assertRepositoryRootCurrent(repositoryRootValue);
   assertNotAborted(options.signal);
 
@@ -314,6 +323,12 @@ export async function observeGitIgnoreCandidate(
     operationError = error;
   }
 
+  let safeToRemove = true;
+  try {
+    await temporary.root.assertCurrent("$candidateWorkTree");
+  } catch {
+    safeToRemove = false;
+  }
   try {
     await temporary.root.close();
   } catch {
@@ -324,6 +339,7 @@ export async function observeGitIgnoreCandidate(
       );
     }
   }
+  if (!safeToRemove) fail("cleanup-failure", "$candidateWorkTree");
   try {
     await rm(temporary.root.absolutePath, {
       recursive: true,
@@ -335,7 +351,6 @@ export async function observeGitIgnoreCandidate(
   if (operationError !== undefined) throw operationError;
   if (paths === undefined) fail("observation-failure", "$git");
   return Object.freeze({
-    kind: "GitIgnoreCandidateObservation",
     candidateByteCount: candidate.byteCount,
     candidateDigest: candidate.digest,
     paths,

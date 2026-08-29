@@ -68,6 +68,7 @@ import {
 } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
   inspectWakeflowWorkspaceCoreLayout,
+  WakeflowWorkspaceCoreLayoutInspectionError,
   type WakeflowWorkspaceCoreLayoutInspection,
 } from "./wakeflow-workspace-core-layout-inspection.js";
 import {
@@ -88,8 +89,14 @@ import {
   WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION,
 } from "./wakeflow-maintenance-resource-catalog.js";
 import {
+  wakeflowMaintenanceCoreInspectionForGateContext,
+  WakeflowMaintenanceGateError,
+  type WakeflowMaintenanceGateContext,
+} from "./wakeflow-maintenance-gate.js";
+import {
   computeWakeflowStaticMaterializationPreviewDigest,
   failWakeflowStaticMaterializationPreview as fail,
+  parseWakeflowStaticMaterializationPreview,
   parseWakeflowStaticMaterializationPreviewRequest,
   type ParsedWakeflowStaticMaterializationPreviewRequest,
   type WakeflowStaticMaterializationPreview,
@@ -104,11 +111,21 @@ import {
  * 本计划组合 Core Layout、Config、Gitignore、Program Instruction 与 Wakeflow-managed
  * Support roots/memory 的真实只读 inspection。它不创建 maintenance journal、不写文件，
  * 且 `executionBoundary` 永远为 `preview-only`，不能直接作为公共 apply 授权。
+ * normal execution锁内重验时只接受同root、当前callback有效的GateContext，并复用Gate
+ * 已验证的pre-gate Core观察；其余所有owner仍执行真实只读inspection。
  *
  * fresh 强制 Config/Active/受管Support roots absent，只允许 exact Local bootstrap-prefix；
  * placement-stable reconfigure 暂只允许 program/presentation/governance 语义变化；reconcile
  * 使用当前 Config。所有写步骤按“布局 → integration → whole-file → Config激活”排序。
  */
+
+export interface WakeflowStaticMaterializationPreviewOptions {
+  readonly gateContext?: Readonly<WakeflowMaintenanceGateContext>;
+}
+
+function assertNotAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true) fail("aborted", "$signal");
+}
 
 async function configResourceExists(root: RootedDirectory): Promise<boolean> {
   try {
@@ -137,7 +154,10 @@ async function currentSnapshot(
       signal === undefined ? undefined : { signal },
     );
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigAuthoritySnapshotError) return null;
+    if (error instanceof WakeflowConfigAuthoritySnapshotError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      return null;
+    }
     throw error;
   }
 }
@@ -194,6 +214,7 @@ async function inspectLedgerParticipant(
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
 ): Promise<void> {
+  assertNotAborted(request.signal);
   const placement = ledgerPlacement(report);
   if (placement === null) {
     addBlocker(blockers, "ledger-placement-unavailable");
@@ -235,6 +256,7 @@ async function inspectLedgerParticipant(
     }
   } catch (error: unknown) {
     if (error instanceof LedgerAuthorityStoreError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
       addBlocker(blockers, `ledger-layout-${error.reason}`);
     } else {
       throw error;
@@ -262,6 +284,7 @@ async function inspectSupportMemories(
     request.currentHostProfile,
   );
   for (const surface of desired.topology.supportSurfaces) {
+    assertNotAborted(request.signal);
     if (surface.ownership !== "wakeflow-managed") continue;
     const placement = placementFor(report, surface.surfaceId);
     if (placement === null) {
@@ -347,12 +370,17 @@ async function inspectSupportMemories(
       }
     } catch (error: unknown) {
       if (error instanceof WakeflowSupportMemoryInspectionError) {
+        if (error.reason === "aborted") fail("aborted", "$signal");
         addBlocker(blockers, `support-memory-${error.reason}`);
       } else {
         throw error;
       }
     } finally {
-      await supportRoot.close();
+      try {
+        await supportRoot.close();
+      } catch {
+        addBlocker(blockers, "support-root-close-failure");
+      }
     }
   }
 }
@@ -364,6 +392,7 @@ async function inspectActiveWorkspaceProjectionParticipant(
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
 ): Promise<void> {
+  assertNotAborted(request.signal);
   let authority;
   try {
     authority = createWakeflowActiveWorkspaceFreshProjectionAuthority(desired);
@@ -408,6 +437,7 @@ async function inspectActiveWorkspaceProjectionParticipant(
     }
   } catch (error: unknown) {
     if (error instanceof WakeflowActiveWorkspaceProjectionInspectionError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
       addBlocker(blockers, `active-workspace-projection-${error.reason}`);
       return;
     }
@@ -419,6 +449,7 @@ async function inspectActiveWorkspaceProjectionParticipant(
 export async function previewWakeflowStaticMaterialization(
   rootValue: RootedDirectory,
   requestValue: WakeflowStaticMaterializationPreviewRequest,
+  optionsValue: WakeflowStaticMaterializationPreviewOptions = {},
 ): Promise<Readonly<WakeflowStaticMaterializationPreview>> {
   if (
     typeof rootValue !== "object"
@@ -431,22 +462,49 @@ export async function previewWakeflowStaticMaterialization(
   const request = parseWakeflowStaticMaterializationPreviewRequest(
     requestValue,
   );
-  if (request.signal?.aborted === true) fail("aborted", "$signal");
+  if (
+    typeof optionsValue !== "object"
+    || optionsValue === null
+    || types.isProxy(optionsValue)
+    || Object.keys(optionsValue).some((key) => key !== "gateContext")
+  ) {
+    fail("input", "$options");
+  }
+  assertNotAborted(request.signal);
   const matrix = createWakeflowWorkspaceStaticResourceMatrix(
     request.currentHostProfile,
   );
   let core: Readonly<WakeflowWorkspaceCoreLayoutInspection>;
-  try {
-    core = await inspectWakeflowWorkspaceCoreLayout(
-      rootValue,
-      request.signal === undefined ? {} : { signal: request.signal },
-    );
-  } catch {
-    fail("inspection", "$coreLayout");
+  if (optionsValue.gateContext === undefined) {
+    try {
+      core = await inspectWakeflowWorkspaceCoreLayout(
+        rootValue,
+        request.signal === undefined ? {} : { signal: request.signal },
+      );
+    } catch (error: unknown) {
+      if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
+        if (error.reason === "aborted") fail("aborted", "$signal");
+        fail("inspection", "$coreLayout");
+      }
+      throw error;
+    }
+  } else {
+    try {
+      core = wakeflowMaintenanceCoreInspectionForGateContext(
+        optionsValue.gateContext,
+        rootValue,
+      );
+    } catch (error: unknown) {
+      if (error instanceof WakeflowMaintenanceGateError) {
+        fail("input", "$options.gateContext");
+      }
+      throw error;
+    }
   }
   const blockers = new Set<string>();
   const steps: WakeflowStaticMaterializationStep[] = [];
   const current = await currentSnapshot(rootValue, request.signal);
+  assertNotAborted(request.signal);
   let desired = request.desiredConfig;
 
   if (request.action === "fresh-initialize") {
@@ -618,6 +676,7 @@ export async function previewWakeflowStaticMaterialization(
       }
     } catch (error: unknown) {
       if (error instanceof WakeflowGitignoreInspectionError) {
+        if (error.reason === "aborted") fail("aborted", "$signal");
         addBlocker(blockers, `gitignore-${error.reason}`);
       } else {
         throw error;
@@ -651,6 +710,7 @@ export async function previewWakeflowStaticMaterialization(
       }
     } catch (error: unknown) {
       if (error instanceof WakeflowProgramInstructionInspectionError) {
+        if (error.reason === "aborted") fail("aborted", "$signal");
         addBlocker(blockers, `program-instruction-${error.reason}`);
       } else {
         throw error;
@@ -712,6 +772,7 @@ export async function previewWakeflowStaticMaterialization(
   const desiredConfigDigest = desired === null
     ? null
     : computeWakeflowConfigV3Digest(desired);
+  assertNotAborted(request.signal);
   const plan = {
     kind: "WakeflowStaticMaterializationPreview" as const,
     schemaVersion: 1 as const,
@@ -725,10 +786,10 @@ export async function previewWakeflowStaticMaterialization(
     blockerCodes: sortedBlockers,
     steps: frozenSteps,
   };
-  return Object.freeze({
+  return parseWakeflowStaticMaterializationPreview(Object.freeze({
     ...plan,
     planDigest: computeWakeflowStaticMaterializationPreviewDigest(plan),
-  });
+  }));
 }
 
 export {

@@ -5,20 +5,23 @@ import {
   WakeflowConfigV3Error,
   type WakeflowConfigPlacement,
   type WakeflowConfigV3Model,
+  type WakeflowConfigV3Indexes,
   type WakeflowConfigWindow,
 } from "../../configuration/wakeflow-config-v3.js";
 import {
   computeCanonicalJsonSha256Digest,
 } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import type { JsonValue } from "../../foundation/data/json-value.js";
-import type { WakeflowDurableId } from "../../foundation/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   WakeflowWorkspaceHostResourceProfileError,
   type WakeflowWorkspaceHostId,
   type WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
+import {
+  WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS,
+} from "./wakeflow-window-runtime-desired-topology.js";
 
 /**
  * Wakeflow Workspace / Window Runtime：Config窗口到宿主中立launch intent的纯编译。
@@ -28,7 +31,7 @@ import {
  * effect；宿主固定composition从同一confirmed Config读取自己的launch preferences。
  */
 
-export type WakeflowWindowLaunchRoot =
+type WakeflowWindowLaunchRoot =
   | Readonly<{
       readonly kind: "program";
       readonly rootId: WakeflowDurableId<"program">;
@@ -62,8 +65,6 @@ export interface WakeflowWindowLaunchIntent {
   }>;
   readonly registration: Readonly<{
     readonly operation: "register-window-host-binding";
-    readonly windowId: WakeflowDurableId<"window">;
-    readonly hostId: WakeflowWorkspaceHostId;
     readonly rawHandleSource: "host-create-result";
     readonly identityAuthority: "window-host-binding";
   }>;
@@ -81,14 +82,16 @@ export interface WakeflowWindowLaunchIntentSet {
   readonly launchSetDigest: Sha256Digest;
 }
 
-export type WakeflowWindowLaunchIntentErrorReason =
+type WakeflowWindowLaunchIntentErrorReason =
   | "config"
   | "profile"
+  | "capacity"
   | "relation";
 
 const ERROR_MESSAGES = {
   config: "Wakeflow window launch intent Config is invalid.",
   profile: "Wakeflow window launch intent Host Profile is invalid.",
+  capacity: "Wakeflow window launch intent exceeds its static window budget.",
   relation: "Wakeflow window launch intent root cannot be resolved.",
 } as const satisfies Readonly<Record<
   WakeflowWindowLaunchIntentErrorReason,
@@ -140,6 +143,7 @@ function parseProfile(
 
 function rootForWindow(
   model: WakeflowConfigV3Model,
+  indexes: Readonly<WakeflowConfigV3Indexes>,
   window: WakeflowConfigWindow,
 ): WakeflowWindowLaunchRoot {
   if (window.root.kind === "program") {
@@ -149,7 +153,6 @@ function rootForWindow(
       configuredPlacement: ".",
     });
   }
-  const indexes = buildWakeflowConfigV3Indexes(model);
   if (window.root.kind === "repository") {
     const repository = indexes.repositoryById[window.root.repositoryId];
     if (repository === undefined) fail("relation", "$window.root");
@@ -173,6 +176,7 @@ function createIntent(
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
   configDigest: Sha256Digest,
   profileDigest: Sha256Digest,
+  indexes: Readonly<WakeflowConfigV3Indexes>,
   window: WakeflowConfigWindow,
 ): Readonly<WakeflowWindowLaunchIntent> {
   const basis = Object.freeze({
@@ -181,7 +185,7 @@ function createIntent(
     windowId: window.windowId,
     role: window.role,
     displayTitle: window.displayName,
-    root: rootForWindow(model, window),
+    root: rootForWindow(model, indexes, window),
     host: Object.freeze({
       hostId: profile.hostId,
       profileDigest,
@@ -192,8 +196,6 @@ function createIntent(
     }),
     registration: Object.freeze({
       operation: "register-window-host-binding" as const,
-      windowId: window.windowId,
-      hostId: profile.hostId,
       rawHandleSource: "host-create-result" as const,
       identityAuthority: "window-host-binding" as const,
     }),
@@ -201,9 +203,7 @@ function createIntent(
   });
   return Object.freeze({
     ...basis,
-    intentDigest: computeCanonicalJsonSha256Digest(
-      basis as unknown as JsonValue,
-    ),
+    intentDigest: computeCanonicalJsonSha256Digest(basis),
   });
 }
 
@@ -214,10 +214,15 @@ export function compileWakeflowWindowLaunchIntents(
 ): Readonly<WakeflowWindowLaunchIntentSet> {
   const model = parseConfig(configValue);
   const profile = parseProfile(profileValue);
+  if (
+    model.topology.windows.length
+      > WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS
+  ) {
+    fail("capacity", "$/topology/windows");
+  }
+  const indexes = buildWakeflowConfigV3Indexes(model);
   const configDigest = computeWakeflowConfigV3Digest(model);
-  const profileDigest = computeCanonicalJsonSha256Digest(
-    profile as unknown as JsonValue,
-  );
+  const profileDigest = computeCanonicalJsonSha256Digest(profile);
   const intents = Object.freeze([...model.topology.windows]
     .sort((left, right) => (
       left.windowId < right.windowId
@@ -231,6 +236,7 @@ export function compileWakeflowWindowLaunchIntents(
       profile,
       configDigest,
       profileDigest,
+      indexes,
       window,
     )));
   const basis = Object.freeze({
@@ -243,8 +249,6 @@ export function compileWakeflowWindowLaunchIntents(
   });
   return Object.freeze({
     ...basis,
-    launchSetDigest: computeCanonicalJsonSha256Digest(
-      basis as unknown as JsonValue,
-    ),
+    launchSetDigest: computeCanonicalJsonSha256Digest(basis),
   });
 }

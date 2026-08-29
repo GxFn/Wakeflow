@@ -10,12 +10,12 @@ export const claudeCodeWindowHostIdentityProfile =
     handleKind: "claude-session",
     maximumHandleLength: 1024,
     reservedHandleValues: [
-      "current-claude-session",
-      "current session",
       "<session id>",
-      "current-codex-thread",
-      "current thread",
       "<thread id>",
+      "current session",
+      "current thread",
+      "current-claude-session",
+      "current-codex-thread",
       "unknown",
     ],
   });

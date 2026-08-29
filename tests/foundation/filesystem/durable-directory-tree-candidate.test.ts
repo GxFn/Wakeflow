@@ -19,6 +19,7 @@ import {
   createDirectoryTreeCandidateDurably,
   inspectDirectoryTreeCandidate,
   inspectDirectoryTreeCandidateProgress,
+  parseDirectoryTreeCandidatePlan,
   planDirectoryTreeCandidate,
   settleDirectoryTreeCandidateDurably,
   DurableDirectoryTreeCandidateError,
@@ -147,6 +148,83 @@ test("directory tree plan rejects non-canonical and over-budget input", async ()
       maximumTotalBytes: 1,
     }),
     "capacity",
+  );
+
+  await expectCandidateError(
+    () => planDirectoryTreeCandidate([{
+      path: "A/first.txt",
+      bytes: encodeUtf8("first\n"),
+      mode: 0o644,
+    }, {
+      path: "a/second.txt",
+      bytes: encodeUtf8("second\n"),
+      mode: 0o644,
+    }], OPTIONS),
+    "path-conflict",
+  );
+
+  await expectCandidateError(
+    () => planDirectoryTreeCandidate([{
+      path: `${"a".repeat(1024)}x`,
+      bytes: new Uint8Array(),
+      mode: 0o644,
+    }], OPTIONS),
+    "capacity",
+  );
+
+  await expectCandidateError(
+    () => planDirectoryTreeCandidate([{
+      path: "shared.bin",
+      bytes: new Uint8Array(new SharedArrayBuffer(1)),
+      mode: 0o644,
+    }], OPTIONS),
+    "input",
+  );
+
+  const controller = new AbortController();
+  controller.abort();
+  await expectCandidateError(
+    () => planDirectoryTreeCandidate(FILES, {
+      ...OPTIONS,
+      signal: controller.signal,
+    }),
+    "aborted",
+  );
+
+  const plan = planDirectoryTreeCandidate(FILES, OPTIONS);
+  await expectCandidateError(
+    () => parseDirectoryTreeCandidatePlan(plan, {
+      maximumDepth: OPTIONS.maximumDepth,
+      maximumEntries: OPTIONS.maximumEntries,
+      maximumFileBytes: OPTIONS.maximumFileBytes,
+      maximumFiles: OPTIONS.maximumFiles,
+      maximumTotalBytes: 1,
+    }),
+    "capacity",
+  );
+
+  await expectCandidateError(
+    () => planDirectoryTreeCandidate(FILES, {
+      ...OPTIONS,
+      maximumDepth: 65,
+    }),
+    "input",
+  );
+
+  await expectCandidateError(
+    () => planDirectoryTreeCandidate(FILES, {
+      ...OPTIONS,
+      directoryMode: 0o500,
+    }),
+    "input",
+  );
+
+  await expectCandidateError(
+    () => planDirectoryTreeCandidate([{
+      ...FILES[0],
+      mode: 0o200,
+    }], OPTIONS),
+    "input",
   );
 });
 

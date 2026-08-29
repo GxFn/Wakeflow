@@ -75,6 +75,8 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
+        "maxLength": 268,
+        "description": "Bounded shared step identity or host-effect prefix plus one bounded host operation identity.",
         "pattern": "^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9_:-]*$"
       }
     },
@@ -87,6 +89,8 @@
       "anyOf": [
         {
           "type": "string",
+          "maxLength": 268,
+          "description": "The exact currently affected member of stepIds.",
           "pattern": "^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9_:-]*$"
         },
         {

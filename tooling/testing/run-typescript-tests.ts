@@ -20,7 +20,35 @@ function fail(message: string): never {
   throw new Error(`Wakeflow TypeScript test runner failed: ${message}`);
 }
 
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function assertRealDirectoryChain(
+  root: string,
+  directory: string,
+  message: string,
+): void {
+  const relative = nodePath.relative(root, directory);
+  if (
+    relative === ".."
+    || relative.startsWith(`..${nodePath.sep}`)
+    || nodePath.isAbsolute(relative)
+  ) {
+    fail(message);
+  }
+  let current = root;
+  for (const segment of ["", ...relative.split(nodePath.sep).filter(Boolean)]) {
+    if (segment.length > 0) current = nodePath.join(current, segment);
+    const stat = lstatSync(current, { throwIfNoEntry: false });
+    if (stat === undefined || stat.isSymbolicLink() || !stat.isDirectory()) {
+      fail(message);
+    }
+  }
+}
+
 function collectTestSources(root: string): readonly string[] {
+  assertRealDirectoryChain(root, root, "tests root must be one real directory");
   const result: string[] = [];
   function visit(directory: string): void {
     const handle = opendirSync(directory);
@@ -34,7 +62,7 @@ function collectTestSources(root: string): readonly string[] {
     } finally {
       handle.closeSync();
     }
-    entries.sort((left, right) => left.name.localeCompare(right.name));
+    entries.sort((left, right) => compareCodeUnits(left.name, right.name));
     for (const entry of entries) {
       const absolute = nodePath.join(directory, entry.name);
       if (entry.isSymbolicLink()) fail("tests source cannot contain symlinks");
@@ -68,6 +96,11 @@ function assertCurrentTestSource(
   ) {
     fail("focused test source must be one .test.ts file below tests/");
   }
+  assertRealDirectoryChain(
+    sourceRoot,
+    nodePath.dirname(source),
+    "focused test source parent chain must contain only real directories",
+  );
   const stat = lstatSync(source, { throwIfNoEntry: false });
   if (stat === undefined || stat.isSymbolicLink() || !stat.isFile()) {
     fail("focused test source must be one current regular file");
@@ -94,7 +127,7 @@ function selectedTestSources(
     seen.add(source);
     return source;
   });
-  return Object.freeze(sources.sort());
+  return Object.freeze(sources.sort(compareCodeUnits));
 }
 
 /** 把当前源清单映射为已经存在的编译输出，不枚举 `.build/tests`。 */
@@ -119,8 +152,18 @@ export function compiledTypeScriptTests(
       outputRoot,
       relative.replace(/\.ts$/u, ".js"),
     );
+    assertRealDirectoryChain(
+      outputRoot,
+      nodePath.dirname(output),
+      "compiled test parent chain must contain only real directories",
+    );
     const stat = lstatSync(output, { throwIfNoEntry: false });
-    if (stat === undefined || stat.isSymbolicLink() || !stat.isFile()) {
+    if (
+      stat === undefined
+      || stat.isSymbolicLink()
+      || !stat.isFile()
+      || stat.nlink !== 1
+    ) {
       fail("a current test source has no regular compiled output");
     }
     return output;

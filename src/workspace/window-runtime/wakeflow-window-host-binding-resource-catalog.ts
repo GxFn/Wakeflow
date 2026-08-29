@@ -9,7 +9,7 @@ import {
   compileWakeflowWindowRuntimeDesiredTopology,
 } from "./wakeflow-window-runtime-desired-topology.js";
 import {
-  wakeflowWindowBindingRef,
+  wakeflowWindowHostBindingRef,
 } from "./wakeflow-window-runtime-paths.js";
 
 /**
@@ -38,7 +38,7 @@ export function createWakeflowWindowHostBindingResourceCatalog(
       scope: "current-host",
       placement: {
         root: { kind: "workspace" },
-        relativePath: wakeflowWindowBindingRef(profile, window.windowId),
+        relativePath: wakeflowWindowHostBindingRef(profile, window.windowId),
       },
       tracking: {
         disposition: "ignored",

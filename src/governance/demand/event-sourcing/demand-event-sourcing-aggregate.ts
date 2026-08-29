@@ -11,7 +11,7 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../../../foundation/identity/wakeflow-durable-id.js";
+} from "../../../contracts/identity/wakeflow-durable-id.js";
 import {
   computeDemandAggregateStateDigest,
   parseDemandAggregateState,
@@ -25,7 +25,10 @@ import {
   type DemandEventSourcingStoredEvent,
 } from "./demand-event-sourcing-stored-event.js";
 import {
+  parseDemandEventCommitSequence,
   parseDemandEventStreamRevision,
+  DemandEventStreamPositionError,
+  type DemandEventCommitSequence,
   type DemandEventStreamRevision,
 } from "./demand-event-stream-position.js";
 import {
@@ -43,11 +46,6 @@ import {
  * 聚合只保存当前状态、事件流游标和尾部证明，不携带完整历史事件数组。完整历史属于
  * 事件存储；完整审计通过流式重放独立完成。
  */
-
-declare const DEMAND_EVENT_COMMIT_SEQUENCE_BRAND: unique symbol;
-export type DemandEventCommitSequence = number & {
-  readonly [DEMAND_EVENT_COMMIT_SEQUENCE_BRAND]: "DemandEventCommitSequence";
-};
 
 export interface DemandEventSourcingAggregate {
   readonly demandId: WakeflowDurableId<"demand">;
@@ -113,16 +111,6 @@ function fail(
   path: string,
 ): never {
   throw new DemandEventSourcingAggregateError(reason, path);
-}
-
-export function parseDemandEventCommitSequence(
-  value: unknown,
-  path = "$commitSequence",
-): DemandEventCommitSequence {
-  if (!Number.isSafeInteger(value) || (value as number) < 1) {
-    fail("position", path);
-  }
-  return value as DemandEventCommitSequence;
 }
 
 function parseDigest(value: unknown, path: string): Sha256Digest {
@@ -196,19 +184,28 @@ export function parseDemandEventSourcingAggregate(
     if (error instanceof DemandAggregateStateError) fail("state", "$/state");
     throw error;
   }
-  const streamRevision = parseDemandEventStreamRevision(
-    record.streamRevision,
-    "$/streamRevision",
-  );
+  let streamRevision: DemandEventStreamRevision;
+  let commitSequence: DemandEventCommitSequence;
+  try {
+    streamRevision = parseDemandEventStreamRevision(
+      record.streamRevision,
+      "$/streamRevision",
+    );
+    commitSequence = parseDemandEventCommitSequence(
+      record.commitSequence,
+      "$/commitSequence",
+    );
+  } catch (error: unknown) {
+    if (error instanceof DemandEventStreamPositionError) {
+      fail("position", error.path);
+    }
+    throw error;
+  }
   const lastEventDigest = parseDigest(
     record.lastEventDigest,
     "$/lastEventDigest",
   );
   const stateDigest = parseDigest(record.stateDigest, "$/stateDigest");
-  const commitSequence = parseDemandEventCommitSequence(
-    record.commitSequence,
-    "$/commitSequence",
-  );
   if (
     commitSequence > streamRevision
     ||

@@ -6,6 +6,7 @@ import {
   buildWakeflowConfigV3Indexes,
   computeWakeflowConfigV3Digest,
   parseWakeflowConfigV3,
+  parseWakeflowConfigPlacement,
   WAKEFLOW_DEFAULT_PRESENTATION_LANGUAGE,
   WakeflowConfigV3Error,
   type WakeflowConfigV3ErrorReason,
@@ -165,6 +166,56 @@ test("placement adds Unicode and per-segment canonicality beyond the public Sche
     topology(value).supportSurfaces[0]!.path = placement;
     expectConfigError(() => parseWakeflowConfigV3(value), "placement");
   }
+  for (const placement of ["C:\\workspace", "Design\\nested"] as const) {
+    expectConfigError(
+      () => parseWakeflowConfigPlacement(placement),
+      "placement",
+    );
+  }
+});
+
+test("typed indexes group product windows in one topology pass", () => {
+  const value = createMinimalWakeflowConfigV3();
+  topology(value).repositories.push({
+    repositoryId: "repository_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    path: "../ProductB",
+    displayName: "Product B",
+    instructionManagement: "owner-managed",
+  });
+  topology(value).windows.push({
+    windowId: "window_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    role: "product",
+    displayName: "Product A 2",
+    root: {
+      kind: "repository",
+      repositoryId: "repository_22222222-2222-4222-8222-222222222222",
+    },
+  }, {
+    windowId: "window_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    role: "product",
+    displayName: "Product B",
+    root: {
+      kind: "repository",
+      repositoryId: "repository_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    },
+  });
+
+  const model = parseWakeflowConfigV3(value);
+  const indexes = buildWakeflowConfigV3Indexes(model);
+  const firstRepositoryId = model.topology.repositories[0]?.repositoryId;
+  const secondRepositoryId = model.topology.repositories[1]?.repositoryId;
+  if (firstRepositoryId === undefined || secondRepositoryId === undefined) {
+    throw new Error("Expected two repositories.");
+  }
+  equal(indexes.productWindows.length, 3);
+  equal(
+    indexes.windowsByRepositoryId[firstRepositoryId]?.length,
+    2,
+  );
+  equal(
+    indexes.windowsByRepositoryId[secondRepositoryId]?.length,
+    1,
+  );
 });
 
 test("in-memory admission is passive and never executes decorated input", () => {

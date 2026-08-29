@@ -24,7 +24,7 @@ import {
   RootedResourceParentHandleError,
 } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
 import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/foundation/identity/wakeflow-durable-id.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   decideDemandEventSourcingCommand,
@@ -140,6 +140,17 @@ test("Demand File Event Store 以固定 commitSequence 槽位执行 no-replace a
     deepEqual(loaded.commits, [first.commit]);
     equal(loaded.cursor?.commitSequence, 1);
     equal(loaded.cursor?.streamRevision, 1);
+    if (loaded.cursor === null) throw new Error("Event cursor is missing.");
+    await rejects(
+      store.readCommitsAfter({
+        ...loaded.cursor,
+        streamRevision: 0,
+      }),
+      (error: unknown) => (
+        error instanceof DemandFileEventStoreError
+        && error.reason === "input"
+      ),
+    );
 
     await rejects(
       store.append({ ...first } as typeof first),
@@ -284,9 +295,13 @@ test("Demand File Event Store 在 commit parent 首次 sync 失败后重新结�
   const originalSync = RootedResourceParentHandle.prototype.sync;
   const first = prepared();
   const commitRef = demandEventStreamCommitRef(first.commit.commitSequence);
+  const commitAbsolutePath = path.join(
+    root.absolutePath,
+    ...commitRef.split("/"),
+  );
   let commitParentSyncAttempts = 0;
   RootedResourceParentHandle.prototype.sync = async function patchedSync() {
-    if (this.resourcePath === commitRef) {
+    if (this.resourceAbsolutePath === commitAbsolutePath) {
       commitParentSyncAttempts += 1;
       if (commitParentSyncAttempts === 1) {
         throw new RootedResourceParentHandleError(

@@ -1,3 +1,5 @@
+import { types } from "node:util";
+
 import {
   WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA,
   type WakeflowWindowHostBindingRegistrationResultV1 as RegistrationResultWire,
@@ -23,7 +25,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
-import type { WakeflowDurableId } from "../../foundation/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   createRuntimeJsonSchemaValidator,
 } from "../../foundation/schema/runtime-json-schema.js";
@@ -59,7 +61,7 @@ import {
  * owner；它不调用宿主工具，也不读取或返回 raw handle。
  */
 
-export interface WakeflowWindowHostBindingPublicHostFacade {
+interface WakeflowWindowHostBindingPublicHostFacade {
   readonly hostId: WakeflowWorkspaceHostId;
   readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
@@ -76,7 +78,6 @@ export interface WakeflowWindowHostBindingPublicResult {
   readonly binding: Readonly<{
     readonly bindingId: WakeflowWindowHostBindingId;
     readonly bindingRef: PortableResourcePath;
-    readonly bindingDigest: Sha256Digest;
     readonly registeredAt: UtcInstant;
     readonly source: Readonly<{
       readonly kind: "agent-host-create-result";
@@ -91,7 +92,7 @@ export interface WakeflowWindowHostBindingPublicResult {
   }>;
 }
 
-export type WakeflowWindowHostBindingPublicCoordinatorErrorReason =
+type WakeflowWindowHostBindingPublicCoordinatorErrorReason =
   | "host"
   | "root"
   | "config"
@@ -134,7 +135,10 @@ export class WakeflowWindowHostBindingPublicCoordinatorError extends Error {
 
 const validateResultWire = createRuntimeJsonSchemaValidator<RegistrationResultWire>(
   WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA,
-  [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_UTC_INSTANT_SCHEMA],
+  [
+    WAKEFLOW_SHA256_DIGEST_SCHEMA,
+    WAKEFLOW_UTC_INSTANT_SCHEMA,
+  ],
 );
 
 function ownString(value: unknown, key: string): string | null {
@@ -164,10 +168,19 @@ function fail(
 function assertFacade(
   facade: Readonly<WakeflowWindowHostBindingPublicHostFacade>,
 ): Readonly<{
+  readonly hostId: WakeflowWorkspaceHostId;
   readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
 }> {
   try {
+    if (
+      typeof facade !== "object"
+      || facade === null
+      || types.isProxy(facade)
+      || !Object.isFrozen(facade)
+    ) {
+      fail("host");
+    }
     const resourceProfile = parseWakeflowWorkspaceHostResourceProfile(
       facade.resourceProfile,
     );
@@ -181,7 +194,11 @@ function assertFacade(
     ) {
       fail("host");
     }
-    return Object.freeze({ resourceProfile, identityProfile });
+    return Object.freeze({
+      hostId: resourceProfile.hostId,
+      resourceProfile,
+      identityProfile,
+    });
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingPublicCoordinatorError) {
       throw error;
@@ -222,6 +239,7 @@ function publicResult(
   if (!validated.ok || containsExactPrivateText(json, privateValues)) {
     fail("output");
   }
+  // Schema 与typed owner已经共同准入；此处只恢复JsonValue快照擦除的品牌类型。
   return json as unknown as Readonly<WakeflowWindowHostBindingPublicResult>;
 }
 
@@ -233,7 +251,7 @@ export async function executeWakeflowWindowHostBindingPublicRequest(
 ): Promise<Readonly<WakeflowWindowHostBindingPublicResult>> {
   const profiles = assertFacade(facade);
   const request = parseWakeflowWindowHostBindingPublicRequest(value);
-  if (request.observation.hostId !== facade.hostId) fail("host");
+  if (request.observation.hostId !== profiles.hostId) fail("host");
 
   let root: RootedDirectory;
   try {
@@ -282,7 +300,10 @@ export async function executeWakeflowWindowHostBindingPublicRequest(
       disposition: registered.disposition,
       binding: registered.binding,
       projection: registered.projection,
-    }, new Set([request.root, canonicalRoot]));
+    }, new Set([
+      request.root,
+      canonicalRoot,
+    ]));
   } catch (error: unknown) {
     failure = error;
   }

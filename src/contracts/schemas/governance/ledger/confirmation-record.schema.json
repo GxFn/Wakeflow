@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_CONFIRMATION_RECORD_SCHEMA",
   "title": "WakeflowConfirmationRecord",
   "description": "Wakeflow Ledger 中绑定一个预分配 Demand ID 的不可变确认记录。",
-  "$comment": "记录只声明 Wakeflow 写入时间，不虚构已认证的人类 actor；document role、顺序和路径关系由 Ledger codec 继续校验。",
+  "$comment": "记录只声明 Wakeflow 写入时间，不虚构已认证的人类 actor；document role、顺序、路径前缀与大小写碰撞由 Ledger codec 继续校验。",
   "type": "object",
   "additionalProperties": false,
   "required": [

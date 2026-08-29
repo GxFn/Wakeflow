@@ -151,6 +151,31 @@ test("journal advances only through affected, checkpoint and terminal successors
   equal(isWakeflowMaintenanceJournalSuccessor(prepared, terminal), false);
 });
 
+test("journal rejects impossible checkpoints and unbounded step identities", () => {
+  const prepared = createPreparedWakeflowMaintenanceJournal(
+    OPERATION_ID,
+    OTHER_DIGEST,
+    plan(),
+  );
+  for (const candidate of [
+    { ...prepared, state: "prepared", checkpoint: 1 },
+    { ...prepared, state: "executing", affectedStepId: "core:unknown" },
+    { ...prepared, state: "terminal" },
+    { ...prepared, stepIds: [`core:${"a".repeat(264)}`] },
+  ]) {
+    let caught: unknown;
+    try {
+      parseWakeflowMaintenanceJournal(candidate);
+    } catch (error: unknown) {
+      caught = error;
+    }
+    equal(caught instanceof WakeflowMaintenanceJournalError, true);
+    if (caught instanceof WakeflowMaintenanceJournalError) {
+      equal(caught.reason, "schema");
+    }
+  }
+});
+
 test("prepared journal rejects blocked, empty or forged plans", () => {
   const valid = plan();
   for (const candidate of [

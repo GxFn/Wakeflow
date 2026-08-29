@@ -17,10 +17,11 @@ import {
   createFileCandidateDurably,
 } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import {
-  durableAtomicFileStageRef,
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import {
   parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
@@ -111,14 +112,9 @@ function request() {
 }
 
 function writeInactiveLock(lockPath: string): void {
-  writeFileSync(lockPath, `${JSON.stringify({
-    createdAt: "2026-08-27T10:00:00.000Z",
-    kind: "WakeflowExclusiveFileLock",
-    pid: 2_147_483_647,
-    threadId: 0,
-    token: "2147483647-0-11111111-1111-4111-8111-111111111111",
-    version: 1,
-  }, null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
+    tokenUuid: "11111111-1111-4111-8111-111111111111",
+  }), { mode: 0o600 });
 }
 
 async function expectRecoveryError(
@@ -165,7 +161,7 @@ test("Gitignore recovery rolls back an inactive single-link replace stage", asyn
     computeSha256Digest(bytes),
     0o644,
   );
-  const stageRef = durableAtomicFileStageRef(WAKEFLOW_GITIGNORE_REF, address);
+  const stageRef = durableAtomicFileStageRefForTest(WAKEFLOW_GITIGNORE_REF, address);
   let released = false;
   try {
     await createFileCandidateDurably(current.root, stageRef, bytes, {
@@ -203,7 +199,7 @@ test("Gitignore recovery forward-settles an exact two-link create publication", 
     target.digest,
     0o644,
   );
-  const stageRef = durableAtomicFileStageRef(WAKEFLOW_GITIGNORE_REF, address);
+  const stageRef = durableAtomicFileStageRefForTest(WAKEFLOW_GITIGNORE_REF, address);
   let released = false;
   try {
     await createFileCandidateDurably(current.root, stageRef, target.bytes, {
@@ -244,7 +240,7 @@ test("Gitignore recovery preserves foreign stage and distinguishes absent or act
       computeSha256Digest(bytes),
       0o600,
     );
-    const stageRef = durableAtomicFileStageRef(foreignTarget, address);
+    const stageRef = durableAtomicFileStageRefForTest(foreignTarget, address);
     let released = false;
     try {
       await createFileCandidateDurably(current.root, stageRef, bytes, {

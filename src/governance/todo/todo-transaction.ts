@@ -31,6 +31,7 @@ import {
 import {
   computeTodoIntakeDigest,
   parseTodoIntake,
+  TodoIntakeError,
   type TodoIntake,
 } from "./todo-intake.js";
 import {
@@ -41,6 +42,7 @@ import {
 import {
   computeTodoStateDigest,
   parseTodoState,
+  TodoStateError,
   type TodoState,
 } from "./todo-state.js";
 
@@ -52,9 +54,9 @@ import {
  * 副作用，也不决定恢复意图何时可以退休。
  */
 
-export const TODO_TRANSACTION_ARTIFACT_KIND =
+const TODO_TRANSACTION_ARTIFACT_KIND =
   "wakeflow-todo-transaction" as const;
-export const TODO_TRANSACTION_SCHEMA_VERSION = 1 as const;
+const TODO_TRANSACTION_SCHEMA_VERSION = 1 as const;
 
 export type TodoTransactionOperation = "append" | "claim" | "archive";
 
@@ -144,6 +146,24 @@ function parseTime(value: unknown): UtcInstant {
   }
 }
 
+function parseTargetIntake(value: unknown): Readonly<TodoIntake> {
+  try {
+    return parseTodoIntake(value);
+  } catch (error: unknown) {
+    if (error instanceof TodoIntakeError) fail("target", "$/targetIntake");
+    throw error;
+  }
+}
+
+function parseTargetState(value: unknown): Readonly<TodoState> {
+  try {
+    return parseTodoState(value);
+  } catch (error: unknown) {
+    if (error instanceof TodoStateError) fail("target", "$/targetState");
+    throw error;
+  }
+}
+
 function assertTransactionRelations(
   transaction: Readonly<TodoTransaction>,
 ): void {
@@ -223,8 +243,8 @@ function normalizeWire(
       : parseDigest(wire.expectedStateDigest, "$/expectedStateDigest"),
     targetIntake: wire.targetIntake === null
       ? null
-      : parseTodoIntake(wire.targetIntake),
-    targetState: parseTodoState(wire.targetState),
+      : parseTargetIntake(wire.targetIntake),
+    targetState: parseTargetState(wire.targetState),
     targetIntakeDigest: parseDigest(
       wire.targetIntakeDigest,
       "$/targetIntakeDigest",
@@ -284,6 +304,6 @@ export function parseTodoTransactionDocument(
 
 export function computeTodoTransactionDigest(value: unknown): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
-    parseTodoTransaction(value) as unknown as JsonValue,
+    parseTodoTransaction(value),
   );
 }

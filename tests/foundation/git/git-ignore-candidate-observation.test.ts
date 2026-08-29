@@ -13,7 +13,6 @@ import { test, type TestContext } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
-  GIT_IGNORE_CANDIDATE_MAXIMUM_BYTES,
   GitIgnoreCandidateObservationError,
   observeGitIgnoreCandidate,
   type GitIgnoreCandidateObservationErrorReason,
@@ -23,6 +22,8 @@ import {
   type PortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+
+const GIT_IGNORE_CANDIDATE_MAXIMUM_BYTES = 2 * 1024 * 1024;
 
 interface GitFixture {
   readonly absolutePath: string;
@@ -102,7 +103,6 @@ test("Git ignore candidate is observed in an isolated worktree without changing 
     ),
   );
 
-  equal(observed.kind, "GitIgnoreCandidateObservation");
   equal(observed.candidateByteCount, candidate.byteLength);
   equal(observed.candidateDigest, computeSha256Digest(candidate));
   deepEqual(observed.paths.map((entry) => entry.ignored), [

@@ -8,14 +8,15 @@ import {
 /**
  * Wakeflow Foundation / Data：确定性格式化 JSON 文档表示。
  *
- * 本模块把已经按领域顺序构造的 JSON 数据树渲染为使用 2 个空格缩进、只含 LF
- * 换行符且末尾恰好保留一个 LF 的文本。反向解析会拒绝重复键，以及空白、缩进、
- * 换行符或数字表示发生漂移。输入先转换为 `JsonValue` 快照，因此不会执行访问器、
- * `toJSON` 或代理陷阱。
+ * 本模块把领域 owner 已按约定键顺序构造的 JSON 数据树渲染为使用 2 个空格缩进、
+ * 只含 LF 换行符且末尾恰好保留一个 LF 的文本。反向解析会拒绝重复键，以及空白、
+ * 缩进、换行符或数字表示发生漂移。输入先转换为 `JsonValue` 快照；进入原生
+ * serializer 前还会验证数组原型环境，因此不会执行访问器、`toJSON` 或代理陷阱。
  *
- * 对象字段的领域顺序不属于本层：解析器只能证明文本对于当前键顺序具有唯一表示。
- * Config、TODO、Demand 等职责所有者必须先把数据重建为各自的规范化模型，再比较
- * 磁盘文本与模型渲染结果。RFC 8785 Canonical JSON 继续独立负责语义摘要。
+ * 对象字段的领域顺序不属于本层。本层沿用 ECMAScript 自有键顺序：数组索引键按
+ * 数值升序，其他字符串键按创建顺序；解析器只能证明文本对于当前键顺序具有唯一
+ * 表示。Config、TODO、Demand 等职责所有者必须先把数据重建为各自的规范化模型，
+ * 再比较磁盘文本与模型渲染结果。RFC 8785 Canonical JSON 继续独立负责语义摘要。
  */
 
 export type DeterministicJsonDocumentErrorReason =
@@ -71,6 +72,23 @@ function fail(
   throw new DeterministicJsonDocumentError(reason, path);
 }
 
+/**
+ * `JsonValue` 对象没有原型，但数组按合同保留标准数组原型。`JSON.stringify` 会
+ * 读取继承的 `toJSON`，因此这里只检查原型身份和属性描述符，不读取属性值。
+ * 非标准环境直接失败，避免已准入数据在渲染阶段再次执行外部行为。
+ */
+function assertNoInheritedArrayToJson(path: string): void {
+  const hasStandardPrototypeChain =
+    Object.getPrototypeOf(Array.prototype) === Object.prototype
+    && Object.getPrototypeOf(Object.prototype) === null;
+  const hasInheritedToJson =
+    Object.getOwnPropertyDescriptor(Array.prototype, "toJSON") !== undefined
+    || Object.getOwnPropertyDescriptor(Object.prototype, "toJSON") !== undefined;
+  if (!hasStandardPrototypeChain || hasInheritedToJson) {
+    fail("render-failure", path);
+  }
+}
+
 function normalizePath(value: unknown): string {
   return typeof value === "string" && value.length > 0 ? value : "$document";
 }
@@ -85,6 +103,7 @@ function admitJsonValue(value: unknown, path: string): JsonValue {
 }
 
 function renderAdmitted(value: JsonValue, path: string): string {
+  assertNoInheritedArrayToJson(path);
   let rendered: string | undefined;
   try {
     rendered = JSON.stringify(value, null, 2);
@@ -99,7 +118,8 @@ function renderAdmitted(value: JsonValue, path: string): string {
  * 将任意无副作用 JSON 数据值渲染为确定性格式化文本。
  *
  * 调用方如果要求特定领域字段顺序，必须先传入按该顺序重建的模型。本函数不会根据
- * 字典序、Schema 的 `properties` 或历史输入顺序替调用方决定领域表示。
+ * 字典序、Schema 的 `properties` 或历史输入顺序替调用方决定领域表示；最终键顺序
+ * 仍遵循 ECMAScript 的自有键枚举规则。
  */
 export function renderDeterministicJsonDocument(
   value: unknown,

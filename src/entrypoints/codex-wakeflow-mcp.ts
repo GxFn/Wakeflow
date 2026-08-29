@@ -15,9 +15,9 @@ import {
 } from "./wakeflow-mcp-stdio.js";
 
 /** Codex 制品内固定的 MCP server identity；版本由制品装配入口注入。 */
-export const CODEX_WAKEFLOW_MCP_SERVER_NAME = "wakeflow-codex" as const;
+const CODEX_WAKEFLOW_MCP_SERVER_NAME = "wakeflow-codex" as const;
 
-/** 创建固定组合 Codex Maintenance 能力的 MCP server。 */
+/** 创建固定组合Codex Maintenance与Window Binding能力的MCP server。 */
 export function createCodexWakeflowMcpServer(
   serverVersion: string,
 ): McpServer {

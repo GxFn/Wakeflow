@@ -81,23 +81,30 @@ function contribution() {
     hostId: "claude-code",
     capabilityId: "claude-code-maintenance",
     status: "ready",
-    sourcePlanDigest: OTHER_DIGEST,
     blockerCodes: [],
-    operations: [{
-      operationId:
-        "claude-portable-settings:program:program_11111111-1111-4111-8111-111111111111",
-      operationKind: "portable-settings",
-      ownerId: "claude-code-portable-settings",
-      targetKey:
-        "settings:program:program_11111111-1111-4111-8111-111111111111",
-      sourceDigest: null,
-      targetDigest: DIGEST,
-      payload: {
-        kind: "ExamplePortableSettingsOperation",
-        targetDigest: DIGEST,
-      },
-    }],
+    operations: [hostOperation(
+      "claude-portable-settings:program:program_11111111-1111-4111-8111-111111111111",
+    )],
   });
+}
+
+function hostOperation(
+  operationId: string,
+  targetKey =
+    "settings:program:program_11111111-1111-4111-8111-111111111111",
+) {
+  return {
+    operationId,
+    operationKind: "portable-settings",
+    ownerId: "claude-code-portable-settings",
+    targetKey,
+    sourceDigest: null,
+    targetDigest: DIGEST,
+    payload: {
+      kind: "ExamplePortableSettingsOperation",
+      targetDigest: DIGEST,
+    },
+  };
 }
 
 test("aggregate plan inserts exact host operation before Config and binds one journal", () => {
@@ -127,6 +134,39 @@ test("aggregate plan inserts exact host operation before Config and binds one jo
   deepEqual(journal.stepIds, plan.steps.map((entry) => entry.stepId));
 });
 
+test("aggregate plan represents ordered host operations as a linear dependency chain", () => {
+  const multiple = createWakeflowHostMaintenanceContribution({
+    hostId: "claude-code",
+    capabilityId: "claude-code-maintenance",
+    status: "ready",
+    blockerCodes: [],
+    operations: [
+      hostOperation(
+        "claude-portable-settings:program:first",
+        "settings:program:first",
+      ),
+      hostOperation(
+        "claude-portable-settings:support-surface:second",
+        "settings:support-surface:second",
+      ),
+    ],
+  });
+  const plan = createWakeflowMaintenanceExecutionPlan(
+    sharedPreview(),
+    claudeCodeWorkspaceHostResourceProfile,
+    multiple,
+  );
+  deepEqual(plan.steps[1]?.dependsOn, ["core:active-layout"]);
+  deepEqual(plan.steps[2]?.dependsOn, [
+    "host-effect:claude-portable-settings:program:first",
+  ]);
+  deepEqual(plan.steps[3]?.dependsOn, [
+    "core:active-layout",
+    "host-effect:claude-portable-settings:program:first",
+    "host-effect:claude-portable-settings:support-surface:second",
+  ]);
+});
+
 test("host payload drift is rejected before it can alter aggregate identity", () => {
   const forged = JSON.parse(JSON.stringify(contribution())) as Record<string, unknown>;
   const operations = forged.operations as Array<Record<string, unknown>>;
@@ -140,6 +180,28 @@ test("host payload drift is rejected before it can alter aggregate identity", ()
   equal(caught instanceof WakeflowHostMaintenanceContributionError, true);
   if (caught instanceof WakeflowHostMaintenanceContributionError) {
     equal(caught.reason, "digest");
+  }
+});
+
+test("host contribution admits one operation per logical owner target", () => {
+  let caught: unknown;
+  try {
+    createWakeflowHostMaintenanceContribution({
+      hostId: "claude-code",
+      capabilityId: "claude-code-maintenance",
+      status: "ready",
+      blockerCodes: [],
+      operations: [
+        hostOperation("claude-portable-settings:program:first"),
+        hostOperation("claude-portable-settings:support-surface:second"),
+      ],
+    });
+  } catch (error: unknown) {
+    caught = error;
+  }
+  equal(caught instanceof WakeflowHostMaintenanceContributionError, true);
+  if (caught instanceof WakeflowHostMaintenanceContributionError) {
+    equal(caught.reason, "order");
   }
 });
 

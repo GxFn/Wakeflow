@@ -6,6 +6,7 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -131,11 +132,14 @@ test("Maintenance launch intent 经 Agent result 注册为私有 Binding 与脱�
     readonly binding: {
       readonly bindingId: string;
       readonly bindingRef: string;
+      readonly registeredAt: string;
+      readonly source: { readonly observedAt: string };
     };
     readonly projection: { readonly resourceRef: string };
   };
   equal(publicValue.disposition, "registered");
   equal(textContent(registered).includes(rawHandle), false);
+  equal(textContent(registered).includes('"bindingDigest"'), false);
   equal(textContent(registered).includes(root), false);
 
   const bindingFile = path.join(root, ...publicValue.binding.bindingRef.split("/"));
@@ -154,15 +158,30 @@ test("Maintenance launch intent 经 Agent result 注册为私有 Binding 与脱�
 
   const replayed = await client.callTool({
     name: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
-    arguments: { root, observation },
+    arguments: {
+      root,
+      observation: {
+        ...observation,
+        observedAt: new Date(Date.parse(observedAt) + 500).toISOString(),
+      },
+    },
   });
   equal(replayed.isError, undefined);
   const replayedValue = JSON.parse(textContent(replayed)) as {
     readonly disposition: string;
-    readonly binding: { readonly bindingId: string };
+    readonly binding: {
+      readonly bindingId: string;
+      readonly registeredAt: string;
+      readonly source: { readonly observedAt: string };
+    };
   };
   equal(replayedValue.disposition, "replayed");
   equal(replayedValue.binding.bindingId, publicValue.binding.bindingId);
+  equal(replayedValue.binding.registeredAt, publicValue.binding.registeredAt);
+  equal(
+    replayedValue.binding.source.observedAt,
+    publicValue.binding.source.observedAt,
+  );
 
   const conflict = await client.callTool({
     name: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
@@ -229,6 +248,12 @@ test("Maintenance launch intent 经 Agent result 注册为私有 Binding 与脱�
       value: "codex-host-owned-thread:opaque-concurrent",
     },
   } as const;
+  const concurrentProjectionFile = path.join(
+    root,
+    ".wakeflow-local/runtime/hosts/codex/projections/window-runtime",
+    `${concurrentIntent.windowId}.json`,
+  );
+  unlinkSync(concurrentProjectionFile);
   const concurrentResults = await Promise.all([
     client.callTool({
       name: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
@@ -254,4 +279,53 @@ test("Maintenance launch intent 经 Agent result 注册为私有 Binding 与脱�
     new Set(concurrentValues.map((value) => value.binding.bindingId)).size,
     1,
   );
+  match(
+    readFileSync(concurrentProjectionFile, "utf8"),
+    /"status": "registered"/u,
+  );
+
+  const futureObservation = {
+    ...observation,
+    windowId: otherIntent.windowId,
+    launchIntentDigest: otherIntent.intentDigest,
+    handle: {
+      kind: "codex-thread",
+      value: "codex-host-owned-thread:opaque-future",
+    },
+    observedAt: new Date(Date.now() + 60_000).toISOString(),
+  } as const;
+  const future = await client.callTool({
+    name: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
+    arguments: { root, observation: futureObservation },
+  });
+  equal(future.isError, true);
+  match(textContent(future), /"causeReason":"time"/u);
+  match(textContent(future), /"bindingAuthority":"unchanged"/u);
+  equal(
+    existsSync(path.join(
+      root,
+      ".wakeflow-local/runtime/hosts/codex/identity/window-bindings",
+      `${otherIntent.windowId}.json`,
+    )),
+    false,
+  );
+
+  const invalidBinding = JSON.parse(readFileSync(bindingFile, "utf8")) as {
+    handle: { kind: string };
+  };
+  invalidBinding.handle.kind = "claude-session";
+  writeFileSync(bindingFile, `${JSON.stringify(invalidBinding, null, 2)}\n`);
+  const invalidInventory = await client.callTool({
+    name: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
+    arguments: {
+      root,
+      observation: {
+        ...futureObservation,
+        observedAt,
+      },
+    },
+  });
+  equal(invalidInventory.isError, true);
+  match(textContent(invalidInventory), /"causeReason":"inventory"/u);
+  equal(textContent(invalidInventory).includes("claude-session"), false);
 });

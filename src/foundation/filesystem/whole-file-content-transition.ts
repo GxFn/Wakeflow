@@ -22,21 +22,14 @@ import { parseByteCount, type ByteCount } from "../numeric/byte-count.js";
  * renderer 重算出的精确字节，不能因为文件位于目标路径就把它加入准入集合。
  */
 
-export const WHOLE_FILE_CONTENT_TRANSITION_KIND =
-  "WakeflowWholeFileContentTransition" as const;
-
 export interface WholeFileContentTransitionRequest {
   readonly currentContents: readonly unknown[];
   readonly desiredContent: unknown;
 }
 
 export interface WholeFileContentTransition {
-  readonly kind: typeof WHOLE_FILE_CONTENT_TRANSITION_KIND;
   readonly disposition: "current" | "create-required" | "replace-required";
   readonly sourceAuthority: "absent" | "desired" | "admitted-current";
-  readonly matchedCurrentContentIndex: number | null;
-  readonly sourceByteCount: ByteCount | null;
-  readonly sourceDigest: Sha256Digest | null;
   readonly desiredByteCount: ByteCount;
   readonly desiredDigest: Sha256Digest;
   /** 调用方拥有的独立可变字节副本。 */
@@ -76,6 +69,8 @@ interface ContentSnapshot {
   readonly byteCount: ByteCount;
   readonly digest: Sha256Digest;
 }
+
+const MAXIMUM_ADMITTED_CURRENT_CONTENTS = 8;
 
 function fail(
   reason: WholeFileContentTransitionErrorReason,
@@ -117,23 +112,30 @@ function parseRequest(value: unknown): Readonly<{
   readonly desired: Readonly<ContentSnapshot>;
 }> {
   let record: Readonly<Record<string, unknown>>;
-  let currentValues: readonly unknown[];
   try {
     record = parsePlainRecord(value, "$request");
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("input", error.path);
+    throw error;
+  }
+  const keys = Object.keys(record).sort();
+  if (
+    keys.length !== 2
+    || keys[0] !== "currentContents"
+    || keys[1] !== "desiredContent"
+  ) {
+    fail("input", "$request");
+  }
+  let currentValues: readonly unknown[];
+  try {
     currentValues = parseDenseArray(
       record.currentContents,
-      8,
+      MAXIMUM_ADMITTED_CURRENT_CONTENTS,
       "$request.currentContents",
     );
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) fail("input", error.path);
     throw error;
-  }
-  if (
-    Object.keys(record).sort().join("\u0000")
-      !== "currentContents\u0000desiredContent"
-  ) {
-    fail("input", "$request");
   }
   const desired = snapshotBytes(
     record.desiredContent,
@@ -144,11 +146,12 @@ function parseRequest(value: unknown): Readonly<{
   )));
   for (let index = 0; index < current.length; index += 1) {
     const entry = current[index];
-    if (
-      entry !== undefined
-      && current.slice(0, index).some((prior) => sameContent(prior, entry))
-    ) {
-      fail("duplicate-current", `$request.currentContents/${index}`);
+    if (entry === undefined) continue;
+    for (let priorIndex = 0; priorIndex < index; priorIndex += 1) {
+      const prior = current[priorIndex];
+      if (prior !== undefined && sameContent(prior, entry)) {
+        fail("duplicate-current", `$request.currentContents/${index}`);
+      }
     }
   }
   return Object.freeze({ current, desired });
@@ -165,12 +168,8 @@ export function planWholeFileContentTransition(
     : snapshotBytes(sourceValue, "$source");
   if (source === null) {
     return Object.freeze({
-      kind: WHOLE_FILE_CONTENT_TRANSITION_KIND,
       disposition: "create-required",
       sourceAuthority: "absent",
-      matchedCurrentContentIndex: null,
-      sourceByteCount: null,
-      sourceDigest: null,
       desiredByteCount: request.desired.byteCount,
       desiredDigest: request.desired.digest,
       desiredBytes: Buffer.from(request.desired.bytes),
@@ -178,28 +177,20 @@ export function planWholeFileContentTransition(
   }
   if (sameContent(source, request.desired)) {
     return Object.freeze({
-      kind: WHOLE_FILE_CONTENT_TRANSITION_KIND,
       disposition: "current",
       sourceAuthority: "desired",
-      matchedCurrentContentIndex: null,
-      sourceByteCount: source.byteCount,
-      sourceDigest: source.digest,
       desiredByteCount: request.desired.byteCount,
       desiredDigest: request.desired.digest,
       desiredBytes: Buffer.from(request.desired.bytes),
     });
   }
-  const currentIndex = request.current.findIndex((content) => (
+  const isAdmittedCurrent = request.current.some((content) => (
     sameContent(source, content)
   ));
-  if (currentIndex < 0) fail("unadmitted-source", "$source");
+  if (!isAdmittedCurrent) fail("unadmitted-source", "$source");
   return Object.freeze({
-    kind: WHOLE_FILE_CONTENT_TRANSITION_KIND,
     disposition: "replace-required",
     sourceAuthority: "admitted-current",
-    matchedCurrentContentIndex: currentIndex,
-    sourceByteCount: source.byteCount,
-    sourceDigest: source.digest,
     desiredByteCount: request.desired.byteCount,
     desiredDigest: request.desired.digest,
     desiredBytes: Buffer.from(request.desired.bytes),

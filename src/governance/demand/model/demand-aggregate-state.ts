@@ -17,7 +17,7 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../../../foundation/identity/wakeflow-durable-id.js";
+} from "../../../contracts/identity/wakeflow-durable-id.js";
 import {
   createRuntimeJsonSchemaValidator,
 } from "../../../foundation/schema/runtime-json-schema.js";
@@ -31,11 +31,11 @@ import {
  * Review、Evidence 与 Pod 不使用空数组或 null 占位；未来只能随真实事件和归约器进入。
  */
 
-export const DEMAND_AGGREGATE_STATE_ARTIFACT_KIND =
+const DEMAND_AGGREGATE_STATE_ARTIFACT_KIND =
   "wakeflow-demand-aggregate-state" as const;
-export const DEMAND_AGGREGATE_STATE_SCHEMA_VERSION = 1 as const;
+const DEMAND_AGGREGATE_STATE_SCHEMA_VERSION = 1 as const;
 
-export type DemandLifecycle = "active" | "completed" | "cancelled";
+export type DemandLifecycle = "active" | "cancelled";
 
 export interface DemandAggregateState {
   readonly artifactKind: typeof DEMAND_AGGREGATE_STATE_ARTIFACT_KIND;
@@ -158,6 +158,6 @@ export function computeDemandAggregateStateDigest(
   value: unknown,
 ): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
-    parseDemandAggregateState(value) as unknown as JsonValue,
+    parseDemandAggregateState(value),
   );
 }

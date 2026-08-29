@@ -2,7 +2,10 @@ import {
   materializeDirectoryPath,
   DurableDirectoryMaterializationError,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
-import { RootedDirectory, RootedDirectoryError } from "../../foundation/filesystem/rooted-directory.js";
+import {
+  RootedDirectory,
+  RootedDirectoryError,
+} from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectRootedExclusiveFileLock,
   retireRootedExclusiveFileLockResidue,
@@ -15,6 +18,7 @@ import {
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   parseWakeflowMaintenanceOperationId,
+  WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceJournalRef,
   wakeflowMaintenanceOperationUuid,
   type WakeflowMaintenanceOperationId,
@@ -25,6 +29,8 @@ import {
 } from "./wakeflow-maintenance-resource-catalog.js";
 import {
   inspectWakeflowWorkspaceCoreLayout,
+  WakeflowWorkspaceCoreLayoutInspectionError,
+  type WakeflowWorkspaceCoreLayoutInspection,
 } from "./wakeflow-workspace-core-layout-inspection.js";
 
 /**
@@ -36,7 +42,6 @@ import {
  */
 
 export interface WakeflowMaintenanceOrphanGateRecoveryReceipt {
-  readonly kind: "WakeflowMaintenanceOrphanGateRecoveryReceipt";
   readonly operationId: WakeflowMaintenanceOperationId;
   readonly retiredLockDigest: Sha256Digest;
   readonly coreLayoutInspectionDigest: Sha256Digest;
@@ -107,7 +112,10 @@ async function journalExists(
     ) {
       return false;
     }
-    fail("recovery-required", "$journal");
+    if (error instanceof RootedDirectoryError) {
+      fail("recovery-required", "$journal");
+    }
+    throw error;
   }
 }
 
@@ -134,13 +142,13 @@ async function assertTransactionsEmpty(root: RootedDirectory): Promise<void> {
       { maximumEntries: 0 },
     );
   } catch (error: unknown) {
-    if (
-      error instanceof StableDirectoryReadError
-      && error.reason === "too-many-entries"
-    ) {
-      fail("transaction-residue", "$transactions");
+    if (error instanceof StableDirectoryReadError) {
+      if (error.reason === "too-many-entries") {
+        fail("transaction-residue", "$transactions");
+      }
+      fail("recovery-required", "$transactions");
     }
-    fail("recovery-required", "$transactions");
+    throw error;
   }
 }
 
@@ -152,8 +160,11 @@ export async function recoverWakeflowMaintenanceOrphanGate(
   let operationId: WakeflowMaintenanceOperationId;
   try {
     operationId = parseWakeflowMaintenanceOperationId(operationIdValue);
-  } catch {
-    fail("input", "$operationId");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceOperationIdError) {
+      fail("input", "$operationId");
+    }
+    throw error;
   }
   let observation;
   try {
@@ -194,10 +205,17 @@ export async function recoverWakeflowMaintenanceOrphanGate(
     }
     throw error;
   }
-  const core = await inspectWakeflowWorkspaceCoreLayout(root);
+  let core: Readonly<WakeflowWorkspaceCoreLayoutInspection>;
+  try {
+    core = await inspectWakeflowWorkspaceCoreLayout(root);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
+      fail("recovery-required", "$coreLayout");
+    }
+    throw error;
+  }
   if (core.local.status !== "idle") fail("recovery-required", "$coreLayout");
   return Object.freeze({
-    kind: "WakeflowMaintenanceOrphanGateRecoveryReceipt",
     operationId,
     retiredLockDigest: observation.digest,
     coreLayoutInspectionDigest: core.inspectionDigest,

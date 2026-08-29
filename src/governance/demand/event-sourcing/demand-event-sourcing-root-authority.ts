@@ -1,6 +1,10 @@
 import { types } from "node:util";
 
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
+import {
+  parsePlainRecord,
+  PassiveOwnDataError,
+} from "../../../foundation/data/passive-own-data.js";
 import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
 import { sameFileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
 import type { FileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
@@ -8,6 +12,7 @@ import { StableFileReadError } from "../../../foundation/filesystem/stable-file-
 import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
 import { DeterministicJsonDocumentError } from "../../../foundation/data/deterministic-json-document.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
+import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
 import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import type { ByteCount } from "../../../foundation/numeric/byte-count.js";
 import {
@@ -43,7 +48,6 @@ import {
   DemandFileEventStoreError,
 } from "./demand-file-event-store.js";
 import type { DemandEventStreamCommit } from "./demand-event-stream-commit.js";
-import { DemandFileEventSnapshotStore } from "./demand-file-event-snapshot-store.js";
 import {
   upcastDemandEventSourcingStoredEvent,
   DemandEventSourcingUpcasterError,
@@ -85,8 +89,7 @@ export type DemandEventSourcingRootAuthorityErrorReason =
   | "ledger"
   | "stream"
   | "closure"
-  | "aborted"
-  | "operation-failure";
+  | "aborted";
 
 const ERROR_MESSAGES = {
   "input": "Demand Event Sourcing root authority input is invalid.",
@@ -97,7 +100,6 @@ const ERROR_MESSAGES = {
   "stream": "Demand Event Sourcing root event stream is invalid.",
   "closure": "Demand Event Sourcing root records do not form one aggregate.",
   "aborted": "Demand Event Sourcing root authority load was aborted.",
-  "operation-failure": "Demand Event Sourcing root authority load failed.",
 } as const satisfies Readonly<Record<
   DemandEventSourcingRootAuthorityErrorReason,
   string
@@ -154,7 +156,7 @@ function sameInventory(
 
 async function readRecord(
   root: RootedDirectory,
-  ref: typeof DEMAND_EVENT_SOURCING_IDENTITY_REF,
+  ref: PortableResourcePath,
   maximumBytes: ByteCount,
   expectedNode: Readonly<FileNodeSnapshot>,
   signal: AbortSignal | undefined,
@@ -188,6 +190,38 @@ async function readRecord(
   }
 }
 
+function parseOptions(value: unknown): Readonly<{
+  readonly audit: boolean;
+  readonly signal: AbortSignal | undefined;
+}> {
+  let record: Readonly<Record<string, unknown>>;
+  try {
+    record = parsePlainRecord(value === undefined ? {} : value, "$options");
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    throw error;
+  }
+  if (
+    Object.keys(record).some((key) => key !== "audit" && key !== "signal")
+    || (record.audit !== undefined && typeof record.audit !== "boolean")
+    || (
+      record.signal !== undefined
+      && (
+        typeof record.signal !== "object"
+        || record.signal === null
+        || types.isProxy(record.signal)
+        || !(record.signal instanceof AbortSignal)
+      )
+    )
+  ) {
+    fail("input", "$options");
+  }
+  return Object.freeze({
+    audit: record.audit === true,
+    signal: record.signal as AbortSignal | undefined,
+  });
+}
+
 /** 加载健康根目录；`audit: true` 明确要求从提交 1 开始完整重放。 */
 export async function loadDemandEventSourcingRootAuthority(
   root: RootedDirectory,
@@ -203,23 +237,10 @@ export async function loadDemandEventSourcingRootAuthority(
     || ledgerStore === null
     || types.isProxy(ledgerStore)
     || !(ledgerStore instanceof LedgerAuthorityStore)
-    || (
-      options !== undefined
-      && (
-        typeof options !== "object"
-        || options === null
-        || types.isProxy(options)
-        || Object.keys(options).some(
-          (key) => key !== "audit" && key !== "signal",
-        )
-        || (options.audit !== undefined && typeof options.audit !== "boolean")
-        || (options.signal !== undefined && !(options.signal instanceof AbortSignal))
-      )
-    )
   ) {
     fail("input", "$input");
   }
-  const signal = options?.signal;
+  const { audit, signal } = parseOptions(options);
   let inventory: Readonly<DemandEventSourcingRootInventory>;
   try {
     inventory = await inspectDemandEventSourcingRootInventory(
@@ -266,27 +287,35 @@ export async function loadDemandEventSourcingRootAuthority(
   }
   let admittedAuthority: Readonly<AdmittedDemandAuthority>;
   try {
-    admittedAuthority = await admitDemandAuthority(identity, authority, ledgerStore);
+    admittedAuthority = await admitDemandAuthority(
+      identity,
+      authority,
+      ledgerStore,
+      signal === undefined ? undefined : { signal },
+    );
   } catch (error: unknown) {
     if (
       error instanceof DemandAuthorityError
       || error instanceof LedgerAuthorityStoreError
     ) {
+      if (
+        (error instanceof DemandAuthorityError && error.reason === "aborted")
+        || (error instanceof LedgerAuthorityStoreError && error.reason === "aborted")
+      ) {
+        fail("aborted", "$signal");
+      }
       fail("ledger", "$authority");
     }
     throw error;
   }
 
   const eventStore = new DemandFileEventStore(root);
-  const repository = new DemandEventSourcingRepository(
-    eventStore,
-    new DemandFileEventSnapshotStore(root),
-  );
+  const repository = new DemandEventSourcingRepository(root);
   let aggregate: Readonly<DemandEventSourcingAggregate>;
   let loadMode: LoadedDemandEventSourcingRootAuthority["loadMode"];
   let replayedCommitCount: number;
   try {
-    if (options?.audit === true) {
+    if (audit) {
       const audited = await repository.audit(
         signal === undefined ? undefined : { signal },
       );
@@ -310,6 +339,7 @@ export async function loadDemandEventSourcingRootAuthority(
       error instanceof DemandEventSourcingRepositoryError
       || error instanceof DemandFileEventStoreError
     ) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
       fail("stream", "$commits");
     }
     throw error;
@@ -321,7 +351,10 @@ export async function loadDemandEventSourcingRootAuthority(
       signal === undefined ? undefined : { signal },
     );
   } catch (error: unknown) {
-    if (error instanceof DemandFileEventStoreError) fail("stream", "$commits/0");
+    if (error instanceof DemandFileEventStoreError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      fail("stream", "$commits/0");
+    }
     throw error;
   }
   const firstPersistedEvent = firstCommit?.events[0];
@@ -344,6 +377,9 @@ export async function loadDemandEventSourcingRootAuthority(
     || firstCommit === null
     || firstCommit.demandId !== identity.demandId
     || firstCommit.commitSequence !== 1
+    || firstCommit.firstStreamRevision !== 1
+    || firstCommit.lastStreamRevision !== 1
+    || firstCommit.events.length !== 1
     || firstEvent?.eventType !== "publication.demand-published"
     || firstEvent.data.identityDigest !== identityDigest
     || firstEvent.data.authorityDigest !== authorityDigest
@@ -358,6 +394,7 @@ export async function loadDemandEventSourcingRootAuthority(
     );
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingRootInventoryError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
       fail("inventory", "$root");
     }
     throw error;

@@ -4,7 +4,7 @@ import { test } from "node:test";
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
-} from "../../../src/foundation/identity/wakeflow-durable-id.js";
+} from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import {
   admitWakeflowResourceOperation,
   type WakeflowResourceProcessingContract,
@@ -15,8 +15,8 @@ import type {
 } from "../../../src/workspace/workspace-resource-declaration.js";
 import {
   parseDemandEventCommitSequence,
-  DemandEventSourcingAggregateError,
-} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-aggregate.js";
+  DemandEventStreamPositionError,
+} from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
 import {
   demandEventSourcingSnapshotRef,
   demandEventStreamCommitRef,
@@ -383,9 +383,9 @@ test("Demand commit and snapshot declarations keep authority and checkpoint dist
   } catch (error: unknown) {
     invalidSequence = error;
   }
-  equal(invalidSequence instanceof DemandEventSourcingAggregateError, true);
-  if (invalidSequence instanceof DemandEventSourcingAggregateError) {
-    equal(invalidSequence.reason, "position");
+  equal(invalidSequence instanceof DemandEventStreamPositionError, true);
+  if (invalidSequence instanceof DemandEventStreamPositionError) {
+    equal(invalidSequence.reason, "commit-sequence");
     equal(invalidSequence.path, "$commitSequence");
   }
   deepEqual(

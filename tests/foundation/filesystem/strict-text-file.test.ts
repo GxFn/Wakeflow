@@ -14,12 +14,12 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import {
   StableFileReadError,
   type StableFileReadErrorReason,
+  type StableFileReadOptions,
 } from "../../../src/foundation/filesystem/stable-file-read.js";
 import {
   readStrictTextFile,
   StrictTextFileError,
   type StrictTextFileErrorReason,
-  type StrictTextFileOptions,
 } from "../../../src/foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 
@@ -64,8 +64,8 @@ async function expectStableFileReadError(
   equal(caught.path, expectedPath);
 }
 
-function asOptions(value: unknown): StrictTextFileOptions {
-  return value as StrictTextFileOptions;
+function asOptions(value: unknown): StableFileReadOptions {
+  return value as StableFileReadOptions;
 }
 
 test("strict UTF-8 text returns exact NFC/LF bytes and stable source facts", async () => {
@@ -225,12 +225,12 @@ test("expectedNode is delegated to the stable file version boundary", async () =
   }
 });
 
-test("options are closed passive data while field values remain lower-layer owned", async () => {
+test("stable file read remains the sole owner of read options", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-strict-options-"));
   writeFileSync(path.join(rootPath, "file"), "value\n");
   const root = await RootedDirectory.open(rootPath);
   try {
-    await expectStrictTextFileError(
+    await expectStableFileReadError(
       () => readStrictTextFile(
         root,
         parsePortableResourcePath("file"),
@@ -249,7 +249,7 @@ test("options are closed passive data while field values remain lower-layer owne
         return 1024;
       },
     });
-    await expectStrictTextFileError(
+    await expectStableFileReadError(
       () => readStrictTextFile(
         root,
         parsePortableResourcePath("file"),

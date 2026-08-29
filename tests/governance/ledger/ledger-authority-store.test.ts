@@ -17,6 +17,11 @@ import { test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
+  issueDurableAtomicFileStageAddress,
+  releaseDurableAtomicFileStageAddress,
+} from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
+import {
   createDirectoryTreeCandidateDurably,
   planDirectoryTreeCandidate,
 } from "../../../src/foundation/filesystem/durable-directory-tree-candidate.js";
@@ -31,7 +36,8 @@ import {
 } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/foundation/identity/wakeflow-durable-id.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
@@ -44,6 +50,7 @@ import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,
+  parseLedgerAuthorityMemberReference,
   type LedgerAuthorityStoreErrorReason,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
 import {
@@ -174,7 +181,7 @@ test("Ledger publishes one complete durable tree and idempotently reuses it", as
       path: "design/requirement.md",
       bytes: REQUIREMENT_BYTES,
     }]);
-    equal(created.created, true);
+    equal(created.wroteAuthority, true);
     equal(created.loaded.record.requirementId, REQUIREMENT_ID);
     equal(created.loaded.recordRef, `requirements/${REQUIREMENT_ID}/record.json`);
     equal(
@@ -191,7 +198,7 @@ test("Ledger publishes one complete durable tree and idempotently reuses it", as
       path: "design/requirement.md",
       bytes: REQUIREMENT_BYTES,
     }]);
-    equal(reused.created, false);
+    equal(reused.wroteAuthority, false);
     equal(reused.loaded.recordDigest, created.loaded.recordDigest);
     deepEqual((await store.loadRequirement(REQUIREMENT_ID)).record, record);
 
@@ -200,6 +207,28 @@ test("Ledger publishes one complete durable tree and idempotently reuses it", as
       "design/requirement.md",
     );
     deepEqual((await store.resolveMemberReference(reference)).bytes, REQUIREMENT_BYTES);
+    await expectStoreError(
+      () => parseLedgerAuthorityMemberReference({
+        ...reference,
+        family: "confirmation",
+      }),
+      "input",
+    );
+    await expectStoreError(
+      () => parseLedgerAuthorityMemberReference({
+        ...reference,
+        role: "goal-stage-decision",
+      }),
+      "input",
+    );
+    await expectStoreError(
+      () => parseLedgerAuthorityMemberReference({
+        ...reference,
+        memberPath: "Record.json",
+        memberRef: reference.recordRef,
+      }),
+      "input",
+    );
 
     const conflict = requirementRecord(REQUIREMENT_ID, "Conflicting title");
     await expectStoreError(
@@ -228,21 +257,37 @@ test("complete private stage recovers from compact intent without member payload
       CANDIDATE_OPTIONS,
     );
     const lockPath = path.join(rootPath, ...publication.intent.lockRef.split("/"));
-    writeFileSync(lockPath, `${JSON.stringify({
-      createdAt: "2026-08-27T08:00:00.000Z",
-      kind: "WakeflowExclusiveFileLock",
-      pid: 2_147_483_647,
-      threadId: 0,
-      token: "2147483647-0-99999999-9999-4999-8999-999999999999",
-      version: 1,
-    }, null, 2)}\n`, { mode: 0o600 });
+    writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: "99999999-9999-4999-8999-999999999999",
+    }), { mode: 0o600 });
 
     const recovered = await store.recoverRecordPublication(REQUIREMENT_ID);
-    equal(recovered.created, true);
+    equal(recovered.wroteAuthority, true);
     equal(recovered.loaded.recordDigest.length, 71);
     equal(existsSync(path.join(rootPath, ...publication.intent.stageRef.split("/"))), false);
     equal(existsSync(path.join(rootPath, ...publication.intent.intentRef.split("/"))), false);
     equal(existsSync(lockPath), false);
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("recovery without an exact intent preserves an inactive lock residue", async () => {
+  const { rootPath, root, store } = await fixture();
+  try {
+    const record = requirementRecord(REQUIREMENT_ID, "Missing recovery intent");
+    const lockRef = publicationPlan(record).intent.lockRef;
+    const lockPath = path.join(rootPath, ...lockRef.split("/"));
+    writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: "77777777-7777-4777-8777-777777777777",
+    }), { mode: 0o600 });
+
+    await expectStoreError(
+      () => store.recoverRecordPublication(REQUIREMENT_ID),
+      "not-found",
+    );
+    equal(existsSync(lockPath), true);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -277,7 +322,7 @@ test("incomplete stage requests exact input and publish retry fills only missing
       path: "design/requirement.md",
       bytes: REQUIREMENT_BYTES,
     }]);
-    equal(resumed.created, true);
+    equal(resumed.wroteAuthority, true);
     equal(existsSync(path.join(rootPath, ...publication.intent.stageRef.split("/"))), false);
     equal(readdirSync(path.join(rootPath, "transactions")).length, 0);
   } finally {
@@ -297,6 +342,30 @@ test("one pending record intent does not block unrelated reads or publications",
 
     const pending = requirementRecord(OTHER_REQUIREMENT_ID, "Pending record");
     writeIntent(rootPath, publicationPlan(pending).intent);
+    const unrelatedTarget = parsePortableResourcePath(
+      `transactions/${CONFIRMATION_ID}.intent.json`,
+    );
+    const intendedBytes = encodeUtf8("unrelated-intent");
+    const address = issueDurableAtomicFileStageAddress(
+      "create",
+      unrelatedTarget,
+      computeSha256Digest(intendedBytes),
+      0o600,
+    );
+    const unrelatedStage = durableAtomicFileStageRefForTest(
+      unrelatedTarget,
+      address,
+    );
+    try {
+      await createFileCandidateDurably(
+        root,
+        unrelatedStage,
+        encodeUtf8("partial"),
+        { mode: 0o600 },
+      );
+    } finally {
+      releaseDurableAtomicFileStageAddress(address);
+    }
     deepEqual((await store.loadRequirement(REQUIREMENT_ID)).record, first);
 
     const third = requirementRecord(THIRD_REQUIREMENT_ID, "Independent record");
@@ -304,9 +373,10 @@ test("one pending record intent does not block unrelated reads or publications",
       path: "design/requirement.md",
       bytes: REQUIREMENT_BYTES,
     }]);
-    equal(published.created, true);
+    equal(published.wroteAuthority, true);
     deepEqual((await store.loadRequirement(REQUIREMENT_ID)).record, first);
-    equal(readdirSync(path.join(rootPath, "transactions")).length, 1);
+    equal(existsSync(path.join(rootPath, ...unrelatedStage.split("/"))), true);
+    equal(readdirSync(path.join(rootPath, "transactions")).length, 2);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -362,7 +432,10 @@ test("same record concurrent publication has one commit and one idempotent resul
         bytes: REQUIREMENT_BYTES,
       }]),
     ]);
-    deepEqual(results.map((result) => result.created).sort(), [false, true]);
+    deepEqual(
+      results.map((result) => result.wroteAuthority).sort(),
+      [false, true],
+    );
     equal(readdirSync(path.join(rootPath, "transactions")).length, 0);
   } finally {
     await root.close();
@@ -389,6 +462,7 @@ test("published final with remaining exact intent settles forward", async () => 
     );
 
     const recovered = await store.recoverRecordPublication(REQUIREMENT_ID);
+    equal(recovered.wroteAuthority, false);
     equal(recovered.loaded.record.artifactKind, "wakeflow-requirement-record");
     if (recovered.loaded.record.artifactKind !== "wakeflow-requirement-record") {
       throw new Error("Expected recovered requirement record.");

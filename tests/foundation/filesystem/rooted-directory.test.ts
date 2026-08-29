@@ -53,13 +53,9 @@ test("a canonical real directory opens as a handle-backed root", async () => {
   const rooted = await RootedDirectory.open(rootPath);
   try {
     equal(rooted.absolutePath, realpathSync(rootPath));
-    equal(rooted.initialSnapshot.kind, "directory");
-    equal(rooted.isClosed, false);
 
     const current = await rooted.assertCurrent();
     equal(current.kind, "directory");
-    equal(current.deviceId, rooted.initialSnapshot.deviceId);
-    equal(current.inodeId, rooted.initialSnapshot.inodeId);
   } finally {
     await rooted.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -222,14 +218,19 @@ test("an opened root detects pathname replacement", async () => {
   const rooted = await RootedDirectory.open(rootPath);
   try {
     renameSync(rootPath, original);
-    mkdirSync(rootPath);
-
-    const error = await expectRootedDirectoryError(
+    const missingError = await expectRootedDirectoryError(
       () => rooted.assertCurrent("$.root"),
       "root-changed",
       "$.root",
     );
-    equal(error.message.includes(parent), false);
+    equal(missingError.message.includes(parent), false);
+
+    mkdirSync(rootPath);
+    await expectRootedDirectoryError(
+      () => rooted.assertCurrent("$.root"),
+      "root-changed",
+      "$.root",
+    );
   } finally {
     await rooted.close();
     rmSync(parent, { recursive: true, force: true });
@@ -260,7 +261,6 @@ test("close is idempotent and all later I/O is rejected", async () => {
   await rooted.close();
   await rooted.close();
 
-  equal(rooted.isClosed, true);
   await expectRootedDirectoryError(
     () => rooted.assertCurrent(),
     "closed",

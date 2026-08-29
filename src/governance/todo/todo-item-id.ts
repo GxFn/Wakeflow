@@ -13,8 +13,6 @@ export type TodoItemId = string & {
   readonly [TODO_ITEM_ID_BRAND]: "TodoItemId";
 };
 
-export type TodoItemIdErrorReason = "format";
-
 /** TODO item ID 词法失败的稳定、脱敏错误。 */
 export class TodoItemIdError extends Error {
   override readonly name = "TodoItemIdError";

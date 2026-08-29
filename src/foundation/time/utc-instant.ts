@@ -122,21 +122,6 @@ export function parseUtcInstant(
 }
 
 /**
- * 把 UTC 时刻转换为 Unix 纪元纳秒，并在运行时重新验证品牌类型输入。
- *
- * 结果可以为负数；例如纪元前 1 纳秒表示为 `-1n`。本转换不修改原文本。
- */
-export function utcInstantToEpochNanoseconds(
-  value: UtcInstant,
-  errorPath?: string,
-): bigint {
-  return parseUtcInstantParts(
-    value,
-    normalizeErrorPath(errorPath),
-  ).epochNanoseconds;
-}
-
-/**
  * 按真实纳秒时间线比较两个 UTC 时刻；不同精度的文本可以表示相同时刻。
  *
  * 参数虽然带品牌，仍分别以 `$left` 和 `$right` 重新完成运行时复验。

@@ -5,15 +5,14 @@ import {
 import {
   parseWakeflowDurableIdOfKind,
   type WakeflowDurableId,
-} from "../../foundation/identity/wakeflow-durable-id.js";
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
 } from "../../workspace/workspace-resource-declaration.js";
 import {
   parseDemandEventCommitSequence,
-  type DemandEventCommitSequence,
-} from "./event-sourcing/demand-event-sourcing-aggregate.js";
+} from "./event-sourcing/demand-event-stream-position.js";
 import {
   demandEventSourcingSnapshotRef,
   demandEventStreamCommitRef,
@@ -161,28 +160,28 @@ function exactAggregateRootDeclaration(
   });
 }
 
-export const DEMAND_PUBLICATION_ROOT_RESOURCE_DECLARATION =
+const DEMAND_PUBLICATION_ROOT_RESOURCE_DECLARATION =
   privateDirectoryDeclaration(
     "demand.publication.root",
     DEMAND_PUBLICATION_OWNER_ID,
     DEMAND_PUBLICATION_ROOT_REF,
   );
 
-export const DEMAND_PUBLICATION_STAGES_ROOT_RESOURCE_DECLARATION =
+const DEMAND_PUBLICATION_STAGES_ROOT_RESOURCE_DECLARATION =
   privateDirectoryDeclaration(
     "demand.publication.stages-root",
     DEMAND_PUBLICATION_OWNER_ID,
     DEMAND_PUBLICATION_STAGES_ROOT_REF,
   );
 
-export const DEMAND_PUBLICATION_TRANSACTIONS_ROOT_RESOURCE_DECLARATION =
+const DEMAND_PUBLICATION_TRANSACTIONS_ROOT_RESOURCE_DECLARATION =
   privateDirectoryDeclaration(
     "demand.publication.transactions-root",
     DEMAND_PUBLICATION_OWNER_ID,
     DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
   );
 
-export const DEMAND_PUBLICATION_LOCKS_ROOT_RESOURCE_DECLARATION =
+const DEMAND_PUBLICATION_LOCKS_ROOT_RESOURCE_DECLARATION =
   privateDirectoryDeclaration(
     "demand.publication.locks-root",
     DEMAND_PUBLICATION_OWNER_ID,
@@ -197,7 +196,7 @@ export const WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG = Object.freeze([
   DEMAND_PUBLICATION_LOCKS_ROOT_RESOURCE_DECLARATION,
 ]) satisfies readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
 
-export type DemandEventSourcingResourceCatalog = readonly [
+type DemandEventSourcingResourceCatalog = readonly [
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
@@ -340,8 +339,10 @@ export function createDemandEventSourcingSnapshotResourceDeclaration(
   commitSequenceValue: unknown,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
   const demandId = parseDemandId(demandValue);
-  const commitSequence: DemandEventCommitSequence =
-    parseDemandEventCommitSequence(commitSequenceValue, "$commitSequence");
+  const commitSequence = parseDemandEventCommitSequence(
+    commitSequenceValue,
+    "$commitSequence",
+  );
   return privateFileDeclaration(
     `demand.event-sourcing.${demandId}.snapshot-${commitSequence}`,
     DEMAND_EVENT_SOURCING_OWNER_ID,

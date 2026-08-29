@@ -3,8 +3,13 @@ import { types } from "node:util";
 import {
   computeSha256Digest,
   parseSha256Digest,
+  Sha256Error,
   type Sha256Digest,
 } from "../../foundation/crypto/sha256.js";
+import {
+  Sha256Hasher,
+  Sha256HasherError,
+} from "../../foundation/crypto/sha256-hasher.js";
 import {
   parsePlainRecord,
   PassiveOwnDataError,
@@ -51,6 +56,8 @@ const MARKER_PATTERN =
 
 export type WakeflowManagedTextEnvelopeErrorReason =
   | "input"
+  | "capacity"
+  | "hash-failure"
   | "utf8"
   | "identity"
   | "body-profile"
@@ -61,6 +68,8 @@ export type WakeflowManagedTextEnvelopeErrorReason =
 
 const ERROR_MESSAGES = {
   input: "Wakeflow managed text envelope input is invalid.",
+  capacity: "Wakeflow managed text envelope exceeds runtime byte capacity.",
+  "hash-failure": "Wakeflow managed text envelope bytes could not be hashed.",
   utf8: "Wakeflow managed text source is not valid UTF-8.",
   identity: "Wakeflow managed text component identity is invalid.",
   "body-profile": "Wakeflow managed text body violates its strict profile.",
@@ -161,6 +170,38 @@ function fail(
   throw new WakeflowManagedTextEnvelopeError(reason, path);
 }
 
+function digestBytes(bytes: Uint8Array, path: string): Sha256Digest {
+  try {
+    return computeSha256Digest(bytes, path);
+  } catch (error: unknown) {
+    if (error instanceof Sha256Error) fail("hash-failure", path);
+    throw error;
+  }
+}
+
+function digestParts(
+  parts: readonly Uint8Array[],
+  path: string,
+): Sha256Digest {
+  let hasher: Sha256Hasher;
+  try {
+    hasher = new Sha256Hasher();
+    for (const part of parts) hasher.update(part, path);
+    return hasher.digest().digest;
+  } catch (error: unknown) {
+    if (error instanceof Sha256HasherError) fail("hash-failure", path);
+    throw error;
+  }
+}
+
+function concatenate(parts: readonly Uint8Array[], path: string): Buffer {
+  try {
+    return Buffer.concat(parts);
+  } catch {
+    fail("capacity", path);
+  }
+}
+
 function snapshotBytes(value: unknown): Buffer {
   if (
     typeof value !== "object"
@@ -172,7 +213,11 @@ function snapshotBytes(value: unknown): Buffer {
   ) {
     fail("input", "$source");
   }
-  return Buffer.from(value);
+  try {
+    return Buffer.from(value);
+  } catch {
+    fail("capacity", "$source");
+  }
 }
 
 function decodeSource(bytes: Uint8Array): void {
@@ -321,7 +366,7 @@ function inspectSnapshot(
 ): Readonly<WakeflowManagedTextEnvelopeInspection> {
   decodeSource(source);
   const sourceByteCount = parseByteCount(source.byteLength, "$source");
-  const sourceDigest = computeSha256Digest(source, "$source");
+  const sourceDigest = digestBytes(source, "$source");
   const offsets = markerOffsets(source);
   if (offsets.length === 0) {
     return Object.freeze({
@@ -358,7 +403,7 @@ function inspectSnapshot(
   const bodyBytes = source.subarray(bodyStart, bodyEnd);
   const body = decodeUtf8(bodyBytes, "$body");
   assertBodyProfile(body, "$body");
-  if (computeSha256Digest(bodyBytes, "$body") !== begin.bodyDigest) {
+  if (digestBytes(bodyBytes, "$body") !== begin.bodyDigest) {
     fail("body-digest", "$body");
   }
   const blockEnd = end.lineEnd + 1;
@@ -372,12 +417,11 @@ function inspectSnapshot(
   }
   const prefix = source.subarray(0, ownedStart);
   const suffix = source.subarray(blockEnd);
-  const outside = Buffer.concat([prefix, suffix]);
   return Object.freeze({
     kind: "managed",
     sourceByteCount,
     sourceDigest,
-    outsideDigest: computeSha256Digest(outside, "$outside"),
+    outsideDigest: digestParts([prefix, suffix], "$outside"),
     component: begin.component,
     owner: begin.owner,
     body,
@@ -412,15 +456,19 @@ function renderOwnedBlock(
     if (error instanceof Utf8Error) fail("body-profile", "$target.body");
     throw error;
   }
-  const digest = computeSha256Digest(bodyBytes, "$target.body");
+  const digest = digestBytes(bodyBytes, "$target.body");
   const separator = ownsSeparator ? "1" : "0";
   const marker = (side: "begin" | "end") => (
     `${WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX}${side} component=${target.component} owner=${target.owner} digest=${digest} sep=${separator} -->`
   );
-  return Buffer.from(
-    `${ownsSeparator ? "\n" : ""}${marker("begin")}\n${target.body}${marker("end")}\n`,
-    "utf8",
-  );
+  try {
+    return Buffer.from(
+      `${ownsSeparator ? "\n" : ""}${marker("begin")}\n${target.body}${marker("end")}\n`,
+      "utf8",
+    );
+  } catch {
+    fail("capacity", "$target.body");
+  }
 }
 
 function resultBytes(
@@ -429,11 +477,10 @@ function resultBytes(
   WakeflowManagedTextRecompositionResult,
   "bytes" | "byteCount" | "digest"
 >> {
-  const snapshot = Buffer.from(bytes);
   return Object.freeze({
-    bytes: snapshot,
-    byteCount: parseByteCount(snapshot.byteLength, "$result"),
-    digest: computeSha256Digest(snapshot, "$result"),
+    bytes,
+    byteCount: parseByteCount(bytes.byteLength, "$result"),
+    digest: digestBytes(bytes, "$result"),
   });
 }
 
@@ -462,11 +509,11 @@ export function recomposeWakeflowManagedTextEnvelope(
   const ownsSeparator = current.kind === "managed"
     ? current.separator === "owned-leading-lf"
     : source.byteLength > 0 && source[source.byteLength - 1] !== LF;
-  const output = Buffer.concat([
+  const output = concatenate([
     source.subarray(0, prefixEnd),
     renderOwnedBlock(target, ownsSeparator),
     source.subarray(suffixStart),
-  ]);
+  ], "$result");
   const facts = resultBytes(output);
   const envelope = inspectSnapshot(output);
   if (envelope.kind !== "managed") fail("relation", "$result");
@@ -499,10 +546,10 @@ export function removeWakeflowManagedTextEnvelope(
   ) {
     fail("relation", "$identity");
   }
-  const output = Buffer.concat([
+  const output = concatenate([
     source.subarray(0, current.ownedRange.offset),
     source.subarray(current.ownedRange.endExclusive),
-  ]);
+  ], "$result");
   return Object.freeze({
     disposition: "removed",
     ...resultBytes(output),

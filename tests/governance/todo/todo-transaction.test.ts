@@ -155,6 +155,27 @@ test("operation-specific nullability, status, target digest and time are enforce
     }),
     "target",
   );
+  expectTransactionError(
+    () => parseTodoTransaction({
+      ...append,
+      targetIntake: {
+        ...append.targetIntake,
+        type: "research",
+      },
+    }),
+    "target",
+  );
+  expectTransactionError(
+    () => parseTodoTransaction({
+      ...append,
+      targetState: {
+        ...append.targetState,
+        revision: 2,
+        previousStateDigest: null,
+      },
+    }),
+    "target",
+  );
 });
 
 test("transaction document field order is exact", () => {

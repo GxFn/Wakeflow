@@ -69,8 +69,6 @@ test("same-parent link publishes one exact no-replace linked pair", async () => 
       { expectedSourceNode: expected.node },
     );
 
-    equal(result.previousLinkCount, 1n);
-    equal(result.linkedPairLinkCount, 2n);
     equal(result.sourceNode.inodeId, result.destinationNode.inodeId);
     equal(result.sourceNode.deviceId, result.destinationNode.deviceId);
     equal(result.sourceNode.linkCount, 2n);
@@ -96,15 +94,13 @@ test("cross-parent link preserves a pre-existing hard-link count", async () => {
     const source = parsePortableResourcePath("from/source");
     const destination = parsePortableResourcePath("to/destination");
     const expected = await root.inspectExistingResource(source);
-    const result = await linkRegularFileWithoutReplacement(
+    await linkRegularFileWithoutReplacement(
       root,
       source,
       destination,
       { expectedSourceNode: expected.node },
     );
 
-    equal(result.previousLinkCount, 2n);
-    equal(result.linkedPairLinkCount, 3n);
     equal(statSync(sourcePath).nlink, 3);
     equal(statSync(path.join(rootPath, "to", "destination")).nlink, 3);
   } finally {
@@ -340,6 +336,16 @@ test("options, paths, and AbortSignal are passively admitted", async () => {
       ),
       "input",
       "$sourceResourcePath",
+    );
+    await expectLinkError(
+      () => linkRegularFileWithoutReplacement(
+        root,
+        source,
+        asPortableResourcePath(null),
+        { expectedSourceNode: expected.node },
+      ),
+      "input",
+      "$destinationResourcePath",
     );
 
     const controller = new AbortController();

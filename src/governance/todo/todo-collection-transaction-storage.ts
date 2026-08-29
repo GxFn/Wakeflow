@@ -11,6 +11,7 @@ import {
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import {
   recoverDurableAtomicFileStagesInDirectory,
+  recoverDurableAtomicFileStagesForTargets,
   DurableAtomicFileStageRecoveryError,
 } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import {
@@ -49,9 +50,14 @@ import {
   parseByteCount,
   type ByteCount,
 } from "../../foundation/numeric/byte-count.js";
+import {
+  admitWakeflowResourceOperation,
+  WakeflowResourceProcessingContractError,
+  type WakeflowDirectoryContainerRecipe,
+  type WakeflowResourceMutationRecipe,
+} from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
-  inspectTodoCollectionAuthority,
   inspectTodoCollectionAuthorityForRecovery,
   TodoCollectionAuthorityError,
   TODO_AUTHORITY_DIRECTORY_MODE,
@@ -71,9 +77,14 @@ import {
   computeTodoIntakeDigest,
   parseTodoIntake,
   renderTodoIntake,
+  TodoIntakeError,
   type TodoIntake,
 } from "./todo-intake.js";
 import type { TodoItemId } from "./todo-item-id.js";
+import {
+  createTodoItemResourceCatalog,
+  WAKEFLOW_TODO_STATIC_RESOURCE_CATALOG,
+} from "./todo-resource-catalog.js";
 import {
   TODO_BOARD_PROJECTION_REF,
   TODO_COLLECTION_LOCK_REF,
@@ -87,11 +98,13 @@ import {
   computeTodoStateDigest,
   parseTodoState,
   renderTodoState,
+  TodoStateError,
   type TodoState,
 } from "./todo-state.js";
 import {
   parseTodoTransaction,
   renderTodoTransaction,
+  TodoTransactionError,
   type TodoTransaction,
   type TodoTransactionOperation,
 } from "./todo-transaction.js";
@@ -102,10 +115,10 @@ import {
  * 本模块只使用已经验证的 TODO 接收记录、状态、事务记录和固定 TODO 引用，执行
  * 恢复意图持久化、暂存、基于精确源预期的替换、投影发布和恢复。公共输入、状态选择、
  * 集合锁临界区和结果语义仍只由 `todo-collection-service` 负责；本模块不是通用
- * 通用仓储、存储后端或第二个权威职责所有者。
+ * 仓储、存储后端或第二个权威职责所有者。
  */
 
-export const TODO_TRANSACTION_MAXIMUM_BYTES = parseByteCount(1024 * 1024);
+const TODO_TRANSACTION_MAXIMUM_BYTES = parseByteCount(1024 * 1024);
 
 interface JournalSource {
   readonly resourcePath: PortableResourcePath;
@@ -128,6 +141,43 @@ function fail(reason: TodoCollectionServiceErrorReason, path: string): never {
   throw new TodoCollectionServiceError(reason, path);
 }
 
+function admitDeclaredOperation(
+  todoId: TodoItemId,
+  resourcePath: PortableResourcePath,
+  recipe: WakeflowResourceMutationRecipe | WakeflowDirectoryContainerRecipe,
+): void {
+  const declaration = createTodoItemResourceCatalog(todoId).find((entry) => (
+    entry.placement.relativePath === resourcePath
+  ));
+  if (declaration === undefined) fail("operation-failure", "$catalog");
+  try {
+    admitWakeflowResourceOperation(declaration.processing, recipe);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowResourceProcessingContractError) {
+      fail("operation-failure", "$catalog");
+    }
+    throw error;
+  }
+}
+
+function admitProjectionRewrite(): void {
+  const declaration = WAKEFLOW_TODO_STATIC_RESOURCE_CATALOG.find((entry) => (
+    entry.placement.relativePath === TODO_BOARD_PROJECTION_REF
+  ));
+  if (declaration === undefined) fail("operation-failure", "$catalog");
+  try {
+    admitWakeflowResourceOperation(
+      declaration.processing,
+      "deterministic-rewrite",
+    );
+  } catch (error: unknown) {
+    if (error instanceof WakeflowResourceProcessingContractError) {
+      fail("operation-failure", "$catalog");
+    }
+    throw error;
+  }
+}
+
 function encodeBoundedContent(
   content: string,
   maximumBytes: ByteCount,
@@ -142,6 +192,7 @@ function mapAuthorityError(error: TodoCollectionAuthorityError): never {
   if (error.reason === "input") fail("input", error.path);
   if (error.reason === "not-initialized") fail("not-initialized", error.path);
   if (error.reason === "recovery-required") fail("recovery-required", error.path);
+  if (error.reason === "capacity") fail("capacity", error.path);
   if (error.reason === "aborted") fail("aborted", error.path);
   fail("transaction-conflict", error.path);
 }
@@ -152,21 +203,6 @@ async function inspectRecovery(
 ): Promise<Readonly<TodoCollectionAuthoritySnapshot>> {
   try {
     return await inspectTodoCollectionAuthorityForRecovery(
-      root,
-      signal === undefined ? undefined : { signal },
-    );
-  } catch (error: unknown) {
-    if (error instanceof TodoCollectionAuthorityError) mapAuthorityError(error);
-    throw error;
-  }
-}
-
-async function inspectSettled(
-  root: RootedDirectory,
-  signal: AbortSignal | undefined,
-): Promise<Readonly<TodoCollectionAuthoritySnapshot>> {
-  try {
-    return await inspectTodoCollectionAuthority(
       root,
       signal === undefined ? undefined : { signal },
     );
@@ -251,15 +287,92 @@ function assertTransactionStorageCapacity(
   );
 }
 
-function mapAtomicWriteError(error: DurableAtomicFileWriteError): never {
+function mapAtomicWriteError(
+  error: DurableAtomicFileWriteError,
+  targetExistsReason: "recovery-required" | "transaction-conflict" =
+    "transaction-conflict",
+): never {
   if (error.reason === "aborted") fail("aborted", error.path);
+  if (error.reason === "target-exists") {
+    fail(targetExistsReason, error.path);
+  }
   if (
-    error.reason === "target-exists"
-    || error.reason === "expectation-changed"
+    error.reason === "expectation-changed"
+    || error.reason === "expectation-read-failure"
   ) {
     fail("transaction-conflict", error.path);
   }
+  if (error.reason === "capacity") fail("capacity", error.path);
+  if (
+    error.reason === "commit-uncertain"
+    || error.reason === "durability-failure"
+    || error.reason === "stage-cleanup-failure"
+    || error.reason === "stage-recovery-required"
+    || error.reason === "close-failure"
+  ) {
+    fail("recovery-required", error.path);
+  }
   fail("write-failure", error.path);
+}
+
+async function recoverTargetStages(
+  root: RootedDirectory,
+  targets: readonly PortableResourcePath[],
+  signal: AbortSignal | undefined,
+  path: string,
+): Promise<void> {
+  try {
+    const receipt = await recoverDurableAtomicFileStagesForTargets(
+      root,
+      targets,
+      signal === undefined ? undefined : { signal },
+    );
+    if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
+      fail("recovery-required", path);
+    }
+  } catch (error: unknown) {
+    if (error instanceof TodoCollectionServiceError) throw error;
+    if (error instanceof DurableAtomicFileStageRecoveryError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      fail("recovery-required", path);
+    }
+    throw error;
+  }
+}
+
+async function recoverTransactionTargetStages(
+  root: RootedDirectory,
+  transaction: Readonly<TodoTransaction>,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  await recoverTargetStages(
+    root,
+    Object.freeze([TODO_BOARD_PROJECTION_REF]),
+    signal,
+    "$projection",
+  );
+  if (transaction.operation === "append") {
+    const stageRef = todoAppendStageRef(transaction.todoId);
+    const stageNode = await inspectExistingNode(root, stageRef);
+    if (stageNode === null) return;
+    assertPrivateNode(stageNode, "directory");
+    await recoverTargetStages(
+      root,
+      Object.freeze([
+        parsePortableResourcePath(`${stageRef}/intake.json`),
+        parsePortableResourcePath(`${stageRef}/state.json`),
+      ]),
+      signal,
+      "$stage",
+    );
+    return;
+  }
+  await recoverTargetStages(
+    root,
+    Object.freeze([todoStateRef(transaction.todoId)]),
+    signal,
+    "$state",
+  );
 }
 
 async function createJournal(
@@ -268,6 +381,7 @@ async function createJournal(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<JournalSource>> {
   const resourcePath = todoTransactionRef(transaction.todoId);
+  admitDeclaredOperation(transaction.todoId, resourcePath, "exclusive-create");
   const bytes = encodeBoundedContent(
     renderTodoTransaction(transaction),
     TODO_TRANSACTION_MAXIMUM_BYTES,
@@ -289,7 +403,9 @@ async function createJournal(
       digest: created.digest,
     });
   } catch (error: unknown) {
-    if (error instanceof DurableAtomicFileWriteError) mapAtomicWriteError(error);
+    if (error instanceof DurableAtomicFileWriteError) {
+      mapAtomicWriteError(error, "recovery-required");
+    }
     throw error;
   }
 }
@@ -350,8 +466,12 @@ async function readJournal(
     if (renderTodoTransaction(transaction) !== read.text) {
       fail("transaction-conflict", "$transaction");
     }
-  } catch {
-    fail("transaction-conflict", "$transaction");
+  } catch (error: unknown) {
+    if (error instanceof TodoCollectionServiceError) throw error;
+    if (error instanceof TodoTransactionError) {
+      fail("transaction-conflict", "$transaction");
+    }
+    throw error;
   }
   if (transaction.todoId !== todoId) fail("transaction-conflict", "$transaction");
   return Object.freeze({
@@ -381,32 +501,28 @@ async function assertTransactionInventory(
       },
     );
     assertPrivateNode(directory.directoryNode, "directory");
-    const allowed = new Set([basename(todoTransactionRef(transaction.todoId))]);
+    const journalName = basename(todoTransactionRef(transaction.todoId));
+    const journal = directory.entries.find((entry) => (
+      entry.name === journalName
+    ));
+    if (journal === undefined) fail("transaction-conflict", "$transactions");
+    assertPrivateNode(journal.node, "file");
+    const allowed = new Set([journalName]);
     if (transaction.operation === "append") {
       allowed.add(basename(todoAppendStageRef(transaction.todoId)));
     }
     if (
-      !directory.entries.some(
-        (entry) => entry.name === basename(todoTransactionRef(transaction.todoId))
-          && entry.node.kind === "file"
-          && entry.node.permissionBits === TODO_AUTHORITY_FILE_MODE
-          && entry.node.linkCount === 1n,
-      )
-      || directory.entries.some((entry) => !allowed.has(entry.name))
+      directory.entries.some((entry) => !allowed.has(entry.name))
     ) {
       fail("transaction-conflict", "$transactions");
     }
     const stageName = basename(todoAppendStageRef(transaction.todoId));
     const stage = directory.entries.find((entry) => entry.name === stageName);
-    if (
-      stage !== undefined
-      && (
-        transaction.operation !== "append"
-        || stage.node.kind !== "directory"
-        || stage.node.permissionBits !== TODO_AUTHORITY_DIRECTORY_MODE
-      )
-    ) {
-      fail("transaction-conflict", "$transactions");
+    if (stage !== undefined) {
+      if (transaction.operation !== "append") {
+        fail("transaction-conflict", "$transactions");
+      }
+      assertPrivateNode(stage.node, "directory");
     }
   } catch (error: unknown) {
     if (error instanceof TodoCollectionServiceError) throw error;
@@ -451,7 +567,10 @@ async function inspectExistingNode(
       error instanceof RootedDirectoryError
       && error.reason === "resource-not-found"
     ) return null;
-    fail("transaction-conflict", "$resourcePath");
+    if (error instanceof RootedDirectoryError) {
+      fail("transaction-conflict", "$resourcePath");
+    }
+    throw error;
   }
 }
 
@@ -485,14 +604,27 @@ async function ensureStageFile(
       expectedNode: existing,
       ...(signal === undefined ? {} : { signal }),
     });
-  } catch {
-    fail("transaction-conflict", "$stage");
+  } catch (error: unknown) {
+    if (error instanceof StableFileReadError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      fail("transaction-conflict", "$stage");
+    }
+    if (
+      error instanceof StrictTextFileError
+      || error instanceof DeterministicJsonDocumentError
+    ) {
+      fail("transaction-conflict", "$stage");
+    }
+    throw error;
   }
   assertPrivateNode(read.node, "file");
   try {
     parser(read.value);
-  } catch {
-    fail("transaction-conflict", "$stage");
+  } catch (error: unknown) {
+    if (error instanceof TodoIntakeError || error instanceof TodoStateError) {
+      fail("transaction-conflict", "$stage");
+    }
+    throw error;
   }
   if (read.text !== content) fail("transaction-conflict", "$stage");
 }
@@ -546,11 +678,24 @@ async function ensureAppendTarget(
     return false;
   }
   if (transaction.targetIntake === null) fail("transaction-conflict", "$transaction");
+  admitDeclaredOperation(
+    transaction.todoId,
+    todoItemRootRef(transaction.todoId),
+    "exact-directory-publish",
+  );
   const stageRef = todoAppendStageRef(transaction.todoId);
   await materializeTodoPrivateDirectory(root, stageRef, signal);
+  const intakeStageRef = parsePortableResourcePath(`${stageRef}/intake.json`);
+  const stateStageRef = parsePortableResourcePath(`${stageRef}/state.json`);
+  await recoverTargetStages(
+    root,
+    Object.freeze([intakeStageRef, stateStageRef]),
+    signal,
+    "$stage",
+  );
   await ensureStageFile(
     root,
-    parsePortableResourcePath(`${stageRef}/intake.json`),
+    intakeStageRef,
     renderTodoIntake(transaction.targetIntake),
     TODO_INTAKE_MAXIMUM_BYTES,
     parseTodoIntake,
@@ -558,7 +703,7 @@ async function ensureAppendTarget(
   );
   await ensureStageFile(
     root,
-    parsePortableResourcePath(`${stageRef}/state.json`),
+    stateStageRef,
     renderTodoState(transaction.targetState),
     TODO_STATE_MAXIMUM_BYTES,
     parseTodoState,
@@ -581,6 +726,14 @@ async function ensureAppendTarget(
   } catch (error: unknown) {
     if (error instanceof DurableResourceRenameError) {
       if (error.reason === "aborted") fail("aborted", error.path);
+      if (
+        error.reason === "destination-exists"
+        || error.reason === "commit-uncertain"
+        || error.reason === "durability-failure"
+        || error.reason === "close-failure"
+      ) {
+        fail("recovery-required", error.path);
+      }
       fail("transaction-conflict", error.path);
     }
     throw error;
@@ -603,6 +756,17 @@ async function ensureStateTarget(
   if (item.stateDigest !== transaction.expectedStateDigest) {
     fail("transaction-conflict", "$item/state");
   }
+  admitDeclaredOperation(
+    transaction.todoId,
+    todoStateRef(transaction.todoId),
+    "exact-source-replace",
+  );
+  await recoverTargetStages(
+    root,
+    Object.freeze([todoStateRef(transaction.todoId)]),
+    signal,
+    "$state",
+  );
   const bytes = encodeBoundedContent(
     renderTodoState(transaction.targetState),
     TODO_STATE_MAXIMUM_BYTES,
@@ -635,6 +799,13 @@ export async function publishTodoBoardProjection(
   const observation = snapshot.projection;
   if (observation.status === "current") return false;
   if (observation.status === "unsafe") fail("projection-unsafe", "$projection");
+  admitProjectionRewrite();
+  await recoverTargetStages(
+    root,
+    Object.freeze([TODO_BOARD_PROJECTION_REF]),
+    signal,
+    "$projection",
+  );
   const bytes = encodeBoundedContent(
     observation.expected.content,
     TODO_PROJECTION_MAXIMUM_BYTES,
@@ -665,9 +836,15 @@ export async function publishTodoBoardProjection(
 
 async function retireJournal(
   root: RootedDirectory,
+  todoId: TodoItemId,
   source: Readonly<JournalSource>,
   signal: AbortSignal | undefined,
 ): Promise<void> {
+  admitDeclaredOperation(
+    todoId,
+    source.resourcePath,
+    "exact-retire",
+  );
   try {
     await unlinkRegularFileExactly(root, source.resourcePath, {
       expectedNode: source.node,
@@ -676,6 +853,13 @@ async function retireJournal(
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
       if (error.reason === "aborted") fail("aborted", error.path);
+      if (
+        error.reason === "commit-uncertain"
+        || error.reason === "durability-failure"
+        || error.reason === "close-failure"
+      ) {
+        fail("recovery-required", "$transaction");
+      }
       fail("transaction-conflict", "$transaction");
     }
     throw error;
@@ -689,6 +873,7 @@ async function applyTransaction(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<AppliedTransaction>> {
   await assertTransactionInventory(root, transaction, signal);
+  await recoverTransactionTargetStages(root, transaction, signal);
   let snapshot = await inspectRecovery(root, signal);
   if (
     snapshot.collection.collectionDigest !== transaction.expectedCollectionDigest
@@ -714,12 +899,15 @@ async function applyTransaction(
     fail("transaction-conflict", "$collection");
   }
   const wroteProjection = await publishTodoBoardProjection(root, snapshot, signal);
-  await retireJournal(root, journal, signal);
-  const settled = await inspectSettled(root, signal);
-  if (settled.collection.collectionDigest !== transaction.targetCollectionDigest) {
+  const verified = await inspectRecovery(root, signal);
+  if (
+    verified.collection.collectionDigest !== transaction.targetCollectionDigest
+    || verified.projection.status !== "current"
+  ) {
     fail("transaction-conflict", "$collection");
   }
-  return Object.freeze({ snapshot: settled, wroteAuthority, wroteProjection });
+  await retireJournal(root, transaction.todoId, journal, signal);
+  return Object.freeze({ snapshot: verified, wroteAuthority, wroteProjection });
 }
 
 /** 在已经持有集合锁时创建恢复意图记录，并前向应用一次领域事务。 */

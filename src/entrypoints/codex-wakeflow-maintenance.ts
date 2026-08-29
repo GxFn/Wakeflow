@@ -25,10 +25,7 @@ import type {
 const CODEX_MAINTENANCE_HOST_PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,
   claudeCodeWorkspaceHostResourceProfile,
-]) as readonly [
-  typeof codexWorkspaceHostResourceProfile,
-  typeof claudeCodeWorkspaceHostResourceProfile,
-];
+]);
 
 const CODEX_MAINTENANCE_PUBLIC_HOST_FACADE = Object.freeze({
   hostId: "codex",

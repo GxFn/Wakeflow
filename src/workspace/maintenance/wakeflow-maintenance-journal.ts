@@ -30,6 +30,7 @@ import {
 } from "../workspace-resource-declaration.js";
 import {
   parseWakeflowMaintenanceOperationId,
+  WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceJournalRef,
   type WakeflowMaintenanceOperationId,
 } from "./wakeflow-maintenance-operation-id.js";
@@ -42,7 +43,7 @@ import type {
 } from "./wakeflow-static-materialization-preview-contract.js";
 
 /**
- * Wakeflow Workspace / Maintenance：prepared-state maintenance journal 领域模型。
+ * Wakeflow Workspace / Maintenance：maintenance transaction checkpoint journal领域模型。
  *
  * Journal 保存 operation identity、immutable intent摘要、计划/Config/Matrix摘要、按序
  * step ID和checkpoint。恢复事实位于同operation的0600 intent sidecar；journal不复制
@@ -70,8 +71,7 @@ export type WakeflowMaintenanceJournalErrorReason =
   | "schema"
   | "operation"
   | "plan"
-  | "digest"
-  | "representation";
+  | "digest";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow maintenance journal input is invalid.",
@@ -79,7 +79,6 @@ const ERROR_MESSAGES = {
   operation: "Wakeflow maintenance journal operation identity is invalid.",
   plan: "Wakeflow maintenance journal requires one ready non-empty execution plan.",
   digest: "Wakeflow maintenance journal contains an invalid digest.",
-  representation: "Wakeflow maintenance journal representation is invalid.",
 } as const satisfies Readonly<Record<
   WakeflowMaintenanceJournalErrorReason,
   string
@@ -131,8 +130,11 @@ export function createPreparedWakeflowMaintenanceJournal(
   let operationId: WakeflowMaintenanceOperationId;
   try {
     operationId = parseWakeflowMaintenanceOperationId(operationIdValue);
-  } catch {
-    fail("operation", "$operationId");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceOperationIdError) {
+      fail("operation", "$operationId");
+    }
+    throw error;
   }
   let plan;
   try {
@@ -189,8 +191,11 @@ export function parseWakeflowMaintenanceJournal(
       validated.value.operationId,
       "$journal.operationId",
     );
-  } catch {
-    fail("operation", "$journal.operationId");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceOperationIdError) {
+      fail("operation", "$journal.operationId");
+    }
+    throw error;
   }
   const stepIds = Object.freeze([...validated.value.stepIds]) as readonly [
     string,
@@ -372,7 +377,7 @@ export function computeWakeflowMaintenanceJournalDigest(
   value: unknown,
 ): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
-    journalRepresentation(parseWakeflowMaintenanceJournal(value)) as JsonValue,
+    journalRepresentation(parseWakeflowMaintenanceJournal(value)),
   );
 }
 

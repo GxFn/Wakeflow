@@ -19,7 +19,7 @@ export interface DemandEventSourcingPublicationTodoResult {
 }
 
 export interface DemandEventSourcingPublicationResult {
-  readonly created: boolean;
+  readonly wroteDemandRoot: boolean;
   readonly demandId: DemandEventSourcingPublicationTransaction["demandId"];
   readonly rootRef: PortableResourcePath;
   readonly todo: Readonly<DemandEventSourcingPublicationTodoResult>;
@@ -37,6 +37,7 @@ export type DemandEventSourcingPublicationServiceErrorReason =
   | "authority"
   | "todo-not-found"
   | "cas-mismatch"
+  | "capacity"
   | "conflict"
   | "not-found"
   | "recovery-required"
@@ -51,6 +52,7 @@ const ERROR_MESSAGES = {
   "authority": "Demand Event Sourcing publication authority is unresolved.",
   "todo-not-found": "Demand Event Sourcing publication TODO does not exist.",
   "cas-mismatch": "Demand Event Sourcing publication expectation is stale.",
+  "capacity": "Demand Event Sourcing publication resource exceeds its byte budget.",
   "conflict": "Demand Event Sourcing publication resources conflict.",
   "not-found": "Demand Event Sourcing publication transaction does not exist.",
   "recovery-required": "Demand Event Sourcing publication requires explicit recovery.",

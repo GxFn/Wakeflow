@@ -1,17 +1,12 @@
 import {
-  parsePlainRecord,
-  PassiveOwnDataError,
-} from "../data/passive-own-data.js";
-import type { ByteCount } from "../numeric/byte-count.js";
-import {
   decodeUtf8,
   Utf8Error,
 } from "../text/utf8.js";
-import type { FileNodeSnapshot } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import type { RootedDirectory } from "./rooted-directory.js";
 import {
   readStableFile,
+  type StableFileReadOptions,
   type StableFileSource,
 } from "./stable-file-read.js";
 
@@ -27,25 +22,12 @@ import {
  * 竞态、取消和节点类型错误继续使用 `StableFileReadError`。
  */
 
-export interface StrictTextFileOptions {
-  readonly maximumBytes: ByteCount;
-  readonly expectedNode?: Readonly<FileNodeSnapshot>;
-  readonly signal?: AbortSignal;
-}
-
 /** 一次严格文本读取结果；成功即证明固定文本 profile 全部成立。 */
 export interface StrictTextFileResult extends StableFileSource {
   readonly text: string;
 }
 
-interface ParsedStrictTextFileOptions {
-  readonly maximumBytes: ByteCount;
-  readonly expectedNode: Readonly<FileNodeSnapshot> | undefined;
-  readonly signal: AbortSignal | undefined;
-}
-
 export type StrictTextFileErrorReason =
-  | "input"
   | "utf8"
   | "bom"
   | "line-endings"
@@ -54,7 +36,6 @@ export type StrictTextFileErrorReason =
   | "unicode-normalization";
 
 const ERROR_MESSAGES = {
-  "input": "Strict text file options are invalid.",
   "utf8": "Strict text file must contain valid fatal UTF-8.",
   "bom": "Strict text file cannot begin with a UTF-8 BOM.",
   "line-endings": "Strict text file must use LF-only line endings.",
@@ -63,7 +44,7 @@ const ERROR_MESSAGES = {
   "unicode-normalization": "Strict text file source must use Unicode NFC.",
 } as const satisfies Readonly<Record<StrictTextFileErrorReason, string>>;
 
-/** 严格文本选项、编码或固定文本形态失败时返回的稳定、脱敏错误。 */
+/** 严格文本编码或固定文本形态失败时返回的稳定、脱敏错误。 */
 export class StrictTextFileError extends Error {
   override readonly name = "StrictTextFileError";
   readonly code = "wakeflow-strict-text-file" as const;
@@ -79,28 +60,6 @@ export class StrictTextFileError extends Error {
 
 function fail(reason: StrictTextFileErrorReason, path: string): never {
   throw new StrictTextFileError(reason, path);
-}
-
-function parseOptions(value: unknown): Readonly<ParsedStrictTextFileOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
-    throw error;
-  }
-  const allowed = new Set(["expectedNode", "maximumBytes", "signal"]);
-  if (
-    !Object.hasOwn(record, "maximumBytes")
-    || Object.keys(record).some((key) => !allowed.has(key))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    maximumBytes: record.maximumBytes as ByteCount,
-    expectedNode: record.expectedNode as Readonly<FileNodeSnapshot> | undefined,
-    signal: record.signal as AbortSignal | undefined,
-  });
 }
 
 function decodeStrictUtf8(bytes: Uint8Array): string {
@@ -129,16 +88,9 @@ function assertStrictText(text: string): void {
 export async function readStrictTextFile(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
-  options: StrictTextFileOptions,
+  options: StableFileReadOptions,
 ): Promise<Readonly<StrictTextFileResult>> {
-  const parsed = parseOptions(options);
-  const stable = await readStableFile(root, resourcePath, {
-    maximumBytes: parsed.maximumBytes,
-    ...(parsed.expectedNode === undefined
-      ? {}
-      : { expectedNode: parsed.expectedNode }),
-    ...(parsed.signal === undefined ? {} : { signal: parsed.signal }),
-  });
+  const stable = await readStableFile(root, resourcePath, options);
   const text = decodeStrictUtf8(stable.bytes);
   assertStrictText(text);
   return Object.freeze({

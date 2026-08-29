@@ -1,4 +1,4 @@
-import { deepEqual, equal, notEqual } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import {
   mkdtempSync,
   rmSync,
@@ -8,7 +8,6 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../../src/foundation/data/deterministic-json-document.js";
 import {
@@ -17,21 +16,23 @@ import {
 } from "../../../src/foundation/data/json-value.js";
 import {
   readDeterministicJsonFile,
-  type DeterministicJsonFileOptions,
 } from "../../../src/foundation/filesystem/deterministic-json-file.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { StableFileReadError } from "../../../src/foundation/filesystem/stable-file-read.js";
+import {
+  StableFileReadError,
+  type StableFileReadOptions,
+} from "../../../src/foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../../src/foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 
 const OPTIONS = Object.freeze({ maximumBytes: parseByteCount(4096) });
 
-function asOptions(value: unknown): DeterministicJsonFileOptions {
-  return value as DeterministicJsonFileOptions;
+function asOptions(value: unknown): StableFileReadOptions {
+  return value as StableFileReadOptions;
 }
 
-test("pretty JSON returns frozen value plus distinct source and semantic digests", async () => {
+test("pretty JSON returns a frozen value with stable physical source facts", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-deterministic-file-"));
   const text = [
     "{",
@@ -53,7 +54,10 @@ test("pretty JSON returns frozen value plus distinct source and semantic digests
     );
     equal(result.text, text);
     equal(result.digest, computeSha256Digest(Buffer.from(text)));
-    equal(result.semanticDigest, computeCanonicalJsonSha256Digest(result.value));
+    equal(
+      Object.keys(result).sort().join(","),
+      "byteCount,digest,node,resourcePath,text,value",
+    );
     equal(Object.isFrozen(result), true);
     equal(Object.isFrozen(result.value), true);
     const record = result.value as JsonObject;
@@ -133,30 +137,6 @@ test("JSON representation drift is rejected without repair", async () => {
   }
 });
 
-test("key order changes source identity but not canonical semantic identity", async () => {
-  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-deterministic-order-"));
-  writeFileSync(path.join(rootPath, "left"), "{\n  \"a\": 1,\n  \"b\": 2\n}\n");
-  writeFileSync(path.join(rootPath, "right"), "{\n  \"b\": 2,\n  \"a\": 1\n}\n");
-  const root = await RootedDirectory.open(rootPath);
-  try {
-    const left = await readDeterministicJsonFile(
-      root,
-      parsePortableResourcePath("left"),
-      OPTIONS,
-    );
-    const right = await readDeterministicJsonFile(
-      root,
-      parsePortableResourcePath("right"),
-      OPTIONS,
-    );
-    notEqual(left.digest, right.digest);
-    equal(left.semanticDigest, right.semanticDigest);
-  } finally {
-    await root.close();
-    rmSync(rootPath, { recursive: true, force: true });
-  }
-});
-
 test("syntax, JSON value, and strict text failures retain their owning layers", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-deterministic-errors-"));
   writeFileSync(path.join(rootPath, "syntax"), "{broken}\n");
@@ -222,8 +202,8 @@ test("expectedNode and options remain lower-layer file contracts", async () => {
     } catch (error: unknown) {
       caught = error;
     }
-    if (!(caught instanceof StrictTextFileError)) {
-      throw new Error("Expected StrictTextFileError.");
+    if (!(caught instanceof StableFileReadError)) {
+      throw new Error("Expected StableFileReadError.");
     }
     equal(caught.reason, "input");
     equal(caught.path, "$options");

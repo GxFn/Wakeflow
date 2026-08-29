@@ -31,7 +31,6 @@ import {
 import {
   assertDurableFileCopyNotAborted,
   assertDurableFileCopyRoot,
-  DURABLE_FILE_COPY_CANDIDATE_CHUNK_BYTES,
   failDurableFileCopyCandidate as fail,
   parseDurableFileCopyExpectation,
   parseDurableFileCopyOptions,
@@ -43,6 +42,54 @@ import {
   type DurableFileCopyContentExpectation,
   type ParsedDurableFileCopyExpectation,
 } from "./durable-file-copy-candidate-contract.js";
+
+const DURABLE_FILE_COPY_CANDIDATE_CHUNK_BYTES = 512 * 1024;
+
+function allocateScratch(
+  byteCount: ByteCount,
+  path: "$source" | "$candidate",
+): Buffer {
+  try {
+    return Buffer.allocUnsafe(Math.min(
+      DURABLE_FILE_COPY_CANDIDATE_CHUNK_BYTES,
+      byteCount || 1,
+    ));
+  } catch {
+    fail("capacity", path);
+  }
+}
+
+function createHasher(
+  reason: "source-read-failure" | "candidate-changed",
+  path: "$source" | "$candidate",
+): Sha256Hasher {
+  try {
+    return new Sha256Hasher();
+  } catch (error: unknown) {
+    if (error instanceof Sha256HasherError) fail(reason, path);
+    throw error;
+  }
+}
+
+async function snapshotHandle(
+  handle: FileHandle,
+  reason:
+    | "source-changed"
+    | "candidate-changed"
+    | "cleanup-failure",
+  path: "$source" | "$candidate",
+): Promise<Readonly<FileNodeSnapshot>> {
+  try {
+    return snapshotDurableFileCopyNode(
+      await handle.stat({ bigint: true }),
+      reason,
+      path,
+    );
+  } catch (error: unknown) {
+    if (error instanceof DurableFileCopyCandidateError) throw error;
+    fail(reason, path);
+  }
+}
 
 /**
  * Wakeflow Foundation / Filesystem：跨根流式复制的具名文件候选。
@@ -157,6 +204,51 @@ async function openDestinationParent(
   }
 }
 
+async function assertDestinationParentCurrent(
+  parent: RootedResourceParentHandle,
+  reason: "destination-parent" | "candidate-changed",
+): Promise<void> {
+  try {
+    await parent.assertCurrent();
+  } catch (error: unknown) {
+    if (error instanceof RootedResourceParentHandleError) {
+      fail(reason, reason === "destination-parent"
+        ? "$candidateResourcePath"
+        : "$candidate");
+    }
+    throw error;
+  }
+}
+
+async function inspectDestinationTarget(
+  parent: RootedResourceParentHandle,
+  reason: "destination-parent" | "candidate-changed",
+): Promise<Readonly<FileNodeSnapshot> | null> {
+  try {
+    return await parent.inspectTarget();
+  } catch (error: unknown) {
+    if (error instanceof RootedResourceParentHandleError) {
+      fail(reason, reason === "destination-parent"
+        ? "$candidateResourcePath"
+        : "$candidate");
+    }
+    throw error;
+  }
+}
+
+async function syncDestinationParent(
+  parent: RootedResourceParentHandle,
+): Promise<void> {
+  try {
+    await parent.sync();
+  } catch (error: unknown) {
+    if (error instanceof RootedResourceParentHandleError) {
+      fail("durability-failure", "$candidate");
+    }
+    throw error;
+  }
+}
+
 async function writeChunk(
   handle: FileHandle,
   bytes: Buffer,
@@ -192,11 +284,8 @@ async function copySourceBytes(
   expectation: Readonly<ParsedDurableFileCopyExpectation>,
   signal: AbortSignal | undefined,
 ): Promise<Sha256Digest> {
-  const scratch = Buffer.allocUnsafe(Math.min(
-    DURABLE_FILE_COPY_CANDIDATE_CHUNK_BYTES,
-    expectation.byteCount || 1,
-  ));
-  const hasher = new Sha256Hasher();
+  const scratch = allocateScratch(expectation.byteCount, "$source");
+  const hasher = createHasher("source-read-failure", "$source");
   let position = 0;
   while (position < expectation.byteCount) {
     assertDurableFileCopyNotAborted(signal);
@@ -239,7 +328,7 @@ async function copySourceBytes(
 
   assertDurableFileCopyNotAborted(signal);
   try {
-    const probe = await sourceHandle.read(Buffer.allocUnsafe(1), 0, 1, position);
+    const probe = await sourceHandle.read(scratch, 0, 1, position);
     if (probe.bytesRead !== 0) fail("source-changed", "$source");
   } catch (error: unknown) {
     if (error instanceof DurableFileCopyCandidateError) throw error;
@@ -270,8 +359,8 @@ async function inspectFinalSource(
   let opened: Readonly<FileNodeSnapshot>;
   let pathNode: Readonly<FileNodeSnapshot>;
   try {
-    opened = snapshotDurableFileCopyNode(
-      await sourceHandle.stat({ bigint: true }),
+    opened = await snapshotHandle(
+      sourceHandle,
       "source-changed",
       "$source",
     );
@@ -303,16 +392,13 @@ async function verifyCandidate(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<FileNodeSnapshot>> {
   assertDurableFileCopyNotAborted(signal);
-  const before = snapshotDurableFileCopyNode(
-    await handle.stat({ bigint: true }),
+  const before = await snapshotHandle(
+    handle,
     "candidate-changed",
     "$candidate",
   );
-  const scratch = Buffer.allocUnsafe(Math.min(
-    DURABLE_FILE_COPY_CANDIDATE_CHUNK_BYTES,
-    expectation.byteCount || 1,
-  ));
-  const hasher = new Sha256Hasher();
+  const scratch = allocateScratch(expectation.byteCount, "$candidate");
+  const hasher = createHasher("candidate-changed", "$candidate");
   let position = 0;
   while (position < expectation.byteCount) {
     assertDurableFileCopyNotAborted(signal);
@@ -342,7 +428,7 @@ async function verifyCandidate(
   }
   assertDurableFileCopyNotAborted(signal);
   try {
-    if ((await handle.read(Buffer.allocUnsafe(1), 0, 1, position)).bytesRead !== 0) {
+    if ((await handle.read(scratch, 0, 1, position)).bytesRead !== 0) {
       fail("candidate-changed", "$candidate");
     }
   } catch (error: unknown) {
@@ -365,8 +451,8 @@ async function verifyCandidate(
     }
     throw error;
   }
-  const after = snapshotDurableFileCopyNode(
-    await handle.stat({ bigint: true }),
+  const after = await snapshotHandle(
+    handle,
     "candidate-changed",
     "$candidate",
   );
@@ -407,6 +493,26 @@ async function closeParent(
   }
 }
 
+function sameRetiredCandidateNode(
+  before: Readonly<FileNodeSnapshot>,
+  after: Readonly<FileNodeSnapshot>,
+): boolean {
+  return (
+    sameFileNodeIdentity(before, after)
+    && before.kind === "file"
+    && after.kind === "file"
+    && before.rawMode === after.rawMode
+    && before.permissionBits === after.permissionBits
+    && before.linkCount === 1n
+    && after.linkCount === 0n
+    && before.userId === after.userId
+    && before.groupId === after.groupId
+    && before.specialDeviceId === after.specialDeviceId
+    && before.byteCount === after.byteCount
+    && before.modifiedAtNanoseconds === after.modifiedAtNanoseconds
+  );
+}
+
 /**
  * 按内容预期把一个来源普通文件流式复制为目标根内具名、非权威、已同步的候选文件。
  */
@@ -420,6 +526,8 @@ export async function copyFileToCandidateDurably(
 ): Promise<Readonly<DurableFileCopyCandidateResult>> {
   assertDurableFileCopyRoot(sourceRootValue, "$sourceRoot");
   assertDurableFileCopyRoot(destinationRootValue, "$destinationRoot");
+  const options = parseDurableFileCopyOptions(optionsValue);
+  assertDurableFileCopyNotAborted(options.signal);
   const sourceResourcePath = parseDurableFileCopyPath(
     sourceResourcePathValue,
     "$sourceResourcePath",
@@ -429,11 +537,9 @@ export async function copyFileToCandidateDurably(
     "$candidateResourcePath",
   );
   const expectation = parseDurableFileCopyExpectation(expectationValue);
-  const options = parseDurableFileCopyOptions(optionsValue);
   if (expectation.byteCount > options.maximumBytes) {
     fail("capacity", "$source");
   }
-  assertDurableFileCopyNotAborted(options.signal);
 
   const initialSource = await inspectInitialSource(
     sourceRootValue,
@@ -445,14 +551,13 @@ export async function copyFileToCandidateDurably(
   let parent: RootedResourceParentHandle | undefined;
   let candidateHandle: FileHandle | undefined;
   let candidateCreated = false;
-  let completed = false;
   let primaryError: unknown;
   let result: Readonly<DurableFileCopyCandidateResult> | undefined;
 
   try {
     sourceHandle = await openSource(initialSource);
-    const openedSource = snapshotDurableFileCopyNode(
-      await sourceHandle.stat({ bigint: true }),
+    const openedSource = await snapshotHandle(
+      sourceHandle,
       "source-changed",
       "$source",
     );
@@ -467,8 +572,11 @@ export async function copyFileToCandidateDurably(
       destinationRootValue,
       candidateResourcePath,
     );
-    await parent.assertCurrent();
-    if (await parent.inspectTarget() !== null) {
+    await assertDestinationParentCurrent(parent, "destination-parent");
+    if (await inspectDestinationTarget(
+      parent,
+      "destination-parent",
+    ) !== null) {
       fail("target-exists", "$candidateResourcePath");
     }
     try {
@@ -529,25 +637,27 @@ export async function copyFileToCandidateDurably(
       expectation,
       options.signal,
     );
-    await parent.assertCurrent();
-    const pathNode = await parent.inspectTarget();
+    await assertDestinationParentCurrent(parent, "candidate-changed");
+    const pathNode = await inspectDestinationTarget(
+      parent,
+      "candidate-changed",
+    );
     if (
       pathNode === null
       || !sameFileNodeSnapshot(candidateNode, pathNode)
     ) {
       fail("candidate-changed", "$candidate");
     }
-    try {
-      await parent.sync();
-    } catch {
-      fail("durability-failure", "$candidate");
-    }
-    const finalHandleNode = snapshotDurableFileCopyNode(
-      await candidateHandle.stat({ bigint: true }),
+    await syncDestinationParent(parent);
+    const finalHandleNode = await snapshotHandle(
+      candidateHandle,
       "candidate-changed",
       "$candidate",
     );
-    const finalPathNode = await parent.inspectTarget();
+    const finalPathNode = await inspectDestinationTarget(
+      parent,
+      "candidate-changed",
+    );
     if (
       finalPathNode === null
       || !sameFileNodeSnapshot(candidateNode, finalHandleNode)
@@ -555,9 +665,7 @@ export async function copyFileToCandidateDurably(
     ) {
       fail("candidate-changed", "$candidate");
     }
-    completed = true;
     result = Object.freeze({
-      kind: "DurableFileCopyCandidate",
       source: Object.freeze({
         resourcePath: sourceResourcePath,
         node: finalSourceNode,
@@ -577,25 +685,35 @@ export async function copyFileToCandidateDurably(
 
   if (
     candidateCreated
-    && !completed
+    && result === undefined
     && candidateHandle !== undefined
     && parent !== undefined
   ) {
     try {
-      const opened = snapshotDurableFileCopyNode(
-        await candidateHandle.stat({ bigint: true }),
+      const opened = await snapshotHandle(
+        candidateHandle,
         "cleanup-failure",
         "$candidate",
       );
       const current = await parent.inspectTarget();
       if (
         current === null
+        || opened.kind !== "file"
+        || current.kind !== "file"
         || opened.linkCount !== 1n
-        || !sameFileNodeIdentity(opened, current)
+        || !sameFileNodeSnapshot(opened, current)
       ) {
         fail("cleanup-failure", "$candidate");
       }
       await unlink(parent.resourceAbsolutePath);
+      const retired = await snapshotHandle(
+        candidateHandle,
+        "cleanup-failure",
+        "$candidate",
+      );
+      if (!sameRetiredCandidateNode(opened, retired)) {
+        fail("cleanup-failure", "$candidate");
+      }
       await parent.sync();
     } catch (error: unknown) {
       primaryError = error instanceof DurableFileCopyCandidateError
@@ -617,17 +735,15 @@ export async function copyFileToCandidateDurably(
     }
   }
   if (primaryError !== undefined) throw primaryError;
-  if (!completed || result === undefined) {
+  if (result === undefined) {
     fail("candidate-changed", "$candidate");
   }
   return result;
 }
 
 export {
-  DURABLE_FILE_COPY_CANDIDATE_CHUNK_BYTES,
   DurableFileCopyCandidateError,
   type DurableFileCopyCandidateErrorReason,
   type DurableFileCopyCandidateOptions,
-  type DurableFileCopyCandidateResult,
   type DurableFileCopyContentExpectation,
 } from "./durable-file-copy-candidate-contract.js";

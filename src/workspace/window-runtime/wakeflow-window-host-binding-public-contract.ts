@@ -25,7 +25,7 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../../foundation/identity/wakeflow-durable-id.js";
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   createRuntimeJsonSchemaValidator,
 } from "../../foundation/schema/runtime-json-schema.js";
@@ -47,10 +47,10 @@ import type { WakeflowWorkspaceHostId } from "../workspace-host-resource-profile
 export const WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME =
   "wakeflow_register_window_binding" as const;
 export const WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_SCHEMA_VERSION = 1 as const;
-export const WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_MAXIMUM_REQUEST_BYTES =
+const WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_MAXIMUM_REQUEST_BYTES =
   64 * 1024;
 
-export interface WakeflowAgentHostWindowCreationObservation {
+interface WakeflowAgentHostWindowCreationObservation {
   readonly kind: "WakeflowAgentHostWindowCreationObservation";
   readonly schemaVersion: 1;
   readonly source: "agent-host-create-result";
@@ -64,25 +64,21 @@ export interface WakeflowAgentHostWindowCreationObservation {
   readonly observedAt: UtcInstant;
 }
 
-export interface WakeflowWindowHostBindingPublicRequest {
+interface WakeflowWindowHostBindingPublicRequest {
   readonly root: string;
   readonly observation: Readonly<WakeflowAgentHostWindowCreationObservation>;
 }
 
-export type WakeflowWindowHostBindingPublicContractErrorReason =
+type WakeflowWindowHostBindingPublicContractErrorReason =
   | "input"
   | "capacity"
   | "schema"
-  | "identifier"
-  | "digest"
   | "time";
 
 const ERROR_MESSAGES = {
   input: "Window Host Binding public request is not passive JSON data.",
   capacity: "Window Host Binding public request exceeds its capacity.",
   schema: "Window Host Binding public request does not satisfy its Schema.",
-  identifier: "Window Host Binding public request contains an invalid window ID.",
-  digest: "Window Host Binding public request contains an invalid launch intent digest.",
   time: "Window Host Binding public request contains an invalid observation time.",
 } as const satisfies Readonly<Record<
   WakeflowWindowHostBindingPublicContractErrorReason,
@@ -150,7 +146,7 @@ export function parseWakeflowWindowHostBindingPublicRequest(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
-      fail("identifier", "$/observation/windowId");
+      fail("schema", "$/observation/windowId");
     }
     throw error;
   }
@@ -162,7 +158,7 @@ export function parseWakeflowWindowHostBindingPublicRequest(
     );
   } catch (error: unknown) {
     if (error instanceof Sha256Error) {
-      fail("digest", "$/observation/launchIntentDigest");
+      fail("schema", "$/observation/launchIntentDigest");
     }
     throw error;
   }

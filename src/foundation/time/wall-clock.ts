@@ -59,7 +59,7 @@ function fail(reason: UtcWallClockErrorReason, path: string): never {
  * `Date` 只生成当前 UTC 毫秒文本，最终仍交给 `utc-instant` 授予品牌类型。函数不
  * 缓存 `Date` 或上一次结果，因此每次调用都是一次新的系统时间观察。
  */
-export const systemUtcWallClock: UtcWallClock = () => (
+const systemUtcWallClock: UtcWallClock = () => (
   parseUtcInstant(new Date().toISOString(), "$systemUtcWallClock")
 );
 

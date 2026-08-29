@@ -4,7 +4,6 @@ import { test } from "node:test";
 import {
   compareUtcInstants,
   parseUtcInstant,
-  utcInstantToEpochNanoseconds,
   UtcInstantError,
   type UtcInstant,
   type UtcInstantErrorReason,
@@ -108,45 +107,33 @@ test("calendar parsing rejects Date rollover while preserving Gregorian leap yea
   equal(parseUtcInstant("2028-02-29T00:00:00Z"), "2028-02-29T00:00:00Z");
 });
 
-test("epoch conversion retains nanoseconds on both sides of Unix epoch", () => {
-  const cases = [
-    ["1970-01-01T00:00:00Z", 0n],
-    ["1970-01-01T00:00:00.000000001Z", 1n],
-    ["1970-01-01T00:00:00.1Z", 100_000_000n],
-    ["1970-01-01T00:00:01Z", 1_000_000_000n],
-    ["1969-12-31T23:59:59.999999999Z", -1n],
-    ["1969-12-31T23:59:59Z", -1_000_000_000n],
-  ] as const;
-
-  for (const [text, expected] of cases) {
-    equal(
-      utcInstantToEpochNanoseconds(parseUtcInstant(text)),
-      expected,
-    );
-  }
-});
-
 test("comparison uses the nanosecond timeline rather than lexical text", () => {
+  const beforeEpoch = parseUtcInstant("1969-12-31T23:59:59.999999999Z");
+  const epoch = parseUtcInstant("1970-01-01T00:00:00Z");
+  const afterEpoch = parseUtcInstant("1970-01-01T00:00:00.000000001Z");
   const whole = parseUtcInstant("2026-08-25T10:20:30Z");
   const zeroFraction = parseUtcInstant("2026-08-25T10:20:30.000000000Z");
   const shortFraction = parseUtcInstant("2026-08-25T10:20:30.1Z");
   const longFraction = parseUtcInstant("2026-08-25T10:20:30.100000000Z");
   const nextNanosecond = parseUtcInstant("2026-08-25T10:20:30.100000001Z");
 
+  equal(compareUtcInstants(beforeEpoch, epoch), -1);
+  equal(compareUtcInstants(epoch, afterEpoch), -1);
+  equal(compareUtcInstants(beforeEpoch, afterEpoch), -1);
   equal(compareUtcInstants(whole, zeroFraction), 0);
   equal(compareUtcInstants(shortFraction, longFraction), 0);
   equal(compareUtcInstants(whole, shortFraction), -1);
   equal(compareUtcInstants(nextNanosecond, longFraction), 1);
 });
 
-test("branded conversion and comparison still revalidate runtime values", () => {
+test("branded comparison still revalidates both runtime values", () => {
   expectUtcInstantError(
-    () => utcInstantToEpochNanoseconds(
+    () => compareUtcInstants(
       asUtcInstant("2026-02-30T00:00:00Z"),
-      "$.expiresAt",
+      parseUtcInstant("2026-08-25T10:20:30Z"),
     ),
     "calendar",
-    "$.expiresAt",
+    "$left",
   );
   expectUtcInstantError(
     () => compareUtcInstants(

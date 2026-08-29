@@ -12,7 +12,7 @@ import { test } from "node:test";
 
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/foundation/identity/wakeflow-durable-id.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   executeDemandEventSourcingCommand,
@@ -22,7 +22,6 @@ import {
   DemandEventSourcingRepository,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
-import { DemandFileEventSnapshotStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-snapshot-store.js";
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_11111111-1111-4111-8111-111111111111",
@@ -75,11 +74,20 @@ test("Demand Event Sourcing Command Handler 执行 load-decide-append 并按 com
   const root = await RootedDirectory.open(fixtureRoot);
   try {
     const eventStore = new DemandFileEventStore(root);
-    const repository = new DemandEventSourcingRepository(
-      eventStore,
-      new DemandFileEventSnapshotStore(root),
-    );
+    const repository = new DemandEventSourcingRepository(root);
     await eventStore.initialize();
+
+    await rejects(
+      executeDemandEventSourcingCommand(
+        repository,
+        COMMAND,
+        { commitId: COMMIT_ID } as never,
+      ),
+      (error: unknown) => (
+        error instanceof DemandEventSourcingCommandHandlerError
+        && error.reason === "input"
+      ),
+    );
 
     const committed = await executeDemandEventSourcingCommand(
       repository,

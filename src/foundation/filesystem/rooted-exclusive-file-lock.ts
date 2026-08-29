@@ -14,9 +14,10 @@ import {
 } from "../data/passive-own-data.js";
 import {
   createUuidV4,
+  parseUuidV4,
+  UuidV4Error,
   type UuidV4Factory,
 } from "../identity/uuid-v4.js";
-import { parseUuidV4, UuidV4Error } from "../identity/uuid-v4.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { parseByteCount, type ByteCount } from "../numeric/byte-count.js";
 import { encodeUtf8 } from "../text/utf8.js";
@@ -34,8 +35,6 @@ import {
   monotonicDurationFromMilliseconds,
   type MonotonicDuration,
 } from "../time/monotonic-duration.js";
-import { parseUtcInstant, UtcInstantError, type UtcInstant } from "../time/utc-instant.js";
-import { readUtcWallClock } from "../time/wall-clock.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
@@ -57,6 +56,7 @@ import {
 import {
   parsePortableResourcePath,
   PortableResourcePathError,
+  splitPortableResourcePath,
   type PortableResourcePath,
 } from "./portable-resource-path.js";
 import {
@@ -81,9 +81,9 @@ import { StrictTextFileError } from "./strict-text-file.js";
  * 只能根据进程是否存在作保守判断，不能据此自动夺锁。
  */
 
-export const ROOTED_EXCLUSIVE_LOCK_DEFAULT_TIMEOUT_MILLISECONDS = 2_000;
-export const ROOTED_EXCLUSIVE_LOCK_DEFAULT_RETRY_MILLISECONDS = 25;
-export const ROOTED_EXCLUSIVE_LOCK_MAXIMUM_RECORD_BYTES = 4 * 1024;
+const ROOTED_EXCLUSIVE_LOCK_DEFAULT_TIMEOUT_MILLISECONDS = 2_000;
+const ROOTED_EXCLUSIVE_LOCK_DEFAULT_RETRY_MILLISECONDS = 25;
+const ROOTED_EXCLUSIVE_LOCK_MAXIMUM_RECORD_BYTES = 4 * 1024;
 
 export interface RootedExclusiveFileLockOptions {
   readonly acquireTimeoutMilliseconds?: number;
@@ -98,7 +98,6 @@ export interface RootedExclusiveFileLockResidueRetirementOptions {
 }
 
 export interface RootedExclusiveFileLockRecord {
-  readonly createdAt: UtcInstant;
   readonly kind: "WakeflowExclusiveFileLock";
   readonly pid: number;
   readonly threadId: number;
@@ -186,7 +185,6 @@ interface LockCandidate {
 const ISSUED_LOCK_OBSERVATIONS = new WeakSet<object>();
 const ACTIVE_LOCK_TOKENS = new Set<string>();
 const LOCK_RECORD_FIELDS = Object.freeze([
-  "createdAt",
   "kind",
   "pid",
   "threadId",
@@ -263,13 +261,15 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   }
   return Object.freeze({
     acquireTimeoutMilliseconds: parsePositiveMilliseconds(
-      record.acquireTimeoutMilliseconds
-        ?? ROOTED_EXCLUSIVE_LOCK_DEFAULT_TIMEOUT_MILLISECONDS,
+      record.acquireTimeoutMilliseconds === undefined
+        ? ROOTED_EXCLUSIVE_LOCK_DEFAULT_TIMEOUT_MILLISECONDS
+        : record.acquireTimeoutMilliseconds,
       "$options.acquireTimeoutMilliseconds",
     ),
     retryDelayMilliseconds: parsePositiveMilliseconds(
-      record.retryDelayMilliseconds
-        ?? ROOTED_EXCLUSIVE_LOCK_DEFAULT_RETRY_MILLISECONDS,
+      record.retryDelayMilliseconds === undefined
+        ? ROOTED_EXCLUSIVE_LOCK_DEFAULT_RETRY_MILLISECONDS
+        : record.retryDelayMilliseconds,
       "$options.retryDelayMilliseconds",
     ),
     signal: record.signal,
@@ -291,7 +291,9 @@ function parseRetirementTargets(
       fail("input", "$options");
     }
     relatedValues = parseDenseArray(
-      record.relatedTargetResourcePaths ?? [],
+      record.relatedTargetResourcePaths === undefined
+        ? []
+        : record.relatedTargetResourcePaths,
       DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE - 1,
       "$options.relatedTargetResourcePaths",
     );
@@ -317,6 +319,12 @@ function parseRetirementTargets(
       fail("input", `$options.relatedTargetResourcePaths/${index}`);
     }
     targets.push(target);
+  }
+  const lockParent = splitPortableResourcePath(lockPath).slice(0, -1).join("/");
+  if (targets.some((target) => (
+    splitPortableResourcePath(target).slice(0, -1).join("/") !== lockParent
+  ))) {
+    fail("input", "$options.relatedTargetResourcePaths");
   }
   return Object.freeze(targets);
 }
@@ -365,17 +373,21 @@ function createLockCandidate(
     fail("acquire-failure", "$lock");
   }
   const record: Readonly<RootedExclusiveFileLockRecord> = Object.freeze({
-    createdAt: readUtcWallClock(),
     kind: "WakeflowExclusiveFileLock" as const,
     pid: process.pid,
     threadId,
     token: `${process.pid}-${threadId}-${tokenUuid}`,
     version: 1 as const,
   });
-  const bytes = encodeUtf8(
-    renderDeterministicJsonDocument(record, "$lockRecord"),
-    "$lockRecord",
-  );
+  let bytes: Uint8Array;
+  try {
+    bytes = encodeUtf8(
+      renderDeterministicJsonDocument(record, "$lockRecord"),
+      "$lockRecord",
+    );
+  } catch {
+    fail("acquire-failure", "$lock");
+  }
   if (bytes.byteLength > ROOTED_EXCLUSIVE_LOCK_MAXIMUM_RECORD_BYTES) {
     fail("acquire-failure", "$lock");
   }
@@ -437,15 +449,7 @@ function parseLockRecord(value: unknown): Readonly<RootedExclusiveFileLockRecord
     if (error instanceof UuidV4Error) fail("unsafe-lock", "$lock");
     throw error;
   }
-  let createdAt: UtcInstant;
-  try {
-    createdAt = parseUtcInstant(record.createdAt, "$lock/createdAt");
-  } catch (error: unknown) {
-    if (error instanceof UtcInstantError) fail("unsafe-lock", "$lock");
-    throw error;
-  }
   return Object.freeze({
-    createdAt,
     kind: "WakeflowExclusiveFileLock",
     pid: record.pid,
     threadId: record.threadId,
@@ -471,7 +475,6 @@ export async function inspectRootedExclusiveFileLock(
       && error.reason === "not-found"
     ) {
       const absent = Object.freeze({ status: "absent" as const });
-      ISSUED_LOCK_OBSERVATIONS.add(absent);
       return absent;
     }
     if (
@@ -512,6 +515,10 @@ export async function inspectRootedExclusiveFileLock(
     read.node.kind !== "file"
     || (read.node.linkCount !== 1n && read.node.linkCount !== 2n)
     || read.node.permissionBits !== 0o600
+    || (
+      typeof process.geteuid === "function"
+      && read.node.userId !== BigInt(process.geteuid())
+    )
   ) {
     fail("unsafe-lock", "$lock");
   }
@@ -718,7 +725,7 @@ async function waitForRetry(
     if (signal?.aborted === true) {
       fail("aborted", "$signal");
     }
-    throw error;
+    fail("acquire-failure", "$lock");
   }
 }
 

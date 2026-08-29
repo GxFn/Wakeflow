@@ -20,6 +20,7 @@ import {
 } from "../../foundation/data/passive-own-data.js";
 import {
   createWakeflowGitignoreBodyAuthority,
+  WakeflowGitignoreBodyAuthorityError,
 } from "../managed-integration/wakeflow-gitignore-body-authority.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
@@ -29,6 +30,7 @@ import {
 } from "../workspace-host-resource-profile.js";
 import {
   createWakeflowWorkspaceStaticResourceMatrix,
+  WakeflowWorkspaceStaticResourceMatrixError,
 } from "../wakeflow-workspace-static-resource-matrix.js";
 
 /** 静态物化 preview 的闭合词汇、请求准入与稳定错误合同。 */
@@ -41,19 +43,22 @@ export const WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS = Object.freeze([
 export type WakeflowStaticMaterializationAction =
   (typeof WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS)[number];
 
+const WAKEFLOW_STATIC_MATERIALIZATION_STEP_KINDS = Object.freeze([
+  "materialize-local-protocol",
+  "materialize-active-layout",
+  "initialize-todo-collection",
+  "publish-fresh-active-workspace-projection",
+  "materialize-ledger-layout",
+  "publish-unregistered-window-runtime",
+  "materialize-host-capability-layout",
+  "materialize-support-root",
+  "recompose-gitignore",
+  "recompose-program-instruction",
+  "publish-support-memory",
+  "publish-config",
+] as const);
 export type WakeflowStaticMaterializationStepKind =
-  | "materialize-local-protocol"
-  | "materialize-active-layout"
-  | "initialize-todo-collection"
-  | "publish-fresh-active-workspace-projection"
-  | "materialize-ledger-layout"
-  | "publish-unregistered-window-runtime"
-  | "materialize-host-capability-layout"
-  | "materialize-support-root"
-  | "recompose-gitignore"
-  | "recompose-program-instruction"
-  | "publish-support-memory"
-  | "publish-config";
+  (typeof WAKEFLOW_STATIC_MATERIALIZATION_STEP_KINDS)[number];
 
 export interface WakeflowStaticMaterializationStep {
   readonly stepId: string;
@@ -236,11 +241,17 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
   });
   try {
     createWakeflowGitignoreBodyAuthority(parsedProfiles);
-  } catch {
-    failWakeflowStaticMaterializationPreview(
-      "profile",
-      "$request.hostProfiles",
-    );
+  } catch (error: unknown) {
+    if (
+      error instanceof WakeflowGitignoreBodyAuthorityError
+      || error instanceof WakeflowWorkspaceStaticResourceMatrixError
+    ) {
+      failWakeflowStaticMaterializationPreview(
+        "profile",
+        "$request.hostProfiles",
+      );
+    }
+    throw error;
   }
   const matching = parsedProfiles.find((profile) => (
     profile.hostId === currentHostProfile.hostId
@@ -265,25 +276,14 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
   });
 }
 
-const STEP_KIND_SET = new Set<string>([
-  "materialize-local-protocol",
-  "materialize-active-layout",
-  "initialize-todo-collection",
-  "publish-fresh-active-workspace-projection",
-  "materialize-ledger-layout",
-  "publish-unregistered-window-runtime",
-  "materialize-host-capability-layout",
-  "materialize-support-root",
-  "recompose-gitignore",
-  "recompose-program-instruction",
-  "publish-support-memory",
-  "publish-config",
-]);
+const STEP_KIND_SET = new Set<string>(WAKEFLOW_STATIC_MATERIALIZATION_STEP_KINDS);
 const STEP_ID_PATTERN = /^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9_:-]*$/u;
 const OWNER_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const BLOCKER_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
+const TARGET_KEY_PATTERN = /^[a-z0-9][a-z0-9_.:-]{0,255}$/u;
 const MAXIMUM_STEPS = 256;
 const MAXIMUM_BLOCKERS = 256;
+const MAXIMUM_IDENTITY_LENGTH = 256;
 
 function digest(value: unknown, path: string): Sha256Digest {
   try {
@@ -340,18 +340,23 @@ function parseStep(
     Object.keys(record).sort().join("\u0000")
       !== "dependsOn\u0000kind\u0000ownerId\u0000sourceDigest\u0000stepId\u0000targetDigest\u0000targetKey"
     || typeof record.stepId !== "string"
+    || record.stepId.length > MAXIMUM_IDENTITY_LENGTH
+    || !record.stepId.isWellFormed()
     || !STEP_ID_PATTERN.test(record.stepId)
     || typeof record.kind !== "string"
     || !STEP_KIND_SET.has(record.kind)
     || typeof record.ownerId !== "string"
+    || record.ownerId.length > MAXIMUM_IDENTITY_LENGTH
+    || !record.ownerId.isWellFormed()
     || !OWNER_ID_PATTERN.test(record.ownerId)
     || typeof record.targetKey !== "string"
-    || record.targetKey.length === 0
-    || record.targetKey.length > 256
     || !record.targetKey.isWellFormed()
-    || /[\u0000-\u001f\u007f-\u009f]/u.test(record.targetKey)
+    || !TARGET_KEY_PATTERN.test(record.targetKey)
     || dependencies.some((entry) => (
-      typeof entry !== "string" || !STEP_ID_PATTERN.test(entry)
+      typeof entry !== "string"
+      || entry.length > MAXIMUM_IDENTITY_LENGTH
+      || !entry.isWellFormed()
+      || !STEP_ID_PATTERN.test(entry)
     ))
     || new Set(dependencies).size !== dependencies.length
   ) {
@@ -405,7 +410,10 @@ export function parseWakeflowStaticMaterializationPreview(
     )
     || (record.status !== "ready" && record.status !== "blocked")
     || blockerValues.some((entry) => (
-      typeof entry !== "string" || !BLOCKER_PATTERN.test(entry)
+      typeof entry !== "string"
+      || entry.length > MAXIMUM_IDENTITY_LENGTH
+      || !entry.isWellFormed()
+      || !BLOCKER_PATTERN.test(entry)
     ))
   ) {
     failWakeflowStaticMaterializationPreview("input", "$preview");
@@ -421,21 +429,26 @@ export function parseWakeflowStaticMaterializationPreview(
     failWakeflowStaticMaterializationPreview("input", "$preview.blockerCodes");
   }
   const steps = Object.freeze(stepValues.map(parseStep));
-  const stepIds = new Set<string>();
+  const stepPositions = new Map<string, number>();
   for (const [index, entry] of steps.entries()) {
-    if (stepIds.has(entry.stepId)) {
+    if (stepPositions.has(entry.stepId)) {
       failWakeflowStaticMaterializationPreview(
         "input",
         `$preview.steps/${index}.stepId`,
       );
     }
-    if (entry.dependsOn.some((dependency) => !stepIds.has(dependency))) {
-      failWakeflowStaticMaterializationPreview(
-        "input",
-        `$preview.steps/${index}.dependsOn`,
-      );
+    let previousPosition = -1;
+    for (const dependency of entry.dependsOn) {
+      const position = stepPositions.get(dependency);
+      if (position === undefined || position <= previousPosition) {
+        failWakeflowStaticMaterializationPreview(
+          "input",
+          `$preview.steps/${index}.dependsOn`,
+        );
+      }
+      previousPosition = position;
     }
-    stepIds.add(entry.stepId);
+    stepPositions.set(entry.stepId, index);
   }
   const configIndexes = steps.flatMap((entry, index) => (
     entry.kind === "publish-config" ? [index] : []
@@ -452,21 +465,46 @@ export function parseWakeflowStaticMaterializationPreview(
   ) {
     failWakeflowStaticMaterializationPreview("input", "$preview.steps");
   }
+  const action = record.action as WakeflowStaticMaterializationAction;
+  const status = record.status;
+  const currentConfigDigest = nullableDigest(
+    record.currentConfigDigest,
+    "$preview.currentConfigDigest",
+  );
+  const desiredConfigDigest = nullableDigest(
+    record.desiredConfigDigest,
+    "$preview.desiredConfigDigest",
+  );
+  if (
+    ((action === "fresh-initialize" || action === "reconfigure")
+      && desiredConfigDigest === null)
+    || (action === "reconcile"
+      && desiredConfigDigest !== currentConfigDigest)
+    || (action === "reconcile" && configIndexes.length !== 0)
+    || (
+      status === "ready"
+      && (
+        (action === "fresh-initialize" && currentConfigDigest !== null)
+        || (action !== "fresh-initialize" && currentConfigDigest === null)
+        || (
+          action !== "reconcile"
+          && configIndexes.length
+            !== (currentConfigDigest === desiredConfigDigest ? 0 : 1)
+        )
+      )
+    )
+  ) {
+    failWakeflowStaticMaterializationPreview("input", "$preview");
+  }
   const plan: Omit<WakeflowStaticMaterializationPreview, "planDigest"> =
     Object.freeze({
       kind: "WakeflowStaticMaterializationPreview",
       schemaVersion: 1,
       executionBoundary: "preview-only",
-      action: record.action as WakeflowStaticMaterializationAction,
-      status: record.status,
-      currentConfigDigest: nullableDigest(
-        record.currentConfigDigest,
-        "$preview.currentConfigDigest",
-      ),
-      desiredConfigDigest: nullableDigest(
-        record.desiredConfigDigest,
-        "$preview.desiredConfigDigest",
-      ),
+      action,
+      status,
+      currentConfigDigest,
+      desiredConfigDigest,
       matrixDigest: digest(record.matrixDigest, "$preview.matrixDigest"),
       coreLayoutInspectionDigest: digest(
         record.coreLayoutInspectionDigest,

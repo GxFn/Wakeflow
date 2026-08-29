@@ -29,7 +29,6 @@ import {
 } from "./durable-atomic-file-write-contract.js";
 import {
   createFileNodeSnapshot,
-  FileNodeSnapshotError,
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
   type FileNodeSnapshot,
@@ -38,7 +37,7 @@ import type { PortableResourcePath } from "./portable-resource-path.js";
 import type { RootedDirectory } from "./rooted-directory.js";
 import type { RootedResourceParentHandle } from "./rooted-resource-parent-handle.js";
 
-/** 持久化原子写入中，自描述暂存文件的 I/O 生命周期。 */
+/** 耐久原子写入中，自描述暂存文件的 I/O 生命周期。 */
 
 const PRIVATE_STAGE_MODE = 0o600;
 const STAGE_CREATE_ATTEMPTS = 4;
@@ -71,8 +70,19 @@ export async function snapshotDurableAtomicFileHandle(
 ): Promise<Readonly<FileNodeSnapshot>> {
   try {
     return createFileNodeSnapshot(await handle.stat({ bigint: true }), path);
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) fail(reason, path);
+  } catch {
+    fail(reason, path);
+  }
+}
+
+function allocateVerificationBuffer(
+  byteLength: number,
+  reason: "stage-changed" | "commit-uncertain",
+  path: string,
+): Buffer {
+  try {
+    return Buffer.allocUnsafe(byteLength);
+  } catch {
     fail(reason, path);
   }
 }
@@ -187,8 +197,10 @@ export async function verifyDurableAtomicFileHandleBytes(
     reason,
     errorPath,
   );
-  const scratch = Buffer.allocUnsafe(
+  const scratch = allocateVerificationBuffer(
     Math.min(VERIFY_CHUNK_BYTES, input.byteCount || 1),
+    reason,
+    errorPath,
   );
   let position = 0;
   while (position < input.byteCount) {
@@ -206,14 +218,14 @@ export async function verifyDurableAtomicFileHandleBytes(
       fail(reason, errorPath);
     }
     if (bytesRead <= 0 || bytesRead > length) fail(reason, errorPath);
-    for (let index = 0; index < bytesRead; index += 1) {
-      if (scratch[index] !== input.bytes[position + index]) {
-        fail(reason, errorPath);
-      }
+    if (!scratch.subarray(0, bytesRead).equals(
+      input.bytes.subarray(position, position + bytesRead),
+    )) {
+      fail(reason, errorPath);
     }
     position += bytesRead;
   }
-  const growthProbe = Buffer.allocUnsafe(1);
+  const growthProbe = allocateVerificationBuffer(1, reason, errorPath);
   try {
     const probe = await handle.read(growthProbe, 0, 1, input.byteCount);
     if (probe.bytesRead !== 0) fail(reason, errorPath);
@@ -289,10 +301,7 @@ export async function assertDurableAtomicFileStageCurrent(
       await lstat(stage.physicalPath, { bigint: true }),
       "$stage",
     );
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) {
-      fail("stage-changed", "$stage");
-    }
+  } catch {
     fail("stage-changed", "$stage");
   }
   if (
@@ -310,7 +319,7 @@ export async function assertDurableAtomicFileStageCurrent(
 export async function unlinkOwnedDurableAtomicFileStage(
   stage: Readonly<OpenDurableAtomicFileStage>,
 ): Promise<void> {
-  let pathNode: Readonly<FileNodeSnapshot> | null;
+  let pathNode: Readonly<FileNodeSnapshot>;
   try {
     pathNode = createFileNodeSnapshot(
       await lstat(stage.physicalPath, { bigint: true }),
@@ -325,15 +334,30 @@ export async function unlinkOwnedDurableAtomicFileStage(
     "stage-cleanup-failure",
     "$stage",
   );
-  if (!sameFileNodeIdentity(pathNode, opened)) {
+  if (
+    pathNode.kind !== "file"
+    || opened.kind !== "file"
+    || (opened.linkCount !== 1n && opened.linkCount !== 2n)
+    || !sameFileNodeIdentity(pathNode, opened)
+  ) {
     fail("stage-cleanup-failure", "$stage");
   }
   try {
     await unlink(stage.physicalPath);
   } catch (error: unknown) {
-    if (readNodeSystemErrorCode(error) !== "ENOENT") {
-      fail("stage-cleanup-failure", "$stage");
-    }
+    if (readNodeSystemErrorCode(error) === "ENOENT") return;
+    fail("stage-cleanup-failure", "$stage");
+  }
+  const afterUnlink = await snapshotDurableAtomicFileHandle(
+    stage.handle,
+    "stage-cleanup-failure",
+    "$stage",
+  );
+  if (
+    !sameFileNodeIdentity(opened, afterUnlink)
+    || afterUnlink.linkCount !== opened.linkCount - 1n
+  ) {
+    fail("stage-cleanup-failure", "$stage");
   }
 }
 

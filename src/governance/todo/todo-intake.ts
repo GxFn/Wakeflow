@@ -31,7 +31,7 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../../foundation/identity/wakeflow-durable-id.js";
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
@@ -40,6 +40,7 @@ import {
 } from "../../foundation/time/utc-instant.js";
 import {
   readUtcWallClock,
+  UtcWallClockError,
   type UtcWallClock,
 } from "../../foundation/time/wall-clock.js";
 import {
@@ -57,8 +58,8 @@ import {
  * Canonical JSON 语义摘要。
  */
 
-export const TODO_INTAKE_ARTIFACT_KIND = "wakeflow-todo-intake" as const;
-export const TODO_INTAKE_SCHEMA_VERSION = 1 as const;
+const TODO_INTAKE_ARTIFACT_KIND = "wakeflow-todo-intake" as const;
+const TODO_INTAKE_SCHEMA_VERSION = 1 as const;
 
 export type TodoIntakeInitialStatus = "pending-claim" | "parked";
 export type TodoIntakeType = "requirement" | "bug" | "supplement" | "research";
@@ -165,6 +166,10 @@ const DRAFT_FIELDS = Object.freeze([
   "todoId",
   "type",
 ] as const);
+const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
+  "1970-01-01T00:00:00.000Z",
+  "$draftValidationInstant",
+);
 
 function fail(reason: TodoIntakeErrorReason, path: string): never {
   throw new TodoIntakeError(reason, path);
@@ -330,11 +335,11 @@ export function createTodoIntake(
     fail("input", "$options");
   }
   const clock = optionRecord.clock as UtcWallClock | undefined;
-  return parseTodoIntake({
+  const admitted = parseTodoIntake({
     artifactKind: TODO_INTAKE_ARTIFACT_KIND,
     schemaVersion: TODO_INTAKE_SCHEMA_VERSION,
     todoId: record.todoId,
-    createdAt: readUtcWallClock(clock),
+    createdAt: DRAFT_VALIDATION_INSTANT,
     initialStatus: record.initialStatus,
     type: record.type,
     priority: record.priority,
@@ -347,6 +352,14 @@ export function createTodoIntake(
     testingDecision: record.testingDecision,
     documents: record.documents,
   });
+  let createdAt: UtcInstant;
+  try {
+    createdAt = readUtcWallClock(clock);
+  } catch (error: unknown) {
+    if (error instanceof UtcWallClockError) fail("time", "$options.clock");
+    throw error;
+  }
+  return Object.freeze({ ...admitted, createdAt });
 }
 
 /** 渲染具有唯一字段顺序的确定性美化 JSON 字节。 */
@@ -373,6 +386,6 @@ export function parseTodoIntakeDocument(text: unknown): Readonly<TodoIntake> {
 /** 计算 Intake 的 Canonical JSON 语义摘要，不绑定格式化字节。 */
 export function computeTodoIntakeDigest(intake: unknown): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
-    parseTodoIntake(intake) as unknown as JsonValue,
+    parseTodoIntake(intake),
   );
 }

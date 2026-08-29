@@ -117,11 +117,11 @@ export async function recoverWakeflowWorkspaceGitignoreRecomposition(
   optionsValue?: WakeflowGitignoreRecompositionRecoveryOptions,
 ): Promise<Readonly<WakeflowGitignoreRecompositionRecoveryReceipt>> {
   assertWakeflowGitignoreRecompositionRoot(rootValue);
-  const request = parseWakeflowGitignoreRecompositionRequest(requestValue);
   const options = parseWakeflowGitignoreRecompositionRecoveryOptions(
     optionsValue,
   );
   assertWakeflowGitignoreRecompositionNotAborted(options.signal);
+  const request = parseWakeflowGitignoreRecompositionRequest(requestValue);
   admitWakeflowGitignoreRecompositionLockOperations(request);
   const expectedUserId = currentWakeflowGitignoreRecompositionUserId();
   await assertCurrentUserWakeflowGitignoreRecompositionRoot(

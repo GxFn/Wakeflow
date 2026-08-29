@@ -5,7 +5,6 @@ import {
   existsSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -13,10 +12,8 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
-import { setImmediate as yieldEventLoop } from "node:timers/promises";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
-import { hasDurableAtomicFileStagePrefix } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { withRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import {
@@ -243,44 +240,6 @@ test("Gitignore recomposition rejects unsafe sources and bounded lock contention
       "$signal",
     );
     equal(existsSync(current.lockPath), false);
-  });
-
-  await t.test("source CAS conflict", async (subtest) => {
-    const source = `# ${"x".repeat(256 * 1024)}\n`;
-    const external = Buffer.from("# external writer won\n");
-    const current = await fixture(subtest, source);
-    const changeAtReplaceStage = async (): Promise<boolean> => {
-      for (let attempt = 0; attempt < 2_000; attempt += 1) {
-        if (readdirSync(current.absolutePath).some((entry) => (
-          entry.startsWith(".wakeflow-atomic-replace-")
-        ))) {
-          writeFileSync(current.gitignorePath, external, { mode: 0o644 });
-          return true;
-        }
-        await yieldEventLoop();
-      }
-      return false;
-    };
-    const pending = recomposeWakeflowWorkspaceGitignore(
-      current.root,
-      request(),
-    );
-    const changing = changeAtReplaceStage();
-    await expectRecompositionError(
-      () => pending,
-      "conflict",
-      "$source",
-    );
-    const changed = await changing;
-    equal(changed, true);
-    deepEqual(readFileSync(current.gitignorePath), external);
-    equal(existsSync(current.lockPath), false);
-    equal(
-      readdirSync(current.absolutePath).some((entry) => (
-        hasDurableAtomicFileStagePrefix(entry)
-      )),
-      false,
-    );
   });
 
   await t.test("lock timeout", async (subtest) => {

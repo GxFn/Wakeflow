@@ -12,6 +12,10 @@ import {
   readDeterministicJsonFile,
 } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
+  DeterministicJsonDocumentError,
+  parseDeterministicJsonDocument,
+} from "../../foundation/data/deterministic-json-document.js";
+import {
   unlinkRegularFileExactly,
   ExactRegularFileUnlinkError,
   type ExactRegularFileUnlinkReceipt,
@@ -29,6 +33,9 @@ import {
 import {
   StableFileReadError,
 } from "../../foundation/filesystem/stable-file-read.js";
+import {
+  StrictTextFileError,
+} from "../../foundation/filesystem/strict-text-file.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   parseByteCount,
@@ -41,18 +48,20 @@ import {
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   assertWakeflowMaintenanceGateContext,
+  WakeflowMaintenanceGateError,
   type WakeflowMaintenanceGateContext,
 } from "./wakeflow-maintenance-gate.js";
 import {
   computeWakeflowMaintenanceExecutionIntentDigest,
   createWakeflowMaintenanceIntentResourceDeclaration,
-  parseWakeflowMaintenanceExecutionIntentDocument,
+  parseWakeflowMaintenanceExecutionIntent,
   renderWakeflowMaintenanceExecutionIntent,
   WakeflowMaintenanceExecutionIntentError,
   type WakeflowMaintenanceExecutionIntent,
 } from "./wakeflow-maintenance-execution-intent.js";
 import {
   parseWakeflowMaintenanceOperationId,
+  WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceIntentRef,
   wakeflowMaintenanceJournalRef,
   type WakeflowMaintenanceOperationId,
@@ -75,16 +84,9 @@ export interface WakeflowMaintenanceExecutionIntentSource {
   readonly operationId: WakeflowMaintenanceOperationId;
   readonly resourcePath: ReturnType<typeof wakeflowMaintenanceIntentRef>;
   readonly node: Readonly<FileNodeSnapshot>;
-  readonly byteCount: ByteCount;
   readonly digest: Sha256Digest;
   readonly intentDigest: Sha256Digest;
   readonly intent: Readonly<WakeflowMaintenanceExecutionIntent>;
-}
-
-export interface WakeflowMaintenanceExecutionIntentPublicationReceipt {
-  readonly disposition: "prepared-intent";
-  readonly publication: Readonly<DurableAtomicFileWriteResult<"created">>;
-  readonly source: Readonly<WakeflowMaintenanceExecutionIntentSource>;
 }
 
 export interface WakeflowMaintenanceExecutionIntentRetirementReceipt {
@@ -104,7 +106,6 @@ export type WakeflowMaintenanceExecutionIntentStoreErrorReason =
   | "capacity"
   | "conflict"
   | "recovery-required"
-  | "aborted"
   | "effect-failure"
   | "commit-uncertain";
 
@@ -118,7 +119,6 @@ const ERROR_MESSAGES = {
   capacity: "Wakeflow maintenance execution intent exceeds its capacity.",
   conflict: "Wakeflow maintenance execution intent changed before its exact effect.",
   "recovery-required": "Wakeflow maintenance execution intent requires explicit recovery.",
-  aborted: "Wakeflow maintenance execution intent operation was aborted.",
   "effect-failure": "Wakeflow maintenance execution intent effect failed safely.",
   "commit-uncertain": "Wakeflow maintenance execution intent commit could not be proven.",
 } as const satisfies Readonly<Record<
@@ -152,6 +152,24 @@ function fail(
   throw new WakeflowMaintenanceExecutionIntentStoreError(reason, path);
 }
 
+function admittedOperationId(value: unknown): WakeflowMaintenanceOperationId {
+  try {
+    return parseWakeflowMaintenanceOperationId(value);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceOperationIdError) {
+      fail("input", "$operationId");
+    }
+    throw error;
+  }
+}
+
+function admittedByteCount(bytes: Uint8Array): ByteCount {
+  if (bytes.byteLength > WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_MAXIMUM_BYTES) {
+    fail("capacity", "$intent");
+  }
+  return parseByteCount(bytes.byteLength, "$intent.byteCount");
+}
+
 /** 在任何bootstrap/gate效果前验证intent的确定性持久表示容量。 */
 export function assertWakeflowMaintenanceExecutionIntentCapacity(
   value: unknown,
@@ -165,10 +183,7 @@ export function assertWakeflowMaintenanceExecutionIntentCapacity(
     }
     throw error;
   }
-  if (bytes.byteLength > WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_MAXIMUM_BYTES) {
-    fail("capacity", "$intent");
-  }
-  return parseByteCount(bytes.byteLength, "$intent.byteCount");
+  return admittedByteCount(bytes);
 }
 
 function currentUserId(): bigint {
@@ -305,12 +320,7 @@ export async function recoverWakeflowMaintenanceExecutionIntentStages(
   root: RootedDirectory,
   operationIdValue: unknown,
 ): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
-  let operationId: WakeflowMaintenanceOperationId;
-  try {
-    operationId = parseWakeflowMaintenanceOperationId(operationIdValue);
-  } catch {
-    fail("input", "$operationId");
-  }
+  const operationId = admittedOperationId(operationIdValue);
   try {
     const receipt = await recoverDurableAtomicFileStagesForTargets(
       root,
@@ -354,14 +364,22 @@ async function readIntentAtNode(
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
       if (error.reason === "too-large") fail("capacity", "$intent");
-      if (error.reason === "aborted") fail("aborted", "$signal");
       fail("source", "$intent");
     }
-    fail("intent", "$intent");
+    if (
+      error instanceof StrictTextFileError
+      || error instanceof DeterministicJsonDocumentError
+    ) {
+      fail("intent", "$intent");
+    }
+    throw error;
   }
   let intent;
   try {
-    intent = parseWakeflowMaintenanceExecutionIntentDocument(read.text);
+    intent = parseWakeflowMaintenanceExecutionIntent(read.value);
+    if (renderWakeflowMaintenanceExecutionIntent(intent) !== read.text) {
+      fail("intent", "$intent");
+    }
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionIntentError) {
       fail("intent", error.path);
@@ -370,12 +388,10 @@ async function readIntentAtNode(
   }
   if (intent.operationId !== operationId) fail("intent", "$/operationId");
   const intentDigest = computeWakeflowMaintenanceExecutionIntentDigest(intent);
-  if (read.semanticDigest !== intentDigest) fail("intent", "$intent");
   const source = Object.freeze({
     operationId,
     resourcePath,
     node: read.node,
-    byteCount: read.byteCount,
     digest: read.digest,
     intentDigest,
     intent,
@@ -389,12 +405,7 @@ export async function readWakeflowMaintenanceExecutionIntent(
   root: RootedDirectory,
   operationIdValue: unknown,
 ): Promise<Readonly<WakeflowMaintenanceExecutionIntentSource>> {
-  let operationId: WakeflowMaintenanceOperationId;
-  try {
-    operationId = parseWakeflowMaintenanceOperationId(operationIdValue);
-  } catch {
-    fail("input", "$operationId");
-  }
+  const operationId = admittedOperationId(operationIdValue);
   const node = await resourceNodeOrNull(
     root,
     wakeflowMaintenanceIntentRef(operationId),
@@ -408,12 +419,7 @@ export async function readWakeflowMaintenanceExecutionIntentOrNull(
   root: RootedDirectory,
   operationIdValue: unknown,
 ): Promise<Readonly<WakeflowMaintenanceExecutionIntentSource> | null> {
-  let operationId: WakeflowMaintenanceOperationId;
-  try {
-    operationId = parseWakeflowMaintenanceOperationId(operationIdValue);
-  } catch {
-    fail("input", "$operationId");
-  }
+  const operationId = admittedOperationId(operationIdValue);
   const node = await resourceNodeOrNull(
     root,
     wakeflowMaintenanceIntentRef(operationId),
@@ -426,16 +432,21 @@ export async function publishWakeflowMaintenanceExecutionIntent(
   root: RootedDirectory,
   context: Readonly<WakeflowMaintenanceGateContext>,
   intentValue: unknown,
-): Promise<Readonly<WakeflowMaintenanceExecutionIntentPublicationReceipt>> {
+): Promise<Readonly<WakeflowMaintenanceExecutionIntentSource>> {
   try {
     assertWakeflowMaintenanceGateContext(context, root);
-  } catch {
-    fail("gate", "$context");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceGateError) {
+      fail("gate", "$context");
+    }
+    throw error;
   }
   let intent: Readonly<WakeflowMaintenanceExecutionIntent>;
+  let text: string;
   try {
-    intent = parseWakeflowMaintenanceExecutionIntentDocument(
-      renderWakeflowMaintenanceExecutionIntent(intentValue),
+    text = renderWakeflowMaintenanceExecutionIntent(intentValue);
+    intent = parseWakeflowMaintenanceExecutionIntent(
+      parseDeterministicJsonDocument(text, "$intent"),
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionIntentError) {
@@ -448,8 +459,9 @@ export async function publishWakeflowMaintenanceExecutionIntent(
   }
   admitOperation(context.operationId, "exclusive-create");
   await assertWakeflowMaintenanceTransactionsEmpty(root);
-  const bytes = encodeUtf8(renderWakeflowMaintenanceExecutionIntent(intent));
-  assertWakeflowMaintenanceExecutionIntentCapacity(intent);
+  const bytes = encodeUtf8(text);
+  admittedByteCount(bytes);
+  const intendedDigest = computeWakeflowMaintenanceExecutionIntentDigest(intent);
   let publication: Readonly<DurableAtomicFileWriteResult<"created">>;
   try {
     publication = await createFileAtomically(
@@ -464,7 +476,6 @@ export async function publishWakeflowMaintenanceExecutionIntent(
       if (error.reason === "stage-recovery-required") {
         fail("recovery-required", "$intent");
       }
-      if (error.reason === "aborted") fail("aborted", "$signal");
       if (
         error.reason === "commit-uncertain"
         || error.reason === "durability-failure"
@@ -477,26 +488,26 @@ export async function publishWakeflowMaintenanceExecutionIntent(
     }
     throw error;
   }
-  const source = await readWakeflowMaintenanceExecutionIntent(
-    root,
-    context.operationId,
-  );
+  let source: Readonly<WakeflowMaintenanceExecutionIntentSource>;
+  try {
+    source = await readWakeflowMaintenanceExecutionIntent(
+      root,
+      context.operationId,
+    );
+  } catch {
+    fail("commit-uncertain", "$intent");
+  }
   if (
     publication.resourcePath !== source.resourcePath
     || publication.digest !== source.digest
-    || publication.byteCount !== source.byteCount
+    || publication.byteCount !== source.node.byteCount
     || publication.node.deviceId !== source.node.deviceId
     || publication.node.inodeId !== source.node.inodeId
-    || source.intentDigest
-      !== computeWakeflowMaintenanceExecutionIntentDigest(intent)
+    || source.intentDigest !== intendedDigest
   ) {
     fail("commit-uncertain", "$intent");
   }
-  return Object.freeze({
-    disposition: "prepared-intent",
-    publication,
-    source,
-  });
+  return source;
 }
 
 /** 在journal仍存在时先精确退休immutable intent。 */
@@ -507,8 +518,11 @@ export async function retireWakeflowMaintenanceExecutionIntent(
 ): Promise<Readonly<WakeflowMaintenanceExecutionIntentRetirementReceipt>> {
   try {
     assertWakeflowMaintenanceGateContext(context, root);
-  } catch {
-    fail("gate", "$context");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceGateError) {
+      fail("gate", "$context");
+    }
+    throw error;
   }
   assertSource(source);
   if (source.operationId !== context.operationId) {
@@ -540,7 +554,6 @@ export async function retireWakeflowMaintenanceExecutionIntent(
     );
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
       if (
         error.reason === "source-changed"
         || error.reason === "source-not-found"
@@ -558,9 +571,13 @@ export async function retireWakeflowMaintenanceExecutionIntent(
     }
     throw error;
   }
-  await assertTransactionEntries(root, [
-    wakeflowMaintenanceJournalRef(context.operationId),
-  ]);
+  try {
+    await assertTransactionEntries(root, [
+      wakeflowMaintenanceJournalRef(context.operationId),
+    ]);
+  } catch {
+    fail("commit-uncertain", "$intent");
+  }
   return Object.freeze({
     disposition: "retired-intent",
     operationId: context.operationId,

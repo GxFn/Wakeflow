@@ -41,7 +41,7 @@ import { RootedDirectory } from "./rooted-directory.js";
  * 操作或崩溃留下的资源。
  */
 
-export interface DurableDirectoryTreePublicationOptions {
+interface DurableDirectoryTreePublicationOptions {
   readonly signal?: AbortSignal;
 }
 
@@ -203,8 +203,8 @@ function mapCandidateError(
   error: DurableDirectoryTreeCandidateError,
   afterCommit: boolean,
 ): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (afterCommit) fail("commit-uncertain", "$destinationResourcePath");
+  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "source-changed") {
     fail("source-changed", "$sourceResourcePath");
   }
@@ -234,7 +234,11 @@ function mapRenameError(error: DurableResourceRenameError): never {
   if (error.reason === "durability-failure") {
     fail("durability-failure", "$destinationResourcePath");
   }
-  if (error.reason === "commit-uncertain") {
+  if (
+    error.reason === "commit-uncertain"
+    || error.reason === "rename-failure"
+    || error.reason === "close-failure"
+  ) {
     fail("commit-uncertain", "$destinationResourcePath");
   }
   fail("operation-failure", "$destinationResourcePath");
@@ -253,13 +257,13 @@ export async function publishDirectoryTreeCandidateDurably(
   if (!(root instanceof RootedDirectory) || types.isProxy(root)) {
     fail("input", "$root");
   }
+  const options = parseOptions(optionsValue);
+  assertNotAborted(options.signal);
   const candidate = parseCandidate(candidateValue);
   const destinationResourcePath = parsePath(
     destinationResourcePathValue,
     "$destinationResourcePath",
   );
-  const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
 
   let inspected;
   try {
@@ -306,7 +310,6 @@ export async function publishDirectoryTreeCandidateDurably(
       candidate.plan,
       {
         expectedRootNode: moved.node,
-        ...(options.signal === undefined ? {} : { signal: options.signal }),
       },
     );
   } catch (error: unknown) {

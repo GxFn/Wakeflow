@@ -21,9 +21,8 @@ import {
 import type {
   WakeflowWorkspaceHostId,
 } from "./workspace-host-resource-profile.js";
-import {
-  parseWakeflowWorkspaceResourceDeclaration,
-  type WakeflowWorkspaceResourceDeclaration,
+import type {
+  WakeflowWorkspaceResourceDeclaration,
 } from "./workspace-resource-declaration.js";
 
 /**
@@ -176,11 +175,10 @@ export function createWakeflowWorkspaceStaticResourceOperationContext(
   if (selected === null) {
     fail("declaration-not-found", "$request.declarationId");
   }
-  const declaration = parseWakeflowWorkspaceResourceDeclaration(selected);
   let operation: Readonly<WakeflowResourceOperation>;
   try {
     operation = admitWakeflowResourceOperation(
-      declaration.processing,
+      selected.processing,
       request.recipe,
     );
   } catch (error: unknown) {
@@ -193,7 +191,7 @@ export function createWakeflowWorkspaceStaticResourceOperationContext(
     kind: WAKEFLOW_WORKSPACE_STATIC_RESOURCE_OPERATION_CONTEXT_KIND,
     hostId: matrix.hostId,
     matrixDigest: matrix.matrixDigest,
-    declaration,
+    declaration: selected,
     operation,
   });
 }

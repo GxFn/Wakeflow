@@ -30,6 +30,7 @@ import {
 } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
   compileWakeflowWindowLaunchIntents,
+  WakeflowWindowLaunchIntentError,
   type WakeflowWindowLaunchIntentSet,
 } from "../window-runtime/wakeflow-window-launch-intent.js";
 import {
@@ -58,17 +59,14 @@ export interface WakeflowMaintenanceConfirmationRequest {
   readonly desiredConfig: WakeflowConfigV3Model | null;
   readonly currentHostProfile:
     Readonly<WakeflowWorkspaceHostResourceProfile>;
-  readonly hostProfiles: readonly [
-    Readonly<WakeflowWorkspaceHostResourceProfile>,
-    Readonly<WakeflowWorkspaceHostResourceProfile>,
-  ];
+  readonly hostProfiles:
+    readonly Readonly<WakeflowWorkspaceHostResourceProfile>[];
 }
 
 export interface WakeflowMaintenanceConfirmation {
   readonly kind: "WakeflowMaintenanceConfirmation";
   readonly schemaVersion: 1;
   readonly executionBoundary: "confirmed-preview";
-  readonly action: WakeflowStaticMaterializationAction;
   readonly executionRequest: Readonly<WakeflowMaintenanceConfirmationRequest>;
   readonly executionPlan: Readonly<WakeflowMaintenanceExecutionPlan>;
   readonly launchIntentSet: Readonly<WakeflowWindowLaunchIntentSet> | null;
@@ -128,18 +126,14 @@ function parseRequest(
     }
     throw error;
   }
-  if (parsed.signal !== undefined || parsed.hostProfiles.length !== 2) {
+  if (parsed.signal !== undefined) {
     fail("request", "$confirmation.executionRequest");
   }
-  const hostProfiles = Object.freeze([...parsed.hostProfiles]) as readonly [
-    Readonly<WakeflowWorkspaceHostResourceProfile>,
-    Readonly<WakeflowWorkspaceHostResourceProfile>,
-  ];
   return Object.freeze({
     action: parsed.action,
     desiredConfig: parsed.desiredConfig,
     currentHostProfile: parsed.currentHostProfile,
-    hostProfiles,
+    hostProfiles: parsed.hostProfiles,
   });
 }
 
@@ -172,14 +166,20 @@ function expectedLaunchIntents(
 ): Readonly<WakeflowWindowLaunchIntentSet> | null {
   if (request.action !== "fresh-initialize") return null;
   if (request.desiredConfig === null) fail("relation", "$confirmation");
-  return compileWakeflowWindowLaunchIntents(
-    request.desiredConfig,
-    request.currentHostProfile,
-  );
+  try {
+    return compileWakeflowWindowLaunchIntents(
+      request.desiredConfig,
+      request.currentHostProfile,
+    );
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWindowLaunchIntentError) {
+      fail("launch-intent", error.path);
+    }
+    throw error;
+  }
 }
 
 function basis(
-  action: WakeflowStaticMaterializationAction,
   request: Readonly<WakeflowMaintenanceConfirmationRequest>,
   plan: Readonly<WakeflowMaintenanceExecutionPlan>,
   launchIntentSet: Readonly<WakeflowWindowLaunchIntentSet> | null,
@@ -188,7 +188,6 @@ function basis(
     kind: "WakeflowMaintenanceConfirmation",
     schemaVersion: 1,
     executionBoundary: "confirmed-preview",
-    action,
     executionRequest: requestRepresentation(request),
     executionPlan: plan,
     launchIntentSet,
@@ -196,12 +195,8 @@ function basis(
 }
 
 function sameJson(left: unknown, right: unknown): boolean {
-  try {
-    return computeCanonicalJsonSha256Digest(left)
-      === computeCanonicalJsonSha256Digest(right);
-  } catch {
-    fail("launch-intent", "$confirmation.launchIntentSet");
-  }
+  return computeCanonicalJsonSha256Digest(left)
+    === computeCanonicalJsonSha256Digest(right);
 }
 
 /** 把任意JSON值重验为ready且关系闭合的confirmation。 */
@@ -224,7 +219,7 @@ export function parseWakeflowMaintenanceConfirmation(
   }
   if (
     Object.keys(record).sort().join("\u0000")
-      !== "action\u0000confirmationDigest\u0000executionBoundary\u0000executionPlan\u0000executionRequest\u0000kind\u0000launchIntentSet\u0000schemaVersion"
+      !== "confirmationDigest\u0000executionBoundary\u0000executionPlan\u0000executionRequest\u0000kind\u0000launchIntentSet\u0000schemaVersion"
     || record.kind !== "WakeflowMaintenanceConfirmation"
     || record.schemaVersion !== 1
     || record.executionBoundary !== "confirmed-preview"
@@ -238,8 +233,7 @@ export function parseWakeflowMaintenanceConfirmation(
     ? null
     : computeWakeflowConfigV3Digest(request.desiredConfig);
   if (
-    record.action !== request.action
-    || plan.status !== "ready"
+    plan.status !== "ready"
     || plan.sharedPreview.action !== request.action
     || plan.hostId !== request.currentHostProfile.hostId
     || plan.sharedPreview.matrixDigest
@@ -268,7 +262,7 @@ export function parseWakeflowMaintenanceConfirmation(
     throw error;
   }
   const expectedDigest = computeCanonicalJsonSha256Digest(
-    basis(request.action, request, plan, launchIntentSet),
+    basis(request, plan, launchIntentSet),
   );
   if (confirmationDigest !== expectedDigest) {
     fail("digest", "$confirmation.confirmationDigest");
@@ -277,7 +271,6 @@ export function parseWakeflowMaintenanceConfirmation(
     kind: "WakeflowMaintenanceConfirmation",
     schemaVersion: 1,
     executionBoundary: "confirmed-preview",
-    action: request.action,
     executionRequest: request,
     executionPlan: plan,
     launchIntentSet,
@@ -294,7 +287,6 @@ export function createWakeflowMaintenanceConfirmation(
   const plan = parsePlan(planValue);
   const launchIntentSet = expectedLaunchIntents(request);
   const confirmationBasis = basis(
-    request.action,
     request,
     plan,
     launchIntentSet,

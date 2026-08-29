@@ -16,6 +16,7 @@ import {
   scanBoundedResourceDirectoryTree,
   scanBoundedRootDirectoryTree,
   type BoundedDirectoryTreeEntry,
+  type BoundedDirectoryTreeScanOptions,
   type BoundedDirectoryTreeScanResult,
 } from "./bounded-directory-tree-scan.js";
 import {
@@ -296,7 +297,7 @@ function mapStableFileReadError(error: StableFileReadError): never {
   ) {
     fail("root-scope", "$root");
   }
-  if (error.reason === "too-large") fail("file-bytes", "$tree.files");
+  if (error.reason === "too-large") fail("io-failure", "$tree.files");
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (
     error.reason === "not-found"
@@ -313,12 +314,7 @@ function mapStableFileReadError(error: StableFileReadError): never {
 function scanOptions(
   options: Readonly<ParsedStableResourceTreeReadOptions>,
   expectedNode: Readonly<FileNodeSnapshot> | undefined,
-): {
-  readonly maximumEntries: number;
-  readonly maximumDepth: number;
-  readonly expectedNode?: Readonly<FileNodeSnapshot>;
-  readonly signal?: AbortSignal;
-} {
+): BoundedDirectoryTreeScanOptions {
   return {
     maximumEntries: options.maximumEntries,
     maximumDepth: options.maximumDepth,
@@ -354,13 +350,12 @@ async function scanTree(
 function addTreeBytes(
   current: ByteCount,
   next: ByteCount,
-  reason: "total-bytes" | "source-changed",
 ): ByteCount {
   try {
     return addByteCounts(current, next, "$tree.totalFileBytes");
   } catch (error: unknown) {
     if (error instanceof ByteCountError) {
-      fail(reason, "$tree.totalFileBytes");
+      fail("total-bytes", "$tree.totalFileBytes");
     }
     throw error;
   }
@@ -383,7 +378,7 @@ function collectFileEntries(
     if (entry.node.byteCount > options.maximumFileBytes) {
       fail("file-bytes", "$tree.files");
     }
-    totalBytes = addTreeBytes(totalBytes, entry.node.byteCount, "total-bytes");
+    totalBytes = addTreeBytes(totalBytes, entry.node.byteCount);
     if (totalBytes > options.maximumTotalBytes) {
       fail("total-bytes", "$tree.totalFileBytes");
     }
@@ -464,17 +459,6 @@ async function readTree<TreeRoot extends TreeRootResourcePath>(
   );
   const planned = collectFileEntries(before, options);
   const files = await readFiles(root, planned.entries, options);
-  let actualTotalBytes = parseByteCount(0, "$tree.totalFileBytes");
-  for (const file of files) {
-    actualTotalBytes = addTreeBytes(
-      actualTotalBytes,
-      file.byteCount,
-      "source-changed",
-    );
-  }
-  if (actualTotalBytes !== planned.totalBytes) {
-    fail("source-changed", "$tree.totalFileBytes");
-  }
   const after = await scanTree(
     root,
     treeRootResourcePath,
@@ -489,7 +473,7 @@ async function readTree<TreeRoot extends TreeRootResourcePath>(
     treeRootNode: before.treeRootNode,
     entries: before.entries,
     files,
-    totalFileBytes: actualTotalBytes,
+    totalFileBytes: planned.totalBytes,
   });
 }
 

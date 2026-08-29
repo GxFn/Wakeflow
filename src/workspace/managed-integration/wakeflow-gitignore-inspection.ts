@@ -75,19 +75,18 @@ export const WAKEFLOW_GITIGNORE_MAXIMUM_BYTES = parseByteCount(
 
 const GIT_DIRECTORY_PROBE_NAME = ".wakeflow-ignore-probe";
 
-export interface WakeflowGitignoreRuleCheck {
+interface WakeflowGitignoreRuleCheck {
   readonly rule: WakeflowGitignoreRule;
   readonly probePath: PortableResourcePath;
   readonly ignored: boolean;
 }
 
-export type WakeflowGitignoreInspectionStatus =
+type WakeflowGitignoreInspectionStatus =
   | "recompose-required"
   | "satisfied-user-owned"
   | "managed-current";
 
 export interface WakeflowGitignoreInspection {
-  readonly kind: "WakeflowGitignoreInspection";
   readonly status: WakeflowGitignoreInspectionStatus;
   readonly context: Readonly<WakeflowWorkspaceStaticResourceOperationContext>;
   readonly authority: Readonly<WakeflowGitignoreBodyAuthority>;
@@ -99,13 +98,6 @@ export interface WakeflowGitignoreInspection {
   readonly targetGitRuleChecks:
     readonly Readonly<WakeflowGitignoreRuleCheck>[] | null;
   readonly target: Readonly<WakeflowManagedTextRecompositionResult> | null;
-}
-
-export interface WakeflowGitignoreInspectionRequest {
-  readonly matrix: Readonly<WakeflowWorkspaceStaticResourceMatrix>;
-  readonly expectedMatrixDigest: Sha256Digest;
-  readonly hostProfiles: readonly unknown[];
-  readonly signal?: AbortSignal;
 }
 
 export type WakeflowGitignoreInspectionErrorReason =
@@ -408,6 +400,16 @@ function ruleChecks(
   }));
 }
 
+function unmatchedRuleChecks(
+  rules: readonly WakeflowGitignoreRule[],
+): readonly Readonly<WakeflowGitignoreRuleCheck>[] {
+  return Object.freeze(rules.map((rule) => Object.freeze({
+    rule,
+    probePath: probePath(rule),
+    ignored: false,
+  })));
+}
+
 async function observeTargetRules(
   root: RootedDirectory,
   rules: readonly WakeflowGitignoreRule[],
@@ -520,17 +522,16 @@ export async function inspectWakeflowWorkspaceGitignore(
   if (exactOutside.kind === "conflict") {
     fail("outside-conflict", "$source");
   }
-  const gitRuleChecks = await observeRules(
-    rootValue,
-    authority.rules,
-    request.signal,
-  );
-  await revalidateSource(rootValue, read, request.signal);
+  const gitRuleChecks = read === null
+    ? unmatchedRuleChecks(authority.rules)
+    : await observeRules(rootValue, authority.rules, request.signal);
+  if (read !== null) {
+    await revalidateSource(rootValue, read, request.signal);
+  }
   const allIgnored = gitRuleChecks.every((entry) => entry.ignored);
   if (envelope.kind === "managed") {
     if (!allIgnored) fail("outside-conflict", "$git");
     return Object.freeze({
-      kind: "WakeflowGitignoreInspection",
       status: "managed-current",
       context,
       authority,
@@ -544,7 +545,6 @@ export async function inspectWakeflowWorkspaceGitignore(
   }
   if (read !== null && allIgnored) {
     return Object.freeze({
-      kind: "WakeflowGitignoreInspection",
       status: "satisfied-user-owned",
       context,
       authority,
@@ -568,7 +568,6 @@ export async function inspectWakeflowWorkspaceGitignore(
   );
   await revalidateSource(rootValue, read, request.signal);
   return Object.freeze({
-    kind: "WakeflowGitignoreInspection",
     status: "recompose-required",
     context,
     authority,

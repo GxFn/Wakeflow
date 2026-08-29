@@ -30,6 +30,7 @@ import {
   TodoItemIdError,
   type TodoItemId,
 } from "./todo-item-id.js";
+import { todoIntakeRef } from "./todo-paths.js";
 
 /**
  * Wakeflow Governance / TODO：供跨聚合使用的不可变 Intake 来源引用。
@@ -39,9 +40,9 @@ import {
  * 当前接收记录、状态和领取操作的精确预期。
  */
 
-export const TODO_INTAKE_LINEAGE_ARTIFACT_KIND =
+const TODO_INTAKE_LINEAGE_ARTIFACT_KIND =
   "wakeflow-todo-intake-lineage" as const;
-export const TODO_INTAKE_LINEAGE_SCHEMA_VERSION = 1 as const;
+const TODO_INTAKE_LINEAGE_SCHEMA_VERSION = 1 as const;
 
 export interface TodoIntakeLineageReference {
   readonly artifactKind: typeof TODO_INTAKE_LINEAGE_ARTIFACT_KIND;
@@ -51,7 +52,7 @@ export interface TodoIntakeLineageReference {
   readonly intakeDigest: Sha256Digest;
 }
 
-export type TodoIntakeLineageErrorReason =
+type TodoIntakeLineageErrorReason =
   | "json"
   | "schema"
   | "identifier"
@@ -122,6 +123,7 @@ export function parseTodoIntakeLineageReference(
     if (error instanceof PortableResourcePathError) fail("path", "$/intakeRef");
     throw error;
   }
+  if (intakeRef !== todoIntakeRef(todoId)) fail("path", "$/intakeRef");
   let intakeDigest: Sha256Digest;
   try {
     intakeDigest = parseSha256Digest(

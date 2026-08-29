@@ -246,6 +246,7 @@ test("options are closed and passive, and AbortSignal remains cooperative", asyn
       [{ ...complete, maximumFiles: -1 }, "$options.maximumFiles"],
       [{ ...complete, maximumFileBytes: 1.5 }, "$options.maximumFileBytes"],
       [{ ...complete, maximumTotalBytes: -1 }, "$options.maximumTotalBytes"],
+      [{ ...complete, expectedNode: null }, "$options.expectedNode"],
       [{ ...complete, expectedNode: {} }, "$options.expectedNode"],
       [{ ...complete, signal: {} }, "$options.signal"],
       [{ ...complete, extra: true }, "$options"],

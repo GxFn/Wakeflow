@@ -2,7 +2,6 @@ import {
   computeCanonicalJsonSha256Digest,
 } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import type { JsonValue } from "../../foundation/data/json-value.js";
 import {
   renderTodoBoardProjection,
 } from "./todo-board-projection.js";
@@ -31,4 +30,4 @@ export const TODO_COLLECTION_INITIALIZATION_AUTHORITY_DIGEST: Sha256Digest =
     declarations: WAKEFLOW_TODO_STATIC_RESOURCE_CATALOG,
     collectionDigest: TODO_EMPTY_COLLECTION_SNAPSHOT.collectionDigest,
     projection: TODO_EMPTY_BOARD_PROJECTION,
-  } as unknown as JsonValue);
+  });

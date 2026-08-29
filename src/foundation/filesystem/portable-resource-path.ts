@@ -33,19 +33,12 @@ export type PortableResourcePathSegments = readonly [string, ...string[]];
 export type PortableResourcePathErrorReason =
   | "format"
   | "unicode-well-formed"
-  | "unicode-normalization"
-  | "segment";
-
-interface ParsedPortableResourcePath {
-  readonly value: PortableResourcePath;
-  readonly segments: PortableResourcePathSegments;
-}
+  | "unicode-normalization";
 
 const ERROR_MESSAGES = {
   "format": "Portable resource path must use one canonical root-relative slash-separated form.",
   "unicode-well-formed": "Portable resource path must contain well-formed Unicode text.",
   "unicode-normalization": "Portable resource path must already use Unicode NFC.",
-  "segment": "Portable resource path contains a non-canonical segment.",
 } as const satisfies Readonly<Record<PortableResourcePathErrorReason, string>>;
 
 /**
@@ -77,39 +70,17 @@ function fail(
   throw new PortableResourcePathError(reason, path);
 }
 
-function parseSegments(
-  value: string,
-  path: string,
-): PortableResourcePathSegments {
-  const segments = value.split("/");
-  if (
-    segments.length === 0
-    || segments.some((segment) => (
-      segment.length === 0
-      || segment === "."
-      || segment === ".."
-      || segment !== segment.trim()
-    ))
-  ) {
-    fail("segment", path);
-  }
-  return Object.freeze(segments) as PortableResourcePathSegments;
-}
-
 function parsePath(
   value: unknown,
   path: string,
-): ParsedPortableResourcePath {
+): PortableResourcePath {
   if (typeof value !== "string") fail("format", path);
   if (!value.isWellFormed()) fail("unicode-well-formed", path);
   if (value.normalize("NFC") !== value) {
     fail("unicode-normalization", path);
   }
   if (!PORTABLE_RESOURCE_PATH_PATTERN.test(value)) fail("format", path);
-  return {
-    value: value as PortableResourcePath,
-    segments: parseSegments(value, path),
-  };
+  return value as PortableResourcePath;
 }
 
 /**
@@ -119,7 +90,7 @@ export function parsePortableResourcePath(
   value: unknown,
   errorPath?: string,
 ): PortableResourcePath {
-  return parsePath(value, normalizeErrorPath(errorPath)).value;
+  return parsePath(value, normalizeErrorPath(errorPath));
 }
 
 /**
@@ -132,5 +103,6 @@ export function splitPortableResourcePath(
   errorPath?: string,
 ): PortableResourcePathSegments {
   const path = normalizeErrorPath(errorPath);
-  return parsePath(value, path).segments;
+  const admitted = parsePath(value, path);
+  return Object.freeze(admitted.split("/")) as PortableResourcePathSegments;
 }

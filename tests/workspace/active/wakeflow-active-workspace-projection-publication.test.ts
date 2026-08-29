@@ -20,6 +20,7 @@ import {
 import {
   RootedDirectory,
 } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import {
   initializeFreshTodoCollection,
 } from "../../../src/governance/todo/todo-collection-initialization.js";
@@ -188,15 +189,9 @@ test("affected recovery retires an inactive projection lock", async (t) => {
     workspace.absolutePath,
     WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF,
   );
-  writeFileSync(lockPath, `${JSON.stringify({
-    createdAt: "2026-08-28T00:00:00.000Z",
-    kind: "WakeflowExclusiveFileLock",
-    pid: 2_147_483_647,
-    threadId: 0,
-    token:
-      "2147483647-0-11111111-1111-4111-8111-111111111111",
-    version: 1,
-  }, null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
+    tokenUuid: "11111111-1111-4111-8111-111111111111",
+  }), { mode: 0o600 });
   let normalError: unknown;
   try {
     await inspectWakeflowActiveWorkspaceProjection(

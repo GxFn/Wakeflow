@@ -63,7 +63,10 @@ async function inspectCurrent(
   try {
     return await inspectWakeflowWorkspaceGitignore(
       root,
-      wakeflowGitignoreInspectionRequest(request, signal),
+      wakeflowGitignoreInspectionRequest(
+        request,
+        afterCommit ? undefined : signal,
+      ),
     );
   } catch (error: unknown) {
     if (afterCommit) fail("commit-uncertain", "$resourcePath");
@@ -260,9 +263,9 @@ export async function recomposeWakeflowWorkspaceGitignore(
   optionsValue?: WakeflowGitignoreRecompositionOptions,
 ): Promise<Readonly<WakeflowGitignoreRecompositionReceipt>> {
   assertWakeflowGitignoreRecompositionRoot(rootValue);
-  const request = parseWakeflowGitignoreRecompositionRequest(requestValue);
   const options = parseWakeflowGitignoreRecompositionOptions(optionsValue);
   assertWakeflowGitignoreRecompositionNotAborted(options.signal);
+  const request = parseWakeflowGitignoreRecompositionRequest(requestValue);
   admitWakeflowGitignoreRecompositionLockOperations(request);
   const expectedUserId = currentWakeflowGitignoreRecompositionUserId();
   await assertCurrentUserWakeflowGitignoreRecompositionRoot(

@@ -16,23 +16,24 @@ import {
   type Sha256Digest,
 } from "../../foundation/crypto/sha256.js";
 import {
-  parseDeterministicJsonDocument,
   renderDeterministicJsonDocument,
-  DeterministicJsonDocumentError,
 } from "../../foundation/data/deterministic-json-document.js";
 import {
   parseJsonValue,
-  type JsonValue,
 } from "../../foundation/data/json-value.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
-import type { WakeflowDurableId } from "../../foundation/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   createRuntimeJsonSchemaValidator,
 } from "../../foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import type { WakeflowWorkspaceHostId } from "../workspace-host-resource-profile.js";
 import {
-  computeWakeflowWindowHostBindingDigest,
+  parseWakeflowWorkspaceHostResourceProfile,
+  WakeflowWorkspaceHostResourceProfileError,
+  type WakeflowWorkspaceHostId,
+  type WakeflowWorkspaceHostResourceProfile,
+} from "../workspace-host-resource-profile.js";
+import {
   parseWakeflowWindowHostBinding,
   type WakeflowWindowHostBinding,
 } from "./wakeflow-window-host-binding.js";
@@ -41,7 +42,7 @@ import type {
   WakeflowWindowRuntimeLogicalRoot,
 } from "./wakeflow-window-runtime-desired-topology.js";
 import {
-  wakeflowWindowBindingRef,
+  wakeflowWindowHostBindingRef,
   wakeflowWindowRuntimeProjectionRef,
 } from "./wakeflow-window-runtime-paths.js";
 import {
@@ -55,7 +56,7 @@ import {
  * Wakeflow Workspace / Window Runtime：已注册身份的脱敏派生投影。
  *
  * 编译输入只有当前 desired/unregistered 投影与私有 Binding authority。输出删除 raw
- * handle，只携带 Binding ref、代际 ID 与摘要。身份注册不会伪造 configured root 已被
+ * handle，只携带Binding ref与代际ID。身份注册不会伪造configured root已被
  * 观察，因此 preflight 仍以 `root-unobserved` 明确阻断。
  */
 
@@ -73,7 +74,6 @@ export interface WakeflowWindowRuntimeRegisteredProjection {
     readonly status: "registered";
     readonly bindingRef: PortableResourcePath;
     readonly bindingId: WakeflowWindowHostBindingId;
-    readonly bindingDigest: Sha256Digest;
   }>;
   readonly rootObservation:
     WakeflowWindowRuntimeUnregisteredProjection["rootObservation"];
@@ -87,7 +87,6 @@ export interface WakeflowWindowRuntimeRegisteredProjection {
   readonly sourceFingerprints: Readonly<{
     readonly desiredTopologyDigest: Sha256Digest;
     readonly windowTopologyDigest: Sha256Digest;
-    readonly bindingDigest: Sha256Digest;
     readonly rootObservationDigest: Sha256Digest;
   }>;
   readonly projectionDigest: Sha256Digest;
@@ -101,17 +100,15 @@ export interface WakeflowWindowRuntimeRegisteredProjectionEntry {
   readonly documentDigest: Sha256Digest;
 }
 
-export type WakeflowWindowRuntimeRegisteredProjectionErrorReason =
+type WakeflowWindowRuntimeRegisteredProjectionErrorReason =
   | "input"
   | "schema"
-  | "source"
-  | "representation";
+  | "source";
 
 const ERROR_MESSAGES = {
   input: "Window Runtime registered projection input is invalid.",
   schema: "Window Runtime registered projection does not satisfy its Schema.",
   source: "Window Runtime registered projection sources are inconsistent.",
-  representation: "Window Runtime registered projection bytes are not deterministic.",
 } as const satisfies Readonly<Record<
   WakeflowWindowRuntimeRegisteredProjectionErrorReason,
   string
@@ -169,11 +166,14 @@ function projectionBasis(
 }
 
 function assertSources(
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
   source: Readonly<WakeflowWindowRuntimeUnregisteredProjection>,
   binding: Readonly<WakeflowWindowHostBinding>,
 ): void {
   if (
-    source.programId !== binding.programId
+    !profile.surfaces.windowIdentity
+    || profile.hostId !== source.hostId
+    || source.programId !== binding.programId
     || source.hostId !== binding.hostId
     || source.windowId !== binding.windowId
   ) {
@@ -182,21 +182,29 @@ function assertSources(
 }
 
 /** 从当前 topology 投影与私有 Binding 编译脱敏 registered 投影。 */
-export function compileWakeflowWindowRuntimeRegisteredProjection(
+function compileWakeflowWindowRuntimeRegisteredProjection(
   profileValue: unknown,
+  identityProfileValue: unknown,
   unregisteredValue: unknown,
   bindingValue: unknown,
 ): Readonly<WakeflowWindowRuntimeRegisteredProjection> {
+  let profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   let source: Readonly<WakeflowWindowRuntimeUnregisteredProjection>;
   let binding: Readonly<WakeflowWindowHostBinding>;
   try {
+    profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
     source = parseWakeflowWindowRuntimeUnregisteredProjection(unregisteredValue);
-    binding = parseWakeflowWindowHostBinding(bindingValue);
-  } catch {
+    binding = parseWakeflowWindowHostBinding(
+      bindingValue,
+      identityProfileValue,
+    );
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
+      fail("input", "$profile");
+    }
     fail("input", "$sources");
   }
-  assertSources(source, binding);
-  const bindingDigest = computeWakeflowWindowHostBindingDigest(binding);
+  assertSources(profile, source, binding);
   const reason = Object.freeze({
     code: "root-unobserved" as const,
     source: "root-observation" as const,
@@ -212,9 +220,8 @@ export function compileWakeflowWindowRuntimeRegisteredProjection(
     configuredPlacement: source.configuredPlacement,
     identity: Object.freeze({
       status: "registered" as const,
-      bindingRef: wakeflowWindowBindingRef(profileValue, binding.windowId),
+      bindingRef: wakeflowWindowHostBindingRef(profile, binding.windowId),
       bindingId: binding.bindingId,
-      bindingDigest,
     }),
     rootObservation: source.rootObservation,
     preflight: Object.freeze({
@@ -224,7 +231,6 @@ export function compileWakeflowWindowRuntimeRegisteredProjection(
     sourceFingerprints: Object.freeze({
       desiredTopologyDigest: source.sourceFingerprints.desiredTopologyDigest,
       windowTopologyDigest: source.sourceFingerprints.windowTopologyDigest,
-      bindingDigest,
       rootObservationDigest: source.sourceFingerprints.rootObservationDigest,
     }),
   } satisfies Omit<
@@ -234,7 +240,7 @@ export function compileWakeflowWindowRuntimeRegisteredProjection(
   const projection = Object.freeze({
     ...projectionBasis(basis),
     projectionDigest: computeCanonicalJsonSha256Digest(
-      projectionBasis(basis) as unknown as JsonValue,
+      projectionBasis(basis),
     ),
   });
   const validated = validateWire(
@@ -247,11 +253,13 @@ export function compileWakeflowWindowRuntimeRegisteredProjection(
 /** 编译一份带资源引用、确定性文档和物理字节摘要的 registered 投影目标。 */
 export function compileWakeflowWindowRuntimeRegisteredProjectionEntry(
   profileValue: unknown,
+  identityProfileValue: unknown,
   unregisteredValue: unknown,
   bindingValue: unknown,
 ): Readonly<WakeflowWindowRuntimeRegisteredProjectionEntry> {
   const projection = compileWakeflowWindowRuntimeRegisteredProjection(
     profileValue,
+    identityProfileValue,
     unregisteredValue,
     bindingValue,
   );
@@ -271,36 +279,4 @@ export function compileWakeflowWindowRuntimeRegisteredProjectionEntry(
       encodeUtf8(document, "$windowRuntimeProjection"),
     ),
   });
-}
-
-/** 只接受与当前 topology + Binding authority 完全一致的确定性投影文档。 */
-export function parseWakeflowWindowRuntimeRegisteredProjectionDocument(
-  text: unknown,
-  profileValue: unknown,
-  unregisteredValue: unknown,
-  bindingValue: unknown,
-): Readonly<WakeflowWindowRuntimeRegisteredProjection> {
-  let json: JsonValue;
-  try {
-    json = parseDeterministicJsonDocument(text, "$windowRuntimeProjection");
-  } catch (error: unknown) {
-    if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", error.path);
-    }
-    throw error;
-  }
-  const validated = validateWire(json);
-  if (!validated.ok) fail("schema", validated.path);
-  const expected = compileWakeflowWindowRuntimeRegisteredProjection(
-    profileValue,
-    unregisteredValue,
-    bindingValue,
-  );
-  if (
-    renderDeterministicJsonDocument(expected, "$windowRuntimeProjection")
-      !== text
-  ) {
-    fail("source", "$windowRuntimeProjection");
-  }
-  return expected;
 }

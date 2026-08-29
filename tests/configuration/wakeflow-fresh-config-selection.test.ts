@@ -93,3 +93,71 @@ test("Fresh selection rejects duplicate keys, unresolved roots, and UUID collisi
     }
   }
 });
+
+test("Fresh selection snapshots all data and validates before ID allocation", () => {
+  const baseline = compileWakeflowFreshConfigSelection(
+    createMinimalWakeflowFreshConfigSelection(),
+    { uuidFactory: createSequenceUuidV4Factory() },
+  );
+  const mutable = createMinimalWakeflowFreshConfigSelection();
+  const sequence = createSequenceUuidV4Factory();
+  let calls = 0;
+  const mutatingFactory = () => {
+    calls += 1;
+    mutable.program.displayName = "Mutated after snapshot";
+    mutable.topology.windows.length = 0;
+    return sequence();
+  };
+  const compiled = compileWakeflowFreshConfigSelection(mutable, {
+    uuidFactory: mutatingFactory,
+  });
+  equal(calls, 8);
+  deepEqual(compiled, baseline);
+
+  const unresolved = createMinimalWakeflowFreshConfigSelection();
+  const product = unresolved.topology.windows[3];
+  if (product === undefined) throw new Error("Expected product window.");
+  product.root = { kind: "repository", selectionKey: "missing" };
+  let invalidFactoryCalls = 0;
+  let caught: unknown;
+  try {
+    compileWakeflowFreshConfigSelection(unresolved, {
+      uuidFactory: () => {
+        invalidFactoryCalls += 1;
+        return UUIDS[0] ?? "invalid";
+      },
+    });
+  } catch (error: unknown) {
+    caught = error;
+  }
+  equal(caught instanceof WakeflowFreshConfigSelectionError, true);
+  equal(invalidFactoryCalls, 0);
+
+  const overCapacity = createMinimalWakeflowFreshConfigSelection();
+  const repositories = overCapacity.topology.repositories as
+    Record<string, unknown>[];
+  for (let index = 0; index < 250; index += 1) {
+    repositories.push({
+      selectionKey: `extra-${index}`,
+      path: `Repositories/Extra-${index}`,
+      displayName: `Extra ${index}`,
+      instructionManagement: "owner-managed",
+    });
+  }
+  caught = undefined;
+  try {
+    compileWakeflowFreshConfigSelection(overCapacity, {
+      uuidFactory: () => {
+        invalidFactoryCalls += 1;
+        return UUIDS[0] ?? "invalid";
+      },
+    });
+  } catch (error: unknown) {
+    caught = error;
+  }
+  equal(caught instanceof WakeflowFreshConfigSelectionError, true);
+  if (caught instanceof WakeflowFreshConfigSelectionError) {
+    equal(caught.reason, "capacity");
+  }
+  equal(invalidFactoryCalls, 0);
+});

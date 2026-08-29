@@ -11,6 +11,7 @@ import {
 function expectSchemaError(
   action: () => unknown,
   reason: RuntimeJsonSchemaErrorReason,
+  expectedPath: string,
 ): void {
   let caught: unknown;
   try {
@@ -21,62 +22,74 @@ function expectSchemaError(
   if (!(caught instanceof RuntimeJsonSchemaError)) {
     throw new Error("Expected RuntimeJsonSchemaError.");
   }
+  equal(caught.name, "RuntimeJsonSchemaError");
   equal(caught.code, "wakeflow-runtime-json-schema");
   equal(caught.reason, reason);
+  equal(caught.path, expectedPath);
 }
 
-test("one compiled validator resolves a closed local external reference", () => {
+test("one compiled validator owns local refs, annotations, and regex format", () => {
   const dependency = Object.freeze({
     $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: "urn:wakeflow:test:name",
+    $id: "urn:wakeflow:test:regex-pattern",
     type: "string",
-    pattern: "^[a-z]+$",
+    format: "regex",
   });
   const root = Object.freeze({
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "urn:wakeflow:test:record",
+    "x-wakeflow-runtime-export": "WAKEFLOW_TEST_RECORD_SCHEMA",
     type: "object",
     additionalProperties: false,
-    required: ["name"],
-    properties: { name: { $ref: dependency.$id } },
+    required: ["pattern"],
+    properties: { pattern: { $ref: dependency.$id } },
   });
   const validate = createRuntimeJsonSchemaValidator<{
-    readonly name: string;
+    readonly pattern: string;
   }>(root, [dependency]);
 
-  const accepted = validate(parseJsonValue({ name: "wakeflow" }));
+  const accepted = validate(parseJsonValue({ pattern: "^[a-z]+$" }));
   equal(accepted.ok, true);
-  if (accepted.ok) equal(accepted.value.name, "wakeflow");
+  if (accepted.ok) equal(accepted.value.pattern, "^[a-z]+$");
 
-  const rejected = validate(parseJsonValue({ name: "Wakeflow" }));
+  const rejected = validate(parseJsonValue({ pattern: "[" }));
   equal(rejected.ok, false);
-  if (!rejected.ok) equal(rejected.path, "$/name");
+  if (!rejected.ok) equal(rejected.path, "$/pattern");
 });
 
-test("validation result does not expose Ajv keyword, schema, data, or message", () => {
+test("validation is non-mutating and exposes only a frozen stable result", () => {
   const validate = createRuntimeJsonSchemaValidator<{ readonly value: number }>({
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "urn:wakeflow:test:number",
     type: "object",
     additionalProperties: false,
     required: ["value"],
-    properties: { value: { type: "integer", minimum: 1 } },
+    properties: {
+      value: { type: "integer", minimum: 1 },
+      defaulted: { type: "string", default: "inserted" },
+    },
   });
   const result = validate(parseJsonValue({ value: 0 }));
   equal(result.ok, false);
   equal(Object.keys(result).sort().join(","), "ok,path");
   equal(JSON.stringify(result).includes("minimum"), false);
   equal(Object.isFrozen(result), true);
+
+  const admitted = parseJsonValue({ value: "1", unexpected: true });
+  const before = JSON.stringify(admitted);
+  const rejected = validate(admitted);
+  equal(rejected.ok, false);
+  equal(JSON.stringify(admitted), before);
 });
 
 test("Schema and dependency admission execute no accessors", () => {
   let getterCalls = 0;
-  const schema = {
+  const hostileRoot = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: "urn:wakeflow:test:hostile",
+    $id: "urn:wakeflow:test:hostile-root",
     type: "string",
   };
-  Object.defineProperty(schema, "pattern", {
+  Object.defineProperty(hostileRoot, "pattern", {
     enumerable: true,
     get() {
       getterCalls += 1;
@@ -84,8 +97,31 @@ test("Schema and dependency admission execute no accessors", () => {
     },
   });
   expectSchemaError(
-    () => createRuntimeJsonSchemaValidator(schema),
+    () => createRuntimeJsonSchemaValidator(hostileRoot),
     "schema-input",
+    "$schema/pattern",
+  );
+
+  const hostileDependency = {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "urn:wakeflow:test:hostile-dependency",
+    type: "string",
+  };
+  Object.defineProperty(hostileDependency, "pattern", {
+    enumerable: true,
+    get() {
+      getterCalls += 1;
+      return ".*";
+    },
+  });
+  expectSchemaError(
+    () => createRuntimeJsonSchemaValidator({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "urn:wakeflow:test:dependency-root",
+      $ref: hostileDependency.$id,
+    }, [hostileDependency]),
+    "schema-dependency",
+    "$dependencies/0/pattern",
   );
   equal(getterCalls, 0);
 });
@@ -98,6 +134,7 @@ test("unresolved, duplicate, and malformed Schema catalogs fail closed", () => {
       $ref: "urn:wakeflow:test:missing",
     }),
     "schema-compile",
+    "$schema",
   );
   const dependency = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -110,9 +147,11 @@ test("unresolved, duplicate, and malformed Schema catalogs fail closed", () => {
       [dependency, dependency],
     ),
     "schema-dependency",
+    "$dependencies/1/$id",
   );
   expectSchemaError(
     () => createRuntimeJsonSchemaValidator(null),
     "schema-input",
+    "$schema",
   );
 });

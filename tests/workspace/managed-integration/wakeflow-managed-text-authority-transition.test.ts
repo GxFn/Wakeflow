@@ -1,7 +1,6 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { equal } from "node:assert/strict";
 import { test } from "node:test";
 
-import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import {
   recomposeWakeflowManagedTextEnvelope,
@@ -58,8 +57,6 @@ test("Managed Text authority transition inserts into unmanaged outside bytes", (
 
   equal(transition.disposition, "recompose-required");
   equal(transition.sourceAuthority, "unmanaged");
-  equal(transition.matchedCurrentTargetIndex, null);
-  equal(transition.desiredBodyDigest, computeSha256Digest(encodeUtf8(DESIRED.body)));
   equal(transition.target?.disposition, "inserted");
   equal(
     Buffer.from(transition.target?.bytes ?? []).subarray(0, source.byteLength)
@@ -80,7 +77,6 @@ test("Managed Text authority transition admits exact current and converges to de
   });
   equal(update.disposition, "recompose-required");
   equal(update.sourceAuthority, "admitted-current");
-  equal(update.matchedCurrentTargetIndex, 0);
   equal(update.target?.disposition, "updated");
 
   const targetBytes = update.target?.bytes;
@@ -92,7 +88,6 @@ test("Managed Text authority transition admits exact current and converges to de
   equal(current.disposition, "current");
   equal(current.sourceAuthority, "desired");
   equal(current.target, null);
-  deepEqual(current.desiredTarget, DESIRED);
 });
 
 test("Managed Text authority transition rejects marker-only ownership claims", () => {

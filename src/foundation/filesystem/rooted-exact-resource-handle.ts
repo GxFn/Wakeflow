@@ -209,6 +209,9 @@ async function inspectInitialResource(
       if (error.reason === "resource-changed") {
         fail("resource-changed", errorPath);
       }
+      if (error.reason === "resource-alias") {
+        fail("resource-changed", errorPath);
+      }
       fail("root-scope", errorPath);
     }
     throw error;
@@ -347,10 +350,6 @@ export class RootedExactResourceHandle {
     }
   }
 
-  get resourcePath(): PortableResourcePath {
-    return this.#resourcePath;
-  }
-
   /** 仅供进程内 foundation I/O；禁止持久化或诊断输出。 */
   get resourceAbsolutePath(): string {
     return this.#resourceAbsolutePath;
@@ -363,10 +362,6 @@ export class RootedExactResourceHandle {
 
   get kind(): RootedExactResourceKind {
     return this.#kind;
-  }
-
-  get isClosed(): boolean {
-    return this.#closed;
   }
 
   #assertOpen(): void {

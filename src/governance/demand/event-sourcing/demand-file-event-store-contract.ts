@@ -8,11 +8,13 @@ import {
 import type { FileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
 import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import {
-  computeDemandEventStreamCommitDigest,
   renderDemandEventStreamCommit,
   type DemandEventStreamCommit,
 } from "./demand-event-stream-commit.js";
-import type { DemandEventCommitSequence } from "./demand-event-sourcing-aggregate.js";
+import type {
+  DemandEventCommitSequence,
+  DemandEventStreamRevision,
+} from "./demand-event-stream-position.js";
 
 /** Demand 文件事件存储的容量、回执和稳定错误合同。 */
 
@@ -30,7 +32,7 @@ export const DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES = parseByteCount(
 
 export interface DemandFileEventStoreCursor {
   readonly commitSequence: DemandEventCommitSequence;
-  readonly streamRevision: number;
+  readonly streamRevision: DemandEventStreamRevision;
   readonly lastCommitDigest: Sha256Digest;
 }
 
@@ -50,7 +52,6 @@ export interface DemandFileEventStoreAppendReceipt {
   readonly commitSequence: DemandEventCommitSequence;
   readonly streamRevision: number;
   readonly commitDigest: Sha256Digest;
-  readonly candidateStatus: "retired";
 }
 
 export interface DemandFileEventStoreCandidateRecoveryReceipt {
@@ -111,8 +112,14 @@ export class DemandFileEventStoreError extends Error {
   }
 }
 
-export interface DemandFileEventStoreOptions {
+interface DemandFileEventStoreOptions {
   readonly signal: AbortSignal | undefined;
+}
+
+function currentUserId(): bigint | null {
+  return typeof process.geteuid === "function"
+    ? BigInt(process.geteuid())
+    : null;
 }
 
 export function failDemandFileEventStore(
@@ -158,6 +165,7 @@ export function assertDemandFileEventStoreDirectory(
   if (
     node.kind !== "directory"
     || node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE
+    || (currentUserId() !== null && node.userId !== currentUserId())
   ) {
     failDemandFileEventStore("node-policy", path);
   }
@@ -172,6 +180,7 @@ export function assertDemandFileEventStoreFile(
     node.kind !== "file"
     || node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE
     || !admittedLinkCounts.includes(node.linkCount)
+    || (currentUserId() !== null && node.userId !== currentUserId())
   ) {
     failDemandFileEventStore("node-policy", path);
   }
@@ -181,9 +190,6 @@ export function sameDemandEventStreamCommit(
   left: Readonly<DemandEventStreamCommit>,
   right: Readonly<DemandEventStreamCommit>,
 ): boolean {
-  return left.commitId === right.commitId
-    && left.commandDigest === right.commandDigest
-    && computeDemandEventStreamCommitDigest(left)
-      === computeDemandEventStreamCommitDigest(right)
-    && renderDemandEventStreamCommit(left) === renderDemandEventStreamCommit(right);
+  return renderDemandEventStreamCommit(left)
+    === renderDemandEventStreamCommit(right);
 }

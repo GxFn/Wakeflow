@@ -29,7 +29,7 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../../../foundation/identity/wakeflow-durable-id.js";
+} from "../../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
@@ -43,6 +43,7 @@ import {
 } from "./demand-event-sourcing-state-version.js";
 import {
   parseDemandEventStreamRevision,
+  DemandEventStreamPositionError,
   type DemandEventStreamRevision,
 } from "./demand-event-stream-position.js";
 
@@ -138,6 +139,12 @@ function parseId<Kind extends "demand" | "demand-event">(
   }
 }
 
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return value !== null
+    && typeof value === "object"
+    && !Array.isArray(value);
+}
+
 /** 解析 envelope；未知 eventType/eventVersion 在本层仍是有效路由事实。 */
 export function parseDemandEventSourcingPersistedEventEnvelope(
   value: unknown,
@@ -166,7 +173,7 @@ export function parseDemandEventSourcingPersistedEventEnvelope(
     if (error instanceof JsonValueError) fail("json", "$/data");
     throw error;
   }
-  if (data === null || Array.isArray(data) || typeof data !== "object") {
+  if (!isJsonObject(data)) {
     fail("schema", "$/data");
   }
   let resultingStateDigest: Sha256Digest;
@@ -197,8 +204,11 @@ export function parseDemandEventSourcingPersistedEventEnvelope(
       wire.streamRevision,
       "$/streamRevision",
     );
-  } catch {
-    fail("revision", "$/streamRevision");
+  } catch (error: unknown) {
+    if (error instanceof DemandEventStreamPositionError) {
+      fail("revision", "$/streamRevision");
+    }
+    throw error;
   }
   return Object.freeze({
     artifactKind: DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND,
@@ -209,7 +219,7 @@ export function parseDemandEventSourcingPersistedEventEnvelope(
     recordedAt,
     eventType: wire.eventType,
     eventVersion: wire.eventVersion,
-    data: data as Readonly<JsonObject>,
+    data,
     resultingStateModelVersion,
     resultingStateDigest,
   });
@@ -219,7 +229,7 @@ export function renderDemandEventSourcingPersistedEventEnvelope(
   value: unknown,
 ): string {
   return renderDeterministicJsonDocument(
-    parseDemandEventSourcingPersistedEventEnvelope(value) as unknown as JsonValue,
+    parseDemandEventSourcingPersistedEventEnvelope(value),
     "$event",
   );
 }
@@ -247,6 +257,6 @@ export function computeDemandEventSourcingPersistedEventEnvelopeDigest(
   value: unknown,
 ): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
-    parseDemandEventSourcingPersistedEventEnvelope(value) as unknown as JsonValue,
+    parseDemandEventSourcingPersistedEventEnvelope(value),
   );
 }

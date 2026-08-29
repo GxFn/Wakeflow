@@ -29,14 +29,10 @@ import {
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
-  ledgerAuthorityFamily,
-  ledgerAuthorityRecordId,
   ledgerAuthorityRootRef,
   ledgerRecordPublicationIntentRef,
   ledgerRecordPublicationLockRef,
   ledgerRecordPublicationStageRef,
-  type LedgerAuthorityFamily,
-  type LedgerAuthorityRecordId,
 } from "./ledger-authority-paths.js";
 import {
   parseLedgerAuthorityRecord,
@@ -45,6 +41,11 @@ import {
   type LedgerAuthorityRecord,
 } from "./ledger-authority-record.js";
 import {
+  LEDGER_AUTHORITY_MAXIMUM_TREE_DEPTH,
+  LEDGER_AUTHORITY_MAXIMUM_TREE_ENTRIES,
+  LEDGER_AUTHORITY_MAXIMUM_TREE_FILES,
+  LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES,
+  LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES,
   LEDGER_DURABLE_DIRECTORY_MODE,
   LEDGER_DURABLE_FILE_MODE,
 } from "./ledger-authority-storage-policy.js";
@@ -58,15 +59,13 @@ import {
  * 重试，不能根据意图记录虚构内容。
  */
 
-export const LEDGER_RECORD_PUBLICATION_INTENT_ARTIFACT_KIND =
+const LEDGER_RECORD_PUBLICATION_INTENT_ARTIFACT_KIND =
   "wakeflow-ledger-record-publication-intent" as const;
-export const LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA_VERSION = 1 as const;
+const LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA_VERSION = 1 as const;
 
 export interface LedgerRecordPublicationIntent {
   readonly artifactKind: typeof LEDGER_RECORD_PUBLICATION_INTENT_ARTIFACT_KIND;
   readonly schemaVersion: typeof LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA_VERSION;
-  readonly family: LedgerAuthorityFamily;
-  readonly recordId: LedgerAuthorityRecordId;
   readonly record: Readonly<LedgerAuthorityRecord>;
   readonly finalRootRef: ReturnType<typeof ledgerAuthorityRootRef>;
   readonly intentRef: ReturnType<typeof ledgerRecordPublicationIntentRef>;
@@ -144,7 +143,13 @@ function normalizeRecord(value: unknown): Readonly<LedgerAuthorityRecord> {
 
 function normalizeTreePlan(value: unknown): Readonly<DirectoryTreeCandidatePlan> {
   try {
-    return parseDirectoryTreeCandidatePlan(value);
+    return parseDirectoryTreeCandidatePlan(value, {
+      maximumDepth: LEDGER_AUTHORITY_MAXIMUM_TREE_DEPTH,
+      maximumEntries: LEDGER_AUTHORITY_MAXIMUM_TREE_ENTRIES,
+      maximumFileBytes: LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES,
+      maximumFiles: LEDGER_AUTHORITY_MAXIMUM_TREE_FILES,
+      maximumTotalBytes: LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES,
+    });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
       fail("tree-plan", "$/treePlan");
@@ -201,16 +206,12 @@ function normalize(
   const record = normalizeRecord(wire.record);
   const treePlan = normalizeTreePlan(wire.treePlan);
   assertTreePlanMatchesRecord(record, treePlan);
-  const family = ledgerAuthorityFamily(record);
-  const recordId = ledgerAuthorityRecordId(record);
   const finalRootRef = ledgerAuthorityRootRef(record);
   const intentRef = ledgerRecordPublicationIntentRef(record);
   const lockRef = ledgerRecordPublicationLockRef(record);
   const stageRef = ledgerRecordPublicationStageRef(record);
   if (
-    wire.family !== family
-    || wire.recordId !== recordId
-    || wire.finalRootRef !== finalRootRef
+    wire.finalRootRef !== finalRootRef
     || wire.intentRef !== intentRef
     || wire.lockRef !== lockRef
     || wire.stageRef !== stageRef
@@ -220,8 +221,6 @@ function normalize(
   return Object.freeze({
     artifactKind: LEDGER_RECORD_PUBLICATION_INTENT_ARTIFACT_KIND,
     schemaVersion: LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA_VERSION,
-    family,
-    recordId,
     record,
     finalRootRef,
     intentRef,
@@ -257,8 +256,6 @@ export function createLedgerRecordPublicationIntent(
   return parseLedgerRecordPublicationIntent({
     artifactKind: LEDGER_RECORD_PUBLICATION_INTENT_ARTIFACT_KIND,
     schemaVersion: LEDGER_RECORD_PUBLICATION_INTENT_SCHEMA_VERSION,
-    family: ledgerAuthorityFamily(record),
-    recordId: ledgerAuthorityRecordId(record),
     record,
     finalRootRef: ledgerAuthorityRootRef(record),
     intentRef: ledgerRecordPublicationIntentRef(record),
@@ -271,7 +268,7 @@ export function createLedgerRecordPublicationIntent(
 /** 渲染唯一的确定性格式化 JSON 表示。 */
 export function renderLedgerRecordPublicationIntent(value: unknown): string {
   return renderDeterministicJsonDocument(
-    parseLedgerRecordPublicationIntent(value) as unknown as JsonValue,
+    parseLedgerRecordPublicationIntent(value),
     "$intent",
   );
 }

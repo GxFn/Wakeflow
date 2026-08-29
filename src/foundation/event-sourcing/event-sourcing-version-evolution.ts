@@ -193,11 +193,15 @@ function parseDefinition(value: unknown): Readonly<ParsedDefinition> {
   });
 }
 
-function snapshotJson(value: unknown, path: string): Readonly<JsonValue> {
+function snapshotJson(
+  value: unknown,
+  path: string,
+  reason: "codec" | "upcast" = "codec",
+): Readonly<JsonValue> {
   try {
     return parseJsonValue(value, path);
   } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("codec", path);
+    if (error instanceof JsonValueError) fail(reason, path);
     throw error;
   }
 }
@@ -269,31 +273,37 @@ export class EventSourcingVersionEvolutionRegistry {
     let codec = this.#codecs.get(sourceVersion);
     if (codec === undefined) fail("unsupported-version", "$sourceVersion");
     let data = snapshotJson(sourceDataValue, "$data");
+    let parsed: unknown;
     try {
-      data = snapshotJson(codec.parse(data), "$data");
-    } catch (error: unknown) {
-      if (error instanceof EventSourcingVersionEvolutionError) throw error;
+      parsed = codec.parse(data);
+    } catch {
       fail("codec", "$data");
     }
+    data = snapshotJson(parsed, "$data");
     for (let version = sourceVersion; version < this.#currentVersion; version += 1) {
       const step = this.#steps.get(version);
-      if (step === undefined) fail("missing-step", `$steps/${version}`);
+      if (step === undefined) fail("missing-step", `$/steps/${version}`);
       let upcasted: unknown;
       try {
         upcasted = step.upcast(data);
       } catch {
-        fail("upcast", `$steps/${version}`);
+        fail("upcast", `$/steps/${version}`);
       }
       codec = this.#codecs.get(step.toVersion);
-      if (codec === undefined) fail("missing-step", `$codecs/${step.toVersion}`);
-      try {
-        data = snapshotJson(codec.parse(
-          snapshotJson(upcasted, `$steps/${version}`),
-        ), `$codecs/${step.toVersion}`);
-      } catch (error: unknown) {
-        if (error instanceof EventSourcingVersionEvolutionError) throw error;
-        fail("codec", `$codecs/${step.toVersion}`);
+      if (codec === undefined) {
+        fail("missing-step", `$/codecs/${step.toVersion}`);
       }
+      const intermediate = snapshotJson(
+        upcasted,
+        `$/steps/${version}`,
+        "upcast",
+      );
+      try {
+        parsed = codec.parse(intermediate);
+      } catch {
+        fail("codec", `$/codecs/${step.toVersion}`);
+      }
+      data = snapshotJson(parsed, `$/codecs/${step.toVersion}`);
     }
     return Object.freeze({
       sourceVersion,

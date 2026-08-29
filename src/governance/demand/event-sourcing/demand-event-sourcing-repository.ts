@@ -1,6 +1,15 @@
 import { types } from "node:util";
 
-import type { WakeflowDurableId } from "../../../foundation/identity/wakeflow-durable-id.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  WakeflowDurableIdError,
+  type WakeflowDurableId,
+} from "../../../contracts/identity/wakeflow-durable-id.js";
+import {
+  parsePlainRecord,
+  PassiveOwnDataError,
+} from "../../../foundation/data/passive-own-data.js";
+import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 
 import {
   applyDemandEventStreamCommit,
@@ -9,9 +18,11 @@ import {
   type PreparedDemandEventStreamCommit,
 } from "./demand-event-stream-commit.js";
 import type {
-  DemandEventCommitSequence,
   DemandEventSourcingAggregate,
 } from "./demand-event-sourcing-aggregate.js";
+import type {
+  DemandEventCommitSequence,
+} from "./demand-event-stream-position.js";
 import {
   createDemandEventSourcingSnapshot,
   restoreDemandEventSourcingSnapshot,
@@ -91,20 +102,28 @@ function fail(
 function parseSignal(
   value: unknown,
 ): AbortSignal | undefined {
-  if (value === undefined) return undefined;
+  let record: Readonly<Record<string, unknown>>;
+  try {
+    record = parsePlainRecord(value === undefined ? {} : value, "$options");
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    throw error;
+  }
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || Object.keys(value).some((key) => key !== "signal")
+    Object.keys(record).some((key) => key !== "signal")
+    || (
+      record.signal !== undefined
+      && (
+        typeof record.signal !== "object"
+        || record.signal === null
+        || types.isProxy(record.signal)
+        || !(record.signal instanceof AbortSignal)
+      )
+    )
   ) {
     fail("input", "$options");
   }
-  const signal = (value as { readonly signal?: unknown }).signal;
-  if (signal !== undefined && !(signal instanceof AbortSignal)) {
-    fail("input", "$options.signal");
-  }
-  return signal;
+  return record.signal as AbortSignal | undefined;
 }
 
 function replayCommits(
@@ -150,24 +169,17 @@ export class DemandEventSourcingRepository {
   readonly #eventStore: DemandFileEventStore;
   readonly #snapshotStore: DemandFileEventSnapshotStore;
 
-  constructor(
-    eventStore: DemandFileEventStore,
-    snapshotStore: DemandFileEventSnapshotStore,
-  ) {
+  constructor(root: RootedDirectory) {
     if (
-      typeof eventStore !== "object"
-      || eventStore === null
-      || types.isProxy(eventStore)
-      || !(eventStore instanceof DemandFileEventStore)
-      || typeof snapshotStore !== "object"
-      || snapshotStore === null
-      || types.isProxy(snapshotStore)
-      || !(snapshotStore instanceof DemandFileEventSnapshotStore)
+      typeof root !== "object"
+      || root === null
+      || types.isProxy(root)
+      || !(root instanceof RootedDirectory)
     ) {
-      fail("input", "$stores");
+      fail("input", "$root");
     }
-    this.#eventStore = eventStore;
-    this.#snapshotStore = snapshotStore;
+    this.#eventStore = new DemandFileEventStore(root);
+    this.#snapshotStore = new DemandFileEventSnapshotStore(root);
   }
 
   /** 正常读取；不存在事件流时返回 `null`，读取过程中绝不创建或修复快照。 */
@@ -269,10 +281,21 @@ export class DemandEventSourcingRepository {
 
   /** 仅为命令重试解析 `commitId`；普通加载不会因此扫描历史。 */
   async findCommitById(
-    commitId: WakeflowDurableId<"demand-event-commit">,
+    commitIdValue: unknown,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DemandEventStreamCommit> | null> {
     const signal = parseSignal(options);
+    let commitId: WakeflowDurableId<"demand-event-commit">;
+    try {
+      commitId = parseWakeflowDurableIdOfKind(
+        commitIdValue,
+        "demand-event-commit",
+        "$commitId",
+      );
+    } catch (error: unknown) {
+      if (error instanceof WakeflowDurableIdError) fail("input", "$commitId");
+      throw error;
+    }
     let stream;
     try {
       stream = await this.#eventStore.readCommits(
@@ -290,15 +313,10 @@ export class DemandEventSourcingRepository {
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DemandFileEventStoreAppendReceipt>> {
     const signal = parseSignal(options);
-    try {
-      return await this.#eventStore.append(
-        prepared,
-        signal === undefined ? undefined : { signal },
-      );
-    } catch (error: unknown) {
-      if (error instanceof DemandFileEventStoreError) throw error;
-      throw error;
-    }
+    return this.#eventStore.append(
+      prepared,
+      signal === undefined ? undefined : { signal },
+    );
   }
 
   /** 显式发布当前聚合的不可变检查点；该操作不属于加载副作用。 */

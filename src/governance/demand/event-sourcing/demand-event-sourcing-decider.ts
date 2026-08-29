@@ -10,12 +10,11 @@ import {
   parsePlainRecord,
   PassiveOwnDataError,
 } from "../../../foundation/data/passive-own-data.js";
-import type { JsonValue } from "../../../foundation/data/json-value.js";
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../../../foundation/identity/wakeflow-durable-id.js";
+} from "../../../contracts/identity/wakeflow-durable-id.js";
 import {
   parseUtcInstant,
   UtcInstantError,
@@ -132,16 +131,9 @@ function fail(
 }
 
 function exactCommand(
-  value: unknown,
+  record: Readonly<Record<string, unknown>>,
   fields: readonly string[],
 ): Readonly<Record<string, unknown>> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$command");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$command");
-    throw error;
-  }
   const keys = Object.keys(record).sort();
   if (
     keys.length !== fields.length
@@ -243,8 +235,14 @@ export function computeDemandEventSourcingCommandDigest(
   value: unknown,
 ): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
-    parseDemandEventSourcingCommand(value) as unknown as JsonValue,
+    parseDemandEventSourcingCommand(value),
   );
+}
+
+function singleEvent(
+  event: Readonly<DemandUncommittedEvent>,
+): readonly [Readonly<DemandUncommittedEvent>] {
+  return Object.freeze([event]);
 }
 
 function parseState(
@@ -269,7 +267,7 @@ export function decideDemandEventSourcingCommand(
 
   if (command.commandType === "publication.publish-demand") {
     if (state !== null) fail("transition", "$state");
-    return Object.freeze([parseDemandUncommittedEvent({
+    return singleEvent(parseDemandUncommittedEvent({
       eventId: command.eventId,
       demandId: command.demandId,
       recordedAt: command.recordedAt,
@@ -280,19 +278,19 @@ export function decideDemandEventSourcingCommand(
         authorityRef: "authority.json",
         authorityDigest: command.authorityDigest,
       },
-    })]) as readonly [Readonly<DemandUncommittedEvent>];
+    }));
   }
 
   if (state === null) fail("transition", "$state");
   if (state.demandId !== command.demandId) fail("identity", "$/demandId");
   if (state.lifecycle !== "active") fail("transition", "$state/lifecycle");
-  return Object.freeze([parseDemandUncommittedEvent({
+  return singleEvent(parseDemandUncommittedEvent({
     eventId: command.eventId,
     demandId: command.demandId,
     recordedAt: command.recordedAt,
     eventType: "lifecycle.demand-cancelled",
     data: { reason: command.reason },
-  })]) as readonly [Readonly<DemandUncommittedEvent>];
+  }));
 }
 
 /** 将一个已决定但尚未持久化的事件确定性应用到状态。 */

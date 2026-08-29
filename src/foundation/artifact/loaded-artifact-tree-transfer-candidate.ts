@@ -10,7 +10,6 @@ import {
 } from "../filesystem/durable-file-copy-candidate.js";
 import {
   createDirectoryAtomically,
-  materializeDirectoryPath,
   DurableDirectoryMaterializationError,
 } from "../filesystem/durable-directory-materialization.js";
 import {
@@ -47,12 +46,11 @@ import {
  * 发布最终路径、不删除来源、不清理未知节点，也不把 candidate 视为权威事实。
  */
 
-export interface LoadedArtifactTreeTransferCandidateOptions {
+interface LoadedArtifactTreeTransferCandidateOptions {
   readonly signal?: AbortSignal;
 }
 
-export interface LoadedArtifactTreeTransferCandidateResult {
-  readonly kind: "LoadedArtifactTreeTransferCandidate";
+interface LoadedArtifactTreeTransferCandidateResult {
   readonly plan: Readonly<LoadedArtifactTreeTransferPlan>;
   readonly sourceIdentity: Readonly<LoadedArtifactTreeIdentity>;
   readonly candidate: Readonly<DirectoryTreeCandidateResult>;
@@ -288,7 +286,7 @@ async function materializeMissingDirectories(
   for (const directory of missingDirectories) {
     assertNotAborted(signal);
     try {
-      await materializeDirectoryPath(
+      await createDirectoryAtomically(
         root,
         joinDirectoryTreeCandidatePath(plan.candidateRootPath, directory),
         {
@@ -407,9 +405,9 @@ export async function materializeLoadedArtifactTreeTransferCandidate(
 ): Promise<Readonly<LoadedArtifactTreeTransferCandidateResult>> {
   assertRoot(sourceRootValue, "$sourceRoot");
   assertRoot(destinationRootValue, "$destinationRoot");
-  const plan = parsePlan(planValue);
   const options = parseOptions(optionsValue);
   assertNotAborted(options.signal);
+  const plan = parsePlan(planValue);
   await inspectSource(sourceRootValue, plan, options.signal);
   await ensureCandidateRoot(destinationRootValue, plan, options.signal);
   let progress = await inspectProgress(
@@ -447,7 +445,6 @@ export async function materializeLoadedArtifactTreeTransferCandidate(
   );
   assertNotAborted(options.signal);
   return Object.freeze({
-    kind: "LoadedArtifactTreeTransferCandidate",
     plan,
     sourceIdentity,
     candidate,

@@ -36,37 +36,16 @@ function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
   return value;
 }
 
-/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_TODO_INTAKE_LINEAGE_SCHEMA = freezeGeneratedSchema({
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:wakeflow:governance:todo:intake-lineage:v1",
-  "x-wakeflow-runtime-export": "WAKEFLOW_TODO_INTAKE_LINEAGE_SCHEMA",
-  "title": "WakeflowTodoIntakeLineageReference",
-  "description": "跨 Aggregate 绑定一份 immutable TODO intake 的 portable ref/digest。",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "artifactKind",
-    "schemaVersion",
-    "todoId",
-    "intakeRef",
-    "intakeDigest"
-  ],
-  "properties": {
-    "artifactKind": {
-      "const": "wakeflow-todo-intake-lineage"
-    },
-    "schemaVersion": {
-      "const": 1
-    },
-    "todoId": {
-      "$ref": "urn:wakeflow:governance:todo:item-id:v1"
-    },
-    "intakeRef": {
-      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
-    },
-    "intakeDigest": {
-      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-    }
+/** 从 JSON 文本恢复 Schema，保留 `__proto__` 等普通 JSON 自有键。 */
+function restoreGeneratedSchema(
+  serialized: string,
+): Readonly<Record<string, unknown>> {
+  const value: unknown = JSON.parse(serialized);
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    throw new TypeError("Generated Schema must be an object.");
   }
-} as const);
+  return freezeGeneratedSchema(value as Record<string, unknown>);
+}
+
+/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
+export const WAKEFLOW_TODO_INTAKE_LINEAGE_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:todo:intake-lineage:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TODO_INTAKE_LINEAGE_SCHEMA\",\"title\":\"WakeflowTodoIntakeLineageReference\",\"description\":\"跨 Aggregate 绑定一份 immutable TODO intake 的 portable ref/digest。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"todoId\",\"intakeRef\",\"intakeDigest\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-todo-intake-lineage\"},\"schemaVersion\":{\"const\":1},\"todoId\":{\"$ref\":\"urn:wakeflow:governance:todo:item-id:v1\"},\"intakeRef\":{\"$ref\":\"urn:wakeflow:foundation:filesystem:portable-resource-path:v1\"},\"intakeDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}}}");

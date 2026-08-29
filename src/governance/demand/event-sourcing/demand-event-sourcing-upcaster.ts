@@ -90,7 +90,3 @@ export function upcastDemandEventSourcingStoredEvent(
     throw error;
   }
 }
-
-export {
-  DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS,
-} from "./demand-event-sourcing-event-version-codec.js";

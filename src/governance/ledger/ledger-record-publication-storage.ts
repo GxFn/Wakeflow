@@ -7,7 +7,7 @@ import {
   DurableAtomicFileWriteError,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import {
-  recoverDurableAtomicFileStagesInDirectory,
+  recoverDurableAtomicFileStagesMatchingTargets,
   DurableAtomicFileStageRecoveryError,
 } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import {
@@ -38,16 +38,24 @@ import {
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import {
+  admitWakeflowResourceOperation,
+  WakeflowResourceProcessingContractError,
+  type WakeflowDirectoryContainerRecipe,
+  type WakeflowResourceMutationRecipe,
+} from "../../foundation/resource/resource-processing-contract.js";
 import { loadLedgerAuthorityRecord } from "./ledger-authority-reader.js";
 import { computeLedgerAuthorityRecordDigest } from "./ledger-authority-record.js";
 import {
-  LEDGER_TRANSACTIONS_ROOT_REF,
+  ledgerAuthorityFamily,
+  ledgerAuthorityRecordId,
 } from "./ledger-authority-paths.js";
 import {
   LedgerAuthorityStoreError,
   throwLedgerAuthorityStoreError as fail,
   type LoadedLedgerAuthorityRecord,
 } from "./ledger-authority-store-contract.js";
+import { createLedgerAuthorityResourceCatalog } from "./ledger-resource-catalog.js";
 import {
   parseLedgerRecordPublicationIntentDocument,
   renderLedgerRecordPublicationIntent,
@@ -58,6 +66,7 @@ import {
 import {
   LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES,
   LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
+  LEDGER_DURABLE_DIRECTORY_MODE,
   LEDGER_TRANSACTION_FILE_MODE,
 } from "./ledger-authority-storage-policy.js";
 
@@ -75,6 +84,31 @@ export interface StoredLedgerRecordPublicationIntent {
 
 export interface LedgerRecordPublicationResidues {
   readonly stageNode: Readonly<FileNodeSnapshot> | null;
+}
+
+function currentUserId(): bigint | null {
+  return typeof process.geteuid === "function"
+    ? BigInt(process.geteuid())
+    : null;
+}
+
+function admitLedgerResourceOperation(
+  intent: Readonly<LedgerRecordPublicationIntent>,
+  resourcePath: PortableResourcePath,
+  recipe: WakeflowResourceMutationRecipe | WakeflowDirectoryContainerRecipe,
+): void {
+  const declaration = createLedgerAuthorityResourceCatalog(intent.record).find(
+    (entry) => entry.placement.relativePath === resourcePath,
+  );
+  if (declaration === undefined) fail("operation-failure", "$catalog");
+  try {
+    admitWakeflowResourceOperation(declaration.processing, recipe);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowResourceProcessingContractError) {
+      fail("operation-failure", "$catalog");
+    }
+    throw error;
+  }
 }
 
 export async function ledgerPublicationResourceNodeOrNull(
@@ -100,8 +134,19 @@ function assertTransactionFileNode(node: Readonly<FileNodeSnapshot>): void {
     node.kind !== "file"
     || node.permissionBits !== LEDGER_TRANSACTION_FILE_MODE
     || node.linkCount !== 1n
+    || (currentUserId() !== null && node.userId !== currentUserId())
   ) {
     fail("conflict", "$intent");
+  }
+}
+
+function assertTransactionStageNode(node: Readonly<FileNodeSnapshot>): void {
+  if (
+    node.kind !== "directory"
+    || node.permissionBits !== LEDGER_DURABLE_DIRECTORY_MODE
+    || (currentUserId() !== null && node.userId !== currentUserId())
+  ) {
+    fail("conflict", "$stage");
   }
 }
 
@@ -159,6 +204,7 @@ export async function ensureLedgerRecordPublicationIntent(
   expected: Readonly<LedgerRecordPublicationIntent>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<StoredLedgerRecordPublicationIntent>> {
+  admitLedgerResourceOperation(expected, expected.intentRef, "exclusive-create");
   const existing = await existingLedgerRecordPublicationIntentOrNull(
     root,
     expected.intentRef,
@@ -170,11 +216,15 @@ export async function ensureLedgerRecordPublicationIntent(
     }
     return existing;
   }
+  const bytes = encodeUtf8(renderLedgerRecordPublicationIntent(expected));
+  if (bytes.byteLength > LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES) {
+    fail("capacity", "$intent");
+  }
   try {
     await createFileAtomically(
       root,
       expected.intentRef,
-      encodeUtf8(renderLedgerRecordPublicationIntent(expected)),
+      bytes,
       {
         mode: LEDGER_TRANSACTION_FILE_MODE,
         ...(signal === undefined ? {} : { signal }),
@@ -183,7 +233,20 @@ export async function ensureLedgerRecordPublicationIntent(
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
-      if (error.reason !== "target-exists") fail("operation-failure", "$intent");
+      if (error.reason === "capacity") fail("capacity", "$intent");
+      if (error.reason === "root-scope") fail("root-scope", "$root");
+      if (
+        error.reason === "commit-uncertain"
+        || error.reason === "durability-failure"
+        || error.reason === "stage-cleanup-failure"
+        || error.reason === "stage-recovery-required"
+        || error.reason === "close-failure"
+      ) {
+        fail("recovery-required", "$intent");
+      }
+      if (error.reason !== "target-exists") {
+        fail("operation-failure", "$intent");
+      }
     } else {
       throw error;
     }
@@ -207,6 +270,11 @@ export async function retireLedgerRecordPublicationIntent(
   stored: Readonly<StoredLedgerRecordPublicationIntent>,
   signal: AbortSignal | undefined,
 ): Promise<void> {
+  admitLedgerResourceOperation(
+    stored.intent,
+    stored.intent.intentRef,
+    "exact-retire",
+  );
   try {
     await unlinkRegularFileExactly(root, stored.intent.intentRef, {
       expectedNode: stored.node,
@@ -226,25 +294,35 @@ export async function inspectLedgerRecordPublicationResidues(
   intent: Readonly<LedgerRecordPublicationIntent>,
   _signal: AbortSignal | undefined,
 ): Promise<Readonly<LedgerRecordPublicationResidues>> {
+  const stageNode = await ledgerPublicationResourceNodeOrNull(
+    root,
+    intent.stageRef,
+  );
+  if (stageNode !== null) assertTransactionStageNode(stageNode);
   return Object.freeze({
-    stageNode: await ledgerPublicationResourceNodeOrNull(root, intent.stageRef),
+    stageNode,
   });
 }
 
 export async function recoverLedgerIntentAtomicStages(
   root: RootedDirectory,
+  intentRef: PortableResourcePath,
   signal: AbortSignal | undefined,
 ): Promise<void> {
   try {
-    await recoverDurableAtomicFileStagesInDirectory(
+    const receipt = await recoverDurableAtomicFileStagesMatchingTargets(
       root,
-      LEDGER_TRANSACTIONS_ROOT_REF,
+      Object.freeze([intentRef]),
       signal === undefined ? undefined : { signal },
     );
+    if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
+      fail("recovery-required", "$intent/stage");
+    }
   } catch (error: unknown) {
+    if (error instanceof LedgerAuthorityStoreError) throw error;
     if (error instanceof DurableAtomicFileStageRecoveryError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("recovery-required", "$transactions");
+      fail("recovery-required", "$intent/stage");
     }
     throw error;
   }
@@ -339,8 +417,8 @@ export async function loadExactPublishedLedgerRecord(
   const loaded = await loadLedgerAuthorityRecord(
     root,
     intent.finalRootRef,
-    intent.family,
-    intent.recordId,
+    ledgerAuthorityFamily(intent.record),
+    ledgerAuthorityRecordId(intent.record),
     signal,
   );
   if (
@@ -361,6 +439,11 @@ export async function publishLedgerRecordStage(
   candidate: Readonly<DirectoryTreeCandidateResult>,
   signal: AbortSignal | undefined,
 ): Promise<void> {
+  admitLedgerResourceOperation(
+    intent,
+    intent.finalRootRef,
+    "exact-directory-publish",
+  );
   try {
     await publishDirectoryTreeCandidateDurably(
       root,

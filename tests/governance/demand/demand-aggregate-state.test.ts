@@ -1,7 +1,7 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
-import { parseWakeflowDurableIdOfKind } from "../../../src/foundation/identity/wakeflow-durable-id.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import {
   cancelDemandAggregateState,
   createInitialDemandAggregateState,
@@ -39,6 +39,16 @@ test("Demand 聚合只保存已由事件拥有的最小业务状态", () => {
 });
 
 test("未实现业务域不能以空占位字段进入 Demand 状态", () => {
+  throws(
+    () => parseDemandAggregateState({
+      ...createInitialDemandAggregateState(DEMAND_ID),
+      lifecycle: "completed",
+    }),
+    (error: unknown) => (
+      error instanceof DemandAggregateStateError
+      && error.reason === "schema"
+    ),
+  );
   throws(
     () => parseDemandAggregateState({
       ...createInitialDemandAggregateState(DEMAND_ID),

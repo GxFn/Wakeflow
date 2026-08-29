@@ -13,6 +13,7 @@ import path from "node:path";
 import { test, type TestContext } from "node:test";
 
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import {
   withRootedExclusiveFileLock,
 } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
@@ -56,14 +57,9 @@ function gatePath(root: string): string {
 }
 
 function writeInactiveGate(root: string, uuid = UUID): void {
-  writeFileSync(gatePath(root), `${JSON.stringify({
-    createdAt: "2026-08-27T10:00:00.000Z",
-    kind: "WakeflowExclusiveFileLock",
-    pid: 2_147_483_647,
-    threadId: 0,
-    token: `2147483647-0-${uuid}`,
-    version: 1,
-  }, null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(gatePath(root), rootedExclusiveFileLockRecordTextForTest({
+    tokenUuid: uuid,
+  }), { mode: 0o600 });
 }
 
 async function expectRecoveryError(

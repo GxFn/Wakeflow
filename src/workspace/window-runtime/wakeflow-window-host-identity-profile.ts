@@ -16,10 +16,10 @@ import {
  * 内部格式，也不借此取得创建、读取、发送或关闭宿主窗口的能力。
  */
 
-export const WAKEFLOW_WINDOW_HOST_IDENTITY_PROFILE_KIND =
+const WAKEFLOW_WINDOW_HOST_IDENTITY_PROFILE_KIND =
   "WakeflowWindowHostIdentityProfile" as const;
-export const WAKEFLOW_WINDOW_HOST_IDENTITY_MAXIMUM_RESERVED_VALUES = 64;
-export const WAKEFLOW_WINDOW_HOST_IDENTITY_MAXIMUM_HANDLE_LENGTH = 4096;
+const WAKEFLOW_WINDOW_HOST_IDENTITY_MAXIMUM_RESERVED_VALUES = 64;
+const WAKEFLOW_WINDOW_HOST_IDENTITY_MAXIMUM_HANDLE_LENGTH = 4096;
 
 declare const WINDOW_HOST_HANDLE_KIND_BRAND: unique symbol;
 declare const WINDOW_HOST_HANDLE_VALUE_BRAND: unique symbol;
@@ -45,7 +45,7 @@ export interface WakeflowWindowHostIdentityProfile {
   readonly reservedHandleValues: readonly string[];
 }
 
-export type WakeflowWindowHostIdentityProfileErrorReason =
+type WakeflowWindowHostIdentityProfileErrorReason =
   | "input"
   | "shape"
   | "host"
@@ -175,7 +175,9 @@ export function parseWakeflowWindowHostIdentityProfile(
     throw error;
   }
   const seen = new Set<string>();
+  let previousKey: string | undefined;
   const reservedHandleValues = Object.freeze(reservedValues.map((entry, index) => {
+    const caseKey = typeof entry === "string" ? entry.toLowerCase() : "";
     if (
       typeof entry !== "string"
       || !entry.isWellFormed()
@@ -184,11 +186,13 @@ export function parseWakeflowWindowHostIdentityProfile(
       || entry.length > maximumHandleLength
       || entry.trim() !== entry
       || CONTROL_PATTERN.test(entry)
-      || seen.has(entry.toLocaleLowerCase("en-US"))
+      || seen.has(caseKey)
+      || (previousKey !== undefined && previousKey >= caseKey)
     ) {
       fail("reserved", `$profile.reservedHandleValues/${index}`);
     }
-    seen.add(entry.toLocaleLowerCase("en-US"));
+    seen.add(caseKey);
+    previousKey = caseKey;
     return entry;
   }));
   return Object.freeze({
@@ -219,8 +223,7 @@ export function parseWakeflowWindowHostHandle(
     || handleValue.trim() !== handleValue
     || CONTROL_PATTERN.test(handleValue)
     || profile.reservedHandleValues.some((reserved) => (
-      reserved.toLocaleLowerCase("en-US")
-        === handleValue.toLocaleLowerCase("en-US")
+      reserved.toLowerCase() === handleValue.toLowerCase()
     ))
   ) {
     fail("handle", "$handle.value");

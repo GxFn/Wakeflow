@@ -1,12 +1,13 @@
 /**
- * Wakeflow Foundation / Numeric：可安全参与文件 I/O 的字节数量。
+ * Wakeflow Foundation / Numeric：可由 JavaScript `number` 精确表示的字节数量。
  *
  * 本模块只表示 `0` 至 `Number.MAX_SAFE_INTEGER` 范围内的整数字节数，并提供从
- * `number`、`bigint` 准入以及不会静默越界的加减运算。它不定义任何文件、目录树
+ * `number`、`bigint` 准入以及不会静默越界的加法。它不定义任何文件、目录树
  * 或协议的容量上限，也不把字节数解释为偏移量、索引或权限。
  *
- * Node.js `bigint` Stats 必须先通过 `byteCountFromBigInt`，才能用于 Buffer 分配、
- * 循环计数或基于 `number` 的 API。领域职责所有者仍须设置更严格的容量预算。
+ * Node.js `bigint` Stats 必须先通过 `byteCountFromBigInt`，才能进入基于 `number`
+ * 的范围和容量计算。`ByteCount` 不证明内存或单个 Buffer 可分配；领域职责所有者
+ * 仍须设置更严格的容量预算，并遵守具体 Node.js API 和运行平台的资源上限。
  */
 
 declare const BYTE_COUNT_BRAND: unique symbol;
@@ -23,14 +24,12 @@ export const MAX_SAFE_BYTE_COUNT = Number.MAX_SAFE_INTEGER as ByteCount;
 export type ByteCountErrorReason =
   | "number-range"
   | "bigint-range"
-  | "addition-overflow"
-  | "subtraction-underflow";
+  | "addition-overflow";
 
 const ERROR_MESSAGES = {
   "number-range": "Byte count must be a non-negative safe integer number.",
   "bigint-range": "BigInt byte count must fit a non-negative safe integer number.",
   "addition-overflow": "Byte count addition exceeds the safe integer range.",
-  "subtraction-underflow": "Byte count subtraction would produce a negative result.",
 } as const satisfies Readonly<Record<ByteCountErrorReason, string>>;
 
 /**
@@ -126,22 +125,4 @@ export function addByteCounts(
     fail("addition-overflow", path);
   }
   return (admittedLeft + admittedRight) as ByteCount;
-}
-
-/**
- * 从 `total` 中精确扣除 `part`；结果不得为负数。
- *
- * 本函数适合计算剩余读取预算或未消费字节，但不会赋予 `part`“属于 `total`”的
- * 领域语义。
- */
-export function subtractByteCounts(
-  total: ByteCount,
-  part: ByteCount,
-  errorPath?: string,
-): ByteCount {
-  const path = normalizeErrorPath(errorPath);
-  const admittedTotal = parseNumberByteCount(total, memberPath(path, "total"));
-  const admittedPart = parseNumberByteCount(part, memberPath(path, "part"));
-  if (admittedPart > admittedTotal) fail("subtraction-underflow", path);
-  return (admittedTotal - admittedPart) as ByteCount;
 }

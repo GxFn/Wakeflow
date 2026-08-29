@@ -20,10 +20,10 @@ import {
 } from "../../../src/configuration/wakeflow-config-v3.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
-  durableAtomicFileStageRef,
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 import {
   createFileCandidateDurably,
 } from "../../../src/foundation/filesystem/durable-file-candidate.js";
@@ -232,7 +232,7 @@ test("Support memory recovery retires an inactive stage and republishes", async 
     computeSha256Digest(desiredBytes),
     0o644,
   );
-  const stageRef = durableAtomicFileStageRef("AGENTS.md", address);
+  const stageRef = durableAtomicFileStageRefForTest("AGENTS.md", address);
   let released = false;
   try {
     await createFileCandidateDurably(

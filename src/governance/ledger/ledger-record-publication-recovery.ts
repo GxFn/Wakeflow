@@ -6,8 +6,10 @@ import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js
 import {
   parseWakeflowDurableId,
   WakeflowDurableIdError,
-} from "../../foundation/identity/wakeflow-durable-id.js";
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import {
+  ledgerAuthorityFamily,
+  ledgerAuthorityRecordId,
   ledgerRecordPublicationIntentRefForIdentity,
   ledgerRecordPublicationLockRefForIdentity,
   type LedgerAuthorityFamily,
@@ -72,18 +74,37 @@ export async function recoverLedgerAuthorityRecordPublication(
     identity.family,
     identity.recordId,
   );
-  await recoverLedgerIntentAtomicStages(root, signal);
+  await recoverLedgerIntentAtomicStages(root, intentRef, signal);
+  const observed = await existingLedgerRecordPublicationIntentOrNull(
+    root,
+    intentRef,
+    signal,
+  );
+  if (observed === null) fail("not-found", "$intent");
+  if (
+    ledgerAuthorityFamily(observed.intent.record) !== identity.family
+    || ledgerAuthorityRecordId(observed.intent.record) !== identity.recordId
+    || observed.intent.lockRef !== lockRef
+  ) {
+    fail("conflict", "$intent");
+  }
   await prepareLedgerRecordPublicationLockRecovery(root, lockRef);
   return withLedgerRecordPublicationLock(root, lockRef, signal, async () => {
+    await recoverLedgerIntentAtomicStages(root, intentRef, signal);
     const stored = await existingLedgerRecordPublicationIntentOrNull(
       root,
       intentRef,
       signal,
     );
-    if (stored === null) fail("not-found", "$intent");
     if (
-      stored.intent.family !== identity.family
-      || stored.intent.recordId !== identity.recordId
+      stored === null
+      || !sameLedgerRecordPublicationIntent(stored.intent, observed.intent)
+    ) {
+      fail("conflict", "$intent");
+    }
+    if (
+      ledgerAuthorityFamily(stored.intent.record) !== identity.family
+      || ledgerAuthorityRecordId(stored.intent.record) !== identity.recordId
       || stored.intent.lockRef !== lockRef
     ) {
       fail("conflict", "$intent");
@@ -105,7 +126,7 @@ export async function recoverLedgerAuthorityRecordPublication(
         residues,
         signal,
       );
-      return Object.freeze({ created: true, loaded });
+      return Object.freeze({ wroteAuthority: false, loaded });
     }
     if (residues.stageNode === null) {
       fail("recovery-input-required", "$stage");
@@ -154,6 +175,6 @@ export async function recoverLedgerAuthorityRecordPublication(
       fail("recovery-required", "$intent");
     }
     await retireLedgerRecordPublicationIntent(root, freshStored, signal);
-    return Object.freeze({ created: true, loaded });
+    return Object.freeze({ wroteAuthority: true, loaded });
   });
 }

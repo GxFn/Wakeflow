@@ -81,7 +81,7 @@ schemaVersion: 1
 todoId: WakeflowTodoItemIdText
 revision: number
 previousStateDigest: (null | WakeflowSha256DigestText)
-status: ("pending-claim" | "parked" | "claimed" | "blocked" | "observing" | "completed" | "cancelled" | "archived")
+status: ("pending-claim" | "parked" | "claimed" | "archived")
 updatedAt: WakeflowUtcInstantText
 mount: (null | DemandMount)
 archive: (null | ArchiveReceipt)
@@ -112,93 +112,16 @@ function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
   return value;
 }
 
-/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_TODO_TRANSACTION_SCHEMA = freezeGeneratedSchema({
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:wakeflow:governance:todo:transaction:v1",
-  "x-wakeflow-runtime-export": "WAKEFLOW_TODO_TRANSACTION_SCHEMA",
-  "title": "WakeflowTodoTransaction",
-  "description": "一个 TODO item append、claim 或 archive 的 immutable recovery plan；expected 与 target digest 允许 owner 判断前向恢复、幂等重放或冲突。",
-  "$comment": "Journal 不保存可变 phase。磁盘 effect 顺序、lock、projection publish 和 exact journal retirement 由 TODO collection owner 执行。",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "artifactKind",
-    "schemaVersion",
-    "todoId",
-    "operation",
-    "createdAt",
-    "expectedCollectionDigest",
-    "expectedIntakeDigest",
-    "expectedStateDigest",
-    "targetIntake",
-    "targetState",
-    "targetIntakeDigest",
-    "targetStateDigest",
-    "targetCollectionDigest"
-  ],
-  "properties": {
-    "artifactKind": {
-      "const": "wakeflow-todo-transaction"
-    },
-    "schemaVersion": {
-      "const": 1
-    },
-    "todoId": {
-      "$ref": "urn:wakeflow:governance:todo:item-id:v1"
-    },
-    "operation": {
-      "enum": [
-        "append",
-        "claim",
-        "archive"
-      ]
-    },
-    "createdAt": {
-      "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
-    },
-    "expectedCollectionDigest": {
-      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-    },
-    "expectedIntakeDigest": {
-      "$ref": "#/$defs/nullableDigest"
-    },
-    "expectedStateDigest": {
-      "$ref": "#/$defs/nullableDigest"
-    },
-    "targetIntake": {
-      "oneOf": [
-        {
-          "type": "null"
-        },
-        {
-          "$ref": "urn:wakeflow:governance:todo:intake:v1"
-        }
-      ]
-    },
-    "targetState": {
-      "$ref": "urn:wakeflow:governance:todo:state:v1"
-    },
-    "targetIntakeDigest": {
-      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-    },
-    "targetStateDigest": {
-      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-    },
-    "targetCollectionDigest": {
-      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-    }
-  },
-  "$defs": {
-    "nullableDigest": {
-      "oneOf": [
-        {
-          "type": "null"
-        },
-        {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-        }
-      ]
-    }
+/** 从 JSON 文本恢复 Schema，保留 `__proto__` 等普通 JSON 自有键。 */
+function restoreGeneratedSchema(
+  serialized: string,
+): Readonly<Record<string, unknown>> {
+  const value: unknown = JSON.parse(serialized);
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    throw new TypeError("Generated Schema must be an object.");
   }
-} as const);
+  return freezeGeneratedSchema(value as Record<string, unknown>);
+}
+
+/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
+export const WAKEFLOW_TODO_TRANSACTION_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:todo:transaction:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TODO_TRANSACTION_SCHEMA\",\"title\":\"WakeflowTodoTransaction\",\"description\":\"一个 TODO item append、claim 或 archive 的 immutable recovery plan；expected 与 target digest 允许 owner 判断前向恢复、幂等重放或冲突。\",\"$comment\":\"Journal 不保存可变 phase。磁盘 effect 顺序、lock、projection publish 和 exact journal retirement 由 TODO collection owner 执行。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"todoId\",\"operation\",\"createdAt\",\"expectedCollectionDigest\",\"expectedIntakeDigest\",\"expectedStateDigest\",\"targetIntake\",\"targetState\",\"targetIntakeDigest\",\"targetStateDigest\",\"targetCollectionDigest\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-todo-transaction\"},\"schemaVersion\":{\"const\":1},\"todoId\":{\"$ref\":\"urn:wakeflow:governance:todo:item-id:v1\"},\"operation\":{\"enum\":[\"append\",\"claim\",\"archive\"]},\"createdAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"},\"expectedCollectionDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"expectedIntakeDigest\":{\"$ref\":\"#/$defs/nullableDigest\"},\"expectedStateDigest\":{\"$ref\":\"#/$defs/nullableDigest\"},\"targetIntake\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"urn:wakeflow:governance:todo:intake:v1\"}]},\"targetState\":{\"$ref\":\"urn:wakeflow:governance:todo:state:v1\"},\"targetIntakeDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"targetStateDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"targetCollectionDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}},\"$defs\":{\"nullableDigest\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}]}}}");

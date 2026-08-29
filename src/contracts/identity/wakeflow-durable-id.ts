@@ -1,23 +1,24 @@
 import {
   WAKEFLOW_DURABLE_ID_KINDS,
   type WakeflowDurableIdKind,
-} from "../../contracts/generated/foundation/wakeflow-durable-id-kind.generated.js";
+} from "../generated/identity/wakeflow-durable-id-kind.generated.js";
 import {
   createUuidV4,
   parseUuidV4,
   UuidV4Error,
   type UuidV4,
-} from "./uuid-v4.js";
+} from "../../foundation/identity/uuid-v4.js";
 
 /**
- * Wakeflow Foundation / Identity：持久类型化身份。
+ * Wakeflow Contracts / Identity：应用级持久类型化身份。
  *
- * 本模块使用 JSON Schema 单向生成的持久标识类别词汇，并负责生成、解析
- * `<kind>_<lowercase UUIDv4>` 以及授予 TypeScript 品牌类型。它只返回词法事实，
- * 不查找实体、状态或文件，也不判断引用权限或集合范围内的标识唯一性。
+ * 本模块使用 Wakeflow 应用合同 Schema 单向生成的活动持久标识类别词汇，并负责
+ * 生成、解析 `<kind>_<lowercase UUIDv4>` 以及授予 TypeScript 品牌类型。它只返回
+ * 词法事实，不查找实体、状态或文件，也不判断引用权限或集合范围内的标识唯一性。
  *
  * Binding、Lease、Locator、Pod 操作、Workspace 变更和临时身份具有不同生命周期
- * 和职责所有者，不会仅因字符串外形相似而并入持久标识词汇。
+ * 和职责所有者，不会仅因字符串外形相似而并入活动持久标识词汇。未来业务 kind
+ * 只有在拥有真实 producer、consumer 和持久字段时才进入本合同。
  */
 
 /** 对外转交 Schema 派生词汇；本模块不保存第二份类别清单。 */

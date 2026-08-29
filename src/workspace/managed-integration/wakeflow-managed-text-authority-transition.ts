@@ -30,26 +30,18 @@ import {
  * 本层不读取文件、不决定配置转换、不取得锁，也不执行 CAS 或发布。
  */
 
-export const WAKEFLOW_MANAGED_TEXT_AUTHORITY_TRANSITION_KIND =
-  "WakeflowManagedTextAuthorityTransition" as const;
-
-export type WakeflowManagedTextAuthorityTransitionSource =
+type WakeflowManagedTextAuthorityTransitionSource =
   | "unmanaged"
   | "desired"
   | "admitted-current";
 
 export interface WakeflowManagedTextAuthorityTransition {
-  readonly kind: typeof WAKEFLOW_MANAGED_TEXT_AUTHORITY_TRANSITION_KIND;
   readonly disposition: "current" | "recompose-required";
   readonly sourceAuthority: WakeflowManagedTextAuthorityTransitionSource;
-  readonly matchedCurrentTargetIndex: number | null;
-  readonly desiredBodyDigest: Sha256Digest;
-  readonly sourceEnvelope: Readonly<WakeflowManagedTextEnvelopeInspection>;
-  readonly desiredTarget: Readonly<WakeflowManagedTextEnvelopeTarget>;
   readonly target: Readonly<WakeflowManagedTextRecompositionResult> | null;
 }
 
-export interface WakeflowManagedTextAuthorityTransitionRequest {
+interface WakeflowManagedTextAuthorityTransitionRequest {
   readonly currentTargets: readonly unknown[];
   readonly desiredTarget: unknown;
 }
@@ -213,23 +205,16 @@ export function planWakeflowManagedTextAuthorityTransition(
   }
   if (sameManagedBody(sourceEnvelope, desired)) {
     return Object.freeze({
-      kind: WAKEFLOW_MANAGED_TEXT_AUTHORITY_TRANSITION_KIND,
       disposition: "current",
       sourceAuthority: "desired",
-      matchedCurrentTargetIndex: null,
-      desiredBodyDigest: desired.bodyDigest,
-      sourceEnvelope,
-      desiredTarget: desired.target,
       target: null,
     });
   }
-  let matchedCurrentTargetIndex: number | null = null;
   if (sourceEnvelope.kind === "managed") {
-    const index = request.currentTargets.findIndex((target) => (
+    const admitted = request.currentTargets.some((target) => (
       sameManagedBody(sourceEnvelope, target)
     ));
-    if (index < 0) fail("unadmitted-source", "$source");
-    matchedCurrentTargetIndex = index;
+    if (!admitted) fail("unadmitted-source", "$source");
   }
   let target: Readonly<WakeflowManagedTextRecompositionResult>;
   try {
@@ -245,15 +230,10 @@ export function planWakeflowManagedTextAuthorityTransition(
   }
   if (target.disposition === "current") fail("envelope", "$source");
   return Object.freeze({
-    kind: WAKEFLOW_MANAGED_TEXT_AUTHORITY_TRANSITION_KIND,
     disposition: "recompose-required",
     sourceAuthority: sourceEnvelope.kind === "managed"
       ? "admitted-current"
       : "unmanaged",
-    matchedCurrentTargetIndex,
-    desiredBodyDigest: desired.bodyDigest,
-    sourceEnvelope,
-    desiredTarget: desired.target,
     target,
   });
 }

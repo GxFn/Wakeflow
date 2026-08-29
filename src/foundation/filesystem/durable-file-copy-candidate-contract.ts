@@ -35,8 +35,6 @@ import type { StableFileSource } from "./stable-file-read.js";
  * 由 `durable-file-copy-candidate` 唯一拥有。
  */
 
-export const DURABLE_FILE_COPY_CANDIDATE_CHUNK_BYTES = 512 * 1024;
-
 export interface DurableFileCopyContentExpectation {
   readonly byteCount: ByteCount;
   readonly digest: Sha256Digest;
@@ -50,7 +48,6 @@ export interface DurableFileCopyCandidateOptions {
 }
 
 export interface DurableFileCopyCandidateResult {
-  readonly kind: "DurableFileCopyCandidate";
   readonly source: Readonly<StableFileSource>;
   readonly candidate: Readonly<StableFileSource>;
 }
@@ -123,7 +120,7 @@ export interface ParsedDurableFileCopyExpectation {
   readonly expectedNode: Readonly<FileNodeSnapshot> | undefined;
 }
 
-export interface ParsedDurableFileCopyOptions {
+interface ParsedDurableFileCopyOptions {
   readonly maximumBytes: ByteCount;
   readonly mode: number;
   readonly signal: AbortSignal | undefined;
@@ -320,10 +317,7 @@ export function snapshotDurableFileCopyNode(
 ): Readonly<FileNodeSnapshot> {
   try {
     return createFileNodeSnapshot(value, path);
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) {
-      failDurableFileCopyCandidate(reason, path);
-    }
-    throw error;
+  } catch {
+    failDurableFileCopyCandidate(reason, path);
   }
 }

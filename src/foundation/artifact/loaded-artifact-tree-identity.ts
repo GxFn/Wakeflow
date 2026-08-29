@@ -44,6 +44,8 @@ import {
  * 本模块把 `StableResourceTreeRead` 提供的物理内容事实转换为与当前 v1 协议兼容的
  * 清单和目录树摘要。物理 inode、所有者、修改时间和状态变更时间只参与整树复验，
  * 不进入位置无关的内容身份；清单只包含引用、字节数、摘要和可执行权限事实。
+ * v1把制品定义为非空普通文件集合：空目录只消耗物理扫描预算，不进入内容身份，
+ * 也不会由后续transfer重建。
  *
  * 遇到符号链接、特殊节点、非 NFC 引用或跨平台大小写冲突时，模块会保守拒绝。
  * 底层稳定目录树能力负责证明结构预算、文件预算和观察期间的来源未漂移。本结果
@@ -73,12 +75,12 @@ export interface LoadedArtifactTreeIdentityLimits {
   readonly maxTotalBytes: number;
 }
 
-export interface LoadedArtifactTreeIdentityOptions {
+interface LoadedArtifactTreeIdentityOptions {
   readonly limits?: LoadedArtifactTreeIdentityLimits;
   readonly signal?: AbortSignal;
 }
 
-export interface LoadedArtifactTreeManifestValidationOptions {
+interface LoadedArtifactTreeManifestValidationOptions {
   readonly limits?: LoadedArtifactTreeIdentityLimits;
 }
 
@@ -213,10 +215,9 @@ function assertExactFields(
   reason: "input" | "manifest-shape",
 ): void {
   const keys = Object.keys(record).sort(compareText);
-  const expected = [...fields].sort(compareText);
   if (
-    keys.length !== expected.length
-    || keys.some((key, index) => key !== expected[index])
+    keys.length !== fields.length
+    || keys.some((key, index) => key !== fields[index])
   ) {
     fail(reason, path);
   }
@@ -340,8 +341,12 @@ function parseManifestDigest(value: unknown, path: string): Sha256Digest {
   }
 }
 
-function portableCollisionKey(ref: PortableResourcePath): string {
-  return ref.toLowerCase();
+function portablePathDepth(ref: PortableResourcePath): number {
+  let depth = 1;
+  for (let index = 0; index < ref.length; index += 1) {
+    if (ref.charCodeAt(index) === 0x2f) depth += 1;
+  }
+  return depth;
 }
 
 function parseManifestFile(
@@ -361,7 +366,7 @@ function parseManifestFile(
   const bytes = parseManifestByteCount(record.bytes, `${path}.bytes`);
   if (bytes > limits.maxFileBytes) fail("file-bytes", `${path}.bytes`);
   const ref = parseManifestRef(record.ref, `${path}.ref`);
-  if (ref.split("/").length > limits.maxDepth) {
+  if (portablePathDepth(ref) > limits.maxDepth) {
     fail("depth-limit", `${path}.ref`);
   }
   if (Buffer.byteLength(ref, "utf8") > limits.maxRefBytes) {
@@ -376,6 +381,50 @@ function parseManifestFile(
     executable: record.executable,
     ref,
   });
+}
+
+function assertManifestTopology(
+  files: readonly LoadedArtifactTreeFile[],
+  limits: Readonly<LoadedArtifactTreeIdentityLimits>,
+): void {
+  const fileRefs = new Set(files.map((file) => file.ref));
+  const resources = new Map<string, Readonly<{
+    kind: "directory" | "file";
+    ref: PortableResourcePath;
+  }>>();
+  const admit = (
+    ref: PortableResourcePath,
+    kind: "directory" | "file",
+    path: string,
+  ): void => {
+    const key = ref.toLowerCase();
+    const existing = resources.get(key);
+    if (
+      existing !== undefined
+      && (existing.ref !== ref || existing.kind !== kind)
+    ) {
+      fail("ref-collision", path);
+    }
+    if (existing === undefined) {
+      resources.set(key, Object.freeze({ kind, ref }));
+      if (resources.size > limits.maxEntries) fail("entry-limit", path);
+    }
+  };
+
+  for (const [index, file] of files.entries()) {
+    const path = `$manifest.files.${index}.ref`;
+    const segments = file.ref.split("/");
+    let current = "";
+    for (let segmentIndex = 0; segmentIndex < segments.length - 1; segmentIndex += 1) {
+      const segment = segments[segmentIndex];
+      if (segment === undefined) fail("manifest-shape", path);
+      current = current.length === 0 ? segment : `${current}/${segment}`;
+      const directory = parsePortableResourcePath(current);
+      if (fileRefs.has(directory)) fail("ref-collision", path);
+      admit(directory, "directory", path);
+    }
+    admit(file.ref, "file", path);
+  }
 }
 
 function parseManifest(
@@ -411,7 +460,6 @@ function parseManifest(
   if (values.length === 0) fail("empty-tree", "$manifest.files");
 
   const files: LoadedArtifactTreeFile[] = [];
-  const collisionKeys = new Set<string>();
   let previousRef: PortableResourcePath | undefined;
   let totalBytes = parseByteCount(0, "$manifest.totalBytes");
   for (const [index, value] of values.entries()) {
@@ -423,11 +471,6 @@ function parseManifest(
       fail("manifest-order", `$manifest.files.${index}.ref`);
     }
     previousRef = file.ref;
-    const collisionKey = portableCollisionKey(file.ref);
-    if (collisionKeys.has(collisionKey)) {
-      fail("ref-collision", `$manifest.files.${index}.ref`);
-    }
-    collisionKeys.add(collisionKey);
     try {
       totalBytes = addByteCounts(totalBytes, file.bytes, "$manifest.totalBytes");
     } catch (error: unknown) {
@@ -439,6 +482,7 @@ function parseManifest(
     }
     files.push(file);
   }
+  assertManifestTopology(files, limits);
   const fileCount = parseNonNegativeInteger(
     record.fileCount,
     "$manifest.fileCount",

@@ -26,7 +26,6 @@
     "lifecycle": {
       "enum": [
         "active",
-        "completed",
         "cancelled"
       ]
     }

@@ -8,7 +8,7 @@ import {
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
-import type { WakeflowDurableId } from "../../foundation/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type {
   LedgerAuthorityDocument,
   LedgerAuthorityRecord,
@@ -26,7 +26,7 @@ export interface LedgerAuthorityMemberInput {
   readonly bytes: Uint8Array;
 }
 
-export interface LedgerAuthorityFileSource extends StableFileSource {}
+export type LedgerAuthorityFileSource = StableFileSource;
 
 export interface LoadedLedgerAuthorityDocument extends LedgerAuthorityDocument {
   readonly memberRef: PortableResourcePath;
@@ -48,17 +48,13 @@ export interface LoadedLedgerAuthorityRecord<
 export interface LedgerAuthorityPublicationResult<
   RecordType extends LedgerAuthorityRecord = LedgerAuthorityRecord,
 > {
-  readonly created: boolean;
+  readonly wroteAuthority: boolean;
   readonly loaded: Readonly<LoadedLedgerAuthorityRecord<RecordType>>;
 }
 
-export interface LedgerAuthorityMemberReference {
+interface LedgerAuthorityMemberReferenceFields {
   readonly artifactKind: "wakeflow-ledger-authority-member-reference";
   readonly schemaVersion: 1;
-  readonly family: LedgerAuthorityFamily;
-  readonly recordId:
-    | WakeflowDurableId<"requirement">
-    | WakeflowDurableId<"confirmation">;
   readonly recordRef: PortableResourcePath;
   readonly recordDigest: Sha256Digest;
   readonly memberPath: PortableResourcePath;
@@ -67,6 +63,16 @@ export interface LedgerAuthorityMemberReference {
   readonly role: LedgerAuthorityDocument["role"];
   readonly mediaType: string;
 }
+
+export type LedgerAuthorityMemberReference =
+  | Readonly<LedgerAuthorityMemberReferenceFields & {
+      readonly family: "requirement";
+      readonly recordId: WakeflowDurableId<"requirement">;
+    }>
+  | Readonly<LedgerAuthorityMemberReferenceFields & {
+      readonly family: "confirmation";
+      readonly recordId: WakeflowDurableId<"confirmation">;
+    }>;
 
 export interface ResolvedLedgerAuthorityMember {
   readonly reference: Readonly<LedgerAuthorityMemberReference>;
@@ -88,7 +94,6 @@ export interface LedgerAuthorityStoreOptions {
 export type LedgerAuthorityStoreErrorReason =
   | "input"
   | "root-scope"
-  | "not-initialized"
   | "not-found"
   | "recovery-required"
   | "recovery-input-required"
@@ -105,7 +110,6 @@ export type LedgerAuthorityStoreErrorReason =
 const ERROR_MESSAGES = {
   input: "Ledger authority store input is invalid.",
   "root-scope": "Ledger authority root changed during the operation.",
-  "not-initialized": "Ledger authority store has not been initialized.",
   "not-found": "Ledger authority record does not exist.",
   "recovery-required": "Ledger authority record has an unresolved publication residue.",
   "recovery-input-required": "Ledger publication stage is incomplete and requires exact caller bytes.",
@@ -134,7 +138,7 @@ export class LedgerAuthorityStoreError extends Error {
   }
 }
 
-export interface ParsedLedgerAuthorityStoreOptions {
+interface ParsedLedgerAuthorityStoreOptions {
   readonly signal: AbortSignal | undefined;
 }
 

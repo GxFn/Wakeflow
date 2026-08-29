@@ -1,6 +1,5 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import type { JsonValue } from "../../foundation/data/json-value.js";
 import {
   parseDenseArray,
   parsePlainRecord,
@@ -10,6 +9,7 @@ import { compareUtcInstants } from "../../foundation/time/utc-instant.js";
 import {
   computeTodoIntakeDigest,
   parseTodoIntake,
+  TodoIntakeError,
   type TodoIntake,
 } from "./todo-intake.js";
 import type { TodoItemId } from "./todo-item-id.js";
@@ -17,8 +17,8 @@ import { todoItemStorageKey, type TodoItemStorageKey } from "./todo-paths.js";
 import {
   computeTodoStateDigest,
   parseTodoState,
+  TodoStateError,
   type TodoState,
-  type TodoStatus,
 } from "./todo-state.js";
 
 /**
@@ -29,9 +29,9 @@ import {
  * 投影作为快照输入。
  */
 
-export const TODO_COLLECTION_SNAPSHOT_KIND =
+const TODO_COLLECTION_SNAPSHOT_KIND =
   "wakeflow-todo-collection-snapshot" as const;
-export const TODO_COLLECTION_SNAPSHOT_VERSION = 1 as const;
+const TODO_COLLECTION_SNAPSHOT_VERSION = 1 as const;
 export const TODO_COLLECTION_MAXIMUM_ITEMS = 65_536;
 
 export interface TodoCollectionItem {
@@ -41,7 +41,6 @@ export interface TodoCollectionItem {
   readonly state: Readonly<TodoState>;
   readonly intakeDigest: Sha256Digest;
   readonly stateDigest: Sha256Digest;
-  readonly status: TodoStatus;
 }
 
 export interface TodoCollectionSnapshot {
@@ -111,8 +110,17 @@ function normalizeItem(value: unknown, index: number): Readonly<TodoCollectionIt
   if (keys.length !== 2 || keys[0] !== "intake" || keys[1] !== "state") {
     fail("item-shape", path);
   }
-  const intake = parseTodoIntake(record.intake);
-  const state = parseTodoState(record.state);
+  let intake: Readonly<TodoIntake>;
+  let state: Readonly<TodoState>;
+  try {
+    intake = parseTodoIntake(record.intake);
+    state = parseTodoState(record.state);
+  } catch (error: unknown) {
+    if (error instanceof TodoIntakeError || error instanceof TodoStateError) {
+      fail("item-shape", path);
+    }
+    throw error;
+  }
   if (intake.todoId !== state.todoId) fail("item-identity", path);
   return Object.freeze({
     todoId: intake.todoId,
@@ -121,11 +129,10 @@ function normalizeItem(value: unknown, index: number): Readonly<TodoCollectionIt
     state,
     intakeDigest: computeTodoIntakeDigest(intake),
     stateDigest: computeTodoStateDigest(state),
-    status: state.status,
   });
 }
 
-function digestBasis(items: readonly Readonly<TodoCollectionItem>[]): JsonValue {
+function digestBasis(items: readonly Readonly<TodoCollectionItem>[]) {
   return {
     artifactKind: TODO_COLLECTION_SNAPSHOT_KIND,
     schemaVersion: TODO_COLLECTION_SNAPSHOT_VERSION,
@@ -134,9 +141,8 @@ function digestBasis(items: readonly Readonly<TodoCollectionItem>[]): JsonValue 
       storageKey: item.storageKey,
       intakeDigest: item.intakeDigest,
       stateDigest: item.stateDigest,
-      status: item.status,
     })),
-  } as JsonValue;
+  };
 }
 
 /** 从一组 Intake/State 配对生成完整、排序且冻结的集合快照。 */
@@ -170,7 +176,9 @@ export function createTodoCollectionSnapshot(
     artifactKind: TODO_COLLECTION_SNAPSHOT_KIND,
     schemaVersion: TODO_COLLECTION_SNAPSHOT_VERSION,
     itemCount: frozenItems.length,
-    activeItemCount: frozenItems.filter((item) => item.status !== "archived").length,
+    activeItemCount: frozenItems.filter(
+      (item) => item.state.status !== "archived",
+    ).length,
     items: frozenItems,
     collectionDigest: computeCanonicalJsonSha256Digest(digestBasis(frozenItems)),
   });

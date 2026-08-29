@@ -62,92 +62,16 @@ function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
   return value;
 }
 
-/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_DEMAND_EVENT_STREAM_COMMIT_SCHEMA = freezeGeneratedSchema({
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:wakeflow:governance:demand:event-stream-commit:v1",
-  "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_EVENT_STREAM_COMMIT_SCHEMA",
-  "title": "WakeflowDemandEventStreamCommit",
-  "description": "一次 Demand Event Store append 的不可变、原子 commit batch。",
-  "$comment": "commitSequence 是连续物理槽位；一个 commit 可以包含多个连续 stream revision，previousCommitDigest 形成 append chain。",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "artifactKind",
-    "schemaVersion",
-    "commitId",
-    "demandId",
-    "commitSequence",
-    "commandDigest",
-    "expectedStreamRevision",
-    "firstStreamRevision",
-    "lastStreamRevision",
-    "previousCommitDigest",
-    "events"
-  ],
-  "properties": {
-    "artifactKind": {
-      "const": "wakeflow-demand-event-stream-commit"
-    },
-    "schemaVersion": {
-      "const": 1
-    },
-    "commitId": {
-      "$ref": "#/$defs/commitId"
-    },
-    "demandId": {
-      "$ref": "#/$defs/demandId"
-    },
-    "commitSequence": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 9007199254740991
-    },
-    "commandDigest": {
-      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-    },
-    "expectedStreamRevision": {
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 9007199254740991
-    },
-    "firstStreamRevision": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 9007199254740991
-    },
-    "lastStreamRevision": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 9007199254740991
-    },
-    "previousCommitDigest": {
-      "oneOf": [
-        {
-          "type": "null"
-        },
-        {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-        }
-      ]
-    },
-    "events": {
-      "type": "array",
-      "minItems": 1,
-      "maxItems": 64,
-      "items": {
-        "$ref": "urn:wakeflow:governance:demand:event-sourcing-stored-event:v1"
-      }
-    }
-  },
-  "$defs": {
-    "commitId": {
-      "type": "string",
-      "pattern": "^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "demandId": {
-      "type": "string",
-      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    }
+/** 从 JSON 文本恢复 Schema，保留 `__proto__` 等普通 JSON 自有键。 */
+function restoreGeneratedSchema(
+  serialized: string,
+): Readonly<Record<string, unknown>> {
+  const value: unknown = JSON.parse(serialized);
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    throw new TypeError("Generated Schema must be an object.");
   }
-} as const);
+  return freezeGeneratedSchema(value as Record<string, unknown>);
+}
+
+/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
+export const WAKEFLOW_DEMAND_EVENT_STREAM_COMMIT_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:demand:event-stream-commit:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_DEMAND_EVENT_STREAM_COMMIT_SCHEMA\",\"title\":\"WakeflowDemandEventStreamCommit\",\"description\":\"一次 Demand Event Store append 的不可变、原子 commit batch。\",\"$comment\":\"commitSequence 是连续物理槽位；一个 commit 可以包含多个连续 stream revision，previousCommitDigest 形成 append chain。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"commitId\",\"demandId\",\"commitSequence\",\"commandDigest\",\"expectedStreamRevision\",\"firstStreamRevision\",\"lastStreamRevision\",\"previousCommitDigest\",\"events\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-demand-event-stream-commit\"},\"schemaVersion\":{\"const\":1},\"commitId\":{\"$ref\":\"#/$defs/commitId\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"commitSequence\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991},\"commandDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"expectedStreamRevision\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":9007199254740991},\"firstStreamRevision\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991},\"lastStreamRevision\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991},\"previousCommitDigest\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}]},\"events\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":64,\"items\":{\"$ref\":\"urn:wakeflow:governance:demand:event-sourcing-stored-event:v1\"}}},\"$defs\":{\"commitId\":{\"type\":\"string\",\"pattern\":\"^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"}}}");

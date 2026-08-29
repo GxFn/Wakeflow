@@ -1,7 +1,6 @@
 import { types } from "node:util";
 
 import {
-  assertDirectoryTreeCandidateNotAborted,
   joinDirectoryTreeCandidatePath,
   parseDirectoryTreeCandidatePath,
   prepareDirectoryTreeCandidate,
@@ -16,7 +15,6 @@ import {
 } from "./directory-tree-candidate-inspection.js";
 import {
   createDirectoryAtomically,
-  materializeDirectoryPath,
   DurableDirectoryMaterializationError,
 } from "./durable-directory-materialization.js";
 import {
@@ -33,10 +31,16 @@ import { RootedDirectory } from "./rooted-directory.js";
  * 暂存路径或最终路径、不获取领域锁、不执行重命名，也不删除崩溃残留。
  */
 
-function mapDirectoryError(error: DurableDirectoryMaterializationError): never {
+function mapDirectoryError(
+  error: DurableDirectoryMaterializationError,
+  target: "candidate-root" | "candidate-member",
+): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "target-exists") {
-    fail("target-exists", "$candidateRootPath");
+    fail(
+      target === "candidate-root" ? "target-exists" : "tree-conflict",
+      "$candidateRootPath",
+    );
   }
   if (
     error.reason === "target-symlink"
@@ -72,7 +76,6 @@ export async function createDirectoryTreeCandidateDurably(
     "$candidateRootPath",
   );
   const prepared = prepareDirectoryTreeCandidate(filesValue, optionsValue);
-  assertDirectoryTreeCandidateNotAborted(prepared.options.signal);
   try {
     await createDirectoryAtomically(root, candidateRootPath, {
       mode: prepared.options.directoryMode,
@@ -80,8 +83,15 @@ export async function createDirectoryTreeCandidateDurably(
         ? {}
         : { signal: prepared.options.signal }),
     });
+  } catch (error: unknown) {
+    if (error instanceof DurableDirectoryMaterializationError) {
+      mapDirectoryError(error, "candidate-root");
+    }
+    throw error;
+  }
+  try {
     for (const directory of prepared.plan.directories) {
-      await materializeDirectoryPath(
+      await createDirectoryAtomically(
         root,
         joinDirectoryTreeCandidatePath(candidateRootPath, directory),
         {
@@ -107,7 +117,7 @@ export async function createDirectoryTreeCandidateDurably(
     }
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
-      mapDirectoryError(error);
+      mapDirectoryError(error, "candidate-member");
     }
     if (error instanceof DurableFileCandidateError) mapFileError(error);
     throw error;
@@ -140,7 +150,6 @@ export async function settleDirectoryTreeCandidateDurably(
     "$candidateRootPath",
   );
   const prepared = prepareDirectoryTreeCandidate(filesValue, optionsValue);
-  assertDirectoryTreeCandidateNotAborted(prepared.options.signal);
   const partial = await inspectPartialDirectoryTreeCandidate(
     root,
     candidateRootPath,
@@ -149,7 +158,7 @@ export async function settleDirectoryTreeCandidateDurably(
   try {
     for (const directory of prepared.plan.directories) {
       if (partial.existingDirectories.has(directory)) continue;
-      await materializeDirectoryPath(
+      await createDirectoryAtomically(
         root,
         joinDirectoryTreeCandidatePath(candidateRootPath, directory),
         {
@@ -204,6 +213,7 @@ export {
   planDirectoryTreeCandidateFromFileDescriptors,
 } from "./directory-tree-candidate-plan.js";
 export type {
+  DirectoryTreeCandidateCapacity,
   DirectoryTreeCandidateFileInput,
   DirectoryTreeCandidateOptions,
   DirectoryTreeCandidatePlan,

@@ -17,7 +17,7 @@ import { initSync, parse } from "es-module-lexer";
 /**
  * Wakeflow Tooling / Artifacts：TypeScript 技术骨干的双宿主候选制品装配器。
  *
- * 本工具以已编译宿主入口为唯一根，使用 TypeScript 的模块预处理器求取真实静态依赖
+ * 本工具以已编译宿主入口为唯一根，使用成熟ES module lexer求取真实静态依赖
  * 闭包，只把可达 JavaScript、精确 npm 依赖和最小 MCP 启动资产写入 `.build`。它不会
  * 读取旧 JS 运行时来补能力，也不会更新 `plugins/`、安装缓存或任何发布版本来源。
  *
@@ -81,7 +81,7 @@ interface CompiledClosure {
   readonly externalPackages: readonly string[];
 }
 
-export interface TypescriptArtifactCandidateBuildRecord {
+interface TypescriptArtifactCandidateBuildRecord {
   readonly hostId: CandidateHostId;
   readonly outputDirectory: string;
   readonly compiledFileCount: number;
@@ -89,7 +89,7 @@ export interface TypescriptArtifactCandidateBuildRecord {
   readonly manifestDigest: string;
 }
 
-export interface TypescriptArtifactCandidatesBuildResult {
+interface TypescriptArtifactCandidatesBuildResult {
   readonly kind: "WakeflowTypescriptArtifactCandidatesBuildResult";
   readonly schemaVersion: 1;
   readonly releaseEligible: false;
@@ -98,7 +98,7 @@ export interface TypescriptArtifactCandidatesBuildResult {
 }
 
 /** 候选制品输入、闭包或物理输出不满足约束时返回的稳定工具错误。 */
-export class TypescriptArtifactCandidateBuildError extends Error {
+class TypescriptArtifactCandidateBuildError extends Error {
   override readonly name = "TypescriptArtifactCandidateBuildError";
   readonly code: string;
 
@@ -132,6 +132,10 @@ function lstatOrNull(target: string): Stats | null {
 
 function repositoryRelative(repositoryRoot: string, absolute: string): string {
   return path.relative(repositoryRoot, absolute).split(path.sep).join("/") || ".";
+}
+
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function assertBelow(parent: string, child: string, code: string): void {
@@ -392,6 +396,12 @@ function packageMetadata(
   if (typeof referencePackage.name !== "string") {
     fail("wakeflow-artifact-package", "reference package name is invalid");
   }
+  if (
+    typeof referencePackage.version !== "string"
+    || referencePackage.version.length === 0
+  ) {
+    fail("wakeflow-artifact-package", "reference package version is invalid");
+  }
   return {
     name: referencePackage.name,
     version: CANDIDATE_VERSION,
@@ -485,7 +495,7 @@ function assembleCandidate(
     }));
   }
 
-  payload.sort((left, right) => left.path.localeCompare(right.path));
+  payload.sort((left, right) => compareCodeUnits(left.path, right.path));
   const manifest = {
     kind: "WakeflowTypescriptArtifactCandidateManifest",
     schemaVersion: 1,

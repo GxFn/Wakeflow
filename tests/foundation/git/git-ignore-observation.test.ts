@@ -92,7 +92,6 @@ test("Git ignore observation returns one ordered decision for every probe", asyn
     probes("ignored.log", "keep.log", ".cache/probe", "other.txt"),
   );
 
-  equal(observed.kind, "GitIgnoreObservation");
   deepEqual(observed.paths.map((entry) => entry.path), [
     "ignored.log",
     "keep.log",

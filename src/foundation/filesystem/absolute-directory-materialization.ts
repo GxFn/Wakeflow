@@ -30,8 +30,8 @@ import {
 /**
  * Wakeflow Foundation / Filesystem：规范绝对目录位置的持久化逐级物化。
  *
- * 本能力先通过 AbsoluteDirectoryPlacement 从目标向上寻找最近的规范真实祖先，再将该
- * 祖先作为一次 RootedDirectory，复用根内 DurableDirectoryMaterialization 逐段创建。
+ * 本能力先消费 AbsoluteDirectoryPlacement 在单次逐段观察中固定的最近规范真实祖先，
+ * 再将该祖先作为一次 RootedDirectory，复用根内 DurableDirectoryMaterialization 逐段创建。
  * 已有目录只观察不改权限；新目录使用调用方显式 mode。最终重新从绝对路径检查目标
  * 与刚物化节点仍为同一身份。
  *
@@ -40,18 +40,18 @@ import {
  * 或恢复。Node.js 未暴露 openat/openat2，路径名竞态边界与 RootedDirectory 相同。
  */
 
-export interface AbsoluteDirectoryMaterializationOptions {
+interface AbsoluteDirectoryMaterializationOptions {
   readonly mode: number;
   readonly signal?: AbortSignal;
 }
 
-export interface AbsoluteDirectoryMaterializationEntry {
+interface AbsoluteDirectoryMaterializationEntry {
   readonly absolutePath: string;
   readonly disposition: DirectoryMaterializationDisposition;
   readonly node: Readonly<FileNodeSnapshot>;
 }
 
-export interface AbsoluteDirectoryMaterializationResult {
+interface AbsoluteDirectoryMaterializationResult {
   readonly absolutePath: string;
   readonly node: Readonly<FileNodeSnapshot>;
   readonly segments:
@@ -167,20 +167,6 @@ async function inspect(value: unknown, path: string) {
   }
 }
 
-async function closestExistingAncestor(target: string): Promise<string> {
-  const parsed = nodePath.parse(target);
-  let candidate = nodePath.dirname(target);
-  while (candidate !== parsed.root) {
-    const observation = await inspect(candidate, "$ancestor");
-    if (observation.state === "present") {
-      if (observation.spellingIsCanonical !== true) fail("alias", "$ancestor");
-      return candidate;
-    }
-    candidate = nodePath.dirname(candidate);
-  }
-  fail("scope", "$absolutePath");
-}
-
 function relativeResourcePath(ancestor: string, target: string) {
   const relative = nodePath.relative(ancestor, target);
   if (
@@ -256,7 +242,12 @@ export async function materializeAbsoluteDirectoryPlacement(
     });
   }
 
-  const ancestor = await closestExistingAncestor(absolutePath);
+  const nearestAncestor = initial.nearestExistingAncestor;
+  if (nearestAncestor === null) fail("scope", "$absolutePath");
+  if (nearestAncestor.spellingIsCanonical !== true) {
+    fail("alias", "$ancestor");
+  }
+  const ancestor = nearestAncestor.absolutePath;
   assertNotAborted(options.signal);
   let root: RootedDirectory;
   try {

@@ -18,20 +18,16 @@ function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
   return value;
 }
 
+/** 从 JSON 文本恢复 Schema，保留 `__proto__` 等普通 JSON 自有键。 */
+function restoreGeneratedSchema(
+  serialized: string,
+): Readonly<Record<string, unknown>> {
+  const value: unknown = JSON.parse(serialized);
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    throw new TypeError("Generated Schema must be an object.");
+  }
+  return freezeGeneratedSchema(value as Record<string, unknown>);
+}
+
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA = freezeGeneratedSchema({
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1",
-  "x-wakeflow-runtime-export": "WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA",
-  "title": "WakeflowPortableResourcePathText",
-  "description": "Wakeflow 持久协议使用的根内逻辑资源路径：以正斜杠分段、非空、相对且已经处于唯一结构形式。",
-  "$comment": "本 Schema 只拥有 portable wire 结构。well-formed Unicode、NFC 和品牌类型由 foundation/filesystem/portable-resource-path 复验；容量、OS 保留文件名、case collision、物理根、symlink、存在性、URL、文档 anchor 与允许父级的配置 placement 不属于本合同。",
-  "type": "string",
-  "minLength": 1,
-  "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)(?!\\s)(?!.*\\s$)(?!.*\\/\\s)(?!.*\\s\\/)(?!.*[\\u0000-\\u001F\\u007F-\\u009F]).+$",
-  "examples": [
-    ".wakeflow-active/current/demand.json",
-    "requirement-designs/需求说明.md",
-    "docs/My Plan.md"
-  ]
-} as const);
+export const WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:foundation:filesystem:portable-resource-path:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA\",\"title\":\"WakeflowPortableResourcePathText\",\"description\":\"Wakeflow 持久协议使用的根内逻辑资源路径：以正斜杠分段、非空、相对且已经处于唯一结构形式。\",\"$comment\":\"本 Schema 只拥有 portable wire 结构。well-formed Unicode、NFC 和品牌类型由 foundation/filesystem/portable-resource-path 复验；容量、OS 保留文件名、case collision、物理根、symlink、存在性、URL、文档 anchor 与允许父级的配置 placement 不属于本合同。\",\"type\":\"string\",\"minLength\":1,\"pattern\":\"^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\\\.{1,2}(?:/|$))(?!.*\\\\/\\\\.{1,2}(?:/|$))(?!.*\\\\\\\\)(?!.*//)(?!.*\\\\/$)(?!\\\\s)(?!.*\\\\s$)(?!.*\\\\/\\\\s)(?!.*\\\\s\\\\/)(?!.*[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F]).+$\",\"examples\":[\".wakeflow-active/current/demand.json\",\"requirement-designs/需求说明.md\",\"docs/My Plan.md\"]}");

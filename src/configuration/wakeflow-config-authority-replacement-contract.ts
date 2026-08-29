@@ -36,12 +36,12 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../foundation/identity/wakeflow-durable-id.js";
+} from "../contracts/identity/wakeflow-durable-id.js";
 import { encodeUtf8, Utf8Error } from "../foundation/text/utf8.js";
-import { WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE } from "./wakeflow-config-authority-publication.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
+  WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE,
   WAKEFLOW_CONFIG_FILE_REF,
   WAKEFLOW_CONFIG_MAXIMUM_BYTES,
   type WakeflowConfigAuthoritySnapshot,
@@ -86,11 +86,6 @@ export interface WakeflowConfigAuthorityReplacementReceipt {
   readonly source: Readonly<WakeflowConfigAuthoritySnapshot>;
   readonly effect: Readonly<DurableAtomicFileReplaceResult> | null;
   readonly authority: Readonly<WakeflowConfigAuthoritySnapshot>;
-}
-
-export interface WakeflowConfigAuthorityReplacementRecoveryReceipt {
-  readonly disposition: "recovered";
-  readonly replacement: Readonly<WakeflowConfigAuthorityReplacementReceipt>;
 }
 
 export type WakeflowConfigAuthorityReplacementErrorReason =
@@ -160,7 +155,7 @@ export interface ParsedWakeflowConfigAuthorityReplacementOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-export interface ParsedWakeflowConfigAuthorityRecoveryOptions {
+interface ParsedWakeflowConfigAuthorityRecoveryOptions {
   readonly signal: AbortSignal | undefined;
 }
 
@@ -208,10 +203,7 @@ function isAbortSignal(value: unknown): value is AbortSignal {
 function optionRecord(value: unknown): Readonly<Record<string, unknown>> {
   try {
     return parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) {
-      failWakeflowConfigAuthorityReplacement("input", "$options");
-    }
+  } catch {
     failWakeflowConfigAuthorityReplacement("input", "$options");
   }
 }
@@ -476,7 +468,7 @@ export async function readCurrentWakeflowConfigAuthority(
   try {
     return await readWakeflowConfigAuthoritySnapshot(
       root,
-      signal === undefined ? undefined : { signal },
+      afterCommit || signal === undefined ? undefined : { signal },
     );
   } catch (error: unknown) {
     if (afterCommit) {
@@ -488,6 +480,9 @@ export async function readCurrentWakeflowConfigAuthority(
       }
       if (error.reason === "root-scope") {
         failWakeflowConfigAuthorityReplacement("root-scope", "$root");
+      }
+      if (error.reason === "source-policy") {
+        failWakeflowConfigAuthorityReplacement("source-policy", "$source");
       }
       failWakeflowConfigAuthorityReplacement("source-invalid", "$source");
     }

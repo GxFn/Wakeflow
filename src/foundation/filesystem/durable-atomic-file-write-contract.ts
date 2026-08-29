@@ -28,7 +28,7 @@ import {
 import { RootedDirectory } from "./rooted-directory.js";
 import type { StableFileSource } from "./stable-file-read.js";
 
-/** 持久化原子文件写入的公共合同、输入快照和稳定错误。 */
+/** 耐久原子文件写入的公共合同、输入快照和稳定错误。 */
 
 export const DURABLE_ATOMIC_FILE_MAXIMUM_BYTES = parseByteCount(
   64 * 1024 * 1024,
@@ -125,7 +125,7 @@ const ERROR_MESSAGES = {
   string
 >>;
 
-/** 持久化单文件写入的稳定、脱敏错误。 */
+/** 耐久单文件写入的稳定、脱敏错误。 */
 export class DurableAtomicFileWriteError extends Error {
   override readonly name = "DurableAtomicFileWriteError";
   readonly code = "wakeflow-durable-atomic-file-write" as const;
@@ -139,12 +139,12 @@ export class DurableAtomicFileWriteError extends Error {
   }
 }
 
-export interface ParsedDurableAtomicFileCreateOptions {
+interface ParsedDurableAtomicFileCreateOptions {
   readonly mode: number;
   readonly signal: AbortSignal | undefined;
 }
 
-export interface ParsedDurableAtomicFileReplaceOptions
+interface ParsedDurableAtomicFileReplaceOptions
   extends ParsedDurableAtomicFileCreateOptions {
   readonly expected: Readonly<DurableAtomicFileExpectation>;
 }
@@ -348,17 +348,24 @@ export function parseDurableAtomicFileReplaceOptions(
 export function snapshotDurableAtomicFileInputBytes(
   value: unknown,
 ): Readonly<DurableAtomicFileInputBytes> {
-  if (!(ArrayBuffer.isView(value) && value instanceof Uint8Array)) {
+  if (
+    typeof value !== "object"
+    || value === null
+    || types.isProxy(value)
+    || !ArrayBuffer.isView(value)
+    || !(value instanceof Uint8Array)
+    || value.buffer instanceof SharedArrayBuffer
+  ) {
     failDurableAtomicFileWrite("input", "$bytes");
+  }
+  const byteCount = parseByteCount(value.byteLength, "$bytes");
+  if (byteCount > DURABLE_ATOMIC_FILE_MAXIMUM_BYTES) {
+    failDurableAtomicFileWrite("capacity", "$bytes");
   }
   let bytes: Buffer;
   try {
     bytes = Buffer.from(value);
   } catch {
-    failDurableAtomicFileWrite("input", "$bytes");
-  }
-  const byteCount = parseByteCount(bytes.byteLength, "$bytes");
-  if (byteCount > DURABLE_ATOMIC_FILE_MAXIMUM_BYTES) {
     failDurableAtomicFileWrite("capacity", "$bytes");
   }
   let digest: Sha256Digest;

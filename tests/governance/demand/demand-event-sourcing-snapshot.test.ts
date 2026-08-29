@@ -6,7 +6,7 @@ import {
 import { test } from "node:test";
 
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/foundation/identity/wakeflow-durable-id.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   decideDemandEventSourcingCommand,
@@ -16,7 +16,6 @@ import {
 } from "../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
 import {
   createDemandEventSourcingSnapshot,
-  formatDemandEventSourcingSnapshotFileName,
   parseDemandEventSourcingSnapshot,
   parseDemandEventSourcingSnapshotDocument,
   renderDemandEventSourcingSnapshot,
@@ -74,7 +73,6 @@ test("Demand Event Sourcing snapshot 是按 commitSequence 定位的 immutable c
     snapshot.versionCompatibilityDigest,
     computeDemandEventSourcingVersionCompatibilityDigest(),
   );
-  equal(formatDemandEventSourcingSnapshotFileName(1), "0000000000000001.json");
 
   const restored = restoreDemandEventSourcingSnapshot(
     snapshot,
@@ -87,7 +85,7 @@ test("Demand Event Sourcing snapshot 是按 commitSequence 定位的 immutable c
   throws(
     () => parseDemandEventSourcingSnapshot({
       ...snapshot,
-      aggregateVersion: 2,
+      commitSequence: 2,
     }),
     DemandEventSourcingSnapshotError,
   );

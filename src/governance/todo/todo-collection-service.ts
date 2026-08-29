@@ -73,7 +73,6 @@ export {
   TodoCollectionServiceError,
   type TodoCollectionServiceErrorReason,
 } from "./todo-collection-service-error.js";
-export { TODO_TRANSACTION_MAXIMUM_BYTES } from "./todo-collection-transaction-storage.js";
 
 /**
  * Wakeflow Governance / TODO：JSON Intake/State 集合的唯一公共职责所有者。
@@ -83,7 +82,7 @@ export { TODO_TRANSACTION_MAXIMUM_BYTES } from "./todo-collection-transaction-st
  * TODO 权威引用，不提供通用仓储、`FileManager` 或存储适配器。
  */
 
-export const TODO_COLLECTION_LOCK_TIMEOUT_MILLISECONDS = 10_000;
+const TODO_COLLECTION_LOCK_TIMEOUT_MILLISECONDS = 10_000;
 
 export interface TodoCollectionMutationOptions {
   readonly expectedCollectionDigest?: Sha256Digest;
@@ -267,8 +266,16 @@ function mapAuthorityError(error: TodoCollectionAuthorityError): never {
   if (error.reason === "input") fail("input", error.path);
   if (error.reason === "not-initialized") fail("not-initialized", error.path);
   if (error.reason === "recovery-required") fail("recovery-required", error.path);
+  if (error.reason === "capacity") fail("capacity", error.path);
   if (error.reason === "aborted") fail("aborted", error.path);
   fail("transaction-conflict", error.path);
+}
+
+function mapActiveLayoutError(error: WakeflowActiveLayoutInspectionError): never {
+  if (error.reason === "input") fail("input", error.path);
+  if (error.reason === "not-current") fail("not-initialized", error.path);
+  if (error.reason === "aborted") fail("aborted", error.path);
+  fail("operation-failure", error.path);
 }
 
 async function inspectStrict(
@@ -409,19 +416,23 @@ export async function initializeTodoCollection(
   try {
     await assertWakeflowActiveLayoutCurrent(root, signal);
     await materializeTodoPrivateDirectory(root, TODO_COLLECTION_ROOT_REF, signal);
-    await materializeTodoPrivateDirectory(root, TODO_ITEMS_ROOT_REF, signal);
-    await materializeTodoPrivateDirectory(root, TODO_TRANSACTIONS_ROOT_REF, signal);
-    let snapshot = await inspectStrict(root, signal);
-    if (snapshot.projection.status !== "current") {
-      await publishTodoBoardProjection(root, snapshot, signal);
-      snapshot = await inspectStrict(root, signal);
-    }
-    return snapshot;
+    return await runLocked(root, signal, "$initialize", async () => {
+      await materializeTodoPrivateDirectory(root, TODO_ITEMS_ROOT_REF, signal);
+      await materializeTodoPrivateDirectory(root, TODO_TRANSACTIONS_ROOT_REF, signal);
+      let snapshot = await inspectStrict(root, signal);
+      if (snapshot.projection.status !== "current") {
+        await publishTodoBoardProjection(root, snapshot, signal);
+        snapshot = await inspectStrict(root, signal);
+      }
+      if (snapshot.projection.status !== "current") {
+        fail("transaction-conflict", "$projection");
+      }
+      return snapshot;
+    });
   } catch (error: unknown) {
     if (error instanceof TodoCollectionServiceError) throw error;
     if (error instanceof WakeflowActiveLayoutInspectionError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
-      fail("not-initialized", "$activeLayout");
+      mapActiveLayoutError(error);
     }
     throw new TodoCollectionServiceError("operation-failure", "$initialize");
   }
@@ -556,5 +567,10 @@ export async function inspectTodoItems(
   root: RootedDirectory,
   signal?: AbortSignal,
 ): Promise<Readonly<TodoCollectionAuthoritySnapshot>> {
-  return inspectStrict(root, signal);
+  try {
+    return await inspectStrict(root, signal);
+  } catch (error: unknown) {
+    if (error instanceof TodoCollectionServiceError) throw error;
+    throw new TodoCollectionServiceError("operation-failure", "$inspect");
+  }
 }

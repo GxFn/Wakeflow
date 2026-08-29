@@ -41,7 +41,7 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../../../foundation/identity/wakeflow-durable-id.js";
+} from "../../../contracts/identity/wakeflow-durable-id.js";
 import {
   createRuntimeJsonSchemaValidator,
 } from "../../../foundation/schema/runtime-json-schema.js";
@@ -67,9 +67,9 @@ import {
  * 关系和位置授权共同证明。本模块不写入 Ledger 或 Demand 文件，也不追加事件流。
  */
 
-export const DEMAND_AUTHORITY_ARTIFACT_KIND =
+const DEMAND_AUTHORITY_ARTIFACT_KIND =
   "wakeflow-demand-authority" as const;
-export const DEMAND_AUTHORITY_SCHEMA_VERSION = 1 as const;
+const DEMAND_AUTHORITY_SCHEMA_VERSION = 1 as const;
 
 export type DemandTestingMode =
   | "controller-only"
@@ -119,6 +119,7 @@ export type DemandAuthorityErrorReason =
   | "testing"
   | "placement"
   | "resolution"
+  | "aborted"
   | "representation";
 
 const ERROR_MESSAGES = {
@@ -135,6 +136,7 @@ const ERROR_MESSAGES = {
   "testing": "Demand authority testing decision is inconsistent.",
   "placement": "Demand authority does not prove execution placement.",
   "resolution": "Demand authority reference cannot be resolved exactly.",
+  "aborted": "Demand authority admission was aborted.",
   "representation": "Demand authority bytes are not its deterministic domain representation.",
 } as const satisfies Readonly<Record<DemandAuthorityErrorReason, string>>;
 
@@ -188,32 +190,63 @@ function fail(reason: DemandAuthorityErrorReason, path: string): never {
   throw new DemandAuthorityError(reason, path);
 }
 
-function referenceKey(reference: Readonly<LedgerAuthorityMemberReference>): string {
+function referenceLocationKey(
+  reference: Readonly<LedgerAuthorityMemberReference>,
+): string {
   return [
     reference.family,
+    reference.recordId,
     reference.recordRef,
+    reference.memberPath,
     reference.memberRef,
-    reference.role,
   ].join("\u0000");
+}
+
+function sameReference(
+  left: Readonly<LedgerAuthorityMemberReference>,
+  right: Readonly<LedgerAuthorityMemberReference>,
+): boolean {
+  return left.artifactKind === right.artifactKind
+    && left.schemaVersion === right.schemaVersion
+    && left.family === right.family
+    && left.recordId === right.recordId
+    && left.recordRef === right.recordRef
+    && left.recordDigest === right.recordDigest
+    && left.memberPath === right.memberPath
+    && left.memberRef === right.memberRef
+    && left.memberDigest === right.memberDigest
+    && left.role === right.role
+    && left.mediaType === right.mediaType;
 }
 
 function parseReferences(
   values: readonly DemandAuthorityWire["authorityRefs"][number][],
 ): DemandAuthority["authorityRefs"] {
-  const references = Object.freeze(values.map((value, index) => {
+  const parsed = values.map((value, index) => {
     try {
       return parseLedgerAuthorityMemberReference(value);
-    } catch {
-      fail("reference", `$/authorityRefs/${index}`);
+    } catch (error: unknown) {
+      if (error instanceof LedgerAuthorityStoreError) {
+        fail("reference", `$/authorityRefs/${index}`);
+      }
+      throw error;
     }
-  })) as DemandAuthority["authorityRefs"];
+  });
+  const first = parsed[0];
+  if (first === undefined) fail("schema", "$/authorityRefs");
+  const mutableReferences: [
+    Readonly<LedgerAuthorityMemberReference>,
+    ...Readonly<LedgerAuthorityMemberReference>[],
+  ] = [first];
+  mutableReferences.push(...parsed.slice(1));
+  const references = Object.freeze(mutableReferences);
   for (let index = 1; index < references.length; index += 1) {
     const previous = references[index - 1];
     const current = references[index];
     if (
       previous === undefined
       || current === undefined
-      || referenceKey(previous) >= referenceKey(current)
+      || referenceLocationKey(previous) >= referenceLocationKey(current)
     ) {
       fail("ordering", `$/authorityRefs/${index}`);
     }
@@ -295,9 +328,9 @@ function assertIdentityRelations(
     fail("testing", "$/testingDecision/environmentMemberRef");
   }
   if (identity.executionPlacement.mode === "isolated") {
-    const expected = referenceKey(identity.executionPlacement.authorizationRef);
+    const expected = identity.executionPlacement.authorizationRef;
     const authorization = authority.authorityRefs.find(
-      (entry) => referenceKey(entry) === expected,
+      (entry) => sameReference(entry, expected),
     );
     if (
       authorization === undefined
@@ -388,14 +421,20 @@ export function createDemandAuthority(
     if (error instanceof PassiveOwnDataError) fail("input", "$/authorityRefs");
     throw error;
   }
-  const sortedRefs = [...draftRefs].sort((left, right) => {
+  const parsedDraftRefs = draftRefs.map((value, index) => {
     try {
-      const leftKey = referenceKey(parseLedgerAuthorityMemberReference(left));
-      const rightKey = referenceKey(parseLedgerAuthorityMemberReference(right));
-      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
-    } catch {
-      fail("reference", "$/authorityRefs");
+      return parseLedgerAuthorityMemberReference(value);
+    } catch (error: unknown) {
+      if (error instanceof LedgerAuthorityStoreError) {
+        fail("reference", `$/authorityRefs/${index}`);
+      }
+      throw error;
     }
+  });
+  const sortedRefs = [...parsedDraftRefs].sort((left, right) => {
+    const leftKey = referenceLocationKey(left);
+    const rightKey = referenceLocationKey(right);
+    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
   });
   return parseDemandAuthority({
     artifactKind: DEMAND_AUTHORITY_ARTIFACT_KIND,
@@ -415,6 +454,7 @@ export async function admitDemandAuthority(
   identityValue: unknown,
   authorityValue: unknown,
   ledgerStore: LedgerAuthorityStore,
+  options?: { readonly signal?: AbortSignal },
 ): Promise<Readonly<AdmittedDemandAuthority>> {
   const identity = parseDemandIdentity(identityValue);
   const authority = parseDemandAuthority(authorityValue, identity);
@@ -426,41 +466,61 @@ export async function admitDemandAuthority(
   ) {
     fail("input", "$ledgerStore");
   }
+  let optionRecord: Readonly<Record<string, unknown>>;
+  try {
+    optionRecord = parsePlainRecord(
+      options === undefined ? {} : options,
+      "$options",
+    );
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    throw error;
+  }
+  if (
+    Object.keys(optionRecord).some((key) => key !== "signal")
+    || (
+      optionRecord.signal !== undefined
+      && (
+        typeof optionRecord.signal !== "object"
+        || optionRecord.signal === null
+        || types.isProxy(optionRecord.signal)
+        || !(optionRecord.signal instanceof AbortSignal)
+      )
+    )
+  ) {
+    fail("input", "$options");
+  }
+  const signal = optionRecord.signal as AbortSignal | undefined;
+  if (signal?.aborted === true) fail("aborted", "$signal");
   const resolved: ResolvedDemandAuthorityReference[] = [];
   let ledgerResolutions;
   try {
     ledgerResolutions = await ledgerStore.resolveMemberReferences(
       authority.authorityRefs,
+      signal === undefined ? undefined : { signal },
     );
   } catch (error: unknown) {
     if (error instanceof LedgerAuthorityStoreError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
       fail("resolution", "$/authorityRefs");
     }
     throw error;
   }
   for (const [index, resolution] of ledgerResolutions.entries()) {
     const record = resolution.loaded;
-    try {
-      if (record.record.programId !== identity.programId) {
-        fail("resolution", `$/authorityRefs/${index}`);
-      }
-      if (
-        record.record.artifactKind === "wakeflow-confirmation-record"
-        && record.record.demandId !== identity.demandId
-      ) {
-        fail("resolution", `$/authorityRefs/${index}`);
-      }
-      resolved.push(Object.freeze({
-        reference: resolution.reference,
-        record,
-      }));
-    } catch (error: unknown) {
-      if (error instanceof DemandAuthorityError) throw error;
-      if (error instanceof LedgerAuthorityStoreError) {
-        fail("resolution", `$/authorityRefs/${index}`);
-      }
-      throw error;
+    if (record.record.programId !== identity.programId) {
+      fail("resolution", `$/authorityRefs/${index}`);
     }
+    if (
+      record.record.artifactKind === "wakeflow-confirmation-record"
+      && record.record.demandId !== identity.demandId
+    ) {
+      fail("resolution", `$/authorityRefs/${index}`);
+    }
+    resolved.push(Object.freeze({
+      reference: resolution.reference,
+      record,
+    }));
   }
   return Object.freeze({
     identity,
@@ -471,7 +531,7 @@ export async function admitDemandAuthority(
 
 export function renderDemandAuthority(value: unknown): string {
   return renderDeterministicJsonDocument(
-    parseDemandAuthority(value) as unknown as JsonValue,
+    parseDemandAuthority(value),
     "$authority",
   );
 }
@@ -498,6 +558,6 @@ export function parseDemandAuthorityDocument(
 
 export function computeDemandAuthorityDigest(value: unknown): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
-    parseDemandAuthority(value) as unknown as JsonValue,
+    parseDemandAuthority(value),
   );
 }

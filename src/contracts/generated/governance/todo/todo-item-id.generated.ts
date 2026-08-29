@@ -18,17 +18,16 @@ function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
   return value;
 }
 
+/** 从 JSON 文本恢复 Schema，保留 `__proto__` 等普通 JSON 自有键。 */
+function restoreGeneratedSchema(
+  serialized: string,
+): Readonly<Record<string, unknown>> {
+  const value: unknown = JSON.parse(serialized);
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    throw new TypeError("Generated Schema must be an object.");
+  }
+  return freezeGeneratedSchema(value as Record<string, unknown>);
+}
+
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_TODO_ITEM_ID_SCHEMA = freezeGeneratedSchema({
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:wakeflow:governance:todo:item-id:v1",
-  "x-wakeflow-runtime-export": "WAKEFLOW_TODO_ITEM_ID_SCHEMA",
-  "title": "WakeflowTodoItemIdText",
-  "description": "TODO intake 使用的稳定、用户可读 opaque ID；允许字母、数字、点、下划线、冒号和连字符，不从标题或路径推导。",
-  "$comment": "TODO ID 不是 Wakeflow durable UUID kind；它保留当前公开输入的可读标识，但创建后不可复用或改写。",
-  "type": "string",
-  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
-  "examples": [
-    "TODO-M2-T09"
-  ]
-} as const);
+export const WAKEFLOW_TODO_ITEM_ID_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:todo:item-id:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TODO_ITEM_ID_SCHEMA\",\"title\":\"WakeflowTodoItemIdText\",\"description\":\"TODO intake 使用的稳定、用户可读 opaque ID；允许字母、数字、点、下划线、冒号和连字符，不从标题或路径推导。\",\"$comment\":\"TODO ID 不是 Wakeflow durable UUID kind；它保留当前公开输入的可读标识，但创建后不可复用或改写。\",\"type\":\"string\",\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$\",\"examples\":[\"TODO-M2-T09\"]}");

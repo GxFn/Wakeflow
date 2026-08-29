@@ -1,4 +1,4 @@
-import { deepEqual, equal, throws } from "node:assert/strict";
+import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -7,7 +7,9 @@ import {
 import {
   codexWorkspaceHostResourceProfile,
 } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import {
+  claudeCodeWorkspaceHostResourceProfile,
+} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   createWakeflowWindowHostBinding,
@@ -26,7 +28,6 @@ import {
 } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
 import {
   compileWakeflowWindowRuntimeRegisteredProjectionEntry,
-  parseWakeflowWindowRuntimeRegisteredProjectionDocument,
   WakeflowWindowRuntimeRegisteredProjectionError,
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-registered-projection.js";
 import {
@@ -34,7 +35,7 @@ import {
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
 import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
 
-test("registered projection 只公开 Binding 外键与摘要并保留 root blocker", () => {
+test("registered projection只公开Binding引用与代际ID并保留root blocker", () => {
   const config = createMinimalWakeflowConfigV3();
   const unregisteredSet =
     compileWakeflowWindowRuntimeUnregisteredProjectionSet(
@@ -51,23 +52,27 @@ test("registered projection 只公开 Binding 外键与摘要并保留 root bloc
     throw new Error("Expected one static window.");
   }
   const rawHandle = "private-codex-thread-id";
-  const binding = createWakeflowWindowHostBinding({
-    programId: source.projection.programId,
-    hostId: "codex",
-    windowId: source.windowId,
-    bindingId: parseWakeflowWindowHostBindingId(
-      "window_binding_33333333-3333-4333-8333-333333333333",
-    ),
-    handle: parseWakeflowWindowHostHandle(
-      codexWindowHostIdentityProfile,
-      { kind: "codex-thread", value: rawHandle },
-    ),
-    launchIntentDigest: launchIntent.intentDigest,
-    observedAt: parseUtcInstant("2026-08-28T10:00:00.000Z"),
-    registeredAt: parseUtcInstant("2026-08-28T10:00:01.000Z"),
-  });
+  const binding = createWakeflowWindowHostBinding(
+    {
+      programId: source.projection.programId,
+      hostId: "codex",
+      windowId: source.windowId,
+      bindingId: parseWakeflowWindowHostBindingId(
+        "window_binding_33333333-3333-4333-8333-333333333333",
+      ),
+      handle: parseWakeflowWindowHostHandle(
+        codexWindowHostIdentityProfile,
+        { kind: "codex-thread", value: rawHandle },
+      ),
+      launchIntentDigest: launchIntent.intentDigest,
+      observedAt: parseUtcInstant("2026-08-28T10:00:00.000Z"),
+      registeredAt: parseUtcInstant("2026-08-28T10:00:01.000Z"),
+    },
+    codexWindowHostIdentityProfile,
+  );
   const target = compileWakeflowWindowRuntimeRegisteredProjectionEntry(
     codexWorkspaceHostResourceProfile,
+    codexWindowHostIdentityProfile,
     source.projection,
     binding,
   );
@@ -80,28 +85,19 @@ test("registered projection 只公开 Binding 外键与摘要并保留 root bloc
   );
   equal(target.document.includes(rawHandle), false);
   equal(target.document.includes('"handle"'), false);
-  deepEqual(
-    parseWakeflowWindowRuntimeRegisteredProjectionDocument(
-      target.document,
-      codexWorkspaceHostResourceProfile,
-      source.projection,
-      binding,
-    ),
-    target.projection,
-  );
-
-  const drift = JSON.parse(target.document) as Record<string, unknown>;
-  drift.projectionDigest = parseSha256Digest(`sha256:${"f".repeat(64)}`);
+  equal(target.document.includes('"bindingDigest"'), false);
   throws(
-    () => parseWakeflowWindowRuntimeRegisteredProjectionDocument(
-      `${JSON.stringify(drift, null, 2)}\n`,
-      codexWorkspaceHostResourceProfile,
+    () => compileWakeflowWindowRuntimeRegisteredProjectionEntry(
+      claudeCodeWorkspaceHostResourceProfile,
+      codexWindowHostIdentityProfile,
       source.projection,
       binding,
     ),
-    WakeflowWindowRuntimeRegisteredProjectionError,
+    (error: unknown) => (
+      error instanceof WakeflowWindowRuntimeRegisteredProjectionError
+      && error.reason === "source"
+    ),
   );
-
   const catalog = createWakeflowWindowHostBindingResourceCatalog(
     config,
     codexWorkspaceHostResourceProfile,

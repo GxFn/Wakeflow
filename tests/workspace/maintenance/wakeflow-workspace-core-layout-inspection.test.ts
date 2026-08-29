@@ -12,6 +12,7 @@ import path from "node:path";
 import { test, type TestContext } from "node:test";
 
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import {
   withRootedExclusiveFileLock,
 } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
@@ -53,14 +54,9 @@ function materializeProtocol(root: string, depth: 1 | 2 | 3 | 4): void {
 
 function writeInactiveLock(root: string): void {
   const lockPath = path.join(root, ...WAKEFLOW_MAINTENANCE_GATE_REF.split("/"));
-  writeFileSync(lockPath, `${JSON.stringify({
-    createdAt: "2026-08-27T10:00:00.000Z",
-    kind: "WakeflowExclusiveFileLock",
-    pid: 2_147_483_647,
-    threadId: 0,
-    token: "2147483647-0-11111111-1111-4111-8111-111111111111",
-    version: 1,
-  }, null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
+    tokenUuid: "11111111-1111-4111-8111-111111111111",
+  }), { mode: 0o600 });
 }
 
 test("core layout distinguishes absent, bootstrap-prefix and idle", async (t) => {

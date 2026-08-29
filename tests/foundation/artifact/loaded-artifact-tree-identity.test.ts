@@ -116,6 +116,7 @@ test("loaded artifact identity preserves the v1 golden and ignores location", as
   const firstPath = createFixture();
   const secondPath = createFixture("wakeflow-artifact-relocated-ts-");
   try {
+    mkdirSync(path.join(secondPath, "empty-directory"));
     const first = await inspectFixture(firstPath);
     const second = await inspectFixture(secondPath);
 
@@ -258,6 +259,49 @@ test("manifest validator rejects collisions, reordering, and inconsistent totals
         totalBytes: sample.bytes * 2,
       }),
       "ref-collision",
+    );
+    const directoryCollisionFiles = [
+      { ...sample, ref: "A/first.txt" },
+      { ...sample, ref: "a/second.txt" },
+    ];
+    await expectIdentityError(
+      () => validateLoadedArtifactTreeManifest({
+        ...manifest,
+        fileCount: 2,
+        files: directoryCollisionFiles,
+        totalBytes: sample.bytes * 2,
+      }),
+      "ref-collision",
+    );
+    const fileParentConflict = [
+      { ...sample, ref: "a" },
+      { ...sample, ref: "a/child.txt" },
+    ];
+    await expectIdentityError(
+      () => validateLoadedArtifactTreeManifest({
+        ...manifest,
+        fileCount: 2,
+        files: fileParentConflict,
+        totalBytes: sample.bytes * 2,
+      }),
+      "ref-collision",
+    );
+    await expectIdentityError(
+      () => validateLoadedArtifactTreeManifest({
+        ...manifest,
+        fileCount: 2,
+        files: [
+          { ...sample, ref: "a/first.txt" },
+          { ...sample, ref: "b/second.txt" },
+        ],
+        totalBytes: sample.bytes * 2,
+      }, {
+        limits: {
+          ...LOADED_ARTIFACT_TREE_IDENTITY_LIMITS,
+          maxEntries: 3,
+        },
+      }),
+      "entry-limit",
     );
     await expectIdentityError(
       () => validateLoadedArtifactTreeManifest({

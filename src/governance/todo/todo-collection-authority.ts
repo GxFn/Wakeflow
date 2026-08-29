@@ -13,6 +13,9 @@ import {
   type BoundedDirectoryTreeScanResult,
 } from "../../foundation/filesystem/bounded-directory-tree-scan.js";
 import {
+  hasDurableAtomicFileStagePrefix,
+} from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
+import {
   readDeterministicJsonFile,
   type DeterministicJsonFileResult,
 } from "../../foundation/filesystem/deterministic-json-file.js";
@@ -47,6 +50,7 @@ import {
 } from "./todo-board-projection.js";
 import {
   createTodoCollectionSnapshot,
+  TODO_COLLECTION_MAXIMUM_ITEMS,
   type TodoCollectionItem,
   type TodoCollectionSnapshot,
 } from "./todo-collection.js";
@@ -85,9 +89,10 @@ export const TODO_AUTHORITY_DIRECTORY_MODE = 0o700;
 export const TODO_INTAKE_MAXIMUM_BYTES = parseByteCount(256 * 1024);
 export const TODO_STATE_MAXIMUM_BYTES = parseByteCount(128 * 1024);
 export const TODO_PROJECTION_MAXIMUM_BYTES = parseByteCount(8 * 1024 * 1024);
-export const TODO_ITEM_TREE_MAXIMUM_ENTRIES = 65_536 * 3;
+const TODO_ITEM_TREE_MAXIMUM_ENTRIES = TODO_COLLECTION_MAXIMUM_ITEMS * 3;
+const TODO_ITEM_READ_CONCURRENCY = 16;
 
-export interface TodoAuthorityFileSource {
+interface TodoAuthorityFileSource {
   readonly resourcePath: PortableResourcePath;
   readonly node: Readonly<FileNodeSnapshot>;
   readonly byteCount: ByteCount;
@@ -99,7 +104,7 @@ export interface StoredTodoCollectionItem extends TodoCollectionItem {
   readonly stateSource: Readonly<TodoAuthorityFileSource>;
 }
 
-export interface TodoProjectionObservation {
+interface TodoProjectionObservation {
   readonly status: "current" | "missing" | "stale" | "unsafe";
   readonly expected: Readonly<TodoBoardProjection>;
   readonly source: Readonly<TodoAuthorityFileSource> | null;
@@ -111,7 +116,7 @@ export interface TodoCollectionAuthoritySnapshot {
   readonly projection: Readonly<TodoProjectionObservation>;
 }
 
-export interface InspectTodoCollectionAuthorityOptions {
+interface InspectTodoCollectionAuthorityOptions {
   readonly signal?: AbortSignal;
 }
 
@@ -123,6 +128,7 @@ export type TodoCollectionAuthorityErrorReason =
   | "tree-shape"
   | "source-policy"
   | "source-changed"
+  | "capacity"
   | "encoding"
   | "record"
   | "aborted"
@@ -136,6 +142,7 @@ const ERROR_MESSAGES = {
   "tree-shape": "TODO collection item tree does not match its closed layout.",
   "source-policy": "TODO collection resource violates its physical node policy.",
   "source-changed": "TODO collection changed while it was inspected.",
+  "capacity": "TODO collection resource exceeds its byte budget.",
   "encoding": "TODO collection record is not strict UTF-8 text.",
   "record": "TODO collection record is invalid or non-deterministic.",
   "aborted": "TODO collection inspection was aborted.",
@@ -277,6 +284,17 @@ function groupItemTree(
 ): readonly Readonly<ItemTreeGroup>[] {
   assertPrivateNode(tree.treeRootNode, "directory", "$items");
   const direct = tree.entries.filter((entry) => entry.depth === 1);
+  const childrenByParent = new Map<
+    PortableResourcePath,
+    BoundedDirectoryTreeEntry[]
+  >();
+  for (const entry of tree.entries) {
+    if (entry.depth !== 2) continue;
+    if (entry.parentResourcePath === null) fail("tree-shape", "$items");
+    const children = childrenByParent.get(entry.parentResourcePath) ?? [];
+    children.push(entry);
+    childrenByParent.set(entry.parentResourcePath, children);
+  }
   const groups: ItemTreeGroup[] = [];
   for (const [index, directory] of direct.entries()) {
     if (
@@ -286,20 +304,15 @@ function groupItemTree(
       fail("tree-shape", `$items/${index}`);
     }
     assertPrivateNode(directory.node, "directory", `$items/${index}`);
-    const children = tree.entries.filter(
-      (entry) => entry.parentResourcePath === directory.resourcePath,
-    );
+    const children = childrenByParent.get(directory.resourcePath) ?? [];
+    const intake = children.find((entry) => entry.name === "intake.json");
+    const state = children.find((entry) => entry.name === "state.json");
     if (
       children.length !== 2
-      || children[0]?.name !== "intake.json"
-      || children[1]?.name !== "state.json"
+      || intake === undefined
+      || state === undefined
       || children.some((entry) => entry.depth !== 2 || entry.node.kind !== "file")
     ) {
-      fail("tree-shape", `$items/${index}`);
-    }
-    const intake = children[0];
-    const state = children[1];
-    if (intake === undefined || state === undefined) {
       fail("tree-shape", `$items/${index}`);
     }
     assertPrivateNode(intake.node, "file", `$items/${index}/intake`);
@@ -315,13 +328,14 @@ function groupItemTree(
   return Object.freeze(groups);
 }
 
-function mapFileReadError(error: StableFileReadError): never {
+function mapFileReadError(error: StableFileReadError, path: string): never {
   if (error.reason === "aborted") fail("aborted", "$signal");
+  if (error.reason === "too-large") fail("capacity", path);
   if (
     error.reason === "expectation-changed"
     || error.reason === "source-changed"
   ) {
-    fail("source-changed", "$items");
+    fail("source-changed", path);
   }
   if (
     error.reason === "root-scope"
@@ -329,8 +343,8 @@ function mapFileReadError(error: StableFileReadError): never {
   ) {
     fail("root-scope", "$root");
   }
-  if (error.reason === "not-found") fail("source-changed", "$items");
-  fail("inspection-failure", "$items");
+  if (error.reason === "not-found") fail("source-changed", path);
+  fail("inspection-failure", path);
 }
 
 function mapTextError(error: StrictTextFileError): never {
@@ -358,7 +372,7 @@ async function readJsonRecordFile(
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError) mapFileReadError(error);
+    if (error instanceof StableFileReadError) mapFileReadError(error, "$items");
     if (error instanceof StrictTextFileError) mapTextError(error);
     if (error instanceof DeterministicJsonDocumentError) {
       mapJsonDocumentError(error);
@@ -377,7 +391,9 @@ async function readProjectionFile(
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError) mapFileReadError(error);
+    if (error instanceof StableFileReadError) {
+      mapFileReadError(error, "$projection");
+    }
     if (error instanceof StrictTextFileError) mapTextError(error);
     throw error;
   }
@@ -446,6 +462,21 @@ async function readStoredItem(
   });
 }
 
+async function readStoredItems(
+  root: RootedDirectory,
+  groups: readonly Readonly<ItemTreeGroup>[],
+  signal: AbortSignal | undefined,
+): Promise<readonly Readonly<StoredTodoCollectionItem>[]> {
+  const stored: Readonly<StoredTodoCollectionItem>[] = [];
+  for (let index = 0; index < groups.length; index += TODO_ITEM_READ_CONCURRENCY) {
+    const batch = groups.slice(index, index + TODO_ITEM_READ_CONCURRENCY);
+    stored.push(...await Promise.all(batch.map((group) => (
+      readStoredItem(root, group, signal)
+    ))));
+  }
+  return Object.freeze(stored);
+}
+
 function sameTree(
   left: Readonly<BoundedDirectoryTreeScanResult<PortableResourcePath>>,
   right: Readonly<BoundedDirectoryTreeScanResult<PortableResourcePath>>,
@@ -493,20 +524,51 @@ async function assertTransactionsEmpty(
   }
 }
 
-async function assertCollectionRoot(root: RootedDirectory): Promise<void> {
+async function assertCollectionRoot(
+  root: RootedDirectory,
+  signal: AbortSignal | undefined,
+): Promise<void> {
   try {
-    const resource = await root.inspectExistingResource(
+    const directory = await readStableResourceDirectory(
+      root,
       TODO_COLLECTION_ROOT_REF,
-      "$todoRoot",
+      {
+        maximumEntries: 16,
+        ...(signal === undefined ? {} : { signal }),
+      },
     );
-    assertPrivateNode(resource.node, "directory", "$todoRoot");
+    assertPrivateNode(directory.directoryNode, "directory", "$todoRoot");
+    for (const entry of directory.entries) {
+      if (hasDurableAtomicFileStagePrefix(entry.name)) {
+        fail("recovery-required", "$todoRoot");
+      }
+      if (entry.name === "items" || entry.name === "transactions") {
+        assertPrivateNode(entry.node, "directory", `$todoRoot/${entry.name}`);
+      } else if (
+        entry.name === "global-todo-board.md"
+        || entry.name === "collection.lock"
+      ) {
+        // Board由Projection observation分类；Lock由exclusive-lock owner准入。
+        continue;
+      } else {
+        fail("tree-shape", `$todoRoot/${entry.name}`);
+      }
+    }
   } catch (error: unknown) {
     if (error instanceof TodoCollectionAuthorityError) throw error;
-    if (error instanceof RootedDirectoryError) {
-      if (error.reason === "resource-not-found") {
+    if (error instanceof StableDirectoryReadError) {
+      if (error.reason === "not-found") {
         fail("not-initialized", "$todoRoot");
       }
-      fail("root-scope", "$todoRoot");
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "source-changed") {
+        fail("source-changed", "$todoRoot");
+      }
+      if (error.reason === "root-scope") fail("root-scope", "$root");
+      if (error.reason === "too-many-entries") {
+        fail("tree-shape", "$todoRoot");
+      }
+      fail("inspection-failure", "$todoRoot");
     }
     throw error;
   }
@@ -537,12 +599,13 @@ async function observeProjection(
       try {
         await root.inspectExistingResource(TODO_BOARD_PROJECTION_REF);
       } catch (inspectionError: unknown) {
-        if (
-          inspectionError instanceof RootedDirectoryError
-          && inspectionError.reason === "resource-not-found"
-        ) {
-          return Object.freeze({ status: "missing", expected, source: null });
+        if (inspectionError instanceof RootedDirectoryError) {
+          if (inspectionError.reason === "resource-not-found") {
+            return Object.freeze({ status: "missing", expected, source: null });
+          }
+          return Object.freeze({ status: "unsafe", expected, source: null });
         }
+        throw inspectionError;
       }
       return Object.freeze({ status: "unsafe", expected, source: null });
     }
@@ -556,16 +619,14 @@ async function inspectAuthority(
   requireCleanTransactions: boolean,
 ): Promise<Readonly<TodoCollectionAuthoritySnapshot>> {
   assertRoot(root);
-  await assertCollectionRoot(root);
+  if (parsed.signal?.aborted === true) fail("aborted", "$signal");
+  await assertCollectionRoot(root, parsed.signal);
   if (requireCleanTransactions) {
     await assertTransactionsEmpty(root, parsed.signal);
   }
   const before = await scanItems(root, parsed.signal);
   const groups = groupItemTree(before);
-  const stored: Readonly<StoredTodoCollectionItem>[] = [];
-  for (const group of groups) {
-    stored.push(await readStoredItem(root, group, parsed.signal));
-  }
+  const stored = await readStoredItems(root, groups, parsed.signal);
   const after = await scanItems(root, parsed.signal);
   if (!sameTree(before, after)) fail("source-changed", "$items");
   const collection = createTodoCollectionSnapshot(
@@ -582,6 +643,9 @@ async function inspectAuthority(
     // 正常快照返回前再次确认检查期间没有留下崩溃恢复意图记录。
     await assertTransactionsEmpty(root, parsed.signal);
   }
+  const finalTree = await scanItems(root, parsed.signal);
+  if (!sameTree(after, finalTree)) fail("source-changed", "$items");
+  await assertCollectionRoot(root, parsed.signal);
   return Object.freeze({
     collection,
     items: ordered,

@@ -15,10 +15,10 @@ import { test, type TestContext } from "node:test";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
-  durableAtomicFileStageRef,
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 import {
   createFileCandidateDurably,
 } from "../../../src/foundation/filesystem/durable-file-candidate.js";
@@ -184,7 +184,7 @@ test("affected recovery retires an inactive candidate stage before publishing", 
     computeSha256Digest(bytes),
     0o644,
   );
-  const stageRef = durableAtomicFileStageRef(
+  const stageRef = durableAtomicFileStageRefForTest(
     CLAUDE_CODE_PORTABLE_SETTINGS_REF,
     address,
   );

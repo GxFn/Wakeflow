@@ -20,13 +20,12 @@ import {
   createFileCandidateDurably,
 } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import {
-  durableAtomicFileStageRef,
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { durableAtomicFileStageRefForTest } from "./durable-atomic-file-test-support.js";
 import {
   recoverDurableAtomicFileStagesForTargets,
-  recoverDurableAtomicFileStagesInTargetParent,
   recoverDurableAtomicFileStagesMatchingTargets,
   DurableAtomicFileStageRecoveryError,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-recovery.js";
@@ -51,7 +50,7 @@ test("atomic stage recovery 回滚 inactive single-link partial stage", async ()
     computeSha256Digest(intendedBytes),
     0o600,
   );
-  const stageRef = durableAtomicFileStageRef(targetRef, address);
+  const stageRef = durableAtomicFileStageRefForTest(targetRef, address);
   let released = false;
   try {
     await createFileCandidateDurably(root, stageRef, encodeUtf8("partial"), {
@@ -60,9 +59,9 @@ test("atomic stage recovery 回滚 inactive single-link partial stage", async ()
     releaseDurableAtomicFileStageAddress(address);
     released = true;
 
-    const receipt = await recoverDurableAtomicFileStagesInTargetParent(
+    const receipt = await recoverDurableAtomicFileStagesForTargets(
       root,
-      targetRef,
+      [targetRef],
     );
     equal(receipt.retiredStageCount, 1);
     equal(receipt.settledTargetCount, 0);
@@ -94,7 +93,7 @@ test("atomic stage recovery 前向结算 exact two-link create publication", asy
     computeSha256Digest(bytes),
     0o600,
   );
-  const stageRef = durableAtomicFileStageRef(targetRef, address);
+  const stageRef = durableAtomicFileStageRefForTest(targetRef, address);
   let released = false;
   try {
     await createFileCandidateDurably(root, stageRef, bytes, { mode: 0o600 });
@@ -105,9 +104,9 @@ test("atomic stage recovery 前向结算 exact two-link create publication", asy
     releaseDurableAtomicFileStageAddress(address);
     released = true;
 
-    const receipt = await recoverDurableAtomicFileStagesInTargetParent(
+    const receipt = await recoverDurableAtomicFileStagesForTargets(
       root,
-      targetRef,
+      [targetRef],
     );
     equal(receipt.retiredStageCount, 1);
     equal(receipt.settledTargetCount, 1);
@@ -135,13 +134,13 @@ test("atomic stage recovery 保留 active stage 并拒绝 malformed reserved nam
     computeSha256Digest(bytes),
     0o600,
   );
-  const stageRef = durableAtomicFileStageRef(targetRef, address);
+  const stageRef = durableAtomicFileStageRefForTest(targetRef, address);
   let released = false;
   try {
     await createFileCandidateDurably(root, stageRef, bytes, { mode: 0o600 });
-    const active = await recoverDurableAtomicFileStagesInTargetParent(
+    const active = await recoverDurableAtomicFileStagesForTargets(
       root,
-      targetRef,
+      [targetRef],
     );
     equal(active.activeStageCount, 1);
     equal(active.retiredStageCount, 0);
@@ -149,9 +148,9 @@ test("atomic stage recovery 保留 active stage 并拒绝 malformed reserved nam
 
     releaseDurableAtomicFileStageAddress(address);
     released = true;
-    const retired = await recoverDurableAtomicFileStagesInTargetParent(
+    const retired = await recoverDurableAtomicFileStagesForTargets(
       root,
-      targetRef,
+      [targetRef],
     );
     equal(retired.retiredStageCount, 1);
 
@@ -161,7 +160,7 @@ test("atomic stage recovery 保留 active stage 并拒绝 malformed reserved nam
       { mode: 0o600 },
     );
     await rejects(
-      recoverDurableAtomicFileStagesInTargetParent(root, targetRef),
+      recoverDurableAtomicFileStagesForTargets(root, [targetRef]),
       (error: unknown) => (
         error instanceof DurableAtomicFileStageRecoveryError
         && error.reason === "inventory"
@@ -192,7 +191,7 @@ test("target-scoped atomic stage recovery rejects foreign stages before mutation
       0o600,
     )
   ));
-  const stages = addresses.map((address, index) => durableAtomicFileStageRef(
+  const stages = addresses.map((address, index) => durableAtomicFileStageRefForTest(
     index === 0 ? firstTarget : secondTarget,
     address,
   ));
@@ -206,6 +205,15 @@ test("target-scoped atomic stage recovery rejects foreign stages before mutation
     }
     released = true;
 
+    await rejects(
+      recoverDurableAtomicFileStagesForTargets(root, [
+        parsePortableResourcePath("records/.wakeflow-atomic-reserved"),
+      ]),
+      (error: unknown) => (
+        error instanceof DurableAtomicFileStageRecoveryError
+        && error.reason === "input"
+      ),
+    );
     await rejects(
       recoverDurableAtomicFileStagesForTargets(root, [firstTarget]),
       (error: unknown) => (

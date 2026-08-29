@@ -26,7 +26,6 @@ import type {
 } from "./wakeflow-window-host-binding-registration-authority.js";
 import {
   compileWakeflowWindowRuntimeRegisteredProjectionEntry,
-  parseWakeflowWindowRuntimeRegisteredProjectionDocument,
   WakeflowWindowRuntimeRegisteredProjectionError,
   type WakeflowWindowRuntimeRegisteredProjectionEntry,
 } from "./wakeflow-window-runtime-registered-projection.js";
@@ -39,7 +38,7 @@ import {
  * 调用方必须把它报告为 projection recovery required。
  */
 
-export type WakeflowWindowRuntimeRegisteredProjectionPublicationErrorReason =
+type WakeflowWindowRuntimeRegisteredProjectionPublicationErrorReason =
   | "conflict"
   | "recovery-required"
   | "aborted";
@@ -185,6 +184,7 @@ export async function publishWakeflowWindowRuntimeRegisteredProjection(
   try {
     target = compileWakeflowWindowRuntimeRegisteredProjectionEntry(
       authority.resourceProfile,
+      authority.identityProfile,
       authority.unregisteredProjection.projection,
       binding,
     );
@@ -197,19 +197,6 @@ export async function publishWakeflowWindowRuntimeRegisteredProjection(
   await recoverTargetStage(root, target.resourceRef, signal);
   const source = await readSourceOrNull(root, target.resourceRef, signal);
   if (source?.text === target.document) {
-    try {
-      parseWakeflowWindowRuntimeRegisteredProjectionDocument(
-        source.text,
-        authority.resourceProfile,
-        authority.unregisteredProjection.projection,
-        binding,
-      );
-    } catch (error: unknown) {
-      if (error instanceof WakeflowWindowRuntimeRegisteredProjectionError) {
-        fail("conflict", "$projection");
-      }
-      throw error;
-    }
     return target;
   }
   if (

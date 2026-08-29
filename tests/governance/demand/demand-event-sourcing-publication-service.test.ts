@@ -13,20 +13,20 @@ import { test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
-  durableAtomicFileStageRef,
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import {
   createFileCandidateDurably,
 } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/foundation/identity/wakeflow-durable-id.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { DemandFileEventSnapshotStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-snapshot-store.js";
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
 import {
   createDemandAuthority,
@@ -58,7 +58,9 @@ import {
 } from "../../../src/governance/ledger/ledger-authority-store.js";
 import {
   appendTodoItem,
+  claimTodoItem,
   initializeTodoCollection,
+  TodoCollectionServiceError,
 } from "../../../src/governance/todo/todo-collection-service.js";
 import {
   materializeWakeflowActiveLayout,
@@ -70,6 +72,10 @@ const PROGRAM_ID = parseWakeflowDurableIdOfKind(
 );
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_22222222-2222-4222-8222-222222222222",
+  "demand",
+);
+const OTHER_DEMAND_ID = parseWakeflowDurableIdOfKind(
+  "demand_88888888-8888-4888-8888-888888888888",
   "demand",
 );
 const REQUIREMENT_ID = parseWakeflowDurableIdOfKind(
@@ -209,7 +215,7 @@ test("publication uses Command Handler and binds exact TODO predecessor", async 
       value.ledgerStore,
       publishInput(value),
     );
-    equal(result.created, true);
+    equal(result.wroteDemandRoot, true);
     equal(result.loaded.aggregate.streamRevision, 1);
     equal(result.loaded.firstCommit.commitId, COMMIT_ID);
     equal(result.todo.item.state.previousStateDigest, value.appended.item.stateDigest);
@@ -219,7 +225,7 @@ test("publication uses Command Handler and binds exact TODO predecessor", async 
       value.ledgerStore,
       publishInput(value),
     );
-    equal(retried.created, false);
+    equal(retried.wroteDemandRoot, false);
   } finally {
     await cleanup(value);
   }
@@ -241,24 +247,45 @@ test("sidecar-only publication recovers without an event append journal", async 
     );
     const lockRef = demandPublicationLockRef(DEMAND_ID);
     const lockPath = path.join(value.workspacePath, ...lockRef.split("/"));
-    writeFileSync(lockPath, `${JSON.stringify({
-      createdAt: "2026-08-26T10:00:00.000Z",
-      kind: "WakeflowExclusiveFileLock",
-      pid: 2_147_483_647,
-      threadId: 0,
-      token: "2147483647-0-88888888-8888-4888-8888-888888888888",
-      version: 1,
-    }, null, 2)}\n`, { mode: 0o600 });
+    writeFileSync(lockPath, rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: "88888888-8888-4888-8888-888888888888",
+    }), { mode: 0o600 });
+    const foreignTarget = demandPublicationTransactionRef(OTHER_DEMAND_ID);
+    const foreignBytes = encodeUtf8("foreign-intent");
+    const foreignAddress = issueDurableAtomicFileStageAddress(
+      "create",
+      foreignTarget,
+      computeSha256Digest(foreignBytes),
+      0o600,
+    );
+    const foreignStage = durableAtomicFileStageRefForTest(
+      foreignTarget,
+      foreignAddress,
+    );
+    try {
+      await createFileCandidateDurably(
+        value.workspaceRoot,
+        foreignStage,
+        encodeUtf8("partial"),
+        { mode: 0o600 },
+      );
+    } finally {
+      releaseDurableAtomicFileStageAddress(foreignAddress);
+    }
 
     const recovered = await recoverDemandPublication(
       value.workspaceRoot,
       value.ledgerStore,
       DEMAND_ID,
     );
-    equal(recovered.created, true);
+    equal(recovered.wroteDemandRoot, true);
     equal(recovered.loaded.firstCommit.commitId, COMMIT_ID);
     equal(existsSync(file), false);
     equal(existsSync(lockPath), false);
+    equal(
+      existsSync(path.join(value.workspacePath, ...foreignStage.split("/"))),
+      true,
+    );
   } finally {
     await cleanup(value);
   }
@@ -281,7 +308,7 @@ test("publication recovery 回滚 canonical sidecar 之前的 inactive partial s
       computeSha256Digest(intendedBytes),
       0o600,
     );
-    const stageRef = durableAtomicFileStageRef(targetRef, address);
+    const stageRef = durableAtomicFileStageRefForTest(targetRef, address);
     try {
       await createFileCandidateDurably(
         value.workspaceRoot,
@@ -308,6 +335,32 @@ test("publication recovery 回滚 canonical sidecar 之前的 inactive partial s
       equal(caught.reason, "not-found");
     }
     equal(existsSync(path.join(value.workspacePath, ...stageRef.split("/"))), false);
+  } finally {
+    await cleanup(value);
+  }
+});
+
+test("recovery without publication storage performs no initialization effects", async () => {
+  const value = await fixture("TODO-RH2-NO-RECOVERY-EVIDENCE");
+  try {
+    let caught: unknown;
+    try {
+      await recoverDemandPublication(
+        value.workspaceRoot,
+        value.ledgerStore,
+        DEMAND_ID,
+      );
+    } catch (error: unknown) {
+      caught = error;
+    }
+    equal(caught instanceof DemandEventSourcingPublicationServiceError, true);
+    if (caught instanceof DemandEventSourcingPublicationServiceError) {
+      equal(caught.reason, "not-found");
+    }
+    equal(existsSync(path.join(
+      value.workspacePath,
+      ".wakeflow-active/current/demand-publication",
+    )), false);
   } finally {
     await cleanup(value);
   }
@@ -349,10 +402,7 @@ test("published root marker is settled before normal authority load", async () =
         text,
         { mode: 0o600 },
       );
-      const repository = new DemandEventSourcingRepository(
-        eventStore,
-        new DemandFileEventSnapshotStore(demandRoot),
-      );
+      const repository = new DemandEventSourcingRepository(demandRoot);
       const created = await executeDemandEventSourcingCommand(
         repository,
         transaction.initialCommand,
@@ -371,6 +421,7 @@ test("published root marker is settled before normal authority load", async () =
       value.ledgerStore,
       DEMAND_ID,
     );
+    equal(recovered.wroteDemandRoot, false);
     equal(recovered.todo.item.state.status, "claimed");
     equal(existsSync(path.join(finalPath, "transactions", "publication.json")), false);
     equal(existsSync(sidecarPath), false);
@@ -408,6 +459,64 @@ test("publication recovery first settles an interrupted TODO claim", async () =>
     );
     equal(recovered.todo.item.state.status, "claimed");
     equal(recovered.loaded.aggregate.streamRevision, 1);
+  } finally {
+    await cleanup(value);
+  }
+});
+
+test("normal publication does not recover TODO residue before sidecar commit", async () => {
+  const value = await fixture("TODO-RH2-PREFLIGHT-RESIDUE");
+  const projectionPath = path.join(
+    value.workspacePath,
+    ".wakeflow-active/current/todo/global-todo-board.md",
+  );
+  const outside = path.join(value.workspacePath, "outside-preflight.md");
+  try {
+    const transaction = createDemandEventSourcingPublicationTransaction(
+      publishInput(value),
+    );
+    writeFileSync(outside, "outside\n", { mode: 0o600 });
+    rmSync(projectionPath);
+    symlinkSync(outside, projectionPath);
+    let claimError: unknown;
+    try {
+      await claimTodoItem(value.workspaceRoot, {
+        todoId: value.appended.item.todoId,
+        intakeDigest: value.appended.item.intakeDigest,
+        stateDigest: value.appended.item.stateDigest,
+        mount: {
+          demandId: transaction.demandId,
+          stateRootRef: transaction.finalRootRef,
+          identityDigest: transaction.identityDigest,
+        },
+      }, { clock: () => CREATED_AT });
+    } catch (error: unknown) {
+      claimError = error;
+    }
+    equal(claimError instanceof TodoCollectionServiceError, true);
+    if (claimError instanceof TodoCollectionServiceError) {
+      equal(claimError.reason, "projection-unsafe");
+    }
+    rmSync(projectionPath);
+
+    let caught: unknown;
+    try {
+      await publishDemandFromTodo(
+        value.workspaceRoot,
+        value.ledgerStore,
+        publishInput(value),
+      );
+    } catch (error: unknown) {
+      caught = error;
+    }
+    equal(caught instanceof DemandEventSourcingPublicationServiceError, true);
+    if (caught instanceof DemandEventSourcingPublicationServiceError) {
+      equal(caught.reason, "recovery-required");
+    }
+    equal(existsSync(path.join(
+      value.workspacePath,
+      ".wakeflow-active/current/demand-publication",
+    )), false);
   } finally {
     await cleanup(value);
   }

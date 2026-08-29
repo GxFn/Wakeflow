@@ -38,13 +38,14 @@ import {
 import {
   parsePortableResourcePath,
   PortableResourcePathError,
+  splitPortableResourcePath,
   type PortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../../foundation/identity/wakeflow-durable-id.js";
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   createRuntimeJsonSchemaValidator,
 } from "../../foundation/schema/runtime-json-schema.js";
@@ -71,11 +72,11 @@ import {
  * 不可变发布、重新加载和引用解析由 `LedgerAuthorityStore` 负责。
  */
 
-export const REQUIREMENT_RECORD_ARTIFACT_KIND =
+const REQUIREMENT_RECORD_ARTIFACT_KIND =
   "wakeflow-requirement-record" as const;
-export const CONFIRMATION_RECORD_ARTIFACT_KIND =
+const CONFIRMATION_RECORD_ARTIFACT_KIND =
   "wakeflow-confirmation-record" as const;
-export const LEDGER_AUTHORITY_RECORD_SCHEMA_VERSION = 1 as const;
+const LEDGER_AUTHORITY_RECORD_SCHEMA_VERSION = 1 as const;
 
 export type RequirementDocumentRole =
   RequirementRecordWire["documents"][number]["role"];
@@ -196,6 +197,10 @@ const CONFIRMATION_DRAFT_FIELDS = Object.freeze([
   "programId",
   "title",
 ] as const);
+const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
+  "1970-01-01T00:00:00.000Z",
+  "$draftValidationInstant",
+);
 
 function fail(
   reason: LedgerAuthorityRecordErrorReason,
@@ -261,8 +266,8 @@ function parseDocument<Role extends LedgerAuthorityDocumentRole>(
     throw error;
   }
   if (
-    memberPath === "record.json"
-    || memberPath.startsWith("record.json/")
+    memberPath.toLowerCase() === "record.json"
+    || memberPath.toLowerCase().startsWith("record.json/")
   ) {
     fail("document", `${path}/path`);
   }
@@ -284,6 +289,10 @@ function parseDocument<Role extends LedgerAuthorityDocumentRole>(
 function assertDocumentRelations(
   documents: readonly Readonly<LedgerAuthorityDocument>[],
 ): void {
+  const nodesByCaseKey = new Map<
+    string,
+    Readonly<{ readonly path: string; readonly kind: "directory" | "file" }>
+  >();
   for (let index = 0; index < documents.length; index += 1) {
     const document = documents[index];
     if (document === undefined) fail("document", "$/documents");
@@ -294,17 +303,20 @@ function assertDocumentRelations(
     ) {
       fail("document", `$/documents/${index}/path`);
     }
-    for (let otherIndex = 0; otherIndex < documents.length; otherIndex += 1) {
-      if (otherIndex === index) continue;
-      const other = documents[otherIndex];
+    const segments = splitPortableResourcePath(document.path);
+    for (let depth = 1; depth <= segments.length; depth += 1) {
+      const nodePath = segments.slice(0, depth).join("/");
+      const kind = depth === segments.length ? "file" as const : "directory" as const;
+      const caseKey = nodePath.toLowerCase();
+      const existing = nodesByCaseKey.get(caseKey);
       if (
-        other !== undefined
-        && (
-          document.path.startsWith(`${other.path}/`)
-          || other.path.startsWith(`${document.path}/`)
-        )
+        existing !== undefined
+        && (existing.path !== nodePath || existing.kind !== kind)
       ) {
-        fail("document", "$/documents");
+        fail("document", `$/documents/${index}/path`);
+      }
+      if (existing === undefined) {
+        nodesByCaseKey.set(caseKey, Object.freeze({ path: nodePath, kind }));
       }
     }
   }
@@ -373,9 +385,6 @@ export function parseLedgerAuthorityRecord(
     if (error instanceof PassiveOwnDataError) fail("schema", "$record");
     throw error;
   }
-  if (Array.isArray(json)) {
-    fail("schema", "$record");
-  }
   if (record.artifactKind === REQUIREMENT_RECORD_ARTIFACT_KIND) {
     const result = validateRequirementWire(json);
     if (!result.ok) fail("schema", result.path);
@@ -435,15 +444,19 @@ export function createRequirementRecord(
   options: CreateLedgerAuthorityRecordOptions = {},
 ): Readonly<RequirementRecord> {
   const record = exactDraft(draft, REQUIREMENT_DRAFT_FIELDS);
-  return parseLedgerAuthorityRecord({
+  const admitted = parseLedgerAuthorityRecord({
     artifactKind: REQUIREMENT_RECORD_ARTIFACT_KIND,
     schemaVersion: LEDGER_AUTHORITY_RECORD_SCHEMA_VERSION,
     requirementId: record.requirementId,
     programId: record.programId,
-    recordedAt: recordTime(options),
+    recordedAt: DRAFT_VALIDATION_INSTANT,
     title: record.title,
     documents: record.documents,
-  }) as Readonly<RequirementRecord>;
+  });
+  if (admitted.artifactKind !== REQUIREMENT_RECORD_ARTIFACT_KIND) {
+    fail("schema", "$/artifactKind");
+  }
+  return Object.freeze({ ...admitted, recordedAt: recordTime(options) });
 }
 
 /** 从不含协议头和写入时间的纯数据草稿创建 `Confirmation` 权威记录。 */
@@ -452,22 +465,26 @@ export function createConfirmationRecord(
   options: CreateLedgerAuthorityRecordOptions = {},
 ): Readonly<ConfirmationRecord> {
   const record = exactDraft(draft, CONFIRMATION_DRAFT_FIELDS);
-  return parseLedgerAuthorityRecord({
+  const admitted = parseLedgerAuthorityRecord({
     artifactKind: CONFIRMATION_RECORD_ARTIFACT_KIND,
     schemaVersion: LEDGER_AUTHORITY_RECORD_SCHEMA_VERSION,
     confirmationId: record.confirmationId,
     programId: record.programId,
     demandId: record.demandId,
-    recordedAt: recordTime(options),
+    recordedAt: DRAFT_VALIDATION_INSTANT,
     title: record.title,
     documents: record.documents,
-  }) as Readonly<ConfirmationRecord>;
+  });
+  if (admitted.artifactKind !== CONFIRMATION_RECORD_ARTIFACT_KIND) {
+    fail("schema", "$/artifactKind");
+  }
+  return Object.freeze({ ...admitted, recordedAt: recordTime(options) });
 }
 
 /** 按唯一字段顺序渲染确定性格式化 JSON 文档。 */
 export function renderLedgerAuthorityRecord(value: unknown): string {
   return renderDeterministicJsonDocument(
-    parseLedgerAuthorityRecord(value) as unknown as JsonValue,
+    parseLedgerAuthorityRecord(value),
     "$record",
   );
 }
@@ -497,6 +514,6 @@ export function computeLedgerAuthorityRecordDigest(
   value: unknown,
 ): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
-    parseLedgerAuthorityRecord(value) as unknown as JsonValue,
+    parseLedgerAuthorityRecord(value),
   );
 }

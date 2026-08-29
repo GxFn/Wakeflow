@@ -1,6 +1,13 @@
 import { types } from "node:util";
 
-import type { FileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
+import {
+  sameFileNodeSnapshot,
+  type FileNodeSnapshot,
+} from "../../../foundation/filesystem/file-node-snapshot.js";
+import {
+  parsePlainRecord,
+  PassiveOwnDataError,
+} from "../../../foundation/data/passive-own-data.js";
 import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import {
@@ -10,15 +17,14 @@ import {
   type StableDirectoryReadResult,
 } from "../../../foundation/filesystem/stable-directory-read.js";
 import {
-  parseDemandEventStreamCommitFileName,
-} from "./demand-event-stream-commit.js";
-import {
   DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF,
   DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF,
   DEMAND_EVENT_SOURCING_ROOT_REF,
   DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF,
   DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
   DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
+  parseDemandEventStreamCommitFileName,
+  DemandEventSourcingPathError,
 } from "./demand-event-sourcing-paths.js";
 import {
   DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE,
@@ -130,6 +136,10 @@ function assertDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
   if (
     node.kind !== "directory"
     || node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE
+    || (
+      typeof process.geteuid === "function"
+      && node.userId !== BigInt(process.geteuid())
+    )
   ) {
     fail("node-policy", path);
   }
@@ -140,6 +150,10 @@ function assertFile(node: Readonly<FileNodeSnapshot>, path: string): void {
     node.kind !== "file"
     || node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE
     || node.linkCount !== 1n
+    || (
+      typeof process.geteuid === "function"
+      && node.userId !== BigInt(process.geteuid())
+    )
   ) {
     fail("node-policy", path);
   }
@@ -165,16 +179,54 @@ async function readResource(
   ref: PortableResourcePath,
   maximumEntries: number,
   signal: AbortSignal | undefined,
+  expectedNode?: Readonly<FileNodeSnapshot>,
 ): Promise<Readonly<StableDirectoryReadResult<PortableResourcePath>>> {
   try {
     return await readStableResourceDirectory(root, ref, {
       maximumEntries,
+      ...(expectedNode === undefined ? {} : { expectedNode }),
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) mapReadError(error, `$${ref}`);
     throw error;
   }
+}
+
+function parseOptions(value: unknown): Readonly<{
+  readonly phase: "healthy" | "publication";
+  readonly signal: AbortSignal | undefined;
+}> {
+  let record: Readonly<Record<string, unknown>>;
+  try {
+    record = parsePlainRecord(value === undefined ? {} : value, "$options");
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    throw error;
+  }
+  if (
+    Object.keys(record).some((key) => key !== "phase" && key !== "signal")
+    || (
+      record.signal !== undefined
+      && (
+        typeof record.signal !== "object"
+        || record.signal === null
+        || types.isProxy(record.signal)
+        || !(record.signal instanceof AbortSignal)
+      )
+    )
+    || (
+      record.phase !== undefined
+      && record.phase !== "healthy"
+      && record.phase !== "publication"
+    )
+  ) {
+    fail("input", "$options");
+  }
+  return Object.freeze({
+    phase: record.phase === "publication" ? "publication" : "healthy",
+    signal: record.signal as AbortSignal | undefined,
+  });
 }
 
 function assertEmpty(
@@ -211,27 +263,7 @@ export async function inspectDemandEventSourcingRootInventory(
   ) {
     fail("input", "$root");
   }
-  if (
-    options !== undefined
-    && (
-      typeof options !== "object"
-      || options === null
-      || types.isProxy(options)
-      || Object.keys(options).some(
-        (key) => key !== "phase" && key !== "signal",
-      )
-      || (options.signal !== undefined && !(options.signal instanceof AbortSignal))
-      || (
-        options.phase !== undefined
-        && options.phase !== "healthy"
-        && options.phase !== "publication"
-      )
-    )
-  ) {
-    fail("input", "$options");
-  }
-  const signal = options?.signal;
-  const phase = options?.phase ?? "healthy";
+  const { phase, signal } = parseOptions(options);
   let before;
   try {
     before = await readStableRootDirectory(root, {
@@ -257,6 +289,7 @@ export async function inspectDemandEventSourcingRootInventory(
     DEMAND_EVENT_SOURCING_ROOT_REF,
     64,
     signal,
+    requiredEntryNode(before, "event-sourcing", "$event-sourcing"),
   );
   assertDirectory(eventSourcing.directoryNode, "$event-sourcing");
   exactNames(eventSourcing, EVENT_SOURCING_NAMES, "$event-sourcing");
@@ -264,29 +297,41 @@ export async function inspectDemandEventSourcingRootInventory(
     assertDirectory(entry.node, `$event-sourcing/${index}`);
   });
 
-  const [candidates, commits, snapshots, artifacts, transactions] =
-    await Promise.all([
-      readResource(root, DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF, 0, signal),
-      readResource(
-        root,
-        DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
-        DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
-        signal,
-      ),
-      readResource(
-        root,
-        DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF,
-        DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
-        signal,
-      ),
-      readResource(root, DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF, 0, signal),
-      readResource(
-        root,
-        DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
-        phase === "publication" ? 1 : 0,
-        signal,
-      ),
-    ]);
+  const candidates = await readResource(
+    root,
+    DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF,
+    1,
+    signal,
+    requiredEntryNode(eventSourcing, "append-candidates", "$append-candidates"),
+  );
+  const commits = await readResource(
+    root,
+    DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
+    DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
+    signal,
+    requiredEntryNode(eventSourcing, "commits", "$commits"),
+  );
+  const snapshots = await readResource(
+    root,
+    DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF,
+    DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
+    signal,
+    requiredEntryNode(eventSourcing, "snapshots", "$snapshots"),
+  );
+  const artifacts = await readResource(
+    root,
+    DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF,
+    1,
+    signal,
+    requiredEntryNode(before, "artifacts", "$artifacts"),
+  );
+  const transactions = await readResource(
+    root,
+    DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
+    1,
+    signal,
+    requiredEntryNode(before, "transactions", "$transactions"),
+  );
   assertEmpty(candidates, "$append-candidates");
   assertEmpty(artifacts, "$artifacts");
   assertDirectory(transactions.directoryNode, "$transactions");
@@ -305,12 +350,16 @@ export async function inspectDemandEventSourcingRootInventory(
   assertDirectory(snapshots.directoryNode, "$snapshots");
   commits.entries.forEach((entry, index) => {
     assertFile(entry.node, `$commits/${index}`);
+    let parsed;
     try {
-      const parsed = parseDemandEventStreamCommitFileName(entry.name);
-      if (parsed.commitSequence !== index + 1) {
+      parsed = parseDemandEventStreamCommitFileName(entry.name);
+    } catch (error: unknown) {
+      if (error instanceof DemandEventSourcingPathError) {
         fail("tree-shape", `$commits/${index}`);
       }
-    } catch {
+      throw error;
+    }
+    if (parsed.commitSequence !== index + 1) {
       fail("tree-shape", `$commits/${index}`);
     }
   });
@@ -318,8 +367,11 @@ export async function inspectDemandEventSourcingRootInventory(
     assertFile(entry.node, `$snapshots/${index}`);
     try {
       parseDemandEventStreamCommitFileName(entry.name);
-    } catch {
-      fail("tree-shape", `$snapshots/${index}`);
+    } catch (error: unknown) {
+      if (error instanceof DemandEventSourcingPathError) {
+        fail("tree-shape", `$snapshots/${index}`);
+      }
+      throw error;
     }
   });
 
@@ -335,6 +387,22 @@ export async function inspectDemandEventSourcingRootInventory(
     throw error;
   }
   exactNames(after, ROOT_NAMES, "$root");
+  if (
+    !sameFileNodeSnapshot(
+      eventSourcing.directoryNode,
+      requiredEntryNode(after, "event-sourcing", "$event-sourcing"),
+    )
+    || !sameFileNodeSnapshot(
+      artifacts.directoryNode,
+      requiredEntryNode(after, "artifacts", "$artifacts"),
+    )
+    || !sameFileNodeSnapshot(
+      transactions.directoryNode,
+      requiredEntryNode(after, "transactions", "$transactions"),
+    )
+  ) {
+    fail("source-changed", "$root");
+  }
   return Object.freeze({
     commitCount: commits.entries.length,
     snapshotCount: snapshots.entries.length,

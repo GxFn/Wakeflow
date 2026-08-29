@@ -48,7 +48,6 @@
       "required": [
         "bindingId",
         "bindingRef",
-        "bindingDigest",
         "registeredAt",
         "source"
       ],
@@ -58,12 +57,7 @@
           "pattern": "^window_binding_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
         },
         "bindingRef": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4096
-        },
-        "bindingDigest": {
-          "$ref": "#/$defs/sha256Digest"
+          "$ref": "#/$defs/portableResourcePath"
         },
         "registeredAt": {
           "$ref": "#/$defs/utcInstant"
@@ -100,9 +94,7 @@
       ],
       "properties": {
         "resourceRef": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4096
+          "$ref": "#/$defs/portableResourcePath"
         },
         "projectionDigest": {
           "$ref": "#/$defs/sha256Digest"
@@ -114,6 +106,11 @@
     }
   },
   "$defs": {
+    "portableResourcePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)(?!\\s)(?!.*\\s$)(?!.*\\/\\s)(?!.*\\s\\/)(?!.*[\\u0000-\\u001F\\u007F-\\u009F]).+$"
+    },
     "sha256Digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"

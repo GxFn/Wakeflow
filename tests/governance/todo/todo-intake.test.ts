@@ -176,3 +176,25 @@ test("draft admission is passive and never executes accessors", () => {
   );
   equal(getterCalls, 0);
 });
+
+test("draft semantics are closed before the wall clock is observed", () => {
+  let clockCalls = 0;
+  expectIntakeError(
+    () => createTodoIntake(draft({ goal: "cafe\u0301" }), {
+      clock: () => {
+        clockCalls += 1;
+        return CREATED_AT;
+      },
+    }),
+    "text",
+  );
+  equal(clockCalls, 0);
+  expectIntakeError(
+    () => createTodoIntake(draft(), {
+      clock: () => {
+        throw new Error("private clock failure");
+      },
+    }),
+    "time",
+  );
+});

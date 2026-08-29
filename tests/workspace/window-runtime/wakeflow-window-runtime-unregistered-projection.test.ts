@@ -11,9 +11,7 @@ import {
   compileWakeflowWindowRuntimeUnregisteredProjectionSet,
   parseWakeflowWindowRuntimeUnregisteredProjection,
   parseWakeflowWindowRuntimeUnregisteredProjectionDocument,
-  renderWakeflowWindowRuntimeUnregisteredProjection,
   WakeflowWindowRuntimeUnregisteredProjectionRecordError,
-  type WakeflowWindowRuntimeUnregisteredProjectionErrorReason,
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
 import {
   createWakeflowWindowRuntimeProjectionResourceCatalog,
@@ -27,7 +25,7 @@ import {
 
 function expectRecordError(
   action: () => unknown,
-  reason: WakeflowWindowRuntimeUnregisteredProjectionErrorReason,
+  reason: WakeflowWindowRuntimeUnregisteredProjectionRecordError["reason"],
 ): void {
   let caught: unknown;
   try {
@@ -81,6 +79,9 @@ test("fresh Window Runtime projections are deterministic and explicitly unregist
     "bindingId",
     "handle",
     "generatedAt",
+    "identityRootRef",
+    "identitySourceDigest",
+    "inventoryStatus",
   ]) {
     equal(serialized.includes(forbidden), false);
   }
@@ -167,11 +168,6 @@ test("persisted unregistered projection rejects relation, digest, and representa
     parseWakeflowWindowRuntimeUnregisteredProjectionDocument(entry.document),
     entry.projection,
   );
-  equal(
-    renderWakeflowWindowRuntimeUnregisteredProjection(entry.projection),
-    entry.document,
-  );
-
   const digestDrift = JSON.parse(entry.document) as Record<string, unknown>;
   digestDrift.projectionDigest = `sha256:${"0".repeat(64)}`;
   expectRecordError(
@@ -179,8 +175,18 @@ test("persisted unregistered projection rejects relation, digest, and representa
     "digest",
   );
 
-  const relationDrift = JSON.parse(entry.document) as Record<string, unknown>;
-  relationDrift.role = "product";
+  const schemaRelationDrift = JSON.parse(entry.document) as Record<string, unknown>;
+  schemaRelationDrift.role = "product";
+  expectRecordError(
+    () => parseWakeflowWindowRuntimeUnregisteredProjection(schemaRelationDrift),
+    "schema",
+  );
+
+  const relationDrift = JSON.parse(entry.document) as {
+    logicalRoot: { programId: string };
+  };
+  relationDrift.logicalRoot.programId =
+    "program_00000000-0000-4000-8000-000000000000";
   expectRecordError(
     () => parseWakeflowWindowRuntimeUnregisteredProjection(relationDrift),
     "relation",

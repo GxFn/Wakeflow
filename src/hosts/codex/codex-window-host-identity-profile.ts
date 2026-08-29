@@ -10,9 +10,9 @@ export const codexWindowHostIdentityProfile =
     handleKind: "codex-thread",
     maximumHandleLength: 1024,
     reservedHandleValues: [
-      "current-codex-thread",
-      "current thread",
       "<thread id>",
+      "current thread",
+      "current-codex-thread",
       "unknown",
     ],
   });

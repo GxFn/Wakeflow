@@ -3,7 +3,6 @@ import {
   hasDurableAtomicFileStagePrefix,
   parseDurableAtomicFileStageFileName,
   readDurableAtomicFileStageOwnerState,
-  DurableAtomicFileStageAddressError,
 } from "../foundation/filesystem/durable-atomic-file-stage-address.js";
 import {
   DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_ENTRIES,
@@ -18,8 +17,10 @@ import {
   readStableRootDirectory,
   StableDirectoryReadError,
 } from "../foundation/filesystem/stable-directory-read.js";
-import { WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE } from "./wakeflow-config-authority-publication.js";
-import { WAKEFLOW_CONFIG_FILE_REF } from "./wakeflow-config-authority-snapshot.js";
+import {
+  WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE,
+  WAKEFLOW_CONFIG_FILE_REF,
+} from "./wakeflow-config-authority-snapshot.js";
 import {
   replaceWakeflowConfigAuthority,
 } from "./wakeflow-config-authority-replacement.js";
@@ -41,7 +42,7 @@ import {
   type ParsedWakeflowConfigAuthorityExpectation,
   type PreparedWakeflowConfigAuthorityDesired,
   type WakeflowConfigAuthorityReplacementRecoveryOptions,
-  type WakeflowConfigAuthorityReplacementRecoveryReceipt,
+  type WakeflowConfigAuthorityReplacementReceipt,
 } from "./wakeflow-config-authority-replacement-contract.js";
 
 /**
@@ -84,10 +85,7 @@ async function inspectRecoveryStages(
     let address;
     try {
       address = parseDurableAtomicFileStageFileName(entry.name);
-    } catch (error: unknown) {
-      if (error instanceof DurableAtomicFileStageAddressError) {
-        fail("recovery-required", "$stages");
-      }
+    } catch {
       fail("recovery-required", "$stages");
     }
     if (readDurableAtomicFileStageOwnerState(address) !== "inactive") {
@@ -144,7 +142,7 @@ export async function recoverWakeflowConfigAuthorityReplacement(
   desiredModelValue: unknown,
   expectedSnapshotValue: unknown,
   options?: WakeflowConfigAuthorityReplacementRecoveryOptions,
-): Promise<Readonly<WakeflowConfigAuthorityReplacementRecoveryReceipt>> {
+): Promise<Readonly<WakeflowConfigAuthorityReplacementReceipt>> {
   assertWakeflowConfigAuthorityRoot(root);
   const parsed = parseWakeflowConfigAuthorityRecoveryOptions(options);
   assertWakeflowConfigAuthorityNotAborted(parsed.signal);
@@ -220,19 +218,10 @@ export async function recoverWakeflowConfigAuthorityReplacement(
     fail("recovery-required", "$lock");
   }
 
-  const replacement = await replaceWakeflowConfigAuthority(
+  return replaceWakeflowConfigAuthority(
     root,
     desired.model,
     expectedSnapshotValue,
     parsed.signal === undefined ? undefined : { signal: parsed.signal },
   );
-  return Object.freeze({
-    disposition: "recovered" as const,
-    replacement,
-  });
 }
-
-export {
-  type WakeflowConfigAuthorityReplacementRecoveryOptions,
-  type WakeflowConfigAuthorityReplacementRecoveryReceipt,
-} from "./wakeflow-config-authority-replacement-contract.js";

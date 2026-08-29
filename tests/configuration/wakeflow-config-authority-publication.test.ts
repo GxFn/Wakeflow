@@ -78,7 +78,6 @@ test("Config authority publication 持久创建0644文件并由Snapshot readback
     const expectedModel = parseWakeflowConfigV3(value);
     const expectedText = renderWakeflowConfigV3(expectedModel);
 
-    equal(receipt.disposition, "published");
     equal(receipt.publication.publication, "created");
     equal(receipt.publication.resourcePath, "wakeflow.config.json");
     equal(receipt.publication.node.kind, "file");

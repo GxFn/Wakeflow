@@ -1,6 +1,7 @@
 import {
   deepEqual,
   equal,
+  rejects,
   throws,
 } from "node:assert/strict";
 import {
@@ -14,7 +15,7 @@ import { test } from "node:test";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/foundation/identity/wakeflow-durable-id.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
@@ -39,6 +40,8 @@ import {
 import {
   parseTodoIntakeLineageReference,
 } from "../../../src/governance/todo/todo-intake-lineage.js";
+import { parseTodoItemId } from "../../../src/governance/todo/todo-item-id.js";
+import { todoIntakeRef } from "../../../src/governance/todo/todo-paths.js";
 
 const PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",
@@ -61,6 +64,7 @@ const OTHER_DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand",
 );
 const CREATED_AT = parseUtcInstant("2026-08-26T10:00:00.000Z");
+const TODO_ID = parseTodoItemId("TODO-RH2-EVENT-SOURCING");
 const ROLES = [
   "code-facts",
   "landing-plan",
@@ -73,8 +77,8 @@ const ROLES = [
 const TODO_LINEAGE = parseTodoIntakeLineageReference({
   artifactKind: "wakeflow-todo-intake-lineage",
   schemaVersion: 1,
-  todoId: "TODO-RH2-EVENT-SOURCING",
-  intakeRef: ".wakeflow-active/current/todo/items/item-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/intake.json",
+  todoId: TODO_ID,
+  intakeRef: todoIntakeRef(TODO_ID),
   intakeDigest: `sha256:${"a".repeat(64)}`,
 });
 
@@ -141,6 +145,35 @@ test("Demand identity binds exact TODO lineage and contains no legacy entry mode
   );
 });
 
+test("Demand identity draft is closed before the wall clock is read", () => {
+  let clockCalls = 0;
+  throws(
+    () => createDemandIdentity({
+      ...identityDraft(),
+      source: {
+        ...TODO_LINEAGE,
+        intakeRef: "todo/forged/intake.json",
+      },
+    }, {
+      clock: () => {
+        clockCalls += 1;
+        return CREATED_AT;
+      },
+    }),
+    DemandIdentityError,
+  );
+  equal(clockCalls, 0);
+
+  throws(
+    () => createDemandIdentity(identityDraft(), {
+      clock: () => {
+        throw new Error("private clock failure");
+      },
+    }),
+    DemandIdentityError,
+  );
+});
+
 test("mandatory Demand authority resolves complete Ledger roles and rejects legacy entryMode", async () => {
   const { rootPath, root, store, published } = await ledgerFixture();
   try {
@@ -167,6 +200,17 @@ test("mandatory Demand authority resolves complete Ledger roles and rejects lega
     equal(Object.hasOwn(authority, "entryMode"), false);
     const admitted = await admitDemandAuthority(identity, authority, store);
     equal(admitted.resolvedAuthority.length, ROLES.length);
+    const controller = new AbortController();
+    controller.abort();
+    await rejects(
+      admitDemandAuthority(identity, authority, store, {
+        signal: controller.signal,
+      }),
+      (error: unknown) => (
+        error instanceof DemandAuthorityError
+        && error.reason === "aborted"
+      ),
+    );
 
     throws(
       () => parseDemandAuthority({
@@ -194,6 +238,13 @@ test("Todo lineage is a closed JSON reference rather than a Markdown row identit
     () => parseTodoIntakeLineageReference({
       ...TODO_LINEAGE,
       boardRef: ".wakeflow-active/current/global-todo-board.md",
+    }),
+  );
+  throws(
+    () => parseTodoIntakeLineageReference({
+      ...TODO_LINEAGE,
+      intakeRef:
+        ".wakeflow-active/current/todo/items/item-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/intake.json",
     }),
   );
 });
@@ -244,6 +295,21 @@ test("isolated placement is proven by a same-demand confirmation instead of entr
       (await admitDemandAuthority(identity, authority, store))
         .resolvedAuthority.length,
       refs.length,
+    );
+
+    const stalePlacementIdentity = createDemandIdentity(identityDraft({
+      mode: "isolated",
+      authorizationRef: {
+        ...placementRef,
+        memberDigest: `sha256:${"f".repeat(64)}`,
+      },
+    }), { clock: () => CREATED_AT });
+    throws(
+      () => createDemandAuthority(stalePlacementIdentity, {
+        authorityRefs: refs,
+        testingDecision: authority.testingDecision,
+      }),
+      DemandAuthorityError,
     );
 
     const wrongDemandConfirmation = createConfirmationRecord({

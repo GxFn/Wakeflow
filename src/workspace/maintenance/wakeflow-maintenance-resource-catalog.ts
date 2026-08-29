@@ -9,13 +9,6 @@ import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
 } from "../workspace-resource-declaration.js";
-export {
-  WAKEFLOW_ACTIVE_ROOT_RESOURCE_DECLARATION,
-} from "../active/wakeflow-active-resource-catalog.js";
-export {
-  WAKEFLOW_ACTIVE_ROOT_REF,
-} from "../active/wakeflow-active-paths.js";
-
 /**
  * Wakeflow Workspace / Maintenance：Workspace 核心私有根与维护协议静态资源目录。
  *

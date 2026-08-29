@@ -7,7 +7,6 @@ import {
   ByteCountError,
   MAX_SAFE_BYTE_COUNT,
   parseByteCount,
-  subtractByteCounts,
   type ByteCount,
   type ByteCountErrorReason,
 } from "../../../src/foundation/numeric/byte-count.js";
@@ -131,32 +130,7 @@ test("checked addition preserves exact values and rejects overflow", () => {
   equal(error.message.includes(String(Number.MAX_SAFE_INTEGER)), false);
 });
 
-test("checked subtraction preserves zero and rejects negative results", () => {
-  const cases = [
-    [0, 0, 0],
-    [3, 1, 2],
-    [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, 0],
-  ] as const;
-
-  for (const [total, part, expected] of cases) {
-    equal(
-      subtractByteCounts(parseByteCount(total), parseByteCount(part)),
-      expected,
-    );
-  }
-
-  expectByteCountError(
-    () => subtractByteCounts(
-      parseByteCount(1),
-      parseByteCount(2),
-      "$.remaining",
-    ),
-    "subtraction-underflow",
-    "$.remaining",
-  );
-});
-
-test("arithmetic revalidates forged ByteCount inputs at member paths", () => {
+test("addition revalidates forged ByteCount inputs at member paths", () => {
   expectByteCountError(
     () => addByteCounts(asByteCount(-1), parseByteCount(1)),
     "number-range",
@@ -166,16 +140,6 @@ test("arithmetic revalidates forged ByteCount inputs at member paths", () => {
     () => addByteCounts(parseByteCount(1), asByteCount(0.5), "$.sum"),
     "number-range",
     "$.sum.right",
-  );
-  expectByteCountError(
-    () => subtractByteCounts(asByteCount("2"), parseByteCount(1)),
-    "number-range",
-    "$total",
-  );
-  expectByteCountError(
-    () => subtractByteCounts(parseByteCount(2), asByteCount(-1), "$.diff"),
-    "number-range",
-    "$.diff.part",
   );
 });
 

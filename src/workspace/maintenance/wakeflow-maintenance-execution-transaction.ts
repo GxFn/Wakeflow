@@ -53,8 +53,7 @@ import {
 import {
   computeWakeflowMaintenanceExecutionIntentDigest,
   createWakeflowMaintenanceExecutionIntent,
-  wakeflowMaintenanceExecutionPlanFromIntent,
-  wakeflowMaintenanceExecutionRequestFromIntent,
+  reconstructWakeflowMaintenanceExecutionFromIntent,
   WakeflowMaintenanceExecutionIntentError,
 } from "./wakeflow-maintenance-execution-intent.js";
 import {
@@ -70,17 +69,18 @@ import {
   type WakeflowMaintenanceExecutionIntentSource,
 } from "./wakeflow-maintenance-execution-intent-store.js";
 import {
-  hostOperationForWakeflowMaintenanceStep,
   parseWakeflowMaintenanceExecutionPlan,
   type WakeflowMaintenanceExecutionPlan,
   type WakeflowMaintenanceExecutionStep,
 } from "./wakeflow-maintenance-execution-plan.js";
 import {
   previewWakeflowMaintenanceExecution,
+  WakeflowMaintenanceExecutionPreviewError,
 } from "./wakeflow-maintenance-execution-preview.js";
 import {
   createWakeflowMaintenanceOperationId,
   parseWakeflowMaintenanceOperationId,
+  WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceOperationUuid,
   type WakeflowMaintenanceOperationId,
 } from "./wakeflow-maintenance-operation-id.js";
@@ -100,8 +100,9 @@ import {
 /**
  * Wakeflow Workspace / Maintenance：唯一 maintenance execution transaction。
  *
- * Normal execution 在 gate 前重推完整聚合计划；gate 内只存在一份 journal，并以
- * affected → exact owner effect → checkpoint 单调推进。shared step 使用闭合 dispatcher，
+ * Normal execution 在gate前及取得exact gate后各重推一次完整聚合计划；gate内只存在
+ * 一份 journal，并以 affected → exact owner effect → checkpoint 单调推进。shared step
+ * 使用闭合 dispatcher，
  * host step 只能交给与计划身份一致的单个 capability。Recovery 消费 exact plan，不根据
  * 已受影响的宿主文件重建 source operation。
  */
@@ -114,22 +115,41 @@ export interface WakeflowMaintenanceExecutionTransactionOptions {
 }
 
 export interface WakeflowMaintenanceExecutionStepReceipt {
-  readonly kind: "WakeflowMaintenanceExecutionStepReceipt";
   readonly stepId: string;
   readonly boundary: WakeflowMaintenanceExecutionStep["boundary"];
   readonly disposition: "current" | "created" | "updated";
   readonly observationDigest: Sha256Digest;
 }
 
-export interface WakeflowMaintenanceExecutionTransactionReceipt {
-  readonly kind: "WakeflowMaintenanceExecutionTransactionReceipt";
-  readonly executionBoundary: "internal-maintenance-only";
-  readonly status: "completed" | "no-op" | "recovered";
-  readonly operationId: WakeflowMaintenanceOperationId | null;
+interface WakeflowMaintenanceExecutionTransactionReceiptBase {
   readonly planDigest: WakeflowMaintenanceExecutionPlan["planDigest"];
   readonly stepReceipts:
     readonly Readonly<WakeflowMaintenanceExecutionStepReceipt>[];
 }
+
+export interface WakeflowMaintenanceExecutionNoOpReceipt
+extends WakeflowMaintenanceExecutionTransactionReceiptBase {
+  readonly status: "no-op";
+  readonly operationId: null;
+  readonly stepReceipts: readonly [];
+}
+
+export interface WakeflowMaintenanceExecutionCompletedReceipt
+extends WakeflowMaintenanceExecutionTransactionReceiptBase {
+  readonly status: "completed";
+  readonly operationId: WakeflowMaintenanceOperationId;
+}
+
+export interface WakeflowMaintenanceExecutionRecoveredReceipt
+extends WakeflowMaintenanceExecutionTransactionReceiptBase {
+  readonly status: "recovered";
+  readonly operationId: WakeflowMaintenanceOperationId;
+}
+
+export type WakeflowMaintenanceExecutionTransactionReceipt =
+  | WakeflowMaintenanceExecutionNoOpReceipt
+  | WakeflowMaintenanceExecutionCompletedReceipt
+  | WakeflowMaintenanceExecutionRecoveredReceipt;
 
 export type WakeflowMaintenanceExecutionTransactionErrorReason =
   | "input"
@@ -143,6 +163,7 @@ export type WakeflowMaintenanceExecutionTransactionErrorReason =
   | "journal"
   | "step"
   | "terminal-closure"
+  | "aborted"
   | "recovery-required";
 
 const ERROR_MESSAGES = {
@@ -157,6 +178,7 @@ const ERROR_MESSAGES = {
   journal: "Wakeflow maintenance execution journal failed.",
   step: "Wakeflow maintenance execution step failed.",
   "terminal-closure": "Wakeflow maintenance execution terminal closure failed.",
+  aborted: "Wakeflow maintenance execution was aborted.",
   "recovery-required": "Wakeflow maintenance execution requires recovery.",
 } as const satisfies Readonly<Record<
   WakeflowMaintenanceExecutionTransactionErrorReason,
@@ -200,6 +222,66 @@ function fail(
     path,
     operationId,
   );
+}
+
+function assertNotAborted(
+  signal: AbortSignal | undefined,
+  operationId: WakeflowMaintenanceOperationId | null = null,
+): void {
+  if (signal?.aborted === true) fail("aborted", "$signal", operationId);
+}
+
+function admittedOperationId(value: unknown): WakeflowMaintenanceOperationId {
+  try {
+    return parseWakeflowMaintenanceOperationId(value);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceOperationIdError) {
+      fail("input", "$operationId");
+    }
+    throw error;
+  }
+}
+
+function createOperationId(
+  factory: UuidV4Factory | undefined,
+): WakeflowMaintenanceOperationId {
+  try {
+    return factory === undefined
+      ? createWakeflowMaintenanceOperationId()
+      : createWakeflowMaintenanceOperationId(factory);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceOperationIdError) {
+      fail("input", "$options.uuidFactory");
+    }
+    throw error;
+  }
+}
+
+function effectiveSignal(
+  requestSignal: AbortSignal | undefined,
+  optionSignal: AbortSignal | undefined,
+): AbortSignal | undefined {
+  if (
+    requestSignal !== undefined
+    && optionSignal !== undefined
+    && requestSignal !== optionSignal
+  ) {
+    fail("input", "$options.signal");
+  }
+  return optionSignal ?? requestSignal;
+}
+
+function requestWithSignal(
+  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  signal: AbortSignal | undefined,
+): Readonly<WakeflowStaticMaterializationPreviewRequest> {
+  return Object.freeze({
+    action: request.action,
+    desiredConfig: request.desiredConfig,
+    currentHostProfile: request.currentHostProfile,
+    hostProfiles: request.hostProfiles,
+    ...(signal === undefined ? {} : { signal }),
+  });
 }
 
 function positiveMilliseconds(value: unknown, path: string): number | undefined {
@@ -267,9 +349,14 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
 
 async function currentConfigSnapshot(
   root: RootedDirectory,
+  signal?: AbortSignal,
+  operationId: WakeflowMaintenanceOperationId | null = null,
 ): Promise<Readonly<WakeflowConfigAuthoritySnapshot> | null> {
   try {
-    return await readWakeflowConfigAuthoritySnapshot(root);
+    return await readWakeflowConfigAuthoritySnapshot(
+      root,
+      signal === undefined ? undefined : { signal },
+    );
   } catch (error: unknown) {
     if (
       error instanceof WakeflowConfigAuthoritySnapshotError
@@ -278,7 +365,10 @@ async function currentConfigSnapshot(
       return null;
     }
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      fail("source-config", "$config");
+      if (error.reason === "aborted") {
+        fail("aborted", "$signal", operationId);
+      }
+      fail("source-config", "$config", operationId);
     }
     throw error;
   }
@@ -350,7 +440,7 @@ async function assertTerminalConfig(
   plan: Readonly<WakeflowMaintenanceExecutionPlan>,
   operationId: WakeflowMaintenanceOperationId,
 ): Promise<void> {
-  const current = await currentConfigSnapshot(root);
+  const current = await currentConfigSnapshot(root, undefined, operationId);
   if (
     plan.sharedPreview.desiredConfigDigest === null
     || current?.configDigest !== plan.sharedPreview.desiredConfigDigest
@@ -376,7 +466,6 @@ function receipt(
   observationDigest: Sha256Digest,
 ): Readonly<WakeflowMaintenanceExecutionStepReceipt> {
   return Object.freeze({
-    kind: "WakeflowMaintenanceExecutionStepReceipt",
     stepId: step.stepId,
     boundary: step.boundary,
     disposition,
@@ -419,6 +508,9 @@ async function executeStep(
       );
     } catch (error: unknown) {
       if (error instanceof WakeflowStaticMaterializationStepExecutionError) {
+        if (error.reason === "aborted") {
+          fail("aborted", "$signal", context.operationId);
+        }
         fail("step", `$step:${stepId}`, context.operationId);
       }
       throw error;
@@ -427,8 +519,16 @@ async function executeStep(
   if (capability === undefined) {
     fail("capability", "$capability", context.operationId);
   }
-  const operation = hostOperationForWakeflowMaintenanceStep(plan, stepId);
-  if (operation === null) fail("step", `$step:${stepId}`, context.operationId);
+  const operation = plan.hostContribution?.operations.find((entry) => (
+    entry.operationId === step.operationId
+  ));
+  if (
+    operation === undefined
+    || operation.payloadDigest !== step.payloadDigest
+    || operation.targetDigest !== step.targetDigest
+  ) {
+    fail("step", `$step:${stepId}`, context.operationId);
+  }
   try {
     const executed = await capability.executeOperation(root, context, {
       config: desiredConfigForExecution(request, sourceConfig),
@@ -448,6 +548,7 @@ async function executeStep(
     if (error instanceof WakeflowMaintenanceExecutionTransactionError) {
       throw error;
     }
+    assertNotAborted(signal, context.operationId);
     fail("step", `$step:${stepId}`, context.operationId);
   }
 }
@@ -469,24 +570,25 @@ async function advanceJournal(
   const receipts: Readonly<WakeflowMaintenanceExecutionStepReceipt>[] = [];
   let replayingAffected = recovery && source.journal.affectedStepId !== null;
   while (source.journal.state !== "terminal") {
+    assertNotAborted(signal, context.operationId);
     if (source.journal.affectedStepId === null) {
       if (source.journal.checkpoint === source.journal.stepIds.length) {
-        source = (await checkpointWakeflowMaintenanceJournal(
+        source = await checkpointWakeflowMaintenanceJournal(
           root,
           context,
           intentSource,
           source,
           terminalizeWakeflowMaintenanceJournal(source.journal),
-        )).source;
+        );
         continue;
       }
-      source = (await checkpointWakeflowMaintenanceJournal(
+      source = await checkpointWakeflowMaintenanceJournal(
         root,
         context,
         intentSource,
         source,
         beginWakeflowMaintenanceJournalStep(source.journal),
-      )).source;
+      );
       replayingAffected = false;
     }
     const stepId = source.journal.affectedStepId;
@@ -503,13 +605,13 @@ async function advanceJournal(
       replayingAffected,
       signal,
     ));
-    source = (await checkpointWakeflowMaintenanceJournal(
+    source = await checkpointWakeflowMaintenanceJournal(
       root,
       context,
       intentSource,
       source,
       completeWakeflowMaintenanceJournalStep(source.journal),
-    )).source;
+    );
     replayingAffected = false;
   }
   return Object.freeze({
@@ -553,7 +655,10 @@ async function retireInactiveCorrelatedGate(
   }
 }
 
-function gateOptions(options: Readonly<ParsedOptions>) {
+function gateOptions(
+  options: Readonly<ParsedOptions>,
+  signal: AbortSignal | undefined = options.signal,
+) {
   return {
     ...(options.acquireTimeoutMilliseconds === undefined
       ? {}
@@ -561,8 +666,46 @@ function gateOptions(options: Readonly<ParsedOptions>) {
     ...(options.retryDelayMilliseconds === undefined
       ? {}
       : { retryDelayMilliseconds: options.retryDelayMilliseconds }),
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(signal === undefined ? {} : { signal }),
   };
+}
+
+function mapGateError(
+  error: WakeflowMaintenanceGateError,
+  operationId: WakeflowMaintenanceOperationId,
+  persistentTransaction: boolean = false,
+): never {
+  const exposedOperationId = persistentTransaction ? operationId : null;
+  if (error.reason === "aborted") {
+    fail("aborted", "$signal", exposedOperationId);
+  }
+  if (error.reason === "stale-preview") {
+    fail("plan-stale", "$plan", null);
+  }
+  if (error.reason === "recovery-required") {
+    fail("recovery-required", "$gate", operationId);
+  }
+  fail("gate", "$gate", exposedOperationId);
+}
+
+function intentStoreFailureReason(
+  error: WakeflowMaintenanceExecutionIntentStoreError,
+): "intent" | "recovery-required" | "transaction" {
+  if (error.reason === "transactions-shape") return "transaction";
+  return error.reason === "commit-uncertain"
+    || error.reason === "recovery-required"
+    ? "recovery-required"
+    : "intent";
+}
+
+function journalStoreFailureReason(
+  error: WakeflowMaintenanceJournalStoreError,
+): "journal" | "recovery-required" | "transaction" {
+  if (error.reason === "transactions-shape") return "transaction";
+  return error.reason === "commit-uncertain"
+    || error.reason === "recovery-required"
+    ? "recovery-required"
+    : "journal";
 }
 
 /** 执行一份重新验证后的聚合维护计划；尚不暴露为公共 maintenance apply。 */
@@ -576,28 +719,40 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
   const options = parseOptions(optionsValue);
   const plan = parseWakeflowMaintenanceExecutionPlan(planValue);
   const request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
+  const signal = effectiveSignal(request.signal, options.signal);
+  assertNotAborted(signal);
+  const executionRequestValue = requestWithSignal(request, signal);
   assertRequestMatchesPlan(plan, request);
   if (plan.status !== "ready") fail("plan-blocked", "$plan");
   const capability = parseCapability(plan, capabilityValue);
-  const rederived = await previewWakeflowMaintenanceExecution(
-    root,
-    requestValue,
-    capability,
-  );
+  let rederived: Awaited<ReturnType<
+    typeof previewWakeflowMaintenanceExecution
+  >>;
+  try {
+    rederived = await previewWakeflowMaintenanceExecution(
+      root,
+      executionRequestValue,
+      capability,
+    );
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceExecutionPreviewError) {
+      if (error.reason === "aborted") fail("aborted", "$signal", null);
+      fail("plan-stale", "$plan", null);
+    }
+    throw error;
+  }
   if (rederived.planDigest !== plan.planDigest) {
     fail("plan-stale", "$plan.planDigest");
   }
   if (plan.steps.length === 0) {
     return Object.freeze({
-      kind: "WakeflowMaintenanceExecutionTransactionReceipt",
-      executionBoundary: "internal-maintenance-only",
       status: "no-op",
       operationId: null,
       planDigest: plan.planDigest,
-      stepReceipts: Object.freeze([]),
+      stepReceipts: [] as const,
     });
   }
-  const current = await currentConfigSnapshot(root);
+  const current = await currentConfigSnapshot(root, signal);
   const desiredConfig = request.action === "reconcile"
     ? current?.model ?? null
     : request.desiredConfig;
@@ -608,15 +763,13 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
   ) {
     fail("source-config", "$config");
   }
-  const operationId = options.uuidFactory === undefined
-    ? createWakeflowMaintenanceOperationId()
-    : createWakeflowMaintenanceOperationId(options.uuidFactory);
+  const operationId = createOperationId(options.uuidFactory);
   let intent;
   try {
     intent = createWakeflowMaintenanceExecutionIntent(
       operationId,
       plan,
-      requestValue,
+      executionRequestValue,
       desiredConfig,
     );
     assertWakeflowMaintenanceExecutionIntentCapacity(intent);
@@ -630,20 +783,21 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
       error instanceof WakeflowMaintenanceExecutionIntentError
       || error instanceof WakeflowMaintenanceExecutionIntentStoreError
     ) {
-      fail("intent", "$intent", operationId);
+      fail("intent", "$intent", null);
     }
     if (error instanceof WakeflowMaintenanceJournalStoreError) {
-      fail("journal", "$journal", operationId);
+      fail("journal", "$journal", null);
     }
     throw error;
   }
-  const intentPlan = wakeflowMaintenanceExecutionPlanFromIntent(intent);
-  const intentRequestValue = wakeflowMaintenanceExecutionRequestFromIntent(
+  const reconstructed = reconstructWakeflowMaintenanceExecutionFromIntent(
     intent,
   );
+  const intentPlan = reconstructed.plan;
   const intentRequest = parseWakeflowStaticMaterializationPreviewRequest(
-    intentRequestValue,
+    reconstructed.request,
   );
+  const intentRequestValue = requestWithSignal(intentRequest, signal);
   try {
     return await withWakeflowMaintenanceGate(
       root,
@@ -651,10 +805,30 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
         expectedCoreLayoutInspectionDigest:
           plan.sharedPreview.coreLayoutInspectionDigest,
         operationId,
-        ...gateOptions(options),
+        ...gateOptions(options, signal),
       },
       async (context) => {
-        const intentPublication =
+        let lockedPlan: Awaited<ReturnType<
+          typeof previewWakeflowMaintenanceExecution
+        >>;
+        try {
+          lockedPlan = await previewWakeflowMaintenanceExecution(
+            root,
+            executionRequestValue,
+            capability,
+            context,
+          );
+        } catch (error: unknown) {
+          if (error instanceof WakeflowMaintenanceExecutionPreviewError) {
+            if (error.reason === "aborted") fail("aborted", "$signal", null);
+            fail("plan-stale", "$plan", null);
+          }
+          throw error;
+        }
+        if (lockedPlan.planDigest !== plan.planDigest) {
+          fail("plan-stale", "$plan.planDigest", null);
+        }
+        const intentSource =
           await publishWakeflowMaintenanceExecutionIntent(
             root,
             context,
@@ -663,27 +837,27 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
         const prepared = await publishPreparedWakeflowMaintenanceJournal(
           root,
           context,
-          intentPublication.source,
+          intentSource,
           intentPlan,
         );
         const advanced = await advanceJournal(
           root,
           context,
-          intentPublication.source,
-          prepared.source,
+          intentSource,
+          prepared,
           intentPlan,
           intentRequestValue,
           intentRequest,
           current?.model ?? null,
           capability,
           false,
-          options.signal,
+          signal,
         );
         await assertTerminalConfig(root, intentPlan, operationId);
         await retireWakeflowMaintenanceExecutionIntent(
           root,
           context,
-          intentPublication.source,
+          intentSource,
         );
         await retireTerminalWakeflowMaintenanceJournal(
           root,
@@ -691,8 +865,6 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
           advanced.terminalSource,
         );
         return Object.freeze({
-          kind: "WakeflowMaintenanceExecutionTransactionReceipt" as const,
-          executionBoundary: "internal-maintenance-only" as const,
           status: "completed" as const,
           operationId,
           planDigest: intentPlan.planDigest,
@@ -703,19 +875,21 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionTransactionError) throw error;
     if (error instanceof WakeflowMaintenanceGateError) {
-      fail("gate", "$gate", operationId);
+      mapGateError(error, operationId);
     }
     if (error instanceof WakeflowMaintenanceExecutionIntentStoreError) {
+      const reason = intentStoreFailureReason(error);
       fail(
-        error.reason === "transactions-shape" ? "transaction" : "intent",
-        error.reason === "transactions-shape" ? "$transactions" : "$intent",
+        reason,
+        reason === "transaction" ? "$transactions" : "$intent",
         operationId,
       );
     }
     if (error instanceof WakeflowMaintenanceJournalStoreError) {
+      const reason = journalStoreFailureReason(error);
       fail(
-        error.reason === "transactions-shape" ? "transaction" : "journal",
-        error.reason === "transactions-shape" ? "$transactions" : "$journal",
+        reason,
+        reason === "transaction" ? "$transactions" : "$journal",
         operationId,
       );
     }
@@ -736,7 +910,12 @@ async function recoverTerminalJournalWithoutIntent(
   ) {
     fail("intent", "$intent", operationId);
   }
-  const current = await currentConfigSnapshot(root);
+  assertNotAborted(options.signal, operationId);
+  const current = await currentConfigSnapshot(
+    root,
+    options.signal,
+    operationId,
+  );
   if (current?.configDigest !== initial.journal.desiredConfigDigest) {
     fail("terminal-closure", "$config", operationId);
   }
@@ -757,8 +936,6 @@ async function recoverTerminalJournalWithoutIntent(
       }
       await retireTerminalWakeflowMaintenanceJournal(root, context, source);
       return Object.freeze({
-        kind: "WakeflowMaintenanceExecutionTransactionReceipt" as const,
-        executionBoundary: "internal-maintenance-only" as const,
         status: "recovered" as const,
         operationId,
         planDigest: source.journal.planDigest,
@@ -831,15 +1008,13 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
   optionsValue: Omit<WakeflowMaintenanceExecutionTransactionOptions, "uuidFactory"> = {},
 ): Promise<Readonly<WakeflowMaintenanceExecutionTransactionReceipt>> {
   const options = parseOptions(optionsValue);
-  let operationId: WakeflowMaintenanceOperationId;
-  try {
-    operationId = parseWakeflowMaintenanceOperationId(operationIdValue);
-  } catch {
-    fail("input", "$operationId");
-  }
+  if (options.uuidFactory !== undefined) fail("input", "$options.uuidFactory");
+  const operationId = admittedOperationId(operationIdValue);
+  assertNotAborted(options.signal, operationId);
   try {
     await recoverWakeflowMaintenanceExecutionIntentStages(root, operationId);
     await recoverWakeflowMaintenanceJournalStages(root, operationId);
+    assertNotAborted(options.signal, operationId);
     const intentSource = await readWakeflowMaintenanceExecutionIntentOrNull(
       root,
       operationId,
@@ -857,10 +1032,11 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
         options,
       );
     }
-    const plan = wakeflowMaintenanceExecutionPlanFromIntent(intentSource.intent);
-    const requestValue = wakeflowMaintenanceExecutionRequestFromIntent(
+    const reconstructed = reconstructWakeflowMaintenanceExecutionFromIntent(
       intentSource.intent,
     );
+    const plan = reconstructed.plan;
+    const requestValue = reconstructed.request;
     const request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
     assertRequestMatchesPlan(plan, request);
     const capability = parseCapability(plan, capabilityValue);
@@ -876,7 +1052,11 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
         intentSource,
       );
     }
-    const current = await currentConfigSnapshot(root);
+    const current = await currentConfigSnapshot(
+      root,
+      options.signal,
+      operationId,
+    );
     const sourceConfig = assertRecoveryConfigState(
       plan,
       initialJournal,
@@ -911,7 +1091,7 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
             currentIntent,
             plan,
           )
-        ).source;
+        );
         validateJournalPlan(source, currentIntent, plan);
         const advanced = await advanceJournal(
           root,
@@ -938,8 +1118,6 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
           advanced.terminalSource,
         );
         return Object.freeze({
-          kind: "WakeflowMaintenanceExecutionTransactionReceipt" as const,
-          executionBoundary: "internal-maintenance-only" as const,
           status: "recovered" as const,
           operationId,
           planDigest: plan.planDigest,
@@ -951,19 +1129,21 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionTransactionError) throw error;
     if (error instanceof WakeflowMaintenanceGateError) {
-      fail("gate", "$gate", operationId);
+      mapGateError(error, operationId, true);
     }
     if (error instanceof WakeflowMaintenanceExecutionIntentStoreError) {
+      const reason = intentStoreFailureReason(error);
       fail(
-        error.reason === "transactions-shape" ? "transaction" : "intent",
-        error.reason === "transactions-shape" ? "$transactions" : "$intent",
+        reason,
+        reason === "transaction" ? "$transactions" : "$intent",
         operationId,
       );
     }
     if (error instanceof WakeflowMaintenanceJournalStoreError) {
+      const reason = journalStoreFailureReason(error);
       fail(
-        error.reason === "transactions-shape" ? "transaction" : "journal",
-        error.reason === "transactions-shape" ? "$transactions" : "$journal",
+        reason,
+        reason === "transaction" ? "$transactions" : "$journal",
         operationId,
       );
     }

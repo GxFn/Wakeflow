@@ -20,6 +20,24 @@ export type WakeflowPortableResourcePathText = string
  * Wakeflow 持久记录与事件使用的严格 UTC instant 文本：四位年份、大写 T/Z，并允许省略小数秒或保留 1 至 9 位小数秒。
  */
 export type WakeflowUtcInstantText = string
+/**
+ * 跨领域只读消费一份已验证 Ledger authority member 的完整 ref/digest 关系。
+ */
+export type WakeflowLedgerAuthorityMemberReference = ({
+[k: string]: unknown | undefined
+} & {
+artifactKind: "wakeflow-ledger-authority-member-reference"
+schemaVersion: 1
+family: ("requirement" | "confirmation")
+recordId: string
+recordRef: WakeflowPortableResourcePathText
+recordDigest: WakeflowSha256DigestText
+memberPath: WakeflowPortableResourcePathText
+memberRef: WakeflowPortableResourcePathText
+memberDigest: WakeflowSha256DigestText
+role: ("original-plan" | "requirement-design" | "code-facts" | "landing-plan" | "non-goals" | "user-confirmation" | "reproduction" | "scope" | "requirement-delta" | "research-question" | "boundaries" | "test-environment" | "supporting-evidence" | "goal-stage-decision")
+mediaType: string
+})
 export type EventId = string
 
 /**
@@ -75,22 +93,6 @@ mode: "main"
 export interface IsolatedPlacement {
 mode: "isolated"
 authorizationRef: WakeflowLedgerAuthorityMemberReference
-}
-/**
- * 跨领域只读消费一份已验证 Ledger authority member 的完整 ref/digest 关系。
- */
-export interface WakeflowLedgerAuthorityMemberReference {
-artifactKind: "wakeflow-ledger-authority-member-reference"
-schemaVersion: 1
-family: ("requirement" | "confirmation")
-recordId: string
-recordRef: WakeflowPortableResourcePathText
-recordDigest: WakeflowSha256DigestText
-memberPath: WakeflowPortableResourcePathText
-memberRef: WakeflowPortableResourcePathText
-memberDigest: WakeflowSha256DigestText
-role: ("original-plan" | "requirement-design" | "code-facts" | "landing-plan" | "non-goals" | "user-confirmation" | "reproduction" | "scope" | "requirement-delta" | "research-question" | "boundaries" | "test-environment" | "supporting-evidence" | "goal-stage-decision")
-mediaType: string
 }
 /**
  * Demand publication 时必须存在并永久冻结的 Ledger authority closure。
@@ -169,128 +171,16 @@ function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
   return value;
 }
 
-/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA = freezeGeneratedSchema({
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:wakeflow:governance:demand:event-sourcing-publication-transaction:v1",
-  "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA",
-  "title": "WakeflowDemandEventSourcingPublicationTransaction",
-  "description": "TODO-backed Demand Event Sourcing root publication 的自包含 immutable recovery plan。",
-  "$comment": "Plan 保存 initial command 与由纯 Decider/evolve 得到的 exact commit；snapshot 是 derived cache，不进入跨资源 transaction authority。",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "artifactKind",
-    "schemaVersion",
-    "demandId",
-    "todoId",
-    "expectedTodoCollectionDigest",
-    "expectedTodoStateDigest",
-    "stageRef",
-    "finalRootRef",
-    "identity",
-    "identityDigest",
-    "authority",
-    "authorityDigest",
-    "initialCommand",
-    "initialCommandDigest",
-    "initialCommit",
-    "initialCommitDigest"
-  ],
-  "properties": {
-    "artifactKind": {
-      "const": "wakeflow-demand-event-sourcing-publication-transaction"
-    },
-    "schemaVersion": {
-      "const": 1
-    },
-    "demandId": {
-      "$ref": "#/$defs/demandId"
-    },
-    "todoId": {
-      "$ref": "urn:wakeflow:governance:todo:item-id:v1"
-    },
-    "expectedTodoCollectionDigest": {
-      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-    },
-    "expectedTodoStateDigest": {
-      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-    },
-    "stageRef": {
-      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
-    },
-    "finalRootRef": {
-      "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
-    },
-    "identity": {
-      "$ref": "urn:wakeflow:governance:demand:identity:v1"
-    },
-    "identityDigest": {
-      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-    },
-    "authority": {
-      "$ref": "urn:wakeflow:governance:demand:authority:v1"
-    },
-    "authorityDigest": {
-      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-    },
-    "initialCommand": {
-      "$ref": "#/$defs/initialCommand"
-    },
-    "initialCommandDigest": {
-      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-    },
-    "initialCommit": {
-      "$ref": "urn:wakeflow:governance:demand:event-stream-commit:v1"
-    },
-    "initialCommitDigest": {
-      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-    }
-  },
-  "$defs": {
-    "demandId": {
-      "type": "string",
-      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "eventId": {
-      "type": "string",
-      "pattern": "^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "initialCommand": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "commandType",
-        "commandVersion",
-        "demandId",
-        "eventId",
-        "recordedAt",
-        "identityDigest",
-        "authorityDigest"
-      ],
-      "properties": {
-        "commandType": {
-          "const": "publication.publish-demand"
-        },
-        "commandVersion": {
-          "const": 1
-        },
-        "demandId": {
-          "$ref": "#/$defs/demandId"
-        },
-        "eventId": {
-          "$ref": "#/$defs/eventId"
-        },
-        "recordedAt": {
-          "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
-        },
-        "identityDigest": {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-        },
-        "authorityDigest": {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-        }
-      }
-    }
+/** 从 JSON 文本恢复 Schema，保留 `__proto__` 等普通 JSON 自有键。 */
+function restoreGeneratedSchema(
+  serialized: string,
+): Readonly<Record<string, unknown>> {
+  const value: unknown = JSON.parse(serialized);
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    throw new TypeError("Generated Schema must be an object.");
   }
-} as const);
+  return freezeGeneratedSchema(value as Record<string, unknown>);
+}
+
+/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
+export const WAKEFLOW_DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:demand:event-sourcing-publication-transaction:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA\",\"title\":\"WakeflowDemandEventSourcingPublicationTransaction\",\"description\":\"TODO-backed Demand Event Sourcing root publication 的自包含 immutable recovery plan。\",\"$comment\":\"Plan 保存 initial command 与由纯 Decider/evolve 得到的 exact commit；snapshot 是 derived cache，不进入跨资源 transaction authority。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"demandId\",\"todoId\",\"expectedTodoCollectionDigest\",\"expectedTodoStateDigest\",\"stageRef\",\"finalRootRef\",\"identity\",\"identityDigest\",\"authority\",\"authorityDigest\",\"initialCommand\",\"initialCommandDigest\",\"initialCommit\",\"initialCommitDigest\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-demand-event-sourcing-publication-transaction\"},\"schemaVersion\":{\"const\":1},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"todoId\":{\"$ref\":\"urn:wakeflow:governance:todo:item-id:v1\"},\"expectedTodoCollectionDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"expectedTodoStateDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"stageRef\":{\"$ref\":\"urn:wakeflow:foundation:filesystem:portable-resource-path:v1\"},\"finalRootRef\":{\"$ref\":\"urn:wakeflow:foundation:filesystem:portable-resource-path:v1\"},\"identity\":{\"$ref\":\"urn:wakeflow:governance:demand:identity:v1\"},\"identityDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"authority\":{\"$ref\":\"urn:wakeflow:governance:demand:authority:v1\"},\"authorityDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"initialCommand\":{\"$ref\":\"#/$defs/initialCommand\"},\"initialCommandDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"initialCommit\":{\"$ref\":\"urn:wakeflow:governance:demand:event-stream-commit:v1\"},\"initialCommitDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}},\"$defs\":{\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"eventId\":{\"type\":\"string\",\"pattern\":\"^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"initialCommand\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"commandType\",\"commandVersion\",\"demandId\",\"eventId\",\"recordedAt\",\"identityDigest\",\"authorityDigest\"],\"properties\":{\"commandType\":{\"const\":\"publication.publish-demand\"},\"commandVersion\":{\"const\":1},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"eventId\":{\"$ref\":\"#/$defs/eventId\"},\"recordedAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"},\"identityDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"authorityDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}}}}}");

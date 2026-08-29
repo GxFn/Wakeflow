@@ -69,13 +69,11 @@ test("regular-file factory admits one exact pathname and opened inode", async ()
     expected.node,
   );
   try {
-    equal(handle.resourcePath, resourcePath);
     equal(
       handle.resourceAbsolutePath,
       path.join(root.absolutePath, "source"),
     );
     equal(handle.kind, "file");
-    equal(handle.isClosed, false);
     deepEqual(handle.initialNodeSnapshot, expected.node);
     deepEqual(await handle.inspectOpenedNode(), expected.node);
     deepEqual(await handle.assertPathCurrent(), expected.node);
@@ -336,7 +334,6 @@ test("close is idempotent and all later I/O methods reject", async () => {
   );
   await handle.close();
   await handle.close();
-  equal(handle.isClosed, true);
   for (const operation of [
     () => handle.assertPathCurrent(),
     () => handle.inspectOpenedNode(),

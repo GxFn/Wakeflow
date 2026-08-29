@@ -4,7 +4,6 @@ import {
   computeCanonicalJsonSha256Digest,
 } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import type { JsonValue } from "../../foundation/data/json-value.js";
 import {
   materializeDirectoryPath,
   DurableDirectoryMaterializationError,
@@ -38,10 +37,10 @@ import {
  * `LedgerAuthorityStore` 的逐记录事务负责。
  */
 
-export const LEDGER_AUTHORITY_LAYOUT_KIND =
+const LEDGER_AUTHORITY_LAYOUT_KIND =
   "WakeflowLedgerAuthorityLayoutInspection" as const;
 
-export type LedgerAuthorityLayoutEntryStatus =
+type LedgerAuthorityLayoutEntryStatus =
   | "absent"
   | "current"
   | "conflict";
@@ -70,20 +69,24 @@ export interface LedgerAuthorityLayoutInspection {
 interface LedgerAuthorityLayoutEntryPolicy {
   readonly resourcePath: LedgerAuthorityLayoutEntryInspection["resourcePath"];
   readonly mode: number;
+  readonly requireCurrentUser: boolean;
 }
 
 const LEDGER_AUTHORITY_LAYOUT_POLICIES = Object.freeze([
   Object.freeze({
     resourcePath: LEDGER_REQUIREMENTS_ROOT_REF,
     mode: LEDGER_DURABLE_DIRECTORY_MODE,
+    requireCurrentUser: false,
   }),
   Object.freeze({
     resourcePath: LEDGER_CONFIRMATIONS_ROOT_REF,
     mode: LEDGER_DURABLE_DIRECTORY_MODE,
+    requireCurrentUser: false,
   }),
   Object.freeze({
     resourcePath: LEDGER_TRANSACTIONS_ROOT_REF,
     mode: LEDGER_TRANSACTION_DIRECTORY_MODE,
+    requireCurrentUser: true,
   }),
 ]) satisfies readonly Readonly<LedgerAuthorityLayoutEntryPolicy>[];
 
@@ -93,7 +96,7 @@ export const LEDGER_AUTHORITY_LAYOUT_DIGEST =
     kind: "WakeflowLedgerAuthorityLayoutAuthority",
     schemaVersion: 1,
     declarations: WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG,
-  } as unknown as JsonValue);
+  });
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (
@@ -110,6 +113,12 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
+function currentUserId(): bigint | null {
+  return typeof process.geteuid === "function"
+    ? BigInt(process.geteuid())
+    : null;
+}
+
 async function inspectEntry(
   root: RootedDirectory,
   policy: Readonly<LedgerAuthorityLayoutEntryPolicy>,
@@ -120,7 +129,12 @@ async function inspectEntry(
       `$layout/${policy.resourcePath}`,
     );
     const current = resource.node.kind === "directory"
-      && resource.node.permissionBits === policy.mode;
+      && resource.node.permissionBits === policy.mode
+      && (
+        !policy.requireCurrentUser
+        || currentUserId() === null
+        || resource.node.userId === currentUserId()
+      );
     return Object.freeze({
       resourcePath: policy.resourcePath,
       expectedMode: policy.mode,
@@ -188,9 +202,7 @@ export async function inspectLedgerAuthorityLayout(
   };
   return Object.freeze({
     ...observationBasis,
-    observationDigest: computeCanonicalJsonSha256Digest(
-      observationBasis as unknown as JsonValue,
-    ),
+    observationDigest: computeCanonicalJsonSha256Digest(observationBasis),
   });
 }
 

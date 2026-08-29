@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_TODO_STATE_SCHEMA",
   "title": "WakeflowTodoState",
   "description": "一个 TODO item 可更新的当前状态快照；revision、previous digest、mount 与 archive receipt 绑定每次前向转换。",
-  "$comment": "Schema 不决定允许的状态转换。revision chain、mount/status、archive/status 和 intake identity 关系由 TODO state codec 与 transaction owner 校验。",
+  "$comment": "v1 只接纳 TODO owner 已实现的 intake、claim 与 archive 状态。revision chain、mount/status、archive/status 和 intake identity 关系由 TODO state codec 与 transaction owner 校验。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -48,10 +48,6 @@
         "pending-claim",
         "parked",
         "claimed",
-        "blocked",
-        "observing",
-        "completed",
-        "cancelled",
         "archived"
       ]
     },

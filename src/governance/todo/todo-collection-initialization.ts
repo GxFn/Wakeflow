@@ -8,6 +8,10 @@ import {
   recoverDurableAtomicFileStagesForTargets,
   DurableAtomicFileStageRecoveryError,
 } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
+import {
+  materializeDirectoryPath,
+  DurableDirectoryMaterializationError,
+} from "../../foundation/filesystem/durable-directory-materialization.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
   RootedDirectory,
@@ -199,9 +203,9 @@ async function readDirectory(
 async function assertRecoverableEmptyPrefix(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
-): Promise<boolean> {
+): Promise<void> {
   const todoRoot = await todoRootOrNull(root);
-  if (todoRoot === null) return false;
+  if (todoRoot === null) fail("prefix-conflict", "$prefix/todo");
   assertPrivateNode(todoRoot.node, "directory", "$prefix/todo");
   try {
     const recovery = await recoverDurableAtomicFileStagesForTargets(
@@ -227,8 +231,11 @@ async function assertRecoverableEmptyPrefix(
     signal,
   );
   assertPrivateNode(directory.directoryNode, "directory", "$prefix/todo");
-  const allowed = new Set(["items", "transactions", "global-todo-board.md"]);
-  if (directory.entries.some((entry) => !allowed.has(entry.name))) {
+  if (directory.entries.some((entry) => (
+    entry.name !== "items"
+    && entry.name !== "transactions"
+    && entry.name !== "global-todo-board.md"
+  ))) {
     fail("prefix-conflict", "$prefix/todo");
   }
   for (const entry of directory.entries) {
@@ -245,7 +252,40 @@ async function assertRecoverableEmptyPrefix(
       fail("prefix-conflict", `$prefix/${entry.name}`);
     }
   }
-  return true;
+}
+
+async function materializeTodoRoot(
+  root: RootedDirectory,
+  requireCreated: boolean,
+  signal: AbortSignal | undefined,
+): Promise<"created" | "existing"> {
+  try {
+    const materialized = await materializeDirectoryPath(
+      root,
+      TODO_COLLECTION_ROOT_REF,
+      {
+        mode: TODO_AUTHORITY_DIRECTORY_MODE,
+        ...(signal === undefined ? {} : { signal }),
+      },
+    );
+    const target = materialized.segments.at(-1);
+    if (
+      target === undefined
+      || (requireCreated && target.disposition !== "created")
+    ) {
+      fail("strict-absent", "$todoRoot");
+    }
+    assertPrivateNode(materialized.node, "directory", "$todoRoot");
+    return target.disposition;
+  } catch (error: unknown) {
+    if (error instanceof FreshTodoCollectionInitializationError) throw error;
+    if (error instanceof DurableDirectoryMaterializationError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "root-scope") fail("root-scope", "$root");
+      fail("owner", "$todoRoot");
+    }
+    throw error;
+  }
 }
 
 function assertEmptyAuthority(
@@ -289,6 +329,11 @@ export async function initializeFreshTodoCollection(
   if (existed) {
     await assertRecoverableEmptyPrefix(rootValue, options.signal);
   }
+  const rootDisposition = await materializeTodoRoot(
+    rootValue,
+    !options.recoveringFreshCollection,
+    options.signal,
+  );
   let snapshot: Readonly<TodoCollectionAuthoritySnapshot>;
   try {
     snapshot = await initializeTodoCollection(rootValue, {
@@ -304,7 +349,7 @@ export async function initializeFreshTodoCollection(
   }
   assertEmptyAuthority(snapshot);
   return Object.freeze({
-    disposition: existed ? "current" : "created",
+    disposition: rootDisposition === "created" ? "created" : "current",
     authorityDigest: TODO_COLLECTION_INITIALIZATION_AUTHORITY_DIGEST,
     snapshot,
   });

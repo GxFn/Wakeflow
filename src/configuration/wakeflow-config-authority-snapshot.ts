@@ -50,15 +50,13 @@ import { renderWakeflowConfigV3 } from "./wakeflow-config-v3-document.js";
  * 必须在自己的互斥锁或比较并交换边界内重新加载，并核对源快照和配置摘要。
  */
 
-export const WAKEFLOW_CONFIG_AUTHORITY_SNAPSHOT_VERSION = 1 as const;
-export const WAKEFLOW_CONFIG_AUTHORITY_SNAPSHOT_KIND =
-  "WakeflowConfigAuthoritySnapshot" as const;
 export const WAKEFLOW_CONFIG_FILE_REF = parsePortableResourcePath(
   "wakeflow.config.json",
 );
 export const WAKEFLOW_CONFIG_MAXIMUM_BYTES = parseByteCount(1024 * 1024);
+export const WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE = 0o644;
 
-export interface WakeflowConfigAuthoritySource {
+interface WakeflowConfigAuthoritySource {
   readonly resourcePath: PortableResourcePath;
   readonly node: Readonly<FileNodeSnapshot>;
   readonly byteCount: ByteCount;
@@ -66,8 +64,6 @@ export interface WakeflowConfigAuthoritySource {
 }
 
 export interface WakeflowConfigAuthoritySnapshot {
-  readonly kind: typeof WAKEFLOW_CONFIG_AUTHORITY_SNAPSHOT_KIND;
-  readonly schemaVersion: typeof WAKEFLOW_CONFIG_AUTHORITY_SNAPSHOT_VERSION;
   readonly workspaceRoot: string;
   readonly source: Readonly<WakeflowConfigAuthoritySource>;
   readonly model: WakeflowConfigV3Model;
@@ -77,7 +73,7 @@ export interface WakeflowConfigAuthoritySnapshot {
   readonly ledgerRoot: string;
 }
 
-export interface WakeflowConfigAuthoritySnapshotOptions {
+interface WakeflowConfigAuthoritySnapshotOptions {
   readonly signal?: AbortSignal;
 }
 
@@ -141,6 +137,17 @@ function fail(
   throw new WakeflowConfigAuthoritySnapshotError(reason, path);
 }
 
+function assertRoot(value: unknown): asserts value is RootedDirectory {
+  if (
+    typeof value !== "object"
+    || value === null
+    || types.isProxy(value)
+    || !(value instanceof RootedDirectory)
+  ) {
+    fail("input", "$root");
+  }
+}
+
 function isAbortSignal(value: unknown): value is AbortSignal {
   return typeof value === "object"
     && value !== null
@@ -174,7 +181,6 @@ function mapStableReadError(error: StableFileReadError): never {
 }
 
 function mapStrictTextError(error: StrictTextFileError): never {
-  if (error.reason === "input") fail("input", error.path);
   if (error.reason === "utf8" || error.reason === "bom") {
     fail("encoding", "$source");
   }
@@ -216,7 +222,19 @@ async function readConfigSource(
 }
 
 function assertSourcePolicy(node: Readonly<FileNodeSnapshot>): void {
-  if (node.linkCount !== 1n || (node.permissionBits & 0o111) !== 0) {
+  let currentUserId: bigint | null = null;
+  if (typeof process.geteuid === "function") {
+    try {
+      currentUserId = BigInt(process.geteuid());
+    } catch {
+      fail("source-policy", "$source");
+    }
+  }
+  if (
+    node.linkCount !== 1n
+    || node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE
+    || (currentUserId !== null && node.userId !== currentUserId)
+  ) {
     fail("source-policy", "$source");
   }
 }
@@ -264,11 +282,8 @@ async function loadSnapshot(
     fail("representation", "$document");
   }
   const configDigest = computeWakeflowConfigV3Digest(model);
-  if (configDigest !== read.semanticDigest) fail("config", "$document");
   const placements = await validatePlacements(root, model);
   return Object.freeze({
-    kind: WAKEFLOW_CONFIG_AUTHORITY_SNAPSHOT_KIND,
-    schemaVersion: WAKEFLOW_CONFIG_AUTHORITY_SNAPSHOT_VERSION,
     workspaceRoot: root.absolutePath,
     source: Object.freeze({
       resourcePath: read.resourcePath,
@@ -290,7 +305,10 @@ export async function readWakeflowConfigAuthoritySnapshot(
   options?: WakeflowConfigAuthoritySnapshotOptions,
 ): Promise<Readonly<WakeflowConfigAuthoritySnapshot>> {
   try {
-    return await loadSnapshot(root, parseOptions(options));
+    assertRoot(root);
+    const parsed = parseOptions(options);
+    if (parsed.signal?.aborted === true) fail("aborted", "$signal");
+    return await loadSnapshot(root, parsed);
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) throw error;
     throw new WakeflowConfigAuthoritySnapshotError("load-failure", "$snapshot");

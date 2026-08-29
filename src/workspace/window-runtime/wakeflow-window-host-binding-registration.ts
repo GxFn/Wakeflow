@@ -4,12 +4,11 @@ import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
-import type { WakeflowDurableId } from "../../foundation/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { UtcWallClock } from "../../foundation/time/wall-clock.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
-import {
-  computeWakeflowWindowHostBindingDigest,
-  type WakeflowWindowHostBinding,
+import type {
+  WakeflowWindowHostBinding,
 } from "./wakeflow-window-host-binding.js";
 import {
   compileWakeflowWindowHostBindingRegistrationAuthority,
@@ -36,12 +35,10 @@ import type {
 /**
  * Wakeflow Workspace / Window Runtime：首次 Window Host Binding 注册编排。
  *
- * 本层只决定相同 observation 重放、window/handle 冲突、Binding commit 后的 projection
+ * 本层只决定相同注册身份重放、window/handle冲突、Binding commit后的projection
  * 前向发布与公共 receipt。纯 authority、私有 store 和派生 projection 各由相邻模块
  * 独立拥有；这里不实现 replace、decommission、Lease、Delivery 或任何宿主效果。
  */
-
-export type { RegisterWakeflowWindowHostBindingRequest };
 
 export interface RegisterWakeflowWindowHostBindingOptions
   extends WakeflowWindowHostBindingStoreOptions {
@@ -51,14 +48,13 @@ export interface RegisterWakeflowWindowHostBindingOptions
   readonly acquireTimeoutMilliseconds?: number;
 }
 
-export interface WakeflowWindowHostBindingRegistrationReceipt {
+interface WakeflowWindowHostBindingRegistrationReceipt {
   readonly hostId: WakeflowWindowHostBinding["hostId"];
   readonly windowId: WakeflowDurableId<"window">;
   readonly disposition: "registered" | "replayed";
   readonly binding: Readonly<{
     readonly bindingId: WakeflowWindowHostBindingId;
     readonly bindingRef: PortableResourcePath;
-    readonly bindingDigest: Sha256Digest;
     readonly registeredAt: UtcInstant;
     readonly source: WakeflowWindowHostBinding["source"];
   }>;
@@ -69,7 +65,7 @@ export interface WakeflowWindowHostBindingRegistrationReceipt {
   }>;
 }
 
-export type WakeflowWindowHostBindingRegistrationErrorReason =
+type WakeflowWindowHostBindingRegistrationErrorReason =
   | "input"
   | "profile"
   | "handle"
@@ -83,7 +79,7 @@ export type WakeflowWindowHostBindingRegistrationErrorReason =
   | "recovery-required"
   | "aborted"
   | "time"
-  | "identity-source"
+  | "binding-id"
   | "binding-write"
   | "projection-conflict"
   | "projection-recovery-required";
@@ -102,7 +98,7 @@ const ERROR_MESSAGES = {
   "recovery-required": "Window Host Binding registration requires explicit recovery.",
   aborted: "Window Host Binding registration was aborted.",
   time: "Window Host Binding registration clock is inconsistent with its observation.",
-  "identity-source": "Window Host Binding generation identity could not be allocated safely.",
+  "binding-id": "Window Host Binding generation ID could not be allocated safely.",
   "binding-write": "Window Host Binding authority could not be published safely.",
   "projection-conflict": "Window Runtime projection is not an admitted source.",
   "projection-recovery-required": "Binding authority is current but its projection requires recovery.",
@@ -148,6 +144,7 @@ function mapAuthorityError(
 ): never {
   if (error.reason === "profile") fail("profile", error.path);
   if (error.reason === "handle") fail("handle", error.path);
+  if (error.reason === "time") fail("time", error.path);
   if (error.reason === "launch-intent") fail("launch-intent", error.path);
   fail("resource", error.path);
 }
@@ -171,20 +168,19 @@ function mapStoreError(
   }
   if (error.reason === "aborted") fail("aborted", error.path);
   if (error.reason === "time") fail("time", error.path);
-  if (error.reason === "identity-source") {
-    fail("identity-source", error.path);
+  if (error.reason === "binding-id") {
+    fail("binding-id", error.path);
   }
   fail("binding-write", error.path);
 }
 
-function sameObservation(
+function sameRegistrationIdentity(
   binding: Readonly<WakeflowWindowHostBinding>,
   authority: Readonly<WakeflowWindowHostBindingRegistrationAuthority>,
 ): boolean {
   return binding.handle.kind === authority.handle.kind
     && binding.handle.value === authority.handle.value
-    && binding.source.launchIntentDigest === authority.launchIntentDigest
-    && binding.source.observedAt === authority.observedAt;
+    && binding.source.launchIntentDigest === authority.launchIntentDigest;
 }
 
 function assertHandleAvailable(
@@ -213,7 +209,6 @@ function receipt(
     binding: Object.freeze({
       bindingId: binding.bindingId,
       bindingRef: authority.bindingRef,
-      bindingDigest: computeWakeflowWindowHostBindingDigest(binding),
       registeredAt: binding.registeredAt,
       source: binding.source,
     }),
@@ -268,11 +263,13 @@ export async function registerWakeflowWindowHostBinding(
       authority,
       options,
       async (context) => {
-        const current = context.inventory.byWindowId.get(authority.windowId);
+        const current = context.inventory.bindings.find((binding) => (
+          binding.windowId === authority.windowId
+        ));
         let binding: Readonly<WakeflowWindowHostBinding>;
         let disposition: "registered" | "replayed";
         if (current !== undefined) {
-          if (!sameObservation(current, authority)) {
+          if (!sameRegistrationIdentity(current, authority)) {
             fail("binding-conflict", "$observation", "current");
           }
           binding = current;

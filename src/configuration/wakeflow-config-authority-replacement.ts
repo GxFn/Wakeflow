@@ -9,8 +9,8 @@ import {
   withRootedExclusiveFileLock,
   RootedExclusiveFileLockError,
 } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
-import { WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE } from "./wakeflow-config-authority-publication.js";
 import {
+  WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE,
   WAKEFLOW_CONFIG_FILE_REF,
   type WakeflowConfigAuthoritySnapshot,
 } from "./wakeflow-config-authority-snapshot.js";

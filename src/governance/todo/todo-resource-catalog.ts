@@ -1,6 +1,9 @@
 import type {
   PortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
+import type {
+  WakeflowResourceProcessingContract,
+} from "../../foundation/resource/resource-processing-contract.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
@@ -72,7 +75,7 @@ function privateDirectoryDeclaration(
 function privateFileDeclaration(
   declarationId: string,
   relativePath: PortableResourcePath,
-  processing: unknown,
+  processing: Readonly<WakeflowResourceProcessingContract>,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
   return parseWakeflowWorkspaceResourceDeclaration({
     kind: "WakeflowWorkspaceResourceDeclaration",
@@ -98,7 +101,7 @@ function privateFileDeclaration(
   });
 }
 
-export const TODO_BOARD_PROJECTION_RESOURCE_DECLARATION =
+const TODO_BOARD_PROJECTION_RESOURCE_DECLARATION =
   parseWakeflowWorkspaceResourceDeclaration({
     kind: "WakeflowWorkspaceResourceDeclaration",
     declarationId: "active.todo.board-projection",
@@ -127,7 +130,7 @@ export const TODO_BOARD_PROJECTION_RESOURCE_DECLARATION =
     },
   });
 
-export const TODO_COLLECTION_LOCK_RESOURCE_DECLARATION =
+const TODO_COLLECTION_LOCK_RESOURCE_DECLARATION =
   parseWakeflowWorkspaceResourceDeclaration({
     kind: "WakeflowWorkspaceResourceDeclaration",
     declarationId: "active.todo.collection-lock",
@@ -159,13 +162,13 @@ export const TODO_COLLECTION_LOCK_RESOURCE_DECLARATION =
     },
   });
 
-export const TODO_ITEMS_ROOT_RESOURCE_DECLARATION =
+const TODO_ITEMS_ROOT_RESOURCE_DECLARATION =
   privateDirectoryDeclaration("active.todo.items-root", TODO_ITEMS_ROOT_REF);
 
-export const TODO_COLLECTION_ROOT_RESOURCE_DECLARATION =
+const TODO_COLLECTION_ROOT_RESOURCE_DECLARATION =
   privateDirectoryDeclaration("active.todo.root", TODO_COLLECTION_ROOT_REF);
 
-export const TODO_TRANSACTIONS_ROOT_RESOURCE_DECLARATION =
+const TODO_TRANSACTIONS_ROOT_RESOURCE_DECLARATION =
   privateDirectoryDeclaration(
     "active.todo.transactions-root",
     TODO_TRANSACTIONS_ROOT_REF,
@@ -180,7 +183,7 @@ export const WAKEFLOW_TODO_STATIC_RESOURCE_CATALOG = Object.freeze([
   TODO_TRANSACTIONS_ROOT_RESOURCE_DECLARATION,
 ]) satisfies readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
 
-export type TodoItemResourceCatalog = readonly [
+type TodoItemResourceCatalog = readonly [
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,

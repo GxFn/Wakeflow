@@ -1,12 +1,16 @@
 import type { WakeflowConfigV3Model } from "../../configuration/wakeflow-config-v3.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
-import type { WakeflowDurableId } from "../../foundation/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
 } from "../../foundation/resource/resource-processing-contract.js";
-import type { UtcInstant } from "../../foundation/time/utc-instant.js";
+import {
+  parseUtcInstant,
+  UtcInstantError,
+  type UtcInstant,
+} from "../../foundation/time/utc-instant.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   WakeflowWorkspaceHostResourceProfileError,
@@ -27,8 +31,8 @@ import {
   WakeflowWindowLaunchIntentError,
 } from "./wakeflow-window-launch-intent.js";
 import {
-  wakeflowWindowBindingRef,
-  wakeflowWindowBindingRootRef,
+  wakeflowWindowHostBindingRef,
+  wakeflowWindowHostBindingRootRef,
   wakeflowWindowHostBindingMutationLockRef,
 } from "./wakeflow-window-runtime-paths.js";
 import {
@@ -62,7 +66,7 @@ export interface RegisterWakeflowWindowHostBindingRequest {
 }
 
 export interface WakeflowWindowHostBindingRegistrationAuthority {
-  readonly config: WakeflowConfigV3Model;
+  readonly programId: WakeflowDurableId<"program">;
   readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
   readonly windowId: WakeflowDurableId<"window">;
@@ -77,15 +81,17 @@ export interface WakeflowWindowHostBindingRegistrationAuthority {
     Readonly<WakeflowWindowRuntimeUnregisteredProjectionEntry>;
 }
 
-export type WakeflowWindowHostBindingRegistrationAuthorityErrorReason =
+type WakeflowWindowHostBindingRegistrationAuthorityErrorReason =
   | "profile"
   | "handle"
+  | "time"
   | "launch-intent"
   | "resource";
 
 const ERROR_MESSAGES = {
   profile: "Window Host Binding registration profiles are inconsistent.",
   handle: "Agent host result contains an invalid current-host handle.",
+  time: "Agent host result contains an invalid observation time.",
   "launch-intent": "Agent host result does not match a current launch intent.",
   resource: "Window Host Binding registration resource catalog is inconsistent.",
 } as const satisfies Readonly<Record<
@@ -160,6 +166,18 @@ export function compileWakeflowWindowHostBindingRegistrationAuthority(
     }
     throw error;
   }
+  let observedAt: UtcInstant;
+  try {
+    observedAt = parseUtcInstant(
+      request.observation.observedAt,
+      "$observation.observedAt",
+    );
+  } catch (error: unknown) {
+    if (error instanceof UtcInstantError) {
+      fail("time", "$observation.observedAt");
+    }
+    throw error;
+  }
   let launchSet;
   let unregisteredSet;
   try {
@@ -229,7 +247,7 @@ export function compileWakeflowWindowHostBindingRegistrationAuthority(
     }
     throw error;
   }
-  const bindingRef = wakeflowWindowBindingRef(
+  const bindingRef = wakeflowWindowHostBindingRef(
     resourceProfile,
     request.observation.windowId,
   );
@@ -237,16 +255,16 @@ export function compileWakeflowWindowHostBindingRegistrationAuthority(
     fail("launch-intent", "$observation.windowId");
   }
   return Object.freeze({
-    config: request.config,
+    programId: unregisteredProjection.projection.programId,
     resourceProfile,
     identityProfile,
-    windowId: request.observation.windowId,
-    launchIntentDigest: request.observation.launchIntentDigest,
+    windowId: launchIntent.windowId,
+    launchIntentDigest: launchIntent.intentDigest,
     handle,
-    observedAt: request.observation.observedAt,
+    observedAt,
     bindingRef,
     bindingRefs,
-    bindingRootRef: wakeflowWindowBindingRootRef(resourceProfile),
+    bindingRootRef: wakeflowWindowHostBindingRootRef(resourceProfile),
     lockRef: wakeflowWindowHostBindingMutationLockRef(resourceProfile),
     unregisteredProjection,
   });

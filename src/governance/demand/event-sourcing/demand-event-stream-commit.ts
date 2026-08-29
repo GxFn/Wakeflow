@@ -35,7 +35,7 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../../../foundation/identity/wakeflow-durable-id.js";
+} from "../../../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import {
   computeDemandAggregateStateDigest,
@@ -46,10 +46,8 @@ import {
   DemandEventSourcingDecisionError,
 } from "./demand-event-sourcing-decider.js";
 import {
-  parseDemandEventCommitSequence,
   parseDemandEventSourcingAggregate,
   DemandEventSourcingAggregateError,
-  type DemandEventCommitSequence,
   type DemandEventSourcingAggregate,
 } from "./demand-event-sourcing-aggregate.js";
 import {
@@ -73,7 +71,10 @@ import {
   DemandEventSourcingStateVersionError,
 } from "./demand-event-sourcing-state-version.js";
 import {
+  parseDemandEventCommitSequence,
   parseDemandEventStreamRevision,
+  DemandEventStreamPositionError,
+  type DemandEventCommitSequence,
   type DemandEventStreamRevision,
 } from "./demand-event-stream-position.js";
 
@@ -84,10 +85,10 @@ import {
  * 一条提交记录可以承载一个命令产生的多个事件，并通过 `previousCommitDigest` 串联历史。
  */
 
-export const DEMAND_EVENT_STREAM_COMMIT_ARTIFACT_KIND =
+const DEMAND_EVENT_STREAM_COMMIT_ARTIFACT_KIND =
   "wakeflow-demand-event-stream-commit" as const;
-export const DEMAND_EVENT_STREAM_COMMIT_SCHEMA_VERSION = 1 as const;
-export const DEMAND_EVENT_STREAM_COMMIT_MAXIMUM_EVENTS = 64;
+const DEMAND_EVENT_STREAM_COMMIT_SCHEMA_VERSION = 1 as const;
+const DEMAND_EVENT_STREAM_COMMIT_MAXIMUM_EVENTS = 64;
 
 export interface DemandEventStreamCommit {
   readonly artifactKind: typeof DEMAND_EVENT_STREAM_COMMIT_ARTIFACT_KIND;
@@ -183,7 +184,6 @@ const validateWire = createRuntimeJsonSchemaValidator<CommitWire>(
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
-const COMMIT_FILE_PATTERN = /^(?<sequence>[0-9]{16})\.json$/u;
 const PREPARE_FIELDS = Object.freeze([
   "commandDigest",
   "commitId",
@@ -235,28 +235,6 @@ function parseDemandId(
   }
 }
 
-/** `commitSequence` 对应的固定宽度文件名；文件名不再包含 `eventId`。 */
-export function formatDemandEventStreamCommitFileName(value: unknown): string {
-  const sequence = parseDemandEventCommitSequence(value);
-  return `${String(sequence).padStart(16, "0")}.json`;
-}
-
-export function parseDemandEventStreamCommitFileName(value: unknown):
-Readonly<{ readonly commitSequence: DemandEventCommitSequence; readonly fileName: string }> {
-  if (typeof value !== "string") fail("position", "$fileName");
-  const match = COMMIT_FILE_PATTERN.exec(value);
-  const sequenceText = match?.groups?.sequence;
-  if (sequenceText === undefined) fail("position", "$fileName");
-  const commitSequence = parseDemandEventCommitSequence(
-    Number(sequenceText),
-    "$fileName",
-  );
-  if (formatDemandEventStreamCommitFileName(commitSequence) !== value) {
-    fail("position", "$fileName");
-  }
-  return Object.freeze({ commitSequence, fileName: value });
-}
-
 /** 只验证提交记录自身的结构和序列关系，不替代归约器语义验证。 */
 export function parseDemandEventStreamCommit(
   value: unknown,
@@ -271,22 +249,38 @@ export function parseDemandEventStreamCommit(
   const result = validateWire(json);
   if (!result.ok) fail("schema", result.path);
   const wire = result.value;
-  const commitSequence = parseDemandEventCommitSequence(
-    wire.commitSequence,
-    "$/commitSequence",
-  );
   const expectedStreamRevision = parseExpectedRevision(
     wire.expectedStreamRevision,
     "$/expectedStreamRevision",
   );
-  const firstStreamRevision = parseDemandEventStreamRevision(
-    wire.firstStreamRevision,
-    "$/firstStreamRevision",
-  );
-  const lastStreamRevision = parseDemandEventStreamRevision(
-    wire.lastStreamRevision,
-    "$/lastStreamRevision",
-  );
+  if (
+    expectedStreamRevision
+      > Number.MAX_SAFE_INTEGER - wire.events.length
+  ) {
+    fail("position", "$/expectedStreamRevision");
+  }
+  let commitSequence: DemandEventCommitSequence;
+  let firstStreamRevision: DemandEventStreamRevision;
+  let lastStreamRevision: DemandEventStreamRevision;
+  try {
+    commitSequence = parseDemandEventCommitSequence(
+      wire.commitSequence,
+      "$/commitSequence",
+    );
+    firstStreamRevision = parseDemandEventStreamRevision(
+      wire.firstStreamRevision,
+      "$/firstStreamRevision",
+    );
+    lastStreamRevision = parseDemandEventStreamRevision(
+      wire.lastStreamRevision,
+      "$/lastStreamRevision",
+    );
+  } catch (error: unknown) {
+    if (error instanceof DemandEventStreamPositionError) {
+      fail("position", error.path);
+    }
+    throw error;
+  }
   const demandId = parseDemandId(wire.demandId, "$/demandId");
   const events: DemandEventSourcingStoredEvent[] = [];
   const eventIds = new Set<string>();
@@ -320,6 +314,11 @@ export function parseDemandEventStreamCommit(
   }
   const first = events[0];
   if (first === undefined) fail("relation", "$/events");
+  const frozenEvents: [
+    Readonly<DemandEventSourcingStoredEvent>,
+    ...Readonly<DemandEventSourcingStoredEvent>[],
+  ] = [first];
+  frozenEvents.push(...events.slice(1));
   return Object.freeze({
     artifactKind: DEMAND_EVENT_STREAM_COMMIT_ARTIFACT_KIND,
     schemaVersion: DEMAND_EVENT_STREAM_COMMIT_SCHEMA_VERSION,
@@ -333,13 +332,13 @@ export function parseDemandEventStreamCommit(
     previousCommitDigest: wire.previousCommitDigest === null
       ? null
       : parseDigest(wire.previousCommitDigest, "$/previousCommitDigest"),
-    events: Object.freeze(events) as DemandEventStreamCommit["events"],
+    events: Object.freeze(frozenEvents),
   });
 }
 
 export function renderDemandEventStreamCommit(value: unknown): string {
   return renderDeterministicJsonDocument(
-    parseDemandEventStreamCommit(value) as unknown as JsonValue,
+    parseDemandEventStreamCommit(value),
     "$commit",
   );
 }
@@ -367,7 +366,7 @@ export function computeDemandEventStreamCommitDigest(
   value: unknown,
 ): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
-    parseDemandEventStreamCommit(value) as unknown as JsonValue,
+    parseDemandEventStreamCommit(value),
   );
 }
 
@@ -536,8 +535,7 @@ export function assertPreparedDemandEventStreamCommit(
   }
 }
 
-/** 根据当前聚合和一条命令产生的全部未提交事件准备完整提交记录。 */
-export function prepareDemandEventStreamCommit(
+function buildDemandEventStreamCommit(
   currentValue: unknown,
   inputValue: unknown,
 ): Readonly<PreparedDemandEventStreamCommit> {
@@ -556,7 +554,22 @@ export function prepareDemandEventStreamCommit(
   const firstEvent = input.events[0];
   if (firstEvent === undefined) fail("input", "$/events");
   const expectedStreamRevision = current?.streamRevision ?? 0;
+  if (
+    (current !== null && current.commitSequence >= Number.MAX_SAFE_INTEGER)
+    || expectedStreamRevision
+      > Number.MAX_SAFE_INTEGER - input.events.length
+  ) {
+    fail("position", "$aggregate");
+  }
   const commitSequence = (current?.commitSequence ?? 0) + 1;
+  const demandId = current?.demandId ?? firstEvent.demandId;
+  const eventIds = new Set<string>();
+  for (const [index, event] of input.events.entries()) {
+    if (event.demandId !== demandId || eventIds.has(event.eventId)) {
+      fail("relation", `$/events/${index}`);
+    }
+    eventIds.add(event.eventId);
+  }
   let state: Readonly<DemandAggregateState> | null = current?.state ?? null;
   const storedEvents: DemandEventSourcingStoredEvent[] = [];
   for (const [index, event] of input.events.entries()) {
@@ -580,7 +593,7 @@ export function prepareDemandEventStreamCommit(
     artifactKind: DEMAND_EVENT_STREAM_COMMIT_ARTIFACT_KIND,
     schemaVersion: DEMAND_EVENT_STREAM_COMMIT_SCHEMA_VERSION,
     commitId: input.commitId,
-    demandId: current?.demandId ?? firstEvent.demandId,
+    demandId,
     commitSequence,
     commandDigest: input.commandDigest,
     expectedStreamRevision,
@@ -594,7 +607,23 @@ export function prepareDemandEventStreamCommit(
     lastEventDigest: current?.lastEventDigest ?? null,
     stateDigest: current?.stateDigest ?? null,
   });
-  const prepared = Object.freeze({ commit, aggregate, sourceExpectation });
+  return Object.freeze({ commit, aggregate, sourceExpectation });
+}
+
+/** 纯计算一条Commit计划，不签发Event Store append capability。 */
+export function planDemandEventStreamCommit(
+  currentValue: unknown,
+  inputValue: unknown,
+): Readonly<DemandEventStreamCommit> {
+  return buildDemandEventStreamCommit(currentValue, inputValue).commit;
+}
+
+/** 根据当前聚合和一条命令产生的全部未提交事件签发完整追加能力。 */
+export function prepareDemandEventStreamCommit(
+  currentValue: unknown,
+  inputValue: unknown,
+): Readonly<PreparedDemandEventStreamCommit> {
+  const prepared = buildDemandEventStreamCommit(currentValue, inputValue);
   ISSUED_PREPARED_COMMITS.add(prepared);
   return prepared;
 }

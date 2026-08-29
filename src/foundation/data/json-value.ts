@@ -120,21 +120,6 @@ function appendPropertyPath(basePath: string, key: string): string {
   return `${basePath}/${escaped}`;
 }
 
-function containsLoneSurrogate(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (code >= 0xd800 && code <= 0xdbff) {
-      if (index + 1 >= value.length) return true;
-      const following = value.charCodeAt(index + 1);
-      if (following < 0xdc00 || following > 0xdfff) return true;
-      index += 1;
-    } else if (code >= 0xdc00 && code <= 0xdfff) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function readPassiveSnapshot<Result>(operation: () => Result): Result {
   try {
     return operation();
@@ -200,7 +185,7 @@ function parseObjectValue(
   try {
     const snapshot: Record<string, JsonValue> = Object.create(null);
     for (const key of Object.keys(source)) {
-      if (containsLoneSurrogate(key)) fail("lone-surrogate", path);
+      if (!key.isWellFormed()) fail("lone-surrogate", path);
       const childPath = appendPropertyPath(path, key);
       defineJsonProperty(
         snapshot,
@@ -224,7 +209,7 @@ function parseValue(
   if (value === null || typeof value === "boolean") return value;
 
   if (typeof value === "string") {
-    if (containsLoneSurrogate(value)) fail("lone-surrogate", path);
+    if (!value.isWellFormed()) fail("lone-surrogate", path);
     return value;
   }
 

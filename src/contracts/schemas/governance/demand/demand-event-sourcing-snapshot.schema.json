@@ -10,7 +10,6 @@
   "required": [
     "artifactKind",
     "schemaVersion",
-    "aggregateVersion",
     "versionCompatibilityDigest",
     "demandId",
     "commitSequence",
@@ -26,9 +25,6 @@
       "const": "wakeflow-demand-event-sourcing-snapshot"
     },
     "schemaVersion": {
-      "const": 1
-    },
-    "aggregateVersion": {
       "const": 1
     },
     "versionCompatibilityDigest": {

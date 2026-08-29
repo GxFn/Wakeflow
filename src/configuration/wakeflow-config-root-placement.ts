@@ -21,8 +21,9 @@ import {
  * Wakeflow Configuration：v3 配置声明根目录的词法与物理位置准入。
  *
  * 本模块把固定的 Active、Local 根目录与配置中的 Ledger、Support、Repository 根目录
- * 编译成一组绝对路径。它先确定性拒绝词法重叠，再复用 `AbsoluteDirectoryPlacement`
- * 逐项检查符号链接、目录类型和规范路径拼写，最后拒绝已有根目录的真实路径重叠。
+ * 编译成一组绝对路径。它先按可移植NFC/case-fold比较拒绝词法重叠，再复用
+ * `AbsoluteDirectoryPlacement`逐项检查符号链接、目录类型和规范路径拼写，最后拒绝
+ * 已有根目录的真实路径重叠。
  * 缺失根目录会作为未来位置明确记录，但本层绝不创建它们。
  *
  * 这只是配置快照的布局准入，不是完整的布局描述符，也不授予任何根目录写入权限。
@@ -106,28 +107,8 @@ function assertRoot(value: unknown): asserts value is RootedDirectory {
   }
 }
 
-function relation(
-  left: string,
-  right: string,
-): "same" | "contains" | "inside" | null {
-  const relative = nodePath.relative(left, right);
-  if (relative.length === 0) return "same";
-  if (
-    relative !== ".."
-    && !relative.startsWith(`..${nodePath.sep}`)
-    && !nodePath.isAbsolute(relative)
-  ) {
-    return "contains";
-  }
-  const inverse = nodePath.relative(right, left);
-  if (
-    inverse !== ".."
-    && !inverse.startsWith(`..${nodePath.sep}`)
-    && !nodePath.isAbsolute(inverse)
-  ) {
-    return "inside";
-  }
-  return null;
+function portableComparisonPath(value: string): string {
+  return nodePath.normalize(value).normalize("NFC").toLowerCase();
 }
 
 function asPlacement(value: string): WakeflowConfigPlacement {
@@ -166,19 +147,27 @@ function assertNoOverlap<Entry>(
   pathOf: (entry: Entry) => string,
   reason: "lexical-overlap" | "physical-overlap",
 ): void {
-  for (let leftIndex = 0; leftIndex < roots.length; leftIndex += 1) {
-    const left = roots[leftIndex];
-    if (left === undefined) fail("inspection-failure", "$placements");
-    for (
-      let rightIndex = leftIndex + 1;
-      rightIndex < roots.length;
-      rightIndex += 1
-    ) {
-      const right = roots[rightIndex];
-      if (right === undefined) fail("inspection-failure", "$placements");
-      if (relation(pathOf(left), pathOf(right)) !== null) {
-        fail(reason, `$placements/${leftIndex}|${rightIndex}`);
+  const indexByPath = new Map<string, number>();
+  for (const [index, root] of roots.entries()) {
+    const key = portableComparisonPath(pathOf(root));
+    const duplicate = indexByPath.get(key);
+    if (duplicate !== undefined) {
+      fail(reason, `$placements/${duplicate}|${index}`);
+    }
+    indexByPath.set(key, index);
+  }
+  for (const [index, root] of roots.entries()) {
+    let current = portableComparisonPath(pathOf(root));
+    while (true) {
+      const parent = nodePath.dirname(current);
+      if (parent === current) break;
+      const ancestor = indexByPath.get(parent);
+      if (ancestor !== undefined) {
+        const left = Math.min(ancestor, index);
+        const right = Math.max(ancestor, index);
+        fail(reason, `$placements/${left}|${right}`);
       }
+      current = parent;
     }
   }
 }
@@ -239,6 +228,16 @@ export async function validateWakeflowConfigRootPlacements(
       && observation.spellingIsCanonical !== true
     ) {
       fail("alias", `$placements/${index}`);
+    }
+    if (observation.state === "missing") {
+      if (observation.nearestExistingAncestor === null) {
+        fail("inspection-failure", `$placements/${index}`);
+      }
+      if (
+        observation.nearestExistingAncestor.spellingIsCanonical !== true
+      ) {
+        fail("alias", `$placements/${index}`);
+      }
     }
     observed.push(observation);
   }

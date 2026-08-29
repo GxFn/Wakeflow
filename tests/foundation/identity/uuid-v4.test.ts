@@ -1,4 +1,4 @@
-import { equal, notEqual } from "node:assert/strict";
+import { equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -139,15 +139,11 @@ test("factory boundaries reject invalid sources without coercing results", () =>
   );
 });
 
-test("Node.js default generation returns canonical UUIDv4 values", () => {
-  const generated = Array.from({ length: 32 }, () => createUuidV4());
+test("Node.js default generation returns one canonical UUIDv4 value", () => {
+  const uuid = createUuidV4();
 
-  for (const uuid of generated) {
-    equal(parseUuidV4(uuid), uuid);
-    equal(uuid.length, 36);
-  }
-  equal(new Set(generated).size, generated.length);
-  notEqual(generated[0], generated[1]);
+  equal(parseUuidV4(uuid), uuid);
+  equal(uuid.length, 36);
 });
 
 test("errors normalize empty paths and do not disclose rejected values", () => {

@@ -12,7 +12,7 @@ import { test } from "node:test";
 
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { parseWakeflowDurableIdOfKind } from "../../../src/foundation/identity/wakeflow-durable-id.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   executeDemandEventSourcingCommand,
@@ -20,9 +20,6 @@ import {
 import {
   DemandEventSourcingRepository,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import {
-  DemandFileEventSnapshotStore,
-} from "../../../src/governance/demand/event-sourcing/demand-file-event-snapshot-store.js";
 import {
   DemandFileEventStore,
 } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
@@ -54,10 +51,7 @@ test("真实本地 v1 stream 在重新打开后经 Registry load 与 full audit"
   let root = await RootedDirectory.open(fixtureRoot);
   try {
     const eventStore = new DemandFileEventStore(root);
-    const repository = new DemandEventSourcingRepository(
-      eventStore,
-      new DemandFileEventSnapshotStore(root),
-    );
+    const repository = new DemandEventSourcingRepository(root);
     await eventStore.initialize();
     await executeDemandEventSourcingCommand(repository, {
       commandType: "publication.publish-demand",
@@ -83,10 +77,7 @@ test("真实本地 v1 stream 在重新打开后经 Registry load 与 full audit"
 
     await root.close();
     root = await RootedDirectory.open(fixtureRoot);
-    const reopenedRepository = new DemandEventSourcingRepository(
-      new DemandFileEventStore(root),
-      new DemandFileEventSnapshotStore(root),
-    );
+    const reopenedRepository = new DemandEventSourcingRepository(root);
     const loaded = await reopenedRepository.load();
     equal(loaded?.aggregate.state.lifecycle, "active");
     equal(loaded?.aggregate.streamRevision, 1);

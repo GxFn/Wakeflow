@@ -31,15 +31,23 @@ import type {
 
 /** Demand 事件溯源各事件家族的持久化版本编解码器和当前版本写入器。 */
 
+export const DEMAND_EVENT_SOURCING_EVENT_TYPES = Object.freeze([
+  "lifecycle.demand-cancelled",
+  "publication.demand-published",
+] as const);
+
+type DemandEventSourcingCurrentEventType =
+  (typeof DEMAND_EVENT_SOURCING_EVENT_TYPES)[number];
+
 export const DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS = Object.freeze({
-  "publication.demand-published": 1,
   "lifecycle.demand-cancelled": 1,
-} as const);
+  "publication.demand-published": 1,
+} as const satisfies Readonly<Record<
+  DemandEventSourcingCurrentEventType,
+  number
+>>);
 
-export type DemandEventSourcingCurrentEventType =
-  keyof typeof DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS;
-
-export interface EncodedCurrentDemandEventVersion {
+interface EncodedCurrentDemandEventVersion {
   readonly eventType: DemandEventSourcingCurrentEventType;
   readonly eventVersion: number;
   readonly data: Readonly<JsonObject>;
@@ -84,15 +92,35 @@ const CANCELLED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
 });
 
 export const DEMAND_EVENT_SOURCING_SUPPORTED_EVENT_VERSIONS = Object.freeze({
-  "publication.demand-published": PUBLISHED_REGISTRY.supportedVersions,
   "lifecycle.demand-cancelled": CANCELLED_REGISTRY.supportedVersions,
-} as const);
+  "publication.demand-published": PUBLISHED_REGISTRY.supportedVersions,
+} as const satisfies Readonly<Record<
+  DemandEventSourcingCurrentEventType,
+  readonly number[]
+>>);
 
-export function isDemandEventSourcingCurrentEventType(
+function isDemandEventSourcingCurrentEventType(
   value: unknown,
 ): value is DemandEventSourcingCurrentEventType {
   return typeof value === "string"
     && Object.hasOwn(DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS, value);
+}
+
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return value !== null
+    && typeof value === "object"
+    && !Array.isArray(value);
+}
+
+function parseEventDataObject(
+  value: unknown,
+  path: string,
+): Readonly<JsonObject> {
+  const parsed = parseJsonValue(value, path);
+  if (!isJsonObject(parsed)) {
+    throw new TypeError("Demand event data must be a JSON object.");
+  }
+  return parsed;
 }
 
 /** 把持久化事件封装中的数据演进并投影为归约器接受的当前事件。 */
@@ -133,6 +161,6 @@ export function encodeCurrentDemandEventVersion(
   return Object.freeze({
     eventType: event.eventType,
     eventVersion: DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS[event.eventType],
-    data: encoded.data as Readonly<JsonObject>,
+    data: parseEventDataObject(encoded.data, "$data"),
   });
 }

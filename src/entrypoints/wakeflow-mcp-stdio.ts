@@ -23,24 +23,28 @@ export function runWakeflowMcpStdio(
   factory: McpServerFactory,
 ): StdioServerHandle {
   const handle = serveStdio(factory, {
-    legacy: "serve",
     onerror: () => {
+      process.exitCode = 1;
       writeStableTransportError("Wakeflow MCP stdio transport failed.");
     },
   });
 
-  let closing = false;
-  const close = (): void => {
-    if (closing) return;
-    closing = true;
-    process.off("SIGINT", close);
-    process.off("SIGTERM", close);
-    void handle.close().catch(() => {
+  let closePromise: Promise<void> | undefined;
+  const close = (): Promise<void> => {
+    if (closePromise !== undefined) return closePromise;
+    process.off("SIGINT", closeFromSignal);
+    process.off("SIGTERM", closeFromSignal);
+    closePromise = Promise.resolve().then(() => handle.close()).catch(() => {
       process.exitCode = 1;
       writeStableTransportError("Wakeflow MCP stdio shutdown failed.");
+      throw new Error("Wakeflow MCP stdio shutdown failed.");
     });
+    return closePromise;
   };
-  process.once("SIGINT", close);
-  process.once("SIGTERM", close);
-  return handle;
+  function closeFromSignal(): void {
+    void close().catch(() => undefined);
+  }
+  process.once("SIGINT", closeFromSignal);
+  process.once("SIGTERM", closeFromSignal);
+  return Object.freeze({ close });
 }

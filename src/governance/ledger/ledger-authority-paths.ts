@@ -5,7 +5,7 @@ import {
 import {
   parseWakeflowDurableIdOfKind,
   type WakeflowDurableId,
-} from "../../foundation/identity/wakeflow-durable-id.js";
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import type {
   ConfirmationRecord,
   LedgerAuthorityRecord,
@@ -119,7 +119,7 @@ export function ledgerRecordPublicationIntentRefForIdentity(
 ): PortableResourcePath {
   const recordId = publicationRecordId(family, recordIdValue);
   return parsePortableResourcePath(
-    `${LEDGER_TRANSACTIONS_ROOT_REF}/${family}-${recordId}.intent.json`,
+    `${LEDGER_TRANSACTIONS_ROOT_REF}/${recordId}.intent.json`,
   );
 }
 
@@ -129,7 +129,7 @@ export function ledgerRecordPublicationLockRefForIdentity(
 ): PortableResourcePath {
   const recordId = publicationRecordId(family, recordIdValue);
   return parsePortableResourcePath(
-    `${LEDGER_TRANSACTIONS_ROOT_REF}/${family}-${recordId}.lock`,
+    `${LEDGER_TRANSACTIONS_ROOT_REF}/${recordId}.lock`,
   );
 }
 
@@ -156,6 +156,6 @@ export function ledgerRecordPublicationStageRef(
   record: Readonly<LedgerAuthorityRecord>,
 ): PortableResourcePath {
   return parsePortableResourcePath(
-    `${LEDGER_TRANSACTIONS_ROOT_REF}/.${ledgerAuthorityFamily(record)}-${ledgerAuthorityRecordId(record)}.stage`,
+    `${LEDGER_TRANSACTIONS_ROOT_REF}/.${ledgerAuthorityRecordId(record)}.stage`,
   );
 }

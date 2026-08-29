@@ -27,7 +27,6 @@ import {
   computeCanonicalJsonSha256Digest,
 } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import type { JsonValue } from "../../foundation/data/json-value.js";
 import {
   parsePlainRecord,
   PassiveOwnDataError,
@@ -118,6 +117,7 @@ import {
 } from "../active/wakeflow-active-workspace-projection-publication.js";
 import {
   assertWakeflowMaintenanceGateContext,
+  WakeflowMaintenanceGateError,
   type WakeflowMaintenanceGateContext,
 } from "./wakeflow-maintenance-gate.js";
 import {
@@ -128,10 +128,13 @@ import {
 } from "./wakeflow-maintenance-resource-catalog.js";
 import {
   inspectWakeflowWorkspaceCoreLayout,
+  WakeflowWorkspaceCoreLayoutInspectionError,
+  type WakeflowWorkspaceCoreLayoutInspection,
 } from "./wakeflow-workspace-core-layout-inspection.js";
 import {
   parseWakeflowStaticMaterializationPreview,
   parseWakeflowStaticMaterializationPreviewRequest,
+  WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationPreviewRequest,
   type WakeflowStaticMaterializationStep,
 } from "./wakeflow-static-materialization-preview-contract.js";
@@ -152,7 +155,6 @@ export interface WakeflowStaticMaterializationStepExecutionOptions {
 }
 
 export interface WakeflowStaticMaterializationStepExecutionReceipt {
-  readonly kind: "WakeflowStaticMaterializationStepExecutionReceipt";
   readonly stepId: string;
   readonly disposition: "current" | "created" | "updated";
   readonly observationDigest: Sha256Digest;
@@ -208,8 +210,67 @@ function fail(
   throw new WakeflowStaticMaterializationStepExecutionError(reason, path);
 }
 
+interface ParsedStepExecutionOptions {
+  readonly sourceConfig: WakeflowConfigV3Model | null;
+  readonly recoveringAffectedStep: boolean;
+  readonly signal: AbortSignal | undefined;
+}
+
+function parseExecutionOptions(
+  value: unknown,
+): Readonly<ParsedStepExecutionOptions> {
+  let record: Readonly<Record<string, unknown>>;
+  try {
+    record = parsePlainRecord(value, "$options");
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    throw error;
+  }
+  if (
+    !Object.hasOwn(record, "recoveringAffectedStep")
+    || !Object.hasOwn(record, "sourceConfig")
+    || Object.keys(record).some((key) => (
+      key !== "recoveringAffectedStep"
+      && key !== "signal"
+      && key !== "sourceConfig"
+    ))
+    || typeof record.recoveringAffectedStep !== "boolean"
+    || (
+      record.signal !== undefined
+      && (
+        typeof record.signal !== "object"
+        || record.signal === null
+        || types.isProxy(record.signal)
+        || !(record.signal instanceof AbortSignal)
+      )
+    )
+  ) {
+    fail("input", "$options");
+  }
+  let sourceConfig: WakeflowConfigV3Model | null;
+  if (record.sourceConfig === null) {
+    sourceConfig = null;
+  } else {
+    try {
+      sourceConfig = parseWakeflowConfigV3(record.sourceConfig);
+    } catch (error: unknown) {
+      if (error instanceof WakeflowConfigV3Error) {
+        fail("source-config", "$options.sourceConfig");
+      }
+      throw error;
+    }
+  }
+  const signal = record.signal as AbortSignal | undefined;
+  if (signal?.aborted === true) fail("aborted", "$signal");
+  return Object.freeze({
+    sourceConfig,
+    recoveringAffectedStep: record.recoveringAffectedStep,
+    signal,
+  });
+}
+
 function authorityDigest(value: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(value as JsonValue);
+  return computeCanonicalJsonSha256Digest(value);
 }
 
 function receipt(
@@ -218,7 +279,6 @@ function receipt(
   value: unknown,
 ): Readonly<WakeflowStaticMaterializationStepExecutionReceipt> {
   return Object.freeze({
-    kind: "WakeflowStaticMaterializationStepExecutionReceipt",
     stepId,
     disposition,
     observationDigest: authorityDigest(value),
@@ -247,9 +307,13 @@ function assertStepTarget(
 
 async function optionalConfigSnapshot(
   root: RootedDirectory,
+  signal: AbortSignal | undefined,
 ): Promise<Readonly<WakeflowConfigAuthoritySnapshot> | null> {
   try {
-    return await readWakeflowConfigAuthoritySnapshot(root);
+    return await readWakeflowConfigAuthoritySnapshot(
+      root,
+      signal === undefined ? undefined : { signal },
+    );
   } catch (error: unknown) {
     if (
       error instanceof WakeflowConfigAuthoritySnapshotError
@@ -258,6 +322,7 @@ async function optionalConfigSnapshot(
       return null;
     }
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
       fail("owner", "$config");
     }
     throw error;
@@ -275,10 +340,20 @@ async function executeLocalProtocol(
     WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION,
     WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION,
   ]));
-  const core = await inspectWakeflowWorkspaceCoreLayout(
-    root,
-    signal === undefined ? {} : { signal },
-  );
+  let core: Readonly<WakeflowWorkspaceCoreLayoutInspection>;
+  try {
+    core = await inspectWakeflowWorkspaceCoreLayout(
+      root,
+      signal === undefined ? {} : { signal },
+    );
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "root-scope") fail("root-scope", "$root");
+      fail("owner", "$coreLayout.local");
+    }
+    throw error;
+  }
   if (!core.local.protocolComplete || core.local.status !== "busy") {
     fail("owner", "$coreLayout.local");
   }
@@ -642,6 +717,7 @@ async function executeSupportRoot(
       throw error;
     }
     if (error instanceof WakeflowManagedSupportRootMaterializationError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
       fail("owner", "$supportRoot");
     }
     throw error;
@@ -766,13 +842,23 @@ async function executeSupportMemory(
     entry.key === `support.${surfaceId}.root`
   ));
   if (placement?.state !== "present") fail("root-scope", "$supportRoot");
-  const supportRoot = await RootedDirectory.open(placement.absolutePath);
+  let supportRoot: RootedDirectory;
+  try {
+    supportRoot = await RootedDirectory.open(placement.absolutePath);
+  } catch (error: unknown) {
+    if (error instanceof RootedDirectoryError) {
+      fail("root-scope", "$supportRoot");
+    }
+    throw error;
+  }
+  let result: Awaited<ReturnType<typeof publishWakeflowSupportMemory>> | undefined;
+  let primaryError: unknown;
   try {
     const catalog = createWakeflowManagedSupportResourceCatalog(
       desired,
       request.currentHostProfile,
     );
-    const result = await publishWakeflowSupportMemory(
+    result = await publishWakeflowSupportMemory(
       root,
       supportRoot,
       {
@@ -788,22 +874,35 @@ async function executeSupportMemory(
       },
       signal === undefined ? undefined : { signal },
     );
-    return receipt(
-      step.stepId,
-      result.disposition === "current" ? "current" : "updated",
-      {
-        authorityDigest: result.inspection.desiredAuthority.authorityDigest,
-        sourceDigest: result.inspection.source?.digest ?? null,
-      },
-    );
   } catch (error: unknown) {
-    if (error instanceof WakeflowSupportMemoryPublicationError) {
-      fail(error.reason === "aborted" ? "aborted" : "owner", "$supportMemory");
-    }
-    throw error;
-  } finally {
-    await supportRoot.close();
+    primaryError = error;
   }
+  let closeError: unknown;
+  try {
+    await supportRoot.close();
+  } catch (error: unknown) {
+    closeError = error;
+  }
+  if (primaryError !== undefined) {
+    if (primaryError instanceof WakeflowSupportMemoryPublicationError) {
+      fail(
+        primaryError.reason === "aborted" ? "aborted" : "owner",
+        "$supportMemory",
+      );
+    }
+    throw primaryError;
+  }
+  if (closeError !== undefined || result === undefined) {
+    fail("owner", "$supportRoot");
+  }
+  return receipt(
+    step.stepId,
+    result.disposition === "current" ? "current" : "updated",
+    {
+      authorityDigest: result.inspection.desiredAuthority.authorityDigest,
+      sourceDigest: result.inspection.source?.digest ?? null,
+    },
+  );
 }
 
 async function executeConfig(
@@ -815,7 +914,7 @@ async function executeConfig(
 ) {
   const desiredDigest = computeWakeflowConfigV3Digest(desired);
   assertStepTarget(step, desiredDigest);
-  const current = await optionalConfigSnapshot(root);
+  const current = await optionalConfigSnapshot(root, signal);
   if (current?.configDigest === desiredDigest) {
     return receipt(step.stepId, "current", {
       configDigest: current.configDigest,
@@ -860,6 +959,8 @@ async function executeConfig(
       error instanceof WakeflowConfigAuthorityPublicationError
       || error instanceof WakeflowConfigAuthorityReplacementError
     ) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "root-scope") fail("root-scope", "$root");
       fail("owner", "$config");
     }
     throw error;
@@ -877,58 +978,43 @@ export async function executeWakeflowStaticMaterializationStep(
 ): Promise<Readonly<WakeflowStaticMaterializationStepExecutionReceipt>> {
   try {
     assertWakeflowMaintenanceGateContext(gateContext, root);
-  } catch {
-    fail("gate", "$gateContext");
-  }
-  const preview = parseWakeflowStaticMaterializationPreview(previewValue);
-  const request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
-  if (typeof stepIdValue !== "string") fail("input", "$stepId");
-  const step = preview.steps.find((entry) => entry.stepId === stepIdValue);
-  if (step === undefined) fail("plan", "$stepId");
-  let optionRecord: Readonly<Record<string, unknown>>;
-  try {
-    optionRecord = parsePlainRecord(options, "$options");
   } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    if (error instanceof WakeflowMaintenanceGateError) {
+      fail("gate", "$gateContext");
+    }
+    throw error;
+  }
+  const parsedOptions = parseExecutionOptions(options);
+  let preview: ReturnType<typeof parseWakeflowStaticMaterializationPreview>;
+  try {
+    preview = parseWakeflowStaticMaterializationPreview(previewValue);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowStaticMaterializationPreviewError) {
+      fail("plan", error.path);
+    }
+    throw error;
+  }
+  let request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>;
+  try {
+    request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowStaticMaterializationPreviewError) {
+      fail("input", error.path);
+    }
     throw error;
   }
   if (
-    !Object.hasOwn(optionRecord, "recoveringAffectedStep")
-    || !Object.hasOwn(optionRecord, "sourceConfig")
-    || Object.keys(optionRecord).some((key) => (
-      key !== "recoveringAffectedStep"
-      && key !== "signal"
-      && key !== "sourceConfig"
-    ))
-    || typeof optionRecord.recoveringAffectedStep !== "boolean"
-    || (
-      optionRecord.signal !== undefined
-      && (
-        typeof optionRecord.signal !== "object"
-        || optionRecord.signal === null
-        || types.isProxy(optionRecord.signal)
-        || !(optionRecord.signal instanceof AbortSignal)
-      )
-    )
+    typeof stepIdValue !== "string"
+    || stepIdValue.length > 256
+    || !stepIdValue.isWellFormed()
   ) {
-    fail("input", "$options");
+    fail("input", "$stepId");
   }
-  let sourceConfig: WakeflowConfigV3Model | null;
-  if (optionRecord.sourceConfig === null) {
-    sourceConfig = null;
-  } else {
-    try {
-      sourceConfig = parseWakeflowConfigV3(optionRecord.sourceConfig);
-    } catch (error: unknown) {
-      if (error instanceof WakeflowConfigV3Error) {
-        fail("source-config", "$options.sourceConfig");
-      }
-      throw error;
-    }
-  }
-  const signal = optionRecord.signal as AbortSignal | undefined;
-  const recovering = optionRecord.recoveringAffectedStep;
-  if (signal?.aborted === true) fail("aborted", "$signal");
+  const step = preview.steps.find((entry) => entry.stepId === stepIdValue);
+  if (step === undefined) fail("plan", "$stepId");
+  if (preview.status !== "ready") fail("plan", "$preview.status");
+  const { sourceConfig, signal } = parsedOptions;
+  const recovering = parsedOptions.recoveringAffectedStep;
   const matrix = createWakeflowWorkspaceStaticResourceMatrix(
     request.currentHostProfile,
   );
@@ -1038,5 +1124,9 @@ export async function executeWakeflowStaticMaterializationStep(
       signal,
     );
   }
-  return executeConfig(root, step, preview, desired, signal);
+  if (step.kind === "publish-config") {
+    return executeConfig(root, step, preview, desired, signal);
+  }
+  const unsupportedKind: never = step.kind;
+  return fail("plan", `$step.kind:${unsupportedKind}`);
 }

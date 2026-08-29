@@ -170,6 +170,21 @@ test("revision, mount, archive and transition relationships fail closed", () => 
   );
 });
 
+test("state v1 rejects lifecycle statuses owned by Demand or Task", () => {
+  const initial = createInitialTodoState(intake());
+  for (const status of [
+    "blocked",
+    "observing",
+    "completed",
+    "cancelled",
+  ] as const) {
+    expectStateError(
+      () => parseTodoState({ ...initial, status }),
+      "schema",
+    );
+  }
+});
+
 test("state field order is part of deterministic disk representation only", () => {
   const state = createInitialTodoState(intake());
   const reordered = Object.fromEntries(Object.entries(state).reverse());
@@ -215,4 +230,49 @@ test("mount and archive inputs are passive closed records", () => {
     "input",
   );
   equal(getterCalls, 0);
+});
+
+test("state transitions close authorization and revision before reading time", () => {
+  const source = intake();
+  const initial = createInitialTodoState(source);
+  const claimed = claimTodoState(initial, mount(), { clock: () => CLAIMED_AT });
+  let clockCalls = 0;
+  expectStateError(
+    () => archiveTodoState(
+      claimed,
+      archiveReceipt(source, `sha256:${"c".repeat(64)}`),
+      {
+        clock: () => {
+          clockCalls += 1;
+          return ARCHIVED_AT;
+        },
+      },
+    ),
+    "archive",
+  );
+  equal(clockCalls, 0);
+
+  const maximumRevision = parseTodoState({
+    ...initial,
+    revision: Number.MAX_SAFE_INTEGER,
+    previousStateDigest: `sha256:${"d".repeat(64)}`,
+  });
+  expectStateError(
+    () => claimTodoState(maximumRevision, mount(), {
+      clock: () => {
+        clockCalls += 1;
+        return CLAIMED_AT;
+      },
+    }),
+    "revision",
+  );
+  equal(clockCalls, 0);
+  expectStateError(
+    () => claimTodoState(initial, mount(), {
+      clock: () => {
+        throw new Error("private clock failure");
+      },
+    }),
+    "time",
+  );
 });

@@ -10,8 +10,6 @@ import {
 } from "../../src/configuration/wakeflow-config-authority-replacement-contract.js";
 import {
   WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE,
-} from "../../src/configuration/wakeflow-config-authority-publication.js";
-import {
   WAKEFLOW_CONFIG_FILE_REF,
 } from "../../src/configuration/wakeflow-config-authority-snapshot.js";
 import {

@@ -17,10 +17,10 @@ import { test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
-  durableAtomicFileStageRef,
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { durableAtomicFileStageRefForTest } from "./durable-atomic-file-test-support.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
@@ -120,10 +120,13 @@ test("atomic create 在 stage cleanup 前后分别同步 target parent", {
   ));
   const root = await RootedDirectory.open(rootPath);
   const resourcePath = parsePortableResourcePath("state");
+  const resourceAbsolutePath = path.join(root.absolutePath, resourcePath);
   const originalSync = RootedResourceParentHandle.prototype.sync;
   let targetParentSyncCount = 0;
   RootedResourceParentHandle.prototype.sync = async function patchedSync() {
-    if (this.resourcePath === resourcePath) targetParentSyncCount += 1;
+    if (this.resourceAbsolutePath === resourceAbsolutePath) {
+      targetParentSyncCount += 1;
+    }
     return originalSync.call(this);
   };
   try {
@@ -230,7 +233,7 @@ test("atomic create 自动恢复 inactive partial 与 two-link stage", async () 
       computeSha256Digest(partialBytes),
       0o640,
     );
-    const partialStage = durableAtomicFileStageRef(
+    const partialStage = durableAtomicFileStageRefForTest(
       partialTarget,
       partialAddress,
     );
@@ -264,7 +267,7 @@ test("atomic create 自动恢复 inactive partial 与 two-link stage", async () 
       computeSha256Digest(linkedBytes),
       0o600,
     );
-    const linkedStage = durableAtomicFileStageRef(linkedTarget, linkedAddress);
+    const linkedStage = durableAtomicFileStageRefForTest(linkedTarget, linkedAddress);
     try {
       await createFileCandidateDurably(root, linkedStage, linkedBytes, {
         mode: 0o600,
@@ -308,7 +311,7 @@ test("atomic write preflight preserves a safe foreign-target stage", async () =>
     computeSha256Digest(foreignBytes),
     0o600,
   );
-  const foreignStage = durableAtomicFileStageRef(foreignTarget, address);
+  const foreignStage = durableAtomicFileStageRefForTest(foreignTarget, address);
   let released = false;
   try {
     await createFileCandidateDurably(root, foreignStage, foreignBytes, {
@@ -483,6 +486,34 @@ test("options, bytes, expectation, and AbortSignal are passively admitted", asyn
       "input",
       "$bytes",
     );
+    await expectAtomicWriteError(
+      () => createFileAtomically(
+        root,
+        resourcePath,
+        new Uint8Array(new SharedArrayBuffer(1)),
+        { mode: 0o600 },
+      ),
+      "input",
+      "$bytes",
+    );
+    let byteTrapCalls = 0;
+    const byteProxy = new Proxy(new Uint8Array([1]), {
+      get() {
+        byteTrapCalls += 1;
+        return undefined;
+      },
+    });
+    await expectAtomicWriteError(
+      () => createFileAtomically(
+        root,
+        resourcePath,
+        byteProxy,
+        { mode: 0o600 },
+      ),
+      "input",
+      "$bytes",
+    );
+    equal(byteTrapCalls, 0);
     await expectAtomicWriteError(
       () => createFileAtomically(
         root,

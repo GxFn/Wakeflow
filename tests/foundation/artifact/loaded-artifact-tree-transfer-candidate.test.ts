@@ -132,7 +132,6 @@ test("loaded artifact transfer materializes and closes a complete candidate", as
     current.destinationRoot,
     plan,
   );
-  equal(result.kind, "LoadedArtifactTreeTransferCandidate");
   equal(result.sourceIdentity.artifactDigest, plan.artifactDigest);
   equal(result.candidate.plan.treeDigest, plan.directoryPlan.treeDigest);
   deepEqual(result.copiedFiles, [

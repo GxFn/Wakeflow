@@ -12,7 +12,7 @@ import {
 } from "./workspace-resource-declaration.js";
 import {
   wakeflowWindowHostBindingMutationLockRef,
-  wakeflowWindowBindingRootRef,
+  wakeflowWindowHostBindingRootRef,
   wakeflowWindowRuntimeProjectionRootRef,
 } from "./window-runtime/wakeflow-window-runtime-paths.js";
 import {
@@ -239,7 +239,7 @@ export function createWakeflowWorkspaceHostResourceCatalog(
       privateDirectoryDeclaration(
         `${prefix}.window-identity-root`,
         "window-host-binding",
-        wakeflowWindowBindingRootRef(profile),
+        wakeflowWindowHostBindingRootRef(profile),
       ),
       transactionFileDeclaration(
         `${prefix}.window-identity-lock`,

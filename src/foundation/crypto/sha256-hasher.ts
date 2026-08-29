@@ -8,11 +8,9 @@ import {
 } from "../numeric/byte-count.js";
 import {
   parseSha256Digest,
-  parseSha256Hex,
   SHA256_DIGEST_PREFIX,
   Sha256Error,
   type Sha256Digest,
-  type Sha256Hex,
 } from "./sha256.js";
 
 /**
@@ -20,7 +18,7 @@ import {
  *
  * 本模块为稳定文件读取、目录树扫描和流式重写提供有状态 SHA-256 累加器。每个
  * `Uint8Array` 分块只处理其可见字节，并以 `ByteCount` 累加总量，最终一次性返回
- * 小写十六进制摘要、`sha256:<hex>` 和精确字节数。
+ * `sha256:<hex>` 和精确字节数。
  *
  * 它不读取流或文件、不隐式编码字符串、不设置 I/O 分块大小，也不把摘要
  * 解释为签名、授权或文件身份。并发调用同一个实例不受支持；上层应为每次顺序
@@ -30,7 +28,6 @@ import {
 /** 一次增量 SHA-256 完成后的冻结结果。 */
 export interface Sha256HashResult {
   readonly byteCount: ByteCount;
-  readonly hex: Sha256Hex;
   readonly digest: Sha256Digest;
 }
 
@@ -92,8 +89,9 @@ function isUint8Array(value: unknown): value is Uint8Array {
 /**
  * 按顺序消费字节分块的单次 SHA-256 累加器。
  *
- * 本类封装 Node.js `Hash` 及其不可逆生命周期。调用方只能读取累计字节数，不能取得
- * 或改写底层哈希器。`digest()` 成功或失败后都不能再次更新或完成该实例。
+ * 本类封装 Node.js `Hash` 及其不可逆生命周期。调用方只能从最终冻结结果取得累计
+ * 字节数与摘要，不能取得或改写底层哈希器。`digest()` 成功或失败后都不能再次更新
+ * 或完成该实例。
  */
 export class Sha256Hasher {
   readonly #hash: Hash;
@@ -106,11 +104,6 @@ export class Sha256Hasher {
     } catch {
       fail("initialization-failure", "$hasher");
     }
-  }
-
-  /** 当前已经成功提交给哈希器的精确字节数。 */
-  get byteCount(): ByteCount {
-    return this.#byteCount;
   }
 
   /**
@@ -154,7 +147,7 @@ export class Sha256Hasher {
   }
 
   /**
-   * 完成增量 SHA-256，并返回同一摘要的两种完整词法与累计字节数。
+   * 完成增量 SHA-256，并返回完整 prefixed digest 与累计字节数。
    *
    * 空输入合法。完成操作只能调用一次；Node.js 摘要计算或词法复验失败都会让实例
    * 永久进入不可用状态。
@@ -171,12 +164,10 @@ export class Sha256Hasher {
       fail("digest-failure", "$hasher");
     }
 
-    let hex: Sha256Hex;
     let digest: Sha256Digest;
     try {
-      hex = parseSha256Hex(value, "$hasher.hex");
       digest = parseSha256Digest(
-        `${SHA256_DIGEST_PREFIX}${hex}`,
+        `${SHA256_DIGEST_PREFIX}${value}`,
         "$hasher.digest",
       );
     } catch (error: unknown) {
@@ -190,7 +181,6 @@ export class Sha256Hasher {
     this.#state = "finalized";
     return Object.freeze({
       byteCount: this.#byteCount,
-      hex,
       digest,
     });
   }

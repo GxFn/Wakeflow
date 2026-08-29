@@ -195,7 +195,7 @@ test("expectedNode binds a directory read to one exact observed version", async 
   }
 });
 
-test("bounded parallel entry inspection preserves deterministic order", async () => {
+test("many-entry inspection preserves deterministic order", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-dir-many-"));
   const names = Array.from({ length: 64 }, (_, index) => (
     `entry-${String(63 - index).padStart(2, "0")}`

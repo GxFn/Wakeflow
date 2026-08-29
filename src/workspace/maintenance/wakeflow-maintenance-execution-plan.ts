@@ -221,7 +221,10 @@ function orderedSteps(
     .map((entry) => sharedStep(entry));
   if (contribution !== null) {
     for (const operation of contribution.operations) {
-      const dependencies = steps.map((entry) => entry.stepId);
+      const predecessor = steps.at(-1);
+      const dependencies = predecessor === undefined
+        ? []
+        : [predecessor.stepId];
       steps.push(hostStep(
         contribution.hostId,
         contribution.capabilityId,
@@ -393,25 +396,4 @@ export function parseWakeflowMaintenanceExecutionPlan(
     fail("digest", "$plan.planDigest");
   }
   return expected;
-}
-
-/** 返回宿主 step 对应的 exact payload；shared step 返回 null。 */
-export function hostOperationForWakeflowMaintenanceStep(
-  planValue: unknown,
-  stepId: string,
-): Readonly<WakeflowHostMaintenanceOperation> | null {
-  const plan = parseWakeflowMaintenanceExecutionPlan(planValue);
-  const step = plan.steps.find((entry) => entry.stepId === stepId);
-  if (step?.boundary !== "host-capability") return null;
-  const operation = plan.hostContribution?.operations.find((entry) => (
-    entry.operationId === step.operationId
-  ));
-  if (
-    operation === undefined
-    || operation.payloadDigest !== step.payloadDigest
-    || operation.targetDigest !== step.targetDigest
-  ) {
-    fail("order", "$plan.steps");
-  }
-  return operation;
 }

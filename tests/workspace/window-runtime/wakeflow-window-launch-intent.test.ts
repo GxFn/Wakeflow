@@ -66,6 +66,8 @@ test("launch intents resolve Config roots without host handles", () => {
     entry.create.authorization === "not-authorized-by-preview"
     && entry.registration.rawHandleSource === "host-create-result"
     && entry.registration.identityAuthority === "window-host-binding"
+    && !Object.hasOwn(entry.registration, "windowId")
+    && !Object.hasOwn(entry.registration, "hostId")
   )), true);
   const serialized = JSON.stringify(set);
   equal(
@@ -102,6 +104,5 @@ test("launch intent set binds the current host profile without changing logical 
   })));
   equal(claude.intents.every((entry) => (
     entry.host.hostId === "claude-code"
-    && entry.registration.hostId === "claude-code"
   )), true);
 });

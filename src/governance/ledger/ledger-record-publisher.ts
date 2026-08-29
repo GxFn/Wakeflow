@@ -29,6 +29,7 @@ import {
 } from "./ledger-authority-store-contract.js";
 import {
   createLedgerRecordPublicationIntent,
+  renderLedgerRecordPublicationIntent,
   sameLedgerRecordPublicationIntent,
   LedgerRecordPublicationIntentError,
   type LedgerRecordPublicationIntent,
@@ -56,6 +57,7 @@ import {
   LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES,
   LEDGER_DURABLE_DIRECTORY_MODE,
   LEDGER_DURABLE_FILE_MODE,
+  LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES,
 } from "./ledger-authority-storage-policy.js";
 
 /**
@@ -178,10 +180,17 @@ function preparePublication(
       candidateFiles,
       candidateOptions(signal),
     );
+    const intent = createLedgerRecordPublicationIntent(record, plan);
+    if (
+      encodeUtf8(renderLedgerRecordPublicationIntent(intent)).byteLength
+        > LEDGER_PUBLICATION_INTENT_MAXIMUM_BYTES
+    ) {
+      fail("capacity", "$intent");
+    }
     return Object.freeze({
       record,
       candidateFiles,
-      intent: createLedgerRecordPublicationIntent(record, plan),
+      intent,
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
@@ -233,13 +242,17 @@ export async function publishLedgerAuthorityRecord(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<LedgerAuthorityPublicationResult>> {
   const prepared = preparePublication(recordValue, membersValue, signal);
-  await recoverLedgerIntentAtomicStages(root, signal);
   await prepareLedgerRecordPublicationLockRecovery(root, prepared.intent.lockRef);
   return withLedgerRecordPublicationLock(
     root,
     prepared.intent.lockRef,
     signal,
     async () => {
+      await recoverLedgerIntentAtomicStages(
+        root,
+        prepared.intent.intentRef,
+        signal,
+      );
       const storedBefore = await existingLedgerRecordPublicationIntentOrNull(
         root,
         prepared.intent.intentRef,
@@ -268,7 +281,7 @@ export async function publishLedgerAuthorityRecord(
             residuesBefore,
             signal,
           );
-          return Object.freeze({ created: false, loaded });
+          return Object.freeze({ wroteAuthority: false, loaded });
         }
         if (residuesBefore.stageNode !== null) {
           fail("recovery-required", "$stage");
@@ -278,7 +291,7 @@ export async function publishLedgerAuthorityRecord(
           prepared.intent,
           signal,
         );
-        return Object.freeze({ created: false, loaded });
+        return Object.freeze({ wroteAuthority: false, loaded });
       }
       if (storedBefore === null && residuesBefore.stageNode !== null) {
         fail("recovery-required", "$stage");
@@ -312,7 +325,7 @@ export async function publishLedgerAuthorityRecord(
         fail("recovery-required", "$intent");
       }
       await retireLedgerRecordPublicationIntent(root, freshStored, signal);
-      return Object.freeze({ created: true, loaded });
+      return Object.freeze({ wroteAuthority: true, loaded });
     },
   );
 }

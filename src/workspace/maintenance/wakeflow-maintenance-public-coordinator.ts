@@ -1,9 +1,15 @@
 import {
   compileWakeflowFreshConfigSelection,
+  WakeflowFreshConfigSelectionError,
   type WakeflowFreshConfigCompilation,
 } from "../../configuration/wakeflow-fresh-config-selection.js";
 import {
+  WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA,
+  type WakeflowMaintenancePublicResultV1 as PublicResultWire,
+} from "../../contracts/generated/entrypoints/wakeflow-maintenance-public-result.generated.js";
+import {
   parseWakeflowConfigV3,
+  WakeflowConfigV3Error,
   type WakeflowConfigV3Model,
 } from "../../configuration/wakeflow-config-v3.js";
 import {
@@ -19,11 +25,14 @@ import {
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
+  createRuntimeJsonSchemaValidator,
+} from "../../foundation/schema/runtime-json-schema.js";
+import {
   computeCanonicalJsonSha256Digest,
 } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
+import type {
+  WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
 import type {
   WakeflowWindowLaunchIntent,
@@ -49,9 +58,11 @@ import {
 import type {
   WakeflowMaintenanceOperationId,
 } from "./wakeflow-maintenance-operation-id.js";
-import type {
-  WakeflowStaticMaterializationAction,
-  WakeflowStaticMaterializationPreviewRequest,
+import {
+  parseWakeflowStaticMaterializationPreviewRequest,
+  WakeflowStaticMaterializationPreviewError,
+  type WakeflowStaticMaterializationAction,
+  type WakeflowStaticMaterializationPreviewRequest,
 } from "./wakeflow-static-materialization-preview-contract.js";
 
 /**
@@ -65,17 +76,18 @@ import type {
 export const WAKEFLOW_MAINTENANCE_PUBLIC_MAXIMUM_RESULT_BYTES =
   8 * 1024 * 1024;
 
-export interface WakeflowMaintenancePublicPreviewResult {
+const validatePublicResult = createRuntimeJsonSchemaValidator<PublicResultWire>(
+  WAKEFLOW_MAINTENANCE_PUBLIC_RESULT_SCHEMA,
+);
+
+interface WakeflowMaintenancePublicPreviewResultBase {
   readonly kind: "WakeflowMaintenancePublicPreviewResult";
   readonly schemaVersion: 1;
   readonly tool: typeof WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME;
   readonly hostId: WakeflowMaintenancePublicHostFacade["hostId"];
   readonly mode: "preview";
   readonly action: WakeflowStaticMaterializationAction;
-  readonly status: "ready" | "blocked";
   readonly blockerCodes: readonly string[];
-  readonly confirmation: Readonly<WakeflowMaintenanceConfirmation> | null;
-  readonly confirmationDigest: Sha256Digest | null;
   readonly freshConfigCompilation: Readonly<{
     readonly selectionDigest: Sha256Digest;
     readonly configDigest: Sha256Digest;
@@ -85,22 +97,61 @@ export interface WakeflowMaintenancePublicPreviewResult {
   readonly launchSetDigest: Sha256Digest | null;
 }
 
-export interface WakeflowMaintenancePublicMutationResult {
+export interface WakeflowMaintenancePublicReadyPreviewResult
+extends WakeflowMaintenancePublicPreviewResultBase {
+  readonly status: "ready";
+  readonly confirmation: Readonly<WakeflowMaintenanceConfirmation>;
+  readonly confirmationDigest: Sha256Digest;
+}
+
+export interface WakeflowMaintenancePublicBlockedPreviewResult
+extends WakeflowMaintenancePublicPreviewResultBase {
+  readonly status: "blocked";
+  readonly confirmation: null;
+  readonly confirmationDigest: null;
+  readonly launchIntents: readonly [];
+  readonly launchSetDigest: null;
+}
+
+export type WakeflowMaintenancePublicPreviewResult =
+  | WakeflowMaintenancePublicReadyPreviewResult
+  | WakeflowMaintenancePublicBlockedPreviewResult;
+
+interface WakeflowMaintenancePublicMutationResultBase {
   readonly kind: "WakeflowMaintenancePublicMutationResult";
   readonly schemaVersion: 1;
   readonly tool: typeof WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME;
   readonly hostId: WakeflowMaintenancePublicHostFacade["hostId"];
-  readonly mode: "apply" | "recover";
-  readonly action: WakeflowStaticMaterializationAction | null;
-  readonly status: "completed" | "no-op" | "recovered";
-  readonly operationId: WakeflowMaintenanceOperationId | null;
   readonly planDigest: Sha256Digest;
   readonly stepReceipts:
     readonly Readonly<WakeflowMaintenanceExecutionStepReceipt>[];
-  readonly confirmationDigest: Sha256Digest | null;
   readonly launchIntents: readonly Readonly<WakeflowWindowLaunchIntent>[];
   readonly launchSetDigest: Sha256Digest | null;
 }
+
+export interface WakeflowMaintenancePublicApplyResult
+extends WakeflowMaintenancePublicMutationResultBase {
+  readonly mode: "apply";
+  readonly action: WakeflowStaticMaterializationAction;
+  readonly status: "completed" | "no-op";
+  readonly operationId: WakeflowMaintenanceOperationId | null;
+  readonly confirmationDigest: Sha256Digest;
+}
+
+export interface WakeflowMaintenancePublicRecoveryResult
+extends WakeflowMaintenancePublicMutationResultBase {
+  readonly mode: "recover";
+  readonly action: null;
+  readonly status: "recovered";
+  readonly operationId: WakeflowMaintenanceOperationId;
+  readonly confirmationDigest: null;
+  readonly launchIntents: readonly [];
+  readonly launchSetDigest: null;
+}
+
+export type WakeflowMaintenancePublicMutationResult =
+  | WakeflowMaintenancePublicApplyResult
+  | WakeflowMaintenancePublicRecoveryResult;
 
 export type WakeflowMaintenancePublicResult =
   | WakeflowMaintenancePublicPreviewResult
@@ -171,39 +222,63 @@ function fail(
   );
 }
 
+interface AdmittedHostFacadeProfiles {
+  readonly currentHostProfile:
+    Readonly<WakeflowWorkspaceHostResourceProfile>;
+  readonly hostProfiles:
+    readonly Readonly<WakeflowWorkspaceHostResourceProfile>[];
+}
+
 function assertHostFacade(
   facade: Readonly<WakeflowMaintenancePublicHostFacade>,
-): void {
+): Readonly<AdmittedHostFacadeProfiles> {
   try {
-    const current = parseWakeflowWorkspaceHostResourceProfile(
-      facade.currentHostProfile,
-    );
     if (
-      current.hostId !== facade.hostId
-      || facade.hostProfiles.length !== 2
-      || !facade.hostProfiles.some((entry) => entry.hostId === facade.hostId)
+      typeof facade !== "object"
+      || facade === null
+      || !Object.isFrozen(facade)
+      || !Object.isFrozen(facade.hostProfiles)
       || typeof facade.preview !== "function"
       || typeof facade.apply !== "function"
       || typeof facade.recover !== "function"
     ) {
       fail("host");
     }
+    const parsed = parseWakeflowStaticMaterializationPreviewRequest({
+      action: "reconcile",
+      desiredConfig: null,
+      currentHostProfile: facade.currentHostProfile,
+      hostProfiles: facade.hostProfiles,
+    });
+    if (
+      parsed.currentHostProfile.hostId !== facade.hostId
+      || parsed.signal !== undefined
+    ) {
+      fail("host");
+    }
+    return Object.freeze({
+      currentHostProfile: parsed.currentHostProfile,
+      hostProfiles: parsed.hostProfiles,
+    });
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenancePublicCoordinatorError) throw error;
-    fail("host", error);
+    if (error instanceof WakeflowStaticMaterializationPreviewError) {
+      fail("host", error);
+    }
+    throw error;
   }
 }
 
 function executionRequest(
-  facade: Readonly<WakeflowMaintenancePublicHostFacade>,
+  profiles: Readonly<AdmittedHostFacadeProfiles>,
   action: WakeflowStaticMaterializationAction,
   desiredConfig: WakeflowConfigV3Model | null,
 ): WakeflowStaticMaterializationPreviewRequest {
   return Object.freeze({
     action,
     desiredConfig,
-    currentHostProfile: facade.currentHostProfile,
-    hostProfiles: facade.hostProfiles,
+    currentHostProfile: profiles.currentHostProfile,
+    hostProfiles: profiles.hostProfiles,
   });
 }
 
@@ -219,22 +294,22 @@ function freshCompilationView(
       });
 }
 
-function containsPrivatePath(
+function containsExactPrivateText(
   value: JsonValue,
-  privatePaths: readonly string[],
+  privateValues: ReadonlySet<string>,
 ): boolean {
   if (typeof value === "string") {
-    return privatePaths.some((entry) => value.includes(entry));
+    return privateValues.has(value);
   }
   if (value === null || typeof value !== "object") return false;
   return Object.values(value).some((entry) => (
-    containsPrivatePath(entry, privatePaths)
+    containsExactPrivateText(entry, privateValues)
   ));
 }
 
 function publicResult(
   value: unknown,
-  privatePaths: readonly string[],
+  privateValues: ReadonlySet<string>,
 ): Readonly<WakeflowMaintenancePublicResult> {
   let parsed: JsonValue;
   try {
@@ -242,7 +317,7 @@ function publicResult(
     if (
       encodeCanonicalJson(parsed, "$result").byteLength
         > WAKEFLOW_MAINTENANCE_PUBLIC_MAXIMUM_RESULT_BYTES
-      || containsPrivatePath(parsed, privatePaths)
+      || containsExactPrivateText(parsed, privateValues)
     ) {
       fail("output");
     }
@@ -250,6 +325,7 @@ function publicResult(
     if (error instanceof WakeflowMaintenancePublicCoordinatorError) throw error;
     fail("output", error);
   }
+  if (!validatePublicResult(parsed).ok) fail("output");
   return parsed as unknown as Readonly<WakeflowMaintenancePublicResult>;
 }
 
@@ -283,6 +359,7 @@ async function withRoot<Result>(
 
 async function preview(
   facade: Readonly<WakeflowMaintenancePublicHostFacade>,
+  profiles: Readonly<AdmittedHostFacadeProfiles>,
   request: Readonly<WakeflowMaintenancePublicPreviewRequest>,
 ): Promise<Readonly<WakeflowMaintenancePublicResult>> {
   let compilation: Readonly<WakeflowFreshConfigCompilation> | null = null;
@@ -299,10 +376,16 @@ async function preview(
       desiredConfig = null;
     }
   } catch (error: unknown) {
-    fail("preview", error);
+    if (
+      error instanceof WakeflowFreshConfigSelectionError
+      || error instanceof WakeflowConfigV3Error
+    ) {
+      fail("preview", error);
+    }
+    throw error;
   }
   const internalRequest = executionRequest(
-    facade,
+    profiles,
     request.action,
     desiredConfig,
   );
@@ -335,21 +418,22 @@ async function preview(
     freshConfigCompilation: freshCompilationView(compilation),
     launchIntents: launchIntentSet?.intents ?? [],
     launchSetDigest: launchIntentSet?.launchSetDigest ?? null,
-  }, [request.root, rooted.canonicalRoot]);
+  }, new Set([request.root, rooted.canonicalRoot]));
 }
 
 function assertConfirmationHost(
   facade: Readonly<WakeflowMaintenancePublicHostFacade>,
+  profiles: Readonly<AdmittedHostFacadeProfiles>,
   confirmation: Readonly<WakeflowMaintenanceConfirmation>,
 ): void {
   if (
     confirmation.executionPlan.hostId !== facade.hostId
     || computeCanonicalJsonSha256Digest(
       confirmation.executionRequest.currentHostProfile,
-    ) !== computeCanonicalJsonSha256Digest(facade.currentHostProfile)
+    ) !== computeCanonicalJsonSha256Digest(profiles.currentHostProfile)
     || computeCanonicalJsonSha256Digest(
       confirmation.executionRequest.hostProfiles,
-    ) !== computeCanonicalJsonSha256Digest(facade.hostProfiles)
+    ) !== computeCanonicalJsonSha256Digest(profiles.hostProfiles)
   ) {
     fail("confirmation");
   }
@@ -360,9 +444,9 @@ export async function executeWakeflowMaintenancePublicRequest(
   facade: Readonly<WakeflowMaintenancePublicHostFacade>,
   value: unknown,
 ): Promise<Readonly<WakeflowMaintenancePublicResult>> {
-  assertHostFacade(facade);
+  const profiles = assertHostFacade(facade);
   const request = parseWakeflowMaintenancePublicRequest(value);
-  if (request.mode === "preview") return preview(facade, request);
+  if (request.mode === "preview") return preview(facade, profiles, request);
 
   if (request.mode === "apply") {
     let confirmation: Readonly<WakeflowMaintenanceConfirmation>;
@@ -378,7 +462,7 @@ export async function executeWakeflowMaintenancePublicRequest(
       ) {
         fail("confirmation");
       }
-      assertConfirmationHost(facade, confirmation);
+      assertConfirmationHost(facade, profiles, confirmation);
     } catch (error: unknown) {
       if (
         error instanceof WakeflowMaintenancePublicCoordinatorError
@@ -403,7 +487,7 @@ export async function executeWakeflowMaintenancePublicRequest(
       tool: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
       hostId: facade.hostId,
       mode: "apply",
-      action: confirmation.action,
+      action: confirmation.executionRequest.action,
       status: rooted.result.status,
       operationId: rooted.result.operationId,
       planDigest: rooted.result.planDigest,
@@ -411,7 +495,7 @@ export async function executeWakeflowMaintenancePublicRequest(
       confirmationDigest: confirmation.confirmationDigest,
       launchIntents: launchIntentSet?.intents ?? [],
       launchSetDigest: launchIntentSet?.launchSetDigest ?? null,
-    }, [request.root, rooted.canonicalRoot]);
+    }, new Set([request.root, rooted.canonicalRoot]));
   }
 
   let rooted;
@@ -437,5 +521,5 @@ export async function executeWakeflowMaintenancePublicRequest(
     confirmationDigest: null,
     launchIntents: [],
     launchSetDigest: null,
-  }, [request.root, rooted.canonicalRoot]);
+  }, new Set([request.root, rooted.canonicalRoot]));
 }

@@ -10,7 +10,6 @@ import {
   type LedgerAuthorityRecord,
 } from "./ledger-authority-record.js";
 import {
-  ledgerAuthorityFamily,
   ledgerAuthorityMemberRef,
   ledgerAuthorityRecordId,
   ledgerAuthorityRecordRef,
@@ -136,7 +135,7 @@ function transactionDeclaration(
   });
 }
 
-export const LEDGER_CONFIRMATIONS_ROOT_RESOURCE_DECLARATION =
+const LEDGER_CONFIRMATIONS_ROOT_RESOURCE_DECLARATION =
   directoryDeclaration(
     "ledger.confirmations-root",
     "ledger-layout",
@@ -144,7 +143,7 @@ export const LEDGER_CONFIRMATIONS_ROOT_RESOURCE_DECLARATION =
     true,
   );
 
-export const LEDGER_REQUIREMENTS_ROOT_RESOURCE_DECLARATION =
+const LEDGER_REQUIREMENTS_ROOT_RESOURCE_DECLARATION =
   directoryDeclaration(
     "ledger.requirements-root",
     "ledger-layout",
@@ -152,7 +151,7 @@ export const LEDGER_REQUIREMENTS_ROOT_RESOURCE_DECLARATION =
     true,
   );
 
-export const LEDGER_TRANSACTIONS_ROOT_RESOURCE_DECLARATION =
+const LEDGER_TRANSACTIONS_ROOT_RESOURCE_DECLARATION =
   directoryDeclaration(
     "ledger.transactions-root",
     "ledger-record-publication",
@@ -185,9 +184,8 @@ export function createLedgerAuthorityResourceCatalog(
   recordValue: unknown,
 ): readonly Readonly<WakeflowWorkspaceResourceDeclaration>[] {
   const record = parseLedgerAuthorityRecord(recordValue);
-  const family = ledgerAuthorityFamily(record);
   const recordId = ledgerAuthorityRecordId(record);
-  const prefix = `ledger.authority.${family}.${recordId}`;
+  const prefix = `ledger.authority.${recordId}`;
   const root = parseWakeflowWorkspaceResourceDeclaration({
     kind: "WakeflowWorkspaceResourceDeclaration",
     declarationId: `${prefix}.root`,

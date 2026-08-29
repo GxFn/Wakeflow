@@ -1,5 +1,6 @@
 import { types } from "node:util";
 
+import type { Sha256Digest } from "../crypto/sha256.js";
 import {
   parseDenseArray,
   parsePlainRecord,
@@ -58,8 +59,6 @@ import {
  */
 
 export const DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_ENTRIES = 100_000;
-export const DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_BYTES =
-  DURABLE_ATOMIC_FILE_MAXIMUM_BYTES;
 export const DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE = 1_024;
 
 export interface DurableAtomicFileStageRecoveryOptions {
@@ -133,7 +132,7 @@ interface StageEntry {
 
 interface TargetScope {
   readonly directoryResourcePath: PortableResourcePath | null;
-  readonly targetDigests: ReadonlySet<string>;
+  readonly targetDigests: ReadonlySet<Sha256Digest>;
 }
 
 function fail(
@@ -195,7 +194,7 @@ function assertStageNode(
   const { address, entry } = stage;
   if (
     entry.node.kind !== "file"
-    || entry.node.byteCount > DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_BYTES
+    || entry.node.byteCount > DURABLE_ATOMIC_FILE_MAXIMUM_BYTES
     || (entry.node.permissionBits !== 0o600
       && entry.node.permissionBits !== address.mode)
     || (entry.node.linkCount !== 1n && entry.node.linkCount !== 2n)
@@ -246,6 +245,7 @@ function parseTargetScope(value: unknown): Readonly<TargetScope> {
   if (values.length === 0) fail("input", "$targetResourcePaths");
   const paths: PortableResourcePath[] = [];
   const seen = new Set<string>();
+  const targetDigests = new Set<Sha256Digest>();
   for (const [index, value] of values.entries()) {
     let resourcePath: PortableResourcePath;
     try {
@@ -264,6 +264,14 @@ function parseTargetScope(value: unknown): Readonly<TargetScope> {
     }
     seen.add(resourcePath);
     paths.push(resourcePath);
+    try {
+      targetDigests.add(computeDurableAtomicFileStageTargetDigest(resourcePath));
+    } catch (error: unknown) {
+      if (error instanceof DurableAtomicFileStageAddressError) {
+        fail("input", `$targetResourcePaths/${index}`);
+      }
+      throw error;
+    }
   }
   const directoryResourcePath = parentDirectoryRef(
     paths[0] as PortableResourcePath,
@@ -273,9 +281,7 @@ function parseTargetScope(value: unknown): Readonly<TargetScope> {
   }
   return Object.freeze({
     directoryResourcePath,
-    targetDigests: new Set(paths.map((path) => (
-      computeDurableAtomicFileStageTargetDigest(path)
-    ))),
+    targetDigests,
   });
 }
 
@@ -333,17 +339,33 @@ function collectStages(
   return Object.freeze(stages);
 }
 
-function targetForStage(
+function indexTargetsByDigest(
   directory: Readonly<StableDirectoryReadResult>,
+): ReadonlyMap<Sha256Digest, readonly Readonly<StableDirectoryEntry>[]> {
+  const targets = new Map<
+    Sha256Digest,
+    Readonly<StableDirectoryEntry>[]
+  >();
+  for (const entry of directory.entries) {
+    if (hasDurableAtomicFileStagePrefix(entry.name)) continue;
+    const digest = computeDurableAtomicFileStageTargetDigest(entry.resourcePath);
+    const matches = targets.get(digest);
+    if (matches === undefined) targets.set(digest, [entry]);
+    else matches.push(entry);
+  }
+  return targets;
+}
+
+function targetForStage(
+  targetsByDigest: ReadonlyMap<
+    Sha256Digest,
+    readonly Readonly<StableDirectoryEntry>[]
+  >,
   stage: Readonly<StageEntry>,
 ): Readonly<StableDirectoryEntry> {
-  const matches = directory.entries.filter((entry) => (
-    !hasDurableAtomicFileStagePrefix(entry.name)
-    && computeDurableAtomicFileStageTargetDigest(entry.resourcePath)
-      === stage.address.targetResourcePathDigest
-  ));
-  const target = matches[0];
-  if (matches.length !== 1 || target === undefined) {
+  const matches = targetsByDigest.get(stage.address.targetResourcePathDigest);
+  const target = matches?.[0];
+  if (matches?.length !== 1 || target === undefined) {
     fail("target-conflict", "$target");
   }
   return target;
@@ -368,7 +390,7 @@ async function assertPublishedTarget(
   let read;
   try {
     read = await readStableFileDigest(root, target.resourcePath, {
-      maximumBytes: DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_BYTES,
+      maximumBytes: DURABLE_ATOMIC_FILE_MAXIMUM_BYTES,
       expectedNode: target.node,
       ...(signal === undefined ? {} : { signal }),
     });
@@ -419,7 +441,7 @@ async function recoverDirectoryStages(
   root: RootedDirectory,
   directoryResourcePath: PortableResourcePath | null,
   signal: AbortSignal | undefined,
-  targetDigests: ReadonlySet<string> | null,
+  targetDigests: ReadonlySet<Sha256Digest> | null,
   foreignStagePolicy: "ignore" | "reject",
 ): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
   const directory = await readDirectory(root, directoryResourcePath, signal);
@@ -438,6 +460,11 @@ async function recoverDirectoryStages(
     : observedStages.filter((stage) => (
       targetDigests.has(stage.address.targetResourcePathDigest)
     ));
+  const targetsByDigest = stages.some((stage) => (
+    stage.entry.node.linkCount === 2n
+  ))
+    ? indexTargetsByDigest(directory)
+    : null;
   let retiredStageCount = 0;
   let settledTargetCount = 0;
   let activeStageCount = 0;
@@ -454,7 +481,8 @@ async function recoverDirectoryStages(
       continue;
     }
     if (stage.entry.node.linkCount === 2n) {
-      const target = targetForStage(directory, stage);
+      if (targetsByDigest === null) fail("operation-failure", "$target");
+      const target = targetForStage(targetsByDigest, stage);
       await assertPublishedTarget(root, stage, target, signal);
       settledTargetCount += 1;
     }
@@ -527,29 +555,4 @@ export async function recoverDurableAtomicFileStagesMatchingTargets(
     scope.targetDigests,
     "ignore",
   );
-}
-
-/** 从目标可移植引用派生同一父目录恢复作用域。 */
-export async function recoverDurableAtomicFileStagesInTargetParent(
-  root: RootedDirectory,
-  targetResourcePathValue: unknown,
-  options?: DurableAtomicFileStageRecoveryOptions,
-): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
-  let targetResourcePath: PortableResourcePath;
-  try {
-    targetResourcePath = parsePortableResourcePath(
-      targetResourcePathValue,
-      "$resourcePath",
-    );
-  } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) {
-      fail("input", "$resourcePath");
-    }
-    throw error;
-  }
-  const segments = splitPortableResourcePath(targetResourcePath);
-  const parent = segments.length === 1
-    ? null
-    : parsePortableResourcePath(segments.slice(0, -1).join("/"));
-  return recoverDurableAtomicFileStagesInDirectory(root, parent, options);
 }

@@ -7,7 +7,6 @@ import {
   parseSha256Digest,
   parseSha256Hex,
   SHA256_DIGEST_PREFIX,
-  SHA256_HEX_LENGTH,
   Sha256Error,
   type Sha256Digest,
   type Sha256ErrorReason,
@@ -58,7 +57,6 @@ test("NIST SHA-256 vectors produce exact lowercase hex and prefixed digests", ()
     },
   ] as const;
 
-  equal(SHA256_HEX_LENGTH, 64);
   equal(SHA256_DIGEST_PREFIX, "sha256:");
   for (const vector of vectors) {
     const bytes = encoder.encode(vector.input);

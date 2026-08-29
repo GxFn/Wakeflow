@@ -43,7 +43,6 @@ export interface ExecuteWakeflowHostMaintenanceOperationRequest {
 }
 
 export interface WakeflowHostMaintenanceOperationReceipt {
-  readonly kind: "WakeflowHostMaintenanceOperationReceipt";
   readonly operationId: string;
   readonly disposition: "current" | "created" | "updated";
   readonly observationDigest: Sha256Digest;
@@ -98,6 +97,7 @@ export class WakeflowHostMaintenanceCapabilityError extends Error {
 }
 
 const CAPABILITY_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
+const MAXIMUM_CAPABILITY_ID_LENGTH = 256;
 
 function fail(
   reason: WakeflowHostMaintenanceCapabilityErrorReason,
@@ -126,6 +126,8 @@ export function assertWakeflowHostMaintenanceCapability(
     || record.kind !== "WakeflowHostMaintenanceCapability"
     || record.hostId !== expectedHostId
     || typeof record.capabilityId !== "string"
+    || record.capabilityId.length > MAXIMUM_CAPABILITY_ID_LENGTH
+    || !record.capabilityId.isWellFormed()
     || !CAPABILITY_ID_PATTERN.test(record.capabilityId)
     || typeof record.planContribution !== "function"
     || types.isProxy(record.planContribution)

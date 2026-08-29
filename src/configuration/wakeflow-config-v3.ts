@@ -26,7 +26,7 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../foundation/identity/wakeflow-durable-id.js";
+} from "../contracts/identity/wakeflow-durable-id.js";
 import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";
 
 /**
@@ -256,6 +256,7 @@ export class WakeflowConfigV3Error extends Error {
 }
 
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
+const WINDOWS_DRIVE_PATTERN = /^[A-Za-z]:/u;
 
 function fail(reason: WakeflowConfigV3ErrorReason, path: string): never {
   throw new WakeflowConfigV3Error(reason, path);
@@ -274,6 +275,8 @@ function parsePlacement(
     !value.isWellFormed()
     || value.normalize("NFC") !== value
     || CONTROL_PATTERN.test(value)
+    || value.includes("\\")
+    || WINDOWS_DRIVE_PATTERN.test(value)
   ) {
     fail("placement", path);
   }
@@ -321,7 +324,7 @@ function registerIdentity(
   value: string,
   kind: "program" | "repository" | "surface" | "window",
   path: string,
-  uuidOwners: Map<string, string>,
+  uuids: Set<string>,
 ): void {
   parseIdentity(value, kind, path);
   let uuid: string;
@@ -331,8 +334,8 @@ function registerIdentity(
     if (error instanceof WakeflowDurableIdError) fail("identifier", path);
     throw error;
   }
-  if (uuidOwners.has(uuid)) fail("identifier-collision", path);
-  uuidOwners.set(uuid, path);
+  if (uuids.has(uuid)) fail("identifier-collision", path);
+  uuids.add(uuid);
 }
 
 function validatePlacements(model: WakeflowConfigV3Wire): void {
@@ -377,7 +380,7 @@ function validateResidueUniqueness(model: WakeflowConfigV3Wire): void {
 }
 
 function validateTopology(model: WakeflowConfigV3Wire): void {
-  const uuids = new Map<string, string>();
+  const uuids = new Set<string>();
   registerIdentity(model.program.programId, "program", "$/program/programId", uuids);
 
   const repositories = new Map<string, RepositoryWire>();
@@ -470,30 +473,39 @@ export function buildWakeflowConfigV3Indexes(
       surface,
     ] as const),
   );
-  const windowById = frozenRecord(
-    model.topology.windows.map((window) => [window.windowId, window] as const),
-  );
-  const productWindows = Object.freeze(
-    model.topology.windows.filter(
-      (window): window is WakeflowProductWindow => window.role === "product",
-    ),
-  );
+  const productWindows: WakeflowProductWindow[] = [];
+  const windowsByRepository = new Map<
+    WakeflowDurableId<"repository">,
+    WakeflowProductWindow[]
+  >(model.topology.repositories.map((repository) => [
+    repository.repositoryId,
+    [],
+  ]));
+  const windowEntries: Array<readonly [string, WakeflowConfigWindow]> = [];
+  let controllerWindow: WakeflowControllerWindow | undefined;
+  let designWindow: WakeflowDesignWindow | undefined;
+  let testWindow: WakeflowTestWindow | undefined;
+  for (const window of model.topology.windows) {
+    windowEntries.push([window.windowId, window] as const);
+    if (window.role === "controller") {
+      controllerWindow = window;
+    } else if (window.role === "design") {
+      designWindow = window;
+    } else if (window.role === "test") {
+      testWindow = window;
+    } else {
+      productWindows.push(window);
+      const members = windowsByRepository.get(window.root.repositoryId);
+      if (members === undefined) fail("topology", "$/topology/windows");
+      members.push(window);
+    }
+  }
+  const windowById = frozenRecord(windowEntries);
   const windowsByRepositoryId = frozenRecord(
     model.topology.repositories.map((repository) => [
       repository.repositoryId,
-      Object.freeze(productWindows.filter(
-        (window) => window.root.repositoryId === repository.repositoryId,
-      )),
+      Object.freeze(windowsByRepository.get(repository.repositoryId) ?? []),
     ] as const),
-  );
-  const controllerWindow = model.topology.windows.find(
-    (window): window is WakeflowControllerWindow => window.role === "controller",
-  );
-  const designWindow = model.topology.windows.find(
-    (window): window is WakeflowDesignWindow => window.role === "design",
-  );
-  const testWindow = model.topology.windows.find(
-    (window): window is WakeflowTestWindow => window.role === "test",
   );
   if (
     controllerWindow === undefined
@@ -510,6 +522,6 @@ export function buildWakeflowConfigV3Indexes(
     controllerWindow,
     designWindow,
     testWindow,
-    productWindows,
+    productWindows: Object.freeze(productWindows),
   });
 }

@@ -3,7 +3,6 @@ import { test } from "node:test";
 
 import {
   readUtcWallClock,
-  systemUtcWallClock,
   UtcWallClockError,
   type UtcWallClock,
   type UtcWallClockErrorReason,
@@ -40,14 +39,11 @@ function asUtcWallClock(value: unknown): UtcWallClock {
   return value as UtcWallClock;
 }
 
-test("system wall clock returns a branded three-digit UTC instant", () => {
-  const direct: UtcInstant = systemUtcWallClock();
-  const guarded: UtcInstant = readUtcWallClock();
+test("default wall clock returns a guarded branded three-digit UTC instant", () => {
+  const value: UtcInstant = readUtcWallClock();
 
-  equal(parseUtcInstant(direct), direct);
-  equal(parseUtcInstant(guarded), guarded);
-  match(direct, /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/u);
-  match(guarded, /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/u);
+  equal(parseUtcInstant(value), value);
+  match(value, /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/u);
 });
 
 test("injected wall clocks are called exactly once and retain their precision", () => {

@@ -52,8 +52,7 @@
       "required": [
         "status",
         "bindingRef",
-        "bindingId",
-        "bindingDigest"
+        "bindingId"
       ],
       "properties": {
         "status": {
@@ -67,9 +66,6 @@
         "bindingId": {
           "type": "string",
           "pattern": "^window_binding_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-        },
-        "bindingDigest": {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         }
       }
     },
@@ -116,7 +112,6 @@
       "required": [
         "desiredTopologyDigest",
         "windowTopologyDigest",
-        "bindingDigest",
         "rootObservationDigest"
       ],
       "properties": {
@@ -124,9 +119,6 @@
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         },
         "windowTopologyDigest": {
-          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
-        },
-        "bindingDigest": {
           "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         },
         "rootObservationDigest": {

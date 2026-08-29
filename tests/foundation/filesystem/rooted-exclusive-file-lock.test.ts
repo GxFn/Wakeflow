@@ -15,6 +15,7 @@ import { threadId } from "node:worker_threads";
 
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "./rooted-exclusive-file-lock-test-support.js";
 import {
   inspectRootedExclusiveFileLock,
   retireRootedExclusiveFileLockResidue,
@@ -209,14 +210,9 @@ test("explicit recovery retires an exact inactive-owner residue", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-lock-residue-"));
   mkdirSync(path.join(rootPath, "state"));
   const physicalLock = path.join(rootPath, "state", "board.lock");
-  writeFileSync(physicalLock, `${JSON.stringify({
-    createdAt: "2026-08-26T09:00:00.000Z",
-    kind: "WakeflowExclusiveFileLock",
-    pid: 2_147_483_647,
-    threadId: 0,
-    token: "2147483647-0-11111111-1111-4111-8111-111111111111",
-    version: 1,
-  }, null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(physicalLock, rootedExclusiveFileLockRecordTextForTest({
+    tokenUuid: "11111111-1111-4111-8111-111111111111",
+  }), { mode: 0o600 });
   const root = await RootedDirectory.open(rootPath);
   const lockPath = parsePortableResourcePath("state/board.lock");
   try {
@@ -224,18 +220,37 @@ test("explicit recovery retires an exact inactive-owner residue", async () => {
     equal(observed.status, "held");
     if (observed.status !== "held") throw new Error("Expected held lock.");
     equal(observed.ownerState, "inactive");
+    await expectLockError(
+      () => retireRootedExclusiveFileLockResidue(
+        root,
+        lockPath,
+        observed,
+        { relatedTargetResourcePaths: null as never },
+      ),
+      "input",
+    );
+    await expectLockError(
+      () => retireRootedExclusiveFileLockResidue(
+        root,
+        lockPath,
+        observed,
+        {
+          relatedTargetResourcePaths: [
+            parsePortableResourcePath("other/target.json"),
+          ],
+        },
+      ),
+      "input",
+    );
     await retireRootedExclusiveFileLockResidue(root, lockPath, observed);
     equal(existsSync(physicalLock), false);
     equal((await inspectRootedExclusiveFileLock(root, lockPath)).status, "absent");
 
-    writeFileSync(physicalLock, `${JSON.stringify({
-      createdAt: "2026-08-26T09:00:01.000Z",
-      kind: "WakeflowExclusiveFileLock",
+    writeFileSync(physicalLock, rootedExclusiveFileLockRecordTextForTest({
       pid: process.pid,
       threadId,
-      token: `${process.pid}-${threadId}-22222222-2222-4222-8222-222222222222`,
-      version: 1,
-    }, null, 2)}\n`, { mode: 0o600 });
+      tokenUuid: "22222222-2222-4222-8222-222222222222",
+    }), { mode: 0o600 });
     const sameThreadResidue = await inspectRootedExclusiveFileLock(
       root,
       lockPath,
@@ -282,6 +297,20 @@ test("unsafe lock nodes and decorated options fail closed", async () => {
       ),
       "input",
     );
+    for (const options of [
+      { acquireTimeoutMilliseconds: null },
+      { retryDelayMilliseconds: null },
+    ]) {
+      await expectLockError(
+        () => withRootedExclusiveFileLock(
+          root,
+          lockPath,
+          () => undefined,
+          options as never,
+        ),
+        "input",
+      );
+    }
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

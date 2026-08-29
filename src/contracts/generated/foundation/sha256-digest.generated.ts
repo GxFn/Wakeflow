@@ -18,17 +18,16 @@ function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
   return value;
 }
 
+/** 从 JSON 文本恢复 Schema，保留 `__proto__` 等普通 JSON 自有键。 */
+function restoreGeneratedSchema(
+  serialized: string,
+): Readonly<Record<string, unknown>> {
+  const value: unknown = JSON.parse(serialized);
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    throw new TypeError("Generated Schema must be an object.");
+  }
+  return freezeGeneratedSchema(value as Record<string, unknown>);
+}
+
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_SHA256_DIGEST_SCHEMA = freezeGeneratedSchema({
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:wakeflow:foundation:crypto:sha256-digest:v1",
-  "x-wakeflow-runtime-export": "WAKEFLOW_SHA256_DIGEST_SCHEMA",
-  "title": "WakeflowSha256DigestText",
-  "description": "Wakeflow portable records 使用的完整 lowercase SHA-256 digest 文本；算法前缀和 256-bit hexadecimal payload 都属于词法合同。",
-  "$comment": "摘要只证明 exact bytes 或 canonical semantics 的相等性；它不是签名、授权、来源真实性或抗恶意篡改证明。",
-  "type": "string",
-  "pattern": "^sha256:[0-9a-f]{64}$",
-  "examples": [
-    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-  ]
-} as const);
+export const WAKEFLOW_SHA256_DIGEST_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_SHA256_DIGEST_SCHEMA\",\"title\":\"WakeflowSha256DigestText\",\"description\":\"Wakeflow portable records 使用的完整 lowercase SHA-256 digest 文本；算法前缀和 256-bit hexadecimal payload 都属于词法合同。\",\"$comment\":\"摘要只证明 exact bytes 或 canonical semantics 的相等性；它不是签名、授权、来源真实性或抗恶意篡改证明。\",\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\",\"examples\":[\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]}");

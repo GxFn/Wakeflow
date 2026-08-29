@@ -9,6 +9,9 @@ import {
   readDeterministicJsonFile,
 } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
+  DeterministicJsonDocumentError,
+} from "../../foundation/data/deterministic-json-document.js";
+import {
   recoverDurableAtomicFileStagesForTargets,
   DurableAtomicFileStageRecoveryError,
   type DurableAtomicFileStageRecoveryReceipt,
@@ -30,6 +33,9 @@ import {
 import {
   StableFileReadError,
 } from "../../foundation/filesystem/stable-file-read.js";
+import {
+  StrictTextFileError,
+} from "../../foundation/filesystem/strict-text-file.js";
 import { parseByteCount, type ByteCount } from "../../foundation/numeric/byte-count.js";
 import {
   admitWakeflowResourceOperation,
@@ -39,6 +45,7 @@ import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   assertWakeflowMaintenanceGateContext,
+  WakeflowMaintenanceGateError,
   type WakeflowMaintenanceGateContext,
 } from "./wakeflow-maintenance-gate.js";
 import {
@@ -59,6 +66,7 @@ import {
 } from "./wakeflow-maintenance-journal.js";
 import {
   parseWakeflowMaintenanceOperationId,
+  WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceJournalRef,
   type WakeflowMaintenanceOperationId,
 } from "./wakeflow-maintenance-operation-id.js";
@@ -83,33 +91,13 @@ export interface WakeflowMaintenanceJournalSource {
   readonly operationId: WakeflowMaintenanceOperationId;
   readonly resourcePath: ReturnType<typeof wakeflowMaintenanceJournalRef>;
   readonly node: Readonly<FileNodeSnapshot>;
-  readonly byteCount: ByteCount;
   readonly digest: Sha256Digest;
   readonly journalDigest: Sha256Digest;
   readonly journal: Readonly<WakeflowMaintenanceJournal>;
 }
 
-export interface WakeflowPreparedMaintenanceJournalPublicationReceipt {
-  readonly disposition: "prepared";
-  readonly publication: Readonly<DurableAtomicFileWriteResult<"created">>;
-  readonly source: Readonly<WakeflowMaintenanceJournalSource>;
-}
-
 export interface WakeflowPreparedMaintenanceJournalRetirementReceipt {
   readonly disposition: "retired-prepared";
-  readonly operationId: WakeflowMaintenanceOperationId;
-  readonly journalDigest: Sha256Digest;
-  readonly retirement: Readonly<ExactRegularFileUnlinkReceipt>;
-}
-
-export interface WakeflowMaintenanceJournalCheckpointReceipt {
-  readonly disposition: "checkpointed";
-  readonly replacement: Readonly<DurableAtomicFileReplaceResult>;
-  readonly source: Readonly<WakeflowMaintenanceJournalSource>;
-}
-
-export interface WakeflowTerminalMaintenanceJournalRetirementReceipt {
-  readonly disposition: "retired-terminal";
   readonly operationId: WakeflowMaintenanceOperationId;
   readonly journalDigest: Sha256Digest;
   readonly retirement: Readonly<ExactRegularFileUnlinkReceipt>;
@@ -120,12 +108,7 @@ export async function recoverWakeflowMaintenanceJournalStages(
   root: RootedDirectory,
   operationIdValue: unknown,
 ): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
-  let operationId: WakeflowMaintenanceOperationId;
-  try {
-    operationId = parseWakeflowMaintenanceOperationId(operationIdValue);
-  } catch {
-    fail("input", "$operationId");
-  }
+  const operationId = admittedOperationId(operationIdValue);
   try {
     const receipt = await recoverDurableAtomicFileStagesForTargets(
       root,
@@ -157,7 +140,6 @@ export type WakeflowMaintenanceJournalStoreErrorReason =
   | "capacity"
   | "conflict"
   | "recovery-required"
-  | "aborted"
   | "effect-failure"
   | "commit-uncertain";
 
@@ -172,7 +154,6 @@ const ERROR_MESSAGES = {
   capacity: "Wakeflow maintenance journal exceeds its capacity.",
   conflict: "Wakeflow maintenance journal changed before its exact effect.",
   "recovery-required": "Wakeflow maintenance journal requires explicit recovery.",
-  aborted: "Wakeflow maintenance journal operation was aborted.",
   "effect-failure": "Wakeflow maintenance journal effect failed safely.",
   "commit-uncertain": "Wakeflow maintenance journal commit could not be proven.",
 } as const satisfies Readonly<Record<
@@ -203,6 +184,24 @@ function fail(
   throw new WakeflowMaintenanceJournalStoreError(reason, path);
 }
 
+function admittedOperationId(value: unknown): WakeflowMaintenanceOperationId {
+  try {
+    return parseWakeflowMaintenanceOperationId(value);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceOperationIdError) {
+      fail("input", "$operationId");
+    }
+    throw error;
+  }
+}
+
+function admittedJournalByteCount(bytes: Uint8Array): ByteCount {
+  if (bytes.byteLength > WAKEFLOW_MAINTENANCE_JOURNAL_MAXIMUM_BYTES) {
+    fail("capacity", "$journal");
+  }
+  return parseByteCount(bytes.byteLength, "$journal.byteCount");
+}
+
 /** 在任何bootstrap/gate效果前验证initial journal的持久表示容量。 */
 export function assertWakeflowPreparedMaintenanceJournalCapacity(
   operationId: unknown,
@@ -222,13 +221,9 @@ export function assertWakeflowPreparedMaintenanceJournalCapacity(
     }
     throw error;
   }
-  const byteCount = encodeUtf8(
+  return admittedJournalByteCount(encodeUtf8(
     renderWakeflowMaintenanceJournal(journal),
-  ).byteLength;
-  if (byteCount > WAKEFLOW_MAINTENANCE_JOURNAL_MAXIMUM_BYTES) {
-    fail("capacity", "$journal");
-  }
-  return parseByteCount(byteCount, "$journal.byteCount");
+  ));
 }
 
 function currentUserId(): bigint {
@@ -236,6 +231,20 @@ function currentUserId(): bigint {
     fail("source-policy", "$journal");
   }
   return BigInt(process.geteuid());
+}
+
+function assertGate(
+  root: RootedDirectory,
+  context: Readonly<WakeflowMaintenanceGateContext>,
+): void {
+  try {
+    assertWakeflowMaintenanceGateContext(context, root);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceGateError) {
+      fail("gate", "$context");
+    }
+    throw error;
+  }
 }
 
 function admitOperation(
@@ -267,7 +276,6 @@ async function assertTransactionsEmpty(root: RootedDirectory): Promise<void> {
       if (error.reason === "too-many-entries") {
         fail("transactions-shape", "$transactions");
       }
-      if (error.reason === "aborted") fail("aborted", "$signal");
       fail("source", "$transactions");
     }
     throw error;
@@ -315,12 +323,7 @@ export async function readWakeflowMaintenanceJournal(
   root: RootedDirectory,
   operationIdValue: unknown,
 ): Promise<Readonly<WakeflowMaintenanceJournalSource>> {
-  let operationId: WakeflowMaintenanceOperationId;
-  try {
-    operationId = parseWakeflowMaintenanceOperationId(operationIdValue);
-  } catch {
-    fail("input", "$operationId");
-  }
+  const operationId = admittedOperationId(operationIdValue);
   const resourcePath = wakeflowMaintenanceJournalRef(operationId);
   let read;
   try {
@@ -329,13 +332,20 @@ export async function readWakeflowMaintenanceJournal(
     });
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
+      if (error.reason === "too-large") fail("capacity", "$journal");
       if (error.reason === "not-found") fail("source", "$journal");
       if (error.reason === "symlink" || error.reason === "not-file") {
         fail("source-policy", "$journal");
       }
       fail("source", "$journal");
     }
-    fail("journal", "$journal");
+    if (
+      error instanceof StrictTextFileError
+      || error instanceof DeterministicJsonDocumentError
+    ) {
+      fail("journal", "$journal");
+    }
+    throw error;
   }
   if (
     read.node.kind !== "file"
@@ -361,12 +371,10 @@ export async function readWakeflowMaintenanceJournal(
     fail("journal", "$journal");
   }
   const journalDigest = computeWakeflowMaintenanceJournalDigest(journal);
-  if (journalDigest !== read.semanticDigest) fail("journal", "$journal");
   const source = Object.freeze({
     operationId,
     resourcePath,
     node: read.node,
-    byteCount: read.byteCount,
     digest: read.digest,
     journalDigest,
     journal,
@@ -380,12 +388,7 @@ export async function readWakeflowMaintenanceJournalOrNull(
   root: RootedDirectory,
   operationIdValue: unknown,
 ): Promise<Readonly<WakeflowMaintenanceJournalSource> | null> {
-  let operationId: WakeflowMaintenanceOperationId;
-  try {
-    operationId = parseWakeflowMaintenanceOperationId(operationIdValue);
-  } catch {
-    fail("input", "$operationId");
-  }
+  const operationId = admittedOperationId(operationIdValue);
   try {
     await root.inspectExistingResource(wakeflowMaintenanceJournalRef(operationId));
   } catch (error: unknown) {
@@ -407,12 +410,8 @@ export async function publishPreparedWakeflowMaintenanceJournal(
   context: Readonly<WakeflowMaintenanceGateContext>,
   intentSource: Readonly<WakeflowMaintenanceExecutionIntentSource>,
   planValue: unknown,
-): Promise<Readonly<WakeflowPreparedMaintenanceJournalPublicationReceipt>> {
-  try {
-    assertWakeflowMaintenanceGateContext(context, root);
-  } catch {
-    fail("gate", "$context");
-  }
+): Promise<Readonly<WakeflowMaintenanceJournalSource>> {
+  assertGate(root, context);
   let journal: Readonly<WakeflowMaintenanceJournal>;
   try {
     journal = createPreparedWakeflowMaintenanceJournal(
@@ -448,11 +447,8 @@ export async function publishPreparedWakeflowMaintenanceJournal(
     throw error;
   }
   const bytes = encodeUtf8(renderWakeflowMaintenanceJournal(journal));
-  assertWakeflowPreparedMaintenanceJournalCapacity(
-    context.operationId,
-    intentSource.intentDigest,
-    planValue,
-  );
+  admittedJournalByteCount(bytes);
+  const intendedDigest = computeWakeflowMaintenanceJournalDigest(journal);
   let publication: Readonly<DurableAtomicFileWriteResult<"created">>;
   try {
     publication = await createFileAtomically(
@@ -467,7 +463,6 @@ export async function publishPreparedWakeflowMaintenanceJournal(
       if (error.reason === "stage-recovery-required") {
         fail("recovery-required", "$journal");
       }
-      if (error.reason === "aborted") fail("aborted", "$signal");
       if (
         error.reason === "commit-uncertain"
         || error.reason === "durability-failure"
@@ -480,22 +475,25 @@ export async function publishPreparedWakeflowMaintenanceJournal(
     }
     throw error;
   }
-  const source = await readWakeflowMaintenanceJournal(
-    root,
-    context.operationId,
-  );
+  let source: Readonly<WakeflowMaintenanceJournalSource>;
+  try {
+    source = await readWakeflowMaintenanceJournal(root, context.operationId);
+  } catch {
+    fail("commit-uncertain", "$journal");
+  }
   if (
     publication.resourcePath !== source.resourcePath
     || publication.digest !== source.digest
-    || publication.byteCount !== source.byteCount
+    || publication.byteCount !== source.node.byteCount
     || publication.node.deviceId !== source.node.deviceId
     || publication.node.inodeId !== source.node.inodeId
     || source.journal.intentDigest !== intentSource.intentDigest
     || source.journal.planDigest !== journal.planDigest
+    || source.journalDigest !== intendedDigest
   ) {
     fail("commit-uncertain", "$journal");
   }
-  return Object.freeze({ disposition: "prepared", publication, source });
+  return source;
 }
 
 /** 在有效 gate scope 内以CAS写入一个且仅一个合法 journal 后继。 */
@@ -505,12 +503,8 @@ export async function checkpointWakeflowMaintenanceJournal(
   intentSource: Readonly<WakeflowMaintenanceExecutionIntentSource>,
   sourceValue: Readonly<WakeflowMaintenanceJournalSource>,
   proposedValue: unknown,
-): Promise<Readonly<WakeflowMaintenanceJournalCheckpointReceipt>> {
-  try {
-    assertWakeflowMaintenanceGateContext(context, root);
-  } catch {
-    fail("gate", "$context");
-  }
+): Promise<Readonly<WakeflowMaintenanceJournalSource>> {
+  assertGate(root, context);
   if (
     typeof sourceValue !== "object"
     || sourceValue === null
@@ -577,18 +571,21 @@ export async function checkpointWakeflowMaintenanceJournal(
   ) {
     fail("conflict", "$journal");
   }
+  const proposedBytes = encodeUtf8(renderWakeflowMaintenanceJournal(proposed));
+  admittedJournalByteCount(proposedBytes);
+  const proposedDigest = computeWakeflowMaintenanceJournalDigest(proposed);
   let replacement: Readonly<DurableAtomicFileReplaceResult>;
   try {
     replacement = await replaceFileAtomically(
       root,
       sourceValue.resourcePath,
-      encodeUtf8(renderWakeflowMaintenanceJournal(proposed)),
+      proposedBytes,
       {
         mode: 0o600,
         expected: Object.freeze({
           resourcePath: sourceValue.resourcePath,
           node: sourceValue.node,
-          byteCount: sourceValue.byteCount,
+          byteCount: sourceValue.node.byteCount,
           digest: sourceValue.digest,
         }),
       },
@@ -618,20 +615,22 @@ export async function checkpointWakeflowMaintenanceJournal(
     }
     throw error;
   }
-  const source = await readWakeflowMaintenanceJournal(
-    root,
-    context.operationId,
-  );
+  let source: Readonly<WakeflowMaintenanceJournalSource>;
+  try {
+    source = await readWakeflowMaintenanceJournal(root, context.operationId);
+  } catch {
+    fail("commit-uncertain", "$journal");
+  }
   if (
     replacement.digest !== source.digest
-    || replacement.byteCount !== source.byteCount
+    || replacement.byteCount !== source.node.byteCount
     || replacement.node.deviceId !== source.node.deviceId
     || replacement.node.inodeId !== source.node.inodeId
-    || source.journalDigest !== computeWakeflowMaintenanceJournalDigest(proposed)
+    || source.journalDigest !== proposedDigest
   ) {
     fail("commit-uncertain", "$journal");
   }
-  return Object.freeze({ disposition: "checkpointed", replacement, source });
+  return source;
 }
 
 /** 在同一有效 gate scope 内退休尚未执行任何 step 的 exact prepared journal。 */
@@ -640,11 +639,7 @@ export async function retirePreparedWakeflowMaintenanceJournal(
   context: Readonly<WakeflowMaintenanceGateContext>,
   sourceValue: Readonly<WakeflowMaintenanceJournalSource>,
 ): Promise<Readonly<WakeflowPreparedMaintenanceJournalRetirementReceipt>> {
-  try {
-    assertWakeflowMaintenanceGateContext(context, root);
-  } catch {
-    fail("gate", "$context");
-  }
+  assertGate(root, context);
   if (
     typeof sourceValue !== "object"
     || sourceValue === null
@@ -678,7 +673,6 @@ export async function retirePreparedWakeflowMaintenanceJournal(
     );
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
       if (
         error.reason === "source-changed"
         || error.reason === "source-not-found"
@@ -696,7 +690,11 @@ export async function retirePreparedWakeflowMaintenanceJournal(
     }
     throw error;
   }
-  await assertTransactionsEmpty(root);
+  try {
+    await assertTransactionsEmpty(root);
+  } catch {
+    fail("commit-uncertain", "$journal");
+  }
   return Object.freeze({
     disposition: "retired-prepared",
     operationId: context.operationId,
@@ -710,12 +708,8 @@ export async function retireTerminalWakeflowMaintenanceJournal(
   root: RootedDirectory,
   context: Readonly<WakeflowMaintenanceGateContext>,
   sourceValue: Readonly<WakeflowMaintenanceJournalSource>,
-): Promise<Readonly<WakeflowTerminalMaintenanceJournalRetirementReceipt>> {
-  try {
-    assertWakeflowMaintenanceGateContext(context, root);
-  } catch {
-    fail("gate", "$context");
-  }
+): Promise<void> {
+  assertGate(root, context);
   if (
     typeof sourceValue !== "object"
     || sourceValue === null
@@ -741,9 +735,8 @@ export async function retireTerminalWakeflowMaintenanceJournal(
   ) {
     fail("conflict", "$journal");
   }
-  let retirement: Readonly<ExactRegularFileUnlinkReceipt>;
   try {
-    retirement = await unlinkRegularFileExactly(
+    await unlinkRegularFileExactly(
       root,
       sourceValue.resourcePath,
       { expectedNode: sourceValue.node },
@@ -767,11 +760,9 @@ export async function retireTerminalWakeflowMaintenanceJournal(
     }
     throw error;
   }
-  await assertTransactionsEmpty(root);
-  return Object.freeze({
-    disposition: "retired-terminal",
-    operationId: context.operationId,
-    journalDigest: sourceValue.journalDigest,
-    retirement,
-  });
+  try {
+    await assertTransactionsEmpty(root);
+  } catch {
+    fail("commit-uncertain", "$journal");
+  }
 }

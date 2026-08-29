@@ -20,7 +20,6 @@ import {
 import {
   publishFreshWakeflowWindowRuntime,
   WakeflowFreshWindowRuntimePublicationError,
-  type WakeflowFreshWindowRuntimePublicationErrorReason,
 } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import {
   parseWakeflowWindowRuntimeUnregisteredProjectionDocument,
@@ -50,7 +49,7 @@ async function fixture(t: TestContext) {
 
 async function expectPublicationError(
   action: () => Promise<unknown>,
-  reason: WakeflowFreshWindowRuntimePublicationErrorReason,
+  reason: WakeflowFreshWindowRuntimePublicationError["reason"],
 ): Promise<void> {
   let caught: unknown;
   try {

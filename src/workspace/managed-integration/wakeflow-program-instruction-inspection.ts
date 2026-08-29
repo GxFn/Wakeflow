@@ -69,12 +69,11 @@ export const WAKEFLOW_PROGRAM_INSTRUCTION_MAXIMUM_BYTES = parseByteCount(
 );
 export const WAKEFLOW_PROGRAM_INSTRUCTION_FILE_MODE = 0o644;
 
-export type WakeflowProgramInstructionInspectionStatus =
+type WakeflowProgramInstructionInspectionStatus =
   | "managed-current"
   | "recompose-required";
 
 export interface WakeflowProgramInstructionInspection {
-  readonly kind: "WakeflowProgramInstructionInspection";
   readonly status: WakeflowProgramInstructionInspectionStatus;
   readonly context: Readonly<WakeflowWorkspaceStaticResourceOperationContext>;
   readonly currentConfigDigest: Sha256Digest | null;
@@ -104,6 +103,7 @@ export type WakeflowProgramInstructionInspectionErrorReason =
   | "context"
   | "authority"
   | "source"
+  | "source-capacity"
   | "source-policy"
   | "envelope"
   | "unknown-managed-body"
@@ -117,6 +117,8 @@ const ERROR_MESSAGES = {
   context: "Wakeflow Program Instruction operation context is invalid.",
   authority: "Wakeflow Program Instruction content authority is invalid.",
   source: "Wakeflow Program Instruction source cannot be read stably.",
+  "source-capacity":
+    "Wakeflow Program Instruction source exceeds its byte budget.",
   "source-policy":
     "Wakeflow Program Instruction source violates its node policy.",
   envelope: "Wakeflow Program Instruction managed envelope is invalid.",
@@ -365,7 +367,7 @@ async function readSource(
       if (error.reason === "symlink" || error.reason === "not-file") {
         fail("source-policy", "$source");
       }
-      if (error.reason === "too-large") fail("target-capacity", "$source");
+      if (error.reason === "too-large") fail("source-capacity", "$source");
       fail("source", "$source");
     }
     throw error;
@@ -485,7 +487,6 @@ export async function inspectWakeflowProgramInstruction(
   }
   await revalidateSource(rootValue, request, read);
   return Object.freeze({
-    kind: "WakeflowProgramInstructionInspection",
     status: transition.disposition === "current"
       ? "managed-current"
       : "recompose-required",

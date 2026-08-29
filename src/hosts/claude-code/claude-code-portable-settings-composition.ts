@@ -24,7 +24,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
-import type { WakeflowDurableId } from "../../foundation/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   WakeflowWorkspaceHostResourceProfileError,
@@ -98,15 +98,12 @@ export interface ClaudeCodePortableSettingsRootPlanEntry {
 }
 
 export interface ClaudeCodePortableSettingsCompositionPlan {
-  readonly kind: "ClaudeCodePortableSettingsCompositionPlan";
-  readonly schemaVersion: 1;
   readonly action: ClaudeCodePortableSettingsCompositionAction;
   readonly status: "ready" | "blocked";
   readonly authorityDigest: Sha256Digest;
   readonly roots: readonly Readonly<ClaudeCodePortableSettingsRootPlanEntry>[];
   readonly operations: readonly Readonly<ClaudeCodePortableSettingsOperation>[];
   readonly blockerCodes: readonly string[];
-  readonly planDigest: Sha256Digest;
 }
 
 export interface PlanClaudeCodePortableSettingsCompositionRequest {
@@ -426,20 +423,12 @@ export async function planClaudeCodePortableSettingsComposition(
   const sortedBlockers = Object.freeze([...blockerCodes].sort());
   const frozenRoots = Object.freeze(rootEntries);
   const frozenOperations = Object.freeze(operations);
-  const basis = {
-    kind: "ClaudeCodePortableSettingsCompositionPlan" as const,
-    schemaVersion: 1 as const,
+  return Object.freeze({
     action: request.action,
     status: sortedBlockers.length === 0 ? "ready" as const : "blocked" as const,
     authorityDigest: authority.authorityDigest,
     roots: frozenRoots,
     operations: frozenOperations,
     blockerCodes: sortedBlockers,
-  };
-  return Object.freeze({
-    ...basis,
-    planDigest: computeCanonicalJsonSha256Digest(
-      basis as unknown as JsonValue,
-    ),
   });
 }

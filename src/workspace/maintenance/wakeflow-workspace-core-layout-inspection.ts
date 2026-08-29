@@ -46,8 +46,8 @@ import {
  * 被 fresh 采用，但在完整 maintenance protocol 为 idle 时不构成运行期冲突。
  */
 
-export type WakeflowActiveRootStatus = "absent" | "present" | "conflict";
-export type WakeflowLocalProtocolStatus =
+type WakeflowActiveRootStatus = "absent" | "present" | "conflict";
+type WakeflowLocalProtocolStatus =
   | "absent"
   | "bootstrap-prefix"
   | "idle"
@@ -56,7 +56,6 @@ export type WakeflowLocalProtocolStatus =
   | "conflict";
 
 export interface WakeflowWorkspaceCoreLayoutInspection {
-  readonly kind: "WakeflowWorkspaceCoreLayoutInspection";
   readonly active: Readonly<{
     readonly status: WakeflowActiveRootStatus;
     readonly nodeDigest: Sha256Digest | null;
@@ -72,7 +71,7 @@ export interface WakeflowWorkspaceCoreLayoutInspection {
   readonly inspectionDigest: Sha256Digest;
 }
 
-export interface WakeflowWorkspaceCoreLayoutInspectionOptions {
+interface WakeflowWorkspaceCoreLayoutInspectionOptions {
   readonly signal?: AbortSignal;
 }
 
@@ -133,6 +132,10 @@ function parseSignal(value: unknown): AbortSignal | undefined {
     fail("input", "$options.signal");
   }
   return value;
+}
+
+function assertNotAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -320,8 +323,7 @@ async function inspectLocal(
     });
   }
   const runtime = await readDirectory(root, WAKEFLOW_RUNTIME_ROOT_REF, signal);
-  const runtimeAllowedFresh = new Set(["maintenance"]);
-  if (runtime.entries.some((entry) => !runtimeAllowedFresh.has(entry.name))) {
+  if (runtime.entries.some((entry) => entry.name !== "maintenance")) {
     freshCompatible = false;
   }
   const stagePresent = runtime.entries.some((entry) => (
@@ -343,11 +345,17 @@ async function inspectLocal(
       freshCompatible = false;
     }
   } catch (error: unknown) {
-    if (error instanceof RootedExclusiveFileLockError) {
-      lockState = error.reason === "unsafe-lock" ? "unsafe" : "inactive-or-unknown";
+    if (!(error instanceof RootedExclusiveFileLockError)) throw error;
+    if (error.reason === "aborted") fail("aborted", "$signal");
+    if (error.reason === "root-scope") fail("root-scope", "$root");
+    if (error.reason === "unsafe-lock") {
+      lockState = "unsafe";
+      freshCompatible = false;
+    } else if (error.reason === "residue-changed") {
+      lockState = "inactive-or-unknown";
       freshCompatible = false;
     } else {
-      throw error;
+      fail("inspection", "$gate");
     }
   }
   if (lockState === "unsafe") issueCodes.push("maintenance-gate-unsafe");
@@ -471,11 +479,12 @@ export async function inspectWakeflowWorkspaceCoreLayout(
     fail("input", "$options");
   }
   const signal = parseSignal(optionsValue.signal);
-  if (signal?.aborted === true) fail("aborted", "$signal");
+  assertNotAborted(signal);
   const issueCodes: string[] = [];
   const active = await inspectActive(rootValue, signal);
   if (active.status === "conflict") issueCodes.push("active-layout-node-policy");
   const local = await inspectLocal(rootValue, signal, issueCodes);
+  assertNotAborted(signal);
   const sortedIssues = Object.freeze([...new Set(issueCodes)].sort());
   const inspectionDigest = computeCanonicalJsonSha256Digest({
     kind: "WakeflowWorkspaceCoreLayoutInspectionDigestBasis",
@@ -484,7 +493,6 @@ export async function inspectWakeflowWorkspaceCoreLayout(
     issueCodes: sortedIssues,
   });
   return Object.freeze({
-    kind: "WakeflowWorkspaceCoreLayoutInspection",
     active,
     local,
     issueCodes: sortedIssues,

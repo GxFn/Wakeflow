@@ -32,7 +32,7 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../../../foundation/identity/wakeflow-durable-id.js";
+} from "../../../contracts/identity/wakeflow-durable-id.js";
 import {
   createRuntimeJsonSchemaValidator,
 } from "../../../foundation/schema/runtime-json-schema.js";
@@ -47,6 +47,7 @@ import {
   type UtcWallClock,
 } from "../../../foundation/time/wall-clock.js";
 import {
+  LedgerAuthorityStoreError,
   parseLedgerAuthorityMemberReference,
   type LedgerAuthorityMemberReference,
 } from "../../ledger/ledger-authority-store.js";
@@ -64,9 +65,9 @@ import {
  * 不能被事件存储替换。
  */
 
-export const DEMAND_IDENTITY_ARTIFACT_KIND =
+const DEMAND_IDENTITY_ARTIFACT_KIND =
   "wakeflow-demand-identity" as const;
-export const DEMAND_IDENTITY_SCHEMA_VERSION = 1 as const;
+const DEMAND_IDENTITY_SCHEMA_VERSION = 1 as const;
 
 export type DemandType = "requirement" | "bug" | "supplement" | "research";
 
@@ -154,6 +155,10 @@ const DRAFT_FIELDS = Object.freeze([
   "source",
   "title",
 ] as const);
+const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
+  "1970-01-01T00:00:00.000Z",
+  "$draftValidationInstant",
+);
 
 function fail(reason: DemandIdentityErrorReason, path: string): never {
   throw new DemandIdentityError(reason, path);
@@ -204,8 +209,11 @@ function normalizeWire(
           wire.executionPlacement.authorizationRef,
         ),
       });
-    } catch {
-      fail("placement", "$/executionPlacement/authorizationRef");
+    } catch (error: unknown) {
+      if (error instanceof LedgerAuthorityStoreError) {
+        fail("placement", "$/executionPlacement/authorizationRef");
+      }
+      throw error;
     }
   }
   let createdAt: UtcInstant;
@@ -285,12 +293,12 @@ export function createDemandIdentity(
   ) {
     fail("input", "$draft");
   }
-  return parseDemandIdentity({
+  const admitted = parseDemandIdentity({
     artifactKind: DEMAND_IDENTITY_ARTIFACT_KIND,
     schemaVersion: DEMAND_IDENTITY_SCHEMA_VERSION,
     programId: record.programId,
     demandId: record.demandId,
-    createdAt: readCreationTime(options),
+    createdAt: DRAFT_VALIDATION_INSTANT,
     title: record.title,
     goal: record.goal,
     completionDefinition: record.completionDefinition,
@@ -298,11 +306,15 @@ export function createDemandIdentity(
     source: record.source,
     executionPlacement: record.executionPlacement,
   });
+  return Object.freeze({
+    ...admitted,
+    createdAt: readCreationTime(options),
+  });
 }
 
 export function renderDemandIdentity(value: unknown): string {
   return renderDeterministicJsonDocument(
-    parseDemandIdentity(value) as unknown as JsonValue,
+    parseDemandIdentity(value),
     "$identity",
   );
 }
@@ -328,6 +340,6 @@ export function parseDemandIdentityDocument(
 
 export function computeDemandIdentityDigest(value: unknown): Sha256Digest {
   return computeCanonicalJsonSha256Digest(
-    parseDemandIdentity(value) as unknown as JsonValue,
+    parseDemandIdentity(value),
   );
 }

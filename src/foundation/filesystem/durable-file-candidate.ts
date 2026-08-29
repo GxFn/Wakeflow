@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { constants as fileSystemConstants } from "node:fs";
 import {
   open as openFileHandle,
@@ -8,6 +9,7 @@ import { types } from "node:util";
 
 import {
   computeSha256Digest,
+  Sha256Error,
   type Sha256Digest,
 } from "../crypto/sha256.js";
 import {
@@ -21,7 +23,6 @@ import {
 } from "../numeric/byte-count.js";
 import {
   createFileNodeSnapshot,
-  FileNodeSnapshotError,
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
   type FileNodeSnapshot,
@@ -46,20 +47,22 @@ import {
  * Node.js 未暴露 `openat`，因此路径名竞态边界与 `RootedDirectory` 保持一致。
  */
 
-export interface DurableFileCandidateOptions {
+interface DurableFileCandidateOptions {
   readonly mode: number;
   readonly signal?: AbortSignal;
 }
 
-export interface DurableFileCandidateResult {
+interface DurableFileCandidateResult {
   readonly resourcePath: PortableResourcePath;
   readonly node: Readonly<FileNodeSnapshot>;
   readonly byteCount: ByteCount;
   readonly digest: Sha256Digest;
 }
 
-export type DurableFileCandidateErrorReason =
+type DurableFileCandidateErrorReason =
   | "input"
+  | "capacity"
+  | "hash-failure"
   | "root-scope"
   | "parent"
   | "target-exists"
@@ -74,6 +77,8 @@ export type DurableFileCandidateErrorReason =
 
 const ERROR_MESSAGES = {
   "input": "Durable file candidate input is invalid.",
+  "capacity": "Durable file candidate exceeds its byte capacity.",
+  "hash-failure": "Durable file candidate bytes could not be hashed.",
   "root-scope": "Durable file candidate lost its rooted scope.",
   "parent": "Durable file candidate parent is unavailable or unsafe.",
   "target-exists": "Durable file candidate target already exists.",
@@ -109,10 +114,16 @@ interface ParsedOptions {
 }
 
 interface InputBytes {
-  readonly bytes: Uint8Array;
+  readonly bytes: Buffer;
   readonly byteCount: ByteCount;
   readonly digest: Sha256Digest;
 }
+
+/** 与耐久原子单文件写入一致的Foundation单文件硬上限。 */
+const DURABLE_FILE_CANDIDATE_MAXIMUM_BYTES = parseByteCount(
+  64 * 1024 * 1024,
+  "$durableFileCandidate.maximumBytes",
+);
 
 function fail(reason: DurableFileCandidateErrorReason, path: string): never {
   throw new DurableFileCandidateError(reason, path);
@@ -146,7 +157,10 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     || record.mode > 0o777
     || (
       record.signal !== undefined
-      && !(record.signal instanceof AbortSignal)
+      && (
+        types.isProxy(record.signal)
+        || !(record.signal instanceof AbortSignal)
+      )
     )
   ) {
     fail("input", "$options");
@@ -158,14 +172,37 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
 }
 
 function snapshotInput(value: unknown): Readonly<InputBytes> {
-  if (!(value instanceof Uint8Array) || !ArrayBuffer.isView(value)) {
+  if (
+    typeof value !== "object"
+    || value === null
+    || types.isProxy(value)
+    || !ArrayBuffer.isView(value)
+    || !(value instanceof Uint8Array)
+    || value.buffer instanceof SharedArrayBuffer
+  ) {
     fail("input", "$bytes");
   }
-  const bytes = Uint8Array.from(value);
+  const byteCount = parseByteCount(value.byteLength, "$bytes");
+  if (byteCount > DURABLE_FILE_CANDIDATE_MAXIMUM_BYTES) {
+    fail("capacity", "$bytes");
+  }
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(value);
+  } catch {
+    fail("capacity", "$bytes");
+  }
+  let digest: Sha256Digest;
+  try {
+    digest = computeSha256Digest(bytes, "$bytes");
+  } catch (error: unknown) {
+    if (error instanceof Sha256Error) fail("hash-failure", "$bytes");
+    throw error;
+  }
   return Object.freeze({
     bytes,
-    byteCount: parseByteCount(bytes.byteLength, "$bytes"),
-    digest: computeSha256Digest(bytes),
+    byteCount,
+    digest,
   });
 }
 
@@ -188,8 +225,58 @@ function snapshotNode(
 ): Readonly<FileNodeSnapshot> {
   try {
     return createFileNodeSnapshot(value, "$candidate");
+  } catch {
+    fail(reason, "$candidate");
+  }
+}
+
+async function snapshotHandle(
+  handle: FileHandle,
+  reason: DurableFileCandidateErrorReason,
+): Promise<Readonly<FileNodeSnapshot>> {
+  try {
+    return snapshotNode(await handle.stat({ bigint: true }), reason);
   } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) fail(reason, "$candidate");
+    if (error instanceof DurableFileCandidateError) throw error;
+    fail(reason, "$candidate");
+  }
+}
+
+async function assertParentCurrent(
+  parent: RootedResourceParentHandle,
+  reason: "parent" | "candidate-changed",
+  path: "$resourcePath" | "$candidate",
+): Promise<void> {
+  try {
+    await parent.assertCurrent();
+  } catch (error: unknown) {
+    if (error instanceof RootedResourceParentHandleError) fail(reason, path);
+    throw error;
+  }
+}
+
+async function inspectParentTarget(
+  parent: RootedResourceParentHandle,
+  reason: "parent" | "candidate-changed",
+  path: "$resourcePath" | "$candidate",
+): Promise<Readonly<FileNodeSnapshot> | null> {
+  try {
+    return await parent.inspectTarget();
+  } catch (error: unknown) {
+    if (error instanceof RootedResourceParentHandleError) fail(reason, path);
+    throw error;
+  }
+}
+
+async function syncParent(
+  parent: RootedResourceParentHandle,
+): Promise<void> {
+  try {
+    await parent.sync();
+  } catch (error: unknown) {
+    if (error instanceof RootedResourceParentHandleError) {
+      fail("durability-failure", "$candidate");
+    }
     throw error;
   }
 }
@@ -224,42 +311,57 @@ async function writeAll(
 async function verifyBytes(
   handle: FileHandle,
   input: Readonly<InputBytes>,
+  signal: AbortSignal | undefined,
 ): Promise<Readonly<FileNodeSnapshot>> {
-  const before = snapshotNode(
-    await handle.stat({ bigint: true }),
-    "candidate-changed",
-  );
-  const scratch = Buffer.allocUnsafe(Math.min(input.byteCount || 1, 512 * 1024));
+  const before = await snapshotHandle(handle, "candidate-changed");
+  let scratch: Buffer;
+  try {
+    scratch = Buffer.allocUnsafe(
+      Math.min(input.byteCount || 1, 512 * 1024),
+    );
+  } catch {
+    fail("candidate-changed", "$candidate");
+  }
   let offset = 0;
   while (offset < input.byteCount) {
+    assertNotAborted(signal);
     const length = Math.min(scratch.byteLength, input.byteCount - offset);
-    let read: number;
-    try {
-      ({ bytesRead: read } = await handle.read(scratch, 0, length, offset));
-    } catch {
-      fail("candidate-changed", "$candidate");
-    }
-    if (read !== length) fail("candidate-changed", "$candidate");
-    for (let index = 0; index < read; index += 1) {
-      if (scratch[index] !== input.bytes[offset + index]) {
+    let filled = 0;
+    while (filled < length) {
+      let read: number;
+      try {
+        ({ bytesRead: read } = await handle.read(
+          scratch,
+          filled,
+          length - filled,
+          offset + filled,
+        ));
+      } catch {
+        assertNotAborted(signal);
         fail("candidate-changed", "$candidate");
       }
+      if (read <= 0 || read > length - filled) {
+        fail("candidate-changed", "$candidate");
+      }
+      filled += read;
     }
-    offset += read;
+    if (!scratch.subarray(0, length).equals(
+      input.bytes.subarray(offset, offset + length),
+    )) {
+      fail("candidate-changed", "$candidate");
+    }
+    offset += length;
   }
-  const probe = Buffer.allocUnsafe(1);
+  assertNotAborted(signal);
   try {
-    if ((await handle.read(probe, 0, 1, input.byteCount)).bytesRead !== 0) {
+    if ((await handle.read(scratch, 0, 1, input.byteCount)).bytesRead !== 0) {
       fail("candidate-changed", "$candidate");
     }
   } catch (error: unknown) {
     if (error instanceof DurableFileCandidateError) throw error;
     fail("candidate-changed", "$candidate");
   }
-  const after = snapshotNode(
-    await handle.stat({ bigint: true }),
-    "candidate-changed",
-  );
+  const after = await snapshotHandle(handle, "candidate-changed");
   if (!sameFileNodeSnapshot(before, after)) {
     fail("candidate-changed", "$candidate");
   }
@@ -277,6 +379,26 @@ async function closeParent(
   }
 }
 
+function sameRetiredCandidateNode(
+  before: Readonly<FileNodeSnapshot>,
+  after: Readonly<FileNodeSnapshot>,
+): boolean {
+  return (
+    sameFileNodeIdentity(before, after)
+    && before.kind === "file"
+    && after.kind === "file"
+    && before.rawMode === after.rawMode
+    && before.permissionBits === after.permissionBits
+    && before.linkCount === 1n
+    && after.linkCount === 0n
+    && before.userId === after.userId
+    && before.groupId === after.groupId
+    && before.specialDeviceId === after.specialDeviceId
+    && before.byteCount === after.byteCount
+    && before.modifiedAtNanoseconds === after.modifiedAtNanoseconds
+  );
+}
+
 /** 直接创建并同步一个具名、非权威文件候选资源。 */
 export async function createFileCandidateDurably(
   root: RootedDirectory,
@@ -286,8 +408,8 @@ export async function createFileCandidateDurably(
 ): Promise<Readonly<DurableFileCandidateResult>> {
   assertRoot(root);
   const options = parseOptions(optionsValue);
-  const input = snapshotInput(bytesValue);
   assertNotAborted(options.signal);
+  const input = snapshotInput(bytesValue);
 
   let parent: RootedResourceParentHandle;
   try {
@@ -302,13 +424,16 @@ export async function createFileCandidateDurably(
   }
   let handle: FileHandle | undefined;
   let created = false;
-  let completed = false;
   let primaryError: unknown;
   let result: Readonly<DurableFileCandidateResult> | undefined;
 
   try {
-    await parent.assertCurrent();
-    if (await parent.inspectTarget() !== null) {
+    await assertParentCurrent(parent, "parent", "$resourcePath");
+    if (await inspectParentTarget(
+      parent,
+      "parent",
+      "$resourcePath",
+    ) !== null) {
       fail("target-exists", "$resourcePath");
     }
     try {
@@ -331,7 +456,7 @@ export async function createFileCandidateDurably(
     } catch {
       fail("write-failure", "$candidate");
     }
-    let prepared = await verifyBytes(handle, input);
+    let prepared = await verifyBytes(handle, input, options.signal);
     if (
       prepared.kind !== "file"
       || prepared.linkCount !== 1n
@@ -345,29 +470,32 @@ export async function createFileCandidateDurably(
     } catch {
       fail("sync-failure", "$candidate");
     }
-    prepared = await verifyBytes(handle, input);
-    await parent.assertCurrent();
-    const pathNode = await parent.inspectTarget();
+    prepared = await verifyBytes(handle, input, options.signal);
+    await assertParentCurrent(parent, "candidate-changed", "$candidate");
+    const pathNode = await inspectParentTarget(
+      parent,
+      "candidate-changed",
+      "$candidate",
+    );
     if (
       pathNode === null
       || !sameFileNodeSnapshot(prepared, pathNode)
     ) {
       fail("candidate-changed", "$candidate");
     }
-    try {
-      await parent.sync();
-    } catch {
-      fail("durability-failure", "$candidate");
-    }
-    const finalHandle = await verifyBytes(handle, input);
-    const finalPath = await parent.inspectTarget();
+    await syncParent(parent);
+    const finalHandle = await verifyBytes(handle, input, options.signal);
+    const finalPath = await inspectParentTarget(
+      parent,
+      "candidate-changed",
+      "$candidate",
+    );
     if (
       finalPath === null
       || !sameFileNodeSnapshot(finalHandle, finalPath)
     ) {
       fail("candidate-changed", "$candidate");
     }
-    completed = true;
     result = Object.freeze({
       resourcePath,
       node: finalPath,
@@ -378,21 +506,24 @@ export async function createFileCandidateDurably(
     primaryError = error;
   }
 
-  if (created && !completed && handle !== undefined) {
+  if (created && result === undefined && handle !== undefined) {
     try {
-      const opened = snapshotNode(
-        await handle.stat({ bigint: true }),
-        "cleanup-failure",
-      );
+      const opened = await snapshotHandle(handle, "cleanup-failure");
       const current = await parent.inspectTarget();
       if (
         current === null
+        || opened.kind !== "file"
+        || current.kind !== "file"
         || opened.linkCount !== 1n
-        || !sameFileNodeIdentity(opened, current)
+        || !sameFileNodeSnapshot(opened, current)
       ) {
         fail("cleanup-failure", "$candidate");
       }
       await unlink(parent.resourceAbsolutePath);
+      const retired = await snapshotHandle(handle, "cleanup-failure");
+      if (!sameRetiredCandidateNode(opened, retired)) {
+        fail("cleanup-failure", "$candidate");
+      }
       await parent.sync();
     } catch (error: unknown) {
       primaryError = error instanceof DurableFileCandidateError
@@ -417,6 +548,6 @@ export async function createFileCandidateDurably(
     primaryError = parentCloseError;
   }
   if (primaryError !== undefined) throw primaryError;
-  if (!completed || result === undefined) fail("candidate-changed", "$candidate");
+  if (result === undefined) fail("candidate-changed", "$candidate");
   return result;
 }

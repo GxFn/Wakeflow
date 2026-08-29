@@ -5,7 +5,16 @@
     "outDir": "../../../.build/src/hosts/claude-code",
     "tsBuildInfoFile": "../../../.build/cache/hosts-claude-code.tsbuildinfo"
   },
-  "files": ["wakeflow-workspace-host-resource-profile.ts"],
+  "files": [
+    "claude-code-maintenance-capability.ts",
+    "claude-code-maintenance-execution.ts",
+    "claude-code-portable-settings-composition.ts",
+    "claude-code-portable-settings-operation-executor.ts",
+    "claude-code-portable-settings-publication.ts",
+    "claude-code-portable-settings-transition.ts",
+    "claude-code-window-host-identity-profile.ts",
+    "wakeflow-workspace-host-resource-profile.ts"
+  ],
   "references": [
     { "path": "../../tsconfig.runtime.json" }
   ]

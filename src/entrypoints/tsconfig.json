@@ -2,10 +2,19 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "../../.build/entrypoints",
+    "outDir": "../../.build/src/entrypoints",
     "tsBuildInfoFile": "../../.build/cache/entrypoints.tsbuildinfo"
   },
-  "files": [],
+  "files": [
+    "claude-code-wakeflow-mcp.ts",
+    "claude-code-wakeflow-maintenance.ts",
+    "claude-code-wakeflow-window-host-binding.ts",
+    "codex-wakeflow-mcp.ts",
+    "codex-wakeflow-maintenance.ts",
+    "codex-wakeflow-window-host-binding.ts",
+    "wakeflow-mcp-stdio.ts",
+    "wakeflow-public-mcp-server.ts"
+  ],
   "references": [
     { "path": "../tsconfig.runtime.json" },
     { "path": "../hosts/codex/tsconfig.json" },

@@ -7,6 +7,7 @@ import {
   type Hosts as HostsWire,
   type ProductWindow as ProductWindowWire,
   type Program as ProgramWire,
+  type Presentation as PresentationWire,
   type Repository as RepositoryWire,
   type Storage as StorageWire,
   type TestWindow as TestWindowWire,
@@ -47,6 +48,19 @@ export const WAKEFLOW_CONFIG_V3_KIND = "WakeflowConfig" as const;
 export const WAKEFLOW_CONFIG_V3_VERSION = 3 as const;
 export const WAKEFLOW_ACTIVE_ROOT = ".wakeflow-active" as const;
 export const WAKEFLOW_LOCAL_ROOT = ".wakeflow-local" as const;
+export const WAKEFLOW_PRESENTATION_LANGUAGES = Object.freeze([
+  "en",
+  "zh-Hans",
+] as const);
+export type WakeflowPresentationLanguage =
+  (typeof WAKEFLOW_PRESENTATION_LANGUAGES)[number];
+
+/**
+ * Fresh Config producer 在用户未选择语言时写入的显式值。
+ * Parser 不会为缺失字段注入默认值，持久文档始终保存唯一语言权威。
+ */
+export const WAKEFLOW_DEFAULT_PRESENTATION_LANGUAGE:
+  WakeflowPresentationLanguage = "en";
 
 declare const CONFIG_PLACEMENT_BRAND: unique symbol;
 
@@ -67,6 +81,12 @@ type DeepReadonly<Value> =
 export type WakeflowConfigProgram = DeepReadonly<
   Omit<ProgramWire, "programId"> & {
     readonly programId: WakeflowDurableId<"program">;
+  }
+>;
+
+export type WakeflowConfigPresentation = DeepReadonly<
+  Omit<PresentationWire, "language"> & {
+    readonly language: WakeflowPresentationLanguage;
   }
 >;
 
@@ -147,9 +167,15 @@ export type WakeflowConfigStorage = DeepReadonly<
 export type WakeflowConfigV3Model = DeepReadonly<
   Omit<
     WakeflowConfigV3Wire,
-    "governance" | "hosts" | "program" | "storage" | "topology"
+    | "governance"
+    | "hosts"
+    | "presentation"
+    | "program"
+    | "storage"
+    | "topology"
   > & {
     readonly program: WakeflowConfigProgram;
+    readonly presentation: WakeflowConfigPresentation;
     readonly topology: {
       readonly repositories: readonly [
         WakeflowConfigRepository,
@@ -267,6 +293,15 @@ function parsePlacement(
     fail("placement", path);
   }
   return value as WakeflowConfigPlacement;
+}
+
+/** 将单个相对位置值准入为 Config 使用的规范 placement；不检查物理存在性。 */
+export function parseWakeflowConfigPlacement(
+  value: unknown,
+  path = "$placement",
+): WakeflowConfigPlacement {
+  if (typeof value !== "string") fail("placement", path);
+  return parsePlacement(value, path);
 }
 
 function parseIdentity<K extends "program" | "repository" | "surface" | "window">(

@@ -6,15 +6,17 @@ import {
   parseWakeflowDurableIdOfKind,
   type WakeflowDurableId,
 } from "../../../foundation/identity/wakeflow-durable-id.js";
+import {
+  WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
+} from "../../../workspace/active/wakeflow-active-paths.js";
+
+export { WAKEFLOW_ACTIVE_CURRENT_ROOT_REF };
 
 /**
  * Wakeflow Governance / Demand Publication：Workspace 内创建事务、暂存目录、逐 Demand
  * 锁和最终 Demand 根目录的可移植路径词汇。
  */
 
-export const WAKEFLOW_ACTIVE_CURRENT_ROOT_REF = parsePortableResourcePath(
-  ".wakeflow-active/current",
-);
 export const DEMAND_PUBLICATION_ROOT_REF = parsePortableResourcePath(
   ".wakeflow-active/current/demand-publication",
 );

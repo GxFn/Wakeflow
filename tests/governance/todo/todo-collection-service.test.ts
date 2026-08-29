@@ -40,6 +40,9 @@ import {
 } from "../../../src/governance/todo/todo-collection-service.js";
 import { todoItemStorageKey } from "../../../src/governance/todo/todo-paths.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import {
+  materializeWakeflowActiveLayout,
+} from "../../../src/workspace/active/wakeflow-active-layout-materialization.js";
 
 const CREATED_AT = parseUtcInstant("2026-08-26T09:00:00.000Z");
 const CLAIMED_AT = parseUtcInstant("2026-08-26T09:01:00.000Z");
@@ -115,6 +118,9 @@ async function expectServiceError(
 async function openedFixture() {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-todo-service-rh1-"));
   const root = await RootedDirectory.open(rootPath);
+  await materializeWakeflowActiveLayout(root, {
+    recoveringFreshLayout: false,
+  });
   await initializeTodoCollection(root, { freshWorkspace: true });
   return { rootPath, root };
 }
@@ -483,6 +489,9 @@ test("invalid initialization, operation inputs, and cancellation fail closed", a
       () => initializeTodoCollection(root, { freshWorkspace: false } as never),
       "input",
     );
+    await materializeWakeflowActiveLayout(root, {
+      recoveringFreshLayout: false,
+    });
     await initializeTodoCollection(root, { freshWorkspace: true });
     const controller = new AbortController();
     controller.abort();

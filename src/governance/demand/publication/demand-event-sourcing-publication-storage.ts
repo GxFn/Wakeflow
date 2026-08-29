@@ -50,6 +50,10 @@ import {
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
   DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
 } from "./demand-publication-paths.js";
+import {
+  assertWakeflowActiveLayoutCurrent,
+  WakeflowActiveLayoutInspectionError,
+} from "../../../workspace/active/wakeflow-active-layout-inspection.js";
 
 /** Demand 事件溯源发布流程的根作用域文件存储边界。 */
 
@@ -255,6 +259,7 @@ export async function initializePublicationStorage(
   signal: AbortSignal | undefined,
 ): Promise<void> {
   try {
+    await assertWakeflowActiveLayoutCurrent(root, signal);
     for (const ref of [
       DEMAND_PUBLICATION_ROOT_REF,
       DEMAND_PUBLICATION_STAGES_ROOT_REF,
@@ -267,6 +272,11 @@ export async function initializePublicationStorage(
       });
     }
   } catch (error: unknown) {
+    if (error instanceof WakeflowActiveLayoutInspectionError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "root-scope") fail("root-scope", "$root");
+      fail("conflict", "$activeLayout");
+    }
     if (error instanceof DurableDirectoryMaterializationError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
       fail("operation-failure", "$initialize");

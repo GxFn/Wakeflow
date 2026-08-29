@@ -1,6 +1,7 @@
 import { types } from "node:util";
 
 import {
+  parseDenseArray,
   parsePlainRecord,
   PassiveOwnDataError,
 } from "../data/passive-own-data.js";
@@ -59,6 +60,7 @@ import {
 export const DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_ENTRIES = 100_000;
 export const DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_BYTES =
   DURABLE_ATOMIC_FILE_MAXIMUM_BYTES;
+export const DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE = 1_024;
 
 export interface DurableAtomicFileStageRecoveryOptions {
   readonly signal?: AbortSignal;
@@ -79,6 +81,7 @@ export type DurableAtomicFileStageRecoveryErrorReason =
   | "capacity"
   | "inventory"
   | "node-policy"
+  | "target-scope"
   | "target-conflict"
   | "busy"
   | "cleanup-required"
@@ -92,6 +95,7 @@ const ERROR_MESSAGES = {
   "capacity": "Atomic file stage recovery inventory exceeds its bounded capacity.",
   "inventory": "Atomic file stage recovery found an invalid reserved stage name.",
   "node-policy": "Atomic file stage recovery found an unsafe stage node.",
+  "target-scope": "Atomic file stage recovery found a stage outside its admitted targets.",
   "target-conflict": "Atomic file stage recovery cannot prove its published target.",
   "busy": "Atomic file stage recovery inventory changed during observation.",
   "cleanup-required": "Atomic file stage recovery could not retire an exact stage.",
@@ -125,6 +129,11 @@ interface ParsedOptions {
 interface StageEntry {
   readonly address: Readonly<DurableAtomicFileStageAddress>;
   readonly entry: Readonly<StableDirectoryEntry>;
+}
+
+interface TargetScope {
+  readonly directoryResourcePath: PortableResourcePath | null;
+  readonly targetDigests: ReadonlySet<string>;
 }
 
 function fail(
@@ -209,6 +218,65 @@ function parseDirectoryRef(
     }
     throw error;
   }
+}
+
+function parentDirectoryRef(
+  resourcePath: PortableResourcePath,
+): PortableResourcePath | null {
+  const segments = splitPortableResourcePath(resourcePath);
+  return segments.length === 1
+    ? null
+    : parsePortableResourcePath(segments.slice(0, -1).join("/"));
+}
+
+function parseTargetScope(value: unknown): Readonly<TargetScope> {
+  let values: readonly unknown[];
+  try {
+    values = parseDenseArray(
+      value,
+      DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE,
+      "$targetResourcePaths",
+    );
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) {
+      fail("input", "$targetResourcePaths");
+    }
+    throw error;
+  }
+  if (values.length === 0) fail("input", "$targetResourcePaths");
+  const paths: PortableResourcePath[] = [];
+  const seen = new Set<string>();
+  for (const [index, value] of values.entries()) {
+    let resourcePath: PortableResourcePath;
+    try {
+      resourcePath = parsePortableResourcePath(
+        value,
+        `$targetResourcePaths/${index}`,
+      );
+    } catch (error: unknown) {
+      if (error instanceof PortableResourcePathError) {
+        fail("input", `$targetResourcePaths/${index}`);
+      }
+      throw error;
+    }
+    if (seen.has(resourcePath)) {
+      fail("input", `$targetResourcePaths/${index}`);
+    }
+    seen.add(resourcePath);
+    paths.push(resourcePath);
+  }
+  const directoryResourcePath = parentDirectoryRef(
+    paths[0] as PortableResourcePath,
+  );
+  if (paths.some((path) => parentDirectoryRef(path) !== directoryResourcePath)) {
+    fail("input", "$targetResourcePaths");
+  }
+  return Object.freeze({
+    directoryResourcePath,
+    targetDigests: new Set(paths.map((path) => (
+      computeDurableAtomicFileStageTargetDigest(path)
+    ))),
+  });
 }
 
 async function readDirectory(
@@ -347,17 +415,29 @@ async function retireStage(
   }
 }
 
-/** 清理指定父目录内所有安全且不再活动的自描述原子暂存文件。 */
-export async function recoverDurableAtomicFileStagesInDirectory(
+async function recoverDirectoryStages(
   root: RootedDirectory,
-  directoryResourcePathValue: PortableResourcePath | null,
-  options?: DurableAtomicFileStageRecoveryOptions,
+  directoryResourcePath: PortableResourcePath | null,
+  signal: AbortSignal | undefined,
+  targetDigests: ReadonlySet<string> | null,
+  foreignStagePolicy: "ignore" | "reject",
 ): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
-  assertRoot(root);
-  const directoryResourcePath = parseDirectoryRef(directoryResourcePathValue);
-  const { signal } = parseOptions(options);
   const directory = await readDirectory(root, directoryResourcePath, signal);
-  const stages = collectStages(directory);
+  const observedStages = collectStages(directory);
+  if (
+    targetDigests !== null
+    && foreignStagePolicy === "reject"
+    && observedStages.some((stage) => (
+      !targetDigests.has(stage.address.targetResourcePathDigest)
+    ))
+  ) {
+    fail("target-scope", "$stages");
+  }
+  const stages = targetDigests === null
+    ? observedStages
+    : observedStages.filter((stage) => (
+      targetDigests.has(stage.address.targetResourcePathDigest)
+    ));
   let retiredStageCount = 0;
   let settledTargetCount = 0;
   let activeStageCount = 0;
@@ -389,6 +469,64 @@ export async function recoverDurableAtomicFileStagesInDirectory(
     activeStageCount,
     unknownStageCount,
   });
+}
+
+/** 清理指定父目录内所有安全且不再活动的自描述原子暂存文件。 */
+export async function recoverDurableAtomicFileStagesInDirectory(
+  root: RootedDirectory,
+  directoryResourcePathValue: PortableResourcePath | null,
+  options?: DurableAtomicFileStageRecoveryOptions,
+): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
+  assertRoot(root);
+  const directoryResourcePath = parseDirectoryRef(directoryResourcePathValue);
+  const { signal } = parseOptions(options);
+  return recoverDirectoryStages(
+    root,
+    directoryResourcePath,
+    signal,
+    null,
+    "ignore",
+  );
+}
+
+/**
+ * 只在一组同父目录目标的闭合集合内恢复 stage；发现其他目标 stage 时不执行任何退休。
+ */
+export async function recoverDurableAtomicFileStagesForTargets(
+  root: RootedDirectory,
+  targetResourcePathValues: readonly PortableResourcePath[],
+  options?: DurableAtomicFileStageRecoveryOptions,
+): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
+  assertRoot(root);
+  const scope = parseTargetScope(targetResourcePathValues);
+  const { signal } = parseOptions(options);
+  return recoverDirectoryStages(
+    root,
+    scope.directoryResourcePath,
+    signal,
+    scope.targetDigests,
+    "reject",
+  );
+}
+
+/**
+ * 只恢复与目标集合匹配的 stage；同目录其他安全 stage 保持不变且不进入回执计数。
+ */
+export async function recoverDurableAtomicFileStagesMatchingTargets(
+  root: RootedDirectory,
+  targetResourcePathValues: readonly PortableResourcePath[],
+  options?: DurableAtomicFileStageRecoveryOptions,
+): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
+  assertRoot(root);
+  const scope = parseTargetScope(targetResourcePathValues);
+  const { signal } = parseOptions(options);
+  return recoverDirectoryStages(
+    root,
+    scope.directoryResourcePath,
+    signal,
+    scope.targetDigests,
+    "ignore",
+  );
 }
 
 /** 从目标可移植引用派生同一父目录恢复作用域。 */

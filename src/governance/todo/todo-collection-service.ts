@@ -64,6 +64,10 @@ import {
   type TodoState,
 } from "./todo-state.js";
 import type { TodoTransactionOperation } from "./todo-transaction.js";
+import {
+  assertWakeflowActiveLayoutCurrent,
+  WakeflowActiveLayoutInspectionError,
+} from "../../workspace/active/wakeflow-active-layout-inspection.js";
 
 export {
   TodoCollectionServiceError,
@@ -403,6 +407,7 @@ export async function initializeTodoCollection(
   }
   const signal = record.signal as AbortSignal | undefined;
   try {
+    await assertWakeflowActiveLayoutCurrent(root, signal);
     await materializeTodoPrivateDirectory(root, TODO_COLLECTION_ROOT_REF, signal);
     await materializeTodoPrivateDirectory(root, TODO_ITEMS_ROOT_REF, signal);
     await materializeTodoPrivateDirectory(root, TODO_TRANSACTIONS_ROOT_REF, signal);
@@ -414,6 +419,10 @@ export async function initializeTodoCollection(
     return snapshot;
   } catch (error: unknown) {
     if (error instanceof TodoCollectionServiceError) throw error;
+    if (error instanceof WakeflowActiveLayoutInspectionError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      fail("not-initialized", "$activeLayout");
+    }
     throw new TodoCollectionServiceError("operation-failure", "$initialize");
   }
 }

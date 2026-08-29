@@ -9,10 +9,6 @@
 export type WakeflowSha256DigestText = string
 export type DemandId = string
 export type EventId = string
-/**
- * @maxItems 0
- */
-export type EmptyFacts = []
 
 /**
  * Demand Event Stream 某一 immutable commit boundary 的可删除 Aggregate checkpoint。
@@ -32,40 +28,13 @@ state: WakeflowDemandAggregateState
 stateDigest: WakeflowSha256DigestText
 }
 /**
- * 由 Demand domain event reducer 唯一生成的纯业务 Aggregate state。
+ * 由 Demand domain event reducer 唯一生成的最小业务 Aggregate state。
  */
 export interface WakeflowDemandAggregateState {
 artifactKind: "wakeflow-demand-aggregate-state"
 schemaVersion: 1
 demandId: string
 lifecycle: ("active" | "completed" | "cancelled")
-tasking: Tasking
-delivery: Delivery
-result: Result
-testing: Testing
-review: Review
-evidence: Evidence
-pod: null
-}
-export interface Tasking {
-taskPackages: EmptyFacts
-targetTasks: EmptyFacts
-}
-export interface Delivery {
-currentDeliveries: EmptyFacts
-}
-export interface Result {
-currentResults: EmptyFacts
-}
-export interface Testing {
-testCards: EmptyFacts
-testAttempts: EmptyFacts
-}
-export interface Review {
-pendingCandidate: null
-}
-export interface Evidence {
-items: EmptyFacts
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */

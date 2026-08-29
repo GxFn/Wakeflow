@@ -2,14 +2,16 @@ import { lstatSync, opendirSync } from "node:fs";
 import type { Dirent } from "node:fs";
 import { spawnSync } from "node:child_process";
 import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * Wakeflow Tooling / Testing：由当前 `.test.ts` 源清单启动编译后测试。
  *
  * TypeScript 增量构建不会自动删除源文件移除后遗留的 `.build/tests/*.js`，因此测试门
  * 不能使用 glob 枚举编译目录。本入口只枚举当前测试源文件、映射对应的编译输出、
- * 复验普通文件并把清单交给 Node.js 测试运行器。旧输出不会被误执行，也不会维持
- * 虚假的测试覆盖。
+ * 复验普通文件并把清单交给 Node.js 测试运行器。无参数模式运行全部当前源；显式
+ * `--focused` 模式只接受调用方列出的当前 `.test.ts` 源文件。旧输出不会被误执行，
+ * 不存在、越界、重复或非测试路径也不能制造虚假的测试覆盖。
  */
 
 const MAXIMUM_TEST_FILES = 512;
@@ -51,10 +53,59 @@ function collectTestSources(root: string): readonly string[] {
   return Object.freeze(result);
 }
 
-function compiledTests(repositoryRoot: string): readonly string[] {
+function assertCurrentTestSource(
+  sourceRoot: string,
+  value: string,
+): string {
+  const source = nodePath.resolve(value);
+  const relative = nodePath.relative(sourceRoot, source);
+  if (
+    relative.length === 0
+    || relative === ".."
+    || relative.startsWith(`..${nodePath.sep}`)
+    || nodePath.isAbsolute(relative)
+    || !relative.endsWith(".test.ts")
+  ) {
+    fail("focused test source must be one .test.ts file below tests/");
+  }
+  const stat = lstatSync(source, { throwIfNoEntry: false });
+  if (stat === undefined || stat.isSymbolicLink() || !stat.isFile()) {
+    fail("focused test source must be one current regular file");
+  }
+  return source;
+}
+
+function selectedTestSources(
+  repositoryRoot: string,
+  focusedValues?: readonly string[],
+): readonly string[] {
+  const sourceRoot = nodePath.join(repositoryRoot, "tests");
+  if (focusedValues === undefined) return collectTestSources(sourceRoot);
+  if (focusedValues.length === 0) {
+    fail("focused mode requires at least one test source");
+  }
+  const seen = new Set<string>();
+  const sources = focusedValues.map((value) => {
+    const source = assertCurrentTestSource(
+      sourceRoot,
+      nodePath.resolve(repositoryRoot, value),
+    );
+    if (seen.has(source)) fail("focused test sources cannot contain duplicates");
+    seen.add(source);
+    return source;
+  });
+  return Object.freeze(sources.sort());
+}
+
+/** 把当前源清单映射为已经存在的编译输出，不枚举 `.build/tests`。 */
+export function compiledTypeScriptTests(
+  repositoryRootInput: string,
+  focusedValues?: readonly string[],
+): readonly string[] {
+  const repositoryRoot = nodePath.resolve(repositoryRootInput);
   const sourceRoot = nodePath.join(repositoryRoot, "tests");
   const outputRoot = nodePath.join(repositoryRoot, ".build", "tests");
-  return collectTestSources(sourceRoot).map((source) => {
+  return selectedTestSources(repositoryRoot, focusedValues).map((source) => {
     const relative = nodePath.relative(sourceRoot, source);
     if (
       relative.length === 0
@@ -76,9 +127,20 @@ function compiledTests(repositoryRoot: string): readonly string[] {
   });
 }
 
+function parseInvocation(values: readonly string[]): readonly string[] | undefined {
+  if (values.length === 0) return undefined;
+  if (values[0] !== "--focused") {
+    fail("the only supported runner option is --focused");
+  }
+  return values.slice(1);
+}
+
 function run(): void {
   const repositoryRoot = process.cwd();
-  const files = compiledTests(repositoryRoot);
+  const files = compiledTypeScriptTests(
+    repositoryRoot,
+    parseInvocation(process.argv.slice(2)),
+  );
   const result = spawnSync(process.execPath, ["--test", ...files], {
     cwd: repositoryRoot,
     stdio: "inherit",
@@ -89,4 +151,10 @@ function run(): void {
   if (result.status !== 0) process.exitCode = result.status ?? 1;
 }
 
-run();
+function isMainModule(): boolean {
+  const invoked = process.argv[1];
+  return invoked !== undefined
+    && nodePath.resolve(invoked) === fileURLToPath(import.meta.url);
+}
+
+if (isMainModule()) run();

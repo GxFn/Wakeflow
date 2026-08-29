@@ -7,8 +7,8 @@ export function createMinimalWakeflowConfigV3(): Record<string, unknown> {
     program: {
       programId: "program_11111111-1111-4111-8111-111111111111",
       displayName: "Example Program",
-      interfaceLanguage: "zh",
     },
+    presentation: { language: "en" },
     topology: {
       repositories: [
         {

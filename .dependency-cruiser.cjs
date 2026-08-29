@@ -67,6 +67,24 @@ module.exports = {
       },
       to: { path: "^node:fs(?:/promises)?$" },
     },
+    {
+      name: "domain-process-effects-use-foundation",
+      severity: "error",
+      comment: "host-neutral 领域代码不得绕过封闭的 foundation 系统进程能力。",
+      from: {
+        path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability)/",
+      },
+      to: { path: "^node:child_process$" },
+    },
+    {
+      name: "host-neutral-runtime-does-not-import-host-implementations",
+      severity: "error",
+      comment: "宿主中立运行时只依赖端口与Profile数据，不得反向导入具体宿主实现。",
+      from: {
+        path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability)/",
+      },
+      to: { path: "^src/hosts/" },
+    },
   ],
   options: {
     parser: "swc",

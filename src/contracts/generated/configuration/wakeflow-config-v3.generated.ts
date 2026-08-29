@@ -50,13 +50,14 @@ kind: "WakeflowConfig"
  */
 schemaVersion: 3
 program: Program
+presentation: Presentation
 topology: Topology
 storage: Storage
 governance: Governance
 hosts: Hosts
 }
 /**
- * Tracked durable program identity and human-facing presentation preferences; it contains no paths, runtime state, or host handles.
+ * Tracked durable program identity and display metadata; it contains no presentation policy, paths, runtime state, or host handles.
  */
 export interface Program {
 /**
@@ -71,10 +72,15 @@ displayName: TrimmedNonEmptyString
  * Optional human explanation; it does not affect identity or state.
  */
 description?: TrimmedNonEmptyString
+}
 /**
- * Persistent presentation-language preference: auto inherits the current interface, while en and zh request an explicit language.
+ * Tracked durable policy for Wakeflow-generated human-facing text. It is shared by the program and is not an inferred host or machine-local preference.
  */
-interfaceLanguage: ("auto" | "en" | "zh")
+export interface Presentation {
+/**
+ * BCP 47 language tag for Wakeflow-generated human-facing text. Fresh initialization explicitly persists en when no language is selected; readers never infer a value from the host environment.
+ */
+language: ("en" | "zh-Hans")
 }
 /**
  * Durable product repositories, Design/Test support surfaces, and stable logical windows connected only through typed references.
@@ -507,6 +513,7 @@ export const WAKEFLOW_CONFIG_V3_SCHEMA = freezeGeneratedSchema({
     "kind",
     "schemaVersion",
     "program",
+    "presentation",
     "topology",
     "storage",
     "governance",
@@ -536,6 +543,9 @@ export const WAKEFLOW_CONFIG_V3_SCHEMA = freezeGeneratedSchema({
     },
     "program": {
       "$ref": "#/$defs/program"
+    },
+    "presentation": {
+      "$ref": "#/$defs/presentation"
     },
     "topology": {
       "$ref": "#/$defs/topology"
@@ -668,20 +678,18 @@ export const WAKEFLOW_CONFIG_V3_SCHEMA = freezeGeneratedSchema({
       ]
     },
     "program": {
-      "description": "Tracked durable program identity and human-facing presentation preferences; it contains no paths, runtime state, or host handles.",
+      "description": "Tracked durable program identity and display metadata; it contains no presentation policy, paths, runtime state, or host handles.",
       "examples": [
         {
           "programId": "program_11111111-1111-4111-8111-111111111111",
-          "displayName": "Example Program",
-          "interfaceLanguage": "zh"
+          "displayName": "Example Program"
         }
       ],
       "type": "object",
       "additionalProperties": false,
       "required": [
         "programId",
-        "displayName",
-        "interfaceLanguage"
+        "displayName"
       ],
       "properties": {
         "programId": {
@@ -695,16 +703,32 @@ export const WAKEFLOW_CONFIG_V3_SCHEMA = freezeGeneratedSchema({
         "description": {
           "$ref": "#/$defs/nonEmptyString",
           "description": "Optional human explanation; it does not affect identity or state."
-        },
-        "interfaceLanguage": {
+        }
+      }
+    },
+    "presentation": {
+      "description": "Tracked durable policy for Wakeflow-generated human-facing text. It is shared by the program and is not an inferred host or machine-local preference.",
+      "examples": [
+        {
+          "language": "en"
+        }
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "language"
+      ],
+      "properties": {
+        "language": {
           "enum": [
-            "auto",
             "en",
-            "zh"
+            "zh-Hans"
           ],
-          "description": "Persistent presentation-language preference: auto inherits the current interface, while en and zh request an explicit language.",
+          "default": "en",
+          "description": "BCP 47 language tag for Wakeflow-generated human-facing text. Fresh initialization explicitly persists en when no language is selected; readers never infer a value from the host environment.",
           "examples": [
-            "zh"
+            "en",
+            "zh-Hans"
           ]
         }
       }

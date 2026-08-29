@@ -26,9 +26,9 @@ import {
  * Wakeflow Governance / Demand Model：领域事件归约器生成的纯聚合状态。
  *
  * 本状态不保存事件流修订号、事件尾部、身份/权威关系摘要或更新时间；这些事实
- * 属于事件溯源的持久化封装或快照。RH-2 的业务区段如实表示“尚无 Tasking、Delivery、
- * Result、Test、Review、Evidence 或 Pod 事实”。后续只能由相应职责所有者的事件和
- * 归约器扩展，不允许使用通用补丁修改。
+ * 属于事件溯源的持久化封装或快照。当前只有 publication 与 cancellation 事件，状态
+ * 因而只保存 Demand 身份和生命周期。尚未实现的 Tasking、Delivery、Result、Test、
+ * Review、Evidence 与 Pod 不使用空数组或 null 占位；未来只能随真实事件和归约器进入。
  */
 
 export const DEMAND_AGGREGATE_STATE_ARTIFACT_KIND =
@@ -42,27 +42,6 @@ export interface DemandAggregateState {
   readonly schemaVersion: typeof DEMAND_AGGREGATE_STATE_SCHEMA_VERSION;
   readonly demandId: WakeflowDurableId<"demand">;
   readonly lifecycle: DemandLifecycle;
-  readonly tasking: Readonly<{
-    readonly taskPackages: readonly [];
-    readonly targetTasks: readonly [];
-  }>;
-  readonly delivery: Readonly<{
-    readonly currentDeliveries: readonly [];
-  }>;
-  readonly result: Readonly<{
-    readonly currentResults: readonly [];
-  }>;
-  readonly testing: Readonly<{
-    readonly testCards: readonly [];
-    readonly testAttempts: readonly [];
-  }>;
-  readonly review: Readonly<{
-    readonly pendingCandidate: null;
-  }>;
-  readonly evidence: Readonly<{
-    readonly items: readonly [];
-  }>;
-  readonly pod: null;
 }
 
 export type DemandAggregateStateErrorReason =
@@ -98,8 +77,6 @@ const validateWire =
   createRuntimeJsonSchemaValidator<DemandAggregateStateWire>(
     WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA,
   );
-const EMPTY_FACTS = Object.freeze([]) as readonly [];
-
 function fail(reason: DemandAggregateStateErrorReason, path: string): never {
   throw new DemandAggregateStateError(reason, path);
 }
@@ -113,23 +90,6 @@ function freezeState(
     schemaVersion: DEMAND_AGGREGATE_STATE_SCHEMA_VERSION,
     demandId,
     lifecycle: wire.lifecycle,
-    tasking: Object.freeze({
-      taskPackages: EMPTY_FACTS,
-      targetTasks: EMPTY_FACTS,
-    }),
-    delivery: Object.freeze({
-      currentDeliveries: EMPTY_FACTS,
-    }),
-    result: Object.freeze({
-      currentResults: EMPTY_FACTS,
-    }),
-    testing: Object.freeze({
-      testCards: EMPTY_FACTS,
-      testAttempts: EMPTY_FACTS,
-    }),
-    review: Object.freeze({ pendingCandidate: null }),
-    evidence: Object.freeze({ items: EMPTY_FACTS }),
-    pod: null,
   });
 }
 
@@ -179,13 +139,6 @@ export function createInitialDemandAggregateState(
     schemaVersion: DEMAND_AGGREGATE_STATE_SCHEMA_VERSION,
     demandId,
     lifecycle: "active",
-    tasking: { taskPackages: [], targetTasks: [] },
-    delivery: { currentDeliveries: [] },
-    result: { currentResults: [] },
-    testing: { testCards: [], testAttempts: [] },
-    review: { pendingCandidate: null },
-    evidence: { items: [] },
-    pod: null,
   });
 }
 

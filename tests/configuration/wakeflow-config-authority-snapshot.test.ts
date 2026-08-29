@@ -62,7 +62,7 @@ async function expectSnapshotError(
   equal(caught.reason, reason);
 }
 
-test("snapshot binds the legacy source/config digests to one stable workspace read", async () => {
+test("snapshot binds the current source/config digests to one stable workspace read", async () => {
   const fixture = createWorkspace();
   const root = await RootedDirectory.open(fixture.workspaceRoot);
   try {
@@ -71,14 +71,14 @@ test("snapshot binds the legacy source/config digests to one stable workspace re
     equal(snapshot.schemaVersion, 1);
     equal(snapshot.workspaceRoot, fixture.workspaceRoot);
     equal(snapshot.source.resourcePath, "wakeflow.config.json");
-    equal(snapshot.source.byteCount, 2190);
+    equal(snapshot.source.byteCount, 2205);
     equal(
       snapshot.source.digest,
-      "sha256:a87e8f7248b8f90efaa07958b301fa2ab9e2b2a5e1795ad531e65d07c61b3cd4",
+      "sha256:8e748fa509edba5b33796f3a4609cd9d2d514f7dac31d315f97c54987bba44ea",
     );
     equal(
       snapshot.configDigest,
-      "sha256:5a1a8b2ab2439d9add5942eea455ceba693a28f643af1631ea6f1d62f3997081",
+      "sha256:54a5976cbac7c3f7e14ac76e405d04f8e534fd820f8bf1ce16768d6514db7007",
     );
     equal(snapshot.indexes.controllerWindow.role, "controller");
     equal(snapshot.ledgerRoot, path.join(fixture.temporaryRoot, "wakeflow-ledger"));

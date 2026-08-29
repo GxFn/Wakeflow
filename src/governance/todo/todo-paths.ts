@@ -8,6 +8,9 @@ import {
   parseTodoItemId,
   type TodoItemId,
 } from "./todo-item-id.js";
+import {
+  WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
+} from "../../workspace/active/wakeflow-active-paths.js";
 
 /**
  * Wakeflow Governance / TODO：TODO 聚合的可移植路径词汇。
@@ -18,19 +21,19 @@ import {
  */
 
 export const TODO_COLLECTION_ROOT_REF = parsePortableResourcePath(
-  ".wakeflow-active/current/todo",
+  `${WAKEFLOW_ACTIVE_CURRENT_ROOT_REF}/todo`,
 );
 export const TODO_ITEMS_ROOT_REF = parsePortableResourcePath(
-  ".wakeflow-active/current/todo/items",
+  `${TODO_COLLECTION_ROOT_REF}/items`,
 );
 export const TODO_TRANSACTIONS_ROOT_REF = parsePortableResourcePath(
-  ".wakeflow-active/current/todo/transactions",
+  `${TODO_COLLECTION_ROOT_REF}/transactions`,
 );
 export const TODO_COLLECTION_LOCK_REF = parsePortableResourcePath(
-  ".wakeflow-active/current/todo/collection.lock",
+  `${TODO_COLLECTION_ROOT_REF}/collection.lock`,
 );
 export const TODO_BOARD_PROJECTION_REF = parsePortableResourcePath(
-  ".wakeflow-active/current/todo/global-todo-board.md",
+  `${TODO_COLLECTION_ROOT_REF}/global-todo-board.md`,
 );
 
 export type TodoItemStorageKey = `item-${string}`;

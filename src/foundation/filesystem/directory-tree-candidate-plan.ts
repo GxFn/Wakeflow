@@ -408,6 +408,24 @@ function buildPlan(
   });
 }
 
+function assertPlanCapacity(
+  plan: Readonly<DirectoryTreeCandidatePlan>,
+  options: Readonly<ParsedDirectoryTreeCandidateOptions>,
+  path: string,
+): void {
+  if (
+    plan.files.length > options.maximumFiles
+    || plan.directories.length > DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_DIRECTORIES
+    || plan.directories.length + plan.files.length > options.maximumEntries
+    || plan.files.some((file) => file.byteCount > options.maximumFileBytes)
+    || plan.totalBytes > options.maximumTotalBytes
+    || directoryTreeCandidateMaximumPathDepth(plan.directories, plan.files)
+      > options.maximumDepth
+  ) {
+    fail("capacity", path);
+  }
+}
+
 export function prepareDirectoryTreeCandidate(
   filesValue: unknown,
   optionsValue: unknown,
@@ -453,16 +471,7 @@ export function prepareDirectoryTreeCandidate(
     mode: file.mode,
   })));
   const plan = buildPlan(options.directoryMode, planFiles);
-  if (
-    plan.files.length > options.maximumFiles
-    || plan.directories.length > DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_DIRECTORIES
-    || plan.directories.length + plan.files.length > options.maximumEntries
-    || plan.totalBytes > options.maximumTotalBytes
-    || directoryTreeCandidateMaximumPathDepth(plan.directories, plan.files)
-      > options.maximumDepth
-  ) {
-    fail("capacity", "$files");
-  }
+  assertPlanCapacity(plan, options, "$files");
   return Object.freeze({ plan, files: Object.freeze(files), options });
 }
 
@@ -486,6 +495,34 @@ function parsePlanFile(
     digest: parseDigest(record.digest, `${path}/digest`),
     mode: parseMode(record.mode, `${path}/mode`),
   });
+}
+
+/**
+ * 从已有内容摘要描述符生成与 bytes 入口完全相同的目录树候选计划。
+ *
+ * 本入口不读取文件或信任调用方摘要；上层必须把每个描述符交给真实 copy/verify
+ * consumer。计划仍执行排序、路径闭包、总量、深度和 tree digest 的完整复验。
+ */
+export function planDirectoryTreeCandidateFromFileDescriptors(
+  filesValue: readonly DirectoryTreeCandidatePlanFile[],
+  optionsValue: DirectoryTreeCandidateOptions,
+): Readonly<DirectoryTreeCandidatePlan> {
+  const options = parseOptions(optionsValue);
+  assertDirectoryTreeCandidateNotAborted(options.signal);
+  if (
+    options.maximumFiles > DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_FILES
+    || options.maximumEntries
+      > DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_FILES
+        + DIRECTORY_TREE_CANDIDATE_MAXIMUM_PLAN_DIRECTORIES
+  ) {
+    fail("input", "$options");
+  }
+  const values = denseArray(filesValue, options.maximumFiles, "$files");
+  if (values.length === 0) fail("input", "$files");
+  const files = Object.freeze(values.map(parsePlanFile));
+  const plan = buildPlan(options.directoryMode, files);
+  assertPlanCapacity(plan, options, "$files");
+  return plan;
 }
 
 export function parseDirectoryTreeCandidatePlan(

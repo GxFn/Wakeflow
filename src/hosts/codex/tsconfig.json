@@ -5,7 +5,11 @@
     "outDir": "../../../.build/src/hosts/codex",
     "tsBuildInfoFile": "../../../.build/cache/hosts-codex.tsbuildinfo"
   },
-  "files": ["wakeflow-workspace-host-resource-profile.ts"],
+  "files": [
+    "codex-maintenance-execution.ts",
+    "codex-window-host-identity-profile.ts",
+    "wakeflow-workspace-host-resource-profile.ts"
+  ],
   "references": [
     { "path": "../../tsconfig.runtime.json" }
   ]

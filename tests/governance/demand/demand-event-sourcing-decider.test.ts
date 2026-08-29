@@ -1,8 +1,4 @@
-import {
-  deepEqual,
-  equal,
-  throws,
-} from "node:assert/strict";
+import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
@@ -62,7 +58,6 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
   equal(cancelled?.eventType, "lifecycle.demand-cancelled");
   const terminal = evolveDemandEventSourcingState(active, cancelled);
   equal(terminal.lifecycle, "cancelled");
-  deepEqual(terminal.tasking, { taskPackages: [], targetTasks: [] });
 
   throws(
     () => decideDemandEventSourcingCommand(terminal, {

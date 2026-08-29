@@ -1,5 +1,9 @@
 import { renderDeterministicJsonDocument } from "../foundation/data/deterministic-json-document.js";
 import {
+  parseJsonValue,
+  type JsonValue,
+} from "../foundation/data/json-value.js";
+import {
   parseWakeflowConfigV3,
   type WakeflowConfigProgram,
   type WakeflowConfigRepository,
@@ -28,8 +32,13 @@ function programRepresentation(program: WakeflowConfigProgram) {
     programId: program.programId,
     displayName: program.displayName,
     ...optionalField("description", program.description),
-    interfaceLanguage: program.interfaceLanguage,
   };
+}
+
+function presentationRepresentation(
+  presentation: WakeflowConfigV3Model["presentation"],
+) {
+  return { language: presentation.language };
 }
 
 function repositoryRepresentation(repository: WakeflowConfigRepository) {
@@ -205,6 +214,7 @@ function configRepresentation(model: WakeflowConfigV3Model) {
     kind: model.kind,
     schemaVersion: model.schemaVersion,
     program: programRepresentation(model.program),
+    presentation: presentationRepresentation(model.presentation),
     topology: {
       repositories: model.topology.repositories.map(repositoryRepresentation),
       supportSurfaces: model.topology.supportSurfaces.map(
@@ -218,8 +228,25 @@ function configRepresentation(model: WakeflowConfigV3Model) {
   };
 }
 
+/**
+ * 创建与持久 Config 文档字段顺序一致的递归冻结 JSON 值。
+ *
+ * 该值供需要嵌入 Config 快照的私有恢复意图复用；它不携带文件路径、节点身份或
+ * 写入授权，也不会保留调用方对象引用。
+ */
+export function createWakeflowConfigV3DocumentValue(
+  value: unknown,
+): JsonValue {
+  return parseJsonValue(
+    configRepresentation(parseWakeflowConfigV3(value)),
+    "$config",
+  );
+}
+
 /** 从严格 v3 领域模型生成唯一 deterministic pretty JSON 表示。 */
 export function renderWakeflowConfigV3(value: unknown): string {
-  const model = parseWakeflowConfigV3(value);
-  return renderDeterministicJsonDocument(configRepresentation(model), "$config");
+  return renderDeterministicJsonDocument(
+    createWakeflowConfigV3DocumentValue(value),
+    "$config",
+  );
 }

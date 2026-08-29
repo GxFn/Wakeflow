@@ -25,7 +25,9 @@ import {
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import {
+  recoverDurableAtomicFileStagesForTargets,
   recoverDurableAtomicFileStagesInTargetParent,
+  recoverDurableAtomicFileStagesMatchingTargets,
   DurableAtomicFileStageRecoveryError,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import {
@@ -167,6 +169,82 @@ test("atomic stage recovery 保留 active stage 并拒绝 malformed reserved nam
     );
   } finally {
     if (!released) releaseDurableAtomicFileStageAddress(address);
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("target-scoped atomic stage recovery rejects foreign stages before mutation", async () => {
+  const rootPath = mkdtempSync(path.join(
+    os.tmpdir(),
+    "wakeflow-atomic-stage-target-scope-",
+  ));
+  mkdirSync(path.join(rootPath, "records"), { mode: 0o700 });
+  const root = await RootedDirectory.open(rootPath);
+  const firstTarget = parsePortableResourcePath("records/first.json");
+  const secondTarget = parsePortableResourcePath("records/second.json");
+  const bytes = encodeUtf8("candidate");
+  const addresses = [firstTarget, secondTarget].map((target) => (
+    issueDurableAtomicFileStageAddress(
+      "replace",
+      target,
+      computeSha256Digest(bytes),
+      0o600,
+    )
+  ));
+  const stages = addresses.map((address, index) => durableAtomicFileStageRef(
+    index === 0 ? firstTarget : secondTarget,
+    address,
+  ));
+  let released = false;
+  try {
+    for (const stage of stages) {
+      await createFileCandidateDurably(root, stage, bytes, { mode: 0o600 });
+    }
+    for (const address of addresses) {
+      releaseDurableAtomicFileStageAddress(address);
+    }
+    released = true;
+
+    await rejects(
+      recoverDurableAtomicFileStagesForTargets(root, [firstTarget]),
+      (error: unknown) => (
+        error instanceof DurableAtomicFileStageRecoveryError
+        && error.reason === "target-scope"
+      ),
+    );
+    equal(
+      stages.every((stage) => existsSync(
+        path.join(rootPath, ...stage.split("/")),
+      )),
+      true,
+    );
+
+    const firstReceipt = await recoverDurableAtomicFileStagesMatchingTargets(
+      root,
+      [firstTarget],
+    );
+    equal(firstReceipt.retiredStageCount, 1);
+    equal(existsSync(path.join(rootPath, ...stages[0]!.split("/"))), false);
+    equal(existsSync(path.join(rootPath, ...stages[1]!.split("/"))), true);
+
+    const receipt = await recoverDurableAtomicFileStagesForTargets(
+      root,
+      [secondTarget],
+    );
+    equal(receipt.retiredStageCount, 1);
+    equal(
+      stages.some((stage) => existsSync(
+        path.join(rootPath, ...stage.split("/")),
+      )),
+      false,
+    );
+  } finally {
+    if (!released) {
+      for (const address of addresses) {
+        releaseDurableAtomicFileStageAddress(address);
+      }
+    }
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
   }

@@ -6,12 +6,7 @@ import {
   PassiveOwnDataError,
 } from "../../foundation/data/passive-own-data.js";
 import {
-  materializeDirectoryPath,
-  DurableDirectoryMaterializationError,
-} from "../../foundation/filesystem/durable-directory-materialization.js";
-import {
   RootedDirectory,
-  RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   parseWakeflowDurableIdOfKind,
@@ -31,9 +26,6 @@ import type {
 import {
   confirmationRootRef,
   requirementRootRef,
-  LEDGER_CONFIRMATIONS_ROOT_REF,
-  LEDGER_REQUIREMENTS_ROOT_REF,
-  LEDGER_TRANSACTIONS_ROOT_REF,
 } from "./ledger-authority-paths.js";
 import {
   isLedgerAbortSignal,
@@ -48,9 +40,9 @@ import {
   type ResolvedLedgerAuthorityMember,
 } from "./ledger-authority-store-contract.js";
 import {
-  LEDGER_DURABLE_DIRECTORY_MODE,
-  LEDGER_TRANSACTION_DIRECTORY_MODE,
-} from "./ledger-authority-storage-policy.js";
+  inspectLedgerAuthorityLayout,
+  materializeLedgerAuthorityLayout,
+} from "./ledger-authority-layout.js";
 import {
   recoverLedgerAuthorityRecordPublication,
 } from "./ledger-record-publication-recovery.js";
@@ -67,23 +59,6 @@ import { publishLedgerAuthorityRecord } from "./ledger-record-publisher.js";
  * 投影或业务归档。长期记录目录树使用 `0755`、`0644` 权限位；短期事务资源使用
  * `0700`、`0600` 权限位。
  */
-
-async function assertDirectoryPolicy(
-  root: RootedDirectory,
-  resourcePath: typeof LEDGER_REQUIREMENTS_ROOT_REF,
-  mode: number,
-): Promise<void> {
-  let resource;
-  try {
-    resource = await root.inspectExistingResource(resourcePath);
-  } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
-    throw error;
-  }
-  if (resource.node.kind !== "directory" || resource.node.permissionBits !== mode) {
-    fail("node-policy", "$initialize");
-  }
-}
 
 function parseInitializeOptions(
   value: unknown,
@@ -141,37 +116,13 @@ export class LedgerAuthorityStore {
   /** 为新 Ledger 幂等创建具有分层权限策略的基础目录。 */
   async initialize(options: InitializeLedgerAuthorityStoreOptions): Promise<void> {
     const { signal } = parseInitializeOptions(options);
-    try {
-      for (const resourcePath of [
-        LEDGER_REQUIREMENTS_ROOT_REF,
-        LEDGER_CONFIRMATIONS_ROOT_REF,
-      ]) {
-        await materializeDirectoryPath(this.#root, resourcePath, {
-          mode: LEDGER_DURABLE_DIRECTORY_MODE,
-          ...(signal === undefined ? {} : { signal }),
-        });
-        await assertDirectoryPolicy(
-          this.#root,
-          resourcePath,
-          LEDGER_DURABLE_DIRECTORY_MODE,
-        );
-      }
-      await materializeDirectoryPath(this.#root, LEDGER_TRANSACTIONS_ROOT_REF, {
-        mode: LEDGER_TRANSACTION_DIRECTORY_MODE,
-        ...(signal === undefined ? {} : { signal }),
-      });
-      await assertDirectoryPolicy(
-        this.#root,
-        LEDGER_TRANSACTIONS_ROOT_REF,
-        LEDGER_TRANSACTION_DIRECTORY_MODE,
-      );
-    } catch (error: unknown) {
-      if (error instanceof DurableDirectoryMaterializationError) {
-        if (error.reason === "aborted") fail("aborted", "$signal");
-        fail("operation-failure", "$initialize");
-      }
-      throw error;
-    }
+    await materializeLedgerAuthorityLayout(this.#root, signal);
+  }
+
+  /** 只读观察 Ledger 固定容器；不会扫描或解释任何权威记录。 */
+  async inspectLayout(options?: LedgerAuthorityStoreOptions) {
+    const { signal } = parseLedgerAuthorityStoreOptions(options);
+    return inspectLedgerAuthorityLayout(this.#root, signal);
   }
 
   async loadRequirement(

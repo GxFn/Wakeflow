@@ -201,6 +201,7 @@ export {
   DurableDirectoryTreeCandidateError,
   parseDirectoryTreeCandidatePlan,
   planDirectoryTreeCandidate,
+  planDirectoryTreeCandidateFromFileDescriptors,
 } from "./directory-tree-candidate-plan.js";
 export type {
   DirectoryTreeCandidateFileInput,

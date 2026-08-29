@@ -1,16 +1,26 @@
 # Wakeflow TypeScript Post-RH-2 能力重新基线化审查
 
 > 创建日期：2026-08-27
-> 当前状态：`draft / NF-0-complete / INF-1-config-authority-lifecycle-complete / INF-2H-todo-resource-catalog-complete`
+> 当前状态：`draft / technical-skeleton-review-gate-reached / implementation-stopped`
 > Owner：Wakeflow Design
 > 预期接收者：Wakeflow 用户与后续 Controller 规划
 > 上位需求：[TypeScript 单一源码、双宿主制品与轻量测试需求](./wakeflow-typescript-dual-artifact-build-requirement-2026-08-24.md)
 > 当前实施计划：[TypeScript 全新项目能力重构开发计划](./wakeflow-typescript-capability-reimplementation-development-plan-2026-08-25.md)
 > 资源标准：[TypeScript 资源处理归一标准与收敛矩阵](./wakeflow-typescript-resource-handling-standard-2026-08-26.md)
+> 最新旧产品全闭包审查：[旧 JavaScript 产品全场景闭包审查](./wakeflow-legacy-js-full-scenario-closure-audit-2026-08-28.md)
+> 当前核实结论：[TypeScript Technical Skeleton Review Gate](./wakeflow-typescript-technical-skeleton-review-gate-2026-08-28.md)
 
 > 本文是经用户明确要求留下的非权威 Design 审查草案。它记录代码与文档事实、
 > 差异和候选切片，不因文件路径或 `draft` 状态取得需求、TODO、dispatch、acceptance、
 > migration、release 或产品运行 authority。候选顺序必须经用户确认后才能回写上位计划。
+
+> 2026-08-28：§12 的 Candidate 顺序在最新旧产品全闭包审查完成后暂停执行；下一项
+> TypeScript 实现必须先采用该审查的技术骨干闭合范围。完成Demand Core Skeleton、
+> Window Runtime Identity、官方MCP与双制品骨干后，在Technical Skeleton Review Gate
+> 强制暂停；未经用户统一review，不得进入真实业务。
+
+> 2026-08-28：上述节点前计划已全部执行并在新 Gate 文档中核实。本文早期“当前状态”、
+> 候选顺序、模块数和测试数继续保留为过程证据，不再覆盖 Gate 文档的最新事实。
 
 <a id="rebaseline-purpose"></a>
 ## 1. 问题、目标与完成定义
@@ -80,8 +90,8 @@ reconfigure owner、transition authority、maintenance composition 和 migration
 | `FND-*` | 中立数据、路径、文件、时间、摘要、锁和mechanical effect | NF-0已完成；仅保留INF-3/4驱动的缺口 |
 | `INF-*` | Config、Workspace Matrix、Managed Text、Manifested Tree、技术mutation/recovery | 下一阶段优先建设 |
 | `DOM-*` | TODO、Demand、Tasking、Delivery、Review、Archive等业务能力 | RH-1/RH-2 Core已完成；暂缓新增业务事件 |
-| `HOST-*` | Codex/Claude真实宿主ports与非对称effect | 尚未开始 |
-| `REL-*` | public entrypoints、双制品、E3对比、E4迁移/切换 | 尚未开始 |
+| `HOST-*` | Codex/Claude真实宿主ports与非对称effect | Maintenance与Window Host Binding固定组合根已完成；真实effect仍全部由Agent执行，Transport/Pod待业务切片 |
+| `REL-*` | public entrypoints、双制品、E3对比、E4迁移/切换 | 官方MCP与两份`.build`候选制品已完成；正式plugin制品、E3/E4仍未开始 |
 
 旧RH-1/RH-2继续作为历史实施identity；RH-3～RH-6不再作为必须保持编号的主序列。
 新顺序由跨轨依赖图决定。
@@ -376,6 +386,10 @@ bounded absence machine proof。不能为了共享接口伪造二者对称。
 
 ### 7.4 当前测试证据
 
+> 本节的INF-1数据已被2026-08-28 Gate实测替代：强制清空编译测试目录后，当前
+> 新TS源清单为`665/665`通过、`87.185658584s`；架构门为`421 modules / 2579
+> dependencies`，Schema为34份。完整分层见Gate文档§10。
+
 INF-1完成后的最新 `npm run check:typescript` 证明：
 
 - strict typecheck 通过；
@@ -530,34 +544,35 @@ Config read-side 已实现；old Config Owner 和 transition authority 没有进
 
 ### 8.5 当前完全空缺的运行面
 
-`src/hosts/codex/`、`src/hosts/claude-code/` 和 `src/entrypoints/` 当前只有 tsconfig，
-没有运行代码。当前新 TS 也没有 Config Snapshot 的领域级 consumer、MCP/CLI/setup、
-host adapter、artifact builder 或 committed plugin output。
+`src/entrypoints/` 已通过官方MCP注册Maintenance与Window Host Binding两个真实工具，
+并从同一次TS编译装配两份`.build/artifacts`候选。它仍不代表31项旧公共工具已迁移，
+也不是正式plugin output。真实窗口create/send/read/close仍由Agent调用宿主能力；Lease、
+Transport、Pod、完整observability、committed plugin output与E3/E4均未实现。
 
 <a id="rebaseline-delta-matrix"></a>
 ## 9. 剩余能力差异矩阵
 
 | 能力簇 | 旧实现事实 | 当前 TS | 下一步性质 |
 | --- | --- | --- | --- |
-| Config mutation | fresh/reconfigure plan、stage、CAS、M3 recovery | 无 | 必须新增真实 owner；不能移植旧大文件 |
-| Workspace authority context | 19个config snapshot consumer各自派生 | 只有 Config Snapshot | 需结合首个领域 consumer设计一次操作 context |
-| Resource matrix | 122 Codex / 143 Claude layout entries | Config root placement only | 只读编译与双宿主 matrix gate |
-| Maintenance transaction | global gate/journal/action composition | domain-local lock/journal primitives | 必须从多资源 consumer证明是否需要统一事务层 |
-| Managed integration | memory/gitignore/Claude settings/statusline | 无 | exact-source-recompose + host seam |
-| Active projections | 4类Markdown与双锁/maintenance路径 | TODO board projection only | 基于新 Event Store/TODO重建，不移植旧state shape |
+| Config mutation | fresh/reconfigure plan、stage、CAS、M3 recovery | Config create/replace/readback/inactive-residue recovery已闭合 | 后续只由maintenance consumer组合，不回填旧大计划 |
+| Workspace authority context | 19个config snapshot consumer各自派生 | Static Resource Matrix与Operation Context已闭合；Support已增加Config摘要绑定的动态Catalog | 动态资源继续由具体owner factory生成，不增加运行时registry |
+| Resource matrix | 122 Codex / 143 Claude layout entries | Config、TODO、Ledger、Demand、Managed Integration、Maintenance核心根与双Host catalog已组合；受管Support root/memory按topology动态生成 | 继续由真实动态consumer补具体实例，不复制旧layout全集 |
+| Maintenance transaction | global gate/journal/action composition | 唯一mutable journal已闭合affected/checkpoint/terminal CAS并绑定同operation immutable intent；2MiB有界intent保存规范化desired Config、Host Profiles、shared preview与host operations，journal保持64KiB。Fresh共享计划现为14步，空TODO后发布Workspace Index/idle Status，再执行其余owner并最后激活Config；公共recover只需operationId和固定宿主capability | per-Demand动态projection与Claude local settings/statusline仍未闭合；不复制旧通用Manager或动态handler registry |
+| Managed integration | memory/gitignore/Claude settings/statusline | Workspace `.gitignore`、Program Instruction managed-block、受管Design/Test whole-file memory及Claude portable settings完整链已闭合；Config使用显式`presentation.language` | portable settings已进入INF-6唯一事务；local settings/statusline等待Binding与真实宿主consumer |
+| Active projections | Workspace index/status + 每Demand index/progress | TODO board之外，已完成Fresh Workspace Index与idle Status：Config+空Demand+空TODO authority、0600双文件、专用projection lock、全目标预检、CAS/recovery与maintenance接入；使用新TODO路径且不生成不存在的Ledger map链接 | per-Demand index/progress等待Tasking/Delivery/Result等真实Event Sourcing区段，不移植旧模板或state shape |
 | Demand artifacts | 6类 immutable record与service | 无 | 按首个 task/delivery consumer实现 |
-| Window binding/lease | strict store、generation、exact lease | 无 | delivery与host的共同前置 |
+| Window binding/lease | strict store、generation、exact lease | 已完成Agent observation→0600 no-replace Binding→脱敏registered projection；Lease/replace/decommission无 | 当前仅服务Maintenance launch intent；Delivery继续后置 |
 | Transport/delivery | 4类record、store、plan/claim/outcome/rearm | 无 | 必须与TaskPackage、binding、lease形成纵切 |
 | Result/review/lifecycle | result import、candidate、decision、complete/cancel | 只有cancel | 扩展同一Demand event stream |
-| Evidence | strict manifest、tree scan/publish、privacy | 只有通用tree read/identity | manifested tree真实consumer |
+| Evidence | strict manifest、tree scan/publish、privacy | Artifact tree identity、跨根stream copy、plan、partial candidate、same-root publish已闭合；Evidence领域仍无event/manifest/privacy owner | 等`evidence.recorded` Event Sourcing扩展后作为首个真实业务consumer |
 | Ledger/archive | requirement/confirmation/archive+4投影 | requirement/confirmation | archive与projection另行切片 |
 | Preservation/retention | audit hold、transport release | 无 | 必须由archive/evidence真实consumer驱动 |
 | Pod | 9类record、state、host materialization | 无 | 依赖Demand artifacts、binding、host ports |
 | Keep-live | records/service，host effect未完全接线 | 无 | 需先确认真实生产consumer |
-| Public/observability | 31 tools、MCP/CLI/setup、status/view/verify | 无 | 等领域ports稳定后接入 |
-| Host runtime | Codex 6、Claude 12 host-only modules | 无 | 保持非对称ports，真实host测试单列 |
+| Public/observability | 31 tools、MCP/CLI/setup、status/view/verify | 官方MCP当前只发布Maintenance与Window Host Binding两个真实工具；其余工具、CLI与observability未开始 | 继续由稳定owner逐项接入，不建立空dispatcher |
+| Host runtime | Codex 6、Claude 12 host-only modules | 双Host Resource/Identity Profiles与固定MCP入口已建立；Claude portable settings保持宿主自有；shared runtime禁止反向import host实现 | Agent拥有全部真实host effect；Transport/Lifecycle/Pod后置 |
 | Migration | explicit bootstrap、classifier、owner drain、M3 composition | 无 | E4 one-time cutover；normal runtime零依赖 |
-| Packaging | core sync +双validator/smoke/package | 只有TS compile/codegen/test | E3/E4 closed artifact build |
+| Packaging | core sync +双validator/smoke/package | `.build`内双宿主闭合候选、manifest、official stdio与npm pack dry-run已通过；正式plugins未切换 | E3完整对比后才允许E4原子切换 |
 
 <a id="rebaseline-dependency-dag"></a>
 ## 10. 候选依赖图
@@ -569,19 +584,23 @@ NF-0 Foundation 完整性审查
 │
 ├─ INF-1 Config Authority Lifecycle
 │  └─ INF-2 Workspace Resource Matrix / Operation Authority Context
-│     ├─ INF-3 Managed Integration Text
-│     ├─ INF-4 Manifested Tree Lifecycle
-│     └─ INF-5 从INF-1/3/4共同事实审查Mutation/Recovery收敛
-│        └─ INF-6 Fresh/Static Workspace Materialization
+│     └─ INF-3 Managed Integration Text
+│        └─ INF-6 Workspace Static Layout / Maintenance Materialization
+│
+├─ INF-4 Manifested Tree Transfer Foundation
+│  └─ DOM Manifested Evidence Consumer
+│     └─ Business Archive + Preservation + Retention
+│
+├─ INF-5 从已出现的跨owner共同事实审查Mutation/Recovery收敛
+│  └─ 不是INF-6前置占位层；证据不足时继续defer
 │
 ├─ DOM Demand Artifact / Tasking Events
 │  └─ Window Binding + Lease + Transport
 │     └─ Delivery Events
 │        └─ TargetResult + Review + Completion Events
 │
-├─ DOM Manifested Evidence Consumer
-│  └─ Review/Completion evidence closure
-│     └─ Business Archive + Preservation + Retention
+├─ Review/Completion evidence closure
+│  └─ 依赖Demand Evidence event与Manifested Evidence Consumer
 │
 ├─ HOST Capability Ports
 │  └─ Codex / Claude Binding, Transport, Lifecycle
@@ -594,6 +613,14 @@ NF-0 Foundation 完整性审查
 
 这些分支不是完全并行：Config/Context 被多数旧 owner 消费，Demand delivery 同时依赖
 TaskPackage、binding、lease、transport 和 host port，Archive 又依赖最终完整业务闭包。
+
+这里明确区分两类此前混用的术语：
+
+- `Artifact Tree Transfer` 是把已有、带manifest的内容树复制到目标文件系统candidate并
+  发布；当前真实未来consumer是Evidence、Archive与Preservation，不是Workspace setup。
+- `Workspace Static Layout` 是按Resource Matrix物化目录，再由Config、Instruction、
+  Gitignore、TODO等领域owner生成各自文件；当前不存在一棵由单一owner原样复制进
+  Workspace的“Static Artifact Tree”。
 
 <a id="rebaseline-options"></a>
 ## 11. 下一阶段顺序选项
@@ -790,10 +817,12 @@ current workspace。
 
 ### Candidate 3：Managed Integration Text First Consumer
 
-- Type：`HITL`
+- Type：`HITL / complete`
 - 用户价值或可独立审查结果：至少一个 whole-file memory 与一个 mixed-owned managed block 能在保留outside bytes的前提下稳定创建、更新和恢复。
 - 建议 owner：Managed Integration Text domain owner + Foundation exact recompose primitive（仅在真实重复得到证明后）。
-- Blocked by：Candidate 2 的role/recipe；确认首个consumer选择（program memory、repository memory、gitignore或Claude settings）。
+- Current：Workspace `.gitignore` 已完成authority、Git语义验证、candidate、lock/CAS、readback与显式恢复。Program Instruction闭合`en`/`zh-Hans`正文authority、current→desired准入、只读inspection、同级短锁、CAS与inactive-lock/stage恢复。Wakeflow-managed Design/Test进一步完成topology动态Resource Catalog、薄whole-file authority、规范绝对目录物化、Support root owner、整文件current→desired、稳定inspection、无锁单资源CAS与target-scoped stage recovery；external-owned明确排除，Skills不复制到workspace。
+- Next：Candidate 3不再扩张；INF-6静态Maintenance公共链已闭合。后续只在真实Binding、Transport或per-Demand projection consumer进入时补相邻能力，不回到mixed-owned文本层扩张。
+- Blocked by：无；fresh Support strict-absent、跨owner顺序、唯一journal、单宿主capability seam与Fresh Workspace projection均已闭合。后续缺口属于per-Demand动态projection、local settings/statusline与公共入口，不再扩张Candidate 3。
 - End-to-end change：`authority snapshot → inspect existing envelope → render owned content → exact-source recompose → recovery → consumer readback`。
 - Named consumers：fresh/reconfigure/reconcile；installed host/repository instruction loading。
 - Observable result：用户内容不丢失，owned block deterministic，stale/outside drift fail closed。
@@ -828,7 +857,7 @@ current workspace。
 
 - Type：`HITL`
 - 用户价值或可独立审查结果：Controller从有界外部source导入一棵privacy-checked manifested tree，并由Demand event引用exact manifest/tree digest。
-- Dependencies：Foundation tree identity；Demand event扩展。
+- Dependencies：INF-4 transfer Foundation已就绪；仍需Evidence manifest/privacy owner、`evidence.recorded`事件、归约器与state-transition publication。
 - 关键边界：external source不要求Wakeflow owner；internal stage/final必须private exact owner。
 
 ### Candidate 8：Business Archive + Preservation + Retention
@@ -847,8 +876,9 @@ current workspace。
 
 ### Candidate 10：Public Runtime、Observability And Entrypoints
 
-- Type：`HITL`
+- Type：`HITL / partial`
 - 用户价值或可独立审查结果：31项公共工具通过闭合typed route调用新domain owner，MCP/CLI/setup错误与输出脱敏，status/view/verify保持零写边界。
+- Current：Maintenance子切片已完成Fresh selection→typed Config、ID allocation、host-neutral launch intent、ready Confirmation、Codex/Claude固定composition root与公共preview/apply/recover；apply重推完整plan，recover只凭私有operation intent，结果不返回workspace绝对路径。尚未替换旧MCP/CLI/setup，也未实现其余公共工具。
 - Dependencies：对应domain ports稳定；不应作为空dispatcher先行。
 - 关键边界：普通domain、maintenance、evidence三种context不合并。
 
@@ -893,12 +923,12 @@ current workspace。
 - Demand完整Event Sourcing会把旧state/event双写关系重新表达，不能用字段数量估算工作量。
 - Config/Host/Layout高扇入，任一错误边界会扩散到多数切片。
 - 旧61 Schema与新24 Schema差额同时包含“尚未实现”和“目标物理格式已改变”，不能机械补齐。
-- 当前没有host/entrypoint代码，任何“插件可运行”结论都是错误的。
+- 当前已有Maintenance host/entrypoint源码，但尚未接入双插件MCP/CLI/setup和构建制品；因此“新TS插件可运行”结论仍然错误。
 
 ### 14.2 待用户确认
 
-1. INF-3首个managed consumer选择program memory、repository memory还是Claude settings；
-2. INF-1/3/4完成后是否存在足够共同语义建设INF-5 mutation/recovery内核；证据不足时必须拒绝抽取。
+1. INF-4何时进入Evidence业务切片；必须等待Evidence Event Sourcing类型，不以物理tree owner冒充完整Evidence Import。
+2. 当前maintenance专属journal与未来Evidence跨owner事务是否存在足够共同语义进入INF-5；证据不足时仍拒绝抽取通用Manager。
 
 <a id="rebaseline-decisions"></a>
 ## 15. 用户决定台账
@@ -914,8 +944,23 @@ current workspace。
 | INF主顺序Config→Matrix→Managed/Tree | 已确认方向 | 用户 | 本文§10～§12；具体文件仍逐项review |
 | Config切片不提前实现完整workspace reconfigure | 已确认 | 用户 | 本文§11～§12 |
 | INF-1 P1/C1合同与文件顺序 | 已确认并完成 | 用户 | 本文§7.3、§12 |
-| 是否新增Owner–Resource Capability Binding层 | 暂时待定，不进入当前计划或代码 | 用户 | 2026-08-27 对话；继续原Owner Catalog→Matrix顺序 |
+| 资源能力选择是否增加中间路由层 | 不增加；Owner Catalog与Matrix直接为具体operation闭合resource/recipe，后续不得重新引入同义中间层 | 用户 | 2026-08-28明确删除原候选方案 |
 | INF-2及后续切片具体API与文件顺序 | pending | 用户 | 每切片的代码事实与文件级review |
+| Workspace Static Artifact Tree与Workspace Static Layout是否同一能力 | 已确认不是；前者没有当前Workspace consumer，后者由目录声明和各领域owner组成 | 用户 | 2026-08-27 对话与真实asset/layout审查 |
+| INF-4 Foundation是否保留 | 已确认保留；未来由Evidence/Archive/Preservation消费，不伪造Workspace owner | 用户 | 2026-08-27 对话 |
+| 当前下一顺序 | 已确认返回INF-3：Program Instruction managed-block → support memory whole-file | 用户 | 2026-08-27 对话 |
+| INF-6 fresh既有Support root政策 | 已确认strict absent；空目录也不接管，只有exact空Local bootstrap-prefix可复用 | 用户 | 2026-08-27 对话 |
+| INF-6跨owner提交策略 | 已确认采用maintenance专属唯一gate/journal、Config最后激活；宿主效果通过单个当前Host capability依赖反转端口贡献精确操作，不采用第二journal、动态handler registry、无journal顺序调用或旧通用Workspace Mutation Manager | 用户约束+代码审查 | 2026-08-27～28 对话与新TS实现 |
+| INF-6首版reconfigure范围 | placement-stable；Support path/ownership/ID移动或删除保持阻断，后续进入独立Resource Move/retention切片 | 用户 | 2026-08-27 对话 |
+| Demand publication静态目录是否进入fresh维护事务 | 不进入；Demand publication service在首次真实业务操作前幂等建立，Active `current`共享父容器必须预先由Active Layout owner建立 | 代码审查 | 新TS Demand publication service与Resource Catalog；旧实现只作功能事实参考 |
+| Window Host Binding是否实现 | 尚未决定具体记录与代际合同；host-effect消费缝已确认由Agent持有：Binding只能保存/校验`windowId → host handle`运行时路由事实并为Agent生成exact目标，不能自行调用Codex、Claude或Pod宿主能力 | 用户约束+代码事实；具体合同待确认 | 不继承已删除的资源能力中间层决定；Window Host Binding属于运行时身份问题 |
+| Claude portable permissions是否保留旧Broad Bash自动批准 | 不保留；新TS只管理`mcp__plugin_wakeflow_wakeflow`，`Bash(node *)`、`Bash(tmux *)`、`Bash(git *)`被识别为legacy blocker，不由normal reconcile静默删除 | 用户确认+官方文档审查 | 2026-08-28对话；Claude permissions wildcard语义与Wakeflow MCP边界 |
+| Maintenance journal是否持久化自足恢复intent | 已确认方案A并实现：同一事务协议使用0600 immutable intent sidecar + 0600 mutable journal；intent 2MiB、journal 64KiB，checkpoint不重复重写Config/host payload；恢复不再接收外部plan/request | 用户确认+代码审查 | 2026-08-28对话与新TS实现；旧JS confirmed plan仅作需求事实参考 |
+| Active projection首个TS切片 | 已确认两阶段方案A：先实现Fresh Workspace两份投影；per-Demand文档等待真实Demand业务区段。旧全量projector与旧TODO/Ledger链接不迁移 | 用户确认+代码审查 | 2026-08-28对话、当前TS Demand Aggregate与Materialized View边界 |
+| 公共Maintenance请求形态 | preview按action接收闭合request；apply只接收完整Confirmation及其摘要；recover只接收operationId。宿主由Codex/Claude各自entrypoint固定，不接收host/capability selector，也不建立动态action registry | 用户确认+代码审查 | 2026-08-28对话与新TS公共Maintenance实现 |
+| 新TS MCP协议实现 | 使用官方稳定MCP TypeScript server依赖与stdio transport；不迁移旧版手写JSON-RPC协商、`tools/list`/`tools/call`分派、协议版本表或line/Content-Length framing。依赖只在真实MCP entrypoint切片开始时安装 | 用户确认+官方SDK审查 | 2026-08-28对话；官方v2包为`@modelcontextprotocol/server` |
+| Codex、Claude与Pod宿主效果由谁执行 | 完全由Agent调用当前宿主提供的能力；Wakeflow无宿主调用权限，也不得以Node adapter、MCP内部转调、Bash/tmux封装或自动fallback代替Agent。Wakeflow只生成intent/plan/claim、校验Agent回传的observation/receipt并推进自身authority | 用户 | 2026-08-28明确架构边界 |
+| 技术骨干完成后是否直接进入业务 | 不直接进入。节点前顺序固定为官方MCP+双制品脊柱→Demand Core Skeleton→最小Window Runtime Identity→技术验证；到Technical Skeleton Review Gate强制暂停，统一回顾技术能力、骨干、复杂度、测试成本与缺口，再由用户决定Tasking等真实业务顺序 | 用户 | 2026-08-28明确并确认阶段门与顺序 |
 | 是否提交/交付本文 | 未授权 | 用户/Controller | 本文仍为draft |
 
 <a id="rebaseline-sources"></a>
@@ -990,6 +1035,10 @@ current workspace。
 - `src/governance/todo/`
 - `src/governance/ledger/`
 - `src/governance/demand/`
+- `src/workspace/maintenance/`
+- `src/hosts/codex/`
+- `src/hosts/claude-code/`
+- `src/entrypoints/`（当前仅双宿主Maintenance TS composition root）
 - `tooling/codegen/schema-types.ts`
 - `tooling/architecture/check-dependencies.ts`
 - `tooling/testing/run-typescript-tests.ts`
@@ -1003,7 +1052,8 @@ current workspace。
 - All user decisions answered：`no`，§14.2的技术边界仍待NF-0证据与用户确认。
 - Testing decision complete：`yes for this review draft`。
 - Non-goals and forbidden shortcuts recorded：`yes`。
-- Ready for explicit delivery confirmation：`no`。
+- Ready for Technical Skeleton Review Gate：`yes`，见独立Gate文档。
+- Ready for business implementation or release：`no`，等待用户统一review与下一路线选择。
 
 <a id="rebaseline-change-log"></a>
 ## 18. 更新记录
@@ -1021,7 +1071,31 @@ current workspace。
 | 2026-08-27 | 完成INF-2C Host Resource Profile共享合同：从旧profile中只保留host identity/runtime directory/instruction file与8类matrix-shaping surface，删除realization/readiness、close/revoke/activation与adapter/handle/effect；共享parser不按hostId硬编码surface。自审根据真实Claude实现修正statusline语义：它由Node调用且mode为0600，profile只保存filename，不声明executable bit。3项新聚焦测试、typecheck和211 modules / 1107 dependencies架构门通过，未运行全部TS测试。 |
 | 2026-08-27 | 完成INF-2D Codex Host Resource Profile：新增宿主自有冻结常量，精确保留`AGENTS.md`、Codex runtime directory与identity/Pod/keep-live资源表面，不声明realization或effect。聚焦测试进一步暴露host tsconfig输出没有镜像`src/hosts/codex`而导致编译绿、ESM运行失败；将outDir修正为`.build/src/hosts/codex`后，1项新聚焦测试、typecheck和213 modules / 1109 dependencies架构门通过，未运行全部TS测试。 |
 | 2026-08-27 | 完成INF-2E Claude Code Host Resource Profile：新增宿主自有冻结常量，精确保留`CLAUDE.md`、Claude runtime directory、8类适用资源表面、双settings路径与statusline文件名，不导入宿主observer/writer/effect。聚焦测试复现并修正Claude host project的非镜像outDir；改为`.build/src/hosts/claude-code`后，1项新聚焦测试、typecheck和215 modules / 1111 dependencies架构门通过，未运行全部TS测试。 |
-| 2026-08-27 | 用户将Owner–Resource Capability Binding方案暂时待定，未进入计划或代码；恢复Owner Catalog→Matrix原顺序。完成INF-2F Config Resource Catalog：只登记Config authority与Config专属lock，复用已有path refs并闭合mode/role/recipe；Foundation atomic stages保持operation-scoped且不复制为全局pattern。1项新聚焦测试、typecheck和217 modules / 1119 dependencies架构门通过，未运行全部TS测试。 |
+| 2026-08-27 | 继续Owner Catalog→Matrix原顺序并完成INF-2F Config Resource Catalog：只登记Config authority与Config专属lock，复用已有path refs并闭合mode/role/recipe；Foundation atomic stages保持operation-scoped且不复制为全局pattern。1项新聚焦测试、typecheck和217 modules / 1119 dependencies架构门通过，未运行全部TS测试。 |
 | 2026-08-27 | 用户确认添加`exact-directory-publish`；完成INF-2G Foundation directory processing refinement。Directory container现以discriminated union区分静态逐段物化与Owner验证关闭stage后的同根durable rename发布，existing target/collision/recovery政策不可混用；新recipe不宣称manifest、跨文件系统或通用stage cleanup能力。Resource Processing与Workspace Declaration共7项聚焦测试、typecheck和217 modules / 1119 dependencies架构门通过，未运行全部TS测试。 |
 | 2026-08-27 | 完成INF-2H TODO Resource Catalog：静态目录闭合collection/items/transactions roots、collection lock和board projection；per-item factory按真实TODO ID的SHA-256 storage key生成item root/intake/state/journal四项具体声明，并用`exact-directory-publish`表达初始aggregate关闭发布。Domain append stage和Foundation atomic stages继续作为operation-scoped residue，不进入全局catalog。2项新聚焦测试、typecheck和219 modules / 1129 dependencies架构门通过，未运行全部TS测试。 |
 | 2026-08-27 | 完成Ledger staged publication重构与INF-2I Resource Catalog：对照POSIX/Node 24/Git/Nix/OSTree及TencentDB-Agent-Memory后，删除旧base64 full-payload journal、全局Ledger lock/read gate、直接final逐文件写入及对应旧测试；新增Foundation关闭目录树计划/partial retry/durable rename能力，Ledger采用per-record lock、compact intent、private final-mode stage与same-device整体发布，长期authority为0755/0644、transaction为0700/0600。Catalog闭合静态roots与per-record aggregate/facts/intent/lock，stage保持operation-scoped。29项相邻聚焦测试、6项Schema tooling测试、typecheck、schema check与235 modules / 1238 dependencies架构门通过，未运行全部TS测试。 |
+| 2026-08-27 | 完成INF-3首个mixed-owned consumer：Workspace `.gitignore`从静态矩阵派生host-neutral ignore authority，经真实Git批量/隔离candidate验证、managed envelope、domain lock、CAS create/replace、readback与inactive lock/stage显式恢复闭合；Foundation Git能力禁止领域层直接调用child_process。 |
+| 2026-08-27 | 完成INF-4 Manifested Tree Transfer Foundation：新增跨根流式文件copy+hash、manifest到唯一DirectoryTreeCandidatePlan、整树partial retry、same-root durable publish、final artifact identity读回与target-scoped stage recovery。审查安装bundle、support surface与host assets后确认当前不存在Workspace Static Artifact Tree consumer；该Foundation保留给Evidence/Archive/Preservation。 |
+| 2026-08-27 | 用户确认纠正“Workspace Static Artifact Tree Owner”假设：INF-6改称Workspace Static Layout / Maintenance Materialization，不复制静态树；当前路线返回INF-3，先完成Program Instruction managed-block，再完成Wakeflow-owned support memory whole-file。 |
+| 2026-08-27 | 用户确认Wakeflow持久维护一份可配置的人类呈现语言，默认英语。TS Config删除`program.interfaceLanguage:auto`与调用期推断，改为必填`presentation.language: en \| zh-Hans`，fresh producer默认值为显式`en`。完成Program Instruction正文authority：从Config与Host Profile确定性生成双语正文、body/authority digest及managed envelope target，用户展示文本按JSON字面量编码并拒绝非NFC输入；物理managed-block owner仍待下一单元接入。 |
+| 2026-08-27 | 完成Program Instruction managed-block垂直链：新增通用Managed Text current→desired权威转换，fresh只准入未受管源，reconfigure只准入精确旧渲染，desired重试幂等，未知marker-consistent正文拒绝；增加Program Instruction只读inspection、宿主静态instruction-lock声明、锁内CAS create/replace、节点与authority readback及inactive-lock/stage显式恢复。Foundation target-closed recovery要求target与lock同父目录，因此锁最终位于`AGENTS.md`/`CLAUDE.md`同级隐藏路径并由Gitignore authority自动忽略，避免跨目录半恢复窗口。 |
+| 2026-08-27 | 完成INF-3受管Support whole-file consumer：提取Foundation Markdown JSON数据字面量与whole-file content transition；新增Config摘要绑定的Design/Test动态Resource Catalog及精简`en`/`zh-Hans`身份、角色、Skill路由authority，不复制旧active/ledger路径、13列TODO步骤或Skill正文。补齐Foundation规范绝对目录物化并以Support root作为首个consumer，支持child/sibling缺失路径且拒绝alias/symlink/mode drift；whole-file memory使用稳定读取与无锁单资源CAS create/replace、readback及target-scoped stage recovery，未知文件拒绝覆盖，external-owned零whole-file操作。 |
+| 2026-08-27 | 用户确认INF-6方案A：fresh对Config/Active/受管Support roots严格absent，仅复用exact空Local bootstrap-prefix；跨owner采用maintenance专属唯一gate/journal并以Config最后提交作为激活边界；首版reconfigure保持placement稳定。完成首个preview单元：Maintenance Resource Catalog登记Active/Local/runtime/maintenance/transactions/gate，核心布局inspection稳定区分absent/bootstrap-prefix/idle/busy/recovery-required/conflict；preview-only静态计划组合Config/Gitignore/Program/Support真实inspection，fresh输出9步且Config依赖全部前序，空Design目录阻断，语言reconfigure只计划3份派生memory再提交Config，reconcile健康场景零步骤。 |
+| 2026-08-27 | 完成INF-6 prepared transaction骨干：preview新增严格parser与自身摘要复验；maintenance operation ID保持领域本地UUID，不进入durable entity kind；新增prepared journal Schema/generated type/codec和动态Resource Declaration，只保存plan/config/matrix摘要、step ID与checkpoint 0，不复制正文或绝对路径。Foundation Rooted lock增加受验证token UUID注入，gate与operation共用UUID，闭合journal前孤立gate关联；exact Local bootstrap后取得唯一gate，journal create/read/同gate retire均验证0600、单链接与transactions唯一条目。显式恢复分别处理journal前orphan gate、prepared journal+gate absent及prepared journal+inactive correlated gate；active/unknown/mismatched/foreign transaction全部保留现场。领域step与公共apply仍未接入。 |
+| 2026-08-27 | 完成INF-6 internal static transaction executor：prepared journal原位扩展为`prepared/executing/terminal`、`affectedStepId`与单调checkpoint，store只接受exact CAS successor；dispatcher以闭合step kind重算authority并调用Core/Support/Gitignore/Program/Config真实owner，不提供handler registry。Normal execute在bootstrap前重推preview，按affected→effect/readback→checkpoint推进，Config固定最后；recovery先target-close结算journal stage，再从exact affected step幂等续跑。小型真实测试闭合fresh 9步、健康reconcile no-op、`en→zh-Hans`四步reconfigure、Active effect-before-checkpoint与Config effect-before-checkpoint（desired inode保持不替换）。执行边界固定`internal-static-only`；Ledger/TODO/Active projection/window/host participant未覆盖前公共maintenance apply继续阻断。 |
+| 2026-08-27 | 继续补齐INF-6基础participants并修正ownership：Ledger新增三固定容器的只读layout inspection，fresh对配置指定Ledger根严格absent，Store初始化复用同一策略；Active从Maintenance Catalog拆为独立两级`root/current` owner，TODO与Demand初始化不再借递归mkdir隐式创建共享父容器；TODO新增绑定空JSON集合与确定性Markdown投影的fresh-only初始化authority，并对恢复前缀、Foundation stage、未知资源和非空items/transactions fail closed。fresh计划由9步变为11步，新增Active/TODO/Ledger effect-before-checkpoint真实恢复测试；47项核心相邻测试与43项Matrix/Managed Integration相邻测试通过，typecheck、329 modules / 1929 dependencies架构门及`git diff --check`通过。Demand publication目录保留first-use lazy initialization；Active projection/window runtime/host settings仍阻断公共apply。 |
+| 2026-08-28 | 完成Fresh Window Runtime首条新TS垂直切片：先把Config编译为不含display title/Binding/dispatch/host observation的host-scoped desired topology；exact-empty identity source只表达全部静态window `unregistered`，没有placeholder或raw handle；未注册投影Schema/codec绑定typed logical root、configured placement、unobserved root、identity blocker、source fingerprints与self digest。新增共享`runtime/hosts`及每宿主identity/projections父容器声明、projection根和per-window 0600动态Resource Catalog；durable publication要求当前宿主root strict absent，恢复只接受exact 0700前缀、空Binding、目标作用域Foundation stages和确定性投影文件，foreign binding/unknown resource/字节漂移fail closed。Maintenance fresh增加第12步并通过effect-before-checkpoint恢复；Binding registered/invalid分支、真实handle writer、reconfigure/reconcile projection刷新仍未实现。 |
+| 2026-08-28 | 完成Host Capability Layout非业务切片：Host Catalog补齐`evidence`、`operations`与Claude `operations/temp`父声明；纯authority只按Profile筛选目录型capability，不选择settings/statusline文件或事件资源。Fresh materializer要求Window Runtime宿主根已建立，Codex exact创建5个空目录，Claude exact创建10个空目录；normal对任一既有target strict absent，recovery只补齐exact 0700前缀，文件、未知目录、权限漂移均保留现场并阻断。Maintenance fresh增加第13步并完成effect-before-checkpoint恢复；Pod evidence、keep-live lease、locator、activity process与temporary prompt仍只能由各自真实事件owner创建。 |
+| 2026-08-28 | 完成Claude portable settings首个host-specific consumer：对照Claude官方settings/permissions/statusLine文档，确认旧`Bash(node *)`、`Bash(tmux *)`、`Bash(git *)`会形成宽泛Agent自动批准；用户确认新TS只管理Wakeflow plugin MCP server permission。新增Microsoft `jsonc-parser@3.3.1`，以strict JSON模式拒绝comment/trailing comma/duplicate key并只对`permissions.allow`生成最小edit，保留其他用户字节与字段；known legacy broad rule返回blocked且零改写。单根CAS owner对absent创建0755`.claude`与0644 settings，对既有0700/0755目录只观察、对0644单链接文件做stable read→exact-source replace→readback，current重试inode不变，并提供target-scoped stage recovery。Claude Host聚焦6/6、typecheck与架构门通过；shared maintenance不直接import host-specific owner，Program/managed Support多根composition、local statusLine和asset继续defer。 |
+| 2026-08-28 | 完成Claude portable settings多根只读composition：Root Authority只包含Program与按stable `surfaceId`排序的`wakeflow-managed` Support，external-owned Support与全部Repository零authority/零operation；Config/Host Profile/portable settings path与Root Placement全部重验。Fresh对尚未物化的managed Support生成source-absent create operation，reconfigure/reconcile缺根则阻断；present root通过独立RootedDirectory读取单根transition并可靠关闭。Plan只保存逻辑root、relative placement、source/target/operation digest和blocker，不保存绝对路径或用户JSON；任一legacy broad rule只阻断对应root但整体plan fail closed。Claude Host相邻10/10通过；跨根写循环仍禁止，下一步只能实现由外层journal逐项调用的exact single-operation executor。 |
+| 2026-08-28 | 完成Claude portable settings exact single-operation executor：每项operation新增Root Authority摘要并经严格被动数据、typed root ID、relative placement、source/target digest与self digest准入；执行前重建当前Config Root Authority，重新解析Support物理位置并只打开一个RootedDirectory。Normal必须由当前transition重建出同一operation，目标已提交仍视为stale；只有`recoveringAffectedOperation=true`才先结算同目标Foundation stage并接受target current。Fresh preview缺失的Support根在apply前物化后仍保持operation有效；source bytes、Config authority或operation字段漂移均在写前阻断。真实consumer测试覆盖inactive create stage退休→发布、normal重入、effect replay和support root，Claude Host相邻14/14通过；模块仍不循环跨根，也未接shared journal。 |
+| 2026-08-28 | 完成Claude host-specific operation接入唯一maintenance journal：新增宿主中立Contribution数据合同，以递归冻结JSON payload、payload/source-plan/contribution digest和确定性operation顺序绑定宿主计划；聚合Execution Plan把host steps插入Config前，并让journal绑定聚合plan digest与唯一step序列。唯一Transaction runner同时驱动shared闭合dispatcher与一个current-host capability；清除shared-only transaction与journal接受旧static preview的过渡入口，所有执行统一消费聚合计划。Claude composition root固定绑定闭合portable-settings executor，不建立registry或第二状态机；依赖架构新增shared runtime禁止反向import `src/hosts`。聚焦测试证明Program与两受管Support共3份settings在Config前发布、健康reconcile no-op、计划后source drift在取得gate前阻断，以及首个host effect-before-checkpoint在调用方重带exact plan/request时恢复。进一步审查确认digest-only journal尚非重启自足恢复intent，因此公共maintenance apply、local settings与statusline继续阻断。 |
+| 2026-08-28 | 用户确认采用自足恢复方案A。新增Maintenance Execution Intent Schema/领域合同与0600 immutable sidecar：只保存规范化desired Config、两份Host Profile、shared preview、host contribution及plan digest，不保存源文件正文、绝对路径、凭据、进程/锁身份或checkpoint；2MiB预算在取得gate前验证。Mutable journal新增intentDigest且继续限制64KiB，准备顺序固定intent→journal，推进期间目录必须精确为同operation两文件，关闭顺序固定intent→terminal/prepared journal。Normal也从已生成intent重建plan/request后执行；recovery/cancel删除外部plan/request参数，仅凭operationId、磁盘私有事实和固定宿主capability继续。聚焦测试覆盖intent-only前缀续建journal、host/shared affected重放、intent drift阻断、外来transaction保留、intent退休后terminal journal清理与超限payload零准入。公共apply仍等待Active projection及其余明确consumer。 |
+| 2026-08-28 | 用户确认Active projection两阶段方案A。审查旧2430行projector后拒绝迁移旧Demand state/template闭包：当前TS Demand Aggregate仍有意保持Tasking/Delivery/Result/Test/Review/Evidence空区段，旧`current/global-todo-board.md`与`workspace-record-map.md`链接也不再成立。第一阶段新增Fresh Workspace projection authority，只从desired Config、空Demand集合与空TODO初始化权威生成`.wakeflow-active/index.md`和`current/workspace-current-status.md`；固定使用`current/todo/global-todo-board.md`，不生成Ledger假链接。Active Catalog拆分Layout两目录与Projection双文件/短锁owner；publication在0600专用lock内全目标预检、逐文件CAS并接受partial-current affected recovery，unmanaged bytes、Demand residue、mode/link/namespace漂移零写入。Maintenance在TODO后新增第14个shared step，语言reconfigure先更新投影再激活Config；per-Demand index/progress继续defer到真实业务事件切片。 |
+| 2026-08-28 | 完成公共Maintenance垂直切片：Fresh selection使用request-local key一次分配typed Program/Repository/Surface/Window IDs并显式持久化默认英语；host-neutral launch intent只包含逻辑root、display title、profile/config digest与typed binding登记来源，不含raw handle或宿主工具。Ready preview生成绑定exact request、完整plan和Fresh launch set的Confirmation，额外重验Config摘要与Host Matrix；apply只接收Confirmation+digest并由唯一transaction重推plan，recover只凭operationId读取0600私有intent/journal。Codex不贡献host operation，Claude固定贡献portable settings；双宿主entrypoint没有host selector、capability注入或action registry。公共输出重新准入为有界被动JSON并拒绝workspace绝对路径泄漏。24项聚焦测试覆盖Codex fresh preview/apply/reconcile、Claude三项host operation、跨宿主Confirmation拒绝及intent-only公共恢复；同时修正`presentation.language`改造后遗留的Config Snapshot陈旧golden。typecheck、391 modules / 2401 dependencies架构门与`git diff --check`通过，尚未运行全部TS测试或旧JS套件。 |
+| 2026-08-28 | 用户明确删除资源Owner与Capability之间的候选中间路由层：具体operation继续由Owner Catalog与Matrix直接闭合resource/recipe，不保留pending方案或同义抽象。同步纠正历史术语混淆：该决定从未适用于`Window Host Binding`；后者是`windowId → host handle`的独立运行时身份问题，当前仍处于真实consumer与host-effect消费缝审查阶段。 |
+| 2026-08-28 | 核实旧双插件MCP入口自行实现JSON-RPC、协议协商、工具分派与line/Content-Length framing，且不存在官方SDK依赖。用户确认新TS改用官方稳定MCP TypeScript server/stdio能力，不继续维护协议底层；实际依赖等真实MCP entrypoint消费时再安装。同步冻结宿主权限边界：Codex、Claude和Pod的create/send/read/close/worktree/session等真实效果全部由Agent调用宿主能力，Wakeflow只计划、签发claim、验证和记录回执，永不自行调用或隐藏fallback。 |
+| 2026-08-28 | 用户要求在继续TS前重新深挖旧项目。完成两时期全闭包审查：渐进迭代版`70d79d7`为43个共享模块/9个Schema/64个测试/31工具，证明真实产品场景；当前旧v3主要由未打tag的`12503b6`一次大重构形成86模块/61 Schema/116测试/约11.6万共享运行时行，证明严格反例但不能单独证明生产成熟度。审查闭合Maintenance、TODO、Demand、Tasking、Delivery、Review、Evidence、Archive、Window、Pod、Observability、Migration与双宿主效果，识别Claude内部宿主effect、无production writer的keep-live、无producer的legacy archive transform、旧state-machine Schema及手写MCP/dispatcher等删除或重写项。暂停原Candidate顺序，下一步先重新基线化Demand Core，再由用户确认Tasking→Agent-mediated Delivery路线。 |
+| 2026-08-28 | 用户确认Technical Skeleton Review Gate与最终取舍：节点前采用有界技术优先，顺序为官方MCP+TS单一源码双制品脊柱→Demand Core Skeleton结构清理→Maintenance launch消费驱动的最小Window Runtime Identity→技术验证/测试清理；明确排除TaskPackage、Delivery、Review、Test、Evidence、Archive、Pod与Migration业务。到达节点必须停止连续实施，统一审阅能力矩阵、依赖图、authority、复杂度、测试成本与defer清单，再由用户决定真实业务顺序。 |
+| 2026-08-28 | Technical Skeleton Review Gate已到达并停止：安装官方MCP server/client v2，Schema驱动发布Maintenance与Window Host Binding两个工具；同一TS编译生成Codex/Claude闭合非发布候选并通过真实stdio/package dry-run；Demand v1删除未来业务空占位；Agent host-create observation通过全inventory锁写入0600 opaque Binding并重建脱敏投影，覆盖幂等、handle冲突、并发、partial commit与`unchanged/current/unknown`证据；测试runner改为当前源清单与显式focused，空编译目录强制重建后665/665通过。完整证据见独立Gate文档；未经用户review不进入业务。 |

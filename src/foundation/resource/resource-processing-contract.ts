@@ -12,8 +12,8 @@ import {
  * 上层 Workspace 资源目录负责把本合同与具体资源身份组合；领域职责所有者仍负责
  * 准入一次真实操作所需的权威事实、互斥锁、源资源预期和恢复证据。
  *
- * 目录容器不是第八种资源角色。它使用独立的判别联合分支，只声明安全的目录创建
- * 策略，不能因此取得后代资源的管理权。
+ * 目录容器不属于资源角色。它使用独立的判别联合分支，只声明安全的目录创建策略，
+ * 不能因此取得后代资源的管理权。
  */
 
 export const WAKEFLOW_RESOURCE_ROLES = Object.freeze([
@@ -21,6 +21,7 @@ export const WAKEFLOW_RESOURCE_ROLES = Object.freeze([
   "immutable-fact",
   "mutable-snapshot",
   "derived-projection",
+  "derived-checkpoint",
   "managed-integration-text",
   "manifested-tree",
   "transaction-artifact",
@@ -103,6 +104,14 @@ export type WakeflowDerivedProjectionProcessingContract =
     "rebuild-from-authority"
   >;
 
+/** 从权威记录重建的不可覆盖检查点；它既不是权威事实，也不是查询投影。 */
+export type WakeflowDerivedCheckpointProcessingContract =
+  ResourceProcessingContract<
+    "derived-checkpoint",
+    readonly ["exclusive-create"],
+    "rebuild-from-authority"
+  >;
+
 export type WakeflowManagedIntegrationTextProcessingContract =
   ResourceProcessingContract<
     "managed-integration-text",
@@ -166,6 +175,7 @@ export type WakeflowResourceRoleProcessingContract =
   | WakeflowImmutableFactProcessingContract
   | WakeflowMutableSnapshotProcessingContract
   | WakeflowDerivedProjectionProcessingContract
+  | WakeflowDerivedCheckpointProcessingContract
   | WakeflowManagedIntegrationTextProcessingContract
   | WakeflowManifestedTreeProcessingContract
   | WakeflowTransactionArtifactProcessingContract;
@@ -242,6 +252,11 @@ const ROLE_POLICIES = Object.freeze({
     recoveryStrategy: "rebuild-from-authority",
     allowedRecipes: Object.freeze(["deterministic-rewrite"] as const),
     requiredRecipes: Object.freeze(["deterministic-rewrite"] as const),
+  }),
+  "derived-checkpoint": Object.freeze({
+    recoveryStrategy: "rebuild-from-authority",
+    allowedRecipes: Object.freeze(["exclusive-create"] as const),
+    requiredRecipes: Object.freeze(["exclusive-create"] as const),
   }),
   "managed-integration-text": Object.freeze({
     recoveryStrategy: "recompose-owned-content",
@@ -457,6 +472,7 @@ export type WakeflowResourceOperation =
       "exclusive-create" | "exact-source-replace"
     >
   | ResourceMutationOperation<"derived-projection", "deterministic-rewrite">
+  | ResourceMutationOperation<"derived-checkpoint", "exclusive-create">
   | ResourceMutationOperation<
       "managed-integration-text",
       "exact-source-recompose"

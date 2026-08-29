@@ -1,0 +1,534 @@
+import { types } from "node:util";
+
+import {
+  DeterministicJsonDocumentError,
+} from "../../foundation/data/deterministic-json-document.js";
+import {
+  parsePlainRecord,
+  PassiveOwnDataError,
+} from "../../foundation/data/passive-own-data.js";
+import {
+  readDeterministicJsonFile,
+} from "../../foundation/filesystem/deterministic-json-file.js";
+import {
+  createFileAtomically,
+  DurableAtomicFileWriteError,
+} from "../../foundation/filesystem/durable-atomic-file-write.js";
+import {
+  recoverDurableAtomicFileStagesForTargets,
+  DurableAtomicFileStageRecoveryError,
+} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
+import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
+import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import {
+  inspectRootedExclusiveFileLock,
+  retireRootedExclusiveFileLockResidue,
+  withRootedExclusiveFileLock,
+  RootedExclusiveFileLockError,
+} from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import {
+  readStableResourceDirectory,
+  StableDirectoryReadError,
+} from "../../foundation/filesystem/stable-directory-read.js";
+import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
+import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
+import type { WakeflowDurableId } from "../../foundation/identity/wakeflow-durable-id.js";
+import { parseByteCount } from "../../foundation/numeric/byte-count.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
+import {
+  readUtcWallClock,
+  UtcWallClockError,
+  type UtcWallClock,
+} from "../../foundation/time/wall-clock.js";
+import type { UtcInstant } from "../../foundation/time/utc-instant.js";
+import {
+  createWakeflowWindowHostBinding,
+  parseWakeflowWindowHostBindingDocument,
+  renderWakeflowWindowHostBinding,
+  WakeflowWindowHostBindingError,
+  type WakeflowWindowHostBinding,
+} from "./wakeflow-window-host-binding.js";
+import {
+  createWakeflowWindowHostBindingId,
+  WakeflowWindowHostBindingIdError,
+} from "./wakeflow-window-host-binding-id.js";
+import {
+  parseWakeflowWindowHostHandle,
+  WakeflowWindowHostIdentityProfileError,
+} from "./wakeflow-window-host-identity-profile.js";
+import type {
+  WakeflowWindowHostBindingRegistrationAuthority,
+} from "./wakeflow-window-host-binding-registration-authority.js";
+import { wakeflowWindowBindingRef } from "./wakeflow-window-runtime-paths.js";
+
+/**
+ * Wakeflow Workspace / Window Runtime：私有 Binding authority store。
+ *
+ * Store 只拥有专用锁、atomic stage 恢复、完整 inventory 读取与 0600 no-replace create。
+ * 它不解释 launch intent、不决定相同 observation 的幂等语义，也不更新 projection。
+ */
+
+export interface WakeflowWindowHostBindingStoreOptions {
+  readonly uuidFactory?: UuidV4Factory;
+  readonly wallClock?: UtcWallClock;
+  readonly signal?: AbortSignal;
+  readonly acquireTimeoutMilliseconds?: number;
+}
+
+export interface WakeflowWindowHostBindingInventory {
+  readonly bindings: readonly Readonly<WakeflowWindowHostBinding>[];
+  readonly byWindowId: ReadonlyMap<
+    WakeflowDurableId<"window">,
+    Readonly<WakeflowWindowHostBinding>
+  >;
+}
+
+export interface WakeflowWindowHostBindingStoreContext {
+  readonly inventory: Readonly<WakeflowWindowHostBindingInventory>;
+  readonly uuidFactory: UuidV4Factory | undefined;
+  readonly wallClock: UtcWallClock | undefined;
+  readonly signal: AbortSignal | undefined;
+}
+
+export type WakeflowWindowHostBindingStoreErrorReason =
+  | "input"
+  | "layout"
+  | "inventory"
+  | "lock"
+  | "recovery-required"
+  | "aborted"
+  | "time"
+  | "identity-source"
+  | "write";
+
+const ERROR_MESSAGES = {
+  input: "Window Host Binding store input is invalid.",
+  layout: "Window Host Binding private layout is unavailable or unsafe.",
+  inventory: "Window Host Binding inventory is invalid or changed.",
+  lock: "Window Host Binding store lock could not be acquired safely.",
+  "recovery-required": "Window Host Binding store requires explicit recovery.",
+  aborted: "Window Host Binding store operation was aborted.",
+  time: "Window Host Binding store clock is inconsistent with its observation.",
+  "identity-source": "Window Host Binding ID could not be allocated safely.",
+  write: "Window Host Binding authority could not be published safely.",
+} as const satisfies Readonly<Record<
+  WakeflowWindowHostBindingStoreErrorReason,
+  string
+>>;
+
+/** Binding store 物理操作失败的稳定、脱敏错误。 */
+export class WakeflowWindowHostBindingStoreError extends Error {
+  override readonly name = "WakeflowWindowHostBindingStoreError";
+  readonly code = "wakeflow-window-host-binding-store" as const;
+  readonly reason: WakeflowWindowHostBindingStoreErrorReason;
+  readonly path: string;
+  readonly bindingAuthority: "unchanged" | "unknown";
+
+  constructor(
+    reason: WakeflowWindowHostBindingStoreErrorReason,
+    path: string,
+    bindingAuthority: "unchanged" | "unknown" = "unchanged",
+  ) {
+    super(ERROR_MESSAGES[reason]);
+    this.reason = reason;
+    this.path = path;
+    this.bindingAuthority = bindingAuthority;
+  }
+}
+
+const MAXIMUM_BINDING_BYTES = parseByteCount(64 * 1024);
+
+interface ParsedOptions {
+  readonly uuidFactory: UuidV4Factory | undefined;
+  readonly wallClock: UtcWallClock | undefined;
+  readonly signal: AbortSignal | undefined;
+  readonly acquireTimeoutMilliseconds: number | undefined;
+}
+
+function fail(
+  reason: WakeflowWindowHostBindingStoreErrorReason,
+  path: string,
+  bindingAuthority: "unchanged" | "unknown" = "unchanged",
+): never {
+  throw new WakeflowWindowHostBindingStoreError(
+    reason,
+    path,
+    bindingAuthority,
+  );
+}
+
+function parseOptions(value: unknown): Readonly<ParsedOptions> {
+  let record: Readonly<Record<string, unknown>>;
+  try {
+    record = parsePlainRecord(value ?? {}, "$options");
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    throw error;
+  }
+  const allowed = new Set([
+    "acquireTimeoutMilliseconds",
+    "signal",
+    "uuidFactory",
+    "wallClock",
+  ]);
+  if (Object.keys(record).some((key) => !allowed.has(key))) {
+    fail("input", "$options");
+  }
+  for (const key of ["uuidFactory", "wallClock"] as const) {
+    if (
+      record[key] !== undefined
+      && (typeof record[key] !== "function" || types.isProxy(record[key]))
+    ) {
+      fail("input", `$options.${key}`);
+    }
+  }
+  if (
+    record.signal !== undefined
+    && (
+      typeof record.signal !== "object"
+      || record.signal === null
+      || types.isProxy(record.signal)
+      || !(record.signal instanceof AbortSignal)
+    )
+  ) {
+    fail("input", "$options.signal");
+  }
+  if (
+    record.acquireTimeoutMilliseconds !== undefined
+    && (
+      typeof record.acquireTimeoutMilliseconds !== "number"
+      || !Number.isSafeInteger(record.acquireTimeoutMilliseconds)
+      || record.acquireTimeoutMilliseconds <= 0
+      || record.acquireTimeoutMilliseconds > 300_000
+    )
+  ) {
+    fail("input", "$options.acquireTimeoutMilliseconds");
+  }
+  return Object.freeze({
+    uuidFactory: record.uuidFactory as UuidV4Factory | undefined,
+    wallClock: record.wallClock as UtcWallClock | undefined,
+    signal: record.signal as AbortSignal | undefined,
+    acquireTimeoutMilliseconds:
+      record.acquireTimeoutMilliseconds as number | undefined,
+  });
+}
+
+function assertNotAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true) fail("aborted", "$signal");
+}
+
+function privateNode(
+  node: Readonly<FileNodeSnapshot>,
+  kind: "directory" | "file",
+  path: string,
+): void {
+  const currentUserId = typeof process.geteuid === "function"
+    ? BigInt(process.geteuid())
+    : null;
+  if (
+    node.kind !== kind
+    || node.permissionBits !== (kind === "directory" ? 0o700 : 0o600)
+    || (kind === "file" && node.linkCount !== 1n)
+    || (currentUserId !== null && node.userId !== currentUserId)
+  ) {
+    fail("layout", path);
+  }
+}
+
+async function recoverStages(
+  root: RootedDirectory,
+  targets: readonly PortableResourcePath[],
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  try {
+    const recovery = await recoverDurableAtomicFileStagesForTargets(
+      root,
+      targets,
+      signal === undefined ? undefined : { signal },
+    );
+    if (recovery.activeStageCount !== 0 || recovery.unknownStageCount !== 0) {
+      fail("recovery-required", "$stages");
+    }
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWindowHostBindingStoreError) throw error;
+    if (error instanceof DurableAtomicFileStageRecoveryError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      fail("recovery-required", "$stages");
+    }
+    throw error;
+  }
+}
+
+async function prepareStaleLockRecovery(
+  root: RootedDirectory,
+  authority: Readonly<WakeflowWindowHostBindingRegistrationAuthority>,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  let lock;
+  try {
+    lock = await inspectRootedExclusiveFileLock(root, authority.lockRef);
+  } catch (error: unknown) {
+    if (error instanceof RootedExclusiveFileLockError) fail("lock", "$lock");
+    throw error;
+  }
+  if (lock.status === "absent") return;
+  if (lock.ownerState !== "inactive") fail("lock", "$lock");
+  await recoverStages(root, authority.bindingRefs, signal);
+  try {
+    await retireRootedExclusiveFileLockResidue(
+      root,
+      authority.lockRef,
+      lock,
+    );
+  } catch (error: unknown) {
+    if (error instanceof RootedExclusiveFileLockError) {
+      fail("recovery-required", "$lock");
+    }
+    throw error;
+  }
+}
+
+async function readInventory(
+  root: RootedDirectory,
+  authority: Readonly<WakeflowWindowHostBindingRegistrationAuthority>,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<WakeflowWindowHostBindingInventory>> {
+  let directory;
+  try {
+    directory = await readStableResourceDirectory(
+      root,
+      authority.bindingRootRef,
+      {
+        maximumEntries: authority.bindingRefs.length + 1,
+        ...(signal === undefined ? {} : { signal }),
+      },
+    );
+  } catch (error: unknown) {
+    if (error instanceof StableDirectoryReadError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      fail("layout", "$bindingRoot");
+    }
+    throw error;
+  }
+  privateNode(directory.directoryNode, "directory", "$bindingRoot");
+  const expected = new Set(authority.bindingRefs);
+  const bindings: Readonly<WakeflowWindowHostBinding>[] = [];
+  for (const entry of directory.entries) {
+    if (entry.resourcePath === authority.lockRef) {
+      privateNode(entry.node, "file", "$lock");
+      continue;
+    }
+    if (!expected.has(entry.resourcePath)) fail("inventory", "$inventory");
+    privateNode(entry.node, "file", "$inventory");
+    let read;
+    try {
+      read = await readDeterministicJsonFile(root, entry.resourcePath, {
+        maximumBytes: MAXIMUM_BINDING_BYTES,
+        expectedNode: entry.node,
+        ...(signal === undefined ? {} : { signal }),
+      });
+    } catch (error: unknown) {
+      if (error instanceof StableFileReadError && error.reason === "aborted") {
+        fail("aborted", "$signal");
+      }
+      if (
+        error instanceof StableFileReadError
+        || error instanceof StrictTextFileError
+        || error instanceof DeterministicJsonDocumentError
+      ) {
+        fail("inventory", "$inventory");
+      }
+      throw error;
+    }
+    let binding: Readonly<WakeflowWindowHostBinding>;
+    try {
+      binding = parseWakeflowWindowHostBindingDocument(read.text);
+      parseWakeflowWindowHostHandle(authority.identityProfile, binding.handle);
+    } catch (error: unknown) {
+      if (
+        error instanceof WakeflowWindowHostBindingError
+        || error instanceof WakeflowWindowHostIdentityProfileError
+      ) {
+        fail("inventory", "$inventory");
+      }
+      throw error;
+    }
+    if (
+      binding.programId !== authority.config.program.programId
+      || binding.hostId !== authority.resourceProfile.hostId
+      || wakeflowWindowBindingRef(
+        authority.resourceProfile,
+        binding.windowId,
+      ) !== entry.resourcePath
+    ) {
+      fail("inventory", "$inventory");
+    }
+    bindings.push(binding);
+  }
+  const byWindowId = new Map<
+    WakeflowDurableId<"window">,
+    Readonly<WakeflowWindowHostBinding>
+  >();
+  const bindingIds = new Set<string>();
+  const handles = new Set<string>();
+  for (const binding of bindings) {
+    const handleKey = `${binding.handle.kind}\u0000${binding.handle.value}`;
+    if (
+      byWindowId.has(binding.windowId)
+      || bindingIds.has(binding.bindingId)
+      || handles.has(handleKey)
+    ) {
+      fail("inventory", "$inventory");
+    }
+    byWindowId.set(binding.windowId, binding);
+    bindingIds.add(binding.bindingId);
+    handles.add(handleKey);
+  }
+  return Object.freeze({
+    bindings: Object.freeze(bindings),
+    byWindowId,
+  });
+}
+
+function mapLockError(error: RootedExclusiveFileLockError): never {
+  if (error.reason === "aborted") fail("aborted", "$signal");
+  if (error.reason === "timeout") fail("lock", "$lock");
+  if (
+    error.reason === "unsafe-lock"
+    || error.reason === "parent"
+    || error.reason === "root-scope"
+  ) {
+    fail("lock", "$lock");
+  }
+  fail("recovery-required", "$lock");
+}
+
+/** 在恢复后的专用锁内提供一份完整 Binding inventory。 */
+export async function withWakeflowWindowHostBindingStore<Result>(
+  root: RootedDirectory,
+  authority: Readonly<WakeflowWindowHostBindingRegistrationAuthority>,
+  optionsValue: WakeflowWindowHostBindingStoreOptions,
+  operation: (
+    context: Readonly<WakeflowWindowHostBindingStoreContext>,
+  ) => Promise<Result>,
+): Promise<Result> {
+  if (
+    typeof root !== "object"
+    || root === null
+    || types.isProxy(root)
+    || !(root instanceof RootedDirectory)
+    || typeof operation !== "function"
+    || types.isProxy(operation)
+  ) {
+    fail("input", "$store");
+  }
+  const options = parseOptions(optionsValue);
+  assertNotAborted(options.signal);
+  await prepareStaleLockRecovery(root, authority, options.signal);
+  try {
+    return await withRootedExclusiveFileLock(
+      root,
+      authority.lockRef,
+      async () => {
+        await recoverStages(root, authority.bindingRefs, options.signal);
+        return operation(Object.freeze({
+          inventory: await readInventory(root, authority, options.signal),
+          uuidFactory: options.uuidFactory,
+          wallClock: options.wallClock,
+          signal: options.signal,
+        }));
+      },
+      {
+        ...(options.acquireTimeoutMilliseconds === undefined
+          ? {}
+          : {
+              acquireTimeoutMilliseconds:
+                options.acquireTimeoutMilliseconds,
+            }),
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      },
+    );
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWindowHostBindingStoreError) throw error;
+    if (error instanceof RootedExclusiveFileLockError) mapLockError(error);
+    throw error;
+  }
+}
+
+/** 在已锁定 inventory 下 no-replace 创建一份新的 Binding authority。 */
+export async function createWakeflowWindowHostBindingInStore(
+  root: RootedDirectory,
+  authority: Readonly<WakeflowWindowHostBindingRegistrationAuthority>,
+  context: Readonly<WakeflowWindowHostBindingStoreContext>,
+): Promise<Readonly<WakeflowWindowHostBinding>> {
+  let registeredAt: UtcInstant;
+  try {
+    registeredAt = context.wallClock === undefined
+      ? readUtcWallClock()
+      : readUtcWallClock(context.wallClock);
+  } catch (error: unknown) {
+    if (error instanceof UtcWallClockError) fail("time", "$clock");
+    throw error;
+  }
+  let binding: Readonly<WakeflowWindowHostBinding>;
+  try {
+    const allocatedBindingId = createWakeflowWindowHostBindingId(
+      context.uuidFactory,
+    );
+    if (context.inventory.bindings.some((entry) => (
+      entry.bindingId === allocatedBindingId
+    ))) {
+      fail("identity-source", "$bindingId");
+    }
+    binding = createWakeflowWindowHostBinding({
+      programId: authority.config.program.programId,
+      hostId: authority.resourceProfile.hostId,
+      windowId: authority.windowId,
+      bindingId: allocatedBindingId,
+      handle: authority.handle,
+      launchIntentDigest: authority.launchIntentDigest,
+      observedAt: authority.observedAt,
+      registeredAt,
+    });
+  } catch (error: unknown) {
+    if (error instanceof WakeflowWindowHostBindingIdError) {
+      fail("identity-source", "$bindingId");
+    }
+    if (error instanceof WakeflowWindowHostBindingError) {
+      fail("time", "$binding");
+    }
+    throw error;
+  }
+  try {
+    await createFileAtomically(
+      root,
+      authority.bindingRef,
+      encodeUtf8(renderWakeflowWindowHostBinding(binding), "$binding"),
+      {
+        mode: 0o600,
+        ...(context.signal === undefined ? {} : { signal: context.signal }),
+      },
+    );
+  } catch (error: unknown) {
+    if (error instanceof DurableAtomicFileWriteError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "stage-recovery-required") {
+        fail("recovery-required", "$binding");
+      }
+      if (
+        error.reason === "target-exists"
+        || error.reason === "commit-uncertain"
+        || error.reason === "durability-failure"
+        || error.reason === "stage-cleanup-failure"
+        || error.reason === "close-failure"
+      ) {
+        fail("write", "$binding", "unknown");
+      }
+      fail("write", "$binding");
+    }
+    throw error;
+  }
+  return binding;
+}

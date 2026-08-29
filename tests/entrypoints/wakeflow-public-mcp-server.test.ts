@@ -1,0 +1,292 @@
+import { deepEqual, equal, match } from "node:assert/strict";
+import { test, type TestContext } from "node:test";
+
+import {
+  Client,
+  InMemoryTransport,
+  type CallToolResult,
+} from "@modelcontextprotocol/client";
+
+import {
+  createWakeflowPublicMcpServer,
+  type WakeflowMaintenanceMcpExecutor,
+  type WakeflowWindowHostBindingMcpExecutor,
+} from "../../src/entrypoints/wakeflow-public-mcp-server.js";
+import {
+  WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+  WakeflowMaintenancePublicContractError,
+} from "../../src/workspace/maintenance/wakeflow-maintenance-public-contract.js";
+import type {
+  WakeflowMaintenancePublicResult,
+} from "../../src/workspace/maintenance/wakeflow-maintenance-public-coordinator.js";
+import {
+  WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
+} from "../../src/workspace/window-runtime/wakeflow-window-host-binding-public-contract.js";
+import type {
+  WakeflowWindowHostBindingPublicResult,
+} from "../../src/workspace/window-runtime/wakeflow-window-host-binding-public-coordinator.js";
+import {
+  WakeflowWindowHostBindingPublicCoordinatorError,
+} from "../../src/workspace/window-runtime/wakeflow-window-host-binding-public-coordinator.js";
+
+/** 两个工具聚焦测试共用的合法占位摘要。 */
+const ZERO_DIGEST = `sha256:${"0".repeat(64)}`;
+const WINDOW_ID = "window_11111111-1111-4111-8111-111111111111";
+const BINDING_ID =
+  "window_binding_22222222-2222-4222-8222-222222222222";
+
+function previewResult(): Readonly<WakeflowMaintenancePublicResult> {
+  return Object.freeze({
+    kind: "WakeflowMaintenancePublicPreviewResult",
+    schemaVersion: 1,
+    tool: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+    hostId: "codex",
+    mode: "preview",
+    action: "reconcile",
+    status: "ready",
+    blockerCodes: Object.freeze([]),
+    confirmation: null,
+    confirmationDigest: null,
+    freshConfigCompilation: null,
+    launchIntents: Object.freeze([]),
+    launchSetDigest: null,
+  });
+}
+
+function bindingResult(): Readonly<WakeflowWindowHostBindingPublicResult> {
+  return Object.freeze({
+    kind: "WakeflowWindowHostBindingRegistrationResult",
+    schemaVersion: 1,
+    tool: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
+    hostId: "codex",
+    windowId: WINDOW_ID as WakeflowWindowHostBindingPublicResult["windowId"],
+    disposition: "registered",
+    binding: Object.freeze({
+      bindingId: BINDING_ID as WakeflowWindowHostBindingPublicResult["binding"]["bindingId"],
+      bindingRef:
+        `.wakeflow-local/runtime/hosts/codex/identity/window-bindings/${WINDOW_ID}.json` as WakeflowWindowHostBindingPublicResult["binding"]["bindingRef"],
+      bindingDigest: ZERO_DIGEST as WakeflowWindowHostBindingPublicResult["binding"]["bindingDigest"],
+      registeredAt: "2026-08-28T10:00:01.000Z" as WakeflowWindowHostBindingPublicResult["binding"]["registeredAt"],
+      source: Object.freeze({
+        kind: "agent-host-create-result" as const,
+        launchIntentDigest: ZERO_DIGEST as WakeflowWindowHostBindingPublicResult["binding"]["source"]["launchIntentDigest"],
+        observedAt: "2026-08-28T10:00:00.000Z" as WakeflowWindowHostBindingPublicResult["binding"]["source"]["observedAt"],
+      }),
+    }),
+    projection: Object.freeze({
+      resourceRef:
+        `.wakeflow-local/runtime/hosts/codex/projections/window-runtime/${WINDOW_ID}.json` as WakeflowWindowHostBindingPublicResult["projection"]["resourceRef"],
+      projectionDigest: ZERO_DIGEST as WakeflowWindowHostBindingPublicResult["projection"]["projectionDigest"],
+      documentDigest: ZERO_DIGEST as WakeflowWindowHostBindingPublicResult["projection"]["documentDigest"],
+    }),
+  });
+}
+
+async function connect(
+  t: TestContext,
+  executeMaintenance: WakeflowMaintenanceMcpExecutor,
+  registerWindowHostBinding: WakeflowWindowHostBindingMcpExecutor =
+    async () => bindingResult(),
+) {
+  const server = createWakeflowPublicMcpServer({
+    serverName: "wakeflow-mcp-focused-test",
+    serverVersion: "1.0.0-test",
+    executeMaintenance,
+    registerWindowHostBinding,
+  });
+  const client = new Client({
+    name: "wakeflow-mcp-focused-client",
+    version: "1.0.0-test",
+  });
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  t.after(async () => {
+    await Promise.allSettled([client.close(), server.close()]);
+  });
+  return client;
+}
+
+function textContent(result: CallToolResult): string {
+  const first = result.content[0];
+  if (first?.type !== "text") {
+    throw new Error("Expected one MCP text content block.");
+  }
+  return first.text;
+}
+
+test("官方 MCP server 只发布两个已有真实 owner 的 Schema 工具", async (t) => {
+  const calls: unknown[] = [];
+  const expected = previewResult();
+  const client = await connect(t, async (request) => {
+    calls.push(request);
+    return expected;
+  });
+
+  const listed = await client.listTools();
+  equal(listed.tools.length, 2);
+  const tool = listed.tools.find((entry) => (
+    entry.name === WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME
+  ));
+  equal(tool?.name, WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME);
+  equal(tool?.inputSchema.$id, "urn:wakeflow:entrypoints:maintenance-public-request:v1");
+  equal(tool?.outputSchema?.$id, "urn:wakeflow:entrypoints:maintenance-public-result:v1");
+  equal(tool?.annotations?.readOnlyHint, false);
+  equal(tool?.annotations?.openWorldHint, false);
+
+  const request = {
+    root: "/workspace",
+    action: "reconcile",
+    mode: "preview",
+    request: {},
+  } as const;
+  const result = await client.callTool({
+    name: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+    arguments: request,
+  });
+  equal(result.isError, undefined);
+  deepEqual(result.structuredContent, expected);
+  deepEqual(JSON.parse(textContent(result)), expected);
+  deepEqual(calls, [request]);
+});
+
+test("Window Host Binding 工具保持 Agent effect 与私有 handle 边界", async (t) => {
+  const observations: unknown[] = [];
+  const expected = bindingResult();
+  const client = await connect(
+    t,
+    async () => previewResult(),
+    async (request) => {
+      observations.push(request);
+      return expected;
+    },
+  );
+  const listed = await client.listTools();
+  const tool = listed.tools.find((entry) => (
+    entry.name === WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME
+  ));
+  equal(
+    tool?.inputSchema.$id,
+    "urn:wakeflow:entrypoints:window-host-binding-registration-request:v1",
+  );
+  equal(tool?.annotations?.idempotentHint, true);
+
+  const request = {
+    root: "/workspace",
+    observation: {
+      kind: "WakeflowAgentHostWindowCreationObservation",
+      schemaVersion: 1,
+      source: "agent-host-create-result",
+      hostId: "codex",
+      windowId: WINDOW_ID,
+      launchIntentDigest: ZERO_DIGEST,
+      handle: {
+        kind: "codex-thread",
+        value: "opaque-host-thread-id",
+      },
+      observedAt: "2026-08-28T10:00:00.000Z",
+    },
+  } as const;
+  const result = await client.callTool({
+    name: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
+    arguments: request,
+  });
+  equal(result.isError, undefined);
+  deepEqual(result.structuredContent, expected);
+  equal(textContent(result).includes("opaque-host-thread-id"), false);
+  deepEqual(observations, [request]);
+});
+
+test("官方 SDK 在进入 Maintenance owner 前拒绝额外字段", async (t) => {
+  let calls = 0;
+  const client = await connect(t, async () => {
+    calls += 1;
+    return previewResult();
+  });
+
+  const result = await client.callTool({
+    name: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+    arguments: {
+      root: "/workspace",
+      action: "reconcile",
+      mode: "preview",
+      request: {},
+      unownedField: true,
+    },
+  });
+  equal(result.isError, true);
+  match(textContent(result), /Input validation error/u);
+  equal(calls, 0);
+});
+
+test("MCP 错误结果只公开稳定的领域错误字段", async (t) => {
+  const client = await connect(t, async () => {
+    throw new WakeflowMaintenancePublicContractError("shape", "$request");
+  });
+
+  const result = await client.callTool({
+    name: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+    arguments: {
+      root: "/workspace",
+      action: "reconcile",
+      mode: "preview",
+      request: {},
+    },
+  });
+  equal(result.isError, true);
+  deepEqual(JSON.parse(textContent(result)), {
+    error: {
+      code: "wakeflow-maintenance-public-contract",
+      path: "$request",
+      reason: "shape",
+    },
+    kind: "WakeflowMcpError",
+    schemaVersion: 1,
+    status: "error",
+    tool: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+  });
+  equal(textContent(result).includes(ZERO_DIGEST), false);
+  equal(textContent(result).includes("stack"), false);
+});
+
+test("MCP 显式保留 Binding commit unknown 而不伪装回滚", async (t) => {
+  const client = await connect(
+    t,
+    async () => previewResult(),
+    async () => {
+      throw new WakeflowWindowHostBindingPublicCoordinatorError(
+        "registration",
+        "wakeflow-window-host-binding-store",
+        "write",
+        "unknown",
+      );
+    },
+  );
+  const result = await client.callTool({
+    name: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
+    arguments: {
+      root: "/workspace",
+      observation: {
+        kind: "WakeflowAgentHostWindowCreationObservation",
+        schemaVersion: 1,
+        source: "agent-host-create-result",
+        hostId: "codex",
+        windowId: WINDOW_ID,
+        launchIntentDigest: ZERO_DIGEST,
+        handle: { kind: "codex-thread", value: "private-value" },
+        observedAt: "2026-08-28T10:00:00.000Z",
+      },
+    },
+  });
+  equal(result.isError, true);
+  const envelope = JSON.parse(textContent(result)) as {
+    readonly error: {
+      readonly bindingAuthority: string;
+      readonly causeReason: string;
+    };
+  };
+  equal(envelope.error.bindingAuthority, "unknown");
+  equal(envelope.error.causeReason, "write");
+  equal(textContent(result).includes("private-value"), false);
+});

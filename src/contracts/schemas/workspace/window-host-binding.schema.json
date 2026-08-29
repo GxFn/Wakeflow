@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:workspace:window-runtime:host-binding:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA",
+  "title": "WakeflowWindowHostBinding",
+  "description": "Private current-host authority binding one durable logical window to one opaque host identifier observed from an Agent-executed host create result.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "programId",
+    "hostId",
+    "windowId",
+    "bindingId",
+    "handle",
+    "source",
+    "registeredAt"
+  ],
+  "properties": {
+    "kind": {
+      "const": "WakeflowWindowHostBinding"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "hostId": {
+      "enum": [
+        "codex",
+        "claude-code"
+      ]
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "bindingId": {
+      "type": "string",
+      "pattern": "^window_binding_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "handle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^(?!\\s)(?![\\s\\S]*[\\u0000-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "launchIntentDigest",
+        "observedAt"
+      ],
+      "properties": {
+        "kind": {
+          "const": "agent-host-create-result"
+        },
+        "launchIntentDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "observedAt": {
+          "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+        }
+      }
+    },
+    "registeredAt": {
+      "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+    }
+  }
+}

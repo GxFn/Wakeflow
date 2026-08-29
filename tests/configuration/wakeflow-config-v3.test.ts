@@ -6,6 +6,7 @@ import {
   buildWakeflowConfigV3Indexes,
   computeWakeflowConfigV3Digest,
   parseWakeflowConfigV3,
+  WAKEFLOW_DEFAULT_PRESENTATION_LANGUAGE,
   WakeflowConfigV3Error,
   type WakeflowConfigV3ErrorReason,
 } from "../../src/configuration/wakeflow-config-v3.js";
@@ -43,15 +44,17 @@ function topology(value: Record<string, unknown>) {
   };
 }
 
-test("public v3 model preserves the legacy semantic digest and builds typed indexes", () => {
+test("public v3 model preserves one explicit presentation language and builds typed indexes", () => {
   const value = createMinimalWakeflowConfigV3();
   const model = parseWakeflowConfigV3(value);
   const indexes = buildWakeflowConfigV3Indexes(model);
 
   equal(
     computeWakeflowConfigV3Digest(model),
-    "sha256:5a1a8b2ab2439d9add5942eea455ceba693a28f643af1631ea6f1d62f3997081",
+    "sha256:54a5976cbac7c3f7e14ac76e405d04f8e534fd820f8bf1ce16768d6514db7007",
   );
+  equal(WAKEFLOW_DEFAULT_PRESENTATION_LANGUAGE, "en");
+  equal(model.presentation.language, "en");
   equal(indexes.controllerWindow.role, "controller");
   equal(indexes.designWindow.role, "design");
   equal(indexes.testWindow.role, "test");
@@ -70,6 +73,24 @@ test("public v3 model preserves the legacy semantic digest and builds typed inde
   equal(
     computeWakeflowConfigV3Digest(parseWakeflowConfigV3(reordered)),
     computeWakeflowConfigV3Digest(model),
+  );
+});
+
+test("presentation language is explicit, closed and never inferred", () => {
+  const missing = createMinimalWakeflowConfigV3();
+  delete missing.presentation;
+  expectConfigError(() => parseWakeflowConfigV3(missing), "schema");
+
+  const legacyAuto = createMinimalWakeflowConfigV3();
+  (legacyAuto.presentation as Record<string, unknown>).language = "auto";
+  expectConfigError(() => parseWakeflowConfigV3(legacyAuto), "schema");
+
+  const simplifiedChinese = createMinimalWakeflowConfigV3();
+  (simplifiedChinese.presentation as Record<string, unknown>).language =
+    "zh-Hans";
+  equal(
+    parseWakeflowConfigV3(simplifiedChinese).presentation.language,
+    "zh-Hans",
   );
 });
 

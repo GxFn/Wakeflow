@@ -8,10 +8,14 @@ import {
   DeterministicJsonDocumentError,
 } from "../data/deterministic-json-document.js";
 import {
+  parseDenseArray,
   parsePlainRecord,
   PassiveOwnDataError,
 } from "../data/passive-own-data.js";
-import { createUuidV4 } from "../identity/uuid-v4.js";
+import {
+  createUuidV4,
+  type UuidV4Factory,
+} from "../identity/uuid-v4.js";
 import { parseUuidV4, UuidV4Error } from "../identity/uuid-v4.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { parseByteCount, type ByteCount } from "../numeric/byte-count.js";
@@ -37,7 +41,8 @@ import {
   DurableAtomicFileWriteError,
 } from "./durable-atomic-file-write.js";
 import {
-  recoverDurableAtomicFileStagesInTargetParent,
+  DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE,
+  recoverDurableAtomicFileStagesForTargets,
   DurableAtomicFileStageRecoveryError,
 } from "./durable-atomic-file-stage-recovery.js";
 import { readDeterministicJsonFile } from "./deterministic-json-file.js";
@@ -49,7 +54,11 @@ import {
   sameFileNodeSnapshot,
   type FileNodeSnapshot,
 } from "./file-node-snapshot.js";
-import type { PortableResourcePath } from "./portable-resource-path.js";
+import {
+  parsePortableResourcePath,
+  PortableResourcePathError,
+  type PortableResourcePath,
+} from "./portable-resource-path.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
@@ -80,6 +89,12 @@ export interface RootedExclusiveFileLockOptions {
   readonly acquireTimeoutMilliseconds?: number;
   readonly retryDelayMilliseconds?: number;
   readonly signal?: AbortSignal;
+  /** 仅供需要把领域 operation 与锁 token 关联的内部 owner 注入。 */
+  readonly tokenUuidFactory?: UuidV4Factory;
+}
+
+export interface RootedExclusiveFileLockResidueRetirementOptions {
+  readonly relatedTargetResourcePaths?: readonly PortableResourcePath[];
 }
 
 export interface RootedExclusiveFileLockRecord {
@@ -155,6 +170,7 @@ interface ParsedOptions {
   readonly acquireTimeoutMilliseconds: number;
   readonly retryDelayMilliseconds: number;
   readonly signal: AbortSignal | undefined;
+  readonly tokenUuidFactory: UuidV4Factory | undefined;
 }
 
 interface AcquiredLock {
@@ -228,12 +244,22 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     "acquireTimeoutMilliseconds",
     "retryDelayMilliseconds",
     "signal",
+    "tokenUuidFactory",
   ]);
   if (Object.keys(record).some((key) => !allowed.has(key))) {
     fail("input", "$options");
   }
   if (record.signal !== undefined && !isAbortSignal(record.signal)) {
     fail("input", "$options.signal");
+  }
+  if (
+    record.tokenUuidFactory !== undefined
+    && (
+      typeof record.tokenUuidFactory !== "function"
+      || types.isProxy(record.tokenUuidFactory)
+    )
+  ) {
+    fail("input", "$options.tokenUuidFactory");
   }
   return Object.freeze({
     acquireTimeoutMilliseconds: parsePositiveMilliseconds(
@@ -247,7 +273,52 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
       "$options.retryDelayMilliseconds",
     ),
     signal: record.signal,
+    tokenUuidFactory: record.tokenUuidFactory as UuidV4Factory | undefined,
   });
+}
+
+function parseRetirementTargets(
+  lockPath: PortableResourcePath,
+  value: unknown,
+): readonly PortableResourcePath[] {
+  let record: Readonly<Record<string, unknown>>;
+  let relatedValues: readonly unknown[];
+  try {
+    record = parsePlainRecord(value === undefined ? {} : value, "$options");
+    if (
+      Object.keys(record).some((key) => key !== "relatedTargetResourcePaths")
+    ) {
+      fail("input", "$options");
+    }
+    relatedValues = parseDenseArray(
+      record.relatedTargetResourcePaths ?? [],
+      DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE - 1,
+      "$options.relatedTargetResourcePaths",
+    );
+  } catch (error: unknown) {
+    if (error instanceof PassiveOwnDataError) fail("input", "$options");
+    throw error;
+  }
+  const targets: PortableResourcePath[] = [lockPath];
+  for (const [index, value] of relatedValues.entries()) {
+    let target: PortableResourcePath;
+    try {
+      target = parsePortableResourcePath(
+        value,
+        `$options.relatedTargetResourcePaths/${index}`,
+      );
+    } catch (error: unknown) {
+      if (error instanceof PortableResourcePathError) {
+        fail("input", `$options.relatedTargetResourcePaths/${index}`);
+      }
+      throw error;
+    }
+    if (targets.includes(target)) {
+      fail("input", `$options.relatedTargetResourcePaths/${index}`);
+    }
+    targets.push(target);
+  }
+  return Object.freeze(targets);
 }
 
 function assertOperation<Result>(
@@ -282,13 +353,23 @@ function lockDeadline(timeoutMilliseconds: number): MonotonicDeadline {
   }
 }
 
-function createLockCandidate(): Readonly<LockCandidate> {
+function createLockCandidate(
+  tokenUuidFactory: UuidV4Factory | undefined,
+): Readonly<LockCandidate> {
+  let tokenUuid: string;
+  try {
+    tokenUuid = tokenUuidFactory === undefined
+      ? createUuidV4()
+      : createUuidV4(tokenUuidFactory);
+  } catch {
+    fail("acquire-failure", "$lock");
+  }
   const record: Readonly<RootedExclusiveFileLockRecord> = Object.freeze({
     createdAt: readUtcWallClock(),
     kind: "WakeflowExclusiveFileLock" as const,
     pid: process.pid,
     threadId,
-    token: `${process.pid}-${threadId}-${createUuidV4()}`,
+    token: `${process.pid}-${threadId}-${tokenUuid}`,
     version: 1 as const,
   });
   const bytes = encodeUtf8(
@@ -454,14 +535,17 @@ export async function inspectRootedExclusiveFileLock(
  * 显式退休已经证明持有者不再活动，且仍与指定观察结果一致的锁残留。
  *
  * 调用方必须先持有自己的领域恢复证据；本函数不读取恢复意图记录，不根据
- * `mtime` 猜测锁是否过期，也不接受自行构造的观察结果。
+ * `mtime` 猜测锁是否过期，也不接受自行构造的观察结果。调用方声明的相关目标与
+ * lockPath 必须位于同一父目录；发现集合外 stage 时保持锁和该 stage 不变。
  */
 export async function retireRootedExclusiveFileLockResidue(
   root: RootedDirectory,
   lockPath: PortableResourcePath,
   observation: RootedExclusiveFileLockObservation,
+  options?: RootedExclusiveFileLockResidueRetirementOptions,
 ): Promise<void> {
   assertRoot(root);
+  const retirementTargets = parseRetirementTargets(lockPath, options);
   if (
     typeof observation !== "object"
     || observation === null
@@ -473,9 +557,9 @@ export async function retireRootedExclusiveFileLockResidue(
   }
   if (observation.ownerState !== "inactive") fail("owner-active", "$lock");
   try {
-    const stageRecovery = await recoverDurableAtomicFileStagesInTargetParent(
+    const stageRecovery = await recoverDurableAtomicFileStagesForTargets(
       root,
-      lockPath,
+      retirementTargets,
     );
     if (
       stageRecovery.activeStageCount !== 0
@@ -560,10 +644,11 @@ async function tryAcquire(
   root: RootedDirectory,
   lockPath: PortableResourcePath,
   signal: AbortSignal | undefined,
+  tokenUuidFactory: UuidV4Factory | undefined,
 ): Promise<Readonly<AcquiredLock> | null> {
   // 竞争热点路径先执行一次不跟随符号链接的目标观察，避免每轮重试都扫描父目录。
   if (await lockTargetExists(root, lockPath)) return null;
-  const candidate = createLockCandidate();
+  const candidate = createLockCandidate(tokenUuidFactory);
   ACTIVE_LOCK_TOKENS.add(candidate.record.token);
   try {
     const created = await createFileAtomically(root, lockPath, candidate.bytes, {
@@ -671,7 +756,12 @@ async function acquire(
     if (isMonotonicDeadlineReached(deadline, readLockMonotonicClock())) {
       fail("timeout", "$lock");
     }
-    const acquired = await tryAcquire(root, lockPath, options.signal);
+    const acquired = await tryAcquire(
+      root,
+      lockPath,
+      options.signal,
+      options.tokenUuidFactory,
+    );
     if (acquired !== null) return acquired;
     await assertSafeExistingLock(root, lockPath);
     await waitForRetry(

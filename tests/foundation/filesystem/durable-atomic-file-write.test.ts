@@ -1,5 +1,6 @@
 import { deepEqual, equal } from "node:assert/strict";
 import {
+  existsSync,
   linkSync,
   mkdirSync,
   mkdtempSync,
@@ -286,6 +287,46 @@ test("atomic create 自动恢复 inactive partial 与 two-link stage", async () 
     equal(statSync(path.join(rootPath, ...linkedTarget.split("/"))).nlink, 1);
     deepEqual(directoryNames(path.join(rootPath, "records")), []);
   } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("atomic write preflight preserves a safe foreign-target stage", async () => {
+  const rootPath = mkdtempSync(path.join(
+    os.tmpdir(),
+    "wakeflow-atomic-foreign-stage-",
+  ));
+  mkdirSync(path.join(rootPath, "records"), { mode: 0o700 });
+  const root = await RootedDirectory.open(rootPath);
+  const foreignTarget = parsePortableResourcePath("records/foreign.json");
+  const ownTarget = parsePortableResourcePath("records/own.json");
+  const foreignBytes = Buffer.from("foreign candidate");
+  const address = issueDurableAtomicFileStageAddress(
+    "replace",
+    foreignTarget,
+    computeSha256Digest(foreignBytes),
+    0o600,
+  );
+  const foreignStage = durableAtomicFileStageRef(foreignTarget, address);
+  let released = false;
+  try {
+    await createFileCandidateDurably(root, foreignStage, foreignBytes, {
+      mode: 0o600,
+    });
+    releaseDurableAtomicFileStageAddress(address);
+    released = true;
+
+    await createFileAtomically(root, ownTarget, Buffer.from("own target"), {
+      mode: 0o600,
+    });
+    equal(existsSync(path.join(rootPath, ...foreignStage.split("/"))), true);
+    equal(
+      readFileSync(path.join(rootPath, ...ownTarget.split("/")), "utf8"),
+      "own target",
+    );
+  } finally {
+    if (!released) releaseDurableAtomicFileStageAddress(address);
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
   }

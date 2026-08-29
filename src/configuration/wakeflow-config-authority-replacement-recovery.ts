@@ -211,6 +211,7 @@ export async function recoverWakeflowConfigAuthorityReplacement(
       root,
       WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF,
       observation,
+      { relatedTargetResourcePaths: [WAKEFLOW_CONFIG_FILE_REF] },
     );
   } catch (error: unknown) {
     if (error instanceof RootedExclusiveFileLockError) {

@@ -60,6 +60,9 @@ import {
   appendTodoItem,
   initializeTodoCollection,
 } from "../../../src/governance/todo/todo-collection-service.js";
+import {
+  materializeWakeflowActiveLayout,
+} from "../../../src/workspace/active/wakeflow-active-layout-materialization.js";
 
 const PROGRAM_ID = parseWakeflowDurableIdOfKind(
   "program_11111111-1111-4111-8111-111111111111",
@@ -99,6 +102,9 @@ async function fixture(todoId: string) {
   mkdirSync(ledgerPath, { mode: 0o700 });
   const workspaceRoot = await RootedDirectory.open(workspacePath);
   const ledgerRoot = await RootedDirectory.open(ledgerPath);
+  await materializeWakeflowActiveLayout(workspaceRoot, {
+    recoveringFreshLayout: false,
+  });
   await initializeTodoCollection(workspaceRoot, { freshWorkspace: true });
   const appended = await appendTodoItem(workspaceRoot, {
     todoId,

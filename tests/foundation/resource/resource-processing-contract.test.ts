@@ -7,6 +7,7 @@ import {
   WAKEFLOW_DIRECTORY_CONTAINER_RECIPES,
   WAKEFLOW_RESOURCE_ROLES,
   WakeflowResourceProcessingContractError,
+  type WakeflowDerivedCheckpointProcessingContract,
   type WakeflowMutableSnapshotProcessingContract,
   type WakeflowResourceProcessingContractErrorReason,
 } from "../../../src/foundation/resource/resource-processing-contract.js";
@@ -41,6 +42,7 @@ test("resource processing contract closes all roles and directory containers", (
     "immutable-fact",
     "mutable-snapshot",
     "derived-projection",
+    "derived-checkpoint",
     "managed-integration-text",
     "manifested-tree",
     "transaction-artifact",
@@ -72,6 +74,12 @@ test("resource processing contract closes all roles and directory containers", (
       kind: "resource",
       role: "derived-projection",
       allowedMutationRecipes: ["deterministic-rewrite"],
+      recoveryStrategy: "rebuild-from-authority",
+    },
+    {
+      kind: "resource",
+      role: "derived-checkpoint",
+      allowedMutationRecipes: ["exclusive-create"],
       recoveryStrategy: "rebuild-from-authority",
     },
     {
@@ -300,6 +308,58 @@ test("one operation admits exactly one recipe from the resource contract", () =>
     () => admitWakeflowResourceOperation(container, "exclusive-create"),
     "operation",
     "$/recipe",
+  );
+});
+
+test("derived checkpoint is create-only and remains distinct from projection", () => {
+  const checkpointInput = {
+    kind: "resource",
+    role: "derived-checkpoint",
+    allowedMutationRecipes: ["exclusive-create"],
+    recoveryStrategy: "rebuild-from-authority",
+  } as const satisfies WakeflowDerivedCheckpointProcessingContract;
+  const checkpoint = parseWakeflowResourceProcessingContract(checkpointInput);
+  deepEqual(checkpoint, checkpointInput);
+  equal(Object.isFrozen(checkpoint), true);
+  if (checkpoint.kind === "resource") {
+    equal(Object.isFrozen(checkpoint.allowedMutationRecipes), true);
+  }
+  deepEqual(
+    admitWakeflowResourceOperation(checkpoint, "exclusive-create"),
+    {
+      kind: "resource-mutation",
+      role: "derived-checkpoint",
+      recipe: "exclusive-create",
+    },
+  );
+
+  expectResourceProcessingError(
+    () => admitWakeflowResourceOperation(
+      checkpoint,
+      "deterministic-rewrite",
+    ),
+    "operation",
+    "$/recipe",
+  );
+  expectResourceProcessingError(
+    () => parseWakeflowResourceProcessingContract({
+      kind: "resource",
+      role: "derived-checkpoint",
+      allowedMutationRecipes: ["deterministic-rewrite"],
+      recoveryStrategy: "rebuild-from-authority",
+    }),
+    "recipe",
+    "$/allowedMutationRecipes/0",
+  );
+  expectResourceProcessingError(
+    () => parseWakeflowResourceProcessingContract({
+      kind: "resource",
+      role: "derived-projection",
+      allowedMutationRecipes: ["exclusive-create"],
+      recoveryStrategy: "rebuild-from-authority",
+    }),
+    "recipe",
+    "$/allowedMutationRecipes/0",
   );
 });
 

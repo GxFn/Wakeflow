@@ -101,6 +101,52 @@ test("operation failure still releases the exact owned lock", async () => {
   }
 });
 
+test("an internal owner may correlate the lock token with an operation UUID", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-lock-correlation-"));
+  mkdirSync(path.join(rootPath, "state"));
+  const root = await RootedDirectory.open(rootPath);
+  const lockPath = parsePortableResourcePath("state/board.lock");
+  const uuid = "11111111-1111-4111-8111-111111111111";
+  try {
+    await withRootedExclusiveFileLock(
+      root,
+      lockPath,
+      async () => {
+        const observed = await inspectRootedExclusiveFileLock(root, lockPath);
+        equal(observed.status, "held");
+        if (observed.status === "held") {
+          equal(observed.record.token.endsWith(`-${uuid}`), true);
+        }
+      },
+      { tokenUuidFactory: () => uuid },
+    );
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("an invalid correlation UUID factory is mapped to lock acquisition failure", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-lock-correlation-error-"));
+  mkdirSync(path.join(rootPath, "state"));
+  const root = await RootedDirectory.open(rootPath);
+  const lockPath = parsePortableResourcePath("state/board.lock");
+  try {
+    await expectLockError(
+      () => withRootedExclusiveFileLock(
+        root,
+        lockPath,
+        () => undefined,
+        { tokenUuidFactory: () => "invalid" },
+      ),
+      "acquire-failure",
+    );
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
 test("a held or crash-residue lock times out without automatic deletion", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-lock-timeout-"));
   mkdirSync(path.join(rootPath, "state"));

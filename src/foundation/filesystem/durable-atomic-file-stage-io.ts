@@ -17,7 +17,7 @@ import {
   type DurableAtomicFileStageOperation,
 } from "./durable-atomic-file-stage-address.js";
 import {
-  recoverDurableAtomicFileStagesInTargetParent,
+  recoverDurableAtomicFileStagesMatchingTargets,
   DurableAtomicFileStageRecoveryError,
 } from "./durable-atomic-file-stage-recovery.js";
 import {
@@ -126,9 +126,9 @@ export async function recoverDurableAtomicFileStagesBeforeWrite(
   signal: AbortSignal | undefined,
 ): Promise<void> {
   try {
-    const receipt = await recoverDurableAtomicFileStagesInTargetParent(
+    const receipt = await recoverDurableAtomicFileStagesMatchingTargets(
       root,
-      resourcePath,
+      [resourcePath],
       signal === undefined ? undefined : { signal },
     );
     if (receipt.unknownStageCount !== 0) {

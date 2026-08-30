@@ -7928,3 +7928,99 @@ ready。
   独立工作树修改，继续保留，未作为本台账的当前命令authority；
 - 按用户此前约定，在技术层与骨干核实节点暂停。下一步先review本台账和代码diff，再由用户
   选择真实业务垂直切片或先形成一个提交节点。
+
+## 174. TASKING-001～004（首个业务垂直切片已收束）
+
+### 174.1 当前实现范围
+
+本轮在已关闭技术骨干之后实现首个consumer-driven Tasking切片，范围严格停在
+“规划一个implementation Target Task”：
+
+- `task-package.ts`与Schema拥有不可变完整执行合同、`configDigest`、Demand Authority摘要、
+  repository/window assignment、边界、完成预期、commit expectation和acceptance anchors；
+- `tasking.target-task-planned.v1`把完整TaskPackage作为业务事件数据，事件流仍是唯一权威；
+- Demand Aggregate只保存`authorityDigest`与按ID排序的最小Target Task摘要，不复制完整包、
+  Config或投影路径；
+- `artifacts/task-packages/<taskPackageId>.json`是按IDcreate-only、可删除重建的查询投影，
+  existing冲突不得覆盖；
+- `wakeflow_plan_target_task`通过官方MCP SDK提供`preview → apply`，同时进入Codex和Claude
+  Code候选制品；不执行Delivery、Lease、消息发送、Git或任何宿主效果。
+
+### 174.2 权威与提交顺序
+
+```text
+Preview（零写入）
+  strict Config snapshot + configDigest
+  → Demand root full audit + Ledger closure
+  → selectedAuthorityMemberRefs解析为完整Authority refs
+  → Wakeflow生成TaskPackage/TargetTask/Event/Commit ID和createdAt
+  → pure Decider + exact prepared commit容量预检
+  → immutable plan + Canonical planDigest
+
+Apply
+  exact plan + planDigest
+  → 先按commitId检查是否已经提交
+  → 未提交：重验Config、Demand Authority、Ledger refs、topology与stream expectation
+  → Command Handler append（唯一业务commit point）
+  → event-backed TaskPackage projection create/readback
+  → structured MCP receipt
+```
+
+已提交重试不会因之后的Config重配而失去恢复能力；它先证明同一commitId、command digest与
+expected revision已经绑定，然后只收敛投影。投影失败显式报告`eventAuthority=current`；无法
+证明追加结果时报告`unknown`，不伪装回滚。
+
+### 174.3 收束修正与剪枝
+
+- `configDigest`进入TaskPackage，修复仅记录repository/window ID而无法说明准入拓扑版本的
+  审计缺口；未建立不必要的Config Event Sourcing或历史仓库；
+- 公共preview只接收Authority member paths，不让Agent复制或声明Ledger record/member摘要；
+  Planning owner从当前Demand Authority恢复完整引用；
+- Foundation `derived-projection`补齐`exclusive-create`形态，仍与`immutable-fact`和非查询型
+  `derived-checkpoint`分离；
+- Planning原1110行单文件拆为input、authority与service三个职责模块；service只保留
+  preview/apply编排、event authority分类和投影后处理；
+- TaskPackage authored-content准入下沉到TaskPackage owner，Planning input删除自建假Ledger
+  reference结构；
+- Tasking只读Event Store容量/目录常量改为直接依赖无副作用contract，不经完整Store门面；
+- 删除重复的public-coordinator真实workspace测试；同一公共链由service业务测试和官方MCP
+  Client端到端测试分别覆盖，不维持第三份等价集成测试；
+- 两份MCP wire Schema因协议要求保持同文档`$ref`自包含；代码生成测试逐项比较共享plan、
+  TaskPackage与词法defs，并核对公共TaskPackage字段集合与领域Schema，限制手写镜像漂移。
+
+### 174.4 明确未进入的范围
+
+当前Target Task只有`planned` phase。下列能力仍不存在，不能从当前工具或字段推断：
+
+- Window Binding/availability/idle、coordination Lease与pre-send fence；
+- Dispatch group、packet、envelope、host send/readback和delivery run；
+- TargetResult、ReviewCandidate、rework/redesign、TestCard、completion与archive；
+- documentation/research/test TaskPackage、dependency、continuation或replacement分支；
+- 旧JS workspace迁移、旧新等价、release切换或安装cache刷新。
+
+### 174.5 当前验证证据
+
+```text
+Affected TypeScript source-manifest tests: 90 pass / 0 fail / 0 skip / 16.805856583s
+TypeScript: pass
+Architecture: pass / parser=swc / 440 modules / 2765 dependencies / 0 violations
+Schema: pass / 38 schemas / 70 external refs
+Schema digest: sha256:cac20f3f7e0c4afc5fce4cfdfb6d34009ab311d8a3c516d5612a1b1a5a954118
+Dual-host candidate official stdio: pass / same 3 public tools
+git diff --check: pass
+```
+
+验证包含真实本地Event Store的preview/apply/idempotent retry、并发Apply收敛、Config drift
+pre-commit阻断、post-commit projection conflict/recovery、官方MCP Client以及双宿主候选制品。
+本轮按约定只运行受影响的新TypeScript测试；未运行旧JS全套、`npm test`、旧plugin smoke/
+validator或release gate。
+
+### 174.6 后续架构观察
+
+- 当前Ledger member reference codec仍由既有Ledger Store门面转交；Tasking没有为此复制第二套
+  parser。若后续Delivery也只需纯引用codec，应在Ledger文件审阅单元决定是否下沉，不能由
+  Tasking私自建立兼容实现；
+- 当前TS项目尚无已发布持久数据，因此新增Tasking状态仍直接完善state model v1，没有制造
+  无真实历史的v2/upcaster；一旦真实版本发布，后续变化必须使用既有版本演进能力；
+- 下一步在进入Delivery前应先由当前Tasking contract推导最小readiness需求，不能照搬旧JS
+  的group/packet/lease大对象或把host effect放回Wakeflow。

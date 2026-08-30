@@ -386,6 +386,9 @@ test("published root marker is settled before normal authority load", async () =
       const eventStore = new DemandFileEventStore(demandRoot);
       await eventStore.initialize();
       mkdirSync(path.join(finalPath, "artifacts"), { mode: 0o700 });
+      mkdirSync(path.join(finalPath, "artifacts", "task-packages"), {
+        mode: 0o700,
+      });
       mkdirSync(path.join(finalPath, "transactions"), { mode: 0o700 });
       writeFileSync(
         path.join(finalPath, "identity.json"),

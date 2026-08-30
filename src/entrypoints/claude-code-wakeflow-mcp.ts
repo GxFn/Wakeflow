@@ -11,6 +11,9 @@ import {
   createWakeflowPublicMcpServer,
 } from "./wakeflow-public-mcp-server.js";
 import {
+  executeTargetTaskPlanningPublicRequest,
+} from "../governance/tasking/target-task-planning-public-coordinator.js";
+import {
   runWakeflowMcpStdio,
 } from "./wakeflow-mcp-stdio.js";
 
@@ -18,7 +21,7 @@ import {
 const CLAUDE_CODE_WAKEFLOW_MCP_SERVER_NAME =
   "wakeflow-claude-code" as const;
 
-/** 创建固定组合Claude Code Maintenance与Window Binding能力的MCP server。 */
+/** 创建固定组合 Maintenance、Tasking 与 Window Binding 能力的 Claude MCP server。 */
 export function createClaudeCodeWakeflowMcpServer(
   serverVersion: string,
 ): McpServer {
@@ -26,6 +29,7 @@ export function createClaudeCodeWakeflowMcpServer(
     serverName: CLAUDE_CODE_WAKEFLOW_MCP_SERVER_NAME,
     serverVersion,
     executeMaintenance: executeClaudeCodeWakeflowMaintenance,
+    planTargetTask: executeTargetTaskPlanningPublicRequest,
     registerWindowHostBinding:
       executeClaudeCodeWakeflowWindowHostBindingRegistration,
   });

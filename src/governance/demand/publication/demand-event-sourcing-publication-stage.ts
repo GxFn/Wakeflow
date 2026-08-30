@@ -29,6 +29,9 @@ import {
   DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
 } from "../event-sourcing/demand-event-sourcing-paths.js";
 import {
+  TASK_PACKAGE_PROJECTIONS_ROOT_REF,
+} from "../../tasking/task-package-projection-paths.js";
+import {
   DemandFileEventSnapshotStore,
   DemandFileEventSnapshotStoreError,
 } from "../event-sourcing/demand-file-event-snapshot-store.js";
@@ -102,6 +105,7 @@ export async function materializeDemandPublicationStage(
     await eventStore.initialize(signal === undefined ? undefined : { signal });
     for (const ref of [
       DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF,
+      TASK_PACKAGE_PROJECTIONS_ROOT_REF,
       DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
     ]) {
       await materializeDirectoryPath(stageRoot, ref, {

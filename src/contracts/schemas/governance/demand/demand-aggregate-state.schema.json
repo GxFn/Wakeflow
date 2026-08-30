@@ -4,14 +4,16 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA",
   "title": "WakeflowDemandAggregateState",
   "description": "由 Demand domain event reducer 唯一生成的最小业务 Aggregate state。",
-  "$comment": "stream revision、event tail 与 snapshot metadata 不进入本状态；未实现的 Tasking、Delivery、Result、Testing、Review、Evidence 与 Pod 领域不会以空占位字段提前进入状态模型。",
+  "$comment": "stream revision、event tail 与 snapshot metadata 不进入本状态；authorityDigest 是 TaskPackage 准入所需的 publication 派生事实。Delivery、Result、Testing、Review、Evidence 与 Pod 不以空占位字段提前进入状态模型。",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "artifactKind",
     "schemaVersion",
     "demandId",
-    "lifecycle"
+    "authorityDigest",
+    "lifecycle",
+    "targetTasks"
   ],
   "properties": {
     "artifactKind": {
@@ -23,17 +25,75 @@
     "demandId": {
       "$ref": "#/$defs/demandId"
     },
+    "authorityDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    },
     "lifecycle": {
       "enum": [
         "active",
         "cancelled"
       ]
+    },
+    "targetTasks": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/targetTask"
+      }
     }
   },
   "$defs": {
     "demandId": {
       "type": "string",
       "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetTaskId": {
+      "type": "string",
+      "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "taskPackageId": {
+      "type": "string",
+      "pattern": "^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "repositoryId": {
+      "type": "string",
+      "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetTaskId",
+        "taskPackageId",
+        "taskPackageDigest",
+        "repositoryId",
+        "windowId",
+        "phase"
+      ],
+      "properties": {
+        "targetTaskId": {
+          "$ref": "#/$defs/targetTaskId"
+        },
+        "taskPackageId": {
+          "$ref": "#/$defs/taskPackageId"
+        },
+        "taskPackageDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        },
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        },
+        "phase": {
+          "const": "planned"
+        }
+      }
     }
   }
 }

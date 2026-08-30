@@ -10,6 +10,9 @@ import {
   PassiveOwnDataError,
 } from "../../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
+import {
+  computeTaskPackageDigest,
+} from "../../tasking/task-package.js";
 
 import {
   applyDemandEventStreamCommit,
@@ -20,6 +23,9 @@ import {
 import type {
   DemandEventSourcingAggregate,
 } from "./demand-event-sourcing-aggregate.js";
+import type {
+  TargetTaskPlannedUncommittedEvent,
+} from "./demand-event-sourcing-event.js";
 import type {
   DemandEventCommitSequence,
 } from "./demand-event-stream-position.js";
@@ -38,6 +44,13 @@ import {
   DemandFileEventSnapshotStoreError,
   type DemandFileEventSnapshotPublishReceipt,
 } from "./demand-file-event-snapshot-store.js";
+import type {
+  DemandEventSourcingStoredEvent,
+} from "./demand-event-sourcing-stored-event.js";
+import {
+  upcastDemandEventSourcingStoredEvent,
+  DemandEventSourcingUpcasterError,
+} from "./demand-event-sourcing-upcaster.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：聚合仓储。
@@ -57,6 +70,11 @@ export interface LoadedDemandEventSourcingAggregate {
 export interface AuditedDemandEventSourcingAggregate {
   readonly aggregate: Readonly<DemandEventSourcingAggregate>;
   readonly replayedCommitCount: number;
+}
+
+export interface LocatedTargetTaskPlannedEvent {
+  readonly storedEvent: Readonly<DemandEventSourcingStoredEvent>;
+  readonly event: Readonly<TargetTaskPlannedUncommittedEvent>;
 }
 
 export type DemandEventSourcingRepositoryErrorReason =
@@ -277,6 +295,80 @@ export class DemandEventSourcingRepository {
       aggregate: replayCommits(null, stream.commits),
       replayedCommitCount: stream.commits.length,
     });
+  }
+
+  /**
+   * 完整审计事件流后，按不可变 TaskPackage 身份定位唯一规划事件。
+   *
+   * 本查询只为可重建投影提供权威来源；它不读取投影文件，也不把 Aggregate 摘要
+   * 反向扩展成 TaskPackage 内容。
+   */
+  async findTargetTaskPlannedEvent(
+    taskPackageIdValue: unknown,
+    options?: { readonly signal?: AbortSignal },
+  ): Promise<Readonly<LocatedTargetTaskPlannedEvent> | null> {
+    const signal = parseSignal(options);
+    let taskPackageId: WakeflowDurableId<"task-package">;
+    try {
+      taskPackageId = parseWakeflowDurableIdOfKind(
+        taskPackageIdValue,
+        "task-package",
+        "$taskPackageId",
+      );
+    } catch (error: unknown) {
+      if (error instanceof WakeflowDurableIdError) {
+        fail("input", "$taskPackageId");
+      }
+      throw error;
+    }
+    let stream;
+    try {
+      stream = await this.#eventStore.readCommits(
+        signal === undefined ? undefined : { signal },
+      );
+    } catch (error: unknown) {
+      mapStoreError(error);
+    }
+    if (stream.commits.length === 0) return null;
+    const aggregate = replayCommits(null, stream.commits);
+    let located: Readonly<LocatedTargetTaskPlannedEvent> | undefined;
+    for (const commit of stream.commits) {
+      for (const storedEvent of commit.events) {
+        let event;
+        try {
+          event = upcastDemandEventSourcingStoredEvent(storedEvent);
+        } catch (error: unknown) {
+          if (error instanceof DemandEventSourcingUpcasterError) {
+            fail("stream", "$events");
+          }
+          throw error;
+        }
+        if (
+          event.eventType !== "tasking.target-task-planned"
+          || event.data.taskPackage.taskPackageId !== taskPackageId
+        ) {
+          continue;
+        }
+        if (located !== undefined) fail("stream", "$events");
+        located = Object.freeze({ storedEvent, event });
+      }
+    }
+    if (located === undefined) return null;
+    const taskPackage = located.event.data.taskPackage;
+    const summary = aggregate.state.targetTasks.find(
+      (entry) => entry.taskPackageId === taskPackageId,
+    );
+    if (
+      summary === undefined
+      || summary.targetTaskId !== taskPackage.targetTaskId
+      || summary.taskPackageDigest !== computeTaskPackageDigest(taskPackage)
+      || summary.repositoryId !== taskPackage.assignment.repositoryId
+      || summary.windowId !== taskPackage.assignment.windowId
+      || located.storedEvent.streamRevision > aggregate.streamRevision
+    ) {
+      fail("stream", "$events");
+    }
+    return located;
   }
 
   /** 仅为命令重试解析 `commitId`；普通加载不会因此扫描历史。 */

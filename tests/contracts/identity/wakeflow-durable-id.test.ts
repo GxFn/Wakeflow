@@ -32,8 +32,6 @@ const RETIRED_DURABLE_ID_KINDS = [
   "preservation",
   "review-candidate",
   "target-result",
-  "target-task",
-  "task-package",
   "test-attempt",
   "test-card",
 ] as const;

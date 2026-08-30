@@ -22,11 +22,13 @@ import {
   DemandEventSourcingRepository,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
+import {
+  createTaskPackageFixture,
+  TASKING_AUTHORITY_DIGEST,
+  TASKING_DEMAND_ID,
+} from "../tasking/task-package.fixture.js";
 
-const DEMAND_ID = parseWakeflowDurableIdOfKind(
-  "demand_11111111-1111-4111-8111-111111111111",
-  "demand",
-);
+const DEMAND_ID = TASKING_DEMAND_ID;
 const EVENT_ID = parseWakeflowDurableIdOfKind(
   "demand-event_22222222-2222-4222-8222-222222222222",
   "demand-event",
@@ -43,10 +45,18 @@ const OTHER_COMMIT_ID = parseWakeflowDurableIdOfKind(
   "demand-event-commit_44444444-4444-4444-8444-444444444444",
   "demand-event-commit",
 );
+const PLAN_EVENT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event_66666666-6666-4666-8666-666666666666",
+  "demand-event",
+);
+const PLAN_COMMIT_ID = parseWakeflowDurableIdOfKind(
+  "demand-event-commit_77777777-7777-4777-8777-777777777777",
+  "demand-event-commit",
+);
 const RECORDED_AT = parseUtcInstant("2026-08-26T10:00:00.000Z");
 const CANCELLED_AT = parseUtcInstant("2026-08-26T11:00:00.000Z");
 const IDENTITY_DIGEST = parseSha256Digest(`sha256:${"a".repeat(64)}`);
-const AUTHORITY_DIGEST = parseSha256Digest(`sha256:${"b".repeat(64)}`);
+const AUTHORITY_DIGEST = TASKING_AUTHORITY_DIGEST;
 
 const COMMAND = Object.freeze({
   commandType: "publication.publish-demand" as const,
@@ -143,6 +153,32 @@ test("Demand Event Sourcing Command Handler 执行 load-decide-append 并按 com
       ),
     );
     equal((await eventStore.readCommits()).commits.length, 1);
+
+    const taskPackage = createTaskPackageFixture();
+    const planCommand = Object.freeze({
+      commandType: "tasking.plan-target-task",
+      commandVersion: 1 as const,
+      eventId: PLAN_EVENT_ID,
+      taskPackage,
+    });
+    const planned = await executeDemandEventSourcingCommand(repository, planCommand, {
+      commitId: PLAN_COMMIT_ID,
+      expectedStreamRevision: 1,
+    });
+    equal(planned.disposition, "committed");
+    equal(planned.aggregate.streamRevision, 2);
+    equal(planned.aggregate.lastEvent.eventType, "tasking.target-task-planned");
+    equal(planned.aggregate.state.targetTasks.length, 1);
+    equal((await repository.audit()).aggregate.state.targetTasks.length, 1);
+
+    const retriedPlan = await executeDemandEventSourcingCommand(
+      repository,
+      planCommand,
+      { commitId: PLAN_COMMIT_ID, expectedStreamRevision: 1 },
+    );
+    equal(retriedPlan.disposition, "idempotent");
+    equal(retriedPlan.aggregate.streamRevision, 2);
+    equal((await eventStore.readCommits()).commits.length, 2);
   } finally {
     await root.close();
     rmSync(fixtureRoot, { recursive: true, force: true });

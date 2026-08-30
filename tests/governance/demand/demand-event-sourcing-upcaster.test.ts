@@ -11,6 +11,10 @@ import {
   upcastDemandEventSourcingStoredEvent,
   DemandEventSourcingUpcasterError,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-upcaster.js";
+import {
+  createTaskPackageFixture,
+  TASKING_DEMAND_ID,
+} from "../tasking/task-package.fixture.js";
 
 const EVENT = Object.freeze({
   artifactKind: "wakeflow-demand-event-sourcing-event" as const,
@@ -52,6 +56,31 @@ test("Demand Event Sourcing upcaster 显式路由 eventType + eventVersion", () 
   if (cancelled.eventType === "lifecycle.demand-cancelled") {
     equal(cancelled.data.reason, "用户终止该 Demand");
   }
+
+  const taskPackage = createTaskPackageFixture();
+  const planned = upcastDemandEventSourcingStoredEvent({
+    ...EVENT,
+    demandId: TASKING_DEMAND_ID,
+    recordedAt: taskPackage.createdAt,
+    eventType: "tasking.target-task-planned",
+    data: { taskPackage },
+  });
+  equal(planned.eventType, "tasking.target-task-planned");
+  if (planned.eventType === "tasking.target-task-planned") {
+    equal(planned.data.taskPackage.taskPackageId, taskPackage.taskPackageId);
+  }
+  throws(
+    () => upcastDemandEventSourcingStoredEvent({
+      ...EVENT,
+      demandId: TASKING_DEMAND_ID,
+      eventType: "tasking.target-task-planned",
+      data: { taskPackage },
+    }),
+    (error: unknown) => (
+      error instanceof DemandEventSourcingUpcasterError
+      && error.reason === "event"
+    ),
+  );
 
   throws(
     () => upcastDemandEventSourcingStoredEvent({ ...EVENT, eventVersion: 2 }),

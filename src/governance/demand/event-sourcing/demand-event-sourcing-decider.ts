@@ -23,10 +23,16 @@ import {
 import {
   cancelDemandAggregateState,
   createInitialDemandAggregateState,
+  planTargetTaskInDemandAggregateState,
   parseDemandAggregateState,
   DemandAggregateStateError,
   type DemandAggregateState,
 } from "../model/demand-aggregate-state.js";
+import {
+  parseTaskPackage,
+  TaskPackageError,
+  type TaskPackage,
+} from "../../tasking/task-package.js";
 import {
   parseDemandUncommittedEvent,
   DemandEventSourcingEventError,
@@ -60,9 +66,17 @@ export interface CancelDemandCommand {
   readonly reason: string;
 }
 
+export interface PlanTargetTaskCommand {
+  readonly commandType: "tasking.plan-target-task";
+  readonly commandVersion: 1;
+  readonly eventId: WakeflowDurableId<"demand-event">;
+  readonly taskPackage: Readonly<TaskPackage>;
+}
+
 export type DemandEventSourcingCommand =
   | PublishDemandCommand
-  | CancelDemandCommand;
+  | CancelDemandCommand
+  | PlanTargetTaskCommand;
 
 export type DemandEventSourcingDecisionErrorReason =
   | "input"
@@ -70,6 +84,7 @@ export type DemandEventSourcingDecisionErrorReason =
   | "time"
   | "digest"
   | "text"
+  | "task-package"
   | "state"
   | "identity"
   | "transition"
@@ -81,6 +96,7 @@ const ERROR_MESSAGES = {
   "time": "Demand Event Sourcing command contains an invalid recorded time.",
   "digest": "Demand Event Sourcing command contains an invalid digest.",
   "text": "Demand Event Sourcing command contains non-canonical text.",
+  "task-package": "Demand Event Sourcing command contains an invalid TaskPackage.",
   "state": "Demand Event Sourcing Decider received an invalid aggregate state.",
   "identity": "Demand Event Sourcing command does not belong to the aggregate.",
   "transition": "Demand Event Sourcing command or event is not admitted from the current state.",
@@ -119,6 +135,12 @@ const CANCEL_FIELDS = Object.freeze([
   "eventId",
   "reason",
   "recordedAt",
+] as const);
+const PLAN_TARGET_TASK_FIELDS = Object.freeze([
+  "commandType",
+  "commandVersion",
+  "eventId",
+  "taskPackage",
 ] as const);
 const CONTROL_EXCEPT_LF_PATTERN =
   /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
@@ -227,6 +249,25 @@ export function parseDemandEventSourcingCommand(
     });
   }
 
+  if (base.commandType === "tasking.plan-target-task") {
+    const command = exactCommand(base, PLAN_TARGET_TASK_FIELDS);
+    let taskPackage: Readonly<TaskPackage>;
+    try {
+      taskPackage = parseTaskPackage(command.taskPackage);
+    } catch (error: unknown) {
+      if (error instanceof TaskPackageError) {
+        fail("task-package", "$/taskPackage");
+      }
+      throw error;
+    }
+    return Object.freeze({
+      commandType: "tasking.plan-target-task",
+      commandVersion: 1,
+      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+      taskPackage,
+    });
+  }
+
   fail("input", "$/commandType");
 }
 
@@ -282,6 +323,26 @@ export function decideDemandEventSourcingCommand(
   }
 
   if (state === null) fail("transition", "$state");
+  if (command.commandType === "tasking.plan-target-task") {
+    if (state.demandId !== command.taskPackage.demandId) {
+      fail("identity", "$/taskPackage/demandId");
+    }
+    try {
+      planTargetTaskInDemandAggregateState(state, command.taskPackage);
+    } catch (error: unknown) {
+      if (error instanceof DemandAggregateStateError) {
+        fail("transition", "$state/targetTasks");
+      }
+      throw error;
+    }
+    return singleEvent(parseDemandUncommittedEvent({
+      eventId: command.eventId,
+      demandId: command.taskPackage.demandId,
+      recordedAt: command.taskPackage.createdAt,
+      eventType: "tasking.target-task-planned",
+      data: { taskPackage: command.taskPackage },
+    }));
+  }
   if (state.demandId !== command.demandId) fail("identity", "$/demandId");
   if (state.lifecycle !== "active") fail("transition", "$state/lifecycle");
   return singleEvent(parseDemandUncommittedEvent({
@@ -309,10 +370,26 @@ export function evolveDemandEventSourcingState(
 
   if (event.eventType === "publication.demand-published") {
     if (state !== null) fail("transition", "$state");
-    return createInitialDemandAggregateState(event.demandId);
+    return createInitialDemandAggregateState(
+      event.demandId,
+      event.data.authorityDigest,
+    );
   }
   if (state === null) fail("transition", "$state");
   if (state.demandId !== event.demandId) fail("identity", "$/demandId");
+  if (event.eventType === "tasking.target-task-planned") {
+    try {
+      return planTargetTaskInDemandAggregateState(
+        state,
+        event.data.taskPackage,
+      );
+    } catch (error: unknown) {
+      if (error instanceof DemandAggregateStateError) {
+        fail("transition", "$state/targetTasks");
+      }
+      throw error;
+    }
+  }
   try {
     return cancelDemandAggregateState(state);
   } catch (error: unknown) {

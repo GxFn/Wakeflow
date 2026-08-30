@@ -14,6 +14,8 @@ export const WAKEFLOW_DURABLE_ID_KINDS = Object.freeze([
   "repository",
   "requirement",
   "surface",
+  "task-package",
+  "target-task",
   "window"
 ] as const);
 

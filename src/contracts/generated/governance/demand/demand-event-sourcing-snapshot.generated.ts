@@ -33,7 +33,20 @@ export interface WakeflowDemandAggregateState {
 artifactKind: "wakeflow-demand-aggregate-state"
 schemaVersion: 1
 demandId: string
+authorityDigest: WakeflowSha256DigestText
 lifecycle: ("active" | "cancelled")
+/**
+ * @maxItems 10000
+ */
+targetTasks: TargetTask[]
+}
+export interface TargetTask {
+targetTaskId: string
+taskPackageId: string
+taskPackageDigest: WakeflowSha256DigestText
+repositoryId: string
+windowId: string
+phase: "planned"
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */

@@ -97,10 +97,18 @@ export type WakeflowMutableSnapshotProcessingContract =
     "owner-forward-recovery"
   >;
 
+/**
+ * 从权威来源重建的查询投影。
+ *
+ * 固定身份槽位可选择 `exclusive-create`，单一 current view 可选择
+ * `deterministic-rewrite`；声明必须显式选择自身形态，合同不会把两者合成为隐式 upsert。
+ */
 export type WakeflowDerivedProjectionProcessingContract =
   ResourceProcessingContract<
     "derived-projection",
-    readonly ["deterministic-rewrite"],
+    | readonly ["exclusive-create"]
+    | readonly ["deterministic-rewrite"]
+    | readonly ["exclusive-create", "deterministic-rewrite"],
     "rebuild-from-authority"
   >;
 
@@ -250,8 +258,11 @@ const ROLE_POLICIES = Object.freeze({
   }),
   "derived-projection": Object.freeze({
     recoveryStrategy: "rebuild-from-authority",
-    allowedRecipes: Object.freeze(["deterministic-rewrite"] as const),
-    requiredRecipes: Object.freeze(["deterministic-rewrite"] as const),
+    allowedRecipes: Object.freeze([
+      "exclusive-create",
+      "deterministic-rewrite",
+    ] as const),
+    requiredRecipes: Object.freeze([] as const),
   }),
   "derived-checkpoint": Object.freeze({
     recoveryStrategy: "rebuild-from-authority",
@@ -471,7 +482,10 @@ export type WakeflowResourceOperation =
       "mutable-snapshot",
       "exclusive-create" | "exact-source-replace"
     >
-  | ResourceMutationOperation<"derived-projection", "deterministic-rewrite">
+  | ResourceMutationOperation<
+      "derived-projection",
+      "exclusive-create" | "deterministic-rewrite"
+    >
   | ResourceMutationOperation<"derived-checkpoint", "exclusive-create">
   | ResourceMutationOperation<
       "managed-integration-text",

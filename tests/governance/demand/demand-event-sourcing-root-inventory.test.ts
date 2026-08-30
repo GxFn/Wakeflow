@@ -32,12 +32,44 @@ test("Demand Event Sourcing root inventory 同时证明允许项与未知项不�
     writeFileSync(path.join(fixtureRoot, "identity.json"), "{}\n", { mode: 0o600 });
     writeFileSync(path.join(fixtureRoot, "authority.json"), "{}\n", { mode: 0o600 });
     mkdirSync(path.join(fixtureRoot, "artifacts"), { mode: 0o700 });
+    mkdirSync(path.join(fixtureRoot, "artifacts", "task-packages"), {
+      mode: 0o700,
+    });
     mkdirSync(path.join(fixtureRoot, "transactions"), { mode: 0o700 });
 
     const inventory = await inspectDemandEventSourcingRootInventory(root);
     equal(inventory.commitCount, 0);
     equal(inventory.snapshotCount, 0);
     equal(inventory.artifactCount, 0);
+
+    const projectionPath = path.join(
+      fixtureRoot,
+      "artifacts",
+      "task-packages",
+      "task-package_11111111-1111-4111-8111-111111111111.json",
+    );
+    writeFileSync(projectionPath, "{}\n", { mode: 0o600 });
+    equal(
+      (await inspectDemandEventSourcingRootInventory(root)).artifactCount,
+      1,
+    );
+    rmSync(projectionPath);
+
+    const invalidProjectionPath = path.join(
+      fixtureRoot,
+      "artifacts",
+      "task-packages",
+      "foreign.json",
+    );
+    writeFileSync(invalidProjectionPath, "{}\n", { mode: 0o600 });
+    await rejects(
+      inspectDemandEventSourcingRootInventory(root),
+      (error: unknown) => (
+        error instanceof DemandEventSourcingRootInventoryError
+        && error.reason === "tree-shape"
+      ),
+    );
+    rmSync(invalidProjectionPath);
 
     writeFileSync(path.join(fixtureRoot, "unknown.txt"), "not-owned\n", {
       mode: 0o600,

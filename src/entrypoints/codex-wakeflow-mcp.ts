@@ -11,13 +11,16 @@ import {
   createWakeflowPublicMcpServer,
 } from "./wakeflow-public-mcp-server.js";
 import {
+  executeTargetTaskPlanningPublicRequest,
+} from "../governance/tasking/target-task-planning-public-coordinator.js";
+import {
   runWakeflowMcpStdio,
 } from "./wakeflow-mcp-stdio.js";
 
 /** Codex 制品内固定的 MCP server identity；版本由制品装配入口注入。 */
 const CODEX_WAKEFLOW_MCP_SERVER_NAME = "wakeflow-codex" as const;
 
-/** 创建固定组合Codex Maintenance与Window Binding能力的MCP server。 */
+/** 创建固定组合 Maintenance、Tasking 与 Window Binding 能力的 Codex MCP server。 */
 export function createCodexWakeflowMcpServer(
   serverVersion: string,
 ): McpServer {
@@ -25,6 +28,7 @@ export function createCodexWakeflowMcpServer(
     serverName: CODEX_WAKEFLOW_MCP_SERVER_NAME,
     serverVersion,
     executeMaintenance: executeCodexWakeflowMaintenance,
+    planTargetTask: executeTargetTaskPlanningPublicRequest,
     registerWindowHostBinding:
       executeCodexWakeflowWindowHostBindingRegistration,
   });

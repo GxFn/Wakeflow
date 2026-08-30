@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:target-task-planned-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_TASK_PLANNED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowTargetTaskPlannedEventDataV1",
+  "description": "tasking.target-task-planned persisted event v1 的严格 payload。",
+  "$comment": "完整 TaskPackage 是已发生的任务规划事实；事件流是权威，后续同 ID 文件只是可重建投影。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "taskPackage"
+  ],
+  "properties": {
+    "taskPackage": {
+      "$ref": "urn:wakeflow:governance:tasking:task-package:v1"
+    }
+  }
+}

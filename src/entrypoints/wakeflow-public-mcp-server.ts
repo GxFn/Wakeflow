@@ -23,6 +23,14 @@ import {
   type WakeflowWindowHostBindingRegistrationResultV1,
 } from "../contracts/generated/entrypoints/wakeflow-window-host-binding-registration-result.generated.js";
 import {
+  WAKEFLOW_TARGET_TASK_PLANNING_REQUEST_SCHEMA,
+  type WakeflowTargetTaskPlanningRequestV1,
+} from "../contracts/generated/entrypoints/wakeflow-target-task-planning-request.generated.js";
+import {
+  WAKEFLOW_TARGET_TASK_PLANNING_RESULT_SCHEMA,
+  type WakeflowTargetTaskPlanningResultV1,
+} from "../contracts/generated/entrypoints/wakeflow-target-task-planning-result.generated.js";
+import {
   canonicalizeJson,
 } from "../foundation/data/canonical-json.js";
 import {
@@ -45,14 +53,23 @@ import {
   WakeflowWindowHostBindingPublicCoordinatorError,
   type WakeflowWindowHostBindingPublicResult,
 } from "../workspace/window-runtime/wakeflow-window-host-binding-public-coordinator.js";
+import {
+  TargetTaskPlanningPublicContractError,
+  WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+} from "../governance/tasking/target-task-planning-public-contract.js";
+import {
+  TargetTaskPlanningPublicCoordinatorError,
+  type TargetTaskPlanningPublicResult,
+} from "../governance/tasking/target-task-planning-public-coordinator.js";
 
 /**
  * Wakeflow Entrypoint / MCP：官方 MCP SDK 与当前真实公共 owners 之间的薄适配层。
  *
  * JSON Schema 是每个工具的可移植 wire 权威，官方 SDK 负责协议、tools/list、
  * tools/call 与调用前结构校验。领域 owner 仍独立复验容量、关系、根作用域和 mutation
- * authority。当前只发布已闭环的 Maintenance 与 Window Host Binding registration；
- * 不注册未来业务占位工具，也不执行窗口创建、消息发送、Git worktree 或其他宿主效果。
+ * authority。当前只发布已闭环的 Maintenance、Window Host Binding registration 与
+ * Target Task Planning；不注册未来业务占位工具，也不执行窗口创建、消息发送、Git
+ * worktree 或其他宿主效果。
  */
 
 type WakeflowMaintenanceMcpExecutor = (
@@ -63,10 +80,15 @@ type WakeflowWindowHostBindingMcpExecutor = (
   value: unknown,
 ) => Promise<Readonly<WakeflowWindowHostBindingPublicResult>>;
 
+type WakeflowTargetTaskPlanningMcpExecutor = (
+  value: unknown,
+) => Promise<Readonly<TargetTaskPlanningPublicResult>>;
+
 interface CreateWakeflowPublicMcpServerOptions {
   readonly serverName: string;
   readonly serverVersion: string;
   readonly executeMaintenance: WakeflowMaintenanceMcpExecutor;
+  readonly planTargetTask: WakeflowTargetTaskPlanningMcpExecutor;
   readonly registerWindowHostBinding: WakeflowWindowHostBindingMcpExecutor;
 }
 
@@ -75,6 +97,7 @@ type WakeflowPublicMcpServerConfigurationErrorReason =
   | "server-name"
   | "server-version"
   | "maintenance-executor"
+  | "target-task-planning-executor"
   | "window-host-binding-executor";
 
 const CONFIGURATION_ERROR_MESSAGES = {
@@ -82,6 +105,8 @@ const CONFIGURATION_ERROR_MESSAGES = {
   "server-name": "Wakeflow MCP server name is invalid.",
   "server-version": "Wakeflow MCP server version is invalid.",
   "maintenance-executor": "Wakeflow MCP Maintenance executor is invalid.",
+  "target-task-planning-executor":
+    "Wakeflow MCP Target Task Planning executor is invalid.",
   "window-host-binding-executor":
     "Wakeflow MCP Window Host Binding executor is invalid.",
 } as const satisfies Readonly<Record<
@@ -114,6 +139,7 @@ interface WakeflowMcpErrorEnvelope {
     readonly causeReason?: string;
     readonly operationId?: string;
     readonly bindingAuthority?: "unchanged" | "current" | "unknown";
+    readonly eventAuthority?: "unchanged" | "current" | "unknown";
   }>;
 }
 
@@ -150,6 +176,7 @@ function parseServerOptions(
   }
   const fields = Object.freeze([
     "executeMaintenance",
+    "planTargetTask",
     "registerWindowHostBinding",
     "serverName",
     "serverVersion",
@@ -170,6 +197,12 @@ function parseServerOptions(
     failConfiguration("maintenance-executor");
   }
   if (
+    typeof record.planTargetTask !== "function"
+    || types.isProxy(record.planTargetTask)
+  ) {
+    failConfiguration("target-task-planning-executor");
+  }
+  if (
     typeof record.registerWindowHostBinding !== "function"
     || types.isProxy(record.registerWindowHostBinding)
   ) {
@@ -180,6 +213,8 @@ function parseServerOptions(
     serverVersion,
     executeMaintenance:
       record.executeMaintenance as WakeflowMaintenanceMcpExecutor,
+    planTargetTask:
+      record.planTargetTask as WakeflowTargetTaskPlanningMcpExecutor,
     registerWindowHostBinding:
       record.registerWindowHostBinding as WakeflowWindowHostBindingMcpExecutor,
   });
@@ -228,8 +263,32 @@ function windowHostBindingError(error: unknown) {
   return null;
 }
 
+function targetTaskPlanningError(error: unknown) {
+  if (error instanceof TargetTaskPlanningPublicContractError) {
+    return Object.freeze({
+      code: error.code,
+      reason: error.reason,
+      path: error.path,
+    });
+  }
+  if (error instanceof TargetTaskPlanningPublicCoordinatorError) {
+    return Object.freeze({
+      code: error.code,
+      reason: error.reason,
+      ...(error.causeCode === null ? {} : { causeCode: error.causeCode }),
+      ...(error.causeReason === null
+        ? {}
+        : { causeReason: error.causeReason }),
+      eventAuthority: error.eventAuthority,
+    });
+  }
+  return null;
+}
+
 function errorEnvelope(tool: string, error: unknown): WakeflowMcpErrorEnvelope {
-  const known = maintenanceError(error) ?? windowHostBindingError(error);
+  const known = maintenanceError(error)
+    ?? windowHostBindingError(error)
+    ?? targetTaskPlanningError(error);
   return Object.freeze({
     kind: "WakeflowMcpError",
     schemaVersion: 1,
@@ -253,7 +312,7 @@ function failedToolResult(tool: string, error: unknown): CallToolResult {
   };
 }
 
-/** 创建只注册当前两个真实公共工具的官方 MCP server 实例。 */
+/** 创建只注册当前三个真实公共工具的官方 MCP server 实例。 */
 export function createWakeflowPublicMcpServer(
   options: Readonly<CreateWakeflowPublicMcpServerOptions>,
 ): McpServer {
@@ -268,6 +327,7 @@ export function createWakeflowPublicMcpServer(
       "Apply must return the exact confirmation and digest produced by that preview.",
       "Wakeflow never performs host effects: the Agent executes each returned window launch intent with host capabilities.",
       `After a host window is created, pass its exact opaque result to ${WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME}.`,
+      `Call ${WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME} in preview mode, review its complete plan, then apply that exact plan and digest.`,
     ].join(" "),
   });
 
@@ -305,6 +365,49 @@ export function createWakeflowPublicMcpServer(
         };
       } catch (error: unknown) {
         return failedToolResult(WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME, error);
+      }
+    },
+  );
+
+  server.registerTool(
+    WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+    {
+      title: "Plan Wakeflow Target Task",
+      description: [
+        "Preview or apply one complete immutable implementation TaskPackage for an existing Demand.",
+        "Preview is read-only and allocates all typed identities. Apply revalidates current Config, Demand Authority, Ledger references, and stream position.",
+        "Apply only appends the planning event and materializes its TaskPackage projection; it never performs Delivery or host effects.",
+      ].join(" "),
+      inputSchema:
+        fromJsonSchema<WakeflowTargetTaskPlanningRequestV1>(
+          WAKEFLOW_TARGET_TASK_PLANNING_REQUEST_SCHEMA,
+        ),
+      outputSchema:
+        fromJsonSchema<WakeflowTargetTaskPlanningResultV1>(
+          WAKEFLOW_TARGET_TASK_PLANNING_RESULT_SCHEMA,
+        ),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (request) => {
+      try {
+        const result = await admitted.planTargetTask(request);
+        return {
+          content: [{
+            type: "text" as const,
+            text: canonicalizeJson(result, "$result"),
+          }],
+          structuredContent: result,
+        };
+      } catch (error: unknown) {
+        return failedToolResult(
+          WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+          error,
+        );
       }
     },
   );

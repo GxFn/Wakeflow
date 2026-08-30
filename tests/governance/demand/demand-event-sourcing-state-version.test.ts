@@ -18,6 +18,7 @@ test("Demand Event Sourcing state-model version 独立于 event version", () => 
   equal(DEMAND_EVENT_SOURCING_EVENT_TYPES.join(","), [
     "lifecycle.demand-cancelled",
     "publication.demand-published",
+    "tasking.target-task-planned",
   ].join(","));
   equal(parseDemandEventSourcingStateModelVersion(1), 1);
   assertSupportedDemandEventSourcingStateModelVersion(

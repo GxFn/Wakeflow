@@ -44,14 +44,23 @@ import {
   createDemandEventSourcingSnapshotResourceDeclaration,
   createDemandEventSourcingResourceCatalog,
   createDemandEventStreamCommitResourceDeclaration,
+  createTaskPackageProjectionResourceDeclaration,
   WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG,
 } from "../../../src/governance/demand/demand-resource-catalog.js";
+import {
+  taskPackageProjectionRef,
+  TASK_PACKAGE_PROJECTIONS_ROOT_REF,
+} from "../../../src/governance/tasking/task-package-projection-paths.js";
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_11111111-1111-4111-8111-111111111111",
   "demand",
 );
 const COMMIT_SEQUENCE = parseDemandEventCommitSequence(1);
+const TASK_PACKAGE_ID = parseWakeflowDurableIdOfKind(
+  "task-package_22222222-2222-4222-8222-222222222222",
+  "task-package",
+);
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;
@@ -199,6 +208,13 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
         processing: "directory-container:materialize-directory",
       },
       {
+        declarationId: `${prefix}.task-packages-root`,
+        ownerId: "demand-tasking-projection",
+        relativePath: `${rootRef}/${TASK_PACKAGE_PROJECTIONS_ROOT_REF}`,
+        mode: "0700",
+        processing: "directory-container:materialize-directory",
+      },
+      {
         declarationId: `${prefix}.transactions-root`,
         ownerId: "demand-event-sourcing",
         relativePath: `${rootRef}/${DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF}`,
@@ -228,7 +244,7 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
       },
     ],
   );
-  equal(catalog.length, 12);
+  equal(catalog.length, 13);
   equal(
     catalog.every((entry) =>
       entry.family === "demand"
@@ -252,7 +268,7 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
   assertDeepFrozen(catalog);
   deepEqual(createDemandEventSourcingResourceCatalog(DEMAND_ID), catalog);
 
-  const publicationMarker = catalog[9];
+  const publicationMarker = catalog[10];
   deepEqual(
     admitWakeflowResourceOperation(
       publicationMarker.processing,
@@ -285,6 +301,41 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
     caught = error;
   }
   equal(caught instanceof WakeflowDurableIdError, true);
+});
+
+test("TaskPackage projection declaration remains derived and create-only", () => {
+  const declaration = createTaskPackageProjectionResourceDeclaration(
+    DEMAND_ID,
+    TASK_PACKAGE_ID,
+  );
+  deepEqual({
+    declarationId: declaration.declarationId,
+    ownerId: declaration.ownerId,
+    relativePath: declaration.placement.relativePath,
+    processing: declaration.processing,
+  }, {
+    declarationId: `demand.tasking.${DEMAND_ID}.task-package.${TASK_PACKAGE_ID}`,
+    ownerId: "demand-tasking-projection",
+    relativePath: `${demandFinalRootRef(DEMAND_ID)}/${taskPackageProjectionRef(TASK_PACKAGE_ID)}`,
+    processing: {
+      kind: "resource",
+      role: "derived-projection",
+      allowedMutationRecipes: ["exclusive-create"],
+      recoveryStrategy: "rebuild-from-authority",
+    },
+  });
+  deepEqual(
+    admitWakeflowResourceOperation(
+      declaration.processing,
+      "exclusive-create",
+    ),
+    {
+      kind: "resource-mutation",
+      role: "derived-projection",
+      recipe: "exclusive-create",
+    },
+  );
+  assertDeepFrozen(declaration);
 });
 
 test("Demand commit and snapshot declarations keep authority and checkpoint distinct", () => {

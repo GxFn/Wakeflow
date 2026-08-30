@@ -31,19 +31,25 @@ import {
   DEMAND_FILE_EVENT_STORE_FILE_MODE,
   DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
 } from "./demand-file-event-store.js";
+import {
+  parseTaskPackageProjectionFileName,
+  TaskPackageProjectionPathError,
+  TASK_PACKAGE_PROJECTIONS_ROOT_REF,
+} from "../../tasking/task-package-projection-paths.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：健康 Demand 根目录的排他资源清单。
  *
  * 本能力不仅验证必需资源存在，还证明根目录和事件溯源子树中不存在未知项。提交记录
  * 和快照内容由各自存储验证；本模块负责目录层级、文件系统节点类型、私有权限位、
- * 健康状态下候选目录与事务目录为空，以及当前 RH-2 的空 Artifacts 边界。
+ * 健康状态下候选目录与事务目录为空，并对可重建 TaskPackage 投影执行封闭命名和
+ * 私有节点策略检查。投影内容与事件的对应关系由 TaskPackage projection store 验证。
  */
 
 export interface DemandEventSourcingRootInventory {
   readonly commitCount: number;
   readonly snapshotCount: number;
-  readonly artifactCount: 0;
+  readonly artifactCount: number;
   readonly transactionCount: 0 | 1;
   readonly appendCandidateCount: 0;
   readonly nodes: Readonly<{
@@ -55,6 +61,7 @@ export interface DemandEventSourcingRootInventory {
     readonly snapshots: Readonly<FileNodeSnapshot>;
     readonly appendCandidates: Readonly<FileNodeSnapshot>;
     readonly artifacts: Readonly<FileNodeSnapshot>;
+    readonly taskPackages: Readonly<FileNodeSnapshot>;
     readonly transactions: Readonly<FileNodeSnapshot>;
   }>;
 }
@@ -111,6 +118,7 @@ const EVENT_SOURCING_NAMES = Object.freeze([
   "commits",
   "snapshots",
 ] as const);
+const ARTIFACT_NAMES = Object.freeze(["task-packages"] as const);
 
 function fail(
   reason: DemandEventSourcingRootInventoryErrorReason,
@@ -325,6 +333,21 @@ export async function inspectDemandEventSourcingRootInventory(
     signal,
     requiredEntryNode(before, "artifacts", "$artifacts"),
   );
+  assertDirectory(artifacts.directoryNode, "$artifacts");
+  exactNames(artifacts, ARTIFACT_NAMES, "$artifacts");
+  const taskPackagesNode = requiredEntryNode(
+    artifacts,
+    "task-packages",
+    "$task-packages",
+  );
+  assertDirectory(taskPackagesNode, "$task-packages");
+  const taskPackages = await readResource(
+    root,
+    TASK_PACKAGE_PROJECTIONS_ROOT_REF,
+    DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
+    signal,
+    taskPackagesNode,
+  );
   const transactions = await readResource(
     root,
     DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
@@ -333,7 +356,18 @@ export async function inspectDemandEventSourcingRootInventory(
     requiredEntryNode(before, "transactions", "$transactions"),
   );
   assertEmpty(candidates, "$append-candidates");
-  assertEmpty(artifacts, "$artifacts");
+  assertDirectory(taskPackages.directoryNode, "$task-packages");
+  taskPackages.entries.forEach((entry, index) => {
+    assertFile(entry.node, `$task-packages/${index}`);
+    try {
+      parseTaskPackageProjectionFileName(entry.name);
+    } catch (error: unknown) {
+      if (error instanceof TaskPackageProjectionPathError) {
+        fail("tree-shape", `$task-packages/${index}`);
+      }
+      throw error;
+    }
+  });
   assertDirectory(transactions.directoryNode, "$transactions");
   if (phase === "healthy") {
     if (transactions.entries.length !== 0) fail("tree-shape", "$transactions");
@@ -406,7 +440,7 @@ export async function inspectDemandEventSourcingRootInventory(
   return Object.freeze({
     commitCount: commits.entries.length,
     snapshotCount: snapshots.entries.length,
-    artifactCount: 0,
+    artifactCount: taskPackages.entries.length,
     transactionCount: transactions.entries.length as 0 | 1,
     appendCandidateCount: 0,
     nodes: Object.freeze({
@@ -422,6 +456,7 @@ export async function inspectDemandEventSourcingRootInventory(
       snapshots: snapshots.directoryNode,
       appendCandidates: candidates.directoryNode,
       artifacts: artifacts.directoryNode,
+      taskPackages: taskPackages.directoryNode,
       transactions: transactions.directoryNode,
     }),
   });

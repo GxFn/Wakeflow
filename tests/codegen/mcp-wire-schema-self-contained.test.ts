@@ -86,9 +86,56 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   for (const name of [
     "wakeflow-window-host-binding-registration-request.schema.json",
     "wakeflow-window-host-binding-registration-result.schema.json",
+    "wakeflow-target-task-planning-request.schema.json",
+    "wakeflow-target-task-planning-result.schema.json",
   ]) {
     const schema = readSchema(`src/contracts/schemas/entrypoints/${name}`);
     deepEqual(definition(schema, "sha256Digest"), expectedSha);
     deepEqual(definition(schema, "utcInstant"), expectedUtc);
   }
+
+  const planningRequest = readSchema(
+    "src/contracts/schemas/entrypoints/wakeflow-target-task-planning-request.schema.json",
+  );
+  const planningResult = readSchema(
+    "src/contracts/schemas/entrypoints/wakeflow-target-task-planning-result.schema.json",
+  );
+  for (const sharedDefinition of [
+    "plan",
+    "taskPackage",
+    "authorityMemberReference",
+    "assignment",
+    "boundaries",
+    "acceptanceAnchor",
+    "nonEmptyTextList",
+    "textList",
+    "humanText",
+    "portableResourcePath",
+    "sha256Digest",
+    "utcInstant",
+    "programId",
+    "demandId",
+    "repositoryId",
+    "windowId",
+    "taskPackageId",
+    "targetTaskId",
+    "eventId",
+    "commitId",
+  ]) {
+    deepEqual(
+      definition(planningRequest, sharedDefinition),
+      definition(planningResult, sharedDefinition),
+      `Planning wire definition ${sharedDefinition} must not drift`,
+    );
+  }
+  const domainTaskPackage = readSchema(
+    "src/contracts/schemas/governance/tasking/task-package.schema.json",
+  );
+  const publicTaskPackage = definition(planningRequest, "taskPackage");
+  deepEqual(publicTaskPackage.required, domainTaskPackage.required);
+  deepEqual(
+    Object.keys(publicTaskPackage.properties as Record<string, unknown>).sort(),
+    Object.keys(domainTaskPackage.properties as Record<string, unknown>).sort(),
+    "Planning public TaskPackage fields must mirror the domain contract",
+  );
 });

@@ -149,6 +149,10 @@ function sameInventory(
     )
     && sameFileNodeSnapshot(left.nodes.artifacts, right.nodes.artifacts)
     && sameFileNodeSnapshot(
+      left.nodes.taskPackages,
+      right.nodes.taskPackages,
+    )
+    && sameFileNodeSnapshot(
       left.nodes.transactions,
       right.nodes.transactions,
     );

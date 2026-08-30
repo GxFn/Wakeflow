@@ -22,6 +22,9 @@ import {
 import {
   WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
 } from "../../src/workspace/window-runtime/wakeflow-window-host-binding-public-contract.js";
+import {
+  WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+} from "../../src/governance/tasking/target-task-planning-public-contract.js";
 
 const OUTPUT_RELATIVE = ".build/test-artifacts/typescript-candidates";
 
@@ -197,6 +200,7 @@ test("两个候选入口都通过官方 stdio Client 发布相同技术骨干工
         listed.tools.map((tool) => tool.name).sort(),
         [
           WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+          WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
           WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
         ].sort(),
       );

@@ -29,6 +29,32 @@ import type {
 import {
   WakeflowWindowHostBindingPublicCoordinatorError,
 } from "../../src/workspace/window-runtime/wakeflow-window-host-binding-public-coordinator.js";
+import {
+  WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+} from "../../src/governance/tasking/target-task-planning-public-contract.js";
+import {
+  executeTargetTaskPlanningPublicRequest,
+  TargetTaskPlanningPublicCoordinatorError,
+  type TargetTaskPlanningPublicResult,
+} from "../../src/governance/tasking/target-task-planning-public-coordinator.js";
+import {
+  computeTargetTaskPlanningPlanDigest,
+  createTargetTaskPlanningPlan,
+} from "../../src/governance/tasking/target-task-planning-plan.js";
+import {
+  createTaskPackageFixture,
+  taskPackageDraft,
+  TASKING_DEMAND_ID,
+} from "../governance/tasking/task-package.fixture.js";
+import {
+  parseWakeflowDurableIdOfKind,
+} from "../../src/contracts/identity/wakeflow-durable-id.js";
+import {
+  cleanupTargetTaskPlanningWorkspaceFixture,
+  createTargetTaskPlanningWorkspaceFixture,
+  planningUuidFactory,
+  PLANNING_RECORDED_AT,
+} from "../governance/tasking/target-task-planning-service.fixture.js";
 
 /** 两个工具聚焦测试共用的合法占位摘要。 */
 const ZERO_DIGEST = parseSha256Digest(`sha256:${"0".repeat(64)}`);
@@ -43,6 +69,8 @@ type WakeflowMaintenanceMcpExecutor =
   PublicServerOptions["executeMaintenance"];
 type WakeflowWindowHostBindingMcpExecutor =
   PublicServerOptions["registerWindowHostBinding"];
+type WakeflowTargetTaskPlanningMcpExecutor =
+  PublicServerOptions["planTargetTask"];
 
 function previewResult(): Readonly<WakeflowMaintenancePublicResult> {
   return Object.freeze({
@@ -108,16 +136,66 @@ function bindingResult(): Readonly<WakeflowWindowHostBindingPublicResult> {
   });
 }
 
+function planningPreviewResult(): Readonly<TargetTaskPlanningPublicResult> {
+  const plan = createTargetTaskPlanningPlan({
+    demandId: TASKING_DEMAND_ID,
+    expectedStreamRevision: 1,
+    commitId: parseWakeflowDurableIdOfKind(
+      "demand-event-commit_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "demand-event-commit",
+    ),
+    eventId: parseWakeflowDurableIdOfKind(
+      "demand-event_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "demand-event",
+    ),
+    taskPackage: createTaskPackageFixture(),
+  });
+  return Object.freeze({
+    kind: "WakeflowTargetTaskPlanningPreviewResult",
+    schemaVersion: 1,
+    tool: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+    mode: "preview",
+    status: "ready",
+    plan,
+    planDigest: computeTargetTaskPlanningPlanDigest(plan),
+  }) as unknown as Readonly<TargetTaskPlanningPublicResult>;
+}
+
+function planningPreviewRequest() {
+  const draft = taskPackageDraft();
+  return {
+    root: "/workspace",
+    mode: "preview" as const,
+    demandId: TASKING_DEMAND_ID,
+    taskPackage: {
+      assignment: draft.assignment,
+      workType: draft.workType,
+      objective: draft.objective,
+      confirmedContext: draft.confirmedContext,
+      selectedAuthorityMemberRefs: draft.selectedAuthorityRefs.map(
+        (reference) => reference.memberRef,
+      ),
+      boundaries: draft.boundaries,
+      completionExpectations: draft.completionExpectations,
+      commitExpectation: draft.commitExpectation,
+      acceptanceAnchors: draft.acceptanceAnchors,
+    },
+  };
+}
+
 async function connect(
   t: TestContext,
   executeMaintenance: WakeflowMaintenanceMcpExecutor,
   registerWindowHostBinding: WakeflowWindowHostBindingMcpExecutor =
     async () => bindingResult(),
+  planTargetTask: WakeflowTargetTaskPlanningMcpExecutor =
+    async () => planningPreviewResult(),
 ) {
   const server = createWakeflowPublicMcpServer({
     serverName: "wakeflow-mcp-focused-test",
     serverVersion: "1.0.0-test",
     executeMaintenance,
+    planTargetTask,
     registerWindowHostBinding,
   });
   const client = new Client({
@@ -144,12 +222,14 @@ function textContent(result: CallToolResult): string {
 
 test("MCP composition拒绝Proxy executor与额外配置字段", () => {
   const executeMaintenance = async () => previewResult();
+  const planTargetTask = async () => planningPreviewResult();
   const registerWindowHostBinding = async () => bindingResult();
   throws(
     () => createWakeflowPublicMcpServer({
       serverName: "wakeflow-test",
       serverVersion: "1.0.0-test",
       executeMaintenance,
+      planTargetTask,
       registerWindowHostBinding: new Proxy(
         registerWindowHostBinding,
         {},
@@ -165,6 +245,7 @@ test("MCP composition拒绝Proxy executor与额外配置字段", () => {
       serverName: "wakeflow-test",
       serverVersion: "1.0.0-test",
       executeMaintenance,
+      planTargetTask,
       registerWindowHostBinding,
       extra: true,
     } as never),
@@ -175,7 +256,7 @@ test("MCP composition拒绝Proxy executor与额外配置字段", () => {
   );
 });
 
-test("官方 MCP server 只发布两个已有真实 owner 的 Schema 工具", async (t) => {
+test("官方 MCP server 只发布三个已有真实 owner 的 Schema 工具", async (t) => {
   const calls: unknown[] = [];
   const expected = previewResult();
   const client = await connect(t, async (request) => {
@@ -184,7 +265,7 @@ test("官方 MCP server 只发布两个已有真实 owner 的 Schema 工具", as
   });
 
   const listed = await client.listTools();
-  equal(listed.tools.length, 2);
+  equal(listed.tools.length, 3);
   const tool = listed.tools.find((entry) => (
     entry.name === WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME
   ));
@@ -208,6 +289,144 @@ test("官方 MCP server 只发布两个已有真实 owner 的 Schema 工具", as
   deepEqual(result.structuredContent, expected);
   deepEqual(JSON.parse(textContent(result)), expected);
   deepEqual(calls, [request]);
+});
+
+test("Target Task Planning MCP exposes exact preview/apply schemas and additive idempotency", async (t) => {
+  const calls: unknown[] = [];
+  const expected = planningPreviewResult();
+  const client = await connect(
+    t,
+    async () => previewResult(),
+    async () => bindingResult(),
+    async (request) => {
+      calls.push(request);
+      return expected;
+    },
+  );
+  const listed = await client.listTools();
+  const tool = listed.tools.find((entry) => (
+    entry.name === WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME
+  ));
+  equal(
+    tool?.inputSchema.$id,
+    "urn:wakeflow:entrypoints:target-task-planning-request:v1",
+  );
+  equal(
+    tool?.outputSchema?.$id,
+    "urn:wakeflow:entrypoints:target-task-planning-result:v1",
+  );
+  equal(tool?.annotations?.readOnlyHint, false);
+  equal(tool?.annotations?.destructiveHint, false);
+  equal(tool?.annotations?.idempotentHint, true);
+  equal(tool?.annotations?.openWorldHint, false);
+  equal(JSON.stringify(tool?.inputSchema).includes('"$ref":"urn:'), false);
+
+  const request = planningPreviewRequest();
+  const result = await client.callTool({
+    name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+    arguments: request,
+  });
+  equal(result.isError, undefined);
+  deepEqual(result.structuredContent, expected);
+  deepEqual(JSON.parse(textContent(result)), expected);
+  deepEqual(calls, [request]);
+});
+
+test("official MCP Client completes a real Target Task Planning preview/apply/retry", async (t) => {
+  const fixture = await createTargetTaskPlanningWorkspaceFixture();
+  try {
+    const client = await connect(
+      t,
+      async () => previewResult(),
+      async () => bindingResult(),
+      (request) => executeTargetTaskPlanningPublicRequest(request, {
+        preview: {
+          clock: () => PLANNING_RECORDED_AT,
+          uuidFactory: planningUuidFactory(),
+        },
+      }),
+    );
+    const privateEcho = await client.callTool({
+      name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+      arguments: {
+        root: fixture.workspacePath,
+        mode: "preview",
+        demandId: fixture.request.demandId,
+        taskPackage: {
+          ...fixture.request.taskPackage,
+          objective: `Do not echo ${fixture.workspacePath}/private`,
+        },
+      },
+    });
+    equal(privateEcho.isError, true);
+    equal(textContent(privateEcho).includes(fixture.workspacePath), false);
+
+    const previewCall = await client.callTool({
+      name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+      arguments: {
+        root: fixture.workspacePath,
+        mode: "preview",
+        demandId: fixture.request.demandId,
+        taskPackage: fixture.request.taskPackage,
+      },
+    });
+    equal(previewCall.isError, undefined);
+    equal(textContent(previewCall).includes(fixture.workspacePath), false);
+    const preview = previewCall.structuredContent as {
+      readonly plan: unknown;
+      readonly planDigest: string;
+    };
+    const applyArguments = {
+      root: fixture.workspacePath,
+      mode: "apply",
+      plan: preview.plan,
+      planDigest: preview.planDigest,
+    } as const;
+    const applied = await client.callTool({
+      name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+      arguments: applyArguments,
+    });
+    equal(applied.isError, undefined);
+    equal(textContent(applied).includes(fixture.workspacePath), false);
+    equal(
+      (applied.structuredContent as { disposition: string }).disposition,
+      "committed",
+    );
+    const replayed = await client.callTool({
+      name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+      arguments: applyArguments,
+    });
+    equal(replayed.isError, undefined);
+    equal(
+      (replayed.structuredContent as { disposition: string }).disposition,
+      "idempotent",
+    );
+  } finally {
+    await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
+  }
+});
+
+test("official SDK rejects Target Task Planning extensions before its owner", async (t) => {
+  let calls = 0;
+  const client = await connect(
+    t,
+    async () => previewResult(),
+    async () => bindingResult(),
+    async () => {
+      calls += 1;
+      return planningPreviewResult();
+    },
+  );
+  const result = await client.callTool({
+    name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+    arguments: {
+      ...planningPreviewRequest(),
+      unownedField: true,
+    },
+  });
+  equal(result.isError, true);
+  match(textContent(result), /Input validation error/u);
+  equal(calls, 0);
 });
 
 test("Maintenance MCP Schema接受领域统一的算法前缀摘要", async (t) => {
@@ -428,4 +647,33 @@ test("MCP 显式保留 Binding commit unknown 而不伪装回滚", async (t) => 
   equal(envelope.error.bindingAuthority, "unknown");
   equal(envelope.error.causeReason, "write");
   equal(textContent(result).includes("private-value"), false);
+});
+
+test("MCP 显式保留 Planning event authority current", async (t) => {
+  const client = await connect(
+    t,
+    async () => previewResult(),
+    async () => bindingResult(),
+    async () => {
+      throw new TargetTaskPlanningPublicCoordinatorError(
+        "apply",
+        "wakeflow-task-package-projection-store",
+        "conflict",
+        "current",
+      );
+    },
+  );
+  const result = await client.callTool({
+    name: WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+    arguments: planningPreviewRequest(),
+  });
+  equal(result.isError, true);
+  const envelope = JSON.parse(textContent(result)) as {
+    readonly error: {
+      readonly eventAuthority: string;
+      readonly causeReason: string;
+    };
+  };
+  equal(envelope.error.eventAuthority, "current");
+  equal(envelope.error.causeReason, "conflict");
 });

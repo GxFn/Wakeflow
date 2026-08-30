@@ -35,6 +35,10 @@ import {
   demandPublicationLockRef,
   demandPublicationTransactionRef,
 } from "./publication/demand-publication-paths.js";
+import {
+  taskPackageProjectionRef,
+  TASK_PACKAGE_PROJECTIONS_ROOT_REF,
+} from "../tasking/task-package-projection-paths.js";
 
 /**
  * Wakeflow Governance / Demand：Demand Event Sourcing 职责所有者的资源目录。
@@ -45,6 +49,8 @@ import {
 
 const DEMAND_PUBLICATION_OWNER_ID = "demand-publication" as const;
 const DEMAND_EVENT_SOURCING_OWNER_ID = "demand-event-sourcing" as const;
+const DEMAND_TASKING_PROJECTION_OWNER_ID =
+  "demand-tasking-projection" as const;
 
 function privateDirectoryDeclaration(
   declarationId: string,
@@ -209,6 +215,7 @@ type DemandEventSourcingResourceCatalog = readonly [
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
+  Readonly<WakeflowWorkspaceResourceDeclaration>,
 ];
 
 /**
@@ -282,6 +289,11 @@ export function createDemandEventSourcingResourceCatalog(
       demandChildRef(demandId, DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF),
     ),
     privateDirectoryDeclaration(
+      `${prefix}.task-packages-root`,
+      DEMAND_TASKING_PROJECTION_OWNER_ID,
+      demandChildRef(demandId, TASK_PACKAGE_PROJECTIONS_ROOT_REF),
+    ),
+    privateDirectoryDeclaration(
       `${prefix}.transactions-root`,
       DEMAND_EVENT_SOURCING_OWNER_ID,
       demandChildRef(demandId, DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF),
@@ -305,6 +317,30 @@ export function createDemandEventSourcingResourceCatalog(
       transactionProcessing,
     ),
   ]);
+}
+
+/** 为一个事件权威 TaskPackage 生成按 ID 不可覆盖的可重建投影声明。 */
+export function createTaskPackageProjectionResourceDeclaration(
+  demandValue: unknown,
+  taskPackageValue: unknown,
+): Readonly<WakeflowWorkspaceResourceDeclaration> {
+  const demandId = parseDemandId(demandValue);
+  const taskPackageId = parseWakeflowDurableIdOfKind(
+    taskPackageValue,
+    "task-package",
+    "$taskPackageId",
+  );
+  return privateFileDeclaration(
+    `demand.tasking.${demandId}.task-package.${taskPackageId}`,
+    DEMAND_TASKING_PROJECTION_OWNER_ID,
+    demandChildRef(demandId, taskPackageProjectionRef(taskPackageId)),
+    {
+      kind: "resource",
+      role: "derived-projection",
+      allowedMutationRecipes: ["exclusive-create"],
+      recoveryStrategy: "rebuild-from-authority",
+    },
+  );
 }
 
 /** 为一个物理事件流槽位生成不可变权威提交声明。 */

@@ -8,6 +8,7 @@ import {
   WAKEFLOW_RESOURCE_ROLES,
   WakeflowResourceProcessingContractError,
   type WakeflowDerivedCheckpointProcessingContract,
+  type WakeflowDerivedProjectionProcessingContract,
   type WakeflowMutableSnapshotProcessingContract,
   type WakeflowResourceProcessingContractErrorReason,
 } from "../../../src/foundation/resource/resource-processing-contract.js";
@@ -311,7 +312,7 @@ test("one operation admits exactly one recipe from the resource contract", () =>
   );
 });
 
-test("derived checkpoint is create-only and remains distinct from projection", () => {
+test("derived checkpoint remains distinct from mutable and immutable projections", () => {
   const checkpointInput = {
     kind: "resource",
     role: "derived-checkpoint",
@@ -351,15 +352,27 @@ test("derived checkpoint is create-only and remains distinct from projection", (
     "recipe",
     "$/allowedMutationRecipes/0",
   );
-  expectResourceProcessingError(
-    () => parseWakeflowResourceProcessingContract({
-      kind: "resource",
+  const immutableProjection = {
+    kind: "resource",
+    role: "derived-projection",
+    allowedMutationRecipes: ["exclusive-create"],
+    recoveryStrategy: "rebuild-from-authority",
+  } as const satisfies WakeflowDerivedProjectionProcessingContract;
+  deepEqual(
+    admitWakeflowResourceOperation(immutableProjection, "exclusive-create"),
+    {
+      kind: "resource-mutation",
       role: "derived-projection",
-      allowedMutationRecipes: ["exclusive-create"],
-      recoveryStrategy: "rebuild-from-authority",
-    }),
-    "recipe",
-    "$/allowedMutationRecipes/0",
+      recipe: "exclusive-create",
+    },
+  );
+  expectResourceProcessingError(
+    () => admitWakeflowResourceOperation(
+      immutableProjection,
+      "deterministic-rewrite",
+    ),
+    "operation",
+    "$/recipe",
   );
 });
 

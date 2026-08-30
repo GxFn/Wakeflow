@@ -17,6 +17,11 @@ import {
   UtcInstantError,
   type UtcInstant,
 } from "../../../foundation/time/utc-instant.js";
+import {
+  parseTaskPackage,
+  TaskPackageError,
+  type TaskPackage,
+} from "../../tasking/task-package.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：尚未进入事件存储的领域事件。
@@ -49,9 +54,20 @@ export interface DemandCancelledUncommittedEvent {
   }>;
 }
 
+export interface TargetTaskPlannedUncommittedEvent {
+  readonly eventId: WakeflowDurableId<"demand-event">;
+  readonly demandId: WakeflowDurableId<"demand">;
+  readonly recordedAt: UtcInstant;
+  readonly eventType: "tasking.target-task-planned";
+  readonly data: Readonly<{
+    readonly taskPackage: Readonly<TaskPackage>;
+  }>;
+}
+
 export type DemandUncommittedEvent =
   | DemandPublishedUncommittedEvent
-  | DemandCancelledUncommittedEvent;
+  | DemandCancelledUncommittedEvent
+  | TargetTaskPlannedUncommittedEvent;
 
 export type DemandEventSourcingEventErrorReason =
   | "input"
@@ -59,7 +75,9 @@ export type DemandEventSourcingEventErrorReason =
   | "time"
   | "digest"
   | "event-type"
-  | "text";
+  | "text"
+  | "task-package"
+  | "relation";
 
 const ERROR_MESSAGES = {
   "input": "Demand Event Sourcing event input is invalid.",
@@ -68,6 +86,8 @@ const ERROR_MESSAGES = {
   "digest": "Demand Event Sourcing event contains an invalid digest.",
   "event-type": "Demand Event Sourcing event type and data do not form one closed variant.",
   "text": "Demand Event Sourcing event contains non-canonical text.",
+  "task-package": "Demand Event Sourcing event contains an invalid TaskPackage.",
+  "relation": "Demand Event Sourcing event identity and TaskPackage do not close.",
 } as const satisfies Readonly<Record<
   DemandEventSourcingEventErrorReason,
   string
@@ -100,6 +120,9 @@ const PUBLISHED_DATA_FIELDS = Object.freeze([
   "identityRef",
 ] as const);
 const CANCELLED_DATA_FIELDS = Object.freeze(["reason"] as const);
+const TARGET_TASK_PLANNED_DATA_FIELDS = Object.freeze([
+  "taskPackage",
+] as const);
 const CONTROL_EXCEPT_LF_PATTERN =
   /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
 
@@ -217,6 +240,36 @@ export function parseDemandUncommittedEvent(
       recordedAt,
       eventType: "lifecycle.demand-cancelled",
       data: Object.freeze({ reason: parseCanonicalReason(data.reason) }),
+    });
+  }
+
+  if (record.eventType === "tasking.target-task-planned") {
+    const data = exactRecord(
+      record.data,
+      TARGET_TASK_PLANNED_DATA_FIELDS,
+      "$/data",
+    );
+    let taskPackage: Readonly<TaskPackage>;
+    try {
+      taskPackage = parseTaskPackage(data.taskPackage);
+    } catch (error: unknown) {
+      if (error instanceof TaskPackageError) {
+        fail("task-package", "$/data/taskPackage");
+      }
+      throw error;
+    }
+    if (
+      taskPackage.demandId !== demandId
+      || taskPackage.createdAt !== recordedAt
+    ) {
+      fail("relation", "$event");
+    }
+    return Object.freeze({
+      eventId,
+      demandId,
+      recordedAt,
+      eventType: "tasking.target-task-planned",
+      data: Object.freeze({ taskPackage }),
     });
   }
 

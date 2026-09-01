@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"]
+  },
+  "include": ["src", "vite.config.ts"]
+}

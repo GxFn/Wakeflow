@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Wakeflow TypeScript总体架构、文件依赖、符号调用、状态恢复与审阅证据"
+    />
+    <link rel="icon" href="./img/favicon.svg" type="image/svg+xml" />
+    <title>Wakeflow 架构与代码图谱</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <button id="menu-toggle" class="icon-button menu-toggle" type="button" aria-label="打开图集导航">
+          ☰
+        </button>
+        <a class="brand" href="#/home" aria-label="返回流程图集首页">
+          <span class="brand-mark" aria-hidden="true">W</span>
+          <span>
+            <strong>Wakeflow 架构图谱</strong>
+            <small>架构 · 文件 · 符号 · 状态 · 证据</small>
+          </span>
+        </a>
+        <div class="search-wrap">
+          <label class="sr-only" for="doc-search">搜索图集</label>
+          <input id="doc-search" type="search" placeholder="搜索文档、文件或术语…" autocomplete="off" />
+          <div id="search-results" class="search-results" hidden></div>
+        </div>
+        <button id="theme-toggle" class="icon-button" type="button" aria-label="切换深浅主题">◐</button>
+      </header>
+
+      <div class="workspace">
+        <aside id="sidebar" class="sidebar" aria-label="图集导航">
+          <div class="sidebar-heading">文档层级</div>
+          <nav id="doc-navigation"></nav>
+        </aside>
+
+        <main id="main-content" class="main-content" tabindex="-1">
+          <article id="article" class="article" aria-live="polite"></article>
+        </main>
+
+        <aside id="context-panel" class="context-panel" aria-label="页面目录与图元素详情">
+          <section id="metadata-panel" class="context-section"></section>
+          <section class="context-section selection-section">
+            <h2>图元素</h2>
+            <p id="selection-kind" class="selection-kind">未选择</p>
+            <p id="selection-text" class="selection-text">点击图中的节点或带编号连线查看信息。</p>
+            <button id="locate-evidence" class="secondary-button" type="button" disabled>定位证据</button>
+          </section>
+          <section class="context-section">
+            <h2>本页目录</h2>
+            <nav id="table-of-contents" class="toc"></nav>
+          </section>
+        </aside>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

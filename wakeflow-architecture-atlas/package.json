@@ -1,0 +1,32 @@
+{
+  "name": "wakeflow-architecture-atlas",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Independent architecture and code review atlas for Wakeflow.",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc -p tsconfig.json",
+    "check:structure": "node scripts/check-atlas.mjs",
+    "check:current": "node scripts/check-atlas.mjs --require-current",
+    "check": "npm run typecheck && npm run check:current && npm run build",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "cytoscape": "3.34.2",
+    "cytoscape-elk": "2.3.0",
+    "dompurify": "3.4.14",
+    "elkjs": "0.12.0",
+    "marked": "18.0.11",
+    "mermaid": "11.17.2",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
+  },
+  "engines": {
+    "node": ">=24.19.0 <25"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:workspace:window-runtime:agent-host-window-observation:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_AGENT_HOST_WINDOW_OBSERVATION_SCHEMA",
+  "title": "WakeflowAgentHostWindowObservation",
+  "description": "Transient Agent report identifying one current host window candidate and attesting that its observed context matches the current Config logical root. Raw handles are request-only secrets and must not be persisted or returned.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "source",
+    "hostId",
+    "windowId",
+    "bindingId",
+    "handle",
+    "attestedRoot",
+    "observedAt"
+  ],
+  "properties": {
+    "kind": {
+      "const": "WakeflowAgentHostWindowObservation"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "source": {
+      "const": "agent-host-inspection-result"
+    },
+    "hostId": {
+      "$ref": "urn:wakeflow:workspace:window-runtime:host-binding:v1#/properties/hostId"
+    },
+    "windowId": {
+      "$ref": "urn:wakeflow:workspace:window-runtime:host-binding:v1#/properties/windowId"
+    },
+    "bindingId": {
+      "$ref": "urn:wakeflow:workspace:window-runtime:host-binding:v1#/properties/bindingId"
+    },
+    "handle": {
+      "$ref": "urn:wakeflow:workspace:window-runtime:host-binding:v1#/properties/handle"
+    },
+    "attestedRoot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "logicalRoot", "configuredPlacement"],
+      "properties": {
+        "status": {
+          "const": "matches-configured-root"
+        },
+        "logicalRoot": {
+          "$ref": "urn:wakeflow:workspace:window-runtime:unregistered-projection:v1#/properties/logicalRoot"
+        },
+        "configuredPlacement": {
+          "$ref": "urn:wakeflow:workspace:window-runtime:unregistered-projection:v1#/properties/configuredPlacement"
+        }
+      }
+    },
+    "observedAt": {
+      "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+    }
+  }
+}

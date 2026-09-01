@@ -58,17 +58,19 @@ test("one compiled validator owns local refs, annotations, and regex format", ()
 });
 
 test("validation is non-mutating and exposes only a frozen stable result", () => {
-  const validate = createRuntimeJsonSchemaValidator<{ readonly value: number }>({
-    $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: "urn:wakeflow:test:number",
-    type: "object",
-    additionalProperties: false,
-    required: ["value"],
-    properties: {
-      value: { type: "integer", minimum: 1 },
-      defaulted: { type: "string", default: "inserted" },
+  const validate = createRuntimeJsonSchemaValidator<{ readonly value: number }>(
+    {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "urn:wakeflow:test:number",
+      type: "object",
+      additionalProperties: false,
+      required: ["value"],
+      properties: {
+        value: { type: "integer", minimum: 1 },
+        defaulted: { type: "string", default: "inserted" },
+      },
     },
-  });
+  );
   const result = validate(parseJsonValue({ value: 0 }));
   equal(result.ok, false);
   equal(Object.keys(result).sort().join(","), "ok,path");
@@ -80,6 +82,44 @@ test("validation is non-mutating and exposes only a frozen stable result", () =>
   const rejected = validate(admitted);
   equal(rejected.ok, false);
   equal(JSON.stringify(admitted), before);
+});
+
+test("对象uniqueItems可校验null原型JsonValue且不替换原始快照", () => {
+  const validate = createRuntimeJsonSchemaValidator<
+    readonly Readonly<{
+      readonly value: number;
+    }>[]
+  >({
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "urn:wakeflow:test:unique-object-array",
+    type: "array",
+    uniqueItems: true,
+    items: {
+      type: "object",
+      additionalProperties: false,
+      required: ["value"],
+      properties: {
+        value: { type: "integer" },
+        valueOf: { type: "string" },
+      },
+    },
+  });
+  const original = parseJsonValue([
+    { value: 1, valueOf: "left" },
+    { value: 2, valueOf: "right" },
+  ]);
+  const accepted = validate(original);
+  equal(accepted.ok, true);
+  if (accepted.ok) equal(accepted.value, original);
+
+  const rejected = validate(
+    parseJsonValue([
+      { value: 1, valueOf: "same" },
+      { value: 1, valueOf: "same" },
+    ]),
+  );
+  equal(rejected.ok, false);
+  if (!rejected.ok) equal(rejected.path, "$");
 });
 
 test("Schema and dependency admission execute no accessors", () => {
@@ -115,11 +155,15 @@ test("Schema and dependency admission execute no accessors", () => {
     },
   });
   expectSchemaError(
-    () => createRuntimeJsonSchemaValidator({
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      $id: "urn:wakeflow:test:dependency-root",
-      $ref: hostileDependency.$id,
-    }, [hostileDependency]),
+    () =>
+      createRuntimeJsonSchemaValidator(
+        {
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          $id: "urn:wakeflow:test:dependency-root",
+          $ref: hostileDependency.$id,
+        },
+        [hostileDependency],
+      ),
     "schema-dependency",
     "$dependencies/0/pattern",
   );
@@ -128,11 +172,12 @@ test("Schema and dependency admission execute no accessors", () => {
 
 test("unresolved, duplicate, and malformed Schema catalogs fail closed", () => {
   expectSchemaError(
-    () => createRuntimeJsonSchemaValidator({
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      $id: "urn:wakeflow:test:missing-ref",
-      $ref: "urn:wakeflow:test:missing",
-    }),
+    () =>
+      createRuntimeJsonSchemaValidator({
+        $schema: "https://json-schema.org/draft/2020-12/schema",
+        $id: "urn:wakeflow:test:missing-ref",
+        $ref: "urn:wakeflow:test:missing",
+      }),
     "schema-compile",
     "$schema",
   );
@@ -142,10 +187,11 @@ test("unresolved, duplicate, and malformed Schema catalogs fail closed", () => {
     type: "string",
   };
   expectSchemaError(
-    () => createRuntimeJsonSchemaValidator(
-      { ...dependency, $id: "urn:wakeflow:test:root" },
-      [dependency, dependency],
-    ),
+    () =>
+      createRuntimeJsonSchemaValidator(
+        { ...dependency, $id: "urn:wakeflow:test:root" },
+        [dependency, dependency],
+      ),
     "schema-dependency",
     "$dependencies/1/$id",
   );

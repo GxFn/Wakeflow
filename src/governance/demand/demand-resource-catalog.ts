@@ -10,9 +10,7 @@ import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
 } from "../../workspace/workspace-resource-declaration.js";
-import {
-  parseDemandEventCommitSequence,
-} from "./event-sourcing/demand-event-stream-position.js";
+import { parseDemandEventCommitSequence } from "./event-sourcing/demand-event-stream-position.js";
 import {
   demandEventSourcingSnapshotRef,
   demandEventStreamCommitRef,
@@ -39,6 +37,12 @@ import {
   taskPackageProjectionRef,
   TASK_PACKAGE_PROJECTIONS_ROOT_REF,
 } from "../tasking/task-package-projection-paths.js";
+import {
+  testCardProjectionRef,
+  testDispatchPacketProjectionRef,
+  TEST_CARD_PROJECTIONS_ROOT_REF,
+  TEST_DISPATCH_PACKET_PROJECTIONS_ROOT_REF,
+} from "../testing/test-dispatch-projection-paths.js";
 
 /**
  * Wakeflow Governance / Demand：Demand Event Sourcing 职责所有者的资源目录。
@@ -49,8 +53,8 @@ import {
 
 const DEMAND_PUBLICATION_OWNER_ID = "demand-publication" as const;
 const DEMAND_EVENT_SOURCING_OWNER_ID = "demand-event-sourcing" as const;
-const DEMAND_TASKING_PROJECTION_OWNER_ID =
-  "demand-tasking-projection" as const;
+const DEMAND_TASKING_PROJECTION_OWNER_ID = "demand-tasking-projection" as const;
+const DEMAND_TESTING_PROJECTION_OWNER_ID = "demand-testing-projection" as const;
 
 function privateDirectoryDeclaration(
   declarationId: string,
@@ -216,6 +220,8 @@ type DemandEventSourcingResourceCatalog = readonly [
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
+  Readonly<WakeflowWorkspaceResourceDeclaration>,
+  Readonly<WakeflowWorkspaceResourceDeclaration>,
 ];
 
 /**
@@ -294,6 +300,16 @@ export function createDemandEventSourcingResourceCatalog(
       demandChildRef(demandId, TASK_PACKAGE_PROJECTIONS_ROOT_REF),
     ),
     privateDirectoryDeclaration(
+      `${prefix}.test-cards-root`,
+      DEMAND_TESTING_PROJECTION_OWNER_ID,
+      demandChildRef(demandId, TEST_CARD_PROJECTIONS_ROOT_REF),
+    ),
+    privateDirectoryDeclaration(
+      `${prefix}.test-dispatch-packets-root`,
+      DEMAND_TESTING_PROJECTION_OWNER_ID,
+      demandChildRef(demandId, TEST_DISPATCH_PACKET_PROJECTIONS_ROOT_REF),
+    ),
+    privateDirectoryDeclaration(
       `${prefix}.transactions-root`,
       DEMAND_EVENT_SOURCING_OWNER_ID,
       demandChildRef(demandId, DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF),
@@ -334,6 +350,54 @@ export function createTaskPackageProjectionResourceDeclaration(
     `demand.tasking.${demandId}.task-package.${taskPackageId}`,
     DEMAND_TASKING_PROJECTION_OWNER_ID,
     demandChildRef(demandId, taskPackageProjectionRef(taskPackageId)),
+    {
+      kind: "resource",
+      role: "derived-projection",
+      allowedMutationRecipes: ["exclusive-create"],
+      recoveryStrategy: "rebuild-from-authority",
+    },
+  );
+}
+
+/** 为Event权威TestCard生成按Card身份不可覆盖的目标读取投影声明。 */
+export function createTestCardProjectionResourceDeclaration(
+  demandValue: unknown,
+  testCardValue: unknown,
+): Readonly<WakeflowWorkspaceResourceDeclaration> {
+  const demandId = parseDemandId(demandValue);
+  const testCardId = parseWakeflowDurableIdOfKind(
+    testCardValue,
+    "test-card",
+    "$testCardId",
+  );
+  return privateFileDeclaration(
+    `demand.testing.${demandId}.test-card.${testCardId}`,
+    DEMAND_TESTING_PROJECTION_OWNER_ID,
+    demandChildRef(demandId, testCardProjectionRef(testCardId)),
+    {
+      kind: "resource",
+      role: "derived-projection",
+      allowedMutationRecipes: ["exclusive-create"],
+      recoveryStrategy: "rebuild-from-authority",
+    },
+  );
+}
+
+/** 为一次Event权威Test Delivery生成一对一、不可覆盖的dispatch packet投影声明。 */
+export function createTestDispatchPacketProjectionResourceDeclaration(
+  demandValue: unknown,
+  targetDeliveryValue: unknown,
+): Readonly<WakeflowWorkspaceResourceDeclaration> {
+  const demandId = parseDemandId(demandValue);
+  const targetDeliveryId = parseWakeflowDurableIdOfKind(
+    targetDeliveryValue,
+    "target-delivery",
+    "$targetDeliveryId",
+  );
+  return privateFileDeclaration(
+    `demand.testing.${demandId}.test-dispatch-packet.${targetDeliveryId}`,
+    DEMAND_TESTING_PROJECTION_OWNER_ID,
+    demandChildRef(demandId, testDispatchPacketProjectionRef(targetDeliveryId)),
     {
       kind: "resource",
       role: "derived-projection",

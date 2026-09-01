@@ -1,8 +1,4 @@
-import {
-  deepEqual,
-  equal,
-  throws,
-} from "node:assert/strict";
+import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -94,7 +90,6 @@ test("TaskPackage rejects future workflow branches and duplicate local facts", (
   for (const extension of [
     { delivery: {} },
     { dependsOnTargetTaskIds: [] },
-    { testCard: null },
     { continuation: null },
     { replacesTargetTask: null },
   ]) {
@@ -105,70 +100,126 @@ test("TaskPackage rejects future workflow branches and duplicate local facts", (
     );
   }
   expectTaskPackageError(
-    () => parseTaskPackage({
-      ...taskPackage,
-      workType: "test",
-    }),
+    () => parseTaskPackage({ ...taskPackage, testCard: null }),
     "schema",
-    "$/workType",
+    "$/testCard",
   );
   expectTaskPackageError(
-    () => parseTaskPackage({
-      ...taskPackage,
-      confirmedContext: [
-        taskPackage.confirmedContext[0],
-        taskPackage.confirmedContext[0],
-      ],
-    }),
+    () =>
+      parseTaskPackage({
+        ...taskPackage,
+        workType: "test",
+      }),
+    "schema",
+    "$",
+  );
+  expectTaskPackageError(
+    () =>
+      parseTaskPackage({
+        ...taskPackage,
+        confirmedContext: [
+          taskPackage.confirmedContext[0],
+          taskPackage.confirmedContext[0],
+        ],
+      }),
     "relation",
     "$/confirmedContext/1",
   );
   expectTaskPackageError(
-    () => parseTaskPackage({
-      ...taskPackage,
-      selectedAuthorityRefs: [
-        SELECTED_AUTHORITY_REF,
-        SELECTED_AUTHORITY_REF,
-      ],
-    }),
+    () =>
+      parseTaskPackage({
+        ...taskPackage,
+        selectedAuthorityRefs: [SELECTED_AUTHORITY_REF, SELECTED_AUTHORITY_REF],
+      }),
     "relation",
     "$/selectedAuthorityRefs/1",
   );
   expectTaskPackageError(
-    () => parseTaskPackage({
-      ...taskPackage,
-      acceptanceAnchors: [
-        taskPackage.acceptanceAnchors[0],
-        taskPackage.acceptanceAnchors[0],
-      ],
-    }),
+    () =>
+      parseTaskPackage({
+        ...taskPackage,
+        acceptanceAnchors: [
+          taskPackage.acceptanceAnchors[0],
+          taskPackage.acceptanceAnchors[0],
+        ],
+      }),
     "relation",
     "$/acceptanceAnchors/1/anchorId",
+  );
+});
+
+test("test TaskPackage is a closed discriminated variant without repository mutation", () => {
+  const implementation = createTaskPackageFixture();
+  if (implementation.workType !== "implementation") {
+    throw new Error("Expected implementation fixture.");
+  }
+  const {
+    assignment: _assignment,
+    commitExpectation: _commitExpectation,
+    acceptanceAnchors: _acceptanceAnchors,
+    ...common
+  } = implementation;
+  const testPackage = parseTaskPackage({
+    ...common,
+    assignment: { windowId: TASKING_WINDOW_ID },
+    workType: "test",
+    acceptanceAnchors: [],
+    testCard: {
+      testCardId: "test-card_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      testCardDigest: `sha256:${"d".repeat(64)}`,
+    },
+  });
+
+  equal(testPackage.workType, "test");
+  if (testPackage.workType !== "test")
+    throw new Error("Expected Test variant.");
+  deepEqual(testPackage.assignment, { windowId: TASKING_WINDOW_ID });
+  deepEqual(testPackage.acceptanceAnchors, []);
+  equal(Object.hasOwn(testPackage, "commitExpectation"), false);
+  equal(Object.hasOwn(testPackage.assignment, "repositoryId"), false);
+  equal(testPackage.testCard.testCardId.startsWith("test-card_"), true);
+
+  expectTaskPackageError(
+    () =>
+      parseTaskPackage({
+        ...testPackage,
+        commitExpectation: "leave-uncommitted",
+      }),
+    "schema",
+    "$/commitExpectation",
   );
 });
 
 test("TaskPackage requires canonical text and validates the closed draft before reading time", () => {
   const decomposed = "e\u0301";
   expectTaskPackageError(
-    () => createTaskPackage({
-      ...taskPackageDraft(),
-      objective: decomposed,
-    }, { clock: () => TASKING_CREATED_AT }),
+    () =>
+      createTaskPackage(
+        {
+          ...taskPackageDraft(),
+          objective: decomposed,
+        },
+        { clock: () => TASKING_CREATED_AT },
+      ),
     "text",
     "$/objective",
   );
 
   let clockCalls = 0;
   expectTaskPackageError(
-    () => createTaskPackage({
-      ...taskPackageDraft(),
-      deliveryId: "future-placeholder",
-    }, {
-      clock: () => {
-        clockCalls += 1;
-        return TASKING_CREATED_AT;
-      },
-    }),
+    () =>
+      createTaskPackage(
+        {
+          ...taskPackageDraft(),
+          deliveryId: "future-placeholder",
+        },
+        {
+          clock: () => {
+            clockCalls += 1;
+            return TASKING_CREATED_AT;
+          },
+        },
+      ),
     "input",
     "$draft",
   );
@@ -176,11 +227,12 @@ test("TaskPackage requires canonical text and validates the closed draft before 
 
   const privateFailure = new Error("private clock failure");
   const timeError = expectTaskPackageError(
-    () => createTaskPackage(taskPackageDraft(), {
-      clock: () => {
-        throw privateFailure;
-      },
-    }),
+    () =>
+      createTaskPackage(taskPackageDraft(), {
+        clock: () => {
+          throw privateFailure;
+        },
+      }),
     "time",
     "$options/clock",
   );
@@ -192,20 +244,22 @@ test("TaskPackage keeps repository and window inside the explicit assignment rel
   const taskPackage = createTaskPackageFixture();
 
   throws(
-    () => parseTaskPackage({
-      ...taskPackage,
-      repositoryId: TASKING_REPOSITORY_ID,
-    }),
+    () =>
+      parseTaskPackage({
+        ...taskPackage,
+        repositoryId: TASKING_REPOSITORY_ID,
+      }),
     TaskPackageError,
   );
   expectTaskPackageError(
-    () => parseTaskPackage({
-      ...taskPackage,
-      assignment: {
-        ...taskPackage.assignment,
-        windowId: TASKING_REPOSITORY_ID,
-      },
-    }),
+    () =>
+      parseTaskPackage({
+        ...taskPackage,
+        assignment: {
+          ...taskPackage.assignment,
+          windowId: TASKING_REPOSITORY_ID,
+        },
+      }),
     "schema",
     "$/assignment/windowId",
   );

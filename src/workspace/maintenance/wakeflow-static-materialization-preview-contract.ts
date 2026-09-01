@@ -5,9 +5,7 @@ import {
   WakeflowConfigV3Error,
   type WakeflowConfigV3Model,
 } from "../../configuration/wakeflow-config-v3.js";
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
   Sha256Error,
@@ -45,6 +43,7 @@ export type WakeflowStaticMaterializationAction =
 
 const WAKEFLOW_STATIC_MATERIALIZATION_STEP_KINDS = Object.freeze([
   "materialize-local-protocol",
+  "materialize-shared-coordination-layout",
   "materialize-active-layout",
   "initialize-todo-collection",
   "publish-fresh-active-workspace-projection",
@@ -94,24 +93,19 @@ export interface WakeflowStaticMaterializationPreviewRequest {
 }
 
 export type WakeflowStaticMaterializationPreviewErrorReason =
-  | "input"
-  | "config"
-  | "profile"
-  | "root-scope"
-  | "inspection"
-  | "aborted";
+  "input" | "config" | "profile" | "root-scope" | "inspection" | "aborted";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow static materialization preview input is invalid.",
   config: "Wakeflow static materialization preview config is invalid.",
   profile: "Wakeflow static materialization preview host profiles are invalid.",
   "root-scope": "Wakeflow static materialization preview lost workspace scope.",
-  inspection: "Wakeflow static materialization preview could not inspect workspace facts.",
+  inspection:
+    "Wakeflow static materialization preview could not inspect workspace facts.",
   aborted: "Wakeflow static materialization preview was aborted.",
-} as const satisfies Readonly<Record<
-  WakeflowStaticMaterializationPreviewErrorReason,
-  string
->>;
+} as const satisfies Readonly<
+  Record<WakeflowStaticMaterializationPreviewErrorReason, string>
+>;
 
 /** 静态物化 preview 构建失败的稳定、脱敏错误。 */
 export class WakeflowStaticMaterializationPreviewError extends Error {
@@ -120,7 +114,10 @@ export class WakeflowStaticMaterializationPreviewError extends Error {
   readonly reason: WakeflowStaticMaterializationPreviewErrorReason;
   readonly path: string;
 
-  constructor(reason: WakeflowStaticMaterializationPreviewErrorReason, path: string) {
+  constructor(
+    reason: WakeflowStaticMaterializationPreviewErrorReason,
+    path: string,
+  ) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -131,8 +128,7 @@ export interface ParsedWakeflowStaticMaterializationPreviewRequest {
   readonly action: WakeflowStaticMaterializationAction;
   readonly desiredConfig: WakeflowConfigV3Model | null;
   readonly currentHostProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
-  readonly hostProfiles:
-    readonly Readonly<WakeflowWorkspaceHostResourceProfile>[];
+  readonly hostProfiles: readonly Readonly<WakeflowWorkspaceHostResourceProfile>[];
   readonly signal: AbortSignal | undefined;
 }
 
@@ -168,38 +164,30 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
     "desiredConfig",
     "hostProfiles",
   ];
-  const expected = record.signal === undefined
-    ? required
-    : [...required, "signal"].sort();
+  const expected =
+    record.signal === undefined ? required : [...required, "signal"].sort();
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== expected.length
-    || keys.some((key, index) => key !== expected[index])
-    || typeof record.action !== "string"
-    || !WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS.includes(
+    keys.length !== expected.length ||
+    keys.some((key, index) => key !== expected[index]) ||
+    typeof record.action !== "string" ||
+    !WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS.includes(
       record.action as WakeflowStaticMaterializationAction,
-    )
-    || (
-      record.signal !== undefined
-      && (
-        typeof record.signal !== "object"
-        || record.signal === null
-        || types.isProxy(record.signal)
-        || !(record.signal instanceof AbortSignal)
-      )
-    )
+    ) ||
+    (record.signal !== undefined &&
+      (typeof record.signal !== "object" ||
+        record.signal === null ||
+        types.isProxy(record.signal) ||
+        !(record.signal instanceof AbortSignal)))
   ) {
     failWakeflowStaticMaterializationPreview("input", "$request");
   }
   const action = record.action as WakeflowStaticMaterializationAction;
   if (
-    (action === "reconcile" && record.desiredConfig !== null)
-    || (action !== "reconcile" && record.desiredConfig === null)
+    (action === "reconcile" && record.desiredConfig !== null) ||
+    (action !== "reconcile" && record.desiredConfig === null)
   ) {
-    failWakeflowStaticMaterializationPreview(
-      "input",
-      "$request.desiredConfig",
-    );
+    failWakeflowStaticMaterializationPreview("input", "$request.desiredConfig");
   }
   let desiredConfig: WakeflowConfigV3Model | null = null;
   if (record.desiredConfig !== null) {
@@ -243,8 +231,8 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
     createWakeflowGitignoreBodyAuthority(parsedProfiles);
   } catch (error: unknown) {
     if (
-      error instanceof WakeflowGitignoreBodyAuthorityError
-      || error instanceof WakeflowWorkspaceStaticResourceMatrixError
+      error instanceof WakeflowGitignoreBodyAuthorityError ||
+      error instanceof WakeflowWorkspaceStaticResourceMatrixError
     ) {
       failWakeflowStaticMaterializationPreview(
         "profile",
@@ -253,13 +241,13 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
     }
     throw error;
   }
-  const matching = parsedProfiles.find((profile) => (
-    profile.hostId === currentHostProfile.hostId
-  ));
+  const matching = parsedProfiles.find(
+    (profile) => profile.hostId === currentHostProfile.hostId,
+  );
   if (
-    matching === undefined
-    || createWakeflowWorkspaceStaticResourceMatrix(matching).matrixDigest
-      !== createWakeflowWorkspaceStaticResourceMatrix(currentHostProfile)
+    matching === undefined ||
+    createWakeflowWorkspaceStaticResourceMatrix(matching).matrixDigest !==
+      createWakeflowWorkspaceStaticResourceMatrix(currentHostProfile)
         .matrixDigest
   ) {
     failWakeflowStaticMaterializationPreview(
@@ -276,7 +264,9 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
   });
 }
 
-const STEP_KIND_SET = new Set<string>(WAKEFLOW_STATIC_MATERIALIZATION_STEP_KINDS);
+const STEP_KIND_SET = new Set<string>(
+  WAKEFLOW_STATIC_MATERIALIZATION_STEP_KINDS,
+);
 const STEP_ID_PATTERN = /^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9_:-]*$/u;
 const OWNER_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const BLOCKER_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
@@ -337,28 +327,29 @@ function parseStep(
     throw error;
   }
   if (
-    Object.keys(record).sort().join("\u0000")
-      !== "dependsOn\u0000kind\u0000ownerId\u0000sourceDigest\u0000stepId\u0000targetDigest\u0000targetKey"
-    || typeof record.stepId !== "string"
-    || record.stepId.length > MAXIMUM_IDENTITY_LENGTH
-    || !record.stepId.isWellFormed()
-    || !STEP_ID_PATTERN.test(record.stepId)
-    || typeof record.kind !== "string"
-    || !STEP_KIND_SET.has(record.kind)
-    || typeof record.ownerId !== "string"
-    || record.ownerId.length > MAXIMUM_IDENTITY_LENGTH
-    || !record.ownerId.isWellFormed()
-    || !OWNER_ID_PATTERN.test(record.ownerId)
-    || typeof record.targetKey !== "string"
-    || !record.targetKey.isWellFormed()
-    || !TARGET_KEY_PATTERN.test(record.targetKey)
-    || dependencies.some((entry) => (
-      typeof entry !== "string"
-      || entry.length > MAXIMUM_IDENTITY_LENGTH
-      || !entry.isWellFormed()
-      || !STEP_ID_PATTERN.test(entry)
-    ))
-    || new Set(dependencies).size !== dependencies.length
+    Object.keys(record).sort().join("\u0000") !==
+      "dependsOn\u0000kind\u0000ownerId\u0000sourceDigest\u0000stepId\u0000targetDigest\u0000targetKey" ||
+    typeof record.stepId !== "string" ||
+    record.stepId.length > MAXIMUM_IDENTITY_LENGTH ||
+    !record.stepId.isWellFormed() ||
+    !STEP_ID_PATTERN.test(record.stepId) ||
+    typeof record.kind !== "string" ||
+    !STEP_KIND_SET.has(record.kind) ||
+    typeof record.ownerId !== "string" ||
+    record.ownerId.length > MAXIMUM_IDENTITY_LENGTH ||
+    !record.ownerId.isWellFormed() ||
+    !OWNER_ID_PATTERN.test(record.ownerId) ||
+    typeof record.targetKey !== "string" ||
+    !record.targetKey.isWellFormed() ||
+    !TARGET_KEY_PATTERN.test(record.targetKey) ||
+    dependencies.some(
+      (entry) =>
+        typeof entry !== "string" ||
+        entry.length > MAXIMUM_IDENTITY_LENGTH ||
+        !entry.isWellFormed() ||
+        !STEP_ID_PATTERN.test(entry),
+    ) ||
+    new Set(dependencies).size !== dependencies.length
   ) {
     failWakeflowStaticMaterializationPreview("input", path);
   }
@@ -387,11 +378,7 @@ export function parseWakeflowStaticMaterializationPreview(
       MAXIMUM_BLOCKERS,
       "$preview.blockerCodes",
     );
-    stepValues = parseDenseArray(
-      record.steps,
-      MAXIMUM_STEPS,
-      "$preview.steps",
-    );
+    stepValues = parseDenseArray(record.steps, MAXIMUM_STEPS, "$preview.steps");
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
       failWakeflowStaticMaterializationPreview("input", error.path);
@@ -399,32 +386,33 @@ export function parseWakeflowStaticMaterializationPreview(
     throw error;
   }
   if (
-    Object.keys(record).sort().join("\u0000")
-      !== "action\u0000blockerCodes\u0000coreLayoutInspectionDigest\u0000currentConfigDigest\u0000desiredConfigDigest\u0000executionBoundary\u0000kind\u0000matrixDigest\u0000planDigest\u0000schemaVersion\u0000status\u0000steps"
-    || record.kind !== "WakeflowStaticMaterializationPreview"
-    || record.schemaVersion !== 1
-    || record.executionBoundary !== "preview-only"
-    || typeof record.action !== "string"
-    || !WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS.includes(
+    Object.keys(record).sort().join("\u0000") !==
+      "action\u0000blockerCodes\u0000coreLayoutInspectionDigest\u0000currentConfigDigest\u0000desiredConfigDigest\u0000executionBoundary\u0000kind\u0000matrixDigest\u0000planDigest\u0000schemaVersion\u0000status\u0000steps" ||
+    record.kind !== "WakeflowStaticMaterializationPreview" ||
+    record.schemaVersion !== 1 ||
+    record.executionBoundary !== "preview-only" ||
+    typeof record.action !== "string" ||
+    !WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS.includes(
       record.action as WakeflowStaticMaterializationAction,
+    ) ||
+    (record.status !== "ready" && record.status !== "blocked") ||
+    blockerValues.some(
+      (entry) =>
+        typeof entry !== "string" ||
+        entry.length > MAXIMUM_IDENTITY_LENGTH ||
+        !entry.isWellFormed() ||
+        !BLOCKER_PATTERN.test(entry),
     )
-    || (record.status !== "ready" && record.status !== "blocked")
-    || blockerValues.some((entry) => (
-      typeof entry !== "string"
-      || entry.length > MAXIMUM_IDENTITY_LENGTH
-      || !entry.isWellFormed()
-      || !BLOCKER_PATTERN.test(entry)
-    ))
   ) {
     failWakeflowStaticMaterializationPreview("input", "$preview");
   }
   const blockerCodes = Object.freeze(blockerValues as readonly string[]);
   if (
-    new Set(blockerCodes).size !== blockerCodes.length
-    || blockerCodes.some((entry, index) => (
-      index > 0 && (blockerCodes[index - 1] ?? "") >= entry
-    ))
-    || (record.status === "ready") !== (blockerCodes.length === 0)
+    new Set(blockerCodes).size !== blockerCodes.length ||
+    blockerCodes.some(
+      (entry, index) => index > 0 && (blockerCodes[index - 1] ?? "") >= entry,
+    ) ||
+    (record.status === "ready") !== (blockerCodes.length === 0)
   ) {
     failWakeflowStaticMaterializationPreview("input", "$preview.blockerCodes");
   }
@@ -450,18 +438,14 @@ export function parseWakeflowStaticMaterializationPreview(
     }
     stepPositions.set(entry.stepId, index);
   }
-  const configIndexes = steps.flatMap((entry, index) => (
-    entry.kind === "publish-config" ? [index] : []
-  ));
+  const configIndexes = steps.flatMap((entry, index) =>
+    entry.kind === "publish-config" ? [index] : [],
+  );
   if (
-    configIndexes.length > 1
-    || (
-      configIndexes.length === 1
-      && (
-        configIndexes[0] !== steps.length - 1
-        || steps.at(-1)?.dependsOn.length !== steps.length - 1
-      )
-    )
+    configIndexes.length > 1 ||
+    (configIndexes.length === 1 &&
+      (configIndexes[0] !== steps.length - 1 ||
+        steps.at(-1)?.dependsOn.length !== steps.length - 1))
   ) {
     failWakeflowStaticMaterializationPreview("input", "$preview.steps");
   }
@@ -476,23 +460,16 @@ export function parseWakeflowStaticMaterializationPreview(
     "$preview.desiredConfigDigest",
   );
   if (
-    ((action === "fresh-initialize" || action === "reconfigure")
-      && desiredConfigDigest === null)
-    || (action === "reconcile"
-      && desiredConfigDigest !== currentConfigDigest)
-    || (action === "reconcile" && configIndexes.length !== 0)
-    || (
-      status === "ready"
-      && (
-        (action === "fresh-initialize" && currentConfigDigest !== null)
-        || (action !== "fresh-initialize" && currentConfigDigest === null)
-        || (
-          action !== "reconcile"
-          && configIndexes.length
-            !== (currentConfigDigest === desiredConfigDigest ? 0 : 1)
-        )
-      )
-    )
+    ((action === "fresh-initialize" || action === "reconfigure") &&
+      desiredConfigDigest === null) ||
+    (action === "reconcile" && desiredConfigDigest !== currentConfigDigest) ||
+    (action === "reconcile" && configIndexes.length !== 0) ||
+    (status === "ready" &&
+      ((action === "fresh-initialize" && currentConfigDigest !== null) ||
+        (action !== "fresh-initialize" && currentConfigDigest === null) ||
+        (action !== "reconcile" &&
+          configIndexes.length !==
+            (currentConfigDigest === desiredConfigDigest ? 0 : 1))))
   ) {
     failWakeflowStaticMaterializationPreview("input", "$preview");
   }

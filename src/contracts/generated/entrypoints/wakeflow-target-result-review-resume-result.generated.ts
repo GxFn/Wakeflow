@@ -1,0 +1,92 @@
+/**
+ * 此文件由 Wakeflow JSON Schema 生成，禁止手工修改。
+ * Source: src/contracts/schemas/entrypoints/wakeflow-target-result-review-resume-result.schema.json
+ */
+
+/**
+ * Successful result for one idempotently recorded TargetResult review Resume Event.
+ */
+export type WakeflowTargetResultReviewResumeResultV1 = ({
+[k: string]: unknown | undefined
+} & {
+kind: "WakeflowTargetResultReviewResumeResult"
+schemaVersion: 1
+tool: "wakeflow_resume_target_result_review"
+status: ("resumed" | "already-resumed")
+disposition: ("committed" | "idempotent")
+eventAuthority: "current"
+resume: Resume
+event: EventReceipt
+commit: CommitReceipt
+stateDigest: Sha256Digest
+})
+export type TargetReviewResumeId = string
+export type ProgramId = string
+export type DemandId = string
+export type TargetTaskId = string
+export type WindowId = string
+export type TargetReviewDecisionId = string
+export type Sha256Digest = string
+export type TargetResultId = string
+export type HumanText = string
+export type UtcInstant = string
+export type EventId = string
+export type CommitId = string
+
+export interface Resume {
+kind: "WakeflowControllerTargetReviewResume"
+schemaVersion: 1
+targetReviewResumeId: TargetReviewResumeId
+programId: ProgramId
+demandId: DemandId
+targetTaskId: TargetTaskId
+controllerWindowId: WindowId
+blockedDecision: BlockedDecision
+blockedSource: BlockedSource
+resolutionSummary: HumanText
+resumedAt: UtcInstant
+resumeDigest: Sha256Digest
+}
+export interface BlockedDecision {
+targetReviewDecisionId: TargetReviewDecisionId
+decisionDigest: Sha256Digest
+targetResultId: TargetResultId
+targetResultDigest: Sha256Digest
+}
+export interface BlockedSource {
+snapshotDigest: Sha256Digest
+stateDigest: Sha256Digest
+streamRevision: number
+}
+export interface EventReceipt {
+eventId: EventId
+streamRevision: number
+}
+export interface CommitReceipt {
+commitId: CommitId
+commitSequence: number
+commitDigest: Sha256Digest
+}
+
+/** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
+function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) freezeGeneratedSchema(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+/** 从 JSON 文本恢复 Schema，保留 `__proto__` 等普通 JSON 自有键。 */
+function restoreGeneratedSchema(
+  serialized: string,
+): Readonly<Record<string, unknown>> {
+  const value: unknown = JSON.parse(serialized);
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    throw new TypeError("Generated Schema must be an object.");
+  }
+  return freezeGeneratedSchema(value as Record<string, unknown>);
+}
+
+/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
+export const WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_RESULT_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:target-result-review-resume-result:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_RESULT_SCHEMA\",\"title\":\"WakeflowTargetResultReviewResumeResultV1\",\"description\":\"Successful result for one idempotently recorded TargetResult review Resume Event.\",\"$comment\":\"Resume reopens the same TargetResult for fresh Controller review. It does not run checks, accept, rework, redesign, create a Test attempt, dispatch, or perform a host effect.\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"tool\",\"status\",\"disposition\",\"eventAuthority\",\"resume\",\"event\",\"commit\",\"stateDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowTargetResultReviewResumeResult\"},\"schemaVersion\":{\"const\":1},\"tool\":{\"const\":\"wakeflow_resume_target_result_review\"},\"status\":{\"enum\":[\"resumed\",\"already-resumed\"]},\"disposition\":{\"enum\":[\"committed\",\"idempotent\"]},\"eventAuthority\":{\"const\":\"current\"},\"resume\":{\"$ref\":\"#/$defs/resume\"},\"event\":{\"$ref\":\"#/$defs/eventReceipt\"},\"commit\":{\"$ref\":\"#/$defs/commitReceipt\"},\"stateDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}},\"allOf\":[{\"if\":{\"properties\":{\"status\":{\"const\":\"resumed\"}},\"required\":[\"status\"]},\"then\":{\"properties\":{\"disposition\":{\"const\":\"committed\"}}}},{\"if\":{\"properties\":{\"status\":{\"const\":\"already-resumed\"}},\"required\":[\"status\"]},\"then\":{\"properties\":{\"disposition\":{\"const\":\"idempotent\"}}}}],\"$defs\":{\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"targetTaskId\":{\"type\":\"string\",\"pattern\":\"^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"resume\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"kind\",\"schemaVersion\",\"targetReviewResumeId\",\"programId\",\"demandId\",\"targetTaskId\",\"controllerWindowId\",\"blockedDecision\",\"blockedSource\",\"resolutionSummary\",\"resumedAt\",\"resumeDigest\"],\"properties\":{\"kind\":{\"const\":\"WakeflowControllerTargetReviewResume\"},\"schemaVersion\":{\"const\":1},\"targetReviewResumeId\":{\"$ref\":\"#/$defs/targetReviewResumeId\"},\"programId\":{\"$ref\":\"#/$defs/programId\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"targetTaskId\":{\"$ref\":\"#/$defs/targetTaskId\"},\"controllerWindowId\":{\"$ref\":\"#/$defs/windowId\"},\"blockedDecision\":{\"$ref\":\"#/$defs/blockedDecision\"},\"blockedSource\":{\"$ref\":\"#/$defs/blockedSource\"},\"resolutionSummary\":{\"$ref\":\"#/$defs/humanText\"},\"resumedAt\":{\"$ref\":\"#/$defs/utcInstant\"},\"resumeDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"blockedDecision\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"targetReviewDecisionId\",\"decisionDigest\",\"targetResultId\",\"targetResultDigest\"],\"properties\":{\"targetReviewDecisionId\":{\"$ref\":\"#/$defs/targetReviewDecisionId\"},\"decisionDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"targetResultId\":{\"$ref\":\"#/$defs/targetResultId\"},\"targetResultDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}},\"blockedSource\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"snapshotDigest\",\"stateDigest\",\"streamRevision\"],\"properties\":{\"snapshotDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"stateDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"streamRevision\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991}}},\"humanText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":8192,\"pattern\":\"^(?!\\\\s)(?![\\\\s\\\\S]*\\\\r)(?![\\\\s\\\\S]*[\\\\u0000-\\\\u0009\\\\u000b-\\\\u001f\\\\u007f-\\\\u009f])[\\\\s\\\\S]*\\\\S$\"},\"utcInstant\":{\"type\":\"string\",\"minLength\":20,\"maxLength\":30,\"pattern\":\"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\\\.[0-9]{1,9})?Z$\"},\"targetReviewResumeId\":{\"type\":\"string\",\"pattern\":\"^target-review-resume_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"targetReviewDecisionId\":{\"type\":\"string\",\"pattern\":\"^target-review-decision_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"targetResultId\":{\"type\":\"string\",\"pattern\":\"^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"programId\":{\"type\":\"string\",\"pattern\":\"^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"windowId\":{\"type\":\"string\",\"pattern\":\"^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"eventId\":{\"type\":\"string\",\"pattern\":\"^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"commitId\":{\"type\":\"string\",\"pattern\":\"^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"eventReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"eventId\",\"streamRevision\"],\"properties\":{\"eventId\":{\"$ref\":\"#/$defs/eventId\"},\"streamRevision\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991}}},\"commitReceipt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"commitId\",\"commitSequence\",\"commitDigest\"],\"properties\":{\"commitId\":{\"$ref\":\"#/$defs/commitId\"},\"commitSequence\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991},\"commitDigest\":{\"$ref\":\"#/$defs/sha256Digest\"}}}}}");

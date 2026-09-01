@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:test-delivery-prepared-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TEST_DELIVERY_PREPARED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowTestDeliveryPreparedEventDataV1",
+  "description": "testing.test-delivery-prepared persisted event v1的严格payload。",
+  "$comment": "完整TaskPackage与TestCard继续由各自先前Event拥有；本Event只保存已验证TestDeliveryIntent。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intent"],
+  "properties": {
+    "intent": {
+      "$ref": "urn:wakeflow:governance:testing:test-delivery-intent:v1"
+    }
+  }
+}

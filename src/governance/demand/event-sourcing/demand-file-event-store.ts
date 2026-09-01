@@ -34,9 +34,7 @@ import {
   WakeflowResourceProcessingContractError,
 } from "../../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../../foundation/text/utf8.js";
-import {
-  createDemandEventStreamCommitResourceDeclaration,
-} from "../demand-resource-catalog.js";
+import { createDemandEventStreamCommitResourceDeclaration } from "../demand-resource-catalog.js";
 import {
   computeDemandEventStreamCommitDigest,
   assertPreparedDemandEventStreamCommit,
@@ -85,10 +83,39 @@ import {
  *
  * 本类只持有一个 Demand 根目录，并协调初始化、候选资源到不替换目标提交，以及候选
  * 资源恢复。提交清单、读取逻辑和公共合同由相邻模块负责；事件存储不执行领域决策或
- * 状态演进，不解析 Ledger/TODO 引用，也不发布 Demand 根目录。
+ * 状态演进，不解析 Ledger/TODO 引用，也不发布 Demand 根目录。同一进程内对同一
+ * canonical Demand root 的append短事务串行；跨进程/线程竞争仍由exclusive link与
+ * candidate owner/recovery合同处理。
  */
 
 const ACTIVE_APPEND_CANDIDATE_TOKENS = new Set<string>();
+
+/** 同一进程内按canonical Demand root串行append；不保存业务权威。 */
+class DemandFileEventStoreMutationQueue {
+  readonly #tails = new Map<string, Promise<void>>();
+
+  async run<Result>(
+    key: string,
+    operation: () => Promise<Result>,
+  ): Promise<Result> {
+    const predecessor = this.#tails.get(key) ?? Promise.resolve();
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const tail = predecessor.catch(() => undefined).then(() => gate);
+    this.#tails.set(key, tail);
+    await predecessor.catch(() => undefined);
+    try {
+      return await operation();
+    } finally {
+      release?.();
+      if (this.#tails.get(key) === tail) this.#tails.delete(key);
+    }
+  }
+}
+
+const APPEND_MUTATION_QUEUE = new DemandFileEventStoreMutationQueue();
 
 function admitCommitPublication(
   commit: Readonly<DemandEventStreamCommit>,
@@ -98,10 +125,7 @@ function admitCommitPublication(
     commit.commitSequence,
   );
   try {
-    admitWakeflowResourceOperation(
-      declaration.processing,
-      "exclusive-create",
-    );
+    admitWakeflowResourceOperation(declaration.processing, "exclusive-create");
   } catch (error: unknown) {
     if (error instanceof WakeflowResourceProcessingContractError) {
       fail("operation-failure", "$catalog");
@@ -133,10 +157,10 @@ export class DemandFileEventStore {
 
   constructor(root: RootedDirectory) {
     if (
-      typeof root !== "object"
-      || root === null
-      || types.isProxy(root)
-      || !(root instanceof RootedDirectory)
+      typeof root !== "object" ||
+      root === null ||
+      types.isProxy(root) ||
+      !(root instanceof RootedDirectory)
     ) {
       fail("input", "$root");
     }
@@ -169,9 +193,9 @@ export class DemandFileEventStore {
     }
   }
 
-  async readCommits(
-    options?: { readonly signal?: AbortSignal },
-  ): Promise<Readonly<DemandFileEventStoreReadResult>> {
+  async readCommits(options?: {
+    readonly signal?: AbortSignal;
+  }): Promise<Readonly<DemandFileEventStoreReadResult>> {
     const { signal } = parseDemandFileEventStoreOptions(options);
     return readAllDemandFileEventCommits(this.#root, signal);
   }
@@ -231,9 +255,9 @@ export class DemandFileEventStore {
   }
 
   /** 显式清理非活动的孤立候选、已链接残留或并发失败方。 */
-  async recoverAppendCandidates(
-    options?: { readonly signal?: AbortSignal },
-  ): Promise<Readonly<DemandFileEventStoreCandidateRecoveryReceipt>> {
+  async recoverAppendCandidates(options?: {
+    readonly signal?: AbortSignal;
+  }): Promise<Readonly<DemandFileEventStoreCandidateRecoveryReceipt>> {
     const { signal } = parseDemandFileEventStoreOptions(options);
     const inventory = await readDemandFileEventDirectory(
       this.#root,
@@ -251,11 +275,10 @@ export class DemandFileEventStore {
         }
         throw error;
       }
-      assertDemandFileEventStoreFile(
-        entry.node,
-        `$candidates/${index}`,
-        [1n, 2n],
-      );
+      assertDemandFileEventStoreFile(entry.node, `$candidates/${index}`, [
+        1n,
+        2n,
+      ]);
       if (candidateOwnerState(address) !== "inactive") {
         fail("candidate-busy", `$candidates/${index}`);
       }
@@ -285,9 +308,9 @@ export class DemandFileEventStore {
         );
       } catch (error: unknown) {
         if (
-          error instanceof DemandFileEventStoreError
-          && error.reason === "stream-invalid"
-          && entry.node.linkCount === 1n
+          error instanceof DemandFileEventStoreError &&
+          error.reason === "stream-invalid" &&
+          entry.node.linkCount === 1n
         ) {
           await this.#retireCandidate(entry.resourcePath, entry.node, signal);
           rolledBackCount += 1;
@@ -296,8 +319,8 @@ export class DemandFileEventStore {
         throw error;
       }
       if (
-        candidate.commit.commitSequence !== address.commitSequence
-        || candidate.commit.commitId !== address.commitId
+        candidate.commit.commitSequence !== address.commitSequence ||
+        candidate.commit.commitId !== address.commitId
       ) {
         fail("candidate-conflict", `$candidates/${index}`);
       }
@@ -345,11 +368,21 @@ export class DemandFileEventStore {
     preparedValue: Readonly<PreparedDemandEventStreamCommit>,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DemandFileEventStoreAppendReceipt>> {
+    return APPEND_MUTATION_QUEUE.run(this.#root.absolutePath, () =>
+      this.#appendUnderProcessGate(preparedValue, options),
+    );
+  }
+
+  async #appendUnderProcessGate(
+    preparedValue: Readonly<PreparedDemandEventStreamCommit>,
+    options?: { readonly signal?: AbortSignal },
+  ): Promise<Readonly<DemandFileEventStoreAppendReceipt>> {
     const { signal } = parseDemandFileEventStoreOptions(options);
     try {
       assertPreparedDemandEventStreamCommit(preparedValue);
     } catch (error: unknown) {
-      if (error instanceof DemandEventStreamCommitError) fail("input", "$commit");
+      if (error instanceof DemandEventStreamCommitError)
+        fail("input", "$commit");
       throw error;
     }
     const commit = parseDemandEventStreamCommit(preparedValue.commit);
@@ -386,15 +419,17 @@ export class DemandFileEventStore {
     let candidateNode: Readonly<FileNodeSnapshot>;
     ACTIVE_APPEND_CANDIDATE_TOKENS.add(ownerToken);
     try {
-      candidateNode = (await createFileCandidateDurably(
-        this.#root,
-        candidateRef,
-        encodeUtf8(renderDemandEventStreamCommit(commit)),
-        {
-          mode: DEMAND_FILE_EVENT_STORE_FILE_MODE,
-          ...(signal === undefined ? {} : { signal }),
-        },
-      )).node;
+      candidateNode = (
+        await createFileCandidateDurably(
+          this.#root,
+          candidateRef,
+          encodeUtf8(renderDemandEventStreamCommit(commit)),
+          {
+            mode: DEMAND_FILE_EVENT_STORE_FILE_MODE,
+            ...(signal === undefined ? {} : { signal }),
+          },
+        )
+      ).node;
     } catch (error: unknown) {
       ACTIVE_APPEND_CANDIDATE_TOKENS.delete(ownerToken);
       if (error instanceof DurableFileCandidateError) {
@@ -412,15 +447,17 @@ export class DemandFileEventStore {
       let disposition: DemandFileEventStoreAppendReceipt["disposition"] =
         "committed";
       try {
-        linkedNode = (await linkRegularFileWithoutReplacement(
-          this.#root,
-          candidateRef,
-          commitRef,
-          {
-            expectedSourceNode: candidateNode,
-            ...(signal === undefined ? {} : { signal }),
-          },
-        )).sourceNode;
+        linkedNode = (
+          await linkRegularFileWithoutReplacement(
+            this.#root,
+            candidateRef,
+            commitRef,
+            {
+              expectedSourceNode: candidateNode,
+              ...(signal === undefined ? {} : { signal }),
+            },
+          )
+        ).sourceNode;
       } catch (error: unknown) {
         if (!(error instanceof DurableRegularFileLinkError)) {
           throw error;
@@ -432,8 +469,8 @@ export class DemandFileEventStore {
           [1n, 2n],
         );
         if (
-          committed === null
-          || !sameDemandEventStreamCommit(committed.commit, commit)
+          committed === null ||
+          !sameDemandEventStreamCommit(committed.commit, commit)
         ) {
           await this.#retireCandidate(candidateRef, candidateNode, undefined);
           if (error.reason === "destination-exists") {
@@ -442,12 +479,15 @@ export class DemandFileEventStore {
           fail("commit-uncertain", "$commit");
         }
         await this.#settleCommitTarget(commitRef, committed.node, undefined);
-        linkedNode = (await readDemandFileEventCommitOrNull(
-          this.#root,
-          candidateRef,
-          undefined,
-          [1n, 2n],
-        ))?.node ?? null;
+        linkedNode =
+          (
+            await readDemandFileEventCommitOrNull(
+              this.#root,
+              candidateRef,
+              undefined,
+              [1n, 2n],
+            )
+          )?.node ?? null;
         if (error.reason === "destination-exists") {
           disposition = "idempotent";
         }
@@ -462,8 +502,8 @@ export class DemandFileEventStore {
         undefined,
       );
       if (
-        committed === null
-        || !sameDemandEventStreamCommit(committed.commit, commit)
+        committed === null ||
+        !sameDemandEventStreamCommit(committed.commit, commit)
       ) {
         fail("commit-uncertain", "$commit");
       }

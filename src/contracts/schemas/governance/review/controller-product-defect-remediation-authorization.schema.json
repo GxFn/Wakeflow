@@ -1,0 +1,301 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:review:controller-product-defect-remediation-authorization:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_AUTHORIZATION_SCHEMA",
+  "title": "WakeflowControllerProductDefectRemediationAuthorization",
+  "description": "Controller把一份精确Test产品缺陷结论映射到原TaskPackage边界内产品返工的不可变授权。",
+  "$comment": "Authorization只确定受影响Implementation baseline、失败检查映射与修复目标；它不修改Aggregate、不创建Delivery、不授予跨TaskPackage或redesign权限。后续Event Stream append与expected revision负责状态转换和幂等。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "productDefectRemediationId",
+    "programId",
+    "demandId",
+    "controllerWindowId",
+    "source",
+    "failedChecks",
+    "affectedTargets",
+    "boundary",
+    "authorizationRationale",
+    "authorizedAt",
+    "authorizationDigest"
+  ],
+  "properties": {
+    "kind": {
+      "const": "WakeflowControllerProductDefectRemediationAuthorization"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "productDefectRemediationId": {
+      "$ref": "#/$defs/productDefectRemediationId"
+    },
+    "programId": {
+      "$ref": "#/$defs/programId"
+    },
+    "demandId": {
+      "$ref": "#/$defs/demandId"
+    },
+    "controllerWindowId": {
+      "$ref": "#/$defs/windowId"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "failedChecks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/failedCheck"
+      }
+    },
+    "affectedTargets": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/affectedTarget"
+      }
+    },
+    "boundary": {
+      "const": "existing-task-packages-only"
+    },
+    "authorizationRationale": {
+      "$ref": "#/$defs/humanText"
+    },
+    "authorizedAt": {
+      "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+    },
+    "authorizationDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    }
+  },
+  "$defs": {
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "productDefectRemediationId": {
+      "type": "string",
+      "pattern": "^product-defect-remediation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetTaskId": {
+      "type": "string",
+      "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "taskPackageId": {
+      "type": "string",
+      "pattern": "^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "repositoryId": {
+      "type": "string",
+      "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "testCardId": {
+      "type": "string",
+      "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "testAttemptId": {
+      "type": "string",
+      "pattern": "^test-attempt_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetResultId": {
+      "type": "string",
+      "pattern": "^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetReviewDecisionId": {
+      "type": "string",
+      "pattern": "^target-review-decision_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "postAcceptanceRouteDigest",
+        "reviewSnapshotDigest",
+        "stateDigest",
+        "streamRevision",
+        "testTargetTaskId",
+        "testCard",
+        "testAttemptId",
+        "testDispatchPacketDigest",
+        "targetResult",
+        "testReviewDecision"
+      ],
+      "properties": {
+        "postAcceptanceRouteDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "reviewSnapshotDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "stateDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "streamRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "testTargetTaskId": {
+          "$ref": "#/$defs/targetTaskId"
+        },
+        "testCard": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["testCardId", "testCardDigest"],
+          "properties": {
+            "testCardId": {
+              "$ref": "#/$defs/testCardId"
+            },
+            "testCardDigest": {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            }
+          }
+        },
+        "testAttemptId": {
+          "$ref": "#/$defs/testAttemptId"
+        },
+        "testDispatchPacketDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "targetResult": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["targetResultId", "resultDigest"],
+          "properties": {
+            "targetResultId": {
+              "$ref": "#/$defs/targetResultId"
+            },
+            "resultDigest": {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            }
+          }
+        },
+        "testReviewDecision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["targetReviewDecisionId", "decisionDigest", "decidedAt"],
+          "properties": {
+            "targetReviewDecisionId": {
+              "$ref": "#/$defs/targetReviewDecisionId"
+            },
+            "decisionDigest": {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            },
+            "decidedAt": {
+              "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+            }
+          }
+        }
+      }
+    },
+    "failedCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkId", "outcome", "method", "observation"],
+      "properties": {
+        "checkId": {
+          "$ref": "#/$defs/checkId"
+        },
+        "outcome": {
+          "const": "failed"
+        },
+        "method": {
+          "$ref": "#/$defs/humanText"
+        },
+        "observation": {
+          "$ref": "#/$defs/humanText"
+        }
+      }
+    },
+    "affectedTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseline", "failedCheckIds", "correctionObjective"],
+      "properties": {
+        "baseline": {
+          "$ref": "#/$defs/implementationBaseline"
+        },
+        "failedCheckIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/checkId"
+          }
+        },
+        "correctionObjective": {
+          "$ref": "#/$defs/humanText"
+        }
+      }
+    },
+    "implementationBaseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetTaskId",
+        "taskPackageId",
+        "taskPackageDigest",
+        "repositoryId",
+        "windowId",
+        "targetResultId",
+        "resultDigest",
+        "targetReviewDecisionId",
+        "decisionDigest"
+      ],
+      "properties": {
+        "targetTaskId": {
+          "$ref": "#/$defs/targetTaskId"
+        },
+        "taskPackageId": {
+          "$ref": "#/$defs/taskPackageId"
+        },
+        "taskPackageDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        },
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        },
+        "targetResultId": {
+          "$ref": "#/$defs/targetResultId"
+        },
+        "resultDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "targetReviewDecisionId": {
+          "$ref": "#/$defs/targetReviewDecisionId"
+        },
+        "decisionDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "checkId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "humanText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192,
+      "pattern": "^(?!\\s)(?![\\s\\S]*\\r)(?![\\s\\S]*[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$"
+    }
+  }
+}

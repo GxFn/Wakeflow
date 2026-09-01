@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:target-delivery-prepared-data:v3",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_DELIVERY_PREPARED_EVENT_DATA_V3_SCHEMA",
+  "title": "WakeflowTargetDeliveryPreparedEventDataV3",
+  "description": "delivery.target-delivery-prepared persisted event v3 的严格payload。",
+  "$comment": "v3接受initial、Implementation Review rework或Controller产品缺陷remediation三种互斥Intent来源；它仍未取得WindowWorkClaim或跨越宿主效果边界。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intent"],
+  "properties": {
+    "intent": {
+      "$ref": "urn:wakeflow:governance:delivery:target-delivery-intent:v1"
+    }
+  }
+}

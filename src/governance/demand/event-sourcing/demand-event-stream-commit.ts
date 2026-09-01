@@ -1,16 +1,10 @@
-import type {
-  WakeflowDemandEventStreamCommit as CommitWire,
-} from "../../../contracts/generated/governance/demand/demand-event-stream-commit.generated.js";
+import type { WakeflowDemandEventStreamCommit as CommitWire } from "../../../contracts/generated/governance/demand/demand-event-stream-commit.generated.js";
 import { types } from "node:util";
-import {
-  WAKEFLOW_DEMAND_EVENT_STREAM_COMMIT_SCHEMA,
-} from "../../../contracts/generated/governance/demand/demand-event-stream-commit.generated.js";
+import { WAKEFLOW_DEMAND_EVENT_STREAM_COMMIT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-stream-commit.generated.js";
 import { WAKEFLOW_DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-stored-event.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
   Sha256Error,
@@ -70,6 +64,11 @@ import {
   assertSupportedDemandEventSourcingStateModelVersion,
   DemandEventSourcingStateVersionError,
 } from "./demand-event-sourcing-state-version.js";
+import { targetDeliveryHostEffectObservationCommitId } from "../../delivery/target-delivery-host-effect-observation.js";
+import { targetHostEffectRearmCommitId } from "../../delivery/target-host-effect-rearm.js";
+import { targetResultRecordedCommitIdFromResult } from "../../result/target-result.js";
+import { controllerReviewDecisionCommitId } from "../../review/controller-review-decision.js";
+import { controllerTargetReviewResumeCommitId } from "../../review/controller-target-review-resume.js";
 import {
   parseDemandEventCommitSequence,
   parseDemandEventStreamRevision,
@@ -116,8 +115,7 @@ export interface DemandEventStreamAppendSourceExpectation {
 export interface PreparedDemandEventStreamCommit {
   readonly commit: Readonly<DemandEventStreamCommit>;
   readonly aggregate: Readonly<DemandEventSourcingAggregate>;
-  readonly sourceExpectation:
-    Readonly<DemandEventStreamAppendSourceExpectation>;
+  readonly sourceExpectation: Readonly<DemandEventStreamAppendSourceExpectation>;
 }
 
 export interface PrepareDemandEventStreamCommitInput {
@@ -145,23 +143,25 @@ export type DemandEventStreamCommitErrorReason =
   | "representation";
 
 const ERROR_MESSAGES = {
-  "input": "Demand Event Stream commit input is invalid.",
-  "json": "Demand Event Stream commit is not passive JSON data.",
-  "schema": "Demand Event Stream commit does not satisfy its Schema.",
-  "identifier": "Demand Event Stream commit contains an invalid identity.",
-  "position": "Demand Event Stream commit contains an invalid stream position.",
-  "digest": "Demand Event Stream commit contains an invalid digest.",
-  "event": "Demand Event Stream commit contains an invalid event.",
-  "aggregate": "Demand Event Stream commit requires a valid current aggregate.",
-  "relation": "Demand Event Stream commit fields do not form one append batch.",
-  "event-version": "Demand Event Stream commit contains an unsupported event version.",
-  "state-version": "Demand Event Stream commit contains an unsupported state-model version.",
-  "transition": "Demand Event Stream commit cannot be evolved from the current state.",
-  "representation": "Demand Event Stream commit bytes are not deterministic.",
-} as const satisfies Readonly<Record<
-  DemandEventStreamCommitErrorReason,
-  string
->>;
+  input: "Demand Event Stream commit input is invalid.",
+  json: "Demand Event Stream commit is not passive JSON data.",
+  schema: "Demand Event Stream commit does not satisfy its Schema.",
+  identifier: "Demand Event Stream commit contains an invalid identity.",
+  position: "Demand Event Stream commit contains an invalid stream position.",
+  digest: "Demand Event Stream commit contains an invalid digest.",
+  event: "Demand Event Stream commit contains an invalid event.",
+  aggregate: "Demand Event Stream commit requires a valid current aggregate.",
+  relation: "Demand Event Stream commit fields do not form one append batch.",
+  "event-version":
+    "Demand Event Stream commit contains an unsupported event version.",
+  "state-version":
+    "Demand Event Stream commit contains an unsupported state-model version.",
+  transition:
+    "Demand Event Stream commit cannot be evolved from the current state.",
+  representation: "Demand Event Stream commit bytes are not deterministic.",
+} as const satisfies Readonly<
+  Record<DemandEventStreamCommitErrorReason, string>
+>;
 
 export class DemandEventStreamCommitError extends Error {
   override readonly name = "DemandEventStreamCommitError";
@@ -253,10 +253,7 @@ export function parseDemandEventStreamCommit(
     wire.expectedStreamRevision,
     "$/expectedStreamRevision",
   );
-  if (
-    expectedStreamRevision
-      > Number.MAX_SAFE_INTEGER - wire.events.length
-  ) {
+  if (expectedStreamRevision > Number.MAX_SAFE_INTEGER - wire.events.length) {
     fail("position", "$/expectedStreamRevision");
   }
   let commitSequence: DemandEventCommitSequence;
@@ -295,9 +292,9 @@ export function parseDemandEventStreamCommit(
       throw error;
     }
     if (
-      event.demandId !== demandId
-      || event.streamRevision !== firstStreamRevision + index
-      || eventIds.has(event.eventId)
+      event.demandId !== demandId ||
+      event.streamRevision !== firstStreamRevision + index ||
+      eventIds.has(event.eventId)
     ) {
       fail("relation", `$/events/${index}`);
     }
@@ -305,10 +302,10 @@ export function parseDemandEventStreamCommit(
     events.push(event);
   }
   if (
-    firstStreamRevision !== expectedStreamRevision + 1
-    || lastStreamRevision !== expectedStreamRevision + events.length
-    || (commitSequence === 1) !== (expectedStreamRevision === 0)
-    || (commitSequence === 1) !== (wire.previousCommitDigest === null)
+    firstStreamRevision !== expectedStreamRevision + 1 ||
+    lastStreamRevision !== expectedStreamRevision + events.length ||
+    (commitSequence === 1) !== (expectedStreamRevision === 0) ||
+    (commitSequence === 1) !== (wire.previousCommitDigest === null)
   ) {
     fail("relation", "$commit");
   }
@@ -329,9 +326,10 @@ export function parseDemandEventStreamCommit(
     expectedStreamRevision,
     firstStreamRevision,
     lastStreamRevision,
-    previousCommitDigest: wire.previousCommitDigest === null
-      ? null
-      : parseDigest(wire.previousCommitDigest, "$/previousCommitDigest"),
+    previousCommitDigest:
+      wire.previousCommitDigest === null
+        ? null
+        : parseDigest(wire.previousCommitDigest, "$/previousCommitDigest"),
     events: Object.freeze(frozenEvents),
   });
 }
@@ -365,14 +363,10 @@ export function parseDemandEventStreamCommitDocument(
 export function computeDemandEventStreamCommitDigest(
   value: unknown,
 ): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(
-    parseDemandEventStreamCommit(value),
-  );
+  return computeCanonicalJsonSha256Digest(parseDemandEventStreamCommit(value));
 }
 
-function parsePrepareInput(
-  value: unknown,
-): Readonly<{
+function parsePrepareInput(value: unknown): Readonly<{
   readonly commitId: WakeflowDurableId<"demand-event-commit">;
   readonly commandDigest: Sha256Digest;
   readonly events: readonly Readonly<DemandUncommittedEvent>[];
@@ -386,8 +380,8 @@ function parsePrepareInput(
   }
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== PREPARE_FIELDS.length
-    || keys.some((key, index) => key !== PREPARE_FIELDS[index])
+    keys.length !== PREPARE_FIELDS.length ||
+    keys.some((key, index) => key !== PREPARE_FIELDS[index])
   ) {
     fail("input", "$input");
   }
@@ -420,6 +414,70 @@ function parsePrepareInput(
   });
 }
 
+/** 复验事件自身声明的提交边界，避免恢复身份与实际 Commit 脱节。 */
+function assertEventCommitBoundary(
+  event: Readonly<DemandUncommittedEvent>,
+  commitId: WakeflowDurableId<"demand-event-commit">,
+  expectedStreamRevision: number,
+  path: string,
+): void {
+  if (
+    event.eventType === "lifecycle.demand-completed" &&
+    event.data.completion.observedState.streamRevision !==
+      expectedStreamRevision
+  ) {
+    fail("relation", path);
+  }
+  if (
+    event.eventType === "testing.test-card-created" &&
+    event.data.testCard.source.streamRevision !== expectedStreamRevision
+  ) {
+    fail("relation", path);
+  }
+  if (
+    event.eventType === "delivery.target-host-effect-claimed" &&
+    (event.data.claim.claimTransition.commitId !== commitId ||
+      event.data.claim.claimTransition.expectedStreamRevision !==
+        expectedStreamRevision)
+  ) {
+    fail("relation", path);
+  }
+  if (
+    event.eventType === "delivery.target-host-effect-observed" &&
+    targetDeliveryHostEffectObservationCommitId(
+      event.data.observation.action.actionId,
+    ) !== commitId
+  ) {
+    fail("relation", path);
+  }
+  if (
+    event.eventType === "delivery.target-host-effect-rearmed" &&
+    targetHostEffectRearmCommitId(event.data.rearm) !== commitId
+  ) {
+    fail("relation", path);
+  }
+  if (
+    event.eventType === "result.target-result-recorded" &&
+    targetResultRecordedCommitIdFromResult(event.data.result) !== commitId
+  ) {
+    fail("relation", path);
+  }
+  if (
+    event.eventType === "review.target-result-decided" &&
+    (controllerReviewDecisionCommitId(event.data.decision) !== commitId ||
+      event.data.decision.reviewed.streamRevision !== expectedStreamRevision)
+  ) {
+    fail("relation", path);
+  }
+  if (
+    event.eventType === "review.target-result-resumed" &&
+    (controllerTargetReviewResumeCommitId(event.data.resume) !== commitId ||
+      event.data.resume.blockedSource.streamRevision !== expectedStreamRevision)
+  ) {
+    fail("relation", path);
+  }
+}
+
 /**
  * 把提交记录确定性应用到指定的当前聚合。
  *
@@ -443,17 +501,15 @@ export function applyDemandEventStreamCommit(
   }
   const commit = parseDemandEventStreamCommit(commitValue);
   if (
-    (current === null && (
-      commit.commitSequence !== 1
-      || commit.expectedStreamRevision !== 0
-      || commit.previousCommitDigest !== null
-    ))
-    || (current !== null && (
-      commit.demandId !== current.demandId
-      || commit.commitSequence !== current.commitSequence + 1
-      || commit.expectedStreamRevision !== current.streamRevision
-      || commit.previousCommitDigest !== current.lastCommitDigest
-    ))
+    (current === null &&
+      (commit.commitSequence !== 1 ||
+        commit.expectedStreamRevision !== 0 ||
+        commit.previousCommitDigest !== null)) ||
+    (current !== null &&
+      (commit.demandId !== current.demandId ||
+        commit.commitSequence !== current.commitSequence + 1 ||
+        commit.expectedStreamRevision !== current.streamRevision ||
+        commit.previousCommitDigest !== current.lastCommitDigest))
   ) {
     fail("relation", "$commit");
   }
@@ -481,6 +537,12 @@ export function applyDemandEventStreamCommit(
       }
       throw error;
     }
+    assertEventCommitBoundary(
+      currentEvent,
+      commit.commitId,
+      commit.expectedStreamRevision,
+      `$/events/${index}`,
+    );
     let next: Readonly<DemandAggregateState>;
     try {
       next = evolveDemandEventSourcingState(state, currentEvent);
@@ -491,9 +553,9 @@ export function applyDemandEventStreamCommit(
       throw error;
     }
     if (
-      storedEvent.streamRevision !== commit.firstStreamRevision + index
-      || storedEvent.resultingStateDigest
-        !== computeDemandAggregateStateDigest(next)
+      storedEvent.streamRevision !== commit.firstStreamRevision + index ||
+      storedEvent.resultingStateDigest !==
+        computeDemandAggregateStateDigest(next)
     ) {
       fail("transition", `$/events/${index}`);
     }
@@ -525,11 +587,11 @@ export function assertPreparedDemandEventStreamCommit(
   value: unknown,
 ): asserts value is Readonly<PreparedDemandEventStreamCommit> {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !Object.isFrozen(value)
-    || !ISSUED_PREPARED_COMMITS.has(value)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !Object.isFrozen(value) ||
+    !ISSUED_PREPARED_COMMITS.has(value)
   ) {
     fail("input", "$preparedCommit");
   }
@@ -555,9 +617,8 @@ function buildDemandEventStreamCommit(
   if (firstEvent === undefined) fail("input", "$/events");
   const expectedStreamRevision = current?.streamRevision ?? 0;
   if (
-    (current !== null && current.commitSequence >= Number.MAX_SAFE_INTEGER)
-    || expectedStreamRevision
-      > Number.MAX_SAFE_INTEGER - input.events.length
+    (current !== null && current.commitSequence >= Number.MAX_SAFE_INTEGER) ||
+    expectedStreamRevision > Number.MAX_SAFE_INTEGER - input.events.length
   ) {
     fail("position", "$aggregate");
   }
@@ -573,6 +634,12 @@ function buildDemandEventStreamCommit(
   let state: Readonly<DemandAggregateState> | null = current?.state ?? null;
   const storedEvents: DemandEventSourcingStoredEvent[] = [];
   for (const [index, event] of input.events.entries()) {
+    assertEventCommitBoundary(
+      event,
+      input.commitId,
+      expectedStreamRevision,
+      `$/events/${index}`,
+    );
     let next: Readonly<DemandAggregateState>;
     try {
       next = evolveDemandEventSourcingState(state, event);
@@ -582,11 +649,13 @@ function buildDemandEventStreamCommit(
       }
       throw error;
     }
-    storedEvents.push(createDemandEventSourcingStoredEvent(
-      event,
-      expectedStreamRevision + index + 1,
-      next,
-    ));
+    storedEvents.push(
+      createDemandEventSourcingStoredEvent(
+        event,
+        expectedStreamRevision + index + 1,
+        next,
+      ),
+    );
     state = next;
   }
   const commit = parseDemandEventStreamCommit({

@@ -4,6 +4,39 @@
  */
 
 /**
+ * Controller 为一个目标窗口规划的不可变 Target Task 执行合同。
+ */
+export type WakeflowTaskPackage = ({
+[k: string]: unknown | undefined
+} & {
+artifactKind: "wakeflow-task-package"
+schemaVersion: 1
+programId: string
+configDigest: WakeflowSha256DigestText
+demandId: string
+demandAuthorityDigest: WakeflowSha256DigestText
+taskPackageId: string
+targetTaskId: string
+createdAt: WakeflowUtcInstantText
+assignment: (ImplementationAssignment | TestAssignment)
+workType: ("implementation" | "test")
+objective: string
+confirmedContext: NonEmptyTextList
+/**
+ * @minItems 1
+ * @maxItems 32
+ */
+selectedAuthorityRefs: [WakeflowLedgerAuthorityMemberReference, ...(WakeflowLedgerAuthorityMemberReference)[]]
+boundaries: Boundaries
+completionExpectations: NonEmptyTextList
+commitExpectation?: ("commit" | "leave-uncommitted")
+/**
+ * @maxItems 32
+ */
+acceptanceAnchors: AcceptanceAnchor[]
+testCard?: TestCardTuple
+})
+/**
  * Wakeflow portable records 使用的完整 lowercase SHA-256 digest 文本；算法前缀和 256-bit hexadecimal payload 都属于词法合同。
  */
 export type WakeflowSha256DigestText = string
@@ -63,39 +96,11 @@ export type TextList = string[]
 export interface WakeflowTargetTaskPlannedEventDataV1 {
 taskPackage: WakeflowTaskPackage
 }
-/**
- * Controller 为一个产品窗口规划的不可变 Target Task 执行合同。
- */
-export interface WakeflowTaskPackage {
-artifactKind: "wakeflow-task-package"
-schemaVersion: 1
-programId: string
-configDigest: WakeflowSha256DigestText
-demandId: string
-demandAuthorityDigest: WakeflowSha256DigestText
-taskPackageId: string
-targetTaskId: string
-createdAt: WakeflowUtcInstantText
-assignment: Assignment
-workType: "implementation"
-objective: string
-confirmedContext: NonEmptyTextList
-/**
- * @minItems 1
- * @maxItems 32
- */
-selectedAuthorityRefs: [WakeflowLedgerAuthorityMemberReference, ...(WakeflowLedgerAuthorityMemberReference)[]]
-boundaries: Boundaries
-completionExpectations: NonEmptyTextList
-commitExpectation: ("commit" | "leave-uncommitted")
-/**
- * @minItems 1
- * @maxItems 32
- */
-acceptanceAnchors: [AcceptanceAnchor, ...(AcceptanceAnchor)[]]
-}
-export interface Assignment {
+export interface ImplementationAssignment {
 repositoryId: string
+windowId: string
+}
+export interface TestAssignment {
 windowId: string
 }
 export interface Boundaries {
@@ -108,6 +113,10 @@ anchorId: string
 claim: string
 probe: string
 expected: string
+}
+export interface TestCardTuple {
+testCardId: string
+testCardDigest: WakeflowSha256DigestText
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */

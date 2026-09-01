@@ -27,9 +27,7 @@ import {
   DemandEventSourcingRepository,
   DemandEventSourcingRepositoryError,
 } from "./demand-event-sourcing-repository.js";
-import {
-  DemandFileEventStoreError,
-} from "./demand-file-event-store.js";
+import { DemandFileEventStoreError } from "./demand-file-event-store.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：标准命令执行管线。
@@ -62,16 +60,19 @@ export type DemandEventSourcingCommandHandlerErrorReason =
   | "aborted";
 
 const ERROR_MESSAGES = {
-  "input": "Demand Event Sourcing Command Handler input is invalid.",
-  "idempotency-conflict": "Demand Event Sourcing commitId is already bound to another command.",
-  "concurrency-conflict": "Demand Event Sourcing command expected a stale stream revision.",
-  "decision-rejected": "Demand Event Sourcing command is not admitted from current state.",
-  "stream": "Demand Event Sourcing command cannot load or append its stream.",
-  "aborted": "Demand Event Sourcing command was aborted before its next commit point.",
-} as const satisfies Readonly<Record<
-  DemandEventSourcingCommandHandlerErrorReason,
-  string
->>;
+  input: "Demand Event Sourcing Command Handler input is invalid.",
+  "idempotency-conflict":
+    "Demand Event Sourcing commitId is already bound to another command.",
+  "concurrency-conflict":
+    "Demand Event Sourcing command expected a stale stream revision.",
+  "decision-rejected":
+    "Demand Event Sourcing command is not admitted from current state.",
+  stream: "Demand Event Sourcing command cannot load or append its stream.",
+  aborted:
+    "Demand Event Sourcing command was aborted before its next commit point.",
+} as const satisfies Readonly<
+  Record<DemandEventSourcingCommandHandlerErrorReason, string>
+>;
 
 export class DemandEventSourcingCommandHandlerError extends Error {
   override readonly name = "DemandEventSourcingCommandHandlerError";
@@ -89,11 +90,7 @@ export class DemandEventSourcingCommandHandlerError extends Error {
   }
 }
 
-const OPTION_FIELDS = new Set([
-  "commitId",
-  "expectedStreamRevision",
-  "signal",
-]);
+const OPTION_FIELDS = new Set(["commitId", "expectedStreamRevision", "signal"]);
 
 function fail(
   reason: DemandEventSourcingCommandHandlerErrorReason,
@@ -106,10 +103,10 @@ function assertRepository(
   value: unknown,
 ): asserts value is DemandEventSourcingRepository {
   if (
-    typeof value !== "object"
-    || value === null
-    || types.isProxy(value)
-    || !(value instanceof DemandEventSourcingRepository)
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !(value instanceof DemandEventSourcingRepository)
   ) {
     fail("input", "$repository");
   }
@@ -126,9 +123,9 @@ function parseOptions(
     throw error;
   }
   if (
-    !Object.hasOwn(record, "commitId")
-    || !Object.hasOwn(record, "expectedStreamRevision")
-    || Object.keys(record).some((key) => !OPTION_FIELDS.has(key))
+    !Object.hasOwn(record, "commitId") ||
+    !Object.hasOwn(record, "expectedStreamRevision") ||
+    Object.keys(record).some((key) => !OPTION_FIELDS.has(key))
   ) {
     fail("input", "$options");
   }
@@ -144,16 +141,13 @@ function parseOptions(
     throw error;
   }
   const expected = record.expectedStreamRevision;
-  if (
-    !Number.isSafeInteger(expected)
-    || (expected as number) < 0
-  ) {
+  if (!Number.isSafeInteger(expected) || (expected as number) < 0) {
     fail("input", "$/expectedStreamRevision");
   }
   const signal = record.signal;
   if (
-    signal !== undefined
-    && (types.isProxy(signal) || !(signal instanceof AbortSignal))
+    signal !== undefined &&
+    (types.isProxy(signal) || !(signal instanceof AbortSignal))
   ) {
     fail("input", "$/signal");
   }
@@ -185,6 +179,56 @@ function mapRepositoryError(error: unknown): never {
   throw error;
 }
 
+async function loadAggregateForCommand(
+  repository: DemandEventSourcingRepository,
+  signal: AbortSignal | undefined,
+) {
+  // 同Commit并发winner完成link到退休双链接candidate之间，reader可短暂
+  // 保守报告stream。只对该错误最多三次完整重读；不等待、不宽松校验。
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await repository.load(
+        signal === undefined ? undefined : { signal },
+      );
+    } catch (error: unknown) {
+      if (
+        error instanceof DemandEventSourcingRepositoryError &&
+        error.reason === "stream" &&
+        attempt < 3
+      ) {
+        continue;
+      }
+      mapRepositoryError(error);
+    }
+  }
+  fail("stream", "$repository");
+}
+
+async function findCommitForCommand(
+  repository: DemandEventSourcingRepository,
+  commitId: WakeflowDurableId<"demand-event-commit">,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<DemandEventStreamCommit> | null> {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await repository.findCommitById(
+        commitId,
+        signal === undefined ? undefined : { signal },
+      );
+    } catch (error: unknown) {
+      if (
+        error instanceof DemandEventSourcingRepositoryError &&
+        error.reason === "stream" &&
+        attempt < 3
+      ) {
+        continue;
+      }
+      mapRepositoryError(error);
+    }
+  }
+  fail("stream", "$repository");
+}
+
 /** 执行一条 Demand 命令；所有领域转换都在任何文件副作用之前完成。 */
 export async function executeDemandEventSourcingCommand(
   repository: DemandEventSourcingRepository,
@@ -205,36 +249,23 @@ export async function executeDemandEventSourcingCommand(
   const commandDigest = computeDemandEventSourcingCommandDigest(command);
   if (options.signal?.aborted === true) fail("aborted", "$signal");
 
-  let loaded;
-  try {
-    loaded = await repository.load(
-      options.signal === undefined ? undefined : { signal: options.signal },
-    );
-  } catch (error: unknown) {
-    mapRepositoryError(error);
-  }
+  const loaded = await loadAggregateForCommand(repository, options.signal);
   const current = loaded?.aggregate ?? null;
   const currentRevision = current?.streamRevision ?? 0;
-  if (
-    options.expectedStreamRevision !== currentRevision
-  ) {
+  if (options.expectedStreamRevision !== currentRevision) {
     // 正常新命令不扫描不可变前缀；只有过期预期可能表示重试，
     // 此时才按 `commitId` 执行有界历史查找。
-    let existing: Readonly<DemandEventStreamCommit> | null;
-    try {
-      existing = await repository.findCommitById(
-        options.commitId,
-        options.signal === undefined ? undefined : { signal: options.signal },
-      );
-    } catch (error: unknown) {
-      mapRepositoryError(error);
-    }
+    const existing = await findCommitForCommand(
+      repository,
+      options.commitId,
+      options.signal,
+    );
     if (existing === null) {
       fail("concurrency-conflict", "$/expectedStreamRevision");
     }
     if (
-      existing.commandDigest !== commandDigest
-      || existing.expectedStreamRevision !== options.expectedStreamRevision
+      existing.commandDigest !== commandDigest ||
+      existing.expectedStreamRevision !== options.expectedStreamRevision
     ) {
       fail("idempotency-conflict", "$/commitId");
     }

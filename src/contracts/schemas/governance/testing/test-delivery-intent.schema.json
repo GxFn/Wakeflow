@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:testing:test-delivery-intent:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TEST_DELIVERY_INTENT_SCHEMA",
+  "title": "WakeflowTestDeliveryIntent",
+  "description": "把一份Test TaskPackage和同一logical Test attempt授权给精确Test窗口Binding的不可变Intent。",
+  "$comment": "省略replacement表示initial authorization；存在replacement时只允许替换一个已证明rejected-before-effect的host delivery，不创建新Test attempt。Intent不执行环境准备、不创建packet/envelope、不取得WindowWorkClaim、不发送宿主消息，也不保存prompt、raw handle或Test结果。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "targetDeliveryId",
+    "programId",
+    "configDigest",
+    "demandId",
+    "target",
+    "route",
+    "attempt",
+    "language",
+    "preparedAt",
+    "intentDigest"
+  ],
+  "properties": {
+    "kind": {
+      "const": "WakeflowTestDeliveryIntent"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "targetDeliveryId": {
+      "$ref": "#/$defs/targetDeliveryId"
+    },
+    "programId": {
+      "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/properties/programId"
+    },
+    "configDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    },
+    "demandId": {
+      "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/properties/demandId"
+    },
+    "target": {
+      "$ref": "#/$defs/target"
+    },
+    "route": {
+      "$ref": "#/$defs/route"
+    },
+    "attempt": {
+      "$ref": "urn:wakeflow:governance:testing:test-execution-attempt:v1"
+    },
+    "replacement": {
+      "$ref": "#/$defs/replacement"
+    },
+    "language": {
+      "enum": ["en", "zh-Hans"]
+    },
+    "preparedAt": {
+      "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+    },
+    "intentDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    }
+  },
+  "$defs": {
+    "targetDeliveryId": {
+      "type": "string",
+      "pattern": "^target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetTaskId",
+        "taskPackageId",
+        "taskPackageRef",
+        "taskPackageDigest",
+        "testCard"
+      ],
+      "properties": {
+        "targetTaskId": {
+          "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/properties/targetTaskId"
+        },
+        "taskPackageId": {
+          "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/properties/taskPackageId"
+        },
+        "taskPackageRef": {
+          "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+        },
+        "taskPackageDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "testCard": {
+          "$ref": "urn:wakeflow:governance:testing:test-execution-attempt:v1#/$defs/testCardTuple"
+        }
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hostId", "windowId", "bindingId"],
+      "properties": {
+        "hostId": {
+          "$ref": "urn:wakeflow:workspace:window-runtime:host-binding:v1#/properties/hostId"
+        },
+        "windowId": {
+          "$ref": "urn:wakeflow:workspace:window-runtime:host-binding:v1#/properties/windowId"
+        },
+        "bindingId": {
+          "$ref": "urn:wakeflow:workspace:window-runtime:host-binding:v1#/properties/bindingId"
+        }
+      }
+    },
+    "claimId": {
+      "type": "string",
+      "pattern": "^window_work_claim_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "eventId": {
+      "type": "string",
+      "pattern": "^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "commitId": {
+      "type": "string",
+      "pattern": "^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "replacement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "authorizationOrdinal",
+        "previousDelivery",
+        "rejectedHostEffect"
+      ],
+      "properties": {
+        "kind": {
+          "const": "rejected-before-effect"
+        },
+        "authorizationOrdinal": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 32
+        },
+        "previousDelivery": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "targetDeliveryId",
+            "intentDigest",
+            "testDispatchPacketDigest"
+          ],
+          "properties": {
+            "targetDeliveryId": {
+              "$ref": "#/$defs/targetDeliveryId"
+            },
+            "intentDigest": {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            },
+            "testDispatchPacketDigest": {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            }
+          }
+        },
+        "rejectedHostEffect": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "claimId",
+            "claimDigest",
+            "claimEventId",
+            "claimCommitId",
+            "observationDigest",
+            "observedAt"
+          ],
+          "properties": {
+            "claimId": {
+              "$ref": "#/$defs/claimId"
+            },
+            "claimDigest": {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            },
+            "claimEventId": {
+              "$ref": "#/$defs/eventId"
+            },
+            "claimCommitId": {
+              "$ref": "#/$defs/commitId"
+            },
+            "observationDigest": {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            },
+            "observedAt": {
+              "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+            }
+          }
+        }
+      }
+    }
+  }
+}

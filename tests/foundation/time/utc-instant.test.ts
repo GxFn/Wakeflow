@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   compareUtcInstants,
   parseUtcInstant,
+  utcInstantEpochNanoseconds,
   UtcInstantError,
   type UtcInstant,
   type UtcInstantErrorReason,
@@ -124,30 +125,36 @@ test("comparison uses the nanosecond timeline rather than lexical text", () => {
   equal(compareUtcInstants(shortFraction, longFraction), 0);
   equal(compareUtcInstants(whole, shortFraction), -1);
   equal(compareUtcInstants(nextNanosecond, longFraction), 1);
+  equal(utcInstantEpochNanoseconds(epoch), 0n);
+  equal(utcInstantEpochNanoseconds(afterEpoch), 1n);
+  equal(utcInstantEpochNanoseconds(beforeEpoch), -1n);
 });
 
 test("branded comparison still revalidates both runtime values", () => {
   expectUtcInstantError(
-    () => compareUtcInstants(
-      asUtcInstant("2026-02-30T00:00:00Z"),
-      parseUtcInstant("2026-08-25T10:20:30Z"),
-    ),
+    () =>
+      compareUtcInstants(
+        asUtcInstant("2026-02-30T00:00:00Z"),
+        parseUtcInstant("2026-08-25T10:20:30Z"),
+      ),
     "calendar",
     "$left",
   );
   expectUtcInstantError(
-    () => compareUtcInstants(
-      asUtcInstant("not-an-instant"),
-      parseUtcInstant("2026-08-25T10:20:30Z"),
-    ),
+    () =>
+      compareUtcInstants(
+        asUtcInstant("not-an-instant"),
+        parseUtcInstant("2026-08-25T10:20:30Z"),
+      ),
     "format",
     "$left",
   );
   expectUtcInstantError(
-    () => compareUtcInstants(
-      parseUtcInstant("2026-08-25T10:20:30Z"),
-      asUtcInstant("not-an-instant"),
-    ),
+    () =>
+      compareUtcInstants(
+        parseUtcInstant("2026-08-25T10:20:30Z"),
+        asUtcInstant("not-an-instant"),
+      ),
     "format",
     "$right",
   );

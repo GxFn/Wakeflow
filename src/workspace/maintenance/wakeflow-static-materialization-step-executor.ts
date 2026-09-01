@@ -23,9 +23,7 @@ import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
 } from "../../configuration/wakeflow-config-root-placement.js";
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   parsePlainRecord,
@@ -39,64 +37,49 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
-import {
-  LEDGER_AUTHORITY_LAYOUT_DIGEST,
-} from "../../governance/ledger/ledger-authority-layout.js";
+import { LEDGER_AUTHORITY_LAYOUT_DIGEST } from "../../governance/ledger/ledger-authority-layout.js";
 import {
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,
 } from "../../governance/ledger/ledger-authority-store.js";
-import {
-  LEDGER_DURABLE_DIRECTORY_MODE,
-} from "../../governance/ledger/ledger-authority-storage-policy.js";
+import { LEDGER_DURABLE_DIRECTORY_MODE } from "../../governance/ledger/ledger-authority-storage-policy.js";
 import {
   initializeFreshTodoCollection,
   FreshTodoCollectionInitializationError,
 } from "../../governance/todo/todo-collection-initialization.js";
-import {
-  TODO_COLLECTION_INITIALIZATION_AUTHORITY_DIGEST,
-} from "../../governance/todo/todo-collection-initialization-authority.js";
-import {
-  createWakeflowGitignoreBodyAuthority,
-} from "../managed-integration/wakeflow-gitignore-body-authority.js";
+import { TODO_COLLECTION_INITIALIZATION_AUTHORITY_DIGEST } from "../../governance/todo/todo-collection-initialization-authority.js";
+import { createWakeflowGitignoreBodyAuthority } from "../managed-integration/wakeflow-gitignore-body-authority.js";
 import {
   recomposeWakeflowWorkspaceGitignore,
   WakeflowGitignoreRecompositionError,
 } from "../managed-integration/wakeflow-gitignore-recomposition.js";
-import {
-  createWakeflowProgramInstructionBodyAuthority,
-} from "../managed-integration/wakeflow-program-instruction-body-authority.js";
+import { createWakeflowProgramInstructionBodyAuthority } from "../managed-integration/wakeflow-program-instruction-body-authority.js";
 import {
   recomposeWakeflowProgramInstruction,
   WakeflowProgramInstructionRecompositionError,
 } from "../managed-integration/wakeflow-program-instruction-recomposition.js";
-import {
-  createWakeflowManagedSupportResourceCatalog,
-} from "../support/wakeflow-managed-support-resource-catalog.js";
+import { createWakeflowManagedSupportResourceCatalog } from "../support/wakeflow-managed-support-resource-catalog.js";
 import {
   materializeWakeflowManagedSupportRoot,
   WakeflowManagedSupportRootMaterializationError,
 } from "../support/wakeflow-managed-support-root-materialization.js";
-import {
-  createWakeflowSupportMemoryAuthority,
-} from "../support/wakeflow-support-memory-authority.js";
+import { createWakeflowSupportMemoryAuthority } from "../support/wakeflow-support-memory-authority.js";
 import {
   publishWakeflowSupportMemory,
   WakeflowSupportMemoryPublicationError,
 } from "../support/wakeflow-support-memory-publication.js";
+import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
-  createWakeflowWorkspaceStaticResourceMatrix,
-} from "../wakeflow-workspace-static-resource-matrix.js";
-import {
-  compileWakeflowHostCapabilityLayoutAuthority,
-} from "../host-runtime/wakeflow-host-capability-layout-authority.js";
+  materializeWakeflowSharedCoordinationLayout,
+  WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST,
+  WakeflowSharedCoordinationLayoutError,
+} from "../wakeflow-shared-coordination-layout.js";
+import { compileWakeflowHostCapabilityLayoutAuthority } from "../host-runtime/wakeflow-host-capability-layout-authority.js";
 import {
   materializeWakeflowHostCapabilityLayout,
   WakeflowHostCapabilityLayoutMaterializationError,
 } from "../host-runtime/wakeflow-host-capability-layout-materialization.js";
-import {
-  compileWakeflowFreshWindowRuntimeAuthority,
-} from "../window-runtime/wakeflow-window-runtime-fresh-authority.js";
+import { compileWakeflowFreshWindowRuntimeAuthority } from "../window-runtime/wakeflow-window-runtime-fresh-authority.js";
 import {
   publishFreshWakeflowWindowRuntime,
   WakeflowFreshWindowRuntimePublicationError,
@@ -105,12 +88,8 @@ import {
   materializeWakeflowActiveLayout,
   WakeflowActiveLayoutMaterializationError,
 } from "../active/wakeflow-active-layout-materialization.js";
-import {
-  WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST,
-} from "../active/wakeflow-active-resource-catalog.js";
-import {
-  createWakeflowActiveWorkspaceFreshProjectionAuthority,
-} from "../active/wakeflow-active-workspace-fresh-projection-authority.js";
+import { WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST } from "../active/wakeflow-active-resource-catalog.js";
+import { createWakeflowActiveWorkspaceFreshProjectionAuthority } from "../active/wakeflow-active-workspace-fresh-projection-authority.js";
 import {
   publishWakeflowActiveWorkspaceProjection,
   WakeflowActiveWorkspaceProjectionPublicationError,
@@ -175,16 +154,18 @@ const ERROR_MESSAGES = {
   input: "Wakeflow static materialization step input is invalid.",
   gate: "Wakeflow static materialization step requires the active gate.",
   plan: "Wakeflow static materialization step is not in the confirmed preview.",
-  "source-config": "Wakeflow static materialization source Config is inconsistent.",
-  "target-authority": "Wakeflow static materialization target authority changed.",
-  "strict-absent": "Wakeflow fresh whole-owned target was not created exclusively.",
+  "source-config":
+    "Wakeflow static materialization source Config is inconsistent.",
+  "target-authority":
+    "Wakeflow static materialization target authority changed.",
+  "strict-absent":
+    "Wakeflow fresh whole-owned target was not created exclusively.",
   owner: "Wakeflow static materialization domain owner failed.",
   "root-scope": "Wakeflow static materialization lost its root scope.",
   aborted: "Wakeflow static materialization step was aborted.",
-} as const satisfies Readonly<Record<
-  WakeflowStaticMaterializationStepExecutionErrorReason,
-  string
->>;
+} as const satisfies Readonly<
+  Record<WakeflowStaticMaterializationStepExecutionErrorReason, string>
+>;
 
 /** 静态物化 step 执行失败的稳定、脱敏错误。 */
 export class WakeflowStaticMaterializationStepExecutionError extends Error {
@@ -227,23 +208,20 @@ function parseExecutionOptions(
     throw error;
   }
   if (
-    !Object.hasOwn(record, "recoveringAffectedStep")
-    || !Object.hasOwn(record, "sourceConfig")
-    || Object.keys(record).some((key) => (
-      key !== "recoveringAffectedStep"
-      && key !== "signal"
-      && key !== "sourceConfig"
-    ))
-    || typeof record.recoveringAffectedStep !== "boolean"
-    || (
-      record.signal !== undefined
-      && (
-        typeof record.signal !== "object"
-        || record.signal === null
-        || types.isProxy(record.signal)
-        || !(record.signal instanceof AbortSignal)
-      )
-    )
+    !Object.hasOwn(record, "recoveringAffectedStep") ||
+    !Object.hasOwn(record, "sourceConfig") ||
+    Object.keys(record).some(
+      (key) =>
+        key !== "recoveringAffectedStep" &&
+        key !== "signal" &&
+        key !== "sourceConfig",
+    ) ||
+    typeof record.recoveringAffectedStep !== "boolean" ||
+    (record.signal !== undefined &&
+      (typeof record.signal !== "object" ||
+        record.signal === null ||
+        types.isProxy(record.signal) ||
+        !(record.signal instanceof AbortSignal)))
   ) {
     fail("input", "$options");
   }
@@ -289,9 +267,8 @@ function desiredConfig(
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
   sourceConfig: WakeflowConfigV3Model | null,
 ): WakeflowConfigV3Model {
-  const desired = request.action === "reconcile"
-    ? sourceConfig
-    : request.desiredConfig;
+  const desired =
+    request.action === "reconcile" ? sourceConfig : request.desiredConfig;
   if (desired === null) fail("source-config", "$options.sourceConfig");
   return desired;
 }
@@ -316,8 +293,8 @@ async function optionalConfigSnapshot(
     );
   } catch (error: unknown) {
     if (
-      error instanceof WakeflowConfigAuthoritySnapshotError
-      && error.reason === "source"
+      error instanceof WakeflowConfigAuthoritySnapshotError &&
+      error.reason === "source"
     ) {
       return null;
     }
@@ -334,12 +311,15 @@ async function executeLocalProtocol(
   step: Readonly<WakeflowStaticMaterializationStep>,
   signal: AbortSignal | undefined,
 ) {
-  assertStepTarget(step, authorityDigest([
-    WAKEFLOW_LOCAL_ROOT_RESOURCE_DECLARATION,
-    WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION,
-    WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION,
-    WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION,
-  ]));
+  assertStepTarget(
+    step,
+    authorityDigest([
+      WAKEFLOW_LOCAL_ROOT_RESOURCE_DECLARATION,
+      WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION,
+      WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION,
+      WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION,
+    ]),
+  );
   let core: Readonly<WakeflowWorkspaceCoreLayoutInspection>;
   try {
     core = await inspectWakeflowWorkspaceCoreLayout(
@@ -397,6 +377,42 @@ async function executeActiveLayout(
   }
 }
 
+async function executeSharedCoordinationLayout(
+  root: RootedDirectory,
+  step: Readonly<WakeflowStaticMaterializationStep>,
+  action: "fresh-initialize" | "reconfigure" | "reconcile",
+  recovering: boolean,
+  signal: AbortSignal | undefined,
+) {
+  assertStepTarget(step, WAKEFLOW_SHARED_COORDINATION_LAYOUT_AUTHORITY_DIGEST);
+  try {
+    const result = await materializeWakeflowSharedCoordinationLayout(root, {
+      mode:
+        action === "fresh-initialize"
+          ? recovering
+            ? "recover"
+            : "fresh"
+          : "ensure",
+      ...(signal === undefined ? {} : { signal }),
+    });
+    return receipt(step.stepId, result.disposition, {
+      authorityDigest: result.authorityDigest,
+      createdDirectoryCount: result.createdDirectoryCount,
+      observationDigest: result.observationDigest,
+    });
+  } catch (error: unknown) {
+    if (error instanceof WakeflowSharedCoordinationLayoutError) {
+      if (error.reason === "strict-absent") {
+        fail("strict-absent", "$sharedCoordinationLayout");
+      }
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "root-scope") fail("root-scope", "$root");
+      fail("owner", "$sharedCoordinationLayout");
+    }
+    throw error;
+  }
+}
+
 async function executeTodoCollectionInitialization(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
@@ -405,8 +421,8 @@ async function executeTodoCollectionInitialization(
   signal: AbortSignal | undefined,
 ) {
   if (
-    request.action !== "fresh-initialize"
-    || step.targetKey !== "active.todo.collection"
+    request.action !== "fresh-initialize" ||
+    step.targetKey !== "active.todo.collection"
   ) {
     fail("plan", "$todoCollection");
   }
@@ -441,9 +457,8 @@ async function executeActiveWorkspaceProjection(
   recovering: boolean,
   signal: AbortSignal | undefined,
 ) {
-  const authority = createWakeflowActiveWorkspaceFreshProjectionAuthority(
-    desired,
-  );
+  const authority =
+    createWakeflowActiveWorkspaceFreshProjectionAuthority(desired);
   assertStepTarget(step, authority.authorityDigest);
   try {
     const result = await publishWakeflowActiveWorkspaceProjection(
@@ -484,8 +499,8 @@ async function executeLedgerLayout(
   signal: AbortSignal | undefined,
 ) {
   if (
-    request.action !== "fresh-initialize"
-    || step.targetKey !== "ledger.root"
+    request.action !== "fresh-initialize" ||
+    step.targetKey !== "ledger.root"
   ) {
     fail("plan", "$ledgerRoot");
   }
@@ -499,9 +514,9 @@ async function executeLedgerLayout(
     }
     throw error;
   }
-  const placement = placements.roots.find((entry) => (
-    entry.key === "ledger.root"
-  ));
+  const placement = placements.roots.find(
+    (entry) => entry.key === "ledger.root",
+  );
   if (placement === undefined) fail("plan", "$ledgerRoot");
 
   let materialized;
@@ -522,10 +537,10 @@ async function executeLedgerLayout(
   }
   const finalSegment = materialized.segments.at(-1);
   if (
-    finalSegment === undefined
-    || (!recovering && finalSegment.disposition !== "created")
-    || materialized.node.kind !== "directory"
-    || materialized.node.permissionBits !== LEDGER_DURABLE_DIRECTORY_MODE
+    finalSegment === undefined ||
+    (!recovering && finalSegment.disposition !== "created") ||
+    materialized.node.kind !== "directory" ||
+    materialized.node.permissionBits !== LEDGER_DURABLE_DIRECTORY_MODE
   ) {
     fail("strict-absent", "$ledgerRoot");
   }
@@ -537,7 +552,8 @@ async function executeLedgerLayout(
       "$ledgerRoot",
     );
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) fail("root-scope", "$ledgerRoot");
+    if (error instanceof RootedDirectoryError)
+      fail("root-scope", "$ledgerRoot");
     throw error;
   }
   let inspection;
@@ -592,8 +608,8 @@ async function executeUnregisteredWindowRuntime(
   signal: AbortSignal | undefined,
 ) {
   if (
-    request.action !== "fresh-initialize"
-    || step.targetKey !== request.currentHostProfile.hostId
+    request.action !== "fresh-initialize" ||
+    step.targetKey !== request.currentHostProfile.hostId
   ) {
     fail("plan", "$windowRuntime");
   }
@@ -638,8 +654,8 @@ async function executeHostCapabilityLayout(
   signal: AbortSignal | undefined,
 ) {
   if (
-    request.action !== "fresh-initialize"
-    || step.targetKey !== request.currentHostProfile.hostId
+    request.action !== "fresh-initialize" ||
+    step.targetKey !== request.currentHostProfile.hostId
   ) {
     fail("plan", "$hostCapabilityLayout");
   }
@@ -686,9 +702,9 @@ async function executeSupportRoot(
     desired,
     request.currentHostProfile,
   );
-  const declaration = catalog.declarations.find((entry) => (
-    entry.declarationId === `support.${step.targetKey}.root`
-  ));
+  const declaration = catalog.declarations.find(
+    (entry) => entry.declarationId === `support.${step.targetKey}.root`,
+  );
   if (declaration === undefined) fail("plan", "$step.targetKey");
   assertStepTarget(step, authorityDigest(declaration));
   try {
@@ -785,9 +801,10 @@ async function executeProgramInstruction(
         expectedMatrixDigest: matrix.matrixDigest,
         profile: request.currentHostProfile,
         currentConfig: sourceConfig,
-        expectedCurrentConfigDigest: sourceConfig === null
-          ? null
-          : computeWakeflowConfigV3Digest(sourceConfig),
+        expectedCurrentConfigDigest:
+          sourceConfig === null
+            ? null
+            : computeWakeflowConfigV3Digest(sourceConfig),
         desiredConfig: desired,
         expectedDesiredConfigDigest: computeWakeflowConfigV3Digest(desired),
       },
@@ -820,7 +837,9 @@ async function executeSupportMemory(
   const separator = step.targetKey.lastIndexOf(":");
   if (separator <= 0) fail("plan", "$step.targetKey");
   const surfaceId = step.targetKey.slice(0, separator);
-  if (step.targetKey.slice(separator + 1) !== request.currentHostProfile.hostId) {
+  if (
+    step.targetKey.slice(separator + 1) !== request.currentHostProfile.hostId
+  ) {
     fail("plan", "$step.targetKey");
   }
   const authority = createWakeflowSupportMemoryAuthority(
@@ -838,9 +857,9 @@ async function executeSupportMemory(
     }
     throw error;
   }
-  const placement = placements.roots.find((entry) => (
-    entry.key === `support.${surfaceId}.root`
-  ));
+  const placement = placements.roots.find(
+    (entry) => entry.key === `support.${surfaceId}.root`,
+  );
   if (placement?.state !== "present") fail("root-scope", "$supportRoot");
   let supportRoot: RootedDirectory;
   try {
@@ -851,7 +870,8 @@ async function executeSupportMemory(
     }
     throw error;
   }
-  let result: Awaited<ReturnType<typeof publishWakeflowSupportMemory>> | undefined;
+  let result:
+    Awaited<ReturnType<typeof publishWakeflowSupportMemory>> | undefined;
   let primaryError: unknown;
   try {
     const catalog = createWakeflowManagedSupportResourceCatalog(
@@ -863,9 +883,10 @@ async function executeSupportMemory(
       supportRoot,
       {
         currentConfig: sourceConfig,
-        expectedCurrentConfigDigest: sourceConfig === null
-          ? null
-          : computeWakeflowConfigV3Digest(sourceConfig),
+        expectedCurrentConfigDigest:
+          sourceConfig === null
+            ? null
+            : computeWakeflowConfigV3Digest(sourceConfig),
         desiredConfig: desired,
         expectedDesiredConfigDigest: computeWakeflowConfigV3Digest(desired),
         profile: request.currentHostProfile,
@@ -934,7 +955,10 @@ async function executeConfig(
         sourceDigest: result.authority.source.digest,
       });
     }
-    if (current === null || current.configDigest !== preview.currentConfigDigest) {
+    if (
+      current === null ||
+      current.configDigest !== preview.currentConfigDigest
+    ) {
       fail("source-config", "$config");
     }
     const result = await replaceWakeflowConfigAuthority(
@@ -956,8 +980,8 @@ async function executeConfig(
       throw error;
     }
     if (
-      error instanceof WakeflowConfigAuthorityPublicationError
-      || error instanceof WakeflowConfigAuthorityReplacementError
+      error instanceof WakeflowConfigAuthorityPublicationError ||
+      error instanceof WakeflowConfigAuthorityReplacementError
     ) {
       if (error.reason === "aborted") fail("aborted", "$signal");
       if (error.reason === "root-scope") fail("root-scope", "$root");
@@ -994,7 +1018,9 @@ export async function executeWakeflowStaticMaterializationStep(
     }
     throw error;
   }
-  let request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>;
+  let request: ReturnType<
+    typeof parseWakeflowStaticMaterializationPreviewRequest
+  >;
   try {
     request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
   } catch (error: unknown) {
@@ -1004,9 +1030,9 @@ export async function executeWakeflowStaticMaterializationStep(
     throw error;
   }
   if (
-    typeof stepIdValue !== "string"
-    || stepIdValue.length > 256
-    || !stepIdValue.isWellFormed()
+    typeof stepIdValue !== "string" ||
+    stepIdValue.length > 256 ||
+    !stepIdValue.isWellFormed()
   ) {
     fail("input", "$stepId");
   }
@@ -1019,8 +1045,8 @@ export async function executeWakeflowStaticMaterializationStep(
     request.currentHostProfile,
   );
   if (
-    preview.action !== request.action
-    || preview.matrixDigest !== matrix.matrixDigest
+    preview.action !== request.action ||
+    preview.matrixDigest !== matrix.matrixDigest
   ) {
     fail("plan", "$preview");
   }
@@ -1028,18 +1054,26 @@ export async function executeWakeflowStaticMaterializationStep(
   if (preview.desiredConfigDigest !== computeWakeflowConfigV3Digest(desired)) {
     fail("plan", "$preview.desiredConfigDigest");
   }
-  const sourceDigest = sourceConfig === null
-    ? null
-    : computeWakeflowConfigV3Digest(sourceConfig);
+  const sourceDigest =
+    sourceConfig === null ? null : computeWakeflowConfigV3Digest(sourceConfig);
   if (
-    step.kind !== "publish-config"
-    && sourceDigest !== preview.currentConfigDigest
+    step.kind !== "publish-config" &&
+    sourceDigest !== preview.currentConfigDigest
   ) {
     fail("source-config", "$options.sourceConfig");
   }
 
   if (step.kind === "materialize-local-protocol") {
     return executeLocalProtocol(root, step, signal);
+  }
+  if (step.kind === "materialize-shared-coordination-layout") {
+    return executeSharedCoordinationLayout(
+      root,
+      step,
+      request.action,
+      recovering,
+      signal,
+    );
   }
   if (step.kind === "materialize-active-layout") {
     return executeActiveLayout(root, step, recovering, signal);
@@ -1083,23 +1117,10 @@ export async function executeWakeflowStaticMaterializationStep(
     );
   }
   if (step.kind === "materialize-host-capability-layout") {
-    return executeHostCapabilityLayout(
-      root,
-      step,
-      request,
-      recovering,
-      signal,
-    );
+    return executeHostCapabilityLayout(root, step, request, recovering, signal);
   }
   if (step.kind === "materialize-support-root") {
-    return executeSupportRoot(
-      root,
-      step,
-      request,
-      desired,
-      recovering,
-      signal,
-    );
+    return executeSupportRoot(root, step, request, desired, recovering, signal);
   }
   if (step.kind === "recompose-gitignore") {
     return executeGitignore(root, step, request, signal);

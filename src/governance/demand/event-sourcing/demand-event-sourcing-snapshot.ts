@@ -1,14 +1,13 @@
-import type {
-  WakeflowDemandEventSourcingSnapshot as SnapshotWire,
-} from "../../../contracts/generated/governance/demand/demand-event-sourcing-snapshot.generated.js";
-import {
-  WAKEFLOW_DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA,
-} from "../../../contracts/generated/governance/demand/demand-event-sourcing-snapshot.generated.js";
+import type { WakeflowDemandEventSourcingSnapshot as SnapshotWire } from "../../../contracts/generated/governance/demand/demand-event-sourcing-snapshot.generated.js";
+import { WAKEFLOW_DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA } from "../../../contracts/generated/governance/demand/demand-event-sourcing-snapshot.generated.js";
 import { WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA } from "../../../contracts/generated/governance/demand/demand-aggregate-state.generated.js";
+import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../../foundation/crypto/canonical-json-sha256.js";
+import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA } from "../../../contracts/generated/governance/testing/test-execution-attempt.generated.js";
+import { WAKEFLOW_TEST_CARD_SCHEMA } from "../../../contracts/generated/governance/testing/test-card.generated.js";
+import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
+import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
   Sha256Error,
@@ -47,9 +46,7 @@ import {
   DemandEventSourcingAggregateError,
   type DemandEventSourcingAggregate,
 } from "./demand-event-sourcing-aggregate.js";
-import {
-  computeDemandEventSourcingStoredEventDigest,
-} from "./demand-event-sourcing-stored-event.js";
+import { computeDemandEventSourcingStoredEventDigest } from "./demand-event-sourcing-stored-event.js";
 import {
   parseDemandEventCommitSequence,
   parseDemandEventStreamRevision,
@@ -57,9 +54,7 @@ import {
   type DemandEventCommitSequence,
   type DemandEventStreamRevision,
 } from "./demand-event-stream-position.js";
-import {
-  computeDemandEventSourcingVersionCompatibilityDigest,
-} from "./demand-event-sourcing-version-compatibility.js";
+import { computeDemandEventSourcingVersionCompatibilityDigest } from "./demand-event-sourcing-version-compatibility.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：不可变、带版本的快照。
@@ -101,21 +96,22 @@ export type DemandEventSourcingSnapshotErrorReason =
   | "representation";
 
 const ERROR_MESSAGES = {
-  "input": "Demand Event Sourcing snapshot input is invalid.",
-  "json": "Demand Event Sourcing snapshot is not passive JSON data.",
-  "schema": "Demand Event Sourcing snapshot does not satisfy its Schema.",
-  "identifier": "Demand Event Sourcing snapshot contains an invalid identity.",
-  "position": "Demand Event Sourcing snapshot contains an invalid stream position.",
-  "digest": "Demand Event Sourcing snapshot contains an invalid digest.",
-  "state": "Demand Event Sourcing snapshot contains an invalid aggregate state.",
-  "aggregate": "Demand Event Sourcing snapshot requires a valid aggregate.",
-  "commit": "Demand Event Sourcing snapshot requires a valid anchor commit.",
-  "mismatch": "Demand Event Sourcing snapshot does not match its commit boundary.",
-  "representation": "Demand Event Sourcing snapshot bytes are not deterministic.",
-} as const satisfies Readonly<Record<
-  DemandEventSourcingSnapshotErrorReason,
-  string
->>;
+  input: "Demand Event Sourcing snapshot input is invalid.",
+  json: "Demand Event Sourcing snapshot is not passive JSON data.",
+  schema: "Demand Event Sourcing snapshot does not satisfy its Schema.",
+  identifier: "Demand Event Sourcing snapshot contains an invalid identity.",
+  position:
+    "Demand Event Sourcing snapshot contains an invalid stream position.",
+  digest: "Demand Event Sourcing snapshot contains an invalid digest.",
+  state: "Demand Event Sourcing snapshot contains an invalid aggregate state.",
+  aggregate: "Demand Event Sourcing snapshot requires a valid aggregate.",
+  commit: "Demand Event Sourcing snapshot requires a valid anchor commit.",
+  mismatch:
+    "Demand Event Sourcing snapshot does not match its commit boundary.",
+  representation: "Demand Event Sourcing snapshot bytes are not deterministic.",
+} as const satisfies Readonly<
+  Record<DemandEventSourcingSnapshotErrorReason, string>
+>;
 
 export class DemandEventSourcingSnapshotError extends Error {
   override readonly name = "DemandEventSourcingSnapshotError";
@@ -132,7 +128,15 @@ export class DemandEventSourcingSnapshotError extends Error {
 
 const validateWire = createRuntimeJsonSchemaValidator<SnapshotWire>(
   WAKEFLOW_DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA,
-  [WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA, WAKEFLOW_SHA256_DIGEST_SCHEMA],
+  [
+    WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA,
+    WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA,
+    WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
+    WAKEFLOW_SHA256_DIGEST_SCHEMA,
+    WAKEFLOW_TEST_CARD_SCHEMA,
+    WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA,
+    WAKEFLOW_UTC_INSTANT_SCHEMA,
+  ],
 );
 
 function fail(
@@ -213,11 +217,11 @@ export function parseDemandEventSourcingSnapshot(
     throw error;
   }
   if (
-    state.demandId !== demandId
-    || commitSequence > streamRevision
-    || computeDemandAggregateStateDigest(state) !== stateDigest
-    || versionCompatibilityDigest
-      !== computeDemandEventSourcingVersionCompatibilityDigest()
+    state.demandId !== demandId ||
+    commitSequence > streamRevision ||
+    computeDemandAggregateStateDigest(state) !== stateDigest ||
+    versionCompatibilityDigest !==
+      computeDemandEventSourcingVersionCompatibilityDigest()
   ) {
     fail("mismatch", "$snapshot");
   }
@@ -228,10 +232,7 @@ export function parseDemandEventSourcingSnapshot(
     demandId,
     commitSequence,
     streamRevision,
-    lastCommitDigest: parseDigest(
-      wire.lastCommitDigest,
-      "$/lastCommitDigest",
-    ),
+    lastCommitDigest: parseDigest(wire.lastCommitDigest, "$/lastCommitDigest"),
     lastEventId,
     lastEventDigest: parseDigest(wire.lastEventDigest, "$/lastEventDigest"),
     state,
@@ -277,20 +278,22 @@ export function restoreDemandEventSourcingSnapshot(
   try {
     anchor = parseDemandEventStreamCommit(anchorCommitValue);
   } catch (error: unknown) {
-    if (error instanceof DemandEventStreamCommitError) fail("commit", "$commit");
+    if (error instanceof DemandEventStreamCommitError)
+      fail("commit", "$commit");
     throw error;
   }
   const lastEvent = anchor.events.at(-1);
   if (
-    lastEvent === undefined
-    || anchor.demandId !== snapshot.demandId
-    || anchor.commitSequence !== snapshot.commitSequence
-    || anchor.lastStreamRevision !== snapshot.streamRevision
-    || computeDemandEventStreamCommitDigest(anchor) !== snapshot.lastCommitDigest
-    || lastEvent.eventId !== snapshot.lastEventId
-    || computeDemandEventSourcingStoredEventDigest(lastEvent)
-      !== snapshot.lastEventDigest
-    || lastEvent.resultingStateDigest !== snapshot.stateDigest
+    lastEvent === undefined ||
+    anchor.demandId !== snapshot.demandId ||
+    anchor.commitSequence !== snapshot.commitSequence ||
+    anchor.lastStreamRevision !== snapshot.streamRevision ||
+    computeDemandEventStreamCommitDigest(anchor) !==
+      snapshot.lastCommitDigest ||
+    lastEvent.eventId !== snapshot.lastEventId ||
+    computeDemandEventSourcingStoredEventDigest(lastEvent) !==
+      snapshot.lastEventDigest ||
+    lastEvent.resultingStateDigest !== snapshot.stateDigest
   ) {
     fail("mismatch", "$snapshot");
   }

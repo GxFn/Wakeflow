@@ -3,7 +3,7 @@
 > 创建日期：2026-08-28
 > 基线提交：`df0eece feat: establish TypeScript technical skeleton`
 > 当前状态：`active / file-review-mode / implementation-by-confirmation`
-> 当前单元：`TypeScript technical review gate closed / awaiting next-stage decision`
+> 当前单元：`Review Resume public vertical slice implemented / verified`
 > 上位核实：[TypeScript Technical Skeleton Review Gate](./wakeflow-typescript-technical-skeleton-review-gate-2026-08-28.md)
 
 ## 1. 台账职责
@@ -8024,3 +8024,9122 @@ validator或release gate。
   无真实历史的v2/upcaster；一旦真实版本发布，后续变化必须使用既有版本演进能力；
 - 下一步在进入Delivery前应先由当前Tasking contract推导最小readiness需求，不能照搬旧JS
   的group/packet/lease大对象或把host effect放回Wakeflow。
+
+## 175. DELIVERY-PRE-001（Agent Host Window Observation）
+
+### 175.1 已确认边界
+
+进入Delivery前先关闭Agent与私有Binding之间的宿主目标交接：Agent通过Codex/Claude宿主能力
+取得候选handle并检查当前上下文，再把候选作为瞬时秘密交给Wakeflow；Wakeflow只做精确验证并
+返回脱敏authority。Wakeflow不读取宿主、不执行send/read/create/close，也不把raw handle写入
+事件、投影、日志或公共结果。
+
+本单元新增：
+
+- `agent-host-window-observation.schema.json`与生成合同：闭合
+  `hostId/windowId/bindingId/candidate handle/configured-root attestation/observedAt`；
+- `wakeflow-agent-host-window-observation.ts`：被动JSON、64KiB容量、typed ID、当前宿主handle、
+  Config placement与UTC instant准入；
+- `wakeflow-agent-host-window-observation-authority.ts`：闭合当前Host profiles、完整私有Binding、
+  当前Config desired topology、Binding代际、候选handle、逻辑根和时间顺序；只输出脱敏摘要。
+
+### 175.2 关键语义与剪枝
+
+- `attestedRoot.status=matches-configured-root`明确是Agent声明，不是Wakeflow伪造的宿主证明；
+- authority只证明观察晚于当前Binding registration；是否足够新、是否允许跨越host-effect边界
+  由后续claim owner使用当前时钟和一次性业务claim判断，本单元不提前固化TTL；
+- 候选handle用固定长度SHA-256指纹执行常量时间等值比较，指纹与原值均不进入返回authority；
+- Binding中的`launchIntentDigest`是创建时历史来源。当前Config只要窗口逻辑根未变，显示标题、
+  语言等非路由变化不会错误淘汰Binding；根或window topology变化会拒绝旧观察；
+- 本单元不持久化root observation、不生成ready/liveness/availability、不创建WindowWorkClaim，
+  也不新增Delivery event、MCP工具或旧式Group/Packet/Envelope/Run文件。
+
+### 175.3 聚焦验证
+
+```text
+New TypeScript test: 4 pass / 0 fail / 0 skip
+TypeScript compile: pass
+Architecture: pass / parser=swc / 444 modules / 2803 dependencies / 0 violations
+Schema: pass / 39 schemas / 77 external refs
+Schema digest: sha256:eaaeaec2dee8ed684f5172914ec378017023ded3393c4a93e9300ca59bcbaa7c
+git diff --check: pass
+```
+
+测试覆盖被动输入、额外字段/accessor拒绝、确定性脱敏authority、错误Binding代际、错误候选
+handle、错误根、早于Binding的观察，以及“显示文本变化保持有效、根拓扑变化失效”。聚焦runner
+只从已跟踪Git diff选取测试，无法看到当前未跟踪的新测试源，因此在同一次TypeScript编译后直接
+执行该单一编译测试文件；没有改动暂存区，也没有运行旧JS或全量TS测试。
+
+## 176. DELIVERY-001（Event-carried TargetDeliveryIntent）
+
+### 176.1 当前实现范围
+
+本单元把一个已规划implementation Target Task推进为唯一`delivery-prepared`业务事实，严格停在
+prepare：
+
+- 新增持久typed kind `target-delivery`，已有`TargetDeliveryIntent` producer、事件字段、
+  Aggregate consumer与真实File Event Store consumer，不是未来占位；
+- `TargetDeliveryIntent`只保存program/config/demand身份、TaskPackage ID/ref/digest、
+  host/window/Binding代际、用户语言、`portablePrompt`、preparedAt与self-excluding digest；
+- `delivery.target-delivery-prepared.v1`把完整Intent作为事件数据，加入现有Demand Event Sourcing
+  Registry、current writer、upcaster、pure Decider和Aggregate reducer；
+- Aggregate仍只保存当前Intent定位和后续Claim所需的最小摘要：
+  `targetDeliveryId + intentDigest + hostId + bindingId`，完整Intent只在事件中；
+- command瞬时携带完整TaskPackage，Decider验证Intent与TaskPackage逐项闭合后只持久化Intent，
+  不在事件中复制第二份TaskPackage。
+
+### 176.2 Prompt与导航修正
+
+Intent不把可移植TaskPackage路径误称为最终宿主prompt。它保存`portablePrompt`：目标摘要、相对
+Wakeflow workspace的TaskPackage入口和三条执行边界。后续TargetDeliveryAgentHostAction在Claim时才把调用方
+已经提供的workspace root瞬时加入真实prompt；absolute root不进入Event Sourcing。
+
+TaskPackage允许较长objective。portable prompt只保留前2048个Unicode code point并加省略号，
+避免一个合法多字节TaskPackage因prompt容量而不可投递；Target仍被要求读取完整TaskPackage。
+语言严格使用现有`en | zh-Hans`配置词汇，未建立第二套语言设置。
+
+### 176.3 Event Sourcing状态边界
+
+```text
+target task: planned
+  → command: delivery.prepare-target-delivery.v1
+  → event: delivery.target-delivery-prepared.v1
+  → target task: delivery-prepared + minimal currentDelivery summary
+```
+
+同一planned任务只能准备一次；重放由既有commitId幂等处理。当前TS尚未发布持久数据，因此本轮
+继续直接完善state model v1，没有制造不存在的v2历史或空upcaster。事件家族仍有独立v1 codec，
+未来真实版本变化继续使用现有version-evolution Registry。
+
+### 176.4 明确未进入的范围
+
+- 尚无Preparation preview/apply service或公共MCP入口；本单元先关闭领域记录与事件骨干；
+- 尚未消费`AgentHostWindowObservationAuthority`，它属于紧邻宿主效果的Claim阶段；
+- 未创建WindowWorkClaim、进程mutex、TTL、send generation、host action或outcome；
+- 未执行Codex/Claude宿主能力，也未保存raw handle、absolute root、send/readback结果；
+- 未创建旧式DispatchGroup、DispatchPacket、DeliveryEnvelope或DeliveryRun文件。
+
+### 176.5 聚焦验证
+
+```text
+New/affected TypeScript tests: 10 pass / 0 fail / 0 skip
+TypeScript: pass
+Real File Event Store: prepared append + reload/full audit + commitId retry pass
+Architecture: pass / parser=swc / 449 modules / 2846 dependencies / 0 violations
+Schema: pass / 41 schemas / 88 external refs
+Schema digest: sha256:55697dd86b0ab772331ff5ccde125efe5b500d72db1a28816c3cce0e750aac91
+git diff --check: pass
+```
+
+验证只执行新Intent测试及直接受影响的Aggregate、Decider、upcaster、state-version与Command
+Handler测试；没有运行旧JS、完整TS套件、插件validator/smoke或release gate。
+
+## 177. DELIVERY-002（TargetDeliveryPreparationService）
+
+### 177.1 真实Preparation纵切
+
+本单元为`TargetDeliveryIntent`建立真实consumer-driven `preview → exact apply`服务：
+
+```text
+Preview（零写入）
+  current Config + Demand/Ledger full audit
+  → planned Target Task + exact TaskPackage projection
+  → stable private Binding inventory observation
+  → allocate targetDelivery/event/commit IDs
+  → derive language + portablePrompt + Intent
+  → pure Decider / exact commit bytes preflight
+  → immutable plan + planDigest
+
+Apply
+  parse exact plan + digest
+  → 从原始 target-task-planned event恢复TaskPackage
+  → 先识别同commitId重放
+  → 未提交：重开完整authority context
+  → 重验TaskPackage/Config/topology/Binding/stream revision
+  → 重算逐字节相同Intent
+  → Config physical-source final check
+  → Command Handler append唯一prepared事件
+```
+
+Apply结果只携带计划、事件/提交authority和摘要，不返回raw handle。已提交重试只依赖原始Tasking
+事件与同Commit证明；后续Config变化或TaskPackage查询投影缺失不会阻断幂等恢复。
+
+### 177.2 Binding Store基础能力修正
+
+旧Binding Store读取入口直接接受`WindowHostBindingRegistrationAuthority`，把inventory读取错误
+耦合到注册时handle/observation。当前已拆为：
+
+- `WakeflowWindowHostBindingStoreAuthority`：program/profile/完整允许refs/root/lock的最小通用
+  Store authority；
+- `WakeflowWindowHostBindingCreateAuthority`：注册写入才额外要求window/ref/launch digest/handle/
+  observedAt；
+- `compileWakeflowWindowHostBindingStoreAuthority(...)`：从Config与固定Host profiles纯编译读取
+  authority，不接受或伪造Agent observation；
+- `inspectWakeflowWindowHostBindingInventory(...)`：零写入、前中后确认mutation lock absent并双读
+  inventory；差异、stage residue、active/stale lock或节点违规均fail closed。Preview不会创建锁、
+  恢复stage或清理残留。
+
+注册流程继续使用扩展authority，现有真实MCP Binding注册测试保持通过。Delivery只读取完整私有
+inventory并立即缩窄到目标Binding；handle不会进入plan、event、错误或返回值。
+
+### 177.3 Demand通用操作上下文
+
+Config snapshot、Ledger root、Demand root安全打开、完整Demand/Ledger audit、关闭顺序和Config
+physical-source复验已从Tasking专用文件下沉为`DemandOperationAuthorityContext`。它不理解Tasking、
+Delivery、Result或Review业务规则；Tasking现有authority改为委托该上下文，自己的拓扑与引用准入
+保持不变。原Tasking 5项真实workspace测试全部通过，未复制第二套根目录安全逻辑。
+
+### 177.4 文件职责收束
+
+首次实现时Preparation Service达到1028行；文件审阅未接受该形态，已拆为：
+
+- `target-delivery-preparation-input.ts`：request/options/AbortSignal/三项ID分配；
+- `target-delivery-preparation-authority.ts`：TaskPackage投影、Demand闭合、Config拓扑、Binding
+  inventory和事件来源恢复；
+- `target-delivery-preparation-plan.ts`：关闭字段计划与plan digest；
+- `target-delivery-preparation-service.ts`：preview/apply、commit preflight、event-authority分类和
+  资源关闭顺序。
+
+Service最终约748行，不再混入输入parser和完整authority加载实现。
+
+### 177.5 明确未进入的范围
+
+- 没有公开MCP/CLI；不暴露一条无法继续Claim的半成品公共流程；
+- 没有WindowWorkClaim、auto-expiry Lease、send generation或host-effect claim事件；
+- 没有消费Agent候选handle、生成最终TargetDeliveryAgentHostAction或执行Codex/Claude能力；
+- 没有outcome/readback/rearm、TargetResult或Review；
+- 没有Group/Packet/Envelope/Run兼容对象或独立Intent投影文件。
+
+### 177.6 聚焦验证
+
+```text
+Direct affected TypeScript tests: 24 pass / 0 fail / 0 skip
+Preparation workspace scenarios: preview zero-write; exact apply; idempotent retry;
+  Config drift; Binding disappearance; concurrent apply; post-commit Config/projection drift
+Tasking regression: 5 pass
+Real MCP Binding registration regression: pass
+TypeScript: pass
+Architecture: pass / parser=swc / 457 modules / 2924 dependencies / 0 violations
+Schema: pass / 41 schemas / 88 external refs
+Schema digest: sha256:55697dd86b0ab772331ff5ccde125efe5b500d72db1a28816c3cce0e750aac91
+git diff --check: pass
+```
+
+验证未运行旧JS、完整TS套件、插件validator/smoke或release gate。
+
+## 178. DELIVERY-003（Non-expiring WindowWorkClaim）
+
+### 178.1 Claim业务合同
+
+本单元新增跨Demand、跨宿主适配层共享的当前窗口工作占用：
+
+```text
+.wakeflow-local/runtime/shared/coordination/window-work-claims/<windowId>.json
+```
+
+`WindowWorkClaim`固定保存：
+
+- 独立`window_work_claim_<uuidv4>`代际ID；它是可释放运行时身份，不进入durable ID kind词汇；
+- program、demand、targetTask、targetDelivery与Intent digest/preparedAt；
+- host/window/Binding代际；
+- 脱敏AgentHostWindowObservation authority digest与observedAt；
+- 预分配Claim Event/Commit、expected stream revision与expected state digest；
+- claimedAt与self-excluding claim digest。
+
+时间顺序固定为`intentPreparedAt < host observedAt <= claimedAt`。记录不含`expiresAt`、TTL、
+auto-retry、raw handle、send/readback结果或验收判断。墙上时间和进程退出不会自动释放Claim；宿主
+本身不消费Wakeflow fencing token，因此本层也不伪造“可阻止旧Agent effect”的单调fence保证。
+
+### 178.2 Store与并发语义
+
+`WindowWorkClaimStore`实现：
+
+- read-only `inspect`；目录或文件权限、symlink/type、single-link、确定性文档和window/path关系
+  任一不满足都fail closed；
+- per-window durable `exclusive-create`，相同完整Claim重放返回`current`，不同Claim返回`occupied`；
+- `exact-retire`只删除同一文档与同一物理节点；不同Claim返回expectation mismatch；
+- Claim缺失不能伪装成幂等释放成功，因为没有tombstone证明由谁删除，返回`not-found + unknown`；
+- exact unlink使用`replacement-allowed`，仅允许另一个已授权Claim在旧inode删除后取得同名路径，
+  不会误删后继Claim。
+
+并发测试首次发现Foundation atomic create在stage cleanup前短暂保持双链接，第二个同进程writer
+可能观察到合法但尚未结算的link count 2。没有放宽single-link策略；Store增加按
+`workspace root + target ref`的短生命周期mutation queue，同进程create/release串行，队列完成即
+删除且不保存业务authority。跨进程未结算仍返回`recovery-required + unknown`，不猜测occupied。
+
+### 178.3 Shared Coordination静态布局
+
+资源矩阵新增三层真实静态目录：
+
+- `.wakeflow-local/runtime/shared`；
+- `.wakeflow-local/runtime/shared/coordination`；
+- `.wakeflow-local/runtime/shared/coordination/window-work-claims`。
+
+三者均为0700、ignored、runtime-private目录；具体Claim为0600、single-link、
+`transaction-artifact`，只准入`exclusive-create + exact-retire`。Fresh新增独立
+`materialize-shared-coordination-layout`步骤；Recovery接受并补齐精确安全前缀，Reconcile补齐旧
+工作区缺失目录，Fresh遇到预存目录则阻断。目录检查不枚举或删除合法活动Claim文件。
+
+资源矩阵声明后又通过真实Fresh入口验证物理Claim根确实创建为0700，修复了“Schema/Matrix存在但
+执行器未消费”的初始缺口。双宿主候选制品重新闭合，公共MCP仍保持原3项工具。
+
+### 178.4 明确未进入的范围
+
+- Claim Store不决定业务准入或释放时机；
+- 尚未新增`delivery.target-host-effect-claimed.v1`事件或Aggregate phase；
+- 尚未实现Claim文件→Demand事件的跨资源前向恢复；
+- 尚未生成TargetDeliveryAgentHostAction、瞬时absolute workspace root或最终宿主prompt；
+- 尚未执行host send/readback，也没有outcome/rearm/TargetResult/Review；
+- Preparation仍未公开为半成品MCP流程。
+
+### 178.5 聚焦验证
+
+```text
+Direct affected TypeScript tests: 23 pass / 0 fail / 0 skip
+Claim: deterministic codec, no-TTL shape, time/digest/schema rejection
+Claim Store: zero-write inspect, create/current/occupied, concurrent winner, exact release
+Static Matrix + Preview + Step Executor + real Fresh entrypoint: pass
+Dual-host candidate build + official stdio tools: pass / same 3 tools
+TypeScript: pass
+Architecture: pass / parser=swc / 466 modules / 2995 dependencies / 0 violations
+Schema: pass / 42 schemas / 97 external refs
+Schema digest: sha256:11392a833d2b35e89e76aa714e612899eaba6b4c60d1e9223a54b611bbe284f2
+git diff --check: pass
+```
+
+验证未运行旧JS、完整TS套件、旧插件validator/smoke或release gate。
+
+## 179. DELIVERY-004（Target Host Effect Claim Event）
+
+### 179.1 Event Sourcing 与 Aggregate 闭合
+
+本单元把已准备的单目标 Delivery 推进到“宿主效果已取得当前工作权”，但仍不声称发送已经发生：
+
+```text
+target: delivery-prepared
+  → WindowWorkClaim exclusive-create
+  → command: delivery.claim-target-host-effect.v1
+  → event: delivery.target-host-effect-claimed.v1
+  → target: host-effect-claimed + minimal workClaim summary
+```
+
+`delivery.target-host-effect-claimed.v1`把完整`WindowWorkClaim`作为不可变事件数据，进入既有事件
+类型目录、当前版本writer、version-evolution Registry、upcaster、pure Decider与Aggregate reducer。
+Aggregate只保留`claimId/ref/digest/claimedAt/hostObservationAuthorityDigest`，完整Claim继续由事件与
+当前共享协调文件持有。
+
+Claim内声明的`commitId + expectedStreamRevision`现在由Event Stream Commit在两处复验：写前准备
+拒绝错配，磁盘完整重放也拒绝错配；`expectedStateDigest`继续由Aggregate reducer绑定前置状态。
+因此调用方即使错误地把同一Claim装入另一Commit，既不能写入，也不能通过后续audit。Aggregate
+新增外部路径/时间Schema引用后，Snapshot运行时Schema目录同步补齐传递依赖，避免生成类型通过但
+Ajv严格编译失败。
+
+### 179.2 Claim Service 与瞬时 TargetDeliveryAgentHostAction
+
+`TargetHostEffectClaimService`固定执行：
+
+```text
+严格request + 当前Agent observation
+  → 完整Demand audit定位唯一prepared Intent
+  → 当前Config / Aggregate / private Binding / observation闭合
+  → 读取逐window共享Claim
+  → 创建新Claim或复用同一未提交Claim
+  → Claim Event Commit容量与状态转换预检
+  → 再次复验Config、Binding和observation
+  → append唯一Claim Event
+  → 仅首次committed返回TargetDeliveryAgentHostAction
+```
+
+Action是一次调用链内的冻结对象，不持久化。它携带最终prompt、absolute workspace root的JSON
+字符串表示、脱敏route、Claim tuple、Claim Event receipt，以及**本次当前observation**的digest/
+observedAt；它不携带raw handle。普通首次Claim中当前observation与Claim记录相同；崩溃恢复时，
+Claim仍保留最初观察，而Action明确绑定恢复调用提交的新鲜观察，供后续宿主operation fence复验。
+本服务本身不调用Codex或Claude宿主能力。
+
+五分钟限制只属于Action签发前的Agent observation freshness，不是Claim TTL。Claim不会因时间推移
+或进程退出自动失效；一个较早但仍合法的未提交Claim，可以由同一当前Binding的一份新鲜观察前向
+完成，不会因最初观察变旧而形成永久占用。
+
+### 179.3 双资源失败恢复
+
+Claim文件与Demand事件位于两个独立本地资源边界，当前文件内核不能把二者伪装成单次原子事务。
+实现采用显式的语义占用与可恢复编排：
+
+- Claim先创建并预分配稳定claim/event/commit身份；事件缺失时重试使用原身份前向提交；
+- Claim已存在且属于其他工作时返回`occupied`，不触碰对应Demand事件；
+- Claim已创建但事件确定未写入，Config/Binding/预检失败会忽略原取消信号执行exact release；
+- 无法证明事件或Claim当前状态时保留`unknown/recovery-required`，不猜测回滚；
+- 事件首次提交才签发Action；commitId幂等重试返回`already-claimed + action=null`，不重新授权发送。
+
+该选择与[AWS Saga continuation/compensation与幂等参与者建议](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/saga-patterns.html)
+一致；同时接受[Microsoft Transactional Outbox对独立dual-write的限制说明](https://learn.microsoft.com/en-us/azure/architecture/databases/guide/transactional-out-box-cosmos)：
+Wakeflow当前没有可覆盖两个本地资源的数据库事务，因此没有把本实现命名为outbox或声称exactly-once
+host effect，而是使用exclusive Claim、Event CAS、稳定身份、前向恢复和可证明时的精确补偿。
+
+### 179.4 测试维护与剪枝
+
+- 两条崩溃恢复测试共用一个局部`seedUncommittedClaim` helper，删除重复的约40行事件前缀搭建；
+- Action nominal/current-observation/no-raw-handle断言留在真实Claim Service纵切，不另建等价集成套件；
+- Aggregate、Decider、Command Handler、upcaster与state-version各自只补一条Claim相邻断言；
+- 首次审阅发现的Schema传递依赖、post-Claim错误authority误报、取消信号阻断补偿、旧observation
+  阻断非过期Claim恢复及Commit/Claim身份脱节均以回归测试或既有完整audit覆盖关闭。
+
+### 179.5 明确未进入的范围
+
+- 没有执行host send/readback，也没有保存raw handle或宿主工具结果；
+- 没有Delivery outcome、ambiguous/rejected分类、rearm generation或Claim释放业务owner；
+- 没有TargetResult、Controller Review、TestCard、completion或archive；
+- 没有新增公共MCP/CLI；现有公共工具面保持不变，Preparation/Claim仍是内部纵切；
+- 没有SQLite、消息代理、后台outbox worker、通用Saga框架或旧Group/Packet/Envelope兼容层。
+
+### 179.6 聚焦验证
+
+```text
+Foundation Time + Demand + Delivery TypeScript tests: 61 pass / 0 fail / 0 skip
+Claim Service scenarios: first issue; idempotent retry; occupied; stale observation;
+  Claim-before-Event forward recovery; fresh-observation recovery; post-Claim Binding drift compensation
+TypeScript: pass
+Architecture: pass / parser=swc / 473 modules / 3083 dependencies / 0 violations
+Schema: pass / 43 schemas / 100 external refs
+Schema digest: sha256:d9f870628ecbf9134fceb30822f1b1e21c87e67489cb36ecb75c0585e791c535
+git diff --check: pass
+```
+
+验证只执行当前Foundation Time与新版Demand/Delivery TS范围；未运行旧JS、完整TS测试、插件
+validator/smoke、`npm test`或release gate。
+
+## 180. DELIVERY-005（Agent-observed Target Host Effect Outcome）
+
+### 180.1 宿主效果与readback双轴合同
+
+旧JS已经把transport与readback分开，但旧Codex指令曾把普通error-like结果直接解释为
+`rejected-before-send`。该推断没有进入新TS。官方资料表明：
+
+- [Codex App Server](https://developers.openai.com/codex/app-server)的`turn/start`成功响应只创建
+  `inProgress` turn，完成由后续事件表达；JSON-RPC transport失败不能自动等同于宿主明确拒绝；
+- [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/agent-loop)区分带ResultMessage的错误终态
+  与连接/进程失败且没有ResultMessage的情形；后者不能证明prompt从未被接受；
+- [AWS幂等API指南](https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/)
+  明确说明无响应会留下side effect是否发生的不确定性，非幂等调用不能据此自动重试。
+
+因此`TargetDeliveryHostEffectObservation`固定为两个独立维度：
+
+```text
+attempt.status = accepted | indeterminate | rejected-before-effect
+readback.status = confirmed | pending | unavailable
+```
+
+`confirmed`可把缺少确定调用回执的`indeterminate`提升为最终`accepted`；
+`rejected-before-effect`只允许`unavailable` readback。`sent-unconfirmed`仅作为
+`accepted + pending/unavailable`的展示派生，不进入事件或Aggregate状态。
+
+创建入口短暂接收宿主结果/readback的被动JSON，分别执行128KiB容量检查并只保存Canonical
+SHA-256摘要。raw handle、完整宿主返回、错误文本、prompt和absolute workspace root都不会进入
+Observation、Event、Aggregate、错误或公共结果。
+
+### 180.2 Action命名与Event Sourcing
+
+原`AgentHostAction`实际只包含Target Delivery字段，已在未发布阶段直接收窄为
+`TargetDeliveryAgentHostAction`，同步修改运行时kind、错误代码、文件名和唯一producer，不保留
+兼容alias。Action的workClaim tuple补齐expected state/Claim Commit身份，使后续Observation所有
+并发字段都能由Claim、Aggregate和Event replay直接复验，而不是只依赖Service调用路径。
+
+新增：
+
+- `delivery.target-host-effect-observed.v1`事件、current writer、Registry、upcaster与Decider；
+- Aggregate phase：`host-effect-accepted | host-effect-indeterminate | host-effect-rejected`；
+- 最小hostEffect summary：observation digest、最终disposition、readback status、observedAt，以及
+  `retain | release-authorized` Claim处理策略；
+- Observation Event/Commit ID从唯一Claim ID的UUID在typed namespace中稳定派生，写前准备与完整
+  audit同时复验Commit边界。
+
+完整Observation仍只存在于Event；Aggregate不复制evidence digest或原始attempt内容。
+
+### 180.3 Outcome Service与失败恢复
+
+`TargetHostEffectOutcomeService`固定执行：
+
+```text
+严格outcome request
+  → 完整audit定位原Claim Event
+  → 由stored Claim Event恢复Action闭合元组
+  → 脱敏attempt/readback evidence
+  → preflight + append observed Event
+  → accepted/indeterminate保留Claim
+  → rejected-before-effect在Event提交后exact release Claim
+```
+
+Outcome是已经发生的历史观察，因此不会因效果之后的Config/Binding漂移而拒绝记录。它仍要求当前
+Claim/Event/Aggregate lineage精确一致。若进程在rejected Event提交后、Claim释放前退出，重试先
+按同Commit幂等确认Event，再只完成原Claim的exact release；Event与Claim任一无法证明时保留
+`unknown/recovery-required`，不猜测释放或重新发送。
+
+### 180.4 明确未进入的范围
+
+- Wakeflow不执行Codex/Claude send/readback，不分类未提供的真实宿主对象；Observation明确是Agent
+  observation，不伪装成宿主签名证明；
+- accepted/indeterminate不会获得自动retry或Claim释放权限；
+- 尚无TargetResult、Controller acceptance、Review、Test或completion；
+- 尚未新增公共MCP/CLI，当前仍是内部consumer-driven纵切。
+
+## 181. DELIVERY-006（Explicit Target Host Effect Rearm）
+
+### 181.1 Rearm业务事实
+
+`TargetHostEffectRearm`只接受当前精确`host-effect-rejected + release-authorized`尾部，绑定：
+
+- demand/targetTask/targetDelivery；
+- rejected Claim ID/digest与原Claim Event/Commit；
+- 唯一rejected Observation digest；
+- rearmedAt与self-excluding rearm digest。
+
+`delivery.target-host-effect-rearmed.v1`只把Target恢复为`delivery-prepared`，不会复用旧Claim、复制旧
+outcome或跨越宿主效果边界。Rearm Event使用原Claim Commit的独立随机UUID，Rearm Commit使用原
+Claim Event的独立随机UUID；二者进入不同typed namespace并由Event Stream Commit复验，重试无需
+重新分配身份。测试fixture原先人为复用的跨类型UUID已换成该测试域唯一值，未放宽真实冲突门禁。
+
+### 181.2 Rearm Service与Binding基础能力
+
+首次Rearm要求：
+
+```text
+exact rejected Observation tail
+  + old Claim physically absent
+  + current Config仍匹配原Intent
+  + current private Binding仍匹配原route
+  → append唯一Rearm Event
+  → delivery-prepared
+  → 后续Claim必须创建全新WindowWorkClaim
+```
+
+当前Binding inventory准入从Claim专用authority抽为窄的`TargetDeliveryBindingAuthority`，供Claim与
+Rearm共同使用；它不持有workspace、不解释outcome、不创建Delivery manager，也不执行宿主能力。
+已提交Rearm重试从完整事件历史恢复同一Rearm/Commit，不重新读取后来Config/Binding，也不会因下
+一代Claim已经存在而篡改历史回执。
+
+accepted与indeterminate outcome无法Rearm；旧Claim未完成释放、Observation不是精确尾部、Config或
+Binding漂移都会在Rearm Event前阻断。真实纵切验证Rearm后再次调用Claim Service会签发不同Claim
+ID的全新Action，没有send generation数字或隐藏自动重试状态。
+
+### 181.3 聚焦验证
+
+```text
+Demand + Delivery TypeScript tests: 67 pass / 0 fail / 0 skip
+Outcome: accepted retain; indeterminate retain; rejected exact release;
+  Event-committed/Claim-present forward recovery; exact idempotent replay
+Rearm: rejected-only; old Claim absent; Config/Binding current; idempotent replay;
+  next attempt requires a new Claim; accepted blocked
+Event Sourcing: observed/rearmed codecs, reducer phases, stable Event/Commit boundaries,
+  upcaster, full local File Event Store replay and command idempotency pass
+TypeScript: pass
+Architecture: pass / parser=swc / 491 modules / 3244 dependencies / 0 violations
+Schema: pass / 47 schemas / 113 external refs
+Schema digest: sha256:ba300d69704783c3054db425d54a4300b27f6729c63f81d432538e58eb1429e9
+git diff --check: pass
+```
+
+验证未运行旧JS、完整TS套件、插件validator/smoke、`npm test`或release gate；没有提交、发布或刷新
+安装cache。
+
+## 182. DELIVERY-007（Agent Report与TargetResult记录）
+
+### 182.1 Report与Result分层
+
+旧JS的结果对象同时混有窗口陈述、投递关系、Controller判断、Group/Envelope文件引用、Test映射与
+多仓库数组。当前切片没有平移该形态，而是按事实来源拆成两层：
+
+```text
+TargetResultReport
+  = Agent提交的业务陈述、单仓库变更、验证、风险与anchor evidence
+
+TargetResult
+  = Wakeflow用TaskPackage + Intent + Claim + Host Effect Event补齐的不可变记录
+```
+
+`completed | blocked | needs-review`都只是Agent对本次目标工作的陈述。三者都可以进入后续Review，
+但任何一个值都不表示Controller acceptance、Demand完成或证据已经被相信。`completed`必须完整映射
+TaskPackage的acceptance anchors并符合`commit | leave-uncommitted`约定；`blocked`与`needs-review`
+允许只提供已取得的部分anchor evidence或不提供anchor evidence。所有anchor引用必须指向本Report
+已声明的evidence locator，防止出现无法解析的悬空证据。
+
+v1只接纳当前真实纵切需要的单仓库`implementation`结果。旧JS中的Group/Envelope结果文件、Test
+字段映射、supersedes/correction轮次和多仓库结果数组没有作为未来占位进入Schema；只有出现真实
+consumer后才扩展。
+
+### 182.2 Git对象身份基础能力
+
+结果记录不再把commit写成固定40位的模糊字符串。Foundation新增显式Git object ID：
+
+```text
+{ algorithm: "sha1", value: <40位小写完整OID> }
+{ algorithm: "sha256", value: <64位小写完整OID> }
+```
+
+这与[Git SHA-256迁移文档](https://git-scm.com/docs/hash-function-transition/2.52.0.html)对两种对象格式
+和完整对象名的定义一致。基础层拒绝缩写、大写与算法/长度错配，不执行Git命令，也不把branch、
+working tree或宿主权限引入结果合同。Report同时约束`committed`必须至少声明一个commit；
+`left-uncommitted | no-changes`不能伪装成已提交状态。
+
+### 182.3 Event Sourcing状态转换
+
+新增`result.target-result-recorded.v1`事件、current writer、version codec、upcaster、pure Decider、
+Command Handler边界与Repository历史查询。Aggregate从
+`host-effect-accepted | host-effect-indeterminate`推进到`result-reported`，只保存：
+
+- TargetResult ID、digest、outcome与reportedAt；
+- 精确Claim处理结论`release-authorized`；
+- TaskPackage在后续Review真实需要的commit expectation与acceptance anchor IDs。
+
+完整Report与Result保留在Event中，Aggregate不复制验证、风险、commit或evidence locator。Result
+Event的recordedAt绑定Report的reportedAt；Result、Event与Commit身份从原Claim的稳定UUID在不同
+typed namespace中派生，并与Rejected Rearm路线保持不同身份。完整stream replay会重新执行相同
+关系验证，而不是只相信写入服务。
+
+### 182.4 Import Service与Claim结算
+
+`TargetResultImportService`固定执行：
+
+```text
+严格Result import request
+  → 从事件历史恢复TaskPackage / Intent / Claim / Observation
+  → 验证当前accepted或indeterminate尾部
+  → 生成Agent Report与authority-enriched TargetResult
+  → preflight + append result.target-result-recorded.v1
+  → Event成功后exact release原WindowWorkClaim
+```
+
+accepted或indeterminate只证明宿主效果没有在发送前被拒绝，因此两者都允许Agent提交真实结果；
+`rejected-before-effect`不能产生TargetResult。Result提交后释放Claim表示本次窗口工作占用已经结算，
+不是接受结果。共享的`settleAuthorizedWindowWorkClaimRelease`只负责在领域Event已经授予释放权后执行
+精确物理释放，没有升级成通用事务管理器。
+
+若进程在Result Event提交后、Claim释放前退出，重试必须提交相同Report内容摘要，按同一Commit确认
+幂等历史后只完成exact release；Event缺失但Claim已经消失则返回显式恢复要求，不猜测已完成。
+Result描述的是已经发生的工作，因此导入时不以之后的Config或Binding漂移否定历史，但仍闭合原
+TaskPackage、assignment、Claim、Observation和当前Aggregate尾部。
+
+### 182.5 测试维护与明确边界
+
+- fixture从真实TaskPackage Event恢复动态acceptance anchors，避免静态测试数据与真实纵切分叉；
+- 独立覆盖SHA-1/SHA-256、Report矛盾、Result来源闭合、completed完整anchors、blocked空anchors、
+  rejected阻断、accepted/indeterminate结算、幂等导入与Event已提交/Claim仍存在的恢复；
+- Command Handler测试明确验证错误Commit身份返回decision-rejected，不只验证Service happy path；
+- 尚未实现Controller Review、accept/rework/block决策、Test/Evidence归档、公共MCP或自动completion；
+- 没有引入SQLite、Git进程调用、结果目录、通用Workflow manager或旧JS兼容分支。
+
+### 182.6 聚焦验证
+
+```text
+Foundation Git + Demand + Delivery + Result TypeScript tests: 79 pass / 0 fail / 0 skip
+Result: Report closed content; SHA-1/SHA-256; source lineage; completed/full anchors;
+  blocked/empty anchors; rejected blocked; accepted/indeterminate import;
+  exact idempotency; Event-committed/Claim-present forward recovery
+TypeScript: pass
+Architecture: pass / parser=swc / 507 modules / 3365 dependencies / 0 violations
+Schema: pass / 51 schemas / 129 external refs
+Schema digest: sha256:746d72a3d545f3b17dc839666f6c36b879cdc789e7f5c7e9619a1f2d340ccb0e
+git diff --check: pass
+```
+
+验证只执行当前Foundation Git与新版Demand/Delivery/Result TS范围；未运行旧JS、完整TS套件、插件
+validator/smoke、`npm test`或release gate。没有提交、发布或刷新安装cache。
+
+## 183. DELIVERY-008（Demand Result Review Snapshot）
+
+### 183.1 从旧Review系统剪枝
+
+旧JS的Review入口建立在`DispatchGroupReviewSnapshot + immutable ReviewCandidate + Controller
+Decision`上，并同时计算group return policy、callback units、allowed decisions与next action。这些
+能力服务于旧DispatchGroup、Packet、Envelope、Test和多轮replacement体系；当前TS尚无对应真实
+producer，直接平移会让Review再次成为提前拥有未来业务的第二状态机。
+
+当前单元只保留旧实现中两项仍然正确的原则：
+
+1. 当前结果必须由Aggregate selector与不可变Event形成exact closure，不能按目录、mtime或调用方
+   自报选择；
+2. Controller看到的审查输入必须绑定精确Event Stream基线，后续写决定时可以识别陈旧输入。
+
+没有创建`ReviewCandidate`文件、Candidate ID、group、return policy、allowed decisions、next action、
+structural gaps或pending review状态。是否需要持久化Candidate留给未来真实Controller Decision
+consumer验证，不把早期计划当成当前命令。
+
+### 183.2 CQRS与Event Sourcing选择
+
+[Microsoft CQRS指南](https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs)明确区分会改变
+状态的Command与零写Query，并建议读模型按查询需要形成DTO或projection；同时警告CQRS与Event
+Sourcing组合会增加显著复杂度。[Microsoft Event Sourcing指南](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)
+和[AWS Event Sourcing指南](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/event-sourcing-pattern.html)
+都把append-only Event Store视为事实来源，把read model/materialized view视为可由事件重建的
+只读投影。
+
+Wakeflow当前Demand流已限制为最多10000个Commit、64MiB总事件字节，因此选择同步、按需、一次
+完整扫描的内存读模型：没有第二个read store、后台projector、projection checkpoint或eventual
+consistency窗口。若未来测量证明Review读取成为瓶颈，再以同一Event Stream重建可丢弃缓存；当前
+不为尚不存在的读取压力增加持久化协议。
+
+### 183.3 中立History查询与Review解释分层
+
+`DemandEventSourcingRepository.auditTargetResultHistory()`一次读取并完整重放Event Stream，同时只
+投影两类不可变来源：
+
+- 每个Target Task唯一的`tasking.target-task-planned`来源；
+- 全部`result.target-result-recorded`历史来源。
+
+Repository复验TaskPackage ID/digest、assignment、commit expectation、ordered acceptance anchor IDs，
+并把Aggregate当前`result-reported` selector闭合到精确TargetResult ID/digest/outcome/reportedAt。
+它只返回Event ID/digest/revision和完整领域载荷，不导入Review模块，也不解释Result应该被接受、
+返工或阻断。
+
+上层`DemandResultReviewSnapshot`再把当前Target Task投影成closed union：
+
+```text
+awaiting-result
+  = 当前phase + TaskPackage tuple + assignment
+
+reported
+  = 完整TaskPackage + 完整TargetResult + 两个source Event tuple
+    + reviewUnitDigest
+```
+
+目标按`targetTaskId`确定性排序。每个reported unit拥有独立`reviewUnitDigest`；整个Snapshot同时绑定
+Demand lifecycle、Commit/Stream游标、tail Event、state digest与`snapshotDigest`。这为未来单目标
+或整组决定分别提供精确并发基线，但本单元不提交决定。
+
+Snapshot只存在于进程内，读取前后Event Store inventory不变。它没有持久化或公共wire consumer，
+因此当前不新增JSON Schema；`kind/schemaVersion`只稳定内部DTO识别。未来若公共MCP真实输出该合同，
+必须在那个切片补齐Schema与producer/consumer同步验证，而不是提前冻结半成品公开格式。
+
+### 183.4 当前边界与下一Consumer
+
+- Snapshot不会验证target声明的证据内容，也不会运行Git、测试或仓库检查；
+- `completed | blocked | needs-review`原样作为Agent outcome呈现，不转换成review readiness；
+- 没有Controller actor、decision reason、独立检查记录、accept/rework/redesign/blocked事件；
+- 没有Demand完成、Test准入、TODO rollup、Controller-return或公共MCP；
+- 读取入口要求调用方已经安全打开Demand Event Sourcing根，完整Config/Ledger/authority组合属于未来
+  Review Pack consumer，不被本读模型暗中接管。
+
+下一单元应先设计`Controller Review Decision`的真实业务事件与审查记录：决定必须引用精确
+`reviewUnitDigest`或`snapshotDigest`，Command Handler在当前Aggregate上重新计算并通过Event Stream
+optimistic CAS提交；不能因为Snapshot存在、Agent outcome为completed或结构无缺口而自动accept。
+
+### 183.5 聚焦验证
+
+```text
+Foundation Git + Demand + Delivery + Result + Review TypeScript tests: 81 pass / 0 fail / 0 skip
+Review Snapshot: awaiting-result closed variant; real Claim/Outcome/Result import;
+  single-stream current closure; deterministic unit/snapshot digests; repeated zero-write read;
+  no Candidate/allowedDecisions/nextAction; strict root/options input
+TypeScript: pass
+Architecture: pass / parser=swc / 509 modules / 3391 dependencies / 0 violations
+Schema: pass / 51 schemas / 129 external refs (unchanged)
+Schema digest: sha256:746d72a3d545f3b17dc839666f6c36b879cdc789e7f5c7e9619a1f2d340ccb0e
+git diff --check: pass
+```
+
+验证只执行当前Foundation Git与新版Demand/Delivery/Result/Review TS范围；未运行旧JS、完整TS套件、
+插件validator/smoke、`npm test`或release gate。没有提交、发布或刷新安装cache。
+
+## 184. DELIVERY-009A（Controller Target Review Decision合同）
+
+### 184.1 无Candidate路线的决定记录
+
+用户确认采用DELIVERY-008推荐方案A：不持久化ReviewCandidate。当前文件单元先建立
+`ControllerTargetReviewDecision`不可变合同，下一单元才接入Demand Event Sourcing与Aggregate。
+
+旧JS决定事件只保存Candidate/Group/Result Set与`reason/decisionSummary`，审查事实主要留在Controller
+自由文本中。新合同删除当前没有producer的Candidate、Group、return policy和result-set scope，改为
+绑定一个真实Target的精确读模型基线：
+
+- `snapshotDigest + reviewUnitDigest`；
+- reviewed `stateDigest + streamRevision`；
+- TaskPackage ID/digest；
+- TargetResult ID/digest/outcome/reportedAt；
+- Controller逻辑Window ID、决定时间与决定自身typed ID/digest。
+
+`target-review-decision`进入durable ID活动词汇，因为本合同已同时拥有真实持久字段、创建器和后续
+Event consumer。Decision/Event/Commit从一个新UUID进入三个独立typed namespace；没有随机ID池、
+Candidate ID或调用方自由声明Event身份。
+
+### 184.2 Controller独立审查内容
+
+[NIST SP 800-53 Rev.5 AU-3](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-53r5.pdf)
+要求审计记录能够确定事件类型、时间、位置、来源、结果和关联主体。Wakeflow不是安全审计产品，
+但该最小事实集合适合作为Controller业务决定记录的结构参考。因此Decision除actor/subject/time/outcome
+外，还保存：
+
+```text
+assessment.requirementAlignment
+  = aligned | mismatch | unresolved
+
+assessment.implementationQuality
+  = satisfactory | defective | unverified
+
+independentChecks[]
+  = checkId + method + passed|failed|inconclusive + observation
+```
+
+`rationale`说明最终决定，`blockingReasons`只表达阻断，`residualRisks`保留已识别但不阻断的风险。
+这些字段仍是Controller的可审计陈述，不是机器对代码真实性的证明；TargetResult、自报测试或结构
+完整性不会自动生成它们。
+
+### 184.3 四类决定的closed relation
+
+| Decision | Requirement alignment | Implementation quality | 独立检查与阻断关系 |
+| --- | --- | --- | --- |
+| `accept` | `aligned` | `satisfactory` | 所有check必须passed；无blocking reason；不能接受blocked TargetResult |
+| `rework` | `aligned` | `defective` | 至少一个failed check；无hard blocking reason |
+| `redesign` | `mismatch` | 任一明确quality状态 | 至少一个failed或inconclusive check；无hard blocking reason |
+| `blocked` | 不得同时为aligned+satisfactory | 不得同时形成可接受闭包 | 至少一个blocking reason |
+
+该矩阵把产品代码缺陷与需求不匹配分开，也不引入`reworkCount`、自动第三次升级、Design路由或后续
+TaskPackage。Controller仍可在下一事件单元中提交事实，后续owner再消费状态。
+
+### 184.4 Event顺序不依赖墙上时钟
+
+初稿要求`decidedAt > targetResultReportedAt`。文件复审时依据Foundation Wall Clock合同和
+[Microsoft Event Sourcing指南](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)
+撤销了该条件：墙上时钟可能重复或回拨；事件因果顺序应由current state、stream revision和
+optimistic concurrency append保证。Decision继续保存严格UTC审计时间，但相同或回拨的合法时间
+不会否定Event Store已经证明的先后关系。下一单元必须只允许从精确`result-reported`状态追加决定。
+
+### 184.5 Schema与防御性JSON边界
+
+Schema负责closed字段、容量、四类决定组合与基础词法；TS parser补充NFC、well-formed Unicode、
+重复check ID、重复文本、typed ID、stream position和self digest。
+
+聚焦测试还发现Ajv `uniqueItems`对无原型对象数组会进入第三方deep-equal的`valueOf`假设并抛出
+TypeError。没有因此放宽Foundation的防御性JSON快照或恢复普通原型：对象集合的业务唯一键本来
+就是`checkId`，所以对象数组由TS parser按该键判重；纯字符串列表继续使用Schema
+`uniqueItems`并在parser复验。
+
+### 184.6 明确未进入的范围
+
+- 尚未新增`review.target-result-decided.v1`Event、Command、upcaster或Aggregate phase；
+- 尚未验证Controller Window与当前Config拓扑关系；该关系属于下一个Service consumer；
+- 尚未从`DemandResultReviewSnapshot`自动组装创建输入或执行stale重算；
+- 尚未实现accept后的Test准入、rework重新Delivery、redesign路由、blocked解除或Demand完成；
+- 没有ReviewCandidate文件、公共MCP、Git命令、外部Evidence capture或自动acceptance。
+
+### 184.7 聚焦验证
+
+```text
+Foundation Git + Demand + Delivery + Result + Review TypeScript tests: 84 pass / 0 fail / 0 skip
+Controller Decision: deterministic codec/digest; typed Decision/Event/Commit identity;
+  four-decision relation matrix; duplicate check ID; illegal UTC; non-NFC text;
+  digest drift; repeated wall-clock instant retained without ordering authority
+TypeScript: pass
+Architecture: pass / parser=swc / 512 modules / 3415 dependencies / 0 violations
+Schema: pass / 52 schemas / 135 external refs
+Schema digest: sha256:9fd9eaa657e13f6fa932d70f76f218ac599d94a8ebd8b9d47d5be735965fd4d9
+git diff --check: pass
+```
+
+验证只执行当前Foundation Git与新版Demand/Delivery/Result/Review TS范围；未运行旧JS、完整TS套件、
+插件validator/smoke、`npm test`或release gate。没有提交、发布或刷新安装cache。
+
+## 185. DELIVERY-009B（Controller Review Decision Event）
+
+### 185.1 修订原文件顺序
+
+原计划把`review.target-result-decided.v1`的Event/codec/upcaster与Aggregate reducer拆成两个文件
+单元。Event registry接线后的集成复审证明该顺序不安全：`DemandUncommittedEvent`一旦承认新类型，
+generic upcaster就会把它交给`evolveDemandEventSourcingState()`；如果Reducer没有显式分支，旧尾部
+会把该事件错误落入Demand cancel转换。
+
+因此本单元把范围扩到**最小可重放闭环**，而没有留下“Schema可写但历史不可重建”的中间状态：
+
+```text
+ControllerTargetReviewDecision
+  → review.target-result-decided.v1 data Schema
+  → current event model
+  → v1 codec Registry
+  → generic upcaster
+  → pure Decider
+  → Aggregate reducer
+  → Commit boundary
+  → File Event Store full replay
+  → Demand Result Review Snapshot
+```
+
+该修订遵循[Microsoft Event Sourcing指南](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)
+关于事件是业务意图、事件流是事实来源且新状态必须可重放的原则。早期文件顺序不再高于当前代码
+不变量。
+
+### 185.2 Event家族与版本演进
+
+新增`review.target-result-decided`当前事件家族，v1 data只包含完整
+`ControllerTargetReviewDecision`。Aggregate summary、后续route、Candidate或公共MCP参数不复制进
+Event data。
+
+`DEMAND_EVENT_SOURCING_EVENT_TYPES`、current/supported version矩阵和
+`EventSourcingVersionEvolutionRegistry`登记v1 codec。通用upcaster本身无需增加特殊分支：它继续按
+`eventType + eventVersion`查Registry，再投影为当前Event模型。未知版本、额外data字段、错误Decision
+Event ID、demand或recordedAt关系仍在Reducer前失败。
+
+新增事件家族会改变`versionCompatibilityDigest`，因此旧Snapshot会安全回退到完整Event replay；
+没有修改历史Event字节或伪造Snapshot兼容。
+
+### 185.3 Aggregate最小状态矩阵
+
+完整Decision继续只存在于Event；Aggregate在原`currentDelivery.targetResult`旁保存最小
+`reviewDecision`摘要：
+
+- Target Review Decision ID/digest；
+- `accept | rework | redesign | blocked`；
+- Controller Window ID；
+- decidedAt。
+
+Target phase显式映射为：
+
+| Decision | Aggregate phase |
+| --- | --- |
+| `accept` | `accepted` |
+| `rework` | `rework-requested` |
+| `redesign` | `redesign-requested` |
+| `blocked` | `review-blocked` |
+
+Reducer只接纳当前`result-reported`目标，复验Demand/Target、TaskPackage、TargetResult
+ID/digest/outcome/reportedAt及Decision reviewed state digest。已决定目标不能被第二次决定；其他Target
+不受影响。该状态只记录已经发生的决定，不执行Test准入、重新Delivery、Design路由、解除阻断或
+Demand完成。
+
+### 185.4 双重陈旧防护与稳定提交身份
+
+Decision Event/Commit ID从Decision typed ID的唯一UUID派生。Commit边界同时要求：
+
+```text
+commitId == controllerTargetReviewDecisionCommitId(decision)
+decision.reviewed.streamRevision == commit.expectedStreamRevision
+decision.reviewed.stateDigest == current Aggregate state digest
+```
+
+state digest由pure reducer复验，stream revision由Commit planner/完整磁盘replay复验。错误Commit ID、
+陈旧Snapshot revision和陈旧state digest都会在文件副作用前失败。墙上时钟仍只作为审计事实，不
+参与因果授权。
+
+聚焦fixture复审还发现Decision UUID与既有Claim Event UUID重复。虽然Decision、Event、Commit属于
+不同typed namespace，同一Event Stream内两个Event ID仍不得复用；fixture已换成测试域唯一UUID，
+没有削弱Event Store的全历史identity conflict检查。
+
+### 185.5 Review读模型跟进
+
+Repository的一次扫描history投影现在同时收集TaskPackage、TargetResult和Review Decision来源，按
+当前Aggregate selector闭合Decision ID/digest/type/controller/time。`DemandResultReviewSnapshot`
+新增`review-decided` closed variant，返回原TaskPackage、TargetResult、Decision及三条source Event
+tuple；它会重新计算原reported unit digest并与Decision reviewed digest比较。
+
+Snapshot仍是零写CQRS读模型。它展示已经发生的决定，但不生成新决定、Candidate、allowed decision
+或next action。
+
+### 185.6 明确未进入的范围
+
+- 尚无`ControllerTargetReviewDecisionService`、请求/options合同或公共MCP；
+- 尚未以当前Config复验`controllerWindowId`确实属于Controller角色；
+- 尚未在提交前由Service重读完整Config/Ledger authority并重算Snapshot；
+- 尚未实现rework重新投递、redesign replacement、blocked解除、TestCard或Demand completion；
+- 没有Group、ReviewCandidate、自动第三次rework升级或Controller-return transport。
+
+### 185.7 聚焦验证
+
+```text
+Foundation Git + Demand + Delivery + Result + Review TypeScript tests: 85 pass / 0 fail / 0 skip
+Review Event: v1 data codec; current event registry; generic upcast; event identity;
+  four Aggregate phases; stale state rejection; stale stream revision rejection;
+  wrong commit rejection; deterministic prepare/apply; real File Event Store full replay;
+  review-decided Snapshot closure
+TypeScript: pass
+Architecture: pass / parser=swc / 515 modules / 3447 dependencies / 0 violations
+Schema: pass / 53 schemas / 136 external refs
+Schema digest: sha256:6a381d2ca6e59a72e1208866bee5e624f9e264a087b3ff94454b64e6db169f6c
+git diff --check: pass
+```
+
+验证只执行当前Foundation Git与新版Demand/Delivery/Result/Review TS范围；未运行旧JS、完整TS套件、
+插件validator/smoke、`npm test`或release gate。没有提交、发布或刷新安装cache。
+
+## 186. DELIVERY-009C（Controller Review Decision Service）
+
+### 186.1 无Candidate的直接决定请求
+
+新增严格`ControllerTargetReviewDecisionRequest`，调用方只提交：
+
+- Demand/Target Task/TargetResult精确identity；
+- 原`DemandResultReviewSnapshot.snapshotDigest`与reported unit digest；
+- 已在009A闭合的decision、双轴assessment、独立检查、rationale、blocking reasons与residual risks。
+
+请求不接受Decision ID、Event/Commit ID、Controller Window ID、state digest、stream revision或决定时间。
+这些字段分别由Service从随机UUID、当前Config、当前Review history和墙上时钟产生，避免调用方伪造
+authority或持久位置。
+
+Input parser在任何时钟/UUID读取前完成closed own-data、typed ID、摘要、NFC文本、容量、重复check ID
+和四类judgment relation验证。额外字段、稀疏数组、accessor/proxy、陈旧摘要或不一致判断都不会先
+分配身份，也不会写Event。
+
+### 186.2 当前Controller逻辑authority
+
+Service通过`DemandOperationAuthorityContext`打开当前Config、Ledger与Demand root，Controller Window
+只从`config.indexes.controllerWindow`派生，同时闭合：
+
+```text
+current Config program
+  == Demand identity program
+  == reviewed TaskPackage program
+```
+
+这证明Decision记录使用当前配置中的唯一**逻辑Controller职责窗口**，但不伪装成宿主调用者认证：
+Service没有raw thread handle、host session签名或Agent身份凭据。公共MCP/宿主入口未来仍必须保证只有
+Controller职责窗口调用该Service。
+
+### 186.3 Snapshot重算与提交边界
+
+首次决定固定执行：
+
+```text
+strict request/options
+  → Demand组合authority
+  → 一次完整TargetResult/Review history审计
+  → 重建当前零写Review Snapshot
+  → exact reported target/result/snapshot/unit tuple
+  → 派生Controller Window并创建Decision
+  → Event/Commit容量与状态转换preflight
+  → 复验Config仍current
+  → Command Handler optimistic CAS append
+```
+
+Service直接复用history同一次扫描得到的Aggregate与Review Snapshot，不按Target重复扫描。最初实现曾在
+Command Handler成功后再次完整audit；性能复审确认append receipt与返回Aggregate已经证明提交，而
+幂等/并发路径也已从history取得完整Decision，因此删除该第三次最多64MiB的冗余扫描。组合authority
+仍执行自己的根/Ledger审计，Review history再执行一次需要完整载荷的审计；没有增加持久化read cache。
+
+### 186.4 语义幂等与并发恢复
+
+Decision ID首次调用随机分配，但幂等键不是新的随机值，而是“同一TargetResult已有唯一Decision”。
+重试先按TargetResult历史查找Decision，并比较：
+
+- demand/target/result identity；
+- 原snapshot/unit digest；
+- 完整Controller judgment digest。
+
+完全相同则使用原Decision ID、decidedAt、Event和Commit调用Command Handler的existing-commit路径；
+新的clock/UUID不会改变历史。任一判断字段不同则是显式state conflict，不会覆盖Decision。
+
+两个相同请求并发且各自尚未看到Decision时，可以生成不同候选UUID；只有一个CAS append成功。失败
+调用遇到concurrency/stream不确定性后重载完整history：若发现语义相同的已提交Decision，就改用其
+原Commit幂等返回；若没有或内容冲突，则保持state/event错误，不猜测成功。
+
+### 186.5 明确未进入的范围
+
+- 没有ReviewCandidate、preview artifact、group reducer或第二状态机；
+- 没有验证代码、Git diff、测试输出或Agent陈述真实性；这些必须在调用Service前由Controller完成；
+- 没有执行rework重新投递、redesign Design route、blocked解除、TestCard或Demand completion；
+- 没有公共MCP、CLI、Controller-return transport或宿主身份认证；
+- 没有后台worker、SQLite、消息队列或持久化Review read store。
+
+### 186.6 聚焦验证
+
+```text
+Foundation Git + Demand + Delivery + Result + Review TypeScript tests: 88 pass / 0 fail / 0 skip
+Decision Service: current Config Controller derivation; exact Snapshot/unit/result closure;
+  first committed decision; retry with different clock/UUID returns original identity/time;
+  conflicting judgment rejection; stale/extra input zero-write before clock/UUID;
+  concurrent same request converges to committed + idempotent and one stream revision
+TypeScript: pass
+Architecture: pass / parser=swc / 519 modules / 3485 dependencies / 0 violations
+Schema: pass / 53 schemas / 136 external refs (unchanged)
+Schema digest: sha256:6a381d2ca6e59a72e1208866bee5e624f9e264a087b3ff94454b64e6db169f6c
+git diff --check: pass
+```
+
+验证只执行当前Foundation Git与新版Demand/Delivery/Result/Review TS范围；未运行旧JS、完整TS套件、
+插件validator/smoke、`npm test`或release gate。没有提交、发布或刷新安装cache。
+
+## 187. Review Decision消费者架构核实节点
+
+### 187.1 当前TS事实矩阵
+
+009A–C已经能可靠记录`accept | rework | redesign | blocked`，但四种结果的下游并不处于同一成熟度：
+
+| 当前phase | 已有真实能力 | 仍缺少的首个consumer |
+| --- | --- | --- |
+| `accepted` | Decision/Event/Aggregate/Review history闭合 | Testing Decision reduction、Test Tasking或Demand completion |
+| `rework-requested` | 原TaskPackage、Result与Decision历史均保留 | 携带精确返工原因的新Target Delivery |
+| `redesign-requested` | 非bug mismatch事实已持久化 | Authority supplement与same-repository replacement lineage |
+| `review-blocked` | hard blocker与独立检查已持久化 | 明确的人类输入恢复/重新审查事件 |
+
+当前TaskPackage v1只支持`implementation`，没有Test、dependency、replacement、continuation或rework
+brief；Planning reducer禁止同一Demand出现第二个同repository Target。Demand lifecycle只有
+`active | cancelled`，尚无complete。Demand Authority在publication时永久冻结，后续TaskPackage只能
+选择原authority引用。因此不能把四条route当成四个只差一个状态判断的并行小改动。
+
+### 187.2 旧JS保留事实与反例
+
+旧JS ordinary rework允许`needs-rework + accepted/ambiguous previous delivery`直接生成新的Envelope，
+继续使用同一个TaskPackage；这证明“返工是同一任务的新执行attempt”是实际功能需求。旧TaskPackage
+还拥有`replacesTargetTask`，redesign replacement要求同repository、精确旧package/result/decision
+链。
+
+但旧`blocked`决定把Demand置为blocked、Task置为needs-rework，代码中没有对应unblock/resume-review
+路径，Delivery planning也不接受blocked Demand。这不是应继承的标准，而是旧实现真实存在的闭环
+缺口。
+
+### 187.3 当前blocked语义缺口
+
+当前新TS进一步把“一份TargetResult只能存在一个Decision”作为Service幂等规则。该规则对
+`accept/rework/redesign`成立，因为它们终结本次Result review；对`blocked`不成立：blocked表示等待
+人类或外部事实，不应永久消费同一Result的审查资格。
+
+[Microsoft Durable Task human-interaction pattern](https://learn.microsoft.com/en-us/azure/durable-task/common/durable-task-human-interaction)
+把人工审批建模为持久等待，并通过明确external event恢复；[Durable Functions external-event指南](https://learn.microsoft.com/en-us/Azure/Azure-functions/durable/durable-functions-external-events)
+同时要求唯一事件身份以处理at-least-once重复。[AWS Step Functions human approval](https://docs.aws.amazon.com/step-functions/latest/dg/tutorial-human-approval.html)
+也让执行暂停到明确callback后再推进，而不是把等待状态当成不可恢复终态。
+
+因此推荐保留blocked Decision不可变历史，同时新增精确`review-blocked → result-reported`恢复事件；
+恢复后Controller必须重新读取输入和运行检查，再创建**新一代**Decision。不得原地改写旧Decision，
+也不得从block resolution直接accept。
+
+这要求把Decision幂等范围从：
+
+```text
+unique(TargetResult ID)
+```
+
+修正为类似：
+
+```text
+unique(TargetResult ID + reviewed Snapshot digest)
+```
+
+并由block-resolution Event绑定精确blocked Decision ID/digest和恢复依据。同一请求仍幂等，不同Review
+generation保留完整历史。当前无需引入TTL；用户取消仍走独立Demand cancellation。
+
+### 187.4 rework不是简单放宽phase
+
+rework可以继续复用原不可变TaskPackage，不需要新任务或额外“rearm”批准；Controller的rework
+Decision本身就是新attempt的业务授权。[AWS Step Functions redrive](https://docs.aws.amazon.com/step-functions/latest/dg/redrive-executions.html)
+同样保留既有成功历史并从未成功步骤继续，新的attempt仍作为execution history出现。
+
+但仅把Delivery Preparation的准入从`planned`放宽到`rework-requested`仍不完整：当前
+`TargetDeliveryIntent`和prompt只描述原TaskPackage，目标窗口看不到Controller复现的缺陷、failed
+checks或精确前Result。标准rework纵切至少需要：
+
+- Intent区分`initial | rework`；
+- rework source绑定Decision与TargetResult ID/digest；
+- prompt携带有界Controller rationale/失败检查摘要，并继续以完整Decision Event作为authority；
+- 新TargetDelivery、Claim、Observation与TargetResult身份；
+- 旧Result/Decision只留历史，不复制到新TaskPackage或覆盖。
+
+重复返工刹车继续从Event history读取真实prior rework decisions，不增加可漂移`reworkCount`字段。
+
+### 187.5 accepted与redesign的真实前置
+
+`accepted`之后必须读取冻结`testingDecision`：
+
+- `controller-only`：具备进入Demand completion设计的资格，但complete还要闭合全目标、TODO与终态事件；
+- `real-environment`：必须先建设TestCard与Test TaskPackage，当前implementation-only TaskPackage不能
+  被临时复用为Test；
+- `not-applicable`：当前只允许research，而research不能创建implementation TaskPackage。
+
+`redesign`更深：新需求依据通常不在publication时冻结的Authority refs中；当前Planning又禁止同repo
+replacement。正确实现必须先选择“immutable base Authority + append-only supplement”还是“新Demand”
+等authority模型，再设计replacement lineage。不能先复制旧`replacesTargetTask`字段并假装新Requirement
+Design已获授权。
+
+### 187.6 剪枝后的推荐顺序
+
+```text
+R-0  blocked Decision generation + explicit resume-review Event
+  ↓
+R-1  rework-aware TargetDeliveryIntent + same-TaskPackage new attempt
+  ↓
+R-2  accepted-target gate读取testingDecision
+  ├─ controller-only → Demand completion纵切
+  └─ real-environment → TestCard/Test Tasking纵切
+
+R-3  redesign Authority supplement + replacement lineage（单独设计确认）
+```
+
+这里不新增通用Workflow manager、Group、ReviewCandidate、全局attempt counter或四条route统一抽象。
+Snapshot/Event history已经是清晰中间层，各route只消费自己需要的事实。
+
+### 187.7 待用户选择
+
+1. **A（推荐）**：先修正blocked为可恢复Review generation，再实现rework纵切；之后回到accepted分支。
+2. **B**：声明blocked必须通过新TargetResult才能解除，直接实现rework；实现更少，但会制造无产品改动
+   的假返工，并保留与durable human gate不一致的语义。
+3. **C**：先做accepted happy path；能更早进入completion/Test讨论，但会暂时保留当前blocked不可恢复
+   和rework prompt缺失问题。
+
+本节点只完成代码/文档/旧逻辑/官方实践审查与路线设计；没有修改TS运行时代码、Schema或测试，
+也没有运行测试、提交、发布或刷新安装cache。
+
+## 188. R-0（可恢复Review Block Generation）
+
+### 188.1 从Result唯一Decision修正为Review generation
+
+用户确认采用§187方案A。原Decision Service按TargetResult ID查找唯一Decision，对accept/rework/
+redesign是正确终结语义，但会让blocked永久消费同一Result的审查资格。本单元把幂等范围修正为：
+
+```text
+TargetResult ID + reviewed Snapshot digest
+```
+
+同一Review generation仍只能有一个Decision；显式Resume提交后，Event Stream与Review history使新
+Snapshot digest和unit digest变化，Controller才能为同一TargetResult创建下一代Decision。没有引入
+可漂移generation数字或mutable current-review文件。
+
+### 188.2 ControllerTargetReviewResume合同
+
+新增`target-review-resume` durable ID和不可变`ControllerTargetReviewResume`，闭合：
+
+- Program/Demand/Target与当前逻辑Controller Window；
+- exact blocked Decision ID/digest；
+- exact TargetResult ID/digest；
+- blocked Snapshot/state digest与stream revision；
+- resolution summary、resumedAt与self digest。
+
+Resume不声明阻断事实真实解决，不撤销或覆盖旧Decision，也不携带accept/rework/redesign字段。
+resolution summary只解释为什么Controller认为可以重新审查；新的业务判断必须由下一代Decision中的
+新独立检查承担。
+
+### 188.3 Event Sourcing闭环
+
+新增`review.target-result-resumed.v1` data Schema、当前Event模型、v1 codec Registry、generic
+upcaster、pure Decider、Aggregate reducer和Commit boundary。Reducer只接受：
+
+```text
+current phase = review-blocked
+current Decision = blocked
+exact Decision/Result tuple
+resume.blockedSource.stateDigest = current state digest
+resume.blockedSource.streamRevision = commit.expectedStreamRevision
+```
+
+转换只删除Aggregate当前`reviewDecision`摘要并把phase恢复为`result-reported`；TaskPackage、Delivery、
+Host Effect和TargetResult summary逐字段保留。旧Decision与Resume完整载荷继续存在于Event Stream。
+重复Resume因不再位于review-blocked状态而失败；同一blocked Decision也只能拥有一个Resume Event。
+
+新增事件家族再次改变version compatibility digest，旧Snapshot会回退到完整replay，不修改历史字节。
+
+### 188.4 Review Unit绑定历史
+
+`DemandResultReviewSnapshot`的reported/review-decided target现在携带有序`priorReviewHistory`：
+
+```text
+decision source event + full Decision
+resume source event + full Resume
+```
+
+首次审查history为空。当前Decision不进入它自己曾审阅的unit；只包含该Decision之前、属于同一
+TargetResult的历史。Resume之后重新生成reported unit时，prior history包含`blocked Decision → Resume`，
+所以unit digest必然不同。下一代Decision由此精确证明Controller看到了阻断与恢复背景。
+
+Repository一次完整扫描同时投影TaskPackage、TargetResult、Decision和Resume，按stream revision排序
+并复验Resume必须引用更早的blocked Decision。它不按mtime、目录顺序或generation counter选择当前项。
+
+### 188.5 Resume Service与恢复边界
+
+`ControllerTargetReviewResumeService`固定执行：
+
+```text
+strict request/options
+  → Demand组合authority
+  → 完整Review history + 当前Snapshot
+  → exact review-blocked target/Decision/Result/Snapshot
+  → 派生当前Config Controller Window
+  → 创建Resume并preflight
+  → 复验Config current
+  → optimistic CAS append Resume Event
+```
+
+请求不允许调用方声明Resume/Event/Commit ID、Controller Window、state digest或stream revision。相同
+blocked Decision的相同resolution request重试返回原Resume身份和时间；内容冲突不覆盖。并发/不确定
+提交沿用Decision Service的“重读history→精确同语义则前向幂等”边界。
+
+[Microsoft Durable Task human-interaction pattern](https://learn.microsoft.com/en-us/azure/durable-task/common/durable-task-human-interaction)
+和[Durable Functions external-event指南](https://learn.microsoft.com/en-us/Azure/Azure-functions/durable/durable-functions-external-events)
+所描述的“持久等待→明确外部事件恢复”在此被收敛为本地Event Sourcing事实；Wakeflow没有引入后台
+orchestrator、timer或消息队列。
+
+### 188.6 明确未进入的范围
+
+- Resume没有TTL、自动超时、自动accept或自动路由；Demand取消仍是独立事件；
+- 没有把resolution summary当成证据、用户签名或宿主身份认证；
+- 尚未实现rework-aware TargetDeliveryIntent与新attempt；
+- 尚未实现accepted Test/completion分流或redesign Authority supplement；
+- 没有Group、ReviewCandidate、global generation counter或持久化Review read store。
+
+### 188.7 聚焦验证
+
+```text
+Foundation Git + Demand + Delivery + Result + Review TypeScript tests: 91 pass / 0 fail / 0 skip
+Review Resume: deterministic codec/digest and typed Resume/Event/Commit identity;
+  v1 codec/upcast; exact blocked reducer; stale Snapshot zero-write before clock/UUID;
+  first Resume + exact retry; prior decision/resume history ordering;
+  changed review-unit digest; second-generation accept Decision on same TargetResult;
+  exactly three additional stream revisions for blocked → resume → accept
+TypeScript: pass
+Architecture: pass / parser=swc / 527 modules / 3539 dependencies / 0 violations
+Schema: pass / 55 schemas / 143 external refs
+Schema digest: sha256:9bed70de8ebd20e27fa0b588a7841be429ef510173c01443040cefced4b502fd
+git diff --check: pass
+```
+
+验证只执行当前Foundation Git与新版Demand/Delivery/Result/Review TS范围；未运行旧JS、完整TS套件、
+插件validator/smoke、`npm test`或release gate。没有提交、发布或刷新安装cache。
+
+## 189. R-1（同一TaskPackage的可审计返工尝试）
+
+### 189.1 返工语义与边界
+
+本单元把`rework-requested`实现为同一不可变TaskPackage的新执行尝试，而不是新建TaskPackage、
+修改旧Result、复用旧TargetDelivery或借用Host Effect Rearm：
+
+```text
+previous TargetResult
+  → Controller rework Decision
+  → new TargetDeliveryIntent
+  → new WindowWorkClaim / Host Effect / TargetResult
+```
+
+TaskPackage ID/ref/digest、Target Task、repository与window保持不变；每次尝试使用新的TargetDelivery、
+Claim、Observation和Result身份。Decision本身就是业务返工授权，不再增加一条无信息量的rearm事件。
+
+### 189.2 有界Rework Context与完整来源闭合
+
+`TargetDeliveryIntent`新增可选`rework`投影。字段缺失表示初次尝试；字段存在时必须绑定：
+
+- exact Controller Decision ID/digest；
+- exact previous TargetResult ID/digest；
+- 最长1024 code points的`rationaleSummary`；
+- 每个未通过检查的ID/outcome，以及最长128/256 code points的method/observation summary；
+- 至少一个`failed`检查，check ID不得重复。
+
+完整Decision和Result不复制进Intent或prompt，继续由Demand Event Stream持有。新增薄适配缝
+`target-delivery-rework-context.ts`先解析两份完整记录，复验Program/Demand/Target/TaskPackage/Result
+关系，再生成有界投影。事件因果顺序继续由stream revision与optimistic append证明，不新增墙上时钟
+先后门。摘要字段明确使用`Summary`命名，截断以Unicode code point执行并保留省略号，不把有界执行
+消息伪装成完整Review authority。
+
+为了让纯Decider也能证明Intent摘要确实来自对应Review历史，prepare command在返工路径额外携带
+完整`reworkSource:{decision,previousResult}`。命令解析器重新投影并与Intent逐摘要比较；Event只保存
+Intent，不复制命令来源。初次命令字节形状与command digest保持不变，返工命令缺少来源或来源不匹配
+会在产生Event前失败。这个单向适配避免`TargetDeliveryIntent ↔ TargetResult`运行时循环依赖。
+
+### 189.3 Prepared Event v2与历史兼容
+
+`delivery.target-delivery-prepared`当前持久化版本升为v2：
+
+- v1 Schema明确禁止`rework`，只代表历史初次尝试；
+- v2同时接受初次与返工Intent；
+- `v1 → v2`是身份upcast，因为旧初次Intent已经是当前内存形状；
+- 当前writer对初次和返工都写v2；
+- v1载荷带`rework`会被codec拒绝，不能用新语义伪装成旧事件。
+
+事件版本兼容摘要随之变化，旧Snapshot会安全回退到完整replay；旧v1事件字节、Intent self digest与
+历史resulting state digest均不改写。
+
+### 189.4 Preparation与Aggregate准入
+
+Preparation Authority现在只接受两个闭合分支：
+
+```text
+planned          + no rework context
+rework-requested + exact current Decision/Result context
+```
+
+返工分支从完整Event历史定位当前Aggregate摘要指向的Decision/Result，复验历史Aggregate与组合上下文
+处于同一state digest/revision，然后读取当前Config拓扑、TaskPackage投影和私有Binding。Apply重试从
+Event历史恢复完整rework command source，不依赖可删除投影，也不要求Aggregate仍停在
+`rework-requested`。
+
+Reducer要求新Intent中的Decision/Result元组与当前summary完全一致，且TargetDelivery ID不同于上一
+尝试。Service还在preview与提交前扫描完整历史，拒绝复用任一更早TargetDelivery ID；并发碰撞继续由
+expected stream revision收敛。
+
+### 189.5 多尝试历史与幂等修正
+
+Repository按TargetDelivery ID定位prepared Event时不再错误要求它必须是Aggregate当前Delivery。
+完整replay已经证明每条Event在其历史位置合法，定位后只复验Demand/Target/TaskPackage/window关系。
+因此上一尝试的TargetResult在后续返工已开始后仍能按原command/commit精确幂等返回，不会因current
+Delivery变化而把合法历史误报为损坏。
+
+`DemandResultReviewSnapshot.priorReviewHistory`也从“同一TargetResult内的Decision/Resume”扩展为
+“同一Target Task在当前Decision之前的全部有序Decision/Resume”。第二次尝试产生Result后，新的
+review unit会明确包含第一次rework Decision；Controller可以从真实Event history实施重复返工刹车，
+仍不增加`reworkCount`或另一份mutable lineage状态。
+
+### 189.6 明确未进入的范围
+
+- 没有改变TaskPackage内容、创建replacement或continuation；普通rework仍是同一任务；
+- 没有实现redesign Authority supplement、accepted Test/completion分流或Demand complete；
+- 没有自动重试、定时器、后台worker、Group、ReviewCandidate或全局attempt counter；
+- 没有把Controller摘要当成事实证明；Controller独立验证与最终Decision权威保持不变；
+- 没有公共MCP/CLI或真实宿主发送；测试只消费首次Claim签发的瞬时Action并记录模拟宿主事实。
+
+### 189.7 聚焦验证
+
+```text
+Foundation Git + Demand + Delivery + Result + Review TypeScript tests: 111 pass / 0 fail / 0 skip
+Rework vertical flow: Result → rework Decision → same TaskPackage/new Delivery v2
+  → new Claim/Action → accepted Observation → second Result;
+  old Result retry remains idempotent; TaskPackage count stays 1;
+  second review unit contains prior rework Decision
+Event evolution: v1 initial upcast; v1 rejects rework; current writer emits v2
+Command closure: missing/mismatched full rework source rejected before Event creation
+Identity: previous/historical TargetDelivery ID reuse rejected
+TypeScript: pass
+Architecture: pass / parser=swc / 529 modules / 3571 dependencies / 0 violations
+Schema: pass / 56 schemas / 144 external refs
+Schema digest: sha256:ac8ab6e44eaf32e0506d8709713cdf6f688fc6c6861b9b49dc262dc2ea290e6c
+git diff --check: pass
+```
+
+验证只执行当前Foundation Git与新版Demand/Delivery/Result/Review TS范围；未运行旧JS、完整TS套件、
+插件validator/smoke、`npm test`或release gate。没有提交、发布或刷新安装cache。
+
+## 190. R-2（产品Target接受后的Testing Decision分流）
+
+### 190.1 当前Authority、Review与旧实现事实
+
+当前新TS并不缺测试决定本身：`DemandAuthority.testingDecision`已经在publication时永久冻结，并且：
+
+- 非research只能是`controller-only | real-environment`；
+- research只能是`not-applicable`；
+- `real-environment`必须精确绑定唯一`test-environment` Ledger成员；
+- Authority admission会稳定读取并复验全部Ledger成员、record/member digest及Program/Demand关系。
+
+R-0/R-1后的Review Snapshot则能证明每个当前implementation Target是否拥有精确accepted
+Decision/Result。缺口是两组事实之间没有可执行的中间路由，Controller只能自行重新解释。
+
+旧JS `createTestCardArtifact`确实同时要求`authority.testDecision.mode=real-environment`和所有产品任务
+accepted/superseded；旧completion owner还要继续检查idle review、lease、current Result、TaskPackage与
+TestCard closure。因此旧逻辑只能作为需求证据：它支持“先分流、再由专属owner完整preflight”，不支持
+把全部accepted直接等同于Demand完成。
+
+TencentDB-Agent-Memory的README明确说明Memory不运行Agent loop，只为下一轮保存结果；它没有对应
+的accepted/Test路由实现可复用，因此本单元没有把其memory分层误套为Wakeflow工作流状态。
+
+[AWS Step Functions Choice](https://docs.aws.amazon.com/step-functions/latest/dg/state-choice.html)要求按输入
+显式选择分支，并建议提供Default避免无匹配时无法转移；[GitHub Environments](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments)
+和[Azure Pipelines环境](https://learn.microsoft.com/en-us/azure/devops/pipelines/process/environments?view=azure-devops)
+都把环境保护检查放在消费环境资源的stage开始之前。R-2据此保留显式`not-ready`默认分支，并且只在
+真实环境路线成立后投影环境Authority引用。
+
+### 190.2 DemandPostAcceptanceRoute读模型
+
+新增`demand-post-acceptance-route.ts`，它是零写、可丢弃、可重建的CQRS读模型，不是持久化Artifact
+或第二状态机。当前没有公共wire或文件消费者，因此没有提前增加JSON Schema；内部合同仍有
+`kind/schemaVersion`、确定性`routeDigest`和稳定错误分类。
+
+路由共同冻结：
+
+- Program/Demand/type与Demand Authority digest；
+- 原始testing decision；
+- Review Snapshot digest；
+- observed stream revision/state digest/last Event tuple；
+- 每个accepted implementation Target的TaskPackage、Result和Decision精确身份。
+
+后续owner必须重新复验这些tuple，不能把route本身当成写许可。
+
+### 190.3 三类显式下一阶段
+
+```text
+not-ready
+  ├─ demand-cancelled
+  ├─ no-target-tasks
+  ├─ targets-not-accepted + exact blocking target/phase
+  └─ testing-not-applicable
+
+completion-preflight
+  └─ active + non-empty targets + all implementation targets accepted
+     + testingDecision=controller-only
+
+real-environment-test-planning
+  └─ same acceptance gate + testingDecision=real-environment
+     + exact test-environment Ledger authority reference
+```
+
+`completion-preflight`刻意不叫`completion-ready`：真正completion owner仍需建设并复验TODO、lease、
+全目标与终态Event边界。`real-environment-test-planning`也不创建TestCard、不分配Test Target、不选择
+环境、不执行命令。
+
+### 190.4 环境Authority与信息边界
+
+路由通过现有Demand组合Authority完整读取和验证Ledger闭包，因此不会跳过member bytes/digest验证；
+但输出只包含现有`LedgerAuthorityMemberReference`，不解释或返回环境正文、secret、endpoint、raw handle、
+thread/session ID。下一阶段TestCard owner必须从同一冻结成员显式构造测试合同，并再次验证当前Config、
+Controller self-check和环境边界。
+
+### 190.5 高负载回归暴露的Decision恢复窗口
+
+R-2整组聚焦测试第一次运行时，既有Controller Decision并发测试出现一次真实瞬态：winner已把commit
+link到最终槽位但尚未退休双链接candidate，loser立即完整audit时被普通reader保守分类为`stream`。
+单独连续三轮均通过，证明不是持久损坏，但也不能把该偶发窗口忽略为测试噪声。
+
+Decision Service的历史读取因此增加最多三次完整重读，只针对`repository.stream`；每次仍执行完整
+Event chain与Review history审计，不使用sleep、timer、局部缓存或宽松解析。winner结算后读取收敛；
+持续三次错误仍按state损坏失败。修正后同一109项高负载聚焦组完整通过。
+
+### 190.6 明确未进入的范围
+
+- 没有TestCard、Test TaskPackage、Test attempt、controllerSelfChecks或真实环境执行；
+- 没有Demand completion Event、TODO settlement、lease closure、archive或continuation；
+- 没有把research零Target捷径混入implementation接受路线；
+- 没有公共MCP/CLI、宿主发送、environment secret或配置值输出；
+- 没有通用Workflow manager、全局stage字段、后台worker或新持久化文件。
+
+### 190.7 聚焦验证
+
+```text
+Tasking + Demand + Delivery + Result + Review TypeScript tests: 109 pass / 0 fail / 0 skip
+Route vertical flow:
+  result-reported → not-ready(targets-not-accepted)
+  accepted + controller-only → completion-preflight
+  accepted + real-environment → real-environment-test-planning + exact authority ref
+  published/no target → not-ready(no-target-tasks)
+  cancelled → not-ready(demand-cancelled)
+Read behavior: deterministic digest; repeated reads byte-equivalent; root inventory zero-write
+Concurrency regression: full high-load group passes after bounded complete-audit retry
+TypeScript: pass
+Architecture: pass / parser=swc / 531 modules / 3597 dependencies / 0 violations
+Schema: pass / 56 schemas / 144 external refs (unchanged)
+Schema digest: sha256:ac8ab6e44eaf32e0506d8709713cdf6f688fc6c6861b9b49dc262dc2ea290e6c
+git diff --check: pass
+```
+
+验证只执行新版Tasking/Demand/Delivery/Result/Review TS范围；未运行旧JS、完整TS套件、插件
+validator/smoke、`npm test`或release gate。没有提交、发布或刷新安装cache。
+
+## 191. R-2A（controller-only Demand Completion终态）
+
+### 191.1 Completion不是accepted别名
+
+R-2只把`controller-only`路由到`completion-preflight`，没有授予写权限。本单元继续复验：
+
+- Demand Authority仍为`controller-only`；
+- 非空implementation Target全部拥有精确accepted Result/Decision；
+- 当前Review Snapshot与Event Stream完全同修订；
+- Demand来源TODO仍以claimed状态精确挂载，intake/state digest未漂移；
+- 每个accepted产品窗口均无WindowWorkClaim；
+- 当前Config仍能确定同一逻辑Controller Window。
+
+[AWS Step Functions Succeed](https://docs.aws.amazon.com/step-functions/latest/dg/state-succeed.html)把成功定义为
+无`Next`的终态；[Microsoft Event Sourcing](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)
+则要求通过不可变append Event和乐观并发从历史重建状态。新TS据此把Completion实现为独立终态Event，
+而不是在accepted读模型上增加一个展示布尔值。
+
+### 191.2 TODO与Completion的职责边界
+
+当前TODO状态词汇有意只有：
+
+```text
+pending-claim | parked | claimed | archived
+```
+
+它没有`completed`，因为TODO是调度Ledger，Demand业务生命周期不在其中重复保存。Completion因此只验证
+TODO仍为exact claimed mount，不写TODO；后续BusinessArchive携带完整归档回执后，TODO才允许
+`claimed → archived`。这避免创建第二套Demand终态，也保证完成后仍能从TODO挂载定位待归档Demand。
+
+为支持真实Completion测试，Tasking工作区fixture已从硬编码TODO lineage摘要改为真实执行Active Layout、
+TODO append和exact claim，再创建Demand/Event Stream。现有Tasking/Delivery/Review测试因此继续使用同一
+真实来源链，而不是Completion专用假状态。
+
+### 191.3 DemandCompletion与Plan合同
+
+新增不可变`DemandCompletion`事件载荷，绑定：
+
+- Program/Demand/逻辑Controller Window；
+- Demand Authority digest；
+- post-acceptance route与Review Snapshot digest；
+- observed stream revision/state digest/last Event tuple；
+- TODO ID、canonical intake ref、intake/state digest和state revision；
+- completedAt与self-excluding completion digest。
+
+Completion没有额外`completionId`：唯一持久身份已由Event ID与Commit ID分别承担，避免第四个等价ID。
+
+`DemandCompletionPlan`冻结Completion、完整Demand Authority、Event/Commit ID和expected stream revision。
+完整Authority进入plan是刻意的：已提交Apply重试可重建原command digest，不需要后来Config、Ledger或
+TODO仍处于preflight状态。Plan digest不是授权；首次Apply仍重读全部外部来源。
+
+### 191.4 Event Sourcing终态闭环
+
+新增`lifecycle.demand-completed.v1`：
+
+- strict event data Schema与v1 codec；
+- current Event/Command parser、pure Decider、Event commit boundary和upcaster路径；
+- Aggregate lifecycle新增`completed`；
+- reducer只接受active、non-empty、all-accepted且state/authority digest精确匹配的状态；
+- Schema进一步禁止`completed + empty/non-accepted targets`伪状态；
+- completion Event要求observed stream revision等于Commit expected revision。
+
+`completed`之后普通Planning、Delivery、Result、Review和Cancel都因非active lifecycle失败关闭；R-2 route
+也返回`not-ready(demand-completed)`，不会再次建议completion。当前state-model version仍为v1，因为旧
+Event产生的历史状态字节与摘要不变；新增Event家族会改变version compatibility digest，使旧Snapshot
+安全回退到完整replay。
+
+### 191.5 Completion Service事务边界
+
+```text
+preview（零写）
+  → Demand组合Authority + Review route
+  → exact claimed TODO
+  → all accepted window claims absent
+  → derive Controller + Completion + Event/Commit plan
+  → preflight commit
+
+apply（未提交）
+  → 重读全部来源
+  → exact plan/stream/route/TODO/Claim/Controller闭合
+  → 复验Config current
+  → optimistic append lifecycle.demand-completed
+
+apply（已提交）
+  → 只按plan冻结Authority重建同一command
+  → 返回原Commit与completed aggregate
+```
+
+同计划并发Apply收敛为`committed + idempotent`和一个stream revision。首次Apply前新增WorkClaim或删除
+TODO state都会失败且不追加Event；Event已提交后，即使Config展示字段变化，精确重试仍返回原终态。
+
+### 191.6 明确未进入的范围
+
+- 没有完成`real-environment` Demand；它仍必须先建设并接受TestCard/Test Task；
+- 没有TODO archive、BusinessArchive、Pod close、宿主线程关闭或物理worktree处理；
+- 没有completed Demand continuation/reopen，普通写命令保持终态失败；
+- 没有completion projection文件、全局stage状态、后台worker或消息队列；
+- 没有公共MCP/CLI或自动调用任何宿主能力。
+
+### 191.7 聚焦验证
+
+```text
+Tasking + Demand + Delivery + Result + Review + Lifecycle TypeScript tests: 113 pass / 0 fail / 0 skip
+Completion vertical flow:
+  accepted + controller-only + claimed TODO + no WorkClaim
+  → zero-write preview → exact Apply → lifecycle.demand-completed.v1
+  → Aggregate completed / route not-ready(demand-completed) / TODO remains claimed
+Negative gates:
+  real-environment rejected; preview→Apply WorkClaim drift rejected;
+  preview→Apply TODO source deletion rejected; completed→cancel rejected
+Idempotency:
+  exact retry after Config drift returns original Event;
+  concurrent same plan converges to committed + idempotent and one revision
+TypeScript: pass
+Architecture: pass / parser=swc / 539 modules / 3670 dependencies / 0 violations
+Schema: pass / 58 schemas / 149 external refs
+Schema digest: sha256:4bcb47adf25c463dabe002737bcf1690e1a1acc5a4f246fe378b54231c63ee5c
+git diff --check: pass
+```
+
+验证只执行新版Tasking/Demand/Delivery/Result/Review/Lifecycle TS范围；未运行旧JS、完整TS套件、插件
+validator/smoke、`npm test`或release gate。没有提交、发布或刷新安装cache。
+
+## 192. R-2B-1（real-environment TestCard耐久创建）
+
+### 192.1 TestCard是测试合同，不是测试运行结果
+
+R-2只路由到`real-environment-test-planning`，本单元把Controller已批准的真实环境测试意图冻结为
+TestCard。[Azure Test Plans](https://learn.microsoft.com/en-us/azure/devops/test/overview?view=azure-devops)
+区分可复用的Test Case、某次Test Run与具体Test Result；[GitHub deployment environments](https://docs.github.com/en/actions/concepts/workflows-and-actions/deployment-environments)
+和[Azure Pipelines environments](https://learn.microsoft.com/en-us/azure/devops/pipelines/process/environments?view=azure-devops)
+则把环境保护放在runner或环境资源真正可用之前。因此当前TestCard只是输入合同，不伪装为
+attempt、run、result或环境已准备的证明。
+
+TencentDB-Agent-Memory的README明确由外部Agent loop消费Memory，项目本身不运行Agent loop；它没有
+TestCard/Test Run对应合同可直接复用。本单元因此只学习其“底层能力与上层运行者分离”边界，
+没有把Memory数据模型套入Wakeflow Testing。
+
+### 192.2 受约束的TestCard合同
+
+新增`governance/testing/test-card` Schema与手写codec，冻结：
+
+- TestCard、预留Test Target、Program/Demand和Config Test Window的typed identity；
+- 完整`test-environment` Ledger Authority member reference，但不包含secret、endpoint、raw handle或session/thread ID；
+- post-acceptance route、Review Snapshot与Event Stream尾部tuple；
+- 每个accepted implementation Target的TaskPackage、Repository、Window、Result和Review Decision精确基线；
+- 原始Demand goal、已批准步骤、允许Skill、环境setup策略、最大attempt数与重启条件；
+- question/object boundary、Controller self-check、真实场景条件、成功/失败/不可推断/停止边界、
+  evidence与允许/禁止操作；
+- `createdAt`和排除self field的Canonical JSON digest。
+
+编写内容在读取UUID和时钟前完成严格准入：字段闭合、NFC文本、控制字符、空白/长度、唯一列表、
+Skill token和`fresh-per-attempt`重启条件都显式校验。旧实现的四个固定false变更布尔值被剪枝为一个
+`changeControl: return-blocked-to-controller`常量，不为尚不存在的流程增加状态空间。
+
+### 192.3 Event Sourcing与Aggregate最小投影
+
+新增`testing.test-card-created.v1`：
+
+- strict event payload Schema、v1 codec与version-evolution registry；
+- `testing.create-test-card` Command、pure Decider、uncommitted Event、Commit stream-position closure与Aggregate reducer；
+- reducer要求active Demand、不存在旧TestCard、Authority/state digest精确一致，且全部产品Target的
+  accepted Result/Decision基线逐项闭合；
+- Aggregate只保存`testCardId/digest/targetTaskId/testWindowId`当前摘要，完整TestCard由不可变Event保存；
+- post-acceptance route在TestCard存在后进入`test-task-planning`，不再重复创建Card；
+- `completed` Aggregate明确禁止尚存TestCard，避免真实环境测试尚未关闭就被标记完成。
+
+当前没有额外创建TestCard投影文件：Event Commit是耐久Authority，Aggregate是可重建的当前路由摘要。
+后续Test TaskPackage owner如需独立文档入口，必须从该Event派生create-only投影，不创建第二权威。
+
+### 192.4 Preview/Apply owner的事务边界
+
+```text
+preview（零写）
+  → Demand组合Authority + accepted Review route
+  → main placement + 产品Window WorkClaim absent
+  → Config Test Window + TestCard/Event/Commit identity
+  → exact immutable plan + Commit capacity preflight
+
+apply（首次）
+  → 重读Authority/route/Review/WorkClaim/Config
+  → 重建同一TestCard并复验plan、stream与Authority
+  → optimistic append testing.test-card-created.v1
+
+apply（已提交）
+  → 仅使用plan冻结Authority重建原Command
+  → 返回原Commit，不依赖后来Config展示值
+```
+
+同计划并发Apply收敛为`committed + idempotent`且只增加一个stream revision。preview后若产品窗口重新出现
+WorkClaim，Apply会在Event append前拒绝。关闭Demand/Ledger root的失败也映射为稳定service error，不泄漏底层异常形状。
+
+### 192.5 明确未进入的范围
+
+- 没有Test TaskPackage、Test Delivery、attempt/run/result、Test Review或Demand Completion；
+- 没有获取environment secret、启动runner、调用宿主Agent、MCP/CLI或网络执行；
+- 没有自动重试、timer、background worker、全局attempt counter或通用Workflow engine；
+- 没有Pod/isolated placement支持；当前只实现已能被现有Authority完整验证的main placement；
+- 没有TestCard独立物理文件、公共entrypoint或另一套持久状态机。
+
+### 192.6 聚焦验证
+
+```text
+Tasking + Demand + Delivery + Result + Review + Lifecycle + Testing TypeScript tests:
+  117 pass / 0 fail / 0 skip
+TestCard vertical flow:
+  accepted + real-environment + no product WorkClaim
+  → zero-write preview → exact Apply → testing.test-card-created.v1
+  → Aggregate minimal summary → route test-task-planning
+Negative gates:
+  controller-only rejected; preview→Apply WorkClaim drift rejected;
+  completed state with a current TestCard rejected;
+  empty boundary and fresh-per-attempt without restart condition rejected before UUID/clock
+Idempotency:
+  exact retry after Config display change returns original Event;
+  concurrent same plan converges to committed + idempotent and one revision
+TypeScript: pass
+Architecture: pass / parser=swc / 547 modules / 3737 dependencies / 0 violations
+Schema: pass / 60 schemas / 153 external refs
+Schema digest: sha256:282367733e9cc9990c9d27c42879dbb5c12a677702dc75ac9c9a6452bc404b85
+```
+
+验证只执行新版Tasking/Demand/Delivery/Result/Review/Lifecycle/Testing TS范围；未运行旧JS、完整TS套件、
+插件validator/smoke、`npm test`或release gate。没有提交、发布或刷新安装cache。
+
+## 193. R-2B-2（Test TaskPackage与耐久规划）
+
+### 193.1 TestCard、TaskPackage与运行事实分层
+
+[Azure Test Plans](https://learn.microsoft.com/en-us/azure/devops/test/overview?view=azure-devops)
+把Test Case、Test Run和Test Result分为可复用测试场景、一次执行实例与该次执行结果；
+[Azure的Actual Result合同](https://learn.microsoft.com/en-us/azure/devops/test/actual-result?view=azure-devops)
+进一步区分编写时expected outcome与执行时actual result。新TS据此固定：
+
+```text
+TestCard
+  = Controller冻结的测试问题、批准步骤、环境、边界和判定合同
+
+Test TaskPackage
+  = 把该Card分配给一个精确Test Window的不可变任务合同
+
+Test Delivery / attempt / Result
+  = 后续才能发生的运行授权、执行事实与证据结果
+```
+
+[TypeScript Handbook](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions)
+建议使用字面量判别字段表达闭合变体；[JSON Schema条件校验](https://json-schema.org/understanding-json-schema/reference/conditionals)
+也为`if/then/else`分支提供标准语义。因此没有新建第二个`wakeflow-test-task-package` Artifact，而是把同一
+TaskPackage收敛为`workType: implementation | test`的严格判别联合。
+
+TencentDB-Agent-Memory仍无Test Task/Run流程合同；其README明确Memory不运行Agent loop。本单元只继续
+采用其“持久合同与外部运行者分离”思路，没有虚构可复用的Testing实现。
+
+### 193.2 回溯修正TestCard的来源与安全边界
+
+R-2B-1原合同冻结了`approvedPlan`正文，但没有证明该计划来自哪个冻结Demand Authority成员。
+这会留下Controller临时编写未确认测试方法的结构缺口，因此本单元先补齐：
+
+- TestCard新增完整`strategyAuthority` Ledger member reference；
+- preview只接收`strategyAuthorityMemberRef`，owner从当前Demand Authority解析完整ref/digest关系；
+- requirement只接受`requirement-design`，bug只接受`reproduction | scope`，supplement只接受
+  `requirement-design | requirement-delta`；`test-environment`不能冒充策略来源；
+- Plan parser、Command parser和首次Apply都复验strategy/environment完整引用仍在冻结Authority中；
+- TestCard新增常量`productSourcePolicy: read-only`，产品源码只读不再仅依赖自由文本约定。
+
+`allowedOperations`仍可授权Test-owned harness/fixture或确认环境内的有界操作，但不能改写上述
+产品源码常量策略。
+
+### 193.3 TaskPackage判别联合与剪枝
+
+| 字段 | implementation | test |
+| --- | --- | --- |
+| `assignment` | exact repository + product window | exact Test window only |
+| `commitExpectation` | required | forbidden |
+| `acceptanceAnchors` | non-empty | exact empty array |
+| `testCard` | forbidden | exact `{testCardId,testCardDigest}` |
+| `selectedAuthorityRefs` | Controller选择且owner解析 | 由strategy + environment Authority确定性派生 |
+
+Test TaskPackage不再复制`approvedPlan`、allowed skills、setup/attempt策略、环境操作或成功/失败边界；
+它仅保存Card tuple，后续owner必须从`testing.test-card-created` Event读取完整合同。通用字段从Card
+严格派生：
+
+- `objective = question`；
+- `confirmedContext = controllerSelfChecks`；
+- `inScope = objectBoundary + realScenarioConditions`；
+- `outOfScope = cannotConclude`；
+- `forbidden = forbiddenOperations`；
+- `completionExpectations = evidenceRequired`。
+
+当前没有提前添加dependency、reviewInputContract或Test Result字段：accepted implementation baselines仍由
+TestCard唯一保存，Test步骤证据映射属于后续Result纵切，不在不可变TaskPackage中创建第二份来源。
+
+### 193.4 Event、Aggregate与历史摘要兼容
+
+Test Task复用现有`tasking.target-task-planned.v1`和create-only TaskPackage查询投影，没有创建含义重复的
+`testing.test-task-created` Event。Aggregate的Test target summary只保存：
+
+```text
+target/task package ID + package digest
++ workType:test + Test window
++ exact TestCard summary
++ phase:planned
+```
+
+重要的兼容修正：既有implementation target的持久字节不新增`workType` Task字段；Schema对其显式禁止
+该字段，仅新Test变体写入`workType:test`。因此旧`tasking.target-task-planned.v1`归约的state bytes/digest
+保持不变，state-model version仍为v1；没有用虚假v2或缺失历史reducer来掩盖摘要漂移。
+
+Review Snapshot现在可表达一个尚未产生Result的Test target，但post-acceptance route只把implementation Target
+纳入“产品已接受”门槛。Test Task创建前路由为`test-task-planning`；创建后精确进入
+`test-delivery-planning`。现有product Delivery/Result owner显式拒绝Test变体，不会意外用implementation流程执行Test。
+
+### 193.5 TargetTaskPlanningService的Test分支
+
+不新建第二个大型preview/apply service。现有`TargetTaskPlanningService`在内部使用判别request：
+
+```text
+implementation request
+  = Controller编写完整package content
+
+test request
+  = { workType: "test" }
+  → owner读取当前TestCard Event并派生全部package content
+```
+
+Test preview依次复验main placement、`test-task-planning` route、精确TestCard Event、Config Test Window、
+strategy/environment Authority、accepted baselines和产品Window WorkClaim absent，再分配TaskPackage/Event/Commit
+身份。`targetTaskId`直接使用TestCard预留值，不分配第二个任务身份。
+
+Apply首次提交前重读全部来源并从Card重建同一Package；因此伪造objective后即使重算plan digest也会
+被拒绝。同plan并发Apply仍收敛为一条Event；Event已提交后的精确重试可修复/读回TaskPackage投影，
+不依赖后来Config展示值。
+
+当前公共`wakeflow_plan_target_task` MCP wire仍只暴露implementation变体；Test路线没有在Test Delivery、Result与
+完整public consumer存在之前被误报为可用公开能力。
+
+### 193.6 明确未进入的范围
+
+- 没有Test Delivery Intent/packet/envelope、Window WorkClaim或宿主发送；
+- 没有Test attempt/restart/resume、环境准备回执或外部资源互斥；
+- 没有Test TargetResult、`test-step`证据映射、Controller Test Review或Demand Completion；
+- 没有Pod Test access probe、isolated placement或任何产品源码修改权限；
+- 没有新的TestCard物理投影、通用Workflow engine、timer或background worker。
+
+### 193.7 聚焦验证
+
+```text
+Tasking + Demand + Delivery + Result + Review + Lifecycle + Testing + MCP wire tests:
+  122 pass / 0 fail / 0 skip
+Test Task vertical flow:
+  accepted implementation targets + real-environment + TestCard Event
+  → zero-write preview → derived Test TaskPackage
+  → tasking.target-task-planned.v1 → create-only projection
+  → Aggregate Test planned summary → route test-delivery-planning
+Negative gates:
+  no TestCard rejected; environment member cannot act as strategy source;
+  forged derived package rejected after recomputed plan digest;
+  preview→Apply product WorkClaim drift rejected;
+  Test package cannot carry repository, commitExpectation or acceptance anchors
+Compatibility:
+  implementation Aggregate target still has no workType field;
+  v1 upcast, real local v1 stream audit and immutable Snapshot tests pass
+TypeScript: pass
+Architecture: pass / parser=swc / 551 modules / 3785 dependencies / 0 violations
+Schema: pass / 60 schemas / 153 external refs
+Schema digest: sha256:ee1259296d677937acc4fddeadcc730719942b908d05506c9a2dc1a1c564ad51
+git diff --check: pass
+```
+
+验证只执行新版Tasking/Demand/Delivery/Result/Review/Lifecycle/Testing与相关MCP wire TS范围；
+未运行旧JS、完整TS套件、插件validator/smoke、`npm test`或release gate。没有提交、发布或刷新安装cache。
+
+## 194. R-2B-3（initial Test Delivery/attempt授权骨干）
+
+### 194.1 logical Test attempt不是host-send attempt
+
+旧JS的有效需求是：一个logical Test attempt可能因`rejected-before-send`更换或重新授权宿主投递，
+但不能因“消息还没有真正发出”就消耗新的Test attempt上maxAttempts。反之，一次真实Test执行结果后的
+resume/restart必须绑定前一attempt和精确Test Result。
+
+[Playwright retries](https://playwright.dev/docs/test-retries)把测试retry显式编号，并在失败后丢弃旧worker、
+使用新worker重新执行；这说明执行attempt、worker/transport与环境重建不应被一个模糊计数器代替。
+[Azure Test Runs](https://learn.microsoft.com/en-us/azure/devops/test/test-runs?view=azure-devops)也把一次run的outcome、duration、
+environment和单项result作为执行事实，而不是反向改写Test Case。
+
+因此新TS新增typed`test-attempt` ID和独立`TestExecutionAttempt`合同，v1只准入当前真实消费者：
+
+```text
+ordinal: 1
+mode: initial
+previous attempt/result: absent
+restart authorization: absent
+```
+
+`resume | restart`没有作为未来占位进入Schema。当Test Result纵切能提供精确previous-result lineage时，
+必须通过新版本演进增加，不得放宽v1解释。
+
+### 194.2 environment setup是指令，不是回执
+
+Initial attempt从TestCard的`setupPolicy`确定性派生：
+
+| TestCard policy | initial directive |
+| --- | --- |
+| `reuse-existing` | `reuse-confirmed-environment` |
+| `fresh-once` | `prepare-fresh-environment` |
+| `fresh-per-attempt` | `prepare-fresh-environment` |
+
+该字段只说明Test执行前要完成什么，不说明环境已经就绪。本轮main placement只使用当前唯一Test
+Window Binding；没有新建环境lease、secret访问、自动rebuild或Pod跨窗口互斥。[GitHub Environments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/control-deployments)
+同样把environment protection和concurrency视为独立门槛：未通过protection前job不运行、不读取environment secrets；
+concurrency也不由environment名自动推导。
+
+### 194.3 TestDeliveryIntent与product Delivery的分界
+
+没有把Test加入现有product `TargetDeliveryIntent` optional分支。新建`TestDeliveryIntent`，只共享底层
+typed identity、TaskPackage入口、Binding route、Config language、Canonical digest和Event Store能力。它冻结：
+
+- Target Delivery/Task/Package及create-only TaskPackage projection ref/digest；
+- exact TestCard tuple；
+- `TestExecutionAttempt`；
+- Test Window、host和当前私有Binding generation；
+- Config digest、presentation language、`preparedAt`和self-excluding digest。
+
+它明确不包含：
+
+- portable/final prompt；
+- dispatch group/packet/envelope；
+- WindowWorkClaim、raw handle或host observation；
+- environment setup receipt；
+- send/readback事实、Test Result、acceptance或retry permission。
+
+这使Intent成为“准备该logical attempt的不可变授权”，后续dispatch owner必须再构造target-facing
+packet/prompt并取得pre-send claim，不能把Intent Event当成已发送事实。因尚无target-facing文档消费者，
+本轮仍不创建TestCard物理投影；packet设计必须先确认是派生create-only Card projection还是冻结有界execution
+contract snapshot。
+
+### 194.4 Event Sourcing与Aggregate attempt lineage
+
+新增独立`testing.test-delivery-prepared.v1`，而不扩展product `delivery.target-delivery-prepared` Event语义：
+
+- strict event data Schema、v1 codec和version-evolution registry；
+- `testing.prepare-test-delivery` Command、pure Decider、Event parser和reducer；
+- Command瞬时携带完整Test TaskPackage/TestCard用于关系校验，Event只保存Intent；
+- Repository可按Target Delivery ID定位唯一Test prepared Event。
+
+Aggregate从Test target `planned`进入`test-delivery-prepared`，最小当前摘要保存Delivery/Intent/Binding/
+TestAttempt身份；`testAttempts`append-only数组在当前只能含一个真定initial attempt，其首个
+`deliveryAuthorizations`绑定Target Delivery ID、Intent digest与preparedAt。它不是空数组占位，是后续
+maxAttempts/previous-result/replacement authorization判定所需的当前域事实。
+
+既有implementation Aggregate字节与归约逻辑保持不变，state-model仍为v1；新Event家族使version
+compatibility digest变化，旧Snapshot会安全回退到完整replay。post-acceptance route在Test Delivery提交后从
+`test-delivery-planning`进入`test-dispatch-planning`。
+
+### 194.5 Preview/Apply事务边界
+
+`TestDeliveryPreparationService`在preview中零写复验：
+
+```text
+main placement + test-delivery-planning route
+→ exact Test TaskPackage projection + TestCard Event
+→ accepted implementation baselines + product WorkClaim absent
+→ exact Program/Demand Authority + frozen Config digest/Test Window
+→ current private Test Binding
+→ allocate TestAttempt/TargetDelivery/Event/Commit IDs
+→ derive initial attempt + TestDeliveryIntent
+→ pure Event/Commit capacity preflight
+```
+
+首次Apply重读全部来源、重建同一attempt/Intent，复验Config current后乐观追加。伪造Binding后即使重算
+Intent/plan digest也会在首写前拒绝；preview后Config或产品Claim漂移也是零Event失败。已提交重试
+只从原TaskPackage/TestCard Event恢复Command，不依赖后来Config展示值或Binding。
+
+当前公共MCP仍不暴露Test Delivery；本轮没有宿主效果、未使用raw handle。
+
+### 194.6 并发结算窗口的Foundation修正
+
+扩大组合测试先后在TestCard和Completion并发测试暴露同一问题：winner的Commit已link，但原子
+candidate尚未退休时，loser的append admission会看到对方active candidate并保守报`stream`。这不是
+Testing业务错误，也不应由每个service各自重试。
+
+修正下沉为：
+
+- `DemandFileEventStore`以canonical Demand root为key，在同一进程内串行短append mutation；
+- 队列只保存Promise tail，不保存业务状态，完成后删除key；
+- 跨进程/worker竞争仍由candidate owner、exclusive no-replace link和保守recovery处理；
+- `DemandEventSourcingCommandHandler`仅对`repository.stream`在load/commit lookup阶段最多三次完整重读，
+  无sleep、无宽松解析，持续错误仍失败。
+
+新Store直接回归证明同进程相同Append收敛为`committed + idempotent`，append-candidates目录最终为空。
+Completion、TestCard与Test Delivery三组并发owner在同一高负载组合中通过。
+
+### 194.7 明确未进入的范围
+
+- 没有dispatch packet/envelope、target-facing prompt或TestCard物理投影；
+- 没有Test WindowWorkClaim、pre-send fence、Agent Host Action、send/readback或outcome Event；
+- 没有environment setup receipt、environment secret、外部资源lease或Pod Test access；
+- 没有resume/restart、replacement authorization、host-send retry或自动重试；
+- 没有Test TargetResult、test-step evidence mapping、Controller Test Review或Demand Completion；
+- 没有公共MCP/CLI、实体Codex/Claude发送、版本发布或安装cache切换。
+
+### 194.8 聚焦验证
+
+```text
+Tasking + Demand + Delivery + Result + Review + Lifecycle + Testing
++ MCP wire + Binding focused tests:
+  130 pass / 0 fail / 0 skip
+Initial Test Delivery flow:
+  Test Task planned + exact TestCard + current Test Binding
+  → zero-write preview → initial TestExecutionAttempt
+  → TestDeliveryIntent → testing.test-delivery-prepared.v1
+  → Aggregate test-delivery-prepared + one append-only attempt authorization
+  → route test-dispatch-planning
+Negative gates:
+  missing Test Binding rejected; forged Binding rejected after recomputed digests;
+  Config digest and product WorkClaim drift rejected before Event;
+  attempt v1 rejects ordinal 2/resume/restart placeholders
+Environment setup:
+  reuse-existing → reuse-confirmed-environment;
+  fresh-once/fresh-per-attempt initial → prepare-fresh-environment
+Concurrency:
+  Event Store same-process identical append → committed + idempotent;
+  Completion/TestCard/Test Delivery concurrent plans converge
+Compatibility:
+  existing implementation state bytes remain unchanged;
+  v1 upcast/local stream audit/Snapshot tests pass
+TypeScript: pass
+Architecture: pass / parser=swc / 562 modules / 3908 dependencies / 0 violations
+Schema: pass / 63 schemas / 171 external refs
+Schema digest: sha256:0e2e3f5117db7e8dba0e9df20412a0fa5b5b5624d9d7f46d225a6e33122878fa
+git diff --check: pass
+```
+
+验证只执行新版Tasking/Demand/Delivery/Result/Review/Lifecycle/Testing、相关MCP wire与Binding TS范围；
+未运行旧JS、完整TS套件、插件validator/smoke、`npm test`或release gate。没有提交、发布或刷新安装cache。
+
+## 195. R-2B-4（Test target-facing dispatch packet与可重建读取投影）
+
+### 195.1 没有恢复旧DispatchGroup/Packet/Envelope状态机
+
+旧JS `dispatch-packet`同时复制Group、TaskPackage、完整边界、Result合同、Test合同、prompt和transport
+字段，并为packet再分配独立身份。新TS的product Delivery已经有意收敛为Event中的单目标
+`TargetDeliveryIntent`；Test不能因为多一个执行合同就恢复整套旧transport层。
+
+[Azure Event Sourcing pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)
+明确把append-only Event Store视为system of record，把materialized view视为可从Event重建的只读投影，
+并建议Event表达业务意图而不是技术状态变化。因此本单元没有新增
+`testing.test-dispatch-packet-created`技术Event，也没有改变Aggregate phase：
+
+```text
+testing.test-delivery-prepared Event
+  = Test Delivery与logical attempt的业务授权
+
+TestCard / TestDispatchPacket file
+  = 目标窗口读取优化，可删除并从Event重建
+```
+
+packet与已有`targetDeliveryId`严格一一对应，没有重新启用已剪枝的`dispatch-packet` durable kind、
+DispatchGroup或DeliveryEnvelope。后续Claim仍必须重新验证当前Binding；投影存在不表示已Claim、已发送、
+环境已准备或Test已执行。
+
+### 195.2 Foundation只创建确定性JSON资源原语
+
+新增`foundation/filesystem/create-only-deterministic-json-resource`，组合现有根作用域能力：
+
+```text
+严格准入目录/文件路径、权限和容量
+→ 幂等物化父目录
+→ exclusive + durable file create
+→ 稳定读取确定性JSON
+→ 复验普通文件、exact mode、current user、single link和完整文本
+```
+
+已有目标只有字节完全相同时返回`current`；不同字节保持`conflict`，不会覆盖。双硬链接结算窗口返回
+`recovery-required`，创建后无法证明目标则返回`commit-uncertain`。该原语不解释Schema、领域digest、
+Event或资源目录准入，Testing owner仍须使用自己的parser和Event来源复验结果。
+
+这避免为TestCard和packet各复制一套约五百行节点/原子写错误映射。现有TaskPackage projection store
+暂不在本文件审阅单元中机械迁移；后续审阅它时可在不改变Tasking合同的前提下评估复用。
+
+### 195.3 TestCard projection与有界TestDispatchPacket
+
+目标窗口现在拥有三个明确、可导航的文件入口：
+
+```text
+artifacts/task-packages/<taskPackageId>.json
+  = 完整目标任务、上下文与边界
+
+artifacts/test-cards/<testCardId>.json
+  = Controller冻结的问题、环境、方法、判定与操作边界
+
+artifacts/test-dispatch-packets/<targetDeliveryId>.json
+  = 本次Delivery的有界目标读取快照与轻量prompt
+```
+
+TestCard文件是`testing.test-card-created` Event原字节的create-only projection，不是第二权威。
+packet只保留：
+
+- prepared Event的ID/revision/digest和TestDeliveryIntent digest；
+- exact TaskPackage/TestCard ID、可移植ref和SHA-256 digest；
+- host/window/binding route与首个logical Test attempt；
+- objective、前两项completion focus、第一条priority context、最高优先级critical boundary；
+- 固定`wakeflow-target`→`wakeflow-test` Skill读取顺序；
+- requirement goal、approved plan、allowed skills、environment setup、attempt上限、restart、change control
+  和`productSourcePolicy: read-only`组成的有界execution contract；
+- Config语言确定的英文或简体中文portable prompt、原Intent时间和self-excluding packet digest。
+
+[OCI Descriptor specification](https://github.com/opencontainers/image-spec/blob/main/descriptor.md)
+把digest作为content identifier，并要求消费前独立复验内容；packet同样不靠路径或ID暗示内容，所有外部
+Artifact入口都绑定完整SHA-256。[CloudEvents specification](https://github.com/cloudevents/spec/blob/main/cloudevents/spec.md)
+还提醒通用传输存在大小与信息泄漏边界，并建议通过链接访问详细内容以支持选择性披露；因此prompt和
+packet不复制完整Card/Package，也不携带raw handle、absolute workspace root、secret或环境回执。
+
+TencentDB-Agent-Memory没有Test dispatch对应模型可直接复用；其
+`MemoryProxy/src/request-prepare-adapter.ts`采用“领域扩展拥有完整语义，宿主只转交有界scalar
+projection”的边界，本单元只学习该职责分离，没有移植其具体数据结构。
+
+### 195.4 Demand根资源清单的闭合修正
+
+首次实现后逐文件复读发现：旧`DemandEventSourcingRootInventory`只允许
+`artifacts/task-packages`。如果只创建新目录而不扩展Inventory，下一次严格Demand Authority加载会把
+合法Test投影误判为未知资源，形成“能写入但后续无法继续”的断链。
+
+现已把`test-cards`和`test-dispatch-packets`加入封闭允许集合，并保持懒创建兼容：
+
+- `task-packages`仍是必需目录；
+- 两个Testing目录在真实投影出现前可严格absent，不为所有Demand预建空目录；
+- 任一目录可独立存在，以允许多文件投影中断后的幂等前向修复；
+- 出现后逐文件校验固定文件名、普通文件、`0600`、single link和current user；
+- 未知artifact目录或非法文件名仍稳定拒绝；
+- Inventory/RootAuthority把可选目录节点和全部artifact数量纳入双读稳定性比较。
+
+真实回归在packet物化后重新执行完整`loadDemandEventSourcingRootAuthority`，证明Ledger、Event、
+Inventory和新投影目录仍形成一个健康Demand根。
+
+### 195.5 单次物化的来源与失败边界
+
+`TestDispatchProjectionStore.materialize(targetDeliveryId)`按以下顺序执行：
+
+```text
+完整审计并定位唯一testing.test-delivery-prepared Event
+→ 定位原始target-task-planned与test-card-created Event
+→ 在任何写入前构造并复验完整期望packet
+→ 幂等修复TaskPackage projection
+→ 幂等创建/复验TestCard projection
+→ 幂等创建/复验TestDispatchPacket projection
+→ 再次交叉验证三个投影与prepared Event
+```
+
+三个文件不是跨文件业务事务：中途失败可留下已经耐久发布且来源正确的前缀，重试只会补齐缺失项；
+任何不同字节都不会被覆盖。Repository的Test Delivery历史查询也改为依据稳定Task/Card/attempt
+authorization lineage闭合，不再把“当前phase必须仍等于`test-delivery-prepared`”误当成历史Event存在条件，
+为后续Claim后的投影复验保留空间。
+
+### 195.6 明确未进入的范围
+
+- 没有Test WindowWorkClaim、host-effect fence、Agent Host Action、raw handle解析、send/readback或outcome Event；
+- 没有environment setup receipt、secret获取、runner启动、外部环境lease或Pod Test access；
+- 没有resume/restart attempt、replacement authorization或自动重试；
+- 没有Test TargetResult、`test-step` evidence mapping、`reviewInputContract`、`resultContract`、Controller Test Review
+  或Demand Completion；这些合同尚无真实Test结果consumer，因此packet不会提前声称支持；
+- 没有公共MCP/CLI、旧JS同步、实体Codex/Claude发送、版本发布或安装cache切换。
+
+### 195.7 聚焦验证
+
+```text
+Tasking + Demand + Delivery + Result + Review + Lifecycle + Testing
++ MCP wire + Binding + 新Foundation聚焦测试:
+  148 pass / 0 fail / 0 skip
+Test target-facing flow:
+  prepared Test Delivery Event
+  → zero-business-write projection materialization
+  → exact TaskPackage + TestCard + TestDispatchPacket files
+  → second materialization all current
+  → Event Stream revision unchanged
+  → strict Demand Root Authority reload pass
+Negative closure:
+  same-schema forged briefing with recomputed packet digest
+  → source cross-check rejects relation;
+  different existing projection bytes → conflict without overwrite;
+  illegal Test projection filename / unknown artifact directory → tree-shape reject
+Language and privacy:
+  English + zh-Hans prompt rendering pass;
+  no raw handle / absolute workspace path / Claim / host effect / result contract
+TypeScript: pass
+Architecture: pass / parser=swc / 570 modules / 3994 dependencies / 0 violations
+Schema: pass / 64 schemas / 189 external refs
+Schema digest: sha256:86afb3c537a46f91b03eb1f8d826615384c08ddd6348e1d7fcb257a1f98313b4
+git diff --check: pass
+```
+
+验证只执行新版相邻TS范围与新增Foundation文件；未运行旧JS、完整TS套件、插件validator/smoke、
+`npm test`或release gate。没有提交、发布或刷新安装cache。
+
+## 196. R-2B-5（Test pre-send WindowWorkClaim与Agent Host Action）
+
+### 196.1 Claim是共享窗口能力，不是第二套Testing锁
+
+Test和implementation在宿主效果前需要解决的是同一个业务无关问题：一个稳定Window同一时刻只能被
+一个精确Demand/Task/Delivery代际占用，旧持有者不能释放或执行后继Claim。现有
+`WindowWorkClaimStore`已经提供：
+
+- 按`windowId`固定路径的durable exclusive create；
+- 同一完整Claim重放返回`current`，不同Claim返回`occupied`；
+- 精确Claim文档与同一文件节点的compare-before-retire；
+- 无TTL、无进程存活推断、无按时间自动释放；
+- Claim文件先于Demand Event建立，跨Demand排他与本Demand状态提交分离。
+
+因此没有新增`TestWindowLock`、Test Claim Store或第二个Claim Event。`WindowWorkClaim`改为严格判别联合：
+
+| Claim target | 持久字段 |
+| --- | --- |
+| implementation | 保持既有字段，继续省略`workType` |
+| Test | `workType:test` + exact `testAttemptId` + `testDispatchPacketDigest` |
+
+现有implementation Claim的领域渲染字节不增加空字段，Test才写入真实consumer需要的fence。
+
+[Hazelcast FencedLock](https://docs.hazelcast.com/hazelcast/5.2/data-structures/fencedlock)
+说明仅有“持有锁”不足以阻止暂停后恢复的旧客户端对外产生副作用，必须把递增fencing token交给外部资源；
+[Redis distributed locks](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks/)
+也要求release时比较唯一owner token，且提醒TTL不能证明旧持有者仍安全。Wakeflow没有远程线性一致锁服务，
+因此不伪造递增token或自动过期语义；它把Claim ID/digest、Binding generation、Intent digest、packet digest、
+expected state digest和Event Stream revision一起传到后续宿主fence，释放时继续比较完整Claim与文件节点。
+
+TencentDB-Agent-Memory的`checkpoint.ts`与conversation extract lock同样使用owner/token校验释放，但其
+worker锁依赖TTL和超时接管。Wakeflow只学习“不能由旧owner删除新owner锁”的边界，不移植其时钟和接管模型。
+
+### 196.2 请求判别与Test Claim Authority
+
+`TargetHostEffectClaimRequest`现在显式要求：
+
+```text
+implementation
+  → workType + Demand/Task/Delivery/Intent + Agent observation
+
+test
+  → 上述字段
+  + exact TestDispatchPacket digest
+```
+
+没有使用“先查product Event，找不到再猜Test”的隐式分支。请求判别先确定唯一Event family；错误类型、缺失
+packet digest或额外字段在打开业务写边界前拒绝。
+
+Test Claim Authority依次复验：
+
+```text
+unique testing.test-delivery-prepared Event
+→ Aggregate仍是同一test-delivery-prepared attempt
+→ Config Program/digest与Test Window
+→ 从Event幂等物化并复验TaskPackage/TestCard/TestDispatchPacket
+→ caller确认的packet digest
+→ 当前唯一Test Window Binding
+→ 同Binding、同Config、同逻辑根的新鲜Agent Host observation
+```
+
+packet投影修复可以先发生，但它只是可重建read model；错误packet digest不会创建WindowWorkClaim或追加Event。
+[Google Cloud Storage preconditions](https://docs.cloud.google.com/storage/docs/request-preconditions)
+强调连续读取/写入必须绑定同一generation，否则元数据与内容可能来自不同对象。这里的Intent/Binding/packet/
+state digest组合承担同类precondition作用：任何一项漂移都在Claim Event前失败。
+
+### 196.3 共享Claim Event与Test Aggregate状态
+
+`delivery.target-host-effect-claimed.v1`本身表达“Target Window宿主效果已取得持久占用”，并不拥有产品
+源码语义，因此继续由implementation与Test共享。没有新增含义重复的
+`testing.test-host-effect-claimed` Event family。
+
+Reducer按Claim target判别：
+
+```text
+implementation delivery-prepared
+  → host-effect-claimed
+
+Test test-delivery-prepared
+  → test-host-effect-claimed
+```
+
+Test current summary保留Target Delivery/Intent/Binding/TestAttempt、append-only attempt authorization和
+WorkClaim摘要；WorkClaim摘要额外保留packet digest。完整Claim仍由不可变Event拥有，Aggregate不复制prompt、
+packet正文或Agent observation。
+
+post-acceptance route新增明确的`test-host-effect-claimed`读模型，暴露Test Delivery、attempt、packet与
+Claim tuple，供后续真实host effect/outcome owner定位；它不表示消息已发送。
+
+### 196.4 Test Agent Host Action
+
+新增瞬时`WakeflowTestDeliveryAgentHostAction`。它只在Claim Event首次`committed`后返回，绑定：
+
+- Claim ID/digest/ref、expected state digest与Claim Event/Commit；
+- current host/window/binding和最新Agent observation digest/time；
+- Target Delivery/Intent、logical Test attempt；
+- TestDispatchPacket ref/digest；
+- packet portable prompt加当前调用期workspace absolute root。
+
+Action不持久化、不包含raw handle、send result、readback或retry permission。Agent仍须使用刚刚通过Authority
+校验的同一候选handle调用宿主能力。相同Claim/Event重放返回`already-claimed + action:null`，不会重新签发
+一次性发送授权。
+
+[Amazon EC2 idempotency](https://docs.aws.amazon.com/ec2/latest/devguide/ec2-api-idempotency.html)
+规定同client token只有在参数完全相同时才能幂等重放，参数漂移必须返回mismatch。Wakeflow同样允许同Claim
+身份和全部来源参数前向恢复；packet、attempt、Binding或Intent不同都不会借用原Claim继续。
+
+### 196.5 失败与恢复顺序
+
+```text
+加载并复验全部Authority来源
+→ 检查observation freshness
+→ 创建或确认同一WindowWorkClaim
+→ pure reducer + Event Commit capacity preflight
+→ 再次复验Config/Binding/packet/observation
+→ 构造但不执行Agent Host Action
+→ optimistic append共享Claim Event
+→ 只有首次commit返回Action
+```
+
+Claim文件已经创建而Event缺失时，重试使用Claim内预分配Event/Commit身份前向完成，并只签发首次Action。
+Claim创建后、Event提交前发生Binding/Config/packet漂移时，只删除仍与完整Claim和节点预期一致的原Claim；无法
+证明时保留并报告unknown/recovery-required。Event已经提交后永不通过异常补偿删除Claim。
+
+### 196.6 明确未进入的范围
+
+- 没有调用Codex/Claude宿主发送工具，没有raw handle解析、send/readback或outcome Event；
+- 没有Test Host Effect Observation、rejected-before-send rearm、resume/restart attempt或自动重试；
+- 没有environment setup receipt、外部环境lease、secret获取、runner或Pod Test access；
+- 没有Test TargetResult、test-step evidence、Controller Test Review、Demand Completion或public MCP/CLI；
+- 没有修改旧JS/core、插件artifact、版本、发布或安装cache。
+
+### 196.7 聚焦验证
+
+```text
+Tasking + Demand + Delivery + Result + Review + Lifecycle + Testing
++ MCP wire + Binding + 新Foundation相邻矩阵:
+  152 pass / 0 fail / 0 skip
+Shared Claim compatibility:
+  既有6组implementation Claim/恢复测试全部通过;
+  implementation Claim仍省略workType/test字段;
+  同一delivery.target-host-effect-claimed.v1可归约两类Target
+Test Claim vertical flow:
+  exact Intent + packet + Binding + fresh observation
+  → WindowWorkClaim exclusive create
+  → shared Claim Event commit
+  → Aggregate test-host-effect-claimed
+  → packet-bound Test Agent Host Action
+  → retry idempotent + action:null
+Crash recovery:
+  Claim file current + Event absent
+  → reuse original Claim/Event/Commit IDs
+  → forward commit + one first Action
+Negative gates:
+  missing workType / missing Test packet digest rejected at input;
+  wrong packet digest rejected before Claim/Event;
+  different current Claim remains occupied;
+  stale observation and Binding drift retain existing compensation rules
+Privacy/effect boundary:
+  no raw handle / send result / readback / TTL / retry permission;
+  no Codex or Claude host tool invoked
+TypeScript: pass
+Architecture: pass / parser=swc / 574 modules / 4051 dependencies / 0 violations
+Schema: pass / 64 schemas / 190 external refs
+Schema digest: sha256:39471ecf3abbdda241e6af19b9100f0dbc57c55f8cf6b127912bb63d80d6c562
+git diff --check: pass
+```
+
+验证只执行新版相邻TS范围；未运行旧JS、完整TS套件、插件validator/smoke、`npm test`或release
+gate。没有提交、发布或刷新安装cache。
+
+## 197. R-2B-6（Test Host Effect Observation与Outcome recording）
+
+### 197.1 Observation记录宿主投递事实，不是Test执行结果
+
+R-2B-5签发的`WakeflowTestDeliveryAgentHostAction`只授权Agent调用当前宿主窗口。Agent把prompt发送到
+Test窗口后，Wakeflow首先需要记录“消息投递发生了什么”；此时Test尚未完成真实环境步骤，也没有产生
+Test Result。因此本单元继续严格区分：
+
+```text
+Host Effect Observation
+  = 宿主消息尝试 + 最多一次readback的脱敏事实
+
+Test Result
+  = Test窗口执行approved plan后返回的步骤证据与结论
+```
+
+Observation的`accepted`只表示宿主接收或readback确认，不表示测试通过、实现正确或Demand可完成。
+
+### 197.2 共享Observation内核，Test action增加lineage fence
+
+implementation与Test的宿主投递都有相同双轴：
+
+- attempt：`accepted | indeterminate | rejected-before-effect`；
+- readback：`confirmed | pending | unavailable`；
+- 原始attempt/readback JSON只参与有界Canonical SHA-256计算，不进入持久Event；
+- `confirmed` readback可以把`indeterminate` attempt提升为最终`accepted`；
+- `rejected-before-effect`只能配`unavailable` readback。
+
+因此没有新增第二个Test Observation Store或Event family。现有
+`WakeflowTargetDeliveryHostEffectObservation`的action改为判别联合：
+
+| action | 持久字段 |
+| --- | --- |
+| implementation | 保持历史字段并省略`workType` |
+| Test | 历史字段 + `workType:test` + `testAttemptId` + `testDispatchPacketDigest` |
+
+完整Test packet、prompt、absolute workspace root、raw handle、宿主返回值和错误文本都不会进入Observation。
+
+### 197.3 为什么保留indeterminate且不自动重发
+
+[RFC 9110 §9.2.2](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2.2)
+规定：非幂等请求只有在能证明语义幂等或原请求从未应用时才应自动重试；
+[RFC 9113 Request Reliability](https://www.rfc-editor.org/rfc/rfc9113.html#section-8.7)
+也强调一般错误下客户端无法判断服务端是否已经处理非幂等请求。Agent窗口消息可能已经触发目标执行，缺失
+宿主响应不能被猜成“未发送”。
+
+[Google Cloud Tasks](https://docs.cloud.google.com/tasks/docs/common-pitfalls#duplicate_execution)和
+[Amazon SQS](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/standard-queues-at-least-once-delivery.html)
+都明确要求消费者面对少量重复执行时保持幂等。Wakeflow当前无法证明任意Agent TaskPackage执行幂等，因此选择：
+
+```text
+accepted + pending/unavailable
+  → retain Claim，展示层可派生sent-unconfirmed，不重发
+
+indeterminate + pending/unavailable
+  → retain Claim，等待TargetResult/人工事实，不重发
+
+rejected-before-effect + unavailable
+  → 先提交Observation Event，再授权精确释放Claim
+```
+
+TencentDB-Agent-Memory的`pending-writes.ts`明确选择“宁可重复、下游hash去重”，适用于其L0内存写入；
+Wakeflow唤醒目标Agent可能重复执行代码修改或环境操作，不能套用该代价模型。
+
+### 197.4 Outcome请求与Authority闭合
+
+`TargetHostEffectOutcomeRequest`与Claim请求使用相同显式判别：
+
+```text
+implementation
+  → workType + Demand/Task/Delivery/Action + observation digest + 双轴事实
+
+test
+  → 上述字段 + exact testAttemptId + TestDispatchPacket digest
+```
+
+Outcome Authority从唯一Claim Event恢复Action闭合字段，并复验：
+
+- Demand/Task/Delivery和Claim Event身份；
+- Aggregate当前Claim ID/digest、Event/Commit/revision和expected state digest；
+- Claim route与Aggregate Host/Window/Binding；
+- Agent observation authority digest与Claim时冻结值；
+- Test request、Claim、Aggregate和Observation中的attempt/packet digest四方一致；
+- 已结算Event重放只能生成与当前Aggregate host-effect摘要完全相同的Observation。
+
+逐文件复读同时发现一个product既有缺口：Aggregate reducer此前没有比较
+`hostObservationAuthorityDigest`，虽然Outcome Authority会构造该字段，但纯Decider仍可能接受伪造值。现已在
+Authority和Reducer两层同时复验，并增加“错误digest不追加Event”的product回归。
+
+### 197.5 共享Event、Test状态与后续路由
+
+两类Target继续共用`delivery.target-host-effect-observed.v1`，因为Event表达相同宿主事实。Test reducer只在
+`test-host-effect-claimed`接收带Test fence的Observation，并转为：
+
+| disposition | Aggregate phase | Claim | next route |
+| --- | --- | --- | --- |
+| accepted | `test-host-effect-accepted` | retain | `test-result-planning` |
+| indeterminate | `test-host-effect-indeterminate` | retain | `test-result-planning` |
+| rejected-before-effect | `test-host-effect-rejected` | Event后exact release | `test-host-effect-rearm-planning` |
+
+Test current summary继续保留原attempt authorization、packet-bound WorkClaim和最小host-effect摘要；原始Evidence只
+保留digest。`test-result-planning`不是Test通过，`test-host-effect-rearm-planning`也不是自动重发许可。
+
+Outcome Event使用Claim ID确定性派生Event/Commit ID；完全相同请求重放返回`already-recorded`。明确拒绝分支
+若Event已经提交但Claim释放中断，重试只完成同一Claim的精确释放，不再次创建Observation或宿主效果。
+
+### 197.6 明确未进入的范围
+
+- 没有Wakeflow自主调用Codex/Claude发送、raw handle读取、重复readback或polling；
+- 没有Test TargetResult、test-step evidence mapping、Controller Test Review或Demand Completion；
+- 没有Test replacement delivery/rearm实现；当前只路由到独立rearm planning，不自动重发；
+- 没有resume/restart logical Test attempt、environment setup receipt、runner、secret或Pod Test access；
+- 没有public MCP/CLI、旧JS/core、插件artifact、版本、发布或安装cache改动。
+
+### 197.7 聚焦验证
+
+```text
+Tasking + Demand + Delivery + Result + Review + Lifecycle + Testing
++ MCP wire + Binding + 新Foundation相邻矩阵:
+  156 pass / 0 fail / 0 skip
+Shared Observation compatibility:
+  implementation action继续省略workType/test字段;
+  既有accepted/indeterminate/rejected/release/rearm测试全部通过;
+  同一delivery.target-host-effect-observed.v1可归约两类Target
+Test host-effect matrix:
+  accepted + pending
+    → Test Observation Event + retain Claim + test-result-planning
+  indeterminate + unavailable
+    → retain Claim + no retry permission + test-result-planning
+  rejected-before-effect + unavailable
+    → Observation Event + exact Claim release + rearm planning
+Idempotency/recovery:
+  same action derives same Event/Commit IDs;
+  exact replay already-recorded;
+  rejected Event current + Claim residue → retry only settles release
+Lineage/privacy:
+  Test action/Claim/Aggregate/Observation attempt+packet digests close;
+  wrong Agent observation authority digest rejected before Event;
+  raw host attempt/readback evidence only contributes Canonical SHA-256
+Effect boundary:
+  no Codex/Claude host call, polling, automatic resend, Test Result or rearm
+TypeScript: pass
+Architecture: pass / parser=swc / 575 modules / 4068 dependencies / 0 violations
+Schema: pass / 64 schemas / 191 external refs
+Schema digest: sha256:7ee2debac36afbb24a545b214f283284c82139779fcc869a8552887dbd2e0610
+git diff --check: pass
+```
+
+验证只执行新版相邻TS范围；未运行旧JS、完整TS套件、插件validator/smoke、`npm test`或release
+gate。没有提交、发布或刷新安装cache。
+
+## 198. R-2B-7（同一Test attempt的显式替代Delivery授权）
+
+### 198.1 这不是自动重试，也不是创建新Test attempt
+
+R-2B-6只在Agent明确报告`rejected-before-effect + unavailable`后记录Observation Event并精确释放
+WindowWorkClaim。此时可以证明上一份宿主投递没有开始执行，但仍不能重新使用旧Delivery身份把变化后的请求
+伪装成幂等重放。
+
+[Stripe Idempotent Requests](https://docs.stripe.com/api/idempotent_requests)和
+[Amazon EC2 Idempotency](https://docs.aws.amazon.com/ec2/latest/devguide/ec2-api-idempotency.html)都要求：同一
+幂等身份只能重放相同参数；参数发生变化时必须拒绝mismatch或使用新的操作身份。
+[Stripe Advanced Error Handling](https://docs.stripe.com/error-low-level#idempotency)进一步区分了“原请求是否已执行
+不确定”与“执行前已拒绝”：不确定结果不能通过新身份盲目再发。
+
+Wakeflow因此采用以下闭合语义：
+
+```text
+accepted / indeterminate
+  → 保留原Claim，不产生替代授权
+
+rejected-before-effect + unavailable + exact Claim released
+  → 保留同一logical Test attempt
+  → 分配新的Target Delivery / Intent / Event / Commit身份
+  → 追加第N份Delivery authorization
+  → 不调用宿主，不自动取得下一份Claim
+```
+
+旧JS `wakeflow-delivery-orchestration.mjs`也把该分支称为`replacement-authorization`并保留同一
+`testAttemptId`。新版只采纳这项真实业务语义；没有复制旧DispatchGroup、Envelope、状态文件或宿主发送实现。
+
+### 198.2 Intent与Aggregate使用追加型授权历史
+
+`WakeflowTestDeliveryIntent`保持schema v1和已有initial持久字节不变：initial Intent仍省略`replacement`；
+替代Intent新增严格上下文：
+
+- 顺序连续的`authorizationOrdinal`；
+- 上一份Target Delivery、Intent digest和TestDispatchPacket digest；
+- 被拒绝Claim的ID/digest/Event/Commit；
+- rejected Host Effect Observation digest与时间。
+
+同一attempt最多保留32份有界授权，运行时代码使用单一常量，Schema保留相同上限。Aggregate不覆盖旧授权，
+而是把新摘要追加到`deliveryAuthorizations`；每个ordinal必须等于数组位置、Target Delivery必须唯一、
+`preparedAt`必须严格递增。currentDelivery只移动到最新授权，完整旧Intent/Claim/Observation仍由Event历史拥有。
+
+本变化对旧Event和Snapshot保持向后可读：旧Intent没有可选字段，旧attempt仍只有ordinal 1；没有虚构一个
+语义重复的Event family，也不需要为兼容性引入空字段或分支。
+
+### 198.3 替代授权的组合Authority
+
+Preparation请求现在具有显式判别：
+
+```text
+mode: initial
+  → 创建新的logical Test attempt与首份Delivery授权
+
+mode: replacement-authorization
+  → 指向previousTargetDeliveryId + actionId + observationDigest
+  → 沿用已有attempt，只分配新的Delivery/Event/Commit身份
+```
+
+替代preview在零写条件下同时复验：
+
+- 当前route必须是`test-delivery-replacement-planning`；旧名
+  `test-host-effect-rearm-planning`已删除，避免与implementation“重新打开同一Delivery”的Rearm混淆；
+- Aggregate尾部必须是同一Test target的`test-host-effect-rejected`；
+- previous Test Delivery Event、Claim Event和Observation Event形成唯一闭合历史；
+- request、route、Aggregate、Intent、Claim、Observation中的Demand/Task/Delivery/attempt/packet/digest一致；
+- Observation必须是`rejected-before-effect + unavailable`，Claim handling必须是`release-authorized`；
+- 旧Test Window Claim和TestCard引用的product Window Claims均已物理absent；
+- TaskPackage/TestCard Authority、当前Config与当前唯一Test Window Binding仍有效；
+- 授权数量没有达到有界上限。
+
+preview只返回不可变Plan。apply在Event不存在时重新加载上述当前Authority、按Plan时间重建Intent并比较完整
+Canonical JSON，再执行stream revision/CAS append；Event已存在的精确重放只从不可变Event恢复TaskPackage与
+TestCard，不依赖后来可删除的投影、Config或Binding。
+
+### 198.4 与implementation Rearm的边界
+
+现有`TargetHostEffectRearmService`服务implementation投递：它保留同一个Target Delivery/Intent，在旧Claim
+明确释放后把状态重新打开为`delivery-prepared`。Test替代授权不能复用该模型，因为新的Test packet可能绑定
+新的Binding和新的Intent digest，且必须保留每次授权的attempt lineage。
+
+因此本轮没有把Test塞入`delivery.target-host-effect-rearmed`，也没有修改implementation Rearm。Test继续使用
+既有`testing.test-delivery-prepared`事实，但Intent内明确说明initial或replacement来源；Reducer据此选择创建
+attempt或追加授权。
+
+### 198.5 新packet与下一次Claim仍是两个显式步骤
+
+替代Event提交后，Test Dispatch Projection可以从Event重建一份绑定新Intent digest的packet；旧packet仍按旧
+Target Delivery身份可审计。Preparation结果不含Agent Host Action，也不会创建WindowWorkClaim。
+
+只有调用方随后提交新Target Delivery/Intent/packet和一份fresh Agent窗口观察，现有Claim owner才会：
+
+```text
+exclusive create新WindowWorkClaim
+→ append共享Claim Event
+→ 首次commit后签发新的packet-bound Agent Host Action
+```
+
+新的Claim和Action继续保留原`testAttemptId`，但绑定新Target Delivery、Intent和packet digest。这样“允许再次
+投递”与“实际取得一次宿主效果占用”保持分离。
+
+### 198.6 明确未进入的范围
+
+- 没有Wakeflow自主调用Codex/Claude发送，没有自动重发、polling、readback或raw handle读取；
+- 没有为accepted或indeterminate结果生成替代授权；
+- 没有创建第二个Test attempt、resume/restart attempt或解释TestCard `maxAttempts`策略；
+- 没有environment setup receipt、runner、secret、Pod Test access或Test Result；
+- 没有public MCP/CLI、旧JS/core、插件artifact、版本、发布或安装cache改动。
+
+### 198.7 聚焦验证
+
+```text
+Focused TypeScript tests:
+  15 pass / 0 fail / 0 skip
+Initial compatibility:
+  initial mode仍创建一个attempt + ordinal 1;
+  preview零写、Apply CAS、并发同Plan和已提交重放继续通过
+Replacement vertical flow:
+  rejected Observation Event + exact Claim release
+  → forged observation digest rejected
+  → zero-write replacement preview
+  → same attempt + new Delivery + ordinal 2 Event
+  → exact apply retry idempotent
+  → packet projection rebuilt from replacement Event
+  → explicit next Claim + new packet-bound Action
+Safety boundaries:
+  accepted/indeterminate仍进入test-result-planning并保留Claim;
+  replacement apply不返回Action且不调用宿主;
+  stale Config/Binding、错误packet和Claim恢复边界继续通过
+Event evolution:
+  state-model version isolation + event upcaster routing通过
+TypeScript: pass
+Architecture: pass / parser=swc / 575 modules / 4076 dependencies / 0 violations
+Schema: pass / 64 schemas / 191 external refs
+Schema digest: sha256:e7d32bc4375d92482ff86e246e4d0f5915c16acf1c1153b9344074221606902c
+git diff --check: pass
+```
+
+验证只执行本轮新增与紧密相邻的新版TS测试；未运行旧JS、完整TS套件、插件validator/smoke、`npm test`或
+release gate。没有提交、发布或刷新安装cache。
+
+## 199. R-2B-8（Test Result模块边界与Report合同）
+
+### 199.1 当前代码事实
+
+当前`TargetResultReport`、`TargetResult`与`TargetResultImportService`不是通用结果骨干，而是明确限定为
+单仓库implementation：Report要求一个`repositoryChange`和`anchorEvidence`，Result要求
+`assignment.repositoryId`及product `TargetDeliveryIntent`，Import只查找product prepared Event，Aggregate
+只允许`host-effect-accepted | host-effect-indeterminate → result-reported`。
+
+另一方面，当前Test垂直链已经提供真实Result消费者所需的上游事实：TestCard approved plan、Test TaskPackage、
+TestExecutionAttempt、TestDeliveryIntent、TestDispatchPacket、packet-bound Claim与Test Host Effect
+Observation。route已明确进入`test-result-planning`，但尚无Test Report、Test Result Event、Claim结算或
+`test-result-reported`状态。
+
+因此R-2B-8不能只增加一个自由文本结果字段，也不能把Test结果伪装成repository result。它至少需要闭合：
+
+- 同一Test attempt、最新Delivery authorization、packet、Claim与Observation；
+- Agent执行结果的`completed | blocked | needs-review`陈述；
+- 每个已返回approved plan step与exact evidence locator的关系；
+- completed时全部approved steps按原顺序恰好映射一次；
+- Test不能声明product repository change或acceptance-anchor evidence；
+- Event提交后才精确释放Test WindowWorkClaim；
+- Aggregate只保存后续Controller review所需最小摘要，完整证据仍留在Event Result中。
+
+### 199.2 外部实践与适用边界
+
+[Azure Test Plans Actual Result](https://learn.microsoft.com/en-us/azure/devops/test/actual-result)区分作者定义的
+Expected Result、执行者记录的逐步Actual Result和非结构化Comment；Actual Result可以作为审计证据，但仍属于
+某次run的执行事实。这支持Wakeflow把approved plan保留在TestCard，把逐步事实放在Test Report，而不是反向
+改写Card。
+
+[Open Test Reporting](https://github.com/ota4j-team/open-test-reporting)与
+[JUnit Platform Reporting](https://docs.junit.org/6.0.0/advanced-topics/junit-platform-reporting.html)提供跨框架的
+event/hierarchical测试报告格式。Wakeflow不应再发明通用runner report：JUnit/Open Test Reporting、CI日志、
+截图或人工检查记录都可以作为外部Evidence Artifact，由Result保存portable ref + digest及approved-step映射。
+
+[W3C PROV-DM](https://www.w3.org/TR/prov-dm/)把Entity、Activity、Agent、Generation和Derivation分开；当前
+TestCard/attempt/Result/Event lineage已经是面向Wakeflow领域的窄化provenance，不需要引入完整PROV模型或依赖。
+
+TencentDB-Agent-Memory的`core/report`把OpenTelemetry Trace实现为非侵入装饰层，并在后端失败时降级；
+`api-sanitize.ts`负责有界脱敏。[OpenTelemetry Signals](https://opentelemetry.io/docs/concepts/signals/)也把trace、
+metric和log定义为观察系统活动的signals。该模式可供未来Evidence采集学习，但Trace/日志不能替代
+Event Sourcing Result authority，也不能因观测后端失败改变业务Result提交。
+
+### 199.3 三个互斥方案
+
+这些是模块边界选择，不是需要依次实施的三个阶段：
+
+| 方案 | 结构 | 优点 | 代价 |
+| --- | --- | --- | --- |
+| A（用户已确认） | `ImplementationTargetResultReport`与`TestTargetResultReport`分别拥有Agent业务陈述；authority-enriched `TargetResult`使用`workType`判别联合，并共享Result Event、Import owner、Claim结算和Review历史 | 文件职责最清楚；Test没有伪repository字段；共享真正相同的下游事实；避免一个超大Report parser | 需要重命名当前implementation Report并同步现有消费者；当前TS尚未发布，按既有决策不承担兼容分支 |
+| B | 单个`TargetResultReport`内使用`workType`和条件Schema，repository/anchor/step字段按分支出现；其余共享 | Artifact种类最少 | 当前Report已超过500行，继续加入两套关系验证会形成大文件；Agent输入职责混合，后续维护容易再膨胀 |
+| C | 新建完整`TestTargetResult`、Test Result Event与独立Import Service | Test完全隔离 | 重复Result ID/Event/Claim settlement/Repository audit/Review管线；与一个TargetResult review入口相冲突，不建议 |
+
+推荐A不是复制旧JS。旧JS的Group/Envelope、`repositoryChanges`多仓库数组、supersedes和完整transport closure
+不会进入当前切片；新TS继续使用当前单Target Delivery + Event authority，只把“Agent业务报告不同、领域Result
+事实共享”落成清晰模块。
+
+### 199.4 推荐A的预期文件顺序
+
+```text
+1. implementation-target-result-report Schema + codec（由当前文件语义化重命名）
+2. test-target-result-report Schema + codec（逐步evidence mapping）
+3. target-result Schema + codec（显式workType判别联合）
+4. target-result-import input/authority/service（同owner两类来源）
+5. shared result.target-result-recorded Event + Test Aggregate reducer
+6. Demand review snapshot + test-result-review-planning route
+7. 一条小型真实纵切：Test outcome → report import → Event → Claim release → review-ready snapshot
+```
+
+用户确认采用方案A。R-2B-8仍不包含Controller对Test的accept/rework判断、新attempt resume/restart、
+Demand completion、外部runner、Evidence文件owner或宿主调用；这些需要后续真实consumer再进入。
+
+### 199.5 Report合同首个文件单元
+
+现有泛化命名已收敛为`ImplementationTargetResultReport`：Schema ID、Artifact kind、生成类型、手写codec、
+生产者、消费者和聚焦测试全部同步改名。它继续只拥有单仓库repository change与acceptance-anchor evidence，
+行为没有扩展到Test。由于新TS尚未发布且用户已明确不承担过渡，本轮不保留旧kind、旧schema URI、重导出或
+兼容parser；Event compatibility digest自然变化，已有开发期Snapshot会按既有机制回退完整replay。
+
+新增`TestTargetResultReport`，只包含：
+
+- `completed | blocked | needs-review`目标窗口陈述；
+- 有界`{kind,ref,digest}` Evidence locators，Test中每个ref只能绑定一个digest；
+- verification、risks和按`planIndex`严格递增的step evidence；
+- 每个step evidence必须指向一条已声明的exact ref/digest tuple；
+- reportedAt、self-excluding Canonical JSON digest与确定性文档表示。
+
+Report层不知道TestCard，因此只验证索引有界、顺序和Evidence引用闭合。`completed`与完整approved plan逐项
+相等的验证属于下一`TargetResult` authority单元，不能由Report猜测。blocked/needs-review可以返回空或部分
+step evidence，但已返回的映射仍必须闭合。
+
+两类Report真正共享的`TargetResultOutcome`与`TargetResultEvidenceLocator`下沉到窄
+`target-result-report-contract.ts`；该文件只有领域值类型，不拥有parser、manager、状态或I/O。Test Report没有
+repository、acceptance anchor、pass/fail verdict、runner输出、transport、Claim或Controller decision字段。
+
+```text
+Focused Result/Review tests: 15 pass / 0 fail / 0 skip
+Implementation Report rename:
+  schema/kind/codec/producers/consumers/tests close under the new semantic name
+Test Report:
+  deterministic round-trip + content digest;
+  completed step evidence;
+  blocked empty evidence;
+  dangling tuple / duplicate ref / out-of-order plan index rejected
+TypeScript: pass
+Architecture: pass / parser=swc / 579 modules / 4095 dependencies / 0 violations
+Schema: pass / 65 schemas / 194 external refs
+Schema digest: sha256:89858a9e6b4e17d9acb1632bc7e846282501d3a99623321b7a89a3d7b4c517f3
+git diff --check: pass
+```
+
+本单元未让Test Report进入TargetResult/Event/Import/Aggregate；下一单元才把两个Report接入同一个显式
+`workType` TargetResult判别联合。
+
+### 199.6 显式workType TargetResult判别联合
+
+共享`WakeflowTargetResult`现在要求显式`workType: implementation | test`，没有通过字段缺失猜测类型：
+
+| 分支 | assignment | Report | 分支特有事实 |
+| --- | --- | --- | --- |
+| implementation | exact repository + product window | `ImplementationTargetResultReport` | 禁止`testExecution` |
+| test | exact Test window，无repository | `TestTargetResultReport` | attempt、TestCard tuple、TestDispatchPacket digest |
+
+共享`target-result.ts`只负责严格Schema解析、typed身份、TaskPackage tuple、Host Effect摘要、Report判别、
+self-excluding digest、确定性文档和从Claim派生的稳定Result/Event/Commit身份。来源闭合拆到两个相邻模块：
+
+- `implementation-target-result.ts`继续验证单仓库TaskPackage、product Intent、Claim/Observation、commit policy
+  与完整acceptance-anchor mapping；
+- `test-target-result.ts`验证Test TaskPackage、TestCard、TestDeliveryIntent、prepared Event packet投影、
+  packet-bound Claim/Observation与逐步Evidence mapping。
+
+Test `completed` Result要求`stepEvidence`与`TestCard.approvedPlan`数量相同、按index连续且step文本逐字相等；
+blocked/needs-review可以部分返回，但不能引用Card范围外或不同文本。Result保存`testAttemptId`、Card ID/digest与
+packet digest，使后续新attempt/review owner无需从自由文本推断lineage。它不保存repository占位、Test verdict、
+Controller decision、raw Evidence正文或runner输出。
+
+现有implementation Result Event/Reducer/Import继续显式只接纳`workType: implementation`。虽然共享Result
+Schema已经可以表达Test，当前还没有Service把Test Result写入Event；该能力属于下一垂直单元，避免“类型可构造”
+被误报为Event Sourcing流程完成。
+
+### 199.7 Foundation Schema的对象uniqueItems修正
+
+真实Test Result包含两条step Evidence时暴露：Wakeflow安全JsonValue对象使用`null`原型，而Ajv内置
+`uniqueItems`深比较会调用对象`valueOf`，导致对象数组在第二项比较时抛出TypeError。放宽Result Schema会把
+底层缺口留给其他领域，因此修正在`runtime-json-schema.ts`：
+
+- 保留原始无原型、递归冻结JsonValue，不转换或替换领域输入；
+- 只替换Ajv的`uniqueItems`关键字执行器，使用不调用对象方法的JSON结构相等比较；
+- 对象成员顺序不影响相等，数组顺序仍影响相等；
+- 自有`valueOf`/`toString`/`__proto__`只作为普通JSON成员，不获得执行机会；
+- Validator成功仍返回同一个原始冻结对象。
+
+新增Foundation回归同时覆盖两个不同对象、两个重复对象和自有`valueOf`文本，证明修复不是只针对Result
+fixture。没有fork Ajv、修改`node_modules`或为某个Schema删除`uniqueItems`。
+
+```text
+Focused Foundation/Delivery/Demand/Result/Review tests:
+  31 pass / 0 fail / 0 skip
+Implementation TargetResult:
+  explicit workType + no testExecution;
+  existing Report/commit/anchor/Claim/Event behavior retained
+Test TargetResult:
+  real Test Delivery Event + packet + Claim + accepted Observation
+  → exact Card/attempt/packet source closure
+  → completed ordered step mapping
+  → deterministic shared TargetResult round-trip
+  incomplete completed mapping rejected
+Foundation Schema:
+  null-prototype object uniqueItems + own valueOf safe;
+  validator returns original frozen JsonValue
+TypeScript: pass
+Architecture: pass / parser=swc / 582 modules / 4128 dependencies / 0 violations
+Schema: pass / 65 schemas / 194 external refs
+Schema digest: sha256:c1cdc77a026bad3363adc2345bbd6bfed94b53020e0d7eafb0185b05bdf12ef2
+git diff --check: pass
+```
+
+本单元未实现Test Result Import、Result Event reducer、Claim release、Review route或Controller Test Review。
+
+### 199.8 Test Result Import与Event Sourcing纵切
+
+`TargetResultImportRequest`现在同样使用显式`workType`：implementation保持原四元identity与
+Implementation Report；Test额外要求`testAttemptId`和`testDispatchPacketDigest`，并只接受
+Test Report content。Import输入不能通过字段缺失猜测目标类型。
+
+新增`target-result-import-authority.ts`，从同一Demand Event Stream恢复：
+
+```text
+Claim Event + Host Effect Observation Event
+  + implementation TargetDelivery/TaskPackage
+或
+  + TestDelivery/TestCard/Test TaskPackage
+    → 从prepared Event确定性重建TestDispatchPacket（不依赖可删除投影）
+```
+
+Test分支逐项闭合request、Intent、attempt、packet、Claim和Observation中的Demand/Task/Delivery/
+Claim/Event/Commit/packet tuple。两类Result创建器还同步补齐Claim expected-state digest、Claim Event revision、
+host-observation authority digest、route与issuedAt fence，纯创建函数不依赖Service恰好传入正确来源。
+
+两类Result继续共享`result.target-result-recorded.v1`，因为Event表达同一事实：“目标窗口提交的严格Result已由
+Wakeflow authority补齐并记录”。没有创建`testing.test-result-recorded`重复Event family。Event成功后，Import
+owner才授权并执行原Test WindowWorkClaim的exact release；同Report重试按原Commit幂等恢复，Claim已经absent
+时只返回`already-recorded + released`，不会重建Result或宿主效果。
+
+Aggregate新增`test-result-reported`，最小摘要继续保留原attempt authorization、packet-bound Claim、Host Effect
+和`targetResultId/resultDigest/outcome/reportedAt/release-authorized`。完整Test Report与Evidence映射只存在于
+Result Event。Reducer复验Card、attempt、packet、Claim、Observation和Result tuple，拒绝rejected-before-effect
+或跨workType Result。
+
+Repository一次审计现在把`test-result-reported`纳入Result历史闭合；Demand Review Snapshot返回
+`status: reported`和完整Test TargetResult。post-acceptance route进入
+`test-result-review-planning`，只表示Controller已有可审查输入，不表示Test通过或Demand可完成。
+
+真实纵切验证：
+
+```text
+Test Delivery Event + TestCard/TaskPackage Events
+→ deterministic packet
+→ Test Claim Event
+→ accepted Host Effect Observation Event
+→ completed Test Report with exact approved-step Evidence
+→ shared TargetResult Event
+→ Aggregate test-result-reported
+→ exact Test Claim release
+→ reported Review Snapshot
+→ test-result-review-planning
+→ exact import retry idempotent
+```
+
+```text
+Focused Foundation/Delivery/Demand/Result/Review tests:
+  31 pass / 0 fail / 0 skip
+TypeScript: pass
+Architecture: pass / parser=swc / 583 modules / 4148 dependencies / 0 violations
+Schema: pass / 65 schemas / 194 external refs
+Schema digest: sha256:37c01a50e8c1836ed242ffd19692330b8446c8680068e48109e5c66622509e7d
+git diff --check: pass
+```
+
+本单元仍未实现Controller Test Review Decision、accept/rework、后续resume/restart attempt、Demand Completion、
+public MCP/CLI、外部runner或Evidence文件owner。
+
+## 200. R-2B-9（Controller Test Review决策合同）
+
+### 200.1 当前implementation Review不能直接复用
+
+现有`ControllerTargetReviewDecision`实际是implementation专用合同：assessment固定为
+`requirementAlignment + implementationQuality`，decision为`accept | rework | redesign | blocked`，Reducer把
+`rework`解释为产品实现缺陷，把`redesign`解释为需求不匹配。Test Review没有repository implementation可评价，
+“另一次Test attempt”也不是产品rework。
+
+旧JS允许同一Review Candidate对Test使用通用`rework`，随后`needs-rework`再由Delivery判断resume/restart；
+accept则关闭TestCard。该逻辑证明“Test可再执行”和“Test接受后关闭Card”是真实需求，但词汇把产品修复、
+Test复测、环境问题和证据不足压进同一状态，不适合作为新TS标准。
+
+### 200.2 执行结果、失败分类和工作流决策必须分离
+
+[Azure Test Results](https://learn.microsoft.com/en-us/rest/api/azure/devops/test/results/get?view=azure-devops-rest-7.1)
+分别保存一次执行的outcome、attempt、failure type、resolution和关联bug；
+[Azure Failure Type](https://learn.microsoft.com/en-us/azure/devops/test/manage-test-failure-type)也把失败分类放在
+post-run analysis，而不是用`Failed`本身推导唯一修复动作。
+[Azure Pipeline Test glossary](https://learn.microsoft.com/en-us/azure/devops/pipelines/test/test-glossary)进一步区分
+Passed、Failed、Inconclusive、Blocked、Error、Aborted等执行结果和flaky事实。
+
+Wakeflow当前Test Report故意没有pass/fail verdict；Controller必须读取step evidence并独立检查后，分别记录：
+
+```text
+Result outcome
+  = Test窗口是否完整/诚实地完成返回合同
+
+Controller conclusion
+  = 当前Evidence对冻结Test问题说明了什么
+
+Controller decision
+  = 接下来允许哪一种工作流动作
+```
+
+TencentDB-Agent-Memory没有Controller Test Review或attempt-resolution状态机可复用；其Trace status只属于
+observability signal，不能提供这里的业务决策词汇。
+
+### 200.3 三个互斥方案
+
+| 方案 | Test Decision | 优点 | 代价 |
+| --- | --- | --- | --- |
+| A（用户已确认） | `accept`、`request-another-attempt`、`escalate-product-defect`、`blocked`；assessment分为`conclusion: satisfied | defect-observed | inconclusive`和`evidenceSufficiency: sufficient | insufficient` | 明确区分关闭环境风险、复测、产品缺陷与外部阻塞；后续route不会猜测`rework`含义 | 新增四个Test phase与明确关系矩阵；product-defect route暂时只阻塞/升级，不自动改产品任务 |
+| B | `accept`、`request-another-attempt`、`blocked`；产品缺陷折叠进blocked reason | 状态更少 | 无法机器区分真实产品缺陷与环境/权限阻塞，后续产品remediation仍需解析人类文本 |
+| C | 直接复用implementation的`accept | rework | redesign | blocked` | 改动最小 | `rework`同时表示产品修复和Test复测，assessment字段也不适用；延续旧项目歧义，不建议 |
+
+推荐A的关系矩阵：
+
+| decision | 必需assessment/检查 | 下一状态 | 当前切片动作 |
+| --- | --- | --- | --- |
+| accept | `satisfied + sufficient`，全部独立检查passed，Result必须completed，无blocking reason | `test-accepted` | 关闭Test Review；不自动完成Demand |
+| request-another-attempt | `inconclusive`或evidence insufficient，至少一项failed/inconclusive，无blocking reason，attempt容量仍可用 | `test-another-attempt-requested` | 只授权后续attempt planning；不立即创建attempt |
+| escalate-product-defect | `defect-observed + sufficient`，至少一项failed，无blocking reason | `test-product-defect` | 保留Evidence并显式阻塞到product remediation；不自动重开已接受任务 |
+| blocked | blocking reason非空，不能同时声称`satisfied + sufficient` | `test-review-blocked` | 等待用户/环境/外部事实 |
+
+### 200.4 推荐A的模块与Event边界
+
+按已经确认的Result方案继续：
+
+```text
+ControllerImplementationReviewDecision（由当前文件语义化重命名）
+ControllerTestReviewDecision（Test conclusion + decision）
+                 ↓
+共享ControllerReviewDecision判别联合
+                 ↓
+共享review.target-result-decided Event family
+```
+
+共享Event只表达“Controller已对精确Snapshot/Result作出审查决定”；两类assessment与状态转换由各自模块拥有。
+Test Decision必须绑定TestCard、attempt、packet与TargetResult tuple，并重新验证ordered step evidence。当前切片不
+创建下一attempt、不选择resume/restart condition、不修复产品、不完成Demand；这些分别由后续真实consumer拥有。
+
+用户确认采用方案A。当前先完成Decision合同层；Event与Aggregate phase仍按后续独立单元接入。
+
+### 200.5 implementation语义化重命名
+
+现有泛化名称已完整收敛为`ControllerImplementationReviewDecision`：Schema ID、Artifact kind、生成类型、
+手写codec、Input、Service、Event/Reducer/Rework/Completion消费者和全部fixture/test文件同步改名。没有保留旧
+文件、旧kind、旧schema URI、重导出或兼容parser；当前TS尚未发布，version compatibility digest按新合同变化。
+
+判断行为保持不变：implementation继续使用`requirementAlignment + implementationQuality`与
+`accept | rework | redesign | blocked`，没有在重命名中改变产品review语义。
+
+两类Decision真正共享的`ControllerIndependentReviewCheck`、check outcome和精确Snapshot/TargetResult reviewed
+tuple下沉到`controller-review-decision-contract.ts`。该文件只有领域值类型，不拥有判断矩阵、状态、Event或I/O。
+
+### 200.6 ControllerTestReviewDecision
+
+新增独立Schema与codec，绑定：
+
+- target-review-decision、Program/Demand/Test Target、Controller Window typed identity；
+- Snapshot digest、review-unit digest、state digest/revision与TaskPackage/TargetResult精确tuple；
+- Test attempt、TestCard ID/digest和TestDispatchPacket digest；
+- conclusion、Evidence充分性、至少一项Controller独立检查、rationale、blocking reasons与residual risks；
+- `decidedAt`必须晚于TargetResult `reportedAt`，以及self-excluding Canonical JSON digest。
+
+关系矩阵同时由Schema和手写parser执行：
+
+- accept只接受`completed + satisfied + sufficient + all checks passed + no blockers`；
+- request-another-attempt要求inconclusive或Evidence不足、至少一项failed/inconclusive且无blocker；
+- escalate-product-defect拒绝blocked Result，要求`defect-observed + sufficient + failed check`且无blocker；
+- blocked必须有blocking reason，不能同时声称`satisfied + sufficient`。
+
+Decision/Event/Commit身份继续共享同一随机UUID但使用独立typed namespace。Decision本身不包含next-attempt对象、
+product mutation或Demand completion字段，防止合同创建时越权执行后续动作。
+
+```text
+Focused Implementation/Test Review + Event/Rework regression:
+  18 pass / 0 fail / 0 skip
+Implementation rename:
+  Decision/Input/Service/Event/Reducer/Rework/Completion consumers close;
+  existing four-decision matrix retained
+Test Decision:
+  accept / request-another-attempt / escalate-product-defect / blocked;
+  deterministic document + Event/Commit identities;
+  contradictory check/assessment/result and backward time rejected
+TypeScript: pass
+Architecture: pass / parser=swc / 587 modules / 4176 dependencies / 0 violations
+Schema: pass / 66 schemas / 200 external refs
+Schema digest: sha256:42146f00de9b3ecbce6a936471720552dd1e11b1472f51fb7d009617b2ef6953
+git diff --check: pass
+```
+
+本单元尚未让Test Decision进入`review.target-result-decided` Event、Repository历史、Aggregate phase、Service或
+route；也没有创建下一Test attempt、产品remediation或Demand completion。
+
+### 200.7 共享Event family与来源专用Aggregate转换
+
+`ControllerImplementationReviewDecision | ControllerTestReviewDecision`现已形成判别联合；
+`review.target-result-decided.v1`的`decision`使用两份Schema的严格`oneOf`，Event、Decider与Commit身份统一按联合
+解析。共享只发生在“Controller已对精确Result作出决定”这一持久事实，不合并两类assessment或状态词汇。
+
+Aggregate分别执行两套转换：
+
+- implementation仍只从`result-reported`进入`accepted | rework-requested | redesign-requested | review-blocked`；
+- Test只从`test-result-reported`进入`test-accepted | test-another-attempt-requested | test-product-defect |
+  test-review-blocked`；
+- Test Decision除Snapshot、TaskPackage与TargetResult tuple外，还必须精确匹配当前TestAttempt、TestCard与
+  TestDispatchPacket digest；
+- 两类Decision都保存最小summary，完整不可变Decision继续由Event Stream提供，不能从Aggregate摘要反向扩展。
+
+Repository审计历史同步改为Decision联合，并验证Decision kind与Target workType一致。TestCard创建事件也纳入同一
+次完整重放的审计来源；Test Review Service不再为读取`maxAttempts`二次扫描Event Stream。
+
+### 200.8 source-specific Service、attempt容量与显式route
+
+新增`ControllerTestReviewDecisionInput/Service`。它与Implementation Service保持独立业务准入，但两者共享无状态的
+`controller-review-decision-event-owner`，统一负责Event command、预检、commit容量、有限重读和append；没有建立
+万能Review Service或把Test分支塞入Implementation Service。
+
+Test Service保证：
+
+- 只接受当前Review Snapshot中的Test reported unit，闭合Program/Demand/Controller authority；
+- `request-another-attempt`在UUID和Event append之前，使用完整TestCard的`maxAttempts`与Aggregate已存在attempt数
+  进行容量准入；
+- Decision只授权后续owner，不创建下一attempt、Delivery、Claim或宿主效果；
+- 相同Result/Snapshot/Judgment按已提交Decision身份幂等返回，并保留并发winner恢复语义。
+
+判断关系由`ControllerTestReviewDecision`模块唯一拥有：Input可以在读取authority前提前调用同一关系断言，最终
+Decision再结合权威Result outcome复验，避免两份矩阵漂移。
+
+Post-acceptance route现显式区分：
+
+```text
+test-accepted                    -> 保留已接受Test Review事实
+test-another-attempt-requested   -> test-another-attempt-planning
+test-product-defect              -> test-product-defect-escalated
+test-review-blocked              -> test-review-blocked
+```
+
+现有Demand Completion只支持`controller-only`，Aggregate completed合同也尚未定义TestCard/Test Target关闭。因此
+`test-accepted`没有被伪装成`completion-preflight`；real-environment completion必须由后续独立切片先明确关闭语义。
+
+### 200.9 聚焦验证与当前边界
+
+真实小型测试覆盖两条Test专用路径：
+
+- `maxAttempts = 1`时另一attempt请求零写拒绝，随后accept成功持久化、重放、生成Review Snapshot并精确幂等；
+- `maxAttempts = 2`时另一attempt授权成功，route停在planning，且没有提前创建`nextAttempt`或replacement Delivery。
+
+最终聚焦回归同时覆盖原Implementation Decision提交/并发、共享Event重放、Aggregate与原post-acceptance路线：
+
+```text
+Focused Demand/Implementation Review/Test Review regression:
+  16 pass / 0 fail / 0 skip
+TypeScript: pass
+Architecture: pass / parser=swc / 593 modules / 4230 dependencies / 0 violations
+Schema: pass / 66 schemas / 201 external refs
+Schema digest: sha256:cb0d77e7c68b62d4c720b9dd0a75b3fe258ea7b1fab4188ce76bdf79e9e0618d
+git diff --check: pass
+```
+
+本单元仍未实现下一TestAttempt的创建与restart condition选择、产品缺陷remediation、Test Review blocked resume、
+real-environment Demand Completion/TestCard关闭、public MCP/CLI或外部runner。这些不能由当前Decision Service隐式
+代办。
+
+## 201. R-2B-10（另一Test attempt与环境setup语义预审）
+
+### 201.1 当前TS的真实边界
+
+当前已经存在两类不同重试，不能合并：
+
+```text
+宿主效果前 rejected-before-effect
+  → 同一logical TestAttempt
+  → replacement Delivery authorization
+  → 不消耗TestCard.maxAttempts
+
+Controller审查真实Test Result后request-another-attempt
+  → 必须创建新logical TestAttempt
+  → 消耗TestCard.maxAttempts
+  → 尚未实现consumer
+```
+
+`TestExecutionAttempt`当前严格固定`ordinal:1 + mode:initial`；Aggregate的`testAttempts`类型和parser也只允许一个
+entry。虽然Repository已经能在全部attempt中定位Delivery，Aggregate reducer与Replacement authority仍使用
+`testAttempts[0]`。因此不能只给Delivery Service增加一个mode；必须把attempt合同、lineage、Aggregate非空有序数组、
+latest-attempt消费者和聚焦测试一起迁移。
+
+### 201.2 旧JS事实不是新TS标准
+
+旧`wakeflow-delivery-orchestration.mjs`的后续attempt要求：
+
+- 上一Delivery为accepted/ambiguous，且存在精确当前Result；
+- ordinal连续，previousAttempt与previousResult闭合；
+- `fresh-per-attempt`使用`mode:restart`，请求选择TestCard中一个`restartConditions`索引并写reason；
+- `fresh-once`与`reuse-existing`都使用`mode:resume`；
+- 新attempt和首份Delivery在同一个prepare事件中产生。
+
+有效部分是“新attempt与传输替代分离”“绑定前一Result”“同一Card/TaskPackage”“有界ordinal”。问题在于
+`resume/restart`同时承担logical rerun分类和环境setup分类；`restartConditions`又与Controller已经作出的
+`request-another-attempt`判断重叠。旧状态文件、DispatchGroup和确定性ID仍不应复制。
+
+TencentDB-Agent-Memory没有相邻的Test attempt领域模型。它可参考的只是较底层做法：公开结果把`retryable`分类与
+服务端实际`attempts`次数分开，队列pause/start与业务重试分开，SQLite create race使用有界attempt并保留幂等唯一
+约束。这支持Wakeflow继续区分“是否允许再试”“实际第几次执行”和“底层传输重发”，但不能提供TestCard语义。
+
+### 201.3 官方资料校准
+
+[Playwright retries](https://playwright.dev/docs/test-retries)为每次retry提供独立编号，失败后丢弃旧worker并启动新
+worker；它把执行attempt、worker隔离和最终flaky分类分开。[Bazel `--flaky_test_attempts`](https://bazel.build/versions/9.1.0/reference/command-line-reference)
+同样保存有界attempt语义，并把多次才通过标记为FLAKY。[GitHub Actions re-run](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs?tool=cli)
+为同一run保留多次attempt，同时继续使用原始SHA/ref。
+
+[Kubernetes Job failure policy](https://kubernetes.io/docs/tasks/job/pod-failure-policy/)把“该失败是否值得retry”的规则
+与实际replacement Pod/失败计数分开，避免软件bug被无意义重试。[OpenTelemetry conventions](https://opentelemetry.io/docs/specs/semconv/how-to-write-conventions/)
+也要求明确区分logical call和physical per-attempt操作。
+
+这些来源共同支持：Wakeflow后续attempt应有新身份与连续ordinal，保留上一attempt/result/Controller Decision，
+继续使用同一冻结TaskPackage/TestCard；环境是否重建应由setup policy独立派生，不应编码进含混的resume/restart
+业务模式。
+
+### 201.4 待用户选择的三种方案
+
+| 方案 | Attempt语义 | TestCard变化 | 评价 |
+| --- | --- | --- | --- |
+| A（推荐） | `mode: initial | rerun`；later attempt绑定previous attempt/result和`request-another-attempt` Decision；environment directive独立按setup policy派生 | 删除冗余`restartConditions`；`setupPolicy + maxAttempts + Controller Decision`构成完整准入 | 最接近Playwright/GitHub/Bazel的attempt模型；没有自动retry，词义清楚，字段最少 |
+| B | 与A相同，但把`restartConditions`改为`environmentRefreshConditions`；`fresh-per-attempt`的rerun必须选择一项并记录理由 | 保留一层人工环境重建白名单 | 控制更细，但raw text condition与Controller Decision可能重复；Card和attempt更复杂 |
+| C | 复制旧`initial | resume | restart`与condition index | 基本保留旧字段 | 迁移最直接，但继续混淆logical rerun和环境setup，不建议 |
+
+方案A的确定性setup矩阵：
+
+| policy | initial | rerun |
+| --- | --- | --- |
+| `reuse-existing` | reuse confirmed | reuse confirmed |
+| `fresh-once` | prepare fresh | reuse已确认的同一环境 |
+| `fresh-per-attempt` | prepare fresh | prepare fresh |
+
+三个方案都保持相同垂直切片：`test-another-attempt-planning`由Test Delivery Preparation消费，在一个
+`testing.test-delivery-prepared`事件中追加新attempt与首份Delivery authorization；不创建新TaskPackage/TestCard，
+不自动发送，不操作环境，不生成setup receipt。
+
+当前推荐方案A，等待用户确认后再修改Schema和代码。
+
+### 201.5 用户确认A后的合同收敛
+
+用户确认采用方案A。新TS没有保留兼容字段或旧mode：
+
+- TestCard authored content、持久Schema、codec/digest basis和TestDispatchPacket execution contract删除
+  `restartConditions`；带该字段的输入按strict extra field拒绝；
+- `TestExecutionAttempt.mode`严格为`initial | rerun`，ordinal范围1–10；
+- initial固定ordinal 1且没有rerun source；rerun固定ordinal 2–10并必须保存：
+  `previousAttemptId`、previous Result ID/digest、Controller Review Decision ID/digest；
+- Rerun ID不得复用上一attempt ID；lineage ordinal连续、Card/Target一致，previous attempt必须是数组中的直接前驱；
+- attempt创建函数只接收已经验证的Result/Decision tuple，不依赖Result/Review模块，避免Testing合同形成运行时循环。
+
+环境setup继续是指令而非回执，按mode与TestCard policy唯一派生：
+
+```text
+reuse-existing:    initial reuse / rerun reuse
+fresh-once:        initial fresh / rerun reuse
+fresh-per-attempt: initial fresh / rerun fresh
+```
+
+因此“是否允许再执行”只由Controller `request-another-attempt`与`maxAttempts`决定；“本attempt执行前如何处理环境”
+只由setup policy决定。
+
+### 201.6 Aggregate与Event lineage
+
+Aggregate的`testAttempts`从exact-one改为1–10有界非空lineage。Parser现在同时验证：
+
+- attempt ID与全部Target Delivery ID全lineage唯一；
+- ordinal从1连续递增，initial只在首位，rerun必须精确引用直接前驱；
+- 每个attempt内部Delivery authorization ordinal连续且preparedAt递增；
+- later attempt首份授权时间晚于上一attempt尾授权；
+- previous Result与Review Decision身份不能被多个later attempt重复消费；
+- currentDelivery只能选择最新attempt的最新authorization。
+
+`testing.test-delivery-prepared`继续作为唯一提交事件：initial从planned创建首个attempt；rerun只从
+`test-another-attempt-requested`追加新attempt；rejected-before-effect replacement只更新latest attempt并保留全部
+历史。Rerun reducer同时复验当前Result/Decision summary、Decision类型、精确digest和`preparedAt > decidedAt`。
+
+没有新增中间`attempt-planned`状态或空Event；attempt不会在没有首份可执行Delivery authorization时单独存在。
+
+### 201.7 Delivery Preparation consumer
+
+Test Delivery Preparation新增strict `mode:rerun` request，携带与Attempt相同的`rerunSource`。Authority在分配UUID前：
+
+- 从一次完整Event Stream audit重建Review Snapshot与`test-another-attempt-planning` route；
+- 闭合当前Aggregate、TaskPackage、TestCard、上一Test Result、Controller Test Decision与latest attempt；
+- 要求Decision为`request-another-attempt`，Result/Decision的attempt、Card、packet tuple完全一致；
+- 再验TestCard attempt容量、Config/Demand authority、当前Binding、产品窗口与Test窗口均无WorkClaim。
+
+Preview分配新TestAttempt/TargetDelivery/Event/Commit身份并创建rerun Intent；Apply在当前authority下重建完全相同
+Intent，随后通过原`testing.test-delivery-prepared`Event提交。精确Apply retry仍从Event恢复TaskPackage/TestCard并按
+原Commit幂等返回。
+
+错误词汇同步拆分为：
+
+- `attempt-capacity`：TestCard logical attempt耗尽；
+- `delivery-authorization-capacity`：同一attempt的rejected-before-effect替代授权耗尽；
+- `commit-capacity`：Event Commit字节容量。
+
+三者不再复用含混的`capacity`。
+
+### 201.8 真实第二attempt验证
+
+新增一条真实纵切，不只验证类型或route：
+
+```text
+first Test Result
+→ Controller request-another-attempt Decision
+→ test-another-attempt-planning
+→ forged Decision digest在UUID前零写拒绝
+→ rerun preview/apply
+→ Aggregate attempts [initial, rerun]
+→ second TestDispatchPacket（无restartConditions）
+→ second Claim + Host Effect Observation
+→ second TargetResult import + Claim release
+→ Review Snapshot选择second Result
+→ exact preparation Apply retry idempotent
+```
+
+轻量合同测试另外证明`fresh-once`的rerun复用环境、`fresh-per-attempt`的rerun准备新环境，并拒绝旧
+`resume/restart`mode。相邻TestCard、packet、initial Delivery、Event upcaster和Test Review容量路径保持通过。
+
+```text
+Focused R-2B-10 regression:
+  19 pass / 0 fail / 0 skip
+TypeScript: pass
+Architecture: pass / parser=swc / 593 modules / 4241 dependencies / 0 violations
+Schema: pass / 66 schemas / 200 external refs
+Schema digest: sha256:d2d30a19175317c1e9a5fd002f3412f9e8cf6265548f61250d3555d3f100bb92
+git diff --check: pass
+```
+
+本单元没有创建新TaskPackage/TestCard、自动发送、环境setup receipt、flaky最终分类、Test blocked resume、产品缺陷
+remediation、real-environment Completion、public MCP/CLI或Pod Test rerun。当前旧JS/core技能与Schema仍作为发布版
+历史输入保留，未在新TS文件审阅中同步或修改。
+
+## 202. R-2B-11（real-environment Completion与TestCard关闭预审）
+
+### 202.1 当前Completion的早期假设
+
+当前`DemandCompletion`骨干只允许`DemandAuthority.testingDecision.mode === controller-only`：
+
+- Post-acceptance route在controller-only时返回`completion-preflight`；
+- real-environment Test accepted仍停在`test-accepted`；
+- Completion Plan明确拒绝任何非controller-only Authority；
+- Aggregate completed Schema要求所有Target phase都为产品`accepted`并禁止`testCard`；
+- Completion authority只检查accepted产品窗口的WorkClaim，不检查Test窗口。
+
+因此不能只把route状态改名；否则Service会在Plan、Aggregate或Claim gate中继续失败，形成虚假consumer。
+
+另外，`not-applicable`只允许research Demand，而当前Completion仍要求至少一个Target，所以zero-artifact research
+Completion也是独立能力缺口。本单元不把它混入real-environment成功路径。
+
+### 202.2 旧JS的有效关闭语义
+
+旧JS在Controller接受Test Result时同时把：
+
+```text
+Test target lifecycleStatus → accepted
+Test TaskPackage lifecycleStatus → closed
+TestCard lifecycleStatus → closed
+```
+
+随后`demand.completed`只验证所有Target accepted/superseded、TaskPackage/TestCard closed/superseded，并保持三组状态
+完全不变。有效原则是“Test接受先于Demand完成，Completion验证而不删除历史”。旧JS需要Card lifecycle字段，是因为
+Card另有一份可变artifact-state summary；新TS TestCard本身是不可变Event载荷，Aggregate只保存当前摘要，不应照搬
+第二套Card状态机。
+
+TencentDB-Agent-Memory没有TestCard或Demand Completion的相邻领域模型，不能提供这一选择。其status/audit实践只能
+支持“终态事实与历史记录分离”，不能决定Wakeflow的Test关闭语义。
+
+### 202.3 官方资料校准
+
+[Microsoft Event Sourcing pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)明确把append-only
+Event Stream作为system of record；Snapshot/materialized view只是可重建的当前投影，不替代历史。Completion应新增
+业务意图Event并更新投影，而不是删除既有Test事件或伪造从未存在的历史。
+
+[Microsoft CQRS guidance](https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs)同样强调读模型可以按查询需要
+重建，但Event保留全部历史与意图。[Azure Test Plans](https://learn.microsoft.com/en-us/azure/devops/test/overview?source=recommendations&view=azure-devops)
+在Test run完成后仍保留run summary、单项Result和附件，并用独立retention policy管理，不把“完成”解释为立即删除执行
+事实。
+
+对Wakeflow最合适的映射是：TestCard仍是不可变合同，`test-accepted`已经表达该Card对应Test target关闭；Demand
+`completed`只是更高层终态，不需要再制造Card closed mutation。
+
+### 202.4 三种互斥方案
+
+| 方案 | Aggregate completed投影 | Event/Route | 评价 |
+| --- | --- | --- | --- |
+| A（推荐） | 保留implementation `accepted`、Test `test-accepted`、TestCard摘要和完整attempt lineage | `test-accepted` route升级为带精确Test closure的`completion-preflight`；一个`lifecycle.demand-completed`Event只改变Demand lifecycle | 与Event Sourcing和旧JS“先关闭、后验证、不删除”一致；无冗余状态机，Repository/Review历史继续可读 |
+| B | 先新增`test-closed`phase和可变Card closed summary，再允许Completion | 新增`testing.test-card-closed`Event，随后Completion | 显式但重复`ControllerTestReviewDecision(accept)`事实；多一个Event/状态机/失败恢复边界，不建议 |
+| C | Completion时从Aggregate删除Test target、TestCard与attempt摘要 | 一个Completion Event同时折叠投影 | Snapshot更小，但破坏稳定Target当前投影、Repository闭合和终态审计；Event虽仍在，常用读模型失去关键事实，不建议 |
+
+### 202.5 方案A的拟定边界
+
+若用户确认A，将实施：
+
+1. `completion-preflight`携带判别式testing closure：
+   - controller-only：无Test tuple；
+   - real-environment：TestCard、Test target/TaskPackage、final attempt、TargetResult和Controller Decision精确tuple。
+2. Completion authority接受controller-only或real-environment；后者要求Test target处于`test-accepted`、Decision为
+   `accept`，并检查产品窗口和Test窗口均无WorkClaim。
+3. Completion Plan允许两种testing mode，并要求Route closure与冻结Demand Authority一致。
+4. Aggregate completed准入改为：implementation只可`accepted`，存在TestCard时唯一Test target只可
+   `test-accepted`；Completion不删除或改写Target/TestCard/attempt。
+5. Completion Event仍只绑定route/review/state/TODO digest，不复制整份Result或Card；精确closure已经包含在可重建
+   route及其digest中，Event Stream保留完整来源。
+6. 真实测试覆盖real-environment Test accept → Completion preview/apply →终态保留Test lineage →精确幂等retry。
+
+当前推荐方案A，等待用户确认后再修改Completion Schema和代码。
+
+### 202.6 用户确认A后的Route与Completion合同
+
+用户确认采用方案A。Post-acceptance route的`completion-preflight`现携带判别式testing closure：
+
+```text
+controller-only
+  → { mode: controller-only }
+
+real-environment
+  → { mode: real-environment, testReview: exact Test closure }
+```
+
+real-environment closure保存Test target/TaskPackage、TestCard、final attempt、TargetResult、Controller Decision与
+Test window精确tuple。只有`test-accepted + decision:accept`能进入该route；another-attempt、product-defect和blocked
+继续保留各自显式route。
+
+`DemandCompletion`新增最小`testingMode: controller-only | real-environment`。完整Test closure不复制进Completion
+Event；`postAcceptanceRouteDigest + reviewSnapshotDigest + observedState`继续绑定可重建投影，Event Stream保存完整Card、
+attempt、Result与Decision来源。
+
+### 202.7 Authority、Plan与Event Sourcing准入
+
+Completion authority现在：
+
+- 要求route testing closure mode与冻结Demand Authority testingDecision完全一致；
+- controller-only检查全部accepted产品窗口无WorkClaim；
+- real-environment额外检查closure中的Test窗口无WorkClaim；
+- Route source只向Lifecycle投影`testingMode`，不把Review完整closure跨层传递。
+
+Completion Plan与Demand Event Sourcing command parser同时允许controller-only/real-environment，但都要求
+`completion.testingMode === authority.testingDecision.mode`并复验authority digest。不是把旧硬编码改成宽泛枚举；
+`not-applicable`仍不能借此进入非research成功路径。
+
+实现过程中架构门发现`DemandCompletion`直接引用Review route类型形成Lifecycle→Review→Demand→Lifecycle循环。最终没有
+新增万能共享文件：Lifecycle本地拥有两值`DemandCompletionTestingMode`，Route完整closure继续由Review拥有，Authority
+只投影mode。依赖循环由边界收窄消除。
+
+### 202.8 completed Aggregate保留Test lineage
+
+Aggregate completed Schema与reducer现在要求：
+
+- 所有implementation target保持`accepted`；
+- controller-only不能出现Test target或TestCard；
+- real-environment必须有唯一Test target且保持`test-accepted`，TestCard摘要存在；
+- Completion只把Demand lifecycle从active改为completed，不修改`targetTasks`、`testCard`、attempt、Delivery、Result或
+  Review summary。
+
+因此TestCard“关闭”由`test-accepted`与Demand terminal lifecycle共同表达，不新增`test-closed`phase、Card lifecycle
+字段或第二个Event。Repository、Review Snapshot和后续BusinessArchive仍能从终态直接读取Test current summary，并从
+Event Stream恢复完整历史。
+
+### 202.9 真实Completion验证
+
+新增real-environment真实纵切：
+
+```text
+Test Result reported
+→ Controller Test Review accept
+→ real-environment completion-preflight
+→ DemandCompletion preview/apply
+→ lifecycle.demand-completed
+→ completed Aggregate保留TestCard与完整attempt lineage
+→ Config变化后的exact Apply retry idempotent
+```
+
+测试同时保留：尚未创建/执行Test的real-environment route不能完成；残留WorkClaim与缺失claimed TODO仍失败关闭；
+controller-only原路径、并发Completion、Event upcaster与Schema wire保持通过。
+
+```text
+Focused R-2B-11 regression:
+  17 pass / 0 fail / 0 skip
+TypeScript: pass
+Architecture: pass / parser=swc / 593 modules / 4244 dependencies / 0 violations
+Schema: pass / 66 schemas / 200 external refs
+Schema digest: sha256:68c5ce0aec3eed8638134fae8fc6d7fcc5abe4bee50747853579e980726ced9c
+git diff --check: pass
+```
+
+本单元没有实现zero-artifact research Completion、Test blocked resume、产品缺陷remediation、环境setup receipt、TODO
+归档、BusinessArchive、宿主窗口关闭、public MCP/CLI或Pod close。Completion成功也不声称这些后续效果已经发生。
+
+## 203. R-2B-12（Test Review blocked恢复预审）
+
+### 203.1 当前合同已经是通用Resume
+
+`ControllerTargetReviewResume`没有implementation assessment、repository或rework字段。它只绑定：
+
+- Program/Demand/Target/Controller Window；
+- blocked Decision ID/digest；
+- 同一TargetResult ID/digest；
+- blocked Snapshot/state digest与stream revision；
+- resolution summary、resumedAt和self digest。
+
+`review.target-result-resumed.v1`Event、Commit ID、Review history entry和Service request也没有workType分支。真正的早期
+限制只有三处：
+
+1. Resume Service只接受`phase === review-blocked`；
+2. Aggregate reducer只转换`review-blocked → result-reported`；
+3. Repository审计强制被引用Decision必须是Implementation Decision。
+
+因此Test blocked恢复不需要新基础合同；应修正这些消费者，使同一Resume语义真正覆盖两种Decision。
+
+### 203.2 恢复与rerun是不同动作
+
+```text
+review blocked
+  → 外部/人类事实已具备重新审查条件
+  → Resume同一TargetResult review generation
+  → Controller重新读取Snapshot并独立检查
+  → 新Decision
+
+request another attempt
+  → Controller已完成当前Result判断但证据仍不足
+  → 新logical TestAttempt + 新Delivery + 新Result
+```
+
+Resume不能消耗`maxAttempts`、创建Delivery或改变TestCard。它只删除Aggregate current Decision summary，使phase回到
+`test-result-reported`；旧blocked Decision和Resume仍按stream revision留在`priorReviewHistory`，新Snapshot/unit digest
+随历史改变。
+
+### 203.3 旧JS与官方实践
+
+旧JS把blocked Test/implementation task都压成`needs-rework`并阻塞Demand，没有对应unblock/resume-review路径；这会让
+纯外部阻断被迫制造假返工，属于旧系统缺口，不应继承。
+
+[Microsoft Durable Task external events](https://learn.microsoft.com/en-us/azure/durable-task/common/durable-task-external-events?tabs=python)
+把人类输入和外部触发建模为等待中的同一orchestration接收唯一外部事件，并建议用唯一ID处理at-least-once重复。
+[Durable Task human interaction](https://learn.microsoft.com/en-us/azure/durable-task/common/durable-task-human-interaction?source=recommendations)
+明确是workflow暂停等待输入后继续，而不是启动一份新的业务执行。[AWS Step Functions callback](https://docs.aws.amazon.com/step-functions/latest/dg/connect-to-resource.html)
+同样以Task Token绑定等待中的精确Task，callback后继续该execution。
+
+这些来源支持复用现有Resume Event：精确blocked Decision相当于等待token，Resume ID提供去重身份，恢复同一Result审查；
+Test attempt retry仍是另一条显式路径。
+
+TencentDB-Agent-Memory没有Controller Review blocked或Test attempt领域模型，不能提供相邻实现；它的queue
+pause/start也只说明暂停恢复与任务重试应分离。
+
+### 203.4 三种互斥方案
+
+| 方案 | 合同/Event | 恢复结果 | 评价 |
+| --- | --- | --- | --- |
+| A（推荐） | 泛化现有`ControllerTargetReviewResume`、`review.target-result-resumed`和同一Service | Implementation回`result-reported`；Test回`test-result-reported`；不创建attempt | 语义完全相同、无重复Schema/Event/Service；Review history天然支持两类Decision |
+| B | 新建`ControllerTestReviewResume`与Test专用Event/Service | 同样回`test-result-reported` | 字段和幂等逻辑重复，Event family分裂但没有不同业务含义，不建议 |
+| C | 把Test blocked resolution直接解释为`request-another-attempt` | 创建新attempt | 消耗容量、跳过同一Result重新判断，并把外部阻断伪装成测试执行不足，错误 |
+
+### 203.5 方案A拟定边界
+
+若用户确认A，将实施：
+
+1. Resume Service同时接受`review-blocked | test-review-blocked`，并要求Decision kind与TaskPackage workType一致。
+2. Aggregate按target workType恢复到`result-reported | test-result-reported`，逐字段保留Delivery、Host Effect、Result、
+   TestCard和attempt lineage，仅移除current reviewDecision summary。
+3. Repository审计允许Implementation/Test blocked Decision，但强制Decision kind与Target workType一致；一个blocked
+   Decision仍只能有一个Resume。
+4. 同一Resume Service保持exact request幂等；恢复后Implementation/Test Decision Service分别消费新Snapshot。
+5. 真实测试覆盖Test blocked → Resume →同一Result重新reported →prior history顺序→Test accept，并证明attempt数量不变。
+
+当前推荐方案A，等待用户确认后再修改Schema和代码。
+
+### 203.6 用户确认A后的通用Resume转换
+
+用户确认采用方案A。现有`ControllerTargetReviewResume`Schema、codec、Event、Commit和Service public shape均保持不变；
+没有新增Test专用kind、Event family或兼容分支。
+
+Aggregate Resume reducer现在接受：
+
+```text
+Implementation review-blocked → result-reported
+Test test-review-blocked       → test-result-reported
+```
+
+两条转换共享同一不变量：Demand active、exact blocked state digest/revision、Decision必须为blocked、Decision/Result
+ID与digest必须匹配current summary。转换只移除current `reviewDecision`；TaskPackage、Delivery、Host Effect、Result、
+TestCard与attempt lineage逐字段保留。
+
+### 203.7 Repository与Service来源闭合
+
+Repository审计不再强制Resume引用Implementation Decision，而是要求：
+
+```text
+ControllerImplementationReviewDecision ↔ implementation Target
+ControllerTestReviewDecision           ↔ Test Target
+```
+
+两类Decision都必须是blocked、早于Resume、Result tuple一致；同一blocked Decision仍只能有一个Resume。
+
+`ControllerTargetReviewResumeService`同时接受`review-blocked | test-review-blocked`。它从Review Snapshot验证phase、
+TaskPackage/TargetResult workType和Decision kind三者一致，然后继续使用原Controller authority、Config current check、
+Commit容量、并发恢复与exact idempotency逻辑。Service不读取或改变TestCard.maxAttempts。
+
+### 203.8 真实Test恢复验证
+
+新增真实纵切：
+
+```text
+Test Result reported
+→ Controller Test Decision blocked
+→ test-review-blocked
+→ ControllerTargetReviewResume
+→ test-result-reported（同一Result、同一attempt）
+→ priorReviewHistory = [decision, resume]
+→ 新Snapshot/unit digest
+→ Controller Test Decision accept
+→ test-accepted
+```
+
+测试直接比较Resume前后`testAttempts`深度相等，证明没有消耗容量、创建Delivery或隐式rerun；最终accept仍保留原lineage。
+原Implementation blocked→Resume→accept、Resume deterministic document/Event identity、Event replay和Test Decision
+attempt-capacity路径均保持通过。
+
+```text
+Focused R-2B-12 regression:
+  11 pass / 0 fail / 0 skip
+TypeScript: pass
+Architecture: pass / parser=swc / 593 modules / 4249 dependencies / 0 violations
+Schema: pass / 66 schemas / 200 external refs
+Schema digest: sha256:68c5ce0aec3eed8638134fae8fc6d7fcc5abe4bee50747853579e980726ced9c
+git diff --check: pass
+```
+
+Resume的`resolutionSummary`仍是Controller陈述，不自动证明外部事实真实解决；下一代Decision必须通过新的独立检查
+承担判断。当前仍未实现产品缺陷remediation、zero-artifact research Completion、环境setup receipt、public MCP/CLI
+或Pod-specific blocked resolution。
+
+## 204. R-2B-13（Test产品缺陷修复闭环预审）
+
+### 204.1 产品缺陷不是另一Test attempt
+
+当前`request-another-attempt`只适合实现基线没有变化、但环境、执行或Evidence仍不足的情形。
+`escalate-product-defect`已经声明Controller从充分Evidence观察到产品缺陷；此时继续复用原TestCard并消耗下一attempt，
+仍然只会验证TestCard冻结的旧Implementation Result/Decision基线，不能证明修复后的代码。
+
+[GitHub Actions rerun](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs)
+明确复用原事件的同一`GITHUB_SHA`与`GITHUB_REF`，反向证明代码变化后应形成新的workflow run，而不是原run的
+rerun。[Kubernetes Pod failure policy](https://kubernetes.io/docs/tasks/job/pod-failure-policy/)也把不可重试的软件缺陷
+与可重试运行失败分开，允许立即`FailJob`避免无意义重启。
+[Azure Test Plans](https://learn.microsoft.com/en-us/azure/devops/test/run-manual-tests?view=azure-devops)则保留每次
+Test Result、把失败Evidence关联到Bug，并允许修复后重新执行测试；可复用的是测试意图，不是旧Result或旧产品基线。
+
+Event Sourcing下也不能删除旧accept或缺陷Event。
+[Microsoft Event Sourcing pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)
+要求历史Event保持不可变，通过新的补偿Event推进当前状态。因此正确闭环应保留旧Test缺陷事实，再显式授权产品修复和
+新一代验证。
+
+### 204.2 当前TS模型不能靠放宽一个phase闭合
+
+现有事实之间存在四个硬边界：
+
+1. `ControllerTestReviewDecision`只绑定Test Result/Card/attempt/packet和独立检查，没有指出一个多repository Demand中
+   哪些Implementation Target需要修复。
+2. TestCard的`implementationBaselines`冻结每个产品Target的TaskPackage、Result和accept Decision精确tuple；产品产生
+   新Result后旧Card必然过期。
+3. Aggregate当前强制“最多一个TestCard、最多一个Test Target”，且TestCard存在期间所有Implementation Target必须保持
+   `accepted`；它无法表达“旧缺陷Test历史仍保留、产品正在返工、随后创建新TestCard”。
+4. 现有Target Delivery `rework`来源只接受Implementation `rework` Decision；Test Delivery `replacement`只处理同一次
+   attempt的宿主副作用被拒绝，不是产品修复或TestCard替换。
+
+因此不能把`test-product-defect-escalated`直接接到已有rework Service，也不能伪造一份第二次Implementation Review
+Decision来覆盖已经发生的accept。
+
+### 204.3 旧JS与Tencent参考边界
+
+旧JS把Implementation与Test都压进`accept | rework | redesign | blocked`，Test的通用`rework`继续使用同一TestCard；
+`superseded`主要服务TaskPackage/Target replacement和归档生命周期。它没有一条把Test产品缺陷定位到产品Target、修复后
+重建Implementation baseline、再生成新TestCard的完整路径。这正是新版TS需要修正的旧闭环缺口，不是迁移模板。
+
+TencentDB-Agent-Memory没有Controller Test Review、产品缺陷修复或TestCard代际模型；其queue/trace/status实现不能为
+这条业务闭环提供相邻抽象。可继续学习其模块边界、命名和注释，但不能从中推导Wakeflow状态机。
+
+### 204.4 三种互斥闭环方案
+
+| 方案 | 产品修复身份 | 修复后的验证 | 评价 |
+| --- | --- | --- | --- |
+| A（推荐） | 同一Demand、同一Implementation Target与TaskPackage进入新的产品返工执行；原accept Event保留 | 旧Test代际保留为缺陷历史，创建新TestCard、新Test Target与新attempt | 对原包范围内缺陷语义准确，复用已有rework骨干，新增模型最少 |
+| B | 为缺陷创建新的Implementation Target/TaskPackage continuation或replacement lineage | 同样创建新TestCard/Test Target | 每次修复都是独立工作包，追踪更显式；但必须先引入repository lineage head、package replacement和completion规则，当前没有第二个真实消费者，设计面显著扩大 |
+| C | 当前Demand保持阻塞或取消，创建关联的新Bug Demand | 新Demand完成修复与测试 | 隔离最强，但把原Requirement的成功闭环拆散，TODO、completion和Evidence需要跨Demand聚合 |
+
+“继续使用原TestCard创建另一attempt”不是可选方案：它只验证旧Implementation baseline，会产生错误的通过证明。
+
+### 204.5 方案A的建议骨干
+
+方案A不把过去的accept改写成未发生，而是追加一份精确修复授权：
+
+```text
+Test Decision: escalate-product-defect
+  → ControllerProductDefectRemediationAuthorization
+      （精确Test Decision/Result/Card/attempt + 受影响Implementation Target + failed check映射）
+  → review.product-defect-remediation-authorized.v1
+  → 旧Test Target保留test-product-defect历史；当前TestCard槽位释放
+  → 受影响Implementation Target进入product-defect-rework-requested
+  → 新Delivery/Claim/Result/Implementation Review
+  → 全部受影响产品Target重新accepted
+  → 新TestCard（新baseline，显式链接旧Card与remediation authorization）
+  → 新Test Target/attempt/Delivery/Result/Test Review
+```
+
+建议同步把Aggregate顶层`testCard`语义化为`currentTestCard`：`targetTasks`可保留多个已经终结的Test代际，但任一时刻
+最多只有一个当前TestCard及其活动Test Target。这样旧缺陷Result仍是有效历史Evidence，而不会被误认成当前验证合同。
+
+该授权只允许修复仍位于原TaskPackage边界和Authority内的缺陷；如果Controller判断需要改变需求、跨出包边界或选择新的
+Authority，应转入独立redesign/new-Demand设计，而不是扩大rework权限。Delivery rework来源应形成显式判别联合：
+`implementation-review-rework | test-product-defect-remediation`，不能伪造Implementation Decision。
+
+本方案不新增通用Workflow engine、可变TestCase registry、全局generation counter或后台runner。Event Stream保存完整历史，
+Aggregate只保存当前路由所需摘要；新TestCard可以复用经Controller再次确认的测试意图文本，但必须获得新身份和新实现基线。
+
+### 204.6 当前核实结论
+
+推荐方案A。它同时满足Event Sourcing不可变历史、同基线rerun与新基线retest分离、同一Demand闭环，以及当前“避免
+过度设计、由真实consumer补基础能力”的约束。方案B只有在用户希望“任何产品缺陷修复都必须成为新的独立TaskPackage”
+时才值得先建设完整任务lineage。
+
+本预审只读取新版TS、旧JS、review ledger、Tencent项目和官方资料；没有修改运行时代码或测试，没有运行测试、提交、
+发布或刷新安装cache。等待用户在A/B/C之间确认后，再按1–2个紧密文件的节奏先审查Aggregate/Test代际合同。
+
+### 204.7 用户确认A后的当前Test代际合同
+
+用户确认方案A。首个实现单元没有提前创建产品修复Authorization或Delivery分支，而是先关闭后续所有消费者共同依赖的
+Aggregate不变量。
+
+Aggregate顶层`testCard`已语义化为`currentTestCard`：它只指向当前可规划或执行的Test合同；每个Test Target继续在自身
+摘要中保存精确Card tuple。当前TS尚未发布，因此Schema v1、生成类型和所有真实消费者直接同步修改，没有保留旧字段、
+双读parser或兼容别名。
+
+新的状态矩阵为：
+
+| 当前Card | Test Target集合 | 允许的产品状态 | 含义 |
+| --- | --- | --- | --- |
+| absent | empty | 正常Tasking阶段 | 尚未进入真实环境Test |
+| present，无匹配Target | 历史Target只能是`test-product-defect` | 全部Implementation accepted | 新Card已创建，等待Test Task planning |
+| present，有一个精确匹配Target | 其他历史Target只能是`test-product-defect` | 全部Implementation accepted | 当前Test代际正在执行或已审查 |
+| absent | 一个或多个`test-product-defect`历史Target | 可进入显式产品返工状态 | 缺陷Card已退出当前槽位，旧Evidence仍保留 |
+
+每个Test Target现在还独立验证Card的`targetTaskId/testWindowId`与自身完全一致，并且同一Aggregate内TestCard ID不可复用。
+没有当前Card时，`planned`、`test-another-attempt-requested`、`test-review-blocked`或`test-accepted`都不能伪装成历史代际。
+
+普通Implementation Task Planning在任何Test历史已经存在后继续拒绝新TaskPackage，避免产品缺陷阶段借“当前Card absent”
+扩张仓库或需求范围。方案A的产品修复必须由下一单元的精确remediation Authorization转换已有Implementation Target。
+
+### 204.8 Event Repository、route与completion闭合
+
+`DemandEventSourcingRepository`现在对每一个Test Target复验其TestCard创建Event早于TaskPackage规划Event，并要求所有
+TestCard Event至少由`currentTestCard`或一个保留的Test Target引用。`findTestCardCreatedEvent`不再错误地只允许读取当前
+Card；历史缺陷Card仍可按不可变身份恢复完整合同，供后续修复Authorization和审计使用。
+
+Post-acceptance route按`currentTestCard`精确选择当前Test Target，不再把排序最前的历史缺陷Target误认为当前执行。
+当产品修复期间存在未accepted Implementation Target时仍返回`targets-not-accepted`；产品重新accepted且当前Card absent后，
+才重新进入`real-environment-test-planning`。
+
+Completion的real-environment闭合允许：一个与`currentTestCard`精确匹配的`test-accepted`当前Target，加零个或多个
+`test-product-defect`历史Target。它仍拒绝只有缺陷历史而没有新accepted测试的Demand。controller-only继续要求零Card、
+零Test Target。
+
+### 204.9 小型真实验证与当前边界
+
+新增一条真实小型路径：
+
+```text
+Test Result recorded
+→ Controller Test Decision: escalate-product-defect
+→ Aggregate test-product-defect
+→ 释放currentTestCard后的历史状态严格回读
+→ 新currentTestCard与新planned Test Target可并存
+```
+
+同一测试同时证明非缺陷Test phase不能成为历史、普通Task Planning不能新增产品任务。扩展聚焦回归覆盖Aggregate、Repository、
+Snapshot、State Version、Upcaster、TestCard/Task/Delivery、Controller Test Review、post-acceptance route和Completion；没有运行
+旧JS或仓库全量测试。
+
+```text
+Focused R-2B-13 Aggregate/Test generation regression:
+  32 pass / 0 fail / 0 skip
+TypeScript: pass
+Architecture: pass / parser=swc / 593 modules / 4250 dependencies / 0 violations
+Schema: pass / 66 schemas / 200 external refs
+Schema digest: sha256:cc44a2400a9f0d7d5ec272379d247dd81637a258931a7763744478e3a306ae23
+git diff --check: pass
+```
+
+本单元仍没有允许产品返工：Event Stream中尚无`ControllerProductDefectRemediationAuthorization`或对应Event，任何现有Service
+都不能清除`currentTestCard`或重新打开accepted Implementation Target。下一审阅单元应先设计这份Controller专属、精确绑定
+Test Decision/Result/Card/attempt与受影响Implementation baseline的Authorization合同，再接入Event Sourcing；不能先放宽
+现有Implementation rework入口。
+
+### 204.10 产品缺陷修复Authorization不是可变工单
+
+用户确认方案A后继续审阅Controller Resume、Implementation rework context、Event command/commit和官方实践。
+[Microsoft Event Sourcing](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)要求Event记录业务意图，
+而不是只记录“phase发生变化”的字段差异；Aggregate是接收Command、执行不变量并产生Event的一致性边界。
+[Kurrent/EventStoreDB](https://docs.kurrent.io/clients/tcp/dotnet/21.2/appending)则以Event ID加expected version提供幂等append。
+[AWS Step Functions redrive](https://docs.aws.amazon.com/step-functions/latest/dg/redrive-executions.html)保留成功历史，并明确只有
+同一workflow definition才适合redrive；definition变化应创建新execution。
+
+因此采用独立不可变`ControllerProductDefectRemediationAuthorization`，随后把它嵌入一个Domain Event；不创建单独物理
+Authorization文件、registry或第二状态权威。Authorization固定`boundary: existing-task-packages-only`：原TaskPackage范围内
+缺陷可恢复同一Target执行，需求/Authority/包边界变化仍必须走redesign或新Demand。
+
+Authorization绑定：
+
+- 精确post-acceptance route、Review Snapshot、Aggregate state digest与stream revision；
+- Test Target、Card、attempt、packet、Result和`escalate-product-defect` Decision tuple；
+- 从Test Decision确定性投影的全部failed checks；
+- 一个或多个按Target ID排序的Implementation baseline，每个包含原package/result/accept Decision；
+- 每个Target映射的failed check ID和不跨包的`correctionObjective`；
+- Controller rationale、typed remediation ID、授权时间和self-excluding digest。
+
+所有failed check必须至少映射到一个产品Target，映射不能引用passed/inconclusive或未知检查；Target、TaskPackage、repository、
+Result和accept Decision身份均不可重复。Decision、route、映射和文本在读取UUID/时钟前准入。新持久身份kind为
+`product-defect-remediation`，Authorization UUID后续确定性派生Event/Commit ID。
+
+### 204.11 Event、Aggregate与Repository完整闭合
+
+新增`review.product-defect-remediation-authorized.v1`。Command为
+`review.authorize-product-defect-remediation`，当前Event codec、version registry、upcaster入口、stored envelope、Commit和
+generic command handler全部接入；Event data只持有一份完整Authorization。
+
+Aggregate没有伪装普通Implementation `rework` Decision，而是新增明确phase：
+
+```text
+accepted Implementation Target
+  + Test product-defect Decision
+  + Controller remediation Authorization
+  → product-defect-rework-requested
+```
+
+目标继续保留原accept Decision/Result/Delivery摘要，并额外保存最小remediation摘要；`currentTestCard`由同一Event释放，旧Test
+Target保持`test-product-defect`。这样过去的accept仍是历史事实，而当前状态明确表示产品因后续真实环境Evidence重新开放。
+
+Reducer逐项复验当前Card、Test attempt/packet/Result/Decision、source state digest和每个产品baseline。Repository完整审计还
+复验：Decision Event正好位于source revision、Authorization Event是下一revision、source state digest来自前一Stored Event、
+TestCard确实冻结所有受影响baseline、failed-check投影与完整Test Decision一致，以及当前Aggregate remediation摘要可回指
+唯一Authorization Event。
+
+Result Review Snapshot把新phase作为仍携带原Result/Decision的review-decided产品Target；post-acceptance route把它列为
+`targets-not-accepted` blocker，不能提前创建新TestCard或完成Demand。
+
+### 204.12 Controller Service与真实纵切
+
+新增严格Service Input与`ControllerProductDefectRemediationService`。调用方只能提交：
+
+- Demand、Test Target与产品缺陷Decision身份；
+- 当前post-acceptance route digest；
+- 受影响产品Target ID、failed check映射、correction objective；
+- authorization rationale。
+
+baseline、TaskPackage/Result/Decision digest、TestCard、stream revision、Controller Window和Event/Commit身份全部由Service从
+同一次Authority context、当前route与完整Event history派生。Service执行Config current fence、Commit容量预检、expected
+revision append、同请求幂等恢复和并发winner恢复；相同Test Decision的不同映射或rationale按冲突拒绝。
+
+真实小型路径现在为：
+
+```text
+Test Result
+→ Controller Test Decision: escalate-product-defect
+→ test-product-defect-escalated route
+→ ControllerProductDefectRemediationService
+→ immutable Authorization
+→ review.product-defect-remediation-authorized.v1
+→ currentTestCard absent
+→ old Test Target remains test-product-defect
+→ selected product Target product-defect-rework-requested
+→ route targets-not-accepted
+→ exact retry idempotent; conflicting retry rejected
+```
+
+聚焦测试还发现旧durable-ID测试把已经投入真实使用的`target-result/test-attempt/test-card`误列为retired kind；已删除这三个
+过时断言，没有修改运行时词汇迁就错误测试。
+
+```text
+Focused R-2B-13 Authorization/Event/Service regression:
+  36 pass / 0 fail / 0 skip
+TypeScript: pass
+Architecture: pass / parser=swc / 599 modules / 4297 dependencies / 0 violations
+Schema: pass / 68 schemas / 203 external refs
+Schema digest: sha256:0a1b3bd841eda5f79e5112d487ad1ff40c72d0b91b8011b98fb121190ccdfd29
+git diff --check: pass
+```
+
+当前仍未创建产品修复Delivery。现有`TargetDeliveryIntent.rework`只接受Implementation Review Decision来源；下一单元必须
+选择清晰的Intent来源模型并建设`product-defect-rework-requested → delivery-prepared`，不能丢失Authorization身份或把Test
+Decision伪装成Implementation Decision。
+
+## 205. R-2B-14（产品缺陷修复Delivery Intent预审）
+
+### 205.1 当前Intent与Event版本事实
+
+`TargetDeliveryIntent`当前Schema v1用可选`rework`表达Implementation Review返工；字段absent表示initial。Intent digest是
+整个self-excluding对象的Canonical JSON摘要。持久Event已经存在两版：
+
+- `delivery.target-delivery-prepared.v1`只允许没有`rework`的initial Intent；
+- v2允许initial或现有Implementation `rework`；
+- v1→v2 upcaster为identity，因为旧Intent字节也是当前内存形状。
+
+因此把现有`rework`直接重命名成通用判别联合，或给所有旧Intent新增required purpose，会改变旧Intent digest，进而改变
+Aggregate currentDelivery中的digest与Stored Event resulting-state digest。这不是一次普通字段重命名；若坚持该路线，必须同时
+引入Intent v2、Event v3和state-model digest evolution。
+
+[AWS Step Functions redrive](https://docs.aws.amazon.com/step-functions/latest/dg/redrive-executions.html)同样区分“保留同一定义的
+redrive”和“定义变化后的新execution”。Wakeflow产品缺陷修复仍使用同一TaskPackage，因此可以是同Target的新执行；但它的
+授权来源必须与普通Implementation Review rework明确分开。
+
+### 205.2 三种互斥方案
+
+| 方案 | 持久Intent | Event演进 | 评价 |
+| --- | --- | --- | --- |
+| A（推荐） | 保留现有可选`rework`，新增互斥可选`productDefectRemediation`；提供统一派生函数返回`initial | implementation-review-rework | product-defect-remediation` | 新增严格Event v3；v1继续禁止两类返工，v2明确禁止product字段，v2→v3 identity | 三类来源清晰，不改旧Intent/digest/state；新增最少且有真实consumer |
+| B | 把Intent升级为required `executionBasis`判别联合并升为Schema v2 | Event v3加Intent与state-model digest upcaster | 持久形状最整齐，但为一个新增来源迁移所有历史Intent和状态digest，复杂度显著高于当前收益 |
+| C | 继续复用现有`rework.decision`，把Test Decision或Authorization塞入旧字段 | 无新版本 | 丢失Authorization typed identity，现有历史恢复会把Test来源当Implementation Decision；语义错误 |
+
+### 205.3 方案A拟定边界
+
+`productDefectRemediation`只保存Target执行需要的有界投影：
+
+- remediation Authorization ID/digest；
+- source Test Review Decision ID/digest；
+- 该产品Target先前accepted Result ID/digest；
+- Authorization rationale、该Target correction objective和映射后的failed checks。
+
+完整Authorization、Test Decision、Test Result与TestCard仍在Event Stream；Intent不复制整份记录。Schema强制`rework`与
+`productDefectRemediation`互斥，派生`targetDeliveryPurpose(...)`成为消费者唯一分类入口。Preparation Authority只从完整
+Event history重建对应来源；调用方不能自行拼接投影。
+
+产品缺陷Delivery继续使用原TaskPackage、原repository/window、当前Binding与新TargetDelivery ID。Reducer只允许
+`product-defect-rework-requested → delivery-prepared`，并要求Intent Authorization摘要与Aggregate remediation摘要精确一致。
+新的Result与Controller Implementation Review随后按现有纵切运行；新accept后才重新进入TestCard planning。
+
+当前推荐方案A，等待用户确认后再修改Intent Schema/codec、Event v3和Preparation纵切。本预审未修改本节所述Delivery代码，
+没有把方案选择伪装成已经实现的能力。
+
+### 205.4 用户确认A后的三类Intent来源
+
+用户确认方案A。`TargetDeliveryIntent`保留现有Implementation `rework`，新增与其Schema互斥的
+`productDefectRemediation`。所有消费者通过唯一`targetDeliveryPurpose(...)`分类：
+
+```text
+两个来源字段均absent       → initial
+仅rework                   → implementation-review-rework
+仅productDefectRemediation → product-defect-remediation
+两个字段同时存在           → Schema/domain拒绝
+```
+
+产品缺陷投影只包含：Authorization ID/digest、Test Review Decision ID/digest、先前产品Result ID/digest、Controller
+authorization rationale摘要、当前Target correction objective摘要和映射后的failed checks。完整Authorization、Test Decision、
+Test Result与TestCard仍留在Demand Event Stream，不复制进Intent。
+
+新增`target-delivery-product-defect-remediation-context.ts`，从完整Authorization和先前Implementation TargetResult验证
+Program/Demand/Target/TaskPackage/repository/window/Result baseline及failed-check映射，再生成有界投影。prompt明确写为
+“Product-defect remediation basis”，继续指向同一不可变TaskPackage，并展示Authorization、Test Decision、旧产品Result和
+修复目标；它不把Test窗口变成产品修复者。
+
+### 205.5 严格Event v3与Preparation来源恢复
+
+`delivery.target-delivery-prepared`当前写入版本升为v3：
+
+- v1同时禁止`rework`和`productDefectRemediation`；
+- v2允许initial/Implementation rework，但显式禁止product字段；
+- v3接受三类当前Intent；
+- v1→v2和v2→v3均为identity upcast，因为新字段对旧Intent是absent，旧Intent digest与resulting-state digest不变；
+- 将产品缺陷Intent伪装为v2会在payload codec处拒绝。
+
+Preparation Authority现在形成三个判别来源：`initial | implementation-review-rework | product-defect-remediation`。产品缺陷
+分支从完整Event history定位精确Authorization Event和先前产品Result，逐项复验Aggregate remediation摘要、Test Decision、
+affected baseline、TaskPackage/Result digest和事件顺序，再创建Intent投影。Apply幂等恢复同样从Event history重建来源，不依赖
+可删除投影或当前Aggregate仍停留在等待phase。
+
+Command新增互斥`productDefectRemediationSource`，由完整Authorization与Result组成；Decider重新投影并与Intent Canonical JSON
+比较。Reducer只允许：
+
+```text
+product-defect-rework-requested
+  + exact productDefectRemediation Intent
+  → delivery-prepared
+```
+
+转换时移除只属于等待phase的Aggregate remediation摘要；完整Authorization继续由Event Stream保存。普通initial与
+Implementation rework路径不变。
+
+### 205.6 完整产品修复与新Test代际真实验证
+
+真实小型纵切已经从原Test缺陷运行到新Test Task planning：
+
+```text
+old Test Result
+→ Test Decision: escalate-product-defect
+→ remediation Authorization/Event
+→ product-defect-rework-requested
+→ product TargetDeliveryIntent / prepared Event v3
+→ Claim / accepted Host Effect / new product TargetResult
+→ Controller Implementation Review accept
+→ real-environment-test-planning
+→ new TestCard with new implementation Result/Decision baseline
+→ test-task-planning
+→ new planned Test Target
+```
+
+断言证明：
+
+- 产品Delivery使用原TaskPackage、repository/window与新TargetDelivery ID；
+- Intent携带精确Authorization和mapped failed check，旧Test窗口没有产品写权限；
+- Preparation Apply与重试分别为committed/idempotent；
+- 产品新Result重新经过Controller独立accept，未复用旧accept verdict；
+- 新TestCard ID不同于旧Card，implementation baseline指向新产品Result；
+- Aggregate同时保留旧`test-product-defect` Target和新`planned` Test Target；
+- route依次经过`targets-not-accepted → real-environment-test-planning → test-task-planning → test-delivery-planning`。
+
+测试维护同步删除了已经被真实纵切替代的手工“伪造reaccepted状态/新Card摘要”段，避免同一不变量维护两套fixture。
+
+```text
+Focused R-2B-14 adjacent regression:
+  50 pass / 0 fail / 0 skip
+Modified final vertical + v3 upcaster check:
+  4 pass / 0 fail / 0 skip
+TypeScript: pass
+Architecture: pass / parser=swc / 601 modules / 4317 dependencies / 0 violations
+Schema: pass / 69 schemas / 204 external refs
+Schema digest: sha256:0e026491920e2857902216c5a038eeade88f0830b6f1e48dd9d11c5eef81ab7d
+git diff --check: pass
+```
+
+本单元尚未给新TestCard保存显式的predecessor/remediation tuple；它当前通过source state digest、旧Test Target和Event history
+保持可审计，但Card自身不能直接回答“由哪份缺陷Card和Authorization触发本次retest”。下一审阅单元应判断是否把该关系作为
+真实Test generation lineage进入TestCard/Planning，而不是依赖调用方从全流推断。
+
+## 206. R-2B-15（TestCard generation lineage预审）
+
+### 206.1 回溯修正：lineage不应污染Test执行合同
+
+完成真实产品修复→新Card→新Test Task纵切后，可以区分两个不同问题：
+
+```text
+TestCard回答：当前Test窗口被批准测试什么、如何测试、在哪个边界测试？
+Generation lineage回答：为什么创建这份Card，它替代哪次缺陷验证？
+```
+
+Test窗口执行新Card不需要旧Card、旧Result或产品remediation全文；把这些历史tuple放进TestCard会扩大Target可见合同、改变
+Card digest，并让初始Card与retest Card形成不必要的形状分支。
+
+[Azure Test Plans](https://learn.microsoft.com/en-us/azure/devops/test/run-manual-tests?view=azure-devops)把可复用Test Case、每次
+Test Result和关联Bug分开保存；修复后重新执行不会把旧Bug历史变成测试步骤本身。
+[Microsoft Event Sourcing](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)则建议Event记录业务意图。
+由此推断，Wakeflow应让Card creation Event记录generation cause，而不是让Card承担历史ledger职责。
+
+### 206.2 三种互斥方案
+
+| 方案 | 持久来源 | TestCard | 评价 |
+| --- | --- | --- | --- |
+| A（推荐） | `testing.test-card-created.v2`新增required判别`generationSource: initial | product-defect-retest`；retest绑定旧Card、Test Decision与remediation Authorization tuple | 保持当前执行合同不变 | Event直接表达创建原因；旧v1安全upcast为initial；Aggregate digest不变；Test不获得额外历史权限 |
+| B | TestCard新增可选`retestSource` | Card自身可回答lineage | 读取方便，但把审计关系复制进执行合同、改变Card digest，并扩大Target-facing数据 |
+| C | 不新增持久字段，只按Event先后与state digest推断 | 不变 | 实现最少，但无法区分未来其他Card重建原因，审计者必须重复推理 |
+
+### 206.3 方案A拟定合同
+
+Event v2建议形状：
+
+```text
+generationSource:
+  { kind: "initial" }
+或
+  {
+    kind: "product-defect-retest",
+    previousTestCard: { testCardId, testCardDigest },
+    testReviewDecision: { targetReviewDecisionId, decisionDigest },
+    productDefectRemediation: {
+      productDefectRemediationId,
+      authorizationDigest
+    }
+  }
+```
+
+初始Card只能在没有历史Test Target时使用`initial`。存在历史`test-product-defect` Target时，新Card必须使用
+`product-defect-retest`，并由Planning Authority从完整Event history派生三个精确tuple；调用方仍只提交TestCard authored
+content。Reducer只需验证Card当前baseline/state digest，Repository audit负责闭合generationSource与旧Test Decision、
+Authorization和事件顺序。
+
+Event v1只包含Card；upcaster可安全添加`generationSource:{kind:"initial"}`，因为旧v1能力只允许首份Card。该字段不进入
+Aggregate current summary，因此旧resulting-state digest保持不变。
+
+当前推荐方案A，等待用户确认后再实现Event v2、Planning来源派生和真实retest lineage审计。
+
+### 206.4 用户确认A后的Event v2与Planning来源
+
+新增独立`TestCardGenerationSource`合同和两类严格判别值；TestCard本体保持原执行合同，不新增lineage字段。
+`testing.test-card-created`当前写入版本升为v2：
+
+- v1 payload仍只含`testCard`，upcaster确定性补为`generationSource:{kind:"initial"}`；
+- v2 payload同时保存`testCard`与required `generationSource`；
+- 初始Card只能声明`initial`，产品缺陷后的Card必须声明`product-defect-retest`；
+- Event中的retest来源只保存旧Card、Test Decision和Remediation Authorization的identity/digest tuple，不复制完整历史记录。
+
+Planning Plan把`generationSource`纳入自身digest，但TestCard digest不受影响。Planning Authority只审计一次完整Event Stream，
+由当前状态和历史Event派生来源；调用方继续只提交Card authored content。Apply幂等路径按Plan中的tuple回查完整Authorization，
+Command写入前要求完整Authorization并复验其Canonical digest及tuple投影，Event仍只保存最小来源。
+
+Repository审计逐代验证：Card source revision和state digest、旧Card及旧Test Target、`escalate-product-defect` Decision、
+Remediation Authorization、严格事件先后，以及旧Card和Authorization均不能被两个新Card重复消费。
+
+### 206.5 纯Decider审查发现：仅靠Event lineage仍缺少写前证明
+
+第一版实现把完整Authorization放入Command，并计划只由Repository在提交后闭合历史。进一步从纯Decider边界检查后发现：
+Command中的Authorization即使内部自洽，Decider若只看“当前没有Card、存在旧缺陷Target”，仍不能证明这份Authorization已经
+作为更早Event进入同一Demand Stream。Repository事后拒绝无法阻止低层调用先写入错误Stream。
+
+[Microsoft Event Sourcing](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)明确要求Command Handler先从
+Event Stream重建实体当前状态，再由Aggregate执行规则和产生新Event；Event Store仍是事实权威，Snapshot/投影只用于重建和
+决策。依此修正，Aggregate新增最小`pendingTestRetest`投影：
+
+```text
+review.product-defect-remediation-authorized
+  → set pendingTestRetest(previous Card + Test Decision + Authorization tuple)
+
+product remediation Delivery / Result / reaccept
+  → preserve pendingTestRetest
+
+testing.test-card-created.v2 with exact generationSource
+  → consume pendingTestRetest
+  → set currentTestCard
+```
+
+该投影不是第二份Authorization，也不是可独立修改的业务文件；它只表示“同一Aggregate当前还欠一次已授权复测”。完整
+Authorization和所有历史细节仍只由不可变Event保存。`pendingTestRetest`与`currentTestCard`互斥，必须回指历史
+`test-product-defect` Target，completed状态不能保留pending。这样纯Decider在append之前就能拒绝伪造或重复消费。
+
+Planning Authority不再从所有历史中猜测“唯一未消费Authorization”，而是先读取Aggregate明确的pending tuple，再回查唯一
+完整Authorization。Repository审计额外要求：当前有pending时恰好存在一份对应的未消费Authorization；没有pending时不得残留
+未消费Authorization。Event是source of truth，Aggregate是由Event重放得到的current decision state，两者权威没有混淆。
+
+### 206.6 真实复测纵切与门禁结论
+
+真实小型路径验证了pending投影的完整生命周期：Authorization后创建、产品修复Delivery和重新accept期间保留、新Card创建时
+精确消费。测试还使用同一合法Card和当前state digest但替换Remediation identity，证明Aggregate在写入前按pending tuple拒绝
+不匹配来源；新Card提交后Repository审计确认两代Card、旧缺陷Target及新当前Card均闭合。
+
+```text
+Focused lineage / Planning / real retest / Decider / Repository / Upcaster:
+  12 pass / 0 fail / 0 skip
+Focused Aggregate / Snapshot / Commit / Command Handler / state version:
+  7 pass / 0 fail / 0 skip
+TypeScript: pass
+Architecture: pass / parser=swc / 605 modules / 4337 dependencies / 0 violations
+Schema: pass / 71 schemas / 207 external refs
+Schema digest: sha256:187867936f78fd60da1eea2d593eb27fd7aef25afc76ae9698384fc15fed0d2d
+git diff --check: pass
+```
+
+R-2B-15至此完成。当前TestCard generation lineage既可从Event直接审计，也能由Aggregate在下一条Command写入前执行一致性规则；
+没有把历史关系扩散进Test执行合同，也没有新增独立读模型或后台投影系统。
+
+## 207. R-2B Testing系统架构核实节点
+
+### 207.1 已闭合的内部业务骨干
+
+R-2B目前已经覆盖一条完整的内部Controller/Test业务链：TestCard、Test Task、initial/rerun/replacement Delivery、target-facing
+packet、Claim授权、Agent Host Action、Host Effect Observation、TargetResult、Controller Review、blocked恢复、Completion、产品缺陷
+Authorization、产品修复Delivery和新Test代际。Event Store、Aggregate、Repository audit、create-only查询投影和Config current fence
+各自拥有清晰职责。
+
+当前Testing目录有19个手写TS模块、8507行生产源码；对应7个直接测试文件及fixtures共2887行。体量主要来自严格wire parser、
+Authority恢复、preview/apply和真实纵切，不存在TODO/FIXME分支，也没有发现使用`node:child_process`、tmux、Git或宿主CLI的代码。
+Test Claim只返回typed Agent Host Action；真正的Codex/Claude消息发送仍由调用Agent和宿主完成，符合“Wakeflow无权自行调用宿主”的
+既定边界。
+
+### 207.2 当前真正缺口不是另一项Testing内部能力
+
+当前公共MCP只注册三项已经闭环的owner：Maintenance、Window Host Binding registration和Implementation Target Task Planning。
+TestCard Planning、Test Delivery、Claim/Outcome、Result Import、Controller Test Review、Resume和Product Defect Remediation Service均
+没有production composition-root consumer；它们目前只由聚焦测试直接驱动。
+
+这不说明这些Service应删除：它们共同构成用户已确认并完成真实验证的业务骨干。它说明继续新增Evidence、Pod、更多Test状态或
+直接复制旧JS工具表，都会扩大一组尚未真正接入产品入口的内部能力。R-2B应在此冻结；下一步必须先解决Controller如何读取当前
+路线、理解允许动作并调用这些owner。
+
+旧JS公共runtime有二十多个工具和大量action分支；原样迁移会把旧复杂度带回新版。MCP
+[Tools规范](https://modelcontextprotocol.io/specification/2025-06-18/server/tools)要求每项工具具有清晰name、description和JSON
+Schema，并建议可变操作保留human-in-the-loop，但明确不规定唯一交互模式。因此工具粒度应由Wakeflow领域owner和确认边界决定，
+不能以“协议要求”为由建立巨型统一工具或一Service一工具。
+
+### 207.3 三条互斥后续路线
+
+| 方案 | 下一步 | 优点 | 代价/风险 |
+| --- | --- | --- | --- |
+| A（推荐） | 先建设只读、可重建的Controller Route/Inspection application layer，统一回答当前Demand阶段、精确来源tuple、允许的下一动作和所需确认；再按真实动作组确定少量公共mutation coordinators | 先形成用户要求的清晰中间环节；不把Route变成权威；能用真实动作矩阵决定工具边界 | 暂不立刻让全部R-2B Service公开可调用 |
+| B | 直接为每个现有Service建立独立public contract/coordinator/MCP tool | owner最明确，单工具Schema较小 | 立即增加约8项工具；Agent必须自行重建流程顺序，容易回到旧工具繁殖 |
+| C | 建立单一`wakeflow_testing`巨型工具，用action判别联合覆盖全部操作 | 工具数量最少 | 一个入口混合planning、effect、result、review和remediation Authority；Schema、错误和确认边界再次变成大switch |
+
+当前推荐A。它不是此前已删除的Owner–Resource Capability Binding：Route只从现有权威事实计算“现在可做什么”，不维护另一份
+owner/resource注册表，也不授予权限。待用户确认后，下一单元先只读审阅现有Post-Acceptance Route、Result Review Snapshot、
+Demand Aggregate和旧`next_work/status`场景，提出最小Controller Route合同；不会直接增加公共mutation工具。
+
+## 208. Controller Route合同预审
+
+### 208.1 已确认的目标与非目标
+
+用户确认§207方案A：先建设只读、可重建的Controller Route/Inspection中间层，再根据真实动作矩阵决定少量公共mutation
+coordinator。当前单元只决定Route的层级、语义和文件落点；不注册MCP tool、不调用任何现有写Service、不执行宿主效果，也不
+把Route结果当成写许可。
+
+目标是让Controller稳定回答：
+
+```text
+当前Demand有哪些并行责任前沿？
+每个前沿由哪个领域owner负责？
+它需要调用Wakeflow owner、等待Agent宿主事实，还是返回Design/用户？
+结论来自哪一条精确Event Stream / Review / Post-Acceptance基线？
+```
+
+它不回答Controller的业务判断内容，例如新TaskPackage正文、Review verdict、修复目标、测试步骤或用户选择。
+
+### 208.2 当前TS的三层事实已经存在
+
+当前并不缺状态或审查事实：
+
+1. `DemandAggregateState`是Event重放后的write-side current decision state，拥有lifecycle、每个Target phase、当前TestCard和
+   `pendingTestRetest`；所有写准入仍由Reducer/Decider执行。
+2. `DemandResultReviewSnapshot`是同步、零写、可重建的CQRS读模型，闭合当前Target与完整TaskPackage、Result、Decision和
+   Event来源；它刻意不推导allowed decisions或next action。
+3. `DemandPostAcceptanceRoute`在所有Implementation Target接受后选择Test/Completion领域下一阶段。目前有13个严格状态，且已被
+   TestCard Planning、Test Task Planning、Test Delivery Preparation、Product Defect Remediation和Demand Completion五个真实
+   写owner消费。每个owner仍会重读Config/Event/历史并复验Route tuple。
+
+因此Controller Route不能重新解释Event历史，也不能取代Post-Acceptance Route成为新的写准入权威。它应组合这三层既有事实，
+只投影Controller当前责任前沿。
+
+### 208.3 旧JS与当前缺口核对
+
+旧`wakeflow_next_work`实际是TODO Board资格扫描，不是单个Demand的下一业务动作；旧`wakeflow_status.nextActions`把Config、
+Storage、Git、Binding、Transport、Lease、Pod和Maintenance的建议集中在2475行Observability模块中。历史审计已经把这些结果
+定性为routing hint，并明确指出“全知aggregator”会成为第二个业务解释器。新版Controller Route不得复制该跨领域status集合。
+
+当前状态矩阵还暴露三项诚实能力缺口：
+
+- `redesign-requested`已有Event/Aggregate事实，但没有Authority supplement或replacement lineage consumer；应路由Design/用户，
+  不能伪装为普通Task Planning可执行；
+- `research + testing:not-applicable + zero Target`不能进入当前Completion，必须显示`research-completion-not-implemented`，不能
+  借用Implementation/Test关闭合同；
+- Cancel Event/Reducer/Command骨干存在，但没有Lifecycle Cancel Service/public owner；Route可以显示终态，却不能把低层Command
+  冒充已完成的公共取消能力。
+
+Route的价值之一正是把这些缺口显示为typed frontier，而不是让Agent从“not-ready”自由猜测。
+
+### 208.4 标准实践与Tencent参考边界
+
+[Microsoft CQRS](https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs)要求Query零写并返回针对consumer优化的DTO，
+不把read model变成write model；[Microsoft DDD application layer](https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/ddd-oriented-microservice)
+进一步要求application layer保持薄，只协调domain owner，不拥有业务规则或业务状态。
+[AWS Step Functions](https://docs.aws.amazon.com/step-functions/latest/dg/workflow-states.html)把Action state与Flow state分开，并显式支持
+Parallel分支。Wakeflow据此不使用单一`nextAction`：同一Demand可能有多个repository Target处于不同phase，Controller Route应
+返回按Target ID稳定排序的多个责任前沿。
+
+TencentDB-Agent-Memory没有Event-sourced Controller Route。其`offload_server/router.ts`只做HTTP route→handler分派，状态和
+transition留在独立模块；这个“薄router不拥有领域状态”原则可借鉴。其`task-transition.ts`基于LLM judgment原地修改状态并以正则
+解析MMD，适用于该项目的memory offload，不适合作为Wakeflow的确定性Event Sourcing路线。
+
+### 208.5 三种互斥层级方案
+
+| 方案 | 结构 | 优点 | 风险 |
+| --- | --- | --- | --- |
+| A（推荐） | 保留`DemandPostAcceptanceRoute`作为Test/Completion领域准入Route；新增`src/governance/controller/demand-controller-route.ts`作为薄application read model，组合Aggregate、Review Snapshot和精确Post-Acceptance Route | 现有五个写consumer不反向依赖Controller；统一视图可以列出并行frontier；领域规则仍各归owner | 存在两个有明确上下层关系的read model，必须用source digest和穷尽映射防止漂移 |
+| B | 把`DemandPostAcceptanceRoute`整体扩展并重命名为`DemandControllerRoute`，迁移五个写consumer | 表面只有一个Route类型 | 一个模块同时拥有Implementation、Test、Completion和Controller presentation；写owner反向依赖全局application模型，容易成长为旧status aggregator |
+| C | 不新增Route，只把Aggregate、Review Snapshot和Post-Acceptance Route一起公开，由Agent解释 | 改动最少 | 没有用户要求的清晰中间环节；每个Agent重复phase→owner映射，缺口和并行责任无法形成稳定合同 |
+
+### 208.6 方案A的最小合同草案
+
+```text
+DemandControllerRoute
+  kind / schemaVersion
+  programId / demandId / demandType / lifecycle
+  authorityDigest
+  observedEventStream
+  reviewSnapshotDigest
+  postAcceptanceRouteDigest?   # 只有进入该领域Route时出现
+  frontiers[]                  # 按scope + targetTaskId稳定排序
+  blockers[]                   # typed capability/input gaps，不是自由文本建议
+  routeDigest
+```
+
+`frontiers`使用closed discriminated union，不使用任意`owner/capability`注册表。Implementation至少映射：
+
+```text
+planned                         → Target Delivery Preparation
+delivery-prepared               → Target Host Effect Claim
+host-effect-claimed             → Agent Host Effect / Outcome fact
+host-effect-accepted|indeterminate → TargetResult Import
+host-effect-rejected            → Target Host Effect Rearm
+result-reported                 → Controller Review Decision
+rework-requested                → Target Delivery Preparation(rework)
+product-defect-rework-requested → Target Delivery Preparation(remediation)
+review-blocked                  → Controller Review Resume
+redesign-requested              → Design/User authority gap
+accepted                        → no target frontier
+```
+
+当所有Implementation关闭后，Controller Route只穷尽映射现有Post-Acceptance `nextStage`，不重算其准入。`currentTestCard`和历史
+Test Target的选择继续由Post-Acceptance Route负责。
+
+Route是函数和递归冻结数据即可，不使用class、manager、后台projection、持久文件或独立状态机。第一实现切片只应包含该纯Route
+和聚焦测试；下一切片再决定公共只读Schema/coordinator/MCP tool。公共工具若建立，应为`readOnlyHint:true`、`openWorldHint:false`，
+不需要preview/apply，并继续删除private root/handle。
+
+当前推荐方案A，等待用户确认这一层级选择后再实现首文件。
+
+### 208.7 用户确认A后的纯Controller Route
+
+用户确认保留Post-Acceptance领域Route并在其上建立薄application read model。新增
+`src/governance/controller/demand-controller-route.ts`，唯一公开构造入口为
+`buildDemandControllerRoute(loaded, snapshot)`：
+
+```text
+同一次Loaded Demand Authority + Review Snapshot
+  → buildDemandPostAcceptanceRoute（复用既有领域准入和relation检查）
+  → 映射当前Implementation Target phase
+  → 全部Implementation accepted时只映射Post-Acceptance nextStage
+  → 稳定排序frontiers / typed blockers
+  → Canonical route digest
+```
+
+顶层固定保存Program/Demand/type/lifecycle、Authority digest、Event Stream tuple、Review Snapshot digest和可选
+Post-Acceptance Route digest。Frontier只保存`scope + kind + owner`和当前Target最小引用；它不复制完整TaskPackage、Delivery、Claim、
+Host Effect、Result、Review Decision、Test环境Authority或Card正文。
+
+Implementation phase映射完整覆盖当前Aggregate联合：
+
+| 当前phase | Controller responsibility frontier |
+| --- | --- |
+| `planned / rework-requested / product-defect-rework-requested` | `implementation-delivery-planning` |
+| `delivery-prepared` | `implementation-host-effect-claim` |
+| `host-effect-claimed` | `implementation-host-effect-execution`，owner明确为`agent-host` |
+| `host-effect-accepted / host-effect-indeterminate` | `implementation-target-result-import` |
+| `host-effect-rejected` | `implementation-host-effect-rearm` |
+| `result-reported` | `implementation-result-review` |
+| `review-blocked` | `implementation-review-resume` |
+| `redesign-requested` | Design frontier + typed capability blocker |
+| `accepted` | 不产生Target frontier |
+
+零Target非research Demand返回Task Planning；cancelled/completed返回空frontier terminal。全部Implementation accepted后，Route保存
+Post-Acceptance digest，并穷尽映射Completion、Test Card/Task/Delivery、Agent Host、Result、Review、rerun、replacement、blocked
+resume和Product Defect Remediation责任，不重新判断其领域资格。
+
+### 208.8 实现中即时剪枝与验证
+
+首个可编译草稿曾把每个Frontier的Delivery、Claim、Host Effect、Result和Decision摘要再次投影到Controller Route。文件复审立即
+判定这会形成第二个领域read model：Controller只需知道当前责任owner，写owner会自行重读完整来源。该草稿在测试前删除，最终合同
+只保留最小Target引用和上游读模型digest。这是本单元“避免过度设计”的实际修正，不保留兼容字段或废弃测试。
+
+聚焦测试使用真实本地Event Stream纵切验证：
+
+- 空Demand→Implementation Task Planning→planned Target→cancelled terminal；
+- Delivery prepared→Claim→Agent Host Effect→Outcome→TargetResult Import；
+- Result reported→Controller Review→controller-only Completion preflight；
+- redesign Decision形成Design frontier和明确未实现blocker；
+- real-environment接受后进入TestCard Planning，Card Event后进入Test Task Planning；
+- Route digest自闭合、数组冻结、进入Post-Acceptance前不伪造其digest，也不泄漏完整环境Authority来源。
+
+```text
+Focused Controller Route + adjacent Post-Acceptance Route:
+  9 pass / 0 fail / 0 skip
+TypeScript: pass
+Prettier: pass
+Architecture: pass / parser=swc / 607 modules / 4366 dependencies / 0 violations
+Schema: unchanged / no public wire added
+git diff --check: pass
+```
+
+没有运行旧JS、完整TS套件、plugin validator/smoke或`npm test`；没有commit、push、发布或cache刷新。当前已知的
+`research-completion-not-implemented`分支保持typed blocker，但本单元没有为尚无owner的research关闭路径扩建大型持久fixture；
+真正建设Research Completion时必须用该纵切补上真实consumer测试。
+
+首文件至此完成。下一单元应先审阅其第一个production consumer：建立直接公共只读Route Query，还是先增加内部root reader。
+不应在没有consumer的情况下继续扩展更多frontier字段。
+
+## 209. Controller Route公共只读Query预审
+
+### 209.1 用户确认直接建立首个production consumer
+
+用户确认不增加无consumer的内部reader，下一纵切直接建立公共只读Route Query。当前公共MCP只有Maintenance、Window Host Binding
+registration和Implementation Target Task Planning三项工具；全部使用官方`@modelcontextprotocol/server@2.0.0`、
+`fromJsonSchema(...)`、同时返回Canonical JSON TextContent与`structuredContent`，并给出严格`outputSchema`。
+
+入口Schema当前有明确额外门：所有`src/contracts/schemas/entrypoints/*.schema.json`必须完全自包含，只允许同文档`#...`引用，
+不能把领域Schema的外部URN交给MCP客户端解析。公共Coordinator仍会在SDK校验后重新解析输入，并在返回前执行输出Schema、容量和
+私密路径扫描。
+
+### 209.2 稳定MCP版本边界
+
+本地官方SDK 2.0.0当前`LATEST_PROTOCOL_VERSION`为`2025-11-25`，同时兼容更早稳定版本。该稳定协议要求：声明
+`outputSchema`时Server必须返回符合它的object `structuredContent`，并建议同时返回序列化TextContent。
+[MCP Tools规范](https://modelcontextprotocol.io/specification/2025-06-18/server/tools)支持本项目现有做法。
+
+2026-07-28规范仍是release candidate；它计划把output提升为任意JSON Schema 2020-12，但本Query没有必要依赖候选能力。结果继续
+使用object root，既能被当前SDK严格处理，也不阻碍未来升级。Tasks、resource link、subscription和pagination都不进入本地同步Route
+读取。
+
+### 209.3 Request最小边界与工具命名
+
+Request只需要：
+
+```text
+{
+  root: absolute workspace root,
+  demandId: typed demand ID
+}
+```
+
+它没有`mode`、`operation`、`preview/apply`、expected digest、时间、语言、host或caller声明。Root词法只做non-empty string；
+Coordinator通过`RootedDirectory.open`验证真实根，Schema不编造跨平台absolute-path正则。
+
+候选工具名：
+
+| 方案 | 名称 | 评价 |
+| --- | --- | --- |
+| A（推荐） | `wakeflow_inspect_demand_route` | 动词、对象和只读目的完整；不会暗示改变Demand或返回全量Demand内容 |
+| B | `wakeflow_inspect_controller_route` | 突出actor，但没有显式说明route属于哪个Demand对象 |
+| C | `wakeflow_inspect_demand` | 简短，但容易被理解为全量状态/历史/文档查询，未来扩张风险最高 |
+
+### 209.4 Result envelope三种方案
+
+| 方案 | 公开结果 | 优点 | 风险 |
+| --- | --- | --- | --- |
+| A（推荐） | `{kind:"WakeflowDemandControllerRouteInspectionResult", schemaVersion:1, tool, status:"current", route:<exact DemandControllerRoute>}` | 公共协议身份与内部Route身份分开；`routeDigest`仍精确覆盖内部Route；与现有公共结果风格一致 | 多一层固定`route`字段 |
+| B | 直接返回内部`DemandControllerRoute` | 字节最少 | 公共结果没有tool identity；未来public-only metadata无稳定位置；领域DTO被直接冻结成公共根合同 |
+| C | 在Route顶层加入`tool/status`并重算public digest | 扁平 | 同一语义出现internal/public两种摘要；Coordinator必须重建全部字段，最容易漂移 |
+
+推荐A。Envelope不另加`observedAt`或public digest；当前性已经由Route的stream revision/state/tail tuple证明，墙钟会破坏无变化重复读取的
+确定性。
+
+### 209.5 Public Route字段与容量
+
+嵌套`route`公开当前内部最小合同：Program/Demand/type/lifecycle、Authority digest、Event Stream tuple、Review Snapshot digest、
+可选Post-Acceptance digest、disposition、frontiers、blockers和route digest。Target frontier只含typed ID/digest、logical
+repository/window ID、work type和phase；不含absolute root、raw handle、private Binding、TaskPackage正文、prompt、环境Authority、
+Result/Decision正文或本地资源路径。
+
+Schema闭合：
+
+- request/result均为JSON Schema 2020-12 object、`additionalProperties:false`；
+- frontiers通过`scope + kind + owner`闭合组合，Implementation/Test Target使用不同引用形状；
+- `frontiers/blockers`最多10000项，与Aggregate现有Target容量一致；
+- output Coordinator沿用24 MiB上限；超限返回稳定output error，不截断责任前沿；
+- entrypoint Schema复制sha256和typed ID词法为local `$defs`，并由现有self-contained测试与领域词法做漂移比对；
+- MCP annotations计划为`readOnlyHint:true`、`destructiveHint:false`、`idempotentHint:true`、`openWorldHint:false`。
+
+### 209.6 建议首文件单元
+
+用户确认方案A后，第一实现单元只包含：
+
+1. `wakeflow-demand-controller-route-request.schema.json`；
+2. `wakeflow-demand-controller-route-result.schema.json`；
+3. codegen生成文件和精确Schema自包含/词法测试更新。
+
+本单元不创建Coordinator、MCP注册或双宿主入口，避免在wire review前同时修改producer。Schema确认后，下一文件才建立公共Contract和
+Coordinator真实消费Route。
+
+当前推荐工具命名A + Result envelope A，等待用户确认后实现两份Schema。
+
+### 209.7 用户确认后的公共wire实现
+
+用户确认`wakeflow_inspect_demand_route`和嵌套Route envelope。新增两份自包含MCP Schema：
+
+```text
+wakeflow-demand-controller-route-request.schema.json
+  { root, demandId }
+
+wakeflow-demand-controller-route-result.schema.json
+  {
+    kind: WakeflowDemandControllerRouteInspectionResult,
+    schemaVersion: 1,
+    tool: wakeflow_inspect_demand_route,
+    status: current,
+    route: exact DemandControllerRoute
+  }
+```
+
+Result Schema在同一文档内关闭全部typed ID、SHA-256、Event Stream、Implementation/Test Target、frontier和blocker词法。它按
+`scope`区分Demand/Target责任，按`workType`区分Implementation/Test引用，并用严格conditional关系验证每个`kind → owner → phase`：
+例如Delivery Planning不能携带Result phase，Agent Host责任只能对应claimed phase，Test Product Defect只能交给Remediation owner。
+
+Route disposition关系也进入wire：terminal必须零frontier/零blocker且没有Post-Acceptance digest；blocked必须同时拥有frontier和
+blocker；work-available必须至少一个frontier。数组容量与Aggregate保持10000，不引入分页或截断语义。
+
+### 209.8 strict Schema实现修正与生成结果
+
+首次Ajv strict compile发现conditional子Schema只写`maxItems/minItems/properties`、没有在同一子Schema声明`type`。虽然上层已约束
+类型，Ajv `strictTypes`仍正确拒绝这种隐式假设。已在每个条件分支显式补充`type:"array"`或`type:"object"`，没有关闭strict、
+降低Ajv配置或绕过codegen。
+
+生成结果保持较小：request generated 40行，result generated 134行；手写result Schema较长是因为显式关闭22类责任关系，而不是
+复制TaskPackage/Delivery/Result正文。当前没有抽取新的Schema DSL、生成前模板或跨文件外部引用；待更多同类公共Route出现真实
+重复后再判断是否需要codegen bundling。
+
+聚焦验证同时执行真实Event Stream：初始Demand和planned Implementation Target产生的Route envelope均通过Result Schema；错误
+owner、错误phase、伪terminal、额外source/root泄漏字段和非法Request均失败。MCP entrypoint目录继续由通用测试证明零external ref，
+新增request/result的Demand ID词法保持一致，Result SHA-256镜像Foundation权威。
+
+```text
+Focused public Route Schema + MCP self-contained:
+  2 pass / 0 fail / 0 skip
+Schema tooling:
+  6 pass / 0 fail / 0 skip
+TypeScript: pass
+Prettier: pass
+Architecture: pass / parser=swc / 610 modules / 4374 dependencies / 0 violations
+Schema: pass / 73 schemas / 207 external refs
+Schema digest: sha256:852a0f195cfaf4063e199036af6a543771e781519c5e9efe79ab54f4bdce503d
+git diff --check: pass
+```
+
+本单元没有创建Public Contract、Coordinator、MCP注册或双宿主入口，也没有运行旧JS、完整TS、plugin smoke/validator或`npm test`。
+下一紧邻单元应成对实现`demand-controller-route-public-contract.ts`与
+`demand-controller-route-public-coordinator.ts`，让这两份wire获得第一个真实production producer/consumer；MCP注册继续留到随后
+独立文件review。
+
+### 209.9 Public Contract与Coordinator
+
+新增`demand-controller-route-public-contract.ts`：
+
+- 唯一工具名Authority为`wakeflow_inspect_demand_route`；
+- request最大64 KiB，在任何根目录读取前完成passive JSON、Canonical byte capacity、自包含Schema和typed Demand ID准入；
+- 返回递归冻结的`{root,demandId}`，不接受mode、operation、expected digest或其他调用方控制字段；
+- 普通输入、容量、Schema和typed identity拥有稳定、带path的错误分类。
+
+新增`demand-controller-route-public-coordinator.ts`，使用函数而不是持有状态的class。一次调用固定顺序为：
+
+```text
+parse public request
+→ RootedDirectory.open(workspace)
+→ open current Config + Ledger + audited Demand authority context
+→ rebuild Review Snapshot
+→ build pure DemandControllerRoute
+→ re-read exact Config node/digest as current fence
+→ build public envelope
+→ passive JSON + 24 MiB + private path + Result Schema validation
+→ close Demand/Ledger roots
+→ close workspace root
+```
+
+Config current fence使`status:"current"`不只是“曾经读到一份合法Config”；若Config在组合读取期间变化，Query返回route error而不是
+发布混合时点。Event Stream若在Authority load和Review audit之间变化，会由Route source relation拒绝，不会把旧Aggregate与新Review
+拼成一份结果。
+
+脱敏扫描覆盖调用方root、canonical workspace root、Config ledger root、实际Demand root和实际Ledger root的任意字符串包含关系。
+输出只返回Schema允许的logical ID/digest/phase；Coordinator不读取host binding、不执行host tool、不访问产品repository，也不缓存
+workspace状态。
+
+### 209.10 聚焦验证与当前公共边界
+
+真实本地Event Stream验证：
+
+- 同一请求连续读取结果逐字段相同，Demand inventory前后完全不变；
+- 初始Demand返回Implementation Task Planning；追加真实Task Event后stream revision加一并返回Delivery Planning；
+- 公开结果递归冻结且不包含workspace绝对路径；
+- extra mode、Proxy、70 KiB请求、missing workspace和missing Demand分别稳定归入Schema/JSON/capacity/root/route错误；
+- missing Demand的内部cause保持`wakeflow-demand-operation-authority-context`，但不回显物理路径；
+- 全Controller Route、public Schema与MCP self-contained相邻组共同通过。
+
+请求/结果容量常量保持模块私有，测试使用明确越界样本，不为测试向production API增加getter或常量export。
+
+```text
+Focused Controller Route + public wire + Coordinator + MCP self-contained:
+  9 pass / 0 fail / 0 skip
+TypeScript: pass
+Prettier: pass
+Architecture: pass / parser=swc / 613 modules / 4395 dependencies / 0 violations
+Schema: pass / 73 schemas / 207 external refs
+Schema digest: sha256:852a0f195cfaf4063e199036af6a543771e781519c5e9efe79ab54f4bdce503d
+git diff --check: pass
+```
+
+当前Coordinator是完整production owner，但尚未注册到MCP composition root，因此用户仍不能通过工具调用。下一单元必须把它接入
+`wakeflow-public-mcp-server.ts`并保持Codex/Claude组合一致；不得在此之前继续增加其他Controller frontier或mutation工具。
+
+### 209.11 官方MCP注册与双宿主组合
+
+`wakeflow-public-mcp-server.ts`继续使用显式executor injection，而不是直接在SDK handler中实例化领域Coordinator。新增required
+`inspectDemandRoute` executor，Server options仍要求闭合字段集、普通函数且拒绝Proxy；Codex与Claude Code composition root均注入
+同一个host-neutral `executeDemandControllerRoutePublicRequest`。这样官方SDK适配层可独立测试，宿主文件只做组合，不复制Route逻辑。
+
+第四项工具固定为：
+
+```text
+name: wakeflow_inspect_demand_route
+title: Inspect Wakeflow Demand Route
+inputSchema: exact self-contained request v1
+outputSchema: exact self-contained result v1
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+  openWorldHint: false
+```
+
+Server instructions明确要求在选择领域owner前读取当前责任frontier，并同时声明Route只是read-only observation，不是mutation
+authority或Controller acceptance。Tool description说明来源是Config、Event Stream、Review Snapshot和Post-Acceptance Route，且不
+返回workspace path、host handle、prompt或完整业务记录。
+
+Handler只把SDK已准入request交给注入executor，并同时返回Canonical JSON TextContent与structuredContent。Contract/Coordinator错误
+进入既有`WakeflowMcpError` envelope，只公开code/reason/path或causeCode/causeReason；异常错误仍收敛为`wakeflow-unexpected`，不返回
+stack或请求root。
+
+### 209.12 MCP真实验证与当前可调用边界
+
+官方InMemory MCP Client验证：
+
+- `tools/list`现在精确四项，Route input/output Schema ID正确且无external URN；
+- SDK在executor前拒绝额外参数；
+- Route工具同时返回完全一致的structured result与JSON text；
+- annotations完整表达只读、非破坏、幂等和closed-world；
+- 真实workspace通过MCP调用返回Implementation Task Planning frontier且不回显root；
+- Route Coordinator错误保留稳定authority-context cause，但不回显私密请求；
+- Codex与Claude Code composition root运行时列出的四工具集合完全相同；
+- 原Maintenance、Target Task Planning和Window Binding调用、输出Schema、真实Binding纵切均未回归。
+
+```text
+Focused Controller Route + MCP + dual-host + adjacent Binding/Tasking:
+  27 pass / 0 fail / 0 skip
+TypeScript: pass
+Prettier: pass
+Architecture: pass / parser=swc / 613 modules / 4405 dependencies / 0 violations
+Schema: pass / 73 schemas / 207 external refs
+Schema digest: sha256:852a0f195cfaf4063e199036af6a543771e781519c5e9efe79ab54f4bdce503d
+git diff --check: pass
+```
+
+Controller Route公共纵切至此从纯读模型、wire、Contract、Coordinator一直闭合到双宿主官方MCP composition root。它尚未进入正式
+插件制品构建、旧JS切换、发布或安装cache，因此不能描述为当前已安装Wakeflow新增了工具。
+
+下一阶段不能直接批量公开全部R-2B Service。应以Route当前首个不可调用frontier为consumer，审查
+`implementation-delivery-planning → TargetDeliveryPreparationService`的公共边界，并决定Delivery Preparation/Claim应保持两个工具
+还是同一Delivery工具的严格分离operation；该选择需要先讨论。
+
+## 210. Implementation Delivery公共工具粒度预审
+
+### 210.1 当前责任链不是一个可自动执行的长事务
+
+当前Route在Implementation Target `planned/rework-requested/product-defect-rework-requested`时返回
+`implementation-delivery-planning`。下游实际有四个独立owner：
+
+```text
+TargetDeliveryPreparationService
+  preview: zero write
+  apply: append delivery.target-delivery-prepared Event
+  no Claim / no Agent Action / no host effect
+
+TargetHostEffectClaimService
+  validate fresh Agent Host observation + current private Binding
+  create cross-Demand exclusive Claim before Event
+  append claimed Event
+  issue Agent Host Action only on the first committed call
+
+Agent invokes host capability outside Wakeflow
+
+TargetHostEffectOutcomeService
+  record the already-observed outcome
+  append observed Event
+  retain Claim for accepted/indeterminate
+  release exact Claim only for rejected-before-effect
+
+TargetHostEffectRearmService
+  require rejected Event + physically released Claim + current Binding
+  append rearm Event and return to delivery-prepared
+  next effect must create a new Claim
+```
+
+Preparation只拥有Event authority；Claim同时拥有全局Claim authority和Event authority；Outcome可能处于
+`claim=current|released|unknown`与`event=unchanged|current|unknown`组合；Rearm要求Claim已经released。把这些步骤合并为一次自动调用会
+越过Agent宿主效果和崩溃恢复边界，明确禁止。
+
+### 210.2 旧JS的有效原则与应删除部分
+
+旧JS使用`wakeflow_prepare_delivery`七个operation，同时混合target preview/apply/claim/rearm和Controller-return preview/apply/pre-send；
+另用`wakeflow_record_delivery`记录target/controller outcome。有效原则是Preparation、Claim、Host Effect、Outcome始终分步，Agent调用
+宿主；不应继承的是一个工具同时拥有Target与Controller-return两套流程、七个operation和中央runtime switch。
+
+新TS当前没有Controller-return领域consumer，也已有typed Controller Route，所以无需靠一个巨型工具替Agent解释下一阶段。
+
+TencentDB-Agent-Memory没有Agent宿主投递协议。其`WorkerPermitPool`把`acquire/release`保持显式配对，并在不平衡时失败；内部worker用
+`finally`结算permit。这个原则支持“资源Claim生命周期必须成对且可审计”，但它是进程内信号量，不能决定Wakeflow公共MCP工具如何
+分组，也不能替代本地耐久Claim/Event恢复。
+
+### 210.3 官方实践校准
+
+[Microsoft CQRS](https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs)建议Command表达具体业务任务，而不是低层状态更新；
+Prepare Delivery、Claim Host Effect、Record Outcome和Rearm Rejected Effect分别是四个可审计业务意图。
+[AWS callback task](https://docs.aws.amazon.com/step-functions/latest/dg/connect-to-resource.html)明确把外部worker开始与callback结果分开，
+workflow在中间暂停；这与Wakeflow Claim→Agent Host→Outcome的边界一致。
+
+[MCP Tools](https://modelcontextprotocol.io/specification/2025-06-18/server/tools)的annotations属于整个tool而非单个operation。Outcome在
+rejected路径会删除已授权Claim，因此可能是destructive；Preparation/Claim/Rearm主要做append/create。全部塞进一个tool会迫使所有
+operation共享最宽风险提示和错误面。
+
+### 210.4 三种互斥方案
+
+| 方案 | 公共工具 | 优点 | 代价/风险 |
+| --- | --- | --- | --- |
+| A（推荐） | 四个明确命令工具：`wakeflow_prepare_implementation_delivery`、`wakeflow_claim_target_host_effect`、`wakeflow_record_target_host_effect_outcome`、`wakeflow_rearm_target_host_effect` | 一工具对应一个已存在owner和恢复合同；Schema/错误/annotations精确；Route直接告诉Agent选哪一个 | 最终增加四个工具，但按frontier逐个建设，不一次暴露 |
+| B | 两个工具：Preparation preview/apply；`wakeflow_coordinate_target_host_effect`内含claim/outcome/rearm | 工具数量较少；Host Effect阶段仍与Preparation分开 | 新增一个当前不存在的公共协调switch；Outcome删除Claim使整工具风险提示变宽；三类authority结果形成大union |
+| C | 一个`wakeflow_target_delivery`，含preview/apply/claim/outcome/rearm | 工具数最少、表面像一条流程 | 重新制造旧`prepare_delivery`大入口；确认、Agent callback、Claim补偿和错误authority混在一个Schema；不建议 |
+
+### 210.5 方案A的实施顺序与命名
+
+内部类名`TargetDeliveryPreparationService`的Target实际只接受`workType=implementation`；Test使用独立
+`TestDeliveryPreparationService`。因此公共名推荐`wakeflow_prepare_implementation_delivery`，比
+`wakeflow_prepare_target_delivery`更准确，避免未来Test工具产生语义重叠。
+
+第一纵切只公开Preparation：
+
+```text
+Route: implementation-delivery-planning
+→ wakeflow_prepare_implementation_delivery preview
+→ user/controller confirms exact plan + digest
+→ apply
+→ Route: implementation-host-effect-claim
+```
+
+它不顺带创建Claim。下一纵切才设计`wakeflow_claim_target_host_effect`，并单独解决Agent Host Action中哪些绝对定位信息可以公开给调用
+Agent。Outcome/Rearm继续等真实Route抵达相应frontier后逐项实现。
+
+当前推荐方案A和精确工具名`wakeflow_prepare_implementation_delivery`，等待用户确认后从Preparation request/result Schema开始。
+
+### 210.6 用户决定与首个公共wire边界
+
+用户确认方案A，并确认第一项工具名为`wakeflow_prepare_implementation_delivery`。本单元只新增该工具未来使用的request/result
+Schema、派生类型和聚焦验证；没有提前创建Public Contract、Coordinator、MCP注册、Claim或Agent Host Action。
+
+Request保持两种严格模式：
+
+```text
+preview { root, mode, demandId, targetTaskId }
+apply   { root, mode, plan, planDigest }
+```
+
+Preview只选择当前Demand与Implementation Target；完整TaskPackage、Config、Binding和Event Stream authority仍由现有
+`TargetDeliveryPreparationService`恢复。Apply必须回送Preview产生的完整不可变Preparation Plan与Canonical digest，不接受调用方重新
+提交host、binding、prompt、purpose或Event身份的零散字段。
+
+Result保持确认面与提交回执分离：
+
+- Preview返回完整Plan与`planDigest`，使Controller可在写入前审阅Intent、portable prompt、精确TaskPackage入口、当前Binding代际以及
+  initial/rework/product-defect-remediation来源；
+- Apply不重复返回完整Plan或内部Command/Aggregate，只返回disposition、`eventAuthority:"current"`、Demand/Plan/Command摘要、Event与
+  Commit物理回执、state digest，以及最小`delivery-prepared` Target Delivery投影；
+- Target Delivery投影明确返回purpose、TaskPackage/Target/Delivery身份、Intent摘要与host/window/binding路由，但不能出现raw handle、
+  workspace root、Claim、host action、send/readback或Outcome；
+- `phase`只能是`delivery-prepared`。因此本工具成功后只把Route推进到
+  `implementation-host-effect-claim`，不会伪装宿主效果已被取得或执行。
+
+### 210.7 自包含Schema与漂移控制
+
+新增：
+
+- `wakeflow-target-delivery-preparation-request.schema.json`；
+- `wakeflow-target-delivery-preparation-result.schema.json`；
+- 两份codegen派生类型；
+- `target-delivery-preparation-public-schema.test.ts`。
+
+两份MCP wire Schema不使用外部URN引用，分别在本地关闭Plan、Intent、rework、product-defect-remediation、typed IDs、Host、路径、摘要与
+时间词法。该重复是当前官方MCP工具可独立发布input/output Schema的边界成本，不因此新增Schema DSL、运行时bundler或第三套domain
+model。
+
+通用MCP self-contained测试新增两类漂移证明：
+
+1. request/result全部共享定义逐项完全相同；
+2. public Intent的required字段与property集合必须和领域`TargetDeliveryIntent`一致。
+
+真实Service测试证明preview request/result、exact apply request和最小apply result均通过Schema；额外`hostAction`、跨模式字段、错误
+`host-effect-claimed` phase与raw handle泄漏均不能进入公共结果。现有Intent与Preparation Service相邻回归同时通过，包括零写入
+Preview、Config/Binding漂移、并发Apply、已提交幂等重试和Implementation Review rework。
+
+```text
+Focused Intent + Preparation Service + public wire + MCP self-contained:
+  13 pass / 0 fail / 0 skip
+TypeScript: pass
+Prettier: pass
+Architecture: pass / parser=swc / 616 modules / 4414 dependencies / 0 violations
+Schema: pass / 75 schemas / 207 external refs
+Schema digest: sha256:4c03849c2b9031768e2054b95a1b9af036e42ed03bbb57a9c50d3914ee5b66fa
+git diff --check: pass
+```
+
+本单元没有运行旧JS、完整TS、plugin validator/smoke或`npm test`。下一紧邻审阅单元应成对实现
+`target-delivery-preparation-public-contract.ts`与`target-delivery-preparation-public-coordinator.ts`，由现有Service成为唯一业务owner，
+实现请求容量、RootedDirectory生命周期、稳定脱敏错误、apply结果投影与private path/handle泄漏扫描；MCP注册继续留到再下一个独立
+文件review。
+
+### 210.8 Public Contract与容量修正
+
+新增`target-delivery-preparation-public-contract.ts`，固定唯一工具名与Schema版本，并把MCP SDK后的请求重新准入为passive、递归冻结、
+自包含Schema验证的数据。Contract不打开workspace、不解释Plan，也不调用Service。
+
+早期草案曾建议沿用Route Query的64 KiB请求容量。文件审阅发现这会拒绝领域内完全合法的Apply：完整Intent本身允许64 KiB prompt，
+还可能同时携带32项rework/product-defect correction投影与Plan元数据。最终采用模块私有512 KiB上限，覆盖当前v1全部有界字段，且不向
+生产API导出测试常量。超限输入在打开任何root前稳定返回`capacity`。
+
+### 210.9 固定Host Public Coordinator与稳定提交回执
+
+新增`target-delivery-preparation-public-coordinator.ts`。composition root必须提供冻结且一致的`hostId + Resource Profile + Identity
+Profile`；Coordinator重新解析两份Profile并要求当前宿主支持Window Identity，不通过请求字段选择Codex/Claude行为。
+
+一次调用固定为：
+
+```text
+assert fixed Host facade
+→ parse bounded public request
+→ open RootedDirectory
+→ instantiate existing TargetDeliveryPreparationService
+→ preview(demandId, targetTaskId) OR apply(exact plan, digest)
+→ project bounded redacted public result
+→ close root with event-authority-aware error
+```
+
+Preview返回完整Plan供Controller确认，且Route和Claim资源保持不变。Apply只返回Plan/Command摘要、原Preparation Event/Commit回执、该Event
+记录的resulting state digest以及最小`delivery-prepared`投影。Coordinator不读取raw handle、不创建WindowWorkClaim、不生成Agent Host
+Action，也不调用宿主能力。
+
+实现审阅发现一个重要幂等边界：Event Sourcing Command Handler在旧Commit重放时返回当前Aggregate；若后续Claim已经把phase推进到
+`host-effect-claimed`，从当前Aggregate构造旧Preparation回执会错误违反`delivery-prepared` Result Schema。最终投影改为使用不可变
+Plan和已存Preparation Event，并返回`event.resultingStateDigest`，而不是当前Aggregate digest。这样晚到重放仍稳定描述原提交，同时
+Controller Route独立显示当前revision与最新责任前沿。Result Schema已补充这一字段语义。
+
+Coordinator错误固定分类为`host/root/preview/apply/output`，只保留稳定`causeCode/causeReason`与
+`eventAuthority=unchanged|current|unknown`。请求root及canonical root不会出现在成功结果任意字符串中；Schema同时从结构上排除Claim、
+host action、raw handle与Outcome字段。
+
+### 210.10 真实纵切验证与当前边界
+
+新增聚焦测试证明：
+
+- Contract拒绝Proxy、开放字段和超过512 KiB的请求；
+- Preview递归冻结、零Event写入、零Claim，并且前后公共Controller Route逐字段相同；
+- 错误Plan digest稳定映射为`apply/plan/eventAuthority:unchanged`；
+- exact Apply追加原Preparation Event，返回`eventAuthority:current`并把Route推进到
+  `implementation-host-effect-claim`；
+- 相同Apply幂等重试不增加Event或Claim；
+- 真实Claim Event把当前Aggregate推进到`host-effect-claimed`后，晚到Preparation重放仍返回原revision 3与原state digest；当前Route则
+  正确位于revision 4的`implementation-host-effect-execution`；
+- 全部成功结果均不包含workspace root或fixture raw handle；固定宿主和missing root拥有稳定错误。
+
+```text
+Focused Preparation public wire/Coordinator + Service + Claim + Route:
+  18 pass / 0 fail / 0 skip
+TypeScript: pass
+Prettier: pass
+Architecture: pass / parser=swc / 619 modules / 4441 dependencies / 0 violations
+Schema: pass / 75 schemas / 207 external refs
+Schema digest: sha256:527e984319ea3760c077c1e28941e8bc8d920ac47befeee38dc6b3b737a0908e
+git diff --check: pass
+```
+
+本单元仍未注册MCP，因此`wakeflow_prepare_implementation_delivery`尚不能被Agent调用；也没有运行旧JS、完整TS、plugin
+validator/smoke或`npm test`。下一单元只应把既有Coordinator注入公共MCP Server与Codex/Claude固定composition roots，验证官方SDK
+input/output、错误脱敏、annotations、双宿主一致和真实Route推进。完成后按约定立即进入业务骨干收束检查点，不继续实现Claim公共工具。
+
+### 210.11 官方MCP注册与风险语义
+
+`wakeflow-public-mcp-server.ts`新增required unary executor `prepareImplementationDelivery`。Server options仍执行字段集合关闭、普通函数与
+Proxy拒绝；缺失、额外或代理executor在创建MCP Server时失败，不形成运行时可选handler registry。
+
+第五项工具固定为：
+
+```text
+name: wakeflow_prepare_implementation_delivery
+title: Prepare Wakeflow Implementation Delivery
+input/output: exact self-contained v1 Schema
+annotations:
+  readOnlyHint: false
+  destructiveHint: false
+  idempotentHint: true
+  openWorldHint: false
+```
+
+工具整体不是read-only，因为Apply追加Event；它不删除或覆盖资源，因此不是destructive。Preview无副作用，exact Apply重复调用不会产生
+新增effect，因此工具级idempotent成立。它只访问本地已配置权威，不调用外部宿主或网络能力，因此保持closed-world。
+
+Server instructions要求只有当前Route选择`implementation-delivery-planning`时才进入Preparation，先审阅完整Intent和portable prompt，
+再Apply同一Plan与digest；同时明确Apply不取得Claim、不授权host effect且不发送消息。Handler只传递SDK已准入request，并返回Canonical
+JSON text与structuredContent。Contract/Coordinator错误只公开稳定code/reason/path/cause与`eventAuthority`，未知异常收敛为
+`wakeflow-unexpected`。
+
+### 210.12 双宿主固定组合与候选制品闭包
+
+新增两个极小Host composition wrapper：
+
+- `codex-wakeflow-target-delivery-preparation.ts`固定Codex Resource/Identity Profile；
+- `claude-code-wakeflow-target-delivery-preparation.ts`固定Claude Code Resource/Identity Profile。
+
+公共请求没有host selector。Codex/Claude MCP根只注入各自一元executor；两个新入口显式加入entrypoints TS project file list。该形态与现有
+Window Binding composition一致，没有把具体Host依赖下沉到共享Delivery Coordinator。
+
+候选制品复核发现原artifact stdio测试仍只断言Maintenance、Task Planning和Binding三项，先前Controller Route接入后没有同步该真实
+consumer，因而完整candidate gate会失败。测试已直接修正为五项精确工具集合，同时包含Controller Route与本Preparation；没有
+增加兼容分支或放宽为“至少包含”。两份候选artifact继续由静态ESM闭包构造，各自只带本宿主Identity执行文件，官方stdio Client均成功
+列出相同五项工具。
+
+### 210.13 MCP真实纵切与收束停点
+
+官方InMemory MCP Client与真实Codex composition验证：
+
+- tools/list精确五项，Preparation input/output Schema ID正确且无external URN；
+- annotations完整，description明确不创建WindowWorkClaim；
+- SDK在executor前拒绝额外`hostAction`字段；
+- structuredContent与Canonical text逐字段一致；
+- 真实Codex workspace先由Route返回Delivery Planning，MCP Preview零Claim，Apply返回committed并推进Route到Host Effect Claim；
+- exact Apply重试返回idempotent且仍不创建Claim；
+- 成功结果不包含workspace root或raw handle；
+- Coordinator `eventAuthority:unknown`与稳定Event Store cause进入脱敏错误envelope，不回显请求root或stack；
+- Codex与Claude Code source composition以及两份stdio候选artifact均列出相同五工具集合；
+- Maintenance、Route、Task Planning与Binding现有MCP路径保持通过。
+
+```text
+Focused public MCP + Preparation + dual-host artifact candidates:
+  27 pass / 0 fail / 0 skip
+TypeScript: pass
+Prettier: pass
+Architecture: pass / parser=swc / 621 modules / 4461 dependencies / 0 violations
+Schema: pass / 75 schemas / 207 external refs
+Schema digest: sha256:527e984319ea3760c077c1e28941e8bc8d920ac47befeee38dc6b3b737a0908e
+git diff --check: pass
+```
+
+Preparation公共纵切至此从领域Service、wire、Contract、Coordinator、官方MCP、双宿主source composition一直闭合到候选artifact。它尚未
+同步正式`plugins/`制品、安装cache或发布版本，因此不能声称当前安装的Wakeflow已有该工具。
+
+按照用户确认的路线，当前已经到达业务骨干收束检查点。下一步不是实现`wakeflow_claim_target_host_effect`，而是审阅当前大型未提交
+业务波次、执行完整TS source-manifest测试、Schema/Architecture、双宿主candidate/stdio、零consumer与测试重复检查，并形成新的当前
+checkpoint事实；旧JS/plugin validator/smoke与正式`npm test`是否进入本检查点，应先按“TS开发门还是release门”重新确认范围。
+
+## 211. TypeScript业务骨干收束核实节点
+
+### 211.1 范围与独立checkpoint
+
+用户确认执行TS开发收束门，不进入旧JS、正式plugin validator/smoke、release或Claim实现。新增独立历史节点：
+
+- [TypeScript Business Skeleton Consolidation Gate](./wakeflow-typescript-business-skeleton-consolidation-gate-2026-09-01.md)
+
+该文档记录当前架构、14类Event、五项公共MCP、内部业务链、规模、测试成本、生产叶子、candidate与能力缺口；不改写2026-08-28的
+Technical Skeleton历史节点。
+
+### 211.2 完整测试发现与清理
+
+从删除后的可丢弃`.build/tests`开始，使用`tsc --force`按当前198份`.test.ts`源重新构建。首次完整运行结果为835/838，三项失败都来自
+Maintenance Transaction测试仍复制新增Shared Coordination Layout之前的14步与固定数组位置。
+
+实现与Preview/Step Executor已正确拥有15步，因此只修正陈旧测试：回执数量改为与不可变Plan长度闭合，崩溃注入按
+`core:active-layout` stepId定位并执行全部前置Plan步骤。相邻21项通过后，完整门重新运行：
+
+```text
+TypeScript source-manifest tests:
+  838 pass / 0 fail / 0 cancelled / 0 skip
+  duration 216.84971075s
+```
+
+本轮没有删除必要的CAS、并发、Claim释放或崩溃恢复测试。当前慢项集中在产品缺陷、Test、Completion与Maintenance真实磁盘纵切；后续只
+能通过共享前缀或减少重复初始化优化，不能降低证据等级。
+
+所有本轮变更/新增的手写TS与JSON已统一Prettier，排除generated、历史文档、旧JS/plugin与外部Atlas；静态门和MCP/artifact聚焦回归在
+格式化后再次通过。
+
+### 211.3 生产叶子与架构结论
+
+`src`生产图共有22个零`src` dependent文件：2个artifact roots、12个待公开业务owner、8个技术恢复/Artifact owner。全部有直接测试和
+明确职责，没有匿名placeholder；当前不删除，但业务owner只能按Route逐项接线，技术owner在首个真实consumer处再次决定接入或删除。
+
+Governance无具体Host import、子进程、tmux或Git CLI调用；真实宿主效果仍属于Agent。依赖图无循环，Foundation不再横向扩展。
+
+```text
+Node: v24.19.0
+TypeScript: pass
+Architecture: parser=swc / 621 modules / 4461 dependencies / 0 violations / 0 cycles
+Schema: 75 / 207 refs
+Schema digest: sha256:527e984319ea3760c077c1e28941e8bc8d920ac47befeee38dc6b3b737a0908e
+Prettier changed/new TS+JSON: pass
+git diff --check: pass
+Candidate stdio: Codex pass / Claude Code pass / exact five tools
+```
+
+最终candidate manifest：Codex 317 compiled files，digest
+`sha256:07f80120c1a877fbb0b8358a65fac6e5b33c291f62ff36a196996d9568c12bbc`；Claude Code 322 files，digest
+`sha256:126600fc8869826d323853eff9bb613b87d8990bbfa973c0c9de9f6e49294d1a`。两者仍为`releaseEligible:false`。
+
+### 211.4 仓库与下一停点
+
+当前`HEAD`仍为`8e0be68`，分支ahead 7；大型业务波次未提交。外部`wakeflow-architecture-atlas/`与历史Technical Skeleton Gate的预先异常
+diff不属于本checkpoint，任何提交前必须排除。
+
+下一步只进入`wakeflow_claim_target_host_effect`公共边界讨论，先比较Implementation/Test共用范围、Host Observation、瞬时Action、
+raw-handle/privacy、双authority错误和Agent执行停点；用户确认方案后才能编码。
+
+## 212. Target Host Effect Claim公共边界预审
+
+### 212.1 当前共享owner与用户决定
+
+现有`TargetHostEffectClaimService`已经同时拥有Implementation与Test Claim：两者共用WindowWorkClaim Store、
+`delivery.target-host-effect-claimed` Event、跨Demand窗口排他、Claim→Event前向恢复与`claimAuthority/eventAuthority`双轴错误。Test只增加
+`testAttemptId + testDispatchPacketDigest`来源闭包及专用Action投影。Controller Route也把Implementation/Test Claim指向同一owner。
+
+因此比较三条路线：
+
+- A：一个`wakeflow_claim_target_host_effect`，使用`workType`严格判别联合；
+- B：当前只公开Implementation，Test以后升级wire；
+- C：拆成Implementation/Test两个重复Claim工具。
+
+用户确认A：第一版公共工具同时支持两个已经存在的真实变体，不建立Test placeholder，不复制Claim事务，也不把宿主发送合入Wakeflow。
+
+### 212.2 Observation、一次性Action与标准校准
+
+公共请求必须携带Agent刚从宿主能力取得的完整瞬时Observation，包括opaque raw handle、Binding ID、configured logical root声明和
+`observedAt`；Wakeflow用当前Host Identity Profile准入，再与私有Binding和Config topology精确闭合。raw handle只参与内存中等值比较，
+不能进入Claim、Event、Action结果或错误。
+
+Claim固定顺序为：
+
+```text
+validate fresh Observation
+→ create durable cross-Demand WindowWorkClaim
+→ revalidate Config / Binding / Intent / optional Test packet
+→ build transient Agent Host Action
+→ append claimed Event
+→ return Action only when this call first commits the Event
+```
+
+已提交重放返回`already-claimed + action:null`。如果Event已提交但MCP首次响应丢失，重试不能重签Action；没有host send idempotency key时，
+重签会把未知“是否已经发送”变成潜在重复副作用，因此进入显式人工/恢复阻断。
+
+[MCP 2025-11-25 Schema](https://modelcontextprotocol.io/specification/2025-11-25/schema)明确`idempotentHint`只描述重复调用是否产生额外环境
+effect，annotations本身不是安全机制；[AWS callback task](https://docs.aws.amazon.com/step-functions/latest/dg/connect-to-resource.html)把外部
+worker effect与带token的结果回传分开；[Microsoft Durable Task](https://learn.microsoft.com/en-sg/azure/azure-functions/durable/durable-functions-types-features-overview)
+说明Activity可能至少执行一次，因此副作用必须按幂等方式设计。这些标准支持持久Claim + 分离Outcome，而不支持Claim工具内部自动发送。
+
+TencentDB-Agent-Memory的`WorkerPermitPool`只是在进程内执行FIFO acquire/release，并由Pipeline Worker在`finally`中归还；它不能保存
+跨进程Claim/Event或崩溃后的unknown effect，因此只借鉴显式配对原则，不复用其内存信号量结构。
+
+### 212.3 公共合同草案
+
+Request使用一个self-contained判别联合：
+
+```text
+Implementation:
+  root / workType=implementation
+  demandId / targetTaskId / targetDeliveryId / intentDigest
+  observation
+
+Test:
+  上述字段
+  workType=test
+  testDispatchPacketDigest
+```
+
+Result区分：
+
+- `issued/committed`：最小Claim摘要、Event/Commit回执、post-claim state digest与Implementation/Test Action；
+- `already-claimed/idempotent`：同一Claim/Event回执，`action:null`，明确禁止发送。
+
+Action中只允许最终prompt携带JSON编码的canonical workspace root；raw handle仍不返回。Outcome后续可从Action取得`actionId`、
+Host Observation authority digest、Target身份以及Test attempt/packet tuple。
+
+工具annotations建议为`readOnly:false / destructive:false / idempotent:true / openWorld:false`；Claim是本地additive effect，真实宿主调用仍由
+Agent执行。MCP task execution保持默认forbidden，因为Claim必须是立即返回的一次效果栅栏，不是后台长任务。
+
+### 212.4 Action词汇修正
+
+用户同时确认把容易被Controller误解为“调用者当前窗口”的：
+
+```text
+send-message-to-current-window
+```
+
+统一改为：
+
+```text
+send-message-to-observed-target-window
+```
+
+已同步`TargetDeliveryAgentHostAction`与`TestDeliveryAgentHostAction`两个内部合同及构造器，并在Implementation/Test真实Claim Service测试中
+增加exact effect断言。没有保留alias、兼容值或双分支；新TS尚未发布，不需要版本迁移。
+
+```text
+Focused Implementation/Test Claim + Outcome:
+  17 pass / 0 fail / 0 skip
+TypeScript: pass
+Prettier: pass
+Architecture: pass / parser=swc / 621 modules / 4461 dependencies / 0 violations
+Schema: unchanged / 75 schemas / 207 refs
+Schema digest: sha256:527e984319ea3760c077c1e28941e8bc8d920ac47befeee38dc6b3b737a0908e
+git diff --check: pass
+```
+
+下一单元只创建共享Claim request/result self-contained Schema、generated types和轻量Schema测试；不创建Contract、Coordinator、MCP注册或
+宿主调用。
+
+### 212.5 共享Claim Request Schema
+
+新增`wakeflow-target-host-effect-claim-request.schema.json`，顶层只有一个Implementation/Test `oneOf`：
+
+- Implementation要求`root/workType/demandId/targetTaskId/targetDeliveryId/intentDigest/observation`；
+- Test要求上述字段并额外要求`testDispatchPacketDigest`；
+- Implementation不能携带Test字段，Test不能省略packet digest；
+- 两者共享完整瞬时`WakeflowAgentHostWindowObservation`，包括host/window/binding、opaque handle、logical root、configured placement和
+  observedAt；
+- raw handle字段明确标记为request-only secret，Schema关闭其kind/value容量和控制字符，但不把具体Codex/Claude handle格式写入共享wire；
+  当前Host Identity Profile继续在Coordinator/Service层收紧。
+
+Request Schema在同一文档本地关闭program/support-surface/repository logical root、placement、Host、UTC、SHA-256和typed IDs，零external
+URN；它不判断窗口role、当前Binding、handle相等、root匹配或五分钟freshness，这些仍属于现有Authority/Service。
+
+### 212.6 Claim Result Schema与一次性Action关系
+
+新增`wakeflow-target-host-effect-claim-result.schema.json`。公共结果不返回完整内部Command/Aggregate或WindowWorkClaim，只返回：
+
+```text
+kind / schemaVersion / tool
+status / disposition
+claimAuthority=current / eventAuthority=current
+minimal normalized Claim summary
+Event / Commit receipts
+post-Claim event stateDigest
+action
+```
+
+Claim摘要显式规范化`target.workType=implementation|test`，避免沿用内部Implementation历史记录省略判别字段的持久兼容形态。Test摘要额外
+携带`testAttemptId + testDispatchPacketDigest`。
+
+Schema固定两层关系：
+
+1. `issued → committed + non-null Action`；`already-claimed → idempotent + action:null`；
+2. Implementation Claim只能配Implementation Action或null，Test Claim只能配Test Action或null。
+
+两个Action都使用已确认的`effect:send-message-to-observed-target-window`。Implementation Action携带Claim/Observation/Event tuple与最终
+prompt；Test Action再增加attempt与target-facing packet ref/digest。Action prompt有明确上限；result结构没有raw handle字段。canonical
+workspace root只允许后续Coordinator在`issued.action.prompt`的精确位置通过，Schema本身不能判断字符串中哪段是私密路径。
+
+跨字段相等关系——claim/action ID、route、digest、issuedAt、Event state digest——也继续留给Coordinator从真实Service结果投影和复验，
+不在JSON Schema伪造data equality能力。
+
+生成两份类型/runtime Schema后，通用MCP self-contained测试补充Claim request/result的SHA、UTC、Host和ID词法漂移检查，并要求公共
+Observation字段集合与领域瞬时Observation一致。轻量测试使用纯wire fixture验证：
+
+- 两种Request均准入且互斥；
+- raw handle词法错误与额外hostAction被拒绝；
+- Implementation/Test issued结果均准入；
+- replay只有`action:null`有效；
+- 旧effect、跨workType Action、额外handle字段被拒绝。
+
+```text
+Focused Claim public wire + MCP self-contained:
+  3 pass / 0 fail / 0 skip
+TypeScript: pass
+Prettier: pass
+Architecture: pass / parser=swc / 624 modules / 4464 dependencies / 0 violations
+Schema: pass / 77 schemas / 207 external refs
+Schema digest: sha256:9f88b130c3f204ad8d1050283dd660ee1af53fd5780898880607f369feb41ad9
+git diff --check: pass
+```
+
+本单元没有打开workspace、创建Claim、生成真实Action、注册MCP或调用宿主。下一单元应成对实现
+`target-host-effect-claim-public-contract.ts`与`target-host-effect-claim-public-coordinator.ts`，重点闭合request容量、固定Host facade、
+Service错误双authority、issued prompt的唯一root例外、raw handle全输出禁入、最小Claim/Event/Commit投影和late replay不重签Action。
+
+### 212.7 Public Contract与固定Host Coordinator
+
+新增`target-host-effect-claim-public-contract.ts`：
+
+- 唯一工具名Authority为`wakeflow_claim_target_host_effect`；
+- 请求在打开workspace前完成passive JSON、Canonical UTF-8 128 KiB容量与self-contained Schema准入；
+- 返回递归冻结的Implementation/Test联合，不解释Observation或Claim业务关系；
+- 错误稳定区分`json/capacity/schema`并保留path，不回显请求内容。
+
+新增`target-host-effect-claim-public-coordinator.ts`。composition root必须注入冻结、一致且支持Window Identity的
+`hostId + Resource Profile + Identity Profile`；请求不能选择宿主，Observation host也必须等于固定facade。
+
+调用顺序为：
+
+```text
+assert fixed Host facade
+→ parse bounded request
+→ open RootedDirectory
+→ call shared TargetHostEffectClaimService
+→ verify exact Claim/Event/Commit/Action relations
+→ project normalized public Claim summary
+→ validate 512 KiB result Schema and privacy boundary
+→ close root without swallowing a unique issued Action
+```
+
+Public Claim摘要不返回完整WindowWorkClaim、Command或Aggregate；Implementation历史持久Claim虽省略`workType`，公共投影统一补为
+`implementation`，Test保持`test + attempt + packet digest`。Event/Commit回执来自精确Claim Commit，`stateDigest`使用该Event记录的
+resulting state，不使用可能后来推进的current Aggregate。
+
+Coordinator逐项复验：Commit ID、Demand、command digest、expected revision、单Event范围、Event type、Event内完整Claim字节、Action/Claim
+身份、route、workClaim、issuedAt与Claim Event tuple。Test Action还必须匹配Claim的attempt和packet digest。任何投影关系漂移都以
+`output + claimAuthority:current + eventAuthority:current`失败，不能发布半可信Action。
+
+### 212.8 一次性Action隐私与关闭语义
+
+成功输出边界固定为：
+
+- raw handle value不能出现在任何结果字符串中；
+- caller root与canonical root不能进入普通字段；
+- `issued`时canonical root只允许作为`$/action/prompt`最后一段JSON编码导航行；
+- prompt正文不能提前复制caller/canonical root；
+- `already-claimed`没有Action，因此结果任何位置都不能出现root；
+- macOS可能把`/var/...`固定为`/private/var/...`，扫描先验证精确canonical prompt后缀，再允许该后缀自然包含系统别名；其它位置仍拒绝。
+
+实现复审还关闭了唯一Action被本地cleanup吞掉的风险：Service成功形成`issued`结果后，如果Coordinator关闭只读RootedDirectory失败，不能
+把唯一Action替换为root错误，因为Claim/Event已经current且重试不会重签。issued结果优先返回；`already-claimed`或尚未形成结果时，关闭
+失败仍按双authority报告。
+
+真实聚焦测试覆盖：
+
+- Contract冻结、Proxy与超128 KiB请求；
+- 非冻结Host facade、missing root、过期Observation及双unchanged错误；
+- Implementation首次issued、Route进入`implementation-host-effect-execution`、重放action null；
+- Test首次issued、packet/attempt投影、Route进入`test-host-effect-execution`、重放action null；
+- issued root路径只位于Action prompt，重放零root；两种结果都零raw handle；
+- 内部Implementation/Test Claim Service前向恢复和竞争场景保持通过。
+
+```text
+Focused Claim Public Coordinator + wire + Implementation/Test Service:
+  14 pass / 0 fail / 0 skip
+TypeScript: pass
+Prettier: pass
+Architecture: pass / parser=swc / 627 modules / 4488 dependencies / 0 violations
+Schema: pass / 77 schemas / 207 external refs
+Schema digest: sha256:9f88b130c3f204ad8d1050283dd660ee1af53fd5780898880607f369feb41ad9
+git diff --check: pass
+```
+
+本单元没有注册MCP或执行宿主发送。下一单元只把现有Coordinator注入Public MCP Server与Codex/Claude固定composition wrappers，验证
+官方SDK、双authority错误、一次性Action、双宿主五→六工具集合和candidate stdio；完成后再进入Outcome公共边界预审。
+
+### 212.9 Claim MCP注册与公共错误投影
+
+`wakeflow-public-mcp-server.ts`现已把`wakeflow_claim_target_host_effect`注册为第六个公开源码候选工具。注册直接使用已闭合的
+self-contained request/result Schema，不创建第二套wire类型；server options只接受必需的一元Claim executor，并继续拒绝Proxy、未知
+配置字段和缺失owner。
+
+工具元数据固定为：
+
+```text
+readOnlyHint: false
+destructiveHint: false
+idempotentHint: true
+openWorldHint: false
+```
+
+这里的`idempotent`只表示同一Claim重放返回`already-claimed + action:null`，不表示Agent可以重复执行首次取得的Action。MCP错误投影在现有
+`stateAuthority/eventAuthority`之外增加`claimAuthority`，精确保留Service/Coordinator对Claim记录、Event结果和Commit不确定性的区分；
+错误结果仍禁止回显workspace root、opaque handle、请求正文和stack。
+
+### 212.10 双宿主composition与真实stdio验证
+
+新增Codex与Claude Code两个极薄的Claim composition wrapper。每个wrapper只冻结本宿主的host ID、resource profile与identity profile，
+然后调用同一个`claimTargetHostEffect`公共Coordinator；公共Server不根据请求或字符串分支判断宿主。
+
+两个MCP composition root都必须注入Claim executor，entrypoint编译清单和候选制品可达闭包同步纳入新wrapper。候选测试证明两个入口通过
+官方stdio Client发布完全相同的六工具集合；没有修改旧JS入口、插件制品或已安装缓存。
+
+真实Codex MCP测试从隔离fixture依次完成：
+
+```text
+Preparation把Route推进到Claim
+→ 首次Claim提交事件并返回issued Action
+→ Route推进到Agent Host effect边界
+→ 同一请求重放返回already-claimed + action:null
+```
+
+测试只检查Action合同，没有把prompt发送给真实Codex/Claude窗口。SDK还在进入executor前拒绝额外`sendNow`字段，并验证成功与失败输出都
+不包含raw handle；workspace root只允许出现在首次issued Action prompt的既定后缀。
+
+### 212.11 开发中间态与下一边界
+
+六工具源码候选不是可发布的端到端Delivery能力。当前公开面能够原子记录Claim并签发一次性Action，但尚未公开对应的Outcome记录入口；
+如果Agent现在执行真实宿主发送后丢失响应，公共MCP链路还没有标准方式提交`observed`或显式进入recovery。因此，在Outcome公共owner完成并
+通过真实Claim→Agent effect→Outcome协议测试前：
+
+- 不把该候选描述为release-ready；
+- 不刷新插件缓存或发布制品；
+- 不在源码测试之外执行真实宿主发送；
+- 不为规避缺口而重签Action、自动发送或把Outcome塞回Claim工具。
+
+```text
+Focused MCP registration + candidate artifacts after formatting:
+  25 pass / 0 fail / 0 skip
+TypeScript: pass
+Prettier: pass
+Architecture: pass / parser=swc / 629 modules / 4504 dependencies / 0 violations
+Schema: pass / 77 schemas / 207 external refs
+Schema digest: sha256:9f88b130c3f204ad8d1050283dd660ee1af53fd5780898880607f369feb41ad9
+git diff --check: pass
+```
+
+下一单元进入Target Host Effect Outcome公共边界预审：先核对Implementation/Test内部Outcome Service、Event语义、恢复分支与旧JS真实场景，再给出
+共享工具、分离工具或暂不公开的候选方案；在用户确认前不直接实现。
+
+## 213. DELIVERY-005-PUBLIC（Target Host Effect Outcome公共边界预审）
+
+### 213.1 当前内部owner与旧JS差异
+
+当前TS已经有一套由Implementation与Test共享的内部`TargetHostEffectOutcomeService`。它从
+`delivery.target-host-effect-claimed` Event恢复Action权威字段，把Agent提供的宿主attempt与最多一次readback转换为只含摘要的
+`TargetDeliveryHostEffectObservation`，再以稳定Action/Claim身份幂等追加唯一
+`delivery.target-host-effect-observed` Event。`accepted | indeterminate`保留Claim；只有
+`rejected-before-effect + unavailable readback`在Event提交后获得精确释放Claim的权限。
+
+现有真实聚焦测试基线：
+
+```text
+Implementation/Test Outcome Service:
+  8 pass / 0 fail / 0 skip
+```
+
+旧JS的`wakeflow_record_delivery`同时路由`target-outcome`与`controller-outcome`，请求还要求Agent填写
+`stateRoot/targetTaskId/deliveryId/sendGeneration/hostMethod/hostMode/transportStatus`。该大工具和多项调用者声明不再作为TS标准；旧代码只证明
+真实场景需要“宿主调用完成后，单独记录观察结果”。
+
+TencentDB-Agent-Memory的`pending-writes.ts`允许在无idempotency key时重试L0写入，并明确接受少量重复，因为下游按hash去重且其业务取舍是
+“宁可重复也不丢”。Wakeflow向Agent窗口发送prompt可能重复执行代码、测试或环境操作，代价模型不同；因此不能复制其自动重试方案，但可以保留
+它把重试条件、attempt次数和重复风险写清楚的注释方式。
+
+### 213.2 公开化前发现的权威状态错误
+
+当前Service在Outcome Event成功提交后才释放`rejected-before-effect` Claim；这一顺序正确。但如果释放阶段抛出
+`WindowWorkClaimStoreError`，外层catch固定构造：
+
+```text
+eventAuthority = unchanged
+```
+
+这会把“Event已经current、Claim结算失败或未知”错误描述成“Event未变化”。同一错误也会出现在已结算replay的Claim检查失败路径。它不影响现有
+八项成功/幂等测试，却会误导公共调用方决定恢复动作，属于Outcome公开化前必须先修正的真实正确性问题。
+
+修正应显式跟踪两个阶段：
+
+```text
+Claimed Aggregate且尚未append             -> eventAuthority=unchanged
+已结算Aggregate replay或append成功返回     -> eventAuthority=current
+append调用无法证明是否提交                -> eventAuthority=unknown
+```
+
+必须增加“Observed Event已存在/已提交，但Claim精确释放失败”的故障测试；不能只修改错误常量，也不能把它伪装成回滚。
+
+### 213.3 标准证据对边界的约束
+
+[RFC 9110 §9.2.2](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2.2)只允许在已知请求语义幂等或能证明原请求未应用时自动重试非幂等
+请求。[AWS Builders' Library](https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/)也用无响应后的singleton创建说明：调用方不能
+判断外部效果是否发生，直接重试可能产生第二个效果。因此Claim重放继续不重签Action；Outcome只记录`indeterminate`，不把未知变成拒绝或自动重发。
+
+[Azure Event Sourcing](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)要求事件表达已经发生的领域事实、保持append-only，且重复
+消费必须幂等。当前`target-host-effect-observed` Event、Action ID派生Commit身份和同参数重放符合这一方向；Claim文件释放是Event后的本地结算，不能
+替代或修改已提交事件。
+
+[MCP 2025-11-25 Schema](https://modelcontextprotocol.io/specification/2025-11-25/schema#toolannotations)明确：
+`destructiveHint=false`只适用于纯additive更新；`idempotentHint=true`表示相同参数重复调用没有额外效果；短操作默认
+`taskSupport=forbidden`。由于rejected Outcome可能精确删除Claim资源，公共Outcome工具应保守声明
+`readOnly:false / destructive:true / idempotent:true / openWorld:false`；它只修改本地Wakeflow闭域记录，不执行外部宿主调用。
+
+### 213.4 已可确定的公共结构
+
+无需再引入多路大工具或分开的Implementation/Test Outcome工具。建议固定：
+
+```text
+wakeflow_claim_target_host_effect
+  -> 只持久Claim并首次签发一次性Action
+
+Agent调用当前宿主工具并做最多一次有界readback
+
+wakeflow_record_target_host_effect_outcome
+  -> 只记录已经观察到的双轴事实
+```
+
+Outcome使用同一个公共工具、同一个内部Service和同一个Observed Event family；stored Claim决定Implementation/Test。Codex与Claude Code只提供冻结
+的当前host ID，Coordinator复验Claim route属于当前入口，不解析raw handle，也不重新验证效果后的Binding。工具结果投影digest-only Observation、
+Event/Commit回执、post-event state digest与Claim结算状态；不返回raw evidence、workspace root、prompt、完整Command/Aggregate或stack。
+
+Outcome是立即完成的本地Event append/Claim settlement，不启用MCP task execution。第七工具仍只是TS源码候选；本单元不顺带公开Rearm、TargetResult
+或Controller Review。
+
+### 213.5 需要用户确认的请求选择
+
+第一项是公共请求重复多少Claim权威字段：
+
+| 方案 | 公共selector | 评价 |
+| --- | --- | --- |
+| A（推荐） | `root + demandId + actionId + claimDigest` | 只让调用者选择历史Claim并证明拿到精确Claim回执；workType、Task/Delivery、Host observation与Test tuple全部由stored Claim Event派生，字段最少且不会把调用者声明当authority |
+| B | 保持当前内部请求，额外要求workType、Task/Delivery、Host observation digest及Test attempt/packet | 多重echo可以发现调用者抄错字段，但模型调用成本高，且这些值最终仍必须被Event覆盖 |
+| C | 回传完整一次性Action | 复制prompt与workspace root，扩大隐私面，也容易让replay Action被误当成再次发送权限；不建议 |
+
+第二项是Evidence摘要由谁计算：
+
+| 方案 | Evidence输入 | 评价 |
+| --- | --- | --- |
+| 1（推荐） | Agent提交最多128 KiB的被动JSON attempt/readback evidence，Wakeflow计算Canonical SHA-256后立即丢弃原值 | 摘要一定对应本次提交的精确JSON；延续现有内部合同，不把raw值写入Event或结果 |
+| 2 | Agent只提交两个digest | 请求更小，但Wakeflow无法证明digest对应Agent刚观察到的对象，错误摘要也会永久进入Event |
+| 3 | 持久化raw evidence | 扩大append-only隐私与兼容负担，违反当前最小Event设计；不建议 |
+
+推荐选择`A + 1`。确认后按以下顺序逐文件实施：
+
+```text
+1. 为eventAuthority故障路径补测试并修正内部Service
+2. 将内部Outcome selector收敛到Claim ID + Claim digest，由stored Event派生其余字段
+3. 新增self-contained request/result Schema与轻量wire测试
+4. 新增Public Contract + fixed-host Coordinator及真实Event/replay/隐私测试
+5. 注入Codex/Claude composition、注册第七工具、验证官方stdio Client与候选闭包
+6. TypeScript / architecture / Schema / formatting / diff门禁并更新台账
+```
+
+本预审没有修改Outcome生产代码、Schema、MCP注册或宿主行为。
+
+### 213.6 用户决定与内部Outcome收敛
+
+用户确认采用`A + 1`。内部`TargetHostEffectOutcomeRequest`现只接受：
+
+```text
+demandId + actionId + claimDigest
++ attempt(status + raw bounded JSON evidence)
++ readback(status + optional raw bounded JSON evidence)
++ observedAt
+```
+
+已删除调用者重复声明的`workType/targetTaskId/targetDeliveryId/hostObservationAuthorityDigest/testAttemptId/
+testDispatchPacketDigest`。所有Implementation/Test、Task/Delivery、Host observation和Test packet lineage都从按`actionId`定位的stored Claim Event派生，
+并由`claimDigest`证明调用者持有精确Claim回执。全部真实内部consumer及fixture已直接切换新形状，没有alias、兼容parser或双分支。
+
+固定Host也不进入请求。`TargetHostEffectOutcomeService`由composition注入当前`codex | claude-code`，Outcome Authority在Event append前复验
+stored Claim route；另一宿主不能替当前宿主记录观察。内部成功结果携带已审计Claim供公共Coordinator投影，但公共结果不返回完整Claim。
+
+### 213.7 Event authority错误的完整修正
+
+原Service在WindowWorkClaim Store错误中固定报告`eventAuthority=unchanged`。现改为从Aggregate阶段开始显式保持：
+
+```text
+host-effect-claimed / test-host-effect-claimed -> unchanged
+accepted / indeterminate / rejected settled    -> current
+append无法确认                                  -> execute owner报告unknown
+```
+
+该权威状态同时附着在Outcome Authority错误上，因此以下两类失败都不会再伪装成未写入：
+
+- Observed Event已提交后，Claim结算目录不可安全读取；
+- 已结算replay携带错误Claim digest或来自另一Host。
+
+新增真实POSIX目录模式故障测试先提交rejected Observation Event，再使Claim根不满足`0700`准入；结果精确为
+`claimAuthority=unknown + eventAuthority=current`。恢复目录模式后，相同请求只幂等确认Event并完成Claim释放。accepted settled replay的错误
+Claim digest也明确保持`eventAuthority=current`。
+
+### 213.8 公共wire、Contract与fixed-host Coordinator
+
+新增self-contained：
+
+- `wakeflow-target-host-effect-outcome-request.schema.json`；
+- `wakeflow-target-host-effect-outcome-result.schema.json`；
+- 对应两份生成类型/runtime Schema。
+
+Request Schema只有已确认的最小selector和双轴Evidence。Public Contract在打开workspace前执行passive JSON、Schema、384 KiB总请求容量，以及
+attempt/readback各128 KiB Canonical容量准入。raw evidence只在调用期参与Canonical SHA-256，随后不进入Event、结果或错误。
+
+Result Schema只公开：
+
+```text
+recorded | already-recorded
+committed | idempotent
+effectDisposition / claimHandling / claimAuthority / eventAuthority
+stored-Claim-derived target summary
+actionId + claimDigest
+digest-only observation summary
+Observed Event / Commit receipts + resulting state digest
+```
+
+Schema关闭以下关系：
+
+- recorded只能配committed；already-recorded只能配idempotent；
+- accepted只能来自accepted attempt，或`indeterminate + confirmed readback`；
+- indeterminate只能配`pending | unavailable`并保留Claim；
+- rejected-before-effect只能配unavailable readback、release-authorized和released Claim；
+- raw evidence、root、prompt、handle及任意额外字段都不能进入结果。
+
+Public Coordinator逐项复验Claim/Observation Action、Host、Test tuple、Observed Event/Commit ID、单Event范围、command digest、event bytes、commit digest和
+post-event state digest。Codex与Claude Code各自只有一个`{hostId}`冻结wrapper；共享Coordinator不导入具体宿主Profile，也不解析raw handle。
+
+### 213.9 第七个官方MCP工具与候选制品
+
+Public MCP现注册：
+
+```text
+wakeflow_record_target_host_effect_outcome
+```
+
+它与Claim保持明确的Agent effect seam：
+
+```text
+Claim首次返回一次性Action
+-> Agent最多执行一次宿主调用并做最多一次有界readback
+-> Outcome只记录已经观察到的事实
+```
+
+工具annotations按MCP标准保守声明为：
+
+```text
+readOnlyHint: false
+destructiveHint: true
+idempotentHint: true
+openWorldHint: false
+```
+
+`destructive:true`来自rejected Outcome可能精确删除当前Claim文件；事件本身仍是append-only。MCP instructions明确
+`accepted/indeterminate/pending/unavailable`都不授权再次发送，只有proved rejected-before-effect可以释放Claim，后续仍需显式owner。
+
+Codex与Claude Code composition root、entrypoint编译清单、候选可达闭包和官方stdio工具集合已从六个同步变为七个。候选manifest继续
+`releaseEligible:false`；没有修改旧JS/core、插件制品或安装cache。
+
+### 213.10 验证与下一核实点
+
+```text
+Internal Outcome authority/selector:
+  9 pass / 0 fail / 0 skip
+Public Outcome Coordinator + wire:
+  5 pass / 0 fail / 0 skip
+MCP server + dual-host candidate stdio + self-contained wire:
+  28 pass / 0 fail / 0 skip
+Adjacent Rearm / Result / Delivery / Route / Review consumers:
+  40 pass / 0 fail / 0 skip
+TypeScript: pass
+Prettier: pass
+Architecture: pass / parser=swc / 637 modules / 4548 dependencies / 0 violations
+Schema: pass / 79 schemas / 207 external refs
+Schema digest: sha256:3a7bb52444336a02d8fb24e80a7e9d094c441113e7a3d5d23ed83e0dbae49cb2
+git diff --check: pass
+```
+
+真实MCP纵切只模拟Agent已观察到的宿主结果，没有调用Codex/Claude发送能力。未运行旧JS全量`npm test`、插件validator/smoke、发布、缓存刷新或
+提交。
+
+下一单元不直接选择Rearm或TargetResult实现。应先读取Outcome后的真实Controller Route矩阵，比较：
+
+- accepted/indeterminate的Implementation TargetResult Import与Test Result Planning；
+- rejected-before-effect的Implementation Rearm与Test replacement Delivery；
+
+再从用户主路径、公共能力闭合度和共享基础owner角度决定下一公共纵切，避免按旧JS工具顺序继续。
+
+## 214. Post-Outcome Route矩阵与下一公共纵切预审
+
+### 214.1 Route的真实四分支
+
+`DemandControllerRoute`与`DemandPostAcceptanceRoute`共同证明，Outcome后的业务路径不是“Rearm或Test Result二选一”，而是四个严格phase映射：
+
+| Outcome后phase | 公共Route frontier | 真实owner | Claim状态 | 路径性质 |
+| --- | --- | --- | --- | --- |
+| `host-effect-accepted | host-effect-indeterminate` | `implementation-target-result-import` | `TargetResultImportService` | current | Implementation正常主路径 |
+| `host-effect-rejected` | `implementation-host-effect-rearm` | `TargetHostEffectRearmService` | released | Implementation投递前拒绝恢复 |
+| `test-host-effect-accepted | test-host-effect-indeterminate` | `test-target-result-import` | 同一个`TargetResultImportService` | current | Test正常主路径 |
+| `test-host-effect-rejected` | `test-delivery-replacement-planning` | `TestDeliveryPreparationService` | released | 同一logical Test attempt的替代Delivery |
+
+因此“Test Result Planning”不是另一套结果服务。Implementation与Test正常路径已经共享同一个Result Import owner、同一个
+`result.target-result-recorded` Event family、同一Claim结算与Review历史；差异只存在于两份Agent Report和authority-enriched TargetResult的判别变体。
+
+### 214.2 三个候选owner的当前成熟度
+
+**TargetResult Import**
+
+- 同时服务Implementation/Test accepted与indeterminate，是S3正常出口；
+- 从TaskPackage、Intent、Claim、Observed Event，以及Test Card/packet恢复完整authority；
+- 由Agent业务Report创建严格TargetResult，append Result Event后才释放Claim；
+- Result的`completed | blocked | needs-review`仍是Agent陈述，不产生Controller acceptance；
+- Result/Event/Commit身份均从Action/Claim身份稳定派生，精确重试幂等。
+
+公开前仍需先修正：当前Request重复要求workType、Task/Delivery和Test tuple；settled replay的错误Report、Claim Store读取失败等路径仍可能把已存在
+Result Event误报为`unchanged`；Service也尚未注入固定Host。其生产者边界必须明确为“Agent提交Report，Wakeflow生成完整TargetResult”，不能让
+Controller重新填写authority-enriched Result。
+
+**Implementation Rearm**
+
+- 内部Service已完整实现rejected-only、旧Claim absent、当前Config/Binding、唯一Rearm Event与幂等重放；
+- 只恢复同一Implementation Delivery到`delivery-prepared`，下一次必须取得全新Claim；
+- 公共化表面相对较小，但当前Input同样重复Task/Delivery字段；
+- 它只解决较少见的Implementation拒绝路径，不会释放正常accepted/indeterminate路径仍持有的Claim，也不能服务Test拒绝。
+
+**Test Delivery Preparation**
+
+- 同一Service拥有`initial | rerun | replacement-authorization`三种preview/apply模式；
+- replacement只增加同一logical attempt的Delivery授权，rerun则创建新logical attempt并绑定Result/Review Decision；
+- 上游TestCard Planning与Test Task Planning尚未公开，直接先公开该Service会形成无法从公共入口正常抵达的中段大工具；
+- 当前生产模块约1500行、测试约730行，必须在完整Test公共路线中单独设计，不能为了补一个rejected分支提前暴露全部模式。
+
+### 214.3 旧JS、官方实践与Tencent参考
+
+旧JS在Outcome后正常调用独立`wakeflow_record_target_result`，而Rearm只是`wakeflow_prepare_delivery`中的一个异常operation。这个真实使用顺序可作为
+场景证据；旧实现让调用者提交完整transport-bound TargetResult和大量echo字段的方式不应保留。新TS已有更标准的分层：Agent只陈述Report，
+Wakeflow从Event authority生成完整TargetResult。
+
+[Azure Event Sourcing](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)要求command handler先重放Event Stream、执行业务规则，再生成
+表达业务事实的Event；这支持“Report是外部Command输入，TargetResult/Event由owner生成”，而不是让调用者提交最终Event记录。
+[SLSA Provenance](https://slsa.dev/spec/v1.0/provenance)区分external parameters、system/internal parameters与resolved dependencies，并建议尽量把
+boilerplate及可从输入Artifact推导的值设为隐式；对应到Wakeflow，Agent Report是external parameter，Task/Delivery/Claim/Test lineage是系统恢复的
+internal authority，Evidence ref/digest是resolved来源。
+
+[AWS幂等API指南](https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/)要求同一request identity配不同参数时明确拒绝mismatch，并让
+重放返回语义等价结果。TargetResult ID由Action ID派生，Report内容digest承担同参数证明；不同Report不能借同一Action覆盖历史。
+[MCP 2025-11-25 Schema](https://modelcontextprotocol.io/specification/2025-11-25/schema)支持严格input/output Schema与structuredContent；Result Import是一次
+立即完成的本地Event/Claim结算，不应使用task execution。
+
+TencentDB-Agent-Memory没有TargetResult或Event-sourced Controller路线。可借鉴的是它把客户端安全错误与完整内部日志分离，并只对天然幂等的clear操作
+自动重试；这支持Wakeflow继续发布稳定脱敏错误和精确幂等重放。它不能决定Wakeflow Result、Rearm或Test replacement的owner顺序。
+
+### 214.4 下一纵切的三种顺序方案
+
+| 方案 | 下一项 | 收益 | 代价/结论 |
+| --- | --- | --- | --- |
+| A（推荐） | 先公开共享TargetResult Import | 同时闭合Implementation/Test正常路径；Result Event后释放长期持有的Claim；Route进入Controller Review；延续S3主流程 | Report Schema较丰富，必须先做selector、authority与生产者合同收敛，但这是必要复杂度 |
+| B | 先公开Implementation Rearm | 文件和wire较小；可恢复明确拒绝的Implementation投递 | 只覆盖异常分支；正常路径仍停在Result Import；Test rejected仍不闭合 |
+| C | 先公开Test Delivery Preparation | 可承接Test rejected replacement，并为未来initial/rerun铺路 | 上游TestCard/Task公共能力缺失；一次引入三种模式，过早扩大工具与测试表面，不建议现在做 |
+
+三个方案代表下一步顺序，不是最终能力互斥。预计合理顺序为：
+
+```text
+TargetResult Import
+→ Implementation Rearm
+→ 按完整Test公共路线建设TestCard / Test Task / Test Delivery
+```
+
+### 214.5 推荐A的公共合同草案
+
+工具名推荐：
+
+```text
+wakeflow_import_target_result
+```
+
+“import”比旧`record_target_result`更准确：调用者提交的是目标Agent Report，owner返回并持久化authority-enriched TargetResult。
+
+推荐Request：
+
+```text
+root
+demandId
+actionId
+observationDigest
+report:
+  workType: implementation | test   # 只作Report wire判别，不作为业务authority
+  content: ImplementationReportContent | TestReportContent
+```
+
+stored Claim/Observation决定真实workType、Task、Delivery、repository/window、Test attempt/card/packet和Event来源；`report.workType`不匹配时拒绝。Request不再
+接受这些echo字段，也不接受完整TargetResult、reportedAt、Result/Event/Commit ID或state digest。
+
+推荐Result返回：
+
+- `recorded | already-recorded`与`committed | idempotent`；
+- `claimAuthority=released / eventAuthority=current`；
+- 完整严格TargetResult；
+- Result Event/Commit回执与post-event state digest。
+
+公共化前的实施顺序建议：
+
+```text
+1. 给settled Result replay与Claim结算故障补双authority测试并修正Service
+2. 把内部selector收敛到Action + Observation + discriminated Agent Report
+3. 明确Report是Target作者输入；Wakeflow补齐reportedAt、authority与Result identity
+4. 建立self-contained request/result Schema与隐私/容量合同
+5. fixed-host Coordinator复验完整Result/Event/Commit并在Result Event后释放Claim
+6. 注册第八工具并验证Implementation/Test真实导入、重放、Route→Review和双宿主候选
+```
+
+建议annotations：`readOnly:false / destructive:true / idempotent:true / openWorld:false`。`destructive:true`来自Result Event提交后精确释放Claim；
+TargetResult/Event本身仍是append-only。Report只允许portable Evidence refs/digests和有界陈述，公共边界还应拒绝workspace absolute root、raw handle、
+prompt、stack或秘密原文进入持久Result。
+
+本预审没有修改Result、Rearm、Test Delivery生产代码、Schema、MCP或测试。等待用户确认是否采用`A`以及推荐的Report-only公共合同后，再开始第一项
+内部authority修正。
+
+### 214.6 用户决定与Report-only内部请求
+
+用户确认采用方案A，并确认公开工具名为：
+
+```text
+wakeflow_import_target_result
+```
+
+内部`TargetResultImportRequest`已删除调用者重复提交的`workType`、Target Task/Delivery和Test attempt/packet字段，只保留：
+
+```text
+demandId
+actionId
+observationDigest
+report:
+  workType: implementation | test
+  content: ImplementationReportContent | TestReportContent
+```
+
+`report.workType`只承担外部Report语法判别。真实Implementation/Test类型、TaskPackage、Delivery Intent、Host、repository/window、Test
+Card/attempt/packet以及Result/Event身份全部由stored Claim、Observation和Event Stream恢复并重新闭合。所有内部真实consumer与fixture已直接切换新请求，
+没有旧字段alias、兼容parser或双写分支。
+
+### 214.7 settled replay、Claim结算与领域错误修正
+
+Result Import现在同时读取Claim Event、Observed Event和可能已存在的Result Event，并在任何后续失败中保持两条独立权威轴：
+
+```text
+Result Event: unchanged | current | unknown
+Claim: current | released | unknown
+```
+
+已闭合以下恢复事实：
+
+- Result Event已存在时，不同Report、不同Observation digest或错误Host都报告`eventAuthority=current`，不会伪装为未写入；
+- Event已提交而Claim仍存在时，精确重试只执行Claim释放，不追加第二个Result Event；
+- Event已提交后Claim Store不可安全读取时，错误仍保留Event current；恢复文件权限后可继续前向结算；
+- 固定Host在Event append前复验stored Claim route，Claude Code入口不能替Codex Claim导入Result，反之亦然；
+- Claim只有在Result Event成功提交后才精确释放；无法证明属于本次Action的Claim不会被删除。
+
+真实MCP纵切还发现一个此前聚焦fixture没有暴露的错误门面缺口：`implementation-target-result`和`test-target-result`在最后调用共享
+`parseTargetResult()`时，时间关系等共享解析失败会泄漏原始`TargetResultError`，最终被MCP降级为`wakeflow-unexpected`。两类creator现都把该内部
+解析失败封装成稳定的领域`relation`错误，并各补一项“Report时间必须严格晚于Host Observation”的轻量测试。MCP公开错误仍只返回稳定code/reason和
+Event/Claim authority，不回显stack、root或Report原文。
+
+### 214.8 self-contained wire与fixed-host Public Coordinator
+
+新增两份self-contained公共Schema及其生成类型/runtime Schema：
+
+- `wakeflow-target-result-import-request.schema.json`；
+- `wakeflow-target-result-import-result.schema.json`。
+
+Request只有workspace root、Demand/Action/Observation selector和判别式Agent Report。它不接受完整TargetResult、`reportedAt`、Task/Delivery/Test
+lineage、Result/Event/Commit身份、Controller Decision或acceptance。Public Contract在打开workspace前完成passive JSON、2 MiB Canonical容量、严格
+Schema和workspace-root隐私准入；Evidence只能使用portable ref与SHA-256 digest。
+
+固定Host Coordinator调用共享Service后逐项复验：
+
+- Claim、Observation、TargetResult和当前Host关系；
+- Result ID、Result Event ID和Commit ID的确定性派生；
+- 单Event commit范围、command digest、Event内Result字节、commit digest与post-event state digest；
+- 请求Report content digest与最终TargetResult Report一致；
+- 成功结果恒为`eventAuthority=current + claimAuthority=released`。
+
+Public Result返回完整严格TargetResult以及Event/Commit receipt，但不返回内部Claim、完整Observation、workspace root、raw host handle、prompt或stack。结果
+是Controller review input，不执行真实性判断、Test verdict、Controller acceptance或Demand completion。
+
+### 214.9 第八个官方MCP工具与真实纵切
+
+Public MCP、Codex/Claude Code固定wrapper、entrypoint编译清单和candidate artifact闭包现共同发布第八项工具：
+
+```text
+wakeflow_import_target_result
+```
+
+annotations固定为：
+
+```text
+readOnlyHint: false
+destructiveHint: true
+idempotentHint: true
+openWorldHint: false
+```
+
+`destructive:true`只来自Event提交后的精确Claim释放；工具不调用宿主、不访问开放网络，也不发送消息。MCP instructions明确要求使用exact
+target-authored Report，禁止Agent合成Report或提交caller-authored TargetResult，并明确导入成功仍不等于Controller acceptance。
+
+真实Codex MCP fixture现完整验证：
+
+```text
+Route: implementation-host-effect-claim
+→ Claim首次签发一次性Action
+→ Agent已观察Outcome（测试只提交事实，不执行宿主发送）
+→ Route: implementation-target-result-import
+→ Report-only TargetResult Import
+→ Result Event committed
+→ exact Claim released
+→ Route: implementation-result-review
+→ 相同请求幂等返回同一Result/Event
+```
+
+独立真实Test纵切也证明同一公共工具从Test Report恢复Card、attempt和packet lineage，并把Route推进到`test-result-review`，没有复制第二套Test
+Result Import owner。
+
+### 214.10 验证与本单元结论
+
+```text
+Result domain / Service / Public Schema / Coordinator / MCP / candidate:
+  49 pass / 0 fail / 0 skip
+Adjacent Delivery Claim / Outcome / Review consumers:
+  55 pass / 0 fail / 0 skip
+TypeScript: pass
+Prettier: pass
+Architecture: pass / parser=swc / 645 modules / 4607 dependencies / 0 violations
+Schema: pass / 81 schemas / 207 external refs
+Schema digest: sha256:6feea8e13b38d8742da67adcf467f73b128836c67055b6986dbbf64fbd119222
+git diff --check: pass
+```
+
+本单元结论为`implemented / verified`：Implementation与Test accepted/indeterminate的共享S3正常出口已从内部owner闭合到公开MCP，且没有新增
+manager、registry、兼容层、Host能力调用或第二状态机。旧JS/core、正式插件制品、安装cache和外部Atlas均未修改；未运行旧JS全量`npm test`、插件
+validator/smoke、发布或提交。
+
+下一项仍不应按文件名机械进入Rearm。先对当前Route中`implementation-host-effect-rearm`异常分支做公共化预审，并同时核对它与Test
+replacement Delivery的共享/非共享边界；若公共Rearm只需最小selector和固定Host恢复同一Delivery，可作为下一小纵切，否则应先补足其authority设计再请求
+用户选择。
+
+## 215. Implementation Host Effect Rearm公共化预审
+
+### 215.1 当前Implementation Rearm的真实职责
+
+当前内部链已经严格区分：
+
+```text
+accepted / indeterminate
+  → 不Rearm，进入TargetResult Import
+
+rejected-before-effect + unavailable
+  → Outcome Event先提交
+  → exact旧Claim释放
+  → Route: implementation-host-effect-rearm
+  → 显式Rearm Event
+  → 同一Target Delivery恢复为delivery-prepared
+  → 重新取得fresh Claim后才可能签发下一份Agent Host Action
+```
+
+`TargetHostEffectRearmService`不执行Codex/Claude能力、不发送消息、不读取raw handle，也不创建或复用Claim。它在首次Event前复验：
+
+- Demand仍active且Aggregate尾部是精确`host-effect-rejected`；
+- Claim Event、Observation Event、Action和Observation digest形成同一拒绝尾部；
+- Observation严格为`rejected-before-effect + unavailable`；
+- 旧Claim文件已经物理absent；
+- 原Target Delivery Intent仍属于当前Config和program；
+- 当前私有Binding仍与原Intent的Host/Window/Binding一致；
+- Config在Event append前没有漂移；
+- Event/Commit容量、stream revision与确定性身份均可提交。
+
+Rearm Event只恢复同一不可变Delivery/Intent，不改变TaskPackage或重新生成prompt。下一次Claim产生新的Claim ID和一次性Action，因此“允许重新取得效果占用”与
+“实际宿主发送”仍是两个owner。
+
+### 215.2 为什么不与Test replacement合并
+
+Implementation和Test共享的只有前置证明：上一份效果明确没有发生，旧Claim已经释放。其后业务事实不同：
+
+| 分支 | Implementation Rearm | Test replacement Delivery |
+| --- | --- | --- |
+| logical task/attempt | 同一Target Task | 同一Test logical attempt |
+| Target Delivery | 保留同一ID | 分配新ID |
+| Intent | 复用原不可变Intent | 创建带replacement lineage的新Intent |
+| packet | 不存在Test packet | 从新Intent Event重建新TestDispatchPacket |
+| Event family | `delivery.target-host-effect-rearmed` | `testing.test-delivery-prepared` |
+| 历史 | 新Claim/Observation Event保留发送代际 | attempt内追加有界Delivery authorization |
+
+Test replacement还必须维护authorization ordinal、previous Intent/packet、Card、attempt容量和新packet来源；把它塞入Implementation Rearm会让一个小owner
+同时拥有两种身份分配和两种Event语义。反向把Implementation改成Test式replacement也会为没有Test attempt/packet需求的主路径制造新Delivery和新Intent。
+
+因此当前分层应保留。未来Test公共链应在完整TestCard → Test Task → Test Delivery纵切中公开
+`TestDeliveryPreparationService`的initial/rerun/replacement模式，不通过一个所谓“统一Retry/Rearm manager”提前暴露中段能力。
+
+### 215.3 旧JS与Tencent参考
+
+旧JS把`target-rearm`作为`wakeflow_prepare_delivery`的一种operation，并在同一大编排文件内同时处理lease generation、Envelope、Test
+replacement authorization和宿主前置状态。可保留的功能事实是：只有精确`rejected-before-send`尾部可以重新授权，下一代授权必须有新占用身份；大工具、共享状态文件、
+lease实现和Implementation/Test同文件分支不是新TS标准。
+
+TencentDB-Agent-Memory的`pending-writes.ts`只在下游hash去重足以吸收重复、且“宁可重复不要丢”符合产品代价时自动重试；`pipeline-worker.ts`在重新入队时换新
+task ID并保留retry count，对锁丢失则依赖明确幂等的下游写；Gateway错误合同把`retryable`与客户端安全错误分离。这些实践支持Wakeflow当前决定：
+
+- 底层Event append的exact retry可以幂等；
+- Agent宿主效果没有通用幂等保证，不能由Wakeflow自动重发；
+- “可重试”必须由已记录事实和显式owner决定，不能只由网络错误、超时或Agent猜测决定。
+
+Tencent项目没有Target Delivery、WindowWorkClaim或Test attempt lineage，不能决定Implementation与Test是否共用Rearm owner。
+
+### 215.4 官方标准校准
+
+[RFC 9110 §9.2.2](https://www.rfc-editor.org/rfc/rfc9110.html#name-idempotent-methods)要求：非幂等请求不应自动重试，除非客户端能证明请求语义实际幂等，或能
+检测原请求从未应用。Wakeflow的`rejected-before-effect`正是后一种强证明；accepted/indeterminate不具备该证明，因此继续禁止Rearm。
+
+[AWS Builders' Library](https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/)建议用唯一请求身份表达调用者意图、相同身份重放返回语义等价
+结果，并在同一身份携带不同参数时拒绝mismatch。Rearm的Action ID是稳定操作身份；Observation digest证明调用者选择的是同一拒绝事实；Task/Delivery则应由stored
+authority派生，不需要由调用者重复声明。
+
+[Google Cloud Retry Strategy](https://docs.cloud.google.com/storage/docs/retry-strategy)把错误是否可重试与操作是否幂等作为两个同时成立的条件，并默认不自动重试
+非幂等操作。这支持Rearm工具自身exact replay幂等，但不支持工具内部自动执行下一次Host Action。
+
+[MCP 2025-11-25 Schema](https://modelcontextprotocol.io/specification/2025-11-25/schema)规定`idempotentHint=true`只表示相同参数重复调用没有额外环境效果；
+`destructiveHint=false`表示写操作只做additive更新。Rearm只追加Event，不删除Claim、不覆盖用户资源，因此推荐：
+
+```text
+readOnlyHint: false
+destructiveHint: false
+idempotentHint: true
+openWorldHint: false
+```
+
+它是短时本地Event mutation，不使用MCP task execution。
+
+### 215.5 公共化前必须修正的三个内部缺口
+
+第一，当前Request仍要求调用者回传`targetTaskId + targetDeliveryId`。两者都能从Action对应的Claim/Observation和Aggregate恢复，是重复echo。建议内部与公共请求统一
+收敛为：
+
+```text
+demandId
+actionId
+observationDigest
+```
+
+Action ID同时充当精确Rearm幂等身份；Observation digest用于拒绝“同一Action、不同拒绝事实”的参数mismatch。不能只用`targetTaskId`，否则同一Target后续出现新的
+rejected generation时，相同请求参数可能产生第二次效果，不再满足精确幂等。
+
+第二，当前Service只在首次Event路径通过当前Binding间接验证Host。`existingRearm !== null`的精确重放分支跳过Binding，因此用另一Host Profile调用已提交Rearm会返回
+`already-rearmed`。公共化前必须从stored Claim route显式比较固定Host，并在首次与settled replay两条路径都拒绝cross-host调用；Service仍保留完整Host Profile依赖，用于
+首次Event前复验当前私有Binding。
+
+第三，当前稳定错误没有`eventAuthority`。若Rearm Event已经提交后发生错误Request、Host mismatch或Repository/Config问题，公共入口无法区分`unchanged`、`current`和
+`unknown`。应与Outcome/Result采用同一原则：同时读取Claim、Observation和可能存在的Rearm Event；一旦定位Event，后续错误保持`current`；append结果无法确认时报告
+`unknown`；普通前置拒绝保持`unchanged`。
+
+这三个修正属于现有owner的authority完整性，不需要新Foundation、Manager、Retry Policy类或通用恢复框架。
+
+### 215.6 推荐公共合同
+
+推荐工具名：
+
+```text
+wakeflow_rearm_target_host_effect
+```
+
+名称保留“Host Effect”是为了说明被重新开放的是已证明未发生的效果代际，而不是重新规划Task或创建新Delivery。工具描述必须明确：它不执行Host Effect、不返回一次性
+Action，也不自动取得Claim。
+
+推荐Request：
+
+```text
+root
+demandId
+actionId
+observationDigest
+```
+
+推荐Result：
+
+- `rearmed | already-rearmed`与`committed | idempotent`；
+- `claimAuthority=released / eventAuthority=current`，其中Claim明确指`actionId`选择的旧拒绝Claim；
+- 完整不可变Rearm事实或其等价严格投影；
+- Rearm Event/Commit receipt与post-event state digest。
+
+Public Coordinator固定Codex或Claude Code的Resource/Identity Profile，复验Request、Claim、Observation、Host、Rearm、单Event Commit、command/commit digest和state digest；输出
+拒绝workspace root、raw handle、prompt、stack和任意额外字段。成功后调用方必须重新读取Route；只有
+`implementation-host-effect-claim` owner在fresh Agent窗口观察下才能创建下一份Claim和一次性Action。
+
+Rearm是单一小Event、无外部输入计划、无宿主效果且身份从旧Claim稳定派生，因此不增加preview/apply二阶段。复杂Test replacement仍保留其既有preview/apply合同。
+
+### 215.7 建议的轻量验证边界
+
+内部Service只补当前缺失的风险证据：
+
+1. 最小selector由stored Event派生Task/Delivery；错误echo字段不再存在；
+2. wrong Host在首次与已提交replay都拒绝，settled错误保留`eventAuthority=current`；
+3. 已提交重放不依赖后来Config/Binding，也不会因随后新Claim而追加Event；
+4. accepted/indeterminate、旧Claim未释放和Event前Binding漂移继续拒绝。
+
+公共层只保留：一份Request/Result wire测试、一份Coordinator真实/replay/隐私/Host测试，以及一条MCP真实纵切：
+
+```text
+rejected Outcome + released Claim
+→ Route: implementation-host-effect-rearm
+→ public Rearm
+→ Route: implementation-host-effect-claim
+→ fresh Observation + new Claim ID + one-shot Action
+```
+
+不复制内部所有关系测试到MCP层，不为Test replacement新增公共测试，也不运行旧JS套件。
+
+当前未修改生产代码或Schema。现有Rearm、Test replacement、Outcome与Controller Route聚焦基线为：
+
+```text
+14 pass / 0 fail / 0 skip
+```
+
+### 215.8 待用户选择的下一步
+
+| 方案 | 下一步 | 评价 |
+| --- | --- | --- |
+| A（推荐） | 按215.5–215.7先修内部Rearm，再完整公开Implementation-only `wakeflow_rearm_target_host_effect` | 闭合当前已公开Implementation rejected分支；边界小、无自动发送，也不提前暴露Test中段 |
+| B | 只完成内部selector/Host/eventAuthority修正，暂不注册第九个MCP工具 | 可以继续巩固owner，但公共Route仍指向不可调用能力，纵切不完整 |
+| C | 先抽象统一Implementation Rearm与Test replacement，再公开一个通用恢复工具 | 混合“同Delivery重开”和“新Delivery授权”两种Event/身份语义，增加无必要抽象；不建议 |
+
+三项是互斥的本轮范围选择，不是都要做。当前推荐A；等待用户确认后再修改代码。
+
+### 215.9 用户决定与内部Rearm authority修正
+
+用户确认采用方案A。内部`TargetHostEffectRearmRequest`现只接受：
+
+```text
+demandId + actionId + observationDigest
+```
+
+已删除`targetTaskId + targetDeliveryId`echo字段。Service从Claim Event和Observed Event恢复Implementation Task/Delivery/Intent、Host/Window/Binding及完整拒绝
+tuple，并重新闭合Claim digest、Claim Event/Commit、expected revision/state digest、Host observation authority和issued/observed事实。Test
+Claim/Observation带workType fence，不能进入Implementation Rearm。
+
+Service现在同时定位可能存在的Rearm Event，并让稳定错误携带：
+
+```text
+eventAuthority: unchanged | current | unknown
+```
+
+首次Event前的普通关系拒绝保持`unchanged`；Rearm Event已存在后，即使请求Observation不匹配或由错误Host重放，也保持`current`；Event Store无法确认append结果时使用
+`unknown`。固定Host检查从间接Binding准入提升为stored Claim route的显式不变量，因此首次与settled replay都会拒绝cross-host调用。
+
+首次Rearm仍要求旧Claim物理absent、当前Config/Binding有效；精确重放只依赖不可变Claim/Observation/Rearm Event和原Commit，不读取后来Binding，也不会因为后续已经取得新Claim而
+追加第二个Rearm。内部成功结果增加Claim与Observation只供Public Coordinator复验，公共投影不会返回这两份完整内部记录。
+
+### 215.10 self-contained wire与Public Coordinator
+
+新增：
+
+- `wakeflow-target-host-effect-rearm-request.schema.json`；
+- `wakeflow-target-host-effect-rearm-result.schema.json`；
+- 对应生成类型/runtime Schema；
+- `target-host-effect-rearm-public-contract.ts`；
+- `target-host-effect-rearm-public-coordinator.ts`。
+
+Request只公开workspace root和三项最小selector，拒绝Task/Delivery echo、自动重试开关或额外字段。Public Contract在打开workspace前完成passive JSON、64 KiB Canonical容量与
+严格Schema准入。
+
+Result关闭：
+
+```text
+rearmed        <-> committed
+already-rearmed <-> idempotent
+claimAuthority = released
+eventAuthority = current
+```
+
+并返回完整不可变Rearm事实、Event/Commit receipt和post-event state digest，不包含Action、root、handle、prompt或Test replacement字段。Coordinator固定当前Host
+Resource/Identity Profile，并复验Claim/Observation、Host、Rearm、单Event Commit、确定性Event/Commit ID、command digest、Event bytes与commit digest。
+
+真实测试在这里发现一项非Service错误：首次Coordinator实现把返回时的当前Aggregate phase强制当作Rearm Event的resulting state。Rearm后若已经取得fresh Claim，精确重放时
+Aggregate自然前进到`host-effect-claimed`，旧Event仍完全有效。现改为：
+
+- 首次`committed`复验返回Aggregate确实是`delivery-prepared`且state digest等于Event resulting digest；
+- `idempotent`重放复验原Event/Commit及Rearm bytes，不要求后来Aggregate倒退到历史phase。
+
+这保持Event authority与当前Projection的时间层级分离，没有放宽首次提交验证。
+
+### 215.11 第九个MCP工具与双宿主纵切
+
+Codex与Claude Code分别新增固定Profile wrapper，Public MCP和candidate artifact现共同发布：
+
+```text
+wakeflow_rearm_target_host_effect
+```
+
+工具annotations为：
+
+```text
+readOnlyHint: false
+destructiveHint: false
+idempotentHint: true
+openWorldHint: false
+```
+
+`destructive:false`表示它只追加Rearm Event，不删除Claim或覆盖资源。MCP instructions明确：只有Implementation
+`rejected-before-effect + old Claim released`可以调用；成功不返回Action，必须重新读取Route并取得fresh target-window observation后再调用Claim owner。Test
+replacement仍由未来完整Test Delivery公共纵切拥有。
+
+真实Codex MCP测试闭合：
+
+```text
+Claim首次签发one-shot Action
+→ rejected-before-effect Outcome Event
+→ exact old Claim released
+→ Route: implementation-host-effect-rearm
+→ public Rearm（zero Host effect / zero Action）
+→ Route: implementation-host-effect-claim
+→ fresh observation + new Claim ID + new one-shot Action
+→ original Rearm request只返回already-rearmed和同一Event
+```
+
+测试只模拟Agent已经观察到的宿主事实，没有调用Codex/Claude消息发送能力。MCP错误信封保留Rearm Event authority并继续删除root和stack。
+
+### 215.12 验证与本单元结论
+
+```text
+Rearm domain / Service / Public wire / Coordinator / MCP / candidate:
+  42 pass / 0 fail / 0 skip
+Adjacent Delivery / Controller Route / Post-Acceptance / Test replacement:
+  75 pass / 0 fail / 0 skip
+TypeScript: pass
+Prettier: pass
+Architecture: pass / parser=swc / 653 modules / 4663 dependencies / 0 violations
+Schema: pass / 83 schemas / 207 external refs
+Schema digest: sha256:5e5e409ebbcdc513739bd222bbd492393d35280b4930f46472a2cf0ae8a76d7a
+git diff --check: pass
+```
+
+本单元结论为`implemented / verified`。Implementation accepted/indeterminate继续进入TargetResult Import，proved rejected-before-effect则可经过显式Rearm回到fresh
+Claim；两条公共路径都不授权Wakeflow执行宿主能力。Implementation与Test恢复模型保持分立，没有新增Manager、Retry Policy、兼容parser、自动重发或第二状态机。
+
+旧JS/core、正式插件制品、安装cache和外部Atlas均未修改；未运行旧JS全量`npm test`、插件validator/smoke、发布或提交。
+
+当前Implementation公共主链的下一个真实停点是`implementation-result-review`。下一单元应先预审Controller Implementation Review公共合同，重点决定：如何让Controller提交
+独立验证事实而不是复述Agent Result、accept/rework/redesign/blocked是否需要preview、Decision Event的幂等身份与公共Evidence容量，以及如何明确“只有Controller
+Decision才是acceptance authority”。确认方案后再公开，不把内部Review Service直接机械注册为第十个工具。
+
+## 216. Controller Implementation Review公共合同预审
+
+### 216.1 直接注册Decision Service并不安全闭环
+
+当前内部`ControllerImplementationReviewDecisionService`只接受已经完成独立审查后的精确命令：
+
+```text
+demandId
+targetTaskId
+targetResultId
+snapshotDigest
+reviewUnitDigest
+decision + assessment + independentChecks + rationale
++ blockingReasons + residualRisks
+```
+
+Service重建当前`DemandResultReviewSnapshot`，再把完整TaskPackage、TargetResult、source Event、prior review history与上述digest闭合。现有公共
+`wakeflow_inspect_demand_route`只告诉Controller当前frontier是`implementation-result-review`，不会返回完整审查单元、TargetResult ID、review unit digest或
+Evidence locators。
+
+因此若直接把Service注册成第十个工具，调用方只能依赖之前对话中偶然保留的TargetResult输出：
+
+- Controller重启或上下文压缩后无法重新建立Decision请求；
+- 独立检查无法证明绑定的是当前Result/Snapshot，而不是旧对话中的Result；
+- Route若承载完整TaskPackage/TargetResult会从轻量责任中间层膨胀为Review业务读模型；
+- 把snapshot/unit digest从请求删除，又会允许旧检查被绑定到后来Result。
+
+正确公共纵切至少需要一个只读Review Context owner和一个Decision mutation owner。原先“第十个工具”假设需要修正为：第十个工具先建立可审查事实，第十一个工具才记录
+Controller Decision。
+
+### 216.2 当前内部Review闭包已经具备的事实
+
+`DemandResultReviewSnapshot`是按需、零写、可丢弃的CQRS读模型。一次完整Event Stream审计返回当前Target的：
+
+- 完整TaskPackage及其source Event ID/digest/revision；
+- 完整authority-enriched TargetResult及其source Event；
+- ordered prior Decision/Resume history；
+- `reviewUnitDigest`；
+- Demand lifecycle、current stream/state/tail tuple与`snapshotDigest`。
+
+它不产生ReviewCandidate、allowed decisions、next action、分数或acceptance。`ControllerImplementationReviewDecisionService`随后：
+
+```text
+strict judgment request
+→ current Config/Demand/Controller logical Window
+→ one full Review history audit
+→ exact reported unit + snapshot/unit/result tuple
+→ server-generated Decision ID/time
+→ Decision/Event/Commit preflight
+→ Config current recheck
+→ expected stream revision CAS append
+```
+
+相同TargetResult、Snapshot和完整judgment重放返回原Decision ID/time/Event；不同judgment不能覆盖。两个相同请求并发时，只有一个随机Decision身份提交，另一个从Event history恢复
+winner并幂等返回。Decision只记录Controller的判断，不执行Git、测试、rework dispatch、Design路由、Test规划、Demand完成或宿主能力。
+
+### 216.3 独立检查合同不应变成伪Evidence Store
+
+当前Decision保存：
+
+```text
+assessment.requirementAlignment
+assessment.implementationQuality
+independentChecks[]:
+  checkId + method + passed|failed|inconclusive + observation
+rationale
+blockingReasons
+residualRisks
+```
+
+[Google Engineering Practices](https://google.github.io/eng-practices/review/reviewer/looking-for.html)要求reviewer检查设计、用户功能、上下文、并发、复杂度与测试，并明确指出测试本身
+仍需人审，不能把“测试通过”当成自动结论。这与Wakeflow的边界一致：Target Report、测试输出和Evidence locator只是输入；Controller必须描述自己的method和observation。
+
+[SLSA Verification Summary Attestation](https://slsa.dev/spec/v1.0/verification_summary)把被验证subject digest、verifier、policy、input attestations和verification result分开。
+Wakeflow不是SLSA签名系统，但可借鉴其最小关系：Decision reviewed字段绑定Snapshot/unit/TaskPackage/TargetResult digest，Controller Window表示逻辑verifier，独立checks表达判断。
+
+本轮不为`independentChecks`增加任意Evidence ref：
+
+- TargetResult已经拥有目标作者Evidence locators；
+- Controller fresh probe可能是即时命令/读取，没有已确认的持久Evidence owner；
+- 添加无发布、读取和生命周期authority的ref只会制造“看起来有证据”的悬空字段；
+- Decision Event仍是Controller可审计陈述，不应宣称为密码学attestation或机器真实性证明。
+
+未来Evidence owner出现时，可用独立版本扩展check evidence；当前不预建通用Evidence Registry。
+
+### 216.4 旧JS与Tencent参考
+
+旧JS使用：
+
+```text
+DispatchGroupReviewSnapshot
+→ persistent ReviewCandidate
+→ reduce/group policy
+→ decide-review-candidate
+```
+
+它同时拥有DispatchGroup、return policy、pending Candidate状态、allowed decisions和Controller-return transport。当前TS早已确认不持久化ReviewCandidate：Snapshot digest +
+reviewUnit digest + Event Stream CAS已经提供陈旧检测；恢复Candidate会创建第二状态机和额外恢复事务，却不能证明Controller检查真实发生。
+
+TencentDB-Agent-Memory没有Event-sourced Controller acceptance。可借鉴的是：Skill Review Agent先做role isolation、按完整会话arc审查，再输出严格合同；`skill-format.ts`把
+parse与validate集中在领域边界；Gateway把客户端安全错误与内部日志分离。这支持Wakeflow继续：
+
+- 把TargetResult当不可信审查输入，不被目标角色捕获；
+- 先返回完整Review Context，再由Controller形成判断；
+- Decision请求严格Schema/关系准入，公开错误不泄漏root、stack或内部记录。
+
+Tencent的自动LLM review和quality gate不构成Wakeflow acceptance标准，也不能代替Controller独立检查。
+
+### 216.5 为什么推荐“inspect + 单步record”，不增加Decision preview/apply
+
+公共Decision的external parameters就是Controller已经明确写出的judgment和精确Snapshot selector；Decision ID、Controller Window、state/revision、Event/Commit ID和时间全部是
+server-derived system parameters。只读inspect已经负责把完整subject和并发基线交给Controller。
+
+额外Decision preview/apply只能：
+
+- 回显同一judgment；
+- 再增加Plan kind/schema/ID/digest、preview过期关系和两套请求结果；
+- 仍不能判断独立检查是否真实；
+- 把一次小型Event command扩成新的临时状态表面。
+
+现有Service已经用Snapshot digest、reviewUnit digest、TargetResult ID和expected stream revision执行CAS，并用Event history提供语义幂等。因此推荐Decision保持一次显式提交；MCP
+把它保守标为`destructiveHint:true`，由客户端显示高风险确认。MCP规范建议工具调用具备human-in-the-loop拒绝能力，但annotations只是提示，不是授权机制
+（[MCP Tools](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)）。真正authority仍是Controller职责规则、完整请求和Service重验。
+
+[Microsoft Event Sourcing](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)建议Command根据当前状态生成Event，并要求重复Event消费幂等。当前
+Decision Event append、semantic retry和并发winner恢复已经符合，不需要持久Preview Candidate。
+
+### 216.6 推荐的两工具公共合同
+
+第十个工具推荐：
+
+```text
+wakeflow_inspect_target_result_review
+```
+
+Request：
+
+```text
+root + demandId + targetTaskId
+```
+
+Result只接受当前`reported` unit，返回current Snapshot/Event Stream tuple、完整TaskPackage、完整TargetResult、source Events、prior review history、
+`reviewUnitDigest + snapshotDigest`。它支持现有Implementation/Test共享Snapshot语义，但不决定、打分、运行检查或给出allowed decisions。annotations：
+
+```text
+readOnlyHint: true
+destructiveHint: false
+idempotentHint: true
+openWorldHint: false
+```
+
+第十一个工具推荐：
+
+```text
+wakeflow_record_controller_implementation_review_decision
+```
+
+Decision Request建议删除可从TargetResult恢复的`targetTaskId`echo，只接受：
+
+```text
+root
+demandId
+targetResultId
+snapshotDigest
+reviewUnitDigest
+decision / assessment / independentChecks / rationale
+blockingReasons / residualRisks
+```
+
+Result返回`decided | already-decided`、`committed | idempotent`、`eventAuthority=current`、完整Decision和Event/Commit/state receipt。Coordinator逐项复验
+request/Decision/Event/Commit与首次resulting Aggregate；settled replay不能把后来Aggregate phase误当Decision Event的历史state。
+
+Decision annotations推荐：
+
+```text
+readOnlyHint: false
+destructiveHint: true
+idempotentHint: true
+openWorldHint: false
+```
+
+`destructive:true`是保守业务语义：accept/rework/redesign/blocked会关闭当前reported review资格并改变后续责任，即使物理存储只是append-only Event。工具不使用MCP task
+execution，不执行任何外部检查或Host effect。
+
+四类Decision保持当前closed matrix；工具描述必须明确只有Controller可调用，`accept`只表示Controller在本次调用前已经独立建立目标行为，不由TargetResult outcome自动生成。
+
+### 216.7 公共化前的内部修正与轻量测试
+
+Decision Service首先需要两项收敛：
+
+1. Request删除`targetTaskId`，由`targetResultId`和当前Review Snapshot恢复Target；inspect仍用Route给出的Target Task选择审查单元；
+2. 已提交Decision存在时，错误snapshot/unit/judgment必须报告`eventAuthority=current`，不能因lookup过滤掉request snapshot而误报`unchanged`。
+
+公共Inspector测试只覆盖：reported unit、Implementation/Test判别、零写、source/digest闭合、root/私密文本过滤和非reported拒绝。Decision公共测试只覆盖四类wire关系、真实
+inspect→independent judgment→Decision Event、exact replay、stale selector、settled conflict、输出隐私和Route变化；MCP层保留一条Implementation accept或rework真实纵切，不复制全部
+领域矩阵。
+
+当前内部Review/Snapshot/Event/Route基线：
+
+```text
+14 pass / 0 fail / 0 skip
+```
+
+本预审没有修改Review生产代码、Schema、MCP或测试。
+
+### 216.8 待用户选择的下一步
+
+| 方案 | 公共结构 | 评价 |
+| --- | --- | --- |
+| A（推荐） | 成对实现共享只读Review Inspector + 单步Implementation Decision recorder；先修selector/eventAuthority，再按文件顺序完成两个工具 | 既提供可重建审查事实又保持唯一Decision owner；无Candidate、无Plan状态，公共链真实闭合 |
+| B | Review Inspector + Decision preview/apply | 多一次确认，但只回显Controller judgment；增加Plan/过期/恢复Schema，不能提高检查真实性，不建议 |
+| C | 把完整Review Context塞进Route，或用一个mode-based inspect/decide大工具 | Route膨胀、annotations无法准确表达、读写owner混合；重现旧大工具问题，不建议 |
+
+三项是互斥的本轮架构选择，不是都要做。当前推荐A；确认后仍按紧密1–2文件节奏实现，但以Inspector→Decision的完整成对纵切作为完成条件。
+
+### 216.9 用户决定与Decision selector收敛
+
+用户确认方案A，并确认Inspector与Decision作为一个paired vertical slice完成。内部
+`ControllerImplementationReviewDecisionRequest`删除`targetTaskId`echo，现由`targetResultId`在当前Review Snapshot中恢复精确Target Task。请求保留：
+
+```text
+demandId
+targetResultId
+snapshotDigest
+reviewUnitDigest
+Controller judgment
+```
+
+Service的Decision代际键仍是`TargetResult + Snapshot generation`，不是TargetResult单值。实现初期为了让settled错误报告Event current，曾把任意同Result旧Decision都视为当前
+幂等Decision，回归立即证明这会错误阻断：
+
+```text
+blocked Decision
+→ explicit Resume
+→ same TargetResult / new Snapshot generation
+→ second Controller Decision
+```
+
+最终规则为：
+
+- 同Result + 同Snapshot已有Decision：完全相同judgment幂等返回；冲突judgment报告`eventAuthority=current`；
+- 当前Snapshot已由Resume重新开放为reported：允许同Result的新一代Decision；
+- 请求不匹配当前reported unit、但历史中已有该Result Decision：报告`review-snapshot + eventAuthority=current`；
+- 尚无Decision的陈旧请求保持`unchanged`。
+
+这同时保留semantic replay、settled权威和blocked generation，不引入generation counter或Candidate状态。
+
+### 216.10 第十个工具：共享只读Review Inspector
+
+新增self-contained：
+
+- `wakeflow-target-result-review-inspection-request.schema.json`；
+- `wakeflow-target-result-review-inspection-result.schema.json`；
+- Public Contract / Coordinator及生成类型/runtime Schema；
+- Codex / Claude Code薄wrapper。
+
+工具名：
+
+```text
+wakeflow_inspect_target_result_review
+```
+
+Request只有`root + demandId + targetTaskId`。Coordinator通过Demand组合authority完整审计Event Stream，重建当前Snapshot，只接受精确`reported` target，并返回：
+
+- current Demand/Event Stream/state tuple与`snapshotDigest`；
+- 完整Implementation或Test TaskPackage；
+- 完整authority-enriched TargetResult；
+- 两份source Event receipt；
+- `reviewUnitDigest`；
+- prior Decision/Resume history的有界审查摘要，包括Decision assessment/checks/rationale与Resume blocked lineage。
+
+Coordinator重新计算内部Snapshot/unit digest、复验Config仍current，再执行生成Schema、32 MiB公共容量和workspace/ledger/demand root隐私检查。输出不生成Decision、allowed decisions、
+next action、score或verdict。annotations：
+
+```text
+readOnlyHint: true
+destructiveHint: false
+idempotentHint: true
+openWorldHint: false
+```
+
+Inspector wire因MCP客户端不能解析仓库私有URN而必须self-contained；大型结构由现有TaskPackage/TargetResult Schema机械内联，并用codegen mirror test逐字段对齐领域authority，未新增
+运行时Schema bundler或手工第二套领域parser。
+
+真实测试覆盖：Implementation reported零写读取、Test reported共享读取、Decision后非reported拒绝，以及
+`blocked Decision → Resume → reported`的公共prior Decision/Resume history投影。
+
+### 216.11 第十一个工具：Controller Implementation Decision recorder
+
+新增self-contained Decision request/result Schema、Public Contract / Coordinator、生成类型/runtime Schema及双宿主wrapper。工具名：
+
+```text
+wakeflow_record_controller_implementation_review_decision
+```
+
+Public Request严格包含Inspector返回的`targetResultId + snapshotDigest + reviewUnitDigest`和Controller judgment；拒绝Target Task echo、非NFC/重复检查、不闭合四类Decision及
+workspace root进入判断文本。Decision ID、Controller logical Window、reviewed state/revision、Event/Commit身份和时间全部由Service派生。
+
+Public Coordinator逐项复验：
+
+- request与完整Decision judgment；
+- reviewed Snapshot/unit/TargetResult identity；
+- 单Decision Event、确定性Event/Commit ID、command/commit digest和Event bytes；
+- 首次committed后的Aggregate phase/Decision summary与resulting state digest；
+- idempotent replay只绑定历史Event/Commit，不要求后来Aggregate退回Decision时的phase。
+
+Result返回`decided | already-decided`、`committed | idempotent`、`eventAuthority=current`、完整Decision和Event/Commit/state receipt。工具不运行检查、不从TargetResult推导
+accept、不执行rework Delivery、Design、Test或Completion。annotations保守声明：
+
+```text
+readOnlyHint: false
+destructiveHint: true
+idempotentHint: true
+openWorldHint: false
+```
+
+`destructive:true`表达Decision会关闭当前reported review资格并改变责任Route；物理Event Store仍是append-only。
+
+### 216.12 双宿主MCP真实纵切与测试维护
+
+Public MCP现精确发布11项已有owner的工具。MCP instructions固定顺序：
+
+```text
+TargetResult Import
+→ Controller调用Review Inspector
+→ Controller读取完整输入并在Wakeflow外运行fresh independent checks
+→ Controller提交exact Decision request
+→ Decision Event成为唯一implementation acceptance authority
+→ 重新Inspect Route
+```
+
+真实Codex MCP fixture已从Claim/Outcome/TargetResult继续推进到Review Inspector、Controller accept Decision、
+`demand-completion-preflight` Route和exact Decision replay；测试没有执行宿主发送，也没有把fixture judgment声称为真实产品acceptance。
+
+MCP composition executor测试同步从逐段重复对象改为一个完整合法options基线加table-driven Proxy字段矩阵。新增工具只需增加一行field/reason，降低后续测试维护与遗漏成本。双宿主
+candidate官方stdio Client列出完全相同的11工具集合，manifest继续`releaseEligible:false`。
+
+### 216.13 验证与本单元结论
+
+```text
+Inspector / Decision domain / public wire / Coordinator / MCP / candidate:
+  49 pass / 0 fail / 0 skip
+All Review subsystem tests:
+  32 pass / 0 fail / 0 skip
+Adjacent Controller Route / rework Delivery / Completion:
+  18 pass / 0 fail / 0 skip
+TypeScript: pass
+Prettier: pass
+Architecture: pass / parser=swc / 668 modules / 4736 dependencies / 0 violations
+Schema: pass / 87 schemas / 207 external refs
+Schema digest: sha256:d4727340aec36f3626a51cc6073cff2685de4603989da111a642dfcd283026b0
+git diff --check: pass
+```
+
+本单元结论为`implemented / verified`。Review Context与Decision保持Query/Command分离；没有恢复旧ReviewCandidate、Group reducer、preview plan、Evidence Registry、自动检查、自动
+acceptance或第二状态机。TargetResult仍只是输入，只有Controller独立判断形成的Decision Event才改变Implementation Target review状态。
+
+旧JS/core、正式插件制品、安装cache和外部Atlas均未修改；未运行旧JS全量`npm test`、插件validator/smoke、发布或提交。
+
+Decision后的Route现在形成三个不同优先级的后续面：accept可能进入controller-only Completion或real-environment TestCard planning；rework已经能回到现有公开Delivery；blocked进入尚未
+公开的Review Resume；redesign进入Design能力边界。下一单元应先重读这张post-Decision Route矩阵和真实产品主路径，再在Completion、Test入口与Review Resume之间选择顺序，不能按文件名
+机械公开下一个Service。
+
+## 217. Decision后Route矩阵与下一公共纵切预审
+
+### 217.1 本轮范围与当前事实
+
+本轮按Controller application层重新读取了：
+
+- `DemandControllerRoute`与`DemandPostAcceptanceRoute`；
+- `DemandCompletion`的Record、Authority、Plan、Service及五项直接测试；
+- `TestCard Planning`、`Test Task Planning`及相邻真实纵切；
+- 通用`ControllerTargetReviewResume`的Request、Record、Service及Implementation/Test恢复测试；
+- 旧JS当前v3 lifecycle、TestCard public handler和历史流程文档；
+- TencentDB-Agent-Memory的Task status、task-transition与session state manager；
+- MCP、Durable Task、GitHub status checks与Google code review官方资料。
+
+本轮不修改生产代码、Schema、生成文件或测试。Route当前已形成四条不同性质的责任路径：
+
+| Decision / Authority | 当前frontier | 性质 | 当前公共可达性 |
+| --- | --- | --- | --- |
+| `accept + controller-only` | `demand-completion-preflight` | 正常成功路径 | Completion尚未公开 |
+| `accept + real-environment` | `test-card-planning` | 条件成功路径的Test入口 | TestCard尚未公开 |
+| `rework` | `implementation-delivery-planning` | 产品代码修复路径 | 已由现有Delivery公共纵切承接 |
+| `blocked` | `implementation-review-resume` | 人类/外部阻断恢复 | Resume尚未公开 |
+| `redesign` | `implementation-redesign-required` | 返回Design的需求级能力缺口 | 当前明确blocked，不应在本轮伪装实现 |
+
+`controller-only`与`real-environment`不是全局默认和增强版的关系；二者由每个非research Demand冻结的测试决定选择。`research`使用
+`not-applicable`，其zero-artifact Completion仍是另一项Lifecycle缺口，不应混入本轮三个候选。
+
+### 217.2 Completion是两条成功路线的共同终点
+
+内部`DemandCompletionService`已经具有完整的零写preview与exact-plan apply：
+
+```text
+current completion-preflight Route
+→ claimed TODO精确挂载
+→ 所有参与WindowWorkClaim均absent
+→ Config current fence
+→ lifecycle.demand-completed Event append
+→ completed Aggregate
+→ exact Commit重放幂等
+```
+
+它不只是controller-only专用能力。real-environment Test被Controller接受后，同一个Post-Acceptance Route也进入
+`completion-preflight`，随后使用同一个Completion owner。因此公开Completion会先闭合当前已公开Implementation纵切在controller-only accept后的成功终点，并同时提前完成
+real-environment路线最终必需的共同收口；不是为单一模式制作一次性工具。
+
+Completion成功后有意保留：
+
+- accepted Implementation/Test lineage；
+- TestCard与attempt历史；
+- `claimed` TODO及其精确挂载。
+
+TODO删除必须等待未来BusinessArchive回执；宿主关闭、BusinessArchive、Retention和Pod close也仍由后续owner负责。`completed`本身是可稳定停留的业务终态，
+但绝不能把Completion工具描述成“已归档、已清理或已关闭宿主”。
+
+### 217.3 Resume是正确但较窄的异常恢复面
+
+内部Resume已经统一覆盖：
+
+```text
+Implementation review-blocked → result-reported
+Test test-review-blocked       → test-result-reported
+```
+
+它绑定精确blocked Decision、同一TargetResult、blocked Snapshot与resolution summary；一个blocked generation只追加一个幂等Resume Event。恢复后Controller仍必须重新Inspect、运行fresh
+independent checks并形成下一代Decision。它不创建Test attempt、不触发Delivery，也不把resolution summary解释为acceptance。
+
+因此Resume是应保留并最终公开的真实能力，但它是异常路径：当前Implementation blocked已经能从公共Decision抵达；Test blocked则要等Test公共链先可达。先做Resume可修复“公共流程遇到blocked后无法恢复”的缺口，
+却不会让任何成功Demand抵达终态。
+
+### 217.4 TestCard是条件路线入口，不是一个孤立工具
+
+`TestCardPlanningService`当前只创建TestCard Event，不创建Test TaskPackage。即使只公开TestCard，Route也会立即推进到另一个尚未公开的
+`test-task-planning`。完整real-environment公共路线至少还需要按现有owner顺序逐项审阅：
+
+```text
+TestCard Planning
+→ Test Task Planning
+→ Test Delivery Preparation
+→ shared Claim / Agent Host Action / Outcome
+→ shared TargetResult Import
+→ Controller Test Review
+→ Completion、another-attempt、blocked Resume或product-defect remediation
+```
+
+这条路线内部骨干已经存在，但公共合同中仍包含Controller编写的测试问题、边界、自检、环境条件、允许/禁止操作、证据要求、策略Authority与attempt政策。它适合继续按小切片公开，不适合用一个巨型
+`wakeflow_testing` action工具一次暴露。只在“下一项”选择TestCard意味着主动开始一组较长的连续公共切片，而不是单文件后已经形成可用Test闭环。
+
+### 217.5 旧JS与Tencent对照
+
+旧JS当前v3提供`wakeflow_complete_demand preview/apply/recover`，因为其Lifecycle transaction在终态提交后还会释放精确coordination lease，属于跨资源前向恢复事务。新版TS Completion在准入时要求参与
+WorkClaim已经absent，写效果只有单个Event Store commit；直接复制旧`recover`会制造没有恢复对象的公共分支。新版应保留内部现有preview/apply，不为旧工具表追求形状等价。
+
+旧JS TestCard入口要求调用方提交近乎完整artifact和transition。新版TS从Demand、Config、Ledger和Route恢复Program、Window、实现接受基线、Event tail及typed identity，调用方只编写真实测试内容和选择策略Authority；该分层更适合作为新标准。
+
+旧JS没有精确blocked generation的显式Review Resume；新版Resume修复的是旧系统真实楔死缺口，不是兼容扩张。
+
+TencentDB-Agent-Memory没有Controller Review、TestCard或Event-sourced Demand Completion这一相邻领域。其`TaskStatus = running | completed`是粗粒度元数据，`OffloadStateManager`用绑定单Session的class持有可变缓存和持久状态，
+`handleTaskTransition`直接组合判断、状态修改和Storage写入。这些代码能支持“持状态对象才使用class、状态词汇用判别值、恢复/重试显式表达”的一般实践，却不能作为Wakeflow post-Decision Route顺序或authority边界的模板。
+
+### 217.6 官方实践校准
+
+[MCP Tools规范](https://modelcontextprotocol.io/specification/2025-06-18/server/tools)要求服务端严格校验输入，并建议敏感工具保持human-in-the-loop；Tool annotations只是客户端提示，不能代替服务端的
+exact authority与CAS。Completion属于高后果终态写入，现有preview→确认→apply比单步命令更合适。
+
+[Durable Task external events](https://learn.microsoft.com/en-us/azure/durable-task/common/durable-task-external-events?tabs=python)把人类批准/外部输入建模为唤醒同一持久执行的显式事件，并建议用唯一ID抵御at-least-once重复。
+这与Wakeflow的精确blocked Decision→Resume ID模型一致，说明Resume设计正确；它没有要求异常恢复优先于正常成功路径。
+
+[GitHub Status Checks](https://docs.github.com/en/pull-requests/reference/status-checks)把测试/构建检查建模为在被配置为required时才阻止最终合入的条件门，并保留check来源与结论。对应Wakeflow，real-environment Test必须服从冻结Demand testing decision；
+不能把它提升为所有Demand的默认终态条件，也不能让Test替代Controller acceptance。
+
+[Google Code Review](https://google.github.io/eng-practices/review/reviewer/looking-for.html)要求从整体设计、真实功能、并发、复杂度和测试有效性审查，并明确警惕尚无实际需求的泛化；其
+[Small CLs](https://google.github.io/eng-practices/review/developer/small-cls.html)建议把功能分解为可独立审阅、逐步叠加的小变更。下一公共纵切应优先形成一个真实可用闭环，不应因内部Testing文件已经存在就一次公开整条大链。
+
+### 217.7 三种互斥的下一切片方案
+
+以下A/B/C只互斥“下一项先做什么”，不是最终能力三选一：
+
+| 方案 | 下一切片 | 直接收益 | 代价与结论 |
+| --- | --- | --- | --- |
+| A（推荐） | 公开`wakeflow_complete_demand` preview/apply | 立即闭合当前公共Implementation纵切在controller-only accept后的成功终点；同时成为未来real-environment路线共同终点；内部owner与五项真实测试已成熟 | 是terminal mutation，wire与说明必须严格区分Completion和Archive；公共边界需保留确认步骤 |
+| B | 公开通用Controller Target Review Resume | 闭合当前Implementation blocked异常路径；内部合同小且Implementation/Test共享 | 不推进正常成功路径；Test变体暂时没有公共上游；单步外部事实仍需保守高风险annotations |
+| C | 从TestCard Planning开始连续公开real-environment路线 | 开始服务冻结为real-environment的Demand；复用完整内部Testing骨干 | 单独TestCard后仍停在Test Task Planning；后续工具、Schema与测试面明显更大，不能把整链压成一次实现 |
+
+推荐顺序为先A。A完成后的B/C顺序仍在A的系统收束点根据真实公共Route、测试成本与用户优先级重新核实，不提前冻结长期路线。
+
+### 217.8 推荐A的拟定公共边界
+
+建议工具名保持领域动作清楚：
+
+```text
+wakeflow_complete_demand
+```
+
+请求判别为：
+
+```text
+preview: root + mode=preview + demandId
+apply:   root + mode=apply + exact plan + planDigest
+```
+
+Preview返回完整self-contained `DemandCompletionPlan + planDigest`供Controller/用户审阅；Apply返回`completed | already-completed`、
+`committed | idempotent`、`eventAuthority=current`、Completion/Event/Commit与resulting state receipt。调用方不能提交Controller Window、TODO、testing mode、Route、Review、时间或Event身份；全部由owner恢复/派生。
+
+工具annotations建议：
+
+```text
+readOnlyHint: false
+destructiveHint: true
+idempotentHint: true
+openWorldHint: false
+```
+
+`destructive:true`表达业务生命周期进入终态，虽然底层只追加不可变Event。它不注册`recover`、不归档TODO、不关闭窗口、不生成BusinessArchive，也不把`completed`自动解释为下一步已经完成。
+
+若用户确认A，主要手写审阅单元仍只有紧密相邻的两个文件：
+
+1. `governance/lifecycle/demand-completion-public-contract.ts`；
+2. `governance/lifecycle/demand-completion-public-coordinator.ts`。
+
+Schema/generated、Codex/Claude薄wrapper、MCP注册和聚焦测试作为同一公共纵切的机械闭包；不借机改写内部Completion、Testing、Resume、Archive或旧JS。测试优先复用现有accepted fixture，增加一次真实
+`Decision accept → Route → MCP preview/apply → terminal Route`和exact replay，不复制内部五项owner测试。
+
+当前结论为`pre-reviewed / awaiting user decision`，尚未创建上述文件。
+
+### 217.9 用户确认A与公共wire落地
+
+用户确认先公开Demand Completion。新增两份self-contained MCP Schema及其生成类型/runtime Schema：
+
+- `wakeflow-demand-completion-request.schema.json`；
+- `wakeflow-demand-completion-result.schema.json`。
+
+Request保持两种闭合模式：
+
+```text
+preview → root + demandId
+apply   → root + exact DemandCompletionPlan + planDigest
+```
+
+Apply Plan完整携带冻结Demand Authority与Completion，以便已提交重试不依赖后来Config、Ledger或TODO状态；调用方不能提交Controller Window、testing mode、TODO、Route、Review、时间、Event/Commit身份、Archive或清理字段。公共request/result各设
+24 MiB Canonical JSON上限，为内部16 MiB Event Commit上限保留确定性封装余量。
+
+wire中的Demand Authority、Completion、Ledger Authority Member、portable path、SHA-256、UTC、TODO ID与typed IDs均为本地定义；MCP Client不需要解析仓库私有URN。codegen mirror test逐字段对齐Domain Schema。Ledger Member的
+family/record/role组合关系仍由Domain codec复验，公共Schema只复制可移植结构字段，不复制一套第二领域parser。
+
+Result关系固定为：
+
+```text
+completed         ↔ committed
+already-completed ↔ idempotent
+```
+
+Preview返回完整Plan与digest；Apply返回Completion、Event/Commit回执、command/plan digest和`eventAuthority=current`。Apply只返回Completion Event的
+`resultingStateDigest`，不返回“调用时Aggregate一定仍为completed”的断言：未来completed Demand若通过正式continuation回到active，历史Completion exact replay仍应诚实指向原Event结果，而不是把当前状态与历史Event混淆。
+
+### 217.10 两个主要手写文件与共享composition
+
+新增主要手写文件：
+
+1. `governance/lifecycle/demand-completion-public-contract.ts`；
+2. `governance/lifecycle/demand-completion-public-coordinator.ts`。
+
+Contract执行被动JSON、24 MiB容量和生成Schema准入。Coordinator：
+
+- 打开并固定workspace根；
+- preview时只把`demandId`交给现有Service；
+- apply时只消费exact Plan/digest；
+- 逐项复验单一Completion Event、Event/Commit/command identity、stream位置、Completion bytes、首次提交后的completed state和Commit digest；
+- idempotent replay不要求后来Aggregate仍停在原phase，只返回原Event resulting state digest；
+- 对输出重新执行生成Schema、容量和workspace root隐私检查；
+- 保留稳定`root | preview | apply | output`错误与`unchanged | current | unknown` Event authority。
+
+内部`DemandCompletion`、Authority、Plan和Service没有修改；既有owner已经正确实现Route、claimed TODO、absent WorkClaim、Config current、Event append与exact replay。
+
+预审曾把双宿主wrapper列为机械闭包，实际依赖审查后未创建：Completion不消费host profile、Host observation、opaque handle或宿主效果，与Demand Route和Target Task Planning相同，Codex/Claude composition直接复用同一个host-neutral Coordinator。复制两个无差异文件只会增加维护面。
+
+### 217.11 第十二个MCP工具与真实纵切
+
+官方MCP新增：
+
+```text
+wakeflow_complete_demand
+```
+
+description明确：只有Route为`demand-completion-preflight`才可preview/apply；Completion不归档或删除TODO、不移动Demand、不创建BusinessArchive、不关闭宿主窗口、不prune transport、不清理资源。annotations：
+
+```text
+readOnlyHint: false
+destructiveHint: true
+idempotentHint: true
+openWorldHint: false
+```
+
+`destructive:true`表示Demand进入成功终态；底层Event Store仍为append-only。MCP instructions要求Controller先Inspect Route、审阅完整Preview，再提交exact Plan/digest。
+
+公共Server options、Proxy executor准入、错误envelope、Codex/Claude固定composition和candidate官方stdio Client均同步。两个宿主现发布相同12工具集合。
+
+原Codex真实MCP纵切没有新增一份重复fixture，而是在现有链后继续：
+
+```text
+Claim
+→ Outcome
+→ TargetResult Import
+→ Review Inspector
+→ Controller accept Decision
+→ demand-completion-preflight Route
+→ Completion preview/apply
+→ terminal Route
+→ exact Completion replay
+```
+
+测试仍不执行宿主发送；Claim只返回Action，宿主效果由fixture observation模拟，Completion也没有任何宿主效果。
+
+### 217.12 测试维护与验证结论
+
+只新增一个Completion公共测试文件，包含两个真实测试：成功终态/幂等路径，以及root/preview/apply错误分类。没有新增独立Schema测试文件；真实Coordinator本身执行output Schema，现有MCP self-contained test承担Schema镜像，现有MCP纵切承担官方Client验证。这样避免重复复制内部五项Completion owner测试。
+
+当前验证：
+
+```text
+Completion public + internal owner + MCP + codegen + candidate focused:
+  45 pass / 0 fail / 0 skip
+Latest Completion public + MCP + codegen after final Schema relation:
+  38 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 89 schemas / 207 external refs
+Schema digest: sha256:a20891eae9550d8c7ca3e72ca065f02f837c3bf6d60fc3fe263e587124610518
+Architecture: pass / parser=swc / 673 modules / 4764 dependencies / 0 violations
+Codex candidate: 383 compiled files / manifest sha256:5468ad4d6f028eb9de05690fb1de644834457c6bc5448155da78623f338583d7
+Claude Code candidate: 388 compiled files / manifest sha256:8f01f867fc6119feba230221f920df19498556375fe899276a73b3967f34322e
+Both candidates: 12 tools / releaseEligible=false
+```
+
+本单元结论为`implemented / verified`。Completion公共纵切闭合的是当前Implementation accept后的成功终点，不声称Demand创建、BusinessArchive、TODO归档、completed continuation、Research Completion、Pod close或完整旧JS等价已经公开。
+
+旧JS/core、正式plugin制品、安装cache、版本和外部Atlas均未修改；没有运行旧JS全量`npm test`、正式plugin validator/smoke、发布或提交。下一Route选择应在通用Review Resume与real-environment TestCard公共入口之间重新核实；当前Implementation blocked已经可由公共Decision抵达，因此Resume是较小且真实的恢复缺口，但仍须先按同样节奏预审公共请求边界。
+
+## 218. 通用Review Resume公共边界预审
+
+### 218.1 现有内部Service不能直接注册
+
+当前`ControllerTargetReviewResumeService`的Request要求调用方同时提交：
+
+```text
+demandId
+targetTaskId
+targetResultId
+blockedDecisionId
+blockedDecisionDigest
+blockedSnapshotDigest
+resolutionSummary
+```
+
+这些字段在内部测试中可以通过直接读取`DemandResultReviewSnapshot`构造，但现有公共链无法稳定取得。其中最关键的是`blockedSnapshotDigest`：它是blocked Decision Event提交后重建的新Snapshot digest，不是Decision请求中的旧reported Snapshot digest。
+
+当前公共事实为：
+
+- Decision Result返回完整blocked Decision、Event和resulting state digest，但不返回post-Decision Snapshot digest；
+- `wakeflow_inspect_target_result_review`只接受当前`reported` Target，Decision后会明确拒绝`review-decided`；
+- Demand Route能报告`implementation-review-resume | test-review-resume`、Target Task和当前Event Stream revision/state digest，但不承载完整Decision正文；
+- Resume后的Inspector可以把旧Decision/Resume显示为prior history，但这不能帮助第一次Resume。
+
+所以直接把内部Request做成公共Schema，会产生一种只能依赖测试helper或上一次对话中非公共内部读取才能构造的API。即使Agent完整保留blocked Decision响应，也仍缺当前blocked Snapshot digest；这不是字段太多的问题，而是公共producer不存在。
+
+### 218.2 正确的durable selector应来自当前Route状态
+
+Demand Route已经公开同一次Review Snapshot对应的：
+
+```text
+targetTaskId
+observedEventStream.streamRevision
+observedEventStream.stateDigest
+```
+
+这三项足以形成精确、可重启的blocked generation CAS selector：
+
+```text
+expectedBlockedState:
+  streamRevision
+  stateDigest
+```
+
+配合`targetTaskId`可区分同一Demand中的多个blocked Target。Service应从当前完整Event history自行恢复：
+
+- 当前TargetResult与digest；
+- blocked Decision ID/digest与Implementation/Test判别；
+- 当前blocked Snapshot digest；
+- Controller Window、Program、Event/Commit身份和时间。
+
+调用方不应回填这些system authority。首次调用要求当前Aggregate revision/state与selector完全一致；相同请求重放则按`targetTaskId + blockedSource revision/state`找到已提交Resume。两个不同Target从同一blocked state并发恢复时，只允许一个CAS winner；另一个重新Inspect Route后再提交，避免把旧全局状态偷偷应用到新generation。
+
+`stateDigest`不是新的状态权威；它等价于条件写入使用的opaque版本标签。Resume Event仍是唯一持久业务事实，Aggregate仍由Event重放产生。
+
+### 218.3 仅有Route selector仍不足以支持负责的人类判断
+
+Route刻意只回答“下一owner是谁”，不返回blocked Decision的assessment、独立检查、rationale和blocking reasons。Controller在重启、上下文压缩或换Agent后，不能只看`phase=review-blocked`就声明阻断已解决。
+
+正确做法是扩展现有`wakeflow_inspect_target_result_review`，而不是把完整Decision塞进Route或新增第二个近似Inspector。建议让同一Inspector支持两种review unit：
+
+```text
+reported
+  → 现有完整TaskPackage / TargetResult / prior history / reviewUnitDigest
+
+review-blocked | test-review-blocked
+  → 同一完整审查输入
+  → current blocked Decision source + judgment summary
+  → current blocked Snapshot/Event Stream tuple
+  → prior history / reviewUnitDigest
+```
+
+accepted、rework、redesign、Test accepted/another-attempt/product-defect等其他decided状态仍由各自Route owner处理，不把Inspector扩大为通用Demand历史浏览器。blocked inspection只提供恢复判断所需事实，不生成“可Resume”结论、不判断resolution summary是否真实，也不自动调用Resume。
+
+### 218.4 Resume与retry、rework、accept继续分离
+
+Resume只表示外部/人类阻断条件已经具备重新审查的基础：
+
+```text
+blocked Decision
+→ explicit Resume Event
+→ 同一TargetResult重新reported
+→ Controller重新Inspect并执行fresh independent checks
+→ 新一代Decision
+```
+
+它不创建Test attempt、不重新Delivery、不消耗attempt预算、不修复产品代码，也不复用旧Decision。`resolutionSummary`是Controller陈述，不是自动acceptance证据。
+
+旧JS/core没有精确blocked generation的Resume owner；blocked任务只能继续混入旧review/rework机制，属于旧实现缺口。TencentDB-Agent-Memory同样没有Controller Review blocked/Test attempt相邻模型；其Gateway`request_id`用于trace和错误关联，不是业务幂等键，其`approval-pending`处理只是跳过尚无有效结果的tool call。它不能决定Wakeflow Resume合同，只能再次说明trace identity、业务state identity与retry必须分开。
+
+### 218.5 官方实践校准
+
+[Microsoft Durable Task external events](https://learn.microsoft.com/en-us/azure/durable-task/common/durable-task-external-events?tabs=python)把人类输入建模为唤醒同一持久orchestration的显式外部事件，并指出external event具有at-least-once语义，应携带唯一身份用于去重。Wakeflow不需要调用方生成Resume ID；Service可用精确blocked state selector识别generation，再由服务器分配Resume/Event/Commit ID并从Event history完成语义去重。
+
+[RFC 9110 If-Match](https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1)要求状态修改在执行前验证当前representation tag，以避免并发lost update。`expectedBlockedState.streamRevision + stateDigest`正是Wakeflow本地Event-sourced资源的条件写入基线；它比回填一组可由服务器恢复的Decision/Result digest更直接。
+
+[MCP Tool Schema](https://modelcontextprotocol.io/specification/2025-11-25/schema)把input/output Schema与annotations定义为工具描述和提示，不能替代服务端authority。Resume是一个立即完成的本地Event append，不需要实验性的MCP task execution；客户端仍可依据清晰description和风险提示让Controller/用户确认调用。
+
+### 218.6 三种互斥的公共结构方案
+
+以下A/B/C是本轮架构选择，不是三项都实现：
+
+| 方案 | 公共结构 | 优点 | 代价/结论 |
+| --- | --- | --- | --- |
+| A（推荐） | 扩展现有Review Inspector支持当前blocked unit；内部Resume selector收敛为`demand + target + expectedBlockedState + resolutionSummary`；新增一个单步Resume recorder | 重启后可重建完整判断输入；Route保持轻量；请求只含external intent与CAS；不新增Candidate/Plan/重复Inspector | 需要同步调整现有Inspector result union和内部Service request，但都是修正真实producer/consumer闭包 |
+| B | 新增专用Blocker Inspector，再新增单步Resume recorder | 不改变现有Inspector的reported-only结果联合 | 新增一个高度重叠的第13/14工具与第二套TaskPackage/TargetResult/Decision Schema；工具和测试表面不必要增长 |
+| C | 新增Resume preview/apply工具；preview同时返回blocker context和完整Resume plan | 一个工具内完成读取、确认和写入 | 混合Query/Command annotations；增加Plan kind/digest、ID/time冻结和过期路径；对一次小型外部signal没有新增真实性或恢复能力 |
+
+直接公开现有七字段内部Request不列为可选方案：`blockedSnapshotDigest`没有公共producer，属于确定的不可用合同。
+
+### 218.7 推荐A的拟定公共合同与实施顺序
+
+建议保留现有Inspector工具名并扩展其输出联合。新增写工具名：
+
+```text
+wakeflow_resume_target_result_review
+```
+
+Resume Request：
+
+```text
+root
+demandId
+targetTaskId
+expectedBlockedState:
+  streamRevision
+  stateDigest
+resolutionSummary
+```
+
+Result返回：
+
+- `resumed | already-resumed`；
+- `committed | idempotent`；
+- `eventAuthority=current`；
+- 完整不可变Resume；
+- Resume Event/Commit与resulting state digest回执。
+
+建议annotations：
+
+```text
+readOnlyHint: false
+destructiveHint: false
+idempotentHint: true
+openWorldHint: false
+```
+
+`destructive:false`与现有Host Effect Rearm相同：Resume只追加授权/恢复Event，保留旧Decision与Result并重新开放审查资格；它不删除历史、不accept、不dispatch、不执行宿主效果。调用后必须重新调用Inspector并重新检查，不能沿用blocked前的判断。
+
+若用户确认A，按紧密文件单元实施：
+
+1. `controller-target-review-resume-input.ts`＋`controller-target-review-resume-service.ts`：删除derived echoes，改用exact blocked state selector，先闭合Implementation/Test/并发/replay测试；
+2. `target-result-review-inspection-public-coordinator.ts`＋既有self-contained result Schema：增加blocked只读变体和重启恢复测试；
+3. 新增Resume Public Contract/Coordinator、Schema、MCP注册与一条`blocked Decision → blocked inspect → Resume → reported inspect → second Decision`真实纵切。
+
+每一步仍只把1–2个手写文件作为主要审阅对象；生成Schema、composition和聚焦测试属于对应纵切机械闭包。不修改旧JS/core、Test attempt、Delivery、Archive或Design。
+
+### 218.8 本轮基线与停点
+
+本轮没有修改生产代码、Schema或测试，只新增本节台账记录。当前基线：
+
+```text
+Resume Service + Review Inspector + Controller Route focused:
+  9 pass / 0 fail / 0 skip
+```
+
+结论为`pre-reviewed / awaiting user decision`。当前推荐方案A。
+
+### 218.9 用户确认A与第一个文件单元
+
+用户确认方案A。本单元只修改：
+
+1. `controller-target-review-resume-input.ts`；
+2. `controller-target-review-resume-service.ts`；
+3. 现有Service聚焦测试。
+
+没有修改Review Inspector、公共Schema、MCP、Route、Test attempt、Delivery或Decision。
+
+内部Request从七个字段收敛为：
+
+```text
+demandId
+targetTaskId
+expectedBlockedState:
+  streamRevision
+  stateDigest
+resolutionSummary
+```
+
+删除的caller echoes：
+
+```text
+targetResultId
+blockedDecisionId
+blockedDecisionDigest
+blockedSnapshotDigest
+```
+
+`expectedBlockedState`使用严格嵌套普通数据对象，stream revision复用Event Sourcing位置codec，state digest复用SHA-256 codec；未知字段、Proxy/accessor、非法位置、摘要和非canonical文本继续失败关闭。额外旧echo现在作为`input`拒绝，不保留兼容分支。
+
+### 218.10 Service派生Authority与幂等generation key
+
+首次Resume时，Service从同一次完整Event history自行重建Review Snapshot，并同时验证：
+
+- Demand仍为active且identity闭合；
+- Aggregate与Snapshot revision/state digest都匹配`expectedBlockedState`；
+- 指定Target当前恰好为Implementation `review-blocked`或Test `test-review-blocked`；
+- TaskPackage/TargetResult work type一致；
+- 当前Decision kind与work type一致且Decision为`blocked`。
+
+验证后才从当前事实派生TargetResult、Decision ID/digest、blocked Snapshot digest、Controller Window、Program和Event/Commit身份，并在读取clock/UUID前完成所有stale检查。
+
+Resume的语义幂等generation key现为：
+
+```text
+targetTaskId
++ blockedSource.streamRevision
++ blockedSource.stateDigest
+```
+
+同一Demand root内该tuple唯一标识一个blocked generation。exact replay按此查找既有Resume并要求`resolutionSummary`完全一致；不同summary不能覆盖历史。不同Target从同一全局blocked state并发时仍由Event Stream CAS串行，失败者必须重新Inspect最新Route。
+
+### 218.11 聚焦测试修正与验证
+
+现有Implementation真实测试不再由helper回填Decision/Result/Snapshot摘要。它现在证明：
+
+- stale state digest在clock/UUID读取前以`review-snapshot`拒绝；
+- 旧`targetResultId`echo作为未知字段拒绝；
+- 两个相同selector、不同候选Resume UUID并发时精确收敛为`committed + idempotent`；
+- committed Resume中的Decision、Result与blocked Snapshot均由Service恢复且与Event history一致；
+- exact replay返回winner原ID/time；
+- Resume后同一Result形成新review generation并允许第二代Decision。
+
+Test真实测试同步改用state selector，并继续证明Resume不创建attempt、不改变TestCard/Delivery/Result，只恢复到`test-result-reported`。
+
+```text
+Resume Service + Resume record + Review Snapshot focused:
+  6 pass / 0 fail / 0 skip
+TypeScript: pass
+Architecture: pass / parser=swc / 673 modules / 4765 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+本单元结论为`implemented / verified`。第二个文件单元仍是扩展现有Review Inspector支持当前blocked unit；在该只读producer完成前，不创建Resume公共Schema或MCP工具。
+
+### 218.12 第二个文件单元：复用现有Inspector
+
+本单元扩展现有：
+
+- `target-result-review-inspection-public-coordinator.ts`；
+- `wakeflow-target-result-review-inspection-request/result` self-contained Schema与生成类型；
+- 现有Inspector、codegen和MCP测试。
+
+没有新增第二个Blocker Inspector工具，没有修改Demand Route，也没有创建Resume Public Contract/Coordinator。
+
+Request保持不变：
+
+```text
+root + demandId + targetTaskId
+```
+
+Result中的`reviewUnit`从单一reported对象扩展为严格联合：
+
+```text
+reportedReviewUnit
+  status: reported
+  complete TaskPackage / TargetResult / source Events
+  priorReviewHistory
+  reviewUnitDigest
+
+blockedReviewUnit
+  status: review-blocked
+  同一完整审查输入
+  currentBlockedDecision:
+    sourceEvent
+    workType-correlated blocked Decision summary
+  priorReviewHistory
+  reviewUnitDigest
+```
+
+blocked变体同时支持Implementation `review-blocked`和Test `test-review-blocked`；Schema按work type强制TaskPackage、TargetResult、Decision summary类型一致，并强制current Decision只能为`blocked`。
+
+### 218.13 reported digest与blocked Snapshot保持分层
+
+`reviewUnitDigest`继续使用Decision提交前的reported basis：TaskPackage、TargetResult、source Events和Decision之前的prior history。当前blocked Decision不被塞回该digest，否则会改变Decision原来签署的review unit identity并制造循环关系。
+
+blocked inspection额外返回：
+
+- top-level current `snapshotDigest`；
+- current Event Stream revision/state/tail；
+- current blocked Decision source与judgment summary。
+
+因此后续Resume可以：
+
+1. 让Controller读取原审查输入与当前阻断理由；
+2. 从top-level Event Stream取得`expectedBlockedState`；
+3. 提交resolution summary；
+4. 由Resume Service再重读完整history并执行CAS。
+
+Inspector仍不判断阻断是否已解决，不返回allowed decisions，不创建Resume/Decision/acceptance，也不把current Decision重复放入prior history。Resume后它重新返回reported变体，旧Decision/Resume才进入有序prior history。
+
+### 218.14 只准入当前blocked，不扩成历史浏览器
+
+Coordinator当前只接受：
+
+```text
+reported
+review-decided + Decision=blocked + exact blocked phase/work type
+```
+
+Implementation accepted/rework/redesign以及Test accepted/another-attempt/product-defect仍以`inspection`拒绝；这些状态已有各自Route owner。这样避免将Review Inspector扩大为任意Demand历史查询或隐藏Route。
+
+MCP description与Server instructions同步说明：
+
+- Implementation Result Review先Inspect再Decision；
+- Implementation/Test Review Resume先Inspect current blocked Decision和state；
+- Inspector不决定blocker resolution，也不创建Resume。
+
+工具数量仍为12，annotations仍是纯只读：
+
+```text
+readOnlyHint: true
+destructiveHint: false
+idempotentHint: true
+openWorldHint: false
+```
+
+### 218.15 测试维护与本单元验证
+
+现有reported Implementation/Test测试保持原输出与零写语义。新增两个真实blocked案例：
+
+- Implementation blocked：复验current Decision ID/source、阻断judgment、Snapshot/Event Stream CAS、reported reviewUnit digest和隐私；伪造`decision=accept`无法通过blocked output Schema；
+- Test blocked：复验Test Decision判别、同一TargetResult与Test attempt identity。
+
+既有accepted负例继续证明Inspector不会接受非blocked decided target。codegen mirror test固定reported/blocked联合、字段差异和currentBlockedDecision shape；没有新增独立Schema测试文件。
+
+第一次MCP聚焦运行出现`39 pass / 1 fail`：失败只是原测试仍查找旧description连续子串`creates no Controller acceptance`，新文案已改成更准确的`creates no Resume, Controller acceptance`。断言随后拆成两个真实边界并重跑，MCP为`35/35`通过；没有修改生产行为迎合旧字符串。
+
+```text
+Review Inspector final focused:
+  4 pass / 0 fail / 0 skip
+Schema/codegen focused:
+  4 pass / 0 fail / 0 skip
+MCP focused after assertion cleanup:
+  35 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 89 schemas / 207 external refs
+Schema digest: sha256:e4f27b587cf713438e7c348e37fbf381d32f72dd771d394244747bce95df13e9
+Architecture: pass / parser=swc / 673 modules / 4771 dependencies / 0 violations
+Codex candidate: 383 compiled files / manifest sha256:1a1bec99a48ba3b2a82f5781f78ece1394b48f84227eb931ee098ceb13094a0e
+Claude Code candidate: 388 compiled files / manifest sha256:ee15896ee00a4052a421764b855335f5a21051634664b24c3c14d823e3aadcf5
+Both candidates: 12 tools / releaseEligible=false
+Prettier: pass
+git diff --check: pass
+```
+
+本单元结论为`implemented / verified`。方案A的只读producer现已完成；下一文件单元可以新增单步`wakeflow_resume_target_result_review` Public Contract/Coordinator和第13个MCP工具，并用当前blocked Inspector输出构造exact Resume request。
+
+### 218.16 第三个文件单元：Resume公共wire
+
+新增self-contained：
+
+- `wakeflow-target-result-review-resume-request.schema.json`；
+- `wakeflow-target-result-review-resume-result.schema.json`；
+- 对应generated type/runtime Schema；
+- `target-result-review-resume-public-contract.ts`；
+- `target-result-review-resume-public-coordinator.ts`。
+
+公共Request精确为：
+
+```text
+root
+demandId
+targetTaskId
+expectedBlockedState:
+  streamRevision
+  stateDigest
+resolutionSummary
+```
+
+Request Schema、64 KiB Canonical JSON容量和内部Resume selector codec三层准入。旧`targetResultId / blockedDecisionId / blockedDecisionDigest / blockedSnapshotDigest`均作为未知字段拒绝；公共调用方只提交Inspector/Route可取得的当前state CAS和Controller外部解决陈述。
+
+Result返回：
+
+```text
+resumed | already-resumed
+committed | idempotent
+eventAuthority=current
+完整ControllerTargetReviewResume
+Resume Event/Commit receipt
+Resume Event resultingStateDigest
+```
+
+status/disposition关系由self-contained Schema强制。Resume、blocked Decision/source和typed ID结构镜像Domain Schema；MCP wire不广告仓库私有URN，Domain codec继续拥有NFC、digest、Decision/Result/Snapshot和Event关系。
+
+### 218.17 Public Coordinator与settled replay
+
+Coordinator调用现有Service后逐项复验：
+
+- request的Demand/Target/expected blocked state/resolution summary与Resume一致；
+- 单一`review.target-result-resumed` Event及其确定性Event/Commit ID；
+- Commit command digest、expected revision、first/last revision和Commit digest；
+- Event recorded time、完整Resume bytes与resulting state digest；
+- 首次committed时Target确实回到work type对应的`result-reported | test-result-reported`。
+
+idempotent replay不要求后来Aggregate仍停在reported：Resume后形成第二代Decision时，exact Resume重放仍返回原Resume/Event/resulting state digest，不把当前accepted或其他phase误报成历史Resume失败。
+
+Coordinator在Event append前拒绝resolution summary中的request/canonical workspace root，避免私有绝对路径进入持久Event；输出再次执行4 MiB容量、Schema和workspace root隐私检查。错误只公开`root | privacy | resume | output`、下层稳定code/reason和`unchanged | current | unknown` Event authority。
+
+Completion与Resume一样为host-neutral owner：不消费Host Profile、Binding handle或宿主效果，因此Codex/Claude composition直接复用同一Coordinator，没有复制两个wrapper。
+
+### 218.18 第十三个MCP工具
+
+新增：
+
+```text
+wakeflow_resume_target_result_review
+```
+
+description与Server instructions固定正确顺序：
+
+```text
+Route → blocked Review Inspector
+→ Controller核实外部阻断已解决
+→ exact state Resume
+→ Inspector重新返回reported generation
+→ fresh independent checks
+→ new Decision
+```
+
+工具不运行检查、不自动判断阻断已解决、不复用旧Decision、不accept/rework/redesign、不创建Test attempt/Delivery、不执行宿主效果。annotations：
+
+```text
+readOnlyHint: false
+destructiveHint: false
+idempotentHint: true
+openWorldHint: false
+```
+
+`destructive:false`表达append-only恢复授权：旧Decision/Result全部保留，只重新开放审查资格，与现有Host Effect Rearm风险语义一致。
+
+公共Server options/Proxy准入、稳定错误envelope、双宿主固定composition、官方stdio Client和candidate tool parity同步。两个候选现在发布相同13工具集合。
+
+### 218.19 真实公共纵切与测试维护
+
+新增一个Public Coordinator测试文件，仅两个真实测试：
+
+1. Implementation完整路径：reported Inspector → public blocked Decision → blocked Inspector → stale/privacy拒绝 → public Resume → reported Inspector/prior history → public第二代accept Decision → settled Resume replay；
+2. Test共享路径：内部Test blocked Decision → public blocked Inspector → public Resume → 同一Test Result/attempt identity → Test review Route重新开放。
+
+MCP真实Codex测试增加一条独立短纵切，从现成reported fixture开始，不重复Claim/Outcome/Result前缀，也不执行宿主发送。它同时验证stale selector的脱敏错误和第二代Decision后的exact replay。
+
+codegen mirror test固定：
+
+- request/result self-contained与Foundation SHA/UTC词法；
+- Request没有derived echoes；
+- Result Resume字段与Domain Resume一致；
+- blocked Decision/source字段集合不漂移。
+
+最终聚焦组合：
+
+```text
+Resume internal Service
++ blocked/reported Inspector
++ Resume Public Coordinator
++ MCP
++ codegen
++ dual-host candidate:
+  47 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 91 schemas / 207 external refs
+Schema digest: sha256:d98726ce8347e69f73a4f4fd438107c57fb397a0211caf583a09d4baf8747c21
+Architecture: pass / parser=swc / 678 modules / 4806 dependencies / 0 violations
+Codex candidate: 389 compiled files / manifest sha256:2f5cd29bf8ec6cbafa695f26234e403e1e28215b23cc36100f0347eee5bea62c
+Claude Code candidate: 394 compiled files / manifest sha256:b82c82d53992466407de0417b12b9c1a2b82d7a5979983c3483c9fd4ace0a4e2
+Both candidates: 13 tools / releaseEligible=false
+Prettier: pass
+git diff --check: pass
+```
+
+### 218.20 方案A收束
+
+方案A三个文件单元全部`implemented / verified`：
+
+1. 内部Resume selector删除不可公开构造的derived echoes；
+2. 现有Inspector增加当前blocked Context而不膨胀Route或新增重复Query工具；
+3. 单步Resume公共工具用exact state CAS追加唯一Event，并要求重新Inspector/重新检查/新Decision。
+
+旧JS/core、正式plugin制品、安装cache、版本、发布和外部Atlas均未修改；未运行旧JS全量`npm test`或正式plugin validator/smoke，没有提交。
+
+当前公共Implementation路线已同时闭合accept→Completion、rework→Delivery和blocked→Resume；redesign仍是明确Design能力边界。下一主要Route缺口转向`real-environment-test-planning → TestCard Planning`公共入口，应先重新审阅TestCard authored content与策略Authority的公共最小输入，不直接批量公开整条Testing链。
+
+## 219. real-environment TestCard Planning公共边界预审
+
+### 219.1 本轮范围与结论状态
+
+本轮同时按Governance、Controller和Test三个职责边界重新读取：
+
+- `test-card.ts`、TestCard Schema、Planning Authority/Plan/Service与四项直接测试；
+- Test Task Planning、Test TaskPackage派生和后续Test Delivery/Result对`approvedPlan`与Authority的消费；
+- `DemandPostAcceptanceRoute`、`DemandControllerRoute`和当前13项公共MCP工具；
+- 旧JS `createTestCardArtifact`、`wakeflow_intake_test_card`及旧TestCard Schema；
+- TencentDB-Agent-Memory的Gateway schema→handler→store分层、`source_refs`溯源形状和粗粒度Task模型；
+- ISTQB、Azure Test Plans与MCP当前官方资料。
+
+本节最初结论为`pre-reviewed / awaiting decision`；用户随后确认方案A，实施结果记录在§219.8–§219.10。预审阶段本身没有修改生产代码、Schema、生成文件或测试。
+
+### 219.2 TestCard的真实职责与可派生边界
+
+TestCard仍应是S4→S5之间由Controller冻结的真实环境测试合同，不是Test自己制定的计划，也不是Test Task、attempt、run或Result：
+
+```text
+S1：用户确认Test决定、环境与原始测试意图
+  ↓
+S4：Controller完成Implementation功能验收并编写Card
+  ↓
+TestCard Event：冻结问题、测试章程、边界和来源
+  ↓
+Test Task Planning：把同一Card分配给Test Window
+  ↓
+Test执行批准合同；Result回到Controller审查
+```
+
+当前Planning owner已经正确派生并复验以下事实，公共调用方不应重复提交：
+
+- Program/Demand identity、Demand goal与完整Authority digest；
+- `test-environment`完整成员引用、Config Test Window和accepted Implementation baselines；
+- Post-Acceptance Route、Review Snapshot与Event Stream尾部CAS；
+- initial/retest generation source、TestCard/Target/Event/Commit identity与`createdAt`；
+- `changeControl=return-blocked-to-controller`和`productSourcePolicy=read-only`。
+
+当前15项`TestCardAuthoredContent`仍属于Controller判断：批准步骤、允许Skill、setup/attempt策略、单一问题、对象边界、Controller已完成检查、真实场景条件、成功/失败/不可推断/停止条件、证据以及允许/禁止操作。代码无法从Markdown Authority正文可靠推断这些语义，也不应让Test补写。
+
+[ISTQB CTFL v4.0.1](https://istqb.org/wp-content/uploads/2024/11/ISTQB_CTFL_Syllabus_v4.0.1.pdf)区分test planning、test design、test implementation和test execution，并把test charter、test environment requirements、test logs分别放在不同工作产物中；其session-based exploratory testing也以目标导向的test charter约束探索，再记录实际步骤与发现。Wakeflow的S5正是“功能已由Controller接受后，对冻结环境风险做受约束探索”，因此当前`question + approvedPlan + boundaries + success/failure`形状合理；不把它机械改造成传统手工Test Case的逐步`Action/Expected Result`，避免引入并不存在的测试管理系统。
+
+### 219.3 发现的根本问题：单一Strategy Authority不成立
+
+R-2B-2曾把一个`strategyAuthority`加入TestCard，但当前代码事实证明该结论需要回溯修正：
+
+- Ledger Authority允许同一role出现多个文档；它只保证成员路径唯一和稳定排序，不保证role唯一；
+- requirement当前允许一个或多个`requirement-design`来源；
+- bug的测试依据必须同时理解`reproduction`与`scope`，现实现却允许调用方任选其一；
+- supplement必须同时理解原`requirement-design`与`requirement-delta`，现实现同样允许任选其一；
+- 当前四项Planning测试只覆盖requirement的单个`requirement-design`，没有证明bug/supplement语义；
+- 当前公共Controller Route只返回`test-card-planning`责任前沿，不返回可供调用方安全猜测的单一成员；直接公开现request会依赖Agent记住内部Ledger路径。
+
+旧JS同样只校验`strategySource`命中任意一个冻结Authority成员，因此是问题来源，不是新TS应维持的标准。TencentDB-Agent-Memory没有TestCard相邻领域；它的`source_refs`会显式保存session与内容hash以便追踪，并明确不触发服务端跨接口隐式取数，只能支持“来源应显式、输入应在边界准入”这一一般原则，不能为单一测试策略来源提供依据。
+
+[ISTQB的test basis→testware traceability](https://istqb.org/wp-content/uploads/2024/11/ISTQB_CTFL_Syllabus_v4.0.1.pdf)明确要求在test basis元素、testware、结果与缺陷之间保持可追踪关系；[Azure Test Plans](https://learn.microsoft.com/en-us/azure/devops/test/create-test-suites?view=azure-devops)也通过requirement-based suite把Test Case与Requirement建立明确关联。二者都支持“多来源可追踪”，不支持从多个有效来源中任意挑一个充当全部测试依据。
+
+### 219.4 推荐的内部收敛
+
+推荐把单一：
+
+```text
+strategyAuthority
+strategyAuthorityMemberRef
+```
+
+替换为由owner确定性恢复的有序非空：
+
+```text
+testBasisAuthorities[]
+```
+
+第一阶段不建立可配置角色注册表，而按Demand类型固定最小basis集合：
+
+| Demand type | Test basis roles |
+| --- | --- |
+| requirement | 全部`requirement-design` |
+| bug | 全部`reproduction` + 全部`scope` |
+| supplement | 全部`requirement-design` + 全部`requirement-delta` |
+| research | 不允许进入real-environment TestCard Planning |
+
+`test-environment`继续是独立`environmentAuthority`；完整Demand Authority digest继续覆盖non-goals、user confirmation和其余冻结来源。这样既不把所有需求文档复制为Test执行合同，也不会遗漏真正决定测试对象/方法的多份basis。
+
+公共preview不再接收任何Authority路径选择，只接收`demandId + TestCardAuthoredContent`。Owner从当前冻结Authority恢复、校验、排序并写入完整`testBasisAuthorities`；Test TaskPackage随后确定性使用`testBasisAuthorities + environmentAuthority`作为导航引用。Caller仍负责语义上保证自己编写的Card来自这些已读basis，代码负责证明Card只引用当前冻结集合；不假装程序能够理解Markdown并自动生成测试判断。
+
+### 219.5 公共工具和Route边界
+
+建议新公共工具名：
+
+```text
+wakeflow_plan_test_card
+```
+
+它与`wakeflow_plan_target_task`保持同一命名层级，使用零写preview和exact-plan apply：
+
+```text
+preview:
+  root + mode=preview + demandId + testCard authored content
+
+apply:
+  root + mode=apply + exact plan + planDigest
+```
+
+Preview返回完整TestCard/Event计划供Controller审阅；Apply只追加`testing.test-card-created` Event并返回Card与Event/Commit receipt。它不创建Test TaskPackage、不准备Delivery、不执行宿主效果、不运行环境操作，也不把Card解释为测试已经开始。Apply后必须重新Inspect Route，下一`test-task-planning`切片优先扩展现有`wakeflow_plan_target_task`接受内部已经支持的`{workType:"test"}`，不新增`wakeflow_plan_test_task`工具。
+
+工具建议annotations：
+
+```text
+readOnlyHint: false
+destructiveHint: false
+idempotentHint: true
+openWorldHint: false
+```
+
+TestCard写入是append-only且保留历史，不删除或覆盖旧事实；annotations仅是MCP提示，服务端仍必须执行Schema、容量、隐私、Authority、Route、CAS和Plan复验。[MCP 2025-11-25 Schema](https://modelcontextprotocol.io/specification/2025-11-25/schema)继续要求明确`inputSchema`，并允许`outputSchema`约束structured result；同一规范明确annotations只是hint，不能代替服务端授权。
+
+另有一个必须在注册公共工具前修正的Route事实：当前全部Test Planning Authority只支持`executionPlacement.mode=main`，但Controller Route尚未据此阻止isolated/Pod Demand显示可执行`test-card-planning`。不应让Route先承诺能力、再由写工具返回`placement`失败。推荐增加typed `isolated-test-planning-not-implemented` blocker；本轮不顺带建设Pod Test access、multi-root probe或宿主能力。
+
+### 219.6 三种互斥方案
+
+| 方案 | Authority来源 | 公共边界 | 评价 |
+| --- | --- | --- | --- |
+| A（推荐） | `testBasisAuthorities[]`由Demand类型和全部匹配role确定性派生 | 修正main/isolated Route真实性后，独立公开`wakeflow_plan_test_card` preview/apply | 无调用方路径猜测；bug/supplement完整；工具最少；先修正确内部模型再冻结wire |
+| B | 调用方从只读Planning Context选择一个或多个basis ref | 先新增Inspector/Route候选，再公开同一preview/apply | 追踪可更细，但增加新Query与选择状态；当前Authority没有“互斥候选”语义，容易让Agent遗漏必要来源 |
+| C | 保留单一`strategyAuthorityMemberRef` | 直接包装现有Service | 改动最少，但把旧JS的单来源缺陷冻结进公共API，bug/supplement和同role多文档仍不闭合，不建议 |
+
+把TestCard与Test Task合并为同一apply不列为候选：二者是两个独立Event owner，前者冻结测试合同，后者派生窗口任务；合并会删除当前Route检查点并扩大单次事务。
+
+若确认A，仍按1–2个紧密文件的节奏推进：
+
+1. `test-card.ts + test-card.schema.json`：单一Strategy改为非空Test Basis集合；
+2. `test-card-planning-authority.ts + test-card-planning-service.ts`：确定性派生并删除caller selector；
+3. `test-task-package.ts + 相邻Planning Authority`：消费复数basis并清理旧分支；
+4. Controller Route及其wire：增加isolated Test capability blocker；
+5. Public Contract/Coordinator；随后Schema/generated、MCP双宿主和聚焦测试作机械闭包。
+
+测试保持轻量：保留现有requirement真实纵切；新增一个纯basis矩阵测试覆盖requirement/bug/supplement、多同role文档和稳定排序；不为每种Demand复制完整Delivery/Review fixture。
+
+### 219.7 当前基线验证
+
+```text
+TestCard Planning + Test Task Planning + Controller Route focused:
+  12 pass / 0 fail / 0 skip
+```
+
+该结果只证明现有单Requirement路径与相邻Route没有回归，不证明§219.3发现的多来源语义。未运行旧JS、完整TS套件、正式plugin validator/smoke、发布或提交。
+
+### 219.8 方案A内部合同收敛
+
+用户确认方案A后，先完成TestCard及其直接producer/consumer闭包，没有提前进入Route或公共MCP：
+
+- `TestCardRouteSource`与`TestCard`删除单一`strategyAuthority`，改为非空`testBasisAuthorities`；
+- codec要求basis按`memberRef`严格递增，拒绝重复、乱序、`test-environment`角色和环境成员复用；
+- `createTestCard`从Route Source副本排序后构造Card，最终仍由同一严格parser复验；
+- TestCard Schema同步改为1–32项完整Ledger Authority member reference数组；
+- 没有保留旧字段、deprecated alias、双写或旧TS历史兼容分支。当前TS尚未发布，旧JS只作需求参考，不能成为新合同负担。
+
+`TestCardAuthoredContent`、Card digest basis、generation source和accepted Implementation baselines均未改变。Test Basis只增加多来源追踪，不扩大Test判断权，也不把Authority Markdown正文复制进Card。
+
+### 219.9 Planning确定性派生与直接消费者
+
+`test-card-planning-authority.ts`新增纯函数`deriveTestCardBasisAuthorities`，固定矩阵为：
+
+```text
+requirement → 全部 requirement-design
+bug         → 全部 reproduction + 全部 scope
+supplement  → 全部 requirement-design + 全部 requirement-delta
+research    → 拒绝
+```
+
+每个要求的role至少出现一次；返回值按`memberRef`稳定排序。Planning preview request因此删除`strategyAuthorityMemberRef`，只保留`demandId + testCard authored content`。Apply重建也直接从当前冻结Demand Authority恢复同一集合，不再从Plan取一个成员路径反向驱动来源选择。
+
+直接消费者同步闭合：
+
+- Planning Plan与Event Sourcing Command parser要求每个basis完整引用都存在于同一Demand Authority；
+- Test TaskPackage的`selectedAuthorityRefs`由全部basis加独立environment引用确定性派生；
+- Test Task Planning与Test Delivery Preparation逐项复验全部basis；
+- `strategyAuthority`、`strategyAuthorityMemberRef`和`TEST_STRATEGY_ROLES`在`src/`与`tests/`中均已清零。
+
+这里没有建立角色注册表、Strategy Resolver class、Test Basis投影文件或新状态。类型矩阵是TestCard Planning领域的闭合规则，纯函数足以表达。
+
+### 219.10 测试维护与内部checkpoint
+
+保留原Requirement真实纵切，只增加一项纯矩阵测试，覆盖：
+
+- Requirement多份同role Design来源与稳定排序；
+- Bug必须同时具有Reproduction和Scope，并保留多份Scope；
+- Supplement同时具有原Design和Delta；
+- Bug缺失Scope与Research均返回`test-basis`；
+- Card Schema拒绝空basis，codec拒绝把environment混入basis。
+
+没有为三种Demand复制完整Delivery/Review工作区fixture。原“caller传入environment冒充strategy”的测试随已删除输入一起移除，由Card codec和确定性派生测试覆盖真实风险。
+
+```text
+Focused Card / Task / Delivery / Test Review / Route / Decider / Upcaster:
+  24 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 91 schemas / 207 external refs
+Schema digest: sha256:5c5233025707f98f0243a7269dcdca6cd594fa430839b74d2e45ac58918ec630
+Architecture: pass / parser=swc / 678 modules / 4806 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+方案A的内部Test Basis收敛至此`implemented / verified`。下一紧邻单元只修正Controller Route对main/isolated Test能力的真实表达；不会同时注册`wakeflow_plan_test_card`或建设Pod Test access。未运行旧JS、完整TS套件、正式plugin validator/smoke、发布或提交。
+
+### 219.11 isolated Test Planning Route真实性
+
+紧邻Route单元只修改Controller Route及其公共Result Schema，没有让Test Planning偷偷支持Pod：
+
+- main placement继续返回`work-available + test-card-planning`；
+- accepted real-environment Demand若为isolated placement，返回`blocked`；
+- frontier仍明确指出被阻断的下一领域是`test-card-planning`；
+- blocker固定为`isolated-test-planning-not-implemented / owner=test-card-planning`；
+- 保留`postAcceptanceRouteDigest`，证明阻断发生在已重建的Post-Acceptance Test Route上，而不是缺失Route来源；
+- controller-only isolated Demand的Completion Route不受影响。
+
+公共Result Schema新增对应closed blocker，并严格区分两类blocked来源：isolated Test blocker必须携带`postAcceptanceRouteDigest`；既有redesign/research blocker继续禁止该字段。第一次Schema build因`contains`条件缺少显式`type:array`被Ajv strictTypes拒绝；补齐局部类型后正常通过，没有关闭strict mode或放宽Catalog验证。
+
+测试fixture只增加可选`executionPlacement=isolated`：它发布同Demand的真实Confirmation member作为placement authorization，再由正常Identity/Authority admission进入现有Implementation接受纵切。Route测试因此使用真实已准入isolated Demand，不伪造Loaded Authority对象；同一测试同时证明公共Schema拒绝缺失Post-Acceptance digest和把普通research blocker伪装成Post-Acceptance blocker。
+
+```text
+Controller Route + public Schema/Coordinator + TestCard Planning focused:
+  14 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 91 schemas / 207 external refs
+Schema digest: sha256:d22ffaa25fa980f0d36efce259468cffbe0bfdfcdaeaea342b585cf65774a29c
+Architecture: pass / parser=swc / 678 modules / 4808 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+Route真实性单元至此`implemented / verified`。它只诚实暴露当前能力缺口，没有创建Pod Test access、multi-root probe、Pod Binding、Test Task或宿主效果。下一单元可以开始`wakeflow_plan_test_card` Public Contract/Coordinator；内部Card来源与Route准入已经不再需要公共调用方猜测Authority路径。
+
+### 219.12 `wakeflow_plan_test_card`公共wire
+
+新增两份self-contained MCP Schema及generated type/runtime Schema：
+
+- `wakeflow-test-card-planning-request.schema.json`；
+- `wakeflow-test-card-planning-result.schema.json`。
+
+Request为严格preview/apply判别联合：
+
+```text
+preview:
+  root
+  mode=preview
+  demandId
+  testCard = 15项Controller-authored content
+
+apply:
+  root
+  mode=apply
+  plan = 完整TestCard Planning Plan
+  planDigest
+```
+
+Preview没有`strategyAuthorityMemberRef`、Test Basis selector、环境选择、Test Window、accepted baselines、generation source、时间或Event identity；这些事实全部由内部owner派生。Apply保留完整Demand Authority、TestCard和generation source，使Event已经提交后的精确重放仍能恢复原Command，而不依赖后来展示状态。
+
+Result同样为严格联合：preview返回完整plan供Controller/用户审阅；apply返回`created | already-created`、`committed | idempotent`、`eventAuthority=current`、完整Card、generation source以及Event/Commit/state receipt。Schema固定status/disposition关系，不返回next action；调用方必须重新读取Controller Route。
+
+两份Schema没有外部URN。TestCard、Demand Authority、Ledger member、Generation Source、Portable Path、SHA与UTC定义以内联`$defs`表达，并由codegen mirror test持续核对Domain字段集合和Foundation词法。公共preview的authored字段精确固定为15项，测试同时证明旧Strategy selector不能重新进入wire。
+
+### 219.13 Public Contract与Coordinator
+
+新增：
+
+- `test-card-planning-public-contract.ts`：24 MiB Canonical JSON容量、passive JSON与self-contained request Schema准入；
+- `test-card-planning-public-coordinator.ts`：RootedDirectory生命周期、隐私、内部Service调用和公共结果复验。
+
+Coordinator不解释Card语义。它只执行：
+
+```text
+parse public request
+→ hold canonical workspace root
+→ reject request/canonical root text inside authored Card or frozen Plan
+→ call internal preview/apply owner
+→ verify exact Plan/Event/Commit/Card/generationSource closure
+→ validate bounded redacted public result
+→ close root
+```
+
+Apply结果逐项复验单一`testing.test-card-created` Event、expected/actual stream revision、Commit ID/sequence/digest、Command digest、Card createdAt和完整Event data。首次commit要求Aggregate current TestCard与Event resulting state闭合；idempotent replay返回原Event receipt，不要求后来Aggregate仍停在刚创建Card的阶段。
+
+错误只公开`root | privacy | preview | apply | output`、下层稳定code/reason和`unchanged | current | unknown` Event authority。Coordinator不创建Test Task、Delivery/attempt、WorkClaim或宿主效果，也不根据Card内容作Test结论。
+
+### 219.14 聚焦测试与维护记录
+
+新增一个Public Coordinator测试文件，仅两项：
+
+1. 真实accepted real-environment Demand：零写preview→exact apply→唯一Card Event→Route进入`test-task-planning`→exact replay idempotent；
+2. 未知旧selector、Proxy、24 MiB容量、错误root、preview/apply私有绝对路径和伪造plan digest全部在Event写入前拒绝，Demand inventory保持不变。
+
+第一次组合运行出现`12 pass / 1 fail`：失败来自断言把validator返回的null-prototype JSON对象与普通对象做`deepStrictEqual`，字段内容完全相同。断言改为验证`generationSource.kind`判别值后，Public测试`2/2`通过；没有修改runtime representation迎合测试。
+
+```text
+Public Contract/Coordinator + Domain Service + Route + codegen mirror:
+  14 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 93 schemas / 207 external refs
+Schema digest: sha256:8d5449fe95db831f192fe821300cd0c6e5ac5dd68eba3ae9c11fdb230f2f573d
+Architecture: pass / parser=swc / 683 modules / 4826 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+Public Contract/Coordinator单元至此`implemented / verified`，但尚未形成production composition-root consumer。下一单元只注册第14个MCP工具、双宿主固定composition、Server instructions、稳定错误envelope和candidate parity；不会同时公开Test Task Planning。
+
+### 219.15 第十四个MCP工具
+
+公共Server新增：
+
+```text
+wakeflow_plan_test_card
+```
+
+工具title为`Plan Wakeflow Test Card`，input/output直接使用§219.12两份self-contained Schema。annotations固定为：
+
+```text
+readOnlyHint: false
+destructiveHint: false
+idempotentHint: true
+openWorldHint: false
+```
+
+`destructive:false`表达append-only Card Event：它不删除或覆盖历史，也不关闭其他能力。Apply仍是状态写入，因此`readOnly:false`；exact plan retry返回同一Event receipt，因此`idempotent:true`。
+
+Tool description和Server instructions同步固定正确顺序：
+
+```text
+inspect Demand Route
+→ 仅当frontier=test-card-planning
+→ Controller编写已确认Card内容
+→ preview完整Card/Event plan
+→ review exact plan
+→ apply同一plan + digest
+→ inspect Demand Route again
+```
+
+说明显式列出owner派生的Test Basis、environment Authority、accepted baselines、Test Window、generation source、时间和Event identities，避免Agent重新提交这些事实。同时明确工具不创建Test Task/Delivery、不运行Test、不执行宿主效果，也不产生Test结论。
+
+### 219.16 Composition、错误边界与双宿主
+
+`CreateWakeflowPublicMcpServerOptions`新增必需`planTestCard` executor，并在读取任何字段前继续执行closed options、function和Proxy拒绝。缺失、额外或Proxy executor分别稳定归入`options | test-card-planning-executor`，没有可选占位或运行时fallback。
+
+错误envelope新增TestCard Public Contract/Coordinator映射：
+
+- Contract只公开`code/reason/path`；
+- Coordinator只公开`code/reason/causeCode?/causeReason?/eventAuthority`；
+- workspace root、Card正文和Plan正文不会进入错误结果；
+- 未知异常仍统一降为`wakeflow-unexpected/unexpected`。
+
+Codex与Claude Code composition root都直接注入同一个host-neutral `executeTestCardPlanningPublicRequest`。没有创建两个host wrapper：Card Planning不消费Host Profile、Binding handle或宿主效果，双宿主分叉没有真实依据。
+
+### 219.17 MCP真实纵切与候选制品
+
+MCP测试维护包括：
+
+- composition options新增Proxy负例；
+- tools/list从13更新为14，并核对TestCard Schema ID、annotations、自包含Schema和职责文案；
+- Codex/Claude Code工具名集合严格相同；
+- 官方SDK在进入owner前拒绝旧`strategyAuthorityMemberRef`；
+- Coordinator privacy错误通过稳定MCP envelope返回，且不回显workspace root；
+- 真实Codex MCP纵切从`test-card-planning` Route开始，完成preview/apply/retry，最后Route进入`test-task-planning`；
+- candidate manifest与两个stdio入口都核对同一14工具集合。
+
+```text
+MCP + Public Coordinator + codegen mirror focused:
+  40 pass / 0 fail / 0 skip
+Candidate build / stdio parity focused:
+  2 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 93 schemas / 207 external refs
+Schema digest: sha256:8d5449fe95db831f192fe821300cd0c6e5ac5dd68eba3ae9c11fdb230f2f573d
+Architecture: pass / parser=swc / 683 modules / 4836 dependencies / 0 violations
+Codex candidate: 396 compiled files / manifest sha256:f50325609a684c88d743518b2b2f138d936fddd83ee229c7c8ed38c1f8502128
+Claude Code candidate: 401 compiled files / manifest sha256:d7f3543f8d42ded4a8610d9b97e9e8c33b874396d35d1162e814f28c0e5518c8
+Both candidates: 14 tools / releaseEligible=false
+Prettier: pass
+git diff --check: pass
+```
+
+TestCard Planning公共纵切至此`implemented / verified`：内部Test Basis、main/isolated Route、Public Contract/Coordinator、MCP、双宿主和候选制品已经闭合。下一Route前沿为`test-task-planning`；进入下一单元前应重新审阅现有`wakeflow_plan_target_task`公共合同，优先扩展同一工具的`workType:test`判别分支，不新建重复Test Task工具。
+
+## 220. `wakeflow_plan_target_task` Test分支
+
+### 220.1 预审结论与旧公共边界问题
+
+内部`TargetTaskPlanningService`、`TargetTaskPlanningInput`与`TestTaskPlanningAuthority`已经具有成熟Test分支：调用方只提交`{workType:"test"}`，owner从当前TestCard Event派生完整TaskPackage、复验Route/Config/Authority/baselines/WorkClaim并复用同一`tasking.target-task-planned`Event。这里没有需要用户重新选择的业务方案，也没有新建Test专用工具的依据。
+
+真正缺口全部位于公共边界：
+
+- Request/Result Schema把Plan和TaskPackage硬编码为implementation；
+- Coordinator的apply projection显式拒绝Test；
+- apply回执读取当前Aggregate phase/state digest，若同一Planning plan在后续Delivery之后精确重放，结果会随当前状态漂移；
+- 公共request没有容量上限；
+- Implementation authored content或Apply plan可以携带workspace root，直到output阶段才可能被间接发现，存在写入Event前的隐私缺口。
+
+因此本单元不是给内部Service增加第二条流程，而是让公共wire忠实表达现有Domain联合，并回溯修正两个公共基础门禁。
+
+### 220.2 Request与TaskPackage判别联合
+
+同一`wakeflow_plan_target_task`保留preview/apply和工具身份。Preview request现在严格为：
+
+```text
+implementation:
+  demandId
+  taskPackage:
+    workType=implementation
+    assignment/objective/context/Authority refs/boundaries/
+    completion/commit expectation/acceptance anchors
+
+test:
+  demandId
+  taskPackage:
+    workType=test
+```
+
+Test request的`additionalProperties:false`使assignment、objective、Authority、TestCard tuple、边界或完成条件全部无法由caller重写。Preview仍由内部owner恢复当前Card并派生完整Package；Test Target ID继续复用Card预留identity。
+
+Apply Plan中的TaskPackage改为完整Domain判别联合，不再维护一份implementation-only近似Schema。Self-contained wire以内联定义镜像Domain的assignment、TestCard tuple、Authority refs、文本和typed IDs；codegen test固定Domain字段集合与两个request变体。
+
+### 220.3 Apply Result与稳定Event receipt
+
+Apply Result的`targetTask`新增公共判别字段：
+
+```text
+implementation:
+  workType=implementation
+  target/task package/repository/window
+  phase=planned
+
+test:
+  workType=test
+  target/task package/window
+  phase=planned
+  testCard tuple
+```
+
+Test分支禁止`repositoryId`；Implementation分支禁止`testCard`。这是新TS尚未发布的公共合同收敛，没有保留缺少`workType`的旧输出兼容形状。
+
+Coordinator不再把当前Aggregate phase当作Planning receipt。它定位plan对应的唯一`tasking.target-task-planned`Event，并复验：
+
+- request plan/digest与Service result；
+- Command/Commit ID、revision、digest和单Event边界；
+- Event完整TaskPackage与createdAt；
+- Aggregate中同一Target identity与work type关系；
+- create-only projection的source Event、完整Package和Package digest。
+
+首次commit仍要求当前Aggregate位于该Event resulting state；idempotent replay允许Aggregate后来进入Delivery/Result阶段，但公共回执始终返回`phase=planned + Event resultingStateDigest`。因此Planning receipt表达“这条规划Event创建了什么”，不伪装成当前状态Query；当前状态继续由Controller Route拥有。
+
+### 220.4 统一容量与隐私门禁
+
+Public Contract新增24 MiB Canonical JSON请求容量，与16 MiB TaskPackage projection上限保留wire余量。Contract稳定增加`capacity`原因。
+
+Coordinator在调用内部Service前扫描：
+
+- Implementation preview authored package；
+- Test preview最小selector；
+- 两种work type的完整Apply plan。
+
+request root和RootedDirectory canonical root均不得进入这些持久内容；命中时返回`privacy + eventAuthority=unchanged`。Output继续执行24 MiB、Schema和根文本检查。根路径`/`不作为子串扫描值，避免把所有portable path误判为隐私泄漏；实际Workspace authority仍由RootedDirectory和内部Service验证。
+
+### 220.5 MCP说明与测试维护
+
+工具数量保持14。Tool description和Server instructions现在区分：
+
+- Implementation Task Planning：Controller提交完整authored package；
+- Test Task Planning：只提交`taskPackage={workType:"test"}`，其余全部派生。
+
+两者Apply都只追加Planning Event并物化create-only projection，不准备Delivery或执行宿主效果。
+
+新增一个Public Coordinator测试文件，仅两项：
+
+1. Test最小request→零写preview→完整派生Package→apply→typed Test Target receipt→Route进入`test-delivery-planning`→exact replay；
+2. Implementation/Test共享容量与根隐私门禁，preview/apply失败后Demand inventory不变。
+
+MCP真实Test纵切在既有TestCard案例上继续推进：Card apply/retry→Route `test-task-planning`→同一`wakeflow_plan_target_task` Test preview/apply/retry→Route `test-delivery-planning`。SDK另行证明带额外objective的Test request在进入owner前被拒绝。没有为Test复制一套MCP工具测试。
+
+```text
+Public/Domain Task Planning + Test Task + codegen mirror focused:
+  11 pass / 0 fail / 0 skip
+MCP focused:
+  37 pass / 0 fail / 0 skip
+Candidate build / stdio parity focused:
+  2 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 93 schemas / 207 external refs
+Schema digest: sha256:6266aa692f55a3f5ea94c02aa4903700dfce11841bc8f6d1d0a0645b3c7a10d5
+Architecture: pass / parser=swc / 684 modules / 4846 dependencies / 0 violations
+Codex candidate: 396 compiled files / manifest sha256:af2e461e60bb83c8f17f2bd5da2161ceeaa8ecc21ce96219fb9f6cfe8b5d6f10
+Claude Code candidate: 401 compiled files / manifest sha256:5fe244332f3a126d3cbe429306f523829df038d6e8c5adda99b268e6e8ba46ed
+Both candidates: 14 tools / releaseEligible=false
+Prettier: pass
+git diff --check: pass
+```
+
+Test Task公共纵切至此`implemented / verified`。当前Route下一前沿为`test-delivery-planning`；下一单元应先重读initial/rerun/replacement三种内部Test Delivery Preparation request，决定如何在不膨胀成巨型action工具的前提下扩展现有Delivery公共边界。
+
+## 221. Test Delivery Preparation公共边界预审
+
+### 221.1 当前内部三种模式的真实语义
+
+`TestDeliveryPreparationService`当前使用同一preview/apply owner和同一`testing.test-delivery-prepared`Event family表达三种闭合变体：
+
+| 当前mode | Route来源 | logical attempt | 新建身份 | 语义 |
+| --- | --- | --- | --- | --- |
+| `initial` | `test-delivery-planning` | 创建ordinal 1 | attempt + delivery + event + commit | Card首次执行授权 |
+| `rerun` | `test-another-attempt-planning` | 创建下一连续ordinal | attempt + delivery + event + commit | Controller审查后授权新的logical attempt |
+| `replacement-authorization` | `test-delivery-replacement-planning` | 沿用当前attempt | delivery + event + commit | 旧宿主效果明确未发生后的新Delivery授权 |
+
+三者都会恢复同一Test TaskPackage/TestCard、当前Config、Test Window Binding和product WorkClaim absence，并创建新的`WakeflowTestDeliveryIntent`。Preparation从不创建WindowWorkClaim、不返回Agent Host Action、不运行环境操作，也不调用宿主。
+
+Rerun与replacement不能合并：前者消耗`TestCard.maxAttempts`并绑定上一Result/Controller Decision；后者只增加同一attempt的有界Delivery authorization。Initial与rerun也不能被称为自动retry：Wakeflow没有timer/background retry，rerun必须由已经存在的`request-another-attempt` Decision准入。
+
+### 221.2 发现的公共构造问题：当前request全是历史echo
+
+当前内部preview request要求：
+
+```text
+initial:
+  mode + demandId + targetTaskId
+
+rerun:
+  mode + demandId + targetTaskId
+  + previousAttemptId
+  + previous Result ID/digest
+  + Review Decision ID/digest
+
+replacement:
+  mode + demandId + targetTaskId
+  + previous Target Delivery ID
+  + Claim/action ID
+  + Observation digest
+```
+
+但后两组字段不是Controller的新选择：
+
+- `test-another-attempt-planning`已唯一携带previous attempt、Result与Decision tuple；
+- `test-delivery-replacement-planning`已唯一携带rejected Delivery、Claim和Observation tuple；
+- Aggregate current tail和Event history再次保存同一关系；
+- Authority loader当前只是把caller echo与这些唯一事实逐项比较，再从history读取完整对象。
+
+Controller Route为了保持薄application read model，有意只公开frontier和Target摘要，不公开这些完整领域来源。要求公共调用方记住早先工具输出才能构造下一步，会破坏任务恢复，并把stale echo误当授权。
+
+推荐先把内部preview request收敛为：
+
+```text
+{ demandId, targetTaskId }
+```
+
+Authority owner从当前Post-Acceptance Route唯一派生`initial | rerun | replacement-authorization`及其完整source。Plan/Intent仍显式记录attempt/replacement lineage；只删除Command边界的冗余输入，不删除持久审计事实。Apply继续按Plan内Intent恢复相同模式并重验当前来源。
+
+### 221.3 Implementation与Test公共工具不应合并
+
+现有Implementation公共工具为`wakeflow_prepare_implementation_delivery`；内部owner是`TargetDeliveryPreparationService`，Event为`delivery.target-delivery-prepared`，Intent包含Implementation rework/product-defect remediation和portable prompt。
+
+Test使用独立`TestDeliveryPreparationService`、`testing.test-delivery-prepared`、Test attempt、TestCard、environment directive、replacement authorization和后续Test Dispatch Packet。两者相同的只有application动作“preview/apply一份Delivery Preparation”，并不共享Plan、Intent、Command、Event或领域错误。
+
+把两者改成一个`wakeflow_prepare_target_delivery`需要：
+
+- public request/result各自容纳两套大Plan/Intent；
+- 一个Coordinator根据work type分派两个Service和两套host facade错误；
+- 工具description同时解释Implementation rework与Test attempt/replacement；
+- Route虽明确给出不同owner，公共层却重新合并。
+
+这不会越过Claim/Host Effect边界，但会让一个原本清晰的工具成为大型判别入口。工具数减少1不是足够的领域依据。此前§210选择Implementation专名正是为了避免未来Test语义重叠；现在Test路线真实抵达，应补齐相邻Test工具，而不是推翻内部owner边界。
+
+### 221.4 旧JS、Tencent与官方实践
+
+旧JS `wakeflow_prepare_delivery`混合target preview/apply/claim/rearm和Controller-return preview/apply/pre-send共七个operation。它能证明Preparation、Claim、Outcome必须分步，却也是“大工具按operation分发”的反例。旧JS会从state自动判断初始、later attempt或replacement，这项“mode由当前状态派生”的原则可保留；其旧`resume/restart`与caller restart index已经被新TS删除。
+
+TencentDB-Agent-Memory没有TestCard、Test attempt或Agent Delivery相邻模型。其Gateway/worker会区分`retryable`、attempt数和non-retryable错误，pipeline worker再按内部state决定requeue或dead letter；这支持“重试分类由owner根据当前事实决定，不由调用方回送内部计数”，但不能决定Wakeflow工具粒度。
+
+[Playwright retries](https://playwright.dev/docs/test-retries)为每次retry保留独立序号并在失败后创建新worker；[GitHub Actions rerun](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs?tool=webui)保留原始SHA/ref并区分历史run attempt；[Kubernetes Pod failure policy](https://kubernetes.io/docs/tasks/job/pod-failure-policy/)把是否retry、是否忽略以及replacement行为交给Controller按失败事实分类。这些资料共同支持Wakeflow保留logical attempt、physical replacement与retry policy三层分离。
+
+[MCP Tools规范](https://modelcontextprotocol.io/specification/2025-06-18/server/tools)不规定工具交互模式，要求工具具有清晰name、description和input/output Schema；[2026-07 Release Candidate](https://blog.modelcontextprotocol.io/posts/2026-07-28-release-candidate/)允许完整JSON Schema 2020-12判别联合。协议允许统一，不代表领域上应该统一；当前选择应由owner、确认边界和Schema可理解性决定。
+
+### 221.5 三种互斥公共方案
+
+| 方案 | 公共工具 | 优点 | 代价/结论 |
+| --- | --- | --- | --- |
+| A（推荐） | 保留`wakeflow_prepare_implementation_delivery`；新增一个`wakeflow_prepare_test_delivery`，内部覆盖initial/rerun/replacement | 一工具对应一个真实Event owner；Test三种模式仍在同一闭合联合；Schema、错误和说明清楚；Route owner直接映射 | 工具数从14增至15，但没有重复Capability |
+| B | 把现有工具改名为`wakeflow_prepare_target_delivery`，用work type联合两个Service | 工具数保持14；表面动作统一 | 合并两套大Plan/Intent/Event/error；公共Coordinator成为跨bounded-context switch；不建议 |
+| C | 新增Test工具但先只公开initial，rerun/replacement后续再补 | 首次实现较小 | 已知Route会在后两种状态形成公共死端；同一工具Schema反复演化，不能称完整Test路线 |
+
+不把initial/rerun/replacement拆成三个工具：它们共享一个Test Delivery owner、Event和exact-plan确认边界，拆分只会复制Schema和说明。
+
+### 221.6 推荐A的拟定公共边界
+
+内部selector收敛后，Test工具Request建议为：
+
+```text
+preview:
+  root + mode=preview + demandId + targetTaskId
+
+apply:
+  root + mode=apply + exact TestDeliveryPreparationPlan + planDigest
+```
+
+Preview result完整返回Intent，让Controller看到owner派生的是initial、rerun还是replacement；Apply result返回稳定Event/Commit receipt和：
+
+```text
+workType=test
+authorizationKind=initial | rerun | replacement
+target/task package/TestCard
+testAttemptId + attemptOrdinal
+targetDeliveryId + intentDigest
+host/window/binding
+phase=test-delivery-prepared
+```
+
+Result不返回Agent Host Action或Dispatch Packet；后者由下一Claim owner按已提交Intent物化/验证。工具annotations与Implementation Preparation相同：`readOnly=false / destructive=false / idempotent=true / openWorld=false`。
+
+建议实施顺序：
+
+1. `test-delivery-preparation-input.ts + authority.ts`：删除mode与历史echo，按Route派生完整source；
+2. `test-delivery-preparation-service.ts + 聚焦测试`：preview选择派生source，三种真实纵切保持通过；
+3. Test公共Request/Result Schema与Contract/Coordinator；
+4. 第15个MCP工具、双宿主composition、真实initial/rerun/replacement公共测试和candidate parity。
+
+### 221.7 当前基线
+
+```text
+Test Delivery initial/rerun/replacement
++ Implementation Preparation public boundary
++ Controller Route focused:
+  19 pass / 0 fail / 0 skip
+```
+
+本轮只做预审与文档记录，没有修改生产代码、Schema、生成文件或测试。未运行旧JS、完整TS套件、正式plugin validator/smoke、发布或提交。当前推荐方案A，等待用户确认后从内部selector收敛开始。
+
+### 221.8 用户确认A与内部selector收敛
+
+用户确认方案A后，本单元只修改内部Test Delivery输入、Authority、Service及相邻测试，没有提前创建Public Schema或第15个工具。
+
+`TestDeliveryPreparationPreviewRequest`现在精确为：
+
+```text
+{
+  demandId,
+  targetTaskId
+}
+```
+
+删除内容包括：
+
+- caller `mode: initial | rerun | replacement-authorization`；
+- rerun的previous attempt/Result/Decision tuple；
+- replacement的previous Delivery/Claim/Observation tuple；
+- Input层只为这些旧echo存在的digest与WindowWorkClaim parser/error分支。
+
+携带任何旧mode或source字段都会按closed input在打开Demand Context和分配UUID前返回`input`。没有deprecated alias、兼容分支或silent ignore。
+
+### 221.9 Current Source Authority
+
+Authority新增`loadCurrentTestDeliveryPreparationSources`作为唯一preview/apply当前来源入口。它先从已加载Aggregate定位同一Test Target，再按当前phase选择候选分支：
+
+```text
+planned                        → initial
+test-another-attempt-requested → rerun
+test-host-effect-rejected      → replacement-authorization
+其他phase                      → route failure
+```
+
+该phase switch不是写授权。每个被选分支仍独立重建并复验完整Post-Acceptance Route、TaskPackage/TestCard、Config、Binding、product/Test Window Claims和Event history。
+
+Rerun loader现在直接从`route.nextStage.testReview`构造`rerunSource`，再闭合Aggregate current Result/Decision和完整历史；Replacement loader直接从`route.nextStage.rejectedDelivery`恢复old Delivery/Claim/Observation selector，再闭合Prepared/Claim/Observed Event与物理Claim absence。返回给Service的discriminated sources和最终Intent形状保持不变。
+
+Service preview不再根据caller mode分派。Apply首次写入也从当前phase/Route恢复唯一source，再按Plan中已冻结的attempt/replacement identity与时间重建完整Intent并做Canonical equality；因此伪造Plan模式或lineage仍会在Event append前失败。Event已提交的exact replay继续只从不可变Event恢复TaskPackage/TestCard，不依赖当前Route。
+
+### 221.10 测试维护与内部checkpoint
+
+测试删除了手工构造合法rerun/replacement source的重复代码，改为：
+
+- 先由真实Controller Test Decision或rejected Host Effect形成Route；
+- preview只提交Demand/Target；
+- 直接检查Plan Intent中owner派生的rerun/replacement lineage；
+- 旧initial/rerun/replacement request字段分别按`input`拒绝；
+- UUID分配计数证明旧rerun echo在identity allocation前被拒绝。
+
+真实语义保持：initial创建ordinal 1；rerun创建ordinal 2并绑定原Decision/Result；replacement沿用同一attempt并追加authorization ordinal 2；packet、Claim和下一次Agent Host Action继续闭合。
+
+```text
+Initial/rerun/replacement + packet/Claim/Outcome combined focused:
+  14 pass / 0 fail / 0 skip
+Final affected selector/Delivery/Outcome rerun:
+  10 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 93 schemas / 207 external refs
+Schema digest: sha256:6266aa692f55a3f5ea94c02aa4903700dfce11841bc8f6d1d0a0645b3c7a10d5
+Architecture: pass / parser=swc / 684 modules / 4842 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+内部selector收敛至此`implemented / verified`。下一单元可以建立独立`wakeflow_prepare_test_delivery` Request/Result Schema与Public Contract/Coordinator；三种mode只出现在owner生成的Plan/Result，不再出现在preview Command输入。
+
+### 221.11 Test Delivery公共Schema与Contract
+
+本单元新增独立`wakeflow_prepare_test_delivery`的Request/Result Schema和手写Public Contract，但没有注册MCP工具。公共Request保持已确认的exact-plan边界：
+
+```text
+preview = root + mode=preview + demandId + targetTaskId
+apply   = root + mode=apply + exact TestDeliveryPreparationPlan + planDigest
+```
+
+Preview没有`initial/rerun/replacement`选择器，也没有previous attempt、Result、Decision、Delivery、Claim或Observation echo。完整Test Delivery Intent仍在Plan中保留，并继续使用领域合同定义的：
+
+- initial/rerun logical Test attempt；
+- TestCard identity与环境准备directive；
+- rejected-before-effect replacement authorization；
+- TaskPackage、Host、Window和Binding lineage；
+- Canonical Intent digest与prepared time。
+
+两份wire Schema均为JSON Schema 2020-12自包含合同；`intent`与`testExecutionAttempt`字段集合分别镜像领域Schema，Foundation的SHA-256、UTC Instant和Portable Resource Path词法保持本地闭合。Request只包含Plan真正需要的30项定义，没有复制Result-only receipt或摘要定义。
+
+Apply result明确投影：
+
+```text
+workType=test
+authorizationKind=initial | rerun | replacement
+targetTaskId + taskPackageId/digest + TestCard tuple
+testAttemptId + attemptOrdinal
+targetDeliveryId + intentDigest
+hostId + windowId + bindingId
+phase=test-delivery-prepared
+```
+
+`replacement` Plan中的Claim/Event/Observation digest tuple是拒绝历史的审计来源，不是新的WindowWorkClaim或宿主执行参数。公共Result不返回Dispatch Packet、完整Claim、Agent Host Action、raw handle或宿主效果。
+
+### 221.12 Public Coordinator与Event闭合
+
+`test-delivery-preparation-public-coordinator.ts`固定并复验当前Host Resource/Identity Profile，再把preview/apply交给现有`TestDeliveryPreparationService`。Coordinator不重新实现Route或mode判断，也没有跨Implementation/Test的统一switch。
+
+Apply投影在输出前复验：
+
+- request Plan与Service返回Plan Canonical相等，plan digest相同；
+- Commit只包含唯一`testing.test-delivery-prepared` Event；
+- Event/Commit/Demand/stream revision与Plan identity、expected revision闭合；
+- Commit command digest与重新计算的commit digest闭合；
+- Event recorded time和完整Intent与Plan一致；
+- 首次提交时Aggregate current Test Target、attempt尾部、delivery authorization尾部和resulting state digest一致；
+- exact idempotent replay可在后续Event已经推进Aggregate时继续返回原Event的稳定state digest；
+- 输出通过容量、递归JSON、Schema和workspace root文本泄漏检查。
+
+Public Coordinator只把Intent是否含replacement以及attempt mode映射为稳定`authorizationKind`；它不创建Dispatch Packet、Claim或Host Action。MCP Server、Codex/Claude入口和artifact candidate本单元均未修改，工具总数仍为14。
+
+### 221.13 聚焦验证与下一核实点
+
+新增公共测试真实完成一次initial纵切：preview零写、伪造digest在Event前失败、exact apply提交唯一Event、Route进入`test-dispatch-planning`、同Plan重放幂等且不泄漏workspace root/raw handle。边界测试同时拒绝旧mode、rerun/replacement echo、开放字段、Proxy、超容量、非冻结Host facade和不存在的根。
+
+内部既有测试继续覆盖真正的rerun与replacement状态链；没有在Public测试中复制一套长流程fixture：
+
+```text
+Public Schema/Coordinator latest focused:
+  3 pass / 0 fail / 0 skip
+Public + internal initial/rerun/replacement/Outcome combined:
+  13 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 95 schemas / 207 external refs
+Schema digest: sha256:2e6f9ee059335e0601f0a1977e7d787577d966f4c23370585eaf1b28b2811916
+Architecture: pass / parser=swc / 689 modules / 4865 dependencies / 0 violations
+Prettier: pass（本单元人工维护文件）
+git diff --check: pass
+```
+
+本单元至此`implemented / verified`，但还不是可调用MCP能力。下一单元应注册第15个`wakeflow_prepare_test_delivery`工具，接入Codex/Claude固定Host facade与annotations，并从公共入口补齐initial/rerun/replacement模式矩阵和双宿主artifact candidate parity；仍不得把Preparation与Claim/Host Effect合并。
+
+### 221.14 MCP注册前的官方规范复核
+
+本单元在接入共享MCP server前重新核对当前官方资料。MCP的`Tool`继续以name、description、input Schema、可选output Schema和annotations描述；声明output Schema时，成功结果的structured content必须满足该Schema。当前2026-07-28规范已把Tool Schema提升为完整JSON Schema 2020-12，input仍保持object根约束并支持`oneOf/$ref/$defs`，因此现有自包含preview/apply判别联合不需要退化为手写operation switch。
+
+- [MCP 2026-07-28 Tools](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)明确要求Tool Schema默认采用JSON Schema 2020-12、声明output Schema时structured content必须闭合，并建议同时返回序列化TextContent；
+- [MCP 2026-07-28 Schema Reference](https://modelcontextprotocol.io/specification/2026-07-28/schema)保留`readOnlyHint/destructiveHint/idempotentHint/openWorldHint`结构；
+- [Tool Annotations as Risk Vocabulary](https://blog.modelcontextprotocol.io/posts/2026-03-16-tool-annotations/)强调annotations只是风险提示，不是安全合同，硬保证必须来自授权层和runtime。
+
+据此，Test Delivery Preparation annotations为：
+
+```text
+readOnlyHint=false
+destructiveHint=false
+idempotentHint=true
+openWorldHint=false
+```
+
+理由是apply会追加本地Event，因此不是只读；更新是加法式且exact apply可幂等重放；它只访问root-scoped Wakeflow authority，不接触开放世界。Schema、Coordinator、Service和Event CAS仍是实际强制边界，annotations不承担授权职责。
+
+### 221.15 第十五个MCP工具与双宿主composition
+
+共享`wakeflow-public-mcp-server.ts`现在注册`wakeflow_prepare_test_delivery`，同时提供完整自包含input/output Schema、canonical text content和structured content。Server composition新增独立`prepareTestDelivery` executor准入、Proxy拒绝、稳定配置错误和脱敏领域错误envelope；没有复用Implementation executor或增加跨work type switch。
+
+工具说明和server instructions固定以下顺序：
+
+1. Controller先从Demand Route看到Test Delivery Planning；
+2. preview只提交Demand和Test Target identity；
+3. owner从当前Route/Aggregate/Event history派生initial、rerun或rejected-before-effect replacement；
+4. Controller审阅完整Plan后原样apply；
+5. apply只追加`testing.test-delivery-prepared` Event；
+6. 重新查看Route，再进入共享Host Effect Claim owner。
+
+Preview不得回送mode或previous attempt/Result/Decision/Delivery/Claim/Observation。Apply必须回送完整preview Plan；这不是caller重新声明lineage，而是exact-plan确认。
+
+Host seam继续保持显式且薄：
+
+- `codex-wakeflow-test-delivery-preparation.ts`固定Codex Resource/Identity Profile；
+- `claude-code-wakeflow-test-delivery-preparation.ts`固定Claude Code Resource/Identity Profile；
+- 两个Host MCP composition root只注入各自executor；
+- Testing领域模块没有Codex/Claude条件分支。
+
+工具总数由14增至15。Implementation与Test Preparation仍是两个工具；后续共享Claim/Outcome owner保持不变。
+
+### 221.16 真实模式矩阵、候选制品与实现发现
+
+没有为三种Test Delivery模式复制新的长fixture。现有真实纵切调整为：
+
+- initial：通过Codex官方MCP Client执行preview/apply/replay，确认Route从`test-delivery-planning`进入Public frontier `test-host-effect-claim`；
+- rerun：真实Controller `request-another-attempt` Decision后，合法Preparation改走Public Coordinator，Apply result明确为`authorizationKind=rerun`；
+- replacement：真实rejected-before-effect Outcome释放Claim后，合法Preparation改走Public Coordinator，Apply result明确为`authorizationKind=replacement`，随后仍能物化Packet并取得fresh Claim；
+- 三条路径都证明Preparation没有创建Claim、返回Action或执行Host Effect。
+
+测试过程还确认了两个已有边界事实：Public Contract返回的递归JSON记录使用null prototype，测试不能用原型敏感断言把它误判为内容差异；内部`test-dispatch-planning`在Public Controller Route中按下一真实owner投影为`test-host-effect-claim`，不是同名状态透传。这两项只修正测试断言，没有修改生产行为。
+
+最终验证：
+
+```text
+Shared MCP server focused: 38 pass / 0 fail / 0 skip
+Test Delivery/Outcome/Public/Candidate focused: 14 pass / 0 fail / 0 skip
+Final candidate-only rerun: 2 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 95 schemas / 207 external refs
+Schema digest: sha256:2e6f9ee059335e0601f0a1977e7d787577d966f4c23370585eaf1b28b2811916
+Architecture: pass / parser=swc / 691 modules / 4883 dependencies / 0 violations
+Prettier: pass（本单元人工维护文件）
+git diff --check: pass
+```
+
+最终候选制品仍为`releaseEligible=false`：
+
+```text
+Codex:      405 compiled files
+            sha256:336007f7d132302e447dffeeae35d5a4119cfd7bf58c6b74e92b1a905e9b3d9f
+Claude Code:410 compiled files
+            sha256:9bdb47357d4649dd5da9afe679ccea91433dafd7a3ba15789cee2bc3dbd501f4
+```
+
+Test Delivery Preparation公共纵切至此`implemented / verified`。下一项不能直接跳到Test执行；当前Route在Result Import后会进入`controller-test-review`，而现有Public Decision只覆盖Implementation。下一审阅单元应先读取内部Controller Test Review Decision的真实语义，讨论独立Test Decision工具与现有Review Inspector/Resume的关系，再决定公共边界。
+
+## 222. Controller Test Review Decision公共化预审
+
+### 222.1 当前真实Route与owner边界
+
+Test TargetResult Import之后，Post-Acceptance Route进入`test-result-review-planning`，Public Controller Route投影为：
+
+```text
+kind  = test-result-review
+owner = controller-test-review
+```
+
+当前Public Review Inspector已经共享支持Implementation/Test reported与blocked unit；Public Review Resume也共享恢复`review-blocked | test-review-blocked`，并保留同一Result和prior Decision/Resume history。这两项语义真正相同，不需要复制Test版本。
+
+Decision不同。内部已经存在独立的：
+
+```text
+ControllerImplementationReviewDecision
+  accept | rework | redesign | blocked
+  requirementAlignment + implementationQuality
+
+ControllerTestReviewDecision
+  accept | request-another-attempt | escalate-product-defect | blocked
+  conclusion + evidenceSufficiency
+  TestCard + logical attempt + Test Dispatch Packet lineage
+```
+
+两类Decision只共享`review.target-result-decided` Event family、reviewed Result/Snapshot tuple和独立检查结构；各自Service、判断矩阵、Aggregate phase和下游owner不同。Event持久化共享不等于Command语义相同。
+
+### 222.2 Test Decision四种结果仍然合理
+
+当前四种结果与真实consumer闭合：
+
+| Decision | 结构准入 | 下一Route owner |
+| --- | --- | --- |
+| `accept` | Test Report outcome=`completed`、`satisfied+sufficient`、全部独立检查passed、无blocker | Demand Completion |
+| `request-another-attempt` | inconclusive或Evidence不足、至少一项failed/inconclusive、Card容量可用 | Test Delivery rerun |
+| `escalate-product-defect` | Result非blocked、`defect-observed+sufficient`、至少一项failed、无blocker | Product Defect Remediation Authorization |
+| `blocked` | 至少一个外部阻断原因，不能同时声称`satisfied+sufficient` | shared Review Resume |
+
+`accept`要求Report outcome=`completed`不是把Test verdict提升为权威。Test Report的completed只表示Test窗口完成全部批准步骤和返回合同，不表示测试通过；`needs-review/blocked`按Test Skill表示合同未完成，Controller不能把不完整执行伪装成环境风险已关闭。产品缺陷可以从`needs-review`升级，因为已取得的failed Evidence可能充分证明缺陷，而不要求剩余无关步骤完成。
+
+Playwright把每次retry保留独立序号，并在所有尝试之后另行分类passed/flaky/failed；Azure Test Results也分别保存outcome、attempt、failure type、resolution与关联bug。这继续支持Wakeflow把执行陈述、Controller conclusion和后续工作流授权分开，而不是复用Implementation `rework`。[Playwright Retries](https://playwright.dev/docs/test-retries)、[Azure Test Results](https://learn.microsoft.com/en-us/rest/api/azure/devops/testresults/results/get-test-results?view=azure-devops-rest-7.1)
+
+### 222.3 公共化前发现的三个内部正确性问题
+
+#### 222.3.1 冗余Target selector
+
+`ControllerTestReviewDecisionRequest`当前要求：
+
+```text
+demandId + targetTaskId + targetResultId + snapshotDigest + reviewUnitDigest
+```
+
+但`targetResultId + snapshotDigest + reviewUnitDigest`已经在当前Snapshot内唯一定位reported Test unit；Implementation Decision Service正是这样派生`targetTaskId`。Test caller再次回送`targetTaskId`是可推导echo，增加stale/伪造组合且没有性能收益。
+
+建议在Public Schema前先把内部Test request收敛为与Implementation相同的selector；完整Decision仍持久化owner派生的`targetTaskId`。
+
+#### 222.3.2 已提交Event冲突时误报authority
+
+Test Service发现同一Result/Snapshot已有Decision但新请求Judgment不同，会进入`assertExistingMatchesRequest()`；当前该分支返回`state + eventAuthority=unchanged`。事实上Decision Event已经存在，Event authority应为`current`。Implementation Service已正确这样分类。
+
+公共error envelope不能继承错误权威。修正后应增加exact retry幂等和different Judgment冲突测试，证明后者返回`current`且不覆盖原Decision。
+
+#### 222.3.3 Test Decision重新引入wall-clock因果门
+
+`ControllerTestReviewDecision`当前要求`decidedAt > targetResultReportedAt`，但Foundation Wall Clock明确允许重复、回拨和系统校时；Implementation Decision早已删除同类条件，使用current Aggregate、stream revision和optimistic CAS证明因果顺序。
+
+更重要的是，这不是孤立一行。当前`compareUtcInstants()`除Foundation函数本身外共有23个生产调用，分布在13个consumer模块：Task/Intent、Binding、Claim、Host Effect Observation、TargetResult、Test attempt/Delivery、Review、Product Defect Authorization、Aggregate与TODO排序。绝大多数是跨Event或跨本地authority的时间先后门。只修Test Decision会让后续rerun或产品缺陷授权继续在系统时钟回拨时错误失败。
+
+[Azure Event Sourcing](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)强调每个实体的有序Event Stream、重放和optimistic concurrency；[AWS Event Sourcing](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/event-sourcing-pattern.html)同样把有序append、version/optimistic collision control作为状态权威。UTC timestamp可以保留为审计事实，但Wakeflow已经拥有更强的per-Demand stream revision、state digest、typed source tuple和CAS，不应再把可回拨wall time当作同一因果关系的第二权威。JavaScript wall time会受系统校时影响而非单调这一点也符合[MDN High precision timing](https://developer.mozilla.org/en-US/docs/Web/API/Performance_API/High_precision_timing)说明。
+
+### 222.4 旧JS与Tencent参考
+
+旧JS把Implementation/Test都压入`accept | rework | redesign | blocked`，随后再从work type和task state猜测`rework`是产品修改还是Test再执行。这是真实功能来源，但也是新TS已经明确删除的歧义，不应为了减少一个MCP工具恢复。
+
+TencentDB-Agent-Memory没有Controller Result Review、TestCard或Event-sourced attempt-resolution模型，不能提供Decision公共边界。其相邻offload state对cache失效使用单调`_offloadMapVersion`，而`Date.now()`主要用于访问时间、retry age和耗时；它没有把wall time和业务Review Event顺序组合成可复用方案。因此只参考其“版本化状态与时间观察分离”的方向，不复制具体实现。
+
+### 222.5 产品缺陷分支仍缺Public consumer
+
+Test Decision的三个结果已有公共下游：
+
+```text
+accept                  → wakeflow_complete_demand
+request-another-attempt → wakeflow_prepare_test_delivery
+blocked                 → wakeflow_resume_target_result_review
+```
+
+但`escalate-product-defect`只存在内部`ControllerProductDefectRemediationService`，没有Public Schema/Coordinator/MCP。若现在直接注册Test Decision，第16个工具会公开一个已知死路。
+
+Remediation内部Request目前还要求`testTargetTaskId + testReviewDecisionId + postAcceptanceRouteDigest`。前两项可以从当前product-defect Route唯一派生；Public边界真正需要Controller选择的是affected implementation Targets、failed check映射、correction objective与authorization rationale。该selector也应在公共化前单独复审，不能原样暴露所有内部echo。
+
+### 222.6 三个互斥实施方案
+
+| 方案 | 顺序 | 优点 | 代价/结论 |
+| --- | --- | --- | --- |
+| A（推荐） | 先做有界Event causal-time audit；再修Test Decision selector/authority；建立独立Test Decision Public Contract/Coordinator但暂不注册；随后收敛并公开Product Defect Remediation；最后同时注册两个真实owner | 不冻结已知错误；四种Decision都有公共consumer；Inspector/Resume继续共享，Decision语义不混合；Foundation与纵切同时加固 | 比直接加一个工具多几个文件级单元，最终工具数从15到17 |
+| B | 只修Test Decision直接时间门和selector，立即注册第16个工具；Remediation后补 | 更快看到Test accept/rerun/blocked公共闭环 | `escalate-product-defect`成为已知公共死路；其他wall-clock因果门继续存在；不建议 |
+| C | 把现有Implementation工具改成一个`wakeflow_record_controller_target_review_decision`联合入口，再补Remediation | 工具数比A少1，共享Event表面统一 | 一个工具容纳两套Decision/assessment/Route语义，Coordinator重新成为跨bounded-context switch；旧JS歧义换成大Schema，不建议 |
+
+不建议保持15工具不动：`controller-test-review`已经是当前真实Route owner，继续缺失会让完整Test执行永远无法由公共路线接受、复测、阻塞恢复或升级产品缺陷。
+
+### 222.7 推荐A的文件级收束顺序
+
+仍按每次紧密相关1–2个生产文件审阅：
+
+1. **FND/EVENT-TIME audit**：为23个consumer调用建立keep/remove/replace表；只保留展示/优先级排序或时间本身就是领域输入的比较。已有identity/revision/state digest/CAS证明因果的门删除，不新增Logical Clock类或第二Event序号系统。
+2. `controller-test-review-decision.ts + direct test`：删除UTC因果门，保留`decidedAt`审计事实；增加equal/rollback clock通过测试。
+3. `controller-test-review-decision-input.ts + service.ts`：删除`targetTaskId` command echo；按TargetResult唯一派生；修正existing Event冲突的`current` authority。
+4. Test Decision Public Request/Result Schema + Contract/Coordinator：独立工具名建议`wakeflow_record_controller_test_review_decision`，direct command而非preview/apply；Result返回完整Decision与Event/Commit/state receipt。
+5. Product Defect Remediation selector/Service预审与收敛；随后建立独立Public Contract/Coordinator。
+6. 两个owner一起接入Codex/Claude composition；Decision annotations建议`readOnly=false / destructive=true / idempotent=true / openWorld=false`；真实四分支与candidate parity通过后工具数达到17。
+
+现有聚焦基线：
+
+```text
+Controller Test Decision
++ shared Inspector/Resume
++ Product Defect Remediation:
+  17 pass / 0 fail / 0 skip
+```
+
+本单元只做源码/历史/官方资料审查和文档记录，没有修改生产代码、Schema、生成文件、MCP工具或候选制品，也没有提交、发布或刷新cache。等待用户在A/B/C中确认路线后再开始第一个文件单元。
+
+### 222.8 用户确认A与Event causal-time审计表
+
+用户确认方案A后，对`compareUtcInstants()`全部生产consumer逐项复核。审计规则不是“删除所有时间比较”，而是区分：
+
+```text
+UTC timestamp = 可移植审计/展示事实
+Event stream revision + typed source tuple + state digest + CAS = 业务因果权威
+process-local timeout/elapsed = monotonic clock
+```
+
+时间字段继续进入Event、Decision、Intent和receipt的Canonical digest；只删除“如果wall time没有递增，则已由其他权威证明的后续动作无效”这一第二因果门。删除这些门不改Schema形状、不重写历史Event、不需要upcaster，也不引入Logical Clock、Lamport timestamp或另一套sequence。
+
+原23个consumer调用的分类如下：
+
+| Consumer组 | 原调用数 | 结论 | 替代/保留权威 |
+| --- | ---: | --- | --- |
+| Controller Test Decision + Test reviewed Aggregate parser | 2 | 本单元remove | exact reported Snapshot、reviewed stream revision/state digest、Event append CAS |
+| TODO collection createdAt排序 | 1 | keep | createdAt本身就是集合展示/确定性排序字段；相同时间由TODO ID打破平局，不是Event准入门 |
+| Implementation Delivery Intent相对TaskPackage | 1 | remove | exact TaskPackage ID/digest、planned phase、expected stream revision |
+| Test Task、Delivery Intent与attempt/authorization lineage | 7 | remove | TestCard/Task/Attempt/Decision/Result/Observation typed tuple、attempt ordinal、authorization ordinal、Aggregate phase与CAS |
+| Claim、Host Effect Observation、TargetResult与Rearm | 7 | remove | exact Action/Claim/Event/Observation digest、current phase、stream append顺序与Claim authority |
+| Product Defect Remediation Authorization/Aggregate | 2 | remove | Test Decision、Route digest/revision、accepted implementation baseline与authorization Event CAS |
+| Window Binding registration与fresh observation | 3 | remove | exact Host/Window/Binding ID、opaque handle、launch/config topology和current binding authority |
+
+本单元完成后还剩21个consumer调用：1个确定性TODO排序保留，20个因果门按后续文件单元删除。Aggregate中的重复门必须与拥有原始领域对象的codec/service同一单元修改，避免“对象parser接受、Aggregate重放拒绝”或相反的双重矩阵。
+
+### 222.9 第一文件单元：Controller Test Decision causal order
+
+首个实现单元修改两份紧密生产文件：
+
+- `controller-test-review-decision.ts`删除`decidedAt > targetResultReportedAt`；
+- `demand-aggregate-state.ts`删除Test reviewed target parser中的同一重复门。
+
+`decidedAt`仍由严格UTC Wall Clock生成、进入Decision basis与digest并持久化。Decision的合法因果顺序继续要求：
+
+- current reported Test review unit；
+- exact Snapshot/review-unit/state digest；
+- reviewed stream revision与TargetResult tuple；
+- exact TestCard/attempt/Dispatch Packet lineage；
+- `review.target-result-decided`在expected stream revision上的optimistic append。
+
+Direct test现在分别证明Decision wall clock与Result reported time相同、早于reported time时都能生成有效确定性Decision；矛盾Decision/assessment/check关系仍拒绝。真实Service测试使用早于Result的`decidedAt`完成Event提交、Aggregate进入`test-accepted`、Repository重放、Completion route与exact retry幂等，证明不是仅放宽孤立codec。
+
+```text
+Controller Test Decision direct/service
++ Demand Aggregate/Event handler focused:
+  9 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 95 schemas / 207 external refs
+Schema digest: sha256:2e6f9ee059335e0601f0a1977e7d787577d966f4c23370585eaf1b28b2811916
+Architecture: pass / parser=swc / 691 modules / 4883 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+本单元`implemented / verified`。下一文件单元建议从`test-task-package.ts`及其direct/service测试开始：它是TestCard→Test Task最早且没有Aggregate重复门的一处单文件因果准入，适合先独立关闭，再进入需要与Aggregate成对修改的Test Delivery/attempt lineage。
+
+### 222.10 第二文件单元：TestCard到Test Task
+
+`test-task-package.ts`原先在完整TaskPackage创建后要求：
+
+```text
+taskPackage.createdAt > testCard.createdAt
+```
+
+该关系没有增加来源闭合。Test Task真正由以下事实唯一派生：
+
+- 当前TestCard Event、Card ID/digest和Demand/target identity；
+- Config digest与Card冻结的Test Window；
+- Card的Test Basis/environment Authority引用；
+- 由Card派生的objective、boundaries、completion expectations和零acceptance anchors；
+- `tasking.target-task-planned`在当前stream revision上的Event append CAS。
+
+本单元删除`compareUtcInstants`依赖、时间比较和已经没有producer的`TestTaskPackageErrorReason="time"`。TaskPackage的`createdAt`字段、UTC词法、TaskPackage digest、Event recorded time与projection均保持不变；没有Schema、Event版本或生成类型变化。
+
+真实Task Planning测试把TestCard记录在`12:20Z`，随后注入回拨到`12:19Z`的Task wall clock，完整通过：
+
+```text
+preview zero-write
+→ TestCard-derived Package/self-check
+→ exact apply Event
+→ projection create
+→ Aggregate Test target planned
+→ Route test-delivery-planning
+→ Config变化后的exact retry idempotent
+```
+
+相邻`TestTargetResult`与`TestDeliveryPreparation`测试同步通过，证明`assertTestTaskPackageMatchesTestCard()`、Result closure和下一Delivery authority不会重新引入已删除门。
+
+```text
+Test Task Planning
++ TestTargetResult
++ Test Delivery downstream focused:
+  10 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 95 schemas / 207 external refs
+Schema digest: sha256:2e6f9ee059335e0601f0a1977e7d787577d966f4c23370585eaf1b28b2811916
+Architecture: pass / parser=swc / 691 modules / 4883 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+当前剩余20个生产consumer：TODO createdAt确定性排序仍保留，19个跨authority/Event因果门待删除。下一单元建议成对处理`test-delivery-intent.ts + demand-aggregate-state.ts`，一次关闭Test initial/rerun/replacement Intent及attempt/delivery authorization lineage中的重复时间门，再用现有三种真实纵切验证。
+
+### 222.11 第三文件单元：Test Delivery与attempt lineage
+
+本单元成对修改`test-delivery-intent.ts`与`demand-aggregate-state.ts`，删除六个重复wall-clock因果门：
+
+1. initial/rerun Intent不再要求`preparedAt > TaskPackage.createdAt`；
+2. Intent不再要求`preparedAt > TestCard.createdAt`；
+3. replacement Intent不再要求`preparedAt > rejected Host Effect observedAt`；
+4. 同一attempt的Delivery authorizations不再按`preparedAt`严格递增；
+5. 新logical attempt的首份authorization不再要求晚于上一attempt末份authorization；
+6. rerun Intent不再要求`preparedAt > request-another-attempt Decision.decidedAt`。
+
+这些时间门分别已有更精确的非时间权威：
+
+```text
+initial
+  planned Test target
+  + exact TaskPackage/TestCard/Binding
+  + attempt mode=initial, ordinal=1
+
+rerun
+  test-another-attempt-requested phase
+  + exact previous Result/Decision
+  + unique testAttemptId, mode=rerun, next ordinal
+
+replacement
+  test-host-effect-rejected phase
+  + exact previous Delivery/Claim/Observation
+  + same attempt
+  + new targetDeliveryId
+  + next authorizationOrdinal
+
+all
+  expected stream revision + state digest + Event append CAS
+```
+
+`preparedAt`继续保存于每份Intent与authorization summary，参与Canonical digest和审计；attempt数组顺序、attempt ordinal、authorization ordinal、唯一Result/Decision/Delivery ID以及current phase继续由codec、Aggregate parser和Reducer严格验证。没有放宽mode、capacity、lineage tuple或Event身份。
+
+测试故意使用与业务因果相反的UTC：
+
+- TestCard=`12:20Z`、TaskPackage=`12:25Z`、initial Delivery=`12:19Z`；
+- previous initial=`12:19Z`、Controller Decision=`12:35Z`、rerun Delivery=`12:18Z`；
+- original authorization=`12:19Z`、rejected Observation=`12:33Z`、replacement Delivery=`12:18Z`。
+
+三种路径均完成preview零写、exact apply、Aggregate/Event Store重放、Route、Packet、Claim/Outcome相邻闭合与幂等重试；测试额外断言rerun和replacement的较早`preparedAt`不会改变attempt/authorization ordinal。
+
+```text
+Test Delivery initial/rerun/replacement
++ Aggregate/Event handler/Public/Outcome focused:
+  15 pass / 0 fail / 0 skip
+Shared MCP server real verticals:
+  38 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 95 schemas / 207 external refs
+Schema digest: sha256:2e6f9ee059335e0601f0a1977e7d787577d966f4c23370585eaf1b28b2811916
+Architecture: pass / parser=swc / 691 modules / 4883 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+当前剩余14个生产consumer：TODO createdAt确定性排序保留，13个因果门待删除。下一单元建议处理`target-delivery-intent.ts`及Implementation Delivery Preparation真实测试；它只有一处TaskPackage→Intent时间门且没有Aggregate重复，是下一个可独立关闭的单文件单元。
+
+### 222.12 第四文件单元：Implementation Delivery Intent
+
+`target-delivery-intent.ts`原先要求Implementation Intent的`preparedAt`严格晚于TaskPackage `createdAt`。该门现已删除；Intent仍必须闭合：
+
+- Program/Config/Demand/Target/TaskPackage typed identity；
+- 完整TaskPackage digest与assignment Window；
+- current Binding ID与Host；
+- 由同一TaskPackage和可选rework/product-defect context确定性渲染的portable prompt；
+- planned/rework-requested/product-defect-rework-requested current phase；
+- exact expected stream revision、state digest与Event append CAS。
+
+`preparedAt`继续作为严格UTC审计事实进入Intent basis、intent digest与prepared Event recorded time。没有修改initial、implementation-review-rework、product-defect-remediation三种purpose或公共Schema。
+
+Direct fixture把TaskPackage记录在`10:00Z`、Intent记录在`09:59Z`；另一案例证明两者完全相同时也能创建、解析并复验同一TaskPackage。真实Preparation fixture把Task Event记录在`12:00Z`、Intent记录在`11:59Z`，同时保留更晚的Binding observation/registration；完整通过preview零写、apply、Aggregate、Route、幂等、Config/Binding drift、并发与rework历史。
+
+```text
+Implementation Intent/Preparation/Public/Claim/Outcome focused:
+  25 pass / 0 fail / 0 skip
+Shared MCP server real verticals:
+  38 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 95 schemas / 207 external refs
+Schema digest: sha256:2e6f9ee059335e0601f0a1977e7d787577d966f4c23370585eaf1b28b2811916
+Architecture: pass / parser=swc / 691 modules / 4884 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+### 222.13 审计补充：Claim observation freshness不是Event排序
+
+相邻测试复核发现`TargetHostEffectClaimService`没有使用`compareUtcInstants()`，但通过`utcInstantEpochNanoseconds()`计算Agent Host Observation相对Claim now的年龄，并执行`0..5分钟`freshness gate。
+
+该策略与已删除门不同：Observation年龄本身是一次Host Effect Claim的安全输入，而不是用时间替代Event顺序。它保持：
+
+- 未来Observation或超过五分钟的Observation保守拒绝；
+- 时钟调整造成的false negative只要求Agent重新取得fresh observation；
+- freshness失败不会创建Claim、Event或Agent Host Action；
+- 它不替代Binding/handle/root attestation或Demand Event authority。
+
+因此审计范围修正为当前14个关系策略：13个`compareUtcInstants` consumer加1个明确age consumer。其中TODO createdAt排序和Claim freshness保留，剩余12个跨authority/Event因果门继续删除。
+
+下一单元建议处理`window-work-claim.ts`的两处时间门：Host Observation不再必须晚于Intent，Claim record也不再必须晚于Observation；五分钟freshness继续由Claim Service独立拥有。该文件没有Aggregate重复时间门，可以继续保持单文件节奏。
+
+### 222.14 第五文件单元：WindowWorkClaim记录与freshness分离
+
+`window-work-claim.ts`原先在持久Claim codec中同时要求：
+
+```text
+hostObservation.observedAt > target.intentPreparedAt
+claimedAt >= hostObservation.observedAt
+```
+
+这两项已删除。WindowWorkClaim继续严格保存和验证：
+
+- Claim、Program、Demand、Target Task/Delivery与可选Test Attempt typed identity；
+- exact Intent digest与其审计`intentPreparedAt`；
+- Host/Window/Binding route；
+- Host Observation authority digest；
+- 预分配Claim Event/Commit、expected stream revision/state digest；
+- Claim自身Canonical digest与确定性文档；
+- 无TTL、无自动过期、无raw handle/Action/Result字段。
+
+Claim record不拥有Observation freshness。`TargetHostEffectClaimService`仍在任何Claim/Event/Action创建前，使用当前Claim clock与Observation UTC执行`0..5分钟`年龄准入；未来Observation或超过五分钟Observation继续返回`stale-observation`。因此删除记录时间顺序不会让旧Observation取得Host Effect权限。
+
+共享direct fixture故意记录：
+
+```text
+Intent preparedAt = 09:59Z
+Observation       = 09:58Z
+Claim claimedAt   = 09:57Z
+```
+
+它能完成Implementation/Test Claim解析、摘要、确定性文档和Store create/inspect/release。真实Claim Service仍以fresh Observation完成exclusive Claim、Event、一次性Action、前向恢复、Binding drift补偿与exact replay；超过五分钟负例保持通过。Outcome和TargetResult相邻consumer也继续闭合。
+
+```text
+Claim direct/store/service + Outcome/TargetResult focused:
+  21 pass / 0 fail / 0 skip
+Public Claim Implementation/Test verticals:
+  2 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 95 schemas / 207 external refs
+Schema digest: sha256:2e6f9ee059335e0601f0a1977e7d787577d966f4c23370585eaf1b28b2811916
+Architecture: pass / parser=swc / 691 modules / 4884 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+当前剩余12个时间关系策略：TODO createdAt排序和Claim freshness保留，10个跨authority/Event因果门待删除。下一单元建议成对处理`target-delivery-host-effect-observation.ts + demand-aggregate-state.ts`，删除Outcome `observedAt > Action.issuedAt/Claim.claimedAt`的codec与Aggregate重复门，并用真实accepted/indeterminate/rejected纵切验证。
+
+### 222.15 第六文件单元：Host Effect Observation审计时间与因果权威分离
+
+`target-delivery-host-effect-observation.ts`原先要求Outcome `observedAt`严格晚于Action `issuedAt`；`demand-aggregate-state.ts`又重复要求持久摘要的`observedAt`严格晚于Claim `claimedAt`。两处墙钟门现已删除，Aggregate parser也不再接收只为该比较存在的`workClaim`参数。
+
+`observedAt`仍是必填且严格解析的UTC审计事实，并继续进入Observation basis、Canonical digest、Event data和Aggregate摘要。Outcome的因果与准入继续由以下确定性关系闭合：
+
+- exact Action、Target Delivery、Intent、Host、Window、Binding与Claim identity；
+- Claim digest、Host Observation authority digest、Claim Event/Commit和expected state digest；
+- Test工作额外闭合attempt与dispatch packet digest；
+- Event stream revision、当前Aggregate状态与append CAS；
+- attempt/readback双轴、evidence digest及`rejected-before-effect`只能搭配`unavailable` readback；
+- accepted/indeterminate保留Claim，rejected-before-effect先提交Event再按授权释放Claim。
+
+共享direct fixture故意把Outcome记录为`09:56Z`，早于Action/Claim的`09:57Z`。真实Implementation纵切把Outcome记录为`12:03Z`、Claim记录为`12:05Z`；真实Test纵切把Outcome记录为`12:30Z`、Claim记录为`12:32Z`。三者均通过codec、Aggregate、Event append、幂等、Claim结算、Controller Route与当前Result下游，证明跨来源UTC倒序不会改变因果权威。
+
+```text
+Observation/Aggregate/Outcome/Result focused:
+  24 pass / 0 fail / 0 skip
+Event decider/upcaster focused:
+  2 pass / 0 fail / 0 skip
+Shared MCP server real verticals:
+  38 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 95 schemas / 207 external refs
+Schema digest: sha256:2e6f9ee059335e0601f0a1977e7d787577d966f4c23370585eaf1b28b2811916
+Architecture: pass / parser=swc / 691 modules / 4884 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+当前剩余10个时间关系策略：TODO createdAt确定性排序和Claim freshness保留，8个跨authority/Event因果门待删除。下一单元建议成对处理`target-result.ts + demand-aggregate-state.ts`，删除Result `reportedAt > Host Effect observedAt`的codec与Aggregate重复门，并用真实Implementation/Test Result导入的倒序UTC验证identity、report digest、Claim释放和Event CAS仍完整闭合。
+
+### 222.16 第七文件单元：TargetResult审计时间与Review准入分离
+
+`target-result.ts`原先要求Report `reportedAt`严格晚于Host Effect `observedAt`；`demand-aggregate-state.ts`又在持久TargetResult摘要中重复该比较。两处墙钟门现已删除，Aggregate parser也不再接收只为该比较存在的`hostEffect`参数。
+
+`reportedAt`仍是Report必填且严格解析的UTC审计事实，并继续进入Implementation/Test Report、TargetResult basis、Canonical digest、Event data和Aggregate摘要。Result进入review的因果与准入仍由以下确定性关系闭合：
+
+- TargetResult ID由Claim Action ID确定性派生，Observed Event ID与同一Action精确闭合；
+- Program、Demand、Target Task、Delivery、TaskPackage ref/digest和assignment一致；
+- Claim identity/digest/Event/Commit与Host Effect Observation digest、disposition、readback一致；
+- Test工作额外闭合TestCard、attempt、dispatch packet和逐步Evidence mapping；
+- Implementation工作继续执行acceptance anchor与commit policy结构校验；
+- Event stream revision、当前Aggregate状态、append CAS和Result Event commit保持不变；
+- Result Event提交后才释放Claim，Result本身仍只形成Controller review input，不产生acceptance。
+
+测试清理删除了两个已经失效的“reportedAt不晚于observedAt必须失败”断言：一个独立Implementation负例和Test真实链中的simultaneous Report分支。它们没有被兼容分支替代，而是由更强的倒序正例覆盖：
+
+```text
+Direct Implementation: Report 09:55Z < Host Effect 09:56Z
+Real Implementation:   Report 12:03Z < Host Effect 12:06Z
+Real Test:             Report 12:29Z < Host Effect 12:33Z
+Public Test:           Report 12:30Z < Host Effect 12:33Z
+```
+
+上述链路均完成codec、Aggregate、Event append、幂等、Claim释放、Route、Review projection和当前Controller下游；没有新增Schema、状态字段或时间兼容模式。
+
+```text
+Result/Aggregate/Import focused:
+  13 pass / 0 fail / 0 skip
+Adjacent Event/Schema/Review focused:
+  14 pass / 0 fail / 0 skip
+Shared MCP server real verticals:
+  38 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 95 schemas / 207 external refs
+Schema digest: sha256:2e6f9ee059335e0601f0a1977e7d787577d966f4c23370585eaf1b28b2811916
+Architecture: pass / parser=swc / 691 modules / 4884 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+当前剩余8个时间关系策略：TODO createdAt确定性排序和Claim freshness保留，6个跨authority/Event因果门待删除。下一单元建议审阅`target-host-effect-rearm.ts + demand-aggregate-state.ts`：Rearm codec本身已正确只保存精确Rejected Attempt授权，但Aggregate仍要求`rearmedAt > rejected Host Effect observedAt`。应删除这一处孤立墙钟门，并用倒序Rearm真实链验证旧Claim已释放、精确Observation授权、fresh Claim准入和Event CAS。
+
+### 222.17 第八文件单元：Rearm审计时间与Rejected Attempt授权分离
+
+文件审阅确认`target-host-effect-rearm.ts`的codec本身没有设计错误：它始终只解析并保存目标identity、原Claim identity/digest/Event/Commit、被拒Observation digest、`rearmedAt`和Canonical digest，没有用墙钟准入。该文件仅补充中文注释，明确`rearmedAt`是审计事实而非因果序号。
+
+唯一错误位于`demand-aggregate-state.ts`的Rearm纯状态转换：它额外要求`rearmedAt`严格晚于被拒Host Effect `observedAt`。该比较现已删除。Rearm仍必须同时满足：
+
+- Demand处于active，Target仍精确位于`host-effect-rejected`；
+- Target Task/Delivery与原Claim identity、digest、Event、Commit完全一致；
+- Observation digest精确等于当前rejected Host Effect；
+- disposition仍为`rejected-before-effect`且Claim handling已是`release-authorized`；
+- Service在Event提交前复验Host、Binding与当前Event authority；
+- Rearm Event使用稳定独立identity并通过expected revision/state digest CAS追加；
+- Aggregate只回到`delivery-prepared`，不复活旧Claim、不创建Action、不自动执行重试；
+- 下一次Action必须通过fresh Host Observation取得全新Claim。
+
+Direct fixture把`rearmedAt`设为`09:55Z`，早于被拒Observation的`09:56Z`；真实Service与Public纵切把Rearm设为`12:03Z`，早于Outcome的`12:06Z`。三层均成功闭合摘要、Event append、Aggregate恢复、幂等、Route与fresh Claim，同时accepted Outcome、Binding漂移、错误Host和错误Observation仍被拒绝。
+
+```text
+Rearm/Aggregate/Event/Public focused:
+  14 pass / 0 fail / 0 skip
+Adjacent Test replacement verticals:
+  4 pass / 0 fail / 0 skip
+Shared MCP server real verticals:
+  38 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 95 schemas / 207 external refs
+Schema digest: sha256:2e6f9ee059335e0601f0a1977e7d787577d966f4c23370585eaf1b28b2811916
+Architecture: pass / parser=swc / 691 modules / 4884 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+当前剩余7个时间关系策略：TODO createdAt确定性排序和Claim freshness保留，5个跨authority/Event因果门待删除。下一单元建议处理`controller-product-defect-remediation-authorization.ts + demand-aggregate-state.ts`：前者要求Authorization晚于Test Review Decision，后者又要求每个受影响Implementation accepted Decision早于Authorization。两项因果都已有精确Decision/Result/Target identity、state digest和Event CAS，应作为同一Remediation授权单元审阅；最后再单独处理Window Binding/Observation的三个时间门。
+
+### 222.18 第九文件单元：Product Defect Remediation审计时间与Controller授权分离
+
+`controller-product-defect-remediation-authorization.ts`原先要求Authorization `authorizedAt`严格晚于Test产品缺陷Decision `decidedAt`；`demand-aggregate-state.ts`又在每个受影响Implementation Target摘要中要求Authorization晚于原accepted Decision。两项墙钟门现已删除。
+
+`authorizedAt`仍是必填且严格解析的UTC审计事实，并继续进入Authorization basis、Canonical digest、Event data和每个受影响Target的Aggregate摘要。Authorization的Controller因果与边界继续由以下精确关系闭合：
+
+- 唯一准入Decision必须是`escalate-product-defect`，并闭合Controller、Program和Demand identity；
+- Test Target、TestCard、attempt、dispatch packet、TargetResult和Test Decision ID/digest完全一致；
+- route digest、review snapshot digest、state digest和stream revision绑定当前Event authority；
+- 受影响Implementation只能来自TestCard冻结的baseline，并闭合TaskPackage、Repository、Window、Result和accepted Decision ID/digest；
+- 所有failed check必须来自Controller独立复验，排序、唯一性和到affected target的映射保持完整；
+- `existing-task-packages-only`、有界correction objective和Authorization rationale保持不变；
+- Service继续执行当前Config/Controller/route复验、preflight、容量检查和expected revision CAS；
+- Authorization只追加Event并打开精确产品返工，不让Test窗口修产品，也不直接创建Delivery。
+
+`assertRelations`不再接收只为墙钟比较存在的可选`authorizedAt`参数，创建流程中读取时钟后的第二次重复关系调用也一并删除。错误Decision、缺失/未知check、baseline漂移、映射不闭合、顺序漂移和摘要篡改负例均保留。
+
+Direct Authorization使用`12:33Z`，早于Test Decision的`12:35Z`。真实Service使用`12:10Z`，同时早于Implementation accepted Decision的`12:15Z`和Test产品缺陷Decision的`12:35Z`；完整通过Authorization Event、Aggregate产品返工、Delivery、Claim、Outcome、Result和下一Test代际。
+
+```text
+Authorization/Aggregate/Event/Delivery focused:
+  17 pass / 0 fail / 0 skip
+Adjacent Route/Review Snapshot focused:
+  6 pass / 0 fail / 0 skip
+Shared MCP server real verticals:
+  38 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 95 schemas / 207 external refs
+Schema digest: sha256:2e6f9ee059335e0601f0a1977e7d787577d966f4c23370585eaf1b28b2811916
+Architecture: pass / parser=swc / 691 modules / 4884 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+当前剩余5个时间关系策略：TODO createdAt确定性排序和Claim freshness保留，3个Window Binding/Observation因果门待审阅。最后一簇跨越`wakeflow-window-host-binding.ts`、`wakeflow-window-host-binding-store.ts`和`wakeflow-agent-host-window-observation-authority.ts`，同时涉及注册记录、持久Store与后续Host Observation authority。下一单元不应机械删除：先完整核对三者的identity/digest/CAS与安全威胁模型，再判断三处墙钟是否全部冗余，或是否有某一处实际属于需要明确保留的freshness策略。
+
+### 222.19 第十文件单元：Window Binding代际与墙钟策略收束
+
+本单元先完成代码威胁模型和标准复核，再决定三处墙钟门，而非沿用前九个单元的结论：
+
+- W3C High Resolution Time明确指出墙钟可能因系统调整而回拨，不适合记录事件顺序；单调时钟只在同一执行上下文内成立，不能作为跨进程、重启后持久记录的绝对时间：[W3C High Resolution Time](https://www.w3.org/TR/2026/WD-hr-time-3-20260225/)；
+- Node官方文档说明`process.hrtime.bigint()`起点任意、与日期时间无关，适合测量同一进程内区间，不是可持久化Binding代际：[Node.js Process](https://nodejs.org/api/process.html#processhrtimebigint)；
+- Lamport的经典模型把分布式因果建立在事件可影响关系与逻辑顺序上，而非假定物理时钟总序：[Time, Clocks and the Ordering of Events in a Distributed System](https://www.microsoft.com/en-us/research/publication/time-clocks-ordering-events-distributed-system/)。
+
+代码审阅确认三处比较全部冗余：
+
+1. `wakeflow-window-host-binding.ts`要求`registeredAt >= source.observedAt`；
+2. `wakeflow-window-host-binding-store.ts`在写入前重复同一比较；
+3. `wakeflow-agent-host-window-observation-authority.ts`要求后续Observation `observedAt >= binding.registeredAt`。
+
+三处现已删除，且没有改用持久化单调时间、容差窗口或新的兼容字段。`source.observedAt`、`registeredAt`和后续`rootAttestation.observedAt`仍是必填、严格解析并进入持久记录/authority digest的UTC审计事实。
+
+Binding代际与后续Observation authority继续由以下确定性关系闭合：
+
+- 当前Config编译的唯一launch intent及其digest；
+- Program、Host、Window typed identity；
+- 每代随机且inventory唯一的`bindingId`；
+- 当前Host Profile严格准入的opaque handle及constant-time fingerprint比较；
+- 0700私有目录、0600单链接Binding文件、稳定完整inventory和跨Window handle唯一性；
+- 专用exclusive mutation lock、stage recovery、no-replace atomic create与明确commit-unknown；
+- 当前Config/runtime topology、logical root/configured placement和三层fingerprint；
+- 后续Claim对Binding ID、Intent Config digest、Window和Observation authority digest的精确闭合。
+
+真正的新鲜度策略仍唯一保留在`TargetHostEffectClaimService`：它在创建Claim/Event/Action前计算Observation相对当前Claim clock的年龄，严格执行`0..5分钟`，未来或过期Observation只要求重新观察且不产生状态写入。Binding注册时间不再伪装成freshness或安全证明。
+
+测试同步完成清理型重写：
+
+- Binding direct测试从“回拨必须失败”改为`registeredAt 10:00:01Z < source observedAt 10:00:02Z`正例；
+- Observation authority使用`observedAt 09:59:59Z < registeredAt 10:00:01Z`，删除旧`time`负例；
+- 真实MCP Binding注册把未来一分钟的Agent source time持久化为审计事实，同时保持私有handle、原子注册、幂等、冲突、并发与投影恢复；
+- Implementation纵切使用`Binding registeredAt 12:02Z < source 12:03Z`，随后`Claim observation 12:01Z < registeredAt`，到Claim `12:05Z`仍在四分钟freshness内；
+- Test纵切使用`Binding registeredAt 12:29Z < source 12:30Z`，随后`Claim observation 12:28Z < registeredAt`，到Claim `12:32Z`仍在四分钟freshness内；
+- 一处把旧Claim observation `12:04Z`写死的恢复断言暴露后，已改为引用fixture权威常量，避免重复时间事实。
+
+```text
+Binding/Observation/Registration/Claim focused:
+  13 pass / 0 fail / 0 skip
+Implementation/Test Delivery + Claim + Outcome verticals:
+  25 pass / 0 fail / 0 skip
+Shared MCP server real verticals:
+  38 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 95 schemas / 207 external refs
+Schema digest: sha256:2e6f9ee059335e0601f0a1977e7d787577d966f4c23370585eaf1b28b2811916
+Architecture: pass / parser=swc / 691 modules / 4884 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+跨authority/Event因果墙钟审计至此完成。生产代码中的`compareUtcInstants()`只剩TODO intake `createdAt`的确定性展示排序；唯一准入型墙钟策略是明确、有界、可重试的Claim freshness。下一审阅单元应回到本轮审计前已确认的问题：先处理Controller Test Review Decision的冗余selector与existing Event authority错误，再建设其Public Contract；随后建设Product Defect Remediation Public Contract，并把两项一起注册，避免公开死分支。
+
+### 222.20 Controller Test Review Decision selector与Event authority修正
+
+本单元对照已经完成真实Public/MCP验证的Implementation Decision模式，修正Test Decision内部Service边界，但不提前注册公共工具。
+
+#### 请求selector收敛
+
+`controller-test-review-decision-input.ts`原先同时要求：
+
+```text
+demandId + targetTaskId + targetResultId + snapshotDigest + reviewUnitDigest
+```
+
+其中`targetTaskId`是冗余echo：`targetResultId`已经唯一定位reported review unit，`snapshotDigest`和`reviewUnitDigest`分别冻结Event Stream审查快照与目标内容；Target Task必须由该Result派生，不能让调用方再提供第二份可能漂移的identity。
+
+请求现收敛为：
+
+```text
+demandId + targetResultId + snapshotDigest + reviewUnitDigest + judgment
+```
+
+Input parser已从exact field set、类型和返回值中删除`targetTaskId`。Service从当前Review Snapshot按`targetResultId`要求恰好一个reported Test target，再使用派生的`target.targetTaskId`读取Aggregate并创建Decision。携带旧`targetTaskId`字段会在打开workspace前以`input + eventAuthority: unchanged`拒绝；没有兼容别名、忽略分支或双selector模式。
+
+#### 已有Event authority修正
+
+`controller-test-review-decision-service.ts`原先找到相同Result/Snapshot的已提交Test Decision后，如果Request的judgment或fence冲突，`assertExistingMatchesRequest()`会使用默认`eventAuthority: unchanged`。这与事实矛盾：当前Decision Event已经存在。
+
+现已与Implementation Decision对齐：
+
+- existing Decision查询要求零个或恰好一个匹配源；重复源以`state + current`失败；
+- 已有Decision与Request的Demand、Result、Snapshot、Review Unit或judgment不一致，以`state + current`失败；
+- 精确相同Request仍返回`already-decided + idempotent + current`；
+- Event Store返回`idempotency-conflict`时，以`state + current`报告确定性Event/Commit身份已被占用；
+- 真正尚未提交Event的input、attempt capacity、snapshot或preflight失败仍保持`unchanged`。
+
+新增聚焦回归先证明多余`targetTaskId`零I/O拒绝，再提交accept Decision并精确重放，最后用同一Result/Snapshot提交合法的`request-another-attempt` judgment，确认冲突报告`eventAuthority: current`。完整产品缺陷授权、Resume、Completion、Inspection、rerun Delivery与Event decider/handler下游继续通过。
+
+```text
+Test Decision Input/Service/Decision focused:
+  6 pass / 0 fail / 0 skip
+Resume/Completion/Inspection/Test Delivery/Event downstream:
+  21 pass / 0 fail / 0 skip
+Shared MCP server:
+  not rerun — this unit intentionally changes no registered Public/MCP surface
+TypeScript: pass
+Schema: pass / 95 schemas / 207 external refs
+Schema digest: sha256:2e6f9ee059335e0601f0a1977e7d787577d966f4c23370585eaf1b28b2811916
+Architecture: pass / parser=swc / 691 modules / 4884 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+下一审阅单元建设Controller Test Review Decision的独立Public Request/Result Schema、手写Public Contract和Public Coordinator，但暂不注册MCP。公共请求必须沿用本单元的单一`targetResultId` selector；公共结果必须保留Decision/Event/Commit/state摘要与`eventAuthority`，不回显root、判断私密文本或内部历史。完成后再以同样节奏建设Product Defect Remediation Public能力，最后两项一起注册并执行17工具完整MCP真实纵切，避免公开死分支。
+
+### 222.21 Controller Test Review Decision Public能力（未注册）
+
+本单元建设独立Public Request/Result Schema、手写Public Contract和Public Coordinator，但明确不修改Codex/Claude entrypoint、composition root或MCP工具清单。
+
+#### 标准与Schema边界
+
+当前依赖`@modelcontextprotocol/server` v2实现MCP 2026-07-28。该版本使用完整JSON Schema 2020-12描述工具输入/输出，声明`outputSchema`后服务端结果必须符合Schema；结构化结果仍需提供兼容的文本表示：[MCP 2026-07-28](https://blog.modelcontextprotocol.io/posts/2026-07-28/)、[TypeScript SDK v2](https://ts.sdk.modelcontextprotocol.io/v2/)。
+
+Wakeflow继续采用比协议最低要求更严格的wire边界：
+
+- Request/Result根均为object且`additionalProperties: false`；
+- 两份Schema运行时完全自包含，不要求客户端解析外部URN `$ref`；
+- Request保持唯一`targetResultId` selector，`snapshotDigest`和`reviewUnitDigest`作为fence，不接受`targetTaskId`；
+- Request完整编码四类Test judgment关系：`accept`、`request-another-attempt`、`escalate-product-defect`、`blocked`；
+- Result完整编码Test Decision与TestCard/attempt/dispatch packet lineage、status/disposition关系、Event/Commit receipt和state digest；
+- Result不携带next attempt、remediation authorization、Delivery、Demand completion或workspace root。
+
+新增Schema及生成物：
+
+```text
+src/contracts/schemas/entrypoints/
+  wakeflow-controller-test-review-decision-request.schema.json
+  wakeflow-controller-test-review-decision-result.schema.json
+
+src/contracts/generated/entrypoints/
+  wakeflow-controller-test-review-decision-request.generated.ts
+  wakeflow-controller-test-review-decision-result.generated.ts
+```
+
+#### Public Contract
+
+`controller-test-review-decision-public-contract.ts`拥有工具名：
+
+```text
+wakeflow_record_controller_test_review_decision
+```
+
+Contract在未来MCP SDK前置校验之后仍独立执行passive JSON、1 MiB容量、自包含Request Schema、领域Input parser和workspace root隐私检查。它不忽略扩展字段，也不把Schema通过等同于judgment正确。
+
+#### Public Coordinator
+
+`controller-test-review-decision-public-coordinator.ts`只打开精确workspace、调用已审阅Service并验证真实物理回执：
+
+- Decision、request judgment与Result/Snapshot/Review Unit完全一致；
+- Decision Event ID、Commit ID、command digest、expected/first/last revision闭合；
+- committed结果的Aggregate phase与四类Decision分别对应：
+  `test-accepted`、`test-another-attempt-requested`、`test-product-defect`、`test-review-blocked`；
+- Event data等于完整Decision，resulting state digest等于Aggregate state digest；
+- idempotent结果复用当前Event authority；
+- 输出通过4 MiB容量、Result Schema及请求root/canonical root隐私复验。
+
+真实Public测试从Test Review Inspector取得reported unit，只提交Result selector和Controller judgment，完成accept Event、Route进入completion preflight、精确重放，并证明同一Result/Snapshot的另一attempt judgment返回`decision/state + eventAuthority: current`。Schema测试独立覆盖四类judgment、状态/处置关系、Test lineage、拒绝Target echo和拒绝越界输出。
+
+```text
+Public Request/Result Schema + Coordinator:
+  3 pass / 0 fail / 0 skip
+Existing Test Decision Service regression:
+  3 pass / 0 fail / 0 skip
+MCP wire Schema self-contained gate:
+  1 pass / 0 fail / 0 skip
+Registered MCP server:
+  not rerun — Public capability intentionally remains unregistered
+TypeScript: pass
+Schema: pass / 97 schemas / 207 external refs
+Schema digest: sha256:4b88d90f5dce0d26cad7968ed00922f589f57783698f5a3a70c6dd895da548ea
+Architecture: pass / parser=swc / 697 modules / 4908 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+下一单元先审阅`controller-product-defect-remediation-input.ts + controller-product-defect-remediation-service.ts`，再决定Public selector。当前内部Request同时携带`testReviewDecisionId`和`testTargetTaskId`；在完整Decision/Event history中，后者可能是可派生的identity echo。不得在未确认前把它固化进公共Schema。selector与existing Event authority收敛后，再建设Product Defect Remediation Public Contract/Coordinator，最后与Test Decision一起注册为第16、17个MCP工具。
+
+### 222.22 Product Defect Remediation selector与Event authority修正
+
+本单元先收敛内部Input/Service，不创建Public Schema、不注册工具。
+
+#### selector分类
+
+完整代码审阅把原Request字段分为三类：
+
+| 字段 | 分类 | 结论 |
+| --- | --- | --- |
+| `testReviewDecisionId` | 唯一缺陷代际selector | 保留；从Event history定位精确`escalate-product-defect` Decision |
+| `postAcceptanceRouteDigest` | 当前route fence | 保留；阻止Controller基于已漂移路线授权产品返工 |
+| `affectedTargets[].targetTaskId` | Controller主动选择的产品修复范围 | 保留；映射到TestCard冻结Implementation baseline |
+| 顶层`testTargetTaskId` | 可由Decision与route共同派生的identity echo | 删除；不允许调用方提供第二份可能漂移的Test Target identity |
+
+`controller-product-defect-remediation-input.ts`已从Request类型、exact field set和parser结果删除顶层`testTargetTaskId`。携带旧字段会在任何workspace I/O前返回`input + eventAuthority: unchanged`；没有兼容别名或静默忽略。
+
+#### Service派生与authority
+
+`controller-product-defect-remediation-service.ts`现按以下顺序建立唯一来源：
+
+1. 从当前Event Stream重建Review Snapshot与Post-Acceptance Route；
+2. 以`testReviewDecisionId`要求恰好一个Decision source；
+3. 要求其为`WakeflowControllerTestReviewDecision + escalate-product-defect`；
+4. 将Decision派生的`targetTaskId`与route的Test target交叉复验；
+5. 继续闭合TestCard、attempt、packet、Result、Controller Window、Program与当前state/revision；
+6. 把Public候选`affectedTargets`映射到TestCard baseline和当前accepted target后创建Authorization。
+
+已有Authorization authority也与前一单元对齐：
+
+- 同一Test Decision的Authorization source要求零个或恰好一个；重复历史以`state + current`失败；
+- 已有Authorization与Demand、Decision、route fence、rationale或affected mapping冲突，以`state + current`失败；
+- 精确重放仍返回`already-authorized + idempotent + current`；
+- Event Store `idempotency-conflict`报告`state + current`；
+- Event尚未存在时的Input、route、mapping、preflight失败仍保持`unchanged`。
+
+真实回归在产品缺陷Decision后首先证明旧`testTargetTaskId`零I/O拒绝，再验证未知check保持Authorization/unchanged失败，随后提交倒序UTC Authorization、精确重放，并以不同rationale验证已有Event冲突为current。完整baseline返工Delivery、Claim、Outcome、Result与新TestCard代际继续通过。
+
+```text
+Product Defect Authorization domain + Service vertical:
+  6 pass / 0 fail / 0 skip
+Registered MCP server:
+  not rerun — this unit changes no registered Public/MCP surface
+TypeScript: pass
+Schema: pass / 97 schemas / 207 external refs
+Schema digest: sha256:4b88d90f5dce0d26cad7968ed00922f589f57783698f5a3a70c6dd895da548ea
+Architecture: pass / parser=swc / 697 modules / 4908 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+下一单元可安全建设Product Defect Remediation的独立Public Request/Result Schema、手写Public Contract和Public Coordinator，仍暂不注册。公共Request只能包含`root + demandId + testReviewDecisionId + postAcceptanceRouteDigest + affectedTargets + authorizationRationale`；公共Result应闭合Authorization、Event、Commit、state digest与`eventAuthority`，不得创建Delivery或把Test Decision本身伪装成产品修复授权。完成后再一次性增加Codex/Claude固定entrypoint并把Test Decision、Product Remediation同时注册为第16、17个MCP工具。
+
+### 222.23 Product Defect Remediation Public能力（未注册）
+
+本单元完成独立Public Request/Result Schema、手写Public Contract和Public Coordinator，并以真实公共Test Decision与Demand Controller Route作为上游；仍不修改host entrypoint、composition root或MCP工具列表。
+
+#### 真实公共上游闭合
+
+现有只读`wakeflow_route_demand`已经在Test缺陷状态公开：
+
+- `postAcceptanceRouteDigest`；
+- `product-defect-remediation-authorization` frontier；
+- 当前Test target引用和owner分类。
+
+因此Remediation调用不需要读取内部文件或新增只读工具。Controller使用刚提交的Test Decision ID、公共Route fence，以及创建TestCard时已知的Implementation baselines来选择affected targets。
+
+#### Request/Result Schema
+
+新增自包含Schema与生成类型：
+
+```text
+src/contracts/schemas/entrypoints/
+  wakeflow-controller-product-defect-remediation-request.schema.json
+  wakeflow-controller-product-defect-remediation-result.schema.json
+
+src/contracts/generated/entrypoints/
+  wakeflow-controller-product-defect-remediation-request.generated.ts
+  wakeflow-controller-product-defect-remediation-result.generated.ts
+```
+
+Request严格只接受：
+
+```text
+root
+demandId
+testReviewDecisionId
+postAcceptanceRouteDigest
+affectedTargets[] = targetTaskId + failedCheckIds + correctionObjective
+authorizationRationale
+```
+
+不接受顶层`testTargetTaskId`、baseline echo、Event位置、Controller Window、Authorization ID或时间。Result完整返回不可变Authorization、Event/Commit receipt、state digest和`eventAuthority: current`，并关闭`authorized/committed`、`already-authorized/idempotent`关系；不携带Delivery、Action、下一TestCard或Demand completion。
+
+#### Public Contract
+
+`controller-product-defect-remediation-public-contract.ts`拥有工具名：
+
+```text
+wakeflow_authorize_product_defect_remediation
+```
+
+Contract执行passive JSON、16 MiB容量、自包含Request Schema、内部Input parser和workspace root隐私准入。16 MiB与Demand单Commit上限对齐；Service preflight仍按完整Commit字节实施最终容量门。
+
+#### Public Coordinator
+
+`controller-product-defect-remediation-public-coordinator.ts`调用已审阅Service后复验：
+
+- Request的Decision ID、route digest、rationale与affected mappings等于Authorization；
+- 每个受影响Implementation Target进入`product-defect-rework-requested`，并闭合Authorization ID/digest、Test Decision、failed checks、objective和authorizedAt；
+- 原Test Target保持`test-product-defect`，current TestCard已移除，pending retest精确绑定旧Card、Test Decision与Authorization；
+- Event类型/ID/data、Commit ID、command digest、expected/first/last revision和resulting state digest完全闭合；
+- 输出通过16 MiB容量、自包含Result Schema及请求root/canonical root隐私复验。
+
+真实公共测试执行完整链：Test Review Inspector → `escalate-product-defect` Public Decision → Public Demand Route → Public Remediation Authorization → Public Demand Route中的唯一Implementation Delivery frontier；随后验证精确重放与不同rationale冲突的`eventAuthority: current`。结果不回显workspace root、raw handle或Target Delivery。
+
+```text
+Product Remediation Public Request/Result Schema + Coordinator:
+  3 pass / 0 fail / 0 skip
+Adjacent Test Decision Public vertical:
+  3 pass / 0 fail / 0 skip
+MCP wire Schema self-contained gate:
+  1 pass / 0 fail / 0 skip
+Registered MCP server:
+  not rerun — both new Public capabilities intentionally remain unregistered
+TypeScript: pass
+Schema: pass / 99 schemas / 207 external refs
+Schema digest: sha256:6b61ae4c9c1c009cc40573e33c26069db58fcd8dcc8cbbc4ccc6c0ed39f26daf
+Architecture: pass / parser=swc / 703 modules / 4933 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+两项Controller Public能力现在都已拥有真实owner和独立验证，下一单元可以一次性完成发布闭合：增加Codex/Claude固定host entrypoint，接入`wakeflow-public-mcp-server.ts` composition root，同时注册`wakeflow_record_controller_test_review_decision`与`wakeflow_authorize_product_defect_remediation`为第16、17个工具。注册前需对照现有Implementation Decision重新判断两项tool annotations与描述；注册后必须执行17工具集合、官方SDK Schema前置拒绝、两条真实纵切、双host parity、wire自包含和artifact candidate完整验证。
+
+### 222.24 第16、17个MCP工具与Controller业务闭环
+
+Test Decision与Product Defect Remediation在各自Public能力完成后一次性注册，没有形成单边公开死分支。
+
+#### 双host entrypoint
+
+新增四个只固定制品边界的薄入口：
+
+```text
+src/entrypoints/
+  codex-wakeflow-controller-test-review-decision.ts
+  claude-code-wakeflow-controller-test-review-decision.ts
+  codex-wakeflow-controller-product-defect-remediation.ts
+  claude-code-wakeflow-controller-product-defect-remediation.ts
+```
+
+两项能力不依赖Host Profile分支；Codex与Claude Code入口均调用同一host-neutral Public Coordinator。四文件进入`src/entrypoints/tsconfig.json`显式构建清单，两个MCP composition root分别绑定自己的固定入口。
+
+#### MCP注册与风险语义
+
+共享server现发布17个真实owner。新增工具：
+
+```text
+wakeflow_record_controller_test_review_decision
+wakeflow_authorize_product_defect_remediation
+```
+
+两项annotations均为：
+
+```text
+readOnlyHint=false
+destructiveHint=true
+idempotentHint=true
+openWorldHint=false
+```
+
+它们都追加不可变Event并有意改变后续责任路线，因此不是只读且具有破坏性语义；精确重放由确定性Event/Commit identity保证幂等；所有外部Host/Test/产品执行效果均在工具外部，因此`openWorldHint=false`。
+
+Server instructions与描述明确：
+
+- Test Review必须先Inspect，再由Controller提交独立judgment；Decision不运行检查、不创建attempt、不授权产品修复；
+- Product Remediation只在Route选中对应frontier后，使用精确Test Decision、post-acceptance route digest、既有产品Target与failed-check映射；
+- Remediation只追加existing-TaskPackage Authorization Event，不创建Delivery、不执行修复、不允许Test改产品、不创建下一TestCard或完成Demand；
+- 两项成功后都必须重新Inspect Route，不能从工具结果自行推断下一效果。
+
+Server options的exact field set、Proxy executor准入、稳定配置错误、公共错误envelope和Event authority映射同步增加两项executor。Codex/Claude composition root通过同一17工具名称集合。
+
+#### 官方SDK structuredContent适配修正
+
+首次17工具真实纵切在Test Review Inspector的官方SDK outputSchema阶段暴露：领域Public结果使用Foundation规定的null-prototype JSON对象；Test Result内对象数组触发SDK校验器的`uniqueItems` deep-equal，其实现假定对象拥有可调用`valueOf`，返回`a.valueOf is not a function`。同一Public Coordinator直接调用与Wakeflow Runtime Schema均已通过，故问题明确位于协议适配层。
+
+`wakeflow-public-mcp-server.ts`新增唯一`successfulToolResult()`：
+
+```text
+领域Public结果
+→ Canonical JSON文本
+→ JSON.parse为标准MCP JSON对象
+→ 同一文本进入content
+→ 标准对象进入structuredContent
+```
+
+这不修改领域对象、Schema或持久字节，也不为SDK建立第二份独立投影；text与structuredContent共享同一Canonical JSON事实。17个重复成功响应模板全部收敛到该函数，同时解决官方SDK对null-prototype对象的兼容问题并降低新增工具维护成本。
+
+#### 真实MCP纵切
+
+新增Codex官方Client真实链：
+
+```text
+Test Review Inspector
+→ SDK拒绝旧targetTaskId echo
+→ Test escalate-product-defect Decision
+→ 冲突Decision返回state/current且不回显judgment
+→ Demand Route + postAcceptanceRouteDigest
+→ SDK拒绝旧testTargetTaskId echo
+→ Product Remediation Authorization
+→ 精确幂等重放
+→ 冲突Authorization返回state/current且不回显rationale
+→ Implementation Delivery Planning frontier
+```
+
+同时复验工具Schema ID、无外部URN `$ref`、四项annotations、描述边界、配置Proxy拒绝、错误envelope、既有14工具回归与双host parity。
+
+```text
+Shared MCP server:
+  39 pass / 0 fail / 0 skip
+MCP wire mirror + dual-host artifact candidates:
+  3 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: pass / 99 schemas / 207 external refs
+Schema digest: sha256:6b61ae4c9c1c009cc40573e33c26069db58fcd8dcc8cbbc4ccc6c0ed39f26daf
+Architecture: pass / parser=swc / 707 modules / 4956 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+候选制品保持`releaseEligible=false`：
+
+```text
+Codex:
+  419 files
+  sha256:f521441e24d214c7e8a820b0f3ce7cb2eed07f867c675b8ac1b24c8f1cf821d7
+
+Claude Code:
+  424 files
+  sha256:c37e56c5f14816f287c524c5de3adecc4d71e982c3b7ca712c2af8ecff4f94f6
+```
+
+本轮因果时间审计、Controller Test Decision与Product Defect Remediation公共闭环已经全部完成。下一步不应直接继续扩展业务文件；应进入一次技术骨干核实节点，从Route frontier→Public tool→Service→Event/Aggregate→下一frontier的全局矩阵重新审阅当前99 Schema、17工具、双host闭包、Foundation依赖和测试冗余，确认是否还有真实owner缺口、重复authority或可剪枝分支，再决定后续业务实现顺序。
+
+### 222.25 技术骨干核实节点
+
+已完成只读全局审阅并更新[Business Skeleton Consolidation Gate](./wakeflow-typescript-business-skeleton-consolidation-gate-2026-09-01.md#13-当前技术骨干核实节点17工具--901测试)。当前结论：
+
+- 22种Demand Controller frontier中，全部当前可执行软件owner已有Public Tool；Research Completion和Implementation Redesign保持显式blocker，Host Effect execution保持Agent seam；
+- 14个Event家族均有测试引用，17工具、99 Schema与双host候选闭包一致；
+- 生产依赖图只有11个可解释叶子，没有孤立Review/Delivery/Test Service；Demand Publication Service是尚未公开的真实下一业务owner；
+- Loaded Artifact transfer保持冻结，等待Evidence/Archive首个真实consumer复审，不继续横向扩张Foundation；
+- 当前主要风险是测试维护：22种Route frontier仅10种有纯Route直接断言，MCP测试单文件4221行且helper拥有18个位置参数，Product Remediation重型纵切仍混在Test Decision Service测试中。
+
+技术核实节点执行一次完整当前TS源清单门：
+
+```text
+901 pass / 0 fail / 0 cancelled / 0 skip
+duration: 297.718717041s
+```
+
+当前规模与静态证据：
+
+```text
+handwritten src: 363 files / 122,565 lines
+tests: 218 files / 56,871 lines
+Schema: 99 / 207 external refs
+Architecture: 707 modules / 4956 dependencies / 0 violations
+Node: v24.19.0
+npm: 11.17.0
+```
+
+后续方案：
+
+1. `A — 测试与Route收敛（推荐）`：先把MCP测试改为exact override object、收敛职责边界、建立22项轻量Route矩阵证据、把Product Remediation测试移回其owner；随后进入Demand Publication Public。
+2. `B — 直接Demand Publication Public`：更快增加用户功能，但继续放大当前测试债务。
+3. `C — Evidence/Archive`：消费Artifact transfer，但业务生命周期入口与测试债务仍未解决。
+
+推荐`A → B`。本节点没有修改旧JS、core、plugins、tools、旧test或外部Atlas，也没有commit、发布或cache刷新。
+
+### 222.26 MCP测试辅助层收敛（方案A / A1）
+
+本单元只review并重写`tests/entrypoints/wakeflow-public-mcp-server.test.ts`中的server连接辅助层。此前`connect(...)`按工具注册顺序接收18个位置参数；新增或重排工具时，调用方必须人工对齐大量默认函数，类型正确也无法直接表达每个实参属于哪个executor。
+
+当前实现直接从`createWakeflowPublicMcpServer`的真实options类型推导`WakeflowMcpExecutorSet`，再以`Partial`形成具名override边界：
+
+```text
+真实PublicServerOptions
+→ 排除serverName/serverVersion
+→ 完整executor默认集合
+→ connect(t, { capabilityName: testExecutor })
+```
+
+30个调用点均改为具名覆盖，并只写出该用例实际替换的executor。17个默认executor统一fail-fast，未声明的跨工具调用会立即失败，而不会被占位成功结果掩盖。这样不建立第二份手写executor签名，不改变MCP composition root，也不把测试便利类型带入生产代码。配置Proxy与额外options拒绝测试保持原状。
+
+本单元没有修改生产实现、Schema、Event、持久化字节或公共协议。MCP测试文件从4,221行收敛至4,028行，减少193行；剩余4,028行仍包含catalog、SDK Schema准入、错误映射和真实磁盘纵切，后续必须按证据继续拆分，不能把相同17工具装配复制到多个文件。
+
+```text
+Shared MCP server: 39 pass / 0 fail / 0 skip
+TypeScript: pass
+Architecture: pass / parser=swc / 707 modules / 4956 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+下一单元继续方案A，但先以当前文件依赖和测试职责为事实选择边界：比较“抽取唯一MCP测试fixture后按catalog/真实纵切/error envelope拆分”与“先完成22项轻量Route映射证据”的维护收益。选择不得引入生产抽象，也不得复制领域fixture。
+
+### 222.27 唯一MCP测试fixture边界（方案A / A2）
+
+审阅4,028行MCP测试后，没有直接按行数拆成catalog、纵切和error三个文件。原因是当前领域结果样例与真实workspace fixture分别属于17个真实owner；先物理拆文件会复制大批import、builder和组合根装配，却不会提高行为证据的独立性。
+
+本单元新增唯一`tests/entrypoints/wakeflow-public-mcp-server.fixture.ts`，仅下沉三类无业务判断的协议测试机械能力：
+
+- 从真实Public Server options推导的17个fail-fast executor及exact override；
+- 官方SDK `Client`、`InMemoryTransport`连接与成对关闭；
+- 唯一文本内容块读取。
+
+原测试的30个单能力连接继续使用`node:test`的`t.after`自动清理；8个双host或真实磁盘纵切使用同一连接函数，但保留显式`close → cleanup workspace`顺序；连接中途失败也会成对尝试关闭Client与Server；152个文本读取点复用同一结构检查。领域result builder、请求样例、Schema断言、Route判断和错误envelope期望均留在测试文件，不进入共享fixture。
+
+```text
+主MCP测试：4,028 → 3,889（-139）
+共享fixture：126
+两文件合计：4,015（相对A1减少13）
+相对技术核实节点4,221行：合计减少206
+Shared MCP server: 39 pass / 0 fail / 0 skip
+TypeScript: pass
+Architecture: pass / parser=swc / 708 modules / 4958 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+A2在共享装配边界处收束，没有修改生产代码、Schema、Event、公共协议、旧JS或双host制品。下一单元进入A3，直接建立22项轻量Route frontier→owner→phase表驱动证据；在该证据完成前不继续增加业务frontier。
+
+### 222.28 Controller Route完整责任矩阵（方案A / A3）
+
+审阅确认22种Controller frontier来自三类不同事实：2种无Implementation Target的Demand条件、8种Implementation责任前沿、12种ready Post-Acceptance责任前沿。原实现将这些映射嵌在两个私有switch和`routeBasis`分支中，纯Route测试只直接到达10种，剩余映射主要依赖重型相邻纵切。
+
+本单元没有构造伪Aggregate，也没有导出测试专用状态修改口。`demand-controller-route.ts`将原映射提取为三个Controller owner纯函数，并让真实构建路径直接消费：
+
+```text
+resolveDemandControllerDemandFrontierDescriptor
+resolveDemandControllerImplementationFrontierDescriptor
+resolveDemandControllerPostAcceptanceFrontierDescriptor
+```
+
+函数只返回未附加Target引用的冻结descriptor，因此命名没有把它们伪装成完整Route frontier。完整Route继续拥有Target引用、redesign blocker、source关系、排序、digest与disposition。
+
+新增`demand-controller-route-frontier-matrix.test.ts`，表内有22个唯一frontier kind；共享映射的多个phase逐项执行，`accepted`另行证明不产生Implementation frontier。TypeScript条件类型同时证明Demand condition、非accepted Implementation phase和全部ready Post-Acceptance status都已进入矩阵；后续union扩展若遗漏测试，会在编译期失败。
+
+```text
+Pure matrix runtime: about 2 ms
+Pure frontier matrix: 1 pass / 0 fail / 0 skip
+Focused total including matrix: 14 pass / 0 fail / 0 skip
+TypeScript: pass
+Architecture: pass / parser=swc / 709 modules / 4959 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+Route源文件从652行增至703行，新矩阵测试366行；该增长固定绑定真实Route policy，不随MCP consumer增加。本单元没有修改Schema、Event、持久化字节、MCP工具、旧JS或制品构建。901项全量结果仍是A1–A3前的核实节点证据，本单元没有伪称已重跑。
+
+下一单元进入A4：将Product Defect Remediation完整纵切从Test Decision Service测试移回其owner测试，迁移后删除重复断言与不再使用的fixture依赖。
+
+### 222.29 Product Defect Remediation测试归位（方案A / A4）
+
+当前代码没有`controller-product-defect-remediation-service.test.ts`。Remediation Authorization已有纯单元测试，Public Coordinator已有协议纵切，但624行Service的完整Event/Aggregate/返工/retest链被放在`controller-test-review-decision-service.test.ts`第三个用例中，使Test Decision生产者测试同时拥有下游消费者生命周期。
+
+本单元新增Service owner测试并迁移整条真实纵切：
+
+```text
+Test defect Decision
+→ Post-Acceptance defect route
+→ Product Remediation Authorization Event
+→ affected Implementation Target返工
+→ replacement Delivery / Host Effect / Result Import
+→ Controller重新accept产品Target
+→ product-defect retest TestCard
+→ 新Test Task进入Delivery planning
+```
+
+Test Decision Service测试只保留自己的`accept`与`request-another-attempt`准入、Event history、Review Snapshot、Route和幂等/冲突证据。其Remediation、Delivery、Result、Implementation Review、TestCard/Task Planning imports与常量全部删除。
+
+新的Remediation Service测试继续复用`controller-test-review-decision-service.fixture.ts`来产生前置reported Test状态；这是实际producer fixture，且当前同时被Public Coordinator消费。没有为单一Service测试新增只转发该fixture的包装层。
+
+Authorization单元测试、Service真实纵切和Public Coordinator协议测试保留各自层级的必要重叠，没有复制第二条Service纵切：
+
+```text
+Test Decision Service test：854 → 222
+Product Remediation Service test：新增649
+两文件合计：871（净增17）
+Test Decision + Remediation Service: 3 pass / 0 fail / 0 skip
+Authorization + Public Coordinator: 4 pass / 0 fail / 0 skip
+Owner surface total: 7 pass / 0 fail / 0 skip
+TypeScript: pass
+Architecture: pass / parser=swc / 710 modules / 4967 dependencies / 0 violations
+Prettier: pass
+git diff --check: pass
+```
+
+本单元没有修改生产代码、Schema、Event、持久化、MCP、旧JS或候选制品。方案A的四项测试/Route收敛完成后，重新执行当前完整TypeScript门：
+
+```text
+902 pass / 0 fail / 0 cancelled / 0 skip
+duration: 325.564075125s
+Schema: 99 / 207 external refs
+Schema digest: sha256:6b61ae4c9c1c009cc40573e33c26069db58fcd8dcc8cbbc4ccc6c0ed39f26daf
+Architecture: parser=swc / 710 modules / 4967 dependencies / 0 violations
+```
+
+双host候选manifest摘要保持不变，`releaseEligible=false`；完整门没有commit、push、tag、publish或cache刷新。下一步按既定`A → B`进入Demand Publication Public准备审阅：先读取现有Publication Service及其真实producer/consumer，不直接注册工具，也不在审阅前新增Foundation。

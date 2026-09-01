@@ -30,17 +30,23 @@ import {
 
 /** Target Task Planning 的无文件副作用输入准入与身份分配。 */
 
-export interface TargetTaskPlanningAuthoredTaskPackage
-extends TaskPackageAuthoredContentDraft {
+export interface TargetTaskPlanningAuthoredTaskPackage extends TaskPackageAuthoredContentDraft {
   readonly selectedAuthorityMemberRefs: readonly [
     PortableResourcePath,
     ...PortableResourcePath[],
   ];
 }
 
+export interface TestTaskPlanningTaskPackageRequest {
+  readonly workType: "test";
+}
+
+export type TargetTaskPlanningRequestedTaskPackage =
+  TargetTaskPlanningAuthoredTaskPackage | TestTaskPlanningTaskPackageRequest;
+
 export interface TargetTaskPlanningPreviewRequest {
   readonly demandId: WakeflowDurableId<"demand">;
-  readonly taskPackage: TargetTaskPlanningAuthoredTaskPackage;
+  readonly taskPackage: TargetTaskPlanningRequestedTaskPackage;
 }
 
 export interface TargetTaskPlanningPreviewOptions {
@@ -67,18 +73,15 @@ export interface AllocatedTargetTaskPlanningIds {
 }
 
 export type TargetTaskPlanningInputErrorReason =
-  | "input"
-  | "identity"
-  | "aborted";
+  "input" | "identity" | "aborted";
 
 const ERROR_MESSAGES = {
   input: "Target Task Planning input is invalid.",
   identity: "Target Task Planning identity allocation failed.",
   aborted: "Target Task Planning input was aborted.",
-} as const satisfies Readonly<Record<
-  TargetTaskPlanningInputErrorReason,
-  string
->>;
+} as const satisfies Readonly<
+  Record<TargetTaskPlanningInputErrorReason, string>
+>;
 
 export class TargetTaskPlanningInputError extends Error {
   override readonly name = "TargetTaskPlanningInputError";
@@ -112,7 +115,7 @@ function fail(reason: TargetTaskPlanningInputErrorReason): never {
 
 function parseAuthoredTaskPackage(
   value: unknown,
-): TargetTaskPlanningAuthoredTaskPackage {
+): TargetTaskPlanningRequestedTaskPackage {
   let record: Readonly<Record<string, unknown>>;
   try {
     record = parsePlainRecord(value, "$/taskPackage");
@@ -121,9 +124,13 @@ function parseAuthoredTaskPackage(
     throw error;
   }
   const keys = Object.keys(record).sort();
+  if (record.workType === "test") {
+    if (keys.length !== 1 || keys[0] !== "workType") fail("input");
+    return Object.freeze({ workType: "test" as const });
+  }
   if (
-    keys.length !== AUTHORED_TASK_PACKAGE_FIELDS.length
-    || keys.some((key, index) => key !== AUTHORED_TASK_PACKAGE_FIELDS[index])
+    keys.length !== AUTHORED_TASK_PACKAGE_FIELDS.length ||
+    keys.some((key, index) => key !== AUTHORED_TASK_PACKAGE_FIELDS[index])
   ) {
     fail("input");
   }
@@ -203,8 +210,8 @@ export function parseTargetTaskPlanningPreviewRequest(
   }
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== PREVIEW_REQUEST_FIELDS.length
-    || keys.some((key, index) => key !== PREVIEW_REQUEST_FIELDS[index])
+    keys.length !== PREVIEW_REQUEST_FIELDS.length ||
+    keys.some((key, index) => key !== PREVIEW_REQUEST_FIELDS[index])
   ) {
     fail("input");
   }
@@ -219,8 +226,8 @@ export function parseTargetTaskPlanningPreviewRequest(
     });
   } catch (error: unknown) {
     if (
-      error instanceof WakeflowDurableIdError
-      || error instanceof TaskPackageError
+      error instanceof WakeflowDurableIdError ||
+      error instanceof TaskPackageError
     ) {
       fail("input");
     }
@@ -239,22 +246,19 @@ export function parseTargetTaskPlanningPreviewOptions(
     throw error;
   }
   if (
-    Object.keys(record).some((key) => (
-      key !== "clock" && key !== "signal" && key !== "uuidFactory"
-    ))
-    || (record.clock !== undefined && (
-      typeof record.clock !== "function" || types.isProxy(record.clock)
-    ))
-    || (record.uuidFactory !== undefined && (
-      typeof record.uuidFactory !== "function"
-      || types.isProxy(record.uuidFactory)
-    ))
-    || (record.signal !== undefined && (
-      typeof record.signal !== "object"
-      || record.signal === null
-      || types.isProxy(record.signal)
-      || !(record.signal instanceof AbortSignal)
-    ))
+    Object.keys(record).some(
+      (key) => key !== "clock" && key !== "signal" && key !== "uuidFactory",
+    ) ||
+    (record.clock !== undefined &&
+      (typeof record.clock !== "function" || types.isProxy(record.clock))) ||
+    (record.uuidFactory !== undefined &&
+      (typeof record.uuidFactory !== "function" ||
+        types.isProxy(record.uuidFactory))) ||
+    (record.signal !== undefined &&
+      (typeof record.signal !== "object" ||
+        record.signal === null ||
+        types.isProxy(record.signal) ||
+        !(record.signal instanceof AbortSignal)))
   ) {
     fail("input");
   }
@@ -276,13 +280,12 @@ export function parseTargetTaskPlanningApplyOptions(
     throw error;
   }
   if (
-    Object.keys(record).some((key) => key !== "signal")
-    || (record.signal !== undefined && (
-      typeof record.signal !== "object"
-      || record.signal === null
-      || types.isProxy(record.signal)
-      || !(record.signal instanceof AbortSignal)
-    ))
+    Object.keys(record).some((key) => key !== "signal") ||
+    (record.signal !== undefined &&
+      (typeof record.signal !== "object" ||
+        record.signal === null ||
+        types.isProxy(record.signal) ||
+        !(record.signal instanceof AbortSignal)))
   ) {
     fail("input");
   }
@@ -299,13 +302,12 @@ export function assertTargetTaskPlanningNotAborted(
 
 export function allocateTargetTaskPlanningIds(
   factory: UuidV4Factory | undefined,
+  reservedTargetTaskId?: WakeflowDurableId<"target-task">,
 ): Readonly<AllocatedTargetTaskPlanningIds> {
   const seen = new Set<string>();
-  function allocate<Kind extends
-    | "task-package"
-    | "target-task"
-    | "demand-event"
-    | "demand-event-commit"
+  function allocate<
+    Kind extends
+      "task-package" | "target-task" | "demand-event" | "demand-event-commit",
   >(kind: Kind): WakeflowDurableId<Kind> {
     let uuid;
     try {
@@ -320,7 +322,7 @@ export function allocateTargetTaskPlanningIds(
   }
   return Object.freeze({
     taskPackageId: allocate("task-package"),
-    targetTaskId: allocate("target-task"),
+    targetTaskId: reservedTargetTaskId ?? allocate("target-task"),
     eventId: allocate("demand-event"),
     commitId: allocate("demand-event-commit"),
   });

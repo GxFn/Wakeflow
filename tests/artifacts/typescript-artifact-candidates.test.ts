@@ -1,11 +1,6 @@
 import { createHash } from "node:crypto";
 import { deepEqual, equal } from "node:assert/strict";
-import {
-  lstatSync,
-  opendirSync,
-  readFileSync,
-  rmSync,
-} from "node:fs";
+import { lstatSync, opendirSync, readFileSync, rmSync } from "node:fs";
 import type { Dirent } from "node:fs";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
@@ -13,18 +8,24 @@ import { test, type TestContext } from "node:test";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 
-import {
-  buildTypescriptArtifactCandidates,
-} from "../../tooling/artifacts/build-typescript-artifact-candidates.js";
-import {
-  WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
-} from "../../src/workspace/maintenance/wakeflow-maintenance-public-contract.js";
-import {
-  WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
-} from "../../src/workspace/window-runtime/wakeflow-window-host-binding-public-contract.js";
-import {
-  WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
-} from "../../src/governance/tasking/target-task-planning-public-contract.js";
+import { buildTypescriptArtifactCandidates } from "../../tooling/artifacts/build-typescript-artifact-candidates.js";
+import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/workspace/maintenance/wakeflow-maintenance-public-contract.js";
+import { WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME } from "../../src/workspace/window-runtime/wakeflow-window-host-binding-public-contract.js";
+import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/governance/tasking/target-task-planning-public-contract.js";
+import { WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME } from "../../src/governance/controller/demand-controller-route-public-contract.js";
+import { WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-delivery-preparation-public-contract.js";
+import { WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-claim-public-contract.js";
+import { WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-outcome-public-contract.js";
+import { WAKEFLOW_TARGET_HOST_EFFECT_REARM_PUBLIC_TOOL_NAME } from "../../src/governance/delivery/target-host-effect-rearm-public-contract.js";
+import { WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME } from "../../src/governance/result/target-result-import-public-contract.js";
+import { WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-inspection-public-contract.js";
+import { WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-implementation-review-decision-public-contract.js";
+import { WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-test-review-decision-public-contract.js";
+import { WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_PUBLIC_TOOL_NAME } from "../../src/governance/review/controller-product-defect-remediation-public-contract.js";
+import { WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME } from "../../src/governance/lifecycle/demand-completion-public-contract.js";
+import { WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME } from "../../src/governance/review/target-result-review-resume-public-contract.js";
+import { WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME } from "../../src/governance/testing/test-card-planning-public-contract.js";
+import { WAKEFLOW_TEST_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME } from "../../src/governance/testing/test-delivery-preparation-public-contract.js";
 
 const OUTPUT_RELATIVE = ".build/test-artifacts/typescript-candidates";
 
@@ -155,9 +156,10 @@ test("双宿主候选制品由确定性的闭合可达文件清单生成", (t) =
       "2.0.0",
     );
 
-    const peerDirectory = artifact.hostId === "codex"
-      ? "lib/hosts/claude-code/"
-      : "lib/hosts/codex/";
+    const peerDirectory =
+      artifact.hostId === "codex"
+        ? "lib/hosts/claude-code/"
+        : "lib/hosts/codex/";
     const admittedPeerProfile = `${peerDirectory}wakeflow-workspace-host-resource-profile.js`;
     deepEqual(
       manifest.files
@@ -168,45 +170,63 @@ test("双宿主候选制品由确定性的闭合可达文件清单生成", (t) =
   }
 });
 
-test("两个候选入口都通过官方 stdio Client 发布相同技术骨干工具", {
-  timeout: 20_000,
-}, async (t) => {
-  const output = outputFixture(t);
-  const built = buildTypescriptArtifactCandidates(
-    process.cwd(),
-    OUTPUT_RELATIVE,
-  );
+test(
+  "两个候选入口都通过官方 stdio Client 发布相同技术骨干工具",
+  {
+    timeout: 20_000,
+  },
+  async (t) => {
+    const output = outputFixture(t);
+    const built = buildTypescriptArtifactCandidates(
+      process.cwd(),
+      OUTPUT_RELATIVE,
+    );
 
-  for (const artifact of built.artifacts) {
-    const artifactRoot = path.join(output, artifact.outputDirectory);
-    const transport = new StdioClientTransport({
-      command: process.execPath,
-      args: [path.join(artifactRoot, "mcp/server.mjs")],
-      cwd: artifactRoot,
-      stderr: "pipe",
-    });
-    let stderr = "";
-    transport.stderr?.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString("utf8");
-    });
-    const client = new Client({
-      name: `wakeflow-${artifact.hostId}-artifact-test`,
-      version: "1.0.0-test",
-    });
-    try {
-      await client.connect(transport);
-      const listed = await client.listTools();
-      deepEqual(
-        listed.tools.map((tool) => tool.name).sort(),
-        [
-          WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
-          WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
-          WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
-        ].sort(),
-      );
-    } finally {
-      await Promise.allSettled([client.close(), transport.close()]);
+    for (const artifact of built.artifacts) {
+      const artifactRoot = path.join(output, artifact.outputDirectory);
+      const transport = new StdioClientTransport({
+        command: process.execPath,
+        args: [path.join(artifactRoot, "mcp/server.mjs")],
+        cwd: artifactRoot,
+        stderr: "pipe",
+      });
+      let stderr = "";
+      transport.stderr?.on("data", (chunk: Buffer) => {
+        stderr += chunk.toString("utf8");
+      });
+      const client = new Client({
+        name: `wakeflow-${artifact.hostId}-artifact-test`,
+        version: "1.0.0-test",
+      });
+      try {
+        await client.connect(transport);
+        const listed = await client.listTools();
+        deepEqual(
+          listed.tools.map((tool) => tool.name).sort(),
+          [
+            WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
+            WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
+            WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
+            WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME,
+            WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME,
+            WAKEFLOW_TARGET_HOST_EFFECT_REARM_PUBLIC_TOOL_NAME,
+            WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+            WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
+            WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_PUBLIC_TOOL_NAME,
+            WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+            WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
+            WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_PUBLIC_TOOL_NAME,
+            WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
+            WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME,
+            WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME,
+            WAKEFLOW_TEST_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
+            WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
+          ].sort(),
+        );
+      } finally {
+        await Promise.allSettled([client.close(), transport.close()]);
+      }
+      equal(stderr, "");
     }
-    equal(stderr, "");
-  }
-});
+  },
+);

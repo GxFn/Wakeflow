@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:testing:test-dispatch-packet:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TEST_DISPATCH_PACKET_SCHEMA",
+  "title": "WakeflowTestDispatchPacket",
+  "description": "Event-derived, target-facing Test dispatch context for one exact prepared Test delivery.",
+  "$comment": "The Demand event stream remains authority. This create-only read model has no separate packet identity, host handle, claim, send observation, environment receipt, TargetResult, or acceptance fact.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactKind",
+    "schemaVersion",
+    "programId",
+    "configDigest",
+    "demandId",
+    "targetDeliveryId",
+    "source",
+    "target",
+    "route",
+    "attempt",
+    "taskBriefing",
+    "testContract",
+    "language",
+    "portablePrompt",
+    "preparedAt",
+    "packetDigest"
+  ],
+  "properties": {
+    "artifactKind": {
+      "const": "wakeflow-test-dispatch-packet"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "programId": {
+      "$ref": "urn:wakeflow:governance:testing:test-delivery-intent:v1#/properties/programId"
+    },
+    "configDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    },
+    "demandId": {
+      "$ref": "urn:wakeflow:governance:testing:test-delivery-intent:v1#/properties/demandId"
+    },
+    "targetDeliveryId": {
+      "$ref": "urn:wakeflow:governance:testing:test-delivery-intent:v1#/properties/targetDeliveryId"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "eventDigest", "streamRevision", "intentDigest"],
+      "properties": {
+        "eventId": {
+          "$ref": "#/$defs/eventId"
+        },
+        "eventDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "streamRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "intentDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targetTaskId", "taskPackage", "testCard"],
+      "properties": {
+        "targetTaskId": {
+          "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/properties/targetTaskId"
+        },
+        "taskPackage": {
+          "$ref": "#/$defs/taskPackageReference"
+        },
+        "testCard": {
+          "$ref": "#/$defs/testCardReference"
+        }
+      }
+    },
+    "route": {
+      "$ref": "urn:wakeflow:governance:testing:test-delivery-intent:v1#/properties/route"
+    },
+    "attempt": {
+      "$ref": "urn:wakeflow:governance:testing:test-execution-attempt:v1"
+    },
+    "taskBriefing": {
+      "$ref": "#/$defs/taskBriefing"
+    },
+    "testContract": {
+      "$ref": "#/$defs/testContract"
+    },
+    "language": {
+      "$ref": "urn:wakeflow:governance:testing:test-delivery-intent:v1#/properties/language"
+    },
+    "portablePrompt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32768,
+      "pattern": "^(?!\\s)(?![\\s\\S]*\\r)(?![\\s\\S]*[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$"
+    },
+    "preparedAt": {
+      "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+    },
+    "packetDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    }
+  },
+  "$defs": {
+    "eventId": {
+      "type": "string",
+      "pattern": "^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "taskPackageReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskPackageId", "taskPackageRef", "taskPackageDigest"],
+      "properties": {
+        "taskPackageId": {
+          "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/properties/taskPackageId"
+        },
+        "taskPackageRef": {
+          "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+        },
+        "taskPackageDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "testCardReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["testCardId", "testCardRef", "testCardDigest"],
+      "properties": {
+        "testCardId": {
+          "$ref": "urn:wakeflow:governance:testing:test-card:v1#/properties/testCardId"
+        },
+        "testCardRef": {
+          "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+        },
+        "testCardDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "trimmedText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192,
+      "pattern": "^(?!\\s)(?![\\s\\S]*\\r)(?![\\s\\S]*[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$"
+    },
+    "taskBriefing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workType",
+        "objective",
+        "completionFocus",
+        "priorityContext",
+        "criticalBoundary",
+        "requiredSkills"
+      ],
+      "properties": {
+        "workType": {
+          "const": "test"
+        },
+        "objective": {
+          "$ref": "#/$defs/trimmedText"
+        },
+        "completionFocus": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/trimmedText"
+          }
+        },
+        "priorityContext": {
+          "$ref": "#/$defs/trimmedText"
+        },
+        "criticalBoundary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": {
+              "enum": ["forbidden", "outOfScope", "inScope"]
+            },
+            "value": {
+              "$ref": "#/$defs/trimmedText"
+            }
+          }
+        },
+        "requiredSkills": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "skills/wakeflow-target/SKILL.md",
+              "skills/wakeflow-test/SKILL.md"
+            ]
+          }
+        }
+      }
+    },
+    "testContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executionContract"],
+      "properties": {
+        "executionContract": {
+          "$ref": "#/$defs/executionContract"
+        }
+      }
+    },
+    "executionContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requirementGoal",
+        "approvedPlan",
+        "allowedSkills",
+        "environmentSetup",
+        "maxAttempts",
+        "changeControl",
+        "productSourcePolicy"
+      ],
+      "properties": {
+        "requirementGoal": {
+          "$ref": "urn:wakeflow:governance:testing:test-card:v1#/properties/requirementGoal"
+        },
+        "approvedPlan": {
+          "$ref": "urn:wakeflow:governance:testing:test-card:v1#/properties/approvedPlan"
+        },
+        "allowedSkills": {
+          "$ref": "urn:wakeflow:governance:testing:test-card:v1#/properties/allowedSkills"
+        },
+        "environmentSetup": {
+          "$ref": "urn:wakeflow:governance:testing:test-execution-attempt:v1#/properties/environmentSetup"
+        },
+        "maxAttempts": {
+          "$ref": "urn:wakeflow:governance:testing:test-card:v1#/properties/maxAttempts"
+        },
+        "changeControl": {
+          "const": "return-blocked-to-controller"
+        },
+        "productSourcePolicy": {
+          "const": "read-only"
+        }
+      }
+    }
+  }
+}

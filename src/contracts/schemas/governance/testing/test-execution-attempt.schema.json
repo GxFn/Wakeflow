@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:testing:test-execution-attempt:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA",
+  "title": "WakeflowTestExecutionAttempt",
+  "description": "Controller为一次真实环境Test执行授权的逻辑attempt。",
+  "$comment": "initial与rerun都是有独立身份和连续ordinal的logical Test attempt；host-send替代授权不创建新attempt。rerun绑定上一attempt、精确Result和Controller request-another-attempt Decision。environmentSetup是按TestCard策略派生的执行指令，不是环境已准备回执。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "testAttemptId",
+    "targetTaskId",
+    "testCard",
+    "ordinal",
+    "mode",
+    "environmentSetup"
+  ],
+  "properties": {
+    "kind": {
+      "const": "WakeflowTestExecutionAttempt"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "testAttemptId": {
+      "$ref": "#/$defs/testAttemptId"
+    },
+    "targetTaskId": {
+      "$ref": "urn:wakeflow:governance:testing:test-card:v1#/properties/targetTaskId"
+    },
+    "testCard": {
+      "$ref": "#/$defs/testCardTuple"
+    },
+    "ordinal": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "mode": {
+      "enum": ["initial", "rerun"]
+    },
+    "environmentSetup": {
+      "$ref": "#/$defs/environmentSetup"
+    },
+    "rerunSource": {
+      "$ref": "#/$defs/rerunSource"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "initial"
+          }
+        },
+        "required": ["mode"]
+      },
+      "then": {
+        "properties": {
+          "ordinal": {
+            "const": 1
+          },
+          "rerunSource": false
+        }
+      },
+      "else": {
+        "required": ["rerunSource"],
+        "properties": {
+          "ordinal": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 10
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "environmentSetup": {
+            "type": "object",
+            "properties": {
+              "policy": {
+                "const": "reuse-existing"
+              }
+            },
+            "required": ["policy"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "environmentSetup": {
+            "type": "object",
+            "properties": {
+              "directive": {
+                "const": "reuse-confirmed-environment"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "environmentSetup": {
+            "type": "object",
+            "properties": {
+              "policy": {
+                "const": "fresh-per-attempt"
+              }
+            },
+            "required": ["policy"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "environmentSetup": {
+            "type": "object",
+            "properties": {
+              "directive": {
+                "const": "prepare-fresh-environment"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "environmentSetup": {
+            "type": "object",
+            "properties": {
+              "policy": {
+                "const": "fresh-once"
+              }
+            },
+            "required": ["policy"]
+          }
+        }
+      },
+      "then": {
+        "if": {
+          "properties": {
+            "mode": {
+              "const": "initial"
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "environmentSetup": {
+              "type": "object",
+              "properties": {
+                "directive": {
+                  "const": "prepare-fresh-environment"
+                }
+              }
+            }
+          }
+        },
+        "else": {
+          "properties": {
+            "environmentSetup": {
+              "type": "object",
+              "properties": {
+                "directive": {
+                  "const": "reuse-confirmed-environment"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "testAttemptId": {
+      "type": "string",
+      "pattern": "^test-attempt_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "testCardTuple": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["testCardId", "testCardDigest"],
+      "properties": {
+        "testCardId": {
+          "$ref": "urn:wakeflow:governance:testing:test-card:v1#/properties/testCardId"
+        },
+        "testCardDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "targetResultId": {
+      "type": "string",
+      "pattern": "^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetReviewDecisionId": {
+      "type": "string",
+      "pattern": "^target-review-decision_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "rerunSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["previousAttemptId", "previousResult", "reviewDecision"],
+      "properties": {
+        "previousAttemptId": {
+          "$ref": "#/$defs/testAttemptId"
+        },
+        "previousResult": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["targetResultId", "resultDigest"],
+          "properties": {
+            "targetResultId": {
+              "$ref": "#/$defs/targetResultId"
+            },
+            "resultDigest": {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            }
+          }
+        },
+        "reviewDecision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["targetReviewDecisionId", "decisionDigest"],
+          "properties": {
+            "targetReviewDecisionId": {
+              "$ref": "#/$defs/targetReviewDecisionId"
+            },
+            "decisionDigest": {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            }
+          }
+        }
+      }
+    },
+    "environmentSetup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "directive"],
+      "properties": {
+        "policy": {
+          "$ref": "urn:wakeflow:governance:testing:test-card:v1#/properties/setupPolicy"
+        },
+        "directive": {
+          "enum": ["prepare-fresh-environment", "reuse-confirmed-environment"]
+        }
+      }
+    }
+  }
+}

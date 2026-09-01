@@ -1,0 +1,77 @@
+/**
+ * 此文件由 Wakeflow JSON Schema 生成，禁止手工修改。
+ * Source: src/contracts/schemas/entrypoints/wakeflow-target-host-effect-outcome-request.schema.json
+ */
+
+/**
+ * Absolute path of the existing Wakeflow workspace root.
+ */
+export type WorkspaceRoot = string
+export type DemandId = string
+export type ClaimId = string
+export type Sha256Digest = string
+/**
+ * A passive JSON value. Capacity and Canonical digesting remain owned by the Outcome contract.
+ */
+export type JsonValue = (null | boolean | number | string | JsonValue[] | {
+[k: string]: JsonValue
+})
+export type Readback = (UnavailableReadback | ObservedReadback)
+export type UtcInstant = string
+
+/**
+ * Closed MCP request for recording one already-observed Target Host Effect outcome without performing or retrying the host effect.
+ */
+export interface WakeflowTargetHostEffectOutcomeRequestV1 {
+root: WorkspaceRoot
+demandId: DemandId
+actionId: ClaimId
+claimDigest: Sha256Digest
+attempt: Attempt
+readback: Readback
+observedAt: UtcInstant
+}
+export interface Attempt {
+status: ("accepted" | "indeterminate" | "rejected-before-effect")
+/**
+ * Request-only passive JSON returned or observed for the single Host effect attempt.
+ */
+evidence: (null | boolean | number | string | JsonValue[] | {
+[k: string]: JsonValue
+})
+}
+export interface UnavailableReadback {
+status: "unavailable"
+}
+export interface ObservedReadback {
+status: ("confirmed" | "pending")
+/**
+ * A passive JSON value. Capacity and Canonical digesting remain owned by the Outcome contract.
+ */
+evidence: (null | boolean | number | string | JsonValue[] | {
+[k: string]: JsonValue
+})
+}
+
+/** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
+function freezeGeneratedSchema<Value>(value: Value): Readonly<Value> {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) freezeGeneratedSchema(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+/** 从 JSON 文本恢复 Schema，保留 `__proto__` 等普通 JSON 自有键。 */
+function restoreGeneratedSchema(
+  serialized: string,
+): Readonly<Record<string, unknown>> {
+  const value: unknown = JSON.parse(serialized);
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    throw new TypeError("Generated Schema must be an object.");
+  }
+  return freezeGeneratedSchema(value as Record<string, unknown>);
+}
+
+/** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
+export const WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_REQUEST_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:entrypoints:target-host-effect-outcome-request:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_REQUEST_SCHEMA\",\"title\":\"WakeflowTargetHostEffectOutcomeRequestV1\",\"description\":\"Closed MCP request for recording one already-observed Target Host Effect outcome without performing or retrying the host effect.\",\"$comment\":\"The stored Claim Event derives work type, target, route, Host observation, and Test lineage. Raw attempt/readback evidence is bounded and digested by the Wakeflow owner, then discarded instead of entering the event stream or result.\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"root\",\"demandId\",\"actionId\",\"claimDigest\",\"attempt\",\"readback\",\"observedAt\"],\"properties\":{\"root\":{\"$ref\":\"#/$defs/workspaceRoot\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"actionId\":{\"$ref\":\"#/$defs/claimId\"},\"claimDigest\":{\"$ref\":\"#/$defs/sha256Digest\"},\"attempt\":{\"$ref\":\"#/$defs/attempt\"},\"readback\":{\"$ref\":\"#/$defs/readback\"},\"observedAt\":{\"$ref\":\"#/$defs/utcInstant\"}},\"$defs\":{\"attempt\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"status\",\"evidence\"],\"properties\":{\"status\":{\"enum\":[\"accepted\",\"indeterminate\",\"rejected-before-effect\"]},\"evidence\":{\"$ref\":\"#/$defs/jsonValue\",\"description\":\"Request-only passive JSON returned or observed for the single Host effect attempt.\"}}},\"readback\":{\"oneOf\":[{\"$ref\":\"#/$defs/unavailableReadback\"},{\"$ref\":\"#/$defs/observedReadback\"}]},\"unavailableReadback\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"status\"],\"properties\":{\"status\":{\"const\":\"unavailable\"}}},\"observedReadback\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"status\",\"evidence\"],\"properties\":{\"status\":{\"enum\":[\"confirmed\",\"pending\"]},\"evidence\":{\"$ref\":\"#/$defs/jsonValue\",\"description\":\"Request-only passive JSON from the one bounded readback observation.\"}}},\"jsonValue\":{\"description\":\"A passive JSON value. Capacity and Canonical digesting remain owned by the Outcome contract.\",\"oneOf\":[{\"type\":\"null\"},{\"type\":\"boolean\"},{\"type\":\"number\"},{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"$ref\":\"#/$defs/jsonValue\"}},{\"type\":\"object\",\"additionalProperties\":{\"$ref\":\"#/$defs/jsonValue\"}}]},\"workspaceRoot\":{\"type\":\"string\",\"minLength\":1,\"description\":\"Absolute path of the existing Wakeflow workspace root.\"},\"sha256Digest\":{\"type\":\"string\",\"pattern\":\"^sha256:[0-9a-f]{64}$\"},\"utcInstant\":{\"type\":\"string\",\"minLength\":20,\"maxLength\":30,\"pattern\":\"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\\\.[0-9]{1,9})?Z$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"claimId\":{\"type\":\"string\",\"pattern\":\"^window_work_claim_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"}}}");

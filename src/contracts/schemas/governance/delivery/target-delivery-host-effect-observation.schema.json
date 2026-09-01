@@ -1,0 +1,249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:delivery:target-delivery-host-effect-observation:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_DELIVERY_HOST_EFFECT_OBSERVATION_SCHEMA",
+  "title": "WakeflowTargetDeliveryHostEffectObservation",
+  "description": "Agent 对一次 Target Delivery 宿主效果尝试及最多一次 readback 的脱敏观察。",
+  "$comment": "本记录是 Agent observation，不是宿主签名证明。历史 implementation action 省略 workType；Test action 额外绑定 logical Test attempt 与 dispatch packet digest。原始 handle、宿主返回值、错误文本、prompt 和 workspace 绝对路径均不得持久化；sent-unconfirmed 是 accepted 与非 confirmed readback 的派生展示，不是本合同状态。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "source",
+    "action",
+    "attempt",
+    "readback",
+    "observedAt",
+    "observationDigest"
+  ],
+  "properties": {
+    "kind": {
+      "const": "WakeflowTargetDeliveryHostEffectObservation"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "source": {
+      "const": "agent-host-effect-observation"
+    },
+    "action": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/implementationAction"
+        },
+        {
+          "$ref": "#/$defs/testAction"
+        }
+      ]
+    },
+    "attempt": {
+      "$ref": "#/$defs/attempt"
+    },
+    "readback": {
+      "$ref": "#/$defs/readback"
+    },
+    "observedAt": {
+      "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+    },
+    "observationDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    }
+  },
+  "$defs": {
+    "claimId": {
+      "type": "string",
+      "pattern": "^window_work_claim_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "eventId": {
+      "type": "string",
+      "pattern": "^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "commitId": {
+      "type": "string",
+      "pattern": "^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "implementationAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actionId",
+        "targetDeliveryId",
+        "intentDigest",
+        "hostId",
+        "windowId",
+        "bindingId",
+        "claimDigest",
+        "hostObservationAuthorityDigest",
+        "claimEventId",
+        "claimCommitId",
+        "claimEventStreamRevision",
+        "claimExpectedStateDigest",
+        "issuedAt"
+      ],
+      "properties": {
+        "actionId": {
+          "$ref": "#/$defs/claimId"
+        },
+        "targetDeliveryId": {
+          "$ref": "urn:wakeflow:governance:delivery:target-delivery-intent:v1#/properties/targetDeliveryId"
+        },
+        "intentDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "hostId": {
+          "$ref": "urn:wakeflow:workspace:window-runtime:host-binding:v1#/properties/hostId"
+        },
+        "windowId": {
+          "$ref": "urn:wakeflow:workspace:window-runtime:host-binding:v1#/properties/windowId"
+        },
+        "bindingId": {
+          "$ref": "urn:wakeflow:workspace:window-runtime:host-binding:v1#/properties/bindingId"
+        },
+        "claimDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "hostObservationAuthorityDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "claimEventId": {
+          "$ref": "#/$defs/eventId"
+        },
+        "claimCommitId": {
+          "$ref": "#/$defs/commitId"
+        },
+        "claimEventStreamRevision": {
+          "type": "integer",
+          "minimum": 4,
+          "maximum": 9007199254740991
+        },
+        "claimExpectedStateDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "issuedAt": {
+          "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+        }
+      }
+    },
+    "testAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actionId",
+        "targetDeliveryId",
+        "intentDigest",
+        "hostId",
+        "windowId",
+        "bindingId",
+        "claimDigest",
+        "hostObservationAuthorityDigest",
+        "claimEventId",
+        "claimCommitId",
+        "claimEventStreamRevision",
+        "claimExpectedStateDigest",
+        "issuedAt",
+        "workType",
+        "testAttemptId",
+        "testDispatchPacketDigest"
+      ],
+      "properties": {
+        "actionId": {
+          "$ref": "#/$defs/claimId"
+        },
+        "targetDeliveryId": {
+          "$ref": "urn:wakeflow:governance:delivery:target-delivery-intent:v1#/properties/targetDeliveryId"
+        },
+        "intentDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "hostId": {
+          "$ref": "urn:wakeflow:workspace:window-runtime:host-binding:v1#/properties/hostId"
+        },
+        "windowId": {
+          "$ref": "urn:wakeflow:workspace:window-runtime:host-binding:v1#/properties/windowId"
+        },
+        "bindingId": {
+          "$ref": "urn:wakeflow:workspace:window-runtime:host-binding:v1#/properties/bindingId"
+        },
+        "claimDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "hostObservationAuthorityDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "claimEventId": {
+          "$ref": "#/$defs/eventId"
+        },
+        "claimCommitId": {
+          "$ref": "#/$defs/commitId"
+        },
+        "claimEventStreamRevision": {
+          "type": "integer",
+          "minimum": 4,
+          "maximum": 9007199254740991
+        },
+        "claimExpectedStateDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "issuedAt": {
+          "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+        },
+        "workType": {
+          "const": "test"
+        },
+        "testAttemptId": {
+          "$ref": "urn:wakeflow:governance:testing:test-execution-attempt:v1#/properties/testAttemptId"
+        },
+        "testDispatchPacketDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evidenceDigest"],
+      "properties": {
+        "status": {
+          "enum": ["accepted", "indeterminate", "rejected-before-effect"]
+        },
+        "evidenceDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "readback": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/unavailableReadback"
+        },
+        {
+          "$ref": "#/$defs/observedReadback"
+        }
+      ]
+    },
+    "unavailableReadback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "const": "unavailable"
+        }
+      }
+    },
+    "observedReadback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evidenceDigest"],
+      "properties": {
+        "status": {
+          "enum": ["confirmed", "pending"]
+        },
+        "evidenceDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    }
+  }
+}

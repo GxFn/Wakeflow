@@ -9,6 +9,79 @@
 export type WakeflowSha256DigestText = string
 export type DemandId = string
 export type EventId = string
+/**
+ * 由 Demand domain event reducer 唯一生成的最小业务 Aggregate state。
+ */
+export type WakeflowDemandAggregateState = ({
+[k: string]: unknown | undefined
+} & {
+artifactKind: "wakeflow-demand-aggregate-state"
+schemaVersion: 1
+demandId: string
+authorityDigest: WakeflowSha256DigestText
+lifecycle: ("active" | "cancelled" | "completed")
+/**
+ * @maxItems 10000
+ */
+targetTasks: TargetTask[]
+currentTestCard?: TestCard
+pendingTestRetest?: PendingTestRetest
+})
+export type TargetTask = ({
+[k: string]: unknown | undefined
+} & {
+targetTaskId: string
+taskPackageId: string
+taskPackageDigest: WakeflowSha256DigestText
+workType?: "test"
+repositoryId?: string
+windowId: string
+commitExpectation?: ("commit" | "leave-uncommitted")
+/**
+ * @minItems 1
+ * @maxItems 32
+ */
+acceptanceAnchorIds?: [string, ...(string)[]]
+phase: ("planned" | "test-delivery-prepared" | "test-host-effect-claimed" | "test-host-effect-accepted" | "test-host-effect-indeterminate" | "test-host-effect-rejected" | "test-result-reported" | "test-accepted" | "test-another-attempt-requested" | "test-product-defect" | "test-review-blocked" | "delivery-prepared" | "host-effect-claimed" | "host-effect-accepted" | "host-effect-indeterminate" | "host-effect-rejected" | "result-reported" | "accepted" | "product-defect-rework-requested" | "rework-requested" | "redesign-requested" | "review-blocked")
+currentDelivery?: (CurrentDelivery | TestCurrentDelivery | TestClaimedCurrentDelivery | TestObservedCurrentDelivery | TestResultCurrentDelivery | TestReviewedCurrentDelivery)
+testCard?: TestCard
+/**
+ * @minItems 1
+ * @maxItems 10
+ */
+testAttempts?: [TestAttemptState]|[TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState]|[TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState, TestAttemptState]
+productDefectRemediation?: ProductDefectRemediation
+})
+/**
+ * Wakeflow 持久协议使用的根内逻辑资源路径：以正斜杠分段、非空、相对且已经处于唯一结构形式。
+ */
+export type WakeflowPortableResourcePathText = string
+/**
+ * Wakeflow 持久记录与事件使用的严格 UTC instant 文本：四位年份、大写 T/Z，并允许省略小数秒或保留 1 至 9 位小数秒。
+ */
+export type WakeflowUtcInstantText = string
+/**
+ * Controller为一次真实环境Test执行授权的逻辑attempt。
+ */
+export type WakeflowTestExecutionAttempt = ({
+[k: string]: unknown | undefined
+} & {
+[k: string]: unknown | undefined
+} & {
+[k: string]: unknown | undefined
+} & {
+[k: string]: unknown | undefined
+} & {
+kind: "WakeflowTestExecutionAttempt"
+schemaVersion: 1
+testAttemptId: string
+targetTaskId: string
+testCard: TestCardTuple
+ordinal: number
+mode: ("initial" | "rerun")
+environmentSetup: EnvironmentSetup
+rerunSource?: RerunSource
+})
 
 /**
  * Demand Event Stream 某一 immutable commit boundary 的可删除 Aggregate checkpoint。
@@ -26,27 +99,178 @@ lastEventDigest: WakeflowSha256DigestText
 state: WakeflowDemandAggregateState
 stateDigest: WakeflowSha256DigestText
 }
-/**
- * 由 Demand domain event reducer 唯一生成的最小业务 Aggregate state。
- */
-export interface WakeflowDemandAggregateState {
-artifactKind: "wakeflow-demand-aggregate-state"
-schemaVersion: 1
-demandId: string
-authorityDigest: WakeflowSha256DigestText
-lifecycle: ("active" | "cancelled")
-/**
- * @maxItems 10000
- */
-targetTasks: TargetTask[]
+export interface CurrentDelivery {
+targetDeliveryId: string
+intentDigest: WakeflowSha256DigestText
+hostId: ("codex" | "claude-code")
+bindingId: string
+workClaim?: WorkClaim
+hostEffect?: HostEffect
+targetResult?: TargetResult
+reviewDecision?: ReviewDecision
 }
-export interface TargetTask {
+export interface WorkClaim {
+claimId: string
+claimRef: WakeflowPortableResourcePathText
+claimDigest: WakeflowSha256DigestText
+claimedAt: WakeflowUtcInstantText
+hostObservationAuthorityDigest: WakeflowSha256DigestText
+claimEventId: string
+claimCommitId: string
+claimEventStreamRevision: number
+claimExpectedStateDigest: WakeflowSha256DigestText
+}
+export interface HostEffect {
+observationDigest: WakeflowSha256DigestText
+disposition: ("accepted" | "indeterminate" | "rejected-before-effect")
+readbackStatus: ("confirmed" | "pending" | "unavailable")
+claimHandling: ("retain" | "release-authorized")
+observedAt: WakeflowUtcInstantText
+}
+export interface TargetResult {
+targetResultId: string
+resultDigest: WakeflowSha256DigestText
+outcome: ("completed" | "blocked" | "needs-review")
+reportedAt: WakeflowUtcInstantText
+claimHandling: "release-authorized"
+}
+export interface ReviewDecision {
+targetReviewDecisionId: string
+decisionDigest: WakeflowSha256DigestText
+decision: ("accept" | "blocked" | "redesign" | "rework")
+controllerWindowId: string
+decidedAt: WakeflowUtcInstantText
+}
+export interface TestCurrentDelivery {
+targetDeliveryId: string
+intentDigest: WakeflowSha256DigestText
+hostId: ("codex" | "claude-code")
+bindingId: string
+testAttemptId: string
+}
+export interface TestClaimedCurrentDelivery {
+targetDeliveryId: string
+intentDigest: WakeflowSha256DigestText
+hostId: ("codex" | "claude-code")
+bindingId: string
+testAttemptId: string
+workClaim: TestWorkClaim
+}
+export interface TestWorkClaim {
+claimId: string
+claimRef: WakeflowPortableResourcePathText
+claimDigest: WakeflowSha256DigestText
+claimedAt: WakeflowUtcInstantText
+hostObservationAuthorityDigest: WakeflowSha256DigestText
+claimEventId: string
+claimCommitId: string
+claimEventStreamRevision: number
+claimExpectedStateDigest: WakeflowSha256DigestText
+testDispatchPacketDigest: WakeflowSha256DigestText
+}
+export interface TestObservedCurrentDelivery {
+targetDeliveryId: string
+intentDigest: WakeflowSha256DigestText
+hostId: ("codex" | "claude-code")
+bindingId: string
+testAttemptId: string
+workClaim: TestWorkClaim
+hostEffect: HostEffect
+}
+export interface TestResultCurrentDelivery {
+targetDeliveryId: string
+intentDigest: WakeflowSha256DigestText
+hostId: ("codex" | "claude-code")
+bindingId: string
+testAttemptId: string
+workClaim: TestWorkClaim
+hostEffect: HostEffect
+targetResult: TargetResult
+}
+export interface TestReviewedCurrentDelivery {
+targetDeliveryId: string
+intentDigest: WakeflowSha256DigestText
+hostId: ("codex" | "claude-code")
+bindingId: string
+testAttemptId: string
+workClaim: TestWorkClaim
+hostEffect: HostEffect
+targetResult: TargetResult
+reviewDecision: TestReviewDecision
+}
+export interface TestReviewDecision {
+targetReviewDecisionId: string
+decisionDigest: WakeflowSha256DigestText
+decision: ("accept" | "request-another-attempt" | "escalate-product-defect" | "blocked")
+controllerWindowId: string
+decidedAt: WakeflowUtcInstantText
+}
+export interface TestCard {
+testCardId: string
+testCardDigest: WakeflowSha256DigestText
 targetTaskId: string
-taskPackageId: string
-taskPackageDigest: WakeflowSha256DigestText
-repositoryId: string
-windowId: string
-phase: "planned"
+testWindowId: string
+}
+export interface TestAttemptState {
+attempt: WakeflowTestExecutionAttempt
+/**
+ * @minItems 1
+ * @maxItems 32
+ */
+deliveryAuthorizations: [TestDeliveryAuthorization, ...(TestDeliveryAuthorization)[]]
+}
+export interface TestCardTuple {
+testCardId: string
+testCardDigest: WakeflowSha256DigestText
+}
+export interface EnvironmentSetup {
+policy: ("fresh-once" | "fresh-per-attempt" | "reuse-existing")
+directive: ("prepare-fresh-environment" | "reuse-confirmed-environment")
+}
+export interface RerunSource {
+previousAttemptId: string
+previousResult: {
+targetResultId: string
+resultDigest: WakeflowSha256DigestText
+}
+reviewDecision: {
+targetReviewDecisionId: string
+decisionDigest: WakeflowSha256DigestText
+}
+}
+export interface TestDeliveryAuthorization {
+ordinal: number
+targetDeliveryId: string
+intentDigest: WakeflowSha256DigestText
+preparedAt: WakeflowUtcInstantText
+}
+export interface ProductDefectRemediation {
+productDefectRemediationId: string
+authorizationDigest: WakeflowSha256DigestText
+testReviewDecisionId: string
+testReviewDecisionDigest: WakeflowSha256DigestText
+/**
+ * @minItems 1
+ * @maxItems 32
+ */
+failedCheckIds: [string, ...(string)[]]
+correctionObjective: string
+authorizedAt: WakeflowUtcInstantText
+}
+export interface PendingTestRetest {
+kind: "product-defect-retest"
+previousTestCard: {
+testCardId: string
+testCardDigest: WakeflowSha256DigestText
+}
+testReviewDecision: {
+targetReviewDecisionId: string
+decisionDigest: WakeflowSha256DigestText
+}
+productDefectRemediation: {
+productDefectRemediationId: string
+authorizationDigest: WakeflowSha256DigestText
+}
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */

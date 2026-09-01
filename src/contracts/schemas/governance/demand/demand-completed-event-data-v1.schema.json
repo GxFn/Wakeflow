@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:demand-completed-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_COMPLETED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowDemandCompletedEventDataV1",
+  "description": "lifecycle.demand-completed persisted event v1 的严格payload。",
+  "$comment": "完整DemandCompletion是已发生的成功终态事实；TODO归档、BusinessArchive和宿主关闭仍由后续owner持有。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["completion"],
+  "properties": {
+    "completion": {
+      "$ref": "urn:wakeflow:governance:lifecycle:demand-completion:v1"
+    }
+  }
+}

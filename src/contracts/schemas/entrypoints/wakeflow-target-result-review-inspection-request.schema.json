@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:entrypoints:target-result-review-inspection-request:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_REQUEST_SCHEMA",
+  "title": "WakeflowTargetResultReviewInspectionRequestV1",
+  "description": "Closed read-only MCP request for inspecting one current reported or review-blocked TargetResult review unit.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["root", "demandId", "targetTaskId"],
+  "properties": {
+    "root": {
+      "$ref": "#/$defs/workspaceRoot"
+    },
+    "demandId": {
+      "$ref": "#/$defs/demandId"
+    },
+    "targetTaskId": {
+      "$ref": "#/$defs/targetTaskId"
+    }
+  },
+  "$defs": {
+    "workspaceRoot": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absolute path of the existing Wakeflow workspace root."
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetTaskId": {
+      "type": "string",
+      "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    }
+  }
+}

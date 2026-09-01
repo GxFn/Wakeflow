@@ -6,51 +6,35 @@ import {
   readdirSync,
   realpathSync,
   rmSync,
+  statSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 
-import {
-  executeClaudeCodeWakeflowMaintenance,
-} from "../../src/entrypoints/claude-code-wakeflow-maintenance.js";
-import {
-  executeCodexWakeflowMaintenance,
-} from "../../src/entrypoints/codex-wakeflow-maintenance.js";
-import {
-  RootedDirectory,
-} from "../../src/foundation/filesystem/rooted-directory.js";
-import {
-  createWakeflowMaintenanceExecutionIntent,
-} from "../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
-import {
-  publishWakeflowMaintenanceExecutionIntent,
-} from "../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
-import {
-  withWakeflowMaintenanceGate,
-} from "../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
-import {
-  parseWakeflowMaintenanceOperationId,
-} from "../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
-import {
-  WakeflowMaintenancePublicCoordinatorError,
-} from "../../src/workspace/maintenance/wakeflow-maintenance-public-coordinator.js";
-import {
-  createMinimalWakeflowFreshConfigSelection,
-} from "../configuration/wakeflow-fresh-config-selection.fixture.js";
+import { executeClaudeCodeWakeflowMaintenance } from "../../src/entrypoints/claude-code-wakeflow-maintenance.js";
+import { executeCodexWakeflowMaintenance } from "../../src/entrypoints/codex-wakeflow-maintenance.js";
+import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { WINDOW_WORK_CLAIMS_ROOT_REF } from "../../src/governance/delivery/window-work-claim-resource-catalog.js";
+import { createWakeflowMaintenanceExecutionIntent } from "../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
+import { publishWakeflowMaintenanceExecutionIntent } from "../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
+import { withWakeflowMaintenanceGate } from "../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
+import { parseWakeflowMaintenanceOperationId } from "../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
+import { WakeflowMaintenancePublicCoordinatorError } from "../../src/workspace/maintenance/wakeflow-maintenance-public-coordinator.js";
+import { createMinimalWakeflowFreshConfigSelection } from "../configuration/wakeflow-fresh-config-selection.fixture.js";
 
 async function fixture(t: TestContext, label: string) {
-  const absolutePath = realpathSync(mkdtempSync(path.join(
-    os.tmpdir(),
-    `wakeflow-public-${label}-`,
-  )));
+  const absolutePath = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), `wakeflow-public-${label}-`)),
+  );
   const initialized = spawnSync("git", ["init", "--quiet"], {
     cwd: absolutePath,
     encoding: "utf8",
     shell: false,
     windowsHide: true,
   });
-  if (initialized.status !== 0) throw new Error("Cannot initialize fixture Git.");
+  if (initialized.status !== 0)
+    throw new Error("Cannot initialize fixture Git.");
   t.after(() => rmSync(absolutePath, { recursive: true, force: true }));
   return absolutePath;
 }
@@ -97,6 +81,9 @@ test("Codex public entrypoint completes Fresh preview/apply and a no-op reconcil
   equal(applied.status, "completed");
   equal(applied.launchIntents.length, 4);
   equal(existsSync(path.join(root, "wakeflow.config.json")), true);
+  const claimRoot = path.join(root, ...WINDOW_WORK_CLAIMS_ROOT_REF.split("/"));
+  equal(existsSync(claimRoot), true);
+  equal(statSync(claimRoot).mode & 0o777, 0o700);
   equal(JSON.stringify(applied).includes(root), false);
 
   const reconcile = await executeCodexWakeflowMaintenance({
@@ -108,7 +95,10 @@ test("Codex public entrypoint completes Fresh preview/apply and a no-op reconcil
   equal(reconcile.mode, "preview");
   equal(reconcile.status, "ready");
   equal(reconcile.launchIntents.length, 0);
-  if (reconcile.confirmation === null || reconcile.confirmationDigest === null) {
+  if (
+    reconcile.confirmation === null ||
+    reconcile.confirmationDigest === null
+  ) {
     throw new Error("Expected a ready reconcile confirmation.");
   }
   const reconciled = await executeCodexWakeflowMaintenance({
@@ -132,7 +122,10 @@ test("Claude entrypoint contributes settings and its confirmation is rejected by
   });
   equal(preview.mode, "preview");
   equal(preview.hostId, "claude-code");
-  equal(preview.confirmation?.executionPlan.hostContribution?.operations.length, 3);
+  equal(
+    preview.confirmation?.executionPlan.hostContribution?.operations.length,
+    3,
+  );
   if (preview.confirmation === null || preview.confirmationDigest === null) {
     throw new Error("Expected a ready Claude confirmation.");
   }
@@ -174,8 +167,7 @@ test("Public recovery consumes only an operation ID and its private intent", asy
       rooted,
       {
         expectedCoreLayoutInspectionDigest:
-          confirmation.executionPlan.sharedPreview
-            .coreLayoutInspectionDigest,
+          confirmation.executionPlan.sharedPreview.coreLayoutInspectionDigest,
         operationId: RECOVERY_OPERATION_ID,
       },
       async (context) => {

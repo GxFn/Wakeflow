@@ -27,9 +27,7 @@ import {
   DemandEventSourcingRepository,
   DemandEventSourcingRepositoryError,
 } from "../demand/event-sourcing/demand-event-sourcing-repository.js";
-import {
-  DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES,
-} from "../demand/event-sourcing/demand-file-event-store-contract.js";
+import { DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES } from "../demand/event-sourcing/demand-file-event-store-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   createTaskPackage,
@@ -68,6 +66,15 @@ import {
   TargetTaskPlanningPlanError,
   type TargetTaskPlanningPlan,
 } from "./target-task-planning-plan.js";
+import {
+  createTestTaskPackage,
+  TestTaskPackageError,
+} from "../testing/test-task-package.js";
+import {
+  assertTestTaskPlanningPackage,
+  loadTestTaskPlanningSources,
+  TestTaskPlanningAuthorityError,
+} from "../testing/test-task-planning-authority.js";
 
 /**
  * Wakeflow Governance / Tasking：Target Task Planning preview/apply 唯一编排职责。
@@ -89,14 +96,11 @@ export interface TargetTaskPlanningApplyResult {
   readonly commandDigest: Sha256Digest;
   readonly commandResult: Readonly<DemandEventSourcingCommandResult>;
   readonly commitDigest: Sha256Digest;
-  readonly projection:
-    Readonly<TaskPackageProjectionMaterializationReceipt>;
+  readonly projection: Readonly<TaskPackageProjectionMaterializationReceipt>;
 }
 
 export type TargetTaskPlanningServiceEventAuthority =
-  | "unchanged"
-  | "current"
-  | "unknown";
+  "unchanged" | "current" | "unknown";
 
 export type TargetTaskPlanningServiceErrorReason =
   | "input"
@@ -106,6 +110,9 @@ export type TargetTaskPlanningServiceErrorReason =
   | "demand-authority"
   | "topology"
   | "reference"
+  | "test-route"
+  | "test-card"
+  | "claim"
   | "task-package"
   | "plan"
   | "transition"
@@ -121,8 +128,12 @@ const ERROR_MESSAGES = {
   root: "Target Task Planning root could not be held safely.",
   config: "Target Task Planning Config authority is invalid.",
   "demand-authority": "Target Task Planning Demand authority is invalid.",
-  topology: "Target Task Planning assignment is not in current Config topology.",
+  topology:
+    "Target Task Planning assignment is not in current Config topology.",
   reference: "Target Task Planning selected authority references are invalid.",
+  "test-route": "Target Task Planning Test route is not admitted.",
+  "test-card": "Target Task Planning TestCard authority is invalid.",
+  claim: "Target Task Planning cannot retain a product WorkClaim.",
   "task-package": "Target Task Planning TaskPackage is invalid.",
   plan: "Target Task Planning plan is invalid or stale.",
   transition: "Target Task Planning transition is not admitted.",
@@ -131,10 +142,9 @@ const ERROR_MESSAGES = {
   capacity: "Target Task Planning event commit exceeds its capacity.",
   aborted: "Target Task Planning was aborted.",
   "operation-failure": "Target Task Planning operation failed.",
-} as const satisfies Readonly<Record<
-  TargetTaskPlanningServiceErrorReason,
-  string
->>;
+} as const satisfies Readonly<
+  Record<TargetTaskPlanningServiceErrorReason, string>
+>;
 
 export class TargetTaskPlanningServiceError extends Error {
   override readonly name = "TargetTaskPlanningServiceError";
@@ -161,9 +171,9 @@ export class TargetTaskPlanningServiceError extends Error {
 function ownString(value: unknown, key: string): string | null {
   if (typeof value !== "object" || value === null) return null;
   const descriptor = Object.getOwnPropertyDescriptor(value, key);
-  return descriptor !== undefined
-    && Object.hasOwn(descriptor, "value")
-    && typeof descriptor.value === "string"
+  return descriptor !== undefined &&
+    Object.hasOwn(descriptor, "value") &&
+    typeof descriptor.value === "string"
     ? descriptor.value
     : null;
 }
@@ -192,6 +202,18 @@ function mapAuthorityError(error: TargetTaskPlanningAuthorityError): never {
   fail(error.reason, error);
 }
 
+function mapTestAuthorityError(error: TestTaskPlanningAuthorityError): never {
+  if (error.reason === "aborted") fail("aborted", error);
+  if (error.reason === "route") fail("test-route", error);
+  if (error.reason === "test-card") fail("test-card", error);
+  if (error.reason === "claim") fail("claim", error);
+  if (error.reason === "config" || error.reason === "placement") {
+    fail("topology", error);
+  }
+  if (error.reason === "authority") fail("reference", error);
+  fail("task-package", error);
+}
+
 function planningCommand(plan: Readonly<TargetTaskPlanningPlan>) {
   return parseDemandEventSourcingCommand({
     commandType: "tasking.plan-target-task",
@@ -213,8 +235,8 @@ async function classifyEventAuthority(
       signal === undefined ? undefined : { signal },
     );
     if (existing === null) return "unchanged";
-    return existing.commandDigest === commandDigest
-      && existing.expectedStreamRevision === plan.expectedStreamRevision
+    return existing.commandDigest === commandDigest &&
+      existing.expectedStreamRevision === plan.expectedStreamRevision
       ? "current"
       : "unchanged";
   } catch {
@@ -226,10 +248,12 @@ async function executePlanCommand(
   repository: DemandEventSourcingRepository,
   plan: Readonly<TargetTaskPlanningPlan>,
   signal: AbortSignal | undefined,
-): Promise<Readonly<{
-  readonly commandDigest: Sha256Digest;
-  readonly result: Readonly<DemandEventSourcingCommandResult>;
-}>> {
+): Promise<
+  Readonly<{
+    readonly commandDigest: Sha256Digest;
+    readonly result: Readonly<DemandEventSourcingCommandResult>;
+  }>
+> {
   const command = planningCommand(plan);
   const commandDigest = computeDemandEventSourcingCommandDigest(command);
   try {
@@ -252,7 +276,8 @@ async function executePlanCommand(
         signal,
       );
       if (error.reason === "aborted") fail("aborted", error, authority);
-      if (error.reason === "concurrency-conflict") fail("plan", error, authority);
+      if (error.reason === "concurrency-conflict")
+        fail("plan", error, authority);
       if (error.reason === "decision-rejected") {
         fail("transition", error, authority);
       }
@@ -300,10 +325,10 @@ export class TargetTaskPlanningService {
 
   constructor(workspaceRoot: RootedDirectory) {
     if (
-      typeof workspaceRoot !== "object"
-      || workspaceRoot === null
-      || types.isProxy(workspaceRoot)
-      || !(workspaceRoot instanceof RootedDirectory)
+      typeof workspaceRoot !== "object" ||
+      workspaceRoot === null ||
+      types.isProxy(workspaceRoot) ||
+      !(workspaceRoot instanceof RootedDirectory)
     ) {
       fail("input");
     }
@@ -341,55 +366,86 @@ export class TargetTaskPlanningService {
     let result: Readonly<TargetTaskPlanningPreviewResult> | undefined;
     let failure: unknown;
     try {
-      let ids;
-      try {
-        ids = allocateTargetTaskPlanningIds(options.uuidFactory);
-      } catch (error: unknown) {
-        if (error instanceof TargetTaskPlanningInputError) mapInputError(error);
-        throw error;
-      }
-      let selectedAuthorityRefs;
-      try {
-        selectedAuthorityRefs = resolveTargetTaskPlanningAuthorityReferences(
-          context,
-          request.taskPackage.selectedAuthorityMemberRefs,
-        );
-      } catch (error: unknown) {
-        if (error instanceof TargetTaskPlanningAuthorityError) {
-          mapAuthorityError(error);
-        }
-        throw error;
-      }
       let taskPackage: Readonly<TaskPackage>;
-      try {
-        taskPackage = createTaskPackage({
-          programId: context.loaded.identity.programId,
-          configDigest: context.config.configDigest,
-          demandId: context.loaded.identity.demandId,
-          demandAuthorityDigest: context.loaded.authorityDigest,
-          taskPackageId: ids.taskPackageId,
-          targetTaskId: ids.targetTaskId,
-          assignment: request.taskPackage.assignment,
-          workType: request.taskPackage.workType,
-          objective: request.taskPackage.objective,
-          confirmedContext: request.taskPackage.confirmedContext,
-          selectedAuthorityRefs,
-          boundaries: request.taskPackage.boundaries,
-          completionExpectations: request.taskPackage.completionExpectations,
-          commitExpectation: request.taskPackage.commitExpectation,
-          acceptanceAnchors: request.taskPackage.acceptanceAnchors,
-        }, options.clock === undefined ? {} : { clock: options.clock });
-      } catch (error: unknown) {
-        if (error instanceof TaskPackageError) fail("task-package", error);
-        throw error;
-      }
-      try {
-        assertTargetTaskPlanningAuthorityAndTopology(context, taskPackage);
-      } catch (error: unknown) {
-        if (error instanceof TargetTaskPlanningAuthorityError) {
-          mapAuthorityError(error);
+      let ids;
+      if (request.taskPackage.workType === "test") {
+        let sources;
+        try {
+          sources = await loadTestTaskPlanningSources(
+            this.#workspaceRoot,
+            context,
+            options.signal,
+          );
+        } catch (error: unknown) {
+          if (error instanceof TestTaskPlanningAuthorityError) {
+            mapTestAuthorityError(error);
+          }
+          throw error;
         }
-        throw error;
+        try {
+          ids = allocateTargetTaskPlanningIds(
+            options.uuidFactory,
+            sources.testCard.targetTaskId,
+          );
+          taskPackage = createTestTaskPackage(
+            {
+              configDigest: context.config.configDigest,
+              taskPackageId: ids.taskPackageId,
+              testCard: sources.testCard,
+            },
+            options.clock === undefined ? {} : { clock: options.clock },
+          );
+          assertTestTaskPlanningPackage(context, taskPackage, sources.testCard);
+        } catch (error: unknown) {
+          if (error instanceof TargetTaskPlanningInputError)
+            mapInputError(error);
+          if (error instanceof TestTaskPackageError) {
+            fail("task-package", error);
+          }
+          if (error instanceof TestTaskPlanningAuthorityError) {
+            mapTestAuthorityError(error);
+          }
+          throw error;
+        }
+      } else {
+        try {
+          ids = allocateTargetTaskPlanningIds(options.uuidFactory);
+          const selectedAuthorityRefs =
+            resolveTargetTaskPlanningAuthorityReferences(
+              context,
+              request.taskPackage.selectedAuthorityMemberRefs,
+            );
+          taskPackage = createTaskPackage(
+            {
+              programId: context.loaded.identity.programId,
+              configDigest: context.config.configDigest,
+              demandId: context.loaded.identity.demandId,
+              demandAuthorityDigest: context.loaded.authorityDigest,
+              taskPackageId: ids.taskPackageId,
+              targetTaskId: ids.targetTaskId,
+              assignment: request.taskPackage.assignment,
+              workType: request.taskPackage.workType,
+              objective: request.taskPackage.objective,
+              confirmedContext: request.taskPackage.confirmedContext,
+              selectedAuthorityRefs,
+              boundaries: request.taskPackage.boundaries,
+              completionExpectations:
+                request.taskPackage.completionExpectations,
+              commitExpectation: request.taskPackage.commitExpectation,
+              acceptanceAnchors: request.taskPackage.acceptanceAnchors,
+            },
+            options.clock === undefined ? {} : { clock: options.clock },
+          );
+          assertTargetTaskPlanningAuthorityAndTopology(context, taskPackage);
+        } catch (error: unknown) {
+          if (error instanceof TargetTaskPlanningInputError)
+            mapInputError(error);
+          if (error instanceof TaskPackageError) fail("task-package", error);
+          if (error instanceof TargetTaskPlanningAuthorityError) {
+            mapAuthorityError(error);
+          }
+          throw error;
+        }
       }
       const plan = createTargetTaskPlanningPlan({
         demandId: request.demandId,
@@ -413,15 +469,15 @@ export class TargetTaskPlanningService {
           },
         );
         if (
-          encodeUtf8(renderDemandEventStreamCommit(prepared.commit)).byteLength
-            > DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES
+          encodeUtf8(renderDemandEventStreamCommit(prepared.commit))
+            .byteLength > DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMIT_BYTES
         ) {
           fail("capacity");
         }
       } catch (error: unknown) {
         if (
-          error instanceof DemandEventSourcingDecisionError
-          || error instanceof DemandEventStreamCommitError
+          error instanceof DemandEventSourcingDecisionError ||
+          error instanceof DemandEventStreamCommitError
         ) {
           fail("transition", error);
         }
@@ -470,8 +526,8 @@ export class TargetTaskPlanningService {
       planDigest = parseSha256Digest(planDigestValue, "$planDigest");
     } catch (error: unknown) {
       if (
-        error instanceof TargetTaskPlanningPlanError
-        || error instanceof Sha256Error
+        error instanceof TargetTaskPlanningPlanError ||
+        error instanceof Sha256Error
       ) {
         fail("plan", error);
       }
@@ -511,10 +567,11 @@ export class TargetTaskPlanningService {
         }
         throw error;
       }
-      if (existing !== null && (
-        existing.commandDigest !== commandDigest
-        || existing.expectedStreamRevision !== plan.expectedStreamRevision
-      )) {
+      if (
+        existing !== null &&
+        (existing.commandDigest !== commandDigest ||
+          existing.expectedStreamRevision !== plan.expectedStreamRevision)
+      ) {
         fail("plan");
       }
 
@@ -553,22 +610,36 @@ export class TargetTaskPlanningService {
             }
             throw error;
           }
-          if (racedCommit !== null && (
-            racedCommit.commandDigest !== commandDigest
-            || racedCommit.expectedStreamRevision
-              !== plan.expectedStreamRevision
-          )) {
+          if (
+            racedCommit !== null &&
+            (racedCommit.commandDigest !== commandDigest ||
+              racedCommit.expectedStreamRevision !==
+                plan.expectedStreamRevision)
+          ) {
             fail("plan");
           }
           if (racedCommit === null) {
             try {
-              assertTargetTaskPlanningAuthorityAndTopology(
-                context,
-                plan.taskPackage,
-              );
+              if (plan.taskPackage.workType === "test") {
+                const sources = await loadTestTaskPlanningSources(
+                  this.#workspaceRoot,
+                  context,
+                  options.signal,
+                );
+                assertTestTaskPlanningPackage(
+                  context,
+                  plan.taskPackage,
+                  sources.testCard,
+                );
+              } else {
+                assertTargetTaskPlanningAuthorityAndTopology(
+                  context,
+                  plan.taskPackage,
+                );
+              }
               if (
-                context.loaded.aggregate.streamRevision
-                  === plan.expectedStreamRevision
+                context.loaded.aggregate.streamRevision ===
+                plan.expectedStreamRevision
               ) {
                 decideDemandEventSourcingCommand(
                   context.loaded.aggregate.state,
@@ -583,6 +654,9 @@ export class TargetTaskPlanningService {
             } catch (error: unknown) {
               if (error instanceof TargetTaskPlanningAuthorityError) {
                 mapAuthorityError(error);
+              }
+              if (error instanceof TestTaskPlanningAuthorityError) {
+                mapTestAuthorityError(error);
               }
               if (error instanceof DemandEventSourcingDecisionError) {
                 fail("transition", error);
@@ -619,14 +693,15 @@ export class TargetTaskPlanningService {
           await closeTargetTaskPlanningRoot(context.ledgerRoot);
         } catch (error: unknown) {
           if (contextFailure === undefined) {
-            contextFailure = error instanceof TargetTaskPlanningAuthorityError
-              ? new TargetTaskPlanningServiceError(
-                  "root",
-                  error.code,
-                  error.reason,
-                  eventAuthority,
-                )
-              : error;
+            contextFailure =
+              error instanceof TargetTaskPlanningAuthorityError
+                ? new TargetTaskPlanningServiceError(
+                    "root",
+                    error.code,
+                    error.reason,
+                    eventAuthority,
+                  )
+                : error;
           }
         }
         if (contextFailure !== undefined) throw contextFailure;
@@ -668,7 +743,8 @@ export class TargetTaskPlanningService {
       }
     }
     if (failure !== undefined) throw failure;
-    if (result === undefined) fail("operation-failure", undefined, eventAuthority);
+    if (result === undefined)
+      fail("operation-failure", undefined, eventAuthority);
     return result;
   }
 }
@@ -678,4 +754,5 @@ export type {
   TargetTaskPlanningAuthoredTaskPackage,
   TargetTaskPlanningPreviewOptions,
   TargetTaskPlanningPreviewRequest,
+  TestTaskPlanningTaskPackageRequest,
 } from "./target-task-planning-input.js";

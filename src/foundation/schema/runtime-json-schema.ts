@@ -3,6 +3,7 @@ import { Ajv2020 } from "ajv/dist/2020.js";
 import {
   JsonValueError,
   parseJsonValue,
+  type JsonArray,
   type JsonObject,
   type JsonValue,
 } from "../data/json-value.js";
@@ -42,18 +43,14 @@ export type RuntimeJsonSchemaValidator<Value> = (
 ) => RuntimeJsonSchemaValidation<Value>;
 
 export type RuntimeJsonSchemaErrorReason =
-  | "schema-input"
-  | "schema-dependency"
-  | "schema-compile";
+  "schema-input" | "schema-dependency" | "schema-compile";
 
 const ERROR_MESSAGES = {
   "schema-input": "Runtime JSON Schema input is invalid.",
   "schema-dependency": "Runtime JSON Schema dependency catalog is invalid.",
-  "schema-compile": "Runtime JSON Schema catalog could not be compiled strictly.",
-} as const satisfies Readonly<Record<
-  RuntimeJsonSchemaErrorReason,
-  string
->>;
+  "schema-compile":
+    "Runtime JSON Schema catalog could not be compiled strictly.",
+} as const satisfies Readonly<Record<RuntimeJsonSchemaErrorReason, string>>;
 
 /** 运行时 Schema 目录构建或编译失败时返回的稳定、脱敏错误。 */
 export class RuntimeJsonSchemaError extends Error {
@@ -85,7 +82,11 @@ function schemaObject(
     if (error instanceof JsonValueError) fail(reason, error.path);
     throw error;
   }
-  if (admitted === null || Array.isArray(admitted) || typeof admitted !== "object") {
+  if (
+    admitted === null ||
+    Array.isArray(admitted) ||
+    typeof admitted !== "object"
+  ) {
     fail(reason, path);
   }
   // 上述准入已经排除原始值和 JsonArray；此处恢复 TypeScript 无法保留的只读类型收窄。
@@ -121,6 +122,52 @@ function validationPath(instancePath: string): string {
   return instancePath.length === 0 ? "$" : `$${instancePath}`;
 }
 
+/** 不调用对象方法地比较两个已准入JSON值，成员顺序不影响对象相等性。 */
+function sameJsonValue(left: JsonValue, right: JsonValue): boolean {
+  if (left === right) return true;
+  if (
+    left === null ||
+    right === null ||
+    typeof left !== "object" ||
+    typeof right !== "object"
+  ) {
+    return false;
+  }
+  const leftIsArray = Array.isArray(left);
+  if (leftIsArray !== Array.isArray(right)) return false;
+  if (leftIsArray) {
+    const leftArray = left as JsonArray;
+    const rightArray = right as JsonArray;
+    return (
+      leftArray.length === rightArray.length &&
+      leftArray.every((entry, index) =>
+        sameJsonValue(entry, rightArray[index]!),
+      )
+    );
+  }
+  const leftRecord = left as JsonObject;
+  const rightRecord = right as JsonObject;
+  const leftKeys = Object.keys(leftRecord);
+  if (leftKeys.length !== Object.keys(rightRecord).length) return false;
+  return leftKeys.every(
+    (key) =>
+      Object.hasOwn(rightRecord, key) &&
+      sameJsonValue(leftRecord[key]!, rightRecord[key]!),
+  );
+}
+
+/** JSON Schema `uniqueItems`的无原型安全实现。 */
+function uniqueJsonItems(enabled: boolean, value: unknown): boolean {
+  if (!enabled || !Array.isArray(value)) return true;
+  const items = value as JsonArray;
+  for (let right = 1; right < items.length; right += 1) {
+    for (let left = 0; left < right; left += 1) {
+      if (sameJsonValue(items[left]!, items[right]!)) return false;
+    }
+  }
+  return true;
+}
+
 /**
  * 编译不访问网络的本地 Schema 目录，并返回可复用的校验器。
  *
@@ -148,6 +195,14 @@ export function createRuntimeJsonSchemaValidator<Value>(
         return false;
       }
     },
+  });
+  ajv.removeKeyword("uniqueItems");
+  ajv.addKeyword({
+    keyword: "uniqueItems",
+    type: "array",
+    schemaType: "boolean",
+    validate: uniqueJsonItems,
+    errors: false,
   });
   ajv.addKeyword({
     keyword: "x-wakeflow-runtime-export",

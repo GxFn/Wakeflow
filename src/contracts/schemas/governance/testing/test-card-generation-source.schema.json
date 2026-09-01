@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:testing:test-card-generation-source:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TEST_CARD_GENERATION_SOURCE_SCHEMA",
+  "title": "WakeflowTestCardGenerationSource",
+  "description": "TestCard创建Event记录的代际原因；不进入TestCard执行合同。",
+  "type": "object",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/initial"
+    },
+    {
+      "$ref": "#/$defs/productDefectRetest"
+    }
+  ],
+  "$defs": {
+    "initial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "const": "initial"
+        }
+      }
+    },
+    "productDefectRetest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "previousTestCard",
+        "testReviewDecision",
+        "productDefectRemediation"
+      ],
+      "properties": {
+        "kind": {
+          "const": "product-defect-retest"
+        },
+        "previousTestCard": {
+          "$ref": "#/$defs/testCard"
+        },
+        "testReviewDecision": {
+          "$ref": "#/$defs/testReviewDecision"
+        },
+        "productDefectRemediation": {
+          "$ref": "#/$defs/productDefectRemediation"
+        }
+      }
+    },
+    "testCard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["testCardId", "testCardDigest"],
+      "properties": {
+        "testCardId": {
+          "type": "string",
+          "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "testCardDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "testReviewDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targetReviewDecisionId", "decisionDigest"],
+      "properties": {
+        "targetReviewDecisionId": {
+          "type": "string",
+          "pattern": "^target-review-decision_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "decisionDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "productDefectRemediation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["productDefectRemediationId", "authorizationDigest"],
+      "properties": {
+        "productDefectRemediationId": {
+          "type": "string",
+          "pattern": "^product-defect-remediation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "authorizationDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    }
+  }
+}

@@ -10,9 +10,7 @@ import {
   type WakeflowResourceProcessingContract,
   WakeflowResourceProcessingContractError,
 } from "../../../src/foundation/resource/resource-processing-contract.js";
-import type {
-  WakeflowWorkspaceResourceNodePolicy,
-} from "../../../src/workspace/workspace-resource-declaration.js";
+import type { WakeflowWorkspaceResourceNodePolicy } from "../../../src/workspace/workspace-resource-declaration.js";
 import {
   parseDemandEventCommitSequence,
   DemandEventStreamPositionError,
@@ -45,12 +43,20 @@ import {
   createDemandEventSourcingResourceCatalog,
   createDemandEventStreamCommitResourceDeclaration,
   createTaskPackageProjectionResourceDeclaration,
+  createTestCardProjectionResourceDeclaration,
+  createTestDispatchPacketProjectionResourceDeclaration,
   WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG,
 } from "../../../src/governance/demand/demand-resource-catalog.js";
 import {
   taskPackageProjectionRef,
   TASK_PACKAGE_PROJECTIONS_ROOT_REF,
 } from "../../../src/governance/tasking/task-package-projection-paths.js";
+import {
+  testCardProjectionRef,
+  testDispatchPacketProjectionRef,
+  TEST_CARD_PROJECTIONS_ROOT_REF,
+  TEST_DISPATCH_PACKET_PROJECTIONS_ROOT_REF,
+} from "../../../src/governance/testing/test-dispatch-projection-paths.js";
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_11111111-1111-4111-8111-111111111111",
@@ -61,6 +67,14 @@ const TASK_PACKAGE_ID = parseWakeflowDurableIdOfKind(
   "task-package_22222222-2222-4222-8222-222222222222",
   "task-package",
 );
+const TEST_CARD_ID = parseWakeflowDurableIdOfKind(
+  "test-card_33333333-3333-4333-8333-333333333333",
+  "test-card",
+);
+const TARGET_DELIVERY_ID = parseWakeflowDurableIdOfKind(
+  "target-delivery_44444444-4444-4444-8444-444444444444",
+  "target-delivery",
+);
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;
@@ -68,7 +82,9 @@ function assertDeepFrozen(value: unknown): void {
   for (const child of Object.values(value)) assertDeepFrozen(child);
 }
 
-function modeOf(nodePolicy: Readonly<WakeflowWorkspaceResourceNodePolicy>): string {
+function modeOf(
+  nodePolicy: Readonly<WakeflowWorkspaceResourceNodePolicy>,
+): string {
   return nodePolicy.kind === "tree" ? nodePolicy.rootMode : nodePolicy.mode;
 }
 
@@ -113,10 +129,10 @@ test("Demand static resource catalog closes only publication directories", () =>
   equal(WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG.length, 4);
   for (const entry of WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG) {
     equal(
-      entry.family === "demand"
-      && entry.scope === "host-neutral"
-      && entry.tracking.disposition === "ignored"
-      && entry.tracking.privacy === "runtime-private",
+      entry.family === "demand" &&
+        entry.scope === "host-neutral" &&
+        entry.tracking.disposition === "ignored" &&
+        entry.tracking.privacy === "runtime-private",
       true,
     );
     deepEqual(entry.nodePolicy, {
@@ -215,6 +231,20 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
         processing: "directory-container:materialize-directory",
       },
       {
+        declarationId: `${prefix}.test-cards-root`,
+        ownerId: "demand-testing-projection",
+        relativePath: `${rootRef}/${TEST_CARD_PROJECTIONS_ROOT_REF}`,
+        mode: "0700",
+        processing: "directory-container:materialize-directory",
+      },
+      {
+        declarationId: `${prefix}.test-dispatch-packets-root`,
+        ownerId: "demand-testing-projection",
+        relativePath: `${rootRef}/${TEST_DISPATCH_PACKET_PROJECTIONS_ROOT_REF}`,
+        mode: "0700",
+        processing: "directory-container:materialize-directory",
+      },
+      {
         declarationId: `${prefix}.transactions-root`,
         ownerId: "demand-event-sourcing",
         relativePath: `${rootRef}/${DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF}`,
@@ -244,31 +274,37 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
       },
     ],
   );
-  equal(catalog.length, 13);
+  equal(catalog.length, 15);
   equal(
-    catalog.every((entry) =>
-      entry.family === "demand"
-      && entry.scope === "host-neutral"
-      && entry.tracking.disposition === "ignored"
-      && entry.tracking.privacy === "runtime-private"),
+    catalog.every(
+      (entry) =>
+        entry.family === "demand" &&
+        entry.scope === "host-neutral" &&
+        entry.tracking.disposition === "ignored" &&
+        entry.tracking.privacy === "runtime-private",
+    ),
     true,
   );
   equal(
-    catalog.some((entry) =>
-      entry.placement.relativePath === demandPublicationStageRef(DEMAND_ID)),
+    catalog.some(
+      (entry) =>
+        entry.placement.relativePath === demandPublicationStageRef(DEMAND_ID),
+    ),
     false,
   );
   equal(
-    catalog.some((entry) =>
-      entry.placement.relativePath?.startsWith(
-        `${rootRef}/${DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF}/`,
-      ) === true),
+    catalog.some(
+      (entry) =>
+        entry.placement.relativePath?.startsWith(
+          `${rootRef}/${DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF}/`,
+        ) === true,
+    ),
     false,
   );
   assertDeepFrozen(catalog);
   deepEqual(createDemandEventSourcingResourceCatalog(DEMAND_ID), catalog);
 
-  const publicationMarker = catalog[10];
+  const publicationMarker = catalog[12];
   deepEqual(
     admitWakeflowResourceOperation(
       publicationMarker.processing,
@@ -308,27 +344,27 @@ test("TaskPackage projection declaration remains derived and create-only", () =>
     DEMAND_ID,
     TASK_PACKAGE_ID,
   );
-  deepEqual({
-    declarationId: declaration.declarationId,
-    ownerId: declaration.ownerId,
-    relativePath: declaration.placement.relativePath,
-    processing: declaration.processing,
-  }, {
-    declarationId: `demand.tasking.${DEMAND_ID}.task-package.${TASK_PACKAGE_ID}`,
-    ownerId: "demand-tasking-projection",
-    relativePath: `${demandFinalRootRef(DEMAND_ID)}/${taskPackageProjectionRef(TASK_PACKAGE_ID)}`,
-    processing: {
-      kind: "resource",
-      role: "derived-projection",
-      allowedMutationRecipes: ["exclusive-create"],
-      recoveryStrategy: "rebuild-from-authority",
-    },
-  });
   deepEqual(
-    admitWakeflowResourceOperation(
-      declaration.processing,
-      "exclusive-create",
-    ),
+    {
+      declarationId: declaration.declarationId,
+      ownerId: declaration.ownerId,
+      relativePath: declaration.placement.relativePath,
+      processing: declaration.processing,
+    },
+    {
+      declarationId: `demand.tasking.${DEMAND_ID}.task-package.${TASK_PACKAGE_ID}`,
+      ownerId: "demand-tasking-projection",
+      relativePath: `${demandFinalRootRef(DEMAND_ID)}/${taskPackageProjectionRef(TASK_PACKAGE_ID)}`,
+      processing: {
+        kind: "resource",
+        role: "derived-projection",
+        allowedMutationRecipes: ["exclusive-create"],
+        recoveryStrategy: "rebuild-from-authority",
+      },
+    },
+  );
+  deepEqual(
+    admitWakeflowResourceOperation(declaration.processing, "exclusive-create"),
     {
       kind: "resource-mutation",
       role: "derived-projection",
@@ -336,6 +372,55 @@ test("TaskPackage projection declaration remains derived and create-only", () =>
     },
   );
   assertDeepFrozen(declaration);
+});
+
+test("TestCard与Test dispatch packet投影声明保持derived/create-only", () => {
+  const card = createTestCardProjectionResourceDeclaration(
+    DEMAND_ID,
+    TEST_CARD_ID,
+  );
+  const packet = createTestDispatchPacketProjectionResourceDeclaration(
+    DEMAND_ID,
+    TARGET_DELIVERY_ID,
+  );
+  deepEqual(
+    {
+      declarationId: card.declarationId,
+      ownerId: card.ownerId,
+      relativePath: card.placement.relativePath,
+      processing: card.processing,
+    },
+    {
+      declarationId: `demand.testing.${DEMAND_ID}.test-card.${TEST_CARD_ID}`,
+      ownerId: "demand-testing-projection",
+      relativePath: `${demandFinalRootRef(DEMAND_ID)}/${testCardProjectionRef(TEST_CARD_ID)}`,
+      processing: {
+        kind: "resource",
+        role: "derived-projection",
+        allowedMutationRecipes: ["exclusive-create"],
+        recoveryStrategy: "rebuild-from-authority",
+      },
+    },
+  );
+  deepEqual(
+    {
+      declarationId: packet.declarationId,
+      ownerId: packet.ownerId,
+      relativePath: packet.placement.relativePath,
+      processing: packet.processing,
+    },
+    {
+      declarationId: `demand.testing.${DEMAND_ID}.test-dispatch-packet.${TARGET_DELIVERY_ID}`,
+      ownerId: "demand-testing-projection",
+      relativePath: `${demandFinalRootRef(DEMAND_ID)}/${testDispatchPacketProjectionRef(TARGET_DELIVERY_ID)}`,
+      processing: {
+        kind: "resource",
+        role: "derived-projection",
+        allowedMutationRecipes: ["exclusive-create"],
+        recoveryStrategy: "rebuild-from-authority",
+      },
+    },
+  );
 });
 
 test("Demand commit and snapshot declarations keep authority and checkpoint distinct", () => {

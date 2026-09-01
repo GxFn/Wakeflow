@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:target-host-effect-claimed-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_HOST_EFFECT_CLAIMED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowTargetHostEffectClaimedEventDataV1",
+  "description": "delivery.target-host-effect-claimed persisted event v1 的严格 payload。",
+  "$comment": "完整 WindowWorkClaim 保留已经提交的跨 Demand 占用历史；事件本身仍不代表宿主发送已经发生。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["claim"],
+  "properties": {
+    "claim": {
+      "$ref": "urn:wakeflow:governance:delivery:window-work-claim:v1"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:target-result-recorded-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_RESULT_RECORDED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowTargetResultRecordedEventDataV1",
+  "description": "result.target-result-recorded persisted event v1 的严格 payload。",
+  "$comment": "完整TargetResult是目标窗口陈述与Wakeflow authority闭合后的review输入；事件不表示Controller已经接受结果。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["result"],
+  "properties": {
+    "result": {
+      "$ref": "urn:wakeflow:governance:result:target-result:v1"
+    }
+  }
+}

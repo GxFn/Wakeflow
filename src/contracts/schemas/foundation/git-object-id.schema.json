@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:foundation:version-control:git-object-id:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_GIT_OBJECT_ID_SCHEMA",
+  "title": "WakeflowGitObjectId",
+  "description": "Git完整对象身份及其显式对象格式；支持SHA-1和SHA-256仓库。",
+  "$comment": "本合同只拥有完整object ID词法，不执行rev解析、对象存在性、commit类型、repository选择或Git进程调用。",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/sha1"
+    },
+    {
+      "$ref": "#/$defs/sha256"
+    }
+  ],
+  "$defs": {
+    "sha1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "value"],
+      "properties": {
+        "algorithm": {
+          "const": "sha1"
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    },
+    "sha256": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "value"],
+      "properties": {
+        "algorithm": {
+          "const": "sha256"
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

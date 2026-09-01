@@ -2,12 +2,8 @@ import {
   WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
   type WakeflowWindowHostBinding as WindowHostBindingWire,
 } from "../../contracts/generated/workspace/window-host-binding.generated.js";
-import {
-  WAKEFLOW_SHA256_DIGEST_SCHEMA,
-} from "../../contracts/generated/foundation/sha256-digest.generated.js";
-import {
-  WAKEFLOW_UTC_INSTANT_SCHEMA,
-} from "../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
+import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
 import {
   parseSha256Digest,
   Sha256Error,
@@ -28,11 +24,8 @@ import {
   WakeflowDurableIdError,
   type WakeflowDurableId,
 } from "../../contracts/identity/wakeflow-durable-id.js";
+import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
-  createRuntimeJsonSchemaValidator,
-} from "../../foundation/schema/runtime-json-schema.js";
-import {
-  compareUtcInstants,
   parseUtcInstant,
   UtcInstantError,
   type UtcInstant,
@@ -59,8 +52,7 @@ import {
  * Delivery 状态；公开consumer只能取得脱敏ref与bindingId。
  */
 
-const WAKEFLOW_WINDOW_HOST_BINDING_KIND =
-  "WakeflowWindowHostBinding" as const;
+const WAKEFLOW_WINDOW_HOST_BINDING_KIND = "WakeflowWindowHostBinding" as const;
 const WAKEFLOW_WINDOW_HOST_BINDING_VERSION = 1 as const;
 
 export interface WakeflowWindowHostBinding {
@@ -74,8 +66,10 @@ export interface WakeflowWindowHostBinding {
   readonly source: Readonly<{
     readonly kind: "agent-host-create-result";
     readonly launchIntentDigest: Sha256Digest;
+    /** Agent报告Host create结果时携带的审计时间。 */
     readonly observedAt: UtcInstant;
   }>;
+  /** Wakeflow持久化本Binding代际时记录的审计时间。 */
   readonly registeredAt: UtcInstant;
 }
 
@@ -91,13 +85,7 @@ interface CreateWakeflowWindowHostBindingInput {
 }
 
 type WakeflowWindowHostBindingErrorReason =
-  | "input"
-  | "schema"
-  | "profile"
-  | "handle"
-  | "time"
-  | "relation"
-  | "representation";
+  "input" | "schema" | "profile" | "handle" | "time" | "representation";
 
 const ERROR_MESSAGES = {
   input: "Window Host Binding is not passive JSON data.",
@@ -106,12 +94,10 @@ const ERROR_MESSAGES = {
     "Window Host Binding does not belong to the supplied Host Identity Profile.",
   handle: "Window Host Binding contains an invalid current-host handle.",
   time: "Window Host Binding contains an invalid UTC instant.",
-  relation: "Window Host Binding source and registration time are inconsistent.",
   representation: "Window Host Binding bytes are not deterministic.",
-} as const satisfies Readonly<Record<
-  WakeflowWindowHostBindingErrorReason,
-  string
->>;
+} as const satisfies Readonly<
+  Record<WakeflowWindowHostBindingErrorReason, string>
+>;
 
 /** Window Host Binding 准入失败的稳定、脱敏错误。 */
 export class WakeflowWindowHostBindingError extends Error {
@@ -132,7 +118,10 @@ const validateWire = createRuntimeJsonSchemaValidator<WindowHostBindingWire>(
   [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_UTC_INSTANT_SCHEMA],
 );
 
-function fail(reason: WakeflowWindowHostBindingErrorReason, path: string): never {
+function fail(
+  reason: WakeflowWindowHostBindingErrorReason,
+  path: string,
+): never {
   throw new WakeflowWindowHostBindingError(reason, path);
 }
 
@@ -207,7 +196,7 @@ function opaqueHandle(
   }
 }
 
-/** 对任意值执行Schema、当前宿主handle、类型化身份和时间关系准入。 */
+/** 对任意值执行Schema、当前宿主handle、类型化身份和审计时间准入。 */
 export function parseWakeflowWindowHostBinding(
   value: unknown,
   identityProfileValue: unknown,
@@ -226,9 +215,6 @@ export function parseWakeflowWindowHostBinding(
   if (wire.hostId !== profile.hostId) fail("profile", "$/hostId");
   const observedAt = instant(wire.source.observedAt, "$/source/observedAt");
   const registeredAt = instant(wire.registeredAt, "$/registeredAt");
-  if (compareUtcInstants(registeredAt, observedAt) < 0) {
-    fail("relation", "$/registeredAt");
-  }
   return Object.freeze({
     kind: WAKEFLOW_WINDOW_HOST_BINDING_KIND,
     schemaVersion: WAKEFLOW_WINDOW_HOST_BINDING_VERSION,
@@ -297,9 +283,7 @@ export function parseWakeflowWindowHostBindingDocument(
     throw error;
   }
   const binding = parseWakeflowWindowHostBinding(json, identityProfileValue);
-  if (
-    renderDeterministicJsonDocument(binding, "$windowHostBinding") !== text
-  ) {
+  if (renderDeterministicJsonDocument(binding, "$windowHostBinding") !== text) {
     fail("representation", "$windowHostBinding");
   }
   return binding;

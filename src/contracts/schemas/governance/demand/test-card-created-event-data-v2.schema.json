@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:test-card-created-data:v2",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TEST_CARD_CREATED_EVENT_DATA_V2_SCHEMA",
+  "title": "WakeflowTestCardCreatedEventDataV2",
+  "description": "testing.test-card-created persisted event v2 的严格payload。",
+  "$comment": "完整TestCard保持当前Test执行合同；generationSource独立记录初始创建或产品缺陷修复后的retest原因。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["testCard", "generationSource"],
+  "properties": {
+    "testCard": {
+      "$ref": "urn:wakeflow:governance:testing:test-card:v1"
+    },
+    "generationSource": {
+      "$ref": "urn:wakeflow:governance:testing:test-card-generation-source:v1"
+    }
+  }
+}

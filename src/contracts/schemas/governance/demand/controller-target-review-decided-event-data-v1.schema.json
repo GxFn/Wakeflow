@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:controller-target-review-decided-event-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_CONTROLLER_TARGET_REVIEW_DECIDED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowControllerTargetReviewDecidedEventDataV1",
+  "description": "review.target-result-decided事件版本1的持久化数据。",
+  "$comment": "Event保存完整ControllerImplementationReviewDecision业务事实；Aggregate状态摘要与后续route不进入Event data。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision"],
+  "properties": {
+    "decision": {
+      "oneOf": [
+        {
+          "$ref": "urn:wakeflow:governance:review:controller-implementation-review-decision:v1"
+        },
+        {
+          "$ref": "urn:wakeflow:governance:review:controller-test-review-decision:v1"
+        }
+      ]
+    }
+  }
+}

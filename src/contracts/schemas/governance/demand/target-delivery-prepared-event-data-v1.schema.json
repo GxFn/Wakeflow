@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:target-delivery-prepared-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_DELIVERY_PREPARED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowTargetDeliveryPreparedEventDataV1",
+  "description": "delivery.target-delivery-prepared persisted event v1 的严格 payload。",
+  "$comment": "完整 TargetDeliveryIntent 是已发生的准备事实；它没有取得 WindowWorkClaim，也没有跨越宿主效果边界。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intent"],
+  "properties": {
+    "intent": {
+      "allOf": [
+        {
+          "$ref": "urn:wakeflow:governance:delivery:target-delivery-intent:v1"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "rework": false,
+            "productDefectRemediation": false
+          }
+        }
+      ]
+    }
+  }
+}

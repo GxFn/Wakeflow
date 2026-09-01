@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:entrypoints:target-result-review-resume-request:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_RESULT_REVIEW_RESUME_REQUEST_SCHEMA",
+  "title": "WakeflowTargetResultReviewResumeRequestV1",
+  "description": "Closed MCP request for resuming one exact current blocked TargetResult review generation.",
+  "$comment": "The caller supplies only the current Route/Inspector state selector and a Controller resolution summary. Wakeflow derives the blocked Decision, TargetResult, Snapshot, Controller, time, Resume, Event, and Commit identities.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "root",
+    "demandId",
+    "targetTaskId",
+    "expectedBlockedState",
+    "resolutionSummary"
+  ],
+  "properties": {
+    "root": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absolute path of the existing Wakeflow workspace root."
+    },
+    "demandId": {
+      "$ref": "#/$defs/demandId"
+    },
+    "targetTaskId": {
+      "$ref": "#/$defs/targetTaskId"
+    },
+    "expectedBlockedState": {
+      "$ref": "#/$defs/expectedBlockedState"
+    },
+    "resolutionSummary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192,
+      "pattern": "^(?!\\s)(?![\\s\\S]*\\r)(?![\\s\\S]*[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$"
+    }
+  },
+  "$defs": {
+    "expectedBlockedState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["streamRevision", "stateDigest"],
+      "properties": {
+        "streamRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "stateDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
+    },
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetTaskId": {
+      "type": "string",
+      "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    }
+  }
+}

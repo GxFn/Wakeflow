@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:target-delivery-prepared-data:v2",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_DELIVERY_PREPARED_EVENT_DATA_V2_SCHEMA",
+  "title": "WakeflowTargetDeliveryPreparedEventDataV2",
+  "description": "delivery.target-delivery-prepared persisted event v2 的严格 payload。",
+  "$comment": "v2 接受初次投递 Intent，也接受绑定精确 rework Decision 与 previous Result 的后续投递 Intent；它仍未取得 WindowWorkClaim 或跨越宿主效果边界。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intent"],
+  "properties": {
+    "intent": {
+      "allOf": [
+        {
+          "$ref": "urn:wakeflow:governance:delivery:target-delivery-intent:v1"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "productDefectRemediation": false
+          }
+        }
+      ]
+    }
+  }
+}

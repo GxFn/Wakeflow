@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:target-host-effect-observed-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_HOST_EFFECT_OBSERVED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowTargetHostEffectObservedEventDataV1",
+  "description": "delivery.target-host-effect-observed persisted event v1 的严格 payload。",
+  "$comment": "完整脱敏 observation 是 Agent 已报告的宿主效果事实；事件只记录观察并派生 transport disposition，不代表 TargetResult、Controller acceptance 或需求完成。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["observation"],
+  "properties": {
+    "observation": {
+      "$ref": "urn:wakeflow:governance:delivery:target-delivery-host-effect-observation:v1"
+    }
+  }
+}

@@ -1,41 +1,22 @@
 import { equal } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 
-import {
-  parseWakeflowConfigV3,
-} from "../../../src/configuration/wakeflow-config-v3.js";
+import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import {
-  claudeCodeWorkspaceHostResourceProfile,
-} from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
-import {
-  codexWorkspaceHostResourceProfile,
-} from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  withWakeflowMaintenanceGate,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
-import {
-  previewWakeflowStaticMaterialization,
-} from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
+import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
+import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { withWakeflowMaintenanceGate } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
+import { previewWakeflowStaticMaterialization } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
 import {
   executeWakeflowStaticMaterializationStep,
   WakeflowStaticMaterializationStepExecutionError,
 } from "../../../src/workspace/maintenance/wakeflow-static-materialization-step-executor.js";
-import {
-  inspectWakeflowWorkspaceCoreLayout,
-} from "../../../src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
-import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+import { inspectWakeflowWorkspaceCoreLayout } from "../../../src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
+import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
 
 const PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,
@@ -44,17 +25,17 @@ const PROFILES = Object.freeze([
 const UUID = "11111111-1111-4111-8111-111111111111";
 
 async function fixture(t: TestContext) {
-  const absolutePath = realpathSync(mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-static-step-executor-",
-  )));
+  const absolutePath = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), "wakeflow-static-step-executor-")),
+  );
   const initialized = spawnSync("git", ["init", "--quiet"], {
     cwd: absolutePath,
     encoding: "utf8",
     shell: false,
     windowsHide: true,
   });
-  if (initialized.status !== 0) throw new Error("Cannot initialize fixture Git.");
+  if (initialized.status !== 0)
+    throw new Error("Cannot initialize fixture Git.");
   const root = await RootedDirectory.open(absolutePath);
   t.after(async () => {
     await root.close();
@@ -95,64 +76,107 @@ test("closed dispatcher executes the fresh preview in Config-last order", async 
     async (context) => {
       const values = [];
       for (const step of preview.steps) {
-        values.push(await executeWakeflowStaticMaterializationStep(
-          workspace.root,
-          context,
-          preview,
-          input,
-          step.stepId,
-          { sourceConfig: null, recoveringAffectedStep: false },
-        ));
+        values.push(
+          await executeWakeflowStaticMaterializationStep(
+            workspace.root,
+            context,
+            preview,
+            input,
+            step.stepId,
+            { sourceConfig: null, recoveringAffectedStep: false },
+          ),
+        );
       }
       return values;
     },
   );
-  equal(receipts.length, 14);
+  equal(receipts.length, 15);
   equal(receipts.at(-1)?.stepId, "authority:config");
-  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), true);
-  equal(existsSync(path.join(workspace.absolutePath, ".wakeflow-active")), true);
-  equal(existsSync(path.join(
-    workspace.absolutePath,
-    ".wakeflow-active",
-    "current",
-    "todo",
-    "global-todo-board.md",
-  )), true);
-  equal(existsSync(path.join(
-    workspace.absolutePath,
-    ".wakeflow-local",
-    "runtime",
-    "hosts",
-    "codex",
-    "evidence",
-    "pods",
-  )), true);
-  equal(existsSync(path.join(
-    workspace.absolutePath,
-    ".wakeflow-local",
-    "runtime",
-    "hosts",
-    "codex",
-    "operations",
-    "keep-live",
-    "leases",
-  )), true);
-  equal(existsSync(path.join(workspace.absolutePath, "Ledger", "requirements")), true);
-  equal(existsSync(path.join(workspace.absolutePath, "Ledger", "confirmations")), true);
-  equal(existsSync(path.join(workspace.absolutePath, "Ledger", "transactions")), true);
-  equal(existsSync(path.join(
-    workspace.absolutePath,
-    ".wakeflow-local",
-    "runtime",
-    "hosts",
-    "codex",
-    "projections",
-    "window-runtime",
-    `${desired.topology.windows[0]?.windowId}.json`,
-  )), true);
+  equal(
+    existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")),
+    true,
+  );
+  equal(
+    existsSync(path.join(workspace.absolutePath, ".wakeflow-active")),
+    true,
+  );
+  equal(
+    existsSync(
+      path.join(
+        workspace.absolutePath,
+        ".wakeflow-active",
+        "current",
+        "todo",
+        "global-todo-board.md",
+      ),
+    ),
+    true,
+  );
+  equal(
+    existsSync(
+      path.join(
+        workspace.absolutePath,
+        ".wakeflow-local",
+        "runtime",
+        "hosts",
+        "codex",
+        "evidence",
+        "pods",
+      ),
+    ),
+    true,
+  );
+  equal(
+    existsSync(
+      path.join(
+        workspace.absolutePath,
+        ".wakeflow-local",
+        "runtime",
+        "hosts",
+        "codex",
+        "operations",
+        "keep-live",
+        "leases",
+      ),
+    ),
+    true,
+  );
+  equal(
+    existsSync(path.join(workspace.absolutePath, "Ledger", "requirements")),
+    true,
+  );
+  equal(
+    existsSync(path.join(workspace.absolutePath, "Ledger", "confirmations")),
+    true,
+  );
+  equal(
+    existsSync(path.join(workspace.absolutePath, "Ledger", "transactions")),
+    true,
+  );
+  equal(
+    existsSync(
+      path.join(
+        workspace.absolutePath,
+        ".wakeflow-local",
+        "runtime",
+        "hosts",
+        "codex",
+        "projections",
+        "window-runtime",
+        `${desired.topology.windows[0]?.windowId}.json`,
+      ),
+    ),
+    true,
+  );
   equal(existsSync(path.join(workspace.absolutePath, "AGENTS.md")), true);
-  equal(existsSync(path.join(workspace.absolutePath, "Design", "AGENTS.md")), true);
-  equal(existsSync(path.join(workspace.absolutePath, "Test", "AGENTS.md")), true);
+  equal(
+    existsSync(path.join(workspace.absolutePath, "Design", "AGENTS.md")),
+    true,
+  );
+  equal(
+    existsSync(path.join(workspace.absolutePath, "Test", "AGENTS.md")),
+    true,
+  );
   const core = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
   equal(core.local.status, "idle");
   equal(core.active.status, "present");
@@ -166,9 +190,9 @@ test("whole-owned root accepts existing only while replaying an affected step", 
     workspace.root,
     input,
   );
-  const activeStep = preview.steps.find((entry) => (
-    entry.kind === "materialize-active-layout"
-  ));
+  const activeStep = preview.steps.find(
+    (entry) => entry.kind === "materialize-active-layout",
+  );
   if (activeStep === undefined) throw new Error("Expected Active root step.");
 
   await withWakeflowMaintenanceGate(
@@ -205,7 +229,9 @@ test("whole-owned root accepts existing only while replaying an affected step", 
         normalError instanceof WakeflowStaticMaterializationStepExecutionError,
         true,
       );
-      if (normalError instanceof WakeflowStaticMaterializationStepExecutionError) {
+      if (
+        normalError instanceof WakeflowStaticMaterializationStepExecutionError
+      ) {
         equal(normalError.reason, "strict-absent");
       }
 

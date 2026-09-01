@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:product-defect-remediation-authorized-event-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowProductDefectRemediationAuthorizedEventDataV1",
+  "description": "review.product-defect-remediation-authorized.v1 的严格事件数据。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["authorization"],
+  "properties": {
+    "authorization": {
+      "$ref": "urn:wakeflow:governance:review:controller-product-defect-remediation-authorization:v1"
+    }
+  }
+}

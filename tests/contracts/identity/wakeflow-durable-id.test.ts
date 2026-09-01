@@ -31,9 +31,6 @@ const RETIRED_DURABLE_ID_KINDS = [
   "pod-design-request",
   "preservation",
   "review-candidate",
-  "target-result",
-  "test-attempt",
-  "test-card",
 ] as const;
 
 function expectWakeflowDurableIdError(
@@ -84,8 +81,10 @@ test("durable kind vocabulary is runtime frozen and parser-compatible", () => {
 });
 
 test("creation preserves the exact kind in the branded return type", () => {
-  const programId: WakeflowDurableId<"program"> =
-    createWakeflowDurableId("program", FIXED_UUID);
+  const programId: WakeflowDurableId<"program"> = createWakeflowDurableId(
+    "program",
+    FIXED_UUID,
+  );
   equal(programId, `program_${FIXED_UUID_TEXT}`);
 
   const broadId: WakeflowDurableId = programId;
@@ -128,7 +127,8 @@ test("kind-specific parsing returns the requested branded scalar", () => {
 
   equal(requirementId, value);
   expectWakeflowDurableIdError(
-    () => parseWakeflowDurableIdOfKind(value, "confirmation", "$.confirmationId"),
+    () =>
+      parseWakeflowDurableIdOfKind(value, "confirmation", "$.confirmationId"),
     "kind-mismatch",
     "$.confirmationId",
   );
@@ -159,7 +159,10 @@ test("parsing rejects malformed, unknown, non-durable, and invalid UUID values",
       value: "program_12345678-90ab-4cde-cfab-1234567890ab",
       reason: "uuid-format",
     },
-    { value: `program_${FIXED_UUID_TEXT.toUpperCase()}`, reason: "uuid-format" },
+    {
+      value: `program_${FIXED_UUID_TEXT.toUpperCase()}`,
+      reason: "uuid-format",
+    },
   ];
 
   for (const invalidCase of invalidCases) {
@@ -183,11 +186,12 @@ test("creation and expected-kind boundaries revalidate runtime values", () => {
     "$uuid",
   );
   expectWakeflowDurableIdError(
-    () => parseWakeflowDurableIdOfKind(
-      `program_${FIXED_UUID_TEXT}`,
-      asDurableKind("binding"),
-      "$.id",
-    ),
+    () =>
+      parseWakeflowDurableIdOfKind(
+        `program_${FIXED_UUID_TEXT}`,
+        asDurableKind("binding"),
+        "$.id",
+      ),
     "kind-unknown",
     "$expectedKind",
   );

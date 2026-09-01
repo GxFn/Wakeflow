@@ -3,7 +3,7 @@
   "$id": "urn:wakeflow:entrypoints:target-task-planning-result:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_TASK_PLANNING_RESULT_SCHEMA",
   "title": "WakeflowTargetTaskPlanningResultV1",
-  "description": "Successful preview or apply result for one immutable implementation Target Task plan.",
+  "description": "Successful preview or apply result for one immutable implementation or Test Target Task plan.",
   "type": "object",
   "oneOf": [
     {
@@ -87,10 +87,7 @@
           "const": "completed"
         },
         "disposition": {
-          "enum": [
-            "committed",
-            "idempotent"
-          ]
+          "enum": ["committed", "idempotent"]
         },
         "eventAuthority": {
           "const": "current"
@@ -107,10 +104,7 @@
         "event": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "eventId",
-            "streamRevision"
-          ],
+          "required": ["eventId", "streamRevision"],
           "properties": {
             "eventId": {
               "$ref": "#/$defs/eventId"
@@ -125,11 +119,7 @@
         "commit": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "commitId",
-            "commitSequence",
-            "commitDigest"
-          ],
+          "required": ["commitId", "commitSequence", "commitDigest"],
           "properties": {
             "commitId": {
               "$ref": "#/$defs/commitId"
@@ -148,59 +138,108 @@
           "$ref": "#/$defs/sha256Digest"
         },
         "targetTask": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "targetTaskId",
-            "taskPackageId",
-            "repositoryId",
-            "windowId",
-            "phase"
-          ],
-          "properties": {
-            "targetTaskId": {
-              "$ref": "#/$defs/targetTaskId"
-            },
-            "taskPackageId": {
-              "$ref": "#/$defs/taskPackageId"
-            },
-            "repositoryId": {
-              "$ref": "#/$defs/repositoryId"
-            },
-            "windowId": {
-              "$ref": "#/$defs/windowId"
-            },
-            "phase": {
-              "const": "planned"
-            }
-          }
+          "$ref": "#/$defs/targetTask"
         },
         "taskPackageProjection": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "disposition",
-            "resourceRef",
-            "taskPackageDigest",
-            "documentDigest"
-          ],
-          "properties": {
-            "disposition": {
-              "enum": [
-                "created",
-                "current"
-              ]
-            },
-            "resourceRef": {
-              "$ref": "#/$defs/portableResourcePath"
-            },
-            "taskPackageDigest": {
-              "$ref": "#/$defs/sha256Digest"
-            },
-            "documentDigest": {
-              "$ref": "#/$defs/sha256Digest"
-            }
-          }
+          "$ref": "#/$defs/taskPackageProjection"
+        }
+      }
+    },
+    "targetTask": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/implementationTargetTask"
+        },
+        {
+          "$ref": "#/$defs/testTargetTask"
+        }
+      ]
+    },
+    "implementationTargetTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workType",
+        "targetTaskId",
+        "taskPackageId",
+        "repositoryId",
+        "windowId",
+        "phase"
+      ],
+      "properties": {
+        "workType": {
+          "const": "implementation"
+        },
+        "targetTaskId": {
+          "$ref": "#/$defs/targetTaskId"
+        },
+        "taskPackageId": {
+          "$ref": "#/$defs/taskPackageId"
+        },
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        },
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        },
+        "phase": {
+          "const": "planned"
+        }
+      }
+    },
+    "testTargetTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workType",
+        "targetTaskId",
+        "taskPackageId",
+        "windowId",
+        "phase",
+        "testCard"
+      ],
+      "properties": {
+        "workType": {
+          "const": "test"
+        },
+        "targetTaskId": {
+          "$ref": "#/$defs/targetTaskId"
+        },
+        "taskPackageId": {
+          "$ref": "#/$defs/taskPackageId"
+        },
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        },
+        "phase": {
+          "const": "planned"
+        },
+        "testCard": {
+          "$ref": "#/$defs/testCardTuple"
+        }
+      }
+    },
+    "taskPackageProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "disposition",
+        "resourceRef",
+        "taskPackageDigest",
+        "documentDigest"
+      ],
+      "properties": {
+        "disposition": {
+          "enum": ["created", "current"]
+        },
+        "resourceRef": {
+          "$ref": "#/$defs/portableResourcePath"
+        },
+        "taskPackageDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "documentDigest": {
+          "$ref": "#/$defs/sha256Digest"
         }
       }
     },
@@ -243,6 +282,8 @@
       }
     },
     "taskPackage": {
+      "description": "Controller 为一个目标窗口规划的不可变 Target Task 执行合同。",
+      "$comment": "workType 是 implementation/test 两个闭合变体的判别字段；Demand 状态、Config 拓扑、完整 authority closure 与 TestCard 来源关系由 Tasking service 校验。",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -262,7 +303,6 @@
         "selectedAuthorityRefs",
         "boundaries",
         "completionExpectations",
-        "commitExpectation",
         "acceptanceAnchors"
       ],
       "properties": {
@@ -297,7 +337,7 @@
           "$ref": "#/$defs/assignment"
         },
         "workType": {
-          "const": "implementation"
+          "enum": ["implementation", "test"]
         },
         "objective": {
           "$ref": "#/$defs/humanText"
@@ -320,22 +360,202 @@
           "$ref": "#/$defs/nonEmptyTextList"
         },
         "commitExpectation": {
-          "enum": [
-            "commit",
-            "leave-uncommitted"
-          ]
+          "enum": ["commit", "leave-uncommitted"]
         },
         "acceptanceAnchors": {
           "type": "array",
-          "minItems": 1,
           "maxItems": 32,
           "items": {
             "$ref": "#/$defs/acceptanceAnchor"
           }
+        },
+        "testCard": {
+          "$ref": "#/$defs/testCardTuple"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "workType": {
+                "const": "implementation"
+              }
+            },
+            "required": ["workType"]
+          },
+          "then": {
+            "required": ["commitExpectation"],
+            "properties": {
+              "commitExpectation": {
+                "enum": ["commit", "leave-uncommitted"]
+              },
+              "assignment": {
+                "$ref": "#/$defs/implementationAssignment"
+              },
+              "acceptanceAnchors": {
+                "type": "array",
+                "minItems": 1
+              },
+              "testCard": false
+            }
+          },
+          "else": {
+            "required": ["testCard"],
+            "properties": {
+              "testCard": {
+                "$ref": "#/$defs/testCardTuple"
+              },
+              "assignment": {
+                "$ref": "#/$defs/testAssignment"
+              },
+              "commitExpectation": false,
+              "acceptanceAnchors": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "taskPackageId": {
+      "type": "string",
+      "pattern": "^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetTaskId": {
+      "type": "string",
+      "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "testCardId": {
+      "type": "string",
+      "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "repositoryId": {
+      "type": "string",
+      "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "humanText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16384,
+      "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+    },
+    "nonEmptyTextList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/humanText"
+      }
+    },
+    "assignment": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/implementationAssignment"
+        },
+        {
+          "$ref": "#/$defs/testAssignment"
+        }
+      ]
+    },
+    "implementationAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositoryId", "windowId"],
+      "properties": {
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        },
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        }
+      }
+    },
+    "testAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["windowId"],
+      "properties": {
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        }
+      }
+    },
+    "boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inScope", "outOfScope", "forbidden"],
+      "properties": {
+        "inScope": {
+          "$ref": "#/$defs/nonEmptyTextList"
+        },
+        "outOfScope": {
+          "$ref": "#/$defs/textList"
+        },
+        "forbidden": {
+          "$ref": "#/$defs/textList"
+        }
+      }
+    },
+    "textList": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/humanText"
+      }
+    },
+    "anchorId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "acceptanceAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["anchorId", "claim", "probe", "expected"],
+      "properties": {
+        "anchorId": {
+          "$ref": "#/$defs/anchorId"
+        },
+        "claim": {
+          "$ref": "#/$defs/humanText"
+        },
+        "probe": {
+          "$ref": "#/$defs/humanText"
+        },
+        "expected": {
+          "$ref": "#/$defs/humanText"
+        }
+      }
+    },
+    "testCardTuple": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["testCardId", "testCardDigest"],
+      "properties": {
+        "testCardId": {
+          "$ref": "#/$defs/testCardId"
+        },
+        "testCardDigest": {
+          "$ref": "#/$defs/sha256Digest"
         }
       }
     },
     "authorityMemberReference": {
+      "description": "跨领域只读消费一份已验证 Ledger authority member 的完整 ref/digest 关系。",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -359,14 +579,19 @@
           "const": 1
         },
         "family": {
-          "enum": [
-            "requirement",
-            "confirmation"
-          ]
+          "enum": ["requirement", "confirmation"]
         },
         "recordId": {
-          "type": "string",
-          "pattern": "^(?:requirement|confirmation)_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            {
+              "type": "string",
+              "pattern": "^confirmation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            }
+          ]
         },
         "recordRef": {
           "$ref": "#/$defs/portableResourcePath"
@@ -405,91 +630,70 @@
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
         }
-      }
-    },
-    "assignment": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "repositoryId",
-        "windowId"
-      ],
-      "properties": {
-        "repositoryId": {
-          "$ref": "#/$defs/repositoryId"
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "family": {
+                "const": "requirement"
+              }
+            },
+            "required": ["family"]
+          },
+          "then": {
+            "properties": {
+              "recordId": {
+                "type": "string",
+                "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "role": {
+                "enum": [
+                  "original-plan",
+                  "requirement-design",
+                  "code-facts",
+                  "landing-plan",
+                  "non-goals",
+                  "user-confirmation",
+                  "reproduction",
+                  "scope",
+                  "requirement-delta",
+                  "research-question",
+                  "boundaries",
+                  "test-environment",
+                  "supporting-evidence"
+                ]
+              }
+            }
+          }
         },
-        "windowId": {
-          "$ref": "#/$defs/windowId"
+        {
+          "if": {
+            "properties": {
+              "family": {
+                "const": "confirmation"
+              }
+            },
+            "required": ["family"]
+          },
+          "then": {
+            "properties": {
+              "recordId": {
+                "type": "string",
+                "pattern": "^confirmation_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "role": {
+                "enum": [
+                  "goal-stage-decision",
+                  "user-confirmation",
+                  "requirement-delta",
+                  "supporting-evidence"
+                ]
+              }
+            }
+          }
         }
-      }
-    },
-    "boundaries": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "inScope",
-        "outOfScope",
-        "forbidden"
-      ],
-      "properties": {
-        "inScope": {
-          "$ref": "#/$defs/nonEmptyTextList"
-        },
-        "outOfScope": {
-          "$ref": "#/$defs/textList"
-        },
-        "forbidden": {
-          "$ref": "#/$defs/textList"
-        }
-      }
-    },
-    "acceptanceAnchor": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "anchorId",
-        "claim",
-        "probe",
-        "expected"
-      ],
-      "properties": {
-        "anchorId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
-        },
-        "claim": {
-          "$ref": "#/$defs/humanText"
-        },
-        "probe": {
-          "$ref": "#/$defs/humanText"
-        },
-        "expected": {
-          "$ref": "#/$defs/humanText"
-        }
-      }
-    },
-    "nonEmptyTextList": {
-      "type": "array",
-      "minItems": 1,
-      "maxItems": 32,
-      "items": {
-        "$ref": "#/$defs/humanText"
-      }
-    },
-    "textList": {
-      "type": "array",
-      "maxItems": 32,
-      "items": {
-        "$ref": "#/$defs/humanText"
-      }
-    },
-    "humanText": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 16384,
-      "pattern": "^(?!\\s)[\\s\\S]*\\S$"
+      ]
     },
     "portableResourcePath": {
       "type": "string",
@@ -505,30 +709,6 @@
       "minLength": 20,
       "maxLength": 30,
       "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
-    },
-    "programId": {
-      "type": "string",
-      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "demandId": {
-      "type": "string",
-      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "repositoryId": {
-      "type": "string",
-      "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "windowId": {
-      "type": "string",
-      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "taskPackageId": {
-      "type": "string",
-      "pattern": "^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    },
-    "targetTaskId": {
-      "type": "string",
-      "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "eventId": {
       "type": "string",

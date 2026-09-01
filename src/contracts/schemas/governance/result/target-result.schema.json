@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:result:target-result:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_RESULT_SCHEMA",
+  "title": "WakeflowTargetResult",
+  "description": "Wakeflow从当前TaskPackage与Host Effect Event authority补齐的不可变implementation或Test TargetResult。",
+  "$comment": "workType显式区分单仓库implementation结果与无repository mutation的Test结果；完整Result进入Demand Event Sourcing，Aggregate只保存review选择所需摘要。本记录是Controller review输入，不是自动acceptance或Test verdict。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "workType",
+    "targetResultId",
+    "programId",
+    "demandId",
+    "targetTaskId",
+    "targetDeliveryId",
+    "taskPackage",
+    "assignment",
+    "hostEffect",
+    "report",
+    "resultDigest"
+  ],
+  "properties": {
+    "kind": {
+      "const": "WakeflowTargetResult"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "workType": {
+      "enum": ["implementation", "test"]
+    },
+    "targetResultId": {
+      "$ref": "#/$defs/targetResultId"
+    },
+    "programId": {
+      "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/properties/programId"
+    },
+    "demandId": {
+      "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/properties/demandId"
+    },
+    "targetTaskId": {
+      "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/properties/targetTaskId"
+    },
+    "targetDeliveryId": {
+      "$ref": "#/$defs/targetDeliveryId"
+    },
+    "taskPackage": {
+      "$ref": "#/$defs/taskPackage"
+    },
+    "assignment": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/implementationAssignment"
+        },
+        {
+          "$ref": "#/$defs/testAssignment"
+        }
+      ]
+    },
+    "hostEffect": {
+      "$ref": "#/$defs/hostEffect"
+    },
+    "report": {
+      "oneOf": [
+        {
+          "$ref": "urn:wakeflow:governance:result:implementation-target-result-report:v1"
+        },
+        {
+          "$ref": "urn:wakeflow:governance:result:test-target-result-report:v1"
+        }
+      ]
+    },
+    "testExecution": {
+      "$ref": "#/$defs/testExecution"
+    },
+    "resultDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "workType": {
+            "const": "test"
+          }
+        },
+        "required": ["workType"]
+      },
+      "then": {
+        "required": ["testExecution"],
+        "properties": {
+          "assignment": {
+            "$ref": "#/$defs/testAssignment"
+          },
+          "report": {
+            "$ref": "urn:wakeflow:governance:result:test-target-result-report:v1"
+          },
+          "testExecution": {
+            "$ref": "#/$defs/testExecution"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "assignment": {
+            "$ref": "#/$defs/implementationAssignment"
+          },
+          "report": {
+            "$ref": "urn:wakeflow:governance:result:implementation-target-result-report:v1"
+          },
+          "testExecution": false
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "targetResultId": {
+      "type": "string",
+      "pattern": "^target-result_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "targetDeliveryId": {
+      "type": "string",
+      "pattern": "^target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "testAttemptId": {
+      "type": "string",
+      "pattern": "^test-attempt_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "testCardId": {
+      "type": "string",
+      "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "claimId": {
+      "type": "string",
+      "pattern": "^window_work_claim_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "eventId": {
+      "type": "string",
+      "pattern": "^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "commitId": {
+      "type": "string",
+      "pattern": "^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "taskPackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskPackageId", "ref", "digest"],
+      "properties": {
+        "taskPackageId": {
+          "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/properties/taskPackageId"
+        },
+        "ref": {
+          "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+        },
+        "digest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "implementationAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositoryId", "windowId"],
+      "properties": {
+        "repositoryId": {
+          "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/$defs/repositoryId"
+        },
+        "windowId": {
+          "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/$defs/windowId"
+        }
+      }
+    },
+    "testAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["windowId"],
+      "properties": {
+        "windowId": {
+          "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/$defs/windowId"
+        }
+      }
+    },
+    "testExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["testAttemptId", "testCard", "testDispatchPacketDigest"],
+      "properties": {
+        "testAttemptId": {
+          "$ref": "#/$defs/testAttemptId"
+        },
+        "testCard": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["testCardId", "testCardDigest"],
+          "properties": {
+            "testCardId": {
+              "$ref": "#/$defs/testCardId"
+            },
+            "testCardDigest": {
+              "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+            }
+          }
+        },
+        "testDispatchPacketDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "hostEffect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actionId",
+        "claimDigest",
+        "claimEventId",
+        "claimCommitId",
+        "observationDigest",
+        "disposition",
+        "readbackStatus",
+        "observedEventId",
+        "observedAt"
+      ],
+      "properties": {
+        "actionId": {
+          "$ref": "#/$defs/claimId"
+        },
+        "claimDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "claimEventId": {
+          "$ref": "#/$defs/eventId"
+        },
+        "claimCommitId": {
+          "$ref": "#/$defs/commitId"
+        },
+        "observationDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "disposition": {
+          "enum": ["accepted", "indeterminate"]
+        },
+        "readbackStatus": {
+          "enum": ["confirmed", "pending", "unavailable"]
+        },
+        "observedEventId": {
+          "$ref": "#/$defs/eventId"
+        },
+        "observedAt": {
+          "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+        }
+      }
+    }
+  }
+}

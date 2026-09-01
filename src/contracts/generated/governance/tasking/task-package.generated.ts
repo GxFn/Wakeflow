@@ -3,6 +3,39 @@
  * Source: src/contracts/schemas/governance/tasking/task-package.schema.json
  */
 
+/**
+ * Controller 为一个目标窗口规划的不可变 Target Task 执行合同。
+ */
+export type WakeflowTaskPackage = ({
+[k: string]: unknown | undefined
+} & {
+artifactKind: "wakeflow-task-package"
+schemaVersion: 1
+programId: ProgramId
+configDigest: WakeflowSha256DigestText
+demandId: DemandId
+demandAuthorityDigest: WakeflowSha256DigestText
+taskPackageId: TaskPackageId
+targetTaskId: TargetTaskId
+createdAt: WakeflowUtcInstantText
+assignment: Assignment
+workType: ("implementation" | "test")
+objective: HumanText
+confirmedContext: NonEmptyTextList
+/**
+ * @minItems 1
+ * @maxItems 32
+ */
+selectedAuthorityRefs: [WakeflowLedgerAuthorityMemberReference, ...(WakeflowLedgerAuthorityMemberReference)[]]
+boundaries: Boundaries
+completionExpectations: NonEmptyTextList
+commitExpectation?: ("commit" | "leave-uncommitted")
+/**
+ * @maxItems 32
+ */
+acceptanceAnchors: AcceptanceAnchor[]
+testCard?: TestCardTuple
+})
 export type ProgramId = string
 /**
  * Wakeflow portable records 使用的完整 lowercase SHA-256 digest 文本；算法前缀和 256-bit hexadecimal payload 都属于词法合同。
@@ -15,6 +48,7 @@ export type TargetTaskId = string
  * Wakeflow 持久记录与事件使用的严格 UTC instant 文本：四位年份、大写 T/Z，并允许省略小数秒或保留 1 至 9 位小数秒。
  */
 export type WakeflowUtcInstantText = string
+export type Assignment = (ImplementationAssignment | TestAssignment)
 export type RepositoryId = string
 export type WindowId = string
 export type HumanText = string
@@ -64,40 +98,13 @@ export type WakeflowPortableResourcePathText = string
  */
 export type TextList = HumanText[]
 export type AnchorId = string
+export type TestCardId = string
 
-/**
- * Controller 为一个产品窗口规划的不可变 Target Task 执行合同。
- */
-export interface WakeflowTaskPackage {
-artifactKind: "wakeflow-task-package"
-schemaVersion: 1
-programId: ProgramId
-configDigest: WakeflowSha256DigestText
-demandId: DemandId
-demandAuthorityDigest: WakeflowSha256DigestText
-taskPackageId: TaskPackageId
-targetTaskId: TargetTaskId
-createdAt: WakeflowUtcInstantText
-assignment: Assignment
-workType: "implementation"
-objective: HumanText
-confirmedContext: NonEmptyTextList
-/**
- * @minItems 1
- * @maxItems 32
- */
-selectedAuthorityRefs: [WakeflowLedgerAuthorityMemberReference, ...(WakeflowLedgerAuthorityMemberReference)[]]
-boundaries: Boundaries
-completionExpectations: NonEmptyTextList
-commitExpectation: ("commit" | "leave-uncommitted")
-/**
- * @minItems 1
- * @maxItems 32
- */
-acceptanceAnchors: [AcceptanceAnchor, ...(AcceptanceAnchor)[]]
-}
-export interface Assignment {
+export interface ImplementationAssignment {
 repositoryId: RepositoryId
+windowId: WindowId
+}
+export interface TestAssignment {
 windowId: WindowId
 }
 export interface Boundaries {
@@ -110,6 +117,10 @@ anchorId: AnchorId
 claim: HumanText
 probe: HumanText
 expected: HumanText
+}
+export interface TestCardTuple {
+testCardId: TestCardId
+testCardDigest: WakeflowSha256DigestText
 }
 
 /** 递归冻结生成的 Schema，阻止校验器首次使用前发生嵌套漂移。 */
@@ -133,4 +144,4 @@ function restoreGeneratedSchema(
 }
 
 /** Ajv 严格校验器使用的 Schema 派生运行时权威；不得手工修改。 */
-export const WAKEFLOW_TASK_PACKAGE_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:tasking:task-package:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TASK_PACKAGE_SCHEMA\",\"title\":\"WakeflowTaskPackage\",\"description\":\"Controller 为一个产品窗口规划的不可变 Target Task 执行合同。\",\"$comment\":\"v1 只准入首个真实消费者 implementation；Demand 状态、Config 拓扑、完整 authority closure 和同仓库活动 lineage 由 Tasking service 校验。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"programId\",\"configDigest\",\"demandId\",\"demandAuthorityDigest\",\"taskPackageId\",\"targetTaskId\",\"createdAt\",\"assignment\",\"workType\",\"objective\",\"confirmedContext\",\"selectedAuthorityRefs\",\"boundaries\",\"completionExpectations\",\"commitExpectation\",\"acceptanceAnchors\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-task-package\"},\"schemaVersion\":{\"const\":1},\"programId\":{\"$ref\":\"#/$defs/programId\"},\"configDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"demandAuthorityDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"taskPackageId\":{\"$ref\":\"#/$defs/taskPackageId\"},\"targetTaskId\":{\"$ref\":\"#/$defs/targetTaskId\"},\"createdAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"},\"assignment\":{\"$ref\":\"#/$defs/assignment\"},\"workType\":{\"const\":\"implementation\"},\"objective\":{\"$ref\":\"#/$defs/humanText\"},\"confirmedContext\":{\"$ref\":\"#/$defs/nonEmptyTextList\"},\"selectedAuthorityRefs\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":32,\"items\":{\"$ref\":\"urn:wakeflow:governance:ledger:authority-member-reference:v1\"}},\"boundaries\":{\"$ref\":\"#/$defs/boundaries\"},\"completionExpectations\":{\"$ref\":\"#/$defs/nonEmptyTextList\"},\"commitExpectation\":{\"enum\":[\"commit\",\"leave-uncommitted\"]},\"acceptanceAnchors\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":32,\"items\":{\"$ref\":\"#/$defs/acceptanceAnchor\"}}},\"$defs\":{\"programId\":{\"type\":\"string\",\"pattern\":\"^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"taskPackageId\":{\"type\":\"string\",\"pattern\":\"^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"targetTaskId\":{\"type\":\"string\",\"pattern\":\"^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"repositoryId\":{\"type\":\"string\",\"pattern\":\"^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"windowId\":{\"type\":\"string\",\"pattern\":\"^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"humanText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":16384,\"pattern\":\"^(?!\\\\s)[\\\\s\\\\S]*\\\\S$\"},\"nonEmptyTextList\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":32,\"items\":{\"$ref\":\"#/$defs/humanText\"}},\"assignment\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"repositoryId\",\"windowId\"],\"properties\":{\"repositoryId\":{\"$ref\":\"#/$defs/repositoryId\"},\"windowId\":{\"$ref\":\"#/$defs/windowId\"}}},\"boundaries\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"inScope\",\"outOfScope\",\"forbidden\"],\"properties\":{\"inScope\":{\"$ref\":\"#/$defs/nonEmptyTextList\"},\"outOfScope\":{\"$ref\":\"#/$defs/textList\"},\"forbidden\":{\"$ref\":\"#/$defs/textList\"}}},\"textList\":{\"type\":\"array\",\"maxItems\":32,\"items\":{\"$ref\":\"#/$defs/humanText\"}},\"anchorId\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128,\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$\"},\"acceptanceAnchor\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"anchorId\",\"claim\",\"probe\",\"expected\"],\"properties\":{\"anchorId\":{\"$ref\":\"#/$defs/anchorId\"},\"claim\":{\"$ref\":\"#/$defs/humanText\"},\"probe\":{\"$ref\":\"#/$defs/humanText\"},\"expected\":{\"$ref\":\"#/$defs/humanText\"}}}}}");
+export const WAKEFLOW_TASK_PACKAGE_SCHEMA = restoreGeneratedSchema("{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"$id\":\"urn:wakeflow:governance:tasking:task-package:v1\",\"x-wakeflow-runtime-export\":\"WAKEFLOW_TASK_PACKAGE_SCHEMA\",\"title\":\"WakeflowTaskPackage\",\"description\":\"Controller 为一个目标窗口规划的不可变 Target Task 执行合同。\",\"$comment\":\"workType 是 implementation/test 两个闭合变体的判别字段；Demand 状态、Config 拓扑、完整 authority closure 与 TestCard 来源关系由 Tasking service 校验。\",\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"artifactKind\",\"schemaVersion\",\"programId\",\"configDigest\",\"demandId\",\"demandAuthorityDigest\",\"taskPackageId\",\"targetTaskId\",\"createdAt\",\"assignment\",\"workType\",\"objective\",\"confirmedContext\",\"selectedAuthorityRefs\",\"boundaries\",\"completionExpectations\",\"acceptanceAnchors\"],\"properties\":{\"artifactKind\":{\"const\":\"wakeflow-task-package\"},\"schemaVersion\":{\"const\":1},\"programId\":{\"$ref\":\"#/$defs/programId\"},\"configDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"demandId\":{\"$ref\":\"#/$defs/demandId\"},\"demandAuthorityDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"},\"taskPackageId\":{\"$ref\":\"#/$defs/taskPackageId\"},\"targetTaskId\":{\"$ref\":\"#/$defs/targetTaskId\"},\"createdAt\":{\"$ref\":\"urn:wakeflow:foundation:time:utc-instant:v1\"},\"assignment\":{\"$ref\":\"#/$defs/assignment\"},\"workType\":{\"enum\":[\"implementation\",\"test\"]},\"objective\":{\"$ref\":\"#/$defs/humanText\"},\"confirmedContext\":{\"$ref\":\"#/$defs/nonEmptyTextList\"},\"selectedAuthorityRefs\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":32,\"items\":{\"$ref\":\"urn:wakeflow:governance:ledger:authority-member-reference:v1\"}},\"boundaries\":{\"$ref\":\"#/$defs/boundaries\"},\"completionExpectations\":{\"$ref\":\"#/$defs/nonEmptyTextList\"},\"commitExpectation\":{\"enum\":[\"commit\",\"leave-uncommitted\"]},\"acceptanceAnchors\":{\"type\":\"array\",\"maxItems\":32,\"items\":{\"$ref\":\"#/$defs/acceptanceAnchor\"}},\"testCard\":{\"$ref\":\"#/$defs/testCardTuple\"}},\"allOf\":[{\"if\":{\"properties\":{\"workType\":{\"const\":\"implementation\"}},\"required\":[\"workType\"]},\"then\":{\"required\":[\"commitExpectation\"],\"properties\":{\"commitExpectation\":{\"enum\":[\"commit\",\"leave-uncommitted\"]},\"assignment\":{\"$ref\":\"#/$defs/implementationAssignment\"},\"acceptanceAnchors\":{\"type\":\"array\",\"minItems\":1},\"testCard\":false}},\"else\":{\"required\":[\"testCard\"],\"properties\":{\"testCard\":{\"$ref\":\"#/$defs/testCardTuple\"},\"assignment\":{\"$ref\":\"#/$defs/testAssignment\"},\"commitExpectation\":false,\"acceptanceAnchors\":{\"type\":\"array\",\"maxItems\":0}}}}],\"$defs\":{\"programId\":{\"type\":\"string\",\"pattern\":\"^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"demandId\":{\"type\":\"string\",\"pattern\":\"^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"taskPackageId\":{\"type\":\"string\",\"pattern\":\"^task-package_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"targetTaskId\":{\"type\":\"string\",\"pattern\":\"^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"testCardId\":{\"type\":\"string\",\"pattern\":\"^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"repositoryId\":{\"type\":\"string\",\"pattern\":\"^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"windowId\":{\"type\":\"string\",\"pattern\":\"^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"},\"humanText\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":16384,\"pattern\":\"^(?!\\\\s)[\\\\s\\\\S]*\\\\S$\"},\"nonEmptyTextList\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":32,\"items\":{\"$ref\":\"#/$defs/humanText\"}},\"assignment\":{\"oneOf\":[{\"$ref\":\"#/$defs/implementationAssignment\"},{\"$ref\":\"#/$defs/testAssignment\"}]},\"implementationAssignment\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"repositoryId\",\"windowId\"],\"properties\":{\"repositoryId\":{\"$ref\":\"#/$defs/repositoryId\"},\"windowId\":{\"$ref\":\"#/$defs/windowId\"}}},\"testAssignment\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"windowId\"],\"properties\":{\"windowId\":{\"$ref\":\"#/$defs/windowId\"}}},\"boundaries\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"inScope\",\"outOfScope\",\"forbidden\"],\"properties\":{\"inScope\":{\"$ref\":\"#/$defs/nonEmptyTextList\"},\"outOfScope\":{\"$ref\":\"#/$defs/textList\"},\"forbidden\":{\"$ref\":\"#/$defs/textList\"}}},\"textList\":{\"type\":\"array\",\"maxItems\":32,\"items\":{\"$ref\":\"#/$defs/humanText\"}},\"anchorId\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128,\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$\"},\"acceptanceAnchor\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"anchorId\",\"claim\",\"probe\",\"expected\"],\"properties\":{\"anchorId\":{\"$ref\":\"#/$defs/anchorId\"},\"claim\":{\"$ref\":\"#/$defs/humanText\"},\"probe\":{\"$ref\":\"#/$defs/humanText\"},\"expected\":{\"$ref\":\"#/$defs/humanText\"}}},\"testCardTuple\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"testCardId\",\"testCardDigest\"],\"properties\":{\"testCardId\":{\"$ref\":\"#/$defs/testCardId\"},\"testCardDigest\":{\"$ref\":\"urn:wakeflow:foundation:crypto:sha256-digest:v1\"}}}}}");

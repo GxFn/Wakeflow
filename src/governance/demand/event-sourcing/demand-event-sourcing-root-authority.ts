@@ -92,18 +92,18 @@ export type DemandEventSourcingRootAuthorityErrorReason =
   | "aborted";
 
 const ERROR_MESSAGES = {
-  "input": "Demand Event Sourcing root authority input is invalid.",
-  "inventory": "Demand Event Sourcing root inventory is not healthy.",
-  "identity": "Demand Event Sourcing root identity is invalid.",
-  "authority": "Demand Event Sourcing root authority record is invalid.",
-  "ledger": "Demand Event Sourcing root authority cannot resolve its Ledger closure.",
-  "stream": "Demand Event Sourcing root event stream is invalid.",
-  "closure": "Demand Event Sourcing root records do not form one aggregate.",
-  "aborted": "Demand Event Sourcing root authority load was aborted.",
-} as const satisfies Readonly<Record<
-  DemandEventSourcingRootAuthorityErrorReason,
-  string
->>;
+  input: "Demand Event Sourcing root authority input is invalid.",
+  inventory: "Demand Event Sourcing root inventory is not healthy.",
+  identity: "Demand Event Sourcing root identity is invalid.",
+  authority: "Demand Event Sourcing root authority record is invalid.",
+  ledger:
+    "Demand Event Sourcing root authority cannot resolve its Ledger closure.",
+  stream: "Demand Event Sourcing root event stream is invalid.",
+  closure: "Demand Event Sourcing root records do not form one aggregate.",
+  aborted: "Demand Event Sourcing root authority load was aborted.",
+} as const satisfies Readonly<
+  Record<DemandEventSourcingRootAuthorityErrorReason, string>
+>;
 
 export class DemandEventSourcingRootAuthorityError extends Error {
   override readonly name = "DemandEventSourcingRootAuthorityError";
@@ -111,7 +111,10 @@ export class DemandEventSourcingRootAuthorityError extends Error {
   readonly reason: DemandEventSourcingRootAuthorityErrorReason;
   readonly path: string;
 
-  constructor(reason: DemandEventSourcingRootAuthorityErrorReason, path: string) {
+  constructor(
+    reason: DemandEventSourcingRootAuthorityErrorReason,
+    path: string,
+  ) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
@@ -129,33 +132,40 @@ function sameInventory(
   left: Readonly<DemandEventSourcingRootInventory>,
   right: Readonly<DemandEventSourcingRootInventory>,
 ): boolean {
-  return left.commitCount === right.commitCount
-    && left.snapshotCount === right.snapshotCount
-    && left.artifactCount === right.artifactCount
-    && left.transactionCount === right.transactionCount
-    && left.appendCandidateCount === right.appendCandidateCount
-    && sameFileNodeSnapshot(left.nodes.root, right.nodes.root)
-    && sameFileNodeSnapshot(left.nodes.identity, right.nodes.identity)
-    && sameFileNodeSnapshot(left.nodes.authority, right.nodes.authority)
-    && sameFileNodeSnapshot(
-      left.nodes.eventSourcing,
-      right.nodes.eventSourcing,
-    )
-    && sameFileNodeSnapshot(left.nodes.commits, right.nodes.commits)
-    && sameFileNodeSnapshot(left.nodes.snapshots, right.nodes.snapshots)
-    && sameFileNodeSnapshot(
+  return (
+    left.commitCount === right.commitCount &&
+    left.snapshotCount === right.snapshotCount &&
+    left.artifactCount === right.artifactCount &&
+    left.transactionCount === right.transactionCount &&
+    left.appendCandidateCount === right.appendCandidateCount &&
+    sameFileNodeSnapshot(left.nodes.root, right.nodes.root) &&
+    sameFileNodeSnapshot(left.nodes.identity, right.nodes.identity) &&
+    sameFileNodeSnapshot(left.nodes.authority, right.nodes.authority) &&
+    sameFileNodeSnapshot(left.nodes.eventSourcing, right.nodes.eventSourcing) &&
+    sameFileNodeSnapshot(left.nodes.commits, right.nodes.commits) &&
+    sameFileNodeSnapshot(left.nodes.snapshots, right.nodes.snapshots) &&
+    sameFileNodeSnapshot(
       left.nodes.appendCandidates,
       right.nodes.appendCandidates,
-    )
-    && sameFileNodeSnapshot(left.nodes.artifacts, right.nodes.artifacts)
-    && sameFileNodeSnapshot(
-      left.nodes.taskPackages,
-      right.nodes.taskPackages,
-    )
-    && sameFileNodeSnapshot(
-      left.nodes.transactions,
-      right.nodes.transactions,
-    );
+    ) &&
+    sameFileNodeSnapshot(left.nodes.artifacts, right.nodes.artifacts) &&
+    sameFileNodeSnapshot(left.nodes.taskPackages, right.nodes.taskPackages) &&
+    sameOptionalNode(left.nodes.testCards, right.nodes.testCards) &&
+    sameOptionalNode(
+      left.nodes.testDispatchPackets,
+      right.nodes.testDispatchPackets,
+    ) &&
+    sameFileNodeSnapshot(left.nodes.transactions, right.nodes.transactions)
+  );
+}
+
+function sameOptionalNode(
+  left: Readonly<FileNodeSnapshot> | undefined,
+  right: Readonly<FileNodeSnapshot> | undefined,
+): boolean {
+  return left === undefined
+    ? right === undefined
+    : right !== undefined && sameFileNodeSnapshot(left, right);
 }
 
 async function readRecord(
@@ -176,17 +186,17 @@ async function readRecord(
     if (error instanceof StableFileReadError) {
       if (error.reason === "aborted") fail("aborted", "$signal");
       if (
-        error.reason === "root-scope"
-        || error.reason === "source-changed"
-        || error.reason === "expectation-changed"
+        error.reason === "root-scope" ||
+        error.reason === "source-changed" ||
+        error.reason === "expectation-changed"
       ) {
         fail("inventory", "$root");
       }
       fail(owner, `$${owner}`);
     }
     if (
-      error instanceof StrictTextFileError
-      || error instanceof DeterministicJsonDocumentError
+      error instanceof StrictTextFileError ||
+      error instanceof DeterministicJsonDocumentError
     ) {
       fail(owner, `$${owner}`);
     }
@@ -206,17 +216,13 @@ function parseOptions(value: unknown): Readonly<{
     throw error;
   }
   if (
-    Object.keys(record).some((key) => key !== "audit" && key !== "signal")
-    || (record.audit !== undefined && typeof record.audit !== "boolean")
-    || (
-      record.signal !== undefined
-      && (
-        typeof record.signal !== "object"
-        || record.signal === null
-        || types.isProxy(record.signal)
-        || !(record.signal instanceof AbortSignal)
-      )
-    )
+    Object.keys(record).some((key) => key !== "audit" && key !== "signal") ||
+    (record.audit !== undefined && typeof record.audit !== "boolean") ||
+    (record.signal !== undefined &&
+      (typeof record.signal !== "object" ||
+        record.signal === null ||
+        types.isProxy(record.signal) ||
+        !(record.signal instanceof AbortSignal)))
   ) {
     fail("input", "$options");
   }
@@ -233,14 +239,14 @@ export async function loadDemandEventSourcingRootAuthority(
   options?: { readonly audit?: boolean; readonly signal?: AbortSignal },
 ): Promise<Readonly<LoadedDemandEventSourcingRootAuthority>> {
   if (
-    typeof root !== "object"
-    || root === null
-    || types.isProxy(root)
-    || !(root instanceof RootedDirectory)
-    || typeof ledgerStore !== "object"
-    || ledgerStore === null
-    || types.isProxy(ledgerStore)
-    || !(ledgerStore instanceof LedgerAuthorityStore)
+    typeof root !== "object" ||
+    root === null ||
+    types.isProxy(root) ||
+    !(root instanceof RootedDirectory) ||
+    typeof ledgerStore !== "object" ||
+    ledgerStore === null ||
+    types.isProxy(ledgerStore) ||
+    !(ledgerStore instanceof LedgerAuthorityStore)
   ) {
     fail("input", "$input");
   }
@@ -299,12 +305,13 @@ export async function loadDemandEventSourcingRootAuthority(
     );
   } catch (error: unknown) {
     if (
-      error instanceof DemandAuthorityError
-      || error instanceof LedgerAuthorityStoreError
+      error instanceof DemandAuthorityError ||
+      error instanceof LedgerAuthorityStoreError
     ) {
       if (
-        (error instanceof DemandAuthorityError && error.reason === "aborted")
-        || (error instanceof LedgerAuthorityStoreError && error.reason === "aborted")
+        (error instanceof DemandAuthorityError && error.reason === "aborted") ||
+        (error instanceof LedgerAuthorityStoreError &&
+          error.reason === "aborted")
       ) {
         fail("aborted", "$signal");
       }
@@ -333,15 +340,14 @@ export async function loadDemandEventSourcingRootAuthority(
       if (loaded === null) fail("stream", "$commits");
       aggregate = loaded.aggregate;
       replayedCommitCount = loaded.replayedCommitCount;
-      loadMode = loaded.snapshotStatus === "used"
-        ? "snapshot-tail"
-        : "full-replay";
+      loadMode =
+        loaded.snapshotStatus === "used" ? "snapshot-tail" : "full-replay";
     }
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingRootAuthorityError) throw error;
     if (
-      error instanceof DemandEventSourcingRepositoryError
-      || error instanceof DemandFileEventStoreError
+      error instanceof DemandEventSourcingRepositoryError ||
+      error instanceof DemandFileEventStoreError
     ) {
       if (error.reason === "aborted") fail("aborted", "$signal");
       fail("stream", "$commits");
@@ -364,9 +370,10 @@ export async function loadDemandEventSourcingRootAuthority(
   const firstPersistedEvent = firstCommit?.events[0];
   let firstEvent;
   try {
-    firstEvent = firstPersistedEvent === undefined
-      ? undefined
-      : upcastDemandEventSourcingStoredEvent(firstPersistedEvent);
+    firstEvent =
+      firstPersistedEvent === undefined
+        ? undefined
+        : upcastDemandEventSourcingStoredEvent(firstPersistedEvent);
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingUpcasterError) {
       fail("stream", "$commits/0/events/0");
@@ -376,17 +383,17 @@ export async function loadDemandEventSourcingRootAuthority(
   const identityDigest = computeDemandIdentityDigest(identity);
   const authorityDigest = computeDemandAuthorityDigest(authority);
   if (
-    aggregate.demandId !== identity.demandId
-    || authority.demandId !== identity.demandId
-    || firstCommit === null
-    || firstCommit.demandId !== identity.demandId
-    || firstCommit.commitSequence !== 1
-    || firstCommit.firstStreamRevision !== 1
-    || firstCommit.lastStreamRevision !== 1
-    || firstCommit.events.length !== 1
-    || firstEvent?.eventType !== "publication.demand-published"
-    || firstEvent.data.identityDigest !== identityDigest
-    || firstEvent.data.authorityDigest !== authorityDigest
+    aggregate.demandId !== identity.demandId ||
+    authority.demandId !== identity.demandId ||
+    firstCommit === null ||
+    firstCommit.demandId !== identity.demandId ||
+    firstCommit.commitSequence !== 1 ||
+    firstCommit.firstStreamRevision !== 1 ||
+    firstCommit.lastStreamRevision !== 1 ||
+    firstCommit.events.length !== 1 ||
+    firstEvent?.eventType !== "publication.demand-published" ||
+    firstEvent.data.identityDigest !== identityDigest ||
+    firstEvent.data.authorityDigest !== authorityDigest
   ) {
     fail("closure", "$root");
   }

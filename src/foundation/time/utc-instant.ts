@@ -1,6 +1,4 @@
-import {
-  UTC_INSTANT_PATTERN_SOURCE,
-} from "../../contracts/generated/foundation/utc-instant.generated.js";
+import { UTC_INSTANT_PATTERN_SOURCE } from "../../contracts/generated/foundation/utc-instant.generated.js";
 
 /**
  * Wakeflow Foundation / Time：严格 UTC 时刻文本与纳秒时间线。
@@ -27,8 +25,8 @@ export type UtcInstant = string & {
 export type UtcInstantErrorReason = "format" | "calendar";
 
 const ERROR_MESSAGES = {
-  "format": "UTC instant must match the strict Wakeflow UTC timestamp profile.",
-  "calendar": "UTC instant must name a real Gregorian calendar instant.",
+  format: "UTC instant must match the strict Wakeflow UTC timestamp profile.",
+  calendar: "UTC instant must name a real Gregorian calendar instant.",
 } as const satisfies Readonly<Record<UtcInstantErrorReason, string>>;
 
 /**
@@ -67,10 +65,7 @@ function fail(reason: UtcInstantErrorReason, path: string): never {
  * Schema 词法模式已经固定分隔符位置，因此组件读取无需维护第二份完整正则。
  * `Date` 只验证整秒公历日期；小数秒由 `bigint` 独立保留到纳秒。
  */
-function parseUtcInstantParts(
-  input: unknown,
-  path: string,
-): ParsedUtcInstant {
+function parseUtcInstantParts(input: unknown, path: string): ParsedUtcInstant {
   if (typeof input !== "string" || !UTC_INSTANT_PATTERN.test(input)) {
     fail("format", path);
   }
@@ -89,13 +84,13 @@ function parseUtcInstantParts(
   calendar.setUTCHours(hour, minute, second, 0);
   const epochMilliseconds = calendar.getTime();
   if (
-    Number.isNaN(epochMilliseconds)
-    || calendar.getUTCFullYear() !== year
-    || calendar.getUTCMonth() !== month - 1
-    || calendar.getUTCDate() !== day
-    || calendar.getUTCHours() !== hour
-    || calendar.getUTCMinutes() !== minute
-    || calendar.getUTCSeconds() !== second
+    Number.isNaN(epochMilliseconds) ||
+    calendar.getUTCFullYear() !== year ||
+    calendar.getUTCMonth() !== month - 1 ||
+    calendar.getUTCDate() !== day ||
+    calendar.getUTCHours() !== hour ||
+    calendar.getUTCMinutes() !== minute ||
+    calendar.getUTCSeconds() !== second
   ) {
     fail("calendar", path);
   }
@@ -104,8 +99,8 @@ function parseUtcInstantParts(
   return {
     value: input as UtcInstant,
     epochNanoseconds:
-      BigInt(epochMilliseconds) * NANOSECONDS_PER_MILLISECOND
-      + fractionalNanoseconds,
+      BigInt(epochMilliseconds) * NANOSECONDS_PER_MILLISECOND +
+      fractionalNanoseconds,
   };
 }
 
@@ -122,6 +117,18 @@ export function parseUtcInstant(
 }
 
 /**
+ * 将严格 UTC instant 投影为 Unix 纪元纳秒，供领域层执行明确的有界时间差判断。
+ * 本函数只暴露时间线坐标，不读取当前时间，也不定义 freshness、TTL 或 Lease 策略。
+ */
+export function utcInstantEpochNanoseconds(
+  value: UtcInstant,
+  errorPath?: string,
+): bigint {
+  return parseUtcInstantParts(value, normalizeErrorPath(errorPath))
+    .epochNanoseconds;
+}
+
+/**
  * 按真实纳秒时间线比较两个 UTC 时刻；不同精度的文本可以表示相同时刻。
  *
  * 参数虽然带品牌，仍分别以 `$left` 和 `$right` 重新完成运行时复验。
@@ -130,10 +137,7 @@ export function compareUtcInstants(
   left: UtcInstant,
   right: UtcInstant,
 ): -1 | 0 | 1 {
-  const leftNanoseconds = parseUtcInstantParts(
-    left,
-    "$left",
-  ).epochNanoseconds;
+  const leftNanoseconds = parseUtcInstantParts(left, "$left").epochNanoseconds;
   const rightNanoseconds = parseUtcInstantParts(
     right,
     "$right",

@@ -1,41 +1,23 @@
 import { equal, rejects } from "node:assert/strict";
-import {
-  existsSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
-import {
-  parseWakeflowConfigV3,
-} from "../../../src/configuration/wakeflow-config-v3.js";
-import {
-  renderWakeflowConfigV3,
-} from "../../../src/configuration/wakeflow-config-v3-document.js";
-import {
-  RootedDirectory,
-} from "../../../src/foundation/filesystem/rooted-directory.js";
-import {
-  DemandEventSourcingRepository,
-} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import {
-  demandFinalRootRef,
-} from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { parseWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3.js";
+import { renderWakeflowConfigV3 } from "../../../src/configuration/wakeflow-config-v3-document.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
+import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {
   parseTaskPackage,
   renderTaskPackage,
 } from "../../../src/governance/tasking/task-package.js";
-import {
-  taskPackageProjectionRef,
-} from "../../../src/governance/tasking/task-package-projection-paths.js";
+import { taskPackageProjectionRef } from "../../../src/governance/tasking/task-package-projection-paths.js";
 import {
   TargetTaskPlanningService,
   TargetTaskPlanningServiceError,
 } from "../../../src/governance/tasking/target-task-planning-service.js";
-import {
-  createMinimalWakeflowConfigV3,
-} from "../../configuration/wakeflow-config-v3.fixture.js";
+import { createMinimalWakeflowConfigV3 } from "../../configuration/wakeflow-config-v3.fixture.js";
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,
@@ -51,8 +33,8 @@ async function streamRevision(workspacePath: string): Promise<number> {
   );
   const root = await RootedDirectory.open(demandRootPath);
   try {
-    return (await new DemandEventSourcingRepository(root).audit())
-      .aggregate.streamRevision;
+    return (await new DemandEventSourcingRepository(root).audit()).aggregate
+      .streamRevision;
   } finally {
     await root.close();
   }
@@ -69,10 +51,7 @@ function rewriteConfig(workspacePath: string, displayName: string): void {
   );
 }
 
-function projectionPath(
-  workspacePath: string,
-  taskPackageId: string,
-): string {
+function projectionPath(workspacePath: string, taskPackageId: string): string {
   return path.join(
     workspacePath,
     ...demandFinalRootRef(PLANNING_DEMAND_ID).split("/"),
@@ -129,14 +108,19 @@ test("concurrent Apply converges through one event commit and exact retry", asyn
       service.apply(preview.plan, preview.planDigest),
       service.apply(preview.plan, preview.planDigest),
     ]);
-    equal(settled.some((entry) => (
-      entry.status === "fulfilled" && entry.value.disposition === "committed"
-    )), true);
+    equal(
+      settled.some(
+        (entry) =>
+          entry.status === "fulfilled" &&
+          entry.value.disposition === "committed",
+      ),
+      true,
+    );
     for (const entry of settled) {
       if (entry.status === "fulfilled") continue;
       equal(
-        entry.reason instanceof TargetTaskPlanningServiceError
-        && entry.reason.eventAuthority === "current",
+        entry.reason instanceof TargetTaskPlanningServiceError &&
+          entry.reason.eventAuthority === "current",
         true,
       );
     }
@@ -162,11 +146,10 @@ test("Planning Apply rejects Config drift before the event commit", async () => 
 
     await rejects(
       service.apply(preview.plan, preview.planDigest),
-      (error: unknown) => (
-        error instanceof TargetTaskPlanningServiceError
-        && error.reason === "plan"
-        && error.eventAuthority === "unchanged"
-      ),
+      (error: unknown) =>
+        error instanceof TargetTaskPlanningServiceError &&
+        error.reason === "plan" &&
+        error.eventAuthority === "unchanged",
     );
     equal(await streamRevision(fixture.workspacePath), 1);
   } finally {
@@ -178,34 +161,36 @@ test("Planning preview resolves only current Authority members and exact product
   const fixture = await createTargetTaskPlanningWorkspaceFixture();
   try {
     const service = new TargetTaskPlanningService(fixture.workspaceRoot);
+    const authored = fixture.request.taskPackage;
+    if (authored.workType !== "implementation") {
+      throw new Error("Expected implementation Planning fixture.");
+    }
     await rejects(
       service.preview({
         ...fixture.request,
         taskPackage: {
-          ...fixture.request.taskPackage,
+          ...authored,
           selectedAuthorityMemberRefs: ["requirements/foreign/member.md"],
         },
       }),
-      (error: unknown) => (
-        error instanceof TargetTaskPlanningServiceError
-        && error.reason === "reference"
-      ),
+      (error: unknown) =>
+        error instanceof TargetTaskPlanningServiceError &&
+        error.reason === "reference",
     );
     await rejects(
       service.preview({
         ...fixture.request,
         taskPackage: {
-          ...fixture.request.taskPackage,
+          ...authored,
           assignment: {
-            ...fixture.request.taskPackage.assignment,
+            ...authored.assignment,
             windowId: "window_77777777-7777-4777-8777-777777777777",
           },
         },
       }),
-      (error: unknown) => (
-        error instanceof TargetTaskPlanningServiceError
-        && error.reason === "topology"
-      ),
+      (error: unknown) =>
+        error instanceof TargetTaskPlanningServiceError &&
+        error.reason === "topology",
     );
     equal(await streamRevision(fixture.workspacePath), 1);
   } finally {
@@ -233,11 +218,10 @@ test("Planning reports current event authority when projection conflicts and ret
 
     await rejects(
       service.apply(preview.plan, preview.planDigest),
-      (error: unknown) => (
-        error instanceof TargetTaskPlanningServiceError
-        && error.reason === "projection"
-        && error.eventAuthority === "current"
-      ),
+      (error: unknown) =>
+        error instanceof TargetTaskPlanningServiceError &&
+        error.reason === "projection" &&
+        error.eventAuthority === "current",
     );
     equal(await streamRevision(fixture.workspacePath), 2);
 

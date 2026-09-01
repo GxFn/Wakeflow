@@ -1,12 +1,8 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  codexWindowHostIdentityProfile,
-} from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
-import {
-  claudeCodeWindowHostIdentityProfile,
-} from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
+import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
+import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
 import {
   createWakeflowWindowHostBinding,
   parseWakeflowWindowHostBinding,
@@ -14,9 +10,7 @@ import {
   renderWakeflowWindowHostBinding,
   WakeflowWindowHostBindingError,
 } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding.js";
-import {
-  parseWakeflowWindowHostBindingId,
-} from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
+import { parseWakeflowWindowHostBindingId } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
 import {
   parseWakeflowWindowHostHandle,
   parseWakeflowWindowHostIdentityProfile,
@@ -41,50 +35,48 @@ const INTENT_DIGEST = parseSha256Digest(`sha256:${"a".repeat(64)}`);
 
 test("Host Identity Profile 把宿主 ID 当作不透明值而非旧 UUID 假设", () => {
   throws(
-    () => parseWakeflowWindowHostIdentityProfile({
-      ...codexWindowHostIdentityProfile,
-      reservedHandleValues: ["unknown", "current thread"],
-    }),
-    (error: unknown) => (
-      error instanceof WakeflowWindowHostIdentityProfileError
-      && error.reason === "reserved"
-    ),
+    () =>
+      parseWakeflowWindowHostIdentityProfile({
+        ...codexWindowHostIdentityProfile,
+        reservedHandleValues: ["unknown", "current thread"],
+      }),
+    (error: unknown) =>
+      error instanceof WakeflowWindowHostIdentityProfileError &&
+      error.reason === "reserved",
   );
-  const handle = parseWakeflowWindowHostHandle(
-    codexWindowHostIdentityProfile,
-    {
-      kind: "codex-thread",
-      value: "host-owned:opaque/thread?id=7",
-    },
-  );
+  const handle = parseWakeflowWindowHostHandle(codexWindowHostIdentityProfile, {
+    kind: "codex-thread",
+    value: "host-owned:opaque/thread?id=7",
+  });
   deepEqual(handle, {
     kind: "codex-thread",
     value: "host-owned:opaque/thread?id=7",
   });
   throws(
-    () => parseWakeflowWindowHostHandle(
-      codexWindowHostIdentityProfile,
-      { kind: "codex-thread", value: "current thread" },
-    ),
-    (error: unknown) => (
-      error instanceof WakeflowWindowHostIdentityProfileError
-      && error.reason === "handle"
-    ),
+    () =>
+      parseWakeflowWindowHostHandle(codexWindowHostIdentityProfile, {
+        kind: "codex-thread",
+        value: "current thread",
+      }),
+    (error: unknown) =>
+      error instanceof WakeflowWindowHostIdentityProfileError &&
+      error.reason === "handle",
   );
   throws(
-    () => parseWakeflowWindowHostHandle(
-      codexWindowHostIdentityProfile,
-      { kind: "claude-session", value: "opaque" },
-    ),
+    () =>
+      parseWakeflowWindowHostHandle(codexWindowHostIdentityProfile, {
+        kind: "claude-session",
+        value: "opaque",
+      }),
     WakeflowWindowHostIdentityProfileError,
   );
 });
 
 test("Window Host Binding 保存私有 handle 并形成唯一确定性文档", () => {
-  const handle = parseWakeflowWindowHostHandle(
-    codexWindowHostIdentityProfile,
-    { kind: "codex-thread", value: "host-owned:opaque/thread?id=7" },
-  );
+  const handle = parseWakeflowWindowHostHandle(codexWindowHostIdentityProfile, {
+    kind: "codex-thread",
+    value: "host-owned:opaque/thread?id=7",
+  });
   const binding = createWakeflowWindowHostBinding(
     {
       programId: PROGRAM_ID,
@@ -93,7 +85,7 @@ test("Window Host Binding 保存私有 handle 并形成唯一确定性文档", (
       bindingId: BINDING_ID,
       handle,
       launchIntentDigest: INTENT_DIGEST,
-      observedAt: parseUtcInstant("2026-08-28T10:00:00.000Z"),
+      observedAt: parseUtcInstant("2026-08-28T10:00:02.000Z"),
       registeredAt: parseUtcInstant("2026-08-28T10:00:01.000Z"),
     },
     codexWindowHostIdentityProfile,
@@ -111,44 +103,30 @@ test("Window Host Binding 保存私有 handle 并形成唯一确定性文档", (
     ),
     binding,
   );
+  equal(binding.registeredAt < binding.source.observedAt, true);
+
   throws(
-    () => createWakeflowWindowHostBinding(
-      {
-        ...binding,
-        launchIntentDigest: INTENT_DIGEST,
-        observedAt: parseUtcInstant("2026-08-28T10:00:02.000Z"),
-        registeredAt: parseUtcInstant("2026-08-28T10:00:01.000Z"),
-      },
-      codexWindowHostIdentityProfile,
-    ),
-    (error: unknown) => (
-      error instanceof WakeflowWindowHostBindingError
-      && error.reason === "relation"
-    ),
+    () =>
+      parseWakeflowWindowHostBinding(
+        binding,
+        claudeCodeWindowHostIdentityProfile,
+      ),
+    (error: unknown) =>
+      error instanceof WakeflowWindowHostBindingError &&
+      error.reason === "profile",
   );
 
   throws(
-    () => parseWakeflowWindowHostBinding(
-      binding,
-      claudeCodeWindowHostIdentityProfile,
-    ),
-    (error: unknown) => (
-      error instanceof WakeflowWindowHostBindingError
-      && error.reason === "profile"
-    ),
-  );
-
-  throws(
-    () => parseWakeflowWindowHostBinding(
-      {
-        ...binding,
-        handle: { kind: "claude-session", value: handle.value },
-      },
-      codexWindowHostIdentityProfile,
-    ),
-    (error: unknown) => (
-      error instanceof WakeflowWindowHostBindingError
-      && error.reason === "handle"
-    ),
+    () =>
+      parseWakeflowWindowHostBinding(
+        {
+          ...binding,
+          handle: { kind: "claude-session", value: handle.value },
+        },
+        codexWindowHostIdentityProfile,
+      ),
+    (error: unknown) =>
+      error instanceof WakeflowWindowHostBindingError &&
+      error.reason === "handle",
   );
 });

@@ -1,23 +1,21 @@
-import type {
-  WakeflowTargetTaskPlanningRequestV1 as TargetTaskPlanningPublicRequestWire,
-} from "../../contracts/generated/entrypoints/wakeflow-target-task-planning-request.generated.js";
-import {
-  WAKEFLOW_TARGET_TASK_PLANNING_REQUEST_SCHEMA,
-} from "../../contracts/generated/entrypoints/wakeflow-target-task-planning-request.generated.js";
+import type { WakeflowTargetTaskPlanningRequestV1 as TargetTaskPlanningPublicRequestWire } from "../../contracts/generated/entrypoints/wakeflow-target-task-planning-request.generated.js";
+import { WAKEFLOW_TARGET_TASK_PLANNING_REQUEST_SCHEMA } from "../../contracts/generated/entrypoints/wakeflow-target-task-planning-request.generated.js";
+import { encodeCanonicalJson } from "../../foundation/data/canonical-json.js";
 import {
   JsonValueError,
   parseJsonValue,
   type JsonValue,
 } from "../../foundation/data/json-value.js";
-import {
-  createRuntimeJsonSchemaValidator,
-} from "../../foundation/schema/runtime-json-schema.js";
+import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 
 /** Wakeflow Governance / Tasking：公共 Target Task Planning wire request。 */
 
 export const WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME =
   "wakeflow_plan_target_task" as const;
 export const WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_SCHEMA_VERSION = 1 as const;
+
+/** 完整TaskPackage plan保持在内部16 MiB投影容量以内，并为wire留出确定性余量。 */
+const TARGET_TASK_PLANNING_PUBLIC_MAXIMUM_REQUEST_BYTES = 24 * 1024 * 1024;
 
 export type TargetTaskPlanningPublicPreviewRequest = Extract<
   TargetTaskPlanningPublicRequestWire,
@@ -32,16 +30,15 @@ export type TargetTaskPlanningPublicRequest =
   | Readonly<TargetTaskPlanningPublicApplyRequest>;
 
 export type TargetTaskPlanningPublicContractErrorReason =
-  | "json"
-  | "schema";
+  "json" | "capacity" | "schema";
 
 const ERROR_MESSAGES = {
   json: "Target Task Planning public request is not passive JSON data.",
+  capacity: "Target Task Planning public request exceeds its capacity.",
   schema: "Target Task Planning public request does not satisfy its Schema.",
-} as const satisfies Readonly<Record<
-  TargetTaskPlanningPublicContractErrorReason,
-  string
->>;
+} as const satisfies Readonly<
+  Record<TargetTaskPlanningPublicContractErrorReason, string>
+>;
 
 export class TargetTaskPlanningPublicContractError extends Error {
   override readonly name = "TargetTaskPlanningPublicContractError";
@@ -78,8 +75,15 @@ export function parseTargetTaskPlanningPublicRequest(
   let json: JsonValue;
   try {
     json = parseJsonValue(value, "$request");
+    if (
+      encodeCanonicalJson(json, "$request").byteLength >
+      TARGET_TASK_PLANNING_PUBLIC_MAXIMUM_REQUEST_BYTES
+    ) {
+      fail("capacity", "$request");
+    }
   } catch (error: unknown) {
     if (error instanceof JsonValueError) fail("json", error.path);
+    if (error instanceof TargetTaskPlanningPublicContractError) throw error;
     throw error;
   }
   const result = validateRequest(json);

@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:result:implementation-target-result-report:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA",
+  "title": "WakeflowImplementationTargetResultReport",
+  "description": "目标Agent对一个implementation Target Task提交的严格业务结果陈述。",
+  "$comment": "Report不声明transport、Claim或Controller acceptance；Wakeflow import owner从当前Event Sourcing authority补齐这些事实。当前v1仅支持单仓库implementation，不包含Test mapping、supersedes或多round兼容字段。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "outcome",
+    "summary",
+    "repositoryChange",
+    "evidenceLocators",
+    "verification",
+    "risks",
+    "anchorEvidence",
+    "reportedAt",
+    "reportDigest"
+  ],
+  "properties": {
+    "kind": {
+      "const": "WakeflowImplementationTargetResultReport"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "outcome": {
+      "enum": ["completed", "blocked", "needs-review"]
+    },
+    "summary": {
+      "$ref": "#/$defs/humanText"
+    },
+    "repositoryChange": {
+      "$ref": "#/$defs/repositoryChange"
+    },
+    "evidenceLocators": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/evidenceLocator"
+      }
+    },
+    "verification": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/humanText"
+      }
+    },
+    "risks": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/humanText"
+      }
+    },
+    "anchorEvidence": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/anchorEvidence"
+      }
+    },
+    "reportedAt": {
+      "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+    },
+    "reportDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    }
+  },
+  "$defs": {
+    "repositoryId": {
+      "type": "string",
+      "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "anchorId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "humanText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192,
+      "pattern": "^(?!\\s)(?![\\s\\S]*\\r)(?![\\s\\S]*[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$"
+    },
+    "repositoryChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositoryId", "disposition", "commits"],
+      "properties": {
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        },
+        "disposition": {
+          "enum": ["committed", "left-uncommitted", "no-changes"]
+        },
+        "commits": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "urn:wakeflow:foundation:version-control:git-object-id:v1"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "committed"
+              }
+            },
+            "required": ["disposition"]
+          },
+          "then": {
+            "properties": {
+              "commits": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "commits": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "evidenceLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ref", "digest"],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/token"
+        },
+        "ref": {
+          "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+        },
+        "digest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "evidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "digest"],
+      "properties": {
+        "ref": {
+          "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+        },
+        "digest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "anchorEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["anchorId", "evidenceRefs"],
+      "properties": {
+        "anchorId": {
+          "$ref": "#/$defs/anchorId"
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/evidenceRef"
+          }
+        }
+      }
+    }
+  }
+}

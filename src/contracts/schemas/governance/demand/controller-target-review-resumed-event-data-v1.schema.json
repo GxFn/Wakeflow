@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:controller-target-review-resumed-event-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_CONTROLLER_TARGET_REVIEW_RESUMED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowControllerTargetReviewResumedEventDataV1",
+  "description": "review.target-result-resumed事件版本1的持久化数据。",
+  "$comment": "Event保存完整ControllerTargetReviewResume；恢复后的Aggregate摘要由Reducer确定，不进入data。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["resume"],
+  "properties": {
+    "resume": {
+      "$ref": "urn:wakeflow:governance:review:controller-target-review-resume:v1"
+    }
+  }
+}

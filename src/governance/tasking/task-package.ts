@@ -1,9 +1,5 @@
-import type {
-  WakeflowTaskPackage as TaskPackageWire,
-} from "../../contracts/generated/governance/tasking/task-package.generated.js";
-import {
-  WAKEFLOW_TASK_PACKAGE_SCHEMA,
-} from "../../contracts/generated/governance/tasking/task-package.generated.js";
+import type { WakeflowTaskPackage as TaskPackageWire } from "../../contracts/generated/governance/tasking/task-package.generated.js";
+import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../contracts/generated/governance/tasking/task-package.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
@@ -13,9 +9,7 @@ import {
   WakeflowDurableIdError,
   type WakeflowDurableId,
 } from "../../contracts/identity/wakeflow-durable-id.js";
-import {
-  computeCanonicalJsonSha256Digest,
-} from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
   Sha256Error,
@@ -35,9 +29,7 @@ import {
   parsePlainRecord,
   PassiveOwnDataError,
 } from "../../foundation/data/passive-own-data.js";
-import {
-  createRuntimeJsonSchemaValidator,
-} from "../../foundation/schema/runtime-json-schema.js";
+import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
   UtcInstantError,
@@ -71,13 +63,15 @@ import {
 const TASK_PACKAGE_ARTIFACT_KIND = "wakeflow-task-package" as const;
 const TASK_PACKAGE_SCHEMA_VERSION = 1 as const;
 
-export type TaskPackageWorkType = "implementation";
-export type TaskPackageCommitExpectation =
-  | "commit"
-  | "leave-uncommitted";
+export type TaskPackageWorkType = "implementation" | "test";
+export type TaskPackageCommitExpectation = "commit" | "leave-uncommitted";
 
-export interface TaskPackageAssignment {
+export interface ImplementationTaskPackageAssignment {
   readonly repositoryId: WakeflowDurableId<"repository">;
+  readonly windowId: WakeflowDurableId<"window">;
+}
+
+export interface TestTaskPackageAssignment {
   readonly windowId: WakeflowDurableId<"window">;
 }
 
@@ -94,7 +88,12 @@ export interface TaskPackageAcceptanceAnchor {
   readonly expected: string;
 }
 
-export interface TaskPackage {
+export interface TaskPackageTestCardTuple {
+  readonly testCardId: WakeflowDurableId<"test-card">;
+  readonly testCardDigest: Sha256Digest;
+}
+
+interface TaskPackageBase {
   readonly artifactKind: typeof TASK_PACKAGE_ARTIFACT_KIND;
   readonly schemaVersion: typeof TASK_PACKAGE_SCHEMA_VERSION;
   readonly programId: WakeflowDurableId<"program">;
@@ -104,8 +103,6 @@ export interface TaskPackage {
   readonly taskPackageId: WakeflowDurableId<"task-package">;
   readonly targetTaskId: WakeflowDurableId<"target-task">;
   readonly createdAt: UtcInstant;
-  readonly assignment: Readonly<TaskPackageAssignment>;
-  readonly workType: TaskPackageWorkType;
   readonly objective: string;
   readonly confirmedContext: readonly [string, ...string[]];
   readonly selectedAuthorityRefs: readonly [
@@ -114,6 +111,11 @@ export interface TaskPackage {
   ];
   readonly boundaries: Readonly<TaskPackageBoundaries>;
   readonly completionExpectations: readonly [string, ...string[]];
+}
+
+export interface ImplementationTaskPackage extends TaskPackageBase {
+  readonly assignment: Readonly<ImplementationTaskPackageAssignment>;
+  readonly workType: "implementation";
   readonly commitExpectation: TaskPackageCommitExpectation;
   readonly acceptanceAnchors: readonly [
     Readonly<TaskPackageAcceptanceAnchor>,
@@ -121,29 +123,39 @@ export interface TaskPackage {
   ];
 }
 
+export interface TestTaskPackage extends TaskPackageBase {
+  readonly assignment: Readonly<TestTaskPackageAssignment>;
+  readonly workType: "test";
+  readonly acceptanceAnchors: readonly [];
+  readonly testCard: Readonly<TaskPackageTestCardTuple>;
+}
+
+export type TaskPackage = ImplementationTaskPackage | TestTaskPackage;
+
 export interface CreateTaskPackageOptions {
   readonly clock?: UtcWallClock;
 }
 
 /** 公共 Planning preview 允许调用方填写、但不允许控制身份/权威/时间的字段。 */
-export type TaskPackageContentDraft = Readonly<Pick<
-  TaskPackage,
-  | "acceptanceAnchors"
-  | "assignment"
-  | "boundaries"
-  | "commitExpectation"
-  | "completionExpectations"
-  | "confirmedContext"
-  | "objective"
-  | "selectedAuthorityRefs"
-  | "workType"
->>;
+export type TaskPackageContentDraft = Readonly<
+  Pick<
+    ImplementationTaskPackage,
+    | "acceptanceAnchors"
+    | "assignment"
+    | "boundaries"
+    | "commitExpectation"
+    | "completionExpectations"
+    | "confirmedContext"
+    | "objective"
+    | "selectedAuthorityRefs"
+    | "workType"
+  >
+>;
 
 /** 尚未由 Planning owner 解析 Authority member 选择的调用方内容字段。 */
-export type TaskPackageAuthoredContentDraft = Readonly<Omit<
-  TaskPackageContentDraft,
-  "selectedAuthorityRefs"
->>;
+export type TaskPackageAuthoredContentDraft = Readonly<
+  Omit<TaskPackageContentDraft, "selectedAuthorityRefs">
+>;
 
 export type TaskPackageErrorReason =
   | "input"
@@ -167,7 +179,8 @@ const ERROR_MESSAGES = {
   text: "Task package contains non-canonical text.",
   reference: "Task package contains an invalid Ledger authority reference.",
   relation: "Task package contains inconsistent local relationships.",
-  representation: "Task package bytes are not its deterministic domain representation.",
+  representation:
+    "Task package bytes are not its deterministic domain representation.",
 } as const satisfies Readonly<Record<TaskPackageErrorReason, string>>;
 
 /** TaskPackage 准入或确定性表示失败时返回的稳定、脱敏错误。 */
@@ -210,6 +223,23 @@ const DRAFT_FIELDS = Object.freeze([
   "selectedAuthorityRefs",
   "targetTaskId",
   "taskPackageId",
+  "workType",
+] as const);
+const TEST_DRAFT_FIELDS = Object.freeze([
+  "acceptanceAnchors",
+  "assignment",
+  "boundaries",
+  "completionExpectations",
+  "configDigest",
+  "confirmedContext",
+  "demandAuthorityDigest",
+  "demandId",
+  "objective",
+  "programId",
+  "selectedAuthorityRefs",
+  "targetTaskId",
+  "taskPackageId",
+  "testCard",
   "workType",
 ] as const);
 const CONTENT_DRAFT_FIELDS = Object.freeze([
@@ -261,22 +291,21 @@ const CONTENT_DRAFT_TARGET_TASK_ID = parseWakeflowDurableIdOfKind(
   "target-task",
   "$contentDraftTargetTaskId",
 );
-const AUTHORED_CONTENT_DRAFT_REFERENCE =
-  parseLedgerAuthorityMemberReference({
-    artifactKind: "wakeflow-ledger-authority-member-reference",
-    schemaVersion: 1,
-    family: "requirement",
-    recordId: "requirement_00000000-0000-4000-8000-000000000010",
-    recordRef:
-      "requirements/requirement_00000000-0000-4000-8000-000000000010/record.json",
-    recordDigest: CONTENT_DRAFT_VALIDATION_DIGEST,
-    memberPath: "validation.md",
-    memberRef:
-      "requirements/requirement_00000000-0000-4000-8000-000000000010/validation.md",
-    memberDigest: CONTENT_DRAFT_VALIDATION_DIGEST,
-    role: "requirement-design",
-    mediaType: "text/markdown",
-  });
+const AUTHORED_CONTENT_DRAFT_REFERENCE = parseLedgerAuthorityMemberReference({
+  artifactKind: "wakeflow-ledger-authority-member-reference",
+  schemaVersion: 1,
+  family: "requirement",
+  recordId: "requirement_00000000-0000-4000-8000-000000000010",
+  recordRef:
+    "requirements/requirement_00000000-0000-4000-8000-000000000010/record.json",
+  recordDigest: CONTENT_DRAFT_VALIDATION_DIGEST,
+  memberPath: "validation.md",
+  memberRef:
+    "requirements/requirement_00000000-0000-4000-8000-000000000010/validation.md",
+  memberDigest: CONTENT_DRAFT_VALIDATION_DIGEST,
+  role: "requirement-design",
+  mediaType: "text/markdown",
+});
 
 function fail(reason: TaskPackageErrorReason, path: string): never {
   throw new TaskPackageError(reason, path);
@@ -284,27 +313,25 @@ function fail(reason: TaskPackageErrorReason, path: string): never {
 
 function parseCanonicalText(value: string, path: string): string {
   if (
-    !value.isWellFormed()
-    || value.normalize("NFC") !== value
-    || CONTROL_EXCEPT_LF_PATTERN.test(value)
+    !value.isWellFormed() ||
+    value.normalize("NFC") !== value ||
+    CONTROL_EXCEPT_LF_PATTERN.test(value)
   ) {
     fail("text", path);
   }
   return value;
 }
 
-function parseId<Kind extends
-  | "program"
-  | "demand"
-  | "task-package"
-  | "target-task"
-  | "repository"
-  | "window"
->(
-  value: unknown,
-  kind: Kind,
-  path: string,
-): WakeflowDurableId<Kind> {
+function parseId<
+  Kind extends
+    | "program"
+    | "demand"
+    | "task-package"
+    | "target-task"
+    | "test-card"
+    | "repository"
+    | "window",
+>(value: unknown, kind: Kind, path: string): WakeflowDurableId<Kind> {
   try {
     return parseWakeflowDurableIdOfKind(value, kind, path);
   } catch (error: unknown) {
@@ -338,7 +365,10 @@ function parseTextList(
   const parsed: string[] = [];
   const seen = new Set<string>();
   for (let index = 0; index < values.length; index += 1) {
-    const text = parseCanonicalText(values[index] as string, `${path}/${index}`);
+    const text = parseCanonicalText(
+      values[index] as string,
+      `${path}/${index}`,
+    );
     if (seen.has(text)) fail("relation", `${path}/${index}`);
     seen.add(text);
     parsed.push(text);
@@ -384,7 +414,7 @@ function parseSelectedAuthorityRefs(
 
 function parseAcceptanceAnchors(
   values: readonly TaskPackageWire["acceptanceAnchors"][number][],
-): TaskPackage["acceptanceAnchors"] {
+): readonly Readonly<TaskPackageAcceptanceAnchor>[] {
   const parsed: Readonly<TaskPackageAcceptanceAnchor>[] = [];
   const anchorIds = new Set<string>();
   for (let index = 0; index < values.length; index += 1) {
@@ -394,21 +424,19 @@ function parseAcceptanceAnchors(
     const anchorId = parseCanonicalText(value.anchorId, `${path}/anchorId`);
     if (anchorIds.has(anchorId)) fail("relation", `${path}/anchorId`);
     anchorIds.add(anchorId);
-    parsed.push(Object.freeze({
-      anchorId,
-      claim: parseCanonicalText(value.claim, `${path}/claim`),
-      probe: parseCanonicalText(value.probe, `${path}/probe`),
-      expected: parseCanonicalText(value.expected, `${path}/expected`),
-    }));
+    parsed.push(
+      Object.freeze({
+        anchorId,
+        claim: parseCanonicalText(value.claim, `${path}/claim`),
+        probe: parseCanonicalText(value.probe, `${path}/probe`),
+        expected: parseCanonicalText(value.expected, `${path}/expected`),
+      }),
+    );
   }
-  const first = parsed[0];
-  if (first === undefined) fail("schema", "$/acceptanceAnchors");
-  return Object.freeze([first, ...parsed.slice(1)]);
+  return Object.freeze(parsed);
 }
 
-function normalizeWire(
-  wire: Readonly<TaskPackageWire>,
-): Readonly<TaskPackage> {
+function normalizeWire(wire: Readonly<TaskPackageWire>): Readonly<TaskPackage> {
   const confirmedContext = parseNonEmptyTextList(
     wire.confirmedContext,
     "$/confirmedContext",
@@ -421,7 +449,7 @@ function normalizeWire(
     wire.completionExpectations,
     "$/completionExpectations",
   );
-  return Object.freeze({
+  const common = {
     artifactKind: TASK_PACKAGE_ARTIFACT_KIND,
     schemaVersion: TASK_PACKAGE_SCHEMA_VERSION,
     programId: parseId(wire.programId, "program", "$/programId"),
@@ -438,19 +466,6 @@ function normalizeWire(
     ),
     targetTaskId: parseId(wire.targetTaskId, "target-task", "$/targetTaskId"),
     createdAt: parseCreationTime(wire.createdAt),
-    assignment: Object.freeze({
-      repositoryId: parseId(
-        wire.assignment.repositoryId,
-        "repository",
-        "$/assignment/repositoryId",
-      ),
-      windowId: parseId(
-        wire.assignment.windowId,
-        "window",
-        "$/assignment/windowId",
-      ),
-    }),
-    workType: wire.workType,
     objective: parseCanonicalText(wire.objective, "$/objective"),
     confirmedContext,
     selectedAuthorityRefs: parseSelectedAuthorityRefs(
@@ -468,9 +483,61 @@ function normalizeWire(
       ),
     }),
     completionExpectations,
-    commitExpectation: wire.commitExpectation,
-    acceptanceAnchors: parseAcceptanceAnchors(wire.acceptanceAnchors),
-  });
+  } as const;
+  const windowId = parseId(
+    wire.assignment.windowId,
+    "window",
+    "$/assignment/windowId",
+  );
+  const acceptanceAnchors = parseAcceptanceAnchors(wire.acceptanceAnchors);
+  if (wire.workType === "implementation") {
+    if (
+      !("repositoryId" in wire.assignment) ||
+      wire.commitExpectation === undefined
+    ) {
+      fail("schema", "$/assignment");
+    }
+    const firstAnchor = acceptanceAnchors[0];
+    if (firstAnchor === undefined) fail("schema", "$/acceptanceAnchors");
+    const parsedAnchors: ImplementationTaskPackage["acceptanceAnchors"] =
+      Object.freeze([firstAnchor, ...acceptanceAnchors.slice(1)]);
+    const implementation: ImplementationTaskPackage = {
+      ...common,
+      assignment: Object.freeze({
+        repositoryId: parseId(
+          wire.assignment.repositoryId,
+          "repository",
+          "$/assignment/repositoryId",
+        ),
+        windowId,
+      }),
+      workType: "implementation" as const,
+      commitExpectation: wire.commitExpectation,
+      acceptanceAnchors: parsedAnchors,
+    };
+    return Object.freeze(implementation);
+  }
+  if (wire.testCard === undefined || acceptanceAnchors.length !== 0) {
+    fail("schema", "$/testCard");
+  }
+  const test: TestTaskPackage = {
+    ...common,
+    assignment: Object.freeze({ windowId }),
+    workType: "test" as const,
+    acceptanceAnchors: Object.freeze([]) as readonly [],
+    testCard: Object.freeze({
+      testCardId: parseId(
+        wire.testCard.testCardId,
+        "test-card",
+        "$/testCard/testCardId",
+      ),
+      testCardDigest: parseDigest(
+        wire.testCard.testCardDigest,
+        "$/testCard/testCardDigest",
+      ),
+    }),
+  };
+  return Object.freeze(test);
 }
 
 /** 把任意进程内值解析为递归冻结、局部关系一致的 TaskPackage。 */
@@ -519,9 +586,11 @@ export function createTaskPackage(
     throw error;
   }
   const keys = Object.keys(record).sort();
+  const expectedFields =
+    record.workType === "test" ? TEST_DRAFT_FIELDS : DRAFT_FIELDS;
   if (
-    keys.length !== DRAFT_FIELDS.length
-    || keys.some((key, index) => key !== DRAFT_FIELDS[index])
+    keys.length !== expectedFields.length ||
+    keys.some((key, index) => key !== expectedFields[index])
   ) {
     fail("input", "$draft");
   }
@@ -542,8 +611,10 @@ export function createTaskPackage(
     selectedAuthorityRefs: record.selectedAuthorityRefs,
     boundaries: record.boundaries,
     completionExpectations: record.completionExpectations,
-    commitExpectation: record.commitExpectation,
     acceptanceAnchors: record.acceptanceAnchors,
+    ...(record.workType === "test"
+      ? { testCard: record.testCard }
+      : { commitExpectation: record.commitExpectation }),
   });
   return Object.freeze({
     ...admitted,
@@ -569,8 +640,8 @@ export function parseTaskPackageContentDraft(
   }
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== CONTENT_DRAFT_FIELDS.length
-    || keys.some((key, index) => key !== CONTENT_DRAFT_FIELDS[index])
+    keys.length !== CONTENT_DRAFT_FIELDS.length ||
+    keys.some((key, index) => key !== CONTENT_DRAFT_FIELDS[index])
   ) {
     fail("input", "$contentDraft");
   }
@@ -594,6 +665,9 @@ export function parseTaskPackageContentDraft(
     commitExpectation: record.commitExpectation,
     acceptanceAnchors: record.acceptanceAnchors,
   });
+  if (parsed.workType !== "implementation") {
+    fail("relation", "$/workType");
+  }
   return Object.freeze({
     assignment: parsed.assignment,
     workType: parsed.workType,
@@ -622,8 +696,8 @@ export function parseTaskPackageAuthoredContentDraft(
   }
   const keys = Object.keys(record).sort();
   if (
-    keys.length !== AUTHORED_CONTENT_DRAFT_FIELDS.length
-    || keys.some((key, index) => key !== AUTHORED_CONTENT_DRAFT_FIELDS[index])
+    keys.length !== AUTHORED_CONTENT_DRAFT_FIELDS.length ||
+    keys.some((key, index) => key !== AUTHORED_CONTENT_DRAFT_FIELDS[index])
   ) {
     fail("input", "$authoredContentDraft");
   }
@@ -659,9 +733,7 @@ export function renderTaskPackage(value: unknown): string {
 }
 
 /** 只接受与领域确定性表示逐字节相同的 TaskPackage 文档。 */
-export function parseTaskPackageDocument(
-  text: unknown,
-): Readonly<TaskPackage> {
+export function parseTaskPackageDocument(text: unknown): Readonly<TaskPackage> {
   let json: JsonValue;
   try {
     json = parseDeterministicJsonDocument(text, "$taskPackage");

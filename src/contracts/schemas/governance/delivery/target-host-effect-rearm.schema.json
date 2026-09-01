@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:delivery:target-host-effect-rearm:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_HOST_EFFECT_REARM_SCHEMA",
+  "title": "WakeflowTargetHostEffectRearm",
+  "description": "将一个精确 rejected-before-effect 尾部重新开放为可 Claim 状态的不可变业务事实。",
+  "$comment": "Rearm 不执行宿主能力、不复用旧 Claim，也不授权自动重试；下一次效果必须重新取得全新 WindowWorkClaim。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "target",
+    "rejectedAttempt",
+    "rearmedAt",
+    "rearmDigest"
+  ],
+  "properties": {
+    "kind": {
+      "const": "WakeflowTargetHostEffectRearm"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "target": {
+      "$ref": "#/$defs/target"
+    },
+    "rejectedAttempt": {
+      "$ref": "#/$defs/rejectedAttempt"
+    },
+    "rearmedAt": {
+      "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+    },
+    "rearmDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    }
+  },
+  "$defs": {
+    "claimId": {
+      "type": "string",
+      "pattern": "^window_work_claim_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "eventId": {
+      "type": "string",
+      "pattern": "^demand-event_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "commitId": {
+      "type": "string",
+      "pattern": "^demand-event-commit_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["demandId", "targetTaskId", "targetDeliveryId"],
+      "properties": {
+        "demandId": {
+          "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/properties/demandId"
+        },
+        "targetTaskId": {
+          "$ref": "urn:wakeflow:governance:tasking:task-package:v1#/properties/targetTaskId"
+        },
+        "targetDeliveryId": {
+          "$ref": "urn:wakeflow:governance:delivery:target-delivery-intent:v1#/properties/targetDeliveryId"
+        }
+      }
+    },
+    "rejectedAttempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claimId",
+        "claimDigest",
+        "claimEventId",
+        "claimCommitId",
+        "observationDigest"
+      ],
+      "properties": {
+        "claimId": {
+          "$ref": "#/$defs/claimId"
+        },
+        "claimDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "claimEventId": {
+          "$ref": "#/$defs/eventId"
+        },
+        "claimCommitId": {
+          "$ref": "#/$defs/commitId"
+        },
+        "observationDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    }
+  }
+}

@@ -1,8 +1,4 @@
-import {
-  deepEqual,
-  equal,
-  rejects,
-} from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   existsSync,
   linkSync,
@@ -26,16 +22,12 @@ import {
 import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import {
-  decideDemandEventSourcingCommand,
-} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
+import { decideDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
   prepareDemandEventStreamCommit,
   renderDemandEventStreamCommit,
 } from "../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
-import {
-  computeDemandEventSourcingStoredEventDigest,
-} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-stored-event.js";
+import { computeDemandEventSourcingStoredEventDigest } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-stored-event.js";
 import {
   demandEventAppendCandidateRef,
   demandEventStreamCommitRef,
@@ -82,7 +74,11 @@ const COMMAND_DIGEST = parseSha256Digest(`sha256:${"c".repeat(64)}`);
 const OTHER_COMMAND_DIGEST = parseSha256Digest(`sha256:${"d".repeat(64)}`);
 const THIRD_COMMAND_DIGEST = parseSha256Digest(`sha256:${"e".repeat(64)}`);
 
-function prepared(commitId = COMMIT_ID, eventId = EVENT_ID, commandDigest = COMMAND_DIGEST) {
+function prepared(
+  commitId = COMMIT_ID,
+  eventId = EVENT_ID,
+  commandDigest = COMMAND_DIGEST,
+) {
   const events = decideDemandEventSourcingCommand(null, {
     commandType: "publication.publish-demand",
     commandVersion: 1,
@@ -121,7 +117,9 @@ function preparedCancellation(
 }
 
 test("Demand File Event Store 以固定 commitSequence 槽位执行 no-replace append", async () => {
-  const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-demand-file-event-store-"));
+  const fixtureRoot = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-demand-file-event-store-"),
+  );
   const root = await RootedDirectory.open(fixtureRoot);
   try {
     const store = new DemandFileEventStore(root);
@@ -146,56 +144,80 @@ test("Demand File Event Store 以固定 commitSequence 槽位执行 no-replace a
         ...loaded.cursor,
         streamRevision: 0,
       }),
-      (error: unknown) => (
-        error instanceof DemandFileEventStoreError
-        && error.reason === "input"
-      ),
+      (error: unknown) =>
+        error instanceof DemandFileEventStoreError && error.reason === "input",
     );
 
     await rejects(
       store.append({ ...first } as typeof first),
-      (error: unknown) => (
-        error instanceof DemandFileEventStoreError
-        && error.reason === "input"
-      ),
+      (error: unknown) =>
+        error instanceof DemandFileEventStoreError && error.reason === "input",
     );
 
     await rejects(
-      store.append(prepared(
-        OTHER_COMMIT_ID,
-        OTHER_EVENT_ID,
-        OTHER_COMMAND_DIGEST,
-      )),
-      (error: unknown) => (
-        error instanceof DemandFileEventStoreError
-        && error.reason === "concurrency-conflict"
+      store.append(
+        prepared(OTHER_COMMIT_ID, OTHER_EVENT_ID, OTHER_COMMAND_DIGEST),
       ),
+      (error: unknown) =>
+        error instanceof DemandFileEventStoreError &&
+        error.reason === "concurrency-conflict",
     );
 
     equal(
-      readdirSync(path.join(fixtureRoot, "event-sourcing", "commits")).join(","),
+      readdirSync(path.join(fixtureRoot, "event-sourcing", "commits")).join(
+        ",",
+      ),
       "0000000000000001.json",
     );
     deepEqual(
-      readdirSync(path.join(fixtureRoot, "event-sourcing", "append-candidates")),
+      readdirSync(
+        path.join(fixtureRoot, "event-sourcing", "append-candidates"),
+      ),
       [],
     );
     equal(readdirSync(fixtureRoot).includes("event-stream.lock"), false);
-    equal(
-      readdirSync(fixtureRoot).includes("transactions"),
-      false,
-    );
+    equal(readdirSync(fixtureRoot).includes("transactions"), false);
   } finally {
     await root.close();
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
 });
 
+test("Demand File Event Store同进程并发相同append不暴露active candidate窗口", async () => {
+  const fixtureRoot = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-demand-concurrent-append-"),
+  );
+  const firstRoot = await RootedDirectory.open(fixtureRoot);
+  const secondRoot = await RootedDirectory.open(fixtureRoot);
+  try {
+    const firstStore = new DemandFileEventStore(firstRoot);
+    const secondStore = new DemandFileEventStore(secondRoot);
+    await firstStore.initialize();
+    const results = await Promise.all([
+      firstStore.append(prepared()),
+      secondStore.append(prepared()),
+    ]);
+    deepEqual(results.map((result) => result.disposition).sort(), [
+      "committed",
+      "idempotent",
+    ]);
+    equal((await firstStore.readCommits()).commits.length, 1);
+    deepEqual(
+      readdirSync(
+        path.join(fixtureRoot, "event-sourcing", "append-candidates"),
+      ),
+      [],
+    );
+  } finally {
+    await Promise.all([firstRoot.close(), secondRoot.close()]);
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
 test("Demand File Event Store 在 append 前拒绝历史 commitId 与 eventId 重用", async () => {
-  const fixtureRoot = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-demand-append-identity-",
-  ));
+  const fixtureRoot = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-demand-append-identity-"),
+  );
   const root = await RootedDirectory.open(fixtureRoot);
   try {
     const store = new DemandFileEventStore(root);
@@ -204,28 +226,22 @@ test("Demand File Event Store 在 append 前拒绝历史 commitId 与 eventId �
     await store.append(first);
 
     await rejects(
-      store.append(preparedCancellation(
-        first.aggregate,
-        COMMIT_ID,
-        OTHER_EVENT_ID,
-      )),
-      (error: unknown) => (
-        error instanceof DemandFileEventStoreError
-        && error.reason === "append-identity-conflict"
-        && error.path === "$commit/commitId"
+      store.append(
+        preparedCancellation(first.aggregate, COMMIT_ID, OTHER_EVENT_ID),
       ),
+      (error: unknown) =>
+        error instanceof DemandFileEventStoreError &&
+        error.reason === "append-identity-conflict" &&
+        error.path === "$commit/commitId",
     );
     await rejects(
-      store.append(preparedCancellation(
-        first.aggregate,
-        OTHER_COMMIT_ID,
-        EVENT_ID,
-      )),
-      (error: unknown) => (
-        error instanceof DemandFileEventStoreError
-        && error.reason === "append-identity-conflict"
-        && error.path === "$commit/events/0/eventId"
+      store.append(
+        preparedCancellation(first.aggregate, OTHER_COMMIT_ID, EVENT_ID),
       ),
+      (error: unknown) =>
+        error instanceof DemandFileEventStoreError &&
+        error.reason === "append-identity-conflict" &&
+        error.path === "$commit/events/0/eventId",
     );
     equal((await store.readCommits()).commits.length, 1);
   } finally {
@@ -235,10 +251,9 @@ test("Demand File Event Store 在 append 前拒绝历史 commitId 与 eventId �
 });
 
 test("Demand File Event Store 拒绝未绑定 physical tail state 的 prepared commit", async () => {
-  const fixtureRoot = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-demand-append-provenance-",
-  ));
+  const fixtureRoot = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-demand-append-provenance-"),
+  );
   const root = await RootedDirectory.open(fixtureRoot);
   try {
     const store = new DemandFileEventStore(root);
@@ -256,9 +271,8 @@ test("Demand File Event Store 拒绝未绑定 physical tail state 的 prepared c
       Object.freeze({
         ...second.aggregate,
         lastEvent: forgedLastEvent,
-        lastEventDigest: computeDemandEventSourcingStoredEventDigest(
-          forgedLastEvent,
-        ),
+        lastEventDigest:
+          computeDemandEventSourcingStoredEventDigest(forgedLastEvent),
         state: first.aggregate.state,
         stateDigest: first.aggregate.stateDigest,
       });
@@ -271,11 +285,10 @@ test("Demand File Event Store 拒绝未绑定 physical tail state 的 prepared c
 
     await rejects(
       store.append(forged),
-      (error: unknown) => (
-        error instanceof DemandFileEventStoreError
-        && error.reason === "append-provenance-conflict"
-        && error.path === "$preparedCommit/sourceExpectation"
-      ),
+      (error: unknown) =>
+        error instanceof DemandFileEventStoreError &&
+        error.reason === "append-provenance-conflict" &&
+        error.path === "$preparedCommit/sourceExpectation",
     );
     equal((await store.readCommits()).commits.length, 2);
   } finally {
@@ -284,55 +297,62 @@ test("Demand File Event Store 拒绝未绑定 physical tail state 的 prepared c
   }
 });
 
-test("Demand File Event Store 在 commit parent 首次 sync 失败后重新结算", {
-  concurrency: false,
-}, async () => {
-  const fixtureRoot = mkdtempSync(path.join(
-    os.tmpdir(),
-    "wakeflow-demand-append-settlement-",
-  ));
-  const root = await RootedDirectory.open(fixtureRoot);
-  const originalSync = RootedResourceParentHandle.prototype.sync;
-  const first = prepared();
-  const commitRef = demandEventStreamCommitRef(first.commit.commitSequence);
-  const commitAbsolutePath = path.join(
-    root.absolutePath,
-    ...commitRef.split("/"),
-  );
-  let commitParentSyncAttempts = 0;
-  RootedResourceParentHandle.prototype.sync = async function patchedSync() {
-    if (this.resourceAbsolutePath === commitAbsolutePath) {
-      commitParentSyncAttempts += 1;
-      if (commitParentSyncAttempts === 1) {
-        throw new RootedResourceParentHandleError(
-          "sync-failure",
-          "$resourcePath",
-        );
-      }
-    }
-    return originalSync.call(this);
-  };
-  try {
-    const store = new DemandFileEventStore(root);
-    await store.initialize();
-    const receipt = await store.append(first);
-
-    equal(receipt.disposition, "committed");
-    equal(commitParentSyncAttempts, 2);
-    equal((await store.readCommits()).commits.length, 1);
-    deepEqual(
-      readdirSync(path.join(fixtureRoot, "event-sourcing", "append-candidates")),
-      [],
+test(
+  "Demand File Event Store 在 commit parent 首次 sync 失败后重新结算",
+  {
+    concurrency: false,
+  },
+  async () => {
+    const fixtureRoot = mkdtempSync(
+      path.join(os.tmpdir(), "wakeflow-demand-append-settlement-"),
     );
-  } finally {
-    RootedResourceParentHandle.prototype.sync = originalSync;
-    await root.close();
-    rmSync(fixtureRoot, { recursive: true, force: true });
-  }
-});
+    const root = await RootedDirectory.open(fixtureRoot);
+    const originalSync = RootedResourceParentHandle.prototype.sync;
+    const first = prepared();
+    const commitRef = demandEventStreamCommitRef(first.commit.commitSequence);
+    const commitAbsolutePath = path.join(
+      root.absolutePath,
+      ...commitRef.split("/"),
+    );
+    let commitParentSyncAttempts = 0;
+    RootedResourceParentHandle.prototype.sync = async function patchedSync() {
+      if (this.resourceAbsolutePath === commitAbsolutePath) {
+        commitParentSyncAttempts += 1;
+        if (commitParentSyncAttempts === 1) {
+          throw new RootedResourceParentHandleError(
+            "sync-failure",
+            "$resourcePath",
+          );
+        }
+      }
+      return originalSync.call(this);
+    };
+    try {
+      const store = new DemandFileEventStore(root);
+      await store.initialize();
+      const receipt = await store.append(first);
+
+      equal(receipt.disposition, "committed");
+      equal(commitParentSyncAttempts, 2);
+      equal((await store.readCommits()).commits.length, 1);
+      deepEqual(
+        readdirSync(
+          path.join(fixtureRoot, "event-sourcing", "append-candidates"),
+        ),
+        [],
+      );
+    } finally {
+      RootedResourceParentHandle.prototype.sync = originalSync;
+      await root.close();
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  },
+);
 
 test("Demand File Event Store 只回滚 candidate-only，并结算已经 link 的 commit residue", async () => {
-  const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-demand-candidate-recovery-"));
+  const fixtureRoot = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-demand-candidate-recovery-"),
+  );
   const root = await RootedDirectory.open(fixtureRoot);
   try {
     const store = new DemandFileEventStore(root);
@@ -344,13 +364,18 @@ test("Demand File Event Store 只回滚 candidate-only，并结算已经 link �
       first.commit.commitId,
       `${process.pid}-${threadId}-66666666-6666-4666-8666-666666666666`,
     );
-    await createFileCandidateDurably(root, rolledBackRef, bytes, { mode: 0o600 });
+    await createFileCandidateDurably(root, rolledBackRef, bytes, {
+      mode: 0o600,
+    });
 
     const rolledBack = await store.recoverAppendCandidates();
     equal(rolledBack.rolledBackCount, 1);
     equal(rolledBack.committedResidueCount, 0);
     equal(rolledBack.durabilitySettledCommitCount, 0);
-    equal(existsSync(path.join(fixtureRoot, ...rolledBackRef.split("/"))), false);
+    equal(
+      existsSync(path.join(fixtureRoot, ...rolledBackRef.split("/"))),
+      false,
+    );
 
     const committedCandidateRef = demandEventAppendCandidateRef(
       first.commit.commitSequence,
@@ -371,7 +396,10 @@ test("Demand File Event Store 只回滚 candidate-only，并结算已经 link �
     equal(settled.durabilitySettledCommitCount, 1);
     equal(settled.retiredCount, 1);
     equal((await store.readCommits()).commits.length, 1);
-    equal(existsSync(path.join(fixtureRoot, ...committedCandidateRef.split("/"))), false);
+    equal(
+      existsSync(path.join(fixtureRoot, ...committedCandidateRef.split("/"))),
+      false,
+    );
   } finally {
     await root.close();
     rmSync(fixtureRoot, { recursive: true, force: true });
@@ -379,7 +407,9 @@ test("Demand File Event Store 只回滚 candidate-only，并结算已经 link �
 });
 
 test("Demand File Event Store recovery 不删除 active 或不可确认 owner 的 candidate", async () => {
-  const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-demand-candidate-owner-"));
+  const fixtureRoot = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-demand-candidate-owner-"),
+  );
   const root = await RootedDirectory.open(fixtureRoot);
   try {
     const store = new DemandFileEventStore(root);
@@ -399,10 +429,9 @@ test("Demand File Event Store recovery 不删除 active 或不可确认 owner �
 
     await rejects(
       store.recoverAppendCandidates(),
-      (error: unknown) => (
-        error instanceof DemandFileEventStoreError
-        && error.reason === "candidate-busy"
-      ),
+      (error: unknown) =>
+        error instanceof DemandFileEventStoreError &&
+        error.reason === "candidate-busy",
     );
     equal(existsSync(path.join(fixtureRoot, ...candidateRef.split("/"))), true);
   } finally {
@@ -412,7 +441,9 @@ test("Demand File Event Store recovery 不删除 active 或不可确认 owner �
 });
 
 test("Demand File Event Store 在读取 payload 前执行 stream 总字节预算", async () => {
-  const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-demand-stream-capacity-"));
+  const fixtureRoot = mkdtempSync(
+    path.join(os.tmpdir(), "wakeflow-demand-stream-capacity-"),
+  );
   const root = await RootedDirectory.open(fixtureRoot);
   try {
     const store = new DemandFileEventStore(root);
@@ -427,10 +458,9 @@ test("Demand File Event Store 在读取 payload 前执行 stream 总字节预算
     truncateSync(oversized, 65 * 1024 * 1024);
     await rejects(
       store.readCommits(),
-      (error: unknown) => (
-        error instanceof DemandFileEventStoreError
-        && error.reason === "capacity"
-      ),
+      (error: unknown) =>
+        error instanceof DemandFileEventStoreError &&
+        error.reason === "capacity",
     );
   } finally {
     await root.close();

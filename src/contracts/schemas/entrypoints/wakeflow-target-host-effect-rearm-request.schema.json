@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:entrypoints:target-host-effect-rearm-request:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_TARGET_HOST_EFFECT_REARM_REQUEST_SCHEMA",
+  "title": "WakeflowTargetHostEffectRearmRequestV1",
+  "description": "Closed MCP request for explicitly rearming one proved rejected-before-effect implementation Host Effect without performing the Host effect.",
+  "$comment": "The stored Claim and Observation derive the implementation Task, Delivery, Intent, Host, Window, Binding, rejected Claim tuple, and Rearm Event identity. The caller supplies only the exact Action and Observation identities returned by the preceding Outcome.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["root", "demandId", "actionId", "observationDigest"],
+  "properties": {
+    "root": {
+      "$ref": "#/$defs/workspaceRoot"
+    },
+    "demandId": {
+      "$ref": "#/$defs/demandId"
+    },
+    "actionId": {
+      "$ref": "#/$defs/claimId"
+    },
+    "observationDigest": {
+      "$ref": "#/$defs/sha256Digest"
+    }
+  },
+  "$defs": {
+    "workspaceRoot": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absolute path of the existing Wakeflow workspace root."
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "claimId": {
+      "type": "string",
+      "pattern": "^window_work_claim_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

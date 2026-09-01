@@ -3,8 +3,8 @@
   "$id": "urn:wakeflow:governance:tasking:task-package:v1",
   "x-wakeflow-runtime-export": "WAKEFLOW_TASK_PACKAGE_SCHEMA",
   "title": "WakeflowTaskPackage",
-  "description": "Controller 为一个产品窗口规划的不可变 Target Task 执行合同。",
-  "$comment": "v1 只准入首个真实消费者 implementation；Demand 状态、Config 拓扑、完整 authority closure 和同仓库活动 lineage 由 Tasking service 校验。",
+  "description": "Controller 为一个目标窗口规划的不可变 Target Task 执行合同。",
+  "$comment": "workType 是 implementation/test 两个闭合变体的判别字段；Demand 状态、Config 拓扑、完整 authority closure 与 TestCard 来源关系由 Tasking service 校验。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -24,7 +24,6 @@
     "selectedAuthorityRefs",
     "boundaries",
     "completionExpectations",
-    "commitExpectation",
     "acceptanceAnchors"
   ],
   "properties": {
@@ -59,7 +58,7 @@
       "$ref": "#/$defs/assignment"
     },
     "workType": {
-      "const": "implementation"
+      "enum": ["implementation", "test"]
     },
     "objective": {
       "$ref": "#/$defs/humanText"
@@ -82,20 +81,63 @@
       "$ref": "#/$defs/nonEmptyTextList"
     },
     "commitExpectation": {
-      "enum": [
-        "commit",
-        "leave-uncommitted"
-      ]
+      "enum": ["commit", "leave-uncommitted"]
     },
     "acceptanceAnchors": {
       "type": "array",
-      "minItems": 1,
       "maxItems": 32,
       "items": {
         "$ref": "#/$defs/acceptanceAnchor"
       }
+    },
+    "testCard": {
+      "$ref": "#/$defs/testCardTuple"
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "workType": {
+            "const": "implementation"
+          }
+        },
+        "required": ["workType"]
+      },
+      "then": {
+        "required": ["commitExpectation"],
+        "properties": {
+          "commitExpectation": {
+            "enum": ["commit", "leave-uncommitted"]
+          },
+          "assignment": {
+            "$ref": "#/$defs/implementationAssignment"
+          },
+          "acceptanceAnchors": {
+            "type": "array",
+            "minItems": 1
+          },
+          "testCard": false
+        }
+      },
+      "else": {
+        "required": ["testCard"],
+        "properties": {
+          "testCard": {
+            "$ref": "#/$defs/testCardTuple"
+          },
+          "assignment": {
+            "$ref": "#/$defs/testAssignment"
+          },
+          "commitExpectation": false,
+          "acceptanceAnchors": {
+            "type": "array",
+            "maxItems": 0
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "programId": {
       "type": "string",
@@ -112,6 +154,10 @@
     "targetTaskId": {
       "type": "string",
       "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "testCardId": {
+      "type": "string",
+      "pattern": "^test-card_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
     },
     "repositoryId": {
       "type": "string",
@@ -136,12 +182,19 @@
       }
     },
     "assignment": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/implementationAssignment"
+        },
+        {
+          "$ref": "#/$defs/testAssignment"
+        }
+      ]
+    },
+    "implementationAssignment": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "repositoryId",
-        "windowId"
-      ],
+      "required": ["repositoryId", "windowId"],
       "properties": {
         "repositoryId": {
           "$ref": "#/$defs/repositoryId"
@@ -151,14 +204,20 @@
         }
       }
     },
+    "testAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["windowId"],
+      "properties": {
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        }
+      }
+    },
     "boundaries": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "inScope",
-        "outOfScope",
-        "forbidden"
-      ],
+      "required": ["inScope", "outOfScope", "forbidden"],
       "properties": {
         "inScope": {
           "$ref": "#/$defs/nonEmptyTextList"
@@ -187,12 +246,7 @@
     "acceptanceAnchor": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "anchorId",
-        "claim",
-        "probe",
-        "expected"
-      ],
+      "required": ["anchorId", "claim", "probe", "expected"],
       "properties": {
         "anchorId": {
           "$ref": "#/$defs/anchorId"
@@ -205,6 +259,19 @@
         },
         "expected": {
           "$ref": "#/$defs/humanText"
+        }
+      }
+    },
+    "testCardTuple": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["testCardId", "testCardDigest"],
+      "properties": {
+        "testCardId": {
+          "$ref": "#/$defs/testCardId"
+        },
+        "testCardDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
         }
       }
     }

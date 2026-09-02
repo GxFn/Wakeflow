@@ -4,9 +4,9 @@ viewType: file-dependency
 truthKind: current-code
 reviewDepth: L3
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:37ba9fd4c166827ab2da0d969297c0ff0eae2e9a39498bf0ef89084b12e1ab89
+snapshotObservedAt: 2026-09-01T20:05:05-07:00
+baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
+sourceFingerprint: sha256:18519fd65ee7fa2a0ce9ad51efe83e1b33087911054a71406bd8433d0994e6f4
 audience:
   - maintainer
   - reviewer
@@ -17,23 +17,26 @@ refreshTriggers:
   - src/contracts/generated/governance/demand/**
 sourcePaths:
   - src/governance/demand/**
+  - src/contracts/generated/entrypoints/wakeflow-demand-publication-*.generated.ts
 schemaPaths:
   - src/contracts/schemas/governance/demand/**
+  - src/contracts/schemas/entrypoints/wakeflow-demand-publication-*.schema.json
 testPaths:
   - tests/governance/demand/**
+  - tests/entrypoints/wakeflow-demand-publication-mcp.test.ts
 ---
 
 # Governance：Demand事件溯源关键文件依赖
 
-> 本图选取Demand 33个生产模块中的23个状态、命令、存储、快照和Publication骨干文件。
-> 当前联合已提交；所有节点按`d17602e`读取快照审阅。
+> 本图选取Demand 38个生产模块中的28个状态、命令、存储、快照、Publication物理事务和公共边界骨干文件。
+> Event Sourcing基线与Publication Public均已提交；新增节点按`f7c005d`审阅。
 
 ## F4：Demand事件溯源关键文件依赖
 
 ```mermaid
 flowchart LR
   accTitle: Wakeflow Demand事件溯源关键文件导入关系
-  accDescr: Decider导入纯Aggregate State、Authority和未提交Event；Command Handler导入Decider、Prepared Commit与Repository；Commit导入Stored Event、Upcaster和Aggregate cursor；Upcaster通过稳定Persisted Event Envelope及版本codec解释历史载荷；Repository导入File Event Store、Snapshot Store和重放能力；Root Authority再组合Inventory、Identity、Authority和Ledger闭合；Publication通过sidecar、stage、storage和TODO模块创建revision 1根目录。
+  accDescr: Decider、Command Handler、Commit、Repository、Snapshot与Upcaster保持既有Event Sourcing方向。Publication Planning导入公共输入与transaction并零写派生计划；Application导入transaction和物理Service；Public Coordinator组合Planning、Application与公共Contract。物理Service仍独占sidecar、stage、storage和TODO模块并创建revision 1根目录。
 
   subgraph ROOTS["Demand模型"]
     IDENTITY["[源码][F-DMD-01]\ndemand-identity.ts"]
@@ -66,14 +69,21 @@ flowchart LR
   end
 
   subgraph HOST_IMPL["跨资源Publication"]
+    PUB_INPUT["[源码][F-PUB-06]\ndemand-event-sourcing-publication-input.ts"]
+    PUB_PLAN["[源码][F-PUB-07]\ndemand-event-sourcing-publication-planning-service.ts"]
+    PUB_APP["[源码][F-PUB-08]\ndemand-event-sourcing-publication-application-service.ts"]
     PUB_SERVICE["[源码][F-PUB-01]\ndemand-event-sourcing-publication-service.ts"]
     PUB_TX["[源码][F-PUB-02]\ndemand-event-sourcing-publication-transaction.ts"]
     PUB_STAGE["[源码][F-PUB-03]\ndemand-event-sourcing-publication-stage.ts"]
     PUB_STORAGE["[源码][F-PUB-04]\ndemand-event-sourcing-publication-storage.ts"]
     PUB_TODO["[源码][F-PUB-05]\ndemand-event-sourcing-publication-todo.ts"]
+    PUB_CONTRACT["[源码][F-PUB-09]\ndemand-publication-public-contract.ts"]
+    PUB_COORD["[源码][F-PUB-10]\ndemand-publication-public-coordinator.ts"]
   end
 
   WIRE["[生成][F-GEN-04]\nDemand 24个Schema/生成合同"]
+  REQUEST_WIRE["[生成][F-GEN-05]\nwakeflow-demand-publication-request.generated.ts"]
+  RESULT_WIRE["[生成][F-GEN-06]\nwakeflow-demand-publication-result.generated.ts"]
 
   AUTHORITY -->|"E-F4-01 Identity关系"| IDENTITY
   STATE -->|"E-F4-02 Aggregate State Schema"| WIRE
@@ -115,6 +125,15 @@ flowchart LR
   PUB_STAGE -->|"E-F4-35 最终根权威加载"| ROOT_AUTH
   PUB_STAGE -->|"E-F4-36 初始化Event/Snapshot Store"| STORE
   PUB_TX -->|"E-F4-37 Publication Schema"| WIRE
+  PUB_PLAN -->|"E-F4-38 解析author-owned输入"| PUB_INPUT
+  PUB_PLAN -->|"E-F4-39 创建完整计划"| PUB_TX
+  PUB_APP -->|"E-F4-40 复验完整计划"| PUB_TX
+  PUB_APP -->|"E-F4-41 委托物理事务"| PUB_SERVICE
+  PUB_COORD -->|"E-F4-42 preview"| PUB_PLAN
+  PUB_COORD -->|"E-F4-43 apply/recover"| PUB_APP
+  PUB_COORD -->|"E-F4-44 解析公共请求"| PUB_CONTRACT
+  PUB_CONTRACT -->|"E-F4-45 Request Schema"| REQUEST_WIRE
+  PUB_COORD -->|"E-F4-46 Result Schema"| RESULT_WIRE
 ```
 
 ### 本图术语说明
@@ -157,12 +176,17 @@ flowchart LR
 | `F-PUB-03` | `publication-stage.ts#materialize/publishDemandStage` | 已实现 | 暂存Demand根、revision 1、整体重命名和最终加载 |
 | `F-PUB-04/05` | `publication-{storage,todo}.ts` | 已实现 | sidecar/锁资源与TODO claim/complete关系 |
 | `F-GEN-04` | `contracts/{schemas,generated}/governance/demand/*` | 已实现 | 24个事件/状态/Commit/Snapshot/Authority合同 |
+| `F-PUB-06` | `demand-event-sourcing-publication-input.ts` | 已实现 | 只接收作者语义、TODO ID、位置与Ledger成员选择的关闭输入 |
+| `F-PUB-07` | `demand-event-sourcing-publication-planning-service.ts` | 已实现 | 零写读取Config/TODO/Ledger并派生完整transaction与digest |
+| `F-PUB-08` | `demand-event-sourcing-publication-application-service.ts` | 已实现 | exact plan/current authority复验、物理apply/recover委托与输出闭合 |
+| `F-PUB-09/10` | `demand-publication-public-{contract,coordinator}.ts` | 已实现 | 公共Schema重解析、根隐私、模式路由、稳定回执与错误authority |
+| `F-GEN-05/06` | `contracts/{schemas,generated}/entrypoints/wakeflow-demand-publication-*` | 已实现 | `wakeflow_create_demand`自包含Request/Result wire合同 |
 
 ## 原始依赖快照
 
 | 范围 | 生产模块 | 当前全仓受检模块 | 当前全仓依赖 | 违规 |
 | --- | ---: | ---: | ---: | ---: |
-| Demand Event Sourcing + Publication | 33 | 710 | 4967 | 0 |
+| Demand Event Sourcing + Publication | 38 | 723 | 5059 | 0 |
 
 本图仍只选择Demand骨干；全量依赖数使用当前全仓SWC architecture gate，局部边以本图静态imports为准。
 
@@ -173,6 +197,7 @@ flowchart LR
 | `E-F4-01`–`E-F4-15` | 模型、Decider、Handler与Commit | 直接imports；aggregate/decider/handler/commit测试 |
 | `E-F4-16`–`E-F4-28` | Repository、Store、Snapshot、Upcast与Root Authority | 直接imports；repository/store/snapshot/upcast/inventory测试 |
 | `E-F4-29`–`E-F4-37` | 跨资源Publication | service/stage/storage/todo直接imports；publication service/transaction测试 |
+| `E-F4-38`–`E-F4-46` | Publication公共边界 | Input/Planning/Application/Contract/Coordinator直接imports；25项聚焦与真实MCP Route测试 |
 
 ## 停止边界
 

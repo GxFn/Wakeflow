@@ -153,8 +153,8 @@ flowchart TB
 | 项目 | 读取值 |
 | --- | --- |
 | Lifecycle源码 | 4个模块，已提交 |
-| 当前完整门 | 710模块、4967依赖、0违规；902项TypeScript测试通过 |
-| Schema | 全仓99份、207 refs；Review 4份、Lifecycle 1份 |
+| 当前架构门 | 723模块、5059依赖、0违规；902项完整测试属于Publication Public之前的基线 |
+| Schema | 全仓101份、207 refs；Review 4份、Lifecycle 1份 |
 | Lifecycle测试 | 2个正式测试、1个fixture |
 | 来源指纹 | `d0ab87bef6d03e8d6b65b636ef6637a180352e236c3344b42e8c6cae256e667a` |
 

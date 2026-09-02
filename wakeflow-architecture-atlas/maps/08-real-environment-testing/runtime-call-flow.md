@@ -4,9 +4,9 @@ viewType: runtime-call-sequence
 truthKind: current-code
 reviewDepth: L4
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:7f70498f7256fe4cba57c95d0b89ad1c49297afa71d34cf3a0ed1dedef2f4604
+snapshotObservedAt: 2026-09-01T20:05:05-07:00
+baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
+sourceFingerprint: sha256:79e7a84af1b73a7d6d51bd50b4a10cc63b80b82aa4119206e2e780cce0d6cb6d
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Source Maintenance
 generatedBy: manual

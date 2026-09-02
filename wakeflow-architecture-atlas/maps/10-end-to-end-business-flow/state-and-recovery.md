@@ -4,9 +4,9 @@ viewType: state-recovery
 truthKind: current-code
 reviewDepth: L5
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:56b16a454dd82d013c5e18773f17a338af5137804a3e1265a29cde2325f8609e
+snapshotObservedAt: 2026-09-01T20:05:05-07:00
+baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
+sourceFingerprint: sha256:c287d7336c3e951b1366fd4a37638004d43ee0f60f1e359785ae2f5b2ae0fd38
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Source Maintenance
 generatedBy: manual-composition
@@ -21,7 +21,7 @@ testPaths: [tests/workspace/**, tests/governance/**]
 ```mermaid
 stateDiagram-v2
   accTitle: Wakeflow端到端业务状态与恢复分支
-  accDescr: Publication发布Demand根后claim TODO。implementation Delivery按accepted/rejected/indeterminate收敛。Test accept进入Completion，another创建rerun，blocked精确Resume；product-defect释放currentTestCard、保留历史Target并进入Remediation Authorization、原产品返工与新Test代际。Demand归档仍停止，Implementation Redesign保持显式blocker。
+  accDescr: wakeflow_create_demand以零写preview和精确apply触发Publication，发布Demand根后claim TODO；中断时只有exact sidecar允许显式recover。implementation Delivery按accepted/rejected/indeterminate收敛。Test accept进入Completion，another创建rerun，blocked精确Resume；product-defect释放currentTestCard、保留历史Target并进入Remediation Authorization、原产品返工与新Test代际。Demand归档仍停止，Implementation Redesign保持显式blocker。
 
   state "① Demand 与规划" as PlanningPhase {
     state "pending-claim TODO" as PendingTodo
@@ -64,7 +64,7 @@ stateDiagram-v2
 
   [*] --> PendingTodo: E-Z1-01 已确认需求进入TODO
 
-  PendingTodo --> DemandPublished: E-Z1-02 Publication + revision 1
+  PendingTodo --> DemandPublished: E-Z1-02 wakeflow_create_demand apply + revision 1
   DemandPublished --> ActiveDemand: E-Z1-03 CAS claim TODO + finalize
   ActiveDemand --> TaskPlanned: E-Z1-04 target-task-planned
   TaskPlanned --> DeliveryPrepared: E-Z1-05 target-delivery-prepared
@@ -107,6 +107,7 @@ stateDiagram-v2
 | 术语 | 解释 |
 | --- | --- |
 | CAS claim | TODO集合与item摘要仍匹配时的条件claim |
+| Publication authority | 发布失败后对exact transaction效果的最强证明；`recoverable`要求存在可重读且完全一致的sidecar |
 | rearm | 仅对精确rejected效果尾部开放新宿主效果代际 |
 | 人工调查 | indeterminate没有自动转换；需要外部证据和显式新命令 |
 | 同TaskPackage新attempt | 保留原执行合同，只增加返工上下文和Delivery代际 |
@@ -120,7 +121,7 @@ stateDiagram-v2
 | 边编号 | 状态转换 | 主要下钻证据 |
 | --- | --- | --- |
 | `E-Z1-01` | 需求进入Pending TODO | TODO与需求入口合同 |
-| `E-Z1-02` | pending-claim TODO → Demand根已发布 | Publication stage创建Identity/Authority/revision 1并整体发布根 |
+| `E-Z1-02` | pending-claim TODO → Demand根已发布 | 公共exact apply委托Publication stage创建Identity/Authority/revision 1并整体发布根 |
 | `E-Z1-03` | Demand根已发布 → Active Demand + TODO claimed | Publication在根存在后CAS claim精确TODO并退休marker/sidecar |
 | `E-Z1-04` | Active Demand → TaskPackage已规划 | [Tasking垂直切片](../05-tasking-slice/README.md) |
 | `E-Z1-05` | TaskPackage已规划 → Delivery Intent已准备 | [实现投递主链](../06-implementation-delivery-review/README.md) |
@@ -162,7 +163,7 @@ stateDiagram-v2
 | 失败点 | 已有权威 | 恢复入口 | 禁止行为 |
 | --- | --- | --- | --- |
 | Maintenance step中断 | intent + journal checkpoint | `recover(operationId)` | 重新使用旧preview直接执行 |
-| Demand首次发布中断 | 同级publication sidecar | `recoverDemandPublication(demandId)` | 删除已发布根倒退 |
+| Demand首次发布中断 | 同级exact publication sidecar | 公共`wakeflow_create_demand recover(demandId)`委托`recoverDemandPublication` | 把`unknown`当成安全重试，或删除已发布根倒退 |
 | Event append候选残留 | candidate + 固定sequence槽位 | `recoverAppendCandidates` | 覆盖不同Commit |
 | Snapshot损坏 | Commit/Event完整流 | load回退完整重放 | 在读取中静默修复历史 |
 | TaskPackage投影缺失 | 唯一规划Event | Projection Store materialize | 调用方伪造投影文件 |
@@ -181,6 +182,7 @@ stateDiagram-v2
 | 范围 | 幂等身份/预期 |
 | --- | --- |
 | Maintenance | operation ID + intent digest + journal successor |
+| Demand Publication | 完整transaction digest + expected TODO collection/state digest + Demand/Event/Commit IDs |
 | Demand Event | commitId + commandDigest + expected stream revision |
 | Task/Delivery/Result/Review | 确定派生ID + source摘要 + generation |
 | WorkClaim | claimId + window/target/intent/action绑定 |
@@ -189,5 +191,6 @@ stateDiagram-v2
 
 ## 未实现边界
 
-成功Completion之后没有归档状态、存储owner、Schema、测试或恢复入口。公共Demand Publication、Research
-Completion和Implementation Redesign也仍是明确缺口。图中停止节点不是未来实现设计。
+成功Completion之后没有归档状态、存储owner、Schema、测试或恢复入口。Research Completion和
+Implementation Redesign也仍是明确缺口。Demand Publication Public已进入提交`f7c005d`，但尚未通过完整发布门；
+图中停止节点不是未来实现设计。

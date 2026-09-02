@@ -17278,8 +17278,8 @@ Prettier（手写新增文件）: pass
 git diff --check: pass
 ```
 
-当前工作树未提交；902项完整TypeScript结果仍是Publication Public之前的基线，旧JS全量测试、正式plugin
-validator/smoke、release gate和真实宿主会话未运行。Atlas已按当前源码更新为18工具、101 Schema，并重新核对
+实现已提交为`f7c005d`；902项完整TypeScript结果仍是Publication Public之前的基线，旧JS全量测试、正式plugin
+validator/smoke、release gate和真实宿主会话未运行。Atlas已按该提交更新为18工具、101 Schema，并重新核对
 30份来源指纹、196条具体TypeScript直接import和778条图边证据。
 
 Demand Publication Public已经消除“公共链必须从已有Demand开始”的缺口。下一步不直接追加第19个工具；先在

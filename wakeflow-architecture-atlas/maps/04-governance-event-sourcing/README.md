@@ -4,9 +4,9 @@ viewType: architecture
 truthKind: current-code
 reviewDepth: L1
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:37ba9fd4c166827ab2da0d969297c0ff0eae2e9a39498bf0ef89084b12e1ab89
+snapshotObservedAt: 2026-09-01T20:05:05-07:00
+baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
+sourceFingerprint: sha256:18519fd65ee7fa2a0ce9ad51efe83e1b33087911054a71406bd8433d0994e6f4
 audience:
   - maintainer
   - reviewer
@@ -19,16 +19,19 @@ refreshTriggers:
   - tests/governance/demand/**
 sourcePaths:
   - src/governance/demand/**
+  - src/contracts/generated/entrypoints/wakeflow-demand-publication-*.generated.ts
 schemaPaths:
   - src/contracts/schemas/governance/demand/**
+  - src/contracts/schemas/entrypoints/wakeflow-demand-publication-*.schema.json
 testPaths:
   - tests/governance/demand/**
+  - tests/entrypoints/wakeflow-demand-publication-mcp.test.ts
 ---
 
 # Governance：Demand事件权威与聚合
 
-> 本文绑定提交`d17602e`中的Demand Event Sourcing。33个生产模块、24份Demand Schema/生成合同
-> 及相关测试均已提交；图不能替代Schema检查或完整重放测试。
+> 本文绑定Demand Publication实现提交`f7c005d`。当前有38个Demand生产模块、24份领域Schema/生成合同
+> 及2份Publication公共entrypoint合同。
 
 ## 当前结论
 
@@ -40,16 +43,21 @@ Demand业务事实由不可变Commit/Event流拥有；`DemandAggregateState`是�
 该能力，在固定sequence槽位用候选硬链接提交，并以`commitId + commandDigest + expectedRevision`支持
 幂等重试和冲突拒绝。
 
+`wakeflow_create_demand`把首次发布分成三层：Planning只读Config、TODO与Ledger并派生完整transaction；
+Application复验plan digest和当前权威后调用既有物理Publication Service；Public Coordinator只拥有根作用域、
+模式路由、结果脱敏与Schema闭合。失败结果通过`unchanged / recoverable / current / unknown`说明当前最强可证状态，
+不会把未知副作用解释成安全重试。
+
 ## 核验快照
 
 | 项目 | 读取值 |
 | --- | --- |
-| 分支/提交 | `main`；`d17602ed9931a1898f713c740752c54b94bd8086` |
-| Demand生产源码 | 33 个模块：event-sourcing 21、publication 7、model 3、根级 2 |
-| 当前全仓架构门 | 710个模块、4967条依赖、0违规；902项TypeScript测试通过 |
-| 测试 | 15 个 `*.test.ts` |
-| Demand合同 | 24个JSON Schema、24个生成TypeScript合同 |
-| 提交状态 | Demand源码、Schema、生成合同与测试已进入`d17602e` |
+| 分支/提交 | `main`；`HEAD=f7c005d` |
+| Demand生产源码 | 38 个模块：event-sourcing 21、publication 12、model 3、根级 2 |
+| 当前全仓架构门 | 723个模块、5059条依赖、0违规 |
+| 测试 | 19 个Demand `*.test.ts`；Publication切片25项与MCP 2项通过 |
+| Demand合同 | 24个领域Schema/生成合同 + 2个Publication entrypoint Schema/生成合同 |
+| 提交状态 | Event Sourcing与Publication Public实现、Schema、测试已提交；Atlas同步待提交 |
 | 来源指纹 | `37ba9fd4c166827ab2da0d969297c0ff0eae2e9a39498bf0ef89084b12e1ab89` |
 
 ## G0：Demand事件权威全景
@@ -63,6 +71,9 @@ flowchart TB
     direction LR
     TODO["[外部权威] pending-claim TODO\n同transaction重试可已claimed"]
     LEDGER["[外部权威] Ledger关系记录"]
+    PUBLIC_API["[当前公共] wakeflow_create_demand\npreview / apply / recover"]
+    PLANNING["[已实现] Publication Planning\n零写owner派生计划"]
+    APPLICATION["[已实现] Publication Application\nexact plan与当前权威复验"]
     PUBLICATION["[已实现] Demand跨资源Publication\nsidecar → Demand根 → TODO完成"]
     ID_AUTH["[已实现] Demand Identity + Authority"]
   end
@@ -84,6 +95,12 @@ flowchart TB
     CONSUMERS["[消费者] Tasking / Delivery / Result / Review\nLifecycle / Testing"]
   end
 
+  PUBLIC_API -->|"E-G0-18 preview"| PLANNING
+  TODO -->|"E-G0-19 只读当前前序"| PLANNING
+  LEDGER -->|"E-G0-20 解析成员选择"| PLANNING
+  PLANNING -.->|"完整plan + digest"| PUBLIC_API
+  PUBLIC_API -->|"E-G0-21 exact apply / recover"| APPLICATION
+  APPLICATION -->|"E-G0-22 委托物理事务"| PUBLICATION
   TODO -->|"E-G0-01 CAS准入"| PUBLICATION
   LEDGER -->|"E-G0-02 关系权威准入"| PUBLICATION
   PUBLICATION -->|"E-G0-03 创建Identity/Authority"| ID_AUTH
@@ -116,6 +133,8 @@ flowchart TB
 | Prepared Commit | 已在内存中完成事件应用、摘要链和预期源前缀验证的追加能力 |
 | Commit | 一次原子追加的不可变记录，可包含一个或多个连续事件 |
 | `commandDigest` | 由Event Sourcing层自己计算的命令幂等摘要，调用方不能自行声明 |
+| Publication plan | Planning从当前Config、TODO、Ledger、Identity分配与时间派生的完整自包含transaction；调用方不能补写内部字段 |
+| Publication authority | 一次发布失败后对exact transaction效果的最强证明：`unchanged / recoverable / current / unknown` |
 | Snapshot | 锚定指定Commit、state digest和版本兼容摘要的不可变加速记录 |
 | tail | Snapshot锚点之后仍需重放的Commit序列 |
 | selector | 从完整历史确定性重建的当前状态视图，不拥有独立修改接口 |
@@ -127,6 +146,7 @@ flowchart TB
 | `E-G0-01`–`E-G0-04` | Publication Service/Stage/TODO与revision 1 Command | Publication先发布Demand根和初始Event，再把精确TODO CAS为claimed |
 | `E-G0-05`–`E-G0-13` | Command Handler、Repository、Decider、Prepared Commit与File Store | 纯决策先于append；固定sequence槽位提供并发/幂等收敛 |
 | `E-G0-14`–`E-G0-17` | Aggregate/Repository/Snapshot与历史查询 | 当前状态和消费者读模型均由不可变Commit流重建，Snapshot只加速 |
+| `E-G0-18`–`E-G0-22` | Public Coordinator、Planning/Application与物理Publication Service | preview零写；apply复验精确计划；recover只凭sidecar证据；公共层不复制物理状态机 |
 
 ## 事件与聚合覆盖
 
@@ -162,17 +182,17 @@ remediation授权。
 - Demand聚合只由14个Event家族演进，公共调用方不能直接写Event或state；
 - Command Handler、Repository、Root Authority/Inventory、Snapshot与File Store拥有加载、追加与恢复；
 - Delivery/Result/Review/Lifecycle/Testing owner只提交自己的严格Command；
-- Demand Publication Service存在，但尚未注册为公共MCP入口。
+- Demand Publication已通过`wakeflow_create_demand`公开；公共成功结果只返回稳定回执，完整Aggregate、Authority内容与机器路径保持内部。
 
 ## 验证证据
 
 | 证据 | 当前结果 | 能证明什么 |
 | --- | --- | --- |
-| 当前全仓architecture | 710模块、4967依赖、0违规 | 当前扫描无循环、未解析依赖或架构违规 |
-| 当前TypeScript/Schema门 | 902 pass；99 Schema/207 refs | Aggregate与生成合同一致 |
-| Demand测试清单 | 15 个正式测试 | 覆盖聚合、decider、command、commit、store、repository、snapshot、upcast和publication |
-| Demand Schema/生成合同 | 24/24 | 当前事件、Authority、Commit、Snapshot与Aggregate有生成来源 |
-| 来源指纹 | 当前路径集合 | 本文绑定提交`d17602e`的Demand内容 |
+| 当前全仓architecture | 723模块、5059依赖、0违规 | 当前扫描无循环、未解析依赖或架构违规 |
+| 当前Schema门 | 101 Schema/207 refs | 24份Demand领域合同与2份Publication公共合同生成一致 |
+| Publication聚焦测试 | 25项领域/公共/MCP测试通过 | 覆盖输入、Planning、Application、物理事务、回执、真实Route与恢复authority |
+| 最近完整TypeScript门 | 902 pass | 属于Publication Public之前的提交基线，当前完整门尚未重跑 |
+| 来源指纹 | 当前路径集合 | 本文绑定提交`f7c005d`的Demand内容 |
 
 ## 下钻入口
 

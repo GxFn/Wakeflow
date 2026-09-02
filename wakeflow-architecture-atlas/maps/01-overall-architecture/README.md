@@ -4,9 +4,9 @@ viewType: architecture
 truthKind: current-code
 reviewDepth: L0
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:9b60b499b494822b89968c728db4633312c35960869be8abadb089e5d915d20f
+snapshotObservedAt: 2026-09-01T20:05:05-07:00
+baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
+sourceFingerprint: sha256:c6e6544009ec5d50fcf830556676f2214436906b2de046c253c7e33c27cb205b
 audience:
   - maintainer
   - reviewer
@@ -28,31 +28,33 @@ testPaths:
 
 # Wakeflow TypeScript 总体架构
 
-> 本文绑定提交`d17602e`的TypeScript源码。它不是已发布插件、release-ready结论或安装缓存状态；
-> 双宿主候选仍明确`releaseEligible=false`。
+> 本文绑定Demand Publication实现提交`f7c005d`。该能力已经完成聚焦验证，但尚未通过当前完整
+> TypeScript发布门；双宿主候选仍明确`releaseEligible=false`。
 
 ## 当前结论
 
 当前TypeScript候选运行时由一套共享源码组成：基础能力、配置、工作区和治理领域保持宿主中立；
 Codex与Claude Code只在宿主实现和固定组合根分开。官方MCP SDK拥有协议、stdio和工具路由；
-Wakeflow公共适配层注册17个已有真实领域owner的工具。
+Wakeflow公共适配层当前注册18个已有真实领域owner的工具，其中`wakeflow_create_demand`以
+`preview → exact apply / explicit recover`公开TODO-backed Demand Publication。
 
-治理源码已经闭合Controller Route、implementation/test Tasking、Delivery、Host Effect事实记录、Result、
+治理源码已经闭合Demand Publication、Controller Route、implementation/test Tasking、Delivery、Host Effect事实记录、Result、
 Implementation/Test Review、blocked Resume、Product Defect Remediation/retest与Completion。Agent仍独占真实
-宿主效果执行；当前公共链假设Demand已经存在，Demand Publication Public、Research Completion、Implementation
-Redesign及Evidence/Archive仍是明确缺口。`core/`、`plugins/`和安装缓存仍是旧JS对照/发布面，不属于本图描述的TS候选闭包。
+宿主效果执行；Research Completion、Implementation Redesign及Evidence/Archive仍是明确缺口。`core/`、
+`plugins/`和安装缓存仍是旧JS对照/发布面，不属于本图描述的TS候选闭包。
 
 ## 核验快照
 
 | 项目 | 读取值 |
 | --- | --- |
-| 分支 | `main`，相对本地`origin/main`领先8个提交 |
-| `HEAD` | `d17602ed9931a1898f713c740752c54b94bd8086` |
-| 工作树 | TypeScript已提交；Atlas独立复核中，另有一份排除的异常历史文档diff |
-| dependency-cruiser | 710个模块、4967条依赖、0条违规 |
-| 生产TS模块 | 363个手写模块 + 99个生成合同 |
-| 当前公共MCP工具 | 17个，双宿主名称与Schema集合一致 |
-| 完整TypeScript门 | 902 pass、0 fail、0 skip；99 Schema、207 external refs |
+| 分支 | `main`，与本地`origin/main`一致 |
+| `HEAD` | `f7c005d73c11e29f284dbde1d7117193376c0ef6` |
+| 工作树 | 仅Atlas同步待提交；另有一份排除的异常历史文档diff |
+| dependency-cruiser | 723个模块、5059条依赖、0条违规 |
+| 生产TS模块 | 368个手写模块 + 101个生成合同 |
+| 当前公共MCP工具 | 18个，双宿主名称与Schema集合一致 |
+| 当前验证 | Publication聚焦25项与MCP注册/双宿主3项通过；101 Schema、207 external refs |
+| 最近完整TypeScript门 | 902 pass、0 fail、0 skip；属于Publication Public之前的提交基线 |
 
 ### 生产模块分布
 
@@ -61,11 +63,11 @@ Redesign及Evidence/Archive仍是明确缺口。`core/`、`plugins/`和安装缓
 | 基础能力 | 62 | 数据、加密、身份、时间、根目录文件系统、原子性、锁、树与Git观察 |
 | 配置 | 10 | v3配置、选择、放置与配置权威 |
 | 工作区 | 81 | 维护事务、资源矩阵、活动面、静态物化、宿主本地布局和窗口身份 |
-| 治理 | 170 | TODO、台账、Demand、Controller Route、Tasking、Delivery、Result、Review、Lifecycle与Testing |
+| 治理 | 175 | TODO、台账、Demand Publication、Controller Route、Tasking、Delivery、Result、Review、Lifecycle与Testing |
 | 宿主 | 11 | Codex/Claude Code资源Profile、身份Profile与宿主专用维护执行 |
 | 入口 | 28 | 两宿主固定组合、公共MCP适配、固定host facade和stdio生命周期 |
 | 手写合同 | 1 | 应用级类型化身份解析边界 |
-| 生成合同 | 99 | 由JSON Schema派生的类型和运行时Schema常量 |
+| 生成合同 | 101 | 由JSON Schema派生的类型和运行时Schema常量 |
 
 ## A0：总体架构与边界
 
@@ -80,7 +82,7 @@ flowchart TB
     direction LR
     CODEX_ROOT["[源码] Codex组合根"]
     CLAUDE_ROOT["[源码] Claude Code组合根"]
-    PUBLIC_MCP["[源码] 公共MCP适配层\n注册17个真实owner工具"]
+    PUBLIC_MCP["[源码] 公共MCP适配层\n注册18个真实owner工具"]
     STDIO["[源码] 官方stdio生命周期边界"]
   end
 
@@ -135,7 +137,7 @@ flowchart TB
 | 图中术语 | 解释 |
 | --- | --- |
 | 固定组合根 | 在模块装载时绑定宿主Profile与执行端口的入口，不接受运行时宿主选择器 |
-| 公共MCP适配层 | 将官方MCP SDK调用转换为当前17个公共领域执行函数的薄层 |
+| 公共MCP适配层 | 将官方MCP SDK调用转换为当前18个公共领域执行函数的薄层 |
 | 宿主中立领域 | 不直接导入Codex或Claude Code具体实现的配置、工作区和治理代码 |
 | 宿主专用实现 | 只在对应组合根注入的资源Profile、身份Profile或宿主维护执行 |
 | wire合同 | MCP输入/输出使用的自包含JSON Schema和生成TypeScript合同 |
@@ -168,7 +170,7 @@ flowchart TB
 | `E-A0-05`、`E-A0-06`、`E-A0-07`、`E-A0-08` | MCP宿主/组合根 | 固定制品/stdio | 启动与调用 | 两宿主`run*WakeflowMcpStdio` | 公共MCP官方Client测试 |
 | `E-A0-09`、`E-A0-10` | 组合根 | 公共Server | 固定组合 | 两宿主`create*WakeflowMcpServer` | 公共MCP与Window Binding入口测试 |
 | `E-A0-11`、`E-A0-12` | 组合根 | 宿主实现 | 固定注入 | 两宿主Maintenance/Binding入口 | 两宿主Maintenance入口测试 |
-| `E-A0-13`、`E-A0-14` | 公共MCP层 | 领域/合同 | 调用与Schema准入 | `createWakeflowPublicMcpServer` | 17工具list/call、双宿主一致性与自包含Schema测试 |
+| `E-A0-13`、`E-A0-14` | 公共MCP层 | 领域/合同 | 调用与Schema准入 | `createWakeflowPublicMcpServer` | 18工具list/call、双宿主一致性、自包含Schema与Demand Publication真实MCP测试 |
 | `E-A0-15`、`E-A0-16` | 宿主实现 | 宿主中立领域 | 实现宿主端口 | `src/hosts/*`和宿主entrypoint facade | Maintenance与Binding纵切测试 |
 | `E-A0-17`、`E-A0-18` | 宿主中立领域 | 基础/生成合同 | 静态依赖 | dependency-cruiser快照 | 架构规则与0违规结果 |
 
@@ -184,10 +186,10 @@ flowchart TB
 
 ## 当前停止边界
 
-- 当前公共MCP发布17个工具，但没有Demand Publication Public；调用链必须从已有Demand开始。
+- 当前公共MCP发布18个工具；`wakeflow_create_demand`可从pending TODO生成完整计划、精确应用或显式恢复，并在成功后进入Route检查。
 - 公共Target Task Planning支持完整implementation输入和最小`{workType:"test"}`派生请求。
 - Agent执行宿主效果，MCP只规划、验证并记录Wakeflow自己的权威。
-- 当前已运行完整TypeScript门；旧JS对照、双宿主插件smoke与release gate不属于本提交证据。
+- 当前Publication切片已通过聚焦门，但尚未重跑完整TypeScript门；旧JS对照、双宿主插件smoke与release gate不属于本次证据。
 - 本文必须在`src/**`或架构规则变化后重新核验。
 
 ## 下钻入口

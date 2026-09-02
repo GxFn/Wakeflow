@@ -36,7 +36,7 @@ npm run check
 
 `npm run check:structure`会机器验证这些隔离条件：根`package.json`没有workspace或script引用、根
 TypeScript/dependency-cruiser配置没有接入、本地依赖与构建输出均被忽略。它还验证33份文档、43张图、
-30份来源指纹、Markdown链接、750条边证据和图中186条可解析TypeScript直接导入。来源漂移只有在文档
+30份来源指纹、Markdown链接、778条边证据和图中196条可解析TypeScript直接导入。来源漂移只有在文档
 明确标为`stale`时通过结构门，并会列入`staleFingerprints`；`npm run check:current`与`npm run check`仍要求
 全部来源指纹当前。
 

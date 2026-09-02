@@ -4,9 +4,9 @@ viewType: runtime-call-sequence
 truthKind: current-code
 reviewDepth: L4
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:32f12350f4ac008d9710cd994ffc2a7e94dc23704c019f0ed8851eda32df4317
+snapshotObservedAt: 2026-09-01T20:05:05-07:00
+baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
+sourceFingerprint: sha256:809beade418b32d4bf3659c66efcf71030b61494ba6d03299ce43e3aa9a902bc
 audience:
   - maintainer
   - reviewer
@@ -17,8 +17,12 @@ refreshTriggers:
   - src/governance/demand/publication/**
 sourcePaths:
   - src/governance/demand/**
+  - src/contracts/generated/entrypoints/wakeflow-demand-publication-*.generated.ts
+schemaPaths:
+  - src/contracts/schemas/entrypoints/wakeflow-demand-publication-*.schema.json
 testPaths:
   - tests/governance/demand/**
+  - tests/entrypoints/wakeflow-demand-publication-mcp.test.ts
 ---
 
 # Governance：Demand Command、Append、Load与Publication流程
@@ -156,15 +160,18 @@ sequenceDiagram
 | `E-E1-08`、`E-E1-09` | `Repository.audit`、`applyDemandEventStreamCommit` | 从1开始、摘要链、upcast和每步结果state |
 | `E-E1-10`、`E-E1-11` | Snapshot模型/Store、Repository.publishSnapshot | anchor闭合、版本兼容摘要、不可变发布和并发幂等 |
 
-## E2：从TODO发布Demand根及前向恢复
+## E2：公共preview、精确应用与Demand根前向恢复
 
 ```mermaid
 sequenceDiagram
-  accTitle: 从已确认TODO跨资源发布Demand事件根
-  accDescr: Publication Service先创建自包含transaction并完成Authority/Ledger和TODO准入，随后初始化同级流程存储并在Demand专属锁内确保sidecar。applyPublication恢复TODO状态，必要时物化暂存Demand根、初始化Event/Snapshot Store并通过Command Handler写revision 1，然后整体重命名到最终根。最终根存在后claim TODO、移除内部marker、完整加载根权威并退休sidecar。recover只凭demandId和sidecar前向完成。
+  accTitle: 从公共preview到精确应用和Demand事件根前向恢复
+  accDescr: MCP客户端先提交只含作者语义与Ledger成员选择的preview；Planning零写读取Config、TODO和Ledger并返回完整transaction及摘要。客户端确认后以原plan和digest调用apply，Application复验当前权威并委托物理Publication Service。后者保存sidecar、发布包含revision 1的Demand根，再claim TODO；recover只凭demandId和exact sidecar前向完成。公共层不复制物理状态机，也不执行宿主效果。
 
   autonumber
-  participant CALLER as 发布职责所有者
+  participant CLIENT as MCP客户端/Controller
+  participant PUBLIC as Public Coordinator
+  participant PLANNING as Planning Service
+  participant APPLICATION as Application Service
   participant SERVICE as Publication Service
   participant AUTH as Demand Authority + Ledger
   participant TODO as TODO权威
@@ -173,8 +180,16 @@ sequenceDiagram
   participant ES as Event/Snapshot Store + Command Handler
   participant FINAL as 最终Demand根
 
-  CALLER->>SERVICE: E-E2-01 publishDemandFromTodo(input)
-  SERVICE->>SERVICE: E-E2-02 创建无可变阶段的完整transaction
+  CLIENT->>PUBLIC: E-E2-16 preview authored Demand + TODO/Ledger选择
+  PUBLIC->>PLANNING: E-E2-17 只读规划
+  PLANNING->>AUTH: E-E2-18 读取Config与Ledger成员
+  PLANNING->>TODO: E-E2-19 读取pending item与CAS摘要
+  PLANNING-->>PUBLIC: 完整transaction + planDigest
+  PUBLIC-->>CLIENT: 完整preview plan + planDigest
+  CLIENT->>PUBLIC: E-E2-20 apply原plan + digest
+  PUBLIC->>APPLICATION: E-E2-21 复验公共合同与根隐私
+  APPLICATION->>SERVICE: E-E2-01 publishDemandFromTodo(derived input)
+  SERVICE->>SERVICE: E-E2-02 重建并闭合完整transaction
   SERVICE->>AUTH: E-E2-03 admit Identity/Authority/Ledger关系
   SERVICE->>TODO: E-E2-04 检查pending item与collection/state digest
   SERVICE->>SIDECAR: E-E2-05 初始化流程目录并no-replace保存transaction
@@ -192,10 +207,14 @@ sequenceDiagram
   SERVICE->>TODO: E-E2-12 claim/完成指定TODO item
   SERVICE->>FINAL: E-E2-13 退休内部marker并完整加载Root Authority
   SERVICE->>SIDECAR: E-E2-14 复验后退休sidecar
-  SERVICE-->>CALLER: Demand根、TODO lineage与Loaded Authority
+  SERVICE-->>APPLICATION: Demand根、TODO lineage与Loaded Authority
+  APPLICATION-->>PUBLIC: E-E2-22 current Publication回执
+  PUBLIC-->>CLIENT: 不含机器路径或完整业务记录的稳定结果
 
   opt 崩溃后恢复
-    CALLER->>SERVICE: E-E2-15 recoverDemandPublication(demandId)
+    CLIENT->>PUBLIC: E-E2-23 recover(demandId)
+    PUBLIC->>APPLICATION: E-E2-24 打开当前Config/Ledger并请求恢复
+    APPLICATION->>SERVICE: E-E2-15 recoverDemandPublication(demandId)
     SERVICE->>SIDECAR: 恢复stage并读取自包含transaction
     SERVICE->>SERVICE: 仅在sidecar证明同一流程时退休非活动锁
     SERVICE->>STAGE: 从已完成的最远事实继续前向applyPublication
@@ -207,11 +226,14 @@ sequenceDiagram
 | 图中术语 | 解释 |
 | --- | --- |
 | Publication transaction | Identity、Authority、TODO预期、revision 1 IDs与所有派生路径的自包含不可变计划 |
+| authored Demand | 调用方拥有的title、goal、completion definition、执行位置与Ledger成员选择；不含系统派生身份、时间、摘要或CAS |
+| exact apply | 必须提交preview返回的完整plan及其digest；Application重新解析并复验当前Config/Ledger与输出闭合 |
 | 同级sidecar | 位于Demand最终根之外的流程意图；根尚未发布时仍可找到恢复依据 |
 | 内部marker | 暂存/最终Demand根内的transaction副本，用来证明发布根与sidecar相同 |
 | stage根 | 与最终根同一文件系统的完整私有候选目录，可整体重命名发布 |
 | 前向恢复 | 根据sidecar、stage/final根和TODO当前事实继续，不删除已发布根倒退 |
 | TODO lineage | 发布完成后TODO claim/完成产生的可验证来源关系 |
+| Publication authority | 失败时公开的最强可证效果：`unchanged / recoverable / current / unknown`；只有`recoverable`指示显式recover |
 
 ### E2边级证据
 
@@ -221,10 +243,13 @@ sequenceDiagram
 | `E-E2-08`–`E-E2-10` | `publication-stage.ts` | 私有节点策略、revision 1、整体rename和stage/final冲突 |
 | `E-E2-11`–`E-E2-14` | `applyPublication` | marker、TODO claim、完整Root Authority加载和sidecar退休顺序 |
 | `E-E2-15` | `recoverDemandPublication` | demandId查找、sidecar完整性、非活动锁与每个崩溃点前向恢复 |
+| `E-E2-16`–`E-E2-21` | Public Contract/Coordinator、Input与Planning/Application Services | preview只有author-owned输入且零写；apply只接受exact plan/digest并复验当前权威 |
+| `E-E2-22` | Application/Public Coordinator输出闭合 | Canonical JSON语义比较、commit digest与稳定脱敏回执 |
+| `E-E2-23`、`E-E2-24` | Public recover与Application Service | recover只接受Demand ID，缺失或冲突sidecar失败关闭 |
 
 ## 停止边界
 
 - 当前文件Event Store只在单进程内按canonical Demand root串行append；跨进程竞争靠固定槽位硬链接与冲突检测。
 - Repository load不写Snapshot；Snapshot发布必须由显式上层策略触发。
 - Publication流程锁只保护首次Demand根跨资源发布；普通Event append不取得该流程锁。
-- 事件、聚合和消费者联合已进入`d17602e`；后续变化必须重新运行重放、Schema与指纹门。
+- 公共化不改变revision 1持久字节、事件家族或物理恢复顺序；提交`f7c005d`尚未通过完整TypeScript发布门。

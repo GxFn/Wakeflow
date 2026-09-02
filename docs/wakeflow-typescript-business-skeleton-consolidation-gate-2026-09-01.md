@@ -621,7 +621,7 @@ git diff --check: pass
 
 ### 13.14 B：Demand Publication Public闭合
 
-方案B已经按“先确认owner边界，再公开真实纵切”的顺序完成当前工作树实现。旧JS只用于确认产品场景；
+方案B已经按“先确认owner边界，再公开真实纵切”的顺序完成，并进入实现提交`f7c005d`。旧JS只用于确认产品场景；
 新的公共合同、TypeScript分层和恢复语义由当前TS Domain、Foundation与官方MCP边界决定。
 
 #### 调用方与owner字段分界
@@ -715,7 +715,8 @@ git diff --check: pass
 ```
 
 902项完整TypeScript结果仍是Publication Public之前的提交基线；本单元没有伪称已重跑当前完整门，也没有运行
-旧JS全量测试、双host plugin validator/smoke、release gate或真实宿主会话。当前实现与Atlas同步均未提交；
+旧JS全量测试、双host plugin validator/smoke、release gate或真实宿主会话。当前实现已提交为`f7c005d`，
+Atlas同步将作为独立文档提交；
 Technical Skeleton Review Gate中既有两行异常diff继续排除且未修改。
 
 Demand Publication Public至此从“真实内部owner”变为“真实公共纵切”，但没有引入自动Controller编排、宿主调用、

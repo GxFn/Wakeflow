@@ -202,7 +202,7 @@ flowchart TB
 | Configuration/Workspace dependency-cruiser | 202 模块、1373 依赖、0 违规 | 当前闭包无循环、未解析依赖或跨层违规 |
 | 正式测试清单 | 54 个 `*.test.ts` | 覆盖主要配置、Maintenance、Managed、Support、Active和Window边界；已进入902项完整门 |
 | Schema/生成合同 | 7/7 | Config、Maintenance、Binding和投影具有生成合同来源 |
-| 公共入口静态检查 | 17工具双宿主组合 | Maintenance与Binding保持Workspace owner，其余治理工具只消费脱敏窗口事实 |
+| 公共入口静态检查 | 18工具双宿主组合 | Maintenance与Binding保持Workspace owner；Demand Publication与其余治理工具只消费关闭、脱敏或owner派生事实 |
 
 ## 下钻入口
 

@@ -4,8 +4,8 @@ viewType: review-ledger
 truthKind: current-code
 reviewDepth: L5
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
+snapshotObservedAt: 2026-09-01T20:05:05-07:00
+baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
 audience:
   - maintainer
   - reviewer
@@ -16,7 +16,8 @@ generatedBy: manual-review
 # 43张流程图逐图代码审阅台账
 
 > 本台账记录图与当前TypeScript、Schema、直接调用方和测试之间的审阅结果。它不是运行状态权威。
-> 当前基线是已提交的`d17602e`；任何后续来源变化仍必须重新核验，不能只刷新摘要。
+> 当前基线是Demand Publication实现提交`f7c005d`；任何后续来源变化仍必须重新核验，
+> 不能只刷新摘要。
 
 ## 审阅判定
 
@@ -31,10 +32,10 @@ generatedBy: manual-review
 | 文档包 | 图 | 判定 | 本轮代码审阅结论 |
 | --- | --- | --- | --- |
 | 00 | 生成与人工审阅边界 | 通过 | 自动导入、人工调用、状态与测试证据仍应分面；新增直接import机器核验 |
-| 01 | A0 总体架构 | 已修正 | 公共面为17工具；710模块/4967依赖、99 Schema与902测试闭合 |
-| 01 | F0 MCP组合根依赖 | 已修正 | 双宿主固定组合同一17 executor集合，宿主差异仍只在固定facade |
-| 01 | D0 变更影响 | 已修正 | `d17602e`提交完整治理骨干；Atlas保持独立只读子项目 |
-| 01 | V0 公共MCP调用流 | 已修正 | Route先选择owner，17工具覆盖现有Demand到Completion主链 |
+| 01 | A0 总体架构 | 已修正 | 公共面为18工具；723模块/5059依赖、101 Schema；当前完整门待重跑 |
+| 01 | F0 MCP组合根依赖 | 已修正 | 双宿主固定组合同一18 executor集合，Demand Publication不引入host分支 |
+| 01 | D0 变更影响 | 已修正 | `f7c005d`增加Publication Public；Atlas保持独立只读子项目 |
+| 01 | V0 公共MCP调用流 | 已修正 | Publication成功后再由Route选择owner；18工具不构成自动编排器 |
 | 02 | B0 Foundation全景 | 已修正 | 活跃范围为10条路径；补入Runtime Schema安全`uniqueItems`与UTC纳秒投影 |
 | 02 | F2 Foundation依赖 | 已修正 | `directory-tree-candidate-plan`实际导入`canonical-json-sha256`，不是直接导入`canonical-json` |
 | 02 | C0 稳定读取 | 通过 | 根/路径/handle前后复验、精确有界读取与摘要顺序符合源码 |
@@ -45,11 +46,11 @@ generatedBy: manual-review
 | 03 | R0 Config CAS | 通过 | snapshot不是租约，替换在专属短锁内重读完整source |
 | 03 | R1 Maintenance事务 | 通过 | preview零写、exact confirmation、intent/journal及operation恢复顺序成立 |
 | 03 | R2 Binding注册 | 通过 | 私有Binding先提交，投影失败不回滚；Agent观察再与当前Binding闭合 |
-| 04 | G0 Demand事件权威 | 已修正 | 14个Event家族与Commit权威成立；TODO顺序为先发布根、再CAS claim |
-| 04 | F4 Demand依赖 | 已修正 | Upcaster直接依赖Persisted Event Envelope与codec，不直接依赖Stored Event门面 |
+| 04 | G0 Demand事件权威 | 已修正 | 14个Event家族不变；Public/Planning/Application包裹既有先根后TODO物理事务 |
+| 04 | F4 Demand依赖 | 已修正 | 38个Demand模块中新增5个Public/Planning/Application边界，未复制Event Store或恢复状态机 |
 | 04 | E0 Command/Append | 通过 | 决策、Prepared Commit与固定sequence追加模型成立 |
 | 04 | E1 Snapshot/Audit | 已修正 | load可fallback，audit从Commit 1；Aggregate使用currentTestCard并保留历史缺陷Target |
-| 04 | E2 Demand Publication | 已修正 | 精确顺序为发布Demand根/revision 1后claim TODO，而非先claim后发布 |
+| 04 | E2 Demand Publication | 已修正 | author-owned preview→exact apply/recover→先发布根/revision 1后claim TODO |
 | 05 | T0 Task Planning纵切 | 已修正 | 公共路径支持implementation和owner派生的test变体 |
 | 05 | F5 Tasking依赖 | 已修正 | Test Planning Authority/Package/Card由同一Public Coordinator真实消费 |
 | 05 | T1 implementation preview | 通过 | Controller提供完整implementation package内容 |
@@ -64,26 +65,28 @@ generatedBy: manual-review
 | 07 | F7 Review/Lifecycle依赖 | 已修正 | Authorization Event、Service、Delivery context与retest consumer均成立 |
 | 07 | L1 rework/resume | 已修正 | Preparation Authority从完整历史加载Decision/Result后创建context，不是Controller直接调用 |
 | 07 | L2 Completion | 已修正 | controller-only与real-environment均可完成；后者保留currentTestCard及历史Target lineage |
-| 08 | X0 Testing纵切 | 已修正 | Card、Test Task、三种Delivery、Result、Review与product-defect retest闭合 |
-| 08 | F8 Testing依赖 | 已修正 | 共享Claim Service导入Test Claim Authority与Action；此前Action→Service方向误导 |
-| 08 | X1 Card/Task/Delivery | 已修正 | Test Task Planning已由公共工具按Route准入；attempt最多10次 |
-| 08 | X2 Claim/Result/Review | 已修正 | 补齐Claim释放及accept→Completion、another→rerun、blocked→Resume路由 |
-| 09 | H0 公共MCP/宿主平面 | 已修正 | Binding请求确实接收raw handle；原值只入0600权威，不进入输出/投影/Event/Action |
+| 08 | X0 Testing纵切 | 通过 | Publication公共化未改变Card、Task、Delivery、Result、Review或retest语义 |
+| 08 | F8 Testing依赖 | 通过 | 新工具只改变共享Server来源指纹，Testing直接依赖方向保持不变 |
+| 08 | X1 Card/Task/Delivery | 通过 | 新Demand进入相同Route后继续使用既有Test Planning边界 |
+| 08 | X2 Claim/Result/Review | 通过 | Claim、Result、Review、Resume与Remediation关系保持不变 |
+| 09 | H0 公共MCP/宿主平面 | 已修正 | 第18个Publication工具无宿主效果；Binding raw handle边界保持不变 |
 | 09 | H1 Agent效果握手 | 已修正 | Claim/Outcome/Rearm公共工具记录Wakeflow事实；Agent仍独占宿主效果执行 |
-| 10 | Z0 端到端业务 | 已修正 | 现有Demand从Route到Completion公共闭合；Demand创建、Research/Redesign与Archive仍停止 |
-| 10 | Z1 状态与恢复 | 已修正 | 产品缺陷授权、返工、重新accept和新Test代际均有Event/CAS证据 |
+| 10 | Z0 端到端业务 | 已修正 | pending TODO经公共Publication到Completion闭合；Research/Redesign与Archive仍停止 |
+| 10 | Z1 状态与恢复 | 已修正 | Publication recover加入公开入口与effect authority；后续Event/CAS状态机不变 |
 
 ## 当前机器证据
 
-- 具体文件节点之间已有186条直接import声明通过源码解析；65条目录、外部权威或折叠节点关系留给人工审阅。
-- 43张Mermaid图均包含`accTitle`、`accDescr`和紧邻术语说明；750条边均有邻接证据映射。
-- 30份来源指纹均按提交`d17602e`重新计算并由严格current门复验。
-- 当前architecture为710模块、4967依赖、0违规；Schema为99份、207条external refs且生成合同一致。
-- 当前TypeScript完整门为902 pass、0 fail、0 skip；候选制品仍明确`releaseEligible=false`。
+- 具体文件节点之间已有196条直接import声明通过源码解析；67条目录、外部权威或折叠节点关系留给人工审阅。
+- 43张Mermaid图均包含`accTitle`、`accDescr`和紧邻术语说明；778条边均有邻接证据映射。
+- 30份来源指纹均按提交`f7c005d`重新计算并由严格current门复验。
+- 当前architecture为723模块、5059依赖、0违规；Schema为101份、207条external refs且生成合同一致。
+- 当前Publication聚焦25项与MCP注册/双宿主3项通过；902项完整门属于此前基线，当前尚未重跑。
+- 双宿主候选为Codex 433、Claude Code 438个编译文件，仍明确`releaseEligible=false`。
 
 ## 本轮明确停止边界
 
 - 不修改Wakeflow运行时代码来配合图谱。
 - 不把测试/fixture对内部Service的直接调用描述成生产入口。
-- 不把尚无Public owner的Demand Publication、Research Completion、Implementation Redesign或Archive画成可执行能力。
+- 不把尚无Public owner的Research Completion、Implementation Redesign或Archive画成可执行能力。
+- 不把已提交但只有聚焦验证的Demand Publication写成release-ready或完整门已通过。
 - 后续任何来源变化都必须重新触发严格指纹门；不得只改摘要而不复核图义。

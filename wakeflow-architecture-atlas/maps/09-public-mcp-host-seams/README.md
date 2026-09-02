@@ -4,13 +4,14 @@ viewType: architecture
 truthKind: current-code
 reviewDepth: L1
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:12d170b987faf6a7b769dc1ce564d24b90d8b29a8c2393595d284fa13615635d
+snapshotObservedAt: 2026-09-01T20:05:05-07:00
+baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
+sourceFingerprint: sha256:84bb0ae73243481bb30e84ecbdeabc96bef6c76df9ae3df918f4e6bfdbaf275a
 audience: [maintainer, reviewer, newcomer]
 documentationOwner: Wakeflow Source Maintenance
 generatedBy: mixed
-sourcePaths: [src/entrypoints/**, src/hosts/**, src/workspace/window-runtime/**, src/governance/**]
+sourcePaths: [src/entrypoints/**, src/hosts/**, src/workspace/window-runtime/**, src/governance/**, src/contracts/generated/entrypoints/**]
+schemaPaths: [src/contracts/schemas/entrypoints/**]
 testPaths: [tests/entrypoints/**, tests/hosts/**, tests/workspace/window-runtime/**, tests/governance/**]
 ---
 
@@ -18,7 +19,7 @@ testPaths: [tests/entrypoints/**, tests/hosts/**, tests/workspace/window-runtime
 
 ## 当前结论
 
-当前公共MCP注册17个真实工具，覆盖Workspace Maintenance/Binding、Demand Route、implementation/test
+当前公共MCP注册18个真实工具，覆盖Workspace Maintenance/Binding、Demand Publication/Route、implementation/test
 Tasking、Delivery、Host Effect事实、Result、Review/Resume、Testing、Product Remediation和Completion。
 Codex和Claude Code各自拥有固定composition root；公共请求不能选择宿主，双宿主工具名称与Schema集合一致。
 
@@ -31,7 +32,7 @@ opaque handle，但该值只进入0600私有Binding权威，不进入返回值�
 ```mermaid
 flowchart TB
   accTitle: Wakeflow公共MCP控制平面与Agent宿主效果平面
-  accDescr: MCP客户端启动固定Codex或Claude组合根，官方stdio服务承载公共Server并注册十七个真实owner工具。Binding注册请求接收Agent观察到的opaque handle并只写入0600私有权威。Delivery与Testing Claim工具可在已提交Intent后签发瞬时Action，Agent执行并通过Outcome工具回传观察；Action和事件都不携带raw handle。
+  accDescr: MCP客户端启动固定Codex或Claude组合根，官方stdio服务承载公共Server并注册十八个真实owner工具。Demand Publication只读取和写入Wakeflow本地权威，不执行宿主效果。Binding注册请求接收Agent观察到的opaque handle并只写入0600私有权威。Delivery与Testing Claim工具可在已提交Intent后签发瞬时Action，Agent执行并通过Outcome工具回传观察；Action和事件都不携带raw handle。
 
   subgraph PUBLIC_PLANE["① 公共 MCP 控制平面"]
     direction LR
@@ -40,7 +41,7 @@ flowchart TB
     CLAUDE["[固定组合] Claude Code root"]
     STDIO["[官方SDK] stdio生命周期"]
     PUBLIC["[公共] Wakeflow MCP Server"]
-    TOOLS["[公开17工具]\nWorkspace / Route / Tasking / Delivery\nResult / Review / Testing / Lifecycle"]
+    TOOLS["[公开18工具]\nWorkspace / Demand Publication / Route / Tasking\nDelivery / Result / Review / Testing / Lifecycle"]
     DOMAINS["[内部] Workspace / Governance owners"]
   end
 
@@ -59,7 +60,7 @@ flowchart TB
   CODEX -->|"E-H0-03 固定注入"| STDIO
   CLAUDE -->|"E-H0-04 固定注入"| STDIO
   STDIO -->|"E-H0-05 factory"| PUBLIC
-  PUBLIC -->|"E-H0-06 registerTool × 17"| TOOLS
+  PUBLIC -->|"E-H0-06 registerTool × 18"| TOOLS
   TOOLS -->|"E-H0-07 调用真实owner"| DOMAINS
   TOOLS -->|"E-H0-08 Binding注册"| PRIVATE
 
@@ -86,6 +87,7 @@ flowchart TB
 | 能力 | 当前公共MCP | 内部源码 | 宿主效果执行者 |
 | --- | --- | --- | --- |
 | Workspace Maintenance / Binding | 是 | 静态资源与私有窗口身份 | Agent执行launch intents并提供窗口观察 |
+| Demand Publication | 是 | 零写Planning、exact-plan Application、sidecar/根/TODO前向事务 | 无宿主效果；成功后Agent继续调用Route |
 | Demand Route / Task Planning | 是 | 22类frontier；implementation/test判别规划 | 无直接宿主效果 |
 | Delivery / Host Effect / Result | 是 | Intent、Claim、Observation、TargetResult Event | Agent执行一次性Host Action |
 | Review / Resume / Remediation | 是 | Controller独立判断与产品返工授权 | Controller执行检查，Agent执行后续修复 |
@@ -103,7 +105,7 @@ flowchart TB
 
 | 边编号 | 代码证据 | 核验结论 |
 | --- | --- | --- |
-| `E-H0-01`–`E-H0-07` | 两宿主composition root、stdio与Public MCP Server | 17工具同名同Schema；test Planning采用最小owner派生请求 |
+| `E-H0-01`–`E-H0-07` | 两宿主composition root、stdio与Public MCP Server | 18工具同名同Schema；Demand Publication与test Planning都采用最小owner派生请求 |
 | `E-H0-08` | Window Binding request/Coordinator/Store | handle从请求进入0600 Binding，结果和registered projection不含原值 |
 | `E-H0-09`–`E-H0-14` | Delivery/Testing公共owners与Binding/Observation Authority | Claim/Outcome工具公开；Agent仍执行真实效果，Action/Event不携带原handle |
 

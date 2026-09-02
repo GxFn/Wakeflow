@@ -4,9 +4,9 @@ viewType: business-flow
 truthKind: current-code
 reviewDepth: L2
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
-baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:1cc0b66743e93135c630f9a2f3c447dbb357a8377aade311ee0151ff2ecee9c5
+snapshotObservedAt: 2026-09-01T20:05:05-07:00
+baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
+sourceFingerprint: sha256:7db6e78faaa9461f54759daa0b48912e1dae28875d6fa7eb53238d56d853475f
 audience:
   - maintainer
   - reviewer
@@ -28,6 +28,8 @@ sourcePaths:
   - src/workspace/**
   - src/governance/**
   - src/entrypoints/**
+schemaPaths:
+  - src/contracts/schemas/**
 testPaths:
   - tests/**
 ---
@@ -37,21 +39,21 @@ testPaths:
 > 本文是01–09文档包的组合视图，不重新解释每个文件。下层源码、Schema、Event、Authority和测试
 > 才是实现事实；本文只提供从需求进入到成功完成的Review导航。
 >
-> 当前17个公共MCP工具覆盖已有Demand从Route到Completion的治理链；Demand Publication仍是内部Service，
-> 因此尚不能通过公共工具从零创建Demand。
+> 当前18个公共MCP工具覆盖pending TODO经Demand Publication、Route、执行治理到Completion的链；
+> `wakeflow_create_demand`公开preview、exact apply与explicit recover，但不会自动串联后续Route。
 >
 > **[未实现]** 当前TypeScript源码没有Demand归档owner；主链在`lifecycle.demand-completed`停止。
 
 ## 当前结论
 
-当前候选实现已经形成一条内部可解释业务链：配置与Workspace初始化后，Publication从精确
+当前候选实现已经形成一条公开可调用、内部可解释的业务链：配置与Workspace初始化后，Publication从精确
 `pending-claim` TODO创建Demand根，并在根发布后把该TODO CAS为claimed；
 Controller规划不可变TaskPackage；Delivery准备Intent并由Agent执行真实宿主效果；Result被导入事件流；
 Controller对implementation决定accept/rework/redesign/blocked；接受后按策略进入真实环境Testing或成功Completion。
 Testing已经闭合到Test Result、独立Controller Test Review Decision Event与四类route；Test accept进入
 real-environment Completion，request-another-attempt创建rerun，Test blocked由共享Resume精确恢复；产品缺陷
-进入Remediation Authorization、原产品Target返工、重新accept和新TestCard代际。除Demand Publication外，
-这些阶段均由17工具中的真实owner公开；Server不会自动串联，Controller按Route逐步调用。
+进入Remediation Authorization、原产品Target返工、重新accept和新TestCard代际。这些阶段由18工具中的
+真实owner公开；Server不会自动串联，Controller按Route逐步调用。
 
 这条链的各段都采用“preview/严格计划 → apply重新准入 → Event权威 → 可重建投影”的模式，并在外部
 宿主效果前插入Intent、WorkClaim和Claim Event。任何`indeterminate`效果、陈旧plan、冲突权威或不完整
@@ -62,15 +64,15 @@ real-environment Completion，request-another-attempt创建rerun，Test blocked�
 ```mermaid
 flowchart TB
   accTitle: Wakeflow从需求进入到实现返工条件测试和完成的端到端业务流程
-  accDescr: Workspace经公开Maintenance/Binding准备，内部Publication发布Demand后claim TODO。十七个公共工具按Route完成implementation/test Planning、Delivery、Result、Review、rerun、Remediation/retest和两种Completion；Agent独立执行宿主效果。Demand Publication Public与Archive仍缺失，Research Completion和Implementation Redesign保持显式blocker。
+  accDescr: Workspace经公开Maintenance/Binding准备，wakeflow_create_demand以preview和精确apply发布Demand后claim TODO，或按sidecar显式recover。十八个公共工具按Route完成implementation/test Planning、Delivery、Result、Review、rerun、Remediation/retest和两种Completion；Agent独立执行宿主效果。Archive仍缺失，Research Completion和Implementation Redesign保持显式blocker。
 
   subgraph SETUP["① 公共入口与需求发布"]
     direction LR
     ACTOR["[外部] 用户 / Controller / Agent"]
-    PUBLIC["[当前公共MCP] 17工具\nWorkspace / Route / Tasking / Delivery\nResult / Review / Testing / Lifecycle"]
+    PUBLIC["[当前公共MCP] 18工具\nWorkspace / Demand Publication / Route / Tasking\nDelivery / Result / Review / Testing / Lifecycle"]
     WORKSPACE["[已实现] Config v3与Workspace就绪"]
     TODO["[内部权威] pending/claimed TODO + Ledger"]
-    DEMAND["[已实现][内部] Demand Publication\nIdentity / Authority / revision 1"]
+    DEMAND["[进行中][公共] Demand Publication\npreview / apply / recover → revision 1"]
     PACKAGE["[已实现][公共Planning] immutable implementation TaskPackage Event"]
   end
 
@@ -106,7 +108,8 @@ flowchart TB
   ACTOR -->|"E-Z0-01 调用当前公共工具"| PUBLIC
   PUBLIC -->|"E-Z0-02 Maintenance/Binding"| WORKSPACE
   WORKSPACE -->|"E-Z0-03 当前配置与资源边界"| TODO
-  TODO -->|"E-Z0-04 内部Publication"| DEMAND
+  TODO -->|"E-Z0-04 pending TODO与Ledger权威"| DEMAND
+  PUBLIC -->|"E-Z0-33 wakeflow_create_demand"| DEMAND
   PUBLIC -->|"E-Z0-05 Target Task Planning"| PACKAGE
   DEMAND -->|"E-Z0-06 Authority Context"| PACKAGE
   PACKAGE -->|"E-Z0-07 内部Delivery准备"| DELIVERY
@@ -143,8 +146,8 @@ flowchart TB
 
 | 图中术语 | 解释 |
 | --- | --- |
-| 当前公共MCP | 已在固定Codex/Claude组合根注册、具有公开Schema和真实消费者的17个工具 |
-| 内部纵切 | 当前仅Demand Publication仍有Service但没有Public tool |
+| 当前公共MCP | 已在固定Codex/Claude组合根注册、具有公开Schema和真实消费者的18个工具 |
+| Demand Publication | 调用方只提交作者语义与上游选择；owner派生完整计划，应用后返回稳定回执并要求继续检查Route |
 | Authority Context | 某一操作重新打开并闭合的Config、Demand、Ledger、TODO、Binding或测试事实集合 |
 | Claim回执 | 首次成功提交host-effect-claimed Event的结果；只有它能签发一次性Host Action |
 | generation | Delivery、宿主效果或Review的显式代际，防止返工/恢复误用旧事实 |
@@ -158,8 +161,8 @@ flowchart TB
 
 | 边编号 | 实际关系 | 审阅结论 |
 | --- | --- | --- |
-| `E-Z0-01`–`E-Z0-03` | 17个公共工具与Workspace | 双宿主真实入口；Route决定后续owner |
-| `E-Z0-04` | Demand Publication | 内部Service先发布Demand根，再把精确TODO CAS为claimed；无公共入口 |
+| `E-Z0-01`–`E-Z0-03` | 18个公共工具与Workspace | 双宿主真实入口；Route决定后续owner |
+| `E-Z0-04`、`E-Z0-33` | Demand Publication | Public preview/apply/recover委托物理Service先发布Demand根，再把精确TODO CAS为claimed |
 | `E-Z0-05`、`E-Z0-06` | implementation/test Task Planning | 同一公共工具preview/apply；test只接受最小owner派生选择 |
 | `E-Z0-07`–`E-Z0-13` | Delivery、宿主效果、Result | 公共owners记录Event；indeterminate保留Claim停止，不回到Delivery |
 | `E-Z0-14`–`E-Z0-19` | Implementation Review与返工/恢复 | Inspection/Decision/Resume公开，判断仍由Controller拥有 |
@@ -171,7 +174,7 @@ flowchart TB
 | 阶段 | 当前入口 | 状态权威 | 可重建视图 | 文档下钻 |
 | --- | --- | --- | --- | --- |
 | Workspace准备 | 公共Maintenance/Binding | Config、Maintenance intent/journal、Binding | Active/Window投影 | [03](../03-configuration-workspace/README.md) |
-| Demand发布 | 内部Publication Service | Identity、Authority、revision 1、TODO lineage | Aggregate | [04](../04-governance-event-sourcing/README.md) |
+| Demand发布 | 公共`wakeflow_create_demand` + Planning/Application/物理Publication Service | Identity、Authority、revision 1、TODO lineage | Aggregate与稳定Publication回执 | [04](../04-governance-event-sourcing/README.md) |
 | Task规划 | 公共Target Task Planning，implementation/test判别请求 | `target-task-planned` Event中的TaskPackage | 0600 TaskPackage投影 | [05](../05-tasking-slice/README.md) |
 | 实现投递 | 公共Delivery/Claim/Outcome工具 + Agent | Intent、WorkClaim、claim/observation Events | Agent Host Action | [06](../06-implementation-delivery-review/README.md) |
 | Result/Review | 公共Import/Inspection/Decision/Resume工具 | workType TargetResult、Decision/Resume Events | Review Snapshot/Route | [06](../06-implementation-delivery-review/README.md) |
@@ -182,7 +185,7 @@ flowchart TB
 ## 正常路径
 
 1. Maintenance使Config、静态资源和宿主本地布局达到可复验状态。
-2. 精确`pending-claim` TODO与Ledger关系经Publication创建Demand根和初始Event，随后由同一transaction CAS为claimed。
+2. Controller调用`wakeflow_create_demand` preview取得owner派生计划，确认后按原plan/digest apply；Publication创建Demand根和初始Event，随后由同一transaction CAS精确TODO为claimed。
 3. Controller preview/apply生成不可变TaskPackage Event及文件投影。
 4. Delivery准备Intent，Agent窗口观察与Binding闭合后创建WorkClaim和Claim Event。
 5. Agent执行一次性Host Action；Outcome Event记录真实观察。
@@ -193,11 +196,11 @@ flowchart TB
    product-defect授权原产品Target返工，修复accept后创建新TestCard代际。
 10. controller-only与real-environment Completion都可提交`lifecycle.demand-completed`；TestCard和attempt历史保留。
 
-## 当前不可称为“端到端公共能力”的原因
+## 当前剩余边界
 
-- 公共MCP没有Demand Publication工具，无法从零开始建立Demand。
 - Research Completion和Implementation Redesign仍是显式blocker。
-- 本轮没有执行真实Codex/Claude宿主效果、双宿主插件smoke或旧JS等价对照；TypeScript完整门已通过。
+- Publication提交`f7c005d`只完成聚焦验证，尚未执行完整TypeScript门、真实Codex/Claude宿主效果、
+  双宿主插件smoke或旧JS等价对照。
 - `demand-completed`之后没有TypeScript归档生产者、合同或恢复路径。
 
 ## 核验基线
@@ -206,7 +209,9 @@ flowchart TB
 | --- | --- |
 | 下层文档 | 01–09共27份Markdown证据 |
 | 组合指纹 | `48b4c587f797c9fefe6b6317f72d8a36e876921c88b2dd7b926e8f3a4a422dbd` |
-| TypeScript基线 | `d17602e`；902 pass、710模块/4967依赖、99 Schema/207 refs |
+| TypeScript基线 | `HEAD=f7c005d`；723模块/5059依赖、101 Schema/207 refs |
+| 当前聚焦验证 | Publication 25项；MCP注册/双宿主3项；候选Codex 433/Claude 438文件 |
+| 最近完整TypeScript门 | 902 pass；早于`f7c005d` |
 | 完整发布门 | 未执行；候选manifest明确`releaseEligible=false` |
 
 ## 下钻入口

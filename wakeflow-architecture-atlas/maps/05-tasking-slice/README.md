@@ -68,7 +68,7 @@ Config/Demand/Ledger权威并复验TaskPackage拓扑与Config时效性，再执�
 | 项目 | 读取值 |
 | --- | --- |
 | 生产源码 | 9 个Tasking模块 |
-| 全仓Architecture | 710个模块、4967条依赖、0违规 |
+| 全仓Architecture | 723个模块、5059条依赖、0违规 |
 | 测试 | 6个正式测试、2个fixture；公共Coordinator覆盖implementation/test两种请求 |
 | 合同 | 1个TaskPackage Schema、1个生成合同 |
 | 提交状态 | TaskPackage、Planning Authority/Input/Service及测试已提交 |
@@ -181,7 +181,7 @@ flowchart TB
 
 | 证据 | 当前结果 | 说明 |
 | --- | --- | --- |
-| 全仓architecture | 710模块、4967依赖、0违规 | 当前纵切所在静态依赖边界 |
+| 全仓architecture | 723模块、5059依赖、0违规 | 当前纵切所在静态依赖边界 |
 | TaskPackage测试 | 解析、创建、文档、摘要与implementation/test联合 | 合同和字段关系负例 |
 | Planning Service测试 | preview/apply/idempotency/Config变化/测试路由/投影恢复 | 纵切主链证据 |
 | Projection Store测试 | 事件来源、0600、缺失/冲突/幂等 | Event权威与文件投影边界 |

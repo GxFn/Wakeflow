@@ -24,6 +24,11 @@ lifecycle: ("active" | "cancelled" | "completed")
  * @maxItems 10000
  */
 targetTasks: TargetTask[]
+/**
+ * @minItems 1
+ * @maxItems 10000
+ */
+managedEvidence?: [ManagedEvidenceSummary, ...(ManagedEvidenceSummary)[]]
 currentTestCard?: TestCard
 pendingTestRetest?: PendingTestRetest
 })
@@ -256,6 +261,11 @@ testReviewDecisionDigest: WakeflowSha256DigestText
 failedCheckIds: [string, ...(string)[]]
 correctionObjective: string
 authorizedAt: WakeflowUtcInstantText
+}
+export interface ManagedEvidenceSummary {
+evidenceId: string
+manifestDigest: WakeflowSha256DigestText
+payloadArtifactDigest: WakeflowSha256DigestText
 }
 export interface PendingTestRetest {
 kind: "product-defect-retest"

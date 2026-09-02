@@ -17,6 +17,7 @@ test("Demand Event Sourcing state-model version 独立于 event version", () => 
       "delivery.target-host-effect-claimed",
       "delivery.target-host-effect-observed",
       "delivery.target-host-effect-rearmed",
+      "evidence.managed-evidence-recorded",
       "lifecycle.demand-cancelled",
       "lifecycle.demand-completed",
       "publication.demand-published",

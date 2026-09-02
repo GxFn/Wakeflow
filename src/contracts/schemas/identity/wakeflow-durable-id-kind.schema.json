@@ -11,6 +11,7 @@
     "demand",
     "demand-event",
     "demand-event-commit",
+    "evidence",
     "program",
     "product-defect-remediation",
     "repository",

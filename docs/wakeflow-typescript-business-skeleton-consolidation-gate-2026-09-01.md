@@ -722,3 +722,437 @@ Technical Skeleton Review Gate中既有两行异常diff继续排除且未修改�
 Demand Publication Public至此从“真实内部owner”变为“真实公共纵切”，但没有引入自动Controller编排、宿主调用、
 通用transaction manager或额外Foundation。下一核实节点应先审阅当前18工具从pending TODO到Completion的骨干闭包、
 完整门与Atlas一致性，再决定进入Research/Redesign，还是以首个真实consumer启动Evidence/Archive。
+
+### 13.15 当前技术核实节点（18工具 / 918测试）
+
+实现提交与Atlas提交完成后，按约定运行当前完整TypeScript门。首次运行得到917 pass / 1 fail；唯一失败是
+`typescript-artifact-candidates.test.ts`仍维护17工具期望数组，而两个真实候选stdio入口已经正确返回第18个
+`wakeflow_create_demand`。候选builder、manifest、双host composition和生产MCP均没有缺失。
+
+测试只做最小维护修正：导入`WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME`并加入候选stdio期望集合。
+聚焦重跑两条候选测试通过，随后重新执行完整门：
+
+```text
+TypeScript: 918 pass / 0 fail / 0 cancelled / 0 skip
+duration: 358.523313625s
+Architecture: parser=swc / 723 modules / 5060 dependencies / 0 violations
+Schema: 101 / 207 external refs
+Schema digest: sha256:bdc85d2a15b0f522c41dde26d77d79fa1969f9ec86ccbc78a387781e4d3ee921
+Candidate: Codex 433 files / Claude Code 438 files / releaseEligible=false
+```
+
+新增的一条architecture dependency来自候选测试对真实Publication Public Contract常量的直接import，不是生产层
+新增依赖。完整门覆盖官方stdio候选入口、18工具集合、Publication真实MCP纵切、全部Foundation/Workspace/Event
+Sourcing/Tasking/Delivery/Result/Review/Testing/Lifecycle测试及Schema生成一致性。
+
+#### 18工具职责矩阵核实
+
+| 形态 | 工具数 | 当前工具 | 共同边界 |
+| --- | ---: | --- | --- |
+| 只读观察 | 2 | Demand Route、Target Result Review Inspection | 零写，只返回当前责任或审阅输入 |
+| preview/apply/recover | 2 | Workspace Maintenance、Demand Publication | preview零写；apply exact-plan；recover只凭私有耐久证据 |
+| preview/apply | 5 | Target Task Planning、Implementation Delivery、TestCard Planning、Test Delivery、Demand Completion | owner派生完整计划；apply重新准入并提交Event/终态 |
+| 单步记录/授权 | 9 | Window Binding、Claim、Outcome、Rearm、Result Import、Implementation Decision、Review Resume、Test Decision、Product Remediation | 一个owner提交一个有界事实，不自动串联后续Route |
+
+公共链现在从pending TODO到Demand Completion具备真实入口和consumer：
+
+```text
+Maintenance / Binding
+→ Demand Publication
+→ Controller Route
+→ Task / Delivery / Host Effect / Result / Review
+→ optional Testing / Remediation / rerun
+→ Demand Completion
+```
+
+MCP仍不执行宿主效果：Maintenance只返回launch intents，Claim只签发一次性Action，Agent调用Codex/Claude宿主能力，
+Outcome/Result再记录Wakeflow事实。18工具没有形成第二个orchestrator、动态handler registry或隐式latest选择。
+
+当前明确停止边界收敛为三类：
+
+- Research Completion：Route有诚实blocker，没有完成策略owner；
+- Implementation Redesign：Review Decision可表达redesign，但没有重新进入Design/规划的生产owner；
+- Evidence/Archive：Loaded Artifact transfer仍只有Foundation能力，Demand完成后没有归档状态、业务manifest或恢复owner。
+
+因此技术骨干核实节点可以关闭：不再为了“可能将来需要”继续扩张Foundation。下一阶段应先对上述三个真实业务缺口
+做代码/旧场景/业界方案复核，再由用户选择首个consumer驱动切片。完整TS门通过仍不表示旧JS等价、正式plugin
+validator/smoke、真实宿主会话或release gate已经通过。
+
+此前Technical Skeleton Review Gate中误插入的两处“确认”已经恢复为提交版本，当前不再有该异常diff。
+
+### 13.16 下一业务切片预选
+
+对当前TS、旧JS、TencentDB-Agent-Memory和官方规范交叉后，四个候选并非并列可随意排序：
+
+| 候选 | 当前TS事实 | 直接进入的主要问题 | 建议 |
+| --- | --- | --- | --- |
+| A. Managed Evidence Import | Loaded Artifact tree identity/plan/candidate/publication已闭合，但零生产consumer | 需要新增Evidence manifest、Event、Aggregate归约和Public owner | **推荐首选** |
+| B. Research Completion | Route和blocker已存在；Research被Implementation Tasking明确排除 | 直接完成会复刻旧JS“零artifact research捷径”，没有研究结论/evidence closure | Evidence之后 |
+| C. Implementation Redesign | Decision/Event/Route已能进入`redesign-requested` | 缺Design generation、Authority supplement和replacement TaskPackage owner | 独立后续切片 |
+| D. Business Archive | Completion终态已存在；旧JS有3561行跨owner归档编排 | 依赖Evidence、Artifact、TODO、Ledger、transport和current detach完整闭包 | 最后实施，不与A合并 |
+
+RFC 8493把可靠内容包区分为“完整”与“校验有效”，并要求manifest逐一列出payload路径和checksum；in-toto
+Statement以不可变subject digest绑定predicate类型；SLSA把provenance定义为说明artifact在何处、何时、如何产生的
+可验证信息。这些模式支持Wakeflow先建立“opaque payload + complete digest manifest + domain metadata”的Evidence
+owner，而不是把source路径或ZIP本身当权威。
+
+Microsoft Event Sourcing官方模式继续支持现有Redesign判断：历史Event不可改写，重新设计必须追加新的业务意图/Event，
+再创建有精确前驱的replacement generation；不能覆盖原TaskPackage或修改旧Decision。
+
+TencentDB-Agent-Memory的`agents/asset-import.ts`是面向Memory Hub的集中式递归扫描/上传CLI，Skill export返回base64 ZIP；
+它没有Wakeflow所需的根作用域manifest、跨资源Event authority和本地前向恢复，因此只能参考client/port分层与显式版本字段，
+不能直接作为Evidence/Archive存储模型。
+
+若选择A，第一版建议只支持Config中已知repository/support-surface下的本地`file | tree`，不同时接受旧JS的
+`https | git-commit` locator-only记录。locator是外部引用声明，不是Wakeflow捕获并验证的managed evidence；把两者继续放在
+同一manifest会混淆“调用方声明digest”和“Wakeflow实际读取字节”。A内部仍按单文件节奏从Evidence Manifest合同开始，
+之后才接入tree capture、Event Sourcing Application/Public和第19个MCP工具。
+
+### 13.17 Managed Evidence Manifest首文件单元
+
+用户确认A后，第一单元只建立managed local evidence的持久记录合同，没有提前实现capture、Event、Application或MCP。
+
+新增：
+
+```text
+src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
+src/governance/evidence/managed-evidence-manifest.ts
+tests/governance/evidence/managed-evidence-manifest.test.ts
+```
+
+Manifest包含：
+
+- typed `evidenceId / programId / demandId`与immutable Demand Authority digest；
+- owner生成的`capturedAt`及`recordedBy.windowId/configDigest`；
+- Config逻辑根中的`repository | support-surface`、portable path和`file | tree`来源；
+- Foundation Loaded Artifact tree manifest及其独立artifact digest；
+- `internal | public` sensitivity；
+- opaque文件子集和`not-required | controller-confirmed`复核事实；
+- 除自身digest外全部字段的Canonical JSON manifest digest。
+
+当前Durable ID词汇此前故意把`evidence`列为retired，因为没有真实producer/consumer。本单元成为首个真实producer后，
+将`evidence`加入唯一`wakeflow-durable-id-kind.schema.json`并删除对应负例；没有恢复delivery、pod、preservation等
+仍无当前producer的旧kind。Loaded Artifact tree Schema只增加runtime export元数据，供Evidence codec复用同一Schema，
+没有复制其file/ref/digest规则。
+
+关键关系：
+
+- payload artifact digest必须等于完整Loaded Artifact tree manifest的Canonical JSON SHA-256；
+- file来源规范化为单一`content`文件，tree保留相对文件清单；
+- opaque refs必须按portable ref排序且全部属于payload manifest；
+- opaque列表为空当且仅当review为`not-required`；
+- Manifest自身摘要、确定性文件表示、1 MiB metadata容量和被动JSON准入均由唯一codec闭合。
+
+`contentReview`不声称执行secret/privacy扫描；它只记录opaque文件是否需要并取得Controller明确复核。
+`evidenceType`是审阅/检索标签，消费者不得把未知值解释为权限、充分性或验收策略。外部HTTPS/Git locator、
+payload字节、Evidence relations、Event位置和Controller acceptance均明确排除。
+
+```text
+Focused: 12 pass / 0 fail / 0 skip
+Candidate artifact focused: 2 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: 102 / 211 external refs
+Schema digest: sha256:84440a2c2d44a798153505f0dd07c035eee4c0a0b3e35ac279de7cadb55ec1da
+Architecture: parser=swc / 726 modules / 5082 dependencies / 0 violations
+```
+
+下一文件单元应审阅并实现“author-owned本地source selector + 零写capture Planning”边界；不得让Manifest codec读取文件，
+也不得让Foundation解释repository/support-surface业务归属。
+
+### 13.18 Managed Evidence Source Selection与零写Capture Planning
+
+第二单元新增：
+
+```text
+src/governance/evidence/managed-evidence-source-selection.ts
+src/governance/evidence/managed-evidence-capture-planning-service.ts
+tests/governance/evidence/managed-evidence-source-selection.test.ts
+tests/governance/evidence/managed-evidence-capture-planning-service.{fixture,test}.ts
+```
+
+调用方选择只包含：
+
+```text
+evidenceType
+source.root: repository | support-surface typed ID
+source.path: PortableResourcePath
+source.resourceType: file | tree
+sensitivity: internal | public
+opaqueContentPolicy: reject | controller-confirmed
+```
+
+绝对路径、expected digest、Evidence ID、时间、Config/Demand摘要、Controller window和payload manifest全部由Planning派生。
+选择器拒绝HTTPS/Git locator、额外expectedDigest、`.git`、`.wakeflow-active`和`.wakeflow-local`根段，以及accessor/Proxy。
+
+Planning Service持有已打开Workspace root，每次preview：
+
+1. 完整打开当前Config、Ledger和audit后的Demand Root Authority；
+2. 只准入active Demand，并从Config indexes/placements解析逻辑source root；
+3. file使用Stable File Read并规范化为单一`content` tree manifest；
+4. tree执行稳定Loaded Artifact identity、四并发有界内容读取分类、再次稳定identity；
+5. UTF-8失败或含非文本控制字符的文件进入opaque refs；`reject`策略在ID/时间分配前失败；
+6. 长时间读取后重新复验Config与Demand Event Stream CAS基线；
+7. 分配Evidence ID和capture time，创建Manifest与包含Config/stream/state/last-event基线的capture plan digest。
+
+并发分类使用`Promise.allSettled`等待所有已启动读取完成后才关闭tree root，避免首个失败导致其他读取与root close竞态。
+全部文件读取、目录identity、容量、symlink和source drift仍由Foundation拥有；Governance只解释Config root、opaque策略和Manifest。
+
+```text
+Evidence focused: 12 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: 102 / 211 external refs
+Schema digest: sha256:84440a2c2d44a798153505f0dd07c035eee4c0a0b3e35ac279de7cadb55ec1da
+Architecture: parser=swc / 731 modules / 5115 dependencies / 0 violations
+```
+
+当前capture plan是内部零写子计划，不含Event/Commit ID、stage路径或公共wire Schema；下一单元必须先设计
+Evidence Event/Aggregate语义与资源目录，再决定完整Publication/Application事务，不能直接把capture plan注册为MCP。
+
+### 13.19 Managed Evidence Event Sourcing与Aggregate最小selector
+
+第三单元把已捕获Manifest接入现有Demand Event Sourcing骨干，没有新建Evidence专用事件存储或第二状态机。
+
+新增事件合同：
+
+```text
+evidence.managed-evidence-recorded.v1
+data.manifest: complete ManagedEvidenceManifest
+```
+
+完整Manifest进入append-only Event，使source provenance、content review和payload tree identity可从Commit历史独立重建；
+同一事件只在Aggregate中投影：
+
+```text
+evidenceId
+manifestDigest
+payloadArtifactDigest
+```
+
+Aggregate不复制source、sensitivity、opaque refs、tree files或recordedBy。`managedEvidence`只在首个Evidence Event后出现，
+旧Demand和首个Event之前的状态仍保持字段absent，因而既有Event的`resultingStateDigest`不发生漂移。状态模型继续为v1；
+新增事件家族本身会改变版本兼容摘要，使旧Snapshot安全回退到完整Commit重放。
+
+Decider新增内部`evidence.record-managed-evidence.v1` Command。准入要求Manifest属于当前active Demand、绑定当前
+Demand Authority且Evidence ID未出现；Event的`recordedAt`等于Manifest的`capturedAt`。Reducer按Evidence ID排序并拒绝
+重复、错误Authority、终态写入和非规范Aggregate顺序。Command不接受调用方回填state digest或其他CAS字段；完整
+Publication Application将使用capture plan已有的Demand expectation约束Command Handler追加。
+
+```text
+Managed Evidence Event focused: 4 pass / 0 fail / 0 skip
+Affected Demand/Evidence focused: 13 pass / 0 fail / 0 skip
+Evidence full focused + Candidate: 18 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: 103 / 212 external refs
+Schema digest: sha256:b2ff63a2d86b528bb728deaa0e31bcd8a0d5cc2daffb8d2f5973e29e0d534d8b
+Architecture: parser=swc / 733 modules / 5132 dependencies / 0 violations
+```
+
+真实Commit测试已经证明该Event以v1编码、追加到publication前缀并从前一Aggregate精确重放。当前仍没有Evidence
+资源目录、payload/Manifest物理发布、跨资源恢复sidecar、完整Application或第19个MCP工具。下一单元应先审阅资源
+目录和Publication事务边界，特别是零写capture plan之后如何重新取得并证明同一payload字节；不能把Manifest Event
+已经存在误写成payload已经耐久发布。
+
+### 13.20 Managed Evidence资源路径与所有权目录
+
+第四单元先关闭资源地址和机械处理角色，没有直接实现Application。新增：
+
+```text
+src/governance/evidence/managed-evidence-resource-paths.ts
+src/governance/evidence/managed-evidence-resource-catalog.ts
+tests/governance/evidence/managed-evidence-resource-paths-and-catalog.test.ts
+```
+
+最终布局固定为：
+
+```text
+artifacts/managed-evidence/<evidenceId>/
+├── manifest.json
+└── payload/**
+
+artifacts/managed-evidence/.<evidenceId>.wakeflow-stage
+transactions/managed-evidence-publication.json
+```
+
+`managed-evidence`明确区别于未来只声明外部locator的Evidence Reference。final与stage都由typed Evidence ID形成可逆映射；
+Demand级journal使用固定单槽，不允许同一Demand同时形成两个跨资源Evidence恢复意图。journal声明ID同样只由Demand决定，
+避免不同Evidence为同一路径生成不同资源身份。
+
+资源目录将三类责任分开：
+
+- `artifacts/managed-evidence`只是0700可选目录容器；
+- `<evidenceId>` final root是`manifested-tree + tree-publish-or-move + manifest-closure`；
+- journal是0600单链接`transaction-artifact`，只允许`exclusive-create + exact-retire`；
+- stage属于具体journal，不作为长期资源实例注册，也不能被调用方当成Evidence事实。
+
+`internal | public` sensitivity不改变active Demand副本的runtime-private/ignored属性；它不是版本控制或外发权限。
+
+#### 事务顺序审阅
+
+[Node.js 24文件系统文档](https://nodejs.org/download/release/v24.15.0/docs/api/fs.html)明确Promise文件操作本身不提供同步或
+线程安全，多项修改必须由调用方协调；`FileHandle.sync()`只提供单文件flush能力。[SQLite Atomic Commit](https://www.sqlite.org/atomiccommit.html)
+说明可靠事务必须先把完整journal刷新到非易失存储，再修改目标，并依据journal状态恢复部分完成；Wakeflow不采用SQLite，
+但吸收“write-ahead intent + durable prepared bytes + explicit recovery”原则。[Microsoft Event Sourcing](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing)
+继续要求Event Store作为append-only系统记录，并由乐观并发拒绝陈旧append。
+
+因此后续Application推荐：
+
+```text
+重新准入Config / Demand / source
+→ exclusive-create并同步完整journal
+→ 把payload与最后写入的manifest.json物化为完整耐久stage
+→ 按preview revision乐观追加Managed Evidence Event
+→ Event committed后只从stage整体rename到final并复验
+→ final与Event闭合后exact-retire journal
+```
+
+Event append是不可逆业务点；journal退休是Demand根重新成为healthy的可见闭合点。Event前冲突只能精确退休当前journal拥有的
+未发布stage；Event后恢复禁止重新读取可能已经变化的source，只能从journal绑定的耐久stage前向完成final。
+
+当前Foundation已支持tree source重验、耐久copy、closed candidate检查与同根rename。file来源因为Manifest规范化为
+`payload/content`，Application应直接组合`copyFileToCandidateDurably`，不放宽Loaded Artifact transfer的“完整source tree”
+合同。尚缺的是Event前对已闭合私有candidate tree的精确退休能力，以及Root Inventory的Evidence transaction phase；
+这两项应在Application前补齐。给所有Demand命令增加全局跨进程锁会扩大耦合和stale-lock恢复面，当前不推荐。
+
+TencentDB-Agent-Memory的asset importer仍只提供扫盘、HTTP上传和checkpoint去重；其checkpoint不是flush后的本地跨资源journal，
+不能替代上述事务边界。旧Wakeflow JS的`evidence/<id>`与hidden stage证明场景真实，但新TS采用`artifacts/managed-evidence`
+和独立资源角色，不继承旧状态机。
+
+```text
+Paths/Catalog focused: 4 pass / 0 fail / 0 skip
+Evidence full focused + Candidate: 22 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: 103 / 212 external refs
+Architecture: parser=swc / 736 modules / 5144 dependencies / 0 violations
+```
+
+当前路径和声明不创建任何目录或文件，Root Inventory也尚未接纳该可选容器。下一单元应先建立Evidence record tree plan与
+事务期Inventory/精确stage退休前置能力，再写journal/Application；不得让普通healthy load忽略未完成journal。
+
+### 13.21 Managed Evidence完整Record Tree Plan与容量闭包
+
+第五单元新增：
+
+```text
+src/governance/evidence/managed-evidence-record-tree-plan.ts
+tests/governance/evidence/managed-evidence-record-tree-plan.test.ts
+```
+
+该纯计划把完整Manifest确定性文件表示和payload描述符组合成一个Foundation `DirectoryTreeCandidatePlan`：
+
+```text
+manifest.json                         0600
+payload/<non-executable ref>          0600
+payload/<executable ref>              0700
+all directories                       0700
+```
+
+计划包含Evidence ID、完整Manifest、Manifest文档字节摘要、固定stage/final路径、整棵record directory plan与plan digest。
+它不携带payload字节、不读取source、不创建stage，也不拥有“payload先写、manifest最后写”的事务执行顺序；后者仍属于
+Application materializer。
+
+#### 容量闭包修正
+
+审阅发现Loaded Artifact payload原本可以吃满Foundation目录树的全部硬上限，但final record还必须加入一个
+`manifest.json`文件和`payload/`前缀。若不预留，合法Manifest会成为无法形成record tree plan的不可发布输入。
+
+因此新增唯一`MANAGED_EVIDENCE_PAYLOAD_LIMITS`：
+
+| 维度 | Foundation hard limit | Managed Evidence payload |
+| --- | ---: | ---: |
+| depth | 64 | 63 |
+| entries | 8192 | 8190 |
+| files | 4096 | 4095 |
+| ref UTF-8 bytes | 1024 | 1016 |
+| total bytes | 256 MiB | 255 MiB |
+| single file bytes | 32 MiB | 32 MiB |
+
+Manifest codec和Capture Planning现在复用同一预算；Schema的opaque refs同步收紧为4095。Manifest的1 MiB容量改为包含
+deterministic document末尾LF，确保`payload total + manifest.json bytes <= 256 MiB`。超出Managed预算但仍处于通用
+Loaded Artifact上限的tree会在分配/发布前以`capacity`稳定拒绝。
+
+Record plan把`manifest.json`自身SHA-256与Manifest业务`manifestDigest`保持为两个明确摘要：前者证明物理文件字节，
+后者证明除自身摘要字段外的业务basis。整树`treeDigest`又独立证明最终record路径、字节、mode和目录闭包，三者不能互换。
+
+```text
+Record Tree Plan focused: 3 pass / 0 fail / 0 skip
+Evidence full focused + Candidate: 25 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: 103 / 212 external refs
+Schema digest: sha256:cc5185f54f77b1ab2804cdba21e9c64c3d233a31b711062f5f1ec1cf8cc3f618
+Architecture: parser=swc / 738 modules / 5164 dependencies / 0 violations
+```
+
+当前仍没有stage materializer、candidate retirement、transaction-phase Inventory或Application。下一Foundation相邻单元应先
+审阅并实现“只退休当前owner已证明闭合的未发布candidate tree”能力；它只用于Event前的冲突/取消，不得删除final、未知树或
+Event后stage。随后再把Managed Evidence容器与journal/stage/final状态加入Demand Root Inventory。
+
+### 13.22 Foundation封闭Candidate Tree精确退休
+
+新增：
+
+```text
+src/foundation/filesystem/durable-directory-tree-candidate-retirement.ts
+tests/foundation/filesystem/durable-directory-tree-candidate-retirement.test.ts
+```
+
+Foundation没有增加`rm -r`或任意路径删除入口，而是分成两个严格入口：
+
+1. `retireDirectoryTreeCandidateDurably(...)`只接受完整、冻结并再次复验的`DirectoryTreeCandidateResult`；
+2. `settleDirectoryTreeCandidateRetirement(...)`只供领域journal恢复，接受同一candidate路径和原始directory plan，允许当前树
+   已经是该计划的安全子集。
+
+退休算法：
+
+```text
+stable progress inspection
+→ 捕获目录inode identity
+→ 逐文件stable digest / bytes / mode / single-link复验
+→ 第二次同root snapshot progress inspection
+→ reverse files exact unlink + inode/parent fsync
+→ deepest-first exact empty-directory rmdir + parent fsync
+→ exact candidate root rmdir
+→ 证明candidate路径absent
+```
+
+恢复入口把缺失计划成员解释为已经退休的前缀，但任何未知节点、符号链接、内容/mode/link漂移、目录替换或非空目录都会停止；
+它不会删除计划外新增内容。首次入口如果在完整复验后发现candidate已经消失，会报`source-changed`，不会把未知外部删除声明为
+本次成功。恢复入口对根已缺失只返回`absent`观察，不伪造retirement receipt。
+
+Abort在每个成员提交点前复验；若已经完成部分unlink/rmdir后失败，领域journal仍保留，后续使用settle入口继续同一计划。
+Foundation不认识Evidence stage/final，也不判断Event状态；只有上层事务owner能授权何时调用恢复入口。这保持“机械安全能力”与
+“Event前允许退休、Event后只前向发布”的业务规则分离。
+
+```text
+Candidate Retirement focused: 7 pass / 0 fail / 0 skip
+Affected Foundation focused: 19 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: 103 / 212 external refs
+Schema digest: sha256:cc5185f54f77b1ab2804cdba21e9c64c3d233a31b711062f5f1ec1cf8cc3f618
+Architecture: parser=swc / 740 modules / 5182 dependencies / 0 violations
+```
+
+下一单元可以进入Demand Root Inventory：healthy phase允许可选`artifacts/managed-evidence`且只含完整final IDs；
+managed-evidence-publication phase必须闭合固定journal、同ID stage/final/Event位置组合，并让普通healthy load在journal存在时失败。
+Inventory只观察分类，不执行退休、恢复或Event追加。
+
+### 13.23 Managed Evidence Foundation完整TypeScript核实节点
+
+在进入Publication Transaction与Demand Root Inventory前，对当前全部TS实现重新执行完整门：
+
+```text
+npm run check:typescript
+
+TypeScript tests: 948 pass / 0 fail / 0 cancelled / 0 skip
+Duration: 375310.104208 ms
+Architecture: parser=swc / 740 modules / 5182 dependencies / 0 violations
+Schema: 103 / 212 external refs
+Schema digest: sha256:cc5185f54f77b1ab2804cdba21e9c64c3d233a31b711062f5f1ec1cf8cc3f618
+```
+
+本次完整门覆盖此前918项基线及新增的Managed Evidence Manifest/Capture/Event/Aggregate/Resource/Record Plan、容量预留、
+Candidate Retirement和Candidate Artifact闭包。没有使用聚焦测试替代完整门，也没有运行旧JS等价测试、插件validator/smoke、
+release gate、push或缓存刷新。
+
+当前工作树是一个可独立提交的基础检查点：Managed Evidence已经具备零写capture到Event/资源计划的全部纯骨干，并补足Event前
+stage退休机制；尚未创建journal、stage/final或公共工具。下一步应先提交TS与Atlas两个独立检查点，再从持久Publication
+Transaction合同开始，避免中央Root Inventory/Application变化继续扩大同一diff。

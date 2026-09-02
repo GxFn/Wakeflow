@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:demand:event-sourcing:managed-evidence-recorded-data:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_MANAGED_EVIDENCE_RECORDED_EVENT_DATA_V1_SCHEMA",
+  "title": "WakeflowManagedEvidenceRecordedEventDataV1",
+  "description": "evidence.managed-evidence-recorded persisted event v1 的严格payload。",
+  "$comment": "完整Manifest是已经捕获并记录的不可变Evidence事实；Aggregate只投影稳定selector，后续同ID文件是可重建资源投影。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifest"],
+  "properties": {
+    "manifest": {
+      "$ref": "urn:wakeflow:governance:evidence:managed-evidence-manifest:v1"
+    }
+  }
+}

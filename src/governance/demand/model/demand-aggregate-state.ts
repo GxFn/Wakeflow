@@ -44,6 +44,11 @@ import {
   type UtcInstant,
 } from "../../../foundation/time/utc-instant.js";
 import {
+  parseManagedEvidenceManifest,
+  ManagedEvidenceManifestError,
+  type ManagedEvidenceManifest,
+} from "../../evidence/managed-evidence-manifest.js";
+import {
   computeTaskPackageDigest,
   parseTaskPackage,
   TaskPackageError,
@@ -142,8 +147,10 @@ import {
  * Rearm、TargetResult 与Controller Review Decision仍属于事件数据；状态只保存当前
  * Delivery、Result和Review的最小摘要。`currentTestCard`只指向当前测试合同；已经
  * 观察到产品缺陷的旧Test Target继续作为历史代际保留自己的Card、attempt、Result与
- * Decision。`pendingTestRetest`只记录产品缺陷修复后尚待创建的一代复测，不复制完整
- * Authorization或事件历史。尚未实现的Evidence与Pod不使用空数组或null占位。
+ * Decision。`managedEvidence`只在首个Evidence Event后出现，且只保存Manifest与payload
+ * 的精确selector；完整Manifest仍由Event拥有。`pendingTestRetest`只记录产品缺陷修复后
+ * 尚待创建的一代复测，不复制完整Authorization或事件历史。尚未实现的Pod不使用
+ * 空数组或null占位。
  */
 
 const DEMAND_AGGREGATE_STATE_ARTIFACT_KIND =
@@ -465,10 +472,18 @@ export interface DemandAggregateState {
   readonly authorityDigest: Sha256Digest;
   readonly lifecycle: DemandLifecycle;
   readonly targetTasks: readonly Readonly<DemandTargetTaskState>[];
+  /** 已由Event记录的Managed Evidence最小selector；完整Manifest不复制到Aggregate。 */
+  readonly managedEvidence?: readonly Readonly<DemandManagedEvidenceSummary>[];
   /** 当前可规划或执行的测试合同；历史Test Target保留自己的Card摘要。 */
   readonly currentTestCard?: Readonly<DemandTestCardSummary>;
   /** 已获Controller授权、尚未由新TestCard消费的一次产品缺陷复测。 */
   readonly pendingTestRetest?: Readonly<DemandPendingTestRetest>;
+}
+
+export interface DemandManagedEvidenceSummary {
+  readonly evidenceId: WakeflowDurableId<"evidence">;
+  readonly manifestDigest: Sha256Digest;
+  readonly payloadArtifactDigest: Sha256Digest;
 }
 
 export type DemandPendingTestRetest = Extract<
@@ -500,6 +515,7 @@ export type DemandAggregateStateErrorReason =
   | "test-card"
   | "test-card-generation-source"
   | "test-delivery-intent"
+  | "managed-evidence-manifest"
   | "relation"
   | "transition";
 
@@ -532,6 +548,8 @@ const ERROR_MESSAGES = {
     "Demand aggregate state transition contains an invalid TestCard Generation Source.",
   "test-delivery-intent":
     "Demand aggregate state transition contains an invalid Test Delivery Intent.",
+  "managed-evidence-manifest":
+    "Demand aggregate state transition contains an invalid Managed Evidence Manifest.",
   relation: "Demand aggregate target task summaries are inconsistent.",
   transition: "Demand aggregate lifecycle transition is not admitted.",
 } as const satisfies Readonly<Record<DemandAggregateStateErrorReason, string>>;
@@ -577,6 +595,7 @@ function parseId<
     | "product-defect-remediation"
     | "demand-event"
     | "demand-event-commit"
+    | "evidence"
     | "test-attempt"
     | "test-card",
 >(value: unknown, kind: Kind, path: string): WakeflowDurableId<Kind> {
@@ -857,6 +876,46 @@ function parseDigest(value: unknown, path: string): Sha256Digest {
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function parseManagedEvidenceSummaries(
+  values: readonly NonNullable<
+    DemandAggregateStateWire["managedEvidence"]
+  >[number][],
+): readonly Readonly<DemandManagedEvidenceSummary>[] {
+  const result: Readonly<DemandManagedEvidenceSummary>[] = [];
+  let previousEvidenceId: string | undefined;
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (value === undefined) fail("schema", `$/managedEvidence/${index}`);
+    const path = `$/managedEvidence/${index}`;
+    const evidenceId = parseId(
+      value.evidenceId,
+      "evidence",
+      `${path}/evidenceId`,
+    );
+    if (
+      previousEvidenceId !== undefined &&
+      compareText(previousEvidenceId, evidenceId) >= 0
+    ) {
+      fail("relation", path);
+    }
+    previousEvidenceId = evidenceId;
+    result.push(
+      Object.freeze({
+        evidenceId,
+        manifestDigest: parseDigest(
+          value.manifestDigest,
+          `${path}/manifestDigest`,
+        ),
+        payloadArtifactDigest: parseDigest(
+          value.payloadArtifactDigest,
+          `${path}/payloadArtifactDigest`,
+        ),
+      }),
+    );
+  }
+  return Object.freeze(result);
 }
 
 function parseTestCardSummary(
@@ -2702,6 +2761,10 @@ function normalizeState(
   wire: Readonly<DemandAggregateStateWire>,
 ): Readonly<DemandAggregateState> {
   const targetTasks = parseTargetTasks(wire.targetTasks);
+  const managedEvidence =
+    wire.managedEvidence === undefined
+      ? undefined
+      : parseManagedEvidenceSummaries(wire.managedEvidence);
   const implementationTargets = targetTasks.filter(
     (target) => target.workType !== "test",
   );
@@ -2785,8 +2848,46 @@ function normalizeState(
     authorityDigest: parseDigest(wire.authorityDigest, "$/authorityDigest"),
     lifecycle: wire.lifecycle,
     targetTasks,
+    ...(managedEvidence === undefined ? {} : { managedEvidence }),
     ...(currentTestCard === undefined ? {} : { currentTestCard }),
     ...(pendingTestRetest === undefined ? {} : { pendingTestRetest }),
+  });
+}
+
+/** `evidence.managed-evidence-recorded.v1`使用的纯状态转换。 */
+export function recordManagedEvidenceInDemandAggregateState(
+  currentValue: unknown,
+  manifestValue: unknown,
+): Readonly<DemandAggregateState> {
+  const current = parseDemandAggregateState(currentValue);
+  let manifest: Readonly<ManagedEvidenceManifest>;
+  try {
+    manifest = parseManagedEvidenceManifest(manifestValue);
+  } catch (error: unknown) {
+    if (error instanceof ManagedEvidenceManifestError) {
+      fail("managed-evidence-manifest", "$manifest");
+    }
+    throw error;
+  }
+  const recorded = current.managedEvidence ?? [];
+  if (
+    current.lifecycle !== "active" ||
+    manifest.demandId !== current.demandId ||
+    manifest.demandAuthorityDigest !== current.authorityDigest ||
+    recorded.some((entry) => entry.evidenceId === manifest.evidenceId)
+  ) {
+    fail("transition", "$state/managedEvidence");
+  }
+  return parseDemandAggregateState({
+    ...current,
+    managedEvidence: [
+      ...recorded,
+      {
+        evidenceId: manifest.evidenceId,
+        manifestDigest: manifest.manifestDigest,
+        payloadArtifactDigest: manifest.payload.artifactDigest,
+      },
+    ].sort((left, right) => compareText(left.evidenceId, right.evidenceId)),
   });
 }
 

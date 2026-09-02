@@ -31,6 +31,7 @@ import {
   prepareTestDeliveryInDemandAggregateState,
   prepareTargetDeliveryInDemandAggregateState,
   rearmTargetHostEffectInDemandAggregateState,
+  recordManagedEvidenceInDemandAggregateState,
   recordTargetResultInDemandAggregateState,
   resumeBlockedTargetReviewInDemandAggregateState,
   planTargetTaskInDemandAggregateState,
@@ -115,6 +116,11 @@ import {
   type DemandUncommittedEvent,
 } from "./demand-event-sourcing-event.js";
 import {
+  parseManagedEvidenceManifest,
+  ManagedEvidenceManifestError,
+  type ManagedEvidenceManifest,
+} from "../../evidence/managed-evidence-manifest.js";
+import {
   parseDemandCompletion,
   DemandCompletionError,
   type DemandCompletion,
@@ -176,6 +182,13 @@ export interface PlanTargetTaskCommand {
   readonly commandVersion: 1;
   readonly eventId: WakeflowDurableId<"demand-event">;
   readonly taskPackage: Readonly<TaskPackage>;
+}
+
+export interface RecordManagedEvidenceCommand {
+  readonly commandType: "evidence.record-managed-evidence";
+  readonly commandVersion: 1;
+  readonly eventId: WakeflowDurableId<"demand-event">;
+  readonly manifest: Readonly<ManagedEvidenceManifest>;
 }
 
 export interface CreateTestCardCommand {
@@ -259,6 +272,7 @@ export type DemandEventSourcingCommand =
   | PublishDemandCommand
   | CancelDemandCommand
   | CompleteDemandCommand
+  | RecordManagedEvidenceCommand
   | CreateTestCardCommand
   | PlanTargetTaskCommand
   | PrepareTestDeliveryCommand
@@ -280,6 +294,7 @@ export type DemandEventSourcingDecisionErrorReason =
   | "task-package"
   | "demand-authority"
   | "demand-completion"
+  | "managed-evidence-manifest"
   | "test-card"
   | "test-card-generation-source"
   | "test-delivery-intent"
@@ -311,6 +326,8 @@ const ERROR_MESSAGES = {
     "Demand Event Sourcing command contains an invalid Demand Authority.",
   "demand-completion":
     "Demand Event Sourcing command contains an invalid Demand Completion.",
+  "managed-evidence-manifest":
+    "Demand Event Sourcing command contains an invalid Managed Evidence Manifest.",
   "test-card": "Demand Event Sourcing command contains an invalid TestCard.",
   "test-card-generation-source":
     "Demand Event Sourcing command contains an invalid TestCard Generation Source.",
@@ -389,6 +406,12 @@ const PLAN_TARGET_TASK_FIELDS = Object.freeze([
   "commandVersion",
   "eventId",
   "taskPackage",
+] as const);
+const RECORD_MANAGED_EVIDENCE_FIELDS = Object.freeze([
+  "commandType",
+  "commandVersion",
+  "eventId",
+  "manifest",
 ] as const);
 const CREATE_TEST_CARD_FIELDS = Object.freeze([
   "authority",
@@ -639,6 +662,25 @@ export function parseDemandEventSourcingCommand(
       commandVersion: 1,
       eventId: parseId(command.eventId, "demand-event", "$/eventId"),
       taskPackage,
+    });
+  }
+
+  if (base.commandType === "evidence.record-managed-evidence") {
+    const command = exactCommand(base, RECORD_MANAGED_EVIDENCE_FIELDS);
+    let manifest: Readonly<ManagedEvidenceManifest>;
+    try {
+      manifest = parseManagedEvidenceManifest(command.manifest);
+    } catch (error: unknown) {
+      if (error instanceof ManagedEvidenceManifestError) {
+        fail("managed-evidence-manifest", "$/manifest");
+      }
+      throw error;
+    }
+    return Object.freeze({
+      commandType: "evidence.record-managed-evidence",
+      commandVersion: 1,
+      eventId: parseId(command.eventId, "demand-event", "$/eventId"),
+      manifest,
     });
   }
 
@@ -1198,6 +1240,28 @@ export function decideDemandEventSourcingCommand(
   }
 
   if (state === null) fail("transition", "$state");
+  if (command.commandType === "evidence.record-managed-evidence") {
+    if (state.demandId !== command.manifest.demandId) {
+      fail("identity", "$/manifest/demandId");
+    }
+    try {
+      recordManagedEvidenceInDemandAggregateState(state, command.manifest);
+    } catch (error: unknown) {
+      if (error instanceof DemandAggregateStateError) {
+        fail("transition", "$state/managedEvidence");
+      }
+      throw error;
+    }
+    return singleEvent(
+      parseDemandUncommittedEvent({
+        eventId: command.eventId,
+        demandId: command.manifest.demandId,
+        recordedAt: command.manifest.capturedAt,
+        eventType: "evidence.managed-evidence-recorded",
+        data: { manifest: command.manifest },
+      }),
+    );
+  }
   if (command.commandType === "lifecycle.complete-demand") {
     if (state.demandId !== command.completion.demandId) {
       fail("identity", "$/completion/demandId");
@@ -1493,6 +1557,19 @@ export function evolveDemandEventSourcingState(
   }
   if (state === null) fail("transition", "$state");
   if (state.demandId !== event.demandId) fail("identity", "$/demandId");
+  if (event.eventType === "evidence.managed-evidence-recorded") {
+    try {
+      return recordManagedEvidenceInDemandAggregateState(
+        state,
+        event.data.manifest,
+      );
+    } catch (error: unknown) {
+      if (error instanceof DemandAggregateStateError) {
+        fail("transition", "$state/managedEvidence");
+      }
+      throw error;
+    }
+  }
   if (event.eventType === "tasking.target-task-planned") {
     try {
       return planTargetTaskInDemandAggregateState(

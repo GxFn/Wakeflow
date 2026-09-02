@@ -5,6 +5,9 @@ import { WAKEFLOW_DEMAND_COMPLETED_EVENT_DATA_V1_SCHEMA } from "../../../contrac
 import { WAKEFLOW_DEMAND_COMPLETION_SCHEMA } from "../../../contracts/generated/governance/lifecycle/demand-completion.generated.js";
 import type { WakeflowDemandPublishedEventDataV1 } from "../../../contracts/generated/governance/demand/demand-published-event-data-v1.generated.js";
 import { WAKEFLOW_DEMAND_PUBLISHED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/demand-published-event-data-v1.generated.js";
+import type { WakeflowManagedEvidenceRecordedEventDataV1 } from "../../../contracts/generated/governance/demand/managed-evidence-recorded-event-data-v1.generated.js";
+import { WAKEFLOW_MANAGED_EVIDENCE_RECORDED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/managed-evidence-recorded-event-data-v1.generated.js";
+import { WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA } from "../../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
 import type { WakeflowTargetTaskPlannedEventDataV1 } from "../../../contracts/generated/governance/demand/target-task-planned-event-data-v1.generated.js";
 import { WAKEFLOW_TARGET_TASK_PLANNED_EVENT_DATA_V1_SCHEMA } from "../../../contracts/generated/governance/demand/target-task-planned-event-data-v1.generated.js";
 import type { WakeflowTestCardCreatedEventDataV1 } from "../../../contracts/generated/governance/demand/test-card-created-event-data-v1.generated.js";
@@ -49,6 +52,7 @@ import { WAKEFLOW_TARGET_RESULT_SCHEMA } from "../../../contracts/generated/gove
 import { WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_SCHEMA } from "../../../contracts/generated/governance/result/implementation-target-result-report.generated.js";
 import { WAKEFLOW_TEST_TARGET_RESULT_REPORT_SCHEMA } from "../../../contracts/generated/governance/result/test-target-result-report.generated.js";
 import { WAKEFLOW_GIT_OBJECT_ID_SCHEMA } from "../../../contracts/generated/foundation/git-object-id.generated.js";
+import { WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA } from "../../../contracts/generated/foundation/loaded-artifact-tree-manifest.generated.js";
 import { WAKEFLOW_LEDGER_AUTHORITY_MEMBER_REFERENCE_SCHEMA } from "../../../contracts/generated/governance/ledger/ledger-authority-member-reference.generated.js";
 import { WAKEFLOW_TASK_PACKAGE_SCHEMA } from "../../../contracts/generated/governance/tasking/task-package.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
@@ -79,6 +83,7 @@ export const DEMAND_EVENT_SOURCING_EVENT_TYPES = Object.freeze([
   "delivery.target-host-effect-claimed",
   "delivery.target-host-effect-observed",
   "delivery.target-host-effect-rearmed",
+  "evidence.managed-evidence-recorded",
   "lifecycle.demand-cancelled",
   "lifecycle.demand-completed",
   "publication.demand-published",
@@ -99,6 +104,7 @@ export const DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS = Object.freeze({
   "delivery.target-host-effect-claimed": 1,
   "delivery.target-host-effect-observed": 1,
   "delivery.target-host-effect-rearmed": 1,
+  "evidence.managed-evidence-recorded": 1,
   "lifecycle.demand-cancelled": 1,
   "lifecycle.demand-completed": 1,
   "publication.demand-published": 1,
@@ -123,6 +129,17 @@ const validatePublishedV1 =
   createRuntimeJsonSchemaValidator<WakeflowDemandPublishedEventDataV1>(
     WAKEFLOW_DEMAND_PUBLISHED_EVENT_DATA_V1_SCHEMA,
     [WAKEFLOW_SHA256_DIGEST_SCHEMA],
+  );
+const validateManagedEvidenceRecordedV1 =
+  createRuntimeJsonSchemaValidator<WakeflowManagedEvidenceRecordedEventDataV1>(
+    WAKEFLOW_MANAGED_EVIDENCE_RECORDED_EVENT_DATA_V1_SCHEMA,
+    [
+      WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA,
+      WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA,
+      WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
+      WAKEFLOW_SHA256_DIGEST_SCHEMA,
+      WAKEFLOW_UTC_INSTANT_SCHEMA,
+    ],
   );
 const validateCancelledV1 =
   createRuntimeJsonSchemaValidator<WakeflowDemandCancelledEventDataV1>(
@@ -331,6 +348,16 @@ function parsePublishedV1(value: Readonly<JsonValue>): Readonly<JsonValue> {
   return parseJsonValue(result.value, "$data");
 }
 
+function parseManagedEvidenceRecordedV1(
+  value: Readonly<JsonValue>,
+): Readonly<JsonValue> {
+  const result = validateManagedEvidenceRecordedV1(value);
+  if (!result.ok) {
+    throw new TypeError("Managed evidence recorded v1 data is invalid.");
+  }
+  return parseJsonValue(result.value, "$data");
+}
+
 function parseCancelledV1(value: Readonly<JsonValue>): Readonly<JsonValue> {
   const result = validateCancelledV1(value);
   if (!result.ok) throw new TypeError("Demand cancelled v1 data is invalid.");
@@ -518,6 +545,16 @@ const PUBLISHED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
   steps: [],
 });
 
+const MANAGED_EVIDENCE_RECORDED_REGISTRY =
+  new EventSourcingVersionEvolutionRegistry({
+    currentVersion:
+      DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS[
+        "evidence.managed-evidence-recorded"
+      ],
+    codecs: [{ version: 1, parse: parseManagedEvidenceRecordedV1 }],
+    steps: [],
+  });
+
 const CANCELLED_REGISTRY = new EventSourcingVersionEvolutionRegistry({
   currentVersion:
     DEMAND_EVENT_SOURCING_CURRENT_EVENT_VERSIONS["lifecycle.demand-cancelled"],
@@ -663,6 +700,7 @@ const EVENT_VERSION_REGISTRIES = Object.freeze({
   "delivery.target-host-effect-claimed": TARGET_HOST_EFFECT_CLAIMED_REGISTRY,
   "delivery.target-host-effect-observed": TARGET_HOST_EFFECT_OBSERVED_REGISTRY,
   "delivery.target-host-effect-rearmed": TARGET_HOST_EFFECT_REARMED_REGISTRY,
+  "evidence.managed-evidence-recorded": MANAGED_EVIDENCE_RECORDED_REGISTRY,
   "lifecycle.demand-cancelled": CANCELLED_REGISTRY,
   "lifecycle.demand-completed": COMPLETED_REGISTRY,
   "publication.demand-published": PUBLISHED_REGISTRY,
@@ -690,6 +728,8 @@ export const DEMAND_EVENT_SOURCING_SUPPORTED_EVENT_VERSIONS = Object.freeze({
     TARGET_HOST_EFFECT_OBSERVED_REGISTRY.supportedVersions,
   "delivery.target-host-effect-rearmed":
     TARGET_HOST_EFFECT_REARMED_REGISTRY.supportedVersions,
+  "evidence.managed-evidence-recorded":
+    MANAGED_EVIDENCE_RECORDED_REGISTRY.supportedVersions,
   "lifecycle.demand-cancelled": CANCELLED_REGISTRY.supportedVersions,
   "lifecycle.demand-completed": COMPLETED_REGISTRY.supportedVersions,
   "publication.demand-published": PUBLISHED_REGISTRY.supportedVersions,

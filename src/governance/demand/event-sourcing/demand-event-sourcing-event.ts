@@ -18,6 +18,11 @@ import {
   type UtcInstant,
 } from "../../../foundation/time/utc-instant.js";
 import {
+  parseManagedEvidenceManifest,
+  ManagedEvidenceManifestError,
+  type ManagedEvidenceManifest,
+} from "../../evidence/managed-evidence-manifest.js";
+import {
   parseTaskPackage,
   TaskPackageError,
   type TaskPackage,
@@ -127,6 +132,16 @@ export interface DemandCompletedUncommittedEvent {
   readonly eventType: "lifecycle.demand-completed";
   readonly data: Readonly<{
     readonly completion: Readonly<DemandCompletion>;
+  }>;
+}
+
+export interface ManagedEvidenceRecordedUncommittedEvent {
+  readonly eventId: WakeflowDurableId<"demand-event">;
+  readonly demandId: WakeflowDurableId<"demand">;
+  readonly recordedAt: UtcInstant;
+  readonly eventType: "evidence.managed-evidence-recorded";
+  readonly data: Readonly<{
+    readonly manifest: Readonly<ManagedEvidenceManifest>;
   }>;
 }
 
@@ -245,6 +260,7 @@ export type DemandUncommittedEvent =
   | DemandPublishedUncommittedEvent
   | DemandCancelledUncommittedEvent
   | DemandCompletedUncommittedEvent
+  | ManagedEvidenceRecordedUncommittedEvent
   | TestCardCreatedUncommittedEvent
   | TargetTaskPlannedUncommittedEvent
   | TestDeliveryPreparedUncommittedEvent
@@ -275,6 +291,7 @@ export type DemandEventSourcingEventErrorReason =
   | "controller-product-defect-remediation-authorization"
   | "controller-target-review-resume"
   | "demand-completion"
+  | "managed-evidence-manifest"
   | "test-card"
   | "test-card-generation-source"
   | "relation";
@@ -309,6 +326,8 @@ const ERROR_MESSAGES = {
     "Demand Event Sourcing event contains an invalid Controller Target Review Resume.",
   "demand-completion":
     "Demand Event Sourcing event contains an invalid Demand Completion.",
+  "managed-evidence-manifest":
+    "Demand Event Sourcing event contains an invalid Managed Evidence Manifest.",
   "test-card": "Demand Event Sourcing event contains an invalid TestCard.",
   "test-card-generation-source":
     "Demand Event Sourcing event contains an invalid TestCard Generation Source.",
@@ -345,6 +364,9 @@ const PUBLISHED_DATA_FIELDS = Object.freeze([
 ] as const);
 const CANCELLED_DATA_FIELDS = Object.freeze(["reason"] as const);
 const COMPLETED_DATA_FIELDS = Object.freeze(["completion"] as const);
+const MANAGED_EVIDENCE_RECORDED_DATA_FIELDS = Object.freeze([
+  "manifest",
+] as const);
 const TARGET_TASK_PLANNED_DATA_FIELDS = Object.freeze(["taskPackage"] as const);
 const TEST_CARD_CREATED_DATA_FIELDS = Object.freeze([
   "generationSource",
@@ -520,6 +542,33 @@ export function parseDemandUncommittedEvent(
       recordedAt,
       eventType: "lifecycle.demand-completed",
       data: Object.freeze({ completion }),
+    });
+  }
+
+  if (record.eventType === "evidence.managed-evidence-recorded") {
+    const data = exactRecord(
+      record.data,
+      MANAGED_EVIDENCE_RECORDED_DATA_FIELDS,
+      "$/data",
+    );
+    let manifest: Readonly<ManagedEvidenceManifest>;
+    try {
+      manifest = parseManagedEvidenceManifest(data.manifest);
+    } catch (error: unknown) {
+      if (error instanceof ManagedEvidenceManifestError) {
+        fail("managed-evidence-manifest", "$/data/manifest");
+      }
+      throw error;
+    }
+    if (manifest.demandId !== demandId || manifest.capturedAt !== recordedAt) {
+      fail("relation", "$event");
+    }
+    return Object.freeze({
+      eventId,
+      demandId,
+      recordedAt,
+      eventType: "evidence.managed-evidence-recorded",
+      data: Object.freeze({ manifest }),
     });
   }
 

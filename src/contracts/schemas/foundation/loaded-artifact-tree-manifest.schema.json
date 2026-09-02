@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:wakeflow:foundation:artifact:loaded-artifact-tree-manifest:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA",
   "title": "LoadedArtifactTreeManifest",
   "description": "Wakeflow 已加载制品树的位置无关内容身份：按 portable ref 排序的 regular-file 摘要、字节数与 executable bit。",
   "$comment": "本 Schema 只闭合 portable manifest shape。ref 的 UTF-8 字节上限、NFC/case collision、fileCount/totalBytes 派生相等、物理 no-follow 观察与两遍树稳定性由 foundation/artifact/loaded-artifact-tree-identity 运行时能力负责。",

@@ -10,6 +10,7 @@ export const WAKEFLOW_DURABLE_ID_KINDS = Object.freeze([
   "demand",
   "demand-event",
   "demand-event-commit",
+  "evidence",
   "program",
   "product-defect-remediation",
   "repository",

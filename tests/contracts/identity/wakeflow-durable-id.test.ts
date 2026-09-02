@@ -21,7 +21,6 @@ import {
 const FIXED_UUID_TEXT = "12345678-90ab-4cde-8fab-1234567890ab";
 const FIXED_UUID = parseUuidV4(FIXED_UUID_TEXT);
 const RETIRED_DURABLE_ID_KINDS = [
-  "evidence",
   "delivery",
   "delivery-run",
   "dispatch-group",

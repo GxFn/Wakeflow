@@ -4,7 +4,7 @@
   "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_AGGREGATE_STATE_SCHEMA",
   "title": "WakeflowDemandAggregateState",
   "description": "由 Demand domain event reducer 唯一生成的最小业务 Aggregate state。",
-  "$comment": "stream revision、event tail 与 snapshot metadata 不进入本状态；authorityDigest 是 TaskPackage 准入所需的 publication 派生事实。currentTestCard 只指向当前测试合同；旧 Test Target 保留其 Card、attempt、Result 与 Decision 历史。pendingTestRetest 只投影已授权但尚未由新 Card 消费的一次复测，不复制完整 Authorization。Evidence 与 Pod 不以空占位字段提前进入状态模型。",
+  "$comment": "stream revision、event tail 与 snapshot metadata 不进入本状态；authorityDigest 是 TaskPackage 准入所需的 publication 派生事实。managedEvidence 只在首个Evidence Event后出现，并仅投影ID与双摘要selector；完整Manifest留在Event。currentTestCard 只指向当前测试合同；旧 Test Target 保留其 Card、attempt、Result 与 Decision 历史。pendingTestRetest 只投影已授权但尚未由新 Card 消费的一次复测，不复制完整 Authorization。Pod不以空占位字段提前进入状态模型。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -36,6 +36,14 @@
       "maxItems": 10000,
       "items": {
         "$ref": "#/$defs/targetTask"
+      }
+    },
+    "managedEvidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/managedEvidenceSummary"
       }
     },
     "currentTestCard": {
@@ -100,6 +108,26 @@
     "demandId": {
       "type": "string",
       "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "evidenceId": {
+      "type": "string",
+      "pattern": "^evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "managedEvidenceSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidenceId", "manifestDigest", "payloadArtifactDigest"],
+      "properties": {
+        "evidenceId": {
+          "$ref": "#/$defs/evidenceId"
+        },
+        "manifestDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "payloadArtifactDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
     },
     "targetTaskId": {
       "type": "string",

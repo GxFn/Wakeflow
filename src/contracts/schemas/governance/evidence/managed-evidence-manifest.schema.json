@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:governance:evidence:managed-evidence-manifest:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA",
+  "title": "WakeflowManagedEvidenceManifest",
+  "description": "Wakeflow从已配置本地资源根捕获的一份不可变managed evidence内容与provenance清单。",
+  "$comment": "本Schema闭合portable manifest shape。typed ID、真实UTC、NFC、payload artifactDigest、file-source单文件映射、opaque ref子集/顺序、为final record的manifest.json与payload/前缀预留的容量，以及manifestDigest由governance/evidence/managed-evidence-manifest运行时codec复验。Manifest不包含payload字节、外部URL/Git locator、Event位置、Controller acceptance或隐含privacy scan结论。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactKind",
+    "schemaVersion",
+    "evidenceId",
+    "programId",
+    "demandId",
+    "demandAuthorityDigest",
+    "evidenceType",
+    "capturedAt",
+    "recordedBy",
+    "source",
+    "sensitivity",
+    "payload",
+    "contentReview",
+    "manifestDigest"
+  ],
+  "properties": {
+    "artifactKind": {
+      "const": "wakeflow-managed-evidence-manifest"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "evidenceId": {
+      "$ref": "#/$defs/evidenceId"
+    },
+    "programId": {
+      "$ref": "#/$defs/programId"
+    },
+    "demandId": {
+      "$ref": "#/$defs/demandId"
+    },
+    "demandAuthorityDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    },
+    "evidenceType": {
+      "$ref": "#/$defs/token",
+      "description": "用于审阅和检索的领域标签；未知标签不得被消费者解释为权限、充分性或验收策略。"
+    },
+    "capturedAt": {
+      "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+    },
+    "recordedBy": {
+      "$ref": "#/$defs/recordedBy"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "sensitivity": {
+      "enum": ["internal", "public"]
+    },
+    "payload": {
+      "$ref": "#/$defs/payload"
+    },
+    "contentReview": {
+      "$ref": "#/$defs/contentReview"
+    },
+    "manifestDigest": {
+      "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+    }
+  },
+  "$defs": {
+    "evidenceId": {
+      "type": "string",
+      "pattern": "^evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "windowId": {
+      "type": "string",
+      "pattern": "^window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "repositoryId": {
+      "type": "string",
+      "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "surfaceId": {
+      "type": "string",
+      "pattern": "^surface_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "recordedBy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["windowId", "configDigest"],
+      "properties": {
+        "windowId": {
+          "$ref": "#/$defs/windowId"
+        },
+        "configDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "path", "resourceType"],
+      "properties": {
+        "root": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/repositoryRoot"
+            },
+            {
+              "$ref": "#/$defs/supportSurfaceRoot"
+            }
+          ]
+        },
+        "path": {
+          "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+        },
+        "resourceType": {
+          "enum": ["file", "tree"]
+        }
+      }
+    },
+    "repositoryRoot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "repositoryId"],
+      "properties": {
+        "kind": {
+          "const": "repository"
+        },
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        }
+      }
+    },
+    "supportSurfaceRoot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "surfaceId"],
+      "properties": {
+        "kind": {
+          "const": "support-surface"
+        },
+        "surfaceId": {
+          "$ref": "#/$defs/surfaceId"
+        }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifactDigest", "treeManifest"],
+      "properties": {
+        "artifactDigest": {
+          "$ref": "urn:wakeflow:foundation:crypto:sha256-digest:v1"
+        },
+        "treeManifest": {
+          "$ref": "urn:wakeflow:foundation:artifact:loaded-artifact-tree-manifest:v1"
+        }
+      }
+    },
+    "contentReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["disposition", "opaqueFileRefs"],
+      "properties": {
+        "disposition": {
+          "enum": ["controller-confirmed", "not-required"]
+        },
+        "opaqueFileRefs": {
+          "type": "array",
+          "maxItems": 4095,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "urn:wakeflow:foundation:filesystem:portable-resource-path:v1"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "not-required"
+              }
+            },
+            "required": ["disposition"]
+          },
+          "then": {
+            "properties": {
+              "opaqueFileRefs": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "opaqueFileRefs": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

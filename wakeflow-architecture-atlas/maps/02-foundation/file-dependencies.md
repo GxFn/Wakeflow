@@ -1,12 +1,12 @@
 ---
 diagramId: ts-foundation-file-dependency-f2
 viewType: file-dependency
-truthKind: current-code
+truthKind: in-progress-worktree
 reviewDepth: L3
-verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
+verifiedAt: 2026-09-02
+snapshotObservedAt: 2026-09-02T00:01:58-07:00
 baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:6d67a06cfe0baa9cea6c8e4816b029ed8a5f7846d04475569fc9f704528c44f8
+sourceFingerprint: sha256:be32826a7dd27f3f23364d53e4a0520d2df4f0cbe054822747de84e122164308
 audience:
   - maintainer
   - reviewer
@@ -25,7 +25,7 @@ testPaths:
 
 # Foundation：关键文件导入依赖
 
-> 本图从 62 个 Foundation 生产模块中选出 21 个审阅骨干文件。交互阅读页默认展示入口概览，
+> 本图从 63 个 Foundation 生产模块中选出 22 个审阅骨干文件。交互阅读页默认展示入口概览，
 > 可切换 ELK 全图、搜索文件、筛选关系并聚焦 1-hop/上游/下游。
 >
 > 箭头只证明静态导入；真实操作顺序见[关键调用流](./runtime-call-flow.md)。
@@ -63,6 +63,7 @@ flowchart LR
   subgraph HOST_ENTRY["目录树与制品"]
     TREE_PLAN["[源码][F-FS-10]\ndirectory-tree-candidate-plan.ts"]
     TREE_PUB["[源码][F-FS-11]\ndurable-directory-tree-publication.ts"]
+    TREE_RETIRE["[进行中][F-FS-12]\ndurable-directory-tree-candidate-retirement.ts"]
     ARTIFACT_PUB["[源码][F-ART-01]\nloaded-artifact-tree-transfer-publication.ts"]
   end
 
@@ -107,6 +108,10 @@ flowchart LR
   TREE_PUB -->|"E-F2-27 节点与路径"| SNAPSHOT
   ARTIFACT_PUB -->|"E-F2-28 发布目录树"| TREE_PUB
   ARTIFACT_PUB -->|"E-F2-29 根作用域"| ROOT
+  TREE_RETIRE -->|"E-F2-39 原计划与路径闭包"| TREE_PLAN
+  TREE_RETIRE -->|"E-F2-40 根作用域"| ROOT
+  TREE_RETIRE -->|"E-F2-41 文件摘要复验"| STABLE_FILE
+  TREE_RETIRE -->|"E-F2-42 节点身份"| SNAPSHOT
 
   GIT_CANDIDATE -->|"E-F2-30 隔离worktree"| ROOT
   GIT_CANDIDATE -->|"E-F2-31 候选摘要"| SHA
@@ -152,6 +157,7 @@ flowchart LR
 | `F-FS-09` | `src/foundation/filesystem/create-only-deterministic-json-resource.ts` | `materializeCreateOnlyDeterministicJsonResource` | 已实现 | 固定权限目录内的幂等只创建 JSON 物化 |
 | `F-FS-10` | `src/foundation/filesystem/directory-tree-candidate-plan.ts` | `planDirectoryTreeCandidate`、`parseDirectoryTreeCandidatePlan` | 已实现 | 规范化并摘要目录树候选计划 |
 | `F-FS-11` | `src/foundation/filesystem/durable-directory-tree-publication.ts` | `publishDirectoryTreeCandidateDurably` | 已实现 | 同根、同设备的目录树重命名发布 |
+| `F-FS-12` | `src/foundation/filesystem/durable-directory-tree-candidate-retirement.ts` | `retire/settleDirectoryTreeCandidate*` | 进行中 | 完整candidate首次退休与原计划安全子集恢复；拒绝recursive删除 |
 | `F-ART-01` | `src/foundation/artifact/loaded-artifact-tree-transfer-publication.ts` | `publishLoadedArtifactTreeTransferCandidate` | 已实现 | 幂等读取或发布已闭合 Loaded Artifact Tree |
 | `F-GIT-01` | `src/foundation/git/git-ignore-candidate-observation.ts` | `observeGitIgnoreCandidate` | 已实现 | 在隔离临时 worktree 中观察候选忽略语义 |
 | `F-GIT-02` | `src/foundation/git/git-object-id.ts` | `parseGitObjectId` | 已实现 | 解析带算法标签的完整 Git 对象身份 |
@@ -163,12 +169,12 @@ flowchart LR
 
 | 范围 | 模块数 | 依赖数 | 违规 |
 | --- | ---: | ---: | ---: |
-| `src/foundation/**`闭包 | 67 | 290 | 0 |
-| Foundation生产源码 | 62 | — | 0 |
+| `src/foundation/**`闭包 | 68 | 301 | 0 |
+| Foundation生产源码 | 63 | — | 0 |
 
-最密集的内部依赖簇是 `filesystem → filesystem`（143 条）；其次是
-`filesystem → data`（26 条）、`artifact → filesystem`（17 条）、
-`filesystem → node`（16 条）和`filesystem → crypto`（14 条）。
+最密集的内部依赖簇是 `filesystem → filesystem`（152 条）；其次是
+`filesystem → data`（27 条）、`artifact → filesystem`（17 条）、
+`filesystem → node`（17 条）和`filesystem → crypto`（14 条）。
 
 ## 边级证据
 
@@ -177,7 +183,7 @@ flowchart LR
 | `E-F2-01`–`E-F2-03` | 数据/摘要 | 被依赖的准入与生成合同 | 文件顶部静态 imports | `tests/foundation/{data,crypto}/**` |
 | `E-F2-04`–`E-F2-12` | 路径、根与稳定读取 | 生成模式、节点、摘要和根作用域 | dependency-cruiser直接边 | `tests/foundation/filesystem/{portable-resource-path,rooted-directory,stable-*}.test.ts` |
 | `E-F2-13`–`E-F2-23` | 原子写入、恢复、锁与只创建 | 根、路径、稳定读取与提交门面 | 写入/恢复模块静态 imports | 原子写入、stage recovery、exclusive lock与create-only测试 |
-| `E-F2-24`–`E-F2-29`、`E-F2-37`、`E-F2-38` | 目录树与Artifact发布 | 规范摘要、节点、路径和发布能力 | plan/publication静态 imports | directory tree与loaded artifact tree测试 |
+| `E-F2-24`–`E-F2-29`、`E-F2-37`–`E-F2-42` | 目录树、退休与Artifact发布 | 规范摘要、节点、路径、精确退休和发布能力 | plan/retirement/publication静态 imports | directory tree、retirement与loaded artifact tree测试 |
 | `E-F2-30`–`E-F2-36` | Git、UTC与事件演进 | 根、摘要、Schema和JSON准入 | 对应模块静态 imports | Git观察、Git object ID、UTC与版本演进测试 |
 
 ## 折叠清单
@@ -187,7 +193,7 @@ flowchart LR
 - UTF-8、字节数、UUID和 Node system error 等单职责原语；
 - 原子写入的 stage address、stage I/O、target I/O、settlement 与 unlink 子模块；
 - 目录物化、文件/目录 candidate、复制 candidate、tree scan 与稳定资源树读取；
-- Loaded Artifact Tree 的 identity、candidate 与 transfer plan；
+- Loaded Artifact Tree 的 identity、candidate 与 transfer plan；identity已由进行中的Managed Evidence Manifest消费，transfer仍无生产consumer；
 - 单调时钟、时长、截止点与墙上时钟；
 - 6 个 JSON Schema 到 6 个生成合同的逐文件映射。
 
@@ -195,5 +201,5 @@ flowchart LR
 
 - 本图不证明调用顺序、提交点或失败恢复顺序。
 - Foundation机制不拥有配置、治理或宿主业务状态。
-- Foundation 62个生产模块已进入`d17602e`；后续来源变化必须重新核验本图。
-- 完整 62 模块导入图应由 dependency-cruiser数据按需查询，不应一次塞入文档主图。
+- Foundation 62个生产模块已进入`d17602e`；当前工作树新增第63个candidate retirement模块，后续来源变化仍须复核。
+- 完整 63 模块导入图应由 dependency-cruiser数据按需查询，不应一次塞入文档主图。

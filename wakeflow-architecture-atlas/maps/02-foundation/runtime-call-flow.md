@@ -3,10 +3,10 @@ diagramId: ts-foundation-runtime-c0
 viewType: runtime-call-sequence
 truthKind: current-code
 reviewDepth: L4
-verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
+verifiedAt: 2026-09-02
+snapshotObservedAt: 2026-09-02T00:01:58-07:00
 baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:578ce4ab95077ed22a7539f64e8a9f9941745aa5499a5504eaa1127f0c32c3b4
+sourceFingerprint: sha256:519046c9a9efdec06e8b7d27ef1f06fd414c3483a9fd521f938778caad937221
 audience:
   - maintainer
   - reviewer
@@ -229,6 +229,7 @@ sequenceDiagram
 | stage恢复 | `durable-atomic-file-stage-recovery.ts#recover*` | 有界识别、活动性判断、结算或退休安全stage | 猜测未知文件或跨目标批量删除 |
 | 独占锁 | `rooted-exclusive-file-lock.ts#withRootedExclusiveFileLock` | 进程/线程/token记录、超时重试和临界区释放 | 分布式租约或业务状态机 |
 | 只创建组合 | `create-only-deterministic-json-resource.ts#materialize*` | 固定目录策略、原子创建、并发幂等与完整回读 | 替换已存在的不同资源 |
+| candidate tree退休 | `durable-directory-tree-candidate-retirement.ts#retire/settle*` | 完整candidate首入、原计划安全子集恢复、逐文件精确unlink与最深目录优先rmdir | 选择业务stage/final、判断Event状态或recursive删除 |
 
 ## 停止边界
 
@@ -236,3 +237,4 @@ sequenceDiagram
 - Foundation锁不是业务权威；上层必须选择正确锁路径并在锁内复验领域状态。
 - 取消只保证提交点之前停止；提交后必须通过回读和恢复确定事实。
 - `create-only-deterministic-json-resource`已提交并由Test Dispatch投影等真实consumer使用。
+- candidate tree退休已通过7项聚焦与19项相邻回归，但尚无生产consumer；上层journal必须决定Event前允许退休还是Event后只前向发布。

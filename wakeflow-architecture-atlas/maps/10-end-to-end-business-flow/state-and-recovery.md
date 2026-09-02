@@ -1,12 +1,12 @@
 ---
 diagramId: ts-end-to-end-state-z1
 viewType: state-recovery
-truthKind: current-code
+truthKind: in-progress-worktree
 reviewDepth: L5
 verifiedAt: 2026-09-01
 snapshotObservedAt: 2026-09-01T20:05:05-07:00
 baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
-sourceFingerprint: sha256:c287d7336c3e951b1366fd4a37638004d43ee0f60f1e359785ae2f5b2ae0fd38
+sourceFingerprint: sha256:1c4c6347a466efe428eb6adb1f085d063cdf2fbaaf3b46e5274cb0e08f26321d
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Source Maintenance
 generatedBy: manual-composition
@@ -21,7 +21,7 @@ testPaths: [tests/workspace/**, tests/governance/**]
 ```mermaid
 stateDiagram-v2
   accTitle: Wakeflow端到端业务状态与恢复分支
-  accDescr: wakeflow_create_demand以零写preview和精确apply触发Publication，发布Demand根后claim TODO；中断时只有exact sidecar允许显式recover。implementation Delivery按accepted/rejected/indeterminate收敛。Test accept进入Completion，another创建rerun，blocked精确Resume；product-defect释放currentTestCard、保留历史Target并进入Remediation Authorization、原产品返工与新Test代际。Demand归档仍停止，Implementation Redesign保持显式blocker。
+  accDescr: wakeflow_create_demand以零写preview和精确apply触发Publication，发布Demand根后claim TODO；中断时只有exact sidecar允许显式recover。当前内部Managed Evidence Event可在active Demand上追加并投影selector，但资源Application尚缺失。implementation Delivery按accepted/rejected/indeterminate收敛。Test accept进入Completion，another创建rerun，blocked精确Resume；product-defect释放currentTestCard、保留历史Target并进入Remediation Authorization、原产品返工与新Test代际。Demand归档仍停止，Implementation Redesign保持显式blocker。
 
   state "① Demand 与规划" as PlanningPhase {
     state "pending-claim TODO" as PendingTodo
@@ -67,6 +67,7 @@ stateDiagram-v2
   PendingTodo --> DemandPublished: E-Z1-02 wakeflow_create_demand apply + revision 1
   DemandPublished --> ActiveDemand: E-Z1-03 CAS claim TODO + finalize
   ActiveDemand --> TaskPlanned: E-Z1-04 target-task-planned
+  ActiveDemand --> ActiveDemand: E-Z1-38 managed-evidence-recorded（内部骨干）
   TaskPlanned --> DeliveryPrepared: E-Z1-05 target-delivery-prepared
   DeliveryPrepared --> EffectClaimed: E-Z1-06 WorkClaim + claimed Event
   EffectClaimed --> EffectAccepted: E-Z1-07 observed accepted
@@ -114,6 +115,7 @@ stateDiagram-v2
 | Controller Test Review | Test conclusion、Evidence充分性和四类Decision的独立Service/Event；不复用implementation判断矩阵 |
 | Test completion closure | Test accept后Route携带Card、最终attempt、Result、Decision与Test窗口来源；Completion只投影mode并保留历史 |
 | currentTestCard | 当前可规划/执行Test合同槽位；product-defect Target保留历史但不再占用该槽位 |
+| managed-evidence-recorded | 保存完整Manifest的第15个Demand Event；Aggregate只增加Evidence ID与Manifest/payload双摘要，生命周期仍为active |
 | lifecycle cancel | 已存在的取消Event终态；不是成功Completion或归档 |
 
 ### 本图边级证据索引
@@ -157,6 +159,7 @@ stateDiagram-v2
 | `E-Z1-35` | Test blocked → Test Review待决定 | 共享Resume Service复验workType/Decision/Result并保留同一attempt |
 | `E-Z1-36` | product-defect → Remediation | currentTestCard释放、历史Target保留；Authorization Event绑定失败检查与baseline |
 | `E-Z1-37` | Remediation → 产品返工Delivery | 原产品Target进入`product-defect-rework-requested`并保持同一TaskPackage |
+| `E-Z1-38` | Active Demand → Active Demand | 内部Evidence Command/Event记录完整Manifest并投影排序selector；当前没有资源Application生产调用方 |
 
 ## 跨层恢复矩阵
 
@@ -166,6 +169,7 @@ stateDiagram-v2
 | Demand首次发布中断 | 同级exact publication sidecar | 公共`wakeflow_create_demand recover(demandId)`委托`recoverDemandPublication` | 把`unknown`当成安全重试，或删除已发布根倒退 |
 | Event append候选残留 | candidate + 固定sequence槽位 | `recoverAppendCandidates` | 覆盖不同Commit |
 | Snapshot损坏 | Commit/Event完整流 | load回退完整重放 | 在读取中静默修复历史 |
+| Managed Evidence Event重放 | Commit中的完整Manifest + Aggregate双摘要selector | Demand完整重放 | 把Event存在解释成payload/Manifest资源已经发布 |
 | TaskPackage投影缺失 | 唯一规划Event | Projection Store materialize | 调用方伪造投影文件 |
 | Binding已写、projection失败 | 私有Binding current | 独立重建registered projection | 回滚Binding并重用handle |
 | Host effect rejected | observed Event | 显式rearm | 自动重复Host Action |
@@ -184,6 +188,7 @@ stateDiagram-v2
 | Maintenance | operation ID + intent digest + journal successor |
 | Demand Publication | 完整transaction digest + expected TODO collection/state digest + Demand/Event/Commit IDs |
 | Demand Event | commitId + commandDigest + expected stream revision |
+| Managed Evidence Event | evidenceId + manifestDigest + payloadArtifactDigest；资源Publication CAS尚未实现 |
 | Task/Delivery/Result/Review | 确定派生ID + source摘要 + generation |
 | WorkClaim | claimId + window/target/intent/action绑定 |
 | Projection | Event来源 + 确定文档摘要 |
@@ -193,4 +198,5 @@ stateDiagram-v2
 
 成功Completion之后没有归档状态、存储owner、Schema、测试或恢复入口。Research Completion和
 Implementation Redesign也仍是明确缺口。Demand Publication Public已进入提交`f7c005d`，但尚未通过完整发布门；
-图中停止节点不是未来实现设计。
+Managed Evidence已有零写capture Planning、Event/Aggregate selector、final/stage/journal路径合同及record tree plan，但尚未创建journal、
+未接入transaction-phase Inventory，也无资源Application或payload/Manifest恢复执行。图中停止节点不是未来实现设计。

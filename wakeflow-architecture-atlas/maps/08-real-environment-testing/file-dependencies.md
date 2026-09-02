@@ -4,7 +4,7 @@ viewType: file-dependency
 truthKind: current-code
 reviewDepth: L3
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T20:05:05-07:00
+snapshotObservedAt: 2026-09-01T20:26:05-07:00
 baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
 sourceFingerprint: sha256:79e7a84af1b73a7d6d51bd50b4a10cc63b80b82aa4119206e2e780cce0d6cb6d
 audience: [maintainer, reviewer]
@@ -121,7 +121,7 @@ flowchart LR
 
 | Testing生产模块 | 当前全仓受检模块 | 当前全仓依赖 | 违规 |
 | ---: | ---: | ---: | ---: |
-| 23 | 723 | 5059 | 0 |
+| 23 | 740 | 5182 | 0 |
 
 ## 停止边界
 

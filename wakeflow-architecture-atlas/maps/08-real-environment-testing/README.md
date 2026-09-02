@@ -4,7 +4,7 @@ viewType: vertical-slice
 truthKind: current-code
 reviewDepth: L2
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T20:05:05-07:00
+snapshotObservedAt: 2026-09-01T20:26:05-07:00
 baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
 sourceFingerprint: sha256:79e7a84af1b73a7d6d51bd50b4a10cc63b80b82aa4119206e2e780cce0d6cb6d
 audience: [maintainer, reviewer]
@@ -139,11 +139,11 @@ flowchart TB
 | 项目 | 读取值 |
 | --- | --- |
 | 生产源码 | 23个Testing模块 |
-| 当前全仓架构门 | 723模块、5059依赖、0违规；Testing语义未受Publication公共化影响 |
+| 当前全仓架构门 | 740模块、5182依赖、0违规；Testing语义未受Foundation Retirement增量影响 |
 | 测试 | 9个正式测试、4个fixture |
 | 合同 | 5个Schema、5个生成合同 |
 | 提交状态 | Testing及相邻公共入口已进入`d17602e` |
-| 完整测试基线 | 902项TypeScript测试通过；Publication提交`f7c005d`尚未重跑完整门 |
+| 最近完整TypeScript门 | 948 pass / 0 fail / 0 cancelled / 0 skip；覆盖当前全部增量 |
 | 来源指纹 | `7f70498f7256fe4cba57c95d0b89ad1c49297afa71d34cf3a0ed1dedef2f4604` |
 
 ## 关键边界

@@ -29,7 +29,10 @@
 Review、blocked Resume、Completion、real-environment Testing和Product Defect Remediation/retest，并通过902项
 TypeScript测试。随后A1–A4收敛MCP测试装配、22项Controller Route矩阵和跨owner测试归属。提交`f7c005d`又以
 author-owned输入、零写Planning、exact-plan Application和双宿主第18个MCP工具补齐Demand Publication Public；
-该切片已通过聚焦门，但尚未重跑完整TypeScript门。
+该切片提交时通过918项完整TypeScript门；当前工作树进一步建立Managed Evidence Manifest、真实
+`evidence` ID、本地source selection、零写capture Planning、Managed Evidence Event/Aggregate selector、资源路径/目录及
+完整record tree plan；Foundation另完成candidate tree精确退休。Evidence 23项、Retirement 7项与Candidate 2项通过，
+但资源发布/Application/Public仍未实现。当前完整TypeScript门为948项全通过。
 
 ## HTML阅读页
 
@@ -113,16 +116,16 @@ HTML、搜索索引和渲染SVG均为可删除重建产物；禁止在`.build/`�
 | 文档包 | 总体/权威图 | 变更影响图 | 文件导入图 | 符号调用图 | 状态/恢复图 | 证据图 | 文档状态 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 00 绘图标准 | 已创建 | 不适用 | 不适用 | 不适用 | 不适用 | 已创建 | 当前 |
-| 01 总体架构 | 已创建 | 已创建 | 已创建 | 已创建 | 不适用 | 已创建 | 当前：18工具、101 Schema；Publication聚焦通过，完整门待重跑 |
-| 02 基础能力 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：62个宿主中立模块 |
+| 01 总体架构 | 已创建 | 已创建 | 已创建 | 已创建 | 不适用 | 已创建 | 进行中：18工具、103 Schema；当前完整门948项 |
+| 02 基础能力 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 进行中：Loaded Artifact identity已有首个Manifest consumer，transfer仍冻结 |
 | 03 配置与工作区 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：维护事务、窗口身份和资源矩阵已提交 |
-| 04 治理与事件溯源 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：14个Event家族及重放/恢复闭合 |
+| 04 治理与事件溯源 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 进行中：15个Event家族；Evidence资源Application仍缺失 |
 | 05 任务规划纵切 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：implementation/test共用公共Planning |
 | 06 实现投递与审阅 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：Delivery/Result/Review公共纵切闭合 |
 | 07 返工与完成 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：普通返工、产品缺陷返工、Resume与Completion闭合 |
 | 08 真实环境测试 | 已创建 | 主图内记录边界 | 已创建 | 已创建 | 调用流内记录 | 嵌入各图 | 当前：Card、Task、Delivery、Result、Review与retest闭合 |
-| 09 公共MCP与宿主接缝 | 已创建 | 不适用 | 复用01 | 已创建 | 按能力记录 | 嵌入各图 | 当前：18工具公开；宿主效果仍由Agent执行 |
-| 10 端到端业务 | 已创建 | 主图内记录边界 | 由下层提供 | 由下层提供 | 已创建 | 已创建 | 当前：pending TODO到Completion公开；Archive仍缺口 |
+| 09 公共MCP与宿主接缝 | 已创建 | 不适用 | 复用01 | 已创建 | 按能力记录 | 嵌入各图 | 当前：仍为18工具；Evidence资源目录尚无Application/Public |
+| 10 端到端业务 | 已创建 | 主图内记录边界 | 由下层提供 | 由下层提供 | 已创建 | 已创建 | 进行中：pending TODO到Completion公开；Evidence资源Application与Archive仍缺口 |
 
 ## 每个文档包的可选文件
 
@@ -174,6 +177,6 @@ HTML、搜索索引和渲染SVG均为可删除重建产物；禁止在`.build/`�
 ## 第一批内容建议
 
 `01-overall-architecture/`至`10-end-to-end-business-flow/`已经建立首轮覆盖。下一步不是继续扩展
-抽象图，而是随真实源码变化刷新来源指纹、逐图验证并修正漂移。Demand Publication Public已进入当前
-工作树；下一停止边界是Research Completion、Implementation Redesign及Evidence/Archive，这些能力仍必须
-等待真实生产者、消费者和测试出现后再建图。
+抽象图，而是随真实源码变化刷新来源指纹、逐图验证并修正漂移。Demand Publication Public已提交；Managed
+Evidence已完成Manifest、零写capture Planning、Event/Aggregate selector、资源路径/目录及record tree plan，但资源Application/Public尚未存在。Research Completion、
+Implementation Redesign与Archive仍须等待真实生产者、消费者和测试后再建图。

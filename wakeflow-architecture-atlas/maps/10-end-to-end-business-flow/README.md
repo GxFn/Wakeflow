@@ -1,12 +1,12 @@
 ---
 diagramId: ts-end-to-end-business-z0
 viewType: business-flow
-truthKind: current-code
+truthKind: in-progress-worktree
 reviewDepth: L2
-verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T20:05:05-07:00
+verifiedAt: 2026-09-02
+snapshotObservedAt: 2026-09-02T00:01:58-07:00
 baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
-sourceFingerprint: sha256:7db6e78faaa9461f54759daa0b48912e1dae28875d6fa7eb53238d56d853475f
+sourceFingerprint: sha256:8bf0fa139de1245f8292a3fc0829ab8e98939953e7863b5ebf9ed770b0d1770f
 audience:
   - maintainer
   - reviewer
@@ -41,6 +41,8 @@ testPaths:
 >
 > 当前18个公共MCP工具覆盖pending TODO经Demand Publication、Route、执行治理到Completion的链；
 > `wakeflow_create_demand`公开preview、exact apply与explicit recover，但不会自动串联后续Route。
+> 当前工作树已有Managed Evidence source selection、零写capture Planning、Event/Aggregate selector、资源路径/目录及record tree plan；
+> Root Inventory、资源Application/MCP仍未实现，因此不进入下图公共主链。
 >
 > **[未实现]** 当前TypeScript源码没有Demand归档owner；主链在`lifecycle.demand-completed`停止。
 
@@ -72,7 +74,7 @@ flowchart TB
     PUBLIC["[当前公共MCP] 18工具\nWorkspace / Demand Publication / Route / Tasking\nDelivery / Result / Review / Testing / Lifecycle"]
     WORKSPACE["[已实现] Config v3与Workspace就绪"]
     TODO["[内部权威] pending/claimed TODO + Ledger"]
-    DEMAND["[进行中][公共] Demand Publication\npreview / apply / recover → revision 1"]
+    DEMAND["[已实现][公共] Demand Publication\npreview / apply / recover → revision 1"]
     PACKAGE["[已实现][公共Planning] immutable implementation TaskPackage Event"]
   end
 
@@ -199,7 +201,8 @@ flowchart TB
 ## 当前剩余边界
 
 - Research Completion和Implementation Redesign仍是显式blocker。
-- Publication提交`f7c005d`只完成聚焦验证，尚未执行完整TypeScript门、真实Codex/Claude宿主效果、
+- Managed Evidence已有本地file/tree capture Planning、Event/Aggregate selector、资源路径/目录及record tree plan，但没有Root Inventory集成、资源Application或公共工具。
+- Publication提交`f7c005d`已通过完整TypeScript门，但尚未执行真实Codex/Claude宿主效果、
   双宿主插件smoke或旧JS等价对照。
 - `demand-completed`之后没有TypeScript归档生产者、合同或恢复路径。
 
@@ -209,9 +212,10 @@ flowchart TB
 | --- | --- |
 | 下层文档 | 01–09共27份Markdown证据 |
 | 组合指纹 | `48b4c587f797c9fefe6b6317f72d8a36e876921c88b2dd7b926e8f3a4a422dbd` |
-| TypeScript基线 | `HEAD=f7c005d`；723模块/5059依赖、101 Schema/207 refs |
-| 当前聚焦验证 | Publication 25项；MCP注册/双宿主3项；候选Codex 433/Claude 438文件 |
-| 最近完整TypeScript门 | 902 pass；早于`f7c005d` |
+| TypeScript基线 | `HEAD=901d5be` + 当前Evidence/Foundation Retirement工作树；740模块/5182依赖、103 Schema/212 refs |
+| 当前聚焦门 | Evidence 23 + Retirement 7 + Candidate 2；0 fail / 0 skip |
+| 最近完整TypeScript门 | 948 pass / 0 fail / 0 cancelled / 0 skip；覆盖当前Evidence/Foundation增量 |
+| 候选闭包 | Codex 439 / Claude Code 444个编译文件；`releaseEligible=false` |
 | 完整发布门 | 未执行；候选manifest明确`releaseEligible=false` |
 
 ## 下钻入口

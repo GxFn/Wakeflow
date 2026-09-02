@@ -1,12 +1,12 @@
 ---
 diagramId: ts-governance-demand-event-sourcing-g0
 viewType: architecture
-truthKind: current-code
+truthKind: in-progress-worktree
 reviewDepth: L1
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T20:05:05-07:00
+snapshotObservedAt: 2026-09-01T21:36:39-07:00
 baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
-sourceFingerprint: sha256:18519fd65ee7fa2a0ce9ad51efe83e1b33087911054a71406bd8433d0994e6f4
+sourceFingerprint: sha256:efe7cf13486c357f87dc2ebde3c1857b1386ed5613a8b42a2845a699bf2ca318
 audience:
   - maintainer
   - reviewer
@@ -14,24 +14,28 @@ documentationOwner: Wakeflow Source Maintenance
 generatedBy: mixed
 refreshTriggers:
   - src/governance/demand/**
+  - src/governance/evidence/managed-evidence-manifest.ts
   - src/contracts/schemas/governance/demand/**
   - src/contracts/generated/governance/demand/**
   - tests/governance/demand/**
 sourcePaths:
   - src/governance/demand/**
+  - src/governance/evidence/managed-evidence-manifest.ts
   - src/contracts/generated/entrypoints/wakeflow-demand-publication-*.generated.ts
 schemaPaths:
   - src/contracts/schemas/governance/demand/**
+  - src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-*.schema.json
 testPaths:
   - tests/governance/demand/**
+  - tests/governance/evidence/managed-evidence-event-sourcing.test.ts
   - tests/entrypoints/wakeflow-demand-publication-mcp.test.ts
 ---
 
 # Governance：Demand事件权威与聚合
 
-> 本文绑定Demand Publication实现提交`f7c005d`。当前有38个Demand生产模块、24份领域Schema/生成合同
-> 及2份Publication公共entrypoint合同。
+> 本文绑定Demand Publication实现提交`f7c005d`及当前未提交的Managed Evidence Event Sourcing增量。当前有
+> 38个Demand生产模块、25份Demand领域Schema/生成合同、1份相邻Evidence Manifest合同及2份Publication公共合同。
 
 ## 当前结论
 
@@ -48,16 +52,20 @@ Application复验plan digest和当前权威后调用既有物理Publication Serv
 模式路由、结果脱敏与Schema闭合。失败结果通过`unchanged / recoverable / current / unknown`说明当前最强可证状态，
 不会把未知副作用解释成安全重试。
 
+当前工作树新增第15个事件家族`evidence.managed-evidence-recorded.v1`：Event保存完整Manifest，Aggregate只投影
+`evidenceId + manifestDigest + payloadArtifactDigest`。该纯Command/Event/Reducer已通过真实两Commit重放，
+但尚无资源Publication/Application生产调用方，因此不能解释为Evidence内容已经耐久发布。
+
 ## 核验快照
 
 | 项目 | 读取值 |
 | --- | --- |
 | 分支/提交 | `main`；`HEAD=f7c005d` |
 | Demand生产源码 | 38 个模块：event-sourcing 21、publication 12、model 3、根级 2 |
-| 当前全仓架构门 | 723个模块、5059条依赖、0违规 |
-| 测试 | 19 个Demand `*.test.ts`；Publication切片25项与MCP 2项通过 |
-| Demand合同 | 24个领域Schema/生成合同 + 2个Publication entrypoint Schema/生成合同 |
-| 提交状态 | Event Sourcing与Publication Public实现、Schema、测试已提交；Atlas同步待提交 |
+| 当前全仓架构门 | 740个模块、5182条依赖、0违规 |
+| 测试 | 19个Demand测试 + 1个Evidence Event测试；相邻回归13项与Candidate 2项通过 |
+| Demand合同 | 25个领域Schema/生成合同 + 1个Evidence Manifest合同 + 2个Publication entrypoint合同 |
+| 提交状态 | Publication Public已提交；Managed Evidence Event/Aggregate及Atlas同步待提交 |
 | 来源指纹 | `37ba9fd4c166827ab2da0d969297c0ff0eae2e9a39498bf0ef89084b12e1ab89` |
 
 ## G0：Demand事件权威全景
@@ -150,7 +158,7 @@ flowchart TB
 
 ## 事件与聚合覆盖
 
-当前事件联合覆盖14个家族：Demand发布/取消/完成、Target Task规划、Test Card创建、Target/Test
+当前事件联合覆盖15个家族：Demand发布/取消/完成、Managed Evidence记录、Target Task规划、Test Card创建、Target/Test
 Delivery准备、宿主效果claim/observe/rearm、TargetResult记录、Controller review决定/恢复，以及产品缺陷
 remediation授权。
 
@@ -161,6 +169,7 @@ remediation授权。
 - `currentTestCard`当前槽位、各Test Target自己的Card tuple、Test Delivery authorization/attempt lineage、
   Dispatch Packet来源与宿主效果状态；历史Test Target只允许保留`test-product-defect`代际；
 - workType Result、Implementation Review generation和Test Review阶段；
+- `managedEvidence`只在首个Evidence Event后出现，并仅保存Evidence ID与Manifest/payload双摘要；
 - Test Review的`test-accepted / another-attempt / product-defect / blocked`类型已进入共享Decision Event；
   another-attempt进入rerun，test-accepted进入Completion，blocked进入共享Resume，product-defect进入
   Remediation Authorization、原Implementation Target返工和`pendingTestRetest`新代际。
@@ -179,19 +188,21 @@ remediation授权。
 
 ## 当前边界
 
-- Demand聚合只由14个Event家族演进，公共调用方不能直接写Event或state；
+- Demand聚合只由15个Event家族演进，公共调用方不能直接写Event或state；
 - Command Handler、Repository、Root Authority/Inventory、Snapshot与File Store拥有加载、追加与恢复；
 - Delivery/Result/Review/Lifecycle/Testing owner只提交自己的严格Command；
 - Demand Publication已通过`wakeflow_create_demand`公开；公共成功结果只返回稳定回执，完整Aggregate、Authority内容与机器路径保持内部。
+- Managed Evidence内部Command/Event/Reducer已存在，但没有资源Application或公共工具；Event可重放不等于payload已保存。
 
 ## 验证证据
 
 | 证据 | 当前结果 | 能证明什么 |
 | --- | --- | --- |
-| 当前全仓architecture | 723模块、5059依赖、0违规 | 当前扫描无循环、未解析依赖或架构违规 |
-| 当前Schema门 | 101 Schema/207 refs | 24份Demand领域合同与2份Publication公共合同生成一致 |
+| 当前全仓architecture | 740模块、5182依赖、0违规 | 当前扫描无循环、未解析依赖或架构违规 |
+| 当前Schema门 | 103 Schema/212 refs | Managed Evidence payload预算为final Manifest/前缀预留容量，生成输出一致 |
 | Publication聚焦测试 | 25项领域/公共/MCP测试通过 | 覆盖输入、Planning、Application、物理事务、回执、真实Route与恢复authority |
-| 最近完整TypeScript门 | 902 pass | 属于Publication Public之前的提交基线，当前完整门尚未重跑 |
+| Managed Evidence Event | 4项新测试、13项相邻回归、Candidate 2项通过 | 覆盖完整Manifest Event、最小selector、版本codec、真实Commit重放及候选可达闭包 |
+| 最近完整TypeScript门 | 948 pass / 0 fail / 0 cancelled / 0 skip | 已覆盖当前Evidence Event与Foundation增量 |
 | 来源指纹 | 当前路径集合 | 本文绑定提交`f7c005d`的Demand内容 |
 
 ## 下钻入口

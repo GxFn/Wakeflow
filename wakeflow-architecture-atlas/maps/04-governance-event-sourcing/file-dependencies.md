@@ -1,12 +1,12 @@
 ---
 diagramId: ts-governance-demand-file-f4
 viewType: file-dependency
-truthKind: current-code
+truthKind: in-progress-worktree
 reviewDepth: L3
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T20:05:05-07:00
+snapshotObservedAt: 2026-09-01T21:36:39-07:00
 baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
-sourceFingerprint: sha256:18519fd65ee7fa2a0ce9ad51efe83e1b33087911054a71406bd8433d0994e6f4
+sourceFingerprint: sha256:efe7cf13486c357f87dc2ebde3c1857b1386ed5613a8b42a2845a699bf2ca318
 audience:
   - maintainer
   - reviewer
@@ -14,22 +14,26 @@ documentationOwner: Wakeflow Source Maintenance
 generatedBy: mixed
 refreshTriggers:
   - src/governance/demand/**
+  - src/governance/evidence/managed-evidence-manifest.ts
   - src/contracts/generated/governance/demand/**
 sourcePaths:
   - src/governance/demand/**
+  - src/governance/evidence/managed-evidence-manifest.ts
   - src/contracts/generated/entrypoints/wakeflow-demand-publication-*.generated.ts
 schemaPaths:
   - src/contracts/schemas/governance/demand/**
+  - src/contracts/schemas/governance/evidence/managed-evidence-manifest.schema.json
   - src/contracts/schemas/entrypoints/wakeflow-demand-publication-*.schema.json
 testPaths:
   - tests/governance/demand/**
+  - tests/governance/evidence/managed-evidence-event-sourcing.test.ts
   - tests/entrypoints/wakeflow-demand-publication-mcp.test.ts
 ---
 
 # Governance：Demand事件溯源关键文件依赖
 
-> 本图选取Demand 38个生产模块中的28个状态、命令、存储、快照、Publication物理事务和公共边界骨干文件。
-> Event Sourcing基线与Publication Public均已提交；新增节点按`f7c005d`审阅。
+> 本图选取Demand 38个生产模块中的28个状态、命令、存储、快照、Publication物理事务和公共边界骨干文件，
+> 并加入相邻Managed Evidence Manifest。Event Sourcing基线与Publication Public已提交；Evidence Event增量在工作树中。
 
 ## F4：Demand事件溯源关键文件依赖
 
@@ -43,6 +47,7 @@ flowchart LR
     AUTHORITY["[源码][F-DMD-02]\ndemand-authority.ts"]
     STATE["[已实现][F-DMD-03]\ndemand-aggregate-state.ts"]
     EVENT["[已实现][F-DMD-04]\ndemand-event-sourcing-event.ts"]
+    EVIDENCE_MANIFEST["[进行中][F-EVD-01]\nmanaged-evidence-manifest.ts"]
   end
 
   subgraph SHARED_ENTRY["命令决策与Commit"]
@@ -81,7 +86,7 @@ flowchart LR
     PUB_COORD["[源码][F-PUB-10]\ndemand-publication-public-coordinator.ts"]
   end
 
-  WIRE["[生成][F-GEN-04]\nDemand 24个Schema/生成合同"]
+  WIRE["[生成][F-GEN-04]\nDemand 25个Schema/生成合同"]
   REQUEST_WIRE["[生成][F-GEN-05]\nwakeflow-demand-publication-request.generated.ts"]
   RESULT_WIRE["[生成][F-GEN-06]\nwakeflow-demand-publication-result.generated.ts"]
 
@@ -91,6 +96,9 @@ flowchart LR
   DECIDER -->|"E-F4-04 纯状态转换"| STATE
   DECIDER -->|"E-F4-05 权威/事件准入"| AUTHORITY
   DECIDER -->|"E-F4-06 创建未提交事件"| EVENT
+  STATE -->|"E-F4-47 解析Manifest并投影selector"| EVIDENCE_MANIFEST
+  EVENT -->|"E-F4-48 解析完整Manifest事件数据"| EVIDENCE_MANIFEST
+  DECIDER -->|"E-F4-49 准入Evidence Command"| EVIDENCE_MANIFEST
   HANDLER -->|"E-F4-07 决策"| DECIDER
   HANDLER -->|"E-F4-08 准备Commit"| COMMIT
   HANDLER -->|"E-F4-09 加载/追加"| REPOSITORY
@@ -156,7 +164,7 @@ flowchart LR
 | --- | --- | --- | --- |
 | `F-DMD-01` | `model/demand-identity.ts` | 已实现 | Demand不可变身份与确定文档/摘要 |
 | `F-DMD-02` | `model/demand-authority.ts#parse/create/admitDemandAuthority` | 已实现 | Identity、角色、测试模式、Ledger引用和位置关系闭合 |
-| `F-DMD-03` | `model/demand-aggregate-state.ts` | 已实现 | 14个Event家族对应的纯状态转换和当前selector |
+| `F-DMD-03` | `model/demand-aggregate-state.ts` | 已实现 | 15个Event家族对应的纯状态转换和当前selector |
 | `F-DMD-04` | `event-sourcing/demand-event-sourcing-event.ts#parseDemandUncommittedEvent` | 已实现 | 未提交事件严格联合，不含持久位置字段 |
 | `F-ES-01` | `demand-event-sourcing-decider.ts#decide/evolve*` | 已实现 | Command准入、幂等摘要、纯事件决策与状态演进 |
 | `F-ES-02` | `demand-event-sourcing-command-handler.ts#execute*Command` | 已实现 | 加载→决策→准备→按预期追加及重试冲突处理 |
@@ -171,11 +179,12 @@ flowchart LR
 | `F-ES-11` | `demand-event-sourcing-snapshot.ts#create/restore*Snapshot` | 已实现 | 带版本不可变Snapshot和锚定Commit恢复 |
 | `F-ES-12/13` | `demand-event-sourcing-{upcaster,event-version-codec}.ts` | 已实现 | 事件schemaVersion codec与相邻版本演进 |
 | `F-ES-14` | `demand-event-sourcing-persisted-event-envelope.ts` | 已实现 | 跨事件版本稳定的持久化信封准入与摘要 |
+| `F-EVD-01` | `evidence/managed-evidence-manifest.ts#parseManagedEvidenceManifest` | 进行中 | Event保存的完整Evidence内容/provenance事实；为final record预留payload容量，不执行资源发布 |
 | `F-PUB-01` | `publication-service.ts#publishDemandFromTodo/recoverDemandPublication` | 已实现 | TODO/Ledger准入、sidecar、锁和跨资源前向恢复 |
 | `F-PUB-02` | `publication-transaction.ts#create*Transaction` | 已实现 | 不含可变阶段的自包含发布恢复计划 |
 | `F-PUB-03` | `publication-stage.ts#materialize/publishDemandStage` | 已实现 | 暂存Demand根、revision 1、整体重命名和最终加载 |
 | `F-PUB-04/05` | `publication-{storage,todo}.ts` | 已实现 | sidecar/锁资源与TODO claim/complete关系 |
-| `F-GEN-04` | `contracts/{schemas,generated}/governance/demand/*` | 已实现 | 24个事件/状态/Commit/Snapshot/Authority合同 |
+| `F-GEN-04` | `contracts/{schemas,generated}/governance/demand/*` | 进行中 | 25个事件/状态/Commit/Snapshot/Authority合同，含Managed Evidence Recorded v1 |
 | `F-PUB-06` | `demand-event-sourcing-publication-input.ts` | 已实现 | 只接收作者语义、TODO ID、位置与Ledger成员选择的关闭输入 |
 | `F-PUB-07` | `demand-event-sourcing-publication-planning-service.ts` | 已实现 | 零写读取Config/TODO/Ledger并派生完整transaction与digest |
 | `F-PUB-08` | `demand-event-sourcing-publication-application-service.ts` | 已实现 | exact plan/current authority复验、物理apply/recover委托与输出闭合 |
@@ -186,7 +195,7 @@ flowchart LR
 
 | 范围 | 生产模块 | 当前全仓受检模块 | 当前全仓依赖 | 违规 |
 | --- | ---: | ---: | ---: | ---: |
-| Demand Event Sourcing + Publication | 38 | 723 | 5059 | 0 |
+| Demand Event Sourcing + Publication | 38 + 1个相邻Evidence Manifest | 740 | 5182 | 0 |
 
 本图仍只选择Demand骨干；全量依赖数使用当前全仓SWC architecture gate，局部边以本图静态imports为准。
 
@@ -198,6 +207,7 @@ flowchart LR
 | `E-F4-16`–`E-F4-28` | Repository、Store、Snapshot、Upcast与Root Authority | 直接imports；repository/store/snapshot/upcast/inventory测试 |
 | `E-F4-29`–`E-F4-37` | 跨资源Publication | service/stage/storage/todo直接imports；publication service/transaction测试 |
 | `E-F4-38`–`E-F4-46` | Publication公共边界 | Input/Planning/Application/Contract/Coordinator直接imports；25项聚焦与真实MCP Route测试 |
+| `E-F4-47`–`E-F4-49` | Managed Evidence Event边界 | Aggregate/Event/Decider直接导入Manifest；4项Event测试及真实Commit重放 |
 
 ## 停止边界
 
@@ -205,3 +215,4 @@ flowchart LR
 - Repository的历史查询不是独立持久投影；它每次审计完整不可变流。
 - Snapshot只加速正常load，不能替代Commit摘要链或audit。
 - 公共调用方不能绕过Decider/Prepared Commit直接向文件Store写任意事件。
+- Managed Evidence Command/Event/selector尚无资源Application调用方；图中的静态依赖不证明payload或Manifest文件已经发布。

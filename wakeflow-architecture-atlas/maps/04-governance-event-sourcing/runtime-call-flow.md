@@ -1,12 +1,12 @@
 ---
 diagramId: ts-governance-demand-runtime-e0
 viewType: runtime-call-sequence
-truthKind: current-code
+truthKind: in-progress-worktree
 reviewDepth: L4
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T20:05:05-07:00
+snapshotObservedAt: 2026-09-01T21:36:39-07:00
 baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
-sourceFingerprint: sha256:809beade418b32d4bf3659c66efcf71030b61494ba6d03299ce43e3aa9a902bc
+sourceFingerprint: sha256:313b1eb0fb6ad13c82f47f807cb63e3560ec5100ba08a3a55f9c9cb91e039ae8
 audience:
   - maintainer
   - reviewer
@@ -252,4 +252,6 @@ sequenceDiagram
 - 当前文件Event Store只在单进程内按canonical Demand root串行append；跨进程竞争靠固定槽位硬链接与冲突检测。
 - Repository load不写Snapshot；Snapshot发布必须由显式上层策略触发。
 - Publication流程锁只保护首次Demand根跨资源发布；普通Event append不取得该流程锁。
+- `evidence.record-managed-evidence`已经能沿E0路径形成v1 Event与Aggregate selector，并由聚焦测试完成真实Commit重放；
+  当前没有资源Application调用该Command，因而本图不能证明Evidence payload或Manifest文件已耐久发布。
 - 公共化不改变revision 1持久字节、事件家族或物理恢复顺序；提交`f7c005d`尚未通过完整TypeScript发布门。

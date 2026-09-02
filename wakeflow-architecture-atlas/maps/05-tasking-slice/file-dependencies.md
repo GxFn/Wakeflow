@@ -4,7 +4,7 @@ viewType: file-dependency
 truthKind: current-code
 reviewDepth: L3
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
+snapshotObservedAt: 2026-09-01T20:26:05-07:00
 baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
 sourceFingerprint: sha256:0eae581be2a350ceb3e1f4fe0c4db9b0d3659514142e39f8f05eb5c6f8780dbc
 audience:
@@ -134,7 +134,7 @@ flowchart LR
 
 | 生产模块 | 聚焦闭包模块 | 依赖 | 违规 |
 | ---: | ---: | ---: | ---: |
-| 9 | 723 | 5059 | 0 |
+| 9 | 740 | 5182 | 0 |
 
 ## 边级证据
 

@@ -1,12 +1,12 @@
 ---
 diagramId: ts-end-to-end-evidence-z2
 viewType: evidence-matrix
-truthKind: current-code
+truthKind: in-progress-worktree
 reviewDepth: L5
-verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T20:05:05-07:00
+verifiedAt: 2026-09-02
+snapshotObservedAt: 2026-09-02T00:01:58-07:00
 baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
-sourceFingerprint: sha256:bd928c541d8217ea70f2b43faf5a2e38b208bba1efb588a724cfa5055c34d486
+sourceFingerprint: sha256:f35712210c24cc57638e7de42e8030fcccae7615ae9d25c5ae9a3630aa6b0669
 audience: [maintainer, reviewer]
 documentationOwner: Wakeflow Source Maintenance
 generatedBy: manual-composition
@@ -19,8 +19,9 @@ testPaths: [tests/**]
 ## 审阅结论
 
 下层文档已经覆盖从Foundation、pending TODO、Demand Publication到Completion的TypeScript候选链及当前
-18个公共MCP工具。当前Architecture与101份Schema通过，Publication 25项和MCP注册/双宿主3项通过；
-902项完整TypeScript门属于Publication之前的基线。双宿主插件smoke、真实宿主效果、旧JS等价对照与
+18个公共MCP工具。当前工作树另有未公开的Managed Evidence Capture/Event/Record Plan骨干；Architecture与103份Schema通过，
+Evidence聚焦23项、Retirement 7项与Candidate 2项通过，最近完整TypeScript门为948项；
+双宿主插件smoke、真实宿主效果、旧JS等价对照与
 release gate未运行，因此图可用于当前代码Review，不能声明插件发布就绪。
 
 ## 阶段证据矩阵
@@ -35,6 +36,7 @@ release gate未运行，因此图可用于当前代码Review，不能声明插�
 | `E-Z0-14`–`17` | 返工/blocked恢复 | Rework Context、blocked Decision、Resume Event | review event sourcing、resume、redelivery | [07](../07-review-rework-completion/runtime-call-flow.md) | 同Package返工和双workType Resume闭合 |
 | `E-Z0-20`–`22`、`E-Z0-25`–`32` | 条件真实测试与产品修复 | Card、Attempt、Result、Test Decision、Remediation Events | Testing/Result/Review/Remediation测试 | [08](../08-real-environment-testing/README.md) | 四类Test Decision均有consumer；修复后新Test代际 |
 | `E-Z0-23`、`E-Z0-25` | Demand成功完成 | Completion Plan与completed Event | controller-only及real-environment Completion测试 | [07](../07-review-rework-completion/README.md) | 两种testing mode均保留精确历史后完成 |
+| 不进入公共主图 | Managed Evidence Capture/Event/Record Plan | Manifest、Capture Planning、Event/Aggregate、目录及Manifest+payload整树计划 | Evidence 23项聚焦、真实两Commit重放 | [04](../04-governance-event-sourcing/README.md) | 内部骨干存在；Inventory/Application/Public缺失 |
 | `E-Z0-24` | 归档 | 无 | 无 | 主图停止边界 | 未实现 |
 
 ## 跨层合同核对
@@ -50,6 +52,7 @@ release gate未运行，因此图可用于当前代码Review，不能声明插�
 | Implementation Review Decision/Resume | Controller Services/Event | Rework、Route、Completion | snapshot generation精确匹配 |
 | Test Review Decision | 独立Test Review Service/Event | accept→Completion、another→rerun、blocked→shared Resume、product-defect→Remediation/retest | 不复用implementation rework/redesign词汇 |
 | Remediation Authorization | Product Remediation Service/Event | Delivery Context、Aggregate、TestCard generation source | 只绑定既有产品TaskPackage和失败检查 |
+| Managed Evidence Manifest/Event/Record Plan | Capture Planning、Demand Event、资源目录与整树计划 | Aggregate双摘要selector；未来资源Application | 三摘要轴和final tree已闭合，但没有物理发布调用方 |
 | currentTestCard / 历史Test Target | Aggregate Event reducer | Route、Repository、Completion | 当前Card唯一；历史Target仅允许`test-product-defect`并保留原Card tuple |
 | Completion | Lifecycle Service/Event | 当前无归档消费者 | 支持controller-only/real-environment，后者保留TestCard与attempt lineage |
 
@@ -60,9 +63,9 @@ release gate未运行，因此图可用于当前代码Review，不能声明插�
 | 文档阅读器TypeScript与生产构建 | 通过 |
 | 图集依赖安全审计 | 0漏洞 |
 | Markdown差异检查 | `git diff --check`通过 |
-| 根TypeScript | 当前Publication聚焦25项与MCP注册/双宿主3项通过；完整902项结果属于此前基线 |
-| Schema检查 | 101 Schema、207 external refs，生成合同一致 |
-| dependency-cruiser | 723模块、5059依赖、0违规 |
+| 根TypeScript | 完整门948 pass / 0 fail / 0 cancelled / 0 skip，覆盖当前全部增量 |
+| Schema检查 | 103 Schema、212 external refs，生成合同一致 |
+| dependency-cruiser | 740模块、5182依赖、0违规 |
 | 图集完整门 | TypeScript、30份严格current指纹与Vite/Mermaid生产构建通过；错误为0 |
 | 根`check:typescript` | 已运行并通过 |
 | Codex/Claude validator与smoke | 未运行 |
@@ -72,6 +75,7 @@ release gate未运行，因此图可用于当前代码Review，不能声明插�
 ## Review停止条件
 
 - 任何下层活动源码继续变化后，10包组合指纹立即过期。
-- Demand Publication提交`f7c005d`尚未通过当前完整TypeScript门；聚焦证据不能冒充release gate。
+- Demand Publication提交`f7c005d`已通过当前完整TypeScript门；该证据仍不能冒充插件release gate。
+- Managed Evidence Event/Aggregate/Record Plan骨干尚无Inventory/Application/Public consumer，不能从MCP客户端记录managed evidence。
 - Research Completion与Implementation Redesign仍必须保持显式blocker。
 - 归档缺口必须保持显式，不得用`demand-completed`冒充已归档。

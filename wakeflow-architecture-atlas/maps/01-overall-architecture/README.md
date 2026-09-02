@@ -1,12 +1,12 @@
 ---
 diagramId: ts-overall-architecture-a0
 viewType: architecture
-truthKind: current-code
+truthKind: in-progress-worktree
 reviewDepth: L0
-verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T20:05:05-07:00
+verifiedAt: 2026-09-02
+snapshotObservedAt: 2026-09-02T00:01:58-07:00
 baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
-sourceFingerprint: sha256:c6e6544009ec5d50fcf830556676f2214436906b2de046c253c7e33c27cb205b
+sourceFingerprint: sha256:1a22720a35fb3f78d08fb80e6d690bc9be095a193ee371c9723c17f4edfa2794
 audience:
   - maintainer
   - reviewer
@@ -28,8 +28,8 @@ testPaths:
 
 # Wakeflow TypeScript 总体架构
 
-> 本文绑定Demand Publication实现提交`f7c005d`。该能力已经完成聚焦验证，但尚未通过当前完整
-> TypeScript发布门；双宿主候选仍明确`releaseEligible=false`。
+> 本文绑定Demand Publication实现提交`f7c005d`及其完整TypeScript核实结果，并纳入当前未提交的
+> Managed Evidence source selection、零写capture Planning、Event/Aggregate selector、资源路径/目录及record tree plan。双宿主候选仍明确`releaseEligible=false`。
 
 ## 当前结论
 
@@ -40,34 +40,33 @@ Wakeflow公共适配层当前注册18个已有真实领域owner的工具，其�
 
 治理源码已经闭合Demand Publication、Controller Route、implementation/test Tasking、Delivery、Host Effect事实记录、Result、
 Implementation/Test Review、blocked Resume、Product Defect Remediation/retest与Completion。Agent仍独占真实
-宿主效果执行；Research Completion、Implementation Redesign及Evidence/Archive仍是明确缺口。`core/`、
+宿主效果执行；Research Completion、Implementation Redesign、Evidence资源Application/Public及Archive仍是明确缺口。`core/`、
 `plugins/`和安装缓存仍是旧JS对照/发布面，不属于本图描述的TS候选闭包。
 
 ## 核验快照
 
 | 项目 | 读取值 |
 | --- | --- |
-| 分支 | `main`，与本地`origin/main`一致 |
-| `HEAD` | `f7c005d73c11e29f284dbde1d7117193376c0ef6` |
-| 工作树 | 仅Atlas同步待提交；另有一份排除的异常历史文档diff |
-| dependency-cruiser | 723个模块、5059条依赖、0条违规 |
-| 生产TS模块 | 368个手写模块 + 101个生成合同 |
+| 分支 | `main`，相对本地`origin/main`领先2个提交 |
+| `HEAD` | `901d5be5722e0849b350fcf8c0d8a432835a5cbf` |
+| 工作树 | 候选stdio测试维护、Managed Evidence Manifest/Capture/Event/Resource/Record Plan骨干及本次Review/Atlas记录待提交 |
+| dependency-cruiser | 740个模块、5182条依赖、0条违规 |
+| 生产TS模块 | 375个手写模块 + 103个生成合同 |
 | 当前公共MCP工具 | 18个，双宿主名称与Schema集合一致 |
-| 当前验证 | Publication聚焦25项与MCP注册/双宿主3项通过；101 Schema、207 external refs |
-| 最近完整TypeScript门 | 902 pass、0 fail、0 skip；属于Publication Public之前的提交基线 |
+| 当前验证 | 完整TypeScript门948项全通过；103 Schema、212 external refs；Architecture 0违规 |
 
 ### 生产模块分布
 
 | 技术层 | 模块数 | 核心职责 |
 | --- | ---: | --- |
-| 基础能力 | 62 | 数据、加密、身份、时间、根目录文件系统、原子性、锁、树与Git观察 |
+| 基础能力 | 63 | 数据、加密、身份、时间、根目录文件系统、原子性、锁、树候选精确退休与Git观察 |
 | 配置 | 10 | v3配置、选择、放置与配置权威 |
 | 工作区 | 81 | 维护事务、资源矩阵、活动面、静态物化、宿主本地布局和窗口身份 |
-| 治理 | 175 | TODO、台账、Demand Publication、Controller Route、Tasking、Delivery、Result、Review、Lifecycle与Testing |
+| 治理 | 181 | TODO、台账、Demand/Evidence Selection/Planning/Event/Resource/Record Plan、Controller Route、Tasking、Delivery、Result、Review、Lifecycle与Testing |
 | 宿主 | 11 | Codex/Claude Code资源Profile、身份Profile与宿主专用维护执行 |
 | 入口 | 28 | 两宿主固定组合、公共MCP适配、固定host facade和stdio生命周期 |
 | 手写合同 | 1 | 应用级类型化身份解析边界 |
-| 生成合同 | 101 | 由JSON Schema派生的类型和运行时Schema常量 |
+| 生成合同 | 103 | 由JSON Schema派生的类型和运行时Schema常量 |
 
 ## A0：总体架构与边界
 
@@ -187,9 +186,10 @@ flowchart TB
 ## 当前停止边界
 
 - 当前公共MCP发布18个工具；`wakeflow_create_demand`可从pending TODO生成完整计划、精确应用或显式恢复，并在成功后进入Route检查。
+- Managed Evidence当前已有本地source selection、零写capture Planning、Event/Aggregate selector、资源路径/目录及record tree plan，尚无Root Inventory集成、资源Application或公共工具。
 - 公共Target Task Planning支持完整implementation输入和最小`{workType:"test"}`派生请求。
 - Agent执行宿主效果，MCP只规划、验证并记录Wakeflow自己的权威。
-- 当前Publication切片已通过聚焦门，但尚未重跑完整TypeScript门；旧JS对照、双宿主插件smoke与release gate不属于本次证据。
+- 当前完整TypeScript门为948项，已覆盖Evidence与Candidate Retirement。旧JS对照、双宿主插件smoke与release gate不属于本次证据。
 - 本文必须在`src/**`或架构规则变化后重新核验。
 
 ## 下钻入口

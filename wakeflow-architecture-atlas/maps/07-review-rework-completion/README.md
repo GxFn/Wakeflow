@@ -4,7 +4,7 @@ viewType: vertical-slice
 truthKind: current-code
 reviewDepth: L2
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
+snapshotObservedAt: 2026-09-01T20:26:05-07:00
 baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
 sourceFingerprint: sha256:d0ab87bef6d03e8d6b65b636ef6637a180352e236c3344b42e8c6cae256e667a
 audience: [maintainer, reviewer]
@@ -153,8 +153,8 @@ flowchart TB
 | 项目 | 读取值 |
 | --- | --- |
 | Lifecycle源码 | 4个模块，已提交 |
-| 当前架构门 | 723模块、5059依赖、0违规；902项完整测试属于Publication Public之前的基线 |
-| Schema | 全仓101份、207 refs；Review 4份、Lifecycle 1份 |
+| 当前架构门 | 740模块、5182依赖、0违规；最近完整门948项 |
+| Schema | 全仓103份、212 refs；Review 4份、Lifecycle 1份 |
 | Lifecycle测试 | 2个正式测试、1个fixture |
 | 来源指纹 | `d0ab87bef6d03e8d6b65b636ef6637a180352e236c3344b42e8c6cae256e667a` |
 

@@ -4,7 +4,7 @@ viewType: vertical-slice
 truthKind: current-code
 reviewDepth: L2
 verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
+snapshotObservedAt: 2026-09-01T20:26:05-07:00
 baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
 sourceFingerprint: sha256:2aa76ec90d7e2b8ceb9212e45a53ea3f0f64f2916bbd610852a9862db2ff0ae0
 audience: [maintainer, reviewer]
@@ -50,7 +50,7 @@ orchestrator在进程内连续调用所有Service。
 | 项目 | 读取值 |
 | --- | --- |
 | 生产源码 | Delivery 22、Result 9、Review 15，共46模块 |
-| 当前全仓架构门 | 723模块、5059依赖、0违规；902项完整测试属于Publication Public之前的基线 |
+| 当前全仓架构门 | 740模块、5182依赖、0违规；最近完整门948项 |
 | 测试 | Delivery 17、Result 7、Review 19，共43个正式测试 |
 | 合同 | Delivery 4、Result 3、Review 4，共11个Schema/生成合同 |
 | 提交状态 | 本范围源码、合同和测试已提交 |
@@ -157,9 +157,9 @@ flowchart TB
 
 | 证据 | 当前结果 |
 | --- | --- |
-| 当前全仓dependency-cruiser | 723模块、5059依赖、0违规 |
-| 正式测试 | Delivery/Result/Review共43个，均进入902项完整门 |
-| Schema/生成合同 | 11/11；101份全仓Schema生成检查通过 |
+| 当前全仓dependency-cruiser | 740模块、5182依赖、0违规 |
+| 正式测试 | Delivery/Result/Review共43个，均进入948项完整门 |
+| Schema/生成合同 | 11/11；当前全仓103份Schema生成检查通过 |
 | 提交状态 | 本范围已提交于`d17602e` |
 
 ## 下钻入口

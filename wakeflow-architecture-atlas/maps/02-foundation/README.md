@@ -1,12 +1,12 @@
 ---
 diagramId: ts-foundation-capability-b0
 viewType: architecture
-truthKind: current-code
+truthKind: in-progress-worktree
 reviewDepth: L1
-verifiedAt: 2026-09-01
-snapshotObservedAt: 2026-09-01T06:42:28-07:00
+verifiedAt: 2026-09-02
+snapshotObservedAt: 2026-09-02T00:01:58-07:00
 baselineCommit: d17602ed9931a1898f713c740752c54b94bd8086
-sourceFingerprint: sha256:6d67a06cfe0baa9cea6c8e4816b029ed8a5f7846d04475569fc9f704528c44f8
+sourceFingerprint: sha256:be32826a7dd27f3f23364d53e4a0520d2df4f0cbe054822747de84e122164308
 audience:
   - maintainer
   - reviewer
@@ -31,7 +31,8 @@ testPaths:
 > 本文描述提交`d17602e`中的TypeScript Foundation。Foundation 是宿主中立的能力层，不拥有
 > Wakeflow 配置、工作区或治理业务状态。
 >
-> Runtime JSON Schema、`utc-instant`、只创建确定性 JSON 资源和完整 Git object ID均已进入提交基线。
+> Runtime JSON Schema、`utc-instant`、只创建确定性 JSON 资源和完整 Git object ID均已进入提交基线；
+> 当前工作树进一步增加封闭directory candidate的精确、可续接退休能力；Managed Evidence仍只是未来consumer。
 
 ## 当前结论
 
@@ -39,19 +40,19 @@ Foundation 把任意进程内输入逐步收窄为确定值，并把文件系统
 原子提交、耐久同步和恢复边界内。上层配置、工作区、治理、宿主与公共入口复用这些能力，但
 Foundation 不反向依赖任何产品领域。
 
-当前 `src/foundation/` 有 62 个生产模块；聚焦 dependency-cruiser 闭包包含 67 个模块、290 条依赖、
-0 条规则违规。文件系统占 35 个模块，是该层最大且最具状态/恢复语义的能力簇。
+当前 `src/foundation/` 有 63 个生产模块；聚焦 dependency-cruiser 闭包包含 68 个模块、301 条依赖、
+0 条规则违规。文件系统占 36 个模块，是该层最大且最具状态/恢复语义的能力簇。
 
 ## 核验快照
 
 | 项目 | 读取值 |
 | --- | --- |
 | 分支/提交 | `main`；`d17602ed9931a1898f713c740752c54b94bd8086` |
-| 工作树 | Foundation范围无未提交源码变化 |
-| 生产源码 | 62 个 `.ts` 模块 |
-| Foundation 测试 | 56 个 `*.test.ts`；另有 2 个测试支持文件 |
+| 工作树 | Loaded Artifact runtime export及directory candidate精确退休待提交 |
+| 生产源码 | 63 个 `.ts` 模块 |
+| Foundation 测试 | 57 个 `*.test.ts`；另有 2 个测试支持文件 |
 | Foundation 合同 | 6 个 JSON Schema、6 个生成 TypeScript 合同 |
-| 依赖扫描 | 67 个闭包模块、290 条依赖、0 违规；SWC 解析器 |
+| 依赖扫描 | 68 个闭包模块、301 条依赖、0 违规；SWC 解析器 |
 | 来源指纹 | `6d67a06cfe0baa9cea6c8e4816b029ed8a5f7846d04475569fc9f704528c44f8` |
 
 ## B0：Foundation 能力全景
@@ -80,7 +81,7 @@ flowchart TB
     TIME_EVOLUTION["[已实现] 时间与演进\nUTC / 单调时间 / 事件版本"]
     RECOVERY["[已实现] 互斥与恢复\n独占锁 + 自描述stage"]
     CREATE_ONLY["[已实现] 只创建确定性JSON资源\n已由Test Dispatch投影消费"]
-    TREE_ARTIFACT["[已实现] 目录树与Artifact\n候选 / 摘要 / 同根发布"]
+    TREE_ARTIFACT["[已实现] 目录树与Artifact\n候选 / 摘要 / 精确退休 / 同根发布"]
     GIT["[已实现] Git观察\n完整对象身份"]
   end
 
@@ -122,6 +123,7 @@ flowchart TB
 | 稳定读取 | 打开前后复验根、路径和节点，并对内容施加容量、节点类型、摘要与取消边界 |
 | stage | 原子提交前的自描述暂存文件；提交或崩溃后必须可被有界恢复识别 |
 | Loaded Artifact Tree | 已闭合、可摘要、可同根发布的一棵制品候选目录树 |
+| candidate tree退休 | 逐文件精确unlink并按最深目录优先rmdir；恢复只允许原计划的安全子集 |
 | 单调时间 | 只用于持续时间和截止点，不与 UTC 墙上时间混用 |
 | 事件版本演进 | 按相邻版本逐步 upcast 持久事件数据，再由当前 codec 重新准入 |
 
@@ -137,7 +139,7 @@ flowchart TB
 
 | 能力簇 | 生产模块数 | 主要职责 |
 | --- | ---: | --- |
-| `filesystem` | 35 | 根作用域、稳定读取、原子写入、锁、目录树候选与发布 |
+| `filesystem` | 36 | 根作用域、稳定读取、原子写入、锁、目录树候选、精确退休与发布 |
 | `time` | 5 | UTC 时刻、墙上时钟、单调时钟、时长和截止点 |
 | `artifact` | 4 | Loaded Artifact Tree身份、候选、计划和发布 |
 | `data` | 4 | 无副作用数据、JSON值、规范JSON和确定性JSON文档 |
@@ -152,7 +154,7 @@ flowchart TB
 
 | 消费层 | 直接消费者模块数 | 典型用途 |
 | --- | ---: | --- |
-| Governance | 129 | 事件存储、投影、任务包、Delivery/Review/Testing与完成服务 |
+| Governance | 173 | 事件存储、投影、任务包、Delivery/Review/Testing、完成与Managed Evidence骨干 |
 | Workspace | 78 | 维护事务、活动投影、窗口绑定、资源布局与静态物化 |
 | Configuration | 9 | v3配置读取、替换、锁、恢复和选择 |
 | Hosts | 7 | Claude Code可移植设置与两宿主维护执行能力 |
@@ -167,6 +169,7 @@ flowchart TB
 - 自描述 stage 在写前和显式恢复时被扫描；未知或仍活动的 stage 不会被猜测删除。
 - `withRootedExclusiveFileLock` 只保护短生命周期临界区；锁记录不是业务权威，也不是跨宿主租约。
 - 目录树与 Loaded Artifact Tree 只在同一文件系统发布；跨设备移动明确失败。
+- directory candidate退休拒绝recursive删除；首次只接受完整candidate，journal恢复只续接原计划的安全子集。
 - 所有公共 Foundation 错误都暴露稳定 `code/reason/path`，不回显物理路径、令牌或底层异常。
 
 ## 架构边界
@@ -182,6 +185,8 @@ flowchart TB
 - `runtime-json-schema.ts`安全支持无原型JSON对象的`uniqueItems`比较；
 - `utc-instant.ts`只在明确的UTC解析/比较边界使用，不拥有跨authority因果排序；
 - `create-only-deterministic-json-resource.ts`已由Test Dispatch等真实consumer使用；
+- Loaded Artifact tree identity已由进行中的Managed Evidence Manifest复用；transfer candidate/publication仍无生产consumer；
+- directory candidate retirement已实现并验证，但尚无生产consumer；Event前/Event后调用权仍属于未来Evidence事务owner；
 - `git-object-id.ts`闭合完整SHA-1/SHA-256身份，不接受缩写。
 
 Foundation继续只提供机制；任何领域owner、资源family或业务事务必须留在上层。
@@ -190,10 +195,10 @@ Foundation继续只提供机制；任何领域owner、资源family或业务事�
 
 | 证据 | 当前结果 | 能证明什么 |
 | --- | --- | --- |
-| Foundation dependency-cruiser | 67 模块、290 依赖、0 违规 | 当前读取范围没有循环、未解析依赖或跨层反向依赖 |
-| Foundation测试清单 | 56 个正式测试文件 | 覆盖主要公开能力的正例、负例与恢复边界；不等于本轮已重新执行全部测试 |
-| Schema/生成合同 | 6/6 | 路径、摘要、UTC、Git身份和Artifact manifest具有可生成词法来源 |
-| 来源指纹 | 132 个源码/Schema/生成/测试文件 | 本文绑定当前 Foundation 文件内容快照 |
+| Foundation dependency-cruiser | 68 模块、301 依赖、0 违规 | 当前读取范围没有循环、未解析依赖或跨层反向依赖 |
+| Foundation测试清单 | 57 个正式测试文件 | 新退休能力7项及相邻Foundation 19项通过；不等于本轮已重新执行全部测试 |
+| Schema/生成合同 | 6/6 | Artifact manifest新增冻结runtime Schema常量，词法和物理语义不变 |
+| 来源指纹 | 128 个源码/Schema/测试文件 | 本文绑定当前 Foundation 文件内容快照 |
 
 ## 下钻入口
 

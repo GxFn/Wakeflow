@@ -1,12 +1,12 @@
 ---
 diagramId: ts-public-mcp-host-h0
 viewType: architecture
-truthKind: current-code
+truthKind: in-progress-worktree
 reviewDepth: L1
 verifiedAt: 2026-09-01
 snapshotObservedAt: 2026-09-01T20:05:05-07:00
 baselineCommit: f7c005d73c11e29f284dbde1d7117193376c0ef6
-sourceFingerprint: sha256:84bb0ae73243481bb30e84ecbdeabc96bef6c76df9ae3df918f4e6bfdbaf275a
+sourceFingerprint: sha256:f91b6d72085e793396d1bd0d529a2c714a49edf2371acbbfd1050dd1a76efa86
 audience: [maintainer, reviewer, newcomer]
 documentationOwner: Wakeflow Source Maintenance
 generatedBy: mixed
@@ -22,6 +22,10 @@ testPaths: [tests/entrypoints/**, tests/hosts/**, tests/workspace/window-runtime
 当前公共MCP注册18个真实工具，覆盖Workspace Maintenance/Binding、Demand Publication/Route、implementation/test
 Tasking、Delivery、Host Effect事实、Result、Review/Resume、Testing、Product Remediation和Completion。
 Codex和Claude Code各自拥有固定composition root；公共请求不能选择宿主，双宿主工具名称与Schema集合一致。
+
+当前工作树新增Managed Evidence source selection、零写capture Planning、Demand Event/Aggregate selector、final/stage/journal
+资源目录及完整record tree plan，但没有Root Inventory集成、资源Application或Public Coordinator，因此公共工具仍严格为
+18个；record plan存在不能被描述为`wakeflow_record_evidence`已经恢复。
 
 Agent宿主效果采用“Wakeflow提交Intent/Claim事实 → 签发瞬时Action → Agent执行 → 回传Observation →
 Wakeflow记录Event”的握手。MCP不替Agent操作窗口。Window Binding注册请求会接收Agent观察到的
@@ -92,6 +96,7 @@ flowchart TB
 | Delivery / Host Effect / Result | 是 | Intent、Claim、Observation、TargetResult Event | Agent执行一次性Host Action |
 | Review / Resume / Remediation | 是 | Controller独立判断与产品返工授权 | Controller执行检查，Agent执行后续修复 |
 | TestCard / Test Delivery / Completion | 是 | 测试代际与Demand终态 | Test窗口执行真实环境动作 |
+| Managed Evidence Capture/Event/Record Plan | 否（进行中） | 稳定读取、Event/selector、final/stage/journal及Manifest+payload整树计划 | 无Inventory、资源Application、Public或宿主效果 |
 
 ## 安全边界
 

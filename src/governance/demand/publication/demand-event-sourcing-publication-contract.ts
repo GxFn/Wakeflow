@@ -12,6 +12,15 @@ export const DEMAND_EVENT_SOURCING_PUBLICATION_FILE_MODE = 0o600;
 export const DEMAND_EVENT_SOURCING_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS =
   10_000;
 
+/**
+ * 一次Publication调用结束或失败后，对该exact transaction业务权威状态的最强证明。
+ *
+ * `recoverable`要求存在可重读且与计划完全一致的sidecar；它表示应显式前向恢复，
+ * 不承诺恢复不会再遇到外部冲突。`unknown`禁止调用方把失败解释为安全重试或成功。
+ */
+export type DemandEventSourcingPublicationEffectAuthority =
+  "unchanged" | "recoverable" | "current" | "unknown";
+
 export interface DemandEventSourcingPublicationTodoResult {
   readonly item: Readonly<StoredTodoCollectionItem>;
   readonly lineageRef: Readonly<TodoIntakeLineageReference>;
@@ -19,6 +28,7 @@ export interface DemandEventSourcingPublicationTodoResult {
 }
 
 export interface DemandEventSourcingPublicationResult {
+  readonly publicationAuthority: "current";
   readonly wroteDemandRoot: boolean;
   readonly demandId: DemandEventSourcingPublicationTransaction["demandId"];
   readonly rootRef: PortableResourcePath;
@@ -70,20 +80,30 @@ export class DemandEventSourcingPublicationServiceError extends Error {
   readonly code = "wakeflow-demand-event-sourcing-publication-service" as const;
   readonly reason: DemandEventSourcingPublicationServiceErrorReason;
   readonly path: string;
+  readonly publicationAuthority: DemandEventSourcingPublicationEffectAuthority;
 
   constructor(
     reason: DemandEventSourcingPublicationServiceErrorReason,
     path: string,
+    publicationAuthority: DemandEventSourcingPublicationEffectAuthority =
+      "unknown",
   ) {
     super(ERROR_MESSAGES[reason]);
     this.reason = reason;
     this.path = path;
+    this.publicationAuthority = publicationAuthority;
   }
 }
 
 export function failDemandEventSourcingPublication(
   reason: DemandEventSourcingPublicationServiceErrorReason,
   path: string,
+  publicationAuthority: DemandEventSourcingPublicationEffectAuthority =
+    "unknown",
 ): never {
-  throw new DemandEventSourcingPublicationServiceError(reason, path);
+  throw new DemandEventSourcingPublicationServiceError(
+    reason,
+    path,
+    publicationAuthority,
+  );
 }

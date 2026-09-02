@@ -58,7 +58,6 @@ import {
   computeDemandEventStreamCommitDigest,
   parseDemandEventStreamCommit,
   planDemandEventStreamCommit,
-  renderDemandEventStreamCommit,
   DemandEventStreamCommitError,
   type DemandEventStreamCommit,
 } from "../event-sourcing/demand-event-stream-commit.js";
@@ -222,7 +221,8 @@ function sameCommit(
   left: Readonly<DemandEventStreamCommit>,
   right: Readonly<DemandEventStreamCommit>,
 ): boolean {
-  return renderDemandEventStreamCommit(left) === renderDemandEventStreamCommit(right);
+  return computeDemandEventStreamCommitDigest(left)
+    === computeDemandEventStreamCommitDigest(right);
 }
 
 export function parseDemandEventSourcingPublicationTransaction(

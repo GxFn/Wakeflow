@@ -44,6 +44,7 @@ function defaultMcpExecutors(): WakeflowMcpExecutorSet {
     claimTargetHostEffect: async () =>
       unexpectedMcpExecutor("claimTargetHostEffect"),
     completeDemand: async () => unexpectedMcpExecutor("completeDemand"),
+    createDemand: async () => unexpectedMcpExecutor("createDemand"),
     executeMaintenance: async () => unexpectedMcpExecutor("executeMaintenance"),
     importTargetResult: async () => unexpectedMcpExecutor("importTargetResult"),
     inspectDemandRoute: async () => unexpectedMcpExecutor("inspectDemandRoute"),

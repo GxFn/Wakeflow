@@ -15,6 +15,14 @@ import {
   type WakeflowMaintenancePublicResultV1,
 } from "../contracts/generated/entrypoints/wakeflow-maintenance-public-result.generated.js";
 import {
+  WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA,
+  type WakeflowDemandPublicationRequestV1,
+} from "../contracts/generated/entrypoints/wakeflow-demand-publication-request.generated.js";
+import {
+  WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA,
+  type WakeflowDemandPublicationResultV1,
+} from "../contracts/generated/entrypoints/wakeflow-demand-publication-result.generated.js";
+import {
   WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_REQUEST_SCHEMA,
   type WakeflowWindowHostBindingRegistrationRequestV1,
 } from "../contracts/generated/entrypoints/wakeflow-window-host-binding-registration-request.generated.js";
@@ -260,6 +268,14 @@ import {
   type DemandCompletionPublicResult,
 } from "../governance/lifecycle/demand-completion-public-coordinator.js";
 import {
+  DemandPublicationPublicContractError,
+  WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME,
+} from "../governance/demand/publication/demand-publication-public-contract.js";
+import {
+  DemandPublicationPublicCoordinatorError,
+  type DemandPublicationPublicResult,
+} from "../governance/demand/publication/demand-publication-public-coordinator.js";
+import {
   DemandControllerRoutePublicContractError,
   WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME,
 } from "../governance/controller/demand-controller-route-public-contract.js";
@@ -289,8 +305,8 @@ import {
  *
  * JSON Schema 是每个工具的可移植 wire 权威，官方 SDK 负责协议、tools/list、
  * tools/call 与调用前结构校验。领域 owner 仍独立复验容量、关系、根作用域和 mutation
- * authority。当前只发布已闭环的Maintenance、Demand Controller Route inspection、
- * Window Host Binding registration、Target Task Planning、Implementation Delivery
+ * authority。当前只发布已闭环的Maintenance、Demand Publication、Demand Controller
+ * Route inspection、Window Host Binding registration、Target Task Planning、Implementation Delivery
  * Preparation、Target Host Effect Claim/Outcome/Rearm、TargetResult Import与Controller
  * Implementation/Test Review Decision、Product Defect Remediation、Review/Resume、
  * Demand Completion、TestCard Planning与Test Delivery Preparation；
@@ -354,6 +370,10 @@ type WakeflowDemandCompletionMcpExecutor = (
   value: unknown,
 ) => Promise<Readonly<DemandCompletionPublicResult>>;
 
+type WakeflowDemandPublicationMcpExecutor = (
+  value: unknown,
+) => Promise<Readonly<DemandPublicationPublicResult>>;
+
 type WakeflowDemandControllerRouteMcpExecutor = (
   value: unknown,
 ) => Promise<Readonly<DemandControllerRoutePublicResult>>;
@@ -372,6 +392,7 @@ interface CreateWakeflowPublicMcpServerOptions {
   readonly serverVersion: string;
   readonly claimTargetHostEffect: WakeflowTargetHostEffectClaimMcpExecutor;
   readonly completeDemand: WakeflowDemandCompletionMcpExecutor;
+  readonly createDemand: WakeflowDemandPublicationMcpExecutor;
   readonly executeMaintenance: WakeflowMaintenanceMcpExecutor;
   readonly importTargetResult: WakeflowTargetResultImportMcpExecutor;
   readonly inspectDemandRoute: WakeflowDemandControllerRouteMcpExecutor;
@@ -402,6 +423,7 @@ type WakeflowPublicMcpServerConfigurationErrorReason =
   | "controller-test-review-decision-executor"
   | "controller-product-defect-remediation-executor"
   | "demand-completion-executor"
+  | "demand-publication-executor"
   | "maintenance-executor"
   | "demand-controller-route-executor"
   | "target-task-planning-executor"
@@ -434,6 +456,8 @@ const CONFIGURATION_ERROR_MESSAGES = {
     "Wakeflow MCP Controller Product Defect Remediation executor is invalid.",
   "demand-completion-executor":
     "Wakeflow MCP Demand Completion executor is invalid.",
+  "demand-publication-executor":
+    "Wakeflow MCP Demand Publication executor is invalid.",
   "maintenance-executor": "Wakeflow MCP Maintenance executor is invalid.",
   "demand-controller-route-executor":
     "Wakeflow MCP Demand Controller Route executor is invalid.",
@@ -478,6 +502,11 @@ interface WakeflowMcpErrorEnvelope {
     readonly bindingAuthority?: "unchanged" | "current" | "unknown";
     readonly claimAuthority?: "unchanged" | "current" | "released" | "unknown";
     readonly eventAuthority?: "unchanged" | "current" | "unknown";
+    readonly publicationAuthority?:
+      | "unchanged"
+      | "recoverable"
+      | "current"
+      | "unknown";
   }>;
 }
 
@@ -519,6 +548,7 @@ function parseServerOptions(
     "authorizeProductDefectRemediation",
     "claimTargetHostEffect",
     "completeDemand",
+    "createDemand",
     "executeMaintenance",
     "importTargetResult",
     "inspectDemandRoute",
@@ -562,6 +592,12 @@ function parseServerOptions(
     types.isProxy(record.completeDemand)
   ) {
     failConfiguration("demand-completion-executor");
+  }
+  if (
+    typeof record.createDemand !== "function" ||
+    types.isProxy(record.createDemand)
+  ) {
+    failConfiguration("demand-publication-executor");
   }
   if (
     typeof record.executeMaintenance !== "function" ||
@@ -656,6 +692,8 @@ function parseServerOptions(
       record.claimTargetHostEffect as WakeflowTargetHostEffectClaimMcpExecutor,
     completeDemand:
       record.completeDemand as WakeflowDemandCompletionMcpExecutor,
+    createDemand:
+      record.createDemand as WakeflowDemandPublicationMcpExecutor,
     executeMaintenance:
       record.executeMaintenance as WakeflowMaintenanceMcpExecutor,
     importTargetResult:
@@ -994,6 +1032,26 @@ function controllerProductDefectRemediationError(error: unknown) {
   return null;
 }
 
+function demandPublicationError(error: unknown) {
+  if (error instanceof DemandPublicationPublicContractError) {
+    return Object.freeze({
+      code: error.code,
+      reason: error.reason,
+      path: error.path,
+    });
+  }
+  if (error instanceof DemandPublicationPublicCoordinatorError) {
+    return Object.freeze({
+      code: error.code,
+      reason: error.reason,
+      ...(error.causeCode === null ? {} : { causeCode: error.causeCode }),
+      ...(error.causeReason === null ? {} : { causeReason: error.causeReason }),
+      publicationAuthority: error.publicationAuthority,
+    });
+  }
+  return null;
+}
+
 function demandCompletionError(error: unknown) {
   if (error instanceof DemandCompletionPublicContractError) {
     return Object.freeze({
@@ -1050,6 +1108,7 @@ function errorEnvelope(tool: string, error: unknown): WakeflowMcpErrorEnvelope {
     controllerImplementationReviewDecisionError(error) ??
     controllerTestReviewDecisionError(error) ??
     controllerProductDefectRemediationError(error) ??
+    demandPublicationError(error) ??
     demandCompletionError(error) ??
     demandControllerRouteError(error);
   return Object.freeze({
@@ -1099,7 +1158,7 @@ function successfulToolResult(value: unknown): CallToolResult {
   };
 }
 
-/** 创建只注册当前十七个真实公共工具的官方 MCP server 实例。 */
+/** 创建只注册当前十八个真实公共工具的官方 MCP server 实例。 */
 export function createWakeflowPublicMcpServer(
   options: Readonly<CreateWakeflowPublicMcpServerOptions>,
 ): McpServer {
@@ -1116,6 +1175,8 @@ export function createWakeflowPublicMcpServer(
         "Apply must return the exact confirmation and digest produced by that preview.",
         "Wakeflow never performs host effects: the Agent executes each returned window launch intent with host capabilities.",
         `After a host window is created, pass its exact opaque result to ${WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME}.`,
+        `To publish a pending TODO as a Demand, call ${WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME} in preview mode with only authored Demand text, placement, and selected Ledger members; review the complete owner-derived plan, then apply that exact plan and digest.`,
+        `Only call ${WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME} in recover mode when the failed exact operation reports publicationAuthority=recoverable. After apply or recovery is current, inspect the new Demand Route.`,
         `Call ${WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME} to inspect the current Demand responsibility frontiers before selecting a domain owner.`,
         "A Demand Controller Route is a read-only observation, never mutation authority or Controller acceptance.",
         `Only when the Route selects Test Card Planning may the Controller call ${WAKEFLOW_TEST_CARD_PLANNING_PUBLIC_TOOL_NAME} in preview mode, review the complete frozen Card/Event plan, then apply that exact plan and digest.`,
@@ -1149,6 +1210,42 @@ export function createWakeflowPublicMcpServer(
         `Only when the Route selects Demand Completion Preflight, call ${WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME} in preview mode, review the exact terminal plan, then apply that plan and digest.`,
         "Demand Completion appends the successful terminal Event only after all required acceptance, Test closure, claimed TODO, and absent WorkClaim gates pass. It does not archive the TODO or Demand, close host windows, create a BusinessArchive, or perform resource cleanup.",
       ].join(" "),
+    },
+  );
+
+  server.registerTool(
+    WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME,
+    {
+      title: "Create Wakeflow Demand",
+      description: [
+        "Preview, apply, or explicitly recover one TODO-backed Demand Event Sourcing publication.",
+        "Preview is read-only and derives Program, Demand type, testing, complete Ledger Authority, IDs, time, paths, Event/Commit data, and TODO CAS from current authority.",
+        "Apply accepts only the exact preview plan and digest. Recover accepts only a Demand ID with exact durable sidecar evidence.",
+        "This tool performs no host effect and returns no machine path or complete business record; inspect the Demand Route after publication is current.",
+      ].join(" "),
+      inputSchema: fromJsonSchema<WakeflowDemandPublicationRequestV1>(
+        WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA,
+      ),
+      outputSchema: fromJsonSchema<WakeflowDemandPublicationResultV1>(
+        WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA,
+      ),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (request) => {
+      try {
+        const result = await admitted.createDemand(request);
+        return successfulToolResult(result);
+      } catch (error: unknown) {
+        return failedToolResult(
+          WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME,
+          error,
+        );
+      }
     },
   );
 

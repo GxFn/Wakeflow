@@ -215,6 +215,7 @@ test("publication uses Command Handler and binds exact TODO predecessor", async 
       value.ledgerStore,
       publishInput(value),
     );
+    equal(result.publicationAuthority, "current");
     equal(result.wroteDemandRoot, true);
     equal(result.loaded.aggregate.streamRevision, 1);
     equal(result.loaded.firstCommit.commitId, COMMIT_ID);
@@ -225,6 +226,7 @@ test("publication uses Command Handler and binds exact TODO predecessor", async 
       value.ledgerStore,
       publishInput(value),
     );
+    equal(retried.publicationAuthority, "current");
     equal(retried.wroteDemandRoot, false);
   } finally {
     await cleanup(value);
@@ -278,6 +280,7 @@ test("sidecar-only publication recovers without an event append journal", async 
       value.ledgerStore,
       DEMAND_ID,
     );
+    equal(recovered.publicationAuthority, "current");
     equal(recovered.wroteDemandRoot, true);
     equal(recovered.loaded.firstCommit.commitId, COMMIT_ID);
     equal(existsSync(file), false);
@@ -333,6 +336,7 @@ test("publication recovery 回滚 canonical sidecar 之前的 inactive partial s
     equal(caught instanceof DemandEventSourcingPublicationServiceError, true);
     if (caught instanceof DemandEventSourcingPublicationServiceError) {
       equal(caught.reason, "not-found");
+      equal(caught.publicationAuthority, "unknown");
     }
     equal(existsSync(path.join(value.workspacePath, ...stageRef.split("/"))), false);
   } finally {
@@ -356,6 +360,7 @@ test("recovery without publication storage performs no initialization effects", 
     equal(caught instanceof DemandEventSourcingPublicationServiceError, true);
     if (caught instanceof DemandEventSourcingPublicationServiceError) {
       equal(caught.reason, "not-found");
+      equal(caught.publicationAuthority, "unknown");
     }
     equal(existsSync(path.join(
       value.workspacePath,
@@ -424,6 +429,7 @@ test("published root marker is settled before normal authority load", async () =
       value.ledgerStore,
       DEMAND_ID,
     );
+    equal(recovered.publicationAuthority, "current");
     equal(recovered.wroteDemandRoot, false);
     equal(recovered.todo.item.state.status, "claimed");
     equal(existsSync(path.join(finalPath, "transactions", "publication.json")), false);
@@ -444,6 +450,7 @@ test("publication recovery first settles an interrupted TODO claim", async () =>
     writeFileSync(outside, "outside\n", { mode: 0o600 });
     rmSync(projectionPath);
     symlinkSync(outside, projectionPath);
+    let publishError: unknown;
     try {
       await publishDemandFromTodo(
         value.workspaceRoot,
@@ -451,7 +458,14 @@ test("publication recovery first settles an interrupted TODO claim", async () =>
         publishInput(value),
       );
     } catch (error: unknown) {
-      equal(error instanceof DemandEventSourcingPublicationServiceError, true);
+      publishError = error;
+    }
+    equal(
+      publishError instanceof DemandEventSourcingPublicationServiceError,
+      true,
+    );
+    if (publishError instanceof DemandEventSourcingPublicationServiceError) {
+      equal(publishError.publicationAuthority, "recoverable");
     }
     rmSync(projectionPath);
 
@@ -460,6 +474,7 @@ test("publication recovery first settles an interrupted TODO claim", async () =>
       value.ledgerStore,
       DEMAND_ID,
     );
+    equal(recovered.publicationAuthority, "current");
     equal(recovered.todo.item.state.status, "claimed");
     equal(recovered.loaded.aggregate.streamRevision, 1);
   } finally {
@@ -515,6 +530,7 @@ test("normal publication does not recover TODO residue before sidecar commit", a
     equal(caught instanceof DemandEventSourcingPublicationServiceError, true);
     if (caught instanceof DemandEventSourcingPublicationServiceError) {
       equal(caught.reason, "recovery-required");
+      equal(caught.publicationAuthority, "unchanged");
     }
     equal(existsSync(path.join(
       value.workspacePath,
@@ -546,6 +562,9 @@ test("unresolved Authority has no publication effects", async () => {
       caught = error;
     }
     equal(caught instanceof DemandEventSourcingPublicationServiceError, true);
+    if (caught instanceof DemandEventSourcingPublicationServiceError) {
+      equal(caught.publicationAuthority, "unchanged");
+    }
     equal(existsSync(path.join(
       value.workspacePath,
       ".wakeflow-active/current/demand-publication",

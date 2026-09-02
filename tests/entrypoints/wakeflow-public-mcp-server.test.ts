@@ -45,6 +45,8 @@ import {
 import { WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME } from "../../src/governance/controller/demand-controller-route-public-contract.js";
 import { DemandEventSourcingRepository } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../src/governance/demand/publication/demand-publication-paths.js";
+import { WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME } from "../../src/governance/demand/publication/demand-publication-public-contract.js";
+import type { DemandPublicationPublicResult } from "../../src/governance/demand/publication/demand-publication-public-coordinator.js";
 import {
   executeDemandControllerRoutePublicRequest,
   DemandControllerRoutePublicCoordinatorError,
@@ -725,6 +727,13 @@ test("MCP composition拒绝Proxy executor与额外配置字段", () => {
       "Demand Completion executor was not expected in this test.",
     );
   };
+  const createDemand = async (): Promise<
+    Readonly<DemandPublicationPublicResult>
+  > => {
+    throw new Error(
+      "Demand Publication executor was not expected in this test.",
+    );
+  };
   const resumeTargetResultReview = async (): Promise<
     Readonly<TargetResultReviewResumePublicResult>
   > => {
@@ -763,6 +772,7 @@ test("MCP composition拒绝Proxy executor与额外配置字段", () => {
     authorizeProductDefectRemediation,
     claimTargetHostEffect,
     completeDemand,
+    createDemand,
     executeMaintenance,
     importTargetResult,
     inspectDemandRoute,
@@ -781,6 +791,7 @@ test("MCP composition拒绝Proxy executor与额外配置字段", () => {
   const proxyCases = Object.freeze([
     ["executeMaintenance", "maintenance-executor"],
     ["completeDemand", "demand-completion-executor"],
+    ["createDemand", "demand-publication-executor"],
     ["resumeTargetResultReview", "target-result-review-resume-executor"],
     ["registerWindowHostBinding", "window-host-binding-executor"],
     ["claimTargetHostEffect", "target-host-effect-claim-executor"],
@@ -831,7 +842,7 @@ test("MCP composition拒绝Proxy executor与额外配置字段", () => {
   );
 });
 
-test("官方 MCP server 只发布十七个已有真实 owner 的 Schema 工具", async (t) => {
+test("官方 MCP server 只发布十八个已有真实 owner 的 Schema 工具", async (t) => {
   const calls: unknown[] = [];
   const expected = previewResult();
   const client = await connect(t, {
@@ -842,7 +853,7 @@ test("官方 MCP server 只发布十七个已有真实 owner 的 Schema 工具",
   });
 
   const listed = await client.listTools();
-  equal(listed.tools.length, 17);
+  equal(listed.tools.length, 18);
   const tool = listed.tools.find(
     (entry) => entry.name === WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
   );
@@ -872,6 +883,34 @@ test("官方 MCP server 只发布十七个已有真实 owner 的 Schema 工具",
   deepEqual(result.structuredContent, expected);
   deepEqual(JSON.parse(textContent(result)), expected);
   deepEqual(calls, [request]);
+
+  const publicationTool = listed.tools.find(
+    (entry) => entry.name === WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME,
+  );
+  equal(
+    publicationTool?.inputSchema.$id,
+    "urn:wakeflow:entrypoints:demand-publication-request:v1",
+  );
+  equal(
+    publicationTool?.outputSchema?.$id,
+    "urn:wakeflow:entrypoints:demand-publication-result:v1",
+  );
+  equal(publicationTool?.annotations?.readOnlyHint, false);
+  equal(publicationTool?.annotations?.destructiveHint, true);
+  equal(publicationTool?.annotations?.idempotentHint, true);
+  equal(publicationTool?.annotations?.openWorldHint, false);
+  equal(
+    publicationTool?.description?.includes("performs no host effect"),
+    true,
+  );
+  equal(
+    JSON.stringify(publicationTool?.inputSchema).includes('"$ref":"urn:'),
+    false,
+  );
+  equal(
+    JSON.stringify(publicationTool?.outputSchema).includes('"$ref":"urn:'),
+    false,
+  );
 
   const completionTool = listed.tools.find(
     (entry) => entry.name === WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
@@ -1054,7 +1093,7 @@ test("官方 MCP server 只发布十七个已有真实 owner 的 Schema 工具",
   );
 });
 
-test("Codex与Claude Code composition root发布同一十七工具集合", async () => {
+test("Codex与Claude Code composition root发布同一十八工具集合", async () => {
   const listedNames: string[][] = [];
   for (const createServer of [
     createCodexWakeflowMcpServer,
@@ -1083,6 +1122,7 @@ test("Codex与Claude Code composition root发布同一十七工具集合", async
       WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME,
       WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_PUBLIC_TOOL_NAME,
       WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME,
+      WAKEFLOW_DEMAND_PUBLICATION_PUBLIC_TOOL_NAME,
       WAKEFLOW_TARGET_DELIVERY_PREPARATION_PUBLIC_TOOL_NAME,
       WAKEFLOW_TARGET_HOST_EFFECT_CLAIM_PUBLIC_TOOL_NAME,
       WAKEFLOW_TARGET_HOST_EFFECT_OUTCOME_PUBLIC_TOOL_NAME,

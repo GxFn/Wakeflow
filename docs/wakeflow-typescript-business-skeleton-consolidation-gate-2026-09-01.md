@@ -618,3 +618,106 @@ git diff --check: pass
 ```
 
 本单元没有修改生产代码、Schema、Event、持久化字节、MCP工具或旧JS。方案A至此完成；下一单元应在进入Demand Publication Public前先review已有Publication Service、Schema邻接需求与首个Route消费边界，再确定B的第一文件单元。
+
+### 13.14 B：Demand Publication Public闭合
+
+方案B已经按“先确认owner边界，再公开真实纵切”的顺序完成当前工作树实现。旧JS只用于确认产品场景；
+新的公共合同、TypeScript分层和恢复语义由当前TS Domain、Foundation与官方MCP边界决定。
+
+#### 调用方与owner字段分界
+
+公共preview只接收调用方真正拥有的事实：
+
+```text
+todoId
+title / goal / completionDefinition
+executionPlacement
+Ledger member selections: { recordId, memberPath }
+```
+
+调用方不能提供Program、Demand类型、testing决定、完整Ledger引用、摘要、TODO lineage/CAS、Demand/Event/Commit ID、
+时间、路径或Event数据。`demand-event-sourcing-publication-input.ts`以关闭的被动own-data合同重新解析这些字段，
+并拒绝自动trim、非NFC文本、重复成员、非Requirement/Confirmation记录和`record.json`选择。
+
+#### 零写Planning与exact-plan Application
+
+`DemandEventSourcingPublicationPlanningService`每次preview重新读取Config、TODO和Ledger：
+
+- main placement由owner分配Demand/Event/Commit身份；
+- isolated placement从唯一Confirmation成员派生Demand身份；
+- 完整角色闭包、media type、record/member digest、TODO collection/state digest和revision 1 transaction全部由owner派生；
+- preview不创建Publication目录、sidecar、Demand根、TODO claim或其他持久效果。
+
+`DemandEventSourcingPublicationApplicationService`只接受完整transaction及其digest。它重新解析计划、复验当前
+Config与Ledger根，随后把物理副作用委托既有`publishDemandFromTodo`；recover只接收Demand ID，并委托既有
+`recoverDemandPublication`按sidecar前向收敛。本层没有复制stage、锁、marker、根rename或TODO claim状态机。
+
+物理Service现在对一次exact transaction公开四类最强可证效果状态：
+
+| authority | 含义 | 调用方行为 |
+| --- | --- | --- |
+| `unchanged` | 可证明没有Publication业务效果 | 可重新preview |
+| `recoverable` | 存在可重读且与transaction完全一致的sidecar | 只允许显式recover |
+| `current` | 完整Demand根、revision 1和TODO claim已闭合 | 进入Controller Route |
+| `unknown` | 无法证明上述任一状态 | 停止，不猜测重试或成功 |
+
+#### Public Contract、MCP与隐私边界
+
+新增两份entrypoint Schema及生成类型、Public Contract和Public Coordinator。公共工具名为
+`wakeflow_create_demand`，支持：
+
+```text
+preview(authored input) → complete plan + planDigest
+apply(exact plan + planDigest) → stable current receipt
+recover(demandId) → stable current receipt
+```
+
+成功回执只包含Demand、Identity/Authority/Command摘要、revision 1 Event/Commit摘要和TODO claim摘要；不返回
+完整Aggregate、Authority内容、物理节点、workspace/ledger绝对路径、sidecar或锁token。错误信封保留稳定
+`code/reason/causeCode/causeReason/publicationAuthority`，不回显异常消息、堆栈或私有root。
+
+共享MCP Server与Codex/Claude Code固定composition root均注入同一个宿主中立Coordinator；公共工具数由17增至18。
+该工具声明`readOnlyHint:false`、`destructiveHint:true`、`idempotentHint:true`、`openWorldHint:false`，且不执行任何
+宿主效果。真实MCP测试证明pending TODO经preview/apply创建Demand后，Controller Route立即返回首个
+`implementation-task-planning` frontier，重复apply返回相同结果。
+
+#### Canonical语义比较修正
+
+官方MCP成功结果以Canonical JSON返回，object key顺序可能与领域deterministic pretty render不同。首次真实MCP
+纵切因此暴露：Publication transaction和Application输出闭合错误地把持久化渲染字节顺序当成JSON语义相等。
+
+修正后：
+
+- Commit一致性使用`computeDemandEventStreamCommitDigest`；
+- Identity、Authority和Commit结构一致性使用Canonical JSON语义比较；
+- deterministic render继续只拥有持久文件字节表示，不再承担跨wire语义等价判断。
+
+transaction测试新增“Canonical序列化后重新解析”反例，防止后续再次把object insertion order误当业务语义。
+
+#### 测试维护与当前证据
+
+新的真实MCP发布链和错误隐私合同已从大型公共Server测试拆入独立
+`wakeflow-demand-publication-mcp.test.ts`。公共Server主测试只保留executor配置、18工具catalog、Schema/annotations
+与双host集合一致性；共享fixture的第18个默认executor继续fail-fast。这样新增能力可单独运行，不复制整套领域样例。
+
+```text
+Node: v24.19.0
+npm: 11.17.0
+Demand Publication完整聚焦面: 25 pass / 0 fail / 0 skip
+MCP catalog / composition root: 3 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: 101 / 207 external refs
+Schema digest: sha256:bdc85d2a15b0f522c41dde26d77d79fa1969f9ec86ccbc78a387781e4d3ee921
+Architecture: parser=swc / 723 modules / 5059 dependencies / 0 violations
+Candidate: Codex 433 files / Claude Code 438 files / releaseEligible=false
+Prettier（手写新增文件）: pass
+git diff --check: pass
+```
+
+902项完整TypeScript结果仍是Publication Public之前的提交基线；本单元没有伪称已重跑当前完整门，也没有运行
+旧JS全量测试、双host plugin validator/smoke、release gate或真实宿主会话。当前实现与Atlas同步均未提交；
+Technical Skeleton Review Gate中既有两行异常diff继续排除且未修改。
+
+Demand Publication Public至此从“真实内部owner”变为“真实公共纵切”，但没有引入自动Controller编排、宿主调用、
+通用transaction manager或额外Foundation。下一核实节点应先审阅当前18工具从pending TODO到Completion的骨干闭包、
+完整门与Atlas一致性，再决定进入Research/Redesign，还是以首个真实consumer启动Evidence/Archive。

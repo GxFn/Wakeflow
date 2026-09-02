@@ -32,6 +32,7 @@ import {
   DEMAND_EVENT_SOURCING_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
   DemandEventSourcingPublicationServiceError,
   failDemandEventSourcingPublication as fail,
+  type DemandEventSourcingPublicationEffectAuthority,
   type DemandEventSourcingPublicationResult,
   type StoredDemandEventSourcingPublicationTransaction,
 } from "./demand-event-sourcing-publication-contract.js";
@@ -90,7 +91,7 @@ function assertRoot(value: unknown): asserts value is RootedDirectory {
     || types.isProxy(value)
     || !(value instanceof RootedDirectory)
   ) {
-    fail("input", "$root");
+    fail("input", "$root", "unchanged");
   }
 }
 
@@ -103,7 +104,7 @@ function assertLedgerStore(
     || types.isProxy(value)
     || !(value instanceof LedgerAuthorityStore)
   ) {
-    fail("input", "$ledgerStore");
+    fail("input", "$ledgerStore", "unchanged");
   }
 }
 
@@ -257,6 +258,7 @@ async function applyPublication(
     signal,
   );
   return Object.freeze({
+    publicationAuthority: "current" as const,
     wroteDemandRoot,
     demandId: transaction.demandId,
     rootRef: transaction.finalRootRef,
@@ -330,6 +332,7 @@ async function loadIdempotentResult(
   const item = exactClaimedTodoItem(snapshot, transaction);
   if (item === null) return null;
   return Object.freeze({
+    publicationAuthority: "current" as const,
     wroteDemandRoot: false,
     demandId: transaction.demandId,
     rootRef: transaction.finalRootRef,
@@ -343,6 +346,67 @@ async function loadIdempotentResult(
   });
 }
 
+function rethrowWithPublicationAuthority(
+  error: unknown,
+  publicationAuthority: DemandEventSourcingPublicationEffectAuthority,
+): never {
+  if (error instanceof DemandEventSourcingPublicationServiceError) {
+    throw new DemandEventSourcingPublicationServiceError(
+      error.reason,
+      error.path,
+      error.publicationAuthority === "unknown"
+        ? publicationAuthority
+        : error.publicationAuthority,
+    );
+  }
+  throw error;
+}
+
+/** 失败后只读观察exact transaction，不把残留、冲突或观察失败猜成成功。 */
+async function classifyPublicationAuthority(
+  root: RootedDirectory,
+  ledgerStore: LedgerAuthorityStore,
+  transaction: Readonly<DemandEventSourcingPublicationTransaction>,
+  signal: AbortSignal | undefined,
+): Promise<DemandEventSourcingPublicationEffectAuthority> {
+  try {
+    const sidecarRef = demandPublicationTransactionRef(transaction.demandId);
+    const sidecarNode = await publicationNodeOrNull(root, sidecarRef);
+    if (sidecarNode !== null) {
+      const stored = await readPublicationTransactionAt(
+        root,
+        sidecarRef,
+        sidecarNode,
+        signal,
+      );
+      return samePublicationTransaction(stored.transaction, transaction)
+        ? "recoverable"
+        : "unknown";
+    }
+
+    if (
+      (await loadIdempotentResult(root, ledgerStore, transaction, signal)) !==
+      null
+    ) {
+      return "current";
+    }
+
+    if (
+      (await publicationNodeOrNull(root, transaction.finalRootRef)) !== null ||
+      (await publicationNodeOrNull(root, transaction.stageRef)) !== null
+    ) {
+      return "unknown";
+    }
+    assertPendingTodoItem(
+      await inspectTodoForDemandPublication(root, signal),
+      transaction,
+    );
+    return "unchanged";
+  } catch {
+    return "unknown";
+  }
+}
+
 /** 根据已确认的身份/权威关系记录和指定待处理 TODO，发布修订号 1 的 Demand。 */
 export async function publishDemandFromTodo(
   root: RootedDirectory,
@@ -352,89 +416,111 @@ export async function publishDemandFromTodo(
 ): Promise<Readonly<DemandEventSourcingPublicationResult>> {
   assertRoot(root);
   assertLedgerStore(ledgerStore);
-  const signal = parseSignal(options);
+  let signal: AbortSignal | undefined;
   let transaction: Readonly<DemandEventSourcingPublicationTransaction>;
   try {
-    transaction = createDemandEventSourcingPublicationTransaction(
-      exactInput(inputValue),
-    );
-  } catch (error: unknown) {
-    if (error instanceof DemandEventSourcingPublicationTransactionError) {
-      fail("input", "$input");
-    }
-    throw error;
-  }
-  try {
-    await admitDemandAuthority(
-      transaction.identity,
-      transaction.authority,
-      ledgerStore,
-      signal === undefined ? undefined : { signal },
-    );
-  } catch (error: unknown) {
-    if (
-      error instanceof DemandAuthorityError
-      || error instanceof LedgerAuthorityStoreError
-    ) {
-      if (
-        (error instanceof DemandAuthorityError && error.reason === "aborted")
-        || (error instanceof LedgerAuthorityStoreError && error.reason === "aborted")
-      ) {
-        fail("aborted", "$signal");
+    signal = parseSignal(options);
+    try {
+      transaction = createDemandEventSourcingPublicationTransaction(
+        exactInput(inputValue),
+      );
+    } catch (error: unknown) {
+      if (error instanceof DemandEventSourcingPublicationTransactionError) {
+        fail("input", "$input");
       }
-      fail("authority", "$authority");
+      throw error;
     }
-    throw error;
-  }
-  // Authority 和 TODO 准入完成前，不创建任何发布基础目录或文件。
-  const initialTodo = await inspectTodoForDemandPublication(
-    root,
-    signal,
-  );
-  if (exactClaimedTodoItem(initialTodo, transaction) === null) {
-    if (
-      initialTodo.collection.collectionDigest
-      !== transaction.expectedTodoCollectionDigest
-    ) {
-      fail("cas-mismatch", "$/expectedTodoCollectionDigest");
-    }
-    assertPendingTodoItem(initialTodo, transaction);
-  }
-  await initializePublicationStorage(root, signal);
-  return runLocked(root, transaction, signal, async () => {
-    const sidecarRef = demandPublicationTransactionRef(transaction.demandId);
-    if (await publicationNodeOrNull(root, sidecarRef) === null) {
-      const idempotent = await loadIdempotentResult(
-        root,
+    try {
+      await admitDemandAuthority(
+        transaction.identity,
+        transaction.authority,
         ledgerStore,
-        transaction,
-        signal,
+        signal === undefined ? undefined : { signal },
       );
-      if (idempotent !== null) return idempotent;
-      const currentTodo = await inspectTodoForDemandPublication(
-        root,
-        signal,
-      );
+    } catch (error: unknown) {
       if (
-        currentTodo.collection.collectionDigest
-        !== transaction.expectedTodoCollectionDigest
+        error instanceof DemandAuthorityError ||
+        error instanceof LedgerAuthorityStoreError
+      ) {
+        if (
+          (error instanceof DemandAuthorityError &&
+            error.reason === "aborted") ||
+          (error instanceof LedgerAuthorityStoreError &&
+            error.reason === "aborted")
+        ) {
+          fail("aborted", "$signal");
+        }
+        fail("authority", "$authority");
+      }
+      throw error;
+    }
+    // Authority 和 TODO 准入完成前，不创建任何发布基础目录或文件。
+    const initialTodo = await inspectTodoForDemandPublication(
+      root,
+      signal,
+    );
+    if (exactClaimedTodoItem(initialTodo, transaction) === null) {
+      if (
+        initialTodo.collection.collectionDigest !==
+        transaction.expectedTodoCollectionDigest
       ) {
         fail("cas-mismatch", "$/expectedTodoCollectionDigest");
       }
-      assertPendingTodoItem(currentTodo, transaction);
+      assertPendingTodoItem(initialTodo, transaction);
     }
-    return applyPublication(
-      root,
-      ledgerStore,
-      await ensurePublicationTransaction(
+  } catch (error: unknown) {
+    rethrowWithPublicationAuthority(error, "unchanged");
+  }
+
+  let publicationIntentWriteAttempted = false;
+  try {
+    await initializePublicationStorage(root, signal);
+    return await runLocked(root, transaction, signal, async () => {
+      const sidecarRef = demandPublicationTransactionRef(transaction.demandId);
+      if (await publicationNodeOrNull(root, sidecarRef) === null) {
+        const idempotent = await loadIdempotentResult(
+          root,
+          ledgerStore,
+          transaction,
+          signal,
+        );
+        if (idempotent !== null) return idempotent;
+        const currentTodo = await inspectTodoForDemandPublication(
+          root,
+          signal,
+        );
+        if (
+          currentTodo.collection.collectionDigest !==
+          transaction.expectedTodoCollectionDigest
+        ) {
+          fail("cas-mismatch", "$/expectedTodoCollectionDigest");
+        }
+        assertPendingTodoItem(currentTodo, transaction);
+      }
+      publicationIntentWriteAttempted = true;
+      const stored = await ensurePublicationTransaction(
         root,
         sidecarRef,
         transaction,
         signal,
-      ),
+      );
+      return applyPublication(root, ledgerStore, stored, signal);
+    });
+  } catch (error: unknown) {
+    let publicationAuthority = await classifyPublicationAuthority(
+      root,
+      ledgerStore,
+      transaction,
       signal,
     );
-  });
+    if (
+      publicationIntentWriteAttempted &&
+      publicationAuthority === "unchanged"
+    ) {
+      publicationAuthority = "unknown";
+    }
+    rethrowWithPublicationAuthority(error, publicationAuthority);
+  }
 }
 
 async function prepareLockRecovery(
@@ -486,51 +572,78 @@ export async function recoverDemandPublication(
 ): Promise<Readonly<DemandEventSourcingPublicationResult>> {
   assertRoot(root);
   assertLedgerStore(ledgerStore);
-  const signal = parseSignal(options);
+  let signal: AbortSignal | undefined;
   let demandId;
   try {
+    signal = parseSignal(options);
     demandId = parseWakeflowDurableIdOfKind(
       demandIdValue,
       "demand",
       "$demandId",
     );
+    assertNotAborted(signal);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("input", "$demandId");
-    throw error;
-  }
-  const ref = demandPublicationTransactionRef(demandId);
-  const transactionsRootNode = await publicationNodeOrNull(
-    root,
-    DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
-  );
-  if (transactionsRootNode === null) fail("not-found", "$transaction");
-  assertPrivatePublicationNode(
-    transactionsRootNode,
-    "directory",
-    "$transactions",
-  );
-  await recoverPublicationTransactionStages(root, ref, signal);
-  const node = await publicationNodeOrNull(root, ref);
-  if (node === null) fail("not-found", "$transaction");
-  const stored = await readPublicationTransactionAt(root, ref, node, signal);
-  if (stored.transaction.demandId !== demandId) {
-    fail("conflict", "$transaction/demandId");
-  }
-  await initializePublicationStorage(root, signal);
-  await prepareLockRecovery(root, stored, signal);
-  return runLocked(root, stored.transaction, signal, async () => {
-    const freshNode = await publicationNodeOrNull(root, ref);
-    if (freshNode === null) fail("not-found", "$transaction");
-    const fresh = await readPublicationTransactionAt(root, ref, freshNode, signal);
-    if (!samePublicationTransaction(fresh.transaction, stored.transaction)) {
-      fail("conflict", "$transaction");
+    if (error instanceof WakeflowDurableIdError) {
+      fail("input", "$demandId", "unchanged");
     }
-    return applyPublication(root, ledgerStore, fresh, signal);
-  });
+    rethrowWithPublicationAuthority(error, "unchanged");
+  }
+
+  let transaction: Readonly<DemandEventSourcingPublicationTransaction> | null =
+    null;
+  try {
+    const ref = demandPublicationTransactionRef(demandId);
+    const transactionsRootNode = await publicationNodeOrNull(
+      root,
+      DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
+    );
+    if (transactionsRootNode === null) fail("not-found", "$transaction");
+    assertPrivatePublicationNode(
+      transactionsRootNode,
+      "directory",
+      "$transactions",
+    );
+    await recoverPublicationTransactionStages(root, ref, signal);
+    const node = await publicationNodeOrNull(root, ref);
+    if (node === null) fail("not-found", "$transaction");
+    const stored = await readPublicationTransactionAt(root, ref, node, signal);
+    if (stored.transaction.demandId !== demandId) {
+      fail("conflict", "$transaction/demandId");
+    }
+    transaction = stored.transaction;
+    await initializePublicationStorage(root, signal);
+    await prepareLockRecovery(root, stored, signal);
+    return await runLocked(root, stored.transaction, signal, async () => {
+      const freshNode = await publicationNodeOrNull(root, ref);
+      if (freshNode === null) fail("not-found", "$transaction");
+      const fresh = await readPublicationTransactionAt(
+        root,
+        ref,
+        freshNode,
+        signal,
+      );
+      if (!samePublicationTransaction(fresh.transaction, stored.transaction)) {
+        fail("conflict", "$transaction");
+      }
+      return applyPublication(root, ledgerStore, fresh, signal);
+    });
+  } catch (error: unknown) {
+    const publicationAuthority =
+      transaction === null
+        ? "unknown"
+        : await classifyPublicationAuthority(
+            root,
+            ledgerStore,
+            transaction,
+            signal,
+          );
+    rethrowWithPublicationAuthority(error, publicationAuthority);
+  }
 }
 
 export {
   DemandEventSourcingPublicationServiceError,
+  type DemandEventSourcingPublicationEffectAuthority,
   type DemandEventSourcingPublicationResult,
   type DemandEventSourcingPublicationTodoResult,
 } from "./demand-event-sourcing-publication-contract.js";

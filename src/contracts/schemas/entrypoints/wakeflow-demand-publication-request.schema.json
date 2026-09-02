@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:entrypoints:demand-publication-request:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_DEMAND_PUBLICATION_REQUEST_SCHEMA",
+  "title": "WakeflowDemandPublicationRequestV1",
+  "description": "Closed MCP preview/apply/recover request for one TODO-backed Demand Event Sourcing publication.",
+  "$comment": "Preview accepts only Controller-authored Demand text, execution placement, TODO identity, and Ledger member selections. Config, Demand type, testing decision, complete Ledger references, digests, time, IDs, paths, Event/Commit data, and TODO CAS are owner-derived. Apply replays the exact preview plan and digest; recover accepts only the Demand identity.",
+  "type": "object",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/previewRequest"
+    },
+    {
+      "$ref": "#/$defs/applyRequest"
+    },
+    {
+      "$ref": "#/$defs/recoverRequest"
+    }
+  ],
+  "$defs": {
+    "previewRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "mode", "todoId", "demand", "authorityMembers"],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/workspaceRoot"
+        },
+        "mode": {
+          "const": "preview"
+        },
+        "todoId": {
+          "$ref": "#/$defs/todoId"
+        },
+        "demand": {
+          "$ref": "#/$defs/authoredDemand"
+        },
+        "authorityMembers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/authorityMemberSelection"
+          }
+        }
+      }
+    },
+    "applyRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "mode", "plan", "planDigest"],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/workspaceRoot"
+        },
+        "mode": {
+          "const": "apply"
+        },
+        "plan": {
+          "$ref": "#/$defs/publicationPlan"
+        },
+        "planDigest": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
+    },
+    "recoverRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "mode", "demandId"],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/workspaceRoot"
+        },
+        "mode": {
+          "const": "recover"
+        },
+        "demandId": {
+          "$ref": "#/$defs/demandId"
+        }
+      }
+    },
+    "authoredDemand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "goal",
+        "completionDefinition",
+        "executionPlacement"
+      ],
+      "properties": {
+        "title": {
+          "$ref": "#/$defs/identityText"
+        },
+        "goal": {
+          "$ref": "#/$defs/identityText"
+        },
+        "completionDefinition": {
+          "$ref": "#/$defs/identityText"
+        },
+        "executionPlacement": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/mainPlacement"
+            },
+            {
+              "$ref": "#/$defs/isolatedPlacement"
+            }
+          ]
+        }
+      }
+    },
+    "mainPlacement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "const": "main"
+        }
+      }
+    },
+    "isolatedPlacement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "authorizationMember"],
+      "properties": {
+        "mode": {
+          "const": "isolated"
+        },
+        "authorizationMember": {
+          "$ref": "#/$defs/authorityMemberSelection"
+        }
+      }
+    },
+    "authorityMemberSelection": {
+      "description": "Caller selection of one immutable Ledger member. Role, media type, record/member digests, and full refs are resolved by the Publication owner.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recordId", "memberPath"],
+      "properties": {
+        "recordId": {
+          "$ref": "#/$defs/authorityRecordId"
+        },
+        "memberPath": {
+          "$ref": "#/$defs/portableResourcePath"
+        }
+      }
+    },
+    "publicationPlan": {
+      "type": "object",
+      "description": "Complete owner-produced Demand Event Sourcing publication transaction. The domain transaction parser revalidates its exact closed shape and relations before Apply.",
+      "minProperties": 1
+    },
+    "workspaceRoot": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absolute path of the existing Wakeflow workspace root. Physical validation remains owned by RootedDirectory and this value is never returned."
+    },
+    "identityText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16384,
+      "pattern": "^(?!\\s)(?![\\s\\S]*\\r)(?![\\s\\S]*[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f])[\\s\\S]*\\S$"
+    },
+    "portableResourcePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*//)(?!.*\\/$)(?!\\s)(?!.*\\s$)(?!.*\\/\\s)(?!.*\\s\\/)(?!.*[\\u0000-\\u001F\\u007F-\\u009F]).+$"
+    },
+    "todoId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "authorityRecordId": {
+      "type": "string",
+      "pattern": "^(?:requirement|confirmation)_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "demandId": {
+      "type": "string",
+      "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

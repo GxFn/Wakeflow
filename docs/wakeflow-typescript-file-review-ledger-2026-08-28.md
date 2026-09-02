@@ -17143,3 +17143,145 @@ Architecture: parser=swc / 710 modules / 4967 dependencies / 0 violations
 ```
 
 双host候选manifest摘要保持不变，`releaseEligible=false`；完整门没有commit、push、tag、publish或cache刷新。下一步按既定`A → B`进入Demand Publication Public准备审阅：先读取现有Publication Service及其真实producer/consumer，不直接注册工具，也不在审阅前新增Foundation。
+
+## 223. Demand Publication Public纵切
+
+### 223.1 现有owner复核与分层选择
+
+进入方案B前重新读取Publication transaction、Service、stage、storage、TODO、Demand Root Authority、Config、
+Ledger、TODO Collection、Controller Route以及旧JS创建场景。确认现有物理Service已经拥有正确且不可拆散的跨资源顺序：
+
+```text
+Authority与pending TODO准入
+→ exact transaction sidecar
+→ 私有stage根
+→ revision 1 Event/Commit
+→ 同根rename发布Demand根
+→ CAS claim精确TODO
+→ marker/sidecar退休与完整Root Authority回读
+```
+
+真正缺失的不是另一套Publication事务，而是三个相邻边界：调用方最小输入、零写preview计划、exact-plan公共应用。
+因此拒绝了两种扩张：
+
+- 不让公共Coordinator直接组装Identity/Authority/Event并复制物理Service；
+- 不让现有物理Service同时读取Config、选择Ledger成员并承担MCP wire/隐私职责。
+
+采用的层次为：
+
+```text
+Public Contract / Coordinator
+├── preview → Publication Planning Service（零写）
+└── apply/recover → Publication Application Service
+                       └── 既有物理Publication Service
+```
+
+### 223.2 author-owned Input与零写Planning
+
+新增`demand-event-sourcing-publication-input.ts`，只允许TODO ID、Demand人类语义、execution placement和
+`{recordId, memberPath}`成员选择。Program、Demand类型、testing、完整Ledger ref、digest、时间、ID、路径、
+Event/Commit和TODO CAS全部排除。解析器使用passive own-data、dense array、typed ID与portable path能力，拒绝
+accessor/proxy/hidden/symbol/unknown字段、非NFC/首尾空白/控制字符、重复成员和`record.json`。
+
+新增`DemandEventSourcingPublicationPlanningService`。它持有一次操作范围外已打开的Workspace根，但每次preview
+重新读取Config、TODO与Ledger，并完成：
+
+- 从Config派生Program；
+- 从TODO状态与collection派生lineage和CAS摘要；
+- 从Ledger记录解析role、media type与record/member摘要；
+- isolated placement从Confirmation派生唯一Demand ID，main placement由owner分配；
+- 分配Event/Commit身份和UTC时间，生成完整revision 1 transaction与plan digest；
+- 在返回前复验全部路径派生和transaction关系。
+
+Planning测试证明main/isolated、Confirmation冲突、role closure缺失和preview零写；没有为了preview新增目录、锁、
+reservation或全局ID registry。
+
+### 223.3 effect authority与Application边界
+
+物理Publication错误新增`publicationAuthority`：
+
+```text
+unchanged | recoverable | current | unknown
+```
+
+准入失败在副作用之前可证明`unchanged`；失败后只读观察exact sidecar、最终根、stage和TODO闭合。
+只有完全相同sidecar可证明`recoverable`，完整Root/TODO闭合可证明`current`；残留、冲突或观察失败均为`unknown`。
+一旦尝试写入Publication intent，即使最终观察看起来没有文件，也不会降格猜成`unchanged`。
+
+新增`DemandEventSourcingPublicationApplicationService`：
+
+- apply重新解析完整transaction和digest；
+- 打开当前Config与Ledger根，并复验Config仍current；
+- 从plan提取既有Service输入，不复制stage/lock/TODO事务；
+- 成功后以Canonical JSON语义、Commit digest、TODO mount和Root Authority闭合输出；
+- recover只接收typed Demand ID，并只委托sidecar驱动的前向恢复。
+
+Application错误把底层稳定`code/reason`和最强`publicationAuthority`带到公共层，不泄漏path或message。
+
+### 223.4 Public Schema、Coordinator与第18个MCP工具
+
+新增：
+
+```text
+contracts/schemas/entrypoints/wakeflow-demand-publication-{request,result}.schema.json
+contracts/generated/entrypoints/wakeflow-demand-publication-{request,result}.generated.ts
+demand-publication-public-contract.ts
+demand-publication-public-coordinator.ts
+```
+
+Request是关闭的`preview | apply | recover`联合。Preview authored fields和成功receipt由Schema完整描述；preview输出
+中的完整domain plan在wire层只要求非空JSON object，Apply仍由唯一domain transaction parser执行关闭结构与关系复验，
+避免在entrypoint Schema复制整份Publication领域合同。
+
+Public Coordinator拥有32 MiB request/result容量、passive JSON、Workspace根打开/关闭、root隐私、模式委派与稳定回执。
+回执不返回完整Aggregate/Authority/TODO snapshot、绝对路径、sidecar或内部mutation token。
+
+`wakeflow-public-mcp-server.ts`注册`wakeflow_create_demand`，Codex与Claude Code固定composition root都直接注入
+`executeDemandPublicationPublicRequest`。公共Server现在有18个真实owner工具；新增工具没有host effect，annotations为：
+
+```text
+readOnlyHint: false
+destructiveHint: true
+idempotentHint: true
+openWorldHint: false
+```
+
+### 223.5 Canonical语义缺陷与测试收敛
+
+真实MCP roundtrip首次把preview plan通过Canonical JSON返回。Canonical key排序改变object insertion order，暴露两个
+旧假设：transaction parser用pretty render比较Commit，Application输出闭合也用render比较Identity/Authority/Commit。
+这些render函数拥有持久字节表示，不拥有跨wire JSON语义相等。
+
+修正为：
+
+- Commit使用`computeDemandEventStreamCommitDigest`；
+- 结构使用Canonical JSON语义比较；
+- transaction测试增加Canonical序列化后重解析反例。
+
+真实MCP测试从大型公共Server测试移入独立`wakeflow-demand-publication-mcp.test.ts`，只保留两条高价值证据：
+
+1. pending TODO → preview → apply → 首个Controller Route → idempotent replay；
+2. recoverable错误信封保留authority且不回显root/stack。
+
+公共Server主测试只保留第18个executor配置、catalog、Schema/annotations和双host集合一致性；共享fixture默认executor
+继续fail-fast，没有复制领域fixture或创建第二套server options类型。
+
+```text
+Demand Publication完整聚焦面: 25 pass / 0 fail / 0 skip
+MCP catalog / composition root: 3 pass / 0 fail / 0 skip
+TypeScript: pass
+Schema: 101 / 207 external refs
+Schema digest: sha256:bdc85d2a15b0f522c41dde26d77d79fa1969f9ec86ccbc78a387781e4d3ee921
+Architecture: parser=swc / 723 modules / 5059 dependencies / 0 violations
+Candidate: Codex 433 files / Claude Code 438 files / releaseEligible=false
+Prettier（手写新增文件）: pass
+git diff --check: pass
+```
+
+当前工作树未提交；902项完整TypeScript结果仍是Publication Public之前的基线，旧JS全量测试、正式plugin
+validator/smoke、release gate和真实宿主会话未运行。Atlas已按当前源码更新为18工具、101 Schema，并重新核对
+30份来源指纹、196条具体TypeScript直接import和778条图边证据。
+
+Demand Publication Public已经消除“公共链必须从已有Demand开始”的缺口。下一步不直接追加第19个工具；先在
+技术核实节点重跑当前完整门，审阅18工具从pending TODO到Completion的owner矩阵、测试重量和候选闭包，再决定
+Research/Redesign与Evidence/Archive的先后顺序。

@@ -17,6 +17,7 @@ import { createWakeflowPublicMcpServer } from "./wakeflow-public-mcp-server.js";
 import { executeTargetTaskPlanningPublicRequest } from "../governance/tasking/target-task-planning-public-coordinator.js";
 import { executeDemandControllerRoutePublicRequest } from "../governance/controller/demand-controller-route-public-coordinator.js";
 import { executeDemandCompletionPublicRequest } from "../governance/lifecycle/demand-completion-public-coordinator.js";
+import { executeDemandPublicationPublicRequest } from "../governance/demand/publication/demand-publication-public-coordinator.js";
 import { executeTargetResultReviewResumePublicRequest } from "../governance/review/target-result-review-resume-public-coordinator.js";
 import { executeTestCardPlanningPublicRequest } from "../governance/testing/test-card-planning-public-coordinator.js";
 import { runWakeflowMcpStdio } from "./wakeflow-mcp-stdio.js";
@@ -31,6 +32,7 @@ export function createCodexWakeflowMcpServer(serverVersion: string): McpServer {
     serverVersion,
     executeMaintenance: executeCodexWakeflowMaintenance,
     completeDemand: executeDemandCompletionPublicRequest,
+    createDemand: executeDemandPublicationPublicRequest,
     inspectDemandRoute: executeDemandControllerRoutePublicRequest,
     importTargetResult: executeCodexTargetResultImport,
     inspectTargetResultReview: executeCodexTargetResultReviewInspection,

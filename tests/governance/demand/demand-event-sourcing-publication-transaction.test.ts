@@ -5,6 +5,7 @@ import {
 import { test } from "node:test";
 
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { canonicalizeJson } from "../../../src/foundation/data/canonical-json.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
@@ -15,6 +16,7 @@ import {
 } from "../../../src/governance/demand/model/demand-identity.js";
 import {
   createDemandEventSourcingPublicationTransaction,
+  parseDemandEventSourcingPublicationTransaction,
   parseDemandEventSourcingPublicationTransactionDocument,
   renderDemandEventSourcingPublicationTransaction,
 } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-transaction.js";
@@ -118,4 +120,10 @@ test("Demand Event Sourcing publication transaction 自包含 initial command �
 
   const text = renderDemandEventSourcingPublicationTransaction(transaction);
   deepEqual(parseDemandEventSourcingPublicationTransactionDocument(text), transaction);
+  deepEqual(
+    parseDemandEventSourcingPublicationTransaction(
+      JSON.parse(canonicalizeJson(transaction, "$transaction")),
+    ),
+    transaction,
+  );
 });

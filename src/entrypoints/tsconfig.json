@@ -33,7 +33,13 @@
     "codex-wakeflow-test-delivery-preparation.ts",
     "codex-wakeflow-window-host-binding.ts",
     "wakeflow-mcp-stdio.ts",
-    "wakeflow-public-mcp-server.ts"
+    "wakeflow-public-mcp-authority-tools.ts",
+    "wakeflow-public-mcp-execution-tools.ts",
+    "wakeflow-public-mcp-review-tools.ts",
+    "wakeflow-public-mcp-server.ts",
+    "wakeflow-public-mcp-server-configuration.ts",
+    "wakeflow-public-mcp-tool.ts",
+    "wakeflow-public-mcp-workspace-tools.ts"
   ],
   "references": [
     { "path": "../tsconfig.runtime.json" },

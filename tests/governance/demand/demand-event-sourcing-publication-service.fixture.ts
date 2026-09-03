@@ -267,9 +267,9 @@ export async function cleanupDemandEventSourcingPublicationWorkspaceFixture(
   rmSync(fixture.fixtureRoot, { recursive: true, force: true });
 }
 
-export function demandEventSourcingPublicationAuthoredDemand(
-  executionPlacement: unknown,
-) {
+export function demandEventSourcingPublicationAuthoredDemand<
+  const ExecutionPlacement,
+>(executionPlacement: ExecutionPlacement) {
   return {
     title: "Demand Event Sourcing Publication",
     goal: "从当前TODO与Ledger生成完整revision 1计划",

@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { DemandEventSourcingPublicationApplicationService } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-application-service.js";
+import type { DemandEventSourcingPublicationPreviewRequest } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-input.js";
 import { DemandEventSourcingPublicationPlanningService } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-planning-service.js";
 import {
   cleanupDemandEventSourcingPublicationWorkspaceFixture,
@@ -34,14 +35,14 @@ export async function createManagedEvidenceCapturePlanningWorkspaceFixture(): Pr
   const publication =
     await createDemandEventSourcingPublicationWorkspaceFixture();
   try {
+    const demandPreviewRequest = {
+      todoId: PUBLICATION_TODO_ID,
+      demand: demandEventSourcingPublicationAuthoredDemand({ mode: "main" }),
+    } satisfies DemandEventSourcingPublicationPreviewRequest;
     const preview = await new DemandEventSourcingPublicationPlanningService(
       publication.workspaceRoot,
     ).preview(
-      {
-        todoId: PUBLICATION_TODO_ID,
-        demand: demandEventSourcingPublicationAuthoredDemand({ mode: "main" }),
-        authorityMembers: publication.requirementMembers,
-      },
+      demandPreviewRequest,
       {
         uuidFactory: demandEventSourcingPublicationUuidFactory(
           [

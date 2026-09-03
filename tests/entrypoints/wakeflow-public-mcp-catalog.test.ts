@@ -341,6 +341,14 @@ test("MCP composition拒绝Proxy executor与额外配置字段", () => {
 
 test("官方MCP server只发布二十三个闭合Schema工具", async (t) => {
   const client = await connectWakeflowMcpTestClient(t);
+  const instructions = client.getInstructions();
+  equal(typeof instructions, "string");
+  equal(Buffer.byteLength(instructions ?? "", "utf8") <= 1_024, true);
+  equal(instructions?.includes("never performs Agent host effects"), true);
+  equal(
+    instructions?.includes(WAKEFLOW_DEMAND_CONTROLLER_ROUTE_PUBLIC_TOOL_NAME),
+    true,
+  );
   const listed = await client.listTools();
   const actualByName = new Map(
     listed.tools.map((tool) => [tool.name, tool] as const),

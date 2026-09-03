@@ -1,3 +1,12 @@
+const WORKSPACE_GOVERNANCE_COMPOSITION_SOURCES =
+  "^src/workspace/(?:active/(?:wakeflow-active-workspace-fresh-projection-authority|wakeflow-active-workspace-projection-inspection)|maintenance/(?:wakeflow-static-materialization-preview|wakeflow-static-materialization-step-executor)|(?:wakeflow-shared-coordination-layout|wakeflow-workspace-static-resource-matrix))\\.ts$";
+
+const WORKSPACE_GOVERNANCE_COMPOSITION_TARGETS =
+  "^src/governance/(?:delivery/window-work-claim-resource-catalog|demand/demand-resource-catalog|ledger/(?:ledger-authority-(?:layout|store|storage-policy)|ledger-resource-catalog)|todo/(?:todo-collection-(?:initialization(?:-authority)?|service)|todo-paths|todo-resource-catalog))\\.ts$";
+
+const GOVERNANCE_WORKSPACE_CONTRACT_TARGETS =
+  "^src/workspace/(?:active/(?:wakeflow-active-layout-inspection|wakeflow-active-paths)|window-runtime/(?:wakeflow-agent-host-window-observation-authority|wakeflow-window-host-binding(?:-id|-store-authority|-store)?|wakeflow-window-host-identity-profile)|workspace-(?:host-resource-profile|resource-declaration|shared-runtime-resource-catalog))\\.ts$";
+
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   forbidden: [
@@ -65,6 +74,46 @@ module.exports = {
       from: { path: "^src/contracts/identity/" },
       to: {
         path: "^src/(?:configuration|workspace|windows|governance|demands|delivery|pods|archives|migration|observability|hosts|entrypoints)/",
+      },
+    },
+    {
+      name: "configuration-uses-only-workspace-resource-contract",
+      severity: "error",
+      comment: "Configuration只可复用Workspace的纯资源声明合同，不能取得Workspace状态或执行能力。",
+      from: { path: "^src/configuration/" },
+      to: {
+        path: "^src/workspace/",
+        pathNot: "^src/workspace/workspace-resource-declaration\\.ts$",
+      },
+    },
+    {
+      name: "workspace-governance-composition-source-is-explicit",
+      severity: "error",
+      comment: "只有Workspace初始化与静态矩阵组合根可以取得Governance owner能力。",
+      from: {
+        path: "^src/workspace/",
+        pathNot: WORKSPACE_GOVERNANCE_COMPOSITION_SOURCES,
+      },
+      to: { path: "^src/governance/" },
+    },
+    {
+      name: "workspace-governance-composition-target-is-explicit",
+      severity: "error",
+      comment: "Workspace组合缝只能取得已列明的Governance布局、目录和初始化owner。",
+      from: { path: WORKSPACE_GOVERNANCE_COMPOSITION_SOURCES },
+      to: {
+        path: "^src/governance/",
+        pathNot: WORKSPACE_GOVERNANCE_COMPOSITION_TARGETS,
+      },
+    },
+    {
+      name: "governance-uses-only-workspace-contract-seams",
+      severity: "error",
+      comment: "Governance只能取得Workspace布局、资源声明、宿主Profile和Window身份合同。",
+      from: { path: "^src/governance/" },
+      to: {
+        path: "^src/workspace/",
+        pathNot: GOVERNANCE_WORKSPACE_CONTRACT_TARGETS,
       },
     },
     {

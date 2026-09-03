@@ -48,6 +48,7 @@ interface ManifestFile {
 interface CandidateManifest {
   readonly kind: "WakeflowTypescriptArtifactCandidateManifest";
   readonly releaseEligible: false;
+  readonly scope: "typescript-public-technical-skeleton";
   readonly hostId: "codex" | "claude-code";
   readonly externalPackages: readonly string[];
   readonly files: readonly ManifestFile[];
@@ -128,6 +129,7 @@ test("双宿主候选制品由确定性的闭合可达文件清单生成", (t) =
     const manifest = parseJsonFile<CandidateManifest>(manifestPath);
     equal(manifest.kind, "WakeflowTypescriptArtifactCandidateManifest");
     equal(manifest.releaseEligible, false);
+    equal(manifest.scope, "typescript-public-technical-skeleton");
     equal(manifest.hostId, artifact.hostId);
     equal(digest(manifestPath), artifact.manifestDigest);
     deepEqual(manifest.externalPackages, artifact.externalPackages);

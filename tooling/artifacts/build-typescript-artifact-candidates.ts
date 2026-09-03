@@ -30,6 +30,7 @@ const COMPILED_SOURCE_ROOT = ".build/src";
 const MAXIMUM_MODULE_BYTES = 8 * 1024 * 1024;
 const MAXIMUM_COMPILED_MODULES = 1024;
 const CANDIDATE_VERSION = "0.0.0-technical-skeleton";
+const CANDIDATE_SCOPE = "typescript-public-technical-skeleton";
 
 type CandidateHostId = "codex" | "claude-code";
 type CompiledFileScope = "shared" | "current-host" | "peer-profile";
@@ -500,7 +501,7 @@ function assembleCandidate(
     kind: "WakeflowTypescriptArtifactCandidateManifest",
     schemaVersion: 1,
     releaseEligible: false,
-    scope: "maintenance-and-window-identity-technical-skeleton",
+    scope: CANDIDATE_SCOPE,
     hostId: definition.hostId,
     candidateVersion: CANDIDATE_VERSION,
     referenceArtifactVersion: referencePackage.version,

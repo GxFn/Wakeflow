@@ -2299,3 +2299,62 @@ Route最终为`work-available / implementation-task-planning`，所有中间结�
 核实测试从一份已建立Config/Ledger/Active静态根的v3 Workspace fixture开始；Workspace Maintenance的fresh public纵切已有独立测试，本测试没有重复执行宿主窗口创建。它证明“技术骨干准备完成后，Requirement/Confirmation → TODO → Demand → Route”全部可由新TS公共工具完成，不证明插件release、真实宿主窗口或旧JS等价。
 
 到此应暂停真实业务继续扩张，先对A4～A6和此前Foundation/骨干做统一Review；后续方向需基于这次核实点重新排序，而不是自动继续旧路线。
+
+### 13.63 技术层与骨干统一Review
+
+本轮以提交`cfc61f4`为代码基线，重新读取Foundation、Configuration、Workspace、Governance、双宿主入口、114份Schema、候选装配、架构规则和当前测试源。旧JS仍只作为功能需求证据，不参与TS技术路线选择。
+
+外部标准复核确认当前主技术选择成立：官方MCP TypeScript SDK v2已经是稳定发布线，Wakeflow继续使用`@modelcontextprotocol/server`的标准Server、stdio、input/output Schema和structured content；TypeScript solution config + composite project references的使用方式符合官方建议。Node文件系统Promise API不提供跨操作同步且FileHandle应显式关闭，当前Rooted Filesystem、专属锁、CAS和durability owner仍有必要。[MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)、[TypeScript Project References](https://www.typescriptlang.org/docs/handbook/project-references)、[Node.js File System](https://nodejs.org/api/fs.html)
+
+统一Review落地了五项确定修正：
+
+1. `npm audit --omit=dev`发现AJV传递依赖`fast-uri@3.1.5`处于高危公告范围；lockfile最小升级为`3.1.7`，没有改变AJV或Schema API，复核后生产依赖漏洞为0。
+2. Public MCP server instructions此前逐工具重复23份description，既扩大初始化上下文，也形成第二套易漂移手册。依据MCP官方“server instructions只表达跨能力关系、不要重复工具说明”的建议，现收敛为五条：closed-world/no host effect、exact preview/apply、exact recovery、Demand变更后重查Route，以及Inspection/TargetResult不授予权限；catalog测试限制UTF-8不超过1024字节。[MCP Server Instructions](https://blog.modelcontextprotocol.io/posts/2025-11-03-using-server-instructions/)
+3. 文件级依赖没有循环，但目录层存在`configuration → workspace`与`workspace ↔ governance`组合缝。它们主要来自资源声明、Active初始化、静态物化、宿主Profile和Window身份合同；不值得为目录纯洁度大搬迁。架构门现以错误级白名单关闭允许的source/target，未来新增跨层边必须显式审阅。
+4. 测试引用此前会让“只有测试consumer的生产模块”看似可达。架构检查器现要求这类模块属于10个明确源码根：两个宿主进程入口、已审定运维Recovery入口、Loaded Artifact publication和内部Evidence Reader；新增孤立模块或陈旧准入都会失败。候选manifest的过期scope同时从`maintenance-and-window-identity-technical-skeleton`修正为`typescript-public-technical-skeleton`。
+5. 首次完整门暴露16项Evidence失败：A6已删除Demand preview的`authorityMembers`，Evidence共用fixture仍提交旧字段，而此前手选聚焦矩阵没有包含这个跨领域consumer。删除旧字段后，共用authored-demand fixture改为`const`泛型保留真实字面类型，Evidence fixture使用`satisfies DemandEventSourcingPublicationPreviewRequest`，后续废弃字段会在TypeScript构建时失败。以Demand input为根的dependency-cruiser反向可达集合选出18个测试文件、80项测试并全部通过；第二次完整门1052项全部通过。
+
+当前技术结论：
+
+- Foundation没有新增万能Manager、全局registry或第二状态机；host-neutral领域仍不得绕过Filesystem/Process Foundation，也不得导入具体宿主实现。
+- 23个公共工具、114份Schema、Ledger→TODO→Demand→Route纵切和后续治理骨干彼此闭合；候选仍是不可发布技术制品，不代表旧插件已切换。
+- 目前主要风险不是缺少新的底层能力，而是两个集中式维护热点：`wakeflow-public-mcp-server.ts`为2253行，`wakeflow-public-mcp-server.test.ts`为3485行；`demand-aggregate-state.ts`虽为3189行，但仍是单一Event Sourcing Aggregate owner，不能只按行数拆散权威。
+- TypeScript runtime暂不盲目拆成Foundation/Workspace/Governance多个project reference：现有组合缝需要先以真实owner边界收敛；当前dependency-cruiser显式规则已提供更直接的方向约束。
+
+当前验证：Architecture 815模块/5805依赖/10个显式生产根/0违规；完整TypeScript 1052 pass；Schema 114份/215 refs，digest保持`sha256:6759f10e8583f43725518a9f239894bbf990089c87e908f559bb17ec3403af5e`；候选Codex 490 / Claude Code 495，manifest分别为`sha256:592c27e902c4a1385fe3f45069f432e18c08964cd80889e9e53d8cc799269a57`与`sha256:37fc7181b8c43a16b34ed54270353613efdf4f42e8dc4c90f8723c5586b06574`；`npm audit --omit=dev`为0。
+
+下一步不继续增加业务能力。推荐先做一个有边界的“公共入口与测试解耦”技术单元：按Workspace/Pre-Demand/Delivery-Review-Testing分组提取注册与错误适配，保留单一Public Server组合根；同时把3485行MCP测试按owner拆分，只保留一条跨域端到端链。是否进入该单元应在本统一Review核实点由用户确认。
+
+### 13.64 公共入口与测试解耦
+
+用户确认后按统一Review建议完成该技术单元，没有新增或修改业务状态机、Schema、工具名称、description、annotations、输入输出或宿主效果边界。
+
+生产入口从一份2253行文件收敛为：
+
+```text
+wakeflow-public-mcp-server.ts                 58行：唯一composition root
+wakeflow-public-mcp-server-configuration.ts 330行：Server身份与23 executor准入
+wakeflow-public-mcp-workspace-tools.ts       153行：Maintenance / Binding
+wakeflow-public-mcp-authority-tools.ts       462行：Ledger / TODO / Demand / Evidence / Route
+wakeflow-public-mcp-execution-tools.ts       521行：Task / Delivery / Host Effect / Result
+wakeflow-public-mcp-review-tools.ts          399行：Review / Remediation / Completion
+wakeflow-public-mcp-tool.ts                  145行：Canonical成功结果与脱敏错误信封
+```
+
+四组是源码固定的立即注册函数，不保存可变registry、不按请求选择owner，也不形成第二路由器。Public Server严格准入options后按固定顺序调用四组；各组拥有自己的generated request/result Schema、工具description/annotations、executor字段和领域错误mapper。共享helper只调用官方`McpServer.registerTool`，把成功结果投影为同一Canonical text + structuredContent，或把本组已知错误映射成稳定信封；未知异常统一降为`wakeflow-unexpected`且不回显message/stack。
+
+测试面删除3485行聚合文件，改为：
+
+- `wakeflow-public-mcp-lifecycle.test.ts`：529行，只保留一条真实Claim → Outcome → TargetResult → Review → Completion跨域链；
+- `wakeflow-public-mcp-error-envelope.test.ts`：222行，覆盖Workspace、Authority、Execution、Review四组错误字段与未知异常脱敏；
+- `wakeflow-public-mcp-registration-groups.test.ts`：172行，以哨兵请求逐一证明23个工具handler绑定同名executor；
+- 既有catalog继续拥有23工具名称、Schema ID、自包含Schema、description关键边界、annotations与双宿主集合；
+- Ledger、TODO、Demand、Evidence、Maintenance和Binding仍由各自入口测试拥有；所有业务状态转换、恢复和负例继续由领域Public/Service测试拥有。
+
+因此entrypoint测试总行数从5525降为2828；入口聚焦门从54项/约66秒收敛为25项/本次19.2秒。全仓测试从1052项降为1023项，最终完整门本次约5分27秒；墙钟会受并发文件事务和机器负载影响，主要成本仍来自真实治理纵切，不把一次运行差值全部归因于删除适配重复。
+
+使用Git `HEAD=cfc61f4`在一次性临时目录编译拆分前基线，与当前工作树通过官方内存Client逐工具比较完整`tools/list`；23项name/title/description/input Schema/output Schema/annotations完全一致。Server instructions从基线9487 bytes变为613 bytes属于上一统一Review已经确认的独立修正，不是本拆分造成的协议漂移。
+
+最终验证：Architecture 823模块/5817依赖/10个显式生产根/0违规；TypeScript 1023 pass；Schema 114/215及digest不变；候选Codex 496 / Claude Code 501，manifest分别为`sha256:b860f0d3d1d3b7dca9ad338899c2d2ba0be89055f8ae28bdee547bf5ec22c944`与`sha256:a9182c0385aa634cb4564b3cb1921877ef6b4e370607eda706103db86b07ea99`，仍为`releaseEligible=false`。
+
+本单元到此关闭。`demand-aggregate-state.ts`仍是单一Event Sourcing Aggregate owner，没有因行数被机械拆分；下一步应回到核实点讨论业务顺序，而不是继续创建技术抽象。

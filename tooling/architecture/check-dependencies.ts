@@ -18,10 +18,34 @@ interface DependencyCruiseSummary {
   readonly optionsUsed: Readonly<Record<string, unknown>>;
 }
 
+interface DependencyCruiseModule {
+  readonly source: string;
+  readonly dependents: readonly string[];
+}
+
 interface DependencyCruiseReport {
-  readonly modules: readonly unknown[];
+  readonly modules: readonly DependencyCruiseModule[];
   readonly summary: DependencyCruiseSummary;
 }
+
+/**
+ * 没有其他生产模块导入、但作为显式库入口或进程入口保留的源码。
+ *
+ * 新的仅测试可达模块必须先证明独立入口职责并加入此表；表中成员一旦获得生产
+ * consumer，也必须从这里删除，避免测试把遗留实现伪装成运行时骨干。
+ */
+const ADMITTED_PRODUCTION_ROOTS: ReadonlySet<string> = new Set([
+  "src/configuration/wakeflow-config-authority-replacement-recovery.ts",
+  "src/entrypoints/claude-code-wakeflow-mcp.ts",
+  "src/entrypoints/codex-wakeflow-mcp.ts",
+  "src/foundation/artifact/loaded-artifact-tree-transfer-publication.ts",
+  "src/governance/evidence/managed-evidence-reading-service.ts",
+  "src/workspace/maintenance/wakeflow-maintenance-orphan-gate-recovery.ts",
+  "src/workspace/maintenance/wakeflow-prepared-maintenance-recovery.ts",
+  "src/workspace/managed-integration/wakeflow-gitignore-recomposition-recovery.ts",
+  "src/workspace/managed-integration/wakeflow-program-instruction-recomposition-recovery.ts",
+  "src/workspace/support/wakeflow-support-memory-recovery.ts",
+]);
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -38,6 +62,21 @@ function readNonNegativeInteger(
   return value;
 }
 
+function parseModule(value: unknown): DependencyCruiseModule {
+  if (
+    !isRecord(value)
+    || typeof value.source !== "string"
+    || !Array.isArray(value.dependents)
+    || value.dependents.some((entry) => typeof entry !== "string")
+  ) {
+    throw new Error("dependency-cruiser returned an invalid module");
+  }
+  return {
+    source: value.source,
+    dependents: value.dependents as readonly string[],
+  };
+}
+
 function parseReport(value: unknown): DependencyCruiseReport {
   if (!isRecord(value) || !Array.isArray(value.modules) || !isRecord(value.summary)) {
     throw new Error("dependency-cruiser returned an invalid report envelope");
@@ -47,7 +86,7 @@ function parseReport(value: unknown): DependencyCruiseReport {
     throw new Error("dependency-cruiser returned an invalid summary");
   }
   return {
-    modules: value.modules,
+    modules: value.modules.map(parseModule),
     summary: {
       error: readNonNegativeInteger(summary, "error"),
       warn: readNonNegativeInteger(summary, "warn"),
@@ -60,6 +99,34 @@ function parseReport(value: unknown): DependencyCruiseReport {
       optionsUsed: summary.optionsUsed,
     },
   };
+}
+
+function admittedProductionRootCount(
+  modules: readonly DependencyCruiseModule[],
+): number {
+  const roots = modules
+    .filter((module) => module.source.startsWith("src/"))
+    .filter(
+      (module) => !module.dependents.some((dependent) =>
+        dependent.startsWith("src/")
+      ),
+    )
+    .map((module) => module.source)
+    .sort();
+  const unadmitted = roots.filter(
+    (source) => !ADMITTED_PRODUCTION_ROOTS.has(source),
+  );
+  if (unadmitted.length > 0) {
+    fail(`unadmitted production roots: ${unadmitted.join(", ")}`);
+  }
+  const current = new Set(roots);
+  const staleAdmissions = [...ADMITTED_PRODUCTION_ROOTS]
+    .filter((source) => !current.has(source))
+    .sort();
+  if (staleAdmissions.length > 0) {
+    fail(`stale production root admissions: ${staleAdmissions.join(", ")}`);
+  }
+  return roots.length;
 }
 
 function fail(message: string): never {
@@ -118,12 +185,14 @@ function run(): void {
   ) {
     fail("one or more dependency rules were violated");
   }
+  const productionRoots = admittedProductionRootCount(report.modules);
 
   process.stdout.write(`${JSON.stringify({
     ok: true,
     parser: "swc",
     modules: report.summary.totalCruised,
     dependencies: report.summary.totalDependenciesCruised,
+    productionRoots,
   })}\n`);
 }
 

@@ -18957,3 +18957,91 @@ Demand Publication受影响24项通过；main计划新增精确断言`plan.autho
 公共MCP真实纵切按Ledger → Intake → exact Inspection → Demand → Route执行，最终进入implementation-task-planning。TODO79项、A4/A5/A6矩阵48项及Candidate/Schema/零到一专项7项通过；Schema114/215，Architecture815/5803/0违规，候选490/495且仍不可发布。
 
 本核实点不等于完整`npm test`、plugin validator/smoke、真实宿主窗口或release gate。按照用户要求在技术层面和骨干完成后暂停，下一步先统一Review，不继续扩张业务能力。
+
+## 272. 技术层与骨干统一Review
+
+### 272.1 审阅范围与结论
+
+以`cfc61f4`为HEAD统一审阅521个生产TS文件（407手写+114生成）、260个`.test.ts`、23个公共MCP工具、114份Schema、双宿主候选与Foundation/Configuration/Workspace/Governance依赖图。旧JS不作为TS技术约束。
+
+结论不是继续补Foundation。当前底层Filesystem、Canonical、Identity、Time、Schema、Lock/CAS、durable mutation、有界并发和Event Sourcing底座已有真实consumer；新增能力应继续由consumer证明。真正需要修正的是依赖安全、组合缝准入、MCP上下文重复、候选元数据漂移和测试影响选择。
+
+### 272.2 已完成修正
+
+- `fast-uri`从传递版本3.1.5最小更新到3.1.7，`npm audit --omit=dev`从1项high恢复为0。
+- MCP server instructions从逐工具长手册收敛为五条跨工具关系；具体边界继续由23份description和自包含Schema拥有，官方Client测试限制instructions不超过1024 UTF-8 bytes。
+- dependency-cruiser新增Configuration→Workspace、Workspace→Governance和Governance→Workspace三组显式组合缝规则；当前815模块、5805依赖、0违规。
+- 架构入口新增10个显式源码根准入，拒绝新的仅测试可达生产模块，并拒绝已经获得consumer却未清理的陈旧准入。
+- 候选scope修正为`typescript-public-technical-skeleton`，仍保持`0.0.0-technical-skeleton`与`releaseEligible=false`。
+- 完整门发现Evidence fixture仍提交A6废弃的`authorityMembers`。删除字段并用`const`泛型+satisfies把跨领域fixture绑定当前Demand input类型；反向依赖18文件/80项通过，第二次完整门1052项通过。
+
+### 272.3 当前机器证据
+
+```text
+Architecture: 815 modules / 5805 dependencies / 10 admitted source roots / 0 violations
+TypeScript: 1052 pass / 0 fail / 0 cancelled / 0 skip
+Schema: 114 sources / 215 external refs
+Schema digest: sha256:6759f10e8583f43725518a9f239894bbf990089c87e908f559bb17ec3403af5e
+Impacted Demand input: 18 test files / 80 pass
+Candidate: Codex 490 / Claude Code 495 / releaseEligible=false
+Audit: 0 production vulnerabilities
+```
+
+未运行根`npm test`中的旧插件core同步、Codex/Claude validator/smoke、真实宿主窗口或release gate；TS候选尚未接入插件制品，因此不把本核实点表述为release-ready。
+
+### 272.4 下一项待用户选择
+
+推荐先做“公共入口与测试解耦”，不是业务扩张：
+
+1. 按Workspace、Pre-Demand、Delivery/Review/Testing分组提取MCP注册和错误适配，保留单一composition root，不建立运行时registry或第二路由器；
+2. 把3485行公共MCP测试按owner迁回相邻测试文件，只保留一条跨域端到端链和一份catalog矩阵；
+3. 完成后再判断2253行Public Server和3189行Aggregate中是否仍有真实多职责，不按行数机械拆分；
+4. 暂不拆runtime TypeScript project references，先以现有错误级依赖规则守住组合缝。
+
+该单元涉及代码组织取舍，统一Review到此停止并等待用户确认；不自动进入下一业务能力。
+
+## 273. 公共入口与测试解耦
+
+### 273.1 单一composition root与四个静态注册组
+
+用户确认统一Review建议后，将2253行`wakeflow-public-mcp-server.ts`收敛为58行唯一组合根。Server只执行：严格options准入、创建官方`McpServer`、保存五条跨工具instructions、按固定顺序调用Workspace/Authority/Execution/Review四个注册组。
+
+新增模块分责：
+
+| 文件 | 唯一职责 |
+| --- | --- |
+| `wakeflow-public-mcp-server-configuration.ts` | 关闭Server身份、字段集合和23个非Proxy executor |
+| `wakeflow-public-mcp-workspace-tools.ts` | Maintenance与Window Binding Schema/metadata/error mapping |
+| `wakeflow-public-mcp-authority-tools.ts` | Ledger、TODO、Demand、Evidence与Route注册 |
+| `wakeflow-public-mcp-execution-tools.ts` | Task、Delivery、Host Effect与Result注册 |
+| `wakeflow-public-mcp-review-tools.ts` | Review、Resume、Remediation与Completion注册 |
+| `wakeflow-public-mcp-tool.ts` | 单工具立即注册、Canonical成功结果和稳定错误信封 |
+
+这些文件不持有动态registry、不创建工具选择器、不解释Route，也不调用宿主API。领域Coordinator仍由Codex/Claude固定composition root注入；注册组只选择同名executor并拥有相邻错误类型。
+
+### 273.2 测试清理
+
+删除3485行`wakeflow-public-mcp-server.test.ts`及其36项组合层重复测试。保留证据重新归属：
+
+- catalog测试拥有23项工具集合、完整Schema metadata和双宿主一致性；
+- 新`wakeflow-public-mcp-error-envelope.test.ts`以5项覆盖四组已知错误和unknown redaction；
+- 新`wakeflow-public-mcp-lifecycle.test.ts`以1项真实纵切覆盖Claim、Outcome、Result、Review、Completion、Route、隐私和幂等；
+- 新`wakeflow-public-mcp-registration-groups.test.ts`以1项哨兵矩阵逐个调用23个handler，防止catalog列出工具但绑定错误executor；
+- 其余真实业务、恢复、并发和Schema负例仍由相邻领域测试拥有。
+
+entrypoint测试总行数5525→2828，聚焦执行54项/约66秒→25项/本次19.2秒。全仓项目保留262个`.test.ts`，完整用例1052→1023；最终完整门本次327秒，墙钟仍由并发文件事务型纵切主导，不能把不同运行间的全部差值归因于MCP测试清理。
+
+### 273.3 等价与机器证据
+
+从Git `cfc61f4`解出一次性编译基线，以官方Client比较当前23项完整`tools/list`，所有name/title/description/input/output Schema/annotations相同。instructions 9487→613 bytes是前一统一Review的已确认修正，单独记录而不冒充本次等价字段。
+
+```text
+Architecture: 823 modules / 5817 dependencies / 10 admitted source roots / 0 violations
+TypeScript: 1023 pass / 0 fail / 0 cancelled / 0 skip
+Schema: 114 sources / 215 external refs / digest unchanged
+Entrypoint focused: 12 files / 25 pass / 19.2s
+Full TypeScript duration: 327.1s on the final run
+Candidate: Codex 496 / Claude Code 501 / releaseEligible=false
+```
+
+结论：公共入口已经从横向巨石变为静态分组组合；测试维护成本下降且没有降低领域验证。下一步不继续拆Aggregate或引入registry，返回技术核实点选择后续业务顺序。
